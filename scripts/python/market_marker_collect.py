@@ -112,7 +112,83 @@ def _rule_is_clear(description: str) -> bool:
     return True
 
 
-def coarse_filter_markets(markets: List[Any]) -> List[Any]:
+# ---------- Step 2 打分相关的可调参数 ----------
+# 盘口价差阈值（越小越好）
+MAX_SPREAD = 0.05
+# 深度统计半径：mid ± delta
+DEPTH_DELTA = 0.01
+# 深度阈值（越大越好）
+MIN_DEPTH = 25.0
+# 短窗采样次数与间隔（做波动与跳变率）
+MID_SAMPLES = 4
+MID_SAMPLE_INTERVAL_SEC = 0.6
+# 波动与跳变阈值（可调）
+MAX_VOL = 0.02
+JUMP_THRESHOLD = 0.02
+MAX_JUMP_RATE = 0.35
+
+
+def _normalize_levels(levels: Any) -> List[Dict[str, float]]:
+    normalized: List[Dict[str, float]] = []
+    if not levels:
+        return normalized
+    for level in levels:
+        if isinstance(level, dict):
+            price = float(level.get("price", 0))
+            size = float(level.get("size", 0))
+        elif isinstance(level, (list, tuple)) and len(level) >= 2:
+            price = float(level[0])
+            size = float(level[1])
+        else:
+            continue
+        if price > 0 and size > 0:
+            normalized.append({"price": price, "size": size})
+    return normalized
+
+
+def _best_bid_ask(orderbook: Dict[str, Any]) -> Optional[Dict[str, float]]:
+    bids = _normalize_levels(orderbook.get("bids"))
+    asks = _normalize_levels(orderbook.get("asks"))
+    if not bids or not asks:
+        return None
+    best_bid = max(bids, key=lambda x: x["price"])["price"]
+    best_ask = min(asks, key=lambda x: x["price"])["price"]
+    return {"best_bid": best_bid, "best_ask": best_ask}
+
+
+def _depth_within_delta(levels: List[Dict[str, float]], mid: float, delta: float, side: str) -> float:
+    if side == "bid":
+        return sum(l["size"] for l in levels if l["price"] >= (mid - delta))
+    return sum(l["size"] for l in levels if l["price"] <= (mid + delta))
+
+
+def _sample_midpoints(polymarket: Polymarket, token_id: str) -> List[float]:
+    midpoints: List[float] = []
+    for i in range(MID_SAMPLES):
+        try:
+            ob = polymarket.get_orderbook(token_id)
+            best = _best_bid_ask(ob if isinstance(ob, dict) else ob.__dict__)
+            if best:
+                midpoints.append((best["best_bid"] + best["best_ask"]) / 2)
+        except Exception:
+            pass
+        if i < MID_SAMPLES - 1:
+            time.sleep(MID_SAMPLE_INTERVAL_SEC)
+    return midpoints
+
+
+def _calc_vol_and_jump(midpoints: List[float]) -> Dict[str, float]:
+    if len(midpoints) < 2:
+        return {"vol": 0.0, "jump_rate": 0.0}
+    deltas = [midpoints[i] - midpoints[i - 1] for i in range(1, len(midpoints))]
+    mean = sum(deltas) / len(deltas)
+    var = sum((d - mean) ** 2 for d in deltas) / len(deltas)
+    vol = var ** 0.5
+    jump_rate = sum(1 for d in deltas if abs(d) > JUMP_THRESHOLD) / len(deltas)
+    return {"vol": vol, "jump_rate": jump_rate}
+
+
+def coarse_filter_markets(polymarket: Polymarket, markets: List[Any]) -> List[Any]:
     # Step 1：硬过滤（先排掉“天坑/不好做”的）
     # 目标：能稳定挂单、成交频繁、条款不拧巴
 
@@ -161,12 +237,67 @@ def coarse_filter_markets(markets: List[Any]) -> List[Any]:
         filtered.append(market)
 
     # Step 2：流动性/稳定性打分（从“看起来能做”到“值得做”）
-    # TODO：后续接 CLOB 数据（/book、/midpoint、/price 或 WS）计算：
-    # 2.1(a) Top-of-book spread：bestAsk - bestBid（越小越好）
-    # 2.1(b) 深度 depth@δ：mid±δ 内挂单量（越厚越好）
-    # 2.1(c) 短窗波动：std(Δmid) 与 jumpRate（越低越好）
+    # 这里直接调用 CLOB 订单簿数据做快速打分过滤（可调整阈值）
+    scored: List[Any] = []
 
-    return filtered
+    for market in filtered:
+        token_ids = _parse_token_ids(getattr(market, "clob_token_ids", ""))
+        if not token_ids:
+            continue
+
+        # 2.1(a) Top-of-book 价差（越小越好）
+        # 2.1(b) 深度 depth@δ（越厚越好）
+        spreads: List[float] = []
+        depths: List[float] = []
+
+        for token_id in token_ids:
+            try:
+                orderbook = polymarket.get_orderbook(token_id)
+                ob = orderbook if isinstance(orderbook, dict) else orderbook.__dict__
+                best = _best_bid_ask(ob)
+                if not best:
+                    continue
+                best_bid = best["best_bid"]
+                best_ask = best["best_ask"]
+                spread = best_ask - best_bid
+                spreads.append(spread)
+
+                bids = _normalize_levels(ob.get("bids"))
+                asks = _normalize_levels(ob.get("asks"))
+                mid = (best_bid + best_ask) / 2
+                depth = _depth_within_delta(bids, mid, DEPTH_DELTA, "bid") + _depth_within_delta(
+                    asks, mid, DEPTH_DELTA, "ask"
+                )
+                depths.append(depth)
+            except Exception:
+                continue
+
+        if not spreads or not depths:
+            continue
+
+        # 2.1(c) 短窗波动与跳变率（越低越好）
+        # 使用第一个 token 做快速采样
+        midpoints = _sample_midpoints(polymarket, token_ids[0])
+        vol_jump = _calc_vol_and_jump(midpoints)
+
+        max_spread = max(spreads)
+        min_depth = min(depths)
+        vol = vol_jump["vol"]
+        jump_rate = vol_jump["jump_rate"]
+
+        # 过滤条件（可调）
+        if max_spread > MAX_SPREAD:
+            continue
+        if min_depth < MIN_DEPTH:
+            continue
+        if vol > MAX_VOL:
+            continue
+        if jump_rate > MAX_JUMP_RATE:
+            continue
+
+        scored.append(market)
+
+    return scored
 
 
 # 拉取 CLOB 订单簿数据
@@ -207,7 +338,7 @@ def collect_and_persist(output_dir: str = "local_market_collection") -> Dict[str
     filtered_events = coarse_filter_events(polymarket, events)
 
     markets = collect_markets(polymarket)
-    filtered_markets = coarse_filter_markets(markets)
+    filtered_markets = coarse_filter_markets(polymarket, markets)
 
     clob_data = collect_clob_data(polymarket, filtered_markets)
 
