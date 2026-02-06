@@ -34,6 +34,30 @@ class MarketOrderRequest(BaseModel):
     amount: float = Field(..., gt=0, description="USDC amount")
 
 
+class SplitRequest(BaseModel):
+    condition_id: str = Field(..., description="CTF condition id (bytes32 hex)")
+    partition: list[int] = Field(..., description="Outcome index sets (e.g. [1,2])")
+    amount: int = Field(..., gt=0, description="Collateral amount in smallest units")
+    collateral_token: Optional[str] = Field(
+        default=None, description="Collateral token address (default USDC)"
+    )
+    parent_collection_id: Optional[str] = Field(
+        default=None, description="Parent collection id (bytes32 hex, default 0x0)"
+    )
+
+
+class MergeRequest(BaseModel):
+    condition_id: str = Field(..., description="CTF condition id (bytes32 hex)")
+    partition: list[int] = Field(..., description="Outcome index sets (e.g. [1,2])")
+    amount: int = Field(..., gt=0, description="Collateral amount in smallest units")
+    collateral_token: Optional[str] = Field(
+        default=None, description="Collateral token address (default USDC)"
+    )
+    parent_collection_id: Optional[str] = Field(
+        default=None, description="Parent collection id (bytes32 hex, default 0x0)"
+    )
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True}
@@ -130,6 +154,8 @@ def place_limit_order(
             token_id=payload.token_id,
         )
         return jsonable_encoder(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -145,5 +171,49 @@ def place_market_order(
             token_id=payload.token_id, amount=payload.amount
         )
         return jsonable_encoder(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/ctf/split")
+def split_positions(
+    payload: SplitRequest,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    try:
+        result = polymarket.split_position(
+            condition_id=payload.condition_id,
+            partition=payload.partition,
+            amount=payload.amount,
+            collateral_token=payload.collateral_token,
+            parent_collection_id=payload.parent_collection_id,
+        )
+        return jsonable_encoder(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/ctf/merge")
+def merge_positions(
+    payload: MergeRequest,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    try:
+        result = polymarket.merge_positions(
+            condition_id=payload.condition_id,
+            partition=payload.partition,
+            amount=payload.amount,
+            collateral_token=payload.collateral_token,
+            parent_collection_id=payload.parent_collection_id,
+        )
+        return jsonable_encoder(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
