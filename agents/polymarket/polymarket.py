@@ -18,9 +18,16 @@ import httpx
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import ApiCreds
 from py_clob_client.constants import AMOY, POLYGON
-from py_order_utils.builders import OrderBuilder
-from py_order_utils.model import OrderData
-from py_order_utils.signer import Signer
+try:
+    from py_order_utils.builders import OrderBuilder
+    from py_order_utils.model import OrderData
+    from py_order_utils.signer import Signer
+    _ORDER_UTILS_AVAILABLE = True
+except ModuleNotFoundError:
+    OrderBuilder = None
+    OrderData = None
+    Signer = None
+    _ORDER_UTILS_AVAILABLE = False
 from py_clob_client.clob_types import (
     OrderArgs,
     MarketOrderArgs,
@@ -93,6 +100,8 @@ class Polymarket:
         self.client = ClobClient(
             self.clob_url, key=self.private_key, chain_id=self.chain_id
         )
+        if not self.private_key:
+            return
         self.credentials = self.client.create_or_derive_api_creds()
         self.client.set_api_creds(self.credentials)
         # print(self.credentials)
@@ -333,6 +342,11 @@ class Polymarket:
         side: str = "BUY",
         expiration: str = "0",  # timestamp after which order expires
     ):
+        if not _ORDER_UTILS_AVAILABLE:
+            raise RuntimeError(
+                "py_order_utils is not available. Install requirements or add "
+                "py_order_utils to enable build_order()."
+            )
         signer = Signer(self.private_key)
         builder = OrderBuilder(self.exchange_address, self.chain_id, signer)
 
