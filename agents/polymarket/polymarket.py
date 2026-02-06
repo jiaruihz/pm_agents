@@ -351,6 +351,15 @@ class Polymarket:
         print("Done!")
         return resp
 
+    def execute_market_order_by_token(self, token_id: str, amount: float) -> str:
+        order_args = MarketOrderArgs(
+            token_id=token_id,
+            amount=amount,
+        )
+        signed_order = self.client.create_market_order(order_args)
+        resp = self.client.post_order(signed_order, orderType=OrderType.FOK)
+        return resp
+
     def get_usdc_balance(self) -> float:
         balance_res = self.usdc.functions.balanceOf(
             self.get_address_for_private_key()

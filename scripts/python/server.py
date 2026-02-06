@@ -1,27 +1,149 @@
-from typing import Union
-from fastapi import FastAPI
+from typing import Optional
+import os
+from functools import lru_cache
 
-app = FastAPI()
+from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel, Field
 
+from agents.polymarket.polymarket import Polymarket
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+app = FastAPI(title="Polymarket Tool Service", version="0.1.0")
 
 
-@app.get("/trades/{trade_id}")
-def read_trade(trade_id: int, q: Union[str, None] = None):
-    return {"trade_id": trade_id, "q": q}
+@lru_cache(maxsize=1)
+def get_polymarket_client() -> Polymarket:
+    return Polymarket()
 
 
-@app.get("/markets/{market_id}")
-def read_market(market_id: int, q: Union[str, None] = None):
-    return {"market_id": market_id, "q": q}
+def require_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
+    expected = os.getenv("TOOL_API_KEY")
+    if expected and x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-# post new prompt
+class LimitOrderRequest(BaseModel):
+    token_id: str = Field(..., description="CLOB token id")
+    price: float = Field(..., gt=0, lt=1)
+    size: float = Field(..., gt=0)
+    side: str = Field(..., description="BUY or SELL")
+
+
+class MarketOrderRequest(BaseModel):
+    token_id: str = Field(..., description="CLOB token id")
+    amount: float = Field(..., gt=0, description="USDC amount")
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"ok": True}
+
+
+@app.get("/events")
+def get_events(
+    tradeable: bool = False,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> list:
+    events = (
+        polymarket.get_all_tradeable_events()
+        if tradeable
+        else polymarket.get_all_events()
+    )
+    if offset:
+        events = events[offset:]
+    if limit is not None:
+        events = events[:limit]
+    return jsonable_encoder(events)
+
+
+@app.get("/markets")
+def get_markets(
+    tradeable: bool = False,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> list:
+    markets = polymarket.get_all_markets()
+    if tradeable:
+        markets = polymarket.filter_markets_for_trading(markets)
+    if offset:
+        markets = markets[offset:]
+    if limit is not None:
+        markets = markets[:limit]
+    return jsonable_encoder(markets)
+
+
+@app.get("/market/{token_id}")
+def get_market(
+    token_id: str,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    market = polymarket.get_market(token_id)
+    if not market:
+        raise HTTPException(status_code=404, detail="Market not found")
+    return jsonable_encoder(market)
+
+
+@app.get("/orderbook/{token_id}")
+def get_orderbook(
+    token_id: str,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    try:
+        orderbook = polymarket.get_orderbook(token_id)
+        return jsonable_encoder(orderbook)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/balance")
+def get_balance(
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    return {
+        "address": polymarket.get_address_for_private_key(),
+        "usdc_balance": polymarket.get_usdc_balance(),
+    }
+
+
+@app.post("/order")
+def place_limit_order(
+    payload: LimitOrderRequest,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    side = payload.side.upper()
+    if side not in {"BUY", "SELL"}:
+        raise HTTPException(status_code=400, detail="side must be BUY or SELL")
+    try:
+        result = polymarket.execute_order(
+            price=payload.price,
+            size=payload.size,
+            side=side,
+            token_id=payload.token_id,
+        )
+        return jsonable_encoder(result)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/market-order")
+def place_market_order(
+    payload: MarketOrderRequest,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    try:
+        result = polymarket.execute_market_order_by_token(
+            token_id=payload.token_id, amount=payload.amount
+        )
+        return jsonable_encoder(result)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
