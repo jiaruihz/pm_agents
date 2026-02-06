@@ -30,9 +30,21 @@ def _ensure_dir(path: str) -> None:
 
 
 # 保存 JSON（保留中文）
+def _to_jsonable(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_to_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _to_jsonable(v) for k, v in value.items()}
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "dict"):
+        return value.dict()
+    return value
+
+
 def _write_json(path: str, data: Any) -> None:
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(_to_jsonable(data), f, ensure_ascii=False, indent=2)
 
 
 # 解析 market.clob_token_ids（字符串形式的 list）
