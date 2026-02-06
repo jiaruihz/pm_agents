@@ -83,6 +83,21 @@ def get_events(
     return jsonable_encoder(events)
 
 
+@app.get("/events/tradeable")
+def get_tradeable_events(
+    limit: Optional[int] = None,
+    offset: int = 0,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> list:
+    events = polymarket.get_all_tradeable_events()
+    if offset:
+        events = events[offset:]
+    if limit is not None:
+        events = events[:limit]
+    return jsonable_encoder(events)
+
+
 @app.get("/markets")
 def get_markets(
     tradeable: bool = False,

@@ -1,18 +1,22 @@
 # Polymarket Tool Service API
 
 This document describes the HTTP API exposed by `scripts/python/server.py`.
+本文档描述 `scripts/python/server.py` 暴露的 HTTP 接口。
 
 ## Base URL
 
 - Default (local): `http://localhost:8000`
+- 默认（本地）：`http://localhost:8000`
 
 ## Auth
 
 If the environment variable `TOOL_API_KEY` is set, all requests must include:
+如果设置了环境变量 `TOOL_API_KEY`，所有请求必须包含：
 
 - Header: `X-API-Key: <your_key>`
 
 If `TOOL_API_KEY` is not set, auth is not enforced.
+如果未设置 `TOOL_API_KEY`，则不启用鉴权。
 
 ## Endpoints
 
@@ -24,6 +28,7 @@ Response:
 ```json
 {"ok": true}
 ```
+中文说明：服务健康检查。
 
 ### 2) Events
 
@@ -36,8 +41,21 @@ Query parameters:
 
 Response:
 - List of `SimpleEvent`
+中文说明：获取事件列表；`tradeable=true` 时返回可交易事件。
 
-### 3) Markets
+### 3) Tradeable Events (explicit)
+
+- `GET /events/tradeable`
+
+Query parameters:
+- `limit` (int, optional)
+- `offset` (int, default `0`)
+
+Response:
+- List of `SimpleEvent`
+中文说明：直接返回“可交易事件”列表（等价于 `/events?tradeable=true`）。
+
+### 4) Markets
 
 - `GET /markets`
 
@@ -48,8 +66,9 @@ Query parameters:
 
 Response:
 - List of `SimpleMarket`
+中文说明：获取市场列表；`tradeable=true` 时返回可交易市场。
 
-### 4) Single Market by token_id
+### 5) Single Market by token_id
 
 - `GET /market/{token_id}`
 
@@ -58,8 +77,9 @@ Path parameters:
 
 Response:
 - `SimpleMarket`
+中文说明：通过 `token_id` 获取单个市场信息。
 
-### 5) Order Book
+### 6) Order Book
 
 - `GET /orderbook/{token_id}`
 
@@ -68,8 +88,9 @@ Path parameters:
 
 Response:
 - CLOB order book object
+中文说明：获取订单簿数据（CLOB）。
 
-### 6) Wallet Balance
+### 7) Wallet Balance
 
 - `GET /balance`
 
@@ -80,8 +101,9 @@ Response:
   "usdc_balance": 123.45
 }
 ```
+中文说明：查询钱包地址与 USDC 余额。
 
-### 7) Place Limit Order
+### 8) Place Limit Order
 
 - `POST /order`
 
@@ -101,8 +123,9 @@ Notes:
 
 Response:
 - CLOB order response
+中文说明：下限价单（BUY/SELL）。
 
-### 8) Place Market Order (FOK)
+### 9) Place Market Order (FOK)
 
 - `POST /market-order`
 
@@ -119,8 +142,9 @@ Notes:
 
 Response:
 - CLOB order response
+中文说明：下市价单（FOK）。
 
-### 9) CTF Split (USDC -> YES/NO)
+### 10) CTF Split (USDC -> YES/NO)
 
 - `POST /ctf/split`
 
@@ -144,8 +168,9 @@ Notes:
 
 Response:
 - Transaction receipt summary
+中文说明：CTF 拆分（USDC -> YES/NO），返回交易回执摘要。
 
-### 10) CTF Merge (YES/NO -> USDC)
+### 11) CTF Merge (YES/NO -> USDC)
 
 - `POST /ctf/merge`
 
@@ -165,12 +190,14 @@ Notes:
 
 Response:
 - Transaction receipt summary
+中文说明：CTF 合并（YES/NO -> USDC），返回交易回执摘要。
 
 ## Environment Variables
 
 - `POLYGON_WALLET_PRIVATE_KEY`: wallet private key for signing and CLOB auth
 - `OPENAI_API_KEY`: required for LLM usage elsewhere in the repo
 - `TOOL_API_KEY`: optional header-based auth for this service
+中文说明：`POLYGON_WALLET_PRIVATE_KEY` 用于签名和 CLOB 认证；`TOOL_API_KEY` 用于接口鉴权。
 
 ## Run the Server
 
