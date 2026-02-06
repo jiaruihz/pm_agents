@@ -1,9 +1,20 @@
 import ast
 import json
 import os
+import sys
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
+
+from dotenv import load_dotenv
+
+# 将项目根目录加入 sys.path，避免每次手动设置 PYTHONPATH
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+# 加载根目录的 .env（配置一次即可复用）
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 from agents.polymarket.polymarket import Polymarket
 
