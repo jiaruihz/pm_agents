@@ -21,6 +21,8 @@ class PMMConfig:
     api_base_url: str = "http://localhost:8000"
     api_key: str = ""
     tick_interval_sec: float = 2.0
+    max_ticks: int = 0
+    dry_run: bool = False
 
     # Pricing / inventory
     base_spread: float = 0.02
@@ -45,6 +47,8 @@ class PMMConfig:
             api_base_url=os.getenv("PMM_API_BASE_URL", "http://localhost:8000"),
             api_key=os.getenv("PMM_API_KEY", ""),
             tick_interval_sec=float(os.getenv("PMM_TICK_INTERVAL_SEC", "2")),
+            max_ticks=int(os.getenv("PMM_MAX_TICKS", "0")),
+            dry_run=os.getenv("PMM_DRY_RUN", "0") == "1",
             base_spread=float(os.getenv("PMM_BASE_SPREAD", "0.02")),
             deadband=float(os.getenv("PMM_DEADBAND", "0.005")),
             skew_factor=float(os.getenv("PMM_SKEW_FACTOR", "0.0")),

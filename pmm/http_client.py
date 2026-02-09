@@ -41,6 +41,9 @@ class ToolServiceClient:
     async def get_orderbook(self, token_id: str) -> Dict[str, Any]:
         return await self._get(f"/orderbook/{token_id}")
 
+    async def get_market(self, token_id: str) -> Dict[str, Any]:
+        return await self._get(f"/market/{token_id}")
+
     async def get_balance(self) -> Dict[str, Any]:
         return await self._get("/balance")
 
