@@ -58,6 +58,10 @@ class MergeRequest(BaseModel):
     )
 
 
+class CancelOrdersRequest(BaseModel):
+    order_ids: list[str] = Field(..., min_items=1)
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True}
@@ -150,6 +154,87 @@ def get_balance(
         "address": polymarket.get_address_for_private_key(),
         "usdc_balance": polymarket.get_usdc_balance(),
     }
+
+
+@app.get("/orders")
+def get_orders(
+    order_id: Optional[str] = None,
+    market: Optional[str] = None,
+    token_id: Optional[str] = None,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> list:
+    try:
+        return jsonable_encoder(
+            polymarket.get_open_orders(order_id=order_id, market=market, asset_id=token_id)
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/order/{order_id}")
+def cancel_order(
+    order_id: str,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    try:
+        return jsonable_encoder(polymarket.cancel_order(order_id))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/orders/cancel")
+def cancel_orders(
+    payload: CancelOrdersRequest,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    try:
+        return jsonable_encoder(polymarket.cancel_orders(payload.order_ids))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/orders/cancel-all")
+def cancel_all_orders(
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    try:
+        return jsonable_encoder(polymarket.cancel_all_orders())
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.delete("/orders/cancel-market")
+def cancel_market_orders(
+    market: str = "",
+    token_id: str = "",
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    try:
+        return jsonable_encoder(
+            polymarket.cancel_market_orders(market=market, asset_id=token_id)
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/positions")
+def get_positions(
+    token_ids: str,
+    _: None = Depends(require_api_key),
+    polymarket: Polymarket = Depends(get_polymarket_client),
+) -> dict:
+    parsed = [t.strip() for t in token_ids.split(",") if t.strip()]
+    if not parsed:
+        raise HTTPException(status_code=400, detail="token_ids is required")
+    try:
+        return jsonable_encoder(polymarket.get_positions(parsed))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/order")

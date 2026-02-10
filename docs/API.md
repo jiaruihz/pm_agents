@@ -125,7 +125,82 @@ Response:
 - CLOB order response
 中文说明：下限价单（BUY/SELL）。
 
-### 9) Place Market Order (FOK)
+### 9) Open Orders
+
+- `GET /orders`
+
+Query parameters:
+- `order_id` (string, optional)
+- `market` (string, optional)
+- `token_id` (string, optional)
+
+Response:
+- List of open orders
+中文说明：查询当前 API Key 对应的挂单列表，可按 `order_id/market/token_id` 过滤。
+
+### 10) Cancel One Order
+
+- `DELETE /order/{order_id}`
+
+Path parameters:
+- `order_id`: order id
+
+Response:
+- cancel result
+中文说明：撤销单个订单。
+
+### 11) Cancel Multiple Orders
+
+- `POST /orders/cancel`
+
+Body:
+```json
+{
+  "order_ids": ["id1", "id2"]
+}
+```
+
+Response:
+- cancel result
+中文说明：批量撤单。
+
+### 12) Cancel All Orders
+
+- `DELETE /orders/cancel-all`
+
+Response:
+- cancel result
+中文说明：撤销当前账户下所有可撤订单。
+
+### 13) Cancel Market Orders
+
+- `DELETE /orders/cancel-market`
+
+Query parameters:
+- `market` (string, optional)
+- `token_id` (string, optional)
+
+Response:
+- cancel result
+中文说明：按 market 或 token_id 定向撤单。
+
+### 14) Positions
+
+- `GET /positions`
+
+Query parameters:
+- `token_ids` (string, required, comma-separated), e.g. `token_ids=id1,id2`
+
+Response:
+```json
+{
+  "token_id_1": 123.0,
+  "token_id_2": 45.0
+}
+```
+中文说明：批量查询条件代币余额（用于 YES/NO 库存管理）。
+
+### 15) Place Market Order (FOK)
 
 - `POST /market-order`
 
@@ -144,7 +219,7 @@ Response:
 - CLOB order response
 中文说明：下市价单（FOK）。
 
-### 10) CTF Split (USDC -> YES/NO)
+### 16) CTF Split (USDC -> YES/NO)
 
 - `POST /ctf/split`
 
@@ -170,7 +245,7 @@ Response:
 - Transaction receipt summary
 中文说明：CTF 拆分（USDC -> YES/NO），返回交易回执摘要。
 
-### 11) CTF Merge (YES/NO -> USDC)
+### 17) CTF Merge (YES/NO -> USDC)
 
 - `POST /ctf/merge`
 

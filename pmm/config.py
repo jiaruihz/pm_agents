@@ -1,4 +1,5 @@
 import os
+import json
 from dataclasses import dataclass, field
 from typing import List
 
@@ -23,37 +24,174 @@ class PMMConfig:
     tick_interval_sec: float = 2.0
     max_ticks: int = 0
     dry_run: bool = False
+    execution_mode: str = "live"  # live | paper
+
+    # Paper trading
+    paper_initial_usdc: float = 1000.0
+    paper_initial_positions: dict = field(default_factory=dict)
+    paper_fill_model: str = "conservative"  # conservative | optimistic
+    paper_fill_epsilon: float = 0.001
+    paper_queue_share: float = 0.25
+
+    # Market data source
+    market_data_source: str = "rest"  # rest | ws
+    ws_market_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+    ws_detail_level: str = "agg"
+    ws_app_ping_interval_sec: float = 10.0
+    ws_reconnect_delay_sec: float = 2.0
+    ws_stale_after_sec: float = 3.0
+    ws_level_limit: int = 200
 
     # Pricing / inventory
-    base_spread: float = 0.02
-    deadband: float = 0.005
-    skew_factor: float = 0.0
+    base_spread: float = 0.04
+    deadband: float = 0.01
+    skew_factor: float = 0.05
+    join_epsilon: float = 0.001
+    min_edge: float = 0.002
+    inventory_sigmoid_k: float = 4.0
+    mid_price_mode: str = "weighted"  # midpoint | weighted
     base_size: float = 5.0
+    min_size: float = 1.0
+    enforce_inventory_for_sell: bool = False
+
+    # Alpha / adverse-selection protection
+    alpha_enabled: bool = True
+    alpha_reference_token_ids: List[str] = field(default_factory=list)
+    alpha_window_sec: int = 30
+    alpha_min_points: int = 5
+    alpha_ref_momentum_threshold: float = 0.03
+    alpha_ofi_enabled: bool = True
+    alpha_ofi_delta: float = 0.01
+    alpha_ofi_imbalance_threshold: float = 0.60
 
     # Depth / risk
     max_position: float = 100.0
+    circuit_breaker_enabled: bool = True
+    circuit_breaker_window_sec: int = 60
+    circuit_breaker_threshold: float = 0.10
+    circuit_breaker_min_points: int = 5
+    circuit_breaker_halt_on_trigger: bool = True
+
+    # Profitability guard
+    min_profitability_spread: float = 0.03
+    fee_spread_floor: float = 0.002
+    target_profit_spread: float = 0.002
+    volatility_spread_coeff: float = 2.0
+    inventory_risk_spread_coeff: float = 0.01
+
+    # Capital efficiency
+    auto_merge_enabled: bool = False
+    auto_merge_every_ticks: int = 30
+    auto_merge_default_min_amount: int = 1_000_000
+    auto_merge_plans: list = field(default_factory=list)
+    merge_pending_credit_enabled: bool = True
+    merge_pending_credit_ttl_sec: int = 20
+    merge_pending_credit_ratio: float = 1.0
+    merge_amount_scale: int = 1_000_000
 
     # Market selection (optional text filter)
     market_query: str = ""
 
     # Market config (manual token ids)
     market: MarketConfig = field(default_factory=lambda: MarketConfig(token_ids=[]))
+    metrics_path: str = "pmm_logs/metrics.jsonl"
 
     @staticmethod
     def from_env() -> "PMMConfig":
         token_ids = os.getenv("PMM_TOKEN_IDS", "").split(",")
         token_ids = [t.strip() for t in token_ids if t.strip()]
+        alpha_reference_token_ids = os.getenv("PMM_ALPHA_REFERENCE_TOKEN_IDS", "").split(",")
+        alpha_reference_token_ids = [
+            t.strip() for t in alpha_reference_token_ids if t.strip()
+        ]
+        merge_plans_raw = os.getenv("PMM_MERGE_PLANS_JSON", "[]")
+        paper_positions_raw = os.getenv("PMM_PAPER_INITIAL_POSITIONS_JSON", "{}")
+        try:
+            auto_merge_plans = json.loads(merge_plans_raw)
+            if not isinstance(auto_merge_plans, list):
+                auto_merge_plans = []
+        except Exception:
+            auto_merge_plans = []
+        try:
+            paper_initial_positions = json.loads(paper_positions_raw)
+            if not isinstance(paper_initial_positions, dict):
+                paper_initial_positions = {}
+        except Exception:
+            paper_initial_positions = {}
         return PMMConfig(
             api_base_url=os.getenv("PMM_API_BASE_URL", "http://localhost:8000"),
             api_key=os.getenv("PMM_API_KEY", ""),
             tick_interval_sec=float(os.getenv("PMM_TICK_INTERVAL_SEC", "2")),
             max_ticks=int(os.getenv("PMM_MAX_TICKS", "0")),
             dry_run=os.getenv("PMM_DRY_RUN", "0") == "1",
-            base_spread=float(os.getenv("PMM_BASE_SPREAD", "0.02")),
-            deadband=float(os.getenv("PMM_DEADBAND", "0.005")),
-            skew_factor=float(os.getenv("PMM_SKEW_FACTOR", "0.0")),
+            execution_mode=os.getenv("PMM_EXECUTION_MODE", "live"),
+            paper_initial_usdc=float(os.getenv("PMM_PAPER_INITIAL_USDC", "1000")),
+            paper_initial_positions=paper_initial_positions,
+            paper_fill_model=os.getenv("PMM_PAPER_FILL_MODEL", "conservative"),
+            paper_fill_epsilon=float(os.getenv("PMM_PAPER_FILL_EPSILON", "0.001")),
+            paper_queue_share=float(os.getenv("PMM_PAPER_QUEUE_SHARE", "0.25")),
+            market_data_source=os.getenv("PMM_MARKET_DATA_SOURCE", "rest"),
+            ws_market_url=os.getenv(
+                "PMM_WS_MARKET_URL", "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+            ),
+            ws_detail_level=os.getenv("PMM_WS_DETAIL_LEVEL", "agg"),
+            ws_app_ping_interval_sec=float(
+                os.getenv("PMM_WS_APP_PING_INTERVAL_SEC", "10")
+            ),
+            ws_reconnect_delay_sec=float(os.getenv("PMM_WS_RECONNECT_DELAY_SEC", "2")),
+            ws_stale_after_sec=float(os.getenv("PMM_WS_STALE_AFTER_SEC", "3")),
+            ws_level_limit=int(os.getenv("PMM_WS_LEVEL_LIMIT", "200")),
+            base_spread=float(os.getenv("PMM_BASE_SPREAD", "0.04")),
+            deadband=float(os.getenv("PMM_DEADBAND", "0.01")),
+            skew_factor=float(os.getenv("PMM_SKEW_FACTOR", "0.05")),
+            join_epsilon=float(os.getenv("PMM_JOIN_EPSILON", "0.001")),
+            min_edge=float(os.getenv("PMM_MIN_EDGE", "0.002")),
+            inventory_sigmoid_k=float(os.getenv("PMM_INVENTORY_SIGMOID_K", "4.0")),
+            mid_price_mode=os.getenv("PMM_MID_PRICE_MODE", "weighted"),
             base_size=float(os.getenv("PMM_BASE_SIZE", "5")),
+            min_size=float(os.getenv("PMM_MIN_SIZE", "1")),
+            enforce_inventory_for_sell=os.getenv("PMM_ENFORCE_INV_SELL", "0") == "1",
+            alpha_enabled=os.getenv("PMM_ALPHA_ENABLED", "1") == "1",
+            alpha_reference_token_ids=alpha_reference_token_ids,
+            alpha_window_sec=int(os.getenv("PMM_ALPHA_WINDOW_SEC", "30")),
+            alpha_min_points=int(os.getenv("PMM_ALPHA_MIN_POINTS", "5")),
+            alpha_ref_momentum_threshold=float(
+                os.getenv("PMM_ALPHA_REF_MOMENTUM_THRESHOLD", "0.03")
+            ),
+            alpha_ofi_enabled=os.getenv("PMM_ALPHA_OFI_ENABLED", "1") == "1",
+            alpha_ofi_delta=float(os.getenv("PMM_ALPHA_OFI_DELTA", "0.01")),
+            alpha_ofi_imbalance_threshold=float(
+                os.getenv("PMM_ALPHA_OFI_IMBALANCE_THRESHOLD", "0.60")
+            ),
             max_position=float(os.getenv("PMM_MAX_POSITION", "100")),
+            circuit_breaker_enabled=os.getenv("PMM_CB_ENABLED", "1") == "1",
+            circuit_breaker_window_sec=int(os.getenv("PMM_CB_WINDOW_SEC", "60")),
+            circuit_breaker_threshold=float(os.getenv("PMM_CB_THRESHOLD", "0.10")),
+            circuit_breaker_min_points=int(os.getenv("PMM_CB_MIN_POINTS", "5")),
+            circuit_breaker_halt_on_trigger=os.getenv("PMM_CB_HALT", "1") == "1",
+            min_profitability_spread=float(os.getenv("PMM_MIN_PROFITABILITY_SPREAD", "0.03")),
+            fee_spread_floor=float(os.getenv("PMM_FEE_SPREAD_FLOOR", "0.002")),
+            target_profit_spread=float(os.getenv("PMM_TARGET_PROFIT_SPREAD", "0.002")),
+            volatility_spread_coeff=float(os.getenv("PMM_VOLATILITY_SPREAD_COEFF", "2.0")),
+            inventory_risk_spread_coeff=float(
+                os.getenv("PMM_INVENTORY_RISK_SPREAD_COEFF", "0.01")
+            ),
+            auto_merge_enabled=os.getenv("PMM_AUTO_MERGE_ENABLED", "0") == "1",
+            auto_merge_every_ticks=int(os.getenv("PMM_AUTO_MERGE_EVERY_TICKS", "30")),
+            auto_merge_default_min_amount=int(
+                os.getenv("PMM_AUTO_MERGE_DEFAULT_MIN_AMOUNT", "1000000")
+            ),
+            auto_merge_plans=auto_merge_plans,
+            merge_pending_credit_enabled=os.getenv("PMM_MERGE_PENDING_CREDIT_ENABLED", "1")
+            == "1",
+            merge_pending_credit_ttl_sec=int(
+                os.getenv("PMM_MERGE_PENDING_CREDIT_TTL_SEC", "20")
+            ),
+            merge_pending_credit_ratio=float(
+                os.getenv("PMM_MERGE_PENDING_CREDIT_RATIO", "1.0")
+            ),
+            merge_amount_scale=int(os.getenv("PMM_MERGE_AMOUNT_SCALE", "1000000")),
             market_query=os.getenv("PMM_MARKET_QUERY", ""),
+            metrics_path=os.getenv("PMM_METRICS_PATH", "pmm_logs/metrics.jsonl"),
             market=MarketConfig(token_ids=token_ids, symbol=os.getenv("PMM_SYMBOL", "PMM")),
         )

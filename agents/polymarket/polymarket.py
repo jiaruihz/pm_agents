@@ -6,7 +6,7 @@ import pdb
 import time
 import ast
 import requests
-from typing import Optional
+from typing import Optional, List
 
 from dotenv import load_dotenv
 
@@ -33,6 +33,9 @@ from py_clob_client.clob_types import (
     MarketOrderArgs,
     OrderType,
     OrderBookSummary,
+    OpenOrderParams,
+    BalanceAllowanceParams,
+    AssetType,
 )
 from py_clob_client.order_builder.constants import BUY
 
@@ -329,6 +332,47 @@ class Polymarket:
 
     def get_orderbook_price(self, token_id: str) -> float:
         return float(self.client.get_price(token_id))
+
+    def get_open_orders(
+        self,
+        order_id: Optional[str] = None,
+        market: Optional[str] = None,
+        asset_id: Optional[str] = None,
+    ) -> list:
+        params = OpenOrderParams(id=order_id, market=market, asset_id=asset_id)
+        return self.client.get_orders(params=params)
+
+    def cancel_order(self, order_id: str) -> dict:
+        return self.client.cancel(order_id)
+
+    def cancel_orders(self, order_ids: List[str]) -> dict:
+        return self.client.cancel_orders(order_ids)
+
+    def cancel_all_orders(self) -> dict:
+        return self.client.cancel_all()
+
+    def cancel_market_orders(
+        self, market: str = "", asset_id: str = ""
+    ) -> dict:
+        return self.client.cancel_market_orders(market=market, asset_id=asset_id)
+
+    def get_token_balance(self, token_id: str) -> float:
+        params = BalanceAllowanceParams(
+            asset_type=AssetType.CONDITIONAL,
+            token_id=token_id,
+        )
+        data = self.client.get_balance_allowance(params=params)
+        balance = data.get("balance", "0")
+        try:
+            return float(balance)
+        except Exception:
+            return 0.0
+
+    def get_positions(self, token_ids: List[str]) -> dict:
+        positions = {}
+        for token_id in token_ids:
+            positions[token_id] = self.get_token_balance(token_id)
+        return positions
 
     def get_address_for_private_key(self):
         account = self.w3.eth.account.from_key(str(self.private_key))

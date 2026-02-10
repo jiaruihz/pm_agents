@@ -38,6 +38,13 @@ class ToolServiceClient:
             resp.raise_for_status()
             return await resp.json()
 
+    async def _delete(self, path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
+        assert self._session is not None
+        url = f"{self.base_url}{path}"
+        async with self._session.delete(url, json=payload, headers=self._headers()) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
     async def get_orderbook(self, token_id: str) -> Dict[str, Any]:
         return await self._get(f"/orderbook/{token_id}")
 
@@ -46,6 +53,23 @@ class ToolServiceClient:
 
     async def get_balance(self) -> Dict[str, Any]:
         return await self._get("/balance")
+
+    async def get_orders(self, token_id: str = "") -> Any:
+        suffix = f"?token_id={token_id}" if token_id else ""
+        return await self._get(f"/orders{suffix}")
+
+    async def get_positions(self, token_ids: list[str]) -> Dict[str, float]:
+        joined = ",".join(token_ids)
+        return await self._get(f"/positions?token_ids={joined}")
+
+    async def cancel_order(self, order_id: str) -> Any:
+        return await self._delete(f"/order/{order_id}")
+
+    async def cancel_orders(self, order_ids: list[str]) -> Any:
+        return await self._post("/orders/cancel", {"order_ids": order_ids})
+
+    async def cancel_all_orders(self) -> Any:
+        return await self._delete("/orders/cancel-all")
 
     async def place_limit_order(self, token_id: str, price: float, size: float, side: str) -> Any:
         payload = {
@@ -59,6 +83,25 @@ class ToolServiceClient:
     async def place_market_order(self, token_id: str, amount: float) -> Any:
         payload = {"token_id": token_id, "amount": amount}
         return await self._post("/market-order", payload)
+
+    async def merge_positions(
+        self,
+        condition_id: str,
+        partition: list[int],
+        amount: int,
+        collateral_token: str = "",
+        parent_collection_id: str = "",
+    ) -> Any:
+        payload: Dict[str, Any] = {
+            "condition_id": condition_id,
+            "partition": partition,
+            "amount": amount,
+        }
+        if collateral_token:
+            payload["collateral_token"] = collateral_token
+        if parent_collection_id:
+            payload["parent_collection_id"] = parent_collection_id
+        return await self._post("/ctf/merge", payload)
 
     async def retry(self, func, *args, retries: int = 3, backoff: float = 0.5, **kwargs):
         for i in range(retries):
