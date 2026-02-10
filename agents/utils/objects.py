@@ -39,6 +39,9 @@ class SimpleMarket(BaseModel):
     rewardsMaxSpread: float
     # volume: Optional[float]
     spread: float
+    best_bid: Optional[float] = None
+    best_ask: Optional[float] = None
+    last_trade_price: Optional[float] = None
     outcomes: str
     outcome_prices: str
     clob_token_ids: Optional[str]

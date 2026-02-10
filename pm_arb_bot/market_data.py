@@ -5,6 +5,7 @@ from pmm.http_client import ToolServiceClient
 from pmm.market_ws import MarketWsFeed
 
 from pm_arb_bot.config import ArbConfig
+from pm_arb_bot.mock_market_data import MockMarketDataFeed
 
 
 class MarketDataManager:
@@ -12,9 +13,14 @@ class MarketDataManager:
         self.config = config
         self.token_ids = token_ids
         self._ws_feed: Optional[MarketWsFeed] = None
+        self._mock_feed: Optional[MockMarketDataFeed] = None
 
     async def start(self) -> None:
-        if self.config.market_data_source.lower() != "ws":
+        source = self.config.market_data_source.lower()
+        if source == "mock":
+            self._mock_feed = MockMarketDataFeed(self.config)
+            return
+        if source != "ws":
             return
         self._ws_feed = MarketWsFeed(
             ws_url=self.config.ws_market_url,
@@ -30,9 +36,13 @@ class MarketDataManager:
     async def stop(self) -> None:
         if self._ws_feed:
             await self._ws_feed.stop()
+        self._mock_feed = None
 
     async def get_orderbooks(self, client: ToolServiceClient) -> Dict[str, Dict[str, Any]]:
         results: Dict[str, Dict[str, Any]] = {}
+
+        if self._mock_feed:
+            return self._mock_feed.next_orderbooks()
 
         if self._ws_feed:
             missing: List[str] = []

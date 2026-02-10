@@ -26,13 +26,19 @@ class ArbConfig:
     dry_run: bool = True
 
     # Market data
-    market_data_source: str = "ws"  # ws | rest
+    market_data_source: str = "ws"  # ws | rest | mock
     ws_market_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
     ws_detail_level: str = "agg"
     ws_app_ping_interval_sec: float = 10.0
     ws_reconnect_delay_sec: float = 2.0
     ws_stale_after_sec: float = 3.0
     ws_level_limit: int = 100
+
+    # Mock market data (for simulation/testing without network)
+    mock_scenario: str = "toggle"  # toggle | merge_arb | split_arb | neutral
+    mock_spread: float = 0.01
+    mock_edge_margin: float = 0.005
+    mock_level_size: float = 100.0
 
     # Strategy thresholds
     fee_buffer: float = 0.003
@@ -101,6 +107,10 @@ class ArbConfig:
             ws_reconnect_delay_sec=float(os.getenv("PM_ARB_WS_RECONNECT_DELAY_SEC", "2")),
             ws_stale_after_sec=float(os.getenv("PM_ARB_WS_STALE_AFTER_SEC", "3")),
             ws_level_limit=int(os.getenv("PM_ARB_WS_LEVEL_LIMIT", "100")),
+            mock_scenario=os.getenv("PM_ARB_MOCK_SCENARIO", "toggle"),
+            mock_spread=float(os.getenv("PM_ARB_MOCK_SPREAD", "0.01")),
+            mock_edge_margin=float(os.getenv("PM_ARB_MOCK_EDGE_MARGIN", "0.005")),
+            mock_level_size=float(os.getenv("PM_ARB_MOCK_LEVEL_SIZE", "100.0")),
             fee_buffer=float(os.getenv("PM_ARB_FEE_BUFFER", "0.003")),
             min_expected_profit_usdc=float(os.getenv("PM_ARB_MIN_EXPECTED_PROFIT_USDC", "0.20")),
             gas_estimate_usdc=float(os.getenv("PM_ARB_GAS_ESTIMATE_USDC", "0.05")),

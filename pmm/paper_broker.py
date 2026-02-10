@@ -196,6 +196,36 @@ class PaperBroker:
             "no_token_id": no_token_id,
         }
 
+    async def split_pair(self, yes_token_id: str, no_token_id: str, amount_usdc: float) -> Dict[str, Any]:
+        """Paper-mode split: USDC collateral -> YES + NO inventory.
+
+        In real CTF, splitting `amount` collateral mints `amount` YES shares and `amount` NO shares.
+        For paper mode we model 1 USDC collateral -> +1 YES share and +1 NO share.
+        """
+        amt = max(0.0, float(amount_usdc))
+        if amt <= 0:
+            return {"status": "skipped", "reason": "amount<=0", "split_usdc": 0.0}
+
+        if amt > self._cash_free + 1e-9:
+            raise ValueError("insufficient paper USDC for split")
+
+        # Consume USDC collateral.
+        self._cash_free -= amt
+        self._cash_total = max(0.0, self._cash_total - amt)
+
+        # Mint YES/NO shares (paper model).
+        for token_id in (str(yes_token_id), str(no_token_id)):
+            self._positions_total[token_id] = float(self._positions_total.get(token_id, 0.0)) + amt
+            self._positions_free[token_id] = float(self._positions_free.get(token_id, 0.0)) + amt
+
+        return {
+            "status": "ok",
+            "mode": "paper",
+            "split_usdc": amt,
+            "yes_token_id": str(yes_token_id),
+            "no_token_id": str(no_token_id),
+        }
+
     async def on_market_data(self, orderbooks: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
         fills: List[Dict[str, Any]] = []
         for order in list(self._orders.values()):

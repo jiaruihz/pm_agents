@@ -54,6 +54,7 @@ python3 -m pm_arb_bot.main
 ## Key Config
 
 - `PM_ARB_MARKET_DATA_SOURCE=ws|rest`
+  - `mock` 也支持：用于在网络不可用时做逻辑仿真（不依赖真实盘口）
 - `PM_ARB_TICK_INTERVAL_SEC=1.0`
 - `PM_ARB_FEE_BUFFER=0.003`
 - `PM_ARB_GAS_ESTIMATE_USDC=0.05`
@@ -64,3 +65,13 @@ python3 -m pm_arb_bot.main
 - `PM_ARB_ALLOW_DEGRADED_EXECUTION=0`
 - `PM_ARB_AUTO_MERGE_EVERY_TICKS=30`
 - `PM_ARB_AUTO_MERGE_MIN_SHARES=1.0`
+
+## Mock Simulation
+
+```bash
+export PM_ARB_MARKET_DATA_SOURCE=mock
+export PM_ARB_MOCK_SCENARIO=toggle   # toggle|merge_arb|split_arb|neutral
+export PM_ARB_MAX_TICKS=5
+export PM_ARB_DRY_RUN=1
+python3 -m pm_arb_bot.main
+```

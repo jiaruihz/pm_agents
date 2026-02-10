@@ -32,6 +32,7 @@ class PMMConfig:
     paper_fill_model: str = "conservative"  # conservative | optimistic
     paper_fill_epsilon: float = 0.001
     paper_queue_share: float = 0.25
+    paper_bootstrap_split_usdc: float = 0.0
 
     # Market data source
     market_data_source: str = "rest"  # rest | ws
@@ -48,6 +49,8 @@ class PMMConfig:
     skew_factor: float = 0.05
     join_epsilon: float = 0.001
     min_edge: float = 0.002
+    price_tick: float = 0.001
+    price_tick_mode: str = "nearest"  # nearest | floor | ceil
     inventory_sigmoid_k: float = 4.0
     mid_price_mode: str = "weighted"  # midpoint | weighted
     base_size: float = 5.0
@@ -130,6 +133,9 @@ class PMMConfig:
             paper_fill_model=os.getenv("PMM_PAPER_FILL_MODEL", "conservative"),
             paper_fill_epsilon=float(os.getenv("PMM_PAPER_FILL_EPSILON", "0.001")),
             paper_queue_share=float(os.getenv("PMM_PAPER_QUEUE_SHARE", "0.25")),
+            paper_bootstrap_split_usdc=float(
+                os.getenv("PMM_PAPER_BOOTSTRAP_SPLIT_USDC", "0")
+            ),
             market_data_source=os.getenv("PMM_MARKET_DATA_SOURCE", "rest"),
             ws_market_url=os.getenv(
                 "PMM_WS_MARKET_URL", "wss://ws-subscriptions-clob.polymarket.com/ws/market"
@@ -146,6 +152,8 @@ class PMMConfig:
             skew_factor=float(os.getenv("PMM_SKEW_FACTOR", "0.05")),
             join_epsilon=float(os.getenv("PMM_JOIN_EPSILON", "0.001")),
             min_edge=float(os.getenv("PMM_MIN_EDGE", "0.002")),
+            price_tick=float(os.getenv("PMM_PRICE_TICK", "0.001")),
+            price_tick_mode=os.getenv("PMM_PRICE_TICK_MODE", "nearest"),
             inventory_sigmoid_k=float(os.getenv("PMM_INVENTORY_SIGMOID_K", "4.0")),
             mid_price_mode=os.getenv("PMM_MID_PRICE_MODE", "weighted"),
             base_size=float(os.getenv("PMM_BASE_SIZE", "5")),

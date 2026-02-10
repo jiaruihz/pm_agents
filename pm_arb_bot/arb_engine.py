@@ -155,12 +155,16 @@ class ArbEngine:
                         }
                     )
 
-        print(
-            f"[PM-ARB][tick={tick}] candidates={len(decisions)} "
-            f"actions={len(actions)} top={decisions[0].expected_profit:.4f}"
-            if decisions
-            else f"[PM-ARB][tick={tick}] no decisions"
-        )
+        if decisions:
+            top = decisions[0]
+            print(
+                f"[PM-ARB][tick={tick}] pairs={len(decisions)} actions={len(actions)} "
+                f"top_pair={top.pair.name} top_action={top.action} "
+                f"top_edge={top.edge:.6f} top_expected_profit={top.expected_profit:.6f} "
+                f"top_size={top.size:.6f}"
+            )
+        else:
+            print(f"[PM-ARB][tick={tick}] no decisions")
         for action in actions:
             print(f"[PM-ARB][action] {action}")
 

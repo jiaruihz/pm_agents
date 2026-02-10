@@ -15,9 +15,37 @@ from web3.constants import MAX_INT
 from web3.middleware import geth_poa_middleware
 
 import httpx
-from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import ApiCreds
-from py_clob_client.constants import AMOY, POLYGON
+try:
+    from py_clob_client.client import ClobClient
+    from py_clob_client.clob_types import ApiCreds
+    from py_clob_client.constants import AMOY, POLYGON
+    from py_clob_client.clob_types import (
+        OrderArgs,
+        MarketOrderArgs,
+        OrderType,
+        OrderBookSummary,
+        OpenOrderParams,
+        BalanceAllowanceParams,
+        AssetType,
+    )
+    from py_clob_client.order_builder.constants import BUY
+    _CLOB_AVAILABLE = True
+except ModuleNotFoundError:
+    # Allow running in "Gamma-only" environments (e.g. paper trading / monitoring)
+    # where the official CLOB python client cannot be installed.
+    ClobClient = None
+    ApiCreds = None
+    AMOY = None
+    POLYGON = None
+    OrderArgs = None
+    MarketOrderArgs = None
+    OrderType = None
+    OrderBookSummary = dict
+    OpenOrderParams = None
+    BalanceAllowanceParams = None
+    AssetType = None
+    BUY = None
+    _CLOB_AVAILABLE = False
 try:
     from py_order_utils.builders import OrderBuilder
     from py_order_utils.model import OrderData
@@ -28,16 +56,6 @@ except ModuleNotFoundError:
     OrderData = None
     Signer = None
     _ORDER_UTILS_AVAILABLE = False
-from py_clob_client.clob_types import (
-    OrderArgs,
-    MarketOrderArgs,
-    OrderType,
-    OrderBookSummary,
-    OpenOrderParams,
-    BalanceAllowanceParams,
-    AssetType,
-)
-from py_clob_client.order_builder.constants import BUY
 
 from agents.utils.objects import SimpleMarket, SimpleEvent
 
@@ -96,15 +114,18 @@ class Polymarket:
             address=self.ctf_address, abi=self.ctf_core_abi
         )
 
+        # CLOB client is optional; in paper-trading or restricted envs we can operate with Gamma-only.
+        self.client = None
+        self.credentials = None
         self._init_api_keys()
         self._init_approvals(False)
 
     def _init_api_keys(self) -> None:
+        if (not _CLOB_AVAILABLE) or (not self.private_key):
+            return
         self.client = ClobClient(
             self.clob_url, key=self.private_key, chain_id=self.chain_id
         )
-        if not self.private_key:
-            return
         self.credentials = self.client.create_or_derive_api_creds()
         self.client.set_api_creds(self.credentials)
         # print(self.credentials)
@@ -220,7 +241,9 @@ class Polymarket:
 
     def get_all_markets(self) -> "list[SimpleMarket]":
         markets = []
-        res = httpx.get(self.gamma_markets_endpoint)
+        # Use Gamma as discovery source; default query to current active markets.
+        params = {"active": "true", "closed": "false", "limit": 50}
+        res = httpx.get(self.gamma_markets_endpoint, params=params)
         if res.status_code == 200:
             for market in res.json():
                 try:
@@ -259,6 +282,9 @@ class Polymarket:
             "rewardsMaxSpread": float(market["rewardsMaxSpread"]),
             # "volume": float(market["volume"]),
             "spread": float(market["spread"]),
+            "best_bid": float(market.get("bestBid") or 0.0),
+            "best_ask": float(market.get("bestAsk") or 0.0),
+            "last_trade_price": float(market.get("lastTradePrice") or 0.0),
             "outcomes": str(market["outcomes"]),
             "outcome_prices": str(market["outcomePrices"]),
             "clob_token_ids": str(market["clobTokenIds"]),
@@ -327,8 +353,60 @@ class Polymarket:
             markets.append(market)
         return markets
 
+    def _normalize_orderbook_levels(self, levels) -> list[dict]:
+        out: list[dict] = []
+        if not levels:
+            return out
+        for lvl in levels:
+            if isinstance(lvl, dict):
+                price = lvl.get("price")
+                size = lvl.get("size")
+            elif isinstance(lvl, (list, tuple)) and len(lvl) >= 2:
+                price, size = lvl[0], lvl[1]
+            else:
+                continue
+            try:
+                p = float(price)
+                s = float(size)
+            except Exception:
+                continue
+            if p > 0 and s > 0:
+                out.append({"price": p, "size": s})
+        return out
+
+    def _get_orderbook_http(self, token_id: str) -> dict:
+        # Best-effort direct HTTP fetch for public CLOB orderbook.
+        # This keeps orderbook retrieval possible even when `py_clob_client` isn't available.
+        candidates = [
+            (f"{self.clob_url}/book", {"token_id": token_id}),
+            (f"{self.clob_url}/book", {"asset_id": token_id}),
+            (f"{self.clob_url}/book/{token_id}", None),
+        ]
+        last_exc: Optional[Exception] = None
+        with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+            for url, params in candidates:
+                try:
+                    resp = client.get(url, params=params)
+                    if resp.status_code != 200:
+                        continue
+                    data = resp.json()
+                    bids = self._normalize_orderbook_levels(data.get("bids"))
+                    asks = self._normalize_orderbook_levels(data.get("asks"))
+                    if bids or asks:
+                        return {"bids": bids, "asks": asks}
+                except Exception as exc:
+                    last_exc = exc
+                    continue
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("failed to fetch orderbook over HTTP")
+
     def get_orderbook(self, token_id: str) -> OrderBookSummary:
-        return self.client.get_order_book(token_id)
+        # Do NOT fabricate pseudo books. If we cannot fetch a real orderbook,
+        # fail fast so downstream strategies don't trade on fake data.
+        if self.client is not None:
+            return self.client.get_order_book(token_id)
+        return self._get_orderbook_http(token_id)
 
     def get_orderbook_price(self, token_id: str) -> float:
         return float(self.client.get_price(token_id))

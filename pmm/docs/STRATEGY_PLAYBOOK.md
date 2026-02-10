@@ -89,6 +89,11 @@
 - `PMM_MID_PRICE_MODE=weighted`
 - `PMM_JOIN_EPSILON=0.001`
 - `PMM_MIN_EDGE=0.002`
+- `PMM_PRICE_TICK=0.001`
+  - 用于把最终下单价格对齐到固定价格网格，避免 `0.419999999999` 这种浮点噪声，同时减少无意义的改单。
+  - 如果你只按 1 cent 报价，可以设为 `0.01`（更粗，但更稳定）。
+- `PMM_PRICE_TICK_MODE=nearest`
+  - `nearest` / `floor` / `ceil`
 - `PMM_MIN_PROFITABILITY_SPREAD=0.03`
 - `PMM_FEE_SPREAD_FLOOR=0.002`
 - `PMM_TARGET_PROFIT_SPREAD=0.002`

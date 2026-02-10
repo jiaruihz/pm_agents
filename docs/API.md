@@ -90,6 +90,11 @@ Response:
 - CLOB order book object
 中文说明：获取订单簿数据（CLOB）。
 
+Notes:
+- This endpoint returns a *real* orderbook only (no pseudo/fallback book fabrication).
+- If the environment cannot reach Polymarket CLOB (or `py_clob_client` is not available/configured),
+  the service will return `500` with an error message.
+
 ### 7) Wallet Balance
 
 - `GET /balance`

@@ -13,6 +13,7 @@ from pmm.order_manager import OrderManager
 from pmm.orderbook import best_bid_ask, mid_price, spread as orderbook_spread
 from pmm.paper_broker import PaperBroker
 from pmm.pricing import compute_quotes
+from pmm.quantize import quantize_to_tick
 
 
 # Parse fallback mid from `/market/{token_id}` payload when orderbook is unavailable.
@@ -233,6 +234,49 @@ def _anchor_quotes_to_book(
     return anchored_bid, anchored_ask
 
 
+def _quantize_quote_pair(
+    bid: float,
+    ask: float,
+    tick: float,
+    mode: str,
+) -> tuple[float, float]:
+    if tick <= 0:
+        return bid, ask
+    qb = quantize_to_tick(bid, tick=tick, mode=mode)
+    qa = quantize_to_tick(ask, tick=tick, mode=mode)
+    # Keep within probability bounds and avoid crossing.
+    qb = max(0.0001, min(0.9998, qb))
+    qa = max(0.0002, min(0.9999, qa))
+    if qb >= qa:
+        # Force a 1-tick gap if needed.
+        qa = min(0.9999, quantize_to_tick(qb + tick, tick=tick, mode="ceil"))
+        if qb >= qa:
+            qa = min(0.9999, qb + 0.0001)
+    return qb, qa
+
+
+def _quantize_price_dict(values: Dict[str, float], tick: float, mode: str) -> Dict[str, float]:
+    if tick <= 0:
+        return dict(values)
+    return {k: quantize_to_tick(v, tick=tick, mode=mode) for k, v in values.items()}
+
+
+def _quantize_quote_dict(
+    values: Dict[str, Dict[str, float]],
+    tick: float,
+    mode: str,
+) -> Dict[str, Dict[str, float]]:
+    if tick <= 0:
+        return {k: dict(v) for k, v in values.items()}
+    out: Dict[str, Dict[str, float]] = {}
+    for token_id, q in values.items():
+        bid = float(q.get("bid", 0.0))
+        ask = float(q.get("ask", 0.0))
+        qb, qa = _quantize_quote_pair(bid, ask, tick=tick, mode=mode)
+        out[token_id] = {"bid": qb, "ask": qa}
+    return out
+
+
 def _parse_partition(value: Any) -> List[int]:
     if not isinstance(value, list):
         return [1, 2]
@@ -311,6 +355,7 @@ async def tick_loop(config: PMMConfig) -> None:
         execution_mode = config.execution_mode.lower().strip()
         paper_broker: Optional[PaperBroker] = None
         execution_client: Any = client
+        paper_bootstrap_actions: List[Dict[str, Any]] = []
         # Execution layer switch:
         # - live: send real API orders
         # - paper: local matching with real market data
@@ -328,6 +373,32 @@ async def tick_loop(config: PMMConfig) -> None:
                 "[PAPER] enabled "
                 f"initial_usdc={config.paper_initial_usdc} fill_model={config.paper_fill_model}"
             )
+            # Optional bootstrap: simulate `split()` so we start with YES+NO inventory.
+            # Without this, SELL quoting may fail due to zero paper positions.
+            if config.paper_bootstrap_split_usdc > 0 and len(token_ids) >= 2:
+                try:
+                    yes_token_id = token_ids[0]
+                    no_token_id = token_ids[1]
+                    resp = await paper_broker.split_pair(
+                        yes_token_id,
+                        no_token_id,
+                        config.paper_bootstrap_split_usdc,
+                    )
+                    paper_bootstrap_actions.append(resp)
+                    print(
+                        "[PAPER] bootstrap split ok "
+                        f"split_usdc={config.paper_bootstrap_split_usdc} "
+                        f"yes={yes_token_id} no={no_token_id}"
+                    )
+                except Exception as exc:
+                    paper_bootstrap_actions.append(
+                        {
+                            "status": "error",
+                            "error": str(exc),
+                            "split_usdc": float(config.paper_bootstrap_split_usdc),
+                        }
+                    )
+                    print(f"[PAPER][ERROR] bootstrap split failed: {exc}")
 
         async def _exec_call(method, *args):
             if paper_broker is not None:
@@ -531,8 +602,8 @@ async def tick_loop(config: PMMConfig) -> None:
                             "pending_usdc_credit": pending_usdc_credit,
                             "positions": positions,
                             "net_inventory": net_inventory,
-                            "mids": mids,
-                            "spreads": spreads,
+                            "mids": _quantize_price_dict(mids, config.price_tick, config.price_tick_mode),
+                            "spreads": _quantize_price_dict(spreads, config.price_tick, config.price_tick_mode),
                             "equity": equity,
                             "pnl": pnl,
                             "open_orders_count": len(open_orders),
@@ -540,8 +611,12 @@ async def tick_loop(config: PMMConfig) -> None:
                             "canceled": canceled,
                             "errors": errors,
                             "inventory_signals": inventory_signals,
-                            "target_quotes": target_quotes,
-                            "final_quotes": final_quotes,
+                            "target_quotes": _quantize_quote_dict(
+                                target_quotes, config.price_tick, config.price_tick_mode
+                            ),
+                            "final_quotes": _quantize_quote_dict(
+                                final_quotes, config.price_tick, config.price_tick_mode
+                            ),
                             "ofi_imbalances": ofi_imbalances,
                             "realized_volatility": realized_volatility,
                             "required_spreads": required_spreads,
@@ -550,6 +625,7 @@ async def tick_loop(config: PMMConfig) -> None:
                             "side_blocks": side_blocks,
                             "merge_actions": merge_actions,
                             "paper_recent_fills": paper_recent_fills,
+                            "paper_bootstrap_actions": paper_bootstrap_actions,
                             "circuit_breaker_triggered": True,
                             "circuit_breaker_reasons": circuit_breaker_reasons,
                         }
@@ -626,6 +702,13 @@ async def tick_loop(config: PMMConfig) -> None:
                         join_epsilon=config.join_epsilon,
                         fair_value=mid,
                         min_edge=config.min_edge,
+                    )
+                    # Quantize to exchange tick size grid for stability and cleaner metrics.
+                    bid_price, ask_price = _quantize_quote_pair(
+                        bid_price,
+                        ask_price,
+                        tick=config.price_tick,
+                        mode=config.price_tick_mode,
                     )
                     final_quotes[token_id] = {"bid": bid_price, "ask": ask_price}
                     position = positions.get(token_id, 0.0)
@@ -820,8 +903,8 @@ async def tick_loop(config: PMMConfig) -> None:
                         "pending_usdc_credit": pending_usdc_credit,
                         "positions": positions,
                         "net_inventory": net_inventory,
-                        "mids": mids,
-                        "spreads": spreads,
+                        "mids": _quantize_price_dict(mids, config.price_tick, config.price_tick_mode),
+                        "spreads": _quantize_price_dict(spreads, config.price_tick, config.price_tick_mode),
                         "equity": equity,
                         "pnl": pnl,
                         "open_orders_count": len(open_orders),
@@ -829,8 +912,12 @@ async def tick_loop(config: PMMConfig) -> None:
                         "canceled": canceled,
                         "errors": errors,
                         "inventory_signals": inventory_signals,
-                        "target_quotes": target_quotes,
-                        "final_quotes": final_quotes,
+                        "target_quotes": _quantize_quote_dict(
+                            target_quotes, config.price_tick, config.price_tick_mode
+                        ),
+                        "final_quotes": _quantize_quote_dict(
+                            final_quotes, config.price_tick, config.price_tick_mode
+                        ),
                         "ofi_imbalances": ofi_imbalances,
                         "realized_volatility": realized_volatility,
                         "required_spreads": required_spreads,
@@ -839,6 +926,7 @@ async def tick_loop(config: PMMConfig) -> None:
                         "side_blocks": side_blocks,
                         "merge_actions": merge_actions,
                         "paper_recent_fills": paper_recent_fills,
+                        "paper_bootstrap_actions": paper_bootstrap_actions,
                         "circuit_breaker_triggered": False,
                         "circuit_breaker_reasons": [],
                     }

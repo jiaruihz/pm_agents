@@ -151,6 +151,8 @@
 
 输出文件：`pmm_logs/metrics.jsonl`
 
+- 指标格式说明：`pmm/docs/METRICS_FORMAT.md`
+
 - 基础：
   - `ts`, `tick`, `usdc_balance`, `effective_usdc_for_sizing`, `pending_usdc_credit`, `positions`, `net_inventory`
   - `mids`, `spreads`, `equity`, `pnl`

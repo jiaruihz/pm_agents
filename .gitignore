@@ -27,3 +27,5 @@ archive.zip
 .cache
 .DS_Store
 local_db*
+local_news_cache/
+pmm_logs/
