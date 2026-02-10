@@ -8,6 +8,10 @@ load_dotenv()
 openai_api_key = os.getenv("OPEN_API_KEY")
 tavily_api_key = os.getenv("TAVILY_API_KEY")
 
+# Note: OPENAI_API_KEY is the repo-wide standard. Keep OPEN_API_KEY for backward compatibility.
+if not openai_api_key:
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+
 # Step 1. Instantiating your TavilyClient
 tavily_client = TavilyClient(api_key=tavily_api_key)
 
