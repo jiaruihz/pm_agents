@@ -15,7 +15,9 @@ from pmm.orderbook import best_bid_ask, spread as orderbook_spread
 from pmm.paper_broker import PaperBroker
 from pmm.strategy_base import StrategyQuoteInput
 from pmm.strategy_registry import StrategyRegistry
+from pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
+from pmm.backtest.scenario_validator import validate_scenario_payload
 import pmm.tick_loop as live
 
 
@@ -132,7 +134,11 @@ class ReplayResult:
     summary_path: str
 
 
-async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayResult:
+async def _run_single_async(
+    scenario: Dict[str, Any],
+    out_dir: Path,
+    validation_report: Dict[str, Any] | None = None,
+) -> ReplayResult:
     scenario_id = str(scenario.get("scenario_id", "unknown_scenario"))
     token_ids = [str(x) for x in scenario.get("token_ids", [])]
     if len(token_ids) < 2:
@@ -153,6 +159,13 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
     strategy_registry = StrategyRegistry()
     strategy_registry.register(
         SingleLevelV1Strategy(
+            anchor_quotes_fn=live._anchor_quotes_to_book,
+            quantize_pair_fn=live._quantize_quote_pair,
+            target_sizes_fn=live._target_sizes,
+        )
+    )
+    strategy_registry.register(
+        MultiLevelV1Strategy(
             anchor_quotes_fn=live._anchor_quotes_to_book,
             quantize_pair_fn=live._quantize_quote_pair,
             target_sizes_fn=live._target_sizes,
@@ -332,20 +345,31 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
                     ),
                     config=cfg,
                 )
-                target_quotes[token_id] = {}
-                final_quotes[token_id] = {}
+                target_bid = 0.0
+                target_ask = 0.0
+                final_bid = 0.0
+                final_ask = 0.0
+                side_targets: Dict[str, List[Dict[str, Any]]] = {"BUY": [], "SELL": []}
                 for q in quote_targets:
-                    side_key = "bid" if q.side == "BUY" else "ask"
-                    target_quotes[token_id][side_key] = q.target_price if q.target_price > 0 else q.price
-                    final_quotes[token_id][side_key] = q.price
-                for side in ("bid", "ask"):
-                    if side not in target_quotes[token_id]:
-                        target_quotes[token_id][side] = 0.0
-                    if side not in final_quotes[token_id]:
-                        final_quotes[token_id][side] = 0.0
+                    q_target_price = q.target_price if q.target_price > 0 else q.price
+                    if q.side == "BUY":
+                        target_bid = max(target_bid, q_target_price)
+                        final_bid = max(final_bid, q.price)
+                    else:
+                        target_ask = q_target_price if target_ask <= 0 else min(target_ask, q_target_price)
+                        final_ask = q.price if final_ask <= 0 else min(final_ask, q.price)
+                    side_targets[q.side].append(
+                        {
+                            "price": q.price,
+                            "size": q.size,
+                            "level": q.level,
+                            "target_price": q_target_price,
+                        }
+                    )
+                target_quotes[token_id] = {"bid": target_bid, "ask": target_ask}
+                final_quotes[token_id] = {"bid": final_bid, "ask": final_ask}
 
-                for q in quote_targets:
-                    side, price, size = q.side, q.price, q.size
+                for side in ("BUY", "SELL"):
                     side_blocked = (side == "BUY" and block_buy) or (side == "SELL" and block_sell)
                     if side_blocked:
                         side_blocks[side].append(token_id)
@@ -393,12 +417,11 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
                             ]
                         continue
 
-                    decision = order_mgr.diff(
+                    decision = order_mgr.diff_multi(
                         open_orders=local_orders,
                         token_id=token_id,
                         side=side,
-                        target_price=price,
-                        target_size=size,
+                        targets=side_targets.get(side, []),
                     )
                     if decision.cancel_ids:
                         try:
@@ -439,48 +462,54 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
                                     "message": str(exc),
                                 }
                             )
-                    if (not decision.create) or size < cfg.min_size:
-                        continue
-                    try:
-                        placed_order = await broker.place_limit_order(token_id, price, size, side)
-                        placed += 1
-                        total_placed += 1
-                        local_orders.append(
-                            {
-                                "id": placed_order.get("id"),
-                                "asset_id": token_id,
-                                "side": side,
-                                "price": price,
-                                "size": size,
-                            }
-                        )
-                        action_events.append(
-                            {
-                                "tick": tick_idx,
-                                "event": event_label,
-                                "type": "place",
-                                "reason": decision.reason,
-                                "token_id": token_id,
-                                "side": side,
-                                "price": price,
-                                "size": size,
-                                "order_id": placed_order.get("id"),
-                            }
-                        )
-                    except Exception as exc:
-                        errors += 1
-                        total_errors += 1
-                        action_events.append(
-                            {
-                                "tick": tick_idx,
-                                "event": event_label,
-                                "type": "error",
-                                "action": "place",
-                                "token_id": token_id,
-                                "side": side,
-                                "message": str(exc),
-                            }
-                        )
+                    for t in decision.create_targets:
+                        price = float(t.get("price", 0.0) or 0.0)
+                        size = float(t.get("size", 0.0) or 0.0)
+                        level = int(t.get("level", 0) or 0)
+                        if size < cfg.min_size or price <= 0:
+                            continue
+                        try:
+                            placed_order = await broker.place_limit_order(token_id, price, size, side)
+                            placed += 1
+                            total_placed += 1
+                            local_orders.append(
+                                {
+                                    "id": placed_order.get("id"),
+                                    "asset_id": token_id,
+                                    "side": side,
+                                    "price": price,
+                                    "size": size,
+                                    "level": level,
+                                }
+                            )
+                            action_events.append(
+                                {
+                                    "tick": tick_idx,
+                                    "event": event_label,
+                                    "type": "place",
+                                    "reason": decision.reason,
+                                    "token_id": token_id,
+                                    "side": side,
+                                    "price": price,
+                                    "size": size,
+                                    "level": level,
+                                    "order_id": placed_order.get("id"),
+                                }
+                            )
+                        except Exception as exc:
+                            errors += 1
+                            total_errors += 1
+                            action_events.append(
+                                {
+                                    "tick": tick_idx,
+                                    "event": event_label,
+                                    "type": "error",
+                                    "action": "place",
+                                    "token_id": token_id,
+                                    "side": side,
+                                    "message": str(exc),
+                                }
+                            )
 
         fills = await broker.on_market_data(orderbooks, trade_flow=trade_flow)
         if fills:
@@ -553,6 +582,13 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
             sum(x.get("pnl", 0.0) for x in metrics_events) / max(1, len(metrics_events))
         ),
     }
+    if validation_report is not None:
+        summary["scenario_validation"] = {
+            "ok": bool(validation_report.get("ok", False)),
+            "errors_count": int(validation_report.get("errors_count", 0)),
+            "warnings_count": int(validation_report.get("warnings_count", 0)),
+            "stats": validation_report.get("stats", {}),
+        }
 
     scenario_dir = out_dir / scenario_id
     metrics_path = scenario_dir / "metrics.jsonl"
@@ -572,11 +608,13 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
 
 def run_scenario_file(scenario_file: str, out_dir: str) -> ReplayResult:
     payload = json.loads(Path(scenario_file).read_text(encoding="utf-8"))
-    return asyncio.run(_run_single_async(payload, Path(out_dir)))
+    report = validate_scenario_payload(payload, strict=True)
+    return asyncio.run(_run_single_async(payload, Path(out_dir), validation_report=report))
 
 
 def run_scenario_payload(scenario: Dict[str, Any], out_dir: str) -> ReplayResult:
-    return asyncio.run(_run_single_async(scenario, Path(out_dir)))
+    report = validate_scenario_payload(scenario, strict=True)
+    return asyncio.run(_run_single_async(scenario, Path(out_dir), validation_report=report))
 
 
 def run_scenarios_dir(scenarios_dir: str, out_dir: str) -> Dict[str, Any]:

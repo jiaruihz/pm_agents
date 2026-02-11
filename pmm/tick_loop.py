@@ -15,6 +15,7 @@ from pmm.paper_broker import PaperBroker
 from pmm.quantize import quantize_to_tick
 from pmm.strategy_base import StrategyQuoteInput
 from pmm.strategy_registry import StrategyRegistry
+from pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
 
 
@@ -341,6 +342,13 @@ async def tick_loop(config: PMMConfig) -> None:
             target_sizes_fn=_target_sizes,
         )
     )
+    strategy_registry.register(
+        MultiLevelV1Strategy(
+            anchor_quotes_fn=_anchor_quotes_to_book,
+            quantize_pair_fn=_quantize_quote_pair,
+            target_sizes_fn=_target_sizes,
+        )
+    )
     strategy = strategy_registry.get(config.strategy_key)
     if strategy is None:
         available = ", ".join(strategy_registry.available_keys())
@@ -372,10 +380,15 @@ async def tick_loop(config: PMMConfig) -> None:
     async with ToolServiceClient(config.api_base_url, config.api_key) as client:
         execution_mode = config.execution_mode.lower().strip()
         quote_runtime_meta = config.quote_runtime_meta()
-        if quote_runtime_meta.get("multi_level_placeholder_active"):
+        if quote_runtime_meta.get("multi_level_placeholder_active") and strategy.key != "multi_level_v1":
             print(
                 "[QUOTE] multi-level requested but placeholder mode is active; "
                 "runtime still uses single-level quoting."
+            )
+        if strategy.key == "multi_level_v1":
+            print(
+                "[QUOTE] multi-level active "
+                f"levels={quote_runtime_meta.get('quote_levels_effective')}"
             )
         paper_broker: Optional[PaperBroker] = None
         execution_client: Any = client
@@ -727,25 +740,33 @@ async def tick_loop(config: PMMConfig) -> None:
                         ),
                         config=config,
                     )
-                    target_quotes[token_id] = {}
-                    final_quotes[token_id] = {}
+                    target_bid = 0.0
+                    target_ask = 0.0
+                    final_bid = 0.0
+                    final_ask = 0.0
+                    side_targets: Dict[str, List[Dict[str, Any]]] = {"BUY": [], "SELL": []}
                     for q in quote_targets:
-                        side_key = "bid" if q.side == "BUY" else "ask"
-                        target_quotes[token_id][side_key] = (
-                            q.target_price if q.target_price > 0 else q.price
+                        q_target_price = q.target_price if q.target_price > 0 else q.price
+                        if q.side == "BUY":
+                            target_bid = max(target_bid, q_target_price)
+                            final_bid = max(final_bid, q.price)
+                        else:
+                            target_ask = q_target_price if target_ask <= 0 else min(target_ask, q_target_price)
+                            final_ask = q.price if final_ask <= 0 else min(final_ask, q.price)
+                        side_targets[q.side].append(
+                            {
+                                "price": q.price,
+                                "size": q.size,
+                                "level": q.level,
+                                "target_price": q_target_price,
+                            }
                         )
-                        final_quotes[token_id][side_key] = q.price
-                    for side in ("bid", "ask"):
-                        if side not in target_quotes[token_id]:
-                            target_quotes[token_id][side] = 0.0
-                        if side not in final_quotes[token_id]:
-                            final_quotes[token_id][side] = 0.0
+                    target_quotes[token_id] = {"bid": target_bid, "ask": target_ask}
+                    final_quotes[token_id] = {"bid": final_bid, "ask": final_ask}
 
-                    for q in quote_targets:
-                        side, price, size = q.side, q.price, q.size
+                    for side in ("BUY", "SELL"):
                         side_blocked = (side == "BUY" and block_buy) or (side == "SELL" and block_sell)
                         if side_blocked:
-                            # If side is blocked, pull existing same-side orders immediately.
                             side_blocks[side].append(token_id)
                             blocked_ids = order_mgr.side_order_ids(
                                 open_orders=local_orders,
@@ -777,13 +798,11 @@ async def tick_loop(config: PMMConfig) -> None:
                                     )
                             continue
 
-                        # 6) Diffing for queue-preserving order management.
-                        decision = order_mgr.diff(
+                        decision = order_mgr.diff_multi(
                             open_orders=local_orders,
                             token_id=token_id,
                             side=side,
-                            target_price=price,
-                            target_size=size,
+                            targets=side_targets.get(side, []),
                         )
                         if decision.cancel_ids:
                             try:
@@ -809,27 +828,49 @@ async def tick_loop(config: PMMConfig) -> None:
                                 errors += 1
                                 print(f"[ERROR] cancel failed token={token_id} side={side}: {exc}")
 
-                        if not decision.create or size < config.min_size:
-                            continue
-
-                        try:
-                            if config.dry_run:
-                                print(
-                                    f"[DRY_RUN] PLACE {side} {token_id} "
-                                    f"price={price:.4f} size={size:.4f} reason={decision.reason}"
+                        for t in decision.create_targets:
+                            price = _safe_float(t.get("price"), 0.0)
+                            size = _safe_float(t.get("size"), 0.0)
+                            level = _safe_int(t.get("level"), 0)
+                            if size < config.min_size or price <= 0:
+                                continue
+                            try:
+                                if config.dry_run:
+                                    print(
+                                        f"[DRY_RUN] PLACE {side} {token_id} "
+                                        f"level={level} price={price:.4f} size={size:.4f} "
+                                        f"reason={decision.reason}"
+                                    )
+                                    placed_order = {
+                                        "id": f"dry_{token_id}_{side}_{level}_{tick_count}",
+                                        "asset_id": token_id,
+                                        "side": side,
+                                        "price": price,
+                                        "size": size,
+                                        "level": level,
+                                    }
+                                else:
+                                    placed_order = await _exec_call(
+                                        execution_client.place_limit_order,
+                                        token_id,
+                                        price,
+                                        size,
+                                        side,
+                                    )
+                                placed += 1
+                                local_orders.append(
+                                    {
+                                        "id": placed_order.get("id"),
+                                        "asset_id": token_id,
+                                        "side": side,
+                                        "price": price,
+                                        "size": size,
+                                        "level": level,
+                                    }
                                 )
-                            else:
-                                await _exec_call(
-                                    execution_client.place_limit_order,
-                                    token_id,
-                                    price,
-                                    size,
-                                    side,
-                                )
-                            placed += 1
-                        except Exception as exc:
-                            errors += 1
-                            print(f"[ERROR] place failed token={token_id} side={side}: {exc}")
+                            except Exception as exc:
+                                errors += 1
+                                print(f"[ERROR] place failed token={token_id} side={side}: {exc}")
 
                 if (
                     config.auto_merge_enabled

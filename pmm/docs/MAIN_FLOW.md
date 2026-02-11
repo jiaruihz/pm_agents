@@ -25,10 +25,12 @@
 ├─────────────────────────────────────────────────────┤
 │ 5. Strategy Routing + Quote Generation              │
 │    strategy_key → StrategyRegistry → strategy impl   │
-│    single_level_v1: compute → anchor → quantize      │
+│    single_level_v1 / multi_level_v1                   │
+│    compute → anchor → quantize → quote_targets[]      │
 ├─────────────────────────────────────────────────────┤
 │ 6. Execution                                        │
-│    diff(open_orders, target) → cancel + place        │
+│    diff_multi(open_orders, side_targets)             │
+│    → cancel + place(1..N levels)                     │
 ├─────────────────────────────────────────────────────┤
 │ 7. Auto Merge (periodic)                            │
 │    min(yes_pos, no_pos) ≥ threshold → merge → USDC   │
@@ -49,7 +51,7 @@ sequenceDiagram
     participant Main as main.py
     participant Engine as tick_loop
     participant Registry as StrategyRegistry
-    participant Strat as single_level_v1
+    participant Strat as strategy_impl
     participant API as ToolService / PaperBroker
     participant WS as MarketWsFeed
     participant Diff as OrderManager
@@ -83,14 +85,14 @@ sequenceDiagram
             Engine->>Engine: compute signals (inv/rv/ofi/momentum)
             Engine->>Strat: generate_quotes(token_ctx, signal_ctx)
             Strat-->>Engine: quote_targets[]
-            loop each quote_target
-                Engine->>Diff: diff(open_orders, target)
-                Diff-->>Engine: cancel_ids, create?
+            loop each side
+                Engine->>Diff: diff_multi(open_orders, side_targets)
+                Diff-->>Engine: cancel_ids, create_targets[]
                 opt cancel
                     Engine->>API: cancel
                 end
-                opt create
-                    Engine->>API: place
+                opt create_targets
+                    Engine->>API: place x N
                 end
             end
             opt merge due

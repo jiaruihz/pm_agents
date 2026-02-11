@@ -1,6 +1,8 @@
 # Backtest & Scenario Replay
 
-场景造数、策略回放、结果分析的方法说明。
+场景造数、策略回放、真实数据录制与结果分析的方法说明。
+
+> 文档分工：`pmm/docs/EXECUTION_PLAN_REALDATA_MULTI_LEVEL.md` 负责阶段计划，本文件负责可执行细则，避免冗余维护。
 
 ## 文件结构
 
@@ -80,6 +82,11 @@ replay_runner
 - `cross_fill`：盘口穿价触发成交
 - `queue_fill`：仅在有 `trade_flow` 时才允许 BBO 队列成交
 - `conservative` 相比 `optimistic` 使用更保守的 BBO 队列份额
+
+回放前置校验（已接入）：
+
+- `run` / `run-all` / `run-all-fill-models` 在执行前会先校验 scenario 结构。
+- 严重问题（如盘口非单调、负价格/负数量）会直接失败并阻止回测。
 
 ---
 
@@ -166,25 +173,26 @@ results_fill_models/
 | `strategy_key` | 本次回测实际使用的策略实现 key |
 | `quote_runtime` | 报价运行元信息（请求档位/生效档位） |
 | `strategy_overrides` | 本次回测实际覆盖参数 |
+| `scenario_validation` | 回放前数据校验摘要（ok/errors/warnings/stats） |
 
-### quote_runtime 字段说明（多档挂单预留口子）
+### quote_runtime 字段说明
 
 - `quote_levels_requested`：配置请求档位（例如 3）
-- `quote_levels_effective`：当前实际生效档位（当前版本固定为 1）
-- `multi_level_quote_enabled`：是否启用多档实现
-- `multi_level_placeholder_active`：请求 > 1 但仍按单档执行时为 `true`
+- `quote_levels_effective`：当前实际生效档位（`single_level_v1`=1；`multi_level_v1`=请求值）
+- `multi_level_quote_enabled`：当前策略是否为多档实现（`strategy_key=multi_level_v1`）
+- `multi_level_placeholder_active`：请求 > 1 但当前策略不是多档时为 `true`
 
 策略路由相关：
 
 - 环境变量：`PMM_STRATEGY_KEY`（默认 `single_level_v1`）
-- 当前实现：`single_level_v1`
-- 预留空壳：`multi_level_v1`（尚未注册到运行时）
+- 当前实现：`single_level_v1`、`multi_level_v1`
+- 多档是否生效：由 `strategy_key=multi_level_v1` + `quote_levels>1` 决定
 
 这保证了：
 
-- 现在不改现有单档行为
-- 现在就能把“未来多档配置”放进回测对照组
-- 未来真正实现多档后，直接比较 `quote_levels_effective` 从 1→N 的收益差异
+- 默认不改现有单档行为（仍可用 `single_level_v1` 做基准）
+- 可以直接把多档配置放进回测对照组
+- 通过比较 `quote_levels_effective` 从 1→N 评估多档收益差异
 
 ---
 
@@ -227,6 +235,13 @@ results_fill_models/
   --profiles pmm/backtest/compare_profiles_single_level.json \
   --out-dir pmm/backtest/results_compare
 
+# 多档策略对比（示例：single vs multi_level_v1）
+# profiles 文件中可设置:
+# - strategy_key: multi_level_v1
+# - quote_levels: 3
+# - level_spread_step: 0.01
+# - level_size_decay: 0.6
+
 # 单场景绘图
 ./venv/bin/python scripts/python/pmm_backtest.py plot \
   --result-dir pmm/backtest/results/b50_oscillating_fill
@@ -234,7 +249,48 @@ results_fill_models/
 # 批量汇总绘图
 ./venv/bin/python scripts/python/pmm_backtest.py plot-all \
   --results-dir pmm/backtest/results
+
+# 录制真实 WS 盘口 + 估算订单流，直接输出 scenario + jsonl
+./venv/bin/python scripts/python/pmm_backtest.py record-live \
+  --tokens <YES_TOKEN_ID>,<NO_TOKEN_ID> \
+  --duration 300 \
+  --interval 1.0 \
+  --out-scenario pmm/backtest/scenarios/recorded_live.json \
+  --out-jsonl pmm/backtest/scenarios/recorded_live.jsonl \
+  --initial-usdc 100 \
+  --initial-positions-json '{"<YES_TOKEN_ID>":50,"<NO_TOKEN_ID>":50}'
+
+# 将已有 jsonl 转换为标准 scenario 格式
+./venv/bin/python scripts/python/pmm_backtest.py convert-live \
+  --jsonl pmm/backtest/scenarios/recorded_live.jsonl \
+  --out-scenario pmm/backtest/scenarios/recorded_live_converted.json \
+  --tokens <YES_TOKEN_ID>,<NO_TOKEN_ID> \
+  --initial-usdc 100 \
+  --initial-positions-json '{"<YES_TOKEN_ID>":50,"<NO_TOKEN_ID>":50}'
+
+# 校验单个 scenario
+./venv/bin/python scripts/python/pmm_backtest.py validate \
+  --scenario pmm/backtest/scenarios/recorded_live_converted.json
+
+# 校验整个目录
+./venv/bin/python scripts/python/pmm_backtest.py validate-dir \
+  --scenarios-dir pmm/backtest/scenarios
+
+# 严格模式：出现错误时返回非 0 退出码
+./venv/bin/python scripts/python/pmm_backtest.py validate-dir \
+  --scenarios-dir pmm/backtest/scenarios \
+  --strict
 ```
+
+真实数据录制说明：
+
+- `record-live` 输出两份文件：
+  - `scenario JSON`：可直接回测。
+  - `jsonl`：逐 tick 原始快照序列，便于审计和重转换。
+- `trade_flow` 当前来自盘口深度变化估计，属于近似值：
+  - ask 深度减少 -> `buy_taker_qty`
+  - bid 深度减少 -> `sell_taker_qty`
+- 该估算会混入撤单噪音，适合做“保守回测”的输入，不等同逐笔真实成交流。
 
 ---
 
@@ -284,3 +340,30 @@ results/plots/
 - 手续费 / 滑点 / 网络延迟建模
 - 更真实的队列优先级
 - 增量事件驱动（替代快照驱动）
+
+---
+
+## 7. 数据质量门禁（Phase C）
+
+校验器：`pmm/backtest/scenario_validator.py`
+
+硬规则（error）：
+
+- `scenario_id` 非空字符串
+- `token_ids` 至少两个
+- `ticks` 非空
+- `bids` 价格递减、`asks` 价格递增
+- 价格必须 `> 0`，数量不可为负
+
+软规则（warning）：
+
+- 缺失 `trade_flow`
+- 某 token 在部分 tick 缺失 orderbook
+- 出现 crossed book（`best_bid >= best_ask`）
+
+输出字段：
+
+- `ok`
+- `errors_count` / `warnings_count`
+- `stats`（覆盖率与异常 tick 计数）
+- `errors[]` / `warnings[]`

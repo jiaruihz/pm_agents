@@ -11,13 +11,13 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from pmm.backtest.scenario_generator import generate_all_from_catalog
 from pmm.backtest.replay_runner import (
     run_scenario_compare,
     run_scenario_file,
     run_scenarios_dir,
     run_scenarios_dir_with_fill_models,
 )
+from pmm.backtest.scenario_generator import generate_all_from_catalog
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -119,17 +119,21 @@ def _build_parser() -> argparse.ArgumentParser:
         default="pmm/backtest/results_compare",
         help="Output directory for compare run artifacts",
     )
-    p_record = sub.add_parser("record", help="Record live orderbook data to scenario JSON")
+
+    p_record = sub.add_parser(
+        "record-live",
+        help="Record live market orderbook + estimated trade_flow and output scenario/jsonl",
+    )
     p_record.add_argument(
         "--tokens",
         required=True,
-        help="Comma separated token IDs to record, e.g. 1234,5678",
+        help="Comma separated token IDs to record, e.g. YES_TOKEN_ID,NO_TOKEN_ID",
     )
     p_record.add_argument(
         "--duration",
         type=int,
-        default=60,
-        help="Duration in seconds (default: 60)",
+        default=120,
+        help="Duration in seconds (default: 120)",
     )
     p_record.add_argument(
         "--interval",
@@ -138,28 +142,173 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Snapshot interval in seconds (default: 1.0)",
     )
     p_record.add_argument(
-        "--out",
-        default="pmm/backtest/scenarios/recorded.json",
-        help="Output file path",
+        "--warmup",
+        type=float,
+        default=4.0,
+        help="Warmup seconds before first sampled tick (default: 4.0)",
+    )
+    p_record.add_argument(
+        "--max-levels",
+        type=int,
+        default=20,
+        help="Top levels per side to store in each tick (default: 20)",
+    )
+    p_record.add_argument(
+        "--out-scenario",
+        default="pmm/backtest/scenarios/recorded_live.json",
+        help="Output scenario JSON path",
+    )
+    p_record.add_argument(
+        "--out-jsonl",
+        default="",
+        help="Optional output jsonl path (default: <out-scenario>.jsonl)",
+    )
+    p_record.add_argument(
+        "--initial-usdc",
+        type=float,
+        default=100.0,
+        help="Initial USDC in generated scenario (default: 100.0)",
+    )
+    p_record.add_argument(
+        "--initial-positions-json",
+        default="",
+        help='Initial positions JSON, e.g. \'{"YES_ID":50,"NO_ID":50}\'',
     )
 
+    p_convert = sub.add_parser(
+        "convert-live",
+        help="Convert recorded jsonl to standard replay scenario JSON",
+    )
+    p_convert.add_argument("--jsonl", required=True, help="Input tick jsonl file")
+    p_convert.add_argument(
+        "--out-scenario",
+        required=True,
+        help="Output scenario JSON path",
+    )
+    p_convert.add_argument(
+        "--tokens",
+        default="",
+        help="Optional token IDs override, comma separated",
+    )
+    p_convert.add_argument(
+        "--initial-usdc",
+        type=float,
+        default=100.0,
+        help="Initial USDC in generated scenario (default: 100.0)",
+    )
+    p_convert.add_argument(
+        "--initial-positions-json",
+        default="",
+        help='Initial positions JSON, e.g. \'{"YES_ID":50,"NO_ID":50}\'',
+    )
+
+    p_validate = sub.add_parser(
+        "validate",
+        help="Validate one scenario JSON before replay",
+    )
+    p_validate.add_argument("--scenario", required=True, help="Scenario JSON file path")
+    p_validate.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with error when validation has errors",
+    )
+
+    p_validate_dir = sub.add_parser(
+        "validate-dir",
+        help="Validate all scenario JSON files under a directory",
+    )
+    p_validate_dir.add_argument(
+        "--scenarios-dir",
+        default="pmm/backtest/scenarios",
+        help="Directory containing scenario json files",
+    )
+    p_validate_dir.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with error when any scenario has errors",
+    )
+    p_validate_dir.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="Stop at first failed scenario",
+    )
     return parser
 
 
 def main() -> None:
     args = _build_parser().parse_args()
 
-    if args.command == "record":
+    if args.command == "record-live":
         from pmm.backtest.recorder import LiveRecorder
         import asyncio
 
         token_ids = [x.strip() for x in args.tokens.split(",") if x.strip()]
-        recorder = LiveRecorder(token_ids, interval=args.interval)
-        asyncio.run(recorder.run(duration_sec=args.duration, output_file=args.out))
+        initial_positions = {}
+        if isinstance(args.initial_positions_json, str) and args.initial_positions_json.strip():
+            initial_positions = json.loads(args.initial_positions_json)
+            if not isinstance(initial_positions, dict):
+                raise ValueError("--initial-positions-json must be a JSON object")
+        recorder = LiveRecorder(
+            token_ids=token_ids,
+            interval=args.interval,
+            max_levels=args.max_levels,
+        )
+        result = asyncio.run(
+            recorder.run(
+                duration_sec=args.duration,
+                output_file=args.out_scenario,
+                output_jsonl=args.out_jsonl.strip() or None,
+                warmup_sec=args.warmup,
+                initial_usdc=args.initial_usdc,
+                initial_positions=initial_positions,
+            )
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "convert-live":
+        from pmm.backtest.recorder import convert_jsonl_to_scenario
+
+        tokens = [x.strip() for x in args.tokens.split(",") if x.strip()]
+        token_ids = tokens if tokens else None
+        initial_positions = {}
+        if isinstance(args.initial_positions_json, str) and args.initial_positions_json.strip():
+            initial_positions = json.loads(args.initial_positions_json)
+            if not isinstance(initial_positions, dict):
+                raise ValueError("--initial-positions-json must be a JSON object")
+        result = convert_jsonl_to_scenario(
+            jsonl_file=args.jsonl,
+            output_file=args.out_scenario,
+            token_ids=token_ids,
+            initial_usdc=args.initial_usdc,
+            initial_positions=initial_positions,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "validate":
+        from pmm.backtest.scenario_validator import validate_scenario_file
+
+        report = validate_scenario_file(args.scenario, strict=args.strict)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if args.strict and not bool(report.get("ok", False)):
+            raise ValueError("scenario validation failed")
+        return
+
+    if args.command == "validate-dir":
+        from pmm.backtest.scenario_validator import validate_scenarios_dir
+
+        report = validate_scenarios_dir(
+            scenarios_dir=args.scenarios_dir,
+            strict=False,
+            fail_fast=args.fail_fast,
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if args.strict and int(report.get("total_errors", 0)) > 0:
+            raise ValueError("scenario dir validation failed")
         return
 
     if args.command == "generate":
-
         res = generate_all_from_catalog(args.catalog, args.out_dir, seed=args.seed)
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return

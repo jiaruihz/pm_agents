@@ -6,7 +6,7 @@
 
 - 当前：`tick_loop` 直接写死单一策略逻辑。
 - 目标：`tick_loop` 只负责编排，策略逻辑由 `strategy_key` 决定。
-- 多档报价：本阶段不实现，只预留标准接口和配置入口，便于后续增量开发并做 A/B 回测。
+- 多档报价：已实现 `multi_level_v1`（按档位生成 quote targets），可直接做 A/B 回测。
 
 ---
 
@@ -51,8 +51,8 @@ class StrategyRegistry:
 ```
 
 内置策略：
-- `single_level_v1`（默认，当前唯一可运行实现）
-- `multi_level_v1`（接口预留，未实现前不注册到运行时）
+- `single_level_v1`（默认基准）
+- `multi_level_v1`（已注册可运行）
 
 ### 3.3 运行路由
 
@@ -107,11 +107,11 @@ class QuoteTarget:
 5. 默认 `strategy_key=single_level_v1`
 6. 回测结果需与当前基线一致（误差阈值内）
 
-后续扩展（不影响本次重构）：
+后续扩展：
 
-1. 新增 `multi_level_v1`（每侧输出 N 档 `QuoteTarget`）
-2. 扩展 `OrderManager`（`diff_multi` 或等价匹配器）
-3. 回测 compare：`single_level_v1` vs `multi_level_v1`
+1. 优化 `multi_level_v1` 的层间风控（每侧 notional cap / per-level cap）
+2. 继续优化 `OrderManager.diff_multi` 匹配启发式
+3. 真实录制数据回放对比：`single_level_v1` vs `multi_level_v1`
 
 ---
 
@@ -125,7 +125,7 @@ class QuoteTarget:
 同一 scenario 下做横向回放：
 
 - `single_level_v1`
-- （后续）`multi_level_v1`
+- `multi_level_v1`
 
 比较指标：
 
@@ -141,7 +141,7 @@ class QuoteTarget:
 1. 默认配置下，`strategy_key=single_level_v1` 与当前行为一致。
 2. `metrics.jsonl` / `summary.json` 能看到 `strategy_key`。
 3. `compare` 报告中可按策略分组比较。
-4. 未实现多档前，运行时只允许 `single_level_v1`，不走隐式回退。
+4. 启用多档时（`strategy_key=multi_level_v1` 且 `quote_levels>1`）可稳定输出 N 档报价并进入统一执行路径。
 
 ---
 

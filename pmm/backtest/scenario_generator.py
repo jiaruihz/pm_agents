@@ -8,99 +8,35 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
-def _clip_price(x: float, tick: float = 0.01) -> float:
-    """Clip price to [0.01, 0.99] and snap to Polymarket tick grid."""
-    clamped = max(0.01, min(0.99, x))
-    return _snap_to_tick(clamped, tick)
+def _clip_price(x: float) -> float:
+    return max(0.01, min(0.99, x))
 
 
-def _snap_to_tick(price: float, tick: float = 0.01) -> float:
-    """Round price to nearest tick (Polymarket uses 0.01 or 0.001)."""
-    if tick <= 0:
-        tick = 0.01
-    decimals = max(0, -int(round(math.log10(tick))))
-    return round(round(price / tick) * tick, decimals)
-
-
-def _make_level(price: float, size: float, tick: float = 0.01) -> Dict[str, float]:
-    return {"price": _snap_to_tick(price, tick), "size": round(max(0.0, size), 2)}
+def _make_level(price: float, size: float) -> Dict[str, float]:
+    return {"price": round(price, 4), "size": round(max(0.0, size), 4)}
 
 
 def _book_from_mid(
     mid: float,
     spread: float,
     depth: float,
-    tick: float = 0.01,
 ) -> Dict[str, List[Dict[str, float]]]:
-    spread = max(tick * 2, spread)
-    bid = _clip_price(mid - spread / 2.0, tick)
-    ask = _clip_price(mid + spread / 2.0, tick)
+    spread = max(0.002, spread)
+    bid = _clip_price(mid - spread / 2.0)
+    ask = _clip_price(mid + spread / 2.0)
     if bid >= ask:
-        ask = min(0.99, bid + tick)
-    # Two levels: top-of-book + one deeper level.
+        ask = min(0.99, bid + 0.001)
+    # Two levels are enough for current paper fill model and diagnostics.
     return {
         "bids": [
-            _make_level(bid, depth, tick),
-            _make_level(max(0.01, bid - tick), depth * 0.6, tick),
+            _make_level(bid, depth),
+            _make_level(max(0.01, bid - 0.01), depth * 0.6),
         ],
         "asks": [
-            _make_level(ask, depth, tick),
-            _make_level(min(0.99, ask + tick), depth * 0.6, tick),
+            _make_level(ask, depth),
+            _make_level(min(0.99, ask + 0.01), depth * 0.6),
         ],
     }
-
-
-def _top_size(orderbook: Dict[str, List[Dict[str, float]]]) -> float:
-    bids = orderbook.get("bids") or []
-    asks = orderbook.get("asks") or []
-    bid_size = float(bids[0].get("size", 0.0)) if bids else 0.0
-    ask_size = float(asks[0].get("size", 0.0)) if asks else 0.0
-    return max(1.0, (bid_size + ask_size) / 2.0)
-
-
-def _flow_scale(fillability: str) -> float:
-    mode = fillability.lower()
-    if mode == "high":
-        return 0.09
-    if mode == "medium":
-        return 0.04
-    return 0.015
-
-
-def _trend_bias(spec: CaseSpec, t: int) -> float:
-    # Positive => buy taker pressure, negative => sell taker pressure.
-    p = spec.pattern
-    if p in {"trend_up", "shock_up", "spike_revert"}:
-        return 0.35
-    if p in {"trend_down", "shock_down", "drop_revert"}:
-        return -0.35
-    if p == "whipsaw":
-        return 0.28 if (t // 20) % 2 == 0 else -0.28
-    return 0.0
-
-
-def _trade_flow_for_token(
-    spec: CaseSpec,
-    t: int,
-    event_label: str,
-    top_depth: float,
-    rng: random.Random,
-    bias: float,
-) -> Dict[str, float]:
-    base = top_depth * _flow_scale(spec.fillability) * (0.75 + 0.6 * rng.random())
-    if event_label in {"shock_window", "event_window"}:
-        base *= 2.2
-    elif event_label == "liquidity_dryup":
-        base *= 0.35
-    elif event_label == "reversion_window":
-        base *= 1.2
-
-    # Clamp and normalize directional split.
-    pressure = _clip_price(0.5 + bias * 0.35 + rng.uniform(-0.08, 0.08), tick=0.0001)
-    buy_frac = max(0.05, min(0.95, pressure))
-    buy_qty = round(max(0.0, base * buy_frac), 2)
-    sell_qty = round(max(0.0, base * (1.0 - buy_frac)), 2)
-    return {"buy_taker_qty": buy_qty, "sell_taker_qty": sell_qty}
 
 
 @dataclass
@@ -126,7 +62,6 @@ class CaseSpec:
     dryup_start: int = 0
     dryup_spread_mult: float = 2.5
     dryup_depth_mult: float = 0.25
-    price_tick: float = 0.01  # Polymarket tick size: 0.01 (99% markets) or 0.001
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "CaseSpec":
@@ -152,7 +87,6 @@ class CaseSpec:
             dryup_start=int(data.get("dryup_start", 0)),
             dryup_spread_mult=float(data.get("dryup_spread_mult", 2.5)),
             dryup_depth_mult=float(data.get("dryup_depth_mult", 0.25)),
-            price_tick=float(data.get("price_tick", 0.01)),
         )
 
 
@@ -233,7 +167,7 @@ def _yes_mid_at_tick(spec: CaseSpec, t: int, prev: float, rng: random.Random) ->
             x += (spec.base_mid - prev) * 0.08
     else:
         x = prev + noise
-    return _clip_price(x, spec.price_tick)
+    return _clip_price(x)
 
 
 def _tick_event_label(spec: CaseSpec, t: int) -> str:
@@ -259,7 +193,7 @@ def generate_case(spec: CaseSpec, token_ids: List[str], seed: int = 42) -> Dict[
     for t in range(spec.ticks):
         prev_yes = yes_mid
         yes_mid = _yes_mid_at_tick(spec, t, prev_yes, rng)
-        no_mid = _clip_price(1.0 - yes_mid, spec.price_tick)
+        no_mid = _clip_price(1.0 - yes_mid)
 
         event_label = _tick_event_label(spec, t)
 
@@ -276,20 +210,11 @@ def generate_case(spec: CaseSpec, token_ids: List[str], seed: int = 42) -> Dict[
         spread += _fill_cross_adjustment(t, spec.fillability, spread)
         spread = max(0.002, spread)
 
-        yes_book = _book_from_mid(yes_mid, spread, depth, spec.price_tick)
+        yes_book = _book_from_mid(yes_mid, spread, depth)
         # Keep NO correlated but not identical to avoid trivial symmetry.
-        no_spread = max(spec.price_tick * 2, spread * (0.9 + rng.random() * 0.2))
+        no_spread = max(0.002, spread * (0.9 + rng.random() * 0.2))
         no_depth = max(20.0, depth * (0.9 + rng.random() * 0.25))
-        no_book = _book_from_mid(no_mid, no_spread, no_depth, spec.price_tick)
-
-        top_depth_yes = _top_size(yes_book)
-        top_depth_no = _top_size(no_book)
-        delta = yes_mid - prev_yes
-        dyn_bias = max(-0.5, min(0.5, delta / max(0.001, spec.volatility * 4.0)))
-        bias_yes = max(-0.7, min(0.7, _trend_bias(spec, t) + dyn_bias))
-        bias_no = -bias_yes
-        flow_yes = _trade_flow_for_token(spec, t, event_label, top_depth_yes, rng, bias_yes)
-        flow_no = _trade_flow_for_token(spec, t, event_label, top_depth_no, rng, bias_no)
+        no_book = _book_from_mid(no_mid, no_spread, no_depth)
 
         ticks.append(
             {
@@ -298,10 +223,6 @@ def generate_case(spec: CaseSpec, token_ids: List[str], seed: int = 42) -> Dict[
                 "orderbooks": {
                     yes_id: yes_book,
                     no_id: no_book,
-                },
-                "trade_flow": {
-                    yes_id: flow_yes,
-                    no_id: flow_no,
                 },
             }
         )
@@ -368,7 +289,7 @@ def generate_case(spec: CaseSpec, token_ids: List[str], seed: int = 42) -> Dict[
         "description": spec.description,
         "token_ids": [yes_id, no_id],
         "initial_state": {
-            # Small initial split inventory (must stay ≤ max_position, default 100).
+            # Small initial split inventory (must stay <= max_position, default 100).
             "usdc": 100.0,
             "positions": {yes_id: 50.0, no_id: 50.0},
         },

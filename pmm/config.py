@@ -58,8 +58,8 @@ class PMMConfig:
     base_size: float = 5.0
     min_size: float = 1.0
     enforce_inventory_for_sell: bool = False
-    # Quote ladder extension point (reserved for future multi-level quoting).
-    # Current behavior stays single-level unless explicitly implemented later.
+    # Quote ladder configuration. Used by strategy_key=multi_level_v1.
+    # For strategy_key=single_level_v1, only one level is used.
     quote_levels: int = 1
     level_spread_step: float = 0.005
     level_size_decay: float = 0.6
@@ -109,18 +109,23 @@ class PMMConfig:
 
     def effective_quote_levels(self) -> int:
         requested = max(1, int(self.quote_levels))
+        if self.strategy_key == "multi_level_v1":
+            return requested
         if self.multi_level_quote_enabled:
+            # Backward compatibility: allow explicit multi-level experiments
+            # even before switching strategy_key.
             return requested
         return 1
 
     def quote_runtime_meta(self) -> dict:
         requested = max(1, int(self.quote_levels))
         effective = self.effective_quote_levels()
+        multi_active = self.strategy_key == "multi_level_v1"
         return {
             "quote_levels_requested": requested,
             "quote_levels_effective": effective,
-            "multi_level_quote_enabled": bool(self.multi_level_quote_enabled),
-            "multi_level_placeholder_active": (requested > 1 and effective == 1),
+            "multi_level_quote_enabled": multi_active,
+            "multi_level_placeholder_active": (requested > 1 and not multi_active),
             "level_spread_step": float(self.level_spread_step),
             "level_size_decay": float(self.level_size_decay),
         }
