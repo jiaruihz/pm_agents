@@ -131,6 +131,7 @@ results_compare/
 | `total_placed` / `total_canceled` / `total_fills` | 操作计数 |
 | `fill_rate_per_order` | `fills / placed` |
 | `avg_pnl_per_tick` | 各 tick PnL 均值 |
+| `strategy_key` | 本次回测实际使用的策略实现 key |
 | `quote_runtime` | 报价运行元信息（请求档位/生效档位） |
 | `strategy_overrides` | 本次回测实际覆盖参数 |
 
@@ -140,6 +141,12 @@ results_compare/
 - `quote_levels_effective`：当前实际生效档位（当前版本固定为 1）
 - `multi_level_quote_enabled`：是否启用多档实现
 - `multi_level_placeholder_active`：请求 > 1 但仍按单档执行时为 `true`
+
+策略路由相关：
+
+- 环境变量：`PMM_STRATEGY_KEY`（默认 `single_level_v1`）
+- 当前实现：`single_level_v1`
+- 预留空壳：`multi_level_v1`（尚未注册到运行时）
 
 这保证了：
 

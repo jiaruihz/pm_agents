@@ -12,7 +12,9 @@ from pmm.config import PMMConfig
 from pmm.order_manager import OrderManager
 from pmm.orderbook import best_bid_ask, spread as orderbook_spread
 from pmm.paper_broker import PaperBroker
-from pmm.pricing import compute_quotes
+from pmm.strategy_base import StrategyQuoteInput
+from pmm.strategy_registry import StrategyRegistry
+from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
 import pmm.tick_loop as live
 
 
@@ -73,6 +75,20 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
     cfg.market.token_ids = token_ids
     _apply_strategy_overrides(cfg, scenario.get("strategy_overrides", {}))
     quote_runtime_meta = cfg.quote_runtime_meta()
+    strategy_registry = StrategyRegistry()
+    strategy_registry.register(
+        SingleLevelV1Strategy(
+            anchor_quotes_fn=live._anchor_quotes_to_book,
+            quantize_pair_fn=live._quantize_quote_pair,
+            target_sizes_fn=live._target_sizes,
+        )
+    )
+    strategy = strategy_registry.get(cfg.strategy_key)
+    if strategy is None:
+        available = ", ".join(strategy_registry.available_keys())
+        raise ValueError(
+            f"Unsupported strategy_key={cfg.strategy_key} in backtest. Available: {available}"
+        )
 
     broker = PaperBroker(
         token_ids=token_ids,
@@ -220,32 +236,35 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
                 block_buy = market_too_thin
                 block_sell = market_too_thin
 
-                quote = compute_quotes(
-                    mid=mid,
-                    spread=adaptive_spread,
-                    inventory=inv_signal,
-                    skew_factor=cfg.skew_factor,
-                )
-                target_quotes[token_id] = {"bid": quote.bid, "ask": quote.ask}
                 top = book_tops.get(token_id, {"best_bid": 0.0, "best_ask": 0.0})
-                bid_price, ask_price = live._anchor_quotes_to_book(
-                    target_bid=quote.bid,
-                    target_ask=quote.ask,
-                    best_bid=top.get("best_bid", 0.0),
-                    best_ask=top.get("best_ask", 0.0),
-                    join_epsilon=cfg.join_epsilon,
-                    fair_value=mid,
-                    min_edge=cfg.min_edge,
-                )
-                bid_price, ask_price = live._quantize_quote_pair(
-                    bid_price, ask_price, tick=cfg.price_tick, mode=cfg.price_tick_mode
-                )
-                final_quotes[token_id] = {"bid": bid_price, "ask": ask_price}
-
                 position = positions.get(token_id, 0.0)
-                buy_size, sell_size = live._target_sizes(cfg, position, usdc_balance, bid_price)
+                quote_targets = strategy.generate_quotes(
+                    StrategyQuoteInput(
+                        token_id=token_id,
+                        mid=mid,
+                        adaptive_spread=adaptive_spread,
+                        inventory_signal=inv_signal,
+                        best_bid=top.get("best_bid", 0.0),
+                        best_ask=top.get("best_ask", 0.0),
+                        position=position,
+                        effective_usdc_balance=usdc_balance,
+                    ),
+                    config=cfg,
+                )
+                target_quotes[token_id] = {}
+                final_quotes[token_id] = {}
+                for q in quote_targets:
+                    side_key = "bid" if q.side == "BUY" else "ask"
+                    target_quotes[token_id][side_key] = q.target_price if q.target_price > 0 else q.price
+                    final_quotes[token_id][side_key] = q.price
+                for side in ("bid", "ask"):
+                    if side not in target_quotes[token_id]:
+                        target_quotes[token_id][side] = 0.0
+                    if side not in final_quotes[token_id]:
+                        final_quotes[token_id][side] = 0.0
 
-                for side, price, size in (("BUY", bid_price, buy_size), ("SELL", ask_price, sell_size)):
+                for q in quote_targets:
+                    side, price, size = q.side, q.price, q.size
                     side_blocked = (side == "BUY" and block_buy) or (side == "SELL" and block_sell)
                     if side_blocked:
                         side_blocks[side].append(token_id)
@@ -401,6 +420,7 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
             {
                 "tick": tick_idx,
                 "event": event_label,
+                "strategy_key": strategy.key,
                 "quote_runtime": quote_runtime_meta,
                 "mids": mids,
                 "spreads": spreads,
@@ -427,6 +447,7 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
     summary = {
         "scenario_id": scenario_id,
         "description": str(scenario.get("description", "")),
+        "strategy_key": strategy.key,
         "quote_runtime": quote_runtime_meta,
         "strategy_overrides": scenario.get("strategy_overrides", {}),
         "ticks": len(metrics_events),

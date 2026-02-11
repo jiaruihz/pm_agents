@@ -25,6 +25,8 @@ class PMMConfig:
     max_ticks: int = 0
     dry_run: bool = False
     execution_mode: str = "live"  # live | paper
+    strategy_key: str = "single_level_v1"
+    strategy_params: dict = field(default_factory=dict)
 
     # Paper trading
     paper_initial_usdc: float = 1000.0
@@ -133,6 +135,7 @@ class PMMConfig:
         ]
         merge_plans_raw = os.getenv("PMM_MERGE_PLANS_JSON", "[]")
         paper_positions_raw = os.getenv("PMM_PAPER_INITIAL_POSITIONS_JSON", "{}")
+        strategy_params_raw = os.getenv("PMM_STRATEGY_PARAMS_JSON", "{}")
         try:
             auto_merge_plans = json.loads(merge_plans_raw)
             if not isinstance(auto_merge_plans, list):
@@ -145,6 +148,12 @@ class PMMConfig:
                 paper_initial_positions = {}
         except Exception:
             paper_initial_positions = {}
+        try:
+            strategy_params = json.loads(strategy_params_raw)
+            if not isinstance(strategy_params, dict):
+                strategy_params = {}
+        except Exception:
+            strategy_params = {}
         return PMMConfig(
             api_base_url=os.getenv("PMM_API_BASE_URL", "http://localhost:8000"),
             api_key=os.getenv("PMM_API_KEY", ""),
@@ -152,6 +161,8 @@ class PMMConfig:
             max_ticks=int(os.getenv("PMM_MAX_TICKS", "0")),
             dry_run=os.getenv("PMM_DRY_RUN", "0") == "1",
             execution_mode=os.getenv("PMM_EXECUTION_MODE", "live"),
+            strategy_key=os.getenv("PMM_STRATEGY_KEY", "single_level_v1"),
+            strategy_params=strategy_params,
             paper_initial_usdc=float(os.getenv("PMM_PAPER_INITIAL_USDC", "1000")),
             paper_initial_positions=paper_initial_positions,
             paper_fill_model=os.getenv("PMM_PAPER_FILL_MODEL", "conservative"),

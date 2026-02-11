@@ -12,8 +12,10 @@ from pmm.metrics import MetricsLogger
 from pmm.order_manager import OrderManager
 from pmm.orderbook import best_bid_ask, mid_price, spread as orderbook_spread
 from pmm.paper_broker import PaperBroker
-from pmm.pricing import compute_quotes
 from pmm.quantize import quantize_to_tick
+from pmm.strategy_base import StrategyQuoteInput
+from pmm.strategy_registry import StrategyRegistry
+from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
 
 
 # Parse fallback mid from `/market/{token_id}` payload when orderbook is unavailable.
@@ -331,6 +333,22 @@ async def tick_loop(config: PMMConfig) -> None:
     # Core strategy state.
     order_mgr = OrderManager(deadband=config.deadband)
     metrics = MetricsLogger(config.metrics_path)
+    strategy_registry = StrategyRegistry()
+    strategy_registry.register(
+        SingleLevelV1Strategy(
+            anchor_quotes_fn=_anchor_quotes_to_book,
+            quantize_pair_fn=_quantize_quote_pair,
+            target_sizes_fn=_target_sizes,
+        )
+    )
+    strategy = strategy_registry.get(config.strategy_key)
+    if strategy is None:
+        available = ", ".join(strategy_registry.available_keys())
+        raise ValueError(
+            f"Unsupported strategy_key={config.strategy_key}. "
+            f"Available: {available}"
+        )
+    print(f"[STRATEGY] using {strategy.key}")
     baseline_equity: Optional[float] = None
     history_window_sec = max(config.circuit_breaker_window_sec, config.alpha_window_sec)
     window_points = max(2, int(max(1, history_window_sec) / max(0.1, config.tick_interval_sec)))
@@ -602,6 +620,7 @@ async def tick_loop(config: PMMConfig) -> None:
                         {
                             "tick": tick_count,
                             "execution_mode": execution_mode,
+                            "strategy_key": strategy.key,
                             "quote_runtime": quote_runtime_meta,
                             "market_data_source": "ws" if ws_feed else "rest",
                             "usdc_balance": usdc_balance,
@@ -693,40 +712,37 @@ async def tick_loop(config: PMMConfig) -> None:
                         else:
                             block_buy = True
 
-                    quote = compute_quotes(
-                        mid=mid,
-                        spread=adaptive_spread,
-                        inventory=inv_signal,
-                        skew_factor=config.skew_factor,
-                    )
-                    target_quotes[token_id] = {"bid": quote.bid, "ask": quote.ask}
                     top = book_tops.get(token_id, {"best_bid": 0.0, "best_ask": 0.0})
-                    bid_price, ask_price = _anchor_quotes_to_book(
-                        target_bid=quote.bid,
-                        target_ask=quote.ask,
-                        best_bid=top.get("best_bid", 0.0),
-                        best_ask=top.get("best_ask", 0.0),
-                        join_epsilon=config.join_epsilon,
-                        fair_value=mid,
-                        min_edge=config.min_edge,
-                    )
-                    # Quantize to exchange tick size grid for stability and cleaner metrics.
-                    bid_price, ask_price = _quantize_quote_pair(
-                        bid_price,
-                        ask_price,
-                        tick=config.price_tick,
-                        mode=config.price_tick_mode,
-                    )
-                    final_quotes[token_id] = {"bid": bid_price, "ask": ask_price}
                     position = positions.get(token_id, 0.0)
-                    buy_size, sell_size = _target_sizes(
-                        config,
-                        position,
-                        effective_usdc_for_sizing,
-                        bid_price,
+                    quote_targets = strategy.generate_quotes(
+                        StrategyQuoteInput(
+                            token_id=token_id,
+                            mid=mid,
+                            adaptive_spread=adaptive_spread,
+                            inventory_signal=inv_signal,
+                            best_bid=top.get("best_bid", 0.0),
+                            best_ask=top.get("best_ask", 0.0),
+                            position=position,
+                            effective_usdc_balance=effective_usdc_for_sizing,
+                        ),
+                        config=config,
                     )
+                    target_quotes[token_id] = {}
+                    final_quotes[token_id] = {}
+                    for q in quote_targets:
+                        side_key = "bid" if q.side == "BUY" else "ask"
+                        target_quotes[token_id][side_key] = (
+                            q.target_price if q.target_price > 0 else q.price
+                        )
+                        final_quotes[token_id][side_key] = q.price
+                    for side in ("bid", "ask"):
+                        if side not in target_quotes[token_id]:
+                            target_quotes[token_id][side] = 0.0
+                        if side not in final_quotes[token_id]:
+                            final_quotes[token_id][side] = 0.0
 
-                    for side, price, size in (("BUY", bid_price, buy_size), ("SELL", ask_price, sell_size)):
+                    for q in quote_targets:
+                        side, price, size = q.side, q.price, q.size
                         side_blocked = (side == "BUY" and block_buy) or (side == "SELL" and block_sell)
                         if side_blocked:
                             # If side is blocked, pull existing same-side orders immediately.
@@ -904,6 +920,7 @@ async def tick_loop(config: PMMConfig) -> None:
                     {
                         "tick": tick_count,
                         "execution_mode": execution_mode,
+                        "strategy_key": strategy.key,
                         "quote_runtime": quote_runtime_meta,
                         "market_data_source": "ws" if ws_feed else "rest",
                         "usdc_balance": usdc_balance,
