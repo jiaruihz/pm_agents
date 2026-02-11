@@ -1,142 +1,128 @@
-# PMM Strategy Playbook (Human-Readable)
+# Strategy Playbook
 
-## 目标
+做市策略的设计理念、参数逻辑和运行指南。
 
-个人做市策略的核心是三件事：
+## 定位
 
-- 稳定挂单，不被市场噪音带着跑。
-- 控制库存风险，不把仓位堆到单边。
-- 在异常行情下快速切到防守模式。
+在 Polymarket 小盘二元市场上做双边流动性提供。核心约束：盘口薄、信息不对称风险高、资金有限。策略围绕三条原则设计：
 
-## 策略框架
+1. **不追价** — 队列优先级比毫厘的 edge 更值钱
+2. **先活下来** — 异常行情下先撤单，再考虑恢复
+3. **仓位中性** — 不赌方向，靠价差吃流
 
-1. 公允价值与基础价差
+---
 
-- 默认用 weighted mid（微观价格近似）作为短期公允价值。
-- 若盘口尺寸不可用，回退到普通中点（`midpoint`）。
-- 在 `mid` 两侧挂出基础价差（`base_spread`）。
+## 公允价值
 
-2. 库存驱动报价偏移（Non-Linear Skew）
+| 模式 | 公式 | 适用场景 |
+|------|------|----------|
+| `weighted` (默认) | `(bid × ask_size + ask × bid_size) / (bid_size + ask_size)` | 薄盘口下更稳健的微价格估计 |
+| `midpoint` | `(best_bid + best_ask) / 2` | 深盘口或调试用 |
 
-- 不再用线性库存函数，改用 sigmoid 非线性曲线。
-- 仓位越接近上限，倾斜力度越大，推动策略主动去库存。
+当 orderbook 完全为空时，fallback 到 `GET /market/{token_id}` 的 `outcome_prices`。
 
-3. 盘口锚定，但不盲目追单
+## 报价生成
 
-- 通过 `join_epsilon` 让报价靠近买一/卖一，提高成交概率。
-- 同时用 `min_edge` 保持最小边际，不允许报价无限追着盘口走。
-- 含义：执行层尊重理论价，不会为了排队把预期收益压到 0。
+```
+理论报价:
+  bid = mid - spread/2 - skew
+  ask = mid + spread/2 - skew
+  skew = skew_factor × inventory_signal
+```
 
-4. AS（Adverse Selection）保护
+- **spread** 不是固定值，而是取 `max(base_spread, required_spread)`
+- **required_spread** = `fee_floor` + `target_profit` + `vol_coeff × realized_vol` + `inv_coeff × |inventory_signal|`
+- 含义：只有当市场能覆盖全部成本加上目标利润时才入场
 
-- OFI 防守：若近端盘口显示明显买盘失衡，撤卖单；明显卖盘失衡，撤买单。
-- 参考市场动量：监控关联市场（`PMM_ALPHA_REFERENCE_TOKEN_IDS`），若动量超阈值，单侧防守，不做对手盘。（后续再实现）
-- 目标：降低“被消息优势资金点杀”的概率。
+## 盘口锚定
 
-5. 动态 Spread + 入场阈值
+理论报价 → 执行报价的映射：
 
-- 不用固定 spread，按风险动态调整：
-  - `required_spread = fee_floor + target_profit + vol_component + inventory_component`
-- 若自然盘口 spread 太薄（低于可盈利阈值），直接不入场并撤掉相关订单。
+1. 用 `join_epsilon` 贴近 best bid/ask（提高成交率）
+2. 用 `min_edge` 保证与 fair value 的最小距离（防止追到 0 edge）
+3. 按 `price_tick` 对齐到价格网格（消除浮点噪声、减少无意义改单）
 
-6. Diffing + Deadband
+**设计意图**：执行层尊重理论价，不会为了拿到更好的队列位置把预期利润压到零。
 
-- 不做“每轮全撤全挂”。
-- 只有当价格/数量变化超过阈值才改单，降低手续费、限流与排队损失。
+## 库存管理
 
-7. Circuit Breaker 防守模式
+使用 Sigmoid 非线性倾斜：
 
-- 监控当前价格相对短窗均价的偏离。
-- 偏离超阈值（如 10%）时：
-  - 立即 `cancel_all`
-  - 记录事件
-  - 按配置停止做市或短暂停机
+```
+raw = net_position / max_position     # ∈ [-1, 1]
+signal = 2 / (1 + exp(-k × raw)) - 1  # 非线性映射
+```
 
-8. 延迟优先（Latency First）
+- 仓位居中时 skew 很小，正常双边做市
+- 仓位接近上限时 skew 急剧加大，主动用价格推动去库存
+- `k` 越大曲线越陡，边际的 skew 变化越剧烈
 
-- 盘口数据优先用 WebSocket 推送，不依赖每 tick REST 轮询。
-- 本地维护 Orderbook 缓存，缺失/过期再回退 REST。
-- 连接 market 频道时使用 `detail_level`（默认 `agg`）。
-- 发送应用层心跳 `"PING"` 并接收 `"PONG"`，降低被服务端踢断概率。
-- 目标是减少“看到过期价格再挂单”导致的被动吃亏。
+## 逆向选择防护
 
-9. 资金利用率（Capital Efficiency）
+| 信号 | 触发条件 | 动作 |
+|------|----------|------|
+| OFI（订单流不平衡） | 近端 bid depth 显著 > ask depth | 撤卖单 |
+| OFI 反向 | ask depth 显著 > bid depth | 撤买单 |
+| 参考市场动量 | 关联市场短窗动量超阈值 | 撤对手方向 |
+| 盘口过薄 | 自然 spread < min_profitability | 双边全撤 |
 
-- 若同时持有 YES/NO，可周期性执行 `merge` 释放为 USDC。
-- 避免资金长期沉淀在对冲仓位中，提升可用保证金与挂单能力。
-- live 模式可启用 merge 在途资金临时 credit，缓解链上确认延迟导致的停挂单。
+撤单不等于停止观察。下一个 tick 如果信号消退，正常恢复挂单。
 
-10. 模拟盘（Paper Trading）
+## 熔断器
 
-- 数据层仍使用真实盘口（WS/REST）。
-- 执行层切到本地撮合引擎，不向交易所发单。
-- 支持两种成交假设：
-  - `conservative`：只有盘口“穿透你的限价”才算成交。
-  - `optimistic`：盘口触碰你的限价即成交。
-- `queue_share` 控制每个 tick 的可成交上限，近似排队劣后。
+监控 `mid` 对近 N tick 移动均价的偏离度。偏离超过阈值（默认 10%）：
+- 立即 `cancel_all`
+- 记录触发原因
+- 可选停止做市（`halt = true`）或 cooldown 后恢复
 
-## 默认风险立场
+## 资金回收
 
-- 行情平稳时：偏被动做市，靠双边价差吃流。
-- 行情突变时：先活下来，先撤单，再考虑恢复。
-- 库存过重时：优先去库存，接受一定成交劣后。
+同时持有 YES 和 NO 本质是对冲锁仓，不产生 PnL。定期执行 `merge`：
 
-## 建议起步参数（示例）
+```
+min(yes_pos, no_pos) units → USDC collateral
+```
 
-- `PMM_BASE_SPREAD=0.04`
-- `PMM_SKEW_FACTOR=0.05`
-- `PMM_INVENTORY_SIGMOID_K=4.0`
-- `PMM_MID_PRICE_MODE=weighted`
-- `PMM_JOIN_EPSILON=0.001`
-- `PMM_MIN_EDGE=0.002`
-- `PMM_PRICE_TICK=0.001`
-  - 用于把最终下单价格对齐到固定价格网格，避免 `0.419999999999` 这种浮点噪声，同时减少无意义的改单。
-  - 如果你只按 1 cent 报价，可以设为 `0.01`（更粗，但更稳定）。
-- `PMM_PRICE_TICK_MODE=nearest`
-  - `nearest` / `floor` / `ceil`
-- `PMM_MIN_PROFITABILITY_SPREAD=0.03`
-- `PMM_FEE_SPREAD_FLOOR=0.002`
-- `PMM_TARGET_PROFIT_SPREAD=0.002`
-- `PMM_VOLATILITY_SPREAD_COEFF=2.0`
-- `PMM_INVENTORY_RISK_SPREAD_COEFF=0.01`
-- `PMM_ALPHA_ENABLED=1`
-- `PMM_ALPHA_REFERENCE_TOKEN_IDS=...`
-- `PMM_ALPHA_REF_MOMENTUM_THRESHOLD=0.03`
-- `PMM_ALPHA_OFI_ENABLED=1`
-- `PMM_ALPHA_OFI_DELTA=0.01`
-- `PMM_ALPHA_OFI_IMBALANCE_THRESHOLD=0.60`
-- `PMM_DEADBAND=0.01`
-- `PMM_CB_ENABLED=1`
-- `PMM_CB_WINDOW_SEC=60`
-- `PMM_CB_THRESHOLD=0.10`
-- `PMM_CB_MIN_POINTS=5`
-- `PMM_CB_HALT=1`
-- `PMM_MARKET_DATA_SOURCE=ws`（或 `rest`）
-- `PMM_EXECUTION_MODE=paper`（或 `live`）
-- `PMM_PAPER_INITIAL_USDC=1000`
-- `PMM_PAPER_INITIAL_POSITIONS_JSON='{\"<yes_token>\":100,\"<no_token>\":50}'`
-- `PMM_PAPER_FILL_MODEL=conservative`（或 `optimistic`）
-- `PMM_PAPER_FILL_EPSILON=0.001`
-- `PMM_PAPER_QUEUE_SHARE=0.25`
-- `PMM_WS_MARKET_URL=wss://ws-subscriptions-clob.polymarket.com/ws/market`
-- `PMM_WS_DETAIL_LEVEL=agg`（或 `l2`）
-- `PMM_WS_APP_PING_INTERVAL_SEC=10`
-- `PMM_WS_STALE_AFTER_SEC=3`
-- `PMM_AUTO_MERGE_ENABLED=1`
-- `PMM_AUTO_MERGE_EVERY_TICKS=30`
-- `PMM_MERGE_PLANS_JSON='[{...}]'`
-- `PMM_MERGE_PENDING_CREDIT_ENABLED=1`
-- `PMM_MERGE_PENDING_CREDIT_TTL_SEC=20`
-- `PMM_MERGE_PENDING_CREDIT_RATIO=1.0`
-- `PMM_MERGE_AMOUNT_SCALE=1000000`
+live 模式下链上确认有延迟，此时启用 pending credit 让策略在确认前就可以用这笔资金继续挂单（TTL + ratio 可配）。
 
-## 指标怎么看
+## 订单管理
 
-- `pnl/equity`：看账户总表现（当前为账面）。
-- `net_inventory`：看仓位是否长期偏单边。
-- `placed/canceled/open_orders_count`：看挂撤是否过于频繁。
-- `required_spreads/adaptive_spreads`：看当前策略要求的利润空间与实际报价宽度。
-- `ofi_imbalances`：看是否经常出现单边吃单风险。
-- `side_blocks`：看被风控拦截的方向和频率。
-- `merge_actions`：看自动 merge 是否成功执行，是否释放了流动性。
-- `circuit_breaker_triggered`：看风控是否频繁触发。
+**不做每轮全撤全挂**。`OrderManager` 用 diff + deadband：
+- 对比现有挂单和目标价 / 量
+- 价格变动未超过 deadband → 保留现有挂单（保持队列位置）
+- 超过 deadband → 撤旧单、挂新单
+
+---
+
+## 推荐参数
+
+以下参数适用于小盘（日成交量 < $50k）的二元事件市场：
+
+| 参数 | 值 | 理由 |
+|------|----|------|
+| `base_spread` | `0.04 ~ 0.08` | 小盘 spread 天然较宽，不需要激进竞价 |
+| `base_size` | `3 ~ 5` | 减小单次被吃穿的敞口 |
+| `skew_factor` | `0.05` | 适中的库存倾斜力度 |
+| `inventory_sigmoid_k` | `4.0` | 仓位 60%+ 开始明显加速去库存 |
+| `max_position` | `100` | 单市场最大仓位 |
+| `deadband` | `0.01` | 1 分钱以内的波动不改单 |
+| `join_epsilon` | `0.001` | 贴 1 mill 以内的 BBO |
+| `min_edge` | `0.002` | 至少保持 0.2% 的 fair value edge |
+| `price_tick` | `0.001` | 报价对齐到 1 mill |
+| `min_profitability_spread` | `0.03` | 自然 spread < 3% 就不入场 |
+| `alpha_ofi_imbalance_threshold` | `0.60` | 小盘 OFI 容易不均衡，阈值不宜太低 |
+
+---
+
+## 监控指标
+
+日常运行关注这几个数：
+
+| 指标 | 健康范围 | 异常信号 |
+|------|----------|----------|
+| `pnl` | 稳步上升或持平 | 持续下滑 → 检查费用 / 逆向选择 |
+| `net_inventory` | 绝对值 < max_position × 40% | 持续偏单边 → skew 参数可能不够 |
+| `placed / canceled` 比值 | < 3:1 | 频繁改单 → deadband 太小 |
+| `side_blocks` | 偶发 | 频繁 block → OFI 阈值或 spread 阈值需调整 |
+| `circuit_breaker_triggered` | false | 频繁触发 → 该市场可能不适合做市 |
+| `merge_actions` | 定期成功 | 连续失败 → 检查仓位 / 链上 gas |

@@ -1,0 +1,35 @@
+[
+  {
+    "name": "single_baseline",
+    "description": "Current default single-level setup",
+    "strategy_overrides": {}
+  },
+  {
+    "name": "single_tight_spread",
+    "description": "More aggressive quoting for higher fill chance",
+    "strategy_overrides": {
+      "base_spread": 0.03,
+      "deadband": 0.005,
+      "skew_factor": 0.04
+    }
+  },
+  {
+    "name": "single_conservative",
+    "description": "Wider spread and stricter inventory control",
+    "strategy_overrides": {
+      "base_spread": 0.05,
+      "deadband": 0.01,
+      "skew_factor": 0.06
+    }
+  },
+  {
+    "name": "multi_level_reserved",
+    "description": "Placeholder profile for future multi-level quote implementation",
+    "strategy_overrides": {
+      "quote_levels": 3,
+      "level_spread_step": 0.005,
+      "level_size_decay": 0.6,
+      "multi_level_quote_enabled": false
+    }
+  }
+]

@@ -1,96 +1,92 @@
-# PMM Main Flow (Current Snapshot)
+# Main Flow
 
-本文档保留为“主链路速览”。更详细内容请看：
-- 策略文档：`pmm/docs/STRATEGY_PLAYBOOK.md`
-- 代码走读：`pmm/docs/CODE_IMPLEMENTATION.md`
+主循环的时序图和关键路径。更详细的策略逻辑见 [STRATEGY_PLAYBOOK.md](STRATEGY_PLAYBOOK.md)，代码走读见 [CODE_IMPLEMENTATION.md](CODE_IMPLEMENTATION.md)。
 
-## Tick 主流程
+## Tick 生命周期
 
-1. 拉取状态：`balance + orders + positions + orderbook`
-  - 执行层可选：
-  - `live`：真实下单和真实账户
-  - `paper`：本地虚拟账户和本地撮合
-  - `orderbook` 支持两种模式：
-  - `rest`：每 tick 拉取
-  - `ws`：本地盘口缓存，订阅 `market` 频道（含 `detail_level`），缺失/过期时回退 REST
-2. 计算 `mid/spread/equity/pnl`
-  - `mid` 支持 `PMM_MID_PRICE_MODE`：
-  - `weighted`（默认，微观价格近似）
-  - `midpoint`（`(best_bid + best_ask)/2`）
-3. 计算 Alpha 信号：
-- OFI（订单流不平衡，基于盘口近端深度）
-- 参考市场动量（`PMM_ALPHA_REFERENCE_TOKEN_IDS`）
-4. Circuit Breaker 检查：
-- 以近 `window_sec` 的移动均价为基准，若偏离超阈值，触发 `cancel_all` 并停止或暂停
-5. 入场盈利性检查：
-- 计算 `required_spread = fee + target_profit + vol_risk + inventory_risk`
-- 若自然盘口过薄（`natural_spread < min_profitability`）则该侧撤单并休眠
-6. 报价计算：
-- 非线性库存 skew（sigmoid）
-- 动态 spread（非固定 spread）
-- 理论价 -> 盘口锚定（`join_epsilon`）
-- 公允价值边界保护（`min_edge`），防止无限追单
-7. Diffing 执行：
-- 撤销无效订单
-- 仅在需要时创建新单
-8. 写入 `metrics.jsonl`
-9. （可选）自动资金回收：
-- 按配置周期执行 YES/NO `merge`，把配对仓位释放回 USDC
-  - 可启用 `merge pending credit`，在链上确认前给 sizing 一笔临时在途资金
+```
+┌─────────────────────────────────────────────────────┐
+│ 1. Fetch Account State                              │
+│    balance + open_orders + positions                 │
+│    (live → REST API / paper → local memory)          │
+├─────────────────────────────────────────────────────┤
+│ 2. Fetch Market Data                                │
+│    ws → local L2 cache (fallback REST if stale)      │
+│    rest → GET /orderbook/{token_id}                  │
+│    → compute mid, spread, book_tops                  │
+├─────────────────────────────────────────────────────┤
+│ 3. Circuit Breaker                                  │
+│    |mid - MA(mid)| / MA(mid) ≥ threshold?            │
+│    yes → cancel_all, halt / cooldown                 │
+├─────────────────────────────────────────────────────┤
+│ 4. Signal Stack (per token)                         │
+│    inventory_signal → realized_vol → required_spread │
+│    → OFI / momentum → side block decision            │
+├─────────────────────────────────────────────────────┤
+│ 5. Quote Generation                                 │
+│    compute_quotes → anchor_to_book → quantize        │
+├─────────────────────────────────────────────────────┤
+│ 6. Execution                                        │
+│    diff(open_orders, target) → cancel + place        │
+├─────────────────────────────────────────────────────┤
+│ 7. Auto Merge (periodic)                            │
+│    min(yes_pos, no_pos) ≥ threshold → merge → USDC   │
+├─────────────────────────────────────────────────────┤
+│ 8. Metrics                                          │
+│    → append to metrics.jsonl                         │
+└─────────────────────────────────────────────────────┘
+        │
+        ▼ sleep(tick_interval_sec) → repeat
+```
 
-## 时序图（Mermaid）
+## 时序图
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Runner as pmm/main.py
-    participant Tick as tick_loop
-    participant API as Tool Service
+    participant Main as main.py
+    participant Engine as tick_loop
+    participant API as ToolService / PaperBroker
+    participant WS as MarketWsFeed
     participant Diff as OrderManager
     participant Log as MetricsLogger
 
-    Runner->>Tick: start(config)
+    Main->>Engine: tick_loop(config)
 
-    loop each tick
-        Tick->>API: GET /balance
-        Tick->>API: GET /orders
-        Tick->>API: GET /positions?token_ids=...
-        opt paper mode
-            Tick->>Tick: local match engine on real orderbook
+    loop every tick
+        par account snapshot
+            Engine->>API: get_balance
+            Engine->>API: get_orders
+            Engine->>API: get_positions
         end
+
         alt ws mode
-            Tick->>Tick: read local orderbook cache
-            Tick->>API: fallback GET /orderbook/{token_id} for stale/missing
+            Engine->>WS: read local book cache
+            opt stale / missing
+                Engine->>API: GET /orderbook (fallback)
+            end
         else rest mode
-            Tick->>API: GET /orderbook/{token_id} x N
-        end
-        alt orderbook unavailable
-            Tick->>API: GET /market/{token_id}
-            API-->>Tick: outcome_prices fallback
+            Engine->>API: GET /orderbook × N
         end
 
-        Tick->>Tick: compute mids, equity, pnl
-        Tick->>Tick: compute OFI + reference momentum
-        Tick->>Tick: circuit-breaker check (moving average band)
-        alt breaker triggered
-            Tick->>API: DELETE /orders/cancel-all
-            Tick->>Log: write breaker event
-        else normal mode
-            Tick->>Tick: profitability gate (required_spread)
-            Tick->>Tick: sigmoid inventory skew
-            Tick->>Tick: anchor with fair-value guard
-            Tick->>Diff: diff(open_orders, target_quotes)
-            Diff-->>Tick: cancel_ids + create decision
-            alt need cancel
-                Tick->>API: DELETE /order/{id} or POST /orders/cancel
+        Engine->>Engine: circuit breaker check
+        alt triggered
+            Engine->>API: cancel_all
+            Engine->>Log: breaker event
+        else normal
+            Engine->>Engine: signals + quotes
+            Engine->>Diff: diff(open_orders, targets)
+            Diff-->>Engine: cancel_ids, create?
+            opt cancel
+                Engine->>API: cancel
             end
-            alt need create
-                Tick->>API: POST /order
+            opt create
+                Engine->>API: place
             end
-            Tick->>Log: append metrics jsonl
-            opt auto-merge enabled
-                Tick->>API: POST /ctf/merge
+            opt merge due
+                Engine->>API: merge
             end
+            Engine->>Log: tick metrics
         end
     end
 ```

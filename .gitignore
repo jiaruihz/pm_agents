@@ -31,3 +31,4 @@ local_news_cache/
 pmm_logs/
 pmm/backtest/scenarios/
 pmm/backtest/results/
+pmm/backtest/results_compare/

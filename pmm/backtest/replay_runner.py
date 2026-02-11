@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 from collections import deque
 from dataclasses import dataclass
@@ -71,6 +72,7 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
     cfg.execution_mode = "paper"
     cfg.market.token_ids = token_ids
     _apply_strategy_overrides(cfg, scenario.get("strategy_overrides", {}))
+    quote_runtime_meta = cfg.quote_runtime_meta()
 
     broker = PaperBroker(
         token_ids=token_ids,
@@ -399,6 +401,7 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
             {
                 "tick": tick_idx,
                 "event": event_label,
+                "quote_runtime": quote_runtime_meta,
                 "mids": mids,
                 "spreads": spreads,
                 "positions": positions,
@@ -424,6 +427,8 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
     summary = {
         "scenario_id": scenario_id,
         "description": str(scenario.get("description", "")),
+        "quote_runtime": quote_runtime_meta,
+        "strategy_overrides": scenario.get("strategy_overrides", {}),
         "ticks": len(metrics_events),
         "token_ids": token_ids,
         "pnl_end": (equity_curve[-1] - equity_curve[0]) if equity_curve else 0.0,
@@ -461,6 +466,10 @@ def run_scenario_file(scenario_file: str, out_dir: str) -> ReplayResult:
     return asyncio.run(_run_single_async(payload, Path(out_dir)))
 
 
+def run_scenario_payload(scenario: Dict[str, Any], out_dir: str) -> ReplayResult:
+    return asyncio.run(_run_single_async(scenario, Path(out_dir)))
+
+
 def run_scenarios_dir(scenarios_dir: str, out_dir: str) -> Dict[str, Any]:
     src = Path(scenarios_dir)
     files = sorted([x for x in src.glob("*.json") if x.is_file()])
@@ -493,3 +502,56 @@ def run_scenarios_dir(scenarios_dir: str, out_dir: str) -> Dict[str, Any]:
     _write_json(report_path, all_summary)
     return all_summary
 
+
+def run_scenario_compare(
+    scenario_file: str,
+    profiles_file: str,
+    out_dir: str,
+) -> Dict[str, Any]:
+    base_scenario = json.loads(Path(scenario_file).read_text(encoding="utf-8"))
+    profiles = json.loads(Path(profiles_file).read_text(encoding="utf-8"))
+    if not isinstance(profiles, list) or not profiles:
+        raise ValueError("profiles file must be a non-empty json array")
+
+    base_id = str(base_scenario.get("scenario_id", "scenario"))
+    compare_out = Path(out_dir)
+    compare_out.mkdir(parents=True, exist_ok=True)
+    run_summaries: List[Dict[str, Any]] = []
+
+    for idx, profile in enumerate(profiles):
+        if not isinstance(profile, dict):
+            continue
+        profile_name = str(profile.get("name", f"profile_{idx}")).strip() or f"profile_{idx}"
+        profile_overrides = profile.get("strategy_overrides", {})
+        if not isinstance(profile_overrides, dict):
+            profile_overrides = {}
+
+        scenario = copy.deepcopy(base_scenario)
+        merged = {}
+        merged.update(base_scenario.get("strategy_overrides", {}) or {})
+        merged.update(profile_overrides)
+        scenario["strategy_overrides"] = merged
+        scenario["scenario_id"] = f"{base_id}__{profile_name}"
+        scenario["description"] = (
+            f"{base_scenario.get('description', '')} | compare_profile={profile_name}"
+        ).strip()
+
+        result = run_scenario_payload(scenario, out_dir=str(compare_out))
+        row = dict(result.summary)
+        row["profile_name"] = profile_name
+        run_summaries.append(row)
+
+    by_pnl = sorted(run_summaries, key=lambda x: float(x.get("pnl_end", 0.0)))
+    compare_report = {
+        "base_scenario_file": str(scenario_file),
+        "profiles_file": str(profiles_file),
+        "count": len(run_summaries),
+        "runs": run_summaries,
+        "best_by_pnl": by_pnl[-1]["scenario_id"] if by_pnl else None,
+        "worst_by_pnl": by_pnl[0]["scenario_id"] if by_pnl else None,
+        "best_pnl_value": float(by_pnl[-1].get("pnl_end", 0.0)) if by_pnl else 0.0,
+        "worst_pnl_value": float(by_pnl[0].get("pnl_end", 0.0)) if by_pnl else 0.0,
+    }
+    report_path = compare_out / "compare_summary.json"
+    _write_json(report_path, compare_report)
+    return compare_report

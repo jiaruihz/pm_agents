@@ -353,6 +353,12 @@ async def tick_loop(config: PMMConfig) -> None:
 
     async with ToolServiceClient(config.api_base_url, config.api_key) as client:
         execution_mode = config.execution_mode.lower().strip()
+        quote_runtime_meta = config.quote_runtime_meta()
+        if quote_runtime_meta.get("multi_level_placeholder_active"):
+            print(
+                "[QUOTE] multi-level requested but placeholder mode is active; "
+                "runtime still uses single-level quoting."
+            )
         paper_broker: Optional[PaperBroker] = None
         execution_client: Any = client
         paper_bootstrap_actions: List[Dict[str, Any]] = []
@@ -596,6 +602,7 @@ async def tick_loop(config: PMMConfig) -> None:
                         {
                             "tick": tick_count,
                             "execution_mode": execution_mode,
+                            "quote_runtime": quote_runtime_meta,
                             "market_data_source": "ws" if ws_feed else "rest",
                             "usdc_balance": usdc_balance,
                             "effective_usdc_for_sizing": effective_usdc_for_sizing,
@@ -897,6 +904,7 @@ async def tick_loop(config: PMMConfig) -> None:
                     {
                         "tick": tick_count,
                         "execution_mode": execution_mode,
+                        "quote_runtime": quote_runtime_meta,
                         "market_data_source": "ws" if ws_feed else "rest",
                         "usdc_balance": usdc_balance,
                         "effective_usdc_for_sizing": effective_usdc_for_sizing,

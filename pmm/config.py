@@ -56,6 +56,12 @@ class PMMConfig:
     base_size: float = 5.0
     min_size: float = 1.0
     enforce_inventory_for_sell: bool = False
+    # Quote ladder extension point (reserved for future multi-level quoting).
+    # Current behavior stays single-level unless explicitly implemented later.
+    quote_levels: int = 1
+    level_spread_step: float = 0.005
+    level_size_decay: float = 0.6
+    multi_level_quote_enabled: bool = False
 
     # Alpha / adverse-selection protection
     alpha_enabled: bool = True
@@ -98,6 +104,24 @@ class PMMConfig:
     # Market config (manual token ids)
     market: MarketConfig = field(default_factory=lambda: MarketConfig(token_ids=[]))
     metrics_path: str = "pmm_logs/metrics.jsonl"
+
+    def effective_quote_levels(self) -> int:
+        requested = max(1, int(self.quote_levels))
+        if self.multi_level_quote_enabled:
+            return requested
+        return 1
+
+    def quote_runtime_meta(self) -> dict:
+        requested = max(1, int(self.quote_levels))
+        effective = self.effective_quote_levels()
+        return {
+            "quote_levels_requested": requested,
+            "quote_levels_effective": effective,
+            "multi_level_quote_enabled": bool(self.multi_level_quote_enabled),
+            "multi_level_placeholder_active": (requested > 1 and effective == 1),
+            "level_spread_step": float(self.level_spread_step),
+            "level_size_decay": float(self.level_size_decay),
+        }
 
     @staticmethod
     def from_env() -> "PMMConfig":
@@ -159,6 +183,10 @@ class PMMConfig:
             base_size=float(os.getenv("PMM_BASE_SIZE", "5")),
             min_size=float(os.getenv("PMM_MIN_SIZE", "1")),
             enforce_inventory_for_sell=os.getenv("PMM_ENFORCE_INV_SELL", "0") == "1",
+            quote_levels=int(os.getenv("PMM_QUOTE_LEVELS", "1")),
+            level_spread_step=float(os.getenv("PMM_LEVEL_SPREAD_STEP", "0.005")),
+            level_size_decay=float(os.getenv("PMM_LEVEL_SIZE_DECAY", "0.6")),
+            multi_level_quote_enabled=os.getenv("PMM_MULTI_LEVEL_ENABLED", "0") == "1",
             alpha_enabled=os.getenv("PMM_ALPHA_ENABLED", "1") == "1",
             alpha_reference_token_ids=alpha_reference_token_ids,
             alpha_window_sec=int(os.getenv("PMM_ALPHA_WINDOW_SEC", "30")),
