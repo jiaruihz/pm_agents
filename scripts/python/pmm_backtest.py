@@ -12,11 +12,11 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from pmm.backtest.scenario_generator import generate_all_from_catalog
-from pmm.backtest.plotter import plot_all, plot_scenario
 from pmm.backtest.replay_runner import (
     run_scenario_compare,
     run_scenario_file,
     run_scenarios_dir,
+    run_scenarios_dir_with_fill_models,
 )
 
 
@@ -60,6 +60,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output directory for run artifacts",
     )
 
+    p_all_models = sub.add_parser(
+        "run-all-fill-models",
+        help="Run all scenarios with multiple paper fill models (optimistic/conservative) and output merged leaderboard",
+    )
+    p_all_models.add_argument(
+        "--scenarios-dir",
+        default="pmm/backtest/scenarios",
+        help="Directory containing scenario json files",
+    )
+    p_all_models.add_argument(
+        "--out-dir",
+        default="pmm/backtest/results_fill_models",
+        help="Output directory for run artifacts",
+    )
+    p_all_models.add_argument(
+        "--fill-models",
+        default="conservative,optimistic",
+        help="Comma separated fill models, e.g. conservative,optimistic",
+    )
+
     p_plot = sub.add_parser("plot", help="Plot one scenario result directory")
     p_plot.add_argument(
         "--result-dir",
@@ -99,12 +119,47 @@ def _build_parser() -> argparse.ArgumentParser:
         default="pmm/backtest/results_compare",
         help="Output directory for compare run artifacts",
     )
+    p_record = sub.add_parser("record", help="Record live orderbook data to scenario JSON")
+    p_record.add_argument(
+        "--tokens",
+        required=True,
+        help="Comma separated token IDs to record, e.g. 1234,5678",
+    )
+    p_record.add_argument(
+        "--duration",
+        type=int,
+        default=60,
+        help="Duration in seconds (default: 60)",
+    )
+    p_record.add_argument(
+        "--interval",
+        type=float,
+        default=1.0,
+        help="Snapshot interval in seconds (default: 1.0)",
+    )
+    p_record.add_argument(
+        "--out",
+        default="pmm/backtest/scenarios/recorded.json",
+        help="Output file path",
+    )
+
     return parser
 
 
 def main() -> None:
     args = _build_parser().parse_args()
+
+    if args.command == "record":
+        from pmm.backtest.recorder import LiveRecorder
+        import asyncio
+
+        token_ids = [x.strip() for x in args.tokens.split(",") if x.strip()]
+        recorder = LiveRecorder(token_ids, interval=args.interval)
+        asyncio.run(recorder.run(duration_sec=args.duration, output_file=args.out))
+        return
+
     if args.command == "generate":
+
         res = generate_all_from_catalog(args.catalog, args.out_dir, seed=args.seed)
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return
@@ -119,13 +174,31 @@ def main() -> None:
         report = run_scenarios_dir(args.scenarios_dir, out_dir=args.out_dir)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         print(f"report={Path(args.out_dir) / 'summary_all.json'}")
+        if report.get("leaderboard_rows"):
+            print(f"table={Path(args.out_dir) / 'summary_all_table.txt'}")
+        return
+    if args.command == "run-all-fill-models":
+        fill_models = [x.strip() for x in args.fill_models.split(",") if x.strip()]
+        report = run_scenarios_dir_with_fill_models(
+            scenarios_dir=args.scenarios_dir,
+            out_dir=args.out_dir,
+            fill_models=fill_models,
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        print(f"report={Path(args.out_dir) / 'summary_all_fill_models.json'}")
+        print(f"table={Path(args.out_dir) / 'summary_all_fill_models_table.txt'}")
+        print(f"csv={Path(args.out_dir) / 'summary_all_fill_models_table.csv'}")
         return
     if args.command == "plot":
+        from pmm.backtest.plotter import plot_scenario
+
         out_dir = args.out_dir.strip() if isinstance(args.out_dir, str) else ""
         result = plot_scenario(args.result_dir, out_dir=out_dir or None)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
     if args.command == "plot-all":
+        from pmm.backtest.plotter import plot_all
+
         out_dir = args.out_dir.strip() if isinstance(args.out_dir, str) else ""
         result = plot_all(args.results_dir, out_dir=out_dir or None)
         print(json.dumps(result, ensure_ascii=False, indent=2))

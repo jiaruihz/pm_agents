@@ -42,6 +42,9 @@ class PaperBroker:
         fill_model: str = "conservative",
         fill_epsilon: float = 0.001,
         queue_share: float = 0.25,
+        require_trade_flow_for_at_bbo: bool = False,
+        disable_at_bbo_in_conservative: bool = False,
+        conservative_bbo_share_multiplier: float = 0.4,
     ) -> None:
         self.token_ids = list(token_ids)
         self.fill_model = fill_model.lower()
@@ -50,6 +53,11 @@ class PaperBroker:
 
         self.fill_epsilon = max(0.0, float(fill_epsilon))
         self.queue_share = max(0.01, min(1.0, float(queue_share)))
+        self.require_trade_flow_for_at_bbo = bool(require_trade_flow_for_at_bbo)
+        self.disable_at_bbo_in_conservative = bool(disable_at_bbo_in_conservative)
+        self.conservative_bbo_share_multiplier = max(
+            0.0, min(1.0, float(conservative_bbo_share_multiplier))
+        )
 
         self._cash_total = max(0.0, float(initial_usdc))
         self._cash_free = self._cash_total
@@ -226,15 +234,21 @@ class PaperBroker:
             "no_token_id": str(no_token_id),
         }
 
-    async def on_market_data(self, orderbooks: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def on_market_data(
+        self,
+        orderbooks: Dict[str, Dict[str, Any]],
+        trade_flow: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
         fills: List[Dict[str, Any]] = []
+        flow_map = trade_flow or {}
         for order in list(self._orders.values()):
             if order.remaining_size <= 0:
                 self._orders.pop(order.order_id, None)
                 continue
             orderbook = orderbooks.get(order.token_id, {})
             top = self._best_bid_ask_with_size(orderbook)
-            fill_qty = self._match_qty(order, top)
+            flow = flow_map.get(order.token_id, {})
+            fill_qty = self._match_qty(order, top, flow)
             if fill_qty <= 0:
                 continue
             fill_price = order.price
@@ -299,22 +313,37 @@ class PaperBroker:
         except Exception:
             return 0.0
 
-    def _match_qty(self, order: PaperOrder, top: Dict[str, float]) -> float:
+    def _match_qty(
+        self,
+        order: PaperOrder,
+        top: Dict[str, float],
+        flow: Dict[str, Any],
+    ) -> float:
         best_bid = top.get("best_bid", 0.0)
         best_ask = top.get("best_ask", 0.0)
         bid_size = max(0.0, top.get("best_bid_size", 0.0))
         ask_size = max(0.0, top.get("best_ask_size", 0.0))
+        buy_taker_qty = max(0.0, self._to_float(flow.get("buy_taker_qty", 0.0)))
+        sell_taker_qty = max(0.0, self._to_float(flow.get("sell_taker_qty", 0.0)))
 
         if order.side == "BUY":
             if best_ask <= 0:
                 return 0.0
+            # Path 1: book crosses our order (original logic)
             if self.fill_model == "conservative":
                 touched = best_ask <= (order.price - self.fill_epsilon)
             else:
                 touched = best_ask <= (order.price + self.fill_epsilon)
-            if not touched:
+            # Path 2: BBO-join — our order is at or improving the best bid,
+            # simulate taker flow hitting our resting order.
+            at_bbo = (best_bid > 0) and (order.price >= best_bid)
+            if self.fill_model == "conservative" and self.disable_at_bbo_in_conservative:
+                at_bbo = False
+            if self.require_trade_flow_for_at_bbo:
+                at_bbo = at_bbo and (sell_taker_qty > 0)
+            if not touched and not at_bbo:
                 return 0.0
-            marketable = ask_size if ask_size > 0 else order.remaining_size
+            marketable = ask_size if touched else sell_taker_qty
         else:
             if best_bid <= 0:
                 return 0.0
@@ -322,11 +351,18 @@ class PaperBroker:
                 touched = best_bid >= (order.price + self.fill_epsilon)
             else:
                 touched = best_bid >= (order.price - self.fill_epsilon)
-            if not touched:
+            at_bbo = (best_ask > 0) and (order.price <= best_ask)
+            if self.fill_model == "conservative" and self.disable_at_bbo_in_conservative:
+                at_bbo = False
+            if self.require_trade_flow_for_at_bbo:
+                at_bbo = at_bbo and (buy_taker_qty > 0)
+            if not touched and not at_bbo:
                 return 0.0
-            marketable = bid_size if bid_size > 0 else order.remaining_size
+            marketable = bid_size if touched else buy_taker_qty
 
         max_fill = max(0.0, marketable * self.queue_share)
+        if (not touched) and at_bbo and self.fill_model == "conservative":
+            max_fill *= self.conservative_bbo_share_multiplier
         if max_fill <= 0:
             return 0.0
         return min(order.remaining_size, max_fill)

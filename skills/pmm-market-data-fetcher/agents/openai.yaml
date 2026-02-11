@@ -1,0 +1,4 @@
+interface_version: 1
+display_name: PMM Market Data Fetcher
+short_description: Fetch event, rules, token IDs, and orderbooks from a Polymarket URL.
+default_prompt: Fetch market snapshot from a Polymarket URL and save it locally.

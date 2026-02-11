@@ -15,6 +15,8 @@ pmm/backtest/
 
 CLI 入口：`scripts/python/pmm_backtest.py`
 
+独立造数脚本：`scripts/python/generate_backtest_scenarios.py`
+
 ---
 
 ## 1. 造数
@@ -30,6 +32,7 @@ CLI 入口：`scripts/python/pmm_backtest.py`
 | `spread_base` / `spread_jitter` | float | 盘口价差基础值 + 随机扰动 |
 | `depth_base` | float | 盘口深度基准 |
 | `fillability` | low / medium / high | 成交难度（影响 `queue_share`） |
+| `trade_flow` (逐 tick 生成) | buy/sell taker qty | 主动单流，用于队列成交模拟 |
 | `shock_tick` / `shock_jump` / `shock_len` | int/float | 事件冲击时点、幅度、持续长度 |
 | `dryup_start` | int | 流动性衰竭起始 tick |
 
@@ -51,6 +54,7 @@ CLI 入口：`scripts/python/pmm_backtest.py`
 - YES 路径按模式生成
 - NO = `1 - YES + 微扰`（避免完全对称）
 - 盘口按 mid ± spread/2 生成 top level
+- 每个 tick 额外生成 `trade_flow`（YES/NO 各自的 `buy_taker_qty` / `sell_taker_qty`）
 
 ---
 
@@ -69,8 +73,13 @@ replay_runner
 1. 读取场景 orderbook 快照
 2. 计算 mid / spread / 库存信号 / 动态 spread
 3. 生成报价 → diff → 挂撤单
-4. `PaperBroker.on_market_data()` 撮合
+4. `PaperBroker.on_market_data(orderbooks, trade_flow)` 撮合
 5. 记录 metrics + actions
+
+撮合模型（当前版本）：
+- `cross_fill`：盘口穿价触发成交
+- `queue_fill`：仅在有 `trade_flow` 时才允许 BBO 队列成交
+- `conservative` 相比 `optimistic` 使用更保守的 BBO 队列份额
 
 ---
 
@@ -104,11 +113,32 @@ results_compare/
 └── compare_summary.json
 ```
 
+### 多 fill model 联跑输出
+
+```
+results_fill_models/
+├── <scenario_id>__fill_conservative/
+├── <scenario_id>__fill_optimistic/
+├── summary_all_fill_models.json
+├── summary_all_fill_models_table.txt
+└── summary_all_fill_models_table.csv
+```
+
 `compare_summary.json` 关键字段：
 
 - `runs`：每个 profile 一条 `summary`（含 `quote_runtime`）
 - `best_by_pnl` / `worst_by_pnl`：按 `pnl_end` 排序后的最好/最差方案
 - `best_pnl_value` / `worst_pnl_value`：对应收益值
+
+`summary_all_fill_models_table.txt` 字段：
+
+- `Scenario`：场景名（不含 fill model 后缀）
+- `FillModel`：`conservative` / `optimistic`
+- `PnL`：`pnl_end`
+- `Fills`：`total_fills`（至少成交过一次的订单数）
+- `Orders`：`total_placed`
+- `Fill%`：`total_fills / total_placed`
+- `MDD`：`max_drawdown`
 
 ### actions.jsonl 字段
 
@@ -128,7 +158,9 @@ results_compare/
 |------|------|
 | `pnl_end` | 期末 PnL |
 | `max_drawdown` | 最大回撤（基于 equity 曲线） |
-| `total_placed` / `total_canceled` / `total_fills` | 操作计数 |
+| `total_placed` / `total_canceled` / `total_fills` | 操作计数（`total_fills`=被成交订单数） |
+| `total_fill_events` | 成交事件条数（可大于 `total_fills`） |
+| `total_filled_qty` | 成交总数量（按份额） |
 | `fill_rate_per_order` | `fills / placed` |
 | `avg_pnl_per_tick` | 各 tick PnL 均值 |
 | `strategy_key` | 本次回测实际使用的策略实现 key |
@@ -165,6 +197,14 @@ results_compare/
   --out-dir pmm/backtest/scenarios \
   --seed 42
 
+# 独立造数脚本（便于外部 AI/自动化调用）
+./venv/bin/python scripts/python/generate_backtest_scenarios.py \
+  --catalog pmm/backtest/case_catalog.json \
+  --out-dir pmm/backtest/scenarios \
+  --seed 42 \
+  --show-initial \
+  --show-sample b30_event_spike_then_revert
+
 # 跑单个场景
 ./venv/bin/python scripts/python/pmm_backtest.py run \
   --scenario pmm/backtest/scenarios/b50_oscillating_fill.json \
@@ -174,6 +214,12 @@ results_compare/
 ./venv/bin/python scripts/python/pmm_backtest.py run-all \
   --scenarios-dir pmm/backtest/scenarios \
   --out-dir pmm/backtest/results
+
+# 同时跑 conservative + optimistic，并输出同一张结果榜单
+./venv/bin/python scripts/python/pmm_backtest.py run-all-fill-models \
+  --scenarios-dir pmm/backtest/scenarios \
+  --out-dir pmm/backtest/results_fill_models \
+  --fill-models conservative,optimistic
 
 # 同场景多参数对比（先用于单档，后续可直接纳入多档）
 ./venv/bin/python scripts/python/pmm_backtest.py compare \

@@ -23,8 +23,9 @@
 │    inventory_signal → realized_vol → required_spread │
 │    → OFI / momentum → side block decision            │
 ├─────────────────────────────────────────────────────┤
-│ 5. Quote Generation                                 │
-│    compute_quotes → anchor_to_book → quantize        │
+│ 5. Strategy Routing + Quote Generation              │
+│    strategy_key → StrategyRegistry → strategy impl   │
+│    single_level_v1: compute → anchor → quantize      │
 ├─────────────────────────────────────────────────────┤
 │ 6. Execution                                        │
 │    diff(open_orders, target) → cancel + place        │
@@ -33,6 +34,7 @@
 │    min(yes_pos, no_pos) ≥ threshold → merge → USDC   │
 ├─────────────────────────────────────────────────────┤
 │ 8. Metrics                                          │
+│    strategy_key + quote_runtime + pnl/signals        │
 │    → append to metrics.jsonl                         │
 └─────────────────────────────────────────────────────┘
         │
@@ -46,12 +48,16 @@ sequenceDiagram
     autonumber
     participant Main as main.py
     participant Engine as tick_loop
+    participant Registry as StrategyRegistry
+    participant Strat as single_level_v1
     participant API as ToolService / PaperBroker
     participant WS as MarketWsFeed
     participant Diff as OrderManager
     participant Log as MetricsLogger
 
     Main->>Engine: tick_loop(config)
+    Engine->>Registry: get(strategy_key)
+    Registry-->>Engine: strategy instance
 
     loop every tick
         par account snapshot
@@ -74,19 +80,23 @@ sequenceDiagram
             Engine->>API: cancel_all
             Engine->>Log: breaker event
         else normal
-            Engine->>Engine: signals + quotes
-            Engine->>Diff: diff(open_orders, targets)
-            Diff-->>Engine: cancel_ids, create?
-            opt cancel
-                Engine->>API: cancel
-            end
-            opt create
-                Engine->>API: place
+            Engine->>Engine: compute signals (inv/rv/ofi/momentum)
+            Engine->>Strat: generate_quotes(token_ctx, signal_ctx)
+            Strat-->>Engine: quote_targets[]
+            loop each quote_target
+                Engine->>Diff: diff(open_orders, target)
+                Diff-->>Engine: cancel_ids, create?
+                opt cancel
+                    Engine->>API: cancel
+                end
+                opt create
+                    Engine->>API: place
+                end
             end
             opt merge due
                 Engine->>API: merge
             end
-            Engine->>Log: tick metrics
+            Engine->>Log: tick metrics(strategy_key, quote_runtime, pnl...)
         end
     end
 ```

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import csv
 import json
 from collections import deque
 from dataclasses import dataclass
@@ -23,6 +24,20 @@ def _write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_csv(path: Path, rows: List[Dict[str, Any]], fieldnames: List[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k, "") for k in fieldnames})
+
+
 def _write_jsonl(path: Path, events: List[Dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
@@ -40,6 +55,66 @@ def _max_drawdown(equity_curve: List[float]) -> float:
         dd = (peak - x) / max(1e-9, peak)
         worst = max(worst, dd)
     return worst
+
+
+def _fmt_pct(value: float) -> str:
+    return f"{value * 100:.1f}%"
+
+
+def _build_leaderboard_rows(
+    run_summaries: List[Dict[str, Any]],
+    include_fill_model: bool = False,
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for s in run_summaries:
+        row = {
+            "scenario": str(s.get("scenario_base", s.get("scenario_id", ""))),
+            "fill_model": str(s.get("fill_model", "")),
+            "pnl": float(s.get("pnl_end", 0.0)),
+            "fills": int(s.get("total_fills", 0)),
+            "orders": int(s.get("total_placed", 0)),
+            "fill_pct": float(s.get("fill_rate_per_order", 0.0)),
+            "mdd": float(s.get("max_drawdown", 0.0)),
+        }
+        if include_fill_model:
+            rows.append(row)
+        else:
+            row.pop("fill_model", None)
+            rows.append(row)
+    rows.sort(key=lambda x: float(x.get("pnl", 0.0)), reverse=True)
+    return rows
+
+
+def _render_table(rows: List[Dict[str, Any]], include_fill_model: bool = False) -> str:
+    if include_fill_model:
+        header = "Scenario                                      FillModel      PnL  Fills  Orders  Fill%     MDD"
+        sep = "-" * len(header)
+        lines = [header, sep]
+        for r in rows:
+            lines.append(
+                f"{r['scenario'][:42]:42}  "
+                f"{r['fill_model'][:12]:12}  "
+                f"{r['pnl']:8.2f}  "
+                f"{r['fills']:5d}  "
+                f"{r['orders']:6d}  "
+                f"{_fmt_pct(r['fill_pct']):>6}  "
+                f"{_fmt_pct(r['mdd']):>7}"
+            )
+        return "\n".join(lines)
+
+    header = "Scenario                                      PnL  Fills  Orders  Fill%     MDD"
+    sep = "-" * len(header)
+    lines = [header, sep]
+    for r in rows:
+        lines.append(
+            f"{r['scenario'][:42]:42}  "
+            f"{r['pnl']:8.2f}  "
+            f"{r['fills']:5d}  "
+            f"{r['orders']:6d}  "
+            f"{_fmt_pct(r['fill_pct']):>6}  "
+            f"{_fmt_pct(r['mdd']):>7}"
+        )
+    return "\n".join(lines)
 
 
 def _apply_strategy_overrides(cfg: PMMConfig, overrides: Dict[str, Any]) -> None:
@@ -97,6 +172,9 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
         fill_model=cfg.paper_fill_model,
         fill_epsilon=cfg.paper_fill_epsilon,
         queue_share=cfg.paper_queue_share,
+        require_trade_flow_for_at_bbo=True,
+        disable_at_bbo_in_conservative=False,
+        conservative_bbo_share_multiplier=0.35,
     )
     order_mgr = OrderManager(deadband=cfg.deadband)
 
@@ -112,12 +190,15 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
     equity_curve: List[float] = []
     total_placed = 0
     total_canceled = 0
-    total_fills = 0
+    total_fill_events = 0
+    total_filled_qty = 0.0
+    filled_order_ids: set[str] = set()
     total_errors = 0
 
     for tick_idx, tick in enumerate(ticks):
         event_label = str(tick.get("event", "normal"))
         orderbooks: Dict[str, Dict[str, Any]] = tick.get("orderbooks", {})
+        trade_flow: Dict[str, Dict[str, Any]] = tick.get("trade_flow", {})
 
         balance = await broker.get_balance()
         open_orders = await broker.get_orders()
@@ -401,11 +482,15 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
                             }
                         )
 
-        fills = await broker.on_market_data(orderbooks)
+        fills = await broker.on_market_data(orderbooks, trade_flow=trade_flow)
         if fills:
             fills_count = len(fills)
-            total_fills += fills_count
+            total_fill_events += fills_count
             for fill in fills:
+                fill_order_id = str(fill.get("order_id", ""))
+                if fill_order_id:
+                    filled_order_ids.add(fill_order_id)
+                total_filled_qty += float(fill.get("size", 0.0) or 0.0)
                 action_events.append(
                     {
                         "tick": tick_idx,
@@ -439,6 +524,7 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
                 "target_quotes": target_quotes,
                 "final_quotes": final_quotes,
                 "side_blocks": side_blocks,
+                "trade_flow": trade_flow,
                 "circuit_breaker_triggered": circuit_breaker_triggered,
                 "circuit_breaker_reasons": circuit_breaker_reasons,
             }
@@ -458,9 +544,11 @@ async def _run_single_async(scenario: Dict[str, Any], out_dir: Path) -> ReplayRe
         "max_drawdown": _max_drawdown(equity_curve),
         "total_placed": total_placed,
         "total_canceled": total_canceled,
-        "total_fills": total_fills,
+        "total_fills": len(filled_order_ids),
+        "total_fill_events": total_fill_events,
+        "total_filled_qty": total_filled_qty,
         "total_errors": total_errors,
-        "fill_rate_per_order": (total_fills / max(1, total_placed)),
+        "fill_rate_per_order": (len(filled_order_ids) / max(1, total_placed)),
         "avg_pnl_per_tick": (
             sum(x.get("pnl", 0.0) for x in metrics_events) / max(1, len(metrics_events))
         ),
@@ -518,10 +606,75 @@ def run_scenarios_dir(scenarios_dir: str, out_dir: str) -> Dict[str, Any]:
         ) / len(results)
         all_summary["total_fills"] = int(sum(int(x.summary.get("total_fills", 0)) for x in results))
         all_summary["total_orders"] = int(sum(int(x.summary.get("total_placed", 0)) for x in results))
+        leaderboard_rows = _build_leaderboard_rows([x.summary for x in results], include_fill_model=False)
+        all_summary["leaderboard_rows"] = leaderboard_rows
 
     report_path = Path(out_dir) / "summary_all.json"
     _write_json(report_path, all_summary)
+    if results:
+        table_text = _render_table(all_summary["leaderboard_rows"], include_fill_model=False)
+        _write_text(Path(out_dir) / "summary_all_table.txt", table_text + "\n")
     return all_summary
+
+
+def run_scenarios_dir_with_fill_models(
+    scenarios_dir: str,
+    out_dir: str,
+    fill_models: List[str],
+) -> Dict[str, Any]:
+    src = Path(scenarios_dir)
+    files = sorted([x for x in src.glob("*.json") if x.is_file()])
+    normalized_models = [str(x).strip().lower() for x in fill_models if str(x).strip()]
+    normalized_models = [x for x in normalized_models if x in {"conservative", "optimistic"}]
+    if not normalized_models:
+        normalized_models = ["conservative", "optimistic"]
+
+    run_summaries: List[Dict[str, Any]] = []
+    for model in normalized_models:
+        for file_path in files:
+            scenario = json.loads(file_path.read_text(encoding="utf-8"))
+            base_id = str(scenario.get("scenario_id", file_path.stem))
+            merged = {}
+            merged.update(scenario.get("strategy_overrides", {}) or {})
+            merged["paper_fill_model"] = model
+            scenario["strategy_overrides"] = merged
+            scenario["scenario_id"] = f"{base_id}__fill_{model}"
+            result = run_scenario_payload(scenario, out_dir=out_dir)
+            row = dict(result.summary)
+            row["scenario_base"] = base_id
+            row["fill_model"] = model
+            run_summaries.append(row)
+
+    report = {
+        "count": len(run_summaries),
+        "fill_models": normalized_models,
+        "runs": run_summaries,
+        "leaderboard_rows": _build_leaderboard_rows(run_summaries, include_fill_model=True),
+    }
+
+    summary_by_scenario: Dict[str, Dict[str, Any]] = {}
+    for row in run_summaries:
+        base = str(row.get("scenario_base", row.get("scenario_id", "")))
+        item = summary_by_scenario.setdefault(base, {"scenario": base, "models": {}})
+        item["models"][str(row.get("fill_model", ""))] = {
+            "pnl_end": float(row.get("pnl_end", 0.0)),
+            "fills": int(row.get("total_fills", 0)),
+            "orders": int(row.get("total_placed", 0)),
+            "fill_rate_per_order": float(row.get("fill_rate_per_order", 0.0)),
+            "max_drawdown": float(row.get("max_drawdown", 0.0)),
+        }
+    report["by_scenario"] = list(summary_by_scenario.values())
+
+    out_path = Path(out_dir)
+    _write_json(out_path / "summary_all_fill_models.json", report)
+    table_text = _render_table(report["leaderboard_rows"], include_fill_model=True)
+    _write_text(out_path / "summary_all_fill_models_table.txt", table_text + "\n")
+    _write_csv(
+        out_path / "summary_all_fill_models_table.csv",
+        report["leaderboard_rows"],
+        fieldnames=["scenario", "fill_model", "pnl", "fills", "orders", "fill_pct", "mdd"],
+    )
+    return report
 
 
 def run_scenario_compare(
