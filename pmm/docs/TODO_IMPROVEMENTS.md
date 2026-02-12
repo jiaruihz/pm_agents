@@ -43,7 +43,7 @@
 - [x] 动态 spread（费用 / 波动 / 库存）
 - [x] Weighted mid / midpoint 切换
 - [x] Merge 在途 credit（TTL + ratio）
-- [ ] **多档报价**（N 档梯度 size / price）
+- [x] **多档报价**（N 档梯度 size / price）
 - [ ] Realized PnL + 费用拆分
 - [ ] 自动 split / redeem
 - [ ] 方向性 exposure 风控 / VaR

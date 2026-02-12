@@ -6,16 +6,35 @@
 
 ```
 main.py
-  └─ tick_loop.py
-       ├─ config.py          全局配置 (env)
-       ├─ market_ws.py        WS 行情 + L2 book
-       ├─ http_client.py      REST API
-       ├─ pricing.py          报价计算
-       ├─ orderbook.py        orderbook 工具
-       ├─ order_manager.py    diff + deadband
-       ├─ paper_broker.py     纸盘撮合
-       ├─ quantize.py         价格 tick 对齐
-       └─ metrics.py          日志写入
+  └─ tick_loop.py (orchestration)
+       ├─ config.py                  全局配置 (env)
+       ├─ core/
+       │    ├─ signals.py             信号计算
+       │    ├─ sizing.py              仓位计算
+       │    ├─ anchoring.py           报价锚定
+       │    ├─ pricing.py             报价公式
+       │    ├─ strategy_base.py       策略协议
+       │    └─ strategy_registry.py   策略注册
+       ├─ data/
+       │    ├─ market_ws.py           WS 行情 + L2 book
+       │    ├─ http_client.py         REST API
+       │    ├─ orderbook.py           orderbook 工具
+       │    └─ parsers.py             数据解析
+       ├─ execution/
+       │    ├─ broker_interface.py    抽象接口
+       │    ├─ live_broker.py         实盘执行
+       │    ├─ paper_broker.py        纸盘撮合
+       │    └─ order_manager.py       diff + deadband
+       ├─ risk/
+       │    ├─ safety_guard.py        风控检查
+       │    └─ circuit_breaker.py     熔断器
+       ├─ utils/
+       │    ├─ converters.py          类型转换
+       │    ├─ quantize.py            价格 tick 对齐
+       │    └─ metrics.py             日志写入
+       └─ strategies/
+            ├─ single_level_v1.py     单档策略
+            └─ multi_level_v1.py      多档策略
 ```
 
 ---
@@ -51,26 +70,28 @@ asyncio.run(tick_loop(config))
 
 ## 3. 主循环 — `tick_loop.py`
 
+**Note**: As of 2026-02-12, `tick_loop.py` has been refactored from 1013 → 735 lines. Signal computation, sizing, anchoring, and parsing functions have been extracted to dedicated modules in `core/` and `data/`.
+
 每个 tick 的执行链：
 
 ```
 1. 拉取 account snapshot (balance / orders / positions)
 2. 拉取 / 读取 orderbook → 计算 mid / spread
-3. Circuit breaker 检查
+3. Circuit breaker 检查 (risk/circuit_breaker.py)
 4. 如果触发 → cancel_all → 停止或 cooldown
 5. 对每个 token:
-   a. 计算 inventory signal (sigmoid)
-   b. 计算 realized volatility
-   c. 计算 required spread → adaptive spread
+   a. 计算 inventory signal (core/signals.py)
+   b. 计算 realized volatility (core/signals.py)
+   c. 计算 required spread → adaptive spread (core/signals.py)
    d. 检查自然 spread < 盈利阈值 → 判定是否 block
-   e. 检查 OFI / 参考市场动量 → 判定是否 block
-   f. compute_quotes → 理论 bid/ask
-   g. anchor_to_book → 执行 bid/ask
-   h. quantize → tick 对齐
-   i. 计算 target sizes (受余额 / max_position 限制)
-   j. 对 BUY/SELL: diff → cancel + place
+   e. 检查 OFI / 参考市场动量 → 判定是否 block (core/signals.py)
+   f. 策略报价生成 (strategies/)
+   g. anchor_to_book → 执行 bid/ask (core/anchoring.py)
+   h. quantize → tick 对齐 (utils/quantize.py)
+   i. 计算 target sizes (core/sizing.py)
+   j. 对 BUY/SELL: diff → cancel + place (execution/order_manager.py)
 6. 自动 merge（按周期）
-7. 写 metrics.jsonl
+7. 写 metrics.jsonl (utils/metrics.py)
 ```
 
 ### 关键实现细节
