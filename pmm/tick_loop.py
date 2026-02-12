@@ -1,325 +1,47 @@
 import asyncio
-import ast
 import math
 import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
 from pmm.config import PMMConfig
+from pmm.core.anchoring import anchor_quotes_to_book as _anchor_quotes_to_book
+from pmm.core.signals import (
+    depth_near_mid as _depth_near_mid,
+    fair_mid as _fair_mid,
+    inventory_signal as _inventory_signal,
+    momentum as _momentum,
+    order_flow_imbalance as _order_flow_imbalance,
+    realized_vol as _realized_vol,
+    required_spread as _required_spread,
+    weighted_mid as _weighted_mid,
+)
+from pmm.core.sizing import target_sizes as _target_sizes
 from pmm.core.strategy_base import StrategyQuoteInput
 from pmm.core.strategy_registry import StrategyRegistry
 from pmm.data.http_client import ToolServiceClient
 from pmm.data.market_ws import MarketWsFeed
 from pmm.data.orderbook import best_bid_ask, mid_price, spread as orderbook_spread
+from pmm.data.parsers import (
+    mid_from_market as _mid_from_market,
+    parse_account_state as _parse_account_state,
+    parse_partition as _parse_partition,
+    pending_credit_total as _pending_credit_total,
+)
 from pmm.execution.order_manager import OrderManager
 from pmm.execution.paper_broker import PaperBroker
 from pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
+from pmm.utils.converters import best_level as _best_level, normalize_levels as _normalize_levels, to_float as _safe_float, to_int as _safe_int
 from pmm.utils.metrics import MetricsLogger
-from pmm.utils.quantize import quantize_to_tick
+from pmm.utils.quantize import (
+    quantize_quote_dict as _quantize_quote_dict,
+    quantize_quote_pair as _quantize_quote_pair,
+    quantize_price_dict as _quantize_price_dict,
+    quantize_to_tick,
+)
 
 
-# Parse fallback mid from `/market/{token_id}` payload when orderbook is unavailable.
-def _mid_from_market(market: Dict[str, Any]) -> Optional[float]:
-    raw = market.get("outcome_prices")
-    if raw is None:
-        return None
-    try:
-        if isinstance(raw, list):
-            return float(raw[0])
-        parsed = ast.literal_eval(raw)
-        if isinstance(parsed, list) and parsed:
-            return float(parsed[0])
-    except Exception:
-        return None
-    return None
-
-
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return default
-
-
-def _safe_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except Exception:
-        return default
-
-
-def _normalize_levels(levels: Any) -> List[tuple[float, float]]:
-    normalized: List[tuple[float, float]] = []
-    if not levels:
-        return normalized
-    for level in levels:
-        if isinstance(level, dict):
-            price = _safe_float(level.get("price"), 0.0)
-            size = _safe_float(level.get("size"), 0.0)
-        elif isinstance(level, (list, tuple)) and len(level) >= 2:
-            price = _safe_float(level[0], 0.0)
-            size = _safe_float(level[1], 0.0)
-        else:
-            continue
-        if price > 0 and size > 0:
-            normalized.append((price, size))
-    return normalized
-
-
-# Pick best level by side from potentially unsorted raw levels.
-def _best_level(levels: Any, is_bid: bool) -> tuple[float, float]:
-    normalized = _normalize_levels(levels)
-    if not normalized:
-        return 0.0, 0.0
-    if is_bid:
-        return max(normalized, key=lambda x: x[0])
-    return min(normalized, key=lambda x: x[0])
-
-
-# Weighted midpoint (micro-price proxy) to reduce toxic midpoint bias on thin books.
-def _weighted_mid(orderbook: Dict[str, Any]) -> float:
-    bid_price, bid_size = _best_level(orderbook.get("bids"), is_bid=True)
-    ask_price, ask_size = _best_level(orderbook.get("asks"), is_bid=False)
-    if bid_price <= 0 or ask_price <= 0:
-        return 0.0
-    denom = bid_size + ask_size
-    if denom <= 0:
-        return 0.0
-    # Weighted midpoint (micro-price proxy): pressure from opposite-side depth.
-    return (bid_price * ask_size + ask_price * bid_size) / denom
-
-
-# Fair value mode switch. `weighted` first, fallback to normal midpoint.
-def _fair_mid(orderbook: Dict[str, Any], mode: str) -> float:
-    mode_value = (mode or "").strip().lower()
-    if mode_value == "weighted":
-        price = _weighted_mid(orderbook)
-        if price > 0:
-            return price
-    return mid_price(orderbook)
-
-
-def _depth_near_mid(orderbook: Dict[str, Any], delta: float) -> tuple[float, float]:
-    top = best_bid_ask(orderbook)
-    best_bid = top.get("best_bid", 0.0)
-    best_ask = top.get("best_ask", 0.0)
-    if best_bid <= 0 or best_ask <= 0:
-        return 0.0, 0.0
-    mid = (best_bid + best_ask) / 2.0
-    bid_depth = 0.0
-    ask_depth = 0.0
-    for price, size in _normalize_levels(orderbook.get("bids")):
-        if price >= mid - delta:
-            bid_depth += size
-    for price, size in _normalize_levels(orderbook.get("asks")):
-        if price <= mid + delta:
-            ask_depth += size
-    return bid_depth, ask_depth
-
-
-def _order_flow_imbalance(orderbook: Dict[str, Any], delta: float) -> float:
-    bid_depth, ask_depth = _depth_near_mid(orderbook, delta)
-    denom = bid_depth + ask_depth
-    if denom <= 0:
-        return 0.0
-    return (bid_depth - ask_depth) / denom
-
-
-def _realized_vol(hist: deque[float]) -> float:
-    if len(hist) < 3:
-        return 0.0
-    items = list(hist)
-    returns: List[float] = []
-    for prev, cur in zip(items[:-1], items[1:]):
-        if prev <= 0:
-            continue
-        returns.append((cur - prev) / prev)
-    if len(returns) < 2:
-        return 0.0
-    mean = sum(returns) / len(returns)
-    variance = sum((x - mean) ** 2 for x in returns) / len(returns)
-    return math.sqrt(max(0.0, variance))
-
-
-def _momentum(hist: deque[float], min_points: int) -> float:
-    if len(hist) < max(2, min_points):
-        return 0.0
-    first = hist[0]
-    last = hist[-1]
-    if first <= 0:
-        return 0.0
-    return (last - first) / first
-
-
-def _required_spread(config: PMMConfig, rv: float, inventory_signal: float) -> float:
-    return (
-        config.fee_spread_floor
-        + config.target_profit_spread
-        + config.volatility_spread_coeff * max(0.0, rv)
-        + config.inventory_risk_spread_coeff * abs(inventory_signal)
-    )
-
-
-# Non-linear inventory skew: near limits, quoting pressure increases faster.
-def _inventory_signal(
-    token_id: str,
-    token_ids: List[str],
-    positions: Dict[str, float],
-    max_position: float,
-    sigmoid_k: float,
-) -> float:
-    current = positions.get(token_id, 0.0)
-    if len(token_ids) >= 2:
-        if token_id == token_ids[0]:
-            net = current - positions.get(token_ids[1], 0.0)
-        elif token_id == token_ids[1]:
-            net = current - positions.get(token_ids[0], 0.0)
-        else:
-            net = current
-    else:
-        net = current
-    denom = max(1.0, max_position)
-    raw_signal = max(-1.0, min(1.0, net / denom))
-    signal = (2.0 / (1.0 + math.exp(-sigmoid_k * raw_signal))) - 1.0
-    return max(-1.0, min(1.0, signal))
-
-
-def _target_sizes(
-    config: PMMConfig,
-    position: float,
-    usdc_balance: float,
-    bid_price: float,
-) -> tuple[float, float]:
-    buy = min(config.base_size, usdc_balance / max(bid_price, 0.0001))
-    if config.max_position > 0:
-        buy = min(buy, max(0.0, config.max_position - position))
-
-    if config.enforce_inventory_for_sell:
-        sell = min(config.base_size, max(0.0, position))
-    else:
-        sell = config.base_size
-    return max(0.0, buy), max(0.0, sell)
-
-
-def _anchor_quotes_to_book(
-    target_bid: float,
-    target_ask: float,
-    best_bid: float,
-    best_ask: float,
-    join_epsilon: float,
-    fair_value: float,
-    min_edge: float,
-) -> tuple[float, float]:
-    if best_bid <= 0 or best_ask <= 0:
-        return target_bid, target_ask
-    eps = max(0.0, join_epsilon)
-    edge = max(0.0001, min_edge)
-
-    desired_bid = max(target_bid, best_bid - eps)
-    desired_ask = min(target_ask, best_ask + eps)
-
-    # Keep edge around fair value to avoid infinite chasing and adverse selection.
-    max_bid = fair_value - edge
-    min_ask = fair_value + edge
-    anchored_bid = min(desired_bid, max_bid)
-    anchored_ask = max(desired_ask, min_ask)
-
-    anchored_bid = max(0.0001, min(0.9998, anchored_bid))
-    anchored_ask = max(0.0002, min(0.9999, anchored_ask))
-    if anchored_bid >= anchored_ask:
-        fallback_bid = max(0.0001, min(0.9998, target_bid))
-        fallback_ask = max(0.0002, min(0.9999, target_ask))
-        anchored_bid = min(fallback_bid, fair_value - 0.0001)
-        anchored_ask = max(fallback_ask, fair_value + 0.0001)
-        if anchored_bid >= anchored_ask:
-            anchored_ask = min(0.9999, anchored_bid + 0.0001)
-    return anchored_bid, anchored_ask
-
-
-def _quantize_quote_pair(
-    bid: float,
-    ask: float,
-    tick: float,
-    mode: str,
-) -> tuple[float, float]:
-    if tick <= 0:
-        return bid, ask
-    qb = quantize_to_tick(bid, tick=tick, mode=mode)
-    qa = quantize_to_tick(ask, tick=tick, mode=mode)
-    # Keep within probability bounds and avoid crossing.
-    qb = max(0.0001, min(0.9998, qb))
-    qa = max(0.0002, min(0.9999, qa))
-    if qb >= qa:
-        # Force a 1-tick gap if needed.
-        qa = min(0.9999, quantize_to_tick(qb + tick, tick=tick, mode="ceil"))
-        if qb >= qa:
-            qa = min(0.9999, qb + 0.0001)
-    return qb, qa
-
-
-def _quantize_price_dict(values: Dict[str, float], tick: float, mode: str) -> Dict[str, float]:
-    if tick <= 0:
-        return dict(values)
-    return {k: quantize_to_tick(v, tick=tick, mode=mode) for k, v in values.items()}
-
-
-def _quantize_quote_dict(
-    values: Dict[str, Dict[str, float]],
-    tick: float,
-    mode: str,
-) -> Dict[str, Dict[str, float]]:
-    if tick <= 0:
-        return {k: dict(v) for k, v in values.items()}
-    out: Dict[str, Dict[str, float]] = {}
-    for token_id, q in values.items():
-        bid = float(q.get("bid", 0.0))
-        ask = float(q.get("ask", 0.0))
-        qb, qa = _quantize_quote_pair(bid, ask, tick=tick, mode=mode)
-        out[token_id] = {"bid": qb, "ask": qa}
-    return out
-
-
-def _parse_partition(value: Any) -> List[int]:
-    if not isinstance(value, list):
-        return [1, 2]
-    out: List[int] = []
-    for item in value:
-        i = _safe_int(item, 0)
-        if i > 0:
-            out.append(i)
-    return out if len(out) >= 2 else [1, 2]
-
-
-def _parse_account_state(
-    balance_raw: Any,
-    open_orders_raw: Any,
-    positions_raw: Any,
-    token_ids: List[str],
-) -> Tuple[float, List[Dict[str, Any]], Dict[str, float]]:
-    balance = balance_raw if isinstance(balance_raw, dict) else {}
-    usdc_balance = _safe_float(balance.get("usdc_balance"), 0.0)
-    open_orders = open_orders_raw if isinstance(open_orders_raw, list) else []
-
-    if isinstance(positions_raw, dict):
-        positions = {tid: _safe_float(positions_raw.get(tid), 0.0) for tid in token_ids}
-    else:
-        positions = {tid: 0.0 for tid in token_ids}
-    return usdc_balance, open_orders, positions
-
-
-# Keep merge-pending credits alive until TTL expires and return current credit total.
-def _pending_credit_total(pending_items: List[Dict[str, float]], now_ts: float) -> float:
-    alive: List[Dict[str, float]] = []
-    total = 0.0
-    for item in pending_items:
-        expire_at = _safe_float(item.get("expire_at"), 0.0)
-        amount = max(0.0, _safe_float(item.get("amount"), 0.0))
-        if expire_at <= 0 or now_ts <= expire_at:
-            alive.append({"amount": amount, "expire_at": expire_at})
-            total += amount
-    pending_items[:] = alive
-    return total
 
 
 async def tick_loop(config: PMMConfig) -> None:
