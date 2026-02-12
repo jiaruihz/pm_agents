@@ -1,8 +1,8 @@
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from pmm.http_client import ToolServiceClient
-from pmm.market_ws import MarketWsFeed
+from pmm.data.http_client import ToolServiceClient
+from pmm.data.market_ws import MarketWsFeed
 
 from pm_arb_bot.config import ArbConfig
 from pm_arb_bot.mock_market_data import MockMarketDataFeed

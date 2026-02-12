@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from pmm.http_client import ToolServiceClient
+from pmm.data.http_client import ToolServiceClient
 
 from pm_arb_bot.config import ArbConfig, ArbPairConfig
 from pm_arb_bot.execution import ArbExecution, ExecutionError

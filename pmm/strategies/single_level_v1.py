@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Callable, List, Tuple
 
 from pmm.config import PMMConfig
-from pmm.pricing import compute_quotes
-from pmm.strategy_base import QuoteTarget, StrategyQuoteInput
+from pmm.core.pricing import compute_quotes
+from pmm.core.strategy_base import QuoteTarget, StrategyQuoteInput
 
 AnchorFn = Callable[[float, float, float, float, float, float, float], Tuple[float, float]]
 QuantizeFn = Callable[[float, float, float, str], Tuple[float, float]]

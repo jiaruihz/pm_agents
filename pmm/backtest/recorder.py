@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from pmm.backtest.scenario_validator import validate_scenario_payload
 from pmm.config import PMMConfig
-from pmm.market_ws import MarketWsFeed
+from pmm.data.market_ws import MarketWsFeed
 
 
 def _to_float(value: Any, default: float = 0.0) -> float:

@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from pmm.config import PMMConfig
-from pmm.order_manager import OrderManager
-from pmm.orderbook import best_bid_ask, spread as orderbook_spread
-from pmm.paper_broker import PaperBroker
-from pmm.strategy_base import StrategyQuoteInput
-from pmm.strategy_registry import StrategyRegistry
+from pmm.core.strategy_base import StrategyQuoteInput
+from pmm.core.strategy_registry import StrategyRegistry
+from pmm.data.orderbook import best_bid_ask, spread as orderbook_spread
+from pmm.execution.order_manager import OrderManager
+from pmm.execution.paper_broker import PaperBroker
 from pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
 from pmm.backtest.scenario_validator import validate_scenario_payload

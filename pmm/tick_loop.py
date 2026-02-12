@@ -6,17 +6,17 @@ from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
 from pmm.config import PMMConfig
-from pmm.http_client import ToolServiceClient
-from pmm.market_ws import MarketWsFeed
-from pmm.metrics import MetricsLogger
-from pmm.order_manager import OrderManager
-from pmm.orderbook import best_bid_ask, mid_price, spread as orderbook_spread
-from pmm.paper_broker import PaperBroker
-from pmm.quantize import quantize_to_tick
-from pmm.strategy_base import StrategyQuoteInput
-from pmm.strategy_registry import StrategyRegistry
+from pmm.core.strategy_base import StrategyQuoteInput
+from pmm.core.strategy_registry import StrategyRegistry
+from pmm.data.http_client import ToolServiceClient
+from pmm.data.market_ws import MarketWsFeed
+from pmm.data.orderbook import best_bid_ask, mid_price, spread as orderbook_spread
+from pmm.execution.order_manager import OrderManager
+from pmm.execution.paper_broker import PaperBroker
 from pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
+from pmm.utils.metrics import MetricsLogger
+from pmm.utils.quantize import quantize_to_tick
 
 
 # Parse fallback mid from `/market/{token_id}` payload when orderbook is unavailable.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from pmm.strategy_base import MarketMakingStrategy
+from pmm.core.strategy_base import MarketMakingStrategy
 
 
 class StrategyRegistry:
