@@ -16,6 +16,8 @@ class StrategyQuoteInput:
     best_ask: float
     position: float
     effective_usdc_balance: float
+    open_buy_qty: float = 0.0
+    open_sell_qty: float = 0.0
 
 
 @dataclass
@@ -37,4 +39,3 @@ class MarketMakingStrategy(Protocol):
         config: PMMConfig,
     ) -> List[QuoteTarget]:
         ...
-

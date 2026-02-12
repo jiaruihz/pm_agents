@@ -247,18 +247,33 @@ class PaperBroker:
     ) -> List[Dict[str, Any]]:
         fills: List[Dict[str, Any]] = []
         trade_flow = trade_flow or {}
+        flow_budget: Dict[str, Dict[str, float]] = {}
+        if isinstance(trade_flow, dict):
+            for token_id, tf in trade_flow.items():
+                if not isinstance(tf, dict):
+                    continue
+                flow_budget[str(token_id)] = {
+                    "buy_taker_qty": max(0.0, self._to_float(tf.get("buy_taker_qty"))),
+                    "sell_taker_qty": max(0.0, self._to_float(tf.get("sell_taker_qty"))),
+                }
         for order in list(self._orders.values()):
             if order.remaining_size <= 0:
                 self._orders.pop(order.order_id, None)
                 continue
             orderbook = orderbooks.get(order.token_id, {})
             top = self._best_bid_ask_with_size(orderbook)
-            token_flow = trade_flow.get(order.token_id, {}) if isinstance(trade_flow, dict) else {}
+            token_flow = flow_budget.get(order.token_id, {"buy_taker_qty": 0.0, "sell_taker_qty": 0.0})
             fill_qty = self._match_qty(order, top, token_flow)
             if fill_qty <= 0:
                 continue
             fill_price = order.price
             self._apply_fill(order, fill_qty)
+            # Consume flow budget so one tick's taker flow is not reused by many resting orders.
+            if order.side == "BUY":
+                token_flow["sell_taker_qty"] = max(0.0, token_flow.get("sell_taker_qty", 0.0) - fill_qty)
+            else:
+                token_flow["buy_taker_qty"] = max(0.0, token_flow.get("buy_taker_qty", 0.0) - fill_qty)
+            flow_budget[order.token_id] = token_flow
             fills.append(
                 {
                     "order_id": order.order_id,
@@ -341,20 +356,32 @@ class PaperBroker:
         if self.fill_model == "conservative":
             bbo_share_mult = self.conservative_bbo_share_multiplier
 
+        # Float-safe price comparison around tick-sized boundaries.
+        cmp_tol = max(1e-9, eps * 1e-3)
+
+        def le(a: float, b: float) -> bool:
+            return a <= (b + cmp_tol)
+
+        def ge(a: float, b: float) -> bool:
+            return a >= (b - cmp_tol)
+
+        def at(a: float, b: float) -> bool:
+            return abs(a - b) <= (eps + cmp_tol)
+
         def cap_by_queue(x: float) -> float:
             return max(0.0, x * self.queue_share * bbo_share_mult)
 
         if order.side == "BUY":
             cross_hit = best_ask > 0 and (
-                best_ask <= (order.price - eps)
+                le(best_ask, (order.price - eps))
                 if self.fill_model == "conservative"
-                else best_ask <= (order.price + eps)
+                else le(best_ask, (order.price + eps))
             )
             if cross_hit:
                 marketable = ask_size if ask_size > 0 else order.remaining_size
                 return min(order.remaining_size, cap_by_queue(marketable))
 
-            at_bbo = best_bid > 0 and abs(order.price - best_bid) <= eps
+            at_bbo = best_bid > 0 and at(order.price, best_bid)
             if at_bbo:
                 if self.fill_model == "conservative" and self.disable_at_bbo_in_conservative:
                     return 0.0
@@ -366,15 +393,15 @@ class PaperBroker:
             return 0.0
 
         cross_hit = best_bid > 0 and (
-            best_bid >= (order.price + eps)
+            ge(best_bid, (order.price + eps))
             if self.fill_model == "conservative"
-            else best_bid >= (order.price - eps)
+            else ge(best_bid, (order.price - eps))
         )
         if cross_hit:
             marketable = bid_size if bid_size > 0 else order.remaining_size
             return min(order.remaining_size, cap_by_queue(marketable))
 
-        at_bbo = best_ask > 0 and abs(order.price - best_ask) <= eps
+        at_bbo = best_ask > 0 and at(order.price, best_ask)
         if at_bbo:
             if self.fill_model == "conservative" and self.disable_at_bbo_in_conservative:
                 return 0.0

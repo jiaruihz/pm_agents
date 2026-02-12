@@ -1,4 +1,4 @@
-# Code Implementation Guide
+# 代码实现说明
 
 各模块的代码走读，按数据流顺序。
 
@@ -6,8 +6,9 @@
 
 ```
 main.py
-  └─ tick_loop.py (orchestration)
-       ├─ config.py                  全局配置 (env)
+  └─ engine/tick_engine.py (orchestration)
+       ├─ config.py                   全局配置 (env)
+       ├─ engine/context_builder.py   运行上下文构建
        ├─ core/
        │    ├─ signals.py             信号计算
        │    ├─ sizing.py              仓位计算
@@ -43,7 +44,7 @@ main.py
 
 ```python
 config = PMMConfig.from_env()
-asyncio.run(tick_loop(config))
+asyncio.run(TickEngine(config).run())
 ```
 
 所有参数从环境变量加载。`PMMConfig` 是一个 dataclass，`from_env()` 做 `os.getenv → 类型转换`。
@@ -68,9 +69,7 @@ asyncio.run(tick_loop(config))
 - 标准 CRUD：`get_orderbook`, `get_balance`, `get_orders`, `get_positions`
 - `retry()` 带指数退避，默认 3 次
 
-## 3. 主循环 — `tick_loop.py`
-
-**Note**: As of 2026-02-12, `tick_loop.py` has been refactored from 1013 → 735 lines. Signal computation, sizing, anchoring, and parsing functions have been extracted to dedicated modules in `core/` and `data/`.
+## 3. 主循环 — `engine/tick_engine.py`
 
 每个 tick 的执行链：
 

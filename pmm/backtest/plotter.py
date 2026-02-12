@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -302,6 +303,128 @@ def plot_all(results_dir: str, out_dir: str | None = None) -> Dict[str, Any]:
                     {"name": "total_fills", "path": "summary_all.json.scenarios[*].total_fills"},
                     {"name": "total_placed", "path": "summary_all.json.scenarios[*].total_placed"},
                     {"name": "pnl_end", "path": "summary_all.json.scenarios[*].pnl_end"},
+                ],
+            },
+        ],
+    }
+    manifest_path = plot_root / "plot_manifest.json"
+    _write_json(manifest_path, manifest)
+    return {
+        "plots_dir": str(plot_root),
+        "manifest": str(manifest_path),
+        "charts": [str(f1), str(f2), str(f3)],
+    }
+
+
+def plot_compare_all(compare_dir: str, out_dir: str | None = None) -> Dict[str, Any]:
+    root = Path(compare_dir)
+    matrix_path = root / "compare_matrix.csv"
+    aggregate_path = root / "compare_aggregate_by_profile.csv"
+    if not matrix_path.exists():
+        raise FileNotFoundError(f"compare matrix not found: {matrix_path}")
+    if not aggregate_path.exists():
+        raise FileNotFoundError(f"compare aggregate not found: {aggregate_path}")
+
+    with matrix_path.open("r", encoding="utf-8") as f:
+        matrix_rows = list(csv.DictReader(f))
+    with aggregate_path.open("r", encoding="utf-8") as f:
+        aggregate_rows = list(csv.DictReader(f))
+    if not matrix_rows or not aggregate_rows:
+        raise ValueError("compare csv is empty")
+
+    plot_root = Path(out_dir) if out_dir else (root / "plots")
+    _ensure_dir(plot_root)
+
+    # 1) profile average pnl ranking
+    ranked = sorted(aggregate_rows, key=lambda x: float(x.get("avg_pnl_end", 0.0)))
+    names = [str(x.get("profile_name", "")) for x in ranked]
+    pnl_vals = [float(x.get("avg_pnl_end", 0.0)) for x in ranked]
+    colors = ["#D62728" if v < 0 else "#2CA02C" for v in pnl_vals]
+
+    fig, ax = plt.subplots(figsize=(10, max(4, 0.5 * len(names))))
+    ax.barh(names, pnl_vals, color=colors)
+    ax.set_title("Average PnL by Profile")
+    ax.set_xlabel("avg_pnl_end")
+    ax.grid(axis="x", alpha=0.25)
+    f1 = plot_root / "compare_avg_pnl_by_profile.png"
+    fig.tight_layout()
+    fig.savefig(f1, dpi=140)
+    plt.close(fig)
+
+    # 2) heatmap: scenario x profile pnl
+    scenarios = sorted({str(x.get("scenario_id", "")) for x in matrix_rows})
+    profiles = sorted({str(x.get("profile_name", "")) for x in matrix_rows})
+    scenario_index = {name: i for i, name in enumerate(scenarios)}
+    profile_index = {name: i for i, name in enumerate(profiles)}
+    grid: List[List[float]] = [[0.0 for _ in profiles] for _ in scenarios]
+    for row in matrix_rows:
+        s = str(row.get("scenario_id", ""))
+        p = str(row.get("profile_name", ""))
+        if s not in scenario_index or p not in profile_index:
+            continue
+        grid[scenario_index[s]][profile_index[p]] = float(row.get("pnl_end", 0.0))
+
+    fig, ax = plt.subplots(figsize=(max(8, 1.5 * len(profiles)), max(5, 0.35 * len(scenarios))))
+    im = ax.imshow(grid, aspect="auto", cmap="coolwarm")
+    ax.set_title("PnL Matrix (Scenario x Profile)")
+    ax.set_xticks(range(len(profiles)))
+    ax.set_xticklabels(profiles, rotation=45, ha="right")
+    ax.set_yticks(range(len(scenarios)))
+    ax.set_yticklabels(scenarios)
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label("pnl_end")
+    f2 = plot_root / "compare_pnl_heatmap.png"
+    fig.tight_layout()
+    fig.savefig(f2, dpi=140)
+    plt.close(fig)
+
+    # 3) fills vs placed by profile
+    fig, ax = plt.subplots(figsize=(10, 6))
+    palette = ["#4C78A8", "#F58518", "#54A24B", "#EECA3B", "#B279A2", "#FF9DA6"]
+    for idx, profile in enumerate(profiles):
+        rows = [x for x in matrix_rows if str(x.get("profile_name", "")) == profile]
+        placed = [int(float(x.get("total_placed", 0) or 0)) for x in rows]
+        fills = [int(float(x.get("total_fills", 0) or 0)) for x in rows]
+        ax.scatter(
+            placed,
+            fills,
+            label=profile,
+            s=60,
+            alpha=0.85,
+            color=palette[idx % len(palette)],
+        )
+    ax.set_title("Fills vs Placed by Profile")
+    ax.set_xlabel("total_placed")
+    ax.set_ylabel("total_fills")
+    ax.grid(alpha=0.25)
+    ax.legend(loc="best")
+    f3 = plot_root / "compare_fills_vs_placed.png"
+    fig.tight_layout()
+    fig.savefig(f3, dpi=140)
+    plt.close(fig)
+
+    manifest = {
+        "compare_dir": str(root),
+        "charts": [
+            {
+                "file": str(f1),
+                "title": "Average PnL ranking by strategy profile",
+                "source_files": [str(aggregate_path)],
+                "series": [{"name": "avg_pnl_end", "path": "compare_aggregate_by_profile.csv.avg_pnl_end"}],
+            },
+            {
+                "file": str(f2),
+                "title": "Scenario/profile PnL heatmap",
+                "source_files": [str(matrix_path)],
+                "series": [{"name": "pnl_end", "path": "compare_matrix.csv.pnl_end"}],
+            },
+            {
+                "file": str(f3),
+                "title": "Fills vs placed by profile",
+                "source_files": [str(matrix_path)],
+                "series": [
+                    {"name": "total_placed", "path": "compare_matrix.csv.total_placed"},
+                    {"name": "total_fills", "path": "compare_matrix.csv.total_fills"},
                 ],
             },
         ],

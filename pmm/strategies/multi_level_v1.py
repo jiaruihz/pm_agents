@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Callable, List, Tuple
 
 from pmm.config import PMMConfig
-from pmm.core.pricing import compute_quotes
+from pmm.core.pricing import compute_quotes_pro
 from pmm.core.strategy_base import QuoteTarget, StrategyQuoteInput
 
 AnchorFn = Callable[[float, float, float, float, float, float, float], Tuple[float, float]]
@@ -29,11 +29,18 @@ class MultiLevelV1Strategy:
         quote_input: StrategyQuoteInput,
         config: PMMConfig,
     ) -> List[QuoteTarget]:
-        quote = compute_quotes(
+        tick = max(1e-6, float(config.price_tick))
+        spread_ticks = max(1, int(round(quote_input.adaptive_spread / tick)))
+        size_decay_power = float(config.strategy_params.get("size_decay_power", 2.0))
+        quote = compute_quotes_pro(
             mid=quote_input.mid,
-            spread=quote_input.adaptive_spread,
-            inventory=quote_input.inventory_signal,
-            skew_factor=config.skew_factor,
+            spread_ticks=spread_ticks,
+            tick_size=tick,
+            position=quote_input.position,
+            open_buy_qty=quote_input.open_buy_qty,
+            open_sell_qty=quote_input.open_sell_qty,
+            max_position=max(1.0, float(config.max_position)),
+            size_decay_power=size_decay_power,
         )
         target_bid = quote.bid
         target_ask = quote.ask
@@ -59,6 +66,14 @@ class MultiLevelV1Strategy:
             usdc_balance=quote_input.effective_usdc_balance,
             bid_price=base_bid,
         )
+        if quote.allow_buy:
+            base_buy_size *= max(0.0, quote.bid_size_adj)
+        else:
+            base_buy_size = 0.0
+        if quote.allow_sell:
+            base_sell_size *= max(0.0, quote.ask_size_adj)
+        else:
+            base_sell_size = 0.0
 
         levels = max(1, int(config.effective_quote_levels()))
         step = max(0.0, float(config.level_spread_step))
@@ -86,24 +101,26 @@ class MultiLevelV1Strategy:
             buy_size = max(0.0, base_buy_size * size_factor)
             sell_size = max(0.0, base_sell_size * size_factor)
 
-            quotes.append(
-                QuoteTarget(
-                    token_id=quote_input.token_id,
-                    side="BUY",
-                    price=lvl_bid,
-                    size=buy_size,
-                    level=level,
-                    target_price=lvl_target_bid,
+            if buy_size > 0:
+                quotes.append(
+                    QuoteTarget(
+                        token_id=quote_input.token_id,
+                        side="BUY",
+                        price=lvl_bid,
+                        size=buy_size,
+                        level=level,
+                        target_price=lvl_target_bid,
+                    )
                 )
-            )
-            quotes.append(
-                QuoteTarget(
-                    token_id=quote_input.token_id,
-                    side="SELL",
-                    price=lvl_ask,
-                    size=sell_size,
-                    level=level,
-                    target_price=lvl_target_ask,
+            if sell_size > 0:
+                quotes.append(
+                    QuoteTarget(
+                        token_id=quote_input.token_id,
+                        side="SELL",
+                        price=lvl_ask,
+                        size=sell_size,
+                        level=level,
+                        target_price=lvl_target_ask,
+                    )
                 )
-            )
         return quotes

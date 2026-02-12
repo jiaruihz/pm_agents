@@ -117,7 +117,7 @@ class QuoteTarget:
 
 ## 6. 回测对比方案
 
-`compare_profiles_single_level.json` 增加字段：
+`compare_profiles_all_strategies.json` 增加字段：
 
 - `strategy_key`
 - `strategy_overrides`

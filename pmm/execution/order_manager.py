@@ -121,6 +121,7 @@ class OrderManager:
         token_id: str,
         side: str,
         targets: List[Dict[str, Any]],
+        pending_orders: Optional[List[Dict[str, Any]]] = None,
     ) -> MultiDiffDecision:
         """
         Multi-level diff for one (token_id, side).
@@ -134,7 +135,15 @@ class OrderManager:
         }
         """
         side_value = self._normalize_side(side)
-        same_side_orders = self._filter_orders(open_orders, token_id, side_value)
+        all_existing_orders = list(open_orders)
+        if pending_orders:
+            all_existing_orders.extend(pending_orders)
+        same_side_orders = self._filter_orders(all_existing_orders, token_id, side_value)
+        # Dedup by order_id so open+pending overlays don't double count.
+        dedup: Dict[str, ManagedOrder] = {}
+        for x in same_side_orders:
+            dedup[x.order_id] = x
+        same_side_orders = list(dedup.values())
 
         valid_targets: List[Dict[str, Any]] = []
         for x in targets:
@@ -215,6 +224,7 @@ class OrderManager:
     ) -> DiffDecision:
         multi = self.diff_multi(
             open_orders=open_orders,
+            pending_orders=None,
             token_id=token_id,
             side=side,
             targets=[

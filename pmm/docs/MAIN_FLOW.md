@@ -1,4 +1,4 @@
-# Main Flow
+# 主链路流程
 
 主循环的时序图和关键路径。更详细的策略逻辑见 [STRATEGY_PLAYBOOK.md](STRATEGY_PLAYBOOK.md)，代码走读见 [CODE_IMPLEMENTATION.md](CODE_IMPLEMENTATION.md)。
 
@@ -49,7 +49,7 @@
 sequenceDiagram
     autonumber
     participant Main as main.py
-    participant Engine as tick_loop
+    participant Engine as TickEngine
     participant Registry as StrategyRegistry
     participant Strat as strategy_impl
     participant API as ToolService / PaperBroker
@@ -57,7 +57,7 @@ sequenceDiagram
     participant Diff as OrderManager
     participant Log as MetricsLogger
 
-    Main->>Engine: tick_loop(config)
+    Main->>Engine: run(config)
     Engine->>Registry: get(strategy_key)
     Registry-->>Engine: strategy instance
 

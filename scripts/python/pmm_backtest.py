@@ -14,6 +14,7 @@ if PROJECT_ROOT not in sys.path:
 from pmm.backtest.replay_runner import (
     run_scenario_compare,
     run_scenario_file,
+    run_scenarios_compare_all,
     run_scenarios_dir,
     run_scenarios_dir_with_fill_models,
 )
@@ -44,7 +45,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--scenario", required=True, help="Scenario JSON file path")
     p_run.add_argument(
         "--out-dir",
-        default="pmm/backtest/results",
+        default="pmm/backtest/.artifacts/results",
         help="Output directory for run artifacts",
     )
 
@@ -56,7 +57,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_all.add_argument(
         "--out-dir",
-        default="pmm/backtest/results",
+        default="pmm/backtest/.artifacts/results_all",
         help="Output directory for run artifacts",
     )
 
@@ -71,7 +72,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_all_models.add_argument(
         "--out-dir",
-        default="pmm/backtest/results_fill_models",
+        default="pmm/backtest/.artifacts/results_fill_models",
         help="Output directory for run artifacts",
     )
     p_all_models.add_argument(
@@ -95,7 +96,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_plot_all = sub.add_parser("plot-all", help="Plot summary charts for all scenarios")
     p_plot_all.add_argument(
         "--results-dir",
-        default="pmm/backtest/results",
+        default="pmm/backtest/.artifacts/results_all",
         help="Directory containing summary_all.json",
     )
     p_plot_all.add_argument(
@@ -111,13 +112,38 @@ def _build_parser() -> argparse.ArgumentParser:
     p_compare.add_argument("--scenario", required=True, help="Base scenario json path")
     p_compare.add_argument(
         "--profiles",
-        default="pmm/backtest/compare_profiles_single_level.json",
+        default="pmm/backtest/compare_profiles_all_strategies.json",
         help="Strategy profiles json path",
     )
     p_compare.add_argument(
         "--out-dir",
-        default="pmm/backtest/results_compare",
+        default="pmm/backtest/.artifacts/results_compare",
         help="Output directory for compare run artifacts",
+    )
+
+    p_compare_all = sub.add_parser(
+        "compare-all",
+        help="Run all scenarios against all profiles and output matrix/aggregate report",
+    )
+    p_compare_all.add_argument(
+        "--scenarios-dir",
+        default="pmm/backtest/scenarios",
+        help="Directory containing scenario json files",
+    )
+    p_compare_all.add_argument(
+        "--profiles",
+        default="pmm/backtest/compare_profiles_all_strategies.json",
+        help="Strategy profiles json path",
+    )
+    p_compare_all.add_argument(
+        "--out-dir",
+        default="pmm/backtest/.artifacts/results_compare_all_strategies",
+        help="Output directory for compare-all artifacts",
+    )
+    p_compare_all.add_argument(
+        "--plot",
+        action="store_true",
+        help="Generate compare-all charts into <out-dir>/plots",
     )
 
     p_record = sub.add_parser(
@@ -155,13 +181,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_record.add_argument(
         "--out-scenario",
-        default="pmm/backtest/scenarios/recorded_live.json",
+        default="pmm/backtest/.artifacts/recorded/recorded_live.json",
         help="Output scenario JSON path",
     )
     p_record.add_argument(
         "--out-jsonl",
         default="",
-        help="Optional output jsonl path (default: <out-scenario>.jsonl)",
+        help="Optional output jsonl path (default: <out-scenario>.jsonl.gz)",
     )
     p_record.add_argument(
         "--initial-usdc",
@@ -360,6 +386,23 @@ def main() -> None:
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))
         print(f"report={Path(args.out_dir) / 'compare_summary.json'}")
+        return
+
+    if args.command == "compare-all":
+        result = run_scenarios_compare_all(
+            scenarios_dir=args.scenarios_dir,
+            profiles_file=args.profiles,
+            out_dir=args.out_dir,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(f"summary={Path(args.out_dir) / 'summary.json'}")
+        print(f"matrix={Path(args.out_dir) / 'compare_matrix.csv'}")
+        print(f"aggregate={Path(args.out_dir) / 'compare_aggregate_by_profile.csv'}")
+        if args.plot:
+            from pmm.backtest.plotter import plot_compare_all
+
+            plot_result = plot_compare_all(args.out_dir)
+            print(json.dumps(plot_result, ensure_ascii=False, indent=2))
         return
     raise ValueError(f"unknown command: {args.command}")
 

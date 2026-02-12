@@ -1,0 +1,1 @@
+"""PMM tests initialization module."""

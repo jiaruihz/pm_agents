@@ -1,46 +1,42 @@
-# PMM Documentation
+# PMM 文档导航
 
-> **Last Updated**: 2026-02-12
+> **最近更新**：2026-02-12
 
-## Quick Start
+## 快速开始
 
-1. **[ARCHITECTURE.md](ARCHITECTURE.md)** — System overview, directory structure, dependency rules
-2. **[CODE_IMPLEMENTATION.md](CODE_IMPLEMENTATION.md)** — Module walkthrough and implementation details
-3. **[MAIN_FLOW.md](MAIN_FLOW.md)** — Tick loop lifecycle and sequence diagrams
+1. **[ARCHITECTURE.md](ARCHITECTURE.md)**：系统概览、目录结构、依赖规则
+2. **[CODE_IMPLEMENTATION.md](CODE_IMPLEMENTATION.md)**：模块代码走读与实现说明
+3. **[MAIN_FLOW.md](MAIN_FLOW.md)**：tick 主循环生命周期与时序图
 
-## Strategy & Backtesting
+## 策略与回测
 
-- **[STRATEGY_PLAYBOOK.md](STRATEGY_PLAYBOOK.md)** — Strategy design patterns and signal computation
-- **[BACKTEST_SCENARIO_METHOD.md](BACKTEST_SCENARIO_METHOD.md)** — Backtesting workflow and fill models
+- **[STRATEGY_PLAYBOOK.md](STRATEGY_PLAYBOOK.md)**：策略设计与信号逻辑
+- **[BACKTEST_SCENARIO_METHOD.md](BACKTEST_SCENARIO_METHOD.md)**：回测方法、场景生成、撮合模型
 
-## Reference
+## 参考
 
-- **[METRICS_FORMAT.md](METRICS_FORMAT.md)** — Metrics logging format specification
-- **[TODO_IMPROVEMENTS.md](TODO_IMPROVEMENTS.md)** — Roadmap and future enhancements
+- **[METRICS_FORMAT.md](METRICS_FORMAT.md)**：指标日志字段规范
+- **[TODO_IMPROVEMENTS.md](TODO_IMPROVEMENTS.md)**：后续演进路线
 
-## Archive
+## 历史文档
 
-Historical planning documents (completed work):
-- `archive/CODE_REVIEW.md` — Pre-refactoring analysis (2026-02-12)
-- `archive/REFACTOR_PLAN.md` — Refactoring execution plan (completed)
-- `archive/SKILL_ARCHITECTURE_PLAN.md` — Architecture planning
-- `archive/EXECUTION_PLAN_REALDATA_MULTI_LEVEL.md` — Multi-level implementation plan (completed)
-- `archive/STRATEGY_KEY_ROUTING_PLAN.md` — Strategy routing design (completed)
+已完成阶段的历史计划文档统一放在 `archive/`：
 
-## Getting Started
+- `archive/CODE_REVIEW.md`
+- `archive/REFACTOR_PLAN.md`
+- `archive/SKILL_ARCHITECTURE_PLAN.md`
+- `archive/EXECUTION_PLAN_REALDATA_MULTI_LEVEL.md`
+- `archive/STRATEGY_KEY_ROUTING_PLAN.md`
+
+## 运行示例
 
 ```bash
-# Set environment variables (see ARCHITECTURE.md for full list)
+# 环境变量（完整列表见 ARCHITECTURE.md）
 export PMM_TOKEN_IDS="token1,token2"
 export PMM_EXEC_MODE="paper"
 export PMM_MARKET_DATA_SOURCE="ws"
 export PMM_STRATEGY_KEY="multi_level_v1"
 
-# Run
+# 启动
 python pmm/main.py
-
-# Backtest
-python scripts/python/pmm_backtest.py run-all
 ```
-
-For detailed configuration, see [ARCHITECTURE.md#configuration](ARCHITECTURE.md#configuration).

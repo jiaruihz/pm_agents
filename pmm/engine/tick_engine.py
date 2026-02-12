@@ -1,7 +1,6 @@
 import asyncio
 import math
 import time
-from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
 from pmm.config import PMMConfig
@@ -30,6 +29,7 @@ from pmm.data.parsers import (
 )
 from pmm.execution.order_manager import OrderManager
 from pmm.execution.paper_broker import PaperBroker
+from pmm.engine.context_builder import build_history_context, build_token_context
 from pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
 from pmm.utils.converters import best_level as _best_level, normalize_levels as _normalize_levels, to_float as _safe_float, to_int as _safe_int
@@ -42,6 +42,72 @@ from pmm.utils.quantize import (
 )
 
 
+def _pending_open_exposure(open_orders: List[Dict[str, Any]], token_id: str) -> Tuple[float, float]:
+    buy_qty = 0.0
+    sell_qty = 0.0
+    for raw in open_orders:
+        order_token = str(raw.get("asset_id") or raw.get("assetId") or raw.get("token_id") or "")
+        if order_token != token_id:
+            continue
+        side = str(raw.get("side", "")).upper()
+        if side == "0":
+            side = "BUY"
+        elif side == "1":
+            side = "SELL"
+        size = _safe_float(
+            raw.get("remaining_size")
+            or raw.get("size")
+            or raw.get("original_size")
+            or raw.get("amount")
+            or 0.0
+        )
+        if size <= 0:
+            continue
+        if side == "BUY":
+            buy_qty += size
+        elif side == "SELL":
+            sell_qty += size
+    return buy_qty, sell_qty
+
+
+def _order_id(raw: Dict[str, Any]) -> str:
+    return str(raw.get("id") or raw.get("orderID") or raw.get("order_id") or "")
+
+
+def _reconcile_pending_orders(
+    pending_orders: List[Dict[str, Any]],
+    open_orders: List[Dict[str, Any]],
+    ttl_sec: float,
+    now_ts: float,
+) -> List[Dict[str, Any]]:
+    if not pending_orders:
+        return []
+    open_ids = {_order_id(x) for x in open_orders if _order_id(x)}
+    keep: List[Dict[str, Any]] = []
+    for item in pending_orders:
+        oid = _order_id(item)
+        if oid and oid in open_ids:
+            continue
+        created_at = _safe_float(item.get("_pending_created_at"), 0.0)
+        if created_at > 0 and (now_ts - created_at) > max(0.1, ttl_sec):
+            continue
+        keep.append(item)
+    return keep
+
+
+def _drop_pending_by_ids(pending_orders: List[Dict[str, Any]], order_ids: List[str]) -> List[Dict[str, Any]]:
+    if not pending_orders or not order_ids:
+        return pending_orders
+    remove = {str(x) for x in order_ids if str(x)}
+    out: List[Dict[str, Any]] = []
+    for item in pending_orders:
+        oid = _order_id(item)
+        if oid and oid in remove:
+            continue
+        out.append(item)
+    return out
+
+
 
 
 async def tick_loop(config: PMMConfig) -> None:
@@ -49,9 +115,10 @@ async def tick_loop(config: PMMConfig) -> None:
         print("PMM_TOKEN_IDS 未设置，无法运行。")
         return
 
-    token_ids = list(config.market.token_ids)
-    reference_token_ids = [x for x in config.alpha_reference_token_ids if x and x not in token_ids]
-    all_token_ids = token_ids + reference_token_ids
+    token_ctx = build_token_context(config)
+    token_ids = token_ctx.token_ids
+    reference_token_ids = token_ctx.reference_token_ids
+    all_token_ids = token_ctx.all_token_ids
 
     # Core strategy state.
     order_mgr = OrderManager(deadband=config.deadband)
@@ -80,11 +147,8 @@ async def tick_loop(config: PMMConfig) -> None:
         )
     print(f"[STRATEGY] using {strategy.key}")
     baseline_equity: Optional[float] = None
-    history_window_sec = max(config.circuit_breaker_window_sec, config.alpha_window_sec)
-    window_points = max(2, int(max(1, history_window_sec) / max(0.1, config.tick_interval_sec)))
-    mid_history: Dict[str, deque[float]] = {
-        token_id: deque(maxlen=window_points) for token_id in all_token_ids
-    }
+    history_ctx = build_history_context(config, all_token_ids)
+    mid_history = history_ctx.mid_history
 
     use_ws = config.market_data_source.lower() == "ws"
     ws_feed: Optional[MarketWsFeed] = None
@@ -126,6 +190,9 @@ async def tick_loop(config: PMMConfig) -> None:
                 fill_model=config.paper_fill_model,
                 fill_epsilon=config.paper_fill_epsilon,
                 queue_share=config.paper_queue_share,
+                require_trade_flow_for_at_bbo=config.paper_require_trade_flow_for_at_bbo,
+                disable_at_bbo_in_conservative=config.paper_disable_at_bbo_in_conservative,
+                conservative_bbo_share_multiplier=config.paper_conservative_bbo_share_multiplier,
             )
             execution_client = paper_broker
             print(
@@ -169,6 +236,7 @@ async def tick_loop(config: PMMConfig) -> None:
             print(f"[WS] market feed started: {config.ws_market_url}")
 
         pending_merge_credits: List[Dict[str, float]] = []
+        pending_orders: List[Dict[str, Any]] = []
         try:
             tick_count = 0
             while True:
@@ -220,6 +288,13 @@ async def tick_loop(config: PMMConfig) -> None:
                     positions_raw,
                     token_ids,
                 )
+                if execution_mode == "live":
+                    pending_orders = _reconcile_pending_orders(
+                        pending_orders=pending_orders,
+                        open_orders=open_orders,
+                        ttl_sec=config.inflight_order_ttl_sec,
+                        now_ts=time.time(),
+                    )
                 pending_usdc_credit = 0.0
                 if (
                     paper_broker is None
@@ -449,6 +524,8 @@ async def tick_loop(config: PMMConfig) -> None:
 
                     top = book_tops.get(token_id, {"best_bid": 0.0, "best_ask": 0.0})
                     position = positions.get(token_id, 0.0)
+                    exposure_orders = local_orders + pending_orders if execution_mode == "live" else local_orders
+                    open_buy_qty, open_sell_qty = _pending_open_exposure(exposure_orders, token_id)
                     quote_targets = strategy.generate_quotes(
                         StrategyQuoteInput(
                             token_id=token_id,
@@ -459,6 +536,8 @@ async def tick_loop(config: PMMConfig) -> None:
                             best_ask=top.get("best_ask", 0.0),
                             position=position,
                             effective_usdc_balance=effective_usdc_for_sizing,
+                            open_buy_qty=open_buy_qty,
+                            open_sell_qty=open_sell_qty,
                         ),
                         config=config,
                     )
@@ -512,6 +591,8 @@ async def tick_loop(config: PMMConfig) -> None:
                                         if str(x.get("id") or x.get("orderID") or x.get("order_id"))
                                         not in cancel_set
                                     ]
+                                    if execution_mode == "live":
+                                        pending_orders = _drop_pending_by_ids(pending_orders, blocked_ids)
                                 except Exception as exc:
                                     errors += 1
                                     print(
@@ -522,6 +603,7 @@ async def tick_loop(config: PMMConfig) -> None:
 
                         decision = order_mgr.diff_multi(
                             open_orders=local_orders,
+                            pending_orders=pending_orders if execution_mode == "live" else None,
                             token_id=token_id,
                             side=side,
                             targets=side_targets.get(side, []),
@@ -546,6 +628,8 @@ async def tick_loop(config: PMMConfig) -> None:
                                     if str(x.get("id") or x.get("orderID") or x.get("order_id"))
                                     not in cancel_set
                                 ]
+                                if execution_mode == "live":
+                                    pending_orders = _drop_pending_by_ids(pending_orders, decision.cancel_ids)
                             except Exception as exc:
                                 errors += 1
                                 print(f"[ERROR] cancel failed token={token_id} side={side}: {exc}")
@@ -590,6 +674,17 @@ async def tick_loop(config: PMMConfig) -> None:
                                         "level": level,
                                     }
                                 )
+                                if execution_mode == "live":
+                                    pending_item = {
+                                        "id": placed_order.get("id"),
+                                        "asset_id": token_id,
+                                        "side": side,
+                                        "price": price,
+                                        "size": size,
+                                        "level": level,
+                                        "_pending_created_at": time.time(),
+                                    }
+                                    pending_orders.append(pending_item)
                             except Exception as exc:
                                 errors += 1
                                 print(f"[ERROR] place failed token={token_id} side={side}: {exc}")
@@ -696,6 +791,7 @@ async def tick_loop(config: PMMConfig) -> None:
                         "equity": equity,
                         "pnl": pnl,
                         "open_orders_count": len(open_orders),
+                        "pending_orders_count": len(pending_orders) if execution_mode == "live" else 0,
                         "placed": placed,
                         "canceled": canceled,
                         "errors": errors,
@@ -733,3 +829,12 @@ async def tick_loop(config: PMMConfig) -> None:
             # Ensure WS task is terminated cleanly.
             if ws_feed:
                 await ws_feed.stop()
+            metrics.close()
+
+
+class TickEngine:
+    def __init__(self, config: PMMConfig) -> None:
+        self.config = config
+
+    async def run(self) -> None:
+        await tick_loop(self.config)

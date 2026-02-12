@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from pmm.config import PMMConfig
+from pmm.core.anchoring import anchor_quotes_to_book
+from pmm.core.signals import fair_mid, inventory_signal, realized_vol, required_spread
+from pmm.core.sizing import target_sizes
 from pmm.core.strategy_base import StrategyQuoteInput
 from pmm.core.strategy_registry import StrategyRegistry
 from pmm.data.orderbook import best_bid_ask, spread as orderbook_spread
@@ -17,8 +20,8 @@ from pmm.execution.order_manager import OrderManager
 from pmm.execution.paper_broker import PaperBroker
 from pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from pmm.strategies.single_level_v1 import SingleLevelV1Strategy
+from pmm.utils.quantize import quantize_quote_pair
 from pmm.backtest.scenario_validator import validate_scenario_payload
-import pmm.tick_loop as live
 
 
 def _write_json(path: Path, payload: Dict[str, Any]) -> None:
@@ -125,6 +128,67 @@ def _apply_strategy_overrides(cfg: PMMConfig, overrides: Dict[str, Any]) -> None
             setattr(cfg, k, v)
 
 
+def _rounded(value: float, digits: int, eps: float = 1e-12) -> float:
+    x = float(value)
+    if abs(x) < eps:
+        return 0.0
+    return round(x, digits)
+
+
+def _pending_open_exposure(open_orders: List[Dict[str, Any]], token_id: str) -> tuple[float, float]:
+    buy_qty = 0.0
+    sell_qty = 0.0
+    for raw in open_orders:
+        order_token = str(raw.get("asset_id") or raw.get("assetId") or raw.get("token_id") or "")
+        if order_token != token_id:
+            continue
+        side = str(raw.get("side", "")).upper()
+        if side == "0":
+            side = "BUY"
+        elif side == "1":
+            side = "SELL"
+        try:
+            size = float(
+                raw.get("remaining_size")
+                or raw.get("size")
+                or raw.get("original_size")
+                or raw.get("amount")
+                or 0.0
+            )
+        except Exception:
+            size = 0.0
+        if size <= 0:
+            continue
+        if side == "BUY":
+            buy_qty += size
+        elif side == "SELL":
+            sell_qty += size
+    return buy_qty, sell_qty
+
+
+def _load_profiles(profiles_file: str) -> List[Dict[str, Any]]:
+    profiles = json.loads(Path(profiles_file).read_text(encoding="utf-8"))
+    if not isinstance(profiles, list) or not profiles:
+        raise ValueError("profiles file must be a non-empty json array")
+    normalized: List[Dict[str, Any]] = []
+    for idx, profile in enumerate(profiles):
+        if not isinstance(profile, dict):
+            continue
+        profile_name = str(profile.get("name", f"profile_{idx}")).strip() or f"profile_{idx}"
+        profile_overrides = profile.get("strategy_overrides", {})
+        if not isinstance(profile_overrides, dict):
+            profile_overrides = {}
+        normalized.append(
+            {
+                "name": profile_name,
+                "strategy_overrides": profile_overrides,
+            }
+        )
+    if not normalized:
+        raise ValueError("profiles file has no valid profile objects")
+    return normalized
+
+
 @dataclass
 class ReplayResult:
     scenario_id: str
@@ -159,16 +223,16 @@ async def _run_single_async(
     strategy_registry = StrategyRegistry()
     strategy_registry.register(
         SingleLevelV1Strategy(
-            anchor_quotes_fn=live._anchor_quotes_to_book,
-            quantize_pair_fn=live._quantize_quote_pair,
-            target_sizes_fn=live._target_sizes,
+            anchor_quotes_fn=anchor_quotes_to_book,
+            quantize_pair_fn=quantize_quote_pair,
+            target_sizes_fn=target_sizes,
         )
     )
     strategy_registry.register(
         MultiLevelV1Strategy(
-            anchor_quotes_fn=live._anchor_quotes_to_book,
-            quantize_pair_fn=live._quantize_quote_pair,
-            target_sizes_fn=live._target_sizes,
+            anchor_quotes_fn=anchor_quotes_to_book,
+            quantize_pair_fn=quantize_quote_pair,
+            target_sizes_fn=target_sizes,
         )
     )
     strategy = strategy_registry.get(cfg.strategy_key)
@@ -185,9 +249,9 @@ async def _run_single_async(
         fill_model=cfg.paper_fill_model,
         fill_epsilon=cfg.paper_fill_epsilon,
         queue_share=cfg.paper_queue_share,
-        require_trade_flow_for_at_bbo=True,
-        disable_at_bbo_in_conservative=False,
-        conservative_bbo_share_multiplier=0.35,
+        require_trade_flow_for_at_bbo=cfg.paper_require_trade_flow_for_at_bbo,
+        disable_at_bbo_in_conservative=cfg.paper_disable_at_bbo_in_conservative,
+        conservative_bbo_share_multiplier=cfg.paper_conservative_bbo_share_multiplier,
     )
     order_mgr = OrderManager(deadband=cfg.deadband)
 
@@ -217,20 +281,47 @@ async def _run_single_async(
         open_orders = await broker.get_orders()
         positions = await broker.get_positions(token_ids)
         usdc_balance = float(balance.get("usdc_balance", 0.0))
+        usdc_total = float(balance.get("usdc_total", usdc_balance))
 
         mids: Dict[str, float] = {}
         spreads: Dict[str, float] = {}
         book_tops: Dict[str, Dict[str, float]] = {}
         for token_id in token_ids:
             ob = orderbooks.get(token_id, {})
-            mid = live._fair_mid(ob, cfg.mid_price_mode) if ob else 0.0
+            mid = fair_mid(ob, cfg.mid_price_mode) if ob else 0.0
             mids[token_id] = mid
             spreads[token_id] = orderbook_spread(ob) if ob else 0.0
             book_tops[token_id] = best_bid_ask(ob) if ob else {"best_bid": 0.0, "best_ask": 0.0}
             if mid > 0:
                 mid_history[token_id].append(mid)
 
-        equity = usdc_balance + sum(positions.get(tid, 0.0) * mids.get(tid, 0.0) for tid in token_ids)
+        # Match previously resting orders first using current tick market data.
+        # This avoids same-tick place->fill artifacts and is closer to exchange timing.
+        fills_count = 0
+        pre_tick_fills = await broker.on_market_data(orderbooks, trade_flow=trade_flow)
+        if pre_tick_fills:
+            fills_count = len(pre_tick_fills)
+            total_fill_events += fills_count
+            for fill in pre_tick_fills:
+                fill_order_id = str(fill.get("order_id", ""))
+                if fill_order_id:
+                    filled_order_ids.add(fill_order_id)
+                total_filled_qty += float(fill.get("size", 0.0) or 0.0)
+                action_events.append(
+                    {
+                        "tick": tick_idx,
+                        "event": event_label,
+                        "type": "fill",
+                        **fill,
+                    }
+                )
+            balance = await broker.get_balance()
+            open_orders = await broker.get_orders()
+            positions = await broker.get_positions(token_ids)
+            usdc_balance = float(balance.get("usdc_balance", 0.0))
+            usdc_total = float(balance.get("usdc_total", usdc_balance))
+
+        equity = usdc_total + sum(positions.get(tid, 0.0) * mids.get(tid, 0.0) for tid in token_ids)
         if baseline_equity is None:
             baseline_equity = equity
         pnl = equity - baseline_equity
@@ -239,7 +330,6 @@ async def _run_single_async(
         placed = 0
         canceled = 0
         errors = 0
-        fills_count = 0
         circuit_breaker_triggered = False
         circuit_breaker_reasons: List[Dict[str, float]] = []
         inventory_signals: Dict[str, float] = {}
@@ -309,7 +399,7 @@ async def _run_single_async(
                 if mid <= 0:
                     continue
 
-                inv_signal = live._inventory_signal(
+                inv_signal = inventory_signal(
                     token_id=token_id,
                     token_ids=token_ids,
                     positions=positions,
@@ -318,8 +408,8 @@ async def _run_single_async(
                 )
                 inventory_signals[token_id] = inv_signal
 
-                rv = live._realized_vol(mid_history[token_id])
-                req_spread = live._required_spread(cfg, rv, inv_signal)
+                rv = realized_vol(mid_history[token_id])
+                req_spread = required_spread(cfg, rv, inv_signal)
                 required_spreads[token_id] = req_spread
                 adaptive_spread = max(cfg.base_spread, req_spread)
                 adaptive_spreads[token_id] = adaptive_spread
@@ -332,6 +422,7 @@ async def _run_single_async(
 
                 top = book_tops.get(token_id, {"best_bid": 0.0, "best_ask": 0.0})
                 position = positions.get(token_id, 0.0)
+                open_buy_qty, open_sell_qty = _pending_open_exposure(local_orders, token_id)
                 quote_targets = strategy.generate_quotes(
                     StrategyQuoteInput(
                         token_id=token_id,
@@ -342,6 +433,8 @@ async def _run_single_async(
                         best_ask=top.get("best_ask", 0.0),
                         position=position,
                         effective_usdc_balance=usdc_balance,
+                        open_buy_qty=open_buy_qty,
+                        open_sell_qty=open_sell_qty,
                     ),
                     config=cfg,
                 )
@@ -511,24 +604,6 @@ async def _run_single_async(
                                 }
                             )
 
-        fills = await broker.on_market_data(orderbooks, trade_flow=trade_flow)
-        if fills:
-            fills_count = len(fills)
-            total_fill_events += fills_count
-            for fill in fills:
-                fill_order_id = str(fill.get("order_id", ""))
-                if fill_order_id:
-                    filled_order_ids.add(fill_order_id)
-                total_filled_qty += float(fill.get("size", 0.0) or 0.0)
-                action_events.append(
-                    {
-                        "tick": tick_idx,
-                        "event": event_label,
-                        "type": "fill",
-                        **fill,
-                    }
-                )
-
         open_orders_after = await broker.get_orders()
         metrics_events.append(
             {
@@ -540,6 +615,7 @@ async def _run_single_async(
                 "spreads": spreads,
                 "positions": positions,
                 "usdc_balance": usdc_balance,
+                "usdc_total": usdc_total,
                 "equity": equity,
                 "pnl": pnl,
                 "open_orders_count": len(open_orders_after),
@@ -721,23 +797,16 @@ def run_scenario_compare(
     out_dir: str,
 ) -> Dict[str, Any]:
     base_scenario = json.loads(Path(scenario_file).read_text(encoding="utf-8"))
-    profiles = json.loads(Path(profiles_file).read_text(encoding="utf-8"))
-    if not isinstance(profiles, list) or not profiles:
-        raise ValueError("profiles file must be a non-empty json array")
+    profiles = _load_profiles(profiles_file)
 
     base_id = str(base_scenario.get("scenario_id", "scenario"))
     compare_out = Path(out_dir)
     compare_out.mkdir(parents=True, exist_ok=True)
     run_summaries: List[Dict[str, Any]] = []
 
-    for idx, profile in enumerate(profiles):
-        if not isinstance(profile, dict):
-            continue
-        profile_name = str(profile.get("name", f"profile_{idx}")).strip() or f"profile_{idx}"
-        profile_overrides = profile.get("strategy_overrides", {})
-        if not isinstance(profile_overrides, dict):
-            profile_overrides = {}
-
+    for profile in profiles:
+        profile_name = profile["name"]
+        profile_overrides = profile["strategy_overrides"]
         scenario = copy.deepcopy(base_scenario)
         merged = {}
         merged.update(base_scenario.get("strategy_overrides", {}) or {})
@@ -761,9 +830,146 @@ def run_scenario_compare(
         "runs": run_summaries,
         "best_by_pnl": by_pnl[-1]["scenario_id"] if by_pnl else None,
         "worst_by_pnl": by_pnl[0]["scenario_id"] if by_pnl else None,
-        "best_pnl_value": float(by_pnl[-1].get("pnl_end", 0.0)) if by_pnl else 0.0,
-        "worst_pnl_value": float(by_pnl[0].get("pnl_end", 0.0)) if by_pnl else 0.0,
+        "best_pnl_value": _rounded(float(by_pnl[-1].get("pnl_end", 0.0)), 3) if by_pnl else 0.0,
+        "worst_pnl_value": _rounded(float(by_pnl[0].get("pnl_end", 0.0)), 3) if by_pnl else 0.0,
     }
     report_path = compare_out / "compare_summary.json"
     _write_json(report_path, compare_report)
     return compare_report
+
+
+def run_scenarios_compare_all(
+    scenarios_dir: str,
+    profiles_file: str,
+    out_dir: str,
+) -> Dict[str, Any]:
+    src = Path(scenarios_dir)
+    files = sorted([x for x in src.glob("*.json") if x.is_file()])
+    profiles = _load_profiles(profiles_file)
+    compare_out = Path(out_dir)
+    compare_out.mkdir(parents=True, exist_ok=True)
+
+    runs: List[Dict[str, Any]] = []
+    for scenario_file in files:
+        base_scenario = json.loads(scenario_file.read_text(encoding="utf-8"))
+        base_id = str(base_scenario.get("scenario_id", scenario_file.stem))
+        for profile in profiles:
+            profile_name = profile["name"]
+            profile_overrides = profile["strategy_overrides"]
+            scenario = copy.deepcopy(base_scenario)
+            merged = {}
+            merged.update(base_scenario.get("strategy_overrides", {}) or {})
+            merged.update(profile_overrides)
+            scenario["strategy_overrides"] = merged
+            scenario["scenario_id"] = f"{base_id}__{profile_name}"
+            scenario["description"] = (
+                f"{base_scenario.get('description', '')} | compare_profile={profile_name}"
+            ).strip()
+
+            result = run_scenario_payload(scenario, out_dir=str(compare_out))
+            summary = dict(result.summary)
+            quote_runtime = summary.get("quote_runtime", {}) if isinstance(summary.get("quote_runtime"), dict) else {}
+            runs.append(
+                {
+                    "scenario_id": base_id,
+                    "scenario_run_id": str(summary.get("scenario_id", "")),
+                    "profile_name": profile_name,
+                    "strategy_key": str(summary.get("strategy_key", "")),
+                    "quote_levels_effective": int(quote_runtime.get("quote_levels_effective", 1)),
+                    "pnl_end": _rounded(float(summary.get("pnl_end", 0.0)), 3),
+                    "max_drawdown": _rounded(float(summary.get("max_drawdown", 0.0)), 6),
+                    "total_placed": int(summary.get("total_placed", 0)),
+                    "total_canceled": int(summary.get("total_canceled", 0)),
+                    "total_fills": int(summary.get("total_fills", 0)),
+                    "fill_rate_per_order": _rounded(float(summary.get("fill_rate_per_order", 0.0)), 6),
+                }
+            )
+
+    matrix_rows = sorted(runs, key=lambda x: (x["scenario_id"], x["profile_name"]))
+    matrix_path = compare_out / "compare_matrix.csv"
+    _write_csv(
+        matrix_path,
+        matrix_rows,
+        fieldnames=[
+            "scenario_id",
+            "scenario_run_id",
+            "profile_name",
+            "strategy_key",
+            "quote_levels_effective",
+            "pnl_end",
+            "max_drawdown",
+            "total_placed",
+            "total_canceled",
+            "total_fills",
+            "fill_rate_per_order",
+        ],
+    )
+
+    agg: Dict[str, Dict[str, Any]] = {}
+    for row in matrix_rows:
+        key = str(row["profile_name"])
+        item = agg.setdefault(
+            key,
+            {
+                "profile_name": key,
+                "strategy_key": str(row["strategy_key"]),
+                "scenarios": 0,
+                "sum_pnl_end": 0.0,
+                "sum_max_drawdown": 0.0,
+                "sum_total_placed": 0,
+                "sum_total_fills": 0,
+            },
+        )
+        item["scenarios"] += 1
+        item["sum_pnl_end"] += float(row["pnl_end"])
+        item["sum_max_drawdown"] += float(row["max_drawdown"])
+        item["sum_total_placed"] += int(row["total_placed"])
+        item["sum_total_fills"] += int(row["total_fills"])
+
+    aggregate_rows: List[Dict[str, Any]] = []
+    for item in agg.values():
+        scenarios_count = max(1, int(item["scenarios"]))
+        sum_orders = int(item["sum_total_placed"])
+        sum_fills = int(item["sum_total_fills"])
+        aggregate_rows.append(
+            {
+                "profile_name": item["profile_name"],
+                "strategy_key": item["strategy_key"],
+                "scenarios": int(item["scenarios"]),
+                "avg_pnl_end": _rounded(float(item["sum_pnl_end"]) / scenarios_count, 3),
+                "avg_max_drawdown": _rounded(float(item["sum_max_drawdown"]) / scenarios_count, 6),
+                "sum_total_placed": sum_orders,
+                "sum_total_fills": sum_fills,
+                "overall_fill_rate": _rounded((sum_fills / max(1, sum_orders)), 6),
+            }
+        )
+    aggregate_rows.sort(key=lambda x: float(x["avg_pnl_end"]), reverse=True)
+    aggregate_path = compare_out / "compare_aggregate_by_profile.csv"
+    _write_csv(
+        aggregate_path,
+        aggregate_rows,
+        fieldnames=[
+            "profile_name",
+            "strategy_key",
+            "scenarios",
+            "avg_pnl_end",
+            "avg_max_drawdown",
+            "sum_total_placed",
+            "sum_total_fills",
+            "overall_fill_rate",
+        ],
+    )
+
+    summary = {
+        "scenarios_count": len(files),
+        "profiles_count": len(profiles),
+        "rows_count": len(matrix_rows),
+        "matrix_csv": str(matrix_path),
+        "aggregate_csv": str(aggregate_path),
+        "top_profile_by_avg_pnl": aggregate_rows[0]["profile_name"] if aggregate_rows else None,
+        "top_profile_avg_pnl": _rounded(float(aggregate_rows[0]["avg_pnl_end"]), 3) if aggregate_rows else 0.0,
+        "bottom_profile_by_avg_pnl": aggregate_rows[-1]["profile_name"] if aggregate_rows else None,
+        "bottom_profile_avg_pnl": _rounded(float(aggregate_rows[-1]["avg_pnl_end"]), 3) if aggregate_rows else 0.0,
+    }
+    _write_json(compare_out / "summary.json", summary)
+    return summary

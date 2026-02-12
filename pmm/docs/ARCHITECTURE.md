@@ -1,243 +1,237 @@
-# PMM Architecture
+# PMM 架构说明
 
-> **Last Updated**: 2026-02-12 (Post-Refactoring)
+> **最近更新**：2026-02-12（重构后）
 
-## Overview
+## 概览
 
-PMM (Polymarket Market Maker) is a layered market-making system with pluggable strategies, paper/live execution modes, and comprehensive backtesting infrastructure.
+PMM（Polymarket Market Maker）是一个分层做市系统，支持：
 
-## Directory Structure
+- 策略插件化（`single_level_v1` / `multi_level_v1`）
+- `paper` / `live` 执行模式切换
+- 真实数据录制、场景回放、批量回测与绘图
 
-```
+## 目录结构
+
+```text
 pmm/
-├── config.py, main.py            # Entry point
-├── tick_loop.py (735L)           # Orchestration engine
+├── config.py, main.py            # 程序入口与全局配置
+├── engine/
+│   ├── tick_engine.py            # 主编排引擎
+│   └── context_builder.py        # token/历史上下文构建
 │
-├── core/                         # Pure computation (no I/O)
-│   ├── pricing.py                # Quote computation formulas
-│   ├── signals.py                # Market signals (weighted_mid, OFI, realized_vol, momentum, etc.)
-│   ├── sizing.py                 # Position sizing logic
-│   ├── anchoring.py              # Quote anchoring to BBO
-│   ├── strategy_base.py          # Strategy protocol + data structures
-│   └── strategy_registry.py     # Strategy plugin registry
+├── core/                         # 纯计算层（无 I/O）
+│   ├── pricing.py                # 报价公式
+│   ├── signals.py                # 信号计算（weighted_mid、OFI、波动率、动量等）
+│   ├── sizing.py                 # 仓位规模计算
+│   ├── anchoring.py              # 报价锚定到盘口
+│   ├── strategy_base.py          # 策略协议 + 数据结构
+│   └── strategy_registry.py      # 策略注册表
 │
-├── data/                         # I/O layer
-│   ├── http_client.py            # REST API client
-│   ├── market_ws.py              # WebSocket market feed + local L2 book
-│   ├── orderbook.py              # Orderbook utilities
-│   └── parsers.py                # API response parsers
+├── data/                         # 数据 I/O 层
+│   ├── http_client.py            # REST 客户端
+│   ├── market_ws.py              # WebSocket 行情 + 本地 L2 盘口
+│   ├── orderbook.py              # 盘口工具函数
+│   └── parsers.py                # 接口响应解析
 │
-├── execution/                    # Order execution
-│   ├── broker_interface.py       # Abstract broker ABC
-│   ├── live_broker.py            # Live trading (dry_run mode ready)
-│   ├── paper_broker.py           # Simulated execution with local matching
-│   └── order_manager.py          # Order diffing + deadband logic
+├── execution/                    # 执行层
+│   ├── broker_interface.py       # Broker 抽象接口
+│   ├── live_broker.py            # 实盘执行（支持 dry_run）
+│   ├── paper_broker.py           # 模拟执行（本地撮合）
+│   └── order_manager.py          # 挂撤单 diff + deadband
 │
-├── risk/                         # Risk management
-│   ├── safety_guard.py           # Pre-execution checks (whitelist, fat-finger, daily loss)
-│   └── circuit_breaker.py        # Price jump detection
+├── risk/                         # 风控层
+│   ├── safety_guard.py           # 下单前检查（白名单、肥手指、日亏损）
+│   └── circuit_breaker.py        # 行情突变熔断
 │
-├── utils/                        # Shared utilities
-│   ├── converters.py             # Type conversion (to_float, normalize_levels)
-│   ├── quantize.py               # Price quantization to tick size
-│   └── metrics.py                # Metrics logging
+├── utils/                        # 公共工具
+│   ├── converters.py             # 类型转换
+│   ├── quantize.py               # 价格 tick 对齐
+│   └── metrics.py                # 指标日志写入
 │
-├── strategies/                   # Strategy plugins
-│   ├── single_level_v1.py        # Single-level quoting
-│   └── multi_level_v1.py         # Multi-level ladder quoting
+├── strategies/                   # 策略插件
+│   ├── single_level_v1.py        # 单档报价
+│   └── multi_level_v1.py         # 多档梯度报价
 │
-└── backtest/                     # Backtesting infrastructure
-    ├── replay_runner.py          # Scenario replay engine
-    ├── recorder.py               # Live market data recorder
-    ├── scenario_generator.py    # Synthetic scenario generation
-    ├── scenario_validator.py    # Scenario validation
-    └── plotter.py                # Result visualization
+└── backtest/                     # 回测基础设施
+    ├── replay_runner.py          # 场景回放引擎
+    ├── recorder.py               # 真实数据录制器
+    ├── scenario_generator.py     # 合成场景生成
+    ├── scenario_validator.py     # 场景校验器
+    └── plotter.py                # 结果可视化
 ```
 
-## Dependency Rules
+## 分层依赖规则
 
-```
-┌─────────────────────────────────────────────┐
-│ Layered Architecture (top → bottom)        │
-├─────────────────────────────────────────────┤
-│ tick_loop.py (engine)                       │
-│   ↓                                         │
-│ strategies/ (pluggable)                     │
-│   ↓                                         │
-│ core/ (pure computation)                    │
-│   ↓                                         │
-│ execution/ + risk/ (stateful components)    │
-│   ↓                                         │
-│ data/ (I/O)                                 │
-│   ↓                                         │
-│ utils/ (shared primitives)                  │
-└─────────────────────────────────────────────┘
-
-Rules:
-- core/ MUST NOT import from execution/, risk/, data/, or strategies/
-- data/ MUST NOT import from core/, execution/, or strategies/
-- utils/ MUST NOT import from any other pmm package
+```text
+engine/tick_engine.py（编排）
+  ↓
+strategies/（策略插件）
+  ↓
+core/（纯计算）
+  ↓
+execution/ + risk/（状态组件）
+  ↓
+data/（I/O）
+  ↓
+utils/（通用基础）
 ```
 
-## Tick Loop Flow
+约束：
 
-```
-┌─────────────────────────────────────────────────────┐
-│ 1. Fetch Account State                             │
-│    balance + open_orders + positions                │
-├─────────────────────────────────────────────────────┤
-│ 2. Fetch Market Data                               │
-│    ws → local L2 cache (fallback REST if stale)     │
-├─────────────────────────────────────────────────────┤
-│ 3. Circuit Breaker Check                           │
-│    price jump > threshold? → cancel_all + halt      │
-├─────────────────────────────────────────────────────┤
-│ 4. Signal Computation (per token)                  │
-│    inventory_signal → realized_vol → required_spread│
-│    → OFI / momentum → side block decision           │
-├─────────────────────────────────────────────────────┤
-│ 5. Strategy Quote Generation                       │
-│    strategy_key → StrategyRegistry → strategy impl  │
-│    compute → anchor → quantize → quote_targets[]    │
-├─────────────────────────────────────────────────────┤
-│ 6. Execution                                        │
-│    diff_multi(open_orders, targets)                 │
-│    → cancel + place (1..N levels)                   │
-├─────────────────────────────────────────────────────┤
-│ 7. Auto Merge (periodic)                           │
-│    min(yes_pos, no_pos) ≥ threshold → merge → USDC  │
-├─────────────────────────────────────────────────────┤
-│ 8. Metrics Logging                                 │
-│    strategy_key + quote_runtime + pnl/signals       │
-└─────────────────────────────────────────────────────┘
-```
+- `core/` 不应依赖 `execution/`、`risk/`、`data/`、`strategies/`
+- `data/` 不应依赖 `core/`、`execution/`、`strategies/`
+- `utils/` 不应依赖其他 `pmm` 子包
 
-## Key Components
+## Tick 主流程
 
-### Strategy System
+```text
+1) 拉账户状态
+   balance + open_orders + positions
 
-Strategies implement the `MarketMakingStrategy` protocol:
+2) 拉行情数据
+   ws -> 本地 L2 缓存（过期时 fallback REST）
 
-```python
-class MarketMakingStrategy(Protocol):
-    def generate_quotes(
-        self,
-        token_ctx: StrategyQuoteInput,
-        signal_ctx: Dict[str, Any],
-    ) -> List[QuoteTarget]:
-        ...
+3) 熔断检查
+   跳价超过阈值 -> cancel_all + 停止/冷却
+
+4) 信号计算（逐 token）
+   inventory_signal -> realized_vol -> required_spread
+   -> OFI / momentum -> side block
+
+5) 策略路由与报价
+   strategy_key -> StrategyRegistry -> strategy 实现
+   -> quote_targets
+
+6) 执行挂撤
+   diff_multi(open_orders + pending_orders, side_targets)
+   -> cancel + place(1..N levels)
+
+7) 周期性 Auto Merge
+   min(yes_pos, no_pos) >= threshold -> merge -> USDC
+
+8) 指标落盘
+   strategy_key + quote_runtime + pnl/signals
 ```
 
-**Available Strategies:**
-- `single_level_v1`: Single bid/ask per side
-- `multi_level_v1`: N-level ladder with configurable spreads
+## 策略系统
 
-### Execution Modes
+策略实现统一遵循 `MarketMakingStrategy` 协议。
 
-Controlled by `PMM_EXEC_MODE` environment variable:
+当前策略：
 
-| Mode | Broker | Use Case |
-|------|--------|----------|
-| `paper` | `PaperBroker` | Backtesting, simulation with real market data |
-| `live` | `LiveBroker` | Production trading (dry_run mode available) |
+- `single_level_v1`：每侧 1 档
+- `multi_level_v1`：每侧 N 档（可配步长和 size 衰减）
 
-### Market Data Sources
+## 执行模式
 
-Controlled by `PMM_MARKET_DATA_SOURCE`:
+由环境变量 `PMM_EXEC_MODE` 控制：
 
-| Source | Latency | Notes |
-|--------|---------|-------|
-| `ws` | ~ms (push) | Maintains local L2 book, auto-reconnect, staleness detection |
-| `rest` | ~tick interval | Simple polling, higher latency |
+| 模式 | Broker | 用途 |
+|------|--------|------|
+| `paper` | `PaperBroker` | 回测/仿真（真实行情 + 本地撮合） |
+| `live` | `LiveBroker` | 实盘执行（支持 dry_run） |
 
-### Risk Management
+## 行情来源
 
-**SafetyGuard** (pre-execution):
-- Token whitelist enforcement
-- Price bounds check [0.01, 0.99]
-- Fat-finger protection (max notional per order)
-- Daily loss circuit breaker
+由环境变量 `PMM_MARKET_DATA_SOURCE` 控制：
 
-**CircuitBreaker** (market-level):
-- Price jump detection (configurable threshold)
-- Automatic cancel-all on trigger
+| 来源 | 延迟 | 说明 |
+|------|------|------|
+| `ws` | ~ms（推送） | 本地维护 L2、自动重连、过期检测 |
+| `rest` | ~tick 间隔 | 轮询简单，但延迟更高 |
 
-## Backtesting
+## 风控
 
-Full workflow:
+- `SafetyGuard`：白名单、价格范围、肥手指、日亏损
+- `CircuitBreaker`：跳价检测，触发后自动 `cancel_all`
+- `In-flight Guard`：把 `pending_orders` 视为已存在订单参与 diff，减少确认延迟导致的重复下单
 
-```
-1. Record live data:    pmm_backtest.py record-live
-2. Convert to scenario: pmm_backtest.py convert-live
-3. Run backtest:        pmm_backtest.py run <scenario>
-4. Run all scenarios:   pmm_backtest.py run-all
-5. Visualize:           pmm_backtest.py plot <scenario>
+## 回测流程
+
+```text
+1. record-live   录制真实数据
+2. convert-live  转换为场景
+3. run           单场景回测
+4. run-all       全场景回测
+5. plot          结果可视化
 ```
 
-**Fill Models:**
-- `conservative`: Requires price penetration (best_ask ≤ bid - ε)
-- `optimistic`: Triggers on touch (best_ask ≤ bid + ε)
+撮合模型：
 
-See [BACKTEST_SCENARIO_METHOD.md](BACKTEST_SCENARIO_METHOD.md) for details.
+- `conservative`：要求穿价（`best_ask <= bid - ε`）
+- `optimistic`：触价成交（`best_ask <= bid + ε`）
 
-## Configuration
+详见：`BACKTEST_SCENARIO_METHOD.md`。
 
-All configuration via environment variables. Key parameters:
+独立录制能力（可复用）：
 
 ```bash
-# Core
+# 录制真实 orderbook + trade_flow 估计（输出 scenario + jsonl）
+python scripts/python/pmm_orderbook_capture.py capture \
+  --tokens "YES_TOKEN,NO_TOKEN" \
+  --duration 180 \
+  --interval 1.0 \
+  --out-scenario pmm/backtest/.artifacts/recorded/sample.json
+
+# 把 jsonl 转成可直接 replay 的 scenario
+python scripts/python/pmm_orderbook_capture.py convert \
+  --jsonl pmm/backtest/.artifacts/recorded/sample.jsonl.gz \
+  --out-scenario pmm/backtest/.artifacts/recorded/sample_converted.json
+```
+
+## 录制落盘规范（Bronze）
+
+- 写入模型：主线程仅入队，后台异步线程落盘（`AsyncJsonlWriter`），避免 tick 主循环被磁盘 I/O 阻塞。
+- 压缩格式：默认 `jsonl.gz`；如安装 `zstandard` 可使用 `jsonl.zst`。
+- 双时间戳：每个 tick 必须同时记录
+  - `ts_event`：交易所事件时间（用于回放撮合）
+  - `ts_ingest`：本地接收时间（用于延迟与数据新鲜度分析）
+- 产物分层：
+  - `pmm/backtest/.artifacts/`：运行产物，默认不入库
+  - `pmm/backtest/metadata/`：汇总元数据，可入库
+
+## 配置
+
+全部通过环境变量配置，示例：
+
+```bash
+# 基础
 PMM_TOKEN_IDS="token1,token2"
 PMM_EXEC_MODE="paper"  # or "live"
 PMM_MARKET_DATA_SOURCE="ws"  # or "rest"
 PMM_STRATEGY_KEY="multi_level_v1"
 
-# Strategy
+# 策略
 PMM_BASE_SIZE=10.0
 PMM_MAX_POSITION=500.0
 PMM_TARGET_PROFIT_SPREAD=0.002
 
-# Risk
+# 风控
 PMM_CIRCUIT_BREAKER_THRESHOLD=0.05
 PMM_MAX_DAILY_LOSS=50.0
 ```
 
-Full list: see `config.py`
+完整参数见 `config.py`。
 
-## Metrics
+## 指标日志
 
-Every tick appends one JSON line to `pmm_logs/metrics.jsonl`:
+每个 tick 会向 `pmm_logs/metrics.jsonl` 追加一行 JSON。
+字段规范见：`METRICS_FORMAT.md`。
 
-```json
-{
-  "timestamp": 1234567890.123,
-  "strategy_key": "multi_level_v1",
-  "pnl": 12.34,
-  "position": {"token1": 100.0},
-  "signals": {"inventory_signal": -0.23, "realized_vol": 0.015},
-  ...
-}
-```
+## 当前状态
 
-Format spec: [METRICS_FORMAT.md](METRICS_FORMAT.md)
+已完成：
 
-## Development Status
-
-✅ **Completed:**
-- Layered architecture (6 packages)
-- Multi-level quoting
-- Paper trading with BBO-join matching
-- Live data recording + scenario replay
-- WebSocket market feed with auto-reconnect
-- OFI + momentum signals
+- 分层结构基础搭建
+- 多档报价策略
+- Paper 撮合（含 BBO join 行为）
+- 真实数据录制 + 场景回放
+- WebSocket 行情接入（自动重连）
+- OFI + 动量信号
 - SafetyGuard + CircuitBreaker
 
-🚧 **In Progress:**
-- LiveBroker API integration (dry_run mode ready)
+进行中：
 
-📋 **Roadmap:**
-- User private WebSocket (order/fill updates)
-- Queue position modeling
-- Realized PnL tracking
-- Prometheus metrics export
+- `LiveBroker` API 细化接入
 
-See [TODO_IMPROVEMENTS.md](TODO_IMPROVEMENTS.md) for full roadmap.
+后续路线：见 `TODO_IMPROVEMENTS.md`。

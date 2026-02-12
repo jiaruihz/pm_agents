@@ -35,4 +35,7 @@ pmm/backtest/results_compare/
 pmm/backtest/results_fill_models/
 pmm/backtest/results_*/
 pmm/backtest/scenarios_*/
+pmm/backtest/.artifacts/
+# Keep metadata only; do not commit replay/plot artifacts.
+pmm/backtest/**/plots/
 local_market_collection/market_snapshot_*.json

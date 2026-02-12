@@ -1,12 +1,12 @@
 import asyncio
 
 from pmm.config import PMMConfig
-from pmm.tick_loop import tick_loop
+from pmm.engine import TickEngine
 
 
 def main() -> None:
     config = PMMConfig.from_env()
-    asyncio.run(tick_loop(config))
+    asyncio.run(TickEngine(config).run())
 
 
 if __name__ == "__main__":

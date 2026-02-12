@@ -34,9 +34,9 @@ def orderbook_to_df(orderbook: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
 def best_bid_ask(orderbook: Dict[str, Any]) -> Dict[str, float]:
     dfs = orderbook_to_df(orderbook)
     bids, asks = dfs["bids"], dfs["asks"]
-    if bids.empty or asks.empty:
-        return {"best_bid": 0.0, "best_ask": 0.0}
-    return {"best_bid": float(bids.iloc[0]["price"]), "best_ask": float(asks.iloc[0]["price"])}
+    best_bid = float(bids.iloc[0]["price"]) if not bids.empty else 0.0
+    best_ask = float(asks.iloc[0]["price"]) if not asks.empty else 0.0
+    return {"best_bid": best_bid, "best_ask": best_ask}
 
 
 def mid_price(orderbook: Dict[str, Any]) -> float:

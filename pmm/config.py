@@ -34,7 +34,11 @@ class PMMConfig:
     paper_fill_model: str = "conservative"  # conservative | optimistic
     paper_fill_epsilon: float = 0.001
     paper_queue_share: float = 0.25
+    paper_require_trade_flow_for_at_bbo: bool = True
+    paper_disable_at_bbo_in_conservative: bool = False
+    paper_conservative_bbo_share_multiplier: float = 0.35
     paper_bootstrap_split_usdc: float = 0.0
+    inflight_order_ttl_sec: float = 10.0
 
     # Market data source
     market_data_source: str = "rest"  # rest | ws
@@ -173,9 +177,21 @@ class PMMConfig:
             paper_fill_model=os.getenv("PMM_PAPER_FILL_MODEL", "conservative"),
             paper_fill_epsilon=float(os.getenv("PMM_PAPER_FILL_EPSILON", "0.001")),
             paper_queue_share=float(os.getenv("PMM_PAPER_QUEUE_SHARE", "0.25")),
+            paper_require_trade_flow_for_at_bbo=os.getenv(
+                "PMM_PAPER_REQUIRE_TRADE_FLOW_BBO", "1"
+            )
+            == "1",
+            paper_disable_at_bbo_in_conservative=os.getenv(
+                "PMM_PAPER_DISABLE_AT_BBO_CONSERVATIVE", "0"
+            )
+            == "1",
+            paper_conservative_bbo_share_multiplier=float(
+                os.getenv("PMM_PAPER_CONSERVATIVE_BBO_SHARE_MULTIPLIER", "0.35")
+            ),
             paper_bootstrap_split_usdc=float(
                 os.getenv("PMM_PAPER_BOOTSTRAP_SPLIT_USDC", "0")
             ),
+            inflight_order_ttl_sec=float(os.getenv("PMM_INFLIGHT_ORDER_TTL_SEC", "10")),
             market_data_source=os.getenv("PMM_MARKET_DATA_SOURCE", "rest"),
             ws_market_url=os.getenv(
                 "PMM_WS_MARKET_URL", "wss://ws-subscriptions-clob.polymarket.com/ws/market"

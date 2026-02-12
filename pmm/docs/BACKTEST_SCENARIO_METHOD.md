@@ -1,4 +1,4 @@
-# Backtest & Scenario Replay
+# 回测与场景回放方法
 
 场景造数、策略回放、真实数据录制与结果分析的方法说明。
 
@@ -6,13 +6,14 @@
 
 ## 文件结构
 
-```
+```text
 pmm/backtest/
-├── case_catalog.json        场景参数目录
-├── scenario_generator.py    catalog → 逐 tick 场景文件
+├── case_catalog.json         场景参数目录
+├── scenario_generator.py     catalog -> 逐 tick 场景文件
 ├── replay_runner.py          策略回放引擎
-├── scenarios/                生成的场景文件（gitignore）
-└── results/                  回测结果（gitignore）
+├── scenarios/                基准场景集（可入库）
+├── metadata/                 汇总元数据（建议入库）
+└── .artifacts/               回测/录制/绘图产物（默认不入库）
 ```
 
 CLI 入口：`scripts/python/pmm_backtest.py`
@@ -37,6 +38,7 @@ CLI 入口：`scripts/python/pmm_backtest.py`
 | `trade_flow` (逐 tick 生成) | buy/sell taker qty | 主动单流，用于队列成交模拟 |
 | `shock_tick` / `shock_jump` / `shock_len` | int/float | 事件冲击时点、幅度、持续长度 |
 | `dryup_start` | int | 流动性衰竭起始 tick |
+| `price_tick` | 0.01 / 0.001 | 价格网格粒度（用于边界与量化） |
 
 ### 路径模式
 
@@ -54,9 +56,32 @@ CLI 入口：`scripts/python/pmm_backtest.py`
 ### YES / NO 联动
 
 - YES 路径按模式生成
-- NO = `1 - YES + 微扰`（避免完全对称）
+- NO ≈ `1 - YES`（在 `price_tick` 网格上量化后得到）
 - 盘口按 mid ± spread/2 生成 top level
 - 每个 tick 额外生成 `trade_flow`（YES/NO 各自的 `buy_taker_qty` / `sell_taker_qty`）
+
+### `trade_flow` 生成模型（修复后）
+
+`trade_flow` 用于模拟“这个 tick 内有多少主动买卖盘打进来”。它不是 orderbook 的替代，而是时间维度上的成交流量输入。
+
+生成逻辑（简化）：
+
+1. 基准流量
+- `base_flow = top_depth * flow_scale(fillability) * random_factor`
+- `flow_scale`：`high > medium > low`，表示更活跃市场有更高 taker 到达率。
+
+2. 事件状态调制
+- `shock/event_window`：放大流量（信息冲击时主动交易增多）
+- `liquidity_dryup`：缩小流量（流动性枯竭时交易活动下降）
+- `reversion_window`：中等放大（事件后回归期）
+
+3. 方向偏置（买卖拆分）
+- 综合 `pattern` 趋势偏置 + 最近一跳 `delta_mid` 动态偏置
+- 拆分成：
+`buy_taker_qty = base_flow * buy_frac`
+`sell_taker_qty = base_flow * (1 - buy_frac)`
+
+这样做的目的是让“稳态、趋势、冲击、枯竭”在成交层面也体现出差异，而不是只在价格曲线里体现。
 
 ---
 
@@ -83,6 +108,10 @@ replay_runner
 - `queue_fill`：仅在有 `trade_flow` 时才允许 BBO 队列成交
 - `conservative` 相比 `optimistic` 使用更保守的 BBO 队列份额
 
+注意：
+- 若场景缺失 `trade_flow`，通常会出现“挂撤很多但 fills 接近 0”。
+- 回测前可用 `validate-dir` 检查 `ticks_with_missing_trade_flow`。
+
 回放前置校验（已接入）：
 
 - `run` / `run-all` / `run-all-fill-models` 在执行前会先校验 scenario 结构。
@@ -95,7 +124,7 @@ replay_runner
 ### 单场景输出
 
 ```
-results/<scenario_id>/
+pmm/backtest/.artifacts/results/<scenario_id>/
 ├── metrics.jsonl     每 tick 状态快照
 ├── actions.jsonl     操作流水（place / cancel / fill / error）
 └── summary.json      汇总统计
@@ -104,7 +133,7 @@ results/<scenario_id>/
 ### 批量输出
 
 ```
-results/
+pmm/backtest/.artifacts/results_all/
 ├── <scenario_id>/    各场景目录
 └── summary_all.json  全量聚合
 ```
@@ -112,7 +141,7 @@ results/
 ### 对比输出（compare）
 
 ```
-results_compare/
+pmm/backtest/.artifacts/results_compare/
 ├── <scenario_id>__<profile_name>/
 │   ├── metrics.jsonl
 │   ├── actions.jsonl
@@ -120,10 +149,28 @@ results_compare/
 └── compare_summary.json
 ```
 
+### 全场景 × 全策略输出（compare-all）
+
+```
+pmm/backtest/.artifacts/results_compare_all_strategies/
+├── <scenario_id>__<profile_name>/
+│   ├── metrics.jsonl
+│   ├── actions.jsonl
+│   └── summary.json
+├── compare_matrix.csv
+├── compare_aggregate_by_profile.csv
+├── summary.json
+└── plots/                        （当使用 --plot 时生成）
+    ├── compare_avg_pnl_by_profile.png
+    ├── compare_pnl_heatmap.png
+    ├── compare_fills_vs_placed.png
+    └── plot_manifest.json
+```
+
 ### 多 fill model 联跑输出
 
 ```
-results_fill_models/
+pmm/backtest/.artifacts/results_fill_models/
 ├── <scenario_id>__fill_conservative/
 ├── <scenario_id>__fill_optimistic/
 ├── summary_all_fill_models.json
@@ -175,6 +222,12 @@ results_fill_models/
 | `strategy_overrides` | 本次回测实际覆盖参数 |
 | `scenario_validation` | 回放前数据校验摘要（ok/errors/warnings/stats） |
 
+资金口径说明（重要）：
+
+- `usdc_balance`：可用现金（`free`，挂单冻结后会下降）
+- `usdc_total`：账户总现金（`free + reserved`）
+- `equity` 与 `pnl_end` 使用 `usdc_total + 持仓市值` 计算，避免把挂单冻结资金误判为亏损。
+
 ### quote_runtime 字段说明
 
 - `quote_levels_requested`：配置请求档位（例如 3）
@@ -216,24 +269,31 @@ results_fill_models/
 # 跑单个场景
 ./venv/bin/python scripts/python/pmm_backtest.py run \
   --scenario pmm/backtest/scenarios/b50_oscillating_fill.json \
-  --out-dir pmm/backtest/results
+  --out-dir pmm/backtest/.artifacts/results
 
 # 批量回测
 ./venv/bin/python scripts/python/pmm_backtest.py run-all \
   --scenarios-dir pmm/backtest/scenarios \
-  --out-dir pmm/backtest/results
+  --out-dir pmm/backtest/.artifacts/results_all
 
 # 同时跑 conservative + optimistic，并输出同一张结果榜单
 ./venv/bin/python scripts/python/pmm_backtest.py run-all-fill-models \
   --scenarios-dir pmm/backtest/scenarios \
-  --out-dir pmm/backtest/results_fill_models \
+  --out-dir pmm/backtest/.artifacts/results_fill_models \
   --fill-models conservative,optimistic
 
 # 同场景多参数对比（先用于单档，后续可直接纳入多档）
 ./venv/bin/python scripts/python/pmm_backtest.py compare \
   --scenario pmm/backtest/scenarios/b50_oscillating_fill.json \
-  --profiles pmm/backtest/compare_profiles_single_level.json \
-  --out-dir pmm/backtest/results_compare
+  --profiles pmm/backtest/compare_profiles_all_strategies.json \
+  --out-dir pmm/backtest/.artifacts/results_compare
+
+# 全场景 × 全策略对比，并生成图表
+./venv/bin/python scripts/python/pmm_backtest.py compare-all \
+  --scenarios-dir pmm/backtest/scenarios \
+  --profiles pmm/backtest/compare_profiles_all_strategies.json \
+  --out-dir pmm/backtest/.artifacts/results_compare_all_strategies \
+  --plot
 
 # 多档策略对比（示例：single vs multi_level_v1）
 # profiles 文件中可设置:
@@ -244,33 +304,45 @@ results_fill_models/
 
 # 单场景绘图
 ./venv/bin/python scripts/python/pmm_backtest.py plot \
-  --result-dir pmm/backtest/results/b50_oscillating_fill
+  --result-dir pmm/backtest/.artifacts/results/b50_oscillating_fill
 
 # 批量汇总绘图
 ./venv/bin/python scripts/python/pmm_backtest.py plot-all \
-  --results-dir pmm/backtest/results
+  --results-dir pmm/backtest/.artifacts/results_all
 
 # 录制真实 WS 盘口 + 估算订单流，直接输出 scenario + jsonl
 ./venv/bin/python scripts/python/pmm_backtest.py record-live \
   --tokens <YES_TOKEN_ID>,<NO_TOKEN_ID> \
   --duration 300 \
   --interval 1.0 \
-  --out-scenario pmm/backtest/scenarios/recorded_live.json \
-  --out-jsonl pmm/backtest/scenarios/recorded_live.jsonl \
+  --out-scenario pmm/backtest/.artifacts/recorded/recorded_live.json \
+  --out-jsonl pmm/backtest/.artifacts/recorded/recorded_live.jsonl.gz \
   --initial-usdc 100 \
   --initial-positions-json '{"<YES_TOKEN_ID>":50,"<NO_TOKEN_ID>":50}'
 
 # 将已有 jsonl 转换为标准 scenario 格式
 ./venv/bin/python scripts/python/pmm_backtest.py convert-live \
-  --jsonl pmm/backtest/scenarios/recorded_live.jsonl \
-  --out-scenario pmm/backtest/scenarios/recorded_live_converted.json \
+  --jsonl pmm/backtest/.artifacts/recorded/recorded_live.jsonl.gz \
+  --out-scenario pmm/backtest/.artifacts/recorded/recorded_live_converted.json \
   --tokens <YES_TOKEN_ID>,<NO_TOKEN_ID> \
   --initial-usdc 100 \
   --initial-positions-json '{"<YES_TOKEN_ID>":50,"<NO_TOKEN_ID>":50}'
 
+# 独立能力版本（不走回测总入口，便于复用到其他工作流）
+./venv/bin/python scripts/python/pmm_orderbook_capture.py capture \
+  --tokens <YES_TOKEN_ID>,<NO_TOKEN_ID> \
+  --duration 300 \
+  --interval 1.0 \
+  --out-scenario pmm/backtest/.artifacts/recorded/recorded_live.json
+
+./venv/bin/python scripts/python/pmm_orderbook_capture.py convert \
+  --jsonl pmm/backtest/.artifacts/recorded/recorded_live.jsonl.gz \
+  --out-scenario pmm/backtest/.artifacts/recorded/recorded_live_converted.json \
+  --tokens <YES_TOKEN_ID>,<NO_TOKEN_ID>
+
 # 校验单个 scenario
 ./venv/bin/python scripts/python/pmm_backtest.py validate \
-  --scenario pmm/backtest/scenarios/recorded_live_converted.json
+  --scenario pmm/backtest/.artifacts/recorded/recorded_live_converted.json
 
 # 校验整个目录
 ./venv/bin/python scripts/python/pmm_backtest.py validate-dir \
@@ -282,15 +354,24 @@ results_fill_models/
   --strict
 ```
 
+产物入库规则：
+
+- 回测和录制产物默认写入 `pmm/backtest/.artifacts/`，不入 git。
+- 长期保留仅保留 `pmm/backtest/metadata/` 下汇总元数据文件。
+
 真实数据录制说明：
 
 - `record-live` 输出两份文件：
   - `scenario JSON`：可直接回测。
-  - `jsonl`：逐 tick 原始快照序列，便于审计和重转换。
+  - `jsonl.gz`：逐 tick 原始快照序列（压缩存储），便于审计和重转换。
 - `trade_flow` 当前来自盘口深度变化估计，属于近似值：
   - ask 深度减少 -> `buy_taker_qty`
   - bid 深度减少 -> `sell_taker_qty`
 - 该估算会混入撤单噪音，适合做“保守回测”的输入，不等同逐笔真实成交流。
+- Bronze 写入使用异步队列（主线程只 `put`，后台线程写盘），避免 tick 主循环被 I/O 阻塞。
+- 每个 tick 强制记录双时间戳：
+  - `ts_event`：交易所事件时间（若消息无事件时间则回退为本地时间）
+  - `ts_ingest`：本地接收时间（用于延迟诊断）
 
 ---
 

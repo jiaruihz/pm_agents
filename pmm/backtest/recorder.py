@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import time
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from pmm.backtest.scenario_validator import validate_scenario_payload
 from pmm.config import PMMConfig
 from pmm.data.market_ws import MarketWsFeed
+from pmm.utils.async_jsonl_writer import AsyncJsonlWriter
 
 
 def _to_float(value: Any, default: float = 0.0) -> float:
@@ -90,6 +92,12 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _open_text_reader(path: Path):
+    if path.suffix.lower() == ".gz" or "".join(path.suffixes[-2:]).lower().endswith(".jsonl.gz"):
+        return gzip.open(path, "rt", encoding="utf-8")
+    return path.open("r", encoding="utf-8")
+
+
 class LiveRecorder:
     def __init__(
         self,
@@ -129,12 +137,14 @@ class LiveRecorder:
     ) -> Dict[str, Any]:
         start_ts = time.time()
         if output_jsonl is None:
-            output_jsonl = str(Path(output_file).with_suffix(".jsonl"))
+            output_jsonl = str(Path(output_file).with_suffix(".jsonl.gz"))
 
         await self.ws_feed.start()
         await asyncio.sleep(max(0.0, warmup_sec))
 
-        ticks: List[Dict[str, Any]] = []
+        jsonl_path = Path(output_jsonl)
+        writer = AsyncJsonlWriter(str(jsonl_path), queue_maxsize=50000, flush_interval_sec=0.5)
+        writer.start()
         prev_books: Dict[str, Dict[str, Any]] = {}
         tick_idx = 0
         try:
@@ -145,6 +155,7 @@ class LiveRecorder:
 
                 orderbooks: Dict[str, Dict[str, Any]] = {}
                 trade_flow: Dict[str, Dict[str, float]] = {}
+                event_ts_by_token: Dict[str, float] = {}
 
                 for token_id in self.token_ids:
                     ob = self.ws_feed.get_orderbook(token_id)
@@ -155,40 +166,51 @@ class LiveRecorder:
                     else:
                         trade_flow[token_id] = {"buy_taker_qty": 0.0, "sell_taker_qty": 0.0}
                     prev_books[token_id] = cur
+                    event_ts_by_token[token_id] = float(self.ws_feed.get_event_ts(token_id) or 0.0)
+
+                ts_ingest = time.time()
+                valid_event_ts = [x for x in event_ts_by_token.values() if x > 0]
+                ts_event = min(valid_event_ts) if valid_event_ts else ts_ingest
 
                 tick = {
                     "t": tick_idx,
-                    "ts": time.time(),
+                    "ts_ingest": ts_ingest,
+                    "ts_event": ts_event,
+                    "event_ts_by_token": event_ts_by_token,
                     "event": event_label,
                     "orderbooks": orderbooks,
                     "trade_flow": trade_flow,
                 }
-                ticks.append(tick)
+                writer.write(tick)
                 tick_idx += 1
 
                 next_ts = start_ts + tick_idx * self.interval
                 await asyncio.sleep(max(0.0, next_ts - time.time()))
         finally:
+            writer.close()
             await self.ws_feed.stop()
 
         if initial_positions is None:
             initial_positions = {tid: 0.0 for tid in self.token_ids}
 
         sid = scenario_id or f"recorded_live_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        scenario_payload: Dict[str, Any] = {
-            "scenario_id": sid,
-            "description": description
-            or f"Recorded live market data via WS at {_utc_now_iso()}",
-            "token_ids": self.token_ids,
-            "initial_state": {
-                "usdc": float(initial_usdc),
-                "positions": {k: float(v) for k, v in initial_positions.items()},
-            },
-            "strategy_overrides": {
-                "paper_fill_model": "conservative",
-                "market_data_source": "rest",
-            },
-            "meta": {
+        convert_result = convert_jsonl_to_scenario(
+            jsonl_file=str(jsonl_path),
+            output_file=output_file,
+            token_ids=self.token_ids,
+            scenario_id=sid,
+            description=description or f"Recorded live market data via WS at {_utc_now_iso()}",
+            initial_usdc=initial_usdc,
+            initial_positions=initial_positions,
+        )
+        # Enrich scenario meta with recorder-level provenance.
+        out_path = Path(convert_result["scenario_file"])
+        payload = json.loads(out_path.read_text(encoding="utf-8"))
+        payload_meta = payload.get("meta", {})
+        if not isinstance(payload_meta, dict):
+            payload_meta = {}
+        payload_meta.update(
+            {
                 "source": "live_ws",
                 "recorded_at": _utc_now_iso(),
                 "duration_sec": duration_sec,
@@ -198,37 +220,26 @@ class LiveRecorder:
                 "trade_flow_mode": "estimated_from_book_delta",
                 "ws_url": self.config.ws_market_url,
                 "ws_detail_level": self.config.ws_detail_level,
-            },
-            "ticks": ticks,
-        }
-
-        validation_report = validate_scenario_payload(scenario_payload, strict=False)
-        scenario_payload["meta"]["validation"] = {
-            "ok": validation_report.get("ok", False),
-            "errors_count": validation_report.get("errors_count", 0),
-            "warnings_count": validation_report.get("warnings_count", 0),
-            "stats": validation_report.get("stats", {}),
-        }
-
-        jsonl_path = Path(output_jsonl)
-        jsonl_path.parent.mkdir(parents=True, exist_ok=True)
-        with jsonl_path.open("w", encoding="utf-8") as f:
-            for tick in ticks:
-                f.write(json.dumps(tick, ensure_ascii=False) + "\n")
-
-        out_path = Path(output_file)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            json.dumps(scenario_payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+                "jsonl_writer": {
+                    "compression": "gzip" if str(jsonl_path).endswith(".gz") else "none",
+                    "written": writer.written,
+                    "dropped": writer.dropped,
+                },
+            }
         )
+        payload["meta"] = payload_meta
+        out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
         return {
             "scenario_file": str(out_path),
             "jsonl_file": str(jsonl_path),
-            "ticks": len(ticks),
+            "ticks": int(convert_result["ticks"]),
             "token_ids": self.token_ids,
-            "validation": validation_report,
+            "validation": convert_result["validation"],
+            "writer": {
+                "written": writer.written,
+                "dropped": writer.dropped,
+            },
         }
 
 
@@ -246,7 +257,7 @@ def convert_jsonl_to_scenario(
         raise FileNotFoundError(jsonl_file)
 
     ticks: List[Dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as f:
+    with _open_text_reader(path) as f:
         for idx, line in enumerate(f):
             line = line.strip()
             if not line:
@@ -256,6 +267,10 @@ def convert_jsonl_to_scenario(
                 row["t"] = idx
             if "event" not in row:
                 row["event"] = "real_data"
+            if "ts_ingest" not in row:
+                row["ts_ingest"] = float(row.get("ts", 0.0) or 0.0)
+            if "ts_event" not in row:
+                row["ts_event"] = float(row.get("ts_ingest", 0.0) or 0.0)
             if "orderbooks" not in row:
                 row["orderbooks"] = {}
             if "trade_flow" not in row:

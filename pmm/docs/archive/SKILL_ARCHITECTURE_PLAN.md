@@ -219,7 +219,7 @@
 ```json
 {
   "scenario": "pmm/backtest/scenarios/b50_oscillating_fill.json",
-  "profiles": "pmm/backtest/compare_profiles_single_level.json",
+  "profiles": "pmm/backtest/compare_profiles_all_strategies.json",
   "out_dir": "pmm/backtest/results_compare"
 }
 ```
