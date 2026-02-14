@@ -1,2 +1,2 @@
-python setup.py
-fastapi dev server.py
+#!/bin/bash
+python -m pmm.main
