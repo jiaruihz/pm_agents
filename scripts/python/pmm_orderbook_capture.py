@@ -12,7 +12,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from pmm.backtest.recorder import LiveRecorder, convert_jsonl_to_scenario
+from src.domains.pmm.backtest.recorder import LiveRecorder, convert_jsonl_to_scenario
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -30,7 +30,7 @@ def _parser() -> argparse.ArgumentParser:
     cap.add_argument("--max-levels", type=int, default=20, help="Top levels per side")
     cap.add_argument(
         "--out-scenario",
-        default="pmm/backtest/.artifacts/recorded/recorded_live.json",
+        default="src/domains/pmm/backtest/.artifacts/recorded/recorded_live.json",
         help="Output scenario JSON path",
     )
     cap.add_argument(

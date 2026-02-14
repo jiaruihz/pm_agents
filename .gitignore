@@ -5,6 +5,7 @@
 .mypy_cache
 .vscode
 __pycache__
+*.py[cod]
 .pytest_cache
 htmlcov
 dist
@@ -28,14 +29,17 @@ archive.zip
 .DS_Store
 local_db*
 local_news_cache/
+research.db
+output/
+archive/books/
 pmm_logs/
-pmm/backtest/scenarios/
-pmm/backtest/results/
-pmm/backtest/results_compare/
-pmm/backtest/results_fill_models/
-pmm/backtest/results_*/
-pmm/backtest/scenarios_*/
-pmm/backtest/.artifacts/
+src/domains/pmm/backtest/scenarios/
+src/domains/pmm/backtest/results/
+src/domains/pmm/backtest/results_compare/
+src/domains/pmm/backtest/results_fill_models/
+src/domains/pmm/backtest/results_*/
+src/domains/pmm/backtest/scenarios_*/
+src/domains/pmm/backtest/.artifacts/
 # Keep metadata only; do not commit replay/plot artifacts.
-pmm/backtest/**/plots/
+src/domains/pmm/backtest/**/plots/
 local_market_collection/market_snapshot_*.json

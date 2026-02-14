@@ -1,6 +1,6 @@
 # PMM Tests
 
-当前测试集仅覆盖 `pmm` 核心模块，不再包含旧 `agents` 组件。
+当前测试集仅覆盖 `src.domains.pmm` 核心模块，不再包含旧 `agents` 组件。
 
 ## 文件
 
@@ -20,4 +20,4 @@ pytest tests/pmm_tests -q
 ## 说明
 
 - 测试以单元测试为主，默认不依赖真实外部 API。
-- 若修改 `pmm/config.py` 或策略参数路由，建议优先补充 `test_config.py` 与 `test_strategies.py`。
+- 若修改 `src/domains/pmm/config.py` 或策略参数路由，建议优先补充 `test_config.py` 与 `test_strategies.py`。

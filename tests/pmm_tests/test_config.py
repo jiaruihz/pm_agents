@@ -3,7 +3,7 @@
 import os
 import unittest
 from unittest.mock import patch
-from pmm.config import PMMConfig, MarketConfig
+from src.domains.pmm.config import PMMConfig, MarketConfig
 
 
 class TestMarketConfig(unittest.TestCase):

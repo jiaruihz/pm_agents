@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PM Research Browser / 研究浏览器</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="header">
+        <div>
+          <div class="title">PM Research Browser / 研究浏览器</div>
+          <div class="subtle">Paginated markets view (sorted by updated_at_utc) / 分页市场列表（按更新时间倒排）</div>
+        </div>
+        <div class="subtle" id="meta"></div>
+      </div>
+
+      <div class="card">
+        <div class="controls">
+          <div class="control">
+            <label for="page">Page / 页码</label>
+            <input id="page" type="number" min="1" value="1">
+          </div>
+          <div class="control">
+            <label for="page-size">Page Size / 每页数量</label>
+            <select id="page-size">
+              <option value="20">20</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </div>
+          <button id="load">Load / 加载</button>
+        </div>
+        <div class="subtle" id="status"></div>
+        <pre id="action-log" class="action-log"></pre>
+        <div id="table-wrap"></div>
+      </div>
+    </div>
+
+    <script src="list.js"></script>
+  </body>
+</html>

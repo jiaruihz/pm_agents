@@ -1,9 +1,9 @@
 """Unit tests for PMM Strategy modules."""
 
 import unittest
-from pmm.core.strategy_base import StrategyQuoteInput, QuoteTarget, MarketMakingStrategy
-from pmm.core.strategy_registry import StrategyRegistry
-from pmm.config import PMMConfig
+from src.domains.pmm.core.strategy_base import StrategyQuoteInput, QuoteTarget, MarketMakingStrategy
+from src.domains.pmm.core.strategy_registry import StrategyRegistry
+from src.domains.pmm.config import PMMConfig
 
 
 class MockStrategy:

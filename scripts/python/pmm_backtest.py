@@ -11,14 +11,14 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from pmm.backtest.replay_runner import (
+from src.domains.pmm.backtest.replay_runner import (
     run_scenario_compare,
     run_scenario_file,
     run_scenarios_compare_all,
     run_scenarios_dir,
     run_scenarios_dir_with_fill_models,
 )
-from pmm.backtest.scenario_generator import generate_all_from_catalog
+from src.domains.pmm.backtest.scenario_generator import generate_all_from_catalog
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -31,12 +31,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_gen = sub.add_parser("generate", help="Generate scenario JSON files from case catalog")
     p_gen.add_argument(
         "--catalog",
-        default="pmm/backtest/case_catalog.json",
+        default="src/domains/pmm/backtest/case_catalog.json",
         help="Path to case catalog json",
     )
     p_gen.add_argument(
         "--out-dir",
-        default="pmm/backtest/scenarios",
+        default="src/domains/pmm/backtest/scenarios",
         help="Output directory for generated scenarios",
     )
     p_gen.add_argument("--seed", type=int, default=42, help="Base random seed")
@@ -45,19 +45,19 @@ def _build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--scenario", required=True, help="Scenario JSON file path")
     p_run.add_argument(
         "--out-dir",
-        default="pmm/backtest/.artifacts/results",
+        default="src/domains/pmm/backtest/.artifacts/results",
         help="Output directory for run artifacts",
     )
 
     p_all = sub.add_parser("run-all", help="Run replay on all scenarios in a directory")
     p_all.add_argument(
         "--scenarios-dir",
-        default="pmm/backtest/scenarios",
+        default="src/domains/pmm/backtest/scenarios",
         help="Directory containing scenario json files",
     )
     p_all.add_argument(
         "--out-dir",
-        default="pmm/backtest/.artifacts/results_all",
+        default="src/domains/pmm/backtest/.artifacts/results_all",
         help="Output directory for run artifacts",
     )
 
@@ -67,12 +67,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_all_models.add_argument(
         "--scenarios-dir",
-        default="pmm/backtest/scenarios",
+        default="src/domains/pmm/backtest/scenarios",
         help="Directory containing scenario json files",
     )
     p_all_models.add_argument(
         "--out-dir",
-        default="pmm/backtest/.artifacts/results_fill_models",
+        default="src/domains/pmm/backtest/.artifacts/results_fill_models",
         help="Output directory for run artifacts",
     )
     p_all_models.add_argument(
@@ -85,7 +85,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_plot.add_argument(
         "--result-dir",
         required=True,
-        help="Scenario result directory, e.g. pmm/backtest/results/b50_oscillating_fill",
+        help="Scenario result directory, e.g. src/domains/pmm/backtest/results/b50_oscillating_fill",
     )
     p_plot.add_argument(
         "--out-dir",
@@ -96,7 +96,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_plot_all = sub.add_parser("plot-all", help="Plot summary charts for all scenarios")
     p_plot_all.add_argument(
         "--results-dir",
-        default="pmm/backtest/.artifacts/results_all",
+        default="src/domains/pmm/backtest/.artifacts/results_all",
         help="Directory containing summary_all.json",
     )
     p_plot_all.add_argument(
@@ -112,12 +112,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_compare.add_argument("--scenario", required=True, help="Base scenario json path")
     p_compare.add_argument(
         "--profiles",
-        default="pmm/backtest/compare_profiles_all_strategies.json",
+        default="src/domains/pmm/backtest/compare_profiles_all_strategies.json",
         help="Strategy profiles json path",
     )
     p_compare.add_argument(
         "--out-dir",
-        default="pmm/backtest/.artifacts/results_compare",
+        default="src/domains/pmm/backtest/.artifacts/results_compare",
         help="Output directory for compare run artifacts",
     )
 
@@ -127,17 +127,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_compare_all.add_argument(
         "--scenarios-dir",
-        default="pmm/backtest/scenarios",
+        default="src/domains/pmm/backtest/scenarios",
         help="Directory containing scenario json files",
     )
     p_compare_all.add_argument(
         "--profiles",
-        default="pmm/backtest/compare_profiles_all_strategies.json",
+        default="src/domains/pmm/backtest/compare_profiles_all_strategies.json",
         help="Strategy profiles json path",
     )
     p_compare_all.add_argument(
         "--out-dir",
-        default="pmm/backtest/.artifacts/results_compare_all_strategies",
+        default="src/domains/pmm/backtest/.artifacts/results_compare_all_strategies",
         help="Output directory for compare-all artifacts",
     )
     p_compare_all.add_argument(
@@ -181,7 +181,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_record.add_argument(
         "--out-scenario",
-        default="pmm/backtest/.artifacts/recorded/recorded_live.json",
+        default="src/domains/pmm/backtest/.artifacts/recorded/recorded_live.json",
         help="Output scenario JSON path",
     )
     p_record.add_argument(
@@ -245,7 +245,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_validate_dir.add_argument(
         "--scenarios-dir",
-        default="pmm/backtest/scenarios",
+        default="src/domains/pmm/backtest/scenarios",
         help="Directory containing scenario json files",
     )
     p_validate_dir.add_argument(
@@ -265,7 +265,7 @@ def main() -> None:
     args = _build_parser().parse_args()
 
     if args.command == "record-live":
-        from pmm.backtest.recorder import LiveRecorder
+        from src.domains.pmm.backtest.recorder import LiveRecorder
         import asyncio
 
         token_ids = [x.strip() for x in args.tokens.split(",") if x.strip()]
@@ -293,7 +293,7 @@ def main() -> None:
         return
 
     if args.command == "convert-live":
-        from pmm.backtest.recorder import convert_jsonl_to_scenario
+        from src.domains.pmm.backtest.recorder import convert_jsonl_to_scenario
 
         tokens = [x.strip() for x in args.tokens.split(",") if x.strip()]
         token_ids = tokens if tokens else None
@@ -313,7 +313,7 @@ def main() -> None:
         return
 
     if args.command == "validate":
-        from pmm.backtest.scenario_validator import validate_scenario_file
+        from src.domains.pmm.backtest.scenario_validator import validate_scenario_file
 
         report = validate_scenario_file(args.scenario, strict=args.strict)
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -322,7 +322,7 @@ def main() -> None:
         return
 
     if args.command == "validate-dir":
-        from pmm.backtest.scenario_validator import validate_scenarios_dir
+        from src.domains.pmm.backtest.scenario_validator import validate_scenarios_dir
 
         report = validate_scenarios_dir(
             scenarios_dir=args.scenarios_dir,
@@ -365,14 +365,14 @@ def main() -> None:
         print(f"csv={Path(args.out_dir) / 'summary_all_fill_models_table.csv'}")
         return
     if args.command == "plot":
-        from pmm.backtest.plotter import plot_scenario
+        from src.domains.pmm.backtest.plotter import plot_scenario
 
         out_dir = args.out_dir.strip() if isinstance(args.out_dir, str) else ""
         result = plot_scenario(args.result_dir, out_dir=out_dir or None)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
     if args.command == "plot-all":
-        from pmm.backtest.plotter import plot_all
+        from src.domains.pmm.backtest.plotter import plot_all
 
         out_dir = args.out_dir.strip() if isinstance(args.out_dir, str) else ""
         result = plot_all(args.results_dir, out_dir=out_dir or None)
@@ -399,7 +399,7 @@ def main() -> None:
         print(f"matrix={Path(args.out_dir) / 'compare_matrix.csv'}")
         print(f"aggregate={Path(args.out_dir) / 'compare_aggregate_by_profile.csv'}")
         if args.plot:
-            from pmm.backtest.plotter import plot_compare_all
+            from src.domains.pmm.backtest.plotter import plot_compare_all
 
             plot_result = plot_compare_all(args.out_dir)
             print(json.dumps(plot_result, ensure_ascii=False, indent=2))

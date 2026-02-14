@@ -1,7 +1,7 @@
 """Unit tests for PMM Signals module."""
 
 import unittest
-from pmm.core.signals import (
+from src.domains.pmm.core.signals import (
     fair_mid as _fair_mid,
     weighted_mid as _weighted_mid,
     inventory_signal as _inventory_signal,
@@ -11,7 +11,7 @@ from pmm.core.signals import (
     required_spread as _required_spread,
     depth_near_mid as _depth_near_mid
 )
-from pmm.data.orderbook import mid_price, spread, best_bid_ask
+from src.domains.pmm.data.orderbook import mid_price, spread, best_bid_ask
 
 
 class TestSignals(unittest.TestCase):
@@ -113,7 +113,7 @@ class TestSignals(unittest.TestCase):
         
     def test_required_spread(self):
         """Test required spread calculation."""
-        from pmm.config import PMMConfig
+        from src.domains.pmm.config import PMMConfig
         config = PMMConfig()
         vol = 0.02
         inv_signal = 0.1

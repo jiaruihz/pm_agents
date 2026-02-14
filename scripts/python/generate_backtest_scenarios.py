@@ -11,7 +11,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from pmm.backtest.scenario_generator import generate_all_from_catalog
+from src.domains.pmm.backtest.scenario_generator import generate_all_from_catalog
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -21,12 +21,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--catalog",
-        default="pmm/backtest/case_catalog.json",
+        default="src/domains/pmm/backtest/case_catalog.json",
         help="Path to case catalog json",
     )
     p.add_argument(
         "--out-dir",
-        default="pmm/backtest/scenarios",
+        default="src/domains/pmm/backtest/scenarios",
         help="Output directory for generated scenario files",
     )
     p.add_argument("--seed", type=int, default=42, help="Base random seed")

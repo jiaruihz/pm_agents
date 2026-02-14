@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import MagicMock, AsyncMock, patch
 import asyncio
-from pmm.data.orderbook import best_bid_ask, mid_price, spread
+from src.domains.pmm.data.orderbook import best_bid_ask, mid_price, spread
 
 
 class TestOrderbookUtils(unittest.TestCase):
@@ -94,7 +94,7 @@ class TestHttpClient(unittest.TestCase):
 
     def test_client_initialization(self):
         """Test HTTP client initialization."""
-        from pmm.data.http_client import ToolServiceClient
+        from src.domains.pmm.data.http_client import ToolServiceClient
 
         client = ToolServiceClient("http://test.url", "test_key")
         self.assertEqual(client.base_url, "http://test.url")
@@ -102,7 +102,7 @@ class TestHttpClient(unittest.TestCase):
 
     def test_get_balance(self):
         """Test get_balance method exists."""
-        from pmm.data.http_client import ToolServiceClient
+        from src.domains.pmm.data.http_client import ToolServiceClient
 
         client = ToolServiceClient("http://test.url", "test_key")
 

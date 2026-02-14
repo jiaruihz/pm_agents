@@ -1,0 +1,10 @@
+{
+  "statuses": "READY_TO_SEARCH,PARSED",
+  "limit": 0,
+  "output_dir": "output/prompts_all",
+  "require_price": true,
+  "price_min": 0.05,
+  "price_max": 0.95,
+  "require_active": true,
+  "require_valid": true
+}
