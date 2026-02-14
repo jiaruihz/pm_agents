@@ -60,6 +60,10 @@ class Settings(BaseModel):
     archive_books: bool = Field(False)
     archive_dir: str = Field("archive/books")
 
+    telegram_bot_token: Optional[str] = Field(None)
+    telegram_chat_id: Optional[str] = Field(None)
+    telegram_api_base_url: str = Field("https://api.telegram.org")
+
     @field_validator("rate_limit_per_sec")
     @classmethod
     def _positive_rate(cls, v: float) -> float:
@@ -110,5 +114,8 @@ def get_settings() -> Settings:
         "prompt_version": _env_str("RESEARCH_PROMPT_VERSION", "v1"),
         "archive_books": _env_bool("RESEARCH_ARCHIVE_BOOKS", False),
         "archive_dir": _env_str("RESEARCH_ARCHIVE_DIR", "archive/books"),
+        "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN"),
+        "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID"),
+        "telegram_api_base_url": _env_str("TELEGRAM_API_BASE_URL", "https://api.telegram.org"),
     }
     return Settings(**data)

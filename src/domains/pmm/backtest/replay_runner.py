@@ -15,7 +15,7 @@ from src.domains.pmm.core.signals import fair_mid, inventory_signal, realized_vo
 from src.domains.pmm.core.sizing import target_sizes
 from src.domains.pmm.core.strategy_base import StrategyQuoteInput
 from src.domains.pmm.core.strategy_registry import StrategyRegistry
-from src.domains.pmm.data.orderbook import best_bid_ask, spread as orderbook_spread
+from src.platform.market_data.orderbook import best_bid_ask, spread as orderbook_spread
 from src.domains.pmm.execution.order_manager import OrderManager
 from src.domains.pmm.execution.paper_broker import PaperBroker
 from src.domains.pmm.strategies.multi_level_v1 import MultiLevelV1Strategy

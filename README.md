@@ -100,6 +100,9 @@ python -m src.domains.research.cli enrich --limit 300 --top-n 20
 
 # 规则解析（需配置 LLM_*）
 python -m src.domains.research.cli parse --llm --batch 100
+
+# Telegram 通知测试（需配置 TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID）
+python -m src.domains.research.cli notify-telegram "Hello from pm_agent"
 ```
 
 ## 测试

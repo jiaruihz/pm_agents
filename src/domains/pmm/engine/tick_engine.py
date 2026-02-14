@@ -18,10 +18,10 @@ from src.domains.pmm.core.signals import (
 from src.domains.pmm.core.sizing import target_sizes as _target_sizes
 from src.domains.pmm.core.strategy_base import StrategyQuoteInput
 from src.domains.pmm.core.strategy_registry import StrategyRegistry
-from src.domains.pmm.data.http_client import ToolServiceClient
-from src.domains.pmm.data.market_ws import MarketWsFeed
-from src.domains.pmm.data.orderbook import best_bid_ask, mid_price, spread as orderbook_spread
-from src.domains.pmm.data.parsers import (
+from src.platform.market_data.http_client import ToolServiceClient
+from src.platform.market_data.market_ws import MarketWsFeed
+from src.platform.market_data.orderbook import best_bid_ask, mid_price, spread as orderbook_spread
+from src.platform.market_data.parsers import (
     mid_from_market as _mid_from_market,
     parse_account_state as _parse_account_state,
     parse_partition as _parse_partition,

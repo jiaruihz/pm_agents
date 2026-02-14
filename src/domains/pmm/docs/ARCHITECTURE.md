@@ -27,13 +27,6 @@ src/domains/pmm/
 │   ├── strategy_base.py          # 策略协议 + 数据结构
 │   └── strategy_registry.py      # 策略注册表
 │
-├── data/                         # 数据 I/O 层
-│   ├── http_client.py            # 内部 REST 客户端
-│   ├── public_http_client.py     # 对齐 platform 的公共 HTTP Client
-│   ├── market_ws.py              # WebSocket 行情 + 本地 L2 盘口
-│   ├── orderbook.py              # 盘口工具函数
-│   └── parsers.py                # 接口响应解析
-│
 ├── execution/                    # 执行层
 │   ├── broker_interface.py       # Broker 抽象接口
 │   ├── live_broker.py            # 实盘执行（支持 dry_run）
@@ -59,6 +52,12 @@ src/domains/pmm/
     ├── scenario_generator.py     # 合成场景生成
     ├── scenario_validator.py     # 场景校验器
     └── plotter.py                # 结果可视化
+
+src/platform/market_data/
+├── http_client.py                # ToolService REST 客户端
+├── market_ws.py                  # WebSocket 行情 + 本地 L2 盘口
+├── orderbook.py                  # 盘口工具函数
+└── parsers.py                    # 接口响应解析
 ```
 
 ## 分层依赖规则
@@ -72,15 +71,15 @@ core/（纯计算）
   ↓
 execution/ + risk/（状态组件）
   ↓
-data/（I/O）
+platform/market_data（I/O）
   ↓
 utils/（通用基础）
 ```
 
 约束：
 
-- `core/` 不应依赖 `execution/`、`risk/`、`data/`、`strategies/`
-- `data/` 不应依赖 `core/`、`execution/`、`strategies/`
+- `core/` 不应依赖 `execution/`、`risk/`、`strategies/`
+- `platform/market_data` 不应依赖 `core/`、`execution/`、`strategies/`
 - `utils/` 不应依赖其他 `src.domains.pmm` 子包
 
 ## Tick 主流程

@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from .config import get_settings
-from .clients.llm import LLMClient, extract_content
-from .llm_prompts import PROMPT_VERSION, build_messages
+from src.agents.llm.client import LLMClient, extract_content
+from src.agents.llm.research_prompts import PROMPT_VERSION, build_messages
 from .storage import save_market_rule_parses
 
 

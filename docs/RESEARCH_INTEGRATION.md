@@ -16,7 +16,7 @@ This repo contains the migrated research pipeline under `src/domains/research/`.
   - `src/domains/research/clients/gamma.py`
   - `src/domains/research/clients/clob.py`
   - `src/domains/research/clients/http.py`
-  - `src/domains/research/clients/llm.py`
+  - `src/agents/llm/client.py`
 
 ## Run examples
 

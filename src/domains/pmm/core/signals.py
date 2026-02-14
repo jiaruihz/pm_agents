@@ -27,7 +27,7 @@ def weighted_mid(orderbook: Dict[str, Any]) -> float:
 
 def fair_mid(orderbook: Dict[str, Any], mode: str) -> float:
     """Fair value mode switch. `weighted` first, fallback to normal midpoint."""
-    from src.domains.pmm.data.orderbook import mid_price
+    from src.platform.market_data.orderbook import mid_price
 
     mode_value = (mode or "").strip().lower()
     if mode_value == "weighted":
@@ -39,7 +39,7 @@ def fair_mid(orderbook: Dict[str, Any], mode: str) -> float:
 
 def depth_near_mid(orderbook: Dict[str, Any], delta: float) -> tuple[float, float]:
     """Compute bid/ask depth within `delta` of the midpoint."""
-    from src.domains.pmm.data.orderbook import best_bid_ask
+    from src.platform.market_data.orderbook import best_bid_ask
 
     top = best_bid_ask(orderbook)
     best_bid = top.get("best_bid", 0.0)

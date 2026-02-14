@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from src.domains.pmm.data.http_client import ToolServiceClient
+from src.platform.market_data.http_client import ToolServiceClient
 
 from src.domains.arb.config import ArbConfig, ArbPairConfig
 from src.domains.arb.utils import to_ctf_units

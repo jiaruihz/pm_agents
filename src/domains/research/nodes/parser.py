@@ -4,7 +4,7 @@ import asyncio
 import json
 from typing import Any, Dict, List
 
-from ..llm_prompts import PROMPT_VERSION
+from src.agents.llm.research_prompts import PROMPT_VERSION
 from ..parser import parse_market_with_llm, save_market_rule_parses_records, save_market_rule_parse_failure
 from ..storage import get_market_rule_parse, get_markets_by_status, update_market_statuses
 from .constants import DEFAULT_READY_SCORE, STATUS_PARSED, STATUS_READY_TO_PARSE, STATUS_READY_TO_SEARCH

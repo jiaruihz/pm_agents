@@ -7,7 +7,7 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from src.domains.research.clients.llm import LLMClient, extract_content
+from src.agents.llm.client import LLMClient, extract_content
 
 
 async def _run(prompt: str) -> str:

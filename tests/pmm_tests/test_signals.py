@@ -11,7 +11,7 @@ from src.domains.pmm.core.signals import (
     required_spread as _required_spread,
     depth_near_mid as _depth_near_mid
 )
-from src.domains.pmm.data.orderbook import mid_price, spread, best_bid_ask
+from src.platform.market_data.orderbook import mid_price, spread, best_bid_ask
 
 
 class TestSignals(unittest.TestCase):

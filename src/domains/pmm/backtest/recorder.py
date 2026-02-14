@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from src.domains.pmm.backtest.scenario_validator import validate_scenario_payload
 from src.domains.pmm.config import PMMConfig
-from src.domains.pmm.data.market_ws import MarketWsFeed
+from src.platform.market_data.market_ws import MarketWsFeed
 from src.domains.pmm.utils.async_jsonl_writer import AsyncJsonlWriter
 
 

@@ -27,6 +27,7 @@ from .nodes.constants import (
     DEFAULT_PRICE_MAX,
     DEFAULT_PRICE_MIN,
 )
+from .notifier import send_telegram_message
 
 
 app = typer.Typer(help="Polymarket research-only coarse screening CLI")
@@ -193,6 +194,26 @@ def candidates(
         typer.echo(f"Markdown preview: {md_path}")
     if not df.empty:
         typer.echo(df.head(20).to_string(index=False))
+
+
+@app.command("notify-telegram")
+def notify_telegram(
+    text: str = typer.Argument(..., help="Telegram message content"),
+    chat_id: Optional[str] = typer.Option(None, help="Override TELEGRAM_CHAT_ID"),
+    parse_mode: Optional[str] = typer.Option(None, help="Telegram parse mode: MarkdownV2/HTML/Markdown"),
+    silent: bool = typer.Option(False, help="Send silently without push notification"),
+):
+    """Send a Telegram bot message."""
+    res = asyncio.run(
+        send_telegram_message(
+            text=text,
+            chat_id=chat_id,
+            parse_mode=parse_mode,
+            disable_notification=silent,
+        )
+    )
+    msg = res.get("result", {}) if isinstance(res, dict) else {}
+    typer.echo(f"Telegram sent: chat_id={msg.get('chat', {}).get('id')} message_id={msg.get('message_id')}")
 
 
 @app.command()

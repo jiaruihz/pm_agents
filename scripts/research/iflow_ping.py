@@ -9,7 +9,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from src.domains.research.config import get_settings
-from src.domains.research.clients.llm import LLMClient, extract_content
+from src.agents.llm.client import LLMClient, extract_content
 
 
 async def _run(prompt: str) -> str:
