@@ -216,7 +216,7 @@ PMM_MAX_DAILY_LOSS=50.0
 
 ## 指标日志
 
-每个 tick 会向 `pmm_logs/metrics.jsonl` 追加一行 JSON。
+每个 tick 会向 `src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl` 追加一行 JSON。
 字段规范见：`METRICS_FORMAT.md`。
 
 ## 当前状态

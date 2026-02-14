@@ -32,7 +32,6 @@ local_news_cache/
 research.db
 output/
 archive/books/
-pmm_logs/
 src/domains/pmm/backtest/scenarios/
 src/domains/pmm/backtest/results/
 src/domains/pmm/backtest/results_compare/

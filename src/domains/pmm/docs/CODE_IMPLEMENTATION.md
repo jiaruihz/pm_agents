@@ -136,7 +136,7 @@ ask = mid + spread/2 - skew
 
 ## 7. 日志 — `metrics.py`
 
-每 tick 追加一行 JSON 到 `pmm_logs/metrics.jsonl`。字段定义详见 [METRICS_FORMAT.md](METRICS_FORMAT.md)。
+每 tick 追加一行 JSON 到 `src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl`。字段定义详见 [METRICS_FORMAT.md](METRICS_FORMAT.md)。
 
 ---
 

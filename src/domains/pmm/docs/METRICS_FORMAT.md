@@ -1,6 +1,6 @@
 # 指标日志（metrics.jsonl）格式说明
 
-`pmm_logs/metrics.jsonl` 使用 JSON Lines 格式：每一行对应一个 tick 快照。
+`src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl` 使用 JSON Lines 格式：每一行对应一个 tick 快照。
 
 ## 字段结构
 
@@ -93,7 +93,7 @@
 ```bash
 python3 -c "
 import json
-with open('pmm_logs/metrics.jsonl') as f:
+with open('src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl') as f:
     for line in f:
         o = json.loads(line)
         print(o['tick'], f\"{o['equity']:.2f}\", o['placed'], o['canceled'], o['side_blocks'])

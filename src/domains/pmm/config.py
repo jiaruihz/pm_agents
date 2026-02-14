@@ -109,7 +109,7 @@ class PMMConfig:
 
     # Market config (manual token ids)
     market: MarketConfig = field(default_factory=lambda: MarketConfig(token_ids=[]))
-    metrics_path: str = "pmm_logs/metrics.jsonl"
+    metrics_path: str = "src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl"
 
     def effective_quote_levels(self) -> int:
         requested = max(1, int(self.quote_levels))
@@ -260,6 +260,6 @@ class PMMConfig:
             ),
             merge_amount_scale=int(os.getenv("PMM_MERGE_AMOUNT_SCALE", "1000000")),
             market_query=os.getenv("PMM_MARKET_QUERY", ""),
-            metrics_path=os.getenv("PMM_METRICS_PATH", "pmm_logs/metrics.jsonl"),
+            metrics_path=os.getenv("PMM_METRICS_PATH", "src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl"),
             market=MarketConfig(token_ids=token_ids, symbol=os.getenv("PMM_SYMBOL", "PMM")),
         )
