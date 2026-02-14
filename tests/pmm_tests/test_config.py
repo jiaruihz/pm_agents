@@ -51,7 +51,7 @@ class TestPMMConfig(unittest.TestCase):
         self.assertEqual(config.effective_quote_levels(), 3)
         
     @patch.dict(os.environ, {
-        'PMM_API_BASE_URL': 'http://test.url',
+        'PM_API_BASE_URL': 'http://test.url',
         'PMM_BASE_SPREAD': '0.05',
         'PMM_MAX_POSITION': '200',
         'PMM_TOKEN_IDS': 'token1,token2',

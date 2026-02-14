@@ -164,8 +164,8 @@ class PMMConfig:
         except Exception:
             strategy_params = {}
         return PMMConfig(
-            api_base_url=os.getenv("PMM_API_BASE_URL", "http://localhost:8000"),
-            api_key=os.getenv("PMM_API_KEY", ""),
+            api_base_url=os.getenv("PM_API_BASE_URL", "http://localhost:8000"),
+            api_key=os.getenv("PM_API_KEY", ""),
             tick_interval_sec=float(os.getenv("PMM_TICK_INTERVAL_SEC", "2")),
             max_ticks=int(os.getenv("PMM_MAX_TICKS", "0")),
             dry_run=os.getenv("PMM_DRY_RUN", "0") == "1",

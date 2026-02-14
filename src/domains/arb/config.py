@@ -93,8 +93,8 @@ class ArbConfig:
             parsed_pairs = []
 
         return ArbConfig(
-            api_base_url=os.getenv("PM_ARB_API_BASE_URL", "http://localhost:8000"),
-            api_key=os.getenv("PM_ARB_API_KEY", ""),
+            api_base_url=os.getenv("PM_API_BASE_URL", "http://localhost:8000"),
+            api_key=os.getenv("PM_API_KEY", ""),
             tick_interval_sec=float(os.getenv("PM_ARB_TICK_INTERVAL_SEC", "1.0")),
             max_ticks=int(os.getenv("PM_ARB_MAX_TICKS", "0")),
             dry_run=os.getenv("PM_ARB_DRY_RUN", "1") == "1",
