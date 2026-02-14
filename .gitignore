@@ -1,5 +1,7 @@
 .venv
 .env
+.env.*
+!.env.example
 .idea
 .ipynb_checkpoints
 .mypy_cache
