@@ -1,6 +1,9 @@
-from typing import Any, Dict, List
+from __future__ import annotations
 
-import pandas as pd
+from typing import Any, Dict, List, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 def _normalize_levels(levels: Any) -> List[Dict[str, float]]:
@@ -21,7 +24,17 @@ def _normalize_levels(levels: Any) -> List[Dict[str, float]]:
     return normalized
 
 
-def orderbook_to_df(orderbook: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
+def _best_levels(orderbook: Dict[str, Any]) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    bids = _normalize_levels(orderbook.get("bids"))
+    asks = _normalize_levels(orderbook.get("asks"))
+    best_bid = max(((x["price"], x["size"]) for x in bids), default=(0.0, 0.0), key=lambda x: x[0])
+    best_ask = min(((x["price"], x["size"]) for x in asks), default=(0.0, 0.0), key=lambda x: x[0])
+    return best_bid, best_ask
+
+
+def orderbook_to_df(orderbook: Dict[str, Any]) -> Dict[str, "pd.DataFrame"]:
+    import pandas as pd
+
     bids = pd.DataFrame(_normalize_levels(orderbook.get("bids")))
     asks = pd.DataFrame(_normalize_levels(orderbook.get("asks")))
     if not bids.empty:
@@ -32,10 +45,7 @@ def orderbook_to_df(orderbook: Dict[str, Any]) -> Dict[str, pd.DataFrame]:
 
 
 def best_bid_ask(orderbook: Dict[str, Any]) -> Dict[str, float]:
-    dfs = orderbook_to_df(orderbook)
-    bids, asks = dfs["bids"], dfs["asks"]
-    best_bid = float(bids.iloc[0]["price"]) if not bids.empty else 0.0
-    best_ask = float(asks.iloc[0]["price"]) if not asks.empty else 0.0
+    (best_bid, _), (best_ask, _) = _best_levels(orderbook)
     return {"best_bid": best_bid, "best_ask": best_ask}
 
 
@@ -54,12 +64,12 @@ def spread(orderbook: Dict[str, Any]) -> float:
 
 
 def depth_within_delta(orderbook: Dict[str, Any], delta: float) -> float:
-    dfs = orderbook_to_df(orderbook)
-    bids, asks = dfs["bids"], dfs["asks"]
+    bids = _normalize_levels(orderbook.get("bids"))
+    asks = _normalize_levels(orderbook.get("asks"))
     best = best_bid_ask(orderbook)
     if best["best_bid"] <= 0 or best["best_ask"] <= 0:
         return 0.0
     mid = (best["best_bid"] + best["best_ask"]) / 2
-    bid_depth = bids[bids["price"] >= (mid - delta)]["size"].sum() if not bids.empty else 0.0
-    ask_depth = asks[asks["price"] <= (mid + delta)]["size"].sum() if not asks.empty else 0.0
+    bid_depth = sum(x["size"] for x in bids if x["price"] >= (mid - delta))
+    ask_depth = sum(x["size"] for x in asks if x["price"] <= (mid + delta))
     return float(bid_depth + ask_depth)

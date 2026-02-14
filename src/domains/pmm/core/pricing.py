@@ -22,14 +22,14 @@ def compute_quotes_pro(
     max_position: float = 1000.0,
     size_decay_power: float = 2.0,
 ) -> Quote:
-    # 1) Effective net exposure: position + potential buys - potential sells.
+    # 1) 有效净敞口：当前仓位 + 潜在买入 - 潜在卖出。
     eff_net = position + open_buy_qty - open_sell_qty
 
-    # 2) Risk ratio in [-1, 1].
+    # 2) 风险比例压缩到 [-1, 1]。
     ratio = eff_net / max(1.0, max_position)
     ratio = max(-1.0, min(1.0, ratio))
 
-    # 3) Tick-based skewing to reduce inventory risk.
+    # 3) 用离散 tick 做偏移，库存越偏越“让价”。
     skew_ticks = 0
     sign = 1 if ratio > 0 else -1
     if abs(ratio) > 0.2:
@@ -39,7 +39,7 @@ def compute_quotes_pro(
     if abs(ratio) > 0.8:
         skew_ticks = 4 * sign
 
-    # 4) Continuous size decay by risk level.
+    # 4) 按风险连续衰减挂单量。
     decay_power = max(1.0, float(size_decay_power))
     decay_factor = max(0.0, 1.0 - (abs(ratio) ** decay_power))
 
@@ -50,11 +50,11 @@ def compute_quotes_pro(
     else:
         ask_adj = decay_factor
 
-    # 5) Side gating at extreme risk.
+    # 5) 极端风险时直接关掉一侧下单权限。
     allow_buy = ratio <= 0.95
     allow_sell = ratio >= -0.95
 
-    # 6) Raw quote around mid.
+    # 6) 基于 mid 生成原始 bid/ask。
     safe_tick = max(1e-6, float(tick_size))
     spread_ticks = max(1, int(spread_ticks))
     half_spread = (spread_ticks / 2.0) * safe_tick
@@ -62,12 +62,12 @@ def compute_quotes_pro(
     bid_raw = mid - half_spread - skew_val
     ask_raw = mid + half_spread - skew_val
 
-    # 7) Conservative quantization.
+    # 7) 保守量化：bid 向下取整，ask 向上取整，避免意外穿价。
     epsilon = 1e-9
     bid = math.floor((bid_raw + epsilon) / safe_tick) * safe_tick
     ask = math.ceil((ask_raw - epsilon) / safe_tick) * safe_tick
 
-    # 8) Bounds and anti-cross.
+    # 8) 边界裁剪与防交叉处理。
     bid = max(safe_tick, min(1.0 - safe_tick, bid))
     ask = max(safe_tick, min(1.0 - safe_tick, ask))
     if bid >= ask:
@@ -87,7 +87,7 @@ def compute_quotes_pro(
 
 
 def compute_quotes(mid: float, spread: float, inventory: float = 0.0, skew_factor: float = 0.0) -> Quote:
-    # Compatibility wrapper for legacy call sites.
+    # 兼容旧调用方的简化接口。
     skew = skew_factor * inventory
     bid = max(0.0001, min(0.9999, mid - spread / 2 - skew))
     ask = max(0.0001, min(0.9999, mid + spread / 2 - skew))

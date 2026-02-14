@@ -11,15 +11,6 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from src.domains.pmm.backtest.replay_runner import (
-    run_scenario_compare,
-    run_scenario_file,
-    run_scenarios_compare_all,
-    run_scenarios_dir,
-    run_scenarios_dir_with_fill_models,
-)
-from src.domains.pmm.backtest.scenario_generator import generate_all_from_catalog
-
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -258,6 +249,27 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Stop at first failed scenario",
     )
+
+    p_web = sub.add_parser(
+        "web",
+        help="Start local web UI for browsing backtest artifacts",
+    )
+    p_web.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="HTTP host (default: 127.0.0.1)",
+    )
+    p_web.add_argument(
+        "--port",
+        type=int,
+        default=8010,
+        help="HTTP port (default: 8010)",
+    )
+    p_web.add_argument(
+        "--artifacts-dir",
+        default="src/domains/pmm/backtest/.artifacts",
+        help="Artifacts root directory",
+    )
     return parser
 
 
@@ -335,10 +347,14 @@ def main() -> None:
         return
 
     if args.command == "generate":
+        from src.domains.pmm.backtest.scenario_generator import generate_all_from_catalog
+
         res = generate_all_from_catalog(args.catalog, args.out_dir, seed=args.seed)
         print(json.dumps(res, ensure_ascii=False, indent=2))
         return
     if args.command == "run":
+        from src.domains.pmm.backtest.replay_runner import run_scenario_file
+
         result = run_scenario_file(args.scenario, out_dir=args.out_dir)
         print(json.dumps(result.summary, ensure_ascii=False, indent=2))
         print(f"metrics={result.metrics_path}")
@@ -346,6 +362,8 @@ def main() -> None:
         print(f"summary={result.summary_path}")
         return
     if args.command == "run-all":
+        from src.domains.pmm.backtest.replay_runner import run_scenarios_dir
+
         report = run_scenarios_dir(args.scenarios_dir, out_dir=args.out_dir)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         print(f"report={Path(args.out_dir) / 'summary_all.json'}")
@@ -353,6 +371,8 @@ def main() -> None:
             print(f"table={Path(args.out_dir) / 'summary_all_table.txt'}")
         return
     if args.command == "run-all-fill-models":
+        from src.domains.pmm.backtest.replay_runner import run_scenarios_dir_with_fill_models
+
         fill_models = [x.strip() for x in args.fill_models.split(",") if x.strip()]
         report = run_scenarios_dir_with_fill_models(
             scenarios_dir=args.scenarios_dir,
@@ -379,6 +399,8 @@ def main() -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
     if args.command == "compare":
+        from src.domains.pmm.backtest.replay_runner import run_scenario_compare
+
         result = run_scenario_compare(
             scenario_file=args.scenario,
             profiles_file=args.profiles,
@@ -389,6 +411,8 @@ def main() -> None:
         return
 
     if args.command == "compare-all":
+        from src.domains.pmm.backtest.replay_runner import run_scenarios_compare_all
+
         result = run_scenarios_compare_all(
             scenarios_dir=args.scenarios_dir,
             profiles_file=args.profiles,
@@ -403,6 +427,19 @@ def main() -> None:
 
             plot_result = plot_compare_all(args.out_dir)
             print(json.dumps(plot_result, ensure_ascii=False, indent=2))
+        return
+    if args.command == "web":
+        from src.domains.pmm.backtest.web_server import run_server
+
+        print(
+            f"serving PMM backtest UI on http://{args.host}:{args.port} "
+            f"(artifacts={Path(args.artifacts_dir).resolve()})"
+        )
+        run_server(
+            host=args.host,
+            port=args.port,
+            artifacts_dir=args.artifacts_dir,
+        )
         return
     raise ValueError(f"unknown command: {args.command}")
 

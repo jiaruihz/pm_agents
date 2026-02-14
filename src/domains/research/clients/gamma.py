@@ -6,6 +6,8 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import httpx
 
+from src.models import Event, Market
+
 from ..config import get_settings
 from .http import HttpClient
 
@@ -23,6 +25,27 @@ def _to_utc_iso(value: Optional[str]) -> Optional[str]:
         return datetime.fromisoformat(value).astimezone(timezone.utc).isoformat()
     except Exception:
         return None
+
+
+def _normalize_json_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+            return [parsed] if parsed else []
+        except Exception:
+            return [value] if value else []
+    return []
+
+
+def _as_optional_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text else None
 
 
 async def fetch_paginated(endpoint: str, params: Dict[str, Any], max_pages: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -79,30 +102,19 @@ async def iter_paginated(
 
 
 def normalize_market(raw: Dict[str, Any]) -> Dict[str, Any]:
+    return normalize_market_model(raw).to_storage_row()
+
+
+def normalize_market_model(raw: Dict[str, Any]) -> Market:
     end_at = raw.get("endDate") or raw.get("endDateISO") or raw.get("endTime")
     updated_at = raw.get("updatedAt") or raw.get("updated_at")
-    clob_ids = raw.get("clobTokenIds") or raw.get("clob_token_ids") or raw.get("clob_token_ids_json") or []
-    outcomes = raw.get("outcomes") or []
-    outcome_prices = raw.get("outcomePrices") or []
+    clob_ids = raw.get("clobTokenIds") or raw.get("clob_token_ids") or raw.get("clob_token_ids_json")
+    outcomes = raw.get("outcomes")
+    outcome_prices = raw.get("outcomePrices")
     events = raw.get("events") or []
-    if isinstance(clob_ids, str):
-        try:
-            parsed = json.loads(clob_ids)
-            clob_ids = parsed if isinstance(parsed, list) else ([parsed] if parsed else [])
-        except Exception:
-            clob_ids = [clob_ids] if clob_ids else []
-    if isinstance(outcomes, str):
-        try:
-            parsed = json.loads(outcomes)
-            outcomes = parsed if isinstance(parsed, list) else ([parsed] if parsed else [])
-        except Exception:
-            outcomes = [outcomes] if outcomes else []
-    if isinstance(outcome_prices, str):
-        try:
-            parsed = json.loads(outcome_prices)
-            outcome_prices = parsed if isinstance(parsed, list) else ([parsed] if parsed else [])
-        except Exception:
-            outcome_prices = [outcome_prices] if outcome_prices else []
+    clob_token_ids = [str(x) for x in _normalize_json_list(clob_ids) if x is not None and str(x)]
+    outcome_list = _normalize_json_list(outcomes)
+    outcome_price_list = _normalize_json_list(outcome_prices)
     event_ids: List[str] = []
     event_slugs: List[str] = []
     event_titles: List[str] = []
@@ -123,31 +135,35 @@ def normalize_market(raw: Dict[str, Any]) -> Dict[str, Any]:
             ticker = event.get("ticker")
             if ticker:
                 event_tickers.append(str(ticker))
-    return {
-        "market_id": raw.get("id") or raw.get("marketId"),
-        "slug": raw.get("slug"),
-        "question": raw.get("question"),
-        "description": raw.get("description"),
-        "rules": raw.get("rules"),
-        "category": raw.get("category"),
-        "active": int(bool(raw.get("active", True))),
-        "resolved": int(bool(raw.get("resolved", False))),
-        "end_at_utc": _to_utc_iso(end_at),
-        "volume": raw.get("volume"),
-        "liquidity": raw.get("liquidity"),
-        "outcomes_json": json.dumps(outcomes),
-        "outcome_prices_json": json.dumps(outcome_prices),
-        "clob_token_ids_json": json.dumps(clob_ids),
-        "event_ids_json": json.dumps(event_ids),
-        "event_slugs_json": json.dumps(event_slugs),
-        "event_titles_json": json.dumps(event_titles),
-        "event_tickers_json": json.dumps(event_tickers),
-        "updated_at_utc": _to_utc_iso(updated_at),
-        "last_synced_at_utc": _now_utc_iso(),
-    }
+    return Market(
+        market_id=_as_optional_str(raw.get("id")) or _as_optional_str(raw.get("marketId")),
+        slug=_as_optional_str(raw.get("slug")),
+        question=_as_optional_str(raw.get("question")),
+        description=_as_optional_str(raw.get("description")),
+        rules=_as_optional_str(raw.get("rules")),
+        category=_as_optional_str(raw.get("category")),
+        active=bool(raw.get("active", True)),
+        resolved=bool(raw.get("resolved", False)),
+        end_at_utc=_to_utc_iso(end_at),
+        volume=raw.get("volume"),
+        liquidity=raw.get("liquidity"),
+        outcomes=outcome_list,
+        outcome_prices=outcome_price_list,
+        clob_token_ids=clob_token_ids,
+        event_ids=event_ids,
+        event_slugs=event_slugs,
+        event_titles=event_titles,
+        event_tickers=event_tickers,
+        updated_at_utc=_to_utc_iso(updated_at),
+        last_synced_at_utc=_now_utc_iso(),
+    )
 
 
 def normalize_event(raw: Dict[str, Any]) -> Dict[str, Any]:
+    return normalize_event_model(raw).to_storage_row()
+
+
+def normalize_event_model(raw: Dict[str, Any]) -> Event:
     updated_at = raw.get("updatedAt") or raw.get("updated_at")
     start_at = raw.get("startDate") or raw.get("startDateIso")
     end_at = raw.get("endDate") or raw.get("endDateIso")
@@ -160,22 +176,22 @@ def normalize_event(raw: Dict[str, Any]) -> Dict[str, Any]:
             slug = tag.get("slug") or tag.get("label")
             if slug:
                 tag_slugs.append(str(slug).lower())
-    return {
-        "event_id": raw.get("id") or raw.get("eventId"),
-        "slug": raw.get("slug"),
-        "title": raw.get("title"),
-        "description": raw.get("description"),
-        "ticker": raw.get("ticker"),
-        "tags_json": json.dumps(tag_slugs),
-        "active": int(bool(raw.get("active", True))),
-        "closed": int(bool(raw.get("closed", False))),
-        "start_at_utc": _to_utc_iso(start_at),
-        "end_at_utc": _to_utc_iso(end_at),
-        "volume": raw.get("volume"),
-        "liquidity": raw.get("liquidity"),
-        "updated_at_utc": _to_utc_iso(updated_at),
-        "last_synced_at_utc": _now_utc_iso(),
-    }
+    return Event(
+        event_id=_as_optional_str(raw.get("id")) or _as_optional_str(raw.get("eventId")),
+        slug=_as_optional_str(raw.get("slug")),
+        title=_as_optional_str(raw.get("title")),
+        description=_as_optional_str(raw.get("description")),
+        ticker=_as_optional_str(raw.get("ticker")),
+        tags=tag_slugs,
+        active=bool(raw.get("active", True)),
+        closed=bool(raw.get("closed", False)),
+        start_at_utc=_to_utc_iso(start_at),
+        end_at_utc=_to_utc_iso(end_at),
+        volume=raw.get("volume"),
+        liquidity=raw.get("liquidity"),
+        updated_at_utc=_to_utc_iso(updated_at),
+        last_synced_at_utc=_now_utc_iso(),
+    )
 
 
 async def fetch_markets(

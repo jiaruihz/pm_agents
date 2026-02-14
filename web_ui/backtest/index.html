@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PMM Backtest Viewer</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="header">
+        <h1>PMM Backtest Viewer</h1>
+        <p id="meta" class="muted"></p>
+      </header>
+
+      <section class="card controls">
+        <label>
+          结果集
+          <select id="run-select"></select>
+        </label>
+        <label>
+          关键词过滤
+          <input id="search" type="text" placeholder="scenario/profile">
+        </label>
+        <button id="reload">刷新</button>
+      </section>
+
+      <section class="card">
+        <div id="summary" class="summary"></div>
+        <div class="table-wrap">
+          <table id="result-table">
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Profile</th>
+                <th>Strategy</th>
+                <th>FillModel</th>
+                <th>PnL</th>
+                <th>MDD</th>
+                <th>Fills</th>
+                <th>Placed</th>
+                <th>FillRate</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Case 详情</h2>
+        <pre id="detail">点击上面任意一行查看该 case 的 summary.json</pre>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+  </html>
+

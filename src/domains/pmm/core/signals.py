@@ -1,7 +1,9 @@
-"""Market microstructure signal functions.
+"""市场微观结构信号函数（纯计算模块）。
 
-Pure computation — no I/O, no side effects, fully testable.
-Extracted from tick_loop.py to enable independent testing and reuse in replay_runner.
+特性：
+- 无 I/O、无副作用，便于单测与回放复用；
+- 输入是订单簿/价格历史，输出是信号与风险约束量；
+- 被 tick_loop 与 replay_runner 共同调用。
 """
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ from src.domains.pmm.utils.converters import normalize_levels, best_level
 
 
 def weighted_mid(orderbook: Dict[str, Any]) -> float:
-    """Weighted midpoint (micro-price proxy) to reduce toxic midpoint bias on thin books."""
+    """加权中间价（micro-price 近似），用于减轻薄盘口中点价偏差。"""
     bid_price, bid_size = best_level(orderbook.get("bids"), is_bid=True)
     ask_price, ask_size = best_level(orderbook.get("asks"), is_bid=False)
     if bid_price <= 0 or ask_price <= 0:
@@ -26,7 +28,7 @@ def weighted_mid(orderbook: Dict[str, Any]) -> float:
 
 
 def fair_mid(orderbook: Dict[str, Any], mode: str) -> float:
-    """Fair value mode switch. `weighted` first, fallback to normal midpoint."""
+    """公平价选择器：weighted 优先，失败回退到普通 midpoint。"""
     from src.platform.market_data.orderbook import mid_price
 
     mode_value = (mode or "").strip().lower()
@@ -38,7 +40,7 @@ def fair_mid(orderbook: Dict[str, Any], mode: str) -> float:
 
 
 def depth_near_mid(orderbook: Dict[str, Any], delta: float) -> tuple[float, float]:
-    """Compute bid/ask depth within `delta` of the midpoint."""
+    """计算中间价附近 delta 范围内的 bid/ask 深度。"""
     from src.platform.market_data.orderbook import best_bid_ask
 
     top = best_bid_ask(orderbook)
@@ -59,7 +61,7 @@ def depth_near_mid(orderbook: Dict[str, Any], delta: float) -> tuple[float, floa
 
 
 def order_flow_imbalance(orderbook: Dict[str, Any], delta: float) -> float:
-    """Order flow imbalance in [-1, 1]: positive = bid pressure."""
+    """订单流不平衡度（[-1, 1]）：越大表示买盘压力越强。"""
     bid_depth, ask_depth = depth_near_mid(orderbook, delta)
     denom = bid_depth + ask_depth
     if denom <= 0:
@@ -68,7 +70,7 @@ def order_flow_imbalance(orderbook: Dict[str, Any], delta: float) -> float:
 
 
 def realized_vol(hist: deque[float]) -> float:
-    """Realized volatility from a deque of midpoint prices."""
+    """基于中间价历史计算实现波动率。"""
     if len(hist) < 3:
         return 0.0
     items = list(hist)
@@ -85,7 +87,7 @@ def realized_vol(hist: deque[float]) -> float:
 
 
 def momentum(hist: deque[float], min_points: int) -> float:
-    """Simple momentum: (last - first) / first over the price history."""
+    """简单动量：价格序列首尾变化率。"""
     if len(hist) < max(2, min_points):
         return 0.0
     first = hist[0]
@@ -96,7 +98,7 @@ def momentum(hist: deque[float], min_points: int) -> float:
 
 
 def required_spread(config: PMMConfig, rv: float, inventory_signal: float) -> float:
-    """Minimum adaptive spread based on fees, target profit, volatility, and inventory."""
+    """最小自适应 spread：手续费 + 目标利润 + 波动补偿 + 库存风险补偿。"""
     return (
         config.fee_spread_floor
         + config.target_profit_spread
@@ -112,7 +114,7 @@ def inventory_signal(
     max_position: float,
     sigmoid_k: float,
 ) -> float:
-    """Non-linear inventory skew: near limits, quoting pressure increases faster."""
+    """非线性库存偏移信号：接近仓位上限时，调整强度会更快增大。"""
     current = positions.get(token_id, 0.0)
     if len(token_ids) >= 2:
         if token_id == token_ids[0]:

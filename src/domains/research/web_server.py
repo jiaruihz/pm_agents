@@ -15,7 +15,8 @@ from .db import init_db, db_cursor
 from .pipeline import get_market_details
 
 
-WEB_DIR = Path(__file__).resolve().parent / "web_ui"
+ROOT_DIR = Path(__file__).resolve().parents[3]
+WEB_DIR = ROOT_DIR / "web_ui" / "research"
 
 
 def _parse_int(value: Optional[str], default: int) -> int:

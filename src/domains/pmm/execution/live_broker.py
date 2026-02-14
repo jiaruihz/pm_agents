@@ -1,10 +1,4 @@
-"""Live broker — production execution with safety checks.
-
-Implements BrokerInterface for real Polymarket CLOB trading.
-All orders pass through SafetyGuard before hitting the network.
-
-STATUS: STUB — implementation pending API integration.
-"""
+"""Live broker — production execution with safety checks."""
 from __future__ import annotations
 
 import time
@@ -24,32 +18,28 @@ class LiveBroker(BrokerInterface):
     def __init__(
         self,
         http_client: Any,
-        safety_guard: SafetyGuard,
+        safety_guard: Optional[SafetyGuard] = None,
         dry_run: bool = True,
     ) -> None:
         self.client = http_client
         self.guard = safety_guard
         self.dry_run = dry_run
 
-    def get_balance(self) -> Dict[str, Any]:
-        # TODO: implement via http_client
-        raise NotImplementedError("LiveBroker.get_balance not yet implemented")
+    async def get_balance(self) -> Dict[str, Any]:
+        return await self.client.retry(self.client.get_balance)
 
-    def get_positions(self, token_ids: List[str]) -> Dict[str, float]:
-        # TODO: implement via http_client
-        raise NotImplementedError("LiveBroker.get_positions not yet implemented")
+    async def get_positions(self, token_ids: List[str]) -> Dict[str, float]:
+        return await self.client.retry(self.client.get_positions, token_ids)
 
-    def get_orders(self, token_id: str = "") -> List[Dict[str, Any]]:
-        # TODO: implement via http_client
-        raise NotImplementedError("LiveBroker.get_orders not yet implemented")
+    async def get_orders(self, token_id: str = "") -> List[Dict[str, Any]]:
+        return await self.client.retry(self.client.get_orders, token_id)
 
-    def place_limit_order(
+    async def place_limit_order(
         self, token_id: str, price: float, size: float, side: str
     ) -> Dict[str, Any]:
-        # Step 1: SafetyGuard pre-check
-        self.guard.validate_order(token_id=token_id, price=price, size=size, side=side)
+        if self.guard is not None:
+            self.guard.validate_order(token_id=token_id, price=price, size=size, side=side)
 
-        # Step 2: Dry-run mode
         if self.dry_run:
             return {
                 "order_id": f"dry_{int(time.time() * 1000)}",
@@ -60,22 +50,70 @@ class LiveBroker(BrokerInterface):
                 "size": size,
             }
 
-        # Step 3: Real execution (TODO)
-        raise NotImplementedError("Live order placement not yet implemented")
+        return await self.client.retry(
+            self.client.place_limit_order,
+            token_id,
+            price,
+            size,
+            side,
+        )
 
-    def cancel_order(self, order_id: str) -> Dict[str, Any]:
+    async def cancel_order(self, order_id: str) -> Dict[str, Any]:
         if self.dry_run:
             return {"order_id": order_id, "status": "dry_cancel"}
-        raise NotImplementedError("Live cancel not yet implemented")
+        return await self.client.retry(self.client.cancel_order, order_id)
 
-    def cancel_orders(self, order_ids: List[str]) -> Dict[str, Any]:
+    async def cancel_orders(self, order_ids: List[str]) -> Dict[str, Any]:
         if self.dry_run:
             return {"cancelled": order_ids, "status": "dry_cancel"}
-        raise NotImplementedError("Live bulk cancel not yet implemented")
+        return await self.client.retry(self.client.cancel_orders, order_ids)
 
-    def merge_pair(
+    async def cancel_all_orders(self) -> Dict[str, Any]:
+        if self.dry_run:
+            return {"status": "dry_cancel_all"}
+        return await self.client.retry(self.client.cancel_all_orders)
+
+    async def merge_positions(
+        self,
+        condition_id: str,
+        partition: List[int],
+        amount: int,
+        collateral_token: str = "",
+        parent_collection_id: str = "",
+    ) -> Dict[str, Any]:
+        if self.dry_run:
+            return {
+                "status": "dry_merge_positions",
+                "condition_id": condition_id,
+                "partition": partition,
+                "amount": amount,
+                "collateral_token": collateral_token,
+                "parent_collection_id": parent_collection_id,
+            }
+        return await self.client.retry(
+            self.client.merge_positions,
+            condition_id,
+            partition,
+            amount,
+            collateral_token,
+            parent_collection_id,
+        )
+
+    async def merge_pair(
         self, yes_token_id: str, no_token_id: str, amount: int
     ) -> Dict[str, Any]:
         if self.dry_run:
-            return {"status": "dry_merge", "amount": amount}
-        raise NotImplementedError("Live merge not yet implemented")
+            return {
+                "status": "dry_merge",
+                "yes_token_id": yes_token_id,
+                "no_token_id": no_token_id,
+                "amount": amount,
+            }
+        if hasattr(self.client, "merge_pair"):
+            return await self.client.retry(
+                self.client.merge_pair,
+                yes_token_id,
+                no_token_id,
+                amount,
+            )
+        raise NotImplementedError("Live merge_pair requires client.merge_pair endpoint")

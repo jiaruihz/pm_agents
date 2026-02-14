@@ -61,10 +61,10 @@ def _top_size(orderbook: Dict[str, List[Dict[str, float]]]) -> float:
 def _flow_scale(fillability: str) -> float:
     mode = fillability.lower()
     if mode == "high":
-        return 0.09
+        return 0.06
     if mode == "medium":
-        return 0.04
-    return 0.015
+        return 0.025
+    return 0.01
 
 
 def _trend_bias(spec: CaseSpec, t: int) -> float:
@@ -322,9 +322,9 @@ def generate_case(spec: CaseSpec, token_ids: List[str], seed: int = 42) -> Dict[
             "target_profit_spread": 0.0005,
             "volatility_spread_coeff": 0.5,
             "inventory_risk_spread_coeff": 0.002,
-            "paper_fill_model": "optimistic",
+            "paper_fill_model": "conservative",
             "paper_fill_epsilon": 0.001,
-            "paper_queue_share": 0.35,
+            "paper_queue_share": 0.15,
         }
     elif spec.fillability.lower() == "medium":
         strategy_overrides = {
@@ -344,7 +344,7 @@ def generate_case(spec: CaseSpec, token_ids: List[str], seed: int = 42) -> Dict[
             "inventory_risk_spread_coeff": 0.003,
             "paper_fill_model": "conservative",
             "paper_fill_epsilon": 0.001,
-            "paper_queue_share": 0.25,
+            "paper_queue_share": 0.1,
         }
     else:
         strategy_overrides = {
@@ -360,7 +360,7 @@ def generate_case(spec: CaseSpec, token_ids: List[str], seed: int = 42) -> Dict[
             "enforce_inventory_for_sell": True,
             "paper_fill_model": "conservative",
             "paper_fill_epsilon": 0.001,
-            "paper_queue_share": 0.2,
+            "paper_queue_share": 0.05,
         }
 
     return {

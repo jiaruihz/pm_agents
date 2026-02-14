@@ -249,6 +249,10 @@ async def _run_single_async(
         fill_model=cfg.paper_fill_model,
         fill_epsilon=cfg.paper_fill_epsilon,
         queue_share=cfg.paper_queue_share,
+        maker_fee_bps=cfg.paper_maker_fee_bps,
+        taker_fee_bps=cfg.paper_taker_fee_bps,
+        min_fill_age_ticks=cfg.paper_min_fill_age_ticks,
+        cancel_delay_ticks=cfg.paper_cancel_delay_ticks,
         require_trade_flow_for_at_bbo=cfg.paper_require_trade_flow_for_at_bbo,
         disable_at_bbo_in_conservative=cfg.paper_disable_at_bbo_in_conservative,
         conservative_bbo_share_multiplier=cfg.paper_conservative_bbo_share_multiplier,
@@ -269,6 +273,7 @@ async def _run_single_async(
     total_canceled = 0
     total_fill_events = 0
     total_filled_qty = 0.0
+    total_fees = 0.0
     filled_order_ids: set[str] = set()
     total_errors = 0
 
@@ -307,6 +312,7 @@ async def _run_single_async(
                 if fill_order_id:
                     filled_order_ids.add(fill_order_id)
                 total_filled_qty += float(fill.get("size", 0.0) or 0.0)
+                total_fees += float(fill.get("fee", 0.0) or 0.0)
                 action_events.append(
                     {
                         "tick": tick_idx,
@@ -652,6 +658,7 @@ async def _run_single_async(
         "total_fills": len(filled_order_ids),
         "total_fill_events": total_fill_events,
         "total_filled_qty": total_filled_qty,
+        "total_fees": total_fees,
         "total_errors": total_errors,
         "fill_rate_per_order": (len(filled_order_ids) / max(1, total_placed)),
         "avg_pnl_per_tick": (

@@ -1,3 +1,11 @@
+"""订单差分与替换决策模块。
+
+职责：
+1) 解析远端 open orders 的多种字段格式；
+2) 根据目标挂单层（price/size/level）计算撤单与新挂单；
+3) 用 deadband 降低频繁撤改单噪声。
+"""
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -29,12 +37,13 @@ class MultiDiffDecision:
 
 
 class OrderManager:
-    """Diffing + deadband manager on top of remote open orders."""
+    """基于远端挂单快照的差分管理器。"""
 
     def __init__(self, deadband: float) -> None:
         self.deadband = deadband
 
     def should_replace(self, old: ManagedOrder, new_price: float, new_size: float) -> bool:
+        # 价格和数量都在容忍带内时，不触发替换，减少无意义抖动。
         price_diff = abs(new_price - old.price)
         size_diff = abs(new_size - old.size)
         if price_diff < self.deadband and size_diff < max(0.01, old.size * 0.1):
@@ -56,6 +65,7 @@ class OrderManager:
             return 0.0
 
     def _parse_order(self, raw: Dict[str, Any]) -> Optional[ManagedOrder]:
+        # 兼容不同上游返回字段：id/orderID/order_id, asset_id/assetId/token_id 等。
         order_id = str(raw.get("id") or raw.get("orderID") or raw.get("order_id") or "")
         token_id = str(raw.get("asset_id") or raw.get("assetId") or raw.get("token_id") or "")
         side = self._normalize_side(raw.get("side", ""))
@@ -123,10 +133,9 @@ class OrderManager:
         targets: List[Dict[str, Any]],
         pending_orders: Optional[List[Dict[str, Any]]] = None,
     ) -> MultiDiffDecision:
-        """
-        Multi-level diff for one (token_id, side).
+        """计算单个 token+side 的多层挂单差分。
 
-        `targets` item format:
+        targets 每项格式：
         {
           "price": float,
           "size": float,
@@ -139,7 +148,7 @@ class OrderManager:
         if pending_orders:
             all_existing_orders.extend(pending_orders)
         same_side_orders = self._filter_orders(all_existing_orders, token_id, side_value)
-        # Dedup by order_id so open+pending overlays don't double count.
+        # open + pending 可能存在同一订单，先按 order_id 去重避免重复计算。
         dedup: Dict[str, ManagedOrder] = {}
         for x in same_side_orders:
             dedup[x.order_id] = x
@@ -171,6 +180,7 @@ class OrderManager:
         same_side_orders.sort(key=self._side_sort_key(side_value))
 
         if not valid_targets:
+            # 没有目标挂单时，当前同侧订单全部撤掉。
             return MultiDiffDecision(
                 cancel_ids=[x.order_id for x in same_side_orders],
                 create_targets=[],
@@ -184,6 +194,7 @@ class OrderManager:
         kept_order_ids: List[str] = []
 
         for t in valid_targets:
+            # 每个目标优先匹配当前最接近价格的订单，决定“保留还是替换”。
             anchor = self._pick_nearest_unmatched(unmatched_orders, t["price"])
             if anchor is None:
                 create_targets.append(t)
@@ -199,7 +210,7 @@ class OrderManager:
         if unmatched_orders:
             cancel_ids.extend([x.order_id for x in unmatched_orders])
 
-        # de-dup while preserving order
+        # 撤单列表去重并保留顺序，避免重复调用 cancel。
         seen = set()
         dedup_cancel_ids: List[str] = []
         for cid in cancel_ids:

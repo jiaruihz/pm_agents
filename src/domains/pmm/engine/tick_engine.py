@@ -1,3 +1,13 @@
+"""PMM 主循环引擎。
+
+职责：
+1) 拉取账户与盘口快照；
+2) 计算信号、生成目标报价；
+3) 对比 open orders 得到撤/挂单动作；
+4) 执行风控（熔断、侧向屏蔽、自动 merge）；
+5) 输出指标日志用于回放和参数调优。
+"""
+
 import asyncio
 import math
 import time
@@ -29,7 +39,9 @@ from src.platform.market_data.parsers import (
 )
 from src.domains.pmm.execution.order_manager import OrderManager
 from src.domains.pmm.execution.paper_broker import PaperBroker
+from src.domains.pmm.execution.live_broker import LiveBroker
 from src.domains.pmm.engine.context_builder import build_history_context, build_token_context
+from src.domains.pmm.risk.safety_guard import SafetyGuard
 from src.domains.pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from src.domains.pmm.strategies.single_level_v1 import SingleLevelV1Strategy
 from src.domains.pmm.utils.converters import best_level as _best_level, normalize_levels as _normalize_levels, to_float as _safe_float, to_int as _safe_int
@@ -43,6 +55,7 @@ from src.domains.pmm.utils.quantize import (
 
 
 def _pending_open_exposure(open_orders: List[Dict[str, Any]], token_id: str) -> Tuple[float, float]:
+    """统计指定 token 在挂单中的买卖侧潜在成交量。"""
     buy_qty = 0.0
     sell_qty = 0.0
     for raw in open_orders:
@@ -71,6 +84,7 @@ def _pending_open_exposure(open_orders: List[Dict[str, Any]], token_id: str) -> 
 
 
 def _order_id(raw: Dict[str, Any]) -> str:
+    """统一提取订单 ID，兼容多种字段名。"""
     return str(raw.get("id") or raw.get("orderID") or raw.get("order_id") or "")
 
 
@@ -80,6 +94,7 @@ def _reconcile_pending_orders(
     ttl_sec: float,
     now_ts: float,
 ) -> List[Dict[str, Any]]:
+    """对 live 模式下的“在途订单”做保活与过期清理。"""
     if not pending_orders:
         return []
     open_ids = {_order_id(x) for x in open_orders if _order_id(x)}
@@ -96,6 +111,7 @@ def _reconcile_pending_orders(
 
 
 def _drop_pending_by_ids(pending_orders: List[Dict[str, Any]], order_ids: List[str]) -> List[Dict[str, Any]]:
+    """从 pending 列表中移除已撤单/已替换的订单。"""
     if not pending_orders or not order_ids:
         return pending_orders
     remove = {str(x) for x in order_ids if str(x)}
@@ -111,16 +127,18 @@ def _drop_pending_by_ids(pending_orders: List[Dict[str, Any]], order_ids: List[s
 
 
 async def tick_loop(config: PMMConfig) -> None:
+    """执行 PMM 连续 tick 主循环。"""
     if not config.market.token_ids:
         print("PMM_TOKEN_IDS 未设置，无法运行。")
         return
 
+    # 1) 构建 token 上下文（主交易 token + 可选参考 token）。
     token_ctx = build_token_context(config)
     token_ids = token_ctx.token_ids
     reference_token_ids = token_ctx.reference_token_ids
     all_token_ids = token_ctx.all_token_ids
 
-    # Core strategy state.
+    # 2) 初始化策略注册表、订单管理器和指标记录器。
     order_mgr = OrderManager(deadband=config.deadband)
     metrics = MetricsLogger(config.metrics_path)
     strategy_registry = StrategyRegistry()
@@ -177,11 +195,12 @@ async def tick_loop(config: PMMConfig) -> None:
                 f"levels={quote_runtime_meta.get('quote_levels_effective')}"
             )
         paper_broker: Optional[PaperBroker] = None
-        execution_client: Any = client
+        execution_client: Any
         paper_bootstrap_actions: List[Dict[str, Any]] = []
-        # Execution layer switch:
-        # - live: send real API orders
-        # - paper: local matching with real market data
+        use_raw_client_retry = False
+        # 3) 执行层路由：
+        # - live: 真实调用下单接口
+        # - paper: 本地撮合模拟（仍使用真实盘口数据）
         if execution_mode == "paper":
             paper_broker = PaperBroker(
                 token_ids=token_ids,
@@ -190,6 +209,10 @@ async def tick_loop(config: PMMConfig) -> None:
                 fill_model=config.paper_fill_model,
                 fill_epsilon=config.paper_fill_epsilon,
                 queue_share=config.paper_queue_share,
+                maker_fee_bps=config.paper_maker_fee_bps,
+                taker_fee_bps=config.paper_taker_fee_bps,
+                min_fill_age_ticks=config.paper_min_fill_age_ticks,
+                cancel_delay_ticks=config.paper_cancel_delay_ticks,
                 require_trade_flow_for_at_bbo=config.paper_require_trade_flow_for_at_bbo,
                 disable_at_bbo_in_conservative=config.paper_disable_at_bbo_in_conservative,
                 conservative_bbo_share_multiplier=config.paper_conservative_bbo_share_multiplier,
@@ -199,8 +222,7 @@ async def tick_loop(config: PMMConfig) -> None:
                 "[PAPER] enabled "
                 f"initial_usdc={config.paper_initial_usdc} fill_model={config.paper_fill_model}"
             )
-            # Optional bootstrap: simulate `split()` so we start with YES+NO inventory.
-            # Without this, SELL quoting may fail due to zero paper positions.
+            # 可选启动注资：先做一次 split，避免初始无仓导致 SELL 侧无法挂单。
             if config.paper_bootstrap_split_usdc > 0 and len(token_ids) >= 2:
                 try:
                     yes_token_id = token_ids[0]
@@ -225,11 +247,35 @@ async def tick_loop(config: PMMConfig) -> None:
                         }
                     )
                     print(f"[PAPER][ERROR] bootstrap split failed: {exc}")
+        elif execution_mode == "live":
+            # live 模式统一走 LiveBroker，便于接入安全检查和未来扩展。
+            safety_guard = SafetyGuard(
+                allowed_tokens=set(token_ids),
+                max_order_value=max(1.0, float(config.max_position)),
+                max_position=max(1.0, float(config.max_position)),
+                max_daily_loss=float("inf"),
+                price_floor=0.0001,
+                price_ceiling=0.9999,
+            )
+            execution_client = LiveBroker(
+                http_client=client,
+                safety_guard=safety_guard,
+                dry_run=config.dry_run,
+            )
+            print(
+                "[LIVE] enabled "
+                f"dry_run={config.dry_run} guard_tokens={len(token_ids)}"
+            )
+        else:
+            execution_client = client
+            use_raw_client_retry = True
+            print(f"[WARN] unknown execution_mode={execution_mode}; fallback to raw ToolServiceClient")
 
         async def _exec_call(method, *args):
-            if paper_broker is not None:
-                return await method(*args)
-            return await client.retry(method, *args)
+            # 统一执行入口：broker 路径直接 await；raw client 路径走 retry。
+            if use_raw_client_retry:
+                return await client.retry(method, *args)
+            return await method(*args)
 
         if ws_feed:
             await ws_feed.start()
@@ -240,7 +286,7 @@ async def tick_loop(config: PMMConfig) -> None:
         try:
             tick_count = 0
             while True:
-                # 1) Account snapshot from selected execution layer.
+                # A) 拉取账户快照（余额、挂单、持仓）。
                 balance_raw, open_orders_raw, positions_raw = await asyncio.gather(
                     _exec_call(execution_client.get_balance),
                     _exec_call(execution_client.get_orders),
@@ -249,7 +295,7 @@ async def tick_loop(config: PMMConfig) -> None:
 
                 orderbook_results: Dict[str, Dict[str, Any]] = {}
                 if ws_feed:
-                    # 2a) WS-first market data path. If stale/missing, fallback to REST snapshot.
+                    # B1) WS 优先；若缺失/过期则回退 REST 拉取。
                     missing_token_ids: List[str] = []
                     for token_id in all_token_ids:
                         ob = ws_feed.get_orderbook(token_id)
@@ -274,7 +320,7 @@ async def tick_loop(config: PMMConfig) -> None:
                             else:
                                 orderbook_results[token_id] = {}
                 else:
-                    # 2b) REST-only market data path.
+                    # B2) 纯 REST 路径。
                     fallback = await asyncio.gather(
                         *[client.retry(client.get_orderbook, tid) for tid in all_token_ids],
                         return_exceptions=True,
@@ -289,6 +335,7 @@ async def tick_loop(config: PMMConfig) -> None:
                     token_ids,
                 )
                 if execution_mode == "live":
+                    # live 模式维护在途订单，避免短时状态不一致。
                     pending_orders = _reconcile_pending_orders(
                         pending_orders=pending_orders,
                         open_orders=open_orders,
@@ -301,7 +348,7 @@ async def tick_loop(config: PMMConfig) -> None:
                     and config.merge_pending_credit_enabled
                     and pending_merge_credits
                 ):
-                    # Pending credit is only for live mode to reduce merge-confirmation idle time.
+                    # merge 在途 credit 仅用于 live，降低链上确认期间的空转。
                     pending_usdc_credit = _pending_credit_total(
                         pending_merge_credits, time.time()
                     )
@@ -321,7 +368,7 @@ async def tick_loop(config: PMMConfig) -> None:
                         best_bid_ask(orderbook) if orderbook else {"best_bid": 0.0, "best_ask": 0.0}
                     )
                     if mid <= 0:
-                        # Emergency fallback for sparse book / malformed feed.
+                        # 盘口稀疏或异常时，回退 market 接口估算 mid。
                         try:
                             market = await client.retry(client.get_market, token_id)
                             mid = _mid_from_market(market) or 0.0
@@ -334,7 +381,7 @@ async def tick_loop(config: PMMConfig) -> None:
 
                 paper_recent_fills: List[Dict[str, Any]] = []
                 if paper_broker is not None:
-                    # In paper mode, use the same real orderbook snapshot to drive local matching.
+                    # paper 模式下用同一份盘口快照驱动本地撮合。
                     await paper_broker.on_market_data(
                         {token_id: orderbooks.get(token_id, {}) for token_id in token_ids}
                     )
@@ -380,7 +427,7 @@ async def tick_loop(config: PMMConfig) -> None:
                 alpha_reference_momentum = 0.0
 
                 if config.circuit_breaker_enabled:
-                    # 3) Circuit breaker: abnormal deviation vs short moving average.
+                    # C) 熔断：mid 偏离短窗均值超过阈值则触发。
                     for token_id in token_ids:
                         mid = mids.get(token_id, 0.0)
                         if mid <= 0:
@@ -402,7 +449,7 @@ async def tick_loop(config: PMMConfig) -> None:
                             )
 
                 if config.alpha_enabled and reference_token_ids:
-                    # 4) Cross-market momentum signal used as directional defense.
+                    # D) 跨市场动量：作为方向性防御信号。
                     ref_momentum_values: List[float] = []
                     for ref_token_id in reference_token_ids:
                         value = _momentum(mid_history[ref_token_id], min_points=config.alpha_min_points)
@@ -412,7 +459,7 @@ async def tick_loop(config: PMMConfig) -> None:
                         alpha_reference_momentum = sum(ref_momentum_values) / len(ref_momentum_values)
 
                 if circuit_breaker_triggered:
-                    # Defensive mode: clear exposure first.
+                    # 熔断触发后先清理敞口，再按配置决定 halt 或继续。
                     try:
                         if config.dry_run:
                             print(
@@ -480,7 +527,7 @@ async def tick_loop(config: PMMConfig) -> None:
                     if mid <= 0:
                         continue
 
-                    # 5) Compute signal stack: inventory -> volatility -> required spread -> OFI/alpha blocks.
+                    # E) 信号栈：库存 -> 波动率 -> 最小价差 -> OFI/动量侧向屏蔽。
                     inv_signal = _inventory_signal(
                         token_id=token_id,
                         token_ids=token_ids,
@@ -592,6 +639,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                         not in cancel_set
                                     ]
                                     if execution_mode == "live":
+                                        # live 维护 pending 一致性，避免后续重复处理。
                                         pending_orders = _drop_pending_by_ids(pending_orders, blocked_ids)
                                 except Exception as exc:
                                     errors += 1
@@ -675,6 +723,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                     }
                                 )
                                 if execution_mode == "live":
+                                    # 新挂单先记入 pending，等待交易所状态回传。
                                     pending_item = {
                                         "id": placed_order.get("id"),
                                         "asset_id": token_id,
@@ -695,7 +744,7 @@ async def tick_loop(config: PMMConfig) -> None:
                     and config.auto_merge_every_ticks > 0
                     and (tick_count + 1) % config.auto_merge_every_ticks == 0
                 ):
-                    # 7) Periodic capital recycle for paired YES/NO inventory.
+                    # F) 周期性 merge：回收成对库存，提升资金周转。
                     for plan in config.auto_merge_plans:
                         yes_token_id = str(plan.get("yes_token_id", "")).strip()
                         no_token_id = str(plan.get("no_token_id", "")).strip()
@@ -749,7 +798,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                     parent_collection_id,
                                 )
                                 if config.merge_pending_credit_enabled:
-                                    # Convert merge amount units to USDC credit (scale is configurable).
+                                    # 将 merge 数量换算为 USDC 在途 credit（可配置 scale）。
                                     pending_usdc_credit_amount = max(
                                         0.0,
                                         float(merge_amount)
@@ -773,7 +822,7 @@ async def tick_loop(config: PMMConfig) -> None:
                             errors += 1
                             print(f"[ERROR] auto-merge failed: {exc}")
 
-                # 8) Persist strategy telemetry for offline analysis / parameter tuning.
+                # G) 落盘指标，供离线分析与参数调优。
                 metrics.log(
                     {
                         "tick": tick_count,
@@ -826,7 +875,7 @@ async def tick_loop(config: PMMConfig) -> None:
                     return
                 await asyncio.sleep(config.tick_interval_sec)
         finally:
-            # Ensure WS task is terminated cleanly.
+            # 收尾：确保 WS 连接和 metrics writer 都被干净关闭。
             if ws_feed:
                 await ws_feed.stop()
             metrics.close()

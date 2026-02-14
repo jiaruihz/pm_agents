@@ -34,6 +34,10 @@ class PMMConfig:
     paper_fill_model: str = "conservative"  # conservative | optimistic
     paper_fill_epsilon: float = 0.001
     paper_queue_share: float = 0.25
+    paper_maker_fee_bps: float = 0.0
+    paper_taker_fee_bps: float = 0.0
+    paper_min_fill_age_ticks: int = 1
+    paper_cancel_delay_ticks: int = 0
     paper_require_trade_flow_for_at_bbo: bool = True
     paper_disable_at_bbo_in_conservative: bool = False
     paper_conservative_bbo_share_multiplier: float = 0.35
@@ -177,6 +181,10 @@ class PMMConfig:
             paper_fill_model=os.getenv("PMM_PAPER_FILL_MODEL", "conservative"),
             paper_fill_epsilon=float(os.getenv("PMM_PAPER_FILL_EPSILON", "0.001")),
             paper_queue_share=float(os.getenv("PMM_PAPER_QUEUE_SHARE", "0.25")),
+            paper_maker_fee_bps=float(os.getenv("PMM_PAPER_MAKER_FEE_BPS", "0")),
+            paper_taker_fee_bps=float(os.getenv("PMM_PAPER_TAKER_FEE_BPS", "0")),
+            paper_min_fill_age_ticks=int(os.getenv("PMM_PAPER_MIN_FILL_AGE_TICKS", "1")),
+            paper_cancel_delay_ticks=int(os.getenv("PMM_PAPER_CANCEL_DELAY_TICKS", "0")),
             paper_require_trade_flow_for_at_bbo=os.getenv(
                 "PMM_PAPER_REQUIRE_TRADE_FLOW_BBO", "1"
             )

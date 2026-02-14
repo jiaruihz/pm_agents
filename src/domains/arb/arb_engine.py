@@ -32,7 +32,7 @@ class ArbEngine:
         token_ids: List[str] = []
         for p in config.pairs:
             token_ids.extend([p.yes_token_id, p.no_token_id])
-        # de-dup while preserving order
+        # 去重并保持顺序，避免重复订阅/拉取盘口。
         seen = set()
         unique_token_ids = []
         for tid in token_ids:
@@ -62,6 +62,7 @@ class ArbEngine:
                 await self.market_data.stop()
 
     async def _run_tick(self, client: ToolServiceClient, execution: ArbExecution, tick: int) -> None:
+        # 1) 获取全部 pair 需要的最新盘口。
         orderbooks = await self.market_data.get_orderbooks(client)
         decisions: List[PairDecision] = []
 
@@ -74,7 +75,7 @@ class ArbEngine:
             decision = self._decide(pair, yes_top, no_top)
             decisions.append(decision)
 
-        # Execute best opportunities first.
+        # 2) 按预期利润排序，优先执行高价值机会。
         decisions.sort(key=lambda x: x.expected_profit, reverse=True)
         actions: List[Dict[str, Any]] = []
 
@@ -83,7 +84,7 @@ class ArbEngine:
                 continue
             try:
                 if d.action == "merge_arb":
-                    # Buy YES+NO, then merge to recycle USDC.
+                    # merge 套利：买入 YES+NO，再 merge 回收 USDC。
                     buy_resp = await execution.place_pair_buy(
                         d.pair,
                         d.detail["ask_yes"],
@@ -102,7 +103,7 @@ class ArbEngine:
                         }
                     )
                 elif d.action == "split_arb":
-                    # Split USDC first, then sell YES+NO.
+                    # split 套利：先 split 出 YES+NO，再分别卖出。
                     split_resp = await execution.split(d.pair, d.size)
                     sell_resp = await execution.place_pair_sell(
                         d.pair,
@@ -139,7 +140,7 @@ class ArbEngine:
                     }
                 )
 
-        # Periodic merge: free stranded paired inventory even without arb signal.
+        # 3) 周期性 merge：即使当前没套利，也回收成对库存提升资金利用率。
         if self.config.auto_merge_every_ticks > 0 and (tick + 1) % self.config.auto_merge_every_ticks == 0:
             for pair in self.config.pairs:
                 try:
@@ -169,6 +170,7 @@ class ArbEngine:
             print(f"[PM-ARB][action] {action}")
 
     def _decide(self, pair: ArbPairConfig, yes_top: Dict[str, float], no_top: Dict[str, float]) -> PairDecision:
+        # 输入仅使用 top-of-book，保证决策路径稳定且低延迟。
         ask_yes = yes_top.get("best_ask", 0.0)
         ask_no = no_top.get("best_ask", 0.0)
         bid_yes = yes_top.get("best_bid", 0.0)
@@ -179,7 +181,7 @@ class ArbEngine:
         bid_yes_size = yes_top.get("best_bid_size", 0.0)
         bid_no_size = no_top.get("best_bid_size", 0.0)
 
-        # Merge arb candidate: buy at asks and merge.
+        # merge 候选：按 ask 买双腿，再 merge。
         merge_edge = 0.0
         merge_profit = 0.0
         merge_size = 0.0
@@ -195,7 +197,7 @@ class ArbEngine:
             merge_notional = merge_size * (ask_yes + ask_no)
             merge_profit = expected_profit_usdc(merge_edge, merge_notional, self.config.gas_estimate_usdc)
 
-        # Split arb candidate: split then sell at bids.
+        # split 候选：先 split，再按 bid 卖双腿。
         split_edge = 0.0
         split_profit = 0.0
         split_size = 0.0
@@ -211,6 +213,7 @@ class ArbEngine:
             split_notional = split_size * 1.0
             split_profit = expected_profit_usdc(split_edge, split_notional, self.config.gas_estimate_usdc)
 
+        # 双重门槛：最小预期利润 + gas 保护阈值。
         gas_guard = self.config.gas_multiplier_guard * self.config.gas_estimate_usdc
         merge_ok = (
             merge_edge > 0
