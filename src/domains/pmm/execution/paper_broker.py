@@ -121,7 +121,12 @@ class PaperBroker:
         }
 
     async def place_limit_order(
-        self, token_id: str, price: float, size: float, side: str
+        self,
+        token_id: str,
+        price: float,
+        size: float,
+        side: str,
+        current_position: Optional[float] = None,
     ) -> Dict[str, Any]:
         token = str(token_id)
         px = max(0.0001, min(0.9999, float(price)))

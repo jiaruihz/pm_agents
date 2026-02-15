@@ -1,0 +1,149 @@
+from typing import Any, Dict, List
+
+import pytest
+
+from src.domains.pmm.config import PMMConfig
+from src.domains.pmm.engine.telegram_notifier import (
+    PMMTelegramNotifier,
+    build_alert_message,
+    build_live_report_message,
+)
+
+
+class _DummyTelegramClient:
+    def __init__(self, *args, **kwargs) -> None:
+        self.calls: List[Dict[str, Any]] = []
+
+    async def send_message(
+        self,
+        chat_id: str,
+        text: str,
+        parse_mode=None,
+        disable_notification: bool = False,
+    ) -> Dict[str, Any]:
+        self.calls.append(
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": parse_mode,
+                "disable_notification": disable_notification,
+            }
+        )
+        return {"ok": True}
+
+    async def aclose(self) -> None:
+        return None
+
+
+def test_build_live_report_message_contains_pnl_and_positions():
+    msg = build_live_report_message(
+        symbol="TEST",
+        strategy_key="single_level_v1",
+        tick=42,
+        pnl=12.34,
+        equity=1012.34,
+        usdc_balance=800.0,
+        positions={"t2": -2.0, "t1": 3.0},
+        mids={"t1": 0.51, "t2": 0.49},
+        open_orders_count=7,
+    )
+    assert "[PMM LIVE REPORT]" in msg
+    assert "strategy=single_level_v1" in msg
+    assert "pnl=12.3400" in msg
+    assert "- t1: qty=3.0000" in msg
+    assert "- t2: qty=-2.0000" in msg
+
+
+def test_build_alert_message_contains_event_and_detail():
+    msg = build_alert_message(
+        symbol="TEST",
+        strategy_key="multi_level_v1",
+        event="place_failed",
+        tick=11,
+        detail="boom",
+        pnl=-1.23,
+    )
+    assert "[PMM ALERT]" in msg
+    assert "event=place_failed" in msg
+    assert "tick=11" in msg
+    assert "pnl=-1.2300" in msg
+    assert "detail=boom" in msg
+
+
+@pytest.mark.asyncio
+async def test_periodic_report_interval_and_alert_cooldown(monkeypatch):
+    client = _DummyTelegramClient()
+    clock = {"now": 1000.0}
+
+    def _now() -> float:
+        return clock["now"]
+
+    monkeypatch.setattr("src.domains.pmm.engine.telegram_notifier.TelegramClient", lambda *a, **k: client)
+    monkeypatch.setattr("src.domains.pmm.engine.telegram_notifier.time.time", _now)
+
+    cfg = PMMConfig(
+        telegram_enabled=True,
+        telegram_bot_token="bot-token",
+        telegram_chat_id="chat-id",
+        telegram_report_interval_sec=120,
+        telegram_alert_cooldown_sec=60,
+        telegram_send_startup=False,
+    )
+    notifier = PMMTelegramNotifier(cfg, execution_mode="live", strategy_key="single_level_v1")
+    await notifier.start()
+
+    await notifier.maybe_send_periodic_report(
+        tick=1,
+        pnl=1.0,
+        equity=1001.0,
+        usdc_balance=900.0,
+        positions={"t1": 1.0},
+        mids={"t1": 0.5},
+        open_orders_count=1,
+    )
+    assert len(client.calls) == 0
+
+    clock["now"] = 1125.0
+    await notifier.maybe_send_periodic_report(
+        tick=2,
+        pnl=2.0,
+        equity=1002.0,
+        usdc_balance=901.0,
+        positions={"t1": 1.0},
+        mids={"t1": 0.5},
+        open_orders_count=2,
+    )
+    assert len(client.calls) == 1
+    assert "[PMM LIVE REPORT]" in client.calls[-1]["text"]
+
+    await notifier.send_alert(
+        alert_key="place_failed:t1:BUY",
+        event="place_failed",
+        detail="err1",
+        tick=2,
+        pnl=2.0,
+    )
+    assert len(client.calls) == 2
+    assert "[PMM ALERT]" in client.calls[-1]["text"]
+
+    clock["now"] = 1150.0
+    await notifier.send_alert(
+        alert_key="place_failed:t1:BUY",
+        event="place_failed",
+        detail="err2",
+        tick=3,
+        pnl=1.5,
+    )
+    assert len(client.calls) == 2
+
+    clock["now"] = 1190.0
+    await notifier.send_alert(
+        alert_key="place_failed:t1:BUY",
+        event="place_failed",
+        detail="err3",
+        tick=4,
+        pnl=1.1,
+    )
+    assert len(client.calls) == 3
+
+    await notifier.aclose()

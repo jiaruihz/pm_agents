@@ -101,11 +101,7 @@ async def iter_paginated(
         await client.aclose()
 
 
-def normalize_market(raw: Dict[str, Any]) -> Dict[str, Any]:
-    return normalize_market_model(raw).to_storage_row()
-
-
-def normalize_market_model(raw: Dict[str, Any]) -> Market:
+def normalize_market(raw: Dict[str, Any]) -> Market:
     end_at = raw.get("endDate") or raw.get("endDateISO") or raw.get("endTime")
     updated_at = raw.get("updatedAt") or raw.get("updated_at")
     clob_ids = raw.get("clobTokenIds") or raw.get("clob_token_ids") or raw.get("clob_token_ids_json")
@@ -159,11 +155,7 @@ def normalize_market_model(raw: Dict[str, Any]) -> Market:
     )
 
 
-def normalize_event(raw: Dict[str, Any]) -> Dict[str, Any]:
-    return normalize_event_model(raw).to_storage_row()
-
-
-def normalize_event_model(raw: Dict[str, Any]) -> Event:
+def normalize_event(raw: Dict[str, Any]) -> Event:
     updated_at = raw.get("updatedAt") or raw.get("updated_at")
     start_at = raw.get("startDate") or raw.get("startDateIso")
     end_at = raw.get("endDate") or raw.get("endDateIso")

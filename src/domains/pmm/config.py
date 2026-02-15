@@ -85,6 +85,14 @@ class PMMConfig:
 
     # Depth / risk
     max_position: float = 100.0
+    guard_max_order_value: float = 100.0
+    guard_max_buy_order_value: float = 100.0
+    guard_max_sell_order_value: float = 100.0
+    guard_max_long_position: float = 100.0
+    guard_max_short_position: float = 100.0
+    guard_max_daily_loss: float = 50.0
+    guard_price_floor: float = 0.0001
+    guard_price_ceiling: float = 0.9999
     circuit_breaker_enabled: bool = True
     circuit_breaker_window_sec: int = 60
     circuit_breaker_threshold: float = 0.10
@@ -114,6 +122,15 @@ class PMMConfig:
     # Market config (manual token ids)
     market: MarketConfig = field(default_factory=lambda: MarketConfig(token_ids=[]))
     metrics_path: str = "src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl"
+
+    # External notification (Telegram)
+    telegram_enabled: bool = False
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    telegram_api_base_url: str = "https://api.telegram.org"
+    telegram_report_interval_sec: int = 1800
+    telegram_alert_cooldown_sec: int = 120
+    telegram_send_startup: bool = True
 
     def effective_quote_levels(self) -> int:
         requested = max(1, int(self.quote_levels))
@@ -240,6 +257,30 @@ class PMMConfig:
                 os.getenv("PMM_ALPHA_OFI_IMBALANCE_THRESHOLD", "0.60")
             ),
             max_position=float(os.getenv("PMM_MAX_POSITION", "100")),
+            guard_max_order_value=float(
+                os.getenv("PMM_GUARD_MAX_ORDER_VALUE", os.getenv("PMM_MAX_POSITION", "100"))
+            ),
+            guard_max_buy_order_value=float(
+                os.getenv(
+                    "PMM_GUARD_MAX_BUY_ORDER_VALUE",
+                    os.getenv("PMM_GUARD_MAX_ORDER_VALUE", os.getenv("PMM_MAX_POSITION", "100")),
+                )
+            ),
+            guard_max_sell_order_value=float(
+                os.getenv(
+                    "PMM_GUARD_MAX_SELL_ORDER_VALUE",
+                    os.getenv("PMM_GUARD_MAX_ORDER_VALUE", os.getenv("PMM_MAX_POSITION", "100")),
+                )
+            ),
+            guard_max_long_position=float(
+                os.getenv("PMM_GUARD_MAX_LONG_POSITION", os.getenv("PMM_MAX_POSITION", "100"))
+            ),
+            guard_max_short_position=float(
+                os.getenv("PMM_GUARD_MAX_SHORT_POSITION", os.getenv("PMM_MAX_POSITION", "100"))
+            ),
+            guard_max_daily_loss=float(os.getenv("PMM_GUARD_MAX_DAILY_LOSS", "50")),
+            guard_price_floor=float(os.getenv("PMM_GUARD_PRICE_FLOOR", "0.0001")),
+            guard_price_ceiling=float(os.getenv("PMM_GUARD_PRICE_CEILING", "0.9999")),
             circuit_breaker_enabled=os.getenv("PMM_CB_ENABLED", "1") == "1",
             circuit_breaker_window_sec=int(os.getenv("PMM_CB_WINDOW_SEC", "60")),
             circuit_breaker_threshold=float(os.getenv("PMM_CB_THRESHOLD", "0.10")),
@@ -269,5 +310,16 @@ class PMMConfig:
             merge_amount_scale=int(os.getenv("PMM_MERGE_AMOUNT_SCALE", "1000000")),
             market_query=os.getenv("PMM_MARKET_QUERY", ""),
             metrics_path=os.getenv("PMM_METRICS_PATH", "src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl"),
+            telegram_enabled=os.getenv("PMM_TELEGRAM_ENABLED", "0") == "1",
+            telegram_bot_token=os.getenv("PMM_TELEGRAM_BOT_TOKEN", ""),
+            telegram_chat_id=os.getenv("PMM_TELEGRAM_CHAT_ID", ""),
+            telegram_api_base_url=os.getenv("PMM_TELEGRAM_API_BASE_URL", "https://api.telegram.org"),
+            telegram_report_interval_sec=int(
+                os.getenv("PMM_TELEGRAM_REPORT_INTERVAL_SEC", "1800")
+            ),
+            telegram_alert_cooldown_sec=int(
+                os.getenv("PMM_TELEGRAM_ALERT_COOLDOWN_SEC", "120")
+            ),
+            telegram_send_startup=os.getenv("PMM_TELEGRAM_SEND_STARTUP", "1") == "1",
             market=MarketConfig(token_ids=token_ids, symbol=os.getenv("PMM_SYMBOL", "PMM")),
         )

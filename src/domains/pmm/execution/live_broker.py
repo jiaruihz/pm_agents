@@ -1,11 +1,14 @@
 """Live broker — production execution with safety checks."""
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Dict, List, Optional
 
 from src.domains.pmm.execution.broker_interface import BrokerInterface
 from src.domains.pmm.risk.safety_guard import SafetyGuard
+
+logger = logging.getLogger("pmm.live_broker")
 
 
 class LiveBroker(BrokerInterface):
@@ -35,10 +38,26 @@ class LiveBroker(BrokerInterface):
         return await self.client.retry(self.client.get_orders, token_id)
 
     async def place_limit_order(
-        self, token_id: str, price: float, size: float, side: str
+        self,
+        token_id: str,
+        price: float,
+        size: float,
+        side: str,
+        current_position: Optional[float] = None,
     ) -> Dict[str, Any]:
         if self.guard is not None:
-            self.guard.validate_order(token_id=token_id, price=price, size=size, side=side)
+            position_for_check = current_position
+            if position_for_check is None:
+                # Fallback path for direct broker calls outside tick_loop.
+                pos_map = await self.client.retry(self.client.get_positions, [token_id])
+                position_for_check = float((pos_map or {}).get(token_id, 0.0))
+            self.guard.validate_order(
+                token_id=token_id,
+                price=price,
+                size=size,
+                side=side,
+                current_position=position_for_check,
+            )
 
         if self.dry_run:
             return {
@@ -116,4 +135,18 @@ class LiveBroker(BrokerInterface):
                 no_token_id,
                 amount,
             )
-        raise NotImplementedError("Live merge_pair requires client.merge_pair endpoint")
+        logger.warning(
+            "merge_pair endpoint unavailable on client; returning unsupported response",
+            extra={
+                "yes_token_id": yes_token_id,
+                "no_token_id": no_token_id,
+                "amount": amount,
+            },
+        )
+        return {
+            "status": "unsupported",
+            "reason": "client.merge_pair endpoint unavailable",
+            "yes_token_id": yes_token_id,
+            "no_token_id": no_token_id,
+            "amount": amount,
+        }

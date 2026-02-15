@@ -55,7 +55,11 @@ class TestPMMConfig(unittest.TestCase):
         'PMM_BASE_SPREAD': '0.05',
         'PMM_MAX_POSITION': '200',
         'PMM_TOKEN_IDS': 'token1,token2',
-        'PMM_SYMBOL': 'TEST'
+        'PMM_SYMBOL': 'TEST',
+        'PMM_TELEGRAM_ENABLED': '1',
+        'PMM_TELEGRAM_BOT_TOKEN': 'bot-token',
+        'PMM_TELEGRAM_CHAT_ID': 'chat-id',
+        'PMM_TELEGRAM_REPORT_INTERVAL_SEC': '900',
     })
     def test_config_from_env(self):
         """Test PMMConfig creation from environment variables."""
@@ -66,6 +70,10 @@ class TestPMMConfig(unittest.TestCase):
         self.assertEqual(config.max_position, 200.0)
         self.assertEqual(config.market.token_ids, ['token1', 'token2'])
         self.assertEqual(config.market.symbol, 'TEST')
+        self.assertTrue(config.telegram_enabled)
+        self.assertEqual(config.telegram_bot_token, 'bot-token')
+        self.assertEqual(config.telegram_chat_id, 'chat-id')
+        self.assertEqual(config.telegram_report_interval_sec, 900)
 
 
 if __name__ == '__main__':

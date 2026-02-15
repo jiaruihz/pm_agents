@@ -2,13 +2,11 @@ import json
 
 from src.domains.research.clients.gamma import (
     normalize_event,
-    normalize_event_model,
     normalize_market,
-    normalize_market_model,
 )
 
 
-def test_normalize_market_model_and_storage_row():
+def test_normalize_market_and_storage_row():
     raw = {
         "id": 123,
         "slug": "market-abc",
@@ -28,13 +26,13 @@ def test_normalize_market_model_and_storage_row():
         "updatedAt": "2026-01-01T00:00:00Z",
     }
 
-    model = normalize_market_model(raw)
+    model = normalize_market(raw)
     assert model.market_id == "123"
     assert model.clob_token_ids == ["t1", "t2"]
     assert model.event_ids == ["88"]
     assert model.event_tickers == ["EV"]
 
-    row = normalize_market(raw)
+    row = model.to_storage_row()
     assert row["market_id"] == "123"
     assert row["active"] == 1
     assert row["resolved"] == 0
@@ -42,7 +40,7 @@ def test_normalize_market_model_and_storage_row():
     assert json.loads(row["event_ids_json"]) == ["88"]
 
 
-def test_normalize_event_model_and_storage_row():
+def test_normalize_event_and_storage_row():
     raw = {
         "eventId": 42,
         "slug": "event-x",
@@ -57,11 +55,11 @@ def test_normalize_event_model_and_storage_row():
         "updatedAt": "2026-01-03T00:00:00Z",
     }
 
-    model = normalize_event_model(raw)
+    model = normalize_event(raw)
     assert model.event_id == "42"
     assert model.tags == ["politics", "us"]
 
-    row = normalize_event(raw)
+    row = model.to_storage_row()
     assert row["event_id"] == "42"
     assert row["active"] == 1
     assert row["closed"] == 0

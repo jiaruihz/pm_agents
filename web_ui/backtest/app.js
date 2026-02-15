@@ -3,6 +3,9 @@ const els = {
   runSelect: document.getElementById("run-select"),
   search: document.getElementById("search"),
   reload: document.getElementById("reload"),
+  shadowReload: document.getElementById("shadow-reload"),
+  shadowMeta: document.getElementById("shadow-meta"),
+  shadowTableBody: document.querySelector("#shadow-table tbody"),
   summary: document.getElementById("summary"),
   tableBody: document.querySelector("#result-table tbody"),
   detail: document.getElementById("detail"),
@@ -13,6 +16,7 @@ const state = {
   run: "",
   rows: [],
   q: "",
+  shadowSessions: [],
 };
 
 function preferredDefaultRun(runs, requestedRun = "") {
@@ -40,6 +44,13 @@ function fmtInt(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "-";
   return String(Math.trunc(n));
+}
+
+function fmtDate(v) {
+  if (!v) return "-";
+  const t = new Date(v);
+  if (Number.isNaN(t.getTime())) return String(v);
+  return t.toLocaleString();
 }
 
 function escapeHtml(v) {
@@ -83,6 +94,33 @@ function renderSummary(summary, count) {
     <div class="pill">best: ${escapeHtml(summary.best?.scenario_id ?? "-")} (${fmtNum(summary.best?.pnl_end, 5)})</div>
     <div class="pill">worst: ${escapeHtml(summary.worst?.scenario_id ?? "-")} (${fmtNum(summary.worst?.pnl_end, 5)})</div>
   `;
+}
+
+function renderShadowStatus(sessions, root, nowIso) {
+  if (!Array.isArray(sessions) || !sessions.length) {
+    els.shadowMeta.textContent = `未发现 shadow 会话目录: ${root || "-"}`;
+    els.shadowTableBody.innerHTML = `<tr><td colspan="7" class="muted center">暂无会话</td></tr>`;
+    return;
+  }
+  els.shadowMeta.textContent = `root: ${root || "-"} | now: ${fmtDate(nowIso)}`;
+  els.shadowTableBody.innerHTML = sessions
+    .map((s) => {
+      const inflightList = Array.isArray(s.inflight_markets) ? s.inflight_markets : [];
+      const inflightText = inflightList.length ? inflightList.join(", ") : "-";
+      const cycles = s.cycles_planned ? `${fmtInt(s.cycles_done)}/${fmtInt(s.cycles_planned)}` : fmtInt(s.cycles_done);
+      const statusText = String(s.status || "-");
+      return `
+      <tr>
+        <td>${escapeHtml(s.name || "-")}</td>
+        <td><span class="status-badge status-${escapeHtml(statusText)}">${escapeHtml(statusText)}</span></td>
+        <td>${escapeHtml(fmtDate(s.last_update))}</td>
+        <td class="num">${escapeHtml(cycles)}</td>
+        <td class="num">${fmtInt(s.market_count)}</td>
+        <td class="num">${fmtInt(s.completed_runs)}</td>
+        <td>${escapeHtml(inflightText)}</td>
+      </tr>`;
+    })
+    .join("");
 }
 
 function renderTable(rows) {
@@ -135,6 +173,12 @@ async function loadRuns() {
   renderRuns();
 }
 
+async function loadShadowStatus() {
+  const payload = await fetchJson("/api/supervisor?limit=20");
+  state.shadowSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  renderShadowStatus(state.shadowSessions, payload.root || "", payload.now || "");
+}
+
 async function loadTable() {
   if (!state.run) return;
   const qs = new URLSearchParams({ run: state.run });
@@ -183,6 +227,14 @@ function bindEvents() {
     await boot();
   });
 
+  els.shadowReload.addEventListener("click", async () => {
+    try {
+      await loadShadowStatus();
+    } catch (err) {
+      els.shadowMeta.textContent = `shadow 状态加载失败: ${String(err?.message || err)}`;
+    }
+  });
+
   els.tableBody.addEventListener("click", async (e) => {
     const tr = e.target.closest("tr[data-idx]");
     if (!tr) return;
@@ -195,6 +247,7 @@ function bindEvents() {
 
 async function boot() {
   try {
+    await loadShadowStatus();
     await loadRuns();
     await loadTable();
   } catch (err) {
@@ -207,3 +260,8 @@ async function boot() {
 
 bindEvents();
 boot();
+setInterval(() => {
+  loadShadowStatus().catch(() => {
+    /* ignore periodic refresh error */
+  });
+}, 10000);

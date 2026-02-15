@@ -9,6 +9,8 @@
 """
 
 import asyncio
+import json
+import logging
 import math
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -41,6 +43,7 @@ from src.domains.pmm.execution.order_manager import OrderManager
 from src.domains.pmm.execution.paper_broker import PaperBroker
 from src.domains.pmm.execution.live_broker import LiveBroker
 from src.domains.pmm.engine.context_builder import build_history_context, build_token_context
+from src.domains.pmm.engine.telegram_notifier import PMMTelegramNotifier
 from src.domains.pmm.risk.safety_guard import SafetyGuard
 from src.domains.pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from src.domains.pmm.strategies.single_level_v1 import SingleLevelV1Strategy
@@ -52,6 +55,13 @@ from src.domains.pmm.utils.quantize import (
     quantize_price_dict as _quantize_price_dict,
     quantize_to_tick,
 )
+
+logger = logging.getLogger("pmm.tick_engine")
+
+
+def _log_event(level: int, event: str, **fields: Any) -> None:
+    payload = {"event": event, **fields}
+    logger.log(level, json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str))
 
 
 def _pending_open_exposure(open_orders: List[Dict[str, Any]], token_id: str) -> Tuple[float, float]:
@@ -129,7 +139,7 @@ def _drop_pending_by_ids(pending_orders: List[Dict[str, Any]], order_ids: List[s
 async def tick_loop(config: PMMConfig) -> None:
     """执行 PMM 连续 tick 主循环。"""
     if not config.market.token_ids:
-        print("PMM_TOKEN_IDS 未设置，无法运行。")
+        _log_event(logging.ERROR, "config_missing_token_ids")
         return
 
     # 1) 构建 token 上下文（主交易 token + 可选参考 token）。
@@ -163,7 +173,7 @@ async def tick_loop(config: PMMConfig) -> None:
             f"Unsupported strategy_key={config.strategy_key}. "
             f"Available: {available}"
         )
-    print(f"[STRATEGY] using {strategy.key}")
+    _log_event(logging.INFO, "strategy_selected", strategy_key=strategy.key)
     baseline_equity: Optional[float] = None
     history_ctx = build_history_context(config, all_token_ids)
     mid_history = history_ctx.mid_history
@@ -185,14 +195,17 @@ async def tick_loop(config: PMMConfig) -> None:
         execution_mode = config.execution_mode.lower().strip()
         quote_runtime_meta = config.quote_runtime_meta()
         if quote_runtime_meta.get("multi_level_placeholder_active") and strategy.key != "multi_level_v1":
-            print(
-                "[QUOTE] multi-level requested but placeholder mode is active; "
-                "runtime still uses single-level quoting."
+            _log_event(
+                logging.WARNING,
+                "quote_placeholder_mode_active",
+                strategy_key=strategy.key,
+                quote_runtime=quote_runtime_meta,
             )
         if strategy.key == "multi_level_v1":
-            print(
-                "[QUOTE] multi-level active "
-                f"levels={quote_runtime_meta.get('quote_levels_effective')}"
+            _log_event(
+                logging.INFO,
+                "quote_multi_level_active",
+                levels=quote_runtime_meta.get("quote_levels_effective"),
             )
         paper_broker: Optional[PaperBroker] = None
         execution_client: Any
@@ -218,9 +231,11 @@ async def tick_loop(config: PMMConfig) -> None:
                 conservative_bbo_share_multiplier=config.paper_conservative_bbo_share_multiplier,
             )
             execution_client = paper_broker
-            print(
-                "[PAPER] enabled "
-                f"initial_usdc={config.paper_initial_usdc} fill_model={config.paper_fill_model}"
+            _log_event(
+                logging.INFO,
+                "paper_mode_enabled",
+                initial_usdc=config.paper_initial_usdc,
+                fill_model=config.paper_fill_model,
             )
             # 可选启动注资：先做一次 split，避免初始无仓导致 SELL 侧无法挂单。
             if config.paper_bootstrap_split_usdc > 0 and len(token_ids) >= 2:
@@ -233,10 +248,12 @@ async def tick_loop(config: PMMConfig) -> None:
                         config.paper_bootstrap_split_usdc,
                     )
                     paper_bootstrap_actions.append(resp)
-                    print(
-                        "[PAPER] bootstrap split ok "
-                        f"split_usdc={config.paper_bootstrap_split_usdc} "
-                        f"yes={yes_token_id} no={no_token_id}"
+                    _log_event(
+                        logging.INFO,
+                        "paper_bootstrap_split_ok",
+                        split_usdc=config.paper_bootstrap_split_usdc,
+                        yes_token_id=yes_token_id,
+                        no_token_id=no_token_id,
                     )
                 except Exception as exc:
                     paper_bootstrap_actions.append(
@@ -246,40 +263,62 @@ async def tick_loop(config: PMMConfig) -> None:
                             "split_usdc": float(config.paper_bootstrap_split_usdc),
                         }
                     )
-                    print(f"[PAPER][ERROR] bootstrap split failed: {exc}")
+                    _log_event(
+                        logging.ERROR,
+                        "paper_bootstrap_split_failed",
+                        error=str(exc),
+                    )
         elif execution_mode == "live":
             # live 模式统一走 LiveBroker，便于接入安全检查和未来扩展。
             safety_guard = SafetyGuard(
                 allowed_tokens=set(token_ids),
-                max_order_value=max(1.0, float(config.max_position)),
+                max_order_value=max(1.0, float(config.guard_max_order_value)),
                 max_position=max(1.0, float(config.max_position)),
-                max_daily_loss=float("inf"),
-                price_floor=0.0001,
-                price_ceiling=0.9999,
+                max_long_position=max(1.0, float(config.guard_max_long_position)),
+                max_short_position=max(1.0, float(config.guard_max_short_position)),
+                max_buy_order_value=max(1.0, float(config.guard_max_buy_order_value)),
+                max_sell_order_value=max(1.0, float(config.guard_max_sell_order_value)),
+                max_daily_loss=max(0.0, float(config.guard_max_daily_loss)),
+                price_floor=float(config.guard_price_floor),
+                price_ceiling=float(config.guard_price_ceiling),
             )
             execution_client = LiveBroker(
                 http_client=client,
                 safety_guard=safety_guard,
                 dry_run=config.dry_run,
             )
-            print(
-                "[LIVE] enabled "
-                f"dry_run={config.dry_run} guard_tokens={len(token_ids)}"
+            _log_event(
+                logging.INFO,
+                "live_mode_enabled",
+                dry_run=config.dry_run,
+                guard_tokens=len(token_ids),
+                max_order_value=config.guard_max_order_value,
+                max_daily_loss=config.guard_max_daily_loss,
             )
         else:
             execution_client = client
             use_raw_client_retry = True
-            print(f"[WARN] unknown execution_mode={execution_mode}; fallback to raw ToolServiceClient")
+            _log_event(
+                logging.WARNING,
+                "unknown_execution_mode_fallback",
+                execution_mode=execution_mode,
+            )
+        notifier = PMMTelegramNotifier(
+            config=config,
+            execution_mode=execution_mode,
+            strategy_key=strategy.key,
+        )
+        await notifier.start()
 
-        async def _exec_call(method, *args):
+        async def _exec_call(method, *args, **kwargs):
             # 统一执行入口：broker 路径直接 await；raw client 路径走 retry。
             if use_raw_client_retry:
-                return await client.retry(method, *args)
-            return await method(*args)
+                return await client.retry(method, *args, **kwargs)
+            return await method(*args, **kwargs)
 
         if ws_feed:
             await ws_feed.start()
-            print(f"[WS] market feed started: {config.ws_market_url}")
+            _log_event(logging.INFO, "ws_feed_started", ws_url=config.ws_market_url)
 
         pending_merge_credits: List[Dict[str, float]] = []
         pending_orders: List[Dict[str, Any]] = []
@@ -460,18 +499,46 @@ async def tick_loop(config: PMMConfig) -> None:
 
                 if circuit_breaker_triggered:
                     # 熔断触发后先清理敞口，再按配置决定 halt 或继续。
+                    reason_lines: List[str] = []
+                    for reason in circuit_breaker_reasons[:4]:
+                        reason_lines.append(
+                            (
+                                f"{reason.get('token_id')} "
+                                f"dev={_safe_float(reason.get('deviation'), 0.0):.4f} "
+                                f"mid={_safe_float(reason.get('mid'), 0.0):.4f}"
+                            )
+                        )
+                    await notifier.send_alert(
+                        alert_key="circuit_breaker",
+                        event="circuit_breaker_triggered",
+                        tick=tick_count,
+                        pnl=pnl,
+                        detail="; ".join(reason_lines) or "unknown",
+                    )
                     try:
                         if config.dry_run:
-                            print(
-                                "[DRY_RUN][CB] triggered; would cancel all orders. "
-                                f"reasons={circuit_breaker_reasons}"
+                            _log_event(
+                                logging.WARNING,
+                                "dry_run_circuit_breaker_triggered",
+                                reasons=circuit_breaker_reasons,
                             )
                         else:
                             await _exec_call(execution_client.cancel_all_orders)
                             canceled = len(open_orders)
                     except Exception as exc:
                         errors += 1
-                        print(f"[ERROR] circuit breaker cancel-all failed: {exc}")
+                        _log_event(
+                            logging.ERROR,
+                            "circuit_breaker_cancel_all_failed",
+                            error=str(exc),
+                        )
+                        await notifier.send_alert(
+                            alert_key="circuit_breaker_cancel_all_failed",
+                            event="circuit_breaker_cancel_all_failed",
+                            tick=tick_count,
+                            pnl=pnl,
+                            detail=str(exc),
+                        )
 
                     metrics.log(
                         {
@@ -514,7 +581,7 @@ async def tick_loop(config: PMMConfig) -> None:
                         }
                     )
                     if config.circuit_breaker_halt_on_trigger:
-                        print("[CB] Halted market making after trigger.")
+                        _log_event(logging.WARNING, "circuit_breaker_halted")
                         return
                     tick_count += 1
                     if config.max_ticks > 0 and tick_count >= config.max_ticks:
@@ -624,7 +691,13 @@ async def tick_loop(config: PMMConfig) -> None:
                             if blocked_ids:
                                 try:
                                     if config.dry_run:
-                                        print(f"[DRY_RUN][BLOCK] CANCEL {token_id} {side} ids={blocked_ids}")
+                                        _log_event(
+                                            logging.INFO,
+                                            "dry_run_block_cancel",
+                                            token_id=token_id,
+                                            side=side,
+                                            order_ids=blocked_ids,
+                                        )
                                     else:
                                         if len(blocked_ids) == 1:
                                             await _exec_call(execution_client.cancel_order, blocked_ids[0])
@@ -643,9 +716,19 @@ async def tick_loop(config: PMMConfig) -> None:
                                         pending_orders = _drop_pending_by_ids(pending_orders, blocked_ids)
                                 except Exception as exc:
                                     errors += 1
-                                    print(
-                                        f"[ERROR] blocked-side cancel failed token={token_id} "
-                                        f"side={side}: {exc}"
+                                    _log_event(
+                                        logging.ERROR,
+                                        "blocked_side_cancel_failed",
+                                        token_id=token_id,
+                                        side=side,
+                                        error=str(exc),
+                                    )
+                                    await notifier.send_alert(
+                                        alert_key=f"blocked_side_cancel_failed:{token_id}:{side}",
+                                        event="blocked_side_cancel_failed",
+                                        tick=tick_count,
+                                        pnl=pnl,
+                                        detail=f"token_id={token_id} side={side} err={exc}",
                                     )
                             continue
 
@@ -659,9 +742,13 @@ async def tick_loop(config: PMMConfig) -> None:
                         if decision.cancel_ids:
                             try:
                                 if config.dry_run:
-                                    print(
-                                        f"[DRY_RUN] CANCEL {token_id} {side} "
-                                        f"ids={decision.cancel_ids} reason={decision.reason}"
+                                    _log_event(
+                                        logging.INFO,
+                                        "dry_run_cancel",
+                                        token_id=token_id,
+                                        side=side,
+                                        order_ids=decision.cancel_ids,
+                                        reason=decision.reason,
                                     )
                                 else:
                                     if len(decision.cancel_ids) == 1:
@@ -680,7 +767,20 @@ async def tick_loop(config: PMMConfig) -> None:
                                     pending_orders = _drop_pending_by_ids(pending_orders, decision.cancel_ids)
                             except Exception as exc:
                                 errors += 1
-                                print(f"[ERROR] cancel failed token={token_id} side={side}: {exc}")
+                                _log_event(
+                                    logging.ERROR,
+                                    "cancel_failed",
+                                    token_id=token_id,
+                                    side=side,
+                                    error=str(exc),
+                                )
+                                await notifier.send_alert(
+                                    alert_key=f"cancel_failed:{token_id}:{side}",
+                                    event="cancel_failed",
+                                    tick=tick_count,
+                                    pnl=pnl,
+                                    detail=f"token_id={token_id} side={side} err={exc}",
+                                )
 
                         for t in decision.create_targets:
                             price = _safe_float(t.get("price"), 0.0)
@@ -690,10 +790,15 @@ async def tick_loop(config: PMMConfig) -> None:
                                 continue
                             try:
                                 if config.dry_run:
-                                    print(
-                                        f"[DRY_RUN] PLACE {side} {token_id} "
-                                        f"level={level} price={price:.4f} size={size:.4f} "
-                                        f"reason={decision.reason}"
+                                    _log_event(
+                                        logging.INFO,
+                                        "dry_run_place",
+                                        token_id=token_id,
+                                        side=side,
+                                        level=level,
+                                        price=round(price, 6),
+                                        size=round(size, 6),
+                                        reason=decision.reason,
                                     )
                                     placed_order = {
                                         "id": f"dry_{token_id}_{side}_{level}_{tick_count}",
@@ -704,13 +809,23 @@ async def tick_loop(config: PMMConfig) -> None:
                                         "level": level,
                                     }
                                 else:
-                                    placed_order = await _exec_call(
-                                        execution_client.place_limit_order,
-                                        token_id,
-                                        price,
-                                        size,
-                                        side,
-                                    )
+                                    if execution_mode == "live":
+                                        placed_order = await _exec_call(
+                                            execution_client.place_limit_order,
+                                            token_id,
+                                            price,
+                                            size,
+                                            side,
+                                            current_position=position,
+                                        )
+                                    else:
+                                        placed_order = await _exec_call(
+                                            execution_client.place_limit_order,
+                                            token_id,
+                                            price,
+                                            size,
+                                            side,
+                                        )
                                 placed += 1
                                 local_orders.append(
                                     {
@@ -736,7 +851,26 @@ async def tick_loop(config: PMMConfig) -> None:
                                     pending_orders.append(pending_item)
                             except Exception as exc:
                                 errors += 1
-                                print(f"[ERROR] place failed token={token_id} side={side}: {exc}")
+                                _log_event(
+                                    logging.ERROR,
+                                    "place_failed",
+                                    token_id=token_id,
+                                    side=side,
+                                    level=level,
+                                    price=round(price, 6),
+                                    size=round(size, 6),
+                                    error=str(exc),
+                                )
+                                await notifier.send_alert(
+                                    alert_key=f"place_failed:{token_id}:{side}",
+                                    event="place_failed",
+                                    tick=tick_count,
+                                    pnl=pnl,
+                                    detail=(
+                                        f"token_id={token_id} side={side} "
+                                        f"level={level} price={round(price, 6)} size={round(size, 6)} err={exc}"
+                                    ),
+                                )
 
                 if (
                     config.auto_merge_enabled
@@ -775,9 +909,12 @@ async def tick_loop(config: PMMConfig) -> None:
                         try:
                             if config.dry_run:
                                 action["status"] = "dry_run"
-                                print(
-                                    "[DRY_RUN][MERGE] "
-                                    f"yes={yes_token_id} no={no_token_id} amount={merge_amount}"
+                                _log_event(
+                                    logging.INFO,
+                                    "dry_run_merge",
+                                    yes_token_id=yes_token_id,
+                                    no_token_id=no_token_id,
+                                    amount=merge_amount,
                                 )
                             elif paper_broker is not None:
                                 resp = await _exec_call(
@@ -820,7 +957,24 @@ async def tick_loop(config: PMMConfig) -> None:
                             action["error"] = str(exc)
                             merge_actions.append(action)
                             errors += 1
-                            print(f"[ERROR] auto-merge failed: {exc}")
+                            _log_event(
+                                logging.ERROR,
+                                "auto_merge_failed",
+                                yes_token_id=yes_token_id,
+                                no_token_id=no_token_id,
+                                amount=merge_amount,
+                                error=str(exc),
+                            )
+                            await notifier.send_alert(
+                                alert_key=f"auto_merge_failed:{yes_token_id}:{no_token_id}",
+                                event="auto_merge_failed",
+                                tick=tick_count,
+                                pnl=pnl,
+                                detail=(
+                                    f"yes={yes_token_id} no={no_token_id} "
+                                    f"amount={merge_amount} err={exc}"
+                                ),
+                            )
 
                 # G) 落盘指标，供离线分析与参数调优。
                 metrics.log(
@@ -864,10 +1018,26 @@ async def tick_loop(config: PMMConfig) -> None:
                         "circuit_breaker_reasons": [],
                     }
                 )
-                print(
-                    f"[TICK {tick_count}] mode={execution_mode} "
-                    f"equity={equity:.4f} pnl={pnl:.4f} "
-                    f"orders(open={len(open_orders)}, place={placed}, cancel={canceled}, err={errors})"
+                _log_event(
+                    logging.INFO,
+                    "tick_summary",
+                    tick=tick_count,
+                    execution_mode=execution_mode,
+                    equity=round(equity, 6),
+                    pnl=round(pnl, 6),
+                    open_orders=len(open_orders),
+                    placed=placed,
+                    canceled=canceled,
+                    errors=errors,
+                )
+                await notifier.maybe_send_periodic_report(
+                    tick=tick_count,
+                    pnl=pnl,
+                    equity=equity,
+                    usdc_balance=usdc_balance,
+                    positions=positions,
+                    mids=mids,
+                    open_orders_count=len(open_orders),
                 )
 
                 tick_count += 1
@@ -876,6 +1046,7 @@ async def tick_loop(config: PMMConfig) -> None:
                 await asyncio.sleep(config.tick_interval_sec)
         finally:
             # 收尾：确保 WS 连接和 metrics writer 都被干净关闭。
+            await notifier.aclose()
             if ws_feed:
                 await ws_feed.stop()
             metrics.close()

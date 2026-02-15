@@ -46,8 +46,15 @@ class DummyGuard:
     def __init__(self) -> None:
         self.calls = []
 
-    def validate_order(self, token_id: str, price: float, size: float, side: str) -> None:
-        self.calls.append((token_id, price, size, side))
+    def validate_order(
+        self,
+        token_id: str,
+        price: float,
+        size: float,
+        side: str,
+        current_position=None,
+    ) -> None:
+        self.calls.append((token_id, price, size, side, current_position))
 
 
 @pytest.mark.asyncio
@@ -74,8 +81,9 @@ async def test_live_broker_place_order_dry_run_with_guard():
     res = await broker.place_limit_order("tid", 0.45, 3.0, "BUY")
 
     assert res["status"] == "simulated"
-    assert guard.calls == [("tid", 0.45, 3.0, "BUY")]
+    assert guard.calls == [("tid", 0.45, 3.0, "BUY", 1.0)]
     assert all(name != "place_limit_order" for name, _ in client.retry_calls)
+    assert ("get_positions", (["tid"],)) in client.retry_calls
 
 
 @pytest.mark.asyncio
@@ -87,6 +95,17 @@ async def test_live_broker_place_order_live():
 
     assert res["id"] == "live_1"
     assert ("place_limit_order", ("tid", 0.5, 2.0, "SELL")) in client.retry_calls
+
+
+@pytest.mark.asyncio
+async def test_live_broker_merge_pair_returns_unsupported_without_endpoint():
+    client = DummyClient()
+    broker = LiveBroker(http_client=client, dry_run=False)
+
+    res = await broker.merge_pair("yes_tid", "no_tid", 10)
+
+    assert res["status"] == "unsupported"
+    assert "unavailable" in res["reason"]
 
 
 @pytest.mark.asyncio

@@ -97,7 +97,7 @@ async def sync_gamma(
         for m in items:
             seen_markets += 1
             normalized = gamma_client.normalize_market(m)
-            end_at = _parse_iso(normalized.get("end_at_utc"))
+            end_at = _parse_iso(normalized.end_at_utc)
             if end_at and end_at.date() < today:
                 skipped_expired += 1
                 continue
@@ -122,7 +122,7 @@ async def sync_gamma(
     ):
         events_pages += 1
         raw_e += save_events_raw(items)
-        save_events([gamma_client.normalize_event(e) for e in items])
+        save_events([gamma_client.normalize_event(e) for e in items if isinstance(e, dict)])
         if len(items) < page_size:
             events_short_page = True
         save_sync_state("events", active, page_size, offset + page_size)
@@ -594,7 +594,7 @@ async def _sync_single_market(market_id: Optional[str], slug: Optional[str]) -> 
     if isinstance(events, list) and events:
         save_events_raw(events)
         save_events([gamma_client.normalize_event(ev) for ev in events if isinstance(ev, dict)])
-    return normalized
+    return normalized.to_storage_row()
 
 
 async def _enrich_market_tokens(token_ids: List[str], top_n: int) -> Dict[str, Any]:

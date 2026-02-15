@@ -13,6 +13,30 @@
         <p id="meta" class="muted"></p>
       </header>
 
+      <section class="card">
+        <div class="section-head">
+          <h2>Shadow 运行状态</h2>
+          <button id="shadow-reload" type="button">刷新状态</button>
+        </div>
+        <p id="shadow-meta" class="muted"></p>
+        <div class="table-wrap">
+          <table id="shadow-table">
+            <thead>
+              <tr>
+                <th>Session</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Cycles</th>
+                <th>Markets</th>
+                <th>Completed</th>
+                <th>In-Flight</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="card controls">
         <label>
           结果集
@@ -55,4 +79,3 @@
     <script src="app.js"></script>
   </body>
   </html>
-

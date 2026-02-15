@@ -29,7 +29,12 @@ class BrokerInterface(ABC):
 
     @abstractmethod
     async def place_limit_order(
-        self, token_id: str, price: float, size: float, side: str
+        self,
+        token_id: str,
+        price: float,
+        size: float,
+        side: str,
+        current_position: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Place a limit order. Returns order details."""
         ...

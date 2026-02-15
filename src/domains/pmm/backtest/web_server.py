@@ -5,7 +5,10 @@ from __future__ import annotations
 import csv
 import json
 import mimetypes
+import re
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
@@ -14,6 +17,11 @@ from urllib.parse import parse_qs, unquote, urlparse
 ROOT_DIR = Path(__file__).resolve().parents[4]
 DEFAULT_ARTIFACTS_DIR = ROOT_DIR / "src" / "domains" / "pmm" / "backtest" / ".artifacts"
 WEB_DIR = ROOT_DIR / "web_ui" / "backtest"
+SUPERVISOR_DIR_NAME = "supervisor_logs"
+RUN_TAG_CYCLE_RE = re.compile(r"_c(?P<cycle>\d{3})_a(?P<attempt>\d{2})$")
+LOG_MARKET_RE = re.compile(r"^\[([^\]|]+)\|(OUT|ERR)\]")
+LOG_SLUG_RE = re.compile(r"--slug\s+([^\s]+)")
+LOG_DURATION_RE = re.compile(r"--duration\s+(\d+)")
 
 
 def _to_float(value: Any, default: float = 0.0) -> float:
@@ -49,6 +57,9 @@ class PMMBacktestHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/runs":
             self._handle_runs()
             return
+        if parsed.path == "/api/supervisor":
+            self._handle_supervisor(parsed.query)
+            return
         if parsed.path == "/api/table":
             self._handle_table(parsed.query)
             return
@@ -75,6 +86,18 @@ class PMMBacktestHandler(BaseHTTPRequestHandler):
                 }
             )
         self._send_json({"runs": runs, "artifacts_dir": str(self.artifacts_dir)})
+
+    def _handle_supervisor(self, query: str) -> None:
+        params = parse_qs(query or "")
+        limit = max(1, min(100, _to_int((params.get("limit", ["20"])[0] or "20"), 20)))
+        sessions = self._scan_supervisor_sessions(limit=limit)
+        self._send_json(
+            {
+                "sessions": sessions,
+                "root": str(self.artifacts_dir / SUPERVISOR_DIR_NAME),
+                "now": datetime.now().isoformat(timespec="seconds"),
+            }
+        )
 
     def _handle_table(self, query: str) -> None:
         params = parse_qs(query or "")
@@ -268,6 +291,141 @@ class PMMBacktestHandler(BaseHTTPRequestHandler):
                 "pnl_end": _to_float(worst.get("pnl_end")),
             },
         }
+
+    def _scan_supervisor_sessions(self, limit: int = 20) -> List[Dict[str, Any]]:
+        sup_dir = self.artifacts_dir / SUPERVISOR_DIR_NAME
+        if not sup_dir.exists():
+            return []
+
+        dirs = sorted([p for p in sup_dir.iterdir() if p.is_dir()], key=lambda p: p.stat().st_mtime, reverse=True)
+        rows: List[Dict[str, Any]] = []
+        now = time.time()
+        for run_dir in dirs[:limit]:
+            overall_path = run_dir / "overall_summary.json"
+            cycle_files = sorted(run_dir.glob("cycle_*.json"))
+            log_files = sorted(run_dir.glob("*.log"))
+            summary_files = sorted(run_dir.glob("*.summary.json"))
+            completed_tags = {
+                p.name[: -len(".summary.json")] for p in summary_files if p.name.endswith(".summary.json")
+            }
+            inflight_tags = [p.stem for p in log_files if p.stem not in completed_tags]
+            inflight_markets = []
+            max_run_duration = 0
+            for tag in inflight_tags:
+                market, duration = self._extract_market_from_log(run_dir / f"{tag}.log")
+                if market and market not in inflight_markets:
+                    inflight_markets.append(market)
+                if duration > max_run_duration:
+                    max_run_duration = duration
+
+            market_names: List[str] = []
+            cycles_planned: Optional[int] = None
+            cycles_done = len(cycle_files)
+            overall_ok: Optional[bool] = None
+            finished_at = ""
+            status = "unknown"
+            if overall_path.exists():
+                try:
+                    overall = json.loads(overall_path.read_text(encoding="utf-8"))
+                    raw_markets = overall.get("markets") or []
+                    market_names = [str(x) for x in raw_markets if str(x).strip()]
+                    cycles_planned = _to_int(overall.get("cycles"), 0) or None
+                    reports = overall.get("cycle_reports")
+                    if isinstance(reports, list):
+                        cycles_done = len(reports)
+                    overall_ok = bool(overall.get("overall_ok"))
+                    finished_at = str(overall.get("finished_at") or "")
+                except Exception:
+                    status = "summary_parse_error"
+
+            if status != "summary_parse_error":
+                if finished_at:
+                    status = "finished_ok" if overall_ok else "finished_error"
+                else:
+                    latest_mtime = run_dir.stat().st_mtime
+                    for p in log_files:
+                        if p.stat().st_mtime > latest_mtime:
+                            latest_mtime = p.stat().st_mtime
+                    age_sec = now - latest_mtime
+                    stale_after = max(900, max_run_duration + 300)
+                    status = "running" if inflight_tags and age_sec <= stale_after else "stale"
+
+            if not market_names:
+                market_names = inflight_markets
+            market_count = len(market_names) if market_names else len(inflight_markets)
+
+            last_update_ts = run_dir.stat().st_mtime
+            for p in log_files:
+                if p.stat().st_mtime > last_update_ts:
+                    last_update_ts = p.stat().st_mtime
+            for p in summary_files:
+                if p.stat().st_mtime > last_update_ts:
+                    last_update_ts = p.stat().st_mtime
+            for p in cycle_files:
+                if p.stat().st_mtime > last_update_ts:
+                    last_update_ts = p.stat().st_mtime
+
+            max_cycle: Optional[int] = None
+            for tag in inflight_tags:
+                m = RUN_TAG_CYCLE_RE.search(tag)
+                if m:
+                    cycle_id = _to_int(m.group("cycle"), 0)
+                    if cycle_id > 0:
+                        max_cycle = cycle_id if max_cycle is None else max(max_cycle, cycle_id)
+
+            rows.append(
+                {
+                    "name": run_dir.name,
+                    "status": status,
+                    "last_update": datetime.fromtimestamp(last_update_ts).isoformat(timespec="seconds"),
+                    "cycles_done": cycles_done,
+                    "cycles_planned": cycles_planned,
+                    "current_cycle": max_cycle,
+                    "market_count": market_count,
+                    "completed_runs": len(completed_tags),
+                    "log_runs": len(log_files),
+                    "inflight_runs": len(inflight_tags),
+                    "inflight_markets": inflight_markets[:12],
+                    "markets_preview": market_names[:12],
+                    "path": str(run_dir),
+                    "overall_ok": overall_ok,
+                }
+            )
+        return rows
+
+    def _extract_market_from_log(self, log_path: Path) -> Tuple[str, int]:
+        if not log_path.exists():
+            return "", 0
+        lines: List[str] = []
+        duration = 0
+        try:
+            with log_path.open("r", encoding="utf-8") as f:
+                for _ in range(30):
+                    line = f.readline()
+                    if not line:
+                        break
+                    line = line.strip()
+                    lines.append(line)
+                    m = LOG_MARKET_RE.match(line)
+                    if m:
+                        for src in lines:
+                            d = LOG_DURATION_RE.search(src)
+                            if d:
+                                duration = max(duration, _to_int(d.group(1), 0))
+                        return m.group(1), duration
+        except Exception:
+            return "", 0
+
+        for src in lines:
+            d = LOG_DURATION_RE.search(src)
+            if d:
+                duration = max(duration, _to_int(d.group(1), 0))
+            sm = LOG_SLUG_RE.search(src)
+            if sm:
+                return sm.group(1), duration
+
+        stem = RUN_TAG_CYCLE_RE.sub("", log_path.stem).strip("_")
+        return stem, duration
 
     def _resolve_run_dir(self, run_name: str) -> Optional[Path]:
         name = unquote(run_name.strip())

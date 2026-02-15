@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
+from src.models import Event, Market
+
 from .db import upsert_many, db_cursor
 from .clients.gamma import normalize_event
 
@@ -34,29 +36,31 @@ def save_events_raw(records: Iterable[Dict[str, Any]]) -> int:
     return upsert_many("events_raw", rows)
 
 
-def save_events(records: Iterable[Dict[str, Any]]) -> int:
+def save_events(records: Iterable[Event]) -> int:
     rows: List[Dict[str, Any]] = []
     for rec in records:
-        if not rec.get("event_id"):
+        row = rec.to_storage_row()
+        if not row.get("event_id"):
             continue
-        rows.append(rec)
+        rows.append(row)
     return upsert_many("events", rows)
 
 
-def save_markets(records: Iterable[Dict[str, Any]]) -> int:
+def save_markets(records: Iterable[Market]) -> int:
     rows: List[Dict[str, Any]] = []
     for rec in records:
-        if not rec.get("market_id"):
+        row = rec.to_storage_row()
+        if not row.get("market_id"):
             continue
-        rec.setdefault("status", None)
-        rec.setdefault("status_updated_at", None)
-        rec.setdefault("outcomes_json", None)
-        rec.setdefault("outcome_prices_json", None)
-        rec.setdefault("event_ids_json", None)
-        rec.setdefault("event_slugs_json", None)
-        rec.setdefault("event_titles_json", None)
-        rec.setdefault("event_tickers_json", None)
-        rows.append(rec)
+        row.setdefault("status", None)
+        row.setdefault("status_updated_at", None)
+        row.setdefault("outcomes_json", None)
+        row.setdefault("outcome_prices_json", None)
+        row.setdefault("event_ids_json", None)
+        row.setdefault("event_slugs_json", None)
+        row.setdefault("event_titles_json", None)
+        row.setdefault("event_tickers_json", None)
+        rows.append(row)
     return upsert_many("markets", rows)
 
 
@@ -247,22 +251,22 @@ def get_events_by_ids(event_ids: Iterable[str]) -> Dict[str, Dict[str, Any]]:
     WHERE event_id IN ({placeholders})
     ORDER BY fetched_at_utc DESC
     """
-    raw_map: Dict[str, Dict[str, Any]] = {}
+    raw_models: Dict[str, Event] = {}
     with db_cursor() as cur:
         cur.execute(sql, missing)
         rows = cur.fetchall()
         for row in rows:
             eid = row["event_id"]
-            if eid in raw_map:
+            if eid in raw_models:
                 continue
             try:
                 raw = json.loads(row["json"])
             except Exception:
                 continue
-            raw_map[eid] = normalize_event(raw)
-    if raw_map:
-        save_events(raw_map.values())
-        event_map.update(raw_map)
+            raw_models[eid] = normalize_event(raw)
+    if raw_models:
+        save_events(raw_models.values())
+        event_map.update({eid: model.to_storage_row() for eid, model in raw_models.items()})
     return event_map
 
 
