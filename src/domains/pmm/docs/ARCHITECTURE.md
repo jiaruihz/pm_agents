@@ -6,7 +6,7 @@
 
 PMM（Polymarket Market Maker）是一个分层做市系统，支持：
 
-- 策略插件化（`single_level_v1` / `multi_level_v1`）
+- 策略插件化（`single_level_v1` / `multi_level_v1` / `smart_money_follow_v1` / `weather_theta_no_v1`）
 - `paper` / `live` 执行模式切换
 - 真实数据录制、场景回放、批量回测与绘图
 
@@ -44,7 +44,9 @@ src/domains/pmm/
 │
 ├── strategies/                   # 策略插件
 │   ├── single_level_v1.py        # 单档报价
-│   └── multi_level_v1.py         # 多档梯度报价
+│   ├── multi_level_v1.py         # 多档梯度报价
+│   ├── smart_money_follow_v1.py  # 跟随聪明钱方向倾斜
+│   └── weather_theta_no_v1.py    # 天气 No 侧时间价值策略
 │
 └── backtest/                     # 回测基础设施
     ├── replay_runner.py          # 场景回放引擎
@@ -121,6 +123,8 @@ utils/（通用基础）
 
 - `single_level_v1`：每侧 1 档
 - `multi_level_v1`：每侧 N 档（可配步长和 size 衰减）
+- `smart_money_follow_v1`：单档基础上根据信号做方向性倾斜（可单边）
+- `weather_theta_no_v1`：事件驱动的单边策略（偏向买入 NO 并按时间/止盈/止损平仓）
 
 ## 执行模式
 

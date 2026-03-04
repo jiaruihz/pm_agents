@@ -92,6 +92,106 @@ live 模式下链上确认有延迟，此时启用 pending credit 让策略在�
 - 价格变动未超过 deadband → 保留现有挂单（保持队列位置）
 - 超过 deadband → 撤旧单、挂新单
 
+## 天气 Theta No（`weather_theta_no_v1`）
+
+这个策略不是传统双边做市，而是事件驱动的“单边 carry”：
+
+- 入场：只在目标区间（通常是极端天气对应的 NO token）挂 `BUY`
+- 持有：按时间窗口持仓（默认 48h）
+- 出场：止盈 / 止损 / 距离结算时间过近时提前平仓
+- 风控：单笔预算按可用 USDC 比例（默认 5%），并支持重入冷却
+
+核心参数（`PMM_STRATEGY_PARAMS_JSON`）：
+
+- `weather_no_token_ids`: 仅交易这些 token（可选）
+- `weather_entry_min_price`, `weather_entry_max_price`: 入场价格安全区间
+- `weather_position_pct`: 单次建仓预算占可用 USDC 比例（默认 `0.05`）
+- `weather_take_profit_abs`, `weather_stop_loss_abs`: 绝对价差止盈/止损阈值
+- `weather_max_hold_hours`: 最大持有时长（默认 `48`）
+- `weather_exit_before_hours`: 结算前强制离场窗口（需配合 `weather_token_end_ts`）
+- `weather_reentry_cooldown_hours`: 平仓后冷却时长
+
+示例：
+
+```bash
+export PMM_STRATEGY_KEY="weather_theta_no_v1"
+export PMM_STRATEGY_PARAMS_JSON='{
+  "weather_no_token_ids": ["NO_TOKEN_A", "NO_TOKEN_B"],
+  "weather_entry_min_price": 0.80,
+  "weather_entry_max_price": 0.96,
+  "weather_position_pct": 0.05,
+  "weather_take_profit_abs": 0.01,
+  "weather_stop_loss_abs": 0.03,
+  "weather_max_hold_hours": 48,
+  "weather_exit_before_hours": 6,
+  "weather_reentry_cooldown_hours": 12
+}'
+```
+
+## 聪明钱跟随（`smart_money_follow_v1`）
+
+这个策略在 `single_level_v1` 的基础上，加入“方向性倾斜”：
+
+- 信号来源：`PMM_STRATEGY_PARAMS_JSON`
+  - `smart_money_token_signals` / `token_signals`: `{"TOKEN_ID": -1~1}`
+  - `smart_money_wallets`: 钱包胜率 + 当前 conviction（策略内会过滤高胜率钱包）
+  - `smart_money_signal_file`: 可选 JSON 文件路径，按 `smart_money_signal_reload_sec` 热加载（用于监听外部进程）
+- 价格倾斜：正信号上移 bid/ask，负信号下移 bid/ask
+- 仓位倾斜：正信号放大 BUY、缩小 SELL；负信号反之
+- 极强信号：`abs(signal) >= smart_money_one_side_only_threshold` 时可单边挂单
+
+### 找账户方法（建议固定流程）
+
+1. `single_market`（按目标市场找人，优先）
+   - 从该 market 的 `holders + trades` 找候选
+   - 适合“我要做某个具体市场跟单”
+2. `multi_market`（跨市场找人，补充）
+   - 扫多个高成交/高流动市场，找稳定活跃钱包
+   - 适合构建长期候选池
+3. `global_recent`（兜底）
+   - 从全站近期成交抓钱包，速度快但噪声大
+
+钱包评估分两层：
+
+- `score_mode=pnl_proxy`：基于 positions 的 pnl 代理评分（快，适合实时刷新）
+- `score_mode=resolved_trades`：基于已结算市场成交推断胜率（更严谨，但更慢）
+
+风格解释分两层：
+
+- 启发式标签（默认可用）：`bot_like_market_maker` / `low_freq_whale` / `concentrated_conviction_trader` ...
+- LLM 解释（可选）：当 `.env` 配置了 `LLM_BASE_URL/LLM_API_KEY/LLM_MODEL` 时启用
+
+示例：
+
+```bash
+# 1) 先发现候选高胜率账户（输出 wallets 快照）
+python scripts/python/pmm_find_smart_wallets.py \
+  --slug "your-market-slug" \
+  --discovery-mode single_market \
+  --score-mode pnl_proxy \
+  --max-candidate-wallets 20 \
+  --min-win-rate 0.5 \
+  --top-wallets 10 \
+  --out-file runtime/smart_money_wallets.json
+
+# 2) 把 wallets 快照转换成 token_signals（可 watch）
+python scripts/python/pmm_smart_money_signal.py \
+  --wallets-file runtime/smart_money_wallets.json \
+  --out-file runtime/smart_money_signals.json \
+  --watch \
+  --interval-sec 15
+
+# 3) 策略读取 signals 文件并执行
+export PMM_STRATEGY_KEY="smart_money_follow_v1"
+export PMM_STRATEGY_PARAMS_JSON='{
+  "smart_money_signal_file": "runtime/smart_money_signals.json",
+  "smart_money_signal_reload_sec": 5,
+  "smart_money_price_tilt_factor": 0.35,
+  "smart_money_size_tilt_factor": 0.75,
+  "smart_money_one_side_only_threshold": 0.9
+}'
+```
+
 ---
 
 ## 推荐参数

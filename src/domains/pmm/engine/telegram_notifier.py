@@ -21,6 +21,7 @@ def build_live_report_message(
     *,
     symbol: str,
     strategy_key: str,
+    mode: str,
     tick: int,
     pnl: float,
     equity: float,
@@ -28,13 +29,22 @@ def build_live_report_message(
     positions: Dict[str, float],
     mids: Dict[str, float],
     open_orders_count: int,
+    fills_total: int,
+    fills_since_last_report: int,
+    placed_total: int,
+    canceled_total: int,
 ) -> str:
     lines = [
         "[PMM LIVE REPORT]",
-        f"symbol={symbol} strategy={strategy_key} tick={tick}",
+        f"symbol={symbol} strategy={strategy_key} mode={mode} tick={tick}",
         (
             "equity="
             f"{equity:.4f} pnl={pnl:.4f} usdc={usdc_balance:.4f} open_orders={open_orders_count}"
+        ),
+        (
+            "fills_total="
+            f"{int(fills_total)} fills_since_last_report={int(fills_since_last_report)} "
+            f"placed_total={int(placed_total)} canceled_total={int(canceled_total)}"
         ),
         "positions:",
     ]
@@ -89,6 +99,7 @@ class PMMTelegramNotifier:
         self._alert_cooldown_sec = max(0, int(config.telegram_alert_cooldown_sec))
         self._client: Optional[TelegramClient] = None
         self._last_report_ts: float = 0.0
+        self._last_report_fills_total: int = 0
         self._last_alert_by_key: Dict[str, float] = {}
 
     @property
@@ -117,6 +128,7 @@ class PMMTelegramNotifier:
             return
 
         self._last_report_ts = time.time()
+        self._last_report_fills_total = 0
         if self._send_startup:
             mode = "live" if self._is_live else "paper"
             await self._send_text(
@@ -142,15 +154,20 @@ class PMMTelegramNotifier:
         positions: Dict[str, float],
         mids: Dict[str, float],
         open_orders_count: int,
+        fills_total: int,
+        placed_total: int,
+        canceled_total: int,
     ) -> None:
-        if not self.enabled or not self._is_live:
+        if not self.enabled:
             return
         now = time.time()
         if now - self._last_report_ts < self._report_interval_sec:
             return
+        fills_since_last_report = max(0, int(fills_total) - int(self._last_report_fills_total))
         text = build_live_report_message(
             symbol=self._symbol,
             strategy_key=self._strategy_key,
+            mode="live" if self._is_live else "paper",
             tick=tick,
             pnl=pnl,
             equity=equity,
@@ -158,8 +175,13 @@ class PMMTelegramNotifier:
             positions=positions,
             mids=mids,
             open_orders_count=open_orders_count,
+            fills_total=fills_total,
+            fills_since_last_report=fills_since_last_report,
+            placed_total=placed_total,
+            canceled_total=canceled_total,
         )
         self._last_report_ts = now
+        self._last_report_fills_total = int(fills_total)
         await self._send_text(text, disable_notification=True)
 
     async def send_alert(

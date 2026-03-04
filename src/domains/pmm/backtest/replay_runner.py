@@ -20,6 +20,8 @@ from src.domains.pmm.execution.order_manager import OrderManager
 from src.domains.pmm.execution.paper_broker import PaperBroker
 from src.domains.pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from src.domains.pmm.strategies.single_level_v1 import SingleLevelV1Strategy
+from src.domains.pmm.strategies.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
+from src.domains.pmm.strategies.weather_theta_no_v1 import WeatherThetaNoV1Strategy
 from src.domains.pmm.utils.quantize import quantize_quote_pair
 from src.domains.pmm.backtest.scenario_validator import validate_scenario_payload
 
@@ -233,6 +235,18 @@ async def _run_single_async(
             anchor_quotes_fn=anchor_quotes_to_book,
             quantize_pair_fn=quantize_quote_pair,
             target_sizes_fn=target_sizes,
+        )
+    )
+    strategy_registry.register(
+        SmartMoneyFollowV1Strategy(
+            anchor_quotes_fn=anchor_quotes_to_book,
+            quantize_pair_fn=quantize_quote_pair,
+            target_sizes_fn=target_sizes,
+        )
+    )
+    strategy_registry.register(
+        WeatherThetaNoV1Strategy(
+            quantize_pair_fn=quantize_quote_pair,
         )
     )
     strategy = strategy_registry.get(cfg.strategy_key)

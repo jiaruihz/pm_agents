@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -44,9 +45,12 @@ from src.domains.pmm.execution.paper_broker import PaperBroker
 from src.domains.pmm.execution.live_broker import LiveBroker
 from src.domains.pmm.engine.context_builder import build_history_context, build_token_context
 from src.domains.pmm.engine.telegram_notifier import PMMTelegramNotifier
+from src.domains.pmm.ops import BUILTIN_STRATEGIES, PMMInstanceStore
 from src.domains.pmm.risk.safety_guard import SafetyGuard
 from src.domains.pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from src.domains.pmm.strategies.single_level_v1 import SingleLevelV1Strategy
+from src.domains.pmm.strategies.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
+from src.domains.pmm.strategies.weather_theta_no_v1 import WeatherThetaNoV1Strategy
 from src.domains.pmm.utils.converters import best_level as _best_level, normalize_levels as _normalize_levels, to_float as _safe_float, to_int as _safe_int
 from src.domains.pmm.utils.metrics import MetricsLogger
 from src.domains.pmm.utils.quantize import (
@@ -164,6 +168,18 @@ async def tick_loop(config: PMMConfig) -> None:
             anchor_quotes_fn=_anchor_quotes_to_book,
             quantize_pair_fn=_quantize_quote_pair,
             target_sizes_fn=_target_sizes,
+        )
+    )
+    strategy_registry.register(
+        SmartMoneyFollowV1Strategy(
+            anchor_quotes_fn=_anchor_quotes_to_book,
+            quantize_pair_fn=_quantize_quote_pair,
+            target_sizes_fn=_target_sizes,
+        )
+    )
+    strategy_registry.register(
+        WeatherThetaNoV1Strategy(
+            quantize_pair_fn=_quantize_quote_pair,
         )
     )
     strategy = strategy_registry.get(config.strategy_key)
@@ -309,6 +325,63 @@ async def tick_loop(config: PMMConfig) -> None:
             strategy_key=strategy.key,
         )
         await notifier.start()
+        instance_id = config.instance_id or f"{strategy.key}-{execution_mode}-{os.getpid()}"
+        instance_label = config.instance_label or instance_id
+        instance_hb_interval_sec = max(1, int(config.instance_heartbeat_sec))
+        instance_snapshot_interval_sec = max(1, int(config.instance_snapshot_interval_sec))
+        next_instance_hb_ts = 0.0
+        instance_log_file = os.getenv("PMM_LOG_FILE", "").strip()
+        instance_store: Optional[PMMInstanceStore] = None
+        try:
+            instance_store = PMMInstanceStore(config.instance_db_path)
+            instance_store.ensure_builtin_strategies(BUILTIN_STRATEGIES)
+            run_params_payload = {
+                "strategy_params": config.strategy_params,
+                "quote_runtime": quote_runtime_meta,
+                "tick_interval_sec": float(config.tick_interval_sec),
+                "max_ticks": int(config.max_ticks),
+                "min_profitability_spread": float(config.min_profitability_spread),
+                "price_tick": float(config.price_tick),
+                "base_size": float(config.base_size),
+                "max_position": float(config.max_position),
+                "paper_fill_model": str(config.paper_fill_model),
+            }
+            runtime_paths_payload = {
+                "cwd": os.getcwd(),
+                "log_file": instance_log_file,
+                "metrics_path": str(config.metrics_path),
+                "instance_db_path": str(config.instance_db_path),
+            }
+            instance_store.upsert_start(
+                instance_id=instance_id,
+                strategy_key=strategy.key,
+                label=instance_label,
+                execution_mode=execution_mode,
+                market_data_source="ws" if ws_feed else "rest",
+                token_ids=token_ids,
+                max_position=float(config.max_position),
+                telegram_enabled=bool(config.telegram_enabled),
+                pid=os.getpid(),
+                log_file=instance_log_file,
+                metrics_path=str(config.metrics_path),
+                cwd=os.getcwd(),
+                run_params=run_params_payload,
+                runtime_paths=runtime_paths_payload,
+            )
+            _log_event(
+                logging.INFO,
+                "instance_registered",
+                instance_id=instance_id,
+                db_path=config.instance_db_path,
+            )
+        except Exception as exc:
+            instance_store = None
+            _log_event(
+                logging.WARNING,
+                "instance_register_failed",
+                error=str(exc),
+                db_path=config.instance_db_path,
+            )
 
         async def _exec_call(method, *args, **kwargs):
             # 统一执行入口：broker 路径直接 await；raw client 路径走 retry。
@@ -322,6 +395,11 @@ async def tick_loop(config: PMMConfig) -> None:
 
         pending_merge_credits: List[Dict[str, float]] = []
         pending_orders: List[Dict[str, Any]] = []
+        total_placed = 0
+        total_canceled = 0
+        total_errors = 0
+        total_fills = 0
+        run_error = ""
         try:
             tick_count = 0
             while True:
@@ -437,6 +515,8 @@ async def tick_loop(config: PMMConfig) -> None:
                             positions_raw,
                             token_ids,
                         )
+                fills_this_tick = len(paper_recent_fills)
+                total_fills += fills_this_tick
 
                 equity = usdc_balance + sum(
                     positions.get(token_id, 0.0) * mids.get(token_id, 0.0) for token_id in token_ids
@@ -704,6 +784,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                         else:
                                             await _exec_call(execution_client.cancel_orders, blocked_ids)
                                     canceled += len(blocked_ids)
+                                    total_canceled += len(blocked_ids)
                                     cancel_set = set(blocked_ids)
                                     local_orders = [
                                         x
@@ -716,6 +797,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                         pending_orders = _drop_pending_by_ids(pending_orders, blocked_ids)
                                 except Exception as exc:
                                     errors += 1
+                                    total_errors += 1
                                     _log_event(
                                         logging.ERROR,
                                         "blocked_side_cancel_failed",
@@ -756,6 +838,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                     else:
                                         await _exec_call(execution_client.cancel_orders, decision.cancel_ids)
                                 canceled += len(decision.cancel_ids)
+                                total_canceled += len(decision.cancel_ids)
                                 cancel_set = set(decision.cancel_ids)
                                 local_orders = [
                                     x
@@ -767,6 +850,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                     pending_orders = _drop_pending_by_ids(pending_orders, decision.cancel_ids)
                             except Exception as exc:
                                 errors += 1
+                                total_errors += 1
                                 _log_event(
                                     logging.ERROR,
                                     "cancel_failed",
@@ -795,7 +879,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                         "dry_run_place",
                                         token_id=token_id,
                                         side=side,
-                                        level=level,
+                                        quote_level=level,
                                         price=round(price, 6),
                                         size=round(size, 6),
                                         reason=decision.reason,
@@ -827,6 +911,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                             side,
                                         )
                                 placed += 1
+                                total_placed += 1
                                 local_orders.append(
                                     {
                                         "id": placed_order.get("id"),
@@ -851,12 +936,13 @@ async def tick_loop(config: PMMConfig) -> None:
                                     pending_orders.append(pending_item)
                             except Exception as exc:
                                 errors += 1
+                                total_errors += 1
                                 _log_event(
                                     logging.ERROR,
                                     "place_failed",
                                     token_id=token_id,
                                     side=side,
-                                    level=level,
+                                    quote_level=level,
                                     price=round(price, 6),
                                     size=round(size, 6),
                                     error=str(exc),
@@ -957,6 +1043,7 @@ async def tick_loop(config: PMMConfig) -> None:
                             action["error"] = str(exc)
                             merge_actions.append(action)
                             errors += 1
+                            total_errors += 1
                             _log_event(
                                 logging.ERROR,
                                 "auto_merge_failed",
@@ -1038,17 +1125,58 @@ async def tick_loop(config: PMMConfig) -> None:
                     positions=positions,
                     mids=mids,
                     open_orders_count=len(open_orders),
+                    fills_total=total_fills,
+                    placed_total=total_placed,
+                    canceled_total=total_canceled,
                 )
+                now_ts = time.time()
+                if instance_store and now_ts >= next_instance_hb_ts:
+                    try:
+                        instance_store.heartbeat(
+                            instance_id=instance_id,
+                            tick=tick_count,
+                            pnl=pnl,
+                            equity=equity,
+                            usdc_balance=usdc_balance,
+                            open_orders=len(open_orders),
+                            fills_total=total_fills,
+                            placed_total=total_placed,
+                            canceled_total=total_canceled,
+                            errors_total=total_errors,
+                            state={
+                                "execution_mode": execution_mode,
+                                "strategy_key": strategy.key,
+                                "market_data_source": "ws" if ws_feed else "rest",
+                                "positions": positions,
+                            },
+                            snapshot_interval_sec=instance_snapshot_interval_sec,
+                        )
+                    except Exception as exc:
+                        _log_event(logging.WARNING, "instance_heartbeat_failed", error=str(exc))
+                    next_instance_hb_ts = now_ts + float(instance_hb_interval_sec)
 
                 tick_count += 1
                 if config.max_ticks > 0 and tick_count >= config.max_ticks:
                     return
                 await asyncio.sleep(config.tick_interval_sec)
+        except Exception as exc:
+            run_error = str(exc)
+            raise
         finally:
             # 收尾：确保 WS 连接和 metrics writer 都被干净关闭。
             await notifier.aclose()
             if ws_feed:
                 await ws_feed.stop()
+            if instance_store is not None:
+                try:
+                    instance_store.mark_stopped(
+                        instance_id=instance_id,
+                        status="error" if run_error else "stopped",
+                        notes=run_error[:800] if run_error else "",
+                    )
+                except Exception as exc:
+                    _log_event(logging.WARNING, "instance_stop_update_failed", error=str(exc))
+                instance_store.close()
             metrics.close()
 
 

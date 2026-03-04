@@ -122,6 +122,11 @@ class PMMConfig:
     # Market config (manual token ids)
     market: MarketConfig = field(default_factory=lambda: MarketConfig(token_ids=[]))
     metrics_path: str = "src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl"
+    instance_id: str = ""
+    instance_label: str = ""
+    instance_db_path: str = "runtime/pmm_instances.db"
+    instance_heartbeat_sec: int = 10
+    instance_snapshot_interval_sec: int = 60
 
     # External notification (Telegram)
     telegram_enabled: bool = False
@@ -310,6 +315,17 @@ class PMMConfig:
             merge_amount_scale=int(os.getenv("PMM_MERGE_AMOUNT_SCALE", "1000000")),
             market_query=os.getenv("PMM_MARKET_QUERY", ""),
             metrics_path=os.getenv("PMM_METRICS_PATH", "src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl"),
+            instance_id=os.getenv("PMM_INSTANCE_ID", "").strip(),
+            instance_label=os.getenv("PMM_INSTANCE_LABEL", "").strip(),
+            instance_db_path=os.getenv("PMM_INSTANCE_DB_PATH", "runtime/pmm_instances.db"),
+            instance_heartbeat_sec=max(
+                1,
+                int(os.getenv("PMM_INSTANCE_HEARTBEAT_SEC", "10")),
+            ),
+            instance_snapshot_interval_sec=max(
+                1,
+                int(os.getenv("PMM_INSTANCE_SNAPSHOT_INTERVAL_SEC", "60")),
+            ),
             telegram_enabled=os.getenv("PMM_TELEGRAM_ENABLED", "0") == "1",
             telegram_bot_token=os.getenv("PMM_TELEGRAM_BOT_TOKEN", ""),
             telegram_chat_id=os.getenv("PMM_TELEGRAM_CHAT_ID", ""),
