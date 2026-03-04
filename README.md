@@ -115,6 +115,9 @@ pytest tests/research_tests -q
 ## 文档
 
 - PMM 文档导航：`src/domains/pmm/docs/README.md`
+- PMM 策略包目录：`src/domains/pmm/strategy_packs/README.md`
+- 天气策略进度手册：`src/domains/pmm/docs/WEATHER_THETA_NO_PROGRESS.md`
+- PMM paper 运维手册：`src/domains/pmm/docs/PAPER_RUNBOOK.md`
 - 架构说明：`src/domains/pmm/docs/ARCHITECTURE.md`
 - 回测方法：`src/domains/pmm/docs/BACKTEST_SCENARIO_METHOD.md`
 - RESEARCH 整合说明：`docs/RESEARCH_INTEGRATION.md`
