@@ -114,6 +114,107 @@ button:hover {
   font-size: 13px;
 }
 
+.pill.on {
+  color: #0b6a3c;
+  border-color: #8fd7b2;
+  background: #eaf8f0;
+}
+
+.pill.off {
+  color: var(--danger);
+  border-color: #e5b7ad;
+  background: #fbefec;
+}
+
+.instance-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.strategy-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.strategy-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #f2f7f5;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.strategy-tab:hover {
+  background: #edf7f3;
+}
+
+.strategy-tab.active {
+  background: #e3f3ee;
+  border-color: #8fd7b2;
+}
+
+.instance-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #f8f2e7;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.instance-tab:hover {
+  background: #f3ebdb;
+}
+
+.instance-tab.active {
+  background: #edf7f3;
+  border-color: #8fd7b2;
+}
+
+.instance-tab.running {
+  border-color: #8fd7b2;
+}
+
+.instance-tab.stale,
+.instance-tab.stopped,
+.instance-tab.error {
+  border-color: #e5b7ad;
+}
+
+.ops-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ops-grid h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.ops-log-controls {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1.2fr 140px auto;
+  gap: 10px;
+  align-items: end;
+}
+
 .table-wrap {
   width: 100%;
   overflow: auto;
@@ -221,6 +322,14 @@ pre {
 
 @media (max-width: 880px) {
   .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-log-controls {
     grid-template-columns: 1fr;
   }
 }

@@ -270,6 +270,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default="src/domains/pmm/backtest/.artifacts",
         help="Artifacts root directory",
     )
+    p_web.add_argument(
+        "--runtime-dir",
+        default="runtime",
+        help="Runtime directory for live/paper logs and pid files",
+    )
     return parser
 
 
@@ -439,6 +444,7 @@ def main() -> None:
             host=args.host,
             port=args.port,
             artifacts_dir=args.artifacts_dir,
+            runtime_dir=args.runtime_dir,
         )
         return
     raise ValueError(f"unknown command: {args.command}")

@@ -15,6 +15,48 @@
 
       <section class="card">
         <div class="section-head">
+          <h2>策略运行实例</h2>
+          <button id="instances-reload" type="button">刷新实例</button>
+        </div>
+        <p id="instances-meta" class="muted"></p>
+        <div id="strategy-tabs" class="strategy-tabs"></div>
+        <div id="instances-tabs" class="instance-tabs"></div>
+        <pre id="instance-detail">加载中...</pre>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Paper 运维看板</h2>
+          <button id="ops-reload" type="button">刷新运维</button>
+        </div>
+        <p id="ops-meta" class="muted"></p>
+        <div id="ops-summary" class="summary"></div>
+        <div class="ops-grid">
+          <div>
+            <h3>关键配置</h3>
+            <pre id="ops-config"></pre>
+          </div>
+          <div>
+            <h3>常用命令</h3>
+            <pre id="ops-commands"></pre>
+          </div>
+        </div>
+        <div class="ops-log-controls">
+          <label>
+            日志文件
+            <select id="ops-log-select"></select>
+          </label>
+          <label>
+            行数
+            <input id="ops-log-lines" type="number" min="20" max="2000" step="20" value="120">
+          </label>
+          <button id="ops-log-reload" type="button">刷新日志</button>
+        </div>
+        <pre id="ops-log">加载中...</pre>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
           <h2>Shadow 运行状态</h2>
           <button id="shadow-reload" type="button">刷新状态</button>
         </div>
