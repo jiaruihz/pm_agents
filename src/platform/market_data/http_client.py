@@ -46,7 +46,13 @@ class ToolServiceClient:
             return await resp.json()
 
     async def get_orderbook(self, token_id: str) -> Dict[str, Any]:
-        return await self._get(f"/orderbook/{token_id}")
+        try:
+            return await self._get(f"/orderbook/{token_id}")
+        except aiohttp.ClientResponseError as exc:
+            # CLOB public API uses /book?token_id=... instead of /orderbook/{token_id}.
+            if exc.status == 404:
+                return await self._get(f"/book?token_id={token_id}")
+            raise
 
     async def get_market(self, token_id: str) -> Dict[str, Any]:
         return await self._get(f"/market/{token_id}")
