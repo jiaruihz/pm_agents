@@ -4,8 +4,8 @@ This repo contains the migrated research pipeline under `src/domains/research/`.
 
 ## What was migrated
 
-- `src/domains/research/` package (pipeline, nodes, schema, CLI, web UI)
-- research scripts under `scripts/research/`
+- `src/domains/research/` package (pipeline, nodes, schema, CLI)
+- research command entry under `src.domains.research.cli`
 - research tests under `tests/research_tests/`
 - prompt template at `data/template.md`
 

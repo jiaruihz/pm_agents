@@ -30,7 +30,6 @@
 │   ├── strategy_catalog.py    # 策略目录管理入口
 │   ├── generate_backtest_scenarios.py
 │   └── pmm_orderbook_capture.py
-├── scripts/research/          # research 相关脚本
 ├── tests/pmm_tests/           # PMM 单元测试
 ├── tests/research_tests/      # research 单元测试
 └── .env.example
