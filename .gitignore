@@ -32,6 +32,8 @@ archive.zip
 local_db*
 local_news_cache/
 research.db
+node_modules/
+frontend/**/node_modules/
 output/
 archive/books/
 src/domains/pmm/backtest/scenarios/
@@ -44,3 +46,10 @@ src/domains/pmm/backtest/.artifacts/
 # Keep metadata only; do not commit replay/plot artifacts.
 src/domains/pmm/backtest/**/plots/
 local_market_collection/market_snapshot_*.json
+
+# Runtime local artifacts
+runtime/*.pid
+runtime/*.db
+runtime/*.db.*
+runtime/*.json
+runtime/logs/*.log
