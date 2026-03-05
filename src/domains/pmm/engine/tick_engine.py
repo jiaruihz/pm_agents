@@ -45,7 +45,6 @@ from src.domains.pmm.execution.paper_broker import PaperBroker
 from src.domains.pmm.execution.live_broker import LiveBroker
 from src.domains.pmm.engine.context_builder import build_history_context, build_token_context
 from src.domains.pmm.engine.telegram_notifier import PMMTelegramNotifier
-from src.domains.pmm.ops import BUILTIN_STRATEGIES, PMMInstanceStore
 from src.domains.pmm.risk.safety_guard import SafetyGuard
 from src.domains.pmm.strategies.multi_level_v1 import MultiLevelV1Strategy
 from src.domains.pmm.strategies.single_level_v1 import SingleLevelV1Strategy
@@ -59,6 +58,8 @@ from src.domains.pmm.utils.quantize import (
     quantize_price_dict as _quantize_price_dict,
     quantize_to_tick,
 )
+from src.platform.strategy_runtime import StrategyRuntimeStore
+from src.strategies.registry import load_strategy_rows
 
 logger = logging.getLogger("pmm.tick_engine")
 
@@ -331,10 +332,10 @@ async def tick_loop(config: PMMConfig) -> None:
         instance_snapshot_interval_sec = max(1, int(config.instance_snapshot_interval_sec))
         next_instance_hb_ts = 0.0
         instance_log_file = os.getenv("PMM_LOG_FILE", "").strip()
-        instance_store: Optional[PMMInstanceStore] = None
+        instance_store: Optional[StrategyRuntimeStore] = None
         try:
-            instance_store = PMMInstanceStore(config.instance_db_path)
-            instance_store.ensure_builtin_strategies(BUILTIN_STRATEGIES)
+            instance_store = StrategyRuntimeStore(config.strategy_runtime_db_path)
+            instance_store.ensure_builtin_strategies(load_strategy_rows())
             run_params_payload = {
                 "strategy_params": config.strategy_params,
                 "quote_runtime": quote_runtime_meta,
@@ -350,14 +351,20 @@ async def tick_loop(config: PMMConfig) -> None:
                 "cwd": os.getcwd(),
                 "log_file": instance_log_file,
                 "metrics_path": str(config.metrics_path),
-                "instance_db_path": str(config.instance_db_path),
+                "strategy_runtime_db_path": str(config.strategy_runtime_db_path),
             }
+            account_id = os.getenv("PM_ACCOUNT_ID", "").strip()
+            wallet_address = os.getenv("PM_ADDRESS", "").strip()
+            if not account_id:
+                account_id = wallet_address
             instance_store.upsert_start(
                 instance_id=instance_id,
                 strategy_key=strategy.key,
                 label=instance_label,
                 execution_mode=execution_mode,
                 market_data_source="ws" if ws_feed else "rest",
+                account_id=account_id,
+                wallet_address=wallet_address,
                 token_ids=token_ids,
                 max_position=float(config.max_position),
                 telegram_enabled=bool(config.telegram_enabled),
@@ -372,7 +379,7 @@ async def tick_loop(config: PMMConfig) -> None:
                 logging.INFO,
                 "instance_registered",
                 instance_id=instance_id,
-                db_path=config.instance_db_path,
+                db_path=config.strategy_runtime_db_path,
             )
         except Exception as exc:
             instance_store = None
@@ -380,7 +387,7 @@ async def tick_loop(config: PMMConfig) -> None:
                 logging.WARNING,
                 "instance_register_failed",
                 error=str(exc),
-                db_path=config.instance_db_path,
+                db_path=config.strategy_runtime_db_path,
             )
 
         async def _exec_call(method, *args, **kwargs):

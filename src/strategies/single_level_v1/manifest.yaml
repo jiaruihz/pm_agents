@@ -1,0 +1,12 @@
+strategy_key: single_level_v1
+strategy_name: 做市策略（单层）
+strategy_group: market_making
+strategy_family: maker
+domain: pmm
+is_active: true
+runner_module: src.domains.pmm.main
+strategy_module: src.domains.pmm.strategies.single_level_v1:SingleLevelV1Strategy
+description: 单档 PMM 做市策略，执行路径更简洁。
+meta:
+  variant: single-level
+  order_style: maker

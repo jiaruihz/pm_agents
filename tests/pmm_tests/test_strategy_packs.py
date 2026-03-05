@@ -1,12 +1,12 @@
 import unittest
 from pathlib import Path
 
-from src.domains.pmm.strategy_packs.registry import STRATEGY_PACKS
+from src.strategies.registry import load_strategy_catalog
 
 
 class TestStrategyPacks(unittest.TestCase):
     def test_strategy_pack_keys(self):
-        keys = {x.key for x in STRATEGY_PACKS}
+        keys = {x.strategy_key for x in load_strategy_catalog()}
         self.assertEqual(
             keys,
             {
@@ -20,11 +20,16 @@ class TestStrategyPacks(unittest.TestCase):
 
     def test_required_files_exist(self):
         repo_root = Path(__file__).resolve().parents[2]
-        for pack in STRATEGY_PACKS:
-            required = pack.required_files()
-            for label, rel_path in required.items():
-                full = repo_root / rel_path
-                self.assertTrue(full.exists(), f"{pack.key}:{label} missing -> {rel_path}")
+        for item in load_strategy_catalog():
+            strategy_dir = repo_root / "src" / "strategies" / item.strategy_key
+            required = {
+                "manifest": strategy_dir / "manifest.yaml",
+                "readme": strategy_dir / "README.md",
+                "params": strategy_dir / "params.example.json",
+                "runner": strategy_dir / "run.sh",
+            }
+            for label, full_path in required.items():
+                self.assertTrue(full_path.exists(), f"{item.strategy_key}:{label} missing -> {full_path}")
 
 
 if __name__ == "__main__":

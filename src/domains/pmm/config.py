@@ -1,5 +1,6 @@
 import os
 import json
+import warnings
 from dataclasses import dataclass, field
 from typing import List
 
@@ -124,7 +125,9 @@ class PMMConfig:
     metrics_path: str = "src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl"
     instance_id: str = ""
     instance_label: str = ""
-    instance_db_path: str = "runtime/pmm_instances.db"
+    strategy_runtime_db_path: str = "runtime/strategy_runtime.db"
+    # Deprecated alias, kept for compatibility with old call sites.
+    instance_db_path: str = "runtime/strategy_runtime.db"
     instance_heartbeat_sec: int = 10
     instance_snapshot_interval_sec: int = 60
 
@@ -189,6 +192,18 @@ class PMMConfig:
                 strategy_params = {}
         except Exception:
             strategy_params = {}
+        legacy_instance_db_path = os.getenv("PMM_INSTANCE_DB_PATH", "").strip()
+        strategy_runtime_db_path = (
+            os.getenv("STRATEGY_RUNTIME_DB_PATH", "").strip()
+            or legacy_instance_db_path
+            or "runtime/strategy_runtime.db"
+        )
+        if legacy_instance_db_path and not os.getenv("STRATEGY_RUNTIME_DB_PATH", "").strip():
+            warnings.warn(
+                "PMM_INSTANCE_DB_PATH is deprecated; please use STRATEGY_RUNTIME_DB_PATH instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         return PMMConfig(
             api_base_url=os.getenv("PM_API_BASE_URL", "http://localhost:8000"),
             api_key=os.getenv("PM_API_KEY", ""),
@@ -317,7 +332,8 @@ class PMMConfig:
             metrics_path=os.getenv("PMM_METRICS_PATH", "src/domains/pmm/backtest/.artifacts/logs/metrics.jsonl"),
             instance_id=os.getenv("PMM_INSTANCE_ID", "").strip(),
             instance_label=os.getenv("PMM_INSTANCE_LABEL", "").strip(),
-            instance_db_path=os.getenv("PMM_INSTANCE_DB_PATH", "runtime/pmm_instances.db"),
+            strategy_runtime_db_path=strategy_runtime_db_path,
+            instance_db_path=strategy_runtime_db_path,
             instance_heartbeat_sec=max(
                 1,
                 int(os.getenv("PMM_INSTANCE_HEARTBEAT_SEC", "10")),

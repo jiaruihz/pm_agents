@@ -1,0 +1,7 @@
+{
+  "pages": 3,
+  "page_size": 100,
+  "enrich_limit": 300,
+  "parse_batch": 100,
+  "investigate_limit": 50
+}

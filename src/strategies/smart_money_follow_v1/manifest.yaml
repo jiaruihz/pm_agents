@@ -1,0 +1,12 @@
+strategy_key: smart_money_follow_v1
+strategy_name: 跟随聪明钱策略
+strategy_group: smart_money
+strategy_family: directional
+domain: pmm
+is_active: true
+runner_module: src.domains.pmm.main
+strategy_module: src.domains.pmm.strategies.smart_money_follow_v1:SmartMoneyFollowV1Strategy
+description: 基于高胜率钱包信号的报价倾斜与仓位倾斜策略。
+meta:
+  signal_source: wallets+token_signals
+  style: follow

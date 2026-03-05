@@ -1,0 +1,13 @@
+{
+  "weather_no_token_ids": ["NO_TOKEN_ID"],
+  "weather_entry_min_price": 0.8,
+  "weather_entry_max_price": 0.96,
+  "weather_entry_max_spread": 0.06,
+  "weather_position_pct": 0.05,
+  "weather_take_profit_abs": 0.01,
+  "weather_stop_loss_abs": 0.03,
+  "weather_max_hold_hours": 48,
+  "weather_exit_before_hours": 6,
+  "weather_reentry_cooldown_hours": 12,
+  "weather_token_end_ts": {}
+}
