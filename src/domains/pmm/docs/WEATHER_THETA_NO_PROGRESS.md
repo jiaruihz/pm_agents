@@ -56,7 +56,7 @@
 推荐使用策略包脚本：
 
 ```bash
-bash src/domains/pmm/strategy_packs/weather_theta_no_v1/run_paper.sh
+bash src/strategies/weather_theta_no_v1/run.sh
 ```
 
 ### 3.1 Paper 模式启动

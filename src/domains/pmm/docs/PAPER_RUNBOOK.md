@@ -19,12 +19,14 @@ test -f .env || cp .env.example .env
 - `PMM_TELEGRAM_REPORT_INTERVAL_SEC="3600"`
 - `PMM_INSTANCE_ID="paper_rm_01"`（建议显式设置）
 - `PMM_INSTANCE_LABEL="RealMadrid paper"`
-- `PMM_INSTANCE_DB_PATH="runtime/pmm_instances.db"`
+- `STRATEGY_RUNTIME_DB_PATH="runtime/strategy_runtime.db"`
+
+兼容项说明：`PMM_INSTANCE_DB_PATH` 仅兼容读取，已弃用（deprecated），不要作为主配置继续使用。
 
 快速做配置体检：
 
 ```bash
-rg -n "^(PMM_EXECUTION_MODE|PMM_TOKEN_IDS|PMM_MARKET_DATA_SOURCE|PMM_MAX_POSITION|PMM_TELEGRAM_ENABLED|PMM_TELEGRAM_REPORT_INTERVAL_SEC|PMM_INSTANCE_ID|PMM_INSTANCE_LABEL|PMM_INSTANCE_DB_PATH)=" .env
+rg -n "^(PMM_EXECUTION_MODE|PMM_TOKEN_IDS|PMM_MARKET_DATA_SOURCE|PMM_MAX_POSITION|PMM_TELEGRAM_ENABLED|PMM_TELEGRAM_REPORT_INTERVAL_SEC|PMM_INSTANCE_ID|PMM_INSTANCE_LABEL|STRATEGY_RUNTIME_DB_PATH)=" .env
 ```
 
 ## 2. 运行与停止
@@ -95,14 +97,14 @@ set -a; source .env; set +a
 
 ## 5. 可视化看板
 
-启动 Web UI：
+启动统一策略看板服务：
 
 ```bash
 set -a; source .env; set +a
-.venv/bin/python scripts/python/pmm_backtest.py web --host 127.0.0.1 --port 8010
+.venv/bin/python -m src.interfaces.web.strategy_dashboard_server --host 127.0.0.1 --port 8011 --artifacts-dir src/domains/pmm/backtest/.artifacts --runtime-dir runtime
 ```
 
-浏览器打开：`http://127.0.0.1:8010`
+浏览器打开：`http://127.0.0.1:8011/api/v1/health`
 
 页面中新增的 **Paper 运维看板** 可直接查看：
 
@@ -111,35 +113,36 @@ set -a; source .env; set +a
 - 运行日志 tail（可选择日志文件与行数）
 - 常用命令速查（启动/停止/日志/错误筛查）
 
-页面中的 **策略运行实例** 会从 SQLite（`runtime/pmm_instances.db`）读取并展示多实例 tab（可并行展示不同策略/盘口实例）。
+页面中的 **策略运行实例** 会从 SQLite（`runtime/strategy_runtime.db`）读取并展示多实例信息。
 
 ## 6. 实例数据库
 
 查看实例表：
 
 ```bash
-sqlite3 runtime/pmm_instances.db "select i.instance_id,i.status,i.strategy_key,i.execution_mode,s.last_tick,s.last_pnl,i.updated_at_utc from pmm_instances i left join pmm_instance_state s on s.instance_id=i.instance_id order by i.updated_at_utc desc limit 20;"
+sqlite3 runtime/strategy_runtime.db "select i.instance_id,i.status,i.strategy_key,i.execution_mode,s.last_tick,s.last_pnl,i.updated_at_utc from strategy_instances i left join strategy_instance_state s on s.instance_id=i.instance_id order by i.updated_at_utc desc limit 20;"
 ```
 
 查看策略目录表：
 
 ```bash
-sqlite3 runtime/pmm_instances.db "select strategy_key,strategy_name,strategy_group,is_active from pmm_strategies order by strategy_group,strategy_key;"
+sqlite3 runtime/strategy_runtime.db "select strategy_key,strategy_name,strategy_group,is_active from strategies order by strategy_group,strategy_key;"
 ```
 
 查看实时状态表：
 
 ```bash
-sqlite3 runtime/pmm_instances.db "select instance_id,last_tick,last_pnl,last_equity,heartbeat_at_utc from pmm_instance_state order by heartbeat_at_utc desc limit 20;"
+sqlite3 runtime/strategy_runtime.db "select instance_id,last_tick,last_pnl,last_equity,heartbeat_at_utc from strategy_instance_state order by heartbeat_at_utc desc limit 20;"
 ```
 
 ## 7. HTTP 接口（给前端）
 
-- `GET /api/strategies`：策略目录 + 每个策略的实例统计
-- `GET /api/instances?limit=200&stale_after_sec=90`：实例列表（含 strategy 关联、模式、参数、路径、实时状态）
-- `GET /api/instance/history?instance_id=<id>&limit=300`：实例历史快照（用于曲线/回放）
-- `GET /api/ops/status`：进程与日志总览
-- `GET /api/ops/logs?name=<log>&lines=120`：日志 tail
+- `GET /api/v1/strategies`：策略目录 + 每个策略的实例统计
+- `GET /api/v1/instances?limit=200&stale_after_sec=90`：实例列表（含 strategy 关联、模式、参数、路径、实时状态）
+- `GET /api/v1/instances/<instance_id>/history?limit=300`：实例历史快照（用于曲线/回放）
+- `GET /api/v1/accounts`：账户聚合视图
+- `GET /api/v1/ops/status`：进程与日志总览
+- `GET /api/v1/ops/logs?name=<log>&lines=120`：日志 tail
 
 ## 8. 常见问题
 

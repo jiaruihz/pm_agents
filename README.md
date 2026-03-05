@@ -20,12 +20,14 @@
 │   ├── platform/              # 公共基础设施（clients/storage）
 │   ├── interfaces/
 │   │   ├── cli/               # 对外命令入口（预留）
-│   │   └── web/               # 对外 Web 入口（预留）
+│   │   └── web/               # 对外 Web 入口（统一策略看板 BFF）
+│   ├── strategies/            # 全局策略目录（manifest + runbook + params）
 │   └── workflows/
 │       ├── backtest/          # 回测跨域编排（预留）
 │       └── pap/               # PAP 跨域编排（预留）
 ├── scripts/python/
 │   ├── pmm_backtest.py        # 回测总入口
+│   ├── strategy_catalog.py    # 策略目录管理入口
 │   ├── generate_backtest_scenarios.py
 │   └── pmm_orderbook_capture.py
 ├── scripts/research/          # research 相关脚本
@@ -49,6 +51,9 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 ```
+
+运行实例主库使用 `STRATEGY_RUNTIME_DB_PATH`（默认 `runtime/strategy_runtime.db`）。
+`PMM_INSTANCE_DB_PATH` 仅保留兼容读取，已弃用（deprecated）。
 
 ### 3) PMM 回测
 
@@ -105,6 +110,18 @@ python -m src.domains.research.cli parse --llm --batch 100
 python -m src.domains.research.cli notify-telegram "Hello from pm_agent"
 ```
 
+### 7) 统一策略看板（BFF）
+
+```bash
+PYTHONPATH=. .venv/bin/python -m src.interfaces.web.strategy_dashboard_server \
+  --host 127.0.0.1 \
+  --port 8011 \
+  --artifacts-dir src/domains/pmm/backtest/.artifacts \
+  --runtime-dir runtime
+```
+
+健康检查：`http://127.0.0.1:8011/api/v1/health`
+
 ## 测试
 
 ```bash
@@ -115,7 +132,7 @@ pytest tests/research_tests -q
 ## 文档
 
 - PMM 文档导航：`src/domains/pmm/docs/README.md`
-- PMM 策略包目录：`src/domains/pmm/strategy_packs/README.md`
+- 策略目录（全局）：`src/strategies/README.md`
 - 天气策略进度手册：`src/domains/pmm/docs/WEATHER_THETA_NO_PROGRESS.md`
 - PMM paper 运维手册：`src/domains/pmm/docs/PAPER_RUNBOOK.md`
 - 架构说明：`src/domains/pmm/docs/ARCHITECTURE.md`

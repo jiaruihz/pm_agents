@@ -310,11 +310,12 @@ python scripts/python/pmm_backtest.py plot \
 python scripts/python/pmm_backtest.py plot-all \
   --results-dir src/domains/pmm/backtest/.artifacts/results_all
 
-# 启动本地可视化页面（按 case 查看 PnL/fill，并点击行查看 summary.json）
-python scripts/python/pmm_backtest.py web \
+# 启动统一策略看板服务（/api/v1/backtests/* 用于查看回测数据）
+python -m src.interfaces.web.strategy_dashboard_server \
   --host 127.0.0.1 \
-  --port 8010 \
-  --artifacts-dir src/domains/pmm/backtest/.artifacts
+  --port 8011 \
+  --artifacts-dir src/domains/pmm/backtest/.artifacts \
+  --runtime-dir runtime
 
 # 录制真实 WS 盘口 + 估算订单流，直接输出 scenario + jsonl
 python scripts/python/pmm_backtest.py record-live \

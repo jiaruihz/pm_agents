@@ -14,7 +14,7 @@
 - **[BACKTEST_SCENARIO_METHOD.md](BACKTEST_SCENARIO_METHOD.md)**：回测方法、场景生成、撮合模型
 - **[PAPER_RUNBOOK.md](PAPER_RUNBOOK.md)**：paper 实盘演练的运行、监控、日志与告警
 - **[WEATHER_THETA_NO_PROGRESS.md](WEATHER_THETA_NO_PROGRESS.md)**：天气 Theta No 策略进度、执行与扩展手册
-- **[../strategy_packs/README.md](../strategy_packs/README.md)**：策略包（skill-like）目录与管理方式
+- **[../../../strategies/README.md](../../../strategies/README.md)**：全局策略目录（manifest/runbook/params）
 
 ## 参考
 

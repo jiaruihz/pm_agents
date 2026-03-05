@@ -1,148 +1,114 @@
-# 统一策略大盘产品计划（前端专区）
+# 统一策略大盘产品计划（前端专区，后端重构对齐版）
 
-> 状态：计划已冻结，暂不执行实现（按你的要求先落文档，后续再推进开发）
+> 状态：计划已冻结，暂不执行实现
 >
-> 日期：2026-03-04
+> 日期：2026-03-05
+>
+> 依赖后端计划：`docs/backend/UNIFIED_STRATEGY_PLATFORM_REFACTOR_PLAN.md`
 
 ## 1. 目标与范围
 
-在本仓库新增前端专区，建设统一策略大盘，支持：
+在本仓库新增统一前端专区，建设策略大盘，支持：
 
 1. 按策略分类查看全量策略。
-2. 查看每个策略实例的运行状态与效果。
-3. 查看账户信息（聚合视图 + 实例拆分视图）。
-4. 每个策略拥有独立前端页面并可切换。
-5. 整合 `pm-research`（规则律师）与 `backtest viewer`，删除旧前端页面入口。
+2. 清晰查看每个策略实例运行状态与效果。
+3. 查看账户信息（聚合 + 实例拆分）。
+4. 每个策略具备独立前端页面并可切换。
+5. 整合 `pm-research` 与 `backtest viewer`，删除旧前端入口。
 
-当前阶段仅完成产品与技术计划，不实施代码改造。
+前端阶段只落文档，不执行前端代码改造；后端重构已按配套计划推进。
 
-## 2. 已确认决策
+## 2. 与后端计划对齐的关键决策
 
 1. 前端形态：React SPA。
-2. 整合方式：深度整合重构（不是 iframe、不是仅导航聚合）。
-3. 账户信息：做全账户聚合 + 实例级明细。
-4. 策略页覆盖：全部已注册策略（按策略目录动态展示）。
-5. 规则律师页面：旧界面删除，仅保留信息能力并纳入新大盘。
-6. 旧入口策略：立即删除旧页面（无过渡跳转）。
-7. 接口演进：前端引入数据适配层，支持文件源 -> API 源切换。
-8. 聚合口径：按账户标识去重求和（`account_id`/`wallet`）。
+2. 统一服务：对接 `src/interfaces/web/strategy_dashboard_server.py`（BFF）。
+3. 策略元信息唯一来源：`src/strategies/*/manifest.yaml`。
+4. 运行数据主库：`runtime/strategy_runtime.db`（不再依赖 `runtime/pmm_instances.db`）。
+5. `research_tasks` 不纳入第一期前端范围（无任务列表/任务状态页）。
+6. 规则律师保留信息能力，不保留旧工具页形态。
+7. 旧 `web_ui/research`、`web_ui/backtest` 最终删除。
 
-## 3. 仓库结构规划
+## 3. 路由与页面信息架构
 
-### 3.1 新增目录
-
-1. `frontend/strategy_dashboard/`
-2. `src/interfaces/web/strategy_dashboard_server.py`
-3. `docs/frontend/`（当前文档所在目录）
-
-### 3.2 删除目录（实施阶段执行）
-
-1. `web_ui/research`
-2. `web_ui/backtest`
-
-### 3.3 保留并复用能力
-
-1. `src/domains/research/*` 的数据能力。
-2. `src/domains/pmm/ops/instance_store.py` 的策略与实例数据。
-3. `src/domains/pmm/backtest/*` 的结果解析能力。
-
-## 4. 产品信息架构与路由
-
-1. `/dashboard`：策略总览（分类、健康、运行概况）。
+1. `/dashboard`：全局概览（策略组、运行状态、关键指标）。
 2. `/strategies`：策略目录（按 `strategy_group` 分类）。
 3. `/strategies/:strategyKey`：策略独立页面。
-4. `/instances/:instanceId`：策略实例详情页。
-5. `/accounts`：账户聚合页（总览 + 拆分）。
-6. `/research`：规则律师信息页（列表/详情/状态）。
-7. `/backtests`：回测查看页（整合原 backtest viewer）。
+4. `/instances/:instanceId`：实例详情（状态、快照曲线、上下文信息）。
+5. `/accounts`：账户聚合（含 `unknown_account` 告警）。
+6. `/research`：research 市场信息页（列表/详情/同步动作结果）。
+7. `/backtests`：回测与运维信息页（runs/table/scenario/ops/supervisor）。
 
-## 5. 前端模块规划
+## 4. 前端模块划分
 
-1. `AppShell`：全局导航、布局、全局刷新控制。
-2. `StrategyCatalog`：策略分组与运行统计。
-3. `InstanceMonitor`：实例状态、心跳、PnL/Equity/USDC 监控。
-4. `StrategyWorkspace`：按 `strategyKey` 渲染独立策略页面。
-5. `AccountCenter`：账户聚合卡片与实例明细表。
-6. `ResearchInsight`：规则律师信息展示（去工具化）。
-7. `BacktestExplorer`：回测结果列表、表格、详情。
-8. `DataAdapter`：前端域数据适配层（切换数据源）。
+1. `AppShell`：导航、全局筛选、自动刷新。
+2. `StrategyCatalog`：策略目录和分组统计。
+3. `InstanceMonitor`：实例状态表 + 心跳/状态老化。
+4. `InstanceHistory`：`pnl/equity/usdc` 时序曲线。
+5. `AccountCenter`：账户聚合与实例映射。
+6. `ResearchPanel`：research 市场与动作回显（同步模式）。
+7. `BacktestPanel`：回测结果表、场景详情、运维状态。
+8. `ApiClient`：统一 `/api/v1` 请求层与错误体解析。
 
-## 6. API 与数据接口规划
+## 5. API 契约（前端消费）
 
-前端统一调用 BFF，BFF 聚合现有域能力。
-
-### 6.1 对外 API（BFF）
+统一基于 `/api/v1`：
 
 1. `GET /api/v1/strategies`
-2. `GET /api/v1/instances?status=&strategy_key=&limit=`
-3. `GET /api/v1/instances/:id`
-4. `GET /api/v1/instances/:id/history?limit=`
-5. `GET /api/v1/accounts`
-6. `GET /api/v1/research/markets`
-7. `GET /api/v1/research/markets/:marketId`
-8. `GET /api/v1/backtests/runs`
-9. `GET /api/v1/backtests/table?run=&q=`
-10. `GET /api/v1/backtests/scenario?run=&scenario_id=&profile=`
+2. `GET /api/v1/instances?status=&strategy_key=&execution_mode=&account_id=&wallet_address=&limit=&offset=&stale_after_sec=`
+3. `GET /api/v1/instances/{instance_id}`
+4. `GET /api/v1/instances/{instance_id}/history?limit=`
+5. `GET /api/v1/accounts?limit=&offset=`
+6. `GET /api/v1/research/markets?page=&page_size=`
+7. `GET /api/v1/research/markets/{market_id}`
+8. `POST /api/v1/research/actions/filter`
+9. `POST /api/v1/research/actions/parse`
+10. `POST /api/v1/research/actions/prompt`
+11. `POST /api/v1/research/actions/run_all`
+12. `GET /api/v1/backtests/runs`
+13. `GET /api/v1/backtests/table?run=&q=`
+14. `GET /api/v1/backtests/scenario?run=&scenario_run_id=`
+15. `GET /api/v1/ops/status`
+16. `GET /api/v1/ops/logs?name=&lines=`
+17. `GET /api/v1/supervisor/sessions?limit=`
 
-### 6.2 前端适配层接口（内部）
+## 6. 数据口径约束
 
-1. `DashboardProvider`（统一业务接口）
-2. `FileBackedProvider`（当前可落地）
-3. `HttpBackedProvider`（后端 API 稳定后切换）
+1. 时间字段统一用 UTC ISO8601 展示与存储。
+2. 账户聚合键优先级：`account_id > wallet_address > unknown_account`。
+3. 前端需统一处理错误体：`{code,message,details,request_id,timestamp_utc}`。
+4. 分页统一按 `limit/offset/total` 协议处理。
 
-环境变量建议：`DASHBOARD_DATA_MODE=file|http`
+## 7. 与后端同步的清理项（前端相关）
 
-## 7. 账户聚合口径
+1. 下线旧独立 UI：`web_ui/research/*`、`web_ui/backtest/*`。
+2. 前端不再依赖旧 `/api/*` 路由，仅使用 `/api/v1/*`。
+3. 前端代码中移除对 `runtime/pmm_instances.db` 或 `pmm_*` 表名的任何假设。
 
-1. 主键优先：`account_id`。
-2. 回退主键：`wallet_address`。
-3. 均缺失时：落入 `unknown_account`，前端展示口径告警。
-4. 聚合指标：
-   - `equity_total`
-   - `usdc_total`
-   - `pnl_total`
-   - `open_orders_total`
-   - `running_instances`
+## 8. 实施顺序（前端侧）
 
-## 8. 迁移与下线计划（实施阶段）
-
-1. 搭建新前端骨架与统一路由。
-2. 接入策略与实例数据。
-3. 接入账户聚合数据。
-4. 接入 research 信息页。
-5. 接入 backtest explorer。
-6. 联调与回归测试。
-7. 删除旧页面与旧静态入口。
-8. 更新 README 与运维文档。
+1. 先搭建 `frontend/strategy_dashboard/` 与基础路由。
+2. 按 `/api/v1` 契约接入策略/实例/账户页。
+3. 接入 research 页（同步 action 模式）。
+4. 接入 backtest + ops + supervisor 页面。
+5. 全链路联调并替换旧入口。
+6. 清理旧页面与旧 API 引用。
 
 ## 9. 验收标准
 
-1. 可按策略分类浏览全部策略。
-2. 可查看每个策略实例运行状态与核心效果指标。
-3. 可查看账户聚合与实例拆分。
-4. 可在前端切换进入策略独立页面。
-5. `pm-research` 与 `backtest viewer` 能力在新大盘内可用。
-6. 旧 `web_ui/research` 与 `web_ui/backtest` 被下线。
-7. 数据适配层可在 `file/http` 模式间切换而不改页面层。
+1. 前端可按策略分组浏览全策略，并进入独立策略页。
+2. 可查看实例状态和历史曲线（来自 `strategy_instance_state/snapshots`）。
+3. 可查看账户聚合并正确处理 `unknown_account`。
+4. research 与 backtest 能力均可在统一前端使用。
+5. 全部接口调用使用 `/api/v1`，无旧路由残留。
+6. 旧 `web_ui/*` 页面下线后，前端主流程不受影响。
 
-## 10. 测试计划
+## 10. 风险与默认假设
 
-1. API 单测：策略、实例、账户、research、backtest 端点。
-2. 聚合单测：账户去重与 `unknown_account` 逻辑。
-3. 前端组件测试：策略目录、实例状态、账户汇总。
-4. 前端路由测试：总览到策略到实例到账户链路。
-5. 兼容测试：`file` 模式与 `http` 模式一致性。
-6. 回归测试：旧入口移除后无残留引用。
+1. 后端会按计划完成 `runtime/strategy_runtime.db` 与新表结构。
+2. `research_actions` 第一版为同步接口，前端需处理超时失败回显。
+3. 第一版不做鉴权，仅面向内部使用。
 
-## 11. 风险与默认假设
+## 11. 执行状态
 
-1. 后端将提供 `account_id` 或 `wallet_address` 至少一种标识。
-2. 现阶段部分数据读取仍可能来自文件工件，后续将 API 化替换。
-3. `runtime/pmm_instances.db` 可能存在历史 schema，需兼容迁移。
-4. 第一版默认单用户内部运营场景，不做鉴权体系。
-
-## 12. 后续执行说明
-
-本文件仅记录冻结计划，未实施任何功能改造。  
-当你确认开始执行时，按本计划分阶段落地，并在每阶段结束后更新本文件的“执行进度”小节（后续补充）。
-
+1. 文档已更新（当前）。
+2. 代码尚未执行（按“先文档、后执行”要求）。
