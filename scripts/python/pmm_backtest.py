@@ -250,31 +250,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Stop at first failed scenario",
     )
 
-    p_web = sub.add_parser(
-        "web",
-        help="Start local web UI for browsing backtest artifacts",
-    )
-    p_web.add_argument(
-        "--host",
-        default="127.0.0.1",
-        help="HTTP host (default: 127.0.0.1)",
-    )
-    p_web.add_argument(
-        "--port",
-        type=int,
-        default=8010,
-        help="HTTP port (default: 8010)",
-    )
-    p_web.add_argument(
-        "--artifacts-dir",
-        default="src/domains/pmm/backtest/.artifacts",
-        help="Artifacts root directory",
-    )
-    p_web.add_argument(
-        "--runtime-dir",
-        default="runtime",
-        help="Runtime directory for live/paper logs and pid files",
-    )
     return parser
 
 
@@ -432,20 +407,6 @@ def main() -> None:
 
             plot_result = plot_compare_all(args.out_dir)
             print(json.dumps(plot_result, ensure_ascii=False, indent=2))
-        return
-    if args.command == "web":
-        from src.domains.pmm.backtest.web_server import run_server
-
-        print(
-            f"serving PMM backtest UI on http://{args.host}:{args.port} "
-            f"(artifacts={Path(args.artifacts_dir).resolve()})"
-        )
-        run_server(
-            host=args.host,
-            port=args.port,
-            artifacts_dir=args.artifacts_dir,
-            runtime_dir=args.runtime_dir,
-        )
         return
     raise ValueError(f"unknown command: {args.command}")
 

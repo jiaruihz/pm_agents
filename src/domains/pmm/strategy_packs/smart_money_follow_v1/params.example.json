@@ -1,7 +1,0 @@
-{
-  "smart_money_signal_file": "runtime/smart_money_signals.json",
-  "smart_money_signal_reload_sec": 5,
-  "smart_money_price_tilt_factor": 0.35,
-  "smart_money_size_tilt_factor": 0.75,
-  "smart_money_one_side_only_threshold": 0.9
-}

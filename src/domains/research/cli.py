@@ -345,16 +345,5 @@ def market_run(
     typer.echo(json.dumps(res, indent=2, ensure_ascii=False))
 
 
-@app.command("web")
-def web(
-    host: str = typer.Option("127.0.0.1", help="Bind host"),
-    port: int = typer.Option(8000, help="Bind port"),
-):
-    """Run lightweight web UI server."""
-    from .web_server import run_server
-
-    run_server(host=host, port=port)
-
-
 if __name__ == "__main__":
     app()
