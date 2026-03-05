@@ -21,7 +21,7 @@ def build_live_report_message(
     *,
     symbol: str,
     strategy_key: str,
-    mode: str,
+    mode: str = "live",
     tick: int,
     pnl: float,
     equity: float,
@@ -29,10 +29,10 @@ def build_live_report_message(
     positions: Dict[str, float],
     mids: Dict[str, float],
     open_orders_count: int,
-    fills_total: int,
-    fills_since_last_report: int,
-    placed_total: int,
-    canceled_total: int,
+    fills_total: int = 0,
+    fills_since_last_report: int = 0,
+    placed_total: int = 0,
+    canceled_total: int = 0,
 ) -> str:
     lines = [
         "[PMM LIVE REPORT]",
@@ -154,9 +154,9 @@ class PMMTelegramNotifier:
         positions: Dict[str, float],
         mids: Dict[str, float],
         open_orders_count: int,
-        fills_total: int,
-        placed_total: int,
-        canceled_total: int,
+        fills_total: int = 0,
+        placed_total: int = 0,
+        canceled_total: int = 0,
     ) -> None:
         if not self.enabled:
             return
