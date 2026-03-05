@@ -53,3 +53,5 @@ runtime/*.db
 runtime/*.db.*
 runtime/*.json
 runtime/logs/*.log
+runtime/db/*.db
+runtime/db/*.db.*

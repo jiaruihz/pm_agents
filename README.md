@@ -54,6 +54,7 @@ cp .env.example .env
 
 运行实例主库使用 `STRATEGY_RUNTIME_DB_PATH`（默认 `runtime/strategy_runtime.db`）。
 `PMM_INSTANCE_DB_PATH` 仅保留兼容读取，已弃用（deprecated）。
+Research 主库默认 `RESEARCH_DB_PATH=runtime/db/research.db`（兼容旧 `research.db` 自动迁移/回退）。
 
 ### 3) PMM 回测
 
@@ -139,6 +140,7 @@ pytest tests/research_tests -q
 - 回测方法：`src/domains/pmm/docs/BACKTEST_SCENARIO_METHOD.md`
 - RESEARCH 整合说明：`docs/RESEARCH_INTEGRATION.md`
 - RESEARCH 原文档：`docs/research/RESEARCH_README.md`
+- 统一策略看板计划：`docs/STRATEGY_DASHBOARD_PLAN.md`
 
 ## License
 

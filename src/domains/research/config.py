@@ -5,6 +5,9 @@ import os
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 
+DEFAULT_RESEARCH_DB_PATH = "runtime/db/research.db"
+LEGACY_RESEARCH_DB_PATH = "research.db"
+
 
 def _env_str(name: str, default: str) -> str:
     val = os.getenv(name)
@@ -28,13 +31,35 @@ def _env_bool(name: str, default: bool) -> bool:
     return str(val).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _resolve_research_db_path() -> str:
+    explicit = os.getenv("RESEARCH_DB_PATH")
+    if explicit is not None and explicit.strip():
+        return explicit.strip()
+
+    runtime_path = DEFAULT_RESEARCH_DB_PATH
+    legacy_path = LEGACY_RESEARCH_DB_PATH
+
+    if os.path.exists(runtime_path):
+        return runtime_path
+    if os.path.exists(legacy_path):
+        try:
+            parent = os.path.dirname(runtime_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            os.replace(legacy_path, runtime_path)
+            return runtime_path
+        except OSError:
+            return legacy_path
+    return runtime_path
+
+
 class Settings(BaseModel):
     """Application settings loaded from environment or .env file."""
 
     gamma_base_url: str = Field("https://gamma-api.polymarket.com")
     clob_base_url: str = Field("https://clob.polymarket.com")
 
-    db_path: str = Field("research.db")
+    db_path: str = Field(DEFAULT_RESEARCH_DB_PATH)
 
     rate_limit_per_sec: float = Field(2.0)
     max_concurrency: int = Field(5)
@@ -93,7 +118,7 @@ def get_settings() -> Settings:
     data = {
         "gamma_base_url": _env_str("GAMMA_BASE_URL", "https://gamma-api.polymarket.com"),
         "clob_base_url": _env_str("CLOB_BASE_URL", "https://clob.polymarket.com"),
-        "db_path": _env_str("RESEARCH_DB_PATH", "research.db"),
+        "db_path": _resolve_research_db_path(),
         "rate_limit_per_sec": _env_float("RESEARCH_RATE_LIMIT_PER_SEC", 2.0),
         "max_concurrency": _env_int("RESEARCH_MAX_CONCURRENCY", 5),
         "cache_ttl_seconds": _env_int("RESEARCH_CACHE_TTL_SECONDS", 300),

@@ -128,5 +128,5 @@
 
 1. 修复 `telegram_notifier` 签名与测试一致性。
 2. 为 `src/interfaces/web/strategy_dashboard_server.py` 增加 API 单测。
-3. 前端按 `docs/frontend/STRATEGY_DASHBOARD_PLAN.md` 接入 `/api/v1`。
+3. 前端按 `docs/STRATEGY_DASHBOARD_PLAN.md` 接入 `/api/v1`。
 4. 评估并补充认证/鉴权（当前内部场景默认无鉴权）。

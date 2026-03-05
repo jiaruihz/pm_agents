@@ -9,7 +9,8 @@
 
 ## 配置 (.env)
 复制 `.env.example` 为 `.env`，按需填充：
-- `RESEARCH_DB_PATH=research.db`
+- `RESEARCH_DB_PATH=runtime/db/research.db`
+- 兼容说明：若未设置 `RESEARCH_DB_PATH` 且根目录存在旧 `research.db`，系统会自动迁移到 `runtime/db/research.db`（失败时回退继续使用旧路径）。
 - `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`（可选，OpenAI 兼容，如 Qwen/DeepSeek）；缺省则跳过 LLM 解析。
 - 限速/并发/缓存：`RESEARCH_RATE_LIMIT_PER_SEC`（默认 5）、`RESEARCH_MAX_CONCURRENCY`（默认 5）、`RESEARCH_CACHE_TTL_SECONDS`（默认 300）
 - Orderbook Top-N：`RESEARCH_ORDERBOOK_TOP_N`（默认 20），`RESEARCH_ARCHIVE_BOOKS` 可选 gzip 归档至 `RESEARCH_ARCHIVE_DIR`。
