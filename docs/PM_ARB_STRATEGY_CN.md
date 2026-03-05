@@ -6,7 +6,7 @@
 2. 模拟命令输出字段的含义。
 3. 实盘/回测中应该重点监控哪些指标。
 
-代码目录：`src/domains/arb/`。
+代码目录：`src/strategies/arb/`。
 
 ## 标识模型（Event vs Market vs Token）
 
@@ -103,8 +103,8 @@ PM-Arb 关键变量：
 
 PMM 与 PM-Arb 解决的是不同问题，可以并行运行：
 
-- PMM（`src/domains/pmm/`）：常态做市，持续挂单，靠价差吃流量，并做库存管理/风控。
-- PM-Arb（`src/domains/arb/`）：只有当 YES/NO 恒等式偏离足够大时才出手，目标是“更接近无风险”的套利。
+- PMM（`src/strategies/pmm/`）：常态做市，持续挂单，靠价差吃流量，并做库存管理/风控。
+- PM-Arb（`src/strategies/arb/`）：只有当 YES/NO 恒等式偏离足够大时才出手，目标是“更接近无风险”的套利。
 
 推荐的协同方式（后续可实现）：
 
@@ -183,5 +183,5 @@ PM_ARB_MAX_TICKS=6 \\
 PM_ARB_TICK_INTERVAL_SEC=0.2 \\
 PM_ARB_DRY_RUN=1 \\
 PM_ARB_PAIRS_JSON='[{\"name\":\"pair\",\"yes_token_id\":\"YES\",\"no_token_id\":\"NO\",\"condition_id\":\"0x..\",\"partition\":[1,2]}]' \\
-python3 -m src.domains.arb.main
+python3 -m src.strategies.arb.main
 ```

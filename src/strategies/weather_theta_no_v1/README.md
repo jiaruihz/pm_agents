@@ -19,4 +19,4 @@ bash src/strategies/weather_theta_no_v1/run.sh
 ```
 
 更多策略细节：
-- `src/domains/pmm/docs/WEATHER_THETA_NO_PROGRESS.md`
+- `docs/pmm/WEATHER_THETA_NO_PROGRESS.md`

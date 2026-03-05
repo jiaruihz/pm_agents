@@ -17,14 +17,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
-from src.domains.research.db import db_cursor, init_db
-from src.domains.research.pipeline import get_market_details, run_single_market_flow
+from src.strategies.rule_lawyer.db import db_cursor, init_db
+from src.strategies.rule_lawyer.pipeline import get_market_details, run_single_market_flow
 from src.platform.strategy_runtime import StrategyRuntimeStore
 from src.strategies.registry import load_strategy_rows
 
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
-DEFAULT_ARTIFACTS_DIR = ROOT_DIR / "src" / "domains" / "pmm" / "backtest" / ".artifacts"
+DEFAULT_ARTIFACTS_DIR = ROOT_DIR / "src" / "strategies" / "pmm" / "backtest" / ".artifacts"
 DEFAULT_RUNTIME_DIR = ROOT_DIR / "runtime"
 SUPERVISOR_DIR_NAME = "supervisor_logs"
 RUN_TAG_CYCLE_RE = re.compile(r"_c(?P<cycle>\d{3})_a(?P<attempt>\d{2})$")
@@ -439,8 +439,8 @@ class StrategyDashboardHandler(BaseHTTPRequestHandler):
         self._send_error("NOT_FOUND", "unknown research action", 404)
 
     def _research_action_filter(self, payload: Dict[str, Any], market_id: str) -> None:
-        from src.domains.research.nodes.filter import FilterNode
-        from src.domains.research.storage import get_markets_by_ids
+        from src.strategies.rule_lawyer.nodes.filter import FilterNode
+        from src.strategies.rule_lawyer.storage import get_markets_by_ids
 
         if market_id:
             markets = get_markets_by_ids([market_id])
@@ -455,13 +455,13 @@ class StrategyDashboardHandler(BaseHTTPRequestHandler):
 
     def _research_action_parse(self, payload: Dict[str, Any], market_id: str) -> None:
         if market_id:
-            from src.domains.research.nodes.constants import DEFAULT_READY_SCORE, STATUS_PARSED, STATUS_READY_TO_SEARCH
-            from src.domains.research.parser import (
+            from src.strategies.rule_lawyer.nodes.constants import DEFAULT_READY_SCORE, STATUS_PARSED, STATUS_READY_TO_SEARCH
+            from src.strategies.rule_lawyer.parser import (
                 parse_market_with_llm,
                 save_market_rule_parse_failure,
                 save_market_rule_parses_records,
             )
-            from src.domains.research.storage import get_markets_by_ids, update_market_statuses
+            from src.strategies.rule_lawyer.storage import get_markets_by_ids, update_market_statuses
             import asyncio
 
             markets = get_markets_by_ids([market_id])
@@ -508,7 +508,7 @@ class StrategyDashboardHandler(BaseHTTPRequestHandler):
             )
             return
 
-        from src.domains.research.nodes.parser import ParserNode
+        from src.strategies.rule_lawyer.nodes.parser import ParserNode
         import asyncio
 
         batch = max(1, _to_int(payload.get("batch"), 100))
@@ -555,8 +555,8 @@ class StrategyDashboardHandler(BaseHTTPRequestHandler):
             )
             return
 
-        from src.domains.research.nodes.builder import PromptBuilder
-        from src.domains.research.nodes.quant import QuantNode
+        from src.strategies.rule_lawyer.nodes.builder import PromptBuilder
+        from src.strategies.rule_lawyer.nodes.quant import QuantNode
 
         edge_threshold = _to_float(payload.get("edge_threshold"), 0.0)
         limit = max(1, _to_int(payload.get("limit"), 500))
@@ -705,7 +705,7 @@ class StrategyDashboardHandler(BaseHTTPRequestHandler):
                 "instance_count": instance_count,
                 "instance_running": instance_running,
                 "config_snapshot": self._load_env_snapshot(env_file),
-                "runbook_path": "src/domains/pmm/docs/PAPER_RUNBOOK.md",
+                "runbook_path": "docs/pmm/PAPER_RUNBOOK.md",
                 "commands": self._ops_commands(),
                 "now": datetime.now().isoformat(timespec="seconds"),
             }
@@ -1082,13 +1082,13 @@ class StrategyDashboardHandler(BaseHTTPRequestHandler):
             "start_foreground": (
                 f"cd {root}\n"
                 "set -a; source .env; set +a\n"
-                ".venv/bin/python -u -m src.domains.pmm.main"
+                ".venv/bin/python -u -m src.strategies.pmm.main"
             ),
             "start_background": (
                 f"cd {root}\n"
                 "mkdir -p runtime/logs\n"
                 "set -a; source .env; set +a\n"
-                "nohup .venv/bin/python -u -m src.domains.pmm.main > runtime/logs/pmm_paper_live.log 2>&1 & echo $! > runtime/pmm_run.pid"
+                "nohup .venv/bin/python -u -m src.strategies.pmm.main > runtime/logs/pmm_paper_live.log 2>&1 & echo $! > runtime/pmm_run.pid"
             ),
             "status": 'ps -p "$(cat runtime/pmm_run.pid)" -o pid=,etime=,cmd=',
             "tail_log": "tail -f runtime/logs/pmm_paper_live.log",
@@ -1157,7 +1157,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Unified strategy dashboard server")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8011)
-    parser.add_argument("--artifacts-dir", default="src/domains/pmm/backtest/.artifacts")
+    parser.add_argument("--artifacts-dir", default="src/strategies/pmm/backtest/.artifacts")
     parser.add_argument("--runtime-dir", default="runtime")
     args = parser.parse_args()
     run_server(host=args.host, port=args.port, artifacts_dir=args.artifacts_dir, runtime_dir=args.runtime_dir)

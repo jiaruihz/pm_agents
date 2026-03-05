@@ -1,6 +1,6 @@
 import pytest
 
-from src.domains.research.clients.gamma import fetch_paginated
+from src.platform.clients.gamma import fetch_paginated
 
 
 class DummyClient:
@@ -30,7 +30,7 @@ async def test_fetch_paginated_collects_pages(monkeypatch):
     def _client_factory():
         return dummy
 
-    monkeypatch.setattr("src.domains.research.clients.gamma.HttpClient", _client_factory)
+    monkeypatch.setattr("src.platform.clients.gamma.HttpClient", _client_factory)
     data = await fetch_paginated("http://example/markets", params={"limit": 2}, max_pages=None)
     assert len(data) == 3
     assert dummy.calls == 2

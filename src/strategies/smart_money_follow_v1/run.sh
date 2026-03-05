@@ -29,4 +29,4 @@ PY_BIN=".venv/bin/python"
 if [[ ! -x "$PY_BIN" ]]; then
   PY_BIN="python3"
 fi
-exec "$PY_BIN" -u -m src.domains.pmm.main
+exec "$PY_BIN" -u -m src.strategies.pmm.main

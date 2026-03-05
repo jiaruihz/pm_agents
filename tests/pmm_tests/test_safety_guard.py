@@ -1,6 +1,6 @@
 import pytest
 
-from src.domains.pmm.risk.safety_guard import RiskError, SafetyGuard, SecurityError
+from src.strategies.pmm.risk.safety_guard import RiskError, SafetyGuard, SecurityError
 
 
 def _guard(**kwargs) -> SafetyGuard:

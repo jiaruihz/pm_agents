@@ -6,7 +6,7 @@ This document explains:
 2. The meaning of the simulation command output fields.
 3. What to monitor (which indicators matter in practice).
 
-Code lives in `src/domains/arb/`.
+Code lives in `src/strategies/arb/`.
 
 ## Identifier Model (Event vs Market vs Token)
 
@@ -103,8 +103,8 @@ Execution safety boundary:
 
 PMM and PM-Arb solve different problems and can run together:
 
-- PMM (`src/domains/pmm/`) provides continuous liquidity with inventory-aware quoting.
-- PM-Arb (`src/domains/arb/`) only acts when the YES/NO invariant is violated enough to cover frictions.
+- PMM (`src/strategies/pmm/`) provides continuous liquidity with inventory-aware quoting.
+- PM-Arb (`src/strategies/arb/`) only acts when the YES/NO invariant is violated enough to cover frictions.
 
 Recommended coordination (next step to implement):
 
@@ -183,5 +183,5 @@ PM_ARB_MAX_TICKS=6 \\
 PM_ARB_TICK_INTERVAL_SEC=0.2 \\
 PM_ARB_DRY_RUN=1 \\
 PM_ARB_PAIRS_JSON='[{\"name\":\"pair\",\"yes_token_id\":\"YES\",\"no_token_id\":\"NO\",\"condition_id\":\"0x..\",\"partition\":[1,2]}]' \\
-python3 -m src.domains.arb.main
+python3 -m src.strategies.arb.main
 ```

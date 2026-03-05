@@ -1,6 +1,6 @@
 import json
 
-from src.domains.research.clients.gamma import (
+from src.platform.clients.gamma import (
     normalize_event,
     normalize_market,
 )

@@ -1,4 +1,4 @@
-from src.domains.research.parser import RuleParse, TimeWindow, EntityDef
+from src.strategies.rule_lawyer.parser import RuleParse, TimeWindow, EntityDef
 
 
 def test_ruleparse_validation_accepts_schema():

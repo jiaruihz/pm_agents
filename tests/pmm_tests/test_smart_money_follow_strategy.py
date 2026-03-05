@@ -3,10 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.domains.pmm.config import PMMConfig
-from src.domains.pmm.core.strategy_base import StrategyQuoteInput
-from src.domains.pmm.strategies.single_level_v1 import SingleLevelV1Strategy
-from src.domains.pmm.strategies.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
+from src.strategies.pmm.config import PMMConfig
+from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
+from src.strategies.pmm.variants.single_level_v1 import SingleLevelV1Strategy
+from src.strategies.pmm.variants.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
 
 
 def _anchor_quotes(

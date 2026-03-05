@@ -1,6 +1,6 @@
 import pytest
 
-from src.domains.pmm.execution.live_broker import LiveBroker
+from src.strategies.pmm.execution.live_broker import LiveBroker
 
 
 class DummyClient:

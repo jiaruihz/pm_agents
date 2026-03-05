@@ -33,7 +33,7 @@
 4. `PYTHONPATH=. .venv/bin/pytest tests/pmm_tests -q`
    - 结果：`2 failed, 71 passed`（见“已知问题”）。
 5. BFF 启动命令（临时端口 `18011`）：
-   - `PYTHONPATH=. .venv/bin/python -m src.interfaces.web.strategy_dashboard_server --host 127.0.0.1 --port 18011 --runtime-dir runtime --artifacts-dir src/domains/pmm/backtest/.artifacts`
+   - `PYTHONPATH=. .venv/bin/python -m src.interfaces.web.strategy_dashboard_server --host 127.0.0.1 --port 18011 --runtime-dir runtime --artifacts-dir src/strategies/pmm/backtest/.artifacts`
 6. BFF 路由烟测：
    - `GET /api/v1/health` -> `200`
    - `GET /api/v1/strategies` -> `200`
@@ -44,11 +44,11 @@
 ## 4. 结构迁移映射（旧 -> 新）
 
 1. 策略元信息：
-   - `src/domains/pmm/strategy_packs/*` -> `src/strategies/*`
+   - `src/strategies/pmm/strategy_packs/*` -> `src/strategies/*`
 2. 运行存储：
-   - `src/domains/pmm/ops/instance_store.py` -> `src/platform/strategy_runtime/store.py`
+   - `src/strategies/pmm/ops/instance_store.py` -> `src/platform/strategy_runtime/store.py`
 3. Web 服务：
-   - `src/domains/pmm/backtest/web_server.py` + `src/domains/research/web_server.py`
+   - `src/strategies/pmm/backtest/web_server.py` + `src/strategies/rule_lawyer/web_server.py`
    -> `src/interfaces/web/strategy_dashboard_server.py`
 4. 脚本入口：
    - `scripts/python/pmm_strategy_packs.py` -> `scripts/python/strategy_catalog.py`
@@ -82,10 +82,10 @@
 
 ## 7. 删除清单（文件/目录）
 
-1. `src/domains/pmm/ops/*`
-2. `src/domains/pmm/strategy_packs/*`
-3. `src/domains/pmm/backtest/web_server.py`
-4. `src/domains/research/web_server.py`
+1. `src/strategies/pmm/ops/*`
+2. `src/strategies/pmm/strategy_packs/*`
+3. `src/strategies/pmm/backtest/web_server.py`
+4. `src/strategies/rule_lawyer/web_server.py`
 5. `web_ui/backtest/*`
 6. `web_ui/research/*`
 7. `scripts/python/pmm_strategy_packs.py`

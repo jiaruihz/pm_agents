@@ -32,19 +32,21 @@ archive.zip
 local_db*
 local_news_cache/
 research.db
+research.db-*
 node_modules/
 frontend/**/node_modules/
+frontend/**/tsconfig.tsbuildinfo
 output/
 archive/books/
-src/domains/pmm/backtest/scenarios/
-src/domains/pmm/backtest/results/
-src/domains/pmm/backtest/results_compare/
-src/domains/pmm/backtest/results_fill_models/
-src/domains/pmm/backtest/results_*/
-src/domains/pmm/backtest/scenarios_*/
-src/domains/pmm/backtest/.artifacts/
+src/strategies/pmm/backtest/scenarios/
+src/strategies/pmm/backtest/results/
+src/strategies/pmm/backtest/results_compare/
+src/strategies/pmm/backtest/results_fill_models/
+src/strategies/pmm/backtest/results_*/
+src/strategies/pmm/backtest/scenarios_*/
+src/strategies/pmm/backtest/.artifacts/
 # Keep metadata only; do not commit replay/plot artifacts.
-src/domains/pmm/backtest/**/plots/
+src/strategies/pmm/backtest/**/plots/
 local_market_collection/market_snapshot_*.json
 
 # Runtime local artifacts

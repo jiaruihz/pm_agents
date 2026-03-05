@@ -1,8 +1,8 @@
 import unittest
 
-from src.domains.pmm.config import PMMConfig
-from src.domains.pmm.core.strategy_base import StrategyQuoteInput
-from src.domains.pmm.strategies.weather_theta_no_v1 import WeatherThetaNoV1Strategy
+from src.strategies.pmm.config import PMMConfig
+from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
+from src.strategies.pmm.variants.weather_theta_no_v1 import WeatherThetaNoV1Strategy
 
 
 def _quantize_pair(bid: float, ask: float, tick: float, mode: str):

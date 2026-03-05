@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.domains.research.notifier import send_telegram_message
+from src.platform.notification.telegram import send_telegram_message
 
 
 @pytest.mark.asyncio
@@ -28,14 +28,14 @@ async def test_send_telegram_message_uses_settings(monkeypatch):
             return {"ok": True, "result": {"message_id": 1}}
 
     monkeypatch.setattr(
-        "src.domains.research.notifier.get_settings",
+        "src.platform.notification.telegram.get_settings",
         lambda: SimpleNamespace(
             telegram_bot_token="bot-123",
             telegram_chat_id="chat-888",
             telegram_api_base_url="https://api.telegram.org",
         ),
     )
-    monkeypatch.setattr("src.domains.research.notifier.TelegramClient", DummyTelegramClient)
+    monkeypatch.setattr("src.platform.notification.telegram.TelegramClient", DummyTelegramClient)
 
     res = await send_telegram_message("ping", parse_mode="Markdown", disable_notification=True)
     assert res["ok"] is True
@@ -49,7 +49,7 @@ async def test_send_telegram_message_uses_settings(monkeypatch):
 @pytest.mark.asyncio
 async def test_send_telegram_message_missing_config(monkeypatch):
     monkeypatch.setattr(
-        "src.domains.research.notifier.get_settings",
+        "src.platform.notification.telegram.get_settings",
         lambda: SimpleNamespace(
             telegram_bot_token="",
             telegram_chat_id="",

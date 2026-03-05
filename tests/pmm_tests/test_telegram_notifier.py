@@ -2,8 +2,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from src.domains.pmm.config import PMMConfig
-from src.domains.pmm.engine.telegram_notifier import (
+from src.strategies.pmm.config import PMMConfig
+from src.platform.notification.telegram import (
     PMMTelegramNotifier,
     build_alert_message,
     build_live_report_message,
@@ -78,8 +78,8 @@ async def test_periodic_report_interval_and_alert_cooldown(monkeypatch):
     def _now() -> float:
         return clock["now"]
 
-    monkeypatch.setattr("src.domains.pmm.engine.telegram_notifier.TelegramClient", lambda *a, **k: client)
-    monkeypatch.setattr("src.domains.pmm.engine.telegram_notifier.time.time", _now)
+    monkeypatch.setattr("src.platform.notification.telegram.TelegramClient", lambda *a, **k: client)
+    monkeypatch.setattr("src.platform.notification.telegram.time.time", _now)
 
     cfg = PMMConfig(
         telegram_enabled=True,

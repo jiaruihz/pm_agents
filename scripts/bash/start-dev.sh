@@ -12,4 +12,4 @@ else
   exit 1
 fi
 
-exec "$PYTHON_BIN" -m src.domains.pmm.main
+exec "$PYTHON_BIN" -m src.strategies.pmm.main

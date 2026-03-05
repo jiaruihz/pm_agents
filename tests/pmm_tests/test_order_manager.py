@@ -1,7 +1,7 @@
 """Unit tests for PMM Order Manager module."""
 
 import unittest
-from src.domains.pmm.execution.order_manager import OrderManager, MultiDiffDecision
+from src.strategies.pmm.execution.order_manager import OrderManager, MultiDiffDecision
 
 
 class TestOrderManager(unittest.TestCase):
@@ -13,7 +13,7 @@ class TestOrderManager(unittest.TestCase):
 
     def test_should_replace_true(self):
         """Test should_replace when replacement is needed."""
-        from src.domains.pmm.execution.order_manager import ManagedOrder
+        from src.strategies.pmm.execution.order_manager import ManagedOrder
         old_order = ManagedOrder(
             order_id="1",
             token_id="token1",
@@ -28,7 +28,7 @@ class TestOrderManager(unittest.TestCase):
 
     def test_should_replace_false(self):
         """Test should_replace when replacement is not needed."""
-        from src.domains.pmm.execution.order_manager import ManagedOrder
+        from src.strategies.pmm.execution.order_manager import ManagedOrder
         old_order = ManagedOrder(
             order_id="1",
             token_id="token1",

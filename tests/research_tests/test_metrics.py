@@ -1,4 +1,4 @@
-from src.domains.research.metrics import compute_metrics
+from src.strategies.rule_lawyer.metrics import compute_metrics
 
 
 def test_compute_metrics_spread_and_depth():

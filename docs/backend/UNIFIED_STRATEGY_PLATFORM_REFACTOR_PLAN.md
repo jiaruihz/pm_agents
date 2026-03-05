@@ -185,10 +185,10 @@ No task queue table is used in v1.
 
 ## 6. Removed Components
 
-- `src/domains/pmm/ops/*`
-- `src/domains/pmm/strategy_packs/*`
-- `src/domains/pmm/backtest/web_server.py`
-- `src/domains/research/web_server.py`
+- `src/strategies/pmm/ops/*`
+- `src/strategies/pmm/strategy_packs/*`
+- `src/strategies/pmm/backtest/web_server.py`
+- `src/strategies/rule_lawyer/web_server.py`
 - `web_ui/backtest/*`
 - `web_ui/research/*`
 - `scripts/python/pmm_strategy_packs.py`

@@ -22,7 +22,7 @@ const strategies: StrategyItem[] = [
     total_instances: 7,
   },
   {
-    strategy_key: "rule_lawyer_v1",
+    strategy_key: "rule_lawyer",
     strategy_name: "规则律师",
     strategy_group: "rule_intelligence",
     strategy_family: "advisory",
@@ -72,7 +72,7 @@ const instances: InstanceItem[] = [
   },
   {
     instance_id: "ins_rl_007",
-    strategy_key: "rule_lawyer_v1",
+    strategy_key: "rule_lawyer",
     strategy_name: "规则律师",
     strategy_group: "rule_intelligence",
     label: "US election rule parse",
@@ -268,7 +268,7 @@ export class MockDashboardProvider implements DashboardProvider {
       ],
       latest_log: "pmm_paper_live.log",
       commands: {
-        start_foreground: "python -m src.domains.pmm.main",
+        start_foreground: "python -m src.strategies.pmm.main",
         stop: "kill $(cat runtime/pmm_run.pid)",
       },
       config_snapshot: { PMM_EXECUTION_MODE: "paper", PMM_STRATEGY_KEY: "multi_level_v1" },

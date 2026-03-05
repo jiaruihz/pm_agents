@@ -4,8 +4,8 @@ strategy_group: weather
 strategy_family: directional
 domain: pmm
 is_active: true
-runner_module: src.domains.pmm.main
-strategy_module: src.domains.pmm.strategies.weather_theta_no_v1:WeatherThetaNoV1Strategy
+runner_module: src.strategies.pmm.main
+strategy_module: src.strategies.pmm.variants.weather_theta_no_v1:WeatherThetaNoV1Strategy
 description: 天气市场 NO 侧 carry 与定时平仓策略。
 meta:
   side_bias: NO
