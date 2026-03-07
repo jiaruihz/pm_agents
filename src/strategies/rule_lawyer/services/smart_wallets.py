@@ -305,6 +305,19 @@ def _heuristic_explanation(style: str, features: Dict[str, Any], score_mode: str
     )
 
 
+def _serialize_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "wallet": str(candidate.get("wallet") or ""),
+        "discovery_score": round(to_float(candidate.get("discovery_score"), 0.0), 6),
+        "sources": sorted(list(candidate.get("sources", set()))),
+        "market_slugs": sorted(list(candidate.get("market_slugs", set()))),
+        "holder_hits": int(candidate.get("holder_hits", 0) or 0),
+        "trade_hits": int(candidate.get("trade_hits", 0) or 0),
+        "name": str(candidate.get("name") or ""),
+        "pseudonym": str(candidate.get("pseudonym") or ""),
+    }
+
+
 def discover_market_wallets(
     market: ResolvedMarket,
     holders_depth: int = 40,
@@ -389,7 +402,7 @@ def discover_market_wallets(
                 style_features=features,
                 style_explanation=_heuristic_explanation(style, features, score_mode),
                 token_convictions=_convictions_from_positions(positions, market.token_ids),
-                raw={"candidate": cand},
+                raw={"candidate": _serialize_candidate(cand)},
             )
         )
     selected.sort(

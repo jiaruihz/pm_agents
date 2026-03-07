@@ -45,6 +45,24 @@ class ResolvedMarket(BaseResearchModel):
 
 
 @dataclass
+class ResolvedEvent(BaseResearchModel):
+    event_id: str = ""
+    slug: str = ""
+    title: str = ""
+    description: str = ""
+    ticker: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    active: bool = True
+    closed: bool = False
+    volume: float = 0.0
+    liquidity: float = 0.0
+    event_url: str = ""
+    markets: List[Dict[str, Any]] = field(default_factory=list)
+    raw_event: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ProfileTarget(BaseResearchModel):
     raw_input: str
     kind: str
@@ -134,6 +152,17 @@ class RiskFlag(BaseResearchModel):
 @dataclass
 class RuleAuditSummary(BaseResearchModel):
     market: Dict[str, Any] = field(default_factory=dict)
+    rule_status: str = "unavailable"
+    rule_failure_reason: str = ""
+    llm_required: bool = True
+    llm_used: bool = False
+    llm_confidence: float = 0.0
+    rule_score: Dict[str, Any] = field(default_factory=dict)
+    trigger_type: str = ""
+    settlement_source_type: str = ""
+    trigger_conditions: List[str] = field(default_factory=list)
+    explicit_exclusions: List[str] = field(default_factory=list)
+    entity_definitions: List[Dict[str, Any]] = field(default_factory=list)
     rule_summary: str = ""
     settlement_summary: str = ""
     rule_clarity_score: float = 0.0
@@ -165,12 +194,33 @@ class MarketIntelSummary(BaseResearchModel):
 
 @dataclass
 class MarketAnalysisSummary(BaseResearchModel):
+    report_kind: str = "complete_market_analysis"
     market: Dict[str, Any] = field(default_factory=dict)
     rule_audit: Dict[str, Any] = field(default_factory=dict)
     market_intel: Dict[str, Any] = field(default_factory=dict)
+    completeness: str = "partial"
+    missing_sections: List[str] = field(default_factory=list)
+    decision_context: str = "research_only"
+    usable_for_trade_decision: bool = False
+    next_research_steps: List[str] = field(default_factory=list)
     observed_bias: float = 0.0
     risk_flags: List[Dict[str, Any]] = field(default_factory=list)
     confidence: float = 0.0
     verdict: str = ""
     caveat: str = ""
     provider_traces: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EventAnalysisSummary(BaseResearchModel):
+    report_kind: str = "event_analysis"
+    event: Dict[str, Any] = field(default_factory=dict)
+    market_summaries: List[Dict[str, Any]] = field(default_factory=list)
+    aggregate_takeaways: List[str] = field(default_factory=list)
+    completeness: str = "partial"
+    missing_sections: List[str] = field(default_factory=list)
+    next_research_steps: List[str] = field(default_factory=list)
+    risk_flags: List[Dict[str, Any]] = field(default_factory=list)
+    confidence: float = 0.0
+    verdict: str = ""
+    caveat: str = ""

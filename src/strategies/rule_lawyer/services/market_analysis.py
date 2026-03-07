@@ -13,6 +13,7 @@ def build_market_intel_summary(
     wallet_audits: List[Dict[str, Any]],
 ) -> MarketIntelSummary:
     wallets = smart_wallets_result.get("wallets", [])
+    wallet_stats = smart_wallets_result.get("stats", {})
     token_ids = market.get("token_ids") or []
     primary_token = token_ids[0] if token_ids else ""
     wallet_bias_values = []
@@ -36,6 +37,7 @@ def build_market_intel_summary(
             comment_total += score
     comment_bias = (comment_weight / comment_total) if comment_total > 0 else 0.0
     comment_status = comments_result.get("comment_status", "unavailable")
+    comment_status_detail = str(comments_result.get("status_detail") or "")
     observed_bias = (0.6 * wallet_bias + 0.4 * comment_bias) if comment_status == "ok" else wallet_bias
     risk_flags: List[Dict[str, Any]] = []
     if comment_status != "ok":
@@ -86,26 +88,85 @@ def build_market_intel_summary(
         verdict=verdict,
         caveat="市场情报层主要基于评论、holder 和钱包历史表现，不能替代对原始规则和事件事实的人工核查。",
         provider_traces={
-            "comments": {"status": comment_status, "top_commentary_count": len(commentary)},
-            "wallets": smart_wallets_result.get("stats", {}),
+            "comments": {
+                "status": comment_status,
+                "top_commentary_count": len(commentary),
+                "status_detail": comment_status_detail,
+                "unavailable_reason": comments_result.get("unavailable_reason", ""),
+                "comment_count_hint": comments_result.get("comment_count_hint", {}),
+            },
+            "wallets": {
+                **wallet_stats,
+                "status_detail": _wallet_status_detail(wallets, wallet_stats),
+            },
+            "confidence_breakdown": {
+                "base": 0.35,
+                "wallet_sample_bonus": min(0.35, len(wallets) * 0.05),
+                "comment_availability_bonus": 0.2 if comment_status == "ok" else 0.0,
+                "bias_strength_bonus": min(0.1, abs(observed_bias) * 0.2),
+                "final_before_rule_gate": round(confidence, 6),
+            },
         },
     )
 
 
+def _wallet_status_detail(wallets: List[Dict[str, Any]], wallet_stats: Dict[str, Any]) -> str:
+    selected = len(wallets)
+    candidates = int(wallet_stats.get("candidate_wallets", 0) or 0)
+    holders_wallets = int(wallet_stats.get("holders_wallets", 0) or 0)
+    trades_wallets = int(wallet_stats.get("trades_wallets", 0) or 0)
+    skipped = int(wallet_stats.get("skipped_no_sample", 0) or 0)
+    if selected > 0:
+        return f"已筛出 {selected} 个 smart wallet 样本。"
+    if candidates > 0 or holders_wallets > 0 or trades_wallets > 0:
+        return (
+            f"发现候选钱包 {candidates} 个，holder 钱包 {holders_wallets} 个，trade 钱包 {trades_wallets} 个，"
+            f"但按当前阈值筛选后未留下合格 smart wallet（无样本/被过滤 {skipped} 个）。"
+        )
+    return "当前没有发现足够的 holder 或 trade 候选钱包。"
+
+
 def build_market_analysis_summary(rule_audit: RuleAuditSummary, market_intel: MarketIntelSummary) -> MarketAnalysisSummary:
+    rule_status = str(rule_audit.rule_status or "unavailable")
     clarity = to_float(rule_audit.rule_clarity_score, 0.0)
     risk = to_float(rule_audit.resolution_risk, 0.0)
     base_confidence = to_float(market_intel.confidence, 0.0)
-    if risk >= 0.75 or clarity <= 0.35:
+    missing_sections: List[str] = []
+    next_research_steps: List[str] = []
+    if rule_status != "ok":
+        verdict = "rule_unavailable"
+        multiplier = 0.0
+        confidence = 0.0
+        missing_sections.append("rules")
+        next_research_steps.append("补跑结构化规则解析，确认触发条件、排除条款和结算来源。")
+        risk_flags = [
+            RiskFlag(
+                provider_name="market_analysis",
+                risk_type="rules_unavailable",
+                severity="high",
+                summary="规则层未完成结构化解析，当前结论不能直接用于交易决策。",
+                payload={"rule_status": rule_status, "reason": rule_audit.rule_failure_reason},
+            ).to_dict()
+        ]
+    elif risk >= 0.75 or clarity <= 0.35:
         verdict = "high_rule_risk"
-        confidence = round(base_confidence * 0.45, 6)
+        multiplier = 0.45
+        confidence = round(base_confidence * multiplier, 6)
+        risk_flags = []
     else:
         verdict = market_intel.verdict or "insufficient_edge"
         multiplier = 1.0
         if risk >= 0.55 or clarity <= 0.55:
             multiplier = 0.7
         confidence = round(base_confidence * multiplier, 6)
-    risk_flags = list(rule_audit.risk_flags) + list(market_intel.risk_flags)
+        risk_flags = []
+    if market_intel.comment_status != "ok":
+        missing_sections.append("comments")
+        next_research_steps.append("用可联网 agent 补抓评论区或外部舆情，确认市场讨论是否存在明显偏差。")
+    wallet_samples = len(market_intel.smart_wallets or [])
+    if wallet_samples < 1:
+        next_research_steps.append("补查 top holder / smart wallet 的历史样本，确认当前筹码结构是否只是噪音。")
+    risk_flags = list(risk_flags) + list(rule_audit.risk_flags) + list(market_intel.risk_flags)
     if verdict == "high_rule_risk":
         risk_flags.append(
             RiskFlag(
@@ -121,9 +182,15 @@ def build_market_analysis_summary(rule_audit: RuleAuditSummary, market_intel: Ma
         "如果市场规则本身存在高歧义，应优先人工审阅原始规则。"
     )
     return MarketAnalysisSummary(
+        report_kind="complete_market_analysis",
         market=rule_audit.market,
         rule_audit=rule_audit.to_dict(),
         market_intel=market_intel.to_dict(),
+        completeness="full" if not missing_sections else "partial",
+        missing_sections=missing_sections,
+        decision_context="research_only",
+        usable_for_trade_decision=(rule_status == "ok"),
+        next_research_steps=list(dict.fromkeys(next_research_steps)),
         observed_bias=market_intel.observed_bias,
         risk_flags=risk_flags,
         confidence=confidence,
@@ -132,5 +199,23 @@ def build_market_analysis_summary(rule_audit: RuleAuditSummary, market_intel: Ma
         provider_traces={
             "rule_audit": rule_audit.source_trace,
             "market_intel": market_intel.provider_traces,
+            "final_confidence_gate": {
+                "base_market_intel_confidence": base_confidence,
+                "rule_clarity_score": clarity,
+                "resolution_risk": risk,
+                "rule_gate_multiplier": multiplier,
+                "final_confidence": confidence,
+                "gate_reason": "规则风险高，强制压低最终置信度。"
+                if verdict == "high_rule_risk"
+                else (
+                    "规则层未完成结构化解析，因此最终置信度被直接压到 0。"
+                    if verdict == "rule_unavailable"
+                    else (
+                        "规则层存在一定歧义或争议风险，因此对市场情报层置信度做折扣。"
+                        if multiplier < 1.0
+                        else "规则层未触发额外折扣。"
+                    )
+                ),
+            },
         },
     )

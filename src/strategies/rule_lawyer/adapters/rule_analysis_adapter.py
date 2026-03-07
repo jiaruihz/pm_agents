@@ -78,6 +78,12 @@ def _heuristic_rule_analysis(market: ResolvedMarket) -> RuleAuditSummary:
         )
     return RuleAuditSummary(
         market=market.to_dict(),
+        rule_status="ok",
+        llm_required=False,
+        llm_used=False,
+        trigger_conditions=[],
+        explicit_exclusions=[],
+        entity_definitions=[],
         rule_summary=rule_summary[:600],
         settlement_summary=settlement_summary,
         rule_clarity_score=round(clarity, 6),
@@ -85,12 +91,75 @@ def _heuristic_rule_analysis(market: ResolvedMarket) -> RuleAuditSummary:
         resolution_risk=round(resolution_risk, 6),
         evidence_records=evidence,
         risk_flags=risk_flags,
-        source_trace={"mode": "heuristic"},
+        source_trace={
+            "mode": "heuristic",
+            "methodology": "未启用 LLM 时，使用规则文本可见性、截止时间、结算措辞和歧义词命中做启发式评分。",
+            "clarity_components": {
+                "base": 0.2,
+                "has_rules_bonus": 0.3 if market.rules.strip() else 0.0,
+                "has_description_bonus": 0.2 if market.description.strip() else 0.0,
+                "has_end_date_bonus": 0.1 if market.end_date else 0.0,
+                "has_resolution_language_bonus": 0.15
+                if any(word in text for word in ["resolve", "resolves", "will resolve", "this market"])
+                else 0.0,
+                "has_exclusion_language_bonus": 0.1
+                if any(word in text for word in ["except", "unless", "does not", "won't resolve"])
+                else 0.0,
+                "ambiguity_penalty": min(0.3, len(ambiguity_flags) * 0.05),
+            },
+            "resolution_risk_formula": {
+                "base": 0.15,
+                "ambiguity_flag_count": len(ambiguity_flags),
+                "ambiguity_flag_penalty_per_hit": 0.12,
+            },
+            "matched_ambiguity_flags": ambiguity_flags,
+        },
         caveat="规则分析在未启用 LLM 时使用启发式规则提取，不能替代人工审阅原始规则文本。",
     )
 
 
-def run_rule_analysis(market: ResolvedMarket) -> RuleAuditSummary:
+def _rule_unavailable(
+    market: ResolvedMarket,
+    reason: str,
+    *,
+    mode: str,
+    llm_required: bool,
+) -> RuleAuditSummary:
+    return RuleAuditSummary(
+        market=market.to_dict(),
+        rule_status="unavailable",
+        rule_failure_reason=reason,
+        llm_required=llm_required,
+        llm_used=False,
+        source_trace={
+            "mode": mode,
+            "methodology": "规则层被配置为强制依赖结构化 LLM 解析；当前未能得到可用结果。",
+        },
+        caveat="规则层本次没有拿到结构化 LLM 解析结果，不提供正式规则评分；需人工补审原始规则。",
+    )
+
+
+def _rule_failed(
+    market: ResolvedMarket,
+    reason: str,
+    *,
+    mode: str,
+) -> RuleAuditSummary:
+    return RuleAuditSummary(
+        market=market.to_dict(),
+        rule_status="failed",
+        rule_failure_reason=reason,
+        llm_required=True,
+        llm_used=False,
+        source_trace={
+            "mode": mode,
+            "methodology": "规则层尝试执行结构化 LLM 解析，但运行失败或返回了不可校验结果。",
+        },
+        caveat="规则层执行失败，不提供正式规则评分；需检查 LLM 配置或人工复核规则文本。",
+    )
+
+
+def run_rule_analysis(market: ResolvedMarket, require_llm: bool = True) -> RuleAuditSummary:
     market_payload: Dict[str, Any] = {
         "market_id": market.market_id,
         "slug": market.slug,
@@ -101,18 +170,31 @@ def run_rule_analysis(market: ResolvedMarket) -> RuleAuditSummary:
         "end_at_utc": market.end_date,
     }
     if not _llm_ready():
+        if require_llm:
+            return _rule_unavailable(
+                market,
+                "LLM config missing: set LLM_API_KEY/IFLOW_API_KEY and LLM_MODEL/IFLOW_MODEL.",
+                mode="llm_required",
+                llm_required=True,
+            )
         return _heuristic_rule_analysis(market)
     try:
         from src.strategies.rule_lawyer.parser import compute_rule_score, parse_market_with_llm
-    except Exception:
+    except Exception as exc:
+        if require_llm:
+            return _rule_failed(market, f"LLM parser import failed: {exc}", mode="llm")
         return _heuristic_rule_analysis(market)
     try:
         import asyncio
 
         parsed = asyncio.run(parse_market_with_llm(market_payload, retry_on_fail=True))
-    except Exception:
+    except Exception as exc:
+        if require_llm:
+            return _rule_failed(market, f"LLM parse execution failed: {exc}", mode="llm")
         parsed = None
     if not parsed:
+        if require_llm:
+            return _rule_failed(market, "LLM parse returned empty or invalid structured output.", mode="llm")
         return _heuristic_rule_analysis(market)
     score_payload = compute_rule_score(parsed)
     evidence = [
@@ -149,6 +231,16 @@ def run_rule_analysis(market: ResolvedMarket) -> RuleAuditSummary:
     rule_summary = parsed.notes_for_humans or market.rules or market.description or market.question
     return RuleAuditSummary(
         market=market.to_dict(),
+        rule_status="ok",
+        llm_required=require_llm,
+        llm_used=True,
+        llm_confidence=round(to_float(parsed.llm_confidence, 0.0), 6),
+        rule_score=score_payload,
+        trigger_type=parsed.trigger_type,
+        settlement_source_type=parsed.settlement_source_type,
+        trigger_conditions=list(parsed.trigger_minimum_conditions or []),
+        explicit_exclusions=list(parsed.explicit_exclusions or []),
+        entity_definitions=[x.dict() for x in parsed.entity_definitions],
         rule_summary=rule_summary[:800],
         settlement_summary=settlement_summary,
         rule_clarity_score=round(to_float(parsed.clarity_score, 0.0), 6),
@@ -156,6 +248,32 @@ def run_rule_analysis(market: ResolvedMarket) -> RuleAuditSummary:
         resolution_risk=round(to_float(parsed.dispute_risk_score, 0.0), 6),
         evidence_records=evidence,
         risk_flags=risk_flags,
-        source_trace={"mode": "llm", "rule_score": score_payload},
+        source_trace={
+            "mode": "llm",
+            "methodology": "LLM 先按 schema 抽取规则结构，再由代码进行字段校验与 rule_score 计算。",
+            "prompt_schema_fields": [
+                "time_window",
+                "settlement_source_type",
+                "trigger_type",
+                "trigger_minimum_conditions",
+                "explicit_exclusions",
+                "entity_definitions",
+                "ambiguity_flags",
+                "clarity_score",
+                "dispute_risk_score",
+                "notes_for_humans",
+                "llm_confidence",
+            ],
+            "llm_confidence": to_float(parsed.llm_confidence, 0.0),
+            "rule_score": score_payload,
+            "parsed_structure": {
+                "settlement_source_type": parsed.settlement_source_type,
+                "trigger_type": parsed.trigger_type,
+                "trigger_minimum_conditions": list(parsed.trigger_minimum_conditions or []),
+                "explicit_exclusions": list(parsed.explicit_exclusions or []),
+                "entity_definitions": [x.dict() for x in parsed.entity_definitions],
+                "ambiguity_flags": list(parsed.ambiguity_flags or []),
+            },
+        },
         caveat="LLM 规则解析是研究辅助，不应替代人工核对原市场规则与结算说明。",
     )

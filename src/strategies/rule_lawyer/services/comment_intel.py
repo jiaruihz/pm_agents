@@ -144,7 +144,18 @@ def collect_market_comments(
 ) -> Dict[str, Any]:
     client = PolymarketCommentsClient()
     status, method, raw_rows = _best_effort_fetch_market_comments(market, client, mode=mode, limit=comment_limit)
+    event_comment_count = int((market.raw_event or {}).get("commentCount") or 0)
+    market_comment_count = int((market.raw_market or {}).get("commentCount") or 0)
     if status != "ok":
+        if event_comment_count > 0 or market_comment_count > 0:
+            unavailable_reason = "comment_count_visible_but_fetch_failed"
+            detail = (
+                f"事件/市场元数据显示存在评论痕迹（event={event_comment_count}, market={market_comment_count}），"
+                "但当前 comments 接口没有成功返回可用评论列表。"
+            )
+        else:
+            unavailable_reason = "no_comment_trace_found"
+            detail = "当前没有从元数据或 comments 接口中发现可用评论痕迹。"
         return {
             "comment_status": "unavailable",
             "comment_fetch_method": method,
@@ -153,6 +164,12 @@ def collect_market_comments(
             "records": [],
             "raw_comments": [],
             "fallback": fallback,
+            "comment_count_hint": {
+                "event_comment_count": event_comment_count,
+                "market_comment_count": market_comment_count,
+            },
+            "unavailable_reason": unavailable_reason,
+            "status_detail": detail,
         }
     records = [_normalize_comment(row, wallet_score_lookup) for row in raw_rows if isinstance(row, dict)]
     summary = summarize_comments(records)
@@ -164,4 +181,10 @@ def collect_market_comments(
         "records": [x.to_dict() for x in records],
         "raw_comments": raw_rows,
         "fallback": fallback,
+        "comment_count_hint": {
+            "event_comment_count": event_comment_count,
+            "market_comment_count": market_comment_count,
+        },
+        "unavailable_reason": "",
+        "status_detail": f"成功抓到 {len(raw_rows)} 条评论原始记录。",
     }

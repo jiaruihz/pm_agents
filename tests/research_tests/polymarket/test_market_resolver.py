@@ -4,10 +4,15 @@ from src.strategies.rule_lawyer.services.market_resolver import resolve_market_t
 
 
 class MarketResolverTargetTests(unittest.TestCase):
-    def test_resolve_market_target_url(self) -> None:
+    def test_resolve_market_target_event_url(self) -> None:
         target = resolve_market_target("https://polymarket.com/event/will-btc-hit-200k")
-        self.assertEqual(target.kind, "url")
+        self.assertEqual(target.kind, "event")
         self.assertEqual(target.slug, "will-btc-hit-200k")
+
+    def test_resolve_market_target_market_url(self) -> None:
+        target = resolve_market_target("https://polymarket.com/market/will-fed-cut-rates")
+        self.assertEqual(target.kind, "market")
+        self.assertEqual(target.slug, "will-fed-cut-rates")
 
     def test_resolve_market_target_slug(self) -> None:
         target = resolve_market_target("will-fed-cut-rates")

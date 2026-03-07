@@ -20,13 +20,21 @@ def run_market_intel_workflow(
     wallet_score_mode: str = "pnl_proxy",
     profile_audit_mode: str = "normal",
     out_dir: str = "",
+    max_candidate_wallets: int = 50,
+    wallet_audit_max_trades: int = 800,
+    summary_name: str = "summary.json",
+    report_name: str = "report.md",
+    comments_name: str = "comments.json",
+    smart_wallets_name: str = "smart_wallets.json",
+    wallet_audits_dirname: str = "wallet_audits",
 ) -> Dict[str, Any]:
     market = resolve_market(target_market)
     smart_wallets = discover_market_wallets(
         market=market,
         holders_depth=holders_depth,
+        max_candidate_wallets=max_candidate_wallets,
         score_mode=wallet_score_mode,
-        top_wallets=max(8, top_wallets),
+        top_wallets=max(8, top_wallets if top_wallets > 0 else 8),
     )
     wallet_score_lookup = {
         str(row.get("wallet") or ""): float(row.get("score") or 0.0)
@@ -38,13 +46,17 @@ def run_market_intel_workflow(
         mode=comment_mode,
         wallet_score_lookup=wallet_score_lookup,
     )
-    selected_wallet_rows = smart_wallets.get("wallets", [])[: max(1, top_wallets)]
+    selected_wallet_rows = smart_wallets.get("wallets", [])[: max(0, top_wallets)]
     wallet_audits: List[Dict[str, Any]] = []
     for row in selected_wallet_rows:
         wallet = str(row.get("wallet") or "").strip()
         if not wallet:
             continue
-        audited = audit_profile(target=wallet, fetch_all=(profile_audit_mode == "full"), max_trades=800)
+        audited = audit_profile(
+            target=wallet,
+            fetch_all=(profile_audit_mode == "full"),
+            max_trades=wallet_audit_max_trades,
+        )
         wallet_audits.append(audited.to_dict())
     summary = build_market_intel_summary(
         market=market.to_dict(),
@@ -53,15 +65,15 @@ def run_market_intel_workflow(
         wallet_audits=wallet_audits,
     )
     output_dir = Path(out_dir) if out_dir else default_output_dir("runtime/market_intel", target_market)
-    summary_path = output_dir / "summary.json"
-    report_path = output_dir / "report.md"
-    comments_path = output_dir / "comments.json"
-    smart_wallets_path = output_dir / "smart_wallets.json"
+    summary_path = output_dir / summary_name
+    report_path = output_dir / report_name
+    comments_path = output_dir / comments_name
+    smart_wallets_path = output_dir / smart_wallets_name
     write_json(summary_path, summary.to_dict())
     write_text(report_path, build_market_intel_report(summary.to_dict()))
     write_json(comments_path, comments_result)
     write_json(smart_wallets_path, smart_wallets)
-    audits_dir = output_dir / "wallet_audits"
+    audits_dir = output_dir / wallet_audits_dirname
     for audit in wallet_audits:
         wallet = str(((audit.get("profile") or {}).get("proxy_wallet")) or "wallet")
         write_json(audits_dir / wallet / "summary.json", audit)

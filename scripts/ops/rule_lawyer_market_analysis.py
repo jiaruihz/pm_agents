@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--top-wallets", type=int, default=8)
     parser.add_argument("--wallet-score-mode", choices=["pnl_proxy", "resolved_trades"], default="pnl_proxy")
     parser.add_argument("--profile-audit-mode", choices=["normal", "full"], default="normal")
+    parser.add_argument("--allow-rule-fallback", action="store_true", help="Allow heuristic fallback when LLM rule parsing is unavailable")
     parser.add_argument("--out-dir", default="")
     return parser
 
@@ -35,14 +36,18 @@ def main() -> None:
         top_wallets=args.top_wallets,
         wallet_score_mode=args.wallet_score_mode,
         profile_audit_mode=args.profile_audit_mode,
+        require_rule_llm=not args.allow_rule_fallback,
         out_dir=args.out_dir,
     )
     summary = result["summary"]
-    print(f"market: {summary.get('market', {}).get('slug') or summary.get('market', {}).get('market_id', '')}")
+    print(f"report kind: {summary.get('report_kind', '')}")
+    print(f"target: {summary.get('market', {}).get('slug') or summary.get('market', {}).get('market_id', '') or summary.get('event', {}).get('slug', '')}")
     print(f"verdict: {summary.get('verdict', '')}")
     print(f"confidence: {float(summary.get('confidence', 0.0)):.2f}")
+    if summary.get("missing_sections"):
+        print(f"missing sections: {','.join(summary.get('missing_sections', []))}")
     print(f"summary json: {result['summary_path']}")
-    print(f"report md: {result['report_path']}")
+    print(f"main report md: {result['report_path']}")
 
 
 if __name__ == "__main__":

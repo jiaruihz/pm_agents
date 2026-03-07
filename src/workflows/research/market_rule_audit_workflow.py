@@ -7,12 +7,19 @@ from src.strategies.rule_lawyer.services.market_rule_audit import audit_market_r
 from src.strategies.rule_lawyer.services.reporting import build_rule_audit_report, default_output_dir, write_json, write_text
 
 
-def run_market_rule_audit_workflow(target_market: str, out_dir: str = "") -> Dict[str, Any]:
-    summary = audit_market_rules(target_market)
+def run_market_rule_audit_workflow(
+    target_market: str,
+    out_dir: str = "",
+    require_llm: bool = True,
+    summary_name: str = "summary.json",
+    report_name: str = "report.md",
+    snapshot_name: str = "market_snapshot.json",
+) -> Dict[str, Any]:
+    summary = audit_market_rules(target_market, require_llm=require_llm)
     output_dir = Path(out_dir) if out_dir else default_output_dir("runtime/market_rule_audits", target_market)
-    summary_path = output_dir / "summary.json"
-    report_path = output_dir / "report.md"
-    snapshot_path = output_dir / "market_snapshot.json"
+    summary_path = output_dir / summary_name
+    report_path = output_dir / report_name
+    snapshot_path = output_dir / snapshot_name
     write_json(summary_path, summary.to_dict())
     write_text(report_path, build_rule_audit_report(summary.to_dict()))
     write_json(snapshot_path, summary.market)
