@@ -1,0 +1,13 @@
+{
+  "name": "chatgpt-web-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Playwright bot for ChatGPT web",
+  "scripts": {
+    "login": "node scripts/login.js",
+    "ask": "node scripts/ask.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.52.0"
+  }
+}

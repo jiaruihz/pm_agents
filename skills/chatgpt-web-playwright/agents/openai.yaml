@@ -1,0 +1,5 @@
+interface_version: 1
+display_name: ChatGPT Web Playwright
+short_description: Scaffold a local Playwright bot for ChatGPT web with reusable login state.
+default_prompt: Use $chatgpt-web-playwright to scaffold or update a local Playwright bot that logs into ChatGPT web once, reuses the browser profile, sends prompts, and saves answers locally.
+
