@@ -1,0 +1,4 @@
+interface_version: 1
+display_name: Polymarket Profile Audit
+short_description: Audit a Polymarket user from username, profile URL, or wallet and summarize the result.
+default_prompt: Audit this Polymarket account, pull its history, and tell me whether the sample supports exceptional accuracy or abnormal behavior.

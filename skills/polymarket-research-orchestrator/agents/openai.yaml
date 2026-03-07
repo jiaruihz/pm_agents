@@ -1,0 +1,4 @@
+interface_version: 1
+display_name: Polymarket Research Orchestrator
+short_description: 对 Polymarket 市场执行完整规则审计与市场情报分析。
+default_prompt: 对这个 Polymarket 市场执行完整研究链路，先审计规则和结算风险，再结合评论区、top holders 和关键钱包历史，输出综合结论。
