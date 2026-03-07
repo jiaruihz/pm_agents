@@ -20,15 +20,66 @@
 │   ├── strategies/            # 策略实现 + 全局策略目录（manifest + runbook + params）
 │   └── workflows/
 │       ├── backtest/          # 回测跨域编排（预留）
-│       └── pap/               # PAP 跨域编排（预留）
+│       ├── pap/               # PAP 跨域编排（预留）
+│       └── research/          # Research 跨域编排（规则审计 / 市场情报 / 综合分析）
 ├── scripts/python/
 │   ├── pmm_backtest.py        # 回测总入口
 │   ├── strategy_catalog.py    # 策略目录管理入口
 │   ├── generate_backtest_scenarios.py
-│   └── pmm_orderbook_capture.py
+│   ├── pmm_orderbook_capture.py
+│   └── pmm_find_smart_wallets.py
+├── scripts/ops/
+│   ├── polymarket_profile_audit.py
+│   ├── polymarket_market_rule_audit.py
+│   ├── polymarket_market_comments.py
+│   ├── polymarket_market_intel.py
+│   └── rule_lawyer_market_analysis.py
+├── skills/                    # AI 入口包装层，不承载核心业务实现
+│   ├── polymarket-profile-audit/
+│   ├── polymarket-market-rule-audit/
+│   ├── polymarket-market-intel/
+│   └── polymarket-research-orchestrator/
 ├── tests/pmm_tests/           # PMM 单元测试
 ├── tests/research_tests/      # research 单元测试
 └── .env.example
+```
+
+## 统一架构全景图 (Unified Engine Architecture)
+
+新版核心系统基于 `asyncio` 事件驱动架构，分为五层。所有策略只需实现 `IStrategy` 接口，剩下的全部交由引擎流转：
+
+```mermaid
+graph TD
+    subgraph Layer 1: Data Feeder
+        F[MarketDataFeeder] -->|MarketTickEvent| D(EventDispatcher)
+    end
+    
+    subgraph Layer 2: Core Engine
+        D -->|Routes Tick| R{StrategyRegistry}
+        R -.->|Maintains| C1[IStrategy Instances]
+    end
+
+    subgraph Layer 3: Strategy Brain
+        C1 -->|Compute Logic| C1
+        C1 -->|Yields| O[OrderCommand]
+    end
+
+    subgraph Layer 4: Execution
+        O -->|Queue| E[ExecutionService]
+        E -->|Writes to| DB[(DB: trade_orders)]
+        E -->|Emits| U[OrderUpdateEvent]
+        U -->|Feedback| D
+    end
+
+    subgraph Layer 5: Notification
+        D -->|AlertEvent| N[TelegramBot]
+    end
+
+    style F fill:#28a745,stroke:#fff,stroke-width:2px,color:#fff
+    style D fill:#ffc107,stroke:#fff,stroke-width:2px,color:#000
+    style C1 fill:#17a2b8,stroke:#fff,stroke-width:2px,color:#fff
+    style E fill:#dc3545,stroke:#fff,stroke-width:2px,color:#fff
+    style DB fill:#6c757d,stroke:#fff,stroke-width:2px,color:#fff
 ```
 
 ## 快速开始
@@ -106,7 +157,26 @@ python -m src.strategies.rule_lawyer.cli parse --llm --batch 100
 python -m src.strategies.rule_lawyer.cli notify-telegram "Hello from pm_agent"
 ```
 
-### 7) 统一策略看板（BFF）
+### 7) Polymarket 研究分析入口
+
+```bash
+# 账户历史审计
+python scripts/ops/polymarket_profile_audit.py --target @cqk
+
+# 市场规则审计
+python scripts/ops/polymarket_market_rule_audit.py \
+  --target-market "https://polymarket.com/event/..."
+
+# 市场情报（评论 + holders + smart wallets）
+python scripts/ops/polymarket_market_intel.py \
+  --target-market "https://polymarket.com/event/..."
+
+# 完整分析（规则门控 + 市场情报）
+python scripts/ops/rule_lawyer_market_analysis.py \
+  --target-market "https://polymarket.com/event/..."
+```
+
+### 8) 统一策略看板（BFF）
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m src.interfaces.web.strategy_dashboard_server \
@@ -129,6 +199,10 @@ pytest tests/research_tests -q
 
 - PMM 文档导航：`docs/pmm/README.md`
 - 策略目录（全局）：`src/strategies/README.md`
+- Polymarket Research 架构：`docs/POLYMARKET_RESEARCH_ARCHITECTURE.md`
+- Polymarket Research 能力说明：`docs/POLYMARKET_RESEARCH_CAPABILITIES.md`
+- Polymarket Research 实施计划：`docs/POLYMARKET_RESEARCH_IMPLEMENTATION_PLAN.md`
+- Polymarket Research 改造记录：`docs/POLYMARKET_RESEARCH_REFACTOR_LOG.md`
 - 天气策略进度手册：`docs/pmm/WEATHER_THETA_NO_PROGRESS.md`
 - PMM paper 运维手册：`docs/pmm/PAPER_RUNBOOK.md`
 - 架构说明：`docs/pmm/ARCHITECTURE.md`
