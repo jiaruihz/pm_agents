@@ -261,3 +261,73 @@ async def fetch_market_by_id_or_slug(
     finally:
         await client.aclose()
     return None
+
+
+async def fetch_market_by_condition_id(condition_id: str) -> Optional[Dict[str, Any]]:
+    settings = get_settings()
+    client = HttpClient()
+    base = settings.gamma_base_url.rstrip("/")
+    candidates: List[Tuple[str, Optional[Dict[str, Any]]]] = [
+        (f"{base}/markets", {"condition_id": condition_id}),
+        (f"{base}/markets", {"conditionId": condition_id}),
+    ]
+    try:
+        for url, params in candidates:
+            try:
+                payload = await client.get_json(url, params=params)
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 404:
+                    continue
+                continue
+            except httpx.RequestError:
+                continue
+            market = _extract_market_payload(payload)
+            if market:
+                return market
+    finally:
+        await client.aclose()
+    return None
+
+
+async def fetch_event_by_id_or_slug(
+    event_id: Optional[str] = None,
+    slug: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    settings = get_settings()
+    client = HttpClient()
+    base = settings.gamma_base_url.rstrip("/")
+    candidates: List[Tuple[str, Optional[Dict[str, Any]]]] = []
+    if event_id:
+        candidates.extend(
+            [
+                (f"{base}/events/{event_id}", None),
+                (f"{base}/events", {"id": event_id}),
+                (f"{base}/events", {"event_id": event_id}),
+                (f"{base}/events", {"eventId": event_id}),
+            ]
+        )
+    if slug:
+        candidates.append((f"{base}/events", {"slug": slug}))
+    try:
+        for url, params in candidates:
+            try:
+                payload = await client.get_json(url, params=params)
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 404:
+                    continue
+                continue
+            except httpx.RequestError:
+                continue
+            if isinstance(payload, list):
+                if payload:
+                    return payload[0]
+            elif isinstance(payload, dict):
+                if isinstance(payload.get("events"), list) and payload["events"]:
+                    return payload["events"][0]
+                if isinstance(payload.get("event"), dict):
+                    return payload["event"]
+                if payload.get("id") or payload.get("slug"):
+                    return payload
+    finally:
+        await client.aclose()
+    return None
