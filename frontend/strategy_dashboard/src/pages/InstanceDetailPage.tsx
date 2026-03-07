@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { PageFrame } from "../components/PageFrame";
 import { Sparkline } from "../components/Sparkline";
 import { useDashboardProvider } from "../data/provider-context";
-import type { InstanceHistoryPoint, InstanceItem } from "../data/types";
+import type { InstanceHistoryPoint, InstanceItem, OrderRecord } from "../data/types";
 import { fmtAge, fmtCurrency, fmtDate, fmtInt } from "../utils/format";
 
 export function InstanceDetailPage(): JSX.Element {
@@ -11,19 +11,22 @@ export function InstanceDetailPage(): JSX.Element {
   const { instanceId = "" } = useParams();
   const [item, setItem] = useState<InstanceItem | null>(null);
   const [history, setHistory] = useState<InstanceHistoryPoint[]>([]);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let dead = false;
     (async () => {
       try {
-        const [detail, hist] = await Promise.all([
+        const [detail, hist, ords] = await Promise.all([
           provider.getInstance(instanceId),
           provider.getInstanceHistory(instanceId, 300),
+          provider.getTradeOrders(instanceId, 100),
         ]);
         if (dead) return;
         setItem(detail);
         setHistory(hist.slice().reverse());
+        setOrders(ords);
         setError("");
       } catch (e) {
         if (!dead) setError((e as Error).message);
@@ -115,6 +118,53 @@ export function InstanceDetailPage(): JSX.Element {
                         <td>{fmtInt(row.open_orders)}</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="card">
+              <h3>订单明细 (Trade Orders)</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Order ID</th>
+                      <th>Strategy</th>
+                      <th>Token</th>
+                      <th>Side</th>
+                      <th>Type</th>
+                      <th>Size</th>
+                      <th>Price</th>
+                      <th>Status</th>
+                      <th>Filled</th>
+                      <th>Avg Price</th>
+                      <th>Fee Paid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.map((row) => (
+                      <tr key={row.order_id}>
+                        <td>{fmtDate(row.updated_at_utc)}</td>
+                        <td title={row.order_id}>{row.order_id.length > 20 ? row.order_id.slice(0, 15) + "..." : row.order_id}</td>
+                        <td><Link to={`/strategies/${row.strategy_key}`}>{row.strategy_key}</Link></td>
+                        <td>{row.token_id}</td>
+                        <td className={row.side.toLowerCase()}>{row.side}</td>
+                        <td>{row.order_type}</td>
+                        <td>{row.size}</td>
+                        <td>{fmtCurrency(row.price)}</td>
+                        <td><span className={`badge ${row.status.toLowerCase()}`}>{row.status}</span></td>
+                        <td>{row.filled_size}</td>
+                        <td>{fmtCurrency(row.average_price)}</td>
+                        <td>{fmtCurrency(row.fee_paid)}</td>
+                      </tr>
+                    ))}
+                    {orders.length === 0 && (
+                      <tr>
+                        <td colSpan={12} style={{ textAlign: "center" }}>无近期订单 (No recent orders)</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

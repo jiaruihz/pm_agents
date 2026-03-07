@@ -136,6 +136,44 @@ class StrategyRuntimeStore:
             """
         )
 
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trade_orders (
+                order_id TEXT PRIMARY KEY,
+                instance_id TEXT NOT NULL,
+                strategy_key TEXT NOT NULL DEFAULT '',
+                token_id TEXT NOT NULL,
+                side TEXT NOT NULL,
+                size REAL NOT NULL,
+                price REAL NOT NULL,
+                order_type TEXT NOT NULL DEFAULT 'LIMIT',
+                status TEXT NOT NULL,
+                filled_size REAL NOT NULL DEFAULT 0,
+                average_price REAL NOT NULL DEFAULT 0,
+                fee_paid REAL NOT NULL DEFAULT 0,
+                created_at_utc TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL,
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            );
+            """
+        )
+
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trade_fills (
+                fill_id TEXT PRIMARY KEY,
+                order_id TEXT NOT NULL,
+                instance_id TEXT NOT NULL,
+                token_id TEXT NOT NULL,
+                side TEXT NOT NULL,
+                fill_size REAL NOT NULL,
+                fill_price REAL NOT NULL,
+                fee_paid REAL NOT NULL DEFAULT 0,
+                created_at_utc TEXT NOT NULL
+            );
+            """
+        )
+
         self._ensure_columns(
             "strategy_instances",
             {
@@ -152,6 +190,13 @@ class StrategyRuntimeStore:
                 "state_json": "TEXT NOT NULL DEFAULT '{}'",
             },
         )
+        self._ensure_columns(
+            "trade_orders",
+            {
+                "strategy_key": "TEXT NOT NULL DEFAULT ''",
+                "fee_paid": "REAL NOT NULL DEFAULT 0",
+            },
+        )
 
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_instances_updated ON strategy_instances(updated_at_utc DESC);"
@@ -163,13 +208,22 @@ class StrategyRuntimeStore:
             "CREATE INDEX IF NOT EXISTS idx_instances_strategy ON strategy_instances(strategy_key, updated_at_utc DESC);"
         )
         self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_instances_account ON strategy_instances(account_id, wallet_address);"
+            "CREATE INDEX IF NOT EXISTS idx_orders_instance ON trade_orders(instance_id, created_at_utc DESC);"
+        )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fills_order ON trade_fills(order_id);"
         )
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_state_heartbeat ON strategy_instance_state(heartbeat_at_utc DESC);"
         )
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_snapshots_instance_ts ON strategy_instance_snapshots(instance_id, ts_utc DESC);"
+        )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_instance ON trade_orders(instance_id, updated_at_utc DESC);"
+        )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_status ON trade_orders(status);"
         )
         self.conn.commit()
 
@@ -338,6 +392,151 @@ class StrategyRuntimeStore:
         )
 
         self.conn.commit()
+
+    def upsert_trade_order(
+        self,
+        *,
+        order_id: str,
+        instance_id: str,
+        strategy_key: str = "",
+        token_id: str,
+        side: str,
+        size: float,
+        price: float,
+        status: str,
+        order_type: str = "LIMIT",
+        filled_size: float = 0.0,
+        average_price: float = 0.0,
+        fee_paid: float = 0.0,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        now = _utc_now_iso()
+        meta_json = json.dumps(metadata or {}, ensure_ascii=False)
+        self.conn.execute(
+            """
+            INSERT INTO trade_orders (
+                order_id, instance_id, strategy_key, token_id, side, size, price, order_type,
+                status, filled_size, average_price, fee_paid, created_at_utc, updated_at_utc, metadata_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(order_id) DO UPDATE SET
+                status=excluded.status,
+                filled_size=excluded.filled_size,
+                average_price=excluded.average_price,
+                fee_paid=excluded.fee_paid,
+                updated_at_utc=excluded.updated_at_utc,
+                metadata_json=excluded.metadata_json
+            """,
+            (
+                order_id,
+                instance_id,
+                strategy_key,
+                token_id,
+                side,
+                float(size),
+                float(price),
+                order_type,
+                status,
+                float(filled_size),
+                float(average_price),
+                float(fee_paid),
+                now,
+                now,
+                meta_json,
+            ),
+        )
+        self.conn.commit()
+
+    def insert_trade_fill(
+        self,
+        *,
+        fill_id: str,
+        order_id: str,
+        instance_id: str,
+        token_id: str,
+        side: str,
+        fill_size: float,
+        fill_price: float,
+        fee_paid: float = 0.0,
+    ) -> None:
+        now = _utc_now_iso()
+        self.conn.execute(
+            """
+            INSERT INTO trade_fills (
+                fill_id, order_id, instance_id, token_id, side,
+                fill_size, fill_price, fee_paid, created_at_utc
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(fill_id) DO NOTHING
+            """,
+            (
+                fill_id,
+                order_id,
+                instance_id,
+                token_id,
+                side,
+                float(fill_size),
+                float(fill_price),
+                float(fee_paid),
+                now,
+            ),
+        )
+        self.conn.commit()
+
+    def get_trade_orders(self, instance_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM trade_orders
+            WHERE instance_id=?
+            ORDER BY updated_at_utc DESC
+            LIMIT ?
+            """,
+            (instance_id, max(1, int(limit))),
+        ).fetchall()
+        out = []
+        for row in rows:
+            out.append({
+                "order_id": str(row["order_id"] or ""),
+                "instance_id": str(row["instance_id"] or ""),
+                "strategy_key": str(row["strategy_key"] or ""),
+                "token_id": str(row["token_id"] or ""),
+                "side": str(row["side"] or ""),
+                "size": _safe_float(row["size"], 0.0),
+                "price": _safe_float(row["price"], 0.0),
+                "order_type": str(row["order_type"] or "LIMIT"),
+                "status": str(row["status"] or ""),
+                "filled_size": _safe_float(row["filled_size"], 0.0),
+                "average_price": _safe_float(row["average_price"], 0.0),
+                "fee_paid": _safe_float(row["fee_paid"], 0.0),
+                "created_at_utc": str(row["created_at_utc"] or ""),
+                "updated_at_utc": str(row["updated_at_utc"] or ""),
+                "metadata": self._parse_json_dict(row["metadata_json"])
+            })
+        return out
+        
+    def get_trade_fills(self, order_id: str) -> List[Dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM trade_fills
+            WHERE order_id=?
+            ORDER BY created_at_utc ASC
+            """,
+            (order_id,),
+        ).fetchall()
+        out = []
+        for row in rows:
+            out.append({
+                "fill_id": str(row["fill_id"] or ""),
+                "order_id": str(row["order_id"] or ""),
+                "instance_id": str(row["instance_id"] or ""),
+                "token_id": str(row["token_id"] or ""),
+                "side": str(row["side"] or ""),
+                "fill_size": _safe_float(row["fill_size"], 0.0),
+                "fill_price": _safe_float(row["fill_price"], 0.0),
+                "fee_paid": _safe_float(row["fee_paid"], 0.0),
+                "created_at_utc": str(row["created_at_utc"] or "")
+            })
+        return out
 
     def heartbeat(
         self,

@@ -122,6 +122,14 @@ class StrategyDashboardHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/v1/instances/"):
             self._handle_instance_related(path, parsed.query)
             return
+        if path.startswith("/api/v1/orders/"):
+            instance_id = unquote(path.split("/", 5)[4] or "").strip()
+            self._handle_trade_orders(instance_id, parsed.query)
+            return
+        if path.startswith("/api/v1/fills/"):
+            order_id = unquote(path.split("/", 5)[4] or "").strip()
+            self._handle_trade_fills(order_id, parsed.query)
+            return
         if path == "/api/v1/research/markets":
             self._handle_research_markets(parsed.query)
             return
@@ -294,6 +302,50 @@ class StrategyDashboardHandler(BaseHTTPRequestHandler):
             {
                 "instance_id": instance_id,
                 "history": rows,
+                "count": len(rows),
+            }
+        )
+
+    def _handle_trade_orders(self, instance_id: str, query: str) -> None:
+        params = parse_qs(query or "")
+        limit = max(1, min(5000, _to_int((params.get("limit", ["200"])[0] or "200"), 200)))
+        if not instance_id:
+            self._send_error("BAD_REQUEST", "instance_id is required", 400)
+            return
+        try:
+            store = self._store()
+            try:
+                rows = store.get_trade_orders(instance_id=instance_id, limit=limit)
+            finally:
+                store.close()
+        except Exception as exc:
+            self._send_error("INTERNAL_ERROR", "failed to fetch trade orders", 500, {"error": str(exc)})
+            return
+        self._send_json(
+            {
+                "instance_id": instance_id,
+                "orders": rows,
+                "count": len(rows),
+            }
+        )
+
+    def _handle_trade_fills(self, order_id: str, query: str) -> None:
+        if not order_id:
+            self._send_error("BAD_REQUEST", "order_id is required", 400)
+            return
+        try:
+            store = self._store()
+            try:
+                rows = store.get_trade_fills(order_id=order_id)
+            finally:
+                store.close()
+        except Exception as exc:
+            self._send_error("INTERNAL_ERROR", "failed to fetch trade fills", 500, {"error": str(exc)})
+            return
+        self._send_json(
+            {
+                "order_id": order_id,
+                "fills": rows,
                 "count": len(rows),
             }
         )

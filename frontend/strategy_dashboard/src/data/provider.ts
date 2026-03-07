@@ -6,6 +6,8 @@ import type {
   InstanceItem,
   ResearchMarketItem,
   StrategyItem,
+  OrderRecord,
+  FillRecord,
 } from "./types";
 
 export interface DashboardProvider {
@@ -14,6 +16,8 @@ export interface DashboardProvider {
   listInstances(params?: Record<string, string | number | undefined>): Promise<{ items: InstanceItem[]; total: number }>;
   getInstance(instanceId: string): Promise<InstanceItem>;
   getInstanceHistory(instanceId: string, limit?: number): Promise<InstanceHistoryPoint[]>;
+  getTradeOrders(instanceId: string, limit?: number): Promise<OrderRecord[]>;
+  getTradeFills(orderId: string): Promise<FillRecord[]>;
   listAccounts(limit?: number, offset?: number): Promise<{ items: AccountAggregate[]; total: number }>;
   listResearchMarkets(page?: number, pageSize?: number): Promise<{ items: ResearchMarketItem[]; total: number }>;
   getResearchMarket(marketId: string): Promise<Record<string, unknown>>;

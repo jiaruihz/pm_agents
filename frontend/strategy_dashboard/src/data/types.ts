@@ -102,3 +102,33 @@ export interface ApiError {
   request_id?: string;
   timestamp_utc?: string;
 }
+
+export interface OrderRecord {
+  order_id: string;
+  instance_id: string;
+  strategy_key: string;
+  token_id: string;
+  side: string;
+  size: number;
+  price: number;
+  order_type: string;
+  status: string;
+  filled_size: number;
+  average_price: number;
+  fee_paid: number;
+  created_at_utc: string;
+  updated_at_utc: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FillRecord {
+  fill_id: string;
+  order_id: string;
+  instance_id: string;
+  token_id: string;
+  side: string;
+  fill_size: number;
+  fill_price: number;
+  fee_paid: number;
+  created_at_utc: string;
+}

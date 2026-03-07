@@ -11,6 +11,7 @@ export function DashboardPage(): JSX.Element {
   const [instances, setInstances] = useState<InstanceItem[]>([]);
   const [accounts, setAccounts] = useState<AccountAggregate[]>([]);
   const [error, setError] = useState<string>("");
+  const [selectedStrategy, setSelectedStrategy] = useState<string>("all");
 
   useEffect(() => {
     let dead = false;
@@ -35,8 +36,13 @@ export function DashboardPage(): JSX.Element {
     };
   }, [provider]);
 
-  const running = instances.filter((x) => (x.runtime_status ?? x.status) === "running").length;
-  const stale = instances.filter((x) => (x.runtime_status ?? x.status) === "stale").length;
+  const filteredInstances = useMemo(() => {
+    if (selectedStrategy === "all") return instances;
+    return instances.filter(x => x.strategy_key === selectedStrategy || x.strategy_group === selectedStrategy);
+  }, [instances, selectedStrategy]);
+
+  const running = filteredInstances.filter((x) => (x.runtime_status ?? x.status) === "running").length;
+  const stale = filteredInstances.filter((x) => (x.runtime_status ?? x.status) === "stale").length;
 
   const groupSummary = useMemo(() => {
     const m = new Map<string, { total: number; running: number }>();
@@ -62,8 +68,8 @@ export function DashboardPage(): JSX.Element {
             <div className="kpi-label">策略总数</div>
           </div>
           <div className="card">
-            <div className="kpi-value">{fmtInt(instances.length)}</div>
-            <div className="kpi-label">实例总数</div>
+            <div className="kpi-value">{fmtInt(filteredInstances.length)}</div>
+            <div className="kpi-label">当前视图实例</div>
           </div>
           <div className="card">
             <div className="kpi-value">{fmtInt(running)}</div>
@@ -101,7 +107,21 @@ export function DashboardPage(): JSX.Element {
           </div>
 
           <div className="card">
-            <h3>实例热点</h3>
+            <div className="row wrap" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+              <h3>实例热点</h3>
+              <select
+                value={selectedStrategy}
+                onChange={(e) => setSelectedStrategy(e.target.value)}
+                style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--fg)" }}
+              >
+                <option value="all">所有模型 (All)</option>
+                {strategies.map((s) => (
+                  <option key={s.strategy_key} value={s.strategy_key}>
+                    {s.strategy_name || s.strategy_key}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="row wrap" style={{ marginBottom: 10 }}>
               <span className="badge running">running: {running}</span>
               <span className="badge stale">stale: {stale}</span>
@@ -117,7 +137,7 @@ export function DashboardPage(): JSX.Element {
                   </tr>
                 </thead>
                 <tbody>
-                  {instances.slice(0, 10).map((item) => {
+                  {filteredInstances.slice(0, 10).map((item) => {
                     const status = item.runtime_status ?? (item.status as "running" | "stopped" | "error" | "stale");
                     return (
                       <tr key={item.instance_id}>
@@ -134,6 +154,11 @@ export function DashboardPage(): JSX.Element {
                       </tr>
                     );
                   })}
+                  {filteredInstances.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: "center" }}>无匹配实例</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

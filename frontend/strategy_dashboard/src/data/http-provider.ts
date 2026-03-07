@@ -8,6 +8,8 @@ import type {
   InstanceItem,
   ResearchMarketItem,
   StrategyItem,
+  OrderRecord,
+  FillRecord,
 } from "./types";
 
 export class HttpDashboardProvider implements DashboardProvider {
@@ -35,6 +37,20 @@ export class HttpDashboardProvider implements DashboardProvider {
       `/api/v1/instances/${encodeURIComponent(instanceId)}/history${toQuery({ limit })}`
     );
     return data.history ?? [];
+  }
+
+  async getTradeOrders(instanceId: string, limit = 200): Promise<OrderRecord[]> {
+    const data = await getJson<{ orders: OrderRecord[] }>(
+      `/api/v1/orders/${encodeURIComponent(instanceId)}${toQuery({ limit })}`
+    );
+    return data.orders ?? [];
+  }
+
+  async getTradeFills(orderId: string): Promise<FillRecord[]> {
+    const data = await getJson<{ fills: FillRecord[] }>(
+      `/api/v1/fills/${encodeURIComponent(orderId)}`
+    );
+    return data.fills ?? [];
   }
 
   async listAccounts(limit = 200, offset = 0): Promise<{ items: AccountAggregate[]; total: number }> {

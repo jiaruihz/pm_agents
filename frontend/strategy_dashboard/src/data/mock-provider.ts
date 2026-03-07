@@ -7,6 +7,8 @@ import type {
   InstanceItem,
   ResearchMarketItem,
   StrategyItem,
+  OrderRecord,
+  FillRecord,
 } from "./types";
 
 const strategies: StrategyItem[] = [
@@ -197,6 +199,14 @@ export class MockDashboardProvider implements DashboardProvider {
 
   async getInstanceHistory(instanceId: string): Promise<InstanceHistoryPoint[]> {
     return history(instanceId);
+  }
+
+  async getTradeOrders(_instanceId: string, _limit = 200): Promise<OrderRecord[]> {
+    return [];
+  }
+
+  async getTradeFills(_orderId: string): Promise<FillRecord[]> {
+    return [];
   }
 
   async listAccounts(): Promise<{ items: AccountAggregate[]; total: number }> {
