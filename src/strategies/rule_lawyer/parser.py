@@ -6,9 +6,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.agents.llm.codex_cli_client import codex_cli_available, run_codex_exec_json
 from .config import get_settings
 from src.agents.llm.client import LLMClient, extract_content
-from src.agents.llm.research_prompts import PROMPT_VERSION, build_messages
+from src.agents.llm.research_prompts import FEW_SHOT_ASSISTANT, FEW_SHOT_USER, PROMPT_VERSION, SYSTEM_PROMPT, USER_PROMPT_TEMPLATE, build_messages
 from .storage import save_market_rule_parses
 
 
@@ -45,6 +46,76 @@ class RuleParse(BaseModel):
         if v not in allowed:
             raise ValueError("invalid settlement_source_type")
         return v
+
+
+def _rule_parse_output_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "market_id": {"type": "string"},
+            "slug": {"type": ["string", "null"]},
+            "time_window": {
+                "type": "object",
+                "properties": {
+                    "start_at_utc": {"type": ["string", "null"]},
+                    "end_at_utc": {"type": ["string", "null"]},
+                    "timezone_source": {"type": ["string", "null"]},
+                },
+                "required": ["start_at_utc", "end_at_utc", "timezone_source"],
+                "additionalProperties": False,
+            },
+            "settlement_source_type": {
+                "type": "string",
+                "enum": ["official_docs", "credible_reporting_consensus", "mixed", "unknown"],
+            },
+            "trigger_type": {
+                "type": "string",
+                "enum": [
+                    "definition_driven",
+                    "data_print",
+                    "procedural_vote",
+                    "military_action",
+                    "financial_price_level",
+                    "other",
+                ],
+            },
+            "trigger_minimum_conditions": {"type": "array", "items": {"type": "string"}},
+            "explicit_exclusions": {"type": "array", "items": {"type": "string"}},
+            "entity_definitions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "entity": {"type": "string"},
+                        "definition": {"type": "string"},
+                    },
+                    "required": ["entity", "definition"],
+                    "additionalProperties": False,
+                },
+            },
+            "ambiguity_flags": {"type": "array", "items": {"type": "string"}},
+            "clarity_score": {"type": "number"},
+            "dispute_risk_score": {"type": "number"},
+            "notes_for_humans": {"type": "string"},
+            "llm_confidence": {"type": "number"},
+        },
+        "required": [
+            "market_id",
+            "slug",
+            "time_window",
+            "settlement_source_type",
+            "trigger_type",
+            "trigger_minimum_conditions",
+            "explicit_exclusions",
+            "entity_definitions",
+            "ambiguity_flags",
+            "clarity_score",
+            "dispute_risk_score",
+            "notes_for_humans",
+            "llm_confidence",
+        ],
+        "additionalProperties": False,
+    }
 
     @field_validator("trigger_type")
     @classmethod
@@ -149,6 +220,46 @@ async def parse_market_with_llm(market: Dict[str, Any], retry_on_fail: bool = Tr
         parsed = _validate_content(content, market)
     await client.aclose()
     return parsed
+
+
+def build_codex_rule_prompt(market: Dict[str, Any]) -> str:
+    user_content = USER_PROMPT_TEMPLATE.format(
+        question=market.get("question", ""),
+        description=market.get("description", ""),
+        rules=market.get("rules", ""),
+        end_at_utc=market.get("end_at_utc", ""),
+        category=market.get("category", ""),
+    )
+    return "\n\n".join(
+        [
+            SYSTEM_PROMPT,
+            "以下是 few-shot 示例：",
+            FEW_SHOT_USER.strip(),
+            json.dumps(FEW_SHOT_ASSISTANT, ensure_ascii=False, indent=2),
+            user_content.strip(),
+            "只输出符合 schema 的 JSON，不要输出任何解释。",
+        ]
+    )
+
+
+def parse_market_with_codex_cli(market: Dict[str, Any]) -> Optional[RuleParse]:
+    if not codex_cli_available():
+        return None
+    prompt = build_codex_rule_prompt(market)
+    try:
+        data = run_codex_exec_json(
+            prompt=prompt,
+            output_model=RuleParse,
+            output_schema=_rule_parse_output_schema(),
+        )
+    except Exception:
+        return None
+    data["market_id"] = market.get("market_id")
+    data["slug"] = market.get("slug")
+    try:
+        return RuleParse(**data)
+    except Exception:
+        return None
 
 
 def _validate_content(content: str, market: Dict[str, Any]) -> Optional[RuleParse]:

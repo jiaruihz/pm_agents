@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
+from src.agents.llm.codex_cli_client import codex_cli_available
 from src.strategies.rule_lawyer.models_research import EvidenceRecord, ResolvedMarket, RiskFlag, RuleAuditSummary
 from src.strategies.rule_lawyer.services.common import to_float
 
@@ -29,6 +30,10 @@ def _llm_ready() -> bool:
             or os.getenv("IFLOW_MODEL")
         )
     )
+
+
+def _codex_cli_ready() -> bool:
+    return codex_cli_available()
 
 
 def _heuristic_rule_analysis(market: ResolvedMarket) -> RuleAuditSummary:
@@ -169,32 +174,45 @@ def run_rule_analysis(market: ResolvedMarket, require_llm: bool = True) -> RuleA
         "category": market.category,
         "end_at_utc": market.end_date,
     }
-    if not _llm_ready():
+    backend = "api" if _llm_ready() else "codex_cli" if _codex_cli_ready() else "none"
+    if backend == "none":
         if require_llm:
             return _rule_unavailable(
                 market,
-                "LLM config missing: set LLM_API_KEY/IFLOW_API_KEY and LLM_MODEL/IFLOW_MODEL.",
+                "No rule parser backend available: configure API LLM or install/authenticate codex CLI.",
                 mode="llm_required",
                 llm_required=True,
             )
         return _heuristic_rule_analysis(market)
     try:
-        from src.strategies.rule_lawyer.parser import compute_rule_score, parse_market_with_llm
+        from src.strategies.rule_lawyer.parser import compute_rule_score, parse_market_with_codex_cli, parse_market_with_llm
     except Exception as exc:
         if require_llm:
             return _rule_failed(market, f"LLM parser import failed: {exc}", mode="llm")
         return _heuristic_rule_analysis(market)
-    try:
-        import asyncio
+    if backend == "api":
+        try:
+            import asyncio
 
-        parsed = asyncio.run(parse_market_with_llm(market_payload, retry_on_fail=True))
-    except Exception as exc:
-        if require_llm:
-            return _rule_failed(market, f"LLM parse execution failed: {exc}", mode="llm")
-        parsed = None
+            parsed = asyncio.run(parse_market_with_llm(market_payload, retry_on_fail=True))
+        except Exception as exc:
+            if require_llm:
+                return _rule_failed(market, f"API LLM parse execution failed: {exc}", mode="llm")
+            parsed = None
+    else:
+        try:
+            parsed = parse_market_with_codex_cli(market_payload)
+        except Exception as exc:
+            if require_llm:
+                return _rule_failed(market, f"Codex CLI parse execution failed: {exc}", mode="codex_cli")
+            parsed = None
     if not parsed:
         if require_llm:
-            return _rule_failed(market, "LLM parse returned empty or invalid structured output.", mode="llm")
+            return _rule_failed(
+                market,
+                f"{'API LLM' if backend == 'api' else 'Codex CLI'} parse returned empty or invalid structured output.",
+                mode="llm" if backend == "api" else "codex_cli",
+            )
         return _heuristic_rule_analysis(market)
     score_payload = compute_rule_score(parsed)
     evidence = [
@@ -249,8 +267,12 @@ def run_rule_analysis(market: ResolvedMarket, require_llm: bool = True) -> RuleA
         evidence_records=evidence,
         risk_flags=risk_flags,
         source_trace={
-            "mode": "llm",
-            "methodology": "LLM 先按 schema 抽取规则结构，再由代码进行字段校验与 rule_score 计算。",
+            "mode": "llm" if backend == "api" else "codex_cli",
+            "methodology": (
+                "LLM 先按 schema 抽取规则结构，再由代码进行字段校验与 rule_score 计算。"
+                if backend == "api"
+                else "Codex CLI 先按 schema 输出结构化 JSON，再由代码进行字段校验与 rule_score 计算。"
+            ),
             "prompt_schema_fields": [
                 "time_window",
                 "settlement_source_type",
@@ -264,6 +286,7 @@ def run_rule_analysis(market: ResolvedMarket, require_llm: bool = True) -> RuleA
                 "notes_for_humans",
                 "llm_confidence",
             ],
+            "backend": backend,
             "llm_confidence": to_float(parsed.llm_confidence, 0.0),
             "rule_score": score_payload,
             "parsed_structure": {
