@@ -44,6 +44,7 @@ class PMMConfig:
     paper_conservative_bbo_share_multiplier: float = 0.35
     paper_bootstrap_split_usdc: float = 0.0
     inflight_order_ttl_sec: float = 10.0
+    live_maker_only: bool = False
 
     # Market data source
     market_data_source: str = "rest"  # rest | ws
@@ -237,6 +238,7 @@ class PMMConfig:
                 os.getenv("PMM_PAPER_BOOTSTRAP_SPLIT_USDC", "0")
             ),
             inflight_order_ttl_sec=float(os.getenv("PMM_INFLIGHT_ORDER_TTL_SEC", "10")),
+            live_maker_only=os.getenv("PMM_LIVE_MAKER_ONLY", "0") == "1",
             market_data_source=os.getenv("PMM_MARKET_DATA_SOURCE", "rest"),
             ws_market_url=os.getenv(
                 "PMM_WS_MARKET_URL", "wss://ws-subscriptions-clob.polymarket.com/ws/market"

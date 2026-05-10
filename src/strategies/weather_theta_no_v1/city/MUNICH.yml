@@ -1,0 +1,86 @@
+identity:
+  city_key: munich
+  display_name: Munich
+  market_unit: C
+  timezone: Europe/Berlin
+
+station:
+  station_name: Munich Airport
+  station_code: EDDM
+  iata_code: MUC
+  object_type: airport
+  settlement_scope: Only the Munich Airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching Munich temperature-market rules.
+  station_match_rule: Must match Munich Airport Station / EDDM. Do not substitute a Munich city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: EDDM
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from city pages or provisional history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: EDDM
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the airport path is ramping cleanly.
+    do_not_use_for: Do not treat the displayed forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain broader market consensus inside the TWC stack.
+      do_not_use_for: Do not replace EDDM with a Munich city page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check cloud, wind, and visibility.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check current airport observation and current runway weather.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and whether support pages allow a warmer tail.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A Munich city page is not the EDDM airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can run warmer than the airport.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain market drift.
+
+operator_notes:
+  summary: Munich is data-rich and easy to verify as an airport object, but it is not one of the cleanest cities because foehn and frontal structure can quickly warm the airport more than a casual forecast suggests.
+  why_this_station: EDDM is the airport object used by Munich weather markets and has broad station-level coverage across the main weather stacks.
+  main_risks:
+    - Foehn-sensitive warm pushes.
+    - Fast cloud or frontal changes moving the top bucket.
+    - Munich city pages running warmer than the airport object.
+  common_wrong_anchor:
+    - Generic Munich city pages instead of EDDM.
+    - Alpine-region summaries that blur away the airport station.
+  usage_order:
+    - Open Polymarket rules and confirm EDDM plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport observation pages before sizing up.
+    - Treat city pages only as market-noise diagnostics.

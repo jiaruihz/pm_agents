@@ -139,6 +139,29 @@ def _drop_pending_by_ids(pending_orders: List[Dict[str, Any]], order_ids: List[s
     return out
 
 
+def _maker_only_price(
+    *,
+    side: str,
+    price: float,
+    best_bid: float,
+    best_ask: float,
+    tick_size: float,
+    tick_mode: str,
+) -> float:
+    """Clamp an order price so it rests on the book instead of intentionally crossing."""
+    side_u = str(side).strip().upper()
+    px = max(0.0, float(price))
+    bid = max(0.0, float(best_bid))
+    ask = max(0.0, float(best_ask))
+    tick = max(1e-9, float(tick_size))
+
+    if side_u == "BUY" and ask > 0 and px >= ask:
+        return max(0.0, quantize_to_tick(ask - tick, tick, "floor"))
+    if side_u == "SELL" and bid > 0 and px <= bid:
+        return max(0.0, quantize_to_tick(bid + tick, tick, "ceil"))
+    return quantize_to_tick(px, tick, tick_mode)
+
+
 
 
 async def tick_loop(config: PMMConfig) -> None:
@@ -879,6 +902,39 @@ async def tick_loop(config: PMMConfig) -> None:
                             level = _safe_int(t.get("level"), 0)
                             if size < config.min_size or price <= 0:
                                 continue
+                            requested_price = price
+                            if execution_mode == "live" and config.live_maker_only:
+                                top = book_tops.get(token_id, {"best_bid": 0.0, "best_ask": 0.0})
+                                price = _maker_only_price(
+                                    side=side,
+                                    price=price,
+                                    best_bid=top.get("best_bid", 0.0),
+                                    best_ask=top.get("best_ask", 0.0),
+                                    tick_size=config.price_tick,
+                                    tick_mode=config.price_tick_mode,
+                                )
+                                if price <= 0:
+                                    _log_event(
+                                        logging.INFO,
+                                        "maker_only_skip_invalid_price",
+                                        token_id=token_id,
+                                        side=side,
+                                        requested_price=round(requested_price, 6),
+                                        quote_level=level,
+                                    )
+                                    continue
+                                if abs(price - requested_price) >= max(1e-9, config.price_tick / 2):
+                                    _log_event(
+                                        logging.INFO,
+                                        "maker_only_adjusted_price",
+                                        token_id=token_id,
+                                        side=side,
+                                        quote_level=level,
+                                        requested_price=round(requested_price, 6),
+                                        adjusted_price=round(price, 6),
+                                        best_bid=round(top.get("best_bid", 0.0), 6),
+                                        best_ask=round(top.get("best_ask", 0.0), 6),
+                                    )
                             try:
                                 if config.dry_run:
                                     _log_event(
@@ -932,7 +988,7 @@ async def tick_loop(config: PMMConfig) -> None:
                                 if execution_mode == "live":
                                     # 新挂单先记入 pending，等待交易所状态回传。
                                     pending_item = {
-                                        "id": placed_order.get("id"),
+                                        "id": placed_order.get("id") or placed_order.get("orderID") or placed_order.get("order_id"),
                                         "asset_id": token_id,
                                         "side": side,
                                         "price": price,
@@ -941,6 +997,27 @@ async def tick_loop(config: PMMConfig) -> None:
                                         "_pending_created_at": time.time(),
                                     }
                                     pending_orders.append(pending_item)
+                                    await notifier.send_order_update(
+                                        event="order_placed",
+                                        token_id=token_id,
+                                        side=side,
+                                        price=price,
+                                        size=size,
+                                        order_id=str(
+                                            placed_order.get("id")
+                                            or placed_order.get("orderID")
+                                            or placed_order.get("order_id")
+                                            or ""
+                                        ),
+                                        detail=(
+                                            f"level={level} reason={decision.reason}"
+                                            + (
+                                                f" requested_price={round(requested_price, 6)}"
+                                                if abs(price - requested_price) >= max(1e-9, config.price_tick / 2)
+                                                else ""
+                                            )
+                                        ),
+                                    )
                             except Exception as exc:
                                 errors += 1
                                 total_errors += 1

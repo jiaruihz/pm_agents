@@ -107,6 +107,8 @@ live 模式下链上确认有延迟，此时启用 pending credit 让策略在�
 - `weather_entry_min_price`, `weather_entry_max_price`: 入场价格安全区间
 - `weather_position_pct`: 单次建仓预算占可用 USDC 比例（默认 `0.05`）
 - `weather_take_profit_abs`, `weather_stop_loss_abs`: 绝对价差止盈/止损阈值
+- `weather_min_forecast_edge`, `weather_exit_forecast_edge`: 日最高温预测和目标桶位的最小安全偏离
+- `weather_token_forecast_map`: token -> `{lat, lon, target_date, unit, bucket_value/bucket_min/bucket_max}`
 - `weather_max_hold_hours`: 最大持有时长（默认 `48`）
 - `weather_exit_before_hours`: 结算前强制离场窗口（需配合 `weather_token_end_ts`）
 - `weather_reentry_cooldown_hours`: 平仓后冷却时长
@@ -118,13 +120,18 @@ export PMM_STRATEGY_KEY="weather_theta_no_v1"
 export PMM_STRATEGY_PARAMS_JSON='{
   "weather_no_token_ids": ["NO_TOKEN_A", "NO_TOKEN_B"],
   "weather_entry_min_price": 0.80,
-  "weather_entry_max_price": 0.96,
+  "weather_entry_max_price": 0.97,
   "weather_position_pct": 0.05,
-  "weather_take_profit_abs": 0.01,
+  "weather_take_profit_abs": 0.02,
   "weather_stop_loss_abs": 0.03,
+  "weather_min_forecast_edge": 2.0,
+  "weather_exit_forecast_edge": 1.0,
   "weather_max_hold_hours": 48,
   "weather_exit_before_hours": 6,
-  "weather_reentry_cooldown_hours": 12
+  "weather_reentry_cooldown_hours": 12,
+  "weather_token_forecast_map": {
+    "NO_TOKEN_A": {"lat": 51.5072, "lon": -0.1276, "target_date": "2026-03-09", "unit": "C", "bucket_value": 12}
+  }
 }'
 ```
 

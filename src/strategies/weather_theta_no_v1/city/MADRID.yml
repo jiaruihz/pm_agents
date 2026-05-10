@@ -1,0 +1,86 @@
+identity:
+  city_key: madrid
+  display_name: Madrid
+  market_unit: C
+  timezone: Europe/Madrid
+
+station:
+  station_name: Adolfo Suarez Madrid-Barajas Airport
+  station_code: LEMD
+  iata_code: MAD
+  object_type: airport
+  settlement_scope: Only the Madrid-Barajas airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values for Madrid-style airport temperature contracts.
+  station_match_rule: Must match Madrid-Barajas Airport Station / LEMD. Do not substitute a generic Madrid city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: LEMD
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from city pages or non-finalized history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: LEMD
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the dry daytime path remains stable.
+    do_not_use_for: Do not treat the forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain broader market consensus inside the TWC stack.
+      do_not_use_for: Do not override the same-station WU anchor with a generic Madrid page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check airport observation trends, wind, and visibility.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and daytime ramp.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend, peak timing, and uncertainty.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: Madrid city pages are not the LEMD airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban warmth can differ from the airport path.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only for noise diagnostics.
+
+operator_notes:
+  summary: Madrid is attractive when you want a dry-air airport market without the foehn-style instability seen in more sensitive alpine setups. Same-station WU Hourly should dominate.
+  why_this_station: Madrid-Barajas is a high-credibility airport object with broad provider coverage and a relatively clean daytime heating profile.
+  main_risks:
+    - Large dry-air range making morning readings weaker evidence.
+    - Thin cloud reducing the top bucket by one degree.
+    - City pages overstating urban warmth versus the airport.
+  common_wrong_anchor:
+    - Generic Madrid city pages instead of LEMD.
+    - Downtown-focused pages that are not the airport object.
+  usage_order:
+    - Open Polymarket rules and confirm LEMD plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport support pages for disagreement on the warm-side cap.
+    - Use city pages only as noise diagnostics.

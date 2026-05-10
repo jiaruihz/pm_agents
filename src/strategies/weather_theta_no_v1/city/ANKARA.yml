@@ -1,0 +1,86 @@
+identity:
+  city_key: ankara
+  display_name: Ankara
+  market_unit: C
+  timezone: Europe/Istanbul
+
+station:
+  station_name: Ankara Esenboga Airport
+  station_code: LTAC
+  iata_code: ESB
+  object_type: airport
+  settlement_scope: Only the Esenboga airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching Ankara temperature-market rules.
+  station_match_rule: Must match Ankara Esenboga Airport Station / LTAC. Do not substitute a generic Ankara city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: LTAC
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not treat provisional history as final settlement.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: LTAC
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the dry daytime path is stable.
+    do_not_use_for: Do not map the displayed forecast integer directly to a guaranteed settlement call.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain market consensus inside the TWC stack.
+      do_not_use_for: Do not replace LTAC with a generic Ankara page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check visibility, wind, and dry-air range.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and daytime ramp.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend and peak timing.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: The Ankara city object is not the LTAC airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can differ from the airport dry-range path.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain market drift.
+
+operator_notes:
+  summary: Ankara is one of the cleaner dry-air airport contracts. Same-station WU Hourly should dominate, while support pages mainly confirm whether the dry daytime range is behaving normally.
+  why_this_station: Esenboga is already in the station profile and is a good airport-based object for stable temperature markets.
+  main_risks:
+    - Large dry-air range making early-morning readings misleading.
+    - Late cloud or frontal spillover trimming the top bucket.
+    - Casual city pages overstating warmth versus the airport.
+  common_wrong_anchor:
+    - Generic Ankara city pages instead of LTAC.
+    - Pages that focus on central Ankara rather than the airport.
+  usage_order:
+    - Open Polymarket rules and confirm LTAC plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport support pages for disagreement on the top of the range.
+    - Use city pages only as wrong-anchor diagnostics.

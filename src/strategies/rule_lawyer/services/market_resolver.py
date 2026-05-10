@@ -15,6 +15,8 @@ def _extract_slug_from_url(url: str) -> str:
         return ""
     if "event" in parts:
         idx = parts.index("event")
+        if idx + 2 < len(parts):
+            return parts[idx + 2]
         if idx + 1 < len(parts):
             return parts[idx + 1]
     if "market" in parts:
@@ -28,7 +30,8 @@ def _extract_url_kind(url: str) -> str:
     parsed = urlparse(url.strip())
     parts = [p for p in parsed.path.split("/") if p]
     if "event" in parts:
-        return "event"
+        idx = parts.index("event")
+        return "market" if idx + 2 < len(parts) else "event"
     if "market" in parts:
         return "market"
     return "unknown"

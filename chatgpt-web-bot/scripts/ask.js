@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs/promises');
 const path = require('path');
+const { launchPersistentContextWithFallback } = require('./browser');
 
 const USER_DATA_DIR = 'data/profile-chatgpt';
 const RECORDS_DIR = 'data/records';
@@ -70,14 +71,12 @@ async function waitForStableAssistantText(page, timeoutMs = 180000) {
 
   await fs.mkdir(RECORDS_DIR, { recursive: true });
 
-  const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
-    headless: false,
-    viewport: { width: 1440, height: 960 }
-  });
+  const { context, profileName } = await launchPersistentContextWithFallback(chromium, USER_DATA_DIR);
 
   const page = context.pages()[0] || await context.newPage();
   await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(3000);
+  console.log(`Browser mode: ${profileName}`);
 
   const composer = page.locator(SELECTORS.composer).last();
   await composer.waitFor({ timeout: 30000 });

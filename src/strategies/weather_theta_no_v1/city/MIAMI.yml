@@ -1,0 +1,86 @@
+identity:
+  city_key: miami
+  display_name: Miami
+  market_unit: F
+  timezone: America/New_York
+
+station:
+  station_name: Miami International Airport
+  station_code: KMIA
+  iata_code: MIA
+  object_type: airport
+  settlement_scope: Only the Miami International Airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Fahrenheit values, matching Miami temperature-market rules.
+  station_match_rule: Must match Miami International Airport Station / KMIA. Do not substitute a generic Miami city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: KMIA
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from a city page or provisional history data.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: KMIA
+    role: trading_anchor
+    use_for: Record target-day high, midday heat path, and whether the airport trend is drifting.
+    do_not_use_for: Do not treat the shown forecast bucket as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain broader market consensus in the TWC stack.
+      do_not_use_for: Do not replace KMIA with a generic Miami page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check cloud, visibility, and convective hints.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and late-morning warming path.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend and uncertainty.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A generic Miami city page is not the KMIA airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: City guidance can differ from the airport path.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only for market-noise diagnostics.
+
+operator_notes:
+  summary: Miami is one of the cleaner airport contracts when convective risk is low. Same-station WU Hourly is the anchor; support pages mainly confirm whether marine cloud or showers can shave the afternoon high.
+  why_this_station: Miami International Airport is already in the strategy station profile and is a high-liquidity, airport-centric weather object.
+  main_risks:
+    - Marine cloud slowing the morning ramp.
+    - Showers or thunderstorms clipping the afternoon high.
+    - Airport versus beach or downtown page mismatch.
+  common_wrong_anchor:
+    - Generic Miami city pages that blend airport and coastal readings.
+    - Beach-focused pages that are not the airport settlement object.
+  usage_order:
+    - Open Polymarket rules and confirm KMIA plus Fahrenheit.
+    - Open same-station WU Hourly and record target-day high plus likely peak window.
+    - Open same-station WU History / Daily to confirm station identity and later use it for settlement review.
+    - Check airport support pages for convective disagreement.
+    - Treat city pages only as a noise check.

@@ -10,6 +10,7 @@
   - `PMM_JAVA_PLAN.md`
   - `PM_ARB_STRATEGY.md`
   - `PM_ARB_STRATEGY_CN.md`
+  - `WEATHER_EXECUTION_ARCHITECTURE.md`
 - Research：
   - `RESEARCH_INTEGRATION.md`
   - `research/RESEARCH_README.md`

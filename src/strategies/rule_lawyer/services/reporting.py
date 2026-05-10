@@ -88,6 +88,10 @@ def _extract_rule_points(market: Dict[str, Any], rule_audit: Dict[str, Any]) -> 
         "trigger_conditions": trigger_conditions,
         "exclusions": exclusions,
         "entity_definitions": entity_defs,
+        "ambiguity_explanations": list(rule_audit.get("ambiguity_explanations") or []),
+        "decision_boundary_notes": list(rule_audit.get("decision_boundary_notes") or []),
+        "yes_case_examples": list(rule_audit.get("yes_case_examples") or []),
+        "no_case_examples": list(rule_audit.get("no_case_examples") or []),
         "quoted_snippets": quoted_snippets,
     }
 
@@ -203,6 +207,42 @@ def _interpret_rule_point(text: str) -> str:
     if "except" in lower or "unless" in lower or "does not" in lower or "won't resolve" in lower:
         interpretations.append("这里是边界条款，决定了哪些看起来接近的事件其实不算数。")
     return " ".join(dict.fromkeys(interpretations)) or "这条原文需要结合上下文人工复核其边界。"
+
+
+def _ambiguity_lines(rule_audit: Dict[str, Any]) -> list[str]:
+    flags = list(rule_audit.get("ambiguity_flags") or [])
+    explanations = list(rule_audit.get("ambiguity_explanations") or [])
+    if not flags and not explanations:
+        return ["- 当前没有识别到明确歧义点。"]
+    lines: list[str] = []
+    max_len = max(len(flags), len(explanations))
+    for idx in range(max_len):
+        flag = flags[idx] if idx < len(flags) else ""
+        explanation = explanations[idx] if idx < len(explanations) else ""
+        if flag and explanation:
+            lines.append(f"- {flag}")
+            lines.append(f"  为什么重要：{explanation}")
+        elif flag:
+            lines.append(f"- {flag}")
+        elif explanation:
+            lines.append(f"- {explanation}")
+    return lines
+
+
+def _boundary_lines(points: Dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for item in points.get("decision_boundary_notes", [])[:5]:
+        lines.append(f"- {item}")
+    if not lines:
+        lines.append("- 当前没有额外边界提醒。")
+    return lines
+
+
+def _example_case_lines(points: Dict[str, Any], key: str, prefix: str) -> list[str]:
+    items = points.get(key, [])[:5]
+    if not items:
+        return [f"- 当前没有结构化的 {prefix} 示例。"]
+    return [f"- {item}" for item in items]
 
 
 def _decision_card(data: Dict[str, Any]) -> str:
@@ -343,10 +383,27 @@ def build_rule_audit_report(data: Dict[str, Any]) -> str:
         "## 歧义点",
         "",
     ])
-    for flag in data.get("ambiguity_flags", []):
-        lines.append(f"- {flag}")
-    if not data.get("ambiguity_flags"):
-        lines.append("- 无明显歧义")
+    lines.extend(_ambiguity_lines(data))
+    lines.extend([
+        "",
+        "## 边界提醒",
+        "",
+    ])
+    lines.extend(_boundary_lines(points))
+    lines.extend([
+        "",
+        "## 例子",
+        "",
+        "### 更可能算 Yes",
+        "",
+    ])
+    lines.extend(_example_case_lines(points, "yes_case_examples", "Yes"))
+    lines.extend([
+        "",
+        "### 更可能不算 Yes",
+        "",
+    ])
+    lines.extend(_example_case_lines(points, "no_case_examples", "No"))
     if points["entity_definitions"]:
         lines.extend(["", "## 实体定义", ""])
         for row in points["entity_definitions"]:
@@ -473,6 +530,30 @@ def build_market_analysis_report(data: Dict[str, Any]) -> str:
             lines.append("- 当前没有抽取到足够结构化的触发 / 排除条款，需人工复读原文。")
     else:
         lines.append("- 当前没有结构化规则解析结果，因此不展示正式触发/排除条款提炼。")
+    lines.extend([
+        "",
+        "### 歧义点展开",
+        "",
+    ])
+    lines.extend(_ambiguity_lines(rule_audit))
+    lines.extend([
+        "",
+        "### 边界提醒",
+        "",
+    ])
+    lines.extend(_boundary_lines(points))
+    lines.extend([
+        "",
+        "### 什么更可能算 Yes",
+        "",
+    ])
+    lines.extend(_example_case_lines(points, "yes_case_examples", "Yes"))
+    lines.extend([
+        "",
+        "### 什么更可能不算 Yes",
+        "",
+    ])
+    lines.extend(_example_case_lines(points, "no_case_examples", "No"))
     lines.extend([
         "",
         "## 评论与情绪层",

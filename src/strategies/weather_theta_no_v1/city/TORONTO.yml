@@ -1,0 +1,86 @@
+identity:
+  city_key: toronto
+  display_name: Toronto
+  market_unit: C
+  timezone: America/Toronto
+
+station:
+  station_name: Toronto Pearson International Airport
+  station_code: CYYZ
+  iata_code: YYZ
+  object_type: airport
+  settlement_scope: Only the Pearson airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching Toronto temperature-market rules.
+  station_match_rule: Must match Toronto Pearson International Airport Station / CYYZ. Do not substitute a generic Toronto city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: CYYZ
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from a city page or from non-finalized history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: CYYZ
+    role: trading_anchor
+    use_for: Record target-day high, peak hour, and whether the daytime path is drifting warmer or cooler.
+    do_not_use_for: Do not treat the displayed forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain broader market consensus inside the TWC stack.
+      do_not_use_for: Do not override the same-station WU anchor with a Toronto city page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check airport observations, wind, and frontal timing.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and warming path.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend, peak timing, and uncertainty.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: Downtown Toronto is not the CYYZ airport contract object.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: City warmth can diverge from the airport path.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use it only to explain market noise, not to price the contract.
+
+operator_notes:
+  summary: Toronto is tradable when the airport forecast is stable and wind or frontal structure is not distorting the day. Start from same-station WU Hourly, then confirm that support pages are not materially colder or warmer.
+  why_this_station: Pearson is the airport object already used by the strategy config and provides a clean airport-based settlement reference.
+  main_risks:
+    - Wind and front timing changing the afternoon peak.
+    - Lake influence making casual city pages misleading.
+    - Light precipitation flattening the warm side of the range.
+  common_wrong_anchor:
+    - Generic Toronto city pages that ignore the airport path.
+    - Same-stack pages without an explicit CYYZ object.
+  usage_order:
+    - Open Polymarket rules and confirm CYYZ plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to confirm station identity and later use it for settlement review.
+    - Check airport support pages for disagreement in high or timing.
+    - Treat city pages only as a wrong-anchor diagnostic.

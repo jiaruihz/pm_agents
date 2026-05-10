@@ -1,0 +1,86 @@
+identity:
+  city_key: dublin
+  display_name: Dublin
+  market_unit: C
+  timezone: Europe/Dublin
+
+station:
+  station_name: Dublin Airport
+  station_code: EIDW
+  iata_code: DUB
+  object_type: airport
+  settlement_scope: Only the Dublin Airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values for Dublin-style airport temperature contracts.
+  station_match_rule: Must match Dublin Airport Station / EIDW. Do not substitute a generic Dublin city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: EIDW
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from city pages or non-finalized history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: EIDW
+    role: trading_anchor
+    use_for: Record target-day high, likely peak window, and whether cloud cover is flattening the curve.
+    do_not_use_for: Do not treat the shown forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain broader market consensus inside the TWC stack.
+      do_not_use_for: Do not override the same-station WU anchor with a generic Dublin page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check low cloud, wind, and airport observations.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and daytime path.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend and uncertainty.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A generic Dublin page is not the EIDW airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: City pages can run warmer than the airport.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only for noise diagnostics.
+
+operator_notes:
+  summary: Dublin is attractive when you want a marine airport market with relatively smooth daytime progression. The main risk is not violent spikes but cloud and wind keeping the peak below a warmer city narrative.
+  why_this_station: Dublin Airport is a clean airport object with strong same-station weather page coverage across major providers.
+  main_risks:
+    - Low cloud capping the afternoon high.
+    - Wind keeping the warm side muted.
+    - City pages overstating the airport high.
+  common_wrong_anchor:
+    - Dublin city pages instead of EIDW.
+    - Metro pages that ignore airport marine influence.
+  usage_order:
+    - Open Polymarket rules and confirm EIDW plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport support pages for disagreement in cloud-limited setups.
+    - Use city pages only to gauge market noise.

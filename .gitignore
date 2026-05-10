@@ -1,7 +1,9 @@
 .venv
+.venv-*/
 .env
 .env.*
 !.env.example
+.codex
 .idea
 .ipynb_checkpoints
 .mypy_cache
@@ -36,6 +38,7 @@ research.db-*
 node_modules/
 frontend/**/node_modules/
 frontend/**/tsconfig.tsbuildinfo
+frontend/**/runtime/
 output/
 archive/books/
 src/strategies/pmm/backtest/scenarios/
@@ -50,6 +53,7 @@ src/strategies/pmm/backtest/**/plots/
 local_market_collection/market_snapshot_*.json
 
 # Runtime local artifacts
+runtime/
 runtime/*.pid
 runtime/*.db
 runtime/*.db.*
@@ -75,3 +79,6 @@ runtime/verify_explained_status/
 runtime/verify_market_analysis_cn/
 *.db-shm
 *.db-wal
+
+# Local agent state
+.claude/

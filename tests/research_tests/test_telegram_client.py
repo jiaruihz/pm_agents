@@ -41,3 +41,19 @@ async def test_send_message_api_failure():
     with pytest.raises(RuntimeError):
         await tg.send_message("123", "hello")
     await async_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_get_updates_success():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert str(request.url).startswith("https://api.telegram.org/bottoken/getUpdates?")
+        assert request.url.params["offset"] == "12"
+        assert request.url.params["timeout"] == "10"
+        return httpx.Response(200, json={"ok": True, "result": [{"update_id": 12}]})
+
+    async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    tg = TelegramClient(bot_token="token", client=async_client)
+    res = await tg.get_updates(offset=12, timeout=10)
+    assert res["result"][0]["update_id"] == 12
+    await async_client.aclose()

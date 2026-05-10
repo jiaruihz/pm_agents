@@ -1,0 +1,86 @@
+identity:
+  city_key: taipei
+  display_name: Taipei
+  market_unit: C
+  timezone: Asia/Taipei
+
+station:
+  station_name: Taiwan Taoyuan International Airport
+  station_code: RCTP
+  iata_code: TPE
+  object_type: airport
+  settlement_scope: Only the Taoyuan airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values, matching Taipei-style weather-market rules.
+  station_match_rule: Must match Taiwan Taoyuan International Airport Station / RCTP. Do not substitute a generic Taipei city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: RCTP
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not treat provisional history as final settlement.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: RCTP
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the airport path is warming or stalling.
+    do_not_use_for: Do not map the displayed forecast integer directly to a guaranteed settlement call.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain market consensus inside the TWC stack.
+      do_not_use_for: Do not replace RCTP with a generic Taipei page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind, cloud, and airport observations.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check current airport observation and whether the ramp is on track.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and subtropical cloud risk.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A Taipei city page is not the RCTP airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can diverge from the airport by multiple degrees.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain wrong-anchor flow.
+
+operator_notes:
+  summary: Taipei should be treated as an RCTP airport contract. Same-station WU Hourly is the main anchor, while airport observation pages matter because subtropical cloud, sea breeze, and rain bands can shave the top bucket quickly.
+  why_this_station: Taoyuan is the clean airport object for a Taipei contract and avoids city-heat-island contamination.
+  main_risks:
+    - Sea breeze clipping the warm side of the range.
+    - Low cloud or rain bands delaying the daytime peak.
+    - Market participants anchoring to Taipei city pages instead of RCTP.
+  common_wrong_anchor:
+    - Taipei city forecast pages with no RCTP match.
+    - Generic Taiwan pages that ignore the airport object.
+  usage_order:
+    - Open Polymarket rules and confirm RCTP plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check CheckWX or another airport observation source for current ramp confirmation.
+    - Use city pages only as wrong-anchor diagnostics.

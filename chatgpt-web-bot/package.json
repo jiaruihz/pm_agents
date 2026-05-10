@@ -5,6 +5,7 @@
   "description": "Local Playwright bot for ChatGPT web",
   "scripts": {
     "login": "node scripts/login.js",
+    "import-profile": "node scripts/import-profile.js",
     "ask": "node scripts/ask.js"
   },
   "devDependencies": {

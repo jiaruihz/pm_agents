@@ -7,6 +7,7 @@ from src.platform.notification.telegram import (
     PMMTelegramNotifier,
     build_alert_message,
     build_live_report_message,
+    build_order_message,
 )
 
 
@@ -68,6 +69,26 @@ def test_build_alert_message_contains_event_and_detail():
     assert "tick=11" in msg
     assert "pnl=-1.2300" in msg
     assert "detail=boom" in msg
+
+
+def test_build_order_message_contains_order_payload():
+    msg = build_order_message(
+        symbol="TEST",
+        strategy_key="weather_theta_no_v1",
+        event="order_placed",
+        token_id="tid-1",
+        side="BUY",
+        price=0.95,
+        size=20.0,
+        order_id="oid-1",
+        detail="maker_only",
+    )
+    assert "[PMM ORDER]" in msg
+    assert "event=order_placed" in msg
+    assert "token_id=tid-1" in msg
+    assert "side=BUY price=0.950000 size=20.000000" in msg
+    assert "order_id=oid-1" in msg
+    assert "detail=maker_only" in msg
 
 
 @pytest.mark.asyncio
@@ -145,5 +166,17 @@ async def test_periodic_report_interval_and_alert_cooldown(monkeypatch):
         pnl=1.1,
     )
     assert len(client.calls) == 3
+
+    await notifier.send_order_update(
+        event="order_placed",
+        token_id="t1",
+        side="BUY",
+        price=0.95,
+        size=10.0,
+        order_id="oid-123",
+        detail="level=0",
+    )
+    assert len(client.calls) == 4
+    assert "[PMM ORDER]" in client.calls[-1]["text"]
 
     await notifier.aclose()

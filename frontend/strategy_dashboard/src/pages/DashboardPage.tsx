@@ -59,7 +59,7 @@ export function DashboardPage(): JSX.Element {
   const equity = accounts.reduce((acc, x) => acc + Number(x.equity_total ?? 0), 0);
 
   return (
-    <PageFrame title="策略总览" desc="全局策略分类、实例运行态、账户总览">
+    <PageFrame title="策略总览" desc="全局策略分类、策略实例运行态、账户总览">
       <div className="grid">
         {error && <div className="card error">{error}</div>}
         <section className="grid cols-4">
@@ -114,7 +114,7 @@ export function DashboardPage(): JSX.Element {
                 onChange={(e) => setSelectedStrategy(e.target.value)}
                 style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--fg)" }}
               >
-                <option value="all">所有模型 (All)</option>
+                <option value="all">所有策略 (All)</option>
                 {strategies.map((s) => (
                   <option key={s.strategy_key} value={s.strategy_key}>
                     {s.strategy_name || s.strategy_key}

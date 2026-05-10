@@ -16,8 +16,8 @@ npm run dev
 
 通过 `VITE_DASHBOARD_DATA_MODE` 切换：
 
-- `mock`（默认）：前端本地假数据，后端改造中也可开发
-- `http`：调用统一 BFF `/api/v1/*`
+- `http`（默认）：调用统一 BFF `/api/v1/*`
+- `mock`：前端本地假数据，供纯前端开发使用
 
 可选环境变量：
 

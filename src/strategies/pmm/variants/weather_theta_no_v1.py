@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Set, Tuple
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from src.strategies.pmm.config import PMMConfig
 from src.strategies.pmm.core.strategy_base import QuoteTarget, StrategyQuoteInput
+from src.strategies.weather_theta_no_v1.tools.provider import AsyncOpenMeteoClient
+
+logger = logging.getLogger("pmm.strategy.weather_theta")
 
 QuantizeFn = Callable[[float, float, float, str], Tuple[float, float]]
 
@@ -83,6 +90,61 @@ class WeatherThetaNoV1Strategy:
         self._quantize_pair = quantize_pair_fn
         self._time_fn = time_fn or time.time
         self._state: Dict[str, _TokenState] = {}
+        self._weather_target_meta: Dict[str, Dict[str, Any]] = {}
+
+        self._weather_provider = AsyncOpenMeteoClient(update_interval_sec=300)
+        self._load_weather_targets()
+
+        # We start the provider polling immediately in background
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._weather_provider.start_polling())
+        except RuntimeError:
+            pass  # No running loop yet, it's fine, we aren't in tick engine yet.
+
+    def _load_weather_targets(self) -> None:
+        """Load weather targets mapping from local config."""
+        config_path = Path("src/strategies/weather_theta_no_v1/config/weather_targets.json")
+        if not config_path.exists():
+            logger.warning(f"Weather targets config not found at {config_path}")
+            return
+            
+        try:
+            data = json.loads(config_path.read_text("utf-8"))
+            if isinstance(data, list):
+                for item in data:
+                    self._apply_weather_target_item(item)
+        except Exception as e:
+            logger.error(f"Failed to load weather targets config: {e}")
+
+    def _apply_weather_target_item(self, item: Dict[str, Any]) -> None:
+        lat = item.get("lat")
+        lon = item.get("lon")
+        token_id = str(item.get("token_id") or item.get("no_token") or "").strip()
+        if lat is None or lon is None or not token_id:
+            return
+        target_date = str(item.get("target_date") or "").strip()
+        self._weather_provider.register_target(token_id, float(lat), float(lon), target_date=target_date or None)
+        self._weather_target_meta[token_id] = {
+            "unit": str(item.get("unit") or "C").strip().upper(),
+            "bucket_min": item.get("bucket_min"),
+            "bucket_max": item.get("bucket_max"),
+            "bucket_value": item.get("bucket_value"),
+            "target_date": target_date,
+            "city": str(item.get("city") or "").strip(),
+        }
+        logger.info("Registered weather target for token %s at (%s, %s)", token_id, lat, lon)
+
+    def _sync_dynamic_weather_targets(self, params: Dict[str, Any]) -> None:
+        raw = params.get("weather_token_forecast_map")
+        if not isinstance(raw, dict):
+            return
+        for token_id, item in raw.items():
+            if not isinstance(item, dict):
+                continue
+            payload = dict(item)
+            payload.setdefault("token_id", str(token_id))
+            self._apply_weather_target_item(payload)
 
     def generate_quotes(
         self,
@@ -90,6 +152,7 @@ class WeatherThetaNoV1Strategy:
         config: PMMConfig,
     ) -> List[QuoteTarget]:
         params = config.strategy_params or {}
+        self._sync_dynamic_weather_targets(params)
         token_id = quote_input.token_id
         allow_tokens = _token_set(params.get("weather_no_token_ids"))
         if allow_tokens and token_id not in allow_tokens:
@@ -104,12 +167,12 @@ class WeatherThetaNoV1Strategy:
         state = self._sync_state(token_id=token_id, position=position, mid=mid, now=now)
 
         entry_min = _clamp(_to_float(params.get("weather_entry_min_price"), 0.78), 0.0001, 0.9999)
-        entry_max = _clamp(_to_float(params.get("weather_entry_max_price"), 0.96), entry_min, 0.9999)
+        entry_max = _clamp(_to_float(params.get("weather_entry_max_price"), 0.97), entry_min, 0.9999)
         max_entry_spread = max(0.0, _to_float(params.get("weather_entry_max_spread"), 0.06))
         position_pct = _clamp(_to_float(params.get("weather_position_pct"), 0.05), 0.0, 1.0)
         min_order_notional = max(0.0, _to_float(params.get("weather_min_order_notional"), 1.0))
 
-        take_profit_abs = max(0.0, _to_float(params.get("weather_take_profit_abs"), 0.01))
+        take_profit_abs = max(0.0, _to_float(params.get("weather_take_profit_abs"), 0.02))
         stop_loss_abs = max(0.0, _to_float(params.get("weather_stop_loss_abs"), 0.03))
         min_hold_sec = max(0.0, _to_float(params.get("weather_min_hold_hours"), 0.0)) * 3600.0
         max_hold_sec = max(0.0, _to_float(params.get("weather_max_hold_hours"), 48.0)) * 3600.0
@@ -118,6 +181,8 @@ class WeatherThetaNoV1Strategy:
         allow_reentry = _to_bool(params.get("weather_allow_reentry"), True)
         force_flat_on_range_break = _to_bool(params.get("weather_force_flat_on_range_break"), True)
         token_end_ts_map = _token_ts_map(params.get("weather_token_end_ts"))
+        forecast_entry_edge = max(0.0, _to_float(params.get("weather_min_forecast_edge"), 2.0))
+        forecast_exit_edge = max(0.0, _to_float(params.get("weather_exit_forecast_edge"), 1.0))
 
         spread_now = 0.0
         if quote_input.best_bid > 0 and quote_input.best_ask > 0:
@@ -131,6 +196,10 @@ class WeatherThetaNoV1Strategy:
             if spread_now > 0 and spread_now > max_entry_spread:
                 return []
             if mid < entry_min or mid > entry_max:
+                return []
+
+            forecast_distance = self._forecast_distance_from_bucket(token_id)
+            if forecast_distance is None or forecast_distance < forecast_entry_edge:
                 return []
 
             entry_price = self._entry_price(quote_input, config, entry_min=entry_min, entry_max=entry_max)
@@ -168,15 +237,17 @@ class WeatherThetaNoV1Strategy:
         max_hold_hit = max_hold_sec > 0 and hold_sec >= max_hold_sec
         pre_settlement_exit = token_end_ts > 0 and now >= max(0.0, token_end_ts - exit_before_sec)
         range_break_hit = force_flat_on_range_break and mid < entry_min
+        forecast_distance = self._forecast_distance_from_bucket(token_id)
+        weather_hit = forecast_distance is not None and forecast_distance <= forecast_exit_edge
 
-        if not (stop_loss_hit or take_profit_hit or max_hold_hit or pre_settlement_exit or range_break_hit):
+        if not (stop_loss_hit or take_profit_hit or max_hold_hit or pre_settlement_exit or range_break_hit or weather_hit):
             return []
 
         exit_size = max(0.0, position - max(0.0, float(quote_input.open_sell_qty)))
         if exit_size <= 0:
             return []
 
-        aggressive = stop_loss_hit or range_break_hit
+        aggressive = stop_loss_hit or range_break_hit or weather_hit
         exit_price = self._exit_price(quote_input, config, aggressive=aggressive)
         return [
             QuoteTarget(
@@ -228,6 +299,39 @@ class WeatherThetaNoV1Strategy:
             base = quote_input.mid - max(tick, quote_input.adaptive_spread * 0.25)
         raw_price = _clamp(base, entry_min, entry_max)
         return self._quantize_price(raw_price, config)
+
+    def _forecast_distance_from_bucket(self, token_id: str) -> Optional[float]:
+        forecast_c = self._weather_provider.get_daily_max_temperature(token_id)
+        meta = self._weather_target_meta.get(token_id) or {}
+        if forecast_c is None or not meta:
+            return None
+        unit = str(meta.get("unit") or "C").strip().upper()
+        forecast = self._convert_celsius(forecast_c, unit)
+        bucket_min = self._bucket_bound(meta.get("bucket_min"), meta.get("bucket_value"))
+        bucket_max = self._bucket_bound(meta.get("bucket_max"), meta.get("bucket_value"))
+        if bucket_min is None and bucket_max is None:
+            return None
+        lo = bucket_min if bucket_min is not None else bucket_max
+        hi = bucket_max if bucket_max is not None else bucket_min
+        if lo is None or hi is None:
+            return None
+        if lo > hi:
+            lo, hi = hi, lo
+        if lo <= forecast <= hi:
+            return 0.0
+        return min(abs(forecast - lo), abs(forecast - hi))
+
+    def _bucket_bound(self, raw: Any, fallback: Any) -> Optional[float]:
+        if raw is not None:
+            return _to_float(raw, 0.0)
+        if fallback is not None:
+            return _to_float(fallback, 0.0)
+        return None
+
+    def _convert_celsius(self, value_c: float, unit: str) -> float:
+        if unit == "F":
+            return (value_c * 9.0 / 5.0) + 32.0
+        return value_c
 
     def _entry_size(
         self,

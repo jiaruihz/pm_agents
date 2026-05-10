@@ -1,0 +1,857 @@
+{
+  "entries": [
+    {
+      "city_key": "london",
+      "local_date": "2026-03-11",
+      "token_id": "26714411844689827334931748379433495720909708286680395860996211175118513040606",
+      "market_title": "Will the highest temperature in London be 14°C on March 11?",
+      "outcome": "No",
+      "market_meta": {
+        "token_id": "26714411844689827334931748379433495720909708286680395860996211175118513040606",
+        "title": "Will the highest temperature in London be 14°C on March 11?",
+        "outcome": "No",
+        "unit": "C",
+        "bucket_value": 14.0
+      },
+      "station": {
+        "hemisphere": "north",
+        "observation_unit": "C",
+        "market_unit": "C",
+        "station_name": "London City Arpt",
+        "station_code": "EGLC",
+        "iata_code": "LCY",
+        "lat": 51.505,
+        "lon": 0.055,
+        "timezone": "Europe/London",
+        "climate_style": "marine",
+        "icao_id": "EGLC",
+        "iata_id": "LCY"
+      },
+      "baseline_forecast": {
+        "forecast_date": "2026-03-11",
+        "max_temp_c": 12.4,
+        "max_temp_f": 54.32,
+        "min_temp_c": 8.8,
+        "min_temp_f": 47.84,
+        "max_temp_market_unit": 12.4,
+        "min_temp_market_unit": 8.8,
+        "market_unit": "C",
+        "main_range_low": 11,
+        "main_range_high": 13,
+        "peak_hour_local": "14:00",
+        "precipitation_probability_max": 100.0,
+        "edge_to_bucket": 1.5999999999999996,
+        "tail_distance_bins": 1,
+        "forecast_shift_vs_baseline": null,
+        "forecast_direction": "baseline",
+        "main_range_shift_bins": 0,
+        "peak_hour_shift_minutes": 0
+      },
+      "latest_snapshot": {
+        "generated_at_utc": "2026-03-09T17:16:41+00:00",
+        "city_key": "london",
+        "local_date": "2026-03-11",
+        "station": {
+          "hemisphere": "north",
+          "observation_unit": "C",
+          "market_unit": "C",
+          "station_name": "London City Arpt",
+          "station_code": "EGLC",
+          "iata_code": "LCY",
+          "lat": 51.505,
+          "lon": 0.055,
+          "timezone": "Europe/London",
+          "climate_style": "marine",
+          "icao_id": "EGLC",
+          "iata_id": "LCY"
+        },
+        "station_info": {
+          "id": "EGLC",
+          "icaoId": "EGLC",
+          "iataId": "LCY",
+          "faaId": null,
+          "wmoId": null,
+          "site": "London City Arpt",
+          "lat": 51.505,
+          "lon": 0.055,
+          "elev": 10,
+          "state": "EN",
+          "country": "GB",
+          "priority": 6,
+          "siteType": [
+            "METAR",
+            "TAF"
+          ]
+        },
+        "market_meta": {
+          "token_id": "26714411844689827334931748379433495720909708286680395860996211175118513040606",
+          "title": "Will the highest temperature in London be 14°C on March 11?",
+          "outcome": "No",
+          "unit": "C",
+          "bucket_value": 14.0
+        },
+        "baseline_forecast": {
+          "forecast_date": "2026-03-11",
+          "max_temp_c": 12.4,
+          "max_temp_f": 54.32,
+          "min_temp_c": 8.8,
+          "min_temp_f": 47.84,
+          "max_temp_market_unit": 12.4,
+          "min_temp_market_unit": 8.8,
+          "market_unit": "C",
+          "main_range_low": 11,
+          "main_range_high": 13,
+          "peak_hour_local": "14:00",
+          "precipitation_probability_max": 100.0,
+          "edge_to_bucket": 1.5999999999999996,
+          "tail_distance_bins": 1,
+          "forecast_shift_vs_baseline": null,
+          "forecast_direction": "baseline",
+          "main_range_shift_bins": 0,
+          "peak_hour_shift_minutes": 0
+        },
+        "latest_forecast": {
+          "forecast_date": "2026-03-11",
+          "max_temp_c": 12.4,
+          "max_temp_f": 54.32,
+          "min_temp_c": 8.8,
+          "min_temp_f": 47.84,
+          "max_temp_market_unit": 12.4,
+          "min_temp_market_unit": 8.8,
+          "market_unit": "C",
+          "main_range_low": 11,
+          "main_range_high": 13,
+          "peak_hour_local": "14:00",
+          "precipitation_probability_max": 100.0,
+          "edge_to_bucket": 1.5999999999999996,
+          "tail_distance_bins": 1,
+          "forecast_shift_vs_baseline": 0.0,
+          "forecast_direction": "stable",
+          "main_range_shift_bins": 0,
+          "peak_hour_shift_minutes": 0
+        },
+        "latest_observation": {
+          "station_code": "EGLC",
+          "observed_at_utc": "2026-03-09T17:00:00.000Z",
+          "temp_c": 14,
+          "temp_f": 57.2,
+          "dewp_c": 10,
+          "wind_dir_deg": 250,
+          "wind_speed_kt": 5,
+          "visibility": "6+",
+          "raw_metar": "METAR EGLC 091650Z AUTO 25005KT 9999 //////CB 14/10 Q1017",
+          "flight_category": ""
+        },
+        "latest_orderbook": {
+          "best_bid": 0.91,
+          "best_ask": 0.92
+        },
+        "daily_overrides": {
+          "city_key": "london",
+          "local_date": "2026-03-11",
+          "season": "spring",
+          "station_name": "London City Arpt",
+          "timezone": "Europe/London",
+          "market_unit": "C",
+          "base_risk_score": 0.37,
+          "position_multiplier": 1.0,
+          "min_tail_distance_bins": 2,
+          "allow_new_position_until_local": "14:30",
+          "accelerate_exit_after_local": "15:30",
+          "hard_flat_local": "18:00",
+          "matched_risk_flags": [],
+          "preferred_trade_types": [
+            "far_tail_no",
+            "upper_tail_no_on_cloudy_days",
+            "lower_tail_no_on_mild_days"
+          ],
+          "avoid_trade_types": [
+            "aggressive_exact_bin_no_near_center"
+          ],
+          "review_schedule": {
+            "pre_position_minutes": 30,
+            "in_position_minutes": 15,
+            "critical_window_minutes": 5
+          }
+        },
+        "action_suggestion": {
+          "action": "avoid_new_entry",
+          "reason": "tail distance is below city/risk-adjusted minimum; forecast shift vs baseline: +0.0C; forecast edge to bucket: 1.6C; tail distance bins: 1",
+          "confidence": "high"
+        },
+        "drift_alert": {
+          "triggered": false,
+          "reasons": []
+        }
+      }
+    },
+    {
+      "city_key": "ankara",
+      "local_date": "2026-03-11",
+      "token_id": "64627001407125482687233386595630094327877862770631441349248177172448871446867",
+      "market_title": "Will the highest temperature in Ankara be 12°C on March 11?",
+      "outcome": "No",
+      "market_meta": {
+        "token_id": "64627001407125482687233386595630094327877862770631441349248177172448871446867",
+        "title": "Will the highest temperature in Ankara be 12°C on March 11?",
+        "outcome": "No",
+        "unit": "C",
+        "bucket_value": 12.0
+      },
+      "station": {
+        "hemisphere": "north",
+        "observation_unit": "C",
+        "market_unit": "C",
+        "station_name": "Ankara/Esenboğa Intl",
+        "station_code": "LTAC",
+        "iata_code": "ESB",
+        "lat": 40.128,
+        "lon": 32.995,
+        "timezone": "Europe/Istanbul",
+        "climate_style": "dry_continental",
+        "icao_id": "LTAC",
+        "iata_id": "ESB"
+      },
+      "baseline_forecast": {
+        "forecast_date": "2026-03-11",
+        "max_temp_c": 13.8,
+        "max_temp_f": 56.84,
+        "min_temp_c": -3.8,
+        "min_temp_f": 25.16,
+        "max_temp_market_unit": 13.8,
+        "min_temp_market_unit": -3.8,
+        "market_unit": "C",
+        "main_range_low": 13,
+        "main_range_high": 14,
+        "peak_hour_local": "16:00",
+        "precipitation_probability_max": 0.0,
+        "edge_to_bucket": 1.8000000000000007,
+        "tail_distance_bins": 1,
+        "forecast_shift_vs_baseline": null,
+        "forecast_direction": "baseline",
+        "main_range_shift_bins": 0,
+        "peak_hour_shift_minutes": 0
+      },
+      "latest_snapshot": {
+        "generated_at_utc": "2026-03-09T17:16:54+00:00",
+        "city_key": "ankara",
+        "local_date": "2026-03-11",
+        "station": {
+          "hemisphere": "north",
+          "observation_unit": "C",
+          "market_unit": "C",
+          "station_name": "Ankara/Esenboğa Intl",
+          "station_code": "LTAC",
+          "iata_code": "ESB",
+          "lat": 40.128,
+          "lon": 32.995,
+          "timezone": "Europe/Istanbul",
+          "climate_style": "dry_continental",
+          "icao_id": "LTAC",
+          "iata_id": "ESB"
+        },
+        "station_info": {
+          "id": "LTAC",
+          "icaoId": "LTAC",
+          "iataId": "ESB",
+          "faaId": null,
+          "wmoId": "17128",
+          "site": "Ankara/Esenboğa Intl",
+          "lat": 40.128,
+          "lon": 32.995,
+          "elev": 952,
+          "state": "AN",
+          "country": "TR",
+          "priority": 1,
+          "siteType": [
+            "METAR",
+            "TAF"
+          ]
+        },
+        "market_meta": {
+          "token_id": "64627001407125482687233386595630094327877862770631441349248177172448871446867",
+          "title": "Will the highest temperature in Ankara be 12°C on March 11?",
+          "outcome": "No",
+          "unit": "C",
+          "bucket_value": 12.0
+        },
+        "baseline_forecast": {},
+        "latest_forecast": {
+          "forecast_date": "2026-03-11",
+          "max_temp_c": 13.8,
+          "max_temp_f": 56.84,
+          "min_temp_c": -3.8,
+          "min_temp_f": 25.16,
+          "max_temp_market_unit": 13.8,
+          "min_temp_market_unit": -3.8,
+          "market_unit": "C",
+          "main_range_low": 13,
+          "main_range_high": 14,
+          "peak_hour_local": "16:00",
+          "precipitation_probability_max": 0.0,
+          "edge_to_bucket": 1.8000000000000007,
+          "tail_distance_bins": 1,
+          "forecast_shift_vs_baseline": null,
+          "forecast_direction": "baseline",
+          "main_range_shift_bins": 0,
+          "peak_hour_shift_minutes": 0
+        },
+        "latest_observation": {
+          "station_code": "LTAC",
+          "observed_at_utc": "2026-03-09T17:00:00.000Z",
+          "temp_c": 6,
+          "temp_f": 42.8,
+          "dewp_c": -9,
+          "wind_dir_deg": 80,
+          "wind_speed_kt": 8,
+          "visibility": "6+",
+          "raw_metar": "METAR LTAC 091650Z 08008KT 040V100 CAVOK 06/M09 Q1028 NOSIG RMK RWY21C 07005KT 030V090 RWY03L 08009KT RWY21R 03004KT 350V060 RWY03R 07007KT RWY21L 07006KT",
+          "flight_category": "VFR"
+        },
+        "latest_orderbook": {
+          "best_bid": 0.92,
+          "best_ask": 0.95
+        },
+        "daily_overrides": {
+          "city_key": "ankara",
+          "local_date": "2026-03-11",
+          "season": "spring",
+          "station_name": "Ankara/Esenboğa Intl",
+          "timezone": "Europe/Istanbul",
+          "market_unit": "C",
+          "base_risk_score": 0.25,
+          "position_multiplier": 0.85,
+          "min_tail_distance_bins": 2,
+          "allow_new_position_until_local": "13:30",
+          "accelerate_exit_after_local": "15:30",
+          "hard_flat_local": "18:00",
+          "matched_risk_flags": [],
+          "preferred_trade_types": [
+            "far_tail_no",
+            "morning_underreaction_right_tail_watch"
+          ],
+          "avoid_trade_types": [
+            "heavy_exact_bin_no_early_day"
+          ],
+          "review_schedule": {
+            "pre_position_minutes": 30,
+            "in_position_minutes": 15,
+            "critical_window_minutes": 5
+          }
+        },
+        "action_suggestion": {
+          "action": "avoid_new_entry",
+          "reason": "tail distance is below city/risk-adjusted minimum; forecast edge to bucket: 1.8C; tail distance bins: 1",
+          "confidence": "high"
+        },
+        "drift_alert": {
+          "triggered": false,
+          "reasons": []
+        }
+      }
+    },
+    {
+      "city_key": "seoul",
+      "local_date": "2026-03-11",
+      "token_id": "10285524772401711170736745777814880026738352114762920047083330123250937276830",
+      "market_title": "Will the highest temperature in Seoul be 5°C on March 11?",
+      "outcome": "No",
+      "market_meta": {
+        "token_id": "10285524772401711170736745777814880026738352114762920047083330123250937276830",
+        "title": "Will the highest temperature in Seoul be 5°C on March 11?",
+        "outcome": "No",
+        "unit": "C",
+        "bucket_value": 5.0
+      },
+      "station": {
+        "hemisphere": "north",
+        "observation_unit": "C",
+        "market_unit": "C",
+        "station_name": "Seoul/Incheon Intl",
+        "station_code": "RKSI",
+        "iata_code": "ICN",
+        "lat": 37.469,
+        "lon": 126.451,
+        "timezone": "Asia/Seoul",
+        "climate_style": "coastal",
+        "icao_id": "RKSI",
+        "iata_id": "ICN"
+      },
+      "baseline_forecast": {
+        "forecast_date": "2026-03-11",
+        "max_temp_c": 4.4,
+        "max_temp_f": 39.92,
+        "min_temp_c": 2.4,
+        "min_temp_f": 36.32,
+        "max_temp_market_unit": 4.4,
+        "min_temp_market_unit": 2.4,
+        "market_unit": "C",
+        "main_range_low": 3,
+        "main_range_high": 5,
+        "peak_hour_local": "23:00",
+        "precipitation_probability_max": 13.0,
+        "edge_to_bucket": 0.5999999999999996,
+        "tail_distance_bins": 0,
+        "forecast_shift_vs_baseline": null,
+        "forecast_direction": "baseline",
+        "main_range_shift_bins": 0,
+        "peak_hour_shift_minutes": 0
+      },
+      "latest_snapshot": {
+        "generated_at_utc": "2026-03-09T17:16:57+00:00",
+        "city_key": "seoul",
+        "local_date": "2026-03-11",
+        "station": {
+          "hemisphere": "north",
+          "observation_unit": "C",
+          "market_unit": "C",
+          "station_name": "Seoul/Incheon Intl",
+          "station_code": "RKSI",
+          "iata_code": "ICN",
+          "lat": 37.469,
+          "lon": 126.451,
+          "timezone": "Asia/Seoul",
+          "climate_style": "coastal",
+          "icao_id": "RKSI",
+          "iata_id": "ICN"
+        },
+        "station_info": {
+          "id": "RKSI",
+          "icaoId": "RKSI",
+          "iataId": "ICN",
+          "faaId": null,
+          "wmoId": null,
+          "site": "Seoul/Incheon Intl",
+          "lat": 37.469,
+          "lon": 126.451,
+          "elev": 7,
+          "state": "28",
+          "country": "KR",
+          "priority": 0,
+          "siteType": [
+            "METAR",
+            "TAF"
+          ]
+        },
+        "market_meta": {
+          "token_id": "10285524772401711170736745777814880026738352114762920047083330123250937276830",
+          "title": "Will the highest temperature in Seoul be 5°C on March 11?",
+          "outcome": "No",
+          "unit": "C",
+          "bucket_value": 5.0
+        },
+        "baseline_forecast": {},
+        "latest_forecast": {
+          "forecast_date": "2026-03-11",
+          "max_temp_c": 4.4,
+          "max_temp_f": 39.92,
+          "min_temp_c": 2.4,
+          "min_temp_f": 36.32,
+          "max_temp_market_unit": 4.4,
+          "min_temp_market_unit": 2.4,
+          "market_unit": "C",
+          "main_range_low": 3,
+          "main_range_high": 5,
+          "peak_hour_local": "23:00",
+          "precipitation_probability_max": 13.0,
+          "edge_to_bucket": 0.5999999999999996,
+          "tail_distance_bins": 0,
+          "forecast_shift_vs_baseline": null,
+          "forecast_direction": "baseline",
+          "main_range_shift_bins": 0,
+          "peak_hour_shift_minutes": 0
+        },
+        "latest_observation": {
+          "station_code": "RKSI",
+          "observed_at_utc": "2026-03-09T17:00:00.000Z",
+          "temp_c": 1,
+          "temp_f": 33.8,
+          "dewp_c": -4,
+          "wind_dir_deg": 340,
+          "wind_speed_kt": 5,
+          "visibility": "6+",
+          "raw_metar": "METAR RKSI 091700Z 34005KT CAVOK 01/M04 Q1028 NOSIG",
+          "flight_category": "VFR"
+        },
+        "latest_orderbook": {
+          "best_bid": 0.84,
+          "best_ask": 0.85
+        },
+        "daily_overrides": {
+          "city_key": "seoul",
+          "local_date": "2026-03-11",
+          "season": "spring",
+          "station_name": "Seoul/Incheon Intl",
+          "timezone": "Asia/Seoul",
+          "market_unit": "C",
+          "base_risk_score": 0.25,
+          "position_multiplier": 0.8,
+          "min_tail_distance_bins": 2,
+          "allow_new_position_until_local": "13:30",
+          "accelerate_exit_after_local": "14:30",
+          "hard_flat_local": "17:30",
+          "matched_risk_flags": [],
+          "preferred_trade_types": [
+            "far_tail_no",
+            "right_tail_no_on_rainy_or_low_cloud_days"
+          ],
+          "avoid_trade_types": [
+            "late_day_right_tail_no_without_wind_check"
+          ],
+          "review_schedule": {
+            "pre_position_minutes": 30,
+            "in_position_minutes": 15,
+            "critical_window_minutes": 5
+          }
+        },
+        "action_suggestion": {
+          "action": "tighten_exit_or_avoid_new_entry",
+          "reason": "forecast edge to bucket compressed to 1.0 or less; forecast edge to bucket: 0.6C; tail distance bins: 0",
+          "confidence": "high"
+        },
+        "drift_alert": {
+          "triggered": false,
+          "reasons": []
+        }
+      }
+    },
+    {
+      "city_key": "dallas",
+      "local_date": "2026-03-11",
+      "token_id": "106206847794676722159150313449825238251473372297392489819633143516706062435380",
+      "market_title": "Will the highest temperature in Dallas be between 70-71°F on March 11?",
+      "outcome": "No",
+      "market_meta": {
+        "token_id": "106206847794676722159150313449825238251473372297392489819633143516706062435380",
+        "title": "Will the highest temperature in Dallas be between 70-71°F on March 11?",
+        "outcome": "No",
+        "unit": "F",
+        "bucket_min": 70.0,
+        "bucket_max": 71.0
+      },
+      "station": {
+        "hemisphere": "north",
+        "observation_unit": "F",
+        "market_unit": "F",
+        "station_name": "Dallas/Love Fld",
+        "station_code": "KDAL",
+        "iata_code": "DAL",
+        "lat": 32.83836,
+        "lon": -96.83584,
+        "timezone": "America/Chicago",
+        "climate_style": "continental_convective",
+        "icao_id": "KDAL",
+        "iata_id": "DAL"
+      },
+      "baseline_forecast": {
+        "forecast_date": "2026-03-11",
+        "max_temp_c": 24.3,
+        "max_temp_f": 75.74000000000001,
+        "min_temp_c": 13.4,
+        "min_temp_f": 56.120000000000005,
+        "max_temp_market_unit": 75.74000000000001,
+        "min_temp_market_unit": 56.120000000000005,
+        "market_unit": "F",
+        "main_range_low": 75,
+        "main_range_high": 76,
+        "peak_hour_local": "15:00",
+        "precipitation_probability_max": 85.0,
+        "edge_to_bucket": 4.740000000000009,
+        "tail_distance_bins": 4,
+        "forecast_shift_vs_baseline": null,
+        "forecast_direction": "baseline",
+        "main_range_shift_bins": 0,
+        "peak_hour_shift_minutes": 0
+      },
+      "latest_snapshot": {
+        "generated_at_utc": "2026-03-09T17:16:58+00:00",
+        "city_key": "dallas",
+        "local_date": "2026-03-11",
+        "station": {
+          "hemisphere": "north",
+          "observation_unit": "F",
+          "market_unit": "F",
+          "station_name": "Dallas/Love Fld",
+          "station_code": "KDAL",
+          "iata_code": "DAL",
+          "lat": 32.83836,
+          "lon": -96.83584,
+          "timezone": "America/Chicago",
+          "climate_style": "continental_convective",
+          "icao_id": "KDAL",
+          "iata_id": "DAL"
+        },
+        "station_info": {
+          "id": "KDAL",
+          "icaoId": "KDAL",
+          "iataId": "DAL",
+          "faaId": "DAL",
+          "wmoId": "72258",
+          "site": "Dallas/Love Fld",
+          "lat": 32.83836,
+          "lon": -96.83584,
+          "elev": 148,
+          "state": "TX",
+          "country": "US",
+          "priority": 6,
+          "siteType": [
+            "METAR",
+            "TAF"
+          ]
+        },
+        "market_meta": {
+          "token_id": "106206847794676722159150313449825238251473372297392489819633143516706062435380",
+          "title": "Will the highest temperature in Dallas be between 70-71°F on March 11?",
+          "outcome": "No",
+          "unit": "F",
+          "bucket_min": 70.0,
+          "bucket_max": 71.0
+        },
+        "baseline_forecast": {},
+        "latest_forecast": {
+          "forecast_date": "2026-03-11",
+          "max_temp_c": 24.3,
+          "max_temp_f": 75.74000000000001,
+          "min_temp_c": 13.4,
+          "min_temp_f": 56.120000000000005,
+          "max_temp_market_unit": 75.74000000000001,
+          "min_temp_market_unit": 56.120000000000005,
+          "market_unit": "F",
+          "main_range_low": 75,
+          "main_range_high": 76,
+          "peak_hour_local": "15:00",
+          "precipitation_probability_max": 85.0,
+          "edge_to_bucket": 4.740000000000009,
+          "tail_distance_bins": 4,
+          "forecast_shift_vs_baseline": null,
+          "forecast_direction": "baseline",
+          "main_range_shift_bins": 0,
+          "peak_hour_shift_minutes": 0
+        },
+        "latest_observation": {
+          "station_code": "KDAL",
+          "observed_at_utc": "2026-03-09T17:00:00.000Z",
+          "temp_c": 22.2,
+          "temp_f": 71.96,
+          "dewp_c": 17.8,
+          "wind_dir_deg": 220,
+          "wind_speed_kt": 8,
+          "visibility": "10+",
+          "raw_metar": "METAR KDAL 091653Z 22008KT 10SM OVC021 22/18 A2996 RMK AO2 SLP141 T02220178",
+          "flight_category": "MVFR"
+        },
+        "latest_orderbook": {
+          "best_bid": 0.85,
+          "best_ask": 0.92
+        },
+        "daily_overrides": {
+          "city_key": "dallas",
+          "local_date": "2026-03-11",
+          "season": "spring",
+          "station_name": "Dallas/Love Fld",
+          "timezone": "America/Chicago",
+          "market_unit": "F",
+          "base_risk_score": 0.82,
+          "position_multiplier": 0.175,
+          "min_tail_distance_bins": 4,
+          "allow_new_position_until_local": "13:00",
+          "accelerate_exit_after_local": "15:00",
+          "hard_flat_local": "18:00",
+          "matched_risk_flags": [],
+          "preferred_trade_types": [
+            "far_tail_no_on_quiet_days",
+            "left_tail_no_on_hot_clear_days"
+          ],
+          "avoid_trade_types": [
+            "any_tail_no_on_severe_weather_days",
+            "close_right_tail_no_in_spring"
+          ],
+          "review_schedule": {
+            "pre_position_minutes": 30,
+            "in_position_minutes": 15,
+            "critical_window_minutes": 5
+          }
+        },
+        "action_suggestion": {
+          "action": "avoid_new_entry",
+          "reason": "base risk too high for clean tail-NO entry; forecast edge to bucket: 4.7F; tail distance bins: 4",
+          "confidence": "low"
+        },
+        "drift_alert": {
+          "triggered": false,
+          "reasons": []
+        }
+      }
+    },
+    {
+      "city_key": "chicago",
+      "local_date": "2026-03-11",
+      "token_id": "54190034140862343728135634542537252827522737042684750976473292681686010536045",
+      "market_title": "Will the highest temperature in Chicago be between 42-43°F on March 11?",
+      "outcome": "No",
+      "market_meta": {
+        "token_id": "54190034140862343728135634542537252827522737042684750976473292681686010536045",
+        "title": "Will the highest temperature in Chicago be between 42-43°F on March 11?",
+        "outcome": "No",
+        "unit": "F",
+        "bucket_min": 42.0,
+        "bucket_max": 43.0
+      },
+      "station": {
+        "hemisphere": "north",
+        "observation_unit": "F",
+        "market_unit": "F",
+        "station_name": "Chicago/O'Hare Intl",
+        "station_code": "KORD",
+        "iata_code": "ORD",
+        "lat": 41.96017,
+        "lon": -87.93161,
+        "timezone": "America/Chicago",
+        "climate_style": "continental_lake_influenced",
+        "icao_id": "KORD",
+        "iata_id": "ORD"
+      },
+      "baseline_forecast": {
+        "forecast_date": "2026-03-11",
+        "max_temp_c": 7.7,
+        "max_temp_f": 45.86,
+        "min_temp_c": 2.5,
+        "min_temp_f": 36.5,
+        "max_temp_market_unit": 45.86,
+        "min_temp_market_unit": 36.5,
+        "market_unit": "F",
+        "main_range_low": 45,
+        "main_range_high": 46,
+        "peak_hour_local": "08:00",
+        "precipitation_probability_max": 92.0,
+        "edge_to_bucket": 2.8599999999999994,
+        "tail_distance_bins": 2,
+        "forecast_shift_vs_baseline": null,
+        "forecast_direction": "baseline",
+        "main_range_shift_bins": 0,
+        "peak_hour_shift_minutes": 0
+      },
+      "latest_snapshot": {
+        "generated_at_utc": "2026-03-09T17:16:59+00:00",
+        "city_key": "chicago",
+        "local_date": "2026-03-11",
+        "station": {
+          "hemisphere": "north",
+          "observation_unit": "F",
+          "market_unit": "F",
+          "station_name": "Chicago/O'Hare Intl",
+          "station_code": "KORD",
+          "iata_code": "ORD",
+          "lat": 41.96017,
+          "lon": -87.93161,
+          "timezone": "America/Chicago",
+          "climate_style": "continental_lake_influenced",
+          "icao_id": "KORD",
+          "iata_id": "ORD"
+        },
+        "station_info": {
+          "id": "KORD",
+          "icaoId": "KORD",
+          "iataId": "ORD",
+          "faaId": "ORD",
+          "wmoId": "72530",
+          "site": "Chicago/O'Hare Intl",
+          "lat": 41.96017,
+          "lon": -87.93161,
+          "elev": 202,
+          "state": "IL",
+          "country": "US",
+          "priority": 0,
+          "siteType": [
+            "METAR",
+            "TAF"
+          ]
+        },
+        "market_meta": {
+          "token_id": "54190034140862343728135634542537252827522737042684750976473292681686010536045",
+          "title": "Will the highest temperature in Chicago be between 42-43°F on March 11?",
+          "outcome": "No",
+          "unit": "F",
+          "bucket_min": 42.0,
+          "bucket_max": 43.0
+        },
+        "baseline_forecast": {},
+        "latest_forecast": {
+          "forecast_date": "2026-03-11",
+          "max_temp_c": 7.7,
+          "max_temp_f": 45.86,
+          "min_temp_c": 2.5,
+          "min_temp_f": 36.5,
+          "max_temp_market_unit": 45.86,
+          "min_temp_market_unit": 36.5,
+          "market_unit": "F",
+          "main_range_low": 45,
+          "main_range_high": 46,
+          "peak_hour_local": "08:00",
+          "precipitation_probability_max": 92.0,
+          "edge_to_bucket": 2.8599999999999994,
+          "tail_distance_bins": 2,
+          "forecast_shift_vs_baseline": null,
+          "forecast_direction": "baseline",
+          "main_range_shift_bins": 0,
+          "peak_hour_shift_minutes": 0
+        },
+        "latest_observation": {
+          "station_code": "KORD",
+          "observed_at_utc": "2026-03-09T17:00:00.000Z",
+          "temp_c": 17.2,
+          "temp_f": 62.959999999999994,
+          "dewp_c": 4.4,
+          "wind_dir_deg": 200,
+          "wind_speed_kt": 14,
+          "visibility": "10+",
+          "raw_metar": "METAR KORD 091651Z 20014G22KT 10SM FEW250 17/04 A2973 RMK AO2 SLP066 T01720044 $",
+          "flight_category": "VFR"
+        },
+        "latest_orderbook": {
+          "best_bid": 0.88,
+          "best_ask": 0.89
+        },
+        "daily_overrides": {
+          "city_key": "chicago",
+          "local_date": "2026-03-11",
+          "season": "spring",
+          "station_name": "Chicago/O'Hare Intl",
+          "timezone": "America/Chicago",
+          "market_unit": "F",
+          "base_risk_score": 0.77,
+          "position_multiplier": 0.325,
+          "min_tail_distance_bins": 4,
+          "allow_new_position_until_local": "12:30",
+          "accelerate_exit_after_local": "14:00",
+          "hard_flat_local": "16:30",
+          "matched_risk_flags": [],
+          "preferred_trade_types": [
+            "far_tail_no_only",
+            "post_confirmation_exit"
+          ],
+          "avoid_trade_types": [
+            "near_tail_no",
+            "exact_bin_no",
+            "late_entry"
+          ],
+          "review_schedule": {
+            "pre_position_minutes": 30,
+            "in_position_minutes": 15,
+            "critical_window_minutes": 5
+          }
+        },
+        "action_suggestion": {
+          "action": "avoid_new_entry",
+          "reason": "tail distance is below city/risk-adjusted minimum; forecast edge to bucket: 2.9F; tail distance bins: 2",
+          "confidence": "low"
+        },
+        "drift_alert": {
+          "triggered": false,
+          "reasons": []
+        }
+      }
+    }
+  ],
+  "generated_at_utc": "2026-03-09T17:16:59+00:00"
+}

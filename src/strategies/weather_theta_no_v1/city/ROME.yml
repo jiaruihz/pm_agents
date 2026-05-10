@@ -1,0 +1,86 @@
+identity:
+  city_key: rome
+  display_name: Rome
+  market_unit: C
+  timezone: Europe/Rome
+
+station:
+  station_name: Rome Fiumicino Airport
+  station_code: LIRF
+  iata_code: FCO
+  object_type: airport
+  settlement_scope: Only the Rome Fiumicino airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values for Rome-style airport temperature contracts.
+  station_match_rule: Must match Rome Fiumicino Airport Station / LIRF. Do not substitute a generic Rome city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: LIRF
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from city pages or provisional history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: LIRF
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the airport path is stable.
+    do_not_use_for: Do not treat the displayed forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain broader market consensus inside the TWC stack.
+      do_not_use_for: Do not replace the same-station WU anchor with a generic Rome page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check airport observations, wind, and cloud structure.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and daytime path.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend and uncertainty.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: Rome city pages are not the LIRF airport contract object.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: City pages can drift from the airport path.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only for market-noise diagnostics.
+
+operator_notes:
+  summary: Rome is generally a smoother airport contract than inland transition cities. Start from same-station WU Hourly, then verify that support pages are not signaling marine moderation or cloud-limited heating.
+  why_this_station: Fiumicino is a strong airport object with broad same-location coverage and a relatively understandable coastal-airport temperature path.
+  main_risks:
+    - Marine moderation clipping the warm side.
+    - Thin cloud keeping the peak one degree lower than a city page suggests.
+    - Casual city anchors overstating urban warmth.
+  common_wrong_anchor:
+    - Generic Rome city pages rather than LIRF.
+    - Downtown pages that are not the settlement object.
+  usage_order:
+    - Open Polymarket rules and confirm LIRF plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport support pages for disagreement on marine moderation.
+    - Use city pages only as noise diagnostics.

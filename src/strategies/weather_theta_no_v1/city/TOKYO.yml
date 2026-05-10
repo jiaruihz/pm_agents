@@ -1,0 +1,86 @@
+identity:
+  city_key: tokyo
+  display_name: Tokyo
+  market_unit: C
+  timezone: Asia/Tokyo
+
+station:
+  station_name: Tokyo Haneda Airport
+  station_code: RJTT
+  iata_code: HND
+  object_type: airport
+  settlement_scope: Only the Tokyo Haneda airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values for Tokyo-style airport temperature contracts.
+  station_match_rule: Must match Tokyo Haneda Airport Station / RJTT. Do not substitute a generic Tokyo city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: RJTT
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not treat provisional history as final settlement.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: RJTT
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether the coastal airport path is warming or cooling.
+    do_not_use_for: Do not map the displayed forecast integer directly to a guaranteed settlement call.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain same-stack market consensus.
+      do_not_use_for: Do not replace RJTT with a generic Tokyo page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind, cloud, and airport observations.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check the current airport observation and whether the ramp is on track.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and tail risk.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A Tokyo city page is not the RJTT airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can diverge from the airport by multiple degrees.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain wrong-anchor flow.
+
+operator_notes:
+  summary: Tokyo is an attractive extension city because Haneda is data-rich and the airport object is easy to verify. It still requires respect for coastal moderation and cloud, so it is better for tail NOs than for aggressive center fades.
+  why_this_station: Haneda is a major airport station with strong same-location coverage and a clean airport identity across weather sites.
+  main_risks:
+    - Coastal moderation clipping the afternoon high.
+    - Cloudy spring transition days compressing the range.
+    - Downtown Tokyo pages running warmer than the airport.
+  common_wrong_anchor:
+    - Tokyo city pages instead of RJTT.
+    - Generic Kanto region pages with no station match.
+  usage_order:
+    - Open Polymarket rules and confirm RJTT plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport observation pages if the day looks borderline.
+    - Use city pages only to estimate wrong-anchor flow.

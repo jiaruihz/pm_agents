@@ -157,6 +157,21 @@ python -m src.strategies.rule_lawyer.cli parse --llm --batch 100
 python -m src.strategies.rule_lawyer.cli notify-telegram "Hello from pm_agent"
 ```
 
+### 7.5) Telegram Research Bot（独立 bot）
+
+```bash
+export TG_RESEARCH_BOT_TOKEN="..."
+export TG_RESEARCH_ALLOWED_CHAT_IDS="5589339017"
+
+python scripts/ops/telegram_research_bot.py
+```
+
+支持：
+
+- `/full <url|slug|condition_id>`：直接返回本地完整研究摘要
+- `/prompt <url|slug|condition_id>`：返回可手动粘贴给 ChatGPT 客户端的 handoff prompt
+- 直接发送一个 Polymarket 链接：按 `TG_RESEARCH_DEFAULT_MODE` 处理（默认 `full`）
+
 ### 7) Polymarket 研究分析入口
 
 ```bash
@@ -203,6 +218,7 @@ pytest tests/research_tests -q
 - Polymarket Research 能力说明：`docs/POLYMARKET_RESEARCH_CAPABILITIES.md`
 - Polymarket Research 实施计划：`docs/POLYMARKET_RESEARCH_IMPLEMENTATION_PLAN.md`
 - Polymarket Research 改造记录：`docs/POLYMARKET_RESEARCH_REFACTOR_LOG.md`
+- 统一运维手册：`docs/OPS_RUNBOOK.md`
 - 天气策略进度手册：`docs/pmm/WEATHER_THETA_NO_PROGRESS.md`
 - PMM paper 运维手册：`docs/pmm/PAPER_RUNBOOK.md`
 - 架构说明：`docs/pmm/ARCHITECTURE.md`

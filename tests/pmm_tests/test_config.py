@@ -60,6 +60,7 @@ class TestPMMConfig(unittest.TestCase):
         'PMM_TELEGRAM_BOT_TOKEN': 'bot-token',
         'PMM_TELEGRAM_CHAT_ID': 'chat-id',
         'PMM_TELEGRAM_REPORT_INTERVAL_SEC': '900',
+        'PMM_LIVE_MAKER_ONLY': '1',
     })
     def test_config_from_env(self):
         """Test PMMConfig creation from environment variables."""
@@ -74,6 +75,7 @@ class TestPMMConfig(unittest.TestCase):
         self.assertEqual(config.telegram_bot_token, 'bot-token')
         self.assertEqual(config.telegram_chat_id, 'chat-id')
         self.assertEqual(config.telegram_report_interval_sec, 900)
+        self.assertTrue(config.live_maker_only)
 
 
 if __name__ == '__main__':

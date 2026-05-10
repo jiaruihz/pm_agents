@@ -1,6 +1,6 @@
 """LLM prompts for rule extraction."""
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 SYSTEM_PROMPT = (
     "你是 Polymarket 的规则抽取器。"
@@ -26,11 +26,23 @@ Schema 说明（字段必须齐全）：
   "explicit_exclusions": ["string", ...],
   "entity_definitions": [{{"entity": "string", "definition": "string"}}],
   "ambiguity_flags": ["string", ...],
+  "ambiguity_explanations": ["string", ...],
+  "decision_boundary_notes": ["string", ...],
+  "yes_case_examples": ["string", ...],
+  "no_case_examples": ["string", ...],
   "clarity_score": "number(0-1)",
   "dispute_risk_score": "number(0-1)",
   "notes_for_humans": "string",
   "llm_confidence": "number(0-1)"
 }}
+
+抽取要求：
+1. `ambiguity_flags` 只写“歧义点标题”，短一些。
+2. `ambiguity_explanations` 写成人能看懂的解释，说明为什么会影响结算。
+3. `decision_boundary_notes` 用来写“什么算 / 什么不算”的边界提醒。
+4. `yes_case_examples` 写 1-3 个最可能算 Yes 的例子。
+5. `no_case_examples` 写 1-3 个最可能不算 Yes 的例子。
+6. 如果规则没有明确写出例子，不要编造；可以用保守概括。
 
 输入：
 Question: {question}
@@ -70,6 +82,16 @@ FEW_SHOT_ASSISTANT = {
         {"entity": "ABC", "definition": "Target company"}
     ],
     "ambiguity_flags": [],
+    "ambiguity_explanations": [],
+    "decision_boundary_notes": [
+        "Must have official confirmation of deal closure by the deadline."
+    ],
+    "yes_case_examples": [
+        "双方联合新闻稿确认交割完成"
+    ],
+    "no_case_examples": [
+        "仅有市场传闻，没有官方确认"
+    ],
     "clarity_score": 0.78,
     "dispute_risk_score": 0.22,
     "notes_for_humans": "Settlement based on official press release confirming closure.",

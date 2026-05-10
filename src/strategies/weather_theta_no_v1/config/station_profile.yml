@@ -1,0 +1,357 @@
+version: 1
+description: >
+  Station metadata used by weather_theta_no_v1 profile resolution.
+
+global_defaults:
+  hemisphere: north
+  observation_unit: C
+  market_unit: C
+
+profiles:
+  amsterdam:
+    station_name: "Amsterdam Schiphol Airport"
+    station_code: "EHAM"
+    iata_code: "AMS"
+    lat: 52.3086
+    lon: 4.7639
+    timezone: "Europe/Amsterdam"
+    hemisphere: north
+    climate_style: "marine"
+    observation_unit: C
+    market_unit: C
+
+  dublin:
+    station_name: "Dublin Airport"
+    station_code: "EIDW"
+    iata_code: "DUB"
+    lat: 53.4213
+    lon: -6.2701
+    timezone: "Europe/Dublin"
+    hemisphere: north
+    climate_style: "marine"
+    observation_unit: C
+    market_unit: C
+
+  lisbon:
+    station_name: "Lisbon Humberto Delgado Airport"
+    station_code: "LPPT"
+    iata_code: "LIS"
+    lat: 38.7742
+    lon: -9.1342
+    timezone: "Europe/Lisbon"
+    hemisphere: north
+    climate_style: "marine"
+    observation_unit: C
+    market_unit: C
+
+  london:
+    station_name: "London City Arpt"
+    station_code: "EGLC"
+    iata_code: "LCY"
+    lat: 51.505
+    lon: 0.055
+    timezone: "Europe/London"
+    hemisphere: north
+    climate_style: "marine"
+    observation_unit: C
+    market_unit: C
+
+  paris:
+    station_name: "Paris/De Gaulle Arpt"
+    station_code: "LFPG"
+    iata_code: "CDG"
+    lat: 49.015
+    lon: 2.534
+    timezone: "Europe/Paris"
+    hemisphere: north
+    climate_style: "marine_inland_mix"
+    observation_unit: C
+    market_unit: C
+
+  munich:
+    station_name: "Munich Airport"
+    station_code: "EDDM"
+    iata_code: "MUC"
+    lat: 48.3538
+    lon: 11.7861
+    timezone: "Europe/Berlin"
+    hemisphere: north
+    climate_style: "continental_foehn_sensitive"
+    observation_unit: C
+    market_unit: C
+
+  seoul:
+    station_name: "Seoul/Incheon Intl"
+    station_code: "RKSI"
+    iata_code: "ICN"
+    lat: 37.469
+    lon: 126.451
+    timezone: "Asia/Seoul"
+    hemisphere: north
+    climate_style: "coastal"
+    observation_unit: C
+    market_unit: C
+
+  toronto:
+    station_name: "Toronto/Pearson Intl"
+    station_code: "CYYZ"
+    iata_code: "YYZ"
+    lat: 43.679
+    lon: -79.629
+    timezone: "America/Toronto"
+    hemisphere: north
+    climate_style: "continental_lake_influenced"
+    observation_unit: C
+    market_unit: C
+
+  chicago:
+    station_name: "Chicago/O'Hare Intl"
+    station_code: "KORD"
+    iata_code: "ORD"
+    lat: 41.96017
+    lon: -87.93161
+    timezone: "America/Chicago"
+    hemisphere: north
+    climate_style: "continental_lake_influenced"
+    observation_unit: F
+    market_unit: F
+
+  dallas:
+    station_name: "Dallas/Love Fld"
+    station_code: "KDAL"
+    iata_code: "DAL"
+    lat: 32.83836
+    lon: -96.83584
+    timezone: "America/Chicago"
+    hemisphere: north
+    climate_style: "continental_convective"
+    observation_unit: F
+    market_unit: F
+
+  atlanta:
+    station_name: "Atlanta Hartsfield-Jackson"
+    station_code: "KATL"
+    iata_code: "ATL"
+    lat: 33.6367
+    lon: -84.4281
+    timezone: "America/New_York"
+    hemisphere: north
+    climate_style: "humid_subtropical"
+    observation_unit: F
+    market_unit: F
+
+  lucknow:
+    station_name: "Lucknow Amausi"
+    station_code: "VILK"
+    iata_code: "LKO"
+    lat: 26.7606
+    lon: 80.8893
+    timezone: "Asia/Kolkata"
+    hemisphere: north
+    climate_style: "continental_monsoon"
+    observation_unit: C
+    market_unit: C
+
+  ankara:
+    station_name: "Ankara/Esenboğa Intl"
+    station_code: "LTAC"
+    iata_code: "ESB"
+    lat: 40.128
+    lon: 32.995
+    timezone: "Europe/Istanbul"
+    hemisphere: north
+    climate_style: "dry_continental"
+    observation_unit: C
+    market_unit: C
+
+  miami:
+    station_name: "Miami Intl"
+    station_code: "KMIA"
+    iata_code: "MIA"
+    lat: 25.78806
+    lon: -80.31692
+    timezone: "America/New_York"
+    hemisphere: north
+    climate_style: "tropical_marine"
+    observation_unit: F
+    market_unit: F
+
+  madrid:
+    station_name: "Adolfo Suarez Madrid-Barajas Airport"
+    station_code: "LEMD"
+    iata_code: "MAD"
+    lat: 40.4983
+    lon: -3.5676
+    timezone: "Europe/Madrid"
+    hemisphere: north
+    climate_style: "dry_continental"
+    observation_unit: C
+    market_unit: C
+
+  new_york:
+    station_name: "LaGuardia Airport"
+    station_code: "KLGA"
+    iata_code: "LGA"
+    lat: 40.7769
+    lon: -73.874
+    timezone: "America/New_York"
+    hemisphere: north
+    climate_style: "coastal_urban_mix"
+    observation_unit: F
+    market_unit: F
+
+  rome:
+    station_name: "Rome Fiumicino Airport"
+    station_code: "LIRF"
+    iata_code: "FCO"
+    lat: 41.8003
+    lon: 12.2389
+    timezone: "Europe/Rome"
+    hemisphere: north
+    climate_style: "marine"
+    observation_unit: C
+    market_unit: C
+
+  berlin:
+    station_name: "Berlin Brandenburg Airport"
+    station_code: "EDDB"
+    iata_code: "BER"
+    lat: 52.3667
+    lon: 13.5033
+    timezone: "Europe/Berlin"
+    hemisphere: north
+    climate_style: "marine_continental_mix"
+    observation_unit: C
+    market_unit: C
+
+  brussels:
+    station_name: "Brussels Airport"
+    station_code: "EBBR"
+    iata_code: "BRU"
+    lat: 50.901
+    lon: 4.4844
+    timezone: "Europe/Brussels"
+    hemisphere: north
+    climate_style: "marine_inland_mix"
+    observation_unit: C
+    market_unit: C
+
+  copenhagen:
+    station_name: "Copenhagen Airport"
+    station_code: "EKCH"
+    iata_code: "CPH"
+    lat: 55.6181
+    lon: 12.6561
+    timezone: "Europe/Copenhagen"
+    hemisphere: north
+    climate_style: "marine"
+    observation_unit: C
+    market_unit: C
+
+  hong_kong:
+    station_name: "Hong Kong International Airport"
+    station_code: "VHHH"
+    iata_code: "HKG"
+    lat: 22.308
+    lon: 113.9185
+    timezone: "Asia/Hong_Kong"
+    hemisphere: north
+    climate_style: "subtropical_marine"
+    observation_unit: C
+    market_unit: C
+
+  taipei:
+    station_name: "Taiwan Taoyuan International Airport"
+    station_code: "RCTP"
+    iata_code: "TPE"
+    lat: 25.0797
+    lon: 121.2342
+    timezone: "Asia/Taipei"
+    hemisphere: north
+    climate_style: "coastal_subtropical"
+    observation_unit: C
+    market_unit: C
+
+  singapore:
+    station_name: "Singapore Changi Airport"
+    station_code: "WSSS"
+    iata_code: "SIN"
+    lat: 1.3644
+    lon: 103.9915
+    timezone: "Asia/Singapore"
+    hemisphere: north
+    climate_style: "equatorial_marine"
+    observation_unit: C
+    market_unit: C
+
+  osaka:
+    station_name: "Kansai International Airport"
+    station_code: "RJBB"
+    iata_code: "KIX"
+    lat: 34.4347
+    lon: 135.244
+    timezone: "Asia/Tokyo"
+    hemisphere: north
+    climate_style: "marine_humid_subtropical"
+    observation_unit: C
+    market_unit: C
+
+  dubai:
+    station_name: "Dubai International Airport"
+    station_code: "OMDB"
+    iata_code: "DXB"
+    lat: 25.2532
+    lon: 55.3657
+    timezone: "Asia/Dubai"
+    hemisphere: north
+    climate_style: "desert_coastal_mix"
+    observation_unit: C
+    market_unit: C
+
+  doha:
+    station_name: "Hamad International Airport"
+    station_code: "OTHH"
+    iata_code: "DOH"
+    lat: 25.2731
+    lon: 51.6081
+    timezone: "Asia/Qatar"
+    hemisphere: north
+    climate_style: "desert_marine"
+    observation_unit: C
+    market_unit: C
+
+  shanghai:
+    station_name: "Shanghai Pudong International Airport"
+    station_code: "ZSPD"
+    iata_code: "PVG"
+    lat: 31.1443
+    lon: 121.8083
+    timezone: "Asia/Shanghai"
+    hemisphere: north
+    climate_style: "coastal_subtropical"
+    observation_unit: C
+    market_unit: C
+
+  tokyo:
+    station_name: "Tokyo Haneda Airport"
+    station_code: "RJTT"
+    iata_code: "HND"
+    lat: 35.5523
+    lon: 139.7798
+    timezone: "Asia/Tokyo"
+    hemisphere: north
+    climate_style: "coastal_subtropical"
+    observation_unit: C
+    market_unit: C
+
+  vienna:
+    station_name: "Vienna International Airport"
+    station_code: "LOWW"
+    iata_code: "VIE"
+    lat: 48.1103
+    lon: 16.5697
+    timezone: "Europe/Vienna"
+    hemisphere: north
+    climate_style: "continental_basin"
+    observation_unit: C
+    market_unit: C

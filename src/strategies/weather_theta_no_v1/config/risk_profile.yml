@@ -1,0 +1,123 @@
+version: 1
+description: >
+  Seasonal and structural risk hints for weather_theta_no_v1.
+
+global_defaults:
+  base_risk_score: 0.35
+  safer_risk_score: 0.25
+  dangerous_risk_score: 0.65
+
+profiles:
+  london:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["winter"]
+    safer_conditions: ["stable_high_pressure"]
+    dangerous_conditions: ["snow", "ice", "low_cloud", "fog", "frontal_shift"]
+
+  paris:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["winter"]
+    safer_conditions: ["stable_high_pressure"]
+    dangerous_conditions: ["snow", "ice", "low_cloud", "fog", "frontal_shift", "thunderstorm"]
+
+  munich:
+    safer_seasons: ["autumn"]
+    dangerous_seasons: ["winter", "spring"]
+    safer_conditions: ["stable_high_pressure"]
+    dangerous_conditions: ["foehn", "frontal_shift", "snow", "ice"]
+
+  toronto:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["winter"]
+    safer_conditions: ["stable_high_pressure", "light_wind"]
+    dangerous_conditions: ["strong_wind", "snow", "ice", "lake_wind", "freezing_rain"]
+
+  chicago:
+    safer_seasons: ["autumn"]
+    dangerous_seasons: ["winter", "spring"]
+    safer_conditions: ["stable_high_pressure", "light_wind"]
+    dangerous_conditions: ["strong_wind", "snow", "ice", "lake_breeze", "front_arrival"]
+
+  dallas:
+    safer_seasons: ["winter", "spring", "autumn"]
+    dangerous_seasons: ["spring"]
+    safer_conditions: ["stable_clear"]
+    dangerous_conditions: ["dryline", "severe_convection", "hail", "tornado", "frontal_shift"]
+
+  atlanta:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["summer", "winter"]
+    safer_conditions: ["stable_clear"]
+    dangerous_conditions: ["thunderstorm", "fog", "low_cloud"]
+
+  lucknow:
+    safer_seasons: ["winter", "spring"]
+    dangerous_seasons: ["summer", "monsoon"]
+    safer_conditions: ["dry_heat", "non_monsoon"]
+    dangerous_conditions: ["monsoon_cloud_rain", "thunderstorm", "heat_wave_edge", "winter_fog"]
+
+  seoul:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_clear"]
+    dangerous_conditions: ["sea_breeze", "monsoon_rain", "typhoon_outer_band"]
+
+  ankara:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["winter"]
+    safer_conditions: ["sunny", "dry", "stable_high_pressure"]
+    dangerous_conditions: ["snow", "ice", "frontal_shift", "dry_air_large_range"]
+
+  miami:
+    safer_seasons: ["winter", "spring"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_trade_wind"]
+    dangerous_conditions: ["sea_breeze", "thunderstorm", "tropical_moisture"]
+
+  shanghai:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_clear", "light_haze"]
+    dangerous_conditions: ["sea_breeze", "low_cloud", "haze", "frontal_shift"]
+
+  tokyo:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_clear"]
+    dangerous_conditions: ["sea_breeze", "low_cloud", "baiu_rain", "typhoon_outer_band"]
+
+  hong_kong:
+    safer_seasons: ["winter", "spring"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_marine_flow"]
+    dangerous_conditions: ["thunderstorm", "tropical_moisture", "sea_breeze", "haze"]
+
+  taipei:
+    safer_seasons: ["winter", "spring"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_clear"]
+    dangerous_conditions: ["sea_breeze", "low_cloud", "mei_yu_rain", "typhoon_outer_band"]
+
+  singapore:
+    safer_seasons: []
+    dangerous_seasons: []
+    safer_conditions: ["stable_morning_clear"]
+    dangerous_conditions: ["thunderstorm", "equatorial_convection", "low_cloud", "sea_breeze"]
+
+  osaka:
+    safer_seasons: ["spring", "autumn"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_clear"]
+    dangerous_conditions: ["sea_breeze", "baiu_rain", "low_cloud", "typhoon_outer_band"]
+
+  dubai:
+    safer_seasons: ["winter", "spring"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_desert_clear"]
+    dangerous_conditions: ["dust", "haze", "sea_breeze", "heat_haze"]
+
+  doha:
+    safer_seasons: ["winter", "spring"]
+    dangerous_seasons: ["summer"]
+    safer_conditions: ["stable_desert_clear"]
+    dangerous_conditions: ["dust", "haze", "sea_breeze", "heat_haze"]

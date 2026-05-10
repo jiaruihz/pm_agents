@@ -14,6 +14,13 @@ class MarketResolverTargetTests(unittest.TestCase):
         self.assertEqual(target.kind, "market")
         self.assertEqual(target.slug, "will-fed-cut-rates")
 
+    def test_resolve_market_target_nested_event_market_url(self) -> None:
+        target = resolve_market_target(
+            "https://polymarket.com/zh/event/which-countries-will-strike-iran-by-march-31/will-france-strike-iran-by-march-31"
+        )
+        self.assertEqual(target.kind, "market")
+        self.assertEqual(target.slug, "will-france-strike-iran-by-march-31")
+
     def test_resolve_market_target_slug(self) -> None:
         target = resolve_market_target("will-fed-cut-rates")
         self.assertEqual(target.kind, "slug")

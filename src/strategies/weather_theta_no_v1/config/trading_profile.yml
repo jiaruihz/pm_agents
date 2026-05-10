@@ -1,0 +1,301 @@
+version: 1
+description: >
+  V1 station-specific trading defaults for tail-NO temperature strategy.
+  These are intended for a semi-manual system with model-assisted review.
+
+global_defaults:
+  strategy_mode: "tail_no_only_v1"
+  allow_exact_bin_yes: false
+  allow_auto_execution: false
+  prefer_maker_exit: true
+  default_entry_window_local:
+    start: "00:00"
+    end: "14:00"
+  default_no_entry_after_local: "16:30"
+  hard_flat_by_local: "19:00"
+  max_cities_per_day: 5
+  max_positions_per_city: 2
+  tp_scheme:
+    style: "two_stage"
+    tp1_move_cents: 1.5
+    tp2_move_cents: 2.5
+    tp1_size_fraction: 0.5
+    tp2_size_fraction: 0.5
+  sl_scheme:
+    style: "hard_plus_invalidation"
+    price_move_cents: -1.0
+    invalidate_on_main_range_shift_bins: 1
+    invalidate_on_peak_hour_shift_minutes: 90
+    invalidate_on_forecast_shift_c: 1.0
+    invalidate_on_forecast_shift_f: 2.0
+  review_schedule:
+    pre_position_minutes: 30
+    in_position_minutes: 15
+    critical_window_minutes: 5
+
+profiles:
+  london:
+    base_position_multiplier: 1.0
+    preferred_trade_types: ["far_tail_no", "upper_tail_no_on_cloudy_days", "lower_tail_no_on_mild_days"]
+    avoid_trade_types: ["aggressive_exact_bin_no_near_center"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["fog", "low_cloud", "frontal_shift"]
+    allow_new_position_until_local: "14:30"
+    accelerate_exit_after_local: "15:30"
+    hard_flat_local: "18:00"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.8
+      invalidate_on_peak_hour_shift_minutes: 60
+    comments: >
+      Cleaner v1 city. Good for patient far-tail NO. Less attractive for close-in exact-bin fights.
+
+  paris:
+    base_position_multiplier: 1.0
+    preferred_trade_types: ["far_tail_no", "right_tail_no_on_stable_clear_spring_days"]
+    avoid_trade_types: ["close_tail_no_on_front_days"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["snow_ice", "frontal_shift", "thunderstorm"]
+    allow_new_position_until_local: "14:30"
+    accelerate_exit_after_local: "16:00"
+    hard_flat_local: "18:00"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.8
+    comments: >
+      Similar to London but slightly more upside elasticity in good warming setups.
+
+  munich:
+    base_position_multiplier: 0.7
+    preferred_trade_types: ["far_tail_no_only"]
+    avoid_trade_types: ["exact_bin_no", "near_tail_no", "hold_to_late_afternoon"]
+    min_tail_distance_bins: 3
+    confidence_penalty_flags: ["foehn", "thunderstorm", "frontal_shift"]
+    allow_new_position_until_local: "13:00"
+    accelerate_exit_after_local: "14:30"
+    hard_flat_local: "17:00"
+    comments: >
+      Reduce size. Require larger distance from main range. Exit earlier than marine airports.
+
+  seoul:
+    base_position_multiplier: 0.8
+    preferred_trade_types: ["far_tail_no", "right_tail_no_on_rainy_or_low_cloud_days"]
+    avoid_trade_types: ["late_day_right_tail_no_without_wind_check"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["sea_breeze", "monsoon_rain", "typhoon_outer_band"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "14:30"
+    hard_flat_local: "17:30"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.6
+      invalidate_on_peak_hour_shift_minutes: 60
+    comments: >
+      Coastal station. Afternoon continuation needs confirmation, not assumption.
+
+  toronto:
+    base_position_multiplier: 0.9
+    preferred_trade_types: ["far_tail_no", "weather_stable_day_tail_no"]
+    avoid_trade_types: ["close_tail_no_on_high_wind_days"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["strong_wind", "freezing_rain", "heavy_rain", "frontal_shift"]
+    allow_new_position_until_local: "14:00"
+    accelerate_exit_after_local: "15:30"
+    hard_flat_local: "18:00"
+    sl_scheme:
+      invalidate_on_forecast_shift_f: 1.5
+    comments: >
+      Often tradable, but wind/frontal structure matters more than casual city-app views.
+
+  chicago:
+    base_position_multiplier: 0.65
+    preferred_trade_types: ["far_tail_no_only", "post_confirmation_exit"]
+    avoid_trade_types: ["near_tail_no", "exact_bin_no", "late_entry"]
+    min_tail_distance_bins: 3
+    confidence_penalty_flags: ["lake_breeze", "front_arrival", "strong_wind", "snow_ice"]
+    allow_new_position_until_local: "12:30"
+    accelerate_exit_after_local: "14:00"
+    hard_flat_local: "16:30"
+    sl_scheme:
+      invalidate_on_forecast_shift_f: 1.5
+      invalidate_on_peak_hour_shift_minutes: 60
+    comments: >
+      Chicago gets punished by lazy assumptions. Require more distance and earlier exits.
+
+  dallas:
+    base_position_multiplier: 0.7
+    preferred_trade_types: ["far_tail_no_on_quiet_days", "left_tail_no_on_hot_clear_days"]
+    avoid_trade_types: ["any_tail_no_on_severe_weather_days", "close_right_tail_no_in_spring"]
+    min_tail_distance_bins: 3
+    confidence_penalty_flags: ["dryline", "severe_convection", "frontal_shift"]
+    allow_new_position_until_local: "13:00"
+    accelerate_exit_after_local: "15:00"
+    hard_flat_local: "18:00"
+    sl_scheme:
+      invalidate_on_forecast_shift_f: 1.5
+      invalidate_on_main_range_shift_bins: 1
+    comments: >
+      Dallas can trend beautifully until it cannot. The day type matters more than the city name.
+
+  atlanta:
+    base_position_multiplier: 0.8
+    preferred_trade_types: ["far_tail_no", "right_tail_no_on_foggy_or_low_cloud_mornings"]
+    avoid_trade_types: ["close_tail_no_when_afternoon_thunder_risk_is_active"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["fog", "low_cloud", "thunderstorm"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "15:00"
+    hard_flat_local: "17:30"
+    sl_scheme:
+      invalidate_on_forecast_shift_f: 1.5
+    comments: >
+      Atlanta is manageable, but morning low cloud and afternoon convection both matter.
+
+  lucknow:
+    base_position_multiplier: 0.75
+    regime_overrides:
+      pre_monsoon:
+        base_position_multiplier: 0.9
+        preferred_trade_types: ["left_tail_no", "far_right_tail_no_only"]
+        min_tail_distance_bins: 3
+      monsoon:
+        base_position_multiplier: 0.6
+        preferred_trade_types: ["right_tail_no_on_cloudy_days"]
+        min_tail_distance_bins: 2
+    preferred_trade_types: ["far_tail_no"]
+    avoid_trade_types: ["single_profile_all_year_round", "close_tail_no_during_transition_months"]
+    confidence_penalty_flags: ["monsoon_cloud_rain", "thunderstorm", "winter_fog"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "15:00"
+    hard_flat_local: "17:30"
+    comments: >
+      Lucknow must branch by season. Pre-monsoon and monsoon need separate priors.
+
+  ankara:
+    base_position_multiplier: 0.85
+    preferred_trade_types: ["far_tail_no", "morning_underreaction_right_tail_watch"]
+    avoid_trade_types: ["heavy_exact_bin_no_early_day"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["dry_air_large_range", "snow_ice", "frontal_shift"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "15:30"
+    hard_flat_local: "18:00"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.8
+    comments: >
+      Dry high-range airport. Morning cool readings are weaker evidence than in marine climates.
+
+  shanghai:
+    base_position_multiplier: 0.85
+    preferred_trade_types: ["far_tail_no", "right_tail_no_on_cloudy_or_hazy_days"]
+    avoid_trade_types: ["close_tail_no_on_fast_clear_coastal_ramp"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["sea_breeze", "low_cloud", "haze", "frontal_shift"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "14:30"
+    hard_flat_local: "17:30"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.6
+      invalidate_on_peak_hour_shift_minutes: 60
+    comments: >
+      Coastal airport. Cleaner than downtown pages, but one-degree continuation assumptions need proof.
+
+  tokyo:
+    base_position_multiplier: 0.85
+    preferred_trade_types: ["far_tail_no", "right_tail_no_on_cloudy_bay_days"]
+    avoid_trade_types: ["late_day_right_tail_no_without_observation_check"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["sea_breeze", "low_cloud", "baiu_rain", "typhoon_outer_band"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "14:30"
+    hard_flat_local: "17:30"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.6
+      invalidate_on_peak_hour_shift_minutes: 60
+    comments: >
+      Bay airport. Tail NO is better than center fades, especially when cloud or marine flow can shave the peak.
+
+  hong_kong:
+    base_position_multiplier: 0.8
+    preferred_trade_types: ["far_tail_no", "right_tail_no_on_hazy_or_cloudy_days"]
+    avoid_trade_types: ["close_tail_no_in_convection_window"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["thunderstorm", "tropical_moisture", "sea_breeze", "haze"]
+    allow_new_position_until_local: "13:00"
+    accelerate_exit_after_local: "14:00"
+    hard_flat_local: "17:00"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.6
+      invalidate_on_peak_hour_shift_minutes: 60
+    comments: >
+      Marine airport with good data quality, but afternoon convection and humidity can erase a thin edge quickly.
+
+  taipei:
+    base_position_multiplier: 0.8
+    preferred_trade_types: ["far_tail_no", "right_tail_no_on_low_cloud_days"]
+    avoid_trade_types: ["close_tail_no_during_mei_yu_or_typhoon_risk"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["sea_breeze", "low_cloud", "mei_yu_rain", "typhoon_outer_band"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "14:30"
+    hard_flat_local: "17:30"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.6
+      invalidate_on_peak_hour_shift_minutes: 60
+    comments: >
+      Coastal subtropical airport. Good candidate when sources align, but humid transition days need respect.
+
+  singapore:
+    base_position_multiplier: 0.7
+    preferred_trade_types: ["far_tail_no_only"]
+    avoid_trade_types: ["close_tail_no", "late_day_right_tail_no", "exact_bin_no"]
+    min_tail_distance_bins: 3
+    confidence_penalty_flags: ["thunderstorm", "equatorial_convection", "low_cloud", "sea_breeze"]
+    allow_new_position_until_local: "12:30"
+    accelerate_exit_after_local: "13:30"
+    hard_flat_local: "16:30"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.5
+      invalidate_on_peak_hour_shift_minutes: 45
+    comments: >
+      Excellent data coverage, but equatorial convection makes close-in temperature fights unattractive.
+
+  osaka:
+    base_position_multiplier: 0.8
+    preferred_trade_types: ["far_tail_no", "right_tail_no_on_cloudy_bay_days"]
+    avoid_trade_types: ["late_tail_no_without_airport_observation_check"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["sea_breeze", "low_cloud", "baiu_rain", "typhoon_outer_band"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "14:30"
+    hard_flat_local: "17:30"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.6
+      invalidate_on_peak_hour_shift_minutes: 60
+    comments: >
+      Bay airport. Similar discipline to Tokyo: tail NO is fine, but marine moderation needs confirmation.
+
+  dubai:
+    base_position_multiplier: 0.85
+    preferred_trade_types: ["far_tail_no", "left_tail_no_on_clear_desert_days"]
+    avoid_trade_types: ["close_right_tail_no_in_dust_or_haze"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["dust", "haze", "sea_breeze", "heat_haze"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "15:00"
+    hard_flat_local: "18:00"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.8
+    comments: >
+      Dry-air large-range airport. Often orderly, but dust and coastal moderation can still shift the top bucket.
+
+  doha:
+    base_position_multiplier: 0.85
+    preferred_trade_types: ["far_tail_no", "left_tail_no_on_clear_desert_days"]
+    avoid_trade_types: ["close_right_tail_no_in_dust_or_haze"]
+    min_tail_distance_bins: 2
+    confidence_penalty_flags: ["dust", "haze", "sea_breeze", "heat_haze"]
+    allow_new_position_until_local: "13:30"
+    accelerate_exit_after_local: "15:00"
+    hard_flat_local: "18:00"
+    sl_scheme:
+      invalidate_on_forecast_shift_c: 0.8
+    comments: >
+      Similar to Dubai: cleaner than humid coastal cities on good days, but dust and marine influence still matter.

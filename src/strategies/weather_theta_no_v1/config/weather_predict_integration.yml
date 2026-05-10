@@ -1,0 +1,137 @@
+version: 1
+purpose: >
+  First-version bridge for B0p vs B3f_Hybrid paper trading. pm_agent owns
+  live orderbook capture and execution; weather-predict owns weather/model
+  research data and probability-source scripts.
+
+paths:
+  pm_agent_root: /home/rui/projects/pm_agent
+  weather_predict_root: /home/rui/projects/weather-predict
+  weather_predict_python: /home/rui/projects/weather-predict/.venv/bin/python
+  bridge_entry: scripts/ops/weather_predict_bridge.py
+
+first_version_scope:
+  profiles:
+    - B0p
+    - B3f_Hybrid
+  paper_profiles:
+    - locked+equal
+    - dynamic+equal
+    - independent+equal
+  entry_threshold:
+    min_edge: 0.10
+  execution_mode: paper_only
+  live_order_placement: disabled
+
+data_sources:
+  gamma_market_metadata:
+    owner: weather-predict
+    primary_script: daily_pipeline.py
+    bridge_command: python3 scripts/ops/weather_predict_bridge.py daily-pipeline
+    output:
+      - weather-predict/cache/pm_history/<city>_<date>.json
+    use_for:
+      - city/date/bracket/token mapping
+      - settled event metadata
+    notes: >
+      Gamma metadata is not the primary price source. It identifies markets,
+      brackets and token ids.
+
+  live_orderbook_prices:
+    owner: pm_agent
+    primary_script: scripts/python/pmm_orderbook_capture.py
+    output:
+      - src/strategies/pmm/backtest/.artifacts/recorded/*.jsonl.gz
+      - src/strategies/pmm/backtest/.artifacts/recorded/*.json
+    use_for:
+      - primary paper entry price
+      - spread/liquidity snapshots
+      - later execution replay
+    notes: >
+      This is preferred over Polymarket /prices-history. Use latest best_ask
+      per YES/NO token when scoring paper signals.
+
+  clob_prices_history_fallback:
+    owner: weather-predict
+    primary_script: daily_pipeline.py
+    output:
+      - weather-predict/cache/pm_history/prices_<token_suffix>.json
+    use_for:
+      - fallback historical price when own orderbook snapshots are missing
+      - old backtest compatibility
+    notes: >
+      Do not let this override pm_agent recorder data.
+
+  wu_observations:
+    owner: weather-predict
+    primary_script: wu_fetch_observations.py
+    bridge_command: python3 scripts/ops/weather_predict_bridge.py sync-wu --days 365
+    output:
+      - weather-predict/cache/wu_obs/wu_obs_<ICAO>.csv
+    use_for:
+      - settlement truth proxy
+      - historical model error distribution
+      - paper result scoring
+    browser_required: true
+    delegated_if_costly: true
+    notes: >
+      This uses Playwright/browser interception against Wunderground. If browser
+      setup or long capture is costly, delegate it as a separate task.
+
+  multi_model_forecast_cache:
+    owner: weather-predict
+    primary_script: calibration_validate.py
+    bridge_command: python3 scripts/ops/weather_predict_bridge.py sync-model-cache
+    output:
+      - weather-predict/cache/gfs_v4_*.json
+      - weather-predict/cache/ecmwf_v4_*.json
+      - weather-predict/cache/jma_v5_*.json
+      - weather-predict/cache/hrrr_v5_*.json
+      - weather-predict/cache/icon_eu_v5_*.json
+    use_for:
+      - B0p selected-model probability
+      - B3f_Hybrid expanded top-2 ensemble probability
+    notes: >
+      Required for B3f_Hybrid. This is not duplicated in pm_agent.
+
+  gfs_global_no_leak_cache:
+    owner: weather-predict
+    primary_script: _planA_fetch_global.py
+    bridge_command: python3 scripts/ops/weather_predict_bridge.py sync-gfs-global
+    output:
+      - weather-predict/cache_global/gfs_365d_*.json
+    use_for:
+      - no-leak B0p/B3f_Hybrid evaluation
+      - cache_global_full assembly
+
+  cache_global_full:
+    owner: pm_agent_bridge
+    primary_script: src/strategies/weather_theta_no_v1/tools/weather_predict_bridge.py
+    bridge_command: python3 scripts/ops/weather_predict_bridge.py assemble-cache-global-full
+    output:
+      - weather-predict/cache_global_full/
+    use_for:
+      - strategy_profile_report.py
+      - _planA_all_sources_roi.py
+    notes: >
+      Assembled as symlinks/copies: gfs_365d_* from cache_global, everything
+      else from cache.
+
+optional_not_first_version:
+  gfs_features_v6:
+    script: fetch_gfs_features.py
+    bridge_command: python3 scripts/ops/weather_predict_bridge.py sync-gfs-features
+    needed_for:
+      - B1_v2 conditional features
+      - later Bayesian/conditional-error experiments
+    first_version_blocker: false
+
+run_order_first_version:
+  - create weather-predict venv
+  - install Python dependencies into weather-predict venv
+  - sync-model-cache
+  - sync-gfs-global
+  - sync-wu if Playwright/browser capture is available
+  - daily-pipeline for current Gamma metadata
+  - assemble-cache-global-full
+  - use pm_agent recorder JSONL as primary orderbook price source

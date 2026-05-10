@@ -1,6 +1,6 @@
 """Telegram Bot API client."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -56,6 +56,36 @@ class TelegramClient:
 
         endpoint = f"{self._api_base_url}/bot{self._bot_token}/sendMessage"
         resp = await self._client.post(endpoint, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, dict) or data.get("ok") is not True:
+            raise RuntimeError(f"Telegram API returned invalid response: {data}")
+        return data
+
+    async def get_me(self) -> Dict[str, Any]:
+        endpoint = f"{self._api_base_url}/bot{self._bot_token}/getMe"
+        resp = await self._client.get(endpoint)
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, dict) or data.get("ok") is not True:
+            raise RuntimeError(f"Telegram API returned invalid response: {data}")
+        return data
+
+    async def get_updates(
+        self,
+        *,
+        offset: Optional[int] = None,
+        timeout: int = 20,
+        allowed_updates: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"timeout": timeout}
+        if offset is not None:
+            params["offset"] = offset
+        if allowed_updates is not None:
+            params["allowed_updates"] = allowed_updates
+
+        endpoint = f"{self._api_base_url}/bot{self._bot_token}/getUpdates"
+        resp = await self._client.get(endpoint, params=params)
         resp.raise_for_status()
         data = resp.json()
         if not isinstance(data, dict) or data.get("ok") is not True:

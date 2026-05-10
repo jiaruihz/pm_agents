@@ -163,6 +163,10 @@ class RuleAuditSummary(BaseResearchModel):
     trigger_conditions: List[str] = field(default_factory=list)
     explicit_exclusions: List[str] = field(default_factory=list)
     entity_definitions: List[Dict[str, Any]] = field(default_factory=list)
+    ambiguity_explanations: List[str] = field(default_factory=list)
+    decision_boundary_notes: List[str] = field(default_factory=list)
+    yes_case_examples: List[str] = field(default_factory=list)
+    no_case_examples: List[str] = field(default_factory=list)
     rule_summary: str = ""
     settlement_summary: str = ""
     rule_clarity_score: float = 0.0

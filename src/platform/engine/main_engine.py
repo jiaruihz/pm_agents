@@ -17,7 +17,7 @@ from src.platform.notification.telegram_bot import TelegramNotificationListener
 from src.platform.strategy_runtime.store import StrategyRuntimeStore
 
 from src.strategies.arb.unified_arb import UnifiedArbStrategy
-from src.strategies.weather.weather_theta_no_v1 import UnifiedWeatherThetaNoStrategy
+from src.strategies.weather_theta_no_v1.tools.unified_strategy import UnifiedWeatherThetaNoStrategy
 from src.strategies.copy_trade.unified_copy_trade import UnifiedCopyTradingStrategy
 
 

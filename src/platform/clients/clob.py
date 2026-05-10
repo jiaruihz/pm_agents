@@ -100,22 +100,22 @@ async def fetch_price_and_book(
     bids = book_json.get("bids") if isinstance(book_json, dict) else []
     asks = book_json.get("asks") if isinstance(book_json, dict) else []
 
-    def _first_price(entries: Iterable[Any]) -> Optional[float]:
-        for entry in entries:
-            if isinstance(entry, dict):
-                price = entry.get("price") or entry.get("p")
-            elif isinstance(entry, (list, tuple)) and len(entry) >= 1:
-                price = entry[0]
-            else:
-                continue
-            try:
-                return float(price)
-            except Exception:
-                continue
-        return None
+    def _extract_price(entry: Any) -> Optional[float]:
+        if isinstance(entry, dict):
+            price = entry.get("price") or entry.get("p")
+        elif isinstance(entry, (list, tuple)) and len(entry) >= 1:
+            price = entry[0]
+        else:
+            return None
+        try:
+            return float(price)
+        except Exception:
+            return None
 
-    best_bid = _first_price(bids)
-    best_ask = _first_price(asks)
+    bid_prices = [price for price in (_extract_price(entry) for entry in bids) if price is not None]
+    ask_prices = [price for price in (_extract_price(entry) for entry in asks) if price is not None]
+    best_bid = max(bid_prices) if bid_prices else None
+    best_ask = min(ask_prices) if ask_prices else None
     mid_val = (best_bid + best_ask) / 2 if best_bid is not None and best_ask is not None else None
     spread = None
     spread_pct_mid = None
@@ -136,10 +136,8 @@ async def fetch_price_and_book(
 
     levels: List[Dict[str, Any]] = []
     def _normalize_side(side: str, entries: Iterable[Any]) -> List[Dict[str, Any]]:
-        rows: List[Dict[str, Any]] = []
-        for idx, entry in enumerate(entries):
-            if idx >= top_n:
-                break
+        parsed_rows: List[Tuple[float, float]] = []
+        for entry in entries:
             if isinstance(entry, dict):
                 price = entry.get("price") or entry.get("p")
                 size = entry.get("size") or entry.get("q") or entry.get("quantity")
@@ -152,6 +150,11 @@ async def fetch_price_and_book(
                 size_f = float(size)
             except Exception:
                 continue
+            parsed_rows.append((price_f, size_f))
+        parsed_rows.sort(key=lambda item: item[0], reverse=(side == "bid"))
+
+        rows: List[Dict[str, Any]] = []
+        for idx, (price_f, size_f) in enumerate(parsed_rows[:top_n]):
             rows.append(
                 {
                     "token_id": token_id,

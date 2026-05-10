@@ -13,7 +13,7 @@ export function PageFrame({ title, desc, children }: { title: string; desc: stri
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">STRAT OPS</div>
-        <div className="brand-sub">Unified Strategy Console</div>
+        <div className="brand-sub">Strategy Runtime Console</div>
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

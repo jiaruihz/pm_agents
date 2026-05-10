@@ -1,0 +1,86 @@
+identity:
+  city_key: new_york
+  display_name: New York City
+  market_unit: F
+  timezone: America/New_York
+
+station:
+  station_name: LaGuardia Airport
+  station_code: KLGA
+  iata_code: LGA
+  object_type: airport
+  settlement_scope: NYC temperature markets resolve to the LaGuardia airport station, not to a generic city-wide reading.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Fahrenheit values, matching recent Polymarket NYC weather-market rules.
+  station_match_rule: Must match LaGuardia Airport Station / KLGA. Do not substitute Manhattan, Central Park, or generic NYC city pages.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: KLGA
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from a city page or from a non-finalized reading.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: KLGA
+    role: trading_anchor
+    use_for: Record the target-day high, peak-hour window, and whether the airport path is shifting warmer or cooler.
+    do_not_use_for: Do not treat the shown forecast bucket as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain broader market consensus inside the TWC stack.
+      do_not_use_for: Do not let a generic NYC page override KLGA.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check airport observation context, wind shifts, and cloud cover.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and midday warming path.
+    - family: meteoblue
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check trend, peak timing, and tail risk.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A generic NYC city page is not the KLGA airport contract.
+    - family: city_park_station
+      page_type: alternate_city_object
+      location_object: city
+      why_forbidden: Central Park or Manhattan style pages often become the market's wrong anchor.
+    - family: aggregated_city_weather
+      page_type: metro_page
+      location_object: metro
+      why_forbidden: Metro summaries blur away the airport-specific settlement object.
+
+operator_notes:
+  summary: NYC markets should be read as KLGA airport contracts. Same-station WU Hourly stays the trading anchor, while city and borough pages are mainly useful for diagnosing wrong-anchor money.
+  why_this_station: Recent Polymarket NYC weather rules point to LaGuardia Airport Station and WU same-station history pages as the settlement source.
+  main_risks:
+    - Sea-breeze or harbor influence changing the airport peak path.
+    - Cloud cover and residual cold air keeping KLGA cooler than a city page suggests.
+    - Market participants anchoring to Manhattan or Central Park instead of the airport.
+  common_wrong_anchor:
+    - Manhattan or Central Park pages that look like "true NYC" but are not the contract object.
+    - Generic NYC app pages without an explicit KLGA station match.
+  usage_order:
+    - Open Polymarket rules and confirm KLGA plus Fahrenheit.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport support pages for material disagreement in high or peak timing.
+    - Look at city pages only to estimate whether wrong-anchor traders are distorting the market.

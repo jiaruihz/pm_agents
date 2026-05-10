@@ -6,7 +6,7 @@ import { MockDashboardProvider } from "./mock-provider";
 const DashboardProviderContext = createContext<DashboardProvider | null>(null);
 
 export function DashboardProviderRoot({ children }: { children: React.ReactNode }): JSX.Element {
-  const mode = (import.meta.env.VITE_DASHBOARD_DATA_MODE ?? "mock").toLowerCase();
+  const mode = (import.meta.env.VITE_DASHBOARD_DATA_MODE ?? "http").toLowerCase();
   const provider = useMemo<DashboardProvider>(() => {
     if (mode === "http") {
       return new HttpDashboardProvider();

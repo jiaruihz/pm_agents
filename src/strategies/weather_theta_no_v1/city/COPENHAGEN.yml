@@ -1,0 +1,86 @@
+identity:
+  city_key: copenhagen
+  display_name: Copenhagen
+  market_unit: C
+  timezone: Europe/Copenhagen
+
+station:
+  station_name: Copenhagen Airport
+  station_code: EKCH
+  iata_code: CPH
+  object_type: airport
+  settlement_scope: Only the Copenhagen Airport station counts for this market.
+
+resolution:
+  metric: daily_high_temperature
+  finalized_required: true
+  unit_rule: Use whole-degree Celsius values for Copenhagen-style airport temperature contracts.
+  station_match_rule: Must match Copenhagen Airport Station / EKCH. Do not substitute a generic Copenhagen city page.
+  settlement_note: Use the finalized same-station WU History / Daily reading for the target date.
+
+sources:
+  primary_settlement:
+    family: wunderground
+    page_type: history_daily
+    location_object: airport_station
+    station_code: EKCH
+    role: settlement_truth
+    use_for: Final market resolution, replay, and truth-table review.
+    do_not_use_for: Do not resolve from city pages or provisional history.
+  primary_trading_anchor:
+    family: wunderground
+    page_type: hourly_forecast
+    location_object: airport_station
+    station_code: EKCH
+    role: trading_anchor
+    use_for: Record target-day high, peak timing, and whether marine moderation is clipping the top bucket.
+    do_not_use_for: Do not treat the displayed forecast integer as a guaranteed settlement bucket.
+  consensus_sources:
+    - family: weather.com
+      page_type: same_stack_reference
+      location_object: airport_preferred
+      use_for: Explain same-stack market consensus.
+      do_not_use_for: Do not replace EKCH with a generic Copenhagen page.
+  supporting_sources:
+    - family: official_aviation_weather
+      page_type: airport_weather
+      location_object: airport
+      use_for: Sanity-check wind and cloud over the marine airport.
+    - family: checkwx
+      page_type: metar_taf
+      location_object: airport
+      use_for: Check the current airport observation.
+    - family: accuweather
+      page_type: airport_page
+      location_object: airport
+      use_for: Cross-check the daily high and warm-tail risk.
+  forbidden_sources:
+    - family: wunderground
+      page_type: city_page
+      location_object: city
+      why_forbidden: A Copenhagen city page is not the EKCH airport contract.
+    - family: accuweather
+      page_type: city_page
+      location_object: city
+      why_forbidden: Urban pages can differ from the airport object.
+    - family: meteoblue
+      page_type: city_page
+      location_object: city
+      why_forbidden: Use only to explain market drift.
+
+operator_notes:
+  summary: Copenhagen is a marine airport market with clean data coverage and relatively smooth temperature paths. The main danger is not surprise heat but low cloud and onshore flow keeping the top bucket muted.
+  why_this_station: EKCH is a clean airport object with consistent airport-page coverage across the weather stacks we care about.
+  main_risks:
+    - Onshore flow clipping the warm side.
+    - Low cloud flattening the afternoon peak.
+    - City pages running slightly warmer than the airport.
+  common_wrong_anchor:
+    - Generic Copenhagen city pages instead of EKCH.
+    - Metro pages without an airport station match.
+  usage_order:
+    - Open Polymarket rules and confirm EKCH plus Celsius.
+    - Open same-station WU Hourly and record target-day high plus likely peak hour.
+    - Open same-station WU History / Daily to verify station identity and later use it for settlement review.
+    - Check airport observation pages if marine cloud looks active.
+    - Use city pages only as a market-noise diagnostic.

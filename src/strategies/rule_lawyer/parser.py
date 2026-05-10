@@ -34,6 +34,10 @@ class RuleParse(BaseModel):
     explicit_exclusions: List[str]
     entity_definitions: List[EntityDef]
     ambiguity_flags: List[str]
+    ambiguity_explanations: List[str] = Field(default_factory=list)
+    decision_boundary_notes: List[str] = Field(default_factory=list)
+    yes_case_examples: List[str] = Field(default_factory=list)
+    no_case_examples: List[str] = Field(default_factory=list)
     clarity_score: float = Field(ge=0, le=1)
     dispute_risk_score: float = Field(ge=0, le=1)
     notes_for_humans: str
@@ -45,6 +49,21 @@ class RuleParse(BaseModel):
         allowed = {"official_docs", "credible_reporting_consensus", "mixed", "unknown"}
         if v not in allowed:
             raise ValueError("invalid settlement_source_type")
+        return v
+
+    @field_validator("trigger_type")
+    @classmethod
+    def _trigger_enum(cls, v: str) -> str:
+        allowed = {
+            "definition_driven",
+            "data_print",
+            "procedural_vote",
+            "military_action",
+            "financial_price_level",
+            "other",
+        }
+        if v not in allowed:
+            raise ValueError("invalid trigger_type")
         return v
 
 
@@ -94,6 +113,10 @@ def _rule_parse_output_schema() -> Dict[str, Any]:
                 },
             },
             "ambiguity_flags": {"type": "array", "items": {"type": "string"}},
+            "ambiguity_explanations": {"type": "array", "items": {"type": "string"}},
+            "decision_boundary_notes": {"type": "array", "items": {"type": "string"}},
+            "yes_case_examples": {"type": "array", "items": {"type": "string"}},
+            "no_case_examples": {"type": "array", "items": {"type": "string"}},
             "clarity_score": {"type": "number"},
             "dispute_risk_score": {"type": "number"},
             "notes_for_humans": {"type": "string"},
@@ -109,6 +132,10 @@ def _rule_parse_output_schema() -> Dict[str, Any]:
             "explicit_exclusions",
             "entity_definitions",
             "ambiguity_flags",
+            "ambiguity_explanations",
+            "decision_boundary_notes",
+            "yes_case_examples",
+            "no_case_examples",
             "clarity_score",
             "dispute_risk_score",
             "notes_for_humans",
@@ -116,21 +143,6 @@ def _rule_parse_output_schema() -> Dict[str, Any]:
         ],
         "additionalProperties": False,
     }
-
-    @field_validator("trigger_type")
-    @classmethod
-    def _trigger_enum(cls, v: str) -> str:
-        allowed = {
-            "definition_driven",
-            "data_print",
-            "procedural_vote",
-            "military_action",
-            "financial_price_level",
-            "other",
-        }
-        if v not in allowed:
-            raise ValueError("invalid trigger_type")
-        return v
 
 
 def compute_rule_score(parsed: RuleParse) -> Dict[str, Any]:
