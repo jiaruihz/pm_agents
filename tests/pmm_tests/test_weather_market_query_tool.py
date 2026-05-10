@@ -1,12 +1,12 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from src.strategies.weather_theta_no_v1.tools.market_query_tool import build_market_snapshot
+from src.strategies.weather_edge_v1.tools.market_query_tool import build_market_snapshot
 
 
 class TestWeatherMarketQueryTool(unittest.TestCase):
-    @patch("src.strategies.weather_theta_no_v1.tools.market_query_tool._fetch_orderbook_rows", new_callable=AsyncMock)
-    @patch("src.strategies.weather_theta_no_v1.tools.market_query_tool._resolve_event_payload")
+    @patch("src.strategies.weather_edge_v1.tools.market_query_tool._fetch_orderbook_rows", new_callable=AsyncMock)
+    @patch("src.strategies.weather_edge_v1.tools.market_query_tool._resolve_event_payload")
     def test_build_market_snapshot_attaches_orderbooks_to_tokens(self, mock_resolve_event_payload, mock_fetch_orderbooks):
         mock_resolve_event_payload.return_value = (
             {
@@ -59,8 +59,8 @@ class TestWeatherMarketQueryTool(unittest.TestCase):
         self.assertEqual(selected[0]["tokens"][0]["orderbook"]["best_bid"], 0.07)
         self.assertEqual(selected[0]["tokens"][1]["orderbook"]["best_ask"], 0.93)
 
-    @patch("src.strategies.weather_theta_no_v1.tools.market_query_tool._fetch_orderbook_rows", new_callable=AsyncMock)
-    @patch("src.strategies.weather_theta_no_v1.tools.market_query_tool._resolve_event_payload")
+    @patch("src.strategies.weather_edge_v1.tools.market_query_tool._fetch_orderbook_rows", new_callable=AsyncMock)
+    @patch("src.strategies.weather_edge_v1.tools.market_query_tool._resolve_event_payload")
     def test_build_market_snapshot_can_skip_orderbooks(self, mock_resolve_event_payload, mock_fetch_orderbooks):
         mock_resolve_event_payload.return_value = (
             {

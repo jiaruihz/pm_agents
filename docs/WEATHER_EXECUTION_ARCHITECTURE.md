@@ -1,6 +1,6 @@
 # Weather Execution Architecture
 
-This document freezes the current P0/P1 boundary for turning the weather paper workflow into a controlled live-trading workflow.
+This document freezes the current boundary for turning the weather paper workflow into a controlled live-trading workflow.
 
 ## System Boundary
 
@@ -29,15 +29,16 @@ Existing operational entry points that stay in the main path:
 - `scripts/ops/pmm_live_order_test.py`: current CLOB order smoke test; defaults to read-only, requires explicit live confirmation.
 - `scripts/ops/weather_edge_market_data.py`: weather market discovery, historical backfill, and live orderbook capture.
 - `scripts/ops/weather_edge_paper.py`: current weather paper decision wrapper.
+- `scripts/ops/weather_signal_importer.py`: imports paper decisions into immutable weather edge signals.
+- `scripts/ops/weather_trade_planner.py`: converts signals into risk-checked trade plans.
 - `src/strategies/pmm/execution/live_broker.py`: reusable dry/live broker wrapper.
 - `src/strategies/pmm/risk/safety_guard.py`: reusable token, notional, position, and loss guard.
-- `src/strategies/weather_theta_no_v1/tools/weather_edge_market_data.py`: weather event/token discovery and CLOB data helpers.
-- `src/strategies/weather_theta_no_v1/tools/weather_edge_paper.py`: snapshot-to-paper-decision logic.
+- `src/strategies/weather_edge_v1/tools/weather_edge_market_data.py`: weather event/token discovery and CLOB data helpers.
+- `src/strategies/weather_edge_v1/tools/weather_edge_paper.py`: snapshot-to-paper-decision logic.
+- `src/strategies/weather_edge_v1/tools/execution_pipeline.py`: signal import and trade-plan core logic.
 
-Planned weather execution entry points:
+Planned weather execution entry points still to implement:
 
-- `scripts/ops/weather_signal_importer.py`: import signals from `weather-predict` into `runtime/weather_edge_v1/signals/signals.jsonl`.
-- `scripts/ops/weather_trade_planner.py`: convert accepted signals into trade plans with token IDs, side, limit price, size, and risk precheck result.
 - `scripts/ops/weather_order_executor.py`: write paper orders for every accepted plan and optionally submit live orders behind explicit flags.
 - `scripts/ops/weather_reconcile.py`: reconcile open, filled, canceled, and settled order state.
 - `scripts/ops/weather_report.py`: produce daily paper/live comparison and attribution reports.
@@ -73,13 +74,13 @@ Required fields:
 - `signal_id`
 - `source_system`
 - `source_run_id`
-- `generated_at`
+- `imported_at_utc`
 - `target_date`
 - `city`
 - `market_slug` or `condition_id`
 - `bracket`
-- `side`
-- `probability`
+- `signal_side`
+- `model_probability_yes`
 - `market_price`
 - `edge`
 - `model_version`
@@ -115,10 +116,10 @@ P1 is now:
 - keep `pm_agent` as the paper/live execution owner
 - reuse `SafetyGuard` and `LiveBroker` rather than creating a separate live order stack
 
-Next implementation stages:
+Current implementation stages:
 
-- P2: implement signal importer in dry-run mode.
-- P3: implement trade planner and risk precheck.
+- P2: signal importer in dry-run/write mode is implemented.
+- P3: trade planner and local risk precheck are implemented.
 - P4: implement paper executor using the same trade plan as live.
 - P5: run a tiny live smoke order and cancel it.
 - P6: enable scheduled reports comparing signal, paper, and live results.

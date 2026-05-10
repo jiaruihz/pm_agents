@@ -231,7 +231,7 @@ TAF XXXX ...
 
 推荐路径：
 
-- `src/strategies/weather_theta_no_v1/plan/cases/<CITY>/<DATE>.md`
+- `src/strategies/weather_edge_v1/plan/cases/<CITY>/<DATE>.md`
 
 记录时优先写给人看的摘要，再附简短结构化小节；不要把整段原始思维流直接塞进去。
 

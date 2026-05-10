@@ -92,14 +92,15 @@ live 模式下链上确认有延迟，此时启用 pending credit 让策略在�
 - 价格变动未超过 deadband → 保留现有挂单（保持队列位置）
 - 超过 deadband → 撤旧单、挂新单
 
-## 天气 Theta No（`weather_theta_no_v1`）
+## Weather Edge v1（`weather_edge_v1`）
 
-这个策略不是传统双边做市，而是事件驱动的“单边 carry”：
+这个策略已经不是纯 theta/carry。当前主线是天气概率 edge：
 
-- 入场：只在目标区间（通常是极端天气对应的 NO token）挂 `BUY`
-- 持有：按时间窗口持仓（默认 48h）
-- 出场：止盈 / 止损 / 距离结算时间过近时提前平仓
-- 风控：单笔预算按可用 USDC 比例（默认 5%），并支持重入冷却
+- `weather-predict` 生成 T-24 bracket 概率和 paper decision
+- `pm_agent` 导入 signal，去重后生成 trade plan
+- paper/live 共用同一份 trade plan
+- live 默认关闭，必须经过本地 `SafetyGuard` 和显式确认
+- 旧的 NO-side carry 逻辑保留为 PMM variant 能力，但不再代表完整策略定义
 
 核心参数（`PMM_STRATEGY_PARAMS_JSON`）：
 
@@ -116,7 +117,7 @@ live 模式下链上确认有延迟，此时启用 pending credit 让策略在�
 示例：
 
 ```bash
-export PMM_STRATEGY_KEY="weather_theta_no_v1"
+export PMM_STRATEGY_KEY="weather_edge_v1"
 export PMM_STRATEGY_PARAMS_JSON='{
   "weather_no_token_ids": ["NO_TOKEN_A", "NO_TOKEN_B"],
   "weather_entry_min_price": 0.80,

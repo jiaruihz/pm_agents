@@ -20,13 +20,13 @@ from src.platform.strategy_runtime.store import StrategyRuntimeStore
 from src.strategies.pmm.config import PMMConfig
 from src.platform.clients.polymarket_data import PolymarketDataClient
 from src.strategies.registry import load_strategy_rows
-from src.strategies.weather_theta_no_v1.tools.airport_weather_tool import (
+from src.strategies.weather_edge_v1.tools.airport_weather_tool import (
     AirportWeatherTool,
     load_watch_baseline,
     upsert_watch_entry,
 )
-from src.strategies.weather_theta_no_v1.tools.codex_weather_advisor import run_codex_analysis
-from src.strategies.weather_theta_no_v1.tools.decision_journal import WeatherDecisionJournal, compute_state_hash
+from src.strategies.weather_edge_v1.tools.codex_weather_advisor import run_codex_analysis
+from src.strategies.weather_edge_v1.tools.decision_journal import WeatherDecisionJournal, compute_state_hash
 
 
 load_dotenv()
@@ -369,7 +369,7 @@ async def _run(args: argparse.Namespace) -> int:
     notifier = PMMTelegramNotifier(
         config=cfg,
         execution_mode="live",
-        strategy_key="weather_theta_no_v1",
+        strategy_key="weather_edge_v1",
     )
     await notifier.start()
 
@@ -415,7 +415,7 @@ async def _run(args: argparse.Namespace) -> int:
 
             store.upsert_start(
                 instance_id=instance_id,
-                strategy_key="weather_theta_no_v1",
+                strategy_key="weather_edge_v1",
                 label=args.label,
                 execution_mode="live",
                 market_data_source="external_api",
@@ -479,7 +479,7 @@ async def _run(args: argparse.Namespace) -> int:
                     store.upsert_trade_order(
                         order_id=order_id,
                         instance_id=instance_id,
-                        strategy_key="weather_theta_no_v1",
+                        strategy_key="weather_edge_v1",
                         token_id=token_id,
                         side=order_side,
                         size=order_size,
@@ -504,7 +504,7 @@ async def _run(args: argparse.Namespace) -> int:
                     store.upsert_trade_order(
                         order_id=f"manual_import::{token_id}",
                         instance_id=instance_id,
-                        strategy_key="weather_theta_no_v1",
+                        strategy_key="weather_edge_v1",
                         token_id=token_id,
                         side="BUY",
                         size=qty,
@@ -928,7 +928,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--max-position", type=float, default=100.0)
     p.add_argument(
         "--weather-baseline-file",
-        default="src/strategies/weather_theta_no_v1/plan/watch",
+        default="src/strategies/weather_edge_v1/plan/watch",
     )
     p.add_argument("--weather-poll-sec", type=int, default=300)
     p.add_argument("--codex-analysis-enabled", action="store_true")

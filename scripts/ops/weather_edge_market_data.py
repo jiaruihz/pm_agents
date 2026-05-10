@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.strategies.weather_theta_no_v1.tools.weather_edge_market_data import (
+from src.strategies.weather_edge_v1.tools.weather_edge_market_data import (
     DEFAULT_DATA_ROOT,
     WEATHER_CITIES,
     WeatherEdgeMarketData,

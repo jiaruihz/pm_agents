@@ -1,11 +1,11 @@
 import unittest
 from unittest.mock import patch
 
-from src.strategies.weather_theta_no_v1.tools.airport_weather_tool import AirportWeatherTool
+from src.strategies.weather_edge_v1.tools.airport_weather_tool import AirportWeatherTool
 
 
 class TestAirportWeatherTool(unittest.TestCase):
-    @patch("src.strategies.weather_theta_no_v1.tools.airport_weather_tool.resolve_daily_plan")
+    @patch("src.strategies.weather_edge_v1.tools.airport_weather_tool.resolve_daily_plan")
     def test_build_snapshot_includes_taf_and_multi_model_layers(self, mock_resolve_daily_plan):
         mock_resolve_daily_plan.return_value = {"daily_overrides": {}, "action_suggestion": {"action": "review_only"}}
         tool = AirportWeatherTool()

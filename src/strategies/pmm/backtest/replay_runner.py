@@ -21,7 +21,7 @@ from src.strategies.pmm.execution.paper_broker import PaperBroker
 from src.strategies.pmm.variants.multi_level_v1 import MultiLevelV1Strategy
 from src.strategies.pmm.variants.single_level_v1 import SingleLevelV1Strategy
 from src.strategies.pmm.variants.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
-from src.strategies.pmm.variants.weather_theta_no_v1 import WeatherThetaNoV1Strategy
+from src.strategies.pmm.variants.weather_edge_v1 import WeatherEdgeV1Strategy
 from src.strategies.pmm.utils.quantize import quantize_quote_pair
 from src.strategies.pmm.backtest.scenario_validator import validate_scenario_payload
 
@@ -245,7 +245,7 @@ async def _run_single_async(
         )
     )
     strategy_registry.register(
-        WeatherThetaNoV1Strategy(
+        WeatherEdgeV1Strategy(
             quantize_pair_fn=quantize_quote_pair,
         )
     )

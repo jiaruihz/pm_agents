@@ -15,14 +15,14 @@ if [[ -z "${PMM_TOKEN_IDS:-}" ]]; then
   exit 1
 fi
 
-PARAMS_FILE="${1:-src/strategies/weather_theta_no_v1/params.example.json}"
+PARAMS_FILE="${1:-src/strategies/weather_edge_v1/params.example.json}"
 if [[ ! -f "$PARAMS_FILE" ]]; then
   echo "Params file not found: $PARAMS_FILE" >&2
   exit 1
 fi
 
 export PMM_EXECUTION_MODE="${PMM_EXECUTION_MODE:-paper}"
-export PMM_STRATEGY_KEY="weather_theta_no_v1"
+export PMM_STRATEGY_KEY="weather_edge_v1"
 export PMM_STRATEGY_PARAMS_JSON="$(cat "$PARAMS_FILE")"
 
 PY_BIN=".venv/bin/python"

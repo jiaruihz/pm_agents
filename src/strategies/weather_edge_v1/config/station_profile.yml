@@ -1,6 +1,6 @@
 version: 1
 description: >
-  Station metadata used by weather_theta_no_v1 profile resolution.
+  Station metadata used by weather_edge_v1 profile resolution.
 
 global_defaults:
   hemisphere: north

@@ -49,7 +49,7 @@ from src.strategies.pmm.risk.safety_guard import SafetyGuard
 from src.strategies.pmm.variants.multi_level_v1 import MultiLevelV1Strategy
 from src.strategies.pmm.variants.single_level_v1 import SingleLevelV1Strategy
 from src.strategies.pmm.variants.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
-from src.strategies.pmm.variants.weather_theta_no_v1 import WeatherThetaNoV1Strategy
+from src.strategies.pmm.variants.weather_edge_v1 import WeatherEdgeV1Strategy
 from src.strategies.pmm.utils.converters import best_level as _best_level, normalize_levels as _normalize_levels, to_float as _safe_float, to_int as _safe_int
 from src.strategies.pmm.utils.metrics import MetricsLogger
 from src.strategies.pmm.utils.quantize import (
@@ -202,7 +202,7 @@ async def tick_loop(config: PMMConfig) -> None:
         )
     )
     strategy_registry.register(
-        WeatherThetaNoV1Strategy(
+        WeatherEdgeV1Strategy(
             quantize_pair_fn=_quantize_quote_pair,
         )
     )

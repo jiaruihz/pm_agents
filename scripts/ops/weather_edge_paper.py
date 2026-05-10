@@ -11,14 +11,14 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.strategies.weather_theta_no_v1.tools.weather_edge_paper import (
+from src.strategies.weather_edge_v1.tools.weather_edge_paper import (
     append_jsonl_dedup,
     build_paper_decisions,
     compute_profile_probabilities,
     extract_snapshot_brackets,
     load_snapshot,
 )
-from src.strategies.weather_theta_no_v1.tools.weather_predict_bridge import (
+from src.strategies.weather_edge_v1.tools.weather_predict_bridge import (
     DEFAULT_WEATHER_PREDICT_ROOT,
 )
 

@@ -106,7 +106,7 @@ data_sources:
 
   cache_global_full:
     owner: pm_agent_bridge
-    primary_script: src/strategies/weather_theta_no_v1/tools/weather_predict_bridge.py
+    primary_script: src/strategies/weather_edge_v1/tools/weather_predict_bridge.py
     bridge_command: python3 scripts/ops/weather_predict_bridge.py assemble-cache-global-full
     output:
       - weather-predict/cache_global_full/

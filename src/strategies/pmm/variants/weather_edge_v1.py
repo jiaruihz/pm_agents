@@ -10,9 +10,9 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from src.strategies.pmm.config import PMMConfig
 from src.strategies.pmm.core.strategy_base import QuoteTarget, StrategyQuoteInput
-from src.strategies.weather_theta_no_v1.tools.provider import AsyncOpenMeteoClient
+from src.strategies.weather_edge_v1.tools.provider import AsyncOpenMeteoClient
 
-logger = logging.getLogger("pmm.strategy.weather_theta")
+logger = logging.getLogger("pmm.strategy.weather_edge")
 
 QuantizeFn = Callable[[float, float, float, str], Tuple[float, float]]
 
@@ -70,17 +70,17 @@ class _TokenState:
     last_exit_ts: float = 0.0
 
 
-class WeatherThetaNoV1Strategy:
+class WeatherEdgeV1Strategy:
     """
-    Weather carry strategy for NO-side accumulation and timed exit.
+    Weather edge strategy for probability-vs-market mispricing.
 
     Core idea:
-    - Entry: buy NO when probability still carries uncertainty premium.
-    - Exit: flatten before settlement / after holding window / at take-profit.
-    - Risk: immediate stop-loss and optional "safety-range break" flattening.
+    - Entry: act only when the weather model implies a clear edge vs market price.
+    - Execution: keep the legacy NO-side carry controls as one supported mode.
+    - Risk: immediate stop-loss, allowlisted tokens, and timed exit before settlement.
     """
 
-    key = "weather_theta_no_v1"
+    key = "weather_edge_v1"
 
     def __init__(
         self,
@@ -104,7 +104,7 @@ class WeatherThetaNoV1Strategy:
 
     def _load_weather_targets(self) -> None:
         """Load weather targets mapping from local config."""
-        config_path = Path("src/strategies/weather_theta_no_v1/config/weather_targets.json")
+        config_path = Path("src/strategies/weather_edge_v1/config/weather_targets.json")
         if not config_path.exists():
             logger.warning(f"Weather targets config not found at {config_path}")
             return

@@ -8,9 +8,9 @@
 
 当前代码暂时还放在：
 
-`src/strategies/weather_theta_no_v1/`
+`src/strategies/weather_edge_v1/`
 
-原因是这里已经有天气策略的执行、配置、测试、文档和一些现成工具。现在没必要为了改名立刻大搬家，否则会牵扯很多 import、测试路径和运行脚本。可以先把 `weather_theta_no_v1` 当成“天气策略框架目录”，把真正的新策略线叫 `weather_edge_v1`。
+原因是这里已经有天气策略的执行、配置、测试、文档和一些现成工具。现在没必要为了改名立刻大搬家，否则会牵扯很多 import、测试路径和运行脚本。可以先把 `weather_edge_v1` 当成“天气策略框架目录”，把真正的新策略线叫 `weather_edge_v1`。
 
 第一版要一起 paper trade 对比的 profile：
 
@@ -33,17 +33,17 @@
   - `pytest`
   - `playwright`
 - 已经在当前项目里加了接入配置：
-  - `src/strategies/weather_theta_no_v1/config/weather_predict_integration.yml`
+  - `src/strategies/weather_edge_v1/config/weather_predict_integration.yml`
 - 已经加了 `weather_edge_v1` profile 配置：
-  - `src/strategies/weather_theta_no_v1/config/weather_edge_v1.yml`
+  - `src/strategies/weather_edge_v1/config/weather_edge_v1.yml`
 - 已经在当前项目里加了桥接入口：
   - `scripts/ops/weather_predict_bridge.py`
 - 已经在当前项目里加了桥接实现：
-  - `src/strategies/weather_theta_no_v1/tools/weather_predict_bridge.py`
+  - `src/strategies/weather_edge_v1/tools/weather_predict_bridge.py`
 - 已经加了一个当前项目自己的盘口读取适配层：
-  - `src/strategies/weather_theta_no_v1/tools/edge_orderbook_source.py`
+  - `src/strategies/weather_edge_v1/tools/edge_orderbook_source.py`
 - 已经加了 Polymarket 盘口数据管理脚本：
-  - `src/strategies/weather_theta_no_v1/tools/weather_edge_market_data.py`
+  - `src/strategies/weather_edge_v1/tools/weather_edge_market_data.py`
   - `scripts/ops/weather_edge_market_data.py`
 - 已经加了桥接测试：
   - `tests/pmm_tests/test_weather_predict_bridge.py`
@@ -83,8 +83,8 @@ python3 -m unittest tests.pmm_tests.test_weather_predict_bridge -v
 
 ```bash
 python3 -m py_compile \
-  src/strategies/weather_theta_no_v1/tools/weather_predict_bridge.py \
-  src/strategies/weather_theta_no_v1/tools/edge_orderbook_source.py \
+  src/strategies/weather_edge_v1/tools/weather_predict_bridge.py \
+  src/strategies/weather_edge_v1/tools/edge_orderbook_source.py \
   scripts/ops/weather_predict_bridge.py
 ```
 
@@ -389,7 +389,7 @@ no market found
 配置文件：
 
 ```bash
-src/strategies/weather_theta_no_v1/config/weather_edge_v1.yml
+src/strategies/weather_edge_v1/config/weather_edge_v1.yml
 ```
 
 ### 2. 接 B0p 和 B3f_Hybrid 的信号
@@ -420,7 +420,7 @@ src/strategies/weather_theta_no_v1/config/weather_edge_v1.yml
 已经加了：
 
 - paper runner 逻辑：
-  - `src/strategies/weather_theta_no_v1/tools/weather_edge_paper.py`
+  - `src/strategies/weather_edge_v1/tools/weather_edge_paper.py`
 - 命令行入口：
   - `scripts/ops/weather_edge_paper.py`
 - 测试：

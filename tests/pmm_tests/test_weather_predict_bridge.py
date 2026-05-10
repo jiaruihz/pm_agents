@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.strategies.weather_theta_no_v1.tools.weather_predict_bridge import WeatherPredictBridge
+from src.strategies.weather_edge_v1.tools.weather_predict_bridge import WeatherPredictBridge
 
 
 class TestWeatherPredictBridge(unittest.TestCase):

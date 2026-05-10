@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.strategies.weather_theta_no_v1.tools.weather_edge_paper import (
+from src.strategies.weather_edge_v1.tools.weather_edge_paper import (
     PaperBracket,
     append_jsonl_dedup,
     build_paper_decisions,

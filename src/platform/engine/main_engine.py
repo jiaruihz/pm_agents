@@ -17,7 +17,7 @@ from src.platform.notification.telegram_bot import TelegramNotificationListener
 from src.platform.strategy_runtime.store import StrategyRuntimeStore
 
 from src.strategies.arb.unified_arb import UnifiedArbStrategy
-from src.strategies.weather_theta_no_v1.tools.unified_strategy import UnifiedWeatherThetaNoStrategy
+from src.strategies.weather_edge_v1.tools.unified_strategy import UnifiedWeatherEdgeStrategy
 from src.strategies.copy_trade.unified_copy_trade import UnifiedCopyTradingStrategy
 
 
@@ -111,7 +111,7 @@ async def main() -> None:
     if args.strategy == "arb":
         strategy_instance = UnifiedArbStrategy()
     elif args.strategy == "weather":
-        strategy_instance = UnifiedWeatherThetaNoStrategy()
+        strategy_instance = UnifiedWeatherEdgeStrategy()
         run_params["weather_no_token_ids"] = token_ids
         run_params["weather_position_pct"] = 0.1
     elif args.strategy == "copy_trade":

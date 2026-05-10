@@ -43,13 +43,13 @@ class TokenState:
     last_exit_ts: float = 0.0
 
 
-class UnifiedWeatherThetaNoStrategy(IStrategy):
+class UnifiedWeatherEdgeStrategy(IStrategy):
     """
     Weather carry strategy for NO-side accumulation and timed exit.
     Adapted for the asyncio Unified Engine.
     """
 
-    key = "weather_theta_no_v1"
+    key = "weather_edge_v1"
 
     async def init(self, context: StrategyContext) -> None:
         logger.info("Initialized %s for instance %s", self.key, context.instance_id)

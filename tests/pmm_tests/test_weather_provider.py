@@ -1,6 +1,6 @@
 import pytest
 from aioresponses import aioresponses
-from src.strategies.weather_theta_no_v1.tools.provider import AsyncOpenMeteoClient
+from src.strategies.weather_edge_v1.tools.provider import AsyncOpenMeteoClient
 
 @pytest.mark.asyncio
 async def test_fetch_weather_success():

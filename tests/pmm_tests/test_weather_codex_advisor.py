@@ -1,6 +1,6 @@
 import unittest
 
-from src.strategies.weather_theta_no_v1.tools.codex_weather_advisor import _normalize_analysis
+from src.strategies.weather_edge_v1.tools.codex_weather_advisor import _normalize_analysis
 
 
 class TestWeatherCodexAdvisor(unittest.TestCase):

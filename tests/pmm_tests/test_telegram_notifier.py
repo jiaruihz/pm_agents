@@ -74,7 +74,7 @@ def test_build_alert_message_contains_event_and_detail():
 def test_build_order_message_contains_order_payload():
     msg = build_order_message(
         symbol="TEST",
-        strategy_key="weather_theta_no_v1",
+        strategy_key="weather_edge_v1",
         event="order_placed",
         token_id="tid-1",
         side="BUY",

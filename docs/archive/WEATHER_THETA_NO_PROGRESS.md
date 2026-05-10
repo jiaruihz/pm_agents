@@ -1,11 +1,11 @@
-# Weather Theta No 策略进度与执行手册
+# Weather Edge 策略进度与执行手册
 
 > 最近更新：2026-03-04
-> 适用范围：仅 `weather_theta_no_v1`
+> 适用范围：仅 `weather_edge_v1`
 
 ## 1. 策略目标与核心逻辑
 
-`weather_theta_no_v1` 不是双边做市，而是事件驱动的单边 carry：
+`weather_edge_v1` 不是双边做市，而是事件驱动的单边 carry：
 
 - 交易对象：天气市场极端区间的 `NO` token
 - 主要收益：时间流逝导致不确定性收敛，`NO` 价格向 1 逼近的中间价差
@@ -27,7 +27,7 @@
 ### 2.1 已完成
 
 - 策略实现：
-  - `src/strategies/pmm/variants/weather_theta_no_v1.py`
+  - `src/strategies/pmm/variants/weather_edge_v1.py`
 - 引擎接入（可运行）：
   - `src/strategies/pmm/engine/tick_engine.py`
 - 回测接入（可回放）：
@@ -56,7 +56,7 @@
 推荐使用策略包脚本：
 
 ```bash
-bash src/strategies/weather_theta_no_v1/run.sh
+bash src/strategies/weather_edge_v1/run.sh
 ```
 
 ### 3.1 Paper 模式启动
@@ -66,7 +66,7 @@ cd /home/rui/projects/pm_agent
 set -a; source .env; set +a
 
 export PMM_EXECUTION_MODE="paper"
-export PMM_STRATEGY_KEY="weather_theta_no_v1"
+export PMM_STRATEGY_KEY="weather_edge_v1"
 export PMM_TOKEN_IDS="NO_TOKEN_ID"   # 可放多个 token，逗号分隔
 export PMM_STRATEGY_PARAMS_JSON='{
   "weather_no_token_ids": ["NO_TOKEN_ID"],
@@ -85,7 +85,7 @@ export PMM_STRATEGY_PARAMS_JSON='{
 
 ### 3.2 快速验证点
 
-- 日志里应看到 `strategy_selected` 且 `strategy_key=weather_theta_no_v1`
+- 日志里应看到 `strategy_selected` 且 `strategy_key=weather_edge_v1`
 - 价格进入区间时应出现 `BUY` 挂单
 - 触发止盈/止损/超时/临近结算时应出现 `SELL` 挂单
 

@@ -5,7 +5,7 @@
 如果你想快速知道某个城市应该盯什么页面、哪些页面不能拿来定价、打开对应 `YML` 后先读哪些字段，从这里开始就够了。  
 更通用的源规则见上层文档 `../DATA_SOURCE.md`。  
 更结构化、给机器读取的 canonical 配置在本目录下的 `*.yml`。
-机场地理位置和微气候摘要见 `[AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/city/AIRPORT_CONTEXT.md)`。
+机场地理位置和微气候摘要见 `[AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/AIRPORT_CONTEXT.md)`。
 
 ---
 
@@ -107,7 +107,7 @@
 
 在真正做天气判断前，建议再配合看一遍：
 
-- `[AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/city/AIRPORT_CONTEXT.md)`
+- `[AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/AIRPORT_CONTEXT.md)`
   这里不是数据源配置，而是机场的地理环境和常见微气候陷阱。
 
 如果你只想先看结论，优先看这几个字段：

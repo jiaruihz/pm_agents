@@ -2,7 +2,7 @@ import unittest
 
 from src.strategies.pmm.config import PMMConfig
 from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
-from src.strategies.pmm.variants.weather_theta_no_v1 import WeatherThetaNoV1Strategy
+from src.strategies.pmm.variants.weather_edge_v1 import WeatherEdgeV1Strategy
 
 
 def _quantize_pair(bid: float, ask: float, tick: float, mode: str):
@@ -42,10 +42,10 @@ class _StubWeatherProvider:
         return self._forecast_map.get(token_id)
 
 
-class TestWeatherThetaNoV1Strategy(unittest.TestCase):
+class TestWeatherEdgeV1Strategy(unittest.TestCase):
     def setUp(self):
         self.now = [1_000.0]
-        self.strategy = WeatherThetaNoV1Strategy(
+        self.strategy = WeatherEdgeV1Strategy(
             quantize_pair_fn=_quantize_pair,
             time_fn=lambda: self.now[0],
         )

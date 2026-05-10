@@ -13,7 +13,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from src.strategies.weather_theta_no_v1.tools.airport_weather_tool import load_watch_baseline
+from src.strategies.weather_edge_v1.tools.airport_weather_tool import load_watch_baseline
 
 
 ROOT = Path(__file__).resolve().parent.parent

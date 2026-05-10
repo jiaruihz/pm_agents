@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from src.strategies.weather_theta_no_v1.tools.edge_orderbook_source import load_latest_orderbook_prices
-from src.strategies.weather_theta_no_v1.tools.weather_predict_bridge import (
+from src.strategies.weather_edge_v1.tools.edge_orderbook_source import load_latest_orderbook_prices
+from src.strategies.weather_edge_v1.tools.weather_predict_bridge import (
     DEFAULT_WEATHER_PREDICT_ROOT,
 )
 
@@ -373,7 +373,7 @@ def load_snapshot(*, target_market: str = "", snapshot_json: str = "", orderbook
         return json.loads(Path(snapshot_json).expanduser().read_text(encoding="utf-8"))
     if not target_market.strip():
         raise ValueError("either target_market or snapshot_json is required")
-    from src.strategies.weather_theta_no_v1.tools.market_query_tool import build_market_snapshot
+    from src.strategies.weather_edge_v1.tools.market_query_tool import build_market_snapshot
 
     return build_market_snapshot(
         target_market=target_market.strip(),

@@ -1,4 +1,4 @@
-# Weather Theta No V1 - 专家审查与提示词强化报告
+# Weather Edge V1 - 专家审查与提示词强化报告
 
 ## Part 1: 高级量化分析与 LLM 提示词专家审查诊断
 

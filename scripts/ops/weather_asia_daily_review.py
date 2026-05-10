@@ -21,10 +21,10 @@ if str(ROOT) not in sys.path:
 
 from src.platform.clients.polymarket_gamma import PolymarketGammaClient
 from src.platform.notification.telegram import send_telegram_message_sync
-from src.strategies.weather_theta_no_v1.tools.airport_weather_tool import AirportWeatherTool
-from src.strategies.weather_theta_no_v1.tools.case_record import CaseRecordWriter
-from src.strategies.weather_theta_no_v1.tools.market_query_tool import build_market_snapshot
-from src.strategies.weather_theta_no_v1.tools.profile_resolver import load_profiles
+from src.strategies.weather_edge_v1.tools.airport_weather_tool import AirportWeatherTool
+from src.strategies.weather_edge_v1.tools.case_record import CaseRecordWriter
+from src.strategies.weather_edge_v1.tools.market_query_tool import build_market_snapshot
+from src.strategies.weather_edge_v1.tools.profile_resolver import load_profiles
 
 
 DEFAULT_CITIES = [

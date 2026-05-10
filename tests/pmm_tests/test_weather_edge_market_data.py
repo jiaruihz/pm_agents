@@ -4,7 +4,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
-from src.strategies.weather_theta_no_v1.tools.weather_edge_market_data import (
+from src.strategies.weather_edge_v1.tools.weather_edge_market_data import (
     WeatherEdgeMarketData,
     normalize_event_summary,
     token_ids_from_event,

@@ -231,14 +231,14 @@ src/strategies/pmm/backtest/.artifacts/results_fill_models/
 ### quote_runtime 字段说明
 
 - `quote_levels_requested`：配置请求档位（例如 3）
-- `quote_levels_effective`：当前实际生效档位（`single_level_v1`=1；`multi_level_v1`=请求值；`smart_money_follow_v1`=1；`weather_theta_no_v1`=1）
+- `quote_levels_effective`：当前实际生效档位（`single_level_v1`=1；`multi_level_v1`=请求值；`smart_money_follow_v1`=1；`weather_edge_v1`=1）
 - `multi_level_quote_enabled`：当前策略是否为多档实现（`strategy_key=multi_level_v1`）
 - `multi_level_placeholder_active`：请求 > 1 但当前策略不是多档时为 `true`
 
 策略路由相关：
 
 - 环境变量：`PMM_STRATEGY_KEY`（默认 `single_level_v1`）
-- 当前实现：`single_level_v1`、`multi_level_v1`、`smart_money_follow_v1`、`weather_theta_no_v1`
+- 当前实现：`single_level_v1`、`multi_level_v1`、`smart_money_follow_v1`、`weather_edge_v1`
 - 多档是否生效：由 `strategy_key=multi_level_v1` + `quote_levels>1` 决定
 
 这保证了：

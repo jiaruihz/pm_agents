@@ -1,11 +1,20 @@
-# weather_theta_no_v1
+# weather_edge_v1
 
 > doc_role: human_manual  
 > doc_pair: `README.md` <-> `SKILL.md`  
 > workflow_version: `v1`  
 > sync_rule: 只要流程、输入输出、日志要求、黑名单或风控约束发生变化，必须同步修改这两个文件；只改一份视为文档失配。
 
-这是天气盘口体系的**人类总入口**。
+这是 Weather Edge v1 的**人类总入口**。
+
+Weather Edge v1 已经不再是纯 theta / carry 策略。当前主线是：
+
+- 用 `weather-predict` 的 T-24 天气概率模型生成 bracket 概率；
+- 和 Polymarket 当前盘口价格比较；
+- 只有当 `model probability - market price` 达到 edge 阈值时生成信号；
+- 在 `pm_agent` 内统一转成 trade plan，再并行支持 paper/live 执行。
+
+旧的 theta/no 命名只作为历史名称保留在 archive 文档里，不再作为主策略名。
 
 如果你想知道这套东西到底在做什么、应该先读哪份文档、哪些内容属于抓数据、哪些内容属于分析和监测，从这里开始。
 
@@ -24,8 +33,8 @@
 
 主文档：
 
-- `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DATA_SOURCE.md)`
-- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/city/CITY.md)`
+- `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`
+- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/CITY.md)`
 - `city/*.yml`
 
 ### 2. 分析与监测层
@@ -40,9 +49,26 @@
 
 主文档：
 
-- `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DECISION_WORKFLOW.md)`
+- `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DECISION_WORKFLOW.md)`
 
-### 3. 策略执行层
+### 3. 信号与交易计划层
+
+只解决：
+
+- 从 `weather-predict` 的 paper decision 导入不可变信号
+- 去重，避免同一个 snapshot 重复下单
+- 把信号转成 paper/live 共用的 trade plan
+- 在进入 executor 前做本地 `SafetyGuard` 风控
+
+关键文件：
+
+- `tools/execution_pipeline.py`
+- `scripts/ops/weather_signal_importer.py`
+- `scripts/ops/weather_trade_planner.py`
+- `runtime/weather_edge_v1/signals/signals.jsonl`
+- `runtime/weather_edge_v1/plans/trade_plans.jsonl`
+
+### 4. 策略执行层
 
 只解决：
 
@@ -52,13 +78,13 @@
 - 撤单和平仓
 - maker/taker 选择
 
-这层主要在策略代码和配置里，不在文档里做自动交易承诺。
+这层主要在策略代码、ops 脚本和配置里。live 默认关闭，必须显式 `--live --confirm` 才能进入真实下单路径。
 
 关键文件：
 
 - `config/trading_profile.yml`
 - `config/risk_profile.yml`
-- `src/strategies/pmm/variants/weather_theta_no_v1.py`
+- `src/strategies/pmm/variants/weather_edge_v1.py`
 
 ## 先读什么
 
@@ -75,17 +101,19 @@
 
 ### 如果你是模型
 
-模型入口仍然是 `[SKILL.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/SKILL.md)`。  
+模型入口仍然是 `[SKILL.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/SKILL.md)`。
 但它现在也用普通语言写，不会故意写成只有模型能读懂的格式。
 
 ## 当前原则
 
 这套体系当前默认是：
 
-- **模型负责抓取、整理、监测、分析、告警**
-- **人负责最终下单和改单**
+- **weather-predict 负责模型概率和 paper decision**
+- **pm_agent 负责 signal import、trade plan、paper/live executor**
+- **paper 默认打开**
+- **live 默认关闭，必须经过人工显式确认和风控**
 
-也就是说，当前重点是**人类在环**，不是把交易决策直接交给模型。
+也就是说，当前重点是把“信号”和“执行”物理隔离。模型可以产生候选信号，但不能绕过 trade plan、风控和 live confirmation。
 
 ## 关键提示词设计
 
@@ -164,30 +192,31 @@
 
 ### 入口文档
 
-- `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/README.md)`：人类总入口
-- `[SKILL.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/SKILL.md)`：模型入口，也尽量保持人类可读
+- `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/README.md)`：人类总入口
+- `[SKILL.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/SKILL.md)`：模型入口，也尽量保持人类可读
 
 ### 抓数据文档
 
-- `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DATA_SOURCE.md)`：跨城市通用源规则和获取方式
-- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/city/CITY.md)`：城市摘要入口
-- `[city/AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/city/AIRPORT_CONTEXT.md)`：机场地理位置、微气候特性和执行提醒
+- `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`：跨城市通用源规则和获取方式
+- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/CITY.md)`：城市摘要入口
+- `[city/AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/AIRPORT_CONTEXT.md)`：机场地理位置、微气候特性和执行提醒
 - `city/*.yml`：城市 canonical source config
 
 ### 分析文档
 
-- `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DECISION_WORKFLOW.md)`：监测、分析、告警和人工决策流程
+- `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DECISION_WORKFLOW.md)`：监测、分析、告警和人工决策流程
 
 ### 工具与实现
 
-- `[tools/airport_weather_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/tools/airport_weather_tool.py)`：当前 watch 基线工具
-- `[tools/market_query_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/tools/market_query_tool.py)`：天气 skill 的市场查询入口，统一走内部 Gamma/CLOB client，不直接 `curl`
-- `[tools/profile_resolver.py](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/tools/profile_resolver.py)`：将天气输入转成 `daily_overrides` 和 `action_suggestion`
-- `[tools/codex_weather_advisor.py](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/tools/codex_weather_advisor.py)`：漂移后的人类辅助解释
+- `[tools/airport_weather_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/airport_weather_tool.py)`：当前 watch 基线工具
+- `[tools/market_query_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/market_query_tool.py)`：天气 skill 的市场查询入口，统一走内部 Gamma/CLOB client，不直接 `curl`
+- `[tools/profile_resolver.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/profile_resolver.py)`：将天气输入转成 `daily_overrides` 和 `action_suggestion`
+- `[tools/codex_weather_advisor.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/codex_weather_advisor.py)`：漂移后的人类辅助解释
+- `[tools/execution_pipeline.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/execution_pipeline.py)`：signal import 与 trade planner 的核心逻辑
 
 ### 运行产物
 
-- `[plan/watch/](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/plan/watch)`：按日期滚动的 watch 文件
+- `[plan/watch/](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/plan/watch)`：按日期滚动的 watch 文件
 - `plan/cases/<CITY>/<DATE>.md`：按 `city + date` 滚动追加的人类可读案例记录
 - `runtime/weather_decision_journal.db`：天气决策日志
 

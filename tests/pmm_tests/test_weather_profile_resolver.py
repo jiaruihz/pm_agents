@@ -1,6 +1,6 @@
 import unittest
 
-from src.strategies.weather_theta_no_v1.tools.profile_resolver import infer_season, load_profiles, resolve_daily_plan
+from src.strategies.weather_edge_v1.tools.profile_resolver import infer_season, load_profiles, resolve_daily_plan
 
 
 class TestWeatherProfileResolver(unittest.TestCase):

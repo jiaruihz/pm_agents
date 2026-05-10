@@ -1,11 +1,11 @@
-strategy_key: weather_theta_no_v1
+strategy_key: weather_edge_v1
 strategy_name: 天气策略
 strategy_group: weather
 strategy_family: directional
 domain: pmm
 is_active: true
 runner_module: src.strategies.pmm.main
-strategy_module: src.strategies.pmm.variants.weather_theta_no_v1:WeatherThetaNoV1Strategy
+strategy_module: src.strategies.pmm.variants.weather_edge_v1:WeatherEdgeV1Strategy
 description: 天气市场 NO 侧 carry 与定时平仓策略。
 meta:
   side_bias: NO

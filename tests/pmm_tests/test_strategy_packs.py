@@ -14,7 +14,7 @@ class TestStrategyPacks(unittest.TestCase):
                 "multi_level_v1",
                 "rule_lawyer",
                 "smart_money_follow_v1",
-                "weather_theta_no_v1",
+                "weather_edge_v1",
             },
         )
 

@@ -13,7 +13,7 @@
 - **[STRATEGY_PLAYBOOK.md](STRATEGY_PLAYBOOK.md)**：策略设计与信号逻辑
 - **[BACKTEST_SCENARIO_METHOD.md](BACKTEST_SCENARIO_METHOD.md)**：回测方法、场景生成、撮合模型
 - **[PAPER_RUNBOOK.md](PAPER_RUNBOOK.md)**：paper 实盘演练的运行、监控、日志与告警
-- **[WEATHER_THETA_NO_PROGRESS.md](WEATHER_THETA_NO_PROGRESS.md)**：天气 Theta No 策略进度、执行与扩展手册
+- **[../WEATHER_EXECUTION_ARCHITECTURE.md](../WEATHER_EXECUTION_ARCHITECTURE.md)**：Weather Edge v1 信号、paper/live 执行链路设计
 - **[../../../strategies/README.md](../../../strategies/README.md)**：全局策略目录（manifest/runbook/params）
 
 ## 参考
@@ -23,13 +23,14 @@
 
 ## 历史文档
 
-已完成阶段的历史计划文档统一放在 `archive/`：
+已完成阶段的历史计划文档统一放在 `../archive/`：
 
-- `archive/CODE_REVIEW.md`
-- `archive/REFACTOR_PLAN.md`
-- `archive/SKILL_ARCHITECTURE_PLAN.md`
-- `archive/EXECUTION_PLAN_REALDATA_MULTI_LEVEL.md`
-- `archive/STRATEGY_KEY_ROUTING_PLAN.md`
+- `../archive/CODE_REVIEW.md`
+- `../archive/REFACTOR_PLAN.md`
+- `../archive/SKILL_ARCHITECTURE_PLAN.md`
+- `../archive/EXECUTION_PLAN_REALDATA_MULTI_LEVEL.md`
+- `../archive/STRATEGY_KEY_ROUTING_PLAN.md`
+- `../archive/WEATHER_THETA_NO_PROGRESS.md`
 
 ## 运行示例
 

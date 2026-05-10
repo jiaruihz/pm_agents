@@ -14,7 +14,7 @@ if sys.prefix == sys.base_prefix and VENV_PYTHON.exists():
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.strategies.weather_theta_no_v1.tools.case_record import CaseRecordWriter, case_record_path
+from src.strategies.weather_edge_v1.tools.case_record import CaseRecordWriter, case_record_path
 
 
 def main() -> int:

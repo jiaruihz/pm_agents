@@ -10,7 +10,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from src.strategies.weather_theta_no_v1.tools.profile_resolver import _safe_yaml_load, load_profiles
+from src.strategies.weather_edge_v1.tools.profile_resolver import _safe_yaml_load, load_profiles
 
 
 ROOT = Path(__file__).resolve().parent.parent

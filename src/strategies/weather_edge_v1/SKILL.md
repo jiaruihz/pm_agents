@@ -1,4 +1,4 @@
-# weather_theta_no_v1 技能说明
+# weather_edge_v1 技能说明
 
 > doc_role: machine_directive  
 > doc_pair: `README.md` <-> `SKILL.md`  
@@ -27,17 +27,17 @@
 
 按这个顺序读：
 
-1. `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/README.md)`
+1. `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/README.md)`
    先看这套体系的总结构。
-2. `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DATA_SOURCE.md)`
+2. `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`
    先理解主源 / 辅助源 / 禁用源，以及获取方式。
-3. `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/city/CITY.md)`
+3. `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/CITY.md)`
    先看给人看的城市摘要。
-4. `[city/AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/city/AIRPORT_CONTEXT.md)`
+4. `[city/AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/AIRPORT_CONTEXT.md)`
    再看机场的地理位置和微气候特性，避免把城市热岛路径硬套到机场。
 5. `city/<CITY>.yml`
    再看该城市的 canonical 结构化配置。
-6. `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DECISION_WORKFLOW.md)`
+6. `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DECISION_WORKFLOW.md)`
    最后看分析、监测、告警和人工决策流程。
 
 如果只想先知道结论，优先看：
@@ -182,7 +182,7 @@
 查 market 时，默认走项目内接口：
 
 1. `scripts/ops/weather_market_snapshot.py`
-2. `src/strategies/weather_theta_no_v1/tools/market_query_tool.py`
+2. `src/strategies/weather_edge_v1/tools/market_query_tool.py`
 3. `src/strategies/rule_lawyer/services/market_resolver.py`
 4. `src/platform/clients/clob.py`
 
@@ -254,7 +254,7 @@ python scripts/ops/weather_market_snapshot.py \
 
 当 source capture 完成后，分析流程看：
 
-- `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DECISION_WORKFLOW.md)`
+- `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DECISION_WORKFLOW.md)`
 
 分析层的目标是输出：
 
@@ -268,11 +268,11 @@ python scripts/ops/weather_market_snapshot.py \
 
 现有本地工具仍然有用，但它们不是这套 source stack 的主抓取器：
 
-- `[airport_weather_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/tools/airport_weather_tool.py)`
+- `[airport_weather_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/airport_weather_tool.py)`
   当前基于 `AviationWeather + Open-Meteo`，适合 baseline/watch 流程，不等于 WU/TWC 主锚。
-- `[profile_resolver.py](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/tools/profile_resolver.py)`
+- `[profile_resolver.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/profile_resolver.py)`
   在你已经拿到天气输入之后，输出 `daily_overrides` 和 `action_suggestion`。
-- `[codex_weather_advisor.py](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/tools/codex_weather_advisor.py)`
+- `[codex_weather_advisor.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/codex_weather_advisor.py)`
   适合在漂移告警后做二次解释，不适合替代数据抓取。
 
 ## 运行时最常见输入
@@ -306,10 +306,10 @@ python scripts/ops/weather_market_snapshot.py \
 
 ## 目录地图
 
-- `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/README.md)`：人类总入口
-- `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DATA_SOURCE.md)`：跨城市通用源规则和获取方式
-- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/city/CITY.md)`：给人看的城市入口
+- `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/README.md)`：人类总入口
+- `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`：跨城市通用源规则和获取方式
+- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/CITY.md)`：给人看的城市入口
 - `city/*.yml`：城市 canonical source config
-- `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DECISION_WORKFLOW.md)`：分析、监测、告警和人工决策流程
-- `[tools/airport_weather_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/tools/airport_weather_tool.py)`：当前 watch 基线工具
-- `[plan/watch/](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/plan/watch)`：按日期滚动的 watch 文件
+- `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DECISION_WORKFLOW.md)`：分析、监测、告警和人工决策流程
+- `[tools/airport_weather_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/airport_weather_tool.py)`：当前 watch 基线工具
+- `[plan/watch/](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/plan/watch)`：按日期滚动的 watch 文件

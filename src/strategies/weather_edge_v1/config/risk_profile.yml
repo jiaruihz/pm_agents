@@ -1,6 +1,6 @@
 version: 1
 description: >
-  Seasonal and structural risk hints for weather_theta_no_v1.
+  Seasonal and structural risk hints for weather_edge_v1.
 
 global_defaults:
   base_risk_score: 0.35

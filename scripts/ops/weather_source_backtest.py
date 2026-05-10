@@ -15,7 +15,7 @@ if sys.prefix == sys.base_prefix and VENV_PYTHON.exists():
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.strategies.weather_theta_no_v1.tools.source_backtest import run_source_backtest, write_backtest_outputs
+from src.strategies.weather_edge_v1.tools.source_backtest import run_source_backtest, write_backtest_outputs
 
 
 def _default_out_dir() -> Path:
@@ -29,7 +29,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--watch-path",
-        default=str(ROOT / "src" / "strategies" / "weather_theta_no_v1" / "plan" / "watch"),
+        default=str(ROOT / "src" / "strategies" / "weather_edge_v1" / "plan" / "watch"),
         help="Directory containing weather watch JSON and archive files.",
     )
     parser.add_argument("--cities", nargs="*", default=[], help="Optional city keys to include.")

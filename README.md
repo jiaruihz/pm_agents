@@ -219,7 +219,7 @@ pytest tests/research_tests -q
 - Polymarket Research 实施计划：`docs/POLYMARKET_RESEARCH_IMPLEMENTATION_PLAN.md`
 - Polymarket Research 改造记录：`docs/POLYMARKET_RESEARCH_REFACTOR_LOG.md`
 - 统一运维手册：`docs/OPS_RUNBOOK.md`
-- 天气策略进度手册：`docs/pmm/WEATHER_THETA_NO_PROGRESS.md`
+- Weather Edge 执行架构：`docs/WEATHER_EXECUTION_ARCHITECTURE.md`
 - PMM paper 运维手册：`docs/pmm/PAPER_RUNBOOK.md`
 - 架构说明：`docs/pmm/ARCHITECTURE.md`
 - 回测方法：`docs/pmm/BACKTEST_SCENARIO_METHOD.md`

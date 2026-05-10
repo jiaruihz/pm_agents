@@ -15,12 +15,12 @@
 
 本次案例按下面的文档顺序执行：
 
-1. `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/README.md)`
-2. `[SKILL.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/SKILL.md)`
-3. `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DATA_SOURCE.md)`
-4. `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/DECISION_WORKFLOW.md)`
-5. `[config/station_profile.yml](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/config/station_profile.yml)`
-6. `[config/trading_profile.yml](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/config/trading_profile.yml)`
+1. `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/README.md)`
+2. `[SKILL.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/SKILL.md)`
+3. `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`
+4. `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DECISION_WORKFLOW.md)`
+5. `[config/station_profile.yml](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/config/station_profile.yml)`
+6. `[config/trading_profile.yml](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/config/trading_profile.yml)`
 
 这次是“当前自动化流程”，不是最终理想流程。
 
@@ -167,14 +167,14 @@
 
 ## 5. Step 4: 看本地风控和城市特性
 
-从 `[config/station_profile.yml](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/config/station_profile.yml)` 读到：
+从 `[config/station_profile.yml](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/config/station_profile.yml)` 读到：
 
 - 站点：`Chicago/O'Hare Intl`
 - 站点代码：`KORD`
 - 气候标签：`continental_lake_influenced`
 - 市场单位：`F`
 
-从 `[config/trading_profile.yml](/home/rui/projects/pm_agent/src/strategies/weather_theta_no_v1/config/trading_profile.yml)` 读到：
+从 `[config/trading_profile.yml](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/config/trading_profile.yml)` 读到：
 
 - `base_position_multiplier`: `0.65`
 - `preferred_trade_types`: `far_tail_no_only`

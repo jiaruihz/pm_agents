@@ -13,8 +13,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from src.strategies.weather_theta_no_v1.tools.profile_resolver import load_profiles, resolve_daily_plan
-from src.strategies.weather_theta_no_v1.tools.source_probe import probe_city_sources
+from src.strategies.weather_edge_v1.tools.profile_resolver import load_profiles, resolve_daily_plan
+from src.strategies.weather_edge_v1.tools.source_probe import probe_city_sources
 
 
 ROOT = Path(__file__).resolve().parent.parent
