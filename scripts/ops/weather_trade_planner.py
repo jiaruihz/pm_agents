@@ -34,6 +34,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-position", type=float, default=10.0)
     parser.add_argument("--min-edge", type=float, default=0.10)
     parser.add_argument("--price-offset", type=float, default=0.0)
+    parser.add_argument("--enable-live", action="store_true", help="Mark accepted plans as live-enabled. Executor still requires --live --confirm-live.")
     parser.add_argument("--accepted-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser
@@ -46,6 +47,7 @@ def main() -> int:
         max_position=float(args.max_position),
         min_edge=float(args.min_edge),
         price_offset=float(args.price_offset),
+        live_enabled=bool(args.enable_live),
     )
     result = plan_trades(
         signal_path=Path(args.signals),

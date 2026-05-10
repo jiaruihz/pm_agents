@@ -4,8 +4,10 @@ import unittest
 from pathlib import Path
 
 from src.strategies.weather_edge_v1.tools.execution_pipeline import (
+    ExecutorConfig,
     PlannerConfig,
     build_trade_plan,
+    execute_trade_plans,
     import_signals,
     normalize_signal,
     plan_trades,
@@ -79,6 +81,72 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             )
             self.assertEqual(result["plans"], 0)
             self.assertEqual(result["written"], 0)
+
+    def test_execute_trade_plans_writes_paper_only_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10))
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(),
+            )
+
+            self.assertEqual(result["paper_written"], 1)
+            self.assertEqual(result["live_orders"], 0)
+            self.assertEqual(len(paper.read_text().splitlines()), 1)
+            self.assertFalse(live.exists())
+
+    def test_execute_trade_plans_requires_live_enabled_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=False))
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "live-1"},
+            )
+
+            self.assertEqual(result["live_skipped_disabled"], 1)
+            self.assertEqual(calls, [])
+            self.assertFalse(live.exists())
+
+    def test_execute_trade_plans_can_call_live_for_enabled_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: {"order_id": "live-1"},
+            )
+
+            self.assertEqual(result["live_written"], 1)
+            self.assertEqual(len(live.read_text().splitlines()), 1)
 
 
 if __name__ == "__main__":

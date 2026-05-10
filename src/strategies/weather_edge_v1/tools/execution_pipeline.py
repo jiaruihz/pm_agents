@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from src.strategies.pmm.risk.safety_guard import RiskError, SafetyGuard, SecurityError
 
@@ -169,6 +169,7 @@ class PlannerConfig:
     price_floor: float = 0.01
     price_ceiling: float = 0.99
     max_position: float = 10.0
+    live_enabled: bool = False
 
 
 def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str, Any]:
@@ -200,7 +201,7 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         "obs_source": safe_str(signal.get("obs_source")),
         "model_version": safe_str(signal.get("model_version")),
         "paper_enabled": True,
-        "live_enabled": False,
+        "live_enabled": bool(config.live_enabled),
     }
     plan = {
         "record_type": "weather_edge_trade_plan",
@@ -257,3 +258,134 @@ def plan_trades(
     if dry_run:
         return {**summary, "plans": plans}
     return {**summary, **append_jsonl_dedup(out_path, plans, key_field="plan_id")}
+
+
+LivePlaceFn = Callable[[Dict[str, Any]], Dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class ExecutorConfig:
+    live: bool = False
+    confirm_live: bool = False
+    cancel_after: bool = False
+
+
+def _execution_id(plan: Dict[str, Any], venue: str) -> str:
+    return stable_hash({"plan_id": safe_str(plan.get("plan_id")), "venue": venue})
+
+
+def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
+    base = {
+        "plan_id": safe_str(plan.get("plan_id")),
+        "signal_id": safe_str(plan.get("signal_id")),
+        "strategy": "weather_edge_v1",
+        "venue": "paper",
+        "city": safe_str(plan.get("city")),
+        "target_date": safe_str(plan.get("target_date")),
+        "market_slug": safe_str(plan.get("market_slug")),
+        "bracket": safe_str(plan.get("bracket")),
+        "token_id": safe_str(plan.get("token_id")),
+        "order_side": safe_str(plan.get("order_side")) or "BUY",
+        "limit_price": to_float(plan.get("limit_price"), 0.0),
+        "size": to_float(plan.get("size"), 0.0),
+        "notional": to_float(plan.get("notional"), 0.0),
+        "source_plan_status": safe_str(plan.get("status")),
+    }
+    return {
+        "record_type": "weather_edge_paper_order",
+        "execution_id": stable_hash(base),
+        "created_at_utc": utc_now_iso(),
+        "status": "simulated_open",
+        **base,
+    }
+
+
+def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, status: str) -> Dict[str, Any]:
+    base = {
+        "plan_id": safe_str(plan.get("plan_id")),
+        "signal_id": safe_str(plan.get("signal_id")),
+        "strategy": "weather_edge_v1",
+        "venue": "polymarket_clob",
+        "city": safe_str(plan.get("city")),
+        "target_date": safe_str(plan.get("target_date")),
+        "market_slug": safe_str(plan.get("market_slug")),
+        "bracket": safe_str(plan.get("bracket")),
+        "token_id": safe_str(plan.get("token_id")),
+        "order_side": safe_str(plan.get("order_side")) or "BUY",
+        "limit_price": to_float(plan.get("limit_price"), 0.0),
+        "size": to_float(plan.get("size"), 0.0),
+        "notional": to_float(plan.get("notional"), 0.0),
+    }
+    return {
+        "record_type": "weather_edge_live_order",
+        "execution_id": stable_hash(base),
+        "created_at_utc": utc_now_iso(),
+        "status": status,
+        "exchange_response": response,
+        **base,
+    }
+
+
+def execute_trade_plans(
+    *,
+    plan_path: Path,
+    paper_out: Path,
+    live_out: Path,
+    config: ExecutorConfig,
+    live_place_fn: Optional[LivePlaceFn] = None,
+) -> Dict[str, Any]:
+    plans = [
+        row
+        for row in read_jsonl(plan_path)
+        if safe_str(row.get("record_type")) == "weather_edge_trade_plan"
+        and safe_str(row.get("status")) == "accepted"
+        and safe_str(row.get("risk_status")) == "passed"
+    ]
+    paper_orders = [build_paper_order(plan) for plan in plans if bool(plan.get("paper_enabled", True))]
+    paper_result = append_jsonl_dedup(paper_out, paper_orders, key_field="execution_id")
+
+    live_orders: List[Dict[str, Any]] = []
+    live_skipped = 0
+    live_errors = 0
+    if config.live and not config.confirm_live:
+        raise RuntimeError("--live requires --confirm-live")
+    if config.live and live_place_fn is None:
+        raise RuntimeError("live execution requested but no live_place_fn was provided")
+
+    for plan in plans:
+        if not config.live:
+            continue
+        if not bool(plan.get("live_enabled", False)):
+            live_skipped += 1
+            continue
+        try:
+            assert live_place_fn is not None
+            response = live_place_fn(plan)
+            live_orders.append(build_live_order_record(plan, response, status="submitted"))
+        except Exception as exc:
+            live_errors += 1
+            live_orders.append(
+                build_live_order_record(
+                    plan,
+                    {"error": f"{type(exc).__name__}: {exc}"},
+                    status="error",
+                )
+            )
+
+    live_result = append_jsonl_dedup(live_out, live_orders, key_field="execution_id") if live_orders else {
+        "written": 0,
+        "skipped_existing": 0,
+    }
+    return {
+        "plans_read": len(plans),
+        "paper_orders": len(paper_orders),
+        "paper_written": paper_result["written"],
+        "paper_skipped_existing": paper_result["skipped_existing"],
+        "live_requested": bool(config.live),
+        "live_orders": len(live_orders),
+        "live_written": live_result["written"],
+        "live_skipped_disabled": live_skipped,
+        "live_errors": live_errors,
+        "paper_out": str(paper_out),
+        "live_out": str(live_out),
+    }

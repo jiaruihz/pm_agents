@@ -31,6 +31,7 @@ Existing operational entry points that stay in the main path:
 - `scripts/ops/weather_edge_paper.py`: current weather paper decision wrapper.
 - `scripts/ops/weather_signal_importer.py`: imports paper decisions into immutable weather edge signals.
 - `scripts/ops/weather_trade_planner.py`: converts signals into risk-checked trade plans.
+- `scripts/ops/weather_order_executor.py`: writes paper orders and optionally submits live CLOB orders.
 - `src/strategies/pmm/execution/live_broker.py`: reusable dry/live broker wrapper.
 - `src/strategies/pmm/risk/safety_guard.py`: reusable token, notional, position, and loss guard.
 - `src/strategies/weather_edge_v1/tools/weather_edge_market_data.py`: weather event/token discovery and CLOB data helpers.
@@ -39,7 +40,6 @@ Existing operational entry points that stay in the main path:
 
 Planned weather execution entry points still to implement:
 
-- `scripts/ops/weather_order_executor.py`: write paper orders for every accepted plan and optionally submit live orders behind explicit flags.
 - `scripts/ops/weather_reconcile.py`: reconcile open, filled, canceled, and settled order state.
 - `scripts/ops/weather_report.py`: produce daily paper/live comparison and attribution reports.
 
@@ -92,7 +92,8 @@ The planner may enrich the signal with token IDs and current orderbook state, bu
 
 Paper execution is always allowed for accepted plans. Live execution is off by default and must require all of the following:
 
-- explicit command flags such as `--live --confirm`
+- planner explicitly sets `live_enabled=true` through `weather_trade_planner.py --enable-live`
+- executor explicitly runs with `weather_order_executor.py --live --confirm-live`
 - CLOB credentials present
 - token ID is allowlisted by `SafetyGuard`
 - order notional is below the configured cap
@@ -100,6 +101,39 @@ Paper execution is always allowed for accepted plans. Live execution is off by d
 - no unresolved reconciliation error exists for the same market
 
 The first live rollout should use a tiny limit order and immediate cancel path through the existing CLOB smoke-test code before enabling weather-triggered live orders.
+
+## Current Command Chain
+
+Paper-only path:
+
+```bash
+scripts/ops/weather_signal_importer.py \
+  runtime/weather_edge_v1/paper_decisions.jsonl
+
+scripts/ops/weather_trade_planner.py \
+  --max-order-notional 1 \
+  --min-edge 0.10 \
+  --accepted-only
+
+scripts/ops/weather_order_executor.py
+```
+
+Live-enabled dry rollout path:
+
+```bash
+scripts/ops/weather_trade_planner.py \
+  --max-order-notional 1 \
+  --min-edge 0.10 \
+  --accepted-only \
+  --enable-live
+
+scripts/ops/weather_order_executor.py \
+  --live \
+  --confirm-live \
+  --cancel-after
+```
+
+`--cancel-after` is intended for the first tiny smoke orders. It submits through CLOB and immediately attempts cancel after placement.
 
 ## Rollout Plan
 
@@ -120,6 +154,6 @@ Current implementation stages:
 
 - P2: signal importer in dry-run/write mode is implemented.
 - P3: trade planner and local risk precheck are implemented.
-- P4: implement paper executor using the same trade plan as live.
+- P4: paper executor using the same trade plan as live is implemented.
 - P5: run a tiny live smoke order and cancel it.
 - P6: enable scheduled reports comparing signal, paper, and live results.
