@@ -14,7 +14,7 @@ from src.strategies.weather_edge_v1.tools.profile_resolver import _safe_yaml_loa
 
 
 ROOT = Path(__file__).resolve().parent.parent
-CITY_DIR = ROOT / "city"
+CITY_DIR = ROOT / "archive" / "manual_airport_research" / "city"
 AVIATION_WEATHER_BASE = "https://aviationweather.gov/api/data"
 OPEN_METEO_BASE = "https://api.open-meteo.com/v1/forecast"
 

@@ -17,10 +17,10 @@
 
 当任务是下面这些类型时，使用这套技能：
 
-- 判断天气盘口该看哪些源
-- 确认机场页和城市页有没有看错
-- 手工抓取或半自动抓取天气页面
-- 为某个城市建立 source config
+- 确认当前生产城市/机场映射应以哪个项目为准
+- 判断旧手工机场研究是否还能提供定性辅助
+- 手工抓取或半自动抓取天气页面，用于 source audit 或复盘
+- 整理某个城市的 manual source notes，但不能直接覆盖生产配置
 - 更新 watch 基线、做盘中复核、做结算复盘
 
 ## 先读什么
@@ -29,14 +29,14 @@
 
 1. `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/README.md)`
    先看这套体系的总结构。
-2. `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`
-   先理解主源 / 辅助源 / 禁用源，以及获取方式。
-3. `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/CITY.md)`
-   先看给人看的城市摘要。
-4. `[city/AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/AIRPORT_CONTEXT.md)`
-   再看机场的地理位置和微气候特性，避免把城市热岛路径硬套到机场。
-5. `city/<CITY>.yml`
-   再看该城市的 canonical 结构化配置。
+2. `[airport-selection-current.md](/home/rui/projects/weather-predict/docs/airport-selection-current.md)`
+   先看当前生产城市、机场、单位、排除项和 source caveat。
+3. `/home/rui/projects/weather-predict/pm_edge_compare.py::CITIES`
+   这是当前 paper snapshot 和模型计算使用的生产映射。
+4. `[WEATHER_EXECUTION_ARCHITECTURE.md](/home/rui/projects/pm_agent/docs/WEATHER_EXECUTION_ARCHITECTURE.md)`
+   再看 weather-predict 与 pm_agent 的边界。
+5. `[archive/manual_airport_research/README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/archive/manual_airport_research/README.md)`
+   只在需要回看旧手工机场源研究时阅读。
 6. `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DECISION_WORKFLOW.md)`
    最后看分析、监测、告警和人工决策流程。
 
@@ -55,6 +55,7 @@
 - 模型负责整理和分析
 - 模型负责监测和告警
 - 人负责最后决策
+- 生产城市/机场选择由 `weather-predict` 维护，旧手工配置只能作为归档参考
 
 也就是说，当前这不是“自动交易 skill”，而是“抓取 + 分析 + 监测 + 人类在环”的 skill。
 
@@ -308,8 +309,9 @@ python scripts/ops/weather_market_snapshot.py \
 
 - `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/README.md)`：人类总入口
 - `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`：跨城市通用源规则和获取方式
-- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/CITY.md)`：给人看的城市入口
-- `city/*.yml`：城市 canonical source config
+- `[airport-selection-current.md](/home/rui/projects/weather-predict/docs/airport-selection-current.md)`：当前生产城市/机场映射
+- `[archive/manual_airport_research/README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/archive/manual_airport_research/README.md)`：已归档的旧手工机场研究入口
+- `archive/manual_airport_research/city/*.yml`：旧 manual source notes，不是生产配置
 - `[DECISION_WORKFLOW.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DECISION_WORKFLOW.md)`：分析、监测、告警和人工决策流程
 - `[tools/airport_weather_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/airport_weather_tool.py)`：当前 watch 基线工具
 - `[plan/watch/](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/plan/watch)`：按日期滚动的 watch 文件

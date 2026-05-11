@@ -28,7 +28,7 @@ def _clamp(value: float, lo: float, hi: float) -> float:
 
 class SmartMoneyFollowV1Strategy:
     """
-    Directional quote-tilt strategy based on "smart money" signals.
+    PMM engine adapter for the smart money follow strategy.
 
     Signal sources (priority: file > params, weighted blend):
     - strategy_params.smart_money_token_signals / token_signals: {token_id: [-1, 1]}

@@ -3,9 +3,9 @@
 这份文件是给人看的入口。
 
 如果你想快速知道某个城市应该盯什么页面、哪些页面不能拿来定价、打开对应 `YML` 后先读哪些字段，从这里开始就够了。  
-更通用的源规则见上层文档 `../DATA_SOURCE.md`。  
-更结构化、给机器读取的 canonical 配置在本目录下的 `*.yml`。
-机场地理位置和微气候摘要见 `[AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/AIRPORT_CONTEXT.md)`。
+更通用的源规则见 `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`。  
+更结构化、给机器读取的旧 manual notes 在本目录下的 `*.yml`。
+机场地理位置和微气候摘要见 `[AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/archive/manual_airport_research/city/AIRPORT_CONTEXT.md)`。
 
 ---
 
@@ -107,7 +107,7 @@
 
 在真正做天气判断前，建议再配合看一遍：
 
-- `[AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/AIRPORT_CONTEXT.md)`
+- `[AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/archive/manual_airport_research/city/AIRPORT_CONTEXT.md)`
   这里不是数据源配置，而是机场的地理环境和常见微气候陷阱。
 
 如果你只想先看结论，优先看这几个字段：
@@ -345,6 +345,6 @@ Vienna 是比较适合扩展的中欧机场盘。主要风险是盆地逆温、�
 
 新增一个城市时，只做三件事：
 
-1. 新建一个 `city/<CITY>.yml`
+1. 在本归档目录下新建一个 `city/<CITY>.yml`
 2. 在这份 `CITY.md` 追加一张城市卡片
-3. 只有在源分层本身发生变化时，才去改 `../DATA_SOURCE.md`
+3. 只有在源分层本身发生变化时，才去改 `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`

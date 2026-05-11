@@ -1,518 +1,288 @@
-# weather_edge_v1 接入 TODO
+# weather_edge_v1 Current Status And Roadmap
 
-最后更新：2026-05-01
+Last updated: 2026-05-11
 
-## 现在这个策略到底叫什么
+## Strategy Name
 
-我们后续统一叫：`weather_edge_v1`。
+The active strategy name is `weather_edge_v1`.
 
-当前代码暂时还放在：
+Older `weather_theta_no_v1` references are historical. They describe the earlier NO/theta framing and should not be used as the current strategy name. The current strategy is a weather probability edge strategy:
 
-`src/strategies/weather_edge_v1/`
+- `weather-predict` computes weather bracket probabilities and paper decisions.
+- `pm_agent` imports signals, builds trade plans, records paper orders, and owns gated live execution.
+- Paper and live must share the same trade plan and risk gates.
 
-原因是这里已经有天气策略的执行、配置、测试、文档和一些现成工具。现在没必要为了改名立刻大搬家，否则会牵扯很多 import、测试路径和运行脚本。可以先把 `weather_edge_v1` 当成“天气策略框架目录”，把真正的新策略线叫 `weather_edge_v1`。
+## Current Production State
 
-第一版要一起 paper trade 对比的 profile：
+### Running Remotely
 
-- `weather_edge_b0p_v1`
-- `weather_edge_b3f_hybrid_v1`
-- `weather_edge_b0p_b3f_compare_v1`
-
-## 已经做完的事
-
-- 已经把 `weather-predict` 拉到本机：
-  - `/home/rui/projects/weather-predict`
-- 已经给 `weather-predict` 建了独立 Python 环境：
-  - `/home/rui/projects/weather-predict/.venv`
-- 已经装了目前需要的依赖：
-  - `requests`
-  - `pandas`
-  - `numpy`
-  - `httpx`
-  - `matplotlib`
-  - `pytest`
-  - `playwright`
-- 已经在当前项目里加了接入配置：
-  - `src/strategies/weather_edge_v1/config/weather_predict_integration.yml`
-- 已经加了 `weather_edge_v1` profile 配置：
-  - `src/strategies/weather_edge_v1/config/weather_edge_v1.yml`
-- 已经在当前项目里加了桥接入口：
-  - `scripts/ops/weather_predict_bridge.py`
-- 已经在当前项目里加了桥接实现：
-  - `src/strategies/weather_edge_v1/tools/weather_predict_bridge.py`
-- 已经加了一个当前项目自己的盘口读取适配层：
-  - `src/strategies/weather_edge_v1/tools/edge_orderbook_source.py`
-- 已经加了 Polymarket 盘口数据管理脚本：
-  - `src/strategies/weather_edge_v1/tools/weather_edge_market_data.py`
-  - `scripts/ops/weather_edge_market_data.py`
-- 已经加了桥接测试：
-  - `tests/pmm_tests/test_weather_predict_bridge.py`
-- 已经加了盘口数据测试：
-  - `tests/pmm_tests/test_weather_edge_market_data.py`
-- 已经删掉了之前临时写在当前项目里的重复天气模型/数据/paper trade 文件。
-  - 以后模型、天气数据、cache 逻辑还是由 `weather-predict` 负责。
-  - 当前项目主要负责调度、盘口、paper/live 执行和记录。
-
-## 已经拉好的数据
-
-- 已经跑过 `weather-predict/calibration_validate.py`。
-  - 生成了多模型历史 cache：
-    - `/home/rui/projects/weather-predict/cache`
-  - 生成了校准结果：
-    - `calibration_results_v4.json`
-    - `calibration_results_v5.json`
-- 已经跑过 `weather-predict/_planA_fetch_global.py`。
-  - 生成了 no-leak GFS global cache：
-    - `/home/rui/projects/weather-predict/cache_global`
-- 已经生成了组合后的 no-leak cache：
-  - `/home/rui/projects/weather-predict/cache_global_full`
-- 已经创建了 paper trading 输出目录：
-  - `/home/rui/projects/weather-predict/paper_trading`
-- 已经单独抓了 2026-04-30 的 15 城 GFS daily forecast：
-  - `/home/rui/projects/weather-predict/cache/gfs_daily`
-
-## 已经验证过
-
-已跑通过：
-
-```bash
-python3 -m unittest tests.pmm_tests.test_weather_predict_bridge -v
-```
-
-也跑过 py_compile：
-
-```bash
-python3 -m py_compile \
-  src/strategies/weather_edge_v1/tools/weather_predict_bridge.py \
-  src/strategies/weather_edge_v1/tools/edge_orderbook_source.py \
-  scripts/ops/weather_predict_bridge.py
-```
-
-## 数据到底谁负责
-
-### Polymarket 盘口数据
-
-负责方：当前项目 `pm_agent`
-
-入口：
-
-```bash
-scripts/ops/weather_edge_market_data.py
-```
-
-数据目录：
-
-```bash
-runtime/weather_edge_v1/market_data
-```
-
-分两类：
-
-1. 过去 30 天历史：
-   - Gamma event / market 元数据
-   - CLOB `/prices-history` 历史价格
-   - 注意：Polymarket 公共接口能稳定回填的是成交/价格历史，不是完整 L2 orderbook 历史。
-2. 从今天开始持续累计：
-   - 当前项目自己按 interval 抓 CLOB `/book`
-   - 保存每个 token 的 bids / asks / best_bid / best_ask
-   - 这是后续 paper 入场价的主数据源
-
-回填 30 天：
-
-```bash
-.venv/bin/python scripts/ops/weather_edge_market_data.py backfill-30d \
-  --days 30 \
-  --history-concurrency 24
-```
-
-当前已完成一次 30 天回填：
-
-- 范围：2026-04-01 ~ 2026-04-30
-- cities：15 个 weather-predict 城市
-- found events：390
-- missing events：60
-- fetched token price histories：6688
-- cached token price histories：1892
-- errors：0
-- summary：
-  - `runtime/weather_edge_v1/market_data/backfill_30d_summary.json`
-
-从今天开始持续抓 live orderbook：
-
-```bash
-.venv/bin/python scripts/ops/weather_edge_market_data.py capture-live \
-  --days-forward 2 \
-  --interval 120 \
-  --top-n 5 \
-  --capture-concurrency 25 \
-  --duration 0
-```
-
-`--duration 0` 表示一直跑，直到手动停止。建议后面用 tmux/systemd 跑。
-
-当前已经启动一个后台 live capture：
-
-- PID 文件：
-  - `runtime/weather_edge_market_data_live.pid`
-- log 文件：
-  - `runtime/logs/weather_edge_market_data_live.log`
-- 输出文件：
-  - `runtime/weather_edge_v1/market_data/live_orderbook/2026-04-30/weather_edge_orderbooks_2026-04-30.jsonl.gz`
-- 当前配置：
-  - `--days-forward 2`
-  - `--interval 120`
-  - `--top-n 5`
-  - `--capture-concurrency 25`
-
-查看是否还在跑：
-
-```bash
-ps -p $(cat runtime/weather_edge_market_data_live.pid) -o pid,etime,cmd
-```
-
-停止：
-
-```bash
-kill $(cat runtime/weather_edge_market_data_live.pid)
-```
-
-查看 Polymarket 数据层状态：
-
-```bash
-.venv/bin/python scripts/ops/weather_edge_market_data.py status
-```
-
-### Gamma 市场信息
-
-负责方：`weather-predict`
-
-脚本：
-
-```bash
-daily_pipeline.py
-```
-
-产物：
-
-```bash
-/home/rui/projects/weather-predict/cache/pm_history/<city>_<date>.json
-```
-
-用途：
-
-- 找到某个城市、某天、某个温度区间对应的市场
-- 拿到 bracket、token id、结算信息
-
-注意：这不是主盘口来源。
-
-更新：对 `weather_edge_v1` 来说，Gamma 市场信息后续优先由当前项目的 `weather_edge_market_data.py` 管理；`weather-predict/daily_pipeline.py` 保留为兼容和旧回测入口。
-
-### 实时盘口 / paper 入场价格
-
-负责方：当前项目 `pm_agent`
-
-用途：
-
-- paper trade 的真实入场价格
-- spread / liquidity 判断
-- 后续回放和实盘执行
-
-原则：
-
-当前项目自己定时抓的 orderbook 数据，优先级高于 Polymarket `/prices-history`。
-
-### CLOB 历史价格 fallback
-
-负责方：`weather-predict`
-
-脚本：
-
-```bash
-daily_pipeline.py
-```
-
-产物：
-
-```bash
-/home/rui/projects/weather-predict/cache/pm_history/prices_<token_suffix>.json
-```
-
-用途：
-
-- 只有当当前项目自己的盘口 recorder 没有数据时，才作为 fallback。
-- 兼容老回测。
-
-### WU 结算 / 小时观测
-
-负责方：`weather-predict`
-
-脚本：
-
-```bash
-wu_fetch_observations.py
-```
-
-产物：
-
-```bash
-/home/rui/projects/weather-predict/cache/wu_obs/wu_obs_<ICAO>.csv
-```
-
-用途：
-
-- 作为结算真值代理
-- 训练/估计历史模型误差
-- 给 paper trade 做事后对账
-
-### 多模型天气 forecast cache
-
-负责方：`weather-predict`
-
-脚本：
-
-```bash
-calibration_validate.py
-```
-
-产物：
-
-```bash
-/home/rui/projects/weather-predict/cache
-```
-
-用途：
-
-- B0p
-- B3f_Hybrid
-- 后续模型校准和 profile report
-
-### no-leak GFS global cache
-
-负责方：`weather-predict`
-
-脚本：
-
-```bash
-_planA_fetch_global.py
-```
-
-产物：
-
-```bash
-/home/rui/projects/weather-predict/cache_global
-```
-
-用途：
-
-- 避免回测里用到有信息泄露风险的数据
-- 给 `cache_global_full` 使用
-
-### cache_global_full
-
-负责方：当前项目的 bridge 负责组装
-
-产物：
-
-```bash
-/home/rui/projects/weather-predict/cache_global_full
-```
-
-用途：
-
-- `strategy_profile_report.py`
-- `_planA_all_sources_roi.py`
-- no-leak 版本的 profile / ROI 检查
-
-## 现在还卡住的事
-
-### 1. WU CSV 还没抓全
-
-当前状态：
+N100 host:
 
 ```text
-WU 已开始有产物，但还不是 15 城全量。
+jiarui@192.168.0.200
+/home/jiarui/projects/weather-predict
 ```
 
-当前 inventory 看到：
+Running user timers:
 
-- `/home/rui/projects/weather-predict/cache/wu_obs/wu_obs_KMDW.csv`
+- `weather-predict-snapshot.timer`: runs `paper_snapshot.py` every 30 minutes.
+- `weather-predict-daily-pipeline.timer`: daily PM settlement, price history, and GFS cache refresh.
 
-原因：
+Current remote production mode:
 
-`wu_fetch_observations.py` 需要 Playwright 开浏览器拦截 Wunderground 请求，可能比较慢，也可能需要单独处理浏览器环境。所以这个适合派给别的 agent 单独跑。
+- paper snapshot: running
+- paper order generation: running
+- live order placement: not scheduled, not enabled
 
-建议给那个 agent 的命令：
+### Local Project Boundary
 
-一行版，最不容易输错：
+`weather-predict` owns:
+
+- snapshot collection
+- weather probability model output
+- active city/airport/unit mapping
+- historical weather and forecast cache
+- paper decision generation
+- settlement/replay research reports
+
+`pm_agent` owns:
+
+- signal import
+- trade plan generation
+- paper/live execution abstraction
+- CLOB credentials and approvals
+- risk gates and kill switches
+- future live reconciliation and reporting
+
+## Data Status
+
+### Historical Weather Data
+
+The 15-city historical supplement has been promoted in `weather-predict`:
+
+- roughly 736 local days per city
+- GFS forecast cache aligned to the same range
+- observation source currently labeled `obs_source_v1_iem_proxy`
+
+Important caveat:
+
+- The promoted `wu_obs` files are IEM-derived WU proxy data, not fully verified raw Wunderground browser data.
+- This is acceptable for the current paper version, but final strategy validation still needs true WU or Polymarket final settlement cross-checks.
+
+### City Exclusions
+
+Seoul data exists but should stay excluded from strategy PnL and live rollout unless revalidated.
+
+Reason from prior calibration notes:
+
+- weak historical calibration
+- high RMSE / Brier relative to other cities
+
+The current city/airport source of truth is `/home/rui/projects/weather-predict/pm_edge_compare.py::CITIES` and
+`/home/rui/projects/weather-predict/docs/airport-selection-current.md`. Older `pm_agent`
+manual airport research has been archived under `archive/manual_airport_research/`
+and should not be used to override production mapping without a fresh calibration
+and settlement validation run.
+
+### Paper Order Data
+
+Paper data has started accumulating from live snapshots.
+
+Known recent state:
+
+- 2026-05-10 generated 44 paper orders.
+- Some Asian markets were already time-settled on 2026-05-10 UTC and could be roughly evaluated from IEM proxy observations.
+- Formal Polymarket settlement cache may lag until the next daily pipeline run.
+
+Do not treat same-day proxy results as final settled PnL.
+
+## Execution Chain
+
+Paper-only chain:
 
 ```bash
-python3 scripts/ops/weather_predict_bridge.py --python /home/rui/projects/weather-predict/.venv/bin/python sync-wu --days 365
+scripts/ops/weather_signal_importer.py \
+  runtime/weather_edge_v1/paper_decisions.jsonl
+
+scripts/ops/weather_trade_planner.py \
+  --max-order-notional 1 \
+  --min-edge 0.10 \
+  --accepted-only
+
+scripts/ops/weather_order_executor.py
 ```
 
-如果要分多行，注意每一行的 `\` 必须是这一行最后一个字符，后面不能有空格，也不能混入其他字符：
+Live smoke-test chain:
 
 ```bash
-/home/rui/projects/weather-predict/.venv/bin/playwright install chromium
-python3 scripts/ops/weather_predict_bridge.py \
-  --python /home/rui/projects/weather-predict/.venv/bin/python \
-  sync-wu --days 365
+scripts/ops/weather_trade_planner.py \
+  --max-order-notional 1 \
+  --min-edge 0.10 \
+  --accepted-only \
+  --enable-live
+
+scripts/ops/weather_order_executor.py \
+  --live \
+  --confirm-live \
+  --cancel-after
 ```
 
-### 2. Gamma settled daily pipeline 比较慢
+Live has two explicit gates:
 
-我试跑过 `daily_pipeline.py` 的 live 模式，查的是 `2026-04-28`。
+- planner must mark accepted plans with `live_enabled=true`
+- executor must run with `--live --confirm-live`
 
-180 秒内跑到前 8 个城市，结果都是：
+`--cancel-after` is mandatory for the first tiny smoke test.
 
-```text
-no market found
-```
+## What Is Done
 
-还没跑到 CLOB 历史价格 fallback 阶段。
+- Renamed current strategy surface to `weather_edge_v1`.
+- Archived old theta/no framing.
+- Added weather-predict integration config.
+- Added signal importer.
+- Added trade planner.
+- Added paper executor.
+- Added gated live executor.
+- Added core execution pipeline tests.
+- Added docs for weather execution architecture.
+- Promoted historical weather supplement in `weather-predict`.
+- Started remote paper snapshot collection on N100.
 
-这里需要后面优化一下：
+## What Is Not Done
 
-- 要么只跑指定城市/日期，不全量扫
-- 要么改成用当前项目已有的市场发现能力
-- 要么把 Gamma 事件发现也拆成独立、更快的脚本
+- No weather-triggered live order has been smoke-tested yet.
+- No live order service is scheduled on N100.
+- No daily `pm_agent` report yet compares signal, paper, live, and settlement in one place.
+- Settlement and replay reports still mostly live in `weather-predict`.
+- True Wunderground browser-based observation validation remains a later verification step.
 
-## 下一步要做的事
+## Near-Term Plan
 
-### 1. 加 `weather_edge_v1` profile/config
+### P0: Keep Paper Running
 
-状态：已完成。
+Let the N100 paper workflow run for several more days.
 
-目标：
+Target before changing filters:
 
-在当前项目里明确有一个叫 `weather_edge_v1` 的策略 profile，而不是继续把它混在旧名字里。
+- 150-300 total paper orders
+- 80-150 formally settled orders
+- at least 3-5 complete trading days
 
-配置文件：
+Daily checks:
 
-```bash
-src/strategies/weather_edge_v1/config/weather_edge_v1.yml
-```
+- timer health
+- new snapshot count
+- new paper orders
+- settled order count
+- missing settlement cache count
+- paper PnL and ROI
 
-### 2. 接 B0p 和 B3f_Hybrid 的信号
+### P1: Build Daily Analysis
 
-状态：最小 runner 已接入，等待 WU CSV 后才能真正产出非 skipped 信号。
+Produce a compact daily analysis that answers:
 
-要做：
+- How many orders were generated?
+- How many are formally settled?
+- What is total cost, PnL, ROI, and max drawdown?
+- Which cities contributed most?
+- YES vs NO performance
+- GFS vs ECMWF performance
+- edge bucket performance
+- time-window performance
+- unresolved or missing data issues
 
-- 调 `weather-predict` 里的 B0p 逻辑
-- 调 `weather-predict` 里的 B3f_Hybrid 逻辑
-- 把两个结果转成当前项目统一的 signal 格式
+### P2: Validate Edge Quality
 
-### 3. 接当前项目自己的盘口数据
+Do not optimize from one or two days. Once enough orders settle, evaluate:
 
-状态：已接入。
+- edge threshold: 10%, 15%, 20%, 30%
+- side filter: YES, NO, both
+- city filter
+- model filter
+- time-to-settle filter
+- duplicate bracket and same-city correlation risk
 
-原则：
+### P3: Validate Price Realism
 
-- paper 入场价优先用当前项目 recorder 的最新 orderbook
-- 如果没有 recorder 数据，再 fallback 到 weather-predict 的 CLOB history
+Compare:
 
-当前 paper runner 通过 `--orderbook-jsonl` 读取本地累计 orderbook，并优先使用 latest best ask。
+- snapshot price
+- last trade
+- best ask
+- executable order size at best ask
+- simulated paper fill price
 
-### 4. 开始 side-by-side paper trade
+The goal is to know whether paper PnL is optimistic because of stale or non-executable prices.
 
-状态：已开始，最小 runner 已落地。
+### P4: Live Smoke Test
 
-已经加了：
+Only after paper data collection is stable:
 
-- paper runner 逻辑：
-  - `src/strategies/weather_edge_v1/tools/weather_edge_paper.py`
-- 命令行入口：
-  - `scripts/ops/weather_edge_paper.py`
-- 测试：
-  - `tests/pmm_tests/test_weather_edge_paper.py`
+- select one tiny order, no more than 1 USD notional
+- submit through the live executor
+- record live response
+- cancel immediately
+- verify live ledger and cancellation behavior
 
-这个 runner 现在做的是：
+This proves the execution chain, not strategy profitability.
 
-- 输入一个 Polymarket weather event/market URL，或者一个已经抓好的 market snapshot JSON。
-- 读取 bracket、YES/NO token、当前 orderbook best ask。
-- 调 `weather-predict` 计算：
-  - `weather_edge_b0p_v1`
-  - `weather_edge_b3f_hybrid_v1`
-- 对每个 profile 同时记录这些组合：
-  - `locked+equal`
-  - `dynamic+equal`
-  - `independent+equal`
-- 只写 paper decision JSONL，不下单。
-- 默认输出：
-  - `runtime/weather_edge_v1/paper_decisions.jsonl`
+### P5: Paper/Live Parallel Rollout
 
-示例命令：
+Only after the smoke test:
 
-```bash
-.venv/bin/python scripts/ops/weather_edge_paper.py \
-  --target-market <polymarket-event-or-market-url> \
-  --city Paris \
-  --date 2026-04-30 \
-  --orderbook-jsonl runtime/weather_edge_v1/market_data/live_orderbook/2026-04-30/weather_edge_orderbooks_2026-04-30.jsonl.gz \
-  --min-edge 0.10
-```
+- keep paper as source of truth for research
+- run tiny live orders with strict caps
+- compare paper and live fills daily
+- stop immediately on reconciliation error
 
-或者用已经抓好的 snapshot：
+Suggested initial caps:
 
-```bash
-.venv/bin/python scripts/ops/weather_edge_paper.py \
-  --snapshot-json runtime/some_weather_snapshot.json \
-  --city Paris \
-  --date 2026-04-30 \
-  --min-edge 0.10
-```
+- max order notional: 1 USD
+- max daily notional: 5-10 USD
+- max daily loss: fixed small amount
+- allowlisted cities and sides only
 
-当前限制：
+## Research Backlog
 
-- 如果 WU CSV 还没抓好，B0p/B3f 会被标记为 skipped，不会硬算。
-- 如果 B3f 当天缺少多模型样本，也会被标记为 skipped。
-- 现在是“记录入场决策”的第一版，还没有做 settlement 后自动对账。
-- 如果传了 `--orderbook-jsonl`，paper 入场价格会优先用本地累计 orderbook 的 latest best ask，而不是 snapshot/outcome price。
+### Signal Research
 
-每一笔 paper 记录至少要存：
+- Does the paper edge survive formal settlement?
+- Is edge concentrated in BUY_NO?
+- Are certain cities consistently negative?
+- Are `gfs` and `ecmwf` complementary or redundant?
+- Does the model overbet low-probability YES tails?
 
-- market id
-- city
-- date
-- bracket
-- profile name
-- model probability
-- market price
-- edge
-- size rule
-- entry timestamp
-- settlement timestamp
-- realized result
+### Probability Calibration
 
-### 5. paper 时一起比较不同组合
+- Build realized win-rate curves by model probability bucket.
+- Build realized win-rate curves by `model_prob - market_price` bucket.
+- Recalibrate probability before increasing size.
 
-状态：已接入到 runner。
+### Data Source Research
 
-先记录这些组合：
+- Cross-check IEM proxy observations against true WU where possible.
+- Cross-check both against Polymarket final resolution.
+- Document any station mismatch, timezone mismatch, or rounding rule mismatch.
 
-- B0p only
-- B3f_Hybrid only
-- locked + equal
-- dynamic + equal
-- independent + equal
+### Execution Research
 
-后面用真实 paper 结果选一个主策略。
+- Estimate slippage from paper price to executable best ask.
+- Measure orderbook depth at the intended size.
+- Detect stale markets and stale snapshots.
+- Decide whether market orders are ever acceptable; default remains limit-only.
 
-### 6. 加一个日常运行脚本
+## Deprecated Or Historical Material
 
-最好最后变成一个命令能跑：
+The following should be treated as history, not current operating instructions:
 
-- 更新当天 forecast/cache
-- 发现活跃 weather markets
-- 抓/读 orderbook
-- 计算 B0p 和 B3f_Hybrid
-- 追加 paper decisions
-- 输出当天报告
+- `docs/archive/WEATHER_THETA_NO_PROGRESS.md`
+- old case files under `src/strategies/weather_edge_v1/plan/cases/`
+- old notes that describe this as pure theta/no carry
+- old TODO items saying WU CSV is the immediate blocker
+- old instructions saying "do not do live trading" without distinguishing live smoke tests from scheduled live rollout
 
-## 第一版先不要做
+Historical files can remain for auditability, but current operating decisions should come from:
 
-- 不要实盘下单。
-- 不要在当前项目里重写 B0p / B3f 的模型数学。
-- 不要把 Polymarket `/prices-history` 当主入场价。
-- 不要让 B1/B4/Bayesian conditional 实验阻塞第一版 paper trade。
-- `fetch_gfs_features.py` / `gfs_features_v6` 先放后面，它不是第一版 blocker。
+- `src/strategies/weather_edge_v1/README.md`
+- `docs/WEATHER_EXECUTION_ARCHITECTURE.md`
+- this file

@@ -1,6 +1,6 @@
 # PMM 文档导航
 
-> **最近更新**：2026-03-04
+> **最近更新**：2026-05-11
 
 ## 快速开始
 
@@ -13,7 +13,6 @@
 - **[STRATEGY_PLAYBOOK.md](STRATEGY_PLAYBOOK.md)**：策略设计与信号逻辑
 - **[BACKTEST_SCENARIO_METHOD.md](BACKTEST_SCENARIO_METHOD.md)**：回测方法、场景生成、撮合模型
 - **[PAPER_RUNBOOK.md](PAPER_RUNBOOK.md)**：paper 实盘演练的运行、监控、日志与告警
-- **[../WEATHER_EXECUTION_ARCHITECTURE.md](../WEATHER_EXECUTION_ARCHITECTURE.md)**：Weather Edge v1 信号、paper/live 执行链路设计
 - **[../../../strategies/README.md](../../../strategies/README.md)**：全局策略目录（manifest/runbook/params）
 
 ## 参考

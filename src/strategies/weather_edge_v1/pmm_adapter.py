@@ -12,7 +12,7 @@ from src.strategies.pmm.config import PMMConfig
 from src.strategies.pmm.core.strategy_base import QuoteTarget, StrategyQuoteInput
 from src.strategies.weather_edge_v1.tools.provider import AsyncOpenMeteoClient
 
-logger = logging.getLogger("pmm.strategy.weather_edge")
+logger = logging.getLogger("weather_edge_v1.pmm_adapter")
 
 QuantizeFn = Callable[[float, float, float, str], Tuple[float, float]]
 

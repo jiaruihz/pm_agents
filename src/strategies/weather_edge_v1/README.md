@@ -20,22 +20,25 @@ Weather Edge v1 已经不再是纯 theta / carry 策略。当前主线是：
 
 ## 这套体系分成哪几层
 
-### 1. 抓数据层
+### 1. 数据与模型层
 
 只解决：
 
-- 去哪里看
-- 哪些页面是主锚
-- 哪些页面只能做辅助
-- 哪些页面是错锚污染源
-- 页面怎么抓，直接 HTTP 还是浏览器 fallback
+- 当前生产跑哪些城市、机场和单位
+- 哪些城市应该排除出策略统计和 live rollout
+- weather probability、snapshot、paper decision 从哪里来
+- 历史天气和 forecast cache 的来源、覆盖范围和 caveat
 - 市场数据和 orderbook 应该走哪条项目内接口，避免手工读错
 
-主文档：
+权威来源：
 
-- `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`
-- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/CITY.md)`
-- `city/*.yml`
+- `[airport-selection-current.md](/home/rui/projects/weather-predict/docs/airport-selection-current.md)`
+- `/home/rui/projects/weather-predict/pm_edge_compare.py::CITIES`
+- `[weather_predict_integration.yml](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/config/weather_predict_integration.yml)`
+
+旧的手工机场源研究已经归档，只能作为定性参考，不能作为当前生产城市/机场配置：
+
+- `[archive/manual_airport_research/README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/archive/manual_airport_research/README.md)`
 
 ### 2. 分析与监测层
 
@@ -78,13 +81,15 @@ Weather Edge v1 已经不再是纯 theta / carry 策略。当前主线是：
 - 撤单和平仓
 - maker/taker 选择
 
-这层主要在策略代码、ops 脚本和配置里。live 默认关闭，必须显式 `--live --confirm` 才能进入真实下单路径。
+这层主要在策略代码、ops 脚本和配置里。live 默认关闭，必须显式 `--live --confirm-live` 才能进入真实下单路径。
 
 关键文件：
 
-- `config/trading_profile.yml`
-- `config/risk_profile.yml`
-- `src/strategies/pmm/variants/weather_edge_v1.py`
+- `config/weather_edge_v1.yml`
+- `tools/execution_pipeline.py`
+- `pmm_adapter.py`
+
+Weather Edge 自己的配置、数据源、文档、工具和 PMM adapter 都收口在 `src/strategies/weather_edge_v1/`。`pmm/` 只保留 PMM 做市策略和共享执行引擎；Weather Edge 可以复用 PMM engine，但策略归属不放在 `pmm/variants`。
 
 ## 先读什么
 
@@ -93,11 +98,10 @@ Weather Edge v1 已经不再是纯 theta / carry 策略。当前主线是：
 按这个顺序读：
 
 1. `README.md`
-2. `DATA_SOURCE.md`
-3. `city/CITY.md`
-4. `city/AIRPORT_CONTEXT.md`
-5. 目标城市的 `city/<CITY>.yml`
-6. `DECISION_WORKFLOW.md`
+2. `[airport-selection-current.md](/home/rui/projects/weather-predict/docs/airport-selection-current.md)`
+3. `[WEATHER_EXECUTION_ARCHITECTURE.md](/home/rui/projects/pm_agent/docs/WEATHER_EXECUTION_ARCHITECTURE.md)`
+4. `[weather_edge_v1_todo.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/plan/weather_edge_v1_todo.md)`
+5. `[archive/manual_airport_research/README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/archive/manual_airport_research/README.md)`，仅在需要回看旧手工机场源研究时阅读
 
 ### 如果你是模型
 
@@ -114,6 +118,80 @@ Weather Edge v1 已经不再是纯 theta / carry 策略。当前主线是：
 - **live 默认关闭，必须经过人工显式确认和风控**
 
 也就是说，当前重点是把“信号”和“执行”物理隔离。模型可以产生候选信号，但不能绕过 trade plan、风控和 live confirmation。
+
+## 当前状态（2026-05-11）
+
+### 已经跑通
+
+- N100 远端的 `weather-predict` 已经用 systemd timer 每 30 分钟跑 `paper_snapshot.py`。
+- `weather-predict` 已经持续写入 snapshot 和 paper ledger。
+- 15 城历史数据已补齐到约 736 天量级；其中 Seoul 因历史校准表现差，策略研究和出单默认排除。
+- 当前生产城市/机场选择以 `weather-predict` 为准；本仓库旧 `city/*.yml` 研究已归档，不能覆盖生产映射。
+- 当前 paper ledger 已经产生多日订单；2026-05-10 有 44 单，其中部分亚洲市场已经可以用实况代理粗算。
+- `pm_agent` 已经有统一的信号导入、trade plan、paper executor 和可选 live executor。
+- `weather_edge_v1` 已经从旧 `weather_theta_no_v1` 命名中独立出来，旧命名只作为 archive 历史保留。
+
+### 还没正式打开
+
+- 真实 live 下单没有在远端定时运行。
+- live 代码路径已经接上，但必须先做一笔小额 smoke test：提交限价单、记录回执、立即撤单。
+- 结算分析目前主要依赖 Polymarket settled cache；如果当日 cache 还没被 daily pipeline 拉到，只能先用 IEM/WU proxy 做临时估算。
+- 当前历史观测源标记为 `obs_source_v1_iem_proxy`；后续仍需用真实 WU 或 Polymarket final settlement 做交叉验证。
+
+### 当前不应误解的点
+
+- 现在正在生产运行的是 paper 观测链路，不是 live trading bot。
+- paper 单和 live 单必须共用同一份 trade plan；不能再维护两套规则。
+- paper 结果在正式 settled cache 到来前只能算初步结果。
+- 当前策略不是纯 theta/carry，而是天气模型概率相对盘口价格的 edge 策略。
+
+## 后续研究路线
+
+### P0：继续积累 paper 样本
+
+目标是至少积累 3-5 天、150-300 单 paper 样本，其中 80-150 单有正式结算结果。每天检查：
+
+- 订单数、成本、PnL、ROI、最大回撤
+- 分城市、分 YES/NO、分模型、分时间窗口
+- 当天未结算、缺 settlement cache、缺 bracket 的数量
+
+### P1：验证 edge 是否稳定
+
+- 按 edge bucket 分桶：10%-15%、15%-20%、20%-30%、30%+
+- 检查 BUY_YES 和 BUY_NO 是否表现显著不同
+- 排查城市级偏差，继续确认 Seoul 这类异常城市是否应排除
+- 比较 `gfs` / `ecmwf` 的贡献和失误类型
+
+### P2：检查价格和流动性
+
+- 比较 snapshot price、last trade、best ask、实际可成交价
+- 估算滑点和盘口深度，确认 paper 用价是否过于乐观
+- 检查同城多 bracket 同时出单时的相关性和总风险
+
+### P3：做概率校准
+
+- 用正式结算样本校准 `model_prob - market_price`
+- 找出长期高估或低估的城市/模型/温度区间
+- 决定是否提高最小 edge 阈值，或只保留某些城市/方向
+
+### P4：live smoke test
+
+在 paper 链路稳定后执行：
+
+- 单笔不超过 1 USD
+- planner 必须加 `--enable-live`
+- executor 必须加 `--live --confirm-live --cancel-after`
+- 验证下单、回执、ledger、撤单和错误处理
+
+### P5：paper/live 并行
+
+live smoke test 通过后，再考虑让 paper 和 tiny live 并行跑。初期应设置：
+
+- 单笔小额上限
+- 每日 notional 上限
+- 每日亏损上限
+- kill switch
+- 每日 paper/live 差异报告
 
 ## 关键提示词设计
 
@@ -195,12 +273,13 @@ Weather Edge v1 已经不再是纯 theta / carry 策略。当前主线是：
 - `[README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/README.md)`：人类总入口
 - `[SKILL.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/SKILL.md)`：模型入口，也尽量保持人类可读
 
-### 抓数据文档
+### 数据与模型文档
 
-- `[DATA_SOURCE.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/DATA_SOURCE.md)`：跨城市通用源规则和获取方式
-- `[city/CITY.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/CITY.md)`：城市摘要入口
-- `[city/AIRPORT_CONTEXT.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/city/AIRPORT_CONTEXT.md)`：机场地理位置、微气候特性和执行提醒
-- `city/*.yml`：城市 canonical source config
+- `[airport-selection-current.md](/home/rui/projects/weather-predict/docs/airport-selection-current.md)`：当前生产城市/机场映射和选择原则
+- `[weather_predict_integration.yml](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/config/weather_predict_integration.yml)`：两项目的数据边界和同步点
+- `[archive/manual_airport_research/README.md](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/archive/manual_airport_research/README.md)`：已归档的旧手工机场研究入口
+
+归档目录里的 `city/*.yml`、`station_profile.yml`、`risk_profile.yml`、`trading_profile.yml` 不是生产配置。它们只用于解释旧研究过程或为未来 source audit 提供线索。
 
 ### 分析文档
 
@@ -213,6 +292,7 @@ Weather Edge v1 已经不再是纯 theta / carry 策略。当前主线是：
 - `[tools/profile_resolver.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/profile_resolver.py)`：将天气输入转成 `daily_overrides` 和 `action_suggestion`
 - `[tools/codex_weather_advisor.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/codex_weather_advisor.py)`：漂移后的人类辅助解释
 - `[tools/execution_pipeline.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/execution_pipeline.py)`：signal import 与 trade planner 的核心逻辑
+- `[pmm_adapter.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/pmm_adapter.py)`：接入 PMM tick engine 的 adapter
 
 ### 运行产物
 

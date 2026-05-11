@@ -2,6 +2,13 @@
 
 This document freezes the current boundary for turning the weather paper workflow into a controlled live-trading workflow.
 
+Status as of 2026-05-11:
+
+- `weather-predict` is running the remote paper snapshot workflow on the N100 host.
+- `pm_agent` has the signal importer, trade planner, paper executor, and gated live executor implemented.
+- Paper is the only scheduled execution mode currently running.
+- Live order placement is implemented but not considered proven until a tiny submit-and-cancel smoke test succeeds.
+
 ## System Boundary
 
 `weather-predict` owns weather research and signal generation:
@@ -42,6 +49,8 @@ Planned weather execution entry points still to implement:
 
 - `scripts/ops/weather_reconcile.py`: reconcile open, filled, canceled, and settled order state.
 - `scripts/ops/weather_report.py`: produce daily paper/live comparison and attribution reports.
+
+Operationally, settlement and reporting still mostly live in `weather-predict` research scripts. The next cleanup is to either wrap those reports from `pm_agent` or move only the execution-facing summaries into this repository.
 
 ## Runtime Layout
 
@@ -102,6 +111,12 @@ Paper execution is always allowed for accepted plans. Live execution is off by d
 
 The first live rollout should use a tiny limit order and immediate cancel path through the existing CLOB smoke-test code before enabling weather-triggered live orders.
 
+Current live status:
+
+- no remote systemd service is running live weather orders
+- no weather-triggered live order has been accepted as a completed smoke test
+- any future live run must be launched manually first and reviewed before it is scheduled
+
 ## Current Command Chain
 
 Paper-only path:
@@ -137,23 +152,38 @@ scripts/ops/weather_order_executor.py \
 
 ## Rollout Plan
 
-P0 is now:
+Completed baseline:
 
 - keep generated runtime data out of git
 - document the weather/live trading boundary
-- do not delete or move legacy code
-
-P1 is now:
-
 - identify the mainline entry points listed above
 - keep `weather-predict` as the signal source
 - keep `pm_agent` as the paper/live execution owner
 - reuse `SafetyGuard` and `LiveBroker` rather than creating a separate live order stack
 
-Current implementation stages:
+Current implementation status:
 
-- P2: signal importer in dry-run/write mode is implemented.
-- P3: trade planner and local risk precheck are implemented.
-- P4: paper executor using the same trade plan as live is implemented.
-- P5: run a tiny live smoke order and cancel it.
-- P6: enable scheduled reports comparing signal, paper, and live results.
+- P0: remote paper snapshot timer is running.
+- P1: signal importer in dry-run/write mode is implemented.
+- P2: trade planner and local risk precheck are implemented.
+- P3: paper executor using the same trade plan as live is implemented.
+- P4: live executor is implemented behind `--enable-live` plus `--live --confirm-live`.
+
+Next stages:
+
+- P5: accumulate several more days of paper data before changing filters.
+- P6: run a tiny live smoke order and cancel it.
+- P7: enable scheduled reports comparing signal, paper, and live results.
+- P8: only after P6/P7, consider a scheduled tiny-live rollout with daily notional and loss caps.
+
+## Research Backlog
+
+The immediate research questions are:
+
+- Does the observed paper edge survive formal settlement rather than IEM/WU proxy estimates?
+- Is the edge concentrated in BUY_NO, specific cities, specific models, or specific time windows?
+- Are snapshot prices close enough to executable best-ask prices to avoid optimistic paper PnL?
+- How much correlation exists across multiple brackets for the same city/date?
+- Which edge threshold gives the best tradeoff between volume and realized ROI?
+
+Do not tune production filters from one or two trading days. First target 150-300 paper orders and at least 80-150 formally settled orders.

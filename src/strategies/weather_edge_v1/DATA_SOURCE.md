@@ -7,7 +7,12 @@
 **告诉你在 Polymarket 的天气温度盘口里，哪些页面该当主锚，哪些页面只能做校验，哪些页面只能当噪音。**
 
 这里不维护城市链接，不维护具体盘口，也不维护每个城市的例外规则。  
-城市级信息统一放在 `city/CITY.md` 和 `city/*.yml`。
+当前生产城市/机场映射统一由 `weather-predict` 维护：
+
+- `/home/rui/projects/weather-predict/pm_edge_compare.py::CITIES`
+- `[airport-selection-current.md](/home/rui/projects/weather-predict/docs/airport-selection-current.md)`
+
+本仓库旧 `city/*.yml` 已归档到 `archive/manual_airport_research/`，只作为手工 source audit 和历史研究参考，不能覆盖生产映射。
 
 先把底层逻辑讲清楚：
 
@@ -404,7 +409,7 @@
 
 ## 5. 常见字段怎么理解
 
-这些字段会在 `city/*.yml` 里反复出现：
+这些字段只适用于已归档的 manual source notes；生产城市/机场映射以 `weather-predict` 为准：
 
 - `primary_settlement`：最终结算真值页
 - `primary_trading_anchor`：盘前最该盯的主锚

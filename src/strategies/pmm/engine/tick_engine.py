@@ -30,7 +30,7 @@ from src.strategies.pmm.core.signals import (
 )
 from src.strategies.pmm.core.sizing import target_sizes as _target_sizes
 from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
-from src.strategies.pmm.core.strategy_registry import StrategyRegistry
+from src.strategies.pmm.core.strategy_registry import build_pmm_strategy_registry
 from src.platform.market_data.http_client import ToolServiceClient
 from src.platform.market_data.market_ws import MarketWsFeed
 from src.platform.market_data.orderbook import best_bid_ask, mid_price, spread as orderbook_spread
@@ -46,10 +46,6 @@ from src.strategies.pmm.execution.live_broker import LiveBroker
 from src.strategies.pmm.engine.context_builder import build_history_context, build_token_context
 from src.platform.notification.telegram import PMMTelegramNotifier
 from src.strategies.pmm.risk.safety_guard import SafetyGuard
-from src.strategies.pmm.variants.multi_level_v1 import MultiLevelV1Strategy
-from src.strategies.pmm.variants.single_level_v1 import SingleLevelV1Strategy
-from src.strategies.pmm.variants.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
-from src.strategies.pmm.variants.weather_edge_v1 import WeatherEdgeV1Strategy
 from src.strategies.pmm.utils.converters import best_level as _best_level, normalize_levels as _normalize_levels, to_float as _safe_float, to_int as _safe_int
 from src.strategies.pmm.utils.metrics import MetricsLogger
 from src.strategies.pmm.utils.quantize import (
@@ -179,32 +175,10 @@ async def tick_loop(config: PMMConfig) -> None:
     # 2) 初始化策略注册表、订单管理器和指标记录器。
     order_mgr = OrderManager(deadband=config.deadband)
     metrics = MetricsLogger(config.metrics_path)
-    strategy_registry = StrategyRegistry()
-    strategy_registry.register(
-        SingleLevelV1Strategy(
-            anchor_quotes_fn=_anchor_quotes_to_book,
-            quantize_pair_fn=_quantize_quote_pair,
-            target_sizes_fn=_target_sizes,
-        )
-    )
-    strategy_registry.register(
-        MultiLevelV1Strategy(
-            anchor_quotes_fn=_anchor_quotes_to_book,
-            quantize_pair_fn=_quantize_quote_pair,
-            target_sizes_fn=_target_sizes,
-        )
-    )
-    strategy_registry.register(
-        SmartMoneyFollowV1Strategy(
-            anchor_quotes_fn=_anchor_quotes_to_book,
-            quantize_pair_fn=_quantize_quote_pair,
-            target_sizes_fn=_target_sizes,
-        )
-    )
-    strategy_registry.register(
-        WeatherEdgeV1Strategy(
-            quantize_pair_fn=_quantize_quote_pair,
-        )
+    strategy_registry = build_pmm_strategy_registry(
+        anchor_quotes_fn=_anchor_quotes_to_book,
+        quantize_pair_fn=_quantize_quote_pair,
+        target_sizes_fn=_target_sizes,
     )
     strategy = strategy_registry.get(config.strategy_key)
     if strategy is None:

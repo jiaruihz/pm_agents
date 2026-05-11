@@ -10,7 +10,13 @@
   - `PMM_JAVA_PLAN.md`
   - `PM_ARB_STRATEGY.md`
   - `PM_ARB_STRATEGY_CN.md`
+- Weather Edge：
   - `WEATHER_EXECUTION_ARCHITECTURE.md`
+  - `../src/strategies/weather_edge_v1/README.md`
+  - `../src/strategies/weather_edge_v1/plan/weather_edge_v1_todo.md`
+- Smart Money Follow：
+  - `../src/strategies/smart_money_follow_v1/README.md`
+  - `../src/strategies/smart_money_follow_v1/SMART_MONEY_COPYTRADE_STRATEGY.md`
 - Research：
   - `RESEARCH_INTEGRATION.md`
   - `research/RESEARCH_README.md`

@@ -5,7 +5,7 @@ strategy_family: directional
 domain: pmm
 is_active: true
 runner_module: src.strategies.pmm.main
-strategy_module: src.strategies.pmm.variants.smart_money_follow_v1:SmartMoneyFollowV1Strategy
+strategy_module: src.strategies.smart_money_follow_v1.pmm_adapter:SmartMoneyFollowV1Strategy
 description: 基于高胜率钱包信号的报价倾斜与仓位倾斜策略。
 meta:
   signal_source: wallets+token_signals

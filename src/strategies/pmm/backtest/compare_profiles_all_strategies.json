@@ -45,19 +45,5 @@
       "level_spread_step": 0.01,
       "level_size_decay": 0.6
     }
-  },
-  {
-    "name": "smart_money_follow_demo",
-    "description": "Smart-money follow v1 with directional tilt from strategy_params",
-    "strategy_overrides": {
-      "strategy_key": "smart_money_follow_v1",
-      "strategy_params": {
-        "smart_money_signal": 0.65,
-        "smart_money_min_abs_signal": 0.05,
-        "smart_money_price_tilt_factor": 0.35,
-        "smart_money_size_tilt_factor": 0.75,
-        "smart_money_one_side_only_threshold": 0.9
-      }
-    }
   }
 ]

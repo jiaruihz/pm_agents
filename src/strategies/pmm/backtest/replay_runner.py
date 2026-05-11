@@ -14,14 +14,10 @@ from src.strategies.pmm.core.anchoring import anchor_quotes_to_book
 from src.strategies.pmm.core.signals import fair_mid, inventory_signal, realized_vol, required_spread
 from src.strategies.pmm.core.sizing import target_sizes
 from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
-from src.strategies.pmm.core.strategy_registry import StrategyRegistry
+from src.strategies.pmm.core.strategy_registry import build_pmm_strategy_registry
 from src.platform.market_data.orderbook import best_bid_ask, spread as orderbook_spread
 from src.strategies.pmm.execution.order_manager import OrderManager
 from src.strategies.pmm.execution.paper_broker import PaperBroker
-from src.strategies.pmm.variants.multi_level_v1 import MultiLevelV1Strategy
-from src.strategies.pmm.variants.single_level_v1 import SingleLevelV1Strategy
-from src.strategies.pmm.variants.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
-from src.strategies.pmm.variants.weather_edge_v1 import WeatherEdgeV1Strategy
 from src.strategies.pmm.utils.quantize import quantize_quote_pair
 from src.strategies.pmm.backtest.scenario_validator import validate_scenario_payload
 
@@ -222,32 +218,10 @@ async def _run_single_async(
     cfg.market.token_ids = token_ids
     _apply_strategy_overrides(cfg, scenario.get("strategy_overrides", {}))
     quote_runtime_meta = cfg.quote_runtime_meta()
-    strategy_registry = StrategyRegistry()
-    strategy_registry.register(
-        SingleLevelV1Strategy(
-            anchor_quotes_fn=anchor_quotes_to_book,
-            quantize_pair_fn=quantize_quote_pair,
-            target_sizes_fn=target_sizes,
-        )
-    )
-    strategy_registry.register(
-        MultiLevelV1Strategy(
-            anchor_quotes_fn=anchor_quotes_to_book,
-            quantize_pair_fn=quantize_quote_pair,
-            target_sizes_fn=target_sizes,
-        )
-    )
-    strategy_registry.register(
-        SmartMoneyFollowV1Strategy(
-            anchor_quotes_fn=anchor_quotes_to_book,
-            quantize_pair_fn=quantize_quote_pair,
-            target_sizes_fn=target_sizes,
-        )
-    )
-    strategy_registry.register(
-        WeatherEdgeV1Strategy(
-            quantize_pair_fn=quantize_quote_pair,
-        )
+    strategy_registry = build_pmm_strategy_registry(
+        anchor_quotes_fn=anchor_quotes_to_book,
+        quantize_pair_fn=quantize_quote_pair,
+        target_sizes_fn=target_sizes,
     )
     strategy = strategy_registry.get(cfg.strategy_key)
     if strategy is None:

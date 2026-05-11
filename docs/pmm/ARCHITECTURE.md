@@ -1,12 +1,12 @@
 # PMM 架构说明
 
-> **最近更新**：2026-02-12（重构后）
+> **最近更新**：2026-05-11
 
 ## 概览
 
 PMM（Polymarket Market Maker）是一个分层做市系统，支持：
 
-- 策略插件化（`single_level_v1` / `multi_level_v1` / `smart_money_follow_v1` / `weather_edge_v1`）
+- 做市策略插件化（`single_level_v1` / `multi_level_v1`）
 - `paper` / `live` 执行模式切换
 - 真实数据录制、场景回放、批量回测与绘图
 
@@ -44,9 +44,7 @@ src/strategies/pmm/
 │
 ├── strategies/                   # 策略插件
 │   ├── single_level_v1.py        # 单档报价
-│   ├── multi_level_v1.py         # 多档梯度报价
-│   ├── smart_money_follow_v1.py  # 跟随聪明钱方向倾斜
-│   └── weather_edge_v1.py    # 天气 No 侧时间价值策略
+│   └── multi_level_v1.py         # 多档梯度报价
 │
 └── backtest/                     # 回测基础设施
     ├── replay_runner.py          # 场景回放引擎
@@ -119,12 +117,14 @@ utils/（通用基础）
 
 策略实现统一遵循 `MarketMakingStrategy` 协议。
 
+`src/strategies/pmm/variants/` 只放 PMM 做市策略的实现。非 PMM 策略如果复用 PMM engine，应把 adapter 放在自己的策略目录下，并通过自己的 `manifest.yaml` 暴露 `strategy_module`。
+
 当前策略：
 
 - `single_level_v1`：每侧 1 档
 - `multi_level_v1`：每侧 N 档（可配步长和 size 衰减）
-- `smart_money_follow_v1`：单档基础上根据信号做方向性倾斜（可单边）
-- `weather_edge_v1`：事件驱动的单边策略（偏向买入 NO 并按时间/止盈/止损平仓）
+
+复用 PMM engine 的非 PMM 策略不列为 PMM 策略本体。PMM engine 运行时从全局策略 manifest 动态加载 `domain: pmm` 且 `is_active: true` 的 adapter。
 
 ## 执行模式
 

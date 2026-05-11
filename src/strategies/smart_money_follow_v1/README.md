@@ -9,6 +9,7 @@
 ## 目录内容
 
 - `package.py`：策略包元信息
+- `pmm_adapter.py`：接入 PMM tick engine 的 adapter
 - `params.example.json`：策略参数示例
 - `run.sh`：paper 启动脚本
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
-CONFIG_ROOT = ROOT / "config"
+CONFIG_ROOT = ROOT / "archive" / "manual_airport_research" / "config"
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:

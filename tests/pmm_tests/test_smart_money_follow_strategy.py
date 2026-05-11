@@ -6,7 +6,7 @@ from pathlib import Path
 from src.strategies.pmm.config import PMMConfig
 from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
 from src.strategies.pmm.variants.single_level_v1 import SingleLevelV1Strategy
-from src.strategies.pmm.variants.smart_money_follow_v1 import SmartMoneyFollowV1Strategy
+from src.strategies.smart_money_follow_v1.pmm_adapter import SmartMoneyFollowV1Strategy
 
 
 def _anchor_quotes(

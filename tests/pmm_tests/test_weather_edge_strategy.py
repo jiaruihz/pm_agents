@@ -2,7 +2,7 @@ import unittest
 
 from src.strategies.pmm.config import PMMConfig
 from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
-from src.strategies.pmm.variants.weather_edge_v1 import WeatherEdgeV1Strategy
+from src.strategies.weather_edge_v1.pmm_adapter import WeatherEdgeV1Strategy
 
 
 def _quantize_pair(bid: float, ask: float, tick: float, mode: str):
