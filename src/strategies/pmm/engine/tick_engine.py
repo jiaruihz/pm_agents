@@ -29,7 +29,7 @@ from src.strategies.pmm.core.signals import (
     weighted_mid as _weighted_mid,
 )
 from src.strategies.pmm.core.sizing import target_sizes as _target_sizes
-from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
+from src.platform.quote_runtime.strategy_base import StrategyQuoteInput
 from src.strategies.pmm.core.strategy_registry import build_pmm_strategy_registry
 from src.platform.market_data.http_client import ToolServiceClient
 from src.platform.market_data.market_ws import MarketWsFeed

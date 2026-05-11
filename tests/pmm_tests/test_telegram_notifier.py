@@ -48,11 +48,11 @@ def test_build_live_report_message_contains_pnl_and_positions():
         mids={"t1": 0.51, "t2": 0.49},
         open_orders_count=7,
     )
-    assert "[PMM LIVE REPORT]" in msg
+    assert "【天气策略小时汇报】" in msg
     assert "strategy=single_level_v1" in msg
-    assert "pnl=12.3400" in msg
-    assert "- t1: qty=3.0000" in msg
-    assert "- t2: qty=-2.0000" in msg
+    assert "浮动盈亏：+12.34 USDC" in msg
+    assert "- t1：3.0000 股" in msg
+    assert "- t2：-2.0000 股" in msg
 
 
 def test_build_alert_message_contains_event_and_detail():
@@ -85,7 +85,7 @@ def test_build_order_message_contains_order_payload():
     )
     assert "[PMM ORDER]" in msg
     assert "event=order_placed" in msg
-    assert "token_id=tid-1" in msg
+    assert "market=tid-1" in msg
     assert "side=BUY price=0.950000 size=20.000000" in msg
     assert "order_id=oid-1" in msg
     assert "detail=maker_only" in msg
@@ -135,7 +135,7 @@ async def test_periodic_report_interval_and_alert_cooldown(monkeypatch):
         open_orders_count=2,
     )
     assert len(client.calls) == 1
-    assert "[PMM LIVE REPORT]" in client.calls[-1]["text"]
+    assert "【天气策略小时汇报】" in client.calls[-1]["text"]
 
     await notifier.send_alert(
         alert_key="place_failed:t1:BUY",

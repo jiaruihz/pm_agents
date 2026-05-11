@@ -287,12 +287,16 @@ live smoke test 通过后，再考虑让 paper 和 tiny live 并行跑。初期�
 
 ### 工具与实现
 
+- `[core.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/core.py)`：Weather Edge 的入场、退出、size、默认参数和天气 bucket 距离判断；这是策略规则的唯一代码源
+- `[pmm_adapter.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/pmm_adapter.py)`：接入 PMM/quote tick engine 的 adapter，只做 runtime 输入输出适配
+- `[tools/unified_strategy.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/unified_strategy.py)`：接入 unified engine 的 adapter，同样调用 `core.py`
 - `[tools/airport_weather_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/airport_weather_tool.py)`：当前 watch 基线工具
 - `[tools/market_query_tool.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/market_query_tool.py)`：天气 skill 的市场查询入口，统一走内部 Gamma/CLOB client，不直接 `curl`
 - `[tools/profile_resolver.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/profile_resolver.py)`：将天气输入转成 `daily_overrides` 和 `action_suggestion`
 - `[tools/codex_weather_advisor.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/codex_weather_advisor.py)`：漂移后的人类辅助解释
 - `[tools/execution_pipeline.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/execution_pipeline.py)`：signal import 与 trade planner 的核心逻辑
-- `[pmm_adapter.py](/home/rui/projects/pm_agent/src/strategies/weather_edge_v1/pmm_adapter.py)`：接入 PMM tick engine 的 adapter
+
+原则：策略规则不再写在 adapter 里。任何新 entry/exit 条件必须先进入 `core.py`，再由不同 runtime adapter 复用。
 
 ### 运行产物
 

@@ -1,7 +1,10 @@
 """Unit tests for PMM Strategy modules."""
 
 import unittest
-from src.strategies.pmm.core.strategy_base import StrategyQuoteInput, QuoteTarget, MarketMakingStrategy
+
+from src.platform.quote_runtime.strategy_base import MarketMakingStrategy, QuoteTarget, StrategyQuoteInput
+from src.strategies.pmm.core.strategy_base import QuoteTarget as LegacyQuoteTarget
+from src.strategies.pmm.core.strategy_base import StrategyQuoteInput as LegacyStrategyQuoteInput
 from src.strategies.pmm.core.strategy_registry import StrategyRegistry
 from src.strategies.pmm.config import PMMConfig
 
@@ -99,6 +102,10 @@ class TestStrategyBase(unittest.TestCase):
         self.assertEqual(quotes[1].side, "SELL")
         self.assertEqual(quotes[0].token_id, "test_token")
         self.assertEqual(quotes[1].token_id, "test_token")
+
+    def test_legacy_pmm_strategy_base_reexports_platform_types(self):
+        self.assertIs(LegacyStrategyQuoteInput, StrategyQuoteInput)
+        self.assertIs(LegacyQuoteTarget, QuoteTarget)
 
 
 class TestStrategyRegistry(unittest.TestCase):

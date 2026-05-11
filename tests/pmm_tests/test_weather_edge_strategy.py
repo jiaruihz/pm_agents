@@ -1,8 +1,13 @@
 import unittest
 
+from src.platform.engine.base import StrategyContext
+from src.platform.engine.events import MarketTickEvent
+from src.platform.engine.models import OrderSide
 from src.strategies.pmm.config import PMMConfig
-from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
+from src.platform.quote_runtime.strategy_base import StrategyQuoteInput
+from src.strategies.weather_edge_v1.core import DEFAULT_PARAMS, WeatherDecisionParams
 from src.strategies.weather_edge_v1.pmm_adapter import WeatherEdgeV1Strategy
+from src.strategies.weather_edge_v1.tools.unified_strategy import UnifiedWeatherEdgeStrategy
 
 
 def _quantize_pair(bid: float, ask: float, tick: float, mode: str):
@@ -76,6 +81,28 @@ class TestWeatherEdgeV1Strategy(unittest.TestCase):
         self.assertLessEqual(q.price, 0.97)
         self.assertAlmostEqual(q.price * q.size, 50.0, places=5)
 
+    def test_shared_default_params_match_expected_live_values(self):
+        params = WeatherDecisionParams.from_mapping({})
+        self.assertEqual(DEFAULT_PARAMS["weather_entry_max_price"], 0.97)
+        self.assertEqual(DEFAULT_PARAMS["weather_take_profit_abs"], 0.02)
+        self.assertEqual(params.entry_max, 0.97)
+        self.assertEqual(params.take_profit_abs, 0.02)
+
+    def test_entry_size_subtracts_open_buy_exposure(self):
+        self.cfg.max_position = 10.0
+        quotes = self.strategy.generate_quotes(
+            _mk_input(position=0.0, open_buy_qty=8.5, mid=0.90, best_bid=0.89, best_ask=0.91),
+            self.cfg,
+        )
+        self.assertEqual(len(quotes), 1)
+        self.assertAlmostEqual(quotes[0].size, 1.5, places=8)
+
+        quotes = self.strategy.generate_quotes(
+            _mk_input(position=0.0, open_buy_qty=10.0, mid=0.90, best_bid=0.89, best_ask=0.91),
+            self.cfg,
+        )
+        self.assertEqual(quotes, [])
+
     def test_no_entry_when_mid_outside_range(self):
         quotes = self.strategy.generate_quotes(_mk_input(mid=0.70, best_bid=0.69, best_ask=0.71), self.cfg)
         self.assertEqual(quotes, [])
@@ -125,6 +152,31 @@ class TestWeatherEdgeV1Strategy(unittest.TestCase):
         self.now[0] += 1800.0
         quotes = self.strategy.generate_quotes(_mk_input(position=0.0, mid=0.90), self.cfg)
         self.assertEqual(quotes, [])
+
+
+class TestUnifiedWeatherEdgeStrategy(unittest.IsolatedAsyncioTestCase):
+    async def test_unified_adapter_uses_shared_entry_defaults(self):
+        strategy = UnifiedWeatherEdgeStrategy(time_fn=lambda: 1_000.0)
+        strategy._weather_provider = _StubWeatherProvider({"NO_TOKEN": 16.0})  # type: ignore[attr-defined]
+        strategy._weather_target_meta = {  # type: ignore[attr-defined]
+            "NO_TOKEN": {"unit": "C", "bucket_value": 12.0}
+        }
+        context = StrategyContext(
+            instance_id="weather-test",
+            strategy_key="weather_edge_v1",
+            run_params={"usdc_balance": 1000.0, "max_position": 100.0},
+        )
+        event = MarketTickEvent(
+            token_id="NO_TOKEN",
+            mid_price=0.965,
+            best_bid=0.964,
+            best_ask=0.966,
+        )
+
+        commands = await strategy.on_market_tick(context, event)
+
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(commands[0].side, OrderSide.BUY)
 
 
 if __name__ == "__main__":

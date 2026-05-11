@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from src.platform.quote_runtime.strategy_base import (
     MarketMakingStrategy,
     QuoteStrategy,

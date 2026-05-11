@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from src.strategies.pmm.config import PMMConfig
-from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
+from src.platform.quote_runtime.strategy_base import StrategyQuoteInput
 from src.strategies.pmm.variants.single_level_v1 import SingleLevelV1Strategy
 from src.strategies.smart_money_follow_v1.pmm_adapter import SmartMoneyFollowV1Strategy
 

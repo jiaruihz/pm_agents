@@ -13,7 +13,7 @@ from src.strategies.pmm.config import PMMConfig
 from src.strategies.pmm.core.anchoring import anchor_quotes_to_book
 from src.strategies.pmm.core.signals import fair_mid, inventory_signal, realized_vol, required_spread
 from src.strategies.pmm.core.sizing import target_sizes
-from src.strategies.pmm.core.strategy_base import StrategyQuoteInput
+from src.platform.quote_runtime.strategy_base import StrategyQuoteInput
 from src.strategies.pmm.core.strategy_registry import build_pmm_strategy_registry
 from src.platform.market_data.orderbook import best_bid_ask, spread as orderbook_spread
 from src.strategies.pmm.execution.order_manager import OrderManager

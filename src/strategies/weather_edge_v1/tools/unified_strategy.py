@@ -1,67 +1,110 @@
-"""Weather carry strategy ported to the unified engine."""
+"""Weather Edge strategy adapter for the unified engine."""
 
+from __future__ import annotations
+
+import json
 import logging
 import time
-from dataclasses import dataclass
-from typing import Any, Dict, List, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 from src.platform.engine.base import IStrategy, StrategyContext
 from src.platform.engine.events import AlertEvent, MarketTickEvent, OrderUpdateEvent
 from src.platform.engine.models import CancelCommand, OrderCommand, OrderSide, OrderStatus, OrderType
+from src.strategies.weather_edge_v1.core import (
+    WeatherDecisionInput,
+    WeatherDecisionParams,
+    WeatherRuntimeConfig,
+    WeatherTokenState,
+    clamp,
+    forecast_distance_from_bucket,
+    make_decision,
+    sync_state,
+    to_float,
+    token_set,
+)
+from src.strategies.weather_edge_v1.tools.provider import AsyncOpenMeteoClient
 
 logger = logging.getLogger(__name__)
 
 
-def _to_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except Exception:
-        return default
-
-
-def _to_bool(value: Any, default: bool = False) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        if lowered in {"1", "true", "yes", "on"}:
-            return True
-        if lowered in {"0", "false", "no", "off"}:
-            return False
-    return default
-
-
-def _clamp(value: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, value))
-
-
-@dataclass
-class TokenState:
-    last_position: float = 0.0
-    entry_mid: float = 0.0
-    entry_ts: float = 0.0
-    last_exit_ts: float = 0.0
-
-
 class UnifiedWeatherEdgeStrategy(IStrategy):
     """
-    Weather carry strategy for NO-side accumulation and timed exit.
-    Adapted for the asyncio Unified Engine.
+    Weather Edge adapter for the asyncio unified engine.
+
+    The trading rules live in `src.strategies.weather_edge_v1.core`; this class
+    only adapts unified-engine ticks and commands.
     """
 
     key = "weather_edge_v1"
 
+    def __init__(self, time_fn=None) -> None:
+        self._time_fn = time_fn or time.time
+        self._weather_provider = AsyncOpenMeteoClient(update_interval_sec=300)
+        self._weather_target_meta: Dict[str, Dict[str, Any]] = {}
+
     async def init(self, context: StrategyContext) -> None:
         logger.info("Initialized %s for instance %s", self.key, context.instance_id)
         context.state["token_states"] = {}
+        self._load_weather_targets()
+        self._sync_dynamic_weather_targets(context.run_params)
+        await self._start_provider_if_needed()
+
+    async def _start_provider_if_needed(self) -> None:
+        try:
+            await self._weather_provider.start_polling()
+        except RuntimeError:
+            logger.debug("Weather provider could not start because no running loop is available.")
+
+    def _load_weather_targets(self) -> None:
+        config_path = Path("src/strategies/weather_edge_v1/config/weather_targets.json")
+        if not config_path.exists():
+            logger.warning("Weather targets config not found at %s", config_path)
+            return
+        try:
+            data = json.loads(config_path.read_text("utf-8"))
+            if isinstance(data, list):
+                for item in data:
+                    self._apply_weather_target_item(item)
+        except Exception as exc:
+            logger.error("Failed to load weather targets config: %s", exc)
+
+    def _apply_weather_target_item(self, item: Dict[str, Any]) -> None:
+        lat = item.get("lat")
+        lon = item.get("lon")
+        token_id = str(item.get("token_id") or item.get("no_token") or "").strip()
+        if lat is None or lon is None or not token_id:
+            return
+        target_date = str(item.get("target_date") or "").strip()
+        self._weather_provider.register_target(token_id, float(lat), float(lon), target_date=target_date or None)
+        self._weather_target_meta[token_id] = {
+            "unit": str(item.get("unit") or "C").strip().upper(),
+            "bucket_min": item.get("bucket_min"),
+            "bucket_max": item.get("bucket_max"),
+            "bucket_value": item.get("bucket_value"),
+            "target_date": target_date,
+            "city": str(item.get("city") or "").strip(),
+        }
+
+    def _sync_dynamic_weather_targets(self, params: Dict[str, Any]) -> None:
+        raw = params.get("weather_token_forecast_map")
+        if not isinstance(raw, dict):
+            return
+        for token_id, item in raw.items():
+            if not isinstance(item, dict):
+                continue
+            payload = dict(item)
+            payload.setdefault("token_id", str(token_id))
+            self._apply_weather_target_item(payload)
 
     async def on_market_tick(
         self, context: StrategyContext, event: MarketTickEvent
     ) -> List[Union[OrderCommand, CancelCommand]]:
         params = context.run_params
+        self._sync_dynamic_weather_targets(params)
         token_id = event.token_id
 
-        allowed_tokens = params.get("weather_no_token_ids", [])
+        allowed_tokens = token_set(params.get("weather_no_token_ids"))
         if allowed_tokens and token_id not in allowed_tokens:
             return []
 
@@ -70,129 +113,63 @@ class UnifiedWeatherEdgeStrategy(IStrategy):
             return []
 
         position = max(0.0, context.positions.get(token_id, 0.0))
-        now = time.time()
+        now = self._time_fn()
+        state_dict = context.state.setdefault("token_states", {})
+        token_state = state_dict.setdefault(token_id, WeatherTokenState())
+        sync_state(token_state, position=position, mid=mid, now=now)
 
-        state_dict = context.state["token_states"]
-        if token_id not in state_dict:
-            state_dict[token_id] = TokenState()
-        token_state: TokenState = state_dict[token_id]
-
-        self._sync_state(token_state, position, mid, now)
-
-        entry_min = _clamp(_to_float(params.get("weather_entry_min_price"), 0.78), 0.0001, 0.9999)
-        entry_max = _clamp(_to_float(params.get("weather_entry_max_price"), 0.96), entry_min, 0.9999)
-        max_entry_spread = max(0.0, _to_float(params.get("weather_entry_max_spread"), 0.06))
-        position_pct = _clamp(_to_float(params.get("weather_position_pct"), 0.05), 0.0, 1.0)
-        min_order_notional = max(0.0, _to_float(params.get("weather_min_order_notional"), 1.0))
-
-        take_profit_abs = max(0.0, _to_float(params.get("weather_take_profit_abs"), 0.01))
-        stop_loss_abs = max(0.0, _to_float(params.get("weather_stop_loss_abs"), 0.03))
-        min_hold_sec = max(0.0, _to_float(params.get("weather_min_hold_hours"), 0.0)) * 3600.0
-        max_hold_sec = max(0.0, _to_float(params.get("weather_max_hold_hours"), 48.0)) * 3600.0
-        exit_before_sec = max(0.0, _to_float(params.get("weather_exit_before_hours"), 6.0)) * 3600.0
-        cooldown_sec = max(0.0, _to_float(params.get("weather_reentry_cooldown_hours"), 12.0)) * 3600.0
-        allow_reentry = _to_bool(params.get("weather_allow_reentry"), True)
-        force_flat_on_range_break = _to_bool(params.get("weather_force_flat_on_range_break"), True)
-
-        token_end_ts_map = params.get("weather_token_end_ts", {})
-        token_end_ts = _to_float(token_end_ts_map.get(token_id, 0.0))
-
-        spread_now = 0.0
-        if event.best_bid and event.best_ask:
-            spread_now = max(0.0, event.best_ask - event.best_bid)
-
-        if position <= 1e-9:
-            if not allow_reentry and token_state.last_exit_ts > 0:
-                return []
-            if token_state.last_exit_ts > 0 and cooldown_sec > 0 and (now - token_state.last_exit_ts) < cooldown_sec:
-                return []
-            if spread_now > 0 and spread_now > max_entry_spread:
-                return []
-            if mid < entry_min or mid > entry_max:
-                return []
-
-            usdc_balance = max(0.0, _to_float(context.run_params.get("usdc_balance", 0.0)))
-            entry_price = min(mid, (event.best_bid or mid) + 0.001)
-            entry_price = _clamp(entry_price, entry_min, entry_max)
-
-            budget = usdc_balance * position_pct
-            if budget <= 0 or entry_price <= 0:
-                return []
-
-            buy_size = budget / max(entry_price, 1e-6)
-
-            max_pos = max(0.0, _to_float(params.get("max_position", 0.0)))
-            if max_pos > 0:
-                buy_size = min(buy_size, max_pos)
-
-            if (buy_size * entry_price) < min_order_notional:
-                return []
-
-            logger.info("[%s] Entry conditions met for %s. Issuing BUY command.", self.key, token_id)
-            return [
-                OrderCommand(
-                    instance_id=context.instance_id,
-                    strategy_key=self.key,
-                    token_id=token_id,
-                    side=OrderSide.BUY,
-                    size=buy_size,
-                    price=round(entry_price, 3),
-                    order_type=OrderType.LIMIT,
-                )
-            ]
-
-        entry_mid = token_state.entry_mid if token_state.entry_mid > 0 else mid
-        hold_sec = (now - token_state.entry_ts) if token_state.entry_ts > 0 else 0.0
-
-        stop_loss_hit = stop_loss_abs > 0 and mid <= (entry_mid - stop_loss_abs)
-        take_profit_hit = (
-            take_profit_abs > 0 and mid >= (entry_mid + take_profit_abs) and hold_sec >= min_hold_sec
+        forecast_distance = self._forecast_distance_from_bucket(token_id)
+        event_context = event.context if isinstance(event.context, dict) else {}
+        price_tick = max(0.0001, to_float(params.get("price_tick"), 0.001))
+        decision = make_decision(
+            quote=WeatherDecisionInput(
+                token_id=token_id,
+                mid=mid,
+                adaptive_spread=to_float(event_context.get("adaptive_spread"), to_float(params.get("adaptive_spread"), 0.04)),
+                best_bid=to_float(event.best_bid, 0.0),
+                best_ask=to_float(event.best_ask, 0.0),
+                position=position,
+                effective_usdc_balance=max(0.0, to_float(params.get("usdc_balance"), 0.0)),
+                open_buy_qty=to_float(event_context.get("open_buy_qty"), 0.0),
+                open_sell_qty=to_float(event_context.get("open_sell_qty"), 0.0),
+            ),
+            state=token_state,
+            params=WeatherDecisionParams.from_mapping(params),
+            runtime=WeatherRuntimeConfig(
+                max_position=max(0.0, to_float(params.get("max_position"), 0.0)),
+                min_size=max(0.0, to_float(params.get("min_size"), 0.01)),
+                price_tick=price_tick,
+                join_epsilon=max(0.0, to_float(params.get("join_epsilon"), 0.001)),
+            ),
+            now=now,
+            forecast_distance=forecast_distance,
+            quantize_price=lambda price: self._quantize_price(price, price_tick=price_tick),
         )
-        max_hold_hit = max_hold_sec > 0 and hold_sec >= max_hold_sec
-        pre_settlement_exit = token_end_ts > 0 and now >= max(0.0, token_end_ts - exit_before_sec)
-        range_break_hit = force_flat_on_range_break and mid < entry_min
+        if decision is None:
+            return []
 
-        if stop_loss_hit or take_profit_hit or max_hold_hit or pre_settlement_exit or range_break_hit:
-            aggressive = stop_loss_hit or range_break_hit
-            exit_price = (event.best_bid or mid) - 0.001 if aggressive else mid
+        logger.info("[%s] %s conditions met for %s. Issuing %s command.", self.key, decision.reason, token_id, decision.side)
+        return [
+            OrderCommand(
+                instance_id=context.instance_id,
+                strategy_key=self.key,
+                token_id=token_id,
+                side=OrderSide(decision.side),
+                size=decision.size,
+                price=decision.price,
+                order_type=OrderType.LIMIT,
+            )
+        ]
 
-            logger.info("[%s] Exit conditions met for %s. Issuing SELL command.", self.key, token_id)
-            return [
-                OrderCommand(
-                    instance_id=context.instance_id,
-                    strategy_key=self.key,
-                    token_id=token_id,
-                    side=OrderSide.SELL,
-                    size=position,
-                    price=round(max(0.001, exit_price), 3),
-                    order_type=OrderType.LIMIT,
-                )
-            ]
+    def _forecast_distance_from_bucket(self, token_id: str) -> Optional[float]:
+        forecast_c = self._weather_provider.get_daily_max_temperature(token_id)
+        meta = self._weather_target_meta.get(token_id) or {}
+        return forecast_distance_from_bucket(forecast_c, meta)
 
-        return []
-
-    def _sync_state(self, state: TokenState, position: float, mid: float, now: float) -> None:
-        prev = max(0.0, state.last_position)
-        curr = max(0.0, position)
-
-        if curr <= 1e-9:
-            if prev > 1e-9:
-                state.last_exit_ts = now
-            state.last_position = 0.0
-            state.entry_mid = 0.0
-            state.entry_ts = 0.0
-            return
-
-        if prev <= 1e-9:
-            state.entry_mid = max(0.0, mid)
-            state.entry_ts = now
-        elif curr > prev + 1e-9:
-            added = curr - prev
-            if state.entry_mid <= 0:
-                state.entry_mid = max(0.0, mid)
-            else:
-                state.entry_mid = ((state.entry_mid * prev) + (mid * added)) / max(curr, 1e-9)
-        state.last_position = curr
+    def _quantize_price(self, price: float, *, price_tick: float) -> float:
+        tick = max(0.0001, price_tick)
+        quantized = round(round(price / tick) * tick, 3)
+        return clamp(quantized, 0.0001, 0.9999)
 
     async def on_order_update(
         self, context: StrategyContext, event: OrderUpdateEvent

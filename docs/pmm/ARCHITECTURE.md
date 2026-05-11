@@ -1,6 +1,6 @@
 # PMM 架构说明
 
-> **最近更新**：2026-05-11
+> **最近更新**：2026-05-12
 
 ## 概览
 
@@ -9,6 +9,11 @@ PMM（Polymarket Market Maker）是一个分层做市系统，支持：
 - 做市策略插件化（`single_level_v1` / `multi_level_v1`）
 - `paper` / `live` 执行模式切换
 - 真实数据录制、场景回放、批量回测与绘图
+
+当前代码里 `src/strategies/pmm/` 还包含一部分可复用 trading runtime：
+tick 编排、账户/挂单暴露、broker、risk guard、recorder 和 replay runner。
+这部分能力会逐步迁到 `src/platform/` 下的通用 runtime 命名空间；`src/strategies/pmm/`
+最终只保留 PMM 做市策略族和薄入口。迁移期间旧 import 路径应保留兼容 shim。
 
 ## 目录结构
 
@@ -58,6 +63,9 @@ src/platform/market_data/
 ├── market_ws.py                  # WebSocket 行情 + 本地 L2 盘口
 ├── orderbook.py                  # 盘口工具函数
 └── parsers.py                    # 接口响应解析
+
+src/platform/quote_runtime/
+└── strategy_base.py              # QuoteStrategy / StrategyQuoteInput / QuoteTarget
 ```
 
 ## 分层依赖规则
@@ -115,16 +123,17 @@ utils/（通用基础）
 
 ## 策略系统
 
-策略实现统一遵循 `MarketMakingStrategy` 协议。
+策略实现统一遵循 `src/platform/quote_runtime/strategy_base.py` 里的 `QuoteStrategy` 协议。
+旧名 `MarketMakingStrategy` 和旧路径 `src/strategies/pmm/core/strategy_base.py` 暂时保留为兼容 shim。
 
-`src/strategies/pmm/variants/` 只放 PMM 做市策略的实现。非 PMM 策略如果复用 PMM engine，应把 adapter 放在自己的策略目录下，并通过自己的 `manifest.yaml` 暴露 `strategy_module`。
+`src/strategies/pmm/variants/` 只放 PMM 做市策略的实现。非 PMM 策略如果复用当前 quote/tick runtime，应把 adapter 放在自己的策略目录下，并通过自己的 `manifest.yaml` 暴露 `strategy_module`。
 
 当前策略：
 
 - `single_level_v1`：每侧 1 档
 - `multi_level_v1`：每侧 N 档（可配步长和 size 衰减）
 
-复用 PMM engine 的非 PMM 策略不列为 PMM 策略本体。PMM engine 运行时从全局策略 manifest 动态加载 `domain: pmm` 且 `is_active: true` 的 adapter。
+复用当前 quote/tick runtime 的非 PMM 策略不列为 PMM 策略本体。运行时从全局策略 manifest 动态加载 `domain: pmm` 且 `is_active: true` 的 adapter；这里的 `domain: pmm` 是历史 runner 标识，不应理解为策略归属。
 
 ## 执行模式
 

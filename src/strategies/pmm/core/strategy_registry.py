@@ -4,7 +4,7 @@ import importlib
 import inspect
 from typing import Dict, Optional
 
-from src.strategies.pmm.core.strategy_base import MarketMakingStrategy
+from src.platform.quote_runtime.strategy_base import MarketMakingStrategy
 from src.strategies.registry import load_strategy_catalog
 
 

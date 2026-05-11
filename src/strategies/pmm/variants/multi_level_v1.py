@@ -4,7 +4,7 @@ from typing import Callable, List, Tuple
 
 from src.strategies.pmm.config import PMMConfig
 from src.strategies.pmm.core.pricing import compute_quotes_pro
-from src.strategies.pmm.core.strategy_base import QuoteTarget, StrategyQuoteInput
+from src.platform.quote_runtime.strategy_base import QuoteTarget, StrategyQuoteInput
 
 AnchorFn = Callable[[float, float, float, float, float, float, float], Tuple[float, float]]
 QuantizeFn = Callable[[float, float, float, str], Tuple[float, float]]

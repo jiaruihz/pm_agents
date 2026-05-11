@@ -1,6 +1,6 @@
 # weather_edge_v1 Current Status And Roadmap
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 ## Strategy Name
 
@@ -147,6 +147,8 @@ Live has two explicit gates:
 - Added docs for weather execution architecture.
 - Promoted historical weather supplement in `weather-predict`.
 - Started remote paper snapshot collection on N100.
+- Centralized runtime entry/exit, sizing, default params, and weather bucket distance rules in `src/strategies/weather_edge_v1/core.py`.
+- Updated both PMM and unified-engine weather adapters to call the shared core instead of carrying separate strategy logic.
 
 ## What Is Not Done
 
@@ -155,6 +157,34 @@ Live has two explicit gates:
 - No daily `pm_agent` report yet compares signal, paper, live, and settlement in one place.
 - Settlement and replay reports still mostly live in `weather-predict`.
 - True Wunderground browser-based observation validation remains a later verification step.
+- PMM's reusable tick/execution/backtest runtime still lives under `src/strategies/pmm/`; it should move to a neutral `src/platform` runtime namespace in a separate migration.
+- Some weather research tools still read archived manual airport config; production code should either migrate those config files back under `config/` or mark those tools research-only.
+- Quote strategy protocol types now live in `src/platform/quote_runtime/strategy_base.py`; the old PMM path is a compatibility shim.
+
+## Architecture Cleanup Plan
+
+### P0: Keep Weather Rules Single-Sourced
+
+- Treat `src/strategies/weather_edge_v1/core.py` as the only implementation point for strategy defaults, entry, exit, sizing, and weather bucket distance logic.
+- Keep `pmm_adapter.py` and `tools/unified_strategy.py` as adapter-only layers.
+- Add regression tests when changing `weather_entry_max_price`, `weather_take_profit_abs`, forecast entry/exit, or open-order exposure behavior.
+
+### P1: Move Runtime Infra Out Of PMM
+
+- Create a neutral runtime namespace under `src/platform/` for quote/tick execution concepts.
+- Move `StrategyQuoteInput`, `QuoteTarget`, broker interfaces, order manager, risk guards, recorder, and replay runner behind compatibility shims. `StrategyQuoteInput` and `QuoteTarget` have been moved first.
+- Keep `src/strategies/pmm/variants/` for PMM market-making strategies only.
+
+### P2: Consolidate Weather Market Data Tools
+
+- Extract shared orderbook snapshot utilities from `market_query_tool.py`, `weather_edge_market_data.py`, and `edge_orderbook_source.py`.
+- Keep both real-time CLOB fetch and local JSONL/GZ replay use cases.
+- Remove or convert old modules to shims only after script entry points and tests use the shared implementation.
+
+### P3: Archive Old Research Artifacts Carefully
+
+- Move non-standard March case logs, old prompt reviews, and postmortems into archive after updating README references.
+- Do not delete `weather_edge_v1_todo.md` until it is replaced by a maintained roadmap or issue tracker.
 
 ## Near-Term Plan
 
