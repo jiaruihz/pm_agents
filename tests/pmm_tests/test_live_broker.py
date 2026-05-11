@@ -1,6 +1,7 @@
 import pytest
 
-from src.strategies.pmm.execution.live_broker import LiveBroker
+from src.platform.quote_runtime.execution.live_broker import LiveBroker
+from src.strategies.pmm.execution.live_broker import LiveBroker as LegacyLiveBroker
 
 
 class DummyClient:
@@ -122,3 +123,7 @@ async def test_live_broker_cancel_and_merge():
     assert c2["canceled"] == ["o1", "o2"]
     assert c3["canceled"] == "all"
     assert m["amount"] == 100
+
+
+def test_legacy_pmm_live_broker_reexports_platform_type():
+    assert LegacyLiveBroker is LiveBroker

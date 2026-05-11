@@ -40,9 +40,9 @@ from src.platform.market_data.parsers import (
     parse_partition as _parse_partition,
     pending_credit_total as _pending_credit_total,
 )
-from src.strategies.pmm.execution.order_manager import OrderManager
-from src.strategies.pmm.execution.paper_broker import PaperBroker
-from src.strategies.pmm.execution.live_broker import LiveBroker
+from src.platform.quote_runtime.execution.order_manager import OrderManager
+from src.platform.quote_runtime.execution.paper_broker import PaperBroker
+from src.platform.quote_runtime.execution.live_broker import LiveBroker
 from src.strategies.pmm.engine.context_builder import build_history_context, build_token_context
 from src.platform.notification.telegram import PMMTelegramNotifier
 from src.platform.quote_runtime.risk.safety_guard import SafetyGuard

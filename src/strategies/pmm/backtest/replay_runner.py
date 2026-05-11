@@ -16,8 +16,8 @@ from src.strategies.pmm.core.sizing import target_sizes
 from src.platform.quote_runtime.strategy_base import StrategyQuoteInput
 from src.strategies.pmm.core.strategy_registry import build_pmm_strategy_registry
 from src.platform.market_data.orderbook import best_bid_ask, spread as orderbook_spread
-from src.strategies.pmm.execution.order_manager import OrderManager
-from src.strategies.pmm.execution.paper_broker import PaperBroker
+from src.platform.quote_runtime.execution.order_manager import OrderManager
+from src.platform.quote_runtime.execution.paper_broker import PaperBroker
 from src.strategies.pmm.utils.quantize import quantize_quote_pair
 from src.strategies.pmm.backtest.scenario_validator import validate_scenario_payload
 

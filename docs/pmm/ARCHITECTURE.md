@@ -66,6 +66,11 @@ src/platform/market_data/
 
 src/platform/quote_runtime/
 ├── strategy_base.py              # QuoteStrategy / StrategyQuoteInput / QuoteTarget
+├── execution/
+│   ├── broker_interface.py       # 通用 Broker 抽象接口
+│   ├── live_broker.py            # 实盘执行（支持 dry_run）
+│   ├── paper_broker.py           # 模拟执行（本地撮合）
+│   └── order_manager.py          # 挂撤单 diff + deadband
 └── risk/
     ├── safety_guard.py           # 通用下单前硬风控
     └── circuit_breaker.py        # 通用价格跳变熔断组件
@@ -146,6 +151,9 @@ utils/（通用基础）
 |------|--------|------|
 | `paper` | `PaperBroker` | 回测/仿真（真实行情 + 本地撮合） |
 | `live` | `LiveBroker` | 实盘执行（支持 dry_run） |
+
+Broker 和 order diff 的通用实现位于 `src/platform/quote_runtime/execution/`。
+旧 `src/strategies/pmm/execution/*` 路径暂时保留为兼容 shim。
 
 ## 行情来源
 

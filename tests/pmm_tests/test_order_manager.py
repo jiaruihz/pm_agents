@@ -1,7 +1,8 @@
 """Unit tests for PMM Order Manager module."""
 
 import unittest
-from src.strategies.pmm.execution.order_manager import OrderManager, MultiDiffDecision
+from src.platform.quote_runtime.execution.order_manager import OrderManager, MultiDiffDecision
+from src.strategies.pmm.execution.order_manager import OrderManager as LegacyOrderManager
 
 
 class TestOrderManager(unittest.TestCase):
@@ -13,7 +14,7 @@ class TestOrderManager(unittest.TestCase):
 
     def test_should_replace_true(self):
         """Test should_replace when replacement is needed."""
-        from src.strategies.pmm.execution.order_manager import ManagedOrder
+        from src.platform.quote_runtime.execution.order_manager import ManagedOrder
         old_order = ManagedOrder(
             order_id="1",
             token_id="token1",
@@ -28,7 +29,7 @@ class TestOrderManager(unittest.TestCase):
 
     def test_should_replace_false(self):
         """Test should_replace when replacement is not needed."""
-        from src.strategies.pmm.execution.order_manager import ManagedOrder
+        from src.platform.quote_runtime.execution.order_manager import ManagedOrder
         old_order = ManagedOrder(
             order_id="1",
             token_id="token1",
@@ -125,6 +126,9 @@ class TestOrderManager(unittest.TestCase):
         self.assertEqual(len(decision.create_targets), 1)
         self.assertEqual(decision.create_targets[0]["price"], 99.0)
         self.assertEqual(len(decision.kept_order_ids), 0)
+
+    def test_legacy_pmm_order_manager_reexports_platform_type(self):
+        self.assertIs(LegacyOrderManager, OrderManager)
 
 
 if __name__ == '__main__':
