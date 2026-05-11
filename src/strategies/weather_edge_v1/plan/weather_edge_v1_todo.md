@@ -160,6 +160,7 @@ Live has two explicit gates:
 - PMM's reusable tick/execution/backtest runtime still lives under `src/strategies/pmm/`; it should move to a neutral `src/platform` runtime namespace in a separate migration.
 - Some weather research tools still read archived manual airport config; production code should either migrate those config files back under `config/` or mark those tools research-only.
 - Quote strategy protocol types now live in `src/platform/quote_runtime/strategy_base.py`; the old PMM path is a compatibility shim.
+- Safety/risk primitives now live in `src/platform/quote_runtime/risk/`; old PMM risk paths are compatibility shims.
 
 ## Architecture Cleanup Plan
 
@@ -172,7 +173,7 @@ Live has two explicit gates:
 ### P1: Move Runtime Infra Out Of PMM
 
 - Create a neutral runtime namespace under `src/platform/` for quote/tick execution concepts.
-- Move `StrategyQuoteInput`, `QuoteTarget`, broker interfaces, order manager, risk guards, recorder, and replay runner behind compatibility shims. `StrategyQuoteInput` and `QuoteTarget` have been moved first.
+- Move `StrategyQuoteInput`, `QuoteTarget`, broker interfaces, order manager, risk guards, recorder, and replay runner behind compatibility shims. `StrategyQuoteInput`, `QuoteTarget`, `SafetyGuard`, and `CircuitBreaker` have been moved first.
 - Keep `src/strategies/pmm/variants/` for PMM market-making strategies only.
 
 ### P2: Consolidate Weather Market Data Tools

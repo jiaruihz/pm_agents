@@ -1,6 +1,9 @@
 import pytest
 
-from src.strategies.pmm.risk.safety_guard import RiskError, SafetyGuard, SecurityError
+from src.platform.quote_runtime.risk.circuit_breaker import CircuitBreaker
+from src.platform.quote_runtime.risk.safety_guard import RiskError, SafetyGuard, SecurityError
+from src.strategies.pmm.risk.circuit_breaker import CircuitBreaker as LegacyCircuitBreaker
+from src.strategies.pmm.risk.safety_guard import SafetyGuard as LegacySafetyGuard
 
 
 def _guard(**kwargs) -> SafetyGuard:
@@ -127,3 +130,18 @@ def test_predict_position_after_order_and_reset_daily():
     assert guard.daily_pnl == -12.0
     guard.reset_daily()
     assert guard.daily_pnl == 0.0
+
+
+def test_legacy_pmm_safety_guard_reexports_platform_type():
+    assert LegacySafetyGuard is SafetyGuard
+
+
+def test_circuit_breaker_and_legacy_reexport():
+    breaker = CircuitBreaker(threshold=0.10)
+    breaker.update({"YES_1": 0.50})
+
+    result = breaker.check({"YES_1": 0.60})
+
+    assert result.triggered
+    assert result.token_id == "YES_1"
+    assert LegacyCircuitBreaker is CircuitBreaker

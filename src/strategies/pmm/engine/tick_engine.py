@@ -45,7 +45,7 @@ from src.strategies.pmm.execution.paper_broker import PaperBroker
 from src.strategies.pmm.execution.live_broker import LiveBroker
 from src.strategies.pmm.engine.context_builder import build_history_context, build_token_context
 from src.platform.notification.telegram import PMMTelegramNotifier
-from src.strategies.pmm.risk.safety_guard import SafetyGuard
+from src.platform.quote_runtime.risk.safety_guard import SafetyGuard
 from src.strategies.pmm.utils.converters import best_level as _best_level, normalize_levels as _normalize_levels, to_float as _safe_float, to_int as _safe_int
 from src.strategies.pmm.utils.metrics import MetricsLogger
 from src.strategies.pmm.utils.quantize import (

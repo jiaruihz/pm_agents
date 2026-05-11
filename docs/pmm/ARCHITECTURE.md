@@ -65,7 +65,10 @@ src/platform/market_data/
 └── parsers.py                    # 接口响应解析
 
 src/platform/quote_runtime/
-└── strategy_base.py              # QuoteStrategy / StrategyQuoteInput / QuoteTarget
+├── strategy_base.py              # QuoteStrategy / StrategyQuoteInput / QuoteTarget
+└── risk/
+    ├── safety_guard.py           # 通用下单前硬风控
+    └── circuit_breaker.py        # 通用价格跳变熔断组件
 ```
 
 ## 分层依赖规则
@@ -155,8 +158,8 @@ utils/（通用基础）
 
 ## 风控
 
-- `SafetyGuard`：白名单、价格范围、肥手指、日亏损
-- `CircuitBreaker`：跳价检测，触发后自动 `cancel_all`
+- `SafetyGuard`：白名单、价格范围、肥手指、日亏损；实现位于 `src/platform/quote_runtime/risk/safety_guard.py`
+- `CircuitBreaker`：跳价检测，触发后自动 `cancel_all`；通用组件位于 `src/platform/quote_runtime/risk/circuit_breaker.py`
 - `In-flight Guard`：把 `pending_orders` 视为已存在订单参与 diff，减少确认延迟导致的重复下单
 
 ## 回测流程

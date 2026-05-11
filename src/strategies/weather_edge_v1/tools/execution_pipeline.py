@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
-from src.strategies.pmm.risk.safety_guard import RiskError, SafetyGuard, SecurityError
+from src.platform.quote_runtime.risk.safety_guard import RiskError, SafetyGuard, SecurityError
 
 
 DEFAULT_RUNTIME_ROOT = Path("runtime/weather_edge_v1")

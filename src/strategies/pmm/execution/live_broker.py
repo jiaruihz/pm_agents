@@ -6,7 +6,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from src.strategies.pmm.execution.broker_interface import BrokerInterface
-from src.strategies.pmm.risk.safety_guard import SafetyGuard
+from src.platform.quote_runtime.risk.safety_guard import SafetyGuard
 
 logger = logging.getLogger("pmm.live_broker")
 
