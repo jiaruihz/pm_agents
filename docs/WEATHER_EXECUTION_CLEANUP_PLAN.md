@@ -123,6 +123,25 @@ send Telegram summary
 5. 新增 `scripts/ops/deploy_pm_agent_to_n100.sh`，固定 rsync 排除列表。
 6. 新增 N100 systemd unit 模板，但默认不 enable。
 
+## 2026-05-15 Cleanup Notes
+
+今天实盘准备过程中发现的历史/重复代码候选:
+
+| Area | Finding | Current decision |
+|---|---|---|
+| Live pause state | `weather_live_cycle.py` 直接读写 `runtime/.../PAUSED`，后续 CLI 也需要同一状态 | 已抽到 `src/strategies/weather_edge_v1/tools/live_state.py`，新增 `scripts/ops/weather_live_status.py` |
+| `src/platform/execution/executor.py` | 历史 mock executor，不是 weather 实盘主链路 | 保留但标记为 cleanup 候选；不允许 weather live import |
+| `src/strategies/rule_lawyer/auto_order.py` | 其他策略历史自动下单代码 | 不进入 weather live；后续确认无调用后归档 |
+| `src/domains/research/auto_order.py` | 研究域历史下单代码 | 不进入 weather live；后续确认无调用后归档 |
+| `scripts/ops/pmm_live_order_test.py` vs `weather_order_executor.py` | 前者适合人工 CLOB smoke，后者是 weather 主执行入口 | 两者保留，文档上区分用途 |
+| `src/strategies/weather_theta_no_v1/` 未跟踪目录 | 旧天气策略/城市资料，与本轮 live 执行提交无关 | 暂不提交；需要单独决定归档或迁移 |
+
+Cleanup rule:
+
+- 不在实盘准备同一波里删除历史下单代码。
+- 先通过 `grep -R` / 测试确认没有 runtime import，再单独提交归档或删除。
+- 任何远端变更必须先在本机提交并推送，再由 N100 `git pull --ff-only origin develop` 同步。
+
 ## Rollback
 
 - 停止 N100 live timer。

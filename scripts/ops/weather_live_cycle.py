@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.platform.notification.telegram import send_telegram_message_sync
+from src.strategies.weather_edge_v1.tools.live_state import pause_live, read_live_state, resume_live, status_text
 
 
 def _utc_run_id() -> str:
@@ -347,10 +348,9 @@ def _handle_telegram_commands(state_dir: Path) -> Dict[str, Any]:
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if not chat_id or not token:
-        return {"commands": [], "paused": False}
+        return {"commands": [], **read_live_state(state_dir)}
 
     offset_path = state_dir / "telegram_update_offset.txt"
-    paused_path = state_dir / "PAUSED"
     offset = 0
     if offset_path.exists():
         try:
@@ -364,7 +364,7 @@ def _handle_telegram_commands(state_dir: Path) -> Dict[str, Any]:
     try:
         data = _telegram_post("getUpdates", payload)
     except Exception as exc:
-        return {"commands": [], "paused": paused_path.exists(), "error": f"{type(exc).__name__}: {exc}"}
+        return {"commands": [], **read_live_state(state_dir), "error": f"{type(exc).__name__}: {exc}"}
 
     updates = data.get("result") if isinstance(data, dict) else []
     if not isinstance(updates, list):
@@ -374,7 +374,7 @@ def _handle_telegram_commands(state_dir: Path) -> Dict[str, Any]:
         offset_path.write_text(str(max_update_id + 1), encoding="utf-8")
 
     if offset <= 0:
-        return {"commands": [], "paused": paused_path.exists(), "initialized": True}
+        return {"commands": [], **read_live_state(state_dir), "initialized": True}
 
     commands: List[str] = []
     for update in updates:
@@ -390,22 +390,18 @@ def _handle_telegram_commands(state_dir: Path) -> Dict[str, Any]:
         if not text:
             continue
         if text in {"/pause_weather", "pause", "暂停", "暂停实盘"}:
-            paused_path.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+            pause_live(state_dir, reason="Telegram 命令暂停", source="telegram")
             commands.append("pause")
             _send_text("已暂停 Weather 实盘。后续循环仍会同步数据和生成研究记录，但不会提交实盘订单。")
         elif text in {"/resume_weather", "resume", "继续", "恢复", "恢复实盘"}:
-            if paused_path.exists():
-                paused_path.unlink()
+            resume_live(state_dir)
             commands.append("resume")
             _send_text("已恢复 Weather 实盘。下一轮如果有合格计划，会按 maker-only 规则尝试挂单。")
         elif text in {"/status_weather", "status", "状态"}:
             commands.append("status")
-            if paused_path.exists():
-                _send_text("Weather 实盘循环正在运行，但当前处于暂停状态。发送 resume / 继续 可以恢复实盘。")
-            else:
-                _send_text("Weather 实盘循环正在运行，当前允许 maker-only 挂单。发送 pause / 暂停 可以停止实盘尝试。")
+            _send_text(status_text(read_live_state(state_dir)))
 
-    return {"commands": commands, "paused": paused_path.exists()}
+    return {"commands": commands, **read_live_state(state_dir)}
 
 
 def main() -> int:
