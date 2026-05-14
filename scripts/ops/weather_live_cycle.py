@@ -333,7 +333,10 @@ def _send_summary(
             f"- 实盘记录：{_short_path(live_path)}",
         ]
     )
-    send_telegram_message_sync("\n".join(lines))
+    try:
+        send_telegram_message_sync("\n".join(lines))
+    except Exception as exc:
+        print(f"[WARN] telegram summary send failed: {type(exc).__name__}: {exc}")
 
 
 def _telegram_post(method: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -351,7 +354,10 @@ def _send_text(text: str) -> None:
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     if not chat_id:
         return
-    _telegram_post("sendMessage", {"chat_id": chat_id, "text": text})
+    try:
+        _telegram_post("sendMessage", {"chat_id": chat_id, "text": text})
+    except Exception as exc:
+        print(f"[WARN] telegram command reply failed: {type(exc).__name__}: {exc}")
 
 
 def _handle_telegram_commands(state_dir: Path) -> Dict[str, Any]:
