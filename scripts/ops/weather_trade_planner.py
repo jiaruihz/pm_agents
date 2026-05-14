@@ -33,7 +33,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-order-notional", type=float, default=1.0)
     parser.add_argument("--max-position", type=float, default=10.0)
     parser.add_argument("--min-edge", type=float, default=0.10)
+    parser.add_argument("--min-entry-price", type=float, default=0.25)
+    parser.add_argument("--max-entry-price", type=float, default=0.75)
     parser.add_argument("--price-offset", type=float, default=0.0)
+    parser.add_argument("--execution-policy", default="mid_price_core_v1")
     parser.add_argument("--enable-live", action="store_true", help="Mark accepted plans as live-enabled. Executor still requires --live --confirm-live.")
     parser.add_argument("--accepted-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -46,8 +49,11 @@ def main() -> int:
         max_order_notional=float(args.max_order_notional),
         max_position=float(args.max_position),
         min_edge=float(args.min_edge),
+        min_entry_price=float(args.min_entry_price),
+        max_entry_price=float(args.max_entry_price),
         price_offset=float(args.price_offset),
         live_enabled=bool(args.enable_live),
+        execution_policy=str(args.execution_policy),
     )
     result = plan_trades(
         signal_path=Path(args.signals),

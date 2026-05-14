@@ -31,6 +31,8 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             "side": "BUY_YES",
             "model_probability_yes": 0.62,
             "market_price": 0.40,
+            "best_bid": 0.39,
+            "best_ask": 0.41,
             "edge": 0.22,
             "min_edge": 0.10,
             "price_source": "orderbook_best_ask",
@@ -45,6 +47,9 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(signal["source_id"], "paper-1")
         self.assertEqual(signal["signal_side"], "BUY_YES")
         self.assertEqual(signal["order_side"], "BUY")
+        self.assertEqual(signal["best_bid"], 0.39)
+        self.assertEqual(signal["best_ask"], 0.41)
+        self.assertAlmostEqual(signal["spread"], 0.02)
 
     def test_import_signals_dedups(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -65,6 +70,24 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(plan["risk_status"], "passed")
         self.assertEqual(plan["paper_enabled"], True)
         self.assertEqual(plan["live_enabled"], False)
+        self.assertEqual(plan["execution_policy"], "mid_price_core_v1")
+        self.assertEqual(plan["entry_price_window"], "0.25-0.75")
+        self.assertEqual(plan["best_bid"], 0.39)
+        self.assertEqual(plan["best_ask"], 0.41)
+
+    def test_build_trade_plan_rejects_outside_mid_price_window(self):
+        low_signal = normalize_signal({**self._paper_decision(), "market_price": 0.24})
+        high_signal = normalize_signal({**self._paper_decision(), "market_price": 0.75})
+        assert low_signal is not None
+        assert high_signal is not None
+
+        low_plan = build_trade_plan(low_signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10))
+        high_plan = build_trade_plan(high_signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10))
+
+        self.assertEqual(low_plan["status"], "rejected")
+        self.assertEqual(low_plan["risk_reason"], "entry_price_below_min")
+        self.assertEqual(high_plan["status"], "rejected")
+        self.assertEqual(high_plan["risk_reason"], "entry_price_at_or_above_max")
 
     def test_plan_trades_can_filter_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -146,7 +169,11 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             )
 
             self.assertEqual(result["live_written"], 1)
-            self.assertEqual(len(live.read_text().splitlines()), 1)
+            rows = [json.loads(line) for line in live.read_text().splitlines()]
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["best_bid"], 0.39)
+            self.assertEqual(rows[0]["best_ask"], 0.41)
+            self.assertEqual(rows[0]["requested_price"], rows[0]["limit_price"])
 
 
 if __name__ == "__main__":

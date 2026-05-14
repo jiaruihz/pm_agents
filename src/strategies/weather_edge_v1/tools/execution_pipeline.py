@@ -86,6 +86,9 @@ def normalize_signal(row: Dict[str, Any], *, source_system: str = "weather-predi
 
     token_id = safe_str(row.get("token_id"))
     market_price = to_float(row.get("market_price"), 0.0)
+    best_bid = to_float(row.get("best_bid"), 0.0)
+    best_ask = to_float(row.get("best_ask"), 0.0)
+    spread = to_float(row.get("spread"), max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0)
     edge = to_float(row.get("edge"), 0.0)
     if not token_id or market_price <= 0:
         return None
@@ -112,6 +115,9 @@ def normalize_signal(row: Dict[str, Any], *, source_system: str = "weather-predi
         "order_side": "BUY",
         "model_probability_yes": to_float(row.get("model_probability_yes"), 0.0),
         "market_price": market_price,
+        "best_bid": best_bid,
+        "best_ask": best_ask,
+        "spread": spread,
         "edge": edge,
         "min_edge": to_float(row.get("min_edge"), 0.0),
         "price_source": safe_str(row.get("price_source")),
@@ -165,16 +171,22 @@ def import_signals(
 class PlannerConfig:
     max_order_notional: float = 1.0
     min_edge: float = 0.10
+    min_entry_price: float = 0.25
+    max_entry_price: float = 0.75
     price_offset: float = 0.0
     price_floor: float = 0.01
     price_ceiling: float = 0.99
     max_position: float = 10.0
     live_enabled: bool = False
+    execution_policy: str = "mid_price_core_v1"
 
 
 def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str, Any]:
     token_id = safe_str(signal.get("token_id"))
     market_price = to_float(signal.get("market_price"), 0.0)
+    best_bid = to_float(signal.get("best_bid"), 0.0)
+    best_ask = to_float(signal.get("best_ask"), 0.0)
+    spread = to_float(signal.get("spread"), max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0)
     edge = to_float(signal.get("edge"), 0.0)
     limit_price = max(config.price_floor, min(config.price_ceiling, market_price + config.price_offset))
     size = round(config.max_order_notional / limit_price, 6) if limit_price > 0 else 0.0
@@ -193,7 +205,14 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         "signal_side": safe_str(signal.get("signal_side")),
         "order_side": "BUY",
         "market_price": round(market_price, 6),
+        "best_bid": round(best_bid, 6),
+        "best_ask": round(best_ask, 6),
+        "spread": round(spread, 6),
         "limit_price": round(limit_price, 6),
+        "entry_price_min": round(config.min_entry_price, 6),
+        "entry_price_max": round(config.max_entry_price, 6),
+        "entry_price_window": f"{config.min_entry_price:.2f}-{config.max_entry_price:.2f}",
+        "execution_policy": safe_str(config.execution_policy),
         "size": size,
         "notional": round(size * limit_price, 6),
         "edge": round(edge, 6),
@@ -212,6 +231,20 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         "risk_reason": "",
         **base,
     }
+    if market_price < config.min_entry_price:
+        return {
+            **plan,
+            "status": "rejected",
+            "risk_status": "rejected",
+            "risk_reason": "entry_price_below_min",
+        }
+    if market_price >= config.max_entry_price:
+        return {
+            **plan,
+            "status": "rejected",
+            "risk_status": "rejected",
+            "risk_reason": "entry_price_at_or_above_max",
+        }
     if edge < config.min_edge:
         return {**plan, "status": "rejected", "risk_status": "rejected", "risk_reason": "edge_below_min"}
     guard = SafetyGuard(
@@ -287,8 +320,13 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "token_id": safe_str(plan.get("token_id")),
         "order_side": safe_str(plan.get("order_side")) or "BUY",
         "limit_price": to_float(plan.get("limit_price"), 0.0),
+        "best_bid": to_float(plan.get("best_bid"), 0.0),
+        "best_ask": to_float(plan.get("best_ask"), 0.0),
+        "spread": to_float(plan.get("spread"), 0.0),
         "size": to_float(plan.get("size"), 0.0),
         "notional": to_float(plan.get("notional"), 0.0),
+        "execution_policy": safe_str(plan.get("execution_policy")),
+        "entry_price_window": safe_str(plan.get("entry_price_window")),
         "source_plan_status": safe_str(plan.get("status")),
     }
     return {
@@ -301,6 +339,9 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, status: str) -> Dict[str, Any]:
+    best_bid = to_float(response.get("best_bid"), to_float(plan.get("best_bid"), 0.0))
+    best_ask = to_float(response.get("best_ask"), to_float(plan.get("best_ask"), 0.0))
+    spread = max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else to_float(plan.get("spread"), 0.0)
     base = {
         "plan_id": safe_str(plan.get("plan_id")),
         "signal_id": safe_str(plan.get("signal_id")),
@@ -313,8 +354,17 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "token_id": safe_str(plan.get("token_id")),
         "order_side": safe_str(plan.get("order_side")) or "BUY",
         "limit_price": to_float(plan.get("limit_price"), 0.0),
+        "requested_price": to_float(response.get("requested_price"), to_float(plan.get("limit_price"), 0.0)),
+        "posted_price": to_float(response.get("posted_price"), 0.0),
+        "best_bid": best_bid,
+        "best_ask": best_ask,
+        "spread": spread,
+        "maker_only": bool(response.get("maker_only", False)),
+        "clob_client": safe_str(response.get("clob_client")),
         "size": to_float(plan.get("size"), 0.0),
         "notional": to_float(plan.get("notional"), 0.0),
+        "execution_policy": safe_str(plan.get("execution_policy")),
+        "entry_price_window": safe_str(plan.get("entry_price_window")),
     }
     return {
         "record_type": "weather_edge_live_order",

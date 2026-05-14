@@ -12,4 +12,5 @@ python-dotenv>=1,<2
 rich>=13,<14
 zai-sdk
 py-clob-client>=0.34,<1
+py-clob-client-v2>=1.0.1,<2
 web3>=7,<8

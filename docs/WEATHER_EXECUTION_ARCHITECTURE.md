@@ -150,6 +150,32 @@ scripts/ops/weather_order_executor.py \
 
 `--cancel-after` is intended for the first tiny smoke orders. It submits through CLOB and immediately attempts cancel after placement.
 
+Current weather live execution rules:
+
+- `weather_trade_planner.py` defaults to `execution_policy=mid_price_core_v1`.
+- Accepted weather plans must satisfy `0.25 <= market_price < 0.75`.
+- `weather_order_executor.py` defaults to maker-only live placement.
+- Maker-only placement signs a limit order, posts it as `GTC` with `post_only=True`, and checks the current orderbook before sending.
+- For BUY orders, if the requested limit would cross the current best ask, the executor clamps to the current best bid; if no resting maker price is available, the live order is rejected.
+- `--allow-taker` exists only as an emergency/manual override and should not be used for the weather rollout.
+- After a live run, the executor attempts to send a Telegram summary with order counts and current weather positions unless `--no-telegram` is set.
+
+Live maker pricing discipline:
+
+- Maker-only does not mean "any price below ask is acceptable." Wide bid/ask spread must be treated as execution cost and adverse-selection risk.
+- Narrow spread: the executor may improve over best bid slightly if the edge remains positive after using the proposed maker price.
+- Wide spread: do not use stale snapshot entry or mid-like prices. Post only near best bid, or pass if the required edge is not large enough.
+- Stale snapshot drift: if the current orderbook has moved materially away from the snapshot entry price, the signal must be re-evaluated against current bid/ask before live entry.
+- Edge for live entry should be evaluated as `model win probability for the token - proposed maker price`, and should also record `edge_vs_bid` and `edge_vs_ask`.
+- The live plan/order record should keep enough data to reconstruct execution quality: snapshot entry, current best bid, current best ask, spread, proposed maker price, posted price, model win probability, and edge at the proposed price.
+- The goal of maker orders is not to maximize fill rate; it is to accept fills only when the resting price preserves the modeled edge.
+
+Practical examples:
+
+- `SF 66+ No`, bid/ask `0.41/0.53`, snapshot entry `0.50`: do not post `0.50` merely because it is below ask. With a 12c spread, either post near `0.41-0.42` or pass.
+- `Seattle 58-59 No`, bid/ask `0.44/0.54`, snapshot entry `0.485`: treat as wide spread. Prefer `0.45` with a short TTL; do not chase toward ask.
+- `Sao Paulo 25 No`, snapshot entry `0.74`, current bid/ask `0.81/0.87`: the original edge has likely been consumed by price drift. Recompute against current bid/ask; pass if edge at current maker price is too thin.
+
 ## Rollout Plan
 
 Completed baseline:
