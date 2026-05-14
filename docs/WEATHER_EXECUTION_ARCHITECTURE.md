@@ -194,7 +194,24 @@ resume / 继续
 status / 状态
 ```
 
-`weather_live_cycle.py` and `weather_live_status.py` share the same state helper, and the helper can read the older one-line timestamp format already present on N100.
+Realtime Telegram control:
+
+```bash
+# start a lightweight Telegram command loop; it does not trade
+scripts/ops/start_weather_telegram_control.sh
+
+# stop it
+scripts/ops/stop_weather_telegram_control.sh
+
+# check process/log
+cat runtime/weather_edge_v1/live_cycle/telegram_control.pid
+tail -f runtime/weather_edge_v1/live_cycle/telegram_control.out
+```
+
+`weather_telegram_control.py` polls Telegram every few seconds and only handles
+state commands. It does not generate signals, plans, or orders. `weather_live_cycle.py`,
+`weather_live_status.py`, and `weather_telegram_control.py` share the same state helper,
+and the helper can read the older one-line timestamp format already present on N100.
 
 Live maker pricing discipline:
 
