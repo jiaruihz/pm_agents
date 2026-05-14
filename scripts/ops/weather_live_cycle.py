@@ -160,6 +160,34 @@ def _to_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _to_usdc(raw_value: Any) -> str:
+    value = _to_int(raw_value, 0)
+    return f"{value / 1_000_000:.2f} USDC"
+
+
+def _short_path(path: Any) -> str:
+    text = str(path or "").strip()
+    if not text:
+        return "-"
+    try:
+        return str(Path(text).relative_to(ROOT))
+    except Exception:
+        return text
+
+
+def _first_sentence_for_skip(skipped: Any) -> str:
+    reason = str(skipped or "").strip()
+    if reason == "dry_run_live":
+        return "本轮只跑到计划生成，未尝试实盘下单。"
+    if reason == "paused_by_telegram":
+        return "实盘当前处于暂停状态，本轮只同步数据和生成计划，没有下单。"
+    if reason == "balance_allowance_preflight":
+        return "实盘下单前检查未通过：余额或授权不足，本轮没有提交订单。"
+    if reason:
+        return f"本轮未提交实盘订单，原因：{reason}。"
+    return "本轮已完成。"
+
+
 def _clob_balance_status() -> Dict[str, Any]:
     try:
         from py_clob_client_v2.client import ClobClient
@@ -227,46 +255,73 @@ def _send_summary(
     live_path: Path,
     errors: List[str],
 ) -> None:
+    sync_ok = int(sync.get("returncode", 1)) == 0
+    signal_ok = bool(signals)
+    planner_ok = bool(planner)
+    accepted = int(planner.get("accepted", 0) or 0)
+    live_orders = int(executor.get("live_orders", 0) or 0)
+    live_errors = int(executor.get("live_errors", 0) or 0)
+    paper_written = int(executor.get("paper_written", 0) or 0)
+    live_written = int(executor.get("live_written", 0) or 0)
+    skipped_disabled = int(executor.get("live_skipped_disabled", 0) or 0)
+    dedup = planner.get("live_dedup") if isinstance(planner.get("live_dedup"), dict) else {}
+    skipped_prior = int(dedup.get("skipped_prior_submitted_live", 0) or 0)
+    skipped_same_run = int(dedup.get("skipped_same_run_duplicate", 0) or 0)
+
+    if live_orders > 0 and live_errors == 0:
+        headline = f"本轮已提交 {live_written} 笔 maker-only 实盘订单。"
+    elif live_errors > 0:
+        headline = f"本轮尝试下单但有 {live_errors} 笔失败；没有发送 taker 单。"
+    else:
+        headline = _first_sentence_for_skip(executor.get("skipped"))
+
     lines = [
-        "【Weather live cycle】",
-        f"run_id: {run_id}",
-        f"sync_rc: {sync.get('returncode')}",
-        f"snapshot: {signals.get('snapshot', '-')}",
-        f"signals: {signals.get('signals', 0)}",
-        f"plans accepted: {planner.get('accepted', 0)}",
-        f"live_orders: {executor.get('live_orders', 0)}",
-        f"live_errors: {executor.get('live_errors', 0)}",
-        f"paper_written: {executor.get('paper_written', 0)}",
-        f"live_file: {live_path}",
+        "【Weather 实盘循环】",
+        headline,
+        "",
+        f"运行编号：{run_id}",
+        f"数据同步：{'成功' if sync_ok else '失败'}",
+        f"使用快照：{_short_path(signals.get('snapshot'))}",
+        f"信号筛选：从 {int(signals.get('records', 0) or 0)} 条记录里选出 {int(signals.get('signals', 0) or 0)} 条候选。",
+        f"交易计划：通过 {accepted} 条；跨轮去重跳过 {skipped_prior} 条，本轮重复跳过 {skipped_same_run} 条。",
+        f"执行结果：提交 {live_written} 笔，失败 {live_errors} 笔，paper 记录 {paper_written} 笔，未启用实盘跳过 {skipped_disabled} 条。",
     ]
+    if not signal_ok or not planner_ok:
+        lines.append("提醒：信号或计划输出解析为空，需要检查本轮日志。")
+
     if errors:
-        lines.extend(["", "errors:"])
+        lines.extend(["", "失败摘要："])
         lines.extend(f"- {err}" for err in errors)
+
     balance = executor.get("balance_preflight") if isinstance(executor, dict) else None
-    if isinstance(balance, dict) and not balance.get("ok_to_submit"):
-        lines.extend(
-            [
-                "",
-                "preflight:",
-                f"- balance: {balance.get('balance', '-')}",
-                f"- max_allowance: {balance.get('max_allowance', '-')}",
-                f"- funder: {balance.get('funder', '-')}",
-            ]
-        )
+    if isinstance(balance, dict):
+        if balance.get("ok_to_submit"):
+            lines.extend(["", f"资金检查：通过，可用余额约 {_to_usdc(balance.get('balance'))}。"])
+        else:
+            lines.extend(
+                [
+                    "",
+                    "资金检查：未通过，实盘提交已跳过。",
+                    f"余额：{_to_usdc(balance.get('balance'))}",
+                    f"funder：{balance.get('funder', '-')}",
+                ]
+            )
+
     if int(executor.get("live_errors", 0) or 0) > 0:
         lines.extend(
             [
                 "",
-                "Action needed: current blocker is likely wallet balance/allowance or CLOB auth. No taker order was sent.",
+                "需要处理：优先检查钱包余额、allowance 和 CLOB API 鉴权。策略默认 maker-only，不会主动吃单。",
             ]
         )
     if executor.get("skipped") == "balance_allowance_preflight":
         lines.extend(
             [
                 "",
-                "Action needed: CLOB balance/allowance preflight is zero, so live submit was skipped.",
+                "需要处理：CLOB 余额或授权为 0，本轮已安全跳过实盘提交。",
             ]
         )
+    lines.extend(["", f"计划文件：{_short_path(planner.get('out'))}", f"实盘记录：{_short_path(live_path)}"])
     send_telegram_message_sync("\n".join(lines))
 
 
@@ -337,15 +392,18 @@ def _handle_telegram_commands(state_dir: Path) -> Dict[str, Any]:
         if text in {"/pause_weather", "pause", "暂停", "暂停实盘"}:
             paused_path.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
             commands.append("pause")
-            _send_text("Weather live cycle paused. It will keep syncing/research, but skip live orders.")
+            _send_text("已暂停 Weather 实盘。后续循环仍会同步数据和生成研究记录，但不会提交实盘订单。")
         elif text in {"/resume_weather", "resume", "继续", "恢复", "恢复实盘"}:
             if paused_path.exists():
                 paused_path.unlink()
             commands.append("resume")
-            _send_text("Weather live cycle resumed. Maker-only live orders may be attempted next cycle.")
+            _send_text("已恢复 Weather 实盘。下一轮如果有合格计划，会按 maker-only 规则尝试挂单。")
         elif text in {"/status_weather", "status", "状态"}:
             commands.append("status")
-            _send_text("Weather live cycle is running. Send pause/暂停 to stop live attempts, resume/继续 to resume.")
+            if paused_path.exists():
+                _send_text("Weather 实盘循环正在运行，但当前处于暂停状态。发送 resume / 继续 可以恢复实盘。")
+            else:
+                _send_text("Weather 实盘循环正在运行，当前允许 maker-only 挂单。发送 pause / 暂停 可以停止实盘尝试。")
 
     return {"commands": commands, "paused": paused_path.exists()}
 

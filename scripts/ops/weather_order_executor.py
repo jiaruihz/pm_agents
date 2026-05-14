@@ -117,6 +117,13 @@ def _build_position_lines(*, wallet: str, limit: int = 8) -> List[str]:
     return lines
 
 
+def _short_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except Exception:
+        return str(path)
+
+
 def _send_execution_telegram(result: Dict[str, Any], *, live_out: Path) -> None:
     if not bool(result.get("live_requested")):
         return
@@ -126,19 +133,34 @@ def _send_execution_telegram(result: Dict[str, Any], *, live_out: Path) -> None:
         print(f"[WARN] telegram helper unavailable: {type(exc).__name__}: {exc}")
         return
 
+    live_orders = int(result.get("live_orders", 0) or 0)
+    live_written = int(result.get("live_written", 0) or 0)
+    live_errors = int(result.get("live_errors", 0) or 0)
+    skipped_disabled = int(result.get("live_skipped_disabled", 0) or 0)
+    paper_written = int(result.get("paper_written", 0) or 0)
+    if live_orders > 0 and live_errors == 0:
+        headline = f"已提交 {live_written} 笔 maker-only 实盘订单。"
+    elif live_errors > 0:
+        headline = f"本次执行有 {live_errors} 笔失败；未发送 taker 单。"
+    else:
+        headline = "本次没有提交实盘订单。"
+
     wallet = os.getenv("PM_ADDRESS", "").strip()
     lines = [
         "【Weather 实盘下单回报】",
+        headline,
         "",
-        f"- live_orders: {int(result.get('live_orders', 0))}",
-        f"- live_written: {int(result.get('live_written', 0))}",
-        f"- live_errors: {int(result.get('live_errors', 0))}",
-        f"- live_skipped_disabled: {int(result.get('live_skipped_disabled', 0))}",
-        f"- live_out: {live_out}",
+        f"计划读取：{int(result.get('plans_read', 0) or 0)} 条",
+        f"paper 记录：{paper_written} 条",
+        f"实盘提交：{live_written} 条成功，{live_errors} 条失败",
+        f"未启用实盘而跳过：{skipped_disabled} 条",
+        f"实盘记录文件：{_short_path(live_out)}",
         "",
-        "当前 weather 持仓",
+        "当前 Weather 相关持仓：",
         *_build_position_lines(wallet=wallet),
     ]
+    if live_errors > 0:
+        lines.extend(["", "需要处理：优先检查余额、allowance、CLOB 鉴权和盘口是否仍有可挂 maker 价格。"])
     try:
         send_telegram_message_sync("\n".join(lines))
     except Exception as exc:
