@@ -360,7 +360,27 @@ def _send_text(text: str) -> None:
         print(f"[WARN] telegram command reply failed: {type(exc).__name__}: {exc}")
 
 
+def _telegram_control_running(state_dir: Path) -> bool:
+    pid_path = state_dir / "telegram_control.pid"
+    if not pid_path.exists():
+        return False
+    try:
+        pid = int(pid_path.read_text(encoding="utf-8").strip())
+    except Exception:
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
 def _handle_telegram_commands(state_dir: Path) -> Dict[str, Any]:
+    if _telegram_control_running(state_dir):
+        return {"commands": [], **read_live_state(state_dir), "skipped": "telegram_control_running"}
+
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if not chat_id or not token:

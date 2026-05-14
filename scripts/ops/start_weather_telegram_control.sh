@@ -16,7 +16,7 @@ if [[ -s "$PID_FILE" ]]; then
 fi
 
 cd "$PROJECT_DIR"
-nohup .venv/bin/python scripts/ops/weather_telegram_control.py >"$OUT_FILE" 2>&1 &
+setsid .venv/bin/python scripts/ops/weather_telegram_control.py </dev/null >"$OUT_FILE" 2>&1 &
 pid="$!"
 echo "$pid" >"$PID_FILE"
 echo "started weather telegram control pid=$pid"
