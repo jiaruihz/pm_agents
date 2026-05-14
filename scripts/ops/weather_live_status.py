@@ -22,13 +22,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", help="Print machine-readable state JSON.")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("status", help="Show current weather live state.")
+    status = sub.add_parser("status", help="Show current weather live state.")
+    status.add_argument("--json", action="store_true", dest="command_json", help="Print machine-readable state JSON.")
 
     pause = sub.add_parser("pause", help="Pause live order submission.")
     pause.add_argument("--reason", default="", help="Human-readable pause reason.")
     pause.add_argument("--source", default="manual_cli", help="State change source label.")
+    pause.add_argument("--json", action="store_true", dest="command_json", help="Print machine-readable state JSON.")
 
-    sub.add_parser("resume", help="Resume live order submission.")
+    resume = sub.add_parser("resume", help="Resume live order submission.")
+    resume.add_argument("--json", action="store_true", dest="command_json", help="Print machine-readable state JSON.")
     return parser
 
 
@@ -42,7 +45,7 @@ def main() -> int:
     else:
         state = read_live_state(state_dir)
 
-    if args.json:
+    if args.json or bool(getattr(args, "command_json", False)):
         print(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True))
     else:
         print(status_text(state))
