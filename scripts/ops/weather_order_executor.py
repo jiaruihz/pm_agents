@@ -139,28 +139,40 @@ def _send_execution_telegram(result: Dict[str, Any], *, live_out: Path) -> None:
     skipped_disabled = int(result.get("live_skipped_disabled", 0) or 0)
     paper_written = int(result.get("paper_written", 0) or 0)
     if live_orders > 0 and live_errors == 0:
-        headline = f"已提交 {live_written} 笔 maker-only 实盘订单。"
+        headline = f"已提交 {live_written} 笔真实挂单。"
     elif live_errors > 0:
-        headline = f"本次执行有 {live_errors} 笔失败；未发送 taker 单。"
+        headline = f"本次执行有 {live_errors} 笔失败；没有主动吃单。"
     else:
-        headline = "本次没有提交实盘订单。"
+        headline = "本次没有提交真实订单。"
 
     wallet = os.getenv("PM_ADDRESS", "").strip()
     lines = [
-        "【Weather 实盘下单回报】",
+        "【天气策略下单回报】",
         headline,
         "",
-        f"计划读取：{int(result.get('plans_read', 0) or 0)} 条",
-        f"paper 记录：{paper_written} 条",
-        f"实盘提交：{live_written} 条成功，{live_errors} 条失败",
-        f"未启用实盘而跳过：{skipped_disabled} 条",
-        f"实盘记录文件：{_short_path(live_out)}",
-        "",
-        "当前 Weather 相关持仓：",
-        *_build_position_lines(wallet=wallet),
+        f"读取计划：{int(result.get('plans_read', 0) or 0)} 条。",
+        f"下单结果：成功 {live_written} 笔，失败 {live_errors} 笔。",
     ]
+    if paper_written:
+        lines.append(f"模拟记录：写入 {paper_written} 条。")
+    if skipped_disabled:
+        lines.append(f"未启用实盘而跳过：{skipped_disabled} 条。")
+    lines.extend(
+        [
+            "",
+            f"记录文件：{_short_path(live_out)}",
+            "",
+            "当前天气市场相关持仓：",
+            *_build_position_lines(wallet=wallet),
+        ]
+    )
     if live_errors > 0:
-        lines.extend(["", "需要处理：优先检查余额、allowance、CLOB 鉴权和盘口是否仍有可挂 maker 价格。"])
+        lines.extend(
+            [
+                "",
+                "需要处理：优先检查余额、授权、交易所 API 鉴权，以及盘口是否还有可挂价格。",
+            ]
+        )
     try:
         send_telegram_message_sync("\n".join(lines))
     except Exception as exc:

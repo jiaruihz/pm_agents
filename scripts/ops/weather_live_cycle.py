@@ -179,11 +179,11 @@ def _short_path(path: Any) -> str:
 def _first_sentence_for_skip(skipped: Any) -> str:
     reason = str(skipped or "").strip()
     if reason == "dry_run_live":
-        return "本轮只跑到计划生成，未尝试实盘下单。"
+        return "本轮只生成了交易计划，没有尝试真实下单。"
     if reason == "paused_by_telegram":
-        return "实盘当前处于暂停状态，本轮只同步数据和生成计划，没有下单。"
+        return "实盘当前是暂停状态。本轮已同步数据并生成计划，但没有下单。"
     if reason == "balance_allowance_preflight":
-        return "实盘下单前检查未通过：余额或授权不足，本轮没有提交订单。"
+        return "下单前检查没有通过，可能是余额或授权不足。本轮没有提交订单。"
     if reason:
         return f"本轮未提交实盘订单，原因：{reason}。"
     return "本轮已完成。"
@@ -270,23 +270,25 @@ def _send_summary(
     skipped_same_run = int(dedup.get("skipped_same_run_duplicate", 0) or 0)
 
     if live_orders > 0 and live_errors == 0:
-        headline = f"本轮已提交 {live_written} 笔 maker-only 实盘订单。"
+        headline = f"本轮已提交 {live_written} 笔真实挂单。"
     elif live_errors > 0:
-        headline = f"本轮尝试下单但有 {live_errors} 笔失败；没有发送 taker 单。"
+        headline = f"本轮尝试下单，但有 {live_errors} 笔失败；没有主动吃单。"
     else:
         headline = _first_sentence_for_skip(executor.get("skipped"))
 
     lines = [
-        "【Weather 实盘循环】",
+        "【天气策略实盘】",
         headline,
         "",
-        f"运行编号：{run_id}",
-        f"数据同步：{'成功' if sync_ok else '失败'}",
-        f"使用快照：{_short_path(signals.get('snapshot'))}",
-        f"信号筛选：从 {int(signals.get('records', 0) or 0)} 条记录里选出 {int(signals.get('signals', 0) or 0)} 条候选。",
-        f"交易计划：通过 {accepted} 条；跨轮去重跳过 {skipped_prior} 条，本轮重复跳过 {skipped_same_run} 条。",
-        f"执行结果：提交 {live_written} 笔，失败 {live_errors} 笔，paper 记录 {paper_written} 笔，未启用实盘跳过 {skipped_disabled} 条。",
+        f"数据同步：{'成功' if sync_ok else '失败'}。",
+        f"信号筛选：从 {int(signals.get('records', 0) or 0)} 条快照记录里，选出 {int(signals.get('signals', 0) or 0)} 条候选。",
+        f"交易计划：{accepted} 条通过风控；去重跳过 {skipped_prior + skipped_same_run} 条。",
+        f"下单结果：成功 {live_written} 笔，失败 {live_errors} 笔。",
     ]
+    if paper_written:
+        lines.append(f"模拟记录：写入 {paper_written} 条。")
+    if skipped_disabled:
+        lines.append(f"未启用实盘而跳过：{skipped_disabled} 条。")
     if not signal_ok or not planner_ok:
         lines.append("提醒：信号或计划输出解析为空，需要检查本轮日志。")
 
@@ -297,14 +299,13 @@ def _send_summary(
     balance = executor.get("balance_preflight") if isinstance(executor, dict) else None
     if isinstance(balance, dict):
         if balance.get("ok_to_submit"):
-            lines.extend(["", f"资金检查：通过，可用余额约 {_to_usdc(balance.get('balance'))}。"])
+            lines.extend(["", f"资金和授权检查：通过，可用余额约 {_to_usdc(balance.get('balance'))}。"])
         else:
             lines.extend(
                 [
                     "",
-                    "资金检查：未通过，实盘提交已跳过。",
+                    "资金和授权检查：未通过，已跳过真实下单。",
                     f"余额：{_to_usdc(balance.get('balance'))}",
-                    f"funder：{balance.get('funder', '-')}",
                 ]
             )
 
@@ -312,17 +313,26 @@ def _send_summary(
         lines.extend(
             [
                 "",
-                "需要处理：优先检查钱包余额、allowance 和 CLOB API 鉴权。策略默认 maker-only，不会主动吃单。",
+                "需要处理：优先检查钱包余额、授权和交易所 API 鉴权。策略默认只挂单，不会主动吃单。",
             ]
         )
     if executor.get("skipped") == "balance_allowance_preflight":
         lines.extend(
             [
                 "",
-                "需要处理：CLOB 余额或授权为 0，本轮已安全跳过实盘提交。",
+                "需要处理：余额或授权为 0，本轮已安全跳过真实下单。",
             ]
         )
-    lines.extend(["", f"计划文件：{_short_path(planner.get('out'))}", f"实盘记录：{_short_path(live_path)}"])
+    lines.extend(
+        [
+            "",
+            "排查信息：",
+            f"- 运行编号：{run_id}",
+            f"- 快照：{_short_path(signals.get('snapshot'))}",
+            f"- 计划文件：{_short_path(planner.get('out'))}",
+            f"- 实盘记录：{_short_path(live_path)}",
+        ]
+    )
     send_telegram_message_sync("\n".join(lines))
 
 
@@ -392,11 +402,11 @@ def _handle_telegram_commands(state_dir: Path) -> Dict[str, Any]:
         if text in {"/pause_weather", "pause", "暂停", "暂停实盘"}:
             pause_live(state_dir, reason="Telegram 命令暂停", source="telegram")
             commands.append("pause")
-            _send_text("已暂停 Weather 实盘。后续循环仍会同步数据和生成研究记录，但不会提交实盘订单。")
+            _send_text("已暂停天气策略实盘。后续循环仍会同步数据和生成计划，但不会提交真实订单。")
         elif text in {"/resume_weather", "resume", "继续", "恢复", "恢复实盘"}:
             resume_live(state_dir)
             commands.append("resume")
-            _send_text("已恢复 Weather 实盘。下一轮如果有合格计划，会按 maker-only 规则尝试挂单。")
+            _send_text("已恢复天气策略实盘。下一轮如果有合格计划，会只按挂单方式尝试提交，不主动吃单。")
         elif text in {"/status_weather", "status", "状态"}:
             commands.append("status")
             _send_text(status_text(read_live_state(state_dir)))

@@ -65,7 +65,7 @@ def resume_live(state_dir: Path) -> Dict[str, Any]:
 
 def status_text(state: Dict[str, Any]) -> str:
     if state.get("paused"):
-        lines = ["Weather 实盘状态：已暂停。"]
+        lines = ["天气策略实盘：已暂停。"]
         paused_at = str(state.get("paused_at_utc") or "").strip()
         reason = str(state.get("reason") or "").strip()
         source = str(state.get("source") or "").strip()
@@ -75,5 +75,6 @@ def status_text(state: Dict[str, Any]) -> str:
             lines.append(f"原因：{reason}")
         if source:
             lines.append(f"来源：{source}")
+        lines.append("暂停期间仍会同步数据和生成计划，但不会提交真实订单。")
         return "\n".join(lines)
-    return "Weather 实盘状态：允许运行。下一轮若有合格计划，会按 maker-only 规则尝试挂单。"
+    return "天气策略实盘：允许运行。下一轮如果有合格计划，会只按挂单方式尝试提交，不主动吃单。"
