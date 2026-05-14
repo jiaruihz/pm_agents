@@ -1,0 +1,33 @@
+city_key: london
+display_name: London
+settlement_station: London City Airport Station
+station_code: EGLC
+default_unit: C
+must_check_rules_each_time: true
+timezone: Europe/London
+
+wu_history_url: https://www.wunderground.com/history/daily/gb/london/EGLC
+wu_hourly_url: https://www.wunderground.com/hourly/gb/london/EGLC
+
+same_stack_reference:
+  - https://www.weather.com/
+
+official_secondary_source:
+  - TODO
+
+event_url_example:
+  - https://polymarket.com/event/highest-temperature-in-london-on-march-12-2026
+
+weather_traits:
+  - 标题写 London，但实际结算看 London City Airport
+  - 云层和海洋性气候会让小时峰值不稳定
+  - exact 档位容易被午后短暂升温决定
+
+common_mispricing:
+  - 把 London city page 当成 EGLC
+  - 忽视单位变化
+  - 把市中心热岛效应误当机场结算值
+
+notes:
+  - London 历史上既出现过摄氏盘，也出现过华氏盘
+  - 每次必须重新看 rules，不要写死单位

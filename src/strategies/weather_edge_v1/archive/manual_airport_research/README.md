@@ -29,6 +29,7 @@ What remains useful:
 - wrong-anchor warnings
 - source probing examples
 - older manual case logs
+- legacy city notes under `legacy_city_notes/`
 
 How to use it:
 

@@ -1,0 +1,33 @@
+city_key: paris
+display_name: Paris
+settlement_station: Charles de Gaulle Airport Station
+station_code: LFPG
+default_unit: C
+must_check_rules_each_time: true
+timezone: Europe/Paris
+
+wu_history_url: https://www.wunderground.com/history/daily/fr/paris/LFPG
+wu_hourly_url: https://www.wunderground.com/hourly/fr/paris/LFPG
+
+same_stack_reference:
+  - https://www.weather.com/
+
+official_secondary_source:
+  - TODO
+
+event_url_example:
+  - https://polymarket.com/event/highest-temperature-in-paris-on-march-12-2026
+
+weather_traits:
+  - 市场标题写 Paris，但实际结算站点是 CDG，不是巴黎市中心
+  - 机场站与城市热岛效应不同
+  - windy / cloud break 对 exact 温度档影响较大
+
+common_mispricing:
+  - 把 Paris city page 当成 LFPG
+  - 只看城市白天高温，不看小时峰值何时出现
+  - 过度锚定 midday warming
+
+notes:
+  - LFPG 页面在 WU 上会显示为 Charles de Gaulle Intl Airport Station
+  - 单位通常看 rules，不要默认只用摄氏
