@@ -9,6 +9,7 @@ tenacity>=8.2,<10
 pydantic>=2.8,<3
 typer>=0.12,<1
 python-dotenv>=1,<2
+PySocks>=1.7,<2
 rich>=13,<14
 zai-sdk
 py-clob-client>=0.34,<1

@@ -11,8 +11,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib import request
-from urllib.error import HTTPError
+
+import requests
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -67,12 +67,8 @@ def _pid_running(pid: Optional[int]) -> bool:
 def _http_check(name: str, url: str, timeout: float) -> Dict[str, Any]:
     started = time.time()
     try:
-        req = request.Request(url, method="HEAD", headers={"User-Agent": "pm-agent-weather-doctor/1.0"})
-        with request.urlopen(req, timeout=timeout) as resp:
-            status = int(getattr(resp, "status", 0) or 0)
-        return {"name": name, "ok": 200 <= status < 500, "status": status, "elapsed_sec": round(time.time() - started, 3)}
-    except HTTPError as exc:
-        status = int(getattr(exc, "code", 0) or 0)
+        resp = requests.head(url, timeout=timeout, headers={"User-Agent": "pm-agent-weather-doctor/1.0"})
+        status = int(resp.status_code)
         return {"name": name, "ok": 200 <= status < 500, "status": status, "elapsed_sec": round(time.time() - started, 3)}
     except Exception as exc:
         return {
