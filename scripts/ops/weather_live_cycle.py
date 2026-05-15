@@ -101,10 +101,15 @@ def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
 
 
 def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str]:
+    market_key = str(row.get("market_id") or "").strip()
+    if not market_key:
+        city = str(row.get("city") or "").strip()
+        bracket = str(row.get("bracket") or "").strip()
+        market_key = f"{city}|{bracket}" if city and bracket else str(row.get("token_id") or "").strip()
     return (
         str(row.get("strategy") or "weather_edge_v1").strip(),
         str(row.get("target_date") or "").strip(),
-        str(row.get("token_id") or "").strip(),
+        market_key,
         str(row.get("execution_policy") or "").strip(),
     )
 
@@ -449,7 +454,10 @@ def main() -> int:
         pass
 
     parser = argparse.ArgumentParser(description="Run one weather live cycle: sync -> signals -> plans -> maker-only executor.")
-    parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "3.90")))
+    parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))
+    parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default=os.getenv("WEATHER_LIVE_SIZING_MODE", "notional"))
+    parser.add_argument("--fixed-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_FIXED_ORDER_SHARES", "10.0")))
+    parser.add_argument("--city-pool", default=os.getenv("WEATHER_LIVE_CITY_POOL", "t1_trading"))
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
     parser.add_argument("--dry-run-live", action="store_true", help="Stop before live executor.")
     parser.add_argument("--no-telegram", action="store_true")
@@ -471,6 +479,8 @@ def main() -> int:
         "scripts/ops/weather_snapshot_signal_builder.py",
         "--out",
         str(signal_path),
+        "--city-pool",
+        str(args.city_pool),
     ]
     signal_run = _run(signal_cmd, timeout=180)
     signals = _load_json_from_output(signal_run["output"])
@@ -484,6 +494,10 @@ def main() -> int:
         str(plan_path),
         "--max-order-notional",
         str(float(args.max_order_notional)),
+        "--sizing-mode",
+        str(args.sizing_mode),
+        "--fixed-order-shares",
+        str(float(args.fixed_order_shares)),
         "--min-edge",
         str(float(args.min_edge)),
         "--enable-live",

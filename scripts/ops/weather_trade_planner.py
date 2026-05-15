@@ -31,6 +31,13 @@ def _parser() -> argparse.ArgumentParser:
         help="Output trade-plan JSONL.",
     )
     parser.add_argument("--max-order-notional", type=float, default=1.0)
+    parser.add_argument(
+        "--sizing-mode",
+        choices=("notional", "fixed_shares"),
+        default="notional",
+        help="Order sizing mode. notional uses max-order-notional / price; fixed_shares uses fixed-order-shares.",
+    )
+    parser.add_argument("--fixed-order-shares", type=float, default=10.0)
     parser.add_argument("--max-position", type=float, default=10.0)
     parser.add_argument("--min-edge", type=float, default=0.10)
     parser.add_argument("--min-entry-price", type=float, default=0.25)
@@ -47,6 +54,8 @@ def main() -> int:
     args = _parser().parse_args()
     config = PlannerConfig(
         max_order_notional=float(args.max_order_notional),
+        sizing_mode=str(args.sizing_mode),
+        fixed_order_shares=float(args.fixed_order_shares),
         max_position=float(args.max_position),
         min_edge=float(args.min_edge),
         min_entry_price=float(args.min_entry_price),

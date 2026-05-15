@@ -75,6 +75,24 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(plan["best_bid"], 0.39)
         self.assertEqual(plan["best_ask"], 0.41)
 
+    def test_build_trade_plan_supports_fixed_share_sizing(self):
+        signal = normalize_signal(self._paper_decision())
+        assert signal is not None
+        plan = build_trade_plan(
+            signal,
+            PlannerConfig(
+                max_order_notional=10.0,
+                sizing_mode="fixed_shares",
+                fixed_order_shares=10.0,
+                min_edge=0.10,
+            ),
+        )
+
+        self.assertEqual(plan["status"], "accepted")
+        self.assertEqual(plan["sizing_mode"], "fixed_shares")
+        self.assertEqual(plan["size"], 10.0)
+        self.assertEqual(plan["notional"], 4.0)
+
     def test_build_trade_plan_rejects_outside_mid_price_window(self):
         low_signal = normalize_signal({**self._paper_decision(), "market_price": 0.24})
         high_signal = normalize_signal({**self._paper_decision(), "market_price": 0.75})

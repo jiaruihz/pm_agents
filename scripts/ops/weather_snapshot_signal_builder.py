@@ -115,6 +115,7 @@ def build_signals(
     *,
     snapshot_path: Path,
     out_path: Path,
+    city_pool: str,
     min_edge: float,
     min_entry_price: float,
     max_entry_price: float,
@@ -128,6 +129,10 @@ def build_signals(
     skipped: Dict[str, int] = {}
 
     for record in records:
+        record_city_pool = _safe_str(record.get("city_pool"))
+        if city_pool and city_pool.lower() != "all" and record_city_pool != city_pool:
+            skipped[f"city_pool_not_{city_pool}"] = skipped.get(f"city_pool_not_{city_pool}", 0) + 1
+            continue
         side = _safe_str(record.get("side")).upper()
         if side not in {"BUY_YES", "BUY_NO"}:
             skipped["bad_side"] = skipped.get("bad_side", 0) + 1
@@ -187,6 +192,7 @@ def build_signals(
 
     return {
         "snapshot": str(snapshot_path),
+        "city_pool": city_pool,
         "records": len(records),
         "signals": len(signals),
         "out": str(out_path),
@@ -200,6 +206,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--snapshot", default="")
     parser.add_argument("--snapshot-dir", default=str(DEFAULT_MARKET_DATA / "paper_snapshots"))
     parser.add_argument("--out", default=str(DEFAULT_OUT))
+    parser.add_argument(
+        "--city-pool",
+        default="all",
+        help="Only import records from this snapshot city_pool, e.g. t1_trading. Use all to disable filtering.",
+    )
     parser.add_argument("--min-edge", type=float, default=0.10)
     parser.add_argument("--min-entry-price", type=float, default=0.25)
     parser.add_argument("--max-entry-price", type=float, default=0.75)
@@ -221,6 +232,7 @@ def main() -> int:
     result = build_signals(
         snapshot_path=snapshot,
         out_path=Path(args.out),
+        city_pool=str(args.city_pool),
         min_edge=float(args.min_edge),
         min_entry_price=float(args.min_entry_price),
         max_entry_price=float(args.max_entry_price),

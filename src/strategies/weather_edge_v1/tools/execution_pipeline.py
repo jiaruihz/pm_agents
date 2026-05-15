@@ -170,6 +170,8 @@ def import_signals(
 @dataclass(frozen=True)
 class PlannerConfig:
     max_order_notional: float = 1.0
+    sizing_mode: str = "notional"
+    fixed_order_shares: float = 10.0
     min_edge: float = 0.10
     min_entry_price: float = 0.25
     max_entry_price: float = 0.75
@@ -189,7 +191,13 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
     spread = to_float(signal.get("spread"), max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0)
     edge = to_float(signal.get("edge"), 0.0)
     limit_price = max(config.price_floor, min(config.price_ceiling, market_price + config.price_offset))
-    size = round(config.max_order_notional / limit_price, 6) if limit_price > 0 else 0.0
+    sizing_mode = safe_str(config.sizing_mode) or "notional"
+    if sizing_mode == "fixed_shares":
+        size = round(max(0.0, float(config.fixed_order_shares)), 6)
+    elif sizing_mode == "notional":
+        size = round(config.max_order_notional / limit_price, 6) if limit_price > 0 else 0.0
+    else:
+        size = 0.0
     base = {
         "signal_id": safe_str(signal.get("signal_id")),
         "strategy": "weather_edge_v1",
@@ -213,6 +221,8 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         "entry_price_max": round(config.max_entry_price, 6),
         "entry_price_window": f"{config.min_entry_price:.2f}-{config.max_entry_price:.2f}",
         "execution_policy": safe_str(config.execution_policy),
+        "sizing_mode": sizing_mode,
+        "fixed_order_shares": round(float(config.fixed_order_shares), 6),
         "size": size,
         "notional": round(size * limit_price, 6),
         "edge": round(edge, 6),
@@ -247,6 +257,8 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         }
     if edge < config.min_edge:
         return {**plan, "status": "rejected", "risk_status": "rejected", "risk_reason": "edge_below_min"}
+    if sizing_mode not in {"notional", "fixed_shares"}:
+        return {**plan, "status": "rejected", "risk_status": "rejected", "risk_reason": "bad_sizing_mode"}
     guard = SafetyGuard(
         allowed_tokens={token_id} if token_id else set(),
         max_order_value=config.max_order_notional,
@@ -316,6 +328,7 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "city": safe_str(plan.get("city")),
         "target_date": safe_str(plan.get("target_date")),
         "market_slug": safe_str(plan.get("market_slug")),
+        "market_id": safe_str(plan.get("market_id")),
         "bracket": safe_str(plan.get("bracket")),
         "token_id": safe_str(plan.get("token_id")),
         "order_side": safe_str(plan.get("order_side")) or "BUY",
@@ -327,6 +340,8 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "notional": to_float(plan.get("notional"), 0.0),
         "execution_policy": safe_str(plan.get("execution_policy")),
         "entry_price_window": safe_str(plan.get("entry_price_window")),
+        "sizing_mode": safe_str(plan.get("sizing_mode")),
+        "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),
         "source_plan_status": safe_str(plan.get("status")),
     }
     return {
@@ -350,6 +365,7 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "city": safe_str(plan.get("city")),
         "target_date": safe_str(plan.get("target_date")),
         "market_slug": safe_str(plan.get("market_slug")),
+        "market_id": safe_str(plan.get("market_id")),
         "bracket": safe_str(plan.get("bracket")),
         "token_id": safe_str(plan.get("token_id")),
         "order_side": safe_str(plan.get("order_side")) or "BUY",
@@ -365,6 +381,8 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "notional": to_float(plan.get("notional"), 0.0),
         "execution_policy": safe_str(plan.get("execution_policy")),
         "entry_price_window": safe_str(plan.get("entry_price_window")),
+        "sizing_mode": safe_str(plan.get("sizing_mode")),
+        "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),
     }
     return {
         "record_type": "weather_edge_live_order",
