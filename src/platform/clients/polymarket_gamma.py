@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -13,14 +14,16 @@ from src.strategies.rule_lawyer.services.common import normalize_json_list
 class PolymarketGammaClient:
     def __init__(self, base_url: str = "https://gamma-api.polymarket.com") -> None:
         self.base_url = base_url.rstrip("/")
+        self.timeout = float(os.getenv("POLYMARKET_GAMMA_TIMEOUT_SEC", "4.0"))
+        retries = int(os.getenv("POLYMARKET_GAMMA_RETRIES", "1"))
         self.session = requests.Session()
         self.session.mount(
             "https://",
             HTTPAdapter(
                 max_retries=Retry(
-                    total=3,
-                    connect=3,
-                    read=3,
+                    total=retries,
+                    connect=retries,
+                    read=retries,
                     backoff_factor=0.4,
                     status_forcelist=[429, 500, 502, 503, 504],
                     allowed_methods=frozenset(["GET"]),
@@ -33,7 +36,7 @@ class PolymarketGammaClient:
             f"{self.base_url}{path}",
             params={k: v for k, v in (params or {}).items() if v is not None and str(v) != ""},
             headers={"Accept": "application/json", "User-Agent": "pm-agent-polymarket-gamma/1.0"},
-            timeout=12.0,
+            timeout=self.timeout,
         )
         resp.raise_for_status()
         return json.loads(resp.text)
