@@ -6,6 +6,11 @@ REMOTE_DIR="${WEATHER_REMOTE_DIR:-~/projects/weather-predict}"
 LOCAL_ROOT="${WEATHER_LOCAL_ROOT:-runtime/weather_edge_v1/market_data}"
 SSH_KEY="${WEATHER_SSH_KEY:-$HOME/.ssh/id_ed25519_weather_deploy}"
 RSYNC_FLAGS=(-az --info=stats1,progress2)
+LOCAL_SOURCE=0
+
+if [[ "$REMOTE" == "local" || "$REMOTE" == "localhost" || "$REMOTE" == "127.0.0.1" ]]; then
+  LOCAL_SOURCE=1
+fi
 
 if [[ "${1:-}" == "--dry-run" ]]; then
   RSYNC_FLAGS+=("--dry-run")
@@ -17,8 +22,12 @@ sync_dir() {
   local remote_subdir="$1"
   local local_subdir="$2"
   mkdir -p "$LOCAL_ROOT/$local_subdir"
-  rsync "${RSYNC_FLAGS[@]}" -e "ssh ${SSH_OPTS[*]}" \
-    "$REMOTE:$REMOTE_DIR/$remote_subdir/" "$LOCAL_ROOT/$local_subdir/"
+  if [[ "$LOCAL_SOURCE" == "1" ]]; then
+    rsync "${RSYNC_FLAGS[@]}" "$REMOTE_DIR/$remote_subdir/" "$LOCAL_ROOT/$local_subdir/"
+  else
+    rsync "${RSYNC_FLAGS[@]}" -e "ssh ${SSH_OPTS[*]}" \
+      "$REMOTE:$REMOTE_DIR/$remote_subdir/" "$LOCAL_ROOT/$local_subdir/"
+  fi
 }
 
 sync_glob() {
@@ -26,9 +35,14 @@ sync_glob() {
   local pattern="$2"
   local local_subdir="$3"
   mkdir -p "$LOCAL_ROOT/$local_subdir"
-  rsync "${RSYNC_FLAGS[@]}" -e "ssh ${SSH_OPTS[*]}" \
-    --include="$pattern" --exclude='*' \
-    "$REMOTE:$REMOTE_DIR/$remote_subdir/" "$LOCAL_ROOT/$local_subdir/"
+  if [[ "$LOCAL_SOURCE" == "1" ]]; then
+    rsync "${RSYNC_FLAGS[@]}" --include="$pattern" --exclude='*' \
+      "$REMOTE_DIR/$remote_subdir/" "$LOCAL_ROOT/$local_subdir/"
+  else
+    rsync "${RSYNC_FLAGS[@]}" -e "ssh ${SSH_OPTS[*]}" \
+      --include="$pattern" --exclude='*' \
+      "$REMOTE:$REMOTE_DIR/$remote_subdir/" "$LOCAL_ROOT/$local_subdir/"
+  fi
 }
 
 echo "remote=$REMOTE:$REMOTE_DIR"
