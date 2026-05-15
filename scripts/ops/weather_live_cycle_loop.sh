@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-/home/rui/projects/pm_agent}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-$DEFAULT_PROJECT_DIR}"
 INTERVAL_SEC="${INTERVAL_SEC:-1800}"
 LOG_DIR="$PROJECT_DIR/runtime/weather_edge_v1/live_cycle"
 mkdir -p "$LOG_DIR"
