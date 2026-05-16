@@ -8,6 +8,11 @@ const NAV_ITEMS = [
   { to: "/backtests", label: "Backtests" },
 ];
 
+const WEATHER_NAV_ITEMS = [
+  { to: "/weather/runs", label: "⛅ Runs 运行" },
+  { to: "/weather/compare", label: "⚖ Compare 对比" },
+];
+
 export function PageFrame({ title, desc, children }: { title: string; desc: string; children: JSX.Element }): JSX.Element {
   return (
     <div className="app-shell">
@@ -15,6 +20,18 @@ export function PageFrame({ title, desc, children }: { title: string; desc: stri
         <div className="brand">STRAT OPS</div>
         <div className="brand-sub">Strategy Runtime Console</div>
         {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`.trim()}
+          >
+            {item.label}
+          </NavLink>
+        ))}
+        <div style={{ margin: "16px 0 6px", fontSize: 11, color: "var(--muted)", padding: "0 12px", letterSpacing: "0.08em" }}>
+          WEATHER
+        </div>
+        {WEATHER_NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
