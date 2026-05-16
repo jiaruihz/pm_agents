@@ -51,6 +51,21 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(signal["best_ask"], 0.41)
         self.assertAlmostEqual(signal["spread"], 0.02)
 
+    def test_normalize_signal_accepts_existing_weather_signal_side(self):
+        signal = normalize_signal(
+            {
+                **self._paper_decision(),
+                "record_type": "weather_edge_signal",
+                "side": "",
+                "signal_side": "BUY_NO",
+                "signal_id": "sig-1",
+            }
+        )
+
+        self.assertIsNotNone(signal)
+        assert signal is not None
+        self.assertEqual(signal["signal_side"], "BUY_NO")
+
     def test_import_signals_dedups(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "paper.jsonl"
@@ -121,6 +136,22 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
                 include_rejected=False,
             )
             self.assertEqual(result["plans"], 0)
+            self.assertEqual(result["all_plans"], 1)
+            self.assertEqual(result["rejected"], 1)
+            self.assertEqual(result["written"], 0)
+
+    def test_plan_trades_missing_signal_file_is_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "plans.jsonl"
+            result = plan_trades(
+                signal_path=Path(tmp) / "missing_signals.jsonl",
+                out_path=out,
+                config=PlannerConfig(max_order_notional=1.0, min_edge=0.10),
+                include_rejected=False,
+            )
+
+            self.assertEqual(result["signals"], 0)
+            self.assertEqual(result["plans"], 0)
             self.assertEqual(result["written"], 0)
 
     def test_execute_trade_plans_writes_paper_only_by_default(self):
@@ -189,6 +220,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(result["live_written"], 1)
             rows = [json.loads(line) for line in live.read_text().splitlines()]
             self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["signal_side"], "BUY_YES")
             self.assertEqual(rows[0]["best_bid"], 0.39)
             self.assertEqual(rows[0]["best_ask"], 0.41)
             self.assertEqual(rows[0]["requested_price"], rows[0]["limit_price"])

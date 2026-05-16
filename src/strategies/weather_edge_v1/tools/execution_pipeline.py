@@ -37,7 +37,10 @@ def stable_hash(payload: Dict[str, Any]) -> str:
 
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    with path.expanduser().open("r", encoding="utf-8") as fh:
+    expanded = path.expanduser()
+    if not expanded.exists():
+        return rows
+    with expanded.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if not line:
@@ -80,7 +83,7 @@ def normalize_signal(row: Dict[str, Any], *, source_system: str = "weather-predi
     if record_type not in {"paper_decision", "weather_edge_signal"}:
         return None
 
-    raw_side = safe_str(row.get("side")).upper()
+    raw_side = (safe_str(row.get("side")) or safe_str(row.get("signal_side"))).upper()
     if raw_side not in {"BUY_YES", "BUY_NO"}:
         return None
 
@@ -287,16 +290,18 @@ def plan_trades(
     dry_run: bool = False,
 ) -> Dict[str, Any]:
     signals = [row for row in read_jsonl(signal_path) if safe_str(row.get("record_type")) == "weather_edge_signal"]
-    plans = [build_trade_plan(signal, config) for signal in signals]
+    all_plans = [build_trade_plan(signal, config) for signal in signals]
+    accepted_total = sum(1 for plan in all_plans if safe_str(plan.get("status")) == "accepted")
+    rejected_total = sum(1 for plan in all_plans if safe_str(plan.get("status")) == "rejected")
+    plans = all_plans
     if not include_rejected:
         plans = [plan for plan in plans if safe_str(plan.get("status")) == "accepted"]
-    accepted = sum(1 for plan in plans if safe_str(plan.get("status")) == "accepted")
-    rejected = sum(1 for plan in plans if safe_str(plan.get("status")) == "rejected")
     summary = {
         "signals": len(signals),
         "plans": len(plans),
-        "accepted": accepted,
-        "rejected": rejected,
+        "all_plans": len(all_plans),
+        "accepted": accepted_total,
+        "rejected": rejected_total,
         "out": str(out_path),
         "dry_run": dry_run,
     }
@@ -331,6 +336,7 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "market_id": safe_str(plan.get("market_id")),
         "bracket": safe_str(plan.get("bracket")),
         "token_id": safe_str(plan.get("token_id")),
+        "signal_side": safe_str(plan.get("signal_side")),
         "order_side": safe_str(plan.get("order_side")) or "BUY",
         "limit_price": to_float(plan.get("limit_price"), 0.0),
         "best_bid": to_float(plan.get("best_bid"), 0.0),
@@ -368,6 +374,7 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "market_id": safe_str(plan.get("market_id")),
         "bracket": safe_str(plan.get("bracket")),
         "token_id": safe_str(plan.get("token_id")),
+        "signal_side": safe_str(plan.get("signal_side")),
         "order_side": safe_str(plan.get("order_side")) or "BUY",
         "limit_price": to_float(plan.get("limit_price"), 0.0),
         "requested_price": to_float(response.get("requested_price"), to_float(plan.get("limit_price"), 0.0)),
