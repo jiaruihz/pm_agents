@@ -66,6 +66,11 @@ def test_validate_order_blocks_max_order_notional():
         guard.validate_order("YES_1", 0.8, 20.0, "BUY")
 
 
+def test_validate_order_allows_floating_point_cap_boundary():
+    guard = _guard(max_order_value=5.0, max_buy_order_value=5.0, max_position=25.0)
+    guard.validate_order("YES_1", 0.395, 12.658228, "BUY")
+
+
 def test_validate_order_blocks_directional_buy_notional():
     guard = _guard(max_order_value=1000.0, max_buy_order_value=5.0)
     with pytest.raises(RiskError, match="BUY notional"):

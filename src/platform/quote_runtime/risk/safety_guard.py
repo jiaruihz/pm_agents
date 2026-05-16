@@ -24,6 +24,8 @@ class SafetyGuard:
     5. Max position — reject orders that would breach position limits.
     """
 
+    NOTIONAL_EPSILON = 1e-6
+
     def __init__(
         self,
         allowed_tokens: Set[str],
@@ -98,15 +100,15 @@ class SafetyGuard:
             )
 
         notional = size * price
-        if notional > self.max_order_value:
+        if notional - self.max_order_value > self.NOTIONAL_EPSILON:
             raise RiskError(
                 f"order notional {notional:.2f} USDC exceeds max {self.max_order_value:.2f}"
             )
-        if side_u == "BUY" and notional > self.max_buy_order_value:
+        if side_u == "BUY" and notional - self.max_buy_order_value > self.NOTIONAL_EPSILON:
             raise RiskError(
                 f"BUY notional {notional:.2f} USDC exceeds BUY cap {self.max_buy_order_value:.2f}"
             )
-        if side_u == "SELL" and notional > self.max_sell_order_value:
+        if side_u == "SELL" and notional - self.max_sell_order_value > self.NOTIONAL_EPSILON:
             raise RiskError(
                 f"SELL notional {notional:.2f} USDC exceeds SELL cap {self.max_sell_order_value:.2f}"
             )
