@@ -1,0 +1,71 @@
+# Weather Dashboard dev commands
+# Usage: make -f Makefile.weather <target>
+
+VENV     := .venv/bin
+PYTHON   := $(VENV)/python
+DB_PATH  := runtime/weather.db
+API_PORT := 8000
+FE_DIR   := frontend/strategy_dashboard
+
+.PHONY: help test api fe ingest-sample ingest-real db-init metrics-refresh
+
+help:
+	@echo "Weather Dashboard targets:"
+	@echo "  test            — run all weather_dashboard tests"
+	@echo "  api             — start FastAPI dev server (port $(API_PORT))"
+	@echo "  fe              — start React dev server (port 5173)"
+	@echo "  db-init         — initialise DB schema at $(DB_PATH)"
+	@echo "  ingest-real     — ingest real snapshot_replay CSV into $(DB_PATH)"
+	@echo "  metrics-refresh — recompute and persist metrics for all runs"
+	@echo "  clean-db        — delete $(DB_PATH)"
+
+test:
+	$(PYTHON) -m pytest tests/weather_dashboard/ -v
+
+api:
+	WEATHER_DB_PATH=$(DB_PATH) $(VENV)/uvicorn weather_dashboard.api.app:app \
+	  --host 0.0.0.0 --port $(API_PORT) --reload
+
+fe:
+	cd $(FE_DIR) && npm run dev
+
+db-init:
+	$(PYTHON) -c "from weather_dashboard.db.apply_schema import init_db; init_db('$(DB_PATH)')"
+	@echo "DB initialised at $(DB_PATH)"
+
+ingest-real: db-init
+	$(PYTHON) -m weather_dashboard.cli.ingest_run \
+	  --csv runtime/weather_edge_v1/market_data/research/t24_paper_snapshot_replay_trades.csv \
+	  --db-path $(DB_PATH) \
+	  --run-name snapshot_replay_t24 \
+	  --execution-mode snapshot_replay \
+	  --config-name weather_edge_v1 \
+	  --config-params '{"min_edge": 0.08}' \
+	  --universe-name "T24 Cities" \
+	  --date-range-start 2026-05-05 \
+	  --date-range-end 2026-05-15 \
+	  --state explore
+
+ingest-paper: db-init
+	$(PYTHON) -m weather_dashboard.cli.ingest_run \
+	  --csv runtime/weather_edge_v1/market_data/research/t24_paper_ledger_trades.csv \
+	  --db-path $(DB_PATH) \
+	  --run-name paper_t24 \
+	  --execution-mode paper \
+	  --config-name weather_edge_v1 \
+	  --config-params '{"min_edge": 0.08}' \
+	  --universe-name "T24 Cities" \
+	  --state paper
+
+metrics-refresh:
+	$(PYTHON) -c "\
+from weather_dashboard.db.connection import get_conn; \
+from weather_dashboard.metrics.save import save_all_metrics; \
+conn = get_conn('$(DB_PATH)'); \
+results = save_all_metrics(conn); \
+conn.close(); \
+print(f'Updated metrics for {len(results)} run(s)')"
+
+clean-db:
+	rm -f $(DB_PATH)
+	@echo "Deleted $(DB_PATH)"
