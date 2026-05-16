@@ -9,3 +9,9 @@ def tmp_db():
     apply_pragmas(conn)
     yield conn
     conn.close()
+
+@pytest.fixture
+def tmp_db_with_schema(tmp_db):
+    from weather_dashboard.db.apply_schema import apply_schema
+    apply_schema(tmp_db)
+    return tmp_db
