@@ -2,6 +2,14 @@
 
 > Claude Code 相关约定见 `CLAUDE.md`；两份文件应保持核心项目规范一致。
 
+## Weather 策略接手入口
+
+天气策略相关开发、实盘排查、回测分析优先从这里开始:
+
+- [docs/WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md)
+
+这份入口文档记录当前 live 口径、N100 检查命令、关键代码路径、近期实盘事故结论和后续设计项。不要只凭本文件下方的历史摘要判断当前实盘状态。
+
 ## 桌面端 / WSL 命令执行约定
 
 关键限制: Codex 桌面端当前可能在 Windows 环境里调用命令。即使代码目录来自 WSL，如果当前 shell 是 PowerShell/CMD，也不是 WSL 里的 bash。
