@@ -15,6 +15,8 @@ export function WeatherComparePage() {
   const selectedIds = rawIds ? rawIds.split(",").filter(Boolean) : [];
 
   const [inputVal, setInputVal] = useState(rawIds);
+  // Keep text input in sync when URL changes (back/forward navigation or external links)
+  useEffect(() => { setInputVal(rawIds); }, [rawIds]);
   const [compareData, setCompareData] = useState<CompareRun[]>([]);
   const [allRuns, setAllRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(false);

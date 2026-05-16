@@ -1,4 +1,14 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+
+function useClock() {
+  const [now, setNow] = useState(() => new Date().toLocaleString());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date().toLocaleString()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "总览" },
@@ -14,6 +24,7 @@ const WEATHER_NAV_ITEMS = [
 ];
 
 export function PageFrame({ title, desc, children }: { title: string; desc: string; children: JSX.Element }): JSX.Element {
+  const clock = useClock();
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -47,7 +58,7 @@ export function PageFrame({ title, desc, children }: { title: string; desc: stri
             <h1 className="page-title">{title}</h1>
             <p className="page-desc">{desc}</p>
           </div>
-          <div className="clock mono">{new Date().toLocaleString()}</div>
+          <div className="clock mono">{clock}</div>
         </header>
         {children}
       </main>

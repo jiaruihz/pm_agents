@@ -22,7 +22,7 @@ function fmt(key: keyof RunMetrics, val: number | null): string {
   if (key === "win_rate" || key === "roi" || key.endsWith("_share"))
     return `${(val * 100).toFixed(1)}%`;
   if (key.endsWith("_usd") || key === "total_cost_usd")
-    return `$${val >= 0 ? "+" : ""}${val.toFixed(2)}`;
+    return `${val >= 0 ? "+" : "-"}$${Math.abs(val).toFixed(2)}`;
   return String(val);
 }
 

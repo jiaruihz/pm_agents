@@ -48,10 +48,20 @@ export function WeatherHistoryPage() {
     });
   }
 
-  // Load run detail (with metrics)
+  // All cities for this run (fetched once, unfiltered — avoids self-filtering dropdown)
+  const [allCities, setAllCities] = useState<string[]>([]);
+
+  // Load run detail (with metrics) + unfiltered city list
   useEffect(() => {
     if (!runId) return;
-    weatherApi.getRun(runId).then(setRun).catch(() => {});
+    weatherApi.getRun(runId)
+      .then(setRun)
+      .catch((e: Error) => setError(e.message));
+    // Fetch unfiltered trades once just for city enumeration
+    weatherApi.getRunTrades(runId, { limit: 2000 }).then((rows) => {
+      const cs = Array.from(new Set(rows.map((t) => t.city).filter(Boolean) as string[])).sort();
+      setAllCities(cs);
+    }).catch(() => {});
   }, [runId]);
 
   // Load trades when filters change
@@ -69,9 +79,6 @@ export function WeatherHistoryPage() {
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [runId, city, targetDate]);
-
-  // Derive unique cities for filter dropdown
-  const cities = Array.from(new Set(trades.map((t) => t.city).filter(Boolean) as string[])).sort();
 
   return (
     <PageFrame
@@ -111,7 +118,7 @@ export function WeatherHistoryPage() {
                 <span>City / 城市</span>
                 <select value={city} onChange={(e) => setFilter("city", e.target.value)} style={selectStyle}>
                   <option value="">All</option>
-                  {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {allCities.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </label>
               <label style={labelStyle}>
@@ -156,7 +163,7 @@ export function WeatherHistoryPage() {
             </thead>
             <tbody>
               {trades.map((t, i) => (
-                <tr key={t.signal_id + i} style={{ borderBottom: "1px solid var(--stroke)" }}>
+                <tr key={`${t.signal_id}-${i}`} style={{ borderBottom: "1px solid var(--stroke)" }}>
                   <td style={tdStyle}>{t.target_date ?? "—"}</td>
                   <td style={tdStyle}>{t.city ?? "—"}</td>
                   <td style={{ ...tdStyle, fontFamily: "IBM Plex Mono, monospace" }}>{t.bracket ?? "—"}</td>
@@ -178,7 +185,7 @@ export function WeatherHistoryPage() {
                   <td style={{
                     ...tdStyle,
                     fontFamily: "IBM Plex Mono, monospace",
-                    color: t.edge && parseFloat(t.edge) > 0 ? "var(--ok)" : "var(--bad)",
+                    color: t.edge ? (parseFloat(t.edge) > 0 ? "var(--ok)" : "var(--bad)") : "inherit",
                   }}>
                     {t.edge ? `${(parseFloat(t.edge) * 100).toFixed(1)}%` : "—"}
                   </td>
