@@ -81,6 +81,7 @@ def _build_signal(record: Dict[str, Any], token_id: str, snapshot_path: Path) ->
         "profile": _safe_str(record.get("forecast_source")),
         "combo": "mid_price_core_v1",
         "city": _safe_str(record.get("city")),
+        "city_pool": _safe_str(record.get("city_pool")),
         "target_date": _safe_str(record.get("event_date")),
         "unit": _safe_str(record.get("unit")),
         "event_slug": _safe_str(record.get("event_slug")),

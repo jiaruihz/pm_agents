@@ -8,7 +8,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
 
@@ -77,6 +77,13 @@ def _read_live_errors(path: Path, limit: int = 5) -> List[str]:
     return errors
 
 
+def _to_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
 def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
@@ -91,6 +98,140 @@ def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
         if isinstance(row, dict):
             rows.append(row)
     return rows
+
+
+def _sample_labels(rows: List[Dict[str, Any]], field: str, limit: int = 5) -> str:
+    values: List[str] = []
+    seen: Set[str] = set()
+    for row in rows:
+        value = str(row.get(field) or "").strip()
+        if not value or value in seen:
+            continue
+        values.append(value)
+        seen.add(value)
+        if len(values) >= limit:
+            break
+    return ", ".join(values) if values else "-"
+
+
+def _validate_rows_for_live_contract(
+    *,
+    rows: List[Dict[str, Any]],
+    label: str,
+    expected_city_pool: str,
+    expected_sizing_mode: str,
+    expected_notional: float,
+    min_entry_price: float,
+    max_entry_price: float,
+    notional_tolerance: float = 0.05,
+) -> List[str]:
+    alerts: List[str] = []
+    if expected_city_pool and expected_city_pool.lower() != "all":
+        bad_pool = [row for row in rows if str(row.get("city_pool") or "").strip() != expected_city_pool]
+        if bad_pool:
+            alerts.append(
+                f"{label} 出现非 {expected_city_pool} city_pool："
+                f"{_sample_labels(bad_pool, 'city')}（{len(bad_pool)} 条）"
+            )
+
+    bad_window = [
+        row
+        for row in rows
+        if str(row.get("entry_price_window") or f"{min_entry_price:.2f}-{max_entry_price:.2f}")
+        != f"{min_entry_price:.2f}-{max_entry_price:.2f}"
+    ]
+    if bad_window:
+        alerts.append(f"{label} entry_price_window 偏离预期：{len(bad_window)} 条。")
+
+    if expected_sizing_mode:
+        bad_sizing = [row for row in rows if str(row.get("sizing_mode") or "").strip() != expected_sizing_mode]
+        if bad_sizing:
+            alerts.append(f"{label} sizing_mode 偏离 {expected_sizing_mode}：{len(bad_sizing)} 条。")
+
+    if expected_sizing_mode == "notional" and expected_notional > 0:
+        bad_notional = [
+            row
+            for row in rows
+            if abs(_to_float(row.get("notional"), 0.0) - expected_notional) > notional_tolerance
+        ]
+        if bad_notional:
+            alerts.append(
+                f"{label} notional 偏离 {expected_notional:.2f}："
+                f"{_sample_labels(bad_notional, 'city')}（{len(bad_notional)} 条）"
+            )
+    return alerts
+
+
+def _build_live_contract_alerts(
+    *,
+    config: Dict[str, Any],
+    sync: Dict[str, Any],
+    signal_run: Dict[str, Any],
+    planner_run: Dict[str, Any],
+    signals: Dict[str, Any],
+    planner: Dict[str, Any],
+    executor: Dict[str, Any],
+    signal_path: Path,
+    plan_path: Path,
+    live_path: Path,
+    errors: List[str],
+) -> List[str]:
+    alerts: List[str] = []
+    if int(sync.get("returncode", 1)) != 0:
+        alerts.append("数据同步失败。")
+    if int(signal_run.get("returncode", 1)) != 0:
+        alerts.append("signal builder 执行失败。")
+    if int(planner_run.get("returncode", 1)) != 0:
+        alerts.append("trade planner 执行失败。")
+    if not signals:
+        alerts.append("signal builder 输出解析为空。")
+    if not planner:
+        alerts.append("trade planner 输出解析为空。")
+    if int(executor.get("live_errors", 0) or 0) > 0 or errors:
+        alerts.append(f"实盘 executor 出现失败：{int(executor.get('live_errors', 0) or 0)} 条。")
+
+    expected_city_pool = str(config.get("city_pool") or "").strip()
+    expected_sizing_mode = str(config.get("sizing_mode") or "").strip()
+    expected_notional = _to_float(config.get("max_order_notional"), 0.0)
+    min_entry_price = _to_float(config.get("min_entry_price"), 0.25)
+    max_entry_price = _to_float(config.get("max_entry_price"), 0.75)
+    signal_rows = _read_jsonl(signal_path)
+    plan_rows = [row for row in _read_jsonl(plan_path) if str(row.get("status") or "") == "accepted"]
+    live_rows = [row for row in _read_jsonl(live_path) if str(row.get("status") or "") == "submitted"]
+    alerts.extend(
+        _validate_rows_for_live_contract(
+            rows=signal_rows,
+            label="signals",
+            expected_city_pool=expected_city_pool,
+            expected_sizing_mode="",
+            expected_notional=0.0,
+            min_entry_price=min_entry_price,
+            max_entry_price=max_entry_price,
+        )
+    )
+    alerts.extend(
+        _validate_rows_for_live_contract(
+            rows=plan_rows,
+            label="plans",
+            expected_city_pool=expected_city_pool,
+            expected_sizing_mode=expected_sizing_mode,
+            expected_notional=expected_notional,
+            min_entry_price=min_entry_price,
+            max_entry_price=max_entry_price,
+        )
+    )
+    alerts.extend(
+        _validate_rows_for_live_contract(
+            rows=live_rows,
+            label="live orders",
+            expected_city_pool=expected_city_pool,
+            expected_sizing_mode=expected_sizing_mode,
+            expected_notional=expected_notional,
+            min_entry_price=min_entry_price,
+            max_entry_price=max_entry_price,
+        )
+    )
+    return alerts
 
 
 def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
@@ -254,12 +395,14 @@ def _clob_balance_status() -> Dict[str, Any]:
 def _send_summary(
     *,
     run_id: str,
+    config: Dict[str, Any],
     sync: Dict[str, Any],
     signals: Dict[str, Any],
     planner: Dict[str, Any],
     executor: Dict[str, Any],
     live_path: Path,
     errors: List[str],
+    contract_alerts: List[str],
 ) -> None:
     sync_ok = int(sync.get("returncode", 1)) == 0
     signal_ok = bool(signals)
@@ -274,7 +417,9 @@ def _send_summary(
     skipped_prior = int(dedup.get("skipped_prior_submitted_live", 0) or 0)
     skipped_same_run = int(dedup.get("skipped_same_run_duplicate", 0) or 0)
 
-    if live_orders > 0 and live_errors == 0:
+    if contract_alerts:
+        headline = f"告警：本轮发现 {len(contract_alerts)} 个实盘约束异常。"
+    elif live_orders > 0 and live_errors == 0:
         headline = f"本轮已提交 {live_written} 笔真实挂单。"
     elif live_errors > 0:
         headline = f"本轮尝试下单，但有 {live_errors} 笔失败；没有主动吃单。"
@@ -300,6 +445,9 @@ def _send_summary(
     if errors:
         lines.extend(["", "失败摘要："])
         lines.extend(f"- {err}" for err in errors)
+    if contract_alerts:
+        lines.extend(["", "约束告警："])
+        lines.extend(f"- {alert}" for alert in contract_alerts[:8])
 
     balance = executor.get("balance_preflight") if isinstance(executor, dict) else None
     if isinstance(balance, dict):
@@ -330,6 +478,14 @@ def _send_summary(
         )
     lines.extend(
         [
+            "",
+            "实盘参数：",
+            f"- city_pool={config.get('city_pool')}",
+            f"- sizing_mode={config.get('sizing_mode')}",
+            f"- max_order_notional={float(config.get('max_order_notional', 0.0)):.2f}",
+            f"- max_order_shares={float(config.get('max_order_shares', 0.0)):.2f}",
+            f"- entry_price_window={float(config.get('min_entry_price', 0.0)):.2f}-{float(config.get('max_entry_price', 0.0)):.2f}",
+            f"- min_edge={float(config.get('min_edge', 0.0)):.2f}",
             "",
             "排查信息：",
             f"- 运行编号：{run_id}",
@@ -457,12 +613,30 @@ def main() -> int:
     parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))
     parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default=os.getenv("WEATHER_LIVE_SIZING_MODE", "notional"))
     parser.add_argument("--fixed-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_FIXED_ORDER_SHARES", "10.0")))
-    parser.add_argument("--max-position", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_POSITION", "25.0")))
+    parser.add_argument(
+        "--max-order-shares",
+        type=float,
+        default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_SHARES", os.getenv("WEATHER_LIVE_MAX_POSITION", "25.0"))),
+    )
+    parser.add_argument("--max-position", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--city-pool", default=os.getenv("WEATHER_LIVE_CITY_POOL", "t1_trading"))
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
+    parser.add_argument("--min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ENTRY_PRICE", "0.25")))
+    parser.add_argument("--max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ENTRY_PRICE", "0.75")))
     parser.add_argument("--dry-run-live", action="store_true", help="Stop before live executor.")
     parser.add_argument("--no-telegram", action="store_true")
     args = parser.parse_args()
+    max_order_shares = float(args.max_order_shares if args.max_position is None else args.max_position)
+    live_config = {
+        "city_pool": str(args.city_pool),
+        "sizing_mode": str(args.sizing_mode),
+        "max_order_notional": float(args.max_order_notional),
+        "fixed_order_shares": float(args.fixed_order_shares),
+        "max_order_shares": max_order_shares,
+        "min_edge": float(args.min_edge),
+        "min_entry_price": float(args.min_entry_price),
+        "max_entry_price": float(args.max_entry_price),
+    }
 
     run_id = _utc_run_id()
     signal_path = ROOT / "runtime" / "weather_edge_v1" / "signals" / f"live_{run_id}_signals.jsonl"
@@ -481,7 +655,11 @@ def main() -> int:
         "--out",
         str(signal_path),
         "--city-pool",
-        str(args.city_pool),
+        str(live_config["city_pool"]),
+        "--min-entry-price",
+        str(float(live_config["min_entry_price"])),
+        "--max-entry-price",
+        str(float(live_config["max_entry_price"])),
     ]
     signal_run = _run(signal_cmd, timeout=180)
     signals = _load_json_from_output(signal_run["output"])
@@ -494,15 +672,19 @@ def main() -> int:
         "--out",
         str(plan_path),
         "--max-order-notional",
-        str(float(args.max_order_notional)),
+        str(float(live_config["max_order_notional"])),
         "--sizing-mode",
-        str(args.sizing_mode),
+        str(live_config["sizing_mode"]),
         "--fixed-order-shares",
-        str(float(args.fixed_order_shares)),
-        "--max-position",
-        str(float(args.max_position)),
+        str(float(live_config["fixed_order_shares"])),
+        "--max-order-shares",
+        str(float(live_config["max_order_shares"])),
         "--min-edge",
-        str(float(args.min_edge)),
+        str(float(live_config["min_edge"])),
+        "--min-entry-price",
+        str(float(live_config["min_entry_price"])),
+        "--max-entry-price",
+        str(float(live_config["max_entry_price"])),
         "--enable-live",
         "--accepted-only",
     ]
@@ -551,8 +733,22 @@ def main() -> int:
         executor["balance_preflight"] = balance_preflight
 
     errors = _read_live_errors(live_path)
+    contract_alerts = _build_live_contract_alerts(
+        config=live_config,
+        sync=sync,
+        signal_run=signal_run,
+        planner_run=planner_run,
+        signals=signals,
+        planner=planner,
+        executor=executor,
+        signal_path=signal_path,
+        plan_path=plan_path,
+        live_path=live_path,
+        errors=errors,
+    )
     summary = {
         "run_id": run_id,
+        "config": live_config,
         "sync": sync,
         "signal_run": signal_run,
         "signals": signals,
@@ -569,18 +765,21 @@ def main() -> int:
             "summary": str(summary_path),
         },
         "live_errors": errors,
+        "contract_alerts": contract_alerts,
     }
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
     if not args.no_telegram:
         _send_summary(
             run_id=run_id,
+            config=live_config,
             sync=sync,
             signals=signals,
             planner=planner,
             executor=executor,
             live_path=live_path,
             errors=errors,
+            contract_alerts=contract_alerts,
         )
 
     print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))

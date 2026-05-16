@@ -105,6 +105,7 @@ def normalize_signal(row: Dict[str, Any], *, source_system: str = "weather-predi
         "profile": safe_str(row.get("profile")),
         "combo": safe_str(row.get("combo")),
         "city": safe_str(row.get("city")),
+        "city_pool": safe_str(row.get("city_pool")),
         "target_date": safe_str(row.get("target_date")),
         "unit": safe_str(row.get("unit")),
         "event_id": safe_str(row.get("event_id")),
@@ -175,13 +176,14 @@ class PlannerConfig:
     max_order_notional: float = 1.0
     sizing_mode: str = "notional"
     fixed_order_shares: float = 10.0
+    max_order_shares: Optional[float] = None
     min_edge: float = 0.10
     min_entry_price: float = 0.25
     max_entry_price: float = 0.75
     price_offset: float = 0.0
     price_floor: float = 0.01
     price_ceiling: float = 0.99
-    max_position: float = 10.0
+    max_position: float = 25.0
     live_enabled: bool = False
     execution_policy: str = "mid_price_core_v1"
 
@@ -201,12 +203,14 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         size = round(config.max_order_notional / limit_price, 6) if limit_price > 0 else 0.0
     else:
         size = 0.0
+    max_order_shares = float(config.max_order_shares if config.max_order_shares is not None else config.max_position)
     base = {
         "signal_id": safe_str(signal.get("signal_id")),
         "strategy": "weather_edge_v1",
         "profile": safe_str(signal.get("profile")),
         "combo": safe_str(signal.get("combo")),
         "city": safe_str(signal.get("city")),
+        "city_pool": safe_str(signal.get("city_pool")),
         "target_date": safe_str(signal.get("target_date")),
         "market_slug": safe_str(signal.get("market_slug")),
         "market_id": safe_str(signal.get("market_id")),
@@ -226,6 +230,7 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         "execution_policy": safe_str(config.execution_policy),
         "sizing_mode": sizing_mode,
         "fixed_order_shares": round(float(config.fixed_order_shares), 6),
+        "max_order_shares": round(max_order_shares, 6),
         "size": size,
         "notional": round(size * limit_price, 6),
         "edge": round(edge, 6),
@@ -265,7 +270,7 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
     guard = SafetyGuard(
         allowed_tokens={token_id} if token_id else set(),
         max_order_value=config.max_order_notional,
-        max_position=config.max_position,
+        max_position=max_order_shares,
         price_floor=config.price_floor,
         price_ceiling=config.price_ceiling,
     )
@@ -331,6 +336,7 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "strategy": "weather_edge_v1",
         "venue": "paper",
         "city": safe_str(plan.get("city")),
+        "city_pool": safe_str(plan.get("city_pool")),
         "target_date": safe_str(plan.get("target_date")),
         "market_slug": safe_str(plan.get("market_slug")),
         "market_id": safe_str(plan.get("market_id")),
@@ -348,6 +354,7 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "entry_price_window": safe_str(plan.get("entry_price_window")),
         "sizing_mode": safe_str(plan.get("sizing_mode")),
         "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),
+        "max_order_shares": to_float(plan.get("max_order_shares"), 0.0),
         "source_plan_status": safe_str(plan.get("status")),
     }
     return {
@@ -369,6 +376,7 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "strategy": "weather_edge_v1",
         "venue": "polymarket_clob",
         "city": safe_str(plan.get("city")),
+        "city_pool": safe_str(plan.get("city_pool")),
         "target_date": safe_str(plan.get("target_date")),
         "market_slug": safe_str(plan.get("market_slug")),
         "market_id": safe_str(plan.get("market_id")),
@@ -386,10 +394,12 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "clob_client": safe_str(response.get("clob_client")),
         "size": to_float(plan.get("size"), 0.0),
         "notional": to_float(plan.get("notional"), 0.0),
+        "posted_notional": round(to_float(response.get("posted_price"), 0.0) * to_float(plan.get("size"), 0.0), 6),
         "execution_policy": safe_str(plan.get("execution_policy")),
         "entry_price_window": safe_str(plan.get("entry_price_window")),
         "sizing_mode": safe_str(plan.get("sizing_mode")),
         "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),
+        "max_order_shares": to_float(plan.get("max_order_shares"), 0.0),
     }
     return {
         "record_type": "weather_edge_live_order",

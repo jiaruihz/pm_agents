@@ -38,7 +38,8 @@ def _parser() -> argparse.ArgumentParser:
         help="Order sizing mode. notional uses max-order-notional / price; fixed_shares uses fixed-order-shares.",
     )
     parser.add_argument("--fixed-order-shares", type=float, default=10.0)
-    parser.add_argument("--max-position", type=float, default=10.0)
+    parser.add_argument("--max-order-shares", type=float, default=None)
+    parser.add_argument("--max-position", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--min-edge", type=float, default=0.10)
     parser.add_argument("--min-entry-price", type=float, default=0.25)
     parser.add_argument("--max-entry-price", type=float, default=0.75)
@@ -56,7 +57,11 @@ def main() -> int:
         max_order_notional=float(args.max_order_notional),
         sizing_mode=str(args.sizing_mode),
         fixed_order_shares=float(args.fixed_order_shares),
-        max_position=float(args.max_position),
+        max_order_shares=(
+            float(args.max_order_shares)
+            if args.max_order_shares is not None
+            else (float(args.max_position) if args.max_position is not None else 25.0)
+        ),
         min_edge=float(args.min_edge),
         min_entry_price=float(args.min_entry_price),
         max_entry_price=float(args.max_entry_price),

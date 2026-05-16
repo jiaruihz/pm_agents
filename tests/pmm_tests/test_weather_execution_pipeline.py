@@ -22,6 +22,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             "profile": "weather_edge_b0p_v1",
             "combo": "locked+equal",
             "city": "Paris",
+            "city_pool": "t1_trading",
             "target_date": "2026-05-10",
             "unit": "C",
             "market_id": "m1",
@@ -87,8 +88,19 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(plan["live_enabled"], False)
         self.assertEqual(plan["execution_policy"], "mid_price_core_v1")
         self.assertEqual(plan["entry_price_window"], "0.25-0.75")
+        self.assertEqual(plan["city_pool"], "t1_trading")
         self.assertEqual(plan["best_bid"], 0.39)
         self.assertEqual(plan["best_ask"], 0.41)
+
+    def test_notional_sizing_uses_configured_order_budget(self):
+        signal = normalize_signal(self._paper_decision())
+        assert signal is not None
+        plan = build_trade_plan(signal, PlannerConfig(max_order_notional=5.0, min_edge=0.10))
+
+        self.assertEqual(plan["status"], "accepted")
+        self.assertEqual(plan["sizing_mode"], "notional")
+        self.assertAlmostEqual(plan["size"], 12.5)
+        self.assertAlmostEqual(plan["notional"], 5.0)
 
     def test_build_trade_plan_supports_fixed_share_sizing(self):
         signal = normalize_signal(self._paper_decision())
@@ -221,9 +233,11 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             rows = [json.loads(line) for line in live.read_text().splitlines()]
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["signal_side"], "BUY_YES")
+            self.assertEqual(rows[0]["city_pool"], "t1_trading")
             self.assertEqual(rows[0]["best_bid"], 0.39)
             self.assertEqual(rows[0]["best_ask"], 0.41)
             self.assertEqual(rows[0]["requested_price"], rows[0]["limit_price"])
+            self.assertEqual(rows[0]["posted_notional"], 0.0)
 
 
 if __name__ == "__main__":
