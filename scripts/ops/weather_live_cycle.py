@@ -457,6 +457,7 @@ def main() -> int:
     parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))
     parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default=os.getenv("WEATHER_LIVE_SIZING_MODE", "notional"))
     parser.add_argument("--fixed-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_FIXED_ORDER_SHARES", "10.0")))
+    parser.add_argument("--max-position", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_POSITION", "25.0")))
     parser.add_argument("--city-pool", default=os.getenv("WEATHER_LIVE_CITY_POOL", "t1_trading"))
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
     parser.add_argument("--dry-run-live", action="store_true", help="Stop before live executor.")
@@ -498,6 +499,8 @@ def main() -> int:
         str(args.sizing_mode),
         "--fixed-order-shares",
         str(float(args.fixed_order_shares)),
+        "--max-position",
+        str(float(args.max_position)),
         "--min-edge",
         str(float(args.min_edge)),
         "--enable-live",

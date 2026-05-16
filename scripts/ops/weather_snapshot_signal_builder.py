@@ -171,7 +171,7 @@ def build_signals(
             continue
         signals.append(_build_signal(record, token_id, snapshot_path))
 
-    if not dry_run and signals:
+    if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         existing = set()
         if out_path.exists():
