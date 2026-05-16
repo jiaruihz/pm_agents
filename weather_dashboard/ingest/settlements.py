@@ -40,7 +40,7 @@ def ingest_settlement_rows(
                 status = 'missing_event'
 
             conn.execute("""
-                INSERT INTO settlements (settlement_id, target_date, bracket, final_yes, status)
+                INSERT OR IGNORE INTO settlements (settlement_id, target_date, bracket, final_yes, status)
                 VALUES (?, ?, ?, ?, ?)
             """, (
                 settlement_id,

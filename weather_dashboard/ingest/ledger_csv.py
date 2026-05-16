@@ -91,10 +91,11 @@ def ingest_ledger_csv(
         # Ensure run_id and config_id exist (FK requirements for plans/orders)
         _ensure_run_and_config(conn, run_id, config_id)
 
-        # Insert signal (idempotent via ingest log)
+        # Insert signal — use OR IGNORE because signal_id is content-addressable
+        # (same snapshot+city+bracket+side+model can appear in multiple runs/CSVs)
         if not already_ingested(conn, source_path, h, 'signals'):
             conn.execute("""
-                INSERT INTO signals (signal_id, snapshot_ts_utc, snapshot_file, target_date,
+                INSERT OR IGNORE INTO signals (signal_id, snapshot_ts_utc, snapshot_file, target_date,
                     city, bracket, side, model_version, model_p_yes, market_price, edge, abs_edge)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
