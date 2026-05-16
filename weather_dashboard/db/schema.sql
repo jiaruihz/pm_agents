@@ -9,19 +9,24 @@ CREATE TABLE IF NOT EXISTS schema_version (
 
 -- Universe configs
 CREATE TABLE IF NOT EXISTS universes (
-    universe_id TEXT PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    cities TEXT NOT NULL,  -- JSON array
-    models TEXT NOT NULL,  -- JSON array
-    frozen_at_utc TEXT,
+    universe_id       TEXT PRIMARY KEY,
+    name              TEXT UNIQUE NOT NULL,
+    description       TEXT,
+    cities            TEXT NOT NULL,  -- JSON array
+    models            TEXT NOT NULL,  -- JSON array
+    created_at_utc    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    frozen_at_utc     TEXT,
     deprecated_at_utc TEXT
 );
 
 -- Code versions (git SHA)
 CREATE TABLE IF NOT EXISTS code_versions (
-    code_version TEXT PRIMARY KEY,  -- git SHA
-    branch TEXT NOT NULL,
-    commit_subject TEXT NOT NULL
+    code_version    TEXT PRIMARY KEY,  -- git SHA
+    branch          TEXT,
+    commit_subject  TEXT,
+    commit_at_utc   TEXT,
+    deployed_at_utc TEXT,
+    notes           TEXT
 );
 
 -- Strategy configs
@@ -34,17 +39,23 @@ CREATE TABLE IF NOT EXISTS strategy_config (
 
 -- Runs
 CREATE TABLE IF NOT EXISTS runs (
-    run_id TEXT PRIMARY KEY,
-    config_id TEXT NOT NULL REFERENCES strategy_config(config_id),
-    universe_id TEXT REFERENCES universes(universe_id),
-    code_version TEXT REFERENCES code_versions(code_version),
-    execution_mode TEXT NOT NULL CHECK (execution_mode IN ('snapshot_replay','paper','live')),
+    run_id          TEXT PRIMARY KEY,
+    config_id       TEXT NOT NULL REFERENCES strategy_config(config_id),
+    universe_id     TEXT REFERENCES universes(universe_id),
+    code_version    TEXT REFERENCES code_versions(code_version),
+    execution_mode  TEXT NOT NULL CHECK (execution_mode IN ('snapshot_replay','paper','live')),
     date_range_start TEXT,
-    state TEXT NOT NULL CHECK (state IN ('explore','paper','live','retired')),
-    repro_key TEXT,
-    tags TEXT,  -- JSON array
-    metrics TEXT,  -- JSON object
-    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    date_range_end  TEXT,
+    started_at_utc  TEXT,
+    ended_at_utc    TEXT,
+    state           TEXT NOT NULL CHECK (state IN ('explore','paper','live','retired')),
+    repro_key       TEXT,
+    parent_run_id   TEXT REFERENCES runs(run_id),
+    tags            TEXT,  -- JSON array
+    metrics         TEXT,  -- JSON object
+    metrics_at_utc  TEXT,
+    notes           TEXT,
+    created_at_utc  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
 -- Signals

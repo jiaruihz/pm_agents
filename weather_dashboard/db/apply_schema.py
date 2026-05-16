@@ -33,8 +33,10 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     # Check if schema_version has any rows
     row = conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()
     if row[0] == 0:
+        from datetime import datetime, timezone
         conn.execute(
-            "INSERT INTO schema_version (version, description) VALUES (1, 'initial schema v1')"
+            "INSERT INTO schema_version (version, applied_at_utc, description) VALUES (1, ?, 'initial schema v1')",
+            (datetime.now(timezone.utc).isoformat(),),
         )
     conn.commit()
 

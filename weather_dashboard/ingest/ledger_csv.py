@@ -18,25 +18,35 @@ def _fill_id(order_id: str, fill_ref: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 def _ensure_run_and_config(conn, run_id: str, config_id: str) -> None:
-    """Ensure run_id exists in runs table and config_id exists in strategy_config."""
-    # Check if config_id exists
-    existing = conn.execute(
-        "SELECT 1 FROM strategy_config WHERE config_id = ?", (config_id,)
-    ).fetchone()
-    if not existing:
+    """Ensure config_id and run_id exist (bootstrap placeholders). Real runs should be
+    pre-created via weather_run_create.py before ingesting."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+
+    if not conn.execute("SELECT 1 FROM strategy_config WHERE config_id=?", (config_id,)).fetchone():
         conn.execute(
-            "INSERT INTO strategy_config (config_id, name, params) VALUES (?, ?, '{}')",
-            (config_id, f"auto_config_{config_id[:8]}")
+            "INSERT INTO strategy_config (config_id, name, params, created_at_utc) VALUES (?,?,?,?)",
+            (config_id, f"bootstrap_{config_id[:8]}", '{}', now),
         )
 
-    # Check if run_id exists
-    existing = conn.execute(
-        "SELECT 1 FROM runs WHERE run_id = ?", (run_id,)
-    ).fetchone()
-    if not existing:
+    # universe_id and code_version are required FK; create stubs too
+    stub_universe = "bootstrap-universe"
+    stub_code = "bootstrap-code"
+    if not conn.execute("SELECT 1 FROM universes WHERE universe_id=?", (stub_universe,)).fetchone():
         conn.execute(
-            "INSERT INTO runs (run_id, config_id, execution_mode, state) VALUES (?, ?, 'snapshot_replay', 'explore')",
-            (run_id, config_id)
+            "INSERT INTO universes (universe_id, name, cities, models, created_at_utc) VALUES (?,?,?,?,?)",
+            (stub_universe, stub_universe, '[]', '[]', now),
+        )
+    if not conn.execute("SELECT 1 FROM code_versions WHERE code_version=?", (stub_code,)).fetchone():
+        conn.execute(
+            "INSERT INTO code_versions (code_version) VALUES (?)", (stub_code,),
+        )
+    if not conn.execute("SELECT 1 FROM runs WHERE run_id=?", (run_id,)).fetchone():
+        conn.execute(
+            "INSERT INTO runs (run_id, config_id, universe_id, code_version, execution_mode, "
+            "date_range_start, started_at_utc, state, repro_key) VALUES (?,?,?,?,?,?,?,?,?)",
+            (run_id, config_id, stub_universe, stub_code,
+             'snapshot_replay', now[:10], now, 'explore', f'bootstrap-{run_id}'),
         )
 
 def ingest_ledger_csv(
@@ -140,10 +150,10 @@ def ingest_ledger_csv(
             record_ingestion(conn, source_path, h, 'orders', order_id)
             new_inserted += 1
 
-        # Insert fill
+        # Insert fill — fills from a ledger are always 'filled' (they executed).
+        # settlement_status is a separate concept stored in the settlements table.
         if not already_ingested(conn, source_path, h, 'fills'):
-            settlement_status = row.get('settlement_status', '')
-            status = 'filled' if settlement_status == 'settled' else settlement_status
+            status = 'filled'
             conn.execute("""
                 INSERT INTO fills (fill_id, order_id, filled_shares, filled_price,
                     fees_usd, status, filled_at_utc)
@@ -154,7 +164,7 @@ def ingest_ledger_csv(
                 row.get('shares', ''),
                 row.get('entry_price', ''),
                 '0',
-                status if status else 'filled',
+                status,
                 row.get('created_at_utc', ''),
             ))
             record_ingestion(conn, source_path, h, 'fills', fill_id)
