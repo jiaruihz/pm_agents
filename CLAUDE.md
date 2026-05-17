@@ -2,6 +2,39 @@
 
 > Codex 相关约定见 `AGENTS.md`；两份文件应保持核心项目规范一致。
 
+## 当前主线：天气温度策略（必读，不要被 README 误导）
+
+**README 描述的是旧 PMM/ARB 框架，当前活跃主线是天气策略。**
+
+关键目录（不是 `src/strategies/`，是下面这些）：
+
+```text
+weather_dashboard/          ← Python 后端：FastAPI + SQLite DB + ingest 管道
+  db/schema.sql             ← 数据库 schema（信号/计划/订单/成交/结算/策略版本）
+  api/                      ← FastAPI routers
+  ingest/                   ← CSV/JSONL → DB 的 ingest 脚本
+
+frontend/strategy_dashboard/← React 前端（Vite + TypeScript）
+  src/pages/weather/        ← 天气策略页面（WeatherRunsPage / HistoryPage / LivePage / ComparePage）
+  src/data/weather-http.ts  ← API 客户端
+
+scripts/weather_dashboard/  ← 一键启动脚本
+  run_stack.sh              ← 启动全栈（建库 + ingest + API + 前端）
+
+runtime/weather_edge_v1/    ← 数据目录（N100 镜像 + DB + 日志，不进 git）
+  market_data/              ← N100 rsync 镜像（snapshots / paper_trades / research CSV）
+  weather.db                ← SQLite 主库（可随时删掉重建，不是源头）
+
+docs/
+  WEATHER_SYSTEM_CONTRACT.md      ← 字段名/枚举/ID 契约（改字段必读）
+  WEATHER_STRATEGY_QUANT_DESIGN.md← 核心量化系统架构设计
+  WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md ← 数据模型缺口（P0 已完成，P1 待做）
+  WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘排查入口（N100 状态 / live 口径）
+```
+
+生产端（N100 `192.168.0.200`）：`/home/jiarui/projects/weather-predict`（信号生成 / 实盘下单 / 结算）  
+分析端（本机）：`/home/rui/projects/pm_agent`（dashboard / 回测 / 研究）
+
 ## Weather 策略接手入口
 
 天气策略相关开发、实盘排查、回测分析优先从这里开始:

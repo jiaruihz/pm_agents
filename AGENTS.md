@@ -2,6 +2,25 @@
 
 > Claude Code 相关约定见 `CLAUDE.md`；两份文件应保持核心项目规范一致。
 
+## 当前主线：天气温度策略（必读，不要被 README 误导）
+
+**README 描述的是旧 PMM/ARB 框架，当前活跃主线是天气策略。**
+
+关键目录：
+
+```text
+weather_dashboard/          ← Python 后端：FastAPI + SQLite DB + ingest 管道
+frontend/strategy_dashboard/← React 前端（src/pages/weather/ 是天气策略页面）
+scripts/weather_dashboard/  ← run_stack.sh 一键启动脚本
+runtime/weather_edge_v1/    ← 数据目录（N100 镜像 + DB，不进 git）
+docs/WEATHER_SYSTEM_CONTRACT.md      ← 字段名/枚举契约（改字段必读）
+docs/WEATHER_STRATEGY_QUANT_DESIGN.md← 架构设计
+docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
+```
+
+生产端（N100）：`jiarui@192.168.0.200:/home/jiarui/projects/weather-predict`  
+分析端（本机）：`/home/rui/projects/pm_agent`
+
 ## Weather 策略接手入口
 
 天气策略相关开发、实盘排查、回测分析优先从这里开始:

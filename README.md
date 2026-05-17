@@ -1,5 +1,11 @@
 # PM Trader Agent
 
+> **Agent 快速定向（必读）**: 当前主线是**天气温度策略**，不是下方的 PMM/ARB 框架。
+> 天气策略代码: `weather_dashboard/`（FastAPI + SQLite 后端）+ `frontend/strategy_dashboard/`（React 前端）。
+> 启动看板: `scripts/weather_dashboard/run_stack.sh`。详见 `CLAUDE.md`。
+
+---
+
 一个面向 Polymarket 的量化交易研究仓库，当前聚焦三条业务线：
 
 - `src/strategies/pmm/`: Personal Market Maker（做市策略、回测、实盘/仿真引擎）
