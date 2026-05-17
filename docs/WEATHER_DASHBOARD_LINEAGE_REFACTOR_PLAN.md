@@ -1,6 +1,7 @@
 # Weather Dashboard 血缘与字段契约改造方案
 
 > 日期: 2026-05-17  
+> **实施状态: P0（字段补全 + metrics/slice API + 前端过滤器）已于 2026-05-17 完成。本文剩余内容为 P1 实施细节（live ingest、signal_id 统一算法、plans/orders 补字段）。**  
 > 范围: 本机 `pm_agent` weather dashboard DB / ingest / API / FE。生产端 N100 字段改名只列依赖，不在本文直接执行。  
 > 依赖契约: [WEATHER_SYSTEM_CONTRACT.md](WEATHER_SYSTEM_CONTRACT.md)
 
