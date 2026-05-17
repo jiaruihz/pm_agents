@@ -14,9 +14,12 @@
 
 本机的策略大盘 / 数据 DB / FastAPI / React 全在 `weather_dashboard/` + `frontend/strategy_dashboard/`。它是分析用的二级镜像，**不参与 N100 生产，不发单**。
 
-数据模型分层与缺口审计:
+设计与现状文档：
 
-- [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
+- **原始设计 spec**（DB schema / 策略管理 / 前端 / API / 13-PR 实施计划）:
+  [docs/superpowers/specs/2026-05-15-weather-strategy-dashboard-design.md](docs/superpowers/specs/2026-05-15-weather-strategy-dashboard-design.md)
+- **数据模型分层与缺口审计**（当前实现 vs 设计，P0/P1/P2 缺口）:
+  [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
 
 任何 agent（Claude / Codex / MiniMax / 人）启动看板都用这一个脚本，不要手动跑多条命令:
 
