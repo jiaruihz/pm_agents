@@ -31,7 +31,13 @@
 
 ## 2. 当前可消费的源数据（实际存在的字段）
 
-### 2.1 N100 paper_orders.jsonl — 最完整的源（46 字段）
+### 2.1 当前 dashboard ingest 的最完整源 — `t24_paper_ledger_trades.csv` (48 字段)
+
+> 这是 dashboard 实际 ingest 的源。本机镜像里同目录的 `paper_orders.jsonl` **首行只有 37 字段**，缺 `city_pool / settlement_status / final_yes / won / pnl_usd / order_source / eligible_for_paper_order / entry_price_min,max,window / execution_policy` 这 11 列（由后续 settle / 分析脚本在 N100 上派生后写入 CSV）。
+>
+> **`paper_orders.jsonl` 是否含有这些字段取决于 N100 当前代码版本和同步状态**——不要假设 jsonl 一定有 CSV 的全部列。审计/迁移以本机镜像的 CSV 为准。
+
+CSV 48 列分组：
 
 ```text
 ✓ 信号上下文: snapshot_file, snapshot_ts_utc, snapshot_ts_beijing,
@@ -48,6 +54,8 @@
               execution_policy, status
 ✓ 结算     : settlement_status, final_yes, won, pnl_usd
 ```
+
+snapshot replay CSV (`t24_paper_snapshot_replay_trades.csv`) 是 35 列，结构相似但缺 `entry_price_min/max/window`、`execution_policy`、`order_source`、`eligible_for_paper_order`，因为 replay 不走真实下单链路。
 
 ### 2.2 N100 live_TIMESTAMP_orders.jsonl — Live 专有字段
 
@@ -153,9 +161,14 @@
 
 1. 给 `signals` 加 `city_pool / forecast_source / condition_id / market_id / icao / hours_to_settle` 6 列（都允许 NULL）。
 2. `weather_dashboard/ingest/real_ledger_adapter.py` 透传这些字段。
-3. 重新 `ingest-real` + `ingest-paper`（content-addressable hash 会保持去重）。
-4. 前端 `RunsPage` / `HistoryPage` 加 `city_pool` / `forecast_source` 过滤器。
-5. 后端 `/api/runs/{id}/metrics?group_by=city_pool` 切片端点。
+3. **优先用 rebuild 而非增量 ingest**：执行 `scripts/weather_dashboard/run_stack.sh`（默认会 `rm -f weather.db` 后重建），新字段对所有历史数据生效。
+   - 增量 ingest（`--no-rebuild`）对**已存在的 signal_id** 不会更新这 6 个新字段——`signals` 是 `INSERT OR IGNORE`。
+   - 这是个迁移风险点，详见 §6。
+4. 后端新增切片端点 `GET /api/runs/{id}/metrics?group_by=city_pool|forecast_source|model_version|side`（返回每个切片的子 metrics）。
+5. 前端：
+   - **HistoryPage / trades API** 加 `?city_pool=` `?forecast_source=` 过滤参数（这两个本就是 signal 级字段）。
+   - **Run Detail / Compare** 用上面的 `metrics?group_by=` 端点渲染分组小表，看 T1 vs T2、ecmwf vs gfs 的 PnL 切片。
+   - **RunsPage 暂时不加这两个过滤器**——它是 run 级页面，run 级没有 city_pool 概念（一个 run 同时包含 T1+T2 城市）。除非以后引入"按 city_pool 拆 run"的口径，否则放在 run-level 过滤会误导。
 
 ### Phase 2 — P1 (~ 1 周)
 
@@ -177,10 +190,37 @@
 
 ## 6. 重要约定（任何 agent 看到这份文档都要遵守）
 
-- **不要破坏 append-only**: 所有"补字段"操作走 `ALTER TABLE ... ADD COLUMN ... DEFAULT NULL`，不要 DROP/重建表。已存历史数据保留。
+### 6.1 表结构演进
+- **不要破坏 append-only**: 所有"补字段"操作走 `ALTER TABLE ... ADD COLUMN ... DEFAULT NULL`，不要 DROP/重建表（除非走完整 rebuild 流程）。
 - **不要在 DB 里做派生计算的源头**: pm_history 是 N100 的真实源，本机 DB 是分析镜像，不要在 DB 里"修正"final_price。
-- **保持 ingest idempotent**: `ingestion_log(source_path, row_hash)` 是去重 key，加新字段时 row_hash 会变——这是想要的行为（被识别为新行）。
-- **回填策略**: 加字段后第一次重 ingest，旧数据 city_pool/forecast_source 仍是 NULL。这是 OK 的——用 `WHERE city_pool IS NOT NULL` 过滤即可。不要为了"补齐历史"去 UPDATE，触发 append-only 保护。
+
+### 6.2 ingest 行为（重要、容易踩坑）
+
+当前实现的事实：
+- `signals` 用 `INSERT OR IGNORE`（按 `signal_id` 主键去重）
+- `plans / orders / fills` 用普通 `INSERT`（依赖 ingest 前的去重逻辑 + ingestion_log）
+- `ingestion_log` 按 `(source_path, source_row_hash, target_table)` 去重，`row_hash = sha256(canonical_json(row))`
+
+加新字段后的行为：
+
+| 场景 | 结果 |
+|---|---|
+| **走 `run_stack.sh` 默认（rebuild）** | DB 整个删掉重建，新字段对所有数据生效。**推荐路径。** |
+| **走 `run_stack.sh --no-rebuild`** | adapter 透传新字段后，row_hash 变化 → ingestion_log 认为是新行 → 但 `signals.INSERT OR IGNORE` 看到相同 signal_id 直接跳过 → 旧 signal 的新字段仍为 NULL；同时 plans/orders/fills 可能会触发 PK 冲突或重复插入。**不推荐，会产生半新半旧的数据。** |
+
+迁移建议：
+
+- Phase 1 P0 字段补完后，**第一次必须 rebuild**（删 `runtime/weather.db` 重 ingest）。
+- 如果未来必须做增量迁移（DB 很大重建代价高），先做这两件事之一：
+  1. 把 `signals` 改成 `INSERT ... ON CONFLICT(signal_id) DO UPDATE SET city_pool=excluded.city_pool, ...`（白名单允许更新的字段）。
+  2. 或加 `schema_version` migration 脚本，单独跑一次 `UPDATE signals SET city_pool=... WHERE signal_id IN (...)`——这会被 append-only trigger 拦截，需要先临时 `DROP TRIGGER signals_before_update`，迁移完再 `CREATE TRIGGER` 回来。这是有意为之的高摩擦设计，迁移必须显式、留痕。
+
+不要在没想清楚之前就在 `--no-rebuild` 模式下加新字段重 ingest。
+
+### 6.3 数据真相分层
+- **N100 = 生产真相**: live 链路、settlement、pm_history 全在 N100。
+- **本机镜像 = 分析快照**: `runtime/weather_edge_v1/market_data/` 是 rsync 镜像，不写回 N100。
+- **本机 weather.db = 镜像派生**: 完全可以删了重建，**不要把它当源头**。研究/回测产物想长期保留的，落到独立目录或 git 跟踪的文件，别只留在这个 DB 里。
 
 ---
 
