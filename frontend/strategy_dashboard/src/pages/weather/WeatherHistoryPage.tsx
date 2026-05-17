@@ -8,6 +8,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import { MetricsCard } from "./MetricsCard";
+import { EquityCurve } from "./EquityCurve";
 import type { RunDetail, TradeRow } from "../../data/weather-types";
 
 const PNL_COL: React.CSSProperties = {
@@ -36,6 +37,7 @@ export function WeatherHistoryPage() {
 
   const [run, setRun] = useState<RunDetail | null>(null);
   const [trades, setTrades] = useState<TradeRow[]>([]);
+  const [equity, setEquity] = useState<{ date: string; cumulative_pnl: number }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +59,10 @@ export function WeatherHistoryPage() {
     weatherApi.getRun(runId)
       .then(setRun)
       .catch((e: Error) => setError(e.message));
+    // Equity curve (unfiltered — shows full run performance)
+    weatherApi.getRunEquity(runId)
+      .then(setEquity)
+      .catch(() => {});
     // Fetch unfiltered trades once just for city enumeration
     weatherApi.getRunTrades(runId, { limit: 2000 }).then((rows) => {
       const cs = Array.from(new Set(rows.map((t) => t.city).filter(Boolean) as string[])).sort();
@@ -144,6 +150,13 @@ export function WeatherHistoryPage() {
         </div>
 
         {error && <div style={{ color: "var(--bad)", marginBottom: 12 }}>{error}</div>}
+
+        {/* Equity curve */}
+        {equity.length > 1 && (
+          <div style={{ marginBottom: 20 }}>
+            <EquityCurve points={equity} />
+          </div>
+        )}
 
         {/* Trades table */}
         <div style={{ overflowX: "auto" }}>

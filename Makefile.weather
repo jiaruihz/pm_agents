@@ -7,17 +7,18 @@ DB_PATH  := runtime/weather.db
 API_PORT := 8000
 FE_DIR   := frontend/strategy_dashboard
 
-.PHONY: help test api fe ingest-sample ingest-real db-init metrics-refresh
+.PHONY: help test api fe ingest-sample ingest-real db-init metrics-refresh cleanup-orphans
 
 help:
 	@echo "Weather Dashboard targets:"
-	@echo "  test            — run all weather_dashboard tests"
-	@echo "  api             — start FastAPI dev server (port $(API_PORT))"
-	@echo "  fe              — start React dev server (port 5173)"
-	@echo "  db-init         — initialise DB schema at $(DB_PATH)"
-	@echo "  ingest-real     — ingest real snapshot_replay CSV into $(DB_PATH)"
-	@echo "  metrics-refresh — recompute and persist metrics for all runs"
-	@echo "  clean-db        — delete $(DB_PATH)"
+	@echo "  test              — run all weather_dashboard tests"
+	@echo "  api               — start FastAPI dev server (port $(API_PORT))"
+	@echo "  fe                — start React dev server (port 5173)"
+	@echo "  db-init           — initialise DB schema at $(DB_PATH)"
+	@echo "  ingest-real       — ingest real snapshot_replay CSV into $(DB_PATH)"
+	@echo "  metrics-refresh   — recompute and persist metrics for all runs"
+	@echo "  cleanup-orphans   — list/delete runs with 0 fills (add DRY=1 to preview)"
+	@echo "  clean-db          — delete $(DB_PATH)"
 
 test:
 	$(PYTHON) -m pytest tests/weather_dashboard/ -v
@@ -65,6 +66,10 @@ conn = get_conn('$(DB_PATH)'); \
 results = save_all_metrics(conn); \
 conn.close(); \
 print(f'Updated metrics for {len(results)} run(s)')"
+
+cleanup-orphans:
+	$(PYTHON) -m weather_dashboard.cli.cleanup --db-path $(DB_PATH) \
+	  $(if $(DRY),--dry-run) $(if $(ALL),--all-orphans)
 
 clean-db:
 	rm -f $(DB_PATH)

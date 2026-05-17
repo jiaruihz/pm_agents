@@ -54,4 +54,8 @@ export const weatherApi = {
   listUniverses(): Promise<UniverseRow[]> {
     return get("/universes");
   },
+
+  getRunEquity(runId: string): Promise<{ date: string; cumulative_pnl: number }[]> {
+    return get(`/runs/${runId}/equity`);
+  },
 };

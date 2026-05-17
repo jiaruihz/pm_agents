@@ -81,8 +81,57 @@ def get_run(run_id: str, db: Db, include_metrics: bool = Query(True)):
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
     result = _row_to_run_summary(row)
-    result["metrics"] = compute_metrics(db, run_id) if include_metrics else None
+    if include_metrics:
+        cached = row["metrics"]
+        result["metrics"] = json.loads(cached) if cached else compute_metrics(db, run_id)
+    else:
+        result["metrics"] = None
     return result
+
+
+@router.get("/{run_id}/equity")
+def get_run_equity(run_id: str, db: Db):
+    """Daily cumulative PnL for the equity curve chart."""
+    row = db.execute("SELECT run_id FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+    rows = db.execute(
+        """
+        SELECT
+            sig.target_date AS date,
+            SUM(CASE
+                WHEN s.final_yes IS NULL THEN 0
+                WHEN o.side = 'BUY_YES' AND s.final_yes = 1
+                    THEN CAST(f.filled_shares AS REAL) * (1 - CAST(f.filled_price AS REAL))
+                WHEN o.side = 'BUY_YES' AND s.final_yes = 0
+                    THEN -CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL)
+                WHEN o.side = 'BUY_NO' AND s.final_yes = 0
+                    THEN CAST(f.filled_shares AS REAL) * (1 - CAST(f.filled_price AS REAL))
+                WHEN o.side = 'BUY_NO' AND s.final_yes = 1
+                    THEN -CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL)
+                ELSE 0
+            END) AS daily_pnl
+        FROM fills f
+        JOIN orders o    ON f.order_id   = o.order_id
+        JOIN plans p     ON o.plan_id    = p.plan_id
+        JOIN signals sig ON p.signal_id  = sig.signal_id
+        LEFT JOIN settlements s
+               ON sig.target_date = s.target_date
+              AND sig.bracket      = s.bracket
+        WHERE o.run_id = ? AND f.status = 'filled' AND sig.target_date IS NOT NULL
+        GROUP BY sig.target_date
+        ORDER BY sig.target_date
+        """,
+        (run_id,),
+    ).fetchall()
+
+    cumulative = 0.0
+    points = []
+    for r in rows:
+        cumulative += r["daily_pnl"] or 0.0
+        points.append({"date": r["date"], "cumulative_pnl": round(cumulative, 4)})
+    return points
 
 
 @router.get("/{run_id}/trades", response_model=list[TradeRow])

@@ -20,6 +20,7 @@ const NAV_ITEMS = [
 
 const WEATHER_NAV_ITEMS = [
   { to: "/weather/runs", label: "⛅ Runs 运行" },
+  { to: "/weather/live", label: "🔴 Live 实时" },
   { to: "/weather/compare", label: "⚖ Compare 对比" },
 ];
 
