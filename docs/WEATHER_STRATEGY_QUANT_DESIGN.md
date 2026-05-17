@@ -1,8 +1,8 @@
-# Weather Strategy Dashboard — Design Document
+# Weather Strategy — Quant System Design
 
-**Status:** Brainstorming complete; pending user review before implementation planning.
-**Date:** 2026-05-15
-**Scope:** Web dashboard + REST API + experiment tracking DB for weather strategy paper/live trading on Polymarket.
+**Status:** Core architecture implemented (DB + ingest + API + frontend MVP). See `docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md` for current gaps vs implementation.
+**Date:** 2026-05-15 (moved/retitled 2026-05-17)
+**Scope:** 量化血缘链架构 / 策略身份与配置管理 / Run Registry / experiment tracking DB / API / 前端结构。这是天气策略量化系统的核心架构设计文档，不只是 dashboard。
 
 **Table of Contents:**
 - §0 Goals

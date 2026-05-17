@@ -3,7 +3,7 @@
 > 最后更新: 2026-05-17  
 > 范围: 本机 `weather_dashboard/` SQLite + ingest + API。**不涉及** N100 生产链。  
 > 目的: 在数据格式僵化前先识别缺口，避免后期回填困难。  
-> 关联文档: 原始设计 spec → [docs/superpowers/specs/2026-05-15-weather-strategy-dashboard-design.md](superpowers/specs/2026-05-15-weather-strategy-dashboard-design.md)
+> 关联文档: 核心量化系统架构 spec → [WEATHER_STRATEGY_QUANT_DESIGN.md](WEATHER_STRATEGY_QUANT_DESIGN.md)
 
 ---
 

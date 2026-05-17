@@ -16,8 +16,8 @@
 
 设计与现状文档：
 
-- **原始设计 spec**（DB schema / 策略管理 / 前端 / API / 13-PR 实施计划）:
-  [docs/superpowers/specs/2026-05-15-weather-strategy-dashboard-design.md](docs/superpowers/specs/2026-05-15-weather-strategy-dashboard-design.md)
+- **核心量化系统架构设计**（血缘链 / 策略身份 / Run Registry / DB schema / API / 前端）:
+  [docs/WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md)
 - **数据模型分层与缺口审计**（当前实现 vs 设计，P0/P1/P2 缺口）:
   [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
 

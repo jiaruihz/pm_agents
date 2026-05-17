@@ -21,7 +21,7 @@ scripts/weather_dashboard/run_stack.sh --status
 ```
 
 设计文档:
-- 原始设计 spec: [docs/superpowers/specs/2026-05-15-weather-strategy-dashboard-design.md](docs/superpowers/specs/2026-05-15-weather-strategy-dashboard-design.md)
+- 核心量化架构设计 spec: [docs/WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md)
 - 数据模型缺口审计: [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
 
 启动后:
