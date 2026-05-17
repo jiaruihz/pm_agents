@@ -16,10 +16,14 @@
 
 设计与现状文档：
 
+- **系统接口契约**（N100↔pm_agent 字段名/枚举/ID算法，改字段前必读）:
+  [docs/WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md)
 - **核心量化系统架构设计**（血缘链 / 策略身份 / Run Registry / DB schema / API / 前端）:
   [docs/WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md)
-- **数据模型分层与缺口审计**（当前实现 vs 设计，P0/P1/P2 缺口）:
+- **数据模型分层与缺口审计**（P0已完成，P1/P2待办）:
   [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
+- **早期实盘历史与回填治理**（本机/N100 live、重复下单、城市池错误、sizing 改动）:
+  [docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)
 
 任何 agent（Claude / Codex / MiniMax / 人）启动看板都用这一个脚本，不要手动跑多条命令:
 

@@ -21,8 +21,10 @@ scripts/weather_dashboard/run_stack.sh --status
 ```
 
 设计文档:
+- **系统接口契约**（字段名/枚举/ID算法，改字段前必读）: [docs/WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md)
 - 核心量化架构设计 spec: [docs/WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md)
-- 数据模型缺口审计: [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
+- 数据模型缺口审计（P0已完成，P1待办）: [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
+- 早期实盘历史与回填治理: [docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)
 
 启动后:
 - 看板 <http://localhost:5173/weather/runs>
