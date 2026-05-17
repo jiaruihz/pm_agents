@@ -1,8 +1,12 @@
 # Weather Strategy Entrypoint
 
-Last updated: 2026-05-16
+Last updated: 2026-05-17
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.
+
+For early live rollout history, known mistakes, and how to split local/N100 live PnL, also read:
+
+- `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`
 
 ## Current Production Posture
 
@@ -92,6 +96,7 @@ Health monitoring:
 
 Architecture and cleanup context:
 
+- `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`
 - `docs/WEATHER_EXECUTION_ARCHITECTURE.md`
 - `docs/WEATHER_EXECUTION_CLEANUP_PLAN.md`
 
@@ -152,7 +157,10 @@ ssh 192.168.0.200 'cd /home/jiarui/projects/weather-predict && python3 scripts/a
 
 2026-05-15/16 live debugging found:
 
-- Old local live code submitted at least one Wuhan order because live signal building used the full snapshot pool.
+- Early live history is split across local `pm_agent` and N100 `pm_agent`. All real fills count for wallet PnL, but strategy evaluation must split by run/config/source. See `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`.
+- Local target-date 2026-05-14 had duplicate/over-submission risk and is not a clean strategy sample.
+- Local target-date 2026-05-15 and 2026-05-16 used a broad/non-T1 city universe. Wuhan belongs to this local early-live wrong-universe bucket.
+- N100 target-date 2026-05-16 is a legacy/debug live run with incomplete metadata/guardrails, not the same identity as current rollout.
 - Current N100 live cycle now passes `--city-pool t1_trading`.
 - Size below 10 shares was not a fill bug; it came from fixed-notional sizing: `size = max_order_notional / limit_price`.
 - `max_position` was misleading in this live path, because planning checked against `current_position=0`. The active config now uses `max_order_shares` for the per-order share cap. True cumulative position caps should be implemented separately with current position plus open-order context.

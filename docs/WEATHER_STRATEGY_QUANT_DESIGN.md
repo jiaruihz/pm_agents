@@ -4,6 +4,8 @@
 **Date:** 2026-05-15 (moved/retitled 2026-05-17)
 **Scope:** 量化血缘链架构 / 策略身份与配置管理 / Run Registry / experiment tracking DB / API / 前端结构。这是天气策略量化系统的核心架构设计文档，不只是 dashboard。
 
+Early live rollout history and backfill governance: [WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)
+
 **Table of Contents:**
 - §0 Goals
 - §1 Background — 量化系统设计沉淀（数据契约、策略身份、Run Registry、指标层次、异常值防御、通用 + Polymarket 难点）
@@ -155,11 +157,13 @@ Signal 和 Plan 是「策略意图」，和执行模式无关。**同一个 plan
 | **code_version** | 执行代码的 git SHA | `a3f9b2c` |
 | **universe** | 数据宇宙：哪些 city / model / 日期 | `universe_v2`（冻结的城市清单） |
 | **data_snapshot** | 用了哪一批 snapshot 数据 | `snapshots_2026-05-06_to_2026-05-13` |
+| **execution_host** | live 实际发单机器/环境 | `local_pm_agent`, `n100_pm_agent` |
 
-**`repro_key = hash(canonical(config + code_version + universe + data_snapshot))`**
+**`repro_key = hash(canonical(config + code_version + universe + data_snapshot + execution_host))`**
 
 - 同一 `repro_key` 跑两次，PnL 必须 bit-by-bit 一致——否则系统有隐藏非确定性，必须排查
 - 任何一项变化即为新策略，不要混并算总 PnL
+- 对 live 来说，`execution_host` 是策略身份的一部分。本机和 N100 可能有不同 env/proxy/package/scheduler 状态，不能默认视作同一个 run。
 
 **`config_id = hash(canonical(config))`**——给"同样参数不同时间窗 / paper vs live"对比用的子 ID。
 
@@ -181,6 +185,7 @@ strategy_config (config_id)  ──┐
 - **重跑历史** 是新 `run_id`，可以打 tag `supersedes: <old_run_id>`
 - **修 bug 重跑**必须打 tag，并标 `code_version` 变化
 - 每个 run 有 **lifecycle state**：`explore` / `paper` / `live` / `retired` —— UI 默认隐藏 retired
+- **事故/脏历史也要入库但标记质量**：例如 `run_quality=invalid_process_wrong_universe`，不要删除，也不要混入 active candidate。
 
 ### 1.4 指标层次（PnL/ROI 只是冰山一角）
 
@@ -1353,4 +1358,3 @@ Runs 页面的过滤条件（state, mode, config_id, tags, date_range）和 Comp
 **总计约 23 个工作日（4-5 周单人 full-time，或 8-10 周 50%）。**
 
 Frontend 视觉设计：PR7 之后用 **frontend-design** skill 走一遍设计语言、Tailwind 主题、shadcn 定制。
-
