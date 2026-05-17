@@ -10,6 +10,55 @@
 
 这份入口文档记录当前 live 口径、N100 检查命令、关键代码路径、近期实盘事故结论和后续设计项。不要只凭本文件下方的历史摘要判断当前实盘状态。
 
+## Weather Dashboard（本机看板，独立于 N100 生产）
+
+本机的策略大盘 / 数据 DB / FastAPI / React 全在 `weather_dashboard/` + `frontend/strategy_dashboard/`。它是分析用的二级镜像，**不参与 N100 生产，不发单**。
+
+数据模型分层与缺口审计:
+
+- [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
+
+任何 agent（Claude / Codex / MiniMax / 人）启动看板都用这一个脚本，不要手动跑多条命令:
+
+```bash
+# 一键启动（建库 + ingest CSV + 启动 API + 启动前端）
+scripts/weather_dashboard/run_stack.sh
+
+# 已经有 DB，只启服务
+scripts/weather_dashboard/run_stack.sh --no-rebuild
+
+# 只看状态（DB 里几个 run / 端口是否占用）
+scripts/weather_dashboard/run_stack.sh --status
+
+# 仅 API / 仅前端
+scripts/weather_dashboard/run_stack.sh --api-only
+scripts/weather_dashboard/run_stack.sh --fe-only
+```
+
+启动后入口:
+- 前端: <http://localhost:5173/weather/runs>
+- Live 监控: <http://localhost:5173/weather/live>
+- API docs: <http://localhost:8000/docs>
+
+日志:
+```text
+runtime/_dashboard_logs/api.log
+runtime/_dashboard_logs/fe.log
+runtime/_dashboard_logs/ingest_{snapshot,paper}.log
+```
+
+停止:
+```bash
+pkill -F runtime/_dashboard_logs/api.pid 2>/dev/null
+pkill -F runtime/_dashboard_logs/fe.pid 2>/dev/null
+```
+
+数据源固定:
+- snapshot replay CSV → `runtime/weather_edge_v1/market_data/research/t24_paper_snapshot_replay_trades.csv`
+- paper ledger CSV → `runtime/weather_edge_v1/market_data/research/t24_paper_ledger_trades.csv`
+
+这两个 CSV 来自 N100 `sync_weather_remote.sh` 拉取的镜像。如果看板数据陈旧，先同步 N100 再重跑 `run_stack.sh`。
+
 ## 桌面端 / WSL 命令执行约定
 
 关键限制: Codex/Claude 桌面端当前可能在 Windows 环境里调用命令。即使代码目录来自 WSL，如果当前 shell 是 PowerShell/CMD，也不是 WSL 里的 bash。

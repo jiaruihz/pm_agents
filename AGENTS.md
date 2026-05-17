@@ -10,6 +10,23 @@
 
 这份入口文档记录当前 live 口径、N100 检查命令、关键代码路径、近期实盘事故结论和后续设计项。不要只凭本文件下方的历史摘要判断当前实盘状态。
 
+## Weather Dashboard 一键启动
+
+本机看板（独立于 N100 生产，不发单）。任何 agent 启动看板都用同一个脚本:
+
+```bash
+scripts/weather_dashboard/run_stack.sh             # 全量：建库+ingest+API+FE
+scripts/weather_dashboard/run_stack.sh --no-rebuild
+scripts/weather_dashboard/run_stack.sh --status
+```
+
+数据模型分层与缺口审计: [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
+
+启动后:
+- 看板 <http://localhost:5173/weather/runs>
+- Live  <http://localhost:5173/weather/live>
+- API   <http://localhost:8000/docs>
+
 ## 桌面端 / WSL 命令执行约定
 
 关键限制: Codex 桌面端当前可能在 Windows 环境里调用命令。即使代码目录来自 WSL，如果当前 shell 是 PowerShell/CMD，也不是 WSL 里的 bash。
