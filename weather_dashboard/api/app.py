@@ -15,11 +15,15 @@ def create_app() -> FastAPI:
         description="Strategy run tracking, metrics, and comparison for weather Polymarket positions",
     )
 
-    # CORS — allow the React dev server and any configured origin
-    origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+    # CORS — allow any localhost origin (dev) plus any explicitly configured origins.
+    # Vite may auto-increment its port (5173→5174 etc) so we use allow_origin_regex
+    # to cover all localhost ports rather than a fixed whitelist.
+    extra = os.environ.get("CORS_ORIGINS", "")
+    extra_origins = [o.strip() for o in extra.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[o.strip() for o in origins],
+        allow_origins=extra_origins,
+        allow_origin_regex=r"https?://localhost(:\d+)?",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

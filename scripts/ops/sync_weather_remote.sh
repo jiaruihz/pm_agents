@@ -50,6 +50,7 @@ echo "local=$LOCAL_ROOT"
 date -Is
 
 sync_dir "output/paper_snapshots" "paper_snapshots"
+sync_dir "output/orderbook_snapshots" "orderbook_snapshots"
 sync_dir "output/paper_trades" "paper_trades"
 sync_dir "output/research" "research"
 sync_dir "cache/pm_history" "cache/pm_history"

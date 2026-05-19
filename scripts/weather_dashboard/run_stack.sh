@@ -50,6 +50,34 @@ log() { printf '\033[1;36m[run_stack]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[run_stack]\033[0m %s\n' "$*"; }
 err() { printf '\033[1;31m[run_stack]\033[0m %s\n' "$*" >&2; }
 
+ensure_linux_node() {
+  local node_path npm_path nvm_bin
+  if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
+    # Non-interactive WSL shells do not source nvm automatically.
+    # Prefer the user's configured Linux node over Windows node/npm on /mnt/c.
+    # shellcheck disable=SC1090
+    source "$HOME/.nvm/nvm.sh"
+    nvm use --silent 20 >/dev/null 2>&1 || nvm use --silent node >/dev/null 2>&1 || true
+  fi
+
+  node_path="$(command -v node 2>/dev/null || true)"
+  npm_path="$(command -v npm 2>/dev/null || true)"
+
+  if [[ "$node_path" == /mnt/* || "$node_path" == *.exe || "$npm_path" == /mnt/* || "$npm_path" == *.cmd ]]; then
+    nvm_bin="$(find "$HOME/.nvm/versions/node" -maxdepth 3 -type f -name node -printf '%h\n' 2>/dev/null | sort -V | tail -1 || true)"
+    if [[ -n "$nvm_bin" ]]; then
+      export PATH="$nvm_bin:$PATH"
+    fi
+  fi
+
+  node_path="$(command -v node 2>/dev/null || true)"
+  npm_path="$(command -v npm 2>/dev/null || true)"
+  if [[ -z "$node_path" || -z "$npm_path" || "$node_path" == /mnt/* || "$npm_path" == /mnt/* ]]; then
+    err "Linux node/npm not found for frontend startup. Install nodejs in WSL or install/use nvm under WSL."
+    exit 1
+  fi
+}
+
 # ---- Preflight ----
 if [[ ! -x "$VENV/python" ]]; then
   err "venv not found at $VENV — create with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
@@ -64,11 +92,13 @@ show_status() {
 from weather_dashboard.db.connection import get_conn
 try:
     c = get_conn('$DB_PATH')
-    rows = c.execute('SELECT run_id, state, execution_mode, (SELECT COUNT(*) FROM fills f JOIN orders o ON f.order_id=o.order_id WHERE o.run_id=runs.run_id AND f.status=\"filled\") AS fills FROM runs').fetchall()
+    rows = c.execute('SELECT run_id, state, execution_mode, (SELECT COUNT(*) FROM fills f JOIN orders o ON f.execution_id=o.execution_id WHERE o.run_id=runs.run_id AND f.status IN (\"filled\", \"simulated\")) AS fills FROM runs').fetchall()
     if not rows:
         print('  [DB] schema present but no runs')
-    for r in rows:
+    for r in rows[:25]:
         print(f'  [DB] {r[\"run_id\"][:12]}  {r[\"state\"]:8s} {r[\"execution_mode\"]:18s} fills={r[\"fills\"]}')
+    if len(rows) > 25:
+        print(f'  [DB] ... {len(rows) - 25} more run(s)')
 except Exception as e:
     print(f'  [DB] error: {e}')
 " 2>&1 || true
@@ -85,36 +115,72 @@ fi
 # ---- 1. Rebuild DB (idempotent — ingest is content-addressable) ----
 if [[ $REBUILD -eq 1 ]]; then
   log "Rebuilding DB at $DB_PATH"
-  rm -f "$DB_PATH"
-  make -f Makefile.weather db-init >/dev/null
+  make -f Makefile.weather db-canonical-rebuild >/dev/null
 
   SNAP_CSV="$REPO_ROOT/runtime/weather_edge_v1/market_data/research/t24_paper_snapshot_replay_trades.csv"
   PAPER_CSV="$REPO_ROOT/runtime/weather_edge_v1/market_data/research/t24_paper_ledger_trades.csv"
 
-  if [[ -f "$SNAP_CSV" ]]; then
-    log "  Ingesting snapshot_replay CSV ($(stat -c '%s' "$SNAP_CSV") bytes)"
-    make -f Makefile.weather ingest-real >"$LOG_DIR/ingest_snapshot.log" 2>&1 || {
-      err "snapshot ingest failed — see $LOG_DIR/ingest_snapshot.log"
+  if [[ -f "$SNAP_CSV" || -f "$PAPER_CSV" ]]; then
+    log "  Migrating legacy research CSVs into canonical DB"
+    make -f Makefile.weather migrate-legacy-research >"$LOG_DIR/migrate_legacy_research.log" 2>&1 || {
+      err "legacy research migration failed — see $LOG_DIR/migrate_legacy_research.log"
       exit 1
     }
   else
-    warn "  snapshot_replay CSV missing: $SNAP_CSV (run scripts/ops/sync_weather_remote.sh first)"
+    warn "  research CSVs missing (run scripts/ops/sync_weather_remote.sh first)"
   fi
 
-  if [[ -f "$PAPER_CSV" ]]; then
-    log "  Ingesting paper_ledger CSV ($(stat -c '%s' "$PAPER_CSV") bytes)"
-    make -f Makefile.weather ingest-paper >"$LOG_DIR/ingest_paper.log" 2>&1 || {
-      err "paper ingest failed — see $LOG_DIR/ingest_paper.log"
+  if [[ -d "$REPO_ROOT/runtime/weather_edge_v1/live_cycle" || -d "$REPO_ROOT/runtime/weather_edge_v1/remote_pm_agent/live_cycle" ]]; then
+    log "  Migrating live-cycle lineage into canonical DB"
+    make -f Makefile.weather migrate-live-cycle >"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+      err "live-cycle migration failed — see $LOG_DIR/migrate_live_cycle.log"
       exit 1
     }
   else
-    warn "  paper_ledger CSV missing: $PAPER_CSV"
+    warn "  live_cycle directories missing"
   fi
+
+  log "  Precomputing metrics cache for all runs"
+  make -f Makefile.weather metrics-refresh >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    warn "metrics-refresh failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
+  }
+
+  log "  Syncing real CLOB fills from Polymarket activity API"
+  "$VENV/python" -m weather_dashboard.ingest.clob_fill_sync \
+    --db-path "$DB_PATH" >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    warn "clob-fill-sync failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
+  }
+
+  log "  Re-computing metrics after CLOB fill sync"
+  make -f Makefile.weather metrics-refresh >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
 fi
 
 show_status
 
-# ---- 2. Start API ----
+# ---- 2. Start main-app BFF (strategy_dashboard_server, port 8011) ----
+BFF_PORT="${WEATHER_BFF_PORT:-8011}"
+if [[ $START_API -eq 1 ]]; then
+  if ss -tln 2>/dev/null | grep -q ":$BFF_PORT "; then
+    warn "Port $BFF_PORT already in use — assuming BFF already running"
+  else
+    log "Starting BFF on :$BFF_PORT (logs: $LOG_DIR/bff.log)"
+    ARTIFACTS_DIR="$REPO_ROOT/src/strategies/pmm/backtest/.artifacts"
+    setsid nohup "$VENV/python" -m src.interfaces.web.strategy_dashboard_server \
+      --host 127.0.0.1 --port "$BFF_PORT" \
+      --artifacts-dir "$ARTIFACTS_DIR" \
+      --runtime-dir "$REPO_ROOT/runtime" \
+      >"$LOG_DIR/bff.log" 2>&1 &
+    echo $! > "$LOG_DIR/bff.pid"
+    sleep 2
+    if ss -tln 2>/dev/null | grep -q ":$BFF_PORT "; then
+      log "  BFF healthy on :$BFF_PORT"
+    else
+      warn "  BFF may not have started — check $LOG_DIR/bff.log"
+    fi
+  fi
+fi
+
+# ---- 3. Start weather API ----
 if [[ $START_API -eq 1 ]]; then
   if ss -tln 2>/dev/null | grep -q ":$API_PORT "; then
     warn "Port $API_PORT already in use — assuming API is already running"
@@ -137,6 +203,7 @@ fi
 
 # ---- 3. Start frontend ----
 if [[ $START_FE -eq 1 ]]; then
+  ensure_linux_node
   if [[ ! -d "$FE_DIR/node_modules" ]]; then
     log "Installing frontend deps (first run)"
     (cd "$FE_DIR" && npm install >"$LOG_DIR/npm_install.log" 2>&1)
@@ -145,11 +212,46 @@ if [[ $START_FE -eq 1 ]]; then
     warn "Port $FE_PORT already in use — assuming FE already running"
   else
     log "Starting frontend on :$FE_PORT (logs: $LOG_DIR/fe.log)"
-    (cd "$FE_DIR" && nohup npm run dev -- --host 0.0.0.0 --port "$FE_PORT" \
+    (cd "$FE_DIR" && setsid nohup npm run dev -- --host 0.0.0.0 --port "$FE_PORT" \
         >"$LOG_DIR/fe.log" 2>&1 &
      echo $! > "$LOG_DIR/fe.pid")
-    sleep 3
+    sleep 5
+    # Detect actual port Vite chose (it may increment if $FE_PORT was busy)
+    ACTUAL_FE_PORT="$(grep -oE 'localhost:[0-9]+' "$LOG_DIR/fe.log" | head -1 | cut -d: -f2 || echo $FE_PORT)"
+    if [[ -n "$ACTUAL_FE_PORT" && "$ACTUAL_FE_PORT" != "$FE_PORT" ]]; then
+      warn "Vite started on :$ACTUAL_FE_PORT (port $FE_PORT was busy)"
+      FE_PORT="$ACTUAL_FE_PORT"
+    fi
   fi
+fi
+
+# ---- 4. Windows port-forwarding (WSL2 -> Windows host) ----
+setup_windows_portproxy() {
+  local wsl_ip
+  wsl_ip="$(ip addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)"
+  if [[ -z "$wsl_ip" ]]; then
+    warn "Could not determine WSL IP — skipping Windows port-proxy setup"
+    return
+  fi
+  log "Setting up Windows port-proxy: WSL IP=$wsl_ip"
+
+  # Build one-liner netsh commands (avoid multi-line PS quoting issues in bash)
+  local del_api="netsh interface portproxy delete v4tov4 listenport=${API_PORT} listenaddress=0.0.0.0"
+  local add_api="netsh interface portproxy add v4tov4 listenport=${API_PORT} listenaddress=0.0.0.0 connectport=${API_PORT} connectaddress=${wsl_ip}"
+  local del_fe="netsh interface portproxy delete v4tov4 listenport=${FE_PORT} listenaddress=0.0.0.0"
+  local add_fe="netsh interface portproxy add v4tov4 listenport=${FE_PORT} listenaddress=0.0.0.0 connectport=${FE_PORT} connectaddress=${wsl_ip}"
+
+  if powershell.exe -NoProfile -NonInteractive -Command "${del_api}; ${add_api}; ${del_fe}; ${add_fe}; netsh interface portproxy show all" 2>/dev/null; then
+    log "  Port-proxy OK"
+  else
+    warn "  Port-proxy setup requires admin PowerShell. Run manually:"
+    warn "    ${add_api}"
+    warn "    ${add_fe}"
+  fi
+}
+
+if [[ $START_API -eq 1 || $START_FE -eq 1 ]]; then
+  setup_windows_portproxy
 fi
 
 log "Done. Open:"

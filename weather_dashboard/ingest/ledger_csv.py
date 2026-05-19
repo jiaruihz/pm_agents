@@ -1,3 +1,11 @@
+"""LEGACY v1 CSV ingest.
+
+This module writes the pre-canonical dashboard schema and still understands old
+field names such as event_date/model_prob/market_yes_price/final_yes. It is
+kept for old tests and historical forensics only. Canonical rebuilds must use
+weather_dashboard.ingest.canonical plus the legacy_migration adapters.
+"""
+
 import hashlib
 from weather_dashboard.ingest.common import row_hash, already_ingested, record_ingestion
 
@@ -95,9 +103,13 @@ def ingest_ledger_csv(
         # (same snapshot+city+bracket+side+model can appear in multiple runs/CSVs)
         if not already_ingested(conn, source_path, h, 'signals'):
             conn.execute("""
-                INSERT OR IGNORE INTO signals (signal_id, snapshot_ts_utc, snapshot_file, target_date,
-                    city, bracket, side, model_version, model_p_yes, market_price, edge, abs_edge)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO signals (
+                    signal_id, snapshot_ts_utc, snapshot_file, target_date,
+                    city, bracket, side, model_version, model_p_yes, market_price,
+                    edge, abs_edge,
+                    city_pool, forecast_source, condition_id, market_id, icao, hours_to_settle
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 signal_id,
                 row.get('snapshot_ts_utc', ''),
@@ -111,6 +123,12 @@ def ingest_ledger_csv(
                 row.get('market_yes_price', ''),
                 row.get('edge', ''),
                 row.get('abs_edge', ''),
+                row.get('city_pool'),
+                row.get('forecast_source'),
+                row.get('condition_id'),
+                row.get('market_id'),
+                row.get('icao'),
+                row.get('hours_to_settle'),
             ))
             record_ingestion(conn, source_path, h, 'signals', signal_id)
             new_inserted += 1

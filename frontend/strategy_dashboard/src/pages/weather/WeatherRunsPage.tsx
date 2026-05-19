@@ -79,15 +79,23 @@ export function WeatherRunsPage() {
           <table style={tableStyle}>
             <thead>
               <tr>
-                {["Run ID", "State", "Mode", "Config", "Date Range", "Started", "Tags", "Actions"].map((h) => (
+                {["Run ID", "State", "Mode", "Date Range", "Trades", "Settled", "PnL (USD)", "Win%", "ROI", "Tags", "Actions"].map((h) => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {runs.map((r) => (
+              {runs.map((r) => {
+                const m = r.metrics;
+                const pnl = m?.total_pnl_usd;
+                const pnlColor = pnl == null ? "var(--muted)" : pnl >= 0 ? "var(--ok)" : "var(--bad)";
+                return (
                 <tr key={r.run_id} style={{ borderBottom: "1px solid var(--stroke)" }}>
-                  <td style={tdMono}>{r.run_id.slice(0, 12)}…</td>
+                  <td style={tdMono} title={r.run_id}>
+                    <Link to={`/weather/history/${r.run_id}`} style={linkStyle}>
+                      {r.run_id.slice(0, 14)}…
+                    </Link>
+                  </td>
                   <td style={tdStyle}>
                     <span style={{
                       color: STATE_COLOR[r.state] ?? "inherit",
@@ -97,13 +105,24 @@ export function WeatherRunsPage() {
                     </span>
                   </td>
                   <td style={tdStyle}>{r.execution_mode}</td>
-                  <td style={tdMono}>{r.config_id.slice(0, 10)}…</td>
                   <td style={tdStyle}>
                     {r.date_range_start && (
-                      <span>{r.date_range_start}{r.date_range_end ? ` → ${r.date_range_end}` : ""}</span>
+                      <span style={{ fontSize: 12 }}>{r.date_range_start}{r.date_range_end ? ` → ${r.date_range_end}` : ""}</span>
                     )}
                   </td>
-                  <td style={tdStyle}>{r.started_at_utc ? r.started_at_utc.slice(0, 10) : "—"}</td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>{m ? m.num_trades : "—"}</td>
+                  <td style={{ ...tdStyle, textAlign: "right", color: "var(--muted)", fontSize: 12 }}>
+                    {m ? `${m.settled_trades ?? 0}/${m.num_trades}` : "—"}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: "right", color: pnlColor, fontWeight: 600 }}>
+                    {pnl != null ? `$${pnl.toFixed(2)}` : "—"}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>
+                    {m?.win_rate != null ? `${(m.win_rate * 100).toFixed(1)}%` : "—"}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>
+                    {m?.roi != null ? `${(m.roi * 100).toFixed(2)}%` : "—"}
+                  </td>
                   <td style={tdStyle}>
                     {r.tags?.map((t) => (
                       <span key={t} style={tagStyle}>{t}</span>
@@ -115,7 +134,8 @@ export function WeatherRunsPage() {
                     <Link to={`/weather/compare?run_ids=${r.run_id}`} style={linkStyle}>Compare</Link>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {!loading && runs.length === 0 && (
                 <tr>
                   <td colSpan={8} style={{ ...tdStyle, color: "var(--muted)", textAlign: "center", padding: 32 }}>

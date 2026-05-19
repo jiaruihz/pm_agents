@@ -7,6 +7,7 @@ This is the first file to read before changing, operating, or analyzing the weat
 For early live rollout history, known mistakes, and how to split local/N100 live PnL, also read:
 
 - `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`
+- `docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md`
 
 ## Current Production Posture
 

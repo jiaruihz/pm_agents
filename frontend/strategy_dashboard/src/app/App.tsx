@@ -10,6 +10,7 @@ import { WeatherRunsPage } from "../pages/weather/WeatherRunsPage";
 import { WeatherComparePage } from "../pages/weather/WeatherComparePage";
 import { WeatherHistoryPage } from "../pages/weather/WeatherHistoryPage";
 import { WeatherLivePage } from "../pages/weather/WeatherLivePage";
+import { WeatherTradeDrilldownPage } from "../pages/weather/WeatherTradeDrilldownPage";
 
 export function App(): JSX.Element {
   return (
@@ -26,6 +27,7 @@ export function App(): JSX.Element {
       <Route path="/weather/runs" element={<WeatherRunsPage />} />
       <Route path="/weather/compare" element={<WeatherComparePage />} />
       <Route path="/weather/history/:runId" element={<WeatherHistoryPage />} />
+      <Route path="/weather/trade/:runId/:signalId" element={<WeatherTradeDrilldownPage />} />
       <Route path="/weather/live" element={<WeatherLivePage />} />
       <Route path="/weather" element={<Navigate to="/weather/runs" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

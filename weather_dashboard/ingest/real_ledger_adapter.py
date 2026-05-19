@@ -1,4 +1,10 @@
 """
+LEGACY v1 adapter.
+
+Do not add this adapter to any normal canonical path. It exists only to support
+old v1 ingest tests/manual forensics. Canonical DB rebuilds should read old
+fields only inside weather_dashboard.legacy_migration and output canonical rows.
+
 real_ledger_adapter.py
 
 Adapts real weather-strategy CSV rows (both ledger and snapshot-replay formats)
@@ -12,6 +18,14 @@ Canonical fields consumed downstream:
     market_yes_price, edge, abs_edge, event_date, shares, cost_usd, entry_price,
     mode, order_id, created_at_utc, settlement_status
     (+ final_yes for settlements)
+
+P0 enrichment fields (passed through when present, None otherwise):
+    city_pool, forecast_source, condition_id, market_id, icao, hours_to_settle
+    - t24_paper_ledger_trades.csv:  all 6 present
+    - t24_paper_snapshot_replay_trades.csv: city_pool, condition_id, market_id,
+      icao, hours_to_settle present; forecast_source = forecast_source column
+    - paper_orders.jsonl (37 fields): condition_id/market_id/icao/hours_to_settle
+      present, city_pool absent (older N100 format)
 """
 
 from __future__ import annotations
@@ -45,7 +59,12 @@ def adapt_row(raw: dict, default_mode: str = "snapshot_replay") -> dict:
     else:
         final_yes = ""
 
+    # hours_to_settle: keep as float string or None
+    raw_hrs = _get("hours_to_settle")
+    hours_to_settle = raw_hrs if raw_hrs else None
+
     return {
+        # Core signal fields
         "snapshot_file":     _get("snapshot_file"),
         "snapshot_ts_utc":   _get("snapshot_ts_utc"),
         "city":              _get("city"),
@@ -65,6 +84,13 @@ def adapt_row(raw: dict, default_mode: str = "snapshot_replay") -> dict:
         "created_at_utc":    _get("created_at_utc", "snapshot_ts_utc"),
         "settlement_status": _get("settlement_status"),
         "final_yes":         final_yes,
+        # P0 enrichment fields (None when absent in source)
+        "city_pool":         _get("city_pool") or None,
+        "forecast_source":   _get("forecast_source") or None,
+        "condition_id":      _get("condition_id") or None,
+        "market_id":         _get("market_id") or None,
+        "icao":              _get("icao") or None,
+        "hours_to_settle":   hours_to_settle,
     }
 
 

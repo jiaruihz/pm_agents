@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 class RunSummary(BaseModel):
     run_id: str
+    producer_system: Optional[str] = None
+    producer_run_id: Optional[str] = None
     config_id: str
     universe_id: Optional[str]
     code_version: Optional[str]
@@ -18,10 +20,12 @@ class RunSummary(BaseModel):
     notes: Optional[str]
     created_at_utc: str
     started_at_utc: Optional[str]
+    # Cached metrics snapshot (precomputed by metrics-refresh / get_run)
+    metrics: Optional[dict[str, Any]] = None
 
 
 class RunDetail(RunSummary):
-    metrics: Optional[dict[str, Any]]
+    pass  # metrics inherited from RunSummary
 
 
 class SignalRow(BaseModel):
@@ -31,34 +35,36 @@ class SignalRow(BaseModel):
     target_date: Optional[str]
     city: Optional[str]
     bracket: Optional[str]
-    side: Optional[str]
+    signal_side: Optional[str]
     model_version: Optional[str]
-    model_p_yes: Optional[str]
-    market_price: Optional[str]
-    edge: Optional[str]
+    model_p_yes: Optional[float]
+    market_price: Optional[float]
+    edge: Optional[float]
     abs_edge: Optional[str]
     created_at_utc: str
 
 
 class OrderRow(BaseModel):
-    order_id: str
+    execution_id: str
+    order_id: Optional[str]
     run_id: str
     plan_id: Optional[str]
-    execution_mode: Optional[str]
-    side: Optional[str]
-    entry_price: Optional[str]
-    shares: Optional[str]
-    cost_usd: Optional[str]
+    venue: Optional[str]
+    order_side: Optional[str]
+    entry_price: Optional[float]
+    shares: Optional[float]
+    cost_usd: Optional[float]
     placed_at_utc: Optional[str]
     created_at_utc: str
 
 
 class FillRow(BaseModel):
     fill_id: str
-    order_id: str
-    filled_shares: Optional[str]
-    filled_price: Optional[str]
-    fees_usd: Optional[str]
+    execution_id: str
+    order_id: Optional[str]
+    filled_shares: Optional[float]
+    filled_price: Optional[float]
+    fees_usd: Optional[float]
     status: Optional[str]
     filled_at_utc: Optional[str]
     created_at_utc: str
@@ -72,19 +78,36 @@ class TradeRow(BaseModel):
     bracket: Optional[str]
     signal_side: Optional[str]
     model_version: Optional[str]
-    model_p_yes: Optional[str]
-    market_price: Optional[str]
-    edge: Optional[str]
+    model_p_yes: Optional[float]
+    market_price: Optional[float]
+    edge: Optional[float]
     order_id: Optional[str]
+    execution_id: Optional[str] = None
     order_side: Optional[str]
-    entry_price: Optional[str]
-    shares: Optional[str]
-    cost_usd: Optional[str]
+    entry_price: Optional[float]
+    shares: Optional[float]
+    cost_usd: Optional[float]
     fill_status: Optional[str]
     filled_at_utc: Optional[str]
-    final_yes: Optional[int]
+    final_price: Optional[float]
     settlement_status: Optional[str]
     pnl_usd: Optional[str]
+    # P0 enrichment
+    city_pool: Optional[str]
+    forecast_source: Optional[str]
+    icao: Optional[str]
+    hours_to_settle: Optional[float]
+
+
+class TradeDrilldown(BaseModel):
+    run_id: str
+    signal_id: str
+    signal: Optional[dict[str, Any]]
+    plans: list[dict[str, Any]]
+    orders: list[dict[str, Any]]
+    fills: list[dict[str, Any]]
+    settlement: Optional[dict[str, Any]]
+    artifacts: list[dict[str, Any]]
 
 
 class MetricsResponse(BaseModel):
@@ -117,7 +140,10 @@ class UniverseRow(BaseModel):
 class SettlementRow(BaseModel):
     settlement_id: str
     target_date: str
+    condition_id: Optional[str] = None
+    market_id: Optional[str] = None
     bracket: str
-    final_yes: Optional[int]
-    status: Optional[str]
+    token_id: Optional[str] = None
+    final_price: Optional[float]
+    settlement_status: Optional[str]
     created_at_utc: str

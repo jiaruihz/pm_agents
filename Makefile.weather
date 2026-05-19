@@ -7,17 +7,22 @@ DB_PATH  := runtime/weather.db
 API_PORT := 8000
 FE_DIR   := frontend/strategy_dashboard
 
-.PHONY: help test api fe ingest-sample ingest-real db-init metrics-refresh cleanup-orphans
+.PHONY: help test api fe ingest-sample ingest-real db-init db-canonical-init db-canonical-rebuild migrate-legacy-research migrate-live-cycle metrics-refresh cleanup-orphans clob-fill-sync
 
 help:
 	@echo "Weather Dashboard targets:"
 	@echo "  test              — run all weather_dashboard tests"
 	@echo "  api               — start FastAPI dev server (port $(API_PORT))"
 	@echo "  fe                — start React dev server (port 5173)"
-	@echo "  db-init           — initialise DB schema at $(DB_PATH)"
-	@echo "  ingest-real       — ingest real snapshot_replay CSV into $(DB_PATH)"
+	@echo "  db-init           — LEGACY v1 schema init; canonical users should use db-canonical-init"
+	@echo "  db-canonical-init — initialise canonical DB schema at $(DB_PATH)"
+	@echo "  db-canonical-rebuild — delete and rebuild canonical DB at $(DB_PATH)"
+	@echo "  migrate-legacy-research — migrate T24 research CSVs into canonical DB"
+	@echo "  migrate-live-cycle — migrate live-cycle JSONL lineage into canonical DB"
+	@echo "  ingest-real       — LEGACY v1 ingest; do not use for canonical rebuilds"
 	@echo "  metrics-refresh   — recompute and persist metrics for all runs"
 	@echo "  cleanup-orphans   — list/delete runs with 0 fills (add DRY=1 to preview)"
+	@echo "  clob-fill-sync    — sync CLOB fill status for submitted orders (add DRY=1 for dry-run)"
 	@echo "  clean-db          — delete $(DB_PATH)"
 
 test:
@@ -28,13 +33,30 @@ api:
 	  --host 0.0.0.0 --port $(API_PORT) --reload
 
 fe:
-	cd $(FE_DIR) && npm run dev
+	cd $(FE_DIR) && npm run dev -- --host 0.0.0.0
 
 db-init:
+	@if [ "$(ALLOW_LEGACY_V1)" != "1" ]; then \
+	  echo "ERROR: db-init is legacy v1. Use db-canonical-init/db-canonical-rebuild, or set ALLOW_LEGACY_V1=1 intentionally." >&2; \
+	  exit 2; \
+	fi
 	$(PYTHON) -c "from weather_dashboard.db.apply_schema import init_db; init_db('$(DB_PATH)')"
 	@echo "DB initialised at $(DB_PATH)"
 
+db-canonical-init:
+	$(PYTHON) -c "from weather_dashboard.db.apply_schema_canonical import init_db_canonical; init_db_canonical('$(DB_PATH)')"
+	@echo "Canonical DB initialised at $(DB_PATH)"
+
+db-canonical-rebuild: clean-db db-canonical-init
+
+migrate-legacy-research: db-canonical-init
+	$(PYTHON) -m weather_dashboard.cli.ingest_legacy_research --db-path $(DB_PATH)
+
+migrate-live-cycle: db-canonical-init
+	$(PYTHON) -m weather_dashboard.cli.ingest_live_cycle --db-path $(DB_PATH)
+
 ingest-real: db-init
+	@echo "WARNING: ingest-real is legacy v1. Prefer migrate-legacy-research for canonical DB." >&2
 	$(PYTHON) -m weather_dashboard.cli.ingest_run \
 	  --csv runtime/weather_edge_v1/market_data/research/t24_paper_snapshot_replay_trades.csv \
 	  --db-path $(DB_PATH) \
@@ -48,6 +70,7 @@ ingest-real: db-init
 	  --state explore
 
 ingest-paper: db-init
+	@echo "WARNING: ingest-paper is legacy v1. Prefer migrate-legacy-research for canonical DB." >&2
 	$(PYTHON) -m weather_dashboard.cli.ingest_run \
 	  --csv runtime/weather_edge_v1/market_data/research/t24_paper_ledger_trades.csv \
 	  --db-path $(DB_PATH) \
@@ -71,6 +94,10 @@ cleanup-orphans:
 	$(PYTHON) -m weather_dashboard.cli.cleanup --db-path $(DB_PATH) \
 	  $(if $(DRY),--dry-run) $(if $(ALL),--all-orphans)
 
+clob-fill-sync:
+	$(PYTHON) -m weather_dashboard.ingest.clob_fill_sync --db-path $(DB_PATH) \
+	  $(if $(DRY),--dry-run) $(if $(V),--verbose)
+
 clean-db:
-	rm -f $(DB_PATH)
+	rm -f $(DB_PATH) $(DB_PATH)-wal $(DB_PATH)-shm
 	@echo "Deleted $(DB_PATH)"

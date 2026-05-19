@@ -1,39 +1,53 @@
 import type { RunMetrics } from "../../data/weather-types";
 import { METRIC_LABELS } from "../../data/weather-types";
 
-// Which metrics to show and their display format
+// Grouped display: primary KPIs first, then risk, then details
 const DISPLAY_ORDER: (keyof RunMetrics)[] = [
-  "num_trades",
-  "settled_trades",
-  "unsettled_trades",
-  "total_pnl_usd",
-  "win_rate",
-  "avg_pnl_usd",
-  "median_pnl_usd",
-  "pnl_trimmed_1pct",
-  "total_cost_usd",
-  "roi",
-  "top1_pnl_share",
-  "top5_pnl_share",
+  // Coverage
+  "num_trades", "settled_trades", "unsettled_trades", "settled_ratio",
+  // Core PnL
+  "total_pnl_usd", "roi", "win_rate", "loss_rate",
+  // Per-trade stats
+  "avg_pnl_usd", "median_pnl_usd", "pnl_trimmed_1pct",
+  "avg_win_usd", "avg_loss_usd", "expectancy_usd",
+  // Risk
+  "worst_loss_usd", "best_win_usd", "max_drawdown_usd",
+  // Concentration
+  "top1_pnl_share", "top5_pnl_share",
+  // Cost
+  "total_cost_usd", "fees_paid_usd",
 ];
+
+const RATE_KEYS = new Set<keyof RunMetrics>([
+  "win_rate", "loss_rate", "roi", "settled_ratio",
+  "top1_pnl_share", "top5_pnl_share",
+]);
+const MONEY_KEYS = new Set<keyof RunMetrics>([
+  "total_pnl_usd", "avg_pnl_usd", "median_pnl_usd", "pnl_trimmed_1pct",
+  "total_cost_usd", "fees_paid_usd", "worst_loss_usd", "best_win_usd",
+  "expectancy_usd", "max_drawdown_usd", "avg_win_usd", "avg_loss_usd",
+]);
 
 function fmt(key: keyof RunMetrics, val: number | null): string {
   if (val === null || val === undefined) return "—";
-  if (key === "win_rate" || key === "roi" || key.endsWith("_share"))
-    return `${(val * 100).toFixed(1)}%`;
-  if (key.endsWith("_usd") || key === "total_cost_usd")
-    return `${val >= 0 ? "+" : "-"}$${Math.abs(val).toFixed(2)}`;
+  if (RATE_KEYS.has(key)) return `${(val * 100).toFixed(1)}%`;
+  if (MONEY_KEYS.has(key)) {
+    const sign = val >= 0 ? "+" : "-";
+    return `${sign}$${Math.abs(val).toFixed(2)}`;
+  }
   return String(val);
 }
 
+const POS_KEYS = new Set<keyof RunMetrics>(["total_pnl_usd", "avg_pnl_usd", "median_pnl_usd",
+  "pnl_trimmed_1pct", "expectancy_usd", "avg_win_usd", "best_win_usd"]);
+const NEG_KEYS = new Set<keyof RunMetrics>(["worst_loss_usd", "avg_loss_usd", "max_drawdown_usd"]);
+
 function pnlColor(key: keyof RunMetrics, val: number | null): string {
   if (val === null) return "";
-  if (key === "total_pnl_usd" || key === "avg_pnl_usd" || key === "median_pnl_usd" || key === "pnl_trimmed_1pct") {
-    return val > 0 ? "var(--ok)" : val < 0 ? "var(--bad)" : "";
-  }
-  if (key === "win_rate" || key === "roi") {
-    return val > 0.5 ? "var(--ok)" : val < 0.4 ? "var(--bad)" : "";
-  }
+  if (POS_KEYS.has(key)) return val > 0 ? "var(--ok)" : val < 0 ? "var(--bad)" : "";
+  if (NEG_KEYS.has(key)) return val < 0 ? "var(--bad)" : "";
+  if (key === "win_rate") return val >= 0.5 ? "var(--ok)" : val < 0.4 ? "var(--bad)" : "";
+  if (key === "roi") return val > 0 ? "var(--ok)" : val < 0 ? "var(--bad)" : "";
   return "";
 }
 

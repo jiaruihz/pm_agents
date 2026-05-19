@@ -1,4 +1,9 @@
 """
+LEGACY v1 raw CSV rebuild helper.
+
+This writes the pre-canonical schema via apply_schema/init_db. It is not part of
+the normal weather dashboard path after the canonical cutover.
+
 rebuild_db_from_raw.py
 
 Batch-ingest all ledger CSV files in a directory into a SQLite DB.

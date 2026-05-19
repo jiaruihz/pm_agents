@@ -16,7 +16,7 @@ def apply_pragmas(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA mmap_size = 268435456")
 
 def get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     apply_pragmas(conn)
     return conn

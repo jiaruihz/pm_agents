@@ -1,4 +1,14 @@
 """
+LEGACY v1 ingest entrypoint.
+
+Do not use this CLI for the weather dashboard canonical rebuild path. The
+normal path is now:
+
+    db-canonical-rebuild -> ingest_legacy_research -> ingest_live_cycle
+
+This module is kept only for old tests/manual forensics around the pre-canonical
+schema and field aliases.
+
 ingest_run.py
 
 One-shot CLI: register config+universe (if needed), create a run, ingest a

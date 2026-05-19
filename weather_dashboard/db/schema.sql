@@ -1,3 +1,5 @@
+-- LEGACY v1 schema. Do not use for canonical weather dashboard rebuilds.
+-- Normal path: schema_canonical.sql via apply_schema_canonical.py.
 -- weather_dashboard DB Schema v1
 
 -- Schema version tracking
@@ -72,6 +74,13 @@ CREATE TABLE IF NOT EXISTS signals (
     market_price TEXT,
     edge TEXT,
     abs_edge TEXT,
+    -- P0 fields: stratification + market identity + feature engineering
+    city_pool TEXT,          -- 't1_trading' | 't2_research' | NULL
+    forecast_source TEXT,    -- 'open_meteo_live_gfs' | 'open_meteo_live_ecmwf' | ...
+    condition_id TEXT,       -- Polymarket condition/contract ID (0x...)
+    market_id TEXT,          -- Polymarket market numeric ID
+    icao TEXT,               -- weather station ICAO code (e.g. ZSPD, LFPG)
+    hours_to_settle REAL,    -- hours from signal time to settlement (TTM feature)
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 

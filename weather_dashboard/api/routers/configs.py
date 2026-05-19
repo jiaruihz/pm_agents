@@ -115,3 +115,86 @@ def list_settlements(
         params,
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+@router.get("/live/summary")
+def get_live_summary(db: Db):
+    by_target_date = db.execute(
+        """
+        SELECT
+            sig.target_date,
+            COUNT(*) AS orders,
+            COUNT(DISTINCT sig.city) AS cities,
+            SUM(CASE WHEN o.venue = 'polymarket_clob' THEN 1 ELSE 0 END) AS clob_orders,
+            SUM(CASE WHEN o.venue = 'paper' THEN 1 ELSE 0 END) AS paper_orders,
+            SUM(CASE WHEN o.status = 'submitted' THEN 1 ELSE 0 END) AS submitted_orders,
+            SUM(o.cost_usd) AS notional_usd,
+            MIN(COALESCE(o.placed_at_utc, o.created_at_utc)) AS first_order_at_utc,
+            MAX(COALESCE(o.placed_at_utc, o.created_at_utc)) AS last_order_at_utc
+        FROM orders o
+        JOIN plans p ON p.plan_id = o.plan_id
+        JOIN signals sig ON sig.signal_id = p.signal_id
+        JOIN runs r ON r.run_id = o.run_id
+        WHERE r.execution_mode = 'live'
+        GROUP BY sig.target_date
+        ORDER BY sig.target_date DESC
+        """
+    ).fetchall()
+
+    strategy_versions = db.execute(
+        """
+        SELECT
+            c.config_id,
+            c.name,
+            c.params,
+            COUNT(DISTINCT r.run_id) AS runs,
+            COUNT(o.execution_id) AS orders,
+            SUM(o.cost_usd) AS notional_usd
+        FROM strategy_config c
+        JOIN runs r ON r.config_id = c.config_id
+        LEFT JOIN orders o ON o.run_id = r.run_id
+        WHERE r.execution_mode = 'live'
+        GROUP BY c.config_id, c.name, c.params
+        ORDER BY orders DESC, c.name
+        """
+    ).fetchall()
+
+    today_account = db.execute(
+        """
+        SELECT
+            date(COALESCE(o.placed_at_utc, o.created_at_utc)) AS order_date_utc,
+            COUNT(*) AS orders,
+            SUM(CASE WHEN o.venue = 'polymarket_clob' THEN 1 ELSE 0 END) AS clob_orders,
+            SUM(CASE WHEN o.venue = 'paper' THEN 1 ELSE 0 END) AS paper_orders,
+            SUM(CASE WHEN o.status = 'submitted' THEN 1 ELSE 0 END) AS submitted_orders,
+            SUM(o.cost_usd) AS notional_usd,
+            COUNT(DISTINCT sig.city) AS cities,
+            COUNT(DISTINCT sig.target_date) AS target_dates
+        FROM orders o
+        JOIN plans p ON p.plan_id = o.plan_id
+        JOIN signals sig ON sig.signal_id = p.signal_id
+        JOIN runs r ON r.run_id = o.run_id
+        WHERE r.execution_mode = 'live'
+          AND date(COALESCE(o.placed_at_utc, o.created_at_utc)) = (
+              SELECT MAX(date(COALESCE(o2.placed_at_utc, o2.created_at_utc)))
+              FROM orders o2
+              JOIN runs r2 ON r2.run_id = o2.run_id
+              WHERE r2.execution_mode = 'live'
+          )
+        GROUP BY order_date_utc
+        """
+    ).fetchone()
+
+    def parsed_config(row):
+        payload = dict(row)
+        try:
+            payload["params"] = json.loads(payload["params"])
+        except Exception:
+            pass
+        return payload
+
+    return {
+        "by_target_date": [dict(row) for row in by_target_date],
+        "strategy_versions": [parsed_config(row) for row in strategy_versions],
+        "today_account": dict(today_account) if today_account else None,
+    }

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
-import type { RunSummary, TradeRow } from "../../data/weather-types";
+import type { LiveSummary, RunSummary, TradeRow } from "../../data/weather-types";
 
 const POLL_INTERVAL_MS = 10_000;
 const RECENT_TRADE_LIMIT = 30;
@@ -35,6 +35,7 @@ export function WeatherLivePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastPoll, setLastPoll] = useState<Date | null>(null);
+  const [summary, setSummary] = useState<LiveSummary | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function pollOnce() {
@@ -44,6 +45,7 @@ export function WeatherLivePage() {
         weatherApi.listRuns({ state: "paper", limit: 10 }),
         weatherApi.listRuns({ state: "live", limit: 10 }),
       ]);
+      weatherApi.getLiveSummary().then(setSummary).catch(() => {});
       const runs = [...liveRuns, ...paperRuns]; // live first
 
       // For each run, fetch recent fills
@@ -98,6 +100,9 @@ export function WeatherLivePage() {
         </div>
 
         {/* No active runs */}
+        {summary && <LiveSummaryPanel summary={summary} />}
+
+        {/* No active runs */}
         {!loading && activeRuns.length === 0 && (
           <div style={{ color: "var(--muted)", textAlign: "center", padding: 48, fontSize: 14 }}>
             No paper or live runs found · 暂无纸盘/实盘
@@ -119,8 +124,75 @@ export function WeatherLivePage() {
   );
 }
 
+function LiveSummaryPanel({ summary }: { summary: LiveSummary }) {
+  const account = summary.today_account;
+  return (
+    <div style={{
+      background: "var(--card)", border: "1px solid var(--stroke)",
+      borderRadius: 12, padding: 14, marginBottom: 20,
+    }}>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+        <StatChip label="Latest Order Day" value={account?.order_date_utc ?? "—"} />
+        <StatChip label="Orders" value={String(account?.orders ?? 0)} />
+        <StatChip label="CLOB" value={String(account?.clob_orders ?? 0)} accent />
+        <StatChip label="Paper" value={String(account?.paper_orders ?? 0)} />
+        <StatChip label="Submitted" value={String(account?.submitted_orders ?? 0)} />
+        <StatChip label="Notional" value={`$${(account?.notional_usd ?? 0).toFixed(2)}`} />
+        <StatChip label="Cities" value={String(account?.cities ?? 0)} />
+        <StatChip label="Target Days" value={String(account?.target_dates ?? 0)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 14 }}>
+        <MiniTable
+          title="Live By Target Date"
+          headers={["Target", "Orders", "CLOB", "Paper", "Notional"]}
+          rows={summary.by_target_date.slice(0, 8).map((r) => [
+            r.target_date,
+            String(r.orders),
+            String(r.clob_orders),
+            String(r.paper_orders),
+            `$${(r.notional_usd ?? 0).toFixed(2)}`,
+          ])}
+        />
+        <MiniTable
+          title="Strategy Versions"
+          headers={["Version", "Runs", "Orders", "Params"]}
+          rows={summary.strategy_versions.slice(0, 8).map((r) => [
+            r.name,
+            String(r.runs),
+            String(r.orders),
+            `${r.params.city_pool ?? "—"} · ${r.params.sizing_mode ?? "—"} · $${r.params.max_order_notional ?? "—"} · ${r.params.entry_price_window ?? "—"}`,
+          ])}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MiniTable({ title, headers, rows }: { title: string; headers: string[]; rows: string[][] }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{title}</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <thead>
+            <tr>{headers.map((h) => <th key={h} style={miniTh}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i}>{row.map((cell, j) => <td key={j} style={miniTd}>{cell}</td>)}</tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={headers.length} style={{ ...miniTd, color: "var(--muted)" }}>No data</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function RunPanel({ run, trades }: { run: RunSummary; trades: TradeRow[] }) {
-  const settledTrades = trades.filter((t) => t.final_yes !== null && t.final_yes !== undefined);
+  const settledTrades = trades.filter((t) => t.final_price !== null && t.final_price !== undefined);
   const totalPnl = settledTrades.reduce((acc, t) => acc + (t.pnl_usd ? parseFloat(t.pnl_usd) : 0), 0);
   const winners = settledTrades.filter((t) => t.pnl_usd && parseFloat(t.pnl_usd) > 0).length;
   const winRate = settledTrades.length > 0 ? winners / settledTrades.length : null;
@@ -208,12 +280,12 @@ function RunPanel({ run, trades }: { run: RunSummary; trades: TradeRow[] }) {
                   </td>
                   <td style={{ ...td, fontFamily: "IBM Plex Mono, monospace" }}>{t.shares ?? "—"}</td>
                   <td style={{ ...td, fontFamily: "IBM Plex Mono, monospace" }}>
-                    {t.cost_usd ? `$${parseFloat(t.cost_usd).toFixed(2)}` : "—"}
+                    {t.cost_usd !== null && t.cost_usd !== undefined ? `$${t.cost_usd.toFixed(2)}` : "—"}
                   </td>
                   <td style={td}>
-                    {t.final_yes !== null && t.final_yes !== undefined ? (
-                      <span style={{ color: t.final_yes === 1 ? "var(--ok)" : "var(--bad)", fontWeight: 600 }}>
-                        {t.final_yes === 1 ? "YES" : "NO"}
+                    {t.final_price !== null && t.final_price !== undefined ? (
+                      <span style={{ color: t.final_price >= 0.5 ? "var(--ok)" : "var(--bad)", fontWeight: 600 }}>
+                        {t.final_price >= 0.5 ? "YES" : "NO"}
                       </span>
                     ) : (
                       <span style={{ color: "var(--muted)" }}>{t.settlement_status ?? "pending"}</span>
@@ -255,3 +327,11 @@ function StatChip({ label, value, accent, color }: {
 }
 
 const td: React.CSSProperties = { padding: "6px 12px", verticalAlign: "middle" };
+const miniTh: React.CSSProperties = {
+  textAlign: "left", padding: "6px 8px", borderBottom: "1px solid var(--stroke)",
+  color: "var(--muted)", fontWeight: 600, whiteSpace: "nowrap",
+};
+const miniTd: React.CSSProperties = {
+  padding: "6px 8px", borderBottom: "1px solid var(--stroke)",
+  fontFamily: "IBM Plex Mono, monospace", overflowWrap: "anywhere",
+};
