@@ -103,36 +103,83 @@ export interface UniverseRow {
   deprecated_at_utc: string | null;
 }
 
+/** Panel A: one filled CLOB position with lineage */
+export interface LivePosition {
+  signal_id: string;
+  city: string | null;
+  target_date: string | null;
+  bracket: string | null;
+  condition_id: string | null;
+  city_pool: string | null;
+  forecast_source: string | null;
+  model_p_yes: number | null;
+  signal_market_price: number | null;
+  signal_edge: number | null;
+  execution_id: string;
+  order_id: string | null;
+  run_id: string;
+  order_side: string;
+  cost_usd: number | null;
+  fill_id: string;
+  filled_shares: number | null;
+  filled_price: number | null;
+  fees_usd: number | null;
+  filled_at_utc: string | null;
+  final_price: number | null;
+  settlement_status: string | null;
+  pnl_usd: number | null;
+}
+
+/** Panel B: paper vs CLOB execution comparison for one signal */
+export interface ExecutionGapRow {
+  signal_id: string;
+  city: string | null;
+  target_date: string | null;
+  bracket: string | null;
+  city_pool: string | null;
+  model_p_yes: number | null;
+  signal_market_price: number | null;
+  signal_edge: number | null;
+  signal_side: string | null;
+
+  paper_fill_price: number | null;
+  paper_shares: number | null;
+  paper_fill_status: string | null;
+  paper_cost_usd: number | null;
+
+  clob_fill_price: number | null;
+  clob_shares: number | null;
+  clob_fill_status: string | null;
+  clob_cost_usd: number | null;
+  clob_order_status: string | null;
+
+  final_price: number | null;
+  settlement_status: string | null;
+  paper_pnl_usd: number | null;
+  clob_pnl_usd: number | null;
+  pnl_gap_usd: number | null;
+  price_slippage: number | null;
+  gap_type: "both" | "clob_only" | "paper_only_clob_rejected" | "paper_only";
+}
+
+/** /api/live/summary response */
 export interface LiveSummary {
-  by_target_date: {
-    target_date: string;
-    orders: number;
-    cities: number;
-    clob_orders: number;
-    paper_orders: number;
-    submitted_orders: number;
-    notional_usd: number | null;
-    first_order_at_utc: string | null;
-    last_order_at_utc: string | null;
-  }[];
-  strategy_versions: {
-    config_id: string;
-    name: string;
-    params: Record<string, unknown>;
-    runs: number;
-    orders: number;
-    notional_usd: number | null;
-  }[];
-  today_account: {
-    order_date_utc: string;
-    orders: number;
-    clob_orders: number;
-    paper_orders: number;
-    submitted_orders: number;
-    notional_usd: number | null;
-    cities: number;
-    target_dates: number;
-  } | null;
+  last_cycle_utc: string | null;
+  clob: {
+    total_positions: number;
+    open_count: number;
+    settled_count: number;
+    capital_deployed_usd: number;
+    realized_pnl_usd: number;
+  };
+  pending_orders: {
+    count: number;
+    reserved_usd: number;
+  };
+  paper_baseline: {
+    run_id: string | null;
+    metrics: RunMetrics | null;
+  };
 }
 
 export interface CompareRun {
