@@ -220,6 +220,17 @@ def _cycle_paths(cycle_path: Path, cycle_id: str) -> tuple[Path, Path, Path, Pat
 
 
 def _strategy_params(summary: dict[str, Any], raw_plans: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build the canonical strategy-config params blob from a live-cycle summary + plans.
+
+    Design rules:
+    - Every field that affects trading behaviour must be included so that two configs
+      with different parameters always produce different config_id hashes.
+    - Fields that are purely administrative (paper_enabled, live_enabled, source)
+      are included for observability but don't meaningfully distinguish strategies.
+    - execution_policy is a top-level field (not aliased to algorithm_version).
+    - maker_queue_v1 params are only included when execution_policy == "maker_queue_v1"
+      so that existing mid_price_core_v1 config_ids are not invalidated.
+    """
     config = dict(summary.get("config") or {})
     first_plan = raw_plans[0] if raw_plans else {}
     execution_policy = str(
@@ -227,10 +238,12 @@ def _strategy_params(summary: dict[str, Any], raw_plans: list[dict[str, Any]]) -
         or first_plan.get("combo")
         or config.get("execution_policy")
         or "mid_price_core_v1"
-    )
-    return {
+    ).strip() or "mid_price_core_v1"
+
+    params: dict[str, Any] = {
         "strategy_family": "weather_edge_v1",
-        "algorithm_version": execution_policy,
+        "algorithm_version": "mid_price_core_v1",         # base signal/sizing algorithm (stable)
+        "execution_policy": execution_policy,              # order-placement policy
         "signal_builder_version": "weather_snapshot_signal_builder",
         "trade_planner_version": "weather_trade_planner",
         "city_pool": config.get("city_pool") or first_plan.get("city_pool") or "t1_trading",
@@ -252,6 +265,38 @@ def _strategy_params(summary: dict[str, Any], raw_plans: list[dict[str, Any]]) -
         "source": "live_cycle",
     }
 
+    # maker_queue_v1 adds order-book-aware params to the config fingerprint.
+    # These are only included for maker_queue_v1 so existing mid_price_core_v1
+    # config_ids are not invalidated.
+    if execution_policy == "maker_queue_v1":
+        params["tick_size"] = _float(
+            first_plan.get("tick_size"), _float(config.get("tick_size"), 0.01)
+        )
+        params["min_quote_edge"] = _float(
+            first_plan.get("min_quote_edge"), _float(config.get("min_quote_edge"), 0.03)
+        )
+        params["max_quote_spread"] = _float(
+            first_plan.get("max_quote_spread"), _float(config.get("max_quote_spread"), 0.12)
+        )
+        params["max_mid_drift"] = _float(
+            first_plan.get("max_mid_drift"), _float(config.get("max_mid_drift"), 0.10)
+        )
+        params["quote_improvement_ticks"] = int(
+            first_plan.get("quote_improvement_ticks") or config.get("quote_improvement_ticks") or 1
+        )
+        params["wide_spread_shade_ticks"] = int(
+            first_plan.get("wide_spread_shade_ticks") or config.get("wide_spread_shade_ticks") or 1
+        )
+        params["narrow_quote_spread"] = _float(
+            first_plan.get("narrow_quote_spread"), _float(config.get("narrow_quote_spread"), 0.03)
+        )
+        params["adverse_selection_spread_fraction"] = _float(
+            first_plan.get("adverse_selection_spread_fraction"),
+            _float(config.get("adverse_selection_spread_fraction"), 0.50),
+        )
+
+    return params
+
 
 def _strategy_config_id(params: dict[str, Any]) -> str:
     payload = json.dumps(params, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -264,8 +309,13 @@ def _strategy_config_name(params: dict[str, Any]) -> str:
     notional = params.get("max_order_notional")
     shares = params.get("fixed_order_shares")
     window = params.get("entry_price_window") or "range"
-    algo = params.get("algorithm_version") or "algo"
-    return f"{pool}_{algo}_{mode}_${notional}_shares_{shares}_entry_{window}"
+    # Use execution_policy for display; fall back to algorithm_version for legacy records.
+    policy = params.get("execution_policy") or params.get("algorithm_version") or "algo"
+    name = f"{pool}_{policy}_{mode}_${notional}_shares_{shares}_entry_{window}"
+    if params.get("execution_policy") == "maker_queue_v1":
+        mqe = params.get("min_quote_edge")
+        name += f"_mqe_{mqe}"
+    return name
 
 
 def _canonical_signal(raw: dict[str, Any], *, producer_system: str, cycle_id: str) -> dict[str, Any]:
