@@ -7,6 +7,7 @@ import { ResearchPage } from "../pages/ResearchPage";
 import { StrategiesPage } from "../pages/StrategiesPage";
 import { StrategyDetailPage } from "../pages/StrategyDetailPage";
 import { WeatherRunsPage } from "../pages/weather/WeatherRunsPage";
+import { WeatherStrategiesPage } from "../pages/weather/WeatherStrategiesPage";
 import { WeatherComparePage } from "../pages/weather/WeatherComparePage";
 import { WeatherHistoryPage } from "../pages/weather/WeatherHistoryPage";
 import { WeatherLivePage } from "../pages/weather/WeatherLivePage";
@@ -24,6 +25,7 @@ export function App(): JSX.Element {
       <Route path="/research" element={<ResearchPage />} />
       <Route path="/backtests" element={<BacktestsPage />} />
       {/* Weather Dashboard */}
+      <Route path="/weather/strategies" element={<WeatherStrategiesPage />} />
       <Route path="/weather/runs" element={<WeatherRunsPage />} />
       <Route path="/weather/compare" element={<WeatherComparePage />} />
       <Route path="/weather/history/:runId" element={<WeatherHistoryPage />} />

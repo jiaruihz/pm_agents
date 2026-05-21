@@ -14,6 +14,99 @@ router = APIRouter(tags=["registry"])
 Db = Annotated[sqlite3.Connection, Depends(get_db)]
 
 
+# ── Strategies (per-config aggregated stats) ──────────────────────────────────
+
+@router.get("/strategies")
+def list_strategies(db: Db):
+    """
+    Per-strategy aggregated performance stats.
+
+    Strategy = config_id in strategy_config.
+    All strategy dimensions (execution_policy, kelly_fraction, etc.) live in
+    strategy_config.params JSON — queried via SQLite JSON1.
+    """
+    rows = db.execute(
+        """
+        SELECT
+            c.config_id,
+            c.name,
+            c.params,
+            c.created_at_utc,
+            json_extract(c.params, '$.execution_policy') AS execution_policy,
+
+            COUNT(DISTINCT r.run_id)                                          AS num_runs,
+            MAX(r.created_at_utc)                                             AS latest_run_at,
+            COUNT(DISTINCT CASE WHEN r.state = 'live'  THEN r.run_id END)    AS live_run_count,
+            COUNT(DISTINCT CASE WHEN r.state = 'paper' THEN r.run_id END)    AS paper_run_count,
+
+            COUNT(DISTINCT f.fill_id)                                   AS total_trades,
+            SUM(CASE WHEN s.final_price IS NOT NULL THEN 1 ELSE 0 END)  AS settled_trades,
+
+            SUM(CASE
+                WHEN s.final_price IS NULL THEN 0
+                WHEN o.order_side = 'BUY_YES'
+                    THEN CAST(f.filled_shares AS REAL)
+                       * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL))
+                WHEN o.order_side = 'BUY_NO'
+                    THEN CAST(f.filled_shares AS REAL)
+                       * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL))
+                ELSE 0
+            END)                                                         AS total_pnl_usd,
+
+            SUM(CASE
+                WHEN s.final_price IS NULL THEN 0
+                WHEN o.order_side = 'BUY_YES'
+                 AND CAST(f.filled_shares AS REAL)
+                   * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL)) > 0
+                    THEN 1
+                WHEN o.order_side = 'BUY_NO'
+                 AND CAST(f.filled_shares AS REAL)
+                   * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL)) > 0
+                    THEN 1
+                ELSE 0
+            END)                                                         AS win_trades,
+
+            SUM(CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL))
+                                                                         AS capital_deployed_usd
+
+        FROM strategy_config c
+        LEFT JOIN runs r      ON r.config_id    = c.config_id
+        LEFT JOIN orders o    ON o.run_id        = r.run_id
+                             AND o.venue         = 'polymarket_clob'
+        LEFT JOIN fills f     ON f.execution_id  = o.execution_id
+                             AND f.status        = 'filled'
+        LEFT JOIN plans p     ON p.plan_id       = o.plan_id
+        LEFT JOIN signals sig ON sig.signal_id   = p.signal_id
+        LEFT JOIN settlements s
+               ON sig.target_date = s.target_date
+              AND sig.condition_id = s.condition_id
+              AND sig.bracket      = s.bracket
+        GROUP BY c.config_id
+        ORDER BY latest_run_at DESC
+        """
+    ).fetchall()
+
+    result = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["params"] = json.loads(d["params"]) if d["params"] else {}
+        except Exception:
+            d["params"] = {}
+
+        cap = d["capital_deployed_usd"] or 0.0
+        pnl = d["total_pnl_usd"] or 0.0
+        settled = d["settled_trades"] or 0
+        wins = d["win_trades"] or 0
+
+        d["total_pnl_usd"] = round(pnl, 4)
+        d["capital_deployed_usd"] = round(cap, 4)
+        d["roi"] = round(pnl / cap, 6) if cap > 0 else None
+        d["win_rate"] = round(wins / settled, 4) if settled > 0 else None
+        result.append(d)
+    return result
+
+
 # ── Configs ───────────────────────────────────────────────────────────────────
 
 @router.get("/configs", response_model=list[ConfigRow])
@@ -117,84 +210,4 @@ def list_settlements(
     return [dict(r) for r in rows]
 
 
-@router.get("/live/summary")
-def get_live_summary(db: Db):
-    by_target_date = db.execute(
-        """
-        SELECT
-            sig.target_date,
-            COUNT(*) AS orders,
-            COUNT(DISTINCT sig.city) AS cities,
-            SUM(CASE WHEN o.venue = 'polymarket_clob' THEN 1 ELSE 0 END) AS clob_orders,
-            SUM(CASE WHEN o.venue = 'paper' THEN 1 ELSE 0 END) AS paper_orders,
-            SUM(CASE WHEN o.status = 'submitted' THEN 1 ELSE 0 END) AS submitted_orders,
-            SUM(o.cost_usd) AS notional_usd,
-            MIN(COALESCE(o.placed_at_utc, o.created_at_utc)) AS first_order_at_utc,
-            MAX(COALESCE(o.placed_at_utc, o.created_at_utc)) AS last_order_at_utc
-        FROM orders o
-        JOIN plans p ON p.plan_id = o.plan_id
-        JOIN signals sig ON sig.signal_id = p.signal_id
-        JOIN runs r ON r.run_id = o.run_id
-        WHERE r.execution_mode = 'live'
-        GROUP BY sig.target_date
-        ORDER BY sig.target_date DESC
-        """
-    ).fetchall()
-
-    strategy_versions = db.execute(
-        """
-        SELECT
-            c.config_id,
-            c.name,
-            c.params,
-            COUNT(DISTINCT r.run_id) AS runs,
-            COUNT(o.execution_id) AS orders,
-            SUM(o.cost_usd) AS notional_usd
-        FROM strategy_config c
-        JOIN runs r ON r.config_id = c.config_id
-        LEFT JOIN orders o ON o.run_id = r.run_id
-        WHERE r.execution_mode = 'live'
-        GROUP BY c.config_id, c.name, c.params
-        ORDER BY orders DESC, c.name
-        """
-    ).fetchall()
-
-    today_account = db.execute(
-        """
-        SELECT
-            date(COALESCE(o.placed_at_utc, o.created_at_utc)) AS order_date_utc,
-            COUNT(*) AS orders,
-            SUM(CASE WHEN o.venue = 'polymarket_clob' THEN 1 ELSE 0 END) AS clob_orders,
-            SUM(CASE WHEN o.venue = 'paper' THEN 1 ELSE 0 END) AS paper_orders,
-            SUM(CASE WHEN o.status = 'submitted' THEN 1 ELSE 0 END) AS submitted_orders,
-            SUM(o.cost_usd) AS notional_usd,
-            COUNT(DISTINCT sig.city) AS cities,
-            COUNT(DISTINCT sig.target_date) AS target_dates
-        FROM orders o
-        JOIN plans p ON p.plan_id = o.plan_id
-        JOIN signals sig ON sig.signal_id = p.signal_id
-        JOIN runs r ON r.run_id = o.run_id
-        WHERE r.execution_mode = 'live'
-          AND date(COALESCE(o.placed_at_utc, o.created_at_utc)) = (
-              SELECT MAX(date(COALESCE(o2.placed_at_utc, o2.created_at_utc)))
-              FROM orders o2
-              JOIN runs r2 ON r2.run_id = o2.run_id
-              WHERE r2.execution_mode = 'live'
-          )
-        GROUP BY order_date_utc
-        """
-    ).fetchone()
-
-    def parsed_config(row):
-        payload = dict(row)
-        try:
-            payload["params"] = json.loads(payload["params"])
-        except Exception:
-            pass
-        return payload
-
-    return {
-        "by_target_date": [dict(row) for row in by_target_date],
-        "strategy_versions": [parsed_config(row) for row in strategy_versions],
-        "today_account": dict(today_account) if today_account else None,
-    }
+# NOTE: /live/* endpoints are now in weather_dashboard.api.routers.live

@@ -22,6 +22,7 @@ export function WeatherRunsPage() {
   const [params, setParams] = useSearchParams();
   const state = params.get("state") ?? "";
   const mode = params.get("mode") ?? "";
+  const configId = params.get("config_id") ?? "";
 
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,17 +41,22 @@ export function WeatherRunsPage() {
     setLoading(true);
     setError(null);
     weatherApi
-      .listRuns({ state: state || undefined, execution_mode: mode || undefined, limit: 200 })
+      .listRuns({
+        state: state || undefined,
+        execution_mode: mode || undefined,
+        config_id: configId || undefined,
+        limit: 200,
+      })
       .then(setRuns)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [state, mode]);
+  }, [state, mode, configId]);
 
   return (
     <PageFrame title="Weather Runs" desc="Browse strategy run registry · 策略运行记录">
       <>
         {/* Filter bar */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "flex-end" }}>
           <label style={labelStyle}>
             <span>State / 状态</span>
             <select value={state} onChange={(e) => setFilter("state", e.target.value)} style={selectStyle}>
@@ -67,7 +73,20 @@ export function WeatherRunsPage() {
               ))}
             </select>
           </label>
-          <div style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 13, alignSelf: "center" }}>
+          {configId && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 6, fontSize: 12,
+              background: "rgba(42,95,255,0.1)", border: "1px solid rgba(42,95,255,0.3)",
+              borderRadius: 8, padding: "5px 10px", color: "var(--accent-2)",
+            }}>
+              Strategy: <span style={{ fontFamily: "monospace", fontSize: 11 }}>{configId.slice(-12)}</span>
+              <button
+                onClick={() => setFilter("config_id", "")}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 0, lineHeight: 1 }}
+              >✕</button>
+            </div>
+          )}
+          <div style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 13 }}>
             {loading ? "Loading…" : `${runs.length} run(s)`}
           </div>
         </div>
@@ -91,9 +110,9 @@ export function WeatherRunsPage() {
                 const pnlColor = pnl == null ? "var(--muted)" : pnl >= 0 ? "var(--ok)" : "var(--bad)";
                 return (
                 <tr key={r.run_id} style={{ borderBottom: "1px solid var(--stroke)" }}>
-                  <td style={tdMono} title={r.run_id}>
+                  <td style={{ ...tdMono, width: 200, maxWidth: 200, overflow: "hidden" }} title={r.run_id}>
                     <Link to={`/weather/history/${r.run_id}`} style={linkStyle}>
-                      {r.run_id.slice(0, 14)}…
+                      <RunIdDisplay runId={r.run_id} />
                     </Link>
                   </td>
                   <td style={tdStyle}>
@@ -105,10 +124,11 @@ export function WeatherRunsPage() {
                     </span>
                   </td>
                   <td style={tdStyle}>{r.execution_mode}</td>
-                  <td style={tdStyle}>
-                    {r.date_range_start && (
-                      <span style={{ fontSize: 12 }}>{r.date_range_start}{r.date_range_end ? ` → ${r.date_range_end}` : ""}</span>
-                    )}
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: 12 }}>
+                    {r.date_range_start ?? "—"}
+                    {r.date_range_end && r.date_range_end !== r.date_range_start
+                      ? ` → ${r.date_range_end}`
+                      : ""}
                   </td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{m ? m.num_trades : "—"}</td>
                   <td style={{ ...tdStyle, textAlign: "right", color: "var(--muted)", fontSize: 12 }}>
@@ -162,7 +182,7 @@ const selectStyle: React.CSSProperties = {
   fontSize: 13, cursor: "pointer",
 };
 const tableStyle: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse", fontSize: 13,
+  width: "100%", minWidth: 900, borderCollapse: "collapse", fontSize: 13,
   background: "var(--card)", borderRadius: 12, overflow: "hidden",
 };
 const thStyle: React.CSSProperties = {
@@ -180,3 +200,23 @@ const tagStyle: React.CSSProperties = {
   fontSize: 11, marginRight: 4,
 };
 const linkStyle: React.CSSProperties = { color: "var(--accent-2)", textDecoration: "none" };
+
+/**
+ * Splits a run_id like "pm_agent_local_live_20260515T063717Z" into two lines:
+ *   Line 1 (small, gray): pm_agent_local_live
+ *   Line 2 (bold):        20260515T063717Z
+ */
+function RunIdDisplay({ runId }: { runId: string }) {
+  const lastUnderscore = runId.lastIndexOf("_");
+  if (lastUnderscore === -1 || lastUnderscore >= runId.length - 1) {
+    return <>{runId}</>;
+  }
+  const prefix = runId.slice(0, lastUnderscore);
+  const suffix = runId.slice(lastUnderscore + 1);
+  return (
+    <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <span style={{ color: "var(--muted)", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{prefix}</span>
+      <span style={{ fontWeight: 700, fontSize: 12 }}>{suffix}</span>
+    </span>
+  );
+}

@@ -12,9 +12,10 @@ function useClock() {
 
 // ---- Weather (new canonical system) ----
 const WEATHER_NAV = [
-  { to: "/weather/runs",    label: "⛅ Runs",    sub: "运行列表" },
-  { to: "/weather/live",    label: "🔴 Live",    sub: "实盘监控" },
-  { to: "/weather/compare", label: "⚖ Compare", sub: "对比分析" },
+  { to: "/weather/strategies", label: "📊 Strategies", sub: "策略列表" },
+  { to: "/weather/runs",       label: "⛅ Runs",        sub: "运行记录" },
+  { to: "/weather/live",       label: "🔴 Live",        sub: "实盘监控" },
+  { to: "/weather/compare",    label: "⚖ Compare",     sub: "对比分析" },
 ];
 
 // ---- Legacy (old strategy_runtime.db, deprecated) ----

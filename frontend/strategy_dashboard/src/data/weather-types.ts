@@ -182,6 +182,26 @@ export interface LiveSummary {
   };
 }
 
+/** /api/strategies — per-config aggregated stats */
+export interface StrategyRow {
+  config_id: string;
+  name: string;
+  params: Record<string, unknown>;
+  created_at_utc: string;
+  execution_policy: string | null;
+  num_runs: number;
+  latest_run_at: string | null;
+  live_run_count: number;
+  paper_run_count: number;
+  total_trades: number;
+  settled_trades: number;
+  win_trades: number;
+  total_pnl_usd: number;
+  capital_deployed_usd: number;
+  roi: number | null;
+  win_rate: number | null;
+}
+
 export interface CompareRun {
   run_id: string;
   config_id?: string;
