@@ -202,6 +202,58 @@ export interface StrategyRow {
   win_rate: number | null;
 }
 
+/** /api/strategies/{config_id}/positions — all fills with settlement status */
+export interface PositionRow {
+  fill_id: string;
+  filled_shares: number;
+  filled_price: number;
+  filled_at_utc: string | null;
+  fill_status: string;
+  order_side: string;
+  venue: string;
+  order_id: string | null;
+  target_date: string;
+  city: string;
+  bracket: string;
+  signal_side: string;
+  model_version: string | null;
+  model_p_yes: number | null;
+  signal_price: number | null;
+  condition_id: string | null;
+  final_price: number | null;
+  settlement_status: string | null;
+  pnl_usd: number | null;
+}
+
+/** /api/strategies/{config_id}/equity — daily cumulative PnL */
+export interface EquityPoint {
+  date: string;
+  pnl: number;
+  cumulative_pnl: number;
+  trades: number;
+  settled: number;
+  wins: number;
+  capital: number;
+}
+
+/** /api/strategies/{config_id}/analytics — breakdown by dimension */
+export interface AnalyticsDimension {
+  dimension: string;
+  trades: number;
+  settled: number;
+  pnl: number;
+  wins: number;
+  capital: number;
+}
+
+export interface StrategyAnalytics {
+  by_side: AnalyticsDimension[];
+  by_city: AnalyticsDimension[];
+  by_bracket: AnalyticsDimension[];
+  by_model: AnalyticsDimension[];
+  by_forecast_source: AnalyticsDimension[];
+}
+
 export interface CompareRun {
   run_id: string;
   config_id?: string;

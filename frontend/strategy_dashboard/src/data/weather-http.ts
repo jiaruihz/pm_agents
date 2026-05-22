@@ -1,5 +1,5 @@
 // HTTP client for the weather dashboard FastAPI backend
-import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow } from "./weather-types";
+import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow } from "./weather-types";
 
 const BASE = (import.meta.env.VITE_WEATHER_API ?? "http://localhost:8000") + "/api";
 
@@ -67,6 +67,22 @@ export const weatherApi = {
 
   listStrategies(): Promise<StrategyRow[]> {
     return get("/strategies");
+  },
+
+  getStrategy(configId: string): Promise<StrategyRow> {
+    return get(`/strategies/${encodeURIComponent(configId)}`);
+  },
+
+  getStrategyEquity(configId: string): Promise<EquityPoint[]> {
+    return get(`/strategies/${encodeURIComponent(configId)}/equity`);
+  },
+
+  getStrategyAnalytics(configId: string): Promise<StrategyAnalytics> {
+    return get(`/strategies/${encodeURIComponent(configId)}/analytics`);
+  },
+
+  getStrategyPositions(configId: string): Promise<PositionRow[]> {
+    return get(`/strategies/${encodeURIComponent(configId)}/positions`);
   },
 
   listConfigs(): Promise<ConfigRow[]> {

@@ -12,11 +12,12 @@ import { WeatherComparePage } from "../pages/weather/WeatherComparePage";
 import { WeatherHistoryPage } from "../pages/weather/WeatherHistoryPage";
 import { WeatherLivePage } from "../pages/weather/WeatherLivePage";
 import { WeatherTradeDrilldownPage } from "../pages/weather/WeatherTradeDrilldownPage";
+import { WeatherStrategyDetailPage } from "../pages/weather/WeatherStrategyDetailPage";
 
 export function App(): JSX.Element {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/weather/strategies" replace />} />
       <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/strategies" element={<StrategiesPage />} />
       <Route path="/strategies/:strategyKey" element={<StrategyDetailPage />} />
@@ -26,13 +27,14 @@ export function App(): JSX.Element {
       <Route path="/backtests" element={<BacktestsPage />} />
       {/* Weather Dashboard */}
       <Route path="/weather/strategies" element={<WeatherStrategiesPage />} />
+      <Route path="/weather/strategies/:configId" element={<WeatherStrategyDetailPage />} />
       <Route path="/weather/runs" element={<WeatherRunsPage />} />
       <Route path="/weather/compare" element={<WeatherComparePage />} />
       <Route path="/weather/history/:runId" element={<WeatherHistoryPage />} />
       <Route path="/weather/trade/:runId/:signalId" element={<WeatherTradeDrilldownPage />} />
       <Route path="/weather/live" element={<WeatherLivePage />} />
-      <Route path="/weather" element={<Navigate to="/weather/runs" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/weather" element={<Navigate to="/weather/strategies" replace />} />
+      <Route path="*" element={<Navigate to="/weather/strategies" replace />} />
     </Routes>
   );
 }

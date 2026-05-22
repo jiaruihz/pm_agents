@@ -71,6 +71,7 @@ export function PageFrame({ title, desc, children }: {
               <NavLink
                 key={to}
                 to={to}
+                end={false}
                 className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`.trim()}
               >
                 <span>{label}</span>

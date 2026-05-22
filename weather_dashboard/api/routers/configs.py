@@ -1,9 +1,9 @@
 """Strategy configs and universes endpoints."""
 
 import json
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 import sqlite3
 
 from weather_dashboard.api.deps import get_db
@@ -35,7 +35,7 @@ def list_strategies(db: Db):
             json_extract(c.params, '$.execution_policy') AS execution_policy,
 
             COUNT(DISTINCT r.run_id)                                          AS num_runs,
-            MAX(r.created_at_utc)                                             AS latest_run_at,
+            MAX(r.started_at_utc)                                             AS latest_run_at,
             COUNT(DISTINCT CASE WHEN r.state = 'live'  THEN r.run_id END)    AS live_run_count,
             COUNT(DISTINCT CASE WHEN r.state = 'paper' THEN r.run_id END)    AS paper_run_count,
 
@@ -72,7 +72,6 @@ def list_strategies(db: Db):
         FROM strategy_config c
         LEFT JOIN runs r      ON r.config_id    = c.config_id
         LEFT JOIN orders o    ON o.run_id        = r.run_id
-                             AND o.venue         = 'polymarket_clob'
         LEFT JOIN fills f     ON f.execution_id  = o.execution_id
                              AND f.status        = 'filled'
         LEFT JOIN plans p     ON p.plan_id       = o.plan_id
@@ -103,6 +102,209 @@ def list_strategies(db: Db):
         d["capital_deployed_usd"] = round(cap, 4)
         d["roi"] = round(pnl / cap, 6) if cap > 0 else None
         d["win_rate"] = round(wins / settled, 4) if settled > 0 else None
+        result.append(d)
+    return result
+
+
+
+# ── Single strategy detail ────────────────────────────────────────────────────
+
+_PNL_CASE = """
+    CASE
+        WHEN s.final_price IS NULL THEN 0
+        WHEN o.order_side = 'BUY_YES'
+            THEN CAST(f.filled_shares AS REAL) * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL))
+        WHEN o.order_side = 'BUY_NO'
+            THEN CAST(f.filled_shares AS REAL) * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL))
+        ELSE 0
+    END
+"""
+
+_WIN_CASE = f"""
+    CASE WHEN ({_PNL_CASE}) > 0 THEN 1 ELSE 0 END
+"""
+
+
+def _base_joins() -> str:
+    # status='filled' keeps real CLOB fills + historical paper fills,
+    # excludes status='simulated' (parallel paper simulation alongside live trades).
+    return """
+        FROM runs r
+        LEFT JOIN orders o ON o.run_id = r.run_id
+        LEFT JOIN fills f  ON f.execution_id = o.execution_id AND f.status = 'filled'
+        LEFT JOIN plans p  ON p.plan_id = o.plan_id
+        LEFT JOIN signals sig ON sig.signal_id = p.signal_id
+        LEFT JOIN settlements s ON sig.target_date = s.target_date
+                               AND sig.condition_id = s.condition_id
+                               AND sig.bracket = s.bracket
+        WHERE r.config_id = ?
+    """
+
+
+@router.get("/strategies/{config_id}")
+def get_strategy(config_id: str, db: Db):
+    """Single strategy detail with full aggregated stats."""
+    row = db.execute("SELECT * FROM strategy_config WHERE config_id = ?", (config_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Strategy {config_id} not found")
+
+    agg = db.execute(f"""
+        SELECT
+            COUNT(DISTINCT r.run_id)                                                AS num_runs,
+            MAX(r.started_at_utc)                                                   AS latest_run_at,
+            COUNT(DISTINCT CASE WHEN r.state='live'  THEN r.run_id END)            AS live_run_count,
+            COUNT(DISTINCT CASE WHEN r.state='paper' THEN r.run_id END)            AS paper_run_count,
+            COUNT(DISTINCT f.fill_id)                                               AS total_trades,
+            SUM(CASE WHEN s.final_price IS NOT NULL THEN 1 ELSE 0 END)             AS settled_trades,
+            SUM({_PNL_CASE})                                                        AS total_pnl_usd,
+            SUM({_WIN_CASE})                                                        AS win_trades,
+            SUM(CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL))      AS capital_deployed_usd
+        {_base_joins()}
+    """, (config_id,)).fetchone()
+
+    try:
+        params = json.loads(row["params"]) if row["params"] else {}
+    except Exception:
+        params = {}
+
+    cap = float(agg["capital_deployed_usd"] or 0)
+    pnl = float(agg["total_pnl_usd"] or 0)
+    settled = int(agg["settled_trades"] or 0)
+    wins = int(agg["win_trades"] or 0)
+
+    return {
+        "config_id": row["config_id"],
+        "name": row["name"],
+        "params": params,
+        "created_at_utc": row["created_at_utc"],
+        "execution_policy": params.get("execution_policy"),
+        "num_runs": int(agg["num_runs"] or 0),
+        "latest_run_at": agg["latest_run_at"],
+        "live_run_count": int(agg["live_run_count"] or 0),
+        "paper_run_count": int(agg["paper_run_count"] or 0),
+        "total_trades": int(agg["total_trades"] or 0),
+        "settled_trades": settled,
+        "total_pnl_usd": round(pnl, 4),
+        "capital_deployed_usd": round(cap, 4),
+        "roi": round(pnl / cap, 6) if cap > 0 else None,
+        "win_rate": round(wins / settled, 4) if settled > 0 else None,
+        "win_trades": wins,
+    }
+
+
+@router.get("/strategies/{config_id}/equity")
+def get_strategy_equity(config_id: str, db: Db):
+    """Daily cumulative PnL curve — one row per target_date with settled trades."""
+    rows = db.execute(f"""
+        SELECT
+            sig.target_date                                         AS date,
+            COUNT(DISTINCT f.fill_id)                              AS trades,
+            SUM(CASE WHEN s.final_price IS NOT NULL THEN 1 ELSE 0 END) AS settled,
+            SUM({_PNL_CASE})                                        AS pnl,
+            SUM({_WIN_CASE})                                        AS wins,
+            SUM(CAST(f.filled_shares AS REAL)*CAST(f.filled_price AS REAL)) AS capital
+        {_base_joins()}
+        AND sig.target_date IS NOT NULL
+        GROUP BY sig.target_date
+        ORDER BY sig.target_date
+    """, (config_id,)).fetchall()
+
+    result = []
+    cumulative = 0.0
+    for r in rows:
+        pnl = float(r["pnl"] or 0)
+        cumulative += pnl
+        result.append({
+            "date": r["date"],
+            "pnl": round(pnl, 4),
+            "cumulative_pnl": round(cumulative, 4),
+            "trades": int(r["trades"] or 0),
+            "settled": int(r["settled"] or 0),
+            "wins": int(r["wins"] or 0),
+            "capital": round(float(r["capital"] or 0), 4),
+        })
+    return result
+
+
+@router.get("/strategies/{config_id}/analytics")
+def get_strategy_analytics(config_id: str, db: Db):
+    """PnL breakdown by dimension: side, city, bracket, model, order_side."""
+
+    def _breakdown(group_col: str, label: str):
+        rows = db.execute(f"""
+            SELECT
+                {group_col}                                                         AS dimension,
+                COUNT(DISTINCT f.fill_id)                                          AS trades,
+                SUM(CASE WHEN s.final_price IS NOT NULL THEN 1 ELSE 0 END)        AS settled,
+                ROUND(SUM({_PNL_CASE}), 4)                                         AS pnl,
+                SUM({_WIN_CASE})                                                    AS wins,
+                ROUND(SUM(CAST(f.filled_shares AS REAL)*CAST(f.filled_price AS REAL)), 4) AS capital
+            {_base_joins()}
+            AND {group_col} IS NOT NULL AND {group_col} != ''
+            GROUP BY {group_col}
+            ORDER BY pnl DESC
+        """, (config_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+    return {
+        "by_side": _breakdown("o.order_side", "side"),
+        "by_city": _breakdown("sig.city", "city"),
+        "by_bracket": _breakdown("sig.bracket", "bracket"),
+        "by_model": _breakdown("sig.model_version", "model"),
+        "by_forecast_source": _breakdown("sig.forecast_source", "forecast_source"),
+    }
+
+
+
+@router.get("/strategies/{config_id}/positions")
+def get_strategy_positions(config_id: str, db: Db):
+    """Open (unsettled) positions for a strategy — waiting for market resolution."""
+    rows = db.execute("""
+        SELECT
+            f.fill_id,
+            f.filled_shares,
+            f.filled_price,
+            f.filled_at_utc,
+            f.status       AS fill_status,
+            o.order_side,
+            o.venue,
+            o.order_id,
+            sig.target_date,
+            sig.city,
+            sig.bracket,
+            sig.signal_side,
+            sig.model_version,
+            sig.model_p_yes,
+            sig.market_price AS signal_price,
+            sig.condition_id,
+            s.final_price,
+            s.settlement_status,
+            CASE
+                WHEN s.final_price IS NULL THEN NULL
+                WHEN o.order_side = 'BUY_YES'
+                    THEN CAST(f.filled_shares AS REAL) * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL))
+                WHEN o.order_side = 'BUY_NO'
+                    THEN CAST(f.filled_shares AS REAL) * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL))
+                ELSE NULL
+            END AS pnl_usd
+        FROM runs r
+        JOIN orders o ON o.run_id = r.run_id
+        JOIN fills f ON f.execution_id = o.execution_id AND f.status = 'filled'
+        JOIN plans p ON p.plan_id = o.plan_id
+        JOIN signals sig ON sig.signal_id = p.signal_id
+        LEFT JOIN settlements s ON sig.target_date = s.target_date
+                               AND sig.condition_id = s.condition_id
+                               AND sig.bracket = s.bracket
+        WHERE r.config_id = ?
+        ORDER BY sig.target_date DESC, f.filled_at_utc DESC
+    """, (config_id,)).fetchall()
+
+    result = []
+    for row in rows:
+        d = dict(row)
+        for k in ("filled_shares", "filled_price", "model_p_yes", "signal_price", "final_price", "pnl_usd"):
+            if d[k] is not None:
+                d[k] = round(float(d[k]), 6)
         result.append(d)
     return result
 

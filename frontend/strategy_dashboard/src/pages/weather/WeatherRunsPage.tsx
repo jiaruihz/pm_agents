@@ -98,7 +98,7 @@ export function WeatherRunsPage() {
           <table style={tableStyle}>
             <thead>
               <tr>
-                {["Run ID", "State", "Mode", "Date Range", "Trades", "Settled", "PnL (USD)", "Win%", "ROI", "Tags", "Actions"].map((h) => (
+                {["Run ID", "State", "Mode", "Started", "Date Range", "Trades", "Settled", "PnL (USD)", "Win%", "ROI", "Tags", "Actions"].map((h) => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
@@ -124,6 +124,9 @@ export function WeatherRunsPage() {
                     </span>
                   </td>
                   <td style={tdStyle}>{r.execution_mode}</td>
+                  <td style={{ ...tdStyle, fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                    {r.started_at_utc ? r.started_at_utc.slice(0, 16).replace("T", " ") : "—"}
+                  </td>
                   <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: 12 }}>
                     {r.date_range_start ?? "—"}
                     {r.date_range_end && r.date_range_end !== r.date_range_start
@@ -158,7 +161,7 @@ export function WeatherRunsPage() {
               })}
               {!loading && runs.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ ...tdStyle, color: "var(--muted)", textAlign: "center", padding: 32 }}>
+                  <td colSpan={12} style={{ ...tdStyle, color: "var(--muted)", textAlign: "center", padding: 32 }}>
                     No runs found · 暂无数据
                   </td>
                 </tr>

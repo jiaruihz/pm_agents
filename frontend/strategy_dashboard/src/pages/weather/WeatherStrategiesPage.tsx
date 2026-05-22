@@ -19,11 +19,15 @@ function usd(v: number | null | undefined, decimals = 2) {
   return `${sign}$${Math.abs(v).toFixed(decimals)}`;
 }
 function shortName(name: string): string {
-  // "t1_trading_mid_price_core_v1_notional_$5.0_shares_10.0_entry_0.25-0.75"
-  // → strip everything up through the algorithm version, humanize the rest
-  const stripped = name.replace(/^.*?_mid_price_core_v\d+_/, "");
-  // Fell back to full name if no match, replace underscores with spaces
-  return (stripped || name).replace(/_/g, " ");
+  // Strip algorithm prefix, humanize the rest
+  const stripped = name
+    .replace(/^.*?_mid_price_core_v\d+_/, "")
+    .replace(/^.*?_maker_queue_v\d+_/, "");
+  return (stripped || name)
+    .replace(/_/g, " ")
+    .replace(/\$None/g, "—")   // "$None" → "—"
+    .replace(/shares —/g, "")  // "shares —" → ""
+    .trim();
 }
 
 // ── component ──────────────────────────────────────────────────────────────────
@@ -37,7 +41,13 @@ export function WeatherStrategiesPage() {
     setLoading(true);
     weatherApi
       .listStrategies()
-      .then(setStrategies)
+      .then((data) => setStrategies([...data].sort((a, b) => {
+        const score = (s: StrategyRow) =>
+          (s.params.live_enabled ? 2 : s.params.paper_enabled ? 1 : 0);
+        const sd = score(b) - score(a);
+        if (sd !== 0) return sd;
+        return (b.latest_run_at ?? "").localeCompare(a.latest_run_at ?? "");
+      })))
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -49,9 +59,11 @@ export function WeatherStrategiesPage() {
     >
       <>
         <div style={topBarStyle}>
-          <div style={{ color: "var(--muted)", fontSize: 13 }}>
-            {loading ? "Loading…" : `${strategies.length} strategies`}
-          </div>
+          {!loading && (
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>
+              {strategies.length} strategies · {strategies.filter(s => s.settled_trades > 0).length} with settled trades
+            </div>
+          )}
         </div>
 
         {error && <div style={errorStyle}>{error}</div>}
@@ -92,74 +104,76 @@ function StrategyCard({ s }: { s: StrategyRow }) {
 
   const accentColor = liveEnabled ? "var(--ok)" : paperEnabled ? "var(--accent-2)" : "var(--muted)";
 
+  const hasSettled = s.settled_trades > 0;
+
   return (
-    <div style={{ ...cardStyle, borderLeft: `3px solid ${accentColor}` }}>
-      {/* Header */}
-      <div style={cardHeaderStyle}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={cardTitleStyle} title={s.name}>
-            {shortName(s.name)}
+    <Link to={`/weather/strategies/${encodeURIComponent(s.config_id)}`} style={{ textDecoration: "none", color: "inherit" }}>
+      <div style={{ ...cardStyle, borderLeft: `3px solid ${accentColor}`, cursor: "pointer", transition: "box-shadow 0.15s" }}
+        onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.15)")}
+        onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+      >
+        {/* Header */}
+        <div style={cardHeaderStyle}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={cardTitleStyle} title={s.name}>
+              {shortName(s.name)}
+            </div>
+            <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2, fontFamily: "monospace" }}>
+              {s.config_id.slice(-12)}
+            </div>
           </div>
-          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2, fontFamily: "monospace" }}>
-            {s.config_id.slice(-12)}
+          <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+            {liveEnabled && <Badge label="LIVE" color="var(--ok)" />}
+            {paperEnabled && <Badge label="PAPER" color="var(--accent-2)" />}
+            {!liveEnabled && !paperEnabled && <Badge label="INACTIVE" color="var(--muted)" />}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-          {liveEnabled && <Badge label="LIVE" color="var(--ok)" />}
-          {paperEnabled && <Badge label="PAPER" color="var(--accent-2)" />}
-          {!liveEnabled && !paperEnabled && <Badge label="INACTIVE" color="var(--muted)" />}
+
+        {/* Key params grid */}
+        <div style={paramsGridStyle}>
+          <ParamCell label="Sizing" value={sizingMode} />
+          <ParamCell
+            label="Notional / Shares"
+            value={notional != null ? `$${notional}` : shares != null ? `${shares} sh` : "—"}
+          />
+          <ParamCell label="Entry Window" value={entryWindow} />
+          <ParamCell label="Min Edge" value={minEdge != null ? pct(minEdge, 0) : "—"} />
+          <ParamCell label="Algorithm" value={algVersion.replace("_v1", " v1")} />
+          <ParamCell label="Exec Policy" value={s.execution_policy ?? "mid_price_core_v1"} />
+        </div>
+
+        {/* Divider */}
+        <div style={dividerStyle} />
+
+        {/* Stats row */}
+        <div style={statsRowStyle}>
+          <StatCell label="Runs" value={String(s.num_runs)} />
+          <StatCell label="Trades" value={hasActivity ? String(s.total_trades) : "—"} />
+          <StatCell label="Settled" value={hasActivity ? String(s.settled_trades) : "—"} />
+          <StatCell label="Win%" value={hasSettled ? pct(s.win_rate) : "—"} />
+          <StatCell
+            label="PnL"
+            value={hasSettled ? usd(pnl) : "—"}
+            valueColor={hasSettled ? pnlColor : "var(--muted)"}
+          />
+          <StatCell
+            label="ROI"
+            value={hasSettled ? pct(s.roi, 2) : "—"}
+            valueColor={hasSettled && s.roi != null ? (s.roi >= 0 ? "var(--ok)" : "var(--bad)") : "var(--muted)"}
+          />
+        </div>
+
+        {/* Footer */}
+        <div style={cardFooterStyle}>
+          <span style={{ color: "var(--muted)", fontSize: 11 }}>
+            Latest: {s.latest_run_at ? s.latest_run_at.slice(0, 10) : "never"}
+            {" · "}
+            {s.live_run_count} live · {s.paper_run_count} paper
+          </span>
+          <span style={{ ...linkStyle, fontSize: 12 }}>Details →</span>
         </div>
       </div>
-
-      {/* Key params grid */}
-      <div style={paramsGridStyle}>
-        <ParamCell label="Sizing" value={sizingMode} />
-        <ParamCell
-          label="Notional / Shares"
-          value={notional != null ? `$${notional}` : shares != null ? `${shares} sh` : "—"}
-        />
-        <ParamCell label="Entry Window" value={entryWindow} />
-        <ParamCell label="Min Edge" value={minEdge != null ? pct(minEdge, 0) : "—"} />
-        <ParamCell label="Algorithm" value={algVersion.replace("_v1", " v1")} />
-        <ParamCell label="Exec Policy" value={s.execution_policy ?? "market"} />
-      </div>
-
-      {/* Divider */}
-      <div style={dividerStyle} />
-
-      {/* Stats row */}
-      <div style={statsRowStyle}>
-        <StatCell label="Runs" value={String(s.num_runs)} />
-        <StatCell label="Trades" value={hasActivity ? String(s.total_trades) : "—"} />
-        <StatCell label="Settled" value={hasActivity ? String(s.settled_trades) : "—"} />
-        <StatCell label="Win%" value={hasActivity ? pct(s.win_rate) : "—"} />
-        <StatCell
-          label="PnL"
-          value={hasActivity ? usd(pnl) : "—"}
-          valueColor={hasActivity ? pnlColor : "var(--muted)"}
-        />
-        <StatCell
-          label="ROI"
-          value={hasActivity ? pct(s.roi, 2) : "—"}
-          valueColor={hasActivity && s.roi != null ? (s.roi >= 0 ? "var(--ok)" : "var(--bad)") : "var(--muted)"}
-        />
-      </div>
-
-      {/* Footer */}
-      <div style={cardFooterStyle}>
-        <span style={{ color: "var(--muted)", fontSize: 11 }}>
-          Latest: {s.latest_run_at ? s.latest_run_at.slice(0, 10) : "never"}
-          {" · "}
-          {s.live_run_count} live · {s.paper_run_count} paper
-        </span>
-        <Link
-          to={`/weather/runs?config_id=${s.config_id}`}
-          style={linkStyle}
-        >
-          View runs →
-        </Link>
-      </div>
-    </div>
+    </Link>
   );
 }
 
