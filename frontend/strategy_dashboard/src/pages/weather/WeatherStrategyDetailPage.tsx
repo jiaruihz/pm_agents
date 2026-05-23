@@ -314,6 +314,8 @@ export function WeatherStrategyDetailPage() {
             {/* ── Execution Funnel ── */}
             {funnel.length > 0 && <ExecutionFunnelSection funnel={funnel} pendingOrders={pendingOrders} />}
 
+            {dailyLedger.length > 0 && <DailyPnlComparisonTable days={dailyLedger} />}
+
             <DailyLedgerSection
               days={dailyLedger}
               expandedDays={expandedDays}
@@ -572,6 +574,87 @@ export function WeatherStrategyDetailPage() {
         )}
       </>
     </PageFrame>
+  );
+}
+
+// ── Daily P&L Comparison Table ────────────────────────────────────────────────
+
+function DailyPnlComparisonTable({ days }: { days: DailyLedgerRow[] }) {
+  if (days.length === 0) return null;
+
+  const settled = days.filter(d => d.paper.settled > 0 || d.clob.settled > 0);
+  if (settled.length === 0) return null;
+
+  const totPaper    = settled.reduce((s, d) => s + (d.paper.settled > 0 ? d.paper.pnl : 0), 0);
+  const totClob     = settled.reduce((s, d) => s + (d.clob.settled  > 0 ? d.clob.pnl  : 0), 0);
+  const totGap      = settled.reduce((s, d) => s + (d.gapPnl ?? 0), 0);
+  const totMissed   = settled.reduce((s, d) => s + d.missedPnl, 0);
+  const totExecDiff = settled.reduce((s, d) => s + d.fillDelta, 0);
+
+  const numCol: React.CSSProperties = { ...tdStyle, textAlign: "right", fontFamily: "monospace", fontVariantNumeric: "tabular-nums" };
+  const numColBold: React.CSSProperties = { ...numCol, fontWeight: 700 };
+  const thR: React.CSSProperties = { ...thStyle, textAlign: "right" };
+
+  function pnlCell(v: number, show: boolean): React.ReactNode {
+    if (!show) return <span style={{ color: "var(--muted)" }}>—</span>;
+    return <span style={{ color: v >= 0 ? "var(--ok)" : "var(--bad)", fontWeight: 600 }}>{usd(v)}</span>;
+  }
+
+  function gapCell(v: number | null): React.ReactNode {
+    if (v == null) return <span style={{ color: "var(--muted)" }}>—</span>;
+    return <span style={{ color: v >= 0 ? "var(--ok)" : "var(--bad)", fontWeight: 700 }}>{usd(v)}</span>;
+  }
+
+  return (
+    <>
+      <SectionHeader title="Daily P&L Comparison" subtitle="每日 paper vs CLOB 执行对比" />
+      <Card style={{ padding: 0, marginBottom: 24 }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Date</th>
+                <th style={thR}>Paper PnL</th>
+                <th style={thR}>CLOB PnL</th>
+                <th style={thR}>Gap</th>
+                <th style={thR}>Missed Gap</th>
+                <th style={thR}>Exec Diff</th>
+              </tr>
+            </thead>
+            <tbody>
+              {settled.map(d => (
+                <tr key={d.date} style={{ borderBottom: "1px solid var(--stroke)" }}>
+                  <td style={{ ...tdStyle, fontWeight: 700, fontFamily: "monospace" }}>{d.date}</td>
+                  <td style={numCol}>{pnlCell(d.paper.pnl, d.paper.settled > 0)}</td>
+                  <td style={numCol}>{pnlCell(d.clob.pnl,  d.clob.settled  > 0)}</td>
+                  <td style={numCol}>{gapCell(d.gapPnl)}</td>
+                  <td style={numCol}>
+                    {d.missedCount > 0
+                      ? <span style={{ color: d.missedPnl >= 0 ? "var(--bad)" : "var(--ok)", fontWeight: 600 }}>{usd(d.missedPnl)}</span>
+                      : <span style={{ color: "var(--muted)" }}>—</span>}
+                  </td>
+                  <td style={numCol}>
+                    {d.bothFilled > 0
+                      ? <span style={{ color: d.fillDelta >= 0 ? "var(--ok)" : "var(--bad)", fontWeight: 600 }}>{usd(d.fillDelta)}</span>
+                      : <span style={{ color: "var(--muted)" }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: "rgba(128,128,128,0.06)", borderTop: "2px solid var(--stroke)" }}>
+                <td style={{ ...tdStyle, fontWeight: 800, fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>TOTAL</td>
+                <td style={numColBold}><span style={{ color: totPaper    >= 0 ? "var(--ok)" : "var(--bad)" }}>{usd(totPaper)}</span></td>
+                <td style={numColBold}><span style={{ color: totClob     >= 0 ? "var(--ok)" : "var(--bad)" }}>{usd(totClob)}</span></td>
+                <td style={numColBold}><span style={{ color: totGap      >= 0 ? "var(--ok)" : "var(--bad)" }}>{usd(totGap)}</span></td>
+                <td style={numColBold}><span style={{ color: totMissed   >= 0 ? "var(--bad)" : "var(--ok)" }}>{usd(totMissed)}</span></td>
+                <td style={numColBold}><span style={{ color: totExecDiff >= 0 ? "var(--ok)" : "var(--bad)" }}>{usd(totExecDiff)}</span></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </Card>
+    </>
   );
 }
 
