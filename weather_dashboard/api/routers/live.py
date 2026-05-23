@@ -11,6 +11,19 @@ router = APIRouter(prefix="/live", tags=["live"])
 
 Db = Annotated[sqlite3.Connection, Depends(get_db)]
 
+_SETTLEMENTS_DEDUP = """
+    (
+        SELECT
+            target_date,
+            condition_id,
+            bracket,
+            MAX(final_price) AS final_price,
+            MAX(settlement_status) AS settlement_status
+        FROM settlements
+        GROUP BY target_date, condition_id, bracket
+    )
+"""
+
 
 # ---------------------------------------------------------------------------
 # GET /api/live/summary
@@ -33,7 +46,7 @@ def get_live_summary(db: Db):
 
     # CLOB positions breakdown
     clob = db.execute(
-        """
+        f"""
         SELECT
             COUNT(DISTINCT f.fill_id)                               AS total_fills,
             SUM(CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL))
@@ -53,7 +66,7 @@ def get_live_summary(db: Db):
         JOIN orders o    ON f.execution_id = o.execution_id
         JOIN plans p     ON o.plan_id      = p.plan_id
         JOIN signals sig ON p.signal_id    = sig.signal_id
-        LEFT JOIN settlements s
+        LEFT JOIN {_SETTLEMENTS_DEDUP} s
                ON sig.target_date = s.target_date
               AND sig.condition_id = s.condition_id
               AND sig.bracket      = s.bracket
@@ -61,15 +74,20 @@ def get_live_summary(db: Db):
         """
     ).fetchone()
 
-    # Pending CLOB orders (submitted, no fill yet)
+    # Pending CLOB orders (submitted, no fill yet, target_date still recent)
+    # Exclude stale orders for past target_dates that were never cancelled/expired
+    # in our DB (happens when N100 sync is interrupted).
     pending = db.execute(
         """
         SELECT COUNT(*) AS n, SUM(o.cost_usd) AS reserved_usd
         FROM orders o
+        JOIN plans   p   ON p.plan_id   = o.plan_id
+        JOIN signals sig ON sig.signal_id = p.signal_id
         LEFT JOIN fills f ON f.execution_id = o.execution_id
         WHERE o.venue = 'polymarket_clob'
           AND o.status = 'submitted'
           AND f.fill_id IS NULL
+          AND sig.target_date >= date('now', '-1 day')
         """
     ).fetchone()
 
@@ -176,7 +194,7 @@ def get_live_positions(
         JOIN orders o    ON f.execution_id = o.execution_id
         JOIN plans p     ON o.plan_id      = p.plan_id
         JOIN signals sig ON p.signal_id    = sig.signal_id
-        LEFT JOIN settlements s
+        LEFT JOIN {_SETTLEMENTS_DEDUP} s
                ON sig.target_date = s.target_date
               AND sig.condition_id = s.condition_id
               AND sig.bracket      = s.bracket
@@ -227,7 +245,7 @@ def get_execution_gap(
             sig.model_p_yes,
             sig.market_price       AS signal_market_price,
             sig.edge               AS signal_edge,
-            sig.order_side         AS signal_side,
+            sig.signal_side        AS signal_side,
 
             -- Paper fill
             MAX(CASE WHEN o.venue = 'paper' THEN f.filled_price END)  AS paper_fill_price,
@@ -286,7 +304,7 @@ def get_execution_gap(
         JOIN plans p     ON p.signal_id = sig.signal_id
         JOIN orders o    ON o.plan_id   = p.plan_id
         LEFT JOIN fills f ON f.execution_id = o.execution_id
-        LEFT JOIN settlements s
+        LEFT JOIN {_SETTLEMENTS_DEDUP} s
                ON sig.target_date = s.target_date
               AND sig.condition_id = s.condition_id
               AND sig.bracket      = s.bracket
