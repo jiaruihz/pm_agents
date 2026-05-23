@@ -309,6 +309,124 @@ def get_strategy_positions(config_id: str, db: Db):
     return result
 
 
+# ── Execution Funnel ──────────────────────────────────────────────────────────
+
+@router.get("/strategies/{config_id}/funnel")
+def get_strategy_funnel(config_id: str, db: Db):
+    """
+    Per-day execution funnel: signals evaluated → plans → orders placed → fills.
+
+    Groups by the run's start date so each row represents one day's cycle.
+    CLOB orders only (venue = 'polymarket_clob').
+    """
+    rows = db.execute("""
+        SELECT
+            date(r.started_at_utc)  AS day,
+            COUNT(DISTINCT p.signal_id)                                            AS signals_evaluated,
+            COUNT(DISTINCT CASE WHEN p.skip_reason IS NULL     THEN p.plan_id END) AS plans_executed,
+            COUNT(DISTINCT CASE WHEN p.skip_reason IS NOT NULL THEN p.plan_id END) AS plans_skipped,
+            COUNT(DISTINCT o.execution_id)                                         AS orders_placed,
+            COUNT(DISTINCT CASE WHEN f.status = 'filled' THEN f.fill_id END)      AS orders_filled,
+            COUNT(DISTINCT CASE
+                WHEN o.status = 'submitted' AND f.fill_id IS NULL
+                THEN o.execution_id END)                                           AS orders_pending,
+            ROUND(AVG(o.limit_price), 4)                                           AS avg_limit_price,
+            ROUND(AVG(CASE WHEN f.status = 'filled' THEN f.filled_price END), 4)  AS avg_fill_price,
+            ROUND(AVG(sig.market_price), 4)                                        AS avg_market_price,
+            ROUND(SUM(CASE WHEN f.status = 'filled'
+                      THEN CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL)
+                      END), 2)                                                     AS filled_capital_usd,
+            ROUND(SUM(CASE
+                WHEN o.status = 'submitted' AND f.fill_id IS NULL
+                THEN o.cost_usd END), 2)                                           AS pending_capital_usd
+        FROM plans p
+        JOIN signals sig ON sig.signal_id = p.signal_id
+        JOIN runs r      ON r.run_id       = p.run_id
+        LEFT JOIN orders o ON o.plan_id = p.plan_id AND o.venue = 'polymarket_clob'
+        LEFT JOIN fills  f ON f.execution_id = o.execution_id
+        WHERE r.config_id = ?
+          AND r.started_at_utc IS NOT NULL
+        GROUP BY day
+        ORDER BY day DESC
+    """, (config_id,)).fetchall()
+
+    result = []
+    for row in rows:
+        d = dict(row)
+        placed = d["orders_placed"] or 0
+        filled = d["orders_filled"] or 0
+        d["fill_rate"] = round(filled / placed, 4) if placed > 0 else None
+        # limit_discount: how many cents below market the avg limit price is
+        if d["avg_market_price"] is not None and d["avg_limit_price"] is not None:
+            d["limit_discount"] = round(d["avg_market_price"] - d["avg_limit_price"], 4)
+        else:
+            d["limit_discount"] = None
+        result.append(d)
+    return result
+
+
+@router.get("/strategies/{config_id}/pending-orders")
+def get_strategy_pending_orders(config_id: str, db: Db):
+    """
+    CLOB orders that are submitted but have no fill yet — currently in the market.
+    Shows limit price vs signal market price so you can see how aggressive the bid is.
+    """
+    rows = db.execute("""
+        SELECT
+            o.execution_id,
+            o.order_id,
+            sig.city,
+            sig.target_date,
+            sig.bracket,
+            sig.city_pool,
+            o.order_side,
+            o.limit_price,
+            sig.market_price    AS signal_market_price,
+            o.shares,
+            o.cost_usd,
+            o.placed_at_utc
+        FROM orders o
+        JOIN plans   p   ON p.plan_id   = o.plan_id
+        JOIN signals sig ON sig.signal_id = p.signal_id
+        JOIN runs    r   ON r.run_id    = o.run_id
+        LEFT JOIN fills f ON f.execution_id = o.execution_id
+        WHERE r.config_id = ?
+          AND o.venue     = 'polymarket_clob'
+          AND o.status    = 'submitted'
+          AND f.fill_id  IS NULL
+        ORDER BY o.placed_at_utc DESC
+    """, (config_id,)).fetchall()
+
+    import datetime as _dt
+    now_utc = _dt.datetime.now(_dt.timezone.utc)
+    result = []
+    for row in rows:
+        d = dict(row)
+        # limit discount: positive means limit is below market (we're bidding at a discount)
+        if d["limit_price"] is not None and d["signal_market_price"] is not None:
+            d["limit_discount"] = round(
+                float(d["signal_market_price"]) - float(d["limit_price"]), 4
+            )
+        else:
+            d["limit_discount"] = None
+        # hours since placed
+        if d["placed_at_utc"]:
+            try:
+                placed = _dt.datetime.fromisoformat(
+                    d["placed_at_utc"].replace("Z", "+00:00")
+                )
+                d["hours_pending"] = round((now_utc - placed).total_seconds() / 3600, 1)
+            except Exception:
+                d["hours_pending"] = None
+        else:
+            d["hours_pending"] = None
+        for k in ("limit_price", "signal_market_price", "shares", "cost_usd"):
+            if d.get(k) is not None:
+                d[k] = round(float(d[k]), 4)
+        result.append(d)
+    return result
+
+
 # ── Configs ───────────────────────────────────────────────────────────────────
 
 @router.get("/configs", response_model=list[ConfigRow])

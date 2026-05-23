@@ -12,7 +12,7 @@ import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import type {
   StrategyRow, EquityPoint, StrategyAnalytics,
-  AnalyticsDimension, PositionRow,
+  AnalyticsDimension, PositionRow, FunnelRow, PendingOrderRow,
 } from "../../data/weather-types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -72,13 +72,15 @@ type DimKey = typeof DIMENSIONS[number]["key"];
 
 export function WeatherStrategyDetailPage() {
   const { configId = "" } = useParams<{ configId: string }>();
-  const [strategy, setStrategy]   = useState<StrategyRow | null>(null);
-  const [equity, setEquity]       = useState<EquityPoint[]>([]);
-  const [analytics, setAnalytics] = useState<StrategyAnalytics | null>(null);
-  const [positions, setPositions] = useState<PositionRow[]>([]);
-  const [tab, setTab]             = useState<DimKey>("by_side");
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const [strategy, setStrategy]         = useState<StrategyRow | null>(null);
+  const [equity, setEquity]             = useState<EquityPoint[]>([]);
+  const [analytics, setAnalytics]       = useState<StrategyAnalytics | null>(null);
+  const [positions, setPositions]       = useState<PositionRow[]>([]);
+  const [funnel, setFunnel]             = useState<FunnelRow[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<PendingOrderRow[]>([]);
+  const [tab, setTab]                   = useState<DimKey>("by_side");
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState<string | null>(null);
 
   useEffect(() => {
     if (!configId) return;
@@ -89,12 +91,16 @@ export function WeatherStrategyDetailPage() {
       weatherApi.getStrategyEquity(configId),
       weatherApi.getStrategyAnalytics(configId),
       weatherApi.getStrategyPositions(configId),
+      weatherApi.getStrategyFunnel(configId),
+      weatherApi.getStrategyPendingOrders(configId),
     ])
-      .then(([s, eq, an, pos]) => {
+      .then(([s, eq, an, pos, fn, po]) => {
         setStrategy(s);
         setEquity(eq);
         setAnalytics(an);
         setPositions(pos);
+        setFunnel(fn);
+        setPendingOrders(po);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
@@ -184,6 +190,9 @@ export function WeatherStrategyDetailPage() {
               <KPI label="Open Capital" value={totalOpenCapital > 0 ? `$${totalOpenCapital.toFixed(1)}` : "—"} color="var(--accent-2)" />
               <KPI label="Unreal. Edge" value={openPositions.length > 0 ? usd(totalEdge) : "—"} color={totalEdge >= 0 ? "var(--ok)" : "var(--bad)"} />
             </div>
+
+            {/* ── Execution Funnel ── */}
+            {funnel.length > 0 && <ExecutionFunnelSection funnel={funnel} pendingOrders={pendingOrders} />}
 
             {/* ── Equity Curve ── */}
             <SectionHeader title="Equity Curve" subtitle="累计盈亏曲线（已结算日期）" />
@@ -437,6 +446,214 @@ export function WeatherStrategyDetailPage() {
         )}
       </>
     </PageFrame>
+  );
+}
+
+// ── Execution Funnel Section ──────────────────────────────────────────────────
+
+function fillRateColor(rate: number | null): string {
+  if (rate == null) return "var(--muted)";
+  if (rate >= 0.8)  return "var(--ok)";
+  if (rate >= 0.4)  return "#f5a623";   // amber
+  return "var(--bad)";
+}
+
+function ExecutionFunnelSection({
+  funnel, pendingOrders,
+}: { funnel: FunnelRow[]; pendingOrders: PendingOrderRow[] }) {
+  // Aggregate totals across all days
+  const totals = funnel.reduce(
+    (acc, r) => ({
+      signals:  acc.signals  + r.signals_evaluated,
+      executed: acc.executed + r.plans_executed,
+      skipped:  acc.skipped  + r.plans_skipped,
+      placed:   acc.placed   + r.orders_placed,
+      filled:   acc.filled   + r.orders_filled,
+      pending:  acc.pending  + r.orders_pending,
+      filledCap: acc.filledCap + (r.filled_capital_usd ?? 0),
+      pendingCap: acc.pendingCap + (r.pending_capital_usd ?? 0),
+    }),
+    { signals: 0, executed: 0, skipped: 0, placed: 0, filled: 0, pending: 0, filledCap: 0, pendingCap: 0 },
+  );
+  const overallFillRate = totals.placed > 0 ? totals.filled / totals.placed : null;
+
+  return (
+    <>
+      <SectionHeader
+        title={`Execution Funnel${pendingOrders.length > 0 ? ` · ${pendingOrders.length} pending` : ""}`}
+        subtitle="挂单成交漏斗分析"
+      />
+
+      {/* Summary KPI row */}
+      <Card style={{ marginBottom: 16, padding: "12px 20px" }}>
+        <div style={{ display: "flex", gap: 0, alignItems: "center" }}>
+          <FunnelKpi label="Signals" value={String(totals.signals)} />
+          <FunnelArrow />
+          <FunnelKpi label="Plans" value={String(totals.executed)} note={totals.skipped > 0 ? `${totals.skipped} skipped` : undefined} />
+          <FunnelArrow />
+          <FunnelKpi label="Placed" value={String(totals.placed)} note={`$${totals.filledCap.toFixed(0) === "0" ? totals.pendingCap.toFixed(0) : totals.filledCap.toFixed(0)} cap`} />
+          <FunnelArrow />
+          <FunnelKpi
+            label="Filled"
+            value={String(totals.filled)}
+            note={overallFillRate != null ? `${(overallFillRate * 100).toFixed(0)}% fill rate` : undefined}
+            valueColor={fillRateColor(overallFillRate)}
+          />
+          {totals.pending > 0 && (
+            <>
+              <div style={{ width: 1, background: "var(--stroke)", alignSelf: "stretch", margin: "0 16px" }} />
+              <FunnelKpi
+                label="Pending"
+                value={String(totals.pending)}
+                note={`$${totals.pendingCap.toFixed(0)} reserved`}
+                valueColor="var(--accent-2)"
+              />
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* Daily breakdown table */}
+      <Card style={{ padding: 0, marginBottom: 24 }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                {["Day", "Signals", "Plans", "Skipped", "Placed", "Filled", "Pending", "Fill Rate", "Avg Limit", "Avg Market", "Discount", "Filled $", "Pending $"].map(h => (
+                  <th key={h} style={{ ...thStyle, textAlign: h === "Day" ? "left" : "right" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {funnel.map(row => {
+                const fc = fillRateColor(row.fill_rate);
+                return (
+                  <tr key={row.day} style={{ borderBottom: "1px solid var(--stroke)" }}>
+                    <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 12 }}>{row.day}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{row.signals_evaluated}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{row.plans_executed}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: row.plans_skipped > 0 ? "var(--muted)" : "inherit" }}>
+                      {row.plans_skipped > 0 ? row.plans_skipped : "—"}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{row.orders_placed}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: fc, fontWeight: 600 }}>{row.orders_filled}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: row.orders_pending > 0 ? "var(--accent-2)" : "var(--muted)" }}>
+                      {row.orders_pending > 0 ? row.orders_pending : "—"}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: fc, fontWeight: 700 }}>
+                      {row.fill_rate != null ? `${(row.fill_rate * 100).toFixed(0)}%` : "—"}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontSize: 12 }}>
+                      {row.avg_limit_price != null ? row.avg_limit_price.toFixed(3) : "—"}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>
+                      {row.avg_market_price != null ? row.avg_market_price.toFixed(3) : "—"}
+                    </td>
+                    <td style={{
+                      ...tdStyle, textAlign: "right", fontWeight: 600,
+                      color: row.limit_discount == null ? "var(--muted)"
+                        : row.limit_discount > 0.01 ? "var(--ok)"
+                        : row.limit_discount < -0.01 ? "var(--bad)"
+                        : "var(--muted)",
+                    }}>
+                      {row.limit_discount != null
+                        ? `${row.limit_discount >= 0 ? "−" : "+"}${Math.abs(row.limit_discount * 100).toFixed(1)}¢`
+                        : "—"}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right", fontSize: 12, color: "var(--muted)" }}>
+                      {row.filled_capital_usd != null && row.filled_capital_usd > 0 ? `$${row.filled_capital_usd.toFixed(1)}` : "—"}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right", fontSize: 12, color: row.pending_capital_usd && row.pending_capital_usd > 0 ? "var(--accent-2)" : "var(--muted)" }}>
+                      {row.pending_capital_usd != null && row.pending_capital_usd > 0 ? `$${row.pending_capital_usd.toFixed(1)}` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Pending orders detail */}
+      {pendingOrders.length > 0 && (
+        <>
+          <SectionHeader
+            title={`Pending Orders (${pendingOrders.length})`}
+            subtitle="在市场中等待成交的挂单"
+          />
+          <Card style={{ padding: 0, marginBottom: 24 }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    {["Age (h)", "City", "Target Date", "Bracket", "Side", "Limit Price", "Market Price", "Discount", "Shares", "Cost"].map(h => (
+                      <th key={h} style={{ ...thStyle, textAlign: h === "City" || h === "Bracket" || h === "Side" ? "left" : "right" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingOrders.map(row => {
+                    const disc = row.limit_discount ?? 0;
+                    const discColor = disc > 0.01 ? "var(--ok)" : disc < -0.01 ? "var(--bad)" : "var(--muted)";
+                    const ageColor = (row.hours_pending ?? 0) > 24 ? "var(--bad)" : (row.hours_pending ?? 0) > 6 ? "#f5a623" : "var(--muted)";
+                    return (
+                      <tr key={row.execution_id} style={{ borderBottom: "1px solid var(--stroke)" }}>
+                        <td style={{ ...tdStyle, textAlign: "right", color: ageColor, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                          {row.hours_pending != null ? row.hours_pending.toFixed(1) : "—"}
+                        </td>
+                        <td style={{ ...tdStyle, fontWeight: 600 }}>{row.city}</td>
+                        <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 12 }}>{row.target_date}</td>
+                        <td style={{ ...tdStyle }}>{row.bracket}</td>
+                        <td style={{ ...tdStyle }}>
+                          <span style={{ color: row.order_side === "BUY_NO" ? "var(--ok)" : "var(--accent-2)", fontWeight: 600, fontSize: 12 }}>
+                            {row.order_side}
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>
+                          {row.limit_price != null ? row.limit_price.toFixed(3) : "—"}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "var(--muted)" }}>
+                          {row.signal_market_price != null ? row.signal_market_price.toFixed(3) : "—"}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right", color: discColor, fontWeight: 600 }}>
+                          {disc !== 0
+                            ? `${disc >= 0 ? "−" : "+"}${Math.abs(disc * 100).toFixed(1)}¢`
+                            : <span style={{ color: "var(--bad)", fontWeight: 700 }}>AT MKT</span>}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                          {row.shares != null ? row.shares.toFixed(2) : "—"}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                          ${row.cost_usd != null ? row.cost_usd.toFixed(2) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+    </>
+  );
+}
+
+function FunnelKpi({
+  label, value, note, valueColor = "inherit",
+}: { label: string; value: string; note?: string; valueColor?: string }) {
+  return (
+    <div style={{ textAlign: "center", flex: 1, minWidth: 72 }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: valueColor, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{label}</div>
+      {note && <div style={{ fontSize: 10, color: "var(--muted)", fontStyle: "italic" }}>{note}</div>}
+    </div>
+  );
+}
+
+function FunnelArrow() {
+  return (
+    <div style={{ color: "var(--muted)", fontSize: 18, padding: "0 4px", flexShrink: 0 }}>→</div>
   );
 }
 

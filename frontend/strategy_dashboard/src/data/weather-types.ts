@@ -254,6 +254,42 @@ export interface StrategyAnalytics {
   by_forecast_source: AnalyticsDimension[];
 }
 
+/** /api/strategies/{config_id}/funnel — per-day order placement vs fill breakdown */
+export interface FunnelRow {
+  day: string;
+  signals_evaluated: number;
+  plans_executed: number;
+  plans_skipped: number;
+  orders_placed: number;
+  orders_filled: number;
+  orders_pending: number;
+  fill_rate: number | null;        // orders_filled / orders_placed
+  avg_limit_price: number | null;
+  avg_fill_price: number | null;
+  avg_market_price: number | null;
+  limit_discount: number | null;   // avg_market_price - avg_limit_price (how far below market we bid)
+  filled_capital_usd: number | null;
+  pending_capital_usd: number | null;
+}
+
+/** /api/strategies/{config_id}/pending-orders — CLOB orders submitted but not yet filled */
+export interface PendingOrderRow {
+  execution_id: string;
+  order_id: string | null;
+  city: string;
+  target_date: string;
+  bracket: string;
+  city_pool: string;
+  order_side: string;
+  limit_price: number | null;
+  signal_market_price: number | null;
+  limit_discount: number | null;  // signal_market_price - limit_price
+  shares: number;
+  cost_usd: number;
+  placed_at_utc: string | null;
+  hours_pending: number | null;
+}
+
 export interface CompareRun {
   run_id: string;
   config_id?: string;
