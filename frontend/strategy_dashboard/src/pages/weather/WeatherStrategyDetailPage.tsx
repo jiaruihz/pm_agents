@@ -704,11 +704,8 @@ function DailyLedgerDay({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const paperWin = day.paper.settled ? day.paper.wins / day.paper.settled : null;
-  const clobWin = day.clob.settled ? day.clob.wins / day.clob.settled : null;
-  const paperRoi = day.paper.capital ? day.paper.pnl / day.paper.capital : null;
-  const clobRoi = day.clob.capital ? day.clob.pnl / day.clob.capital : null;
   const gapColor = day.gapPnl == null ? "var(--muted)" : day.gapPnl >= 0 ? "var(--ok)" : "var(--bad)";
+  const hasSettled = day.paper.settled > 0 || day.clob.settled > 0;
 
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
@@ -716,20 +713,24 @@ function DailyLedgerDay({
         <div style={{ minWidth: 118 }}>
           <div style={{ fontSize: 15, fontWeight: 800 }}>{day.date}</div>
           <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
-            {expanded ? "Hide details" : "Show paper / CLOB"}
+            {expanded ? "Hide details ▲" : "Show orders ▼"}
           </div>
         </div>
         <div style={daySummaryGridStyle}>
-          <DailyStat label="Paper Orders" value={String(day.paper.orders)} />
-          <DailyStat label="Paper PnL" value={day.paper.settled ? usd(day.paper.pnl) : "—"} color={day.paper.pnl >= 0 ? "var(--ok)" : "var(--bad)"} />
-          <DailyStat label="Paper Win / ROI" value={`${pct(paperWin)} / ${pct(paperRoi, 2)}`} />
-          <DailyStat label="CLOB Orders" value={`${day.clob.orders} / ${day.clob.fills} fills`} />
-          <DailyStat label="CLOB PnL" value={day.clob.settled ? usd(day.clob.pnl) : "—"} color={day.clob.pnl >= 0 ? "var(--ok)" : "var(--bad)"} />
-          <DailyStat label="CLOB Win / ROI" value={`${pct(clobWin)} / ${pct(clobRoi, 2)}`} />
-          <DailyStat label="Execution Gap" value={day.gapPnl == null ? "—" : usd(day.gapPnl)} color={gapColor} />
-          <DailyStat label="Missed Paper PnL" value={day.missedCount ? usd(day.missedPnl) : "—"} color={day.missedPnl >= 0 ? "var(--bad)" : "var(--ok)"} />
-          <DailyStat label="Fill Delta" value={day.bothFilled ? usd(day.fillDelta) : "—"} color={day.fillDelta >= 0 ? "var(--ok)" : "var(--bad)"} />
-          <DailyStat label="Errors / No Fill" value={`${day.clob.errors} / ${day.clob.noFill}`} color={day.clob.errors || day.clob.noFill ? "var(--bad)" : "var(--muted)"} />
+          <DailyStat label="Paper Orders"    value={`${day.paper.orders} / ${day.paper.fills} filled`} />
+          <DailyStat label="CLOB Orders"     value={`${day.clob.orders} / ${day.clob.fills} filled`} />
+          <DailyStat label="Paper PnL"
+            value={day.paper.settled > 0 ? usd(day.paper.pnl) : "—"}
+            color={day.paper.settled > 0 ? (day.paper.pnl >= 0 ? "var(--ok)" : "var(--bad)") : "var(--muted)"} />
+          <DailyStat label="CLOB PnL"
+            value={day.clob.settled > 0 ? usd(day.clob.pnl) : "—"}
+            color={day.clob.settled > 0 ? (day.clob.pnl >= 0 ? "var(--ok)" : "var(--bad)") : "var(--muted)"} />
+          <DailyStat label="Execution Gap"
+            value={hasSettled && day.gapPnl != null ? usd(day.gapPnl) : "—"}
+            color={gapColor} />
+          <DailyStat label="Errors / No Fill"
+            value={`${day.clob.errors} / ${day.clob.noFill}`}
+            color={day.clob.errors || day.clob.noFill ? "var(--bad)" : "var(--muted)"} />
         </div>
         <div style={{ color: "var(--muted)", fontSize: 18, paddingLeft: 8 }}>{expanded ? "−" : "+"}</div>
       </button>
@@ -1063,7 +1064,7 @@ function KpiDivider() {
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, paddingLeft: 10, borderLeft: "3px solid var(--accent)" }}>
       <div style={{ fontSize: 15, fontWeight: 700 }}>{title}</div>
       <div style={{ fontSize: 12, color: "var(--muted)" }}>{subtitle}</div>
     </div>
@@ -1115,7 +1116,7 @@ const daySummaryGridStyle: React.CSSProperties = {
 };
 const dayExpandedStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
   gap: 14,
   padding: 16,
 };
