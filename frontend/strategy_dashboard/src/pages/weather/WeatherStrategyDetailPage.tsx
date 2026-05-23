@@ -2,8 +2,8 @@
  * WeatherStrategyDetailPage — per-strategy equity curve, analytics & positions.
  * Route: /weather/strategies/:configId
  */
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Bar, BarChart,
@@ -12,8 +12,10 @@ import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import type {
   StrategyRow, EquityPoint, StrategyAnalytics,
-  AnalyticsDimension, PositionRow, FunnelRow, PendingOrderRow,
+  AnalyticsDimension, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow,
 } from "../../data/weather-types";
+
+type StrategyState = "live" | "paper" | "explore" | "all";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -26,6 +28,12 @@ function usd(v: number | null | undefined, d = 2) {
   return `${sign}$${Math.abs(v).toFixed(d)}`;
 }
 function fmtDate(s: string | null | undefined) { return s ? s.slice(0, 10) : "—"; }
+// Detect and suppress incorrect 1970 timestamps from ingest bug (CLOB fill sync stored ms as s)
+function fmtTs(s: string | null | undefined) {
+  if (!s) return "—";
+  if (s.startsWith("1970-")) return "—";  // ingest bug: unix_ms treated as unix_s
+  return s.slice(0, 16).replace("T", " ");
+}
 
 function dimWinRate(dim: AnalyticsDimension) {
   return dim.settled > 0 ? pct(dim.wins / dim.settled) : "—";
@@ -69,15 +77,104 @@ const DIMENSIONS = [
 ] as const;
 
 type DimKey = typeof DIMENSIONS[number]["key"];
+type VenueStats = {
+  venue: "paper" | "polymarket_clob";
+  label: string;
+  orders: number;
+  fills: number;
+  settled: number;
+  unsettled: number;
+  errors: number;
+  noFill: number;
+  wins: number;
+  pnl: number;
+  capital: number;
+  rows: StrategyOrderRow[];
+};
+
+type DailyLedgerRow = {
+  date: string;
+  paper: VenueStats;
+  clob: VenueStats;
+  gapPnl: number | null;
+  bothFilled: number;
+  missedCount: number;
+  missedPnl: number;
+  fillDelta: number;
+};
+
+function buildVenueStats(rows: StrategyOrderRow[], venue: "paper" | "polymarket_clob", label: string): VenueStats {
+  const vr = rows.filter(r => r.venue === venue);
+  const filled = vr.filter(r => r.fill_id != null);
+  const settled = filled.filter(r => r.final_price != null);
+  const pnl = settled.reduce((s, r) => s + (r.pnl_usd ?? 0), 0);
+  const capital = filled.reduce((s, r) => s + ((r.filled_shares ?? r.order_shares) * (r.filled_price ?? r.entry_price)), 0);
+  return {
+    venue,
+    label,
+    orders: vr.length,
+    fills: filled.length,
+    settled: settled.length,
+    unsettled: filled.length - settled.length,
+    errors: vr.filter(r => r.order_status === "error").length,
+    noFill: vr.filter(r => r.order_status === "submitted" && r.fill_id == null).length,
+    wins: settled.filter(r => (r.pnl_usd ?? 0) > 0).length,
+    pnl,
+    capital,
+    rows: vr,
+  };
+}
+
+function buildDailyLedger(orders: StrategyOrderRow[]): DailyLedgerRow[] {
+  const byDate = new Map<string, StrategyOrderRow[]>();
+  orders.forEach((row) => {
+    const key = row.target_date || "unknown";
+    byDate.set(key, [...(byDate.get(key) ?? []), row]);
+  });
+  return [...byDate.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, rows]) => {
+      const paper = buildVenueStats(rows, "paper", "Paper");
+      const clob = buildVenueStats(rows, "polymarket_clob", "CLOB");
+      const gapPnl = paper.settled > 0 || clob.settled > 0 ? clob.pnl - paper.pnl : null;
+      const byPlan = new Map<string, StrategyOrderRow[]>();
+      rows.forEach((row) => byPlan.set(row.plan_id, [...(byPlan.get(row.plan_id) ?? []), row]));
+      let bothFilled = 0;
+      let missedCount = 0;
+      let missedPnl = 0;
+      let fillDelta = 0;
+      byPlan.forEach((planRows) => {
+        const paperRow = planRows.find(r => r.venue === "paper");
+        const clobRow = planRows.find(r => r.venue === "polymarket_clob");
+        if (!paperRow || paperRow.pnl_usd == null) return;
+        if (clobRow?.pnl_usd != null) {
+          bothFilled += 1;
+          fillDelta += clobRow.pnl_usd - paperRow.pnl_usd;
+        } else if (clobRow && clobRow.fill_id == null) {
+          missedCount += 1;
+          missedPnl += paperRow.pnl_usd;
+        }
+      });
+      return { date, paper, clob, gapPnl, bothFilled, missedCount, missedPnl, fillDelta };
+    });
+}
 
 export function WeatherStrategyDetailPage() {
   const { configId = "" } = useParams<{ configId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const stateParam = searchParams.get("state");
+  const stateFilter: StrategyState =
+    stateParam === "paper" || stateParam === "explore" || stateParam === "all"
+      ? stateParam
+      : "live";
   const [strategy, setStrategy]         = useState<StrategyRow | null>(null);
   const [equity, setEquity]             = useState<EquityPoint[]>([]);
   const [analytics, setAnalytics]       = useState<StrategyAnalytics | null>(null);
   const [positions, setPositions]       = useState<PositionRow[]>([]);
   const [funnel, setFunnel]             = useState<FunnelRow[]>([]);
   const [pendingOrders, setPendingOrders] = useState<PendingOrderRow[]>([]);
+  const [orders, setOrders]             = useState<StrategyOrderRow[]>([]);
+  const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
   const [tab, setTab]                   = useState<DimKey>("by_side");
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
@@ -87,24 +184,26 @@ export function WeatherStrategyDetailPage() {
     setLoading(true);
     setError(null);
     Promise.all([
-      weatherApi.getStrategy(configId),
-      weatherApi.getStrategyEquity(configId),
-      weatherApi.getStrategyAnalytics(configId),
-      weatherApi.getStrategyPositions(configId),
+      weatherApi.getStrategy(configId, { state: stateFilter }),
+      weatherApi.getStrategyEquity(configId, { state: stateFilter }),
+      weatherApi.getStrategyAnalytics(configId, { state: stateFilter }),
+      weatherApi.getStrategyPositions(configId, { state: stateFilter }),
+      weatherApi.getStrategyOrders(configId, { state: stateFilter, limit: 1000 }),
       weatherApi.getStrategyFunnel(configId),
       weatherApi.getStrategyPendingOrders(configId),
     ])
-      .then(([s, eq, an, pos, fn, po]) => {
+      .then(([s, eq, an, pos, ord, fn, po]) => {
         setStrategy(s);
         setEquity(eq);
         setAnalytics(an);
         setPositions(pos);
+        setOrders(ord);
         setFunnel(fn);
         setPendingOrders(po);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [configId]);
+  }, [configId, stateFilter]);
 
   const p = strategy?.params ?? {};
   const liveEnabled  = p.live_enabled  as boolean | undefined;
@@ -127,6 +226,15 @@ export function WeatherStrategyDetailPage() {
     const e = unrealizedEdge(r);
     return s + (e != null ? e * r.filled_shares : 0);
   }, 0);
+  const dailyLedger = useMemo(() => buildDailyLedger(orders), [orders]);
+
+  useEffect(() => {
+    if (dailyLedger.length === 0) return;
+    setExpandedDays((prev) => {
+      if (Object.keys(prev).length > 0) return prev;
+      return Object.fromEntries(dailyLedger.map(day => [day.date, true]));
+    });
+  }, [dailyLedger]);
 
   return (
     <PageFrame
@@ -136,7 +244,7 @@ export function WeatherStrategyDetailPage() {
       <>
         {/* ── Back ── */}
         <div style={{ marginBottom: 16 }}>
-          <Link to="/weather/strategies" style={{ color: "var(--muted)", textDecoration: "none", fontSize: 13 }}>
+          <Link to={`/weather/strategies`} style={{ color: "var(--muted)", textDecoration: "none", fontSize: 13 }}>
             ← All strategies
           </Link>
         </div>
@@ -162,6 +270,18 @@ export function WeatherStrategyDetailPage() {
                   {strategy.execution_policy && (
                     <Badge label={strategy.execution_policy} color="rgba(128,128,128,0.6)" />
                   )}
+                </div>
+                <div style={segmentedStyle}>
+                  {(["live", "paper", "explore", "all"] as StrategyState[]).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setSearchParams({ state: v })}
+                      style={v === stateFilter ? segmentedButtonActiveStyle : segmentedButtonStyle}
+                    >
+                      {v.toUpperCase()}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, auto)", gap: "6px 24px" }}>
@@ -193,6 +313,12 @@ export function WeatherStrategyDetailPage() {
 
             {/* ── Execution Funnel ── */}
             {funnel.length > 0 && <ExecutionFunnelSection funnel={funnel} pendingOrders={pendingOrders} />}
+
+            <DailyLedgerSection
+              days={dailyLedger}
+              expandedDays={expandedDays}
+              onToggle={(date) => setExpandedDays(prev => ({ ...prev, [date]: !prev[date] }))}
+            />
 
             {/* ── Equity Curve ── */}
             <SectionHeader title="Equity Curve" subtitle="累计盈亏曲线（已结算日期）" />
@@ -306,7 +432,7 @@ export function WeatherStrategyDetailPage() {
                                 ${(row.filled_shares * row.filled_price).toFixed(2)}
                               </td>
                               <td style={{ ...tdStyle, fontSize: 11, color: "var(--muted)" }}>
-                                {row.filled_at_utc ? row.filled_at_utc.slice(0, 16).replace("T", " ") : "—"}
+                                {fmtTs(row.filled_at_utc)}
                               </td>
                               <td style={{ ...tdStyle, fontSize: 11, color: "var(--muted)" }}>
                                 {row.venue}
@@ -446,6 +572,164 @@ export function WeatherStrategyDetailPage() {
         )}
       </>
     </PageFrame>
+  );
+}
+
+// ── Daily Execution Ledger ─────────────────────────────────────────────────────
+
+function DailyLedgerSection({
+  days,
+  expandedDays,
+  onToggle,
+}: {
+  days: DailyLedgerRow[];
+  expandedDays: Record<string, boolean>;
+  onToggle: (date: string) => void;
+}) {
+  return (
+    <>
+      <SectionHeader
+        title={`Daily Execution Ledger (${days.length})`}
+        subtitle="按结算目标日拆分 paper vs CLOB"
+      />
+      {days.length === 0 ? (
+        <Card style={{ padding: "28px 24px", textAlign: "center", color: "var(--muted)", marginBottom: 24 }}>
+          No orders for this state · 当前状态下没有下单明细
+        </Card>
+      ) : (
+        <div style={dailyLedgerStyle}>
+          {days.map(day => (
+            <DailyLedgerDay
+              key={day.date}
+              day={day}
+              expanded={Boolean(expandedDays[day.date])}
+              onToggle={() => onToggle(day.date)}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function DailyLedgerDay({
+  day,
+  expanded,
+  onToggle,
+}: {
+  day: DailyLedgerRow;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const paperWin = day.paper.settled ? day.paper.wins / day.paper.settled : null;
+  const clobWin = day.clob.settled ? day.clob.wins / day.clob.settled : null;
+  const paperRoi = day.paper.capital ? day.paper.pnl / day.paper.capital : null;
+  const clobRoi = day.clob.capital ? day.clob.pnl / day.clob.capital : null;
+  const gapColor = day.gapPnl == null ? "var(--muted)" : day.gapPnl >= 0 ? "var(--ok)" : "var(--bad)";
+
+  return (
+    <Card style={{ padding: 0, overflow: "hidden" }}>
+      <button type="button" onClick={onToggle} style={dayHeaderButtonStyle}>
+        <div style={{ minWidth: 118 }}>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>{day.date}</div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+            {expanded ? "Hide details" : "Show paper / CLOB"}
+          </div>
+        </div>
+        <div style={daySummaryGridStyle}>
+          <DailyStat label="Paper Orders" value={String(day.paper.orders)} />
+          <DailyStat label="Paper PnL" value={day.paper.settled ? usd(day.paper.pnl) : "—"} color={day.paper.pnl >= 0 ? "var(--ok)" : "var(--bad)"} />
+          <DailyStat label="Paper Win / ROI" value={`${pct(paperWin)} / ${pct(paperRoi, 2)}`} />
+          <DailyStat label="CLOB Orders" value={`${day.clob.orders} / ${day.clob.fills} fills`} />
+          <DailyStat label="CLOB PnL" value={day.clob.settled ? usd(day.clob.pnl) : "—"} color={day.clob.pnl >= 0 ? "var(--ok)" : "var(--bad)"} />
+          <DailyStat label="CLOB Win / ROI" value={`${pct(clobWin)} / ${pct(clobRoi, 2)}`} />
+          <DailyStat label="Execution Gap" value={day.gapPnl == null ? "—" : usd(day.gapPnl)} color={gapColor} />
+          <DailyStat label="Missed Paper PnL" value={day.missedCount ? usd(day.missedPnl) : "—"} color={day.missedPnl >= 0 ? "var(--bad)" : "var(--ok)"} />
+          <DailyStat label="Fill Delta" value={day.bothFilled ? usd(day.fillDelta) : "—"} color={day.fillDelta >= 0 ? "var(--ok)" : "var(--bad)"} />
+          <DailyStat label="Errors / No Fill" value={`${day.clob.errors} / ${day.clob.noFill}`} color={day.clob.errors || day.clob.noFill ? "var(--bad)" : "var(--muted)"} />
+        </div>
+        <div style={{ color: "var(--muted)", fontSize: 18, paddingLeft: 8 }}>{expanded ? "−" : "+"}</div>
+      </button>
+      {expanded && (
+        <div style={dayExpandedStyle}>
+          <VenuePanel stats={day.paper} />
+          <VenuePanel stats={day.clob} />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function DailyStat({ label, value, color = "inherit" }: { label: string; value: string; color?: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 750, color, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function VenuePanel({ stats }: { stats: VenueStats }) {
+  const winRate = stats.settled ? stats.wins / stats.settled : null;
+  const roi = stats.capital ? stats.pnl / stats.capital : null;
+  const tone = stats.venue === "polymarket_clob" ? "var(--ok)" : "var(--accent-2)";
+  return (
+    <div style={venuePanelStyle}>
+      <div style={venueHeaderStyle}>
+        <Badge label={stats.label} color={tone} />
+        <DailyStat label="Orders / Fills / Settled" value={`${stats.orders} / ${stats.fills} / ${stats.settled}`} />
+        <DailyStat label="PnL" value={stats.settled ? usd(stats.pnl) : "—"} color={stats.pnl >= 0 ? "var(--ok)" : "var(--bad)"} />
+        <DailyStat label="Win / ROI" value={`${pct(winRate)} / ${pct(roi, 2)}`} />
+        <DailyStat label="Unsettled" value={String(stats.unsettled)} color={stats.unsettled ? "var(--accent-2)" : "var(--muted)"} />
+        <DailyStat label="Errors / No Fill" value={`${stats.errors} / ${stats.noFill}`} color={stats.errors || stats.noFill ? "var(--bad)" : "var(--muted)"} />
+      </div>
+      <OrderMiniTable rows={stats.rows} />
+    </div>
+  );
+}
+
+function OrderMiniTable({ rows }: { rows: StrategyOrderRow[] }) {
+  if (rows.length === 0) {
+    return <div style={{ color: "var(--muted)", padding: "14px 0", fontSize: 12 }}>No orders</div>;
+  }
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            {["Time", "City", "Bracket", "Side", "Order", "Fill", "Settle", "Shares", "Price", "Cost", "PnL"].map(h => (
+              <th key={h} style={thStyle}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => {
+            const pnl = row.pnl_usd;
+            const settlement = row.final_price == null ? "open" : String(row.final_price);
+            return (
+              <tr key={`${row.execution_id}:${row.fill_id ?? "none"}`} style={{ borderBottom: "1px solid var(--stroke)" }}>
+                <td style={{ ...tdStyle, color: "var(--muted)", whiteSpace: "nowrap" }}>{row.placed_at_utc?.slice(5, 16).replace("T", " ") ?? "—"}</td>
+                <td style={{ ...tdStyle, fontWeight: 650 }}>{row.city}</td>
+                <td style={tdStyle}>{row.bracket}</td>
+                <td style={tdStyle}>{row.order_side.replace("BUY_", "")}</td>
+                <td style={tdStyle}>
+                  <div>{row.order_status}</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", fontFamily: "monospace" }}>{row.order_id?.slice(0, 12) ?? row.execution_id.slice(0, 12)}</div>
+                </td>
+                <td style={tdStyle}>{row.fill_status ?? "unfilled"}</td>
+                <td style={tdStyle}>{settlement}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{(row.filled_shares ?? row.order_shares).toFixed(2)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{(row.filled_price ?? row.entry_price).toFixed(3)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>${row.order_cost_usd.toFixed(2)}</td>
+                <td style={{ ...tdStyle, textAlign: "right", color: pnl == null ? "var(--muted)" : pnl >= 0 ? "var(--ok)" : "var(--bad)", fontWeight: 650 }}>
+                  {pnl == null ? "—" : usd(pnl)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -720,6 +1004,72 @@ const kpiStripStyle: React.CSSProperties = {
   display: "flex", gap: 0, alignItems: "center",
   background: "var(--card)", border: "1px solid var(--stroke)",
   borderRadius: 12, padding: "14px 20px", marginBottom: 24,
+};
+const dailyLedgerStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  marginBottom: 24,
+};
+const dayHeaderButtonStyle: React.CSSProperties = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: 16,
+  padding: "14px 16px",
+  background: "transparent",
+  border: 0,
+  borderBottom: "1px solid var(--stroke)",
+  color: "inherit",
+  cursor: "pointer",
+  textAlign: "left",
+};
+const daySummaryGridStyle: React.CSSProperties = {
+  flex: 1,
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))",
+  gap: "10px 16px",
+};
+const dayExpandedStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 14,
+  padding: 16,
+};
+const venuePanelStyle: React.CSSProperties = {
+  border: "1px solid var(--stroke)",
+  borderRadius: 8,
+  padding: "12px 14px",
+};
+const venueHeaderStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "auto repeat(5, minmax(100px, 1fr))",
+  alignItems: "center",
+  gap: "10px 14px",
+  marginBottom: 10,
+};
+const segmentedStyle: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid var(--stroke)",
+  borderRadius: 6,
+  overflow: "hidden",
+  background: "var(--card)",
+  marginTop: 12,
+};
+const segmentedButtonStyle: React.CSSProperties = {
+  border: 0,
+  borderRight: "1px solid var(--stroke)",
+  background: "transparent",
+  color: "var(--muted)",
+  padding: "7px 10px",
+  fontSize: 11,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+const segmentedButtonActiveStyle: React.CSSProperties = {
+  ...segmentedButtonStyle,
+  background: "var(--accent)",
+  color: "white",
 };
 const tableStyle: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", fontSize: 13,

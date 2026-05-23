@@ -98,14 +98,36 @@ def _already_have_fill(conn: sqlite3.Connection, fill_id: str) -> bool:
     return row is not None
 
 
-def _ts_to_iso(ts_ms: Any) -> str | None:
-    """Convert a millisecond timestamp (int or str) to an ISO-8601 UTC string."""
-    if ts_ms is None:
+def _ts_to_iso(ts_raw: Any) -> str | None:
+    """Convert a Polymarket timestamp to an ISO-8601 UTC string.
+
+    Polymarket CLOB endpoints return different timestamp formats:
+    - ``updatedAt`` / ``timestamp`` from /data/order and /data/trades:
+      Unix **seconds** as an integer (e.g. 1779436328 ≈ May 2026)
+    - Some endpoints return Unix **milliseconds** (13-digit int)
+
+    Heuristic: values < 1e11 are treated as seconds; >= 1e11 as milliseconds.
+    This correctly handles timestamps from 1970 through ~year 5138 in both units.
+    """
+    if ts_raw is None:
         return None
+    # Already an ISO string (pass through after sanity check)
+    if isinstance(ts_raw, str) and not ts_raw.isdigit():
+        try:
+            from datetime import datetime as _dt
+            _dt.fromisoformat(ts_raw.replace("Z", "+00:00"))
+            return ts_raw  # valid ISO
+        except ValueError:
+            pass
     try:
-        return datetime.fromtimestamp(int(ts_ms) / 1000, tz=timezone.utc).isoformat()
+        val = float(ts_raw)
+        # If the float looks like seconds (9-10 digit), use directly.
+        # If it looks like milliseconds (13-digit), divide by 1000.
+        if val >= 1e11:  # clearly milliseconds
+            val = val / 1000.0
+        return datetime.fromtimestamp(val, tz=timezone.utc).isoformat()
     except (ValueError, TypeError, OSError):
-        return str(ts_ms)
+        return str(ts_raw)
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +380,10 @@ def _discover_funder(conn: sqlite3.Connection) -> str:
     Tries to extract from exchange_response (balance_preflight.funder),
     falls back to KNOWN_WEATHER_FUNDER constant.
     """
+    env_funder = os.getenv("PM_ADDRESS", "").strip()
+    if env_funder:
+        return env_funder
+
     row = conn.execute(
         """
         SELECT json_extract(exchange_response, '$.balance_preflight.funder') AS funder
@@ -535,6 +561,12 @@ def sync_clob_fills(
         )
         all_clob_trades = _fetch_trades_clob(client, maker_address)
         log.info("CLOB returned %d trade records.", len(all_clob_trades))
+        if not all_clob_trades:
+            log.info(
+                "Authenticated CLOB returned no maker trades; falling back to "
+                "public funder activity matching."
+            )
+            client = None
         for t in all_clob_trades:
             oid = (
                 t.get("maker_order_id")
