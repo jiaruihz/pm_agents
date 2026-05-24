@@ -182,7 +182,9 @@ CREATE INDEX IF NOT EXISTS idx_plans_signal_id ON plans(signal_id);
 CREATE INDEX IF NOT EXISTS idx_orders_run_id ON orders(run_id);
 CREATE INDEX IF NOT EXISTS idx_orders_plan_id ON orders(plan_id);
 CREATE INDEX IF NOT EXISTS idx_fills_execution_id ON fills(execution_id);
-CREATE INDEX IF NOT EXISTS idx_settlements_market ON settlements(target_date, condition_id, bracket);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_settlements_market
+    ON settlements(target_date, condition_id, bracket)
+    WHERE condition_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
 CREATE INDEX IF NOT EXISTS idx_run_alerts_run_id ON run_alerts(run_id);
 

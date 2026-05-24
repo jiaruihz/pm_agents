@@ -298,8 +298,72 @@ def _strategy_params(summary: dict[str, Any], raw_plans: list[dict[str, Any]]) -
     return params
 
 
+# Fields that actually identify a strategy. Anything not in this list is
+# observability or runtime toggle and must NOT affect config_id, otherwise
+# one logical strategy gets fragmented into multiple config rows (see
+# docs/WEATHER_DATA_PIPELINE.md "unified PnL caliber").
+_STRATEGY_IDENTITY_FIELDS: tuple[str, ...] = (
+    "strategy_family",
+    "algorithm_version",
+    "execution_policy",
+    "signal_builder_version",
+    "trade_planner_version",
+    "city_pool",
+    "universe_scope",
+    "sizing_mode",
+    "max_order_notional",
+    "fixed_order_shares",
+    "min_edge",
+    "min_entry_price",
+    "max_entry_price",
+    "entry_price_window",
+)
+_MAKER_QUEUE_IDENTITY_FIELDS: tuple[str, ...] = (
+    "tick_size",
+    "min_quote_edge",
+    "max_quote_spread",
+    "max_mid_drift",
+    "quote_improvement_ticks",
+    "wide_spread_shade_ticks",
+    "narrow_quote_spread",
+    "adverse_selection_spread_fraction",
+)
+# Explicitly excluded from identity: paper_enabled, live_enabled, source
+# (runtime/observability) and max_order_shares (per-order safety cap, not
+# strategy intent — was added later and would have fragmented old configs).
+
+
+# Default-equivalence map: a missing or empty value in any of these identity
+# fields hashes the same as the explicit default. Without this, old records
+# (where the field hadn't been added to the dict yet) and new records (where
+# the fallback fills it in) would collide on intent but split on hash.
+_IDENTITY_DEFAULTS: dict[str, Any] = {
+    "strategy_family": "weather_edge_v1",
+    "algorithm_version": "mid_price_core_v1",
+    "execution_policy": "mid_price_core_v1",
+    "signal_builder_version": "weather_snapshot_signal_builder",
+    "trade_planner_version": "weather_trade_planner",
+    "sizing_mode": "notional",
+    "universe_scope": "configured_live_pool",
+}
+
+
+def _strategy_identity(params: dict[str, Any]) -> dict[str, Any]:
+    fields = list(_STRATEGY_IDENTITY_FIELDS)
+    if params.get("execution_policy") == "maker_queue_v1":
+        fields.extend(_MAKER_QUEUE_IDENTITY_FIELDS)
+    identity: dict[str, Any] = {}
+    for k in fields:
+        v = params.get(k)
+        if v in (None, ""):
+            v = _IDENTITY_DEFAULTS.get(k)
+        identity[k] = v
+    return identity
+
+
 def _strategy_config_id(params: dict[str, Any]) -> str:
-    payload = json.dumps(params, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    identity = _strategy_identity(params)
+    payload = json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return f"live_weather_edge_v1_{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:12]}"
 
 

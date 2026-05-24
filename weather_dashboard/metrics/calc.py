@@ -95,13 +95,22 @@ def _max_drawdown(pnls: list[float]) -> float:
     return max_dd
 
 
+_SETTLEMENTS_DEDUP_SQL = """
+    (
+        SELECT target_date, condition_id, bracket, MAX(final_price) AS final_price
+        FROM settlements
+        GROUP BY target_date, condition_id, bracket
+    )
+"""
+
+
 def compute_metrics(conn, run_id: str) -> dict:
     """
     Query fills + orders + settlements for run_id and return metrics dict.
     """
     if _has_column(conn, "orders", "execution_id"):
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 f.filled_shares,
                 f.filled_price,
@@ -113,7 +122,7 @@ def compute_metrics(conn, run_id: str) -> dict:
             JOIN orders o ON f.execution_id = o.execution_id
             JOIN plans p  ON o.plan_id  = p.plan_id
             JOIN signals sig ON p.signal_id = sig.signal_id
-            LEFT JOIN settlements s
+            LEFT JOIN {_SETTLEMENTS_DEDUP_SQL} s
                    ON sig.target_date = s.target_date
                   AND sig.condition_id = s.condition_id
                   AND sig.bracket      = s.bracket
@@ -125,7 +134,7 @@ def compute_metrics(conn, run_id: str) -> dict:
     else:
         # Legacy v1 compatibility for old tests/manual forensics.
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 f.filled_shares,
                 f.filled_price,
@@ -137,7 +146,7 @@ def compute_metrics(conn, run_id: str) -> dict:
             JOIN orders o ON f.order_id = o.order_id
             JOIN plans p  ON o.plan_id  = p.plan_id
             JOIN signals sig ON p.signal_id = sig.signal_id
-            LEFT JOIN settlements s
+            LEFT JOIN {_SETTLEMENTS_DEDUP_SQL} s
                    ON sig.target_date = s.target_date
                   AND sig.bracket      = s.bracket
             WHERE o.run_id = ?

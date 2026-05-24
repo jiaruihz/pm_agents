@@ -5,7 +5,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from weather_dashboard.api.routers import compare, configs, live, runs
+from weather_dashboard.api.routers import compare, configs, copy_trade, live, runs
 
 
 def create_app() -> FastAPI:
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(compare.router, prefix="/api")
     app.include_router(configs.router, prefix="/api")
     app.include_router(live.router, prefix="/api")
+    app.include_router(copy_trade.router, prefix="/api")
 
     @app.get("/health")
     def health():

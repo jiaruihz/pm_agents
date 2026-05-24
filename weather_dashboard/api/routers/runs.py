@@ -25,6 +25,19 @@ _GROUP_BY_COLS: dict[str, str] = {
     "bracket":         "sig.bracket",
 }
 
+_SETTLEMENTS_DEDUP = """
+    (
+        SELECT
+            target_date,
+            condition_id,
+            bracket,
+            MAX(final_price) AS final_price,
+            MAX(settlement_status) AS settlement_status
+        FROM settlements
+        GROUP BY target_date, condition_id, bracket
+    )
+"""
+
 
 def _parse_tags(raw) -> list[str]:
     if not raw:
@@ -77,8 +90,13 @@ def list_runs(
         where.append("execution_mode = ?")
         params.append(execution_mode)
     if config_id:
-        where.append("config_id = ?")
-        params.append(config_id)
+        # Accept either canonical id or any alias — match all aliased runs.
+        where.append(
+            "config_id IN (SELECT alias_config_id FROM config_aliases "
+            "WHERE canonical_config_id = COALESCE("
+            "(SELECT canonical_config_id FROM config_aliases WHERE alias_config_id = ?), ?))"
+        )
+        params.extend([config_id, config_id])
 
     params += [limit, offset]
     rows = db.execute(
@@ -164,7 +182,7 @@ def get_run_metrics_slice(
         JOIN orders o    ON f.execution_id = o.execution_id
         JOIN plans p     ON o.plan_id    = p.plan_id
         JOIN signals sig ON p.signal_id  = sig.signal_id
-        LEFT JOIN settlements s
+        LEFT JOIN {_SETTLEMENTS_DEDUP} s
                ON sig.target_date = s.target_date
               AND sig.condition_id = s.condition_id
               AND sig.bracket      = s.bracket
@@ -199,7 +217,7 @@ def get_run_equity(run_id: str, db: Db):
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
     rows = db.execute(
-        """
+        f"""
         SELECT
             sig.target_date AS date,
             SUM(CASE
@@ -214,7 +232,7 @@ def get_run_equity(run_id: str, db: Db):
         JOIN orders o    ON f.execution_id = o.execution_id
         JOIN plans p     ON o.plan_id    = p.plan_id
         JOIN signals sig ON p.signal_id  = sig.signal_id
-        LEFT JOIN settlements s
+        LEFT JOIN {_SETTLEMENTS_DEDUP} s
                ON sig.target_date = s.target_date
               AND sig.condition_id = s.condition_id
               AND sig.bracket      = s.bracket
@@ -400,7 +418,7 @@ def get_run_trades(
         JOIN plans p     ON o.plan_id    = p.plan_id
         JOIN signals sig ON p.signal_id  = sig.signal_id
         LEFT JOIN fills f ON f.execution_id = o.execution_id
-        LEFT JOIN settlements s
+        LEFT JOIN {_SETTLEMENTS_DEDUP} s
                ON sig.target_date = s.target_date
               AND sig.condition_id = s.condition_id
               AND sig.bracket      = s.bracket
