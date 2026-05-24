@@ -25,7 +25,7 @@ MARKET_LOCAL="$REPO_ROOT/runtime/weather_edge_v1/market_data"
 
 # ---- Config: n100 pm_agent runtime source ----
 N100_REMOTE="${N100_REMOTE:-jiarui@192.168.0.200}"
-N100_REMOTE_DIR="${N100_REMOTE_DIR:-/home/rui/projects/pm_agent/runtime/weather_edge_v1}"
+N100_REMOTE_DIR="${N100_REMOTE_DIR:-/home/jiarui/projects/pm_agent/runtime/weather_edge_v1}"
 N100_LOCAL="$REPO_ROOT/runtime/weather_edge_v1/remote_pm_agent"
 
 # ---- Flags ----

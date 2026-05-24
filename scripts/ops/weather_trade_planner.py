@@ -44,7 +44,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-entry-price", type=float, default=0.25)
     parser.add_argument("--max-entry-price", type=float, default=0.75)
     parser.add_argument("--price-offset", type=float, default=0.0)
-    parser.add_argument("--execution-policy", default="mid_price_core_v1")
+    parser.add_argument("--execution-policy", choices=("mid_price_core_v1", "maker_queue_v1"), default="mid_price_core_v1")
+    parser.add_argument("--tick-size", type=float, default=0.01)
+    parser.add_argument("--min-quote-edge", type=float, default=0.03)
+    parser.add_argument("--max-quote-spread", type=float, default=0.12)
+    parser.add_argument("--max-mid-drift", type=float, default=0.10)
+    parser.add_argument("--quote-improvement-ticks", type=int, default=1)
+    parser.add_argument("--wide-spread-shade-ticks", type=int, default=1)
+    parser.add_argument("--narrow-quote-spread", type=float, default=0.03)
+    parser.add_argument("--adverse-selection-spread-fraction", type=float, default=0.50)
     parser.add_argument("--enable-live", action="store_true", help="Mark accepted plans as live-enabled. Executor still requires --live --confirm-live.")
     parser.add_argument("--accepted-only", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -68,6 +76,14 @@ def main() -> int:
         price_offset=float(args.price_offset),
         live_enabled=bool(args.enable_live),
         execution_policy=str(args.execution_policy),
+        tick_size=float(args.tick_size),
+        min_quote_edge=float(args.min_quote_edge),
+        max_quote_spread=float(args.max_quote_spread),
+        max_mid_drift=float(args.max_mid_drift),
+        quote_improvement_ticks=int(args.quote_improvement_ticks),
+        wide_spread_shade_ticks=int(args.wide_spread_shade_ticks),
+        narrow_quote_spread=float(args.narrow_quote_spread),
+        adverse_selection_spread_fraction=float(args.adverse_selection_spread_fraction),
     )
     result = plan_trades(
         signal_path=Path(args.signals),

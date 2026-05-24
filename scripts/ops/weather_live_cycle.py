@@ -486,6 +486,9 @@ def _send_summary(
             f"- max_order_shares={float(config.get('max_order_shares', 0.0)):.2f}",
             f"- entry_price_window={float(config.get('min_entry_price', 0.0)):.2f}-{float(config.get('max_entry_price', 0.0)):.2f}",
             f"- min_edge={float(config.get('min_edge', 0.0)):.2f}",
+            f"- execution_policy={config.get('execution_policy', '-')}",
+            f"- min_quote_edge={float(config.get('min_quote_edge', 0.0)):.2f}",
+            f"- max_quote_spread={float(config.get('max_quote_spread', 0.0)):.2f}",
             "",
             "排查信息：",
             f"- 运行编号：{run_id}",
@@ -623,6 +626,29 @@ def main() -> int:
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
     parser.add_argument("--min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ENTRY_PRICE", "0.25")))
     parser.add_argument("--max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ENTRY_PRICE", "0.75")))
+    parser.add_argument(
+        "--execution-policy",
+        choices=("mid_price_core_v1", "maker_queue_v1"),
+        default=os.getenv("WEATHER_LIVE_EXECUTION_POLICY", "mid_price_core_v1"),
+    )
+    parser.add_argument("--min-quote-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_QUOTE_EDGE", "0.03")))
+    parser.add_argument("--max-quote-spread", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_QUOTE_SPREAD", "0.12")))
+    parser.add_argument("--max-mid-drift", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_MID_DRIFT", "0.10")))
+    parser.add_argument(
+        "--quote-improvement-ticks",
+        type=int,
+        default=int(os.getenv("WEATHER_LIVE_QUOTE_IMPROVEMENT_TICKS", "1")),
+    )
+    parser.add_argument(
+        "--wide-spread-shade-ticks",
+        type=int,
+        default=int(os.getenv("WEATHER_LIVE_WIDE_SPREAD_SHADE_TICKS", "1")),
+    )
+    parser.add_argument(
+        "--adverse-selection-spread-fraction",
+        type=float,
+        default=float(os.getenv("WEATHER_LIVE_ADVERSE_SELECTION_SPREAD_FRACTION", "0.50")),
+    )
     parser.add_argument("--dry-run-live", action="store_true", help="Stop before live executor.")
     parser.add_argument("--no-telegram", action="store_true")
     args = parser.parse_args()
@@ -636,6 +662,13 @@ def main() -> int:
         "min_edge": float(args.min_edge),
         "min_entry_price": float(args.min_entry_price),
         "max_entry_price": float(args.max_entry_price),
+        "execution_policy": str(args.execution_policy),
+        "min_quote_edge": float(args.min_quote_edge),
+        "max_quote_spread": float(args.max_quote_spread),
+        "max_mid_drift": float(args.max_mid_drift),
+        "quote_improvement_ticks": int(args.quote_improvement_ticks),
+        "wide_spread_shade_ticks": int(args.wide_spread_shade_ticks),
+        "adverse_selection_spread_fraction": float(args.adverse_selection_spread_fraction),
     }
 
     run_id = _utc_run_id()
@@ -685,6 +718,20 @@ def main() -> int:
         str(float(live_config["min_entry_price"])),
         "--max-entry-price",
         str(float(live_config["max_entry_price"])),
+        "--execution-policy",
+        str(live_config["execution_policy"]),
+        "--min-quote-edge",
+        str(float(live_config["min_quote_edge"])),
+        "--max-quote-spread",
+        str(float(live_config["max_quote_spread"])),
+        "--max-mid-drift",
+        str(float(live_config["max_mid_drift"])),
+        "--quote-improvement-ticks",
+        str(int(live_config["quote_improvement_ticks"])),
+        "--wide-spread-shade-ticks",
+        str(int(live_config["wide_spread_shade_ticks"])),
+        "--adverse-selection-spread-fraction",
+        str(float(live_config["adverse_selection_spread_fraction"])),
         "--enable-live",
         "--accepted-only",
     ]

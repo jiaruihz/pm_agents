@@ -17,6 +17,10 @@ from src.strategies.weather_edge_v1.tools.execution_pipeline import (
     ExecutorConfig,
     execute_trade_plans,
 )
+from src.strategies.weather_edge_v1.tools.execution_policy import (
+    ExecutionPolicyConfig,
+    build_execution_quote,
+)
 
 
 def _extract_order_id(payload: Any) -> Optional[str]:
@@ -83,6 +87,42 @@ def _maker_only_price(
             return requested_price
         return best_ask if best_ask > best_bid else 0.0
     return 0.0
+
+
+def _get_tick_size(client: Any, token_id: str, fallback: float) -> float:
+    for name in ("get_tick_size", "getTickSize"):
+        fn = getattr(client, name, None)
+        if not callable(fn):
+            continue
+        try:
+            value = fn(token_id)
+            tick = _to_float(value, fallback)
+            if tick > 0:
+                return tick
+        except Exception:
+            continue
+    return fallback if fallback > 0 else 0.001
+
+
+class WeatherExecutionError(RuntimeError):
+    def __init__(self, message: str, *, response: Dict[str, Any]):
+        super().__init__(message)
+        self.weather_execution_response = response
+
+
+def _classify_live_error(exc: Exception) -> str:
+    text = f"{type(exc).__name__}: {exc}"
+    if "invalid post-only order" in text or "order crosses book" in text:
+        return "post_only_crosses_book"
+    if "No orderbook exists" in text:
+        return "no_orderbook"
+    if "service not ready" in text:
+        return "service_not_ready"
+    if "maker_only_no_resting_price" in text:
+        return "maker_only_no_resting_price"
+    if "maker_only_price_would_cross" in text:
+        return "maker_only_price_would_cross"
+    return "live_order_error"
 
 
 def _build_position_lines(*, wallet: str, limit: int = 8) -> List[str]:
@@ -235,41 +275,176 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
         order_price = requested_price
         best_bid = 0.0
         best_ask = 0.0
+        tick_size = _to_float(plan.get("quote_tick_size"), 0.01)
+        quote: Dict[str, Any] = {
+            "quote_status": "",
+            "quote_reason": "",
+            "quote_edge": _to_float(plan.get("quote_edge"), 0.0),
+            "required_quote_edge": _to_float(plan.get("required_quote_edge"), 0.0),
+            "model_token_probability": _to_float(plan.get("model_token_probability"), 0.0),
+            "quote_best_bid": _to_float(plan.get("quote_best_bid"), 0.0),
+            "quote_best_ask": _to_float(plan.get("quote_best_ask"), 0.0),
+            "quote_spread": _to_float(plan.get("quote_spread"), 0.0),
+            "quote_tick_size": tick_size,
+            "quote_mode": "not_evaluated",
+        }
+
+        def _diagnostics(*, classification: str, reason: str = "") -> Dict[str, Any]:
+            return {
+                "error_classification": classification,
+                "error_reason": reason,
+                "maker_only": bool(maker_only),
+                "cancel_after": bool(cancel_after),
+                "side": side,
+                "requested_price": requested_price,
+                "attempted_price": order_price,
+                "posted_price": 0.0,
+                "best_bid": best_bid,
+                "best_ask": best_ask,
+                "spread": max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0,
+                "tick_size": tick_size,
+                "token_id": str(plan.get("token_id") or ""),
+                "market_id": str(plan.get("market_id") or ""),
+                "city": str(plan.get("city") or ""),
+                "target_date": str(plan.get("target_date") or ""),
+                "bracket": str(plan.get("bracket") or ""),
+                "signal_side": str(plan.get("signal_side") or ""),
+                "execution_policy": str(plan.get("execution_policy") or ""),
+                "diagnostic_key": "|".join(
+                    [
+                        str(plan.get("target_date") or ""),
+                        str(plan.get("city") or ""),
+                        str(plan.get("bracket") or ""),
+                        str(plan.get("signal_side") or ""),
+                        str(plan.get("token_id") or ""),
+                    ]
+                ),
+                **quote,
+            }
+
         if maker_only:
-            book = client.get_order_book(str(plan["token_id"]))
+            try:
+                book = client.get_order_book(str(plan["token_id"]))
+            except Exception as exc:
+                classification = _classify_live_error(exc)
+                raise WeatherExecutionError(
+                    f"{classification}: {exc}",
+                    response=_diagnostics(classification=classification, reason="get_order_book_failed"),
+                ) from exc
             best_bid, best_ask = _best_bid_ask_from_book(book)
-            order_price = _maker_only_price(
-                side=side,
-                requested_price=requested_price,
-                best_bid=best_bid,
-                best_ask=best_ask,
-            )
+            tick_size = _get_tick_size(client, str(plan["token_id"]), _to_float(plan.get("quote_tick_size"), 0.01))
+            if str(plan.get("execution_policy") or "").strip() == "maker_queue_v1":
+                quote = build_execution_quote(
+                    plan,
+                    ExecutionPolicyConfig(
+                        policy_name="maker_queue_v1",
+                        price_floor=0.01,
+                        price_ceiling=0.99,
+                        tick_size=tick_size,
+                        min_quote_edge=_to_float(plan.get("min_quote_edge"), 0.03),
+                        max_quote_spread=_to_float(plan.get("max_quote_spread"), 0.12),
+                        max_mid_drift=_to_float(plan.get("max_mid_drift"), 0.10),
+                        quote_improvement_ticks=int(_to_float(plan.get("quote_improvement_ticks"), 1.0)),
+                        wide_spread_shade_ticks=int(_to_float(plan.get("wide_spread_shade_ticks"), 1.0)),
+                        narrow_spread=_to_float(plan.get("narrow_quote_spread"), 0.03),
+                        adverse_selection_spread_fraction=_to_float(
+                            plan.get("adverse_selection_spread_fraction"),
+                            0.50,
+                        ),
+                    ),
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    tick_size=tick_size,
+                )
+                order_price = _to_float(quote.get("limit_price"), 0.0)
+                if quote.get("quote_status") != "accepted" or order_price <= 0:
+                    reason = str(quote.get("quote_reason") or "maker_queue_quote_rejected")
+                    raise WeatherExecutionError(
+                        "maker_queue_quote_rejected "
+                        f"reason={reason} "
+                        f"best_bid={best_bid:.6f} best_ask={best_ask:.6f} "
+                        f"quote_edge={_to_float(quote.get('quote_edge'), 0.0):.6f} "
+                        f"required={_to_float(quote.get('required_quote_edge'), 0.0):.6f}",
+                        response=_diagnostics(classification="maker_queue_quote_rejected", reason=reason),
+                    )
+            else:
+                order_price = _maker_only_price(
+                    side=side,
+                    requested_price=requested_price,
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                )
+                quote = {
+                    "quote_status": "accepted" if order_price > 0 else "rejected",
+                    "quote_reason": "" if order_price > 0 else "maker_only_no_resting_price",
+                    "quote_edge": _to_float(plan.get("quote_edge"), 0.0),
+                    "required_quote_edge": _to_float(plan.get("required_quote_edge"), 0.0),
+                    "model_token_probability": _to_float(plan.get("model_token_probability"), 0.0),
+                    "quote_best_bid": best_bid,
+                    "quote_best_ask": best_ask,
+                    "quote_spread": max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0,
+                    "quote_tick_size": tick_size,
+                    "quote_mode": "executor_clamp",
+                }
+            if order_price >= best_ask and best_ask > 0:
+                raise WeatherExecutionError(
+                    "maker_only_price_would_cross "
+                    f"price={order_price:.6f} best_ask={best_ask:.6f}",
+                    response=_diagnostics(
+                        classification="maker_only_price_would_cross",
+                        reason="computed_price_crosses_best_ask",
+                    ),
+                )
             if order_price <= 0:
-                raise RuntimeError(
+                raise WeatherExecutionError(
                     "maker_only_no_resting_price "
                     f"side={side} requested={requested_price:.6f} "
-                    f"best_bid={best_bid:.6f} best_ask={best_ask:.6f}"
+                    f"best_bid={best_bid:.6f} best_ask={best_ask:.6f}",
+                    response=_diagnostics(
+                        classification="maker_only_no_resting_price",
+                        reason="missing_valid_resting_price",
+                    ),
                 )
-        signed_order = client.create_order(
-            OrderArgsV2(
-                token_id=str(plan["token_id"]),
-                price=float(order_price),
-                size=float(plan["size"]),
-                side=side,
-            )
-        )
-        if clob_v2:
-            response = client.post_order(
-                signed_order,
-                order_type=OrderType.GTC,
-                post_only=bool(maker_only),
-            )
         else:
-            response = client.post_order(
-                signed_order,
-                orderType=OrderType.GTC,
-                post_only=bool(maker_only),
+            quote = {
+                "quote_status": "accepted",
+                "quote_reason": "",
+                "quote_edge": _to_float(plan.get("quote_edge"), 0.0),
+                "required_quote_edge": _to_float(plan.get("required_quote_edge"), 0.0),
+                "model_token_probability": _to_float(plan.get("model_token_probability"), 0.0),
+                "quote_best_bid": best_bid,
+                "quote_best_ask": best_ask,
+                "quote_spread": max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0,
+                "quote_tick_size": _to_float(plan.get("quote_tick_size"), 0.01),
+                "quote_mode": "taker_allowed",
+            }
+        try:
+            signed_order = client.create_order(
+                OrderArgsV2(
+                    token_id=str(plan["token_id"]),
+                    price=float(order_price),
+                    size=float(plan["size"]),
+                    side=side,
+                )
             )
+            if clob_v2:
+                response = client.post_order(
+                    signed_order,
+                    order_type=OrderType.GTC,
+                    post_only=bool(maker_only),
+                )
+            else:
+                response = client.post_order(
+                    signed_order,
+                    orderType=OrderType.GTC,
+                    post_only=bool(maker_only),
+                )
+        except Exception as exc:
+            classification = _classify_live_error(exc)
+            raise WeatherExecutionError(
+                f"{classification}: {exc}",
+                response=_diagnostics(classification=classification, reason="post_order_failed"),
+            ) from exc
         result: Dict[str, Any] = {"place": response}
         result["clob_client"] = "py_clob_client_v2" if clob_v2 else "py_clob_client"
         result["maker_only"] = bool(maker_only)
@@ -277,6 +452,7 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
         result["posted_price"] = order_price
         result["best_bid"] = best_bid
         result["best_ask"] = best_ask
+        result.update(quote)
         if cancel_after:
             order_id = _extract_order_id(response)
             if order_id:
