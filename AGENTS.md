@@ -285,3 +285,41 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 - ** Warsaw 表现最好**: ROI +52.9%（5/8-5/10累计）
 - **ECMwf 模型优于 GFS**: ROI +12% vs +1.4%（同周期累计）
 - **LA 数据经常 missing_bracket**，结算失败率高
+
+---
+
+## 文档索引
+
+> **维护规则：每次在 `docs/` 下新增或删除文档，必须同步更新本节。**  
+> 归档文档移到 `docs/archive/`，从本节删除。
+
+### 核心参考文档（稳定，高频查阅）
+
+| 文档 | 用途 |
+|---|---|
+| [WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md) | 实盘排查入口：N100 检查命令、live 口径、近期事故结论 |
+| [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md) | N100↔pm_agent 字段名/枚举/ID算法契约，**改字段前必读** |
+| [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) | N100→镜像→DB→API 全链路、所有脚本职责、PnL口径、运维 runbook |
+| [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) | 核心架构设计（血缘链/策略身份/Run Registry/DB schema/API/前端） |
+| [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | 数据模型分层与缺口审计（P0已完成，P1/P2待办） |
+| [WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md) | 早期实盘历史与回填治理（重复下单/城市池错误/sizing改动） |
+| [WEATHER_DASHBOARD_TROUBLESHOOTING.md](docs/WEATHER_DASHBOARD_TROUBLESHOOTING.md) | Dashboard 故障排查：portproxy/CORS/env/null crash 根因与修复 |
+| [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) | 通用运维手册：常驻进程、日志路径、启停命令 |
+
+### 设计文档（功能待实施或部分实施）
+
+| 文档 | 用途 |
+|---|---|
+| [WEATHER_EXECUTION_ARCHITECTURE.md](docs/WEATHER_EXECUTION_ARCHITECTURE.md) | paper→live 执行边界设计（资金安全/暂停开关/notional 上限） |
+| [WEATHER_SHADOW_PORTFOLIO_TRACKING.md](docs/WEATHER_SHADOW_PORTFOLIO_TRACKING.md) | 影子组合追踪架构（live策略的虚拟持仓快照设计） |
+| [WEATHER_CLOB_ORDERBOOK_CAPTURE.md](docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md) | CLOB 快照捕获设计（供回测用更准确的 ask/bid 入场价） |
+| [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](docs/WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | 城市/日组合优化器设计（多城市仓位分配） |
+| [WEATHER_LEDGER_POSITION_ANALYSIS.md](docs/WEATHER_LEDGER_POSITION_ANALYSIS.md) | 持仓分析设计（Dashboard 持仓拆解页面） |
+
+### 研究与分析报告（时间点快照，不更新）
+
+| 文档 | 用途 |
+|---|---|
+| [WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md](docs/WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md) | 低价YES彩票仓研究（5c-20c YES 持有到结算回报分析） |
+| [WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md](docs/WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md) | 2026-05-23 实盘血缘分析（t1_trading mid_price_core_v1 策略） |
+| [COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md](docs/COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md) | Copy Trade 钱包研究执行计划 |
