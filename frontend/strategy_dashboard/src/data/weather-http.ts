@@ -1,5 +1,6 @@
 // HTTP client for the weather dashboard FastAPI backend
-import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow } from "./weather-types";
+import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow } from "./weather-types";
+import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
 
 const BASE = (import.meta.env.VITE_WEATHER_API ?? "http://localhost:8000") + "/api";
 
@@ -65,24 +66,37 @@ export const weatherApi = {
     return get("/compare", { run_ids: runIds.join(",") });
   },
 
-  listStrategies(): Promise<StrategyRow[]> {
-    return get("/strategies");
+  listStrategies(params?: { state?: "live" | "paper" | "explore" | "all" }): Promise<StrategyRow[]> {
+    return get("/strategies", params);
   },
 
-  getStrategy(configId: string): Promise<StrategyRow> {
-    return get(`/strategies/${encodeURIComponent(configId)}`);
+  getStrategy(configId: string, params?: { state?: "live" | "paper" | "explore" | "all" }): Promise<StrategyRow> {
+    return get(`/strategies/${encodeURIComponent(configId)}`, params);
   },
 
-  getStrategyEquity(configId: string): Promise<EquityPoint[]> {
-    return get(`/strategies/${encodeURIComponent(configId)}/equity`);
+  getStrategyEquity(configId: string, params?: { state?: "live" | "paper" | "explore" | "all" }): Promise<EquityPoint[]> {
+    return get(`/strategies/${encodeURIComponent(configId)}/equity`, params);
   },
 
-  getStrategyAnalytics(configId: string): Promise<StrategyAnalytics> {
-    return get(`/strategies/${encodeURIComponent(configId)}/analytics`);
+  getStrategyAnalytics(configId: string, params?: { state?: "live" | "paper" | "explore" | "all" }): Promise<StrategyAnalytics> {
+    return get(`/strategies/${encodeURIComponent(configId)}/analytics`, params);
   },
 
-  getStrategyPositions(configId: string): Promise<PositionRow[]> {
-    return get(`/strategies/${encodeURIComponent(configId)}/positions`);
+  getStrategyPositions(configId: string, params?: { state?: "live" | "paper" | "explore" | "all" }): Promise<PositionRow[]> {
+    return get(`/strategies/${encodeURIComponent(configId)}/positions`, params);
+  },
+
+  getStrategyOrders(
+    configId: string,
+    params?: {
+      state?: "live" | "paper" | "explore" | "all";
+      venue?: "paper" | "polymarket_clob" | "snapshot_replay";
+      target_date?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<StrategyOrderRow[]> {
+    return get(`/strategies/${encodeURIComponent(configId)}/orders`, params);
   },
 
   getStrategyFunnel(configId: string): Promise<FunnelRow[]> {
@@ -122,5 +136,22 @@ export const weatherApi = {
 
   getRunEquity(runId: string): Promise<{ date: string; cumulative_pnl: number }[]> {
     return get(`/runs/${runId}/equity`);
+  },
+
+  getCopyTradeSummary(): Promise<CopyTradeSummary> {
+    return get("/copy-trade/summary");
+  },
+
+  listCopyTradeWallets(params?: {
+    verdict?: string;
+    scan_mode?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<CopyTradeWalletList> {
+    return get("/copy-trade/wallets", params);
+  },
+
+  getCopyTradeWallet(walletAddress: string): Promise<CopyTradeWalletDetail> {
+    return get(`/copy-trade/wallets/${encodeURIComponent(walletAddress)}`);
   },
 };

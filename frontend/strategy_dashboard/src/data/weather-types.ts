@@ -290,6 +290,46 @@ export interface PendingOrderRow {
   hours_pending: number | null;
 }
 
+export interface StrategyOrderRow {
+  run_id: string;
+  started_at_utc: string | null;
+  producer_system: string | null;
+  source_config_id: string;
+  signal_id: string;
+  target_date: string;
+  city: string;
+  bracket: string;
+  city_pool: string;
+  forecast_source: string | null;
+  model_version: string | null;
+  model_p_yes: number | null;
+  signal_market_price: number | null;
+  signal_edge: number | null;
+  condition_id: string | null;
+  plan_id: string;
+  execution_policy: string | null;
+  skip_reason: string | null;
+  execution_id: string;
+  order_id: string | null;
+  venue: string;
+  order_side: string;
+  order_status: string;
+  limit_price: number | null;
+  entry_price: number;
+  order_shares: number;
+  order_cost_usd: number;
+  placed_at_utc: string | null;
+  fill_id: string | null;
+  fill_status: string | null;
+  filled_shares: number | null;
+  filled_price: number | null;
+  fees_usd: number | null;
+  filled_at_utc: string | null;
+  final_price: number | null;
+  settlement_status: string | null;
+  pnl_usd: number | null;
+}
+
 export interface CompareRun {
   run_id: string;
   config_id?: string;

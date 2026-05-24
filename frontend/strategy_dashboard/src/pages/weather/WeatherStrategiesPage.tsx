@@ -8,6 +8,8 @@ import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import type { StrategyRow } from "../../data/weather-types";
 
+type StrategyState = "live" | "paper" | "explore" | "all";
+
 // ── helpers ────────────────────────────────────────────────────────────────────
 
 function pct(v: number | null, decimals = 1) {
@@ -34,13 +36,14 @@ function shortName(name: string): string {
 
 export function WeatherStrategiesPage() {
   const [strategies, setStrategies] = useState<StrategyRow[]>([]);
+  const [stateFilter, setStateFilter] = useState<StrategyState>("live");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     weatherApi
-      .listStrategies()
+      .listStrategies({ state: stateFilter })
       .then((data) => setStrategies([...data].sort((a, b) => {
         const score = (s: StrategyRow) =>
           (s.params.live_enabled ? 2 : s.params.paper_enabled ? 1 : 0);
@@ -50,7 +53,7 @@ export function WeatherStrategiesPage() {
       })))
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [stateFilter]);
 
   return (
     <PageFrame
@@ -59,9 +62,21 @@ export function WeatherStrategiesPage() {
     >
       <>
         <div style={topBarStyle}>
+          <div style={segmentedStyle}>
+            {(["live", "paper", "explore", "all"] as StrategyState[]).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setStateFilter(v)}
+                style={v === stateFilter ? segmentedButtonActiveStyle : segmentedButtonStyle}
+              >
+                {v.toUpperCase()}
+              </button>
+            ))}
+          </div>
           {!loading && (
             <div style={{ color: "var(--muted)", fontSize: 13 }}>
-              {strategies.length} strategies · {strategies.filter(s => s.settled_trades > 0).length} with settled trades
+              {stateFilter} · {strategies.length} strategies · {strategies.filter(s => s.settled_trades > 0).length} with settled trades
             </div>
           )}
         </div>
@@ -76,7 +91,7 @@ export function WeatherStrategiesPage() {
 
         <div style={gridStyle}>
           {strategies.map((s) => (
-            <StrategyCard key={s.config_id} s={s} />
+            <StrategyCard key={s.config_id} s={s} stateFilter={stateFilter} />
           ))}
         </div>
       </>
@@ -86,7 +101,7 @@ export function WeatherStrategiesPage() {
 
 // ── StrategyCard ───────────────────────────────────────────────────────────────
 
-function StrategyCard({ s }: { s: StrategyRow }) {
+function StrategyCard({ s, stateFilter }: { s: StrategyRow; stateFilter: StrategyState }) {
   const p = s.params;
   const liveEnabled = p.live_enabled as boolean | undefined;
   const paperEnabled = p.paper_enabled as boolean | undefined;
@@ -107,7 +122,7 @@ function StrategyCard({ s }: { s: StrategyRow }) {
   const hasSettled = s.settled_trades > 0;
 
   return (
-    <Link to={`/weather/strategies/${encodeURIComponent(s.config_id)}`} style={{ textDecoration: "none", color: "inherit" }}>
+    <Link to={`/weather/strategies/${encodeURIComponent(s.config_id)}?state=${stateFilter}`} style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ ...cardStyle, borderLeft: `3px solid ${accentColor}`, cursor: "pointer", transition: "box-shadow 0.15s" }}
         onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.15)")}
         onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
@@ -219,6 +234,28 @@ function StatCell({
 const topBarStyle: React.CSSProperties = {
   display: "flex", justifyContent: "space-between", alignItems: "center",
   marginBottom: 20,
+};
+const segmentedStyle: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid var(--stroke)",
+  borderRadius: 6,
+  overflow: "hidden",
+  background: "var(--card)",
+};
+const segmentedButtonStyle: React.CSSProperties = {
+  border: 0,
+  borderRight: "1px solid var(--stroke)",
+  background: "transparent",
+  color: "var(--muted)",
+  padding: "7px 10px",
+  fontSize: 11,
+  fontWeight: 700,
+  cursor: "pointer",
+};
+const segmentedButtonActiveStyle: React.CSSProperties = {
+  ...segmentedButtonStyle,
+  background: "var(--accent)",
+  color: "white",
 };
 const errorStyle: React.CSSProperties = {
   color: "var(--bad)", marginBottom: 12, padding: "10px 14px",

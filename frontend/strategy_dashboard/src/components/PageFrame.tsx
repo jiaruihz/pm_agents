@@ -18,6 +18,10 @@ const WEATHER_NAV = [
   { to: "/weather/compare",    label: "⚖ Compare",     sub: "对比分析" },
 ];
 
+const COPY_TRADE_NAV = [
+  { to: "/copy-trade/wallets", label: "🧭 Wallets", sub: "地址筛选" },
+];
+
 // ---- Legacy (old strategy_runtime.db, deprecated) ----
 const LEGACY_NAV = [
   { to: "/dashboard",  label: "总览" },
@@ -27,7 +31,8 @@ const LEGACY_NAV = [
   { to: "/backtests",  label: "Backtests" },
 ];
 
-function tabFromPath(pathname: string): "weather" | "legacy" {
+function tabFromPath(pathname: string): "weather" | "copyTrade" | "legacy" {
+  if (pathname.startsWith("/copy-trade")) return "copyTrade";
   return pathname.startsWith("/weather") ? "weather" : "legacy";
 }
 
@@ -38,7 +43,7 @@ export function PageFrame({ title, desc, children }: {
 }): JSX.Element {
   const clock = useClock();
   const { pathname } = useLocation();
-  const [tab, setTab] = useState<"weather" | "legacy">(tabFromPath(pathname));
+  const [tab, setTab] = useState<"weather" | "copyTrade" | "legacy">(tabFromPath(pathname));
 
   // Sync tab if URL changes externally
   useEffect(() => {
@@ -60,6 +65,7 @@ export function PageFrame({ title, desc, children }: {
           borderRadius: 8, overflow: "hidden",
         }}>
           <TabButton label="Weather" active={tab === "weather"} onClick={() => setTab("weather")} />
+          <TabButton label="Copy" active={tab === "copyTrade"} onClick={() => setTab("copyTrade")} />
           <TabButton label="Legacy" active={tab === "legacy"} onClick={() => setTab("legacy")} isLegacy />
         </div>
 
@@ -68,6 +74,23 @@ export function PageFrame({ title, desc, children }: {
           <>
             <SectionLabel>NEW SYSTEM</SectionLabel>
             {WEATHER_NAV.map(({ to, label, sub }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={false}
+                className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`.trim()}
+              >
+                <span>{label}</span>
+                <span style={{ fontSize: 10, color: "var(--muted)", marginLeft: 6 }}>{sub}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
+
+        {tab === "copyTrade" && (
+          <>
+            <SectionLabel>COPY TRADE · 钱包研究</SectionLabel>
+            {COPY_TRADE_NAV.map(({ to, label, sub }) => (
               <NavLink
                 key={to}
                 to={to}

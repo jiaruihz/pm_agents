@@ -13,6 +13,8 @@ import { WeatherHistoryPage } from "../pages/weather/WeatherHistoryPage";
 import { WeatherLivePage } from "../pages/weather/WeatherLivePage";
 import { WeatherTradeDrilldownPage } from "../pages/weather/WeatherTradeDrilldownPage";
 import { WeatherStrategyDetailPage } from "../pages/weather/WeatherStrategyDetailPage";
+import { CopyTradeWalletsPage } from "../pages/weather/CopyTradeWalletsPage";
+import { CopyTradeWalletDetailPage } from "../pages/weather/CopyTradeWalletDetailPage";
 
 export function App(): JSX.Element {
   return (
@@ -33,7 +35,12 @@ export function App(): JSX.Element {
       <Route path="/weather/history/:runId" element={<WeatherHistoryPage />} />
       <Route path="/weather/trade/:runId/:signalId" element={<WeatherTradeDrilldownPage />} />
       <Route path="/weather/live" element={<WeatherLivePage />} />
+      <Route path="/weather/copy-trade" element={<Navigate to="/copy-trade/wallets" replace />} />
       <Route path="/weather" element={<Navigate to="/weather/strategies" replace />} />
+      {/* Copy Trade */}
+      <Route path="/copy-trade/wallets" element={<CopyTradeWalletsPage />} />
+      <Route path="/copy-trade/wallets/:walletAddress" element={<CopyTradeWalletDetailPage />} />
+      <Route path="/copy-trade" element={<Navigate to="/copy-trade/wallets" replace />} />
       <Route path="*" element={<Navigate to="/weather/strategies" replace />} />
     </Routes>
   );
