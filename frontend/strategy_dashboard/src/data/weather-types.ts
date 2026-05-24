@@ -225,6 +225,48 @@ export interface PositionRow {
   pnl_usd: number | null;
 }
 
+export interface MarkToMarketPositionRow {
+  fill_id: string;
+  filled_shares: number;
+  filled_price: number;
+  filled_at_utc: string | null;
+  order_id: string | null;
+  order_side: string;
+  venue: string;
+  target_date: string;
+  city: string;
+  bracket: string;
+  signal_side: string;
+  model_p_yes: number | null;
+  signal_price: number | null;
+  market_id: string | null;
+  token_id: string | null;
+  final_price: number | null;
+  settlement_status: string | null;
+  best_bid: number | null;
+  best_ask: number | null;
+  mid_price: number | null;
+  mark_price: number | null;
+  mark_price_source: string | null;
+  mark_value_usd: number | null;
+  cost_usd: number;
+  unrealized_pnl_usd: number | null;
+  mark_error: string | null;
+}
+
+export interface MarkToMarketSummary {
+  config_id: string;
+  state: string;
+  as_of_utc: string;
+  open_positions: number;
+  marked_positions: number;
+  unmarked_positions: number;
+  total_cost_usd: number;
+  mark_value_usd: number;
+  unrealized_pnl_usd: number;
+  positions: MarkToMarketPositionRow[];
+}
+
 /** /api/strategies/{config_id}/equity — daily cumulative PnL */
 export interface EquityPoint {
   date: string;

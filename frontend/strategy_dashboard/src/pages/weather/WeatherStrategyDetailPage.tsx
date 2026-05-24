@@ -12,7 +12,7 @@ import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import type {
   StrategyRow, EquityPoint, StrategyAnalytics,
-  AnalyticsDimension, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow,
+  AnalyticsDimension, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary,
 } from "../../data/weather-types";
 
 type StrategyState = "live" | "paper" | "explore" | "all";
@@ -174,10 +174,13 @@ export function WeatherStrategyDetailPage() {
   const [funnel, setFunnel]             = useState<FunnelRow[]>([]);
   const [pendingOrders, setPendingOrders] = useState<PendingOrderRow[]>([]);
   const [orders, setOrders]             = useState<StrategyOrderRow[]>([]);
+  const [markToMarket, setMarkToMarket] = useState<MarkToMarketSummary | null>(null);
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
   const [tab, setTab]                   = useState<DimKey>("by_side");
   const [loading, setLoading]           = useState(true);
+  const [markLoading, setMarkLoading]   = useState(false);
   const [error, setError]               = useState<string | null>(null);
+  const [markError, setMarkError]       = useState<string | null>(null);
 
   useEffect(() => {
     if (!configId) return;
@@ -200,10 +203,22 @@ export function WeatherStrategyDetailPage() {
         setOrders(ord);
         setFunnel(fn);
         setPendingOrders(po);
+        setMarkToMarket(null);
+        setMarkError(null);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [configId, stateFilter]);
+
+  const refreshMarkToMarket = () => {
+    if (!configId) return;
+    setMarkLoading(true);
+    setMarkError(null);
+    weatherApi.getStrategyMarkToMarket(configId, { state: stateFilter })
+      .then(setMarkToMarket)
+      .catch((e: Error) => setMarkError(e.message))
+      .finally(() => setMarkLoading(false));
+  };
 
   const p = strategy?.params ?? {};
   const liveEnabled  = p.live_enabled  as boolean | undefined;
@@ -226,7 +241,13 @@ export function WeatherStrategyDetailPage() {
     const e = unrealizedEdge(r);
     return s + (e != null ? e * r.filled_shares : 0);
   }, 0);
+  const mtmPnl = markToMarket?.unrealized_pnl_usd ?? null;
+  const mtmPnlColor = mtmPnl == null ? "var(--muted)" : mtmPnl >= 0 ? "var(--ok)" : "var(--bad)";
   const dailyLedger = useMemo(() => buildDailyLedger(orders), [orders]);
+  const mtmByFill = useMemo(
+    () => new Map((markToMarket?.positions ?? []).map(row => [row.fill_id, row])),
+    [markToMarket],
+  );
 
   useEffect(() => {
     if (dailyLedger.length === 0) return;
@@ -271,6 +292,20 @@ export function WeatherStrategyDetailPage() {
                     <Badge label={strategy.execution_policy} color="rgba(128,128,128,0.6)" />
                   )}
                 </div>
+                <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={refreshMarkToMarket}
+                    disabled={markLoading || !(stateFilter === "live" || stateFilter === "all")}
+                    style={refreshButtonStyle}
+                  >
+                    {markLoading ? "Refreshing mark…" : "Refresh Mark PnL"}
+                  </button>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                    {markToMarket?.as_of_utc ? `Marked ${fmtTs(markToMarket.as_of_utc)}` : "Live CLOB mark"}
+                  </span>
+                </div>
+                {markError && <div style={{ color: "var(--bad)", fontSize: 12, marginTop: 6 }}>{markError}</div>}
                 <div style={segmentedStyle}>
                   {(["live", "paper", "explore", "all"] as StrategyState[]).map((v) => (
                     <button
@@ -309,6 +344,11 @@ export function WeatherStrategyDetailPage() {
               <KPI label="Capital" value={strategy.capital_deployed_usd > 0 ? `$${strategy.capital_deployed_usd.toFixed(0)}` : "—"} />
               <KPI label="Open Capital" value={totalOpenCapital > 0 ? `$${totalOpenCapital.toFixed(1)}` : "—"} color="var(--accent-2)" />
               <KPI label="Unreal. Edge" value={openPositions.length > 0 ? usd(totalEdge) : "—"} color={totalEdge >= 0 ? "var(--ok)" : "var(--bad)"} />
+              <KPI
+                label="Mark PnL"
+                value={markToMarket && markToMarket.marked_positions > 0 ? usd(markToMarket.unrealized_pnl_usd) : "—"}
+                color={mtmPnlColor}
+              />
             </div>
 
             {/* ── Execution Funnel ── */}
@@ -398,7 +438,7 @@ export function WeatherStrategyDetailPage() {
                     <table style={tableStyle}>
                       <thead>
                         <tr>
-                          {["Date", "City", "Bracket", "Side", "Fill Price", "Fair Value", "Edge", "Shares", "Cost", "Time", "Venue"].map(h => (
+                          {["Date", "City", "Bracket", "Side", "Fill Price", "Mkt Bid", "Mark PnL", "Fair Value", "Edge", "Shares", "Cost", "Time", "Venue"].map(h => (
                             <th key={h} style={thStyle}>{h}</th>
                           ))}
                         </tr>
@@ -408,6 +448,9 @@ export function WeatherStrategyDetailPage() {
                           const fv = fairValue(row);
                           const edge = unrealizedEdge(row);
                           const edgeColor = edge == null ? "var(--muted)" : edge >= 0 ? "var(--ok)" : "var(--bad)";
+                          const mark = mtmByFill.get(row.fill_id);
+                          const markPnl = mark?.unrealized_pnl_usd ?? null;
+                          const markColor = markPnl == null ? "var(--muted)" : markPnl >= 0 ? "var(--ok)" : "var(--bad)";
                           return (
                             <tr key={row.fill_id} style={{ borderBottom: "1px solid var(--stroke)" }}>
                               <td style={tdStyle}>{row.target_date}</td>
@@ -420,6 +463,12 @@ export function WeatherStrategyDetailPage() {
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>
                                 {(row.filled_price ?? 0).toFixed(3)}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: mark?.mark_price ? "inherit" : "var(--muted)" }}>
+                                {mark?.mark_price != null ? mark.mark_price.toFixed(3) : "—"}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: "right", color: markColor, fontWeight: 700 }}>
+                                {markPnl != null ? usd(markPnl) : "—"}
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "var(--muted)" }}>
                                 {fv != null ? fv.toFixed(3) : "—"}
@@ -986,7 +1035,7 @@ function ExecutionFunnelSection({
                         <td style={{ ...tdStyle, textAlign: "right", color: discColor, fontWeight: 600 }}>
                           {disc !== 0
                             ? `${disc >= 0 ? "−" : "+"}${Math.abs(disc * 100).toFixed(1)}¢`
-                            : <span style={{ color: "var(--bad)", fontWeight: 700 }}>AT MKT</span>}
+                            : <span style={{ color: "var(--bad)", fontWeight: 700 }}>NO DISC</span>}
                         </td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
                           {row.shares != null ? row.shares.toFixed(2) : "—"}
@@ -1154,6 +1203,16 @@ const segmentedButtonActiveStyle: React.CSSProperties = {
   ...segmentedButtonStyle,
   background: "var(--accent)",
   color: "white",
+};
+const refreshButtonStyle: React.CSSProperties = {
+  border: "1px solid var(--stroke)",
+  borderRadius: 6,
+  background: "var(--card)",
+  color: "inherit",
+  padding: "7px 11px",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
 };
 const tableStyle: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", fontSize: 13,

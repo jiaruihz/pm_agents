@@ -1,5 +1,5 @@
 // HTTP client for the weather dashboard FastAPI backend
-import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow } from "./weather-types";
+import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary } from "./weather-types";
 import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
 
 const BASE = (import.meta.env.VITE_WEATHER_API ?? "http://localhost:8000") + "/api";
@@ -84,6 +84,10 @@ export const weatherApi = {
 
   getStrategyPositions(configId: string, params?: { state?: "live" | "paper" | "explore" | "all" }): Promise<PositionRow[]> {
     return get(`/strategies/${encodeURIComponent(configId)}/positions`, params);
+  },
+
+  getStrategyMarkToMarket(configId: string, params?: { state?: "live" | "paper" | "explore" | "all" }): Promise<MarkToMarketSummary> {
+    return get(`/strategies/${encodeURIComponent(configId)}/mark-to-market`, params);
   },
 
   getStrategyOrders(

@@ -1,7 +1,12 @@
 """Strategy configs and universes endpoints."""
 
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from typing import Annotated, Optional
+from urllib import error as urlerror
+from urllib import parse, request
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 import sqlite3
@@ -206,6 +211,52 @@ def _canonical_id(db: sqlite3.Connection, config_id: str) -> str:
     raise HTTPException(status_code=404, detail=f"Strategy {config_id} not found")
 
 
+def _float(value, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _best_bid_ask_from_book(book) -> tuple[float, float]:
+    bids = book.get("bids") if isinstance(book, dict) else getattr(book, "bids", None)
+    asks = book.get("asks") if isinstance(book, dict) else getattr(book, "asks", None)
+    bids = bids or []
+    asks = asks or []
+
+    def level_price(item) -> float:
+        if isinstance(item, dict):
+            return _float(item.get("price"), 0.0)
+        return _float(getattr(item, "price", 0.0), 0.0)
+
+    best_bid = max((level_price(item) for item in bids if level_price(item) > 0), default=0.0)
+    best_ask = min((level_price(item) for item in asks if level_price(item) > 0), default=0.0)
+    return best_bid, best_ask
+
+
+def _clob_host() -> str:
+    return (
+        os.getenv("CLOB_BASE_URL", "").strip()
+        or os.getenv("PM_API_BASE_URL", "").strip()
+        or "https://clob.polymarket.com"
+    ).rstrip("/")
+
+
+def _fetch_order_book(token_id: str) -> dict:
+    url = f"{_clob_host()}/book?{parse.urlencode({'token_id': token_id})}"
+    req = request.Request(url, headers={"Accept": "application/json", "User-Agent": "pm-agent-weather-dashboard"})
+    try:
+        with request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:200]
+        raise RuntimeError(f"CLOB book HTTP {exc.code}: {body}") from exc
+    except Exception as exc:
+        raise RuntimeError(f"CLOB book unavailable: {type(exc).__name__}: {exc}") from exc
+
+
 @router.get("/strategies/{config_id}")
 def get_strategy(config_id: str, db: Db, state: str = Query("all")):
     """Single strategy detail with full aggregated stats.
@@ -392,6 +443,143 @@ def get_strategy_positions(config_id: str, db: Db, state: str = Query("all")):
                 d[k] = round(float(d[k]), 6)
         result.append(d)
     return result
+
+
+@router.get("/strategies/{config_id}/mark-to-market")
+def get_strategy_mark_to_market(config_id: str, db: Db, state: str = Query("live")):
+    """Realtime mark-to-market for open CLOB fills.
+
+    Uses the current CLOB orderbook for each filled token. PnL is marked to the
+    best bid because that is the executable liquidation price for a long token.
+    If the book is one-sided, the endpoint reports the row but does not invent a
+    fallback mark price.
+    """
+    _validate_state(state)
+    cid = _canonical_id(db, config_id)
+    state_filter = "" if state == "all" else f" AND r.state = '{state}'"
+    rows = db.execute(f"""
+        SELECT
+            f.fill_id,
+            f.filled_shares,
+            f.filled_price,
+            f.filled_at_utc,
+            o.order_id,
+            o.order_side,
+            o.venue,
+            sig.target_date,
+            sig.city,
+            sig.bracket,
+            sig.signal_side,
+            sig.model_p_yes,
+            sig.market_price AS signal_price,
+            sig.market_id,
+            sig.token_id,
+            s.final_price,
+            s.settlement_status
+        FROM config_aliases ca
+        JOIN runs r ON r.config_id = ca.alias_config_id{state_filter}
+        JOIN orders o ON o.run_id = r.run_id
+        JOIN fills f ON f.execution_id = o.execution_id AND f.status = 'filled'
+        JOIN plans p ON p.plan_id = o.plan_id
+        JOIN signals sig ON sig.signal_id = p.signal_id
+        LEFT JOIN {_SETTLEMENTS_DEDUP} s ON sig.target_date = s.target_date
+                                        AND sig.condition_id = s.condition_id
+                                        AND sig.bracket = s.bracket
+        WHERE ca.canonical_config_id = ?
+          AND o.venue = 'polymarket_clob'
+          AND s.final_price IS NULL
+        ORDER BY sig.target_date DESC, f.filled_at_utc DESC
+    """, (cid,)).fetchall()
+
+    today_utc = datetime.now(timezone.utc).date().isoformat()
+    tokens_to_fetch = sorted({
+        str(row["token_id"] or "").strip()
+        for row in rows
+        if str(row["token_id"] or "").strip()
+        and str(row["target_date"] or "") >= today_utc
+    })
+
+    def fetch_token_book(token_id: str) -> tuple[str, dict]:
+        try:
+            book = _fetch_order_book(token_id)
+            bid, ask = _best_bid_ask_from_book(book)
+            return token_id, {"best_bid": bid, "best_ask": ask, "error": ""}
+        except Exception as exc:
+            return token_id, {
+                "best_bid": 0.0,
+                "best_ask": 0.0,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+
+    book_cache: dict[str, dict] = {}
+    if tokens_to_fetch:
+        with ThreadPoolExecutor(max_workers=min(8, len(tokens_to_fetch))) as executor:
+            futures = [executor.submit(fetch_token_book, token_id) for token_id in tokens_to_fetch]
+            for future in as_completed(futures):
+                token_id, book_result = future.result()
+                book_cache[token_id] = book_result
+
+    positions = []
+    for row in rows:
+        d = dict(row)
+        token_id = str(d.get("token_id") or "").strip()
+        target_date = str(d.get("target_date") or "")
+        best_bid = 0.0
+        best_ask = 0.0
+        mark_error = ""
+        if not target_date:
+            mark_error = "missing target_date"
+        elif target_date < today_utc:
+            mark_error = "target date passed; use settlement pnl"
+        elif token_id:
+            cached = book_cache[token_id]
+            best_bid = float(cached["best_bid"])
+            best_ask = float(cached["best_ask"])
+            mark_error = str(cached["error"])
+        else:
+            mark_error = "missing token_id"
+
+        mark_price = best_bid if best_bid > 0 else None
+        mid_price = (best_bid + best_ask) / 2.0 if best_bid > 0 and best_ask > 0 else None
+        shares = float(d["filled_shares"] or 0)
+        filled_price = float(d["filled_price"] or 0)
+        mark_value = shares * mark_price if mark_price is not None else None
+        cost = shares * filled_price
+        unrealized_pnl = mark_value - cost if mark_value is not None else None
+        d.update(
+            {
+                "best_bid": round(best_bid, 6) if best_bid > 0 else None,
+                "best_ask": round(best_ask, 6) if best_ask > 0 else None,
+                "mid_price": round(mid_price, 6) if mid_price is not None else None,
+                "mark_price": round(mark_price, 6) if mark_price is not None else None,
+                "mark_price_source": "best_bid" if mark_price is not None else None,
+                "mark_value_usd": round(mark_value, 6) if mark_value is not None else None,
+                "cost_usd": round(cost, 6),
+                "unrealized_pnl_usd": round(unrealized_pnl, 6) if unrealized_pnl is not None else None,
+                "mark_error": mark_error or None,
+            }
+        )
+        for k in ("filled_shares", "filled_price", "model_p_yes", "signal_price"):
+            if d[k] is not None:
+                d[k] = round(float(d[k]), 6)
+        positions.append(d)
+
+    markable = [p for p in positions if p["unrealized_pnl_usd"] is not None]
+    total_cost = sum(float(p["cost_usd"] or 0) for p in positions)
+    total_value = sum(float(p["mark_value_usd"] or 0) for p in markable)
+    total_pnl = sum(float(p["unrealized_pnl_usd"] or 0) for p in markable)
+    return {
+        "config_id": cid,
+        "state": state,
+        "as_of_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "open_positions": len(positions),
+        "marked_positions": len(markable),
+        "unmarked_positions": len(positions) - len(markable),
+        "total_cost_usd": round(total_cost, 6),
+        "mark_value_usd": round(total_value, 6),
+        "unrealized_pnl_usd": round(total_pnl, 6),
+        "positions": positions,
+    }
 
 
 @router.get("/strategies/{config_id}/orders")
