@@ -264,14 +264,39 @@ if [[ $START_FE -eq 1 ]]; then
 fi
 
 # ---- 4. Windows port-forwarding (WSL2 -> Windows host) ----
+#
+# IMPORTANT: In WSL2 mirrored networking mode, portproxy is HARMFUL.
+# Mirrored mode shares the host loopback — WSL ports are directly reachable
+# at localhost from Windows WITHOUT any proxy. Adding a portproxy in mirrored
+# mode makes Windows svchost listen on that port, which blocks WSL from
+# binding to the same port (EADDRINUSE). We detect mirrored mode and instead
+# REMOVE any stale proxies rather than adding new ones.
 setup_windows_portproxy() {
+  # Detect WSL2 mirrored networking via .wslconfig
+  local networking_mode
+  networking_mode="$(powershell.exe -NoProfile -NonInteractive -Command \
+    "try { (Get-Content \"\$env:USERPROFILE\.wslconfig\" -ErrorAction Stop) -match 'networkingMode\s*=\s*mirrored' | Out-Null; if (\$Matches) { 'mirrored' } else { 'nat' } } catch { 'nat' }" \
+    2>/dev/null | tr -d '\r' || echo 'nat')"
+
+  if [[ "$networking_mode" == "mirrored" ]]; then
+    # In mirrored mode: ports are shared between Windows and WSL.
+    # Remove any stale portproxies for our ports (they would block WSL binding).
+    log "WSL mirrored networking detected — removing stale portproxies for ports $API_PORT, $FE_PORT"
+    local del_api="netsh interface portproxy delete v4tov4 listenport=${API_PORT} listenaddress=0.0.0.0 2>NUL; exit 0"
+    local del_fe="netsh interface portproxy delete v4tov4 listenport=${FE_PORT} listenaddress=0.0.0.0 2>NUL; exit 0"
+    powershell.exe -NoProfile -NonInteractive -Command "${del_api}; ${del_fe}" 2>/dev/null || true
+    log "  Mirrored mode: WSL ports accessible at localhost without proxy"
+    return
+  fi
+
+  # NAT mode: set up portproxy so Windows can reach WSL services.
   local wsl_ip
   wsl_ip="$(ip addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)"
   if [[ -z "$wsl_ip" ]]; then
     warn "Could not determine WSL IP — skipping Windows port-proxy setup"
     return
   fi
-  log "Setting up Windows port-proxy: WSL IP=$wsl_ip"
+  log "Setting up Windows port-proxy (NAT mode): WSL IP=$wsl_ip"
 
   # Build one-liner netsh commands (avoid multi-line PS quoting issues in bash)
   local del_api="netsh interface portproxy delete v4tov4 listenport=${API_PORT} listenaddress=0.0.0.0"
