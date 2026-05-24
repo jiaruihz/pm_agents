@@ -64,7 +64,9 @@ def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Pat
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     # Collect all today's summaries for this policy, oldest-first so later
     # entries overwrite earlier ones when we dedup by condition_id.
-    seen: dict[str, dict] = {}  # condition_id → signal row
+    # Signal files use market_id as the stable dedup key and
+    # snapshot_fetched_at_utc for recency ordering.
+    seen: dict[str, dict] = {}  # market_id → signal row
 
     for path in sorted(live_cycle_dir.glob("*.json")):
         # Filter to today's runs by filename prefix (YYYYMMDD)
@@ -85,11 +87,15 @@ def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Pat
                 sig = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            cid = sig.get("condition_id") or ""
-            # Deduplicate by condition_id, keeping the latest snapshot_ts_utc
-            existing = seen.get(cid)
-            if existing is None or (sig.get("snapshot_ts_utc", "") >= existing.get("snapshot_ts_utc", "")):
-                seen[cid] = sig
+            # Prefer market_id as dedup key; fall back to city+bracket+target_date
+            mid = (sig.get("market_id")
+                   or f"{sig.get('city')}|{sig.get('bracket')}|{sig.get('target_date')}")
+            # Keep the version from the latest snapshot
+            snap_ts = sig.get("snapshot_fetched_at_utc") or sig.get("snapshot_ts_utc") or ""
+            existing = seen.get(mid)
+            existing_ts = (existing or {}).get("snapshot_fetched_at_utc") or (existing or {}).get("snapshot_ts_utc") or ""
+            if existing is None or snap_ts >= existing_ts:
+                seen[mid] = sig
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as fh:
