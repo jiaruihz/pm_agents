@@ -419,7 +419,7 @@ export function WeatherStrategyDetailPage() {
                                 </span>
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>
-                                {row.filled_price.toFixed(3)}
+                                {(row.filled_price ?? 0).toFixed(3)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "var(--muted)" }}>
                                 {fv != null ? fv.toFixed(3) : "—"}
@@ -428,10 +428,10 @@ export function WeatherStrategyDetailPage() {
                                 {edge != null ? `${edge >= 0 ? "+" : ""}${(edge * 100).toFixed(1)}¢` : "—"}
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right" }}>
-                                {row.filled_shares.toFixed(2)}
+                                {(row.filled_shares ?? 0).toFixed(2)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right" }}>
-                                ${(row.filled_shares * row.filled_price).toFixed(2)}
+                                ${((row.filled_shares ?? 0) * (row.filled_price ?? 0)).toFixed(2)}
                               </td>
                               <td style={{ ...tdStyle, fontSize: 11, color: "var(--muted)" }}>
                                 {fmtTs(row.filled_at_utc)}
@@ -480,7 +480,7 @@ export function WeatherStrategyDetailPage() {
                                 </span>
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace" }}>
-                                {row.filled_price.toFixed(3)}
+                                {(row.filled_price ?? 0).toFixed(3)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right", fontFamily: "monospace", color: "var(--muted)" }}>
                                 {row.final_price != null ? row.final_price.toFixed(2) : "—"}
@@ -489,10 +489,10 @@ export function WeatherStrategyDetailPage() {
                                 {usd(row.pnl_usd)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right" }}>
-                                {row.filled_shares.toFixed(2)}
+                                {(row.filled_shares ?? 0).toFixed(2)}
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right" }}>
-                                ${(row.filled_shares * row.filled_price).toFixed(2)}
+                                ${((row.filled_shares ?? 0) * (row.filled_price ?? 0)).toFixed(2)}
                               </td>
                             </tr>
                           );
@@ -551,7 +551,7 @@ export function WeatherStrategyDetailPage() {
                             <td style={{ ...tdStyle, textAlign: "right" }}>{row.settled}</td>
                             <td style={{ ...tdStyle, textAlign: "right" }}>{row.wins}</td>
                             <td style={{ ...tdStyle, textAlign: "right" }}>{dimWinRate(row)}</td>
-                            <td style={{ ...tdStyle, textAlign: "right" }}>${row.capital.toFixed(2)}</td>
+                            <td style={{ ...tdStyle, textAlign: "right" }}>${(row.capital ?? 0).toFixed(2)}</td>
                             <td style={{ ...tdStyle, textAlign: "right", color, fontWeight: 600 }}>
                               {row.settled > 0 ? usd(row.pnl) : "—"}
                             </td>
@@ -802,9 +802,9 @@ function OrderMiniTable({ rows }: { rows: StrategyOrderRow[] }) {
                 </td>
                 <td style={tdStyle}>{row.fill_status ?? "unfilled"}</td>
                 <td style={tdStyle}>{settlement}</td>
-                <td style={{ ...tdStyle, textAlign: "right" }}>{(row.filled_shares ?? row.order_shares).toFixed(2)}</td>
-                <td style={{ ...tdStyle, textAlign: "right" }}>{(row.filled_price ?? row.entry_price).toFixed(3)}</td>
-                <td style={{ ...tdStyle, textAlign: "right" }}>${row.order_cost_usd.toFixed(2)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{(row.filled_shares ?? row.order_shares ?? 0).toFixed(2)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{(row.filled_price ?? row.entry_price ?? 0).toFixed(3)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>${(row.order_cost_usd ?? 0).toFixed(2)}</td>
                 <td style={{ ...tdStyle, textAlign: "right", color: pnl == null ? "var(--muted)" : pnl >= 0 ? "var(--ok)" : "var(--bad)", fontWeight: 650 }}>
                   {pnl == null ? "—" : usd(pnl)}
                 </td>
