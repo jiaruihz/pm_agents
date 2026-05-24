@@ -50,6 +50,54 @@ def _latest_cycle_summary(live_cycle_dir: Path, source_policy: str) -> tuple[Pat
     raise RuntimeError(f"no recent {source_policy} signal file found")
 
 
+def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Path) -> int:
+    """Merge signals from ALL of today's source_policy runs into out_path.
+
+    For each (condition_id) we keep the most recent signal (latest
+    snapshot_ts_utc).  This ensures the branch policy sees every market
+    that the source policy has ever signalled today, not just the ones
+    from the most recent single run (which may have fewer markets when
+    the latest snapshot only covers a subset of the universe).
+
+    Returns the number of unique signals written.
+    """
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    # Collect all today's summaries for this policy, oldest-first so later
+    # entries overwrite earlier ones when we dedup by condition_id.
+    seen: dict[str, dict] = {}  # condition_id → signal row
+
+    for path in sorted(live_cycle_dir.glob("*.json")):
+        # Filter to today's runs by filename prefix (YYYYMMDD)
+        if not path.stem.startswith(today):
+            continue
+        summary = _read_json(path)
+        config = summary.get("config") if isinstance(summary.get("config"), dict) else {}
+        if config.get("execution_policy") != source_policy:
+            continue
+        signal_path = Path(str((summary.get("paths") or {}).get("signal") or ""))
+        if not signal_path.exists():
+            continue
+        for line in signal_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                sig = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            cid = sig.get("condition_id") or ""
+            # Deduplicate by condition_id, keeping the latest snapshot_ts_utc
+            existing = seen.get(cid)
+            if existing is None or (sig.get("snapshot_ts_utc", "") >= existing.get("snapshot_ts_utc", "")):
+                seen[cid] = sig
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as fh:
+        for sig in seen.values():
+            fh.write(json.dumps(sig) + "\n")
+    return len(seen)
+
+
 def _order_rows(path: str | Path, limit: int = 6) -> list[dict[str, Any]]:
     p = Path(path)
     if not p.exists():
@@ -205,7 +253,17 @@ def main() -> int:
     live_path = runtime / "live" / f"live_{run_id}_orders.jsonl"
     summary_path = live_cycle_dir / f"{run_id}.json"
     signal_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source_signal_path, signal_path)
+
+    # Merge all of today's source-policy signals (not just the latest run's file).
+    # Each source run may capture different markets depending on which snapshot was
+    # current at run time; London/Paris/Warsaw often appear only in early-morning
+    # runs while Miami/NYC may appear in later ones.  Merging gives the branch
+    # policy full coverage, deduplicating by condition_id (latest snapshot wins).
+    if not args.source_signal:
+        n_merged = _merge_today_signals(live_cycle_dir, args.source_policy, signal_path)
+        print(f"[policy_branch] merged {n_merged} signals from today's {args.source_policy} runs → {signal_path.name}", flush=True)
+    else:
+        shutil.copyfile(source_signal_path, signal_path)
 
     live_config = {
         "city_pool": str(args.city_pool),
@@ -315,7 +373,12 @@ def main() -> int:
         "signals": signal_count,
     }
     sync = {"cmd": ["shared_signal_branch"], "returncode": 0, "output": f"source_signal={source_signal_path}"}
-    signal_run = {"cmd": ["copy", str(source_signal_path), str(signal_path)], "returncode": 0, "output": ""}
+    signal_run_cmd = (
+        ["merge_today_signals", args.source_policy, str(signal_path)]
+        if not args.source_signal
+        else ["copy", str(source_signal_path), str(signal_path)]
+    )
+    signal_run = {"cmd": signal_run_cmd, "returncode": 0, "output": ""}
     errors = _read_live_errors(live_path)
     contract_alerts = _build_live_contract_alerts(
         config=live_config,
