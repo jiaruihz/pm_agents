@@ -222,8 +222,9 @@ if [[ $START_API -eq 1 ]]; then
     warn "Port $API_PORT already in use — assuming API is already running"
   else
     log "Starting API on :$API_PORT (logs: $LOG_DIR/api.log)"
+    # setsid creates a new process group so the API survives if the invoking shell exits.
     WEATHER_DB_PATH="$DB_PATH" \
-      nohup "$VENV/uvicorn" weather_dashboard.api.app:app \
+      setsid nohup "$VENV/uvicorn" weather_dashboard.api.app:app \
         --host 0.0.0.0 --port "$API_PORT" --reload \
         >"$LOG_DIR/api.log" 2>&1 &
     echo $! > "$LOG_DIR/api.pid"
