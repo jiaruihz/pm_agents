@@ -50,23 +50,28 @@ def _latest_cycle_summary(live_cycle_dir: Path, source_policy: str) -> tuple[Pat
     raise RuntimeError(f"no recent {source_policy} signal file found")
 
 
-def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Path) -> int:
+def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Path) -> dict[str, Any]:
     """Merge signals from ALL of today's source_policy runs into out_path.
 
-    For each (condition_id) we keep the most recent signal (latest
-    snapshot_ts_utc).  This ensures the branch policy sees every market
+    For each market_id we keep the most recent signal by snapshot timestamp.
+    This ensures the branch policy sees every market
     that the source policy has ever signalled today, not just the ones
     from the most recent single run (which may have fewer markets when
     the latest snapshot only covers a subset of the universe).
 
-    Returns the number of unique signals written.
+    Returns merge stats for run summary and contract alerts.
     """
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     # Collect all today's summaries for this policy, oldest-first so later
-    # entries overwrite earlier ones when we dedup by condition_id.
+    # entries overwrite earlier ones when we dedup by market_id.
     # Signal files use market_id as the stable dedup key and
     # snapshot_fetched_at_utc for recency ordering.
     seen: dict[str, dict] = {}  # market_id → signal row
+    source_files = 0
+    source_rows = 0
+    invalid_json_lines = 0
+    missing_market_id = 0
+    missing_snapshot_ts = 0
 
     for path in sorted(live_cycle_dir.glob("*.json")):
         # Filter to today's runs by filename prefix (YYYYMMDD)
@@ -79,19 +84,25 @@ def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Pat
         signal_path = Path(str((summary.get("paths") or {}).get("signal") or ""))
         if not signal_path.exists():
             continue
+        source_files += 1
         for line in signal_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line:
                 continue
+            source_rows += 1
             try:
                 sig = json.loads(line)
             except json.JSONDecodeError:
+                invalid_json_lines += 1
                 continue
-            # Prefer market_id as dedup key; fall back to city+bracket+target_date
-            mid = (sig.get("market_id")
-                   or f"{sig.get('city')}|{sig.get('bracket')}|{sig.get('target_date')}")
+            mid = str(sig.get("market_id") or "").strip()
+            if not mid:
+                missing_market_id += 1
+                continue
             # Keep the version from the latest snapshot
             snap_ts = sig.get("snapshot_fetched_at_utc") or sig.get("snapshot_ts_utc") or ""
+            if not snap_ts:
+                missing_snapshot_ts += 1
             existing = seen.get(mid)
             existing_ts = (existing or {}).get("snapshot_fetched_at_utc") or (existing or {}).get("snapshot_ts_utc") or ""
             if existing is None or snap_ts >= existing_ts:
@@ -101,7 +112,30 @@ def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Pat
     with out_path.open("w", encoding="utf-8") as fh:
         for sig in seen.values():
             fh.write(json.dumps(sig) + "\n")
-    return len(seen)
+    return {
+        "source_files": source_files,
+        "source_rows": source_rows,
+        "merged_signals": len(seen),
+        "invalid_json_lines": invalid_json_lines,
+        "missing_market_id": missing_market_id,
+        "missing_snapshot_ts": missing_snapshot_ts,
+    }
+
+
+def _branch_signal_alerts(merge_stats: dict[str, Any] | None, signal_count: int) -> list[str]:
+    if not merge_stats:
+        return []
+    alerts: list[str] = []
+    merged = int(merge_stats.get("merged_signals", 0) or 0)
+    if signal_count != merged:
+        alerts.append(f"policy branch signal count mismatch: wrote {signal_count}, expected merged {merged}.")
+    if int(merge_stats.get("invalid_json_lines", 0) or 0) > 0:
+        alerts.append(f"policy branch skipped invalid source signal JSON lines: {merge_stats['invalid_json_lines']}.")
+    if int(merge_stats.get("missing_market_id", 0) or 0) > 0:
+        alerts.append(f"policy branch skipped source signals without market_id: {merge_stats['missing_market_id']}.")
+    if int(merge_stats.get("missing_snapshot_ts", 0) or 0) > 0:
+        alerts.append(f"policy branch source signals missing snapshot timestamp: {merge_stats['missing_snapshot_ts']}.")
+    return alerts
 
 
 def _order_rows(path: str | Path, limit: int = 6) -> list[dict[str, Any]]:
@@ -264,10 +298,15 @@ def main() -> int:
     # Each source run may capture different markets depending on which snapshot was
     # current at run time; London/Paris/Warsaw often appear only in early-morning
     # runs while Miami/NYC may appear in later ones.  Merging gives the branch
-    # policy full coverage, deduplicating by condition_id (latest snapshot wins).
+    # policy full coverage, deduplicating by market_id (latest snapshot wins).
+    merge_stats: dict[str, Any] | None = None
     if not args.source_signal:
-        n_merged = _merge_today_signals(live_cycle_dir, args.source_policy, signal_path)
-        print(f"[policy_branch] merged {n_merged} signals from today's {args.source_policy} runs → {signal_path.name}", flush=True)
+        merge_stats = _merge_today_signals(live_cycle_dir, args.source_policy, signal_path)
+        print(
+            f"[policy_branch] merged {merge_stats['merged_signals']} signals from today's "
+            f"{args.source_policy} runs → {signal_path.name}",
+            flush=True,
+        )
     else:
         shutil.copyfile(source_signal_path, signal_path)
 
@@ -378,6 +417,8 @@ def main() -> int:
         "source_signal_path": str(source_signal_path),
         "signals": signal_count,
     }
+    if merge_stats is not None:
+        signals["merge_stats"] = merge_stats
     sync = {"cmd": ["shared_signal_branch"], "returncode": 0, "output": f"source_signal={source_signal_path}"}
     signal_run_cmd = (
         ["merge_today_signals", args.source_policy, str(signal_path)]
@@ -399,6 +440,7 @@ def main() -> int:
         live_path=live_path,
         errors=errors,
     )
+    contract_alerts.extend(_branch_signal_alerts(merge_stats, signal_count))
     summary = {
         "run_id": run_id,
         "config": live_config,

@@ -198,6 +198,17 @@ def _build_live_contract_alerts(
     signal_rows = _read_jsonl(signal_path)
     plan_rows = [row for row in _read_jsonl(plan_path) if str(row.get("status") or "") == "accepted"]
     live_rows = [row for row in _read_jsonl(live_path) if str(row.get("status") or "") == "submitted"]
+
+    signal_count = int(signals.get("signals", 0) or 0) if isinstance(signals, dict) else 0
+    planner_signal_count = int(planner.get("signals", 0) or 0) if isinstance(planner, dict) else 0
+    planner_accepted = int(planner.get("accepted", 0) or 0) if isinstance(planner, dict) else 0
+    if signal_count != len(signal_rows):
+        alerts.append(f"signals summary/file count mismatch: summary={signal_count}, file={len(signal_rows)}.")
+    if planner_signal_count != len(signal_rows):
+        alerts.append(f"planner input count mismatch: planner={planner_signal_count}, signal_file={len(signal_rows)}.")
+    if planner_accepted != len(plan_rows):
+        alerts.append(f"planner accepted/file count mismatch: planner={planner_accepted}, accepted_file={len(plan_rows)}.")
+
     alerts.extend(
         _validate_rows_for_live_contract(
             rows=signal_rows,
