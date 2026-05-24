@@ -6,14 +6,17 @@
 
 Early live rollout history and backfill governance: [WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)
 
-**Table of Contents:**
-- §0 Goals
-- §1 Background — 量化系统设计沉淀（数据契约、策略身份、Run Registry、指标层次、异常值防御、通用 + Polymarket 难点）
-- §2 Database Schema（SQLite, 容量分析, 韧性, DDL, 索引, trigger）
-- §3 Strategy / Model Management（YAML config, 命名 + tag 规约, model/universe SOP, paper-live 配对, supersede）
-- §4 Frontend Structure（IA, 双语显示, 5 个页面, 共享组件, 数据流）
-- §5 API Surface（汇总）
-- §6 Implementation Plan Pointer（PR 拆解）
+**Table of Contents — 实现状态速查：**
+
+| 章节 | 内容 | 状态 |
+|---|---|---|
+| §0 Goals | 系统目标（Compare / Live / History） | ✅ 已实现 |
+| §1 Background | 量化系统设计沉淀（血缘链/策略身份/Run Registry/指标层次/Polymarket难点） | 📖 设计参考（持续有效） |
+| §2 Database Schema | SQLite schema、DDL、索引、trigger | ✅ 已实现（见 `weather_dashboard/db/schema.sql`） |
+| §3 Strategy / Model Management | YAML config 工作流、命名规约、paper-live 配对 | ⚠️ 部分实现：命名规约已落地；Config as Code YAML bootstrap 尚未实现（当前无正式 config 文件） |
+| §4 Frontend Structure | 5个页面 IA、双语显示约定、共享组件 | ✅ MVP 已实现（部分页面设计稿与当前实现有差异） |
+| §5 API Surface | 汇总 | ✅ 已实现（见 `weather_dashboard/api/routers/`） |
+| §6 Implementation Plan Pointer | PR 拆解建议 | ✅ 已执行完毕 |
 
 ---
 

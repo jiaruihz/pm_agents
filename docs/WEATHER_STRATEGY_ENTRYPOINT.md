@@ -1,6 +1,6 @@
 # Weather Strategy Entrypoint
 
-Last updated: 2026-05-17
+Last updated: 2026-05-24
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.
 
@@ -115,7 +115,7 @@ Architecture and cleanup context:
 
 - `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`
 - `docs/WEATHER_EXECUTION_ARCHITECTURE.md`
-- `docs/WEATHER_EXECUTION_CLEANUP_PLAN.md`
+- `docs/archive/WEATHER_EXECUTION_CLEANUP_PLAN.md` (归档，已完成)
 
 ## Runtime Files To Inspect
 
@@ -128,6 +128,13 @@ runtime/weather_edge_v1/signals/live_*_signals.jsonl
 runtime/weather_edge_v1/plans/live_*_trade_plans.jsonl
 runtime/weather_edge_v1/live/live_*_orders.jsonl
 ```
+
+Important live PnL note: `live_*_orders.jsonl` records submitted/error order
+attempts, not actual fills. Real live CLOB fill-level PnL is in the dashboard
+DB (`runtime/weather.db`) via `orders.venue='polymarket_clob'` joined to
+`fills.status='filled'` and `settlements`; the relevant API logic lives in
+`weather_dashboard/api/routers/live.py`. See
+`docs/WEATHER_DATA_PIPELINE.md` before making live-vs-paper PnL claims.
 
 Each live cycle summary now includes:
 
@@ -170,18 +177,17 @@ If that file is stale or missing, regenerate on N100 `weather-predict`:
 ssh 192.168.0.200 'cd /home/jiarui/projects/weather-predict && python3 scripts/analysis/settle_t24_paper.py --source ledger'
 ```
 
-## Recent Incident Notes
+## Historical Incident Notes（已解决，仅供参考）
 
-2026-05-15/16 live debugging found:
+> 详细历史记录见 `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`。
 
-- Early live history is split across local `pm_agent` and N100 `pm_agent`. All real fills count for wallet PnL, but strategy evaluation must split by run/config/source. See `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`.
-- Local target-date 2026-05-14 had duplicate/over-submission risk and is not a clean strategy sample.
-- Local target-date 2026-05-15 and 2026-05-16 used a broad/non-T1 city universe. Wuhan belongs to this local early-live wrong-universe bucket.
-- N100 target-date 2026-05-16 is a legacy/debug live run with incomplete metadata/guardrails, not the same identity as current rollout.
-- Current N100 live cycle now passes `--city-pool t1_trading`.
-- Size below 10 shares was not a fill bug; it came from fixed-notional sizing: `size = max_order_notional / limit_price`.
-- `max_position` was misleading in this live path, because planning checked against `current_position=0`. The active config now uses `max_order_shares` for the per-order share cap. True cumulative position caps should be implemented separately with current position plus open-order context.
-- Live summaries now alert on non-T1 rows, notional drift, wrong sizing mode, wrong entry window, executor errors, and command failures.
+2026-05-15/16 调试结论（均已修复，当前配置已覆盖）：
+
+- 早期 live 历史分布在本机和 N100 两个 `pm_agent`。所有真实成交都计入 wallet PnL，但策略评估必须按 run/config/source 分开。
+- 2026-05-14（本机）：重复提交风险，非干净样本。
+- 2026-05-15/16（本机）：使用了宽泛/非 T1 城市池（含 Wuhan）。
+- 2026-05-16（N100）：legacy/debug live run，metadata 不完整，不是当前 rollout。
+- **当前修复状态**：N100 live cycle 传 `--city-pool t1_trading`；`max_order_shares` 替代了有误导的 `max_position`；live summaries 已有 contract_alerts 告警。
 
 ## Open Design Items
 

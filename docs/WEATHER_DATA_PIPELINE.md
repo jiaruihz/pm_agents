@@ -1,6 +1,6 @@
 # Weather Data Pipeline
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 Single source of truth for **where weather strategy data lives, who produces
 it, who consumes it, and how PnL is computed**. Read this before touching
@@ -37,6 +37,21 @@ Every agent and every endpoint must use this caliber. It is implemented in
 `weather_dashboard.api.routers.configs._PNL_CASE` + `_base_joins()` and
 must not be reimplemented elsewhere.
 
+For live CLOB performance, the dashboard DB already has real fill-level data:
+
+- Source: `runtime/weather.db` → `fills` joined to `orders` where
+  `orders.venue = 'polymarket_clob'` and `fills.status = 'filled'`.
+- API: `weather_dashboard/api/routers/live.py`
+  (`/api/live/summary`, `/api/live/positions`, `/api/live/execution-gap`).
+- Sync: `weather_dashboard.ingest.clob_fill_sync` writes matched real CLOB
+  fills into `fills`.
+
+Do **not** infer live realized PnL from
+`runtime/weather_edge_v1/remote_pm_agent/live/live_*_orders.jsonl` alone.
+Those files are order submission/error records. A `status='submitted'` row is
+not proof of fill, and its `posted_price`/`size` is only an order-level proxy
+unless matched by a real row in `fills`.
+
 ---
 
 ## 2. Data sources
@@ -52,7 +67,7 @@ must not be reimplemented elsewhere.
 | `weather-predict/cache/iem_v2_*.csv` | t2 fill timer | daily | IEM ASOS observed temps |
 | `weather-predict/output/research/t24_paper_ledger_trades.csv` | `settle_t24_paper.py --source ledger` | **manual** ⚠ | derived: paper ledger settled into per-trade rows |
 | `weather-predict/output/research/t24_paper_snapshot_replay_trades.csv` | `settle_t24_paper.py --source snapshots` | **manual** ⚠ | derived: snapshot-replay backtest trades |
-| `pm_agent/runtime/weather_edge_v1/live/live_*_orders.jsonl` | weather_live_cycle | every 30 min | real CLOB orders placed by the live strategy |
+| `pm_agent/runtime/weather_edge_v1/live/live_*_orders.jsonl` | weather_live_cycle | every 30 min | real CLOB order submissions/errors; not fill/PnL truth by itself |
 | `pm_agent/runtime/weather_edge_v1/plans/live_*_trade_plans.jsonl` | weather_trade_planner | every 30 min | plans the live executor considered |
 | `pm_agent/runtime/weather_edge_v1/signals/live_*_signals.jsonl` | weather_snapshot_signal_builder | every 30 min | signals fed into the planner |
 | `pm_agent/runtime/weather_edge_v1/live_cycle/{cycle_id}.json` | weather_live_cycle | every 30 min | cycle summary (config, alerts, executor result) |
@@ -84,6 +99,27 @@ All lineage tables (`signals`, `plans`, `orders`, `fills`, `strategy_config`,
 `runs`, `settlements`) have `BEFORE UPDATE` and `BEFORE DELETE` triggers —
 the DB is **append-only by design**. Reconciliations happen by adding new
 rows, never by editing old ones.
+
+This is the local analysis/dashboard source for live fill-level realized PnL.
+The live CLOB path is:
+
+```text
+remote_pm_agent/live/*.jsonl
+  -> legacy_migration/live_cycle.py imports submitted/error orders
+  -> ingest/clob_fill_sync.py matches CLOB/Data API trade activity
+  -> fills(status='filled') linked by execution_id/order_id
+  -> settlements from pm_history
+  -> /api/live/* and strategy detail endpoints compute realized PnL
+```
+
+When comparing paper vs live:
+
+- Use `orders.venue='paper'` + `fills.status IN ('filled','simulated')` for
+  the parallel paper shadow.
+- Use `orders.venue='polymarket_clob'` + `fills.status='filled'` for real
+  live CLOB fills.
+- Use `orders.status='submitted'` only for pending/execution funnel analysis,
+  not as a substitute for actual fills.
 
 Side tables (mutable):
 
@@ -194,6 +230,9 @@ def _base_joins(state: str = "all") -> str:
 5. **Always specify a `state` filter.** A curve that silently blends live +
    paper is the original bug this caliber was built to prevent. Equity
    endpoints accept `?state=live` / `?state=paper` / `?state=all`.
+6. For live realized PnL, query the DB/API fill path first. If an analysis only
+   reads `live_*_orders.jsonl`, label it explicitly as submitted-order or
+   assumed-filled analysis, not real live PnL.
 
 ### Strategy identity
 

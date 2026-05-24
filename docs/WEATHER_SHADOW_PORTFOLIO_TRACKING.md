@@ -1,5 +1,10 @@
 # Weather Shadow Portfolio Tracking Architecture
 
+> **与相关文档的区别**
+> - 本文档：离线模拟多组**信号过滤 + 仓位规则**组合的表现对比（signal 是否入池、用什么 filter），关注哪套规则长期优于 baseline
+> - [`WEATHER_LEDGER_POSITION_ANALYSIS.md`](WEATHER_LEDGER_POSITION_ANALYSIS.md)：信号集固定不变，只模拟不同**仓位 sizing 策略**（fixed shares / fixed dollar / price bucket 等）
+> - [`WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md`](WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md)：同一城市同一日期的 YES+NO 多腿**组合优化**，关注 bracket 之间的组合效益
+
 ## 1. Purpose
 
 Shadow portfolio tracking 用来在不改变原始信号记录和生产 paper ledger 的前提下，同时跟踪多组候选过滤/仓位规则的表现。
@@ -27,6 +32,7 @@ production changes require evidence over time
 | `t24_paper_ledger_trades.csv` | 实际 paper ledger 结算结果，执行和仓位主口径 |
 | `t24_paper_snapshot_replay_trades.csv` | 完整 snapshot replay，策略研究主口径 |
 | `docs/WEATHER_LEDGER_POSITION_ANALYSIS.md` | 仓位 sizing 模拟设计 |
+| `docs/WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md` | 同城同日 YES/NO 组合优化与复盘设计 |
 | `runtime/.../daily_reviews/` | 每日人工复盘记录 |
 | This document | 多组 shadow portfolio 的架构和跟踪规范 |
 

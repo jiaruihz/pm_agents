@@ -260,13 +260,13 @@ Completed baseline:
 
 Current implementation status:
 
-- P0: remote paper snapshot timer is running.
-- P1: signal importer in dry-run/write mode is implemented.
-- P2: trade planner and local risk precheck are implemented.
-- P3: paper executor using the same trade plan as live is implemented.
-- P4: live executor is implemented behind `--enable-live` plus `--live --confirm-live`.
+- ✅ P0: remote paper snapshot timer is running.
+- ✅ P1: signal importer in dry-run/write mode is implemented.
+- ✅ P2: trade planner and local risk precheck are implemented.
+- ✅ P3: paper executor using the same trade plan as live is implemented.
+- ✅ P4: live executor is implemented behind `--enable-live` plus `--live --confirm-live`.
 
-Next stages:
+Next stages（待实施）:
 
 - P5: accumulate several more days of paper data before changing filters.
 - P6: run a tiny live smoke order and cancel it.
