@@ -21,6 +21,7 @@ def compute_quotes_pro(
     open_sell_qty: float = 0.0,
     max_position: float = 1000.0,
     size_decay_power: float = 2.0,
+    inventory_skew_mode: str = "asymmetric",
 ) -> Quote:
     # 1) 有效净敞口：当前仓位 + 潜在买入 - 潜在卖出。
     eff_net = position + open_buy_qty - open_sell_qty
@@ -59,8 +60,19 @@ def compute_quotes_pro(
     spread_ticks = max(1, int(spread_ticks))
     half_spread = (spread_ticks / 2.0) * safe_tick
     skew_val = skew_ticks * safe_tick
-    bid_raw = mid - half_spread - skew_val
-    ask_raw = mid + half_spread - skew_val
+    mode = str(inventory_skew_mode or "asymmetric").strip().lower()
+    if mode == "symmetric":
+        bid_raw = mid - half_spread - skew_val
+        ask_raw = mid + half_spread - skew_val
+    else:
+        bid_raw = mid - half_spread
+        ask_raw = mid + half_spread
+        if skew_val > 0:
+            # Long inventory: only move the buy side away from fair value.
+            bid_raw -= skew_val
+        elif skew_val < 0:
+            # Short inventory: only move the sell side away from fair value.
+            ask_raw -= skew_val
 
     # 7) 保守量化：bid 向下取整，ask 向上取整，避免意外穿价。
     epsilon = 1e-9

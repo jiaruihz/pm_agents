@@ -223,6 +223,24 @@ Live maker pricing discipline:
 - The live plan/order record should keep enough data to reconstruct execution quality: snapshot entry, current best bid, current best ask, spread, proposed maker price, posted price, model win probability, and edge at the proposed price.
 - The goal of maker orders is not to maximize fill rate; it is to accept fills only when the resting price preserves the modeled edge.
 
+Pluggable execution policies:
+
+- `mid_price_core_v1` is the historical baseline. It uses the snapshot `market_price` plus `price_offset`; the live executor still clamps any marketable BUY order back to a resting maker price.
+- `maker_queue_v1` is the adverse-selection-aware maker policy. It requires a two-sided book, rejects stale books, computes the token win probability from the signal side, and posts only when the resulting edge remains above `min_quote_edge + spread * adverse_selection_spread_fraction`.
+- `maker_queue_v1` improves the bid in narrow spreads, joins the bid in normal spreads, and shades below best bid when spread is wide. Wide spread is a reason to demand a cheaper quote, not an automatic rejection.
+- Tick size must be treated as market-specific. The default planner tick is `0.01`, but live execution fetches CLOB tick size before signing; near price extremes Polymarket markets can use smaller ticks such as `0.001`.
+- The planner writes quote diagnostics into every plan: `quote_status`, `quote_reason`, `quote_edge`, `required_quote_edge`, `model_token_probability`, `quote_best_bid`, `quote_best_ask`, `quote_spread`, `quote_tick_size`, and `quote_mode`.
+- The live executor recomputes `maker_queue_v1` against the latest CLOB book immediately before signing. A plan accepted on stale snapshot data can still be rejected at execution time.
+
+Policy comparison:
+
+```bash
+.venv/bin/python scripts/ops/weather_execution_policy_compare.py \
+  --signals runtime/weather_edge_v1/signals/live_YYYYMMDDTHHMMSSZ_signals.jsonl
+```
+
+The comparison output reports accepted/rejected counts, rejection reasons, average quote price, average quote edge, and quote modes per policy. Use this before switching live from `mid_price_core_v1` to `maker_queue_v1`.
+
 Practical examples:
 
 - `SF 66+ No`, bid/ask `0.41/0.53`, snapshot entry `0.50`: do not post `0.50` merely because it is below ask. With a 12c spread, either post near `0.41-0.42` or pass.

@@ -399,6 +399,7 @@ async def tick_loop(config: PMMConfig) -> None:
 
         pending_merge_credits: List[Dict[str, float]] = []
         pending_orders: List[Dict[str, Any]] = []
+        volatility_paused_until_tick: Dict[str, int] = {}
         total_placed = 0
         total_canceled = 0
         total_errors = 0
@@ -709,6 +710,25 @@ async def tick_loop(config: PMMConfig) -> None:
                     if market_too_thin:
                         block_buy = True
                         block_sell = True
+                    if config.volatility_pause_enabled:
+                        pause_until = volatility_paused_until_tick.get(token_id, -1)
+                        if rv >= max(0.0, float(config.volatility_pause_threshold)):
+                            pause_until = max(
+                                pause_until,
+                                tick_count + max(1, int(config.volatility_pause_cooldown_ticks)),
+                            )
+                            volatility_paused_until_tick[token_id] = pause_until
+                            _log_event(
+                                logging.WARNING,
+                                "volatility_pause_active",
+                                token_id=token_id,
+                                realized_volatility=round(rv, 6),
+                                threshold=config.volatility_pause_threshold,
+                                pause_until_tick=pause_until,
+                            )
+                        if tick_count < pause_until:
+                            block_buy = True
+                            block_sell = True
                     if config.alpha_enabled and config.alpha_ofi_enabled:
                         if ofi >= config.alpha_ofi_imbalance_threshold:
                             block_sell = True

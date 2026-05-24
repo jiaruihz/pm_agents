@@ -100,3 +100,47 @@ Observed issue:
 - Latest sidecar samples show `status=not_found` for weather token orderbooks.
 - This matches the current Polymarket weather market archive/missing-market issue.
 - Conclusion: scheduled capture is running and writing the new fields; executable CLOB values may remain empty until Polymarket weather markets recover.
+
+## Operational Check - 2026-05-21
+
+N100 status at 2026-05-20 16:46 UTC / 2026-05-21 00:46 Asia/Shanghai:
+
+- `weather-predict-snapshot.timer` is active.
+- Latest snapshot service run completed successfully.
+- Latest snapshot: `output/paper_snapshots/snapshot_20260521_0030.json`.
+- Snapshot freshness is OK under the doctor threshold.
+- `paper_snapshot.err.log` and `daily_pipeline.err.log` are empty.
+- Latest snapshot contains 611 CLOB-enriched market records.
+- `yes_book_status`: 611 `ok`.
+- `no_book_status`: 611 `ok`.
+- Non-null top-of-book counts:
+  - `yes_best_ask`: 609
+  - `yes_best_bid`: 571
+  - `no_best_ask`: 571
+  - `no_best_bid`: 609
+- Latest sidecar: `output/orderbook_snapshots/2026-05-21/orderbook_snapshot_20260521_0030.jsonl.gz`.
+- Latest sidecar line count: 1222 rows.
+- Latest sidecar status: 1222 `ok`.
+
+Sample active top-of-book rows:
+
+```text
+Amsterdam 18 YES: bid=0.985 ask=0.991 spread=0.006 depth_bid_5c=94.74 depth_ask_5c=428.2
+Amsterdam 19 YES: bid=0.010 ask=0.016 spread=0.006 depth_bid_5c=862.72 depth_ask_5c=345.14
+Amsterdam 20 YES: bid=0.003 ask=0.005 spread=0.002 depth_bid_5c=328.11 depth_ask_5c=852.3
+Atlanta 84-85 YES: bid=0.010 ask=0.054 spread=0.044 depth_bid_5c=136.85 depth_ask_5c=54.99
+```
+
+Local mirror check:
+
+- Full `scripts/ops/sync_weather_remote.sh` hit an SSH broken pipe during large rsync transfer.
+- Direct single-file `ssh cat` copy succeeded for the latest snapshot and latest sidecar.
+- Local sidecar gzip validation passed.
+- Local sidecar line count: 1222.
+- Local snapshot JSON validation passed.
+
+Conclusion:
+
+- Polymarket weather CLOB availability has recovered for the checked snapshot.
+- The CLOB capture fields and full sidecar orderbook archival are working on production.
+- The remaining issue is sync robustness for larger transfers, not data capture.

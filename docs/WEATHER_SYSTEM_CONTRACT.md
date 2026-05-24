@@ -80,6 +80,27 @@ N100 产出的文件格式 = 本文档约定的契约。pm_agent 消费这些文
 | 配置ID | `config_id` | TEXT | SHA256(策略参数JSON) |
 | 执行模式 | `execution_mode` | TEXT | snapshot_replay/paper/live |
 
+### 1.5 Strategy / Signal / Policy 分层
+
+`signal` 是机会事实，不属于某个下单模块：同一个 `signal_id` 可以被多个
+`strategy_config` 消费。`strategy_config` 是策略身份，包含 signal filter、
+sizing 和 execution policy。`plan` 是某个 `run/config` 对某个 `signal`
+的决策，因此 A/B 执行策略对比应表现为:
+
+```text
+same signal_id
+  -> config/run A -> plan(execution_policy=mid_price_core_v1)   -> order/fill
+  -> config/run B -> plan(execution_policy=maker_queue_v1)      -> order/fill
+```
+
+参数分层:
+
+| 层级 | 例子 | 进入策略身份 |
+|---|---|---|
+| signal/model | `model_version`, `forecast_source`, `edge`, `city_pool` | 间接进入；signal 本身可共享 |
+| filter/sizing | `entry_price_window`, `min_edge`, `max_order_notional`, `sizing_mode` | 是 |
+| execution policy | `execution_policy`, `min_quote_edge`, `max_quote_spread`, `max_mid_drift` | 是 |
+
 ---
 
 ## 2. ID 生成算法（必须两侧一致）

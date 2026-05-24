@@ -21,6 +21,17 @@ docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
 生产端（N100）：`jiarui@192.168.0.200:/home/jiarui/projects/weather-predict`  
 分析端（本机）：`/home/rui/projects/pm_agent`
 
+## 全局工程姿态：个人项目，默认直接推进
+
+这是个人研究/交易项目，不是承载外部线上流量的多租户生产系统。默认实现时不要为了“看起来稳妥”层层加保守兜底、静默 fallback、双路径兼容或过度抽象。
+
+默认偏好:
+- **直接实现主路径**：优先把当前要验证的策略、看板或分析链路跑通，少写与当前目标无关的防御性分支。
+- **显式失败优于静默兜底**：数据缺失、字段不一致、盘口不可用时，优先报错/告警并暴露原因；不要偷偷换旧字段、旧数据、默认值继续跑，除非文档已约定这是兼容层。
+- **兼容逻辑要有退出条件**：如果必须兼容历史字段或旧文件，在代码/文档里标明原因和删除时机，不要无限期保留。
+- **研究和本机工具可以激进**：回测、对比脚本、dashboard、本机分析默认选择可观测、可调参、可快速迭代的实现，而不是最保守的企业级兜底。
+- **真实下单仍保留硬边界**：涉及 N100 live、私钥、余额、真实 CLOB 下单、删除数据、远端部署时，保留显式确认、暂停开关、notional 上限和可追溯日志；不要把“少兜底”理解成绕过资金安全或不可逆操作。
+
 ## Weather 策略接手入口
 
 天气策略相关开发、实盘排查、回测分析优先从这里开始:
@@ -44,6 +55,7 @@ scripts/weather_dashboard/run_stack.sh --status
 - 核心量化架构设计 spec: [docs/WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md)
 - 数据模型缺口审计（P0已完成，P1待办）: [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
 - 早期实盘历史与回填治理: [docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)
+- 数据管道与统一 PnL 口径（数据流全链路 / 脚本职责 / 已知缺口 / 运维 runbook）: [docs/WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md)
 
 启动后:
 - 看板 <http://localhost:5173/weather/runs>

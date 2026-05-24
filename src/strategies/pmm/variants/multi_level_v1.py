@@ -8,7 +8,7 @@ from src.platform.quote_runtime.strategy_base import QuoteTarget, StrategyQuoteI
 
 AnchorFn = Callable[[float, float, float, float, float, float, float], Tuple[float, float]]
 QuantizeFn = Callable[[float, float, float, str], Tuple[float, float]]
-TargetSizesFn = Callable[[PMMConfig, float, float, float], Tuple[float, float]]
+TargetSizesFn = Callable[[PMMConfig, float, float, float, float, float], Tuple[float, float]]
 
 
 class MultiLevelV1Strategy:
@@ -32,6 +32,7 @@ class MultiLevelV1Strategy:
         tick = max(1e-6, float(config.price_tick))
         spread_ticks = max(1, int(round(quote_input.adaptive_spread / tick)))
         size_decay_power = float(config.strategy_params.get("size_decay_power", 2.0))
+        inventory_skew_mode = str(config.strategy_params.get("inventory_skew_mode", "asymmetric"))
         quote = compute_quotes_pro(
             mid=quote_input.mid,
             spread_ticks=spread_ticks,
@@ -41,6 +42,7 @@ class MultiLevelV1Strategy:
             open_sell_qty=quote_input.open_sell_qty,
             max_position=max(1.0, float(config.max_position)),
             size_decay_power=size_decay_power,
+            inventory_skew_mode=inventory_skew_mode,
         )
         target_bid = quote.bid
         target_ask = quote.ask
@@ -65,6 +67,8 @@ class MultiLevelV1Strategy:
             position=quote_input.position,
             usdc_balance=quote_input.effective_usdc_balance,
             bid_price=base_bid,
+            open_buy_qty=quote_input.open_buy_qty,
+            open_sell_qty=quote_input.open_sell_qty,
         )
         if quote.allow_buy:
             base_buy_size *= max(0.0, quote.bid_size_adj)

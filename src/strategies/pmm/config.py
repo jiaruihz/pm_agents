@@ -107,6 +107,9 @@ class PMMConfig:
     target_profit_spread: float = 0.002
     volatility_spread_coeff: float = 2.0
     inventory_risk_spread_coeff: float = 0.01
+    volatility_pause_enabled: bool = False
+    volatility_pause_threshold: float = 0.08
+    volatility_pause_cooldown_ticks: int = 30
 
     # Capital efficiency
     auto_merge_enabled: bool = False
@@ -315,6 +318,9 @@ class PMMConfig:
             inventory_risk_spread_coeff=float(
                 os.getenv("PMM_INVENTORY_RISK_SPREAD_COEFF", "0.01")
             ),
+            volatility_pause_enabled=os.getenv("PMM_VOLATILITY_PAUSE_ENABLED", "0") == "1",
+            volatility_pause_threshold=float(os.getenv("PMM_VOLATILITY_PAUSE_THRESHOLD", "0.08")),
+            volatility_pause_cooldown_ticks=int(os.getenv("PMM_VOLATILITY_PAUSE_COOLDOWN_TICKS", "30")),
             auto_merge_enabled=os.getenv("PMM_AUTO_MERGE_ENABLED", "0") == "1",
             auto_merge_every_ticks=int(os.getenv("PMM_AUTO_MERGE_EVERY_TICKS", "30")),
             auto_merge_default_min_amount=int(

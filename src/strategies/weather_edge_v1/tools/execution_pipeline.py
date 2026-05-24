@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from src.platform.quote_runtime.risk.safety_guard import RiskError, SafetyGuard, SecurityError
+from src.strategies.weather_edge_v1.tools.execution_policy import (
+    ExecutionPolicyConfig,
+    build_execution_quote,
+)
 
 
 DEFAULT_RUNTIME_ROOT = Path("runtime/weather_edge_v1")
@@ -186,6 +190,14 @@ class PlannerConfig:
     max_position: float = 25.0
     live_enabled: bool = False
     execution_policy: str = "mid_price_core_v1"
+    tick_size: float = 0.01
+    min_quote_edge: float = 0.03
+    max_quote_spread: float = 0.12
+    max_mid_drift: float = 0.10
+    quote_improvement_ticks: int = 1
+    wide_spread_shade_ticks: int = 1
+    narrow_quote_spread: float = 0.03
+    adverse_selection_spread_fraction: float = 0.50
 
 
 def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str, Any]:
@@ -195,7 +207,37 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
     best_ask = to_float(signal.get("best_ask"), 0.0)
     spread = to_float(signal.get("spread"), max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0)
     edge = to_float(signal.get("edge"), 0.0)
-    limit_price = max(config.price_floor, min(config.price_ceiling, market_price + config.price_offset))
+    quote = build_execution_quote(
+        signal,
+        ExecutionPolicyConfig(
+            policy_name=config.execution_policy,
+            price_offset=config.price_offset,
+            price_floor=config.price_floor,
+            price_ceiling=config.price_ceiling,
+            tick_size=config.tick_size,
+            min_quote_edge=config.min_quote_edge,
+            max_quote_spread=config.max_quote_spread,
+            max_mid_drift=config.max_mid_drift,
+            quote_improvement_ticks=config.quote_improvement_ticks,
+            wide_spread_shade_ticks=config.wide_spread_shade_ticks,
+            narrow_spread=config.narrow_quote_spread,
+            adverse_selection_spread_fraction=config.adverse_selection_spread_fraction,
+        ),
+    )
+    if (
+        safe_str(config.execution_policy) == "maker_queue_v1"
+        and safe_str(quote.get("quote_status")) == "rejected"
+        and safe_str(quote.get("quote_reason")) == "missing_two_sided_book"
+    ):
+        quote = {
+            **quote,
+            "quote_status": "accepted",
+            "quote_reason": "defer_to_executor_missing_two_sided_book",
+            "limit_price": round(market_price, 6),
+            "quote_edge": round(to_float(quote.get("model_token_probability"), 0.0) - market_price, 6),
+            "quote_mode": "defer_to_executor",
+        }
+    limit_price = to_float(quote.get("limit_price"), 0.0)
     sizing_mode = safe_str(config.sizing_mode) or "notional"
     if sizing_mode == "fixed_shares":
         size = round(max(0.0, float(config.fixed_order_shares)), 6)
@@ -224,10 +266,28 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         "best_ask": round(best_ask, 6),
         "spread": round(spread, 6),
         "limit_price": round(limit_price, 6),
+        "quote_status": safe_str(quote.get("quote_status")),
+        "quote_reason": safe_str(quote.get("quote_reason")),
+        "quote_edge": to_float(quote.get("quote_edge"), 0.0),
+        "required_quote_edge": to_float(quote.get("required_quote_edge"), 0.0),
+        "model_token_probability": to_float(quote.get("model_token_probability"), 0.0),
+        "quote_best_bid": to_float(quote.get("quote_best_bid"), best_bid),
+        "quote_best_ask": to_float(quote.get("quote_best_ask"), best_ask),
+        "quote_spread": to_float(quote.get("quote_spread"), spread),
+        "quote_tick_size": to_float(quote.get("quote_tick_size"), config.tick_size),
+        "quote_mode": safe_str(quote.get("quote_mode")),
         "entry_price_min": round(config.min_entry_price, 6),
         "entry_price_max": round(config.max_entry_price, 6),
         "entry_price_window": f"{config.min_entry_price:.2f}-{config.max_entry_price:.2f}",
         "execution_policy": safe_str(config.execution_policy),
+        "tick_size": round(float(config.tick_size), 6),
+        "min_quote_edge": round(float(config.min_quote_edge), 6),
+        "max_quote_spread": round(float(config.max_quote_spread), 6),
+        "max_mid_drift": round(float(config.max_mid_drift), 6),
+        "quote_improvement_ticks": int(config.quote_improvement_ticks),
+        "wide_spread_shade_ticks": int(config.wide_spread_shade_ticks),
+        "narrow_quote_spread": round(float(config.narrow_quote_spread), 6),
+        "adverse_selection_spread_fraction": round(float(config.adverse_selection_spread_fraction), 6),
         "sizing_mode": sizing_mode,
         "fixed_order_shares": round(float(config.fixed_order_shares), 6),
         "max_order_shares": round(max_order_shares, 6),
@@ -265,6 +325,9 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         }
     if edge < config.min_edge:
         return {**plan, "status": "rejected", "risk_status": "rejected", "risk_reason": "edge_below_min"}
+    if safe_str(quote.get("quote_status")) != "accepted":
+        reason = safe_str(quote.get("quote_reason")) or "execution_quote_rejected"
+        return {**plan, "status": "rejected", "risk_status": "rejected", "risk_reason": reason}
     if sizing_mode not in {"notional", "fixed_shares"}:
         return {**plan, "status": "rejected", "risk_status": "rejected", "risk_reason": "bad_sizing_mode"}
     guard = SafetyGuard(
@@ -345,12 +408,30 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "signal_side": safe_str(plan.get("signal_side")),
         "order_side": safe_str(plan.get("order_side")) or "BUY",
         "limit_price": to_float(plan.get("limit_price"), 0.0),
+        "quote_status": safe_str(plan.get("quote_status")),
+        "quote_reason": safe_str(plan.get("quote_reason")),
+        "quote_edge": to_float(plan.get("quote_edge"), 0.0),
+        "required_quote_edge": to_float(plan.get("required_quote_edge"), 0.0),
+        "model_token_probability": to_float(plan.get("model_token_probability"), 0.0),
+        "quote_best_bid": to_float(plan.get("quote_best_bid"), 0.0),
+        "quote_best_ask": to_float(plan.get("quote_best_ask"), 0.0),
+        "quote_spread": to_float(plan.get("quote_spread"), 0.0),
+        "quote_tick_size": to_float(plan.get("quote_tick_size"), 0.0),
+        "quote_mode": safe_str(plan.get("quote_mode")),
         "best_bid": to_float(plan.get("best_bid"), 0.0),
         "best_ask": to_float(plan.get("best_ask"), 0.0),
         "spread": to_float(plan.get("spread"), 0.0),
         "size": to_float(plan.get("size"), 0.0),
         "notional": to_float(plan.get("notional"), 0.0),
         "execution_policy": safe_str(plan.get("execution_policy")),
+        "tick_size": to_float(plan.get("tick_size"), 0.0),
+        "min_quote_edge": to_float(plan.get("min_quote_edge"), 0.0),
+        "max_quote_spread": to_float(plan.get("max_quote_spread"), 0.0),
+        "max_mid_drift": to_float(plan.get("max_mid_drift"), 0.0),
+        "quote_improvement_ticks": to_float(plan.get("quote_improvement_ticks"), 0.0),
+        "wide_spread_shade_ticks": to_float(plan.get("wide_spread_shade_ticks"), 0.0),
+        "narrow_quote_spread": to_float(plan.get("narrow_quote_spread"), 0.0),
+        "adverse_selection_spread_fraction": to_float(plan.get("adverse_selection_spread_fraction"), 0.0),
         "entry_price_window": safe_str(plan.get("entry_price_window")),
         "sizing_mode": safe_str(plan.get("sizing_mode")),
         "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),
@@ -387,6 +468,22 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "limit_price": to_float(plan.get("limit_price"), 0.0),
         "requested_price": to_float(response.get("requested_price"), to_float(plan.get("limit_price"), 0.0)),
         "posted_price": to_float(response.get("posted_price"), 0.0),
+        "quote_status": safe_str(response.get("quote_status")) or safe_str(plan.get("quote_status")),
+        "quote_reason": safe_str(response.get("quote_reason")) or safe_str(plan.get("quote_reason")),
+        "quote_edge": to_float(response.get("quote_edge"), to_float(plan.get("quote_edge"), 0.0)),
+        "required_quote_edge": to_float(
+            response.get("required_quote_edge"),
+            to_float(plan.get("required_quote_edge"), 0.0),
+        ),
+        "model_token_probability": to_float(
+            response.get("model_token_probability"),
+            to_float(plan.get("model_token_probability"), 0.0),
+        ),
+        "quote_best_bid": to_float(response.get("quote_best_bid"), to_float(plan.get("quote_best_bid"), 0.0)),
+        "quote_best_ask": to_float(response.get("quote_best_ask"), to_float(plan.get("quote_best_ask"), 0.0)),
+        "quote_spread": to_float(response.get("quote_spread"), to_float(plan.get("quote_spread"), 0.0)),
+        "quote_tick_size": to_float(response.get("quote_tick_size"), to_float(plan.get("quote_tick_size"), 0.0)),
+        "quote_mode": safe_str(response.get("quote_mode")) or safe_str(plan.get("quote_mode")),
         "best_bid": best_bid,
         "best_ask": best_ask,
         "spread": spread,
@@ -396,6 +493,14 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "notional": to_float(plan.get("notional"), 0.0),
         "posted_notional": round(to_float(response.get("posted_price"), 0.0) * to_float(plan.get("size"), 0.0), 6),
         "execution_policy": safe_str(plan.get("execution_policy")),
+        "tick_size": to_float(plan.get("tick_size"), 0.0),
+        "min_quote_edge": to_float(plan.get("min_quote_edge"), 0.0),
+        "max_quote_spread": to_float(plan.get("max_quote_spread"), 0.0),
+        "max_mid_drift": to_float(plan.get("max_mid_drift"), 0.0),
+        "quote_improvement_ticks": to_float(plan.get("quote_improvement_ticks"), 0.0),
+        "wide_spread_shade_ticks": to_float(plan.get("wide_spread_shade_ticks"), 0.0),
+        "narrow_quote_spread": to_float(plan.get("narrow_quote_spread"), 0.0),
+        "adverse_selection_spread_fraction": to_float(plan.get("adverse_selection_spread_fraction"), 0.0),
         "entry_price_window": safe_str(plan.get("entry_price_window")),
         "sizing_mode": safe_str(plan.get("sizing_mode")),
         "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),
@@ -449,10 +554,17 @@ def execute_trade_plans(
             live_orders.append(build_live_order_record(plan, response, status="submitted"))
         except Exception as exc:
             live_errors += 1
+            response = getattr(exc, "weather_execution_response", None)
+            if not isinstance(response, dict):
+                response = {}
+            response = {
+                **response,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
             live_orders.append(
                 build_live_order_record(
                     plan,
-                    {"error": f"{type(exc).__name__}: {exc}"},
+                    response,
                     status="error",
                 )
             )

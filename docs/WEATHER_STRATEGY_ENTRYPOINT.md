@@ -29,6 +29,22 @@ max_order_shares = 25.00
 order style = maker-only GTC, post_only=True
 ```
 
+`maker_queue_v1` is implemented as a pluggable execution policy for dry-run comparison and controlled rollout. It prices maker orders from the current bid/ask, requires edge after an adverse-selection buffer, and is selected with `--execution-policy maker_queue_v1` or `WEATHER_LIVE_EXECUTION_POLICY=maker_queue_v1`. Keep the documented `mid_price_core_v1` live default until a deliberate rollout switch is made.
+
+Execution policy is part of `strategy_config`, not part of signal generation.
+For A/B tests, build signals once and branch after `signals`:
+
+```text
+same signal_id
+  -> mid_price_core_v1 run/plan/order/fill
+  -> maker_queue_v1 run/plan/order/fill
+```
+
+Use `scripts/ops/weather_policy_branch.py --execution-policy maker_queue_v1`
+to run an execution-policy branch from the latest `mid_price_core_v1` signal
+file. This keeps market/model opportunities identical while giving each policy
+its own config/run/plan/order lineage.
+
 Important: `city_pool=t1_trading` is the execution pool source of truth. Do not add a second hardcoded T1 city allowlist unless there is a new explicit design decision. If a T2 city appears in live signals or live orders, treat it as an upstream `city_pool` or live-cycle parameter incident, pause live, and investigate.
 
 ## Production Checks
