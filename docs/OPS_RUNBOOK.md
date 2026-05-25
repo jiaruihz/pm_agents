@@ -142,42 +142,21 @@ wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && .
 
 ## 4. 重启后最小恢复清单
 
-如果机器重启，按这个顺序恢复：
-
-1. 进入项目目录
+**一键恢复（推荐）：**
 
 ```bash
 cd /home/rui/projects/pm_agent
+scripts/ops/after_reboot.sh
 ```
 
-2. 检查环境变量和 `.env`
+自动按顺序：打印状态 → 启动 Dashboard → 启动 Telegram Bot → 检查 N100 实盘。已运行的服务会自动跳过。
+
+分项运行：
 
 ```bash
-test -f .env && echo ".env ok"
-```
-
-3. 看当前状态
-
-```bash
-PYTHONPATH=. .venv/bin/python scripts/ops/process_status.py
-```
-
-4. 先拉你现在真正依赖的服务
-
-- Telegram Research Bot
-- Strategy Dashboard Server
-- Weather Position Monitor
-
-推荐先拉 research bot：
-
-```bash
-scripts/ops/telegram_research_bot_ctl.sh start
-```
-
-5. 再次检查状态
-
-```bash
-PYTHONPATH=. .venv/bin/python scripts/ops/process_status.py
+scripts/ops/after_reboot.sh --dashboard   # 仅 Dashboard
+scripts/ops/after_reboot.sh --n100        # 仅 N100 检查
+scripts/ops/after_reboot.sh --status      # 仅看状态
 ```
 
 ## 5. 常用文件
