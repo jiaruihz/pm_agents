@@ -839,6 +839,9 @@ function OrderMiniTable({ rows }: { rows: StrategyOrderRow[] }) {
           {rows.map(row => {
             const pnl = row.pnl_usd;
             const settlement = row.final_price == null ? "open" : String(row.final_price);
+            const filledCost = row.filled_shares != null && row.filled_price != null
+              ? row.filled_shares * row.filled_price + (row.fees_usd ?? 0)
+              : null;
             return (
               <tr key={`${row.execution_id}:${row.fill_id ?? "none"}`} style={{ borderBottom: "1px solid var(--stroke)" }}>
                 <td style={{ ...tdStyle, color: "var(--muted)", whiteSpace: "nowrap" }}>{row.placed_at_utc?.slice(5, 16).replace("T", " ") ?? "—"}</td>
@@ -853,7 +856,7 @@ function OrderMiniTable({ rows }: { rows: StrategyOrderRow[] }) {
                 <td style={tdStyle}>{settlement}</td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>{(row.filled_shares ?? row.order_shares ?? 0).toFixed(2)}</td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>{(row.filled_price ?? row.entry_price ?? 0).toFixed(3)}</td>
-                <td style={{ ...tdStyle, textAlign: "right" }}>${(row.order_cost_usd ?? 0).toFixed(2)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>${(filledCost ?? row.order_cost_usd ?? 0).toFixed(2)}</td>
                 <td style={{ ...tdStyle, textAlign: "right", color: pnl == null ? "var(--muted)" : pnl >= 0 ? "var(--ok)" : "var(--bad)", fontWeight: 650 }}>
                   {pnl == null ? "—" : usd(pnl)}
                 </td>
