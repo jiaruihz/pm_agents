@@ -146,7 +146,8 @@ def _get_submitted_orders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
             o.limit_price,
             o.placed_at_utc,
             o.order_side,
-            sig.condition_id
+            sig.condition_id,
+            sig.token_id
         FROM orders o
         JOIN plans   p   ON o.plan_id   = p.plan_id
         JOIN signals sig ON p.signal_id = sig.signal_id
@@ -507,6 +508,48 @@ def _side_matches_public(order_side: str, trade: dict[str, Any]) -> bool:
     return False
 
 
+def _public_trade_key(trade: dict[str, Any]) -> str:
+    """Best-effort stable key for one public activity trade row."""
+    return "|".join(
+        str(trade.get(k) or "")
+        for k in ("transactionHash", "asset", "timestamp", "side", "outcome", "size", "price")
+    )
+
+
+def _public_trade_matches_order(
+    trade: dict[str, Any],
+    *,
+    condition_id: str,
+    token_id: str,
+    order_side: str,
+    limit_price: float,
+    placed_ts: int,
+) -> bool:
+    """Strict public fallback match.
+
+    Public activity rows do not include the CLOB order id. To avoid inventing
+    fills, require the exact condition, exact asset token, compatible side, a
+    trade after placement, and an executable price for our buy limit.
+    """
+    if trade.get("conditionId") != condition_id:
+        return False
+    if token_id and str(trade.get("asset") or "") != token_id:
+        return False
+    if not _side_matches_public(order_side, trade):
+        return False
+    try:
+        trade_ts = int(trade.get("timestamp", 0))
+    except (TypeError, ValueError):
+        return False
+    if trade_ts < placed_ts:
+        return False
+    try:
+        trade_price = float(trade.get("price") or 0)
+    except (TypeError, ValueError):
+        return False
+    return trade_price <= limit_price + 1e-6
+
+
 # ---------------------------------------------------------------------------
 # Main sync function
 # ---------------------------------------------------------------------------
@@ -595,6 +638,7 @@ def sync_clob_fills(
         log.info(
             "Total unauthenticated trade records: %d", len(public_trades)
         )
+    used_public_trade_keys: set[str] = set()
 
     # --- Process each submitted order ---
     for row in submitted:
@@ -737,6 +781,7 @@ def sync_clob_fills(
         # ------------------------------------------------------------------
         else:
             cid = row["condition_id"] or ""
+            token_id = str(row["token_id"] or "")
             order_side = row["order_side"] or ""
             placed_ts = 0
             placed_raw = row["placed_at_utc"]
@@ -752,9 +797,15 @@ def sync_clob_fills(
 
             matching_public = [
                 t for t in public_trades
-                if t.get("conditionId") == cid
-                and _side_matches_public(order_side, t)
-                and int(t.get("timestamp", 0)) >= placed_ts
+                if _public_trade_key(t) not in used_public_trade_keys
+                and _public_trade_matches_order(
+                    t,
+                    condition_id=cid,
+                    token_id=token_id,
+                    order_side=order_side,
+                    limit_price=row_limit_price,
+                    placed_ts=placed_ts,
+                )
             ]
 
             if matching_public:
@@ -771,6 +822,7 @@ def sync_clob_fills(
                 except (TypeError, ValueError):
                     filled_price = row_limit_price
                 filled_at = _ts_to_iso(best.get("timestamp"))
+                used_public_trade_keys.add(_public_trade_key(best))
 
                 _insert_fill(
                     conn,

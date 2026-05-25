@@ -87,6 +87,8 @@ def list_strategies(db: Db, state: str = Query("all")):
         LEFT JOIN orders o    ON o.run_id        = r.run_id
         LEFT JOIN fills f     ON f.execution_id  = o.execution_id
                              AND f.status        = 'filled'
+                             AND (o.venue != 'polymarket_clob'
+                                  OR CAST(f.filled_price AS REAL) <= CAST(o.limit_price AS REAL) + 0.000001)
         LEFT JOIN plans p     ON p.plan_id       = o.plan_id
         LEFT JOIN signals sig ON sig.signal_id   = p.signal_id
         LEFT JOIN {_SETTLEMENTS_DEDUP} s
@@ -181,7 +183,10 @@ def _base_joins(state: str = "all") -> str:
         FROM config_aliases ca
         JOIN runs r ON r.config_id = ca.alias_config_id{state_filter}
         LEFT JOIN orders o ON o.run_id = r.run_id
-        LEFT JOIN fills f  ON f.execution_id = o.execution_id AND f.status = 'filled'
+        LEFT JOIN fills f  ON f.execution_id = o.execution_id
+                           AND f.status = 'filled'
+                           AND (o.venue != 'polymarket_clob'
+                                OR CAST(f.filled_price AS REAL) <= CAST(o.limit_price AS REAL) + 0.000001)
         LEFT JOIN plans p  ON p.plan_id = o.plan_id
         LEFT JOIN signals sig ON sig.signal_id = p.signal_id
         LEFT JOIN {_SETTLEMENTS_DEDUP} s ON sig.target_date = s.target_date
@@ -425,7 +430,10 @@ def get_strategy_positions(config_id: str, db: Db, state: str = Query("all")):
         FROM config_aliases ca
         JOIN runs r ON r.config_id = ca.alias_config_id{state_filter}
         JOIN orders o ON o.run_id = r.run_id
-        JOIN fills f ON f.execution_id = o.execution_id AND f.status = 'filled'
+        JOIN fills f ON f.execution_id = o.execution_id
+                    AND f.status = 'filled'
+                    AND (o.venue != 'polymarket_clob'
+                         OR CAST(f.filled_price AS REAL) <= CAST(o.limit_price AS REAL) + 0.000001)
         JOIN plans p ON p.plan_id = o.plan_id
         JOIN signals sig ON sig.signal_id = p.signal_id
         LEFT JOIN {_SETTLEMENTS_DEDUP} s ON sig.target_date = s.target_date
@@ -479,7 +487,9 @@ def get_strategy_mark_to_market(config_id: str, db: Db, state: str = Query("live
         FROM config_aliases ca
         JOIN runs r ON r.config_id = ca.alias_config_id{state_filter}
         JOIN orders o ON o.run_id = r.run_id
-        JOIN fills f ON f.execution_id = o.execution_id AND f.status = 'filled'
+        JOIN fills f ON f.execution_id = o.execution_id
+                    AND f.status = 'filled'
+                    AND CAST(f.filled_price AS REAL) <= CAST(o.limit_price AS REAL) + 0.000001
         JOIN plans p ON p.plan_id = o.plan_id
         JOIN signals sig ON sig.signal_id = p.signal_id
         LEFT JOIN {_SETTLEMENTS_DEDUP} s ON sig.target_date = s.target_date
@@ -664,6 +674,8 @@ def get_strategy_orders(
         JOIN signals sig ON sig.signal_id = p.signal_id
         JOIN orders o ON o.plan_id = p.plan_id
         LEFT JOIN fills f ON f.execution_id = o.execution_id
+                         AND (o.venue != 'polymarket_clob'
+                              OR CAST(f.filled_price AS REAL) <= CAST(o.limit_price AS REAL) + 0.000001)
         LEFT JOIN {_SETTLEMENTS_DEDUP} s ON sig.target_date = s.target_date
                                         AND sig.condition_id = s.condition_id
                                         AND sig.bracket = s.bracket
@@ -763,6 +775,7 @@ def get_strategy_daily_execution(
                                AND co.venue = 'polymarket_clob'
             LEFT JOIN fills cf ON cf.execution_id = co.execution_id
                               AND cf.status = 'filled'
+                              AND CAST(cf.filled_price AS REAL) <= CAST(co.limit_price AS REAL) + 0.000001
             LEFT JOIN {_SETTLEMENTS_DEDUP} s ON sig.target_date = s.target_date
                                             AND sig.condition_id = s.condition_id
                                             AND sig.bracket = s.bracket
@@ -876,6 +889,7 @@ def get_strategy_funnel(config_id: str, db: Db):
         JOIN runs r      ON r.run_id       = p.run_id
         LEFT JOIN orders o ON o.plan_id = p.plan_id AND o.venue = 'polymarket_clob'
         LEFT JOIN fills  f ON f.execution_id = o.execution_id
+                           AND CAST(f.filled_price AS REAL) <= CAST(o.limit_price AS REAL) + 0.000001
         WHERE r.config_id = ?
           AND r.started_at_utc IS NOT NULL
         GROUP BY day
@@ -922,6 +936,7 @@ def get_strategy_pending_orders(config_id: str, db: Db):
         JOIN signals sig ON sig.signal_id = p.signal_id
         JOIN runs    r   ON r.run_id    = o.run_id
         LEFT JOIN fills f ON f.execution_id = o.execution_id
+                         AND CAST(f.filled_price AS REAL) <= CAST(o.limit_price AS REAL) + 0.000001
         WHERE r.config_id = ?
           AND o.venue     = 'polymarket_clob'
           AND o.status    = 'submitted'
