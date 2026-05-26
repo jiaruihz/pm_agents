@@ -339,6 +339,21 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 
 ---
 
+## Weather 策略分析强制规约
+
+**任何 weather 策略分析请求必须先 invoke 对应 skill，不准跳过：**
+
+| 分析类型 | 触发词 | Skill |
+|---|---|---|
+| 历史绩效 / A/B 对比 | 绩效、PnL、ROI、win rate、胜率、切片、对比、A/B、回测结果、策略表现 | `weather-strategy-performance` |
+| 单日血缘 / 逐笔复盘 | 单日、血缘、逐笔、当日复盘、为什么下了这单、信号到结算 | `weather-strategy-lineage` |
+| 持仓敞口 / 未平仓 | 持仓、敞口、未结算、未平仓、风险、当前仓位、open position | `weather-strategy-exposure` |
+
+**禁止**：在不 invoke skill 的情况下直接写一次性 pandas 脚本做策略分析。  
+**口径唯一来源**：[docs/WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)
+
+---
+
 ## 文档索引
 
 > **维护规则：每次在 `docs/` 下新增或删除文档，必须同步更新本节。**  
@@ -350,6 +365,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 |---|---|
 | [WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md) | 实盘排查入口：N100 检查命令、live 口径、近期事故结论 |
 | [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md) | N100↔pm_agent 字段名/枚举/ID算法契约，**改字段前必读** |
+| [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md) | 分析口径唯一来源：PnL/win_rate/切片/城市池/时区，**所有分析前必读** |
 | [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) | N100→镜像→DB→API 全链路、所有脚本职责、PnL口径、运维 runbook |
 | [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) | 核心架构设计（血缘链/策略身份/Run Registry/DB schema/API/前端） |
 | [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | 数据模型分层与缺口审计（P0已完成，P1/P2待办） |

@@ -21,6 +21,21 @@ docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
 生产端（N100）：`jiarui@192.168.0.200:/home/jiarui/projects/weather-predict`  
 分析端（本机）：`/home/rui/projects/pm_agent`
 
+## Weather 策略分析强制规约
+
+**任何 weather 策略分析请求必须先 invoke 对应 skill，不准跳过：**
+
+| 分析类型 | 触发词 | Skill |
+|---|---|---|
+| 历史绩效 / A/B 对比 | 绩效、PnL、ROI、win rate、胜率、切片、对比、A/B、回测结果、策略表现 | `weather-strategy-performance` |
+| 单日血缘 / 逐笔复盘 | 单日、血缘、逐笔、当日复盘、为什么下了这单、信号到结算 | `weather-strategy-lineage` |
+| 持仓敞口 / 未平仓 | 持仓、敞口、未结算、未平仓、风险、当前仓位、open position | `weather-strategy-exposure` |
+
+**禁止**：在不 invoke skill 的情况下直接写一次性 pandas 脚本做策略分析。  
+**口径唯一来源**：`docs/WEATHER_ANALYSIS_CONTRACT.md`（§2 PnL 公式、§5 切片维度白名单、§6 默认城市池）
+
+---
+
 ## 全局工程姿态：个人项目，默认直接推进
 
 这是个人研究/交易项目，不是承载外部线上流量的多租户生产系统。默认实现时不要为了“看起来稳妥”层层加保守兜底、静默 fallback、双路径兼容或过度抽象。
@@ -31,6 +46,18 @@ docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
 - **兼容逻辑要有退出条件**：如果必须兼容历史字段或旧文件，在代码/文档里标明原因和删除时机，不要无限期保留。
 - **研究和本机工具可以激进**：回测、对比脚本、dashboard、本机分析默认选择可观测、可调参、可快速迭代的实现，而不是最保守的企业级兜底。
 - **真实下单仍保留硬边界**：涉及 N100 live、私钥、余额、真实 CLOB 下单、删除数据、远端部署时，保留显式确认、暂停开关、notional 上限和可追溯日志；不要把“少兜底”理解成绕过资金安全或不可逆操作。
+
+## 策略研究防跑偏约定（重要）
+
+天气策略研究中，用户提出的往往是一个很具体的失败模式或交易形态。Agent 必须先把问题收敛成一句明确的 **target metric / target slice**，再跑数据、写脚本或写结论。
+
+默认流程:
+- **先复述目标指标**：例如 `bought_no_hit_and_net_loss` = “pure NO city-day 中买了多个 NO，最终温度命中其中一个被买 NO bracket，导致该腿亏满且整组 city-day 净亏”。
+- **先锁分母**：明确是在看事前持仓形态（如 `pure_no_basket`）还是事后结算形态（如 `no_wins_only`），不要把两者混用。
+- **所有表格必须回答目标指标**：如果表格只是在说明背景（如 pure NO 总体 PnL），必须标注为背景，不能拿它替代主结论。
+- **不要擅自扩大问题**：用户问“某个坏场景怎么优化”，不要扩展成“整个分支是否赚钱/是否该砍”；除非明确说明这是额外 sanity check。
+- **结论先给交易动作**：先回答应该保留、过滤、降 size、shadow 还是不改 live，再给证据和细分数据。
+- **发现口径漂移要立刻纠正**：如果分析过程中发现 target metric、样本分母或字段含义不一致，先暂停修正口径，不继续堆更多结果。
 
 ## Weather 策略接手入口
 
