@@ -1,6 +1,6 @@
 # Weather Strategy Entrypoint
 
-Last updated: 2026-05-24
+Last updated: 2026-05-26
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.
 
@@ -20,14 +20,42 @@ For early live rollout history, known mistakes, and how to split local/N100 live
 Current live rollout policy:
 
 ```text
-city_pool = t1_trading
-execution_policy = mid_price_core_v1
+city_pool = t1_trading (v2, 20 cities — see below)
+execution_policy = maker_queue_v1  [upgraded 2026-05-26; set via WEATHER_LIVE_EXECUTION_POLICY in N100 .env]
 entry window = 0.25 <= price < 0.75
 sizing_mode = notional
 max_order_notional = 5.00
 max_order_shares = 25.00
 order style = maker-only GTC, post_only=True
 ```
+
+## 2026-05-26 城市池 v2 变更（paper ledger 生效）
+
+基于 2026-05-08~05-24 ledger 数据，939 笔已结算交易的分析结论。
+
+**T1 新增（8 城，T2→T1）：**
+Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle
+— BUY_NO ecmwf/gfs 胜率 67%~95%，ROI +20%~+55%（95% CI 下界均 > 0.53）
+
+**T1 移除（完全屏蔽 paper order）：**
+- Beijing → `EXCLUDED_CITIES`（ECMWF 结构性失效，BUY_YES 0/17，BUY_NO 全 edge bucket 均亏）
+- Austin → `EXCLUDED_CITIES`（entry_price 中位 0.65，赔率结构不利，BUY_NO 58% 胜但 ROI -12.6%）
+
+**BUY_YES 禁用城市（`BUY_YES_BLOCKED_CITIES`）：**
+Ankara, Istanbul, Jeddah, Lucknow, Moscow（BUY_YES 胜率 0%~20%，ROI -42%~-100%）
+
+**Paris 过滤收紧：** `abs_edge ≥ 0.30`（低于此阈值全部亏损）
+
+**双策略 A/B paper 对比（2026-05-26 起）：**
+每个信号同时生成两笔 paper order，各 5 shares：
+- `mid_price_core_v1`：entry_price = last_trade_price（原有行为）
+- `maker_queue_v1`：entry_price = no_best_bid / yes_best_bid（CLOB 盘口）
+dedup key 包含 execution_policy，两笔订单互不干扰。
+
+**T1 完整城市列表（v2，共 20 个）：**
+Ankara, Boston, Chicago, Guangzhou, Istanbul, Jeddah, Karachi, LA,
+London, Lucknow, Madrid, Miami, Moscow, NYC, Paris, Phoenix, Seattle,
+Shanghai, Tokyo, Warsaw
 
 `maker_queue_v1` is implemented as a pluggable execution policy for dry-run comparison and controlled rollout. It prices maker orders from the current bid/ask, requires edge after an adverse-selection buffer, and is selected with `--execution-policy maker_queue_v1` or `WEATHER_LIVE_EXECUTION_POLICY=maker_queue_v1`. Keep the documented `mid_price_core_v1` live default until a deliberate rollout switch is made.
 
