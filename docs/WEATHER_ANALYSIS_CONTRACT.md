@@ -256,3 +256,74 @@ sharpe_like    = avg_daily_pnl / std_daily_pnl   -- 未年化，仅供参考
 
 **以 `orders.created_at_utc`（下单时间戳）所在北京时间日期为准。**  
 结算日期在 `signals.target_date`；两者可能不同——报告中两列都列出。
+
+---
+
+## §4 策略身份
+
+- **策略唯一标识 = `strategy_id`**（对应 `runs.config_id` → `strategy_config.config_id`）
+- sizing 参数改动（`notional` / `sizing_mode`）**不改变** strategy_id；改动体现在 `strategy_config.params` 字段的 `code_version` / `sizing_mode` 子键
+- A/B 对比切片使用 `strategy_config.params` 里的 `code_version` × `sizing_mode` 子键，不使用 strategy_id
+
+---
+
+## §5 切片维度白名单
+
+分析报告只能使用以下切片，**新切片必须先 PR 进本文件再使用**：
+
+| 切片键 | 对应 DB 字段 | 说明 |
+|---|---|---|
+| by_date | `signals.target_date` | 目标日期（北京时间日） |
+| by_city | `signals.city` | 城市名 |
+| by_model | `signals.forecast_source` | 预测模型（ecmwf / gfs 等） |
+| by_side | `orders.order_side` | BUY_YES / BUY_NO |
+| by_pool | `signals.city_pool` | t1_trading / t2_research |
+| by_pool_side | city_pool × order_side | 组合切片 |
+| by_pool_model | city_pool × forecast_source | 组合切片 |
+
+---
+
+## §6 默认城市池
+
+### T1 交易池（`city_pool = 't1_trading'`）
+
+默认分析范围。**城市归属以 `weather.db` 里 `signals.city_pool = 't1_trading'` 字段为准**，本列表仅供参考：
+
+Amsterdam, Ankara, Atlanta, Austin, Beijing, BuenosAires, Busan, CapeTown,
+Chengdu, Chicago, Chongqing, Dallas, Denver, Guangzhou, Helsinki, HongKong,
+Houston, Istanbul, Jakarta, Jeddah, Karachi, KualaLumpur, LA, Lagos,
+London, Lucknow, Madrid, Manila, MexicoCity, Miami, Milan, Moscow,
+Munich, NYC, PanamaCity, Paris, SanFrancisco, SaoPaulo, Seattle, Seoul,
+Shanghai, Shenzhen, Singapore, Taipei, TelAviv, Tokyo, Warsaw, Wellington, Wuhan
+
+> 城市池调整后以 DB 数据为准，无需更新本列表。
+
+### 其他池
+
+- `t2_research`：T2 研究池，非默认分析范围。使用时需在 prompt 里显式指定 `city_pool=t2_research`
+- 混合分析：在报告"对比设定"段注明 pool 范围
+
+---
+
+## §7 报告模板字段顺序
+
+| 模式 | 模板文件 | 触发 skill |
+|---|---|---|
+| M1 绩效切片 | `docs/analysis/templates/performance.md` | weather-strategy-performance |
+| M3 A/B 对比 | `docs/analysis/templates/performance-compare.md` | weather-strategy-performance |
+| M2 单日血缘 | `docs/analysis/templates/lineage.md` | weather-strategy-lineage |
+| M4 持仓敞口 | `docs/analysis/templates/exposure.md` | weather-strategy-exposure |
+
+**输出路径规约**：`docs/analysis/YYYY-MM/YYYY-MM-DD-<mode>-<topic>.md`  
+每份报告产出后必须 git commit。
+
+---
+
+## §8 待定项（遇到再补）
+
+以下口径分歧暂未钉死，实际分析遇到时在此补充并 PR：
+
+- **滑点扣减**：`plan_price` vs `fill_price` 差值当前两列并列展示，不单独作为成本项扣除
+- **基准对比**：vs "随机下单" / vs "全 BUY_NO" / vs "持有 YES 到结算"
+- **重复计数处理**：同一笔单同时出现在 ledger CSV + DB fills 的去重逻辑
+- **部分成交**：`fills.status = 'partial'` 的订单如何计入 win_rate 分母
