@@ -10,11 +10,11 @@
 | 项目 | 值 |
 |---|---|
 | 数据源路径 | runtime/weather.db；runtime/weather_edge_v1/remote_pm_agent/live |
-| 数据快照时间 | 2026-05-27T22:09:30；sync 于 2026-05-27 22:08:51 +08:00 |
-| fills 行数 | live=494 / paper=1145 / snapshot_replay=636 |
-| unsettled 占比 | 191 / 494（38.7%） |
+| 数据快照时间 | 2026-05-27T22:50:57（DB mtime；报告生成前已按 contract 同步并重建） |
+| fills 行数 | live=497 / paper=1145 / snapshot_replay=636 |
+| unsettled 占比 | 194 / 497（39.0%） |
 | missing_bracket 数 | 65 |
-| live raw submitted orders | 275 submitted；76 not matched to DB fills |
+| live raw submitted orders | 275 submitted；73 not matched to DB fills |
 
 ## 总览
 
@@ -24,7 +24,7 @@
 | ROI | 23.6% | N/A | N/A |
 | Win rate（by count） | 63.7% | N/A | N/A |
 | Win rate（by notional） | 63.5% | N/A | N/A |
-| 总 fills 数 | 303 / 494 | 303 / 494 | 494 |
+| 总 fills 数 | 303 / 497 | 303 / 497 | 497 |
 | 总 cost (USD) | 1,349.69 | 1,349.69 | N/A |
 | 总 fill_qty (shares) | 2804.37 | 2804.37 | N/A |
 | Sharpe-like（daily） | 0.633 | N/A | N/A |
@@ -82,31 +82,31 @@
 
 ## Top Winners / Top Losers
 
-**Top 8 winners（by pnl_usd_at_fill）：**
+**Top 8 market winners（按 city × target_date × side × bracket 聚合）：**
 
-| city | target_date | side | bracket | fill_price | plan_price | qty | settle | pnl_fill | edge |
-|---|---|---|---|---:|---:|---:|---:|---:|---:|
-| Tokyo | 2026-05-20 | BUY_YES | 27+ | 0.255 | 0.255 | 19.61 | 1.000 | 14.61 | 0.509 |
-| Tokyo | 2026-05-20 | BUY_YES | 27+ | 0.255 | 0.255 | 19.61 | 1.000 | 14.61 | 0.582 |
-| Tokyo | 2026-05-20 | BUY_YES | 27+ | 0.255 | 0.255 | 19.61 | 1.000 | 14.61 | 0.582 |
-| Tokyo | 2026-05-20 | BUY_YES | 27+ | 0.255 | 0.255 | 19.61 | 1.000 | 14.61 | 0.582 |
-| Tokyo | 2026-05-20 | BUY_YES | 27+ | 0.255 | 0.255 | 19.61 | 1.000 | 14.61 | 0.582 |
-| Tokyo | 2026-05-20 | BUY_YES | 27+ | 0.255 | 0.255 | 19.61 | 1.000 | 14.61 | 0.582 |
-| Tokyo | 2026-05-20 | BUY_YES | 27+ | 0.255 | 0.255 | 19.61 | 1.000 | 14.61 | 0.582 |
-| Tokyo | 2026-05-20 | BUY_YES | 27+ | 0.255 | 0.255 | 19.61 | 1.000 | 14.61 | 0.582 |
+| city | target_date | side | bracket | fills | cost_usd | pnl_usd | avg_price |
+|---|---|---|---|---:|---:|---:|---:|
+| Tokyo | 2026-05-20 | BUY_YES | 27+ | 8 | 40.00 | 116.86 | 0.255 |
+| Miami | 2026-05-25 | BUY_YES | 86-87 | 3 | 15.00 | 42.69 | 0.260 |
+| NYC | 2026-05-24 | BUY_YES | 56-57 | 4 | 12.73 | 30.47 | 0.295 |
+| LA | 2026-05-25 | BUY_NO | 66-67 | 3 | 15.00 | 24.30 | 0.382 |
+| London | 2026-05-26 | BUY_YES | 34 | 2 | 10.00 | 22.00 | 0.312 |
+| London | 2026-05-20 | BUY_YES | 20 | 2 | 9.71 | 18.85 | 0.340 |
+| London | 2026-05-24 | BUY_YES | 30 | 2 | 10.00 | 17.02 | 0.370 |
+| Warsaw | 2026-05-22 | BUY_YES | 23 | 2 | 6.70 | 16.92 | 0.284 |
 
-**Top 8 losers：**
+**Top 8 market losers：**
 
-| city | target_date | side | bracket | fill_price | plan_price | qty | settle | pnl_fill | edge |
-|---|---|---|---|---:|---:|---:|---:|---:|---:|
-| Warsaw | 2026-05-26 | BUY_NO | 27 | 0.710 | 0.710 | 7.04 | 1.000 | -5.00 | 0.133 |
-| Austin | 2026-05-23 | BUY_NO | 82-83 | 0.695 | 0.695 | 7.19 | 1.000 | -5.00 | 0.289 |
-| Beijing | 2026-05-17 | BUY_NO | 19 | 0.725 | 0.725 | 6.90 | 1.000 | -5.00 | 0.238 |
-| Warsaw | 2026-05-20 | BUY_NO | 23 | 0.490 | 0.490 | 10.20 | 1.000 | -5.00 | 0.389 |
-| Miami | 2026-05-24 | BUY_NO | 88-89 | 0.490 | 0.490 | 10.20 | 1.000 | -5.00 | 0.417 |
-| LA | 2026-05-24 | BUY_YES | 66-67 | 0.490 | 0.490 | 10.20 | 0.000 | -5.00 | 0.161 |
-| Tokyo | 2026-05-25 | BUY_NO | 25 | 0.740 | 0.740 | 6.76 | 1.000 | -5.00 | 0.130 |
-| LA | 2026-05-25 | BUY_NO | 68-69 | 0.740 | 0.740 | 6.76 | 1.000 | -5.00 | 0.231 |
+| city | target_date | side | bracket | fills | cost_usd | pnl_usd | avg_price |
+|---|---|---|---|---:|---:|---:|---:|
+| Madrid | 2026-05-26 | BUY_NO | 32 | 4 | 19.21 | -19.21 | 0.487 |
+| Warsaw | 2026-05-26 | BUY_NO | 27 | 4 | 19.02 | -19.02 | 0.702 |
+| LA | 2026-05-25 | BUY_NO | 68-69 | 4 | 18.33 | -18.33 | 0.728 |
+| Beijing | 2026-05-25 | BUY_NO | 22 | 4 | 17.83 | -17.83 | 0.641 |
+| Miami | 2026-05-24 | BUY_NO | 88-89 | 4 | 16.00 | -16.00 | 0.477 |
+| Tokyo | 2026-05-25 | BUY_NO | 25 | 4 | 15.14 | -15.14 | 0.735 |
+| Madrid | 2026-05-26 | BUY_YES | 33 | 3 | 15.00 | -15.00 | 0.250 |
+| Madrid | 2026-05-25 | BUY_NO | 32 | 3 | 15.00 | -15.00 | 0.402 |
 
 **集中度 / 重复市场 Top 12（city × target_date × side × bracket）：**
 
@@ -127,8 +127,8 @@
 
 ## 数据完整性自检
 
-- [x] fill_row_count 与 DB 匹配：live fills=494。
-- [ ] unsettled_pct < 20%：38.7%。
+- [x] fill_row_count 与 DB 匹配：live fills=497。
+- [ ] unsettled_pct < 20%：39.0%。
 - [ ] missing_bracket：DB 当前 total=65，本报告未逐城市列全量 missing_bracket。
 - [x] by_date 行按 target_date 展示；无交易日期不会补空行。
 
@@ -196,3 +196,43 @@
 | Watch / no scale | Paris, LA, Austin | settled>=5 且 -5%<=ROI<10% |
 | Reduce / shadow | Madrid, Beijing, Chicago | settled>=5 且 ROI<-5% |
 | Need more data | Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle | raw live orders 存在但尚无已结算 fills |
+
+## 新增 8 城后的扩池候选
+
+昨天新增的 8 城按当前 live raw 识别为：Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle。下面候选已排除这 8 城和当前已有已结算 live 城市。
+
+**最近窗口候选（paper ledger，event_date >= live 起点）：**
+
+| city | fills | wins | win_rate | cost_usd | pnl_usd | roi |
+|---|---:|---:|---:|---:|---:|---:|
+| BuenosAires | 7 | 6 | 85.7% | 36.40 | 23.60 | 64.8% |
+| Munich | 7 | 5 | 71.4% | 36.35 | 13.65 | 37.6% |
+| Chengdu | 7 | 6 | 85.7% | 44.60 | 15.40 | 34.5% |
+| SanFrancisco | 5 | 4 | 80.0% | 29.81 | 10.19 | 34.2% |
+| Taipei | 8 | 7 | 87.5% | 54.80 | 15.20 | 27.7% |
+| KualaLumpur | 9 | 5 | 55.6% | 39.45 | 10.55 | 26.7% |
+| Singapore | 11 | 8 | 72.7% | 63.20 | 16.80 | 26.6% |
+| Wuhan | 6 | 5 | 83.3% | 40.45 | 9.55 | 23.6% |
+| CapeTown | 11 | 8 | 72.7% | 65.45 | 14.55 | 22.2% |
+| SaoPaulo | 6 | 5 | 83.3% | 41.55 | 8.45 | 20.3% |
+| Chongqing | 5 | 4 | 80.0% | 34.20 | 5.80 | 17.0% |
+| TelAviv | 18 | 12 | 66.7% | 107.04 | 12.96 | 12.1% |
+
+**宽窗口候选（paper ledger，event_date >= 2026-05-07）：**
+
+| city | fills | wins | win_rate | cost_usd | pnl_usd | roi |
+|---|---:|---:|---:|---:|---:|---:|
+| BuenosAires | 11 | 10 | 90.9% | 60.54 | 39.46 | 65.2% |
+| Amsterdam | 14 | 10 | 71.4% | 66.51 | 33.49 | 50.4% |
+| Manila | 12 | 8 | 66.7% | 55.24 | 24.76 | 44.8% |
+| Munich | 13 | 9 | 69.2% | 66.30 | 23.70 | 35.7% |
+| Singapore | 13 | 10 | 76.9% | 74.50 | 25.50 | 34.2% |
+| Chengdu | 13 | 9 | 69.2% | 68.61 | 21.39 | 31.2% |
+| SanFrancisco | 9 | 6 | 66.7% | 46.81 | 13.19 | 28.2% |
+| HongKong | 5 | 3 | 60.0% | 25.40 | 4.60 | 18.1% |
+| PanamaCity | 8 | 6 | 75.0% | 51.55 | 8.45 | 16.4% |
+| Helsinki | 24 | 16 | 66.7% | 141.79 | 18.22 | 12.8% |
+| Wuhan | 11 | 7 | 63.6% | 62.41 | 7.58 | 12.2% |
+| Atlanta | 20 | 12 | 60.0% | 107.30 | 12.70 | 11.8% |
+
+建议下一批不要一次性全加：优先 shadow/小 size 加 BuenosAires、Munich、Chengdu、SanFrancisco、Singapore、Taipei；Amsterdam/Manila 宽窗口表现好但最近窗口样本不足，先等新样本或只进 shadow。

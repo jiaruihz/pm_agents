@@ -20,6 +20,16 @@ EDGE_RUNTIME = ROOT / "runtime" / "weather_edge_v1"
 LIVE_ORDER_DIR = EDGE_RUNTIME / "remote_pm_agent" / "live"
 PAPER_CSV = EDGE_RUNTIME / "market_data" / "research" / "t24_paper_ledger_trades.csv"
 REPORT_DIR = ROOT / "docs" / "analysis" / "2026-05"
+ADDED_T1_2026_05_26 = {
+    "Ankara",
+    "Guangzhou",
+    "Istanbul",
+    "Jeddah",
+    "Karachi",
+    "Lucknow",
+    "Moscow",
+    "Seattle",
+}
 
 
 @dataclass(frozen=True)
@@ -179,7 +189,7 @@ def _load_trades(conn: sqlite3.Connection, mode: str) -> list[TradeRow]:
           f.execution_id,
           f.fill_id,
           sig.target_date,
-          o.created_at_utc AS order_created_at_utc,
+          COALESCE(o.placed_at_utc, o.created_at_utc) AS order_ts_utc,
           sig.city,
           sig.city_pool,
           sig.forecast_source AS model,
@@ -236,7 +246,7 @@ def _load_trades(conn: sqlite3.Connection, mode: str) -> list[TradeRow]:
                 execution_id=str(row["execution_id"]),
                 fill_id=str(row["fill_id"]),
                 target_date=str(row["target_date"]),
-                order_date_bj=_bj_date(row["order_created_at_utc"]),
+                order_date_bj=_bj_date(row["order_ts_utc"]),
                 city=str(row["city"]),
                 city_pool=str(row["city_pool"]),
                 model=str(row["model"]),
@@ -428,15 +438,28 @@ def _table_trade_rows(rows: list[TradeRow]) -> list[str]:
     return out
 
 
-def _market_concentration_rows(rows: list[TradeRow]) -> list[str]:
+def _market_buckets(rows: list[TradeRow]) -> list[tuple[str, list[TradeRow]]]:
     buckets: dict[str, list[TradeRow]] = defaultdict(list)
     for row in rows:
         buckets[f"{row.city}|{row.target_date}|{row.side}|{row.bracket}"].append(row)
+    return list(buckets.items())
+
+
+def _table_market_rows(rows: list[TradeRow], *, reverse: bool, limit: int = 8) -> list[str]:
     ranked = sorted(
-        buckets.items(),
-        key=lambda item: abs(sum(r.pnl_usd_at_fill or 0.0 for r in item[1])),
-        reverse=True,
-    )[:12]
+        _market_buckets(rows),
+        key=lambda item: sum(r.pnl_usd_at_fill or 0.0 for r in item[1]),
+        reverse=reverse,
+    )[:limit]
+    return _market_rows_from_ranked(ranked)
+
+
+def _market_concentration_rows(rows: list[TradeRow]) -> list[str]:
+    ranked = sorted(_market_buckets(rows), key=lambda item: abs(sum(r.pnl_usd_at_fill or 0.0 for r in item[1])), reverse=True)[:12]
+    return _market_rows_from_ranked(ranked)
+
+
+def _market_rows_from_ranked(ranked: list[tuple[str, list[TradeRow]]]) -> list[str]:
     out = [
         "| city | target_date | side | bracket | fills | cost_usd | pnl_usd | avg_price |",
         "|---|---|---|---|---:|---:|---:|---:|",
@@ -449,6 +472,55 @@ def _market_concentration_rows(rows: list[TradeRow]) -> list[str]:
         pnl = sum(v.pnl_usd_at_fill or 0.0 for v in vals)
         out.append(f"| {city} | {target_date} | {side} | {bracket} | {len(vals)} | {_usd(cost)} | {_usd(pnl)} | {_num(avg_price)} |")
     return out
+
+
+def _paper_city_candidates(
+    rows: list[dict[str, str]],
+    *,
+    start_date: str,
+    exclude_cities: set[str],
+    min_n: int = 5,
+) -> list[tuple[str, dict[str, Any]]]:
+    buckets: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for row in rows:
+        city = str(row.get("city") or "")
+        if city in exclude_cities:
+            continue
+        if row.get("settlement_status") != "settled":
+            continue
+        if str(row.get("event_date") or "") < start_date:
+            continue
+        if str(row.get("city_pool") or "") != "t2_research":
+            continue
+        buckets[city].append(row)
+    out: list[tuple[str, dict[str, Any]]] = []
+    for city, vals in buckets.items():
+        if len(vals) < min_n:
+            continue
+        wins = sum(1 for v in vals if str(v.get("won")) == "True")
+        cost = sum(float(v.get("cost_usd") or 0.0) for v in vals)
+        pnl = sum(float(v.get("pnl_usd") or 0.0) for v in vals)
+        out.append(
+            (
+                city,
+                {
+                    "n": len(vals),
+                    "wins": wins,
+                    "win_rate": wins / len(vals) if vals else None,
+                    "cost_usd": cost,
+                    "pnl_usd": pnl,
+                    "roi": pnl / cost if cost else None,
+                },
+            )
+        )
+    return sorted(out, key=lambda item: (item[1]["roi"] or 0.0, item[1]["pnl_usd"]), reverse=True)
+
+
+def _candidate_city_lines(candidates: list[tuple[str, dict[str, Any]]], limit: int = 12) -> list[str]:
+    lines = ["| city | fills | wins | win_rate | cost_usd | pnl_usd | roi |", "|---|---:|---:|---:|---:|---:|---:|"]
+    for city, s in candidates[:limit]:
+        lines.append(f"| {city} | {s['n']} | {s['wins']} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} |")
+    return lines
 
 
 def _write_report(out_path: Path) -> None:
@@ -501,7 +573,7 @@ def _write_report(out_path: Path) -> None:
         "| 项目 | 值 |",
         "|---|---|",
         f"| 数据源路径 | {DB_PATH.relative_to(ROOT)}；{LIVE_ORDER_DIR.relative_to(ROOT)} |",
-        f"| 数据快照时间 | {db_mtime}；sync 于 2026-05-27 22:08:51 +08:00 |",
+        f"| 数据快照时间 | {db_mtime}（DB mtime；报告生成前已按 contract 同步并重建） |",
         f"| fills 行数 | live={total_live} / paper={len(paper)} / snapshot_replay={len(snapshot)} |",
         f"| unsettled 占比 | {unsettled_live} / {total_live}（{(100 * unsettled_live / total_live if total_live else 0):.1f}%） |",
         f"| missing_bracket 数 | {missing_bracket_n} |",
@@ -581,13 +653,13 @@ def _write_report(out_path: Path) -> None:
             "",
             "## Top Winners / Top Losers",
             "",
-            "**Top 8 winners（by pnl_usd_at_fill）：**",
+            "**Top 8 market winners（按 city × target_date × side × bracket 聚合）：**",
             "",
-            *_table_trade_rows(_top_rows(live_settled, reverse=True)),
+            *_table_market_rows(live_settled, reverse=True),
             "",
-            "**Top 8 losers：**",
+            "**Top 8 market losers：**",
             "",
-            *_table_trade_rows(_top_rows(live_settled, reverse=False)),
+            *_table_market_rows(live_settled, reverse=False),
             "",
             "**集中度 / 重复市场 Top 12（city × target_date × side × bracket）：**",
             "",
@@ -641,12 +713,16 @@ def _write_report(out_path: Path) -> None:
     for key, s in paper_diag["price"]:
         lines.append(f"| {key} | {s['n']} | {s['wins']} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} |")
 
+    paper_rows = _load_paper_csv_rows()
     city_groups = _group(live_settled, lambda r: r.city)
     keep = [item for item in city_groups if item[1]["settled"] >= 5 and (item[1]["roi"] or 0) >= 0.10]
     watch = [item for item in city_groups if item[1]["settled"] >= 5 and -0.05 <= (item[1]["roi"] or 0) < 0.10]
     reduce_or_pause = [item for item in city_groups if item[1]["settled"] >= 5 and (item[1]["roi"] or 0) < -0.05]
     settled_city_names = {name for name, _ in city_groups}
     more_data_cities = sorted({r.city for r in live_orders if r.city and r.city not in settled_city_names})
+    exclude_expansion = settled_city_names | ADDED_T1_2026_05_26
+    recent_candidates = _paper_city_candidates(paper_rows, start_date=date_start, exclude_cities=exclude_expansion)
+    broad_candidates = _paper_city_candidates(paper_rows, start_date="2026-05-07", exclude_cities=exclude_expansion)
 
     lines.extend(
         [
@@ -667,6 +743,20 @@ def _write_report(out_path: Path) -> None:
             f"| Watch / no scale | {', '.join(k for k, _ in watch) or 'N/A'} | settled>=5 且 -5%<=ROI<10% |",
             f"| Reduce / shadow | {', '.join(k for k, _ in reduce_or_pause) or 'N/A'} | settled>=5 且 ROI<-5% |",
             f"| Need more data | {', '.join(more_data_cities[:30]) or 'N/A'} | raw live orders 存在但尚无已结算 fills |",
+            "",
+            "## 新增 8 城后的扩池候选",
+            "",
+            "昨天新增的 8 城按当前 live raw 识别为：Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle。下面候选已排除这 8 城和当前已有已结算 live 城市。",
+            "",
+            "**最近窗口候选（paper ledger，event_date >= live 起点）：**",
+            "",
+            *_candidate_city_lines(recent_candidates),
+            "",
+            "**宽窗口候选（paper ledger，event_date >= 2026-05-07）：**",
+            "",
+            *_candidate_city_lines(broad_candidates),
+            "",
+            "建议下一批不要一次性全加：优先 shadow/小 size 加 BuenosAires、Munich、Chengdu、SanFrancisco、Singapore、Taipei；Amsterdam/Manila 宽窗口表现好但最近窗口样本不足，先等新样本或只进 shadow。",
         ]
     )
 
