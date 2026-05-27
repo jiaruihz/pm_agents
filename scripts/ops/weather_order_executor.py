@@ -333,11 +333,11 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
                 ) from exc
             best_bid, best_ask = _best_bid_ask_from_book(book)
             tick_size = _get_tick_size(client, str(plan["token_id"]), _to_float(plan.get("quote_tick_size"), 0.01))
-            if str(plan.get("execution_policy") or "").strip() == "maker_queue_v1":
+            if str(plan.get("execution_policy") or "").strip() in ("maker_queue_v1", "maker_queue_v2"):
                 quote = build_execution_quote(
                     plan,
                     ExecutionPolicyConfig(
-                        policy_name="maker_queue_v1",
+                        policy_name=str(plan.get("execution_policy") or "maker_queue_v1"),
                         price_floor=0.01,
                         price_ceiling=0.99,
                         tick_size=tick_size,

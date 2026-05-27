@@ -106,7 +106,7 @@ def build_execution_quote(
             "quote_mode": "legacy_snapshot_price",
         }
 
-    if policy != "maker_queue_v1":
+    if policy not in ("maker_queue_v1", "maker_queue_v2"):
         return {
             "execution_policy": policy,
             "quote_status": "rejected",
@@ -124,7 +124,7 @@ def build_execution_quote(
 
     if bid <= 0 or ask <= 0 or ask <= bid:
         return {
-            "execution_policy": "maker_queue_v1",
+            "execution_policy": policy,
             "quote_status": "rejected",
             "quote_reason": "missing_two_sided_book",
             "limit_price": 0.0,
@@ -141,7 +141,7 @@ def build_execution_quote(
     mid = (bid + ask) / 2.0
     if market_price > 0 and abs(mid - market_price) > config.max_mid_drift:
         return {
-            "execution_policy": "maker_queue_v1",
+            "execution_policy": policy,
             "quote_status": "rejected",
             "quote_reason": "mid_drift_too_large",
             "limit_price": 0.0,
@@ -158,7 +158,13 @@ def build_execution_quote(
     required_edge = config.min_quote_edge + config.adverse_selection_spread_fraction * spread
     edge_cap = token_prob - required_edge
     ask_cap = ask - tick
-    if spread > config.max_quote_spread:
+    if policy == "maker_queue_v2":
+        # V2: always try to top the book by 1 tick.
+        # If spread <= 1 tick the ask_cap collapses queue_price back to bid (join bid).
+        # Wide-spread adverse selection is handled by the edge check, not by shading.
+        queue_price = bid + tick
+        quote_mode = "improve_bid" if (ask_cap > bid) else "join_bid"
+    elif spread > config.max_quote_spread:
         queue_price = bid - max(0, int(config.wide_spread_shade_ticks)) * tick
         quote_mode = "shade_below_bid_wide_spread"
     elif spread <= config.narrow_spread:
@@ -176,7 +182,7 @@ def build_execution_quote(
     if limit_price < price_floor or limit_price <= 0:
         quote_edge = token_prob - max(0.0, limit_price)
         return {
-            "execution_policy": "maker_queue_v1",
+            "execution_policy": policy,
             "quote_status": "rejected",
             "quote_reason": "no_valid_resting_price",
             "limit_price": 0.0,
@@ -193,7 +199,7 @@ def build_execution_quote(
     quote_edge = token_prob - limit_price
     if quote_edge < required_edge:
         return {
-            "execution_policy": "maker_queue_v1",
+            "execution_policy": policy,
             "quote_status": "rejected",
             "quote_reason": "quote_edge_below_required",
             "limit_price": round(limit_price, 6),
@@ -208,7 +214,7 @@ def build_execution_quote(
         }
 
     return {
-        "execution_policy": "maker_queue_v1",
+        "execution_policy": policy,
         "quote_status": "accepted",
         "quote_reason": "",
         "limit_price": round(limit_price, 6),

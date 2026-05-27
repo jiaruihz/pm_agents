@@ -251,7 +251,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run one execution-policy branch from a shared live signal file."
     )
-    parser.add_argument("--execution-policy", choices=("mid_price_core_v1", "maker_queue_v1"), required=True)
+    parser.add_argument("--execution-policy", choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2"), required=True)
     parser.add_argument("--source-policy", default="mid_price_core_v1")
     parser.add_argument("--source-signal")
     parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))

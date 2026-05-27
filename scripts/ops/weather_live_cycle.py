@@ -638,8 +638,23 @@ def main() -> int:
     parser.add_argument("--min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ENTRY_PRICE", "0.25")))
     parser.add_argument("--max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ENTRY_PRICE", "0.75")))
     parser.add_argument(
+        "--snapshot-lookback-minutes",
+        type=float,
+        default=float(os.getenv("WEATHER_LIVE_SNAPSHOT_LOOKBACK_MINUTES", "90")),
+    )
+    parser.add_argument(
+        "--min-hours-to-settle",
+        type=float,
+        default=float(os.getenv("WEATHER_LIVE_MIN_HOURS_TO_SETTLE", "22")),
+    )
+    parser.add_argument(
+        "--max-hours-to-settle",
+        type=float,
+        default=float(os.getenv("WEATHER_LIVE_MAX_HOURS_TO_SETTLE", "28")),
+    )
+    parser.add_argument(
         "--execution-policy",
-        choices=("mid_price_core_v1", "maker_queue_v1"),
+        choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2"),
         default=os.getenv("WEATHER_LIVE_EXECUTION_POLICY", "mid_price_core_v1"),
     )
     parser.add_argument("--min-quote-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_QUOTE_EDGE", "0.03")))
@@ -673,6 +688,9 @@ def main() -> int:
         "min_edge": float(args.min_edge),
         "min_entry_price": float(args.min_entry_price),
         "max_entry_price": float(args.max_entry_price),
+        "snapshot_lookback_minutes": float(args.snapshot_lookback_minutes),
+        "min_hours_to_settle": float(args.min_hours_to_settle),
+        "max_hours_to_settle": float(args.max_hours_to_settle),
         "execution_policy": str(args.execution_policy),
         "min_quote_edge": float(args.min_quote_edge),
         "max_quote_spread": float(args.max_quote_spread),
@@ -700,10 +718,18 @@ def main() -> int:
         str(signal_path),
         "--city-pool",
         str(live_config["city_pool"]),
+        "--min-edge",
+        str(float(live_config["min_edge"])),
         "--min-entry-price",
         str(float(live_config["min_entry_price"])),
         "--max-entry-price",
         str(float(live_config["max_entry_price"])),
+        "--snapshot-lookback-minutes",
+        str(float(live_config["snapshot_lookback_minutes"])),
+        "--min-hours-to-settle",
+        str(float(live_config["min_hours_to_settle"])),
+        "--max-hours-to-settle",
+        str(float(live_config["max_hours_to_settle"])),
     ]
     signal_run = _run(signal_cmd, timeout=180)
     signals = _load_json_from_output(signal_run["output"])
