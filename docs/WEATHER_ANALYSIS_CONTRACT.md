@@ -25,7 +25,7 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild
 
 同步完成后按以下优先级使用数据：
 
-1. `weather.db`（`runtime/weather_edge_v1/weather.db`）— 首选
+1. `weather.db`（`runtime/weather.db`）— 首选
 2. Dashboard API（`http://localhost:8000`）— DB 不可用时
 3. 镜像 JSON/CSV（`runtime/weather_edge_v1/market_data/research/`）— API 不可用时
 4. N100 raw（`jiarui@192.168.0.200:~/projects/weather-predict/output/`）— 最后手段
@@ -58,7 +58,7 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild
 
 ### weather.db
 
-- 路径：`runtime/weather_edge_v1/weather.db`
+- 路径：`runtime/weather.db`
 - 刷新方式：`scripts/weather_dashboard/run_stack.sh`（重跑 ingest）
 - 覆盖时间：取决于镜像同步时间，详见 `WEATHER_DATA_PIPELINE.md`
 - 关键表：`signals` / `plans` / `orders` / `fills` / `settlements` / `runs` / `strategy_config`

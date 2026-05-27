@@ -52,7 +52,7 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild
 ### 第 2 步：数据源（按 contract §0 优先级）
 
 ```bash
-ls -la runtime/weather_edge_v1/weather.db
+ls -la runtime/weather.db
 ```
 
 若 DB 不可用，按 contract §0 降级并在报告"数据快照"段说明原因。

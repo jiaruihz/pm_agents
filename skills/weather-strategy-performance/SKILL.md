@@ -66,7 +66,7 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild
 **优先 DB：**
 ```bash
 # 确认 DB 存在且时间戳新鲜（同步后应刚刚更新）
-ls -la runtime/weather_edge_v1/weather.db
+ls -la runtime/weather.db
 ```
 
 **降级到镜像 JSON（DB 不可用时）：**
@@ -93,7 +93,7 @@ curl -s http://localhost:8000/api/runs | python3 -m json.tool | head -20
 ```python
 import sqlite3
 
-conn = sqlite3.connect("runtime/weather_edge_v1/weather.db")
+conn = sqlite3.connect("runtime/weather.db")
 
 total = conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0]
 
