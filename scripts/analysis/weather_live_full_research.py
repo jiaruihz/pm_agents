@@ -529,6 +529,70 @@ def _paper_city_candidates(
     return sorted(out, key=lambda item: (item[1]["roi"] or 0.0, item[1]["pnl_usd"]), reverse=True)
 
 
+def _paper_city_comparison_pool(
+    rows: list[dict[str, str]],
+    *,
+    start_date: str,
+    existing_live_cities: set[str],
+    added_cities: set[str],
+    min_n: int = 5,
+) -> list[tuple[str, dict[str, Any]]]:
+    buckets: dict[str, list[dict[str, str]]] = defaultdict(list)
+    cohort_by_city: dict[str, str] = {}
+    for row in rows:
+        city = str(row.get("city") or "")
+        if row.get("settlement_status") != "settled":
+            continue
+        if str(row.get("event_date") or "") < start_date:
+            continue
+
+        if city in added_cities:
+            cohort = "new_added_8"
+        elif str(row.get("city_pool") or "") == "t2_research" and city not in existing_live_cities:
+            cohort = "current_t2"
+        else:
+            continue
+
+        buckets[city].append(row)
+        cohort_by_city[city] = cohort
+
+    out: list[tuple[str, dict[str, Any]]] = []
+    for city, vals in buckets.items():
+        if len(vals) < min_n and city not in added_cities:
+            continue
+        by_date: dict[str, list[dict[str, str]]] = defaultdict(list)
+        for val in vals:
+            by_date[str(val.get("event_date") or "")].append(val)
+        wins = sum(1 for v in vals if str(v.get("won")) == "True")
+        cost = sum(float(v.get("cost_usd") or 0.0) for v in vals)
+        pnl = sum(float(v.get("pnl_usd") or 0.0) for v in vals)
+        positive_days = sum(
+            1
+            for day_rows in by_date.values()
+            if sum(float(v.get("pnl_usd") or 0.0) for v in day_rows) > 0
+        )
+        dates = sorted(d for d in by_date if d)
+        out.append(
+            (
+                city,
+                {
+                    "cohort": cohort_by_city[city],
+                    "n": len(vals),
+                    "wins": wins,
+                    "win_rate": wins / len(vals) if vals else None,
+                    "cost_usd": cost,
+                    "pnl_usd": pnl,
+                    "roi": pnl / cost if cost else None,
+                    "active_days": len(dates),
+                    "positive_days": positive_days,
+                    "positive_day_rate": positive_days / len(dates) if dates else None,
+                    "date_range": f"{dates[0]} - {dates[-1]}" if dates else "N/A",
+                },
+            )
+        )
+    return sorted(out, key=lambda item: (item[1]["roi"] or 0.0, item[1]["pnl_usd"]), reverse=True)
+
+
 def _candidate_city_lines(candidates: list[tuple[str, dict[str, Any]]], limit: int = 30) -> list[str]:
     lines = [
         "| city | fills | active_days | positive_days | positive_day_rate | win_rate | cost_usd | pnl_usd | roi | date_range |",
@@ -539,6 +603,36 @@ def _candidate_city_lines(candidates: list[tuple[str, dict[str, Any]]], limit: i
             f"| {city} | {s['n']} | {s['active_days']} | {s['positive_days']} | {_pct(s['positive_day_rate'])} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} | {s['date_range']} |"
         )
     return lines
+
+
+def _comparison_city_lines(candidates: list[tuple[str, dict[str, Any]]], limit: int = 40) -> list[str]:
+    lines = [
+        "| cohort | city | fills | active_days | positive_days | positive_day_rate | win_rate | cost_usd | pnl_usd | roi | date_range |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for city, s in candidates[:limit]:
+        lines.append(
+            f"| {s['cohort']} | {city} | {s['n']} | {s['active_days']} | {s['positive_days']} | {_pct(s['positive_day_rate'])} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} | {s['date_range']} |"
+        )
+    return lines
+
+
+def _comparison_tier_lines(candidates: list[tuple[str, dict[str, Any]]]) -> list[str]:
+    def names(pred: Callable[[dict[str, Any]], bool]) -> str:
+        selected = [city for city, stats in candidates if pred(stats)]
+        return ", ".join(selected) if selected else "N/A"
+
+    stable = lambda s: s["active_days"] >= 4 and s["n"] >= 10 and (s["roi"] or 0) >= 0.10 and (s["positive_day_rate"] or 0) >= 0.60
+    positive_unstable = lambda s: (s["roi"] or 0) >= 0.10 and not stable(s)
+    return [
+        "| tier | cities | rule |",
+        "|---|---|---|",
+        f"| 新增 8 城：保留/可小幅加权 | {names(lambda s: s['cohort'] == 'new_added_8' and stable(s))} | added8 且 active_days>=4, fills>=10, ROI>=10%, positive_day_rate>=60% |",
+        f"| 新增 8 城：低 size 观察 | {names(lambda s: s['cohort'] == 'new_added_8' and positive_unstable(s))} | added8 正收益但日稳定性不足 |",
+        f"| 当前 T2：优先补进候选池 | {names(lambda s: s['cohort'] == 'current_t2' and stable(s))} | current_t2 且 active_days>=4, fills>=10, ROI>=10%, positive_day_rate>=60% |",
+        f"| 当前 T2：shadow / 等样本 | {names(lambda s: s['cohort'] == 'current_t2' and (s['roi'] or 0) >= 0 and not stable(s))} | current_t2 非负但不满足稳定阈值 |",
+        f"| 当前 T2：不加 | {names(lambda s: s['cohort'] == 'current_t2' and s['n'] >= 10 and (s['roi'] or 0) < 0)} | current_t2 fills>=10 且 ROI<0 |",
+    ]
 
 
 def _stability_tier_lines(candidates: list[tuple[str, dict[str, Any]]]) -> list[str]:
@@ -581,7 +675,7 @@ def _paper_candidate_coverage(rows: list[dict[str, str]], exclude_cities: set[st
     }
 
 
-def _write_report(out_path: Path) -> None:
+def _write_report(out_path: Path, *, data_note: str) -> None:
     conn = _connect()
     live = _load_trades(conn, "live")
     paper = _load_trades(conn, "paper")
@@ -631,7 +725,7 @@ def _write_report(out_path: Path) -> None:
         "| 项目 | 值 |",
         "|---|---|",
         f"| 数据源路径 | {DB_PATH.relative_to(ROOT)}；{LIVE_ORDER_DIR.relative_to(ROOT)} |",
-        f"| 数据快照时间 | {db_mtime}（DB mtime；报告生成前已按 contract 同步并重建） |",
+        f"| 数据快照时间 | {db_mtime}（{data_note}） |",
         f"| fills 行数 | live={total_live} / paper={len(paper)} / snapshot_replay={len(snapshot)} |",
         f"| unsettled 占比 | {unsettled_live} / {total_live}（{(100 * unsettled_live / total_live if total_live else 0):.1f}%） |",
         f"| missing_bracket 数 | {missing_bracket_n} |",
@@ -782,6 +876,12 @@ def _write_report(out_path: Path) -> None:
     coverage = _paper_candidate_coverage(paper_rows, exclude_expansion)
     full_candidates = _paper_city_candidates(paper_rows, start_date="2026-05-13", exclude_cities=exclude_expansion)
     recent_candidates = _paper_city_candidates(paper_rows, start_date=date_start, exclude_cities=exclude_expansion)
+    comparison_candidates = _paper_city_comparison_pool(
+        paper_rows,
+        start_date="2026-05-13",
+        existing_live_cities=settled_city_names,
+        added_cities=ADDED_T1_2026_05_26,
+    )
 
     lines.extend(
         [
@@ -805,7 +905,7 @@ def _write_report(out_path: Path) -> None:
             "",
             "## 新增 8 城后的扩池候选",
             "",
-            "昨天新增的 8 城按当前 live raw 识别为：Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle。下面候选已排除这 8 城和当前已有已结算 live 城市。",
+            "昨天新增的 8 城按当前 live raw 识别为：Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle。扩池决策需要先把这 8 城和仍在 T2 的候选放在同一张 paper ledger 表里比较，再看剩余未加入候选。",
             "",
             "| coverage | rows | cities | date_range |",
             "|---|---:|---:|---|",
@@ -814,6 +914,14 @@ def _write_report(out_path: Path) -> None:
             f"| settled T2 | {coverage['settled_t2_rows']} | N/A | N/A |",
             f"| T2 candidates after excludes | {coverage['candidate_rows']} | {coverage['candidate_cities']} | {coverage['candidate_range']} |",
             f"| live-overlap recent candidates | {coverage['recent_rows']} | {coverage['recent_cities']} | {coverage['recent_range']} |",
+            "",
+            "**同池比较：新增 8 城 vs 当前 T2 候选（event_date >= 2026-05-13）：**",
+            "",
+            "`new_added_8` 表示昨天已经补进 live/T1 的城市；`current_t2` 表示当前仍未进 live 的 T2 候选。新增 8 城不再从比较表中排除。",
+            "",
+            *_comparison_tier_lines(comparison_candidates),
+            "",
+            *_comparison_city_lines(comparison_candidates),
             "",
             "**稳定性分层（基于全量可用 T2 paper 候选）：**",
             "",
@@ -842,8 +950,12 @@ def main() -> None:
         type=Path,
         default=REPORT_DIR / "2026-05-27-performance-live-full-research.md",
     )
+    parser.add_argument(
+        "--data-note",
+        default="DB mtime；报告生成前已按 contract 同步并重建",
+    )
     args = parser.parse_args()
-    _write_report(args.out)
+    _write_report(args.out, data_note=args.data_note)
     print(args.out)
 
 

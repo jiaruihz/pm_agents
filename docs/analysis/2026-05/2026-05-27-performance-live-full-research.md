@@ -10,7 +10,7 @@
 | 项目 | 值 |
 |---|---|
 | 数据源路径 | runtime/weather.db；runtime/weather_edge_v1/remote_pm_agent/live |
-| 数据快照时间 | 2026-05-27T23:05:34（DB mtime；报告生成前已按 contract 同步并重建） |
+| 数据快照时间 | 2026-05-27T23:05:34（DB mtime；N100 sync connection reset，本次使用本地镜像重建 DB） |
 | fills 行数 | live=497 / paper=1145 / snapshot_replay=636 |
 | unsettled 占比 | 194 / 497（39.0%） |
 | missing_bracket 数 | 65 |
@@ -199,7 +199,7 @@
 
 ## 新增 8 城后的扩池候选
 
-昨天新增的 8 城按当前 live raw 识别为：Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle。下面候选已排除这 8 城和当前已有已结算 live 城市。
+昨天新增的 8 城按当前 live raw 识别为：Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle。扩池决策需要先把这 8 城和仍在 T2 的候选放在同一张 paper ledger 表里比较，再看剩余未加入候选。
 
 | coverage | rows | cities | date_range |
 |---|---:|---:|---|
@@ -208,6 +208,56 @@
 | settled T2 | 538 | N/A | N/A |
 | T2 candidates after excludes | 361 | 29 | 2026-05-13 - 2026-05-24 |
 | live-overlap recent candidates | 233 | 28 | 2026-05-16 - 2026-05-24 |
+
+**同池比较：新增 8 城 vs 当前 T2 候选（event_date >= 2026-05-13）：**
+
+`new_added_8` 表示昨天已经补进 live/T1 的城市；`current_t2` 表示当前仍未进 live 的 T2 候选。新增 8 城不再从比较表中排除。
+
+| tier | cities | rule |
+|---|---|---|
+| 新增 8 城：保留/可小幅加权 | Jeddah, Guangzhou, Moscow, Seattle | added8 且 active_days>=4, fills>=10, ROI>=10%, positive_day_rate>=60% |
+| 新增 8 城：低 size 观察 | Lucknow, Istanbul, Ankara, Karachi | added8 正收益但日稳定性不足 |
+| 当前 T2：优先补进候选池 | BuenosAires, Amsterdam, Manila, Munich, Singapore, Chengdu, Wuhan | current_t2 且 active_days>=4, fills>=10, ROI>=10%, positive_day_rate>=60% |
+| 当前 T2：shadow / 等样本 | SanFrancisco, HongKong, PanamaCity, Helsinki, Atlanta, KualaLumpur, CapeTown, TelAviv, Taipei, Busan, SaoPaulo, Dallas, Chongqing | current_t2 非负但不满足稳定阈值 |
+| 当前 T2：不加 | Milan, Houston, Shenzhen, Jakarta, Seoul, Wellington | current_t2 fills>=10 且 ROI<0 |
+
+| cohort | city | fills | active_days | positive_days | positive_day_rate | win_rate | cost_usd | pnl_usd | roi | date_range |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| current_t2 | BuenosAires | 11 | 7 | 6 | 85.7% | 90.9% | 60.54 | 39.46 | 65.2% | 2026-05-13 - 2026-05-24 |
+| current_t2 | Amsterdam | 14 | 7 | 5 | 71.4% | 71.4% | 66.51 | 33.49 | 50.4% | 2026-05-13 - 2026-05-24 |
+| current_t2 | Manila | 12 | 6 | 5 | 83.3% | 66.7% | 55.24 | 24.76 | 44.8% | 2026-05-14 - 2026-05-22 |
+| new_added_8 | Jeddah | 24 | 9 | 7 | 77.8% | 79.2% | 133.52 | 56.48 | 42.3% | 2026-05-13 - 2026-05-24 |
+| current_t2 | Munich | 13 | 7 | 5 | 71.4% | 69.2% | 66.30 | 23.70 | 35.7% | 2026-05-13 - 2026-05-23 |
+| current_t2 | Singapore | 13 | 8 | 6 | 75.0% | 76.9% | 74.50 | 25.50 | 34.2% | 2026-05-14 - 2026-05-24 |
+| new_added_8 | Guangzhou | 16 | 7 | 6 | 85.7% | 75.0% | 90.58 | 29.42 | 32.5% | 2026-05-14 - 2026-05-24 |
+| current_t2 | Chengdu | 13 | 5 | 5 | 100.0% | 69.2% | 68.61 | 21.39 | 31.2% | 2026-05-14 - 2026-05-24 |
+| new_added_8 | Moscow | 17 | 5 | 3 | 60.0% | 70.6% | 91.73 | 28.27 | 30.8% | 2026-05-15 - 2026-05-22 |
+| new_added_8 | Seattle | 16 | 7 | 5 | 71.4% | 75.0% | 93.58 | 26.41 | 28.2% | 2026-05-13 - 2026-05-24 |
+| current_t2 | SanFrancisco | 9 | 6 | 4 | 66.7% | 66.7% | 46.81 | 13.19 | 28.2% | 2026-05-13 - 2026-05-24 |
+| new_added_8 | Lucknow | 21 | 7 | 2 | 28.6% | 57.1% | 97.64 | 22.36 | 22.9% | 2026-05-13 - 2026-05-24 |
+| new_added_8 | Istanbul | 30 | 9 | 4 | 44.4% | 60.0% | 148.00 | 32.00 | 21.6% | 2026-05-13 - 2026-05-24 |
+| new_added_8 | Ankara | 23 | 8 | 4 | 50.0% | 65.2% | 123.37 | 26.63 | 21.6% | 2026-05-13 - 2026-05-24 |
+| new_added_8 | Karachi | 30 | 10 | 5 | 50.0% | 70.0% | 174.80 | 35.20 | 20.1% | 2026-05-13 - 2026-05-24 |
+| current_t2 | HongKong | 5 | 2 | 1 | 50.0% | 60.0% | 25.40 | 4.60 | 18.1% | 2026-05-14 - 2026-05-21 |
+| current_t2 | PanamaCity | 8 | 4 | 2 | 50.0% | 75.0% | 51.55 | 8.45 | 16.4% | 2026-05-13 - 2026-05-23 |
+| current_t2 | Helsinki | 24 | 9 | 5 | 55.6% | 66.7% | 141.79 | 18.22 | 12.8% | 2026-05-13 - 2026-05-24 |
+| current_t2 | Wuhan | 11 | 6 | 4 | 66.7% | 63.6% | 62.41 | 7.58 | 12.2% | 2026-05-14 - 2026-05-24 |
+| current_t2 | Atlanta | 20 | 7 | 4 | 57.1% | 60.0% | 107.30 | 12.70 | 11.8% | 2026-05-13 - 2026-05-24 |
+| current_t2 | KualaLumpur | 13 | 7 | 3 | 42.9% | 46.2% | 53.75 | 6.25 | 11.6% | 2026-05-14 - 2026-05-24 |
+| current_t2 | CapeTown | 16 | 8 | 4 | 50.0% | 62.5% | 90.65 | 9.35 | 10.3% | 2026-05-13 - 2026-05-23 |
+| current_t2 | TelAviv | 22 | 8 | 4 | 50.0% | 63.6% | 127.80 | 12.20 | 9.5% | 2026-05-13 - 2026-05-24 |
+| current_t2 | Taipei | 14 | 7 | 4 | 57.1% | 64.3% | 82.18 | 7.82 | 9.5% | 2026-05-14 - 2026-05-24 |
+| current_t2 | Busan | 13 | 7 | 3 | 42.9% | 61.5% | 74.71 | 5.28 | 7.1% | 2026-05-14 - 2026-05-23 |
+| current_t2 | SaoPaulo | 12 | 7 | 4 | 57.1% | 66.7% | 76.91 | 3.10 | 4.0% | 2026-05-13 - 2026-05-24 |
+| current_t2 | Dallas | 9 | 4 | 2 | 50.0% | 66.7% | 58.55 | 1.45 | 2.5% | 2026-05-16 - 2026-05-23 |
+| current_t2 | Chongqing | 8 | 6 | 4 | 66.7% | 62.5% | 49.35 | 0.65 | 1.3% | 2026-05-14 - 2026-05-23 |
+| current_t2 | Milan | 15 | 8 | 3 | 37.5% | 53.3% | 84.75 | -4.75 | -5.6% | 2026-05-13 - 2026-05-24 |
+| current_t2 | Houston | 17 | 7 | 2 | 28.6% | 47.1% | 85.85 | -5.85 | -6.8% | 2026-05-13 - 2026-05-24 |
+| current_t2 | Shenzhen | 15 | 7 | 3 | 42.9% | 60.0% | 97.25 | -7.25 | -7.5% | 2026-05-14 - 2026-05-24 |
+| current_t2 | Jakarta | 10 | 5 | 1 | 20.0% | 40.0% | 44.16 | -4.16 | -9.4% | 2026-05-13 - 2026-05-21 |
+| current_t2 | Lagos | 6 | 3 | 1 | 33.3% | 50.0% | 37.20 | -7.20 | -19.4% | 2026-05-13 - 2026-05-15 |
+| current_t2 | Seoul | 18 | 8 | 2 | 25.0% | 44.4% | 102.20 | -22.20 | -21.7% | 2026-05-14 - 2026-05-23 |
+| current_t2 | Wellington | 13 | 9 | 2 | 22.2% | 46.2% | 77.40 | -17.40 | -22.5% | 2026-05-14 - 2026-05-24 |
 
 **稳定性分层（基于全量可用 T2 paper 候选）：**
 
