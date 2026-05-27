@@ -1,12 +1,13 @@
 # Weather Strategy Entrypoint
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.
 
 For early live rollout history, known mistakes, and how to split local/N100 live PnL, also read:
 
 - `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`
+- `docs/WEATHER_CITY_POOL_DECISIONS.md`
 - `docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md`
 
 ## Current Production Posture
@@ -20,16 +21,36 @@ For early live rollout history, known mistakes, and how to split local/N100 live
 Current live rollout policy:
 
 ```text
-city_pool = t1_trading (v2, 20 cities — see below)
+city_pool = t1_trading (v3, 24 cities — see docs/WEATHER_CITY_POOL_DECISIONS.md)
 execution_policy = maker_queue_v1  [upgraded 2026-05-26; set via WEATHER_LIVE_EXECUTION_POLICY in N100 .env]
 entry window = 0.25 <= price < 0.75
+signal capture = scan latest 90 minutes of synced snapshots; executable window 22h <= hours_to_settle_now <= 28h
 sizing_mode = notional
 max_order_notional = 5.00
 max_order_shares = 25.00
 order style = maker-only GTC, post_only=True
 ```
 
-## 2026-05-26 城市池 v2 变更（paper ledger 生效）
+## 当前城市池 v3（2026-05-27）
+
+城市池决策日志和完整证据见 `docs/WEATHER_CITY_POOL_DECISIONS.md`。
+代码 source of truth 是 `weather-predict/city_pools.py` 的
+`TRADING_T1_CITIES`。
+
+**T1 完整城市列表（v3，共 24 个）：**
+Amsterdam, Ankara, Boston, BuenosAires, Chengdu, Guangzhou, Istanbul,
+Jeddah, Karachi, LA, London, Lucknow, Manila, Miami, Moscow, Munich, NYC,
+Paris, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw
+
+**2026-05-27 v3 变更：**
+- T1 移除：Chicago
+- 已确认继续不在 T1：Beijing, Madrid
+- T1 新增：BuenosAires, Amsterdam, Manila, Munich, Singapore, Chengdu
+
+Madrid / Beijing / Chicago 均保留在 `FULL_CITY_CONFIGS`，因此是 T2
+research-only，不是删除城市配置。
+
+## 2026-05-26 城市池 v2 变更（已被 v3 覆盖，paper ledger 生效）
 
 基于 2026-05-08~05-24 ledger 数据，939 笔已结算交易的分析结论。
 
@@ -52,7 +73,7 @@ Ankara, Istanbul, Jeddah, Lucknow, Moscow（BUY_YES 胜率 0%~20%，ROI -42%~-10
 - `maker_queue_v1`：entry_price = no_best_bid / yes_best_bid（CLOB 盘口）
 dedup key 包含 execution_policy，两笔订单互不干扰。
 
-**T1 完整城市列表（v2，共 20 个）：**
+**T1 完整城市列表（v2，共 20 个，历史记录）：**
 Ankara, Boston, Chicago, Guangzhou, Istanbul, Jeddah, Karachi, LA,
 London, Lucknow, Madrid, Miami, Moscow, NYC, Paris, Phoenix, Seattle,
 Shanghai, Tokyo, Warsaw
@@ -168,6 +189,7 @@ Each live cycle summary now includes:
 
 - `config`: exact live parameters used for that cycle.
 - `contract_alerts`: invariant violations that should be visible in Telegram.
+- `signals.snapshots`: all snapshot files scanned for catch-up signal capture.
 - `planner.live_dedup`: skipped prior or same-run duplicate plans.
 - `executor.balance_preflight`: CLOB balance/allowance gate when orders are eligible.
 

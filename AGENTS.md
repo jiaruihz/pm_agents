@@ -325,6 +325,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | 文档 | 用途 |
 |---|---|
 | [WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md) | 实盘排查入口：N100 检查命令、live 口径、近期事故结论 |
+| [WEATHER_CITY_POOL_DECISIONS.md](docs/WEATHER_CITY_POOL_DECISIONS.md) | 城市池决策日志：T1/T2 当前口径、升降级依据、N100 部署记录 |
 | [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md) | N100↔pm_agent 字段名/枚举/ID算法契约，**改字段前必读** |
 | [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) | N100→镜像→DB→API 全链路、所有脚本职责、PnL口径、运维 runbook |
 | [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) | 核心架构设计（血缘链/策略身份/Run Registry/DB schema/API/前端） |
