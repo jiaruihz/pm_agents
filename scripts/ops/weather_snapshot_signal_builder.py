@@ -7,7 +7,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -53,6 +53,58 @@ def _market_top(record: Dict[str, Any]) -> Dict[str, float]:
 def _latest_snapshot(snapshot_dir: Path) -> Optional[Path]:
     files = sorted(snapshot_dir.glob("snapshot_*.json"), key=lambda p: p.stat().st_mtime)
     return files[-1] if files else None
+
+
+def _recent_snapshots(snapshot_dir: Path, lookback_minutes: float) -> List[Path]:
+    files = sorted(snapshot_dir.glob("snapshot_*.json"), key=lambda p: p.stat().st_mtime)
+    if not files:
+        return []
+    if lookback_minutes <= 0:
+        return [files[-1]]
+    newest_mtime = files[-1].stat().st_mtime
+    cutoff = newest_mtime - lookback_minutes * 60.0
+    return [p for p in files if p.stat().st_mtime >= cutoff]
+
+
+def _parse_utc(value: Any) -> Optional[datetime]:
+    text = _safe_str(value)
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _hours_to_settle_now(record: Dict[str, Any], now_utc: datetime) -> Optional[float]:
+    settle_utc = _parse_utc(record.get("settle_utc"))
+    if settle_utc is not None:
+        return (settle_utc - now_utc).total_seconds() / 3600.0
+    try:
+        return float(record.get("hours_to_settle"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _record_key(record: Dict[str, Any], side: str) -> Tuple[str, str, str, str, str]:
+    market_id = _safe_str(record.get("market_id"))
+    condition_id = _safe_str(record.get("condition_id"))
+    if market_id:
+        return ("market_id", market_id, "", "", side)
+    if condition_id:
+        return ("condition_id", condition_id, "", "", side)
+    return (
+        "city_bracket",
+        _safe_str(record.get("city")),
+        _safe_str(record.get("event_date")),
+        _safe_str(record.get("bracket")),
+        side,
+    )
 
 
 def _token_for_side(market: Dict[str, Any], side: str) -> str:
@@ -115,21 +167,29 @@ def _build_signal(record: Dict[str, Any], token_id: str, snapshot_path: Path) ->
 def build_signals(
     *,
     snapshot_path: Path,
+    snapshot_paths: Optional[Iterable[Path]] = None,
     out_path: Path,
     city_pool: str,
     min_edge: float,
     min_entry_price: float,
     max_entry_price: float,
+    min_hours_to_settle: Optional[float] = None,
+    max_hours_to_settle: Optional[float] = None,
     dry_run: bool,
 ) -> Dict[str, Any]:
-    payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
-    records = [x for x in payload.get("records", []) if isinstance(x, dict)]
+    paths = list(snapshot_paths) if snapshot_paths is not None else [snapshot_path]
+    now_utc = datetime.now(timezone.utc)
+    records_with_source: List[Tuple[Dict[str, Any], Path]] = []
+    for path in paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        records_with_source.extend((x, path) for x in payload.get("records", []) if isinstance(x, dict))
     gamma = PolymarketGammaClient()
     market_cache: Dict[str, Optional[Dict[str, Any]]] = {}
     signals: List[Dict[str, Any]] = []
     skipped: Dict[str, int] = {}
+    candidates: Dict[Tuple[str, str, str, str, str], Tuple[Dict[str, Any], Path]] = {}
 
-    for record in records:
+    for record, source_path in records_with_source:
         record_city_pool = _safe_str(record.get("city_pool"))
         if city_pool and city_pool.lower() != "all" and record_city_pool != city_pool:
             skipped[f"city_pool_not_{city_pool}"] = skipped.get(f"city_pool_not_{city_pool}", 0) + 1
@@ -138,9 +198,21 @@ def build_signals(
         if side not in {"BUY_YES", "BUY_NO"}:
             skipped["bad_side"] = skipped.get("bad_side", 0) + 1
             continue
-        if _safe_str(record.get("time_bucket")) != "t24":
-            skipped["not_t24"] = skipped.get("not_t24", 0) + 1
-            continue
+        if min_hours_to_settle is None and max_hours_to_settle is None:
+            if _safe_str(record.get("time_bucket")) != "t24":
+                skipped["not_t24"] = skipped.get("not_t24", 0) + 1
+                continue
+        else:
+            hours_to_settle = _hours_to_settle_now(record, now_utc)
+            if hours_to_settle is None:
+                skipped["missing_hours_to_settle"] = skipped.get("missing_hours_to_settle", 0) + 1
+                continue
+            if min_hours_to_settle is not None and hours_to_settle < min_hours_to_settle:
+                skipped["hours_to_settle_below_min"] = skipped.get("hours_to_settle_below_min", 0) + 1
+                continue
+            if max_hours_to_settle is not None and hours_to_settle > max_hours_to_settle:
+                skipped["hours_to_settle_above_max"] = skipped.get("hours_to_settle_above_max", 0) + 1
+                continue
         edge = _to_float(record.get("abs_edge"), abs(_to_float(record.get("edge"), 0.0)))
         if edge < min_edge:
             skipped["edge_below_min"] = skipped.get("edge_below_min", 0) + 1
@@ -152,7 +224,13 @@ def build_signals(
         if entry_price >= max_entry_price:
             skipped["entry_price_at_or_above_max"] = skipped.get("entry_price_at_or_above_max", 0) + 1
             continue
+        key = _record_key(record, side)
+        if key in candidates:
+            skipped["older_duplicate_candidate"] = skipped.get("older_duplicate_candidate", 0) + 1
+        candidates[key] = (record, source_path)
 
+    for record, source_path in candidates.values():
+        side = _safe_str(record.get("side")).upper()
         market_id = _safe_str(record.get("market_id"))
         condition_id = _safe_str(record.get("condition_id"))
         cache_key = market_id or condition_id
@@ -170,7 +248,7 @@ def build_signals(
         if not token_id:
             skipped["token_not_found"] = skipped.get("token_not_found", 0) + 1
             continue
-        signals.append(_build_signal(record, token_id, snapshot_path))
+        signals.append(_build_signal(record, token_id, source_path))
 
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -193,8 +271,10 @@ def build_signals(
 
     return {
         "snapshot": str(snapshot_path),
+        "snapshots": [str(p) for p in paths],
         "city_pool": city_pool,
-        "records": len(records),
+        "records": len(records_with_source),
+        "candidate_signals": len(candidates),
         "signals": len(signals),
         "out": str(out_path),
         "dry_run": dry_run,
@@ -215,6 +295,14 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-edge", type=float, default=0.10)
     parser.add_argument("--min-entry-price", type=float, default=0.25)
     parser.add_argument("--max-entry-price", type=float, default=0.75)
+    parser.add_argument(
+        "--snapshot-lookback-minutes",
+        type=float,
+        default=0.0,
+        help="Scan all snapshots whose mtime is within this many minutes of the newest snapshot. Default preserves latest-only behavior.",
+    )
+    parser.add_argument("--min-hours-to-settle", type=float, default=None)
+    parser.add_argument("--max-hours-to-settle", type=float, default=None)
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
@@ -227,16 +315,23 @@ def main() -> int:
     except ModuleNotFoundError:
         pass
     args = _parser().parse_args()
-    snapshot = Path(args.snapshot) if args.snapshot else _latest_snapshot(Path(args.snapshot_dir))
+    if args.snapshot:
+        snapshots = [Path(args.snapshot)]
+    else:
+        snapshots = _recent_snapshots(Path(args.snapshot_dir), float(args.snapshot_lookback_minutes))
+    snapshot = snapshots[-1] if snapshots else None
     if snapshot is None:
         raise SystemExit("no snapshot found")
     result = build_signals(
         snapshot_path=snapshot,
+        snapshot_paths=snapshots,
         out_path=Path(args.out),
         city_pool=str(args.city_pool),
         min_edge=float(args.min_edge),
         min_entry_price=float(args.min_entry_price),
         max_entry_price=float(args.max_entry_price),
+        min_hours_to_settle=args.min_hours_to_settle,
+        max_hours_to_settle=args.max_hours_to_settle,
         dry_run=bool(args.dry_run),
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
