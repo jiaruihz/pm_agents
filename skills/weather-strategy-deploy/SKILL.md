@@ -2,16 +2,154 @@
 name: weather-strategy-deploy
 description: >
   部署 weather 策略变更到 N100 生产环境。适用场景：新增执行策略（如 maker_queue_v2）、
-  修改现有策略参数、切换当前运行的策略分支。
+  修改现有策略参数、切换当前运行的策略分支、更新城市池（T1/T2）。
   触发词：部署策略、上线策略、部署 policy、新策略、切换策略、修改参数部署、
-  deploy、上 V2、上 V3、启动新分支、停旧策略。
+  城市池、T1、T2、加城市、移除城市、deploy、上 V2、上 V3、启动新分支、停旧策略。
   禁止：跳过 N100 diff 检查直接 rsync；跳过 smoke test 直接切换；
   在未确认用户许可的情况下 kill 生产进程。
 ---
 
 # weather-strategy-deploy
 
-将执行策略变更安全部署到 N100，含三个强制确认点。
+将 weather 策略变更安全部署到 N100。先判断部署类型：
+
+| 类型 | 本机源目录 | N100 目标目录 | 典型文件 |
+|---|---|---|---|
+| 执行策略 / live cycle | `/home/rui/projects/pm_agent` | `/home/jiarui/projects/pm_agent` | `execution_policy.py`, `weather_live_cycle.py` |
+| 城市池 / paper 生产采集 | `/home/rui/projects/weather-predict` | `/home/jiarui/projects/weather-predict` | `city_pools.py` |
+
+不要把两个项目混用。城市池的 source of truth 是 `weather-predict/city_pools.py`，不是 `pm_agent`。
+
+---
+
+## A. 城市池部署 Checklist
+
+适用：新增/移除 T1 城市、调整 T2 research pool、更新 `city_pools.py`。
+
+### A0：部署前必须确认的文档
+
+先读：
+
+- `/home/rui/projects/pm_agent/docs/WEATHER_CITY_POOL_DECISIONS.md`
+- `/home/rui/projects/pm_agent/docs/WEATHER_STRATEGY_ENTRYPOINT.md`
+
+确认本次城市池变更已经写入：
+
+- 当前 T1 完整列表
+- 加入/移除城市
+- 决策依据
+- 对应分析报告路径
+
+### A1：本机校验
+
+```bash
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/weather-predict && \
+  python3 -m py_compile city_pools.py scripts/analysis/paper_policy.py scripts/ops/fill_t2_weather_cache.py"
+```
+
+确认关键城市归属：
+
+```bash
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/weather-predict && python3 - <<'PY'
+from city_pools import TRADING_T1_CITIES, RESEARCH_T2_CITIES
+
+check = [
+    'Beijing', 'Chicago', 'Madrid',
+    'BuenosAires', 'Amsterdam', 'Manila', 'Munich', 'Singapore', 'Chengdu',
+]
+print('T1_COUNT', len(TRADING_T1_CITIES))
+for city in check:
+    if city in TRADING_T1_CITIES:
+        pool = 'T1'
+    elif city in RESEARCH_T2_CITIES:
+        pool = 'T2'
+    else:
+        pool = 'MISSING'
+    print(city, pool)
+PY"
+```
+
+### A2：N100 备份并 rsync
+
+不要在 PowerShell 字符串里写 `$(date ...)`，会被 Windows 侧解析。用固定备份名或分两步执行。
+
+```bash
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
+  cp /home/jiarui/projects/weather-predict/city_pools.py \
+     /home/jiarui/projects/weather-predict/city_pools.py.bak.codex_YYYYMMDD
+
+wsl -d Ubuntu-24.04 -- rsync -av \
+  /home/rui/projects/weather-predict/city_pools.py \
+  jiarui@192.168.0.200:/home/jiarui/projects/weather-predict/city_pools.py
+```
+
+### A3：N100 校验
+
+```bash
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
+  'cd /home/jiarui/projects/weather-predict && \
+   python3 -m py_compile city_pools.py scripts/analysis/paper_policy.py scripts/ops/fill_t2_weather_cache.py && \
+   sed -n "1,45p" city_pools.py'
+```
+
+必须人工确认：
+
+- T1 区块包含应加入城市
+- T1 区块不包含应移除城市
+- `FULL_CITY_CONFIGS` 仍保留被降级城市
+
+### A4：N100 doctor
+
+```bash
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
+  'cd /home/jiarui/projects/weather-predict && scripts/ops/doctor_restart.sh'
+```
+
+通过标准：
+
+- `snapshot freshness ok`
+- `paper_snapshot.err.log` empty or missing
+- `daily_pipeline.err.log` empty or missing
+- `paper_orders.jsonl` 行数正常增长或至少可读取
+
+### A5：确认是否已经被运行中的 snapshot 进程加载
+
+文件部署成功不等于当前正在跑的进程已经加载了新文件。`paper_snapshot.py`
+如果在 rsync 前已经启动，它会继续使用启动时 import 的旧 `city_pools.py`。
+
+检查当前 service：
+
+```bash
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
+  'systemctl --user status weather-predict-snapshot.service --no-pager | sed -n "1,35p"; \
+   echo === latest ===; \
+   ls -lt /home/jiarui/projects/weather-predict/output/paper_snapshots | head -5'
+```
+
+判断：
+
+- 如果 `weather-predict-snapshot.service` 的 `Active since` 晚于 rsync 时间，说明当前进程已加载新文件。
+- 如果 `Active since` 早于 rsync 时间，说明文件已部署，但当前这轮 snapshot 未必加载新城市池；下一轮新进程会加载。
+- 不要为了“立刻生效”直接 kill/restart 生产采集进程，除非用户明确要求或已经确认当前进程卡死。
+
+### A6：汇报格式
+
+```text
+城市池部署完成：
+- N100 文件：/home/jiarui/projects/weather-predict/city_pools.py
+- 备份：/home/jiarui/projects/weather-predict/city_pools.py.bak.<suffix>
+- 本机 py_compile：通过
+- N100 py_compile：通过
+- T1 校验：新增城市在 T1，移除城市不在 T1
+- doctor：snapshot freshness ok，错误日志为空
+- 生效状态：当前 snapshot 进程是否晚于部署时间启动；若不是，说明下一轮进程才加载
+```
+
+---
+
+## B. 执行策略部署 Checklist
+
+适用：新增/切换 execution policy、live cycle、branch daemon。
 
 ---
 
@@ -129,7 +267,6 @@ git commit -m "feat: add <policy_name> execution policy"
 
 ```bash
 wsl -d Ubuntu-24.04 -- bash -lc "rsync -av \
-  /home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/execution_policy.py \
   /home/rui/projects/pm_agent/scripts/ops/weather_trade_planner.py \
   /home/rui/projects/pm_agent/scripts/ops/weather_live_cycle.py \
   /home/rui/projects/pm_agent/scripts/ops/weather_policy_branch.py \
