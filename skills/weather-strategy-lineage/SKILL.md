@@ -35,6 +35,20 @@ description: >
 
 ---
 
+### 第 1.5 步：强制数据同步（不得跳过）
+
+```bash
+# 从 N100 同步最新 paper ledger / snapshot CSV
+scripts/ops/sync_weather_remote.sh
+
+# 重建 weather.db（ingest CSV → DB）
+scripts/weather_dashboard/run_stack.sh --no-rebuild
+```
+
+> 若 N100 不可达，在报告"数据快照"段注明，并标注本地缓存数据时间。
+
+---
+
 ### 第 2 步：数据源（按 contract §0 优先级）
 
 ```bash

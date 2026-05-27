@@ -7,7 +7,23 @@
 
 ## §0 通用规约
 
+### 分析前强制数据同步（硬规定）
+
+**每次触发分析前必须先执行以下两条命令**（skill checklist 第 1.5 步）：
+
+```bash
+# Step 1: 从 N100 拉取最新 paper ledger、snapshot CSV、pm_history
+scripts/ops/sync_weather_remote.sh
+
+# Step 2: 重建 weather.db（ingest 最新 CSV → DB）
+scripts/weather_dashboard/run_stack.sh --no-rebuild
+```
+
+> 若 N100 不可达（SSH 超时 / 网络中断），在报告"数据快照"段注明，并写明本地缓存的最后同步时间。
+
 ### 数据源优先级（硬规定）
+
+同步完成后按以下优先级使用数据：
 
 1. `weather.db`（`runtime/weather_edge_v1/weather.db`）— 首选
 2. Dashboard API（`http://localhost:8000`）— DB 不可用时

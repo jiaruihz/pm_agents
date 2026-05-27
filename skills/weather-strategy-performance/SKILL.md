@@ -42,11 +42,30 @@ description: >
 
 ---
 
+### 第 1.5 步：强制数据同步（不得跳过）
+
+每次分析前必须先从 N100 拉取最新数据并重建 DB：
+
+```bash
+# 从 N100 同步最新 paper ledger / snapshot CSV
+scripts/ops/sync_weather_remote.sh
+
+# 重建 weather.db（ingest CSV → DB）
+scripts/weather_dashboard/run_stack.sh --no-rebuild
+```
+
+> `--no-rebuild` 表示不重建 schema（schema 已存在），只重跑 ingest。
+> 若 DB 不存在或 schema 有变，去掉 `--no-rebuild`。
+>
+> 如果 N100 不可达（SSH 超时），在报告"数据快照"段说明，并注明使用的是本地缓存数据及缓存时间。
+
+---
+
 ### 第 2 步：数据源选择（按 contract §0 优先级）
 
 **优先 DB：**
 ```bash
-# 确认 DB 存在且时间戳新鲜
+# 确认 DB 存在且时间戳新鲜（同步后应刚刚更新）
 ls -la runtime/weather_edge_v1/weather.db
 ```
 
