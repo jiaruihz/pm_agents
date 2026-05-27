@@ -497,9 +497,18 @@ def _paper_city_candidates(
     for city, vals in buckets.items():
         if len(vals) < min_n:
             continue
+        by_date: dict[str, list[dict[str, str]]] = defaultdict(list)
+        for val in vals:
+            by_date[str(val.get("event_date") or "")].append(val)
         wins = sum(1 for v in vals if str(v.get("won")) == "True")
         cost = sum(float(v.get("cost_usd") or 0.0) for v in vals)
         pnl = sum(float(v.get("pnl_usd") or 0.0) for v in vals)
+        positive_days = sum(
+            1
+            for day_rows in by_date.values()
+            if sum(float(v.get("pnl_usd") or 0.0) for v in day_rows) > 0
+        )
+        dates = sorted(d for d in by_date if d)
         out.append(
             (
                 city,
@@ -510,6 +519,10 @@ def _paper_city_candidates(
                     "cost_usd": cost,
                     "pnl_usd": pnl,
                     "roi": pnl / cost if cost else None,
+                    "active_days": len(dates),
+                    "positive_days": positive_days,
+                    "positive_day_rate": positive_days / len(dates) if dates else None,
+                    "date_range": f"{dates[0]} - {dates[-1]}" if dates else "N/A",
                 },
             )
         )
@@ -517,10 +530,30 @@ def _paper_city_candidates(
 
 
 def _candidate_city_lines(candidates: list[tuple[str, dict[str, Any]]], limit: int = 30) -> list[str]:
-    lines = ["| city | fills | wins | win_rate | cost_usd | pnl_usd | roi |", "|---|---:|---:|---:|---:|---:|---:|"]
+    lines = [
+        "| city | fills | active_days | positive_days | positive_day_rate | win_rate | cost_usd | pnl_usd | roi | date_range |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+    ]
     for city, s in candidates[:limit]:
-        lines.append(f"| {city} | {s['n']} | {s['wins']} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} |")
+        lines.append(
+            f"| {city} | {s['n']} | {s['active_days']} | {s['positive_days']} | {_pct(s['positive_day_rate'])} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} | {s['date_range']} |"
+        )
     return lines
+
+
+def _stability_tier_lines(candidates: list[tuple[str, dict[str, Any]]]) -> list[str]:
+    def names(pred: Callable[[dict[str, Any]], bool]) -> str:
+        selected = [city for city, stats in candidates if pred(stats)]
+        return ", ".join(selected) if selected else "N/A"
+
+    return [
+        "| tier | cities | rule |",
+        "|---|---|---|",
+        f"| Stable add / small live | {names(lambda s: s['active_days'] >= 4 and s['n'] >= 10 and (s['roi'] or 0) >= 0.10 and (s['positive_day_rate'] or 0) >= 0.60)} | active_days>=4, fills>=10, ROI>=10%, positive_day_rate>=60% |",
+        f"| Opportunistic shadow | {names(lambda s: (s['roi'] or 0) >= 0.20 and (s['active_days'] < 4 or s['n'] < 10))} | ROI>=20% but active_days<4 or fills<10 |",
+        f"| Watch only | {names(lambda s: (s['roi'] or 0) >= 0 and not (s['active_days'] >= 4 and s['n'] >= 10 and (s['roi'] or 0) >= 0.10 and (s['positive_day_rate'] or 0) >= 0.60) and not ((s['roi'] or 0) >= 0.20 and (s['active_days'] < 4 or s['n'] < 10)))} | non-negative but not stable enough |",
+        f"| Avoid / do not add | {names(lambda s: s['n'] >= 10 and (s['roi'] or 0) < 0)} | fills>=10 and ROI<0 |",
+    ]
 
 
 def _paper_candidate_coverage(rows: list[dict[str, str]], exclude_cities: set[str]) -> dict[str, Any]:
@@ -781,6 +814,10 @@ def _write_report(out_path: Path) -> None:
             f"| settled T2 | {coverage['settled_t2_rows']} | N/A | N/A |",
             f"| T2 candidates after excludes | {coverage['candidate_rows']} | {coverage['candidate_cities']} | {coverage['candidate_range']} |",
             f"| live-overlap recent candidates | {coverage['recent_rows']} | {coverage['recent_cities']} | {coverage['recent_range']} |",
+            "",
+            "**稳定性分层（基于全量可用 T2 paper 候选）：**",
+            "",
+            *_stability_tier_lines(full_candidates),
             "",
             "**全量可用 T2 paper 候选（event_date >= 2026-05-13；T2 settled 起点；表内仅列 fills>=5）：**",
             "",
