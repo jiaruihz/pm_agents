@@ -123,19 +123,24 @@ def build_execution_quote(
         }
 
     if bid <= 0 or ask <= 0 or ask <= bid:
+        # No live two-sided book in the signal (snapshot branch).
+        # Accept with a placeholder price so the executor can re-evaluate
+        # against the live orderbook at CLOB submission time.
+        placeholder = max(price_floor, min(price_ceiling, market_price))
+        placeholder = _round_down_to_tick(placeholder, tick)
         return {
             "execution_policy": policy,
-            "quote_status": "rejected",
-            "quote_reason": "missing_two_sided_book",
-            "limit_price": 0.0,
-            "quote_edge": round(token_prob, 6),
+            "quote_status": "accepted",
+            "quote_reason": "defer_to_executor_missing_two_sided_book",
+            "limit_price": round(placeholder, 6),
+            "quote_edge": round(token_prob - placeholder, 6),
             "required_quote_edge": round(config.min_quote_edge, 6),
             "model_token_probability": round(token_prob, 6),
-            "quote_best_bid": round(bid, 6),
-            "quote_best_ask": round(ask, 6),
-            "quote_spread": round(spread, 6),
+            "quote_best_bid": 0.0,
+            "quote_best_ask": 0.0,
+            "quote_spread": 0.0,
             "quote_tick_size": round(tick, 6),
-            "quote_mode": "no_quote",
+            "quote_mode": "defer_to_executor",
         }
 
     mid = (bid + ask) / 2.0
