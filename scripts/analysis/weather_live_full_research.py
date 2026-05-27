@@ -516,11 +516,36 @@ def _paper_city_candidates(
     return sorted(out, key=lambda item: (item[1]["roi"] or 0.0, item[1]["pnl_usd"]), reverse=True)
 
 
-def _candidate_city_lines(candidates: list[tuple[str, dict[str, Any]]], limit: int = 12) -> list[str]:
+def _candidate_city_lines(candidates: list[tuple[str, dict[str, Any]]], limit: int = 30) -> list[str]:
     lines = ["| city | fills | wins | win_rate | cost_usd | pnl_usd | roi |", "|---|---:|---:|---:|---:|---:|---:|"]
     for city, s in candidates[:limit]:
         lines.append(f"| {city} | {s['n']} | {s['wins']} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} |")
     return lines
+
+
+def _paper_candidate_coverage(rows: list[dict[str, str]], exclude_cities: set[str]) -> dict[str, Any]:
+    settled = [r for r in rows if r.get("settlement_status") == "settled"]
+    t2 = [r for r in settled if str(r.get("city_pool") or "") == "t2_research"]
+    candidates = [r for r in t2 if str(r.get("city") or "") not in exclude_cities]
+    recent = [r for r in candidates if str(r.get("event_date") or "") >= "2026-05-16"]
+
+    def date_range(vals: list[dict[str, str]]) -> str:
+        dates = [str(v.get("event_date") or "") for v in vals if v.get("event_date")]
+        if not dates:
+            return "N/A"
+        return f"{min(dates)} - {max(dates)}"
+
+    return {
+        "total_rows": len(rows),
+        "settled_rows": len(settled),
+        "settled_t2_rows": len(t2),
+        "candidate_rows": len(candidates),
+        "candidate_cities": len({r.get("city") for r in candidates}),
+        "candidate_range": date_range(candidates),
+        "recent_rows": len(recent),
+        "recent_cities": len({r.get("city") for r in recent}),
+        "recent_range": date_range(recent),
+    }
 
 
 def _write_report(out_path: Path) -> None:
@@ -721,8 +746,9 @@ def _write_report(out_path: Path) -> None:
     settled_city_names = {name for name, _ in city_groups}
     more_data_cities = sorted({r.city for r in live_orders if r.city and r.city not in settled_city_names})
     exclude_expansion = settled_city_names | ADDED_T1_2026_05_26
+    coverage = _paper_candidate_coverage(paper_rows, exclude_expansion)
+    full_candidates = _paper_city_candidates(paper_rows, start_date="2026-05-13", exclude_cities=exclude_expansion)
     recent_candidates = _paper_city_candidates(paper_rows, start_date=date_start, exclude_cities=exclude_expansion)
-    broad_candidates = _paper_city_candidates(paper_rows, start_date="2026-05-07", exclude_cities=exclude_expansion)
 
     lines.extend(
         [
@@ -748,15 +774,23 @@ def _write_report(out_path: Path) -> None:
             "",
             "昨天新增的 8 城按当前 live raw 识别为：Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle。下面候选已排除这 8 城和当前已有已结算 live 城市。",
             "",
-            "**最近窗口候选（paper ledger，event_date >= live 起点）：**",
+            "| coverage | rows | cities | date_range |",
+            "|---|---:|---:|---|",
+            f"| paper ledger total | {coverage['total_rows']} | N/A | N/A |",
+            f"| settled paper | {coverage['settled_rows']} | N/A | N/A |",
+            f"| settled T2 | {coverage['settled_t2_rows']} | N/A | N/A |",
+            f"| T2 candidates after excludes | {coverage['candidate_rows']} | {coverage['candidate_cities']} | {coverage['candidate_range']} |",
+            f"| live-overlap recent candidates | {coverage['recent_rows']} | {coverage['recent_cities']} | {coverage['recent_range']} |",
+            "",
+            "**全量可用 T2 paper 候选（event_date >= 2026-05-13；T2 settled 起点；表内仅列 fills>=5）：**",
+            "",
+            *_candidate_city_lines(full_candidates),
+            "",
+            "**最近 live-overlap 候选（event_date >= live 起点；表内仅列 fills>=5）：**",
             "",
             *_candidate_city_lines(recent_candidates),
             "",
-            "**宽窗口候选（paper ledger，event_date >= 2026-05-07）：**",
-            "",
-            *_candidate_city_lines(broad_candidates),
-            "",
-            "建议下一批不要一次性全加：优先 shadow/小 size 加 BuenosAires、Munich、Chengdu、SanFrancisco、Singapore、Taipei；Amsterdam/Manila 宽窗口表现好但最近窗口样本不足，先等新样本或只进 shadow。",
+            "建议下一批不要一次性全加：优先 shadow/小 size 加 BuenosAires、Amsterdam、Manila、Munich、Singapore、Chengdu、SanFrancisco；如果更看重最近 live-overlap 窗口，则把 Taipei 提到第一批，把 Amsterdam/Manila 放 shadow 等新样本。",
         ]
     )
 

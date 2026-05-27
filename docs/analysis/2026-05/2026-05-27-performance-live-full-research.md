@@ -10,7 +10,7 @@
 | 项目 | 值 |
 |---|---|
 | 数据源路径 | runtime/weather.db；runtime/weather_edge_v1/remote_pm_agent/live |
-| 数据快照时间 | 2026-05-27T22:50:57（DB mtime；报告生成前已按 contract 同步并重建） |
+| 数据快照时间 | 2026-05-27T22:59:51（DB mtime；报告生成前已按 contract 同步并重建） |
 | fills 行数 | live=497 / paper=1145 / snapshot_replay=636 |
 | unsettled 占比 | 194 / 497（39.0%） |
 | missing_bracket 数 | 65 |
@@ -201,24 +201,15 @@
 
 昨天新增的 8 城按当前 live raw 识别为：Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle。下面候选已排除这 8 城和当前已有已结算 live 城市。
 
-**最近窗口候选（paper ledger，event_date >= live 起点）：**
+| coverage | rows | cities | date_range |
+|---|---:|---:|---|
+| paper ledger total | 1145 | N/A | N/A |
+| settled paper | 939 | N/A | N/A |
+| settled T2 | 538 | N/A | N/A |
+| T2 candidates after excludes | 361 | 29 | 2026-05-13 - 2026-05-24 |
+| live-overlap recent candidates | 233 | 28 | 2026-05-16 - 2026-05-24 |
 
-| city | fills | wins | win_rate | cost_usd | pnl_usd | roi |
-|---|---:|---:|---:|---:|---:|---:|
-| BuenosAires | 7 | 6 | 85.7% | 36.40 | 23.60 | 64.8% |
-| Munich | 7 | 5 | 71.4% | 36.35 | 13.65 | 37.6% |
-| Chengdu | 7 | 6 | 85.7% | 44.60 | 15.40 | 34.5% |
-| SanFrancisco | 5 | 4 | 80.0% | 29.81 | 10.19 | 34.2% |
-| Taipei | 8 | 7 | 87.5% | 54.80 | 15.20 | 27.7% |
-| KualaLumpur | 9 | 5 | 55.6% | 39.45 | 10.55 | 26.7% |
-| Singapore | 11 | 8 | 72.7% | 63.20 | 16.80 | 26.6% |
-| Wuhan | 6 | 5 | 83.3% | 40.45 | 9.55 | 23.6% |
-| CapeTown | 11 | 8 | 72.7% | 65.45 | 14.55 | 22.2% |
-| SaoPaulo | 6 | 5 | 83.3% | 41.55 | 8.45 | 20.3% |
-| Chongqing | 5 | 4 | 80.0% | 34.20 | 5.80 | 17.0% |
-| TelAviv | 18 | 12 | 66.7% | 107.04 | 12.96 | 12.1% |
-
-**宽窗口候选（paper ledger，event_date >= 2026-05-07）：**
+**全量可用 T2 paper 候选（event_date >= 2026-05-13；T2 settled 起点；表内仅列 fills>=5）：**
 
 | city | fills | wins | win_rate | cost_usd | pnl_usd | roi |
 |---|---:|---:|---:|---:|---:|---:|
@@ -234,5 +225,48 @@
 | Helsinki | 24 | 16 | 66.7% | 141.79 | 18.22 | 12.8% |
 | Wuhan | 11 | 7 | 63.6% | 62.41 | 7.58 | 12.2% |
 | Atlanta | 20 | 12 | 60.0% | 107.30 | 12.70 | 11.8% |
+| KualaLumpur | 13 | 6 | 46.2% | 53.75 | 6.25 | 11.6% |
+| CapeTown | 16 | 10 | 62.5% | 90.65 | 9.35 | 10.3% |
+| TelAviv | 22 | 14 | 63.6% | 127.80 | 12.20 | 9.5% |
+| Taipei | 14 | 9 | 64.3% | 82.18 | 7.82 | 9.5% |
+| Busan | 13 | 8 | 61.5% | 74.71 | 5.28 | 7.1% |
+| SaoPaulo | 12 | 8 | 66.7% | 76.91 | 3.10 | 4.0% |
+| Dallas | 9 | 6 | 66.7% | 58.55 | 1.45 | 2.5% |
+| Chongqing | 8 | 5 | 62.5% | 49.35 | 0.65 | 1.3% |
+| Milan | 15 | 8 | 53.3% | 84.75 | -4.75 | -5.6% |
+| Houston | 17 | 8 | 47.1% | 85.85 | -5.85 | -6.8% |
+| Shenzhen | 15 | 9 | 60.0% | 97.25 | -7.25 | -7.5% |
+| Jakarta | 10 | 4 | 40.0% | 44.16 | -4.16 | -9.4% |
+| Lagos | 6 | 3 | 50.0% | 37.20 | -7.20 | -19.4% |
+| Seoul | 18 | 8 | 44.4% | 102.20 | -22.20 | -21.7% |
+| Wellington | 13 | 6 | 46.2% | 77.40 | -17.40 | -22.5% |
 
-建议下一批不要一次性全加：优先 shadow/小 size 加 BuenosAires、Munich、Chengdu、SanFrancisco、Singapore、Taipei；Amsterdam/Manila 宽窗口表现好但最近窗口样本不足，先等新样本或只进 shadow。
+**最近 live-overlap 候选（event_date >= live 起点；表内仅列 fills>=5）：**
+
+| city | fills | wins | win_rate | cost_usd | pnl_usd | roi |
+|---|---:|---:|---:|---:|---:|---:|
+| BuenosAires | 7 | 6 | 85.7% | 36.40 | 23.60 | 64.8% |
+| Munich | 7 | 5 | 71.4% | 36.35 | 13.65 | 37.6% |
+| Chengdu | 7 | 6 | 85.7% | 44.60 | 15.40 | 34.5% |
+| SanFrancisco | 5 | 4 | 80.0% | 29.81 | 10.19 | 34.2% |
+| Taipei | 8 | 7 | 87.5% | 54.80 | 15.20 | 27.7% |
+| KualaLumpur | 9 | 5 | 55.6% | 39.45 | 10.55 | 26.7% |
+| Singapore | 11 | 8 | 72.7% | 63.20 | 16.80 | 26.6% |
+| Wuhan | 6 | 5 | 83.3% | 40.45 | 9.55 | 23.6% |
+| CapeTown | 11 | 8 | 72.7% | 65.45 | 14.55 | 22.2% |
+| SaoPaulo | 6 | 5 | 83.3% | 41.55 | 8.45 | 20.3% |
+| Chongqing | 5 | 4 | 80.0% | 34.20 | 5.80 | 17.0% |
+| TelAviv | 18 | 12 | 66.7% | 107.04 | 12.96 | 12.1% |
+| Atlanta | 14 | 9 | 64.3% | 81.70 | 8.30 | 10.2% |
+| Helsinki | 14 | 10 | 71.4% | 93.10 | 6.90 | 7.4% |
+| Amsterdam | 7 | 4 | 57.1% | 37.75 | 2.25 | 6.0% |
+| Dallas | 9 | 6 | 66.7% | 58.55 | 1.45 | 2.5% |
+| PanamaCity | 5 | 3 | 60.0% | 32.05 | -2.05 | -6.4% |
+| Milan | 9 | 5 | 55.6% | 54.10 | -4.10 | -7.6% |
+| Seoul | 14 | 7 | 50.0% | 83.15 | -13.15 | -15.8% |
+| Shenzhen | 11 | 6 | 54.5% | 72.50 | -12.50 | -17.2% |
+| Houston | 15 | 6 | 40.0% | 74.95 | -14.95 | -19.9% |
+| Busan | 8 | 4 | 50.0% | 52.80 | -12.80 | -24.3% |
+| Wellington | 10 | 4 | 40.0% | 59.75 | -19.75 | -33.1% |
+
+建议下一批不要一次性全加：优先 shadow/小 size 加 BuenosAires、Amsterdam、Manila、Munich、Singapore、Chengdu、SanFrancisco；如果更看重最近 live-overlap 窗口，则把 Taipei 提到第一批，把 Amsterdam/Manila 放 shadow 等新样本。
