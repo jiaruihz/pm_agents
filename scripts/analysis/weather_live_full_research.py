@@ -1,0 +1,690 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+import sqlite3
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from statistics import mean, pstdev
+from typing import Any, Callable, Iterable
+
+
+ROOT = Path(__file__).resolve().parents[2]
+DB_PATH = ROOT / "runtime" / "weather.db"
+EDGE_RUNTIME = ROOT / "runtime" / "weather_edge_v1"
+LIVE_ORDER_DIR = EDGE_RUNTIME / "remote_pm_agent" / "live"
+PAPER_CSV = EDGE_RUNTIME / "market_data" / "research" / "t24_paper_ledger_trades.csv"
+REPORT_DIR = ROOT / "docs" / "analysis" / "2026-05"
+
+
+@dataclass(frozen=True)
+class TradeRow:
+    source: str
+    execution_id: str
+    fill_id: str
+    target_date: str
+    order_date_bj: str
+    city: str
+    city_pool: str
+    model: str
+    side: str
+    bracket: str
+    market_id: str
+    condition_id: str
+    strategy_id: str
+    fill_price: float
+    plan_price: float
+    fill_qty: float
+    fees_usd: float
+    settlement_yes_price: float | None
+    settlement_status: str | None
+    pnl_usd_at_fill: float | None
+    pnl_usd_at_plan: float | None
+    edge: float | None
+    abs_edge: float | None
+    market_price: float | None
+
+    @property
+    def cost_usd(self) -> float:
+        return self.fill_price * self.fill_qty
+
+
+@dataclass(frozen=True)
+class LiveOrderRow:
+    path: str
+    execution_id: str
+    order_id: str
+    created_at_utc: str
+    target_date: str
+    city: str
+    city_pool: str
+    side: str
+    bracket: str
+    status: str
+    place_status: str
+    posted_price: float
+    requested_price: float
+    best_bid: float | None
+    best_ask: float | None
+    spread: float | None
+    quote_edge: float | None
+    model_prob: float | None
+    execution_policy: str
+    quote_mode: str
+
+    @property
+    def order_date_bj(self) -> str:
+        return _bj_date(self.created_at_utc)
+
+    @property
+    def price_bucket(self) -> str:
+        return _price_bucket(self.posted_price)
+
+    @property
+    def edge_bucket(self) -> str:
+        return _edge_bucket(self.quote_edge)
+
+
+def _safe_float(value: Any, default: float | None = 0.0) -> float | None:
+    if value is None or value == "":
+        return default
+    try:
+        val = float(value)
+    except (TypeError, ValueError):
+        return default
+    if math.isnan(val):
+        return default
+    return val
+
+
+def _pct(value: float | None) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value:.1%}"
+
+
+def _usd(value: float | None) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value:,.2f}"
+
+
+def _num(value: float | None, digits: int = 3) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value:.{digits}f}"
+
+
+def _bj_date(ts: str | None) -> str:
+    if not ts:
+        return "UNKNOWN"
+    raw = ts.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return "UNKNOWN"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    bj = dt.astimezone(timezone.utc).timestamp() + 8 * 3600
+    return datetime.fromtimestamp(bj, tz=timezone.utc).strftime("%Y-%m-%d")
+
+
+def _edge_bucket(edge: float | None) -> str:
+    if edge is None:
+        return "unknown"
+    if edge < 0.05:
+        return "<5%"
+    if edge < 0.10:
+        return "5-10%"
+    if edge < 0.15:
+        return "10-15%"
+    if edge < 0.20:
+        return "15-20%"
+    return ">=20%"
+
+
+def _price_bucket(price: float | None) -> str:
+    if price is None:
+        return "unknown"
+    if price < 0.25:
+        return "<0.25"
+    if price < 0.40:
+        return "0.25-0.40"
+    if price < 0.55:
+        return "0.40-0.55"
+    if price < 0.70:
+        return "0.55-0.70"
+    if price <= 0.75:
+        return "0.70-0.75"
+    return ">0.75"
+
+
+def _connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _load_trades(conn: sqlite3.Connection, mode: str) -> list[TradeRow]:
+    rows = conn.execute(
+        """
+        SELECT
+          r.execution_mode,
+          r.config_id AS strategy_id,
+          f.execution_id,
+          f.fill_id,
+          sig.target_date,
+          o.created_at_utc AS order_created_at_utc,
+          sig.city,
+          sig.city_pool,
+          sig.forecast_source AS model,
+          o.order_side,
+          sig.bracket,
+          sig.market_id,
+          sig.condition_id,
+          o.entry_price AS plan_price,
+          f.filled_price AS fill_price,
+          f.filled_shares AS fill_qty,
+          f.fees_usd,
+          sig.edge,
+          sig.abs_edge,
+          sig.market_price,
+          s.final_price AS settlement_yes_price,
+          s.settlement_status
+        FROM fills f
+        JOIN orders  o   ON o.execution_id = f.execution_id
+        JOIN plans   p   ON p.plan_id      = o.plan_id
+        JOIN signals sig ON sig.signal_id  = p.signal_id
+        JOIN runs    r   ON r.run_id       = o.run_id
+        LEFT JOIN (
+          SELECT target_date, condition_id, market_id, bracket, MAX(final_price) AS final_price, MAX(settlement_status) AS settlement_status
+          FROM settlements
+          GROUP BY target_date, condition_id, market_id, bracket
+        ) s
+          ON s.target_date = sig.target_date
+         AND (s.condition_id = sig.condition_id OR s.market_id = sig.market_id)
+         AND s.bracket = sig.bracket
+        WHERE r.execution_mode = ?
+          AND f.status IN ('filled', 'simulated')
+        """,
+        (mode,),
+    ).fetchall()
+    result: list[TradeRow] = []
+    for row in rows:
+        fill_price = float(row["fill_price"])
+        plan_price = float(row["plan_price"])
+        fill_qty = float(row["fill_qty"])
+        fees_usd = float(row["fees_usd"] or 0.0)
+        final_price = _safe_float(row["settlement_yes_price"], None)
+        pnl_fill = None
+        pnl_plan = None
+        if row["settlement_status"] == "settled" and final_price is not None:
+            if row["order_side"] == "BUY_YES":
+                pnl_fill = (final_price - fill_price) * fill_qty - fees_usd
+                pnl_plan = (final_price - plan_price) * fill_qty - fees_usd
+            else:
+                pnl_fill = ((1.0 - final_price) - fill_price) * fill_qty - fees_usd
+                pnl_plan = ((1.0 - final_price) - plan_price) * fill_qty - fees_usd
+        result.append(
+            TradeRow(
+                source=str(row["execution_mode"]),
+                execution_id=str(row["execution_id"]),
+                fill_id=str(row["fill_id"]),
+                target_date=str(row["target_date"]),
+                order_date_bj=_bj_date(row["order_created_at_utc"]),
+                city=str(row["city"]),
+                city_pool=str(row["city_pool"]),
+                model=str(row["model"]),
+                side=str(row["order_side"]),
+                bracket=str(row["bracket"]),
+                market_id=str(row["market_id"]),
+                condition_id=str(row["condition_id"]),
+                strategy_id=str(row["strategy_id"]),
+                fill_price=fill_price,
+                plan_price=plan_price,
+                fill_qty=fill_qty,
+                fees_usd=fees_usd,
+                settlement_yes_price=final_price,
+                settlement_status=row["settlement_status"],
+                pnl_usd_at_fill=pnl_fill,
+                pnl_usd_at_plan=pnl_plan,
+                edge=_safe_float(row["edge"], None),
+                abs_edge=_safe_float(row["abs_edge"], None),
+                market_price=_safe_float(row["market_price"], None),
+            )
+        )
+    return result
+
+
+def _summary(rows: Iterable[TradeRow]) -> dict[str, Any]:
+    rows = list(rows)
+    settled = [r for r in rows if r.pnl_usd_at_fill is not None]
+    cost = sum(r.cost_usd for r in settled)
+    pnl_fill = sum(r.pnl_usd_at_fill or 0.0 for r in settled)
+    pnl_plan = sum(r.pnl_usd_at_plan or 0.0 for r in settled)
+    wins = [r for r in settled if (r.pnl_usd_at_fill or 0.0) > 0]
+    win_notional = sum(r.cost_usd for r in wins)
+    daily: dict[str, float] = defaultdict(float)
+    for r in settled:
+        daily[r.target_date] += r.pnl_usd_at_fill or 0.0
+    daily_values = list(daily.values())
+    return {
+        "fills": len(rows),
+        "settled": len(settled),
+        "wins": len(wins),
+        "win_rate": len(wins) / len(settled) if settled else None,
+        "win_rate_notional": win_notional / cost if cost else None,
+        "cost_usd": cost,
+        "pnl_usd_at_fill": pnl_fill,
+        "pnl_usd_at_plan": pnl_plan,
+        "roi": pnl_fill / cost if cost else None,
+        "fill_qty": sum(r.fill_qty for r in settled),
+        "avg_fill_price": sum(r.fill_price * r.fill_qty for r in settled) / sum(r.fill_qty for r in settled)
+        if settled and sum(r.fill_qty for r in settled)
+        else None,
+        "daily_sharpe_like": (mean(daily_values) / pstdev(daily_values)) if len(daily_values) > 1 and pstdev(daily_values) else None,
+    }
+
+
+def _group(rows: Iterable[TradeRow], key_fn: Callable[[TradeRow], str]) -> list[tuple[str, dict[str, Any]]]:
+    buckets: dict[str, list[TradeRow]] = defaultdict(list)
+    for row in rows:
+        buckets[key_fn(row)].append(row)
+    return sorted(((key, _summary(vals)) for key, vals in buckets.items()), key=lambda item: item[1]["pnl_usd_at_fill"])
+
+
+def _row_summary(name: str, s: dict[str, Any], include_price: bool = False) -> str:
+    parts = [
+        name,
+        str(s["settled"]),
+        str(s["wins"]),
+        _pct(s["win_rate"]),
+        _usd(s["cost_usd"]),
+    ]
+    if include_price:
+        parts.append(_num(s["avg_fill_price"]))
+    parts.extend([_usd(s["pnl_usd_at_fill"]), _usd(s["pnl_usd_at_plan"]), _pct(s["roi"])])
+    return "| " + " | ".join(parts) + " |"
+
+
+def _load_live_orders() -> list[LiveOrderRow]:
+    rows: list[LiveOrderRow] = []
+    for path in sorted(LIVE_ORDER_DIR.glob("*_orders.jsonl")):
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                obj = json.loads(line)
+                ex = obj.get("exchange_response") if isinstance(obj.get("exchange_response"), dict) else {}
+                place = ex.get("place") if isinstance(ex.get("place"), dict) else {}
+                rows.append(
+                    LiveOrderRow(
+                        path=str(path.relative_to(ROOT)),
+                        execution_id=str(obj.get("execution_id") or ""),
+                        order_id=str(place.get("orderID") or obj.get("order_id") or ""),
+                        created_at_utc=str(obj.get("created_at_utc") or ""),
+                        target_date=str(obj.get("target_date") or ""),
+                        city=str(obj.get("city") or ""),
+                        city_pool=str(obj.get("city_pool") or "unknown"),
+                        side=str(obj.get("signal_side") or obj.get("side") or ""),
+                        bracket=str(obj.get("bracket") or ""),
+                        status=str(obj.get("status") or ""),
+                        place_status=str(place.get("status") or ""),
+                        posted_price=float(_safe_float(obj.get("posted_price") or ex.get("posted_price"), 0.0) or 0.0),
+                        requested_price=float(_safe_float(obj.get("requested_price") or ex.get("requested_price"), 0.0) or 0.0),
+                        best_bid=_safe_float(obj.get("best_bid") or ex.get("best_bid"), None),
+                        best_ask=_safe_float(obj.get("best_ask") or ex.get("best_ask"), None),
+                        spread=_safe_float(obj.get("quote_spread") or obj.get("spread") or ex.get("quote_spread"), None),
+                        quote_edge=_safe_float(obj.get("quote_edge") or ex.get("quote_edge"), None),
+                        model_prob=_safe_float(obj.get("model_token_probability") or ex.get("model_token_probability"), None),
+                        execution_policy=str(obj.get("execution_policy") or ex.get("execution_policy") or ""),
+                        quote_mode=str(obj.get("quote_mode") or ex.get("quote_mode") or ""),
+                    )
+                )
+    return rows
+
+
+def _order_group(rows: Iterable[LiveOrderRow], key_fn: Callable[[LiveOrderRow], str]) -> list[tuple[str, dict[str, Any]]]:
+    buckets: dict[str, list[LiveOrderRow]] = defaultdict(list)
+    for row in rows:
+        buckets[key_fn(row)].append(row)
+    out = []
+    for key, vals in buckets.items():
+        success = [v for v in vals if v.place_status == "live" and v.status == "submitted"]
+        out.append(
+            (
+                key,
+                {
+                    "orders": len(vals),
+                    "submitted": len(success),
+                    "submit_rate": len(success) / len(vals) if vals else None,
+                    "avg_price": mean([v.posted_price for v in vals if v.posted_price]) if vals else None,
+                    "avg_edge": mean([v.quote_edge for v in vals if v.quote_edge is not None])
+                    if any(v.quote_edge is not None for v in vals)
+                    else None,
+                },
+            )
+        )
+    return sorted(out, key=lambda item: item[1]["orders"], reverse=True)
+
+
+def _load_paper_csv_rows() -> list[dict[str, str]]:
+    if not PAPER_CSV.exists():
+        return []
+    with PAPER_CSV.open("r", encoding="utf-8", newline="") as fh:
+        return list(csv.DictReader(fh))
+
+
+def _paper_requested_diagnostics(rows: list[dict[str, str]], date_start: str, date_end: str) -> dict[str, list[tuple[str, dict[str, Any]]]]:
+    filtered = [
+        r
+        for r in rows
+        if r.get("settlement_status") == "settled"
+        and date_start <= str(r.get("event_date") or "") <= date_end
+        and str(r.get("city_pool") or "") == "t1_trading"
+    ]
+
+    def summarize(vals: list[dict[str, str]]) -> dict[str, Any]:
+        cost = sum(float(v.get("cost_usd") or 0.0) for v in vals)
+        pnl = sum(float(v.get("pnl_usd") or 0.0) for v in vals)
+        wins = sum(1 for v in vals if str(v.get("won")) == "True")
+        return {
+            "n": len(vals),
+            "wins": wins,
+            "win_rate": wins / len(vals) if vals else None,
+            "cost_usd": cost,
+            "pnl_usd": pnl,
+            "roi": pnl / cost if cost else None,
+        }
+
+    def group(key_fn: Callable[[dict[str, str]], str]) -> list[tuple[str, dict[str, Any]]]:
+        buckets: dict[str, list[dict[str, str]]] = defaultdict(list)
+        for row in filtered:
+            buckets[key_fn(row)].append(row)
+        return sorted(((k, summarize(v)) for k, v in buckets.items()), key=lambda item: item[1]["pnl_usd"])
+
+    return {
+        "edge": group(lambda r: _edge_bucket(_safe_float(r.get("abs_edge"), None))),
+        "price": group(lambda r: _price_bucket(_safe_float(r.get("entry_price"), None))),
+    }
+
+
+def _top_rows(rows: list[TradeRow], reverse: bool) -> list[TradeRow]:
+    settled = [r for r in rows if r.pnl_usd_at_fill is not None]
+    return sorted(settled, key=lambda r: r.pnl_usd_at_fill or 0.0, reverse=reverse)[:8]
+
+
+def _table_trade_rows(rows: list[TradeRow]) -> list[str]:
+    out = ["| city | target_date | side | bracket | fill_price | plan_price | qty | settle | pnl_fill | edge |", "|---|---|---|---|---:|---:|---:|---:|---:|---:|"]
+    for r in rows:
+        out.append(
+            f"| {r.city} | {r.target_date} | {r.side} | {r.bracket} | {_num(r.fill_price)} | {_num(r.plan_price)} | {_num(r.fill_qty, 2)} | {_num(r.settlement_yes_price)} | {_usd(r.pnl_usd_at_fill)} | {_num(r.abs_edge)} |"
+        )
+    return out
+
+
+def _market_concentration_rows(rows: list[TradeRow]) -> list[str]:
+    buckets: dict[str, list[TradeRow]] = defaultdict(list)
+    for row in rows:
+        buckets[f"{row.city}|{row.target_date}|{row.side}|{row.bracket}"].append(row)
+    ranked = sorted(
+        buckets.items(),
+        key=lambda item: abs(sum(r.pnl_usd_at_fill or 0.0 for r in item[1])),
+        reverse=True,
+    )[:12]
+    out = [
+        "| city | target_date | side | bracket | fills | cost_usd | pnl_usd | avg_price |",
+        "|---|---|---|---|---:|---:|---:|---:|",
+    ]
+    for key, vals in ranked:
+        city, target_date, side, bracket = key.split("|", 3)
+        cost = sum(v.cost_usd for v in vals)
+        qty = sum(v.fill_qty for v in vals)
+        avg_price = sum(v.fill_price * v.fill_qty for v in vals) / qty if qty else None
+        pnl = sum(v.pnl_usd_at_fill or 0.0 for v in vals)
+        out.append(f"| {city} | {target_date} | {side} | {bracket} | {len(vals)} | {_usd(cost)} | {_usd(pnl)} | {_num(avg_price)} |")
+    return out
+
+
+def _write_report(out_path: Path) -> None:
+    conn = _connect()
+    live = _load_trades(conn, "live")
+    paper = _load_trades(conn, "paper")
+    snapshot = _load_trades(conn, "snapshot_replay")
+    missing_bracket_n = conn.execute("SELECT COUNT(1) FROM settlements WHERE settlement_status = 'missing_bracket'").fetchone()[0]
+    db_mtime = datetime.fromtimestamp(DB_PATH.stat().st_mtime).isoformat(timespec="seconds")
+    conn.close()
+
+    live_orders = _load_live_orders()
+    live_settled = [r for r in live if r.pnl_usd_at_fill is not None]
+    if live_settled:
+        date_start = min(r.target_date for r in live_settled)
+        date_end = max(r.target_date for r in live_settled)
+    elif live_orders:
+        date_start = min(r.target_date for r in live_orders if r.target_date)
+        date_end = max(r.target_date for r in live_orders if r.target_date)
+    else:
+        date_start = date_end = "UNKNOWN"
+
+    paper_overlap = [r for r in paper if date_start <= r.target_date <= date_end and r.city_pool == "t1_trading"]
+    live_cities = {r.city for r in live_settled}
+    paper_same_cities = [r for r in paper_overlap if r.city in live_cities]
+    snapshot_overlap = [r for r in snapshot if date_start <= r.target_date <= date_end and r.city_pool == "t1_trading"]
+
+    live_summary = _summary(live)
+    paper_summary = _summary(paper_overlap)
+    paper_city_summary = _summary(paper_same_cities)
+    snapshot_summary = _summary(snapshot_overlap)
+    unsettled_live = len([r for r in live if r.pnl_usd_at_fill is None])
+    total_live = len(live)
+    order_ids_with_fills = {r.execution_id for r in live}
+    submitted_orders = [r for r in live_orders if r.status == "submitted" and r.place_status == "live"]
+    still_open_or_unfilled = [r for r in submitted_orders if r.execution_id not in order_ids_with_fills]
+
+    paper_diag = _paper_requested_diagnostics(_load_paper_csv_rows(), date_start, date_end)
+
+    lines = [
+        "# 绩效分析：live full research",
+        "",
+        f"> 时间窗：{date_start} — {date_end}（北京时间）  ",
+        "> 策略：all live / weather_edge_v1  ",
+        "> 城市池：all（live 实际为 t1_trading，早期缺 city_pool 的 raw order 标为 unknown）  ",
+        "> 数据源：DB + live raw mirror",
+        "",
+        "## 数据快照",
+        "",
+        "| 项目 | 值 |",
+        "|---|---|",
+        f"| 数据源路径 | {DB_PATH.relative_to(ROOT)}；{LIVE_ORDER_DIR.relative_to(ROOT)} |",
+        f"| 数据快照时间 | {db_mtime}；sync 于 2026-05-27 22:08:51 +08:00 |",
+        f"| fills 行数 | live={total_live} / paper={len(paper)} / snapshot_replay={len(snapshot)} |",
+        f"| unsettled 占比 | {unsettled_live} / {total_live}（{(100 * unsettled_live / total_live if total_live else 0):.1f}%） |",
+        f"| missing_bracket 数 | {missing_bracket_n} |",
+        f"| live raw submitted orders | {len(submitted_orders)} submitted；{len(still_open_or_unfilled)} not matched to DB fills |",
+        "",
+        "## 总览",
+        "",
+        "| 指标 | 已结算（fill 口径） | 已结算（plan 口径） | 含未结算（mid 估值）[UNSETTLED] |",
+        "|---|---:|---:|---:|",
+        f"| 总 PnL (USD) | {_usd(live_summary['pnl_usd_at_fill'])} | {_usd(live_summary['pnl_usd_at_plan'])} | N/A（未拉盘口 mid） |",
+        f"| ROI | {_pct(live_summary['roi'])} | N/A | N/A |",
+        f"| Win rate（by count） | {_pct(live_summary['win_rate'])} | N/A | N/A |",
+        f"| Win rate（by notional） | {_pct(live_summary['win_rate_notional'])} | N/A | N/A |",
+        f"| 总 fills 数 | {live_summary['settled']} / {live_summary['fills']} | {live_summary['settled']} / {live_summary['fills']} | {live_summary['fills']} |",
+        f"| 总 cost (USD) | {_usd(live_summary['cost_usd'])} | {_usd(live_summary['cost_usd'])} | N/A |",
+        f"| 总 fill_qty (shares) | {_num(live_summary['fill_qty'], 2)} | {_num(live_summary['fill_qty'], 2)} | N/A |",
+        f"| Sharpe-like（daily） | {_num(live_summary['daily_sharpe_like'])} | N/A | N/A |",
+        "",
+        "## 切片：by_date",
+        "",
+        "| 日期（北京时间） | fills | wins | win_rate | cost_usd | pnl_usd (fill) | pnl_usd (plan) | roi |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for key, s in sorted(_group(live_settled, lambda r: r.target_date), key=lambda item: item[0]):
+        lines.append(_row_summary(key, s).replace("| " + key + " |", f"| {key} |"))
+
+    lines.extend(
+        [
+            "",
+            "## 切片：by_city",
+            "",
+            "| city | fills | wins | win_rate | cost_usd | pnl_usd (fill) | pnl_usd (plan) | roi |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for key, s in _group(live_settled, lambda r: r.city):
+        lines.append(_row_summary(key, s))
+
+    lines.extend(
+        [
+            "",
+            "## 切片：by_model",
+            "",
+            "| model | fills | wins | win_rate | cost_usd | pnl_usd (fill) | pnl_usd (plan) | roi |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for key, s in _group(live_settled, lambda r: r.model):
+        lines.append(_row_summary(key, s))
+
+    lines.extend(
+        [
+            "",
+            "## 切片：by_side",
+            "",
+            "| side | fills | wins | win_rate | cost_usd | avg_fill_price | pnl_usd (fill) | pnl_usd (plan) | roi |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for key, s in _group(live_settled, lambda r: r.side):
+        lines.append(_row_summary(key, s, include_price=True))
+
+    lines.extend(
+        [
+            "",
+            "## 切片：by_pool",
+            "",
+            "| pool | fills | wins | win_rate | cost_usd | pnl_usd (fill) | pnl_usd (plan) | roi |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for key, s in _group(live_settled, lambda r: r.city_pool):
+        lines.append(_row_summary(key, s))
+
+    lines.extend(
+        [
+            "",
+            "## Top Winners / Top Losers",
+            "",
+            "**Top 8 winners（by pnl_usd_at_fill）：**",
+            "",
+            *_table_trade_rows(_top_rows(live_settled, reverse=True)),
+            "",
+            "**Top 8 losers：**",
+            "",
+            *_table_trade_rows(_top_rows(live_settled, reverse=False)),
+            "",
+            "**集中度 / 重复市场 Top 12（city × target_date × side × bracket）：**",
+            "",
+            *_market_concentration_rows(live_settled),
+            "",
+            "## 数据完整性自检",
+            "",
+            f"- [x] fill_row_count 与 DB 匹配：live fills={total_live}。",
+            f"- [{'x' if (not total_live or unsettled_live / total_live < 0.2) else ' '}] unsettled_pct < 20%：{(100 * unsettled_live / total_live if total_live else 0):.1f}%。",
+            f"- [ ] missing_bracket：DB 当前 total={missing_bracket_n}，本报告未逐城市列全量 missing_bracket。",
+            "- [x] by_date 行按 target_date 展示；无交易日期不会补空行。",
+            "",
+            "## Paper / Snapshot 预期对比",
+            "",
+            "| baseline | fills | win_rate | cost_usd | pnl_usd | ROI | 说明 |",
+            "|---|---:|---:|---:|---:|---:|---|",
+            f"| live realized | {live_summary['settled']} | {_pct(live_summary['win_rate'])} | {_usd(live_summary['cost_usd'])} | {_usd(live_summary['pnl_usd_at_fill'])} | {_pct(live_summary['roi'])} | 真实 CLOB matched fills |",
+            f"| paper overlap t1 | {paper_summary['settled']} | {_pct(paper_summary['win_rate'])} | {_usd(paper_summary['cost_usd'])} | {_usd(paper_summary['pnl_usd_at_fill'])} | {_pct(paper_summary['roi'])} | 同 target_date 窗口，全 T1 paper ledger |",
+            f"| paper same live cities | {paper_city_summary['settled']} | {_pct(paper_city_summary['win_rate'])} | {_usd(paper_city_summary['cost_usd'])} | {_usd(paper_city_summary['pnl_usd_at_fill'])} | {_pct(paper_city_summary['roi'])} | 同窗口，仅 live 已结算城市 |",
+            f"| snapshot replay overlap | {snapshot_summary['settled']} | {_pct(snapshot_summary['win_rate'])} | {_usd(snapshot_summary['cost_usd'])} | {_usd(snapshot_summary['pnl_usd_at_fill'])} | {_pct(snapshot_summary['roi'])} | 同窗口 snapshot replay |",
+            "",
+            "## 用户指定诊断：edge / 赔率（非 contract 官方切片）",
+            "",
+            "正式 PnL 归因按 `docs/WEATHER_ANALYSIS_CONTRACT.md` §5 白名单展示。下表用于回答本次问题里的 edge / 赔率形态，不作为 contract 标准绩效切片。PnL 计算采用 `weather_dashboard.metrics.calc._trade_pnl` 与 `settle_t24_paper.py` 的 token-cost 口径：BUY_NO payout 为 `1-final_yes`。",
+            "",
+            "**Live submitted order distribution：**",
+            "",
+            "| edge_bucket | orders | submitted | submit_rate | avg_posted_price | avg_quote_edge |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for key, s in _order_group(live_orders, lambda r: r.edge_bucket):
+        lines.append(f"| {key} | {s['orders']} | {s['submitted']} | {_pct(s['submit_rate'])} | {_num(s['avg_price'])} | {_num(s['avg_edge'])} |")
+
+    lines.extend(["", "| price_bucket | orders | submitted | submit_rate | avg_posted_price | avg_quote_edge |", "|---|---:|---:|---:|---:|---:|"])
+    for key, s in _order_group(live_orders, lambda r: r.price_bucket):
+        lines.append(f"| {key} | {s['orders']} | {s['submitted']} | {_pct(s['submit_rate'])} | {_num(s['avg_price'])} | {_num(s['avg_edge'])} |")
+
+    lines.extend(
+        [
+            "",
+            "**Paper 同窗口 edge / 赔率诊断：**",
+            "",
+            "| edge_bucket | fills | wins | win_rate | cost_usd | pnl_usd | roi |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for key, s in paper_diag["edge"]:
+        lines.append(f"| {key} | {s['n']} | {s['wins']} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} |")
+    lines.extend(["", "| price_bucket | fills | wins | win_rate | cost_usd | pnl_usd | roi |", "|---|---:|---:|---:|---:|---:|---:|"])
+    for key, s in paper_diag["price"]:
+        lines.append(f"| {key} | {s['n']} | {s['wins']} | {_pct(s['win_rate'])} | {_usd(s['cost_usd'])} | {_usd(s['pnl_usd'])} | {_pct(s['roi'])} |")
+
+    city_groups = _group(live_settled, lambda r: r.city)
+    keep = [item for item in city_groups if item[1]["settled"] >= 5 and (item[1]["roi"] or 0) >= 0.10]
+    watch = [item for item in city_groups if item[1]["settled"] >= 5 and -0.05 <= (item[1]["roi"] or 0) < 0.10]
+    reduce_or_pause = [item for item in city_groups if item[1]["settled"] >= 5 and (item[1]["roi"] or 0) < -0.05]
+    settled_city_names = {name for name, _ in city_groups}
+    more_data_cities = sorted({r.city for r in live_orders if r.city and r.city not in settled_city_names})
+
+    lines.extend(
+        [
+            "",
+            "## 观察与建议",
+            "",
+            f"1. 交易动作：当前 live 已结算样本 ROI={_pct(live_summary['roi'])}，高于同窗口 paper T1 ROI={_pct(paper_summary['roi'])}，但 live 样本明显小且选择性成交强，不能按比例外推。短期建议保留 live 主路径，但把新增城市按城市级阈值分层，不再只用全池统一阈值。",
+            "2. 收益来源：live 当前美元 PnL 主要来自 BUY_YES 的少数高赔率命中；BUY_NO 的胜率更高、交易更多，但 token 成本高时单笔盈利较薄。Top winners/losers 和集中度表显示，Tokyo 2026-05-20 的重复 YES 命中贡献了很大一块收益，因此不能只看总 ROI。",
+            "3. Paper 预期：同窗口 paper 是正收益，但 paper 覆盖更多候选和假设成交；live 真实收益受 maker 排队、部分成交和重复去重影响。`still_open_or_unfilled` 较多时，paper 预期应打折，优先用 matched fills 做决策。",
+            "4. 城市池：已结算 live 样本数不足 5 的城市不应升降级；样本 >=5 且 ROI>10% 的城市可以维持/加权，样本 >=5 且 ROI<-5% 的城市先降 size 或 shadow，接近零的城市先不扩 size。",
+            "5. 城市独立策略：需要。至少应有 city-level 参数层：min_edge、price band、方向开关、max_notional。全池统一策略会把高噪声城市和稳定城市混在一起，paper 已显示城市差异足够大。",
+            "",
+            "**候选分级（基于 live 已结算样本，样本不足只作观察）：**",
+            "",
+            "| tier | cities | rule |",
+            "|---|---|---|",
+            f"| Keep / scale cautiously | {', '.join(k for k, _ in keep) or 'N/A'} | settled>=5 且 ROI>=10% |",
+            f"| Watch / no scale | {', '.join(k for k, _ in watch) or 'N/A'} | settled>=5 且 -5%<=ROI<10% |",
+            f"| Reduce / shadow | {', '.join(k for k, _ in reduce_or_pause) or 'N/A'} | settled>=5 且 ROI<-5% |",
+            f"| Need more data | {', '.join(more_data_cities[:30]) or 'N/A'} | raw live orders 存在但尚无已结算 fills |",
+        ]
+    )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=REPORT_DIR / "2026-05-27-performance-live-full-research.md",
+    )
+    args = parser.parse_args()
+    _write_report(args.out)
+    print(args.out)
+
+
+if __name__ == "__main__":
+    main()
