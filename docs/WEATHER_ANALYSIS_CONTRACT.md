@@ -67,24 +67,90 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild
 
 **DB 路径只许 `runtime/weather.db`**（其他路径皆废，已删）。
 
+#### 取数 quickstart
+
+```python
+import sqlite3
+conn = sqlite3.connect("runtime/weather.db")
+conn.row_factory = sqlite3.Row
+
+# --- 最常用：取所有已结算成交，直接用预算好的 PnL ---
+rows = conn.execute("""
+    SELECT
+        trade_class,       -- live_real / live_simulated / paper / snapshot_replay
+        city, city_pool,
+        side, bracket,
+        target_date, order_date_bj,
+        model_version,     -- ecmwf / gfs
+        fill_price, plan_price, fill_qty, fees_usd,
+        cost_usd,
+        final_yes,         -- 结算价（0.0 或 1.0）
+        pnl_usd_at_fill,   -- 唯一授权 PnL，基于 fill_price 算
+        pnl_usd_at_plan,   -- 以 plan_price 为基准（衡量滑点影响）
+        edge, abs_edge,
+        strategy_id, run_id,
+        settlement_status  -- settled / missing_bracket / unsettled
+    FROM fact_trades
+    WHERE settlement_status = 'settled'
+""").fetchall()
+
+# --- 按城市/方向切片 ---
+rows = conn.execute("""
+    SELECT city, side,
+           COUNT(*) AS n,
+           SUM(pnl_usd_at_fill) AS total_pnl,
+           AVG(CASE WHEN pnl_usd_at_fill > 0 THEN 1.0 ELSE 0.0 END) AS win_rate
+    FROM fact_trades
+    WHERE settlement_status = 'settled'
+      AND city_pool = 't1_trading'
+    GROUP BY city, side
+    ORDER BY total_pnl DESC
+""").fetchall()
+
+# --- 只看 live 实盘（区分 paper） ---
+rows = conn.execute("""
+    SELECT * FROM fact_trades
+    WHERE trade_class = 'live_real'
+      AND settlement_status = 'settled'
+""").fetchall()
+```
+
+常用 `trade_class` 枚举值：
+
+| 值 | 含义 |
+|---|---|
+| `live_real` | execution_mode=live 且 fill_status=filled（真实成交） |
+| `live_simulated` | execution_mode=live 且 fill_status=simulated |
+| `paper` | paper 模拟下单 |
+| `snapshot_replay` | snapshot 快照 replay |
+
+#### 已迁移的参考实现（可以直接抄）
+
+| 脚本 | 说明 |
+|---|---|
+| `scripts/analysis/weather_live_full_research.py` | 按城市/方向/模型全量切片，`_load_trades()` 展示了典型的 fact_trades 读法 |
+| `scripts/analysis/weather_city_day_portfolio.py` | `load_live_fills()` 展示了只取 live_real + settled 的过滤方式 |
+| `weather_dashboard/metrics/calc.py` | `compute_metrics()` 展示了 run 级别聚合 |
+
 ### weather.db（原始规范化表，仅 fact_trades builder 使用）
 
 - 路径：`runtime/weather.db`
 - 刷新方式：`scripts/weather_dashboard/run_stack.sh`（重跑 ingest）
 - 覆盖时间：取决于镜像同步时间，详见 `WEATHER_DATA_PIPELINE.md`
-- 关键表：`signals` / `plans` / `orders` / `fills` / `settlements` / `runs` / `strategy_config`
+- **直接读原始表的唯一授权场景**：`build_weather_fact_trades.py`，其他代码禁止绕过 fact_trades 自己 JOIN 多表算 PnL
 
-关键 join 路径（signal → settlement）：
+关键表结构：`signals` / `plans` / `orders` / `fills` / `settlements` / `runs` / `strategy_config`
 
-```
-signals
-  → plans        ON plans.signal_id = signals.signal_id
-  → orders       ON orders.plan_id  = plans.plan_id
-  → fills        ON fills.execution_id = orders.execution_id
-  → settlements  ON settlements.target_date = signals.target_date
-                AND (settlements.condition_id = signals.condition_id
-                 OR  settlements.market_id    = signals.market_id)
-```
+### snapshot replay 脚本专用数据源（不走 fact_trades）
+
+以下两个脚本分析的是**候选信号 replay**（如果当时按快照价格入场会怎样），不是 DB 里的实际 fills，因此不使用 fact_trades：
+
+| 脚本 | 数据源 | 说明 |
+|---|---|---|
+| `scripts/analysis/weather_city_pool_contribution_analysis.py` | `runtime/weather_edge_v1/market_data/paper_snapshots/*.json` + `cache/pm_history/*.json` | 候选信号 × 当前城市池的反事实 replay |
+| `scripts/analysis/weather_window_capture_performance.py` | 同上 | 时间窗口捕获率 A/B 对比 |
+
+这两个脚本的 `pnl_usd=(payout - entry_price) * shares` 是正确的——它们算的是 snapshot 级别的假设入场，不是成交层 PnL，不需要 fact_trades。如果要新增类似的 snapshot 反事实分析，以这两个脚本为模板，**不要**改成读 fact_trades。
 
 ### Dashboard API
 
@@ -123,52 +189,34 @@ signals
 
 ### 2.1 PnL
 
-**已结算 PnL（settled PnL）**
+**已结算 PnL（settled PnL）— 直接读 fact_trades**
 
 ```sql
--- ⚠️  BUY_NO 公式勘误（2026-05-29 修正）：
---   旧（错误）：BUY_NO profit = fill_price - final_yes_price
---   正确：      BUY_NO profit = (1 - final_yes_price) - fill_price
---
--- 原理：fills.filled_price 对 BUY_NO 存的是 NO token 自身价（不是 YES 等效价）。
---   NO token 买入成本 = fill_price（NO price），结算时 NO 获得 (1 - final_yes)。
---   profit = (1 - final_yes) - fill_price。
---   用 651 笔 N100 生产已结算 BUY_NO 对账验证，8/8 命中此公式。
---
--- 唯一授权实现：fact_trades builder（scripts/analysis/build_weather_fact_trades.py）
--- 所有分析应读 fact_trades.pnl_usd_at_fill，不要自己实现此公式。
---
--- BUY_YES profit = (final_yes_price - fill_price) × fill_qty - fees
--- BUY_NO  profit = ((1 - final_yes_price) - fill_price) × fill_qty - fees
-
+-- 正确做法：直接读预算好的列，不要自己实现公式
 SELECT
-  f.fill_id,
-  sig.city,
-  sig.city_pool,
-  o.order_side,
-  o.entry_price          AS plan_price,
-  f.filled_price         AS fill_price,
-  f.filled_shares        AS fill_qty,
-  f.fees_usd,
-  s.final_price          AS settlement_yes_price,
-  s.settlement_status,
-  CASE o.order_side
-    WHEN 'BUY_YES' THEN (s.final_price - f.filled_price) * f.filled_shares - f.fees_usd
-    WHEN 'BUY_NO'  THEN ((1.0 - s.final_price) - f.filled_price) * f.filled_shares - f.fees_usd
-  END AS pnl_usd_at_fill,
-  CASE o.order_side
-    WHEN 'BUY_YES' THEN (s.final_price - o.entry_price) * f.filled_shares - f.fees_usd
-    WHEN 'BUY_NO'  THEN ((1.0 - s.final_price) - o.entry_price) * f.filled_shares - f.fees_usd
-  END AS pnl_usd_at_plan
-FROM fills f
-JOIN orders  o   ON o.execution_id = f.execution_id
-JOIN plans   p   ON p.plan_id      = o.plan_id
-JOIN signals sig ON sig.signal_id  = p.signal_id
-LEFT JOIN settlements s
-  ON s.target_date = sig.target_date
- AND (s.condition_id = sig.condition_id OR s.market_id = sig.market_id)
-WHERE s.settlement_status = 'settled'
+    fill_id,
+    city, city_pool, side, bracket, target_date,
+    fill_price, plan_price, fill_qty, fees_usd,
+    final_yes          AS settlement_yes_price,
+    pnl_usd_at_fill,   -- 基于实际成交价
+    pnl_usd_at_plan    -- 基于计划价（衡量滑点影响）
+FROM fact_trades
+WHERE settlement_status = 'settled'
 ```
+
+**公式说明（仅供理解，禁止在消费者代码里重新实现）**
+
+```
+BUY_YES profit = (final_yes - fill_price) × fill_qty - fees
+BUY_NO  profit = ((1 - final_yes) - fill_price) × fill_qty - fees
+```
+
+> ⚠️  BUY_NO 公式勘误（2026-05-29 修正）：  
+> 旧（错误）：`fill_price - final_yes`  
+> 正确：`(1 - final_yes) - fill_price`  
+> 原理：`fills.filled_price` 对 BUY_NO 存的是 NO token 自身价，不是 YES 等效价。  
+> 用 651 笔 N100 生产已结算 BUY_NO 对账验证，8/8 命中此公式。  
+> **唯一授权实现**：`scripts/analysis/build_weather_fact_trades.py`
 
 **未结算 PnL（unsettled PnL）**
 
@@ -188,6 +236,7 @@ WHERE s.settlement_status = 'settled'
 
 ```sql
 -- 在已结算集合上计算，按 pnl_usd_at_fill > 0 判断胜负
+-- 数据源：fact_trades WHERE settlement_status = 'settled'
 
 -- 按订单数
 SELECT
@@ -196,17 +245,19 @@ SELECT
   ROUND(
     1.0 * COUNT(*) FILTER (WHERE pnl_usd_at_fill > 0) / COUNT(*), 4
   ) AS win_rate_by_count
+FROM fact_trades
+WHERE settlement_status = 'settled'
 
 -- 按 notional（fill_price × fill_qty）
 SELECT
-  SUM(f.filled_price * f.filled_shares) FILTER (WHERE pnl_usd_at_fill > 0)
-    AS win_notional,
-  SUM(f.filled_price * f.filled_shares)
-    AS total_notional,
+  SUM(fill_price * fill_qty) FILTER (WHERE pnl_usd_at_fill > 0)  AS win_notional,
+  SUM(fill_price * fill_qty)                                       AS total_notional,
   ROUND(
-    SUM(f.filled_price * f.filled_shares) FILTER (WHERE pnl_usd_at_fill > 0)
-    / SUM(f.filled_price * f.filled_shares), 4
+    SUM(fill_price * fill_qty) FILTER (WHERE pnl_usd_at_fill > 0)
+    / SUM(fill_price * fill_qty), 4
   ) AS win_rate_by_notional
+FROM fact_trades
+WHERE settlement_status = 'settled'
 ```
 
 报告**必须同时列两套**（by_count 和 by_notional）。
@@ -305,17 +356,21 @@ sharpe_like    = avg_daily_pnl / std_daily_pnl   -- 未年化，仅供参考
 
 ## §5 切片维度白名单
 
-分析报告只能使用以下切片，**新切片必须先 PR 进本文件再使用**：
+分析报告只能使用以下切片，**新切片必须先 PR 进本文件再使用**。
 
-| 切片键 | 对应 DB 字段 | 说明 |
+所有切片直接 `GROUP BY fact_trades.<列名>`，不需要回到原始表 JOIN：
+
+| 切片键 | `fact_trades` 列名 | 说明 |
 |---|---|---|
-| by_date | `signals.target_date` | 目标日期（北京时间日） |
-| by_city | `signals.city` | 城市名 |
-| by_model | `signals.forecast_source` | 预测模型（ecmwf / gfs 等） |
-| by_side | `orders.order_side` | BUY_YES / BUY_NO |
-| by_pool | `signals.city_pool` | t1_trading / t2_research |
-| by_pool_side | city_pool × order_side | 组合切片 |
-| by_pool_model | city_pool × forecast_source | 组合切片 |
+| by_date | `target_date` | 目标日期（北京时间日） |
+| by_city | `city` | 城市名 |
+| by_model | `model_version` | 预测模型（ecmwf / gfs 等） |
+| by_side | `side` | BUY_YES / BUY_NO |
+| by_pool | `city_pool` | t1_trading / t2_research |
+| by_pool_side | `city_pool, side` | 组合切片 |
+| by_pool_model | `city_pool, model_version` | 组合切片 |
+| by_trade_class | `trade_class` | live_real / paper / snapshot_replay 等 |
+| by_strategy | `strategy_id` | 策略版本 |
 
 ---
 
