@@ -1,138 +1,166 @@
 ---
 name: weather-strategy-exposure
 description: >
-  查看当前 weather 策略的未结算持仓和风险敞口（按市场/城市/到期日聚合，含三种未实现 PnL 估值）。
+  查看当前 weather 策略的未结算持仓和风险敞口（按市场/城市/到期日聚合，含 mid/bid/last_fill 三种未实现 PnL 估值）。
   触发词：持仓、敞口、未结算、未平仓、风险、当前仓位、还挂着哪些单、open position、仓位风险。
-  禁止：在不读 contract 的情况下写一次性分析脚本；漏掉三估值并列；把未实现 PnL 混入历史绩效。
+  禁止：绕过 fact_trades 自己 join fills/orders/settlements；漏掉三估值并列；
+  把未实现 PnL 混入历史 realized 绩效。
 ---
 
 # weather-strategy-exposure
 
-时间点快照：查询所有 open positions（有 fill 但尚无 settled 结算记录的持仓）。
+时间点快照：查询所有有 fill 但尚未 settled 的 open positions。
 
----
+默认唯一取数源：
 
-## 执行 Checklist（必须按顺序完成，不得跳步）
-
-### 第 0 步：强制前置——读 contract（不得跳过）
-
-读 `docs/WEATHER_ANALYSIS_CONTRACT.md` 全文，重点确认：
-- §0 通用规约（禁止清单 + 报告头必填项）
-- §2.1 未结算 PnL 三种估值定义（mid / bid / last_fill）
-- §1 数据源清单（mid/bid 需要最新 snapshot）
-
-**未读 contract 不得继续任何分析动作。**
-
----
-
-### 第 1 步：确认分析参数
-
-| 参数 | 说明 | 默认值 |
-|---|---|---|
-| snapshot_time | 快照时间（北京时间） | now |
-| city_pool | t1_trading / t2_research / all | t1_trading |
-
----
-
-### 第 1.5 步：强制数据同步（不得跳过）
-
-持仓敞口要求数据最新，必须先同步：
-
-```bash
-# 从 N100 同步最新 paper ledger / snapshot CSV
-scripts/ops/sync_weather_remote.sh
-
-# 重建 weather.db（ingest CSV → DB）
-scripts/weather_dashboard/run_stack.sh --no-rebuild
+```text
+runtime/weather.db.fact_trades
 ```
 
-> 若 N100 不可达，在报告"数据快照"段注明，并标注本地缓存数据时间。
+`fact_trades` 已包含 open fill 的基础信息、settlement 状态、`val_mid` / `val_bid` / `val_last_fill` / `unrealized_pnl_mid`。不要绕回 raw 表手写结算 join 或 PnL 公式。
 
 ---
 
-### 第 2 步：数据源（按 contract §0 优先级）
+## 执行 Checklist
+
+### 第 0 步：读 contract
+
+先读 `docs/WEATHER_ANALYSIS_CONTRACT.md`，确认：
+- `fact_trades` 是 fill 绩效和持仓估值的默认取数源。
+- 未结算估值必须和 realized PnL 分开。
+- 未结算 PnL 至少并列展示 mid / bid / last_fill；缺值要写明原因。
+
+### 第 1 步：确认参数
+
+| 参数 | 默认值 |
+|---|---|
+| snapshot_time | now |
+| city_pool | all |
+| trade_class | live_real；若用户问 paper/shadow，再改为对应 trade_class |
+| strategy_id | all |
+
+先复述目标：例如 `current_live_real_open_exposure` = “查看 live_real 未结算 fill 的城市/市场/到期日敞口与三估值 unrealized PnL”。
+
+### 第 2 步：同步与数据源
+
+持仓敞口要求数据新鲜。需要最新数据时：
+
+```bash
+scripts/ops/sync_weather_remote.sh
+scripts/weather_dashboard/run_stack.sh
+```
+
+检查：
 
 ```bash
 ls -la runtime/weather.db
 ```
 
----
+若无法同步，报告“数据快照”注明使用本地缓存、DB mtime、`MAX(fact_built_at_utc)`。
 
-### 第 3 步：查询 open positions
+### 第 3 步：完整性自检
+
+```sql
+SELECT MAX(fact_built_at_utc) AS fact_built_at_utc FROM fact_trades;
+
+SELECT trade_class, settlement_status, COUNT(*) AS fills
+FROM fact_trades
+GROUP BY trade_class, settlement_status
+ORDER BY trade_class, settlement_status;
+
+SELECT COUNT(*) AS open_fills
+FROM fact_trades
+WHERE settlement_status != 'settled'
+  AND (:trade_class = 'all' OR trade_class = :trade_class);
+
+SELECT
+  SUM(CASE WHEN val_mid IS NULL THEN 1 ELSE 0 END) AS missing_mid,
+  SUM(CASE WHEN val_bid IS NULL THEN 1 ELSE 0 END) AS missing_bid,
+  SUM(CASE WHEN val_last_fill IS NULL THEN 1 ELSE 0 END) AS missing_last_fill
+FROM fact_trades
+WHERE settlement_status != 'settled'
+  AND (:trade_class = 'all' OR trade_class = :trade_class);
+```
+
+如果 `val_mid` / `val_bid` 大面积为空，必须在报告里说明 snapshot valuation 尚未覆盖或快照不可用。
+
+### 第 4 步：查询 open positions
 
 ```sql
 SELECT
-  sig.city,
-  sig.city_pool,
-  sig.target_date,
-  o.order_side,
-  f.filled_price,
-  f.filled_shares                            AS fill_qty,
-  f.filled_price * f.filled_shares           AS cost_usd,
-  sig.condition_id,
-  sig.market_id,
-  f.fill_id,
-  f.filled_at_utc
-FROM fills f
-JOIN orders  o   ON o.execution_id = f.execution_id
-JOIN plans   p   ON p.plan_id      = o.plan_id
-JOIN signals sig ON sig.signal_id  = p.signal_id
-WHERE f.status IN ('filled', 'partial', 'simulated')
-  AND sig.city_pool = '{city_pool}'
-  AND NOT EXISTS (
-    SELECT 1 FROM settlements s
-    WHERE s.target_date = sig.target_date
-      AND (s.condition_id = sig.condition_id OR s.market_id = sig.market_id)
-      AND s.settlement_status = 'settled'
-  )
-ORDER BY sig.target_date, sig.city;
+  trade_class,
+  strategy_id,
+  execution_policy,
+  city,
+  city_pool,
+  target_date,
+  bracket,
+  side,
+  forecast_source,
+  model_version,
+  fill_id,
+  execution_id,
+  fill_ts_utc,
+  fill_price,
+  fill_qty,
+  cost_usd,
+  settlement_status,
+  settlement_join_method,
+  val_mid,
+  val_bid,
+  val_last_fill,
+  unrealized_pnl_mid,
+  val_snapshot_ts_utc
+FROM fact_trades
+WHERE settlement_status != 'settled'
+  AND (:trade_class = 'all' OR trade_class = :trade_class)
+  AND (:city_pool = 'all' OR city_pool = :city_pool)
+  AND (:strategy_id = 'all' OR strategy_id = :strategy_id)
+ORDER BY target_date, city, side, bracket;
 ```
 
----
+按市场/城市/到期日聚合：
 
-### 第 4 步：未实现 PnL 三估值
-
-对每条 open position 按三种口径估值（contract §2.1）：
-
-**last_fill**（直接从 fills 取，无需额外数据）：
-```python
-# BUY_YES: unrealized = (last_fill_price - entry_price) * fill_qty
-# BUY_NO:  unrealized = (entry_price - last_fill_price) * fill_qty
-# last_fill_price = filled_price（用入场价本身估值，偏保守）
+```sql
+SELECT
+  city,
+  city_pool,
+  target_date,
+  side,
+  COUNT(*) AS open_fills,
+  SUM(cost_usd) AS cost_usd,
+  SUM(unrealized_pnl_mid) AS unrealized_pnl_mid,
+  SUM(CASE WHEN val_bid IS NOT NULL THEN
+    CASE side
+      WHEN 'BUY_YES' THEN (val_bid - fill_price) * fill_qty
+      WHEN 'BUY_NO' THEN ((1.0 - val_bid) - fill_price) * fill_qty
+    END
+  END) AS unrealized_pnl_bid
+FROM fact_trades
+WHERE settlement_status != 'settled'
+  AND (:trade_class = 'all' OR trade_class = :trade_class)
+GROUP BY city, city_pool, target_date, side
+ORDER BY target_date, city, side;
 ```
 
-**mid / bid**（需要最新 snapshot）：
-```python
-import pandas as pd, glob, os
+只允许在估值层用 `val_mid` / `val_bid` 代入，且必须标注 `[UNSETTLED]`。不要把这些值加入 realized PnL。
 
-# 取最新 snapshot CSV
-snapshots = glob.glob("runtime/weather_edge_v1/market_data/paper_snapshots/*.csv")
-if snapshots:
-    latest = max(snapshots, key=os.path.getmtime)
-    df = pd.read_csv(latest)
-    # join by condition_id，取 mid_price, best_bid 列
-    # 若列名不同，以实际文件列名为准
-else:
-    print("无 snapshot 文件，mid/bid 估值填 N/A")
-```
-
-若盘口数据不可用：mid/bid 列填 `N/A（无 snapshot）`，在报告"数据快照"段说明。
-
----
-
-### 第 5 步：填写报告模板
+### 第 5 步：报告
 
 模板：`docs/analysis/templates/exposure.md`
 
-**三估值列必须并列，全部标注 `[UNSETTLED]`，不得合并为一列，不得混入已结算 PnL。**
+报告必须包含：
+- 数据快照：DB mtime、`fact_built_at_utc`、`val_snapshot_ts_utc`
+- 完整性自检
+- open fills 总览
+- 按 city / target_date / side 的敞口表
+- 三估值列并列：mid / bid / last_fill；缺值写 N/A 和原因
+- 风险提示：最大城市敞口、最大单日敞口、settlement_join_method none、valuation 缺失
 
-输出路径：`docs/analysis/YYYY-MM/YYYY-MM-DD-exposure-{snapshot_ts}.md`
+输出路径：
 
----
-
-### 第 6 步：Git commit
-
-```bash
-git add docs/analysis/YYYY-MM/
-git commit -m "analysis: exposure snapshot {snapshot_ts}"
+```text
+docs/analysis/YYYY-MM/YYYY-MM-DD-exposure-{snapshot_ts}.md
 ```
+
+只有用户要求提交时才 commit。
