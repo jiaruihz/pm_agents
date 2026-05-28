@@ -380,6 +380,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | 文档 | 用途 |
 |---|---|
 | [WEATHER_FACT_TRADES_DESIGN.md](docs/WEATHER_FACT_TRADES_DESIGN.md) | 唯一物化底表 fact_trades 设计（消除取数/公式/DB路径口径漂移，每fill一行宽表） |
+| [WEATHER_SIGNAL_CANDIDATES_DESIGN.md](docs/WEATHER_SIGNAL_CANDIDATES_DESIGN.md) | 机会粒度候选底表设计（全机会宇宙→paper intended→live actual 对齐，回答城市真实alpha/漏单/滑点） |
 | [WEATHER_EXECUTION_ARCHITECTURE.md](docs/WEATHER_EXECUTION_ARCHITECTURE.md) | paper→live 执行边界设计（资金安全/暂停开关/notional 上限） |
 | [WEATHER_SHADOW_PORTFOLIO_TRACKING.md](docs/WEATHER_SHADOW_PORTFOLIO_TRACKING.md) | 影子组合追踪架构（live策略的虚拟持仓快照设计） |
 | [WEATHER_CLOB_ORDERBOOK_CAPTURE.md](docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md) | CLOB 快照捕获设计（供回测用更准确的 ask/bid 入场价） |
