@@ -211,6 +211,17 @@ if [[ $REBUILD -eq 1 ]]; then
   make -f Makefile.weather metrics-refresh >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
 fi
 
+# ---- 1b. Build fact_trades (唯一派生层) ----
+if [[ $REBUILD -eq 1 ]]; then
+  log "Building fact_trades..."
+  "$VENV/python" scripts/analysis/build_weather_fact_trades.py \
+    --db-path "$DB_PATH" \
+    --parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_trades.parquet" \
+    >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    warn "fact_trades build failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
+  }
+fi
+
 show_status
 
 # ---- 2. Start weather API ----

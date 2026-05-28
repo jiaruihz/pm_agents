@@ -56,7 +56,18 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild
 
 ## §1 数据源清单
 
-### weather.db
+### fact_trades（强制唯一取数源）
+
+**绩效分析必须读 `fact_trades`，禁止绕过直接查 fills/orders/signals 等原始表自算指标。**
+
+- DB 表：`runtime/weather.db` 的 `fact_trades` 表（73 列，每 fill 一行）
+- Parquet：`runtime/weather_edge_v1/market_data/research/fact_trades.parquet`（与 DB 同步）
+- 重建：`run_stack.sh` 在 ingest 后自动调用 `scripts/analysis/build_weather_fact_trades.py`
+- 设计文档：[WEATHER_FACT_TRADES_DESIGN.md](WEATHER_FACT_TRADES_DESIGN.md)
+
+**DB 路径只许 `runtime/weather.db`**（其他路径皆废，已删）。
+
+### weather.db（原始规范化表，仅 fact_trades builder 使用）
 
 - 路径：`runtime/weather.db`
 - 刷新方式：`scripts/weather_dashboard/run_stack.sh`（重跑 ingest）
@@ -115,30 +126,39 @@ signals
 **已结算 PnL（settled PnL）**
 
 ```sql
+-- ⚠️  BUY_NO 公式勘误（2026-05-29 修正）：
+--   旧（错误）：BUY_NO profit = fill_price - final_yes_price
+--   正确：      BUY_NO profit = (1 - final_yes_price) - fill_price
+--
+-- 原理：fills.filled_price 对 BUY_NO 存的是 NO token 自身价（不是 YES 等效价）。
+--   NO token 买入成本 = fill_price（NO price），结算时 NO 获得 (1 - final_yes)。
+--   profit = (1 - final_yes) - fill_price。
+--   用 651 笔 N100 生产已结算 BUY_NO 对账验证，8/8 命中此公式。
+--
+-- 唯一授权实现：fact_trades builder（scripts/analysis/build_weather_fact_trades.py）
+-- 所有分析应读 fact_trades.pnl_usd_at_fill，不要自己实现此公式。
+--
 -- BUY_YES profit = (final_yes_price - fill_price) × fill_qty - fees
--- BUY_NO  profit = (fill_price - final_yes_price) × fill_qty - fees
--- 原理：NO token 买入成本 = fill_price（以 YES 价格计），结算时 NO 获得 (1 - final_yes_price)
---       等价于持有 YES 时 final_yes_price 收益，但方向相反，因此
---       BUY_NO profit = fill_price - final_yes_price（与 BUY_YES 符号相反）
+-- BUY_NO  profit = ((1 - final_yes_price) - fill_price) × fill_qty - fees
 
 SELECT
   f.fill_id,
   sig.city,
   sig.city_pool,
   o.order_side,
-  o.entry_price          AS plan_price,    -- 计划入场价（entry_price 在 orders 表）
-  f.filled_price         AS fill_price,    -- 实际成交价
+  o.entry_price          AS plan_price,
+  f.filled_price         AS fill_price,
   f.filled_shares        AS fill_qty,
   f.fees_usd,
   s.final_price          AS settlement_yes_price,
   s.settlement_status,
   CASE o.order_side
     WHEN 'BUY_YES' THEN (s.final_price - f.filled_price) * f.filled_shares - f.fees_usd
-    WHEN 'BUY_NO'  THEN (f.filled_price - s.final_price) * f.filled_shares - f.fees_usd
+    WHEN 'BUY_NO'  THEN ((1.0 - s.final_price) - f.filled_price) * f.filled_shares - f.fees_usd
   END AS pnl_usd_at_fill,
   CASE o.order_side
     WHEN 'BUY_YES' THEN (s.final_price - o.entry_price) * f.filled_shares - f.fees_usd
-    WHEN 'BUY_NO'  THEN (o.entry_price - s.final_price) * f.filled_shares - f.fees_usd
+    WHEN 'BUY_NO'  THEN ((1.0 - s.final_price) - o.entry_price) * f.filled_shares - f.fees_usd
   END AS pnl_usd_at_plan
 FROM fills f
 JOIN orders  o   ON o.execution_id = f.execution_id

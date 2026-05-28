@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = ROOT / "runtime" / "weather_edge_v1"
 SNAPSHOT_DIR = RUNTIME / "market_data" / "paper_snapshots"
 PM_HISTORY_DIR = RUNTIME / "market_data" / "cache" / "pm_history"
-DB_PATH = RUNTIME / "weather.db"
+DB_PATH = ROOT / "runtime" / "weather.db"
 
 
 @dataclass(frozen=True)

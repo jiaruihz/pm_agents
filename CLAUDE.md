@@ -379,6 +379,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 
 | 文档 | 用途 |
 |---|---|
+| [WEATHER_FACT_TRADES_DESIGN.md](docs/WEATHER_FACT_TRADES_DESIGN.md) | 唯一物化底表 fact_trades 设计（消除取数/公式/DB路径口径漂移，每fill一行宽表） |
 | [WEATHER_EXECUTION_ARCHITECTURE.md](docs/WEATHER_EXECUTION_ARCHITECTURE.md) | paper→live 执行边界设计（资金安全/暂停开关/notional 上限） |
 | [WEATHER_SHADOW_PORTFOLIO_TRACKING.md](docs/WEATHER_SHADOW_PORTFOLIO_TRACKING.md) | 影子组合追踪架构（live策略的虚拟持仓快照设计） |
 | [WEATHER_CLOB_ORDERBOOK_CAPTURE.md](docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md) | CLOB 快照捕获设计（供回测用更准确的 ask/bid 入场价） |
@@ -392,4 +393,5 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md](docs/WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md) | 低价YES彩票仓研究（5c-20c YES 持有到结算回报分析） |
 | [WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md](docs/WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md) | 2026-05-23 实盘血缘分析（t1_trading mid_price_core_v1 策略） |
 | [2026-05-27-performance-live-full-research.md](docs/analysis/2026-05/2026-05-27-performance-live-full-research.md) | 2026-05-27 全量 live 实盘绩效归因（城市/方向/paper 对比/edge 赔率诊断） |
+| [2026-05-28-performance-makerqueue-v3-city-pool.md](docs/analysis/2026-05/2026-05-28-performance-makerqueue-v3-city-pool.md) | 2026-05-28 maker_queue 与 v3 城市池当日未结算亏损拆解 |
 | [COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md](docs/COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md) | Copy Trade 钱包研究执行计划 |
