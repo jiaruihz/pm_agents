@@ -181,88 +181,67 @@ def _connect() -> sqlite3.Connection:
 
 
 def _load_trades(conn: sqlite3.Connection, mode: str) -> list[TradeRow]:
+    """Load trades from fact_trades (唯一派生层).
+
+    PnL and settlement join are precomputed by build_weather_fact_trades.py.
+    """
     rows = conn.execute(
         """
         SELECT
-          r.execution_mode,
-          r.config_id AS strategy_id,
-          f.execution_id,
-          f.fill_id,
-          sig.target_date,
-          COALESCE(o.placed_at_utc, o.created_at_utc) AS order_ts_utc,
-          sig.city,
-          sig.city_pool,
-          sig.forecast_source AS model,
-          o.order_side,
-          sig.bracket,
-          sig.market_id,
-          sig.condition_id,
-          o.entry_price AS plan_price,
-          f.filled_price AS fill_price,
-          f.filled_shares AS fill_qty,
-          f.fees_usd,
-          sig.edge,
-          sig.abs_edge,
-          sig.market_price,
-          s.final_price AS settlement_yes_price,
-          s.settlement_status
-        FROM fills f
-        JOIN orders  o   ON o.execution_id = f.execution_id
-        JOIN plans   p   ON p.plan_id      = o.plan_id
-        JOIN signals sig ON sig.signal_id  = p.signal_id
-        JOIN runs    r   ON r.run_id       = o.run_id
-        LEFT JOIN (
-          SELECT target_date, condition_id, market_id, bracket, MAX(final_price) AS final_price, MAX(settlement_status) AS settlement_status
-          FROM settlements
-          GROUP BY target_date, condition_id, market_id, bracket
-        ) s
-          ON s.target_date = sig.target_date
-         AND (s.condition_id = sig.condition_id OR s.market_id = sig.market_id)
-         AND s.bracket = sig.bracket
-        WHERE r.execution_mode = ?
-          AND f.status IN ('filled', 'simulated')
+          execution_mode,
+          execution_id,
+          fill_id,
+          target_date,
+          order_date_bj,
+          city,
+          city_pool,
+          forecast_source  AS model,
+          side,
+          bracket,
+          market_id,
+          condition_id,
+          strategy_id,
+          fill_price,
+          plan_price,
+          fill_qty,
+          fees_usd,
+          final_yes        AS settlement_yes_price,
+          settlement_status,
+          pnl_usd_at_fill,
+          pnl_usd_at_plan,
+          edge,
+          abs_edge,
+          market_price
+        FROM fact_trades
+        WHERE execution_mode = ?
         """,
         (mode,),
     ).fetchall()
     result: list[TradeRow] = []
     for row in rows:
-        fill_price = float(row["fill_price"])
-        plan_price = float(row["plan_price"])
-        fill_qty = float(row["fill_qty"])
-        fees_usd = float(row["fees_usd"] or 0.0)
-        final_price = _safe_float(row["settlement_yes_price"], None)
-        pnl_fill = None
-        pnl_plan = None
-        if row["settlement_status"] == "settled" and final_price is not None:
-            if row["order_side"] == "BUY_YES":
-                pnl_fill = (final_price - fill_price) * fill_qty - fees_usd
-                pnl_plan = (final_price - plan_price) * fill_qty - fees_usd
-            else:
-                pnl_fill = ((1.0 - final_price) - fill_price) * fill_qty - fees_usd
-                pnl_plan = ((1.0 - final_price) - plan_price) * fill_qty - fees_usd
         result.append(
             TradeRow(
-                source=str(row["execution_mode"]),
-                execution_id=str(row["execution_id"]),
-                fill_id=str(row["fill_id"]),
-                target_date=str(row["target_date"]),
-                order_date_bj=_bj_date(row["order_ts_utc"]),
-                city=str(row["city"]),
-                city_pool=str(row["city_pool"]),
-                model=str(row["model"]),
-                side=str(row["order_side"]),
-                bracket=str(row["bracket"]),
-                market_id=str(row["market_id"]),
-                condition_id=str(row["condition_id"]),
-                strategy_id=str(row["strategy_id"]),
-                fill_price=fill_price,
-                plan_price=plan_price,
-                fill_qty=fill_qty,
-                fees_usd=fees_usd,
-                settlement_yes_price=final_price,
+                source=str(row["execution_mode"] or ""),
+                execution_id=str(row["execution_id"] or ""),
+                fill_id=str(row["fill_id"] or ""),
+                target_date=str(row["target_date"] or ""),
+                order_date_bj=str(row["order_date_bj"] or "UNKNOWN"),
+                city=str(row["city"] or ""),
+                city_pool=str(row["city_pool"] or ""),
+                model=str(row["model"] or ""),
+                side=str(row["side"] or ""),
+                bracket=str(row["bracket"] or ""),
+                market_id=str(row["market_id"] or ""),
+                condition_id=str(row["condition_id"] or ""),
+                strategy_id=str(row["strategy_id"] or ""),
+                fill_price=float(row["fill_price"] or 0.0),
+                plan_price=float(row["plan_price"] or 0.0),
+                fill_qty=float(row["fill_qty"] or 0.0),
+                fees_usd=float(row["fees_usd"] or 0.0),
+                settlement_yes_price=_safe_float(row["settlement_yes_price"], None),
                 settlement_status=row["settlement_status"],
-                pnl_usd_at_fill=pnl_fill,
-                pnl_usd_at_plan=pnl_plan,
+                pnl_usd_at_fill=_safe_float(row["pnl_usd_at_fill"], None),
+                pnl_usd_at_plan=_safe_float(row["pnl_usd_at_plan"], None),
                 edge=_safe_float(row["edge"], None),
                 abs_edge=_safe_float(row["abs_edge"], None),
                 market_price=_safe_float(row["market_price"], None),

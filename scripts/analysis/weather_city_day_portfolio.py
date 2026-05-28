@@ -132,62 +132,48 @@ def load_live_fills(path: Path) -> list[Trade]:
     rows = conn.execute(
         """
         SELECT
-            o.execution_id,
-            o.order_side,
-            f.fill_id,
-            f.filled_shares,
-            f.filled_price,
-            f.fees_usd,
-            sig.target_date,
-            sig.city,
-            sig.city_pool,
-            sig.bracket,
-            sig.model_version,
-            sig.model_p_yes,
-            sig.snapshot_ts_utc,
-            s.final_price,
-            s.settlement_status
-        FROM orders o
-        JOIN fills f ON f.execution_id = o.execution_id
-        JOIN plans p ON p.plan_id = o.plan_id
-        JOIN signals sig ON sig.signal_id = p.signal_id
-        JOIN settlements s
-          ON s.target_date = sig.target_date
-         AND s.condition_id = sig.condition_id
-         AND s.bracket = sig.bracket
-        WHERE o.venue = 'polymarket_clob'
-          AND f.status = 'filled'
-          AND s.settlement_status = 'settled'
+            fill_id,
+            execution_id,
+            side,
+            fill_price,
+            fill_qty,
+            fees_usd,
+            cost_usd,
+            target_date,
+            city,
+            city_pool,
+            bracket,
+            model_version,
+            model_p_yes,
+            snapshot_ts_utc,
+            final_yes,
+            settlement_status,
+            pnl_usd_at_fill
+        FROM fact_trades
+        WHERE trade_class = 'live_real'
+          AND settlement_status = 'settled'
         """
     ).fetchall()
     trades: list[Trade] = []
     for row in rows:
-        side = row["order_side"]
-        entry_price = float(row["filled_price"])
-        shares = float(row["filled_shares"])
-        fees = float(row["fees_usd"] or 0.0)
-        cost_usd = shares * entry_price + fees
-        final_price = float(row["final_price"])
-        won = (side == "BUY_YES" and final_price == 1.0) or (side == "BUY_NO" and final_price == 0.0)
-        pnl_usd = shares * (1.0 - entry_price) - fees if won else -cost_usd
         trades.append(
             Trade(
                 source="live_clob_fills",
                 trade_id=row["fill_id"] or row["execution_id"],
                 event_date=row["target_date"],
                 city=row["city"],
-                city_pool=row["city_pool"],
+                city_pool=row["city_pool"] or "unknown",
                 bracket=row["bracket"],
-                side=side,
+                side=row["side"],
                 model=row["model_version"] or "",
                 snapshot_ts_utc=row["snapshot_ts_utc"] or "",
-                entry_price=entry_price,
-                shares=shares,
-                cost_usd=cost_usd,
-                model_p_yes=float(row["model_p_yes"]),
+                entry_price=float(row["fill_price"]),
+                shares=float(row["fill_qty"]),
+                cost_usd=float(row["cost_usd"] or 0.0),
+                model_p_yes=float(row["model_p_yes"] or 0.0),
                 settlement_status="settled",
-                final_price=final_price,
-                pnl_usd=pnl_usd,
+                final_price=float(row["final_yes"]),
+                pnl_usd=float(row["pnl_usd_at_fill"]),
             )
         )
     return trades

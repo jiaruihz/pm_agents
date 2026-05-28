@@ -1,6 +1,6 @@
 # 绩效分析：live full research
 
-> 时间窗：2026-05-16 — 2026-05-26（北京时间）  
+> 时间窗：2026-05-16 — 2026-05-27（北京时间）  
 > 策略：all live / weather_edge_v1  
 > 城市池：all（live 实际为 t1_trading，早期缺 city_pool 的 raw order 标为 unknown）  
 > 数据源：DB + live raw mirror
@@ -10,24 +10,24 @@
 | 项目 | 值 |
 |---|---|
 | 数据源路径 | runtime/weather.db；runtime/weather_edge_v1/remote_pm_agent/live |
-| 数据快照时间 | 2026-05-27T23:05:34（DB mtime；N100 sync connection reset，本次使用本地镜像重建 DB） |
-| fills 行数 | live=497 / paper=1145 / snapshot_replay=636 |
-| unsettled 占比 | 194 / 497（39.0%） |
-| missing_bracket 数 | 65 |
-| live raw submitted orders | 275 submitted；73 not matched to DB fills |
+| 数据快照时间 | 2026-05-29T00:35:46（DB mtime；报告生成前已按 contract 同步并重建） |
+| fills 行数 | live=673 / paper=1145 / snapshot_replay=636 |
+| unsettled 占比 | 279 / 673（41.5%） |
+| missing_bracket 数 | 111 |
+| live raw submitted orders | 358 submitted；96 not matched to DB fills |
 
 ## 总览
 
 | 指标 | 已结算（fill 口径） | 已结算（plan 口径） | 含未结算（mid 估值）[UNSETTLED] |
 |---|---:|---:|---:|
-| 总 PnL (USD) | 318.32 | 317.18 | N/A（未拉盘口 mid） |
-| ROI | 23.6% | N/A | N/A |
-| Win rate（by count） | 63.7% | N/A | N/A |
-| Win rate（by notional） | 63.5% | N/A | N/A |
-| 总 fills 数 | 303 / 497 | 303 / 497 | 497 |
-| 总 cost (USD) | 1,349.69 | 1,349.69 | N/A |
-| 总 fill_qty (shares) | 2804.37 | 2804.37 | N/A |
-| Sharpe-like（daily） | 0.633 | N/A | N/A |
+| 总 PnL (USD) | 294.42 | 292.59 | N/A（未拉盘口 mid） |
+| ROI | 16.9% | N/A | N/A |
+| Win rate（by count） | 62.7% | N/A | N/A |
+| Win rate（by notional） | 62.2% | N/A | N/A |
+| 总 fills 数 | 394 / 673 | 394 / 673 | 673 |
+| 总 cost (USD) | 1,744.88 | 1,744.88 | N/A |
+| 总 fill_qty (shares) | 3546.97 | 3546.97 | N/A |
+| Sharpe-like（daily） | 0.526 | N/A | N/A |
 
 ## 切片：by_date
 
@@ -42,43 +42,51 @@
 | 2026-05-24 | 40 | 22 | 55.0% | 166.27 | 28.11 | 28.15 | 16.9% |
 | 2026-05-25 | 55 | 33 | 60.0% | 239.19 | 44.98 | 44.86 | 18.8% |
 | 2026-05-26 | 44 | 22 | 50.0% | 200.23 | -24.14 | -24.44 | -12.1% |
+| 2026-05-27 | 91 | 54 | 59.3% | 395.19 | -23.90 | -24.59 | -6.0% |
 
 ## 切片：by_city
 
 | city | fills | wins | win_rate | cost_usd | pnl_usd (fill) | pnl_usd (plan) | roi |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Madrid | 15 | 3 | 20.0% | 74.05 | -44.59 | -44.74 | -60.2% |
+| Madrid | 19 | 7 | 36.8% | 93.75 | -24.29 | -24.44 | -25.9% |
+| Ankara | 8 | 2 | 25.0% | 36.28 | -22.00 | -22.00 | -60.6% |
+| Karachi | 9 | 3 | 33.3% | 42.58 | -17.58 | -17.66 | -41.3% |
+| Moscow | 8 | 4 | 50.0% | 34.40 | -13.68 | -13.83 | -39.8% |
 | Beijing | 29 | 17 | 58.6% | 134.80 | -10.20 | -10.27 | -7.6% |
 | Chicago | 8 | 5 | 62.5% | 35.76 | -6.62 | -6.66 | -18.5% |
-| Paris | 30 | 18 | 60.0% | 143.44 | -1.99 | -2.03 | -1.4% |
+| Paris | 38 | 22 | 57.9% | 174.00 | -6.55 | -6.79 | -3.8% |
 | LA | 40 | 20 | 50.0% | 177.34 | -0.55 | -0.89 | -0.3% |
 | Austin | 26 | 16 | 61.5% | 115.63 | 0.92 | 0.84 | 0.8% |
-| Shanghai | 11 | 10 | 90.9% | 54.66 | 18.53 | 18.53 | 33.9% |
+| Lucknow | 9 | 6 | 66.7% | 35.75 | 3.16 | 3.16 | 8.9% |
+| Istanbul | 3 | 3 | 100.0% | 11.33 | 5.38 | 5.38 | 47.5% |
+| Jeddah | 4 | 4 | 100.0% | 18.56 | 7.17 | 7.17 | 38.6% |
+| Guangzhou | 4 | 4 | 100.0% | 15.56 | 7.42 | 7.42 | 47.6% |
+| Shanghai | 13 | 12 | 92.3% | 61.69 | 21.72 | 21.72 | 35.2% |
+| NYC | 32 | 18 | 56.2% | 135.75 | 29.75 | 29.66 | 21.9% |
 | Miami | 33 | 19 | 57.6% | 138.34 | 29.95 | 29.94 | 21.7% |
-| Warsaw | 25 | 18 | 72.0% | 106.10 | 41.30 | 41.12 | 38.9% |
-| NYC | 26 | 18 | 69.2% | 107.69 | 57.81 | 57.71 | 53.7% |
-| London | 28 | 21 | 75.0% | 126.82 | 66.12 | 66.09 | 52.1% |
-| Tokyo | 32 | 28 | 87.5% | 135.06 | 167.64 | 167.55 | 124.1% |
+| London | 39 | 28 | 71.8% | 174.95 | 62.61 | 62.57 | 35.8% |
+| Warsaw | 32 | 25 | 78.1% | 138.56 | 69.16 | 68.98 | 49.9% |
+| Tokyo | 40 | 32 | 80.0% | 169.86 | 158.63 | 158.29 | 93.4% |
 
 ## 切片：by_model
 
 | model | fills | wins | win_rate | cost_usd | pnl_usd (fill) | pnl_usd (plan) | roi |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| open_meteo_live_ecmwf | 97 | 59 | 60.8% | 441.77 | 52.64 | 52.20 | 11.9% |
-| open_meteo_live_gfs | 206 | 134 | 65.0% | 907.92 | 265.69 | 264.98 | 29.3% |
+| open_meteo_live_ecmwf | 152 | 95 | 62.5% | 689.26 | 68.65 | 67.98 | 10.0% |
+| open_meteo_live_gfs | 242 | 152 | 62.8% | 1,055.62 | 225.77 | 224.61 | 21.4% |
 
 ## 切片：by_side
 
 | side | fills | wins | win_rate | cost_usd | avg_fill_price | pnl_usd (fill) | pnl_usd (plan) | roi |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| BUY_NO | 219 | 152 | 69.4% | 997.93 | 0.604 | 107.91 | 106.87 | 10.8% |
-| BUY_YES | 84 | 41 | 48.8% | 351.75 | 0.305 | 210.41 | 210.31 | 59.8% |
+| BUY_NO | 295 | 203 | 68.8% | 1,328.72 | 0.614 | 112.70 | 110.98 | 8.5% |
+| BUY_YES | 99 | 44 | 44.4% | 416.16 | 0.301 | 181.71 | 181.61 | 43.7% |
 
 ## 切片：by_pool
 
 | pool | fills | wins | win_rate | cost_usd | pnl_usd (fill) | pnl_usd (plan) | roi |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| t1_trading | 303 | 193 | 63.7% | 1,349.69 | 318.32 | 317.18 | 23.6% |
+| t1_trading | 394 | 247 | 62.7% | 1,744.88 | 294.42 | 292.59 | 16.9% |
 
 ## Top Winners / Top Losers
 
@@ -91,22 +99,22 @@
 | NYC | 2026-05-24 | BUY_YES | 56-57 | 4 | 12.73 | 30.47 | 0.295 |
 | LA | 2026-05-25 | BUY_NO | 66-67 | 3 | 15.00 | 24.30 | 0.382 |
 | London | 2026-05-26 | BUY_YES | 34 | 2 | 10.00 | 22.00 | 0.312 |
+| Warsaw | 2026-05-27 | BUY_YES | 22 | 3 | 15.00 | 20.71 | 0.420 |
+| Madrid | 2026-05-27 | BUY_NO | 34 | 4 | 19.70 | 20.30 | 0.492 |
 | London | 2026-05-20 | BUY_YES | 20 | 2 | 9.71 | 18.85 | 0.340 |
-| London | 2026-05-24 | BUY_YES | 30 | 2 | 10.00 | 17.02 | 0.370 |
-| Warsaw | 2026-05-22 | BUY_YES | 23 | 2 | 6.70 | 16.92 | 0.284 |
 
 **Top 8 market losers：**
 
 | city | target_date | side | bracket | fills | cost_usd | pnl_usd | avg_price |
 |---|---|---|---|---:|---:|---:|---:|
+| NYC | 2026-05-27 | BUY_YES | 86-87 | 6 | 28.05 | -28.05 | 0.248 |
+| Ankara | 2026-05-27 | BUY_NO | 24 | 4 | 19.83 | -19.83 | 0.585 |
+| Tokyo | 2026-05-27 | BUY_NO | 27 | 4 | 19.80 | -19.80 | 0.636 |
+| Moscow | 2026-05-27 | BUY_NO | 13 | 4 | 19.76 | -19.76 | 0.703 |
 | Madrid | 2026-05-26 | BUY_NO | 32 | 4 | 19.21 | -19.21 | 0.487 |
 | Warsaw | 2026-05-26 | BUY_NO | 27 | 4 | 19.02 | -19.02 | 0.702 |
+| London | 2026-05-27 | BUY_NO | 24 | 4 | 18.35 | -18.35 | 0.741 |
 | LA | 2026-05-25 | BUY_NO | 68-69 | 4 | 18.33 | -18.33 | 0.728 |
-| Beijing | 2026-05-25 | BUY_NO | 22 | 4 | 17.83 | -17.83 | 0.641 |
-| Miami | 2026-05-24 | BUY_NO | 88-89 | 4 | 16.00 | -16.00 | 0.477 |
-| Tokyo | 2026-05-25 | BUY_NO | 25 | 4 | 15.14 | -15.14 | 0.735 |
-| Madrid | 2026-05-26 | BUY_YES | 33 | 3 | 15.00 | -15.00 | 0.250 |
-| Madrid | 2026-05-25 | BUY_NO | 32 | 3 | 15.00 | -15.00 | 0.402 |
 
 **集中度 / 重复市场 Top 12（city × target_date × side × bracket）：**
 
@@ -115,28 +123,28 @@
 | Tokyo | 2026-05-20 | BUY_YES | 27+ | 8 | 40.00 | 116.86 | 0.255 |
 | Miami | 2026-05-25 | BUY_YES | 86-87 | 3 | 15.00 | 42.69 | 0.260 |
 | NYC | 2026-05-24 | BUY_YES | 56-57 | 4 | 12.73 | 30.47 | 0.295 |
+| NYC | 2026-05-27 | BUY_YES | 86-87 | 6 | 28.05 | -28.05 | 0.248 |
 | LA | 2026-05-25 | BUY_NO | 66-67 | 3 | 15.00 | 24.30 | 0.382 |
 | London | 2026-05-26 | BUY_YES | 34 | 2 | 10.00 | 22.00 | 0.312 |
+| Warsaw | 2026-05-27 | BUY_YES | 22 | 3 | 15.00 | 20.71 | 0.420 |
+| Madrid | 2026-05-27 | BUY_NO | 34 | 4 | 19.70 | 20.30 | 0.492 |
+| Ankara | 2026-05-27 | BUY_NO | 24 | 4 | 19.83 | -19.83 | 0.585 |
+| Tokyo | 2026-05-27 | BUY_NO | 27 | 4 | 19.80 | -19.80 | 0.636 |
+| Moscow | 2026-05-27 | BUY_NO | 13 | 4 | 19.76 | -19.76 | 0.703 |
 | Madrid | 2026-05-26 | BUY_NO | 32 | 4 | 19.21 | -19.21 | 0.487 |
-| Warsaw | 2026-05-26 | BUY_NO | 27 | 4 | 19.02 | -19.02 | 0.702 |
-| London | 2026-05-20 | BUY_YES | 20 | 2 | 9.71 | 18.85 | 0.340 |
-| LA | 2026-05-25 | BUY_NO | 68-69 | 4 | 18.33 | -18.33 | 0.728 |
-| Beijing | 2026-05-25 | BUY_NO | 22 | 4 | 17.83 | -17.83 | 0.641 |
-| London | 2026-05-24 | BUY_YES | 30 | 2 | 10.00 | 17.02 | 0.370 |
-| Warsaw | 2026-05-22 | BUY_YES | 23 | 2 | 6.70 | 16.92 | 0.284 |
 
 ## 数据完整性自检
 
-- [x] fill_row_count 与 DB 匹配：live fills=497。
-- [ ] unsettled_pct < 20%：39.0%。
-- [ ] missing_bracket：DB 当前 total=65，本报告未逐城市列全量 missing_bracket。
+- [x] fill_row_count 与 DB 匹配：live fills=673。
+- [ ] unsettled_pct < 20%：41.5%。
+- [ ] missing_bracket：DB 当前 total=111，本报告未逐城市列全量 missing_bracket。
 - [x] by_date 行按 target_date 展示；无交易日期不会补空行。
 
 ## Paper / Snapshot 预期对比
 
 | baseline | fills | win_rate | cost_usd | pnl_usd | ROI | 说明 |
 |---|---:|---:|---:|---:|---:|---|
-| live realized | 303 | 63.7% | 1,349.69 | 318.32 | 23.6% | 真实 CLOB matched fills |
+| live realized | 394 | 62.7% | 1,744.88 | 294.42 | 16.9% | 真实 CLOB matched fills |
 | paper overlap t1 | 146 | 61.6% | 800.45 | 99.55 | 12.4% | 同 target_date 窗口，全 T1 paper ledger |
 | paper same live cities | 146 | 61.6% | 800.45 | 99.55 | 12.4% | 同窗口，仅 live 已结算城市 |
 | snapshot replay overlap | 0 | N/A | 0.00 | 0.00 | N/A | 同窗口 snapshot replay |
@@ -150,20 +158,20 @@
 | edge_bucket | orders | submitted | submit_rate | avg_posted_price | avg_quote_edge |
 |---|---:|---:|---:|---:|---:|
 | unknown | 145 | 117 | 80.7% | 0.555 | N/A |
-| >=20% | 70 | 69 | 98.6% | 0.556 | 0.286 |
-| 10-15% | 54 | 41 | 75.9% | 0.546 | 0.123 |
-| 15-20% | 46 | 44 | 95.7% | 0.623 | 0.169 |
-| 5-10% | 2 | 2 | 100.0% | 0.495 | 0.085 |
+| >=20% | 136 | 113 | 83.1% | 0.554 | 0.288 |
+| 10-15% | 90 | 61 | 67.8% | 0.550 | 0.125 |
+| 15-20% | 64 | 61 | 95.3% | 0.626 | 0.170 |
+| 5-10% | 6 | 4 | 66.7% | 0.488 | 0.085 |
 | <5% | 2 | 2 | 100.0% | 0.460 | 0.048 |
 
 | price_bucket | orders | submitted | submit_rate | avg_posted_price | avg_quote_edge |
 |---|---:|---:|---:|---:|---:|
-| 0.55-0.70 | 99 | 99 | 100.0% | 0.638 | 0.195 |
-| 0.70-0.75 | 64 | 64 | 100.0% | 0.722 | 0.203 |
-| 0.40-0.55 | 52 | 52 | 100.0% | 0.480 | 0.249 |
-| 0.25-0.40 | 51 | 51 | 100.0% | 0.299 | 0.186 |
-| <0.25 | 47 | 3 | 6.4% | 0.236 | 0.155 |
-| >0.75 | 6 | 6 | 100.0% | 0.782 | 0.163 |
+| 0.55-0.70 | 135 | 135 | 100.0% | 0.637 | 0.201 |
+| <0.25 | 90 | 5 | 5.6% | 0.225 | 0.196 |
+| 0.70-0.75 | 81 | 81 | 100.0% | 0.723 | 0.198 |
+| 0.25-0.40 | 67 | 67 | 100.0% | 0.302 | 0.213 |
+| 0.40-0.55 | 62 | 62 | 100.0% | 0.484 | 0.259 |
+| >0.75 | 8 | 8 | 100.0% | 0.778 | 0.165 |
 
 **Paper 同窗口 edge / 赔率诊断：**
 
@@ -182,7 +190,7 @@
 
 ## 观察与建议
 
-1. 交易动作：当前 live 已结算样本 ROI=23.6%，高于同窗口 paper T1 ROI=12.4%，但 live 样本明显小且选择性成交强，不能按比例外推。短期建议保留 live 主路径，但把新增城市按城市级阈值分层，不再只用全池统一阈值。
+1. 交易动作：当前 live 已结算样本 ROI=16.9%，高于同窗口 paper T1 ROI=12.4%，但 live 样本明显小且选择性成交强，不能按比例外推。短期建议保留 live 主路径，但把新增城市按城市级阈值分层，不再只用全池统一阈值。
 2. 收益来源：live 当前美元 PnL 主要来自 BUY_YES 的少数高赔率命中；BUY_NO 的胜率更高、交易更多，但 token 成本高时单笔盈利较薄。Top winners/losers 和集中度表显示，Tokyo 2026-05-20 的重复 YES 命中贡献了很大一块收益，因此不能只看总 ROI。
 3. Paper 预期：同窗口 paper 是正收益，但 paper 覆盖更多候选和假设成交；live 真实收益受 maker 排队、部分成交和重复去重影响。`still_open_or_unfilled` 较多时，paper 预期应打折，优先用 matched fills 做决策。
 4. 城市池：已结算 live 样本数不足 5 的城市不应升降级；样本 >=5 且 ROI>10% 的城市可以维持/加权，样本 >=5 且 ROI<-5% 的城市先降 size 或 shadow，接近零的城市先不扩 size。
@@ -192,10 +200,10 @@
 
 | tier | cities | rule |
 |---|---|---|
-| Keep / scale cautiously | Shanghai, Miami, Warsaw, NYC, London, Tokyo | settled>=5 且 ROI>=10% |
-| Watch / no scale | Paris, LA, Austin | settled>=5 且 -5%<=ROI<10% |
-| Reduce / shadow | Madrid, Beijing, Chicago | settled>=5 且 ROI<-5% |
-| Need more data | Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle | raw live orders 存在但尚无已结算 fills |
+| Keep / scale cautiously | Shanghai, NYC, Miami, London, Warsaw, Tokyo | settled>=5 且 ROI>=10% |
+| Watch / no scale | Paris, LA, Austin, Lucknow | settled>=5 且 -5%<=ROI<10% |
+| Reduce / shadow | Madrid, Ankara, Karachi, Moscow, Beijing, Chicago | settled>=5 且 ROI<-5% |
+| Need more data | BuenosAires, Chengdu, Manila, Munich, Seattle, Singapore | raw live orders 存在但尚无已结算 fills |
 
 ## 新增 8 城后的扩池候选
 

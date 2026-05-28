@@ -95,65 +95,94 @@ def _max_drawdown(pnls: list[float]) -> float:
     return max_dd
 
 
-_SETTLEMENTS_DEDUP_SQL = """
-    (
-        SELECT target_date, condition_id, bracket, MAX(final_price) AS final_price
-        FROM settlements
-        GROUP BY target_date, condition_id, bracket
-    )
-"""
-
-
 def compute_metrics(conn, run_id: str) -> dict:
     """
-    Query fills + orders + settlements for run_id and return metrics dict.
+    Compute PnL and risk metrics for a given run_id.
+
+    Reads from fact_trades (precomputed canonical PnL) when available.
+    Falls back to raw SQL join when fact_trades doesn't exist (test fixtures,
+    fresh DB before run_stack). Remove the fallback once test fixtures use
+    fact_trades (Phase 3 TODO).
     """
-    if _has_column(conn, "orders", "execution_id"):
-        rows = conn.execute(
-            f"""
+    _from_fact_trades = False
+    rows = None
+    if _has_column(conn, "fact_trades", "run_id"):
+        raw = conn.execute(
+            """
             SELECT
-                f.filled_shares,
-                f.filled_price,
-                f.fees_usd,
-                o.order_side,
-                o.cost_usd,
-                s.final_price
-            FROM fills f
-            JOIN orders o ON f.execution_id = o.execution_id
-            JOIN plans p  ON o.plan_id  = p.plan_id
-            JOIN signals sig ON p.signal_id = sig.signal_id
-            LEFT JOIN {_SETTLEMENTS_DEDUP_SQL} s
-                   ON sig.target_date = s.target_date
-                  AND sig.condition_id = s.condition_id
-                  AND sig.bracket      = s.bracket
-            WHERE o.run_id = ?
-              AND f.status IN ('filled', 'simulated')
+                fill_qty    AS filled_shares,
+                fill_price  AS filled_price,
+                fees_usd,
+                side        AS order_side,
+                cost_usd,
+                pnl_usd_at_fill,
+                settled
+            FROM fact_trades
+            WHERE run_id = ?
             """,
             (run_id,),
         ).fetchall()
-    else:
-        # Legacy v1 compatibility for old tests/manual forensics.
-        rows = conn.execute(
-            f"""
-            SELECT
-                f.filled_shares,
-                f.filled_price,
-                f.fees_usd,
-                o.side AS order_side,
-                o.cost_usd,
-                s.final_yes AS final_price
-            FROM fills f
-            JOIN orders o ON f.order_id = o.order_id
-            JOIN plans p  ON o.plan_id  = p.plan_id
-            JOIN signals sig ON p.signal_id = sig.signal_id
-            LEFT JOIN {_SETTLEMENTS_DEDUP_SQL} s
-                   ON sig.target_date = s.target_date
-                  AND sig.bracket      = s.bracket
-            WHERE o.run_id = ?
-              AND f.status IN ('filled', 'simulated')
-            """,
-            (run_id,),
-        ).fetchall()
+        rows = raw
+        _from_fact_trades = True
+
+    if rows is None:
+        # Fallback for test fixtures / DBs that pre-date fact_trades.
+        # TODO: delete once test_metrics.py fixtures populate fact_trades.
+        if _has_column(conn, "orders", "execution_id"):
+            rows = conn.execute(
+                """
+                SELECT
+                    f.filled_shares,
+                    f.filled_price,
+                    f.fees_usd,
+                    o.order_side,
+                    o.cost_usd,
+                    s.final_price,
+                    NULL AS pnl_usd_at_fill,
+                    NULL AS settled
+                FROM fills f
+                JOIN orders o ON f.execution_id = o.execution_id
+                JOIN plans p  ON o.plan_id  = p.plan_id
+                JOIN signals sig ON p.signal_id = sig.signal_id
+                LEFT JOIN (
+                    SELECT target_date, condition_id, bracket, MAX(final_price) AS final_price
+                    FROM settlements GROUP BY target_date, condition_id, bracket
+                ) s
+                       ON sig.target_date = s.target_date
+                      AND sig.condition_id = s.condition_id
+                      AND sig.bracket      = s.bracket
+                WHERE o.run_id = ?
+                  AND f.status IN ('filled', 'simulated')
+                """,
+                (run_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT
+                    f.filled_shares,
+                    f.filled_price,
+                    f.fees_usd,
+                    o.side AS order_side,
+                    o.cost_usd,
+                    s.final_price,
+                    NULL AS pnl_usd_at_fill,
+                    NULL AS settled
+                FROM fills f
+                JOIN orders o ON f.order_id = o.order_id
+                JOIN plans p  ON o.plan_id  = p.plan_id
+                JOIN signals sig ON p.signal_id = sig.signal_id
+                LEFT JOIN (
+                    SELECT target_date, bracket, MAX(final_yes) AS final_price
+                    FROM settlements GROUP BY target_date, bracket
+                ) s
+                       ON sig.target_date = s.target_date
+                      AND sig.bracket      = s.bracket
+                WHERE o.run_id = ?
+                  AND f.status IN ('filled', 'simulated')
+                """,
+                (run_id,),
+            ).fetchall()
 
     _empty = {
         "num_trades": 0, "total_pnl_usd": None, "win_rate": None,
@@ -176,10 +205,15 @@ def compute_metrics(conn, run_id: str) -> dict:
     unsettled = 0
 
     for row in rows:
-        pnl = _trade_pnl(
-            row["filled_shares"], row["filled_price"], row["fees_usd"],
-            row["final_price"], row["order_side"],
-        )
+        if _from_fact_trades:
+            raw_pnl = row["pnl_usd_at_fill"]
+            pnl = float(raw_pnl) if raw_pnl is not None else None
+        else:
+            pnl = _trade_pnl(
+                row["filled_shares"], row["filled_price"], row["fees_usd"],
+                row["final_price"], row["order_side"],
+            )
+
         cost = _d(row["cost_usd"])
         if cost is not None:
             costs.append(float(cost))
