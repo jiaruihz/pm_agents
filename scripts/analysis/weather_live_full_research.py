@@ -180,15 +180,25 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+_TRADE_CLASS_MODES = {"live_real", "live_simulated"}
+
+
 def _load_trades(conn: sqlite3.Connection, mode: str) -> list[TradeRow]:
     """Load trades from fact_trades (唯一派生层).
 
+    Pass trade_class values ('live_real', 'live_simulated') to get exact-class
+    results; pass execution_mode values ('paper', 'snapshot_replay') otherwise.
     PnL and settlement join are precomputed by build_weather_fact_trades.py.
     """
+    if mode in _TRADE_CLASS_MODES:
+        where_col = "trade_class"
+    else:
+        where_col = "execution_mode"
     rows = conn.execute(
-        """
+        f"""
         SELECT
           execution_mode,
+          trade_class,
           execution_id,
           fill_id,
           target_date,
@@ -213,7 +223,7 @@ def _load_trades(conn: sqlite3.Connection, mode: str) -> list[TradeRow]:
           abs_edge,
           market_price
         FROM fact_trades
-        WHERE execution_mode = ?
+        WHERE {where_col} = ?
         """,
         (mode,),
     ).fetchall()
@@ -656,7 +666,7 @@ def _paper_candidate_coverage(rows: list[dict[str, str]], exclude_cities: set[st
 
 def _write_report(out_path: Path, *, data_note: str) -> None:
     conn = _connect()
-    live = _load_trades(conn, "live")
+    live = _load_trades(conn, "live_real")
     paper = _load_trades(conn, "paper")
     snapshot = _load_trades(conn, "snapshot_replay")
     missing_bracket_n = conn.execute("SELECT COUNT(1) FROM settlements WHERE settlement_status = 'missing_bracket'").fetchone()[0]

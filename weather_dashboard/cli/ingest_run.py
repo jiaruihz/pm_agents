@@ -42,6 +42,7 @@ from weather_dashboard.cli.run_create import _current_git_sha, create_run
 from weather_dashboard.cli.universe_register import _universe_id, register_universe
 from weather_dashboard.db.apply_schema import init_db
 from weather_dashboard.db.connection import get_conn
+from scripts.analysis.build_weather_fact_trades import FACT_DDL
 from weather_dashboard.ingest.ledger_csv import ingest_ledger_csv
 from weather_dashboard.ingest.real_ledger_adapter import adapt_rows
 from weather_dashboard.ingest.settlements import ingest_settlement_rows
@@ -90,6 +91,8 @@ def run_ingest(
     # Init DB
     init_db(db_path)
     conn = get_conn(db_path)
+    conn.execute(FACT_DDL)
+    conn.commit()
 
     try:
         # Ensure config

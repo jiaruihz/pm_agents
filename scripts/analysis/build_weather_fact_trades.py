@@ -89,6 +89,8 @@ CITY_TZ: dict[str, str] = {
 
 BJ_TZ = ZoneInfo("Asia/Shanghai")
 
+SNAPSHOT_DIR = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "paper_snapshots"
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -112,6 +114,40 @@ def _safe_float(v: Any) -> float | None:
         return float(v)
     except Exception:
         return None
+
+
+def _load_snapshot_prices() -> tuple[dict[tuple, dict], str | None]:
+    """Load latest snapshot file and return (lookup, snapshot_ts_utc).
+
+    lookup key: (condition_id, bracket, event_date) → {val_mid, val_bid}
+    Returns ({}, None) if no snapshot files found.
+    """
+    snapshots = sorted(SNAPSHOT_DIR.glob("snapshot_*.json")) if SNAPSHOT_DIR.exists() else []
+    if not snapshots:
+        return {}, None
+    latest = snapshots[-1]
+    try:
+        data = json.loads(latest.read_text())
+    except Exception:
+        return {}, None
+
+    snap_ts = None
+    lookup: dict[tuple, dict] = {}
+    for rec in data.get("records", []):
+        if not isinstance(rec, dict):
+            continue
+        if snap_ts is None:
+            snap_ts = rec.get("ts_utc")
+        cid = rec.get("condition_id") or ""
+        bracket = str(rec.get("bracket") or "")
+        event_date = str(rec.get("event_date") or "")
+        if not (cid and bracket and event_date):
+            continue
+        bid = _safe_float(rec.get("yes_best_bid"))
+        ask = _safe_float(rec.get("yes_best_ask"))
+        mid = (bid + ask) / 2.0 if (bid is not None and ask is not None) else _safe_float(rec.get("market_yes_price"))
+        lookup[(cid, bracket, event_date)] = {"val_mid": mid, "val_bid": bid}
+    return lookup, snap_ts
 
 
 def _derive_trade_class(execution_mode: str | None, fill_status: str | None) -> str:
@@ -387,12 +423,55 @@ CREATE TABLE IF NOT EXISTS fact_trades (
 """
 
 # ---------------------------------------------------------------------------
+# Unsettled valuation helper
+# ---------------------------------------------------------------------------
+
+def _snap_valuation(
+    final_yes: float | None,
+    side: str,
+    fill_price: float | None,
+    fill_qty: float | None,
+    condition_id: str | None,
+    bracket: str,
+    event_date: str,
+    snap_prices: dict[tuple, dict],
+    snap_ts: str | None,
+) -> dict:
+    """Return valuation dict for the fact row.
+
+    For settled fills: all val_ columns are None (settlement is the source of truth).
+    For unsettled fills: look up current market price from latest snapshot.
+    """
+    base = {"val_mid": None, "val_bid": None, "val_last_fill": None,
+            "unrealized_pnl_mid": None, "val_snapshot_ts_utc": None}
+    if final_yes is not None:
+        return base  # already settled — no need for market valuation
+
+    key = (condition_id or "", bracket, event_date)
+    snap = snap_prices.get(key)
+    if snap is None:
+        return base
+
+    val_mid = snap.get("val_mid")
+    val_bid = snap.get("val_bid")
+    unrealized = _compute_pnl(side, fill_price, val_mid, fill_qty, 0.0) if val_mid is not None else None
+    return {
+        "val_mid": val_mid,
+        "val_bid": val_bid,
+        "val_last_fill": None,
+        "unrealized_pnl_mid": unrealized,
+        "val_snapshot_ts_utc": snap_ts,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main build logic
 # ---------------------------------------------------------------------------
 
 def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
     """Build all fact rows. Returns (rows, alerts)."""
     by_token, by_cid, by_mid = _load_settlements(conn)
+    snap_prices, snap_ts = _load_snapshot_prices()
 
     cursor = conn.execute(BASE_SQL)
     base_cols = [d[0] for d in cursor.description]
@@ -472,12 +551,9 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
         pnl_at_plan = _compute_pnl(side, plan_price, final_yes, fill_qty, fees_usd) if final_yes is not None else None
         win_by_count = int(pnl_at_fill > 0) if pnl_at_fill is not None else None
         contract_won = int(final_yes == 1.0) if final_yes is not None else None
-        bracket_hit: int | None = None
-        if final_yes is not None:
-            if side == "BUY_YES":
-                bracket_hit = int(final_yes == 1.0)
-            elif side == "BUY_NO":
-                bracket_hit = int(final_yes == 0.0)
+        # bracket_hit = whether the temperature bracket won (YES resolved 1.0),
+        # side-independent. Use win_by_count to check if YOUR position won.
+        bracket_hit = int(final_yes == 1.0) if final_yes is not None else None
 
         fact_rows.append({
             # grain / blood-line
@@ -555,12 +631,12 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
             "win_by_count": win_by_count,
             "contract_won": contract_won,
             "bracket_hit": bracket_hit,
-            # valuation (Phase 1.5, NULL for now)
-            "val_mid": None,
-            "val_bid": None,
-            "val_last_fill": None,
-            "unrealized_pnl_mid": None,
-            "val_snapshot_ts_utc": None,
+            # valuation (Phase 1.5) — populated for unsettled fills from latest snapshot
+            **_snap_valuation(
+                final_yes, side, fill_price, fill_qty,
+                b.get("condition_id"), str(b.get("bracket") or ""), str(b.get("target_date") or ""),
+                snap_prices, snap_ts,
+            ),
             # build metadata
             "fact_built_at_utc": now_utc,
         })

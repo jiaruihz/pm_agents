@@ -178,11 +178,6 @@ if [[ $REBUILD -eq 1 ]]; then
     warn "  live_cycle directories missing"
   fi
 
-  log "  Precomputing metrics cache for all runs"
-  make -f Makefile.weather metrics-refresh >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
-    warn "metrics-refresh failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
-  }
-
   log "  Ingesting pm_history -> settlements (authoritative)"
   "$VENV/python" -m weather_dashboard.ingest.pm_history_settlements \
     --db-path "$DB_PATH" >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
@@ -207,19 +202,18 @@ if [[ $REBUILD -eq 1 ]]; then
     warn "consolidate_configs failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
   }
 
-  log "  Re-computing metrics after fill+settlement+alias refresh"
-  make -f Makefile.weather metrics-refresh >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
-fi
-
-# ---- 1b. Build fact_trades (唯一派生层) ----
-if [[ $REBUILD -eq 1 ]]; then
-  log "Building fact_trades..."
+  # ---- 1b. Build fact_trades BEFORE metrics (metrics reads from fact_trades) ----
+  log "  Building fact_trades (唯一派生层)..."
   "$VENV/python" scripts/analysis/build_weather_fact_trades.py \
     --db-path "$DB_PATH" \
     --parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_trades.parquet" \
     >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
-    warn "fact_trades build failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
+    err "fact_trades build failed — see $LOG_DIR/migrate_live_cycle.log"
+    exit 1
   }
+
+  log "  Re-computing metrics after fill+settlement+fact_trades rebuild"
+  make -f Makefile.weather metrics-refresh >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
 fi
 
 show_status

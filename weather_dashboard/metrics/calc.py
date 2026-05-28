@@ -27,58 +27,7 @@ Metrics returned:
   avg_loss_usd      - mean PnL of losing trades (negative value)
 """
 
-from decimal import Decimal, InvalidOperation
 from statistics import median, mean
-from typing import Optional
-
-
-def _d(val) -> Optional[Decimal]:
-    """Safely parse a Decimal from TEXT or None."""
-    if val is None or str(val).strip() == "":
-        return None
-    try:
-        return Decimal(str(val))
-    except InvalidOperation:
-        return None
-
-
-def _has_column(conn, table_name: str, column_name: str) -> bool:
-    return any(
-        (row["name"] if hasattr(row, "keys") else row[1]) == column_name
-        for row in conn.execute(f"PRAGMA table_info({table_name})")
-    )
-
-
-def _trade_pnl(filled_shares: str, filled_price: str, fees_usd: str,
-               final_price=None, order_side: str = "", **legacy_kwargs) -> Optional[Decimal]:
-    """
-    Compute PnL for one trade given settlement.
-    Polymarket contracts pay $1 for YES win, $0 for NO win.
-
-    order_side: 'BUY_YES' or 'BUY_NO'
-    final_price: YES token final price, usually 0.0 or 1.0
-    """
-    if final_price is None and "final_yes" in legacy_kwargs:
-        final_price = legacy_kwargs["final_yes"]
-
-    resolved = _d(final_price)
-    if resolved is None:
-        return None
-
-    shares = _d(filled_shares)
-    price = _d(filled_price)
-    fees = _d(fees_usd) or Decimal("0")
-
-    if shares is None or price is None:
-        return None
-
-    cost = shares * price
-    if order_side == "BUY_YES":
-        payout = shares * resolved
-    else:  # BUY_NO
-        payout = shares * (Decimal("1") - resolved)
-
-    return payout - cost - fees
 
 
 def _max_drawdown(pnls: list[float]) -> float:
@@ -96,93 +45,21 @@ def _max_drawdown(pnls: list[float]) -> float:
 
 
 def compute_metrics(conn, run_id: str) -> dict:
-    """
-    Compute PnL and risk metrics for a given run_id.
-
-    Reads from fact_trades (precomputed canonical PnL) when available.
-    Falls back to raw SQL join when fact_trades doesn't exist (test fixtures,
-    fresh DB before run_stack). Remove the fallback once test fixtures use
-    fact_trades (Phase 3 TODO).
-    """
-    _from_fact_trades = False
-    rows = None
-    if _has_column(conn, "fact_trades", "run_id"):
-        raw = conn.execute(
-            """
-            SELECT
-                fill_qty    AS filled_shares,
-                fill_price  AS filled_price,
-                fees_usd,
-                side        AS order_side,
-                cost_usd,
-                pnl_usd_at_fill,
-                settled
-            FROM fact_trades
-            WHERE run_id = ?
-            """,
-            (run_id,),
-        ).fetchall()
-        rows = raw
-        _from_fact_trades = True
-
-    if rows is None:
-        # Fallback for test fixtures / DBs that pre-date fact_trades.
-        # TODO: delete once test_metrics.py fixtures populate fact_trades.
-        if _has_column(conn, "orders", "execution_id"):
-            rows = conn.execute(
-                """
-                SELECT
-                    f.filled_shares,
-                    f.filled_price,
-                    f.fees_usd,
-                    o.order_side,
-                    o.cost_usd,
-                    s.final_price,
-                    NULL AS pnl_usd_at_fill,
-                    NULL AS settled
-                FROM fills f
-                JOIN orders o ON f.execution_id = o.execution_id
-                JOIN plans p  ON o.plan_id  = p.plan_id
-                JOIN signals sig ON p.signal_id = sig.signal_id
-                LEFT JOIN (
-                    SELECT target_date, condition_id, bracket, MAX(final_price) AS final_price
-                    FROM settlements GROUP BY target_date, condition_id, bracket
-                ) s
-                       ON sig.target_date = s.target_date
-                      AND sig.condition_id = s.condition_id
-                      AND sig.bracket      = s.bracket
-                WHERE o.run_id = ?
-                  AND f.status IN ('filled', 'simulated')
-                """,
-                (run_id,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT
-                    f.filled_shares,
-                    f.filled_price,
-                    f.fees_usd,
-                    o.side AS order_side,
-                    o.cost_usd,
-                    s.final_price,
-                    NULL AS pnl_usd_at_fill,
-                    NULL AS settled
-                FROM fills f
-                JOIN orders o ON f.order_id = o.order_id
-                JOIN plans p  ON o.plan_id  = p.plan_id
-                JOIN signals sig ON p.signal_id = sig.signal_id
-                LEFT JOIN (
-                    SELECT target_date, bracket, MAX(final_yes) AS final_price
-                    FROM settlements GROUP BY target_date, bracket
-                ) s
-                       ON sig.target_date = s.target_date
-                      AND sig.bracket      = s.bracket
-                WHERE o.run_id = ?
-                  AND f.status IN ('filled', 'simulated')
-                """,
-                (run_id,),
-            ).fetchall()
+    """Compute PnL and risk metrics for a given run_id from fact_trades."""
+    rows = conn.execute(
+        """
+        SELECT
+            fill_qty    AS filled_shares,
+            fill_price  AS filled_price,
+            fees_usd,
+            side        AS order_side,
+            cost_usd,
+            pnl_usd_at_fill
+        FROM fact_trades
+        WHERE run_id = ?
+        """,
+        (run_id,),
+    ).fetchall()
 
     _empty = {
         "num_trades": 0, "total_pnl_usd": None, "win_rate": None,
@@ -205,20 +82,14 @@ def compute_metrics(conn, run_id: str) -> dict:
     unsettled = 0
 
     for row in rows:
-        if _from_fact_trades:
-            raw_pnl = row["pnl_usd_at_fill"]
-            pnl = float(raw_pnl) if raw_pnl is not None else None
-        else:
-            pnl = _trade_pnl(
-                row["filled_shares"], row["filled_price"], row["fees_usd"],
-                row["final_price"], row["order_side"],
-            )
+        raw_pnl = row["pnl_usd_at_fill"]
+        pnl = float(raw_pnl) if raw_pnl is not None else None
 
-        cost = _d(row["cost_usd"])
+        cost = row["cost_usd"]
         if cost is not None:
             costs.append(float(cost))
 
-        fee = _d(row["fees_usd"])
+        fee = row["fees_usd"]
         if fee is not None:
             fees_total += float(fee)
 

@@ -15,28 +15,24 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 
 Db = Annotated[sqlite3.Connection, Depends(get_db)]
 
-_GROUP_BY_COLS: dict[str, str] = {
-    "city_pool":       "sig.city_pool",
-    "forecast_source": "sig.forecast_source",
-    "model_version":   "sig.model_version",
-    "side":            "o.order_side",
-    "city":            "sig.city",
-    "target_date":     "sig.target_date",
-    "bracket":         "sig.bracket",
-}
-
 _SETTLEMENTS_DEDUP = """
     (
-        SELECT
-            target_date,
-            condition_id,
-            bracket,
-            MAX(final_price) AS final_price,
-            MAX(settlement_status) AS settlement_status
-        FROM settlements
-        GROUP BY target_date, condition_id, bracket
+        SELECT target_date, condition_id, bracket,
+               MAX(final_price) AS final_price,
+               MAX(settlement_status) AS settlement_status
+        FROM settlements GROUP BY target_date, condition_id, bracket
     )
 """
+
+_GROUP_BY_COLS: dict[str, str] = {
+    "city_pool":       "city_pool",
+    "forecast_source": "forecast_source",
+    "model_version":   "model_version",
+    "side":            "side",
+    "city":            "city",
+    "target_date":     "target_date",
+    "bracket":         "bracket",
+}
 
 
 def _parse_tags(raw) -> list[str]:
@@ -157,36 +153,16 @@ def get_run_metrics_slice(
     rows = db.execute(
         f"""
         SELECT
-            {col} AS slice_value,
-            COUNT(*)                                                  AS num_trades,
-            SUM(CASE WHEN s.final_price IS NOT NULL THEN 1 ELSE 0 END) AS settled_trades,
-            SUM(CASE
-                WHEN s.final_price IS NULL THEN 0
-                WHEN o.order_side = 'BUY_YES'
-                    THEN CAST(f.filled_shares AS REAL) * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL))
-                WHEN o.order_side = 'BUY_NO'
-                    THEN CAST(f.filled_shares AS REAL) * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL))
-                ELSE 0
-            END)                                                      AS total_pnl_usd,
-            SUM(CASE
-                WHEN s.final_price IS NOT NULL AND (
-                    (o.order_side = 'BUY_YES' AND CAST(s.final_price AS REAL) > CAST(f.filled_price AS REAL)) OR
-                    (o.order_side = 'BUY_NO'  AND (1 - CAST(s.final_price AS REAL)) > CAST(f.filled_price AS REAL))
-                ) THEN 1 ELSE 0
-            END) * 1.0 /
-            NULLIF(SUM(CASE WHEN s.final_price IS NOT NULL THEN 1 ELSE 0 END), 0)
-                                                                      AS win_rate,
-            SUM(CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL))
-                                                                      AS total_cost_usd
-        FROM fills f
-        JOIN orders o    ON f.execution_id = o.execution_id
-        JOIN plans p     ON o.plan_id    = p.plan_id
-        JOIN signals sig ON p.signal_id  = sig.signal_id
-        LEFT JOIN {_SETTLEMENTS_DEDUP} s
-               ON sig.target_date = s.target_date
-              AND sig.condition_id = s.condition_id
-              AND sig.bracket      = s.bracket
-        WHERE o.run_id = ? AND f.status IN ('filled', 'simulated')
+            {col}                                                           AS slice_value,
+            COUNT(*)                                                        AS num_trades,
+            SUM(CASE WHEN settlement_status = 'settled' THEN 1 ELSE 0 END) AS settled_trades,
+            SUM(CASE WHEN settlement_status = 'settled' THEN pnl_usd_at_fill ELSE 0 END)
+                                                                            AS total_pnl_usd,
+            AVG(CASE WHEN settlement_status = 'settled' THEN CAST(win_by_count AS REAL) END)
+                                                                            AS win_rate,
+            SUM(cost_usd)                                                   AS total_cost_usd
+        FROM fact_trades
+        WHERE run_id = ?
         GROUP BY {col}
         ORDER BY total_pnl_usd DESC
         """,
@@ -217,28 +193,14 @@ def get_run_equity(run_id: str, db: Db):
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
     rows = db.execute(
-        f"""
+        """
         SELECT
-            sig.target_date AS date,
-            SUM(CASE
-                WHEN s.final_price IS NULL THEN 0
-                WHEN o.order_side = 'BUY_YES'
-                    THEN CAST(f.filled_shares AS REAL) * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL))
-                WHEN o.order_side = 'BUY_NO'
-                    THEN CAST(f.filled_shares AS REAL) * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL))
-                ELSE 0
-            END) AS daily_pnl
-        FROM fills f
-        JOIN orders o    ON f.execution_id = o.execution_id
-        JOIN plans p     ON o.plan_id    = p.plan_id
-        JOIN signals sig ON p.signal_id  = sig.signal_id
-        LEFT JOIN {_SETTLEMENTS_DEDUP} s
-               ON sig.target_date = s.target_date
-              AND sig.condition_id = s.condition_id
-              AND sig.bracket      = s.bracket
-        WHERE o.run_id = ? AND f.status IN ('filled', 'simulated') AND sig.target_date IS NOT NULL
-        GROUP BY sig.target_date
-        ORDER BY sig.target_date
+            target_date AS date,
+            SUM(CASE WHEN settlement_status = 'settled' THEN pnl_usd_at_fill ELSE 0 END) AS daily_pnl
+        FROM fact_trades
+        WHERE run_id = ? AND target_date IS NOT NULL
+        GROUP BY target_date
+        ORDER BY target_date
         """,
         (run_id,),
     ).fetchall()
@@ -406,14 +368,17 @@ def get_run_trades(
             f.filled_at_utc,
             s.final_price,
             s.settlement_status,
-            CASE
-                WHEN s.final_price IS NULL OR f.execution_id IS NULL THEN NULL
-                WHEN o.order_side = 'BUY_YES'
-                    THEN CAST(CAST(f.filled_shares AS REAL) * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL)) AS TEXT)
-                WHEN o.order_side = 'BUY_NO'
-                    THEN CAST(CAST(f.filled_shares AS REAL) * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL)) AS TEXT)
-                ELSE NULL
-            END AS pnl_usd
+            COALESCE(
+                ft.pnl_usd_at_fill,
+                CASE
+                    WHEN s.final_price IS NULL OR f.execution_id IS NULL THEN NULL
+                    WHEN o.order_side = 'BUY_YES'
+                        THEN CAST(f.filled_shares AS REAL) * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL))
+                    WHEN o.order_side = 'BUY_NO'
+                        THEN CAST(f.filled_shares AS REAL) * ((1.0 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL))
+                    ELSE NULL
+                END
+            ) AS pnl_usd
         FROM orders o
         JOIN plans p     ON o.plan_id    = p.plan_id
         JOIN signals sig ON p.signal_id  = sig.signal_id
@@ -422,6 +387,7 @@ def get_run_trades(
                ON sig.target_date = s.target_date
               AND sig.condition_id = s.condition_id
               AND sig.bracket      = s.bracket
+        LEFT JOIN fact_trades ft ON ft.fill_id = f.fill_id
         WHERE {' AND '.join(where)}
         ORDER BY COALESCE(f.filled_at_utc, o.placed_at_utc, o.created_at_utc) DESC
         LIMIT ? OFFSET ?

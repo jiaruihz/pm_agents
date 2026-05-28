@@ -19,10 +19,13 @@ from weather_dashboard.ingest.canonical import (
 def api_db(tmp_path):
     """In-memory SQLite with schema applied, plus seed data."""
     import sqlite3
+    from scripts.analysis.build_weather_fact_trades import FACT_DDL
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     apply_schema_canonical(conn)
+    conn.execute(FACT_DDL)
+    conn.commit()
     yield conn
     conn.close()
 

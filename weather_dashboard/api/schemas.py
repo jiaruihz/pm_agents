@@ -91,7 +91,7 @@ class TradeRow(BaseModel):
     filled_at_utc: Optional[str]
     final_price: Optional[float]
     settlement_status: Optional[str]
-    pnl_usd: Optional[str]
+    pnl_usd: Optional[float]
     # P0 enrichment
     city_pool: Optional[str]
     forecast_source: Optional[str]

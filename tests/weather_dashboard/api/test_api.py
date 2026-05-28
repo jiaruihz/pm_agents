@@ -11,6 +11,13 @@ from weather_dashboard.ingest.canonical import (
     ingest_canonical_settlements,
     ingest_canonical_signals,
 )
+from scripts.analysis.build_weather_fact_trades import build as _build_fact, write_db as _write_fact
+
+
+def _rebuild_fact(conn):
+    """Populate fact_trades from raw tables in the test DB."""
+    rows, _ = _build_fact(conn)
+    _write_fact(conn, rows)
 
 
 # ── /health ───────────────────────────────────────────────────────────────────
@@ -148,6 +155,7 @@ def test_get_run_metrics_slice_uses_canonical_fields(client, api_db):
     ingest_canonical_orders(api_db, [order], "orders.jsonl")
     ingest_canonical_fills(api_db, [fill], "fills.jsonl")
     ingest_canonical_settlements(api_db, [settlement], "settlements.jsonl")
+    _rebuild_fact(api_db)
 
     r = client.get(f"/api/runs/{run_id}/metrics/slice?group_by=city_pool")
     assert r.status_code == 200

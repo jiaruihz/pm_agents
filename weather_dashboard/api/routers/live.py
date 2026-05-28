@@ -11,18 +11,6 @@ router = APIRouter(prefix="/live", tags=["live"])
 
 Db = Annotated[sqlite3.Connection, Depends(get_db)]
 
-_SETTLEMENTS_DEDUP = """
-    (
-        SELECT
-            target_date,
-            condition_id,
-            bracket,
-            MAX(final_price) AS final_price,
-            MAX(settlement_status) AS settlement_status
-        FROM settlements
-        GROUP BY target_date, condition_id, bracket
-    )
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -44,33 +32,18 @@ def get_live_summary(db: Db):
         "SELECT MAX(created_at_utc) FROM runs WHERE state = 'live'"
     ).fetchone()[0]
 
-    # CLOB positions breakdown
+    # CLOB positions breakdown (live_real fills only — excludes simulated)
     clob = db.execute(
-        f"""
+        """
         SELECT
-            COUNT(DISTINCT f.fill_id)                               AS total_fills,
-            SUM(CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL))
-                                                                    AS capital_deployed_usd,
-            SUM(CASE WHEN s.final_price IS NOT NULL THEN 1 ELSE 0 END)
-                                                                    AS settled_count,
-            SUM(CASE WHEN s.final_price IS NULL THEN 1 ELSE 0 END) AS open_count,
-            SUM(CASE
-                WHEN s.final_price IS NULL THEN 0
-                WHEN o.order_side = 'BUY_YES'
-                    THEN CAST(f.filled_shares AS REAL) * (CAST(s.final_price AS REAL) - CAST(f.filled_price AS REAL))
-                WHEN o.order_side = 'BUY_NO'
-                    THEN CAST(f.filled_shares AS REAL) * ((1 - CAST(s.final_price AS REAL)) - CAST(f.filled_price AS REAL))
-                ELSE 0
-            END)                                                    AS realized_pnl_usd
-        FROM fills f
-        JOIN orders o    ON f.execution_id = o.execution_id
-        JOIN plans p     ON o.plan_id      = p.plan_id
-        JOIN signals sig ON p.signal_id    = sig.signal_id
-        LEFT JOIN {_SETTLEMENTS_DEDUP} s
-               ON sig.target_date = s.target_date
-              AND sig.condition_id = s.condition_id
-              AND sig.bracket      = s.bracket
-        WHERE o.venue = 'polymarket_clob' AND f.status = 'filled'
+            COUNT(DISTINCT fill_id)                                          AS total_fills,
+            SUM(cost_usd)                                                    AS capital_deployed_usd,
+            SUM(CASE WHEN settlement_status = 'settled' THEN 1 ELSE 0 END)  AS settled_count,
+            SUM(CASE WHEN settlement_status != 'settled' THEN 1 ELSE 0 END) AS open_count,
+            SUM(CASE WHEN settlement_status = 'settled' THEN pnl_usd_at_fill ELSE 0 END)
+                                                                             AS realized_pnl_usd
+        FROM fact_trades
+        WHERE trade_class = 'live_real'
         """
     ).fetchone()
 

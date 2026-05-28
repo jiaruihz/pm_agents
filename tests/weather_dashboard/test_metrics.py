@@ -1,130 +1,58 @@
-"""Tests for weather_dashboard.metrics.calc"""
+"""Tests for weather_dashboard.metrics.calc — reads from fact_trades."""
 
+import sqlite3
 import pytest
-from weather_dashboard.metrics.calc import compute_metrics, _trade_pnl
-from decimal import Decimal
+from weather_dashboard.metrics.calc import compute_metrics
+
+FACT_DDL = """
+CREATE TABLE IF NOT EXISTS fact_trades (
+  fill_id TEXT, run_id TEXT, side TEXT,
+  fill_price REAL, fill_qty REAL, fees_usd REAL, cost_usd REAL,
+  pnl_usd_at_fill REAL, settlement_status TEXT, win_by_count INTEGER
+)
+"""
 
 
-# ── unit tests for _trade_pnl ─────────────────────────────────────────────────
-
-def test_trade_pnl_buy_yes_win():
-    # Buy YES at 0.6, 100 shares → cost 60, payout 100, pnl 40
-    pnl = _trade_pnl("100", "0.6", "0", final_yes=1, order_side="BUY_YES")
-    assert pnl == Decimal("40")
-
-
-def test_trade_pnl_buy_yes_lose():
-    # Buy YES at 0.6, 100 shares → payout 0, pnl -60
-    pnl = _trade_pnl("100", "0.6", "0", final_yes=0, order_side="BUY_YES")
-    assert pnl == Decimal("-60")
+def _mk_db() -> sqlite3.Connection:
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(FACT_DDL)
+    return conn
 
 
-def test_trade_pnl_buy_no_win():
-    # Buy NO at 0.4, 50 shares → cost 20, payout 50, pnl 30
-    pnl = _trade_pnl("50", "0.4", "0", final_yes=0, order_side="BUY_NO")
-    assert pnl == Decimal("30")
-
-
-def test_trade_pnl_buy_no_lose():
-    # Buy NO at 0.4, 50 shares → payout 0, pnl -20
-    pnl = _trade_pnl("50", "0.4", "0", final_yes=1, order_side="BUY_NO")
-    assert pnl == Decimal("-20")
-
-
-def test_trade_pnl_with_fees():
-    # Buy YES at 0.5, 100 shares, fee 1 → pnl = 100 - 50 - 1 = 49
-    pnl = _trade_pnl("100", "0.5", "1", final_yes=1, order_side="BUY_YES")
-    assert pnl == Decimal("49")
-
-
-def test_trade_pnl_unsettled_returns_none():
-    pnl = _trade_pnl("100", "0.5", "0", final_yes=None, order_side="BUY_YES")
-    assert pnl is None
-
-
-# ── integration test: compute_metrics ────────────────────────────────────────
-
-def _insert_full_trade(conn, run_id, config_id,
-                       city, bracket, target_date,
-                       order_side, shares, price, final_yes=None):
-    """Helper: insert signal→plan→order→fill and optionally settlement."""
-    from datetime import datetime, timezone
-    import hashlib, uuid
-
-    now = datetime.now(timezone.utc).isoformat()
-
-    signal_side = "YES" if "YES" in order_side else "NO"
-    signal_id = hashlib.sha256(f"{city}{bracket}{signal_side}".encode()).hexdigest()[:32]
-    plan_id = hashlib.sha256(f"{signal_id}{run_id}".encode()).hexdigest()[:32]
-    order_id = str(uuid.uuid4())
-    fill_id = str(uuid.uuid4())
-
-    conn.execute(
-        "INSERT OR IGNORE INTO signals (signal_id, target_date, city, bracket, side, created_at_utc) "
-        "VALUES (?,?,?,?,?,?)",
-        (signal_id, target_date, city, bracket, signal_side, now),
-    )
-    conn.execute(
-        "INSERT OR IGNORE INTO plans (plan_id, run_id, signal_id, config_id, created_at_utc) "
-        "VALUES (?,?,?,?,?)",
-        (plan_id, run_id, signal_id, config_id, now),
-    )
-    conn.execute(
-        "INSERT INTO orders (order_id, run_id, plan_id, execution_mode, side, "
-        "entry_price, shares, cost_usd, placed_at_utc, created_at_utc) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (order_id, run_id, plan_id, "snapshot_replay", order_side,
-         str(price), str(shares), str(float(shares) * float(price)), now, now),
-    )
-    conn.execute(
-        "INSERT INTO fills (fill_id, order_id, filled_shares, filled_price, status, filled_at_utc, created_at_utc) "
-        "VALUES (?,?,?,?,?,?,?)",
-        (fill_id, order_id, str(shares), str(price), "filled", now, now),
-    )
-
+def _insert(conn, run_id: str, side: str, fill_price: float, qty: float,
+            final_yes=None, fees: float = 0.0):
+    cost = fill_price * qty
     if final_yes is not None:
-        import hashlib as h
-        sid = h.sha256(f"{target_date}{bracket}".encode()).hexdigest()[:32]
-        conn.execute(
-            "INSERT OR IGNORE INTO settlements (settlement_id, target_date, bracket, final_yes, status, created_at_utc) "
-            "VALUES (?,?,?,?,?,?)",
-            (sid, target_date, bracket, final_yes, "settled", now),
-        )
-
+        if side == "BUY_YES":
+            pnl = (final_yes - fill_price) * qty - fees
+        else:
+            pnl = ((1.0 - final_yes) - fill_price) * qty - fees
+        status = "settled"
+        win = int(pnl > 0)
+    else:
+        pnl = None
+        status = "unsettled"
+        win = None
+    conn.execute(
+        "INSERT INTO fact_trades VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (f"f_{side}_{fill_price}", run_id, side, fill_price, qty, fees, cost, pnl, status, win),
+    )
     conn.commit()
-    return run_id
 
 
-def _setup_run(conn):
-    """Create minimal config, universe, code_version, run."""
-    from weather_dashboard.cli.config_register import register_config
-    from weather_dashboard.cli.universe_register import register_universe
-    from weather_dashboard.cli.run_create import create_run
-
-    register_config(conn, "cfg", {"min_edge": 0.08})
-    from weather_dashboard.cli.config_register import _config_id
-    cid = _config_id({"min_edge": 0.08})
-
-    register_universe(conn, "u1", "Universe", "", ["Tokyo"], ["ecmwf"])
-    run_id = create_run(conn, cid, "u1", "sha_test", "snapshot_replay")
-    return run_id, cid
-
-
-def test_compute_metrics_no_trades(tmp_db_with_schema):
-    run_id, _ = _setup_run(tmp_db_with_schema)
-    m = compute_metrics(tmp_db_with_schema, run_id)
+def test_compute_metrics_no_trades():
+    conn = _mk_db()
+    m = compute_metrics(conn, "run1")
     assert m["num_trades"] == 0
     assert m["total_pnl_usd"] is None
 
 
-def test_compute_metrics_settled_win(tmp_db_with_schema):
-    run_id, cid = _setup_run(tmp_db_with_schema)
-    # Buy YES at 0.5, 100 shares → cost 50, payout 100, pnl +50
-    _insert_full_trade(tmp_db_with_schema, run_id, cid,
-                       "Tokyo", "23", "2026-05-09",
-                       "BUY_YES", 100, 0.5, final_yes=1)
-
-    m = compute_metrics(tmp_db_with_schema, run_id)
+def test_compute_metrics_settled_win():
+    conn = _mk_db()
+    # Buy YES at 0.5, 100 shares → pnl +50
+    _insert(conn, "r1", "BUY_YES", 0.5, 100, final_yes=1)
+    m = compute_metrics(conn, "r1")
     assert m["num_trades"] == 1
     assert m["total_pnl_usd"] == 50.0
     assert m["win_rate"] == 1.0
@@ -132,26 +60,63 @@ def test_compute_metrics_settled_win(tmp_db_with_schema):
     assert m["unsettled_trades"] == 0
 
 
-def test_compute_metrics_mixed(tmp_db_with_schema):
-    run_id, cid = _setup_run(tmp_db_with_schema)
-    # Win: +50
-    _insert_full_trade(tmp_db_with_schema, run_id, cid,
-                       "Tokyo", "23", "2026-05-09", "BUY_YES", 100, 0.5, final_yes=1)
-    # Loss: -20
-    _insert_full_trade(tmp_db_with_schema, run_id, cid,
-                       "Warsaw", "25", "2026-05-09", "BUY_NO", 50, 0.4, final_yes=1)
+def test_compute_metrics_buy_no_win():
+    conn = _mk_db()
+    # Buy NO at 0.4, 50 shares → pnl = (1-0-0.4)*50 = 30
+    _insert(conn, "r1", "BUY_NO", 0.4, 50, final_yes=0)
+    m = compute_metrics(conn, "r1")
+    assert m["total_pnl_usd"] == 30.0
+    assert m["win_rate"] == 1.0
 
-    m = compute_metrics(tmp_db_with_schema, run_id)
+
+def test_compute_metrics_with_fees():
+    conn = _mk_db()
+    # Buy YES at 0.5, 100 shares, fee 1 → pnl = 50 - 1 = 49
+    _insert(conn, "r1", "BUY_YES", 0.5, 100, final_yes=1, fees=1.0)
+    m = compute_metrics(conn, "r1")
+    assert m["total_pnl_usd"] == 49.0
+    assert m["fees_paid_usd"] == 1.0
+
+
+def test_compute_metrics_mixed():
+    conn = _mk_db()
+    _insert(conn, "r1", "BUY_YES", 0.5, 100, final_yes=1)   # +50
+    _insert(conn, "r1", "BUY_NO", 0.4, 50, final_yes=1)     # -20
+    m = compute_metrics(conn, "r1")
     assert m["num_trades"] == 2
-    assert m["total_pnl_usd"] == 30.0  # 50 - 20
+    assert m["total_pnl_usd"] == 30.0
     assert m["win_rate"] == 0.5
 
 
-def test_compute_metrics_unsettled(tmp_db_with_schema):
-    run_id, cid = _setup_run(tmp_db_with_schema)
-    _insert_full_trade(tmp_db_with_schema, run_id, cid,
-                       "Tokyo", "23", "2026-05-09", "BUY_YES", 100, 0.5, final_yes=None)
-
-    m = compute_metrics(tmp_db_with_schema, run_id)
+def test_compute_metrics_unsettled():
+    conn = _mk_db()
+    _insert(conn, "r1", "BUY_YES", 0.5, 100, final_yes=None)
+    m = compute_metrics(conn, "r1")
     assert m["unsettled_trades"] == 1
     assert m["total_pnl_usd"] is None
+
+
+def test_compute_metrics_roi():
+    conn = _mk_db()
+    _insert(conn, "r1", "BUY_YES", 0.5, 100, final_yes=1)  # cost=50, pnl=50
+    m = compute_metrics(conn, "r1")
+    assert m["roi"] == pytest.approx(1.0)
+
+
+def test_compute_metrics_expectancy():
+    conn = _mk_db()
+    _insert(conn, "r1", "BUY_YES", 0.5, 100, final_yes=1)   # +50 win
+    _insert(conn, "r1", "BUY_NO",  0.4, 50,  final_yes=1)   # -20 loss
+    m = compute_metrics(conn, "r1")
+    # avg_win=50, avg_loss=-20, win_rate=0.5, loss_rate=0.5
+    assert m["expectancy_usd"] == pytest.approx(50*0.5 + (-20)*0.5)
+
+
+def test_compute_metrics_max_drawdown():
+    conn = _mk_db()
+    _insert(conn, "r1", "BUY_YES", 0.5, 100, final_yes=1)   # +50
+    _insert(conn, "r1", "BUY_NO",  0.4, 50,  final_yes=1)   # -20
+    _insert(conn, "r1", "BUY_YES", 0.3, 100, final_yes=1)   # +70
+    m = compute_metrics(conn, "r1")
+    # cumulative: 50, 30, 100 → peak=50, trough=30, dd=20
+    assert m["max_drawdown_usd"] == pytest.approx(20.0)
