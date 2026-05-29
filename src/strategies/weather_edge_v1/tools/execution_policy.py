@@ -134,6 +134,44 @@ def _accepted_quote(
     }
 
 
+def _deferred_quote(
+    *,
+    policy: str,
+    placeholder: float,
+    token_prob: float,
+    tick: float,
+    required_edge: float,
+    order_role: str = "single",
+    maker_only: bool = True,
+    notional_fraction: float = 1.0,
+    size_multiplier: float = 1.0,
+) -> Dict[str, Any]:
+    """Accepted placeholder quote for the no-live-book (production planner) path.
+
+    The split/band decision only needs ``market_price`` + ``token_prob`` (both
+    present in the signal), so we decide the leg structure here and let the
+    executor re-fetch the live orderbook and re-price each leg by role.
+    """
+
+    quote = _accepted_quote(
+        policy=policy,
+        limit_price=placeholder,
+        token_prob=token_prob,
+        bid=0.0,
+        ask=0.0,
+        spread=0.0,
+        tick=tick,
+        quote_mode="defer_to_executor",
+        required_edge=required_edge,
+        order_role=order_role,
+        maker_only=maker_only,
+        notional_fraction=notional_fraction,
+        size_multiplier=size_multiplier,
+    )
+    quote["quote_reason"] = "defer_to_executor_missing_two_sided_book"
+    return quote
+
+
 def build_execution_quote(
     signal: Dict[str, Any],
     config: ExecutionPolicyConfig,
@@ -391,17 +429,97 @@ def build_execution_quotes(
             model_probability_yes=model_p_yes,
         )
 
+    low_band_ceiling = max(price_floor, min(price_ceiling, config.low_band_ceiling))
+    high_band_floor = max(price_floor, min(price_ceiling, config.high_band_floor))
+
     if bid <= 0 or ask <= 0 or ask <= bid:
+        # Production signals carry no live two-sided book (bid=0/ask=0). The
+        # split/band decision only needs market_price + token_prob, so decide
+        # the leg structure here and emit deferred placeholder quotes with the
+        # correct child_order_role. The executor re-fetches the live book at
+        # submit time and re-prices each leg by role (selecting the matching
+        # child_order_role), so this stays consistent with the with-book path.
+        entry_price = market_price
+        placeholder = _round_down_to_tick(max(price_floor, min(price_ceiling, market_price)), tick)
+
+        if entry_price < low_band_ceiling:
+            split_edge_ok = (token_prob - entry_price) >= config.split_min_edge
+            should_split = bool(config.split_enabled) and split_edge_ok
+            if not should_split:
+                return [
+                    _deferred_quote(
+                        policy=policy,
+                        placeholder=placeholder,
+                        token_prob=token_prob,
+                        tick=tick,
+                        required_edge=config.min_quote_edge,
+                        order_role="single",
+                        maker_only=True,
+                        notional_fraction=1.0,
+                    )
+                ]
+            return [
+                _deferred_quote(
+                    policy=policy,
+                    placeholder=placeholder,
+                    token_prob=token_prob,
+                    tick=tick,
+                    required_edge=config.split_min_edge,
+                    order_role="taker",
+                    maker_only=False,
+                    notional_fraction=config.taker_fraction,
+                ),
+                _deferred_quote(
+                    policy=policy,
+                    placeholder=placeholder,
+                    token_prob=token_prob,
+                    tick=tick,
+                    required_edge=config.min_quote_edge,
+                    order_role="maker",
+                    maker_only=True,
+                    notional_fraction=(1.0 - config.taker_fraction),
+                ),
+            ]
+
+        if entry_price < high_band_floor:
+            return [
+                _deferred_quote(
+                    policy=policy,
+                    placeholder=placeholder,
+                    token_prob=token_prob,
+                    tick=tick,
+                    required_edge=config.min_quote_edge,
+                    order_role="single",
+                    maker_only=True,
+                )
+            ]
+
+        required_edge = max(config.min_quote_edge, config.high_band_min_edge)
+        if (token_prob - entry_price) < required_edge:
+            return [
+                _reject_quote(
+                    policy=policy,
+                    reason="high_band_edge_below_min",
+                    token_prob=token_prob,
+                    bid=0.0,
+                    ask=0.0,
+                    spread=0.0,
+                    tick=tick,
+                    quote_mode="high_band_no_quote",
+                    required_edge=required_edge,
+                    limit_price=entry_price,
+                )
+            ]
         return [
-            _reject_quote(
+            _deferred_quote(
                 policy=policy,
-                reason="missing_two_sided_book",
+                placeholder=placeholder,
                 token_prob=token_prob,
-                bid=bid,
-                ask=ask,
-                spread=spread,
                 tick=tick,
-                quote_mode="no_quote",
+                required_edge=required_edge,
+                order_role="single",
+                maker_only=True,
+                size_multiplier=config.high_band_size_mult,
             )
         ]
 
@@ -420,8 +538,6 @@ def build_execution_quotes(
             )
         ]
 
-    low_band_ceiling = max(price_floor, min(price_ceiling, config.low_band_ceiling))
-    high_band_floor = max(price_floor, min(price_ceiling, config.high_band_floor))
     entry_price = market_price
 
     if entry_price < low_band_ceiling:

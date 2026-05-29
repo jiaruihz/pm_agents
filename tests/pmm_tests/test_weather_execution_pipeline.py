@@ -289,6 +289,123 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertAlmostEqual(strong_plan["order_notional_cap"], 3.0)
         self.assertAlmostEqual(strong_plan["notional"], 3.0, places=5)
 
+    def test_mid_price_core_v2_defers_split_when_no_live_book(self):
+        # Production signals carry no two-sided book (bid=0/ask=0). The split
+        # decision must still happen at planner stage from market_price+edge,
+        # emitting two deferred child plans for the executor to re-price.
+        signal = normalize_signal(
+            {
+                **self._paper_decision(),
+                "market_price": 0.30,
+                "best_bid": 0.0,
+                "best_ask": 0.0,
+                "model_probability_yes": 0.48,
+                "edge": 0.18,
+            }
+        )
+        assert signal is not None
+        plans = build_trade_plans_for_signal(
+            signal,
+            PlannerConfig(
+                max_order_notional=5.0,
+                min_edge=0.10,
+                execution_policy="mid_price_core_v2",
+                tick_size=0.01,
+                split_min_edge=0.10,
+                taker_fraction=0.50,
+            ),
+        )
+
+        self.assertEqual(len(plans), 2)
+        by_role = {plan["child_order_role"]: plan for plan in plans}
+        self.assertEqual(set(by_role), {"taker", "maker"})
+        for role in ("taker", "maker"):
+            self.assertEqual(by_role[role]["status"], "accepted")
+            self.assertEqual(by_role[role]["quote_mode"], "defer_to_executor")
+            self.assertEqual(
+                by_role[role]["quote_reason"], "defer_to_executor_missing_two_sided_book"
+            )
+        self.assertFalse(by_role["taker"]["maker_only"])
+        self.assertTrue(by_role["maker"]["maker_only"])
+        self.assertAlmostEqual(by_role["taker"]["notional_fraction"], 0.50)
+        self.assertAlmostEqual(by_role["maker"]["notional_fraction"], 0.50)
+        self.assertAlmostEqual(by_role["taker"]["notional"], 2.5, places=5)
+        self.assertAlmostEqual(by_role["maker"]["notional"], 2.5, places=5)
+        self.assertNotEqual(by_role["taker"]["plan_id"], by_role["maker"]["plan_id"])
+
+    def test_mid_price_core_v2_no_book_low_band_below_split_edge_single_defer(self):
+        # Low band but edge under split_min_edge → no split, single deferred maker.
+        signal = normalize_signal(
+            {
+                **self._paper_decision(),
+                "market_price": 0.30,
+                "best_bid": 0.0,
+                "best_ask": 0.0,
+                "model_probability_yes": 0.38,
+                "edge": 0.11,
+            }
+        )
+        assert signal is not None
+        plans = build_trade_plans_for_signal(
+            signal,
+            PlannerConfig(
+                max_order_notional=5.0,
+                min_edge=0.10,
+                execution_policy="mid_price_core_v2",
+                tick_size=0.01,
+                split_min_edge=0.10,
+                taker_fraction=0.50,
+            ),
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["child_order_role"], "single")
+        self.assertEqual(plans[0]["status"], "accepted")
+        self.assertEqual(plans[0]["quote_mode"], "defer_to_executor")
+        self.assertTrue(plans[0]["maker_only"])
+
+    def test_mid_price_core_v2_no_book_high_band_edge_gate(self):
+        weak = normalize_signal(
+            {
+                **self._paper_decision(),
+                "market_price": 0.60,
+                "best_bid": 0.0,
+                "best_ask": 0.0,
+                "model_probability_yes": 0.70,
+                "edge": 0.10,
+            }
+        )
+        strong = normalize_signal(
+            {
+                **self._paper_decision(),
+                "market_price": 0.60,
+                "best_bid": 0.0,
+                "best_ask": 0.0,
+                "model_probability_yes": 0.80,
+                "edge": 0.20,
+            }
+        )
+        assert weak is not None
+        assert strong is not None
+        weak_plans = build_trade_plans_for_signal(
+            weak,
+            PlannerConfig(max_order_notional=5.0, min_edge=0.10, execution_policy="mid_price_core_v2"),
+        )
+        strong_plans = build_trade_plans_for_signal(
+            strong,
+            PlannerConfig(max_order_notional=5.0, min_edge=0.10, execution_policy="mid_price_core_v2"),
+        )
+
+        self.assertEqual(len(weak_plans), 1)
+        self.assertEqual(weak_plans[0]["status"], "rejected")
+        self.assertEqual(weak_plans[0]["risk_reason"], "high_band_edge_below_min")
+
+        self.assertEqual(len(strong_plans), 1)
+        self.assertEqual(strong_plans[0]["status"], "accepted")
+        self.assertEqual(strong_plans[0]["child_order_role"], "single")
+        self.assertEqual(strong_plans[0]["quote_mode"], "defer_to_executor")
+        self.assertAlmostEqual(strong_plans[0]["size_multiplier"], 0.60)
+        self.assertAlmostEqual(strong_plans[0]["order_notional_cap"], 3.0)
+
     def test_plan_trades_can_filter_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             signal = normalize_signal({**self._paper_decision(), "edge": 0.01})
