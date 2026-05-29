@@ -343,6 +343,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_CLOB_ORDERBOOK_CAPTURE.md](docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md) | CLOB 快照捕获设计（供回测用更准确的 ask/bid 入场价） |
 | [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](docs/WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | 城市/日组合优化器设计（多城市仓位分配） |
 | [WEATHER_LEDGER_POSITION_ANALYSIS.md](docs/WEATHER_LEDGER_POSITION_ANALYSIS.md) | 持仓分析设计（Dashboard 持仓拆解页面） |
+| [WEATHER_MID_PRICE_CORE_V2_DESIGN.md](docs/WEATHER_MID_PRICE_CORE_V2_DESIGN.md) | mid_price_core_v2 执行策略设计（低价正 alpha 漏单拆单、maker_queue 删除方案） |
 
 ### 研究与分析报告（时间点快照，不更新）
 
@@ -352,4 +353,8 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md](docs/WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md) | 2026-05-23 实盘血缘分析（t1_trading mid_price_core_v1 策略） |
 | [2026-05-27-performance-live-full-research.md](docs/analysis/2026-05/2026-05-27-performance-live-full-research.md) | 2026-05-27 全量 live 实盘绩效归因（城市/方向/paper 对比/edge 赔率诊断） |
 | [2026-05-28-performance-makerqueue-v3-city-pool.md](docs/analysis/2026-05/2026-05-28-performance-makerqueue-v3-city-pool.md) | 2026-05-28 maker_queue 与 v3 城市池当日未结算亏损拆解 |
+| [2026-05-29-entry-timing-edge.md](docs/analysis/2026-05/2026-05-29-entry-timing-edge.md) | 2026-05-29 入场 timing / edge 诊断 |
+| [2026-05-29-performance-candidates-vs-fills-link.md](docs/analysis/2026-05/2026-05-29-performance-candidates-vs-fills-link.md) | 2026-05-29 fact_signal_candidates × fact_trades 双底表首次串联（全机会 alpha vs 成交样本/漏单/滑点） |
+| [2026-05-29-performance-city-pool-side-strategy.md](docs/analysis/2026-05/2026-05-29-performance-city-pool-side-strategy.md) | 2026-05-29 城市池选择策略复盘（合并城市 alpha+成交质量）：city×side 侧别白名单、fill级稳健性、三层一致性、Paris应降级 |
+| [2026-05-29-strategy-entry-band-and-execution-quality.md](docs/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | 2026-05-29 入场价 25-75 区间调参 + maker_queue vs mid_price 成交质量/paper 对比 + 策略建议 |
 | [COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md](docs/COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md) | Copy Trade 钱包研究执行计划 |

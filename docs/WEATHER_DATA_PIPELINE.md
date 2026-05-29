@@ -176,6 +176,19 @@ Side tables (mutable):
 │     ├─ python -m weather_dashboard.db.consolidate_configs           │
 │     │     writes: config_aliases (fragments → canonical)            │
 │     │                                                               │
+│     ├─ scripts/analysis/build_weather_fact_trades.py   (DERIVED)    │
+│     │     reads:  orders/fills/plans/signals/settlements (canonical)│
+│     │     writes: fact_trades (每 fill 一行宽表, 已成交 PnL 唯一源) │
+│     │             + fact_trades.parquet                             │
+│     │                                                               │
+│     ├─ scripts/analysis/build_weather_signal_candidates.py (DERIVED)│
+│     │     reads:  paper_snapshots/*.json, paper_orders.jsonl,       │
+│     │             fact_trades(live_real), settlements               │
+│     │     writes: fact_signal_candidates (每机会一行, 全机会宇宙→   │
+│     │             paper intended→live actual 对齐, 机会 alpha 唯一源)│
+│     │             + fact_signal_candidates.parquet                  │
+│     │             window: decision hts_min/max 默认 [22,24]         │
+│     │                                                               │
 │     └─ make metrics-refresh             (per-run metrics cache)     │
 │                                                                     │
 │   FastAPI + React serve from runtime/weather.db                     │

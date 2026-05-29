@@ -132,25 +132,87 @@ rows = conn.execute("""
 | `scripts/analysis/weather_city_day_portfolio.py` | `load_live_fills()` 展示了只取 live_real + settled 的过滤方式 |
 | `weather_dashboard/metrics/calc.py` | `compute_metrics()` 展示了 run 级别聚合 |
 
-### weather.db（原始规范化表，仅 fact_trades builder 使用）
+### fact_signal_candidates（机会粒度授权源）
+
+**机会粒度问题必须读 `fact_signal_candidates`，禁止回到 raw JSON 自己 JOIN 重算。**
+它和 `fact_trades` 是**互补的两张授权底表**，grain 不同，结论不准互相硬塞：
+
+| 表 | grain | 回答 | PnL 列 |
+|---|---|---|---|
+| `fact_trades` | 每 fill 一行（只有成交了的） | 已成交 realized 绩效 | `pnl_usd_at_fill` / `pnl_usd_at_plan` |
+| `fact_signal_candidates` | 每机会一行 `(condition_id, side, event_date)`（全机会宇宙） | 全机会 alpha、成交率、漏单、滑点、漏掉的赢家 | `counterfactual_pnl`（反事实，非成交 PnL） |
+
+- DB 表：`runtime/weather.db` 的 `fact_signal_candidates` 表（每机会一行）
+- Parquet：`runtime/weather_edge_v1/market_data/research/fact_signal_candidates.parquet`
+- 重建：`run_stack.sh` 在 fact_trades **之后**调用 `scripts/analysis/build_weather_signal_candidates.py`
+- 设计文档：[WEATHER_SIGNAL_CANDIDATES_DESIGN.md](WEATHER_SIGNAL_CANDIDATES_DESIGN.md)
+
+**口径硬规定：**
+- **反事实主口径 = `counterfactual_pnl`**，用**决策窗 `decision_entry_price`**（T-22~24h 真能看到的价）算，
+  公式沿用 §2.1 已验证的 BUY_YES/BUY_NO（含 2026-05-29 BUY_NO 勘误）。
+  `counterfactual_pnl_best`（用 `best_entry_price`）**仅作诊断上限，禁止当主绩效**（交易时不可能预知全天最优价）。
+- **链路标志**：`seen`(恒1) / `eligible` / `paper_ordered` / `live_filled`。派生视图：
+  `missed_fill = paper_ordered=1 AND live_filled=0`、
+  `counterfactual_win = paper_ordered=0 AND win_by_count=1`、
+  `filtered_out = eligible=0`。
+- **可用反事实分母**：只在 `final_yes IS NOT NULL AND decision_window_missing=0 AND eligible=1` 上算城市/方向/模型 alpha，
+  其余留空不估值（本表不做 Phase 1.5）。
+- **`live_filled` 只认 `trade_class='live_real'`**；`live_pnl_usd` 直接引用 `fact_trades.pnl_usd_at_fill`，不重算。
+- **`paper_ordered` 来自全池 paper ledger（T1+T2 paper 决定），不是 live 下单意图**。
+  因此 `missed_fill` 大多是 paper≠live 的设计差异，**不是 live 执行漏单**；
+  不要把 paper 成交率当 live 成交率。真实 live 覆盖率看 `live_filled / eligible`。
+
+#### 取数 quickstart
+
+```python
+import sqlite3
+conn = sqlite3.connect("runtime/weather.db"); conn.row_factory = sqlite3.Row
+
+# 全 eligible 机会宇宙的城市/方向反事实 alpha（settled + 决策窗存在）
+rows = conn.execute("""
+    SELECT city, side,
+           COUNT(*) AS n,
+           SUM(paper_ordered) AS ordered, SUM(live_filled) AS live_fill,
+           AVG(CAST(win_by_count AS REAL)) AS win_rate,
+           SUM(counterfactual_pnl) AS cf_pnl
+    FROM fact_signal_candidates
+    WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0
+    GROUP BY city, side
+    ORDER BY cf_pnl DESC
+""").fetchall()
+
+# 滑点（live 实际成交价 − paper 想进价）
+rows = conn.execute("""
+    SELECT side, COUNT(*) n, AVG(slippage_vs_paper) avg_slippage
+    FROM fact_signal_candidates
+    WHERE slippage_vs_paper IS NOT NULL GROUP BY side
+""").fetchall()
+```
+
+### weather.db（原始规范化表，仅 fact_trades / fact_signal_candidates builder 使用）
 
 - 路径：`runtime/weather.db`
 - 刷新方式：`scripts/weather_dashboard/run_stack.sh`（重跑 ingest）
 - 覆盖时间：取决于镜像同步时间，详见 `WEATHER_DATA_PIPELINE.md`
-- **直接读原始表的唯一授权场景**：`build_weather_fact_trades.py`，其他代码禁止绕过 fact_trades 自己 JOIN 多表算 PnL
+- **直接读原始表的唯一授权场景**：`build_weather_fact_trades.py` 和 `build_weather_signal_candidates.py`（两个 builder）；其他代码禁止绕过这两张底表自己 JOIN 多表算 PnL
 
 关键表结构：`signals` / `plans` / `orders` / `fills` / `settlements` / `runs` / `strategy_config`
 
-### snapshot replay 脚本专用数据源（不走 fact_trades）
+### snapshot replay 脚本（机会反事实 — 标准问题改走 fact_signal_candidates）
 
-以下两个脚本分析的是**候选信号 replay**（如果当时按快照价格入场会怎样），不是 DB 里的实际 fills，因此不使用 fact_trades：
+以下两个脚本分析的是**候选信号 replay**（如果当时按快照价格入场会怎样），不是 DB 里的实际 fills：
 
 | 脚本 | 数据源 | 说明 |
 |---|---|---|
-| `scripts/analysis/weather_city_pool_contribution_analysis.py` | `runtime/weather_edge_v1/market_data/paper_snapshots/*.json` + `cache/pm_history/*.json` | 候选信号 × 当前城市池的反事实 replay |
+| `scripts/analysis/weather_city_pool_contribution_analysis.py` | `paper_snapshots/*.json` + `cache/pm_history/*.json` | 候选信号 × 当前城市池的反事实 replay |
 | `scripts/analysis/weather_window_capture_performance.py` | 同上 | 时间窗口捕获率 A/B 对比 |
 
-这两个脚本的 `pnl_usd=(payout - entry_price) * shares` 是正确的——它们算的是 snapshot 级别的假设入场，不是成交层 PnL，不需要 fact_trades。如果要新增类似的 snapshot 反事实分析，以这两个脚本为模板，**不要**改成读 fact_trades。
+这两个脚本的 `pnl_usd=(payout - entry_price) * shares` 是 snapshot 级假设入场，不是成交层 PnL，**不需要** fact_trades。
+
+> **口径更新（2026-05-29）**：城市/方向/模型反事实 alpha、成交率、滑点、漏掉的赢家这类**标准机会粒度问题，
+> 现在一律走已物化的 `fact_signal_candidates`，不要再写一次性脚本扫 raw JSON**。
+> 上面两个脚本只保留给本表未覆盖的研究维度（如多窗口 A/B、城市池假设重组）；
+> 新增标准机会分析以 `fact_signal_candidates` 为准。
 
 ### Dashboard API
 

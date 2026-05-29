@@ -35,19 +35,20 @@ order style = maker-only GTC, post_only=True
 
 城市池决策日志和完整证据见 `docs/WEATHER_CITY_POOL_DECISIONS.md`。
 代码 source of truth 是 `weather-predict/city_pools.py` 的
-`TRADING_T1_CITIES`。
+`CITY_TRADING_CONFIG`。
 
-**T1 完整城市列表（v3，共 24 个）：**
+**T1 完整城市列表（2026-05-29 city×side 配置，共 24 个）：**
 Amsterdam, Ankara, Boston, BuenosAires, Chengdu, Guangzhou, Istanbul,
-Jeddah, Karachi, LA, London, Lucknow, Manila, Miami, Moscow, Munich, NYC,
-Paris, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw
+Jeddah, Karachi, LA, London, Lucknow, Madrid, Manila, Miami, Moscow,
+Munich, NYC, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw
 
-**2026-05-27 v3 变更：**
-- T1 移除：Chicago
-- 已确认继续不在 T1：Beijing, Madrid
-- T1 新增：BuenosAires, Amsterdam, Manila, Munich, Singapore, Chengdu
+**2026-05-29 city×side 变更：**
+- Madrid 重新进入 T1，但只允许 `BUY_NO`。
+- Shanghai 保留 T1，但只允许 `BUY_NO`。
+- Paris 降级到 T2 / research only。
+- 其余 T1 城市默认双侧。
 
-Madrid / Beijing / Chicago 均保留在 `FULL_CITY_CONFIGS`，因此是 T2
+Paris / Beijing / Chicago / Austin 均保留在 `FULL_CITY_CONFIGS`，因此是 T2
 research-only，不是删除城市配置。
 
 ## 2026-05-26 城市池 v2 变更（已被 v3 覆盖，paper ledger 生效）

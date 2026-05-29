@@ -4,19 +4,30 @@ description: >
   分析 weather 策略的历史绩效、PnL、ROI、win rate、城市 alpha、稳定性、多维切片，
   或对比两个策略/参数版本的 A/B 表现。触发词：绩效、PnL、ROI、win rate、胜率、
   切片、对比策略、A/B、回测结果、策略表现、历史表现、收益分析、城市 alpha、稳定性。
-  禁止：绕过 fact_trades 自算 PnL；绕过 weather.db 直接用 raw JSON/CSV 跑 pandas；
-  把候选信号/未成交机会混进 fill-grain 绩效表。
+  禁止：绕过 fact_trades 自算成交 PnL；绕过 weather.db 直接用 raw JSON/CSV 跑 pandas；
+  把候选信号/未成交机会混进 fill-grain 绩效表（成交质量/机会 alpha 改读 fact_signal_candidates）。
 ---
 
 # weather-strategy-performance
 
-分析 weather 策略**已成交 fill** 的历史绩效。默认唯一取数源是：
+分析 weather 策略**已成交 fill** 的历史绩效。已成交 PnL 唯一取数源是：
 
 ```text
 runtime/weather.db.fact_trades
 ```
 
-`fact_trades` 的 grain 是每 fill 一行。它回答“实际成交后的 realized / shadow / replay 绩效”，不回答 missed signal、候选信号、窗口捕获、未成交机会成本、全市场机会质量。这些问题需要候选事实表，不能硬塞进 fill 绩效结论。
+`fact_trades` 的 grain 是每 fill 一行。它回答“实际成交后的 realized / shadow / replay 绩效”，不回答 missed signal、候选信号、窗口捕获、未成交机会成本、全市场机会质量。
+
+**这些机会粒度问题现在有授权底表 `fact_signal_candidates`**（每机会一行，已物化，见 contract §1）。
+当用户问“成交质量 / 成交率 / 漏单 / 滑点 / 全机会集真实 alpha / 漏掉的赢家”时，**join 这张表**，不要回去扫 raw JSON。
+
+| 表 | grain | 回答 | PnL 列 |
+|---|---|---|---|
+| `fact_trades` | 每 fill | 已成交 realized 绩效 | `pnl_usd_at_fill` |
+| `fact_signal_candidates` | 每机会 `(condition_id,side,event_date)` | 全机会 alpha / 成交率 / 滑点 / 漏单 | `counterfactual_pnl`（反事实，非成交 PnL） |
+
+**禁止互相硬塞**：不要拿候选反事实 PnL 冒充已成交绩效，也不要用成交样本结论否定全机会 alpha。
+关联键 = `(condition_id, side, event_date)`（fact_trades 侧用 `condition_id + side + target_date`）。
 
 两个子模式：
 - **M1 单跑绩效切片**：指定时间窗 + 策略/来源，输出多维切片报告。
@@ -164,6 +175,34 @@ ROI:
 
 M3 A/B：两个 selector 都从 `fact_trades` 过滤，分别聚合，再按同一切片键 join，输出 delta PnL / delta ROI / delta win_rate / delta active_days。
 
+### 第 6.5 步：成交质量 / 机会 alpha（结合 fact_signal_candidates）
+
+当问题涉及“成交质量、有没有漏单/漏赢家、滑点、城市真实 alpha（不只成交样本）”时，
+**补一段机会粒度分析，读 `fact_signal_candidates`**（口径见 contract §1）。默认输出：
+
+- **成交覆盖**：每 city/side 的 `eligible` 机会数、`paper_ordered`、`live_filled`，
+  真实 live 覆盖率 = `live_filled / eligible`（**不要**用 paper 成交率冒充 live 成交率）。
+- **滑点**：`AVG(slippage_vs_paper)`（负=成交价更便宜，对买方有利）。
+- **漏掉的赢家**：`counterfactual_win`（`paper_ordered=0 AND win_by_count=1`）放弃的 `counterfactual_pnl`。
+- **全机会 alpha vs 成交样本**：同一 city/side 把候选反事实（全 eligible）和 fact_trades 已成交并排，
+  暴露执行选择偏差（成交样本好/坏是不是只是吃到了机会集的一个子集）。
+
+```sql
+-- 全 eligible 机会宇宙的城市/方向反事实 alpha（settled + 决策窗存在）
+SELECT city, side, COUNT(*) n,
+       SUM(paper_ordered) ordered, SUM(live_filled) live_fill,
+       AVG(CAST(win_by_count AS REAL)) win_rate,
+       SUM(counterfactual_pnl) cf_pnl
+FROM fact_signal_candidates
+WHERE eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0
+GROUP BY city, side ORDER BY cf_pnl DESC;
+```
+
+机会粒度的硬约束（必须在报告里点明）：
+- 反事实可用分母仅 `eligible=1 AND final_yes IS NOT NULL AND decision_window_missing=0`，样本通常很小 → 弱结论。
+- `decision_window_missing` 占比要单列（当前 T-22~24h 带内缺失可达 ~46%，系统性缺口）。
+- `paper_ordered` 是全池 paper ledger，不是 live 意图；`missed_fill` 大多是 paper≠live 设计差异，不是执行漏单。
+
 ### 第 7 步：报告与保存
 
 正式报告写到：
@@ -179,6 +218,7 @@ docs/analysis/YYYY-MM/YYYY-MM-DD-performance-<topic>.md
 - 总览
 - 关键切片
 - 交易动作建议：保留 / 过滤 / 降 size / shadow / 不改 live
-- 残余风险：样本量、unsettled、trade_class 混用风险、候选机会缺失
+- 残余风险：样本量、unsettled、trade_class 混用风险；若用了 fact_signal_candidates，必须点明
+  `decision_window_missing` 占比（反事实只覆盖另一半机会）与 `paper_ordered ≠ live 意图`（勿把 paper 成交率当 live 成交率）
 
 只有用户要求提交时才 commit。

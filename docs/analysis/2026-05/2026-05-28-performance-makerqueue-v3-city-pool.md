@@ -1,5 +1,11 @@
 # 绩效分析：maker_queue_v2 与 v3 城市池当日拆解
 
+> **口径状态：局部执行/未结算视图，保留为事故复盘。**
+> 本报告适合解释 2026-05-28 当日 maker_queue / mid_price 分支和 open mark 体感，
+> 但城市级长期 realized alpha 以
+> [2026-05-29-performance-city-pool-side-strategy.md](2026-05-29-performance-city-pool-side-strategy.md)
+> 的城市池策略复盘报告为准。
+
 > 时间窗：2026-05-27 — 2026-05-29（北京时间）  
 > 策略：live CLOB；重点 `maker_queue_v1` / `maker_queue_v2` / `mid_price_core_v1`  
 > 城市池：`t1_trading`，并拆成旧 T1 保留城市 vs 2026-05-27 v3 新增城市  

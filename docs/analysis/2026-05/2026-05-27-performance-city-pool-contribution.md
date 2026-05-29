@@ -1,5 +1,10 @@
 # 绩效分析：current T1/T2 city contribution replay
 
+> **口径状态：候选 replay，不是 fill realized alpha。**
+> 本报告回答“如果候选信号按 snapshot entry 入场会怎样”，不应和
+> [2026-05-29-performance-city-pool-side-strategy.md](2026-05-29-performance-city-pool-side-strategy.md)
+> 的 `fact_trades` 已成交 fill 绩效混用。未来应由候选事实表统一，而不是迁入 `fact_trades`。
+
 > 时间窗：全部已结算镜像样本（北京时间 target_date）
 > 策略：snapshot replay / live-like wide capture
 > 城市池：current_t1 vs current_t2

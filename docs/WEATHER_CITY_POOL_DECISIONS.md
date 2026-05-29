@@ -127,6 +127,30 @@ Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle
 
 ## 历史记录
 
+### 2026-05-29：Madrid NO-only 重新进 T1，Paris 降级
+
+动作：
+
+- `Madrid` 重新进入 `TRADING_T1_CITIES`，但只允许 `BUY_NO`。
+- `Paris` 从 `TRADING_T1_CITIES` 移到 `RESEARCH_T2_CITIES`。
+- `Shanghai` 保留 T1，但只允许 `BUY_NO`。
+- 其余 T1 城市恢复默认双侧，旧的中等置信 BUY_YES block 不再作为主配置。
+- 生产配置改为 `CITY_TRADING_CONFIG` 嵌套结构：`TRADING_T1_CITIES` / `RESEARCH_T2_CITIES` / `CITY_ALLOWED_SIDES`。
+
+依据：
+
+| 层 | Madrid BUY_NO | Madrid BUY_YES |
+|---|---:|---:|
+| 反事实机会 | +10.0, n=12, win 66.7% | -1.85, n=8, win 25% |
+| live_real settled | +2.38, n=6, ROI 8.3%, win 50% | -9.9, n=2, ROI -100%, win 0% |
+| paper | +11.53, n=18, ROI 10.6%, win 70.6% | -4.95, n=10, ROI -19.8%, win 20% |
+
+结论：
+
+- Madrid 的亏损不是整城问题，而是 YES 侧黑洞；整城踢出会误杀 NO 正腿。
+- Madrid 不是高置信加仓城市，按 NO-only re-entry 观察；累积 5-10 笔 settled NO 后复核。
+- 若 Madrid NO realized PnL <= -5 或 ROI < -20%，回退到 T2。
+
 ### 2026-05-27：Madrid 单独降级
 
 代码提交：

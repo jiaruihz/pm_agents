@@ -1,5 +1,10 @@
 # 绩效分析：live full research
 
+> **口径状态：旧口径，仅作历史快照。**
+> 该报告生成时 `live` 分母混合了 `live_real` 与 `live_simulated`，城市级 realized alpha 结论已由
+> [2026-05-29-performance-city-pool-side-strategy.md](2026-05-29-performance-city-pool-side-strategy.md)
+> 的 `fact_trades` 标准口径替代。后续 live 实绩只使用 `trade_class='live_real'`。
+
 > 时间窗：2026-05-16 — 2026-05-27（北京时间）  
 > 策略：all live / weather_edge_v1  
 > 城市池：all（live 实际为 t1_trading，早期缺 city_pool 的 raw order 标为 unknown）  

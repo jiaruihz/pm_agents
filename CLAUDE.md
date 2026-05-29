@@ -375,17 +375,23 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_DASHBOARD_TROUBLESHOOTING.md](docs/WEATHER_DASHBOARD_TROUBLESHOOTING.md) | Dashboard 故障排查：portproxy/CORS/env/null crash 根因与修复 |
 | [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) | 通用运维手册：常驻进程、日志路径、启停命令 |
 
+### 已实现底表（DERIVED 物化层，分析唯一授权源）
+
+| 文档 | 用途 |
+|---|---|
+| [WEATHER_FACT_TRADES_DESIGN.md](docs/WEATHER_FACT_TRADES_DESIGN.md) | **已实现** fill 粒度底表 `fact_trades`（每 fill 一行宽表，已成交 PnL 唯一源；builder=`scripts/analysis/build_weather_fact_trades.py`） |
+| [WEATHER_SIGNAL_CANDIDATES_DESIGN.md](docs/WEATHER_SIGNAL_CANDIDATES_DESIGN.md) | **已实现**（2026-05-29）机会粒度底表 `fact_signal_candidates`（全机会宇宙→paper intended→live actual 对齐，城市真实alpha/漏单/滑点唯一源；builder=`scripts/analysis/build_weather_signal_candidates.py`） |
+
 ### 设计文档（功能待实施或部分实施）
 
 | 文档 | 用途 |
 |---|---|
-| [WEATHER_FACT_TRADES_DESIGN.md](docs/WEATHER_FACT_TRADES_DESIGN.md) | 唯一物化底表 fact_trades 设计（消除取数/公式/DB路径口径漂移，每fill一行宽表） |
-| [WEATHER_SIGNAL_CANDIDATES_DESIGN.md](docs/WEATHER_SIGNAL_CANDIDATES_DESIGN.md) | 机会粒度候选底表设计（全机会宇宙→paper intended→live actual 对齐，回答城市真实alpha/漏单/滑点） |
 | [WEATHER_EXECUTION_ARCHITECTURE.md](docs/WEATHER_EXECUTION_ARCHITECTURE.md) | paper→live 执行边界设计（资金安全/暂停开关/notional 上限） |
 | [WEATHER_SHADOW_PORTFOLIO_TRACKING.md](docs/WEATHER_SHADOW_PORTFOLIO_TRACKING.md) | 影子组合追踪架构（live策略的虚拟持仓快照设计） |
 | [WEATHER_CLOB_ORDERBOOK_CAPTURE.md](docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md) | CLOB 快照捕获设计（供回测用更准确的 ask/bid 入场价） |
 | [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](docs/WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | 城市/日组合优化器设计（多城市仓位分配） |
 | [WEATHER_LEDGER_POSITION_ANALYSIS.md](docs/WEATHER_LEDGER_POSITION_ANALYSIS.md) | 持仓分析设计（Dashboard 持仓拆解页面） |
+| [WEATHER_MID_PRICE_CORE_V2_DESIGN.md](docs/WEATHER_MID_PRICE_CORE_V2_DESIGN.md) | mid_price_core_v2 执行策略设计（低价正 alpha 漏单拆单、maker_queue 删除方案） |
 
 ### 研究与分析报告（时间点快照，不更新）
 
@@ -395,4 +401,8 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md](docs/WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md) | 2026-05-23 实盘血缘分析（t1_trading mid_price_core_v1 策略） |
 | [2026-05-27-performance-live-full-research.md](docs/analysis/2026-05/2026-05-27-performance-live-full-research.md) | 2026-05-27 全量 live 实盘绩效归因（城市/方向/paper 对比/edge 赔率诊断） |
 | [2026-05-28-performance-makerqueue-v3-city-pool.md](docs/analysis/2026-05/2026-05-28-performance-makerqueue-v3-city-pool.md) | 2026-05-28 maker_queue 与 v3 城市池当日未结算亏损拆解 |
+| [2026-05-29-entry-timing-edge.md](docs/analysis/2026-05/2026-05-29-entry-timing-edge.md) | 2026-05-29 入场 timing / edge 诊断 |
+| [2026-05-29-performance-candidates-vs-fills-link.md](docs/analysis/2026-05/2026-05-29-performance-candidates-vs-fills-link.md) | 2026-05-29 fact_signal_candidates × fact_trades 双底表首次串联（全机会 alpha vs 成交样本/漏单/滑点） |
+| [2026-05-29-performance-city-pool-side-strategy.md](docs/analysis/2026-05/2026-05-29-performance-city-pool-side-strategy.md) | 2026-05-29 城市池选择策略复盘（合并城市 alpha+成交质量）：city×side 侧别白名单、fill级稳健性、三层一致性、Paris应降级 |
+| [2026-05-29-strategy-entry-band-and-execution-quality.md](docs/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | 2026-05-29 入场价 25-75 区间调参 + maker_queue vs mid_price 成交质量/paper 对比 + 策略建议 |
 | [COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md](docs/COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md) | Copy Trade 钱包研究执行计划 |

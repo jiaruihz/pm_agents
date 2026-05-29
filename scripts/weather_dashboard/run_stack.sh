@@ -212,6 +212,17 @@ if [[ $REBUILD -eq 1 ]]; then
     exit 1
   }
 
+  # ---- 1c. Build fact_signal_candidates (机会粒度，对齐 universe→paper→live) ----
+  log "  Building fact_signal_candidates (机会粒度候选表)..."
+  "$VENV/python" scripts/analysis/build_weather_signal_candidates.py \
+    --db-path "$DB_PATH" \
+    --parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_signal_candidates.parquet" \
+    --decision-hts-min 22 --decision-hts-max 24 \
+    >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    err "fact_signal_candidates build failed — see $LOG_DIR/migrate_live_cycle.log"
+    exit 1
+  }
+
   log "  Re-computing metrics after fill+settlement+fact_trades rebuild"
   make -f Makefile.weather metrics-refresh >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
 fi
