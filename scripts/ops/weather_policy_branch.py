@@ -251,7 +251,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run one execution-policy branch from a shared live signal file."
     )
-    parser.add_argument("--execution-policy", choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2"), required=True)
+    parser.add_argument(
+        "--execution-policy",
+        choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2", "mid_price_core_v2"),
+        required=True,
+    )
     parser.add_argument("--source-policy", default="mid_price_core_v1")
     parser.add_argument("--source-signal")
     parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))
@@ -268,6 +272,19 @@ def main() -> int:
     parser.add_argument("--quote-improvement-ticks", type=int, default=int(os.getenv("WEATHER_LIVE_QUOTE_IMPROVEMENT_TICKS", "1")))
     parser.add_argument("--wide-spread-shade-ticks", type=int, default=int(os.getenv("WEATHER_LIVE_WIDE_SPREAD_SHADE_TICKS", "1")))
     parser.add_argument("--adverse-selection-spread-fraction", type=float, default=float(os.getenv("WEATHER_LIVE_ADVERSE_SELECTION_SPREAD_FRACTION", "0.50")))
+    parser.add_argument("--low-band-ceiling", type=float, default=float(os.getenv("WEATHER_LIVE_LOW_BAND_CEILING", "0.40")))
+    parser.add_argument("--high-band-floor", type=float, default=float(os.getenv("WEATHER_LIVE_HIGH_BAND_FLOOR", "0.55")))
+    parser.add_argument(
+        "--split-enabled",
+        action=argparse.BooleanOptionalAction,
+        default=os.getenv("WEATHER_LIVE_SPLIT_ENABLED", "1").strip().lower() not in {"0", "false", "no"},
+    )
+    parser.add_argument("--taker-fraction", type=float, default=float(os.getenv("WEATHER_LIVE_TAKER_FRACTION", "0.50")))
+    parser.add_argument("--split-min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_SPLIT_MIN_EDGE", "0.10")))
+    parser.add_argument("--high-band-shade-narrow", type=int, default=int(os.getenv("WEATHER_LIVE_HIGH_BAND_SHADE_NARROW", "1")))
+    parser.add_argument("--high-band-shade-wide", type=int, default=int(os.getenv("WEATHER_LIVE_HIGH_BAND_SHADE_WIDE", "2")))
+    parser.add_argument("--high-band-min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_HIGH_BAND_MIN_EDGE", "0.15")))
+    parser.add_argument("--high-band-size-mult", type=float, default=float(os.getenv("WEATHER_LIVE_HIGH_BAND_SIZE_MULT", "0.60")))
     parser.add_argument("--dry-run-live", action="store_true")
     parser.add_argument("--no-telegram", action="store_true")
     args = parser.parse_args()
@@ -327,6 +344,15 @@ def main() -> int:
         "quote_improvement_ticks": int(args.quote_improvement_ticks),
         "wide_spread_shade_ticks": int(args.wide_spread_shade_ticks),
         "adverse_selection_spread_fraction": float(args.adverse_selection_spread_fraction),
+        "low_band_ceiling": float(args.low_band_ceiling),
+        "high_band_floor": float(args.high_band_floor),
+        "split_enabled": bool(args.split_enabled),
+        "taker_fraction": float(args.taker_fraction),
+        "split_min_edge": float(args.split_min_edge),
+        "high_band_shade_narrow": int(args.high_band_shade_narrow),
+        "high_band_shade_wide": int(args.high_band_shade_wide),
+        "high_band_min_edge": float(args.high_band_min_edge),
+        "high_band_size_mult": float(args.high_band_size_mult),
         "source_signal_path": str(source_signal_path),
         "source_summary_path": str(source_summary_path) if source_summary_path else "",
     }
@@ -366,9 +392,27 @@ def main() -> int:
         str(live_config["wide_spread_shade_ticks"]),
         "--adverse-selection-spread-fraction",
         str(live_config["adverse_selection_spread_fraction"]),
+        "--low-band-ceiling",
+        str(live_config["low_band_ceiling"]),
+        "--high-band-floor",
+        str(live_config["high_band_floor"]),
+        "--taker-fraction",
+        str(live_config["taker_fraction"]),
+        "--split-min-edge",
+        str(live_config["split_min_edge"]),
+        "--high-band-shade-narrow",
+        str(live_config["high_band_shade_narrow"]),
+        "--high-band-shade-wide",
+        str(live_config["high_band_shade_wide"]),
+        "--high-band-min-edge",
+        str(live_config["high_band_min_edge"]),
+        "--high-band-size-mult",
+        str(live_config["high_band_size_mult"]),
         "--enable-live",
         "--accepted-only",
     ]
+    if not bool(live_config["split_enabled"]):
+        planner_cmd.append("--no-split-enabled")
     planner_run = _run(planner_cmd, timeout=90)
     planner = _load_json_from_output(planner_run["output"])
     live_dedup = _filter_plan_file_for_live_dedup(

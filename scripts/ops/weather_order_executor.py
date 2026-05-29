@@ -20,6 +20,7 @@ from src.strategies.weather_edge_v1.tools.execution_pipeline import (
 from src.strategies.weather_edge_v1.tools.execution_policy import (
     ExecutionPolicyConfig,
     build_execution_quote,
+    build_execution_quotes,
 )
 
 
@@ -219,7 +220,7 @@ def _send_execution_telegram(result: Dict[str, Any], *, live_out: Path) -> None:
         print(f"[WARN] telegram send failed: {type(exc).__name__}: {exc}")
 
 
-def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
+def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
     try:
         from py_clob_client_v2.client import ClobClient
         from py_clob_client_v2.clob_types import ApiCreds, OrderArgsV2, OrderPayload, OrderType
@@ -271,6 +272,9 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
 
     def place(plan: Dict[str, Any]) -> Dict[str, Any]:
         side = str(plan.get("order_side") or "BUY").upper().strip()
+        execution_policy = str(plan.get("execution_policy") or "").strip()
+        child_order_role = str(plan.get("child_order_role") or "single").strip() or "single"
+        maker_only = bool(plan.get("maker_only", default_maker_only))
         requested_price = float(plan["limit_price"])
         order_price = requested_price
         best_bid = 0.0
@@ -310,6 +314,7 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
                 "bracket": str(plan.get("bracket") or ""),
                 "signal_side": str(plan.get("signal_side") or ""),
                 "execution_policy": str(plan.get("execution_policy") or ""),
+                "child_order_role": str(plan.get("child_order_role") or "single"),
                 "diagnostic_key": "|".join(
                     [
                         str(plan.get("target_date") or ""),
@@ -322,7 +327,8 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
                 **quote,
             }
 
-        if maker_only:
+        needs_live_policy_quote = execution_policy == "mid_price_core_v2"
+        if maker_only or needs_live_policy_quote:
             try:
                 book = client.get_order_book(str(plan["token_id"]))
             except Exception as exc:
@@ -333,11 +339,66 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
                 ) from exc
             best_bid, best_ask = _best_bid_ask_from_book(book)
             tick_size = _get_tick_size(client, str(plan["token_id"]), _to_float(plan.get("quote_tick_size"), 0.01))
-            if str(plan.get("execution_policy") or "").strip() in ("maker_queue_v1", "maker_queue_v2"):
+            if execution_policy == "mid_price_core_v2":
+                quotes = build_execution_quotes(
+                    plan,
+                    ExecutionPolicyConfig(
+                        policy_name="mid_price_core_v2",
+                        price_floor=0.01,
+                        price_ceiling=0.99,
+                        tick_size=tick_size,
+                        min_quote_edge=_to_float(plan.get("min_quote_edge"), 0.03),
+                        max_quote_spread=_to_float(plan.get("max_quote_spread"), 0.12),
+                        max_mid_drift=_to_float(plan.get("max_mid_drift"), 0.10),
+                        quote_improvement_ticks=int(_to_float(plan.get("quote_improvement_ticks"), 1.0)),
+                        wide_spread_shade_ticks=int(_to_float(plan.get("wide_spread_shade_ticks"), 1.0)),
+                        narrow_spread=_to_float(plan.get("narrow_quote_spread"), 0.03),
+                        adverse_selection_spread_fraction=_to_float(
+                            plan.get("adverse_selection_spread_fraction"),
+                            0.50,
+                        ),
+                        low_band_ceiling=_to_float(plan.get("low_band_ceiling"), 0.40),
+                        high_band_floor=_to_float(plan.get("high_band_floor"), 0.55),
+                        split_enabled=bool(plan.get("split_enabled", True)),
+                        taker_fraction=_to_float(plan.get("taker_fraction"), 0.50),
+                        split_min_edge=_to_float(plan.get("split_min_edge"), 0.10),
+                        high_band_shade_narrow=int(_to_float(plan.get("high_band_shade_narrow"), 1.0)),
+                        high_band_shade_wide=int(_to_float(plan.get("high_band_shade_wide"), 2.0)),
+                        high_band_min_edge=_to_float(plan.get("high_band_min_edge"), 0.15),
+                        high_band_size_mult=_to_float(plan.get("high_band_size_mult"), 0.60),
+                    ),
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    tick_size=tick_size,
+                )
+                quote = next(
+                    (item for item in quotes if str(item.get("child_order_role") or "single") == child_order_role),
+                    None,
+                )
+                if quote is None:
+                    reason = f"missing_child_quote:{child_order_role}"
+                    raise WeatherExecutionError(
+                        "mid_price_core_v2_quote_rejected "
+                        f"reason={reason} best_bid={best_bid:.6f} best_ask={best_ask:.6f}",
+                        response=_diagnostics(classification="mid_price_core_v2_quote_rejected", reason=reason),
+                    )
+                order_price = _to_float(quote.get("limit_price"), 0.0)
+                maker_only = bool(quote.get("maker_only", maker_only))
+                if quote.get("quote_status") != "accepted" or order_price <= 0:
+                    reason = str(quote.get("quote_reason") or "mid_price_core_v2_quote_rejected")
+                    raise WeatherExecutionError(
+                        "mid_price_core_v2_quote_rejected "
+                        f"reason={reason} "
+                        f"best_bid={best_bid:.6f} best_ask={best_ask:.6f} "
+                        f"quote_edge={_to_float(quote.get('quote_edge'), 0.0):.6f} "
+                        f"required={_to_float(quote.get('required_quote_edge'), 0.0):.6f}",
+                        response=_diagnostics(classification="mid_price_core_v2_quote_rejected", reason=reason),
+                    )
+            elif execution_policy in ("maker_queue_v1", "maker_queue_v2"):
                 quote = build_execution_quote(
                     plan,
                     ExecutionPolicyConfig(
-                        policy_name=str(plan.get("execution_policy") or "maker_queue_v1"),
+                        policy_name=execution_policy or "maker_queue_v1",
                         price_floor=0.01,
                         price_ceiling=0.99,
                         tick_size=tick_size,
@@ -386,7 +447,7 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
                     "quote_tick_size": tick_size,
                     "quote_mode": "executor_clamp",
                 }
-            if order_price >= best_ask and best_ask > 0:
+            if maker_only and order_price >= best_ask and best_ask > 0:
                 raise WeatherExecutionError(
                     "maker_only_price_would_cross "
                     f"price={order_price:.6f} best_ask={best_ask:.6f}",
@@ -395,7 +456,7 @@ def _build_live_place_fn(*, cancel_after: bool, maker_only: bool):
                         reason="computed_price_crosses_best_ask",
                     ),
                 )
-            if order_price <= 0:
+            if maker_only and order_price <= 0:
                 raise WeatherExecutionError(
                     "maker_only_no_resting_price "
                     f"side={side} requested={requested_price:.6f} "
@@ -493,7 +554,7 @@ def main() -> int:
         pass
     args = _parser().parse_args()
     live_place_fn = (
-        _build_live_place_fn(cancel_after=bool(args.cancel_after), maker_only=not bool(args.allow_taker))
+        _build_live_place_fn(cancel_after=bool(args.cancel_after), default_maker_only=not bool(args.allow_taker))
         if args.live
         else None
     )

@@ -152,7 +152,11 @@ def _validate_rows_for_live_contract(
         bad_notional = [
             row
             for row in rows
-            if abs(_to_float(row.get("notional"), 0.0) - expected_notional) > notional_tolerance
+            if abs(
+                _to_float(row.get("notional"), 0.0)
+                - (_to_float(row.get("order_notional_cap"), 0.0) or expected_notional)
+            )
+            > notional_tolerance
         ]
         if bad_notional:
             alerts.append(
@@ -252,7 +256,7 @@ def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
             fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str]:
+def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
     market_key = str(row.get("market_id") or "").strip()
     if not market_key:
         city = str(row.get("city") or "").strip()
@@ -263,11 +267,12 @@ def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str]:
         str(row.get("target_date") or "").strip(),
         market_key,
         str(row.get("execution_policy") or "").strip(),
+        str(row.get("child_order_role") or "single").strip() or "single",
     )
 
 
-def _prior_submitted_live_keys(live_dir: Path, *, exclude_path: Path) -> Set[Tuple[str, str, str, str]]:
-    keys: Set[Tuple[str, str, str, str]] = set()
+def _prior_submitted_live_keys(live_dir: Path, *, exclude_path: Path) -> Set[Tuple[str, str, str, str, str]]:
+    keys: Set[Tuple[str, str, str, str, str]] = set()
     if not live_dir.exists():
         return keys
     for path in sorted(live_dir.glob("*.jsonl")):
@@ -284,10 +289,10 @@ def _prior_submitted_live_keys(live_dir: Path, *, exclude_path: Path) -> Set[Tup
     return keys
 
 
-def _filter_plan_file_for_live_dedup(plan_path: Path, prior_keys: Set[Tuple[str, str, str, str]]) -> Dict[str, Any]:
+def _filter_plan_file_for_live_dedup(plan_path: Path, prior_keys: Set[Tuple[str, str, str, str, str]]) -> Dict[str, Any]:
     rows = _read_jsonl(plan_path)
     kept: List[Dict[str, Any]] = []
-    seen_this_run: Set[Tuple[str, str, str, str]] = set()
+    seen_this_run: Set[Tuple[str, str, str, str, str]] = set()
     skipped_prior = 0
     skipped_same_run = 0
     for row in rows:
@@ -654,7 +659,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--execution-policy",
-        choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2"),
+        choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2", "mid_price_core_v2"),
         default=os.getenv("WEATHER_LIVE_EXECUTION_POLICY", "mid_price_core_v1"),
     )
     parser.add_argument("--min-quote-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_QUOTE_EDGE", "0.03")))
@@ -675,6 +680,27 @@ def main() -> int:
         type=float,
         default=float(os.getenv("WEATHER_LIVE_ADVERSE_SELECTION_SPREAD_FRACTION", "0.50")),
     )
+    parser.add_argument("--low-band-ceiling", type=float, default=float(os.getenv("WEATHER_LIVE_LOW_BAND_CEILING", "0.40")))
+    parser.add_argument("--high-band-floor", type=float, default=float(os.getenv("WEATHER_LIVE_HIGH_BAND_FLOOR", "0.55")))
+    parser.add_argument(
+        "--split-enabled",
+        action=argparse.BooleanOptionalAction,
+        default=os.getenv("WEATHER_LIVE_SPLIT_ENABLED", "1").strip().lower() not in {"0", "false", "no"},
+    )
+    parser.add_argument("--taker-fraction", type=float, default=float(os.getenv("WEATHER_LIVE_TAKER_FRACTION", "0.50")))
+    parser.add_argument("--split-min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_SPLIT_MIN_EDGE", "0.10")))
+    parser.add_argument(
+        "--high-band-shade-narrow",
+        type=int,
+        default=int(os.getenv("WEATHER_LIVE_HIGH_BAND_SHADE_NARROW", "1")),
+    )
+    parser.add_argument(
+        "--high-band-shade-wide",
+        type=int,
+        default=int(os.getenv("WEATHER_LIVE_HIGH_BAND_SHADE_WIDE", "2")),
+    )
+    parser.add_argument("--high-band-min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_HIGH_BAND_MIN_EDGE", "0.15")))
+    parser.add_argument("--high-band-size-mult", type=float, default=float(os.getenv("WEATHER_LIVE_HIGH_BAND_SIZE_MULT", "0.60")))
     parser.add_argument("--dry-run-live", action="store_true", help="Stop before live executor.")
     parser.add_argument("--no-telegram", action="store_true")
     args = parser.parse_args()
@@ -698,6 +724,15 @@ def main() -> int:
         "quote_improvement_ticks": int(args.quote_improvement_ticks),
         "wide_spread_shade_ticks": int(args.wide_spread_shade_ticks),
         "adverse_selection_spread_fraction": float(args.adverse_selection_spread_fraction),
+        "low_band_ceiling": float(args.low_band_ceiling),
+        "high_band_floor": float(args.high_band_floor),
+        "split_enabled": bool(args.split_enabled),
+        "taker_fraction": float(args.taker_fraction),
+        "split_min_edge": float(args.split_min_edge),
+        "high_band_shade_narrow": int(args.high_band_shade_narrow),
+        "high_band_shade_wide": int(args.high_band_shade_wide),
+        "high_band_min_edge": float(args.high_band_min_edge),
+        "high_band_size_mult": float(args.high_band_size_mult),
     }
 
     run_id = _utc_run_id()
@@ -769,9 +804,27 @@ def main() -> int:
         str(int(live_config["wide_spread_shade_ticks"])),
         "--adverse-selection-spread-fraction",
         str(float(live_config["adverse_selection_spread_fraction"])),
+        "--low-band-ceiling",
+        str(float(live_config["low_band_ceiling"])),
+        "--high-band-floor",
+        str(float(live_config["high_band_floor"])),
+        "--taker-fraction",
+        str(float(live_config["taker_fraction"])),
+        "--split-min-edge",
+        str(float(live_config["split_min_edge"])),
+        "--high-band-shade-narrow",
+        str(int(live_config["high_band_shade_narrow"])),
+        "--high-band-shade-wide",
+        str(int(live_config["high_band_shade_wide"])),
+        "--high-band-min-edge",
+        str(float(live_config["high_band_min_edge"])),
+        "--high-band-size-mult",
+        str(float(live_config["high_band_size_mult"])),
         "--enable-live",
         "--accepted-only",
     ]
+    if not bool(live_config["split_enabled"]):
+        planner_cmd.append("--no-split-enabled")
     planner_run = _run(planner_cmd, timeout=60)
     planner = _load_json_from_output(planner_run["output"])
     prior_live_keys = _prior_submitted_live_keys(live_path.parent, exclude_path=live_path)

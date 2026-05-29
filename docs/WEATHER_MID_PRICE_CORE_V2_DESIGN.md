@@ -1,7 +1,7 @@
 # mid_price_core_v2 执行策略设计
 
-> 状态：**设计中（未实施 / 未部署）**。本文档是 brainstorm 已批准方向的落地设计。
-> 实施前必须走 `weather-strategy-deploy` skill 的 8 步流程，含确认点 A/B/C 与 N100 smoke。
+> 状态：**本机已实施 / 未部署 N100**。`pm_agent` 已支持 `mid_price_core_v2` planner/executor/live-cycle 切换；
+> 生产部署前仍必须走 `weather-strategy-deploy` skill 的 8 步流程，含确认点 A/B/C 与 N100 smoke。
 > 取数口径唯一来源：[WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md)。
 
 ## 0. 一句话目标
@@ -119,6 +119,20 @@ SPLIT  当且仅当:  decision_entry_price < 0.40
 
 > taker 腿是唯一需要触碰 `maker_only=False` 的地方——这是架构里被刻意劝阻的资金安全边界。
 > 现有 executor 无 cancel/re-quote/reconcile 生命周期：maker 腿不成交就一直挂着到结算，符合现状，不新增超时逻辑（拆单已用 taker 腿保证半仓，不需要超时回退 taker）。
+
+### 5.1 本机实现说明（2026-05-29）
+
+- `build_execution_quotes()` 对 `mid_price_core_v2` 返回一条或两条 child quote；split 时写出 `child_order_role=taker|maker`，每条 quote 进入独立 `weather_edge_trade_plan`。
+- planner 通过 `notional_fraction` / `size_multiplier` 控制拆单和高价降 size；`plan_id` 包含 child 字段，因此同一 signal 的 taker/maker 两腿不会互相覆盖。
+- live dedup key 已加入 `child_order_role`，同一 signal 的两条 child plan 可在同一轮实盘里同时通过；历史已提交 child leg 会被单独去重。
+- executor 对 `mid_price_core_v2` 在下单前重新读取实时 orderbook 并重算对应 child quote；若当前盘口不再支持原 child leg，则显式失败并记录 `mid_price_core_v2_quote_rejected`，不静默换路径。
+- `WEATHER_LIVE_EXECUTION_POLICY=mid_price_core_v2` 或 `--execution-policy mid_price_core_v2` 即可切换本机/N100 live cycle；拆单可用 `WEATHER_LIVE_SPLIT_ENABLED=0` 或 `--no-split-enabled` 关闭。
+
+### 5.2 Review 后额外约束
+
+- v2 taker 不应复用 executor 的全局 `--allow-taker` 开关；是否 taker 必须来自 policy 生成的 child plan，避免误把其他策略整体切成 taker。
+- high-band 的 notional 偏离 `$5` 是策略设计，不应触发 live contract alert；校验按每条 plan 的 `order_notional_cap` 对齐。
+- split 上线初期应把 `child_order_role` 作为 dashboard / analysis 的一级排查维度：先看 taker 半仓的成交质量和 maker 半仓的补成交率，再决定是否调 `taker_fraction`。
 
 ---
 

@@ -7,6 +7,7 @@ from src.strategies.weather_edge_v1.tools.execution_pipeline import (
     ExecutorConfig,
     PlannerConfig,
     build_trade_plan,
+    build_trade_plans_for_signal,
     execute_trade_plans,
     import_signals,
     normalize_signal,
@@ -209,6 +210,84 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(plan["status"], "accepted")
         self.assertEqual(plan["quote_mode"], "shade_below_bid_wide_spread")
         self.assertAlmostEqual(plan["limit_price"], 0.29)
+
+    def test_mid_price_core_v2_splits_low_price_high_edge_order(self):
+        signal = normalize_signal(
+            {
+                **self._paper_decision(),
+                "market_price": 0.30,
+                "best_bid": 0.29,
+                "best_ask": 0.31,
+                "model_probability_yes": 0.48,
+                "edge": 0.18,
+            }
+        )
+        assert signal is not None
+        plans = build_trade_plans_for_signal(
+            signal,
+            PlannerConfig(
+                max_order_notional=5.0,
+                min_edge=0.10,
+                execution_policy="mid_price_core_v2",
+                tick_size=0.01,
+                split_min_edge=0.10,
+                taker_fraction=0.50,
+            ),
+        )
+
+        self.assertEqual(len(plans), 2)
+        by_role = {plan["child_order_role"]: plan for plan in plans}
+        self.assertEqual(set(by_role), {"taker", "maker"})
+        self.assertEqual(by_role["taker"]["status"], "accepted")
+        self.assertEqual(by_role["maker"]["status"], "accepted")
+        self.assertFalse(by_role["taker"]["maker_only"])
+        self.assertTrue(by_role["maker"]["maker_only"])
+        self.assertEqual(by_role["taker"]["quote_mode"], "split_taker_cross_ask")
+        self.assertAlmostEqual(by_role["taker"]["limit_price"], 0.31)
+        self.assertAlmostEqual(by_role["maker"]["limit_price"], 0.30)
+        self.assertAlmostEqual(by_role["taker"]["notional"], 2.5, places=5)
+        self.assertAlmostEqual(by_role["maker"]["notional"], 2.5, places=5)
+        self.assertNotEqual(by_role["taker"]["plan_id"], by_role["maker"]["plan_id"])
+
+    def test_mid_price_core_v2_high_band_requires_stronger_edge_and_reduces_size(self):
+        weak_signal = normalize_signal(
+            {
+                **self._paper_decision(),
+                "market_price": 0.60,
+                "best_bid": 0.59,
+                "best_ask": 0.61,
+                "model_probability_yes": 0.70,
+                "edge": 0.10,
+            }
+        )
+        strong_signal = normalize_signal(
+            {
+                **self._paper_decision(),
+                "market_price": 0.60,
+                "best_bid": 0.59,
+                "best_ask": 0.61,
+                "model_probability_yes": 0.80,
+                "edge": 0.20,
+            }
+        )
+        assert weak_signal is not None
+        assert strong_signal is not None
+
+        weak_plan = build_trade_plan(
+            weak_signal,
+            PlannerConfig(max_order_notional=5.0, min_edge=0.10, execution_policy="mid_price_core_v2"),
+        )
+        strong_plan = build_trade_plan(
+            strong_signal,
+            PlannerConfig(max_order_notional=5.0, min_edge=0.10, execution_policy="mid_price_core_v2"),
+        )
+
+        self.assertEqual(weak_plan["status"], "rejected")
+        self.assertEqual(weak_plan["risk_reason"], "high_band_edge_below_min")
+        self.assertEqual(strong_plan["status"], "accepted")
+        self.assertEqual(strong_plan["quote_mode"], "high_band_shade_narrow")
+        self.assertAlmostEqual(strong_plan["order_notional_cap"], 3.0)
+        self.assertAlmostEqual(strong_plan["notional"], 3.0, places=5)
 
     def test_plan_trades_can_filter_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

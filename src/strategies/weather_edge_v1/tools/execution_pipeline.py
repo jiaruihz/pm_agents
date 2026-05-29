@@ -11,6 +11,7 @@ from src.platform.quote_runtime.risk.safety_guard import RiskError, SafetyGuard,
 from src.strategies.weather_edge_v1.tools.execution_policy import (
     ExecutionPolicyConfig,
     build_execution_quote,
+    build_execution_quotes,
 )
 
 
@@ -198,32 +199,56 @@ class PlannerConfig:
     wide_spread_shade_ticks: int = 1
     narrow_quote_spread: float = 0.03
     adverse_selection_spread_fraction: float = 0.50
+    low_band_ceiling: float = 0.40
+    high_band_floor: float = 0.55
+    split_enabled: bool = True
+    taker_fraction: float = 0.50
+    split_min_edge: float = 0.10
+    high_band_shade_narrow: int = 1
+    high_band_shade_wide: int = 2
+    high_band_min_edge: float = 0.15
+    high_band_size_mult: float = 0.60
 
 
-def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str, Any]:
+def _policy_config(config: PlannerConfig) -> ExecutionPolicyConfig:
+    return ExecutionPolicyConfig(
+        policy_name=config.execution_policy,
+        price_offset=config.price_offset,
+        price_floor=config.price_floor,
+        price_ceiling=config.price_ceiling,
+        tick_size=config.tick_size,
+        min_quote_edge=config.min_quote_edge,
+        max_quote_spread=config.max_quote_spread,
+        max_mid_drift=config.max_mid_drift,
+        quote_improvement_ticks=config.quote_improvement_ticks,
+        wide_spread_shade_ticks=config.wide_spread_shade_ticks,
+        narrow_spread=config.narrow_quote_spread,
+        adverse_selection_spread_fraction=config.adverse_selection_spread_fraction,
+        low_band_ceiling=config.low_band_ceiling,
+        high_band_floor=config.high_band_floor,
+        split_enabled=config.split_enabled,
+        taker_fraction=config.taker_fraction,
+        split_min_edge=config.split_min_edge,
+        high_band_shade_narrow=config.high_band_shade_narrow,
+        high_band_shade_wide=config.high_band_shade_wide,
+        high_band_min_edge=config.high_band_min_edge,
+        high_band_size_mult=config.high_band_size_mult,
+    )
+
+
+def build_trade_plan(
+    signal: Dict[str, Any],
+    config: PlannerConfig,
+    *,
+    quote: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     token_id = safe_str(signal.get("token_id"))
     market_price = to_float(signal.get("market_price"), 0.0)
     best_bid = to_float(signal.get("best_bid"), 0.0)
     best_ask = to_float(signal.get("best_ask"), 0.0)
     spread = to_float(signal.get("spread"), max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0)
     edge = to_float(signal.get("edge"), 0.0)
-    quote = build_execution_quote(
-        signal,
-        ExecutionPolicyConfig(
-            policy_name=config.execution_policy,
-            price_offset=config.price_offset,
-            price_floor=config.price_floor,
-            price_ceiling=config.price_ceiling,
-            tick_size=config.tick_size,
-            min_quote_edge=config.min_quote_edge,
-            max_quote_spread=config.max_quote_spread,
-            max_mid_drift=config.max_mid_drift,
-            quote_improvement_ticks=config.quote_improvement_ticks,
-            wide_spread_shade_ticks=config.wide_spread_shade_ticks,
-            narrow_spread=config.narrow_quote_spread,
-            adverse_selection_spread_fraction=config.adverse_selection_spread_fraction,
-        ),
-    )
+    quote = quote or build_execution_quote(signal, _policy_config(config))
     if (
         safe_str(config.execution_policy) == "maker_queue_v1"
         and safe_str(quote.get("quote_status")) == "rejected"
@@ -238,11 +263,14 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
             "quote_mode": "defer_to_executor",
         }
     limit_price = to_float(quote.get("limit_price"), 0.0)
+    notional_fraction = max(0.0, min(1.0, to_float(quote.get("notional_fraction"), 1.0)))
+    size_multiplier = max(0.0, to_float(quote.get("size_multiplier"), 1.0))
+    order_budget = round(float(config.max_order_notional) * notional_fraction * size_multiplier, 6)
     sizing_mode = safe_str(config.sizing_mode) or "notional"
     if sizing_mode == "fixed_shares":
-        size = round(max(0.0, float(config.fixed_order_shares)), 6)
+        size = round(max(0.0, float(config.fixed_order_shares) * notional_fraction * size_multiplier), 6)
     elif sizing_mode == "notional":
-        size = round(config.max_order_notional / limit_price, 6) if limit_price > 0 else 0.0
+        size = round(order_budget / limit_price, 6) if limit_price > 0 else 0.0
     else:
         size = 0.0
     max_order_shares = float(config.max_order_shares if config.max_order_shares is not None else config.max_position)
@@ -276,6 +304,11 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         "quote_spread": to_float(quote.get("quote_spread"), spread),
         "quote_tick_size": to_float(quote.get("quote_tick_size"), config.tick_size),
         "quote_mode": safe_str(quote.get("quote_mode")),
+        "child_order_role": safe_str(quote.get("child_order_role")) or "single",
+        "maker_only": bool(quote.get("maker_only", True)),
+        "notional_fraction": notional_fraction,
+        "size_multiplier": size_multiplier,
+        "order_notional_cap": order_budget,
         "entry_price_min": round(config.min_entry_price, 6),
         "entry_price_max": round(config.max_entry_price, 6),
         "entry_price_window": f"{config.min_entry_price:.2f}-{config.max_entry_price:.2f}",
@@ -288,6 +321,15 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
         "wide_spread_shade_ticks": int(config.wide_spread_shade_ticks),
         "narrow_quote_spread": round(float(config.narrow_quote_spread), 6),
         "adverse_selection_spread_fraction": round(float(config.adverse_selection_spread_fraction), 6),
+        "low_band_ceiling": round(float(config.low_band_ceiling), 6),
+        "high_band_floor": round(float(config.high_band_floor), 6),
+        "split_enabled": bool(config.split_enabled),
+        "taker_fraction": round(float(config.taker_fraction), 6),
+        "split_min_edge": round(float(config.split_min_edge), 6),
+        "high_band_shade_narrow": int(config.high_band_shade_narrow),
+        "high_band_shade_wide": int(config.high_band_shade_wide),
+        "high_band_min_edge": round(float(config.high_band_min_edge), 6),
+        "high_band_size_mult": round(float(config.high_band_size_mult), 6),
         "sizing_mode": sizing_mode,
         "fixed_order_shares": round(float(config.fixed_order_shares), 6),
         "max_order_shares": round(max_order_shares, 6),
@@ -349,6 +391,11 @@ def build_trade_plan(signal: Dict[str, Any], config: PlannerConfig) -> Dict[str,
     return {**plan, "risk_status": "passed"}
 
 
+def build_trade_plans_for_signal(signal: Dict[str, Any], config: PlannerConfig) -> List[Dict[str, Any]]:
+    quotes = build_execution_quotes(signal, _policy_config(config))
+    return [build_trade_plan(signal, config, quote=quote) for quote in quotes]
+
+
 def plan_trades(
     *,
     signal_path: Path,
@@ -358,7 +405,7 @@ def plan_trades(
     dry_run: bool = False,
 ) -> Dict[str, Any]:
     signals = [row for row in read_jsonl(signal_path) if safe_str(row.get("record_type")) == "weather_edge_signal"]
-    all_plans = [build_trade_plan(signal, config) for signal in signals]
+    all_plans = [plan for signal in signals for plan in build_trade_plans_for_signal(signal, config)]
     accepted_total = sum(1 for plan in all_plans if safe_str(plan.get("status")) == "accepted")
     rejected_total = sum(1 for plan in all_plans if safe_str(plan.get("status")) == "rejected")
     plans = all_plans
@@ -418,6 +465,11 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "quote_spread": to_float(plan.get("quote_spread"), 0.0),
         "quote_tick_size": to_float(plan.get("quote_tick_size"), 0.0),
         "quote_mode": safe_str(plan.get("quote_mode")),
+        "child_order_role": safe_str(plan.get("child_order_role")) or "single",
+        "maker_only": bool(plan.get("maker_only", True)),
+        "notional_fraction": to_float(plan.get("notional_fraction"), 1.0),
+        "size_multiplier": to_float(plan.get("size_multiplier"), 1.0),
+        "order_notional_cap": to_float(plan.get("order_notional_cap"), 0.0),
         "best_bid": to_float(plan.get("best_bid"), 0.0),
         "best_ask": to_float(plan.get("best_ask"), 0.0),
         "spread": to_float(plan.get("spread"), 0.0),
@@ -432,6 +484,15 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "wide_spread_shade_ticks": to_float(plan.get("wide_spread_shade_ticks"), 0.0),
         "narrow_quote_spread": to_float(plan.get("narrow_quote_spread"), 0.0),
         "adverse_selection_spread_fraction": to_float(plan.get("adverse_selection_spread_fraction"), 0.0),
+        "low_band_ceiling": to_float(plan.get("low_band_ceiling"), 0.0),
+        "high_band_floor": to_float(plan.get("high_band_floor"), 0.0),
+        "split_enabled": bool(plan.get("split_enabled", False)),
+        "taker_fraction": to_float(plan.get("taker_fraction"), 0.0),
+        "split_min_edge": to_float(plan.get("split_min_edge"), 0.0),
+        "high_band_shade_narrow": to_float(plan.get("high_band_shade_narrow"), 0.0),
+        "high_band_shade_wide": to_float(plan.get("high_band_shade_wide"), 0.0),
+        "high_band_min_edge": to_float(plan.get("high_band_min_edge"), 0.0),
+        "high_band_size_mult": to_float(plan.get("high_band_size_mult"), 0.0),
         "entry_price_window": safe_str(plan.get("entry_price_window")),
         "sizing_mode": safe_str(plan.get("sizing_mode")),
         "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),
@@ -484,10 +545,11 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "quote_spread": to_float(response.get("quote_spread"), to_float(plan.get("quote_spread"), 0.0)),
         "quote_tick_size": to_float(response.get("quote_tick_size"), to_float(plan.get("quote_tick_size"), 0.0)),
         "quote_mode": safe_str(response.get("quote_mode")) or safe_str(plan.get("quote_mode")),
+        "child_order_role": safe_str(plan.get("child_order_role")) or "single",
         "best_bid": best_bid,
         "best_ask": best_ask,
         "spread": spread,
-        "maker_only": bool(response.get("maker_only", False)),
+        "maker_only": bool(response.get("maker_only", plan.get("maker_only", False))),
         "clob_client": safe_str(response.get("clob_client")),
         "size": to_float(plan.get("size"), 0.0),
         "notional": to_float(plan.get("notional"), 0.0),
@@ -501,6 +563,15 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "wide_spread_shade_ticks": to_float(plan.get("wide_spread_shade_ticks"), 0.0),
         "narrow_quote_spread": to_float(plan.get("narrow_quote_spread"), 0.0),
         "adverse_selection_spread_fraction": to_float(plan.get("adverse_selection_spread_fraction"), 0.0),
+        "low_band_ceiling": to_float(plan.get("low_band_ceiling"), 0.0),
+        "high_band_floor": to_float(plan.get("high_band_floor"), 0.0),
+        "split_enabled": bool(plan.get("split_enabled", False)),
+        "taker_fraction": to_float(plan.get("taker_fraction"), 0.0),
+        "split_min_edge": to_float(plan.get("split_min_edge"), 0.0),
+        "high_band_shade_narrow": to_float(plan.get("high_band_shade_narrow"), 0.0),
+        "high_band_shade_wide": to_float(plan.get("high_band_shade_wide"), 0.0),
+        "high_band_min_edge": to_float(plan.get("high_band_min_edge"), 0.0),
+        "high_band_size_mult": to_float(plan.get("high_band_size_mult"), 0.0),
         "entry_price_window": safe_str(plan.get("entry_price_window")),
         "sizing_mode": safe_str(plan.get("sizing_mode")),
         "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),

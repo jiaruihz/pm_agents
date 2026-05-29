@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
 from src.strategies.weather_edge_v1.tools.execution_pipeline import (
     DEFAULT_RUNTIME_ROOT,
     PlannerConfig,
-    build_trade_plan,
+    build_trade_plans_for_signal,
     read_jsonl,
     safe_str,
     to_float,
@@ -56,7 +56,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--policies",
-        default="mid_price_core_v1,maker_queue_v1,maker_queue_v2",
+        default="mid_price_core_v1,maker_queue_v1,maker_queue_v2,mid_price_core_v2",
         help="Comma-separated policies to compare.",
     )
     parser.add_argument("--max-order-notional", type=float, default=5.0)
@@ -72,6 +72,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--quote-improvement-ticks", type=int, default=1)
     parser.add_argument("--wide-spread-shade-ticks", type=int, default=1)
     parser.add_argument("--adverse-selection-spread-fraction", type=float, default=0.50)
+    parser.add_argument("--low-band-ceiling", type=float, default=0.40)
+    parser.add_argument("--high-band-floor", type=float, default=0.55)
+    parser.add_argument("--split-enabled", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--taker-fraction", type=float, default=0.50)
+    parser.add_argument("--split-min-edge", type=float, default=0.10)
+    parser.add_argument("--high-band-shade-narrow", type=int, default=1)
+    parser.add_argument("--high-band-shade-wide", type=int, default=2)
+    parser.add_argument("--high-band-min-edge", type=float, default=0.15)
+    parser.add_argument("--high-band-size-mult", type=float, default=0.60)
     parser.add_argument("--sample-rejections", type=int, default=8)
     return parser
 
@@ -105,8 +114,17 @@ def main() -> int:
             quote_improvement_ticks=int(args.quote_improvement_ticks),
             wide_spread_shade_ticks=int(args.wide_spread_shade_ticks),
             adverse_selection_spread_fraction=float(args.adverse_selection_spread_fraction),
+            low_band_ceiling=float(args.low_band_ceiling),
+            high_band_floor=float(args.high_band_floor),
+            split_enabled=bool(args.split_enabled),
+            taker_fraction=float(args.taker_fraction),
+            split_min_edge=float(args.split_min_edge),
+            high_band_shade_narrow=int(args.high_band_shade_narrow),
+            high_band_shade_wide=int(args.high_band_shade_wide),
+            high_band_min_edge=float(args.high_band_min_edge),
+            high_band_size_mult=float(args.high_band_size_mult),
         )
-        plans = [build_trade_plan(signal, config) for signal in signals]
+        plans = [plan for signal in signals for plan in build_trade_plans_for_signal(signal, config)]
         summary = _summarize(plans)
         rejected = [row for row in plans if safe_str(row.get("status")) == "rejected"]
         summary["sample_rejections"] = [
