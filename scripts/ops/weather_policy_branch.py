@@ -262,6 +262,7 @@ def main() -> int:
     parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default=os.getenv("WEATHER_LIVE_SIZING_MODE", "notional"))
     parser.add_argument("--fixed-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_FIXED_ORDER_SHARES", "10.0")))
     parser.add_argument("--max-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_SHARES", "25.0")))
+    parser.add_argument("--min-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ORDER_SHARES", "5.0")))
     parser.add_argument("--city-pool", default=os.getenv("WEATHER_LIVE_CITY_POOL", "t1_trading"))
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
     parser.add_argument("--min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ENTRY_PRICE", "0.25")))
@@ -333,6 +334,7 @@ def main() -> int:
         "max_order_notional": float(args.max_order_notional),
         "fixed_order_shares": float(args.fixed_order_shares),
         "max_order_shares": float(args.max_order_shares),
+        "min_order_shares": float(args.min_order_shares),
         "min_edge": float(args.min_edge),
         "min_entry_price": float(args.min_entry_price),
         "max_entry_price": float(args.max_entry_price),
@@ -372,6 +374,8 @@ def main() -> int:
         str(live_config["fixed_order_shares"]),
         "--max-order-shares",
         str(live_config["max_order_shares"]),
+        "--min-order-shares",
+        str(live_config["min_order_shares"]),
         "--min-edge",
         str(live_config["min_edge"]),
         "--min-entry-price",

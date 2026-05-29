@@ -182,6 +182,7 @@ class PlannerConfig:
     sizing_mode: str = "notional"
     fixed_order_shares: float = 10.0
     max_order_shares: Optional[float] = None
+    min_order_shares: float = 5.0
     min_edge: float = 0.10
     min_entry_price: float = 0.25
     max_entry_price: float = 0.75
@@ -273,6 +274,17 @@ def build_trade_plan(
         size = round(order_budget / limit_price, 6) if limit_price > 0 else 0.0
     else:
         size = 0.0
+    # Exchange enforces a minimum order size (Polymarket: 5 shares). Reduced-size
+    # legs (e.g. high-band size_mult) can fall below it and get rejected pre-fill.
+    # Floor up to the minimum so the order is executable; this raises the leg's
+    # notional above order_budget, so reflect that in order_notional_cap to keep
+    # the live-contract notional check consistent.
+    min_order_shares = max(0.0, float(config.min_order_shares))
+    size_floored_to_min = False
+    if min_order_shares > 0 and 0.0 < size < min_order_shares:
+        size = round(min_order_shares, 6)
+        size_floored_to_min = True
+    order_notional_cap = round(size * limit_price, 6) if size_floored_to_min else order_budget
     max_order_shares = float(config.max_order_shares if config.max_order_shares is not None else config.max_position)
     base = {
         "signal_id": safe_str(signal.get("signal_id")),
@@ -308,7 +320,7 @@ def build_trade_plan(
         "maker_only": bool(quote.get("maker_only", True)),
         "notional_fraction": notional_fraction,
         "size_multiplier": size_multiplier,
-        "order_notional_cap": order_budget,
+        "order_notional_cap": order_notional_cap,
         "entry_price_min": round(config.min_entry_price, 6),
         "entry_price_max": round(config.max_entry_price, 6),
         "entry_price_window": f"{config.min_entry_price:.2f}-{config.max_entry_price:.2f}",

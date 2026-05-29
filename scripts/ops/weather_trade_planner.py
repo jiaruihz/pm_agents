@@ -39,6 +39,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--fixed-order-shares", type=float, default=10.0)
     parser.add_argument("--max-order-shares", type=float, default=None)
+    parser.add_argument("--min-order-shares", type=float, default=5.0)
     parser.add_argument("--max-position", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--min-edge", type=float, default=0.10)
     parser.add_argument("--min-entry-price", type=float, default=0.25)
@@ -83,6 +84,7 @@ def main() -> int:
             if args.max_order_shares is not None
             else (float(args.max_position) if args.max_position is not None else 25.0)
         ),
+        min_order_shares=float(args.min_order_shares),
         min_edge=float(args.min_edge),
         min_entry_price=float(args.min_entry_price),
         max_entry_price=float(args.max_entry_price),

@@ -406,6 +406,35 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertAlmostEqual(strong_plans[0]["size_multiplier"], 0.60)
         self.assertAlmostEqual(strong_plans[0]["order_notional_cap"], 3.0)
 
+    def test_mid_price_core_v2_high_band_floors_to_min_order_shares(self):
+        # High band $3 budget at price 0.65 -> 4.615 shares < 5-share minimum.
+        # Floor up to 5 shares and bump order_notional_cap to match (5 * 0.65).
+        strong = normalize_signal(
+            {
+                **self._paper_decision(),
+                "market_price": 0.65,
+                "best_bid": 0.0,
+                "best_ask": 0.0,
+                "model_probability_yes": 0.85,
+                "edge": 0.20,
+            }
+        )
+        assert strong is not None
+        plans = build_trade_plans_for_signal(
+            strong,
+            PlannerConfig(
+                max_order_notional=5.0,
+                min_edge=0.10,
+                min_order_shares=5.0,
+                execution_policy="mid_price_core_v2",
+            ),
+        )
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["status"], "accepted")
+        self.assertEqual(plans[0]["child_order_role"], "single")
+        self.assertAlmostEqual(plans[0]["size"], 5.0)
+        self.assertAlmostEqual(plans[0]["order_notional_cap"], 3.25)
+
     def test_plan_trades_can_filter_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             signal = normalize_signal({**self._paper_decision(), "edge": 0.01})
