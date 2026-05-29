@@ -5,8 +5,8 @@ description: >
   修改现有策略参数、切换当前运行的策略分支、更新城市池（T1/T2）。
   触发词：部署策略、上线策略、部署 policy、新策略、切换策略、修改参数部署、
   城市池、T1、T2、加城市、移除城市、deploy、上 V2、上 V3、启动新分支、停旧策略。
-  禁止：跳过 N100 diff 检查直接 rsync；跳过 smoke test 直接切换；
-  在未确认用户许可的情况下 kill 生产进程。
+  禁止：未本地 commit 就部署；跳过 N100 diff 检查直接覆盖；跳过 smoke test 直接切换；
+  在未确认用户许可的情况下 kill 生产进程。默认 git-first：本地 commit/push，N100 pull/checkout。
 ---
 
 # weather-strategy-deploy
@@ -19,6 +19,30 @@ description: >
 | 城市池 / paper 生产采集 | `/home/rui/projects/weather-predict` | `/home/jiarui/projects/weather-predict` | `city_pools.py` |
 
 不要把两个项目混用。城市池的 source of truth 是 `weather-predict/city_pools.py`，不是 `pm_agent`。
+
+## 硬规则：以后策略/配置上线一律走本 skill
+
+凡是会改变 N100 生产行为的 weather 策略或配置变更，必须按本 skill 执行，不允许临时手搓：
+
+1. **先本机修改和验证**：本机 `py_compile` / smoke / dry-run 通过。
+2. **先提交再部署**：本机必须 `git commit`，提交信息写清策略动作和理由。
+3. **默认 git-first 部署**：本机 `git push` 后，N100 用 `git fetch` + `git checkout <commit>` 或 `git pull --ff-only` 更新。
+4. **记录线上版本**：最终汇报必须包含本地 commit SHA、N100 当前 commit SHA、验证命令和结果。
+5. **rsync 只能是 fallback**：只有当 N100 目标目录还不是 git worktree、或用户明确允许临时修复时，才允许备份 + rsync；报告里必须标注这是 fallback，并给出后续 git 化 TODO。
+6. **资金/进程安全边界不变**：真实下单、kill/restart 生产进程、切换 daemon 前仍需明确确认；paper snapshot 进程只在用户授权或确认卡死时重启。
+
+推荐提交信息格式：
+
+```text
+strategy: <action summary>
+
+Reason:
+- <data-backed rationale>
+
+Validation:
+- <local command/result>
+- <N100 command/result>
+```
 
 ---
 
@@ -69,9 +93,73 @@ for city in check:
 PY"
 ```
 
-### A2：N100 备份并 rsync
+### A2：Git 提交（必须）
+
+城市池变更必须先在本机 `weather-predict` 提交。不要把 pm_agent 文档改动混进 weather-predict 代码提交；如果同时更新了 pm_agent 文档，另做一个 pm_agent 文档提交。
+
+```bash
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/weather-predict && \
+  git status --short && \
+  git diff -- city_pools.py scripts/analysis/paper_policy.py && \
+  git add city_pools.py scripts/analysis/paper_policy.py docs/reports/<REPORT>.md && \
+  git commit -m 'strategy: update weather city side policy'"
+```
+
+记录本地 commit SHA：
+
+```bash
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/weather-predict && git rev-parse HEAD"
+```
+
+如有 pm_agent 文档同步：
+
+```bash
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && \
+  git add docs/WEATHER_CITY_POOL_DECISIONS.md docs/WEATHER_STRATEGY_ENTRYPOINT.md && \
+  git commit -m 'docs: record weather city side policy change'"
+```
+
+### A3：Git-first 部署到 N100
+
+默认部署方式是 push 后在 N100 pull/checkout。先确认本机和 N100 是 git worktree：
+
+```bash
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/weather-predict && git remote -v && git status --short"
+
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
+  'cd /home/jiarui/projects/weather-predict && git rev-parse --is-inside-work-tree && git status --short'
+```
+
+如果 N100 是 git worktree：
+
+```bash
+# 本机 push
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/weather-predict && git push"
+
+# N100 fast-forward 到同一 commit（推荐固定 SHA，避免拉错分支）
+COMMIT=<LOCAL_COMMIT_SHA>
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
+  "cd /home/jiarui/projects/weather-predict && \
+   git fetch --all --prune && \
+   git checkout $COMMIT && \
+   git rev-parse HEAD"
+```
+
+必须确认：
+
+- N100 `git status --short` 没有会被覆盖的未提交生产改动。
+- N100 `git rev-parse HEAD` 等于本地 commit SHA。
+- 如远端只能 `pull --ff-only`，必须确认当前分支和本地 push 分支一致。
+
+### A3 fallback：N100 尚未 git 化时才允许备份 + rsync
 
 不要在 PowerShell 字符串里写 `$(date ...)`，会被 Windows 侧解析。用固定备份名或分两步执行。
+
+只有满足以下任一条件才走 fallback：
+
+- N100 `/home/jiarui/projects/weather-predict` 不是 git worktree。
+- git remote 暂不可用，但用户明确要求本次先上线。
+- 紧急修复，且已明确记录后续补 commit / git 化 TODO。
 
 ```bash
 wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
@@ -83,7 +171,14 @@ wsl -d Ubuntu-24.04 -- rsync -av \
   jiarui@192.168.0.200:/home/jiarui/projects/weather-predict/city_pools.py
 ```
 
-### A3：N100 校验
+fallback 汇报里必须写：
+
+- fallback 原因。
+- N100 备份路径。
+- 本地 commit SHA（即使远端不是 git，也要先 commit）。
+- N100 后续 git 化 TODO。
+
+### A4：N100 校验
 
 ```bash
 wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
@@ -98,7 +193,7 @@ wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
 - T1 区块不包含应移除城市
 - `FULL_CITY_CONFIGS` 仍保留被降级城市
 
-### A4：N100 doctor
+### A5：N100 doctor
 
 ```bash
 wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
@@ -112,7 +207,7 @@ wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
 - `daily_pipeline.err.log` empty or missing
 - `paper_orders.jsonl` 行数正常增长或至少可读取
 
-### A5：确认是否已经被运行中的 snapshot 进程加载
+### A6：确认是否已经被运行中的 snapshot 进程加载
 
 文件部署成功不等于当前正在跑的进程已经加载了新文件。`paper_snapshot.py`
 如果在 rsync 前已经启动，它会继续使用启动时 import 的旧 `city_pools.py`。
@@ -132,17 +227,19 @@ wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
 - 如果 `Active since` 早于 rsync 时间，说明文件已部署，但当前这轮 snapshot 未必加载新城市池；下一轮新进程会加载。
 - 不要为了“立刻生效”直接 kill/restart 生产采集进程，除非用户明确要求或已经确认当前进程卡死。
 
-### A6：汇报格式
+### A7：汇报格式
 
 ```text
 城市池部署完成：
+- 本地 commit：<sha>
+- N100 commit：<sha>（git-first）或 fallback rsync + 备份路径
 - N100 文件：/home/jiarui/projects/weather-predict/city_pools.py
-- 备份：/home/jiarui/projects/weather-predict/city_pools.py.bak.<suffix>
 - 本机 py_compile：通过
 - N100 py_compile：通过
 - T1 校验：新增城市在 T1，移除城市不在 T1
 - doctor：snapshot freshness ok，错误日志为空
 - 生效状态：当前 snapshot 进程是否晚于部署时间启动；若不是，说明下一轮进程才加载
+- 回滚方式：git checkout <previous_sha> 或恢复备份文件
 ```
 
 ---
@@ -248,7 +345,7 @@ wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && \
 
 ---
 
-### 第 4 步：Git Commit
+### 第 4 步：Git Commit（必须）
 
 ```bash
 cd /home/rui/projects/pm_agent
@@ -259,25 +356,35 @@ git add src/strategies/weather_edge_v1/tools/execution_policy.py \
         scripts/ops/weather_order_executor.py \
         scripts/ops/weather_execution_policy_compare.py
 git commit -m "feat: add <policy_name> execution policy"
+git rev-parse HEAD
 ```
 
----
+如 N100 运行的是 `/home/jiarui/projects/pm_agent`，该目录也必须用同一个 commit SHA 部署。不要在未 commit 的工作区直接 rsync。
 
-### 第 5 步：Rsync 到 N100
+### 第 5 步：Git-first 部署到 N100
+
+先 push，再在 N100 checkout/pull 到同一 SHA：
 
 ```bash
-wsl -d Ubuntu-24.04 -- bash -lc "rsync -av \
-  /home/rui/projects/pm_agent/scripts/ops/weather_trade_planner.py \
-  /home/rui/projects/pm_agent/scripts/ops/weather_live_cycle.py \
-  /home/rui/projects/pm_agent/scripts/ops/weather_policy_branch.py \
-  /home/rui/projects/pm_agent/scripts/ops/weather_order_executor.py \
-  /home/rui/projects/pm_agent/scripts/ops/weather_execution_policy_compare.py \
-  jiarui@192.168.0.200:/home/jiarui/projects/pm_agent/scripts/ops/"
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && git push"
 
-wsl -d Ubuntu-24.04 -- bash -lc "rsync -av \
-  /home/rui/projects/pm_agent/src/strategies/weather_edge_v1/tools/execution_policy.py \
-  jiarui@192.168.0.200:/home/jiarui/projects/pm_agent/src/strategies/weather_edge_v1/tools/"
+COMMIT=<LOCAL_COMMIT_SHA>
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
+  "cd /home/jiarui/projects/pm_agent && \
+   git status --short && \
+   git fetch --all --prune && \
+   git checkout $COMMIT && \
+   git rev-parse HEAD"
 ```
+
+**⚠️ 确认点 A2（必须等用户确认）**
+
+展示：
+- 本地 commit SHA
+- N100 checkout 后 SHA
+- N100 `git status --short`
+
+如果 N100 `/home/jiarui/projects/pm_agent` 不是 git worktree，停止并说明需要先 git 化；只有用户明确要求临时修复时，才允许备份 + rsync fallback，并在最终报告标注。
 
 ---
 
@@ -398,3 +505,15 @@ ssh jiarui@192.168.0.200 \
 ssh jiarui@192.168.0.200 \
   'tail -3 ~/projects/pm_agent/runtime/weather_edge_v1/live_cycle/loop.log'
 ```
+
+## N100 git 化 TODO（一次性治理）
+
+如果发现 N100 目标目录不是 git worktree，不要继续把 rsync 当长期方案。下一次非紧急窗口应完成：
+
+1. 备份当前 N100 目录。
+2. 在 N100 上 clone 对应 repo 到新目录或原地初始化为 clean worktree。
+3. 对比旧目录和目标 commit 的差异，确认生产独有文件只在 `output/`、`runtime/`、`cache/`、`.env` 等非代码路径。
+4. 切换 systemd / scripts 指向 git worktree。
+5. 跑本 skill 的完整部署 smoke。
+
+完成后，所有策略/配置部署必须使用 `commit -> push -> N100 fetch/checkout`，不再直接 rsync 代码文件。
