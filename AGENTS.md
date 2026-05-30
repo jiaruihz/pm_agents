@@ -30,8 +30,10 @@ docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
 | 历史绩效 / A/B 对比 | 绩效、PnL、ROI、win rate、胜率、切片、对比、A/B、回测结果、策略表现 | `weather-strategy-performance` |
 | 单日血缘 / 逐笔复盘 | 单日、血缘、逐笔、当日复盘、为什么下了这单、信号到结算 | `weather-strategy-lineage` |
 | 持仓敞口 / 未平仓 | 持仓、敞口、未结算、未平仓、风险、当前仓位、open position | `weather-strategy-exposure` |
+| 策略/参数部署到 N100 | 部署策略、上线策略、新 policy、切换策略、修改参数部署、上 V2/V3、启动新分支、城市池、加城市、移除城市、T1/T2、city_pools、paper_policy、N100 代码改动 | `weather-strategy-deploy` |
 
 **禁止**：在不 invoke skill 的情况下直接写一次性 pandas 脚本做策略分析。  
+**禁止**：任何改变 N100 生产行为的代码/配置变更（city_pools、paper_policy、execution_policy 等）通过 `scp`/`rsync` 直接推送，必须走 `weather-strategy-deploy` skill 的 git-first 流程。  
 **口径唯一来源**：`docs/WEATHER_ANALYSIS_CONTRACT.md`（§2 PnL 公式、§5 切片维度白名单、§6 默认城市池）
 
 ---

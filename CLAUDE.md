@@ -345,12 +345,17 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 
 | 分析类型 | 触发词 | Skill |
 |---|---|---|
+| 补全/重建底表 + 同步数据 | 补全底表、重建底表、刷新底表、同步数据、sync N100、数据陈旧/落后、重建 weather.db、重新结算、rebuild、resync | `weather-fact-rebuild` |
 | 历史绩效 / A/B 对比 | 绩效、PnL、ROI、win rate、胜率、切片、对比、A/B、回测结果、策略表现 | `weather-strategy-performance` |
 | 单日血缘 / 逐笔复盘 | 单日、血缘、逐笔、当日复盘、为什么下了这单、信号到结算 | `weather-strategy-lineage` |
 | 持仓敞口 / 未平仓 | 持仓、敞口、未结算、未平仓、风险、当前仓位、open position | `weather-strategy-exposure` |
-| 策略/参数部署到 N100 | 部署策略、上线策略、新 policy、切换策略、修改参数部署、上 V2/V3、启动新分支 | `weather-strategy-deploy` |
+| 策略/参数部署到 N100 | 部署策略、上线策略、新 policy、切换策略、修改参数部署、上 V2/V3、启动新分支、城市池、加城市、移除城市、T1/T2、city_pools、paper_policy、N100 代码改动 | `weather-strategy-deploy` |
+
+> 数据可能陈旧时（分析「最新/今天/最近几天」战绩），先走 `weather-fact-rebuild` 同步+重建，再 invoke 上面的分析 skill。
 
 **禁止**：在不 invoke skill 的情况下直接写一次性 pandas 脚本做策略分析。  
+**禁止**：手搓单跑 `build_weather_*.py` 或跳过 `sync_weather_remote.sh` 直接重建底表（破坏链条顺序，见 `weather-fact-rebuild`）。  
+**禁止**：任何改变 N100 生产行为的代码/配置变更（city_pools、paper_policy、execution_policy、live_cycle 等）通过 `scp`/`rsync` 直接推送，必须走 `weather-strategy-deploy` skill 的 git-first 流程。  
 **口径唯一来源**：[docs/WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)
 
 ---
@@ -392,6 +397,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](docs/WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | 城市/日组合优化器设计（多城市仓位分配） |
 | [WEATHER_LEDGER_POSITION_ANALYSIS.md](docs/WEATHER_LEDGER_POSITION_ANALYSIS.md) | 持仓分析设计（Dashboard 持仓拆解页面） |
 | [WEATHER_MID_PRICE_CORE_V2_DESIGN.md](docs/WEATHER_MID_PRICE_CORE_V2_DESIGN.md) | mid_price_core_v2 执行策略设计（低价正 alpha 漏单拆单、maker_queue 删除方案） |
+| [WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md](docs/WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md) | 入场区间×仓位 sizing 设计（side×价位桶档位+edge缩放+硬上限,替代等额$5/统一0.25-0.75带） |
 
 ### 研究与分析报告（时间点快照，不更新）
 
