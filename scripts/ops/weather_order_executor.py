@@ -324,7 +324,7 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                         str(plan.get("token_id") or ""),
                     ]
                 ),
-                **quote,
+                **(quote if isinstance(quote, dict) else {}),
             }
 
         needs_live_policy_quote = execution_policy == "mid_price_core_v2"
@@ -376,7 +376,18 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                     None,
                 )
                 if quote is None:
-                    reason = f"missing_child_quote:{child_order_role}"
+                    # The role may not match because build_execution_quotes emitted a
+                    # signal-level reject (e.g. mid_drift_too_large) with role="single".
+                    # Surface that real reason instead of the misleading missing_child_quote.
+                    signal_reject = next(
+                        (q for q in quotes if isinstance(q, dict) and q.get("quote_status") == "rejected"),
+                        None,
+                    )
+                    reason = (
+                        str(signal_reject.get("quote_reason") or f"missing_child_quote:{child_order_role}")
+                        if signal_reject is not None
+                        else f"missing_child_quote:{child_order_role}"
+                    )
                     raise WeatherExecutionError(
                         "mid_price_core_v2_quote_rejected "
                         f"reason={reason} best_bid={best_bid:.6f} best_ask={best_ask:.6f}",
