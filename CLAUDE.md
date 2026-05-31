@@ -411,4 +411,6 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [2026-05-29-performance-candidates-vs-fills-link.md](docs/analysis/2026-05/2026-05-29-performance-candidates-vs-fills-link.md) | 2026-05-29 fact_signal_candidates × fact_trades 双底表首次串联（全机会 alpha vs 成交样本/漏单/滑点） |
 | [2026-05-29-performance-city-pool-side-strategy.md](docs/analysis/2026-05/2026-05-29-performance-city-pool-side-strategy.md) | 2026-05-29 城市池选择策略复盘（合并城市 alpha+成交质量）：city×side 侧别白名单、fill级稳健性、三层一致性、Paris应降级 |
 | [2026-05-29-strategy-entry-band-and-execution-quality.md](docs/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | 2026-05-29 入场价 25-75 区间调参 + maker_queue vs mid_price 成交质量/paper 对比 + 策略建议 |
+| [2026-05-30-performance-entry-band-research.md](docs/analysis/2026-05/2026-05-30-performance-entry-band-research.md) | 2026-05-30 入场价带（0.25-0.75）调参研究：side×价位桶 EV、候选反事实、live/paper 对照 |
+| [2026-05-30-performance-sizing-and-band-distribution.md](docs/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md) | 2026-05-30 仓位 sizing×入场区间收益分布研究（反过拟合、bootstrap、paper→live 样本外验证） |
 | [COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md](docs/COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md) | Copy Trade 钱包研究执行计划 |
