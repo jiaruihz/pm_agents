@@ -26,10 +26,11 @@ description: >
 
 1. **先本机修改和验证**：本机 `py_compile` / smoke / dry-run 通过。
 2. **先提交再部署**：本机必须 `git commit`，提交信息写清策略动作和理由。
-3. **默认 git-first 部署**：本机 `git push` 后，N100 用 `git fetch` + `git checkout <commit>` 或 `git pull --ff-only` 更新。
+3. **默认 git-first 部署**：本机提交后，N100 用 `git fetch` + `git checkout <commit>` 或 `git pull --ff-only` 更新；如果 N100 无 GitHub 凭据，使用本机 git bundle 同步到 N100 bare repo，再由 N100 worktree 从该 bare repo fast-forward。
 4. **记录线上版本**：最终汇报必须包含本地 commit SHA、N100 当前 commit SHA、验证命令和结果。
-5. **rsync 只能是 fallback**：只有当 N100 目标目录还不是 git worktree、或用户明确允许临时修复时，才允许备份 + rsync；报告里必须标注这是 fallback，并给出后续 git 化 TODO。
+5. **rsync 只能是 fallback**：只有当 N100 目标目录还不是 git worktree、或用户明确允许临时修复时，才允许备份 + rsync；报告里必须标注这是 fallback，并给出后续 git 化 TODO。`pm_agent` 已完成 git 化，默认不再 rsync 代码文件。
 6. **资金/进程安全边界不变**：真实下单、kill/restart 生产进程、切换 daemon 前仍需明确确认；paper snapshot 进程只在用户授权或确认卡死时重启。
+7. **不要在 Windows/PowerShell 的 SSH 字符串里写 `$!`、`$VAR`、`$(...)`**：这些会被 Windows 侧提前展开。启动 daemon 必须用仓库里的 start script，或用不含 shell 变量的固定命令。
 
 推荐提交信息格式：
 
@@ -363,7 +364,16 @@ git rev-parse HEAD
 
 ### 第 5 步：Git-first 部署到 N100
 
-先 push，再在 N100 checkout/pull 到同一 SHA：
+`pm_agent` 当前固定路径：
+
+| 角色 | 路径 |
+|---|---|
+| 本机源码 | `/home/rui/projects/pm_agent` |
+| N100 worktree | `/home/jiarui/projects/pm_agent` |
+| N100 bare origin | `/home/jiarui/projects/pm_agent_repo.git` |
+| N100 旧目录备份 | `/home/jiarui/projects/pm_agent_pre_git_20260531T2200_gitcutover` |
+
+优先 push，再在 N100 checkout/pull 到同一 SHA：
 
 ```bash
 wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && git push"
@@ -375,6 +385,30 @@ wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
    git fetch --all --prune && \
    git checkout $COMMIT && \
    git rev-parse HEAD"
+```
+
+如果 N100 不能访问 GitHub（例如缺少 HTTPS 凭据），不要退回 rsync。走 bundle bridge：
+
+```bash
+# 本机：把当前 HEAD 打成 bundle
+wsl -d Ubuntu-24.04 -- bash -lc 'cd /home/rui/projects/pm_agent && \
+  git rev-parse HEAD && \
+  git bundle create /tmp/pm_agent_HEAD.bundle HEAD develop'
+
+# 传到 N100
+wsl -d Ubuntu-24.04 -- scp /tmp/pm_agent_HEAD.bundle \
+  jiarui@192.168.0.200:/tmp/pm_agent_HEAD.bundle
+
+# N100：更新 bare origin，再让 worktree fast-forward
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
+  'git --git-dir=/home/jiarui/projects/pm_agent_repo.git fetch /tmp/pm_agent_HEAD.bundle HEAD:refs/heads/develop && \
+   cd /home/jiarui/projects/pm_agent && \
+   git status --short --untracked-files=no && \
+   git fetch origin && \
+   git checkout develop && \
+   git pull --ff-only && \
+   git rev-parse HEAD && \
+   git status --short --branch'
 ```
 
 **⚠️ 确认点 A2（必须等用户确认）**
@@ -443,15 +477,13 @@ wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
 # 停旧
 wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 'kill <OLD_PID>'
 
-# 启新
+# 启新：不要手写 nohup + $!，使用固定 start script
 wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
   'cd /home/jiarui/projects/pm_agent && \
    WEATHER_BRANCH_EXECUTION_POLICY=<NEW_POLICY> \
    WEATHER_BRANCH_SOURCE_POLICY=mid_price_core_v1 \
    INITIAL_DELAY_SEC=0 \
-   nohup scripts/ops/weather_policy_branch_loop.sh \
-   > runtime/weather_edge_v1/live_cycle/policy_branch_<NEW_POLICY>.out 2>&1 &
-   echo "started pid=$!"'
+   scripts/ops/start_weather_policy_branch_loop.sh'
 ```
 
 **⚠️ 确认点 C（必须等用户确认）**
@@ -495,14 +527,14 @@ scripts/ops/weather_execution_policy_compare.py            ← 对比工具
 
 ```bash
 # 查所有 weather 进程
-ssh jiarui@192.168.0.200 'ps aux | grep weather | grep -v grep'
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 'pgrep -af weather_live_cycle_loop; pgrep -af weather_policy_branch_loop; true'
 
 # 查 branch daemon 日志
-ssh jiarui@192.168.0.200 \
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
   'tail -20 ~/projects/pm_agent/runtime/weather_edge_v1/live_cycle/policy_branch_<POLICY>.out'
 
 # 主 cycle 最新状态
-ssh jiarui@192.168.0.200 \
+wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
   'tail -3 ~/projects/pm_agent/runtime/weather_edge_v1/live_cycle/loop.log'
 ```
 
