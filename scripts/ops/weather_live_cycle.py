@@ -188,15 +188,12 @@ def _validate_rows_for_live_contract(
         bad_notional = [
             row
             for row in rows
-            if abs(
-                _to_float(row.get("notional"), 0.0)
-                - (_to_float(row.get("order_notional_cap"), 0.0) or expected_notional)
-            )
-            > notional_tolerance
+            if _to_float(row.get("notional"), 0.0)
+            > (_to_float(row.get("order_notional_cap"), 0.0) or expected_notional) + notional_tolerance
         ]
         if bad_notional:
             alerts.append(
-                f"{label} notional 偏离 {expected_notional:.2f}："
+                f"{label} notional 超过上限 {expected_notional:.2f}："
                 f"{_sample_labels(bad_notional, 'city')}（{len(bad_notional)} 条）"
             )
     return alerts
