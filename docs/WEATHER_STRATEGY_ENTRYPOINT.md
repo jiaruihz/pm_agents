@@ -105,6 +105,33 @@ Run N100 commands from WSL, not directly from Windows PowerShell:
 wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_status.py status --json'
 ```
 
+## N100 pm_agent Git Deployment Record
+
+As of 2026-05-31, N100 live execution runs from a real git worktree:
+
+```text
+worktree: /home/jiarui/projects/pm_agent
+origin:   /home/jiarui/projects/pm_agent_repo.git
+backup:   /home/jiarui/projects/pm_agent_pre_git_20260531T2145_gitcutover
+```
+
+Runtime-only paths were preserved across the cutover and must not be overwritten
+by code deployment:
+
+```text
+/home/jiarui/projects/pm_agent/.env
+/home/jiarui/projects/pm_agent/.venv
+/home/jiarui/projects/pm_agent/runtime
+/home/jiarui/projects/pm_agent/.claude
+/home/jiarui/projects/pm_agent/.codex
+```
+
+If N100 does not have direct GitHub credentials, deploy code with a git bundle
+as a git transport artifact: create the bundle from local `pm_agent`, import it
+into `/home/jiarui/projects/pm_agent_repo.git`, then fetch/checkout in
+`/home/jiarui/projects/pm_agent`. Do not copy individual code or config files
+into the live worktree with `scp`/`rsync`.
+
 Health check:
 
 ```bash
