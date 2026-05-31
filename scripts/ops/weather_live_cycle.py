@@ -369,6 +369,10 @@ def _first_sentence_for_skip(skipped: Any) -> str:
     reason = str(skipped or "").strip()
     if reason == "dry_run_live":
         return "本轮只生成了交易计划，没有尝试真实下单。"
+    if reason == "no_accepted_plans_after_live_dedup":
+        return "本轮候选计划已被 live 去重过滤，没有新的真实订单需要提交。"
+    if reason == "no_accepted_plans":
+        return "本轮没有通过筛选的交易计划，因此没有提交真实订单。"
     if reason == "paused_by_telegram":
         return "实盘当前是暂停状态。本轮已同步数据并生成计划，但没有下单。"
     if reason == "balance_allowance_preflight":
@@ -906,16 +910,25 @@ def main() -> int:
         planner["plans"] = live_dedup["plans_after"]
     planner["live_dedup"] = live_dedup
 
+    accepted_after_dedup = int(planner.get("accepted", 0) or 0)
+    no_submit_reason = "dry_run_live" if args.dry_run_live else "no_accepted_plans"
+    if (
+        not args.dry_run_live
+        and accepted_after_dedup == 0
+        and int(live_dedup.get("plans_before", 0) or 0) > int(live_dedup.get("plans_after", 0) or 0)
+    ):
+        no_submit_reason = "no_accepted_plans_after_live_dedup"
+
     executor: Dict[str, Any] = {
         "live_requested": False,
         "live_orders": 0,
         "live_errors": 0,
         "paper_written": 0,
-        "skipped": "dry_run_live",
+        "skipped": no_submit_reason,
     }
     executor_run: Dict[str, Any] = {"returncode": 0, "output": ""}
-    balance_preflight = _clob_balance_status() if int(planner.get("accepted", 0) or 0) > 0 else {"ok_to_submit": False}
-    if not args.dry_run_live and (not paused) and int(planner.get("accepted", 0) or 0) > 0 and bool(balance_preflight.get("ok_to_submit")):
+    balance_preflight = _clob_balance_status() if accepted_after_dedup > 0 else {"ok_to_submit": False}
+    if not args.dry_run_live and (not paused) and accepted_after_dedup > 0 and bool(balance_preflight.get("ok_to_submit")):
         executor_cmd = [
             sys.executable,
             "scripts/ops/weather_order_executor.py",
@@ -935,7 +948,7 @@ def main() -> int:
     elif paused:
         executor["skipped"] = "paused_by_telegram"
         executor["balance_preflight"] = balance_preflight
-    elif int(planner.get("accepted", 0) or 0) > 0 and not bool(balance_preflight.get("ok_to_submit")):
+    elif accepted_after_dedup > 0 and not bool(balance_preflight.get("ok_to_submit")):
         executor["skipped"] = "balance_allowance_preflight"
         executor["balance_preflight"] = balance_preflight
 

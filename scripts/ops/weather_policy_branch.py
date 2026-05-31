@@ -429,16 +429,25 @@ def main() -> int:
         planner["accepted"] = live_dedup["plans_after"]
         planner["plans"] = live_dedup["plans_after"]
 
+    accepted_after_dedup = int(planner.get("accepted", 0) or 0)
+    no_submit_reason = "dry_run_live" if args.dry_run_live else "no_accepted_plans"
+    if (
+        not args.dry_run_live
+        and accepted_after_dedup == 0
+        and int(live_dedup.get("plans_before", 0) or 0) > int(live_dedup.get("plans_after", 0) or 0)
+    ):
+        no_submit_reason = "no_accepted_plans_after_live_dedup"
+
     executor: dict[str, Any] = {
         "live_requested": False,
         "live_orders": 0,
         "live_errors": 0,
         "paper_written": 0,
-        "skipped": "dry_run_live",
+        "skipped": no_submit_reason,
     }
     executor_run: dict[str, Any] = {"returncode": 0, "output": ""}
-    balance_preflight = _clob_balance_status() if int(planner.get("accepted", 0) or 0) > 0 else {"ok_to_submit": False}
-    if not args.dry_run_live and int(planner.get("accepted", 0) or 0) > 0 and bool(balance_preflight.get("ok_to_submit")):
+    balance_preflight = _clob_balance_status() if accepted_after_dedup > 0 else {"ok_to_submit": False}
+    if not args.dry_run_live and accepted_after_dedup > 0 and bool(balance_preflight.get("ok_to_submit")):
         executor_cmd = [
             sys.executable,
             "scripts/ops/weather_order_executor.py",
@@ -455,7 +464,7 @@ def main() -> int:
         executor_run = _run(executor_cmd, timeout=180)
         executor = _load_json_from_output(executor_run["output"])
         executor["balance_preflight"] = balance_preflight
-    elif int(planner.get("accepted", 0) or 0) > 0 and not args.dry_run_live:
+    elif accepted_after_dedup > 0 and not args.dry_run_live:
         executor["skipped"] = "balance_allowance_preflight"
         executor["balance_preflight"] = balance_preflight
 
