@@ -123,6 +123,8 @@ def _validate_rows_for_live_contract(
     expected_notional: float,
     min_entry_price: float,
     max_entry_price: float,
+    yes_window: Optional[str] = None,
+    no_window: Optional[str] = None,
     notional_tolerance: float = 0.05,
 ) -> List[str]:
     alerts: List[str] = []
@@ -134,11 +136,20 @@ def _validate_rows_for_live_contract(
                 f"{_sample_labels(bad_pool, 'city')}（{len(bad_pool)} 条）"
             )
 
+    global_window = f"{min_entry_price:.2f}-{max_entry_price:.2f}"
+
+    def _expected_window(row: Dict[str, Any]) -> str:
+        side = str(row.get("signal_side") or row.get("side") or "").upper()
+        if side == "BUY_YES" and yes_window:
+            return yes_window
+        if side == "BUY_NO" and no_window:
+            return no_window
+        return global_window
+
     bad_window = [
         row
         for row in rows
-        if str(row.get("entry_price_window") or f"{min_entry_price:.2f}-{max_entry_price:.2f}")
-        != f"{min_entry_price:.2f}-{max_entry_price:.2f}"
+        if str(row.get("entry_price_window") or _expected_window(row)) != _expected_window(row)
     ]
     if bad_window:
         alerts.append(f"{label} entry_price_window 偏离预期：{len(bad_window)} 条。")
@@ -199,6 +210,16 @@ def _build_live_contract_alerts(
     expected_notional = _to_float(config.get("max_order_notional"), 0.0)
     min_entry_price = _to_float(config.get("min_entry_price"), 0.25)
     max_entry_price = _to_float(config.get("max_entry_price"), 0.75)
+
+    def _side_window(lo_key: str, hi_key: str) -> Optional[str]:
+        lo = config.get(lo_key)
+        hi = config.get(hi_key)
+        if lo is None or hi is None:
+            return None
+        return f"{_to_float(lo, 0.0):.2f}-{_to_float(hi, 0.0):.2f}"
+
+    yes_window = _side_window("yes_min_entry_price", "yes_max_entry_price")
+    no_window = _side_window("no_min_entry_price", "no_max_entry_price")
     signal_rows = _read_jsonl(signal_path)
     plan_rows = [row for row in _read_jsonl(plan_path) if str(row.get("status") or "") == "accepted"]
     live_rows = [row for row in _read_jsonl(live_path) if str(row.get("status") or "") == "submitted"]
@@ -222,6 +243,8 @@ def _build_live_contract_alerts(
             expected_notional=0.0,
             min_entry_price=min_entry_price,
             max_entry_price=max_entry_price,
+            yes_window=yes_window,
+            no_window=no_window,
         )
     )
     alerts.extend(
@@ -233,6 +256,8 @@ def _build_live_contract_alerts(
             expected_notional=expected_notional,
             min_entry_price=min_entry_price,
             max_entry_price=max_entry_price,
+            yes_window=yes_window,
+            no_window=no_window,
         )
     )
     alerts.extend(
@@ -244,6 +269,8 @@ def _build_live_contract_alerts(
             expected_notional=expected_notional,
             min_entry_price=min_entry_price,
             max_entry_price=max_entry_price,
+            yes_window=yes_window,
+            no_window=no_window,
         )
     )
     return alerts
@@ -643,6 +670,15 @@ def main() -> int:
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
     parser.add_argument("--min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ENTRY_PRICE", "0.25")))
     parser.add_argument("--max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ENTRY_PRICE", "0.75")))
+    # Per-side entry band / edge (2026-05-31 entry-band strategy; see
+    # docs/WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md §7). Sizing stays flat;
+    # only the per-side selection gate differs. Env-overridable.
+    parser.add_argument("--yes-min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_YES_MIN_ENTRY_PRICE", "0.20")))
+    parser.add_argument("--yes-max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_YES_MAX_ENTRY_PRICE", "0.45")))
+    parser.add_argument("--yes-min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_YES_MIN_EDGE", "0.20")))
+    parser.add_argument("--no-min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_NO_MIN_ENTRY_PRICE", "0.35")))
+    parser.add_argument("--no-max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_NO_MAX_ENTRY_PRICE", "0.65")))
+    parser.add_argument("--no-min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_NO_MIN_EDGE", "0.10")))
     parser.add_argument(
         "--snapshot-lookback-minutes",
         type=float,
@@ -716,6 +752,12 @@ def main() -> int:
         "min_edge": float(args.min_edge),
         "min_entry_price": float(args.min_entry_price),
         "max_entry_price": float(args.max_entry_price),
+        "yes_min_entry_price": float(args.yes_min_entry_price),
+        "yes_max_entry_price": float(args.yes_max_entry_price),
+        "yes_min_edge": float(args.yes_min_edge),
+        "no_min_entry_price": float(args.no_min_entry_price),
+        "no_max_entry_price": float(args.no_max_entry_price),
+        "no_min_edge": float(args.no_min_edge),
         "snapshot_lookback_minutes": float(args.snapshot_lookback_minutes),
         "min_hours_to_settle": float(args.min_hours_to_settle),
         "max_hours_to_settle": float(args.max_hours_to_settle),
@@ -761,6 +803,18 @@ def main() -> int:
         str(float(live_config["min_entry_price"])),
         "--max-entry-price",
         str(float(live_config["max_entry_price"])),
+        "--yes-min-entry-price",
+        str(float(live_config["yes_min_entry_price"])),
+        "--yes-max-entry-price",
+        str(float(live_config["yes_max_entry_price"])),
+        "--yes-min-edge",
+        str(float(live_config["yes_min_edge"])),
+        "--no-min-entry-price",
+        str(float(live_config["no_min_entry_price"])),
+        "--no-max-entry-price",
+        str(float(live_config["no_max_entry_price"])),
+        "--no-min-edge",
+        str(float(live_config["no_min_edge"])),
         "--snapshot-lookback-minutes",
         str(float(live_config["snapshot_lookback_minutes"])),
         "--min-hours-to-settle",
@@ -794,6 +848,18 @@ def main() -> int:
         str(float(live_config["min_entry_price"])),
         "--max-entry-price",
         str(float(live_config["max_entry_price"])),
+        "--yes-min-entry-price",
+        str(float(live_config["yes_min_entry_price"])),
+        "--yes-max-entry-price",
+        str(float(live_config["yes_max_entry_price"])),
+        "--yes-min-edge",
+        str(float(live_config["yes_min_edge"])),
+        "--no-min-entry-price",
+        str(float(live_config["no_min_entry_price"])),
+        "--no-max-entry-price",
+        str(float(live_config["no_max_entry_price"])),
+        "--no-min-edge",
+        str(float(live_config["no_min_edge"])),
         "--execution-policy",
         str(live_config["execution_policy"]),
         "--min-quote-edge",

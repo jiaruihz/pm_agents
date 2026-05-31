@@ -44,6 +44,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-edge", type=float, default=0.10)
     parser.add_argument("--min-entry-price", type=float, default=0.25)
     parser.add_argument("--max-entry-price", type=float, default=0.75)
+    # Per-side entry band / edge overrides (None -> use global above).
+    parser.add_argument("--yes-min-entry-price", type=float, default=None)
+    parser.add_argument("--yes-max-entry-price", type=float, default=None)
+    parser.add_argument("--yes-min-edge", type=float, default=None)
+    parser.add_argument("--no-min-entry-price", type=float, default=None)
+    parser.add_argument("--no-max-entry-price", type=float, default=None)
+    parser.add_argument("--no-min-edge", type=float, default=None)
     parser.add_argument("--price-offset", type=float, default=0.0)
     parser.add_argument(
         "--execution-policy",
@@ -88,6 +95,12 @@ def main() -> int:
         min_edge=float(args.min_edge),
         min_entry_price=float(args.min_entry_price),
         max_entry_price=float(args.max_entry_price),
+        yes_min_entry_price=(float(args.yes_min_entry_price) if args.yes_min_entry_price is not None else None),
+        yes_max_entry_price=(float(args.yes_max_entry_price) if args.yes_max_entry_price is not None else None),
+        yes_min_edge=(float(args.yes_min_edge) if args.yes_min_edge is not None else None),
+        no_min_entry_price=(float(args.no_min_entry_price) if args.no_min_entry_price is not None else None),
+        no_max_entry_price=(float(args.no_max_entry_price) if args.no_max_entry_price is not None else None),
+        no_min_edge=(float(args.no_min_edge) if args.no_min_edge is not None else None),
         price_offset=float(args.price_offset),
         live_enabled=bool(args.enable_live),
         execution_policy=str(args.execution_policy),

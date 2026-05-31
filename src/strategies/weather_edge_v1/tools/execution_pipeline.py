@@ -186,6 +186,15 @@ class PlannerConfig:
     min_edge: float = 0.10
     min_entry_price: float = 0.25
     max_entry_price: float = 0.75
+    # Per-side entry band / edge overrides. None -> fall back to the global
+    # min_edge / min_entry_price / max_entry_price above. Lets BUY_YES and
+    # BUY_NO use different gates without changing flat sizing or pricing.
+    yes_min_entry_price: Optional[float] = None
+    yes_max_entry_price: Optional[float] = None
+    yes_min_edge: Optional[float] = None
+    no_min_entry_price: Optional[float] = None
+    no_max_entry_price: Optional[float] = None
+    no_min_edge: Optional[float] = None
     price_offset: float = 0.0
     price_floor: float = 0.01
     price_ceiling: float = 0.99
@@ -237,6 +246,25 @@ def _policy_config(config: PlannerConfig) -> ExecutionPolicyConfig:
     )
 
 
+def _effective_band(config: PlannerConfig, side: str) -> tuple[float, float, float]:
+    """Resolve (min_entry_price, max_entry_price, min_edge) for a signal side.
+
+    Per-side overrides win when set; otherwise fall back to the global config.
+    """
+    s = (side or "").upper()
+    if s == "BUY_YES":
+        lo = config.yes_min_entry_price if config.yes_min_entry_price is not None else config.min_entry_price
+        hi = config.yes_max_entry_price if config.yes_max_entry_price is not None else config.max_entry_price
+        ed = config.yes_min_edge if config.yes_min_edge is not None else config.min_edge
+    elif s == "BUY_NO":
+        lo = config.no_min_entry_price if config.no_min_entry_price is not None else config.min_entry_price
+        hi = config.no_max_entry_price if config.no_max_entry_price is not None else config.max_entry_price
+        ed = config.no_min_edge if config.no_min_edge is not None else config.min_edge
+    else:
+        lo, hi, ed = config.min_entry_price, config.max_entry_price, config.min_edge
+    return float(lo), float(hi), float(ed)
+
+
 def build_trade_plan(
     signal: Dict[str, Any],
     config: PlannerConfig,
@@ -244,6 +272,9 @@ def build_trade_plan(
     quote: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     token_id = safe_str(signal.get("token_id"))
+    eff_min_entry, eff_max_entry, eff_min_edge = _effective_band(
+        config, safe_str(signal.get("signal_side"))
+    )
     market_price = to_float(signal.get("market_price"), 0.0)
     best_bid = to_float(signal.get("best_bid"), 0.0)
     best_ask = to_float(signal.get("best_ask"), 0.0)
@@ -321,9 +352,9 @@ def build_trade_plan(
         "notional_fraction": notional_fraction,
         "size_multiplier": size_multiplier,
         "order_notional_cap": order_notional_cap,
-        "entry_price_min": round(config.min_entry_price, 6),
-        "entry_price_max": round(config.max_entry_price, 6),
-        "entry_price_window": f"{config.min_entry_price:.2f}-{config.max_entry_price:.2f}",
+        "entry_price_min": round(eff_min_entry, 6),
+        "entry_price_max": round(eff_max_entry, 6),
+        "entry_price_window": f"{eff_min_entry:.2f}-{eff_max_entry:.2f}",
         "execution_policy": safe_str(config.execution_policy),
         "tick_size": round(float(config.tick_size), 6),
         "min_quote_edge": round(float(config.min_quote_edge), 6),
@@ -348,7 +379,7 @@ def build_trade_plan(
         "size": size,
         "notional": round(size * limit_price, 6),
         "edge": round(edge, 6),
-        "min_edge": round(config.min_edge, 6),
+        "min_edge": round(eff_min_edge, 6),
         "obs_source": safe_str(signal.get("obs_source")),
         "model_version": safe_str(signal.get("model_version")),
         "paper_enabled": True,
@@ -363,21 +394,21 @@ def build_trade_plan(
         "risk_reason": "",
         **base,
     }
-    if market_price < config.min_entry_price:
+    if market_price < eff_min_entry:
         return {
             **plan,
             "status": "rejected",
             "risk_status": "rejected",
             "risk_reason": "entry_price_below_min",
         }
-    if market_price >= config.max_entry_price:
+    if market_price >= eff_max_entry:
         return {
             **plan,
             "status": "rejected",
             "risk_status": "rejected",
             "risk_reason": "entry_price_at_or_above_max",
         }
-    if edge < config.min_edge:
+    if edge < eff_min_edge:
         return {**plan, "status": "rejected", "risk_status": "rejected", "risk_reason": "edge_below_min"}
     if safe_str(quote.get("quote_status")) != "accepted":
         reason = safe_str(quote.get("quote_reason")) or "execution_quote_rejected"

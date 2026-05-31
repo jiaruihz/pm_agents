@@ -173,10 +173,32 @@ def build_signals(
     min_edge: float,
     min_entry_price: float,
     max_entry_price: float,
+    yes_min_entry_price: Optional[float] = None,
+    yes_max_entry_price: Optional[float] = None,
+    yes_min_edge: Optional[float] = None,
+    no_min_entry_price: Optional[float] = None,
+    no_max_entry_price: Optional[float] = None,
+    no_min_edge: Optional[float] = None,
     min_hours_to_settle: Optional[float] = None,
     max_hours_to_settle: Optional[float] = None,
     dry_run: bool,
 ) -> Dict[str, Any]:
+    def _band_for_side(s: str) -> Tuple[float, float, float]:
+        s = (s or "").upper()
+        if s == "BUY_YES":
+            return (
+                yes_min_entry_price if yes_min_entry_price is not None else min_entry_price,
+                yes_max_entry_price if yes_max_entry_price is not None else max_entry_price,
+                yes_min_edge if yes_min_edge is not None else min_edge,
+            )
+        if s == "BUY_NO":
+            return (
+                no_min_entry_price if no_min_entry_price is not None else min_entry_price,
+                no_max_entry_price if no_max_entry_price is not None else max_entry_price,
+                no_min_edge if no_min_edge is not None else min_edge,
+            )
+        return (min_entry_price, max_entry_price, min_edge)
+
     paths = list(snapshot_paths) if snapshot_paths is not None else [snapshot_path]
     now_utc = datetime.now(timezone.utc)
     records_with_source: List[Tuple[Dict[str, Any], Path]] = []
@@ -213,15 +235,16 @@ def build_signals(
             if max_hours_to_settle is not None and hours_to_settle > max_hours_to_settle:
                 skipped["hours_to_settle_above_max"] = skipped.get("hours_to_settle_above_max", 0) + 1
                 continue
+        side_min_entry, side_max_entry, side_min_edge = _band_for_side(side)
         edge = _to_float(record.get("abs_edge"), abs(_to_float(record.get("edge"), 0.0)))
-        if edge < min_edge:
+        if edge < side_min_edge:
             skipped["edge_below_min"] = skipped.get("edge_below_min", 0) + 1
             continue
         entry_price = _to_float(record.get("entry_price"), 0.0)
-        if entry_price < min_entry_price:
+        if entry_price < side_min_entry:
             skipped["entry_price_below_min"] = skipped.get("entry_price_below_min", 0) + 1
             continue
-        if entry_price >= max_entry_price:
+        if entry_price >= side_max_entry:
             skipped["entry_price_at_or_above_max"] = skipped.get("entry_price_at_or_above_max", 0) + 1
             continue
         key = _record_key(record, side)
@@ -295,6 +318,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-edge", type=float, default=0.10)
     parser.add_argument("--min-entry-price", type=float, default=0.25)
     parser.add_argument("--max-entry-price", type=float, default=0.75)
+    # Per-side entry band / edge overrides (None -> use global above).
+    parser.add_argument("--yes-min-entry-price", type=float, default=None)
+    parser.add_argument("--yes-max-entry-price", type=float, default=None)
+    parser.add_argument("--yes-min-edge", type=float, default=None)
+    parser.add_argument("--no-min-entry-price", type=float, default=None)
+    parser.add_argument("--no-max-entry-price", type=float, default=None)
+    parser.add_argument("--no-min-edge", type=float, default=None)
     parser.add_argument(
         "--snapshot-lookback-minutes",
         type=float,
@@ -330,6 +360,12 @@ def main() -> int:
         min_edge=float(args.min_edge),
         min_entry_price=float(args.min_entry_price),
         max_entry_price=float(args.max_entry_price),
+        yes_min_entry_price=(float(args.yes_min_entry_price) if args.yes_min_entry_price is not None else None),
+        yes_max_entry_price=(float(args.yes_max_entry_price) if args.yes_max_entry_price is not None else None),
+        yes_min_edge=(float(args.yes_min_edge) if args.yes_min_edge is not None else None),
+        no_min_entry_price=(float(args.no_min_entry_price) if args.no_min_entry_price is not None else None),
+        no_max_entry_price=(float(args.no_max_entry_price) if args.no_max_entry_price is not None else None),
+        no_min_edge=(float(args.no_min_edge) if args.no_min_edge is not None else None),
         min_hours_to_settle=args.min_hours_to_settle,
         max_hours_to_settle=args.max_hours_to_settle,
         dry_run=bool(args.dry_run),
