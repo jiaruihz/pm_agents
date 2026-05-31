@@ -58,16 +58,27 @@ sync_market() {
   _sync_dir() {
     local remote_subdir="$1" local_subdir="$2"
     mkdir -p "$MARKET_LOCAL/$local_subdir"
-    rsync "${RSYNC_FLAGS[@]}" -e "ssh ${WEATHER_SSH_OPTS[*]}" \
-      "$WEATHER_REMOTE:$WEATHER_REMOTE_DIR/$remote_subdir/" "$MARKET_LOCAL/$local_subdir/"
+    if [[ "$WEATHER_REMOTE" == "local" || "$WEATHER_REMOTE" == "localhost" || "$WEATHER_REMOTE" == "127.0.0.1" ]]; then
+      rsync "${RSYNC_FLAGS[@]}" \
+        "$WEATHER_REMOTE_DIR/$remote_subdir/" "$MARKET_LOCAL/$local_subdir/"
+    else
+      rsync "${RSYNC_FLAGS[@]}" -e "ssh ${WEATHER_SSH_OPTS[*]}" \
+        "$WEATHER_REMOTE:$WEATHER_REMOTE_DIR/$remote_subdir/" "$MARKET_LOCAL/$local_subdir/"
+    fi
   }
 
   _sync_glob() {
     local remote_subdir="$1" pattern="$2" local_subdir="$3"
     mkdir -p "$MARKET_LOCAL/$local_subdir"
-    rsync "${RSYNC_FLAGS[@]}" -e "ssh ${WEATHER_SSH_OPTS[*]}" \
-      --include="$pattern" --exclude='*' \
-      "$WEATHER_REMOTE:$WEATHER_REMOTE_DIR/$remote_subdir/" "$MARKET_LOCAL/$local_subdir/"
+    if [[ "$WEATHER_REMOTE" == "local" || "$WEATHER_REMOTE" == "localhost" || "$WEATHER_REMOTE" == "127.0.0.1" ]]; then
+      rsync "${RSYNC_FLAGS[@]}" \
+        --include="$pattern" --exclude='*' \
+        "$WEATHER_REMOTE_DIR/$remote_subdir/" "$MARKET_LOCAL/$local_subdir/"
+    else
+      rsync "${RSYNC_FLAGS[@]}" -e "ssh ${WEATHER_SSH_OPTS[*]}" \
+        --include="$pattern" --exclude='*' \
+        "$WEATHER_REMOTE:$WEATHER_REMOTE_DIR/$remote_subdir/" "$MARKET_LOCAL/$local_subdir/"
+    fi
   }
 
   _sync_dir  "output/paper_snapshots"    "paper_snapshots"
