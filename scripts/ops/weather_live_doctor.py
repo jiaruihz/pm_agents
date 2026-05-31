@@ -64,6 +64,24 @@ def _pid_running(pid: Optional[int]) -> bool:
     return True
 
 
+def _running_pid_files(paths: List[Path]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    seen: set[Path] = set()
+    for path in paths:
+        if path in seen or not path.exists():
+            continue
+        seen.add(path)
+        pid = _read_pid(path)
+        rows.append(
+            {
+                "pid_file": str(path),
+                "pid": pid,
+                "ok": _pid_running(pid),
+            }
+        )
+    return rows
+
+
 def _http_check(name: str, url: str, timeout: float) -> Dict[str, Any]:
     started = time.time()
     try:
@@ -126,7 +144,8 @@ def _doctor(args: argparse.Namespace) -> Dict[str, Any]:
     snapshot_age = _file_age_seconds(snapshot) if snapshot else None
     max_snapshot_age = float(args.max_snapshot_age_minutes) * 60.0
 
-    loop_pid = _read_pid(state_dir / "daemon.pid")
+    live_loop_files = sorted(state_dir.glob("live_*.pid")) + [state_dir / "daemon.pid"]
+    live_loops = _running_pid_files(live_loop_files)
     telegram_pid = _read_pid(state_dir / "telegram_control.pid")
     checks: Dict[str, Any] = {
         "snapshot": {
@@ -137,8 +156,8 @@ def _doctor(args: argparse.Namespace) -> Dict[str, Any]:
         },
         "live_state": read_live_state(state_dir),
         "live_loop": {
-            "ok": _pid_running(loop_pid),
-            "pid": loop_pid,
+            "ok": any(row.get("ok") for row in live_loops),
+            "loops": live_loops,
         },
         "telegram_control": {
             "ok": _pid_running(telegram_pid),
