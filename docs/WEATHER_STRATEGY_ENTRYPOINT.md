@@ -22,13 +22,29 @@ Current live rollout policy:
 
 ```text
 city_pool = t1_trading (v3, 24 cities — see docs/WEATHER_CITY_POOL_DECISIONS.md)
-execution_policy = maker_queue_v1  [upgraded 2026-05-26; set via WEATHER_LIVE_EXECUTION_POLICY in N100 .env]
-entry window = 0.25 <= price < 0.75
 signal capture = scan latest 90 minutes of synced snapshots; executable window 22h <= hours_to_settle_now <= 28h
 sizing_mode = notional
 max_order_notional = 5.00
 max_order_shares = 25.00
 order style = maker-only GTC, post_only=True
+```
+
+N100 should run exactly three weather live strategy instances:
+
+| strategy_instance | execution_policy | source_strategy_instance | Entry / edge gate |
+|---|---|---|---|
+| `mid_price_core_v1_25_75` | `mid_price_core_v1` | direct signal builder | global `0.25 <= price < 0.75`, `edge >= 0.10` |
+| `mid_price_core_v2_25_75` | `mid_price_core_v2` | `mid_price_core_v1_25_75` | same source signals as `mid_price_core_v1_25_75` |
+| `mid_price_core_v1_side_band` | `mid_price_core_v1` | direct signal builder | YES `0.20 <= price < 0.45`, `edge >= 0.20`; NO `0.35 <= price < 0.65`, `edge >= 0.10` |
+
+Operationally, this is one order pipeline parameterized by
+`strategy_instance`, `execution_policy`, and entry-band config. Do not count
+strategies only by `execution_policy`: two instances can share
+`mid_price_core_v1` while using different signal gates and separate live dedup.
+Start the intended production set with:
+
+```bash
+wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && scripts/ops/start_weather_three_strategy_instances.sh'
 ```
 
 ## 当前城市池 v3（2026-05-27）

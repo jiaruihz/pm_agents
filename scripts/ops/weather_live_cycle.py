@@ -114,6 +114,31 @@ def _sample_labels(rows: List[Dict[str, Any]], field: str, limit: int = 5) -> st
     return ", ".join(values) if values else "-"
 
 
+def _slug(value: Any, default: str = "default") -> str:
+    text = str(value or "").strip()
+    if not text:
+        text = default
+    return "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in text)
+
+
+def _infer_strategy_instance(row: Dict[str, Any]) -> str:
+    explicit = str(row.get("strategy_instance") or "").strip()
+    if explicit:
+        return explicit
+    policy = str(row.get("execution_policy") or "").strip() or "unknown_policy"
+    window = str(row.get("entry_price_window") or "").strip()
+    side = str(row.get("signal_side") or "").strip().upper()
+    if policy == "mid_price_core_v1":
+        if window == "0.20-0.45" or window == "0.35-0.65":
+            return "mid_price_core_v1_side_band"
+        if window == "0.25-0.75":
+            return "mid_price_core_v1_25_75"
+    if policy == "mid_price_core_v2":
+        return "mid_price_core_v2_25_75"
+    suffix = window.replace(".", "").replace("-", "_") if window else side.lower() or "default"
+    return f"{policy}_{suffix}"
+
+
 def _validate_rows_for_live_contract(
     *,
     rows: List[Dict[str, Any]],
@@ -283,7 +308,7 @@ def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
             fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
+def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str, str, str]:
     market_key = str(row.get("market_id") or "").strip()
     if not market_key:
         city = str(row.get("city") or "").strip()
@@ -291,6 +316,7 @@ def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
         market_key = f"{city}|{bracket}" if city and bracket else str(row.get("token_id") or "").strip()
     return (
         str(row.get("strategy") or "weather_edge_v1").strip(),
+        _infer_strategy_instance(row),
         str(row.get("target_date") or "").strip(),
         market_key,
         str(row.get("execution_policy") or "").strip(),
@@ -298,8 +324,8 @@ def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
     )
 
 
-def _prior_submitted_live_keys(live_dir: Path, *, exclude_path: Path) -> Set[Tuple[str, str, str, str, str]]:
-    keys: Set[Tuple[str, str, str, str, str]] = set()
+def _prior_submitted_live_keys(live_dir: Path, *, exclude_path: Path) -> Set[Tuple[str, str, str, str, str, str]]:
+    keys: Set[Tuple[str, str, str, str, str, str]] = set()
     if not live_dir.exists():
         return keys
     for path in sorted(live_dir.glob("*.jsonl")):
@@ -311,26 +337,26 @@ def _prior_submitted_live_keys(live_dir: Path, *, exclude_path: Path) -> Set[Tup
             if str(row.get("status") or "").strip() != "submitted":
                 continue
             key = _live_dedup_key(row)
-            if key[1] and key[2]:
+            if key[2] and key[3]:
                 keys.add(key)
     return keys
 
 
-def _filter_plan_file_for_live_dedup(plan_path: Path, prior_keys: Set[Tuple[str, str, str, str, str]]) -> Dict[str, Any]:
+def _filter_plan_file_for_live_dedup(plan_path: Path, prior_keys: Set[Tuple[str, str, str, str, str, str]]) -> Dict[str, Any]:
     rows = _read_jsonl(plan_path)
     kept: List[Dict[str, Any]] = []
-    seen_this_run: Set[Tuple[str, str, str, str, str]] = set()
+    seen_this_run: Set[Tuple[str, str, str, str, str, str]] = set()
     skipped_prior = 0
     skipped_same_run = 0
     for row in rows:
         key = _live_dedup_key(row)
-        if key[1] and key[2] and key in prior_keys:
+        if key[2] and key[3] and key in prior_keys:
             skipped_prior += 1
             continue
-        if key[1] and key[2] and key in seen_this_run:
+        if key[2] and key[3] and key in seen_this_run:
             skipped_same_run += 1
             continue
-        if key[1] and key[2]:
+        if key[2] and key[3]:
             seen_this_run.add(key)
         kept.append(row)
     if len(kept) != len(rows):
@@ -527,6 +553,7 @@ def _send_summary(
         [
             "",
             "实盘参数：",
+            f"- strategy_instance={config.get('strategy_instance', '-')}",
             f"- city_pool={config.get('city_pool')}",
             f"- sizing_mode={config.get('sizing_mode')}",
             f"- max_order_notional={float(config.get('max_order_notional', 0.0)):.2f}",
@@ -660,6 +687,11 @@ def main() -> int:
         pass
 
     parser = argparse.ArgumentParser(description="Run one weather live cycle: sync -> signals -> plans -> maker-only executor.")
+    parser.add_argument(
+        "--strategy-instance",
+        default=os.getenv("WEATHER_LIVE_STRATEGY_INSTANCE", os.getenv("WEATHER_STRATEGY_INSTANCE", "")),
+        help="Stable strategy instance id used in summaries, filenames, and live dedup.",
+    )
     parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))
     parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default=os.getenv("WEATHER_LIVE_SIZING_MODE", "notional"))
     parser.add_argument("--fixed-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_FIXED_ORDER_SHARES", "10.0")))
@@ -746,7 +778,21 @@ def main() -> int:
     parser.add_argument("--no-telegram", action="store_true")
     args = parser.parse_args()
     max_order_shares = float(args.max_order_shares if args.max_position is None else args.max_position)
+    strategy_instance = str(args.strategy_instance or "").strip()
+    if not strategy_instance:
+        yes_tuple = (float(args.yes_min_entry_price), float(args.yes_max_entry_price), float(args.yes_min_edge))
+        no_tuple = (float(args.no_min_entry_price), float(args.no_max_entry_price), float(args.no_min_edge))
+        global_tuple = (float(args.min_entry_price), float(args.max_entry_price), float(args.min_edge))
+        if str(args.execution_policy) == "mid_price_core_v1" and yes_tuple == global_tuple and no_tuple == global_tuple:
+            strategy_instance = "mid_price_core_v1_25_75"
+        elif str(args.execution_policy) == "mid_price_core_v1":
+            strategy_instance = "mid_price_core_v1_side_band"
+        elif str(args.execution_policy) == "mid_price_core_v2":
+            strategy_instance = "mid_price_core_v2_25_75"
+        else:
+            strategy_instance = str(args.execution_policy)
     live_config = {
+        "strategy_instance": strategy_instance,
         "city_pool": str(args.city_pool),
         "sizing_mode": str(args.sizing_mode),
         "max_order_notional": float(args.max_order_notional),
@@ -784,11 +830,12 @@ def main() -> int:
     }
 
     run_id = _utc_run_id()
-    signal_path = ROOT / "runtime" / "weather_edge_v1" / "signals" / f"live_{run_id}_signals.jsonl"
-    plan_path = ROOT / "runtime" / "weather_edge_v1" / "plans" / f"live_{run_id}_trade_plans.jsonl"
-    paper_path = ROOT / "runtime" / "weather_edge_v1" / "paper" / f"live_{run_id}_paper_orders.jsonl"
-    live_path = ROOT / "runtime" / "weather_edge_v1" / "live" / f"live_{run_id}_orders.jsonl"
-    summary_path = ROOT / "runtime" / "weather_edge_v1" / "live_cycle" / f"{run_id}.json"
+    instance_slug = _slug(strategy_instance)
+    signal_path = ROOT / "runtime" / "weather_edge_v1" / "signals" / f"live_{instance_slug}_{run_id}_signals.jsonl"
+    plan_path = ROOT / "runtime" / "weather_edge_v1" / "plans" / f"live_{instance_slug}_{run_id}_trade_plans.jsonl"
+    paper_path = ROOT / "runtime" / "weather_edge_v1" / "paper" / f"live_{instance_slug}_{run_id}_paper_orders.jsonl"
+    live_path = ROOT / "runtime" / "weather_edge_v1" / "live" / f"live_{instance_slug}_{run_id}_orders.jsonl"
+    summary_path = ROOT / "runtime" / "weather_edge_v1" / "live_cycle" / f"{run_id}_{instance_slug}.json"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     command_state = _handle_telegram_commands(summary_path.parent)
     paused = bool(command_state.get("paused"))
@@ -799,6 +846,8 @@ def main() -> int:
         "scripts/ops/weather_snapshot_signal_builder.py",
         "--out",
         str(signal_path),
+        "--strategy-instance",
+        strategy_instance,
         "--city-pool",
         str(live_config["city_pool"]),
         "--min-edge",
@@ -836,6 +885,8 @@ def main() -> int:
         str(signal_path),
         "--out",
         str(plan_path),
+        "--strategy-instance",
+        strategy_instance,
         "--max-order-notional",
         str(float(live_config["max_order_notional"])),
         "--sizing-mode",

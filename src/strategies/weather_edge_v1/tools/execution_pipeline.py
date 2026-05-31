@@ -178,6 +178,7 @@ def import_signals(
 
 @dataclass(frozen=True)
 class PlannerConfig:
+    strategy_instance: str = ""
     max_order_notional: float = 1.0
     sizing_mode: str = "notional"
     fixed_order_shares: float = 10.0
@@ -272,6 +273,11 @@ def build_trade_plan(
     quote: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     token_id = safe_str(signal.get("token_id"))
+    strategy_instance = (
+        safe_str(config.strategy_instance)
+        or safe_str(signal.get("strategy_instance"))
+        or safe_str(config.execution_policy)
+    )
     eff_min_entry, eff_max_entry, eff_min_edge = _effective_band(
         config, safe_str(signal.get("signal_side"))
     )
@@ -320,6 +326,8 @@ def build_trade_plan(
     base = {
         "signal_id": safe_str(signal.get("signal_id")),
         "strategy": "weather_edge_v1",
+        "strategy_instance": strategy_instance,
+        "source_strategy_instance": safe_str(signal.get("strategy_instance")),
         "profile": safe_str(signal.get("profile")),
         "combo": safe_str(signal.get("combo")),
         "city": safe_str(signal.get("city")),
@@ -487,6 +495,8 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "plan_id": safe_str(plan.get("plan_id")),
         "signal_id": safe_str(plan.get("signal_id")),
         "strategy": "weather_edge_v1",
+        "strategy_instance": safe_str(plan.get("strategy_instance")),
+        "source_strategy_instance": safe_str(plan.get("source_strategy_instance")),
         "venue": "paper",
         "city": safe_str(plan.get("city")),
         "city_pool": safe_str(plan.get("city_pool")),
@@ -559,6 +569,8 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "plan_id": safe_str(plan.get("plan_id")),
         "signal_id": safe_str(plan.get("signal_id")),
         "strategy": "weather_edge_v1",
+        "strategy_instance": safe_str(plan.get("strategy_instance")),
+        "source_strategy_instance": safe_str(plan.get("source_strategy_instance")),
         "venue": "polymarket_clob",
         "city": safe_str(plan.get("city")),
         "city_pool": safe_str(plan.get("city_pool")),

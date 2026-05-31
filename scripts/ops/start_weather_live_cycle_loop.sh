@@ -4,9 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$DEFAULT_PROJECT_DIR}"
+STRATEGY_INSTANCE="${WEATHER_LIVE_STRATEGY_INSTANCE:-${WEATHER_STRATEGY_INSTANCE:-default}}"
 LOG_DIR="$PROJECT_DIR/runtime/weather_edge_v1/live_cycle"
-PID_FILE="$LOG_DIR/daemon.pid"
-OUT_FILE="$LOG_DIR/daemon.out"
+PID_FILE="$LOG_DIR/live_${STRATEGY_INSTANCE}.pid"
+OUT_FILE="$LOG_DIR/live_${STRATEGY_INSTANCE}.out"
 mkdir -p "$LOG_DIR"
 
 if [[ -s "$PID_FILE" ]]; then
@@ -18,7 +19,8 @@ if [[ -s "$PID_FILE" ]]; then
 fi
 
 cd "$PROJECT_DIR"
+WEATHER_LIVE_STRATEGY_INSTANCE="$STRATEGY_INSTANCE" \
 nohup scripts/ops/weather_live_cycle_loop.sh >"$OUT_FILE" 2>&1 &
 pid="$!"
 echo "$pid" >"$PID_FILE"
-echo "started pid=$pid"
+echo "started instance=$STRATEGY_INSTANCE pid=$pid"

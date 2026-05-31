@@ -121,7 +121,7 @@ def _token_for_side(market: Dict[str, Any], side: str) -> str:
     return token_ids[0]
 
 
-def _build_signal(record: Dict[str, Any], token_id: str, snapshot_path: Path) -> Dict[str, Any]:
+def _build_signal(record: Dict[str, Any], token_id: str, snapshot_path: Path, *, strategy_instance: str) -> Dict[str, Any]:
     side = _safe_str(record.get("side")).upper()
     entry_price = _to_float(record.get("entry_price"), 0.0)
     base = {
@@ -130,6 +130,7 @@ def _build_signal(record: Dict[str, Any], token_id: str, snapshot_path: Path) ->
         "source_id": f"{_safe_str(record.get('condition_id'))}|{side}",
         "source_run_id": snapshot_path.stem,
         "strategy": "weather_edge_v1",
+        "strategy_instance": strategy_instance,
         "profile": _safe_str(record.get("forecast_source")),
         "combo": "mid_price_core_v1",
         "city": _safe_str(record.get("city")),
@@ -179,6 +180,7 @@ def build_signals(
     no_min_entry_price: Optional[float] = None,
     no_max_entry_price: Optional[float] = None,
     no_min_edge: Optional[float] = None,
+    strategy_instance: str = "",
     min_hours_to_settle: Optional[float] = None,
     max_hours_to_settle: Optional[float] = None,
     dry_run: bool,
@@ -271,7 +273,7 @@ def build_signals(
         if not token_id:
             skipped["token_not_found"] = skipped.get("token_not_found", 0) + 1
             continue
-        signals.append(_build_signal(record, token_id, source_path))
+        signals.append(_build_signal(record, token_id, source_path, strategy_instance=strategy_instance))
 
     if not dry_run:
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -310,6 +312,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--snapshot", default="")
     parser.add_argument("--snapshot-dir", default=str(DEFAULT_MARKET_DATA / "paper_snapshots"))
     parser.add_argument("--out", default=str(DEFAULT_OUT))
+    parser.add_argument("--strategy-instance", default=os.getenv("WEATHER_STRATEGY_INSTANCE", ""))
     parser.add_argument(
         "--city-pool",
         default="all",
@@ -366,6 +369,7 @@ def main() -> int:
         no_min_entry_price=(float(args.no_min_entry_price) if args.no_min_entry_price is not None else None),
         no_max_entry_price=(float(args.no_max_entry_price) if args.no_max_entry_price is not None else None),
         no_min_edge=(float(args.no_min_edge) if args.no_min_edge is not None else None),
+        strategy_instance=str(args.strategy_instance),
         min_hours_to_settle=args.min_hours_to_settle,
         max_hours_to_settle=args.max_hours_to_settle,
         dry_run=bool(args.dry_run),

@@ -30,6 +30,7 @@ def _parser() -> argparse.ArgumentParser:
         default=str(DEFAULT_RUNTIME_ROOT / "plans" / "trade_plans.jsonl"),
         help="Output trade-plan JSONL.",
     )
+    parser.add_argument("--strategy-instance", default=os.getenv("WEATHER_STRATEGY_INSTANCE", ""))
     parser.add_argument("--max-order-notional", type=float, default=1.0)
     parser.add_argument(
         "--sizing-mode",
@@ -83,6 +84,7 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = _parser().parse_args()
     config = PlannerConfig(
+        strategy_instance=str(args.strategy_instance),
         max_order_notional=float(args.max_order_notional),
         sizing_mode=str(args.sizing_mode),
         fixed_order_shares=float(args.fixed_order_shares),

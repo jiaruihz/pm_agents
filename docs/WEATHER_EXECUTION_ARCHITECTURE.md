@@ -226,6 +226,7 @@ Live maker pricing discipline:
 Pluggable execution policies:
 
 - `mid_price_core_v1` is the historical baseline. It uses the snapshot `market_price` plus `price_offset`; the live executor still clamps any marketable BUY order back to a resting maker price.
+- `mid_price_core_v2` reuses the mid-price signal set but recomputes the final live quote against the current CLOB book in the executor before signing.
 - `maker_queue_v1` is the adverse-selection-aware maker policy. It requires a two-sided book, rejects stale books, computes the token win probability from the signal side, and posts only when the resulting edge remains above `min_quote_edge + spread * adverse_selection_spread_fraction`.
 - `maker_queue_v1` improves the bid in narrow spreads, joins the bid in normal spreads, and shades below best bid when spread is wide. Wide spread is a reason to demand a cheaper quote, not an automatic rejection.
 - Tick size must be treated as market-specific. The default planner tick is `0.01`, but live execution fetches CLOB tick size before signing; near price extremes Polymarket markets can use smaller ticks such as `0.001`.
@@ -239,7 +240,13 @@ Policy comparison:
   --signals runtime/weather_edge_v1/signals/live_YYYYMMDDTHHMMSSZ_signals.jsonl
 ```
 
-The comparison output reports accepted/rejected counts, rejection reasons, average quote price, average quote edge, and quote modes per policy. Use this before switching live from `mid_price_core_v1` to `maker_queue_v1`.
+The comparison output reports accepted/rejected counts, rejection reasons, average quote price, average quote edge, and quote modes per policy. Current N100 production is configured as three explicit `strategy_instance` values, not a single implicit policy:
+
+- `mid_price_core_v1_25_75`: `mid_price_core_v1`, global 25-75 band.
+- `mid_price_core_v2_25_75`: `mid_price_core_v2`, sharing the `mid_price_core_v1_25_75` signal set.
+- `mid_price_core_v1_side_band`: `mid_price_core_v1`, YES 20-45 with edge >= 20%, NO 35-65 with edge >= 10%.
+
+Do not use old maker_queue rollout notes to infer current production state; check `docs/WEATHER_STRATEGY_ENTRYPOINT.md` and N100 live_cycle summaries.
 
 Practical examples:
 

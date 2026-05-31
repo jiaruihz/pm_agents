@@ -22,6 +22,7 @@ from scripts.ops.weather_live_cycle import (
     _prior_submitted_live_keys,
     _read_live_errors,
     _run,
+    _slug,
 )
 from src.platform.notification.telegram import send_telegram_message_sync
 
@@ -38,19 +39,31 @@ def _read_json(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _latest_cycle_summary(live_cycle_dir: Path, source_policy: str) -> tuple[Path, dict[str, Any]]:
+def _latest_cycle_summary(
+    live_cycle_dir: Path,
+    source_policy: str,
+    source_strategy_instance: str = "",
+) -> tuple[Path, dict[str, Any]]:
     for path in sorted(live_cycle_dir.glob("*.json"), reverse=True):
         summary = _read_json(path)
         config = summary.get("config") if isinstance(summary.get("config"), dict) else {}
         if config.get("execution_policy") != source_policy:
             continue
+        if source_strategy_instance and config.get("strategy_instance") != source_strategy_instance:
+            continue
         signal_path = Path(str((summary.get("paths") or {}).get("signal") or ""))
         if signal_path.exists():
             return path, summary
-    raise RuntimeError(f"no recent {source_policy} signal file found")
+    suffix = f" instance={source_strategy_instance}" if source_strategy_instance else ""
+    raise RuntimeError(f"no recent {source_policy}{suffix} signal file found")
 
 
-def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Path) -> dict[str, Any]:
+def _merge_today_signals(
+    live_cycle_dir: Path,
+    source_policy: str,
+    out_path: Path,
+    source_strategy_instance: str = "",
+) -> dict[str, Any]:
     """Merge signals from ALL of today's source_policy runs into out_path.
 
     For each market_id we keep the most recent signal by snapshot timestamp.
@@ -80,6 +93,8 @@ def _merge_today_signals(live_cycle_dir: Path, source_policy: str, out_path: Pat
         summary = _read_json(path)
         config = summary.get("config") if isinstance(summary.get("config"), dict) else {}
         if config.get("execution_policy") != source_policy:
+            continue
+        if source_strategy_instance and config.get("strategy_instance") != source_strategy_instance:
             continue
         signal_path = Path(str((summary.get("paths") or {}).get("signal") or ""))
         if not signal_path.exists():
@@ -162,6 +177,7 @@ def _policy_line(summary: dict[str, Any]) -> str:
     planner = summary.get("planner") if isinstance(summary.get("planner"), dict) else {}
     executor = summary.get("executor") if isinstance(summary.get("executor"), dict) else {}
     policy = config.get("execution_policy", "-")
+    instance = config.get("strategy_instance", policy)
     accepted = int(planner.get("accepted", 0) or 0)
     before = planner.get("accepted_before_live_dedup")
     if before is not None:
@@ -169,7 +185,7 @@ def _policy_line(summary: dict[str, Any]) -> str:
     else:
         accepted_text = str(accepted)
     return (
-        f"- {policy}: signals {int((summary.get('signals') or {}).get('signals', 0) or 0)}, "
+        f"- {instance} ({policy}): signals {int((summary.get('signals') or {}).get('signals', 0) or 0)}, "
         f"accepted {accepted_text}, live {int(executor.get('live_written', 0) or 0)}/"
         f"{int(executor.get('live_orders', 0) or 0)}, errors {int(executor.get('live_errors', 0) or 0)}"
     )
@@ -256,7 +272,9 @@ def main() -> int:
         choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2", "mid_price_core_v2"),
         required=True,
     )
+    parser.add_argument("--strategy-instance", default=os.getenv("WEATHER_BRANCH_STRATEGY_INSTANCE", ""))
     parser.add_argument("--source-policy", default="mid_price_core_v1")
+    parser.add_argument("--source-strategy-instance", default=os.getenv("WEATHER_BRANCH_SOURCE_STRATEGY_INSTANCE", ""))
     parser.add_argument("--source-signal")
     parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))
     parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default=os.getenv("WEATHER_LIVE_SIZING_MODE", "notional"))
@@ -300,16 +318,22 @@ def main() -> int:
     if args.source_signal:
         source_signal_path = Path(args.source_signal)
     else:
-        source_summary_path, source_summary = _latest_cycle_summary(live_cycle_dir, args.source_policy)
+        source_summary_path, source_summary = _latest_cycle_summary(
+            live_cycle_dir,
+            args.source_policy,
+            str(args.source_strategy_instance or ""),
+        )
         source_signal_path = Path(str((source_summary.get("paths") or {}).get("signal") or ""))
     if not source_signal_path.exists():
         raise RuntimeError(f"source signal file not found: {source_signal_path}")
 
-    signal_path = runtime / "signals" / f"live_{run_id}_signals.jsonl"
-    plan_path = runtime / "plans" / f"live_{run_id}_trade_plans.jsonl"
-    paper_path = runtime / "paper" / f"live_{run_id}_paper_orders.jsonl"
-    live_path = runtime / "live" / f"live_{run_id}_orders.jsonl"
-    summary_path = live_cycle_dir / f"{run_id}.json"
+    strategy_instance = str(args.strategy_instance or "").strip() or f"{args.execution_policy}_branch"
+    instance_slug = _slug(strategy_instance)
+    signal_path = runtime / "signals" / f"live_{instance_slug}_{run_id}_signals.jsonl"
+    plan_path = runtime / "plans" / f"live_{instance_slug}_{run_id}_trade_plans.jsonl"
+    paper_path = runtime / "paper" / f"live_{instance_slug}_{run_id}_paper_orders.jsonl"
+    live_path = runtime / "live" / f"live_{instance_slug}_{run_id}_orders.jsonl"
+    summary_path = live_cycle_dir / f"{run_id}_{instance_slug}.json"
     signal_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Merge all of today's source-policy signals (not just the latest run's file).
@@ -319,16 +343,22 @@ def main() -> int:
     # policy full coverage, deduplicating by market_id (latest snapshot wins).
     merge_stats: dict[str, Any] | None = None
     if not args.source_signal:
-        merge_stats = _merge_today_signals(live_cycle_dir, args.source_policy, signal_path)
+        merge_stats = _merge_today_signals(
+            live_cycle_dir,
+            args.source_policy,
+            signal_path,
+            str(args.source_strategy_instance or ""),
+        )
         print(
             f"[policy_branch] merged {merge_stats['merged_signals']} signals from today's "
-            f"{args.source_policy} runs → {signal_path.name}",
+            f"{args.source_policy}/{args.source_strategy_instance or '*'} runs → {signal_path.name}",
             flush=True,
         )
     else:
         shutil.copyfile(source_signal_path, signal_path)
 
     live_config = {
+        "strategy_instance": strategy_instance,
         "city_pool": str(args.city_pool),
         "sizing_mode": str(args.sizing_mode),
         "max_order_notional": float(args.max_order_notional),
@@ -340,6 +370,7 @@ def main() -> int:
         "max_entry_price": float(args.max_entry_price),
         "execution_policy": str(args.execution_policy),
         "source_policy": str(args.source_policy),
+        "source_strategy_instance": str(args.source_strategy_instance or ""),
         "min_quote_edge": float(args.min_quote_edge),
         "max_quote_spread": float(args.max_quote_spread),
         "max_mid_drift": float(args.max_mid_drift),
@@ -366,6 +397,8 @@ def main() -> int:
         str(signal_path),
         "--out",
         str(plan_path),
+        "--strategy-instance",
+        strategy_instance,
         "--max-order-notional",
         str(live_config["max_order_notional"]),
         "--sizing-mode",
@@ -478,7 +511,12 @@ def main() -> int:
         signals["merge_stats"] = merge_stats
     sync = {"cmd": ["shared_signal_branch"], "returncode": 0, "output": f"source_signal={source_signal_path}"}
     signal_run_cmd = (
-        ["merge_today_signals", args.source_policy, str(signal_path)]
+        [
+            "merge_today_signals",
+            args.source_policy,
+            str(args.source_strategy_instance or ""),
+            str(signal_path),
+        ]
         if not args.source_signal
         else ["copy", str(source_signal_path), str(signal_path)]
     )
