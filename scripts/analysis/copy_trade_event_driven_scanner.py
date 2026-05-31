@@ -314,7 +314,7 @@ def main() -> None:
                 "market_count": len(data["markets"]),
                 "markets": data["markets"],
             }
-            for addr, data in sorted_wallets[:50]
+            for addr, data in sorted_wallets
         ],
         "markets": [
             {
