@@ -31,6 +31,8 @@ description: >
 5. **rsync 只能是 fallback**：只有当 N100 目标目录还不是 git worktree、或用户明确允许临时修复时，才允许备份 + rsync；报告里必须标注这是 fallback，并给出后续 git 化 TODO。`pm_agent` 已完成 git 化，默认不再 rsync 代码文件。
 6. **资金/进程安全边界不变**：真实下单、kill/restart 生产进程、切换 daemon 前仍需明确确认；paper snapshot 进程只在用户授权或确认卡死时重启。
 7. **不要在 Windows/PowerShell 的 SSH 字符串里写 `$!`、`$VAR`、`$(...)`**：这些会被 Windows 侧提前展开。启动 daemon 必须用仓库里的 start script，或用不含 shell 变量的固定命令。
+8. **部署前后必须核对“策略实例”而不是只看 `execution_policy` 名字**：先列出预期正在跑的策略实例（process / execution_policy / source_policy / entry band / per-side band / min_edge），再改代码或重启；部署后必须从 N100 `runtime/weather_edge_v1/live_cycle/*.json` 和 `ps` 输出逐项确认。不要把“同一 policy 不同参数”误数成一个策略，也不要把默认 branch policy 当成预期分支。
+9. **启动 branch daemon 必须显式传入 policy**：使用 `WEATHER_BRANCH_EXECUTION_POLICY=<expected>` 和 `WEATHER_BRANCH_SOURCE_POLICY=<expected>`，不要依赖 `weather_policy_branch_loop.sh` 的默认值。当前默认值只是 fallback，不代表生产预期。
 
 推荐提交信息格式：
 
