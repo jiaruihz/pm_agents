@@ -255,7 +255,7 @@ projection of params:
 - Included: `strategy_family, algorithm_version, execution_policy,
   signal_builder_version, trade_planner_version, city_pool, universe_scope,
   sizing_mode, max_order_notional, fixed_order_shares, min_edge,
-  min_entry_price, max_entry_price, entry_price_window` (+ maker_queue_v1
+  min_entry_price, max_entry_price, entry_price_window` (+ active policy-specific
   params when applicable).
 - **Excluded** (would cause fragmentation): `paper_enabled, live_enabled,
   source` (runtime toggles); `max_order_shares` (per-order safety cap, not
@@ -274,7 +274,7 @@ same signal and writes its own `plans`:
 ```text
 same signal_id
   -> config/run A -> plan(execution_policy=mid_price_core_v1) -> order/fill
-  -> config/run B -> plan(execution_policy=maker_queue_v1)    -> order/fill
+  -> config/run B -> plan(execution_policy=mid_price_core_v2) -> order/fill
 ```
 
 Parameter ownership:

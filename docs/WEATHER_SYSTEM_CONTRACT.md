@@ -90,7 +90,7 @@ sizing 和 execution policy。`plan` 是某个 `run/config` 对某个 `signal`
 ```text
 same signal_id
   -> config/run A -> plan(execution_policy=mid_price_core_v1)   -> order/fill
-  -> config/run B -> plan(execution_policy=maker_queue_v1)      -> order/fill
+  -> config/run B -> plan(execution_policy=mid_price_core_v2)   -> order/fill
 ```
 
 参数分层:

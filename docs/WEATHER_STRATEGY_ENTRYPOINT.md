@@ -84,18 +84,17 @@ Ankara, Istanbul, Jeddah, Lucknow, Moscow（BUY_YES 胜率 0%~20%，ROI -42%~-10
 
 **Paris 过滤收紧：** `abs_edge ≥ 0.30`（低于此阈值全部亏损）
 
-**双策略 A/B paper 对比（2026-05-26 起）：**
-每个信号同时生成两笔 paper order，各 5 shares：
-- `mid_price_core_v1`：entry_price = last_trade_price（原有行为）
-- `maker_queue_v1`：entry_price = no_best_bid / yes_best_bid（CLOB 盘口）
-dedup key 包含 execution_policy，两笔订单互不干扰。
+**历史双策略 A/B paper 对比（2026-05-26 起，已退役）：**
+曾经每个信号同时生成 `mid_price_core_v1` 与 `maker_queue_v1` 两笔 paper order。
+`maker_queue_v1` 已退役；当前 legacy paper runner 只生成 `mid_price_core_v1`。
 
 **T1 完整城市列表（v2，共 20 个，历史记录）：**
 Ankara, Boston, Chicago, Guangzhou, Istanbul, Jeddah, Karachi, LA,
 London, Lucknow, Madrid, Miami, Moscow, NYC, Paris, Phoenix, Seattle,
 Shanghai, Tokyo, Warsaw
 
-`maker_queue_v1` is implemented as a pluggable execution policy for dry-run comparison and controlled rollout. It prices maker orders from the current bid/ask, requires edge after an adverse-selection buffer, and is selected with `--execution-policy maker_queue_v1` or `WEATHER_LIVE_EXECUTION_POLICY=maker_queue_v1`. Keep the documented `mid_price_core_v1` live default until a deliberate rollout switch is made.
+`maker_queue_v1` is retired. Do not select it via CLI or environment variables.
+Current live execution policy branches are `mid_price_core_v1`, `mid_price_core_v1_side_band`, and `mid_price_core_v2_25_75`.
 
 Execution policy is part of `strategy_config`, not part of signal generation.
 For A/B tests, build signals once and branch after `signals`:
@@ -103,10 +102,10 @@ For A/B tests, build signals once and branch after `signals`:
 ```text
 same signal_id
   -> mid_price_core_v1 run/plan/order/fill
-  -> maker_queue_v1 run/plan/order/fill
+  -> mid_price_core_v2 run/plan/order/fill
 ```
 
-Use `scripts/ops/weather_policy_branch.py --execution-policy maker_queue_v1`
+Use `scripts/ops/weather_policy_branch.py --execution-policy mid_price_core_v2`
 to run an execution-policy branch from the latest `mid_price_core_v1` signal
 file. This keeps market/model opportunities identical while giving each policy
 its own config/run/plan/order lineage.

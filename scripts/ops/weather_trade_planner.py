@@ -55,7 +55,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--price-offset", type=float, default=0.0)
     parser.add_argument(
         "--execution-policy",
-        choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2", "mid_price_core_v2"),
+        choices=("mid_price_core_v1", "maker_queue_v2", "mid_price_core_v2"),
         default="mid_price_core_v1",
     )
     parser.add_argument("--tick-size", type=float, default=0.01)

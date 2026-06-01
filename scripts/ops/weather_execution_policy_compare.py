@@ -56,7 +56,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--policies",
-        default="mid_price_core_v1,maker_queue_v1,maker_queue_v2,mid_price_core_v2",
+        default="mid_price_core_v1,maker_queue_v2,mid_price_core_v2",
         help="Comma-separated policies to compare.",
     )
     parser.add_argument("--max-order-notional", type=float, default=5.0)

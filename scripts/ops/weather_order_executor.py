@@ -405,11 +405,19 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                         f"required={_to_float(quote.get('required_quote_edge'), 0.0):.6f}",
                         response=_diagnostics(classification="mid_price_core_v2_quote_rejected", reason=reason),
                     )
-            elif execution_policy in ("maker_queue_v1", "maker_queue_v2"):
+            elif execution_policy == "maker_queue_v1":
+                raise WeatherExecutionError(
+                    "maker_queue_v1_retired",
+                    response=_diagnostics(
+                        classification="maker_queue_v1_retired",
+                        reason="execution_policy_removed_from_active_strategies",
+                    ),
+                )
+            elif execution_policy == "maker_queue_v2":
                 quote = build_execution_quote(
                     plan,
                     ExecutionPolicyConfig(
-                        policy_name=execution_policy or "maker_queue_v1",
+                        policy_name="maker_queue_v2",
                         price_floor=0.01,
                         price_ceiling=0.99,
                         tick_size=tick_size,

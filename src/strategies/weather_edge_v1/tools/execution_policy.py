@@ -246,7 +246,7 @@ def build_execution_quote(
             "size_multiplier": 1.0,
         }
 
-    if policy not in ("maker_queue_v1", "maker_queue_v2"):
+    if policy not in ("maker_queue_v2",):
         return {
             "execution_policy": policy,
             "quote_status": "rejected",

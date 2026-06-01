@@ -287,19 +287,6 @@ def build_trade_plan(
     spread = to_float(signal.get("spread"), max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else 0.0)
     edge = to_float(signal.get("edge"), 0.0)
     quote = quote or build_execution_quote(signal, _policy_config(config))
-    if (
-        safe_str(config.execution_policy) == "maker_queue_v1"
-        and safe_str(quote.get("quote_status")) == "rejected"
-        and safe_str(quote.get("quote_reason")) == "missing_two_sided_book"
-    ):
-        quote = {
-            **quote,
-            "quote_status": "accepted",
-            "quote_reason": "defer_to_executor_missing_two_sided_book",
-            "limit_price": round(market_price, 6),
-            "quote_edge": round(to_float(quote.get("model_token_probability"), 0.0) - market_price, 6),
-            "quote_mode": "defer_to_executor",
-        }
     limit_price = to_float(quote.get("limit_price"), 0.0)
     notional_fraction = max(0.0, min(1.0, to_float(quote.get("notional_fraction"), 1.0)))
     size_multiplier = max(0.0, to_float(quote.get("size_multiplier"), 1.0))

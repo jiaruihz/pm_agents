@@ -314,7 +314,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--execution-policy",
-        choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2", "mid_price_core_v2"),
+        choices=("mid_price_core_v1", "maker_queue_v2", "mid_price_core_v2"),
         required=True,
     )
     parser.add_argument("--strategy-instance", default=os.getenv("WEATHER_BRANCH_STRATEGY_INSTANCE", ""))

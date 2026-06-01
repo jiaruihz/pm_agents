@@ -870,7 +870,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--execution-policy",
-        choices=("mid_price_core_v1", "maker_queue_v1", "maker_queue_v2", "mid_price_core_v2"),
+        choices=("mid_price_core_v1", "maker_queue_v2", "mid_price_core_v2"),
         default=os.getenv("WEATHER_LIVE_EXECUTION_POLICY", "mid_price_core_v1"),
     )
     parser.add_argument("--min-quote-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_QUOTE_EDGE", "0.03")))

@@ -137,7 +137,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(high_plan["status"], "rejected")
         self.assertEqual(high_plan["risk_reason"], "entry_price_at_or_above_max")
 
-    def test_maker_queue_policy_improves_narrow_bid_and_preserves_edge(self):
+    def test_maker_queue_v2_policy_improves_narrow_bid_and_preserves_edge(self):
         signal = normalize_signal(self._paper_decision())
         assert signal is not None
         plan = build_trade_plan(
@@ -145,7 +145,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             PlannerConfig(
                 max_order_notional=2.0,
                 min_edge=0.10,
-                execution_policy="maker_queue_v1",
+                execution_policy="maker_queue_v2",
                 tick_size=0.01,
                 min_quote_edge=0.03,
                 max_quote_spread=0.12,
@@ -153,12 +153,12 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         )
 
         self.assertEqual(plan["status"], "accepted")
-        self.assertEqual(plan["execution_policy"], "maker_queue_v1")
+        self.assertEqual(plan["execution_policy"], "maker_queue_v2")
         self.assertEqual(plan["quote_mode"], "improve_bid")
         self.assertAlmostEqual(plan["limit_price"], 0.40)
         self.assertGreaterEqual(plan["quote_edge"], plan["required_quote_edge"])
 
-    def test_maker_queue_policy_rejects_wide_spread_when_edge_is_thin(self):
+    def test_maker_queue_v2_policy_rejects_wide_spread_when_edge_is_thin(self):
         signal = normalize_signal(
             {
                 **self._paper_decision(),
@@ -174,7 +174,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             PlannerConfig(
                 max_order_notional=2.0,
                 min_edge=0.10,
-                execution_policy="maker_queue_v1",
+                execution_policy="maker_queue_v2",
                 tick_size=0.01,
                 max_quote_spread=0.12,
             ),
@@ -182,9 +182,9 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
 
         self.assertEqual(plan["status"], "rejected")
         self.assertEqual(plan["risk_reason"], "quote_edge_below_required")
-        self.assertEqual(plan["quote_mode"], "shade_below_bid_wide_spread")
+        self.assertEqual(plan["quote_mode"], "improve_bid")
 
-    def test_maker_queue_policy_can_shade_below_bid_on_wide_spread(self):
+    def test_maker_queue_v2_policy_improves_wide_spread_when_edge_is_sufficient(self):
         signal = normalize_signal(
             {
                 **self._paper_decision(),
@@ -200,7 +200,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             PlannerConfig(
                 max_order_notional=2.0,
                 min_edge=0.10,
-                execution_policy="maker_queue_v1",
+                execution_policy="maker_queue_v2",
                 tick_size=0.01,
                 max_quote_spread=0.12,
                 wide_spread_shade_ticks=1,
@@ -208,8 +208,8 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         )
 
         self.assertEqual(plan["status"], "accepted")
-        self.assertEqual(plan["quote_mode"], "shade_below_bid_wide_spread")
-        self.assertAlmostEqual(plan["limit_price"], 0.29)
+        self.assertEqual(plan["quote_mode"], "improve_bid")
+        self.assertAlmostEqual(plan["limit_price"], 0.31)
 
     def test_mid_price_core_v2_splits_low_price_high_edge_order(self):
         signal = normalize_signal(
