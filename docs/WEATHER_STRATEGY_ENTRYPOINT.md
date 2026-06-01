@@ -9,6 +9,7 @@ For early live rollout history, known mistakes, and how to split local/N100 live
 - `docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`
 - `docs/WEATHER_CITY_POOL_DECISIONS.md`
 - `docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md`
+- `docs/WEATHER_REPO_BOUNDARY.md`
 
 ## Current Production Posture
 

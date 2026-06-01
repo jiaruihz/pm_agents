@@ -114,6 +114,8 @@ wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && pytest"
 wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && npm test"
 ```
 
+PowerShell 引号很容易把上一层查询拆坏，尤其是嵌套 `bash -lc`、`ssh '<command>'`、`python -c`、`awk`/`sed` 或包含 JSON/SQL 的命令时。遇到复杂查询时不要硬塞一长串混合引号；优先进入 WSL 后用 bash 原生命令执行，或把复杂逻辑写成临时脚本/项目脚本再调用。若必须从 PowerShell 发起，先用最小只读命令验证 quoting，再跑真实查询。
+
 如果后续迁移到其他 WSL 发行版或用户名，按实际路径替换 `Ubuntu-24.04`、`rui` 和项目目录即可。
 
 ## Weather 数据分工与数据真相
@@ -327,6 +329,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | 文档 | 用途 |
 |---|---|
 | [WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md) | 实盘排查入口：N100 检查命令、live 口径、近期事故结论 |
+| [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) | weather-predict 与 pm_agent 的生产/本机职责边界、数据同步边界、重复文件注意事项 |
 | [WEATHER_CITY_POOL_DECISIONS.md](docs/WEATHER_CITY_POOL_DECISIONS.md) | 城市池决策日志：T1/T2 当前口径、升降级依据、N100 部署记录 |
 | [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md) | N100↔pm_agent 字段名/枚举/ID算法契约，**改字段前必读** |
 | [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) | N100→镜像→DB→API 全链路、所有脚本职责、PnL口径、运维 runbook |

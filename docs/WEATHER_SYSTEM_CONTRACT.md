@@ -8,12 +8,17 @@
 
 ## 0. 两侧职责边界
 
+详细 repo/runtime 边界见 [`WEATHER_REPO_BOUNDARY.md`](WEATHER_REPO_BOUNDARY.md)。
+
 | 系统 | 职责 | 不负责 |
 |---|---|---|
-| **N100 `weather-predict`** | 信号生成、paper/live 下单、结算、原始 snapshot 采集 | 分析、看板、回测 DB |
-| **本机 `pm_agent`** | 分析 DB、看板、回测、策略研究 | 向 N100 写数据、修改生产链路 |
+| **N100 `weather-predict`** | market snapshot / orderbook snapshot、paper ledger、城市池、天气 cache、settlement truth | live CLOB 下单、pm_agent dashboard DB |
+| **N100 `pm_agent`** | live signal / plan / real CLOB order lineage、策略实例、pause/doctor/Telegram | weather model cache、paper snapshot timer |
+| **本机 `pm_agent`** | 分析 DB、看板、回测、策略研究、N100 `pm_agent` 部署 staging | 直接采集生产数据、直接写 N100 market data |
 
-N100 产出的文件格式 = 本文档约定的契约。pm_agent 消费这些文件，**不应** 静默地把字段改名再存 DB（会造成双方字段漂移）。如果 DB 字段名与 CSV 不同，必须在本文档里显式标注「别名」和迁移时间。
+N100 两个 repo 产出的文件格式 = 本文档约定的契约。pm_agent dashboard
+消费这些文件，**不应** 静默地把字段改名再存 DB（会造成双方字段漂移）。
+如果 DB 字段名与 CSV/JSONL 不同，必须在本文档里显式标注「别名」和迁移时间。
 
 ---
 
