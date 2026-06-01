@@ -30,6 +30,13 @@ def _safe_str(value: Any) -> str:
     return "" if value is None else str(value).strip()
 
 
+def _parse_csv_set(value: Any) -> set[str]:
+    text = _safe_str(value)
+    if not text:
+        return set()
+    return {part.strip() for part in text.split(",") if part.strip()}
+
+
 def _to_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -181,6 +188,7 @@ def build_signals(
     no_max_entry_price: Optional[float] = None,
     no_min_edge: Optional[float] = None,
     strategy_instance: str = "",
+    allowed_cities: Optional[set[str]] = None,
     min_hours_to_settle: Optional[float] = None,
     max_hours_to_settle: Optional[float] = None,
     dry_run: bool,
@@ -218,6 +226,10 @@ def build_signals(
         if city_pool and city_pool.lower() != "all" and record_city_pool != city_pool:
             skipped[f"city_pool_not_{city_pool}"] = skipped.get(f"city_pool_not_{city_pool}", 0) + 1
             continue
+        city = _safe_str(record.get("city"))
+        if allowed_cities and city not in allowed_cities:
+            skipped["city_not_allowed"] = skipped.get("city_not_allowed", 0) + 1
+            continue
         side = _safe_str(record.get("side")).upper()
         if side not in {"BUY_YES", "BUY_NO"}:
             skipped["bad_side"] = skipped.get("bad_side", 0) + 1
@@ -249,7 +261,11 @@ def build_signals(
         if entry_price >= side_max_entry:
             skipped["entry_price_at_or_above_max"] = skipped.get("entry_price_at_or_above_max", 0) + 1
             continue
-        key = _record_key(record, side)
+        # De-duplicate by market, not by market+side. With a lookback window the
+        # same market can flip from BUY_NO to BUY_YES across snapshots; keeping
+        # both creates self-hedged live positions. Paths are processed oldest ->
+        # newest, so the latest eligible snapshot wins.
+        key = _record_key(record, "")
         if key in candidates:
             skipped["older_duplicate_candidate"] = skipped.get("older_duplicate_candidate", 0) + 1
         candidates[key] = (record, source_path)
@@ -298,6 +314,7 @@ def build_signals(
         "snapshot": str(snapshot_path),
         "snapshots": [str(p) for p in paths],
         "city_pool": city_pool,
+        "allowed_cities": sorted(allowed_cities or []),
         "records": len(records_with_source),
         "candidate_signals": len(candidates),
         "signals": len(signals),
@@ -313,6 +330,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--snapshot-dir", default=str(DEFAULT_MARKET_DATA / "paper_snapshots"))
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--strategy-instance", default=os.getenv("WEATHER_STRATEGY_INSTANCE", ""))
+    parser.add_argument(
+        "--allowed-cities",
+        default=os.getenv("WEATHER_LIVE_ALLOWED_CITIES", ""),
+        help="Comma-separated city allowlist after city_pool filtering. Empty means all cities in the pool.",
+    )
     parser.add_argument(
         "--city-pool",
         default="all",
@@ -370,6 +392,7 @@ def main() -> int:
         no_max_entry_price=(float(args.no_max_entry_price) if args.no_max_entry_price is not None else None),
         no_min_edge=(float(args.no_min_edge) if args.no_min_edge is not None else None),
         strategy_instance=str(args.strategy_instance),
+        allowed_cities=_parse_csv_set(args.allowed_cities),
         min_hours_to_settle=args.min_hours_to_settle,
         max_hours_to_settle=args.max_hours_to_settle,
         dry_run=bool(args.dry_run),

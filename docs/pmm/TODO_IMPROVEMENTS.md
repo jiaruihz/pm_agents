@@ -38,6 +38,7 @@
 
 ## Risk & Strategy
 
+- [ ] Weather live YES/NO 冲突处理：当同一 market 在新旧 forecast 中方向翻转时，不只是丢弃新单；需要基于最新 forecast、实时观测高温、市场价格/edge 和已有仓位，决定 hold / reduce / unwind / flip，并把决策写入可审计日志。
 - [x] 熔断器（偏离阈值 → cancel_all）
 - [x] OFI + 动量防守
 - [x] 动态 spread（费用 / 波动 / 库存）

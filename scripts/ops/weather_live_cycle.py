@@ -321,6 +321,136 @@ def _live_dedup_key(row: Dict[str, Any]) -> Tuple[str, str, str, str, str, str]:
     )
 
 
+def _live_history_dirs(live_dir: Path) -> List[Path]:
+    dirs = [live_dir]
+    remote_live = live_dir.parent / "remote_pm_agent" / "live"
+    if remote_live != live_dir:
+        dirs.append(remote_live)
+    return dirs
+
+
+def _live_market_key(row: Dict[str, Any]) -> Tuple[str, str]:
+    market_key = str(row.get("market_id") or "").strip()
+    if not market_key:
+        city = str(row.get("city") or "").strip()
+        bracket = str(row.get("bracket") or "").strip()
+        market_key = f"{city}|{bracket}" if city and bracket else str(row.get("token_id") or "").strip()
+    return (str(row.get("target_date") or "").strip(), market_key)
+
+
+def _live_signal_side(row: Dict[str, Any]) -> str:
+    return str(row.get("signal_side") or row.get("side") or "").strip().upper()
+
+
+def _live_exposure_key(row: Dict[str, Any]) -> Tuple[str, str, str]:
+    target_date, market_key = _live_market_key(row)
+    return (target_date, market_key, _infer_strategy_instance(row))
+
+
+def _prior_live_market_notional(live_dir: Path, *, exclude_path: Path) -> Dict[Tuple[str, str, str], float]:
+    exposure: Dict[Tuple[str, str, str], float] = {}
+    excluded = exclude_path.resolve()
+    for history_dir in _live_history_dirs(live_dir):
+        if not history_dir.exists():
+            continue
+        for path in sorted(history_dir.glob("*.jsonl")):
+            if path.resolve() == excluded:
+                continue
+            for row in _read_jsonl(path):
+                if row.get("record_type") != "weather_edge_live_order":
+                    continue
+                if str(row.get("status") or "").strip() != "submitted":
+                    continue
+                key = _live_exposure_key(row)
+                if not key[0] or not key[1] or not key[2]:
+                    continue
+                notional = _to_float(row.get("posted_notional", row.get("notional")), 0.0)
+                exposure[key] = exposure.get(key, 0.0) + max(0.0, notional)
+    return exposure
+
+
+def _prior_live_market_sides(live_dir: Path, *, exclude_path: Path) -> Dict[Tuple[str, str], Set[str]]:
+    sides: Dict[Tuple[str, str], Set[str]] = {}
+    excluded = exclude_path.resolve()
+    for history_dir in _live_history_dirs(live_dir):
+        if not history_dir.exists():
+            continue
+        for path in sorted(history_dir.glob("*.jsonl")):
+            if path.resolve() == excluded:
+                continue
+            for row in _read_jsonl(path):
+                if row.get("record_type") != "weather_edge_live_order":
+                    continue
+                if str(row.get("status") or "").strip() != "submitted":
+                    continue
+                key = _live_market_key(row)
+                side = _live_signal_side(row)
+                if key[0] and key[1] and side:
+                    sides.setdefault(key, set()).add(side)
+    return sides
+
+
+def _filter_plan_file_for_live_exposure_cap(
+    plan_path: Path,
+    prior_exposure: Dict[Tuple[str, str, str], float],
+    *,
+    max_market_notional: float,
+    prior_market_sides: Optional[Dict[Tuple[str, str], Set[str]]] = None,
+    block_opposite_side: bool = True,
+) -> Dict[str, Any]:
+    rows = _read_jsonl(plan_path)
+    if max_market_notional <= 0:
+        return {
+            "enabled": False,
+            "max_market_notional": float(max_market_notional),
+            "plans_before": len(rows),
+            "plans_after": len(rows),
+            "skipped_exposure_cap": 0,
+            "skipped_opposite_side": 0,
+        }
+    kept: List[Dict[str, Any]] = []
+    exposure = dict(prior_exposure)
+    market_sides = {key: set(value) for key, value in (prior_market_sides or {}).items()}
+    skipped = 0
+    skipped_opposite = 0
+    skipped_notional = 0.0
+    for row in rows:
+        market_key = _live_market_key(row)
+        exposure_key = _live_exposure_key(row)
+        side = _live_signal_side(row)
+        existing_sides = market_sides.get(market_key, set())
+        if block_opposite_side and market_key[0] and market_key[1] and side and existing_sides and side not in existing_sides:
+            skipped_opposite += 1
+            continue
+        plan_notional = max(0.0, _to_float(row.get("posted_notional", row.get("notional")), 0.0))
+        current = exposure.get(exposure_key, 0.0)
+        if (
+            exposure_key[0]
+            and exposure_key[1]
+            and exposure_key[2]
+            and plan_notional > 0
+            and current + plan_notional > max_market_notional + 1e-9
+        ):
+            skipped += 1
+            skipped_notional += plan_notional
+            continue
+        kept.append(row)
+        if exposure_key[0] and exposure_key[1] and exposure_key[2]:
+            exposure[exposure_key] = current + plan_notional
+        if market_key[0] and market_key[1] and side:
+            market_sides.setdefault(market_key, set()).add(side)
+    if len(kept) != len(rows):
+        _write_jsonl(plan_path, kept)
+    return {
+        "enabled": True,
+        "max_market_notional": float(max_market_notional),
+        "plans_before": len(rows),
+        "plans_after": len(kept),
+        "skipped_exposure_cap": skipped,
+        "skipped_opposite_side": skipped_opposite,
+        "skipped_notional": round(skipped_notional, 6),
+    }
+
 def _prior_submitted_live_keys(live_dir: Path, *, exclude_path: Path) -> Set[Tuple[str, str, str, str, str, str]]:
     keys: Set[Tuple[str, str, str, str, str, str]] = set()
     if not live_dir.exists():
@@ -690,6 +820,12 @@ def main() -> int:
         help="Stable strategy instance id used in summaries, filenames, and live dedup.",
     )
     parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))
+    parser.add_argument(
+        "--max-market-notional",
+        type=float,
+        default=float(os.getenv("WEATHER_LIVE_MAX_MARKET_NOTIONAL", "0")),
+        help="Max submitted live notional per target_date+market_id per strategy instance. 0 defaults to max-order-notional.",
+    )
     parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default=os.getenv("WEATHER_LIVE_SIZING_MODE", "notional"))
     parser.add_argument("--fixed-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_FIXED_ORDER_SHARES", "10.0")))
     parser.add_argument(
@@ -700,6 +836,11 @@ def main() -> int:
     parser.add_argument("--max-position", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--min-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ORDER_SHARES", "5.0")))
     parser.add_argument("--city-pool", default=os.getenv("WEATHER_LIVE_CITY_POOL", "t1_trading"))
+    parser.add_argument(
+        "--allowed-cities",
+        default=os.getenv("WEATHER_LIVE_ALLOWED_CITIES", ""),
+        help="Comma-separated city allowlist after city_pool filtering. Empty means all cities in the pool.",
+    )
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
     parser.add_argument("--min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ENTRY_PRICE", "0.25")))
     parser.add_argument("--max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ENTRY_PRICE", "0.75")))
@@ -775,6 +916,7 @@ def main() -> int:
     parser.add_argument("--no-telegram", action="store_true")
     args = parser.parse_args()
     max_order_shares = float(args.max_order_shares if args.max_position is None else args.max_position)
+    max_market_notional = float(args.max_market_notional) if float(args.max_market_notional) > 0 else float(args.max_order_notional)
     strategy_instance = str(args.strategy_instance or "").strip()
     if not strategy_instance:
         yes_tuple = (float(args.yes_min_entry_price), float(args.yes_max_entry_price), float(args.yes_min_edge))
@@ -791,8 +933,10 @@ def main() -> int:
     live_config = {
         "strategy_instance": strategy_instance,
         "city_pool": str(args.city_pool),
+        "allowed_cities": str(args.allowed_cities),
         "sizing_mode": str(args.sizing_mode),
         "max_order_notional": float(args.max_order_notional),
+        "max_market_notional": max_market_notional,
         "fixed_order_shares": float(args.fixed_order_shares),
         "max_order_shares": max_order_shares,
         "min_order_shares": float(args.min_order_shares),
@@ -847,6 +991,8 @@ def main() -> int:
         strategy_instance,
         "--city-pool",
         str(live_config["city_pool"]),
+        "--allowed-cities",
+        str(live_config["allowed_cities"]),
         "--min-edge",
         str(float(live_config["min_edge"])),
         "--min-entry-price",
@@ -957,6 +1103,19 @@ def main() -> int:
         planner["accepted"] = live_dedup["plans_after"]
         planner["plans"] = live_dedup["plans_after"]
     planner["live_dedup"] = live_dedup
+
+    live_exposure_cap = _filter_plan_file_for_live_exposure_cap(
+        plan_path,
+        _prior_live_market_notional(live_path.parent, exclude_path=live_path),
+        max_market_notional=float(live_config["max_market_notional"]),
+        prior_market_sides=_prior_live_market_sides(live_path.parent, exclude_path=live_path),
+    )
+    if live_exposure_cap["plans_before"] != live_exposure_cap["plans_after"]:
+        planner.setdefault("accepted_before_live_exposure_cap", planner.get("accepted", 0))
+        planner.setdefault("plans_before_live_exposure_cap", planner.get("plans", 0))
+        planner["accepted"] = live_exposure_cap["plans_after"]
+        planner["plans"] = live_exposure_cap["plans_after"]
+    planner["live_exposure_cap"] = live_exposure_cap
 
     accepted_after_dedup = int(planner.get("accepted", 0) or 0)
     no_submit_reason = "dry_run_live" if args.dry_run_live else "no_accepted_plans"

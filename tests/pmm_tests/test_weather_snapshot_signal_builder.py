@@ -100,11 +100,85 @@ class TestWeatherSnapshotSignalBuilder(unittest.TestCase):
                 min_edge=0.10,
                 min_entry_price=0.25,
                 max_entry_price=0.75,
+                min_hours_to_settle=22.0,
+                max_hours_to_settle=28.0,
                 dry_run=False,
             )
 
             self.assertEqual(result["signals"], 0)
             self.assertEqual(out.read_text(encoding="utf-8"), "")
+
+    @patch.object(builder, "PolymarketGammaClient", _FakeGamma)
+    def test_allowed_cities_filters_after_city_pool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot = root / "snapshot_20260526_2000.json"
+            out = root / "signals.jsonl"
+            blocked = self._record(market_id="blocked")
+            blocked["city"] = "Ankara"
+            allowed = self._record(market_id="allowed")
+            allowed["city"] = "London"
+            self._snapshot(snapshot, [blocked, allowed])
+
+            result = builder.build_signals(
+                snapshot_path=snapshot,
+                snapshot_paths=[snapshot],
+                out_path=out,
+                city_pool="t1_trading",
+                allowed_cities={"London", "Tokyo"},
+                min_edge=0.10,
+                min_entry_price=0.25,
+                max_entry_price=0.75,
+                min_hours_to_settle=22.0,
+                max_hours_to_settle=28.0,
+                dry_run=False,
+            )
+
+            self.assertEqual(result["signals"], 1)
+            self.assertEqual(result["skipped"].get("city_not_allowed"), 1)
+            rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([row["city"] for row in rows], ["London"])
+
+    @patch.object(builder, "PolymarketGammaClient", _FakeGamma)
+    def test_lookback_keeps_latest_side_per_market(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            older = root / "snapshot_20260531_2030.json"
+            latest = root / "snapshot_20260531_2200.json"
+            out = root / "signals.jsonl"
+            old_no = self._record(market_id="lucknow-34", edge=-0.1957, entry_price=0.64)
+            old_no["side"] = "BUY_NO"
+            old_no["model_prob"] = 0.1643
+            old_no["abs_edge"] = 0.1957
+            new_yes = self._record(market_id="lucknow-34", edge=0.1368, entry_price=0.325)
+            new_yes["side"] = "BUY_YES"
+            new_yes["model_prob"] = 0.4618
+            new_yes["abs_edge"] = 0.1368
+            self._snapshot(older, [old_no])
+            self._snapshot(latest, [new_yes])
+            os.utime(older, (1_000_000, 1_000_000))
+            os.utime(latest, (1_000_000 + 90 * 60, 1_000_000 + 90 * 60))
+
+            result = builder.build_signals(
+                snapshot_path=latest,
+                snapshot_paths=builder._recent_snapshots(root, 120),
+                out_path=out,
+                city_pool="t1_trading",
+                min_edge=0.10,
+                min_entry_price=0.25,
+                max_entry_price=0.75,
+                min_hours_to_settle=22.0,
+                max_hours_to_settle=28.0,
+                dry_run=False,
+            )
+
+            self.assertEqual(result["signals"], 1)
+            self.assertEqual(result["skipped"].get("older_duplicate_candidate"), 1)
+            rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["signal_side"], "BUY_YES")
+            self.assertEqual(rows[0]["token_id"], "yes-token")
+            self.assertEqual(rows[0]["source_run_id"], "snapshot_20260531_2200")
 
 
 if __name__ == "__main__":

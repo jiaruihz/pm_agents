@@ -10,6 +10,7 @@ EXECUTION_POLICY="${WEATHER_BRANCH_EXECUTION_POLICY:-maker_queue_v1}"
 SOURCE_POLICY="${WEATHER_BRANCH_SOURCE_POLICY:-mid_price_core_v1}"
 STRATEGY_INSTANCE="${WEATHER_BRANCH_STRATEGY_INSTANCE:-${EXECUTION_POLICY}_branch}"
 SOURCE_STRATEGY_INSTANCE="${WEATHER_BRANCH_SOURCE_STRATEGY_INSTANCE:-}"
+ALLOWED_CITIES="${WEATHER_BRANCH_ALLOWED_CITIES:-${WEATHER_LIVE_ALLOWED_CITIES:-}}"
 LOG_DIR="$PROJECT_DIR/runtime/weather_edge_v1/live_cycle"
 mkdir -p "$LOG_DIR"
 
@@ -27,6 +28,7 @@ while true; do
       --execution-policy "$EXECUTION_POLICY" \
       --source-policy "$SOURCE_POLICY" \
       --source-strategy-instance "$SOURCE_STRATEGY_INSTANCE" \
+      --allowed-cities "$ALLOWED_CITIES" \
       >"$log" 2>&1; then
     echo "[$(date -Is)] policy branch ok: instance=${STRATEGY_INSTANCE} policy=${EXECUTION_POLICY} ts=${ts} log=$log" | tee -a "$LOG_DIR/policy_branch_${STRATEGY_INSTANCE}.log"
   else

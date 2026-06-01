@@ -18,7 +18,10 @@ from scripts.ops.weather_live_cycle import (
     _build_live_contract_alerts,
     _clob_balance_status,
     _filter_plan_file_for_live_dedup,
+    _filter_plan_file_for_live_exposure_cap,
     _load_json_from_output,
+    _prior_live_market_notional,
+    _prior_live_market_sides,
     _prior_submitted_live_keys,
     _read_live_errors,
     _run,
@@ -37,6 +40,42 @@ def _read_json(path: Path) -> dict[str, Any]:
     except Exception:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _parse_csv_set(value: Any) -> set[str]:
+    text = str(value or "").strip()
+    if not text:
+        return set()
+    return {part.strip() for part in text.split(",") if part.strip()}
+
+
+def _filter_signal_file_by_allowed_cities(path: Path, allowed_cities: set[str]) -> dict[str, Any]:
+    if not allowed_cities:
+        return {"enabled": False, "before": None, "after": None, "allowed_cities": []}
+    rows: list[dict[str, Any]] = []
+    invalid_json_lines = 0
+    before = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        before += 1
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            invalid_json_lines += 1
+            continue
+        if str(row.get("city") or "").strip() in allowed_cities:
+            rows.append(row)
+    with path.open("w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row) + "\n")
+    return {
+        "enabled": True,
+        "before": before,
+        "after": len(rows),
+        "allowed_cities": sorted(allowed_cities),
+        "invalid_json_lines": invalid_json_lines,
+    }
 
 
 def _latest_cycle_summary(
@@ -137,13 +176,19 @@ def _merge_today_signals(
     }
 
 
-def _branch_signal_alerts(merge_stats: dict[str, Any] | None, signal_count: int) -> list[str]:
+def _branch_signal_alerts(
+    merge_stats: dict[str, Any] | None,
+    signal_count: int,
+    city_filter: dict[str, Any] | None = None,
+) -> list[str]:
     if not merge_stats:
         return []
     alerts: list[str] = []
     merged = int(merge_stats.get("merged_signals", 0) or 0)
-    if signal_count != merged:
-        alerts.append(f"policy branch signal count mismatch: wrote {signal_count}, expected merged {merged}.")
+    filter_enabled = bool((city_filter or {}).get("enabled"))
+    expected = int((city_filter or {}).get("after", merged) or 0) if filter_enabled else merged
+    if signal_count != expected:
+        alerts.append(f"policy branch signal count mismatch: wrote {signal_count}, expected {expected}.")
     if int(merge_stats.get("invalid_json_lines", 0) or 0) > 0:
         alerts.append(f"policy branch skipped invalid source signal JSON lines: {merge_stats['invalid_json_lines']}.")
     if int(merge_stats.get("missing_market_id", 0) or 0) > 0:
@@ -277,11 +322,22 @@ def main() -> int:
     parser.add_argument("--source-strategy-instance", default=os.getenv("WEATHER_BRANCH_SOURCE_STRATEGY_INSTANCE", ""))
     parser.add_argument("--source-signal")
     parser.add_argument("--max-order-notional", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_NOTIONAL", "5.00")))
+    parser.add_argument(
+        "--max-market-notional",
+        type=float,
+        default=float(os.getenv("WEATHER_LIVE_MAX_MARKET_NOTIONAL", "0")),
+        help="Max submitted live notional per target_date+market_id per strategy instance. 0 defaults to max-order-notional.",
+    )
     parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default=os.getenv("WEATHER_LIVE_SIZING_MODE", "notional"))
     parser.add_argument("--fixed-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_FIXED_ORDER_SHARES", "10.0")))
     parser.add_argument("--max-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ORDER_SHARES", "25.0")))
     parser.add_argument("--min-order-shares", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ORDER_SHARES", "5.0")))
     parser.add_argument("--city-pool", default=os.getenv("WEATHER_LIVE_CITY_POOL", "t1_trading"))
+    parser.add_argument(
+        "--allowed-cities",
+        default=os.getenv("WEATHER_BRANCH_ALLOWED_CITIES", os.getenv("WEATHER_LIVE_ALLOWED_CITIES", "")),
+        help="Comma-separated branch signal city allowlist. Empty means keep all source signals.",
+    )
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
     parser.add_argument("--min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ENTRY_PRICE", "0.25")))
     parser.add_argument("--max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ENTRY_PRICE", "0.75")))
@@ -351,17 +407,24 @@ def main() -> int:
         )
         print(
             f"[policy_branch] merged {merge_stats['merged_signals']} signals from today's "
-            f"{args.source_policy}/{args.source_strategy_instance or '*'} runs → {signal_path.name}",
+            f"{args.source_policy}/{args.source_strategy_instance or '*'} runs -> {signal_path.name}",
             flush=True,
         )
     else:
         shutil.copyfile(source_signal_path, signal_path)
 
+    allowed_cities = _parse_csv_set(args.allowed_cities)
+    city_filter = _filter_signal_file_by_allowed_cities(signal_path, allowed_cities)
+
+    max_market_notional = float(args.max_market_notional) if float(args.max_market_notional) > 0 else float(args.max_order_notional)
+
     live_config = {
         "strategy_instance": strategy_instance,
         "city_pool": str(args.city_pool),
+        "allowed_cities": str(args.allowed_cities),
         "sizing_mode": str(args.sizing_mode),
         "max_order_notional": float(args.max_order_notional),
+        "max_market_notional": max_market_notional,
         "fixed_order_shares": float(args.fixed_order_shares),
         "max_order_shares": float(args.max_order_shares),
         "min_order_shares": float(args.min_order_shares),
@@ -462,6 +525,18 @@ def main() -> int:
         planner["accepted"] = live_dedup["plans_after"]
         planner["plans"] = live_dedup["plans_after"]
 
+    live_exposure_cap = _filter_plan_file_for_live_exposure_cap(
+        plan_path,
+        _prior_live_market_notional(live_path.parent, exclude_path=live_path),
+        max_market_notional=float(live_config["max_market_notional"]),
+        prior_market_sides=_prior_live_market_sides(live_path.parent, exclude_path=live_path),
+    )
+    planner["live_exposure_cap"] = live_exposure_cap
+    if live_exposure_cap["plans_before"] != live_exposure_cap["plans_after"]:
+        planner.setdefault("accepted_before_live_exposure_cap", planner.get("accepted", 0))
+        planner["accepted"] = live_exposure_cap["plans_after"]
+        planner["plans"] = live_exposure_cap["plans_after"]
+
     accepted_after_dedup = int(planner.get("accepted", 0) or 0)
     no_submit_reason = "dry_run_live" if args.dry_run_live else "no_accepted_plans"
     if (
@@ -509,6 +584,7 @@ def main() -> int:
     }
     if merge_stats is not None:
         signals["merge_stats"] = merge_stats
+    signals["city_filter"] = city_filter
     sync = {"cmd": ["shared_signal_branch"], "returncode": 0, "output": f"source_signal={source_signal_path}"}
     signal_run_cmd = (
         [
@@ -535,7 +611,7 @@ def main() -> int:
         live_path=live_path,
         errors=errors,
     )
-    contract_alerts.extend(_branch_signal_alerts(merge_stats, signal_count))
+    contract_alerts.extend(_branch_signal_alerts(merge_stats, signal_count, city_filter))
     summary = {
         "run_id": run_id,
         "config": live_config,
