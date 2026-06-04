@@ -82,7 +82,8 @@ if [[ "$CLOB" == "1" ]]; then
   log "Step 3/4: Syncing real CLOB fills from Polymarket activity API"
   "$VENV/python" -m weather_dashboard.ingest.clob_fill_sync \
     --db-path "$DB_PATH" 2>&1 | tee "$LOG_DIR/clob_fill_sync.log" || {
-    warn "CLOB fill sync failed (non-fatal) — check $LOG_DIR/clob_fill_sync.log"
+    err "CLOB fill sync failed; live_real fills are incomplete — check $LOG_DIR/clob_fill_sync.log"
+    exit 1
   }
 else
   log "Step 3/4: Skipping CLOB fill sync (--no-clob)"

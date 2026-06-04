@@ -57,12 +57,14 @@ import json
 import logging
 import os
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from typing import Any
 
 import requests
 
 log = logging.getLogger(__name__)
+EXTERNAL_FETCH_ERRORS: list[str] = []
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -289,6 +291,7 @@ def _fetch_order_status_clob(client: Any, order_id: str) -> dict[str, Any] | Non
         result = client.get_order(order_id)
         return result if isinstance(result, dict) else None
     except Exception as exc:
+        EXTERNAL_FETCH_ERRORS.append(f"clob_order_status:{exc}")
         log.debug("get_order(%s...): %s", order_id[:12], exc)
         return None
 
@@ -311,6 +314,7 @@ def _fetch_trades_clob(client: Any, maker_address: str) -> list[dict[str, Any]]:
             return result.get("data", [])
         return []
     except Exception as exc:
+        EXTERNAL_FETCH_ERRORS.append(f"clob_trades:{exc}")
         log.warning("CLOB get_trades failed: %s", exc)
         return []
 
@@ -335,6 +339,7 @@ def _fetch_trades_public(maker_address: str) -> list[dict[str, Any]]:
             all_trades.extend(batch)
             log.debug("Public trades: fetched %d records.", len(all_trades))
     except requests.RequestException as exc:
+        EXTERNAL_FETCH_ERRORS.append(f"public_trades:{exc}")
         log.warning("Public trades fetch failed: %s", exc)
     return all_trades
 
@@ -359,6 +364,7 @@ def _fetch_activity_public(funder: str) -> list[dict[str, Any]]:
             resp.raise_for_status()
             batch = resp.json()
         except requests.RequestException as exc:
+            EXTERNAL_FETCH_ERRORS.append(f"activity:{exc}")
             log.warning("Activity fetch failed at offset=%d: %s", offset, exc)
             break
         if not isinstance(batch, list) or not batch:
@@ -582,8 +588,11 @@ def sync_clob_fills(
         "cancelled": 0,
         "still_open": 0,
         "errors": 0,
+        "external_fetch_errors": 0,
+        "data_incomplete": False,
         "dry_run": dry_run,
     }
+    EXTERNAL_FETCH_ERRORS.clear()
 
     submitted = _get_submitted_orders(conn)
     if not submitted:
@@ -637,6 +646,14 @@ def sync_clob_fills(
             public_trades = _fetch_trades_public(maker_address)
         log.info(
             "Total unauthenticated trade records: %d", len(public_trades)
+        )
+
+    if EXTERNAL_FETCH_ERRORS:
+        summary["external_fetch_errors"] = len(EXTERNAL_FETCH_ERRORS)
+        summary["data_incomplete"] = True
+        log.error(
+            "External CLOB fill source failed %d time(s); DB live fill status is incomplete.",
+            len(EXTERNAL_FETCH_ERRORS),
         )
     used_public_trade_keys: set[str] = set()
 
@@ -848,6 +865,10 @@ def sync_clob_fills(
                 )
                 summary["still_open"] += 1
 
+    if EXTERNAL_FETCH_ERRORS:
+        summary["external_fetch_errors"] = len(EXTERNAL_FETCH_ERRORS)
+        summary["data_incomplete"] = True
+
     log.info("Sync complete: %s", summary)
     return summary
 
@@ -923,5 +944,7 @@ if __name__ == "__main__":
             maker_address=args.maker_address,
         )
         print(json.dumps(result, indent=2))
+        if result.get("data_incomplete") and not args.dry_run:
+            sys.exit(1)
     finally:
         db_conn.close()

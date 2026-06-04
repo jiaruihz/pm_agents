@@ -193,7 +193,8 @@ if [[ $REBUILD -eq 1 ]]; then
   log "  Syncing real CLOB fills from Polymarket activity API"
   "$VENV/python" -m weather_dashboard.ingest.clob_fill_sync \
     --db-path "$DB_PATH" >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
-    warn "clob-fill-sync failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
+    err "clob-fill-sync failed; live_real fills are incomplete — see $LOG_DIR/migrate_live_cycle.log"
+    exit 1
   }
 
   log "  Consolidating fragmented strategy_config rows -> config_aliases"
