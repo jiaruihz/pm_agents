@@ -32,12 +32,18 @@ CORE_CITIES = (
 
 INSTANCE_EXPR = """
 CASE
-  WHEN execution_policy='mid_price_core_v2' AND entry_price_window='0.25-0.75'
+  WHEN producer_run_id LIKE '%mid_price_core_v2_25_75%'
     THEN 'mid_price_core_v2_25_75'
-  WHEN execution_policy='mid_price_core_v1' AND entry_price_window='0.25-0.75'
+  WHEN producer_run_id LIKE '%mid_price_core_v1_25_75%'
     THEN 'mid_price_core_v1_25_75'
-  WHEN execution_policy='mid_price_core_v1' AND entry_price_window='0.35-0.65'
+  WHEN producer_run_id LIKE '%mid_price_core_v1_side_band%'
     THEN 'mid_price_core_v1_side_band'
+  WHEN execution_policy='mid_price_core_v2' AND entry_price_window='0.25-0.75'
+    THEN 'legacy_mid_price_core_v2_25_75'
+  WHEN execution_policy='mid_price_core_v1' AND entry_price_window='0.25-0.75'
+    THEN 'legacy_mid_price_core_v1_25_75'
+  WHEN execution_policy='mid_price_core_v1' AND entry_price_window IN ('0.35-0.65','0.20-0.45')
+    THEN 'legacy_mid_price_core_v1_side_band_window'
   ELSE strategy_id
 END
 """
@@ -548,7 +554,7 @@ def build_report() -> str:
     lines.append(f"- DB last modified：{datetime.fromtimestamp(db_stat.st_mtime).astimezone().isoformat(timespec='seconds')}。")
     lines.append(f"- fact built：{snapshot.get('fact_built_at_utc') or '-'}。")
     lines.append(f"- 同模型范围：{model_filter_label}。")
-    lines.append(f"- 公平窗口：core 9 城，`target_date={min_date}..{max_date}`，因为这是 side-band 实际成交目标日期窗口。")
+    lines.append(f"- 公平窗口：core 9 城，`target_date={min_date}..{max_date}`，来自 side-band synced plan/order 的目标日期窗口。")
     lines.append(f"- 记录行数：fact_trades {snapshot.get('total_rows')} rows；settled {snapshot.get('settled_rows')}。")
     lines.append(
         f"- 降级口径：side-band scoped accepted plans {len(side_plans_scope)} / submitted live orders {len(side_orders_scope)}；"
@@ -585,7 +591,7 @@ def build_report() -> str:
     lines.append("## 结论先行\n")
     lines.append(
         "交易动作：**side-band 目前不应扩大 live size；应该继续 shadow/极小 size。** "
-        "当前 DB 已恢复出部分 `live_real`，但同模型/core 9/side-band 活跃窗口内的公平成交样本仍太少，"
+        "当前 DB 已恢复出部分 `live_real`，但按 `producer_run_id` 严格归因后 side-band 暂无 `live_real`，"
         "不能用这批数据判断 realized EV。"
     )
     lines.append(

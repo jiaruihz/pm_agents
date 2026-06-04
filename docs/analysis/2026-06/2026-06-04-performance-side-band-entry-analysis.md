@@ -4,15 +4,15 @@
 
 - 目标指标：`side_band_same_model_entry_delta` = 优先在 `trade_class='live_real'` 下比较 realized PnL；若 live_real 因 CLOB fill sync 缺失不可用，则降级到 synced live `plans/` 与 `live/` JSONL，在同一模型、core 9 城、同目标日期窗口下比较 submitted order 的入场价、edge、quote spread，并用 `fact_signal_candidates` 做 entry band gate 诊断。
 - 数据源：`runtime/weather.db.fact_trades` + `runtime/weather.db.fact_signal_candidates`。
-- DB last modified：2026-06-04T23:26:20+08:00。
-- fact built：2026-06-04T15:25:56.499187+00:00。
-- 同模型范围：`model_version IN (ecmwf)`。
-- 公平窗口：core 9 城，`target_date=2026-06-01..2026-06-01`，因为这是 side-band 实际成交目标日期窗口。
-- 记录行数：fact_trades 3657 rows；settled 2908。
-- 降级口径：side-band scoped accepted plans 4 / submitted live orders 4；v1 25-75 scoped accepted plans 4 / submitted live orders 4。
-- unsettled/null 占比：125 / 3657 = +3.4%。
+- DB last modified：2026-06-05T00:35:07+08:00。
+- fact built：2026-06-04T16:34:48.173670+00:00。
+- 同模型范围：`model_version IN (ecmwf, gfs)`（来自 synced side-band plan/order；fact_trades live_real 为空）。
+- 公平窗口：core 9 城，`target_date=2026-06-01..2026-06-05`，来自 side-band synced plan/order 的目标日期窗口。
+- 记录行数：fact_trades 3940 rows；settled 2923。
+- 降级口径：side-band scoped accepted plans 37 / submitted live orders 34；v1 25-75 scoped accepted plans 49 / submitted live orders 49。
+- unsettled/null 占比：393 / 3940 = +10.0%。
 - missing_bracket 数：624。
-- fact_signal_candidates：20144 rows；eligible 6217；decision_window_missing 8862 (+44.0%)。
+- fact_signal_candidates：20931 rows；eligible 6597；decision_window_missing 9181 (+43.9%)。
 
 完整性自检：
 
@@ -20,7 +20,7 @@
 | --- | --- |
 | settled rows with null PnL | 0 |
 | live_real rows / settled | 67 / 51 |
-| live_simulated rows / settled | 669 / 486 |
+| live_simulated rows / settled | 952 / 501 |
 | paper rows / settled | 2285 / 1751 |
 | snapshot_replay rows / settled | 636 / 620 |
 
@@ -28,15 +28,15 @@
 
 | join_method | status | rows |
 | --- | --- | --- |
-| fallback | settled | 2844 |
+| fallback | settled | 2851 |
 | fallback | missing_bracket | 567 |
-| none | null | 125 |
-| token | settled | 64 |
+| none | null | 393 |
+| token | settled | 72 |
 | token | missing_bracket | 57 |
 
 ## 结论先行
 
-交易动作：**side-band 目前不应扩大 live size；应该继续 shadow/极小 size。** 当前 DB 已恢复出部分 `live_real`，但同模型/core 9/side-band 活跃窗口内的公平成交样本仍太少，不能用这批数据判断 realized EV。
+交易动作：**side-band 目前不应扩大 live size；应该继续 shadow/极小 size。** 当前 DB 已恢复出部分 `live_real`，但按 `producer_run_id` 严格归因后 side-band 暂无 `live_real`，不能用这批数据判断 realized EV。
 入场行为上，side-band 已经把样本压得很窄：同 ecmwf/gfs、core 9、同 target_date 窗口里，它主要提交 BUY_NO 的 35-65c 中价带订单；YES 需要更高 edge，submitted 样本几乎被压没。这符合配置意图，但意味着继续原样跑很慢才会有统计功效。
 ## Fair Live Fill 对照
 
@@ -48,17 +48,21 @@ _No rows._
 
 | strategy | layer | n | cities | days | models | side_mix | avg_entry | avg_market | avg_edge | avg_quote_edge | avg_quote_spread |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| v1 25-75 | accepted plans | 4 | 2 | 1 | ecmwf | BUY_NO:3,BUY_YES:1 | 0.570 | 0.574 | 0.198 | 0.202 | 0.000 |
-| v1 25-75 | submitted live orders | 4 | 2 | 1 | ecmwf | BUY_NO:3,BUY_YES:1 | 0.569 | 0.574 | 0.198 | 0.202 | 0.013 |
-| side-band | accepted plans | 4 | 2 | 1 | ecmwf | BUY_NO:3,BUY_YES:1 | 0.500 | 0.501 | 0.237 | 0.238 | 0.000 |
-| side-band | submitted live orders | 4 | 2 | 1 | ecmwf | BUY_NO:3,BUY_YES:1 | 0.500 | 0.501 | 0.237 | 0.238 | 0.018 |
+| v1 25-75 | accepted plans | 49 | 7 | 5 | ecmwf,gfs | BUY_NO:30,BUY_YES:19 | 0.515 | 0.518 | 0.213 | 0.216 | 0.000 |
+| v1 25-75 | submitted live orders | 49 | 7 | 5 | ecmwf,gfs | BUY_NO:30,BUY_YES:19 | 0.507 | 0.518 | 0.213 | 0.216 | 0.025 |
+| side-band | accepted plans | 37 | 7 | 5 | ecmwf,gfs | BUY_NO:24,BUY_YES:13 | 0.470 | 0.473 | 0.274 | 0.277 | 0.000 |
+| side-band | submitted live orders | 34 | 7 | 5 | ecmwf,gfs | BUY_NO:22,BUY_YES:12 | 0.468 | 0.476 | 0.269 | 0.272 | 0.023 |
 
 | strategy | model | side | orders | cities | days | avg_entry | entry_range | avg_market | avg_edge | avg_quote_edge | avg_quote_spread |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| v1 25-75 | ecmwf | BUY_NO | 3 | 2 | 1 | 0.635 | 0.590-0.726 | 0.640 | 0.220 | 0.223 | 0.011 |
-| v1 25-75 | ecmwf | BUY_YES | 1 | 1 | 1 | 0.370 | 0.370-0.370 | 0.375 | 0.132 | 0.137 | 0.020 |
-| side-band | ecmwf | BUY_NO | 3 | 2 | 1 | 0.597 | 0.580-0.620 | 0.598 | 0.241 | 0.243 | 0.017 |
-| side-band | ecmwf | BUY_YES | 1 | 1 | 1 | 0.210 | 0.210-0.210 | 0.210 | 0.224 | 0.224 | 0.020 |
+| v1 25-75 | ecmwf | BUY_NO | 9 | 2 | 4 | 0.654 | 0.590-0.726 | 0.661 | 0.222 | 0.225 | 0.024 |
+| v1 25-75 | ecmwf | BUY_YES | 6 | 2 | 4 | 0.340 | 0.300-0.370 | 0.353 | 0.119 | 0.122 | 0.022 |
+| v1 25-75 | gfs | BUY_NO | 21 | 5 | 5 | 0.610 | 0.440-0.730 | 0.621 | 0.252 | 0.254 | 0.022 |
+| v1 25-75 | gfs | BUY_YES | 13 | 4 | 4 | 0.318 | 0.210-0.430 | 0.328 | 0.187 | 0.190 | 0.033 |
+| side-band | ecmwf | BUY_NO | 7 | 2 | 4 | 0.617 | 0.580-0.640 | 0.621 | 0.223 | 0.226 | 0.017 |
+| side-band | ecmwf | BUY_YES | 3 | 2 | 3 | 0.197 | 0.180-0.210 | 0.203 | 0.258 | 0.258 | 0.013 |
+| side-band | gfs | BUY_NO | 15 | 5 | 5 | 0.571 | 0.440-0.640 | 0.581 | 0.272 | 0.275 | 0.022 |
+| side-band | gfs | BUY_YES | 9 | 3 | 3 | 0.271 | 0.170-0.400 | 0.282 | 0.303 | 0.308 | 0.031 |
 
 side-band submitted live orders：
 
@@ -67,7 +71,37 @@ side-band submitted live orders：
 | 2026-06-01 | 2026-05-31T17:11:32+00:00 | Warsaw | ecmwf | BUY_NO | 22 | 0.590 | 0.590 | 0.292 | 0.292 | 0.010 | submitted |
 | 2026-06-01 | 2026-05-31T18:42:05+00:00 | London | ecmwf | BUY_NO | 22 | 0.580 | 0.580 | 0.130 | 0.130 | 0.030 | submitted |
 | 2026-06-01 | 2026-05-31T20:12:47+00:00 | London | ecmwf | BUY_NO | 21 | 0.620 | 0.625 | 0.302 | 0.307 | 0.010 | submitted |
+| 2026-06-01 | 2026-05-31T23:13:33+00:00 | Miami | gfs | BUY_YES | 88-89 | 0.210 | 0.215 | 0.367 | 0.372 | 0.030 | submitted |
+| 2026-06-01 | 2026-05-31T23:13:35+00:00 | Miami | gfs | BUY_NO | 90-91 | 0.510 | 0.520 | 0.205 | 0.205 | 0.010 | submitted |
+| 2026-06-01 | 2026-05-31T23:13:36+00:00 | NYC | gfs | BUY_YES | 70-71 | 0.320 | 0.325 | 0.202 | 0.206 | 0.040 | submitted |
+| 2026-06-01 | 2026-05-31T23:13:37+00:00 | NYC | gfs | BUY_NO | 72-73 | 0.630 | 0.630 | 0.137 | 0.137 | 0.040 | submitted |
 | 2026-06-01 | 2026-05-31T23:13:38+00:00 | London | ecmwf | BUY_YES | 23 | 0.210 | 0.210 | 0.224 | 0.224 | 0.020 | submitted |
+| 2026-06-01 | 2026-06-01T01:44:14+00:00 | Miami | gfs | BUY_YES | 92-93 | 0.230 | 0.235 | 0.379 | 0.384 | 0.010 | submitted |
+| 2026-06-01 | 2026-06-01T02:14:26+00:00 | LA | gfs | BUY_YES | 70-71 | 0.400 | 0.405 | 0.215 | 0.220 | 0.040 | submitted |
+| 2026-06-01 | 2026-06-01T02:14:27+00:00 | LA | gfs | BUY_NO | 72-73 | 0.640 | 0.645 | 0.281 | 0.286 | 0.040 | submitted |
+| 2026-06-02 | 2026-06-01T09:01:33+00:00 | Tokyo | gfs | BUY_NO | 25 | 0.570 | 0.570 | 0.112 | 0.112 | 0.020 | submitted |
+| 2026-06-02 | 2026-06-01T19:33:56+00:00 | London | ecmwf | BUY_NO | 20 | 0.640 | 0.645 | 0.293 | 0.298 | 0.010 | submitted |
+| 2026-06-02 | 2026-06-01T20:34:15+00:00 | Warsaw | ecmwf | BUY_YES | 22 | 0.180 | 0.200 | 0.239 | 0.239 | 0.010 | submitted |
+| 2026-06-02 | 2026-06-02T02:05:25+00:00 | LA | gfs | BUY_NO | 70-71 | 0.600 | 0.605 | 0.360 | 0.365 | 0.060 | submitted |
+| 2026-06-03 | 2026-06-02T09:06:59+00:00 | Tokyo | gfs | BUY_NO | 23 | 0.610 | 0.610 | 0.292 | 0.292 | 0.030 | submitted |
+| 2026-06-03 | 2026-06-02T21:10:20+00:00 | London | ecmwf | BUY_NO | 18 | 0.620 | 0.625 | 0.133 | 0.138 | 0.020 | submitted |
+| 2026-06-03 | 2026-06-02T23:10:47+00:00 | NYC | gfs | BUY_NO | 80-81 | 0.620 | 0.625 | 0.224 | 0.229 | 0.010 | submitted |
+| 2026-06-03 | 2026-06-03T02:11:24+00:00 | LA | gfs | BUY_NO | 70-71 | 0.490 | 0.520 | 0.456 | 0.456 | 0.020 | submitted |
+| 2026-06-03 | 2026-06-03T03:11:41+00:00 | LA | gfs | BUY_YES | 68-69 | 0.260 | 0.265 | 0.403 | 0.408 | 0.020 | submitted |
+| 2026-06-04 | 2026-06-03T09:13:05+00:00 | Tokyo | gfs | BUY_NO | 23 | 0.540 | 0.545 | 0.391 | 0.396 | 0.020 | submitted |
+| 2026-06-04 | 2026-06-03T10:43:27+00:00 | Shanghai | gfs | BUY_NO | 29 | 0.630 | 0.635 | 0.149 | 0.154 | 0.010 | submitted |
+| 2026-06-04 | 2026-06-03T18:15:07+00:00 | London | ecmwf | BUY_NO | 19 | 0.640 | 0.645 | 0.268 | 0.273 | 0.010 | submitted |
+| 2026-06-04 | 2026-06-03T21:45:53+00:00 | London | ecmwf | BUY_YES | 17 | 0.200 | 0.200 | 0.310 | 0.310 | 0.010 | submitted |
+| 2026-06-04 | 2026-06-03T21:45:54+00:00 | Warsaw | ecmwf | BUY_NO | 21 | 0.630 | 0.635 | 0.142 | 0.147 | 0.030 | submitted |
+| 2026-06-04 | 2026-06-03T23:46:45+00:00 | Miami | gfs | BUY_NO | 82-83 | 0.490 | 0.500 | 0.488 | 0.488 | 0.010 | submitted |
+| 2026-06-04 | 2026-06-03T23:46:46+00:00 | NYC | gfs | BUY_NO | 86-87 | 0.600 | 0.605 | 0.190 | 0.195 | 0.010 | submitted |
+| 2026-06-04 | 2026-06-03T23:46:47+00:00 | NYC | gfs | BUY_YES | 88-89 | 0.200 | 0.200 | 0.337 | 0.337 | 0.020 | submitted |
+| 2026-06-04 | 2026-06-04T00:16:57+00:00 | Miami | gfs | BUY_YES | 80-81 | 0.170 | 0.225 | 0.208 | 0.213 | 0.030 | submitted |
+| 2026-06-04 | 2026-06-04T02:17:30+00:00 | LA | gfs | BUY_NO | 70-71 | 0.440 | 0.445 | 0.412 | 0.417 | 0.010 | submitted |
+| 2026-06-04 | 2026-06-04T02:17:31+00:00 | LA | gfs | BUY_YES | 72-73 | 0.390 | 0.395 | 0.258 | 0.263 | 0.010 | submitted |
+| 2026-06-04 | 2026-06-04T07:18:43+00:00 | LA | gfs | BUY_YES | 68-69 | 0.260 | 0.269 | 0.361 | 0.370 | 0.076 | submitted |
+| 2026-06-05 | 2026-06-04T09:19:10+00:00 | Tokyo | gfs | BUY_NO | 21 | 0.580 | 0.630 | 0.272 | 0.272 | 0.030 | submitted |
+| 2026-06-05 | 2026-06-04T09:49:21+00:00 | Tokyo | gfs | BUY_NO | 22 | 0.620 | 0.625 | 0.109 | 0.114 | 0.010 | submitted |
 
 ## 按模型和方向
 
@@ -88,41 +122,40 @@ _No rows._
 
 ## side-band 实际成交明细
 
-| target_date | order_date_bj | city | model | side | bracket | fill | plan | market | edge | abs_edge | hts | cost | pnl | status | final_yes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-06-01 | 2026-06-04 | Karachi | ecmwf | BUY_NO | 35 | 0.530 | 0.530 | 0.535 | 0.258 | 0.258 | 34.5 | 2.13 | +1.89 | settled | 0.0 |
-| 2026-06-01 | 2026-06-04 | Lucknow | ecmwf | BUY_NO | 34 | 0.640 | 0.640 | 0.640 | 0.196 | 0.196 | 35.5 | 4.44 | +2.50 | settled | 0.0 |
+_No rows._
 
 ## 候选机会层：entry band gate 差异
 
 这段是机会粒度诊断，不是成交 PnL。分母只取 `final_yes IS NOT NULL AND decision_window_missing=0`，并在同模型、core 9、同日期窗口内用配置规则重放 entry band gate：v1 = `0.25-0.75 + abs_edge>=0.10`；side-band YES = `0.20-0.45 + abs_edge>=0.20`，NO = `0.35-0.65 + abs_edge>=0.10`。
-_No rows._
+| model | side | evaluable | pass_v1 | pass_side | both | v1_only | side_only | v1_cf_pnl | side_cf_pnl | v1_avg_entry | side_avg_entry | v1_abs_edge | side_abs_edge |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| gfs | BUY_YES | 1 | 0 | 0 | 0 | 0 | 0 | +0.00 | +0.00 | - | - | - | - |
 
 ## live_cycle 链路统计
 
 | layer | count |
 | --- | --- |
-| side-band runs | 149 |
-| records scanned | 335724 |
-| candidate_signals | 266 |
-| signals | 266 |
-| accepted before live dedup | 259 |
-| accepted after live dedup | 32 |
-| live_orders | 31 |
-| paper_written | 31 |
+| side-band runs | 198 |
+| records scanned | 429253 |
+| candidate_signals | 361 |
+| signals | 361 |
+| accepted before live dedup | 349 |
+| accepted after live dedup | 47 |
+| live_orders | 43 |
+| paper_written | 43 |
 
 主要 filter / skip：
 
 | reason | count |
 | --- | --- |
-| city_pool_not_t1_trading | 174829 |
-| city_not_allowed | 80273 |
-| hours_to_settle_above_max | 34534 |
-| hours_to_settle_below_min | 32211 |
-| edge_below_min | 11192 |
-| entry_price_at_or_above_max | 1240 |
-| entry_price_below_min | 695 |
-| older_duplicate_candidate | 484 |
+| city_pool_not_t1_trading | 223192 |
+| city_not_allowed | 111089 |
+| hours_to_settle_above_max | 41344 |
+| hours_to_settle_below_min | 37351 |
+| edge_below_min | 13008 |
+| entry_price_at_or_above_max | 1453 |
+| entry_price_below_min | 830 |
+| older_duplicate_candidate | 625 |
 
 最新配置摘要：
 

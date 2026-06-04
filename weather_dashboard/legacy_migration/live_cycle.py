@@ -209,13 +209,25 @@ def _producer_system(cycle_path: Path) -> str:
     return "n100" if "remote_pm_agent" in cycle_path.parts else "pm_agent_local"
 
 
-def _cycle_paths(cycle_path: Path, cycle_id: str) -> tuple[Path, Path, Path, Path]:
+def _local_path_from_summary(root: Path, raw_path: str | None, subdir: str, fallback: Path) -> Path:
+    if not raw_path:
+        return fallback
+    name = Path(raw_path).name
+    return root / subdir / name
+
+
+def _cycle_paths(cycle_path: Path, cycle_id: str, summary: dict[str, Any] | None = None) -> tuple[Path, Path, Path, Path]:
     root = cycle_path.parent.parent
+    paths = (summary or {}).get("paths") or {}
+    signal_fallback = root / "signals" / f"live_{cycle_id}_signals.jsonl"
+    plan_fallback = root / "plans" / f"live_{cycle_id}_trade_plans.jsonl"
+    live_fallback = root / "live" / f"live_{cycle_id}_orders.jsonl"
+    paper_fallback = root / "paper" / f"live_{cycle_id}_paper_orders.jsonl"
     return (
-        root / "signals" / f"live_{cycle_id}_signals.jsonl",
-        root / "plans" / f"live_{cycle_id}_trade_plans.jsonl",
-        root / "live" / f"live_{cycle_id}_orders.jsonl",
-        root / "paper" / f"live_{cycle_id}_paper_orders.jsonl",
+        _local_path_from_summary(root, paths.get("signal"), "signals", signal_fallback),
+        _local_path_from_summary(root, paths.get("plan"), "plans", plan_fallback),
+        _local_path_from_summary(root, paths.get("live"), "live", live_fallback),
+        _local_path_from_summary(root, paths.get("paper"), "paper", paper_fallback),
     )
 
 
@@ -539,7 +551,7 @@ def migrate_live_cycle(conn, *, cycle_path: str | Path) -> LiveCycleMigrationRep
     except Exception:
         summary = {}
 
-    signal_path, plan_path, live_order_path, paper_order_path = _cycle_paths(cycle_path, cycle_id)
+    signal_path, plan_path, live_order_path, paper_order_path = _cycle_paths(cycle_path, cycle_id, summary)
     raw_signals = _read_jsonl(signal_path)
     raw_plans = _read_jsonl(plan_path)
     raw_orders = [* _read_jsonl(live_order_path), * _read_jsonl(paper_order_path)]
