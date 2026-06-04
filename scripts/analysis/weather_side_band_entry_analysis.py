@@ -350,6 +350,7 @@ def build_report() -> str:
         ORDER BY trade_class
         """,
     )
+    live_real_rows = next((r["rows"] for r in class_rows if r["trade_class"] == "live_real"), 0)
     join_rows = rows(
         conn,
         """
@@ -584,7 +585,8 @@ def build_report() -> str:
     lines.append("## 结论先行\n")
     lines.append(
         "交易动作：**side-band 目前不应扩大 live size；应该继续 shadow/极小 size。** "
-        "这次 DB rebuild 后没有 `live_real` 行，真实成交 PnL 不可用；只能评价入场行为，不能评价 realized EV。"
+        "当前 DB 已恢复出部分 `live_real`，但同模型/core 9/side-band 活跃窗口内的公平成交样本仍太少，"
+        "不能用这批数据判断 realized EV。"
     )
     lines.append(
         "入场行为上，side-band 已经把样本压得很窄：同 ecmwf/gfs、core 9、同 target_date 窗口里，"
@@ -595,8 +597,8 @@ def build_report() -> str:
     lines.append("## Fair Live Fill 对照\n")
     if not fair_summary:
         lines.append(
-            "`fact_trades` 当前没有 `live_real` 行；CLOB activity/trades API 在 rebuild 时 connection reset，"
-            "593 个 submitted orders 全被标成 still_open。因此本节不能给 realized PnL。\n"
+            f"`fact_trades` 当前有 live_real={live_real_rows}，但同模型/core 9/side-band 活跃 target_date 窗口内没有可比 live_real fill。"
+            "因此本节不能给公平 realized PnL。\n"
         )
     fair_table = []
     for r in fair_summary:

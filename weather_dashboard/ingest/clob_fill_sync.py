@@ -63,6 +63,12 @@ from typing import Any
 
 import requests
 
+from weather_dashboard.ingest.clob_fill_cache import (
+    DEFAULT_CACHE_PATH,
+    append_cached_fill,
+    import_cached_fills,
+)
+
 log = logging.getLogger(__name__)
 EXTERNAL_FETCH_ERRORS: list[str] = []
 
@@ -171,7 +177,7 @@ def _insert_fill(
     fees_usd: float,
     filled_at_utc: str | None,
     dry_run: bool,
-) -> None:
+) -> bool:
     """INSERT OR IGNORE a fill row (idempotent)."""
     now = _now_utc()
     if dry_run:
@@ -180,7 +186,8 @@ def _insert_fill(
             "shares=%.6f price=%.4f fees=%.6f",
             fill_id[:12], execution_id[:12], filled_shares, filled_price, fees_usd,
         )
-        return
+        return False
+    before = conn.total_changes
     conn.execute(
         """
         INSERT OR IGNORE INTO fills
@@ -200,6 +207,21 @@ def _insert_fill(
         ),
     )
     conn.commit()
+    inserted = conn.total_changes > before
+    if inserted:
+        append_cached_fill(
+            {
+                "fill_id": fill_id,
+                "execution_id": execution_id,
+                "order_id": order_id,
+                "filled_shares": filled_shares,
+                "filled_price": filled_price,
+                "fees_usd": fees_usd,
+                "filled_at_utc": filled_at_utc or now,
+                "created_at_utc": now,
+            }
+        )
+    return inserted
 
 
 # ---------------------------------------------------------------------------
@@ -590,9 +612,15 @@ def sync_clob_fills(
         "errors": 0,
         "external_fetch_errors": 0,
         "data_incomplete": False,
+        "cached_imported": 0,
         "dry_run": dry_run,
     }
     EXTERNAL_FETCH_ERRORS.clear()
+
+    if not dry_run:
+        summary["cached_imported"] = import_cached_fills(conn, DEFAULT_CACHE_PATH)
+        if summary["cached_imported"]:
+            log.info("Imported %d cached CLOB fill(s).", summary["cached_imported"])
 
     submitted = _get_submitted_orders(conn)
     if not submitted:
