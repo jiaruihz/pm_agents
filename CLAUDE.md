@@ -469,6 +469,7 @@ SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 
 | [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) | 通用运维手册：常驻进程、日志路径、启停命令 |
 | [WEATHER_PROBABILITY_MODEL_REVIEW.md](docs/WEATHER_PROBABILITY_MODEL_REVIEW.md) | 概率模型（`model_p_yes`）专家评估：生产 baseline 算法、v2 条件模型为何没上线（特征 0% 覆盖）、季节条件化实测 +9% Brier、改进优先级 |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](docs/WEATHER_PROBABILITY_MODEL_ROADMAP.md) | 概率模型分阶段改造路线：M0 可观测骨架、稳定性门、季节残差、lead-time/ensemble/ML 分布模型 |
+| [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | weather_edge_engine 当前接手入口：拆成 blender shadow 数据链路与 city-day basket 算法研究两条线，含 PR2b 过拟合结论与后续窗口边界 |
 
 ### 已实现底表（DERIVED 物化层，分析唯一授权源）
 
@@ -505,6 +506,9 @@ SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 
 | [2026-05-30-performance-entry-band-research.md](docs/analysis/2026-05/2026-05-30-performance-entry-band-research.md) | 2026-05-30 入场价带（0.25-0.75）调参研究：side×价位桶 EV、候选反事实、live/paper 对照 |
 | [2026-05-30-performance-sizing-and-band-distribution.md](docs/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md) | 2026-05-30 仓位 sizing×入场区间收益分布研究（反过拟合、bootstrap、paper→live 样本外验证） |
 | [2026-06-05-city-day-basket-eval.md](docs/analysis/2026-06/2026-06-05-city-day-basket-eval.md) | 2026-06-05 weather_edge_engine PR2 离线 replay：raw vs blended-single vs basket 三规则对比 + 归因 + Step 2→3 gate 结论（暂不通过） |
+| [2026-06-06-city-day-basket-pr2b-sweep.md](docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md) | 2026-06-06 PR2b basket 参数 sweep：192 组参数、30 组全样本 gate pass，最佳候选 `$3/$8 cap15 max4 prefer_no=False` |
+| [2026-06-06-city-day-basket-pr2b-robustness.md](docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md) | 2026-06-06 PR2b 稳健性复核：full/train/holdout/recent/live_filled 子集对比，确认全样本通过但存在 tail/overfit 风险 |
+| [2026-06-06-city-day-basket-optimizer-research.md](docs/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md) | 2026-06-06 basket 核心算法研究：归一化 city-day 分布 + 组合枚举 optimizer；结论是 headline ROI 可升但 tail 风险更集中，需改 objective/分布 |
 | [2026-06-03-performance-three-strategy-instances.md](docs/analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | 2026-06-03 三策略实例复盘：mid_price_core_v1/v2/side-band 的 live_real 绩效、成交质量、价位桶和新增城市池 |
 | [2026-06-05-probability-calibration.md](docs/analysis/2026-06/2026-06-05-probability-calibration.md) | 2026-06-05 概率校准实测：raw model vs 市场 Brier、isotonic/Platt/凸组合 ensemble，time-split + LOO 双 holdout |
 | [WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md](docs/WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md) | 2026-06-05 综合复盘：1 月 67 fills live_real 绩效 + 概率校准发现 + 数据管道审计 + 3 个可执行动作 |
@@ -519,3 +523,4 @@ SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 
 |---|---|
 | [2026-06-05-weather-edge-engine-pr1.md](docs/dev_logs/2026-06-05-weather-edge-engine-pr1.md) | weather_edge_engine PR1（本机纯函数骨架：blender + city_day_basket + tests）开发记录，含设计偏离 |
 | [2026-06-05-weather-edge-engine-pr2.md](docs/dev_logs/2026-06-05-weather-edge-engine-pr2.md) | weather_edge_engine PR2（离线 replay + sklearn recalibration）开发记录与结论 |
+| [2026-06-06-weather-edge-engine-pr2b.md](docs/dev_logs/2026-06-06-weather-edge-engine-pr2b.md) | weather_edge_engine PR2b（basket 参数 sweep + robustness）开发记录，结论是仅可作为 shadow 候选、不能直接 canary |

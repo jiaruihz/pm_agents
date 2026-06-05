@@ -1,0 +1,8 @@
+{
+  "global_alpha": 0.30,
+  "global_beta": 0.70,
+  "blacklist_alpha": 0.10,
+  "clip_lo": 0.001,
+  "clip_hi": 0.999,
+  "raw_model_blacklist": ["Milan", "Lucknow", "Austin", "Beijing"]
+}
