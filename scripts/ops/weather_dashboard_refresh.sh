@@ -52,6 +52,27 @@ err()  { printf '\033[1;31m[refresh]\033[0m %s\n' "$*" >&2; }
 TS="$(date -Is)"
 log "Weather dashboard refresh — $TS"
 log "DB: $DB_PATH"
+log ""
+log "数据源契约（不要绕过）："
+log "  N100 没有活跃 SQLite。生产数据 = N100 文件系统（output/ + runtime/weather_edge_v1/）"
+log "  $DB_PATH = 本机从 N100 镜像独立重建的 DB。**不从 N100 拷贝 SQLite。**"
+log "  详见 docs/WEATHER_DATA_CANONICAL_SOURCES.md"
+log ""
+
+init_canonical_db() {
+  "$VENV/python" -c "from weather_dashboard.db.apply_schema_canonical import init_db_canonical; init_db_canonical('$DB_PATH')"
+}
+
+refresh_metrics() {
+  "$VENV/python" -c "
+from weather_dashboard.db.connection import get_conn
+from weather_dashboard.metrics.save import save_all_metrics
+conn = get_conn('$DB_PATH')
+results = save_all_metrics(conn)
+conn.close()
+print(f'Updated metrics for {len(results)} run(s)')
+"
+}
 
 # ---- Step 1: Sync from n100 ----
 if [[ "$SYNC" == "1" ]]; then
@@ -72,7 +93,10 @@ fi
 # ---- Step 2: Ingest live_cycle JSONL ----
 log ""
 log "Step 2/5: Ingesting live_cycle JSONL into $DB_PATH"
-make -f Makefile.weather migrate-live-cycle 2>&1 | tee "$LOG_DIR/ingest.log" || {
+{
+  init_canonical_db
+  "$VENV/python" -m weather_dashboard.cli.ingest_live_cycle --db-path "$DB_PATH"
+} 2>&1 | tee "$LOG_DIR/ingest.log" || {
   err "Ingest failed — check $LOG_DIR/ingest.log"
   exit 1
 }
@@ -112,7 +136,7 @@ log "Step 4/5: Rebuilding fact_trades and fact_signal_candidates"
 # ---- Step 5: Metrics refresh ----
 log ""
 log "Step 5/5: Recomputing metrics cache for all runs"
-make -f Makefile.weather metrics-refresh 2>&1 | tee "$LOG_DIR/metrics_refresh.log" || {
+refresh_metrics 2>&1 | tee "$LOG_DIR/metrics_refresh.log" || {
   warn "metrics-refresh failed (non-fatal) — check $LOG_DIR/metrics_refresh.log"
 }
 

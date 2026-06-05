@@ -122,6 +122,26 @@ if [[ ! -x "$VENV/python" ]]; then
   exit 1
 fi
 
+init_canonical_db() {
+  "$VENV/python" -c "from weather_dashboard.db.apply_schema_canonical import init_db_canonical; init_db_canonical('$DB_PATH')"
+}
+
+rebuild_canonical_db() {
+  rm -f "$DB_PATH" "$DB_PATH-wal" "$DB_PATH-shm"
+  init_canonical_db
+}
+
+refresh_metrics() {
+  "$VENV/python" -c "
+from weather_dashboard.db.connection import get_conn
+from weather_dashboard.metrics.save import save_all_metrics
+conn = get_conn('$DB_PATH')
+results = save_all_metrics(conn)
+conn.close()
+print(f'Updated metrics for {len(results)} run(s)')
+"
+}
+
 show_status() {
   log "Repo:        $REPO_ROOT"
   log "DB path:     $DB_PATH ($([[ -f $DB_PATH ]] && stat -c '%s bytes' "$DB_PATH" || echo 'absent'))"
@@ -153,14 +173,17 @@ fi
 # ---- 1. Rebuild DB (idempotent — ingest is content-addressable) ----
 if [[ $REBUILD -eq 1 ]]; then
   log "Rebuilding DB at $DB_PATH"
-  make -f Makefile.weather db-canonical-rebuild >/dev/null
+  rebuild_canonical_db >/dev/null
 
   SNAP_CSV="$REPO_ROOT/runtime/weather_edge_v1/market_data/research/t24_paper_snapshot_replay_trades.csv"
   PAPER_CSV="$REPO_ROOT/runtime/weather_edge_v1/market_data/research/t24_paper_ledger_trades.csv"
 
   if [[ -f "$SNAP_CSV" || -f "$PAPER_CSV" ]]; then
     log "  Migrating legacy research CSVs into canonical DB"
-    make -f Makefile.weather migrate-legacy-research >"$LOG_DIR/migrate_legacy_research.log" 2>&1 || {
+    {
+      init_canonical_db
+      "$VENV/python" -m weather_dashboard.cli.ingest_legacy_research --db-path "$DB_PATH"
+    } >"$LOG_DIR/migrate_legacy_research.log" 2>&1 || {
       err "legacy research migration failed — see $LOG_DIR/migrate_legacy_research.log"
       exit 1
     }
@@ -170,7 +193,10 @@ if [[ $REBUILD -eq 1 ]]; then
 
   if [[ -d "$REPO_ROOT/runtime/weather_edge_v1/live_cycle" || -d "$REPO_ROOT/runtime/weather_edge_v1/remote_pm_agent/live_cycle" ]]; then
     log "  Migrating live-cycle lineage into canonical DB"
-    make -f Makefile.weather migrate-live-cycle >"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    {
+      init_canonical_db
+      "$VENV/python" -m weather_dashboard.cli.ingest_live_cycle --db-path "$DB_PATH"
+    } >"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
       err "live-cycle migration failed — see $LOG_DIR/migrate_live_cycle.log"
       exit 1
     }
@@ -225,7 +251,7 @@ if [[ $REBUILD -eq 1 ]]; then
   }
 
   log "  Re-computing metrics after fill+settlement+fact_trades rebuild"
-  make -f Makefile.weather metrics-refresh >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
+  refresh_metrics >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
 fi
 
 show_status
