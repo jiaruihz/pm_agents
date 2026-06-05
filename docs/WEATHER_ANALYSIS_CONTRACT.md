@@ -40,6 +40,43 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild
 - 不准只输出数字结论而不写 Markdown 报告
 - 不准跳过报告的"数据完整性自检"段
 
+### Live 账户余额 / CLOB 对账（wallet cashflow）
+
+当问题是“余额少了 / 钱包对不上 / 最近几天账户到底亏没亏 / CLOB fill 链路是否漏记”时，**这不是普通绩效切片**。必须使用固定脚本，不准再写一次性 pandas/SQL 临时脚本：
+
+```bash
+python3 scripts/analysis/weather_live_account_reconcile.py \
+  --start YYYY-MM-DD \
+  --end YYYY-MM-DD \
+  --date-field fill_date_bj \
+  --group-by instance,selected_date
+```
+
+账户对账必须同时报告这些层，不能互相替代：
+
+| 指标 | 含义 | 授权来源 |
+|---|---|---|
+| `submitted_notional_usd` | raw live order 记录的下单名义金额，可能含未成交/失败/占用 | `runtime/weather_edge_v1/remote_pm_agent/live/*orders.jsonl` |
+| `posted_notional_usd` | 实际提交到 live 记录里的订单名义金额 | raw live order JSONL |
+| `actual_fill_cost_usd` / `cash_cost_usd` | 已成交买入真正花掉的现金 | `fills.filled_price * fills.filled_shares`，并与 `fact_trades.cost_usd` 交叉检查 |
+| `realized_pnl_usd` | 已结算真实 PnL | `fact_trades.pnl_usd_at_fill WHERE settlement_status='settled'` |
+| `open_cost_usd` | 未结算仓位成本，仍在风险中 | `fact_trades.cost_usd WHERE settlement_status<>'settled' OR settlement_status IS NULL` |
+| `unrealized_pnl_mid/bid/last_fill` | 未结算仓位估值，不是 realized PnL | `fact_trades.val_*`，必须附 `val_snapshot_ts_utc` |
+
+时间字段硬规定：
+- `fill_date_bj` = 真实成交花钱日期；解释钱包现金流默认用它。
+- `target_date` = 天气合约目标日；只用于策略归因、城市日归属，不解释余额减少。
+- `fact_trades.order_date_bj` **禁止用于余额现金流结论**；它可能受回填/重建链路污染，只能作为策略下单归属诊断字段。
+- `orders.placed_at_utc` / raw order `created_at_utc` 用于 submitted/posted notional；它不是已花掉的 fill cost。
+
+最终报告前必须输出 fill 链路一致性：
+- `db_live_real_distinct_fills`
+- `raw_clob_distinct_fills`
+- `db_not_in_raw`
+- `raw_not_in_db`
+
+若 raw live order 文件或 raw CLOB fills 比 `MAX(fact_built_at_utc)` / `MAX(fill_ts_utc)` 更新，结论必须明确写“DB 滞后”，并把 raw submitted/posted notional 与 DB fill cost 分开列。
+
 ### 报告头必填项
 
 每份分析报告的第一个 H2 段（`## 数据快照`）必须包含：
@@ -59,6 +96,7 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild
 ### fact_trades（强制唯一取数源）
 
 **绩效分析必须读 `fact_trades`，禁止绕过直接查 fills/orders/signals 等原始表自算指标。**
+这条约束针对 fill 绩效、settled PnL、open exposure 估值；**账户余额 / wallet cashflow / raw CLOB 对账必须走 §0 的 `weather_live_account_reconcile.py`，不能只看 `fact_trades` 下结论。**
 
 - DB 表：`runtime/weather.db` 的 `fact_trades` 表（73 列，每 fill 一行）
 - Parquet：`runtime/weather_edge_v1/market_data/research/fact_trades.parquet`（与 DB 同步）
@@ -119,10 +157,12 @@ rows = conn.execute("""
 
 | 值 | 含义 |
 |---|---|
-| `live_real` | execution_mode=live 且 fill_status=filled（真实成交） |
+| `live_real` | execution_mode=live 且 fill_status=filled（真实 CLOB 成交） |
 | `live_simulated` | execution_mode=live 且 fill_status=simulated |
 | `paper` | paper 模拟下单 |
 | `snapshot_replay` | snapshot 快照 replay |
+
+> **当前 `live_real` 行数可能为 0** —— 不是代码缺失。pipeline 完整：N100 `live/*.jsonl` → `orders(venue=polymarket_clob, status=submitted)` → `clob_fill_sync` 查 Polymarket CLOB API → `fills(status=filled)` → `fact_trades(trade_class='live_real')`。当前缺口是 `clob_fill_sync` 从本机访问 CLOB API 经常 `ConnectionResetError(104)`（见 [WEATHER_DATA_CANONICAL_SOURCES.md §4.1](WEATHER_DATA_CANONICAL_SOURCES.md#41-真金-clob-live_real-在-fact_trades-当前为-0)）。**不要拿 `live_simulated` 冒充 `live_real`，也不要拿 paper PnL 冒充实盘 PnL。**
 
 #### 已迁移的参考实现（可以直接抄）
 

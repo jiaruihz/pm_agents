@@ -2,9 +2,10 @@
 name: weather-strategy-exposure
 description: >
   查看当前 weather 策略的未结算持仓和风险敞口（按市场/城市/到期日聚合，含 mid/bid/last_fill 三种未实现 PnL 估值）。
-  触发词：持仓、敞口、未结算、未平仓、风险、当前仓位、还挂着哪些单、open position、仓位风险。
+  触发词：持仓、敞口、未结算、未平仓、风险、当前仓位、还挂着哪些单、open position、仓位风险、
+  余额少了、钱包余额、账户、USDC、cash、cashflow、资金少了、CLOB 对账。
   禁止：绕过 fact_trades 自己 join fills/orders/settlements；漏掉三估值并列；
-  把未实现 PnL 混入历史 realized 绩效。
+  把未实现 PnL 混入历史 realized 绩效；把余额减少直接说成策略亏损。
 ---
 
 # weather-strategy-exposure
@@ -18,6 +19,14 @@ runtime/weather.db.fact_trades
 ```
 
 `fact_trades` 已包含 open fill 的基础信息、settlement 状态、`val_mid` / `val_bid` / `val_last_fill` / `unrealized_pnl_mid`。不要绕回 raw 表手写结算 join 或 PnL 公式。
+
+如果用户问的是余额、钱包、USDC、账户现金变化或 CLOB fill 对账，不要只跑本 skill 的 open exposure SQL；先转 `weather-live-account-reconcile`，使用固定脚本：
+
+```bash
+python3 scripts/analysis/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
+```
+
+账户对账必须拆开 `submitted_notional_usd` / `posted_notional_usd` / `actual_fill_cost_usd` / `open_cost_usd` / `realized_pnl_usd`。`fact_trades.order_date_bj` 禁止用于钱包现金流结论；默认用 `fill_date_bj` 解释实际花钱日期，用 raw live order files 解释 submitted/posted notional。
 
 ---
 

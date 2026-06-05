@@ -18,8 +18,13 @@ docs/WEATHER_STRATEGY_QUANT_DESIGN.md← 架构设计
 docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
 ```
 
-生产端（N100）：`jiarui@192.168.0.200:/home/jiarui/projects/weather-predict`  
-分析端（本机）：`/home/rui/projects/pm_agent`
+生产端（N100，**两个 repo 各管一块**）：
+- `jiarui@192.168.0.200:/home/jiarui/projects/weather-predict` ← 信号原料 + 行情/天气 cache（systemd timer）
+- `jiarui@192.168.0.200:/home/jiarui/projects/pm_agent`         ← 实盘交易执行（live_cycle loop 写 `runtime/weather_edge_v1/live/*.jsonl`）
+
+分析端（本机）：`/home/rui/projects/pm_agent`（拉两边镜像 → 本机 `runtime/weather.db` 重建）
+
+> 完整四角色 + 数据链路图见 [docs/WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) 和 [docs/WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md)。**不要再以为 N100 只跑 weather-predict**。
 
 ## Weather 策略分析强制规约
 
@@ -30,11 +35,44 @@ docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
 | 历史绩效 / A/B 对比 | 绩效、PnL、ROI、win rate、胜率、切片、对比、A/B、回测结果、策略表现 | `weather-strategy-performance` |
 | 单日血缘 / 逐笔复盘 | 单日、血缘、逐笔、当日复盘、为什么下了这单、信号到结算 | `weather-strategy-lineage` |
 | 持仓敞口 / 未平仓 | 持仓、敞口、未结算、未平仓、风险、当前仓位、open position | `weather-strategy-exposure` |
+| 账户余额 / CLOB 对账 | 余额、钱包、账户、USDC、cash、cashflow、资金少了、买入成本、submitted notional、actual fill cost、CLOB 对账、fill_id 对不上 | `weather-live-account-reconcile` |
 | 策略/参数部署到 N100 | 部署策略、上线策略、新 policy、切换策略、修改参数部署、上 V2/V3、启动新分支、城市池、加城市、移除城市、T1/T2、city_pools、paper_policy、N100 代码改动 | `weather-strategy-deploy` |
 
 **禁止**：在不 invoke skill 的情况下直接写一次性 pandas 脚本做策略分析。  
 **禁止**：任何改变 N100 生产行为的代码/配置变更（city_pools、paper_policy、execution_policy 等）通过 `scp`/`rsync` 直接推送，必须走 `weather-strategy-deploy` skill 的 git-first 流程。  
 **口径唯一来源**：`docs/WEATHER_ANALYSIS_CONTRACT.md`（§2 PnL 公式、§5 切片维度白名单、§6 默认城市池）
+
+### Live 账户余额 / CLOB 对账强制口径
+
+用户问“余额少了 / 最近几天账户亏了 / 钱包对不上 / CLOB fill 对不上”时，必须走 `weather-live-account-reconcile`，使用：
+
+```bash
+python3 scripts/analysis/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
+```
+
+硬规定：
+- **禁止**用 `fact_trades.order_date_bj` 解释钱包现金流或余额变化；它可能受回填/重建链路污染，只能作为策略下单归属诊断字段。
+- `target_date` 是天气合约目标日，不是现金流日期；`fill_date_bj` 才是已成交买入真正花钱日期。
+- `submitted_notional_usd` / `posted_notional_usd` / `actual_fill_cost_usd` / `open_cost_usd` / `realized_pnl_usd` 必须分开报；`cost_usd` 或 open cost 不是“亏损”。
+- 已结算 PnL 只看 `settlement_status='settled'` 的 `pnl_usd_at_fill`；未结算只能报 MTM，并必须附 `val_snapshot_ts_utc`，估值旧就明确说旧。
+- 如果 raw live order 文件比 DB 新，必须用脚本里的 Raw Live Order Files 段补充 submitted/posted notional，并说明 DB 滞后。
+- 最终结论前必须报告 fill_id reconciliation：`db_live_real_distinct_fills`、`raw_clob_distinct_fills`、`db_not_in_raw`、`raw_not_in_db`。
+
+### 分析前数据源自检（强制 5 行 SQL）
+
+任何 weather 分析、模型评估、报告前，先跑这 5 个查询确认数据真在「权威源」上、缺口在哪。完整说明见 `docs/WEATHER_DATA_CANONICAL_SOURCES.md`。
+
+```sql
+SELECT MAX(fact_built_at_utc) FROM fact_trades;                       -- 数据新鲜度
+SELECT trade_class, COUNT(*) FROM fact_trades GROUP BY trade_class;   -- live_real / paper / snapshot_replay 分布
+SELECT settlement_status, COUNT(*) FROM fact_trades GROUP BY settlement_status;  -- settled/unsettled
+SELECT COUNT(*), SUM(eligible), SUM(paper_ordered), SUM(live_filled) FROM fact_signal_candidates;  -- 机会粒度覆盖
+SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 1 ELSE 0 END) with_fill
+  FROM orders o LEFT JOIN fills f USING(execution_id) WHERE o.venue='polymarket_clob' GROUP BY o.status;
+```
+
+**禁止**：读 `runtime/_legacy/*.db`（已退役）、绕过 `fact_trades` 自算 fill PnL、绕过 `fact_signal_candidates` 自算成交质量/漏单/滑点。  
+**当前已知缺口**：`live_real` 行数可能为 0（`clob_fill_sync` 网络问题，非代码缺失，见 canonical sources §4.1）。`gfs_365d_*` cache 文件名误标，实际 ~735 天。`decision_window_missing` ~44%。
 
 ---
 
@@ -332,10 +370,13 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) | weather-predict 与 pm_agent 的生产/本机职责边界、数据同步边界、重复文件注意事项 |
 | [WEATHER_CITY_POOL_DECISIONS.md](docs/WEATHER_CITY_POOL_DECISIONS.md) | 城市池决策日志：T1/T2 当前口径、升降级依据、N100 部署记录 |
 | [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md) | N100↔pm_agent 字段名/枚举/ID算法契约，**改字段前必读** |
+| [WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) | 单页数据源拓扑：哪个表/文件是 source/mirror/derived/legacy，已知缺口列表，**避免被错误数据误导** |
 | [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) | N100→镜像→DB→API 全链路、所有脚本职责、PnL口径、运维 runbook |
 | [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) | 核心架构设计（血缘链/策略身份/Run Registry/DB schema/API/前端） |
 | [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | 数据模型分层与缺口审计（P0已完成，P1/P2待办） |
 | [WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md) | 早期实盘历史与回填治理（重复下单/城市池错误/sizing改动） |
+| [WEATHER_PROBABILITY_MODEL_REVIEW.md](docs/WEATHER_PROBABILITY_MODEL_REVIEW.md) | 概率模型（`model_p_yes`）审计：生产 baseline、条件模型数据缺口、季节条件化、forecast jump 风险 |
+| [WEATHER_PROBABILITY_MODEL_ROADMAP.md](docs/WEATHER_PROBABILITY_MODEL_ROADMAP.md) | 概率模型分阶段改造路线：M0 可观测骨架、稳定性门、季节残差、lead-time/ensemble/ML 分布模型 |
 | [WEATHER_DASHBOARD_TROUBLESHOOTING.md](docs/WEATHER_DASHBOARD_TROUBLESHOOTING.md) | Dashboard 故障排查：portproxy/CORS/env/null crash 根因与修复 |
 | [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) | 通用运维手册：常驻进程、日志路径、启停命令 |
 
@@ -350,6 +391,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_LEDGER_POSITION_ANALYSIS.md](docs/WEATHER_LEDGER_POSITION_ANALYSIS.md) | 持仓分析设计（Dashboard 持仓拆解页面） |
 | [WEATHER_MID_PRICE_CORE_V2_DESIGN.md](docs/WEATHER_MID_PRICE_CORE_V2_DESIGN.md) | mid_price_core_v2 执行策略设计（低价正 alpha 漏单拆单、maker_queue 删除方案） |
 | [WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md](docs/WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md) | 入场区间×仓位 sizing 设计（side×价位桶档位+edge缩放+硬上限,替代等额$5/统一0.25-0.75带） |
+| [WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md](docs/WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md) | weather-predict 与 pm_agent 数据协议/采集统一迁移方案（canonical schema、paper语义、shadow-run cutover） |
 
 ### 研究与分析报告（时间点快照，不更新）
 
@@ -365,4 +407,5 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [2026-05-29-strategy-entry-band-and-execution-quality.md](docs/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | 2026-05-29 入场价 25-75 区间调参 + maker_queue vs mid_price 成交质量/paper 对比 + 策略建议 |
 | [2026-05-30-performance-entry-band-research.md](docs/analysis/2026-05/2026-05-30-performance-entry-band-research.md) | 2026-05-30 入场价带（0.25-0.75）调参研究：side×价位桶 EV、候选反事实、live/paper 对照 |
 | [2026-05-30-performance-sizing-and-band-distribution.md](docs/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md) | 2026-05-30 仓位 sizing×入场区间收益分布研究（反过拟合、bootstrap、paper→live 样本外验证） |
+| [2026-06-03-performance-three-strategy-instances.md](docs/analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | 2026-06-03 三策略实例复盘：mid_price_core_v1/v2/side-band 的 live_real 绩效、成交质量、价位桶和新增城市池 |
 | [COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md](docs/COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md) | Copy Trade 钱包研究执行计划 |

@@ -142,10 +142,39 @@ PowerShell 引号很容易把上一层查询拆坏，尤其是嵌套 `bash -lc`�
 
 ## Weather 数据分工与数据真相
 
-### N100 远端：生产采集机
+> **重要**：N100 上同时跑**两个 repo**，不是只跑 weather-predict。完整四角色边界见 [docs/WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md)。下面是简版口径。
+
+四角色拓扑：
+
+| 角色 | 路径 | 干什么 | 不干什么 |
+|---|---|---|---|
+| **N100 weather-predict** | `/home/jiarui/projects/weather-predict` | 信号原料 + 行情采集（systemd timer）：paper snapshot、orderbook snapshot、pm_history、GFS cache、observation cache | 实盘下单 |
+| **N100 pm_agent** | `/home/jiarui/projects/pm_agent` | 实盘交易执行（foreground loop）：读信号 → 生成 plan → 下 CLOB 单 → 写 live JSONL + live_cycle 日志 | 行情采集、信号生成 |
+| **本机 pm_agent** | `/home/rui/projects/pm_agent` | 分析、看板、回测、本机部署 staging | 任何生产数据采集 |
+| **本机 weather-predict** | `/home/rui/projects/weather-predict` | weather-predict 代码改动的开发副本 | 数据真相 |
+
+数据流：
+
+```text
+N100 weather-predict ─(snapshot/cache)─┐
+                                       │ rsync (sync_weather_remote.sh)
+                                       ▼
+                            本机 runtime/weather_edge_v1/market_data/
+N100 pm_agent ─(live signals/plans/orders/cycle)─┐
+                                                 │ rsync (sync_weather_remote.sh)
+                                                 ▼
+                            本机 runtime/weather_edge_v1/remote_pm_agent/
+                                                 │
+                                                 │ ingest (weather_dashboard/legacy_migration/*)
+                                                 ▼
+                            本机 runtime/weather.db (fact_trades / fact_signal_candidates / ...)
+```
+
+### N100 远端：双 repo 生产机
 
 远端机器: `jiarui@192.168.0.200`
-远端 base: `/home/jiarui/projects/weather-predict`
+- 信号原料 base: `/home/jiarui/projects/weather-predict`
+- 实盘执行 base: `/home/jiarui/projects/pm_agent`
 
 ### N100 SSH 约定
 
@@ -168,21 +197,33 @@ Host 192.168.0.200
 ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/weather-predict && <command>'
 ```
 
-N100 是生产数据真相，负责:
-- systemd timers
+N100 是生产数据真相，**两个 repo 各管一块**：
+
+**weather-predict**（systemd timer 驱动）负责行情/天气原料：
 - 实时半小时 Polymarket snapshot
 - paper order ledger
 - 每日 settlement / `pm_history` / GFS cache refresh
 - T2 盘口先行采集
 - 天气观测数据补全的生产运行
 
-生产数据目录:
+**pm_agent**（foreground loop 驱动，CWD=`/home/jiarui/projects/pm_agent`）负责实盘交易：
+- `scripts/ops/weather_live_cycle_loop.sh`（多策略实例并行）
+- 读 signals → 生成 plans → 调 py_clob_client 下单 → 写 live JSONL + live_cycle 日志
+- 暂停开关 / Telegram 控制 / live doctor
+
+生产数据目录（weather-predict 侧）:
 - `/home/jiarui/projects/weather-predict/output/paper_snapshots/`
 - `/home/jiarui/projects/weather-predict/output/paper_trades/`
 - `/home/jiarui/projects/weather-predict/output/research/`
 - `/home/jiarui/projects/weather-predict/cache/pm_history/`
 - `/home/jiarui/projects/weather-predict/cache/wu_obs/`
 - `/home/jiarui/projects/weather-predict/cache/iem_v2_*.csv`
+
+生产数据目录（pm_agent 侧 — 实盘 lineage）:
+- `/home/jiarui/projects/pm_agent/runtime/weather_edge_v1/signals/`
+- `/home/jiarui/projects/pm_agent/runtime/weather_edge_v1/plans/`
+- `/home/jiarui/projects/pm_agent/runtime/weather_edge_v1/live/` (CLOB 下单 JSONL)
+- `/home/jiarui/projects/pm_agent/runtime/weather_edge_v1/live_cycle/` (cycle 日志)
 
 健康检查入口:
 ```bash
@@ -195,18 +236,28 @@ ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/doctor_re
 
 本机只拉 N100 数据镜像，用于分析、回测、报表、前端看板和策略开发。本机不作为生产采集来源，也不直接影响远端 paper order，除非明确执行部署。
 
-本机镜像根目录:
+本机镜像有**两个根**，分别对应 N100 两个 repo:
 ```text
-/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/
+/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/    ← N100 weather-predict 镜像
+/home/rui/projects/pm_agent/runtime/weather_edge_v1/remote_pm_agent/ ← N100 pm_agent 镜像
 ```
 
-镜像目录映射:
+镜像目录映射 — weather-predict 侧:
 - N100 `output/paper_snapshots/` → 本机 `runtime/weather_edge_v1/market_data/paper_snapshots/`
 - N100 `output/paper_trades/` → 本机 `runtime/weather_edge_v1/market_data/paper_trades/`
 - N100 `output/research/` → 本机 `runtime/weather_edge_v1/market_data/research/`
 - N100 `cache/pm_history/` → 本机 `runtime/weather_edge_v1/market_data/cache/pm_history/`
 - N100 `cache/wu_obs/` → 本机 `runtime/weather_edge_v1/market_data/cache/wu_obs/`
 - N100 `cache/iem_v2_*.csv` → 本机 `runtime/weather_edge_v1/market_data/cache/iem/`
+
+镜像目录映射 — N100 pm_agent 侧（实盘 lineage，分析必读）:
+- N100 `runtime/weather_edge_v1/signals/`    → 本机 `runtime/weather_edge_v1/remote_pm_agent/signals/`
+- N100 `runtime/weather_edge_v1/plans/`      → 本机 `runtime/weather_edge_v1/remote_pm_agent/plans/`
+- N100 `runtime/weather_edge_v1/live/`       → 本机 `runtime/weather_edge_v1/remote_pm_agent/live/`（CLOB 实盘订单 JSONL）
+- N100 `runtime/weather_edge_v1/live_cycle/` → 本机 `runtime/weather_edge_v1/remote_pm_agent/live_cycle/`
+- N100 `runtime/weather_edge_v1/paper/`      → 本机 `runtime/weather_edge_v1/remote_pm_agent/paper/`
+
+本机 `runtime/weather.db` 由 `weather_dashboard/legacy_migration/*` 从上面两个镜像 ingest 生成；它**不是** N100 任何 DB 的拷贝，是本机独立重建的分析 DB。本机 `runtime/weather_edge_v1/live/` 是早期本机自跑 live loop 留下的历史目录，**当前已无新数据，可忽略**。
 
 同步入口:
 ```bash
@@ -351,6 +402,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | 历史绩效 / A/B 对比 | 绩效、PnL、ROI、win rate、胜率、切片、对比、A/B、回测结果、策略表现 | `weather-strategy-performance` |
 | 单日血缘 / 逐笔复盘 | 单日、血缘、逐笔、当日复盘、为什么下了这单、信号到结算 | `weather-strategy-lineage` |
 | 持仓敞口 / 未平仓 | 持仓、敞口、未结算、未平仓、风险、当前仓位、open position | `weather-strategy-exposure` |
+| 账户余额 / CLOB 对账 | 余额、钱包、账户、USDC、cash、cashflow、资金少了、买入成本、submitted notional、actual fill cost、CLOB 对账、fill_id 对不上 | `weather-live-account-reconcile` |
 | 策略/参数部署到 N100 | 部署策略、上线策略、新 policy、切换策略、修改参数部署、上 V2/V3、启动新分支、城市池、加城市、移除城市、T1/T2、city_pools、paper_policy、N100 代码改动 | `weather-strategy-deploy` |
 
 > 数据可能陈旧时（分析「最新/今天/最近几天」战绩），先走 `weather-fact-rebuild` 同步+重建，再 invoke 上面的分析 skill。
@@ -359,6 +411,38 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 **禁止**：手搓单跑 `build_weather_*.py` 或跳过 `sync_weather_remote.sh` 直接重建底表（破坏链条顺序，见 `weather-fact-rebuild`）。  
 **禁止**：任何改变 N100 生产行为的代码/配置变更（city_pools、paper_policy、execution_policy、live_cycle 等）通过 `scp`/`rsync` 直接推送，必须走 `weather-strategy-deploy` skill 的 git-first 流程。  
 **口径唯一来源**：[docs/WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)
+
+### Live 账户余额 / CLOB 对账强制口径
+
+用户问“余额少了 / 最近几天账户亏了 / 钱包对不上 / CLOB fill 对不上”时，必须走 `weather-live-account-reconcile`，使用：
+
+```bash
+python3 scripts/analysis/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
+```
+
+硬规定：
+- **禁止**用 `fact_trades.order_date_bj` 解释钱包现金流或余额变化；它可能受回填/重建链路污染，只能作为策略下单归属诊断字段。
+- `target_date` 是天气合约目标日，不是现金流日期；`fill_date_bj` 才是已成交买入真正花钱日期。
+- `submitted_notional_usd` / `posted_notional_usd` / `actual_fill_cost_usd` / `open_cost_usd` / `realized_pnl_usd` 必须分开报；`cost_usd` 或 open cost 不是“亏损”。
+- 已结算 PnL 只看 `settlement_status='settled'` 的 `pnl_usd_at_fill`；未结算只能报 MTM，并必须附 `val_snapshot_ts_utc`，估值旧就明确说旧。
+- 如果 raw live order 文件比 DB 新，必须用脚本里的 Raw Live Order Files 段补充 submitted/posted notional，并说明 DB 滞后。
+- 最终结论前必须报告 fill_id reconciliation：`db_live_real_distinct_fills`、`raw_clob_distinct_fills`、`db_not_in_raw`、`raw_not_in_db`。
+
+### 分析前数据源自检（强制 5 行 SQL）
+
+任何 weather 分析、模型评估、报告前，先跑这 5 个查询确认数据真在「权威源」上、缺口在哪。完整说明见 [docs/WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md)。
+
+```sql
+SELECT MAX(fact_built_at_utc) FROM fact_trades;                       -- 数据新鲜度
+SELECT trade_class, COUNT(*) FROM fact_trades GROUP BY trade_class;   -- live_real / paper / snapshot_replay 分布
+SELECT settlement_status, COUNT(*) FROM fact_trades GROUP BY settlement_status;  -- settled/unsettled
+SELECT COUNT(*), SUM(eligible), SUM(paper_ordered), SUM(live_filled) FROM fact_signal_candidates;  -- 机会粒度覆盖
+SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 1 ELSE 0 END) with_fill
+  FROM orders o LEFT JOIN fills f USING(execution_id) WHERE o.venue='polymarket_clob' GROUP BY o.status;
+```
+
+**禁止**：读 `runtime/_legacy/*.db`（已退役）、读 `runtime/weather_v2.db` / `runtime/weather_edge_v1/weather.db`（已搬到 `_legacy/`）、绕过 `fact_trades` 自算 fill PnL、绕过 `fact_signal_candidates` 自算成交质量/漏单/滑点。  
+**当前已知缺口**（不要踩坑）：`live_real` 行数可能为 0（`clob_fill_sync` 网络问题，非代码缺失，见 canonical sources §4.1）。`gfs_365d_*` cache 文件名误标，实际 ~735 天。`decision_window_missing` ~44%，反事实结论只覆盖另一半机会。
 
 ---
 
@@ -376,12 +460,15 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_CITY_POOL_DECISIONS.md](docs/WEATHER_CITY_POOL_DECISIONS.md) | 城市池决策日志：T1/T2 当前口径、升降级依据、N100 部署记录 |
 | [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md) | N100↔pm_agent 字段名/枚举/ID算法契约，**改字段前必读** |
 | [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md) | 分析口径唯一来源：PnL/win_rate/切片/城市池/时区，**所有分析前必读** |
+| [WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) | 单页数据源拓扑：哪个表/文件是 source/mirror/derived/legacy，已知缺口列表，**避免被错误数据误导** |
 | [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) | N100→镜像→DB→API 全链路、所有脚本职责、PnL口径、运维 runbook |
 | [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) | 核心架构设计（血缘链/策略身份/Run Registry/DB schema/API/前端） |
 | [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | 数据模型分层与缺口审计（P0已完成，P1/P2待办） |
 | [WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md) | 早期实盘历史与回填治理（重复下单/城市池错误/sizing改动） |
 | [WEATHER_DASHBOARD_TROUBLESHOOTING.md](docs/WEATHER_DASHBOARD_TROUBLESHOOTING.md) | Dashboard 故障排查：portproxy/CORS/env/null crash 根因与修复 |
 | [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) | 通用运维手册：常驻进程、日志路径、启停命令 |
+| [WEATHER_PROBABILITY_MODEL_REVIEW.md](docs/WEATHER_PROBABILITY_MODEL_REVIEW.md) | 概率模型（`model_p_yes`）专家评估：生产 baseline 算法、v2 条件模型为何没上线（特征 0% 覆盖）、季节条件化实测 +9% Brier、改进优先级 |
+| [WEATHER_PROBABILITY_MODEL_ROADMAP.md](docs/WEATHER_PROBABILITY_MODEL_ROADMAP.md) | 概率模型分阶段改造路线：M0 可观测骨架、稳定性门、季节残差、lead-time/ensemble/ML 分布模型 |
 
 ### 已实现底表（DERIVED 物化层，分析唯一授权源）
 
@@ -401,6 +488,7 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_LEDGER_POSITION_ANALYSIS.md](docs/WEATHER_LEDGER_POSITION_ANALYSIS.md) | 持仓分析设计（Dashboard 持仓拆解页面） |
 | [WEATHER_MID_PRICE_CORE_V2_DESIGN.md](docs/WEATHER_MID_PRICE_CORE_V2_DESIGN.md) | mid_price_core_v2 执行策略设计（低价正 alpha 漏单拆单、maker_queue 删除方案） |
 | [WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md](docs/WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md) | 入场区间×仓位 sizing 设计（side×价位桶档位+edge缩放+硬上限,替代等额$5/统一0.25-0.75带） |
+| [WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md](docs/WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md) | weather-predict 与 pm_agent 数据协议/采集统一迁移方案（canonical schema、paper语义、shadow-run cutover） |
 
 ### 研究与分析报告（时间点快照，不更新）
 
@@ -416,4 +504,18 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [2026-05-29-strategy-entry-band-and-execution-quality.md](docs/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | 2026-05-29 入场价 25-75 区间调参 + maker_queue vs mid_price 成交质量/paper 对比 + 策略建议 |
 | [2026-05-30-performance-entry-band-research.md](docs/analysis/2026-05/2026-05-30-performance-entry-band-research.md) | 2026-05-30 入场价带（0.25-0.75）调参研究：side×价位桶 EV、候选反事实、live/paper 对照 |
 | [2026-05-30-performance-sizing-and-band-distribution.md](docs/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md) | 2026-05-30 仓位 sizing×入场区间收益分布研究（反过拟合、bootstrap、paper→live 样本外验证） |
+| [2026-06-05-city-day-basket-eval.md](docs/analysis/2026-06/2026-06-05-city-day-basket-eval.md) | 2026-06-05 weather_edge_engine PR2 离线 replay：raw vs blended-single vs basket 三规则对比 + 归因 + Step 2→3 gate 结论（暂不通过） |
+| [2026-06-03-performance-three-strategy-instances.md](docs/analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | 2026-06-03 三策略实例复盘：mid_price_core_v1/v2/side-band 的 live_real 绩效、成交质量、价位桶和新增城市池 |
+| [2026-06-05-probability-calibration.md](docs/analysis/2026-06/2026-06-05-probability-calibration.md) | 2026-06-05 概率校准实测：raw model vs 市场 Brier、isotonic/Platt/凸组合 ensemble，time-split + LOO 双 holdout |
+| [WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md](docs/WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md) | 2026-06-05 综合复盘：1 月 67 fills live_real 绩效 + 概率校准发现 + 数据管道审计 + 3 个可执行动作 |
+| [WEATHER_STRATEGY_DIRECTION_RECONCILIATION_2026-06-05.md](docs/WEATHER_STRATEGY_DIRECTION_RECONCILIATION_2026-06-05.md) | 2026-06-05 战略方向对齐：`模型优化研究.md` Phase 0-4 路线 × 校准发现互补整合，修订版 Phase 0/1 |
+| [WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](docs/WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) | 2026-06-05 **单城市混合模型 (PCBM) 完整实施 + 研究计划**：架构总图、文件清单、训练/灰度方案、kill 判据 as code、4 周 timeline、10 个待拍板决策项（代码可启动） |
+| [模型优化研究.md](docs/模型优化研究.md) | 战略方向：从信号到可部署 edge，Phase 0-4 路线 + 5 条 kill 判据（含 2026-06-05 同步注） |
 | [COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md](docs/COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md) | Copy Trade 钱包研究执行计划 |
+
+### 开发日志（dev_logs/，按 PR 串起来）
+
+| 文档 | 用途 |
+|---|---|
+| [2026-06-05-weather-edge-engine-pr1.md](docs/dev_logs/2026-06-05-weather-edge-engine-pr1.md) | weather_edge_engine PR1（本机纯函数骨架：blender + city_day_basket + tests）开发记录，含设计偏离 |
+| [2026-06-05-weather-edge-engine-pr2.md](docs/dev_logs/2026-06-05-weather-edge-engine-pr2.md) | weather_edge_engine PR2（离线 replay + sklearn recalibration）开发记录与结论 |

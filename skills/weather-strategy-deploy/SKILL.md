@@ -251,14 +251,18 @@ wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
 
 适用：新增/切换 execution policy、live cycle、branch daemon。
 
-当前 N100 生产目标不是“按 execution_policy 数策略”，而是三条明确的
+当前 N100 生产目标不是“按 execution_policy 数策略”，而是默认两条明确的
 `strategy_instance`：
 
 | strategy_instance | execution_policy | source_strategy_instance | 入场/edge |
 |---|---|---|---|
 | `mid_price_core_v1_25_75` | `mid_price_core_v1` | direct | global 0.25-0.75, edge>=0.10 |
-| `mid_price_core_v2_25_75` | `mid_price_core_v2` | `mid_price_core_v1_25_75` | same source signals |
 | `mid_price_core_v1_side_band` | `mid_price_core_v1` | direct | YES 0.20-0.45 edge>=0.20; NO 0.35-0.65 edge>=0.10 |
+
+`mid_price_core_v2_25_75` was stopped from live on 2026-06-06. It may only be
+started deliberately for a named shadow/live experiment with
+`START_MID_PRICE_CORE_V2_25_75=1`; do not count it as part of default
+production.
 
 正常启动入口是：
 
@@ -266,6 +270,8 @@ wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
 wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
   'cd /home/jiarui/projects/pm_agent && scripts/ops/start_weather_three_strategy_instances.sh'
 ```
+
+The script name is historical; by default it now starts two instances.
 
 ---
 

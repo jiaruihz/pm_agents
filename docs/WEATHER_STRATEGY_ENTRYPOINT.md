@@ -1,6 +1,6 @@
 # Weather Strategy Entrypoint
 
-Last updated: 2026-05-27
+Last updated: 2026-06-06
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.
 
@@ -22,7 +22,7 @@ For early live rollout history, known mistakes, and how to split local/N100 live
 Current live rollout policy:
 
 ```text
-city_pool = t1_trading (v3, 24 cities — see docs/WEATHER_CITY_POOL_DECISIONS.md)
+city_pool = t1_trading (v4, 22 cities — see docs/WEATHER_CITY_POOL_DECISIONS.md)
 signal capture = scan latest 90 minutes of synced snapshots; executable window 22h <= hours_to_settle_now <= 28h
 sizing_mode = notional
 max_order_notional = 5.00
@@ -30,13 +30,19 @@ max_order_shares = 25.00
 order style = maker-only GTC, post_only=True
 ```
 
-N100 should run exactly three weather live strategy instances:
+N100 should run exactly two weather live strategy instances by default:
 
 | strategy_instance | execution_policy | source_strategy_instance | Entry / edge gate |
 |---|---|---|---|
 | `mid_price_core_v1_25_75` | `mid_price_core_v1` | direct signal builder | global `0.25 <= price < 0.75`, `edge >= 0.10` |
-| `mid_price_core_v2_25_75` | `mid_price_core_v2` | `mid_price_core_v1_25_75` | same source signals as `mid_price_core_v1_25_75` |
 | `mid_price_core_v1_side_band` | `mid_price_core_v1` | direct signal builder | YES `0.20 <= price < 0.45`, `edge >= 0.20`; NO `0.35 <= price < 0.65`, `edge >= 0.10` |
+
+`mid_price_core_v2_25_75` was stopped from live on 2026-06-06. Finding:
+V2 execution improved fill-vs-plan on BUY_YES, but the grabbed `0.25-0.75`
+YES opportunities were negative alpha (`target_date >= 2026-06-01`: V2
+BUY_YES PnL `-22.64`, ROI `-19.45%`). Do not restart it by default; only
+explicitly re-enable with `START_MID_PRICE_CORE_V2_25_75=1` for a named
+shadow/live experiment after adding YES/city filters.
 
 Operationally, this is one order pipeline parameterized by
 `strategy_instance`, `execution_policy`, and entry-band config. Do not count
@@ -48,24 +54,32 @@ Start the intended production set with:
 wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && scripts/ops/start_weather_three_strategy_instances.sh'
 ```
 
-## 当前城市池 v3（2026-05-27）
+The script name is historical; by default it now starts two instances. V2 only
+starts when `START_MID_PRICE_CORE_V2_25_75=1` is set.
+
+## 当前城市池 v4（2026-06-06）
 
 城市池决策日志和完整证据见 `docs/WEATHER_CITY_POOL_DECISIONS.md`。
 代码 source of truth 是 `weather-predict/city_pools.py` 的
 `CITY_TRADING_CONFIG`。
 
-**T1 完整城市列表（2026-05-29 city×side 配置，共 24 个）：**
-Amsterdam, Ankara, Boston, BuenosAires, Chengdu, Guangzhou, Istanbul,
-Jeddah, Karachi, LA, London, Lucknow, Madrid, Manila, Miami, Moscow,
-Munich, NYC, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw
+**T1 完整城市列表（2026-06-06 city×side 配置，共 22 个）：**
+Ankara, Boston, Chengdu, Guangzhou, Istanbul, Jeddah, Karachi, LA,
+London, Lucknow, Madrid, Manila, Miami, Moscow, Munich, NYC, Phoenix,
+Seattle, Shanghai, Singapore, Tokyo, Warsaw
 
-**2026-05-29 city×side 变更：**
+**2026-06-06 city pool 变更：**
+- Amsterdam 降级到 T2 / research only：三策略实例 all-history live PnL `-30.43`, ROI `-82.0%`。
+- BuenosAires 降级到 T2 / research only：三策略实例 all-history live PnL `-28.11`, ROI `-49.6%`。
+- V2 live 默认停止：主动抢单质量不是主要问题，`0.25-0.75` YES 信号负 alpha 是主要问题。
+
+**保留的 2026-05-29 city×side 规则：**
 - Madrid 重新进入 T1，但只允许 `BUY_NO`。
 - Shanghai 保留 T1，但只允许 `BUY_NO`。
 - Paris 降级到 T2 / research only。
 - 其余 T1 城市默认双侧。
 
-Paris / Beijing / Chicago / Austin 均保留在 `FULL_CITY_CONFIGS`，因此是 T2
+Paris / Beijing / Chicago / Austin / Amsterdam / BuenosAires 均保留在 `FULL_CITY_CONFIGS`，因此是 T2
 research-only，不是删除城市配置。
 
 ## 2026-05-26 城市池 v2 变更（已被 v3 覆盖，paper ledger 生效）
@@ -95,7 +109,9 @@ London, Lucknow, Madrid, Miami, Moscow, NYC, Paris, Phoenix, Seattle,
 Shanghai, Tokyo, Warsaw
 
 `maker_queue_v1` is retired. Do not select it via CLI or environment variables.
-Current live execution policy branches are `mid_price_core_v1`, `mid_price_core_v1_side_band`, and `mid_price_core_v2_25_75`.
+Current default live execution policy branches are `mid_price_core_v1_25_75`
+and `mid_price_core_v1_side_band`. `mid_price_core_v2_25_75` is stopped from
+live by default as of 2026-06-06.
 
 Execution policy is part of `strategy_config`, not part of signal generation.
 For A/B tests, build signals once and branch after `signals`:
@@ -112,6 +128,12 @@ file. This keeps market/model opportunities identical while giving each policy
 its own config/run/plan/order lineage.
 
 Important: `city_pool=t1_trading` is the execution pool source of truth. Do not add a second hardcoded T1 city allowlist unless there is a new explicit design decision. If a T2 city appears in live signals or live orders, treat it as an upstream `city_pool` or live-cycle parameter incident, pause live, and investigate.
+
+2026-06-06 exception: `scripts/ops/start_weather_three_strategy_instances.sh`
+now passes an explicit v4 T1 allowlist to `mid_price_core_v1_25_75`. This is a
+live safety gate so Amsterdam/BuenosAires cannot slip through stale synced
+snapshots during the signal lookback. Keep it mirrored with
+`weather-predict/city_pools.py` whenever T1 changes.
 
 ## Production Checks
 

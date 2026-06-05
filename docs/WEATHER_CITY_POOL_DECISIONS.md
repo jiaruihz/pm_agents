@@ -1,6 +1,6 @@
 # 天气策略城市池决策记录
 
-更新时间：2026-05-27
+更新时间：2026-06-06
 
 这份文档专门记录天气策略城市池怎么变、为什么变、当前哪些城市可以实盘。
 
@@ -23,24 +23,24 @@
 
 ## 当前结论
 
-当前版本：v3  
-决策日期：2026-05-27  
-T1 城市数：24
+当前版本：v4  
+决策日期：2026-06-06  
+T1 城市数：22
 
 ### 当前 T1 城市
 
 | 区域/用途 | 城市 |
 |---|---|
-| 美洲 | Boston, LA, Miami, NYC, Phoenix, Seattle, BuenosAires |
-| 欧洲 | Amsterdam, Ankara, Istanbul, London, Moscow, Munich, Paris, Warsaw |
+| 美洲 | Boston, LA, Miami, NYC, Phoenix, Seattle |
+| 欧洲 | Ankara, Istanbul, London, Madrid, Moscow, Munich, Warsaw |
 | 亚洲 / 中东 | Chengdu, Guangzhou, Jeddah, Karachi, Lucknow, Manila, Shanghai, Singapore, Tokyo |
 
 完整列表：
 
 ```text
-Amsterdam, Ankara, Boston, BuenosAires, Chengdu, Guangzhou, Istanbul,
-Jeddah, Karachi, LA, London, Lucknow, Manila, Miami, Moscow, Munich,
-NYC, Paris, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw
+Ankara, Boston, Chengdu, Guangzhou, Istanbul, Jeddah, Karachi, LA,
+London, Lucknow, Madrid, Manila, Miami, Moscow, Munich, NYC, Phoenix,
+Seattle, Shanghai, Singapore, Tokyo, Warsaw
 ```
 
 ### 当前不在 T1 的重点城市
@@ -51,6 +51,8 @@ NYC, Paris, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw
 | Beijing | T2 / research only | live ROI -7.6%，不继续扩 size |
 | Chicago | T2 / research only | live ROI -18.5%，样本虽小但表现弱 |
 | Austin | T2 / research only | v2 时已移出，赔率结构不利 |
+| Amsterdam | T2 / research only | 2026-06-06 降级：三策略实例 all-history live PnL -30.43 / ROI -82.0%，V1-only ROI -61.9% |
+| BuenosAires | T2 / research only | 2026-06-06 降级：三策略实例 all-history live PnL -28.11 / ROI -49.6%，V1-only ROI -22.2% |
 
 ## 这次 v3 怎么改
 
@@ -126,6 +128,47 @@ Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle
 | 低 size 观察 | Lucknow, Istanbul, Ankara, Karachi | 总 ROI 为正，但赚钱天数比例不够稳 |
 
 ## 历史记录
+
+### 2026-06-06：停 V2 live，Amsterdam / BuenosAires 降级到 T2
+
+动作：
+
+- `mid_price_core_v2_25_75` 从 live 默认启动集中移除；生产已停止 V2 branch loop。
+- `Amsterdam` 从 `TRADING_T1_CITIES` 移到 `RESEARCH_T2_CITIES`。
+- `BuenosAires` 从 `TRADING_T1_CITIES` 移到 `RESEARCH_T2_CITIES`。
+- 两城仍保留在 `FULL_CITY_CONFIGS`，继续收集、结算、paper/research，不删除历史或天气配置。
+
+三实例共同窗口（`target_date >= 2026-06-01`, `trade_class='live_real'`）：
+
+| strategy_instance | settled_cost | realized_pnl | ROI | open_cost | mid MTM |
+|---|---:|---:|---:|---:|---:|
+| `mid_price_core_v1_side_band` | 134.70 | +25.27 | +18.76% | 34.02 | -1.99 |
+| `mid_price_core_v1_25_75` | 431.02 | +8.85 | +2.05% | 140.20 | -16.40 |
+| `mid_price_core_v2_25_75` | 252.31 | -20.07 | -7.96% | 44.42 | -4.86 |
+
+V2 结论：
+
+- V2 主动抢单本身不是主要问题：V2 BUY_YES 的 `fill PnL - plan PnL = +11.63`，实际成交价比 plan 更好。
+- 问题在 `0.25-0.75` YES 信号负 alpha：共同窗口 V2 BUY_YES `-22.64 / ROI -19.45%`，V1 BUY_YES `-8.50 / ROI -8.40%`。
+- V2 把负 alpha YES 样本更积极地成交出来，因此不再作为 live 默认实例；后续只允许显式 shadow/实验启动。
+
+城市降级证据：
+
+| city | 三实例 all-history settled_cost | PnL | ROI | V1-only PnL / ROI | 结论 |
+|---|---:|---:|---:|---:|---|
+| Amsterdam | 37.11 | -30.43 | -82.0% | -10.85 / -61.9% | 三实例、两侧几乎全负，降级 T2 |
+| BuenosAires | 56.63 | -28.11 | -49.6% | -8.12 / -22.2% | V2 YES 满亏 cluster，候选反事实也偏负，降级 T2 |
+
+回滚条件：
+
+- V2 仅在有新的 YES 过滤/城市禁入逻辑后 shadow 重跑；不得直接恢复 live 默认启动。
+- Amsterdam / BuenosAires 若要回 T1，至少需要新的 paper/research 样本证明 city×side 正 alpha，并先 shadow 观察。
+
+部署记录：
+
+- `pm_agent` git-first 部署到 N100 commit `e5557ff`：V2 默认不启动，`mid_price_core_v1_25_75` 显式使用 v4 T1 allowlist。
+- `weather-predict` N100 目录当前不是 git worktree；2026-06-06 走 fallback 热修 `city_pools.py`，备份为 `/home/jiarui/projects/weather-predict/city_pools.py.bak.codex_20260606_v2_stop_city_demotion`。
+- 当前 Codex workspace 不允许写 `/home/rui/projects/weather-predict`，所以本机 weather-predict 开发副本需后续手动同步同一城市池改动，避免下次从本机 weather-predict 部署时覆盖 N100 热修。
 
 ### 2026-05-29：Madrid NO-only 重新进 T1，Paris 降级
 

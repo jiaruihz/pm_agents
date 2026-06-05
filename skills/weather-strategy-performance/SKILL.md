@@ -16,6 +16,8 @@ description: >
 runtime/weather.db.fact_trades
 ```
 
+如果用户问的是“余额少了 / 钱包还有多少 / 最近几天账户到底亏没亏 / CLOB fill 是否漏记”，这不是普通绩效问题，先转 `weather-live-account-reconcile`。绩效 skill 不得用 `fact_trades.order_date_bj` 或 `cost_usd` 解释钱包现金流；余额现金流默认按 `fill_date_bj` 的 actual fill cost 对账，并把 open cost 与 realized PnL 分开。
+
 `fact_trades` 的 grain 是每 fill 一行。它回答“实际成交后的 realized / shadow / replay 绩效”，不回答 missed signal、候选信号、窗口捕获、未成交机会成本、全市场机会质量。
 
 **这些机会粒度问题现在有授权底表 `fact_signal_candidates`**（每机会一行，已物化，见 contract §1）。
@@ -55,7 +57,7 @@ runtime/weather.db.fact_trades
 
 必须先锁分母：
 - `trade_class`: `live_real` / `live_simulated` / `paper` / `snapshot_replay` / `all`
-- 时间字段：默认 `target_date`；如果问题是下单时段，则用 `order_date_bj`
+- 时间字段：默认 `target_date`；如果问题是策略下单归属诊断，可用 `order_date_bj`；如果问题是钱包现金流，不能用本 skill，必须转 `weather-live-account-reconcile` 的 `fill_date_bj`
 - settlement：realized PnL 默认只纳入 `settlement_status='settled'`；未结算估值单独列
 
 ### 第 2 步：确认分析参数
