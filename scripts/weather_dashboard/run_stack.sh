@@ -142,6 +142,10 @@ print(f'Updated metrics for {len(results)} run(s)')
 "
 }
 
+has_parquet_engine() {
+  "$VENV/python" -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pyarrow') or importlib.util.find_spec('fastparquet') else 1)"
+}
+
 show_status() {
   log "Repo:        $REPO_ROOT"
   log "DB path:     $DB_PATH ($([[ -f $DB_PATH ]] && stat -c '%s bytes' "$DB_PATH" || echo 'absent'))"
@@ -231,9 +235,19 @@ if [[ $REBUILD -eq 1 ]]; then
 
   # ---- 1b. Build fact_trades BEFORE metrics (metrics reads from fact_trades) ----
   log "  Building fact_trades (唯一派生层)..."
+  FACT_PARQUET_ARGS=()
+  SIGNAL_PARQUET_ARGS=()
+  if has_parquet_engine; then
+    FACT_PARQUET_ARGS=(--parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_trades.parquet")
+    SIGNAL_PARQUET_ARGS=(--parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_signal_candidates.parquet")
+  else
+    warn "No pyarrow/fastparquet in $VENV; skipping parquet export and writing SQLite fact tables only"
+    FACT_PARQUET_ARGS=(--no-parquet)
+    SIGNAL_PARQUET_ARGS=(--no-parquet)
+  fi
   "$VENV/python" scripts/analysis/build_weather_fact_trades.py \
     --db-path "$DB_PATH" \
-    --parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_trades.parquet" \
+    "${FACT_PARQUET_ARGS[@]}" \
     >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
     err "fact_trades build failed — see $LOG_DIR/migrate_live_cycle.log"
     exit 1
@@ -243,7 +257,7 @@ if [[ $REBUILD -eq 1 ]]; then
   log "  Building fact_signal_candidates (机会粒度候选表)..."
   "$VENV/python" scripts/analysis/build_weather_signal_candidates.py \
     --db-path "$DB_PATH" \
-    --parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_signal_candidates.parquet" \
+    "${SIGNAL_PARQUET_ARGS[@]}" \
     --decision-hts-min 22 --decision-hts-max 24 \
     >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
     err "fact_signal_candidates build failed — see $LOG_DIR/migrate_live_cycle.log"

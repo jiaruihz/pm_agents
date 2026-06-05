@@ -710,6 +710,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Build weather fact_trades table")
     ap.add_argument("--db-path", default=str(DB_PATH))
     ap.add_argument("--parquet-path", default=str(PARQUET_PATH))
+    ap.add_argument("--no-parquet", action="store_true",
+                    help="Write the DB table only; skip parquet export")
     ap.add_argument("--dry-run", action="store_true",
                     help="Compute rows but do not write to DB or parquet")
     args = ap.parse_args()
@@ -729,8 +731,11 @@ def main() -> None:
             return
         write_db(conn, rows)
         print(f"fact_trades written to DB: {db_path}")
-        write_parquet(rows, parquet_path)
-        print(f"fact_trades written to parquet: {parquet_path}")
+        if args.no_parquet:
+            print("fact_trades parquet export skipped (--no-parquet)")
+        else:
+            write_parquet(rows, parquet_path)
+            print(f"fact_trades written to parquet: {parquet_path}")
     finally:
         conn.close()
 

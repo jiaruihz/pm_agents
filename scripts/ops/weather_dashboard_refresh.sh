@@ -74,6 +74,10 @@ print(f'Updated metrics for {len(results)} run(s)')
 "
 }
 
+has_parquet_engine() {
+  "$VENV/python" -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pyarrow') or importlib.util.find_spec('fastparquet') else 1)"
+}
+
 # ---- Step 1: Sync from n100 ----
 if [[ "$SYNC" == "1" ]]; then
   log ""
@@ -117,16 +121,26 @@ fi
 # ---- Step 4: Fact table rebuild ----
 log ""
 log "Step 4/5: Rebuilding fact_trades and fact_signal_candidates"
+FACT_PARQUET_ARGS=()
+SIGNAL_PARQUET_ARGS=()
+if has_parquet_engine; then
+  FACT_PARQUET_ARGS=(--parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_trades.parquet")
+  SIGNAL_PARQUET_ARGS=(--parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_signal_candidates.parquet")
+else
+  warn "No pyarrow/fastparquet in $VENV; skipping parquet export and writing SQLite fact tables only"
+  FACT_PARQUET_ARGS=(--no-parquet)
+  SIGNAL_PARQUET_ARGS=(--no-parquet)
+fi
 "$VENV/python" scripts/analysis/build_weather_fact_trades.py \
   --db-path "$DB_PATH" \
-  --parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_trades.parquet" \
+  "${FACT_PARQUET_ARGS[@]}" \
   2>&1 | tee "$LOG_DIR/fact_trades.log" || {
   err "fact_trades build failed — check $LOG_DIR/fact_trades.log"
   exit 1
 }
 "$VENV/python" scripts/analysis/build_weather_signal_candidates.py \
   --db-path "$DB_PATH" \
-  --parquet-path "$REPO_ROOT/runtime/weather_edge_v1/market_data/research/fact_signal_candidates.parquet" \
+  "${SIGNAL_PARQUET_ARGS[@]}" \
   --decision-hts-min 22 --decision-hts-max 24 \
   2>&1 | tee "$LOG_DIR/fact_signal_candidates.log" || {
   err "fact_signal_candidates build failed — check $LOG_DIR/fact_signal_candidates.log"

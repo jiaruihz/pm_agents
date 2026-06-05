@@ -679,6 +679,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Build weather fact_signal_candidates table")
     ap.add_argument("--db-path", default=str(DB_PATH))
     ap.add_argument("--parquet-path", default=str(PARQUET_PATH))
+    ap.add_argument("--no-parquet", action="store_true",
+                    help="Write the DB table only; skip parquet export")
     ap.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR))
     ap.add_argument("--paper-orders", default=str(PAPER_ORDERS_PATH))
     ap.add_argument("--decision-hts-min", type=float, default=22.0)
@@ -706,8 +708,11 @@ def main() -> None:
             return
         write_db(conn, rows)
         print(f"\nfact_signal_candidates written to DB: {db_path}")
-        write_parquet(rows, Path(args.parquet_path))
-        print(f"fact_signal_candidates written to parquet: {args.parquet_path}")
+        if args.no_parquet:
+            print("fact_signal_candidates parquet export skipped (--no-parquet)")
+        else:
+            write_parquet(rows, Path(args.parquet_path))
+            print(f"fact_signal_candidates written to parquet: {args.parquet_path}")
     finally:
         conn.close()
 
