@@ -20,6 +20,11 @@ cd "$PROJECT_DIR"
 # synced snapshots during the 90-minute signal lookback.
 TRADING_T1_CITIES="${WEATHER_TRADING_T1_CITIES:-Ankara,Boston,Chengdu,Guangzhou,Istanbul,Jeddah,Karachi,LA,London,Lucknow,Madrid,Manila,Miami,Moscow,Munich,NYC,Phoenix,Seattle,Shanghai,Singapore,Tokyo,Warsaw}"
 
+# City x side hard block for live signal construction. This is a pm_agent-side
+# guard in addition to weather-predict/city_pools.py, so stale lookback
+# snapshots cannot leak blocked sides into live plans.
+BLOCKED_CITY_SIDES="${WEATHER_LIVE_BLOCKED_CITY_SIDES:-NYC:BUY_YES}"
+
 # The default legacy core list keeps only old-pool cities that were not later
 # explicitly removed or side-gated. Override WEATHER_LEGACY_CORE_CITIES to adjust
 # without changing code.
@@ -28,6 +33,7 @@ LEGACY_CORE_CITIES="${WEATHER_LEGACY_CORE_CITIES:-Boston,LA,London,Miami,NYC,Pho
 WEATHER_LIVE_STRATEGY_INSTANCE=mid_price_core_v1_25_75 \
 WEATHER_LIVE_EXECUTION_POLICY=mid_price_core_v1 \
 WEATHER_LIVE_ALLOWED_CITIES="$TRADING_T1_CITIES" \
+WEATHER_LIVE_BLOCKED_CITY_SIDES="$BLOCKED_CITY_SIDES" \
 WEATHER_LIVE_MIN_ENTRY_PRICE=0.25 \
 WEATHER_LIVE_MAX_ENTRY_PRICE=0.75 \
 WEATHER_LIVE_MIN_EDGE=0.10 \
@@ -43,6 +49,7 @@ scripts/ops/start_weather_live_cycle_loop.sh
 WEATHER_LIVE_STRATEGY_INSTANCE=mid_price_core_v1_side_band \
 WEATHER_LIVE_EXECUTION_POLICY=mid_price_core_v1 \
 WEATHER_LIVE_ALLOWED_CITIES="$LEGACY_CORE_CITIES" \
+WEATHER_LIVE_BLOCKED_CITY_SIDES="$BLOCKED_CITY_SIDES" \
 WEATHER_LIVE_MIN_ENTRY_PRICE=0.25 \
 WEATHER_LIVE_MAX_ENTRY_PRICE=0.75 \
 WEATHER_LIVE_MIN_EDGE=0.10 \

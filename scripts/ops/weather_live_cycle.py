@@ -508,6 +508,10 @@ def _to_usdc(raw_value: Any) -> str:
     return f"{value / 1_000_000:.2f} USDC"
 
 
+def _has_value(value: Any) -> bool:
+    return value is not None and str(value).strip() != ""
+
+
 def _short_path(path: Any) -> str:
     text = str(path or "").strip()
     if not text:
@@ -529,10 +533,42 @@ def _first_sentence_for_skip(skipped: Any) -> str:
     if reason == "paused_by_telegram":
         return "实盘当前是暂停状态。本轮已同步数据并生成计划，但没有下单。"
     if reason == "balance_allowance_preflight":
-        return "下单前检查没有通过，可能是余额或授权不足。本轮没有提交订单。"
+        return "下单前资金和授权检查没有通过。本轮没有提交真实订单。"
     if reason:
         return f"本轮未提交实盘订单，原因：{reason}。"
     return "本轮已完成。"
+
+
+def _balance_preflight_lines(balance: Dict[str, Any]) -> List[str]:
+    if balance.get("ok_to_submit"):
+        return ["", f"资金和授权检查：通过，可用余额约 {_to_usdc(balance.get('balance'))}。"]
+
+    lines = ["", "资金和授权检查：未通过，已跳过真实下单。"]
+    error = str(balance.get("error") or "").strip()
+    has_balance = _has_value(balance.get("balance"))
+    has_allowance = _has_value(balance.get("max_allowance"))
+    if error:
+        lines.append(f"CLOB 查询错误：{error}")
+    if has_balance:
+        lines.append(f"余额：{_to_usdc(balance.get('balance'))}")
+    if has_allowance:
+        lines.append(f"最大授权：{_to_usdc(balance.get('max_allowance'))}")
+    if not error and not has_balance and not has_allowance:
+        lines.append("CLOB 未返回余额或授权信息。")
+    return lines
+
+
+def _balance_preflight_action(balance: Dict[str, Any]) -> str:
+    error = str(balance.get("error") or "").strip()
+    if error:
+        return "需要处理：CLOB 余额/授权查询失败，先检查 Polymarket CLOB API、代理和鉴权；这不是余额为 0 的证据。"
+    balance_raw = _to_int(balance.get("balance"), 0)
+    allowance_raw = _to_int(balance.get("max_allowance"), 0)
+    if balance_raw <= 0:
+        return "需要处理：CLOB 返回可用抵押余额为 0，请检查 funder 钱包 USDC 可用余额。"
+    if allowance_raw <= 0:
+        return "需要处理：CLOB 返回授权为 0，请检查 Polymarket collateral allowance。"
+    return "需要处理：资金和授权检查未通过，请检查 CLOB 返回的 balance_preflight 详情。"
 
 
 def _clob_balance_status() -> Dict[str, Any]:
@@ -651,16 +687,7 @@ def _send_summary(
 
     balance = executor.get("balance_preflight") if isinstance(executor, dict) else None
     if isinstance(balance, dict):
-        if balance.get("ok_to_submit"):
-            lines.extend(["", f"资金和授权检查：通过，可用余额约 {_to_usdc(balance.get('balance'))}。"])
-        else:
-            lines.extend(
-                [
-                    "",
-                    "资金和授权检查：未通过，已跳过真实下单。",
-                    f"余额：{_to_usdc(balance.get('balance'))}",
-                ]
-            )
+        lines.extend(_balance_preflight_lines(balance))
 
     if int(executor.get("live_errors", 0) or 0) > 0:
         lines.extend(
@@ -670,12 +697,7 @@ def _send_summary(
             ]
         )
     if executor.get("skipped") == "balance_allowance_preflight":
-        lines.extend(
-            [
-                "",
-                "需要处理：余额或授权为 0，本轮已安全跳过真实下单。",
-            ]
-        )
+        lines.extend(["", _balance_preflight_action(balance if isinstance(balance, dict) else {})])
     lines.extend(
         [
             "",
@@ -841,6 +863,11 @@ def main() -> int:
         default=os.getenv("WEATHER_LIVE_ALLOWED_CITIES", ""),
         help="Comma-separated city allowlist after city_pool filtering. Empty means all cities in the pool.",
     )
+    parser.add_argument(
+        "--blocked-city-sides",
+        default=os.getenv("WEATHER_LIVE_BLOCKED_CITY_SIDES", "NYC:BUY_YES"),
+        help="Comma-separated CITY:SIDE live signal blocks, e.g. NYC:BUY_YES.",
+    )
     parser.add_argument("--min-edge", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_EDGE", "0.10")))
     parser.add_argument("--min-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MIN_ENTRY_PRICE", "0.25")))
     parser.add_argument("--max-entry-price", type=float, default=float(os.getenv("WEATHER_LIVE_MAX_ENTRY_PRICE", "0.75")))
@@ -934,6 +961,7 @@ def main() -> int:
         "strategy_instance": strategy_instance,
         "city_pool": str(args.city_pool),
         "allowed_cities": str(args.allowed_cities),
+        "blocked_city_sides": str(args.blocked_city_sides),
         "sizing_mode": str(args.sizing_mode),
         "max_order_notional": float(args.max_order_notional),
         "max_market_notional": max_market_notional,
@@ -993,6 +1021,8 @@ def main() -> int:
         str(live_config["city_pool"]),
         "--allowed-cities",
         str(live_config["allowed_cities"]),
+        "--blocked-city-sides",
+        str(live_config["blocked_city_sides"]),
         "--min-edge",
         str(float(live_config["min_edge"])),
         "--min-entry-price",

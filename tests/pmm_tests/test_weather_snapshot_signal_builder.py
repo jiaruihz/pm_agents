@@ -140,6 +140,41 @@ class TestWeatherSnapshotSignalBuilder(unittest.TestCase):
             self.assertEqual([row["city"] for row in rows], ["London"])
 
     @patch.object(builder, "PolymarketGammaClient", _FakeGamma)
+    def test_blocked_city_sides_filter_specific_side_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot = root / "snapshot_20260604_2000.json"
+            out = root / "signals.jsonl"
+            yes = self._record(market_id="nyc-yes", edge=0.25, entry_price=0.32)
+            yes["city"] = "NYC"
+            yes["side"] = "BUY_YES"
+            no = self._record(market_id="nyc-no", edge=-0.25, entry_price=0.62)
+            no["city"] = "NYC"
+            no["side"] = "BUY_NO"
+            self._snapshot(snapshot, [yes, no])
+
+            result = builder.build_signals(
+                snapshot_path=snapshot,
+                snapshot_paths=[snapshot],
+                out_path=out,
+                city_pool="t1_trading",
+                blocked_city_sides={("NYC", "BUY_YES")},
+                min_edge=0.10,
+                min_entry_price=0.25,
+                max_entry_price=0.75,
+                min_hours_to_settle=22.0,
+                max_hours_to_settle=28.0,
+                dry_run=False,
+            )
+
+            self.assertEqual(result["signals"], 1)
+            self.assertEqual(result["skipped"].get("city_side_blocked"), 1)
+            self.assertEqual(result["blocked_city_sides"], ["NYC:BUY_YES"])
+            rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(rows[0]["city"], "NYC")
+            self.assertEqual(rows[0]["signal_side"], "BUY_NO")
+
+    @patch.object(builder, "PolymarketGammaClient", _FakeGamma)
     def test_lookback_keeps_latest_side_per_market(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

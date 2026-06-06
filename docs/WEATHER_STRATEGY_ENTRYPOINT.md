@@ -77,6 +77,7 @@ Seattle, Shanghai, Singapore, Tokyo, Warsaw
 - Madrid 重新进入 T1，但只允许 `BUY_NO`。
 - Shanghai 保留 T1，但只允许 `BUY_NO`。
 - Paris 降级到 T2 / research only。
+- NYC 保留 T1，但 pm_agent live signal builder 暂时 hard-block `BUY_YES`（`WEATHER_LIVE_BLOCKED_CITY_SIDES=NYC:BUY_YES`）；`BUY_NO` 继续允许。
 - 其余 T1 城市默认双侧。
 
 Paris / Beijing / Chicago / Austin / Amsterdam / BuenosAires 均保留在 `FULL_CITY_CONFIGS`，因此是 T2

@@ -136,6 +136,7 @@ Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle
 - `mid_price_core_v2_25_75` 从 live 默认启动集中移除；生产已停止 V2 branch loop。
 - `Amsterdam` 降级到 `RESEARCH_T2_CITIES`。
 - `BuenosAires` 降级到 `RESEARCH_T2_CITIES`。
+- `NYC` 保留在 T1，但 pm_agent live signal builder 暂时 hard-block `BUY_YES`；`BUY_NO` 继续允许。
 - 两城仍保留在 `FULL_CITY_CONFIGS`，继续收集、结算、paper/research，不删除历史或天气配置。
 
 三实例共同窗口（`target_date >= 2026-06-01`, `trade_class='live_real'`）：
@@ -158,6 +159,16 @@ V2 结论：
 |---|---:|---:|---:|---:|---|
 | Amsterdam | 37.11 | -30.43 | -82.0% | -10.85 / -61.9% | 三实例、两侧几乎全负，降级 T2 |
 | BuenosAires | 56.63 | -28.11 | -49.6% | -8.12 / -22.2% | V2 YES 满亏 cluster，候选反事实也偏负，降级 T2 |
+
+NYC side-block 证据：
+
+| slice | BUY_NO | BUY_YES | 结论 |
+|---|---:|---:|---|
+| 2026-05-31..2026-06-06 live_real settled | +0.68 / ROI +1.7% | -31.00 / ROI -75.4% | YES 近期集中亏损，NO 仍未坏 |
+| all-history live_real settled | +15.48 / ROI +23.3% | -42.72 / ROI -68.7% | 亏损边界在 side，不是整城 |
+| 机会层 recent 反事实 | +10.50 | -17.65 | YES 的机会层也转负 |
+
+处理：先用 pm_agent-side hard gate block `NYC:BUY_YES`，避免 90 分钟 lookback 的旧 snapshot 继续漏出 YES 信号；后续若 weather-predict `city_pools.py` 同步 git 化，再把 NYC 写入 `CITY_ALLOWED_SIDES`。
 
 回滚条件：
 

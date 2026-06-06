@@ -37,6 +37,27 @@ def _parse_csv_set(value: Any) -> set[str]:
     return {part.strip() for part in text.split(",") if part.strip()}
 
 
+def _parse_city_side_set(value: Any) -> set[tuple[str, str]]:
+    text = _safe_str(value)
+    if not text:
+        return set()
+    pairs: set[tuple[str, str]] = set()
+    for raw_part in text.split(","):
+        part = raw_part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            raise ValueError(f"blocked city side must be CITY:SIDE, got {part!r}")
+        city, side = (piece.strip() for piece in part.split(":", 1))
+        side = side.upper()
+        if side in {"YES", "NO"}:
+            side = f"BUY_{side}"
+        if not city or side not in {"BUY_YES", "BUY_NO"}:
+            raise ValueError(f"blocked city side must be CITY:BUY_YES or CITY:BUY_NO, got {part!r}")
+        pairs.add((city, side))
+    return pairs
+
+
 def _to_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -189,6 +210,7 @@ def build_signals(
     no_min_edge: Optional[float] = None,
     strategy_instance: str = "",
     allowed_cities: Optional[set[str]] = None,
+    blocked_city_sides: Optional[set[tuple[str, str]]] = None,
     min_hours_to_settle: Optional[float] = None,
     max_hours_to_settle: Optional[float] = None,
     dry_run: bool,
@@ -233,6 +255,9 @@ def build_signals(
         side = _safe_str(record.get("side")).upper()
         if side not in {"BUY_YES", "BUY_NO"}:
             skipped["bad_side"] = skipped.get("bad_side", 0) + 1
+            continue
+        if blocked_city_sides and (city, side) in blocked_city_sides:
+            skipped["city_side_blocked"] = skipped.get("city_side_blocked", 0) + 1
             continue
         if min_hours_to_settle is None and max_hours_to_settle is None:
             if _safe_str(record.get("time_bucket")) != "t24":
@@ -315,6 +340,7 @@ def build_signals(
         "snapshots": [str(p) for p in paths],
         "city_pool": city_pool,
         "allowed_cities": sorted(allowed_cities or []),
+        "blocked_city_sides": [f"{city}:{side}" for city, side in sorted(blocked_city_sides or [])],
         "records": len(records_with_source),
         "candidate_signals": len(candidates),
         "signals": len(signals),
@@ -334,6 +360,11 @@ def _parser() -> argparse.ArgumentParser:
         "--allowed-cities",
         default=os.getenv("WEATHER_LIVE_ALLOWED_CITIES", ""),
         help="Comma-separated city allowlist after city_pool filtering. Empty means all cities in the pool.",
+    )
+    parser.add_argument(
+        "--blocked-city-sides",
+        default=os.getenv("WEATHER_LIVE_BLOCKED_CITY_SIDES", ""),
+        help="Comma-separated CITY:SIDE entries, e.g. NYC:BUY_YES,Ankara:NO.",
     )
     parser.add_argument(
         "--city-pool",
@@ -393,6 +424,7 @@ def main() -> int:
         no_min_edge=(float(args.no_min_edge) if args.no_min_edge is not None else None),
         strategy_instance=str(args.strategy_instance),
         allowed_cities=_parse_csv_set(args.allowed_cities),
+        blocked_city_sides=_parse_city_side_set(args.blocked_city_sides),
         min_hours_to_settle=args.min_hours_to_settle,
         max_hours_to_settle=args.max_hours_to_settle,
         dry_run=bool(args.dry_run),
