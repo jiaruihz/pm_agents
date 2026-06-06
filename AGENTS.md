@@ -359,66 +359,17 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 
 ## 文档索引
 
-> **维护规则：每次在 `docs/` 下新增或删除文档，必须同步更新本节。**  
-> 归档文档移到 `docs/archive/`，从本节删除。
+> 完整文档目录、状态分级和历史快照索引统一维护在
+> [docs/WEATHER_DOCS_INDEX.md](docs/WEATHER_DOCS_INDEX.md)。每次新增、删除、
+> 归档或改变 weather 文档职责时，只维护这份总索引；本节只保留最高频入口。
 
-### 核心参考文档（稳定，高频查阅）
-
-| 文档 | 用途 |
-|---|---|
-| [WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md) | 实盘排查入口：N100 检查命令、live 口径、近期事故结论 |
-| [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) | weather-predict 与 pm_agent 的生产/本机职责边界、数据同步边界、重复文件注意事项 |
-| [WEATHER_CITY_POOL_DECISIONS.md](docs/WEATHER_CITY_POOL_DECISIONS.md) | 城市池决策日志：T1/T2 当前口径、升降级依据、N100 部署记录 |
-| [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md) | N100↔pm_agent 字段名/枚举/ID算法契约，**改字段前必读** |
-| [WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) | 单页数据源拓扑：哪个表/文件是 source/mirror/derived/legacy，已知缺口列表，**避免被错误数据误导** |
-| [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) | N100→镜像→DB→API 全链路、所有脚本职责、PnL口径、运维 runbook |
-| [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) | 核心架构设计（血缘链/策略身份/Run Registry/DB schema/API/前端） |
-| [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | 数据模型分层与缺口审计（P0已完成，P1/P2待办） |
-| [WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md) | 早期实盘历史与回填治理（重复下单/城市池错误/sizing改动） |
-| [WEATHER_PROBABILITY_MODEL_REVIEW.md](docs/WEATHER_PROBABILITY_MODEL_REVIEW.md) | 概率模型（`model_p_yes`）审计：生产 baseline、条件模型数据缺口、季节条件化、forecast jump 风险 |
-| [WEATHER_PROBABILITY_MODEL_ROADMAP.md](docs/WEATHER_PROBABILITY_MODEL_ROADMAP.md) | 概率模型分阶段改造路线：M0 可观测骨架、稳定性门、季节残差、lead-time/ensemble/ML 分布模型 |
-| [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | weather_edge_engine 当前接手入口：拆成 blender shadow 数据链路与 city-day basket 算法研究两条线，含 PR2b 过拟合结论与后续窗口边界 |
-| [WEATHER_DASHBOARD_TROUBLESHOOTING.md](docs/WEATHER_DASHBOARD_TROUBLESHOOTING.md) | Dashboard 故障排查：portproxy/CORS/env/null crash 根因与修复 |
-| [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) | 通用运维手册：常驻进程、日志路径、启停命令 |
-
-### 设计文档（功能待实施或部分实施）
+### 最高频权威入口
 
 | 文档 | 用途 |
 |---|---|
-| [WEATHER_EXECUTION_ARCHITECTURE.md](docs/WEATHER_EXECUTION_ARCHITECTURE.md) | paper→live 执行边界设计（资金安全/暂停开关/notional 上限） |
-| [WEATHER_SHADOW_PORTFOLIO_TRACKING.md](docs/WEATHER_SHADOW_PORTFOLIO_TRACKING.md) | 影子组合追踪架构（live策略的虚拟持仓快照设计） |
-| [WEATHER_CLOB_ORDERBOOK_CAPTURE.md](docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md) | CLOB 快照捕获设计（供回测用更准确的 ask/bid 入场价） |
-| [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](docs/WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | 城市/日组合优化器设计（多城市仓位分配） |
-| [WEATHER_LEDGER_POSITION_ANALYSIS.md](docs/WEATHER_LEDGER_POSITION_ANALYSIS.md) | 持仓分析设计（Dashboard 持仓拆解页面） |
-| [WEATHER_MID_PRICE_CORE_V2_DESIGN.md](docs/WEATHER_MID_PRICE_CORE_V2_DESIGN.md) | mid_price_core_v2 执行策略设计（低价正 alpha 漏单拆单、maker_queue 删除方案） |
-| [WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md](docs/WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md) | 入场区间×仓位 sizing 设计（side×价位桶档位+edge缩放+硬上限,替代等额$5/统一0.25-0.75带） |
-| [WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md](docs/WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md) | weather-predict 与 pm_agent 数据协议/采集统一迁移方案（canonical schema、paper语义、shadow-run cutover） |
-
-### 研究与分析报告（时间点快照，不更新）
-
-| 文档 | 用途 |
-|---|---|
-| [WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md](docs/WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md) | 低价YES彩票仓研究（5c-20c YES 持有到结算回报分析） |
-| [WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md](docs/WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md) | 2026-05-23 实盘血缘分析（t1_trading mid_price_core_v1 策略） |
-| [2026-05-27-performance-live-full-research.md](docs/analysis/2026-05/2026-05-27-performance-live-full-research.md) | 2026-05-27 全量 live 实盘绩效归因（城市/方向/paper 对比/edge 赔率诊断） |
-| [2026-05-28-performance-makerqueue-v3-city-pool.md](docs/analysis/2026-05/2026-05-28-performance-makerqueue-v3-city-pool.md) | 2026-05-28 maker_queue 与 v3 城市池当日未结算亏损拆解 |
-| [2026-05-29-entry-timing-edge.md](docs/analysis/2026-05/2026-05-29-entry-timing-edge.md) | 2026-05-29 入场 timing / edge 诊断 |
-| [2026-05-29-performance-candidates-vs-fills-link.md](docs/analysis/2026-05/2026-05-29-performance-candidates-vs-fills-link.md) | 2026-05-29 fact_signal_candidates × fact_trades 双底表首次串联（全机会 alpha vs 成交样本/漏单/滑点） |
-| [2026-05-29-performance-city-pool-side-strategy.md](docs/analysis/2026-05/2026-05-29-performance-city-pool-side-strategy.md) | 2026-05-29 城市池选择策略复盘（合并城市 alpha+成交质量）：city×side 侧别白名单、fill级稳健性、三层一致性、Paris应降级 |
-| [2026-05-29-strategy-entry-band-and-execution-quality.md](docs/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | 2026-05-29 入场价 25-75 区间调参 + maker_queue vs mid_price 成交质量/paper 对比 + 策略建议 |
-| [2026-05-30-performance-entry-band-research.md](docs/analysis/2026-05/2026-05-30-performance-entry-band-research.md) | 2026-05-30 入场价带（0.25-0.75）调参研究：side×价位桶 EV、候选反事实、live/paper 对照 |
-| [2026-05-30-performance-sizing-and-band-distribution.md](docs/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md) | 2026-05-30 仓位 sizing×入场区间收益分布研究（反过拟合、bootstrap、paper→live 样本外验证） |
-| [2026-06-05-city-day-basket-eval.md](docs/analysis/2026-06/2026-06-05-city-day-basket-eval.md) | 2026-06-05 weather_edge_engine PR2 离线 replay：raw vs blended-single vs basket 三规则对比 + 归因 + Step 2→3 gate 结论（暂不通过） |
-| [2026-06-06-city-day-basket-pr2b-sweep.md](docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md) | 2026-06-06 PR2b basket 参数 sweep：192 组参数、30 组全样本 gate pass，最佳候选 `$3/$8 cap15 max4 prefer_no=False` |
-| [2026-06-06-city-day-basket-pr2b-robustness.md](docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md) | 2026-06-06 PR2b 稳健性复核：full/train/holdout/recent/live_filled 子集对比，确认全样本通过但存在 tail/overfit 风险 |
-| [2026-06-06-city-day-basket-optimizer-research.md](docs/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md) | 2026-06-06 basket 核心算法研究：归一化 city-day 分布 + 组合枚举 optimizer；结论是 headline ROI 可升但 tail 风险更集中，需改 objective/分布 |
-| [2026-06-03-performance-three-strategy-instances.md](docs/analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | 2026-06-03 三策略实例复盘：mid_price_core_v1/v2/side-band 的 live_real 绩效、成交质量、价位桶和新增城市池 |
-| [COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md](docs/COPY_TRADE_WALLET_RESEARCH_EXECUTION_PLAN.md) | Copy Trade 钱包研究执行计划 |
-
-### 开发日志（dev_logs/，按 PR 串起来）
-
-| 文档 | 用途 |
-|---|---|
-| [2026-06-05-weather-edge-engine-pr1.md](docs/dev_logs/2026-06-05-weather-edge-engine-pr1.md) | weather_edge_engine PR1（本机纯函数骨架：blender + city_day_basket + tests）开发记录，含设计偏离 |
-| [2026-06-05-weather-edge-engine-pr2.md](docs/dev_logs/2026-06-05-weather-edge-engine-pr2.md) | weather_edge_engine PR2（离线 replay + sklearn recalibration）开发记录与结论 |
-| [2026-06-06-weather-edge-engine-pr2b.md](docs/dev_logs/2026-06-06-weather-edge-engine-pr2b.md) | weather_edge_engine PR2b（basket 参数 sweep + robustness）开发记录，结论是仅可作为 shadow 候选、不能直接 canary |
+| [WEATHER_DOCS_INDEX.md](docs/WEATHER_DOCS_INDEX.md) | weather 文档总索引：状态分级、当前入口、历史快照、维护规则 |
+| [WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md) | 实盘接手入口：当前 live 实例、N100 检查、近期关键决策 |
+| [WEATHER_CITY_POOL_DECISIONS.md](docs/WEATHER_CITY_POOL_DECISIONS.md) | 城市池决策日志：当前 T1/T2、升降级依据、回滚条件 |
+| [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md) | 分析口径唯一来源：PnL、切片、账户现金流、数据自检 |
+| [WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) | 数据源真相：source/mirror/derived/legacy 和已知缺口 |
+| [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) | `weather-predict` 与 `pm_agent` 的生产/本机职责边界 |

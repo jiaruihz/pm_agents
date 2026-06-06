@@ -47,7 +47,7 @@ Seattle, Shanghai, Singapore, Tokyo, Warsaw
 
 | 城市 | 当前状态 | 原因 |
 |---|---|---|
-| Madrid | T2 / research only | live 亏损最明显，ROI -60.2% |
+| Paris | T2 / research only | 2026-05-29 降级：city×side 质量不稳定，保留 research only |
 | Beijing | T2 / research only | live ROI -7.6%，不继续扩 size |
 | Chicago | T2 / research only | live ROI -18.5%，样本虽小但表现弱 |
 | Austin | T2 / research only | v2 时已移出，赔率结构不利 |
@@ -134,8 +134,8 @@ Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle
 动作：
 
 - `mid_price_core_v2_25_75` 从 live 默认启动集中移除；生产已停止 V2 branch loop。
-- `Amsterdam` 从 `TRADING_T1_CITIES` 移到 `RESEARCH_T2_CITIES`。
-- `BuenosAires` 从 `TRADING_T1_CITIES` 移到 `RESEARCH_T2_CITIES`。
+- `Amsterdam` 降级到 `RESEARCH_T2_CITIES`。
+- `BuenosAires` 降级到 `RESEARCH_T2_CITIES`。
 - 两城仍保留在 `FULL_CITY_CONFIGS`，继续收集、结算、paper/research，不删除历史或天气配置。
 
 三实例共同窗口（`target_date >= 2026-06-01`, `trade_class='live_real'`）：
@@ -162,11 +162,11 @@ V2 结论：
 回滚条件：
 
 - V2 仅在有新的 YES 过滤/城市禁入逻辑后 shadow 重跑；不得直接恢复 live 默认启动。
-- Amsterdam / BuenosAires 若要回 T1，至少需要新的 paper/research 样本证明 city×side 正 alpha，并先 shadow 观察。
+- Amsterdam / BuenosAires 若要回到交易池，至少需要新的 paper/research 样本证明 city×side 正 alpha，并先 shadow 观察。
 
 部署记录：
 
-- `pm_agent` git-first 部署到 N100 commit `e5557ff`：V2 默认不启动，`mid_price_core_v1_25_75` 显式使用 v4 T1 allowlist。
+- `pm_agent` git-first 部署到 N100 commit `2458696`：V2 默认不启动，`mid_price_core_v1_25_75` 显式使用 v4 T1 allowlist。
 - `weather-predict` N100 目录当前不是 git worktree；2026-06-06 走 fallback 热修 `city_pools.py`，备份为 `/home/jiarui/projects/weather-predict/city_pools.py.bak.codex_20260606_v2_stop_city_demotion`。
 - 当前 Codex workspace 不允许写 `/home/rui/projects/weather-predict`，所以本机 weather-predict 开发副本需后续手动同步同一城市池改动，避免下次从本机 weather-predict 部署时覆盖 N100 热修。
 

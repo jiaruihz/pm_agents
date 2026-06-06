@@ -1,5 +1,7 @@
 # Weather Edge Engine Implementation Plan
 
+Status: `snapshot`。本文是 2026-06-05 单城市混合模型实施计划；当前 weather_edge_engine 接手入口和下一步窗口边界见 [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md)。
+
 > 定稿 2026-06-05。本文档是当前天气策略的**统一执行方案**，不再拆成多套模型版本。
 > 核心目标：把单 bracket 的独立 edge 信号，升级成按 `city + target_date`
 > 做一组相关决策的交易引擎。

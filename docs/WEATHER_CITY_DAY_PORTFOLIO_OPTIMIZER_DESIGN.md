@@ -1,5 +1,7 @@
 # 天气 City-Day 组合优化器设计
 
+Status: design-draft。本文是组合优化器设计草案；当前算法研究结论以 [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) 和对应 docs/analysis/2026-06/ 快照为准。
+
 最后更新: 2026-05-25
 
 > **与相关文档的区别**
