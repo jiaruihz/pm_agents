@@ -1,6 +1,6 @@
 # 天气 City-Day 组合优化器设计
 
-Status: design-draft。本文是组合优化器设计草案；当前算法研究结论以 [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) 和对应 docs/analysis/2026-06/ 快照为准。
+Status: `design-draft`。本文是组合优化器设计草案；当前算法研究结论以 [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) 和对应 `docs/analysis/2026-06/` 快照为准。
 
 最后更新: 2026-05-25
 
@@ -8,6 +8,20 @@ Status: design-draft。本文是组合优化器设计草案；当前算法研究
 > - 本文档：同一城市同一日期内，多个 bracket 的 YES/NO **组合优化**。核心是利用同城同日 bracket 的强相关关系，找出比逐腿独立决策更好的多腿组合。
 > - [`WEATHER_LEDGER_POSITION_ANALYSIS.md`](WEATHER_LEDGER_POSITION_ANALYSIS.md)：单腿 sizing 策略模拟，信号集固定，只比较仓位管理方式。
 > - [`WEATHER_SHADOW_PORTFOLIO_TRACKING.md`](WEATHER_SHADOW_PORTFOLIO_TRACKING.md)：信号过滤规则对比，判断哪套 filter 长期优于 baseline。
+
+> ## ⚠️ 批判性复核说明（2026-06-01）
+>
+> 这份文档是**研究日志**，保留下来有价值，但它的**方法论方向需要纠正**，落地前请先读本节：
+>
+> 1. **本文档大量章节是「事后分类考古」，不是决策规则。** §5.3.4（正好2条NO都>60c）、§5.3.5（相邻双NO）这类硬规则，在文档自己的表里 **正负号跨 T1/T2/全量/live 反复翻转**（例：相邻双NO，T1 全价 -4.3% 但 T1 25-75 +4.2%，T2 +7.4%）。一个规则跨切片翻号，**这就是过拟合的直接证据**，不是规律。这些 `>60c`/`相邻` 的硬阈值**一条都不应该写进 planner**，walk-forward 基本活不下来。
+>
+> 2. **所有花哨标签其实是同一个量的影子。** §5.3.3 已经摸到了 `sum_bought_no_model_p_yes`（你买 NO 的挡位，模型认为合计命中的概率）——这个量**就是温度分布本身**。「2条都>60c」「相邻」全是「在押模型自己觉得挺可能的挡位不会发生」的粗糙近似。**如果直接用一个连贯分布算组合 EV，整套 taxonomy 都不需要存在。**
+>
+> 3. **关键事实修正（连贯性在哪断的）**：生产 `paper_snapshot.py` 对一个 city-day 调用一次 `compute_bracket_probs`，传入该 market 全部 bracket、同一模型、同一 snapshot ——所以**同一 snapshot 下，逐挡位概率本来就是连贯的（和≈1）**。连贯性是在**下游被丢掉的**：planner 用 0.25–0.75 价带 + 逐腿 edge 阈值**筛掉部分挡位**，再对幸存腿等额 $5。也就是说，「city-day 整组决策」不需要重建分布——**那个连贯分布在 snapshot 里已经存在，只是被逐腿过滤+等额 sizing 抹掉了**。正确做法是回到 snapshot 的连贯分布上选组合，而不是在被过滤后的「腿汤」上打补丁。
+>
+> 4. **§6「枚举最优组合」本身也会过拟合。** 每天挑分布最爱的 3 条腿 = 放大模型误差。更稳的是**软塑形**（砍同挡冲突、砍薄 edge、砍 sum_p_hit 高的、封 city-day 总额），而不是每天求最优解。与 [`WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md`](WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md) §7「拒绝 Kelly/过度集中」一致。
+>
+> 5. **本文档的诊断报告（每日复盘看哪组好坏）有用，保留；它想往「逐规则硬阈值」走的那条路，停掉。**
 
 ## 1. 目标
 
@@ -83,6 +97,8 @@ runtime/weather_edge_v1/market_data/research/t24_paper_snapshot_replay_trades.cs
 ```text
 P(final_bracket = b)
 ```
+
+> ✅ **复核补充（2026-06-01）**：这个分布**不用重建**。生产 `paper_snapshot.py` 对同一 city-day 同一 snapshot 调一次 `compute_bracket_probs`，输出的逐挡位 `model_pct` 本来就是从同一个 `simulated` 数组算的，**天然 Σ≈1 的连贯分布**。optimizer 应直接取「同一 snapshot、同一 model_version 的整组 `model_pct`」作为 `P(b)`，而不是把来自不同 snapshot/不同代表值的逐腿 row 拼起来（那才会出现概率不一致）。下面「保留最新 row」是次优兜底，根因是跨 snapshot 拼接破坏了连贯性。
 
 V1 可以先使用现有 signal row 已经给出的概率:
 
@@ -610,6 +626,8 @@ min_edge_no = min((1 - model_p_yes) - entry_price)
 
 ### 5.3.4 正好两条 NO，且两条都 >60c
 
+> ⚠️ **过拟合警告（2026-06-01 复核）**：本节是 pattern-mining，**不要落地为 live 规则**。下表 PnL 跨口径正负翻号（T1 全价 -6.9%，T1 25-75 +5.7%，T2 +15.0%，全量 +10.3%），这是过拟合而非规律。`>60c`/`正好2条` 只是「模型合计命中概率高 + edge 薄」的劣质代理；用 §顶部所述的连贯分布直接算 `sum_p_hit` + 组合 EV 即可，无需此规则。保留本节仅作复盘示例。
+
 这个 slice 是为了回答一个更具体的问题:
 
 ```text
@@ -665,6 +683,8 @@ min_edge_no = min((1 - model_p_yes) - entry_price)
 - Live DB 里能看到 Tokyo 的 5/25 fill/simulated fill，但没有 Paris 5/25 fill；两者都不能进入已结算 PnL 表。
 
 ### 5.3.5 相邻 bracket 的双 NO
+
+> ⚠️ **过拟合警告（2026-06-01 复核）**：同 §5.3.4，**不要落地为 live 规则**。"相邻" 是 `sum_p_hit`（连贯分布下相邻挡位概率质量相加偏高）的几何代理；既然已有分布，直接算 `sum_p_hit` 比拼 bracket 是否相邻更准、更稳，且不依赖 PM 当天恰好怎么切挡。本节下表同样跨口径翻号，是 pattern-mining，保留仅作复盘。
 
 进一步收窄到更像真实问题的 slice:
 
@@ -790,6 +810,8 @@ BUY_NO 远端尾部档
 具体取决于模型分布和市场价格。
 
 ## 6. 选择算法
+
+> ⚠️ **复核（2026-06-01）**：下面的「枚举 EV 最优组合」每天挑分布最爱的腿，会**放大模型误差**，在小样本/噪声分布上本身就是过拟合源。推荐先用**软塑形**而非硬优化：(1) 同 bracket 反向→留 EV 高的一侧；(2) `abs_edge < 阈值`→丢；(3) `sum_p_hit`（被买 NO 挡位的合计概率质量）过高→降权/跳过；(4) city-day 总 notional 封顶。这四条软过滤覆盖了本文档 §5.3.x 想做的全部内容，且不依赖硬阈值穷举。硬枚举 optimizer 仅在分布校准被验证后再考虑。
 
 V1 保持简单、可解释。
 

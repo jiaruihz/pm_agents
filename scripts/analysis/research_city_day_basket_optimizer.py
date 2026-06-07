@@ -9,6 +9,12 @@ combo-enumeration optimizers:
   - combo_ev: choose the feasible leg combination with highest normalized EV.
   - combo_risk: choose highest EV + 0.5 * CVaR20, penalizing bad tail outcomes.
   - combo_guarded: same risk-aware objective, but filters extreme payout legs.
+  - combo_policy_v1: fixed robust policy using blend EV plus market sanity.
+  - combo_market_risk: candidate edge from blend, portfolio objective from
+    market-normalized city-day distribution.
+  - combo_market_tail: candidate edge from blend, but the objective requires
+    positive market-normalized EV after removing the single best final-temp
+    outcome.
 
 It is intentionally offline-only. Data source is fact_signal_candidates, using
 the existing T-22~24h representative decision snapshot. This is not production
@@ -152,6 +158,22 @@ def _cvar20(payoff: dict[str, float], probs: dict[str, float]) -> float:
     return acc / denom if denom > 0 else min(payoff.values())
 
 
+def _expected_value(payoff: dict[str, float], probs: dict[str, float]) -> float:
+    return sum(probs[t] * payoff[t] for t in probs)
+
+
+def _leave_best_out_ev(payoff: dict[str, float], probs: dict[str, float]) -> float:
+    """Expected payoff after dropping the single most favorable temp outcome."""
+    if len(payoff) <= 1:
+        return min(payoff.values()) if payoff else 0.0
+    best_temp = max(payoff, key=lambda t: payoff[t])
+    remaining = {t: p for t, p in probs.items() if t != best_temp}
+    denom = sum(remaining.values())
+    if denom <= 0.0:
+        return min(payoff.values())
+    return sum((p / denom) * payoff[t] for t, p in remaining.items())
+
+
 def _score_combo(
     legs: tuple[ComboLeg, ...],
     probs: dict[str, float],
@@ -159,11 +181,71 @@ def _score_combo(
     cvar_weight: float,
 ) -> ComboScore:
     payoff = _payoff_by_temp(legs, list(probs))
-    ev = sum(probs[t] * payoff[t] for t in probs)
+    ev = _expected_value(payoff, probs)
     worst = min(payoff.values()) if payoff else 0.0
     cvar = _cvar20(payoff, probs)
     score = ev if mode == "ev" else ev + cvar_weight * cvar
     return ComboScore(expected_value=ev, cvar20=cvar, worst_case=worst, score=score)
+
+
+def _score_market_tail(
+    legs: tuple[ComboLeg, ...],
+    probs_market: dict[str, float],
+) -> ComboScore | None:
+    """Tail objective: do not let one best outcome carry the whole basket."""
+    payoff = _payoff_by_temp(legs, list(probs_market))
+    ev_market = _expected_value(payoff, probs_market)
+    cvar_market = _cvar20(payoff, probs_market)
+    leave_best_out_ev = _leave_best_out_ev(payoff, probs_market)
+    worst = min(payoff.values()) if payoff else 0.0
+
+    if ev_market <= 0.0:
+        return None
+    if leave_best_out_ev <= 0.0:
+        return None
+
+    score = leave_best_out_ev + 0.25 * cvar_market
+    return ComboScore(
+        expected_value=ev_market,
+        cvar20=cvar_market,
+        worst_case=worst,
+        score=score,
+    )
+
+
+def _score_policy_v1(
+    legs: tuple[ComboLeg, ...],
+    probs_blend: dict[str, float],
+    probs_market: dict[str, float],
+) -> ComboScore | None:
+    """Fixed robust policy candidate.
+
+    Principles:
+      - optimize against blend-normalized distribution;
+      - reject combinations that look too bad under market-normalized distribution;
+      - require the worst 20% blend tail not to consume more than 85% of cost.
+
+    These are ex-ante risk checks, not fitted parameters.
+    """
+    payoff = _payoff_by_temp(legs, list(probs_blend))
+    cost = sum(leg.notional for leg in legs)
+    ev_blend = _expected_value(payoff, probs_blend)
+    ev_market = _expected_value(payoff, probs_market)
+    cvar_blend = _cvar20(payoff, probs_blend)
+    cvar_market = _cvar20(payoff, probs_market)
+    worst = min(payoff.values()) if payoff else 0.0
+
+    if ev_blend <= 0.0:
+        return None
+    if ev_market < -0.15 * cost:
+        return None
+    if cvar_blend < -0.85 * cost:
+        return None
+    if cvar_market < -1.00 * cost:
+        return None
+
+    score = ev_blend + 0.25 * ev_market + 0.25 * cvar_blend
+    return ComboScore(expected_value=ev_blend, cvar20=cvar_blend, worst_case=worst, score=score)
 
 
 def _to_eval_leg(leg: ComboLeg) -> Leg:
@@ -187,7 +269,7 @@ def _candidate_legs_for_group(
     normal_notional: float,
     normal_threshold: float,
     max_win_multiple: float | None,
-) -> tuple[list[ComboLeg], dict[str, float]]:
+) -> tuple[list[ComboLeg], dict[str, dict[str, float]]]:
     blend_cfg = load_default_config()
     by_bracket: dict[str, dict] = {}
     city = str(grp["city"].iloc[0])
@@ -210,7 +292,11 @@ def _candidate_legs_for_group(
         elif r.side == "BUY_NO":
             slot["no_best_ask"] = float(r.decision_entry_price)
 
-    bracket_to_p: dict[str, float] = {}
+    prob_inputs: dict[str, dict[str, float]] = {
+        "raw": {},
+        "market": {},
+        "blend": {},
+    }
     legs: list[ComboLeg] = []
     for bracket, slot in by_bracket.items():
         br = blend_probability(
@@ -220,7 +306,9 @@ def _candidate_legs_for_group(
             config=blend_cfg,
         )
         p = br.p_yes_used
-        bracket_to_p[bracket] = p
+        prob_inputs["raw"][bracket] = float(slot["p_yes_raw"])
+        prob_inputs["market"][bracket] = float(slot["market_yes_price"])
+        prob_inputs["blend"][bracket] = p
         yes_ask = slot["yes_best_ask"]
         no_ask = slot["no_best_ask"]
         if yes_ask is not None:
@@ -267,7 +355,7 @@ def _candidate_legs_for_group(
                             edge=edge_no,
                         )
                     )
-    return legs, bracket_to_p
+    return legs, prob_inputs
 
 
 def _valid_combo(legs: tuple[ComboLeg, ...]) -> bool:
@@ -290,7 +378,7 @@ def _decide_combo_optimizer(
 ) -> list[Leg]:
     out: list[Leg] = []
     for (_city, _event_date), grp in df.groupby(["city", "event_date"]):
-        candidates, bracket_to_p = _candidate_legs_for_group(
+        candidates, prob_inputs = _candidate_legs_for_group(
             grp,
             edge_threshold=edge_threshold,
             small_notional=small_notional,
@@ -300,8 +388,11 @@ def _decide_combo_optimizer(
         )
         if not candidates:
             continue
-        probs = _probability_distribution(bracket_to_p)
-        if not probs:
+        probs = _probability_distribution(
+            prob_inputs["market"] if mode in ("market_risk", "market_tail") else prob_inputs["blend"]
+        )
+        probs_market = _probability_distribution(prob_inputs["market"])
+        if not probs or not probs_market:
             continue
         pool = sorted(candidates, key=lambda leg: leg.edge, reverse=True)[:candidate_pool_size]
         best_combo: tuple[ComboLeg, ...] | None = None
@@ -311,7 +402,16 @@ def _decide_combo_optimizer(
             for combo in itertools.combinations(pool, k):
                 if not _valid_combo(combo):
                     continue
-                score = _score_combo(combo, probs, mode=mode, cvar_weight=cvar_weight)
+                if mode == "policy_v1":
+                    score = _score_policy_v1(combo, probs, probs_market)
+                    if score is None:
+                        continue
+                elif mode == "market_tail":
+                    score = _score_market_tail(combo, probs_market)
+                    if score is None:
+                        continue
+                else:
+                    score = _score_combo(combo, probs, mode=mode, cvar_weight=cvar_weight)
                 if score.expected_value <= 0.0:
                     continue
                 if abs(score.worst_case) > city_day_cap:
@@ -351,6 +451,9 @@ def _evaluate_slice(df: pd.DataFrame) -> dict:
     combo_ev = _decide_combo_optimizer(df, mode="ev")
     combo_risk = _decide_combo_optimizer(df, mode="risk")
     combo_guarded = _decide_combo_optimizer(df, mode="risk", max_win_multiple=12.0)
+    combo_policy_v1 = _decide_combo_optimizer(df, mode="policy_v1")
+    combo_market_risk = _decide_combo_optimizer(df, mode="market_risk")
+    combo_market_tail = _decide_combo_optimizer(df, mode="market_tail")
 
     rules = {
         "raw_single": asdict(_summarize("raw_single", raw)),
@@ -360,6 +463,9 @@ def _evaluate_slice(df: pd.DataFrame) -> dict:
         "combo_ev": asdict(_summarize("combo_ev", combo_ev)),
         "combo_risk": asdict(_summarize("combo_risk", combo_risk)),
         "combo_guarded": asdict(_summarize("combo_guarded", combo_guarded)),
+        "combo_policy_v1": asdict(_summarize("combo_policy_v1", combo_policy_v1)),
+        "combo_market_risk": asdict(_summarize("combo_market_risk", combo_market_risk)),
+        "combo_market_tail": asdict(_summarize("combo_market_tail", combo_market_tail)),
     }
     attrs = {
         name: _attribution(legs, blended)
@@ -368,11 +474,14 @@ def _evaluate_slice(df: pd.DataFrame) -> dict:
             ("combo_ev", combo_ev),
             ("combo_risk", combo_risk),
             ("combo_guarded", combo_guarded),
+            ("combo_policy_v1", combo_policy_v1),
+            ("combo_market_risk", combo_market_risk),
+            ("combo_market_tail", combo_market_tail),
         )
     }
     gates = {}
     blended_roi = rules["blended_single"]["roi"]
-    for name in ("heuristic_pr2b", "combo_ev", "combo_risk", "combo_guarded"):
+    for name in ("heuristic_pr2b", "combo_ev", "combo_risk", "combo_guarded", "combo_policy_v1", "combo_market_risk", "combo_market_tail"):
         s = rules[name]
         a = attrs[name]
         checks = {
@@ -414,6 +523,9 @@ def _write_markdown(report: dict, out_path: Path) -> None:
         "- `combo_ev`: enumerate feasible combinations and maximize normalized EV.",
         "- `combo_risk`: enumerate feasible combinations and maximize EV + 0.5 * CVaR20.",
         "- `combo_guarded`: same as `combo_risk`, but drops legs whose max win is > 12x notional.",
+        "- `combo_policy_v1`: fixed robust policy using blend EV, market-normalized sanity checks, and CVaR floors.",
+        "- `combo_market_risk`: candidates from blend edge, but objective uses market-normalized distribution.",
+        "- `combo_market_tail`: market-normalized objective that requires positive EV even after removing the best single final-temp outcome.",
         "",
         "Research constraints:",
         "",
@@ -429,7 +541,7 @@ def _write_markdown(report: dict, out_path: Path) -> None:
         "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for slice_name, data in report["slices"].items():
-        for rule in ("raw_single", "blended_single", "heuristic_pr2b", "combo_ev", "combo_risk", "combo_guarded"):
+        for rule in ("raw_single", "blended_single", "heuristic_pr2b", "combo_ev", "combo_risk", "combo_guarded", "combo_policy_v1", "combo_market_risk", "combo_market_tail"):
             s = data["rules"][rule]
             attr = data["attr_vs_blended"].get(rule)
             gates = data["gates"].get(rule)
@@ -460,12 +572,25 @@ def _write_markdown(report: dict, out_path: Path) -> None:
         f"- Live-filled opportunity subset: `combo_risk` is the only basket variant with 3/4 gates, "
         f"but top-5 removed ROI is still {live_subset['combo_risk']['roi_excl_top5']*100:+.2f}%.",
         "- `combo_guarded` shows that a blunt high-payout filter is too destructive: it reduces full-sample PnL and does not fix holdout tail risk.",
+        f"- `combo_policy_v1` tests a fixed robust objective. Full-sample ROI is "
+        f"{full['combo_policy_v1']['roi']*100:+.2f}%, holdout ROI is "
+        f"{holdout['combo_policy_v1']['roi']*100:+.2f}%, recent ROI is "
+        f"{recent['combo_policy_v1']['roi']*100:+.2f}%.",
+        f"- `combo_market_risk` directly tests the distribution-quality finding. Full-sample ROI is "
+        f"{full['combo_market_risk']['roi']*100:+.2f}%, holdout ROI is "
+        f"{holdout['combo_market_risk']['roi']*100:+.2f}%, recent ROI is "
+        f"{recent['combo_market_risk']['roi']*100:+.2f}%.",
+        f"- `combo_market_tail` is the strict tail-objective test. Full-sample ROI is "
+        f"{full['combo_market_tail']['roi']*100:+.2f}%, holdout ROI is "
+        f"{holdout['combo_market_tail']['roi']*100:+.2f}%, recent ROI is "
+        f"{recent['combo_market_tail']['roi']*100:+.2f}%.",
         "",
         "## Quant Read",
         "",
         "- Combo enumeration is directionally useful for finding higher headline ROI, but it currently concentrates risk into fewer, higher-tail legs.",
         "- The core problem is not just top-N vs enumeration. The objective needs a better calibrated city-day temperature distribution and explicit tail controls.",
         "- Simple lottery-leg filtering is not enough. The next research step should improve the probability distribution and evaluate combinations with walk-forward objectives.",
+        "- A viable candidate should improve holdout and recent tail-removed ROI, not only headline ROI.",
         "",
         "Production remains unchanged.",
     ])
@@ -495,6 +620,11 @@ def main() -> None:
             "normal_threshold": 0.06,
             "cvar_weight": 0.5,
             "guarded_max_win_multiple": 12.0,
+            "policy_v1_market_ev_floor": "-0.15 * cost",
+            "policy_v1_blend_cvar_floor": "-0.85 * cost",
+            "policy_v1_market_cvar_floor": "-1.00 * cost",
+            "market_risk_distribution": "market_norm",
+            "market_tail_rule": "market_norm EV remains positive after removing best final-temp outcome",
         },
     }
 
@@ -508,7 +638,7 @@ def main() -> None:
 
     for slice_name, data in report["slices"].items():
         print(f"\n== {slice_name} ==")
-        for rule in ("raw_single", "blended_single", "heuristic_pr2b", "combo_ev", "combo_risk", "combo_guarded"):
+        for rule in ("raw_single", "blended_single", "heuristic_pr2b", "combo_ev", "combo_risk", "combo_guarded", "combo_policy_v1", "combo_market_risk", "combo_market_tail"):
             s = data["rules"][rule]
             gates = data["gates"].get(rule)
             gate_count = gates["gate_count"] if gates else 0
