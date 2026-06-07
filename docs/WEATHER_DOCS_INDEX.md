@@ -103,6 +103,7 @@ Status 口径：
 | [2026-06-07-mid-price-core-v1-city-model-downgrade.md](analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md) | `snapshot` | yes | v1_25_75 city×model 降级依据，识别 Ankara/Jeddah/Karachi/Moscow/Munich 等弱近期 ECMWF 城市 |
 | [2026-06-07-v1-ecmwf-blocked-side-band-overlay.md](analysis/2026-06/2026-06-07-v1-ecmwf-blocked-side-band-overlay.md) | `snapshot` | yes | 被移出 v1_25_75 live allowlist 的弱城市若换 side-band 是否改善；结论是明显减亏但仍只适合 shadow |
 | [2026-06-08-blender-research-state-and-next-plan.md](analysis/2026-06/2026-06-08-blender-research-state-and-next-plan.md) | `snapshot` | yes | blender 全部研究和工程改动交接：结论是只做 shadow/paper 与 size/risk signal，不进 live hard gate |
+| [2026-06-08-blender-signal-value-research.md](analysis/2026-06/2026-06-08-blender-signal-value-research.md) | `snapshot` | yes | strict `22<=T<=28` 新 base 下研究 blender 本体：hard gate、size curve、alpha grid、walk-forward 均不支持 live gate |
 | [2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md](analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md) | `snapshot` | yes | 剔除 6 个弱 ECMWF 城市并 ban T>28 后，blender 相对新 base 的边际收益为负 |
 | [2026-06-08-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | 最新 fact 重建后 basket vs legacy baseline refresh；recent slice 仍不支持上线 |
 | [2026-06-08-city-day-basket-walkforward.md](analysis/2026-06/2026-06-08-city-day-basket-walkforward.md) | `snapshot` | yes | 最新 fact 重建后 city-day basket walk-forward refresh；用于拒绝过拟合候选 |

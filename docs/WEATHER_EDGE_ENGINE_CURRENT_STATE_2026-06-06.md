@@ -13,6 +13,7 @@ Status: `current-source`。这是 weather_edge_engine 当前接手入口；旧�
 - 用户已从 live allowlist 移除近期弱 ECMWF 城市：`BuenosAires / Munich / Jeddah / Karachi / Moscow / Ankara`。
 - 用户已 ban `hours_to_settle > 28` 的过早下单。
 - 在该新 operational base 下，`blender` 的定位从“可能的硬 gate”降级为“shadow/paper + size/risk signal 候选”。原因是剔除 6 城 + `T<=28` 后，6 月后 `mid_price_core_v1_25_75` settled live overlay 已从 `-$89.06` 改善到 `+$39.53`；再叠纯 `blended_edge>=0.10` 只剩 `+$20.19`，相对新 base 是 `-$19.33` 的负增量。
+- 2026-06-08 进一步按 strict execution window `22<=hours_to_settle<=28` 重算 blender 本体价值：新 base 本身 308 settled fills、PnL `+$167.35`、ROI `+20.1%`；`blended_edge>=0.10` hard gate 的 delta 是 `-$115.28`；温和 size curve 的 delta 是 `-$67.65`；7-day walk-forward policy selection 总 delta `-$16.40`。结论：blender 仍不应进 live hard gate，size curve 也未证明能增厚收益。
 - 因此当前策略动作是：**保留城市/时间风控，blender 不进 live hard gate，只继续 shadow/paper 和 lineage 双写研究。**
 
 最新交接报告：
@@ -20,6 +21,7 @@ Status: `current-source`。这是 weather_edge_engine 当前接手入口；旧�
 ```text
 docs/analysis/2026-06/2026-06-08-blender-research-state-and-next-plan.md
 docs/analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md
+docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md
 ```
 
 ---
@@ -87,6 +89,7 @@ p_yes_used = 0.3 * 30% + 0.7 * 20% = 23%
 - 但最近 7 天 recalibration 显示 best alpha = 0.00，raw model 近期退化，不能贸然加 raw 权重。
 - 2026-06-07 live fill overlay 显示，纯 `blended_edge>=0.10` 在 6 月前伤害收益、6 月后改善亏损：pre delta `-$67.63`，post delta `+$86.56`。它更像近期 drift filter，不是稳定 alpha。
 - 2026-06-08 控制变量重算显示，剔除 6 个弱 ECMWF 城市并 ban `T>28` 后，blender 对新 base 的边际收益为负：post 新 base `+$39.53`，新 base + blender `+$20.19`。
+- 2026-06-08 strict window 重算显示，在 `22<=T<=28` 的新 base 内，blender hard gate 和 size curve 都没有通过：base `+$167.35`，hard gate delta `-$115.28`，gentle size curve delta `-$67.65`，walk-forward delta `-$16.40`。
 
 推荐下一步：
 
@@ -124,7 +127,7 @@ if blended_edge < 0.10:
     skip_live_order
 ```
 
-更合理的研究方向：
+更合理但尚未通过的研究方向：
 
 ```text
 if operational_base_pass:
@@ -139,6 +142,8 @@ blended_edge < 0.00       -> skip / size 0
 0.05 <= blended_edge < .10 and raw_edge <= .25 -> 0.5x
 otherwise                 -> 1.0x
 ```
+
+这条 size curve 已在 2026-06-08 strict window 样本上回测，当前结果为负增量；只保留为 future shadow 字段和模型健康告警候选，不作为 live 参数。
 
 ### B. City-Day Basket / 核心算法研究
 
