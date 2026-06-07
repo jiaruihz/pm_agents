@@ -1,0 +1,40 @@
+{
+  "strategy_id": "weather_edge_engine_basket_v0",
+  "strategy_family": "weather_edge_engine",
+  "strategy_name": "Weather Edge Engine City-Day Basket v0",
+  "status": "research_candidate",
+  "execution_mode": "shadow",
+  "probability_source": "blended",
+  "decision_mode": "city_day_basket_shadow",
+  "description": "Research-only shadow strategy for combining multiple temperature bracket markets into one city-day basket decision. Current PR2b parameters are not production-approved.",
+  "code_locations": {
+    "basket_builder": "weather_dashboard/basket/city_day_basket.py",
+    "basket_tests": [
+      "tests/basket/test_city_day_basket.py"
+    ],
+    "parameter_sweep": "scripts/analysis/tune_city_day_basket.py",
+    "robustness_check": "scripts/analysis/validate_city_day_basket_robustness.py"
+  },
+  "current_research_candidate": {
+    "single_leg_notional_small": 3.0,
+    "single_leg_notional_normal": 8.0,
+    "city_day_notional_cap": 15.0,
+    "max_legs_per_city_day": 4,
+    "edge_small_threshold": 0.03,
+    "edge_normal_threshold": 0.06,
+    "prefer_no_over_yes": false
+  },
+  "known_risks": [
+    "parameters selected on the same offline sample",
+    "holdout/recent/live_filled top-5-removed ROI is negative",
+    "current builder is heuristic top-N selection, not full portfolio optimization",
+    "current offline replay uses aggregated decision-window candidates, not full N100 snapshot replay",
+    "BUY_NO book uses historical proxy where independent NO book is unavailable"
+  ],
+  "production_boundary": {
+    "submits_orders": false,
+    "changes_live_execution_policy": false,
+    "changes_n100_city_pool": false,
+    "canary_allowed_without_shadow_review": false
+  }
+}
