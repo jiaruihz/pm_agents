@@ -1,6 +1,6 @@
 # 天气策略城市池决策记录
 
-更新时间：2026-06-06
+更新时间：2026-06-08
 
 这份文档专门记录天气策略城市池怎么变、为什么变、当前哪些城市可以实盘。
 
@@ -53,6 +53,20 @@ Seattle, Shanghai, Singapore, Tokyo, Warsaw
 | Austin | T2 / research only | v2 时已移出，赔率结构不利 |
 | Amsterdam | T2 / research only | 2026-06-06 降级：三策略实例 all-history live PnL -30.43 / ROI -82.0%，V1-only ROI -61.9% |
 | BuenosAires | T2 / research only | 2026-06-06 降级：三策略实例 all-history live PnL -28.11 / ROI -49.6%，V1-only ROI -22.2% |
+
+### pm_agent live allowlist 覆盖层（2026-06-08）
+
+这里不是修改 `weather-predict/city_pools.py` 的全局 T1/T2 source of truth，
+而是 `pm_agent` live 启动脚本里的实例级 allowlist。目的是先把近期退化的
+`mid_price_core_v1_25_75` 分支降风险，同时不影响天气采集、settlement、
+paper/research 和 side-band 影子观察。
+
+| strategy_instance | live allowed cities | 说明 |
+|---|---|---|
+| `mid_price_core_v1_25_75` | Boston, Chengdu, Guangzhou, Istanbul, LA, London, Lucknow, Madrid, Manila, Miami, NYC, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw | 从该实例 live allowlist 移除 Ankara, Jeddah, Karachi, Moscow, Munich；BuenosAires 本来不在该 allowlist |
+| `mid_price_core_v1_side_band` | Boston, LA, London, Miami, NYC, Phoenix, Shanghai, Tokyo, Warsaw | 保持 legacy core 城市池；本来就不包含 BuenosAires/Munich/Jeddah/Karachi/Moscow/Ankara |
+
+共同 side gate 仍为 `NYC:BUY_YES`，所以 `NYC` 仍在两个实例城市池里，但只允许符合条件的 `BUY_NO`。
 
 ## 这次 v3 怎么改
 
@@ -128,6 +142,42 @@ Ankara, Guangzhou, Istanbul, Jeddah, Karachi, Lucknow, Moscow, Seattle
 | 低 size 观察 | Lucknow, Istanbul, Ankara, Karachi | 总 ROI 为正，但赚钱天数比例不够稳 |
 
 ## 历史记录
+
+### 2026-06-08：收缩 v1_25_75 live allowlist，弱近期 ECMWF 城市先退出该实例
+
+动作：
+
+- `pm_agent` N100 部署到 commit `4149a13`。
+- `mid_price_core_v1_25_75` live allowlist 从 v4 T1 22 城收缩到 17 城。
+- 从该实例 live allowlist 移除：`Ankara`, `Jeddah`, `Karachi`, `Moscow`, `Munich`。
+- `BuenosAires` 已在 2026-06-06 降级为 T2 / research only，本来不在该实例 allowlist。
+- `mid_price_core_v1_side_band` 城市池不变，仍为 legacy core 9 城。
+
+依据：
+
+- `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md`
+- `docs/analysis/2026-06/2026-06-07-v1-ecmwf-blocked-side-band-overlay.md`
+
+历史 overlay 结论：
+
+| slice | baseline v1_25_75 | side-band kept subset | 结论 |
+|---|---:|---:|---|
+| 2026-06-01 以来，6 城市 ECMWF 历史 fills | 95 fills / PnL -99.14 / ROI -39.8% | 35 fills / PnL -9.85 / ROI -10.2% | side-band 明显减亏但仍未证明正 alpha |
+
+交易动作：
+
+- 这些城市不再进入 `mid_price_core_v1_25_75` live。
+- 不为此新增 city×model block 参数；保持简单的实例级城市 allowlist。
+- side-band 对这些城市不直接 live，因为它本来不含这些城市；如要研究，走 shadow/paper。
+
+部署验证：
+
+- N100 commit：`4149a13`
+- 新 live loop pid：`mid_price_core_v1_25_75=387632`, `mid_price_core_v1_side_band=387645`
+- 首轮运行：2026-06-08 00:10/00:11 北京时间，两个实例 `contract_alerts=[]`
+- 首轮配置确认：
+  - v1_25_75 `allowed_cities=Boston,Chengdu,Guangzhou,Istanbul,LA,London,Lucknow,Madrid,Manila,Miami,NYC,Phoenix,Seattle,Shanghai,Singapore,Tokyo,Warsaw`
+  - side-band `allowed_cities=Boston,LA,London,Miami,NYC,Phoenix,Shanghai,Tokyo,Warsaw`
 
 ### 2026-06-06：停 V2 live，Amsterdam / BuenosAires 降级到 T2
 

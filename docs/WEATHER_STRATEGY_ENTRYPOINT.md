@@ -1,6 +1,6 @@
 # Weather Strategy Entrypoint
 
-Last updated: 2026-06-06
+Last updated: 2026-06-08
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.
 
@@ -22,7 +22,7 @@ For early live rollout history, known mistakes, and how to split local/N100 live
 Current live rollout policy:
 
 ```text
-city_pool = t1_trading (v4, 22 cities — see docs/WEATHER_CITY_POOL_DECISIONS.md)
+city_pool = t1_trading (weather-predict v4 has 22 cities; pm_agent live instances apply explicit allowlists below)
 signal capture = scan latest 90 minutes of synced snapshots; executable window 22h <= hours_to_settle_now <= 28h
 sizing_mode = notional
 max_order_notional = 5.00
@@ -36,6 +36,18 @@ N100 should run exactly two weather live strategy instances by default:
 |---|---|---|---|
 | `mid_price_core_v1_25_75` | `mid_price_core_v1` | direct signal builder | global `0.25 <= price < 0.75`, `edge >= 0.10` |
 | `mid_price_core_v1_side_band` | `mid_price_core_v1` | direct signal builder | YES `0.20 <= price < 0.45`, `edge >= 0.20`; NO `0.35 <= price < 0.65`, `edge >= 0.10` |
+
+Current pm_agent live allowlists:
+
+| strategy_instance | allowed cities |
+|---|---|
+| `mid_price_core_v1_25_75` | Boston, Chengdu, Guangzhou, Istanbul, LA, London, Lucknow, Madrid, Manila, Miami, NYC, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw |
+| `mid_price_core_v1_side_band` | Boston, LA, London, Miami, NYC, Phoenix, Shanghai, Tokyo, Warsaw |
+
+The 2026-06-08 v1_25_75 allowlist intentionally excludes
+`Ankara/Jeddah/Karachi/Moscow/Munich`; `BuenosAires` was already outside this
+live allowlist. Side-band already used the legacy core 9-city pool and did not
+include `BuenosAires/Munich/Jeddah/Karachi/Moscow/Ankara`.
 
 `mid_price_core_v2_25_75` was stopped from live on 2026-06-06. Finding:
 V2 execution improved fill-vs-plan on BUY_YES, but the grabbed `0.25-0.75`
@@ -57,7 +69,7 @@ wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && s
 The script name is historical; by default it now starts two instances. V2 only
 starts when `START_MID_PRICE_CORE_V2_25_75=1` is set.
 
-## 当前城市池 v4（2026-06-06）
+## 当前城市池 v4 + pm_agent allowlists（2026-06-08）
 
 城市池决策日志和完整证据见 `docs/WEATHER_CITY_POOL_DECISIONS.md`。
 代码 source of truth 是 `weather-predict/city_pools.py` 的
@@ -82,6 +94,15 @@ Seattle, Shanghai, Singapore, Tokyo, Warsaw
 
 Paris / Beijing / Chicago / Austin / Amsterdam / BuenosAires 均保留在 `FULL_CITY_CONFIGS`，因此是 T2
 research-only，不是删除城市配置。
+
+**2026-06-08 pm_agent live allowlist 覆盖层：**
+
+- `mid_price_core_v1_25_75` 从 live allowlist 移除 `Ankara`, `Jeddah`,
+  `Karachi`, `Moscow`, `Munich`，保留 17 城。
+- `mid_price_core_v1_side_band` 保持 legacy core 9 城，不包含上述弱城市。
+- 这不是从 `weather-predict` 删除城市；这些城市仍继续用于采集、结算、
+  paper/research 和 shadow 分析。
+- N100 已部署 `4149a13`，首轮运行 `contract_alerts=[]`。
 
 ## 2026-05-26 城市池 v2 变更（已被 v3 覆盖，paper ledger 生效）
 
@@ -130,11 +151,13 @@ its own config/run/plan/order lineage.
 
 Important: `city_pool=t1_trading` is the execution pool source of truth. Do not add a second hardcoded T1 city allowlist unless there is a new explicit design decision. If a T2 city appears in live signals or live orders, treat it as an upstream `city_pool` or live-cycle parameter incident, pause live, and investigate.
 
-2026-06-06 exception: `scripts/ops/start_weather_three_strategy_instances.sh`
-now passes an explicit v4 T1 allowlist to `mid_price_core_v1_25_75`. This is a
-live safety gate so Amsterdam/BuenosAires cannot slip through stale synced
-snapshots during the signal lookback. Keep it mirrored with
-`weather-predict/city_pools.py` whenever T1 changes.
+2026-06-08 exception: `scripts/ops/start_weather_three_strategy_instances.sh`
+passes explicit per-instance allowlists. `mid_price_core_v1_25_75` is narrower
+than weather-predict v4 T1 because recent raw/ECMWF degradation was concentrated
+in `Ankara/Jeddah/Karachi/Moscow/Munich`; `mid_price_core_v1_side_band` keeps
+the legacy core 9-city pool. Do not add a second city×model block unless a new
+design explicitly proves it is needed; prefer changing the instance allowlist
+first.
 
 ## Production Checks
 
@@ -251,6 +274,31 @@ DB (`runtime/weather.db`) via `orders.venue='polymarket_clob'` joined to
 `fills.status='filled'` and `settlements`; the relevant API logic lives in
 `weather_dashboard/api/routers/live.py`. See
 `docs/WEATHER_DATA_PIPELINE.md` before making live-vs-paper PnL claims.
+
+2026-06-07 CLOB fill recovery incident: Polymarket public activity is not an
+order-level authoritative fill source. It is account-level activity and can
+misallocate fills across split child orders or partial fills. Correct live fill
+recovery now uses this priority:
+
+1. local `exchange_response.place.status='matched'` immediate fill
+   (`makingAmount` / `takingAmount`);
+2. authenticated CLOB order / trade data;
+3. public activity only as a token/side/price/time matched fallback, capped by
+   each submitted order's shares/cost.
+
+Before publishing any live_real PnL/ROI/curve, run:
+
+```bash
+python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+```
+
+`gate_pass=false` means stop and fix the fill cache / CLOB sync before making
+strategy conclusions. Minimum publishable condition:
+`gate_pass=true`, `missing_order_rows=0`, `over_order_keys=0`,
+DB/cache fill_id difference is 0, and `db_fill_cost_minus_fact_cost=0`.
+`live_real` row count changes as new real fills arrive, so do not hardcode a
+historical count. Full incident report:
+`docs/analysis/2026-06/2026-06-07-fill-recovery-and-performance-recalc.md`.
 
 Each live cycle summary now includes:
 

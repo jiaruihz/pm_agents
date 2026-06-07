@@ -1,6 +1,6 @@
 # Weather Docs Index
 
-更新时间：2026-06-06
+更新时间：2026-06-08
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -15,12 +15,39 @@ Status 口径：
 | `snapshot` | 时间点分析/复盘，保留证据，不代表当前生产口径 |
 | `superseded` | 已被新入口覆盖，只作为历史背景 |
 
+## 2026-06-06 口径勘误
+
+`pm_history` 已结算价格可能是 near-binary `0.9995 / 0.0005`，不是精确 `1.0 / 0.0`。2026-06-06 前旧 ingest/builder 会把这批已结算 bracket 误标为 `missing_bracket`；修复后 live fill 与 raw CLOB fills 对齐，`missing_bracket` 从 725 降到 0。
+
+权威入口：
+
+| 文档 | Status | 读它回答什么问题 |
+|---|---|---|
+| [2026-06-06-account-equity-replay.md](analysis/2026-06/2026-06-06-account-equity-replay.md) | `snapshot` | 用 Polymarket public activity + raw live order files + DB fills 对齐截图 `1周 -$305.32`，确认 DB fill recovery 少覆盖真实 BUY |
+| [2026-06-06-polymarket-ui-account-loss-reconciliation.md](analysis/2026-06/2026-06-06-polymarket-ui-account-loss-reconciliation.md) | `snapshot` | Polymarket UI `1周 -$305.32` 与 fact 表已结算 PnL、公开 activity cashflow、当前 positions value 的口径差异 |
+| [2026-06-06-live-account-reconcile-near-binary-fix.md](analysis/2026-06/2026-06-06-live-account-reconcile-near-binary-fix.md) | `snapshot` | 2026-06-06 fill 没漏、near-binary settlement 修复、最近一周 cashflow/realized/open 分拆 |
+| [2026-06-06-live-strategy-period-slice.md](analysis/2026-06/2026-06-06-live-strategy-period-slice.md) | `snapshot` | 最近 7 天/14 天/更早按日期和 strategy_instance 拆 realized、open cost、cashflow；注意它不是 Polymarket UI 账户权益曲线 |
+| [2026-06-06-three-strategy-instances-near-binary-reanalysis.md](analysis/2026-06/2026-06-06-three-strategy-instances-near-binary-reanalysis.md) | `snapshot` | near-binary 勘误后重算三个 live strategy_instance 的 recent/full realized 表现和动作建议 |
+| [2026-06-06-near-binary-city-reanalysis.md](analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md) | `snapshot` | near-binary 勘误后重算城市 alpha、recent live loss、city x side 处置 |
+
+以下报告可能使用旧 settlement 口径；凡是要引用 settled PnL、ROI、win rate、city/side rank、live_filled 子集或 `missing_bracket` 数，必须先 sync + rebuild `runtime/weather.db` 后重算：
+
+| 文档 | 过时原因 |
+|---|---|
+| [2026-06-03-performance-three-strategy-instances.md](analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | `missing_bracket=725`，且 side-band 漏算 YES 侧 `0.20-0.45`，三实例 realized 对比需重算 |
+| [2026-06-04-performance-side-band-entry-analysis.md](analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md) | `missing_bracket=624`，side-band realized 判定需重算 |
+| [2026-06-06-recent-live-loss-attribution.md](analysis/2026-06/2026-06-06-recent-live-loss-attribution.md) | `missing_bracket=28/734`，recent loss、open/cashflow 结论已被新对账快照覆盖 |
+| [2026-06-06-city-alpha-framework.md](analysis/2026-06/2026-06-06-city-alpha-framework.md) | `missing_bracket=734`，live city/side rank 和 settled 兑现需重算 |
+| [2026-06-06-blended-single-v0-backtest.md](analysis/2026-06/2026-06-06-blended-single-v0-backtest.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
+| [2026-06-06-blended-entry-band-backtest.md](analysis/2026-06/2026-06-06-blended-entry-band-backtest.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
+| [2026-06-06-blended-paper-fill-estimate.md](analysis/2026-06/2026-06-06-blended-paper-fill-estimate.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
+
 ## 当前运行入口
 
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
-| [WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) | `current-source` | 现在 N100 应跑哪些 live 实例、怎么检查、近期事故/决策是什么 |
-| [WEATHER_CITY_POOL_DECISIONS.md](WEATHER_CITY_POOL_DECISIONS.md) | `current-source` | 当前 T1/T2 城市池是谁、为什么升降级、回滚条件是什么 |
+| [WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) | `current-source` | 现在 N100 应跑哪些 live 实例、每条实例的 allowed cities、怎么检查、近期事故/决策是什么 |
+| [WEATHER_CITY_POOL_DECISIONS.md](WEATHER_CITY_POOL_DECISIONS.md) | `current-source` | 当前 T1/T2 城市池、pm_agent 实例级 live allowlist、为什么升降级、回滚条件是什么 |
 | [WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md) | `current-source` | weather 分析、PnL、切片、账户对账必须用什么口径 |
 | [OPS_RUNBOOK.md](OPS_RUNBOOK.md) | `current-reference` | 常驻进程、日志、通用运维命令在哪里 |
 | [WEATHER_DASHBOARD_TROUBLESHOOTING.md](WEATHER_DASHBOARD_TROUBLESHOOTING.md) | `current-reference` | 本机 dashboard / API / FE 出问题时怎么排查 |
@@ -70,10 +97,16 @@ Status 口径：
 | 文档 | Status | Used by current decision | 读它回答什么问题 |
 |---|---|---|---|
 | [2026-06-03-performance-three-strategy-instances.md](analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | `snapshot` | yes | 三策略实例 live_real 表现、V2 停 live、Amsterdam/BuenosAires 降 T2 的证据入口 |
+| [2026-06-06-near-binary-city-reanalysis.md](analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md) | `snapshot` | yes | near-binary 勘误后城市 alpha、recent live loss 和 city x side 处置重算 |
+| [2026-06-07-mid-price-core-v1-raw-degradation.md](analysis/2026-06/2026-06-07-mid-price-core-v1-raw-degradation.md) | `snapshot` | yes | raw / mid_price_core_v1 为什么 2026-06-01 后退化：side、city、edge、market divergence、tail 事件归因 |
+| [2026-06-07-mid-price-core-v1-city-model-downgrade.md](analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md) | `snapshot` | yes | v1_25_75 city×model 降级依据，识别 Ankara/Jeddah/Karachi/Moscow/Munich 等弱近期 ECMWF 城市 |
+| [2026-06-07-v1-ecmwf-blocked-side-band-overlay.md](analysis/2026-06/2026-06-07-v1-ecmwf-blocked-side-band-overlay.md) | `snapshot` | yes | 被移出 v1_25_75 live allowlist 的弱城市若换 side-band 是否改善；结论是明显减亏但仍只适合 shadow |
 | [2026-06-06-city-alpha-framework.md](analysis/2026-06/2026-06-06-city-alpha-framework.md) | `snapshot` | yes | 城市 alpha 评价体系、paper->live 扩池反转、city x side gate |
 | [2026-06-06-city-day-distribution-quality.md](analysis/2026-06/2026-06-06-city-day-distribution-quality.md) | `snapshot` | yes | raw/market/blend_norm 分布质量和 holdout 退化问题 |
 | [2026-06-06-blended-single-v0-backtest.md](analysis/2026-06/2026-06-06-blended-single-v0-backtest.md) | `snapshot` | yes | blended single v0 shadow 策略回测、策略身份和 opportunity 对比 |
 | [2026-06-06-blended-entry-band-backtest.md](analysis/2026-06/2026-06-06-blended-entry-band-backtest.md) | `snapshot` | yes | 保留 live 入场区间后的 blend gate 公平对比 |
+| [2026-06-06-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | basket vs 旧 per-bucket raw 策略的同窗、同 entry-band baseline 对比 |
+| [2026-06-06-city-day-basket-walkforward.md](analysis/2026-06/2026-06-06-city-day-basket-walkforward.md) | `snapshot` | yes | city-day basket 目标选择 walk-forward：用于拒绝过拟合候选，不批准上线 |
 | [2026-06-06-city-day-basket-optimizer-research.md](analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md) | `snapshot` | yes | city-day basket optimizer 的 headline ROI 与 tail 风险 |
 | [2026-06-06-city-day-basket-pr2b-robustness.md](analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md) | `snapshot` | yes | PR2b 全样本通过但 tail/overfit 风险的复核 |
 | [2026-06-06-city-day-basket-pr2b-sweep.md](analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md) | `snapshot` | yes | PR2b basket 参数 sweep 和候选 profile |
