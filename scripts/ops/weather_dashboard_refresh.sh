@@ -6,7 +6,8 @@
 #   2. ingest — scan live_cycle JSONL into canonical weather.db
 #   3. clob-fill-sync — pull real CLOB fills from Polymarket activity API
 #   4. fact-build — rebuild fact_trades / fact_signal_candidates from canonical DB
-#   5. metrics-refresh — recompute all run metrics and persist to DB cache
+#   5. clob-fill-coverage-gate — fail closed on mismatched/over-cap live fills
+#   6. metrics-refresh — recompute all run metrics and persist to DB cache
 #
 # Usage:
 #   scripts/ops/weather_dashboard_refresh.sh                  # full refresh
@@ -120,7 +121,7 @@ fi
 
 # ---- Step 4: Fact table rebuild ----
 log ""
-log "Step 4/5: Rebuilding fact_trades and fact_signal_candidates"
+log "Step 4/6: Rebuilding fact_trades and fact_signal_candidates"
 FACT_PARQUET_ARGS=()
 SIGNAL_PARQUET_ARGS=()
 if has_parquet_engine; then
@@ -147,9 +148,20 @@ fi
   exit 1
 }
 
-# ---- Step 5: Metrics refresh ----
+# ---- Step 5: CLOB fill coverage gate ----
 log ""
-log "Step 5/5: Recomputing metrics cache for all runs"
+log "Step 5/6: Checking CLOB fill coverage gate"
+"$VENV/python" scripts/analysis/weather_clob_fill_coverage_gate.py \
+  --db "$DB_PATH" \
+  --json-out "$LOG_DIR/clob_fill_coverage_gate.json" \
+  2>&1 | tee "$LOG_DIR/clob_fill_coverage_gate.log" || {
+  err "CLOB fill coverage gate failed — check $LOG_DIR/clob_fill_coverage_gate.json"
+  exit 1
+}
+
+# ---- Step 6: Metrics refresh ----
+log ""
+log "Step 6/6: Recomputing metrics cache for all runs"
 refresh_metrics 2>&1 | tee "$LOG_DIR/metrics_refresh.log" || {
   warn "metrics-refresh failed (non-fatal) — check $LOG_DIR/metrics_refresh.log"
 }

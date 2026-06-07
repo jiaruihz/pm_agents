@@ -264,6 +264,15 @@ if [[ $REBUILD -eq 1 ]]; then
     exit 1
   }
 
+  log "  Checking CLOB fill coverage gate..."
+  "$VENV/python" scripts/analysis/weather_clob_fill_coverage_gate.py \
+    --db "$DB_PATH" \
+    --json-out "$LOG_DIR/clob_fill_coverage_gate.json" \
+    >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    err "CLOB fill coverage gate failed — see $LOG_DIR/clob_fill_coverage_gate.json"
+    exit 1
+  }
+
   log "  Re-computing metrics after fill+settlement+fact_trades rebuild"
   refresh_metrics >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
 fi

@@ -1,5 +1,7 @@
 # 三策略实例绩效复盘：mid_price_core_v1 / v2 / side-band
 
+> 2026-06-06 口径勘误：本文使用旧 settlement 精确 `1.0/0.0` 规则，报告中的 `missing_bracket=725` 及依赖 settled/missing 分母的 PnL、ROI、win rate、v1/v2 对比均需按 near-binary 新规则重算。另：本文的 side-band 映射只认 `0.35-0.65`，漏掉 YES 侧 `0.20-0.45`，会低估 `mid_price_core_v1_side_band`。正确三实例结论见 [2026-06-06-three-strategy-instances-near-binary-reanalysis.md](2026-06-06-three-strategy-instances-near-binary-reanalysis.md)；账户/CLOB 对账背景见 [2026-06-06-live-account-reconcile-near-binary-fix.md](2026-06-06-live-account-reconcile-near-binary-fix.md)。
+
 Status: `snapshot`。Used by current decision: yes。本文是 V2 停 live、Amsterdam/BuenosAires 降 T2 的证据入口之一；当前生产口径见 [../../WEATHER_STRATEGY_ENTRYPOINT.md](../../WEATHER_STRATEGY_ENTRYPOINT.md) 和 [../../WEATHER_CITY_POOL_DECISIONS.md](../../WEATHER_CITY_POOL_DECISIONS.md)。
 
 ## 数据快照

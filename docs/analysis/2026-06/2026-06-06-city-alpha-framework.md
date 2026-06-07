@@ -1,5 +1,7 @@
 # 城市 Alpha 评价体系研究：forecast × market × live 兑现
 
+> 2026-06-06 口径勘误：本文生成于 near-binary settlement 修复前，自检里的 `missing_bracket=734` 已过时；涉及 settled live PnL、ROI、win rate、city/side rank 的结论必须重算后再用于交易决策。见 [2026-06-06-live-account-reconcile-near-binary-fix.md](2026-06-06-live-account-reconcile-near-binary-fix.md)。
+
 ## 数据快照
 
 | 字段 | 值 |

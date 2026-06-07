@@ -56,6 +56,17 @@ def _safe_float(v: Any) -> float | None:
         return None
 
 
+def _binary_final_yes(v: Any) -> float | None:
+    fp = _safe_float(v)
+    if fp is None:
+        return None
+    if fp >= 0.99:
+        return 1.0
+    if fp <= 0.01:
+        return 0.0
+    return None
+
+
 def _hours_to_settle(rec: dict) -> float | None:
     return _safe_float(rec.get("hours_to_settle"))
 
@@ -499,12 +510,10 @@ def build(
         settlement_status = sett.get("settlement_status") if sett else None
         final_yes: float | None = None
         if settlement_status == "settled" and sett:
-            fp = _safe_float(sett.get("final_price"))
-            if fp in (0.0, 1.0):
-                final_yes = fp
-            elif fp is not None:
+            final_yes = _binary_final_yes(sett.get("final_price"))
+            if final_yes is None:
                 alerts.append(
-                    f"FINAL_YES_UNEXPECTED candidate={candidate_id} final_price={fp}"
+                    f"FINAL_YES_UNEXPECTED candidate={candidate_id} final_price={sett.get('final_price')}"
                 )
 
         bracket_hit = int(final_yes == 1.0) if final_yes is not None else None

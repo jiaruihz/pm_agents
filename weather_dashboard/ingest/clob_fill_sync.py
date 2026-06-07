@@ -99,6 +99,26 @@ def _make_fill_id(execution_id: str, order_id: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _make_public_trade_fill_id(execution_id: str, public_trade_key: str) -> str:
+    """Deterministic fill_id for one public activity partial fill."""
+    raw = f"{execution_id}|clob_public_trade_fill|{public_trade_key}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _make_order_delta_fill_id(
+    execution_id: str,
+    order_id: str,
+    target_shares: float,
+    target_cost: float,
+) -> str:
+    """Deterministic fill_id for an authenticated order-level top-up fill."""
+    raw = (
+        f"{execution_id}|clob_order_delta_fill|{order_id}|"
+        f"{target_shares:.8f}|{target_cost:.8f}"
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def _already_have_fill(conn: sqlite3.Connection, fill_id: str) -> bool:
     row = conn.execute(
         "SELECT 1 FROM fills WHERE fill_id = ?", (fill_id,)
@@ -154,6 +174,7 @@ def _get_submitted_orders(conn: sqlite3.Connection) -> list[sqlite3.Row]:
             o.limit_price,
             o.placed_at_utc,
             o.order_side,
+            o.exchange_response,
             sig.condition_id,
             sig.token_id
         FROM orders o
@@ -222,6 +243,137 @@ def _insert_fill(
             }
         )
     return inserted
+
+
+def _existing_fill_totals(
+    conn: sqlite3.Connection,
+    *,
+    execution_id: str,
+    order_id: str,
+) -> dict[str, float]:
+    row = conn.execute(
+        """
+        SELECT
+          COUNT(*) AS fills,
+          COALESCE(SUM(filled_shares), 0.0) AS shares,
+          COALESCE(SUM(filled_shares * filled_price), 0.0) AS cost
+        FROM fills
+        WHERE execution_id = ? AND order_id = ?
+        """,
+        (execution_id, order_id),
+    ).fetchone()
+    return {
+        "fills": float(row["fills"] if row else 0.0),
+        "shares": float(row["shares"] if row else 0.0),
+        "cost": float(row["cost"] if row else 0.0),
+    }
+
+
+def _insert_order_fill_top_up(
+    conn: sqlite3.Connection,
+    *,
+    base_fill_id: str,
+    execution_id: str,
+    order_id: str,
+    target_shares: float,
+    target_price: float,
+    fees_usd: float,
+    filled_at_utc: str | None,
+    dry_run: bool,
+) -> bool:
+    """Insert the missing delta when auth CLOB reports a larger total fill.
+
+    Authenticated order status is order-level, while prior cache rows may only
+    contain the first partial fill. Keep the existing row and append only the
+    missing shares/cost delta so fact_trades remains fill-grain and idempotent.
+    """
+    if target_shares <= 0 or target_price <= 0:
+        return False
+    existing = _existing_fill_totals(
+        conn,
+        execution_id=execution_id,
+        order_id=order_id,
+    )
+    target_cost = target_shares * target_price
+    existing_shares = existing["shares"]
+    existing_cost = existing["cost"]
+    if existing_shares <= 1e-9:
+        return _insert_fill(
+            conn,
+            fill_id=base_fill_id,
+            execution_id=execution_id,
+            order_id=order_id,
+            filled_shares=target_shares,
+            filled_price=target_price,
+            fees_usd=fees_usd,
+            filled_at_utc=filled_at_utc,
+            dry_run=dry_run,
+        )
+    if target_shares <= existing_shares + 1e-6:
+        return False
+
+    delta_shares = target_shares - existing_shares
+    delta_cost = max(target_cost - existing_cost, 0.0)
+    delta_price = delta_cost / delta_shares if delta_cost > 0 else target_price
+    delta_fill_id = _make_order_delta_fill_id(
+        execution_id,
+        order_id,
+        target_shares,
+        target_cost,
+    )
+    return _insert_fill(
+        conn,
+        fill_id=delta_fill_id,
+        execution_id=execution_id,
+        order_id=order_id,
+        filled_shares=delta_shares,
+        filled_price=delta_price,
+        fees_usd=fees_usd,
+        filled_at_utc=filled_at_utc,
+        dry_run=dry_run,
+    )
+
+
+def _extract_immediate_place_fill(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any] | None:
+    """Extract exact immediate-match fill details from order exchange_response.
+
+    For successful BUY placements with ``place.status=matched``, Polymarket
+    returns USDC ``makingAmount`` and token ``takingAmount`` in the local order
+    response. This is more precise than later public account activity, which is
+    account-level and does not expose CLOB order IDs.
+    """
+    raw = row["exchange_response"] if "exchange_response" in row.keys() else None
+    if not raw:
+        return None
+    try:
+        response = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(response, dict):
+        return None
+    place = response.get("place") or {}
+    if not isinstance(place, dict):
+        return None
+    if str(place.get("status") or "").lower() != "matched":
+        return None
+    if place.get("success") is False:
+        return None
+    order_side = str(row["order_side"] if "order_side" in row.keys() else "").upper()
+    if not order_side.startswith("BUY"):
+        return None
+    try:
+        cost = float(place.get("makingAmount") or 0.0)
+        shares = float(place.get("takingAmount") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if shares <= 0 or cost <= 0:
+        return None
+    return {
+        "filled_shares": shares,
+        "filled_price": cost / shares,
+        "fees_usd": 0.0,
+        "filled_at_utc": row["placed_at_utc"] if "placed_at_utc" in row.keys() else None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -529,6 +681,8 @@ def _side_matches_public(order_side: str, trade: dict[str, Any]) -> bool:
     """
     side = (trade.get("side") or "").upper()
     outcome = (trade.get("outcome") or "").lower()
+    if order_side == "BUY":
+        return side == "BUY"
     if order_side == "BUY_YES":
         return side == "BUY" and outcome in ("yes", "")
     if order_side == "BUY_NO":
@@ -576,6 +730,64 @@ def _public_trade_matches_order(
     except (TypeError, ValueError):
         return False
     return trade_price <= limit_price + 1e-6
+
+
+def _select_public_partial_fills(
+    public_trades: list[dict[str, Any]],
+    *,
+    used_public_trade_keys: set[str],
+    condition_id: str,
+    token_id: str,
+    order_side: str,
+    limit_price: float,
+    row_shares: float,
+    placed_ts: int,
+) -> list[dict[str, Any]]:
+    """Return public activity rows that fill one submitted order.
+
+    The activity API exposes partial trades, but not CLOB order IDs. Match rows
+    by exact condition/token, compatible buy side, executable price, and time
+    after placement, then allocate earliest rows up to the submitted size.
+    """
+    candidates = [
+        t for t in public_trades
+        if _public_trade_key(t) not in used_public_trade_keys
+        and _public_trade_matches_order(
+            t,
+            condition_id=condition_id,
+            token_id=token_id,
+            order_side=order_side,
+            limit_price=limit_price,
+            placed_ts=placed_ts,
+        )
+    ]
+    candidates.sort(key=lambda t: int(t.get("timestamp", 0) or 0))
+
+    selected: list[dict[str, Any]] = []
+    selected_shares = 0.0
+    selected_cost = 0.0
+    max_cost = row_shares * limit_price if row_shares > 0 and limit_price > 0 else 0.0
+    for trade in candidates:
+        try:
+            size = float(trade.get("size") or 0.0)
+        except (TypeError, ValueError):
+            size = 0.0
+        try:
+            price = float(trade.get("price") or 0.0)
+        except (TypeError, ValueError):
+            price = 0.0
+        if size <= 0 or price <= 0:
+            continue
+        if row_shares > 0 and selected_shares + size > row_shares + 1e-6:
+            continue
+        if max_cost > 0 and selected_cost + size * price > max_cost + 0.02:
+            continue
+        selected.append(trade)
+        selected_shares += size
+        selected_cost += size * price
+        if row_shares > 0 and selected_shares >= row_shares - 1e-6:
+            break
+    return selected
 
 
 # ---------------------------------------------------------------------------
@@ -712,12 +924,30 @@ def sync_clob_fills(
         )
 
         fill_id = _make_fill_id(execution_id, clob_order_id)
-        if _already_have_fill(conn, fill_id):
-            log.debug(
-                "Fill already recorded for execution_id=%s...; skipping.",
-                execution_id[:12],
+        immediate_fill = _extract_immediate_place_fill(row)
+        if immediate_fill is not None:
+            inserted = _insert_order_fill_top_up(
+                conn,
+                base_fill_id=fill_id,
+                execution_id=execution_id,
+                order_id=clob_order_id,
+                target_shares=immediate_fill["filled_shares"],
+                target_price=immediate_fill["filled_price"],
+                fees_usd=immediate_fill["fees_usd"],
+                filled_at_utc=immediate_fill["filled_at_utc"],
+                dry_run=dry_run,
             )
-            summary["still_open"] += 1
+            if inserted:
+                log.info(
+                    "Recorded immediate matched fill for execution_id=%s... "
+                    "shares=%.6f price=%.4f",
+                    execution_id[:12],
+                    immediate_fill["filled_shares"],
+                    immediate_fill["filled_price"],
+                )
+                summary["filled"] += 1
+            else:
+                summary["still_open"] += 1
             continue
 
         # ------------------------------------------------------------------
@@ -754,22 +984,25 @@ def sync_clob_fills(
                     if filled_price <= 0:
                         filled_price = row_limit_price
 
-                    _insert_fill(
+                    inserted = _insert_order_fill_top_up(
                         conn,
-                        fill_id=fill_id,
+                        base_fill_id=fill_id,
                         execution_id=execution_id,
                         order_id=clob_order_id,
-                        filled_shares=filled_shares,
-                        filled_price=filled_price,
+                        target_shares=filled_shares,
+                        target_price=filled_price,
                         fees_usd=fees_usd,
                         filled_at_utc=filled_at,
                         dry_run=dry_run,
                     )
-                    log.info(
-                        "Recorded fill for execution_id=%s... shares=%.6f price=%.4f",
-                        execution_id[:12], filled_shares, filled_price,
-                    )
-                    summary["filled"] += 1
+                    if inserted:
+                        log.info(
+                            "Recorded fill for execution_id=%s... shares=%.6f price=%.4f",
+                            execution_id[:12], filled_shares, filled_price,
+                        )
+                        summary["filled"] += 1
+                    else:
+                        summary["still_open"] += 1
                     # NOTE: orders is append-only (BEFORE UPDATE trigger prevents
                     # changing orders.status). The fill record in fills table is
                     # the authoritative source of truth for fill status.
@@ -782,12 +1015,37 @@ def sync_clob_fills(
                     summary["cancelled"] += 1
 
                 else:
-                    # LIVE, OPEN, or unknown
-                    log.debug(
-                        "Order execution_id=%s... status=%s -- still open.",
-                        execution_id[:12], clob_status or "UNKNOWN",
-                    )
-                    summary["still_open"] += 1
+                    # LIVE/OPEN orders may still be partially filled.
+                    filled_shares = parsed["size_matched"]
+                    if filled_shares > 0:
+                        filled_price = parsed["price"] or row_limit_price
+                        inserted = _insert_order_fill_top_up(
+                            conn,
+                            base_fill_id=fill_id,
+                            execution_id=execution_id,
+                            order_id=clob_order_id,
+                            target_shares=filled_shares,
+                            target_price=filled_price,
+                            fees_usd=parsed["fees_usd"],
+                            filled_at_utc=parsed["filled_at"],
+                            dry_run=dry_run,
+                        )
+                        if inserted:
+                            log.info(
+                                "Recorded partial fill for execution_id=%s... "
+                                "status=%s shares=%.6f price=%.4f",
+                                execution_id[:12], clob_status or "UNKNOWN",
+                                filled_shares, filled_price,
+                            )
+                            summary["filled"] += 1
+                        else:
+                            summary["still_open"] += 1
+                    else:
+                        log.debug(
+                            "Order execution_id=%s... status=%s -- still open.",
+                            execution_id[:12], clob_status or "UNKNOWN",
+                        )
+                        summary["still_open"] += 1
 
             elif matched_trades:
                 # Order endpoint returned nothing but we have matching trade records
@@ -796,23 +1054,26 @@ def sync_clob_fills(
                     row_shares=row_shares,
                     row_limit_price=row_limit_price,
                 )
-                _insert_fill(
+                inserted = _insert_order_fill_top_up(
                     conn,
-                    fill_id=fill_id,
+                    base_fill_id=fill_id,
                     execution_id=execution_id,
                     order_id=clob_order_id,
-                    filled_shares=agg["size_matched"],
-                    filled_price=agg["price"],
+                    target_shares=agg["size_matched"],
+                    target_price=agg["price"],
                     fees_usd=agg["fees_usd"],
                     filled_at_utc=agg["filled_at"],
                     dry_run=dry_run,
                 )
-                log.info(
-                    "Recorded fill (from trades) execution_id=%s... "
-                    "shares=%.6f avg_price=%.4f",
-                    execution_id[:12], agg["size_matched"], agg["price"],
-                )
-                summary["filled"] += 1
+                if inserted:
+                    log.info(
+                        "Recorded fill (from trades) execution_id=%s... "
+                        "shares=%.6f avg_price=%.4f",
+                        execution_id[:12], agg["size_matched"], agg["price"],
+                    )
+                    summary["filled"] += 1
+                else:
+                    summary["still_open"] += 1
 
             else:
                 log.debug(
@@ -840,52 +1101,63 @@ def sync_clob_fills(
                 except (ValueError, TypeError):
                     pass
 
-            matching_public = [
-                t for t in public_trades
-                if _public_trade_key(t) not in used_public_trade_keys
-                and _public_trade_matches_order(
-                    t,
-                    condition_id=cid,
-                    token_id=token_id,
-                    order_side=order_side,
-                    limit_price=row_limit_price,
-                    placed_ts=placed_ts,
-                )
-            ]
+            matching_public = _select_public_partial_fills(
+                public_trades,
+                used_public_trade_keys=used_public_trade_keys,
+                condition_id=cid,
+                token_id=token_id,
+                order_side=order_side,
+                limit_price=row_limit_price,
+                row_shares=row_shares,
+                placed_ts=placed_ts,
+            )
 
             if matching_public:
-                # Pick the earliest trade after order placement
-                best = min(
-                    matching_public, key=lambda t: int(t.get("timestamp", 0))
-                )
-                try:
-                    filled_shares = float(best.get("size") or row_shares)
-                except (TypeError, ValueError):
-                    filled_shares = row_shares
-                try:
-                    filled_price = float(best.get("price") or row_limit_price)
-                except (TypeError, ValueError):
-                    filled_price = row_limit_price
-                filled_at = _ts_to_iso(best.get("timestamp"))
-                used_public_trade_keys.add(_public_trade_key(best))
+                inserted_count = 0
+                for trade_idx, trade in enumerate(matching_public):
+                    public_key = _public_trade_key(trade)
+                    # Preserve backward compatibility with the old cache: the
+                    # first public fill for an order uses the legacy per-order
+                    # fill_id, while later partial fills get trade-grain ids.
+                    public_fill_id = (
+                        fill_id
+                        if trade_idx == 0
+                        else _make_public_trade_fill_id(execution_id, public_key)
+                    )
+                    if _already_have_fill(conn, public_fill_id):
+                        used_public_trade_keys.add(public_key)
+                        continue
+                    try:
+                        filled_shares = float(trade.get("size") or row_shares)
+                    except (TypeError, ValueError):
+                        filled_shares = row_shares
+                    try:
+                        filled_price = float(trade.get("price") or row_limit_price)
+                    except (TypeError, ValueError):
+                        filled_price = row_limit_price
+                    filled_at = _ts_to_iso(trade.get("timestamp"))
 
-                _insert_fill(
-                    conn,
-                    fill_id=fill_id,
-                    execution_id=execution_id,
-                    order_id=clob_order_id,
-                    filled_shares=filled_shares,
-                    filled_price=filled_price,
-                    fees_usd=0.0,
-                    filled_at_utc=filled_at,
-                    dry_run=dry_run,
-                )
-                log.info(
-                    "Recorded fill (public fallback) execution_id=%s... "
-                    "shares=%.6f price=%.4f",
-                    execution_id[:12], filled_shares, filled_price,
-                )
-                summary["filled"] += 1
+                    if _insert_fill(
+                        conn,
+                        fill_id=public_fill_id,
+                        execution_id=execution_id,
+                        order_id=clob_order_id,
+                        filled_shares=filled_shares,
+                        filled_price=filled_price,
+                        fees_usd=0.0,
+                        filled_at_utc=filled_at,
+                        dry_run=dry_run,
+                    ):
+                        inserted_count += 1
+                    used_public_trade_keys.add(public_key)
+                    log.info(
+                        "Recorded partial fill (public fallback) execution_id=%s... "
+                        "shares=%.6f price=%.4f",
+                        execution_id[:12], filled_shares, filled_price,
+                    )
+                summary["filled"] += inserted_count
+                if inserted_count == 0:
+                    summary["still_open"] += 1
             else:
                 log.debug(
                     "No public trade match for execution_id=%s... -- still open.",

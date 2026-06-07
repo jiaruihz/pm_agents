@@ -1,5 +1,7 @@
 # Weather Edge Engine Blended Entry-Band Backtest
 
+> 2026-06-06 口径勘误：本文生成于 near-binary settlement 修复前，自检里的 `missing_bracket=734` 已过时。opportunity selector 逻辑可作历史背景，但任何依赖 final settlement / ROI / live_filled 子集的数字需重算。
+
 > generated_at_utc: `2026-06-05T18:35:43+00:00`
 > strategy_id: `weather_edge_engine_blended_single_v0`
 > strategy_spec: `weather_dashboard/strategy_specs/weather_edge_engine_blended_single_v0.json`

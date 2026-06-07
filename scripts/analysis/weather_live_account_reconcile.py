@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import importlib.util
 import json
 import sqlite3
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DB = ROOT / "runtime" / "weather.db"
 DEFAULT_CLOB_FILLS = ROOT / "runtime" / "weather_edge_v1" / "clob_fills.jsonl"
 DEFAULT_RAW_LIVE_DIR = ROOT / "runtime" / "weather_edge_v1" / "remote_pm_agent" / "live"
+DEFAULT_COVERAGE_GATE = ROOT / "scripts" / "analysis" / "weather_clob_fill_coverage_gate.py"
 
 
 INSTANCE_CASE = """
@@ -390,6 +393,79 @@ def unmatched_summary(conn: sqlite3.Connection, path: Path) -> dict[str, Any]:
     }
 
 
+def clob_coverage_gate(db: Path, cache: Path) -> dict[str, Any]:
+    spec = importlib.util.spec_from_file_location(
+        "weather_clob_fill_coverage_gate",
+        DEFAULT_COVERAGE_GATE,
+    )
+    if spec is None or spec.loader is None:
+        return {"gate_pass": False, "fail_reasons": ["coverage_gate_import_failed"]}
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    conn = sqlite3.connect(str(db))
+    try:
+        order_caps = module.load_order_caps(conn)
+        db_rows = module.load_db_fill_rows(conn)
+        db_fills = module.summarize_rows(db_rows, order_caps=order_caps)
+        facts = module.fact_summary(conn)
+        cache_rows = module.load_cache_rows(cache)
+        cache_fills = module.summarize_rows(cache_rows, order_caps=order_caps)
+        db_fill_ids = module._fill_id_set(db_rows)
+        cache_fill_ids = module._fill_id_set(cache_rows)
+        db_not_in_cache = sorted(db_fill_ids - cache_fill_ids)
+        cache_not_in_db = sorted(cache_fill_ids - db_fill_ids)
+        db_cost_minus_cache_cost = module._round(module._cost(db_rows) - module._cost(cache_rows))
+        db_fill_cost_minus_fact_cost = module._round(db_fills["cost_usd"] - facts["cost_usd"])
+
+        fail_reasons: list[str] = []
+        if db_fills["missing_order_rows"]:
+            fail_reasons.append("db_fills_missing_or_mismatched_order_id")
+        if db_fills["over_order_keys"]:
+            fail_reasons.append("db_fills_exceed_order_cap")
+        if cache_fills["missing_order_rows"]:
+            fail_reasons.append("cache_fills_missing_or_mismatched_order_id")
+        if cache_fills["over_order_keys"]:
+            fail_reasons.append("cache_fills_exceed_order_cap")
+        if db_not_in_cache or cache_not_in_db:
+            fail_reasons.append("db_cache_fill_id_mismatch")
+        if abs(db_cost_minus_cache_cost) > 0.01:
+            fail_reasons.append("db_cache_cost_mismatch")
+        if abs(db_fill_cost_minus_fact_cost) > 0.01:
+            fail_reasons.append("fact_trades_cost_not_equal_fills_cost")
+
+        return {
+            "gate_pass": not fail_reasons,
+            "fail_reasons": fail_reasons,
+            "order_caps": len(order_caps),
+            "db_fills": {
+                "rows": db_fills["rows"],
+                "distinct_fill_ids": db_fills["distinct_fill_ids"],
+                "cost_usd": db_fills["cost_usd"],
+                "missing_order_rows": db_fills["missing_order_rows"],
+                "over_order_keys": db_fills["over_order_keys"],
+            },
+            "cache_fills": {
+                "rows": cache_fills["rows"],
+                "distinct_fill_ids": cache_fills["distinct_fill_ids"],
+                "cost_usd": cache_fills["cost_usd"],
+                "missing_order_rows": cache_fills["missing_order_rows"],
+                "over_order_keys": cache_fills["over_order_keys"],
+            },
+            "fact_trades_live_real": facts,
+            "db_vs_primary_cache": {
+                "db_not_in_cache": len(db_not_in_cache),
+                "cache_not_in_db": len(cache_not_in_db),
+                "db_cost_minus_cache_cost": db_cost_minus_cache_cost,
+                "sample_db_not_in_cache": db_not_in_cache[:10],
+                "sample_cache_not_in_db": cache_not_in_db[:10],
+            },
+            "db_fill_cost_minus_fact_cost": db_fill_cost_minus_fact_cost,
+        }
+    finally:
+        conn.close()
+
+
 def render_table(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "_No rows._"
@@ -432,6 +508,10 @@ def render_markdown(result: dict[str, Any]) -> str:
         "",
         render_table([result["fill_id_reconciliation"]]),
         "",
+        "## CLOB Fill Coverage Gate",
+        "",
+        render_table([result["clob_fill_coverage_gate"]]),
+        "",
     ]
     if result["order_reconcile"]:
         lines += ["## Order Submitted Cost", "", render_table(result["order_reconcile"]), ""]
@@ -445,6 +525,7 @@ def render_markdown(result: dict[str, Any]) -> str:
         "- Do not use `fact_trades.order_date_bj` as wallet cashflow evidence; use raw live order files for submitted/posted notional.",
         "- `unrealized_pnl_*` depends on fact-table valuation freshness; check `max_val_snapshot_ts_utc` before using it as current wallet equity.",
         "- Raw CLOB fill mismatch means the DB and local raw mirror are not identical sources; inspect unmatched samples before treating either as authoritative.",
+        "- `clob_fill_coverage_gate.gate_pass=false` means live_real PnL is not publishable until fill recovery is fixed and facts are rebuilt.",
     ]
     return "\n".join(lines)
 
@@ -466,6 +547,7 @@ def run(args: Args) -> dict[str, Any]:
         "raw_clob_summary": raw_clob_summary(args.clob_fills, args.start, args.end),
         "raw_order_summary": raw_order_summary(args.raw_live_dir, args.start, args.end),
         "fill_id_reconciliation": unmatched_summary(conn, args.clob_fills),
+        "clob_fill_coverage_gate": clob_coverage_gate(args.db, args.clob_fills),
     }
 
 
@@ -514,6 +596,8 @@ def main() -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(render_markdown(result))
+    if not result["clob_fill_coverage_gate"].get("gate_pass"):
+        sys.exit(1)
 
 
 if __name__ == "__main__":

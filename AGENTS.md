@@ -57,6 +57,8 @@ python3 scripts/analysis/weather_live_account_reconcile.py --start YYYY-MM-DD --
 - 已结算 PnL 只看 `settlement_status='settled'` 的 `pnl_usd_at_fill`；未结算只能报 MTM，并必须附 `val_snapshot_ts_utc`，估值旧就明确说旧。
 - 如果 raw live order 文件比 DB 新，必须用脚本里的 Raw Live Order Files 段补充 submitted/posted notional，并说明 DB 滞后。
 - 最终结论前必须报告 fill_id reconciliation：`db_live_real_distinct_fills`、`raw_clob_distinct_fills`、`db_not_in_raw`、`raw_not_in_db`。
+- 最终结论前必须跑 `python3 scripts/analysis/weather_clob_fill_coverage_gate.py`；`gate_pass=false` 时禁止发布 live_real PnL/ROI/曲线。
+- 2026-06-07 勘误：Polymarket public activity 不是逐 order 权威 fill 来源，只能作受 order cap 约束的 fallback；真实 fill 优先 `exchange_response.place.status=matched` 和 authenticated CLOB order/trade 数据。旧口径 `live_real=1316` / raw CLOB cost 约 `$3499` 已作废；fill 行数会随新增成交变化，最终以 `weather_clob_fill_coverage_gate.py gate_pass=true` 为准。
 
 ### 分析前数据源自检（强制 5 行 SQL）
 
@@ -72,7 +74,7 @@ SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 
 ```
 
 **禁止**：读 `runtime/_legacy/*.db`（已退役）、绕过 `fact_trades` 自算 fill PnL、绕过 `fact_signal_candidates` 自算成交质量/漏单/滑点。  
-**当前已知缺口**：`live_real` 行数可能为 0（`clob_fill_sync` 网络问题，非代码缺失，见 canonical sources §4.1）。`gfs_365d_*` cache 文件名误标，实际 ~735 天。`decision_window_missing` ~44%。
+**当前已知口径/缺口**：2026-06-07 修正后 live fill recovery 的硬标准是 `weather_clob_fill_coverage_gate.py gate_pass=true`，且 `missing_order_rows=0`、`over_order_keys=0`、DB/cache/fact 成本差为 0；`live_real` 行数会随新增真实成交变化，不要写死。2026-06-06 之前大量 `missing_bracket` 是 settlement near-binary bug，`pm_history` raw `0.9995/0.0005` 必须归一化为 `1/0`，旧报告需重算。`gfs_365d_*` cache 文件名误标，实际 ~735 天。`decision_window_missing` ~44%。
 
 ---
 

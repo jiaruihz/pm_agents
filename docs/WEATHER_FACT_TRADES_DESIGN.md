@@ -163,7 +163,7 @@ fill 入选条件:`fills.status IN ('filled','simulated')`。被拒的 live 下�
 ### 3.6 结算 / 盈亏指标(公式 B 钉死)
 
 **硬规定:`final_yes` / 所有 pnl / win 列,仅在 `settled = true` 时填值,否则一律 NULL。**
-实测 missing_bracket 行 final_price 是 0.9995/0.0005 这类非干净值,**绝不能**当结算价代入盈亏。
+2026-06-06 口径勘误：`pm_history` raw `final_price` 常见 `0.9995/0.0005` 这类 near-binary 值，必须在 ingest/builder 归一化为已结算 `1/0` 后再计算 PnL。旧版“非精确 1/0 一律 missing_bracket”的规则已废弃。
 
 | 列 | 公式 / 来源 | 说明 |
 |---|---|---|
@@ -172,7 +172,7 @@ fill 入选条件:`fills.status IN ('filled','simulated')`。被拒的 live 下�
 | `settlement_id` | settlements.settlement_id | 审计:命中哪条结算 |
 | `settlement_join_method` | 派生 | 审计:token / fallback / none |
 | `settlement_match_count` | 派生 | 审计:join 命中条数(>1 说明 fallback 有歧义,已去重) |
-| `final_yes` | settlements.final_price | 仅 settled 填;settled 实测严格 ∈ {0,1},**非 {0,1} 才告警** |
+| `final_yes` | settlements.final_price normalized | 仅 settled 填；builder 输出严格 ∈ {0,1}，但 upstream pm_history raw 可能是 0.9995/0.0005 |
 | `pnl_usd_at_fill` | BUY_YES: `(final_yes − fill_price)×qty − fees`<br>BUY_NO: `((1−final_yes) − fill_price)×qty − fees` | 仅 settled,否则 NULL |
 | `pnl_usd_at_plan` | 同上,price 换 `plan_price` | 仅 settled,否则 NULL |
 | `win_by_count` | `pnl_usd_at_fill > 0` | 仅 settled,否则 NULL |

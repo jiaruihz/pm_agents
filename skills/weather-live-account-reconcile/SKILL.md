@@ -76,6 +76,12 @@ python3 scripts/analysis/weather_live_account_reconcile.py \
    - `raw_clob_distinct_fills`
    - `db_not_in_raw`
    - `raw_not_in_db`
+8. CLOB fill coverage gate：
+   - `gate_pass`
+   - `missing_order_rows`
+   - `over_order_keys`
+   - `db_vs_primary_cache`
+   - `db_fill_cost_minus_fact_cost`
 
 ## 禁止事项
 
@@ -87,6 +93,7 @@ python3 scripts/analysis/weather_live_account_reconcile.py \
 - 不准看到 `realized_pnl_usd=0` 就说没亏；近期可能只是未结算。
 - 不准看到钱包余额下降就说策略亏；可能只是 fill cost / open positions / reserved notional。
 - 不准再写一次性 pandas 临时脚本替代 `scripts/analysis/weather_live_account_reconcile.py`；脚本缺字段就先补脚本和 contract。
+- 不准用 public activity 单独解释 order-level fill；它只能作为 fallback，最终必须被 `weather_clob_fill_coverage_gate.py` 约束。
 
 ## 后续分析衔接
 

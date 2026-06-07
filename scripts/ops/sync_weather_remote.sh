@@ -81,13 +81,27 @@ sync_market() {
     fi
   }
 
+  # ---- Output ----
   _sync_dir  "output/paper_snapshots"    "paper_snapshots"
   _sync_dir  "output/orderbook_snapshots" "orderbook_snapshots"
   _sync_dir  "output/paper_trades"       "paper_trades"
   _sync_dir  "output/research"           "research"
+  _sync_dir  "output/logs"               "logs"
+
+  # ---- Cache: observation / settlement (large, already used) ----
   _sync_dir  "cache/pm_history"          "cache/pm_history"
   _sync_dir  "cache/wu_obs"              "cache/wu_obs"
   _sync_glob "cache" "iem_v2_*.csv"      "cache/iem"
+
+  # ---- Cache: weather model forecast (probability model inputs) ----
+  # GFS (primary), ECMWF (secondary), plus regional models for coverage.
+  _sync_glob "cache" "gfs_v4_*.json"     "cache/gfs_v4"
+  _sync_glob "cache" "gfs_daily_*.json"  "cache/gfs_daily"
+  _sync_glob "cache" "ecmwf_v4_*.json"   "cache/ecmwf_v4"
+  _sync_glob "cache" "jma_v5_*.json"     "cache/jma_v5"
+  _sync_glob "cache" "hrrr_v5_*.json"    "cache/hrrr_v5"
+  _sync_glob "cache" "icon_eu_v5_*.json" "cache/icon_eu_v5"
+  _sync_glob "cache" "arome_v5_*.json"   "cache/arome_v5"
 
   log "market_data: $(find "$MARKET_LOCAL" -type f | wc -l) files, $(du -sh "$MARKET_LOCAL" 2>/dev/null | cut -f1)"
 }
@@ -112,6 +126,42 @@ sync_live() {
       warn "  $subdir sync failed (non-fatal)"
     }
   done
+
+  # Persisted CLOB fill cache is replayed by clob_fill_sync during local DB rebuild.
+  # Do not rsync this file directly onto the local canonical cache: local recovery
+  # can contain more partial fills than the N100 cache, and overwriting it would
+  # make the next fact rebuild regress live_real coverage.
+  mkdir -p "$REPO_ROOT/runtime/weather_edge_v1"
+  log "  syncing clob_fills.jsonl (staging only; local cache is canonical)"
+  local remote_clob_cache="$N100_LOCAL/clob_fills.remote.jsonl"
+  local local_clob_cache="$REPO_ROOT/runtime/weather_edge_v1/clob_fills.jsonl"
+  rsync "${RSYNC_FLAGS[@]}" -e "ssh ${N100_SSH_OPTS[*]}" \
+    "$N100_REMOTE:/home/jiarui/projects/pm_agent/runtime/weather_edge_v1/clob_fills.jsonl" \
+    "$remote_clob_cache" || {
+    warn "  clob_fills.jsonl sync failed (non-fatal)"
+  }
+  if [[ "$DRY_RUN" == "0" && -f "$remote_clob_cache" ]]; then
+    if [[ ! -f "$local_clob_cache" ]]; then
+      cp "$remote_clob_cache" "$local_clob_cache"
+      log "  initialized local clob_fills.jsonl from remote staging"
+    else
+      local_count="$(wc -l < "$local_clob_cache" | tr -d ' ')"
+      remote_count="$(wc -l < "$remote_clob_cache" | tr -d ' ')"
+      log "  staged remote clob_fills.jsonl: remote_rows=$remote_count local_rows=$local_count"
+      if [[ "$remote_count" -gt "$local_count" ]]; then
+        warn "  remote clob_fills.jsonl has more rows than local; not auto-merging. Run scripts/ops/rebuild_clob_fill_cache_from_activity.py --replace before fact rebuild."
+      fi
+    fi
+  fi
+
+  # ---- pm_agent runtime/logs (live cycle process logs, useful for debugging) ----
+  mkdir -p "$N100_LOCAL/logs"
+  log "  syncing logs/ (pm_agent process logs)"
+  rsync "${RSYNC_FLAGS[@]}" -e "ssh ${N100_SSH_OPTS[*]}" \
+    --exclude="*.pid" \
+    "$N100_REMOTE:/home/jiarui/projects/pm_agent/runtime/logs/" "$N100_LOCAL/logs/" || {
+    warn "  logs sync failed (non-fatal)"
+  }
 
   log "remote_pm_agent: $(find "$N100_LOCAL" -type f | wc -l) files, $(du -sh "$N100_LOCAL" 2>/dev/null | cut -f1)"
 }

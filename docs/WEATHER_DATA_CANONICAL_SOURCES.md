@@ -8,6 +8,10 @@
 > - **N100 上没有活跃的 SQLite DB**。所有生产数据以 JSONL/JSON 文件形态存在 `output/`（weather-predict）和 `runtime/weather_edge_v1/`（pm_agent）下。
 > - **本机 `runtime/weather.db` 是唯一的 weather SQLite DB**，由本机 ingest 脚本从两个 N100 镜像独立重建，**不是** N100 任何 DB 的拷贝。
 > - 如果你在 N100 上看到 `*.db` 文件，要么是 0 字节残留（已清理），要么是非 weather 用途（chatgpt-web-bot 之类）。任何分析都不要去 N100 上抓 SQLite。
+>
+> **2026-06-06 口径勘误**：`pm_history` 已结算价格可能是 `0.9995 / 0.0005`，不是精确 `1.0 / 0.0`。本机 ingest/builder 必须按 near-binary 规则归一化结算；旧口径生成的大量 `missing_bracket` 报告需要重算。
+>
+> **2026-06-07 CLOB fill 勘误**：Polymarket public activity 不是逐 order 权威 fill 来源。真实成交优先读本地 `exchange_response.place.status='matched'` 和 authenticated CLOB 数据；public activity 只能作受 order cap 约束的 partial-fill fallback。任何 live_real 分析前必须确认 `weather_clob_fill_coverage_gate.py` 通过。
 
 ---
 
@@ -19,9 +23,9 @@
 | 全机会 alpha / 成交质量 / 漏单 / 滑点 | `runtime/weather.db` 的 `fact_signal_candidates` 表 | raw paper_snapshots/ JSONL |
 | 单笔血缘 (signal→plan→order→fill→settle) | `runtime/weather.db` 的 `signals/plans/orders/fills/settlements` | 任何 raw JSONL（除非确认底表丢字段） |
 | 实盘下单凭证（真金 CLOB 提交记录） | `runtime/weather_edge_v1/live/*.jsonl` + `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` （已被 ingest 到 `orders` 表，venue=`polymarket_clob`） | — |
-| 实盘成交（真金 CLOB fills） | `fills` 表 join `orders WHERE venue='polymarket_clob'` （**当前可能为空** — 见 §4 已知缺口） | — |
+| 实盘成交（真金 CLOB fills） | `fills` 表 join `orders WHERE venue='polymarket_clob'`，并用 raw `clob_fills.jsonl` + `weather_clob_fill_coverage_gate.py` 做 fill_id / order cap reconciliation | public activity 不能单独当 order-level 真相 |
 | 概率模型 / 错误分布 cache | N100 `cache/gfs_365d_*.json`（**实际 ~735 天，不是 365 天**）；本机镜像 `runtime/weather_edge_v1/market_data/cache/` | — |
-| 结算（pm_history） | `settlements` 表 / N100 `cache/pm_history/*.json` | 旧 `t24_paper_ledger_summary.json` 的 "by_date" 块 |
+| 结算（pm_history） | `settlements` 表 / N100 `cache/pm_history/*.json`，near-binary raw price 归一化后使用 | 旧 `t24_paper_ledger_summary.json` 的 "by_date" 块 |
 
 **唯一 DB**：`runtime/weather.db`。其他 `.db` 文件已搬到 `runtime/_legacy/`（见 §3）。
 
@@ -91,7 +95,7 @@
 | **N100** `output/paper_snapshots/*.jsonl` | source | N100 半小时 snapshot timer | rsync→镜像 | T1+T2 全池 |
 | **N100** `output/paper_trades/paper_orders.jsonl` | source | N100 paper engine | rsync→镜像 | 全池 paper ledger（**不是** live intent） |
 | **N100** `output/research/t24_paper_*_trades.csv` | derived（结算后） | N100 `settle_t24_paper.py` | run_stack.sh ingest | 不是结算源头，源头是 `pm_history` |
-| **N100** `cache/pm_history/<City>_<date>.json` | source | N100 `daily_pipeline.py` | `pm_history_settlements` ingest | 结算唯一权威源 |
+| **N100** `cache/pm_history/<City>_<date>.json` | source | N100 `daily_pipeline.py` | `pm_history_settlements` ingest | 结算唯一权威源；raw `0.9995/0.0005` 必须按 near-binary 规则归一化为 `1/0` |
 | **N100** `cache/gfs_v4_<City>_*.json` | source | N100 GFS fetcher | `compute_error_distribution` / 校准 | **实际 ~735 天**（2 年）。本机镜像 `market_data/cache/gfs_v4/`（2026-06-05 起加入 sync） |
 | **N100** `cache/gfs_daily_*.json` | source | N100 GFS daily fetcher | 校准辅助 | 本机镜像 `market_data/cache/gfs_daily/`（2026-06-05 起加入 sync） |
 | **N100** `cache/ecmwf_v4_<City>_*.json` | source | N100 ECMWF fetcher | 多模型 ensemble | 本机镜像 `market_data/cache/ecmwf_v4/`（2026-06-05 起加入 sync） |
@@ -181,8 +185,22 @@ live/*.jsonl → orders(venue=polymarket_clob, status=submitted)  [via migrate-l
 - 新拉到的真实 CLOB fill 会追加写入这个 cache；
 - 如果 Polymarket CLOB / activity / trades API 连接失败，`clob_fill_sync` 返回 `data_incomplete=true` 并 exit 1；
 - `run_stack.sh` / `weather_dashboard_refresh.sh` 遇到该失败会 hard fail，不再继续产出一个误导性的 `live_real=0` DB。
+- `run_stack.sh` / `weather_dashboard_refresh.sh` 在 build facts 后会运行 `scripts/analysis/weather_clob_fill_coverage_gate.py`；只要出现 mismatched order_id、fill 超过 order cap、DB/cache fill_id 不一致、或 `fact_trades` 成本不等于 `fills` 成本，就 hard fail。
 
 **历史事故**：2026-06-04 曾经用 full rebuild 清空 DB 后，Polymarket API `ConnectionResetError(104)`，导致 rebuilt DB 中 `live_real=0`。已从旧 `clob_fill_sync.log` 恢复 67 条可证明真实 fills，并写入 `runtime/weather_edge_v1/clob_fills.jsonl`。
+
+**2026-06-07 事故复盘**：旧 fallback 把 Polymarket public activity 当成逐 order 权威 fill 来源。public activity 实际是账户级成交活动，不可靠携带本地 CLOB `order_id` 粒度；在 split child order、同 token 多笔订单、partial fill 场景下会少算或多算。修复后真实 fill 优先 `exchange_response.place.status='matched'` 和 authenticated CLOB order/trade 数据；public activity 只能作受 token/side/price/time/order cap 约束的 fallback。
+
+**2026-06-06 验证状态**（历史快照）：当时重建后 `fact_trades live_real` 和 raw `clob_fills.jsonl` 完全一致：
+
+```text
+db_live_real_distinct_fills=852
+raw_clob_distinct_fills=852
+db_not_in_raw=0
+raw_not_in_db=0
+```
+
+**2026-06-07 当前标准**：`live_real` 行数会随新增真实成交变化，最终以 `weather_clob_fill_coverage_gate.py` 为准。可发布 live PnL 的最低条件是 `gate_pass=true`、`missing_order_rows=0`、`over_order_keys=0`、DB/cache fill_id 差异为 0、`db_fill_cost_minus_fact_cost=0`。
 
 如果再次看到 `"data_incomplete": true`：
 
@@ -198,11 +216,25 @@ runtime/_dashboard_logs/clob_fill_sync.log
 
 **不要做**：拿 `live_simulated` 冒充 `live_real`，或拿 paper PnL 冒充实盘 PnL。
 
-### 4.2 概率模型 cache 文件名误导
+### 4.2 pm_history near-binary settlement 旧口径污染
+
+Polymarket 已结算 bracket 在 `pm_history` 里常见 raw `final_price=0.9995` 或 `0.0005`。2026-06-06 前旧 ingest/builder 只认精确 `1.0 / 0.0`，会把这些已过期、实际可结算的合约误标为 `missing_bracket`，进而低估 settled rows 并污染 realized PnL / ROI / win rate / city-side rank。
+
+修复位置：
+
+```text
+weather_dashboard/ingest/pm_history_settlements.py
+scripts/analysis/build_weather_fact_trades.py
+scripts/analysis/build_weather_signal_candidates.py
+```
+
+修复后基线：`missing_bracket` 从 725 行降到 0。凡是引用旧报告中 `missing_bracket=725/734/28` 等数值的结论，都要先重建 DB 再重算。
+
+### 4.3 概率模型 cache 文件名误导
 
 N100 `cache/gfs_365d_*.json` 文件名写 365 天，**实际包含 ~735 天**（2 年）。在 `compute_error_distribution()` 代码里有注释 `# Load GFS 365d cache` 同样误导。这两处都待修。
 
-### 4.3 `decision_window_missing` 占 ~44%
+### 4.4 `decision_window_missing` 占 ~44%
 
 `fact_signal_candidates` 里 `decision_window_missing=1` 占比 ~44%（T-22~24h 决策窗内无 snapshot）。所有反事实 alpha 结论的有效样本只覆盖另一半，必须在报告里点明。
 
@@ -233,7 +265,7 @@ FROM orders o LEFT JOIN fills f USING(execution_id)
 WHERE o.venue='polymarket_clob' GROUP BY o.status;
 ```
 
-任何一行返回结果与预期严重背离（如 live_real 应该 > 0 却 = 0），先回 §4 查已知缺口或运 `run_stack.sh`，**不要**直接绕开 `fact_trades` 跑 raw 自算。
+任何一行返回结果与预期严重背离（如 live_real 应该 > 0 却 = 0，或历史窗口 `missing_bracket` 突然大量出现），先回 §4 查已知缺口或运行 `run_stack.sh` 重建，**不要**直接绕开 `fact_trades` 跑 raw 自算。
 
 ---
 

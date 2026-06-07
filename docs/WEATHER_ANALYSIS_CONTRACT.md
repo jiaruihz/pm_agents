@@ -15,8 +15,8 @@
 # Step 1: 从 N100 拉取最新 paper ledger、snapshot CSV、pm_history
 scripts/ops/sync_weather_remote.sh
 
-# Step 2: 重建 weather.db（ingest 最新 CSV → DB）
-scripts/weather_dashboard/run_stack.sh --no-rebuild
+# Step 2: 重建 weather.db + fact_trades/fact_signal_candidates + CLOB coverage gate
+scripts/weather_dashboard/run_stack.sh
 ```
 
 > 若 N100 不可达（SSH 超时 / 网络中断），在报告"数据快照"段注明，并写明本地缓存的最后同步时间。
@@ -74,8 +74,55 @@ python3 scripts/analysis/weather_live_account_reconcile.py \
 - `raw_clob_distinct_fills`
 - `db_not_in_raw`
 - `raw_not_in_db`
+- `weather_clob_fill_coverage_gate.py` 的 `gate_pass`
+- `missing_order_rows`
+- `over_order_keys`
+- `db_cache_fill_id_mismatch`
+- `db_fill_cost_minus_fact_cost`
 
 若 raw live order 文件或 raw CLOB fills 比 `MAX(fact_built_at_utc)` / `MAX(fill_ts_utc)` 更新，结论必须明确写“DB 滞后”，并把 raw submitted/posted notional 与 DB fill cost 分开列。
+
+### CLOB fill recovery 规则（2026-06-07 勘误）
+
+真实 CLOB fill 的权威顺序是：
+
+1. `orders.exchange_response.place.status='matched'` 的即时成交回报（含 `makingAmount`/`takingAmount`）。
+2. authenticated CLOB order / trade 数据。
+3. public activity / trades API 只作 fallback，并且必须按 partial fill 粒度聚合、受 order cap 约束。
+
+**禁止**把 Polymarket public activity 当成逐 order 的权威 fill 来源。public activity 是账户级成交活动，不保证携带本地 CLOB `order_id` 粒度；同 market split child orders 或同 token 多笔订单时，旧 fallback 会把账户级成交错误分配给某个 child order，造成：
+
+- `order_id` mismatch；
+- 同一 public activity 被错误归属；
+- partial fill 只记第一段导致少算；
+- 或累计 fill cost/shares 超过订单 cap 导致多算。
+
+所有 weather live rebuild / refresh 后必须跑：
+
+```bash
+python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+```
+
+`gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。必须先修复 `clob_fills.jsonl` / CLOB fill sync，再重建 `runtime/weather.db`。
+
+### 结算 near-binary 规则（2026-06-06 勘误）
+
+`pm_history` 里的 Polymarket 已结算价格不一定是精确 `1.0 / 0.0`；大量已基本结算的 bracket 会写成 `0.9995 / 0.0005`。因此：
+
+- `pm_history_settlements.py`、`build_weather_fact_trades.py`、`build_weather_signal_candidates.py` 必须按 near-binary 规则识别结算：接近 1 的 bracket 归一化为 `final_yes=1.0`，接近 0 的 bracket 归一化为 `final_yes=0.0`。
+- **旧口径“只认精确 1.0 / 0.0”已废弃**；用旧口径生成的 `missing_bracket`、settled PnL、ROI、win rate、city/side rank 都可能低估/偏移。
+- `missing_bracket` 只表示 `pm_history` 中找不到对应 bracket / event，不再表示 near-binary price 未归一化。
+- 引用 2026-06-06 之前的报告时，若报告头中有大量 `missing_bracket`（例如 725/734/28 这类数），必须先按新结算规则重建 `runtime/weather.db` 并重算。
+
+2026-06-06 已验证基线（历史快照；后续成交会改变 live_real 行数，最终以 CLOB coverage gate 为准）：
+
+```text
+db_live_real_distinct_fills=852
+raw_clob_distinct_fills=852
+db_not_in_raw=0
+raw_not_in_db=0
+missing_bracket: 725 -> 0 after rebuild
+```
 
 ### 报告头必填项
 
@@ -122,7 +169,7 @@ rows = conn.execute("""
         model_version,     -- ecmwf / gfs
         fill_price, plan_price, fill_qty, fees_usd,
         cost_usd,
-        final_yes,         -- 结算价（0.0 或 1.0）
+        final_yes,         -- 归一化结算价（0.0 或 1.0；pm_history raw 可能是 0.0005/0.9995）
         pnl_usd_at_fill,   -- 唯一授权 PnL，基于 fill_price 算
         pnl_usd_at_plan,   -- 以 plan_price 为基准（衡量滑点影响）
         edge, abs_edge,
@@ -162,7 +209,9 @@ rows = conn.execute("""
 | `paper` | paper 模拟下单 |
 | `snapshot_replay` | snapshot 快照 replay |
 
-> **当前 `live_real` 行数可能为 0** —— 不是代码缺失。pipeline 完整：N100 `live/*.jsonl` → `orders(venue=polymarket_clob, status=submitted)` → `clob_fill_sync` 查 Polymarket CLOB API → `fills(status=filled)` → `fact_trades(trade_class='live_real')`。当前缺口是 `clob_fill_sync` 从本机访问 CLOB API 经常 `ConnectionResetError(104)`（见 [WEATHER_DATA_CANONICAL_SOURCES.md §4.1](WEATHER_DATA_CANONICAL_SOURCES.md#41-真金-clob-live_real-在-fact_trades-当前为-0)）。**不要拿 `live_simulated` 冒充 `live_real`，也不要拿 paper PnL 冒充实盘 PnL。**
+> **不要把 `live_real` 小/空直接解释成没有真实成交。** pipeline 是：N100 `live/*.jsonl` → `orders(venue=polymarket_clob, status=submitted)` → `clob_fill_sync` 查 Polymarket CLOB API / 本地 `clob_fills.jsonl` → `fills(status=filled)` → `fact_trades(trade_class='live_real')`。2026-06-06 重建后 DB 与 raw CLOB fills 已完全对齐（852/852，差异 0），历史 `live_real=0` 是 CLOB sync 网络/恢复事故，不是策略无成交。**不要拿 `live_simulated` 冒充 `live_real`，也不要拿 paper PnL 冒充实盘 PnL。**
+
+> **2026-06-07 补充**：`live_real` 行数会随新增真实成交变化，不是固定基线。判断是否可用于实盘 PnL 的标准是 `weather_clob_fill_coverage_gate.py gate_pass=true`，不是某个历史行数。
 
 #### 已迁移的参考实现（可以直接抄）
 

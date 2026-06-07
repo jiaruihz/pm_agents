@@ -49,7 +49,8 @@ wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && scripts/weath
 4. consolidate configs
 5. **build `fact_trades`**（`scripts/analysis/build_weather_fact_trades.py`）
 6. **build `fact_signal_candidates`**（`--decision-hts-min 22 --decision-hts-max 24`）
-7. `metrics-refresh`
+7. **CLOB fill coverage gate**（`scripts/analysis/weather_clob_fill_coverage_gate.py`）
+8. `metrics-refresh`
 
 > 重建是第 1 阶段，起 API/FE 服务在后面。即使前端 node 起不来，底表也已经重建完成。
 > 如果只想重建不在意服务，照样跑默认；不要为省事改成单跑 make/build 子步骤。
@@ -90,6 +91,11 @@ FROM fact_trades GROUP BY trade_class;
 ```
 - **未结算 + missing_bracket 不是 0 是常态**：最近 1–2 天的单往往还没结算。分析 realized PnL 时
   必须单列这两块（别像 settled-only 那样假装它们不存在），口径见 `WEATHER_ANALYSIS_CONTRACT.md`。
+- CLOB fill gate 必须通过：
+  ```bash
+  python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+  ```
+  如果 `gate_pass=false`，停止分析并先修 fill recovery / `clob_fills.jsonl`。不要只因为 `live_real` 行数看起来合理就继续。
 
 ### ⚠️ 致命陷阱：`live_real` 是网络派生的，重建可能把它整个抹掉
 
@@ -116,6 +122,22 @@ live_real 一起抹掉**。
    ```
 4. 通了就**幂等重跑** `scripts/weather_dashboard/run_stack.sh`（无需再 sync），live_real 会恢复。
    SSL 抖动通常是瞬时的，重跑即可。
+
+### ⚠️ 致命陷阱：public activity 不是 order-level fill 真相
+
+2026-06-07 复盘确认：Polymarket public activity / public trades API 是账户级成交活动，不可靠携带本地 CLOB `order_id` 粒度。旧 fallback 在 split child order、同 token 多笔订单、partial fill 场景下会：
+
+- 只吃第一段 partial fill → 少算成交；
+- 把账户级 activity 错分给某个 child order → 多算成交；
+- 产生 `order_id` mismatch 或 fill cost/shares 超过订单 cap。
+
+修复后的权威顺序是：
+
+1. `orders.exchange_response.place.status='matched'` 的即时 matched fill；
+2. authenticated CLOB order / trade 数据；
+3. public activity 只作受 token/side/price/time/order cap 约束的 fallback。
+
+任何历史重建后，都必须以 coverage gate 为准。旧报告中 `live_real=1316` 或 raw CLOB cost 约 `$3499` 的口径已作废。后续新增成交会改变 live_real 行数和成本；可发布 live PnL 的标准是 `gate_pass=true`、`missing_order_rows=0`、`over_order_keys=0`、DB/cache fill_id 差异为 0、`db_fill_cost_minus_fact_cost=0`。
 
 ### 第 4 步：交回分析
 - 重建完成后再 invoke `weather-strategy-performance` / `-lineage` / `-exposure` 做分析。

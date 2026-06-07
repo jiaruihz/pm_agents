@@ -116,6 +116,17 @@ def _safe_float(v: Any) -> float | None:
         return None
 
 
+def _binary_final_yes(v: Any) -> float | None:
+    fp = _safe_float(v)
+    if fp is None:
+        return None
+    if fp >= 0.99:
+        return 1.0
+    if fp <= 0.01:
+        return 0.0
+    return None
+
+
 def _load_snapshot_prices() -> tuple[dict[tuple, dict], str | None]:
     """Load latest snapshot file and return (lookup, snapshot_ts_utc).
 
@@ -536,15 +547,12 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
         # final_yes only for settled; non-{0,1} on settled rows → alert
         final_yes: float | None = None
         if settled and sett:
-            fp = _safe_float(sett.get("final_price"))
-            if fp is not None:
-                if fp not in (0.0, 1.0):
-                    alerts.append(
-                        f"FINAL_YES_UNEXPECTED fill_id={fill_id} final_price={fp} "
-                        f"settlement_id={settlement_id}"
-                    )
-                else:
-                    final_yes = fp
+            final_yes = _binary_final_yes(sett.get("final_price"))
+            if final_yes is None:
+                alerts.append(
+                    f"FINAL_YES_UNEXPECTED fill_id={fill_id} final_price={sett.get('final_price')} "
+                    f"settlement_id={settlement_id}"
+                )
 
         # pnl / outcome (only when settled and final_yes clean)
         pnl_at_fill = _compute_pnl(side, fill_price, final_yes, fill_qty, fees_usd) if final_yes is not None else None

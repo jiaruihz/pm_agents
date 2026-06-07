@@ -72,8 +72,25 @@ def _settlement_id(
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _binary_final_price(final_price) -> float | None:
+    """Normalize Polymarket near-binary settlement prices.
+
+    Some pm_history files store resolved brackets as 0.9995 / 0.0005 while
+    the downstream settlement contract expects binary 1.0 / 0.0.
+    """
+    try:
+        value = float(final_price)
+    except (TypeError, ValueError):
+        return None
+    if value >= 0.99:
+        return 1.0
+    if value <= 0.01:
+        return 0.0
+    return None
+
+
 def _settlement_status(final_price) -> str:
-    if final_price in (0.0, 1.0):
+    if _binary_final_price(final_price) is not None:
         return "settled"
     return "missing_bracket"
 
@@ -141,6 +158,8 @@ def ingest(conn: sqlite3.Connection, pmh_dir: str, *, dry_run: bool = False) -> 
             if condition_id is None:
                 stats["no_signal_match"] += 1
             sid = _settlement_id(date, condition_id, market_id, label)
+            normalized_final_price = _binary_final_price(final_price)
+            stored_final_price = normalized_final_price if normalized_final_price is not None else float(final_price)
             status = _settlement_status(final_price)
 
             if dry_run:
@@ -151,7 +170,7 @@ def ingest(conn: sqlite3.Connection, pmh_dir: str, *, dry_run: bool = False) -> 
                     token_id, final_price, settlement_status)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (sid, date, condition_id, market_id, label, token_id,
-                 float(final_price), status),
+                 stored_final_price, status),
             )
             stats["settlements_inserted"] += cur.rowcount or 0
 
