@@ -1,0 +1,2020 @@
+{
+  "generated_at_utc": "2026-06-07T17:17:19.275357+00:00",
+  "self_checks": {
+    "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_mtime_utc": "2026-06-07T17:03:02.974936+00:00",
+    "db_size_bytes": 58384384,
+    "fact_built_at": [
+      {
+        "max_fact_built_at_utc": "2026-06-07T17:02:43.560681+00:00"
+      }
+    ],
+    "trade_class": [
+      {
+        "trade_class": "live_real",
+        "n": 1320
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1093
+      },
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status": [
+      {
+        "settlement_status": "",
+        "n": 301
+      },
+      {
+        "settlement_status": "settled",
+        "n": 5033
+      }
+    ],
+    "signal_candidates": [
+      {
+        "rows": 23487,
+        "eligible": 7642,
+        "paper_ordered": 2835,
+        "live_filled": 513
+      }
+    ],
+    "orders_fills": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1546,
+        "with_fill": 1320
+      }
+    ]
+  },
+  "coverage_gate": {
+    "cache_checks": {
+      "/home/rui/projects/pm_agent/runtime/weather_edge_v1/clob_fills.jsonl": {
+        "cost_usd": 3518.567452,
+        "distinct_executions": 797,
+        "distinct_fill_ids": 1320,
+        "missing_order_cost_usd": 0.0,
+        "missing_order_rows": 0,
+        "multi_fill_executions": 352,
+        "over_order_cost_usd": 0.0,
+        "over_order_excess_cost_usd": 0.0,
+        "over_order_keys": 0,
+        "rows": 1320,
+        "top_over_order": []
+      }
+    },
+    "db": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "db_fills": {
+      "cost_usd": 3518.567452,
+      "distinct_executions": 797,
+      "distinct_fill_ids": 1320,
+      "missing_order_cost_usd": 0.0,
+      "missing_order_rows": 0,
+      "multi_fill_executions": 352,
+      "over_order_cost_usd": 0.0,
+      "over_order_excess_cost_usd": 0.0,
+      "over_order_keys": 0,
+      "rows": 1320,
+      "top_over_order": []
+    },
+    "db_vs_primary_cache": {
+      "cache_not_in_db": 0,
+      "db_cost_minus_cache_cost": 0.0,
+      "db_not_in_cache": 0,
+      "sample_cache_not_in_db": [],
+      "sample_db_not_in_cache": []
+    },
+    "fact_trades_live_real": {
+      "cost_usd": 3518.567452,
+      "executions": 797,
+      "fill_ids": 1320,
+      "rows": 1320
+    },
+    "fail_reasons": [],
+    "gate_pass": true,
+    "order_caps": 1023
+  },
+  "run_stack_note": "sync_weather_remote.sh succeeded; run_stack.sh rebuilt DB/facts but API start returned non-zero because port 8000 was already in use.",
+  "opportunity_layers": {
+    "signal_snapshot_universe": [
+      {
+        "timing_bin": "<T-18",
+        "signal_rows": 97,
+        "avg_abs_edge": 0.2813,
+        "avg_market_price": 0.5087
+      },
+      {
+        "timing_bin": "T-18-20",
+        "signal_rows": 239,
+        "avg_abs_edge": 0.2556,
+        "avg_market_price": 0.5208
+      },
+      {
+        "timing_bin": "T-20-22",
+        "signal_rows": 303,
+        "avg_abs_edge": 0.2593,
+        "avg_market_price": 0.524
+      },
+      {
+        "timing_bin": "T-22-24",
+        "signal_rows": 494,
+        "avg_abs_edge": 0.197,
+        "avg_market_price": 0.3644
+      },
+      {
+        "timing_bin": "T-24-26",
+        "signal_rows": 1931,
+        "avg_abs_edge": 0.2156,
+        "avg_market_price": 0.3301
+      },
+      {
+        "timing_bin": "T-26-28",
+        "signal_rows": 468,
+        "avg_abs_edge": 0.2216,
+        "avg_market_price": 0.5708
+      },
+      {
+        "timing_bin": ">T-28",
+        "signal_rows": 1786,
+        "avg_abs_edge": 0.2124,
+        "avg_market_price": 0.597
+      }
+    ],
+    "l0_opportunity": [
+      {
+        "timing_bin": "T-22-24",
+        "opportunities": 2213,
+        "eligible": 854,
+        "eligible_rate": 0.3859,
+        "paper_ordered": 1771,
+        "live_filled": 416,
+        "live_fill_rate": 0.188,
+        "avg_abs_edge": 0.1639,
+        "avg_decision_entry_price": 0.5043
+      }
+    ],
+    "l1_eligible": [
+      {
+        "timing_bin": "T-22-24",
+        "eligible_opportunities": 854,
+        "cf_cost_proxy": 437.228,
+        "cf_pnl": 37.72,
+        "cf_roi_proxy": 0.0863,
+        "cf_win_rate": 0.5164,
+        "live_filled": 410,
+        "live_fill_rate": 0.4801
+      }
+    ],
+    "l1_eligible_by_side": [
+      {
+        "timing_bin": "T-22-24",
+        "eligible_opportunities": 543,
+        "cf_cost_proxy": 361.9085,
+        "cf_pnl": 0.915,
+        "cf_roi_proxy": 0.0025,
+        "cf_win_rate": 0.6667,
+        "live_filled": 311,
+        "live_fill_rate": 0.5727,
+        "side": "BUY_NO"
+      },
+      {
+        "timing_bin": "T-22-24",
+        "eligible_opportunities": 311,
+        "cf_cost_proxy": 75.3195,
+        "cf_pnl": 36.805,
+        "cf_roi_proxy": 0.4887,
+        "cf_win_rate": 0.254,
+        "live_filled": 99,
+        "live_fill_rate": 0.3183,
+        "side": "BUY_YES"
+      }
+    ]
+  },
+  "submitted_layer": [
+    {
+      "timing_bin": "<T-18",
+      "submitted_orders": 27,
+      "submitted_notional_usd": 102.6,
+      "posted_cost_usd": 59.9257,
+      "filled_executions": 11,
+      "execution_fill_rate": 0.4074,
+      "status_counts": {
+        "submitted": 15,
+        "error": 12
+      }
+    },
+    {
+      "timing_bin": "T-18-20",
+      "submitted_orders": 26,
+      "submitted_notional_usd": 108.8,
+      "posted_cost_usd": 94.0271,
+      "filled_executions": 16,
+      "execution_fill_rate": 0.6154,
+      "status_counts": {
+        "submitted": 22,
+        "error": 4
+      }
+    },
+    {
+      "timing_bin": "T-20-22",
+      "submitted_orders": 61,
+      "submitted_notional_usd": 254.2,
+      "posted_cost_usd": 192.4454,
+      "filled_executions": 38,
+      "execution_fill_rate": 0.623,
+      "status_counts": {
+        "submitted": 45,
+        "error": 16
+      }
+    },
+    {
+      "timing_bin": "T-22-24",
+      "submitted_orders": 168,
+      "submitted_notional_usd": 720.4,
+      "posted_cost_usd": 588.0913,
+      "filled_executions": 99,
+      "execution_fill_rate": 0.5893,
+      "status_counts": {
+        "submitted": 131,
+        "error": 37
+      }
+    },
+    {
+      "timing_bin": "T-24-26",
+      "submitted_orders": 290,
+      "submitted_notional_usd": 1396.7,
+      "posted_cost_usd": 1210.6805,
+      "filled_executions": 191,
+      "execution_fill_rate": 0.6586,
+      "status_counts": {
+        "submitted": 255,
+        "error": 35
+      }
+    },
+    {
+      "timing_bin": "T-26-28",
+      "submitted_orders": 59,
+      "submitted_notional_usd": 264.0,
+      "posted_cost_usd": 223.9956,
+      "filled_executions": 37,
+      "execution_fill_rate": 0.6271,
+      "status_counts": {
+        "submitted": 51,
+        "error": 8
+      }
+    },
+    {
+      "timing_bin": ">T-28",
+      "submitted_orders": 543,
+      "submitted_notional_usd": 2494.1,
+      "posted_cost_usd": 2303.4616,
+      "filled_executions": 405,
+      "execution_fill_rate": 0.7459,
+      "status_counts": {
+        "submitted": 504,
+        "error": 39
+      }
+    }
+  ],
+  "trade_layers": {
+    "l3_live_real": [
+      {
+        "timing_bin": "<T-18",
+        "fills": 20,
+        "city_days": 9,
+        "cost_usd": 45.4838,
+        "pnl_usd": 51.4226,
+        "roi": 1.1306,
+        "win_rate": 0.8,
+        "avg_fill_price": 0.3403
+      },
+      {
+        "timing_bin": "T-18-20",
+        "fills": 21,
+        "city_days": 13,
+        "cost_usd": 60.9018,
+        "pnl_usd": -3.8712,
+        "roi": -0.0636,
+        "win_rate": 0.5238,
+        "avg_fill_price": 0.489
+      },
+      {
+        "timing_bin": "T-20-22",
+        "fills": 55,
+        "city_days": 25,
+        "cost_usd": 137.9389,
+        "pnl_usd": -30.7856,
+        "roi": -0.2232,
+        "win_rate": 0.4364,
+        "avg_fill_price": 0.4173
+      },
+      {
+        "timing_bin": "T-22-24",
+        "fills": 172,
+        "city_days": 63,
+        "cost_usd": 391.7694,
+        "pnl_usd": 114.4555,
+        "roi": 0.2922,
+        "win_rate": 0.5058,
+        "avg_fill_price": 0.4316
+      },
+      {
+        "timing_bin": "T-24-26",
+        "fills": 289,
+        "city_days": 134,
+        "cost_usd": 824.6578,
+        "pnl_usd": 39.3372,
+        "roi": 0.0477,
+        "win_rate": 0.5433,
+        "avg_fill_price": 0.5089
+      },
+      {
+        "timing_bin": "T-26-28",
+        "fills": 66,
+        "city_days": 27,
+        "cost_usd": 140.5101,
+        "pnl_usd": -43.0004,
+        "roi": -0.306,
+        "win_rate": 0.2424,
+        "avg_fill_price": 0.3977
+      },
+      {
+        "timing_bin": ">T-28",
+        "fills": 579,
+        "city_days": 243,
+        "cost_usd": 1605.9656,
+        "pnl_usd": -179.3752,
+        "roi": -0.1117,
+        "win_rate": 0.5043,
+        "avg_fill_price": 0.5455
+      }
+    ],
+    "paper_settled": [
+      {
+        "timing_bin": "T-22-24",
+        "fills": 353,
+        "city_days": 178,
+        "cost_usd": 1643.965,
+        "pnl_usd": -23.965,
+        "roi": -0.0146,
+        "win_rate": 0.4589,
+        "avg_fill_price": 0.4657
+      },
+      {
+        "timing_bin": "T-24-26",
+        "fills": 1834,
+        "city_days": 587,
+        "cost_usd": 8835.3,
+        "pnl_usd": 614.7,
+        "roi": 0.0696,
+        "win_rate": 0.5153,
+        "avg_fill_price": 0.4818
+      }
+    ],
+    "settled_by_trade_class": [
+      {
+        "trade_class": "live_real",
+        "timing_bin": "<T-18",
+        "fills": 20,
+        "cost_usd": 45.4838,
+        "pnl_usd": 51.4226,
+        "roi": 1.1306,
+        "win_rate": 0.8
+      },
+      {
+        "trade_class": "live_real",
+        "timing_bin": "T-18-20",
+        "fills": 21,
+        "cost_usd": 60.9018,
+        "pnl_usd": -3.8712,
+        "roi": -0.0636,
+        "win_rate": 0.5238
+      },
+      {
+        "trade_class": "live_real",
+        "timing_bin": "T-20-22",
+        "fills": 55,
+        "cost_usd": 137.9389,
+        "pnl_usd": -30.7856,
+        "roi": -0.2232,
+        "win_rate": 0.4364
+      },
+      {
+        "trade_class": "live_real",
+        "timing_bin": "T-22-24",
+        "fills": 172,
+        "cost_usd": 391.7694,
+        "pnl_usd": 114.4555,
+        "roi": 0.2922,
+        "win_rate": 0.5058
+      },
+      {
+        "trade_class": "live_real",
+        "timing_bin": "T-24-26",
+        "fills": 289,
+        "cost_usd": 824.6578,
+        "pnl_usd": 39.3372,
+        "roi": 0.0477,
+        "win_rate": 0.5433
+      },
+      {
+        "trade_class": "live_real",
+        "timing_bin": "T-26-28",
+        "fills": 66,
+        "cost_usd": 140.5101,
+        "pnl_usd": -43.0004,
+        "roi": -0.306,
+        "win_rate": 0.2424
+      },
+      {
+        "trade_class": "live_real",
+        "timing_bin": ">T-28",
+        "fills": 579,
+        "cost_usd": 1605.9656,
+        "pnl_usd": -179.3752,
+        "roi": -0.1117,
+        "win_rate": 0.5043
+      },
+      {
+        "trade_class": "live_simulated",
+        "timing_bin": "<T-18",
+        "fills": 16,
+        "cost_usd": 61.6,
+        "pnl_usd": 67.5821,
+        "roi": 1.0971,
+        "win_rate": 0.75
+      },
+      {
+        "trade_class": "live_simulated",
+        "timing_bin": "T-18-20",
+        "fills": 23,
+        "cost_usd": 97.75,
+        "pnl_usd": -4.4147,
+        "roi": -0.0452,
+        "win_rate": 0.5652
+      },
+      {
+        "trade_class": "live_simulated",
+        "timing_bin": "T-20-22",
+        "fills": 44,
+        "cost_usd": 188.65,
+        "pnl_usd": -23.3547,
+        "roi": -0.1238,
+        "win_rate": 0.4545
+      },
+      {
+        "trade_class": "live_simulated",
+        "timing_bin": "T-22-24",
+        "fills": 122,
+        "cost_usd": 566.05,
+        "pnl_usd": 109.4998,
+        "roi": 0.1934,
+        "win_rate": 0.582
+      },
+      {
+        "trade_class": "live_simulated",
+        "timing_bin": "T-24-26",
+        "fills": 266,
+        "cost_usd": 1276.7,
+        "pnl_usd": 111.5057,
+        "roi": 0.0873,
+        "win_rate": 0.5677
+      },
+      {
+        "trade_class": "live_simulated",
+        "timing_bin": "T-26-28",
+        "fills": 53,
+        "cost_usd": 234.0,
+        "pnl_usd": 5.5163,
+        "roi": 0.0236,
+        "win_rate": 0.4528
+      },
+      {
+        "trade_class": "live_simulated",
+        "timing_bin": ">T-28",
+        "fills": 484,
+        "cost_usd": 2199.1,
+        "pnl_usd": -11.2243,
+        "roi": -0.0051,
+        "win_rate": 0.5558
+      },
+      {
+        "trade_class": "paper",
+        "timing_bin": "T-22-24",
+        "fills": 353,
+        "cost_usd": 1643.965,
+        "pnl_usd": -23.965,
+        "roi": -0.0146,
+        "win_rate": 0.4589
+      },
+      {
+        "trade_class": "paper",
+        "timing_bin": "T-24-26",
+        "fills": 1834,
+        "cost_usd": 8835.3,
+        "pnl_usd": 614.7,
+        "roi": 0.0696,
+        "win_rate": 0.5153
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "timing_bin": "T-22-24",
+        "fills": 87,
+        "cost_usd": 381.56,
+        "pnl_usd": 8.44,
+        "roi": 0.0221,
+        "win_rate": 0.4483
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "timing_bin": "T-24-26",
+        "fills": 549,
+        "cost_usd": 2349.365,
+        "pnl_usd": 180.635,
+        "roi": 0.0769,
+        "win_rate": 0.4608
+      }
+    ],
+    "live_real_by_strategy": [
+      {
+        "strategy_id": "live_weather_edge_v1_c13ccf0c3181",
+        "execution_policy": "maker_queue_v1",
+        "timing_bin": "T-20-22",
+        "city_days": 3,
+        "fills": 7,
+        "cost_usd": 23.3562,
+        "pnl_usd": 0.7638,
+        "roi": 0.0327,
+        "win_rate": 0.5714
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_c13ccf0c3181",
+        "execution_policy": "maker_queue_v1",
+        "timing_bin": "T-22-24",
+        "city_days": 4,
+        "fills": 6,
+        "cost_usd": 13.8476,
+        "pnl_usd": -5.8676,
+        "roi": -0.4237,
+        "win_rate": 0.5
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_c13ccf0c3181",
+        "execution_policy": "maker_queue_v1",
+        "timing_bin": "T-24-26",
+        "city_days": 13,
+        "fills": 22,
+        "cost_usd": 58.6841,
+        "pnl_usd": -5.9152,
+        "roi": -0.1008,
+        "win_rate": 0.5
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_c13ccf0c3181",
+        "execution_policy": "maker_queue_v1",
+        "timing_bin": ">T-28",
+        "city_days": 18,
+        "fills": 41,
+        "cost_usd": 117.4673,
+        "pnl_usd": -17.3144,
+        "roi": -0.1474,
+        "win_rate": 0.561
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_edb2b6f8df82",
+        "execution_policy": "maker_queue_v2",
+        "timing_bin": "<T-18",
+        "city_days": 2,
+        "fills": 7,
+        "cost_usd": 11.616,
+        "pnl_usd": 34.1081,
+        "roi": 2.9363,
+        "win_rate": 1.0
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_edb2b6f8df82",
+        "execution_policy": "maker_queue_v2",
+        "timing_bin": "T-18-20",
+        "city_days": 2,
+        "fills": 4,
+        "cost_usd": 13.4386,
+        "pnl_usd": -13.4386,
+        "roi": -1.0,
+        "win_rate": 0.0
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_edb2b6f8df82",
+        "execution_policy": "maker_queue_v2",
+        "timing_bin": "T-20-22",
+        "city_days": 1,
+        "fills": 1,
+        "cost_usd": 4.2174,
+        "pnl_usd": 3.5926,
+        "roi": 0.8519,
+        "win_rate": 1.0
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_edb2b6f8df82",
+        "execution_policy": "maker_queue_v2",
+        "timing_bin": "T-22-24",
+        "city_days": 2,
+        "fills": 2,
+        "cost_usd": 5.7522,
+        "pnl_usd": 8.2478,
+        "roi": 1.4338,
+        "win_rate": 1.0
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_edb2b6f8df82",
+        "execution_policy": "maker_queue_v2",
+        "timing_bin": "T-24-26",
+        "city_days": 8,
+        "fills": 12,
+        "cost_usd": 41.4742,
+        "pnl_usd": -10.5442,
+        "roi": -0.2542,
+        "win_rate": 0.4167
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_edb2b6f8df82",
+        "execution_policy": "maker_queue_v2",
+        "timing_bin": ">T-28",
+        "city_days": 19,
+        "fills": 33,
+        "cost_usd": 111.7478,
+        "pnl_usd": 1.0222,
+        "roi": 0.0091,
+        "win_rate": 0.4848
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4b07f7abc42f",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-18-20",
+        "city_days": 1,
+        "fills": 1,
+        "cost_usd": 4.998,
+        "pnl_usd": 3.332,
+        "roi": 0.6667,
+        "win_rate": 1.0
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4b07f7abc42f",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-22-24",
+        "city_days": 4,
+        "fills": 10,
+        "cost_usd": 20.4794,
+        "pnl_usd": 2.1906,
+        "roi": 0.107,
+        "win_rate": 0.5
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4b07f7abc42f",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-24-26",
+        "city_days": 6,
+        "fills": 15,
+        "cost_usd": 32.3268,
+        "pnl_usd": -24.2705,
+        "roi": -0.7508,
+        "win_rate": 0.1333
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4b07f7abc42f",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-26-28",
+        "city_days": 1,
+        "fills": 2,
+        "cost_usd": 4.992,
+        "pnl_usd": 3.0596,
+        "roi": 0.6129,
+        "win_rate": 1.0
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4b07f7abc42f",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "city_days": 19,
+        "fills": 34,
+        "cost_usd": 111.7433,
+        "pnl_usd": 10.3868,
+        "roi": 0.093,
+        "win_rate": 0.6765
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "<T-18",
+        "city_days": 3,
+        "fills": 7,
+        "cost_usd": 14.9824,
+        "pnl_usd": 10.42,
+        "roi": 0.6955,
+        "win_rate": 0.8571
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-18-20",
+        "city_days": 6,
+        "fills": 10,
+        "cost_usd": 29.6781,
+        "pnl_usd": 9.6024,
+        "roi": 0.3236,
+        "win_rate": 0.7
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-20-22",
+        "city_days": 10,
+        "fills": 23,
+        "cost_usd": 56.7585,
+        "pnl_usd": -16.3415,
+        "roi": -0.2879,
+        "win_rate": 0.4783
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-22-24",
+        "city_days": 37,
+        "fills": 100,
+        "cost_usd": 244.4472,
+        "pnl_usd": 73.2035,
+        "roi": 0.2995,
+        "win_rate": 0.55
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-24-26",
+        "city_days": 89,
+        "fills": 208,
+        "cost_usd": 600.954,
+        "pnl_usd": 79.9324,
+        "roi": 0.133,
+        "win_rate": 0.601
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-26-28",
+        "city_days": 17,
+        "fills": 41,
+        "cost_usd": 93.0318,
+        "pnl_usd": -19.8337,
+        "roi": -0.2132,
+        "win_rate": 0.2927
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "city_days": 144,
+        "fills": 385,
+        "cost_usd": 1053.094,
+        "pnl_usd": -129.4675,
+        "roi": -0.1229,
+        "win_rate": 0.4987
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_91f019941593",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "<T-18",
+        "city_days": 1,
+        "fills": 2,
+        "cost_usd": 4.9998,
+        "pnl_usd": -4.9998,
+        "roi": -1.0,
+        "win_rate": 0.0
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_91f019941593",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-20-22",
+        "city_days": 5,
+        "fills": 12,
+        "cost_usd": 28.0981,
+        "pnl_usd": -13.9019,
+        "roi": -0.4948,
+        "win_rate": 0.3333
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_91f019941593",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-22-24",
+        "city_days": 4,
+        "fills": 20,
+        "cost_usd": 36.6282,
+        "pnl_usd": 37.8298,
+        "roi": 1.0328,
+        "win_rate": 0.55
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_91f019941593",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-24-26",
+        "city_days": 3,
+        "fills": 7,
+        "cost_usd": 17.9525,
+        "pnl_usd": 20.0908,
+        "roi": 1.1191,
+        "win_rate": 0.7143
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_91f019941593",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-26-28",
+        "city_days": 4,
+        "fills": 13,
+        "cost_usd": 19.4927,
+        "pnl_usd": -11.5627,
+        "roi": -0.5932,
+        "win_rate": 0.0769
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": "<T-18",
+        "city_days": 3,
+        "fills": 4,
+        "cost_usd": 13.8857,
+        "pnl_usd": 11.8943,
+        "roi": 0.8566,
+        "win_rate": 0.75
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": "T-18-20",
+        "city_days": 4,
+        "fills": 6,
+        "cost_usd": 12.7871,
+        "pnl_usd": -3.3671,
+        "roi": -0.2633,
+        "win_rate": 0.5
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": "T-20-22",
+        "city_days": 6,
+        "fills": 12,
+        "cost_usd": 25.5087,
+        "pnl_usd": -4.8987,
+        "roi": -0.192,
+        "win_rate": 0.3333
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": "T-22-24",
+        "city_days": 12,
+        "fills": 34,
+        "cost_usd": 70.6147,
+        "pnl_usd": -1.1486,
+        "roi": -0.0163,
+        "win_rate": 0.3235
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": "T-24-26",
+        "city_days": 15,
+        "fills": 25,
+        "cost_usd": 73.2662,
+        "pnl_usd": -19.9562,
+        "roi": -0.2724,
+        "win_rate": 0.36
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": "T-26-28",
+        "city_days": 5,
+        "fills": 10,
+        "cost_usd": 22.9936,
+        "pnl_usd": -14.6636,
+        "roi": -0.6377,
+        "win_rate": 0.1
+      },
+      {
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": ">T-28",
+        "city_days": 43,
+        "fills": 86,
+        "cost_usd": 211.9133,
+        "pnl_usd": -44.0023,
+        "roi": -0.2076,
+        "win_rate": 0.4419
+      }
+    ],
+    "live_real_by_period": [
+      {
+        "period": "holdout_2026_05_26_to_05_31",
+        "timing_bin": "<T-18",
+        "fills": 16,
+        "cost_usd": 31.5826,
+        "pnl_usd": 65.3239,
+        "roi": 2.0684,
+        "win_rate": 1.0
+      },
+      {
+        "period": "holdout_2026_05_26_to_05_31",
+        "timing_bin": "T-18-20",
+        "fills": 10,
+        "cost_usd": 28.3407,
+        "pnl_usd": -11.7807,
+        "roi": -0.4157,
+        "win_rate": 0.4
+      },
+      {
+        "period": "holdout_2026_05_26_to_05_31",
+        "timing_bin": "T-20-22",
+        "fills": 10,
+        "cost_usd": 27.8962,
+        "pnl_usd": 2.2738,
+        "roi": 0.0815,
+        "win_rate": 0.6
+      },
+      {
+        "period": "holdout_2026_05_26_to_05_31",
+        "timing_bin": "T-22-24",
+        "fills": 55,
+        "cost_usd": 140.5561,
+        "pnl_usd": -4.3141,
+        "roi": -0.0307,
+        "win_rate": 0.3818
+      },
+      {
+        "period": "holdout_2026_05_26_to_05_31",
+        "timing_bin": "T-24-26",
+        "fills": 103,
+        "cost_usd": 312.9833,
+        "pnl_usd": -39.7818,
+        "roi": -0.1271,
+        "win_rate": 0.5146
+      },
+      {
+        "period": "holdout_2026_05_26_to_05_31",
+        "timing_bin": "T-26-28",
+        "fills": 10,
+        "cost_usd": 27.9845,
+        "pnl_usd": 2.0155,
+        "roi": 0.072,
+        "win_rate": 0.3
+      },
+      {
+        "period": "holdout_2026_05_26_to_05_31",
+        "timing_bin": ">T-28",
+        "fills": 282,
+        "cost_usd": 775.5487,
+        "pnl_usd": -90.4763,
+        "roi": -0.1167,
+        "win_rate": 0.5213
+      },
+      {
+        "period": "post_2026_06_01",
+        "timing_bin": "<T-18",
+        "fills": 4,
+        "cost_usd": 13.9013,
+        "pnl_usd": -13.9013,
+        "roi": -1.0,
+        "win_rate": 0.0
+      },
+      {
+        "period": "post_2026_06_01",
+        "timing_bin": "T-18-20",
+        "fills": 9,
+        "cost_usd": 22.8681,
+        "pnl_usd": 1.9724,
+        "roi": 0.0863,
+        "win_rate": 0.5556
+      },
+      {
+        "period": "post_2026_06_01",
+        "timing_bin": "T-20-22",
+        "fills": 33,
+        "cost_usd": 81.6783,
+        "pnl_usd": -47.4521,
+        "roi": -0.581,
+        "win_rate": 0.2424
+      },
+      {
+        "period": "post_2026_06_01",
+        "timing_bin": "T-22-24",
+        "fills": 94,
+        "cost_usd": 196.897,
+        "pnl_usd": 117.8726,
+        "roi": 0.5987,
+        "win_rate": 0.5745
+      },
+      {
+        "period": "post_2026_06_01",
+        "timing_bin": "T-24-26",
+        "fills": 66,
+        "cost_usd": 161.674,
+        "pnl_usd": -26.7313,
+        "roi": -0.1653,
+        "win_rate": 0.3485
+      },
+      {
+        "period": "post_2026_06_01",
+        "timing_bin": "T-26-28",
+        "fills": 56,
+        "cost_usd": 112.5255,
+        "pnl_usd": -45.0159,
+        "roi": -0.4001,
+        "win_rate": 0.2321
+      },
+      {
+        "period": "post_2026_06_01",
+        "timing_bin": ">T-28",
+        "fills": 291,
+        "cost_usd": 811.0805,
+        "pnl_usd": -94.7024,
+        "roi": -0.1168,
+        "win_rate": 0.4845
+      },
+      {
+        "period": "pre_2026_05_26",
+        "timing_bin": "T-18-20",
+        "fills": 2,
+        "cost_usd": 9.693,
+        "pnl_usd": 5.937,
+        "roi": 0.6125,
+        "win_rate": 1.0
+      },
+      {
+        "period": "pre_2026_05_26",
+        "timing_bin": "T-20-22",
+        "fills": 12,
+        "cost_usd": 28.3643,
+        "pnl_usd": 14.3927,
+        "roi": 0.5074,
+        "win_rate": 0.8333
+      },
+      {
+        "period": "pre_2026_05_26",
+        "timing_bin": "T-22-24",
+        "fills": 23,
+        "cost_usd": 54.3162,
+        "pnl_usd": 0.8971,
+        "roi": 0.0165,
+        "win_rate": 0.5217
+      },
+      {
+        "period": "pre_2026_05_26",
+        "timing_bin": "T-24-26",
+        "fills": 120,
+        "cost_usd": 350.0006,
+        "pnl_usd": 105.8503,
+        "roi": 0.3024,
+        "win_rate": 0.675
+      },
+      {
+        "period": "pre_2026_05_26",
+        "timing_bin": ">T-28",
+        "fills": 6,
+        "cost_usd": 19.3365,
+        "pnl_usd": 5.8035,
+        "roi": 0.3001,
+        "win_rate": 0.6667
+      }
+    ],
+    "live_real_by_side_model": [
+      {
+        "timing_bin": "<T-18",
+        "side": "BUY_NO",
+        "model_version": "gfs",
+        "fills": 5,
+        "cost_usd": 13.7397,
+        "pnl_usd": 15.5827,
+        "roi": 1.1341,
+        "win_rate": 1.0
+      },
+      {
+        "timing_bin": "<T-18",
+        "side": "BUY_YES",
+        "model_version": "gfs",
+        "fills": 15,
+        "cost_usd": 31.7442,
+        "pnl_usd": 35.8399,
+        "roi": 1.129,
+        "win_rate": 0.7333
+      },
+      {
+        "timing_bin": "T-18-20",
+        "side": "BUY_NO",
+        "model_version": "gfs",
+        "fills": 13,
+        "cost_usd": 44.6861,
+        "pnl_usd": 2.9244,
+        "roi": 0.0654,
+        "win_rate": 0.6154
+      },
+      {
+        "timing_bin": "T-18-20",
+        "side": "BUY_YES",
+        "model_version": "gfs",
+        "fills": 8,
+        "cost_usd": 16.2157,
+        "pnl_usd": -6.7957,
+        "roi": -0.4191,
+        "win_rate": 0.375
+      },
+      {
+        "timing_bin": "T-20-22",
+        "side": "BUY_NO",
+        "model_version": "gfs",
+        "fills": 24,
+        "cost_usd": 77.1001,
+        "pnl_usd": -27.2301,
+        "roi": -0.3532,
+        "win_rate": 0.4583
+      },
+      {
+        "timing_bin": "T-20-22",
+        "side": "BUY_YES",
+        "model_version": "gfs",
+        "fills": 31,
+        "cost_usd": 60.8388,
+        "pnl_usd": -3.5556,
+        "roi": -0.0584,
+        "win_rate": 0.4194
+      },
+      {
+        "timing_bin": "T-22-24",
+        "side": "BUY_NO",
+        "model_version": "ecmwf",
+        "fills": 12,
+        "cost_usd": 42.934,
+        "pnl_usd": -0.184,
+        "roi": -0.0043,
+        "win_rate": 0.5
+      },
+      {
+        "timing_bin": "T-22-24",
+        "side": "BUY_NO",
+        "model_version": "gfs",
+        "fills": 63,
+        "cost_usd": 162.8391,
+        "pnl_usd": 22.7045,
+        "roi": 0.1394,
+        "win_rate": 0.6349
+      },
+      {
+        "timing_bin": "T-22-24",
+        "side": "BUY_YES",
+        "model_version": "ecmwf",
+        "fills": 17,
+        "cost_usd": 33.4524,
+        "pnl_usd": -4.019,
+        "roi": -0.1201,
+        "win_rate": 0.2941
+      },
+      {
+        "timing_bin": "T-22-24",
+        "side": "BUY_YES",
+        "model_version": "gfs",
+        "fills": 80,
+        "cost_usd": 152.5439,
+        "pnl_usd": 95.9542,
+        "roi": 0.629,
+        "win_rate": 0.45
+      },
+      {
+        "timing_bin": "T-24-26",
+        "side": "BUY_NO",
+        "model_version": "ecmwf",
+        "fills": 54,
+        "cost_usd": 188.3248,
+        "pnl_usd": 5.6852,
+        "roi": 0.0302,
+        "win_rate": 0.6111
+      },
+      {
+        "timing_bin": "T-24-26",
+        "side": "BUY_NO",
+        "model_version": "gfs",
+        "fills": 142,
+        "cost_usd": 437.2456,
+        "pnl_usd": 32.7632,
+        "roi": 0.0749,
+        "win_rate": 0.662
+      },
+      {
+        "timing_bin": "T-24-26",
+        "side": "BUY_YES",
+        "model_version": "ecmwf",
+        "fills": 15,
+        "cost_usd": 33.5992,
+        "pnl_usd": 65.3659,
+        "roi": 1.9455,
+        "win_rate": 0.9333
+      },
+      {
+        "timing_bin": "T-24-26",
+        "side": "BUY_YES",
+        "model_version": "gfs",
+        "fills": 78,
+        "cost_usd": 165.4882,
+        "pnl_usd": -64.4771,
+        "roi": -0.3896,
+        "win_rate": 0.2051
+      },
+      {
+        "timing_bin": "T-26-28",
+        "side": "BUY_NO",
+        "model_version": "ecmwf",
+        "fills": 21,
+        "cost_usd": 65.5096,
+        "pnl_usd": -1.3299,
+        "roi": -0.0203,
+        "win_rate": 0.619
+      },
+      {
+        "timing_bin": "T-26-28",
+        "side": "BUY_YES",
+        "model_version": "ecmwf",
+        "fills": 42,
+        "cost_usd": 70.0021,
+        "pnl_usd": -36.6721,
+        "roi": -0.5239,
+        "win_rate": 0.0714
+      },
+      {
+        "timing_bin": "T-26-28",
+        "side": "BUY_YES",
+        "model_version": "gfs",
+        "fills": 3,
+        "cost_usd": 4.9984,
+        "pnl_usd": -4.9984,
+        "roi": -1.0,
+        "win_rate": 0.0
+      },
+      {
+        "timing_bin": ">T-28",
+        "side": "BUY_NO",
+        "model_version": "ecmwf",
+        "fills": 284,
+        "cost_usd": 843.5338,
+        "pnl_usd": -57.3428,
+        "roi": -0.068,
+        "win_rate": 0.5986
+      },
+      {
+        "timing_bin": ">T-28",
+        "side": "BUY_NO",
+        "model_version": "gfs",
+        "fills": 145,
+        "cost_usd": 436.5785,
+        "pnl_usd": -16.4255,
+        "roi": -0.0376,
+        "win_rate": 0.6138
+      },
+      {
+        "timing_bin": ">T-28",
+        "side": "BUY_YES",
+        "model_version": "ecmwf",
+        "fills": 128,
+        "cost_usd": 269.7247,
+        "pnl_usd": -94.0982,
+        "roi": -0.3489,
+        "win_rate": 0.2188
+      },
+      {
+        "timing_bin": ">T-28",
+        "side": "BUY_YES",
+        "model_version": "gfs",
+        "fills": 22,
+        "cost_usd": 56.1287,
+        "pnl_usd": -11.5087,
+        "roi": -0.205,
+        "win_rate": 0.2273
+      }
+    ],
+    "live_real_settlement_by_bin": [
+      {
+        "timing_bin": "<T-18",
+        "settlement_status": "settled",
+        "fills": 20
+      },
+      {
+        "timing_bin": "T-18-20",
+        "settlement_status": "settled",
+        "fills": 21
+      },
+      {
+        "timing_bin": "T-18-20",
+        "settlement_status": "",
+        "fills": 2
+      },
+      {
+        "timing_bin": "T-20-22",
+        "settlement_status": "settled",
+        "fills": 55
+      },
+      {
+        "timing_bin": "T-20-22",
+        "settlement_status": "",
+        "fills": 6
+      },
+      {
+        "timing_bin": "T-22-24",
+        "settlement_status": "settled",
+        "fills": 172
+      },
+      {
+        "timing_bin": "T-22-24",
+        "settlement_status": "",
+        "fills": 6
+      },
+      {
+        "timing_bin": "T-24-26",
+        "settlement_status": "settled",
+        "fills": 289
+      },
+      {
+        "timing_bin": "T-24-26",
+        "settlement_status": "",
+        "fills": 20
+      },
+      {
+        "timing_bin": "T-26-28",
+        "settlement_status": "",
+        "fills": 6
+      },
+      {
+        "timing_bin": "T-26-28",
+        "settlement_status": "settled",
+        "fills": 66
+      },
+      {
+        "timing_bin": ">T-28",
+        "settlement_status": "settled",
+        "fills": 579
+      },
+      {
+        "timing_bin": ">T-28",
+        "settlement_status": "",
+        "fills": 78
+      }
+    ]
+  },
+  "city_day_layer": {
+    "l4_city_day": [
+      {
+        "timing_bin": "<T-18",
+        "city_days": 9,
+        "cost_usd": 45.4838,
+        "pnl_usd": 51.4226,
+        "roi": 1.1306,
+        "avg_city_day_pnl": 5.7136,
+        "median_city_day_pnl": 4.8375,
+        "negative_city_day_rate": 0.3333
+      },
+      {
+        "timing_bin": "T-18-20",
+        "city_days": 13,
+        "cost_usd": 60.9018,
+        "pnl_usd": -3.8712,
+        "roi": -0.0636,
+        "avg_city_day_pnl": -0.2978,
+        "median_city_day_pnl": 1.7446,
+        "negative_city_day_rate": 0.4615
+      },
+      {
+        "timing_bin": "T-20-22",
+        "city_days": 25,
+        "cost_usd": 137.9388,
+        "pnl_usd": -30.7856,
+        "roi": -0.2232,
+        "avg_city_day_pnl": -1.2314,
+        "median_city_day_pnl": -4.7089,
+        "negative_city_day_rate": 0.6
+      },
+      {
+        "timing_bin": "T-22-24",
+        "city_days": 63,
+        "cost_usd": 391.7694,
+        "pnl_usd": 114.4555,
+        "roi": 0.2922,
+        "avg_city_day_pnl": 1.8168,
+        "median_city_day_pnl": 1.9432,
+        "negative_city_day_rate": 0.4444
+      },
+      {
+        "timing_bin": "T-24-26",
+        "city_days": 134,
+        "cost_usd": 824.6578,
+        "pnl_usd": 39.3372,
+        "roi": 0.0477,
+        "avg_city_day_pnl": 0.2936,
+        "median_city_day_pnl": 1.4826,
+        "negative_city_day_rate": 0.4701
+      },
+      {
+        "timing_bin": "T-26-28",
+        "city_days": 27,
+        "cost_usd": 140.5101,
+        "pnl_usd": -43.0004,
+        "roi": -0.306,
+        "avg_city_day_pnl": -1.5926,
+        "median_city_day_pnl": -4.3911,
+        "negative_city_day_rate": 0.5556
+      },
+      {
+        "timing_bin": ">T-28",
+        "city_days": 243,
+        "cost_usd": 1605.9656,
+        "pnl_usd": -179.3752,
+        "roi": -0.1117,
+        "avg_city_day_pnl": -0.7382,
+        "median_city_day_pnl": -1.8548,
+        "negative_city_day_rate": 0.5638
+      }
+    ],
+    "worst_city_days": [
+      {
+        "target_date": "2026-05-31",
+        "city": "Istanbul",
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": ">T-28",
+        "fills": 4,
+        "cost_usd": 12.6014,
+        "pnl_usd": -12.6014,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-01",
+        "city": "NYC",
+        "strategy_id": "live_weather_edge_v1_986d901ccc58",
+        "execution_policy": "mid_price_core_v2",
+        "timing_bin": "T-22-24",
+        "fills": 6,
+        "cost_usd": 10.1278,
+        "pnl_usd": -10.1278,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-05-25",
+        "city": "Austin",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-24-26",
+        "fills": 4,
+        "cost_usd": 9.998,
+        "pnl_usd": -9.998,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-04",
+        "city": "NYC",
+        "strategy_id": "live_weather_edge_v1_4b07f7abc42f",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-24-26",
+        "fills": 6,
+        "cost_usd": 9.998,
+        "pnl_usd": -9.998,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-05",
+        "city": "Karachi",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 3,
+        "cost_usd": 9.9975,
+        "pnl_usd": -9.9975,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-04",
+        "city": "London",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 2,
+        "cost_usd": 9.9971,
+        "pnl_usd": -9.9971,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-05",
+        "city": "Jeddah",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 4,
+        "cost_usd": 9.9963,
+        "pnl_usd": -9.9963,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-06",
+        "city": "Miami",
+        "strategy_id": "live_weather_edge_v1_91f019941593",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-20-22",
+        "fills": 5,
+        "cost_usd": 9.9963,
+        "pnl_usd": -9.9963,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-05",
+        "city": "Miami",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-24-26",
+        "fills": 3,
+        "cost_usd": 9.9962,
+        "pnl_usd": -9.9962,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-05-31",
+        "city": "Istanbul",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 4,
+        "cost_usd": 9.9959,
+        "pnl_usd": -9.9959,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-05-30",
+        "city": "NYC",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-24-26",
+        "fills": 5,
+        "cost_usd": 9.9957,
+        "pnl_usd": -9.9957,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-05-30",
+        "city": "Munich",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 2,
+        "cost_usd": 9.9956,
+        "pnl_usd": -9.9956,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-05-31",
+        "city": "Manila",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 5,
+        "cost_usd": 9.9956,
+        "pnl_usd": -9.9956,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-05",
+        "city": "BuenosAires",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-26-28",
+        "fills": 4,
+        "cost_usd": 9.9956,
+        "pnl_usd": -9.9956,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-05-31",
+        "city": "Warsaw",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-26-28",
+        "fills": 3,
+        "cost_usd": 9.995,
+        "pnl_usd": -9.995,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-01",
+        "city": "BuenosAires",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-22-24",
+        "fills": 4,
+        "cost_usd": 9.995,
+        "pnl_usd": -9.995,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-01",
+        "city": "Amsterdam",
+        "strategy_id": "live_weather_edge_v1_4b07f7abc42f",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 2,
+        "cost_usd": 9.9949,
+        "pnl_usd": -9.9949,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-06-01",
+        "city": "Amsterdam",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 4,
+        "cost_usd": 9.9949,
+        "pnl_usd": -9.9949,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-05-24",
+        "city": "LA",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": "T-24-26",
+        "fills": 3,
+        "cost_usd": 9.9937,
+        "pnl_usd": -9.9937,
+        "roi": -1.0
+      },
+      {
+        "target_date": "2026-05-28",
+        "city": "London",
+        "strategy_id": "live_weather_edge_v1_4ef9b3ec3e2e",
+        "execution_policy": "mid_price_core_v1",
+        "timing_bin": ">T-28",
+        "fills": 2,
+        "cost_usd": 9.9937,
+        "pnl_usd": -9.9937,
+        "roi": -1.0
+      }
+    ]
+  },
+  "raw_snapshot_metadata_probe": {
+    "snapshot_dir": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/paper_snapshots",
+    "file_count": 1593,
+    "sampled_file_count": 120,
+    "record_count": 78094,
+    "with_model_init_utc_estimated": 78094,
+    "with_model_run_age_hours_estimated": 78094,
+    "with_forecast_source": 78094,
+    "with_settle_utc": 78094,
+    "sample_files": [
+      "snapshot_20260605_1300.json",
+      "snapshot_20260605_1330.json",
+      "snapshot_20260605_1401.json"
+    ],
+    "latest_sample_files": [
+      "snapshot_20260607_2330.json",
+      "snapshot_20260608_0000.json",
+      "snapshot_20260608_0030.json"
+    ],
+    "coverage": {
+      "model_init_utc_estimated": 1.0,
+      "model_run_age_hours_estimated": 1.0,
+      "forecast_source": 1.0,
+      "settle_utc": 1.0
+    },
+    "timing_model_init_distribution": [
+      {
+        "timing_bin": "<T-18",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "00Z",
+        "records": 9379,
+        "avg_model_run_age_hours_estimated": 9.1942
+      },
+      {
+        "timing_bin": "<T-18",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "12Z",
+        "records": 3995,
+        "avg_model_run_age_hours_estimated": 10.7367
+      },
+      {
+        "timing_bin": "<T-18",
+        "model": "gfs",
+        "model_init_utc_estimated": "00Z",
+        "records": 1613,
+        "avg_model_run_age_hours_estimated": 6.6944
+      },
+      {
+        "timing_bin": "<T-18",
+        "model": "gfs",
+        "model_init_utc_estimated": "06Z",
+        "records": 2771,
+        "avg_model_run_age_hours_estimated": 6.806
+      },
+      {
+        "timing_bin": "<T-18",
+        "model": "gfs",
+        "model_init_utc_estimated": "12Z",
+        "records": 1729,
+        "avg_model_run_age_hours_estimated": 6.777
+      },
+      {
+        "timing_bin": "<T-18",
+        "model": "gfs",
+        "model_init_utc_estimated": "18Z",
+        "records": 1445,
+        "avg_model_run_age_hours_estimated": 6.4592
+      },
+      {
+        "timing_bin": "T-18-20",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "00Z",
+        "records": 547,
+        "avg_model_run_age_hours_estimated": 8.1335
+      },
+      {
+        "timing_bin": "T-18-20",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "12Z",
+        "records": 1495,
+        "avg_model_run_age_hours_estimated": 10.628
+      },
+      {
+        "timing_bin": "T-18-20",
+        "model": "gfs",
+        "model_init_utc_estimated": "00Z",
+        "records": 625,
+        "avg_model_run_age_hours_estimated": 8.5352
+      },
+      {
+        "timing_bin": "T-18-20",
+        "model": "gfs",
+        "model_init_utc_estimated": "06Z",
+        "records": 358,
+        "avg_model_run_age_hours_estimated": 5.4693
+      },
+      {
+        "timing_bin": "T-18-20",
+        "model": "gfs",
+        "model_init_utc_estimated": "12Z",
+        "records": 430,
+        "avg_model_run_age_hours_estimated": 6.9395
+      },
+      {
+        "timing_bin": "T-18-20",
+        "model": "gfs",
+        "model_init_utc_estimated": "18Z",
+        "records": 130,
+        "avg_model_run_age_hours_estimated": 7.8577
+      },
+      {
+        "timing_bin": "T-20-22",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "00Z",
+        "records": 496,
+        "avg_model_run_age_hours_estimated": 7.8589
+      },
+      {
+        "timing_bin": "T-20-22",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "12Z",
+        "records": 1663,
+        "avg_model_run_age_hours_estimated": 8.634
+      },
+      {
+        "timing_bin": "T-20-22",
+        "model": "gfs",
+        "model_init_utc_estimated": "00Z",
+        "records": 902,
+        "avg_model_run_age_hours_estimated": 7.1103
+      },
+      {
+        "timing_bin": "T-20-22",
+        "model": "gfs",
+        "model_init_utc_estimated": "06Z",
+        "records": 154,
+        "avg_model_run_age_hours_estimated": 6.763
+      },
+      {
+        "timing_bin": "T-20-22",
+        "model": "gfs",
+        "model_init_utc_estimated": "12Z",
+        "records": 476,
+        "avg_model_run_age_hours_estimated": 5.0555
+      },
+      {
+        "timing_bin": "T-20-22",
+        "model": "gfs",
+        "model_init_utc_estimated": "18Z",
+        "records": 130,
+        "avg_model_run_age_hours_estimated": 5.5808
+      },
+      {
+        "timing_bin": "T-22-24",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "00Z",
+        "records": 1451,
+        "avg_model_run_age_hours_estimated": 12.2888
+      },
+      {
+        "timing_bin": "T-22-24",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "12Z",
+        "records": 1728,
+        "avg_model_run_age_hours_estimated": 8.7132
+      },
+      {
+        "timing_bin": "T-22-24",
+        "model": "gfs",
+        "model_init_utc_estimated": "00Z",
+        "records": 951,
+        "avg_model_run_age_hours_estimated": 5.4837
+      },
+      {
+        "timing_bin": "T-22-24",
+        "model": "gfs",
+        "model_init_utc_estimated": "06Z",
+        "records": 839,
+        "avg_model_run_age_hours_estimated": 8.0453
+      },
+      {
+        "timing_bin": "T-22-24",
+        "model": "gfs",
+        "model_init_utc_estimated": "12Z",
+        "records": 256,
+        "avg_model_run_age_hours_estimated": 6.2012
+      },
+      {
+        "timing_bin": "T-22-24",
+        "model": "gfs",
+        "model_init_utc_estimated": "18Z",
+        "records": 231,
+        "avg_model_run_age_hours_estimated": 7.7078
+      },
+      {
+        "timing_bin": "T-24-26",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "00Z",
+        "records": 1315,
+        "avg_model_run_age_hours_estimated": 12.2734
+      },
+      {
+        "timing_bin": "T-24-26",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "12Z",
+        "records": 1386,
+        "avg_model_run_age_hours_estimated": 8.0937
+      },
+      {
+        "timing_bin": "T-24-26",
+        "model": "gfs",
+        "model_init_utc_estimated": "00Z",
+        "records": 327,
+        "avg_model_run_age_hours_estimated": 6.0076
+      },
+      {
+        "timing_bin": "T-24-26",
+        "model": "gfs",
+        "model_init_utc_estimated": "06Z",
+        "records": 704,
+        "avg_model_run_age_hours_estimated": 6.5732
+      },
+      {
+        "timing_bin": "T-24-26",
+        "model": "gfs",
+        "model_init_utc_estimated": "12Z",
+        "records": 147,
+        "avg_model_run_age_hours_estimated": 7.2517
+      },
+      {
+        "timing_bin": "T-24-26",
+        "model": "gfs",
+        "model_init_utc_estimated": "18Z",
+        "records": 535,
+        "avg_model_run_age_hours_estimated": 8.3561
+      },
+      {
+        "timing_bin": "T-26-28",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "00Z",
+        "records": 1596,
+        "avg_model_run_age_hours_estimated": 11.802
+      },
+      {
+        "timing_bin": "T-26-28",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "12Z",
+        "records": 1303,
+        "avg_model_run_age_hours_estimated": 7.1612
+      },
+      {
+        "timing_bin": "T-26-28",
+        "model": "gfs",
+        "model_init_utc_estimated": "00Z",
+        "records": 186,
+        "avg_model_run_age_hours_estimated": 7.543
+      },
+      {
+        "timing_bin": "T-26-28",
+        "model": "gfs",
+        "model_init_utc_estimated": "06Z",
+        "records": 657,
+        "avg_model_run_age_hours_estimated": 4.71
+      },
+      {
+        "timing_bin": "T-26-28",
+        "model": "gfs",
+        "model_init_utc_estimated": "12Z",
+        "records": 171,
+        "avg_model_run_age_hours_estimated": 5.1667
+      },
+      {
+        "timing_bin": "T-26-28",
+        "model": "gfs",
+        "model_init_utc_estimated": "18Z",
+        "records": 713,
+        "avg_model_run_age_hours_estimated": 6.8289
+      },
+      {
+        "timing_bin": ">T-28",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "00Z",
+        "records": 15761,
+        "avg_model_run_age_hours_estimated": 9.2686
+      },
+      {
+        "timing_bin": ">T-28",
+        "model": "ecmwf",
+        "model_init_utc_estimated": "12Z",
+        "records": 4030,
+        "avg_model_run_age_hours_estimated": 10.4018
+      },
+      {
+        "timing_bin": ">T-28",
+        "model": "gfs",
+        "model_init_utc_estimated": "00Z",
+        "records": 6216,
+        "avg_model_run_age_hours_estimated": 6.9606
+      },
+      {
+        "timing_bin": ">T-28",
+        "model": "gfs",
+        "model_init_utc_estimated": "06Z",
+        "records": 4554,
+        "avg_model_run_age_hours_estimated": 6.7456
+      },
+      {
+        "timing_bin": ">T-28",
+        "model": "gfs",
+        "model_init_utc_estimated": "12Z",
+        "records": 2746,
+        "avg_model_run_age_hours_estimated": 6.4997
+      },
+      {
+        "timing_bin": ">T-28",
+        "model": "gfs",
+        "model_init_utc_estimated": "18Z",
+        "records": 1953,
+        "avg_model_run_age_hours_estimated": 6.7875
+      }
+    ]
+  },
+  "data_gaps": [
+    {
+      "table": "fact_trades",
+      "missing_fields": "forecast_update_checkpoint, last_forecast_run_ts_utc, minutes_since_last_forecast_run, minutes_to_next_forecast_run, next_forecast_run_ts_utc",
+      "impact": "Cannot publish forecast-update checkpoint performance from DB facts yet."
+    },
+    {
+      "table": "fact_signal_candidates",
+      "missing_fields": "forecast_update_checkpoint, last_forecast_run_ts_utc, minutes_since_last_forecast_run, minutes_to_next_forecast_run, next_forecast_run_ts_utc",
+      "impact": "Cannot publish forecast-update checkpoint performance from DB facts yet."
+    },
+    {
+      "table": "signals",
+      "missing_fields": "forecast_update_checkpoint, last_forecast_run_ts_utc, minutes_since_last_forecast_run, minutes_to_next_forecast_run, next_forecast_run_ts_utc",
+      "impact": "Cannot publish forecast-update checkpoint performance from DB facts yet."
+    },
+    {
+      "table": "plans",
+      "missing_fields": "forecast_update_checkpoint, last_forecast_run_ts_utc, minutes_since_last_forecast_run, minutes_to_next_forecast_run, next_forecast_run_ts_utc",
+      "impact": "Cannot publish forecast-update checkpoint performance from DB facts yet."
+    }
+  ],
+  "summary": "当前 DB 支持的结论先限定在 timing 基线，不发布 forecast 更新卡点收益结论。\n- `<T-18`: L1 unavailable outside current decision-window fact table, L3 live_real roi=1.1306 (fills=20), L4 city-day roi=1.1306 (city_days=9).\n- `T-18-20`: L1 unavailable outside current decision-window fact table, L3 live_real roi=-0.0636 (fills=21), L4 city-day roi=-0.0636 (city_days=13).\n- `T-20-22`: L1 unavailable outside current decision-window fact table, L3 live_real roi=-0.2232 (fills=55), L4 city-day roi=-0.2232 (city_days=25).\n- `T-22-24`: L1 cf_roi_proxy=0.0863, L3 live_real roi=0.2922 (fills=172), L4 city-day roi=0.2922 (city_days=63).\n- `T-24-26`: L1 unavailable outside current decision-window fact table, L3 live_real roi=0.0477 (fills=289), L4 city-day roi=0.0477 (city_days=134).\n- `T-26-28`: L1 unavailable outside current decision-window fact table, L3 live_real roi=-0.306 (fills=66), L4 city-day roi=-0.306 (city_days=27).\n- `>T-28`: L1 unavailable outside current decision-window fact table, L3 live_real roi=-0.1117 (fills=579), L4 city-day roi=-0.1117 (city_days=243).\n`T-24-26` 不能直接并入主窗口：本轮可见 live_real/city-day 基线需要和 forecast checkpoint 再拆一次。\n`fact_signal_candidates` 当前只给 T-22~24 决策窗，不能用它证明 `<T-22` 或 `T-24-26` 的机会层 alpha；这些窗口先以 live fill/city-day 结果作为风险基线。\nraw paper snapshots 已有 estimated model init/run age metadata；forecast checkpoint 字段当前不在 fact/signals/plans 中，下一步是把这些原料接入派生层，不能用理论 6h cadence 硬贴标签。"
+}
