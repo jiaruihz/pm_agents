@@ -119,6 +119,13 @@ def _hours_to_settle_now(record: Dict[str, Any], now_utc: datetime) -> Optional[
         return None
 
 
+def _snapshot_hours_to_settle(record: Dict[str, Any]) -> Optional[float]:
+    try:
+        return float(record.get("hours_to_settle"))
+    except (TypeError, ValueError):
+        return None
+
+
 def _record_key(record: Dict[str, Any], side: str) -> Tuple[str, str, str, str, str]:
     market_id = _safe_str(record.get("market_id"))
     condition_id = _safe_str(record.get("condition_id"))
@@ -264,6 +271,16 @@ def build_signals(
                 skipped["not_t24"] = skipped.get("not_t24", 0) + 1
                 continue
         else:
+            snapshot_hours_to_settle = _snapshot_hours_to_settle(record)
+            if (
+                max_hours_to_settle is not None
+                and snapshot_hours_to_settle is not None
+                and snapshot_hours_to_settle > max_hours_to_settle
+            ):
+                skipped["snapshot_hours_to_settle_above_max"] = skipped.get(
+                    "snapshot_hours_to_settle_above_max", 0
+                ) + 1
+                continue
             hours_to_settle = _hours_to_settle_now(record, now_utc)
             if hours_to_settle is None:
                 skipped["missing_hours_to_settle"] = skipped.get("missing_hours_to_settle", 0) + 1

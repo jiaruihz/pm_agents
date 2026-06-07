@@ -109,6 +109,34 @@ class TestWeatherSnapshotSignalBuilder(unittest.TestCase):
             self.assertEqual(out.read_text(encoding="utf-8"), "")
 
     @patch.object(builder, "PolymarketGammaClient", _FakeGamma)
+    def test_source_snapshot_above_max_hours_is_blocked_even_if_current_window_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot = root / "snapshot_20260607_2000.json"
+            out = root / "signals.jsonl"
+            record = self._record()
+            record["hours_to_settle"] = 28.5
+            record["settle_utc"] = (datetime.now(timezone.utc) + timedelta(hours=27)).isoformat()
+            self._snapshot(snapshot, [record])
+
+            result = builder.build_signals(
+                snapshot_path=snapshot,
+                snapshot_paths=[snapshot],
+                out_path=out,
+                city_pool="t1_trading",
+                min_edge=0.10,
+                min_entry_price=0.25,
+                max_entry_price=0.75,
+                min_hours_to_settle=22.0,
+                max_hours_to_settle=28.0,
+                dry_run=False,
+            )
+
+            self.assertEqual(result["signals"], 0)
+            self.assertEqual(result["skipped"].get("snapshot_hours_to_settle_above_max"), 1)
+            self.assertEqual(out.read_text(encoding="utf-8"), "")
+
+    @patch.object(builder, "PolymarketGammaClient", _FakeGamma)
     def test_allowed_cities_filters_after_city_pool(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
