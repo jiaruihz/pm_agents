@@ -104,6 +104,10 @@ Status 口径：
 | [2026-06-07-v1-ecmwf-blocked-side-band-overlay.md](analysis/2026-06/2026-06-07-v1-ecmwf-blocked-side-band-overlay.md) | `snapshot` | yes | 被移出 v1_25_75 live allowlist 的弱城市若换 side-band 是否改善；结论是明显减亏但仍只适合 shadow |
 | [2026-06-08-blender-research-state-and-next-plan.md](analysis/2026-06/2026-06-08-blender-research-state-and-next-plan.md) | `snapshot` | yes | blender 全部研究和工程改动交接：结论是只做 shadow/paper 与 size/risk signal，不进 live hard gate |
 | [2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md](analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md) | `snapshot` | yes | 剔除 6 个弱 ECMWF 城市并 ban T>28 后，blender 相对新 base 的边际收益为负 |
+| [2026-06-08-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | 最新 fact 重建后 basket vs legacy baseline refresh；recent slice 仍不支持上线 |
+| [2026-06-08-city-day-basket-walkforward.md](analysis/2026-06/2026-06-08-city-day-basket-walkforward.md) | `snapshot` | yes | 最新 fact 重建后 city-day basket walk-forward refresh；用于拒绝过拟合候选 |
+| [2026-06-08-city-day-distribution-quality.md](analysis/2026-06/2026-06-08-city-day-distribution-quality.md) | `snapshot` | yes | 最新 fact 重建后 city-day 分布质量 refresh；market-normalized distribution 仍优先 |
+| [2026-06-08-side-band-entry-timing-impact.md](analysis/2026-06/2026-06-08-side-band-entry-timing-impact.md) | `snapshot` | yes | side-band live_real 的 entry timing 与日度 PnL 关系；`>T-28` 不适合对 side-band 简单套用 v1 规则 |
 | [2026-06-07-blended-live-instance-overlay.md](analysis/2026-06/2026-06-07-blended-live-instance-overlay.md) | `snapshot` | yes | blender 叠加到真实 live instance fills 的控制变量 overlay；6 月后改善但 6 月前误杀盈利 |
 | [2026-06-07-v1-raw-regime-filter-walkforward.md](analysis/2026-06/2026-06-07-v1-raw-regime-filter-walkforward.md) | `snapshot` | yes | v1 raw 退化后的 gate walk-forward：城市层风控强于纯 blended edge gate |
 | [2026-06-06-city-alpha-framework.md](analysis/2026-06/2026-06-06-city-alpha-framework.md) | `snapshot` | yes | 城市 alpha 评价体系、paper->live 扩池反转、city x side gate |
