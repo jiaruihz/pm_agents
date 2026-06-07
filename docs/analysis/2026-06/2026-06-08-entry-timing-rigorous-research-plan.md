@@ -12,8 +12,9 @@
 
 1. `T-22-24` 是否仍是唯一可保留的主入场窗口？
 2. `<T-22` 是模型 edge 失效，还是 live 可成交样本选择/流动性/side mix 导致亏损？
-3. `T-24-26`、`T-26-28`、`>T-28` 应该分别是 keep、shadow、drop 还是 conditional keep？
-4. timing rule 是否应按 `strategy_instance`、`model_version`、`city`、`side`、`entry_price`、`forecast_run_age` 分层，而不是全局硬切？
+3. `T-24-26` 是应该和 `T-22-24` 合并成主窗口，还是因为卡在天气预报更新前后而需要单独处理？
+4. `T-26-28`、`>T-28` 应该分别是 keep、shadow、drop 还是 conditional keep？
+5. timing rule 是否应按 `strategy_instance`、`model_version`、`city`、`side`、`entry_price`、`forecast_run_age`、`forecast_update_checkpoint` 分层，而不是全局硬切？
 
 ## 当前证据边界
 
@@ -23,8 +24,11 @@
 - `2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md`：6 月后 v1 live_real settled 中 `<T-22` 为负，`T-22-24` 明显最好，`>T-28` 和 `T-26-28` 均为坏窗口；但严格 matched cell 不足。
 - `2026-06-08-side-band-entry-timing-impact.md`：side-band 的 timing 形态不同，`<T-22` 也为负，但 `>T-28` 不能简单套用 v1 的 drop 结论。
 - `2026-06-08-weather-edge-v2-filtered-operational-base-research.md`：近期 regime 下 raw/blend/basket 多数规则都弱，timing 研究必须和 operational-base filter、city/model 降级一起看。
+- `WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md`：早期复盘已观察到同一模型预报更新导致 side flip；GFS/ECMWF 大致每 6h 出新跑，但研究必须用实际 cache/snapshot 可用时间衡量，不能硬编码理论发布时间。
 
 因此当前最重要的修正是：**不要再用“5 月旧全量已成交样本 `<T-22` 还行”推导 live 规则；也不要用“6 月 v1 `<T-22` 亏”直接证明模型晚期失效。**
+
+另一个修正是：**不要把 `T-24-26` 当成无差别中间桶。** 它可能正好覆盖部分城市的下一轮 GFS/ECMWF 更新可用前后；如果一个 fill 在新 forecast 可用前入场，而同 city/bracket 在下一轮 snapshot 立刻跳 forecast 或 flip side，这和单纯 `hours_to_settle=25` 的含义不同。
 
 ## 强制数据前置
 
@@ -81,7 +85,7 @@ SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 
 
 - lower cut: `18, 20, 21, 22, 23`
 - upper cut: `24, 25, 26, 27, 28`
-- policy candidates: `only_22_24`, `only_22_26`, `only_20_24`, `drop_lt22`, `drop_gt26`, `drop_gt28`, `conditional_lt22_no_only`, `conditional_22_26_by_model`
+- policy candidates: `only_22_24`, `only_24_26`, `only_22_26`, `only_20_24`, `drop_lt22`, `drop_gt26`, `drop_gt28`, `conditional_lt22_no_only`, `conditional_24_26_after_fresh_forecast`, `conditional_22_26_by_model`
 
 所有 sweep 必须用 walk-forward 或 leave-date-out 评估，不能只报全样本最优。
 
@@ -94,17 +98,18 @@ SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 
 1. `strategy_instance x timing_bin`：fills、city_days、settled_cost、pnl、ROI、win_rate、open_cost。
 2. `period x strategy_instance x timing_bin`：`pre_2026_06_01`、`post_2026_06_01`、`holdout_from_2026_05_26`。
 3. `trade_class x timing_bin`：live_real、paper、snapshot_replay 分开，禁止混合 headline。
-4. `settlement_status x timing_bin`：确认 `<T-22` 是否因未结算占比偏高而被误判。
+4. `settlement_status x timing_bin`：确认 `<T-22` / `T-24-26` 是否因未结算占比偏高而被误判。
+5. `strategy_instance x timing_bin x forecast_update_checkpoint`：确认 `T-24-26` 是否被 forecast 更新卡点拆成两个不同分布。
 
 通过标准：
 
 - fill coverage gate 通过；
-- `<T-22` 在 live_real 和 city-day 两个口径方向一致；
+- `<T-22` 和 `T-24-26` 在 live_real 和 city-day 两个口径方向一致；
 - 如方向不一致，报告必须先解释重复腿/城市日集中度。
 
 ## 阶段 2：机会层 vs 成交层拆解
 
-目标：判断 `<T-22` 是 edge 本身差，还是成交选择差。
+目标：判断 `<T-22` / `T-24-26` 是 edge 本身差，还是成交选择差。
 
 表格：
 
@@ -161,6 +166,11 @@ period
 | 字段 | 含义 |
 |---|---|
 | `entry_model_run_age_hours` | 入场时 forecast run 已老化多久 |
+| `last_forecast_run_ts_utc` | 入场所用 forecast run 的发布时间或 cache run timestamp |
+| `next_forecast_run_ts_utc` | 入场后下一轮同模型 forecast run 的发布时间或 cache run timestamp |
+| `minutes_to_next_forecast_run` | 入场距离下一轮 forecast run 的分钟数；负数表示下一轮理论已出但本地尚未用上 |
+| `minutes_since_last_forecast_run` | 入场距离上一轮 forecast run 的分钟数 |
+| `forecast_update_checkpoint` | `pre_update_0_60m` / `post_update_0_60m` / `mid_run` / `stale_run` / `unknown` |
 | `next_model_run_available_before_settle` | 结算前是否还有下一轮 forecast |
 | `forecast_jump_after_entry_f` | 入场后同 city/bracket forecast 最大变化 |
 | `side_flip_after_entry` | 入场后同机会是否出现 BUY_YES/BUY_NO 翻转 |
@@ -172,6 +182,8 @@ period
 机制表：
 
 - timing bin x mechanism flag；
+- timing bin x forecast_update_checkpoint；
+- model_version x forecast_update_checkpoint；
 - loss fills 中各 flag 覆盖率；
 - flag 之间重叠矩阵；
 - leave-one-city/date 后机制是否仍成立。
@@ -183,6 +195,40 @@ period
 - 是否是 late catch-up / dedup 漏洞造成的非标准样本；
 - 是否入场后 market 已经明显 adverse；
 - 是否 forecast run age 比 `T-22-24` 更旧。
+
+特别检查 `T-24-26`：
+
+- 是否和 `T-22-24` 在 L0 opportunity 层相近，但在 L3/L4 变差；
+- 是否集中在 `pre_update_0_60m`，即马上要有新 GFS/ECMWF run，但入场仍使用旧 run；
+- 是否集中在 `post_update_0_60m`，即刚更新后市场尚未完成重新定价；
+- `T-24-26` 的亏损是否由 forecast jump / side flip 主导，而不是 city/model/side mix；
+- 如果 `T-24-26 + post_update_0_60m` 好、`T-24-26 + pre_update_0_60m` 差，候选规则应是“等更新后再入场”，不是简单 drop 整个 `T-24-26`。
+
+## 阶段 4.5：天气预报更新卡点
+
+目标：把 `hours_to_settle` 和 forecast 发布/可用时间分开，避免把预报更新噪声误判成 timing edge。
+
+必须用实际数据构造卡点，优先级：
+
+1. snapshot/signals 中已有的 forecast run timestamp 或 forecast source metadata；
+2. synced forecast cache 文件中的 run / generation / valid timestamp；
+3. 若 metadata 不完整，再用同 city/model forecast 序列发生跃迁的第一帧近似；
+4. 理论 GFS/ECMWF 6h cadence 只能作为 sanity check，不能作为主标签来源。
+
+输出表：
+
+1. `model_version x forecast_update_checkpoint x timing_bin`：opportunity / filled / city-day 三层表现。
+2. `T-24-26 x minutes_to_next_forecast_run_bucket`：`<0`、`0-30m`、`30-60m`、`1-2h`、`2h+`。
+3. `T-24-26 x minutes_since_last_forecast_run_bucket`：`0-30m`、`30-60m`、`1-3h`、`3h+`。
+4. `forecast_jump_after_next_run`：下一轮 forecast 后同 city/bracket 温度概率或 bracket side 是否大幅变化。
+5. `market_reprice_lag`：forecast 更新后 market side price 完成主要移动所需时间。
+
+判读规则：
+
+- `pre_update_0_60m` 亏、`post_update_0_60m` 好：考虑把入场推迟到 forecast 更新后。
+- `post_update_0_60m` 亏、`mid_run` 好：考虑避开刚更新后的盘口重定价窗口。
+- `stale_run` 亏：候选规则是 forecast freshness gate，而不是纯 timing cut。
+- 若所有 checkpoint 都差，`T-24-26` 才进入整体 drop 候选。
 
 ## 阶段 5：city-day portfolio 口径
 
@@ -218,11 +264,14 @@ timing_bin
 |---|---|
 | baseline_current | 当前 live 规则 |
 | only_T22_24 | 只保留 `T-22-24` |
+| only_T24_26 | 只保留 `T-24-26`，用于检验它是不是独立可交易窗口 |
 | only_T22_26 | 保留 `T-22-24` + `T-24-26` |
 | drop_lt22 | 去掉 `<T-22` |
 | drop_gt26 | 去掉 `T-26-28` + `>T-28` |
 | drop_lt22_gt26 | 只保留 `T-22-26` |
 | conditional_lt22_no_only | `<T-22` 只保留 BUY_NO 且 edge/price 达标 |
+| conditional_T24_26_after_fresh_forecast | `T-24-26` 只在 forecast 更新后或 freshness 通过时保留 |
+| conditional_T24_26_avoid_pre_update | `T-24-26` 避开下一轮 forecast 前 0-60 分钟 |
 | conditional_by_instance | v1 / side-band 分别设 timing 规则 |
 | conditional_by_model | ECMWF / GFS 分别设 upper/lower cut |
 
@@ -252,6 +301,7 @@ timing_bin
 - top5-worst removed ROI 不比 baseline 更差；
 - dropped bucket 的 avoided loss 大于 missed gain；
 - `<T-22` 若要保留，必须在 L0/L3/L4 中至少两层为正，且机制上不是单日/单城驱动。
+- `T-24-26` 若要和 `T-22-24` 合并为主窗口，必须在 forecast checkpoint 分层后仍不劣化；若只在特定 checkpoint 好，只能作为 conditional rule。
 
 候选 rule 进入 live/canary 的最低门槛：
 
@@ -303,10 +353,12 @@ fact_signal_timing_lineage
 | `keep_current` | timing rule 不改 |
 | `shadow_drop_lt22` | `<T-22` 先 shadow/drop，不改 live |
 | `shadow_only_T22_26` | 只保留 `T-22-26` 做 shadow 对照 |
+| `shadow_conditional_T24_26_forecast_checkpoint` | `T-24-26` 按 forecast 更新卡点条件化 shadow |
 | `canary_only_T22_26` | 小 size canary，仅在门槛全部通过后 |
 | `conditional_timing_by_instance` | v1 / side-band 分别配置 timing |
 | `conditional_timing_by_model_city` | 城市/模型条件化 timing，需额外防过拟合 |
+| `conditional_timing_by_forecast_checkpoint` | 避开 forecast 更新前/后特定卡点，优先 shadow |
 
 当前先验不是“马上砍 `<T-22`”，而是：
 
-> `<T-22` 已经不能被视为安全补仓窗口；下一轮研究要证明它是可条件保留，还是应该和 `>T-28` 一样从 live 主路径移出。
+> `<T-22` 已经不能被视为安全补仓窗口；`T-24-26` 也不能默认并入好窗口。下一轮研究要证明它们是可条件保留，还是应该按 forecast 更新卡点和 city/model/side 从 live 主路径移出。

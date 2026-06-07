@@ -109,7 +109,7 @@ Status 口径：
 | [2026-06-08-city-day-basket-walkforward.md](analysis/2026-06/2026-06-08-city-day-basket-walkforward.md) | `snapshot` | yes | 最新 fact 重建后 city-day basket walk-forward refresh；用于拒绝过拟合候选 |
 | [2026-06-08-city-day-distribution-quality.md](analysis/2026-06/2026-06-08-city-day-distribution-quality.md) | `snapshot` | yes | 最新 fact 重建后 city-day 分布质量 refresh；market-normalized distribution 仍优先 |
 | [2026-06-08-side-band-entry-timing-impact.md](analysis/2026-06/2026-06-08-side-band-entry-timing-impact.md) | `snapshot` | yes | side-band live_real 的 entry timing 与日度 PnL 关系；`>T-28` 不适合对 side-band 简单套用 v1 规则 |
-| [2026-06-08-entry-timing-rigorous-research-plan.md](analysis/2026-06/2026-06-08-entry-timing-rigorous-research-plan.md) | `design-draft` | yes | 针对 `<T-22`、`T-22-26`、`>T-28` 的完整 timing 研究计划：分母、matched、机制、city-day、shadow/live gate |
+| [2026-06-08-entry-timing-rigorous-research-plan.md](analysis/2026-06/2026-06-08-entry-timing-rigorous-research-plan.md) | `design-draft` | yes | 针对 `<T-22`、`T-24-26`、`>T-28` 与天气预报更新卡点的完整 timing 研究计划：分母、matched、机制、city-day、shadow/live gate |
 | [2026-06-07-blended-live-instance-overlay.md](analysis/2026-06/2026-06-07-blended-live-instance-overlay.md) | `snapshot` | yes | blender 叠加到真实 live instance fills 的控制变量 overlay；6 月后改善但 6 月前误杀盈利 |
 | [2026-06-07-v1-raw-regime-filter-walkforward.md](analysis/2026-06/2026-06-07-v1-raw-regime-filter-walkforward.md) | `snapshot` | yes | v1 raw 退化后的 gate walk-forward：城市层风控强于纯 blended edge gate |
 | [2026-06-06-city-alpha-framework.md](analysis/2026-06/2026-06-06-city-alpha-framework.md) | `snapshot` | yes | 城市 alpha 评价体系、paper->live 扩池反转、city x side gate |
