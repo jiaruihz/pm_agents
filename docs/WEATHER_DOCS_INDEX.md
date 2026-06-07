@@ -99,12 +99,17 @@ Status 口径：
 | [2026-06-03-performance-three-strategy-instances.md](analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | `snapshot` | yes | 三策略实例 live_real 表现、V2 停 live、Amsterdam/BuenosAires 降 T2 的证据入口 |
 | [2026-06-06-near-binary-city-reanalysis.md](analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md) | `snapshot` | yes | near-binary 勘误后城市 alpha、recent live loss 和 city x side 处置重算 |
 | [2026-06-07-mid-price-core-v1-raw-degradation.md](analysis/2026-06/2026-06-07-mid-price-core-v1-raw-degradation.md) | `snapshot` | yes | raw / mid_price_core_v1 为什么 2026-06-01 后退化：side、city、edge、market divergence、tail 事件归因 |
+| [2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md](analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md) | `snapshot` | yes | v1_25_75 forecast timing 退化：`>T-28`、`T-26-28`、forecast run age、side flip、market adverse move 和 timing policy overlay |
 | [2026-06-07-mid-price-core-v1-city-model-downgrade.md](analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md) | `snapshot` | yes | v1_25_75 city×model 降级依据，识别 Ankara/Jeddah/Karachi/Moscow/Munich 等弱近期 ECMWF 城市 |
 | [2026-06-07-v1-ecmwf-blocked-side-band-overlay.md](analysis/2026-06/2026-06-07-v1-ecmwf-blocked-side-band-overlay.md) | `snapshot` | yes | 被移出 v1_25_75 live allowlist 的弱城市若换 side-band 是否改善；结论是明显减亏但仍只适合 shadow |
+| [2026-06-08-blender-research-state-and-next-plan.md](analysis/2026-06/2026-06-08-blender-research-state-and-next-plan.md) | `snapshot` | yes | blender 全部研究和工程改动交接：结论是只做 shadow/paper 与 size/risk signal，不进 live hard gate |
+| [2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md](analysis/2026-06/2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md) | `snapshot` | yes | 剔除 6 个弱 ECMWF 城市并 ban T>28 后，blender 相对新 base 的边际收益为负 |
+| [2026-06-07-blended-live-instance-overlay.md](analysis/2026-06/2026-06-07-blended-live-instance-overlay.md) | `snapshot` | yes | blender 叠加到真实 live instance fills 的控制变量 overlay；6 月后改善但 6 月前误杀盈利 |
+| [2026-06-07-v1-raw-regime-filter-walkforward.md](analysis/2026-06/2026-06-07-v1-raw-regime-filter-walkforward.md) | `snapshot` | yes | v1 raw 退化后的 gate walk-forward：城市层风控强于纯 blended edge gate |
 | [2026-06-06-city-alpha-framework.md](analysis/2026-06/2026-06-06-city-alpha-framework.md) | `snapshot` | yes | 城市 alpha 评价体系、paper->live 扩池反转、city x side gate |
 | [2026-06-06-city-day-distribution-quality.md](analysis/2026-06/2026-06-06-city-day-distribution-quality.md) | `snapshot` | yes | raw/market/blend_norm 分布质量和 holdout 退化问题 |
-| [2026-06-06-blended-single-v0-backtest.md](analysis/2026-06/2026-06-06-blended-single-v0-backtest.md) | `snapshot` | yes | blended single v0 shadow 策略回测、策略身份和 opportunity 对比 |
-| [2026-06-06-blended-entry-band-backtest.md](analysis/2026-06/2026-06-06-blended-entry-band-backtest.md) | `snapshot` | yes | 保留 live 入场区间后的 blend gate 公平对比 |
+| [2026-06-06-blended-single-v0-backtest.md](analysis/2026-06/2026-06-06-blended-single-v0-backtest.md) | `snapshot` | yes | blended single v0 shadow 策略回测、策略身份和 opportunity 对比；settled/live 结论以 2026-06-07/08 重算为准 |
+| [2026-06-06-blended-entry-band-backtest.md](analysis/2026-06/2026-06-06-blended-entry-band-backtest.md) | `snapshot` | yes | 保留 live 入场区间后的 blend gate 公平对比；settled/live 结论以 2026-06-07/08 重算为准 |
 | [2026-06-06-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | basket vs 旧 per-bucket raw 策略的同窗、同 entry-band baseline 对比 |
 | [2026-06-06-city-day-basket-walkforward.md](analysis/2026-06/2026-06-06-city-day-basket-walkforward.md) | `snapshot` | yes | city-day basket 目标选择 walk-forward：用于拒绝过拟合候选，不批准上线 |
 | [2026-06-06-city-day-basket-optimizer-research.md](analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md) | `snapshot` | yes | city-day basket optimizer 的 headline ROI 与 tail 风险 |

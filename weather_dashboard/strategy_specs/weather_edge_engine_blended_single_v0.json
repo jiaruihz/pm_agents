@@ -1,0 +1,118 @@
+{
+  "strategy_id": "weather_edge_engine_blended_single_v0",
+  "strategy_family": "weather_edge_engine",
+  "strategy_name": "Weather Edge Engine Blended Single v0",
+  "status": "shadow_candidate",
+  "execution_mode": "shadow",
+  "probability_source": "blended",
+  "decision_mode": "single_leg_shadow",
+  "source_strategy_scope": [
+    "mid_price_core_v1_25_75",
+    "mid_price_core_v1_side_band"
+  ],
+  "description": "Shadow strategy that keeps the current single-market decision shape but replaces raw model probability with the configured market-anchored blended probability. It does not submit orders.",
+  "code_locations": {
+    "probability_blend": "weather_dashboard/blend/blender.py",
+    "blend_config": "weather_dashboard/blend/city_blend_config.json",
+    "offline_backtest": "scripts/analysis/backtest_weather_edge_engine_blended_single.py",
+    "entry_band_backtest": "scripts/analysis/backtest_weather_edge_engine_blended_entry_bands.py",
+    "fill_rate_estimate": "scripts/analysis/backtest_blended_paper_fill_estimate.py",
+    "shadow_paper_runner": "scripts/ops/weather_blended_shadow_paper.py",
+    "shadow_paper_loop": "scripts/ops/weather_blended_shadow_paper_loop.sh",
+    "pure_function_tests": [
+      "tests/blend/test_blender.py"
+    ]
+  },
+  "inputs": {
+    "model_p_yes_raw": "fact_signal_candidates.model_p_yes",
+    "market_implied_p_yes": "fact_signal_candidates.market_yes_price",
+    "decision_entry_price": "fact_signal_candidates.decision_entry_price",
+    "decision_window": "fact_signal_candidates decision_window_label, currently hts_22_24"
+  },
+  "blend_config": {
+    "global_alpha": 0.3,
+    "global_beta": 0.7,
+    "blacklist_alpha": 0.1,
+    "raw_model_blacklist": [
+      "Milan",
+      "Lucknow",
+      "Austin",
+      "Beijing"
+    ],
+    "clip_lo": 0.001,
+    "clip_hi": 0.999
+  },
+  "decision_rule": {
+    "single_leg_notional_usd": 5.0,
+    "buy_yes_edge": "p_yes_used - decision_entry_price",
+    "buy_no_edge": "(1 - p_yes_used) - decision_entry_price",
+    "selector_profiles": {
+      "current_25_75": {
+        "buy_yes_entry_window": "0.25-0.75",
+        "buy_yes_min_edge": 0.1,
+        "buy_no_entry_window": "0.25-0.75",
+        "buy_no_min_edge": 0.1
+      },
+      "current_side_band": {
+        "buy_yes_entry_window": "0.20-0.45",
+        "buy_yes_min_edge": 0.2,
+        "buy_no_entry_window": "0.35-0.65",
+        "buy_no_min_edge": 0.1
+      }
+    },
+    "loose_exploratory_edge_threshold": 0.03,
+    "trade_condition": "entry window passes and side-aware blended edge >= profile min_edge"
+  },
+  "current_findings": {
+    "loose_edge_0_03": "blended improves raw on opportunity full/recent/live_filled subsets, but this does not preserve current live gates",
+    "entry_band_aware": "when current entry windows and min_edge gates are preserved, blended selects far fewer legs and is not robust on recent/live_filled subsets",
+    "selected_initial_paper_range": "Use blended min_edge 0.05 with current entry windows; backtest sanity showed current raw gates 0.10/0.20 are too strict for blend, while 0.05 preserves volume and stays positive on recent/live_filled slices for the selected profiles.",
+    "production_read": "do not directly replace current live gates; after weak ECMWF city removal and T28 ban, blended hard gate has negative marginal value versus the new operational base; use N100 shadow double-write first and research blended sizing separately",
+    "latest_overlay_2026_06_08": "On settled mid_price_core_v1_25_75 live_real fills, removing BuenosAires/Munich/Jeddah/Karachi/Moscow/Ankara and banning hours_to_settle > 28 improves post PnL from -89.06 to +39.53; adding blended_edge>=0.10 lowers it to +20.19."
+  },
+  "paper_shadow_profiles": {
+    "blended_25_75_e05": {
+      "strategy_instance": "weather_edge_engine_blended_25_75_e05_paper",
+      "source_live_instance": "mid_price_core_v1_25_75",
+      "city_scope": "current operational T1 blend shadow cities excluding weak ECMWF cities; BuenosAires is not in this profile",
+      "entry_window": "BUY_YES/BUY_NO 0.25-0.75",
+      "blended_min_edge": 0.05,
+      "paper_notional_usd": 1.0,
+      "status": "paper_enabled_candidate_after_weak_ecmwf_removal"
+    },
+    "blended_side_band_e05": {
+      "strategy_instance": "weather_edge_engine_blended_side_band_e05_paper",
+      "source_live_instance": "mid_price_core_v1_side_band",
+      "city_scope": "legacy core cities: Boston, LA, London, Miami, NYC, Phoenix, Shanghai, Tokyo, Warsaw",
+      "entry_window": "BUY_YES 0.20-0.45; BUY_NO 0.35-0.65",
+      "blended_min_edge": 0.05,
+      "paper_notional_usd": 1.0,
+      "status": "paper_enabled_candidate"
+    }
+  },
+  "lineage_fields_to_shadow_write": [
+    "source_strategy_instance",
+    "strategy_id",
+    "strategy_family",
+    "probability_source",
+    "decision_mode",
+    "model_p_yes_raw",
+    "market_implied_p_yes",
+    "model_p_yes_used",
+    "blend_alpha",
+    "blend_beta",
+    "blend_mode",
+    "edge_raw_yes",
+    "edge_raw_no",
+    "edge_used_yes",
+    "edge_used_no",
+    "shadow_decision",
+    "shadow_reason"
+  ],
+  "production_boundary": {
+    "submits_orders": false,
+    "changes_live_execution_policy": false,
+    "changes_n100_city_pool": false,
+    "canary_allowed_without_shadow_review": false
+  }
+}
