@@ -15,10 +15,10 @@ cd "$PROJECT_DIR"
 # because the grabbed 25-75 YES opportunities were negative alpha. Re-enable only
 # for explicit shadow/live experiments with START_MID_PRICE_CORE_V2_25_75=1.
 #
-# The explicit T1 list is a live safety gate. It mirrors
-# weather-predict/city_pools.py v4 so demoted cities cannot slip through stale
-# synced snapshots during the 90-minute signal lookback.
-TRADING_T1_CITIES="${WEATHER_TRADING_T1_CITIES:-Ankara,Boston,Chengdu,Guangzhou,Istanbul,Jeddah,Karachi,LA,London,Lucknow,Madrid,Manila,Miami,Moscow,Munich,NYC,Phoenix,Seattle,Shanghai,Singapore,Tokyo,Warsaw}"
+# The explicit T1 list is a live safety gate for v1_25_75. It intentionally
+# excludes weak recent ECMWF city cases from live while keeping them available
+# for shadow research in other instances.
+TRADING_T1_CITIES="${WEATHER_TRADING_T1_CITIES:-Boston,Chengdu,Guangzhou,Istanbul,LA,London,Lucknow,Madrid,Manila,Miami,NYC,Phoenix,Seattle,Shanghai,Singapore,Tokyo,Warsaw}"
 
 # City x side hard block for live signal construction. This is a pm_agent-side
 # guard in addition to weather-predict/city_pools.py, so stale lookback
