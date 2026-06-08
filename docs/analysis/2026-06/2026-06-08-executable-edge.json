@@ -1,0 +1,265 @@
+{
+  "generated_at_utc": "2026-06-08T15:22:25.083975+00:00",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "trade_class": "live_real",
+  "parameters": {
+    "bootstrap_iters": 1000,
+    "seed": 20260608,
+    "market_structure_json": "docs/analysis/2026-06/2026-06-08-market-structural-edge.json"
+  },
+  "data_freshness": {
+    "max_fact_trades_built_at_utc": "2026-06-08T01:32:33.618777+00:00",
+    "max_fact_signal_candidates_built_at_utc": "2026-06-08T01:32:49.788100+00:00"
+  },
+  "live_real_coverage_gate": {
+    "required": true,
+    "status": "pass",
+    "gate_pass": true,
+    "returncode": 0,
+    "output_tail": [
+      "    \"rows\": 1333,",
+      "    \"top_over_order\": []",
+      "  },",
+      "  \"db_vs_primary_cache\": {",
+      "    \"cache_not_in_db\": 0,",
+      "    \"db_cost_minus_cache_cost\": 0.0,",
+      "    \"db_not_in_cache\": 0,",
+      "    \"sample_cache_not_in_db\": [],",
+      "    \"sample_db_not_in_cache\": []",
+      "  },",
+      "  \"fact_trades_live_real\": {",
+      "    \"cost_usd\": 3557.18743,",
+      "    \"executions\": 805,",
+      "    \"fill_ids\": 1333,",
+      "    \"rows\": 1333",
+      "  },",
+      "  \"fail_reasons\": [],",
+      "  \"gate_pass\": true,",
+      "  \"order_caps\": 1034",
+      "}"
+    ]
+  },
+  "fill_audit_2a": {
+    "overall": {
+      "fills_total": 1333,
+      "settled_fills": 1202,
+      "open_or_unsettled_fills": 131,
+      "active_target_dates": 20,
+      "settled_cost_usd": 3207.227342,
+      "settled_pnl_usd": -51.81717500000001,
+      "settled_roi": -0.016156377292445772,
+      "settled_roi_ci95_cluster_by_target_date": [
+        -0.16764383057410084,
+        0.13391485509053622
+      ],
+      "win_rate": 0.5016638935108153,
+      "open_cost_usd": 349.960088,
+      "drop_top1_fill_pnl_usd": -70.61917500000001,
+      "drop_top5_fill_pnl_usd": -129.16077500000003
+    },
+    "by_side": [
+      {
+        "fills_total": 845,
+        "settled_fills": 763,
+        "open_or_unsettled_fills": 82,
+        "active_target_dates": 20,
+        "settled_cost_usd": 2312.491236,
+        "settled_pnl_usd": -22.85244099999999,
+        "settled_roi": -0.00988217410048597,
+        "settled_roi_ci95_cluster_by_target_date": [
+          -0.0938759615614702,
+          0.07618497603964612
+        ],
+        "win_rate": 0.6146788990825688,
+        "open_cost_usd": 278.120632,
+        "drop_top1_fill_pnl_usd": -31.00544099999999,
+        "drop_top5_fill_pnl_usd": -58.37784099999999,
+        "side": "BUY_NO"
+      },
+      {
+        "fills_total": 488,
+        "settled_fills": 439,
+        "open_or_unsettled_fills": 49,
+        "active_target_dates": 20,
+        "settled_cost_usd": 894.7361060000001,
+        "settled_pnl_usd": -28.96473400000002,
+        "settled_roi": -0.03237237639765039,
+        "settled_roi_ci95_cluster_by_target_date": [
+          -0.391895151232921,
+          0.34983179087828814
+        ],
+        "win_rate": 0.3052391799544419,
+        "open_cost_usd": 71.839456,
+        "drop_top1_fill_pnl_usd": -47.76673400000003,
+        "drop_top5_fill_pnl_usd": -106.30833400000003,
+        "side": "BUY_YES"
+      }
+    ],
+    "by_strategy_instance": [
+      {
+        "fills_total": 59,
+        "settled_fills": 59,
+        "open_or_unsettled_fills": 0,
+        "active_target_dates": 4,
+        "settled_cost_usd": 188.246196,
+        "settled_pnl_usd": 22.987903999999997,
+        "settled_roi": 0.12211616748951462,
+        "settled_roi_ci95_cluster_by_target_date": [
+          -0.14732189095218104,
+          0.3809469795983718
+        ],
+        "win_rate": 0.5254237288135594,
+        "open_cost_usd": 0,
+        "drop_top1_fill_pnl_usd": 8.167903999999997,
+        "drop_top5_fill_pnl_usd": -21.841496000000003,
+        "strategy_instance": "live_weather_edge_v1_edb2b6f8df82"
+      },
+      {
+        "fills_total": 137,
+        "settled_fills": 116,
+        "open_or_unsettled_fills": 21,
+        "active_target_dates": 6,
+        "settled_cost_usd": 281.710775,
+        "settled_pnl_usd": 22.154721000000002,
+        "settled_roi": 0.0786434988154074,
+        "settled_roi_ci95_cluster_by_target_date": [
+          -0.4583620329255443,
+          0.5032784966792783
+        ],
+        "win_rate": 0.46551724137931033,
+        "open_cost_usd": 44.594129,
+        "drop_top1_fill_pnl_usd": 3.352720999999999,
+        "drop_top5_fill_pnl_usd": -28.986679000000002,
+        "strategy_instance": "mid_price_core_v1_side_band"
+      },
+      {
+        "fills_total": 884,
+        "settled_fills": 774,
+        "open_or_unsettled_fills": 110,
+        "active_target_dates": 20,
+        "settled_cost_usd": 2092.945888,
+        "settled_pnl_usd": 7.515706999999988,
+        "settled_roi": 0.003590970527757853,
+        "settled_roi_ci95_cluster_by_target_date": [
+          -0.12970361239635816,
+          0.13698715525508995
+        ],
+        "win_rate": 0.5271317829457365,
+        "open_cost_usd": 305.36595900000003,
+        "drop_top1_fill_pnl_usd": -7.484293000000012,
+        "drop_top5_fill_pnl_usd": -58.54129300000001,
+        "strategy_instance": "mid_price_core_v1_25_75"
+      },
+      {
+        "fills_total": 76,
+        "settled_fills": 76,
+        "open_or_unsettled_fills": 0,
+        "active_target_dates": 6,
+        "settled_cost_usd": 213.355187,
+        "settled_pnl_usd": -28.333323999999998,
+        "settled_roi": -0.1327988524600529,
+        "settled_roi_ci95_cluster_by_target_date": [
+          -0.31493587005786094,
+          0.11222697541160306
+        ],
+        "win_rate": 0.5394736842105263,
+        "open_cost_usd": 0,
+        "drop_top1_fill_pnl_usd": -33.933124,
+        "drop_top5_fill_pnl_usd": -51.482823999999994,
+        "strategy_instance": "live_weather_edge_v1_c13ccf0c3181"
+      },
+      {
+        "fills_total": 177,
+        "settled_fills": 177,
+        "open_or_unsettled_fills": 0,
+        "active_target_dates": 9,
+        "settled_cost_usd": 430.969296,
+        "settled_pnl_usd": -76.142183,
+        "settled_roi": -0.17667658393928834,
+        "settled_roi_ci95_cluster_by_target_date": [
+          -0.4387614383417612,
+          0.11307551528618207
+        ],
+        "win_rate": 0.3898305084745763,
+        "open_cost_usd": 0,
+        "drop_top1_fill_pnl_usd": -83.642183,
+        "drop_top5_fill_pnl_usd": -109.36198300000001,
+        "strategy_instance": "mid_price_core_v2_25_75"
+      }
+    ],
+    "edge_predictiveness": {
+      "n": 1202,
+      "edge_pnl_pearson_by_fill": -0.05619825496389603,
+      "edge_median": 0.1622,
+      "high_edge_roi": -0.04225803192877169,
+      "low_edge_roi": 0.009145234948492849,
+      "high_minus_low_edge_roi": -0.05140326687726454,
+      "high_minus_low_edge_roi_ci95_cluster_by_target_date": [
+        -0.3098765728406447,
+        0.2519645592779823
+      ]
+    }
+  },
+  "decision_entry_proxy_2b": {
+    "source": "fact_signal_candidates.decision_entry_price",
+    "scope": "selected Step1 buckets",
+    "selected_price_buckets": [
+      "0.20-0.25",
+      "0.30-0.35",
+      "0.35-0.40"
+    ],
+    "overall": {
+      "n": 312,
+      "active_dates": 24,
+      "decision_cost_usd": 176.356,
+      "counterfactual_pnl": 96.43999999999998,
+      "counterfactual_roi": 0.5468484202408763,
+      "counterfactual_roi_ci95_cluster_by_event_date": [
+        -0.26374580086339977,
+        1.316667901643108
+      ],
+      "live_fill_rate": 0.5705128205128205,
+      "avg_yes_spread": 0.027740384615384615,
+      "avg_no_spread": 0.027932692307692308
+    },
+    "by_side": {
+      "BUY_NO": {
+        "n": 215,
+        "active_dates": 24,
+        "decision_cost_usd": 146.775,
+        "counterfactual_pnl": 102.24999999999997,
+        "counterfactual_roi": 0.6966445239311869,
+        "counterfactual_roi_ci95_cluster_by_event_date": [
+          0.10355216901159243,
+          1.2732566192454147
+        ],
+        "live_fill_rate": 0.641860465116279,
+        "avg_yes_spread": 0.030186046511627908,
+        "avg_no_spread": 0.030372093023255817
+      },
+      "BUY_YES": {
+        "n": 97,
+        "active_dates": 22,
+        "decision_cost_usd": 29.581,
+        "counterfactual_pnl": -5.809999999999993,
+        "counterfactual_roi": -0.1964098576789153,
+        "counterfactual_roi_ci95_cluster_by_event_date": [
+          -3.279556053094216,
+          3.0818336391535053
+        ],
+        "live_fill_rate": 0.41237113402061853,
+        "avg_yes_spread": 0.02231958762886598,
+        "avg_no_spread": 0.02252577319587629
+      }
+    }
+  },
+  "raw_orderbook_2b": {
+    "status": "not_requested"
+  },
+  "gates": {
+    "significance": "FAIL",
+    "baseline": "FAIL",
+    "forward": "NA",
+    "verdict": "inconclusive"
+  }
+}
