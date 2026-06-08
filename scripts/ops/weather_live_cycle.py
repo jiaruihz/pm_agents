@@ -893,7 +893,7 @@ def main() -> int:
     parser.add_argument(
         "--max-hours-to-settle",
         type=float,
-        default=float(os.getenv("WEATHER_LIVE_MAX_HOURS_TO_SETTLE", "26")),
+        default=float(os.getenv("WEATHER_LIVE_MAX_HOURS_TO_SETTLE", "28")),
     )
     parser.add_argument(
         "--execution-policy",

@@ -23,16 +23,12 @@ Current live rollout policy:
 
 ```text
 city_pool = t1_trading (weather-predict v4 has 22 cities; pm_agent live instances apply explicit allowlists below)
-signal capture = scan latest 90 minutes of synced snapshots; executable window 22h <= hours_to_settle_now <= 26h
+signal capture = scan latest 90 minutes of synced snapshots; executable window 22h <= hours_to_settle_now <= 28h
 sizing_mode = notional
 max_order_notional = 5.00
 max_order_shares = 25.00
 order style = maker-only GTC, post_only=True
 ```
-
-2026-06-08 timing baseline 后的临时风控：`<T-22` 继续不进 live，
-`T-26-28` 先从 live executable window 移除；`T-24-26` 暂保留但必须继续
-做 forecast checkpoint / city x timing 复核。
 
 N100 should run exactly two weather live strategy instances by default:
 
