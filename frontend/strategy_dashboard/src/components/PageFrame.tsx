@@ -16,6 +16,7 @@ const WEATHER_NAV = [
   { to: "/weather/runs",       label: "⛅ Runs",        sub: "运行记录" },
   { to: "/weather/live",       label: "🔴 Live",        sub: "实盘监控" },
   { to: "/weather/compare",    label: "⚖ Compare",     sub: "对比分析" },
+  { to: "/weather/research",   label: "Research",      sub: "shadow 研究" },
 ];
 
 const COPY_TRADE_NAV = [

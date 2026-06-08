@@ -182,6 +182,74 @@ export interface LiveSummary {
   };
 }
 
+export interface WeatherEdgeV2RuleSummary {
+  rule: string;
+  n_legs: number;
+  total_cost_usd: number;
+  total_pnl_usd: number;
+  roi: number;
+  roi_excl_top5: number;
+  win_rate: number;
+}
+
+export interface WeatherEdgeV2RuleAggregate {
+  active_city_days: number;
+  summary: WeatherEdgeV2RuleSummary;
+  vs_legacy_side_band_raw: {
+    missed_profit_usd: number;
+    avoided_loss_usd: number;
+    shared_profit_usd: number;
+    shared_loss_usd: number;
+    net_basket_vs_baseline_usd: number;
+  } | null;
+}
+
+export interface WeatherEdgeV2LineageReport {
+  generated_at_utc: string;
+  operational_base: {
+    removed_cities: string[];
+    max_decision_hours_to_settle: number;
+    source_rows: number;
+    filtered_rows: number;
+    date_range: [string | null, string | null];
+  };
+  actual_live_operational_base: {
+    recent_from_2026_06_01: {
+      fills: number;
+      cost_usd: number;
+      pnl_usd: number;
+      roi: number;
+      roi_excl_top5: number;
+      win_rate: number;
+      date_range: [string | null, string | null];
+    };
+  };
+  lineage_record_count: number;
+  city_day_count: number;
+  aggregate: Record<string, WeatherEdgeV2RuleAggregate>;
+  sample_records: Array<{
+    lineage_id: string;
+    city: string;
+    target_date: string;
+    rule_id: string;
+    selected_count: number;
+    metrics: {
+      actual_pnl_usd: number;
+      expected_value: number;
+      cvar20: number;
+      leave_best_out_ev: number;
+      worst_case: number;
+    };
+  }>;
+}
+
+export interface WeatherEdgeV2Latest {
+  lineage_path: string | null;
+  research_path: string | null;
+  lineage: WeatherEdgeV2LineageReport | null;
+  research: Record<string, unknown> | null;
+}
+
 /** /api/strategies — per-config aggregated stats */
 export interface StrategyRow {
   config_id: string;

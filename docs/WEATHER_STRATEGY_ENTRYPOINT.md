@@ -23,12 +23,16 @@ Current live rollout policy:
 
 ```text
 city_pool = t1_trading (weather-predict v4 has 22 cities; pm_agent live instances apply explicit allowlists below)
-signal capture = scan latest 90 minutes of synced snapshots; executable window 22h <= hours_to_settle_now <= 28h
+signal capture = scan latest 90 minutes of synced snapshots; executable window 22h <= hours_to_settle_now <= 26h
 sizing_mode = notional
 max_order_notional = 5.00
 max_order_shares = 25.00
 order style = maker-only GTC, post_only=True
 ```
+
+2026-06-08 timing baseline 后的临时风控：`<T-22` 继续不进 live，
+`T-26-28` 先从 live executable window 移除；`T-24-26` 暂保留但必须继续
+做 forecast checkpoint / city x timing 复核。
 
 N100 should run exactly two weather live strategy instances by default:
 
@@ -36,6 +40,54 @@ N100 should run exactly two weather live strategy instances by default:
 |---|---|---|---|
 | `mid_price_core_v1_25_75` | `mid_price_core_v1` | direct signal builder | global `0.25 <= price < 0.75`, `edge >= 0.10` |
 | `mid_price_core_v1_side_band` | `mid_price_core_v1` | direct signal builder | YES `0.20 <= price < 0.45`, `edge >= 0.20`; NO `0.35 <= price < 0.65`, `edge >= 0.10` |
+
+## weather_edge_v2 Research / Shadow Entry
+
+`weather_edge_v2` is research/shadow only. It is not a live strategy and must
+not be read as wallet cashflow or live-realized PnL.
+
+Current artifacts:
+
+| Artifact | Purpose |
+|---|---|
+| `scripts/analysis/research_weather_edge_v2_filtered_operational_base.py` | Rerun raw/blend/side-band/basket comparisons on the current operational base: remove `Ankara/BuenosAires/Jeddah/Karachi/Moscow/Munich`, require `decision_hours_to_settle <= 28`. |
+| `scripts/analysis/build_weather_edge_v2_shadow_lineage.py` | Build per city-day/rule shadow lineage: rule_id, selected/rejected legs, market distribution, EV, CVaR20, leave-best-out EV, worst-case payoff, actual settled PnL, missed/avoided attribution. |
+| `docs/analysis/2026-06/2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | Human-readable full comparison report. |
+| `docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.md` | Human-readable shadow lineage summary. |
+| `docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.jsonl` | Full machine-readable city-day/rule lineage rows for forward-settled comparison. |
+
+Dashboard view:
+
+```text
+http://localhost:5173/weather/research
+```
+
+API source:
+
+```text
+GET http://localhost:8000/api/research/weather-edge-v2/latest
+```
+
+The dashboard intentionally shows `weather_edge_v2` under Weather Research,
+not under Strategies or Live. Until a canary is explicitly approved, the
+Strategies/Live pages remain reserved for actual configured/live execution
+metrics.
+
+Refresh flow after new settled data:
+
+```bash
+scripts/ops/sync_weather_remote.sh
+scripts/weather_dashboard/run_stack.sh
+. .venv/bin/activate
+python scripts/analysis/research_weather_edge_v2_filtered_operational_base.py
+python scripts/analysis/build_weather_edge_v2_shadow_lineage.py
+```
+
+Canary still requires: CLOB gate and fill_id reconciliation pass, recent and
+holdout filtered basket beat current side-band, top5-removed ROI does not
+deteriorate, missed profit is no larger than avoided loss, walk-forward
+positive folds stay at or above 60%, and at least one additional settled week
+of forward shadow evidence.
 
 Current pm_agent live allowlists:
 
