@@ -208,12 +208,12 @@ Side tables (mutable):
 │     ├─ python -m weather_dashboard.db.consolidate_configs           │
 │     │     writes: config_aliases (fragments → canonical)            │
 │     │                                                               │
-│     ├─ scripts/analysis/build_weather_fact_trades.py   (DERIVED)    │
+│     ├─ scripts/etl/build_weather_fact_trades.py   (DERIVED)    │
 │     │     reads:  orders/fills/plans/signals/settlements (canonical)│
 │     │     writes: fact_trades (每 fill 一行宽表, 已成交 PnL 唯一源) │
 │     │             + fact_trades.parquet                             │
 │     │                                                               │
-│     ├─ scripts/analysis/build_weather_signal_candidates.py (DERIVED)│
+│     ├─ scripts/etl/build_weather_signal_candidates.py (DERIVED)│
 │     │     reads:  paper_snapshots/*.json, paper_orders.jsonl,       │
 │     │             fact_trades(live_real), settlements               │
 │     │     writes: fact_signal_candidates (每机会一行, 全机会宇宙→   │
@@ -221,7 +221,7 @@ Side tables (mutable):
 │     │             + fact_signal_candidates.parquet                  │
 │     │             window: decision hts_min/max 默认 [22,24]         │
 │     │                                                               │
-│     ├─ scripts/analysis/weather_clob_fill_coverage_gate.py          │
+│     ├─ scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py          │
 │     │     checks: order_id match, order cap, DB/cache/fact cost     │
 │     │             consistency; fail closed before metrics/reports   │
 │     │                                                               │
@@ -303,7 +303,7 @@ N100 / 本机 `live/*.jsonl` 记录的是 CLOB 订单提交凭证，不是成交
 refresh/rebuild 后必须跑：
 
 ```bash
-python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 ```
 
 `gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。当前 gate 会检查：

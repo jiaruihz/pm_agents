@@ -208,7 +208,7 @@ Phase 1.5 单独实现 valuation join,避免污染核心 builder 的纯 DB 派�
 
 ---
 
-## §4 builder:`scripts/analysis/build_weather_fact_trades.py`
+## §4 builder:`scripts/etl/build_weather_fact_trades.py`
 
 唯一派生层。职责:
 
@@ -225,8 +225,8 @@ Phase 1.5 单独实现 valuation join,避免污染核心 builder 的纯 DB 派�
 
 CLI:
 ```bash
-python3 scripts/analysis/build_weather_fact_trades.py            # 双写
-python3 scripts/analysis/build_weather_fact_trades.py --dry-run  # 只算不写,打摘要
+python3 scripts/etl/build_weather_fact_trades.py            # 双写
+python3 scripts/etl/build_weather_fact_trades.py --dry-run  # 只算不写,打摘要
 ```
 
 ---

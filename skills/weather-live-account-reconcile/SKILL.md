@@ -36,7 +36,7 @@ bash scripts/weather_dashboard/run_stack.sh
 然后运行账户级对账脚本：
 
 ```bash
-python3 scripts/analysis/weather_live_account_reconcile.py \
+python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py \
   --start 2026-06-04 \
   --end 2026-06-06 \
   --date-field fill_date_bj \
@@ -92,7 +92,7 @@ python3 scripts/analysis/weather_live_account_reconcile.py \
 - 不准用 `signals.market_price` 当权威当前盘口；它只是策略信号快照。
 - 不准看到 `realized_pnl_usd=0` 就说没亏；近期可能只是未结算。
 - 不准看到钱包余额下降就说策略亏；可能只是 fill cost / open positions / reserved notional。
-- 不准再写一次性 pandas 临时脚本替代 `scripts/analysis/weather_live_account_reconcile.py`；脚本缺字段就先补脚本和 contract。
+- 不准再写一次性 pandas 临时脚本替代 `scripts/analysis/account_reconcile/weather_live_account_reconcile.py`；脚本缺字段就先补脚本和 contract。
 - 不准用 public activity 单独解释 order-level fill；它只能作为 fallback，最终必须被 `weather_clob_fill_coverage_gate.py` 约束。
 
 ## 后续分析衔接

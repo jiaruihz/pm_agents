@@ -68,8 +68,8 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 | `docs/analysis/model_vs_market.md` | living doc 样板 | 5 篇模型快照→1 篇；含 6 月翻负/BUY_NO 失守真实表格 |
 | `docs/analysis/2026-06/2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md` | 审计 | "猜硬币 vs 真能赚"的正式判断 + Step1/2/3 |
 | `skills/weather-strategy-performance/SKILL.md` | **已改 skill** | 升级为科学推断模式（本节 §2） |
-| `scripts/analysis/research_market_structural_edge.py` | 脚本 | Step1：H_B 市场结构检验（已自测） |
-| `scripts/analysis/research_executable_edge.py` | 脚本 | Step2：扣点差执行检验（已 compile） |
+| `scripts/analysis/market_structure_edge/research_market_structural_edge.py` | 脚本 | Step1：H_B 市场结构检验（已自测） |
+| `scripts/analysis/execution_quality/research_executable_edge.py` | 脚本 | Step2：扣点差执行检验（已 compile） |
 | `scripts/ops/reorg_eval_layer.sh` | 脚本 | [6] 评估层重构（DRY_RUN 验证过，未真跑） |
 
 > 本机补齐与校验状态见

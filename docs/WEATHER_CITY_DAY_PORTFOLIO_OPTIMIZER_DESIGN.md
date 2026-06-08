@@ -404,7 +404,7 @@ bought_no_hit_and_net_loss
 离线报告可复跑:
 
 ```bash
-python3 scripts/analysis/weather_city_day_portfolio.py
+python3 scripts/analysis/city_selection/weather_city_day_portfolio.py
 ```
 
 输出目录:
@@ -497,7 +497,7 @@ Worst city-day:     unchanged at -$7.45
 当前执行建议:
 
 - 不改 live execution。
-- 每天继续复跑 `scripts/analysis/weather_city_day_portfolio.py`，重点看 `paper_ledger_t1_trading_25_75` 和 `live_clob_fills` 两个口径。
+- 每天继续复跑 `scripts/analysis/city_selection/weather_city_day_portfolio.py`，重点看 `paper_ledger_t1_trading_25_75` 和 `live_clob_fills` 两个口径。
 - 只有当后续 settled paper 和 live fills 都连续确认 `pure_no_portfolio_gate` 比 baseline 更好，再考虑进入 paper planner gate。
 
 ### 5.3.3 当前候选优化方向：先做可解释诊断，再做过滤
@@ -993,7 +993,7 @@ V1 在任何 live 改动前，必须回答:
 先构建脚本和报告，不影响生产:
 
 ```text
-scripts/analysis/weather_city_day_portfolio.py
+scripts/analysis/city_selection/weather_city_day_portfolio.py
 ```
 
 ### 阶段 1: Shadow Portfolio（影子组合）

@@ -125,7 +125,7 @@ SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 
 若分析 `live_real`，还必须跑：
 
 ```bash
-python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 ```
 
 `gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。

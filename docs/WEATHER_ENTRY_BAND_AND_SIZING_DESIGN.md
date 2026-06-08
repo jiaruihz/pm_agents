@@ -9,7 +9,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 > 证据基础（时间点快照）：
 > - [2026-05-30-performance-entry-band-research.md](analysis/2026-05/2026-05-30-performance-entry-band-research.md)（side×价位桶 EV 结构）
 > - [2026-05-30-performance-sizing-and-band-distribution.md](analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md)（**收益分布 + 反过拟合扫描**，§7 结论以此为准）
-> 可复跑脚本：`scripts/analysis/weather_entry_band_research.py`、`scripts/analysis/weather_sizing_band_study.py`
+> 可复跑脚本：`scripts/analysis/sizing_entry_band/weather_entry_band_research.py`、`scripts/analysis/sizing_entry_band/weather_sizing_band_study.py`
 > 口径来源：[WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md)（PnL 唯一源 `fact_trades.pnl_usd_at_fill`）
 
 ## 0. 当前状态与问题

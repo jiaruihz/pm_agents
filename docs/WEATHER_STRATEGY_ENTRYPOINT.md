@@ -55,8 +55,8 @@ Current artifacts:
 
 | Artifact | Purpose |
 |---|---|
-| `scripts/analysis/research_weather_edge_v2_filtered_operational_base.py` | Rerun raw/blend/side-band/basket comparisons on the current operational base: remove `Ankara/BuenosAires/Jeddah/Karachi/Moscow/Munich`, require `decision_hours_to_settle <= 28`. |
-| `scripts/analysis/build_weather_edge_v2_shadow_lineage.py` | Build per city-day/rule shadow lineage: rule_id, selected/rejected legs, market distribution, EV, CVaR20, leave-best-out EV, worst-case payoff, actual settled PnL, missed/avoided attribution. |
+| `scripts/analysis/blender_shadow/research_weather_edge_v2_filtered_operational_base.py` | Rerun raw/blend/side-band/basket comparisons on the current operational base: remove `Ankara/BuenosAires/Jeddah/Karachi/Moscow/Munich`, require `decision_hours_to_settle <= 28`. |
+| `scripts/analysis/blender_shadow/build_weather_edge_v2_shadow_lineage.py` | Build per city-day/rule shadow lineage: rule_id, selected/rejected legs, market distribution, EV, CVaR20, leave-best-out EV, worst-case payoff, actual settled PnL, missed/avoided attribution. |
 | `docs/analysis/2026-06/2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | Human-readable full comparison report. |
 | `docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.md` | Human-readable shadow lineage summary. |
 | `docs/analysis/2026-06/2026-06-08-weather-edge-v2-shadow-lineage.jsonl` | Full machine-readable city-day/rule lineage rows for forward-settled comparison. |
@@ -84,8 +84,8 @@ Refresh flow after new settled data:
 scripts/ops/sync_weather_remote.sh
 scripts/weather_dashboard/run_stack.sh
 . .venv/bin/activate
-python scripts/analysis/research_weather_edge_v2_filtered_operational_base.py
-python scripts/analysis/build_weather_edge_v2_shadow_lineage.py
+python scripts/analysis/blender_shadow/research_weather_edge_v2_filtered_operational_base.py
+python scripts/analysis/blender_shadow/build_weather_edge_v2_shadow_lineage.py
 ```
 
 Canary still requires: CLOB gate and fill_id reconciliation pass, recent and
@@ -346,7 +346,7 @@ recovery now uses this priority:
 Before publishing any live_real PnL/ROI/curve, run:
 
 ```bash
-python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 ```
 
 `gate_pass=false` means stop and fix the fill cache / CLOB sync before making

@@ -132,14 +132,14 @@ else
   FACT_PARQUET_ARGS=(--no-parquet)
   SIGNAL_PARQUET_ARGS=(--no-parquet)
 fi
-"$VENV/python" scripts/analysis/build_weather_fact_trades.py \
+"$VENV/python" scripts/etl/build_weather_fact_trades.py \
   --db-path "$DB_PATH" \
   "${FACT_PARQUET_ARGS[@]}" \
   2>&1 | tee "$LOG_DIR/fact_trades.log" || {
   err "fact_trades build failed — check $LOG_DIR/fact_trades.log"
   exit 1
 }
-"$VENV/python" scripts/analysis/build_weather_signal_candidates.py \
+"$VENV/python" scripts/etl/build_weather_signal_candidates.py \
   --db-path "$DB_PATH" \
   "${SIGNAL_PARQUET_ARGS[@]}" \
   --decision-hts-min 22 --decision-hts-max 24 \
@@ -151,7 +151,7 @@ fi
 # ---- Step 5: CLOB fill coverage gate ----
 log ""
 log "Step 5/6: Checking CLOB fill coverage gate"
-"$VENV/python" scripts/analysis/weather_clob_fill_coverage_gate.py \
+"$VENV/python" scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py \
   --db "$DB_PATH" \
   --json-out "$LOG_DIR/clob_fill_coverage_gate.json" \
   2>&1 | tee "$LOG_DIR/clob_fill_coverage_gate.log" || {

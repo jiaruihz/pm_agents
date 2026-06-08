@@ -111,7 +111,7 @@ conclusion=confirmed/shadow_candidate/inconclusive
 当问题是“余额少了 / 钱包对不上 / 最近几天账户到底亏没亏 / CLOB fill 链路是否漏记”时，**这不是普通绩效切片**。必须使用固定脚本，不准再写一次性 pandas/SQL 临时脚本：
 
 ```bash
-python3 scripts/analysis/weather_live_account_reconcile.py \
+python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py \
   --start YYYY-MM-DD \
   --end YYYY-MM-DD \
   --date-field fill_date_bj \
@@ -166,7 +166,7 @@ python3 scripts/analysis/weather_live_account_reconcile.py \
 所有 weather live rebuild / refresh 后必须跑：
 
 ```bash
-python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 ```
 
 `gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。必须先修复 `clob_fills.jsonl` / CLOB fill sync，再重建 `runtime/weather.db`。
@@ -213,7 +213,7 @@ missing_bracket: 725 -> 0 after rebuild
 
 - DB 表：`runtime/weather.db` 的 `fact_trades` 表（73 列，每 fill 一行）
 - Parquet：`runtime/weather_edge_v1/market_data/research/fact_trades.parquet`（与 DB 同步）
-- 重建：`run_stack.sh` 在 ingest 后自动调用 `scripts/analysis/build_weather_fact_trades.py`
+- 重建：`run_stack.sh` 在 ingest 后自动调用 `scripts/etl/build_weather_fact_trades.py`
 - 设计文档：[WEATHER_FACT_TRADES_DESIGN.md](WEATHER_FACT_TRADES_DESIGN.md)
 
 **DB 路径只许 `runtime/weather.db`**（其他路径皆废，已删）。
@@ -283,8 +283,8 @@ rows = conn.execute("""
 
 | 脚本 | 说明 |
 |---|---|
-| `scripts/analysis/weather_live_full_research.py` | 按城市/方向/模型全量切片，`_load_trades()` 展示了典型的 fact_trades 读法 |
-| `scripts/analysis/weather_city_day_portfolio.py` | `load_live_fills()` 展示了只取 live_real + settled 的过滤方式 |
+| `scripts/analysis/live_performance/weather_live_full_research.py` | 按城市/方向/模型全量切片，`_load_trades()` 展示了典型的 fact_trades 读法 |
+| `scripts/analysis/city_selection/weather_city_day_portfolio.py` | `load_live_fills()` 展示了只取 live_real + settled 的过滤方式 |
 | `weather_dashboard/metrics/calc.py` | `compute_metrics()` 展示了 run 级别聚合 |
 
 ### fact_signal_candidates（机会粒度授权源）
@@ -299,7 +299,7 @@ rows = conn.execute("""
 
 - DB 表：`runtime/weather.db` 的 `fact_signal_candidates` 表（每机会一行）
 - Parquet：`runtime/weather_edge_v1/market_data/research/fact_signal_candidates.parquet`
-- 重建：`run_stack.sh` 在 fact_trades **之后**调用 `scripts/analysis/build_weather_signal_candidates.py`
+- 重建：`run_stack.sh` 在 fact_trades **之后**调用 `scripts/etl/build_weather_signal_candidates.py`
 - 设计文档：[WEATHER_SIGNAL_CANDIDATES_DESIGN.md](WEATHER_SIGNAL_CANDIDATES_DESIGN.md)
 
 **口径硬规定：**
@@ -376,8 +376,8 @@ rows = conn.execute("""
 
 | 脚本 | 数据源 | 说明 |
 |---|---|---|
-| `scripts/analysis/weather_city_pool_contribution_analysis.py` | `paper_snapshots/*.json` + `cache/pm_history/*.json` | 候选信号 × 当前城市池的反事实 replay |
-| `scripts/analysis/weather_window_capture_performance.py` | 同上 | 时间窗口捕获率 A/B 对比 |
+| `scripts/analysis/city_selection/weather_city_pool_contribution_analysis.py` | `paper_snapshots/*.json` + `cache/pm_history/*.json` | 候选信号 × 当前城市池的反事实 replay |
+| `scripts/analysis/execution_quality/weather_window_capture_performance.py` | 同上 | 时间窗口捕获率 A/B 对比 |
 
 这两个脚本的 `pnl_usd=(payout - entry_price) * shares` 是 snapshot 级假设入场，不是成交层 PnL，**不需要** fact_trades。
 
@@ -450,7 +450,7 @@ BUY_NO  profit = ((1 - final_yes) - fill_price) × fill_qty - fees
 > 正确：`(1 - final_yes) - fill_price`  
 > 原理：`fills.filled_price` 对 BUY_NO 存的是 NO token 自身价，不是 YES 等效价。  
 > 用 651 笔 N100 生产已结算 BUY_NO 对账验证，8/8 命中此公式。  
-> **唯一授权实现**：`scripts/analysis/build_weather_fact_trades.py`
+> **唯一授权实现**：`scripts/etl/build_weather_fact_trades.py`
 
 **未结算 PnL（unsettled PnL）**
 

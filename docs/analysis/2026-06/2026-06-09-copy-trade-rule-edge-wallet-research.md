@@ -19,12 +19,12 @@ Fed decisions, market-cap / stock-price style markets, 90%+ near-binary legs, sp
 ## Artifacts
 
 - Evidence JSON: `docs/analysis/2026-06/2026-06-09-copy-trade-rule-edge-wallets.json`
-- Repro script: `scripts/analysis/copy_trade_rule_edge_wallet_research.py`
+- Repro script: `scripts/copy_trade/copy_trade_rule_edge_wallet_research.py`
 
 Run command:
 
 ```bash
-python3 scripts/analysis/copy_trade_rule_edge_wallet_research.py \
+python3 scripts/copy_trade/copy_trade_rule_edge_wallet_research.py \
   --out docs/analysis/2026-06/2026-06-09-copy-trade-rule-edge-wallets.json \
   --holders-per-market 25 \
   --max-wallets 30 \

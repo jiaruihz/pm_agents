@@ -196,7 +196,7 @@ BUY_NO 73.7% live 胜率与既知的 paper-side 76% 高度一致，**实盘验�
 - ✅ `sync_weather_remote.sh` 新增 `output/logs/` 和 pm_agent `runtime/logs/` 同步（debug 用）。
 - ✅ 新建 `scripts/ops/sync_n100_backups.sh` 拉取 N100 tar 备份到本机 `runtime/_backups_n100/`（sha256 校验，本机首次拉到 5.5MB + 8.3MB 共 14MB）。
 - ✅ `CLAUDE.md` / `AGENTS.md` / `WEATHER_DATA_CANONICAL_SOURCES.md` 同步更新「N100 没有活跃 SQLite」「N100 上有两个 repo（weather-predict + pm_agent runtime）」的拓扑事实。
-- ✅ 概率校准脚本 `scripts/analysis/calibrate_weather_probability.py` 落库；产出 JSON+MD 报告。
+- ✅ 概率校准脚本 `scripts/analysis/model_vs_market/calibrate_weather_probability.py` 落库；产出 JSON+MD 报告。
 
 ### 4.2 已知缺口（按优先级）
 
@@ -254,7 +254,7 @@ for r in c.execute(\"SELECT side, COUNT(*), ROUND(SUM(pnl_usd_at_fill),2), ROUND
 "
 
 # 校准重跑
-.venv/bin/python scripts/analysis/calibrate_weather_probability.py \
+.venv/bin/python scripts/analysis/model_vs_market/calibrate_weather_probability.py \
   --db-path runtime/weather.db \
   --out-json docs/analysis/2026-06/2026-06-05-probability-calibration.json \
   --out-md docs/analysis/2026-06/2026-06-05-probability-calibration.md

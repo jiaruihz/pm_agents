@@ -23,7 +23,7 @@ runtime/weather.db.fact_trades
 如果用户问的是余额、钱包、USDC、账户现金变化或 CLOB fill 对账，不要只跑本 skill 的 open exposure SQL；先转 `weather-live-account-reconcile`，使用固定脚本：
 
 ```bash
-python3 scripts/analysis/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
+python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
 ```
 
 账户对账必须拆开 `submitted_notional_usd` / `posted_notional_usd` / `actual_fill_cost_usd` / `open_cost_usd` / `realized_pnl_usd`。`fact_trades.order_date_bj` 禁止用于钱包现金流结论；默认用 `fill_date_bj` 解释实际花钱日期，用 raw live order files 解释 submitted/posted notional。

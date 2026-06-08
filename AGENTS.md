@@ -47,7 +47,7 @@ docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
 用户问“余额少了 / 最近几天账户亏了 / 钱包对不上 / CLOB fill 对不上”时，必须走 `weather-live-account-reconcile`，使用：
 
 ```bash
-python3 scripts/analysis/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
+python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
 ```
 
 硬规定：
@@ -57,7 +57,7 @@ python3 scripts/analysis/weather_live_account_reconcile.py --start YYYY-MM-DD --
 - 已结算 PnL 只看 `settlement_status='settled'` 的 `pnl_usd_at_fill`；未结算只能报 MTM，并必须附 `val_snapshot_ts_utc`，估值旧就明确说旧。
 - 如果 raw live order 文件比 DB 新，必须用脚本里的 Raw Live Order Files 段补充 submitted/posted notional，并说明 DB 滞后。
 - 最终结论前必须报告 fill_id reconciliation：`db_live_real_distinct_fills`、`raw_clob_distinct_fills`、`db_not_in_raw`、`raw_not_in_db`。
-- 最终结论前必须跑 `python3 scripts/analysis/weather_clob_fill_coverage_gate.py`；`gate_pass=false` 时禁止发布 live_real PnL/ROI/曲线。
+- 最终结论前必须跑 `python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py`；`gate_pass=false` 时禁止发布 live_real PnL/ROI/曲线。
 - 2026-06-07 勘误：Polymarket public activity 不是逐 order 权威 fill 来源，只能作受 order cap 约束的 fallback；真实 fill 优先 `exchange_response.place.status=matched` 和 authenticated CLOB order/trade 数据。旧口径 `live_real=1316` / raw CLOB cost 约 `$3499` 已作废；fill 行数会随新增成交变化，最终以 `weather_clob_fill_coverage_gate.py gate_pass=true` 为准。
 
 ### 分析前数据源自检（强制 5 行 SQL）

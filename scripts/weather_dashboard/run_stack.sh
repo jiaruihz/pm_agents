@@ -245,7 +245,7 @@ if [[ $REBUILD -eq 1 ]]; then
     FACT_PARQUET_ARGS=(--no-parquet)
     SIGNAL_PARQUET_ARGS=(--no-parquet)
   fi
-  "$VENV/python" scripts/analysis/build_weather_fact_trades.py \
+  "$VENV/python" scripts/etl/build_weather_fact_trades.py \
     --db-path "$DB_PATH" \
     "${FACT_PARQUET_ARGS[@]}" \
     >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
@@ -255,7 +255,7 @@ if [[ $REBUILD -eq 1 ]]; then
 
   # ---- 1c. Build fact_signal_candidates (机会粒度，对齐 universe→paper→live) ----
   log "  Building fact_signal_candidates (机会粒度候选表)..."
-  "$VENV/python" scripts/analysis/build_weather_signal_candidates.py \
+  "$VENV/python" scripts/etl/build_weather_signal_candidates.py \
     --db-path "$DB_PATH" \
     "${SIGNAL_PARQUET_ARGS[@]}" \
     --decision-hts-min 22 --decision-hts-max 24 \
@@ -265,7 +265,7 @@ if [[ $REBUILD -eq 1 ]]; then
   }
 
   log "  Checking CLOB fill coverage gate..."
-  "$VENV/python" scripts/analysis/weather_clob_fill_coverage_gate.py \
+  "$VENV/python" scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py \
     --db "$DB_PATH" \
     --json-out "$LOG_DIR/clob_fill_coverage_gate.json" \
     >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {

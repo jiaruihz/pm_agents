@@ -47,9 +47,9 @@ wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && scripts/weath
 2. 迁移 legacy research CSV → 迁移 live-cycle 血缘
 3. **pm_history 结算（权威）→ Polymarket API 回填缺失结算 → 同步真实 CLOB fills**
 4. consolidate configs
-5. **build `fact_trades`**（`scripts/analysis/build_weather_fact_trades.py`）
+5. **build `fact_trades`**（`scripts/etl/build_weather_fact_trades.py`）
 6. **build `fact_signal_candidates`**（`--decision-hts-min 22 --decision-hts-max 24`）
-7. **CLOB fill coverage gate**（`scripts/analysis/weather_clob_fill_coverage_gate.py`）
+7. **CLOB fill coverage gate**（`scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py`）
 8. `metrics-refresh`
 
 > 重建是第 1 阶段，起 API/FE 服务在后面。即使前端 node 起不来，底表也已经重建完成。
@@ -93,7 +93,7 @@ FROM fact_trades GROUP BY trade_class;
   必须单列这两块（别像 settled-only 那样假装它们不存在），口径见 `WEATHER_ANALYSIS_CONTRACT.md`。
 - CLOB fill gate 必须通过：
   ```bash
-  python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+  python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
   ```
   如果 `gate_pass=false`，停止分析并先修 fill recovery / `clob_fills.jsonl`。不要只因为 `live_real` 行数看起来合理就继续。
 

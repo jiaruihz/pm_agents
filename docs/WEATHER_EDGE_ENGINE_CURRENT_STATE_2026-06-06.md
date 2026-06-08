@@ -54,8 +54,8 @@ execution_mode = shadow
 weather_dashboard/strategy_specs/weather_edge_engine_blended_single_v0.json
 weather_dashboard/blend/blender.py
 weather_dashboard/blend/city_blend_config.json
-scripts/analysis/backtest_weather_edge_engine_blended_single.py
-scripts/analysis/backtest_weather_edge_engine_blended_entry_bands.py
+scripts/analysis/blender_shadow/backtest_weather_edge_engine_blended_single.py
+scripts/analysis/blender_shadow/backtest_weather_edge_engine_blended_entry_bands.py
 scripts/ops/weather_blended_shadow_paper.py
 scripts/ops/weather_blended_shadow_paper_loop.sh
 ```
@@ -240,8 +240,8 @@ tests/blend tests/basket: 28 passed
 文件：
 
 ```text
-scripts/analysis/recalibrate_blend.py
-scripts/analysis/eval_city_day_basket.py
+scripts/analysis/blender_shadow/recalibrate_blend.py
+scripts/analysis/city_selection/eval_city_day_basket.py
 docs/analysis/2026-06/2026-06-05-city-day-basket-eval.md
 docs/analysis/2026-06/2026-06-05-recalibrate-blend.json
 docs/dev_logs/2026-06-05-weather-edge-engine-pr2.md
@@ -266,8 +266,8 @@ basket missed_profit $3007 > avoided_loss $2170
 文件：
 
 ```text
-scripts/analysis/tune_city_day_basket.py
-scripts/analysis/validate_city_day_basket_robustness.py
+scripts/analysis/city_selection/tune_city_day_basket.py
+scripts/analysis/city_selection/validate_city_day_basket_robustness.py
 docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md
 docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md
 docs/dev_logs/2026-06-06-weather-edge-engine-pr2b.md
@@ -306,7 +306,7 @@ missed_profit $784 <= avoided_loss $825
 
 ```text
 weather_dashboard/strategy_specs/weather_edge_engine_blended_single_v0.json
-scripts/analysis/backtest_weather_edge_engine_blended_single.py
+scripts/analysis/blender_shadow/backtest_weather_edge_engine_blended_single.py
 docs/analysis/2026-06/2026-06-06-blended-single-v0-backtest.md
 docs/analysis/2026-06/2026-06-06-blended-entry-band-backtest.md
 docs/analysis/2026-06/2026-06-06-blended-paper-fill-estimate.md
@@ -418,7 +418,7 @@ all-attempt fill rate     = 76.4%（含 error order attempts）
 文件：
 
 ```text
-scripts/analysis/research_city_day_basket_optimizer.py
+scripts/analysis/city_selection/research_city_day_basket_optimizer.py
 docs/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md
 docs/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.json
 ```
@@ -457,7 +457,7 @@ combo_market_tail = market-normalized objective，去掉最好温度结果后 EV
 文件：
 
 ```text
-scripts/analysis/research_city_day_distribution_quality.py
+scripts/analysis/city_selection/research_city_day_distribution_quality.py
 docs/analysis/2026-06/2026-06-06-city-day-distribution-quality.md
 docs/analysis/2026-06/2026-06-06-city-day-distribution-quality.json
 ```
@@ -500,7 +500,7 @@ dist_blend_norm
 文件：
 
 ```text
-scripts/analysis/research_city_day_basket_walkforward.py
+scripts/analysis/city_selection/research_city_day_basket_walkforward.py
 docs/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md
 docs/analysis/2026-06/2026-06-06-city-day-basket-walkforward.json
 ```
@@ -544,7 +544,7 @@ combo_market_tail
 文件：
 
 ```text
-scripts/analysis/compare_city_day_basket_vs_legacy_baselines.py
+scripts/analysis/city_selection/compare_city_day_basket_vs_legacy_baselines.py
 docs/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md
 docs/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.json
 ```

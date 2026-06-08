@@ -162,7 +162,7 @@ narrow_bracket
 ```text
 weather_dashboard/basket/city_day_basket.py
 tests/basket/test_city_day_basket.py
-scripts/analysis/eval_city_day_basket.py
+scripts/analysis/city_selection/eval_city_day_basket.py
 ```
 
 输入是一组同一 `city + target_date + snapshot_ts` 的 bracket candidates：
@@ -311,7 +311,7 @@ tests/basket/test_city_day_basket.py
 文件：
 
 ```text
-scripts/analysis/eval_city_day_basket.py
+scripts/analysis/city_selection/eval_city_day_basket.py
 docs/analysis/2026-06/2026-06-XX-city-day-basket-eval.md
 ```
 
@@ -408,8 +408,8 @@ tests/basket/test_city_day_basket.py
 ### PR 2: 离线回放评估 + 周度重新校准脚本
 
 ```text
-scripts/analysis/eval_city_day_basket.py
-scripts/analysis/recalibrate_blend.py       # sklearn 唯一生产相邻用途
+scripts/analysis/city_selection/eval_city_day_basket.py
+scripts/analysis/blender_shadow/recalibrate_blend.py       # sklearn 唯一生产相邻用途
 docs/analysis/2026-06/2026-06-XX-city-day-basket-eval.md
 ```
 

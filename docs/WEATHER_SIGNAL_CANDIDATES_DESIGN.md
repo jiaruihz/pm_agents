@@ -16,7 +16,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 > **范围边界**:本表 grain 是**机会**,不是 fill,也**不下沉到 snapshot 时序粒度**(那 62 万行只在研究"日内入场时点"时按需读 JSON,不物化)。
 > 已成交绩效仍归 [`fact_trades`](WEATHER_FACT_TRADES_DESIGN.md),本表不重复造已成交绩效口径,而是引用它。
 >
-> 状态:**已实现**(2026-05-29)。builder = `scripts/analysis/build_weather_signal_candidates.py`,
+> 状态:**已实现**(2026-05-29)。builder = `scripts/etl/build_weather_signal_candidates.py`,
 > 测试 = `tests/weather_dashboard/test_signal_candidates.py`(10 通过),已接入 `run_stack.sh`(1c 步),
 > 双写 `runtime/weather.db.fact_signal_candidates` + `…/research/fact_signal_candidates.parquet`。
 > 下方 §1 标 ★ 的设计判断均已按所选项落地。

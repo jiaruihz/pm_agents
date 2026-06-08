@@ -11,8 +11,8 @@ Account reconciliation is not the same as strategy PnL. Wallet questions must us
 ## Canonical Command
 
 ```bash
-python3 scripts/analysis/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
-python3 scripts/analysis/weather_clob_fill_coverage_gate.py
+python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
+python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 ```
 
 ## Evidence Map

@@ -190,7 +190,7 @@ live/*.jsonl → orders(venue=polymarket_clob, status=submitted)  [via migrate-l
 - 新拉到的真实 CLOB fill 会追加写入这个 cache；
 - 如果 Polymarket CLOB / activity / trades API 连接失败，`clob_fill_sync` 返回 `data_incomplete=true` 并 exit 1；
 - `run_stack.sh` / `weather_dashboard_refresh.sh` 遇到该失败会 hard fail，不再继续产出一个误导性的 `live_real=0` DB。
-- `run_stack.sh` / `weather_dashboard_refresh.sh` 在 build facts 后会运行 `scripts/analysis/weather_clob_fill_coverage_gate.py`；只要出现 mismatched order_id、fill 超过 order cap、DB/cache fill_id 不一致、或 `fact_trades` 成本不等于 `fills` 成本，就 hard fail。
+- `run_stack.sh` / `weather_dashboard_refresh.sh` 在 build facts 后会运行 `scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py`；只要出现 mismatched order_id、fill 超过 order cap、DB/cache fill_id 不一致、或 `fact_trades` 成本不等于 `fills` 成本，就 hard fail。
 
 **历史事故**：2026-06-04 曾经用 full rebuild 清空 DB 后，Polymarket API `ConnectionResetError(104)`，导致 rebuilt DB 中 `live_real=0`。已从旧 `clob_fill_sync.log` 恢复 67 条可证明真实 fills，并写入 `runtime/weather_edge_v1/clob_fills.jsonl`。
 
@@ -229,8 +229,8 @@ Polymarket 已结算 bracket 在 `pm_history` 里常见 raw `final_price=0.9995`
 
 ```text
 weather_dashboard/ingest/pm_history_settlements.py
-scripts/analysis/build_weather_fact_trades.py
-scripts/analysis/build_weather_signal_candidates.py
+scripts/etl/build_weather_fact_trades.py
+scripts/etl/build_weather_signal_candidates.py
 ```
 
 修复后基线：`missing_bracket` 从 725 行降到 0。凡是引用旧报告中 `missing_bracket=725/734/28` 等数值的结论，都要先重建 DB 再重算。

@@ -59,7 +59,7 @@ MarketData -> Signal -> TradePlan -> Order -> Fill -> Position -> Settlement
 
 真相源：N100 `weather-predict` 的行情/天气/paper/settlement cache，加 N100 `pm_agent` 的 live execution lineage。本机 DB 是衍生物，可删可重建。
 
-当前治理动作：`build_weather_fact_trades.py`、`build_weather_signal_candidates.py` 这类脚本属于 ETL/ingest，不属于评估层。后续 Phase 3 再从 `scripts/analysis/` 移到 `scripts/etl/` 或 `weather_dashboard/ingest/`。
+当前治理动作：`build_weather_fact_trades.py`、`build_weather_signal_candidates.py`、decision-window backfill 这类脚本属于 ETL/ingest，不属于评估层。Phase 3B 已移动到 `scripts/etl/`。
 
 ### [1] 模型层
 
@@ -124,4 +124,5 @@ MarketData -> Signal -> TradePlan -> Order -> Fill -> Position -> Settlement
 - 本文成为 `[0]-[6]` 的总骨架。
 - `docs/analysis/` 下 11 篇 living doc 存在，并各自声明主线层、当前结论、证据快照、live action gate。
 - `WEATHER_DOCS_INDEX.md` 能从“模型与 Edge Engine / 评估层 Living Docs”直接跳到这些入口。
-- 不移动历史快照、不搬脚本、不删除 tracked JSON；这些属于 Phase 3。
+- Phase 3A/3B 后，脚本迁移 manifest 已落到 `docs/analysis/SCRIPT_MIGRATION_MANIFEST.md`，topic 脚本已移动到 `scripts/analysis/<topic>/`，ETL 脚本已移动到 `scripts/etl/`，copy-trade 脚本已移动到 `scripts/copy_trade/`。
+- 不移动历史快照、不删除 tracked JSON；这些属于后续 Phase 3C/3D。
