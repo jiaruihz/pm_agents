@@ -1,0 +1,766 @@
+{
+  "generated_at_utc": "2026-06-08T17:01:00.048252+00:00",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "parameters": {
+    "bucket_size": 0.05,
+    "train_frac": 0.7,
+    "min_bin_n": 30,
+    "bootstrap_iters": 1000,
+    "seed": 20260608
+  },
+  "data_quality": {
+    "fact_signal_candidates_rows": 23893,
+    "eligible_rows": 7841,
+    "decision_window_missing_rows": 8251,
+    "decision_window_missing_rate": 0.3453312685723852,
+    "usable_side_rows_before_market_dedupe": 1007,
+    "max_fact_built_at_utc": "2026-06-08T01:32:49.788100+00:00",
+    "market_rows_after_side_dedupe": 759,
+    "market_row_dates": 24
+  },
+  "overall": {
+    "n": 759,
+    "active_dates": 24,
+    "actual_yes_rate": 0.310935441370224,
+    "mean_market_yes_price": 0.3020714756258235,
+    "gap_actual_minus_implied": 0.008863965744400508,
+    "buy_no_cost": 529.72775,
+    "buy_no_pnl": -6.72775,
+    "buy_no_roi": -0.012700391852229754,
+    "buy_yes_cost": 229.27225,
+    "buy_yes_pnl": 6.72775,
+    "buy_yes_roi": 0.02934393499431353
+  },
+  "price_buckets": [
+    {
+      "price_bucket": "0.00-0.05",
+      "n": 48,
+      "active_dates": 8,
+      "actual_yes_rate": 0.0625,
+      "mean_market_yes_price": 0.023624999999999997,
+      "gap_actual_minus_implied": 0.038875,
+      "buy_no_cost": 46.866,
+      "buy_no_pnl": -1.866,
+      "buy_no_roi": -0.039815644603763925,
+      "buy_yes_cost": 1.134,
+      "buy_yes_pnl": 1.866,
+      "buy_yes_roi": 1.6455026455026458,
+      "wilson95_actual_yes": [
+        0.0214832329083893,
+        0.16835438054946347
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.01433671358559438,
+        0.23404514081673342
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.10107696669525339,
+        0.01015385854329473
+      ],
+      "model_lift": {
+        "n": 48,
+        "model_p_yes_median": 0.1501,
+        "low_n": 25,
+        "high_n": 23,
+        "low_actual_yes_rate": 0.04,
+        "high_actual_yes_rate": 0.08695652173913043,
+        "delta_high_minus_low_actual_yes": 0.04695652173913043
+      }
+    },
+    {
+      "price_bucket": "0.05-0.10",
+      "n": 31,
+      "active_dates": 9,
+      "actual_yes_rate": 0.06451612903225806,
+      "mean_market_yes_price": 0.07458064516129032,
+      "gap_actual_minus_implied": -0.010064516129032253,
+      "buy_no_cost": 28.688,
+      "buy_no_pnl": 0.31200000000000006,
+      "buy_no_roi": 0.010875627440044621,
+      "buy_yes_cost": 2.312,
+      "buy_yes_pnl": -0.31200000000000006,
+      "buy_yes_roi": -0.1349480968858132,
+      "wilson95_actual_yes": [
+        0.017874783521914572,
+        0.20718636736298118
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.011278104819192142,
+        0.2942674228820582
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.07294386675113178,
+        0.08471680019563675
+      ],
+      "model_lift": {
+        "n": 31,
+        "model_p_yes_median": 0.17,
+        "low_n": 16,
+        "high_n": 15,
+        "low_actual_yes_rate": 0.0,
+        "high_actual_yes_rate": 0.13333333333333333,
+        "delta_high_minus_low_actual_yes": 0.13333333333333333
+      }
+    },
+    {
+      "price_bucket": "0.10-0.15",
+      "n": 40,
+      "active_dates": 12,
+      "actual_yes_rate": 0.225,
+      "mean_market_yes_price": 0.128325,
+      "gap_actual_minus_implied": 0.096675,
+      "buy_no_cost": 34.867,
+      "buy_no_pnl": -3.867,
+      "buy_no_roi": -0.11090716149941206,
+      "buy_yes_cost": 5.133,
+      "buy_yes_pnl": 3.867,
+      "buy_yes_roi": 0.7533606078316774,
+      "wilson95_actual_yes": [
+        0.12316091323540745,
+        0.37503096742310016
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.09491453030899788,
+        0.4455980434800004
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.2527456429588955,
+        0.02455953583104865
+      ],
+      "model_lift": {
+        "n": 40,
+        "model_p_yes_median": 0.15015,
+        "low_n": 22,
+        "high_n": 18,
+        "low_actual_yes_rate": 0.22727272727272727,
+        "high_actual_yes_rate": 0.2222222222222222,
+        "delta_high_minus_low_actual_yes": -0.005050505050505055
+      }
+    },
+    {
+      "price_bucket": "0.15-0.20",
+      "n": 48,
+      "active_dates": 17,
+      "actual_yes_rate": 0.1875,
+      "mean_market_yes_price": 0.17467708333333332,
+      "gap_actual_minus_implied": 0.012822916666666684,
+      "buy_no_cost": 39.6155,
+      "buy_no_pnl": -0.6154999999999997,
+      "buy_no_roi": -0.015536847950928292,
+      "buy_yes_cost": 8.3845,
+      "buy_yes_pnl": 0.6154999999999997,
+      "buy_yes_roi": 0.07340926710000593,
+      "wilson95_actual_yes": [
+        0.10191390954847648,
+        0.31939867149284695
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.07851795589474239,
+        0.38461194010692035
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.14084903305201743,
+        0.10790595678104961
+      ],
+      "model_lift": {
+        "n": 48,
+        "model_p_yes_median": 0.17595,
+        "low_n": 25,
+        "high_n": 23,
+        "low_actual_yes_rate": 0.28,
+        "high_actual_yes_rate": 0.08695652173913043,
+        "delta_high_minus_low_actual_yes": -0.1930434782608696
+      }
+    },
+    {
+      "price_bucket": "0.20-0.25",
+      "n": 82,
+      "active_dates": 21,
+      "actual_yes_rate": 0.24390243902439024,
+      "mean_market_yes_price": 0.2244329268292683,
+      "gap_actual_minus_implied": 0.019469512195121937,
+      "buy_no_cost": 63.5965,
+      "buy_no_pnl": -1.5965000000000005,
+      "buy_no_roi": -0.025103582744333424,
+      "buy_yes_cost": 18.4035,
+      "buy_yes_pnl": 1.5965000000000005,
+      "buy_yes_roi": 0.08674980302659822,
+      "wilson95_actual_yes": [
+        0.16379885088671692,
+        0.34692707832040764
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.13723730550026753,
+        0.3954700559927074
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.185441296092843,
+        0.10854849971812885
+      ],
+      "model_lift": {
+        "n": 82,
+        "model_p_yes_median": 0.1973,
+        "low_n": 42,
+        "high_n": 40,
+        "low_actual_yes_rate": 0.23809523809523808,
+        "high_actual_yes_rate": 0.25,
+        "delta_high_minus_low_actual_yes": 0.011904761904761918
+      }
+    },
+    {
+      "price_bucket": "0.25-0.30",
+      "n": 134,
+      "active_dates": 24,
+      "actual_yes_rate": 0.26119402985074625,
+      "mean_market_yes_price": 0.2759832089552239,
+      "gap_actual_minus_implied": -0.014789179104477598,
+      "buy_no_cost": 97.01825,
+      "buy_no_pnl": 1.98175,
+      "buy_no_roi": 0.020426569227954536,
+      "buy_yes_cost": 36.98175,
+      "buy_yes_pnl": -1.98175,
+      "buy_yes_roi": -0.05358724235602696,
+      "wilson95_actual_yes": [
+        0.19421393448989088,
+        0.3414845371633147
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.17008783125503874,
+        0.3788249594772379
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.10692039912152912,
+        0.14113101609483938
+      ],
+      "model_lift": {
+        "n": 134,
+        "model_p_yes_median": 0.1929,
+        "low_n": 68,
+        "high_n": 66,
+        "low_actual_yes_rate": 0.19117647058823528,
+        "high_actual_yes_rate": 0.3333333333333333,
+        "delta_high_minus_low_actual_yes": 0.14215686274509803
+      }
+    },
+    {
+      "price_bucket": "0.30-0.35",
+      "n": 117,
+      "active_dates": 23,
+      "actual_yes_rate": 0.3504273504273504,
+      "mean_market_yes_price": 0.3279871794871795,
+      "gap_actual_minus_implied": 0.02244017094017096,
+      "buy_no_cost": 78.6255,
+      "buy_no_pnl": -2.6254999999999997,
+      "buy_no_roi": -0.0333924744516728,
+      "buy_yes_cost": 38.3745,
+      "buy_yes_pnl": 2.6254999999999997,
+      "buy_yes_roi": 0.06841782954826772,
+      "wilson95_actual_yes": [
+        0.2699839639664325,
+        0.44038034029165013
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.23965017074932315,
+        0.48007951094263135
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.11926326980647071,
+        0.05619733163053047
+      ],
+      "model_lift": {
+        "n": 117,
+        "model_p_yes_median": 0.21689999999999998,
+        "low_n": 59,
+        "high_n": 58,
+        "low_actual_yes_rate": 0.4406779661016949,
+        "high_actual_yes_rate": 0.25862068965517243,
+        "delta_high_minus_low_actual_yes": -0.18205727644652248
+      }
+    },
+    {
+      "price_bucket": "0.35-0.40",
+      "n": 84,
+      "active_dates": 23,
+      "actual_yes_rate": 0.27380952380952384,
+      "mean_market_yes_price": 0.37386904761904766,
+      "gap_actual_minus_implied": -0.10005952380952382,
+      "buy_no_cost": 52.595,
+      "buy_no_pnl": 8.405,
+      "buy_no_roi": 0.15980606521532464,
+      "buy_yes_cost": 31.405,
+      "buy_yes_pnl": -8.405,
+      "buy_yes_roi": -0.26763254258875974,
+      "wilson95_actual_yes": [
+        0.18992825695769278,
+        0.37747419161084395
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.16119097990221148,
+        0.42522355866388944
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.006722739400833229,
+        0.3555784299486295
+      ],
+      "model_lift": {
+        "n": 84,
+        "model_p_yes_median": 0.2944,
+        "low_n": 43,
+        "high_n": 41,
+        "low_actual_yes_rate": 0.27906976744186046,
+        "high_actual_yes_rate": 0.2682926829268293,
+        "delta_high_minus_low_actual_yes": -0.010777084515031177
+      }
+    },
+    {
+      "price_bucket": "0.40-0.45",
+      "n": 75,
+      "active_dates": 20,
+      "actual_yes_rate": 0.49333333333333335,
+      "mean_market_yes_price": 0.4218,
+      "gap_actual_minus_implied": 0.07153333333333331,
+      "buy_no_cost": 43.365,
+      "buy_no_pnl": -5.364999999999999,
+      "buy_no_roi": -0.1237172835235789,
+      "buy_yes_cost": 31.635,
+      "buy_yes_pnl": 5.364999999999999,
+      "buy_yes_roi": 0.16959064327485376,
+      "wilson95_actual_yes": [
+        0.38330010247790747,
+        0.6040162154218635
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.33981154106684097,
+        0.6481227401351788
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.29472249410973417,
+        0.04359781500694674
+      ],
+      "model_lift": {
+        "n": 75,
+        "model_p_yes_median": 0.3286,
+        "low_n": 38,
+        "high_n": 37,
+        "low_actual_yes_rate": 0.47368421052631576,
+        "high_actual_yes_rate": 0.5135135135135135,
+        "delta_high_minus_low_actual_yes": 0.03982930298719772
+      }
+    },
+    {
+      "price_bucket": "0.45-0.50",
+      "n": 46,
+      "active_dates": 20,
+      "actual_yes_rate": 0.5,
+      "mean_market_yes_price": 0.47206521739130436,
+      "gap_actual_minus_implied": 0.027934782608695655,
+      "buy_no_cost": 24.285,
+      "buy_no_pnl": -1.285,
+      "buy_no_roi": -0.05291332098002882,
+      "buy_yes_cost": 21.715,
+      "buy_yes_pnl": 1.285,
+      "buy_yes_roi": 0.059175685010361495,
+      "wilson95_actual_yes": [
+        0.3611893708270325,
+        0.6388106291729675
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.30879197720238527,
+        0.6912080227976147
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.28868023484752026,
+        0.15629845235372322
+      ],
+      "model_lift": {
+        "n": 46,
+        "model_p_yes_median": 0.3343,
+        "low_n": 24,
+        "high_n": 22,
+        "low_actual_yes_rate": 0.4166666666666667,
+        "high_actual_yes_rate": 0.5909090909090909,
+        "delta_high_minus_low_actual_yes": 0.17424242424242425
+      }
+    },
+    {
+      "price_bucket": "0.50-0.55",
+      "n": 22,
+      "active_dates": 16,
+      "actual_yes_rate": 0.5909090909090909,
+      "mean_market_yes_price": 0.5245454545454545,
+      "gap_actual_minus_implied": 0.06636363636363632,
+      "buy_no_cost": 10.459999999999999,
+      "buy_no_pnl": -1.4599999999999995,
+      "buy_no_roi": -0.13957934990439766,
+      "buy_yes_cost": 11.540000000000001,
+      "buy_yes_pnl": 1.4599999999999995,
+      "buy_yes_roi": 0.12651646447140377,
+      "wilson95_actual_yes": [
+        0.38734818476315136,
+        0.7674418380352813
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.31331734186721905,
+        0.82055398204479
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.6470795360397681,
+        0.2720194643475668
+      ],
+      "model_lift": {
+        "n": 22,
+        "model_p_yes_median": 0.3098,
+        "low_n": 12,
+        "high_n": 10,
+        "low_actual_yes_rate": 0.5,
+        "high_actual_yes_rate": 0.7,
+        "delta_high_minus_low_actual_yes": 0.19999999999999996
+      }
+    },
+    {
+      "price_bucket": "0.55-0.60",
+      "n": 11,
+      "active_dates": 8,
+      "actual_yes_rate": 0.36363636363636365,
+      "mean_market_yes_price": 0.5709090909090908,
+      "gap_actual_minus_implied": -0.20727272727272722,
+      "buy_no_cost": 4.720000000000001,
+      "buy_no_pnl": 2.28,
+      "buy_no_roi": 0.483050847457627,
+      "buy_yes_cost": 6.279999999999999,
+      "buy_yes_pnl": -2.28,
+      "buy_yes_roi": -0.36305732484076436,
+      "wilson95_actual_yes": [
+        0.15166471095367584,
+        0.6461988254921511
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.10460998666291071,
+        0.7364869830470486
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.005006025771762346,
+        1.2988505747126435
+      ],
+      "model_lift": {
+        "n": 11,
+        "model_p_yes_median": 0.2912,
+        "low_n": 6,
+        "high_n": 5,
+        "low_actual_yes_rate": 0.3333333333333333,
+        "high_actual_yes_rate": 0.4,
+        "delta_high_minus_low_actual_yes": 0.06666666666666671
+      }
+    },
+    {
+      "price_bucket": "0.60-0.65",
+      "n": 6,
+      "active_dates": 6,
+      "actual_yes_rate": 0.6666666666666666,
+      "mean_market_yes_price": 0.6224999999999999,
+      "gap_actual_minus_implied": 0.04416666666666669,
+      "buy_no_cost": 2.265,
+      "buy_no_pnl": -0.26500000000000024,
+      "buy_no_roi": -0.11699779249448133,
+      "buy_yes_cost": 3.735,
+      "buy_yes_pnl": 0.26500000000000024,
+      "buy_yes_roi": 0.07095046854083005,
+      "wilson95_actual_yes": [
+        0.29999331513839217,
+        0.9032285888942195
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.20447677844932938,
+        0.9396212691020072
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -1.0,
+        0.8477356233558747
+      ],
+      "model_lift": {
+        "n": 6,
+        "delta_high_minus_low_actual_yes": null
+      }
+    },
+    {
+      "price_bucket": "0.65-0.70",
+      "n": 3,
+      "active_dates": 3,
+      "actual_yes_rate": 0.6666666666666666,
+      "mean_market_yes_price": 0.68,
+      "gap_actual_minus_implied": -0.013333333333333345,
+      "buy_no_cost": 0.96,
+      "buy_no_pnl": 0.040000000000000036,
+      "buy_no_roi": 0.041666666666666706,
+      "buy_yes_cost": 2.04,
+      "buy_yes_pnl": -0.040000000000000036,
+      "buy_yes_roi": -0.01960784313725492,
+      "wilson95_actual_yes": [
+        0.20765960080204776,
+        0.9385080552796039
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.12701306493663622,
+        0.9649034427909576
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -1.0,
+        2.1746031746031753
+      ],
+      "model_lift": {
+        "n": 3,
+        "delta_high_minus_low_actual_yes": null
+      }
+    },
+    {
+      "price_bucket": "0.75-0.80",
+      "n": 2,
+      "active_dates": 2,
+      "actual_yes_rate": 1.0,
+      "mean_market_yes_price": 0.7625,
+      "gap_actual_minus_implied": 0.23750000000000004,
+      "buy_no_cost": 0.475,
+      "buy_no_pnl": -0.475,
+      "buy_no_roi": -1.0,
+      "buy_yes_cost": 1.525,
+      "buy_yes_pnl": 0.475,
+      "buy_yes_roi": 0.3114754098360656,
+      "wilson95_actual_yes": [
+        0.3423802275066532,
+        1.0
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.20244065333151268,
+        1.0
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -1.0,
+        -1.0
+      ],
+      "model_lift": {
+        "n": 2,
+        "delta_high_minus_low_actual_yes": null
+      }
+    },
+    {
+      "price_bucket": "0.80-0.85",
+      "n": 5,
+      "active_dates": 5,
+      "actual_yes_rate": 0.8,
+      "mean_market_yes_price": 0.8130000000000001,
+      "gap_actual_minus_implied": -0.013000000000000077,
+      "buy_no_cost": 0.9349999999999999,
+      "buy_no_pnl": 0.06500000000000006,
+      "buy_no_roi": 0.06951871657754018,
+      "buy_yes_cost": 4.065,
+      "buy_yes_pnl": -0.06500000000000006,
+      "buy_yes_roi": -0.01599015990159903,
+      "wilson95_actual_yes": [
+        0.3755346297625255,
+        0.9637758913675698
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.25373795247932357,
+        0.9791914552858036
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -1.0,
+        2.3149171270718227
+      ],
+      "model_lift": {
+        "n": 5,
+        "delta_high_minus_low_actual_yes": null
+      }
+    },
+    {
+      "price_bucket": "0.85-0.90",
+      "n": 2,
+      "active_dates": 2,
+      "actual_yes_rate": 1.0,
+      "mean_market_yes_price": 0.8574999999999999,
+      "gap_actual_minus_implied": 0.14250000000000007,
+      "buy_no_cost": 0.28500000000000003,
+      "buy_no_pnl": -0.28500000000000003,
+      "buy_no_roi": -1.0,
+      "buy_yes_cost": 1.7149999999999999,
+      "buy_yes_pnl": 0.28500000000000003,
+      "buy_yes_roi": 0.16618075801749274,
+      "wilson95_actual_yes": [
+        0.3423802275066532,
+        1.0
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.20244065333151268,
+        1.0
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -1.0,
+        -1.0
+      ],
+      "model_lift": {
+        "n": 2,
+        "delta_high_minus_low_actual_yes": null
+      }
+    },
+    {
+      "price_bucket": "0.90-0.95",
+      "n": 1,
+      "active_dates": 1,
+      "actual_yes_rate": 1.0,
+      "mean_market_yes_price": 0.91,
+      "gap_actual_minus_implied": 0.08999999999999997,
+      "buy_no_cost": 0.08999999999999997,
+      "buy_no_pnl": -0.08999999999999997,
+      "buy_no_roi": -1.0,
+      "buy_yes_cost": 0.91,
+      "buy_yes_pnl": 0.08999999999999997,
+      "buy_yes_roi": 0.09890109890109887,
+      "wilson95_actual_yes": [
+        0.20654931437723745,
+        1.0
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.11261973280977161,
+        1.0
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -1.0,
+        -1.0
+      ],
+      "model_lift": {
+        "n": 1,
+        "delta_high_minus_low_actual_yes": null
+      }
+    },
+    {
+      "price_bucket": "0.95-1.00",
+      "n": 2,
+      "active_dates": 2,
+      "actual_yes_rate": 1.0,
+      "mean_market_yes_price": 0.992,
+      "gap_actual_minus_implied": 0.008000000000000007,
+      "buy_no_cost": 0.016000000000000014,
+      "buy_no_pnl": -0.016000000000000014,
+      "buy_no_roi": -1.0,
+      "buy_yes_cost": 1.984,
+      "buy_yes_pnl": 0.016000000000000014,
+      "buy_yes_roi": 0.008064516129032265,
+      "wilson95_actual_yes": [
+        0.3423802275066532,
+        1.0
+      ],
+      "wilson_bonferroni_actual_yes": [
+        0.20244065333151268,
+        1.0
+      ],
+      "bonferroni_tests": 10,
+      "gap_significant_bonferroni": false,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -1.0,
+        -1.0
+      ],
+      "model_lift": {
+        "n": 2,
+        "delta_high_minus_low_actual_yes": null
+      }
+    }
+  ],
+  "forward_test": {
+    "split": {
+      "train_frac": 0.7,
+      "cutoff_first_test_date": "2026-05-30",
+      "train_dates": 16,
+      "test_dates": 8,
+      "train_rows": 467,
+      "test_rows": 292
+    },
+    "selection_rule": "train buckets with n>=min_bin_n, BUY_NO ROI>0, and actual_yes-implied_yes<0",
+    "selected_price_buckets": [
+      "0.20-0.25",
+      "0.35-0.40"
+    ],
+    "selected_test": {
+      "n": 67,
+      "active_dates": 8,
+      "actual_yes_rate": 0.26865671641791045,
+      "mean_market_yes_price": 0.30402985074626865,
+      "gap_actual_minus_implied": -0.03537313432835822,
+      "buy_no_cost": 46.63,
+      "buy_no_pnl": 2.3699999999999997,
+      "buy_no_roi": 0.05082564872399742,
+      "buy_yes_cost": 20.37,
+      "buy_yes_pnl": -2.3699999999999997,
+      "buy_yes_roi": -0.11634756995581735,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.13370390256656894,
+        0.25474819588998365
+      ]
+    },
+    "all_band_buy_no_test_baseline": {
+      "n": 292,
+      "active_dates": 8,
+      "actual_yes_rate": 0.3253424657534247,
+      "mean_market_yes_price": 0.32909589041095894,
+      "gap_actual_minus_implied": -0.0037534246575342592,
+      "buy_no_cost": 195.904,
+      "buy_no_pnl": 1.0959999999999999,
+      "buy_no_roi": 0.005594576935641946,
+      "buy_yes_cost": 96.096,
+      "buy_yes_pnl": -1.0959999999999999,
+      "buy_yes_roi": -0.011405261405261404,
+      "buy_no_roi_ci95_cluster_by_event_date": [
+        -0.03178541349012589,
+        0.05198422721396952
+      ]
+    },
+    "selected_minus_all_band_buy_no_roi": {
+      "point": 0.045231071788355476,
+      "ci95_cluster_by_event_date": [
+        -0.11002426773657226,
+        0.22662339290851047
+      ]
+    },
+    "gates": {
+      "significance": "FAIL",
+      "baseline": "FAIL",
+      "forward": "PASS",
+      "verdict": "inconclusive"
+    }
+  }
+}
