@@ -1,6 +1,6 @@
 # Executable Edge Research
 
-> generated_at_utc: `2026-06-08T15:22:25.083975+00:00`
+> generated_at_utc: `2026-06-08T16:07:58.638096+00:00`
 > DB: `/home/rui/projects/pm_agent/runtime/weather.db`
 > trade_class: `live_real`
 > Scope: offline Step 2 diagnostic; no N100/live behavior changed.
@@ -41,10 +41,17 @@ Drop top1 fill PnL: `-70.62`; drop top5 fill PnL: `-129.16`.
 
 ## Raw Orderbook Replay
 
-`not_requested`:
+| scope | candidates | matched | taker rows | taker ROI | taker ROI CI | maker proxy ROI | avg age min |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| selected Step1 buckets | 312 | 259 | 259 | +2.6% | [-6.0%, +11.1%] | +8.8% | 8.920334620334621 |
+
+| side | rows | taker ROI | taker CI | maker proxy ROI | avg spread |
+|---|---:|---:|---:|---:|---:|
+| `BUY_NO` | 180 | +3.6% | [-2.4%, +9.5%] | +9.2% | 0.036000000000000004 |
+| `BUY_YES` | 79 | -2.1% | [-35.1%, +31.7%] | +7.0% | 0.027658227848101267 |
 
 ## Notes
 
 - 2A uses settled `fact_trades` only and surfaces open/unsettled rows separately.
-- 2B here is a decision-entry proxy from `fact_signal_candidates`; it is not a raw orderbook replay.
-- Raw orderbook replay is intentionally disabled until it enforces `snapshot_ts <= decision_snapshot_ts_utc` and de-duplicates market rows before aggregation.
+- 2B decision-entry proxy uses `fact_signal_candidates`; raw orderbook replay separately uses the latest orderbook row with `snapshot_ts_utc <= decision_snapshot_ts_utc`.
+- Raw orderbook taker ROI uses side-token `best_ask`; maker ROI is only a `best_bid` proxy and does not prove fill probability.

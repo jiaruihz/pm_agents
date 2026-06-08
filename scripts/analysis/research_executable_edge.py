@@ -4,16 +4,17 @@
 Step 2 is intentionally split:
 
 2A. Settled real-fill audit from fact_trades.
-2B. Decision-entry proxy from fact_signal_candidates.
+2B. Decision-entry proxy plus time-aligned raw orderbook replay.
 
-Raw orderbook replay is fail-closed in this script until a time-aligned
-ts <= decision_snapshot_ts_utc implementation exists. That avoids the known
-"latest orderbook" lookahead bug from the external audit draft.
+Raw orderbook replay is valid only when it uses the latest orderbook snapshot
+with snapshot_ts_utc <= decision_snapshot_ts_utc for the same condition_id and
+side token outcome. It never uses latest-after-decision books.
 """
 
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import math
 import random
@@ -54,8 +55,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-json", default=str(OUT_JSON_DEFAULT))
     parser.add_argument("--out-md", default=str(OUT_MD_DEFAULT))
     parser.add_argument("--market-structure-json", default=None, help="Optional Step 1 JSON; selected buckets are reused for the candidate proxy.")
-    parser.add_argument("--orderbook-glob", default=None, help="Accepted for compatibility; raw orderbook replay is fail-closed.")
-    parser.add_argument("--token-map", default=None, help="Accepted for compatibility; raw orderbook replay is fail-closed.")
+    parser.add_argument(
+        "--orderbook-glob",
+        default=str(ROOT / "runtime" / "weather_edge_v1" / "market_data" / "orderbook_snapshots" / "*" / "*.jsonl.gz"),
+        help="Glob for weather orderbook snapshot jsonl.gz files.",
+    )
+    parser.add_argument("--token-map", default=None, help="Accepted for compatibility; condition_id+outcome is used when available.")
     parser.add_argument("--bootstrap-iters", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=20260608)
     parser.add_argument("--skip-live-gate", action="store_true", help="Do not run weather_clob_fill_coverage_gate.py for live_real.")
@@ -82,6 +87,21 @@ def safe_div(num: float, den: float) -> float | None:
 
 def pct(value: float | None) -> str:
     return "NA" if value is None else f"{value * 100:+.1f}%"
+
+
+def parse_ts(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def percentile(values: list[float], q: float) -> float | None:
@@ -352,14 +372,261 @@ def candidate_proxy(
     }
 
 
-def orderbook_status(orderbook_glob: str | None, token_map: str | None) -> dict[str, Any]:
-    if not orderbook_glob and not token_map:
-        return {"status": "not_requested"}
-    return {
-        "status": "skipped_fail_closed",
-        "reason": "raw orderbook replay requires a time-aligned ts<=decision_snapshot_ts_utc implementation; latest-snapshot replay is refused to avoid lookahead",
+def _side_outcome(side: str) -> str:
+    return "yes" if side == "BUY_YES" else "no"
+
+
+def _outcome_payout(side: str, final_yes: float) -> float:
+    return final_yes if side == "BUY_YES" else 1.0 - final_yes
+
+
+def load_orderbook_candidates(conn: sqlite3.Connection, selected_bins: set[str]) -> list[dict[str, Any]]:
+    data = rows(
+        conn,
+        """
+        SELECT
+          candidate_id,
+          condition_id,
+          market_id,
+          event_date,
+          city,
+          bracket,
+          side,
+          market_yes_price,
+          decision_entry_price,
+          decision_snapshot_ts_utc,
+          final_yes,
+          counterfactual_pnl,
+          live_filled
+        FROM fact_signal_candidates
+        WHERE eligible=1
+          AND final_yes IS NOT NULL
+          AND decision_window_missing=0
+          AND decision_snapshot_ts_utc IS NOT NULL
+          AND condition_id IS NOT NULL
+          AND market_yes_price IS NOT NULL
+          AND market_yes_price > 0
+          AND market_yes_price < 1
+          AND side IN ('BUY_YES', 'BUY_NO')
+        """,
+    )
+    out: list[dict[str, Any]] = []
+    for row in data:
+        bucket = bucket_for_price(float(row["market_yes_price"]))
+        if selected_bins and bucket not in selected_bins:
+            continue
+        decision_dt = parse_ts(row.get("decision_snapshot_ts_utc"))
+        if decision_dt is None:
+            continue
+        row["decision_dt"] = decision_dt
+        row["outcome"] = _side_outcome(str(row["side"]))
+        row["price_bucket"] = bucket
+        out.append(row)
+    return out
+
+
+def _snapshot_file_ts(path: Path) -> datetime | None:
+    # orderbook_snapshot_20260529_1431.jsonl.gz
+    parts = path.name.split("_")
+    if len(parts) < 4:
+        return None
+    date_part = parts[2]
+    time_part = parts[3].split(".")[0]
+    try:
+        return datetime.strptime(date_part + time_part, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _book_sort_key(path: Path) -> datetime:
+    return _snapshot_file_ts(path) or datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _glob_paths(pattern: str) -> list[Path]:
+    if pattern.startswith("/"):
+        return sorted(Path("/").glob(pattern[1:]), key=_book_sort_key)
+    return sorted(Path().glob(pattern), key=_book_sort_key)
+
+
+def match_time_aligned_orderbooks(candidates: list[dict[str, Any]], orderbook_glob: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if not candidates:
+        return [], {"status": "no_candidates"}
+
+    by_pair: dict[tuple[str, str], list[int]] = defaultdict(list)
+    max_decision = max(row["decision_dt"] for row in candidates)
+    for idx, row in enumerate(candidates):
+        by_pair[(str(row["condition_id"]), str(row["outcome"]))].append(idx)
+
+    latest_by_candidate: dict[int, dict[str, Any]] = {}
+    files = _glob_paths(orderbook_glob)
+    scanned_files = 0
+    scanned_rows = 0
+    matched_book_rows_seen = 0
+    for path in files:
+        file_dt = _snapshot_file_ts(path)
+        if file_dt is not None and file_dt > max_decision:
+            break
+        scanned_files += 1
+        opener = gzip.open if path.suffix == ".gz" else open
+        try:
+            with opener(path, "rt", encoding="utf-8") as fh:
+                for line in fh:
+                    scanned_rows += 1
+                    try:
+                        book = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    key = (str(book.get("condition_id") or ""), str(book.get("outcome") or "").lower())
+                    candidate_idxs = by_pair.get(key)
+                    if not candidate_idxs:
+                        continue
+                    book_dt = parse_ts(book.get("snapshot_ts_utc"))
+                    if book_dt is None:
+                        continue
+                    matched_book_rows_seen += 1
+                    summary = book.get("summary") or {}
+                    for idx in candidate_idxs:
+                        if book_dt <= candidates[idx]["decision_dt"]:
+                            prev = latest_by_candidate.get(idx)
+                            if prev is None or book_dt > prev["book_dt"]:
+                                latest_by_candidate[idx] = {
+                                    "book_dt": book_dt,
+                                    "book": book,
+                                    "summary": summary,
+                                }
+        except OSError:
+            continue
+
+    out: list[dict[str, Any]] = []
+    for idx, candidate in enumerate(candidates):
+        match = latest_by_candidate.get(idx)
+        if match is None:
+            continue
+        summary = match["summary"]
+        best_ask = summary.get("best_ask")
+        best_bid = summary.get("best_bid")
+        final_yes = float(candidate["final_yes"])
+        payout = _outcome_payout(str(candidate["side"]), final_yes)
+        row = dict(candidate)
+        decision_dt = row.pop("decision_dt")
+        row["orderbook_snapshot_ts_utc"] = match["book_dt"].isoformat()
+        row["orderbook_age_minutes"] = (decision_dt - match["book_dt"]).total_seconds() / 60.0
+        row["taker_best_ask"] = best_ask
+        row["maker_best_bid"] = best_bid
+        row["ask_size"] = summary.get("ask_size")
+        row["bid_size"] = summary.get("bid_size")
+        row["spread"] = summary.get("spread")
+        row["depth_ask_5c"] = summary.get("depth_ask_5c")
+        row["depth_bid_5c"] = summary.get("depth_bid_5c")
+        row["taker_cost_usd"] = float(best_ask) if best_ask is not None else None
+        row["maker_cost_proxy_usd"] = float(best_bid) if best_bid is not None else None
+        row["taker_pnl_usd"] = None if best_ask is None else payout - float(best_ask)
+        row["maker_pnl_proxy_usd"] = None if best_bid is None else payout - float(best_bid)
+        row["taker_price_minus_decision_entry"] = (
+            None if best_ask is None else float(best_ask) - float(candidate["decision_entry_price"])
+        )
+        out.append(row)
+
+    return out, {
+        "status": "ok",
         "orderbook_glob": orderbook_glob,
-        "token_map": token_map,
+        "orderbook_files_found": len(files),
+        "candidate_rows": len(candidates),
+        "matched_candidate_rows": len(out),
+        "matched_candidate_rate": safe_div(len(out), len(candidates)),
+        "scanned_files": scanned_files,
+        "scanned_rows": scanned_rows,
+        "matched_book_rows_seen": matched_book_rows_seen,
+        "max_decision_ts_utc": max_decision.isoformat(),
+    }
+
+
+def _roi_for_fields(data: list[dict[str, Any]], cost_key: str, pnl_key: str) -> float | None:
+    usable = [row for row in data if row.get(cost_key) is not None and row.get(pnl_key) is not None]
+    cost = sum(float(row[cost_key]) for row in usable)
+    pnl = sum(float(row[pnl_key]) for row in usable)
+    return safe_div(pnl, cost)
+
+
+def summarize_orderbook_rows(data: list[dict[str, Any]], *, bootstrap_iters: int, seed: int) -> dict[str, Any]:
+    taker_rows = [row for row in data if row.get("taker_cost_usd") is not None]
+    maker_rows = [row for row in data if row.get("maker_cost_proxy_usd") is not None]
+    taker_cost = sum(float(row["taker_cost_usd"]) for row in taker_rows)
+    taker_pnl = sum(float(row["taker_pnl_usd"]) for row in taker_rows)
+    maker_cost = sum(float(row["maker_cost_proxy_usd"]) for row in maker_rows)
+    maker_pnl = sum(float(row["maker_pnl_proxy_usd"]) for row in maker_rows)
+
+    def taker_metric(sample: list[dict[str, Any]]) -> float | None:
+        return _roi_for_fields(sample, "taker_cost_usd", "taker_pnl_usd")
+
+    def maker_metric(sample: list[dict[str, Any]]) -> float | None:
+        return _roi_for_fields(sample, "maker_cost_proxy_usd", "maker_pnl_proxy_usd")
+
+    return {
+        "rows": len(data),
+        "active_event_dates": len({row["event_date"] for row in data}),
+        "taker_priced_rows": len(taker_rows),
+        "maker_priced_rows": len(maker_rows),
+        "taker_cost_usd": taker_cost,
+        "taker_pnl_usd": taker_pnl,
+        "taker_roi": safe_div(taker_pnl, taker_cost),
+        "taker_roi_ci95_cluster_by_event_date": ci(
+            bootstrap_by_date(taker_rows, "event_date", taker_metric, iters=bootstrap_iters, seed=seed)
+        ),
+        "maker_cost_proxy_usd": maker_cost,
+        "maker_pnl_proxy_usd": maker_pnl,
+        "maker_roi_proxy": safe_div(maker_pnl, maker_cost),
+        "maker_roi_proxy_ci95_cluster_by_event_date": ci(
+            bootstrap_by_date(maker_rows, "event_date", maker_metric, iters=bootstrap_iters, seed=seed + 1)
+        ),
+        "avg_orderbook_age_minutes": safe_div(sum(float(row["orderbook_age_minutes"]) for row in data), len(data)),
+        "avg_spread": safe_div(sum(float(row.get("spread") or 0.0) for row in data), len(data)),
+        "avg_taker_price_minus_decision_entry": safe_div(
+            sum(float(row.get("taker_price_minus_decision_entry") or 0.0) for row in taker_rows),
+            len(taker_rows),
+        ),
+    }
+
+
+def grouped_orderbook_summaries(data: list[dict[str, Any]], key: str, *, bootstrap_iters: int, seed: int) -> dict[str, Any]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in data:
+        grouped[str(row.get(key) or "unknown")].append(row)
+    return {
+        name: summarize_orderbook_rows(items, bootstrap_iters=bootstrap_iters, seed=seed + idx * 10)
+        for idx, (name, items) in enumerate(sorted(grouped.items()))
+    }
+
+
+def raw_orderbook_replay(
+    conn: sqlite3.Connection,
+    *,
+    selected_bins: set[str],
+    orderbook_glob: str,
+    bootstrap_iters: int,
+    seed: int,
+) -> dict[str, Any]:
+    candidates = load_orderbook_candidates(conn, selected_bins)
+    matched, coverage = match_time_aligned_orderbooks(candidates, orderbook_glob)
+    overall = summarize_orderbook_rows(matched, bootstrap_iters=bootstrap_iters, seed=seed) if matched else {}
+    taker_ci = overall.get("taker_roi_ci95_cluster_by_event_date") or [None, None]
+    significance = bool(taker_ci[0] is not None and taker_ci[0] > 0)
+    return {
+        "status": coverage.get("status", "unknown"),
+        "source": "raw orderbook snapshots, latest snapshot_ts_utc <= decision_snapshot_ts_utc",
+        "scope": "selected Step1 buckets" if selected_bins else "all usable eligible candidates",
+        "selected_price_buckets": sorted(selected_bins),
+        "coverage": coverage,
+        "overall": overall,
+        "by_side": grouped_orderbook_summaries(matched, "side", bootstrap_iters=bootstrap_iters, seed=seed + 1000) if matched else {},
+        "by_price_bucket": grouped_orderbook_summaries(matched, "price_bucket", bootstrap_iters=bootstrap_iters, seed=seed + 2000) if matched else {},
+        "gates": {
+            "significance": "PASS" if significance else "FAIL",
+            "baseline": "NA",
+            "forward": "NA",
+            "verdict": "inconclusive",
+        },
+        "sample_rows": matched[:5],
     }
 
 
@@ -449,13 +716,40 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
             "",
             "## Raw Orderbook Replay",
             "",
-            f"`{report['raw_orderbook_2b']['status']}`: {report['raw_orderbook_2b'].get('reason', '')}",
+            "| scope | candidates | matched | taker rows | taker ROI | taker ROI CI | maker proxy ROI | avg age min |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    raw = report["raw_orderbook_2b"]
+    raw_cov = raw.get("coverage", {})
+    raw_overall = raw.get("overall", {})
+    lines.append(
+        f"| {raw.get('scope', '')} | {raw_cov.get('candidate_rows', 0)} | {raw_cov.get('matched_candidate_rows', 0)} | "
+        f"{raw_overall.get('taker_priced_rows', 0)} | {pct(raw_overall.get('taker_roi'))} | "
+        f"{fmt_ci(raw_overall.get('taker_roi_ci95_cluster_by_event_date'))} | "
+        f"{pct(raw_overall.get('maker_roi_proxy'))} | {raw_overall.get('avg_orderbook_age_minutes', 'NA')} |"
+    )
+    lines.extend(
+        [
+            "",
+            "| side | rows | taker ROI | taker CI | maker proxy ROI | avg spread |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for side, item in raw.get("by_side", {}).items():
+        lines.append(
+            f"| `{side}` | {item.get('rows', 0)} | {pct(item.get('taker_roi'))} | "
+            f"{fmt_ci(item.get('taker_roi_ci95_cluster_by_event_date'))} | "
+            f"{pct(item.get('maker_roi_proxy'))} | {item.get('avg_spread')} |"
+        )
+    lines.extend(
+        [
             "",
             "## Notes",
             "",
             "- 2A uses settled `fact_trades` only and surfaces open/unsettled rows separately.",
-            "- 2B here is a decision-entry proxy from `fact_signal_candidates`; it is not a raw orderbook replay.",
-            "- Raw orderbook replay is intentionally disabled until it enforces `snapshot_ts <= decision_snapshot_ts_utc` and de-duplicates market rows before aggregation.",
+            "- 2B decision-entry proxy uses `fact_signal_candidates`; raw orderbook replay separately uses the latest orderbook row with `snapshot_ts_utc <= decision_snapshot_ts_utc`.",
+            "- Raw orderbook taker ROI uses side-token `best_ask`; maker ROI is only a `best_bid` proxy and does not prove fill probability.",
         ]
     )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -498,7 +792,13 @@ def main() -> None:
             bootstrap_iters=args.bootstrap_iters,
             seed=args.seed + 6000,
         ),
-        "raw_orderbook_2b": orderbook_status(args.orderbook_glob, args.token_map),
+        "raw_orderbook_2b": raw_orderbook_replay(
+            conn,
+            selected_bins=selected_bins,
+            orderbook_glob=args.orderbook_glob,
+            bootstrap_iters=args.bootstrap_iters,
+            seed=args.seed + 7000,
+        ),
     }
     report["gates"] = gate_status(overall, edge)
     write_json(Path(args.out_json), report)
