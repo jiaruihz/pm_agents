@@ -1,6 +1,11 @@
 # Weather Docs Index
 
-更新时间：2026-06-08
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
+更新时间：2026-06-09
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -49,6 +54,8 @@ Status 口径：
 | [WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) | `current-source` | 现在 N100 应跑哪些 live 实例、每条实例的 allowed cities、怎么检查、近期事故/决策是什么 |
 | [WEATHER_CITY_POOL_DECISIONS.md](WEATHER_CITY_POOL_DECISIONS.md) | `current-source` | 当前 T1/T2 城市池、pm_agent 实例级 live allowlist、为什么升降级、回滚条件是什么 |
 | [WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md) | `current-source` | weather 分析、PnL、切片、账户对账必须用什么口径 |
+| [WEATHER_HANDOFF_EXECUTION.md](WEATHER_HANDOFF_EXECUTION.md) | `design-draft` | 2026-06-08 方法论/结构重整交接入口；用于迁移执行顺序，不直接定义 live 生产状态 |
+| [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md) | `design-draft` | 天气策略 [0]–[6] 主线骨架和评估层重构映射 |
 | [OPS_RUNBOOK.md](OPS_RUNBOOK.md) | `current-reference` | 常驻进程、日志、通用运维命令在哪里 |
 | [WEATHER_DASHBOARD_TROUBLESHOOTING.md](WEATHER_DASHBOARD_TROUBLESHOOTING.md) | `current-reference` | 本机 dashboard / API / FE 出问题时怎么排查 |
 
@@ -60,6 +67,7 @@ Status 口径：
 | [WEATHER_DATA_CANONICAL_SOURCES.md](WEATHER_DATA_CANONICAL_SOURCES.md) | `current-source` | 哪些表/文件是 source、mirror、derived、legacy，分析前先查什么 |
 | [WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md) | `current-source` | N100 -> 本机镜像 -> DB -> API 的脚本职责和数据链路 |
 | [WEATHER_SYSTEM_CONTRACT.md](WEATHER_SYSTEM_CONTRACT.md) | `current-source` | 字段名、枚举、ID 算法、跨 repo contract 怎么定义 |
+| [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | `current-reference` | dashboard DB/API 分层缺口审计；P0 已完成，剩余项按当前 fact-table 口径复核 |
 | [WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md](WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md) | `design-draft` | canonical schema / paper 语义 / shadow-run cutover 怎么迁移 |
 | [WEATHER_FACT_TRADES_DESIGN.md](WEATHER_FACT_TRADES_DESIGN.md) | `design-draft` | `fact_trades` 设计背景和目标形态是什么 |
 | [WEATHER_SIGNAL_CANDIDATES_DESIGN.md](WEATHER_SIGNAL_CANDIDATES_DESIGN.md) | `design-draft` | `fact_signal_candidates` 设计背景和机会粒度口径是什么 |
@@ -81,6 +89,7 @@ Status 口径：
 
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
+| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | 模型概率相对市场是否有 alpha 的 living doc；当前结论：global probability alpha 为负，model edge rank alpha 未确认 |
 | [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | `current-source` | weather_edge_engine 当前接手入口：blender shadow/paper 与 city-day basket 下一步 |
 | [WEATHER_PROBABILITY_MODEL_REVIEW.md](WEATHER_PROBABILITY_MODEL_REVIEW.md) | `current-reference` | 生产 baseline `model_p_yes` 的问题、条件模型缺口、季节/forecast jump 风险 |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) | `current-reference` | 概率模型从 M0 可观测骨架到 lead-time/ensemble/ML 的路线图 |
@@ -89,6 +98,24 @@ Status 口径：
 | [WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md](WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md) | `snapshot` | 2026-06-05 策略/模型复盘，作为时间点证据，不定义当前生产 |
 | [WEATHER_STRATEGY_DIRECTION_RECONCILIATION_2026-06-05.md](WEATHER_STRATEGY_DIRECTION_RECONCILIATION_2026-06-05.md) | `snapshot` | 2026-06-05 策略方向对齐记录，当前执行以后续入口为准 |
 | [模型优化研究.md](模型优化研究.md) | `snapshot` | 中文模型优化研究笔记，保留背景，当前有效动作以 roadmap/current state 为准 |
+
+## 评估层 Living Docs
+
+这些文档是 `[6] 评估层` 的当前入口。日期快照继续保留为证据，但新分析结论应优先落到对应 living doc。
+
+| 文档 | Status | 主线层 | 读它回答什么问题 |
+|---|---|---:|---|
+| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | [1] | 模型概率相对市场是否有 alpha；模型字段是否可影响 signal / sizing |
+| [market_structure_edge.md](analysis/market_structure_edge.md) | `current-reference` | [2] | 是否存在 model-free 的市场结构 edge，例如 favorite-longshot、BUY_NO base-rate、price-bucket mispricing |
+| [execution_quality.md](analysis/execution_quality.md) | `current-reference` | [4] | maker-only 扣 spread、queue、逆向选择和 fill selection 后是否仍有可成交 edge |
+| [entry_timing.md](analysis/entry_timing.md) | `current-reference` | [3] | target-date lead time、forecast checkpoint、decision window 对计划和成交的影响 |
+| [side_alpha.md](analysis/side_alpha.md) | `current-reference` | [2] | BUY_NO / BUY_YES、side-band 是否有持久超额，而不是单纯 win-rate |
+| [city_selection.md](analysis/city_selection.md) | `current-reference` | [3] | 城市池、city-day basket、城市 x model x side 选择证据；live 事实仍以 CITY_POOL_DECISIONS 为准 |
+| [sizing_entry_band.md](analysis/sizing_entry_band.md) | `current-reference` | [3] | 仓位、entry price band、side-specific band 是否改善风险调整后的 executable edge |
+| [blender_shadow.md](analysis/blender_shadow.md) | `current-reference` | [1] | blender / edge-engine 字段作为 shadow、paper 或 sizing signal 是否有价值 |
+| [live_performance.md](analysis/live_performance.md) | `current-reference` | [5][6] | live 策略绩效曲线、strategy_instance 归因、settled/open/quasi-settled 拆分 |
+| [account_reconcile.md](analysis/account_reconcile.md) | `current-reference` | [5] | 钱包余额、CLOB fill、cashflow、DB/fact 对账 |
+| [data_integrity.md](analysis/data_integrity.md) | `current-reference` | [0] | snapshot 健康、side flip、candidate/fill linkage、fact-table coverage 和分析前自检 |
 
 ## 历史分析快照
 
@@ -110,7 +137,11 @@ Status 口径：
 | [2026-06-08-executable-edge.md](analysis/2026-06/2026-06-08-executable-edge.md) | `snapshot` | yes | Step2 执行现实检验：live_real fill 审计 + decision-entry proxy + time-aligned raw orderbook 2B；当前 verdict=inconclusive |
 | [2026-06-09-weather-strategy-research-window-handoff.md](analysis/2026-06/2026-06-09-weather-strategy-research-window-handoff.md) | `handoff` | yes | 本窗口策略研究收口：H_A/H_B/H_C/Step2B verdict、Range RV Scanner v0 下一窗口提示词 |
 | [2026-06-09-range-rv-scanner-v0.md](analysis/2026-06/2026-06-09-range-rv-scanner-v0.md) | `snapshot` | yes | Range RV Scanner v0：city-day 区间/相邻 bracket relative value，train 显著和基准过但 holdout 前瞻失败，当前 verdict=inconclusive |
+| [2026-06-09-model-rank-ic.md](analysis/2026-06/2026-06-09-model-rank-ic.md) | `snapshot` | yes | Ring3 模型排序/IC 检验：`model_edge_at_decision` 显著性、基准、前瞻均 FAIL；当前 verdict=inconclusive |
 | [2026-06-08-city-model-conditional-edge.md](analysis/2026-06/2026-06-08-city-model-conditional-edge.md) | `snapshot` | yes | H_C city×model×side 条件优势检验：train 选池、holdout 复核、matched side+price baseline；当前 verdict=inconclusive |
+| [2026-06-08-HANDOFF-LANDING-VALIDATION.md](analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md) | `snapshot` | yes | 交接包文件落地、manifest 产物补齐、skill/contract/schema 假设和 git 状态校验 |
+| [2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md](analysis/2026-06/2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md) | `design-draft` | yes | 交接包审阅和 P0-P3 改进计划 |
+| [2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md](analysis/2026-06/2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md) | `design-draft` | yes | 策略可靠性审计和 Step1/Step2/Step3 迁移执行顺序 |
 | [2026-06-08-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | 最新 fact 重建后 basket vs legacy baseline refresh；recent slice 仍不支持上线 |
 | [2026-06-08-city-day-basket-walkforward.md](analysis/2026-06/2026-06-08-city-day-basket-walkforward.md) | `snapshot` | yes | 最新 fact 重建后 city-day basket walk-forward refresh；用于拒绝过拟合候选 |
 | [2026-06-08-city-day-distribution-quality.md](analysis/2026-06/2026-06-08-city-day-distribution-quality.md) | `snapshot` | yes | 最新 fact 重建后 city-day 分布质量 refresh；market-normalized distribution 仍优先 |

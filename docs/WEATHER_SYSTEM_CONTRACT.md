@@ -1,5 +1,10 @@
 # Weather Strategy — 系统接口契约
 
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
 > 版本: v1 · 2026-05-17  
 > 范围: N100 weather-predict（生产端）⟷ pm_agent（分析端）之间的数据接口规范  
 > 规则: 两侧任何 agent 修改字段名、枚举值、ID 格式前必须先更新本文档并对齐

@@ -375,3 +375,4 @@ winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
 | [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md) | 分析口径唯一来源：PnL、切片、账户现金流、数据自检 |
 | [WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) | 数据源真相：source/mirror/derived/legacy 和已知缺口 |
 | [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) | `weather-predict` 与 `pm_agent` 的生产/本机职责边界 |
+| [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | edge engine 当前接手入口：blender shadow/paper 与 city-day basket 下一步 |

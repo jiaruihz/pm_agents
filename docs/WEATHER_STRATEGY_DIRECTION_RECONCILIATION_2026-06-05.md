@@ -1,5 +1,10 @@
 # 战略方向对齐 — 「模型优化研究」 × 「2026-06-05 校准发现」
 
+Status: snapshot
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; historical snapshot evidence only
+
 Status: `snapshot`。本文保留 2026-06-05 策略方向对齐记录；当前执行路线以 [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) 和 [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) 为准。
 
 > 2026-06-05。回答用户问题：「他的策略对还是你现在的这个对？我们怎么把研究融进去？」

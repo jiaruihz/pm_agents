@@ -1,5 +1,10 @@
 # mid_price_core_v2 执行策略设计
 
+Status: superseded
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; superseded, do not use as current production basis
+
 > 状态：**本机已实施 / 未部署 N100**。`pm_agent` 已支持 `mid_price_core_v2` planner/executor/live-cycle 切换；
 > 生产部署前仍必须走 `weather-strategy-deploy` skill 的 8 步流程，含确认点 A/B/C 与 N100 smoke。
 > 取数口径唯一来源：[WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md)。

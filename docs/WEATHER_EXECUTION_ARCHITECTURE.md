@@ -1,5 +1,10 @@
 # Weather Execution Architecture
 
+Status: design-draft
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
+
 This document freezes the current boundary for turning the weather paper workflow into a controlled live-trading workflow.
 
 Status as of 2026-05-11:

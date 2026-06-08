@@ -1,5 +1,10 @@
 # 天气策略城市池决策记录
 
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
 更新时间：2026-06-08
 
 这份文档专门记录天气策略城市池怎么变、为什么变、当前哪些城市可以实盘。

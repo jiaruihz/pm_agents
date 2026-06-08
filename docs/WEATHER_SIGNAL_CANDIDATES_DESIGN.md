@@ -1,5 +1,10 @@
 # Weather Signal Candidates 底表设计
 
+Status: design-draft
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
+
 > 目的:回答 **"这个城市/方向/模型本身有没有可交易 alpha"**——不是"我们成交到的样本表现"。
 > 建立**机会粒度(opportunity-grain)候选事实表 `fact_signal_candidates`**:
 > 每个 `(condition_id, side, event_date)` 机会一行,装下"我们看见过的全部机会",

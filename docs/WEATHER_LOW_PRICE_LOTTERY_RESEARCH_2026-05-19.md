@@ -1,5 +1,10 @@
 # 天气低价 YES 彩票仓研究 - 2026-05-19
 
+Status: snapshot
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; historical snapshot evidence only
+
 这是第一版低价 YES 彩票仓研究文档，重点分析 `5c-20c` 低价 YES 在持有到结算口径下是否有筛选价值。本报告使用已经结算的历史 snapshot 代理价格，不使用可成交 ask/bid；后续 snapshot 已经开始记录 CLOB orderbook 字段，等数据自然积累后再切换到强回测口径。
 
 ## 样本定义

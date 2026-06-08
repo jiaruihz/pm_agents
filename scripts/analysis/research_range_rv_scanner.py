@@ -322,6 +322,10 @@ def enumerate_ranges(decision_sets: list[list[dict[str, Any]]]) -> list[RangeRow
                     "range_edge": range_edge,
                     "abs_range_edge": abs(range_edge),
                     "hit_count": hit_count,
+                    "eligible_legs": sum(int(row.get("eligible") or 0) for row in legs),
+                    "all_legs_eligible": int(all(int(row.get("eligible") or 0) for row in legs)),
+                    "paper_ordered_legs": sum(int(row.get("paper_ordered") or 0) for row in legs),
+                    "live_filled_legs": sum(int(row.get("live_filled") or 0) for row in legs),
                     "settled_payout": proxy_payout,
                     "taker_cost": proxy_cost,
                     "taker_pnl": proxy_payout - proxy_cost,
@@ -649,6 +653,84 @@ def gate_result(train_eval: dict[str, Any] | None, holdout_eval: dict[str, Any] 
     return {"significance": significance, "baseline": baseline, "forward": forward, "verdict": verdict}
 
 
+def filter_family(rows_in: list[RangeRow], family: str) -> list[RangeRow]:
+    if family == "mixed_single_allowed":
+        return rows_in
+    if family == "single_only":
+        return [row for row in rows_in if row["range_type"] == "single"]
+    if family == "true_range_only":
+        return [row for row in rows_in if row["range_type"] != "single"]
+    if family == "adjacent_only":
+        return [row for row in rows_in if row["range_type"] in {"adjacent_2", "adjacent_3"}]
+    if family == "tail_only":
+        return [row for row in rows_in if row["range_type"] in {"below_tail", "above_tail"}]
+    if family == "inside_range_yes":
+        return [row for row in rows_in if row["range_shape"] == "inside_range_yes"]
+    if family == "outside_range_no":
+        return [row for row in rows_in if row["range_shape"] == "outside_range_no"]
+    raise ValueError(f"unknown family: {family}")
+
+
+def run_family_experiments(
+    rows_in: list[RangeRow],
+    *,
+    source: str,
+    train_dates: set[str],
+    holdout_dates: set[str],
+    thresholds: list[float],
+    min_rule_rows: int,
+    bootstrap_iters: int,
+    seed: int,
+) -> list[dict[str, Any]]:
+    families = [
+        "mixed_single_allowed",
+        "single_only",
+        "true_range_only",
+        "adjacent_only",
+        "tail_only",
+        "inside_range_yes",
+        "outside_range_no",
+    ]
+    out: list[dict[str, Any]] = []
+    for idx, family in enumerate(families):
+        family_rows = filter_family(rows_in, family)
+        train_rows = [row for row in family_rows if row["event_date"] in train_dates]
+        holdout_rows = [row for row in family_rows if row["event_date"] in holdout_dates]
+        rules = select_rules(
+            train_rows,
+            source=source,
+            thresholds=thresholds,
+            min_rule_rows=min_rule_rows,
+            bootstrap_iters=bootstrap_iters,
+            seed=seed + idx * 1000,
+        )
+        top = rules[0] if rules else None
+        holdout_eval = (
+            evaluate_rule(
+                holdout_rows,
+                top["rule"],
+                source=source,
+                bootstrap_iters=bootstrap_iters,
+                seed=seed + idx * 1000 + 500,
+            )
+            if top
+            else None
+        )
+        out.append(
+            {
+                "family": family,
+                "source": source,
+                "train_rows_available": len(train_rows),
+                "holdout_rows_available": len(holdout_rows),
+                "rules_tested": len(rules),
+                "train_selected": top,
+                "holdout_evaluation": holdout_eval,
+                "gates": gate_result(top, holdout_eval),
+            }
+        )
+    return out
+
+
 def data_self_check(conn: sqlite3.Connection) -> dict[str, Any]:
     return {
         "fact_trades_max_built_at_utc": scalar(conn, "SELECT MAX(fact_built_at_utc) FROM fact_trades"),
@@ -698,6 +780,29 @@ def small_table(items: list[dict[str, Any]], keys: list[str], limit: int = 8) ->
     return lines
 
 
+def family_row(item: dict[str, Any]) -> str:
+    train = item.get("train_selected")
+    holdout = item.get("holdout_evaluation")
+    gates = item.get("gates") or {}
+    if not train:
+        return (
+            f"| `{item['family']}` | {item.get('train_rows_available', 0)} | {item.get('holdout_rows_available', 0)} | "
+            "NA | NA | NA | NA | NA | NA | NA | "
+            f"`{gates.get('verdict', 'inconclusive')}` |"
+        )
+    rule = train["rule"]
+    rule_text = f"{rule['range_type']}/{rule['direction']}/edge>={rule['abs_edge_min']}"
+    holdout_roi = holdout.get("selected", {}).get("taker_roi") if holdout else None
+    holdout_excess = holdout.get("excess_roi") if holdout else None
+    holdout_drop = holdout.get("selected", {}).get("drop_top5_taker_roi") if holdout else None
+    return (
+        f"| `{item['family']}` | {item.get('train_rows_available', 0)} | {item.get('holdout_rows_available', 0)} | "
+        f"`{rule_text}` | {pct(train['selected']['taker_roi'])} | {pct(train['excess_roi'])} | "
+        f"{pct(train['selected']['drop_top5_taker_roi'])} | {pct(holdout_roi)} | {pct(holdout_excess)} | "
+        f"{pct(holdout_drop)} | `{gates.get('significance')}/{gates.get('baseline')}/{gates.get('forward')} -> {gates.get('verdict')}` |"
+    )
+
+
 def write_md(path: Path, report: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     proxy = report["decision_proxy"]
@@ -717,7 +822,7 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
         f"- 数据源: `runtime/weather.db.fact_signal_candidates` primary; `fact_trades` only for mandatory freshness/status self-check.",
         f"- DB last_modified: `{report['db_last_modified_utc']}`",
         f"- fact built at: `{report['data_self_check']['fact_signal_candidates_max_built_at_utc']}`",
-        f"- scanner input candidates: `{report['input']['candidate_rows']}` rows; decision sets `{report['input']['decision_sets']}`; range rows `{report['input']['range_rows']}`.",
+        f"- scanner input candidates: `{report['input']['candidate_rows']}` seen-complete rows; decision sets `{report['input']['decision_sets']}`; range rows `{report['input']['range_rows']}`; all-legs-eligible range rows `{report['input']['all_legs_eligible_range_rows']}`.",
         f"- unsettled used in scanner: `0` (filter `settlement_status='settled'` and `final_yes IS NOT NULL`).",
         f"- missing_bracket used in scanner: `0`.",
         f"- local cache note: user requested local `runtime/weather.db`; no N100/live sync or config change was run.",
@@ -782,6 +887,32 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
                 f"{money(top_holdout['selected']['avg_worst_case_loss_unit_notional'])} | "
                 f"{pct(top_holdout['selected']['avg_loss_probability'])} |"
             )
+    lines.extend(
+        [
+            "",
+            "## Follow-up Families",
+            "",
+            "These experiments keep single-leg opportunity visible, but evaluate it separately from true range RV. Each family still selects only on train and only verifies on holdout.",
+            "",
+            "### Seen Complete Universe",
+            "",
+            "| family | train rows | holdout rows | selected train rule | train ROI | train excess | train top5 removed ROI | holdout ROI | holdout excess | holdout top5 removed ROI | gates |",
+            "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---|",
+        ]
+    )
+    for item in proxy.get("family_experiments", {}).get("seen_complete", []):
+        lines.append(family_row(item))
+    lines.extend(
+        [
+            "",
+            "### Eligible-only Universe",
+            "",
+            "| family | train rows | holdout rows | selected train rule | train ROI | train excess | train top5 removed ROI | holdout ROI | holdout excess | holdout top5 removed ROI | gates |",
+            "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---|",
+        ]
+    )
+    for item in proxy.get("family_experiments", {}).get("eligible_only", []):
+        lines.append(family_row(item))
     lines.extend(
         [
             "",
@@ -886,6 +1017,8 @@ def main() -> None:
     train_dates, holdout_dates, split_date = split_train_holdout(all_dates, args.train_frac)
     proxy_rows = metric_rows(clean_rows, source="proxy")
     ob_rows = metric_rows(clean_rows, source="orderbook")
+    proxy_eligible_rows = [row for row in proxy_rows if int(row.get("all_legs_eligible") or 0) == 1]
+    ob_eligible_rows = [row for row in ob_rows if int(row.get("all_legs_eligible") or 0) == 1]
     proxy_train = [row for row in proxy_rows if row["event_date"] in train_dates]
     proxy_holdout = [row for row in proxy_rows if row["event_date"] in holdout_dates]
     ob_train = [row for row in ob_rows if row["event_date"] in train_dates]
@@ -960,6 +1093,7 @@ def main() -> None:
             "range_rows": len(clean_rows),
             "event_dates": len(all_dates),
             "cities": len({row["city"] for row in clean_rows}),
+            "all_legs_eligible_range_rows": sum(int(row.get("all_legs_eligible") or 0) for row in clean_rows),
         },
         "split": {
             "split_date": split_date,
@@ -978,6 +1112,28 @@ def main() -> None:
             "rules_tested": len(proxy_rules),
             "train_selected_rules": proxy_rules[:10],
             "holdout_evaluation": proxy_holdout_eval,
+            "family_experiments": {
+                "seen_complete": run_family_experiments(
+                    proxy_rows,
+                    source="decision_market_proxy",
+                    train_dates=train_dates,
+                    holdout_dates=holdout_dates,
+                    thresholds=thresholds,
+                    min_rule_rows=args.min_rule_rows,
+                    bootstrap_iters=args.bootstrap_iters,
+                    seed=args.seed + 10000,
+                ),
+                "eligible_only": run_family_experiments(
+                    proxy_eligible_rows,
+                    source="decision_market_proxy",
+                    train_dates=train_dates,
+                    holdout_dates=holdout_dates,
+                    thresholds=thresholds,
+                    min_rule_rows=max(10, min(args.min_rule_rows, 20)),
+                    bootstrap_iters=args.bootstrap_iters,
+                    seed=args.seed + 20000,
+                ),
+            },
         },
         "orderbook_executable_subset": {
             "coverage": orderbook_coverage,
@@ -988,6 +1144,28 @@ def main() -> None:
             "rules_tested": len(ob_rules),
             "train_selected_rules": ob_rules[:10],
             "holdout_evaluation": ob_holdout_eval,
+            "family_experiments": {
+                "seen_complete": run_family_experiments(
+                    ob_rows,
+                    source="time_aligned_orderbook",
+                    train_dates=train_dates,
+                    holdout_dates=holdout_dates,
+                    thresholds=thresholds,
+                    min_rule_rows=max(10, min(args.min_rule_rows, 20)),
+                    bootstrap_iters=args.bootstrap_iters,
+                    seed=args.seed + 30000,
+                ),
+                "eligible_only": run_family_experiments(
+                    ob_eligible_rows,
+                    source="time_aligned_orderbook",
+                    train_dates=train_dates,
+                    holdout_dates=holdout_dates,
+                    thresholds=thresholds,
+                    min_rule_rows=max(10, min(args.min_rule_rows, 20)),
+                    bootstrap_iters=args.bootstrap_iters,
+                    seed=args.seed + 40000,
+                ),
+            },
         },
         "gates": gates,
         "sample_range_rows": clean_rows[:20],

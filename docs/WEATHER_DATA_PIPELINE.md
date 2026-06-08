@@ -1,5 +1,10 @@
 # Weather Data Pipeline
 
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
 Last updated: 2026-06-06
 
 > 2026-06-05 更新: 同步覆盖扩展（7 个 weather model cache 家族 + output/logs + pm_agent runtime/logs + N100 tar backups），删除两个 legacy DB（weather_v2.db / weather_edge_v1_weather.db），新增 `scripts/ops/sync_n100_backups.sh`。详见 §2.2、§7。

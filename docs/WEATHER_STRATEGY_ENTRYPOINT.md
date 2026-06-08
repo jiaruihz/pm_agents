@@ -1,5 +1,10 @@
 # Weather Strategy Entrypoint
 
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
 Last updated: 2026-06-08
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.

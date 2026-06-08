@@ -1,5 +1,10 @@
 # Weather CLOB Orderbook Capture
 
+Status: design-draft
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
+
 Purpose: future weather snapshots should record executable CLOB market context so gamma / lottery research can use ask-entry and bid-exit assumptions instead of UI price or midpoint proxies.
 
 ## Current Design

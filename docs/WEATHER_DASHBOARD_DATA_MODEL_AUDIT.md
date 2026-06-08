@@ -1,5 +1,10 @@
 # Weather Dashboard 数据模型分层与缺口审计
 
+Status: current-reference
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
+
 > 最后更新: 2026-05-17 (P0 已完成，见 §7)
 > 范围: 本机 `weather_dashboard/` SQLite + ingest + API。**不涉及** N100 生产链。
 > 目的: 在数据格式僵化前先识别缺口，避免后期回填困难。

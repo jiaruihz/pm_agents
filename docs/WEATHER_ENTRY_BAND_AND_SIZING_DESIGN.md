@@ -1,5 +1,10 @@
 # Weather 策略 入场区间 × 仓位 Sizing 设计
 
+Status: design-draft
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
+
 > 主题研究文档（功能待实施）。把「入场价带调参」和「仓位 sizing」作为一个整体设计。
 > 证据基础（时间点快照）：
 > - [2026-05-30-performance-entry-band-research.md](analysis/2026-05/2026-05-30-performance-entry-band-research.md)（side×价位桶 EV 结构）

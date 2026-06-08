@@ -1,5 +1,10 @@
 # 天气策略 × 概率模型 复盘 — 2026-06-05
 
+Status: snapshot
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; historical snapshot evidence only
+
 Status: `snapshot`。本文保留 2026-06-05 时间点证据，不定义当前生产口径；当前入口见 [WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md)，edge engine 当前状态见 [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md)。
 
 > 整合一个月 live_real 实盘 + 概率校准实测 + 当前数据管道审计。

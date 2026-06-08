@@ -1,5 +1,10 @@
 # Weather Ledger Position Analysis Design
 
+Status: design-draft
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
+
 > **与相关文档的区别**
 > - 本文档：信号集固定不变，只模拟不同**仓位 sizing 策略**（fixed shares / fixed dollar / price bucket / city tier 等），看同样的信号改变仓位管理后 PnL 怎么变
 > - [`WEATHER_SHADOW_PORTFOLIO_TRACKING.md`](WEATHER_SHADOW_PORTFOLIO_TRACKING.md)：模拟不同**信号过滤规则**组合，关注哪套 filter 长期优于 baseline（信号层面的决策）

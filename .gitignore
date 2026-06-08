@@ -80,5 +80,8 @@ runtime/verify_market_analysis_cn/
 *.db-shm
 *.db-wal
 
+# Generated analysis artifacts; keep Markdown conclusions in git.
+docs/analysis/**/*.json
+
 # Local agent state
 .claude/

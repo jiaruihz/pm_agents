@@ -1,5 +1,10 @@
 # Weather Dashboard 故障排查手册
 
+Status: current-reference
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
+
 > 本文记录 2026-05 调试过程中遇到的所有问题及根因分析，供后续运维参考。
 
 ---

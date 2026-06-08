@@ -1,6 +1,10 @@
 # Weather Edge Engine Current State — 2026-06-06
 
-Status: `current-source`。这是 weather_edge_engine 当前接手入口；旧的模型/策略研究文档只作为时间点证据。完整索引见 [WEATHER_DOCS_INDEX.md](WEATHER_DOCS_INDEX.md)。
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
 
 > 本文档把 PR1/PR2/PR2b dev log 里的关键结论抽成稳定入口，供后续两个新窗口分别接手：
 > 1. **跑策略 / shadow 双写链路**

@@ -48,7 +48,8 @@ runtime/weather.db.fact_signal_candidates
 
 ## 结论分级
 
-任何交易动作建议必须先过三道门：
+三道门的硬来源是 `docs/WEATHER_ANALYSIS_CONTRACT.md` 的“绩效结论三道门”。本节只复述执行规则；
+若与 contract 冲突，以 contract 为准。任何交易动作建议必须先过三道门：
 
 | 门 | 通过条件 | 不通过时 |
 |---|---|---|

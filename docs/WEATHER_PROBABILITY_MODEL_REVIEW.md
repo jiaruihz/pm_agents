@@ -1,6 +1,10 @@
 # 天气概率模型 · 专家评估与实测（v2 · 2026-06-05）
 
-Status: `current-reference`。本文是生产 baseline `model_p_yes` 的审计和实测证据；实施优先级以 [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) 和 [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) 为准。
+Status: current-reference
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
+
 
 > 时间点快照评估。回答「我们现在算 `model_p_yes` 的模型，算法、缺陷、好处，以及今天该上什么」。
 > 证据基于直读 N100 生产代码 + 离线 Brier 实测（time-split + leave-one-city-out 两种 holdout）。

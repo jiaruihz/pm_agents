@@ -1,5 +1,10 @@
 # Weather Data Canonical Sources
 
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
 **单页拓扑** — 解决"到底从哪读数据"的问题。任何 weather 分析 / 报告 / 模型评估前必读。
 
 > 与之配套：[WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md)（口径定义）、[WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md)（脚本职责）、[WEATHER_REPO_BOUNDARY.md](WEATHER_REPO_BOUNDARY.md)（仓库职责）。本文只回答"用哪份数据 / 不要用哪份"。

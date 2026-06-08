@@ -1,6 +1,6 @@
 # Executable Edge Research
 
-> generated_at_utc: `2026-06-08T16:07:58.638096+00:00`
+> generated_at_utc: `2026-06-08T17:01:00.574990+00:00`
 > DB: `/home/rui/projects/pm_agent/runtime/weather.db`
 > trade_class: `live_real`
 > Scope: offline Step 2 diagnostic; no N100/live behavior changed.
@@ -36,19 +36,19 @@ Drop top1 fill PnL: `-70.62`; drop top5 fill PnL: `-129.16`.
 
 | side | n | dates | cf ROI | ROI CI | live fill rate |
 |---|---:|---:|---:|---:|---:|
-| `BUY_NO` | 215 | 24 | +69.7% | [+10.4%, +127.3%] | +64.2% |
-| `BUY_YES` | 97 | 22 | -19.6% | [-328.0%, +308.2%] | +41.2% |
+| `BUY_NO` | 600 | 24 | -6.6% | [-48.7%, +30.7%] | +54.2% |
+| `BUY_YES` | 407 | 24 | +5.8% | [-160.6%, +167.5%] | +29.0% |
 
 ## Raw Orderbook Replay
 
 | scope | candidates | matched | taker rows | taker ROI | taker ROI CI | maker proxy ROI | avg age min |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| selected Step1 buckets | 312 | 259 | 259 | +2.6% | [-6.0%, +11.1%] | +8.8% | 8.920334620334621 |
+| all usable eligible candidates | 1007 | 842 | 838 | -3.5% | [-9.3%, +2.0%] | +2.5% | 5.772842438638164 |
 
 | side | rows | taker ROI | taker CI | maker proxy ROI | avg spread |
 |---|---:|---:|---:|---:|---:|
-| `BUY_NO` | 180 | +3.6% | [-2.4%, +9.5%] | +9.2% | 0.036000000000000004 |
-| `BUY_YES` | 79 | -2.1% | [-35.1%, +31.7%] | +7.0% | 0.027658227848101267 |
+| `BUY_NO` | 503 | -3.1% | [-7.5%, +0.7%] | +1.7% | 0.03169980119284294 |
+| `BUY_YES` | 339 | -5.0% | [-22.4%, +12.1%] | +5.8% | 0.02912094395280236 |
 
 ## Notes
 

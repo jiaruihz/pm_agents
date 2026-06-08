@@ -1,5 +1,10 @@
 # Weather Fact Trades 底表设计
 
+Status: design-draft
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
+
 > 目的:消除"每次分析各写各的取数+派生逻辑"导致的口径漂移。
 > 建立**已成交交易绩效分析的唯一物化底表 `fact_trades`**——每笔成交(fill)一行、
 > 所有维度和指标预先算死,绩效分析只许 `filter + groupby`,禁止再碰原始源。

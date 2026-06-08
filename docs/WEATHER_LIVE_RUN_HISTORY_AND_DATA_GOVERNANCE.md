@@ -1,5 +1,10 @@
 # Weather Live Run History and Data Governance
 
+Status: current-reference
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
+
 Last updated: 2026-05-17
 
 This document records the early weather live-trading rollout history, known mistakes, and data-model rules needed to keep future analysis reproducible. Read it with:

@@ -1,5 +1,10 @@
 # Weather Repo Boundary
 
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
 Last updated: 2026-06-01
 
 This document defines the runtime boundary between the two active weather

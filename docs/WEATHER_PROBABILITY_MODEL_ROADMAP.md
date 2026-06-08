@@ -1,6 +1,10 @@
 # Weather Probability Model Roadmap
 
-Status: `current-reference`。本文描述概率模型改造路线；当前 edge engine 接手状态见 [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md)。
+Status: current-reference
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
+
 
 Last updated: 2026-06-04
 

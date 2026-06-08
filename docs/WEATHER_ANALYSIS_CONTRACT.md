@@ -1,5 +1,10 @@
 # Weather Analysis Contract
 
+Status: current-source
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: yes
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
+
 > 任何天气策略分析（绩效 / 血缘 / 持仓敞口）必须遵守本文件中的所有定义。  
 > 口径改动必须先 PR 进本文件，然后才能在分析报告或 skill 中使用新口径。
 
@@ -39,6 +44,67 @@ scripts/weather_dashboard/run_stack.sh
 - 不准把 strategy_id 之外的字段当作策略唯一标识
 - 不准只输出数字结论而不写 Markdown 报告
 - 不准跳过报告的"数据完整性自检"段
+- 不准在未通过三道门时给 keep / cut / 降 size / 上 live 建议
+- 不准把 `fact_trades`、`fact_signal_candidates`、orderbook snapshot 的字段混成一个 grain
+
+### 绩效结论三道门（硬规定）
+
+任何 weather 绩效、A/B、城市 alpha、策略表现或回测结论，如果要导向 live 动作（keep / cut / 调 size / 改 city pool / 改 entry band / 上新策略），必须同时通过三道门。
+
+| 门 | 通过条件 | 不通过时 |
+|---|---|---|
+| 显著性门 | ROI、超额 ROI、PnL delta 或 A/B delta 的 bootstrap 95% CI 不跨 0；若是相对基准，则 CI 不跨基准 | `inconclusive`，不得给 live 动作 |
+| 基准门 | 相对零模型的超额显著大于 0；默认零模型是同价位无脑买 NO，可补市场隐含价 EV=0 和随机选边 sanity check | 只是 base-rate，不算 alpha |
+| 前瞻门 | train 窗选出的规则、城市、side 或参数，在 holdout 或后续日期仍同号且仍有超额 | 只能 `shadow_candidate`，不得改 live |
+
+结论只能使用以下等级：
+
+| 等级 | 条件 | 允许动作 |
+|---|---|---|
+| `confirmed` | 三门全过 | 可建议 live keep / cut / 调 size，但仍必须走 `weather-strategy-deploy` |
+| `shadow_candidate` | 显著且超额，但前瞻未验证 | 只能 shadow / paper，不得改 live |
+| `inconclusive` | CI 跨 0、样本不足、未超额、基准缺失、前瞻失败或口径缺失 | 禁止 live 动作 |
+
+报告中每条交易动作相关结论必须标：
+
+```text
+significance=PASS/FAIL/NA
+baseline=PASS/FAIL/NA
+forward=PASS/FAIL/NA
+conclusion=confirmed/shadow_candidate/inconclusive
+```
+
+一句话总结必须采用：
+
+```text
+在 [窗口]，[策略/切片] 相对 [零模型] 的超额 ROI 为 X%（95% CI [a,b]），
+前瞻 [PASS/FAIL/NA]，结论等级 [confirmed/shadow_candidate/inconclusive]。
+```
+
+禁止用“ROI +Y%，建议保留 A 城砍 B 城”作为最终结论。
+
+样本门槛：
+
+- 城市或切片级 keep/cut 默认需要 `active_days >= 10` 且 `settled_fills >= 30`。
+- 低于门槛只能标 `low_sample` / `inconclusive`，除非用户明确只要探索性描述。
+- 同一 `target_date` 多城市、多 bracket 或多 fill 存在相关性时，优先按 `target_date` 做 block/cluster bootstrap。
+- 可报告相关性折减后的 `n_eff = n / (1 + (n - 1) * rho_bar)`；若 `n_eff` 远低于 naive n，结论必须降级或标高风险。
+- 若本轮试了多个城市/切片/版本，报告候选数量 K，并说明是否做了 Bonferroni、FDR、Deflated Sharpe 或其他多重检验处理。
+
+### 8 环覆盖自检（报告必须声明）
+
+每份策略研究报告必须声明覆盖了哪些环、缺哪些环。缺环不是自动失败，但如果缺的是显著性、基准或前瞻，不能给 live 动作。
+
+| 环 | 问题 | 默认授权源 |
+|---|---|---|
+| 1 描述性绩效切片 | 谁赚谁亏 | `fact_trades` |
+| 2 统计推断 | 盈亏是否显著、是否多重检验后仍成立 | `fact_trades` + block bootstrap |
+| 3 信号判别 | 模型是否有排序/IC 能力 | `signals` / `fact_trades` / `fact_signal_candidates`，需明确 grain |
+| 4 概率分布评估 | 概率/分布是否校准 | `signals` + `settlements` 或专门模型评估脚本 |
+| 5 执行微结构 | 点差、滑点、可成交 edge、fill/unfill 偏差 | 见“三源口径” |
+| 6 容量 | size 放大后 edge 是否还存在 | orderbook depth / live fills |
+| 7 组合相关性 | 同日多城是否是假分散 | `target_date` / city outcome / PnL block |
+| 8 基准/反事实 | 相对无脑 NO / 市场 EV / 随机是否有超额 | `fact_signal_candidates` + `fact_trades` |
 
 ### Live 账户余额 / CLOB 对账（wallet cashflow）
 
@@ -277,6 +343,23 @@ rows = conn.execute("""
     WHERE slippage_vs_paper IS NOT NULL GROUP BY side
 """).fetchall()
 ```
+
+### 执行微结构三源口径（硬规定）
+
+执行微结构不能声称所有字段都在同一张 fact 表。必须按 grain 分开：
+
+| 层 | 授权源 | 可回答 |
+|---|---|---|
+| 已成交 fill | `fact_trades` | 真实成交价 `fill_price`、真实成交 PnL、fill 级 ROI、edge 与 realized PnL 关系 |
+| 机会/决策窗 | `fact_signal_candidates` | `decision_entry_price`、`yes_spread` / `no_spread`、`best_entry_price`、`live_fill_price`、`slippage_vs_paper`、`counterfactual_pnl` |
+| 原始盘口 | orderbook snapshot + token map + `decision_ts` | 决策时 `best_ask` / depth / capacity；必须保证 `snapshot_ts <= decision_ts` |
+
+硬约束：
+
+- `best_ask` 未物化进 `fact_trades` 或 `fact_signal_candidates` 时，不得在报告中写“fact 表直接有 best_ask”。
+- raw orderbook join 必须按 token map 对齐 `(condition_id, bracket, outcome)`，并且只取 `snapshot_ts <= decision_ts` 的最近盘口；禁止用 latest snapshot 回填历史决策。
+- `counterfactual_pnl_best` 只能作为全天最优诊断上限，不得当作主绩效或 live 决策依据。
+- 成交样本和未成交机会必须并排报告，避免把 fill selection bias 当 alpha。
 
 ### weather.db（原始规范化表，仅 fact_trades / fact_signal_candidates builder 使用）
 
@@ -566,6 +649,5 @@ Shanghai, Shenzhen, Singapore, Taipei, TelAviv, Tokyo, Warsaw, Wellington, Wuhan
 以下口径分歧暂未钉死，实际分析遇到时在此补充并 PR：
 
 - **滑点扣减**：`plan_price` vs `fill_price` 差值当前两列并列展示，不单独作为成本项扣除
-- **基准对比**：vs "随机下单" / vs "全 BUY_NO" / vs "持有 YES 到结算"
 - **重复计数处理**：同一笔单同时出现在 ledger CSV + DB fills 的去重逻辑
 - **部分成交**：`fills.status = 'partial'` 的订单如何计入 win_rate 分母

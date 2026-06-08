@@ -1,5 +1,10 @@
 # Weather Shadow Portfolio Tracking Architecture
 
+Status: design-draft
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
+
 > **与相关文档的区别**
 > - 本文档：离线模拟多组**信号过滤 + 仓位规则**组合的表现对比（signal 是否入池、用什么 filter），关注哪套规则长期优于 baseline
 > - [`WEATHER_LEDGER_POSITION_ANALYSIS.md`](WEATHER_LEDGER_POSITION_ANALYSIS.md)：信号集固定不变，只模拟不同**仓位 sizing 策略**（fixed shares / fixed dollar / price bucket 等）

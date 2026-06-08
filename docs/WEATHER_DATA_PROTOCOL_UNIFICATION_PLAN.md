@@ -1,5 +1,10 @@
 # Weather Data Protocol And Collection Unification Plan
 
+Status: design-draft
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
+
 Last updated: 2026-06-03
 
 ## Conclusion

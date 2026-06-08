@@ -1,5 +1,10 @@
 # 天气策略实盘血缘分析（2026-05-23）
 
+Status: snapshot
+Updated: 2026-06-09 metadata pass; preserve content dates below
+Source of truth: no
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; historical snapshot evidence only
+
 > 分析对象：N100 当前实盘 rollout（`t1_trading / mid_price_core_v1 / 入场窗口
 > 0.25–0.75 / $5 notional / maker-only GTC`），实盘周期 2026-05-15 16:00Z
 > 起，分析时未暂停。
