@@ -137,6 +137,7 @@ Status 口径：
 | [2026-06-08-executable-edge.md](analysis/2026-06/2026-06-08-executable-edge.md) | `snapshot` | yes | Step2 执行现实检验：live_real fill 审计 + decision-entry proxy + time-aligned raw orderbook 2B；当前 verdict=inconclusive |
 | [2026-06-09-weather-strategy-research-window-handoff.md](analysis/2026-06/2026-06-09-weather-strategy-research-window-handoff.md) | `handoff` | yes | 本窗口策略研究收口：H_A/H_B/H_C/Step2B verdict、Range RV Scanner v0 下一窗口提示词 |
 | [2026-06-09-range-rv-scanner-v0.md](analysis/2026-06/2026-06-09-range-rv-scanner-v0.md) | `snapshot` | yes | Range RV Scanner v0：city-day 区间/相邻 bracket relative value，train 显著和基准过但 holdout 前瞻失败，当前 verdict=inconclusive |
+| [2026-06-09-decision-window-backfill.md](analysis/2026-06/2026-06-09-decision-window-backfill.md) | `snapshot` | yes | `fact_signal_candidates` decision window 回填：用 city/date anchor + raw orderbook + 0.005 磨损补 2186 行；只改本机分析 DB |
 | [2026-06-09-model-rank-ic.md](analysis/2026-06/2026-06-09-model-rank-ic.md) | `snapshot` | yes | Ring3 模型排序/IC 检验：`model_edge_at_decision` 显著性、基准、前瞻均 FAIL；当前 verdict=inconclusive |
 | [2026-06-08-city-model-conditional-edge.md](analysis/2026-06/2026-06-08-city-model-conditional-edge.md) | `snapshot` | yes | H_C city×model×side 条件优势检验：train 选池、holdout 复核、matched side+price baseline；当前 verdict=inconclusive |
 | [2026-06-08-HANDOFF-LANDING-VALIDATION.md](analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md) | `snapshot` | yes | 交接包文件落地、manifest 产物补齐、skill/contract/schema 假设和 git 状态校验 |

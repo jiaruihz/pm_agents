@@ -14,7 +14,7 @@ while the 0.3 model / 0.7 market blend improvement is too small to treat as conf
 
 This does not prove the model has no remaining use, but the first rank-IC pass also failed the live-action gates:
 
-1. **Ranking / IC**: `model_edge_at_decision` did not show significant rank power versus realized ROI or counterfactual PnL; the date-based forward top-rank test also failed.
+1. **Ranking / IC**: `model_edge_at_decision` did not show significant rank power versus realized ROI or counterfactual PnL. After decision-window backfill, the forward top-rank test is same-sign but still not significant, so it remains non-actionable.
 2. **Conditional subpools**: model value could still exist in specific city, forecast source, season, or lead-time slices, but any such pool must pass train/holdout validation before live use.
 
 Important nuance: `model_side_prob` has positive IC against raw side win and decision ROI, but that mostly says high-probability sides win more often. It is not enough to prove tradable edge because the actionable score is excess over entry price / market price, and that score is not significant.
@@ -29,7 +29,8 @@ Important nuance: `model_side_prob` has positive IC against raw side win and dec
 | `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | 2026-06 timing review | forecast timing, side flip, market adverse move lineage | snapshot |
 | `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md` | 2026-06 city/model review | weak city/model slices and downgrade candidates | snapshot |
 | `docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md` | 2026-06 blender research | blender hard-gate and sizing signal value | snapshot |
-| `docs/analysis/2026-06/2026-06-09-model-rank-ic.md` | 2026-05-12 to 2026-06-06 candidate rows | Ring3 rank/IC test; model edge ranking inconclusive, forward test failed | snapshot |
+| `docs/analysis/2026-06/2026-06-09-decision-window-backfill.md` | 2026-06-09 local DB repair | backfilled 2,186 candidate decision windows from raw orderbook with 0.005 wear | snapshot |
+| `docs/analysis/2026-06/2026-06-09-model-rank-ic.md` | 2026-05-12 to 2026-06-06 candidate rows | Ring3 rank/IC test after backfill; model edge ranking still inconclusive | snapshot |
 
 ## Required Gates Before Live Use
 

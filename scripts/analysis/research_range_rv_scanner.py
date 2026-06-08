@@ -646,9 +646,16 @@ def gate_result(train_eval: dict[str, Any] | None, holdout_eval: dict[str, Any] 
     excess_ci = train_eval.get("excess_roi_ci95_cluster_by_event_date") or [None, None]
     significance = "PASS" if roi_ci[0] is not None and roi_ci[0] > 0 else "FAIL"
     baseline = "PASS" if excess_ci[0] is not None and excess_ci[0] > 0 else "FAIL"
-    holdout_excess = holdout_eval.get("excess_roi")
-    holdout_roi = holdout_eval.get("selected", {}).get("taker_roi")
-    forward = "PASS" if holdout_roi is not None and holdout_roi > 0 and holdout_excess is not None and holdout_excess > 0 else "FAIL"
+    holdout_roi_ci = holdout_eval.get("roi_ci95_cluster_by_event_date") or [None, None]
+    holdout_excess_ci = holdout_eval.get("excess_roi_ci95_cluster_by_event_date") or [None, None]
+    forward = (
+        "PASS"
+        if holdout_roi_ci[0] is not None
+        and holdout_roi_ci[0] > 0
+        and holdout_excess_ci[0] is not None
+        and holdout_excess_ci[0] > 0
+        else "FAIL"
+    )
     verdict = "confirmed" if significance == "PASS" and baseline == "PASS" and forward == "PASS" else "inconclusive"
     return {"significance": significance, "baseline": baseline, "forward": forward, "verdict": verdict}
 
