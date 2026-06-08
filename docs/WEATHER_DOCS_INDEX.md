@@ -109,6 +109,7 @@ Status 口径：
 | [2026-06-08-market-structural-edge.md](analysis/2026-06/2026-06-08-market-structural-edge.md) | `snapshot` | yes | H_B model-free 市场结构检验第一版：按日期前瞻、cluster bootstrap、Bonferroni 风险；当前 verdict=inconclusive |
 | [2026-06-08-executable-edge.md](analysis/2026-06/2026-06-08-executable-edge.md) | `snapshot` | yes | Step2 执行现实检验：live_real fill 审计 + decision-entry proxy + time-aligned raw orderbook 2B；当前 verdict=inconclusive |
 | [2026-06-09-weather-strategy-research-window-handoff.md](analysis/2026-06/2026-06-09-weather-strategy-research-window-handoff.md) | `handoff` | yes | 本窗口策略研究收口：H_A/H_B/H_C/Step2B verdict、Range RV Scanner v0 下一窗口提示词 |
+| [2026-06-09-range-rv-scanner-v0.md](analysis/2026-06/2026-06-09-range-rv-scanner-v0.md) | `snapshot` | yes | Range RV Scanner v0：city-day 区间/相邻 bracket relative value，train 显著和基准过但 holdout 前瞻失败，当前 verdict=inconclusive |
 | [2026-06-08-city-model-conditional-edge.md](analysis/2026-06/2026-06-08-city-model-conditional-edge.md) | `snapshot` | yes | H_C city×model×side 条件优势检验：train 选池、holdout 复核、matched side+price baseline；当前 verdict=inconclusive |
 | [2026-06-08-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | 最新 fact 重建后 basket vs legacy baseline refresh；recent slice 仍不支持上线 |
 | [2026-06-08-city-day-basket-walkforward.md](analysis/2026-06/2026-06-08-city-day-basket-walkforward.md) | `snapshot` | yes | 最新 fact 重建后 city-day basket walk-forward refresh；用于拒绝过拟合候选 |
