@@ -1,0 +1,202 @@
+{
+  "generated_at_utc": "2026-06-09T18:37:15.611357+00:00",
+  "git_sha": "2f17561",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "input_reports": {
+    "all_yes_underround": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-09-range-rv-underround-robust-v1-0.json",
+    "side_band_forecast_regime": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-side-band-forecast-regime-v0.json",
+    "adjacent3_shadow": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-adjacent3-quality-shadow-journal-v0.json",
+    "hybrid_single": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-hybrid-adjacent3-single-v0.json"
+  },
+  "data_self_check": {
+    "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_last_modified_utc": "2026-06-09T17:38:04.156943+00:00",
+    "max_fact_built_at_utc": "2026-06-09T17:37:40.513320+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "n": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1147
+      },
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": null,
+        "n": 232
+      },
+      {
+        "settlement_status": "settled",
+        "n": 5241
+      }
+    ],
+    "candidate_coverage": {
+      "rows": 25117,
+      "eligible": 8306,
+      "paper_ordered": 3139,
+      "live_filled": 554
+    },
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ],
+    "candidate_event_range": {
+      "min_event_date": "2026-05-05",
+      "max_event_date": "2026-06-10",
+      "event_dates": 37,
+      "rows": 25117
+    },
+    "candidate_usable_main_denominator": {
+      "rows": 918,
+      "event_dates": 26,
+      "city_days": 372
+    }
+  },
+  "candidates": [
+    {
+      "candidate_id": "all_yes_underround",
+      "human_name": "all-YES underround",
+      "plain_idea": "所有 YES 总价低于 1 时买完整互斥篮子，押市场 no-arb 定价错误。",
+      "evidence": "verdict=confirmed; confirmed_orderbook_algorithms=5; fully_matched_strategy_rows=137",
+      "holdout_or_forward": "proxy/executable 多阈值过三门",
+      "significance": "PASS",
+      "baseline": "PASS",
+      "forward": "PASS",
+      "readiness": "confirmed_but_deferred",
+      "live_test_decision": "不选当前 live",
+      "reason": "统计三门通过，但用户已明确 all-YES 暂不实盘；多腿速度、partial fill、滑点和手续费执行风险仍是主问题。",
+      "next_evidence_needed": "只做工程 shadow：完整篮子下单仿真、partial fill unwind、fee/slippage 容量测试。"
+    },
+    {
+      "candidate_id": "forecast_quality_adjacent3",
+      "human_name": "forecast-quality adjacent3",
+      "plain_idea": "当模型分布集中在 mode 附近三档时，买相邻 3 档 YES，用 forecast quality 做软门。",
+      "evidence": "decision holdout rows=8, decision ROI=+72.9%; orderbook rows=8, orderbook ROI=+47.1%",
+      "holdout_or_forward": "orderbook CI=NA",
+      "significance": "FAIL",
+      "baseline": "NA",
+      "forward": "FAIL",
+      "readiness": "best_shadow_candidate",
+      "live_test_decision": "不选 live，选 shadow/paper 主线",
+      "reason": "点估计最好且逻辑贴近天气预测，但样本只有 8 条 holdout orderbook，CI/forward/baseline 不够。",
+      "next_evidence_needed": "固定规则跑 forward shadow：>=10 event_dates、>=30 executable rows、CI 下界 >0、top5 removed >0、matched baseline >0。"
+    },
+    {
+      "candidate_id": "single_high_conviction_yes",
+      "human_name": "single high-conviction YES",
+      "plain_idea": "每个 city-day 只买一个模型最强、价格较低的 YES 单腿。",
+      "evidence": "decision holdout rows=101, decision ROI=+35.8%; orderbook rows=100, orderbook ROI=+23.0%; inside adjacent3 rate=+99.8%",
+      "holdout_or_forward": "orderbook CI=[-31.1%, +84.0%]",
+      "significance": "FAIL",
+      "baseline": "FAIL",
+      "forward": "FAIL",
+      "readiness": "feature_not_strategy",
+      "live_test_decision": "不选 live",
+      "reason": "99%+ 都在 adjacent3 内，更多是重复加注或降级表达，不是独立互补 edge。",
+      "next_evidence_needed": "只作为 adjacent3 太贵/盘口不全时的 fallback 记录，不做叠加真钱。"
+    },
+    {
+      "candidate_id": "side_band_forecast_regime",
+      "human_name": "side-band + forecast regime",
+      "plain_idea": "复查早期 side-band/mid-price 赚钱是否能被 forecast regime 稳定复现。",
+      "evidence": "holdout selected rows=10, selected ROI=-67.3%; baseline ROI=-18.7%; excess ROI=-48.6%",
+      "holdout_or_forward": "excess CI=[-84.3%, +18.7%]",
+      "significance": "FAIL",
+      "baseline": "FAIL",
+      "forward": "FAIL",
+      "readiness": "rejected_for_live",
+      "live_test_decision": "不选 live",
+      "reason": "真钱早期赚过是真的，但 clean holdout 反向，top5 stress 不稳。",
+      "next_evidence_needed": "保留为特征输入，不再按旧 side-band 规则独立实盘。"
+    },
+    {
+      "candidate_id": "outside_range_no_overlay",
+      "human_name": "outside-range NO overlay",
+      "plain_idea": "adjacent3 外侧某档被市场高估时买 NO，理论上是区间外互补。",
+      "evidence": "hybrid v0 固定归一化口径下触发 0 行。",
+      "holdout_or_forward": "NA",
+      "significance": "FAIL",
+      "baseline": "FAIL",
+      "forward": "FAIL",
+      "readiness": "concept_only",
+      "live_test_decision": "不选 live",
+      "reason": "概念上互补，但当前 fact 近窗固定规则没有样本。",
+      "next_evidence_needed": "等更长 opportunity fact 或 shadow 期自然触发后再评估。"
+    }
+  ],
+  "shadow_rule_spec": {
+    "rule_id": "forecast_quality_medium_adjacent3_shadow_v0",
+    "status": "frozen_shadow_not_live",
+    "plain_idea": "只在模型分布非常集中、尾部很低、价格没贵到离谱时，记录 mode 附近三档 YES would-trade。",
+    "selection": {
+      "range_width": 3,
+      "range": "model mode around adjacent 3 YES brackets",
+      "decision_hours_to_settle": [
+        22,
+        24
+      ],
+      "market_cost_sum_max": 0.85,
+      "range_edge_min": 0.0,
+      "model_adjacent3_mass_min": 0.9841447792833155,
+      "model_tail_mass_outside_adjacent3_max": 0.015855220716684548,
+      "entropy": "record_only_not_hard_gate"
+    },
+    "record_fields": [
+      "rule_version",
+      "git_sha",
+      "generated_at_utc",
+      "city",
+      "event_date",
+      "forecast_source",
+      "model_version",
+      "decision_snapshot_ts_utc",
+      "decision_hours_to_settle",
+      "selected_brackets",
+      "leg condition_id/market_id/bracket/model_p_yes/market_yes_price",
+      "market_cost_sum",
+      "model_adjacent3_mass",
+      "model_tail_mass_outside_adjacent3",
+      "entropy",
+      "mode_probability",
+      "range_edge",
+      "per-leg orderbook_snapshot_ts_utc <= decision_snapshot_ts_utc",
+      "best ask/spread/depth/full-match/taker cost",
+      "settlement final bracket and event_date cluster metrics"
+    ]
+  },
+  "readiness_thresholds": {
+    "forward_event_dates_min": 30,
+    "settled_shadow_decisions_min": 100,
+    "full_orderbook_matched_decisions_min": 50,
+    "decision_proxy_cluster_ci95_lower_gt_zero": true,
+    "orderbook_taker_cluster_ci95_lower_gt_zero": true,
+    "matched_baseline_excess_ci95_lower_gt_zero": true,
+    "top5_removed_orderbook_roi_gt_zero": true,
+    "no_orderbook_leakage": "all orderbook_snapshot_ts_utc <= decision_snapshot_ts_utc"
+  },
+  "recommendation": {
+    "real_live_test_candidate": null,
+    "shadow_primary": "forecast_quality_adjacent3",
+    "engineering_shadow": "all_yes_underround",
+    "reason": "没有非 all-YES 策略通过三门。all-YES 是 confirmed 但执行复杂且用户暂不实盘；forecast-quality adjacent3 是最接近天气预测核心逻辑的 shadow 主线。",
+    "next_action": "freeze forecast_quality_medium_adjacent3_shadow_v0 and accumulate forward shadow evidence"
+  }
+}
