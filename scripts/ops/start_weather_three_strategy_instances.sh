@@ -7,7 +7,7 @@ PROJECT_DIR="${PROJECT_DIR:-$DEFAULT_PROJECT_DIR}"
 cd "$PROJECT_DIR"
 
 # Production strategy instances:
-# 1) Legacy global 25-75 mid-price chain on the current expanded T1 city pool.
+# 1) Legacy global 25-75 mid-price chain on the original core city pool.
 # 2) Per-side entry-band chain on the original core city pool.
 #
 # 2026-06-06: mid_price_core_v2_25_75 is stopped from live by default.
@@ -15,11 +15,6 @@ cd "$PROJECT_DIR"
 # because the grabbed 25-75 YES opportunities were negative alpha. Re-enable only
 # for explicit shadow/live experiments with START_MID_PRICE_CORE_V2_25_75=1.
 #
-# The explicit T1 list is a live safety gate for v1_25_75. It intentionally
-# excludes weak recent ECMWF city cases from live while keeping them available
-# for shadow research in other instances.
-TRADING_T1_CITIES="${WEATHER_TRADING_T1_CITIES:-Boston,Chengdu,Guangzhou,Istanbul,LA,London,Lucknow,Madrid,Manila,Miami,NYC,Phoenix,Seattle,Shanghai,Singapore,Tokyo,Warsaw}"
-
 # City x side hard block for live signal construction. This is a pm_agent-side
 # guard in addition to weather-predict/city_pools.py, so stale lookback
 # snapshots cannot leak blocked sides into live plans.
@@ -29,6 +24,11 @@ BLOCKED_CITY_SIDES="${WEATHER_LIVE_BLOCKED_CITY_SIDES:-NYC:BUY_YES}"
 # explicitly removed or side-gated. Override WEATHER_LEGACY_CORE_CITIES to adjust
 # without changing code.
 LEGACY_CORE_CITIES="${WEATHER_LEGACY_CORE_CITIES:-Boston,LA,London,Miami,NYC,Phoenix,Shanghai,Tokyo,Warsaw}"
+
+# v1_25_75 now uses the same core-city safety gate as side-band. Expanded T1
+# cities remain available in weather-predict for collection/research, but are
+# not live-eligible in pm_agent by default.
+TRADING_T1_CITIES="${WEATHER_TRADING_T1_CITIES:-$LEGACY_CORE_CITIES}"
 
 WEATHER_LIVE_STRATEGY_INSTANCE=mid_price_core_v1_25_75 \
 WEATHER_LIVE_EXECUTION_POLICY=mid_price_core_v1 \

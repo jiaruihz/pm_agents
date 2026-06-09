@@ -98,13 +98,14 @@ Current pm_agent live allowlists:
 
 | strategy_instance | allowed cities |
 |---|---|
-| `mid_price_core_v1_25_75` | Boston, Chengdu, Guangzhou, Istanbul, LA, London, Lucknow, Madrid, Manila, Miami, NYC, Phoenix, Seattle, Shanghai, Singapore, Tokyo, Warsaw |
+| `mid_price_core_v1_25_75` | Boston, LA, London, Miami, NYC, Phoenix, Shanghai, Tokyo, Warsaw |
 | `mid_price_core_v1_side_band` | Boston, LA, London, Miami, NYC, Phoenix, Shanghai, Tokyo, Warsaw |
 
-The 2026-06-08 v1_25_75 allowlist intentionally excludes
-`Ankara/Jeddah/Karachi/Moscow/Munich`; `BuenosAires` was already outside this
-live allowlist. Side-band already used the legacy core 9-city pool and did not
-include `BuenosAires/Munich/Jeddah/Karachi/Moscow/Ankara`.
+The 2026-06-09 v1_25_75 allowlist was narrowed to the same legacy core 9-city
+pool as side-band. Expanded T1 cities such as `Chengdu/Guangzhou/Istanbul/
+Lucknow/Madrid/Manila/Seattle/Singapore` remain in weather-predict collection,
+paper/research, and settlement, but are not live-eligible in pm_agent by
+default. This supersedes the 2026-06-08 17-city pm_agent allowlist.
 
 `mid_price_core_v2_25_75` was stopped from live on 2026-06-06. Finding:
 V2 execution improved fill-vs-plan on BUY_YES, but the grabbed `0.25-0.75`
@@ -152,14 +153,15 @@ Seattle, Shanghai, Singapore, Tokyo, Warsaw
 Paris / Beijing / Chicago / Austin / Amsterdam / BuenosAires 均保留在 `FULL_CITY_CONFIGS`，因此是 T2
 research-only，不是删除城市配置。
 
-**2026-06-08 pm_agent live allowlist 覆盖层：**
+**2026-06-09 pm_agent live allowlist 覆盖层：**
 
-- `mid_price_core_v1_25_75` 从 live allowlist 移除 `Ankara`, `Jeddah`,
-  `Karachi`, `Moscow`, `Munich`，保留 17 城。
+- `mid_price_core_v1_25_75` 从 live allowlist 进一步收窄到 legacy core 9 城：
+  Boston, LA, London, Miami, NYC, Phoenix, Shanghai, Tokyo, Warsaw。
 - `mid_price_core_v1_side_band` 保持 legacy core 9 城，不包含上述弱城市。
 - 这不是从 `weather-predict` 删除城市；这些城市仍继续用于采集、结算、
   paper/research 和 shadow 分析。
-- N100 已部署 `4149a13`，首轮运行 `contract_alerts=[]`。
+- 2026-06-08 N100 曾部署 `4149a13` 的 17 城覆盖层；2026-06-09 起以本文
+  9 城覆盖层为准。
 
 ## 2026-05-26 城市池 v2 变更（已被 v3 覆盖，paper ledger 生效）
 
