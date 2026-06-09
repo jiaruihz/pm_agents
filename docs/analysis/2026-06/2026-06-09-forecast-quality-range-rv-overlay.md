@@ -1,13 +1,13 @@
 # Forecast Quality Filter Range RV Overlay
 
-> generated_at_utc: `2026-06-09T15:50:56.133638+00:00`
+> generated_at_utc: `2026-06-09T17:34:52.815087+00:00`
 > target_metric: `forecast_quality_filter_range_rv_proxy_value`
 > DB: `/home/rui/projects/pm_agent/runtime/weather.db`
 > Scope: local research only; no N100/live config changed; no live action.
 
 ## 数据快照
 
-- fact_signal_candidates rows: `25100`
+- fact_signal_candidates rows: `25117`
 - fact_trades rows: `5473`
 - decision_sets: `270`
 - range rows: `526`

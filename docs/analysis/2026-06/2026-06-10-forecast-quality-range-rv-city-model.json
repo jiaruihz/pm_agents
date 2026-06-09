@@ -1,0 +1,1142 @@
+{
+  "generated_at_utc": "2026-06-09T17:34:55.052214+00:00",
+  "target_metric": "forecast_quality_range_rv_city_model_data_depth_value",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "self_check": {
+    "fact_signal_candidates_rows": 25117,
+    "fact_trades_rows": 5473
+  },
+  "split": {
+    "method": "event_date chronological 70/30 split",
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-28",
+    "holdout_start": "2026-05-29",
+    "holdout_end": "2026-06-07",
+    "train_dates": 21,
+    "holdout_dates": 9
+  },
+  "funnel": {
+    "input_candidate_rows": 2276,
+    "decision_sets": 270,
+    "range_rows": 526
+  },
+  "thresholds_train_derived": {
+    "tail_q75": 0.0,
+    "tail_q50": 0.0,
+    "adj3_q50": 1.0,
+    "adj3_q67": 1.0,
+    "entropy_q67": 0.8423549096219223,
+    "mode_q67": 0.5599337356525855,
+    "hist_q75": 0.062962962962963
+  },
+  "baseline_no_filter": {
+    "train": {
+      "rows": 126,
+      "event_dates": 18,
+      "cities": 44,
+      "cost": 76.1605,
+      "pnl": 20.8395,
+      "roi": 0.27362609226567575,
+      "roi_ci95": [
+        0.22452472475665103,
+        0.3197484233953623
+      ],
+      "hit_rate": 0.7698412698412699,
+      "avg_hist_n": 2.2936507936507935
+    },
+    "holdout": {
+      "rows": 38,
+      "event_dates": 3,
+      "cities": 29,
+      "cost": 22.852999999999998,
+      "pnl": 6.146999999999999,
+      "roi": 0.2689800026254759,
+      "roi_ci95": [
+        0.10520722635494158,
+        0.45553345301052833
+      ],
+      "hit_rate": 0.7631578947368421,
+      "avg_hist_n": 4.578947368421052
+    }
+  },
+  "executable_no_filter": {
+    "coverage": {
+      "status": "ok",
+      "orderbook_glob": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/orderbook_snapshots/*/*.jsonl.gz",
+      "orderbook_files_found": 1052,
+      "candidate_rows": 737,
+      "matched_candidate_rows": 401,
+      "matched_candidate_rate": 0.5440976933514247,
+      "scanned_files": 888,
+      "scanned_rows": 1096465,
+      "matched_book_rows_seen": 28350,
+      "max_decision_ts_utc": "2026-06-06T15:00:53+00:00",
+      "strategy_rows": 164,
+      "fully_matched_strategy_rows": 87,
+      "fully_matched_strategy_rate": 0.5304878048780488
+    },
+    "train": {
+      "rows": 49,
+      "event_dates": 8,
+      "cities": 36,
+      "cost": 50.50500000000001,
+      "pnl": -1.505000000000001,
+      "roi": -0.029799029799029816,
+      "roi_ci95": [
+        -0.2195616682446047,
+        0.0698807078962669
+      ],
+      "hit_rate": 0.4897959183673469,
+      "avg_hist_n": null
+    },
+    "holdout": {
+      "rows": 38,
+      "event_dates": 3,
+      "cities": 29,
+      "cost": 34.43,
+      "pnl": 3.5699999999999994,
+      "roi": 0.10368864362474585,
+      "roi_ci95": [
+        0.07024164929871007,
+        0.6129032258064517
+      ],
+      "hit_rate": 0.5263157894736842,
+      "avg_hist_n": null
+    }
+  },
+  "executable_candidate": {
+    "coverage": {
+      "status": "ok",
+      "orderbook_glob": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/orderbook_snapshots/*/*.jsonl.gz",
+      "orderbook_files_found": 1052,
+      "candidate_rows": 334,
+      "matched_candidate_rows": 176,
+      "matched_candidate_rate": 0.5269461077844312,
+      "scanned_files": 888,
+      "scanned_rows": 1096465,
+      "matched_book_rows_seen": 13211,
+      "max_decision_ts_utc": "2026-06-06T15:00:53+00:00",
+      "strategy_rows": 88,
+      "fully_matched_strategy_rows": 46,
+      "fully_matched_strategy_rate": 0.5227272727272727
+    },
+    "train": {
+      "rows": 26,
+      "event_dates": 7,
+      "cities": 21,
+      "cost": 23.969,
+      "pnl": 2.0309999999999997,
+      "roi": 0.08473444866285616,
+      "roi_ci95": [
+        0.025290025460660958,
+        0.13403493714431486
+      ],
+      "hit_rate": 0.6923076923076923,
+      "avg_hist_n": null
+    },
+    "holdout": {
+      "rows": 20,
+      "event_dates": 3,
+      "cities": 17,
+      "cost": 16.984,
+      "pnl": 3.016,
+      "roi": 0.17757889778615168,
+      "roi_ci95": [
+        0.12422709387296234,
+        0.6129032258064517
+      ],
+      "hit_rate": 0.6,
+      "avg_hist_n": null
+    }
+  },
+  "candidate": {
+    "definition": "adjacent3 cost<=0.85 medium_quality",
+    "rows": 88,
+    "train": {
+      "rows": 68,
+      "event_dates": 16,
+      "cities": 34,
+      "cost": 46.55899999999999,
+      "pnl": 12.440999999999999,
+      "roi": 0.2672093472797955,
+      "roi_ci95": [
+        0.1694354929370647,
+        0.33885311545738805
+      ],
+      "hit_rate": 0.8676470588235294,
+      "avg_hist_n": 2.323529411764706
+    },
+    "holdout": {
+      "rows": 20,
+      "event_dates": 3,
+      "cities": 17,
+      "cost": 13.4805,
+      "pnl": 4.5195,
+      "roi": 0.3352620451763659,
+      "roi_ci95": [
+        0.14629603094999283,
+        0.5743899239044871
+      ],
+      "hit_rate": 0.9,
+      "avg_hist_n": 5.25
+    }
+  },
+  "by_model": [
+    {
+      "model_version": "ecmwf",
+      "total_rows": 53,
+      "train_rows": 41,
+      "train_dates": 14,
+      "train_roi": 0.28332050012833204,
+      "train_pnl": 7.726999999999999,
+      "holdout_rows": 12,
+      "holdout_dates": 3,
+      "holdout_roi": 0.4046737326012004,
+      "holdout_pnl": 3.169,
+      "avg_hist_n": 4.083333333333333
+    },
+    {
+      "model_version": "gfs",
+      "total_rows": 35,
+      "train_rows": 27,
+      "train_dates": 12,
+      "train_roi": 0.24442600850357774,
+      "train_pnl": 4.714,
+      "holdout_rows": 8,
+      "holdout_dates": 2,
+      "holdout_roi": 0.23904770333657843,
+      "holdout_pnl": 1.3504999999999998,
+      "avg_hist_n": 7.0
+    }
+  ],
+  "by_forecast_source": [
+    {
+      "forecast_source": "open_meteo_live_ecmwf",
+      "total_rows": 53,
+      "train_rows": 41,
+      "train_dates": 14,
+      "train_roi": 0.28332050012833204,
+      "train_pnl": 7.726999999999999,
+      "holdout_rows": 12,
+      "holdout_dates": 3,
+      "holdout_roi": 0.4046737326012004,
+      "holdout_pnl": 3.169,
+      "avg_hist_n": 4.083333333333333
+    },
+    {
+      "forecast_source": "open_meteo_live_gfs",
+      "total_rows": 35,
+      "train_rows": 27,
+      "train_dates": 12,
+      "train_roi": 0.24442600850357774,
+      "train_pnl": 4.714,
+      "holdout_rows": 8,
+      "holdout_dates": 2,
+      "holdout_roi": 0.23904770333657843,
+      "holdout_pnl": 1.3504999999999998,
+      "avg_hist_n": 7.0
+    }
+  ],
+  "by_data_depth": [
+    {
+      "data_depth_bucket": "prior_3_5",
+      "total_rows": 22,
+      "train_rows": 14,
+      "train_dates": 7,
+      "train_roi": 0.14078299196266522,
+      "train_pnl": 1.3575,
+      "holdout_rows": 8,
+      "holdout_dates": 3,
+      "holdout_roi": 0.46681334800146673,
+      "holdout_pnl": 2.546,
+      "avg_hist_n": 4.0
+    },
+    {
+      "data_depth_bucket": "prior_6_10",
+      "total_rows": 12,
+      "train_rows": 8,
+      "train_dates": 5,
+      "train_roi": 0.012145748987854229,
+      "train_pnl": 0.05999999999999989,
+      "holdout_rows": 4,
+      "holdout_dates": 2,
+      "holdout_roi": 0.2865873271148279,
+      "holdout_pnl": 0.8909999999999999,
+      "avg_hist_n": 7.0
+    },
+    {
+      "data_depth_bucket": "prior_1_2",
+      "total_rows": 34,
+      "train_rows": 30,
+      "train_dates": 10,
+      "train_roi": 0.34073932196897144,
+      "train_pnl": 7.1160000000000005,
+      "holdout_rows": 4,
+      "holdout_dates": 2,
+      "holdout_roi": 0.23915737298636935,
+      "holdout_pnl": 0.5790000000000002,
+      "avg_hist_n": 1.75
+    },
+    {
+      "data_depth_bucket": "no_prior",
+      "total_rows": 16,
+      "train_rows": 15,
+      "train_dates": 6,
+      "train_roi": 0.3602798289933929,
+      "train_pnl": 3.708,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.4503263234227701,
+      "holdout_pnl": 0.3105,
+      "avg_hist_n": 0.0
+    },
+    {
+      "data_depth_bucket": "prior_11_plus",
+      "total_rows": 4,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.24921923797626486,
+      "train_pnl": 0.1995,
+      "holdout_rows": 3,
+      "holdout_dates": 2,
+      "holdout_roi": 0.1068068622025456,
+      "holdout_pnl": 0.1929999999999999,
+      "avg_hist_n": 12.666666666666666
+    }
+  ],
+  "by_city": [
+    {
+      "city": "SaoPaulo",
+      "total_rows": 3,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.21212121212121218,
+      "train_pnl": 0.17500000000000004,
+      "holdout_rows": 2,
+      "holdout_dates": 2,
+      "holdout_roi": 0.6956337431114881,
+      "holdout_pnl": 0.8205000000000001,
+      "avg_hist_n": 1.5
+    },
+    {
+      "city": "Chengdu",
+      "total_rows": 2,
+      "train_rows": 0,
+      "train_dates": 0,
+      "train_roi": null,
+      "train_pnl": 0.0,
+      "holdout_rows": 2,
+      "holdout_dates": 2,
+      "holdout_roi": 0.6135538523598224,
+      "holdout_pnl": 0.7605,
+      "avg_hist_n": 4.5
+    },
+    {
+      "city": "Moscow",
+      "total_rows": 1,
+      "train_rows": 0,
+      "train_dates": 0,
+      "train_roi": null,
+      "train_pnl": 0.0,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.9588638589618024,
+      "holdout_pnl": 0.48950000000000005,
+      "avg_hist_n": 3.0
+    },
+    {
+      "city": "Jeddah",
+      "total_rows": 1,
+      "train_rows": 0,
+      "train_dates": 0,
+      "train_roi": null,
+      "train_pnl": 0.0,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.6129032258064516,
+      "holdout_pnl": 0.38,
+      "avg_hist_n": 2.0
+    },
+    {
+      "city": "Shanghai",
+      "total_rows": 5,
+      "train_rows": 4,
+      "train_dates": 4,
+      "train_roi": 0.7463435931019429,
+      "train_pnl": 1.7095,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.5037593984962405,
+      "holdout_pnl": 0.33499999999999996,
+      "avg_hist_n": 5.0
+    },
+    {
+      "city": "Singapore",
+      "total_rows": 1,
+      "train_rows": 0,
+      "train_dates": 0,
+      "train_roi": null,
+      "train_pnl": 0.0,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.4503263234227701,
+      "holdout_pnl": 0.3105,
+      "avg_hist_n": 0.0
+    },
+    {
+      "city": "London",
+      "total_rows": 3,
+      "train_rows": 2,
+      "train_dates": 2,
+      "train_roi": -0.3386243386243386,
+      "train_pnl": -0.512,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.4357501794687724,
+      "holdout_pnl": 0.3035,
+      "avg_hist_n": 11.0
+    },
+    {
+      "city": "Ankara",
+      "total_rows": 2,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.44927536231884047,
+      "train_pnl": 0.30999999999999994,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.4184397163120566,
+      "holdout_pnl": 0.29499999999999993,
+      "avg_hist_n": 4.0
+    },
+    {
+      "city": "Amsterdam",
+      "total_rows": 2,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.5797788309636651,
+      "train_pnl": 0.367,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.40056022408963593,
+      "holdout_pnl": 0.28600000000000003,
+      "avg_hist_n": 4.0
+    },
+    {
+      "city": "Warsaw",
+      "total_rows": 3,
+      "train_rows": 2,
+      "train_dates": 2,
+      "train_roi": 0.2539184952978056,
+      "train_pnl": 0.4049999999999999,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.35226504394861385,
+      "holdout_pnl": 0.26049999999999995,
+      "avg_hist_n": 8.0
+    },
+    {
+      "city": "Paris",
+      "total_rows": 3,
+      "train_rows": 2,
+      "train_dates": 2,
+      "train_roi": 0.3922728854855551,
+      "train_pnl": 0.5635,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.3166556945358788,
+      "holdout_pnl": 0.24049999999999994,
+      "avg_hist_n": 7.0
+    },
+    {
+      "city": "Atlanta",
+      "total_rows": 3,
+      "train_rows": 2,
+      "train_dates": 2,
+      "train_roi": 0.23076923076923078,
+      "train_pnl": 0.375,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.3157894736842105,
+      "holdout_pnl": 0.24,
+      "avg_hist_n": 6.0
+    },
+    {
+      "city": "Istanbul",
+      "total_rows": 4,
+      "train_rows": 3,
+      "train_dates": 3,
+      "train_roi": -0.13363656053714534,
+      "train_pnl": -0.3085000000000001,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.24223602484472043,
+      "holdout_pnl": 0.19499999999999995,
+      "avg_hist_n": 3.0
+    },
+    {
+      "city": "Seattle",
+      "total_rows": 2,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.2903225806451614,
+      "train_pnl": 0.2250000000000001,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.22699386503067492,
+      "holdout_pnl": 0.18500000000000005,
+      "avg_hist_n": 4.0
+    },
+    {
+      "city": "Chicago",
+      "total_rows": 4,
+      "train_rows": 3,
+      "train_dates": 3,
+      "train_roi": -0.13681484678463532,
+      "train_pnl": -0.31700000000000006,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.17647058823529416,
+      "holdout_pnl": 0.15000000000000002,
+      "avg_hist_n": 7.0
+    },
+    {
+      "city": "Beijing",
+      "total_rows": 6,
+      "train_rows": 6,
+      "train_dates": 6,
+      "train_roi": 0.2982797792924375,
+      "train_pnl": 0.9189999999999999,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "BuenosAires",
+      "total_rows": 2,
+      "train_rows": 2,
+      "train_dates": 2,
+      "train_roi": 0.39860139860139865,
+      "train_pnl": 0.5700000000000001,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Busan",
+      "total_rows": 2,
+      "train_rows": 2,
+      "train_dates": 2,
+      "train_roi": 0.4336917562724014,
+      "train_pnl": 0.605,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "CapeTown",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.6313213703099511,
+      "train_pnl": 0.387,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Chongqing",
+      "total_rows": 3,
+      "train_rows": 3,
+      "train_dates": 3,
+      "train_roi": 0.7167381974248928,
+      "train_pnl": 1.2525000000000002,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Dallas",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.36986301369863017,
+      "train_pnl": 0.27,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Guangzhou",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.2738853503184713,
+      "train_pnl": 0.21499999999999997,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Houston",
+      "total_rows": 3,
+      "train_rows": 3,
+      "train_dates": 2,
+      "train_roi": 0.33333333333333337,
+      "train_pnl": 0.7500000000000001,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "KualaLumpur",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.3333333333333333,
+      "train_pnl": 0.25,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "LA",
+      "total_rows": 3,
+      "train_rows": 3,
+      "train_dates": 3,
+      "train_roi": 0.2684989429175475,
+      "train_pnl": 0.6349999999999999,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Lagos",
+      "total_rows": 2,
+      "train_rows": 2,
+      "train_dates": 1,
+      "train_roi": 0.7241379310344827,
+      "train_pnl": 0.84,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Lucknow",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.24999999999999994,
+      "train_pnl": 0.19999999999999996,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Madrid",
+      "total_rows": 3,
+      "train_rows": 3,
+      "train_dates": 3,
+      "train_roi": 0.3280212483399733,
+      "train_pnl": 0.7409999999999999,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Manila",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.45454545454545453,
+      "train_pnl": 0.3125,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Munich",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.3422818791946309,
+      "train_pnl": 0.255,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "NYC",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.33511348464619495,
+      "train_pnl": 0.251,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "SanFrancisco",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 1.3282887077997672,
+      "train_pnl": 0.5705,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Seoul",
+      "total_rows": 4,
+      "train_rows": 4,
+      "train_dates": 4,
+      "train_roi": 0.3729191693839025,
+      "train_pnl": 1.0865,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Shenzhen",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": 0.6,
+      "train_pnl": 0.375,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Tokyo",
+      "total_rows": 2,
+      "train_rows": 2,
+      "train_dates": 2,
+      "train_roi": -1.0,
+      "train_pnl": -0.9395,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Wuhan",
+      "total_rows": 1,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": -1.0,
+      "train_pnl": -0.4845,
+      "holdout_rows": 0,
+      "holdout_dates": 0,
+      "holdout_roi": null,
+      "holdout_pnl": 0.0,
+      "avg_hist_n": null
+    },
+    {
+      "city": "Miami",
+      "total_rows": 6,
+      "train_rows": 4,
+      "train_dates": 4,
+      "train_roi": 0.3046314416177429,
+      "train_pnl": 0.9339999999999999,
+      "holdout_rows": 2,
+      "holdout_dates": 2,
+      "holdout_roi": -0.09950472760018018,
+      "holdout_pnl": -0.1105000000000001,
+      "avg_hist_n": 13.5
+    },
+    {
+      "city": "Milan",
+      "total_rows": 2,
+      "train_rows": 1,
+      "train_dates": 1,
+      "train_roi": -1.0,
+      "train_pnl": -0.5465,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": -1.0,
+      "holdout_pnl": -0.6214999999999999,
+      "avg_hist_n": 2.0
+    }
+  ],
+  "train_selected_probe": {
+    "selection_rule": "select city+model pairs on train only when train_rows>=3 and train_roi>0",
+    "selected_pairs": [
+      {
+        "city": "Beijing",
+        "model_version": "ecmwf"
+      },
+      {
+        "city": "Chongqing",
+        "model_version": "ecmwf"
+      },
+      {
+        "city": "Houston",
+        "model_version": "gfs"
+      },
+      {
+        "city": "LA",
+        "model_version": "gfs"
+      },
+      {
+        "city": "Madrid",
+        "model_version": "ecmwf"
+      },
+      {
+        "city": "Miami",
+        "model_version": "gfs"
+      },
+      {
+        "city": "Seoul",
+        "model_version": "ecmwf"
+      },
+      {
+        "city": "Shanghai",
+        "model_version": "gfs"
+      }
+    ],
+    "diagnostics": [
+      {
+        "city": "Shanghai",
+        "model_version": "gfs",
+        "train_rows": 4,
+        "train_roi": 0.7463435931019429,
+        "train_pnl": 1.7095,
+        "selected": true
+      },
+      {
+        "city": "Chongqing",
+        "model_version": "ecmwf",
+        "train_rows": 3,
+        "train_roi": 0.7167381974248928,
+        "train_pnl": 1.2525000000000002,
+        "selected": true
+      },
+      {
+        "city": "Seoul",
+        "model_version": "ecmwf",
+        "train_rows": 4,
+        "train_roi": 0.3729191693839025,
+        "train_pnl": 1.0865,
+        "selected": true
+      },
+      {
+        "city": "Miami",
+        "model_version": "gfs",
+        "train_rows": 4,
+        "train_roi": 0.3046314416177429,
+        "train_pnl": 0.9339999999999999,
+        "selected": true
+      },
+      {
+        "city": "Beijing",
+        "model_version": "ecmwf",
+        "train_rows": 6,
+        "train_roi": 0.2982797792924375,
+        "train_pnl": 0.9189999999999999,
+        "selected": true
+      },
+      {
+        "city": "Houston",
+        "model_version": "gfs",
+        "train_rows": 3,
+        "train_roi": 0.33333333333333337,
+        "train_pnl": 0.7500000000000001,
+        "selected": true
+      },
+      {
+        "city": "Madrid",
+        "model_version": "ecmwf",
+        "train_rows": 3,
+        "train_roi": 0.3280212483399733,
+        "train_pnl": 0.7409999999999999,
+        "selected": true
+      },
+      {
+        "city": "LA",
+        "model_version": "gfs",
+        "train_rows": 3,
+        "train_roi": 0.2684989429175475,
+        "train_pnl": 0.6349999999999999,
+        "selected": true
+      },
+      {
+        "city": "Lagos",
+        "model_version": "ecmwf",
+        "train_rows": 2,
+        "train_roi": 0.7241379310344827,
+        "train_pnl": 0.84,
+        "selected": false
+      },
+      {
+        "city": "Busan",
+        "model_version": "ecmwf",
+        "train_rows": 2,
+        "train_roi": 0.4336917562724014,
+        "train_pnl": 0.605,
+        "selected": false
+      },
+      {
+        "city": "SanFrancisco",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 1.3282887077997672,
+        "train_pnl": 0.5705,
+        "selected": false
+      },
+      {
+        "city": "BuenosAires",
+        "model_version": "ecmwf",
+        "train_rows": 2,
+        "train_roi": 0.39860139860139865,
+        "train_pnl": 0.5700000000000001,
+        "selected": false
+      },
+      {
+        "city": "Paris",
+        "model_version": "gfs",
+        "train_rows": 2,
+        "train_roi": 0.3922728854855551,
+        "train_pnl": 0.5635,
+        "selected": false
+      },
+      {
+        "city": "Warsaw",
+        "model_version": "ecmwf",
+        "train_rows": 2,
+        "train_roi": 0.2539184952978056,
+        "train_pnl": 0.4049999999999999,
+        "selected": false
+      },
+      {
+        "city": "CapeTown",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.6313213703099511,
+        "train_pnl": 0.387,
+        "selected": false
+      },
+      {
+        "city": "Atlanta",
+        "model_version": "gfs",
+        "train_rows": 2,
+        "train_roi": 0.23076923076923078,
+        "train_pnl": 0.375,
+        "selected": false
+      },
+      {
+        "city": "Shenzhen",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.6,
+        "train_pnl": 0.375,
+        "selected": false
+      },
+      {
+        "city": "Amsterdam",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.5797788309636651,
+        "train_pnl": 0.367,
+        "selected": false
+      },
+      {
+        "city": "Manila",
+        "model_version": "gfs",
+        "train_rows": 1,
+        "train_roi": 0.45454545454545453,
+        "train_pnl": 0.3125,
+        "selected": false
+      },
+      {
+        "city": "Ankara",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.44927536231884047,
+        "train_pnl": 0.30999999999999994,
+        "selected": false
+      },
+      {
+        "city": "Dallas",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.36986301369863017,
+        "train_pnl": 0.27,
+        "selected": false
+      },
+      {
+        "city": "Munich",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.3422818791946309,
+        "train_pnl": 0.255,
+        "selected": false
+      },
+      {
+        "city": "NYC",
+        "model_version": "gfs",
+        "train_rows": 1,
+        "train_roi": 0.33511348464619495,
+        "train_pnl": 0.251,
+        "selected": false
+      },
+      {
+        "city": "KualaLumpur",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.3333333333333333,
+        "train_pnl": 0.25,
+        "selected": false
+      },
+      {
+        "city": "Seattle",
+        "model_version": "gfs",
+        "train_rows": 1,
+        "train_roi": 0.2903225806451614,
+        "train_pnl": 0.2250000000000001,
+        "selected": false
+      },
+      {
+        "city": "Guangzhou",
+        "model_version": "gfs",
+        "train_rows": 1,
+        "train_roi": 0.2738853503184713,
+        "train_pnl": 0.21499999999999997,
+        "selected": false
+      },
+      {
+        "city": "Lucknow",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.24999999999999994,
+        "train_pnl": 0.19999999999999996,
+        "selected": false
+      },
+      {
+        "city": "SaoPaulo",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": 0.21212121212121218,
+        "train_pnl": 0.17500000000000004,
+        "selected": false
+      },
+      {
+        "city": "Istanbul",
+        "model_version": "ecmwf",
+        "train_rows": 3,
+        "train_roi": -0.13363656053714534,
+        "train_pnl": -0.3085000000000001,
+        "selected": false
+      },
+      {
+        "city": "Chicago",
+        "model_version": "gfs",
+        "train_rows": 3,
+        "train_roi": -0.13681484678463532,
+        "train_pnl": -0.31700000000000006,
+        "selected": false
+      },
+      {
+        "city": "Wuhan",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": -1.0,
+        "train_pnl": -0.4845,
+        "selected": false
+      },
+      {
+        "city": "London",
+        "model_version": "ecmwf",
+        "train_rows": 2,
+        "train_roi": -0.3386243386243386,
+        "train_pnl": -0.512,
+        "selected": false
+      },
+      {
+        "city": "Milan",
+        "model_version": "ecmwf",
+        "train_rows": 1,
+        "train_roi": -1.0,
+        "train_pnl": -0.5465,
+        "selected": false
+      },
+      {
+        "city": "Tokyo",
+        "model_version": "gfs",
+        "train_rows": 2,
+        "train_roi": -1.0,
+        "train_pnl": -0.9395,
+        "selected": false
+      }
+    ],
+    "train": {
+      "rows": 30,
+      "event_dates": 11,
+      "cities": 8,
+      "cost": 19.9725,
+      "pnl": 8.0275,
+      "roi": 0.4019276505194643,
+      "roi_ci95": [
+        0.3489666461732596,
+        0.46731908697911057
+      ],
+      "hit_rate": 0.9333333333333333,
+      "avg_hist_n": 3.3333333333333335
+    },
+    "holdout": {
+      "rows": 3,
+      "event_dates": 2,
+      "cities": 2,
+      "cost": 1.7755,
+      "pnl": 0.22449999999999987,
+      "roi": 0.1264432554210081,
+      "roi_ci95": [
+        -1.0,
+        0.5284677111196026
+      ],
+      "hit_rate": 0.6666666666666666,
+      "avg_hist_n": 10.666666666666666
+    }
+  }
+}

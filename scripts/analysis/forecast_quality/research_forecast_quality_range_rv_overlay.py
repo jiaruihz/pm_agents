@@ -160,6 +160,8 @@ def build_decision_sets(cands: pd.DataFrame) -> pd.DataFrame:
             .agg(
                 {
                     "bracket_value": "first",
+                    "condition_id": "first",
+                    "market_id": "first",
                     "model_p_yes": "median",
                     "market_yes_price": "median",
                     "final_yes": "max",
@@ -206,6 +208,8 @@ def build_decision_sets(cands: pd.DataFrame) -> pd.DataFrame:
             [
                 {
                     "bracket": str(r["bracket"]),
+                    "condition_id": str(r["condition_id"]),
+                    "market_id": str(r["market_id"]),
                     "market": float(r["market_yes_price"]),
                     "model": float(r["model_p_yes"]),
                     "final_yes": float(r["final_yes"]),
@@ -294,7 +298,7 @@ def build_range_rows(decision_sets: pd.DataFrame) -> pd.DataFrame:
             if cost <= 0 or cost >= 1:
                 continue
             payout = 1.0 if int(ds["final_i"]) in idxs else 0.0
-            row = ds.drop(labels=["legs_json"]).to_dict()
+            row = ds.to_dict()
             row.update(
                 {
                     "range_width": width,

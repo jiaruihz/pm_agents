@@ -1,14 +1,14 @@
 {
-  "generated_at_utc": "2026-06-09T15:50:56.133638+00:00",
+  "generated_at_utc": "2026-06-09T17:34:52.815087+00:00",
   "target_metric": "forecast_quality_filter_range_rv_proxy_value",
   "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
   "self_check": {
-    "fact_signal_candidates_rows": 25100,
+    "fact_signal_candidates_rows": 25117,
     "fact_trades_rows": 5473,
     "candidate_coverage": {
-      "rows": 25100,
-      "eligible": 8300,
-      "paper_ordered": 3127,
+      "rows": 25117,
+      "eligible": 8306,
+      "paper_ordered": 3139,
       "live_filled": 554
     },
     "trade_class_distribution": [
@@ -40,7 +40,7 @@
     "holdout_dates": 9
   },
   "funnel": {
-    "input_candidate_rows": 2292,
+    "input_candidate_rows": 2276,
     "decision_sets": 270,
     "range_rows": 526
   },
