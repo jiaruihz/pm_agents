@@ -1,0 +1,1773 @@
+{
+  "generated_at_utc": "2026-06-09T01:57:41.039780+00:00",
+  "target_metric": "temporal_range_rv_reversion_alpha",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "db_last_modified_utc": "2026-06-08T17:23:59.056493+00:00",
+  "parameters": {
+    "bootstrap_iters": 1000,
+    "seed": 20260609,
+    "train_frac": 0.7,
+    "split_date": "2026-05-29",
+    "orderbook_glob": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/orderbook_snapshots/*/*.jsonl.gz",
+    "skip_orderbook": false
+  },
+  "data_self_check": {
+    "fact_trades_max_built_at_utc": "2026-06-08T17:23:42.317245+00:00",
+    "fact_signal_candidates_max_built_at_utc": "2026-06-08T17:23:55.700271+00:00",
+    "fact_trades_by_class": [
+      {
+        "trade_class": "live_real",
+        "rows": 1364
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 1125
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "settlement_status": "",
+        "rows": 251
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 5159
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "rows": 24323,
+      "eligible": 7989,
+      "paper_ordered": 2986,
+      "live_filled": 533
+    },
+    "clob_order_fill_join": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1597,
+        "with_fill": 1364
+      }
+    ]
+  },
+  "input": {
+    "candidate_rows": 2248,
+    "decision_sets": 647,
+    "temporal_rows": 20,
+    "event_dates": 4,
+    "algorithms": 6
+  },
+  "orderbook_coverage": {
+    "status": "ok",
+    "orderbook_glob": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/orderbook_snapshots/*/*.jsonl.gz",
+    "orderbook_files_found": 1020,
+    "candidate_rows": 40,
+    "matched_candidate_rows": 30,
+    "matched_candidate_rate": 0.75,
+    "scanned_files": 518,
+    "scanned_rows": 641911,
+    "matched_book_rows_seen": 847,
+    "max_decision_ts_utc": "2026-05-29T20:00:53+00:00",
+    "strategy_rows": 20,
+    "fully_matched_strategy_rows": 15,
+    "fully_matched_strategy_rate": 0.75
+  },
+  "decision_proxy_results": [
+    {
+      "algorithm": "temporal_adj3_range_reversion_e150",
+      "source": "decision_market_proxy",
+      "train_family_rows": 2,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 1.0,
+          "model_prob_sum": 1.0,
+          "range_edge": -0.11550000000000016,
+          "avg_abs_range_edge": 0.05775000000000008,
+          "taker_cost": 3.305,
+          "settled_pnl": 0.695,
+          "taker_roi": 0.21028744326777607,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": -0.15250000000000005,
+          "avg_worst_case_loss_unit_notional": -0.15250000000000002,
+          "avg_loss_probability": 0.5,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.7897153351698807,
+          "model_prob_sum": 0.8849817876155787,
+          "range_edge": 0.20170000000000002,
+          "avg_abs_range_edge": 0.20170000000000002,
+          "taker_cost": 0.43,
+          "settled_pnl": 0.5700000000000001,
+          "taker_roi": 1.3255813953488373,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.45498178761557867,
+          "avg_worst_case_loss_unit_notional": -0.43,
+          "avg_loss_probability": 0.1150182123844214,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 1.7897153351698807,
+          "model_prob_sum": 1.8849817876155788,
+          "range_edge": 0.16510000000000002,
+          "avg_abs_range_edge": 0.11915,
+          "taker_cost": 0.9595,
+          "settled_pnl": 1.0405000000000002,
+          "taker_roi": 1.0844189682126109,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.4627408938077894,
+          "avg_worst_case_loss_unit_notional": 0.020250000000000018,
+          "avg_loss_probability": 0.0575091061922107,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.2411624271362265,
+        "roi_ci95_cluster_by_event_date": [
+          1.3255813953488373,
+          1.3255813953488373
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.2411624271362265
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_above_tail_reversion_e010",
+      "source": "decision_market_proxy",
+      "train_family_rows": 0,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.38403608581306237,
+          "model_prob_sum": 1.0630645272138675,
+          "range_edge": 0.5769,
+          "avg_abs_range_edge": 0.28845,
+          "taker_cost": 1.865,
+          "settled_pnl": 1.135,
+          "taker_roi": 0.6085790884718498,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.48553408058197767,
+          "avg_worst_case_loss_unit_notional": -0.9325,
+          "avg_loss_probability": 0.46268563048923184,
+          "avg_large_loss_probability": 0.041678341272065,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.38403608581306237,
+          "model_prob_sum": 1.0630645272138675,
+          "range_edge": 0.5769,
+          "avg_abs_range_edge": 0.28845,
+          "taker_cost": 1.865,
+          "settled_pnl": 1.135,
+          "taker_roi": 0.6085790884718498,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.48553408058197767,
+          "avg_worst_case_loss_unit_notional": -0.9325,
+          "avg_loss_probability": 0.46268563048923184,
+          "avg_large_loss_probability": 0.041678341272065,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -0.04306220095693773,
+          1.4390243902439022
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_adj2_range_reversion_e120",
+      "source": "decision_market_proxy",
+      "train_family_rows": 2,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.627906976744186,
+          "model_prob_sum": 0.9431742211525606,
+          "range_edge": 0.5865,
+          "avg_abs_range_edge": 0.29325,
+          "taker_cost": 1.625,
+          "settled_pnl": -0.625,
+          "taker_roi": -0.38461538461538464,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.3956456768233466,
+          "avg_worst_case_loss_unit_notional": -0.3125,
+          "avg_loss_probability": 0.2918543231766534,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.627906976744186,
+          "model_prob_sum": 0.9431742211525606,
+          "range_edge": 0.5865,
+          "avg_abs_range_edge": 0.29325,
+          "taker_cost": 1.625,
+          "settled_pnl": -0.625,
+          "taker_roi": -0.38461538461538464,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.3956456768233466,
+          "avg_worst_case_loss_unit_notional": -0.3125,
+          "avg_loss_probability": 0.2918543231766534,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          -0.180327868852459
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.6795224977043159,
+          "model_prob_sum": 0.6667133650882601,
+          "range_edge": 0.41390000000000005,
+          "avg_abs_range_edge": 0.20695000000000002,
+          "taker_cost": 1.9855,
+          "settled_pnl": 1.0145,
+          "taker_roi": 0.5109544195416771,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.26300473488740456,
+          "avg_worst_case_loss_unit_notional": -0.49274999999999997,
+          "avg_loss_probability": 0.24424526511259548,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.6795224977043159,
+          "model_prob_sum": 0.6667133650882601,
+          "range_edge": 0.41390000000000005,
+          "avg_abs_range_edge": 0.20695000000000002,
+          "taker_cost": 1.9855,
+          "settled_pnl": 1.0145,
+          "taker_roi": 0.5109544195416771,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.26300473488740456,
+          "avg_worst_case_loss_unit_notional": -0.49274999999999997,
+          "avg_loss_probability": 0.24424526511259548,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          0.23800680903744975,
+          1.7027027027027026
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_adjacent_spread_reversion_e015",
+      "source": "decision_market_proxy",
+      "train_family_rows": 2,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.5742962056303549,
+          "model_prob_sum": 1.0261322414659204,
+          "range_edge": 0.6418999999999999,
+          "avg_abs_range_edge": 0.32094999999999996,
+          "taker_cost": 1.7400000000000002,
+          "settled_pnl": 0.2599999999999999,
+          "taker_roi": 0.14942528735632177,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.38385527952771703,
+          "avg_worst_case_loss_unit_notional": -0.8700000000000001,
+          "avg_loss_probability": 0.4542903972956295,
+          "avg_large_loss_probability": 0.02841288942371975,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.5742962056303549,
+          "model_prob_sum": 1.0261322414659204,
+          "range_edge": 0.6418999999999999,
+          "avg_abs_range_edge": 0.32094999999999996,
+          "taker_cost": 1.7400000000000002,
+          "settled_pnl": 0.2599999999999999,
+          "taker_roi": 0.14942528735632177,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.38385527952771703,
+          "avg_worst_case_loss_unit_notional": -0.8700000000000001,
+          "avg_loss_probability": 0.4542903972956295,
+          "avg_large_loss_probability": 0.02841288942371975,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -0.01477832512315283,
+          0.37931034482758624
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.668700915932438,
+          "model_prob_sum": 1.2535940873147362,
+          "range_edge": 0.6526,
+          "avg_abs_range_edge": 0.3263,
+          "taker_cost": 1.965,
+          "settled_pnl": 1.035,
+          "taker_roi": 0.5267175572519084,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.558607770691252,
+          "avg_worst_case_loss_unit_notional": -0.9825,
+          "avg_loss_probability": 0.36742085043879746,
+          "avg_large_loss_probability": 0.013869431213224995,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.668700915932438,
+          "model_prob_sum": 1.2535940873147362,
+          "range_edge": 0.6526,
+          "avg_abs_range_edge": 0.3263,
+          "taker_cost": 1.965,
+          "settled_pnl": 1.035,
+          "taker_roi": 0.5267175572519084,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.558607770691252,
+          "avg_worst_case_loss_unit_notional": -0.9825,
+          "avg_loss_probability": 0.36742085043879746,
+          "avg_large_loss_probability": 0.013869431213224995,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -0.12663755458515286,
+          1.4390243902439022
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_single_reversion_e012",
+      "source": "decision_market_proxy",
+      "train_family_rows": 2,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.17894736842105263,
+          "model_prob_sum": 0.47311713249413273,
+          "range_edge": 0.471,
+          "avg_abs_range_edge": 0.2355,
+          "taker_cost": 0.93,
+          "settled_pnl": 0.06999999999999998,
+          "taker_roi": 0.07526881720430105,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.24314567682334665,
+          "avg_worst_case_loss_unit_notional": -0.465,
+          "avg_loss_probability": 0.2918543231766534,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.17894736842105263,
+          "model_prob_sum": 0.47311713249413273,
+          "range_edge": 0.471,
+          "avg_abs_range_edge": 0.2355,
+          "taker_cost": 0.93,
+          "settled_pnl": 0.06999999999999998,
+          "taker_roi": 0.07526881720430105,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.24314567682334665,
+          "avg_worst_case_loss_unit_notional": -0.465,
+          "avg_loss_probability": 0.2918543231766534,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          0.3157894736842105
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.668700915932438,
+          "model_prob_sum": 1.2535940873147362,
+          "range_edge": 0.34819999999999995,
+          "avg_abs_range_edge": 0.17409999999999998,
+          "taker_cost": 0.36,
+          "settled_pnl": 0.64,
+          "taker_roi": 1.777777777777778,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.44679704365736805,
+          "avg_worst_case_loss_unit_notional": -0.18,
+          "avg_loss_probability": 0.37320295634263195,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.668700915932438,
+          "model_prob_sum": 1.2535940873147362,
+          "range_edge": 0.34819999999999995,
+          "avg_abs_range_edge": 0.17409999999999998,
+          "taker_cost": 0.36,
+          "settled_pnl": 0.64,
+          "taker_roi": 1.777777777777778,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.44679704365736805,
+          "avg_worst_case_loss_unit_notional": -0.18,
+          "avg_loss_probability": 0.37320295634263195,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          5.8965517241379315
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_below_tail_reversion_e010",
+      "source": "decision_market_proxy",
+      "train_family_rows": 2,
+      "holdout_family_rows": 0,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.5742962056303549,
+          "model_prob_sum": 1.0261322414659204,
+          "range_edge": 0.6418999999999999,
+          "avg_abs_range_edge": 0.32094999999999996,
+          "taker_cost": 1.7400000000000002,
+          "settled_pnl": 0.2599999999999999,
+          "taker_roi": 0.14942528735632177,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.38385527952771703,
+          "avg_worst_case_loss_unit_notional": -0.8700000000000001,
+          "avg_loss_probability": 0.4542903972956295,
+          "avg_large_loss_probability": 0.02841288942371975,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.5742962056303549,
+          "model_prob_sum": 1.0261322414659204,
+          "range_edge": 0.6418999999999999,
+          "avg_abs_range_edge": 0.32094999999999996,
+          "taker_cost": 1.7400000000000002,
+          "settled_pnl": 0.2599999999999999,
+          "taker_roi": 0.14942528735632177,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.38385527952771703,
+          "avg_worst_case_loss_unit_notional": -0.8700000000000001,
+          "avg_loss_probability": 0.4542903972956295,
+          "avg_large_loss_probability": 0.02841288942371975,
+          "drop_top5_event_dates": [
+            "2026-05-12",
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -0.01477832512315283,
+          0.37931034482758624
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    }
+  ],
+  "orderbook_results": [
+    {
+      "algorithm": "temporal_adj3_range_reversion_e150",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 1,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.0,
+          "model_prob_sum": 0.0,
+          "range_edge": -0.10290000000000005,
+          "avg_abs_range_edge": 0.10290000000000005,
+          "taker_cost": 2.4,
+          "settled_pnl": 0.6,
+          "taker_roi": 0.25,
+          "maker_proxy_cost": 2.34,
+          "maker_proxy_settled_pnl": 0.66,
+          "maker_proxy_roi": 0.2820512820512821,
+          "avg_expected_pnl_unit_notional": -0.35500000000000004,
+          "avg_worst_case_loss_unit_notional": -0.355,
+          "avg_loss_probability": 1.0,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.7897153351698807,
+          "model_prob_sum": 0.8849817876155787,
+          "range_edge": 0.20170000000000002,
+          "avg_abs_range_edge": 0.20170000000000002,
+          "taker_cost": 0.46,
+          "settled_pnl": 0.54,
+          "taker_roi": 1.173913043478261,
+          "maker_proxy_cost": 0.38,
+          "maker_proxy_settled_pnl": 0.6199999999999999,
+          "maker_proxy_roi": 1.6315789473684208,
+          "avg_expected_pnl_unit_notional": 0.45498178761557867,
+          "avg_worst_case_loss_unit_notional": -0.43,
+          "avg_loss_probability": 0.1150182123844214,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 1.7897153351698807,
+          "model_prob_sum": 1.8849817876155788,
+          "range_edge": 0.16510000000000002,
+          "avg_abs_range_edge": 0.11915,
+          "taker_cost": 1.022,
+          "settled_pnl": 0.978,
+          "taker_roi": 0.9569471624266145,
+          "maker_proxy_cost": 0.8109999999999999,
+          "maker_proxy_settled_pnl": 1.189,
+          "maker_proxy_roi": 1.466091245376079,
+          "avg_expected_pnl_unit_notional": 0.4627408938077894,
+          "avg_worst_case_loss_unit_notional": 0.020250000000000018,
+          "avg_loss_probability": 0.0575091061922107,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.2169658810516465,
+        "roi_ci95_cluster_by_event_date": [
+          1.173913043478261,
+          1.173913043478261
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.2169658810516465
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_above_tail_reversion_e010",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 0,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.38403608581306237,
+          "model_prob_sum": 1.0630645272138675,
+          "range_edge": 0.5769,
+          "avg_abs_range_edge": 0.28845,
+          "taker_cost": 2.109,
+          "settled_pnl": 0.891,
+          "taker_roi": 0.422475106685633,
+          "maker_proxy_cost": 1.9509999999999998,
+          "maker_proxy_settled_pnl": 1.0490000000000002,
+          "maker_proxy_roi": 0.5376729882111739,
+          "avg_expected_pnl_unit_notional": 0.48553408058197767,
+          "avg_worst_case_loss_unit_notional": -0.9325,
+          "avg_loss_probability": 0.46268563048923184,
+          "avg_large_loss_probability": 0.041678341272065,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.38403608581306237,
+          "model_prob_sum": 1.0630645272138675,
+          "range_edge": 0.5769,
+          "avg_abs_range_edge": 0.28845,
+          "taker_cost": 2.109,
+          "settled_pnl": 0.891,
+          "taker_roi": 0.422475106685633,
+          "maker_proxy_cost": 1.9509999999999998,
+          "maker_proxy_settled_pnl": 1.0490000000000002,
+          "maker_proxy_roi": 0.5376729882111739,
+          "avg_expected_pnl_unit_notional": 0.48553408058197767,
+          "avg_worst_case_loss_unit_notional": -0.9325,
+          "avg_loss_probability": 0.46268563048923184,
+          "avg_large_loss_probability": 0.041678341272065,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -0.05571293673276676,
+          0.9047619047619047
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_adj2_range_reversion_e120",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 1,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.627906976744186,
+          "model_prob_sum": 0.9431742211525606,
+          "range_edge": 0.3004,
+          "avg_abs_range_edge": 0.3004,
+          "taker_cost": 0.4,
+          "settled_pnl": -0.4,
+          "taker_roi": -1.0,
+          "maker_proxy_cost": 0.37,
+          "maker_proxy_settled_pnl": -0.37,
+          "maker_proxy_roi": -1.0,
+          "avg_expected_pnl_unit_notional": 0.5381742211525605,
+          "avg_worst_case_loss_unit_notional": -0.405,
+          "avg_loss_probability": 0.0568257788474395,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.627906976744186,
+          "model_prob_sum": 0.9431742211525606,
+          "range_edge": 0.3004,
+          "avg_abs_range_edge": 0.3004,
+          "taker_cost": 0.4,
+          "settled_pnl": -0.4,
+          "taker_roi": -1.0,
+          "maker_proxy_cost": 0.37,
+          "maker_proxy_settled_pnl": -0.37,
+          "maker_proxy_roi": -1.0,
+          "avg_expected_pnl_unit_notional": 0.5381742211525605,
+          "avg_worst_case_loss_unit_notional": -0.405,
+          "avg_loss_probability": 0.0568257788474395,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          -1.0
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.6795224977043159,
+          "model_prob_sum": 0.6667133650882601,
+          "range_edge": 0.41390000000000005,
+          "avg_abs_range_edge": 0.20695000000000002,
+          "taker_cost": 2.1390000000000002,
+          "settled_pnl": 0.861,
+          "taker_roi": 0.4025245441795231,
+          "maker_proxy_cost": 2.018,
+          "maker_proxy_settled_pnl": 0.982,
+          "maker_proxy_roi": 0.4866204162537166,
+          "avg_expected_pnl_unit_notional": 0.26300473488740456,
+          "avg_worst_case_loss_unit_notional": -0.49274999999999997,
+          "avg_loss_probability": 0.24424526511259548,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.6795224977043159,
+          "model_prob_sum": 0.6667133650882601,
+          "range_edge": 0.41390000000000005,
+          "avg_abs_range_edge": 0.20695000000000002,
+          "taker_cost": 2.1390000000000002,
+          "settled_pnl": 0.861,
+          "taker_roi": 0.4025245441795231,
+          "maker_proxy_cost": 2.018,
+          "maker_proxy_settled_pnl": 0.982,
+          "maker_proxy_roi": 0.4866204162537166,
+          "avg_expected_pnl_unit_notional": 0.26300473488740456,
+          "avg_worst_case_loss_unit_notional": -0.49274999999999997,
+          "avg_loss_probability": 0.24424526511259548,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          0.14351057747284163,
+          1.564102564102564
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_adjacent_spread_reversion_e015",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 1,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.3953488372093023,
+          "model_prob_sum": 0.5530151089717877,
+          "range_edge": 0.35609999999999997,
+          "avg_abs_range_edge": 0.35609999999999997,
+          "taker_cost": 1.01,
+          "settled_pnl": -0.010000000000000009,
+          "taker_roi": -0.00990099009900991,
+          "maker_proxy_cost": 0.97,
+          "maker_proxy_settled_pnl": 0.03,
+          "maker_proxy_roi": 0.030927835051546393,
+          "avg_expected_pnl_unit_notional": 0.48118933012434806,
+          "avg_worst_case_loss_unit_notional": -1.0150000000000001,
+          "avg_loss_probability": 0.4469848910282123,
+          "avg_large_loss_probability": 0.0568257788474395,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.3953488372093023,
+          "model_prob_sum": 0.5530151089717877,
+          "range_edge": 0.35609999999999997,
+          "avg_abs_range_edge": 0.35609999999999997,
+          "taker_cost": 1.01,
+          "settled_pnl": -0.010000000000000009,
+          "taker_roi": -0.00990099009900991,
+          "maker_proxy_cost": 0.97,
+          "maker_proxy_settled_pnl": 0.03,
+          "maker_proxy_roi": 0.030927835051546393,
+          "avg_expected_pnl_unit_notional": 0.48118933012434806,
+          "avg_worst_case_loss_unit_notional": -1.0150000000000001,
+          "avg_loss_probability": 0.4469848910282123,
+          "avg_large_loss_probability": 0.0568257788474395,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -0.00990099009900991,
+          -0.00990099009900991
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.668700915932438,
+          "model_prob_sum": 1.2535940873147362,
+          "range_edge": 0.6526,
+          "avg_abs_range_edge": 0.3263,
+          "taker_cost": 2.23,
+          "settled_pnl": 0.77,
+          "taker_roi": 0.3452914798206278,
+          "maker_proxy_cost": 2.0300000000000002,
+          "maker_proxy_settled_pnl": 0.97,
+          "maker_proxy_roi": 0.47783251231527085,
+          "avg_expected_pnl_unit_notional": 0.558607770691252,
+          "avg_worst_case_loss_unit_notional": -0.9825,
+          "avg_loss_probability": 0.36742085043879746,
+          "avg_large_loss_probability": 0.013869431213224995,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.668700915932438,
+          "model_prob_sum": 1.2535940873147362,
+          "range_edge": 0.6526,
+          "avg_abs_range_edge": 0.3263,
+          "taker_cost": 2.23,
+          "settled_pnl": 0.77,
+          "taker_roi": 0.3452914798206278,
+          "maker_proxy_cost": 2.0300000000000002,
+          "maker_proxy_settled_pnl": 0.97,
+          "maker_proxy_roi": 0.47783251231527085,
+          "avg_expected_pnl_unit_notional": 0.558607770691252,
+          "avg_worst_case_loss_unit_notional": -0.9825,
+          "avg_loss_probability": 0.36742085043879746,
+          "avg_large_loss_probability": 0.013869431213224995,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -0.15254237288135591,
+          0.9047619047619047
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_single_reversion_e012",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 1,
+      "holdout_family_rows": 2,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.0,
+          "model_prob_sum": 0.0,
+          "range_edge": 0.19749999999999998,
+          "avg_abs_range_edge": 0.19749999999999998,
+          "taker_cost": 0.77,
+          "settled_pnl": 0.22999999999999998,
+          "taker_roi": 0.2987012987012987,
+          "maker_proxy_cost": 0.74,
+          "maker_proxy_settled_pnl": 0.26,
+          "maker_proxy_roi": 0.35135135135135137,
+          "avg_expected_pnl_unit_notional": 0.18317422115256052,
+          "avg_worst_case_loss_unit_notional": -0.76,
+          "avg_loss_probability": 0.0568257788474395,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.0,
+          "model_prob_sum": 0.0,
+          "range_edge": 0.19749999999999998,
+          "avg_abs_range_edge": 0.19749999999999998,
+          "taker_cost": 0.77,
+          "settled_pnl": 0.22999999999999998,
+          "taker_roi": 0.2987012987012987,
+          "maker_proxy_cost": 0.74,
+          "maker_proxy_settled_pnl": 0.26,
+          "maker_proxy_roi": 0.35135135135135137,
+          "avg_expected_pnl_unit_notional": 0.18317422115256052,
+          "avg_worst_case_loss_unit_notional": -0.76,
+          "avg_loss_probability": 0.0568257788474395,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          0.2987012987012987,
+          0.2987012987012987
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.668700915932438,
+          "model_prob_sum": 1.2535940873147362,
+          "range_edge": 0.34819999999999995,
+          "avg_abs_range_edge": 0.17409999999999998,
+          "taker_cost": 0.48,
+          "settled_pnl": 0.52,
+          "taker_roi": 1.0833333333333335,
+          "maker_proxy_cost": 0.38,
+          "maker_proxy_settled_pnl": 0.6200000000000001,
+          "maker_proxy_roi": 1.6315789473684212,
+          "avg_expected_pnl_unit_notional": 0.44679704365736805,
+          "avg_worst_case_loss_unit_notional": -0.18,
+          "avg_loss_probability": 0.37320295634263195,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 2,
+          "active_event_dates": 2,
+          "active_city_days": 2,
+          "market_prob_sum": 0.668700915932438,
+          "model_prob_sum": 1.2535940873147362,
+          "range_edge": 0.34819999999999995,
+          "avg_abs_range_edge": 0.17409999999999998,
+          "taker_cost": 0.48,
+          "settled_pnl": 0.52,
+          "taker_roi": 1.0833333333333335,
+          "maker_proxy_cost": 0.38,
+          "maker_proxy_settled_pnl": 0.6200000000000001,
+          "maker_proxy_roi": 1.6315789473684212,
+          "avg_expected_pnl_unit_notional": 0.44679704365736805,
+          "avg_worst_case_loss_unit_notional": -0.18,
+          "avg_loss_probability": 0.37320295634263195,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          3.0
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    },
+    {
+      "algorithm": "temporal_below_tail_reversion_e010",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 1,
+      "holdout_family_rows": 0,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.3953488372093023,
+          "model_prob_sum": 0.5530151089717877,
+          "range_edge": 0.35609999999999997,
+          "avg_abs_range_edge": 0.35609999999999997,
+          "taker_cost": 1.01,
+          "settled_pnl": -0.010000000000000009,
+          "taker_roi": -0.00990099009900991,
+          "maker_proxy_cost": 0.97,
+          "maker_proxy_settled_pnl": 0.03,
+          "maker_proxy_roi": 0.030927835051546393,
+          "avg_expected_pnl_unit_notional": 0.48118933012434806,
+          "avg_worst_case_loss_unit_notional": -1.0150000000000001,
+          "avg_loss_probability": 0.4469848910282123,
+          "avg_large_loss_probability": 0.0568257788474395,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.3953488372093023,
+          "model_prob_sum": 0.5530151089717877,
+          "range_edge": 0.35609999999999997,
+          "avg_abs_range_edge": 0.35609999999999997,
+          "taker_cost": 1.01,
+          "settled_pnl": -0.010000000000000009,
+          "taker_roi": -0.00990099009900991,
+          "maker_proxy_cost": 0.97,
+          "maker_proxy_settled_pnl": 0.03,
+          "maker_proxy_roi": 0.030927835051546393,
+          "avg_expected_pnl_unit_notional": 0.48118933012434806,
+          "avg_worst_case_loss_unit_notional": -1.0150000000000001,
+          "avg_loss_probability": 0.4469848910282123,
+          "avg_large_loss_probability": 0.0568257788474395,
+          "drop_top5_event_dates": [
+            "2026-05-27"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": 0.0,
+        "roi_ci95_cluster_by_event_date": [
+          -0.00990099009900991,
+          -0.00990099009900991
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.0
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_active_dates<5",
+        "holdout_rows<10",
+        "holdout_top5_removed_roi<=0_or_not_available"
+      ]
+    }
+  ],
+  "confirmed_algorithms": [],
+  "gates": {
+    "significance": "FAIL",
+    "baseline": "FAIL",
+    "forward": "FAIL",
+    "verdict": "inconclusive"
+  },
+  "verdict": "inconclusive"
+}
