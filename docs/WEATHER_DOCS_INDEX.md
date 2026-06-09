@@ -117,6 +117,7 @@ Status 口径：
 | [account_reconcile.md](analysis/account_reconcile.md) | `current-reference` | [5] | 钱包余额、CLOB fill、cashflow、DB/fact 对账 |
 | [data_integrity.md](analysis/data_integrity.md) | `current-reference` | [0] | snapshot 健康、side flip、candidate/fill linkage、fact-table coverage 和分析前自检 |
 | [SCRIPT_MIGRATION_MANIFEST.md](analysis/SCRIPT_MIGRATION_MANIFEST.md) | `current-reference` | [0]-[6] | Phase 3A/3B 脚本迁移归属表：old path、new path、owner living doc |
+| [MD_CONSOLIDATION_PLAN.md](analysis/MD_CONSOLIDATION_PLAN.md) | `current-reference` | [6] | Phase 4A/4B Markdown 审计表：口径有效性、重复、勘误、owner living doc、后续动作 |
 
 ## 历史分析快照
 
