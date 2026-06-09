@@ -206,6 +206,33 @@ Not done in this phase:
 | `2026-06-07-fill-recovery-and-performance-recalc.md` | external account activity gap is separate from internal DB/fact coverage gate. | keep active evidence |
 | `2026-06-07-live-strategy-period-slice-current.md` | fill-date cashflow and target-date strategy attribution must be presented separately. | keep for `live_performance.md` absorption later |
 
+## Phase 4D Pilot Absorption Log
+
+### `live_performance.md` absorbed on 2026-06-09
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-03-performance-three-strategy-instances.md` | Old near-binary and side-band mapping make numeric PnL invalid; keep only V2 action-history context. | `archive-ready-after-link-check` as invalidated evidence |
+| `2026-06-06-three-strategy-instances-near-binary-reanalysis.md` | Post-fix instance actions: V2 stopped/shadow, V1 retained but not expanded, side-band small-size only. | keep active action-history evidence until entrypoint supersedes |
+| `2026-06-06-live-strategy-period-slice.md` | Correct distinction between UI equity, target-date attribution, fill-date cashflow, open cost, and MTM. | `archive-ready-after-link-check`; numbers superseded |
+| `2026-06-06-recent-live-loss-attribution.md` | Loss-attribution structure useful, but numeric output pre near-binary fix is invalidated. | `archive-ready-after-link-check` as invalidated evidence |
+| `2026-06-07-live-strategy-period-slice-current.md` | Best 2026-06-07 target-date vs fill-date live period snapshot; row counts timestamped. | keep active evidence until newer live-performance snapshot |
+| `2026-06-07-live-pnl-curve-0524-0606.md` | 15d curve with settled-only PnL and open-cost separation through 2026-06-06. | duplicate-family; keep newest after link check |
+| `2026-06-07-live-pnl-15d-curve-after-history-rebuild.md` | Extended 15d curve through 2026-06-07; open rows and MTM missingness explicit. | keep as primary curve snapshot for now |
+| `2026-06-07-recent-live-loss-attribution-target-0531-0606.md` | Post-fix loss attribution by cohort/city/side/instance; no global model proof. | keep active evidence |
+| `2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | Current risk posture: gated DB usable, 6月 live turned negative, no add-size / no confirmed edge. | keep active meta-evidence |
+
+### `data_integrity.md` absorbed on 2026-06-09
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-03-signal-side-flip-check.md` | Side flips are mostly forecast/probability instability, not side inversion by default. | `archive-ready-after-link-check` after monitor exists |
+| `2026-05-29-performance-candidates-vs-fills-link.md` | Candidate/fill bridge reached zero orphan in snapshot; counterfactual and fill grains must stay separated. | keep active evidence until reusable orphan table exists |
+| `2026-06-09-decision-window-backfill.md` | Backfill repaired analysis DB coverage only and marks `decision_window_source=orderbook_backfill`. | keep active evidence |
+| `2026-06-08-HANDOFF-LANDING-VALIDATION.md` | Handoff landing/schema validation is method evidence, not strategy proof. | `archive-ready-after-link-check` |
+| `2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md` | Corrected fact table/schema assumptions and staged reorg advice. | `archive-ready-after-link-check` after current plan supersedes |
+| `2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | Report only three-gate verdicts; avoid drifting live_real counts and hard-coded rows. | keep active meta-evidence |
+
 ## Hard Rules For Later Moves
 
 - A historical file can move only after its useful claim appears in the owner living doc or is explicitly marked `invalidated`.
