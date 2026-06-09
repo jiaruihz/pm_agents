@@ -184,6 +184,28 @@ Not done in this phase:
 6. `non-weather`: move copy-trade/OpenAI hardware docs to their own area.
 7. `2026-05 archive`: after lessons are extracted, move most May reports together.
 
+## Phase 4C Pilot Absorption Log
+
+### `execution_quality.md` absorbed on 2026-06-09
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1.md` | UNKNOWN vs mid mechanism was signal filtering, not quote formula; paper-era only. | `archive-ready-after-link-check` |
+| `2026-05-27-compare-mid-price-vs-maker-queue.md` | maker_queue price improvement was too small relative to fill-rate loss; retired-strategy evidence. | `archive-ready-after-link-check` |
+| `2026-05-29-strategy-entry-band-and-execution-quality.md` | mid_price beat maker_queue in early A/B; filled-only price-band results conflict with opportunity universe. | `archive-ready-after-link-check` for execution claims; sizing claims still need `sizing_entry_band.md` |
+| `2026-06-07-fill-recovery-and-performance-recalc.md` | CLOB coverage gate, partial-fill recovery, and public fallback over-allocation failure mode. | keep active evidence until next fill-recovery audit supersedes |
+| `2026-06-08-executable-edge.md` | Step2 executable-edge gates failed; current verdict remains `inconclusive`. | keep active evidence |
+
+### `account_reconcile.md` absorbed on 2026-06-09
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-06-account-equity-replay.md` | UI account loss is account-equity/cashflow reconstruction, not settled strategy PnL; public activity was diagnostic for magnitude. | `archive-ready-after-link-check` after account-equity replay successor exists |
+| `2026-06-06-live-account-reconcile-near-binary-fix.md` | near-binary normalization and fill-date cashflow split are required. | `archive-ready-after-link-check` |
+| `2026-06-06-polymarket-ui-account-loss-reconciliation.md` | settled strategy PnL cannot refute UI one-week loss; report already self-corrects. | `archive-ready-after-link-check` |
+| `2026-06-07-fill-recovery-and-performance-recalc.md` | external account activity gap is separate from internal DB/fact coverage gate. | keep active evidence |
+| `2026-06-07-live-strategy-period-slice-current.md` | fill-date cashflow and target-date strategy attribution must be presented separately. | keep for `live_performance.md` absorption later |
+
 ## Hard Rules For Later Moves
 
 - A historical file can move only after its useful claim appears in the owner living doc or is explicitly marked `invalidated`.
