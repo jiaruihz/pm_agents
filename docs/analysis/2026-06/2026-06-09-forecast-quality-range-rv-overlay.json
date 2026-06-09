@@ -1,0 +1,1114 @@
+{
+  "generated_at_utc": "2026-06-09T15:50:56.133638+00:00",
+  "target_metric": "forecast_quality_filter_range_rv_proxy_value",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "self_check": {
+    "fact_signal_candidates_rows": 25100,
+    "fact_trades_rows": 5473,
+    "candidate_coverage": {
+      "rows": 25100,
+      "eligible": 8300,
+      "paper_ordered": 3127,
+      "live_filled": 554
+    },
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "rows": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 1147
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ]
+  },
+  "split": {
+    "method": "event_date chronological 70/30 split",
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-28",
+    "holdout_start": "2026-05-29",
+    "holdout_end": "2026-06-07",
+    "train_dates": 21,
+    "holdout_dates": 9
+  },
+  "funnel": {
+    "input_candidate_rows": 2292,
+    "decision_sets": 270,
+    "range_rows": 526
+  },
+  "thresholds_train_derived": {
+    "tail_q75": 0.0,
+    "tail_q50": 0.0,
+    "adj3_q50": 1.0,
+    "adj3_q67": 1.0,
+    "entropy_q67": 0.8423549096219223,
+    "mode_q67": 0.5599337356525855,
+    "hist_q75": 0.062962962962963
+  },
+  "results": [
+    {
+      "range_width": 2,
+      "cost_cap": 0.7,
+      "filter": "no_filter",
+      "train": {
+        "rows": 153,
+        "event_dates": 20,
+        "cities": 45,
+        "cost": 65.332,
+        "pnl": 13.668,
+        "roi": 0.20920835119084064,
+        "roi_ci95": [
+          0.07203635640821611,
+          0.3391434027684193
+        ],
+        "hit_rate": 0.5163398692810458
+      },
+      "holdout": {
+        "rows": 61,
+        "event_dates": 9,
+        "cities": 34,
+        "cost": 28.959,
+        "pnl": 6.0409999999999995,
+        "roi": 0.20860526951897512,
+        "roi_ci95": [
+          -0.4009369026220434,
+          0.35900675632738027
+        ],
+        "hit_rate": 0.5737704918032787
+      },
+      "train_roi_delta_vs_no_filter": 0.0,
+      "holdout_roi_delta_vs_no_filter": 0.0
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.7,
+      "filter": "loose_drop_worst_tail",
+      "train": {
+        "rows": 115,
+        "event_dates": 20,
+        "cities": 41,
+        "cost": 55.104,
+        "pnl": 12.895999999999999,
+        "roi": 0.23403019744483158,
+        "roi_ci95": [
+          0.070817121942562,
+          0.38083611443337734
+        ],
+        "hit_rate": 0.591304347826087
+      },
+      "holdout": {
+        "rows": 49,
+        "event_dates": 9,
+        "cities": 28,
+        "cost": 25.543499999999998,
+        "pnl": 5.4565,
+        "roi": 0.21361598841192478,
+        "roi_ci95": [
+          -0.4009369026220434,
+          0.38353185157088543
+        ],
+        "hit_rate": 0.6326530612244898
+      },
+      "train_roi_delta_vs_no_filter": 0.024821846253990948,
+      "holdout_roi_delta_vs_no_filter": 0.005010718892949656
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.7,
+      "filter": "medium_quality",
+      "train": {
+        "rows": 89,
+        "event_dates": 19,
+        "cities": 36,
+        "cost": 42.933,
+        "pnl": 11.067,
+        "roi": 0.25777374047935153,
+        "roi_ci95": [
+          0.09650911756090759,
+          0.4226748310037089
+        ],
+        "hit_rate": 0.6067415730337079
+      },
+      "holdout": {
+        "rows": 38,
+        "event_dates": 8,
+        "cities": 23,
+        "cost": 20.205000000000002,
+        "pnl": 4.795000000000001,
+        "roi": 0.23731749566938873,
+        "roi_ci95": [
+          -0.3906870891332279,
+          0.42362438119673296
+        ],
+        "hit_rate": 0.6578947368421053
+      },
+      "train_roi_delta_vs_no_filter": 0.048565389288510896,
+      "holdout_roi_delta_vs_no_filter": 0.028712226150413606
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.7,
+      "filter": "strict_low_uncertainty",
+      "train": {
+        "rows": 29,
+        "event_dates": 16,
+        "cities": 16,
+        "cost": 14.9455,
+        "pnl": 2.0545,
+        "roi": 0.13746612692783783,
+        "roi_ci95": [
+          -0.1749361957051364,
+          0.46621065888444674
+        ],
+        "hit_rate": 0.5862068965517241
+      },
+      "holdout": {
+        "rows": 10,
+        "event_dates": 4,
+        "cities": 8,
+        "cost": 5.108,
+        "pnl": 0.8919999999999998,
+        "roi": 0.17462803445575564,
+        "roi_ci95": [
+          -1.0,
+          0.812141347025068
+        ],
+        "hit_rate": 0.6
+      },
+      "train_roi_delta_vs_no_filter": -0.07174222426300281,
+      "holdout_roi_delta_vs_no_filter": -0.03397723506321948
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.75,
+      "filter": "no_filter",
+      "train": {
+        "rows": 165,
+        "event_dates": 21,
+        "cities": 46,
+        "cost": 73.94399999999999,
+        "pnl": 16.055999999999997,
+        "roi": 0.2171372930866602,
+        "roi_ci95": [
+          0.09579857679718304,
+          0.33717426184375593
+        ],
+        "hit_rate": 0.5454545454545454
+      },
+      "holdout": {
+        "rows": 65,
+        "event_dates": 9,
+        "cities": 34,
+        "cost": 31.873,
+        "pnl": 7.127,
+        "roi": 0.22360618705487412,
+        "roi_ci95": [
+          -0.23200681391466527,
+          0.3604917071914117
+        ],
+        "hit_rate": 0.6
+      },
+      "train_roi_delta_vs_no_filter": 0.0,
+      "holdout_roi_delta_vs_no_filter": 0.0
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.75,
+      "filter": "loose_drop_worst_tail",
+      "train": {
+        "rows": 127,
+        "event_dates": 21,
+        "cities": 42,
+        "cost": 63.715999999999994,
+        "pnl": 15.284,
+        "roi": 0.2398769539833009,
+        "roi_ci95": [
+          0.10577765977627404,
+          0.37742944189383804
+        ],
+        "hit_rate": 0.6220472440944882
+      },
+      "holdout": {
+        "rows": 53,
+        "event_dates": 9,
+        "cities": 28,
+        "cost": 28.4575,
+        "pnl": 6.5424999999999995,
+        "roi": 0.22990424316963895,
+        "roi_ci95": [
+          -0.23200681391466527,
+          0.3837250583134108
+        ],
+        "hit_rate": 0.660377358490566
+      },
+      "train_roi_delta_vs_no_filter": 0.0227396608966407,
+      "holdout_roi_delta_vs_no_filter": 0.006298056114764833
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.75,
+      "filter": "medium_quality",
+      "train": {
+        "rows": 101,
+        "event_dates": 20,
+        "cities": 38,
+        "cost": 51.545,
+        "pnl": 13.454999999999998,
+        "roi": 0.26103404791929385,
+        "roi_ci95": [
+          0.1357039664795268,
+          0.4009670075285122
+        ],
+        "hit_rate": 0.6435643564356436
+      },
+      "holdout": {
+        "rows": 41,
+        "event_dates": 8,
+        "cities": 23,
+        "cost": 22.409,
+        "pnl": 5.591,
+        "roi": 0.24949796956579945,
+        "roi_ci95": [
+          -0.2611607709232738,
+          0.4195390701380215
+        ],
+        "hit_rate": 0.6829268292682927
+      },
+      "train_roi_delta_vs_no_filter": 0.043896754832633667,
+      "holdout_roi_delta_vs_no_filter": 0.025891782510925332
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.75,
+      "filter": "strict_low_uncertainty",
+      "train": {
+        "rows": 31,
+        "event_dates": 17,
+        "cities": 16,
+        "cost": 16.3605,
+        "pnl": 2.6395,
+        "roi": 0.16133370007029127,
+        "roi_ci95": [
+          -0.11659550317216479,
+          0.4537914969198358
+        ],
+        "hit_rate": 0.6129032258064516
+      },
+      "holdout": {
+        "rows": 12,
+        "event_dates": 5,
+        "cities": 8,
+        "cost": 6.561999999999999,
+        "pnl": 1.438,
+        "roi": 0.21914050594330997,
+        "roi_ci95": [
+          -0.7027348394768133,
+          0.6902598774561589
+        ],
+        "hit_rate": 0.6666666666666666
+      },
+      "train_roi_delta_vs_no_filter": -0.05580359301636892,
+      "holdout_roi_delta_vs_no_filter": -0.004465681111564146
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.8,
+      "filter": "no_filter",
+      "train": {
+        "rows": 183,
+        "event_dates": 21,
+        "cities": 47,
+        "cost": 87.881,
+        "pnl": 16.118999999999996,
+        "roi": 0.18341848636223987,
+        "roi_ci95": [
+          0.07212805025679135,
+          0.302856534120729
+        ],
+        "hit_rate": 0.5683060109289617
+      },
+      "holdout": {
+        "rows": 66,
+        "event_dates": 9,
+        "cities": 34,
+        "cost": 32.638,
+        "pnl": 7.362,
+        "roi": 0.2255652919909309,
+        "roi_ci95": [
+          -0.23200681391466527,
+          0.3586414197842602
+        ],
+        "hit_rate": 0.6060606060606061
+      },
+      "train_roi_delta_vs_no_filter": 0.0,
+      "holdout_roi_delta_vs_no_filter": 0.0
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.8,
+      "filter": "loose_drop_worst_tail",
+      "train": {
+        "rows": 142,
+        "event_dates": 21,
+        "cities": 44,
+        "cost": 75.3895,
+        "pnl": 15.6105,
+        "roi": 0.20706464428070223,
+        "roi_ci95": [
+          0.08092354950246057,
+          0.33651855126036495
+        ],
+        "hit_rate": 0.6408450704225352
+      },
+      "holdout": {
+        "rows": 54,
+        "event_dates": 9,
+        "cities": 28,
+        "cost": 29.2225,
+        "pnl": 6.7775,
+        "roi": 0.23192745316109162,
+        "roi_ci95": [
+          -0.23200681391466527,
+          0.3816546809946707
+        ],
+        "hit_rate": 0.6666666666666666
+      },
+      "train_roi_delta_vs_no_filter": 0.023646157918462363,
+      "holdout_roi_delta_vs_no_filter": 0.006362161170160724
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.8,
+      "filter": "medium_quality",
+      "train": {
+        "rows": 113,
+        "event_dates": 20,
+        "cities": 40,
+        "cost": 60.876,
+        "pnl": 13.124,
+        "roi": 0.21558578093173003,
+        "roi_ci95": [
+          0.09937697379407569,
+          0.3418842034732794
+        ],
+        "hit_rate": 0.6548672566371682
+      },
+      "holdout": {
+        "rows": 42,
+        "event_dates": 8,
+        "cities": 23,
+        "cost": 23.174,
+        "pnl": 5.8260000000000005,
+        "roi": 0.25140243376197463,
+        "roi_ci95": [
+          -0.2611607709232738,
+          0.41711619694602925
+        ],
+        "hit_rate": 0.6904761904761905
+      },
+      "train_roi_delta_vs_no_filter": 0.03216729456949016,
+      "holdout_roi_delta_vs_no_filter": 0.025837141771043737
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.8,
+      "filter": "strict_low_uncertainty",
+      "train": {
+        "rows": 33,
+        "event_dates": 18,
+        "cities": 17,
+        "cost": 17.9355,
+        "pnl": 3.0645000000000007,
+        "roi": 0.1708622564188342,
+        "roi_ci95": [
+          -0.113422285567704,
+          0.4526083443473638
+        ],
+        "hit_rate": 0.6363636363636364
+      },
+      "holdout": {
+        "rows": 13,
+        "event_dates": 5,
+        "cities": 8,
+        "cost": 7.326999999999999,
+        "pnl": 1.6730000000000003,
+        "roi": 0.22833356080251133,
+        "roi_ci95": [
+          -0.7027348394768133,
+          0.6155088852988694
+        ],
+        "hit_rate": 0.6923076923076923
+      },
+      "train_roi_delta_vs_no_filter": -0.012556229943405661,
+      "holdout_roi_delta_vs_no_filter": 0.002768268811580432
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.85,
+      "filter": "no_filter",
+      "train": {
+        "rows": 190,
+        "event_dates": 21,
+        "cities": 47,
+        "cost": 93.63049999999998,
+        "pnl": 17.369499999999995,
+        "roi": 0.1855111315223138,
+        "roi_ci95": [
+          0.07934849047154088,
+          0.29553026781773556
+        ],
+        "hit_rate": 0.5842105263157895
+      },
+      "holdout": {
+        "rows": 67,
+        "event_dates": 9,
+        "cities": 34,
+        "cost": 33.443,
+        "pnl": 7.557,
+        "roi": 0.22596656998475026,
+        "roi_ci95": [
+          -0.23200681391466527,
+          0.3556310519690837
+        ],
+        "hit_rate": 0.6119402985074627
+      },
+      "train_roi_delta_vs_no_filter": 0.0,
+      "holdout_roi_delta_vs_no_filter": 0.0
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.85,
+      "filter": "loose_drop_worst_tail",
+      "train": {
+        "rows": 148,
+        "event_dates": 21,
+        "cities": 44,
+        "cost": 80.30950000000001,
+        "pnl": 16.6905,
+        "roi": 0.20782721844862687,
+        "roi_ci95": [
+          0.08863036011117045,
+          0.32890486270396535
+        ],
+        "hit_rate": 0.6554054054054054
+      },
+      "holdout": {
+        "rows": 55,
+        "event_dates": 9,
+        "cities": 28,
+        "cost": 30.0275,
+        "pnl": 6.9725,
+        "roi": 0.23220381317125968,
+        "roi_ci95": [
+          -0.23200681391466527,
+          0.37454134868909467
+        ],
+        "hit_rate": 0.6727272727272727
+      },
+      "train_roi_delta_vs_no_filter": 0.022316086926313067,
+      "holdout_roi_delta_vs_no_filter": 0.0062372431865094224
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.85,
+      "filter": "medium_quality",
+      "train": {
+        "rows": 119,
+        "event_dates": 20,
+        "cities": 40,
+        "cost": 65.79599999999999,
+        "pnl": 14.204,
+        "roi": 0.21587938476503127,
+        "roi_ci95": [
+          0.10706151541061466,
+          0.33372885943532743
+        ],
+        "hit_rate": 0.6722689075630253
+      },
+      "holdout": {
+        "rows": 43,
+        "event_dates": 8,
+        "cities": 23,
+        "cost": 23.978999999999996,
+        "pnl": 6.021000000000001,
+        "roi": 0.25109470786938576,
+        "roi_ci95": [
+          -0.2611607709232738,
+          0.40621326462118845
+        ],
+        "hit_rate": 0.6976744186046512
+      },
+      "train_roi_delta_vs_no_filter": 0.03036825324271747,
+      "holdout_roi_delta_vs_no_filter": 0.0251281378846355
+    },
+    {
+      "range_width": 2,
+      "cost_cap": 0.85,
+      "filter": "strict_low_uncertainty",
+      "train": {
+        "rows": 34,
+        "event_dates": 18,
+        "cities": 17,
+        "cost": 18.755499999999998,
+        "pnl": 3.2445000000000013,
+        "roi": 0.17298925648476451,
+        "roi_ci95": [
+          -0.09643878152094829,
+          0.4472812032761005
+        ],
+        "hit_rate": 0.6470588235294118
+      },
+      "holdout": {
+        "rows": 14,
+        "event_dates": 5,
+        "cities": 8,
+        "cost": 8.132,
+        "pnl": 1.8680000000000005,
+        "roi": 0.22970978848991647,
+        "roi_ci95": [
+          -0.7027348394768133,
+          0.6113985242981937
+        ],
+        "hit_rate": 0.7142857142857143
+      },
+      "train_roi_delta_vs_no_filter": -0.012521875037549285,
+      "holdout_roi_delta_vs_no_filter": 0.003743218505166207
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.7,
+      "filter": "no_filter",
+      "train": {
+        "rows": 77,
+        "event_dates": 13,
+        "cities": 37,
+        "cost": 37.809999999999995,
+        "pnl": 12.19,
+        "roi": 0.3224014810896588,
+        "roi_ci95": [
+          0.19328313316357687,
+          0.4211200543120156
+        ],
+        "hit_rate": 0.6493506493506493
+      },
+      "holdout": {
+        "rows": 24,
+        "event_dates": 2,
+        "cities": 19,
+        "cost": 12.144,
+        "pnl": 2.8560000000000003,
+        "roi": 0.2351778656126482,
+        "roi_ci95": [
+          -0.11769895888477146,
+          0.5439246564767639
+        ],
+        "hit_rate": 0.625
+      },
+      "train_roi_delta_vs_no_filter": 0.0,
+      "holdout_roi_delta_vs_no_filter": 0.0
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.7,
+      "filter": "loose_drop_worst_tail",
+      "train": {
+        "rows": 42,
+        "event_dates": 11,
+        "cities": 26,
+        "cost": 23.6525,
+        "pnl": 9.347499999999998,
+        "roi": 0.3952013529225241,
+        "roi_ci95": [
+          0.24249034625951385,
+          0.5274935743313354
+        ],
+        "hit_rate": 0.7857142857142857
+      },
+      "holdout": {
+        "rows": 14,
+        "event_dates": 2,
+        "cities": 12,
+        "cost": 8.2845,
+        "pnl": 1.7155000000000002,
+        "roi": 0.20707345041945804,
+        "roi_ci95": [
+          -0.19300605245460656,
+          0.5327348368732209
+        ],
+        "hit_rate": 0.7142857142857143
+      },
+      "train_roi_delta_vs_no_filter": 0.07279987183286529,
+      "holdout_roi_delta_vs_no_filter": -0.028104415193190152
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.7,
+      "filter": "medium_quality",
+      "train": {
+        "rows": 32,
+        "event_dates": 11,
+        "cities": 22,
+        "cost": 18.201999999999998,
+        "pnl": 5.797999999999999,
+        "roi": 0.31853642456872866,
+        "roi_ci95": [
+          0.15356498927985604,
+          0.4837304953729173
+        ],
+        "hit_rate": 0.75
+      },
+      "holdout": {
+        "rows": 11,
+        "event_dates": 2,
+        "cities": 9,
+        "cost": 6.547500000000001,
+        "pnl": 2.4525,
+        "roi": 0.37457044673539514,
+        "roi_ci95": [
+          -0.04290955495294302,
+          0.7579841781423966
+        ],
+        "hit_rate": 0.8181818181818182
+      },
+      "train_roi_delta_vs_no_filter": -0.0038650565209301657,
+      "holdout_roi_delta_vs_no_filter": 0.13939258112274694
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.7,
+      "filter": "strict_low_uncertainty",
+      "train": {
+        "rows": 4,
+        "event_dates": 4,
+        "cities": 4,
+        "cost": 2.624,
+        "pnl": 0.3759999999999999,
+        "roi": 0.14329268292682923,
+        "roi_ci95": [
+          -0.6395097332372025,
+          0.6736401673640166
+        ],
+        "hit_rate": 0.75
+      },
+      "holdout": {
+        "rows": 3,
+        "event_dates": 2,
+        "cities": 3,
+        "cost": 1.8435000000000001,
+        "pnl": 1.1564999999999999,
+        "roi": 0.6273393002441009,
+        "roi_ci95": [
+          0.4503263234227701,
+          0.733102253032929
+        ],
+        "hit_rate": 1.0
+      },
+      "train_roi_delta_vs_no_filter": -0.1791087981628296,
+      "holdout_roi_delta_vs_no_filter": 0.3921614346314527
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.75,
+      "filter": "no_filter",
+      "train": {
+        "rows": 95,
+        "event_dates": 16,
+        "cities": 40,
+        "cost": 51.03549999999999,
+        "pnl": 14.9645,
+        "roi": 0.29321746627347633,
+        "roi_ci95": [
+          0.22050784581620672,
+          0.3576700318285034
+        ],
+        "hit_rate": 0.6947368421052632
+      },
+      "holdout": {
+        "rows": 30,
+        "event_dates": 2,
+        "cities": 25,
+        "cost": 16.493500000000004,
+        "pnl": 4.5065,
+        "roi": 0.2732288477278928,
+        "roi_ci95": [
+          0.021320056172603095,
+          0.5010680676635297
+        ],
+        "hit_rate": 0.7
+      },
+      "train_roi_delta_vs_no_filter": 0.0,
+      "holdout_roi_delta_vs_no_filter": 0.0
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.75,
+      "filter": "loose_drop_worst_tail",
+      "train": {
+        "rows": 58,
+        "event_dates": 14,
+        "cities": 34,
+        "cost": 35.402,
+        "pnl": 12.598,
+        "roi": 0.35585560137845323,
+        "roi_ci95": [
+          0.2452135886661364,
+          0.460903608496067
+        ],
+        "hit_rate": 0.8275862068965517
+      },
+      "holdout": {
+        "rows": 20,
+        "event_dates": 2,
+        "cities": 18,
+        "cost": 12.634,
+        "pnl": 3.3659999999999997,
+        "roi": 0.26642393541237924,
+        "roi_ci95": [
+          0.01980113877793831,
+          0.48137175024072293
+        ],
+        "hit_rate": 0.8
+      },
+      "train_roi_delta_vs_no_filter": 0.0626381351049769,
+      "holdout_roi_delta_vs_no_filter": -0.006804912315513556
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.75,
+      "filter": "medium_quality",
+      "train": {
+        "rows": 43,
+        "event_dates": 12,
+        "cities": 28,
+        "cost": 26.320500000000003,
+        "pnl": 7.6795,
+        "roi": 0.29176877338956325,
+        "roi_ci95": [
+          0.11227463753270081,
+          0.4312388279928521
+        ],
+        "hit_rate": 0.7906976744186046
+      },
+      "holdout": {
+        "rows": 14,
+        "event_dates": 2,
+        "cities": 12,
+        "cost": 8.706,
+        "pnl": 3.294,
+        "roi": 0.3783597518952446,
+        "roi_ci95": [
+          0.041802318010157595,
+          0.6438919141066474
+        ],
+        "hit_rate": 0.8571428571428571
+      },
+      "train_roi_delta_vs_no_filter": -0.001448692883913083,
+      "holdout_roi_delta_vs_no_filter": 0.10513090416735182
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.75,
+      "filter": "strict_low_uncertainty",
+      "train": {
+        "rows": 6,
+        "event_dates": 6,
+        "cities": 6,
+        "cost": 4.094,
+        "pnl": 0.9059999999999999,
+        "roi": 0.2212994626282364,
+        "roi_ci95": [
+          -0.2836676217765042,
+          0.5584415584415582
+        ],
+        "hit_rate": 0.8333333333333334
+      },
+      "holdout": {
+        "rows": 3,
+        "event_dates": 2,
+        "cities": 3,
+        "cost": 1.8435000000000001,
+        "pnl": 1.1564999999999999,
+        "roi": 0.6273393002441009,
+        "roi_ci95": [
+          0.4503263234227701,
+          0.733102253032929
+        ],
+        "hit_rate": 1.0
+      },
+      "train_roi_delta_vs_no_filter": -0.07191800364523993,
+      "holdout_roi_delta_vs_no_filter": 0.3541104525162081
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.8,
+      "filter": "no_filter",
+      "train": {
+        "rows": 106,
+        "event_dates": 16,
+        "cities": 42,
+        "cost": 59.5965,
+        "pnl": 17.403499999999998,
+        "roi": 0.2920221825107179,
+        "roi_ci95": [
+          0.2330983913589761,
+          0.3482285302110063
+        ],
+        "hit_rate": 0.7264150943396226
+      },
+      "holdout": {
+        "rows": 35,
+        "event_dates": 3,
+        "cities": 27,
+        "cost": 20.383,
+        "pnl": 5.617,
+        "roi": 0.27557278123926804,
+        "roi_ci95": [
+          0.08454523046586146,
+          0.48061974512188677
+        ],
+        "hit_rate": 0.7428571428571429
+      },
+      "train_roi_delta_vs_no_filter": 0.0,
+      "holdout_roi_delta_vs_no_filter": 0.0
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.8,
+      "filter": "loose_drop_worst_tail",
+      "train": {
+        "rows": 69,
+        "event_dates": 14,
+        "cities": 38,
+        "cost": 43.962999999999994,
+        "pnl": 15.036999999999999,
+        "roi": 0.3420376225462321,
+        "roi_ci95": [
+          0.2542770233659535,
+          0.4257202288386422
+        ],
+        "hit_rate": 0.855072463768116
+      },
+      "holdout": {
+        "rows": 23,
+        "event_dates": 3,
+        "cities": 19,
+        "cost": 14.938500000000001,
+        "pnl": 4.0615,
+        "roi": 0.27188138032600323,
+        "roi_ci95": [
+          0.08064298257463189,
+          0.48137175024072293
+        ],
+        "hit_rate": 0.8260869565217391
+      },
+      "train_roi_delta_vs_no_filter": 0.050015440035514225,
+      "holdout_roi_delta_vs_no_filter": -0.0036914009132648085
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.8,
+      "filter": "medium_quality",
+      "train": {
+        "rows": 53,
+        "event_dates": 12,
+        "cities": 33,
+        "cost": 34.1065,
+        "pnl": 9.8935,
+        "roi": 0.29007667160218725,
+        "roi_ci95": [
+          0.1536865089047707,
+          0.39191411054025654
+        ],
+        "hit_rate": 0.8301886792452831
+      },
+      "holdout": {
+        "rows": 17,
+        "event_dates": 3,
+        "cities": 14,
+        "cost": 11.0105,
+        "pnl": 3.9895,
+        "roi": 0.36233595204577446,
+        "roi_ci95": [
+          0.11961186788579961,
+          0.6438919141066474
+        ],
+        "hit_rate": 0.8823529411764706
+      },
+      "train_roi_delta_vs_no_filter": -0.0019455109085306233,
+      "holdout_roi_delta_vs_no_filter": 0.08676317080650642
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.8,
+      "filter": "strict_low_uncertainty",
+      "train": {
+        "rows": 11,
+        "event_dates": 8,
+        "cities": 10,
+        "cost": 8.005,
+        "pnl": 1.9949999999999999,
+        "roi": 0.24921923797626486,
+        "roi_ci95": [
+          -0.041237074157345836,
+          0.44346694534073366
+        ],
+        "hit_rate": 0.9090909090909091
+      },
+      "holdout": {
+        "rows": 5,
+        "event_dates": 2,
+        "cities": 5,
+        "cost": 3.363,
+        "pnl": 1.637,
+        "roi": 0.48676776687481416,
+        "roi_ci95": [
+          0.3580805794477139,
+          0.733102253032929
+        ],
+        "hit_rate": 1.0
+      },
+      "train_roi_delta_vs_no_filter": -0.04280294453445302,
+      "holdout_roi_delta_vs_no_filter": 0.21119498563554612
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.85,
+      "filter": "no_filter",
+      "train": {
+        "rows": 126,
+        "event_dates": 18,
+        "cities": 44,
+        "cost": 76.1605,
+        "pnl": 20.8395,
+        "roi": 0.27362609226567575,
+        "roi_ci95": [
+          0.22452472475665103,
+          0.3197484233953623
+        ],
+        "hit_rate": 0.7698412698412699
+      },
+      "holdout": {
+        "rows": 38,
+        "event_dates": 3,
+        "cities": 29,
+        "cost": 22.852999999999998,
+        "pnl": 6.146999999999999,
+        "roi": 0.2689800026254759,
+        "roi_ci95": [
+          0.10520722635494158,
+          0.45553345301052833
+        ],
+        "hit_rate": 0.7631578947368421
+      },
+      "train_roi_delta_vs_no_filter": 0.0,
+      "holdout_roi_delta_vs_no_filter": 0.0
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.85,
+      "filter": "loose_drop_worst_tail",
+      "train": {
+        "rows": 88,
+        "event_dates": 17,
+        "cities": 40,
+        "cost": 59.722,
+        "pnl": 18.278,
+        "roi": 0.30605137135393995,
+        "roi_ci95": [
+          0.2384657076646149,
+          0.3655820390357643
+        ],
+        "hit_rate": 0.8863636363636364
+      },
+      "holdout": {
+        "rows": 26,
+        "event_dates": 3,
+        "cities": 21,
+        "cost": 17.408500000000004,
+        "pnl": 4.5915,
+        "roi": 0.26375046672602465,
+        "roi_ci95": [
+          0.10827884295688796,
+          0.4472732057101506
+        ],
+        "hit_rate": 0.8461538461538461
+      },
+      "train_roi_delta_vs_no_filter": 0.0324252790882642,
+      "holdout_roi_delta_vs_no_filter": -0.005229535899451243
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.85,
+      "filter": "medium_quality",
+      "train": {
+        "rows": 68,
+        "event_dates": 16,
+        "cities": 34,
+        "cost": 46.55899999999999,
+        "pnl": 12.440999999999999,
+        "roi": 0.2672093472797955,
+        "roi_ci95": [
+          0.1694354929370647,
+          0.33885311545738805
+        ],
+        "hit_rate": 0.8676470588235294
+      },
+      "holdout": {
+        "rows": 20,
+        "event_dates": 3,
+        "cities": 17,
+        "cost": 13.4805,
+        "pnl": 4.5195,
+        "roi": 0.3352620451763659,
+        "roi_ci95": [
+          0.14629603094999283,
+          0.5743899239044871
+        ],
+        "hit_rate": 0.9
+      },
+      "train_roi_delta_vs_no_filter": -0.0064167449858802406,
+      "holdout_roi_delta_vs_no_filter": 0.06628204255088999
+    },
+    {
+      "range_width": 3,
+      "cost_cap": 0.85,
+      "filter": "strict_low_uncertainty",
+      "train": {
+        "rows": 16,
+        "event_dates": 11,
+        "cities": 13,
+        "cost": 12.175,
+        "pnl": 2.8249999999999997,
+        "roi": 0.23203285420944553,
+        "roi_ci95": [
+          0.033810810198501844,
+          0.35417718382252017
+        ],
+        "hit_rate": 0.9375
+      },
+      "holdout": {
+        "rows": 6,
+        "event_dates": 2,
+        "cities": 6,
+        "cost": 4.213,
+        "pnl": 1.787,
+        "roi": 0.4241633040588654,
+        "roi_ci95": [
+          0.3580805794477139,
+          0.49700598802395207
+        ],
+        "hit_rate": 1.0
+      },
+      "train_roi_delta_vs_no_filter": -0.04159323805623022,
+      "holdout_roi_delta_vs_no_filter": 0.1551833014333895
+    }
+  ]
+}
