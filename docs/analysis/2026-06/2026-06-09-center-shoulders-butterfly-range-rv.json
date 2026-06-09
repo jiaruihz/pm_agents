@@ -1,0 +1,4425 @@
+{
+  "generated_at_utc": "2026-06-09T15:25:04.684378+00:00",
+  "target_metric": "forecast_center_shoulders_range_rv_alpha",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "db_last_modified_utc": "2026-06-09T15:09:06.567273+00:00",
+  "parameters": {
+    "bootstrap_iters": 1000,
+    "seed": 20260609,
+    "train_frac": 0.7,
+    "orderbook_glob": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/orderbook_snapshots/*/*.jsonl.gz",
+    "skip_orderbook": false,
+    "strategies": {
+      "center_cheap_butterfly": {
+        "label": "center cheap: BUY_YES center + BUY_NO adjacent shoulders",
+        "score_min": 0.08,
+        "min_mode_probability": 0.24,
+        "min_adjacent3_mass": 0.55,
+        "max_tail_model_mass": 0.3,
+        "max_loss_probability": 0.5,
+        "max_large_loss_probability": 0.35,
+        "max_spread": 0.22,
+        "min_mode_gap": 0.03
+      },
+      "shoulders_cheap_butterfly": {
+        "label": "shoulders cheap: BUY_YES two shoulders + BUY_NO center",
+        "score_min": 0.08,
+        "min_mode_probability": 0.24,
+        "min_adjacent3_mass": 0.55,
+        "max_tail_model_mass": 0.3,
+        "max_loss_probability": 0.55,
+        "max_large_loss_probability": 0.4,
+        "max_spread": 0.22,
+        "min_mode_gap": 0.03
+      },
+      "center_band_cheap_neighbors": {
+        "label": "center band cheap: BUY_YES adjacent3 center band + BUY_NO outside neighbors",
+        "score_min": 0.1,
+        "min_mode_probability": 0.24,
+        "min_adjacent3_mass": 0.55,
+        "max_tail_model_mass": 0.3,
+        "max_loss_probability": 0.55,
+        "max_large_loss_probability": 0.4,
+        "max_spread": 0.22,
+        "min_mode_gap": 0.03
+      },
+      "tail_center_contrast": {
+        "label": "tail/center contrast: BUY_YES center band + BUY_NO tails",
+        "score_min": 0.15,
+        "min_mode_probability": 0.24,
+        "min_adjacent3_mass": 0.55,
+        "max_tail_model_mass": 0.28,
+        "max_loss_probability": 0.55,
+        "max_large_loss_probability": 0.4,
+        "max_spread": 0.22,
+        "min_mode_gap": 0.03
+      }
+    },
+    "min_holdout_active_dates": 5,
+    "min_holdout_rows": 10
+  },
+  "data_self_check": {
+    "fact_trades_max_built_at_utc": "2026-06-09T15:08:45.011642+00:00",
+    "fact_signal_candidates_max_built_at_utc": "2026-06-09T15:09:02.643978+00:00",
+    "fact_trades_by_class": [
+      {
+        "trade_class": "live_real",
+        "rows": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 1147
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "settlement_status": "",
+        "rows": 172
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 5301
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "rows": 25100,
+      "eligible": 8300,
+      "paper_ordered": 3127,
+      "live_filled": 554
+    },
+    "clob_order_fill_join": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ]
+  },
+  "filter_funnel": {
+    "fact_signal_candidates_rows": 25100,
+    "settled_decision_window_present_rows": 2292,
+    "decision_sets_count": 301,
+    "raw_expression_candidates_count": 684,
+    "strategy_filters": {
+      "center_cheap_butterfly": {
+        "raw": 195,
+        "model_mode_stable": 175,
+        "mode_probability": 175,
+        "adjacent3_mass": 175,
+        "tail_model_mass": 174,
+        "shape_score": 107,
+        "risk": 116,
+        "spread": 114
+      },
+      "shoulders_cheap_butterfly": {
+        "raw": 195,
+        "model_mode_stable": 175,
+        "mode_probability": 175,
+        "adjacent3_mass": 175,
+        "tail_model_mass": 174,
+        "shape_score": 7,
+        "risk": 34,
+        "spread": 33
+      },
+      "center_band_cheap_neighbors": {
+        "raw": 147,
+        "model_mode_stable": 131,
+        "mode_probability": 131,
+        "adjacent3_mass": 131,
+        "tail_model_mass": 130,
+        "shape_score": 114,
+        "risk": 130,
+        "spread": 127
+      },
+      "tail_center_contrast": {
+        "raw": 147,
+        "model_mode_stable": 131,
+        "mode_probability": 131,
+        "adjacent3_mass": 131,
+        "tail_model_mass": 128,
+        "shape_score": 104,
+        "risk": 128,
+        "spread": 125
+      }
+    },
+    "selected_strategy_rows": 332,
+    "orderbook_fully_matched_selected_rows": 149
+  },
+  "input": {
+    "sync_rebuild_note": "ran scripts/ops/sync_weather_remote.sh and scripts/weather_dashboard/run_stack.sh --api-only before research",
+    "candidate_rows": 25100,
+    "usable_rows": 2292,
+    "decision_sets": 301,
+    "strategy_family_rows": 399,
+    "strategy_selected_rows": 332,
+    "event_dates": 19
+  },
+  "split": {
+    "split_date": "2026-05-26",
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-23",
+    "holdout_start": "2026-05-26",
+    "holdout_end": "2026-06-01",
+    "train_active_dates": 13,
+    "holdout_active_dates": 6,
+    "train_family_rows": 227,
+    "holdout_family_rows": 172,
+    "train_selected_rows": 188,
+    "holdout_selected_rows": 144
+  },
+  "diagnostics": {
+    "decision_hours_to_settle_buckets": [
+      {
+        "bucket": "22-24",
+        "rows": 399
+      }
+    ],
+    "by_strategy": {
+      "center_cheap_butterfly": {
+        "rows": 107,
+        "avg_model_mode_probability": 0.5078596586323046,
+        "avg_model_adjacent3_mass": 0.931601895787092,
+        "avg_market_adjacent3_mass": 0.6756957259829378,
+        "avg_model_entropy": 1.1263004800196916,
+        "avg_market_entropy": 1.212731541962351,
+        "avg_tail_model_mass": 0.06839810421290808,
+        "avg_tail_market_mass": 0.32430427401706213,
+        "avg_expected_pnl": 0.3003697579261156,
+        "avg_worst_case_loss": -0.7837476635514019,
+        "avg_loss_probability": 0.42374223715478726,
+        "avg_large_loss_probability": 0.0030027033923833023
+      },
+      "shoulders_cheap_butterfly": {
+        "rows": 7,
+        "avg_model_mode_probability": 0.4514672814862252,
+        "avg_model_adjacent3_mass": 0.9907475083056478,
+        "avg_market_adjacent3_mass": 0.996374184191443,
+        "avg_model_entropy": 1.0702979343446202,
+        "avg_market_entropy": 0.9511547294273185,
+        "avg_tail_model_mass": 0.009252491694352159,
+        "avg_tail_market_mass": 0.003625815808556926,
+        "avg_expected_pnl": 0.17002723104748313,
+        "avg_worst_case_loss": -0.9177857142857143,
+        "avg_loss_probability": 0.4607197731805774,
+        "avg_large_loss_probability": 0.05664451827242525
+      },
+      "center_band_cheap_neighbors": {
+        "rows": 114,
+        "avg_model_mode_probability": 0.4776276634902648,
+        "avg_model_adjacent3_mass": 0.9237124238451286,
+        "avg_market_adjacent3_mass": 0.6066691969099176,
+        "avg_model_entropy": 1.1725858797635387,
+        "avg_market_entropy": 1.2447382192712408,
+        "avg_tail_model_mass": 0.07628757615487136,
+        "avg_tail_market_mass": 0.3933308030900824,
+        "avg_expected_pnl": 0.5674613721223993,
+        "avg_worst_case_loss": -1.2876447368421053,
+        "avg_loss_probability": 0.07304740487577564,
+        "avg_large_loss_probability": 0.04985732313898237
+      },
+      "tail_center_contrast": {
+        "rows": 104,
+        "avg_model_mode_probability": 0.4793363757209832,
+        "avg_model_adjacent3_mass": 0.9251612635203782,
+        "avg_market_adjacent3_mass": 0.5891881294732639,
+        "avg_model_entropy": 1.168336623227757,
+        "avg_market_entropy": 1.2443633745318177,
+        "avg_tail_model_mass": 0.07483873647962182,
+        "avg_tail_market_mass": 0.41081187052673607,
+        "avg_expected_pnl": 0.6883706039638333,
+        "avg_worst_case_loss": -1.161951923076923,
+        "avg_loss_probability": 0.07483873647962182,
+        "avg_large_loss_probability": 0.040550462368725386
+      }
+    }
+  },
+  "orderbook_coverage": {
+    "status": "ok",
+    "orderbook_glob": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/orderbook_snapshots/*/*.jsonl.gz",
+    "orderbook_files_found": 1048,
+    "candidate_rows": 1552,
+    "matched_candidate_rows": 706,
+    "matched_candidate_rate": 0.45489690721649484,
+    "scanned_files": 631,
+    "scanned_rows": 786165,
+    "matched_book_rows_seen": 30762,
+    "max_decision_ts_utc": "2026-06-01T04:00:53+00:00",
+    "strategy_rows": 399,
+    "fully_matched_strategy_rows": 180,
+    "fully_matched_strategy_rate": 0.45112781954887216
+  },
+  "decision_proxy_results": [
+    {
+      "strategy": "shoulders_cheap_butterfly",
+      "strategy_label": "shoulders cheap: BUY_YES two shoulders + BUY_NO center",
+      "source": "decision_market_proxy",
+      "train_family_rows": 19,
+      "holdout_family_rows": 14,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 4,
+          "active_event_dates": 3,
+          "active_city_days": 4,
+          "market_prob_sum": 1.8391501360167926,
+          "model_prob_sum": 2.1436135307356285,
+          "range_edge": 0.5607,
+          "avg_abs_range_edge": 0.140175,
+          "taker_cost": 3.7215,
+          "settled_pnl": 0.2785000000000001,
+          "taker_roi": 0.07483541582695152,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.15762362583293046,
+          "avg_worst_case_loss_unit_notional": -0.930375,
+          "avg_loss_probability": 0.4640966173160929,
+          "avg_large_loss_probability": 0.09912790697674419,
+          "drop_top5_event_dates": [
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-12"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.44790475685097664,
+          "avg_model_adjacent3_mass": 0.9838081395348837,
+          "avg_market_adjacent3_mass": 0.9936548223350254,
+          "avg_model_entropy": 1.0882665310846629,
+          "avg_market_entropy": 0.984003931992589,
+          "avg_tail_model_mass": 0.016191860465116278,
+          "avg_tail_market_mass": 0.00634517766497462,
+          "avg_expected_pnl": 0.15762362583293046,
+          "avg_worst_case_loss": -0.930375
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 19,
+          "active_event_dates": 8,
+          "active_city_days": 19,
+          "market_prob_sum": 7.400105750003212,
+          "model_prob_sum": 9.848808425705487,
+          "range_edge": 0.35230000000000006,
+          "avg_abs_range_edge": 0.08271052631578948,
+          "taker_cost": 20.742,
+          "settled_pnl": -0.7419999999999999,
+          "taker_roi": -0.03577282807829524,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.034265207198239576,
+          "avg_worst_case_loss_unit_notional": -1.0916842105263158,
+          "avg_loss_probability": 0.4804736190267472,
+          "avg_large_loss_probability": 0.29106170643864193,
+          "drop_top5_event_dates": [
+            "2026-05-08",
+            "2026-05-09",
+            "2026-05-12",
+            "2026-05-13",
+            "2026-05-15"
+          ],
+          "drop_top5_settled_pnl": -4.85,
+          "drop_top5_taker_roi": -0.6178343949044586,
+          "avg_model_mode_probability": 0.39240892047047027,
+          "avg_model_adjacent3_mass": 0.9107672586654957,
+          "avg_market_adjacent3_mass": 0.6758925770267021,
+          "avg_model_entropy": 1.2555207188792816,
+          "avg_market_entropy": 1.16533429820423,
+          "avg_tail_model_mass": 0.08923274133450416,
+          "avg_tail_market_mass": 0.3241074229732978,
+          "avg_expected_pnl": 0.034265207198239576,
+          "avg_worst_case_loss": -1.0916842105263158
+        },
+        "excess_roi": 0.11060824390524676,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          0.9417475728155343
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.8819258536463543,
+          1.0735983950775534
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 3,
+          "active_event_dates": 3,
+          "active_city_days": 3,
+          "market_prob_sum": 1.2692785204554022,
+          "model_prob_sum": 1.6313480570003298,
+          "range_edge": 0.4811,
+          "avg_abs_range_edge": 0.16036666666666669,
+          "taker_cost": 2.703,
+          "settled_pnl": 2.297,
+          "taker_roi": 0.849796522382538,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.18656537133355333,
+          "avg_worst_case_loss_unit_notional": -0.9009999999999999,
+          "avg_loss_probability": 0.4562173143332234,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-27",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.4562173143332234,
+          "avg_model_adjacent3_mass": 1.0,
+          "avg_market_adjacent3_mass": 1.0,
+          "avg_model_entropy": 1.0463398053578965,
+          "avg_market_entropy": 0.9073557926736248,
+          "avg_tail_model_mass": 0.0,
+          "avg_tail_market_mass": 0.0,
+          "avg_expected_pnl": 0.18656537133355333,
+          "avg_worst_case_loss": -0.9009999999999999
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 14,
+          "active_event_dates": 4,
+          "active_city_days": 14,
+          "market_prob_sum": 5.295160733675185,
+          "model_prob_sum": 7.143607068557243,
+          "range_edge": 0.34719999999999995,
+          "avg_abs_range_edge": 0.09978571428571428,
+          "taker_cost": 15.0955,
+          "settled_pnl": 0.9044999999999999,
+          "taker_roi": 0.05991851876387002,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.04010715005517073,
+          "avg_worst_case_loss_unit_notional": -1.07825,
+          "avg_loss_probability": 0.4897423522459112,
+          "avg_large_loss_probability": 0.2593263891176735,
+          "drop_top5_event_dates": [
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.39190049769891805,
+          "avg_model_adjacent3_mass": 0.9021581454530068,
+          "avg_market_adjacent3_mass": 0.6827550254679337,
+          "avg_model_entropy": 1.2665314658366593,
+          "avg_market_entropy": 1.1537848891446092,
+          "avg_tail_model_mass": 0.09784185454699323,
+          "avg_tail_market_mass": 0.3172449745320663,
+          "avg_expected_pnl": 0.04010715005517073,
+          "avg_worst_case_loss": -1.07825
+        },
+        "excess_roi": 0.789878003618668,
+        "roi_ci95_cluster_by_event_date": [
+          0.08108108108108103,
+          1.5542784163473822
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.29906739584158937,
+          1.470854797712496
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_rows<10",
+        "holdout_active_dates<5",
+        "holdout_top5_removed_roi<=0_or_na"
+      ]
+    },
+    {
+      "strategy": "center_band_cheap_neighbors",
+      "strategy_label": "center band cheap: BUY_YES adjacent3 center band + BUY_NO outside neighbors",
+      "source": "decision_market_proxy",
+      "train_family_rows": 72,
+      "holdout_family_rows": 55,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 65,
+          "active_event_dates": 10,
+          "active_city_days": 65,
+          "market_prob_sum": 38.44399015066151,
+          "model_prob_sum": 60.610654617668246,
+          "range_edge": 32.5314,
+          "avg_abs_range_edge": 0.5004830769230769,
+          "taker_cost": 88.533,
+          "settled_pnl": 10.467,
+          "taker_roi": 0.11822710175866627,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.6031275092367093,
+          "avg_worst_case_loss_unit_notional": -1.2697384615384615,
+          "avg_loss_probability": 0.06430985659020427,
+          "avg_large_loss_probability": 0.039234072561866624,
+          "drop_top5_event_dates": [
+            "2026-05-07",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-13",
+            "2026-05-14"
+          ],
+          "drop_top5_settled_pnl": 0.6164999999999994,
+          "drop_top5_taker_roi": 0.019644080488154584,
+          "avg_model_mode_probability": 0.48548455351667846,
+          "avg_model_adjacent3_mass": 0.9324716095025884,
+          "avg_market_adjacent3_mass": 0.5914460023178695,
+          "avg_model_entropy": 1.1501965598021224,
+          "avg_market_entropy": 1.23705805489717,
+          "avg_tail_model_mass": 0.06752839049741158,
+          "avg_tail_market_mass": 0.4085539976821305,
+          "avg_expected_pnl": 0.6031275092367093,
+          "avg_worst_case_loss": -1.2697384615384615
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 72,
+          "active_event_dates": 11,
+          "active_city_days": 72,
+          "market_prob_sum": 44.99364317121012,
+          "model_prob_sum": 67.02490131553944,
+          "range_edge": 31.8081,
+          "avg_abs_range_edge": 0.46322083333333336,
+          "taker_cost": 102.3885,
+          "settled_pnl": 11.6115,
+          "taker_roi": 0.11340629074554272,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.5441747029294839,
+          "avg_worst_case_loss_unit_notional": -1.3248402777777777,
+          "avg_loss_probability": 0.066192971951279,
+          "avg_large_loss_probability": 0.04349542922021929,
+          "drop_top5_event_dates": [
+            "2026-05-07",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-13",
+            "2026-05-14"
+          ],
+          "drop_top5_settled_pnl": 1.2489999999999994,
+          "drop_top5_taker_roi": 0.033085216285661294,
+          "avg_model_mode_probability": 0.48121144898421647,
+          "avg_model_adjacent3_mass": 0.9309014071602699,
+          "avg_market_adjacent3_mass": 0.6249117107112516,
+          "avg_model_entropy": 1.153094207788048,
+          "avg_market_entropy": 1.229085404901627,
+          "avg_tail_model_mass": 0.06909859283973004,
+          "avg_tail_market_mass": 0.37508828928874843,
+          "avg_expected_pnl": 0.5441747029294839,
+          "avg_worst_case_loss": -1.3248402777777777
+        },
+        "excess_roi": 0.004820811013123552,
+        "roi_ci95_cluster_by_event_date": [
+          0.06070096855821833,
+          0.1818100738218924
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.006118802081564171,
+          0.017599150482183887
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 49,
+          "active_event_dates": 5,
+          "active_city_days": 48,
+          "market_prob_sum": 30.716298297069095,
+          "model_prob_sum": 44.69256170067642,
+          "range_edge": 21.1399,
+          "avg_abs_range_edge": 0.4314265306122449,
+          "taker_cost": 78.2585,
+          "settled_pnl": 5.741500000000001,
+          "taker_roi": 0.073365832465483,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.5201491494197433,
+          "avg_worst_case_loss_unit_notional": -1.3113979591836735,
+          "avg_loss_probability": 0.08463803015255394,
+          "avg_large_loss_probability": 0.06394939023107467,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.46720525835318555,
+          "avg_model_adjacent3_mass": 0.9120930959321719,
+          "avg_market_adjacent3_mass": 0.6268632305524305,
+          "avg_model_entropy": 1.202285998079703,
+          "avg_market_entropy": 1.2549261924205182,
+          "avg_tail_model_mass": 0.0879069040678282,
+          "avg_tail_market_mass": 0.3731367694475695,
+          "avg_expected_pnl": 0.5201491494197433,
+          "avg_worst_case_loss": -1.3113979591836735
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 55,
+          "active_event_dates": 5,
+          "active_city_days": 54,
+          "market_prob_sum": 36.06541925814686,
+          "model_prob_sum": 49.84392049901049,
+          "range_edge": 20.7108,
+          "avg_abs_range_edge": 0.3921636363636363,
+          "taker_cost": 89.361,
+          "settled_pnl": 6.639,
+          "taker_roi": 0.07429415516836203,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.4677207527241656,
+          "avg_worst_case_loss_unit_notional": -1.3520181818181818,
+          "avg_loss_probability": 0.09083463052983774,
+          "avg_large_loss_probability": 0.07172810620718266,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.46055070661161235,
+          "avg_model_adjacent3_mass": 0.9062530999820089,
+          "avg_market_adjacent3_mass": 0.6557348956026702,
+          "avg_model_entropy": 1.2132740218190206,
+          "avg_market_entropy": 1.2563668157278525,
+          "avg_tail_model_mass": 0.09374690001799116,
+          "avg_tail_market_mass": 0.34426510439732977,
+          "avg_expected_pnl": 0.4677207527241656,
+          "avg_worst_case_loss": -1.3520181818181818
+        },
+        "excess_roi": -0.0009283227028790281,
+        "roi_ci95_cluster_by_event_date": [
+          -0.08377712878657731,
+          0.192182327799409
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.04778077676153284,
+          0.02530279826848128
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_top5_removed_roi<=0_or_na"
+      ]
+    },
+    {
+      "strategy": "tail_center_contrast",
+      "strategy_label": "tail/center contrast: BUY_YES center band + BUY_NO tails",
+      "source": "decision_market_proxy",
+      "train_family_rows": 72,
+      "holdout_family_rows": 53,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 60,
+          "active_event_dates": 10,
+          "active_city_days": 60,
+          "market_prob_sum": 34.18244679991234,
+          "model_prob_sum": 55.84601708043574,
+          "range_edge": 38.2674,
+          "avg_abs_range_edge": 0.6377900000000001,
+          "taker_cost": 111.5005,
+          "settled_pnl": 7.499499999999999,
+          "taker_roi": 0.06725978807269922,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.7365255693478581,
+          "avg_worst_case_loss_unit_notional": -1.1250083333333334,
+          "avg_loss_probability": 0.06923304865940431,
+          "avg_large_loss_probability": 0.03280690046361841,
+          "drop_top5_event_dates": [
+            "2026-05-07",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-12",
+            "2026-05-14"
+          ],
+          "drop_top5_settled_pnl": -1.0395000000000003,
+          "drop_top5_taker_roi": -0.022098449175692775,
+          "avg_model_mode_probability": 0.48406253349209627,
+          "avg_model_adjacent3_mass": 0.9307669513405957,
+          "avg_market_adjacent3_mass": 0.5697074466652057,
+          "avg_model_entropy": 1.155914758217112,
+          "avg_market_entropy": 1.2379003013173167,
+          "avg_tail_model_mass": 0.06923304865940431,
+          "avg_tail_market_mass": 0.43029255333479427,
+          "avg_expected_pnl": 0.7365255693478581,
+          "avg_worst_case_loss": -1.1250083333333334
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 72,
+          "active_event_dates": 11,
+          "active_city_days": 72,
+          "market_prob_sum": 44.99364317121012,
+          "model_prob_sum": 67.02490131553944,
+          "range_edge": 38.2267,
+          "avg_abs_range_edge": 0.5523680555555556,
+          "taker_cost": 135.485,
+          "settled_pnl": 10.514999999999999,
+          "taker_roi": 0.07761006753515147,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.6328444809872066,
+          "avg_worst_case_loss_unit_notional": -1.2289583333333334,
+          "avg_loss_probability": 0.06909859283973004,
+          "avg_large_loss_probability": 0.03874346934324179,
+          "drop_top5_event_dates": [
+            "2026-05-07",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-14",
+            "2026-05-20"
+          ],
+          "drop_top5_settled_pnl": 0.3894999999999994,
+          "drop_top5_taker_roi": 0.006321974338789644,
+          "avg_model_mode_probability": 0.48121144898421647,
+          "avg_model_adjacent3_mass": 0.9309014071602699,
+          "avg_market_adjacent3_mass": 0.6249117107112516,
+          "avg_model_entropy": 1.153094207788048,
+          "avg_market_entropy": 1.229085404901627,
+          "avg_tail_model_mass": 0.06909859283973004,
+          "avg_tail_market_mass": 0.37508828928874843,
+          "avg_expected_pnl": 0.6328444809872066,
+          "avg_worst_case_loss": -1.2289583333333334
+        },
+        "excess_roi": -0.010350279462452247,
+        "roi_ci95_cluster_by_event_date": [
+          0.005861221703981102,
+          0.1485663258170997
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.029070002186071336,
+          0.007556354420606565
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 44,
+          "active_event_dates": 5,
+          "active_city_days": 44,
+          "market_prob_sum": 27.093118665307106,
+          "model_prob_sum": 40.37075432568359,
+          "range_edge": 23.814,
+          "avg_abs_range_edge": 0.5412272727272728,
+          "taker_cost": 85.3425,
+          "settled_pnl": 1.6574999999999998,
+          "taker_roi": 0.01942174180507953,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.6227047420765267,
+          "avg_worst_case_loss_unit_notional": -1.2123295454545455,
+          "avg_loss_probability": 0.0824828562344639,
+          "avg_large_loss_probability": 0.051109864966598535,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.4728916151240108,
+          "avg_model_adjacent3_mass": 0.9175171437655362,
+          "avg_market_adjacent3_mass": 0.6157526969387979,
+          "avg_model_entropy": 1.1852755300604547,
+          "avg_market_entropy": 1.2531766561879554,
+          "avg_tail_model_mass": 0.0824828562344639,
+          "avg_tail_market_mass": 0.38424730306120214,
+          "avg_expected_pnl": 0.6227047420765267,
+          "avg_worst_case_loss": -1.2123295454545455
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 53,
+          "active_event_dates": 5,
+          "active_city_days": 52,
+          "market_prob_sum": 35.06263870153175,
+          "model_prob_sum": 48.41440717103339,
+          "range_edge": 23.7935,
+          "avg_abs_range_edge": 0.4651566037735849,
+          "taker_cost": 102.2695,
+          "settled_pnl": 3.7304999999999993,
+          "taker_roi": 0.036477151056766674,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.5388549875861656,
+          "avg_worst_case_loss_unit_notional": -1.2881037735849055,
+          "avg_loss_probability": 0.08652061941446437,
+          "avg_large_loss_probability": 0.060475117229821435,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.46712639830558034,
+          "avg_model_adjacent3_mass": 0.9134793805855357,
+          "avg_market_adjacent3_mass": 0.661559220783618,
+          "avg_model_entropy": 1.1953706837550389,
+          "avg_market_entropy": 1.2509273976867854,
+          "avg_tail_model_mass": 0.08652061941446437,
+          "avg_tail_market_mass": 0.3384407792163821,
+          "avg_expected_pnl": 0.5388549875861656,
+          "avg_worst_case_loss": -1.2881037735849055
+        },
+        "excess_roi": -0.017055409251687144,
+        "roi_ci95_cluster_by_event_date": [
+          -0.1356470433491798,
+          0.1180158234032453
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.061297876250081526,
+          0.017164815472144025
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_top5_removed_roi<=0_or_na"
+      ]
+    },
+    {
+      "strategy": "center_cheap_butterfly",
+      "strategy_label": "center cheap: BUY_YES center + BUY_NO adjacent shoulders",
+      "source": "decision_market_proxy",
+      "train_family_rows": 64,
+      "holdout_family_rows": 50,
+      "train": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 59,
+          "active_event_dates": 13,
+          "active_city_days": 59,
+          "market_prob_sum": 12.479949030850987,
+          "model_prob_sum": 30.61719160403676,
+          "range_edge": 18.083099999999998,
+          "avg_abs_range_edge": 0.30800169491525425,
+          "taker_cost": 104.8735,
+          "settled_pnl": 6.126499999999998,
+          "taker_roi": 0.05841799882715841,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.3181551680230172,
+          "avg_worst_case_loss_unit_notional": -0.7775169491525423,
+          "avg_loss_probability": 0.42326333374031766,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-09",
+            "2026-05-11",
+            "2026-05-14",
+            "2026-05-20",
+            "2026-05-21"
+          ],
+          "drop_top5_settled_pnl": -3.2680000000000007,
+          "drop_top5_taker_roi": -0.05913005717594269,
+          "avg_model_mode_probability": 0.5189354509158772,
+          "avg_model_adjacent3_mass": 0.9421987846561949,
+          "avg_market_adjacent3_mass": 0.6679686357232129,
+          "avg_model_entropy": 1.097954081252817,
+          "avg_market_entropy": 1.1849351679248206,
+          "avg_tail_model_mass": 0.05780121534380512,
+          "avg_tail_market_mass": 0.3320313642767872,
+          "avg_expected_pnl": 0.3181551680230172,
+          "avg_worst_case_loss": -0.7775169491525423
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 64,
+          "active_event_dates": 13,
+          "active_city_days": 64,
+          "market_prob_sum": 14.458418681659843,
+          "model_prob_sum": 32.858060015245776,
+          "range_edge": 18.1326,
+          "avg_abs_range_edge": 0.286275,
+          "taker_cost": 114.749,
+          "settled_pnl": 7.250999999999998,
+          "taker_roi": 0.06319009315985323,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.29553900112767495,
+          "avg_worst_case_loss_unit_notional": -0.792953125,
+          "avg_loss_probability": 0.42580373675272826,
+          "avg_large_loss_probability": 0.005258865841418535,
+          "drop_top5_event_dates": [
+            "2026-05-08",
+            "2026-05-09",
+            "2026-05-11",
+            "2026-05-14",
+            "2026-05-21"
+          ],
+          "drop_top5_settled_pnl": -2.749500000000001,
+          "drop_top5_taker_roi": -0.04119131978516695,
+          "avg_model_mode_probability": 0.5134071877382153,
+          "avg_model_adjacent3_mass": 0.9383222493487554,
+          "avg_market_adjacent3_mass": 0.6794409669671736,
+          "avg_model_entropy": 1.1078886662794025,
+          "avg_market_entropy": 1.1949507070166085,
+          "avg_tail_model_mass": 0.061677750651244596,
+          "avg_tail_market_mass": 0.32055903303282646,
+          "avg_expected_pnl": 0.29553900112767495,
+          "avg_worst_case_loss": -0.792953125
+        },
+        "excess_roi": -0.004772094332694821,
+        "roi_ci95_cluster_by_event_date": [
+          -0.04706608947499225,
+          0.12909812042996824
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.06401582687421686,
+          0.02603985758449883
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "decision_market_proxy",
+          "rows": 48,
+          "active_event_dates": 6,
+          "active_city_days": 47,
+          "market_prob_sum": 10.83369963730731,
+          "model_prob_sum": 23.723791869619845,
+          "range_edge": 13.1492,
+          "avg_abs_range_edge": 0.27634166666666665,
+          "taker_cost": 85.9875,
+          "settled_pnl": 4.012499999999999,
+          "taker_roi": 0.04666375926733536,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.2785085246820073,
+          "avg_worst_case_loss_unit_notional": -0.79140625,
+          "avg_loss_probability": 0.4243308892684061,
+          "avg_large_loss_probability": 0.006693526312187778,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-29",
+            "2026-05-30",
+            "2026-06-01"
+          ],
+          "drop_top5_settled_pnl": -4.004,
+          "drop_top5_taker_roi": -0.2501874531367158,
+          "avg_model_mode_probability": 0.4942456639504134,
+          "avg_model_adjacent3_mass": 0.9185765532188195,
+          "avg_market_adjacent3_mass": 0.6851936077605165,
+          "avg_model_entropy": 1.1611429285039752,
+          "avg_market_entropy": 1.2468979183834823,
+          "avg_tail_model_mass": 0.08142344678118048,
+          "avg_tail_market_mass": 0.3148063922394835,
+          "avg_expected_pnl": 0.2785085246820073,
+          "avg_worst_case_loss": -0.79140625
+        },
+        "baseline": {
+          "source": "decision_market_proxy",
+          "rows": 50,
+          "active_event_dates": 6,
+          "active_city_days": 49,
+          "market_prob_sum": 11.64935415538277,
+          "model_prob_sum": 24.540601404969568,
+          "range_edge": 13.2204,
+          "avg_abs_range_edge": 0.26828399999999997,
+          "taker_cost": 89.8625,
+          "settled_pnl": 6.137499999999999,
+          "taker_roi": 0.06829878981777715,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": 0.26875333924418227,
+          "avg_worst_case_loss_unit_notional": -0.7972499999999999,
+          "avg_loss_probability": 0.42480868885520906,
+          "avg_large_loss_probability": 0.006425785259700267,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-29",
+            "2026-05-30",
+            "2026-06-01"
+          ],
+          "drop_top5_settled_pnl": -4.004,
+          "drop_top5_taker_roi": -0.2501874531367158,
+          "avg_model_mode_probability": 0.49081202809939134,
+          "avg_model_adjacent3_mass": 0.9156207169546003,
+          "avg_market_adjacent3_mass": 0.692981781860424,
+          "avg_model_entropy": 1.1656547684881027,
+          "avg_market_entropy": 1.2486193711028033,
+          "avg_tail_model_mass": 0.0843792830453996,
+          "avg_tail_market_mass": 0.3070182181395759,
+          "avg_expected_pnl": 0.26875333924418227,
+          "avg_worst_case_loss": -0.7972499999999999
+        },
+        "excess_roi": -0.02163503055044179,
+        "roi_ci95_cluster_by_event_date": [
+          -0.12975484510494883,
+          0.22069535465300014
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.04075847284710856,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_top5_removed_roi<=0_or_na"
+      ]
+    }
+  ],
+  "orderbook_results": [
+    {
+      "strategy": "shoulders_cheap_butterfly",
+      "strategy_label": "shoulders cheap: BUY_YES two shoulders + BUY_NO center",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 0,
+      "holdout_family_rows": 14,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": null,
+          "avg_model_adjacent3_mass": null,
+          "avg_market_adjacent3_mass": null,
+          "avg_model_entropy": null,
+          "avg_market_entropy": null,
+          "avg_tail_model_mass": null,
+          "avg_tail_market_mass": null,
+          "avg_expected_pnl": null,
+          "avg_worst_case_loss": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": null,
+          "avg_model_adjacent3_mass": null,
+          "avg_market_adjacent3_mass": null,
+          "avg_model_entropy": null,
+          "avg_market_entropy": null,
+          "avg_tail_model_mass": null,
+          "avg_tail_market_mass": null,
+          "avg_expected_pnl": null,
+          "avg_worst_case_loss": null
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 3,
+          "active_event_dates": 3,
+          "active_city_days": 3,
+          "market_prob_sum": 1.2692785204554022,
+          "model_prob_sum": 1.6313480570003298,
+          "range_edge": 0.4811,
+          "avg_abs_range_edge": 0.16036666666666669,
+          "taker_cost": 2.973,
+          "settled_pnl": 2.027,
+          "taker_roi": 0.6818028927009755,
+          "maker_proxy_cost": 2.543,
+          "maker_proxy_settled_pnl": 2.457,
+          "maker_proxy_roi": 0.9661816751867871,
+          "avg_expected_pnl_unit_notional": 0.18656537133355333,
+          "avg_worst_case_loss_unit_notional": -0.9009999999999999,
+          "avg_loss_probability": 0.4562173143332234,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-27",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.4562173143332234,
+          "avg_model_adjacent3_mass": 1.0,
+          "avg_market_adjacent3_mass": 1.0,
+          "avg_model_entropy": 1.0463398053578965,
+          "avg_market_entropy": 0.9073557926736248,
+          "avg_tail_model_mass": 0.0,
+          "avg_tail_market_mass": 0.0,
+          "avg_expected_pnl": 0.18656537133355333,
+          "avg_worst_case_loss": -0.9009999999999999
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 14,
+          "active_event_dates": 4,
+          "active_city_days": 14,
+          "market_prob_sum": 5.295160733675185,
+          "model_prob_sum": 7.143607068557243,
+          "range_edge": 0.34719999999999995,
+          "avg_abs_range_edge": 0.09978571428571428,
+          "taker_cost": 15.917,
+          "settled_pnl": 0.08299999999999988,
+          "taker_roi": 0.0052145504806182,
+          "maker_proxy_cost": 14.38,
+          "maker_proxy_settled_pnl": 1.6199999999999994,
+          "maker_proxy_roi": 0.11265646731571623,
+          "avg_expected_pnl_unit_notional": 0.04010715005517073,
+          "avg_worst_case_loss_unit_notional": -1.07825,
+          "avg_loss_probability": 0.4897423522459112,
+          "avg_large_loss_probability": 0.2593263891176735,
+          "drop_top5_event_dates": [
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.39190049769891805,
+          "avg_model_adjacent3_mass": 0.9021581454530068,
+          "avg_market_adjacent3_mass": 0.6827550254679337,
+          "avg_model_entropy": 1.2665314658366593,
+          "avg_market_entropy": 1.1537848891446092,
+          "avg_tail_model_mass": 0.09784185454699323,
+          "avg_tail_market_mass": 0.3172449745320663,
+          "avg_expected_pnl": 0.04010715005517073,
+          "avg_worst_case_loss": -1.07825
+        },
+        "excess_roi": 0.6765883422203572,
+        "roi_ci95_cluster_by_event_date": [
+          0.03092783505154642,
+          1.4009603841536615
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.2853546756852836,
+          1.3453657324998964
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_rows<10",
+        "holdout_active_dates<5",
+        "holdout_top5_removed_roi<=0_or_na"
+      ]
+    },
+    {
+      "strategy": "center_band_cheap_neighbors",
+      "strategy_label": "center band cheap: BUY_YES adjacent3 center band + BUY_NO outside neighbors",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 1,
+      "holdout_family_rows": 55,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": null,
+          "avg_model_adjacent3_mass": null,
+          "avg_market_adjacent3_mass": null,
+          "avg_model_entropy": null,
+          "avg_market_entropy": null,
+          "avg_tail_model_mass": null,
+          "avg_tail_market_mass": null,
+          "avg_expected_pnl": null,
+          "avg_worst_case_loss": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.7400503778337532,
+          "model_prob_sum": 0.8825966850828729,
+          "range_edge": 0.001899999999999985,
+          "avg_abs_range_edge": 0.001899999999999985,
+          "taker_cost": 2.729,
+          "settled_pnl": 0.271,
+          "taker_roi": 0.09930377427629168,
+          "maker_proxy_cost": 2.24,
+          "maker_proxy_settled_pnl": 0.7600000000000001,
+          "maker_proxy_roi": 0.3392857142857143,
+          "avg_expected_pnl_unit_notional": 0.2699904849600984,
+          "avg_worst_case_loss_unit_notional": -1.4994999999999998,
+          "avg_loss_probability": 0.11740331491712709,
+          "avg_large_loss_probability": 0.11310620012277472,
+          "drop_top5_event_dates": [
+            "2026-05-20"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.5391344383057091,
+          "avg_model_adjacent3_mass": 0.8825966850828729,
+          "avg_market_adjacent3_mass": 0.7400503778337532,
+          "avg_model_entropy": 1.1369981685970556,
+          "avg_market_entropy": 1.4584221620075741,
+          "avg_tail_model_mass": 0.11740331491712709,
+          "avg_tail_market_mass": 0.25994962216624684,
+          "avg_expected_pnl": 0.2699904849600984,
+          "avg_worst_case_loss": -1.4994999999999998
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 49,
+          "active_event_dates": 5,
+          "active_city_days": 48,
+          "market_prob_sum": 30.716298297069095,
+          "model_prob_sum": 44.69256170067642,
+          "range_edge": 21.1399,
+          "avg_abs_range_edge": 0.4314265306122449,
+          "taker_cost": 81.129,
+          "settled_pnl": 2.8709999999999987,
+          "taker_roi": 0.03538808564138592,
+          "maker_proxy_cost": 75.883,
+          "maker_proxy_settled_pnl": 8.116999999999999,
+          "maker_proxy_roi": 0.10696730492995796,
+          "avg_expected_pnl_unit_notional": 0.5201491494197433,
+          "avg_worst_case_loss_unit_notional": -1.3113979591836735,
+          "avg_loss_probability": 0.08463803015255394,
+          "avg_large_loss_probability": 0.06394939023107467,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.46720525835318555,
+          "avg_model_adjacent3_mass": 0.9120930959321719,
+          "avg_market_adjacent3_mass": 0.6268632305524305,
+          "avg_model_entropy": 1.202285998079703,
+          "avg_market_entropy": 1.2549261924205182,
+          "avg_tail_model_mass": 0.0879069040678282,
+          "avg_tail_market_mass": 0.3731367694475695,
+          "avg_expected_pnl": 0.5201491494197433,
+          "avg_worst_case_loss": -1.3113979591836735
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 55,
+          "active_event_dates": 5,
+          "active_city_days": 54,
+          "market_prob_sum": 36.06541925814686,
+          "model_prob_sum": 49.84392049901049,
+          "range_edge": 20.7108,
+          "avg_abs_range_edge": 0.3921636363636363,
+          "taker_cost": 92.771,
+          "settled_pnl": 3.2289999999999988,
+          "taker_roi": 0.034806135538045284,
+          "maker_proxy_cost": 86.44800000000001,
+          "maker_proxy_settled_pnl": 9.552,
+          "maker_proxy_roi": 0.11049416990560798,
+          "avg_expected_pnl_unit_notional": 0.4677207527241656,
+          "avg_worst_case_loss_unit_notional": -1.3520181818181818,
+          "avg_loss_probability": 0.09083463052983774,
+          "avg_large_loss_probability": 0.07172810620718266,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.46055070661161235,
+          "avg_model_adjacent3_mass": 0.9062530999820089,
+          "avg_market_adjacent3_mass": 0.6557348956026702,
+          "avg_model_entropy": 1.2132740218190206,
+          "avg_market_entropy": 1.2563668157278525,
+          "avg_tail_model_mass": 0.09374690001799116,
+          "avg_tail_market_mass": 0.34426510439732977,
+          "avg_expected_pnl": 0.4677207527241656,
+          "avg_worst_case_loss": -1.3520181818181818
+        },
+        "excess_roi": 0.0005819501033406393,
+        "roi_ci95_cluster_by_event_date": [
+          -0.11357340720221608,
+          0.14767485488534288
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.04016924478624697,
+          0.0293133031830021
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_top5_removed_roi<=0_or_na"
+      ]
+    },
+    {
+      "strategy": "tail_center_contrast",
+      "strategy_label": "tail/center contrast: BUY_YES center band + BUY_NO tails",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 1,
+      "holdout_family_rows": 53,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 0,
+          "active_event_dates": 0,
+          "active_city_days": 0,
+          "market_prob_sum": 0,
+          "model_prob_sum": 0,
+          "range_edge": 0,
+          "avg_abs_range_edge": null,
+          "taker_cost": 0,
+          "settled_pnl": 0,
+          "taker_roi": null,
+          "maker_proxy_cost": 0,
+          "maker_proxy_settled_pnl": 0,
+          "maker_proxy_roi": null,
+          "avg_expected_pnl_unit_notional": null,
+          "avg_worst_case_loss_unit_notional": null,
+          "avg_loss_probability": null,
+          "avg_large_loss_probability": null,
+          "drop_top5_event_dates": [],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": null,
+          "avg_model_adjacent3_mass": null,
+          "avg_market_adjacent3_mass": null,
+          "avg_model_entropy": null,
+          "avg_market_entropy": null,
+          "avg_tail_model_mass": null,
+          "avg_tail_market_mass": null,
+          "avg_expected_pnl": null,
+          "avg_worst_case_loss": null
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 1,
+          "active_event_dates": 1,
+          "active_city_days": 1,
+          "market_prob_sum": 0.7400503778337532,
+          "model_prob_sum": 0.8825966850828729,
+          "range_edge": 0.02209999999999998,
+          "avg_abs_range_edge": 0.02209999999999998,
+          "taker_cost": 4.727,
+          "settled_pnl": 0.273,
+          "taker_roi": 0.05775333192299556,
+          "maker_proxy_cost": 4.197,
+          "maker_proxy_settled_pnl": 0.8030000000000002,
+          "maker_proxy_roi": 0.19132713843221352,
+          "avg_expected_pnl_unit_notional": 0.28869337016574614,
+          "avg_worst_case_loss_unit_notional": -1.4764999999999997,
+          "avg_loss_probability": 0.11740331491712709,
+          "avg_large_loss_probability": 0.11740331491712709,
+          "drop_top5_event_dates": [
+            "2026-05-20"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.5391344383057091,
+          "avg_model_adjacent3_mass": 0.8825966850828729,
+          "avg_market_adjacent3_mass": 0.7400503778337532,
+          "avg_model_entropy": 1.1369981685970556,
+          "avg_market_entropy": 1.4584221620075741,
+          "avg_tail_model_mass": 0.11740331491712709,
+          "avg_tail_market_mass": 0.25994962216624684,
+          "avg_expected_pnl": 0.28869337016574614,
+          "avg_worst_case_loss": -1.4764999999999997
+        },
+        "excess_roi": null,
+        "roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          null,
+          null
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 44,
+          "active_event_dates": 5,
+          "active_city_days": 44,
+          "market_prob_sum": 27.093118665307106,
+          "model_prob_sum": 40.37075432568359,
+          "range_edge": 23.814,
+          "avg_abs_range_edge": 0.5412272727272728,
+          "taker_cost": 88.18900000000001,
+          "settled_pnl": -1.1890000000000018,
+          "taker_roi": -0.013482407102926688,
+          "maker_proxy_cost": 83.044,
+          "maker_proxy_settled_pnl": 3.9559999999999995,
+          "maker_proxy_roi": 0.047637397042531664,
+          "avg_expected_pnl_unit_notional": 0.6227047420765267,
+          "avg_worst_case_loss_unit_notional": -1.2123295454545455,
+          "avg_loss_probability": 0.0824828562344639,
+          "avg_large_loss_probability": 0.051109864966598535,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.4728916151240108,
+          "avg_model_adjacent3_mass": 0.9175171437655362,
+          "avg_market_adjacent3_mass": 0.6157526969387979,
+          "avg_model_entropy": 1.1852755300604547,
+          "avg_market_entropy": 1.2531766561879554,
+          "avg_tail_model_mass": 0.0824828562344639,
+          "avg_tail_market_mass": 0.38424730306120214,
+          "avg_expected_pnl": 0.6227047420765267,
+          "avg_worst_case_loss": -1.2123295454545455
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 53,
+          "active_event_dates": 5,
+          "active_city_days": 52,
+          "market_prob_sum": 35.06263870153175,
+          "model_prob_sum": 48.41440717103339,
+          "range_edge": 23.7935,
+          "avg_abs_range_edge": 0.4651566037735849,
+          "taker_cost": 105.971,
+          "settled_pnl": 0.02899999999999814,
+          "taker_roi": 0.0002736597748440435,
+          "maker_proxy_cost": 99.215,
+          "maker_proxy_settled_pnl": 6.784999999999999,
+          "maker_proxy_roi": 0.06838683666784255,
+          "avg_expected_pnl_unit_notional": 0.5388549875861656,
+          "avg_worst_case_loss_unit_notional": -1.2881037735849055,
+          "avg_loss_probability": 0.08652061941446437,
+          "avg_large_loss_probability": 0.060475117229821435,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29",
+            "2026-05-30"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.46712639830558034,
+          "avg_model_adjacent3_mass": 0.9134793805855357,
+          "avg_market_adjacent3_mass": 0.661559220783618,
+          "avg_model_entropy": 1.1953706837550389,
+          "avg_market_entropy": 1.2509273976867854,
+          "avg_tail_model_mass": 0.08652061941446437,
+          "avg_tail_market_mass": 0.3384407792163821,
+          "avg_expected_pnl": 0.5388549875861656,
+          "avg_worst_case_loss": -1.2881037735849055
+        },
+        "excess_roi": -0.013756066877770732,
+        "roi_ci95_cluster_by_event_date": [
+          -0.16915918909936856,
+          0.08370491618219787
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.05769181723967012,
+          0.015628436459028422
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_top5_removed_roi<=0_or_na"
+      ]
+    },
+    {
+      "strategy": "center_cheap_butterfly",
+      "strategy_label": "center cheap: BUY_YES center + BUY_NO adjacent shoulders",
+      "source": "time_aligned_orderbook",
+      "train_family_rows": 6,
+      "holdout_family_rows": 50,
+      "train": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 5,
+          "active_event_dates": 3,
+          "active_city_days": 5,
+          "market_prob_sum": 1.9302619524766573,
+          "model_prob_sum": 2.7075779400952786,
+          "range_edge": 1.2098,
+          "avg_abs_range_edge": 0.24196,
+          "taker_cost": 9.629999999999999,
+          "settled_pnl": 1.37,
+          "taker_roi": 0.14226375908618902,
+          "maker_proxy_cost": 8.831,
+          "maker_proxy_settled_pnl": 2.1690000000000005,
+          "maker_proxy_roi": 0.2456120484656325,
+          "avg_expected_pnl_unit_notional": 0.26141183902153686,
+          "avg_worst_case_loss_unit_notional": -0.8451000000000001,
+          "avg_loss_probability": 0.43500374899751887,
+          "avg_large_loss_probability": 0.0,
+          "drop_top5_event_dates": [
+            "2026-05-20",
+            "2026-05-21",
+            "2026-05-23"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.5415155880190557,
+          "avg_model_adjacent3_mass": 0.9765193370165746,
+          "avg_market_adjacent3_mass": 0.9480100755667505,
+          "avg_model_entropy": 0.9709397387359313,
+          "avg_market_entropy": 1.1474394591361923,
+          "avg_tail_model_mass": 0.023480662983425417,
+          "avg_tail_market_mass": 0.05198992443324937,
+          "avg_expected_pnl": 0.26141183902153686,
+          "avg_worst_case_loss": -0.8451000000000001
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 6,
+          "active_event_dates": 3,
+          "active_city_days": 6,
+          "market_prob_sum": 2.2975232326445485,
+          "model_prob_sum": 3.314135317144459,
+          "range_edge": 1.2062,
+          "avg_abs_range_edge": 0.20223333333333335,
+          "taker_cost": 12.01,
+          "settled_pnl": 0.9900000000000002,
+          "taker_roi": 0.08243130724396339,
+          "maker_proxy_cost": 10.781,
+          "maker_proxy_settled_pnl": 2.2190000000000003,
+          "maker_proxy_roi": 0.2058250626101475,
+          "avg_expected_pnl_unit_notional": 0.23534152638434636,
+          "avg_worst_case_loss_unit_notional": -0.8984166666666668,
+          "avg_loss_probability": 0.42807689465640236,
+          "avg_large_loss_probability": 0.05609456897513104,
+          "drop_top5_event_dates": [
+            "2026-05-20",
+            "2026-05-21",
+            "2026-05-23"
+          ],
+          "drop_top5_settled_pnl": 0,
+          "drop_top5_taker_roi": null,
+          "avg_model_mode_probability": 0.5523558861907432,
+          "avg_model_adjacent3_mass": 0.9709535793304732,
+          "avg_market_adjacent3_mass": 0.8835725795864929,
+          "avg_model_entropy": 0.98753811446642,
+          "avg_market_entropy": 1.2629125671590138,
+          "avg_tail_model_mass": 0.029046420669526757,
+          "avg_tail_market_mass": 0.11642742041350705,
+          "avg_expected_pnl": 0.23534152638434636,
+          "avg_worst_case_loss": -0.8984166666666668
+        },
+        "excess_roi": 0.05983245184222563,
+        "roi_ci95_cluster_by_event_date": [
+          -0.4623655913978495,
+          0.5957446808510639
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0,
+          0.10444437025767711
+        ]
+      },
+      "holdout": {
+        "selected": {
+          "source": "time_aligned_orderbook",
+          "rows": 48,
+          "active_event_dates": 6,
+          "active_city_days": 47,
+          "market_prob_sum": 10.83369963730731,
+          "model_prob_sum": 23.723791869619845,
+          "range_edge": 13.1492,
+          "avg_abs_range_edge": 0.27634166666666665,
+          "taker_cost": 88.143,
+          "settled_pnl": 1.8570000000000007,
+          "taker_roi": 0.02106803716687656,
+          "maker_proxy_cost": 83.968,
+          "maker_proxy_settled_pnl": 6.032,
+          "maker_proxy_roi": 0.07183689024390244,
+          "avg_expected_pnl_unit_notional": 0.2785085246820073,
+          "avg_worst_case_loss_unit_notional": -0.79140625,
+          "avg_loss_probability": 0.4243308892684061,
+          "avg_large_loss_probability": 0.006693526312187778,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-29",
+            "2026-05-30",
+            "2026-06-01"
+          ],
+          "drop_top5_settled_pnl": -4.303,
+          "drop_top5_taker_roi": -0.26393915230325704,
+          "avg_model_mode_probability": 0.4942456639504134,
+          "avg_model_adjacent3_mass": 0.9185765532188195,
+          "avg_market_adjacent3_mass": 0.6851936077605165,
+          "avg_model_entropy": 1.1611429285039752,
+          "avg_market_entropy": 1.2468979183834823,
+          "avg_tail_model_mass": 0.08142344678118048,
+          "avg_tail_market_mass": 0.3148063922394835,
+          "avg_expected_pnl": 0.2785085246820073,
+          "avg_worst_case_loss": -0.79140625
+        },
+        "baseline": {
+          "source": "time_aligned_orderbook",
+          "rows": 50,
+          "active_event_dates": 6,
+          "active_city_days": 49,
+          "market_prob_sum": 11.64935415538277,
+          "model_prob_sum": 24.540601404969568,
+          "range_edge": 13.2204,
+          "avg_abs_range_edge": 0.26828399999999997,
+          "taker_cost": 92.133,
+          "settled_pnl": 3.867000000000001,
+          "taker_roi": 0.041971931881084966,
+          "maker_proxy_cost": 87.758,
+          "maker_proxy_settled_pnl": 8.241999999999999,
+          "maker_proxy_roi": 0.09391736365915358,
+          "avg_expected_pnl_unit_notional": 0.26875333924418227,
+          "avg_worst_case_loss_unit_notional": -0.7972499999999999,
+          "avg_loss_probability": 0.42480868885520906,
+          "avg_large_loss_probability": 0.006425785259700267,
+          "drop_top5_event_dates": [
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-29",
+            "2026-05-30",
+            "2026-06-01"
+          ],
+          "drop_top5_settled_pnl": -4.303,
+          "drop_top5_taker_roi": -0.26393915230325704,
+          "avg_model_mode_probability": 0.49081202809939134,
+          "avg_model_adjacent3_mass": 0.9156207169546003,
+          "avg_market_adjacent3_mass": 0.692981781860424,
+          "avg_model_entropy": 1.1656547684881027,
+          "avg_market_entropy": 1.2486193711028033,
+          "avg_tail_model_mass": 0.0843792830453996,
+          "avg_tail_market_mass": 0.3070182181395759,
+          "avg_expected_pnl": 0.26875333924418227,
+          "avg_worst_case_loss": -0.7972499999999999
+        },
+        "excess_roi": -0.020903894714208407,
+        "roi_ci95_cluster_by_event_date": [
+          -0.13376673072231884,
+          0.19129232740309512
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.04021913244351953,
+          0.0
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      },
+      "gate_reasons": [
+        "holdout_top5_removed_roi<=0_or_na"
+      ]
+    }
+  ],
+  "confirmed_strategies": [],
+  "gates": {
+    "significance": "FAIL",
+    "baseline": "FAIL",
+    "forward": "FAIL",
+    "verdict": "inconclusive"
+  },
+  "conclusion": {
+    "verdict": "inconclusive",
+    "reason": "some positive point estimates but holdout/orderbook sample too small or unstable",
+    "sample_or_structure": "sample_limited"
+  },
+  "strategy_assessment": [
+    {
+      "strategy": "center_cheap_butterfly",
+      "assessment": "structurally_weak_proxy",
+      "reason": "decision-proxy holdout excess is non-positive versus same-family baseline; executable coverage is still a separate limitation",
+      "proxy_holdout_excess_roi": -0.02163503055044179,
+      "orderbook_holdout_excess_roi": -0.020903894714208407,
+      "proxy_selected_rows": 107,
+      "orderbook_train_selected_rows": 5,
+      "orderbook_holdout_selected_rows": 48
+    },
+    {
+      "strategy": "shoulders_cheap_butterfly",
+      "assessment": "sample_limited",
+      "reason": "selected rows or executable train coverage below gate",
+      "proxy_holdout_excess_roi": 0.789878003618668,
+      "orderbook_holdout_excess_roi": 0.6765883422203572,
+      "proxy_selected_rows": 7,
+      "orderbook_train_selected_rows": 0,
+      "orderbook_holdout_selected_rows": 3
+    },
+    {
+      "strategy": "center_band_cheap_neighbors",
+      "assessment": "structurally_weak_proxy",
+      "reason": "decision-proxy holdout excess is non-positive versus same-family baseline; executable coverage is still a separate limitation",
+      "proxy_holdout_excess_roi": -0.0009283227028790281,
+      "orderbook_holdout_excess_roi": 0.0005819501033406393,
+      "proxy_selected_rows": 114,
+      "orderbook_train_selected_rows": 0,
+      "orderbook_holdout_selected_rows": 49
+    },
+    {
+      "strategy": "tail_center_contrast",
+      "assessment": "structurally_weak_proxy",
+      "reason": "decision-proxy holdout excess is non-positive versus same-family baseline; executable coverage is still a separate limitation",
+      "proxy_holdout_excess_roi": -0.017055409251687144,
+      "orderbook_holdout_excess_roi": -0.013756066877770732,
+      "proxy_selected_rows": 104,
+      "orderbook_train_selected_rows": 0,
+      "orderbook_holdout_selected_rows": 44
+    }
+  ],
+  "candidate_samples_by_strategy": {
+    "center_cheap_butterfly": [
+      {
+        "candidate_id": "center_cheap_butterfly|LA|2026-05-10|2026-05-10T07:01:19Z|BUY_YES:66-67,BUY_NO:64-65,BUY_NO:68-69",
+        "algorithm": "center_cheap_butterfly",
+        "strategy": "center_cheap_butterfly",
+        "strategy_label": "center cheap: BUY_YES center + BUY_NO adjacent shoulders",
+        "city": "LA",
+        "city_pool": null,
+        "event_date": "2026-05-10",
+        "target_date": "2026-05-10",
+        "decision_snapshot_ts_utc": "2026-05-10T07:01:19Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "66-67",
+          "64-65",
+          "68-69"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x842e918e6916dbde26c1df718282352703119f9366d78160a2e2519e7b716171",
+          "0xd3a05967d3976225d98618463923bda73061f47302be9d237353531f28d62167",
+          "0x211a8e31271e337e5f7b54bfb27c443b8730d5a512177d3deb5aaa33e816b993"
+        ],
+        "market_prob_sum": 0.11357769747031492,
+        "model_prob_sum": 0.6652316523165231,
+        "range_edge": 0.7750000000000001,
+        "abs_range_edge": 0.7750000000000001,
+        "score": 0.657,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.6652316523165231,
+        "model_mode_gap": 0.4560270602706027,
+        "model_adjacent3_mass": 0.9957974579745797,
+        "market_adjacent3_mass": 0.6902426432627775,
+        "model_entropy": 0.8800937425545314,
+        "market_entropy": 1.1728289164520447,
+        "tail_model_mass": 0.0042025420254202545,
+        "tail_market_mass": 0.3097573567372225,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "66-67"
+        },
+        "components": {
+          "center": "66-67",
+          "shoulders": [
+            "64-65",
+            "68-69"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x842e918e6916dbde26c1df718282352703119f9366d78160a2e2519e7b716171",
+            "market_id": "2186964",
+            "bracket": "66-67",
+            "side": "BUY_YES",
+            "market_yes_price": 0.11,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0xd3a05967d3976225d98618463923bda73061f47302be9d237353531f28d62167",
+            "market_id": "2186963",
+            "bracket": "64-65",
+            "side": "BUY_NO",
+            "market_yes_price": 0.0135,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x211a8e31271e337e5f7b54bfb27c443b8730d5a512177d3deb5aaa33e816b993",
+            "market_id": "2186965",
+            "bracket": "68-69",
+            "side": "BUY_NO",
+            "market_yes_price": 0.545,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 1.5515,
+        "settled_payout": 1.0,
+        "taker_pnl": -0.5515000000000001,
+        "payoff_by_final_temp": {
+          "64-65": -0.5515000000000001,
+          "66-67": 1.4485,
+          "68-69": -0.5515000000000001,
+          "70-71": 0.4484999999999999,
+          "72+": 0.4484999999999999
+        },
+        "expected_pnl": 0.7831658466584664,
+        "worst_case_loss": -0.5515000000000001,
+        "loss_probability": 0.3305658056580566,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "center_cheap_butterfly|Miami|2026-05-09|2026-05-09T04:00:19Z|BUY_YES:88-89,BUY_NO:86-87,BUY_NO:90-91",
+        "algorithm": "center_cheap_butterfly",
+        "strategy": "center_cheap_butterfly",
+        "strategy_label": "center cheap: BUY_YES center + BUY_NO adjacent shoulders",
+        "city": "Miami",
+        "city_pool": null,
+        "event_date": "2026-05-09",
+        "target_date": "2026-05-09",
+        "decision_snapshot_ts_utc": "2026-05-09T04:00:19Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "88-89",
+          "86-87",
+          "90-91"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xc3b31cce029fcfcf786b54d85213b8201382a2cb84664f501fcccbf78c2abcaa",
+          "0x722436e11abe80dbbed6f15e8578c5a401f8b25b2a170532f13ae693fbf98380",
+          "0x1b48c9c6875ae940b99f55e0c5c44cf5f2e658d63fe7f40c209251607b9ebbaf"
+        ],
+        "market_prob_sum": 0.09146341463414634,
+        "model_prob_sum": 0.6354583718304075,
+        "range_edge": 0.7674000000000001,
+        "abs_range_edge": 0.7674000000000001,
+        "score": 0.6482000000000001,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.6354583718304075,
+        "model_mode_gap": 0.42736885330048247,
+        "model_adjacent3_mass": 0.990247407863669,
+        "market_adjacent3_mass": 0.684959349593496,
+        "model_entropy": 0.9415057116925419,
+        "market_entropy": 1.0509023586354145,
+        "tail_model_mass": 0.009752592136330972,
+        "tail_market_mass": 0.3150406504065041,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "88-89"
+        },
+        "components": {
+          "center": "88-89",
+          "shoulders": [
+            "86-87",
+            "90-91"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xc3b31cce029fcfcf786b54d85213b8201382a2cb84664f501fcccbf78c2abcaa",
+            "market_id": "2179185",
+            "bracket": "88-89",
+            "side": "BUY_YES",
+            "market_yes_price": 0.09,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x722436e11abe80dbbed6f15e8578c5a401f8b25b2a170532f13ae693fbf98380",
+            "market_id": "2179184",
+            "bracket": "86-87",
+            "side": "BUY_NO",
+            "market_yes_price": 0.044,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x1b48c9c6875ae940b99f55e0c5c44cf5f2e658d63fe7f40c209251607b9ebbaf",
+            "market_id": "2179186",
+            "bracket": "90-91",
+            "side": "BUY_NO",
+            "market_yes_price": 0.54,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 1.506,
+        "settled_payout": 1.0,
+        "taker_pnl": -0.506,
+        "payoff_by_final_temp": {
+          "86-87": -0.506,
+          "88-89": 1.494,
+          "90-91": -0.506,
+          "92-93": 0.494
+        },
+        "expected_pnl": 0.774669335797146,
+        "worst_case_loss": -0.506,
+        "loss_probability": 0.3547890360332615,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "center_cheap_butterfly|LA|2026-05-26|2026-05-26T07:00:53Z|BUY_YES:64-65,BUY_NO:62-63,BUY_NO:66-67",
+        "algorithm": "center_cheap_butterfly",
+        "strategy": "center_cheap_butterfly",
+        "strategy_label": "center cheap: BUY_YES center + BUY_NO adjacent shoulders",
+        "city": "LA",
+        "city_pool": "t1_trading",
+        "event_date": "2026-05-26",
+        "target_date": "2026-05-26",
+        "decision_snapshot_ts_utc": "2026-05-26T07:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "64-65",
+          "62-63",
+          "66-67"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x81c5c6090b22e2772f1e6b9734ad20b39a028f593c52cb5409911233ac78ee92",
+          "0x3e36ba7a6c21160b1dfa0e8b12438a601d6902c4563511a7025fad4723cef945",
+          "0xb4c10190bb477ce705eeb53112066f8f5fdcf2dd8362e57533a4e2b6016b6b32"
+        ],
+        "market_prob_sum": 0.22912423625254583,
+        "model_prob_sum": 0.6442200908632004,
+        "range_edge": 0.713,
+        "abs_range_edge": 0.713,
+        "score": 0.56305,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 1,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 1,
+        "model_mode_probability": 0.6442200908632004,
+        "model_mode_gap": 0.3969712266532055,
+        "model_adjacent3_mass": 0.9779909136799596,
+        "market_adjacent3_mass": 0.8711812627291242,
+        "model_entropy": 0.9245121911179013,
+        "market_entropy": 1.0608042953375416,
+        "tail_model_mass": 0.022009086320040384,
+        "tail_market_mass": 0.12881873727087575,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "64-65"
+        },
+        "components": {
+          "center": "64-65",
+          "shoulders": [
+            "62-63",
+            "66-67"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x81c5c6090b22e2772f1e6b9734ad20b39a028f593c52cb5409911233ac78ee92",
+            "market_id": "2344326",
+            "bracket": "64-65",
+            "side": "BUY_YES",
+            "market_yes_price": 0.225,
+            "final_yes": 0.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x3e36ba7a6c21160b1dfa0e8b12438a601d6902c4563511a7025fad4723cef945",
+            "market_id": "2344325",
+            "bracket": "62-63",
+            "side": "BUY_NO",
+            "market_yes_price": 0.0455,
+            "final_yes": 0.0,
+            "yes_spread": 0.002,
+            "no_spread": 0.002,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0xb4c10190bb477ce705eeb53112066f8f5fdcf2dd8362e57533a4e2b6016b6b32",
+            "market_id": "2344327",
+            "bracket": "66-67",
+            "side": "BUY_NO",
+            "market_yes_price": 0.585,
+            "final_yes": 0.0,
+            "yes_spread": 0.09,
+            "no_spread": 0.09,
+            "eligible": 1
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 1.5945,
+        "settled_payout": 2.0,
+        "taker_pnl": 0.40549999999999997,
+        "payoff_by_final_temp": {
+          "60-61": 0.40549999999999997,
+          "62-63": -0.5945,
+          "64-65": 1.4055,
+          "66-67": -0.5945,
+          "68-69": 0.40549999999999997
+        },
+        "expected_pnl": 0.7159492680464412,
+        "worst_case_loss": -0.5945,
+        "loss_probability": 0.3337708228167592,
+        "large_loss_probability": 0,
+        "orderbook_taker_cost": 1.615,
+        "orderbook_taker_pnl": 0.385,
+        "orderbook_maker_proxy_cost": 1.513,
+        "orderbook_maker_proxy_pnl": 0.487
+      },
+      {
+        "candidate_id": "center_cheap_butterfly|Miami|2026-05-13|2026-05-13T04:00:53Z|BUY_YES:92-93,BUY_NO:90-91,BUY_NO:94-95",
+        "algorithm": "center_cheap_butterfly",
+        "strategy": "center_cheap_butterfly",
+        "strategy_label": "center cheap: BUY_YES center + BUY_NO adjacent shoulders",
+        "city": "Miami",
+        "city_pool": "t1_trading",
+        "event_date": "2026-05-13",
+        "target_date": "2026-05-13",
+        "decision_snapshot_ts_utc": "2026-05-13T04:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "92-93",
+          "90-91",
+          "94-95"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xb1a9732c7f869ec9f7a972242e280e504c15a5f6bea700a472840a181cb2b0cd",
+          "0x446bf5c45019c3ad9707ac49ec2174cc68f658bc6b6f42178b244840111217a6",
+          "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411"
+        ],
+        "market_prob_sum": 0.10545267489711933,
+        "model_prob_sum": 0.6275344687753447,
+        "range_edge": 0.5654,
+        "abs_range_edge": 0.5654,
+        "score": 0.5409499999999999,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 1,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.6275344687753447,
+        "model_mode_gap": 0.4220397404703974,
+        "model_adjacent3_mass": 0.9778994322789943,
+        "market_adjacent3_mass": 0.5113168724279835,
+        "model_entropy": 0.9954096840638487,
+        "market_entropy": 1.1845583227002365,
+        "tail_model_mass": 0.022100567721005677,
+        "tail_market_mass": 0.48868312757201643,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "92-93"
+        },
+        "components": {
+          "center": "92-93",
+          "shoulders": [
+            "90-91",
+            "94-95"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xb1a9732c7f869ec9f7a972242e280e504c15a5f6bea700a472840a181cb2b0cd",
+            "market_id": "2227645",
+            "bracket": "92-93",
+            "side": "BUY_YES",
+            "market_yes_price": 0.1025,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x446bf5c45019c3ad9707ac49ec2174cc68f658bc6b6f42178b244840111217a6",
+            "market_id": "2227644",
+            "bracket": "90-91",
+            "side": "BUY_NO",
+            "market_yes_price": 0.385,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x1065137ef1319e44e24ec7aec505313b9f21a33e929480346941d1791dc27411",
+            "market_id": "2227646",
+            "bracket": "94-95",
+            "side": "BUY_NO",
+            "market_yes_price": 0.0095,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 1.708,
+        "settled_payout": 1.0,
+        "taker_pnl": -0.708,
+        "payoff_by_final_temp": {
+          "86-87": 0.29200000000000004,
+          "88-89": 0.29200000000000004,
+          "90-91": -0.708,
+          "92-93": 1.292,
+          "94-95": -0.708
+        },
+        "expected_pnl": 0.5691695052716951,
+        "worst_case_loss": -0.708,
+        "loss_probability": 0.35036496350364965,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "center_cheap_butterfly|LA|2026-05-29|2026-05-29T07:00:53Z|BUY_YES:66-67,BUY_NO:64-65,BUY_NO:68-69",
+        "algorithm": "center_cheap_butterfly",
+        "strategy": "center_cheap_butterfly",
+        "strategy_label": "center cheap: BUY_YES center + BUY_NO adjacent shoulders",
+        "city": "LA",
+        "city_pool": "t1_trading",
+        "event_date": "2026-05-29",
+        "target_date": "2026-05-29",
+        "decision_snapshot_ts_utc": "2026-05-29T07:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "66-67",
+          "64-65",
+          "68-69"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xfbbb833d53dd45e45ebc9d91f37e0c5d910a113a8f786f286ce8c9ac2b6dc6a8",
+          "0xb1472e263079c26ee590d020771290ae0f8cb712c408b2fbcc422bea5fa28912",
+          "0x777ac7832664e8cf113d08b4d56ca4ea28ca8a917464d83b194f144dda896947"
+        ],
+        "market_prob_sum": 0.30810810810810807,
+        "model_prob_sum": 0.6769897801176835,
+        "range_edge": 0.6329,
+        "abs_range_edge": 0.6329,
+        "score": 0.5018500000000001,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 1,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 2,
+        "model_mode_probability": 0.6769897801176835,
+        "model_mode_gap": 0.46495302983379794,
+        "model_adjacent3_mass": 1.0,
+        "market_adjacent3_mass": 0.9297297297297297,
+        "model_entropy": 0.8369323777058721,
+        "market_entropy": 1.052819449409796,
+        "tail_model_mass": 0.0,
+        "tail_market_mass": 0.07027027027027027,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "66-67"
+        },
+        "components": {
+          "center": "66-67",
+          "shoulders": [
+            "64-65",
+            "68-69"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xfbbb833d53dd45e45ebc9d91f37e0c5d910a113a8f786f286ce8c9ac2b6dc6a8",
+            "market_id": "2367582",
+            "bracket": "66-67",
+            "side": "BUY_YES",
+            "market_yes_price": 0.285,
+            "final_yes": 1.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0xb1472e263079c26ee590d020771290ae0f8cb712c408b2fbcc422bea5fa28912",
+            "market_id": "2367581",
+            "bracket": "64-65",
+            "side": "BUY_NO",
+            "market_yes_price": 0.06,
+            "final_yes": 0.0,
+            "yes_spread": 0.02,
+            "no_spread": 0.02,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x777ac7832664e8cf113d08b4d56ca4ea28ca8a917464d83b194f144dda896947",
+            "market_id": "2367583",
+            "bracket": "68-69",
+            "side": "BUY_NO",
+            "market_yes_price": 0.515,
+            "final_yes": 0.0,
+            "yes_spread": 0.04,
+            "no_spread": 0.04,
+            "eligible": 1
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 1.71,
+        "settled_payout": 3.0,
+        "taker_pnl": 1.29,
+        "payoff_by_final_temp": {
+          "64-65": -0.71,
+          "66-67": 1.29,
+          "68-69": -0.71,
+          "70-71": 0.29000000000000004
+        },
+        "expected_pnl": 0.6439795602353671,
+        "worst_case_loss": -0.71,
+        "loss_probability": 0.3230102198823165,
+        "large_loss_probability": 0,
+        "orderbook_taker_cost": 1.69,
+        "orderbook_taker_pnl": 1.31,
+        "orderbook_maker_proxy_cost": 1.62,
+        "orderbook_maker_proxy_pnl": 1.38
+      }
+    ],
+    "shoulders_cheap_butterfly": [
+      {
+        "candidate_id": "shoulders_cheap_butterfly|CapeTown|2026-05-27|2026-05-26T21:00:53Z|BUY_YES:17,BUY_YES:20,BUY_NO:19",
+        "algorithm": "shoulders_cheap_butterfly",
+        "strategy": "shoulders_cheap_butterfly",
+        "strategy_label": "shoulders cheap: BUY_YES two shoulders + BUY_NO center",
+        "city": "CapeTown",
+        "city_pool": "t2_research",
+        "event_date": "2026-05-27",
+        "target_date": "2026-05-27",
+        "decision_snapshot_ts_utc": "2026-05-26T21:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "17",
+          "20",
+          "19"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xc9cc3773c141118900dd8d618436b291e6fee39e377df8f75d76dcf5c1517a17",
+          "0x6f30c1c88d50d08a3a8f9c07fce0d752fdba0b848d9b9dadff3180f54e4524d3",
+          "0x102e5648ccadc558b4807bb8fa78d08e1993290dbbcd23439e902151ce37ad28"
+        ],
+        "market_prob_sum": 0.32300163132137033,
+        "model_prob_sum": 0.5054305663304887,
+        "range_edge": 0.22259999999999996,
+        "abs_range_edge": 0.22259999999999996,
+        "score": 0.19129999999999997,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.4945694336695112,
+        "model_mode_gap": 0.12645461598138097,
+        "model_adjacent3_mass": 0.9999999999999999,
+        "market_adjacent3_mass": 0.9999999999999999,
+        "model_entropy": 0.9887263535687025,
+        "market_entropy": 0.8080084456690713,
+        "tail_model_mass": 0,
+        "tail_market_mass": 0,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "19"
+        },
+        "components": {
+          "center": "19",
+          "shoulders": [
+            "17",
+            "20"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xc9cc3773c141118900dd8d618436b291e6fee39e377df8f75d76dcf5c1517a17",
+            "market_id": "2351090",
+            "bracket": "17",
+            "side": "BUY_YES",
+            "market_yes_price": 0.048,
+            "final_yes": 1.0,
+            "yes_spread": 0.05,
+            "no_spread": 0.05,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x6f30c1c88d50d08a3a8f9c07fce0d752fdba0b848d9b9dadff3180f54e4524d3",
+            "market_id": "2351093",
+            "bracket": "20",
+            "side": "BUY_YES",
+            "market_yes_price": 0.15,
+            "final_yes": 0.0,
+            "yes_spread": 0.03,
+            "no_spread": 0.03,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x102e5648ccadc558b4807bb8fa78d08e1993290dbbcd23439e902151ce37ad28",
+            "market_id": "2351092",
+            "bracket": "19",
+            "side": "BUY_NO",
+            "market_yes_price": 0.415,
+            "final_yes": 0.0,
+            "yes_spread": 0.03,
+            "no_spread": 0.03,
+            "eligible": 0
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.7829999999999999,
+        "settled_payout": 2.0,
+        "taker_pnl": 1.217,
+        "payoff_by_final_temp": {
+          "17": 1.217,
+          "19": -0.7829999999999999,
+          "20": 1.217
+        },
+        "expected_pnl": 0.22786113266097752,
+        "worst_case_loss": -0.7829999999999999,
+        "loss_probability": 0.4945694336695112,
+        "large_loss_probability": 0,
+        "orderbook_taker_cost": 0.833,
+        "orderbook_taker_pnl": 1.167,
+        "orderbook_maker_proxy_cost": 0.723,
+        "orderbook_maker_proxy_pnl": 1.2770000000000001
+      },
+      {
+        "candidate_id": "shoulders_cheap_butterfly|London|2026-05-12|2026-05-11T23:01:19Z|BUY_YES:15,BUY_YES:17,BUY_NO:16",
+        "algorithm": "shoulders_cheap_butterfly",
+        "strategy": "shoulders_cheap_butterfly",
+        "strategy_label": "shoulders cheap: BUY_YES two shoulders + BUY_NO center",
+        "city": "London",
+        "city_pool": null,
+        "event_date": "2026-05-12",
+        "target_date": "2026-05-12",
+        "decision_snapshot_ts_utc": "2026-05-11T23:01:19Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "15",
+          "17",
+          "16"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x91d27cfdf1c4aa94935eca4303d4d6666d150b8165416ac570eb1bac35c16dc2",
+          "0x8e5a0a55afcb8c929c31ab55e50e4497fbc48e253f6219d0e874552f4facb6a0",
+          "0xa19b97956cf5ddc30b1cc852e39e9b0f5a87452e190872df508d12fd5ab1815a"
+        ],
+        "market_prob_sum": 0.36979166666666663,
+        "model_prob_sum": 0.47446967274277796,
+        "range_edge": 0.2021,
+        "abs_range_edge": 0.2021,
+        "score": 0.15705,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.525530327257222,
+        "model_mode_gap": 0.19518175034644492,
+        "model_adjacent3_mass": 1.0,
+        "market_adjacent3_mass": 1.0,
+        "model_entropy": 0.9831720930076829,
+        "market_entropy": 0.9151280806019737,
+        "tail_model_mass": 0,
+        "tail_market_mass": 0,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "16"
+        },
+        "components": {
+          "center": "16",
+          "shoulders": [
+            "15",
+            "17"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x91d27cfdf1c4aa94935eca4303d4d6666d150b8165416ac570eb1bac35c16dc2",
+            "market_id": "2219640",
+            "bracket": "15",
+            "side": "BUY_YES",
+            "market_yes_price": 0.18,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x8e5a0a55afcb8c929c31ab55e50e4497fbc48e253f6219d0e874552f4facb6a0",
+            "market_id": "2219642",
+            "bracket": "17",
+            "side": "BUY_YES",
+            "market_yes_price": 0.175,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0xa19b97956cf5ddc30b1cc852e39e9b0f5a87452e190872df508d12fd5ab1815a",
+            "market_id": "2219641",
+            "bracket": "16",
+            "side": "BUY_NO",
+            "market_yes_price": 0.605,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.75,
+        "settled_payout": 2.0,
+        "taker_pnl": 1.25,
+        "payoff_by_final_temp": {
+          "15": 1.25,
+          "16": -0.75,
+          "17": 1.25
+        },
+        "expected_pnl": 0.19893934548555597,
+        "worst_case_loss": -0.75,
+        "loss_probability": 0.525530327257222,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "shoulders_cheap_butterfly|HongKong|2026-05-30|2026-05-29T15:09:51Z|BUY_YES:30,BUY_YES:33+,BUY_NO:31",
+        "algorithm": "shoulders_cheap_butterfly",
+        "strategy": "shoulders_cheap_butterfly",
+        "strategy_label": "shoulders cheap: BUY_YES two shoulders + BUY_NO center",
+        "city": "HongKong",
+        "city_pool": "t2_research",
+        "event_date": "2026-05-30",
+        "target_date": "2026-05-30",
+        "decision_snapshot_ts_utc": "2026-05-29T15:09:51Z",
+        "decision_hours_to_settle": 22.8,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "30",
+          "33+",
+          "31"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xb6554553818ce7e00edf18e1cd30d99d2092842ece0022882b55548d56b4de2d",
+          "0x5fe9918d5cf57abdc68cc1bdca546878cc4736801300b186e32771d5fe04f354",
+          "0x799736b953678de34b1021e4adad3bb37e443f256090a85459e67eede8a8fed0"
+        ],
+        "market_prob_sum": 0.44897959183673464,
+        "model_prob_sum": 0.5688147668393784,
+        "range_edge": 0.16000000000000003,
+        "abs_range_edge": 0.16000000000000003,
+        "score": 0.14935000000000004,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.4311852331606218,
+        "model_mode_gap": 0.13762953367875647,
+        "model_adjacent3_mass": 1.0,
+        "market_adjacent3_mass": 0.9999999999999999,
+        "model_entropy": 1.0776241420290342,
+        "market_entropy": 0.9199437601847541,
+        "tail_model_mass": 0,
+        "tail_market_mass": 0,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "31"
+        },
+        "components": {
+          "center": "31",
+          "shoulders": [
+            "30",
+            "33+"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xb6554553818ce7e00edf18e1cd30d99d2092842ece0022882b55548d56b4de2d",
+            "market_id": "2375832",
+            "bracket": "30",
+            "side": "BUY_YES",
+            "market_yes_price": 0.26,
+            "final_yes": 0.0,
+            "yes_spread": 0.04,
+            "no_spread": 0.04,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x5fe9918d5cf57abdc68cc1bdca546878cc4736801300b186e32771d5fe04f354",
+            "market_id": "2375835",
+            "bracket": "33+",
+            "side": "BUY_YES",
+            "market_yes_price": 0.07,
+            "final_yes": 0.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x799736b953678de34b1021e4adad3bb37e443f256090a85459e67eede8a8fed0",
+            "market_id": "2375833",
+            "bracket": "31",
+            "side": "BUY_NO",
+            "market_yes_price": 0.405,
+            "final_yes": 0.0,
+            "yes_spread": 0.03,
+            "no_spread": 0.03,
+            "eligible": 0
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.925,
+        "settled_payout": 1.0,
+        "taker_pnl": 0.07499999999999996,
+        "payoff_by_final_temp": {
+          "30": 1.075,
+          "31": -0.925,
+          "33+": 1.075
+        },
+        "expected_pnl": 0.21262953367875653,
+        "worst_case_loss": -0.925,
+        "loss_probability": 0.4311852331606218,
+        "large_loss_probability": 0,
+        "orderbook_taker_cost": 0.97,
+        "orderbook_taker_pnl": 0.030000000000000027,
+        "orderbook_maker_proxy_cost": 0.8899999999999999,
+        "orderbook_maker_proxy_pnl": 0.11000000000000004
+      },
+      {
+        "candidate_id": "shoulders_cheap_butterfly|Paris|2026-05-10|2026-05-09T22:01:19Z|BUY_YES:17,BUY_YES:19,BUY_NO:18",
+        "algorithm": "shoulders_cheap_butterfly",
+        "strategy": "shoulders_cheap_butterfly",
+        "strategy_label": "shoulders cheap: BUY_YES two shoulders + BUY_NO center",
+        "city": "Paris",
+        "city_pool": null,
+        "event_date": "2026-05-10",
+        "target_date": "2026-05-10",
+        "decision_snapshot_ts_utc": "2026-05-09T22:01:19Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "17",
+          "19",
+          "18"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x6351b41fc54a8334e503d67ce378f9a034e7f512b78004c12c0575c9dae3edd6",
+          "0x036c9e9b75e6d445e0c911928f8af26ed5cf41a80f1f13cc61985ded0cbf2d4c",
+          "0x2efc1421998ad52b26ef658bad9d331ff2fe6abc6ae3c5fe62a514a67d91dc66"
+        ],
+        "market_prob_sum": 0.48659440958357103,
+        "model_prob_sum": 0.5802034920236151,
+        "range_edge": 0.15119999999999997,
+        "abs_range_edge": 0.15119999999999997,
+        "score": 0.1335,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.41979650797638485,
+        "model_mode_gap": 0.05803291043838715,
+        "model_adjacent3_mass": 0.9999999999999999,
+        "market_adjacent3_mass": 1.0,
+        "model_entropy": 1.064505935004466,
+        "market_entropy": 0.9508570285632203,
+        "tail_model_mass": 0,
+        "tail_market_mass": 0,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "18"
+        },
+        "components": {
+          "center": "18",
+          "shoulders": [
+            "17",
+            "19"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x6351b41fc54a8334e503d67ce378f9a034e7f512b78004c12c0575c9dae3edd6",
+            "market_id": "2186596",
+            "bracket": "17",
+            "side": "BUY_YES",
+            "market_yes_price": 0.3315,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x036c9e9b75e6d445e0c911928f8af26ed5cf41a80f1f13cc61985ded0cbf2d4c",
+            "market_id": "2186598",
+            "bracket": "19",
+            "side": "BUY_YES",
+            "market_yes_price": 0.095,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x2efc1421998ad52b26ef658bad9d331ff2fe6abc6ae3c5fe62a514a67d91dc66",
+            "market_id": "2186597",
+            "bracket": "18",
+            "side": "BUY_NO",
+            "market_yes_price": 0.45,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.9765,
+        "settled_payout": 0.0,
+        "taker_pnl": -0.9765,
+        "payoff_by_final_temp": {
+          "17": 1.0234999999999999,
+          "18": -0.9765,
+          "19": 1.0234999999999999
+        },
+        "expected_pnl": 0.18390698404723016,
+        "worst_case_loss": -0.9765,
+        "loss_probability": 0.41979650797638485,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "shoulders_cheap_butterfly|Paris|2026-05-12|2026-05-11T22:00:19Z|BUY_YES:15,BUY_YES:17,BUY_NO:16",
+        "algorithm": "shoulders_cheap_butterfly",
+        "strategy": "shoulders_cheap_butterfly",
+        "strategy_label": "shoulders cheap: BUY_YES two shoulders + BUY_NO center",
+        "city": "Paris",
+        "city_pool": null,
+        "event_date": "2026-05-12",
+        "target_date": "2026-05-12",
+        "decision_snapshot_ts_utc": "2026-05-11T22:00:19Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 3,
+        "brackets": [
+          "15",
+          "17",
+          "16"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xf96980d8fc4bbbf32f881104fa8cf76c246c12775b3fd3807a311c4db97903fa",
+          "0x680ac22ce9af10038bb6cb8bebea1ccf0455bffdade26dec806aa26338517ec1",
+          "0x6dc7cdf730bdd7f54436adc8d91805c0ded30dffb3186712028872492095fccc"
+        ],
+        "market_prob_sum": 0.480225988700565,
+        "model_prob_sum": 0.5502194357366772,
+        "range_edge": 0.1151,
+        "abs_range_edge": 0.1151,
+        "score": 0.10819999999999999,
+        "threshold": 0.08,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 3,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.4497805642633229,
+        "model_mode_gap": 0.15335423197492165,
+        "model_adjacent3_mass": 1.0,
+        "market_adjacent3_mass": 1.0,
+        "model_entropy": 1.0678243784006034,
+        "market_entropy": 0.9727415521914686,
+        "tail_model_mass": 0,
+        "tail_market_mass": 0,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "16"
+        },
+        "components": {
+          "center": "16",
+          "shoulders": [
+            "15",
+            "17"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xf96980d8fc4bbbf32f881104fa8cf76c246c12775b3fd3807a311c4db97903fa",
+            "market_id": "2219651",
+            "bracket": "15",
+            "side": "BUY_YES",
+            "market_yes_price": 0.31,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x680ac22ce9af10038bb6cb8bebea1ccf0455bffdade26dec806aa26338517ec1",
+            "market_id": "2219653",
+            "bracket": "17",
+            "side": "BUY_YES",
+            "market_yes_price": 0.115,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x6dc7cdf730bdd7f54436adc8d91805c0ded30dffb3186712028872492095fccc",
+            "market_id": "2219652",
+            "bracket": "16",
+            "side": "BUY_NO",
+            "market_yes_price": 0.46,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.9650000000000001,
+        "settled_payout": 0.0,
+        "taker_pnl": -0.9650000000000001,
+        "payoff_by_final_temp": {
+          "15": 1.035,
+          "16": -0.9650000000000001,
+          "17": 1.035
+        },
+        "expected_pnl": 0.13543887147335415,
+        "worst_case_loss": -0.9650000000000001,
+        "loss_probability": 0.4497805642633229,
+        "large_loss_probability": 0
+      }
+    ],
+    "center_band_cheap_neighbors": [
+      {
+        "candidate_id": "center_band_cheap_neighbors|Beijing|2026-05-15|2026-05-14T15:00:53Z|BUY_YES:32,BUY_YES:33,BUY_YES:34,BUY_NO:31",
+        "algorithm": "center_band_cheap_neighbors",
+        "strategy": "center_band_cheap_neighbors",
+        "strategy_label": "center band cheap: BUY_YES adjacent3 center band + BUY_NO outside neighbors",
+        "city": "Beijing",
+        "city_pool": "t1_trading",
+        "event_date": "2026-05-15",
+        "target_date": "2026-05-15",
+        "decision_snapshot_ts_utc": "2026-05-14T15:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 4,
+        "brackets": [
+          "32",
+          "33",
+          "34",
+          "31"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xa39eab14389b480884d75a567547525efb574eaf12a49eccbb1ed6ba97e1b02c",
+          "0x361584ab94ee60edd21c7c413728c155db7bd532c3d221226d7e2a9f31c72190",
+          "0x0a0a2c2e0b1a5cb2a478aaa1059324f752060e1bffdc28c3bcc0a2d8af0c9a33",
+          "0x6a2eb06b7474db2824895c7944e5609aef2bc80cc10e6ec593318cf8c42681e8"
+        ],
+        "market_prob_sum": 0.12596401028277635,
+        "model_prob_sum": 0.8945219462402177,
+        "range_edge": 1.4232,
+        "abs_range_edge": 1.4232,
+        "score": 1.4232,
+        "threshold": 0.1,
+        "selected": 1,
+        "all_legs_eligible": 1,
+        "paper_ordered_legs": 0,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.3481909946693887,
+        "model_mode_gap": 0.044686401270273346,
+        "model_adjacent3_mass": 0.8945219462402177,
+        "market_adjacent3_mass": 0.12596401028277635,
+        "model_entropy": 1.3101745181093833,
+        "market_entropy": 0.486803598681399,
+        "tail_model_mass": 0.10547805375978224,
+        "tail_market_mass": 0.8740359897172236,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "33"
+        },
+        "components": {
+          "center_band": [
+            "32",
+            "33",
+            "34"
+          ],
+          "outside_neighbors": [
+            "31"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xa39eab14389b480884d75a567547525efb574eaf12a49eccbb1ed6ba97e1b02c",
+            "market_id": "2247377",
+            "bracket": "32",
+            "side": "BUY_YES",
+            "market_yes_price": 0.07,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x361584ab94ee60edd21c7c413728c155db7bd532c3d221226d7e2a9f31c72190",
+            "market_id": "2247378",
+            "bracket": "33",
+            "side": "BUY_YES",
+            "market_yes_price": 0.045,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x0a0a2c2e0b1a5cb2a478aaa1059324f752060e1bffdc28c3bcc0a2d8af0c9a33",
+            "market_id": "2247379",
+            "bracket": "34",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0075,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x6a2eb06b7474db2824895c7944e5609aef2bc80cc10e6ec593318cf8c42681e8",
+            "market_id": "2247376",
+            "bracket": "31",
+            "side": "BUY_NO",
+            "market_yes_price": 0.85,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 1
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.2725,
+        "settled_payout": 0.0,
+        "taker_pnl": -0.2725,
+        "payoff_by_final_temp": {
+          "31": -0.2725,
+          "32": 1.7275,
+          "33": 1.7275,
+          "34": 1.7275
+        },
+        "expected_pnl": 1.5165438924804355,
+        "worst_case_loss": -0.2725,
+        "loss_probability": 0.10547805375978224,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "center_band_cheap_neighbors|Milan|2026-05-30|2026-05-29T22:00:53Z|BUY_YES:32,BUY_YES:33,BUY_YES:34+,BUY_NO:31",
+        "algorithm": "center_band_cheap_neighbors",
+        "strategy": "center_band_cheap_neighbors",
+        "strategy_label": "center band cheap: BUY_YES adjacent3 center band + BUY_NO outside neighbors",
+        "city": "Milan",
+        "city_pool": "t2_research",
+        "event_date": "2026-05-30",
+        "target_date": "2026-05-30",
+        "decision_snapshot_ts_utc": "2026-05-29T22:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 4,
+        "brackets": [
+          "32",
+          "33",
+          "34+",
+          "31"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x3cf15e0cff072d1ebe017d1346e19413939586b796ee844a868753cc7f3a8bef",
+          "0xfba421f06d81f3e9ed2770bf2a141a3f7cb8a336f8190a40f30375a29b41082e",
+          "0x544697b0380e66cf7a57d30a72c3cf017a5083bb15fa228f574e14b04c1c1649",
+          "0x505f74fda8352cd634a965a1fcbb1da652607c19d77bede43d67885591bdeba9"
+        ],
+        "market_prob_sum": 0.16880451513596714,
+        "model_prob_sum": 0.9320000000000002,
+        "range_edge": 1.1502,
+        "abs_range_edge": 1.1502,
+        "score": 1.1502,
+        "threshold": 0.1,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 4,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.36260000000000003,
+        "model_mode_gap": 0.068,
+        "model_adjacent3_mass": 0.9320000000000002,
+        "market_adjacent3_mass": 0.16880451513596714,
+        "model_entropy": 1.2852307551170241,
+        "market_entropy": 1.1447865561887467,
+        "tail_model_mass": 0.068,
+        "tail_market_mass": 0.8311954848640328,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "33"
+        },
+        "components": {
+          "center_band": [
+            "32",
+            "33",
+            "34+"
+          ],
+          "outside_neighbors": [
+            "31"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x3cf15e0cff072d1ebe017d1346e19413939586b796ee844a868753cc7f3a8bef",
+            "market_id": "2375866",
+            "bracket": "32",
+            "side": "BUY_YES",
+            "market_yes_price": 0.115,
+            "final_yes": 0.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0xfba421f06d81f3e9ed2770bf2a141a3f7cb8a336f8190a40f30375a29b41082e",
+            "market_id": "2375867",
+            "bracket": "33",
+            "side": "BUY_YES",
+            "market_yes_price": 0.045,
+            "final_yes": 0.0,
+            "yes_spread": 0.014,
+            "no_spread": 0.014,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x544697b0380e66cf7a57d30a72c3cf017a5083bb15fa228f574e14b04c1c1649",
+            "market_id": "2375868",
+            "bracket": "34+",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0045,
+            "final_yes": 0.0,
+            "yes_spread": 0.003,
+            "no_spread": 0.003,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x505f74fda8352cd634a965a1fcbb1da652607c19d77bede43d67885591bdeba9",
+            "market_id": "2375865",
+            "bracket": "31",
+            "side": "BUY_NO",
+            "market_yes_price": 0.445,
+            "final_yes": 0.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 0
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.7194999999999999,
+        "settled_payout": 1.0,
+        "taker_pnl": 0.2805000000000001,
+        "payoff_by_final_temp": {
+          "30": 0.2805000000000001,
+          "31": -0.7194999999999999,
+          "32": 1.2805,
+          "33": 1.2805,
+          "34+": 1.2805
+        },
+        "expected_pnl": 1.1502000000000001,
+        "worst_case_loss": -0.7194999999999999,
+        "loss_probability": 0.06230000000000001,
+        "large_loss_probability": 0,
+        "orderbook_taker_cost": 0.74,
+        "orderbook_taker_pnl": 0.25999999999999995,
+        "orderbook_maker_proxy_cost": 0.7030000000000001,
+        "orderbook_maker_proxy_pnl": 0.29699999999999993
+      },
+      {
+        "candidate_id": "center_band_cheap_neighbors|London|2026-05-10|2026-05-09T23:01:19Z|BUY_YES:17,BUY_YES:18,BUY_YES:19,BUY_NO:16",
+        "algorithm": "center_band_cheap_neighbors",
+        "strategy": "center_band_cheap_neighbors",
+        "strategy_label": "center band cheap: BUY_YES adjacent3 center band + BUY_NO outside neighbors",
+        "city": "London",
+        "city_pool": null,
+        "event_date": "2026-05-10",
+        "target_date": "2026-05-10",
+        "decision_snapshot_ts_utc": "2026-05-09T23:01:19Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 4,
+        "brackets": [
+          "17",
+          "18",
+          "19",
+          "16"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x5060107906a65f8933e82d7dbe663467510a4d4bd7500928e417696b86d620fb",
+          "0xc7066accab5e560d64b83f6efbb3c41e6b106318da998407e5400e5dc2f6c372",
+          "0x56c65deed9a5412c8b82b4e2861649a0043ea05578702f8920b83ae1e79d0bcf",
+          "0x4b1be62efc186b28e27a8417c96b3e8dcea4880659fb8b78c9c94e76285efe97"
+        ],
+        "market_prob_sum": 0.07811741872877245,
+        "model_prob_sum": 0.9265944645006017,
+        "range_edge": 1.0459,
+        "abs_range_edge": 1.0459,
+        "score": 1.0459,
+        "threshold": 0.1,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 4,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.48024468511833135,
+        "model_mode_gap": 0.13277176093060572,
+        "model_adjacent3_mass": 0.9265944645006017,
+        "market_adjacent3_mass": 0.07811741872877245,
+        "model_entropy": 1.1598793077358733,
+        "market_entropy": 1.214451670083812,
+        "tail_model_mass": 0.07340553549939831,
+        "tail_market_mass": 0.9218825812712276,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "18"
+        },
+        "components": {
+          "center_band": [
+            "17",
+            "18",
+            "19"
+          ],
+          "outside_neighbors": [
+            "16"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x5060107906a65f8933e82d7dbe663467510a4d4bd7500928e417696b86d620fb",
+            "market_id": "2186589",
+            "bracket": "17",
+            "side": "BUY_YES",
+            "market_yes_price": 0.07,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0xc7066accab5e560d64b83f6efbb3c41e6b106318da998407e5400e5dc2f6c372",
+            "market_id": "2186590",
+            "bracket": "18",
+            "side": "BUY_YES",
+            "market_yes_price": 0.008,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x56c65deed9a5412c8b82b4e2861649a0043ea05578702f8920b83ae1e79d0bcf",
+            "market_id": "2186591",
+            "bracket": "19",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0025,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x4b1be62efc186b28e27a8417c96b3e8dcea4880659fb8b78c9c94e76285efe97",
+            "market_id": "2186588",
+            "bracket": "16",
+            "side": "BUY_NO",
+            "market_yes_price": 0.27,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.8105,
+        "settled_payout": 1.0,
+        "taker_pnl": 0.1895,
+        "payoff_by_final_temp": {
+          "14": 0.1895,
+          "15": 0.1895,
+          "16": -0.8105,
+          "17": 1.1895,
+          "18": 1.1895,
+          "19": 1.1895
+        },
+        "expected_pnl": 1.0483046530284799,
+        "worst_case_loss": -0.8105,
+        "loss_probability": 0.06778981147212193,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "center_band_cheap_neighbors|NYC|2026-05-30|2026-05-30T04:00:53Z|BUY_YES:64-65,BUY_YES:66-67,BUY_YES:68-69,BUY_NO:62-63,BUY_NO:70-71",
+        "algorithm": "center_band_cheap_neighbors",
+        "strategy": "center_band_cheap_neighbors",
+        "strategy_label": "center band cheap: BUY_YES adjacent3 center band + BUY_NO outside neighbors",
+        "city": "NYC",
+        "city_pool": "t1_trading",
+        "event_date": "2026-05-30",
+        "target_date": "2026-05-30",
+        "decision_snapshot_ts_utc": "2026-05-30T04:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 5,
+        "brackets": [
+          "64-65",
+          "66-67",
+          "68-69",
+          "62-63",
+          "70-71"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x447c6ac1d5deefd00d3824128ae166f1ec5c75fabbdf08585a97f2324a1da0f1",
+          "0xd0e68e75d2a458ba192a89589f113384f499090dabc1da937410b98afac64c35",
+          "0x815835f4374a4c1a2fc58052e731ec25f0272876dd042a23fcb76b69356c2e0b",
+          "0xfd357d8da5e56b3b3cda5e88ee98b594b661e2355b1f866b0bd6b74cdeba71dc",
+          "0x71b1d903fac77563c308343816d91f5b43660eaa7a6caacd7a3cf1d4274de800"
+        ],
+        "market_prob_sum": 0.38326446280991733,
+        "model_prob_sum": 0.9377338877338877,
+        "range_edge": 1.0264,
+        "abs_range_edge": 1.0264,
+        "score": 1.0264,
+        "threshold": 0.1,
+        "selected": 1,
+        "all_legs_eligible": 1,
+        "paper_ordered_legs": 5,
+        "live_filled_legs": 2,
+        "model_mode_probability": 0.5472972972972973,
+        "model_mode_gap": 0.3054054054054054,
+        "model_adjacent3_mass": 0.9377338877338877,
+        "market_adjacent3_mass": 0.38326446280991733,
+        "model_entropy": 1.1902361153566243,
+        "market_entropy": 1.0266030406504703,
+        "tail_model_mass": 0.06226611226611227,
+        "tail_market_mass": 0.6167355371900827,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "66-67"
+        },
+        "components": {
+          "center_band": [
+            "64-65",
+            "66-67",
+            "68-69"
+          ],
+          "outside_neighbors": [
+            "62-63",
+            "70-71"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x447c6ac1d5deefd00d3824128ae166f1ec5c75fabbdf08585a97f2324a1da0f1",
+            "market_id": "2375707",
+            "bracket": "64-65",
+            "side": "BUY_YES",
+            "market_yes_price": 0.011,
+            "final_yes": 0.0,
+            "yes_spread": 0.018,
+            "no_spread": 0.018,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0xd0e68e75d2a458ba192a89589f113384f499090dabc1da937410b98afac64c35",
+            "market_id": "2375708",
+            "bracket": "66-67",
+            "side": "BUY_YES",
+            "market_yes_price": 0.035,
+            "final_yes": 0.0,
+            "yes_spread": 0.008,
+            "no_spread": 0.008,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x815835f4374a4c1a2fc58052e731ec25f0272876dd042a23fcb76b69356c2e0b",
+            "market_id": "2375709",
+            "bracket": "68-69",
+            "side": "BUY_YES",
+            "market_yes_price": 0.325,
+            "final_yes": 0.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0xfd357d8da5e56b3b3cda5e88ee98b594b661e2355b1f866b0bd6b74cdeba71dc",
+            "market_id": "2375706",
+            "bracket": "62-63",
+            "side": "BUY_NO",
+            "market_yes_price": 0.002,
+            "final_yes": 0.0,
+            "yes_spread": 0.002,
+            "no_spread": 0.002,
+            "eligible": 1
+          },
+          {
+            "condition_id": "0x71b1d903fac77563c308343816d91f5b43660eaa7a6caacd7a3cf1d4274de800",
+            "market_id": "2375710",
+            "bracket": "70-71",
+            "side": "BUY_NO",
+            "market_yes_price": 0.545,
+            "final_yes": 1.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 1
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 1.824,
+        "settled_payout": 1.0,
+        "taker_pnl": -0.8240000000000001,
+        "payoff_by_final_temp": {
+          "62-63": -0.8240000000000001,
+          "64-65": 1.176,
+          "66-67": 1.176,
+          "68-69": 1.176,
+          "70-71": -0.8240000000000001,
+          "72-73": 0.17599999999999993
+        },
+        "expected_pnl": 1.0599916839916839,
+        "worst_case_loss": -0.8240000000000001,
+        "loss_probability": 0.053742203742203745,
+        "large_loss_probability": 0,
+        "orderbook_taker_cost": 1.808,
+        "orderbook_taker_pnl": -0.808,
+        "orderbook_maker_proxy_cost": 1.76,
+        "orderbook_maker_proxy_pnl": -0.76
+      },
+      {
+        "candidate_id": "center_band_cheap_neighbors|Manila|2026-05-14|2026-05-13T15:00:53Z|BUY_YES:36,BUY_YES:37,BUY_YES:38+,BUY_NO:35",
+        "algorithm": "center_band_cheap_neighbors",
+        "strategy": "center_band_cheap_neighbors",
+        "strategy_label": "center band cheap: BUY_YES adjacent3 center band + BUY_NO outside neighbors",
+        "city": "Manila",
+        "city_pool": "t2_research",
+        "event_date": "2026-05-14",
+        "target_date": "2026-05-14",
+        "decision_snapshot_ts_utc": "2026-05-13T15:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 4,
+        "brackets": [
+          "36",
+          "37",
+          "38+",
+          "35"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xdb4232f6373e0466368fd4ab306010256df700918db1841742f27a6a25a85166",
+          "0x3a0d3e1450f727730232cbf0ebde28a59a87e44cb1d5b8e6d6cecdba94fcf1f1",
+          "0x2cb6905bc649da32c8b61e19c6edf1f2e25ac171a9063074ea276b92327e2d2e",
+          "0x74709f6c4a14e9097d33170c61685efe5eaab151a5c94101fee0b4c81afba82a"
+        ],
+        "market_prob_sum": 0.2446043165467626,
+        "model_prob_sum": 0.859512491149995,
+        "range_edge": 1.0126,
+        "abs_range_edge": 1.0126,
+        "score": 1.0126,
+        "threshold": 0.1,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 4,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.3781733589562052,
+        "model_mode_gap": 0.042985738848993704,
+        "model_adjacent3_mass": 0.859512491149995,
+        "market_adjacent3_mass": 0.2446043165467626,
+        "model_entropy": 1.3749727743017184,
+        "market_entropy": 1.1214776263615045,
+        "tail_model_mass": 0.14048750885000505,
+        "tail_market_mass": 0.7553956834532374,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "37"
+        },
+        "components": {
+          "center_band": [
+            "36",
+            "37",
+            "38+"
+          ],
+          "outside_neighbors": [
+            "35"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xdb4232f6373e0466368fd4ab306010256df700918db1841742f27a6a25a85166",
+            "market_id": "2237891",
+            "bracket": "36",
+            "side": "BUY_YES",
+            "market_yes_price": 0.215,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x3a0d3e1450f727730232cbf0ebde28a59a87e44cb1d5b8e6d6cecdba94fcf1f1",
+            "market_id": "2237895",
+            "bracket": "37",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0165,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x2cb6905bc649da32c8b61e19c6edf1f2e25ac171a9063074ea276b92327e2d2e",
+            "market_id": "2237897",
+            "bracket": "38+",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0065,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x74709f6c4a14e9097d33170c61685efe5eaab151a5c94101fee0b4c81afba82a",
+            "market_id": "2237889",
+            "bracket": "35",
+            "side": "BUY_NO",
+            "market_yes_price": 0.5,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 0.738,
+        "settled_payout": 1.0,
+        "taker_pnl": 0.262,
+        "payoff_by_final_temp": {
+          "34": 0.262,
+          "35": -0.738,
+          "36": 1.262,
+          "37": 1.262,
+          "38+": 1.262
+        },
+        "expected_pnl": 1.021178719530697,
+        "worst_case_loss": -0.738,
+        "loss_probability": 0.10033377161929807,
+        "large_loss_probability": 0
+      }
+    ],
+    "tail_center_contrast": [
+      {
+        "candidate_id": "tail_center_contrast|London|2026-05-10|2026-05-09T23:01:19Z|BUY_YES:17,BUY_YES:18,BUY_YES:19,BUY_NO:14,BUY_NO:15,BUY_NO:16",
+        "algorithm": "tail_center_contrast",
+        "strategy": "tail_center_contrast",
+        "strategy_label": "tail/center contrast: BUY_YES center band + BUY_NO tails",
+        "city": "London",
+        "city_pool": null,
+        "event_date": "2026-05-10",
+        "target_date": "2026-05-10",
+        "decision_snapshot_ts_utc": "2026-05-09T23:01:19Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 6,
+        "brackets": [
+          "17",
+          "18",
+          "19",
+          "14",
+          "15",
+          "16"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x5060107906a65f8933e82d7dbe663467510a4d4bd7500928e417696b86d620fb",
+          "0xc7066accab5e560d64b83f6efbb3c41e6b106318da998407e5400e5dc2f6c372",
+          "0x56c65deed9a5412c8b82b4e2861649a0043ea05578702f8920b83ae1e79d0bcf",
+          "0x886a4849b303fcbfac2b07a99856db874bdade8526fecf2a6efb84e8765814fd",
+          "0x1217be75372dac39f0decddaaab43d4ef695b40be4b33c94130a76079b6f7964",
+          "0x4b1be62efc186b28e27a8417c96b3e8dcea4880659fb8b78c9c94e76285efe97"
+        ],
+        "market_prob_sum": 0.07811741872877245,
+        "model_prob_sum": 0.9265944645006017,
+        "range_edge": 1.7203,
+        "abs_range_edge": 1.7203,
+        "score": 1.7203,
+        "threshold": 0.15,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 6,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.48024468511833135,
+        "model_mode_gap": 0.13277176093060572,
+        "model_adjacent3_mass": 0.9265944645006017,
+        "market_adjacent3_mass": 0.07811741872877245,
+        "model_entropy": 1.1598793077358733,
+        "market_entropy": 1.214451670083812,
+        "tail_model_mass": 0.07340553549939831,
+        "tail_market_mass": 0.9218825812712276,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "18"
+        },
+        "components": {
+          "center_band": [
+            "17",
+            "18",
+            "19"
+          ],
+          "tails": [
+            "14",
+            "15",
+            "16"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x5060107906a65f8933e82d7dbe663467510a4d4bd7500928e417696b86d620fb",
+            "market_id": "2186589",
+            "bracket": "17",
+            "side": "BUY_YES",
+            "market_yes_price": 0.07,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0xc7066accab5e560d64b83f6efbb3c41e6b106318da998407e5400e5dc2f6c372",
+            "market_id": "2186590",
+            "bracket": "18",
+            "side": "BUY_YES",
+            "market_yes_price": 0.008,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x56c65deed9a5412c8b82b4e2861649a0043ea05578702f8920b83ae1e79d0bcf",
+            "market_id": "2186591",
+            "bracket": "19",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0025,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x886a4849b303fcbfac2b07a99856db874bdade8526fecf2a6efb84e8765814fd",
+            "market_id": "2186586",
+            "bracket": "14",
+            "side": "BUY_NO",
+            "market_yes_price": 0.155,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x1217be75372dac39f0decddaaab43d4ef695b40be4b33c94130a76079b6f7964",
+            "market_id": "2186587",
+            "bracket": "15",
+            "side": "BUY_NO",
+            "market_yes_price": 0.525,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x4b1be62efc186b28e27a8417c96b3e8dcea4880659fb8b78c9c94e76285efe97",
+            "market_id": "2186588",
+            "bracket": "16",
+            "side": "BUY_NO",
+            "market_yes_price": 0.27,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 2.1305,
+        "settled_payout": 3.0,
+        "taker_pnl": 0.8694999999999999,
+        "payoff_by_final_temp": {
+          "14": -0.13050000000000006,
+          "15": -0.13050000000000006,
+          "16": -0.13050000000000006,
+          "17": 1.8695,
+          "18": 1.8695,
+          "19": 1.8695
+        },
+        "expected_pnl": 1.7226889290012033,
+        "worst_case_loss": -0.13050000000000006,
+        "loss_probability": 0.07340553549939831,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "tail_center_contrast|NYC|2026-05-09|2026-05-09T04:00:19Z|BUY_YES:66-67,BUY_YES:68-69,BUY_YES:70+,BUY_NO:58-59,BUY_NO:60-61,BUY_NO:62-63,BUY_NO:64-65",
+        "algorithm": "tail_center_contrast",
+        "strategy": "tail_center_contrast",
+        "strategy_label": "tail/center contrast: BUY_YES center band + BUY_NO tails",
+        "city": "NYC",
+        "city_pool": null,
+        "event_date": "2026-05-09",
+        "target_date": "2026-05-09",
+        "decision_snapshot_ts_utc": "2026-05-09T04:00:19Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 7,
+        "brackets": [
+          "66-67",
+          "68-69",
+          "70+",
+          "58-59",
+          "60-61",
+          "62-63",
+          "64-65"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x89edf2a6ddfaf5df6b7406558975c7892668a41549114882d7b809424936a790",
+          "0xf80458c15b1cec0642db5b4163268cc8db1f61a46d2c3c1903b46893cb9a4ee4",
+          "0xbb11d0c8508c8f4b2c8a986779994d97a548b25d5e89c3942488b6df55e7ae9e",
+          "0x5ba37b7b50409e2a9a78cf0569e45fc2e1ae275e9b7d45b849237b409326c01d",
+          "0xacd0b40afa4e08872450904a477bb9f4108c59c8ebdeab1e9e447652981436ab",
+          "0x489e84f2887dc93cc7e28a0725037482660662d58307a977ec1bee81cf6300f5",
+          "0x492a771f1542e149af8b4380b9853c5a0d21205137f7f6f3ff74a9d27e5d081d"
+        ],
+        "market_prob_sum": 0.08158029758850693,
+        "model_prob_sum": 0.9507339634023728,
+        "range_edge": 1.7121,
+        "abs_range_edge": 1.7121,
+        "score": 1.7121,
+        "threshold": 0.15,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 7,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.4924592801126081,
+        "model_mode_gap": 0.1354313291775588,
+        "model_adjacent3_mass": 0.9507339634023728,
+        "market_adjacent3_mass": 0.08158029758850693,
+        "model_entropy": 1.1540769314119226,
+        "market_entropy": 1.4721612557962995,
+        "tail_model_mass": 0.04926603659762718,
+        "tail_market_mass": 0.9184197024114931,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "68-69"
+        },
+        "components": {
+          "center_band": [
+            "66-67",
+            "68-69",
+            "70+"
+          ],
+          "tails": [
+            "58-59",
+            "60-61",
+            "62-63",
+            "64-65"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x89edf2a6ddfaf5df6b7406558975c7892668a41549114882d7b809424936a790",
+            "market_id": "2179155",
+            "bracket": "66-67",
+            "side": "BUY_YES",
+            "market_yes_price": 0.062,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0xf80458c15b1cec0642db5b4163268cc8db1f61a46d2c3c1903b46893cb9a4ee4",
+            "market_id": "2179156",
+            "bracket": "68-69",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0135,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0xbb11d0c8508c8f4b2c8a986779994d97a548b25d5e89c3942488b6df55e7ae9e",
+            "market_id": "2179157",
+            "bracket": "70+",
+            "side": "BUY_YES",
+            "market_yes_price": 0.004,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x5ba37b7b50409e2a9a78cf0569e45fc2e1ae275e9b7d45b849237b409326c01d",
+            "market_id": "2179151",
+            "bracket": "58-59",
+            "side": "BUY_NO",
+            "market_yes_price": 0.065,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0xacd0b40afa4e08872450904a477bb9f4108c59c8ebdeab1e9e447652981436ab",
+            "market_id": "2179152",
+            "bracket": "60-61",
+            "side": "BUY_NO",
+            "market_yes_price": 0.33,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x489e84f2887dc93cc7e28a0725037482660662d58307a977ec1bee81cf6300f5",
+            "market_id": "2179153",
+            "bracket": "62-63",
+            "side": "BUY_NO",
+            "market_yes_price": 0.335,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          },
+          {
+            "condition_id": "0x492a771f1542e149af8b4380b9853c5a0d21205137f7f6f3ff74a9d27e5d081d",
+            "market_id": "2179154",
+            "bracket": "64-65",
+            "side": "BUY_NO",
+            "market_yes_price": 0.165,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": null
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 3.1845,
+        "settled_payout": 3.0,
+        "taker_pnl": -0.1844999999999999,
+        "payoff_by_final_temp": {
+          "58-59": -0.1844999999999999,
+          "60-61": -0.1844999999999999,
+          "62-63": -0.1844999999999999,
+          "64-65": -0.1844999999999999,
+          "66-67": 1.8155000000000001,
+          "68-69": 1.8155000000000001,
+          "70+": 1.8155000000000001
+        },
+        "expected_pnl": 1.716967926804746,
+        "worst_case_loss": -0.1844999999999999,
+        "loss_probability": 0.04926603659762718,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "tail_center_contrast|Ankara|2026-05-14|2026-05-13T20:00:53Z|BUY_YES:17,BUY_YES:18,BUY_YES:19,BUY_NO:20,BUY_NO:21,BUY_NO:22,BUY_NO:23",
+        "algorithm": "tail_center_contrast",
+        "strategy": "tail_center_contrast",
+        "strategy_label": "tail/center contrast: BUY_YES center band + BUY_NO tails",
+        "city": "Ankara",
+        "city_pool": "t2_research",
+        "event_date": "2026-05-14",
+        "target_date": "2026-05-14",
+        "decision_snapshot_ts_utc": "2026-05-13T20:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 7,
+        "brackets": [
+          "17",
+          "18",
+          "19",
+          "20",
+          "21",
+          "22",
+          "23"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xe066f993cca250815f94088bc531240f6deafc84ff994bff23a3a86e95b716b0",
+          "0x477cd7c1c632b4789de322eb9f11aa23867d19be9a4576942a2e6742e7f2eb8e",
+          "0xcdf0219d182ea5ec61d42dfdfaada8fa6c8bd72af2d82bb050198ec56d8f2788",
+          "0xd1c18f7a840e406068460889a5638b0481ce8b479845ebed0ac6473925c249a7",
+          "0x4f2b573373eefb4b90802fad1e7cd315e8caba2e9ce112424183708df276134d",
+          "0x4aa5d0c9b2004bed558f35ef22eb5e94e59b5cffadf92bae1414f5048b3fd0c2",
+          "0x3d9e6cc456d3e21787633c803aa1137b9826edd9fcd8f70cf495f93ff637a58f"
+        ],
+        "market_prob_sum": 0.046858908341915556,
+        "model_prob_sum": 0.8816710182767624,
+        "range_edge": 1.6109,
+        "abs_range_edge": 1.6109,
+        "score": 1.6109,
+        "threshold": 0.15,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 2,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.3757702349869452,
+        "model_mode_gap": 0.044386422976501305,
+        "model_adjacent3_mass": 0.8816710182767624,
+        "market_adjacent3_mass": 0.046858908341915556,
+        "model_entropy": 1.3542644026803394,
+        "market_entropy": 1.4597500175998204,
+        "tail_model_mass": 0.1183289817232376,
+        "tail_market_mass": 0.9531410916580845,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "18"
+        },
+        "components": {
+          "center_band": [
+            "17",
+            "18",
+            "19"
+          ],
+          "tails": [
+            "20",
+            "21",
+            "22",
+            "23"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xe066f993cca250815f94088bc531240f6deafc84ff994bff23a3a86e95b716b0",
+            "market_id": "2237430",
+            "bracket": "17",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0045,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x477cd7c1c632b4789de322eb9f11aa23867d19be9a4576942a2e6742e7f2eb8e",
+            "market_id": "2237431",
+            "bracket": "18",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0065,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0xcdf0219d182ea5ec61d42dfdfaada8fa6c8bd72af2d82bb050198ec56d8f2788",
+            "market_id": "2237432",
+            "bracket": "19",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0345,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0xd1c18f7a840e406068460889a5638b0481ce8b479845ebed0ac6473925c249a7",
+            "market_id": "2237433",
+            "bracket": "20",
+            "side": "BUY_NO",
+            "market_yes_price": 0.12,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x4f2b573373eefb4b90802fad1e7cd315e8caba2e9ce112424183708df276134d",
+            "market_id": "2237434",
+            "bracket": "21",
+            "side": "BUY_NO",
+            "market_yes_price": 0.32,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x4aa5d0c9b2004bed558f35ef22eb5e94e59b5cffadf92bae1414f5048b3fd0c2",
+            "market_id": "2237435",
+            "bracket": "22",
+            "side": "BUY_NO",
+            "market_yes_price": 0.332,
+            "final_yes": 1.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x3d9e6cc456d3e21787633c803aa1137b9826edd9fcd8f70cf495f93ff637a58f",
+            "market_id": "2237436",
+            "bracket": "23",
+            "side": "BUY_NO",
+            "market_yes_price": 0.1535,
+            "final_yes": 0.0,
+            "yes_spread": null,
+            "no_spread": null,
+            "eligible": 0
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 3.12,
+        "settled_payout": 3.0,
+        "taker_pnl": -0.1200000000000001,
+        "payoff_by_final_temp": {
+          "17": 1.88,
+          "18": 1.88,
+          "19": 1.88,
+          "20": -0.1200000000000001,
+          "21": -0.1200000000000001,
+          "22": -0.1200000000000001,
+          "23": -0.1200000000000001
+        },
+        "expected_pnl": 1.6433420365535247,
+        "worst_case_loss": -0.1200000000000001,
+        "loss_probability": 0.1183289817232376,
+        "large_loss_probability": 0
+      },
+      {
+        "candidate_id": "tail_center_contrast|Milan|2026-05-30|2026-05-29T22:00:53Z|BUY_YES:32,BUY_YES:33,BUY_YES:34+,BUY_NO:30,BUY_NO:31",
+        "algorithm": "tail_center_contrast",
+        "strategy": "tail_center_contrast",
+        "strategy_label": "tail/center contrast: BUY_YES center band + BUY_NO tails",
+        "city": "Milan",
+        "city_pool": "t2_research",
+        "event_date": "2026-05-30",
+        "target_date": "2026-05-30",
+        "decision_snapshot_ts_utc": "2026-05-29T22:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 5,
+        "brackets": [
+          "32",
+          "33",
+          "34+",
+          "30",
+          "31"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0x3cf15e0cff072d1ebe017d1346e19413939586b796ee844a868753cc7f3a8bef",
+          "0xfba421f06d81f3e9ed2770bf2a141a3f7cb8a336f8190a40f30375a29b41082e",
+          "0x544697b0380e66cf7a57d30a72c3cf017a5083bb15fa228f574e14b04c1c1649",
+          "0x7f595f683d648c37231b06b70b01b53c6deff081311e2552b11d4225b9444e78",
+          "0x505f74fda8352cd634a965a1fcbb1da652607c19d77bede43d67885591bdeba9"
+        ],
+        "market_prob_sum": 0.16880451513596714,
+        "model_prob_sum": 0.9320000000000002,
+        "range_edge": 1.5095,
+        "abs_range_edge": 1.5095,
+        "score": 1.5095,
+        "threshold": 0.15,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 5,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.36260000000000003,
+        "model_mode_gap": 0.068,
+        "model_adjacent3_mass": 0.9320000000000002,
+        "market_adjacent3_mass": 0.16880451513596714,
+        "model_entropy": 1.2852307551170241,
+        "market_entropy": 1.1447865561887467,
+        "tail_model_mass": 0.068,
+        "tail_market_mass": 0.8311954848640328,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "ecmwf"
+        ],
+        "model_mode_by_version": {
+          "ecmwf": "33"
+        },
+        "components": {
+          "center_band": [
+            "32",
+            "33",
+            "34+"
+          ],
+          "tails": [
+            "30",
+            "31"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0x3cf15e0cff072d1ebe017d1346e19413939586b796ee844a868753cc7f3a8bef",
+            "market_id": "2375866",
+            "bracket": "32",
+            "side": "BUY_YES",
+            "market_yes_price": 0.115,
+            "final_yes": 0.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0xfba421f06d81f3e9ed2770bf2a141a3f7cb8a336f8190a40f30375a29b41082e",
+            "market_id": "2375867",
+            "bracket": "33",
+            "side": "BUY_YES",
+            "market_yes_price": 0.045,
+            "final_yes": 0.0,
+            "yes_spread": 0.014,
+            "no_spread": 0.014,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x544697b0380e66cf7a57d30a72c3cf017a5083bb15fa228f574e14b04c1c1649",
+            "market_id": "2375868",
+            "bracket": "34+",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0045,
+            "final_yes": 0.0,
+            "yes_spread": 0.003,
+            "no_spread": 0.003,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x7f595f683d648c37231b06b70b01b53c6deff081311e2552b11d4225b9444e78",
+            "market_id": "2375864",
+            "bracket": "30",
+            "side": "BUY_NO",
+            "market_yes_price": 0.365,
+            "final_yes": 1.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x505f74fda8352cd634a965a1fcbb1da652607c19d77bede43d67885591bdeba9",
+            "market_id": "2375865",
+            "bracket": "31",
+            "side": "BUY_NO",
+            "market_yes_price": 0.445,
+            "final_yes": 0.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 0
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 1.3545,
+        "settled_payout": 1.0,
+        "taker_pnl": -0.35450000000000004,
+        "payoff_by_final_temp": {
+          "30": -0.35450000000000004,
+          "31": -0.35450000000000004,
+          "32": 1.6455,
+          "33": 1.6455,
+          "34+": 1.6455
+        },
+        "expected_pnl": 1.5095000000000003,
+        "worst_case_loss": -0.35450000000000004,
+        "loss_probability": 0.068,
+        "large_loss_probability": 0,
+        "orderbook_taker_cost": 1.3800000000000001,
+        "orderbook_taker_pnl": -0.3800000000000001,
+        "orderbook_maker_proxy_cost": 1.3330000000000002,
+        "orderbook_maker_proxy_pnl": -0.3330000000000001
+      },
+      {
+        "candidate_id": "tail_center_contrast|PanamaCity|2026-05-27|2026-05-27T04:00:53Z|BUY_YES:27,BUY_YES:28,BUY_YES:29,BUY_NO:26,BUY_NO:31,BUY_NO:32,BUY_NO:33+",
+        "algorithm": "tail_center_contrast",
+        "strategy": "tail_center_contrast",
+        "strategy_label": "tail/center contrast: BUY_YES center band + BUY_NO tails",
+        "city": "PanamaCity",
+        "city_pool": "t2_research",
+        "event_date": "2026-05-27",
+        "target_date": "2026-05-27",
+        "decision_snapshot_ts_utc": "2026-05-27T04:00:53Z",
+        "decision_hours_to_settle": 23.0,
+        "decision_hours_to_settle_bucket": "22-24",
+        "n_legs": 7,
+        "brackets": [
+          "27",
+          "28",
+          "29",
+          "26",
+          "31",
+          "32",
+          "33+"
+        ],
+        "sides": [
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_YES",
+          "BUY_NO",
+          "BUY_NO",
+          "BUY_NO",
+          "BUY_NO"
+        ],
+        "condition_ids": [
+          "0xfcf82bec5128945f7a47a4e8408e8ea0fe8276ac69536f23e19b9489d0afd716",
+          "0x01940b2cfd6f59acb3e9291ea20dddc25b767366db1aa702008fce2bfd1a8970",
+          "0xb17d7cefff61b99fbd95459af4ac14499d47a2945d6743033848b8bd36093d9d",
+          "0x064429f7c59b740e0d599c08e61d29728cf7ea666a203f11c3b2f6bbb1dc3f0b",
+          "0xdec87587f34db2c14d8d8a087bd10138d8aa78c818e16e6ef3dbd17a18e9076a",
+          "0x5094d106c150bd1c1b099fd85d36a10d146994799cf929977d357ad03db25748",
+          "0xdcda3a93ceb0aea7c2f8da66fcc73fb0d11f3858cc69173b6204de978ad0b6dc"
+        ],
+        "market_prob_sum": 0.03162055335968379,
+        "model_prob_sum": 0.8412115067798758,
+        "range_edge": 1.4865,
+        "abs_range_edge": 1.4865,
+        "score": 1.4865,
+        "threshold": 0.15,
+        "selected": 1,
+        "all_legs_eligible": 0,
+        "paper_ordered_legs": 7,
+        "live_filled_legs": 0,
+        "model_mode_probability": 0.3790394119883411,
+        "model_mode_gap": 0.10822455962488908,
+        "model_adjacent3_mass": 0.8412115067798758,
+        "market_adjacent3_mass": 0.03162055335968379,
+        "model_entropy": 1.4051798014042678,
+        "market_entropy": 1.2178626026386317,
+        "tail_model_mass": 0.1587884932201242,
+        "tail_market_mass": 0.9683794466403163,
+        "mode_stability_ratio": 1.0,
+        "model_versions_present": [
+          "gfs"
+        ],
+        "model_mode_by_version": {
+          "gfs": "28"
+        },
+        "components": {
+          "center_band": [
+            "27",
+            "28",
+            "29"
+          ],
+          "tails": [
+            "26",
+            "31",
+            "32",
+            "33+"
+          ]
+        },
+        "legs": [
+          {
+            "condition_id": "0xfcf82bec5128945f7a47a4e8408e8ea0fe8276ac69536f23e19b9489d0afd716",
+            "market_id": "2351058",
+            "bracket": "27",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0065,
+            "final_yes": 0.0,
+            "yes_spread": 0.005,
+            "no_spread": 0.005,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x01940b2cfd6f59acb3e9291ea20dddc25b767366db1aa702008fce2bfd1a8970",
+            "market_id": "2351059",
+            "bracket": "28",
+            "side": "BUY_YES",
+            "market_yes_price": 0.0095,
+            "final_yes": 0.0,
+            "yes_spread": 0.011,
+            "no_spread": 0.011,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0xb17d7cefff61b99fbd95459af4ac14499d47a2945d6743033848b8bd36093d9d",
+            "market_id": "2351060",
+            "bracket": "29",
+            "side": "BUY_YES",
+            "market_yes_price": 0.016,
+            "final_yes": 0.0,
+            "yes_spread": 0.002,
+            "no_spread": 0.002,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x064429f7c59b740e0d599c08e61d29728cf7ea666a203f11c3b2f6bbb1dc3f0b",
+            "market_id": "2351057",
+            "bracket": "26",
+            "side": "BUY_NO",
+            "market_yes_price": 0.005,
+            "final_yes": 0.0,
+            "yes_spread": 0.006,
+            "no_spread": 0.006,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0xdec87587f34db2c14d8d8a087bd10138d8aa78c818e16e6ef3dbd17a18e9076a",
+            "market_id": "2351062",
+            "bracket": "31",
+            "side": "BUY_NO",
+            "market_yes_price": 0.2,
+            "final_yes": 0.0,
+            "yes_spread": 0.08,
+            "no_spread": 0.08,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0x5094d106c150bd1c1b099fd85d36a10d146994799cf929977d357ad03db25748",
+            "market_id": "2351063",
+            "bracket": "32",
+            "side": "BUY_NO",
+            "market_yes_price": 0.34,
+            "final_yes": 0.0,
+            "yes_spread": 0.08,
+            "no_spread": 0.08,
+            "eligible": 0
+          },
+          {
+            "condition_id": "0xdcda3a93ceb0aea7c2f8da66fcc73fb0d11f3858cc69173b6204de978ad0b6dc",
+            "market_id": "2351064",
+            "bracket": "33+",
+            "side": "BUY_NO",
+            "market_yes_price": 0.435,
+            "final_yes": 1.0,
+            "yes_spread": 0.01,
+            "no_spread": 0.01,
+            "eligible": 0
+          }
+        ],
+        "price_source": "decision_market_proxy",
+        "taker_cost": 3.052,
+        "settled_payout": 3.0,
+        "taker_pnl": -0.052000000000000046,
+        "payoff_by_final_temp": {
+          "26": -0.052000000000000046,
+          "27": 1.948,
+          "28": 1.948,
+          "29": 1.948,
+          "31": -0.052000000000000046,
+          "32": -0.052000000000000046,
+          "33+": -0.052000000000000046
+        },
+        "expected_pnl": 1.6304230135597515,
+        "worst_case_loss": -0.052000000000000046,
+        "loss_probability": 0.1587884932201242,
+        "large_loss_probability": 0,
+        "orderbook_taker_cost": 3.149,
+        "orderbook_taker_pnl": -0.14900000000000002,
+        "orderbook_maker_proxy_cost": 2.9549999999999996,
+        "orderbook_maker_proxy_pnl": 0.04500000000000004
+      }
+    ]
+  }
+}
