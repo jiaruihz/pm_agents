@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at_utc": "2026-06-09T15:16:48.893649+00:00",
+    "generated_at_utc": "2026-06-09T15:52:58.033787+00:00",
     "script": "scripts/analysis/market_structure_edge/research_forecast_first_adjacent_range_rv.py",
     "target_metric": "forecast_first_adjacent_range_rv_alpha",
     "counterfactual_research_only": true,

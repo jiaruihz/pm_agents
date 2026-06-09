@@ -723,6 +723,9 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
         "## 数据快照",
         "",
         f"- 数据源：`runtime/weather.db` 的 `fact_signal_candidates` / `fact_trades`；orderbook 仅用于 executable price replay。",
+        "- 数据血缘：`fact_signal_candidates` 是 paper snapshot 全机会宇宙 + paper intended orders + `fact_trades` live_real actual fills 的机会表。本实验主分母来自全机会宇宙，不要求这条 Range RV 策略历史上真的下过单。",
+        "- `decision_proxy` 用历史 decision snapshot 里的 market YES price 模拟反事实成本；`time_aligned_orderbook` 用历史 raw orderbook 的 best ask，且必须满足 `orderbook_snapshot_ts <= decision_snapshot_ts_utc`。",
+        "- 因为这是新 Range RV 表达，当前没有“这个策略自己的 live fills”；若要真实 live 级别 fill/slippage/queue 证据，需要先以 shadow/paper 或小额受控 live 跑出订单和成交记录。",
         f"- DB mtime UTC：`{self_check['db_last_modified_utc']}`。",
         f"- fact built at：trades `{self_check['fact_trades_max_built_at_utc']}`；candidates `{self_check['fact_signal_candidates_max_built_at_utc']}`。",
         f"- fact rows：trades `{self_check['fact_trades_rows']}`；signal candidates `{self_check['fact_signal_candidates_rows']}`。",
@@ -805,6 +808,7 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
             f"- significance：`{conclusion['significance']}`；baseline：`{conclusion['baseline']}`；forward：`{conclusion['forward']}`。",
             f"- final conclusion：`{conclusion['label']}`。",
             f"- live action：`{conclusion['live_action']}`。",
+            "- `top5 removed ROI` 不是三门硬门；它只是压力测试，用来提示收益是否过度依赖少数日期。它不单独否决策略，但若 train/holdout CI 已经不稳，它会提高过拟合风险判断。",
             "",
             "## 8 环覆盖自检",
             "",
@@ -827,6 +831,7 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
             "- 本任务是 counterfactual research，未改 N100/live 配置。",
             "- 旧单腿 `eligible` 没有作为主分析硬门，只作为 old eligible control slice。",
             "- 不按城市或日期事后挑 winner；profile 网格按 width/mass/cost/edge/hour bucket 预注册。",
+            "- 证据阶梯：先用历史 fact opportunity + time-aligned orderbook 判断是否值得观察；若仍有希望，下一步应跑 shadow/paper 记录 would-trade 决策和盘口；只有 shadow/paper 稳定后，才考虑小额受控 live 来收集真实 fill、滑点和排队证据。",
         ]
     )
     path.parent.mkdir(parents=True, exist_ok=True)
