@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.analysis.copy_trade_wallet_research import (
+from scripts.copy_trade.copy_trade_wallet_research import (
     analyze_rows,
     get_open_positions,
     iter_closed_positions,
@@ -259,6 +259,30 @@ def sort_reviews(reviews: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
+def sort_wallet_sources(wallets: dict[str, dict[str, Any]], limit: int = 300) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for wallet, source in wallets.items():
+        rows.append(
+            {
+                "wallet": wallet,
+                "name": source["name"],
+                "source_market_count": len(source["source_markets"]),
+                "total_holder_amount": round(source["total_holder_amount"], 2),
+                "max_holder_amount": round(source["max_holder_amount"], 2),
+                "source_markets": sorted(source["source_markets"], key=lambda row: -row["amount"])[:20],
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda row: (
+            row["source_market_count"],
+            row["total_holder_amount"],
+            row["max_holder_amount"],
+        ),
+        reverse=True,
+    )[:limit]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Research smart-wallet candidates from rule-edge Polymarket markets.")
     parser.add_argument("--out", required=True, help="Output JSON path")
@@ -299,6 +323,7 @@ def main() -> None:
         },
         "markets_count": len(markets),
         "wallets_found": len(wallets),
+        "wallet_sources": sort_wallet_sources(wallets),
         "reviewed_count": len(reviewed),
         "markets": sorted(markets, key=lambda row: (-row["liquidity"], row["question"])),
         "top_reviewed": sort_reviews(reviewed),
