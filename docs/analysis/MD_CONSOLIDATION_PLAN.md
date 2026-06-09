@@ -233,6 +233,28 @@ Not done in this phase:
 | `2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md` | Corrected fact table/schema assumptions and staged reorg advice. | `archive-ready-after-link-check` after current plan supersedes |
 | `2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | Report only three-gate verdicts; avoid drifting live_real counts and hard-coded rows. | keep active meta-evidence |
 
+### `entry_timing.md` absorbed on 2026-06-09
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-05-27-compare-strict-t24-vs-wide-window.md` | Strict-vs-wide replay is early timing hypothesis only; old replay source and current facts supersede numbers. | `archive-ready-after-link-check` |
+| `2026-05-29-entry-timing-edge.md` | `<T-22` filled samples looked strong but fill-rate/selection made it unsuitable for live restoration. | `archive-ready-after-link-check` |
+| `2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | v1 `>T-28` risk filter and `T-26-28` shadow/drop caution; forecast/adverse-move mechanisms overlap. | keep active v1 timing evidence |
+| `2026-06-08-entry-timing-rigorous-research-plan.md` | Timing research must use L0-L4 denominators, matched analysis, forecast checkpoint, and city-day portfolio. | keep design-plan until implementation |
+| `2026-06-08-entry-timing-effect-baseline.md` | Current gated timing baseline: T-22-24 strongest; other bins need opportunity/checkpoint coverage. | keep active evidence |
+| `2026-06-08-city-x-entry-timing-research.md` | City x timing cells guide review priority but are too sparse for broad live automation. | keep active evidence |
+| `2026-06-08-side-band-entry-timing-impact.md` | Side-band timing differs from v1; no simple transplant of v1 timing cuts. | keep for side-alpha absorption too |
+
+### `sizing_entry_band.md` absorbed on 2026-06-09
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-05-27-compare-execution-algorithm-window-filter.md` | `entry_price_window` is pre-trade signal filter; 0.25-0.75 removed many low-quality lottery/over-expensive signals. | `archive-ready-after-link-check` |
+| `2026-05-29-strategy-entry-band-and-execution-quality.md` | Filled-only bands and opportunity bands can disagree; execution selection bias must be separated. | `archive-ready-after-link-check` for sizing claims |
+| `2026-05-30-performance-entry-band-research.md` | Side x price bucket framework is useful; stale DB and high decision-window missingness block live use. | `archive-ready-after-link-check` after fresh rerun exists |
+| `2026-05-30-performance-sizing-and-band-distribution.md` | EV-tier is risk leverage, Kelly overconcentrates, actual fill size inconsistency is first-order. | keep active methodology evidence until sizing report standard exists |
+| `2026-06-07-v1-ecmwf-blocked-side-band-overlay.md` | Blocked ECMWF side-band overlay supports shadow research, not direct live restoration. | keep for side-alpha/city absorption too |
+
 ## Hard Rules For Later Moves
 
 - A historical file can move only after its useful claim appears in the owner living doc or is explicitly marked `invalidated`.
