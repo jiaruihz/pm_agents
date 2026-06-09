@@ -1,12 +1,13 @@
 {
-  "generated_at_utc": "2026-06-09T18:37:15.611357+00:00",
-  "git_sha": "2f17561",
+  "generated_at_utc": "2026-06-09T18:48:31.920035+00:00",
+  "git_sha": "2e31cd9",
   "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
   "input_reports": {
     "all_yes_underround": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-09-range-rv-underround-robust-v1-0.json",
     "side_band_forecast_regime": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-side-band-forecast-regime-v0.json",
     "adjacent3_shadow": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-adjacent3-quality-shadow-journal-v0.json",
-    "hybrid_single": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-hybrid-adjacent3-single-v0.json"
+    "hybrid_single": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-hybrid-adjacent3-single-v0.json",
+    "adjacent3_matched_baseline": "/home/rui/projects/pm_agent/docs/analysis/2026-06/2026-06-10-adjacent3-quality-matched-baseline-v0.json"
   },
   "data_self_check": {
     "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
@@ -89,15 +90,15 @@
       "candidate_id": "forecast_quality_adjacent3",
       "human_name": "forecast-quality adjacent3",
       "plain_idea": "当模型分布集中在 mode 附近三档时，买相邻 3 档 YES，用 forecast quality 做软门。",
-      "evidence": "decision holdout rows=8, decision ROI=+72.9%; orderbook rows=8, orderbook ROI=+47.1%",
+      "evidence": "decision holdout rows=8, decision ROI=+72.9%; orderbook rows=8, orderbook ROI=+47.1%; eligible matched-baseline holdout rows=2, eligible matched-baseline orderbook ROI=-100.0%; same-cost random match rate=+1.3%",
       "holdout_or_forward": "orderbook CI=NA",
       "significance": "FAIL",
       "baseline": "NA",
       "forward": "FAIL",
       "readiness": "best_shadow_candidate",
       "live_test_decision": "不选 live，选 shadow/paper 主线",
-      "reason": "点估计最好且逻辑贴近天气预测，但样本只有 8 条 holdout orderbook，CI/forward/baseline 不够。",
-      "next_evidence_needed": "固定规则跑 forward shadow：>=10 event_dates、>=30 executable rows、CI 下界 >0、top5 removed >0、matched baseline >0。"
+      "reason": "点估计最好且逻辑贴近天气预测，但 full-opportunity 样本薄；eligible matched-baseline 主口径下 holdout 更薄且不支持 live。",
+      "next_evidence_needed": "固定规则跑 forward shadow：>=30 event_dates、>=100 settled decisions、>=50 full orderbook matched decisions、same-cost random baseline excess CI 下界 >0。"
     },
     {
       "candidate_id": "single_high_conviction_yes",

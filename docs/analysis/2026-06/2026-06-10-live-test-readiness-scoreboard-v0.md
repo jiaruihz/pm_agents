@@ -1,7 +1,7 @@
 # Live-Test Readiness Scoreboard v0
 
-> generated_at_utc: `2026-06-09T18:37:15.611357+00:00`
-> git_sha: `2f17561`
+> generated_at_utc: `2026-06-09T18:48:31.920035+00:00`
+> git_sha: `2e31cd9`
 > Scope: synthesis of submitted fact-table research; no N100/live config changed; no live orders.
 
 ## 数据快照
@@ -73,7 +73,7 @@
 | candidate | readiness | decision | gates | evidence | reason |
 | --- | --- | --- | --- | --- | --- |
 | all-YES underround | confirmed_but_deferred | 不选当前 live | PASS/PASS/PASS | verdict=confirmed; confirmed_orderbook_algorithms=5; fully_matched_strategy_rows=137 | 统计三门通过，但用户已明确 all-YES 暂不实盘；多腿速度、partial fill、滑点和手续费执行风险仍是主问题。 |
-| forecast-quality adjacent3 | best_shadow_candidate | 不选 live，选 shadow/paper 主线 | FAIL/NA/FAIL | decision holdout rows=8, decision ROI=+72.9%; orderbook rows=8, orderbook ROI=+47.1% | 点估计最好且逻辑贴近天气预测，但样本只有 8 条 holdout orderbook，CI/forward/baseline 不够。 |
+| forecast-quality adjacent3 | best_shadow_candidate | 不选 live，选 shadow/paper 主线 | FAIL/NA/FAIL | decision holdout rows=8, decision ROI=+72.9%; orderbook rows=8, orderbook ROI=+47.1%; eligible matched-baseline holdout rows=2, eligible matched-baseline orderbook ROI=-100.0%; same-cost random match rate=+1.3% | 点估计最好且逻辑贴近天气预测，但 full-opportunity 样本薄；eligible matched-baseline 主口径下 holdout 更薄且不支持 live。 |
 | single high-conviction YES | feature_not_strategy | 不选 live | FAIL/FAIL/FAIL | decision holdout rows=101, decision ROI=+35.8%; orderbook rows=100, orderbook ROI=+23.0%; inside adjacent3 rate=+99.8% | 99%+ 都在 adjacent3 内，更多是重复加注或降级表达，不是独立互补 edge。 |
 | side-band + forecast regime | rejected_for_live | 不选 live | FAIL/FAIL/FAIL | holdout selected rows=10, selected ROI=-67.3%; baseline ROI=-18.7%; excess ROI=-48.6% | 真钱早期赚过是真的，但 clean holdout 反向，top5 stress 不稳。 |
 | outside-range NO overlay | concept_only | 不选 live | FAIL/FAIL/FAIL | hybrid v0 固定归一化口径下触发 0 行。 | 概念上互补，但当前 fact 近窗固定规则没有样本。 |
@@ -83,7 +83,7 @@
 | candidate | needed evidence |
 | --- | --- |
 | all-YES underround | 只做工程 shadow：完整篮子下单仿真、partial fill unwind、fee/slippage 容量测试。 |
-| forecast-quality adjacent3 | 固定规则跑 forward shadow：>=10 event_dates、>=30 executable rows、CI 下界 >0、top5 removed >0、matched baseline >0。 |
+| forecast-quality adjacent3 | 固定规则跑 forward shadow：>=30 event_dates、>=100 settled decisions、>=50 full orderbook matched decisions、same-cost random baseline excess CI 下界 >0。 |
 | single high-conviction YES | 只作为 adjacent3 太贵/盘口不全时的 fallback 记录，不做叠加真钱。 |
 | side-band + forecast regime | 保留为特征输入，不再按旧 side-band 规则独立实盘。 |
 | outside-range NO overlay | 等更长 opportunity fact 或 shadow 期自然触发后再评估。 |

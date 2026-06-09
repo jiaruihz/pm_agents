@@ -44,6 +44,11 @@ REPORTS = {
     / "analysis"
     / "2026-06"
     / "2026-06-10-hybrid-adjacent3-single-v0.json",
+    "adjacent3_matched_baseline": ROOT
+    / "docs"
+    / "analysis"
+    / "2026-06"
+    / "2026-06-10-adjacent3-quality-matched-baseline-v0.json",
 }
 
 
@@ -161,6 +166,7 @@ def build_candidates(reports: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
     side = reports["side_band_forecast_regime"]
     adj = reports["adjacent3_shadow"]
     hybrid = reports["hybrid_single"]
+    matched = reports["adjacent3_matched_baseline"]
 
     side_rule = (side.get("selected_rules") or [{}])[0]
     side_holdout = side_rule.get("holdout", {})
@@ -174,6 +180,16 @@ def build_candidates(reports: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
     overlap = {
         row.get("rule_id"): row for row in hybrid.get("overlap_summary", [])
     }
+    matched_holdout = find_summary(matched, "model_adjacent3_medium_quality", "holdout", "orderbook_taker")
+    matched_excess = [
+        row
+        for row in matched.get("excess", [])
+        if row.get("selected_rule_id") == "model_adjacent3_medium_quality"
+        and row.get("baseline_rule_id") == "same_cost_random_adjacent3_for_medium"
+        and row.get("split") == "holdout"
+        and row.get("source") == "orderbook_taker"
+    ]
+    matched_baseline_diag = matched.get("baseline_diagnostics", {})
 
     return [
         {
@@ -202,7 +218,10 @@ def build_candidates(reports: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
                 f"decision holdout rows={adj_decision_holdout.get('usable_rows')}, "
                 f"decision ROI={pct(adj_decision_holdout.get('roi'))}; "
                 f"orderbook rows={adj_holdout.get('usable_rows')}, "
-                f"orderbook ROI={pct(adj_holdout.get('roi'))}"
+                f"orderbook ROI={pct(adj_holdout.get('roi'))}; "
+                f"eligible matched-baseline holdout rows={matched_holdout.get('usable_rows')}, "
+                f"eligible matched-baseline orderbook ROI={pct(matched_holdout.get('roi'))}; "
+                f"same-cost random match rate={pct(matched_baseline_diag.get('same_cost_random_match_rate'))}"
             ),
             "holdout_or_forward": f"orderbook CI={fmt_ci(adj_holdout.get('roi_ci95'))}",
             "significance": "FAIL",
@@ -210,8 +229,8 @@ def build_candidates(reports: dict[str, dict[str, Any]]) -> list[dict[str, Any]]
             "forward": "FAIL",
             "readiness": "best_shadow_candidate",
             "live_test_decision": "不选 live，选 shadow/paper 主线",
-            "reason": "点估计最好且逻辑贴近天气预测，但样本只有 8 条 holdout orderbook，CI/forward/baseline 不够。",
-            "next_evidence_needed": "固定规则跑 forward shadow：>=10 event_dates、>=30 executable rows、CI 下界 >0、top5 removed >0、matched baseline >0。",
+            "reason": "点估计最好且逻辑贴近天气预测，但 full-opportunity 样本薄；eligible matched-baseline 主口径下 holdout 更薄且不支持 live。",
+            "next_evidence_needed": "固定规则跑 forward shadow：>=30 event_dates、>=100 settled decisions、>=50 full orderbook matched decisions、same-cost random baseline excess CI 下界 >0。",
         },
         {
             "candidate_id": "single_high_conviction_yes",
