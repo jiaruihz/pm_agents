@@ -1,0 +1,3590 @@
+{
+  "generated_at_utc": "2026-06-09T17:54:29.683771+00:00",
+  "target_metric": "side_band_forecast_regime_alpha",
+  "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+  "data_self_check": {
+    "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_last_modified_utc": "2026-06-09T17:38:04.156943+00:00",
+    "max_fact_built_at_utc": "2026-06-09T17:37:40.513320+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "n": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1147
+      },
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": null,
+        "n": 232
+      },
+      {
+        "settlement_status": "settled",
+        "n": 5241
+      }
+    ],
+    "candidate_coverage": {
+      "rows": 25117,
+      "eligible": 8306,
+      "paper_ordered": 3139,
+      "live_filled": 554
+    },
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ],
+    "fact_signal_candidates_max_built_at_utc": "2026-06-09T17:38:03.570994+00:00",
+    "fact_signal_candidates_rows": 25117,
+    "fact_trades_rows": 5473,
+    "fact_trades_missing_bracket_rows": 0,
+    "fact_trades_unsettled_rows": 232
+  },
+  "clob_fill_coverage_gate": {
+    "gate_ran": true,
+    "returncode": 0,
+    "stdout_tail": [
+      "    \"rows\": 1405,",
+      "    \"top_over_order\": []",
+      "  },",
+      "  \"db_vs_primary_cache\": {",
+      "    \"cache_not_in_db\": 0,",
+      "    \"db_cost_minus_cache_cost\": 0.0,",
+      "    \"db_not_in_cache\": 0,",
+      "    \"sample_cache_not_in_db\": [],",
+      "    \"sample_db_not_in_cache\": []",
+      "  },",
+      "  \"fact_trades_live_real\": {",
+      "    \"cost_usd\": 3767.650378,",
+      "    \"executions\": 847,",
+      "    \"fill_ids\": 1405,",
+      "    \"rows\": 1405",
+      "  },",
+      "  \"fail_reasons\": [],",
+      "  \"gate_pass\": true,",
+      "  \"order_caps\": 1077",
+      "}"
+    ],
+    "stderr_tail": [],
+    "parsed": {
+      "cache_checks": {
+        "/home/rui/projects/pm_agent/runtime/weather_edge_v1/clob_fills.jsonl": {
+          "cost_usd": 3767.650378,
+          "distinct_executions": 847,
+          "distinct_fill_ids": 1405,
+          "missing_order_cost_usd": 0.0,
+          "missing_order_rows": 0,
+          "multi_fill_executions": 377,
+          "over_order_cost_usd": 0.0,
+          "over_order_excess_cost_usd": 0.0,
+          "over_order_keys": 0,
+          "rows": 1405,
+          "top_over_order": []
+        }
+      },
+      "db": "/home/rui/projects/pm_agent/runtime/weather.db",
+      "db_fill_cost_minus_fact_cost": 0.0,
+      "db_fills": {
+        "cost_usd": 3767.650378,
+        "distinct_executions": 847,
+        "distinct_fill_ids": 1405,
+        "missing_order_cost_usd": 0.0,
+        "missing_order_rows": 0,
+        "multi_fill_executions": 377,
+        "over_order_cost_usd": 0.0,
+        "over_order_excess_cost_usd": 0.0,
+        "over_order_keys": 0,
+        "rows": 1405,
+        "top_over_order": []
+      },
+      "db_vs_primary_cache": {
+        "cache_not_in_db": 0,
+        "db_cost_minus_cache_cost": 0.0,
+        "db_not_in_cache": 0,
+        "sample_cache_not_in_db": [],
+        "sample_db_not_in_cache": []
+      },
+      "fact_trades_live_real": {
+        "cost_usd": 3767.650378,
+        "executions": 847,
+        "fill_ids": 1405,
+        "rows": 1405
+      },
+      "fail_reasons": [],
+      "gate_pass": true,
+      "order_caps": 1077
+    }
+  },
+  "filter_funnel": {
+    "fact_signal_candidates_rows": 25117,
+    "settled_decision_window_present_rows": 2277,
+    "recognizable_market_model_price_side_rows": 2276,
+    "side_band_candidate_rows_020_080": 1587,
+    "forecast_regime_layered_rows": 2276,
+    "executable_matched_rows": 1082
+  },
+  "filter_funnel_table": [
+    {
+      "step": "fact_signal_candidates rows",
+      "rows": 25117,
+      "active_dates": "NA",
+      "drop_vs_previous": "NA"
+    },
+    {
+      "step": "settled + decision_window present rows",
+      "rows": 2277,
+      "active_dates": "NA",
+      "drop_vs_previous": "+90.9%"
+    },
+    {
+      "step": "recognizable market/model/price/side rows",
+      "rows": 2276,
+      "active_dates": "NA",
+      "drop_vs_previous": "+0.0%"
+    },
+    {
+      "step": "side_band candidate rows",
+      "rows": 1587,
+      "active_dates": "NA",
+      "drop_vs_previous": "+30.3%"
+    },
+    {
+      "step": "forecast regime layered side_band rows",
+      "rows": 1587,
+      "active_dates": "NA",
+      "drop_vs_previous": "+0.0%"
+    },
+    {
+      "step": "executable/spread-available side_band rows",
+      "rows": 1082,
+      "active_dates": "NA",
+      "drop_vs_previous": "+31.8%"
+    },
+    {
+      "step": "train rows from recognizable analysis rows",
+      "rows": 1813,
+      "active_dates": 23,
+      "drop_vs_previous": "date split, not a filter"
+    },
+    {
+      "step": "holdout rows from recognizable analysis rows",
+      "rows": 463,
+      "active_dates": 10,
+      "drop_vs_previous": "date split, not a filter"
+    }
+  ],
+  "filter_funnel_drop_notes": [
+    {
+      "step": "settled + decision_window present rows",
+      "drop": 0.9093442688219134,
+      "explanation": "Large filter loss; see report context."
+    }
+  ],
+  "split": {
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-29",
+    "train_dates": 23,
+    "holdout_start": "2026-05-30",
+    "holdout_end": "2026-06-08",
+    "holdout_dates": 10
+  },
+  "grid": {
+    "price_bands": [
+      [
+        0.2,
+        0.8
+      ],
+      [
+        0.25,
+        0.75
+      ],
+      [
+        0.3,
+        0.7
+      ],
+      [
+        0.35,
+        0.65
+      ]
+    ],
+    "sides": [
+      "BUY_YES",
+      "BUY_NO",
+      "both"
+    ],
+    "decision_hour_buckets": [
+      "T-12-18",
+      "T-18-24",
+      "T-24-36",
+      "T-36+"
+    ],
+    "model_edge_thresholds": [
+      0.03,
+      0.05,
+      0.08,
+      0.1
+    ],
+    "liquidity_spread_filters": {
+      "none": "no spread filter",
+      "mild": "side spread <= 0.15; NA rows fail this filter",
+      "strict": "side spread <= 0.08; NA rows fail this filter"
+    },
+    "eligible_modes": [
+      "no_filter",
+      "eligible_control"
+    ],
+    "forecast_regimes": [
+      "no_regime_baseline",
+      "low_uncertainty_allowed",
+      "medium_uncertainty_price_sensitive",
+      "high_uncertainty_no_trade",
+      "tail_risk_block"
+    ],
+    "rules_pre_registered": 5760,
+    "rules_evaluated_on_train_after_min_rows": 889
+  },
+  "regime_distribution": [
+    {
+      "forecast_regime": "low_uncertainty_allowed",
+      "rows": 643
+    },
+    {
+      "forecast_regime": "medium_uncertainty_price_sensitive",
+      "rows": 279
+    },
+    {
+      "forecast_regime": "high_uncertainty_no_trade",
+      "rows": 783
+    },
+    {
+      "forecast_regime": "tail_risk_block",
+      "rows": 571
+    }
+  ],
+  "selected_rules": [
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "BUY_YES",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.1,
+        "liquidity_filter": "none",
+        "eligible_mode": "no_filter",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "只买 YES，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.10，只在中等不确定性且价位合适时交易，不加盘口过滤，不使用旧 eligible 硬门",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "none",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 32,
+          "active_event_dates": 16,
+          "active_city_days": 32,
+          "cost": 105.05,
+          "pnl": 44.949999999999996,
+          "roi": 0.4278914802475012,
+          "win_rate": 0.46875,
+          "avg_entry_price": 0.32828125,
+          "avg_abs_edge": 0.190559375,
+          "top5_event_dates": [
+            "2026-05-14",
+            "2026-05-21",
+            "2026-05-23",
+            "2026-05-24",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -16.6,
+          "top5_removed_roi": -0.21671018276762405,
+          "worst_day_pnl": -11.25
+        },
+        "baseline": {
+          "rows": 297,
+          "active_event_dates": 22,
+          "active_city_days": 251,
+          "cost": 948.865,
+          "pnl": 91.135,
+          "roi": 0.09604632903521576,
+          "win_rate": 0.3501683501683502,
+          "avg_entry_price": 0.319483164983165,
+          "avg_abs_edge": 0.13537407407407406,
+          "top5_event_dates": [
+            "2026-05-21",
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -49.855000000000004,
+          "top5_removed_roi": -0.0767171138176978,
+          "worst_day_pnl": -30.5
+        },
+        "excess_roi": 0.3318451512122854,
+        "roi_ci95_cluster_by_event_date": [
+          -0.18177142547777597,
+          1.1560817830092827
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.23661870336668575,
+          1.0448317337612385
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "none",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 10,
+          "active_event_dates": 8,
+          "active_city_days": 10,
+          "cost": 30.6,
+          "pnl": -20.6,
+          "roi": -0.673202614379085,
+          "win_rate": 0.1,
+          "avg_entry_price": 0.306,
+          "avg_abs_edge": 0.27113,
+          "top5_event_dates": [
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-07"
+          ],
+          "top5_removed_pnl": -16.9,
+          "top5_removed_roi": -1.0,
+          "worst_day_pnl": -9.25
+        },
+        "baseline": {
+          "rows": 106,
+          "active_event_dates": 10,
+          "active_city_days": 92,
+          "cost": 356.64,
+          "pnl": -66.64,
+          "roi": -0.18685509196949304,
+          "win_rate": 0.27358490566037735,
+          "avg_entry_price": 0.3364528301886793,
+          "avg_abs_edge": 0.12513584905660377,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-07"
+          ],
+          "top5_removed_pnl": -102.35,
+          "top5_removed_roi": -0.5321029373537821,
+          "worst_day_pnl": -35.0
+        },
+        "excess_roi": -0.486347522409592,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          0.2422360248447204
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.8428982913222302,
+          0.18735079847648944
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.25,
+          0.75
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "strict",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.25-0.75，T-18-24，模型 edge 至少 0.05，只在中等不确定性且价位合适时交易，点差 <=8c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 38,
+          "active_event_dates": 9,
+          "active_city_days": 23,
+          "cost": 200.8,
+          "pnl": 69.2,
+          "roi": 0.3446215139442231,
+          "win_rate": 0.7105263157894737,
+          "avg_entry_price": 0.5284210526315789,
+          "avg_abs_edge": 0.1863763157894737,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -7.85,
+          "top5_removed_roi": -0.08935685828116108,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 203,
+          "active_event_dates": 10,
+          "active_city_days": 121,
+          "cost": 1092.5,
+          "pnl": 87.5,
+          "roi": 0.08009153318077804,
+          "win_rate": 0.5812807881773399,
+          "avg_entry_price": 0.5381773399014779,
+          "avg_abs_edge": 0.19414334975369457,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -19.650000000000013,
+          "top5_removed_roi": -0.03932752927048937,
+          "worst_day_pnl": -17.000000000000007
+        },
+        "excess_roi": 0.264529980763445,
+        "roi_ci95_cluster_by_event_date": [
+          0.052955464166119584,
+          0.607932473501221
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.05954788168688245,
+          0.5277884840997378
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 31,
+          "active_event_dates": 9,
+          "active_city_days": 19,
+          "cost": 162.8,
+          "pnl": -52.800000000000004,
+          "roi": -0.32432432432432434,
+          "win_rate": 0.3548387096774194,
+          "avg_entry_price": 0.5251612903225806,
+          "avg_abs_edge": 0.22898064516129032,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -57.75,
+          "top5_removed_roi": -0.5359628770301624,
+          "worst_day_pnl": -17.05
+        },
+        "baseline": {
+          "rows": 296,
+          "active_event_dates": 10,
+          "active_city_days": 169,
+          "cost": 1626.795,
+          "pnl": -116.795,
+          "roi": -0.07179454079954757,
+          "win_rate": 0.5101351351351351,
+          "avg_entry_price": 0.5495929054054054,
+          "avg_abs_edge": 0.15575844594594596,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -152.59,
+          "top5_removed_roi": -0.19252072319862729,
+          "worst_day_pnl": -48.9
+        },
+        "excess_roi": -0.2525297835247768,
+        "roi_ci95_cluster_by_event_date": [
+          -0.6629688158449221,
+          0.0472841930328736
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.5846530648594814,
+          0.10962706104716317
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.25,
+          0.75
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "mild",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.25-0.75，T-18-24，模型 edge 至少 0.05，只在中等不确定性且价位合适时交易，点差 <=15c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 38,
+          "active_event_dates": 9,
+          "active_city_days": 23,
+          "cost": 200.8,
+          "pnl": 69.2,
+          "roi": 0.3446215139442231,
+          "win_rate": 0.7105263157894737,
+          "avg_entry_price": 0.5284210526315789,
+          "avg_abs_edge": 0.1863763157894737,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -7.85,
+          "top5_removed_roi": -0.08935685828116108,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 212,
+          "active_event_dates": 10,
+          "active_city_days": 123,
+          "cost": 1141.4,
+          "pnl": 98.60000000000001,
+          "roi": 0.08638514105484493,
+          "win_rate": 0.5849056603773585,
+          "avg_entry_price": 0.5383962264150943,
+          "avg_abs_edge": 0.1942570754716981,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-25",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -17.50000000000001,
+          "top5_removed_roi": -0.03255813953488374,
+          "worst_day_pnl": -20.100000000000005
+        },
+        "excess_roi": 0.2582363728893782,
+        "roi_ci95_cluster_by_event_date": [
+          0.05261081971296898,
+          0.6101414325106987
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.053114167912166624,
+          0.5257604828820066
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 31,
+          "active_event_dates": 9,
+          "active_city_days": 19,
+          "cost": 162.8,
+          "pnl": -52.800000000000004,
+          "roi": -0.32432432432432434,
+          "win_rate": 0.3548387096774194,
+          "avg_entry_price": 0.5251612903225806,
+          "avg_abs_edge": 0.22898064516129032,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -57.75,
+          "top5_removed_roi": -0.5359628770301624,
+          "worst_day_pnl": -17.05
+        },
+        "baseline": {
+          "rows": 308,
+          "active_event_dates": 10,
+          "active_city_days": 175,
+          "cost": 1701.095,
+          "pnl": -121.095,
+          "roi": -0.07118650045999782,
+          "win_rate": 0.512987012987013,
+          "avg_entry_price": 0.5523035714285714,
+          "avg_abs_edge": 0.15539220779220778,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -149.69,
+          "top5_removed_roi": -0.18041678217165447,
+          "worst_day_pnl": -42.55
+        },
+        "excess_roi": -0.25313782386432654,
+        "roi_ci95_cluster_by_event_date": [
+          -0.6241441905807739,
+          0.07685656060761835
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.5534337688374044,
+          0.09986795747709035
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "BUY_YES",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "none",
+        "eligible_mode": "no_filter",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "只买 YES，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.05，只在中等不确定性且价位合适时交易，不加盘口过滤，不使用旧 eligible 硬门",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "none",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 47,
+          "active_event_dates": 21,
+          "active_city_days": 44,
+          "cost": 155.56,
+          "pnl": 54.44,
+          "roi": 0.3499614296734379,
+          "win_rate": 0.44680851063829785,
+          "avg_entry_price": 0.3309787234042553,
+          "avg_abs_edge": 0.15398936170212765,
+          "top5_event_dates": [
+            "2026-05-14",
+            "2026-05-17",
+            "2026-05-21",
+            "2026-05-23",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -7.510000000000002,
+          "top5_removed_roi": -0.06985396707283044,
+          "worst_day_pnl": -11.25
+        },
+        "baseline": {
+          "rows": 297,
+          "active_event_dates": 22,
+          "active_city_days": 251,
+          "cost": 948.865,
+          "pnl": 91.135,
+          "roi": 0.09604632903521576,
+          "win_rate": 0.3501683501683502,
+          "avg_entry_price": 0.319483164983165,
+          "avg_abs_edge": 0.13537407407407406,
+          "top5_event_dates": [
+            "2026-05-21",
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -49.855000000000004,
+          "top5_removed_roi": -0.0767171138176978,
+          "worst_day_pnl": -30.5
+        },
+        "excess_roi": 0.25391510063822215,
+        "roi_ci95_cluster_by_event_date": [
+          -0.08753321497484831,
+          0.807245059700952
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.1688002966197155,
+          0.6904281726787587
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "none",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 13,
+          "active_event_dates": 9,
+          "active_city_days": 13,
+          "cost": 44.8,
+          "pnl": -34.8,
+          "roi": -0.7767857142857143,
+          "win_rate": 0.07692307692307693,
+          "avg_entry_price": 0.34461538461538466,
+          "avg_abs_edge": 0.22774615384615385,
+          "top5_event_dates": [
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-07"
+          ],
+          "top5_removed_pnl": -31.099999999999998,
+          "top5_removed_roi": -1.0,
+          "worst_day_pnl": -13.1
+        },
+        "baseline": {
+          "rows": 106,
+          "active_event_dates": 10,
+          "active_city_days": 92,
+          "cost": 356.64,
+          "pnl": -66.64,
+          "roi": -0.18685509196949304,
+          "win_rate": 0.27358490566037735,
+          "avg_entry_price": 0.3364528301886793,
+          "avg_abs_edge": 0.12513584905660377,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-07"
+          ],
+          "top5_removed_pnl": -102.35,
+          "top5_removed_roi": -0.5321029373537821,
+          "worst_day_pnl": -35.0
+        },
+        "excess_roi": -0.5899306223162213,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          -0.15160613916768567
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.8333420175072948,
+          -0.146423464455885
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "mild",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.05，只在中等不确定性且价位合适时交易，点差 <=15c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 41,
+          "active_event_dates": 9,
+          "active_city_days": 23,
+          "cost": 224.1,
+          "pnl": 75.9,
+          "roi": 0.33868808567603753,
+          "win_rate": 0.7317073170731707,
+          "avg_entry_price": 0.5465853658536586,
+          "avg_abs_edge": 0.18537073170731708,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -5.449999999999999,
+          "top5_removed_roi": -0.05709795704557359,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 246,
+          "active_event_dates": 10,
+          "active_city_days": 126,
+          "cost": 1338.21,
+          "pnl": 121.79,
+          "roi": 0.09100963226997258,
+          "win_rate": 0.5934959349593496,
+          "avg_entry_price": 0.5439878048780488,
+          "avg_abs_edge": 0.1894239837398374,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -3.1000000000000045,
+          "top5_removed_roi": -0.0046055563809240885,
+          "worst_day_pnl": -20.25
+        },
+        "excess_roi": 0.24767845340606495,
+        "roi_ci95_cluster_by_event_date": [
+          0.07896648521387604,
+          0.5759965631147161
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.0058288430085601676,
+          0.462352624528527
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 38,
+          "active_event_dates": 9,
+          "active_city_days": 20,
+          "cost": 205.5,
+          "pnl": -55.5,
+          "roi": -0.27007299270072993,
+          "win_rate": 0.39473684210526316,
+          "avg_entry_price": 0.5407894736842106,
+          "avg_abs_edge": 0.22018421052631582,
+          "top5_event_dates": [
+            "2026-05-31",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -58.45,
+          "top5_removed_roi": -0.42217407006139407,
+          "worst_day_pnl": -16.85
+        },
+        "baseline": {
+          "rows": 349,
+          "active_event_dates": 10,
+          "active_city_days": 183,
+          "cost": 1934.7450000000001,
+          "pnl": -74.745,
+          "roi": -0.03863299814704264,
+          "win_rate": 0.5329512893982808,
+          "avg_entry_price": 0.5543681948424068,
+          "avg_abs_edge": 0.1537842406876791,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -158.69,
+          "top5_removed_roi": -0.16552796002878928,
+          "worst_day_pnl": -45.949999999999996
+        },
+        "excess_roi": -0.2314399945536873,
+        "roi_ci95_cluster_by_event_date": [
+          -0.5274844185467149,
+          0.05701262176116159
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.5049454796463452,
+          0.09029985075213158
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "PASS",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "strict",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.05，只在中等不确定性且价位合适时交易，点差 <=8c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 41,
+          "active_event_dates": 9,
+          "active_city_days": 23,
+          "cost": 224.1,
+          "pnl": 75.9,
+          "roi": 0.33868808567603753,
+          "win_rate": 0.7317073170731707,
+          "avg_entry_price": 0.5465853658536586,
+          "avg_abs_edge": 0.18537073170731708,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -5.449999999999999,
+          "top5_removed_roi": -0.05709795704557359,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 236,
+          "active_event_dates": 10,
+          "active_city_days": 124,
+          "cost": 1281.76,
+          "pnl": 118.24,
+          "roi": 0.0922481587816752,
+          "win_rate": 0.5932203389830508,
+          "avg_entry_price": 0.5431186440677965,
+          "avg_abs_edge": 0.18937457627118645,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": 4.149999999999995,
+          "top5_removed_roi": 0.006526696547927961,
+          "worst_day_pnl": -17.15
+        },
+        "excess_roi": 0.24643992689436234,
+        "roi_ci95_cluster_by_event_date": [
+          0.08864504352817963,
+          0.5809237625418308
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.0033147967511623993,
+          0.46858025513266416
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 38,
+          "active_event_dates": 9,
+          "active_city_days": 20,
+          "cost": 205.5,
+          "pnl": -55.5,
+          "roi": -0.27007299270072993,
+          "win_rate": 0.39473684210526316,
+          "avg_entry_price": 0.5407894736842106,
+          "avg_abs_edge": 0.22018421052631582,
+          "top5_event_dates": [
+            "2026-05-31",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -58.45,
+          "top5_removed_roi": -0.42217407006139407,
+          "worst_day_pnl": -16.85
+        },
+        "baseline": {
+          "rows": 335,
+          "active_event_dates": 10,
+          "active_city_days": 178,
+          "cost": 1844.895,
+          "pnl": -64.89500000000001,
+          "roi": -0.035175443588930544,
+          "win_rate": 0.5313432835820896,
+          "avg_entry_price": 0.5507149253731343,
+          "avg_abs_edge": 0.15422238805970148,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -153.64000000000001,
+          "top5_removed_roi": -0.1681625147760606,
+          "worst_day_pnl": -44.35
+        },
+        "excess_roi": -0.2348975491117994,
+        "roi_ci95_cluster_by_event_date": [
+          -0.509742670486344,
+          0.036791132206786044
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.4875692787319133,
+          0.04691445203323921
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.25,
+          0.75
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "strict",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.25-0.75，T-18-24，模型 edge 至少 0.03，只在中等不确定性且价位合适时交易，点差 <=8c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 41,
+          "active_event_dates": 9,
+          "active_city_days": 25,
+          "cost": 211.4,
+          "pnl": 68.6,
+          "roi": 0.32450331125827814,
+          "win_rate": 0.6829268292682927,
+          "avg_entry_price": 0.515609756097561,
+          "avg_abs_edge": 0.17572926829268293,
+          "top5_event_dates": [
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -4.1,
+          "top5_removed_roi": -0.07578558225508317,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 203,
+          "active_event_dates": 10,
+          "active_city_days": 121,
+          "cost": 1092.5,
+          "pnl": 87.5,
+          "roi": 0.08009153318077804,
+          "win_rate": 0.5812807881773399,
+          "avg_entry_price": 0.5381773399014779,
+          "avg_abs_edge": 0.19414334975369457,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -19.650000000000013,
+          "top5_removed_roi": -0.03932752927048937,
+          "worst_day_pnl": -17.000000000000007
+        },
+        "excess_roi": 0.24441177807750009,
+        "roi_ci95_cluster_by_event_date": [
+          0.07922469355077437,
+          0.5457011929952098
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.029466820749811797,
+          0.45005374675893867
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 33,
+          "active_event_dates": 9,
+          "active_city_days": 19,
+          "cost": 171.3,
+          "pnl": -61.300000000000004,
+          "roi": -0.35785172212492705,
+          "win_rate": 0.3333333333333333,
+          "avg_entry_price": 0.519090909090909,
+          "avg_abs_edge": 0.2175030303030303,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -66.25,
+          "top5_removed_roi": -0.5698924731182796,
+          "worst_day_pnl": -19.1
+        },
+        "baseline": {
+          "rows": 296,
+          "active_event_dates": 10,
+          "active_city_days": 169,
+          "cost": 1626.795,
+          "pnl": -116.795,
+          "roi": -0.07179454079954757,
+          "win_rate": 0.5101351351351351,
+          "avg_entry_price": 0.5495929054054054,
+          "avg_abs_edge": 0.15575844594594596,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -152.59,
+          "top5_removed_roi": -0.19252072319862729,
+          "worst_day_pnl": -48.9
+        },
+        "excess_roi": -0.2860571813253795,
+        "roi_ci95_cluster_by_event_date": [
+          -0.6893903343058013,
+          -0.004153384582613133
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.6303029273056951,
+          0.029901938129718565
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.25,
+          0.75
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "mild",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.25-0.75，T-18-24，模型 edge 至少 0.03，只在中等不确定性且价位合适时交易，点差 <=15c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 41,
+          "active_event_dates": 9,
+          "active_city_days": 25,
+          "cost": 211.4,
+          "pnl": 68.6,
+          "roi": 0.32450331125827814,
+          "win_rate": 0.6829268292682927,
+          "avg_entry_price": 0.515609756097561,
+          "avg_abs_edge": 0.17572926829268293,
+          "top5_event_dates": [
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -4.1,
+          "top5_removed_roi": -0.07578558225508317,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 212,
+          "active_event_dates": 10,
+          "active_city_days": 123,
+          "cost": 1141.4,
+          "pnl": 98.60000000000001,
+          "roi": 0.08638514105484493,
+          "win_rate": 0.5849056603773585,
+          "avg_entry_price": 0.5383962264150943,
+          "avg_abs_edge": 0.1942570754716981,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-25",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -17.50000000000001,
+          "top5_removed_roi": -0.03255813953488374,
+          "worst_day_pnl": -20.100000000000005
+        },
+        "excess_roi": 0.2381181702034332,
+        "roi_ci95_cluster_by_event_date": [
+          0.11236432780582677,
+          0.5430185617547851
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.007604568884586523,
+          0.4660915873033809
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 33,
+          "active_event_dates": 9,
+          "active_city_days": 19,
+          "cost": 171.3,
+          "pnl": -61.300000000000004,
+          "roi": -0.35785172212492705,
+          "win_rate": 0.3333333333333333,
+          "avg_entry_price": 0.519090909090909,
+          "avg_abs_edge": 0.2175030303030303,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -66.25,
+          "top5_removed_roi": -0.5698924731182796,
+          "worst_day_pnl": -19.1
+        },
+        "baseline": {
+          "rows": 308,
+          "active_event_dates": 10,
+          "active_city_days": 175,
+          "cost": 1701.095,
+          "pnl": -121.095,
+          "roi": -0.07118650045999782,
+          "win_rate": 0.512987012987013,
+          "avg_entry_price": 0.5523035714285714,
+          "avg_abs_edge": 0.15539220779220778,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -149.69,
+          "top5_removed_roi": -0.18041678217165447,
+          "worst_day_pnl": -42.55
+        },
+        "excess_roi": -0.28666522166492925,
+        "roi_ci95_cluster_by_event_date": [
+          -0.665169558463153,
+          0.02605452352646926
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.6050629630278929,
+          0.05385552068384973
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "PASS",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.25,
+          0.75
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.1,
+        "liquidity_filter": "strict",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.25-0.75，T-18-24，模型 edge 至少 0.10，只在中等不确定性且价位合适时交易，点差 <=8c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 30,
+          "active_event_dates": 9,
+          "active_city_days": 21,
+          "cost": 167.35,
+          "pnl": 52.65,
+          "roi": 0.3146100985957574,
+          "win_rate": 0.7333333333333333,
+          "avg_entry_price": 0.5578333333333333,
+          "avg_abs_edge": 0.21689666666666665,
+          "top5_event_dates": [
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -7.8,
+          "top5_removed_roi": -0.16317991631799164,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 203,
+          "active_event_dates": 10,
+          "active_city_days": 121,
+          "cost": 1092.5,
+          "pnl": 87.5,
+          "roi": 0.08009153318077804,
+          "win_rate": 0.5812807881773399,
+          "avg_entry_price": 0.5381773399014779,
+          "avg_abs_edge": 0.19414334975369457,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -19.650000000000013,
+          "top5_removed_roi": -0.03932752927048937,
+          "worst_day_pnl": -17.000000000000007
+        },
+        "excess_roi": 0.23451856541497934,
+        "roi_ci95_cluster_by_event_date": [
+          0.027553217354584023,
+          0.6298852728779487
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.08412527699913738,
+          0.539777717590718
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 27,
+          "active_event_dates": 9,
+          "active_city_days": 18,
+          "cost": 140.2,
+          "pnl": -50.2,
+          "roi": -0.3580599144079886,
+          "win_rate": 0.3333333333333333,
+          "avg_entry_price": 0.5192592592592592,
+          "avg_abs_edge": 0.250662962962963,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -55.15,
+          "top5_removed_roi": -0.6476805637110981,
+          "worst_day_pnl": -16.45
+        },
+        "baseline": {
+          "rows": 296,
+          "active_event_dates": 10,
+          "active_city_days": 169,
+          "cost": 1626.795,
+          "pnl": -116.795,
+          "roi": -0.07179454079954757,
+          "win_rate": 0.5101351351351351,
+          "avg_entry_price": 0.5495929054054054,
+          "avg_abs_edge": 0.15575844594594596,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -152.59,
+          "top5_removed_roi": -0.19252072319862729,
+          "worst_day_pnl": -48.9
+        },
+        "excess_roi": -0.28626537360844106,
+        "roi_ci95_cluster_by_event_date": [
+          -0.7218898432136301,
+          0.04230571510913531
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.6609639780337645,
+          0.08564487314673107
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "mild",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.03，只在中等不确定性且价位合适时交易，点差 <=15c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 44,
+          "active_event_dates": 9,
+          "active_city_days": 25,
+          "cost": 234.7,
+          "pnl": 75.3,
+          "roi": 0.32083510864933956,
+          "win_rate": 0.7045454545454546,
+          "avg_entry_price": 0.5334090909090908,
+          "avg_abs_edge": 0.17551818181818182,
+          "top5_event_dates": [
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -2.1,
+          "top5_removed_roi": -0.033816425120772944,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 246,
+          "active_event_dates": 10,
+          "active_city_days": 126,
+          "cost": 1338.21,
+          "pnl": 121.79,
+          "roi": 0.09100963226997258,
+          "win_rate": 0.5934959349593496,
+          "avg_entry_price": 0.5439878048780488,
+          "avg_abs_edge": 0.1894239837398374,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -3.1000000000000045,
+          "top5_removed_roi": -0.0046055563809240885,
+          "worst_day_pnl": -20.25
+        },
+        "excess_roi": 0.22982547637936698,
+        "roi_ci95_cluster_by_event_date": [
+          0.125374989137047,
+          0.5278755878991572
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.03893735140160903,
+          0.4184499329750427
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 41,
+          "active_event_dates": 9,
+          "active_city_days": 20,
+          "cost": 221.95,
+          "pnl": -61.95,
+          "roi": -0.2791169182248254,
+          "win_rate": 0.3902439024390244,
+          "avg_entry_price": 0.5413414634146342,
+          "avg_abs_edge": 0.20718780487804878,
+          "top5_event_dates": [
+            "2026-05-31",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -62.400000000000006,
+          "top5_removed_roi": -0.43820224719101125,
+          "worst_day_pnl": -19.1
+        },
+        "baseline": {
+          "rows": 349,
+          "active_event_dates": 10,
+          "active_city_days": 183,
+          "cost": 1934.7450000000001,
+          "pnl": -74.745,
+          "roi": -0.03863299814704264,
+          "win_rate": 0.5329512893982808,
+          "avg_entry_price": 0.5543681948424068,
+          "avg_abs_edge": 0.1537842406876791,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -158.69,
+          "top5_removed_roi": -0.16552796002878928,
+          "worst_day_pnl": -45.949999999999996
+        },
+        "excess_roi": -0.2404839200777828,
+        "roi_ci95_cluster_by_event_date": [
+          -0.5245924898372515,
+          -0.011673755682672716
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.5005498378383717,
+          0.00807237544277517
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "PASS",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "strict",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.03，只在中等不确定性且价位合适时交易，点差 <=8c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 44,
+          "active_event_dates": 9,
+          "active_city_days": 25,
+          "cost": 234.7,
+          "pnl": 75.3,
+          "roi": 0.32083510864933956,
+          "win_rate": 0.7045454545454546,
+          "avg_entry_price": 0.5334090909090908,
+          "avg_abs_edge": 0.17551818181818182,
+          "top5_event_dates": [
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -2.1,
+          "top5_removed_roi": -0.033816425120772944,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 236,
+          "active_event_dates": 10,
+          "active_city_days": 124,
+          "cost": 1281.76,
+          "pnl": 118.24,
+          "roi": 0.0922481587816752,
+          "win_rate": 0.5932203389830508,
+          "avg_entry_price": 0.5431186440677965,
+          "avg_abs_edge": 0.18937457627118645,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": 4.149999999999995,
+          "top5_removed_roi": 0.006526696547927961,
+          "worst_day_pnl": -17.15
+        },
+        "excess_roi": 0.22858694986766437,
+        "roi_ci95_cluster_by_event_date": [
+          0.11227560225067594,
+          0.523195113812664
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.017413085654103738,
+          0.41323779981720876
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 41,
+          "active_event_dates": 9,
+          "active_city_days": 20,
+          "cost": 221.95,
+          "pnl": -61.95,
+          "roi": -0.2791169182248254,
+          "win_rate": 0.3902439024390244,
+          "avg_entry_price": 0.5413414634146342,
+          "avg_abs_edge": 0.20718780487804878,
+          "top5_event_dates": [
+            "2026-05-31",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -62.400000000000006,
+          "top5_removed_roi": -0.43820224719101125,
+          "worst_day_pnl": -19.1
+        },
+        "baseline": {
+          "rows": 335,
+          "active_event_dates": 10,
+          "active_city_days": 178,
+          "cost": 1844.895,
+          "pnl": -64.89500000000001,
+          "roi": -0.035175443588930544,
+          "win_rate": 0.5313432835820896,
+          "avg_entry_price": 0.5507149253731343,
+          "avg_abs_edge": 0.15422238805970148,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -153.64000000000001,
+          "top5_removed_roi": -0.1681625147760606,
+          "worst_day_pnl": -44.35
+        },
+        "excess_roi": -0.24394147463589488,
+        "roi_ci95_cluster_by_event_date": [
+          -0.5163240628778718,
+          -0.0015306725302461368
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.48754023941465796,
+          0.008855097780187735
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "PASS",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.25,
+          0.75
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.1,
+        "liquidity_filter": "mild",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.25-0.75，T-18-24，模型 edge 至少 0.10，只在中等不确定性且价位合适时交易，点差 <=15c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 30,
+          "active_event_dates": 9,
+          "active_city_days": 21,
+          "cost": 167.35,
+          "pnl": 52.65,
+          "roi": 0.3146100985957574,
+          "win_rate": 0.7333333333333333,
+          "avg_entry_price": 0.5578333333333333,
+          "avg_abs_edge": 0.21689666666666665,
+          "top5_event_dates": [
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -7.8,
+          "top5_removed_roi": -0.16317991631799164,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 212,
+          "active_event_dates": 10,
+          "active_city_days": 123,
+          "cost": 1141.4,
+          "pnl": 98.60000000000001,
+          "roi": 0.08638514105484493,
+          "win_rate": 0.5849056603773585,
+          "avg_entry_price": 0.5383962264150943,
+          "avg_abs_edge": 0.1942570754716981,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-25",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -17.50000000000001,
+          "top5_removed_roi": -0.03255813953488374,
+          "worst_day_pnl": -20.100000000000005
+        },
+        "excess_roi": 0.22822495754091246,
+        "roi_ci95_cluster_by_event_date": [
+          0.03774489392823207,
+          0.6265328180858419
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.07012915491392914,
+          0.5147288920470434
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 27,
+          "active_event_dates": 9,
+          "active_city_days": 18,
+          "cost": 140.2,
+          "pnl": -50.2,
+          "roi": -0.3580599144079886,
+          "win_rate": 0.3333333333333333,
+          "avg_entry_price": 0.5192592592592592,
+          "avg_abs_edge": 0.250662962962963,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -55.15,
+          "top5_removed_roi": -0.6476805637110981,
+          "worst_day_pnl": -16.45
+        },
+        "baseline": {
+          "rows": 308,
+          "active_event_dates": 10,
+          "active_city_days": 175,
+          "cost": 1701.095,
+          "pnl": -121.095,
+          "roi": -0.07118650045999782,
+          "win_rate": 0.512987012987013,
+          "avg_entry_price": 0.5523035714285714,
+          "avg_abs_edge": 0.15539220779220778,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -149.69,
+          "top5_removed_roi": -0.18041678217165447,
+          "worst_day_pnl": -42.55
+        },
+        "excess_roi": -0.2868734139479908,
+        "roi_ci95_cluster_by_event_date": [
+          -0.7140833663750559,
+          0.08291035013640428
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.6392014962691028,
+          0.09226121173995022
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.3,
+          0.7
+        ],
+        "side": "BUY_NO",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.1,
+        "liquidity_filter": "strict",
+        "eligible_mode": "no_filter",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "只买 NO，entry price 在 0.30-0.70，T-18-24，模型 edge 至少 0.10，只在中等不确定性且价位合适时交易，点差 <=8c，不使用旧 eligible 硬门",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.3,
+            0.7
+          ],
+          "side": "BUY_NO",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "strict",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 37,
+          "active_event_dates": 10,
+          "active_city_days": 31,
+          "cost": 229.15,
+          "pnl": 40.849999999999994,
+          "roi": 0.17826751036439012,
+          "win_rate": 0.7297297297297297,
+          "avg_entry_price": 0.6193243243243243,
+          "avg_abs_edge": 0.2305891891891892,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -2.849999999999999,
+          "top5_removed_roi": -0.01995099754987749,
+          "worst_day_pnl": -2.8499999999999996
+        },
+        "baseline": {
+          "rows": 290,
+          "active_event_dates": 10,
+          "active_city_days": 233,
+          "cost": 1736.75,
+          "pnl": -86.75,
+          "roi": -0.04994961854037714,
+          "win_rate": 0.5689655172413793,
+          "avg_entry_price": 0.5988793103448277,
+          "avg_abs_edge": 0.21394413793103448,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-24",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -130.25000000000003,
+          "top5_removed_roi": -0.1514094739901192,
+          "worst_day_pnl": -61.05000000000001
+        },
+        "excess_roi": 0.22821712890476725,
+        "roi_ci95_cluster_by_event_date": [
+          0.023390999746306804,
+          0.3897788129963282
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          0.05493746868734002,
+          0.4242997026169278
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.3,
+            0.7
+          ],
+          "side": "BUY_NO",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "strict",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 16,
+          "active_event_dates": 7,
+          "active_city_days": 15,
+          "cost": 92.2,
+          "pnl": -22.200000000000003,
+          "roi": -0.24078091106290675,
+          "win_rate": 0.4375,
+          "avg_entry_price": 0.57625,
+          "avg_abs_edge": 0.26010625,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-07"
+          ],
+          "top5_removed_pnl": -24.200000000000003,
+          "top5_removed_roi": -0.5475113122171947,
+          "worst_day_pnl": -12.15
+        },
+        "baseline": {
+          "rows": 184,
+          "active_event_dates": 10,
+          "active_city_days": 145,
+          "cost": 1111.75,
+          "pnl": -21.75000000000001,
+          "roi": -0.019563750843265133,
+          "win_rate": 0.592391304347826,
+          "avg_entry_price": 0.6042119565217391,
+          "avg_abs_edge": 0.17983423913043478,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -80.9,
+          "top5_removed_roi": -0.14956553891662047,
+          "worst_day_pnl": -24.5
+        },
+        "excess_roi": -0.2212171602196416,
+        "roi_ci95_cluster_by_event_date": [
+          -0.5895593520126584,
+          0.26197405251699457
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.5586910916898551,
+          0.24456668241020085
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "PASS",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "BUY_YES",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "none",
+        "eligible_mode": "no_filter",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "只买 YES，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.03，只在中等不确定性且价位合适时交易，不加盘口过滤，不使用旧 eligible 硬门",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "none",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 50,
+          "active_event_dates": 21,
+          "active_city_days": 47,
+          "cost": 166.16,
+          "pnl": 53.839999999999996,
+          "roi": 0.3240250361097737,
+          "win_rate": 0.44,
+          "avg_entry_price": 0.33232,
+          "avg_abs_edge": 0.147202,
+          "top5_event_dates": [
+            "2026-05-14",
+            "2026-05-17",
+            "2026-05-21",
+            "2026-05-23",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -5.560000000000002,
+          "top5_removed_roi": -0.04811353409484252,
+          "worst_day_pnl": -11.25
+        },
+        "baseline": {
+          "rows": 297,
+          "active_event_dates": 22,
+          "active_city_days": 251,
+          "cost": 948.865,
+          "pnl": 91.135,
+          "roi": 0.09604632903521576,
+          "win_rate": 0.3501683501683502,
+          "avg_entry_price": 0.319483164983165,
+          "avg_abs_edge": 0.13537407407407406,
+          "top5_event_dates": [
+            "2026-05-21",
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -49.855000000000004,
+          "top5_removed_roi": -0.0767171138176978,
+          "worst_day_pnl": -30.5
+        },
+        "excess_roi": 0.22797870707455792,
+        "roi_ci95_cluster_by_event_date": [
+          -0.0551390641576074,
+          0.7041228533994381
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.12478686739626174,
+          0.5803634473107789
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "none",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 14,
+          "active_event_dates": 9,
+          "active_city_days": 14,
+          "cost": 48.75,
+          "pnl": -38.75,
+          "roi": -0.7948717948717948,
+          "win_rate": 0.07142857142857142,
+          "avg_entry_price": 0.3482142857142857,
+          "avg_abs_edge": 0.21462857142857142,
+          "top5_event_dates": [
+            "2026-05-31",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -33.35,
+          "top5_removed_roi": -1.0,
+          "worst_day_pnl": -13.1
+        },
+        "baseline": {
+          "rows": 106,
+          "active_event_dates": 10,
+          "active_city_days": 92,
+          "cost": 356.64,
+          "pnl": -66.64,
+          "roi": -0.18685509196949304,
+          "win_rate": 0.27358490566037735,
+          "avg_entry_price": 0.3364528301886793,
+          "avg_abs_edge": 0.12513584905660377,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-07"
+          ],
+          "top5_removed_pnl": -102.35,
+          "top5_removed_roi": -0.5321029373537821,
+          "worst_day_pnl": -35.0
+        },
+        "excess_roi": -0.6080167029023018,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          -0.19014588100686516
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.8544296536180115,
+          -0.18722932696060557
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.25,
+          0.75
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.08,
+        "liquidity_filter": "strict",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.25-0.75，T-18-24，模型 edge 至少 0.08，只在中等不确定性且价位合适时交易，点差 <=8c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.08,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 34,
+          "active_event_dates": 9,
+          "active_city_days": 23,
+          "cost": 184.0,
+          "pnl": 56.0,
+          "roi": 0.30434782608695654,
+          "win_rate": 0.7058823529411765,
+          "avg_entry_price": 0.5411764705882353,
+          "avg_abs_edge": 0.20139705882352943,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -4.199999999999999,
+          "top5_removed_roi": -0.04988123515439429,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 203,
+          "active_event_dates": 10,
+          "active_city_days": 121,
+          "cost": 1092.5,
+          "pnl": 87.5,
+          "roi": 0.08009153318077804,
+          "win_rate": 0.5812807881773399,
+          "avg_entry_price": 0.5381773399014779,
+          "avg_abs_edge": 0.19414334975369457,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -19.650000000000013,
+          "top5_removed_roi": -0.03932752927048937,
+          "worst_day_pnl": -17.000000000000007
+        },
+        "excess_roi": 0.2242562929061785,
+        "roi_ci95_cluster_by_event_date": [
+          0.06981907798932241,
+          0.5392488979817746
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.03592153670323612,
+          0.482156955077102
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.08,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 29,
+          "active_event_dates": 9,
+          "active_city_days": 19,
+          "cost": 151.5,
+          "pnl": -51.5,
+          "roi": -0.33993399339933994,
+          "win_rate": 0.3448275862068966,
+          "avg_entry_price": 0.5224137931034483,
+          "avg_abs_edge": 0.23957931034482757,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -56.45,
+          "top5_removed_roi": -0.585277345775013,
+          "worst_day_pnl": -20.3
+        },
+        "baseline": {
+          "rows": 296,
+          "active_event_dates": 10,
+          "active_city_days": 169,
+          "cost": 1626.795,
+          "pnl": -116.795,
+          "roi": -0.07179454079954757,
+          "win_rate": 0.5101351351351351,
+          "avg_entry_price": 0.5495929054054054,
+          "avg_abs_edge": 0.15575844594594596,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -152.59,
+          "top5_removed_roi": -0.19252072319862729,
+          "worst_day_pnl": -48.9
+        },
+        "excess_roi": -0.2681394525997924,
+        "roi_ci95_cluster_by_event_date": [
+          -0.6352942475616253,
+          0.09141263098947315
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.5726397607600994,
+          0.11398729764988584
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.1,
+        "liquidity_filter": "mild",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.10，只在中等不确定性且价位合适时交易，点差 <=15c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 33,
+          "active_event_dates": 9,
+          "active_city_days": 21,
+          "cost": 190.65,
+          "pnl": 59.35,
+          "roi": 0.3113034356150013,
+          "win_rate": 0.7575757575757576,
+          "avg_entry_price": 0.5777272727272728,
+          "avg_abs_edge": 0.21287272727272727,
+          "top5_event_dates": [
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -5.800000000000001,
+          "top5_removed_roi": -0.10394265232974913,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 246,
+          "active_event_dates": 10,
+          "active_city_days": 126,
+          "cost": 1338.21,
+          "pnl": 121.79,
+          "roi": 0.09100963226997258,
+          "win_rate": 0.5934959349593496,
+          "avg_entry_price": 0.5439878048780488,
+          "avg_abs_edge": 0.1894239837398374,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -3.1000000000000045,
+          "top5_removed_roi": -0.0046055563809240885,
+          "worst_day_pnl": -20.25
+        },
+        "excess_roi": 0.2202938033450287,
+        "roi_ci95_cluster_by_event_date": [
+          0.058690610311640815,
+          0.5827349516398278
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.038893313633830445,
+          0.4515376897317761
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 32,
+          "active_event_dates": 9,
+          "active_city_days": 18,
+          "cost": 167.6,
+          "pnl": -47.6,
+          "roi": -0.2840095465393795,
+          "win_rate": 0.375,
+          "avg_entry_price": 0.52375,
+          "avg_abs_edge": 0.246234375,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -52.8,
+          "top5_removed_roi": -0.5136186770428015,
+          "worst_day_pnl": -16.25
+        },
+        "baseline": {
+          "rows": 349,
+          "active_event_dates": 10,
+          "active_city_days": 183,
+          "cost": 1934.7450000000001,
+          "pnl": -74.745,
+          "roi": -0.03863299814704264,
+          "win_rate": 0.5329512893982808,
+          "avg_entry_price": 0.5543681948424068,
+          "avg_abs_edge": 0.1537842406876791,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -158.69,
+          "top5_removed_roi": -0.16552796002878928,
+          "worst_day_pnl": -45.949999999999996
+        },
+        "excess_roi": -0.24537654839233686,
+        "roi_ci95_cluster_by_event_date": [
+          -0.6327056948119054,
+          0.10236039301635375
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.60014709972121,
+          0.1043836153599852
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "BUY_YES",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.05,
+        "liquidity_filter": "none",
+        "eligible_mode": "no_filter",
+        "forecast_regime": "low_uncertainty_allowed"
+      },
+      "human_readable_idea": "只买 YES，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.05，只在低不确定性时交易，不加盘口过滤，不使用旧 eligible 硬门",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "none",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "low_uncertainty_allowed"
+        },
+        "selected": {
+          "rows": 57,
+          "active_event_dates": 20,
+          "active_city_days": 56,
+          "cost": 205.145,
+          "pnl": 64.855,
+          "roi": 0.3161422408540301,
+          "win_rate": 0.47368421052631576,
+          "avg_entry_price": 0.35990350877192984,
+          "avg_abs_edge": 0.22462631578947367,
+          "top5_event_dates": [
+            "2026-05-13",
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -10.085000000000003,
+          "top5_removed_roi": -0.07199200485419568,
+          "worst_day_pnl": -10.65
+        },
+        "baseline": {
+          "rows": 297,
+          "active_event_dates": 22,
+          "active_city_days": 251,
+          "cost": 948.865,
+          "pnl": 91.135,
+          "roi": 0.09604632903521576,
+          "win_rate": 0.3501683501683502,
+          "avg_entry_price": 0.319483164983165,
+          "avg_abs_edge": 0.13537407407407406,
+          "top5_event_dates": [
+            "2026-05-21",
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -49.855000000000004,
+          "top5_removed_roi": -0.0767171138176978,
+          "worst_day_pnl": -30.5
+        },
+        "excess_roi": 0.22009591181881433,
+        "roi_ci95_cluster_by_event_date": [
+          -0.05190794596400067,
+          0.7153828452181072
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.08983997049715836,
+          0.5392790111820855
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.05,
+          "liquidity_filter": "none",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "low_uncertainty_allowed"
+        },
+        "selected": {
+          "rows": 20,
+          "active_event_dates": 9,
+          "active_city_days": 20,
+          "cost": 73.28999999999999,
+          "pnl": -13.29,
+          "roi": -0.18133442488743348,
+          "win_rate": 0.3,
+          "avg_entry_price": 0.36645,
+          "avg_abs_edge": 0.18395,
+          "top5_event_dates": [
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-05",
+            "2026-06-07",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -33.089999999999996,
+          "top5_removed_roi": -1.0,
+          "worst_day_pnl": -15.65
+        },
+        "baseline": {
+          "rows": 106,
+          "active_event_dates": 10,
+          "active_city_days": 92,
+          "cost": 356.64,
+          "pnl": -66.64,
+          "roi": -0.18685509196949304,
+          "win_rate": 0.27358490566037735,
+          "avg_entry_price": 0.3364528301886793,
+          "avg_abs_edge": 0.12513584905660377,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-07"
+          ],
+          "top5_removed_pnl": -102.35,
+          "top5_removed_roi": -0.5321029373537821,
+          "worst_day_pnl": -35.0
+        },
+        "excess_roi": 0.0055206670820595605,
+        "roi_ci95_cluster_by_event_date": [
+          -0.6971532404603271,
+          0.4064747069887639
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.5347290716706593,
+          0.5860733725997931
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.1,
+        "liquidity_filter": "strict",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.10，只在中等不确定性且价位合适时交易，点差 <=8c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 33,
+          "active_event_dates": 9,
+          "active_city_days": 21,
+          "cost": 190.65,
+          "pnl": 59.35,
+          "roi": 0.3113034356150013,
+          "win_rate": 0.7575757575757576,
+          "avg_entry_price": 0.5777272727272728,
+          "avg_abs_edge": 0.21287272727272727,
+          "top5_event_dates": [
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -5.800000000000001,
+          "top5_removed_roi": -0.10394265232974913,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 236,
+          "active_event_dates": 10,
+          "active_city_days": 124,
+          "cost": 1281.76,
+          "pnl": 118.24,
+          "roi": 0.0922481587816752,
+          "win_rate": 0.5932203389830508,
+          "avg_entry_price": 0.5431186440677965,
+          "avg_abs_edge": 0.18937457627118645,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": 4.149999999999995,
+          "top5_removed_roi": 0.006526696547927961,
+          "worst_day_pnl": -17.15
+        },
+        "excess_roi": 0.2190552768333261,
+        "roi_ci95_cluster_by_event_date": [
+          0.052251027534223365,
+          0.5659664474750317
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.059836282867357746,
+          0.45784687529130486
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.1,
+          "liquidity_filter": "strict",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 32,
+          "active_event_dates": 9,
+          "active_city_days": 18,
+          "cost": 167.6,
+          "pnl": -47.6,
+          "roi": -0.2840095465393795,
+          "win_rate": 0.375,
+          "avg_entry_price": 0.52375,
+          "avg_abs_edge": 0.246234375,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -52.8,
+          "top5_removed_roi": -0.5136186770428015,
+          "worst_day_pnl": -16.25
+        },
+        "baseline": {
+          "rows": 335,
+          "active_event_dates": 10,
+          "active_city_days": 178,
+          "cost": 1844.895,
+          "pnl": -64.89500000000001,
+          "roi": -0.035175443588930544,
+          "win_rate": 0.5313432835820896,
+          "avg_entry_price": 0.5507149253731343,
+          "avg_abs_edge": 0.15422238805970148,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -153.64000000000001,
+          "top5_removed_roi": -0.1681625147760606,
+          "worst_day_pnl": -44.35
+        },
+        "excess_roi": -0.24883410295044894,
+        "roi_ci95_cluster_by_event_date": [
+          -0.645965570363001,
+          0.06742242952336285
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.6312728474328602,
+          0.07765181839222769
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.25,
+          0.75
+        ],
+        "side": "both",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.08,
+        "liquidity_filter": "mild",
+        "eligible_mode": "eligible_control",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "YES/NO 都允许，entry price 在 0.25-0.75，T-18-24，模型 edge 至少 0.08，只在中等不确定性且价位合适时交易，点差 <=15c，只看旧 eligible 对照",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.08,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 34,
+          "active_event_dates": 9,
+          "active_city_days": 23,
+          "cost": 184.0,
+          "pnl": 56.0,
+          "roi": 0.30434782608695654,
+          "win_rate": 0.7058823529411765,
+          "avg_entry_price": 0.5411764705882353,
+          "avg_abs_edge": 0.20139705882352943,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-24",
+            "2026-05-26",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -4.199999999999999,
+          "top5_removed_roi": -0.04988123515439429,
+          "worst_day_pnl": -6.15
+        },
+        "baseline": {
+          "rows": 212,
+          "active_event_dates": 10,
+          "active_city_days": 123,
+          "cost": 1141.4,
+          "pnl": 98.60000000000001,
+          "roi": 0.08638514105484493,
+          "win_rate": 0.5849056603773585,
+          "avg_entry_price": 0.5383962264150943,
+          "avg_abs_edge": 0.1942570754716981,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-24",
+            "2026-05-25",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -17.50000000000001,
+          "top5_removed_roi": -0.03255813953488374,
+          "worst_day_pnl": -20.100000000000005
+        },
+        "excess_roi": 0.2179626850321116,
+        "roi_ci95_cluster_by_event_date": [
+          0.05540436609666624,
+          0.5767387684443298
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.043004780212226576,
+          0.4888186541173136
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.25,
+            0.75
+          ],
+          "side": "both",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.08,
+          "liquidity_filter": "mild",
+          "eligible_mode": "eligible_control",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 29,
+          "active_event_dates": 9,
+          "active_city_days": 19,
+          "cost": 151.5,
+          "pnl": -51.5,
+          "roi": -0.33993399339933994,
+          "win_rate": 0.3448275862068966,
+          "avg_entry_price": 0.5224137931034483,
+          "avg_abs_edge": 0.23957931034482757,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -56.45,
+          "top5_removed_roi": -0.585277345775013,
+          "worst_day_pnl": -20.3
+        },
+        "baseline": {
+          "rows": 308,
+          "active_event_dates": 10,
+          "active_city_days": 175,
+          "cost": 1701.095,
+          "pnl": -121.095,
+          "roi": -0.07118650045999782,
+          "win_rate": 0.512987012987013,
+          "avg_entry_price": 0.5523035714285714,
+          "avg_abs_edge": 0.15539220779220778,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-08"
+          ],
+          "top5_removed_pnl": -149.69,
+          "top5_removed_roi": -0.18041678217165447,
+          "worst_day_pnl": -42.55
+        },
+        "excess_roi": -0.26874749293934214,
+        "roi_ci95_cluster_by_event_date": [
+          -0.6540263737877614,
+          0.030522886317205664
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.5717254015765143,
+          0.05149085913610079
+        ]
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    },
+    {
+      "rule": {
+        "price_band": [
+          0.2,
+          0.8
+        ],
+        "side": "BUY_YES",
+        "hour_bucket": "T-18-24",
+        "edge_threshold": 0.03,
+        "liquidity_filter": "mild",
+        "eligible_mode": "no_filter",
+        "forecast_regime": "medium_uncertainty_price_sensitive"
+      },
+      "human_readable_idea": "只买 YES，entry price 在 0.20-0.80，T-18-24，模型 edge 至少 0.03，只在中等不确定性且价位合适时交易，点差 <=15c，不使用旧 eligible 硬门",
+      "train": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "mild",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 30,
+          "active_event_dates": 10,
+          "active_city_days": 28,
+          "cost": 96.3,
+          "pnl": 43.7,
+          "roi": 0.45379023883696784,
+          "win_rate": 0.4666666666666667,
+          "avg_entry_price": 0.321,
+          "avg_abs_edge": 0.14499666666666666,
+          "top5_event_dates": [
+            "2026-05-20",
+            "2026-05-23",
+            "2026-05-24",
+            "2026-05-28",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -5.900000000000001,
+          "top5_removed_roi": -0.10554561717352418,
+          "worst_day_pnl": -7.750000000000001
+        },
+        "baseline": {
+          "rows": 165,
+          "active_event_dates": 10,
+          "active_city_days": 139,
+          "cost": 525.91,
+          "pnl": 124.09,
+          "roi": 0.23595291970108956,
+          "win_rate": 0.3939393939393939,
+          "avg_entry_price": 0.3187333333333333,
+          "avg_abs_edge": 0.13734666666666664,
+          "top5_event_dates": [
+            "2026-05-22",
+            "2026-05-23",
+            "2026-05-26",
+            "2026-05-27",
+            "2026-05-29"
+          ],
+          "top5_removed_pnl": -3.9900000000000055,
+          "top5_removed_roi": -0.014562575276469964,
+          "worst_day_pnl": -8.849999999999998
+        },
+        "excess_roi": 0.21783731913587828,
+        "roi_ci95_cluster_by_event_date": [
+          -0.028745579028555953,
+          1.0116839224686933
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.23252990062153367,
+          0.743972977527265
+        ]
+      },
+      "holdout": {
+        "rule": {
+          "price_band": [
+            0.2,
+            0.8
+          ],
+          "side": "BUY_YES",
+          "hour_bucket": "T-18-24",
+          "edge_threshold": 0.03,
+          "liquidity_filter": "mild",
+          "eligible_mode": "no_filter",
+          "forecast_regime": "medium_uncertainty_price_sensitive"
+        },
+        "selected": {
+          "rows": 13,
+          "active_event_dates": 9,
+          "active_city_days": 13,
+          "cost": 42.95,
+          "pnl": -32.95,
+          "roi": -0.7671711292200233,
+          "win_rate": 0.07692307692307693,
+          "avg_entry_price": 0.3303846153846154,
+          "avg_abs_edge": 0.2248923076923077,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-05-31",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04"
+          ],
+          "top5_removed_pnl": -28.6,
+          "top5_removed_roi": -1.0,
+          "worst_day_pnl": -13.1
+        },
+        "baseline": {
+          "rows": 104,
+          "active_event_dates": 10,
+          "active_city_days": 91,
+          "cost": 347.84,
+          "pnl": -57.839999999999996,
+          "roi": -0.16628334866605335,
+          "win_rate": 0.27884615384615385,
+          "avg_entry_price": 0.3344615384615385,
+          "avg_abs_edge": 0.12110384615384615,
+          "top5_event_dates": [
+            "2026-05-30",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-07"
+          ],
+          "top5_removed_pnl": -102.35,
+          "top5_removed_roi": -0.5321029373537821,
+          "worst_day_pnl": -35.0
+        },
+        "excess_roi": -0.60088778055397,
+        "roi_ci95_cluster_by_event_date": [
+          -1.0,
+          -0.12005579000071545
+        ],
+        "excess_roi_ci95_cluster_by_event_date": [
+          -0.881936213937517,
+          -0.17322322930586254
+        ]
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL",
+        "verdict": "inconclusive"
+      }
+    }
+  ],
+  "old_strategy_diagnostic": {
+    "v1_25_75_proxy": {
+      "rows": 976,
+      "active_event_dates": 33,
+      "active_city_days": 661,
+      "cost": 5625.04,
+      "pnl": 154.96,
+      "roi": 0.02754824854578812,
+      "win_rate": 0.5922131147540983,
+      "avg_entry_price": 0.5763360655737705,
+      "avg_abs_edge": 0.22218114754098361,
+      "top5_event_dates": [
+        "2026-05-14",
+        "2026-05-20",
+        "2026-05-23",
+        "2026-05-29",
+        "2026-06-03"
+      ],
+      "top5_removed_pnl": -99.33500000000004,
+      "top5_removed_roi": -0.02263099079928965,
+      "worst_day_pnl": -75.7
+    },
+    "side_band_proxy": {
+      "rows": 489,
+      "active_event_dates": 32,
+      "active_city_days": 411,
+      "cost": 2566.435,
+      "pnl": 163.565,
+      "roi": 0.06373237584431322,
+      "win_rate": 0.558282208588957,
+      "avg_entry_price": 0.5248333333333334,
+      "avg_abs_edge": 0.25216053169734154,
+      "top5_event_dates": [
+        "2026-05-13",
+        "2026-05-14",
+        "2026-05-24",
+        "2026-05-29",
+        "2026-06-03"
+      ],
+      "top5_removed_pnl": -0.2849999999999806,
+      "top5_removed_roi": -0.000140374380936657,
+      "worst_day_pnl": -36.25
+    },
+    "by_model_side": [
+      {
+        "selector": "v1_25_75_proxy",
+        "model_version": "ecmwf",
+        "side": "BUY_NO",
+        "rows": 470,
+        "active_event_dates": 32,
+        "active_city_days": 361,
+        "cost": 2965.93,
+        "pnl": 164.07000000000002,
+        "roi": 0.05531823070672606,
+        "win_rate": 0.6659574468085107,
+        "avg_entry_price": 0.6310489361702128,
+        "avg_abs_edge": 0.2219236170212766,
+        "top5_event_dates": [
+          "2026-05-13",
+          "2026-05-14",
+          "2026-05-16",
+          "2026-05-20",
+          "2026-05-23"
+        ],
+        "top5_removed_pnl": 9.554999999999986,
+        "top5_removed_roi": 0.0042458269364503394,
+        "worst_day_pnl": -48.1
+      },
+      {
+        "selector": "v1_25_75_proxy",
+        "model_version": "ecmwf",
+        "side": "BUY_YES",
+        "rows": 88,
+        "active_event_dates": 30,
+        "active_city_days": 87,
+        "cost": 291.8,
+        "pnl": -41.8,
+        "roi": -0.14324880054832076,
+        "win_rate": 0.2840909090909091,
+        "avg_entry_price": 0.3315909090909091,
+        "avg_abs_edge": 0.18531136363636366,
+        "top5_event_dates": [
+          "2026-05-22",
+          "2026-05-23",
+          "2026-05-27",
+          "2026-05-28",
+          "2026-05-29"
+        ],
+        "top5_removed_pnl": -101.6,
+        "top5_removed_roi": -0.45848375451263534,
+        "worst_day_pnl": -18.65
+      },
+      {
+        "selector": "v1_25_75_proxy",
+        "model_version": "gfs",
+        "side": "BUY_NO",
+        "rows": 337,
+        "active_event_dates": 33,
+        "active_city_days": 253,
+        "cost": 2089.285,
+        "pnl": -19.285000000000004,
+        "roi": -0.00923043050613009,
+        "win_rate": 0.6142433234421365,
+        "avg_entry_price": 0.61996587537092,
+        "avg_abs_edge": 0.2342175074183976,
+        "top5_event_dates": [
+          "2026-05-11",
+          "2026-05-14",
+          "2026-05-20",
+          "2026-05-22",
+          "2026-05-24"
+        ],
+        "top5_removed_pnl": -121.985,
+        "top5_removed_roi": -0.0716721945258037,
+        "worst_day_pnl": -26.8
+      },
+      {
+        "selector": "v1_25_75_proxy",
+        "model_version": "gfs",
+        "side": "BUY_YES",
+        "rows": 81,
+        "active_event_dates": 31,
+        "active_city_days": 75,
+        "cost": 278.025,
+        "pnl": 51.974999999999994,
+        "roi": 0.18694362017804153,
+        "win_rate": 0.4074074074074074,
+        "avg_entry_price": 0.34324074074074074,
+        "avg_abs_edge": 0.21365432098765433,
+        "top5_event_dates": [
+          "2026-05-10",
+          "2026-05-13",
+          "2026-05-25",
+          "2026-05-26",
+          "2026-05-29"
+        ],
+        "top5_removed_pnl": -21.425000000000004,
+        "top5_removed_roi": -0.10133617121910844,
+        "worst_day_pnl": -10.75
+      },
+      {
+        "selector": "side_band_proxy",
+        "model_version": "ecmwf",
+        "side": "BUY_NO",
+        "rows": 230,
+        "active_event_dates": 32,
+        "active_city_days": 212,
+        "cost": 1324.8,
+        "pnl": 115.20000000000002,
+        "roi": 0.08695652173913045,
+        "win_rate": 0.6260869565217392,
+        "avg_entry_price": 0.576,
+        "avg_abs_edge": 0.23543565217391305,
+        "top5_event_dates": [
+          "2026-05-06",
+          "2026-05-16",
+          "2026-05-23",
+          "2026-06-03",
+          "2026-06-04"
+        ],
+        "top5_removed_pnl": 3.750000000000006,
+        "top5_removed_roi": 0.003389830508474582,
+        "worst_day_pnl": -39.3
+      },
+      {
+        "selector": "side_band_proxy",
+        "model_version": "ecmwf",
+        "side": "BUY_YES",
+        "rows": 25,
+        "active_event_dates": 16,
+        "active_city_days": 25,
+        "cost": 70.1,
+        "pnl": -0.09999999999999654,
+        "roi": -0.0014265335235377537,
+        "win_rate": 0.28,
+        "avg_entry_price": 0.2804,
+        "avg_abs_edge": 0.302988,
+        "top5_event_dates": [
+          "2026-05-17",
+          "2026-05-28",
+          "2026-05-29",
+          "2026-06-01",
+          "2026-06-04"
+        ],
+        "top5_removed_pnl": -30.7,
+        "top5_removed_roi": -0.6055226824457594,
+        "worst_day_pnl": -7.6
+      },
+      {
+        "selector": "side_band_proxy",
+        "model_version": "gfs",
+        "side": "BUY_NO",
+        "rows": 186,
+        "active_event_dates": 31,
+        "active_city_days": 174,
+        "cost": 1034.55,
+        "pnl": -14.550000000000002,
+        "roi": -0.014064085834420766,
+        "win_rate": 0.5483870967741935,
+        "avg_entry_price": 0.5562096774193548,
+        "avg_abs_edge": 0.2517478494623656,
+        "top5_event_dates": [
+          "2026-05-08",
+          "2026-05-11",
+          "2026-05-14",
+          "2026-05-22",
+          "2026-05-24"
+        ],
+        "top5_removed_pnl": -110.0,
+        "top5_removed_roi": -0.13095238095238096,
+        "worst_day_pnl": -23.349999999999998
+      },
+      {
+        "selector": "side_band_proxy",
+        "model_version": "gfs",
+        "side": "BUY_YES",
+        "rows": 48,
+        "active_event_dates": 22,
+        "active_city_days": 46,
+        "cost": 136.98499999999999,
+        "pnl": 63.015,
+        "roi": 0.4600138701317663,
+        "win_rate": 0.4166666666666667,
+        "avg_entry_price": 0.28538541666666667,
+        "avg_abs_edge": 0.3074270833333333,
+        "top5_event_dates": [
+          "2026-05-23",
+          "2026-05-25",
+          "2026-05-26",
+          "2026-05-27",
+          "2026-05-29"
+        ],
+        "top5_removed_pnl": -8.175000000000002,
+        "top5_removed_roi": -0.092713354125319,
+        "worst_day_pnl": -7.54
+      }
+    ],
+    "definition": {
+      "v1_25_75_proxy": "decision_entry_price 0.25-0.75 and abs_edge>=0.10.",
+      "side_band_proxy": "BUY_YES 0.20-0.45 abs_edge>=0.20; BUY_NO 0.35-0.65 abs_edge>=0.10."
+    }
+  },
+  "live_instance_diagnostic": {
+    "gate_pass": true,
+    "instances": [
+      {
+        "strategy_instance": "mid_price_core_v1_25_75",
+        "fills": 482,
+        "settled_fills": 442,
+        "active_dates": 10,
+        "settled_cost": 1140.3319490000001,
+        "pnl": -116.39110900000001,
+        "roi": -0.10206774360927776,
+        "buy_yes_fills": 178,
+        "buy_no_fills": 304,
+        "min_target_date": "2026-06-01",
+        "max_target_date": "2026-06-10"
+      },
+      {
+        "strategy_instance": "mid_price_core_v1_side_band",
+        "fills": 145,
+        "settled_fills": 138,
+        "active_dates": 10,
+        "settled_cost": 336.30316,
+        "pnl": 10.765915000000003,
+        "roi": 0.032012530004178384,
+        "buy_yes_fills": 71,
+        "buy_no_fills": 74,
+        "min_target_date": "2026-06-01",
+        "max_target_date": "2026-06-10"
+      },
+      {
+        "strategy_instance": "mid_price_core_v2_25_75",
+        "fills": 88,
+        "settled_fills": 88,
+        "active_dates": 6,
+        "settled_cost": 221.373486,
+        "pnl": -53.61733,
+        "roi": -0.24220303419714861,
+        "buy_yes_fills": 50,
+        "buy_no_fills": 38,
+        "min_target_date": "2026-06-01",
+        "max_target_date": "2026-06-06"
+      }
+    ]
+  }
+}
