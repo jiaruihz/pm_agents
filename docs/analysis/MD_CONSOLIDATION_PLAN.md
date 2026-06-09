@@ -1,7 +1,7 @@
 # Weather Markdown Consolidation Plan
 
 Status: current-reference
-Updated: 2026-06-09 Phase 4A/4B
+Updated: 2026-06-10 Phase 4D model/market absorption
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; docs/analysis living docs
 
@@ -159,6 +159,17 @@ Not done in this phase:
 | `2026-06-09-range-rv-scanner-v0-1.md` | `market_structure_edge.md` | `duplicate` | Range RV v0 duplicate/variant, inconclusive. | Prefer positive v0.2 if retained. |
 | `2026-06-09-range-rv-positive-v0-2.md` | `market_structure_edge.md` | `active-evidence` | Positive profile test; no live PnL, no live action, `inconclusive`. | Extract as current range-RV evidence. |
 | `2026-06-09-range-rv-variant-lab-v0-3.md` | `market_structure_edge.md` | `active-evidence` | Broader pre-registered range-RV lab; decision proxy and orderbook subsets all fail final verdict, `inconclusive`. | Treat as newest range-RV negative evidence; no live action. |
+| `2026-06-09-range-rv-walkforward-v0-4.md` | `market_structure_edge.md` | `active-evidence` | Expanding-window selector failed significance/baseline/forward gates. | Extract as walk-forward negative evidence. |
+| `2026-06-09-range-rv-market-shape-v0-5.md` | `market_structure_edge.md` | `active-evidence` | Market-shape anomaly variants did not hold in holdout. | Extract as shape negative evidence. |
+| `2026-06-09-range-rv-temporal-reversion-v0-6.md` | `market_structure_edge.md` | `active-evidence` | Temporal reversion generated only 20 rows and failed gates. | Extract sample-thin negative evidence. |
+| `2026-06-09-range-rv-market-shape-fullop-v0-7.md` | `market_structure_edge.md` | `active-evidence` | Full-opportunity market-shape pass remained inconclusive. | Extract as latest shape evidence. |
+| `2026-06-09-range-rv-regime-v0-8.md` | `market_structure_edge.md` | `active-evidence` | Regime-conditioned variants failed all gates. | Extract regime negative evidence. |
+| `2026-06-09-range-rv-noarb-v0-9.md` | `market_structure_edge.md` | `superseded-evidence` | All-YES underround emerged as strongest family, but executable proof was incomplete in this pass. | Prefer robust v1.0 for current conclusion. |
+| `2026-06-09-range-rv-underround-robust-v1-0.md` | `market_structure_edge.md` | `active-evidence` | All-YES underround confirmed offline in proxy and executable orderbook thresholds. | Keep as primary market-structure candidate evidence. |
+| `2026-06-09-forecast-quality-range-rv-overlay.md` | `market_structure_edge.md` | `active-evidence` | Forecast-quality hard filters did not stably improve no-filter range baseline. | Extract as overlay caveat. |
+| `2026-06-09-forecast-first-adjacent-range-rv-v0-1.md` | `market_structure_edge.md` | `active-evidence` | Forecast-first adjacent2/3 range failed gates in proxy and orderbook. | Extract as adjacent-range negative evidence. |
+| `2026-06-09-center-shoulders-butterfly-range-rv.md` | `market_structure_edge.md` | `active-evidence` | Center/shoulder/butterfly structures were sample-limited and inconclusive. | Extract as shape-family negative evidence. |
+| `2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md` | `market_structure_edge.md` | `active-evidence` | Tail-fade/uncertainty baskets failed all gates. | Extract as tail-family negative evidence. |
 
 ### Handoff / Non-Weather / Misc
 
@@ -254,6 +265,36 @@ Not done in this phase:
 | `2026-05-30-performance-entry-band-research.md` | Side x price bucket framework is useful; stale DB and high decision-window missingness block live use. | `archive-ready-after-link-check` after fresh rerun exists |
 | `2026-05-30-performance-sizing-and-band-distribution.md` | EV-tier is risk leverage, Kelly overconcentrates, actual fill size inconsistency is first-order. | keep active methodology evidence until sizing report standard exists |
 | `2026-06-07-v1-ecmwf-blocked-side-band-overlay.md` | Blocked ECMWF side-band overlay supports shadow research, not direct live restoration. | keep for side-alpha/city absorption too |
+
+### `model_vs_market.md` absorbed on 2026-06-10
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-05-probability-calibration.md` | Raw model probability loses to market out of sample; small blend improvement is not confirmed alpha. | keep active calibration baseline |
+| `2026-06-07-mid-price-core-v1-raw-degradation.md` | Post-June raw edge degraded, especially low/mid edge buckets and ECMWF-heavy paths. | keep active degradation evidence |
+| `2026-06-07-mid-price-core-v1-raw-calibration-drift.md` | No clean code-version breakpoint was proven; breakpoint suspicion remains diagnostic only. | `archive-ready-after-link-check` after lineage rerun exists |
+| `2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | Timing, adverse market move, and forecast/version lineage overlap with model degradation. | keep active evidence; also owned by `entry_timing.md` |
+| `2026-06-08-city-model-conditional-edge.md` | City/model selected pockets have high point estimates but failed significance/baseline/forward gates. | keep active city/model caution |
+| `2026-06-09-model-rank-ic.md` | `model_edge_at_decision` rank alpha remains inconclusive; `model_side_prob` is not tradable edge by itself. | keep active rank-IC evidence |
+
+### `market_structure_edge.md` absorbed on 2026-06-10
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-08-market-structural-edge.md` | H_B structural BUY_NO/price-bucket edge is useful separation from model alpha but remains inconclusive. | keep active baseline evidence |
+| `2026-06-09-range-rv-positive-v0-2.md` | Adjacent positive profiles had encouraging point estimates but failed required gates. | `archive-ready-after-link-check` after v0.3/v1.0 links verified |
+| `2026-06-09-range-rv-variant-lab-v0-3.md` | Broad Range RV lab found no general adjacent/range/pair/center/tail rule ready for live. | keep active negative evidence |
+| `2026-06-09-range-rv-walkforward-v0-4.md` | Prior-date walk-forward selector did not pass the three-gate standard. | `archive-ready-after-link-check` |
+| `2026-06-09-range-rv-market-shape-v0-5.md` | Market-shape anomaly first pass failed holdout/forward gates. | `archive-ready-after-link-check` after fullop v0.7 retained |
+| `2026-06-09-range-rv-temporal-reversion-v0-6.md` | Temporal reversion sample was too thin and failed gates. | `archive-ready-after-link-check` |
+| `2026-06-09-range-rv-market-shape-fullop-v0-7.md` | Full-opportunity market-shape variants remained inconclusive. | keep active latest shape evidence |
+| `2026-06-09-range-rv-regime-v0-8.md` | Regime-conditioned Range RV variants failed gates. | `archive-ready-after-link-check` |
+| `2026-06-09-range-rv-noarb-v0-9.md` | All-YES underround emerged as strongest no-arb family, but robust v1.0 supersedes the current proof. | `archive-ready-after-link-check` after v1.0 retained |
+| `2026-06-09-range-rv-underround-robust-v1-0.md` | All-YES underround is `confirmed_offline` in both proxy and executable orderbook tests. | keep primary active evidence |
+| `2026-06-09-forecast-quality-range-rv-overlay.md` | Forecast-quality filters are soft stratification, not a stable hard filter. | keep active overlay caveat |
+| `2026-06-09-forecast-first-adjacent-range-rv-v0-1.md` | Forecast-first adjacent2/3 range tests failed proxy/orderbook gates. | `archive-ready-after-link-check` |
+| `2026-06-09-center-shoulders-butterfly-range-rv.md` | Center/shoulder/butterfly structures are sample-limited and inconclusive. | `archive-ready-after-link-check` |
+| `2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md` | Tail-fade/uncertainty baskets failed all gates. | `archive-ready-after-link-check` |
 
 ## Hard Rules For Later Moves
 
