@@ -1,11 +1,11 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-06-10 M3 observed-max strategy notes added
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-06-09
+更新时间：2026-06-10
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -162,6 +162,9 @@ Status 口径：
 | [2026-06-10-shadow-paper-queue-v0.md](analysis/2026-06/2026-06-10-shadow-paper-queue-v0.md) | `snapshot` | yes | Shadow/Paper Queue v0：把 forecast-quality adjacent3、side-band tags、blended paper baseline、all-YES engineering shadow、April backfill 分层排队；live 队列为空 |
 | [2026-06-10-hybrid-adjacent3-single-v0.md](analysis/2026-06/2026-06-10-hybrid-adjacent3-single-v0.md) | `snapshot` | yes | Hybrid adjacent3 + single / outside NO v0：验证单腿多为 adjacent3 内重复加注，outside NO 固定口径未触发；当前三门不过 |
 | [2026-06-10-live-test-readiness-scoreboard-v0.md](analysis/2026-06/2026-06-10-live-test-readiness-scoreboard-v0.md) | `snapshot` | yes | Live-test readiness 总表：当前无真钱 live 候选；冻结 `forecast_quality_medium_adjacent3_shadow_v0` 为主 shadow 规则和硬门 |
+| [2026-06-10-m3-observed-max-strategy-handoff.md](analysis/2026-06/2026-06-10-m3-observed-max-strategy-handoff.md) | `snapshot` | yes | M3 傍晚已观测最高温策略原始交接稿：旧 forecast-only 路线为何失败、M3 物理假设和验证纪律 |
+| [2026-06-10-m3-observed-max-strategy-plan.md](analysis/2026-06/2026-06-10-m3-observed-max-strategy-plan.md) | `design-draft` | yes | M3 结合当前 live/edge-engine 现状后的执行规划：先补 observed running max 事实层和物理残差实验，不改 live |
+| [2026-06-10-m3-observed-max-residual-v0.md](analysis/2026-06/2026-06-10-m3-observed-max-residual-v0.md) | `snapshot` | yes | M3 P2 物理残差实验 v0：49 城 WU 缓存显示当地 19:00 后 P95 residual 为 0°C，下一步做 bad-case 事前过滤 |
 | [2026-06-10-adjacent3-quality-matched-baseline-v0.md](analysis/2026-06/2026-06-10-adjacent3-quality-matched-baseline-v0.md) | `snapshot` | yes | Adjacent3 medium_quality matched baseline：eligible 主口径下 same-cost random baseline 几乎无匹配，holdout 不支持 live |
 | [2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md](analysis/2026-06/2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md) | `snapshot` | yes | Opportunity fact 扩样覆盖审计：两年天气缓存不能直接当交易样本；关键缺口是历史 decision-time 市场行情/盘口进入 fact_signal_candidates |
 | [2026-06-10-april-historical-opportunity-mapping-audit-v0.md](analysis/2026-06/2026-06-10-april-historical-opportunity-mapping-audit-v0.md) | `snapshot` | yes | April historical opportunity mapping 审计：gamma/clob token 映射和 T-24 price proxy 可做原型，但缺 settlement/model probability/orderbook，不能直接算 ROI |

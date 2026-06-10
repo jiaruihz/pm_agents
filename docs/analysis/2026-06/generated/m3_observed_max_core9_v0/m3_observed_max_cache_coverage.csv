@@ -1,0 +1,10 @@
+city,icao,timezone,cache_path,cache_exists,input_rows,usable_days,output_rows
+LA,KLAX,America/Los_Angeles,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_KLAX.csv,True,21274,736,2944
+London,EGLL,Europe/London,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_EGLL.csv,True,35266,735,2940
+Miami,KMIA,America/New_York,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_KMIA.csv,True,19899,735,2940
+NYC,KLGA,America/New_York,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_KLGA.csv,True,20184,735,2940
+Shanghai,ZSPD,Asia/Shanghai,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_ZSPD.csv,True,36052,736,2944
+Tokyo,RJTT,Asia/Tokyo,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_RJTT.csv,True,36828,736,2944
+Warsaw,EPWA,Europe/Warsaw,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_EPWA.csv,True,35252,735,2940
+Boston,KBOS,America/New_York,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_KBOS.csv,True,20956,735,2940
+Phoenix,KPHX,America/Phoenix,runtime/weather_edge_v1/market_data/cache/wu_obs/wu_obs_KPHX.csv,True,18190,735,2940
