@@ -1,7 +1,7 @@
 # Weather Markdown Consolidation Plan
 
 Status: current-reference
-Updated: 2026-06-10 Phase 4D blender absorption
+Updated: 2026-06-10 Phase 4D side/city/M3 absorption
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; docs/analysis living docs
 
@@ -51,6 +51,7 @@ Not done in this phase:
 | `entry_timing.md` | entry timing edge, strict vs wide window, city x entry timing, timing baseline, timing plan |
 | `side_alpha.md` | side-band entry analysis, side-band alpha summary, side-band timing impact |
 | `city_selection.md` | city pool contribution, city pool side strategy, city-day basket family, city/model conditional edge |
+| `observed_max_m3.md` | M3 observed running max handoff, plan, residual physical-layer experiment |
 | `sizing_entry_band.md` | entry band research, sizing and band distribution |
 | `blender_shadow.md` | blender backtests, overlays, edge v2 shadow, filtered operational base |
 | `live_performance.md` | live full research, live period slices, PnL curves, recent loss attribution, three strategy instances |
@@ -310,6 +311,40 @@ Not done in this phase:
 | `2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | City/time controls explain more June degradation; blender is marginally negative after new operational base. | keep active control evidence |
 | `2026-06-08-weather-edge-v2-shadow-lineage.md` | Edge v2 lineage is shadow/offline artifact; do not read it as live trading result. | keep active lineage evidence |
 | `2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | Edge v2/basket candidates need separate top5, forward, capacity, and execution gates; do not merge with blender hard-gate approval. | keep active edge-engine evidence |
+
+### `side_alpha.md` absorbed on 2026-06-10
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-04-performance-side-band-entry-analysis.md` | Early side-band entry-band shape is useful, but pre-near-binary caveats and attribution issues make it secondary. | `archive-ready-after-link-check` as superseded evidence |
+| `2026-06-07-v1-ecmwf-blocked-side-band-overlay.md` | Side-band would reduce losses in blocked ECMWF city fills, but it is an overlay and still shadow-only. | keep active cross-owner evidence |
+| `2026-06-08-performance-side-band-alpha-summary.md` | Early side-band live PnL was positive but small, concentrated, and not enough for size expansion. | keep active side-band live snapshot |
+| `2026-06-08-side-band-entry-timing-impact.md` | Side-band timing differs from v1; do not transplant v1 timing cuts mechanically. | keep active timing/side evidence |
+| `2026-06-10-side-band-forecast-regime-v0.md` | Full-opportunity clean side-band + forecast-regime test failed significance/baseline/forward gates. | keep active current side-band evidence |
+| `2026-06-10-side-band-mechanism-attribution-v1.md` | Side-band gains look like side/price/date concentration rather than stable reusable alpha; all selectors remain inconclusive. | keep active mechanism evidence |
+| `2026-06-10-weather-strategy-live-test-selection.md` | Side-band is not a real live-test candidate in the current scoreboard. | keep active synthesis evidence |
+| `2026-06-10-shadow-paper-queue-v0.md` | Side-band remains tag-only shadow, not paper/live queue. | keep active queue evidence |
+
+### `city_selection.md` absorbed on 2026-06-10
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-06-city-alpha-framework.md` | Numeric city ranks are invalidated by old near-binary `missing_bracket`, but the target metric framework remains useful. | `archive-ready-after-link-check` as invalidated numbers |
+| `2026-06-06-near-binary-city-reanalysis.md` | Post-fix city evidence points to city x side x strategy_instance, not whole-city ROI. | keep active city correction evidence |
+| `2026-06-08-city-day-basket-research-state-and-plan.md` | Basket remains research/shadow; first rerun on filtered operational base before canary. | keep active basket handoff |
+| `2026-06-08-city-day-basket-vs-legacy-baselines.md` | Basket/combos can show headline gains, but recent/top5 stress still blocks production. | keep active basket baseline evidence |
+| `2026-06-08-city-day-basket-walkforward.md` | Train-selected basket rules do not yet beat simple always-on baselines in unseen windows. | keep active anti-overfit evidence |
+| `2026-06-08-city-day-distribution-quality.md` | Market-normalized distribution remains the safer basket objective anchor in holdout/recent slices. | keep active distribution evidence |
+| `2026-06-10-weather-strategy-live-test-selection.md` | No new real live-test candidate; adjacent3 only enters shadow/paper observation. | keep active synthesis evidence |
+| `2026-06-10-live-test-readiness-scoreboard-v0.md` | Readiness scoreboard freezes adjacent3 shadow and defers all live scheduling. | keep active readiness evidence |
+
+### `observed_max_m3.md` absorbed on 2026-06-10
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-10-m3-observed-max-strategy-handoff.md` | M3 is a new observed-running-max information structure; external claims need local reproduction. | keep active framing evidence |
+| `2026-06-10-m3-observed-max-strategy-plan.md` | M3 must start with fact layer and physical residual gates; no live/paper config change. | keep active design evidence |
+| `2026-06-10-m3-observed-max-residual-v0.md` | 19:00+ local observed-max residual passes the first physical candidate gate, but market/execution gates are untouched. | keep active physical evidence |
 
 ## Hard Rules For Later Moves
 

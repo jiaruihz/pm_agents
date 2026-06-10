@@ -1,7 +1,7 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-10 M3 observed-max strategy notes added
+Updated: 2026-06-10 analysis living docs absorbed
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -111,6 +111,7 @@ Status 口径：
 | [entry_timing.md](analysis/entry_timing.md) | `current-reference` | [3] | target-date lead time、forecast checkpoint、decision window 对计划和成交的影响 |
 | [side_alpha.md](analysis/side_alpha.md) | `current-reference` | [2] | BUY_NO / BUY_YES、side-band 是否有持久超额，而不是单纯 win-rate |
 | [city_selection.md](analysis/city_selection.md) | `current-reference` | [3] | 城市池、city-day basket、城市 x model x side 选择证据；live 事实仍以 CITY_POOL_DECISIONS 为准 |
+| [observed_max_m3.md](analysis/observed_max_m3.md) | `current-reference` | [0]-[2] | M3 傍晚已观测 running max 物理层研究；当前只是 physical_candidate，不是 live/paper/shadow 交易规则 |
 | [sizing_entry_band.md](analysis/sizing_entry_band.md) | `current-reference` | [3] | 仓位、entry price band、side-specific band 是否改善风险调整后的 executable edge |
 | [blender_shadow.md](analysis/blender_shadow.md) | `current-reference` | [1] | blender / edge-engine 字段作为 shadow、paper 或 sizing signal 是否有价值 |
 | [live_performance.md](analysis/live_performance.md) | `current-reference` | [5][6] | live 策略绩效曲线、strategy_instance 归因、settled/open/quasi-settled 拆分 |
