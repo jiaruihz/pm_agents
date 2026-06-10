@@ -1,0 +1,282 @@
+{
+  "generated_at_utc": "2026-06-10T01:39:13.796176+00:00",
+  "git_sha": "b164755",
+  "db": {
+    "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_last_modified_utc": "2026-06-09T17:38:04.156943+00:00",
+    "max_fact_built_at_utc": "2026-06-09T17:37:40.513320+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "n": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1147
+      },
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": null,
+        "n": 232
+      },
+      {
+        "settlement_status": "settled",
+        "n": 5241
+      }
+    ],
+    "candidate_coverage": {
+      "rows": 25117,
+      "eligible": 8306,
+      "paper_ordered": 3139,
+      "live_filled": 554
+    },
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ],
+    "fact_signal_candidates_range": {
+      "min_event_date": "2026-05-05",
+      "max_event_date": "2026-06-10",
+      "event_dates": 37,
+      "rows": 25117
+    }
+  },
+  "queue": {
+    "policy": {
+      "live_now": [],
+      "primary_shadow": [
+        "forecast_quality_medium_adjacent3_shadow_v0"
+      ],
+      "paper_now": [
+        "blended_single_leg_paper_profiles"
+      ],
+      "shadow_tags": [
+        "side_band_mechanism_shadow_tags_v1",
+        "single_high_conviction_yes_fallback"
+      ],
+      "engineering_shadow": [
+        "all_yes_underround_engineering_shadow"
+      ],
+      "data_backfill": [
+        "april_historical_opportunity_backfill"
+      ]
+    },
+    "candidates": [
+      {
+        "queue_id": "forecast_quality_medium_adjacent3_shadow_v0",
+        "family": "forecast_first_range_rv",
+        "mode": "shadow_primary",
+        "can_run_now": true,
+        "live_allowed_now": false,
+        "paper_allowed_now": false,
+        "reason_human": "非 all-YES 里最像天气预测核心策略：模型分布很集中时观察 mode 附近三档 YES。但 matched baseline/holdout 仍不过，只能 shadow。",
+        "current_gates": {
+          "significance": "FAIL",
+          "baseline": "FAIL_OR_NA",
+          "forward": "FAIL"
+        },
+        "run_command": "python3 scripts/analysis/market_structure_edge/research_adjacent3_quality_shadow_journal_v0.py",
+        "evidence": [
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-adjacent3-quality-shadow-journal-v0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-09T18:14:37.472371+00:00"
+          },
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-adjacent3-quality-matched-baseline-v0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-09T18:47:32.567860+00:00"
+          },
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-live-test-readiness-scoreboard-v0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-09T18:48:31.947841+00:00"
+          }
+        ],
+        "promotion_requirements": [
+          ">=30 forward event_dates",
+          ">=100 settled shadow decisions",
+          ">=50 full orderbook matched decisions",
+          "decision proxy cluster CI lower > 0",
+          "orderbook taker cluster CI lower > 0",
+          "matched baseline excess CI lower > 0",
+          "top5 removed orderbook ROI > 0",
+          "all orderbook_snapshot_ts_utc <= decision_snapshot_ts_utc"
+        ]
+      },
+      {
+        "queue_id": "side_band_mechanism_shadow_tags_v1",
+        "family": "side_band",
+        "mode": "shadow_tag_only",
+        "can_run_now": true,
+        "live_allowed_now": false,
+        "paper_allowed_now": false,
+        "reason_human": "早期真钱赚过是真的，但机制归因显示收益依赖少数日期和 side/price 形态；适合继续打 tag 观察，不适合独立 paper/live。",
+        "current_gates": {
+          "significance": "FAIL",
+          "baseline": "FAIL",
+          "forward": "FAIL"
+        },
+        "run_command": "python3 scripts/analysis/side_alpha/research_side_band_mechanism_attribution_v1.py",
+        "evidence": [
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-side-band-mechanism-attribution-v1.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-10T01:36:01.269465+00:00"
+          },
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-side-band-forecast-regime-v0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-09T17:54:29.692687+00:00"
+          }
+        ],
+        "promotion_requirements": [
+          "预注册新 selector，不复用本轮 holdout 调参",
+          "top5 removed ROI > 0",
+          "matched same side/hour/price baseline excess CI lower > 0",
+          "forward dates >=30"
+        ]
+      },
+      {
+        "queue_id": "blended_single_leg_paper_profiles",
+        "family": "single_leg_blended_baselines",
+        "mode": "paper_baseline",
+        "can_run_now": true,
+        "live_allowed_now": false,
+        "paper_allowed_now": true,
+        "reason_human": "已有 ops paper profiles，可作为低成本对照组继续跑；它不是当前 live 候选，主要用于比较 adjacent3/side-band 是否真的有增量。",
+        "current_gates": {
+          "significance": "NA",
+          "baseline": "NA",
+          "forward": "NA"
+        },
+        "run_command": "scripts/ops/weather_blended_shadow_paper_loop.sh",
+        "evidence": [
+          {
+            "path": "scripts/ops/weather_blended_shadow_paper.py",
+            "exists": true,
+            "last_modified_utc": "2026-06-07T16:25:45.363428+00:00"
+          },
+          {
+            "path": "scripts/ops/weather_blended_shadow_paper_loop.sh",
+            "exists": true,
+            "last_modified_utc": "2026-06-05T18:49:16.521996+00:00"
+          }
+        ],
+        "promotion_requirements": [
+          "只作为 baseline/paper，不从该队列直接晋级 live",
+          "与 primary shadow 使用同一日期窗口对比"
+        ]
+      },
+      {
+        "queue_id": "all_yes_underround_engineering_shadow",
+        "family": "model_free_underround",
+        "mode": "engineering_shadow_deferred",
+        "can_run_now": true,
+        "live_allowed_now": false,
+        "paper_allowed_now": false,
+        "reason_human": "统计三门通过，但用户已明确 all-YES 暂不实盘；只能做工程 shadow：多腿 partial fill、滑点、手续费、unwind 仿真。",
+        "current_gates": {
+          "significance": "PASS",
+          "baseline": "PASS",
+          "forward": "PASS"
+        },
+        "run_command": "none yet; requires dedicated basket execution simulator",
+        "evidence": [
+          {
+            "path": "docs/analysis/2026-06/2026-06-09-range-rv-underround-robust-v1-0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-09T02:15:57.853781+00:00"
+          },
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-live-test-readiness-scoreboard-v0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-09T18:48:31.947841+00:00"
+          }
+        ],
+        "promotion_requirements": [
+          "user explicitly re-allows all-YES live consideration",
+          "basket execution simulator with partial fill unwind",
+          "fee/slippage stress remains positive"
+        ]
+      },
+      {
+        "queue_id": "single_high_conviction_yes_fallback",
+        "family": "single_leg_fallback",
+        "mode": "fallback_shadow_only",
+        "can_run_now": true,
+        "live_allowed_now": false,
+        "paper_allowed_now": false,
+        "reason_human": "99%+ 与 adjacent3 重叠，不是独立策略；只在 adjacent3 三腿太贵或缺腿时记录 fallback。",
+        "current_gates": {
+          "significance": "FAIL",
+          "baseline": "FAIL",
+          "forward": "FAIL"
+        },
+        "run_command": "covered by hybrid adjacent3/single research; no standalone loop",
+        "evidence": [
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-hybrid-adjacent3-single-v0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-09T18:27:54.176165+00:00"
+          }
+        ],
+        "promotion_requirements": [
+          "必须证明不是 adjacent3 的重复加注",
+          "same cost/same market baseline excess CI lower > 0"
+        ]
+      },
+      {
+        "queue_id": "april_historical_opportunity_backfill",
+        "family": "data_expansion",
+        "mode": "backfill_input",
+        "can_run_now": true,
+        "live_allowed_now": false,
+        "paper_allowed_now": false,
+        "reason_human": "这是扩样数据工程，不是策略。已经能生成 April decision price preview；下一步补 model_p_yes/final_yes/orderbook proxy 后，才能回测 shadow 候选。",
+        "current_gates": {
+          "significance": "NA",
+          "baseline": "NA",
+          "forward": "NA"
+        },
+        "run_command": "python3 scripts/analysis/market_structure_edge/build_april_historical_opportunity_preview_v0.py",
+        "evidence": [
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-april-historical-opportunity-preview-v0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-10T01:34:20.749494+00:00"
+          },
+          {
+            "path": "docs/analysis/2026-06/2026-06-10-april-historical-opportunity-mapping-audit-v0.md",
+            "exists": true,
+            "last_modified_utc": "2026-06-10T01:27:35.797597+00:00"
+          }
+        ],
+        "promotion_requirements": [
+          "join historical forecast probability to model_p_yes",
+          "join April settlement to final_yes",
+          "define executable cost proxy or orderbook depth availability",
+          "materialize into fact_signal_candidates-compatible table"
+        ]
+      }
+    ],
+    "live_promotion_rule": "A queue item can enter live scheduling only after significance/baseline/forward PASS, execution coverage is time-aligned, top5 stress is positive, and user explicitly approves live scheduling."
+  }
+}
