@@ -1,7 +1,7 @@
 # Weather Markdown Consolidation Plan
 
 Status: current-reference
-Updated: 2026-06-11 Phase 4C batch-01
+Updated: 2026-06-11 Phase 4D batch-02
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; docs/analysis living docs
 
@@ -323,6 +323,33 @@ Not done in this phase:
 | `2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | City/time controls explain more June degradation; blender is marginally negative after new operational base. | keep active control evidence |
 | `2026-06-08-weather-edge-v2-shadow-lineage.md` | Edge v2 lineage is shadow/offline artifact; do not read it as live trading result. | keep active lineage evidence |
 | `2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | Edge v2/basket candidates need separate top5, forward, capacity, and execution gates; do not merge with blender hard-gate approval. | keep active edge-engine evidence |
+
+### `model_vs_market.md` absorbed on 2026-06-11 batch-02
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-05-probability-calibration.md` | Raw model probability loses to market probability out of sample; blend uplift remains small and context-sensitive. | keep active calibration baseline |
+| `2026-06-07-mid-price-core-v1-raw-degradation.md` | Post-June raw-edge deterioration likely from timing/execution/city-model drift mix; keep as active degradation evidence. | keep active degradation evidence |
+| `2026-06-07-mid-price-core-v1-raw-calibration-drift.md` | No clean code-version breakpoint proven; breakpoint should remain hypothesis until rerun with updated lineage. | `archive-ready-after-link-check` |
+| `2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | Timing/adverse-market pathway is now coupled with `entry_timing.md`; model doc only retains residual-quality claim. | `link-to-entry-timing` |
+| `2026-06-08-city-model-conditional-edge.md` | Conditional city-model pockets remain high-variance and fail significance / forward gate; no live allowlist. | keep active city/model caution |
+| `2026-06-09-model-rank-ic.md` | Rank-IC remains non-actionable for live; `model_side_prob` is not a standalone tradable edge. | keep active rank-IC evidence |
+| `2026-06-08-blender-signal-value-research.md` | Blender hard-gate claims are owned by `blender_shadow.md` and retained here only as cross-domain caution. | `cross-owner-reference` |
+
+### `blender_shadow.md` absorbed on 2026-06-11 batch-02
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-06-blended-single-v0-backtest.md` | Early blended single backtest is historical search and pre-near-binary only. | `archive-ready-after-link-check` |
+| `2026-06-06-blended-entry-band-backtest.md` | Early blended entry-band result is superseded by corrected fact-table-backed runs. | `archive-ready-after-link-check` |
+| `2026-06-06-blended-paper-fill-estimate.md` | Paper-only fill estimate is not live-real authority. | `archive-ready-after-link-check` |
+| `2026-06-07-blended-live-instance-overlay.md` | Recent positive but pre-recent negative split means drift-sensitive overlay, not global hard gate. | keep active overlay evidence |
+| `2026-06-07-blended-paper-fill-estimate.md` | Paper-fill estimate remains proxy; live-real execution recovery remains required. | `archive-ready-after-link-check` |
+| `2026-06-08-blender-research-state-and-next-plan.md` | Direction stays in lineage/risk/sizing shadow track; no live hard gate yet. | keep active state handoff |
+| `2026-06-08-blender-signal-value-research.md` | Hard gates can improve ROI optics while reducing net PnL in base-corrected windows. | keep active signal-value evidence |
+| `2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | City/time controls dominate; blender hard thresholds remain marginally negative after base updates. | keep active control evidence |
+| `2026-06-08-weather-edge-v2-shadow-lineage.md` | V2 lineage fields are shadow-only and require independent criteria before any hard usage. | keep active lineage evidence |
+| `2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | Basket/edge candidates still need full forward/top5/capacity/execution gate stack. | keep active edge-engine evidence |
 
 ### `side_alpha.md` absorbed on 2026-06-10
 

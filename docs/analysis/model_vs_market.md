@@ -2,7 +2,7 @@
 
 > Living doc for module [1]: whether the weather probability model has alpha beyond market prices.
 > Current status: `inconclusive` for residual model use, negative for global probability alpha and unconfirmed for rank alpha.
-> Last updated: 2026-06-10 Phase 4D absorption.
+> Last updated: 2026-06-11 Phase 4D batch-02.
 
 Quant lineage anchor: model outputs enter the chain through Signal / candidate fields such as `model_p_yes`, `model_side_prob`, and model-derived edge. This document evaluates whether those fields should influence Signal, TradePlan, or sizing; it does not redefine fill PnL or account cashflow.
 
@@ -31,15 +31,15 @@ Important nuance: `model_side_prob` has positive IC against raw side win and dec
 
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
-| `docs/analysis/2026-06/2026-06-05-probability-calibration.md` | through 2026-06-05 snapshot | Raw model vs market calibration and ensemble baseline | snapshot |
-| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-raw-degradation.md` | 2026-06 degradation review | raw / mid-price v1 degradation after June 1 | snapshot |
-| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-raw-calibration-drift.md` | 2026-06 drift review | calibration drift and market divergence | snapshot |
-| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | 2026-06 timing review | forecast timing, side flip, market adverse move lineage | snapshot |
-| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md` | 2026-06 city/model review | weak city/model slices and downgrade candidates | snapshot |
-| `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-05-12 to 2026-06-06 candidate rows | city x model train-selected pockets; gates failed | snapshot |
-| `docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md` | 2026-06 blender research | blender hard-gate and sizing signal value | snapshot |
-| `docs/analysis/2026-06/2026-06-09-decision-window-backfill.md` | 2026-06-09 local DB repair | backfilled 2,186 candidate decision windows from raw orderbook with 0.005 wear | snapshot |
-| `docs/analysis/2026-06/2026-06-09-model-rank-ic.md` | 2026-05-12 to 2026-06-06 candidate rows | Ring3 rank/IC test after backfill; model edge ranking still inconclusive | snapshot |
+| `docs/analysis/2026-06/2026-06-05-probability-calibration.md` | through 2026-06-05 snapshot | Raw model vs market calibration and ensemble baseline | active-evidence |
+| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-raw-degradation.md` | 2026-06 degradation review | raw / mid-price v1 degradation after June 1 | active-evidence |
+| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-raw-calibration-drift.md` | 2026-06 drift review | calibration drift and market divergence | active-evidence |
+| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | 2026-06 timing review | forecast timing, side flip, market adverse move lineage | active-evidence |
+| `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-city-model-downgrade.md` | 2026-06 city/model review | weak city/model slices and downgrade candidates | active-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-05-12 to 2026-06-06 candidate rows | city x model train-selected pockets; gates failed | active-evidence |
+| `docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md` | 2026-06 blender research | blender hard-gate and sizing signal value | cross-domain-reference |
+| `docs/analysis/2026-06/2026-06-09-decision-window-backfill.md` | 2026-06-09 local DB repair | backfilled 2,186 candidate decision windows from raw orderbook with 0.005 wear | active-evidence |
+| `docs/analysis/2026-06/2026-06-09-model-rank-ic.md` | 2026-05-12 to 2026-06-06 candidate rows | Ring3 rank/IC test after backfill; model edge ranking still inconclusive | active-evidence |
 
 ## Required Gates Before Live Use
 
