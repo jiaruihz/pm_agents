@@ -1,7 +1,7 @@
 # Weather Markdown Consolidation Plan
 
 Status: current-reference
-Updated: 2026-06-10 Phase 4D model/market absorption
+Updated: 2026-06-10 Phase 4D blender absorption
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; docs/analysis living docs
 
@@ -295,6 +295,21 @@ Not done in this phase:
 | `2026-06-09-forecast-first-adjacent-range-rv-v0-1.md` | Forecast-first adjacent2/3 range tests failed proxy/orderbook gates. | `archive-ready-after-link-check` |
 | `2026-06-09-center-shoulders-butterfly-range-rv.md` | Center/shoulder/butterfly structures are sample-limited and inconclusive. | `archive-ready-after-link-check` |
 | `2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md` | Tail-fade/uncertainty baskets failed all gates. | `archive-ready-after-link-check` |
+
+### `blender_shadow.md` absorbed on 2026-06-10
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-06-06-blended-single-v0-backtest.md` | Early blended opportunity backtest is search history only; pre near-binary correction and not final live evidence. | `archive-ready-after-link-check` as superseded evidence |
+| `2026-06-06-blended-entry-band-backtest.md` | Early entry-band blended result is superseded by current gated fact-table runs. | `archive-ready-after-link-check` as superseded evidence |
+| `2026-06-06-blended-paper-fill-estimate.md` | Paper fill estimate is not live-real authority; use only as early execution hypothesis. | `archive-ready-after-link-check` after execution doc link check |
+| `2026-06-07-blended-live-instance-overlay.md` | Blender helped recent June fills but hurt pre-June fills; it is a drift/risk filter, not stable hard alpha. | keep active overlay evidence |
+| `2026-06-07-blended-paper-fill-estimate.md` | Newer paper estimate remains shadow/paper only, not live fill proof. | `archive-ready-after-link-check` |
+| `2026-06-08-blender-research-state-and-next-plan.md` | Best narrative handoff: blender should be lineage/risk/sizing shadow, not live hard gate. | keep active state handoff until next edge-engine doc |
+| `2026-06-08-blender-signal-value-research.md` | Hard gates reduce PnL despite ROI optics; size curves and negative blended-edge alerts remain research candidates. | keep active signal-value evidence |
+| `2026-06-08-v1-removed-ecmwf-t28-blender-overlay.md` | City/time controls explain more June degradation; blender is marginally negative after new operational base. | keep active control evidence |
+| `2026-06-08-weather-edge-v2-shadow-lineage.md` | Edge v2 lineage is shadow/offline artifact; do not read it as live trading result. | keep active lineage evidence |
+| `2026-06-08-weather-edge-v2-filtered-operational-base-research.md` | Edge v2/basket candidates need separate top5, forward, capacity, and execution gates; do not merge with blender hard-gate approval. | keep active edge-engine evidence |
 
 ## Hard Rules For Later Moves
 
