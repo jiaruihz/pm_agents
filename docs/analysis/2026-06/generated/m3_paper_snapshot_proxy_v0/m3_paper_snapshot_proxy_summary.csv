@@ -1,0 +1,4 @@
+strategy,decision_hour_local,trades,city_days,cities,cost,pnl,avg_price,win_rate,roi
+below_running_max_buy_no,20,2,1,1,1.006,0.994,0.503,1.0,0.9880715705765407
+below_running_max_buy_no,21,2,1,1,1.0,1.0,0.5,1.0,1.0
+below_running_max_buy_no,ALL,4,1,1,2.0060000000000002,1.994,0.5015000000000001,1.0,0.9940179461615153

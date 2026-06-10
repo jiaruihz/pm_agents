@@ -1,0 +1,18 @@
+{
+  "decision_hours": [
+    20,
+    21
+  ],
+  "experiment": "m3_paper_snapshot_proxy_v0",
+  "joined_market_rows": 4,
+  "notes": [
+    "Proxy only: uses paper snapshot market_yes_price, not orderbook best ask.",
+    "Snapshot records may be strategy-candidate filtered and may not include full market universe.",
+    "No spread/depth/fill probability is modeled."
+  ],
+  "observed_detail": "docs/analysis/2026-06/generated/m3_observed_max_v0/m3_observed_max_residual_detail.csv",
+  "paper_snapshot_dir": "runtime/weather_edge_v1/remote_pm_agent/market_data/paper_snapshots",
+  "price_grid_rows": 4552,
+  "raw_quote_rows": 15797,
+  "summary_rows": 3
+}
