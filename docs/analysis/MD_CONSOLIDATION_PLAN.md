@@ -345,6 +345,7 @@ Not done in this phase:
 | `2026-06-10-m3-observed-max-strategy-handoff.md` | M3 is a new observed-running-max information structure; external claims need local reproduction. | keep active framing evidence |
 | `2026-06-10-m3-observed-max-strategy-plan.md` | M3 must start with fact layer and physical residual gates; no live/paper config change. | keep active design evidence |
 | `2026-06-10-m3-observed-max-residual-v0.md` | 19:00+ local observed-max residual passes the first physical candidate gate, but market/execution gates are untouched. | keep active physical evidence |
+| `2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md` | Proxy paper-market backtest confirms no reliable edge signal in 4/14 sparse trades; sample concentrated in Moscow/Madrid and not executable-best-ask. | keep active-snapshot; do not cite for live/paper claims |
 
 ## Hard Rules For Later Moves
 

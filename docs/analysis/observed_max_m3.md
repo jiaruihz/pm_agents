@@ -2,7 +2,7 @@
 
 > Living doc for modules [0]-[2]: observed running max / late-day residual research for a possible M3 weather strategy.
 > Current status: `physical_candidate`; not a live, paper, or shadow trading rule yet.
-> Last updated: 2026-06-10 Phase 4D M3 absorption.
+> Last updated: 2026-06-10 Phase 4D+ M3 paper snapshot bridge
 
 Quant lineage anchor: M3 changes the information source before signal generation. Instead of forecasting tomorrow's final high at T-22 to T-28, it asks whether the current target day's observed running max is already effectively locked by local evening. That places M3 first in [0] data and [1] model/physical-feature validation before it can become a [2] signal.
 
@@ -26,6 +26,7 @@ That is only a `physical_candidate` result. It does **not** prove market edge, e
 2. The M3 strategy plan correctly freezes the boundary: do not modify N100 live config, do not replace current production strategy, and do not introduce market price/PnL before the observed-max fact layer is validated.
 3. The residual v0 report is the first local evidence: 49 cached cities and current core 9 pass the 19:00+ physical gate, but 18:00 is weaker for Paris/Amsterdam/Helsinki/Madrid and core 9 tail cases include Boston/NYC/London.
 4. M3 should start with 20:00/21:00 local as the cleaner research window; 18:00 is observation-only until secondary-warming filters are validated.
+5. Proxy paper-snapshot joins in `2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md` produce highly concentrated 2- to 14-trade windows (core cities limited to Moscow/Madrid), and are `inconclusive` for ROI; they are blocked on dataset overlap and lack executable best-ask.
 
 ## Evidence Map
 
@@ -34,6 +35,7 @@ That is only a `physical_candidate` result. It does **not** prove market edge, e
 | `docs/analysis/2026-06/2026-06-10-m3-observed-max-strategy-handoff.md` | 2026-06 handoff | strategy intuition and research discipline for observed max | snapshot |
 | `docs/analysis/2026-06/2026-06-10-m3-observed-max-strategy-plan.md` | 2026-06 design | P0-P4 plan, repo ownership, no-live boundary | design-draft |
 | `docs/analysis/2026-06/2026-06-10-m3-observed-max-residual-v0.md` | 2024-04-30 to 2026-05 cache window | physical residual experiment; 19:00+ passes v0 physical gate | active-evidence |
+| `docs/analysis/2026-06/2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md` | 2026-05-05 to 2026-05-12 | local paper snapshot proxy with `market_yes_price`, only 4/14 joined trades, no statistical gates | snapshot-inconclusive |
 
 ## Required Gates Before Trading Use
 
@@ -53,4 +55,5 @@ That is only a `physical_candidate` result. It does **not** prove market edge, e
 2. Refresh latest WU/IEM cache through current June for core 9 and any proposed M3 cities.
 3. Build bad-case feature study for `residual_c >= 1C` and `bucket_delta >= 1`.
 4. Add an explicit M3 fact or research table before connecting to market prices.
-5. Only after P2/P3 pass, run time-aligned orderbook backtests for 20:00/21:00 local windows.
+5. Resolve paper proxy/data gap: either extend WU/IEM to overlap orderbook snapshots, or backfill 2026-05-05 to 2026-05-12 orderbook best-ask windows.
+6. Only after P2/P3 pass, run time-aligned orderbook backtests for 20:00/21:00 local windows.
