@@ -1,0 +1,353 @@
+{
+  "generated_at_utc": "2026-06-10T01:27:35.158252+00:00",
+  "git_sha": "4a252c7",
+  "window": {
+    "start_date": "2026-04-01",
+    "end_date": "2026-04-30"
+  },
+  "db": {
+    "db_path": "/home/rui/projects/pm_agent/runtime/weather.db",
+    "db_last_modified_utc": "2026-06-09T17:38:04.156943+00:00",
+    "max_fact_built_at_utc": "2026-06-09T17:37:40.513320+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "n": 1405
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 1147
+      },
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": null,
+        "n": 232
+      },
+      {
+        "settlement_status": "settled",
+        "n": 5241
+      }
+    ],
+    "candidate_coverage": {
+      "rows": 25117,
+      "eligible": 8306,
+      "paper_ordered": 3139,
+      "live_filled": 554
+    },
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 151,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 1635,
+        "with_fill": 1405
+      }
+    ],
+    "fact_signal_candidates_range": {
+      "min_event_date": "2026-05-05",
+      "max_event_date": "2026-06-10",
+      "event_dates": 37,
+      "rows": 25117
+    }
+  },
+  "gamma_events": {
+    "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/gamma_events",
+    "files_in_range": 450,
+    "found_event_files": 390,
+    "missing_or_bad_files": 60,
+    "city_days_found": 390,
+    "event_dates_found": 30,
+    "cities_found": 13,
+    "market_rows": 4290,
+    "token_rows": 8580,
+    "city_day_market_count_min": 11,
+    "city_day_market_count_max": 11,
+    "missing_condition_rows": 0,
+    "missing_token_pair_rows": 0,
+    "missing_bracket_label_rows": 0,
+    "by_date": {
+      "2026-04-01": 13,
+      "2026-04-02": 13,
+      "2026-04-03": 13,
+      "2026-04-04": 13,
+      "2026-04-05": 13,
+      "2026-04-06": 13,
+      "2026-04-07": 13,
+      "2026-04-08": 13,
+      "2026-04-09": 13,
+      "2026-04-10": 13,
+      "2026-04-11": 13,
+      "2026-04-12": 13,
+      "2026-04-13": 13,
+      "2026-04-14": 13,
+      "2026-04-15": 13,
+      "2026-04-16": 13,
+      "2026-04-17": 13,
+      "2026-04-18": 13,
+      "2026-04-19": 13,
+      "2026-04-20": 13,
+      "2026-04-21": 13,
+      "2026-04-22": 13,
+      "2026-04-23": 13,
+      "2026-04-24": 13,
+      "2026-04-25": 13,
+      "2026-04-26": 13,
+      "2026-04-27": 13,
+      "2026-04-28": 13,
+      "2026-04-29": 13,
+      "2026-04-30": 13
+    },
+    "top_cities": {
+      "Austin": 30,
+      "Beijing": 30,
+      "Chicago": 30,
+      "LA": 30,
+      "London": 30,
+      "Madrid": 30,
+      "Miami": 30,
+      "NYC": 30,
+      "Paris": 30,
+      "Seoul": 30
+    },
+    "sample_markets": [
+      {
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "condition_id": "0x6d32de1ec727b87bed0c53722fe48feb943769b1ae81d6c43250ceb93873449a",
+        "market_id": "1780119",
+        "bracket": "84-85°F",
+        "outcomes": [
+          "Yes",
+          "No"
+        ],
+        "token_count": 2,
+        "best_bid": null,
+        "best_ask": 0.001
+      },
+      {
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "condition_id": "0x7a443878251c215e455861a183069b98bf3a1a9c4b0ea3efa002b906c8d871ce",
+        "market_id": "1780121",
+        "bracket": "88-89°F",
+        "outcomes": [
+          "Yes",
+          "No"
+        ],
+        "token_count": 2,
+        "best_bid": null,
+        "best_ask": 0.001
+      },
+      {
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "condition_id": "0x91055036f5080c7e8c6cb1de27683626136127391da59fc3d642f830b1a21bd8",
+        "market_id": "1780123",
+        "bracket": "92-93°F",
+        "outcomes": [
+          "Yes",
+          "No"
+        ],
+        "token_count": 2,
+        "best_bid": null,
+        "best_ask": 0.001
+      },
+      {
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "condition_id": "0xe597fb004a844b57178ec7e5784c53509775e4586eba23ea3d907b6978f8538c",
+        "market_id": "1780125",
+        "bracket": "96-97°F",
+        "outcomes": [
+          "Yes",
+          "No"
+        ],
+        "token_count": 2,
+        "best_bid": null,
+        "best_ask": 0.001
+      },
+      {
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "condition_id": "0x2ad6c500478d5d735d6673051cd5b4e3e599add4e5a1bd5c1b119cb7528c83c1",
+        "market_id": "1780127",
+        "bracket": "100-101°F",
+        "outcomes": [
+          "Yes",
+          "No"
+        ],
+        "token_count": 2,
+        "best_bid": null,
+        "best_ask": 0.001
+      }
+    ]
+  },
+  "clob_price_history": {
+    "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/clob_price_history",
+    "files_in_range": 8580,
+    "decoded_files": 8580,
+    "matched_token_files": 8580,
+    "unmatched_token_files": 0,
+    "matched_city_days": 390,
+    "matched_condition_side_rows": 8580,
+    "history_rows": 416301,
+    "history_min_ts_utc": "2026-03-29T17:00:30+00:00",
+    "history_max_ts_utc": "2026-04-29T17:15:05+00:00",
+    "history_rows_before_event_date_utc": 321482,
+    "history_rows_after_event_date_utc": 94819,
+    "decision_price_coverage_by_hours_to_noon_utc": {
+      "24": {
+        "tokens_with_price_at_or_before_decision": 8482,
+        "coverage_rate": 0.9885780885780886,
+        "median_stale_minutes": 59.85
+      },
+      "18": {
+        "tokens_with_price_at_or_before_decision": 8577,
+        "coverage_rate": 0.9996503496503496,
+        "median_stale_minutes": 59.86666666666667
+      },
+      "12": {
+        "tokens_with_price_at_or_before_decision": 8580,
+        "coverage_rate": 1.0,
+        "median_stale_minutes": 59.916666666666664
+      },
+      "6": {
+        "tokens_with_price_at_or_before_decision": 8580,
+        "coverage_rate": 1.0,
+        "median_stale_minutes": 59.916666666666664
+      }
+    },
+    "by_event_date": {
+      "2026-04-01": 286,
+      "2026-04-02": 286,
+      "2026-04-03": 286,
+      "2026-04-04": 286,
+      "2026-04-05": 286,
+      "2026-04-06": 286,
+      "2026-04-07": 286,
+      "2026-04-08": 286,
+      "2026-04-09": 286,
+      "2026-04-10": 286,
+      "2026-04-11": 286,
+      "2026-04-12": 286,
+      "2026-04-13": 286,
+      "2026-04-14": 286,
+      "2026-04-15": 286,
+      "2026-04-16": 286,
+      "2026-04-17": 286,
+      "2026-04-18": 286,
+      "2026-04-19": 286,
+      "2026-04-20": 286,
+      "2026-04-21": 286,
+      "2026-04-22": 286,
+      "2026-04-23": 286,
+      "2026-04-24": 286,
+      "2026-04-25": 286,
+      "2026-04-26": 286,
+      "2026-04-27": 286,
+      "2026-04-28": 286,
+      "2026-04-29": 286,
+      "2026-04-30": 286
+    },
+    "top_cities": {
+      "Austin": 660,
+      "Beijing": 660,
+      "Chicago": 660,
+      "LA": 660,
+      "London": 660,
+      "Madrid": 660,
+      "Miami": 660,
+      "NYC": 660,
+      "Paris": 660,
+      "Seoul": 660
+    },
+    "sample_matched": [
+      {
+        "file": "clob_price_history/2026-04-01/Austin/09238171088503367558.json",
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "bracket": "94-95°F",
+        "side": "No",
+        "history_rows": 50
+      },
+      {
+        "file": "clob_price_history/2026-04-01/Austin/11400856820677460012.json",
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "bracket": "83°F or below",
+        "side": "No",
+        "history_rows": 70
+      },
+      {
+        "file": "clob_price_history/2026-04-01/Austin/15604415835387749295.json",
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "bracket": "90-91°F",
+        "side": "No",
+        "history_rows": 81
+      },
+      {
+        "file": "clob_price_history/2026-04-01/Austin/16786745350791591265.json",
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "bracket": "84-85°F",
+        "side": "No",
+        "history_rows": 58
+      },
+      {
+        "file": "clob_price_history/2026-04-01/Austin/26305538452483472917.json",
+        "city": "Austin",
+        "event_date": "2026-04-01",
+        "bracket": "100-101°F",
+        "side": "Yes",
+        "history_rows": 81
+      }
+    ],
+    "sample_unmatched": []
+  },
+  "pm_history": {
+    "path": "/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/cache/pm_history",
+    "city_day_settlement_files_in_range": 0,
+    "price_history_files_total": 14909,
+    "sample_city_day_files": [],
+    "sample_price_files": [
+      "prices_00001129884025178383.json",
+      "prices_00005259586761584201.json",
+      "prices_00006102812596486438.json",
+      "prices_00006390609588658721.json",
+      "prices_00018207500694646115.json"
+    ]
+  },
+  "assessment": {
+    "can_materialize_full_fact_signal_candidates_now": false,
+    "can_build_mapping_prototype": true,
+    "token_match_rate": 1.0,
+    "hard_blockers": [
+      "April city-day settlement files are missing from pm_history, so final_yes cannot be filled.",
+      "CLOB history is token price history, not orderbook depth; taker/maker executable cost still needs orderbook or a conservative price proxy.",
+      "No model probability/eligible snapshot is present in gamma/clob history; a historical forecast join is required before strategy rules can be evaluated.",
+      "Raw files are not an authorized strategy PnL source; they must be materialized into fact_signal_candidates first."
+    ],
+    "minimum_builder_plan": [
+      "Build token_to_market from gamma_events markets: city, event_date, condition_id, market_id, bracket, side, clob token.",
+      "Join clob_price_history by full token_id to attach historical YES/NO token price time series.",
+      "Choose a frozen decision timestamp policy before looking at outcomes, then select last price at or before that timestamp.",
+      "Join historical forecast/model probability visible at that decision timestamp.",
+      "Backfill April city-day settlement final_yes at the same bracket grain.",
+      "Materialize rows into a fact-like table with condition_id, side, event_date, decision_snapshot_ts_utc, market_yes_price, decision_entry_price, final_yes.",
+      "Only after materialization, rerun Range RV/adjacent3 gates with train/holdout and baselines."
+    ]
+  }
+}
