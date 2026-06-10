@@ -1,7 +1,7 @@
 # Adjacent3 Quality Shadow Journal v0
 
-> generated_at_utc: `2026-06-09T18:14:05.510853+00:00`
-> git_sha: `8407d68`
+> generated_at_utc: `2026-06-10T14:23:34.839536+00:00`
+> git_sha: `f60deeb`
 > journal_schema_version: `adjacent3_quality_shadow_journal_v0`
 > target_metric: `adjacent3_quality_shadow_forward_readiness`
 > Scope: local shadow journal only; no N100/live config changed; no live orders.
