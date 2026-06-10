@@ -1,11 +1,11 @@
 # Weather Markdown Consolidation Plan
 
 Status: current-reference
-Updated: 2026-06-10 Phase 4D side/city/M3 absorption
+Updated: 2026-06-11 Phase 4C batch-01
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; docs/analysis living docs
 
-This is the Phase 4A/4B plan for Markdown cleanup. It does not move files. It records the first content audit so later archive work is based on claims, data quality, and overlap rather than filename/date alone.
+This is the Phase 4A/4B plan for Markdown cleanup. It does not move files. It records the content audit so later archive work is based on claims, data quality, and overlap rather than filename/date alone.
 
 ## Scope
 
@@ -197,6 +197,18 @@ Not done in this phase:
 7. `2026-05 archive`: after lessons are extracted, move most May reports together.
 
 ## Phase 4C Pilot Absorption Log
+
+### `execution_quality.md` absorbed on 2026-06-11 batch-01
+
+| File | Absorbed claim | Archive readiness |
+|---|---|---|
+| `2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1.md` | UNKNOWN-vs-mid mechanism is primarily signal filtering (`eligible`, bucketing, eligible windows), not quote formula; this remains a historical mechanism checkpoint. | `archive-ready-after-link-check` |
+| `2026-05-27-compare-mid-price-vs-maker-queue.md` | maker_queue showed lower fill capture and adverse-selection concentration after short-term sample, so maker is retained as retired mechanism only. | `archive-ready-after-link-check` |
+| `2026-05-29-strategy-entry-band-and-execution-quality.md` | Early A/B says mid execution dominated maker in realized capture and keeps `entry_price_window` as pre-trade filter. | `archive-ready-after-link-check` |
+| `2026-05-27-maker-queue-baseline-and-optimization.md` | Baseline maker_queue optimization and stale-fill pattern are mechanism-only evidence for historical hardening tests. | `archive-ready-after-link-check` |
+| `2026-05-27-maker-queue-cancel-backtest.md` | 4-hour stale-fill cancel hypothesis has directional value only; sample size remains limited and no live rule. | `archive-ready-after-link-check` |
+| `2026-06-07-fill-recovery-and-performance-recalc.md` | CLOB coverage gate and fill-date truth layer are now required to trust live performance from this family of reports. | keep active evidence until next coverage audit |
+| `2026-06-08-executable-edge.md` | Execution significance/baseline/forward Step2 still `inconclusive`; no live rule change from this file alone. | keep active evidence |
 
 ### `execution_quality.md` absorbed on 2026-06-09
 
