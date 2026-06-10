@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -41,12 +42,22 @@ def parse_args() -> argparse.Namespace:
         default="runtime/weather_edge_v1/market_data/orderbook_snapshots",
     )
     parser.add_argument(
+        "--pm-history-dir",
+        default="runtime/weather_edge_v1/market_data/cache/pm_history",
+    )
+    parser.add_argument(
         "--output-dir",
-        default="docs/analysis/2026-06/generated/m3_orderbook_best_ask_v0",
+        default="docs/analysis/2026-06/generated/m3_orderbook_best_ask_v1",
     )
     parser.add_argument("--decision-hours", default=",".join(str(x) for x in DEFAULT_HOURS))
     parser.add_argument("--min-best-ask", type=float, default=0.005)
     parser.add_argument("--max-best-ask", type=float, default=0.995)
+    parser.add_argument(
+        "--c-market-rule",
+        choices=["raw", "floor", "round", "ceil"],
+        default="round",
+        help="How to map observed Celsius values to integer Celsius market brackets.",
+    )
     return parser.parse_args()
 
 
@@ -85,14 +96,36 @@ def load_observed(path: Path, decision_hours: set[int]) -> pd.DataFrame:
         "decision_hour_local",
         "running_max_c",
         "final_max_c",
+        "running_max_f",
+        "final_max_f",
         "residual_c",
         "floor_c_bucket_delta",
     ]
     return df[keep].copy()
 
 
+def load_market_units(pm_history_dir: Path) -> dict[tuple[str, str], str]:
+    units: dict[tuple[str, str], str] = {}
+    for path in pm_history_dir.glob("*_????-??-??.json"):
+        stem = path.stem
+        if "_" not in stem:
+            continue
+        city, target_date = stem.rsplit("_", 1)
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        unit = str(data.get("unit") or "").upper()
+        if unit in {"C", "F"}:
+            units[(city, target_date)] = unit
+    return units
+
+
 def iter_orderbook_rows(
     orderbook_dir: Path,
+    market_units: dict[tuple[str, str], str],
     decision_hours: set[int],
     min_best_ask: float,
     max_best_ask: float,
@@ -101,6 +134,7 @@ def iter_orderbook_rows(
     files_seen = 0
     records_seen = 0
     records_missing_tz = 0
+    records_missing_unit = 0
     records_wrong_hour_or_day = 0
     records_no_best_ask = 0
     records_bad_bracket = 0
@@ -126,6 +160,10 @@ def iter_orderbook_rows(
                     continue
                 local_ts = snapshot_ts.tz_convert(ZoneInfo(timezone))
                 event_date = str(record.get("event_date") or "")
+                unit = market_units.get((str(city), event_date))
+                if not unit:
+                    records_missing_unit += 1
+                    continue
                 local_date = local_ts.date().isoformat()
                 local_hour = int(local_ts.hour)
                 if local_date != event_date or local_hour not in decision_hours:
@@ -151,9 +189,10 @@ def iter_orderbook_rows(
                         "decision_hour_local": local_hour,
                         "city": city,
                         "target_date": event_date,
+                        "unit": unit,
                         "bracket": bracket.raw,
-                        "bracket_low_c": bracket.low_f,
-                        "bracket_high_c": bracket.high_f,
+                        "bracket_low": bracket.low_f,
+                        "bracket_high": bracket.high_f,
                         "outcome": outcome,
                         "best_ask": ask.price,
                         "best_ask_size": ask.size,
@@ -167,6 +206,7 @@ def iter_orderbook_rows(
         "orderbook_files_seen": files_seen,
         "orderbook_records_seen": records_seen,
         "records_missing_tz": records_missing_tz,
+        "records_missing_unit": records_missing_unit,
         "records_wrong_hour_or_day": records_wrong_hour_or_day,
         "records_no_best_ask_or_outside_price_band": records_no_best_ask,
         "records_bad_bracket": records_bad_bracket,
@@ -186,23 +226,41 @@ def last_quote_per_hour(rows: pd.DataFrame) -> pd.DataFrame:
     return rows.groupby(key, as_index=False).tail(1).drop(columns=["snapshot_sort"])
 
 
-def bracket_contains(row: pd.Series, temp_c: float) -> bool:
-    low = row["bracket_low_c"]
-    high = row["bracket_high_c"]
-    if pd.notna(low) and temp_c < low:
+def round_half_up(value: float) -> int:
+    return int(math.floor(value + 0.5))
+
+
+def market_value(row: pd.Series, prefix: str, c_market_rule: str) -> float:
+    unit = str(row["unit"]).upper()
+    if unit == "F":
+        return float(row[f"{prefix}_f"])
+    value = float(row[f"{prefix}_c"])
+    if c_market_rule == "raw":
+        return value
+    if c_market_rule == "floor":
+        return float(math.floor(value + 1e-9))
+    if c_market_rule == "ceil":
+        return float(math.ceil(value - 1e-9))
+    return float(round_half_up(value))
+
+
+def bracket_contains(row: pd.Series, value: float) -> bool:
+    low = row["bracket_low"]
+    high = row["bracket_high"]
+    if pd.notna(low) and value < low:
         return False
-    if pd.notna(high) and temp_c > high:
+    if pd.notna(high) and value > high:
         return False
     return True
 
 
-def bracket_below_temp(row: pd.Series, temp_c: float) -> bool:
-    high = row["bracket_high_c"]
-    return bool(pd.notna(high) and high < temp_c)
+def bracket_below_value(row: pd.Series, value: float) -> bool:
+    high = row["bracket_high"]
+    return bool(pd.notna(high) and high < value)
 
 
-def final_hit(row: pd.Series) -> int:
-    return int(bracket_contains(row, float(row["final_max_c"])))
+def final_hit(row: pd.Series, c_market_rule: str) -> int:
+    return int(bracket_contains(row, market_value(row, "final_max", c_market_rule)))
 
 
 def summarize(trades: pd.DataFrame) -> pd.DataFrame:
@@ -246,7 +304,11 @@ def summarize(trades: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([summary, total[summary.columns]], ignore_index=True)
 
 
-def run_backtest(observed: pd.DataFrame, quotes: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def run_backtest(
+    observed: pd.DataFrame,
+    quotes: pd.DataFrame,
+    c_market_rule: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     joined = quotes.merge(
         observed,
         on=["city", "target_date", "decision_hour_local"],
@@ -256,13 +318,15 @@ def run_backtest(observed: pd.DataFrame, quotes: pd.DataFrame) -> tuple[pd.DataF
     if joined.empty:
         return joined, pd.DataFrame(), pd.DataFrame()
 
-    joined["final_hit"] = joined.apply(final_hit, axis=1)
+    joined["running_market_value"] = joined.apply(lambda r: market_value(r, "running_max", c_market_rule), axis=1)
+    joined["final_market_value"] = joined.apply(lambda r: market_value(r, "final_max", c_market_rule), axis=1)
+    joined["final_hit"] = joined.apply(lambda r: final_hit(r, c_market_rule), axis=1)
     joined["observed_bucket"] = joined.apply(
-        lambda r: int(bracket_contains(r, float(r["running_max_c"]))),
+        lambda r: int(bracket_contains(r, float(r["running_market_value"]))),
         axis=1,
     )
     joined["below_running_max"] = joined.apply(
-        lambda r: int(bracket_below_temp(r, float(r["running_max_c"]))),
+        lambda r: int(bracket_below_value(r, float(r["running_market_value"]))),
         axis=1,
     )
 
@@ -301,14 +365,16 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     observed = load_observed(Path(args.observed_detail), decision_hours)
+    market_units = load_market_units(Path(args.pm_history_dir))
     orderbook_rows, orderbook_meta = iter_orderbook_rows(
         Path(args.orderbook_dir),
+        market_units,
         decision_hours,
         args.min_best_ask,
         args.max_best_ask,
     )
     quotes = last_quote_per_hour(orderbook_rows)
-    joined, trades, summary = run_backtest(observed, quotes)
+    joined, trades, summary = run_backtest(observed, quotes, args.c_market_rule)
 
     quotes_path = output_dir / "m3_orderbook_best_ask_quotes.csv"
     joined_path = output_dir / "m3_orderbook_best_ask_joined.csv"
@@ -322,11 +388,14 @@ def main() -> int:
     summary.to_csv(summary_path, index=False)
 
     manifest = {
-        "experiment": "m3_orderbook_best_ask_v0",
+        "experiment": "m3_orderbook_best_ask_v1",
         "observed_detail": args.observed_detail,
         "orderbook_dir": args.orderbook_dir,
+        "pm_history_dir": args.pm_history_dir,
         "output_dir": str(output_dir),
         "decision_hours": sorted(decision_hours),
+        "c_market_rule": args.c_market_rule,
+        "market_unit_keys": len(market_units),
         "min_best_ask": args.min_best_ask,
         "max_best_ask": args.max_best_ask,
         "observed_rows": int(len(observed)),
@@ -343,7 +412,7 @@ def main() -> int:
         },
         "notes": [
             "Uses orderbook token-side raw.asks best ask; no paper market_yes_price proxy.",
-            "Interprets Polymarket weather bracket labels as Celsius and compares to observed *_max_c.",
+            "Uses pm_history unit by city-date; C markets map observed Celsius values via c_market_rule.",
             "Keeps only target-date snapshots whose city-local hour is in decision_hours.",
             "This does not model queue position, partial fills, fees, or live execution latency.",
         ],

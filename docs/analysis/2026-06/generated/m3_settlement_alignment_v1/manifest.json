@@ -1,0 +1,24 @@
+{
+  "alignment_rows": 37551,
+  "best_ask_trade_rows": 60,
+  "best_ask_trades": "docs/analysis/2026-06/generated/m3_orderbook_best_ask_v1/m3_orderbook_best_ask_trades.csv",
+  "experiment": "m3_settlement_alignment_v1",
+  "notes": [
+    "Alignment tests raw/floor/round/ceil observed values against pm_history winner labels.",
+    "Official trade PnL uses pm_history winner labels, not observed final max payout.",
+    "This is still an orderbook backtest, not live CLOB fill PnL."
+  ],
+  "observed_city_days": 37551,
+  "observed_detail": "docs/analysis/2026-06/generated/m3_observed_max_v1/m3_observed_max_residual_detail.csv",
+  "official_summary_rows": 6,
+  "official_trade_rows": 60,
+  "output_dir": "docs/analysis/2026-06/generated/m3_settlement_alignment_v1",
+  "outputs": {
+    "alignment": "docs/analysis/2026-06/generated/m3_settlement_alignment_v1/m3_settlement_alignment_city_days.csv",
+    "alignment_summary": "docs/analysis/2026-06/generated/m3_settlement_alignment_v1/m3_settlement_alignment_summary.csv",
+    "official_summary": "docs/analysis/2026-06/generated/m3_settlement_alignment_v1/m3_orderbook_best_ask_official_settlement_summary.csv",
+    "official_trades": "docs/analysis/2026-06/generated/m3_settlement_alignment_v1/m3_orderbook_best_ask_trades_official_settlement.csv"
+  },
+  "pm_history_dir": "runtime/weather_edge_v1/market_data/cache/pm_history",
+  "win_threshold": 0.99
+}

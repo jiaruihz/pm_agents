@@ -1,9 +1,21 @@
 # M3 Orderbook Best-Ask Backtest v0
 
-Status: snapshot
+Status: superseded
 Updated: 2026-06-10
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/observed_max_m3.md
+Superseded by / Used by: 2026-06-11-m3-settlement-alignment-v1.md; WEATHER_DOCS_INDEX.md; analysis/observed_max_m3.md
+
+## 2026-06-11 勘误
+
+本报告的 observed-payout ROI 不得再引用为收益结论。
+
+后续 settlement alignment 发现，WU/IEM observed final max 与 `pm_history` 官方
+winning bracket 不稳定一致。用官方 winner label 重算同一方向后，M3 v1 best-ask
+收益转负。当前结论改读：
+
+```text
+docs/analysis/2026-06/2026-06-11-m3-settlement-alignment-v1.md
+```
 
 ## 结论先行
 

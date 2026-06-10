@@ -1,0 +1,40 @@
+{
+  "c_market_rule": "round",
+  "decision_hours": [
+    20,
+    21
+  ],
+  "experiment": "m3_orderbook_best_ask_v1",
+  "joined_rows": 417,
+  "market_unit_keys": 1404,
+  "max_best_ask": 0.995,
+  "min_best_ask": 0.005,
+  "notes": [
+    "Uses orderbook token-side raw.asks best ask; no paper market_yes_price proxy.",
+    "Uses pm_history unit by city-date; C markets map observed Celsius values via c_market_rule.",
+    "Keeps only target-date snapshots whose city-local hour is in decision_hours.",
+    "This does not model queue position, partial fills, fees, or live execution latency."
+  ],
+  "observed_detail": "docs/analysis/2026-06/generated/m3_observed_max_v1/m3_observed_max_residual_detail.csv",
+  "observed_rows": 75102,
+  "orderbook_dir": "runtime/weather_edge_v1/market_data/orderbook_snapshots",
+  "orderbook_files_seen": 1098,
+  "orderbook_records_seen": 1379825,
+  "orderbook_rows_kept": 645,
+  "output_dir": "docs/analysis/2026-06/generated/m3_orderbook_best_ask_v1",
+  "outputs": {
+    "joined": "docs/analysis/2026-06/generated/m3_orderbook_best_ask_v1/m3_orderbook_best_ask_joined.csv",
+    "quotes": "docs/analysis/2026-06/generated/m3_orderbook_best_ask_v1/m3_orderbook_best_ask_quotes.csv",
+    "summary": "docs/analysis/2026-06/generated/m3_orderbook_best_ask_v1/m3_orderbook_best_ask_summary.csv",
+    "trades": "docs/analysis/2026-06/generated/m3_orderbook_best_ask_v1/m3_orderbook_best_ask_trades.csv"
+  },
+  "pm_history_dir": "runtime/weather_edge_v1/market_data/cache/pm_history",
+  "quote_rows": 417,
+  "records_bad_bracket": 0,
+  "records_missing_tz": 0,
+  "records_missing_unit": 91192,
+  "records_no_best_ask_or_outside_price_band": 4171,
+  "records_wrong_hour_or_day": 1283817,
+  "summary_rows": 6,
+  "trade_rows": 60
+}

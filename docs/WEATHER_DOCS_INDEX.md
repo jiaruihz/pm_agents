@@ -111,7 +111,7 @@ Status 口径：
 | [entry_timing.md](analysis/entry_timing.md) | `current-reference` | [3] | target-date lead time、forecast checkpoint、decision window 对计划和成交的影响 |
 | [side_alpha.md](analysis/side_alpha.md) | `current-reference` | [2] | BUY_NO / BUY_YES、side-band 是否有持久超额，而不是单纯 win-rate |
 | [city_selection.md](analysis/city_selection.md) | `current-reference` | [3] | 城市池、city-day basket、城市 x model x side 选择证据；live 事实仍以 CITY_POOL_DECISIONS 为准 |
-| [observed_max_m3.md](analysis/observed_max_m3.md) | `current-reference` | [0]-[2] | M3 傍晚已观测 running max 研究；已完成 WU 补全和 orderbook best-ask v0，但仍不是 live 交易规则 |
+| [observed_max_m3.md](analysis/observed_max_m3.md) | `current-reference` | [0]-[2] | M3 傍晚已观测 running max 研究；当前卡在 WU/IEM observed max 与 pm_history 官方结算不一致，不是 live/paper/shadow 交易规则 |
 | [sizing_entry_band.md](analysis/sizing_entry_band.md) | `current-reference` | [3] | 仓位、entry price band、side-specific band 是否改善风险调整后的 executable edge |
 | [blender_shadow.md](analysis/blender_shadow.md) | `current-reference` | [1] | blender / edge-engine 字段作为 shadow、paper 或 sizing signal 是否有价值 |
 | [live_performance.md](analysis/live_performance.md) | `current-reference` | [5][6] | live 策略绩效曲线、strategy_instance 归因、settled/open/quasi-settled 拆分 |
@@ -167,7 +167,8 @@ Status 口径：
 | [2026-06-10-m3-observed-max-strategy-plan.md](analysis/2026-06/2026-06-10-m3-observed-max-strategy-plan.md) | `design-draft` | yes | M3 结合当前 live/edge-engine 现状后的执行规划：先补 observed running max 事实层和物理残差实验，不改 live |
 | [2026-06-10-m3-observed-max-residual-v0.md](analysis/2026-06/2026-06-10-m3-observed-max-residual-v0.md) | `snapshot` | yes | M3 P2 物理残差实验 v0：49 城 WU 缓存显示当地 19:00 后 P95 residual 为 0°C，下一步做 bad-case 事前过滤 |
 | [2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md](analysis/2026-06/2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md) | `snapshot` | yes | M3 价格 proxy 尝试：paper snapshot 只有 14 条可 join 交易，不能作为收益结论；必须补 observed/orderbook 同窗 |
-| [2026-06-10-m3-orderbook-best-ask-backtest-v0.md](analysis/2026-06/2026-06-10-m3-orderbook-best-ask-backtest-v0.md) | `snapshot` | yes | M3 WU cache 补全后接真实 orderbook token-side best ask：lower-bracket BUY_NO 历史 best-ask 强正，但未过 settlement/fill/capacity gate |
+| [2026-06-10-m3-orderbook-best-ask-backtest-v0.md](analysis/2026-06/2026-06-10-m3-orderbook-best-ask-backtest-v0.md) | `superseded` | no | M3 observed-payout best-ask 早期结果；已被 settlement alignment v1 推翻，不得引用 ROI |
+| [2026-06-11-m3-settlement-alignment-v1.md](analysis/2026-06/2026-06-11-m3-settlement-alignment-v1.md) | `snapshot` | yes | M3 settlement alignment：WU/IEM observed payout 与 pm_history 官方 winner 不一致，官方结算重算后 best-ask 结果转负，当前 settlement_blocked |
 | [2026-06-10-adjacent3-quality-matched-baseline-v0.md](analysis/2026-06/2026-06-10-adjacent3-quality-matched-baseline-v0.md) | `snapshot` | yes | Adjacent3 medium_quality matched baseline：eligible 主口径下 same-cost random baseline 几乎无匹配，holdout 不支持 live |
 | [2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md](analysis/2026-06/2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md) | `snapshot` | yes | Opportunity fact 扩样覆盖审计：两年天气缓存不能直接当交易样本；关键缺口是历史 decision-time 市场行情/盘口进入 fact_signal_candidates |
 | [2026-06-10-april-historical-opportunity-mapping-audit-v0.md](analysis/2026-06/2026-06-10-april-historical-opportunity-mapping-audit-v0.md) | `snapshot` | yes | April historical opportunity mapping 审计：gamma/clob token 映射和 T-24 price proxy 可做原型，但缺 settlement/model probability/orderbook，不能直接算 ROI |
