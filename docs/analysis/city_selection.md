@@ -2,7 +2,7 @@
 
 > Living doc for module [3]: city pool, city-day basket, and region/forecast-source selection.
 > Current status: `shadow_candidate` for research-only basket ideas; live city pool remains governed by `WEATHER_CITY_POOL_DECISIONS.md`.
-> Last updated: 2026-06-10 Phase 4D city absorption.
+> Last updated: 2026-06-11 Phase 4D city batch-02.
 
 ## Current Conclusion
 
@@ -30,12 +30,18 @@ The current city-selection state is:
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
 | `docs/analysis/2026-06/2026-06-06-city-alpha-framework.md` | 2026-06 pre near-binary fix | useful framework, invalidated numeric city ranks | invalidated-numbers |
-| `docs/analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md` | 2026-06 | basket vs legacy baseline refresh | snapshot |
-| `docs/analysis/2026-06/2026-06-08-city-day-basket-walkforward.md` | 2026-06 | walk-forward check, overfit risk | snapshot |
-| `docs/analysis/2026-06/2026-06-08-city-day-distribution-quality.md` | 2026-06 | distribution quality and normalized market distribution | snapshot |
-| `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-06 | city x model x side conditional edge | snapshot |
+| `docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md` | 2026-06 | offline PR2b parameter sweep and guard tests | superseded-evidence |
+| `docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md` | 2026-06 | PR2b robustness and gate comparison | superseded-evidence |
+| `docs/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md` | 2026-06 | first optimizer basket research; missed-profit and top5 weakness | superseded-evidence |
+| `docs/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md` | 2026-06 | baseline-vs-basket comparison on older window | superseded-evidence |
+| `docs/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md` | 2026-06 | city-day basket walk-forward; train-selected folds not robust | superseded-evidence |
+| `docs/analysis/2026-06/2026-06-06-city-day-distribution-quality.md` | 2026-06 | distribution diagnostics before basket objective refresh | superseded-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md` | 2026-06 | basket vs legacy baseline refresh | active-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-day-basket-walkforward.md` | 2026-06 | walk-forward check, overfit risk | active-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-day-distribution-quality.md` | 2026-06 | distribution quality and normalized market distribution | active-evidence |
+| `docs/analysis/2026-06/2026-06-08-city-model-conditional-edge.md` | 2026-06 | city x model x side conditional edge | active-evidence |
 | `docs/analysis/2026-06/2026-06-08-city-day-basket-research-state-and-plan.md` | 2026-06 | basket research state, filtered-base rerun plan, no canary | active-evidence |
-| `docs/analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md` | 2026-06 | near-binary fixed city reanalysis | snapshot |
+| `docs/analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md` | 2026-06 | near-binary fixed city reanalysis | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-weather-strategy-live-test-selection.md` | 2026-06 | no new real live test candidate; adjacent3 only shadow | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-live-test-readiness-scoreboard-v0.md` | 2026-06 | readiness scoreboard; no city/basket live promotion | active-evidence |
 

@@ -364,16 +364,23 @@ Not done in this phase:
 | `2026-06-10-weather-strategy-live-test-selection.md` | Side-band is not a real live-test candidate in the current scoreboard. | keep active synthesis evidence |
 | `2026-06-10-shadow-paper-queue-v0.md` | Side-band remains tag-only shadow, not paper/live queue. | keep active queue evidence |
 
-### `city_selection.md` absorbed on 2026-06-10
+### `city_selection.md` absorbed on 2026-06-11 batch-02
 
 | File | Absorbed claim | Archive readiness |
 |---|---|---|
 | `2026-06-06-city-alpha-framework.md` | Numeric city ranks are invalidated by old near-binary `missing_bracket`, but the target metric framework remains useful. | `archive-ready-after-link-check` as invalidated numbers |
+| `2026-06-06-city-day-basket-pr2b-sweep.md` | PR2b sweep confirms multiple threshold settings are not enough without holdout/top5 controls. | `archive-ready-after-link-check` |
+| `2026-06-06-city-day-basket-pr2b-robustness.md` | PR2b robustness pass is still vulnerable to tail concentration and recent underperformance. | `archive-ready-after-link-check` |
+| `2026-06-06-city-day-basket-optimizer-research.md` | Early optimizer found higher headline ROI but failed missed-profit and top5 stress gates. | `archive-ready-after-link-check` |
+| `2026-06-06-city-day-basket-vs-legacy-baselines.md` | Historical baseline-vs-basket comparison; newer 06-08 refresh supersedes numbers. | `archive-ready-after-link-check` |
+| `2026-06-06-city-day-basket-walkforward.md` | Early walk-forward fold structure; newer 06-08 walk-forward refresh supersedes conclusions. | `archive-ready-after-link-check` |
+| `2026-06-06-city-day-distribution-quality.md` | Early city-day distribution check before the 06-08 refresh. | `archive-ready-after-link-check` |
 | `2026-06-06-near-binary-city-reanalysis.md` | Post-fix city evidence points to city x side x strategy_instance, not whole-city ROI. | keep active city correction evidence |
 | `2026-06-08-city-day-basket-research-state-and-plan.md` | Basket remains research/shadow; first rerun on filtered operational base before canary. | keep active basket handoff |
 | `2026-06-08-city-day-basket-vs-legacy-baselines.md` | Basket/combos can show headline gains, but recent/top5 stress still blocks production. | keep active basket baseline evidence |
 | `2026-06-08-city-day-basket-walkforward.md` | Train-selected basket rules do not yet beat simple always-on baselines in unseen windows. | keep active anti-overfit evidence |
 | `2026-06-08-city-day-distribution-quality.md` | Market-normalized distribution remains the safer basket objective anchor in holdout/recent slices. | keep active distribution evidence |
+| `2026-06-08-city-model-conditional-edge.md` | City-model conditional pockets remain high-variance, fail gates, and remain `inconclusive`. | keep active negative evidence |
 | `2026-06-10-weather-strategy-live-test-selection.md` | No new real live-test candidate; adjacent3 only enters shadow/paper observation. | keep active synthesis evidence |
 | `2026-06-10-live-test-readiness-scoreboard-v0.md` | Readiness scoreboard freezes adjacent3 shadow and defers all live scheduling. | keep active readiness evidence |
 
