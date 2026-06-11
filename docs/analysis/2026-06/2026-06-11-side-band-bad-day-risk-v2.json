@@ -1,0 +1,6687 @@
+{
+  "generated_at_utc": "2026-06-11T08:33:34.944852+00:00",
+  "target_metric": "side_band_bad_day_risk_v2",
+  "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+  "db_last_modified_utc": "2026-06-11T05:19:43.132771+00:00",
+  "mandatory_self_check": {
+    "max_fact_built_at_utc": "2026-06-11T05:19:34.417822+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "paper",
+        "n": 2285
+      },
+      {
+        "trade_class": "live_real",
+        "n": 853
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "n": 636
+      },
+      {
+        "trade_class": "live_simulated",
+        "n": 624
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": "settled",
+        "n": 4182
+      },
+      {
+        "settlement_status": null,
+        "n": 216
+      }
+    ],
+    "candidate_coverage": [
+      {
+        "rows": 26572,
+        "eligible": 8903,
+        "paper_ordered": 3339,
+        "live_filled": 345
+      }
+    ],
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 33,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 962,
+        "with_fill": 853
+      }
+    ]
+  },
+  "clob_gate": {
+    "cache_checks": {
+      "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/clob_fills.jsonl": {
+        "cost_usd": 3844.663359,
+        "distinct_executions": 863,
+        "distinct_fill_ids": 1432,
+        "missing_order_cost_usd": 1596.197286,
+        "missing_order_rows": 579,
+        "multi_fill_executions": 385,
+        "over_order_cost_usd": 6.406,
+        "over_order_excess_cost_usd": 1.406,
+        "over_order_keys": 1,
+        "rows": 1432,
+        "top_over_order": [
+          {
+            "bracket": "33",
+            "city": "Chengdu",
+            "cost_over": 1.406,
+            "execution_id": "08fde055b5f348a7277297c70f07d58206036d48437ef293658bee654e03d402",
+            "fill_cost": 6.406,
+            "fill_shares": 9.08,
+            "fills": 2,
+            "order_id": "0x465e39876551ff40e0269a74f115be216c521b32e998001fd93fe854785e80a0",
+            "order_limit_cost": 5.0,
+            "order_shares": 7.042254,
+            "shares_over": 2.037746,
+            "target_date": "2026-06-01"
+          }
+        ]
+      }
+    },
+    "db": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "db_fills": {
+      "cost_usd": 2248.466073,
+      "distinct_executions": 495,
+      "distinct_fill_ids": 853,
+      "missing_order_cost_usd": 0.0,
+      "missing_order_rows": 0,
+      "multi_fill_executions": 230,
+      "over_order_cost_usd": 6.406,
+      "over_order_excess_cost_usd": 1.406,
+      "over_order_keys": 1,
+      "rows": 853,
+      "top_over_order": [
+        {
+          "bracket": "33",
+          "city": "Chengdu",
+          "cost_over": 1.406,
+          "execution_id": "08fde055b5f348a7277297c70f07d58206036d48437ef293658bee654e03d402",
+          "fill_cost": 6.406,
+          "fill_shares": 9.08,
+          "fills": 2,
+          "order_id": "0x465e39876551ff40e0269a74f115be216c521b32e998001fd93fe854785e80a0",
+          "order_limit_cost": 5.0,
+          "order_shares": 7.042254,
+          "shares_over": 2.037746,
+          "target_date": "2026-06-01"
+        }
+      ]
+    },
+    "db_vs_primary_cache": {
+      "cache_not_in_db": 579,
+      "db_cost_minus_cache_cost": -1596.197286,
+      "db_not_in_cache": 0,
+      "sample_cache_not_in_db": [
+        "00124dc22361f5d596648a3873bd2791a59b2730bf280fed392db08f7b0ed819",
+        "0113330eff9c5e8b539d8816071dde9ee86ee252c53577d70eb067ff1dae733b",
+        "019962ca2838ce2a0d9197a0663a16a48ef3feb85f9d77d3d2bdf1532923707b",
+        "01e4d8cb94bf0c27388ea5a769d2346278f14466270e71a4b818b23386c80448",
+        "024e174f46c8c631355ffe2008b45fb269f04f2c10a2a284a55993375a145144",
+        "02bcd1e07b1f01e3f5104014a98a8761f3175736bec5c6c3a14227126c3dc958",
+        "0311c61bc7307ee50fd460ee9fae4aceb2b1693bb254f39a12bc4ddabc998186",
+        "034c272ce7d53d7388b0b2ddf94eca06f2e0d09d7545a6cd34eae80f206e44e2",
+        "034d2f0c4d77b93445950b7fe2cb1bc73813cbb2eb00008e55f17e3c62ca5315",
+        "0408c01413806a78a647d52c8c76f2655ed215a3098e70395e407f011ea8bfd5",
+        "048f101ce01853ddc1cd96a8a534e166ab408c66d23bca3a3824251399944c66",
+        "05b8b0a6197199d986bad028bacc84cdd6864e8106507841d6832825c73d37e4",
+        "05e88511bbe779678d1919e5b086d9a42f5006658ba4386aedb60595a6070bb0",
+        "061a386135569a9f9a2dce246017d6d089ec1680e1d69222778132053fed0ff7",
+        "066053460e6547b5886d5865926275a6e65e93d7bae5cbc70555ffa575a69022",
+        "067241a50e0ffea185e0c57f9da1d2ff9f9f3f8a3c1ed2f1deb9d12eef13e672",
+        "06d1c634c163ef46f754ce2a2153d4709e424e7d895cbca147e7a30b9136e593",
+        "0752562f15507fe5356bf99ebbf02fdf55165dd730dcd1c063237da5ed9898fd",
+        "076515b3c009b419961f15d2e7d460363bf31d2d3207acde10210f6a7b51ad69",
+        "077c9afc3f3e2caad5d0a126529b483d27619896ece8474c33f66706f991e903",
+        "07922528cd69aee7b3cef83dbc04763c298c4ee40010a4d33cc54c8e097ef85c",
+        "08d08992259a0fcf8d24b3d6c55d2de37c2a4fc545eb1f1d18d7afd4e94a3869",
+        "08f36c59c4b8ce4ff7bd26a83916390dab7059c923f4039c3b9525ff0e23521d",
+        "091fb5643cbb8e4b7482542476a063da8cd2cb4014aadb4c21634633142cc8fb",
+        "0927a2a2f6f5ab66b47c4cb95044a1e7190d09bc42e60992286072a953b06872"
+      ],
+      "sample_db_not_in_cache": []
+    },
+    "fact_trades_live_real": {
+      "cost_usd": 2248.466073,
+      "executions": 495,
+      "fill_ids": 853,
+      "rows": 853
+    },
+    "fail_reasons": [
+      "cache_fills_missing_or_mismatched_order_id:/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/clob_fills.jsonl",
+      "cache_fills_exceed_order_cap:/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/clob_fills.jsonl",
+      "db_cache_fill_id_mismatch",
+      "db_cache_cost_mismatch",
+      "db_fills_exceed_order_cap"
+    ],
+    "gate_pass": false,
+    "order_caps": 604,
+    "returncode": 1
+  },
+  "split": {
+    "method": "event_date chronological 70/30 split",
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-28",
+    "holdout_start": "2026-05-29",
+    "holdout_end": "2026-06-09",
+    "train_dates": 21,
+    "holdout_dates": 9
+  },
+  "filter_funnel": [
+    {
+      "step": "fact_signal_candidates rows",
+      "rows": 26572,
+      "active_dates": 39,
+      "drop_from_previous": null,
+      "note": "全机会候选表，不按 eligible 硬过滤。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "settled + decision_window present rows",
+      "rows": 2245,
+      "active_dates": 33,
+      "drop_from_previous": 0.9155125696221587,
+      "note": "只保留可评价 counterfactual 的 settled 决策窗。",
+      "drop_over_70pct": true
+    },
+    {
+      "step": "可识别 market/model/price/side rows",
+      "rows": 1064,
+      "active_dates": 30,
+      "drop_from_previous": 0.5260579064587974,
+      "note": "要求 condition/market/model/side/decision_entry_price/counterfactual_pnl 可用。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "side_band candidate rows",
+      "rows": 590,
+      "active_dates": 30,
+      "drop_from_previous": 0.44548872180451127,
+      "note": "预注册 grid 任一 price band/hour bucket 的 union。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "forecast regime 分层后 rows",
+      "rows": 590,
+      "active_dates": 30,
+      "drop_from_previous": 0.0,
+      "note": "已成功 merge distribution features 并分配 regime。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "executable orderbook matched rows",
+      "rows": 312,
+      "active_dates": 18,
+      "drop_from_previous": 0.4711864406779661,
+      "note": "raw orderbook latest snapshot_ts <= decision_snapshot_ts_utc 且有 best ask。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "train rows",
+      "rows": 449,
+      "active_dates": 21,
+      "drop_from_previous": null,
+      "note": "按 event_date chronological 70% split；不是上一行的过滤子集。",
+      "drop_over_70pct": false
+    },
+    {
+      "step": "holdout rows",
+      "rows": 141,
+      "active_dates": 9,
+      "drop_from_previous": null,
+      "note": "holdout 不参与调参；不是上一行的过滤子集。",
+      "drop_over_70pct": false
+    }
+  ],
+  "orderbook_coverage": {
+    "status": "ok",
+    "source": "raw orderbook snapshots, latest snapshot_ts_utc <= decision_snapshot_ts_utc",
+    "orderbook_glob": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/*/*.jsonl.gz",
+    "orderbook_files_found": 1124,
+    "candidate_rows": 1064,
+    "matched_candidate_rows": 551,
+    "matched_candidate_rate": 0.5178571428571429,
+    "scanned_files": 1010,
+    "scanned_rows": 1262081,
+    "matched_book_rows_seen": 41663
+  },
+  "analysis_pool": {
+    "rows": 1058,
+    "active_dates": 30
+  },
+  "results": [
+    {
+      "selector": "old_side_band_proxy",
+      "risk_filter": "no_filter",
+      "train": {
+        "rows": 148,
+        "active_dates": 20,
+        "cities": 41,
+        "cost_usd_1share": 75.0795,
+        "counterfactual_pnl_usd_1share": 19.205000000000002,
+        "roi": 0.25579552341185013,
+        "baseline_rows": 320,
+        "baseline_roi": -0.07039269383289164,
+        "excess_roi": 0.3261882172447418,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.4328454518074306,
+          1.0653873780153822
+        ],
+        "top5_removed_roi": -1.1763840821968843,
+        "worst_day_pnl": -30.200000000000003,
+        "best_day_pnl": 20.85,
+        "positive_day_rate": 0.55
+      },
+      "holdout": {
+        "rows": 52,
+        "active_dates": 8,
+        "cities": 22,
+        "cost_usd_1share": 24.683999999999997,
+        "counterfactual_pnl_usd_1share": 33.16000000000002,
+        "roi": 1.3433803273375475,
+        "baseline_rows": 73,
+        "baseline_roi": 1.3239884923792622,
+        "excess_roi": 0.019391834958285337,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.3667947779723462,
+          1.3262887524884666
+        ],
+        "top5_removed_roi": -5.479204339963835,
+        "worst_day_pnl": -9.940000000000001,
+        "best_day_pnl": 40.050000000000004,
+        "positive_day_rate": 0.625
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 19,
+            "cost": 10.02,
+            "pnl": -30.200000000000003,
+            "roi": -3.013972055888224
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 7,
+            "cost": 3.2735,
+            "pnl": -12.735,
+            "roi": -3.8903314495188637
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 3,
+            "cost": 1.09,
+            "pnl": -10.9,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 7,
+            "cost": 2.9939999999999998,
+            "pnl": -9.940000000000001,
+            "roi": -3.3199732798931203
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 8,
+            "cost": 3.775,
+            "pnl": -7.750000000000001,
+            "roi": -2.0529801324503314
+          },
+          {
+            "event_date": "2026-06-05",
+            "rows": 2,
+            "cost": 0.72,
+            "pnl": -7.199999999999999,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 2,
+            "cost": 0.71,
+            "pnl": -7.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 3,
+            "cost": 1.605,
+            "pnl": -6.05,
+            "roi": -3.7694704049844234
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 23,
+            "cost": 11.995,
+            "pnl": 40.050000000000004,
+            "roi": 3.3388912046686126
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 6,
+            "cost": 1.915,
+            "pnl": 20.85,
+            "roi": 10.887728459530027
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 13,
+            "cost": 7.01,
+            "pnl": 19.9,
+            "roi": 2.8388017118402282
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 10,
+            "cost": 5.545,
+            "pnl": 14.550000000000002,
+            "roi": 2.6239855725879173
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 16,
+            "cost": 8.565,
+            "pnl": 14.349999999999998,
+            "roi": 1.6754232340922357
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 2,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 15,
+            "cost": 7.411,
+            "pnl": 5.890000000000002,
+            "roi": 0.7947645391984891
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "NYC",
+            "rows": 15,
+            "cost": 6.881,
+            "pnl": -28.81,
+            "roi": -4.186891440197646
+          },
+          {
+            "city": "Paris",
+            "rows": 7,
+            "cost": 3.875,
+            "pnl": -18.75,
+            "roi": -4.838709677419355
+          },
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 4,
+            "cost": 1.63,
+            "pnl": -16.299999999999997,
+            "roi": -9.999999999999998
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 14,
+            "cost": 5.5425,
+            "pnl": 34.574999999999996,
+            "roi": 6.238159675236806
+          },
+          {
+            "city": "Warsaw",
+            "rows": 7,
+            "cost": 3.51,
+            "pnl": 24.9,
+            "roi": 7.094017094017094
+          },
+          {
+            "city": "Milan",
+            "rows": 5,
+            "cost": 2.66,
+            "pnl": 13.4,
+            "roi": 5.037593984962406
+          },
+          {
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          },
+          {
+            "city": "Chengdu",
+            "rows": 4,
+            "cost": 1.9300000000000002,
+            "pnl": 10.7,
+            "roi": 5.544041450777201
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 10,
+            "cost": 4.3185,
+            "pnl": -3.185,
+            "roi": -0.737524603450272
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 161,
+            "cost": 83.271,
+            "pnl": -2.7099999999999977,
+            "roi": -0.032544343168690155
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 29,
+            "cost": 12.174,
+            "pnl": 58.260000000000005,
+            "roi": 4.785608674223756
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_proxy",
+      "risk_filter": "block_high_uncertainty",
+      "train": {
+        "rows": 25,
+        "active_dates": 12,
+        "cities": 8,
+        "cost_usd_1share": 10.6335,
+        "counterfactual_pnl_usd_1share": 23.665,
+        "roi": 2.2255137066817134,
+        "baseline_rows": 246,
+        "baseline_roi": 0.27188392771161685,
+        "excess_roi": 1.9536297789700967,
+        "excess_roi_ci95_event_date_cluster": [
+          -3.3629233465506787,
+          6.166866034511999
+        ],
+        "top5_removed_roi": -5.774796662089363,
+        "worst_day_pnl": -14.8,
+        "best_day_pnl": 13.5,
+        "positive_day_rate": 0.5833333333333334
+      },
+      "holdout": {
+        "rows": 14,
+        "active_dates": 5,
+        "cities": 5,
+        "cost_usd_1share": 5.859,
+        "counterfactual_pnl_usd_1share": 31.410000000000007,
+        "roi": 5.360983102918588,
+        "baseline_rows": 73,
+        "baseline_roi": 1.3239884923792622,
+        "excess_roi": 4.036994610539326,
+        "excess_roi_ci95_event_date_cluster": [
+          -7.66349001457058,
+          8.425052108251576
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -7.94,
+        "best_day_pnl": 33.85,
+        "positive_day_rate": 0.6
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 3,
+            "cost": 1.48,
+            "pnl": -14.8,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.794,
+            "pnl": -7.94,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 2,
+            "cost": 0.765,
+            "pnl": -7.65,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.225,
+            "pnl": -2.25,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.79,
+            "pnl": 2.0999999999999988,
+            "roi": 2.658227848101264
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 6,
+            "cost": 2.6149999999999998,
+            "pnl": 33.85,
+            "roi": 12.944550669216063
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 4,
+            "cost": 1.65,
+            "pnl": 13.5,
+            "roi": 8.181818181818182
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 5,
+            "cost": 1.665,
+            "pnl": 13.35,
+            "roi": 8.018018018018017
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 2,
+            "cost": 0.99,
+            "pnl": 10.1,
+            "roi": 10.202020202020202
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 1.1749999999999998,
+            "pnl": 8.25,
+            "roi": 7.021276595744682
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 4,
+            "cost": 1.42,
+            "pnl": 5.8,
+            "roi": 4.084507042253521
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Atlanta",
+            "rows": 5,
+            "cost": 1.8299999999999998,
+            "pnl": -18.3,
+            "roi": -10.000000000000002
+          },
+          {
+            "city": "London",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Moscow",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Paris",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "LA",
+            "rows": 12,
+            "cost": 4.4825,
+            "pnl": 35.175,
+            "roi": 7.84718349135527
+          },
+          {
+            "city": "Miami",
+            "rows": 9,
+            "cost": 3.8,
+            "pnl": 12.0,
+            "roi": 3.1578947368421053
+          },
+          {
+            "city": "Karachi",
+            "rows": 5,
+            "cost": 2.19,
+            "pnl": 8.100000000000001,
+            "roi": 3.698630136986302
+          },
+          {
+            "city": "Chicago",
+            "rows": 3,
+            "cost": 1.22,
+            "pnl": 7.800000000000001,
+            "roi": 6.39344262295082
+          },
+          {
+            "city": "Warsaw",
+            "rows": 1,
+            "cost": 0.575,
+            "pnl": 4.25,
+            "roi": 7.391304347826088
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 10,
+            "cost": 4.3185,
+            "pnl": -3.185,
+            "roi": -0.737524603450272
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 29,
+            "cost": 12.174,
+            "pnl": 58.260000000000005,
+            "roi": 4.785608674223756
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_proxy",
+      "risk_filter": "low_or_medium_quality",
+      "train": {
+        "rows": 25,
+        "active_dates": 12,
+        "cities": 8,
+        "cost_usd_1share": 10.6335,
+        "counterfactual_pnl_usd_1share": 23.665,
+        "roi": 2.2255137066817134,
+        "baseline_rows": 246,
+        "baseline_roi": 0.27188392771161685,
+        "excess_roi": 1.9536297789700967,
+        "excess_roi_ci95_event_date_cluster": [
+          -3.9450544382540493,
+          5.96081249378347
+        ],
+        "top5_removed_roi": -5.774796662089363,
+        "worst_day_pnl": -14.8,
+        "best_day_pnl": 13.5,
+        "positive_day_rate": 0.5833333333333334
+      },
+      "holdout": {
+        "rows": 14,
+        "active_dates": 5,
+        "cities": 5,
+        "cost_usd_1share": 5.859,
+        "counterfactual_pnl_usd_1share": 31.410000000000007,
+        "roi": 5.360983102918588,
+        "baseline_rows": 73,
+        "baseline_roi": 1.3239884923792622,
+        "excess_roi": 4.036994610539326,
+        "excess_roi_ci95_event_date_cluster": [
+          -6.6911220033322305,
+          8.448228574686567
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -7.94,
+        "best_day_pnl": 33.85,
+        "positive_day_rate": 0.6
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 3,
+            "cost": 1.48,
+            "pnl": -14.8,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.794,
+            "pnl": -7.94,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 2,
+            "cost": 0.765,
+            "pnl": -7.65,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.225,
+            "pnl": -2.25,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.79,
+            "pnl": 2.0999999999999988,
+            "roi": 2.658227848101264
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 6,
+            "cost": 2.6149999999999998,
+            "pnl": 33.85,
+            "roi": 12.944550669216063
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 4,
+            "cost": 1.65,
+            "pnl": 13.5,
+            "roi": 8.181818181818182
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 5,
+            "cost": 1.665,
+            "pnl": 13.35,
+            "roi": 8.018018018018017
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 2,
+            "cost": 0.99,
+            "pnl": 10.1,
+            "roi": 10.202020202020202
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 1.1749999999999998,
+            "pnl": 8.25,
+            "roi": 7.021276595744682
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 4,
+            "cost": 1.42,
+            "pnl": 5.8,
+            "roi": 4.084507042253521
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Atlanta",
+            "rows": 5,
+            "cost": 1.8299999999999998,
+            "pnl": -18.3,
+            "roi": -10.000000000000002
+          },
+          {
+            "city": "London",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Moscow",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Paris",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "LA",
+            "rows": 12,
+            "cost": 4.4825,
+            "pnl": 35.175,
+            "roi": 7.84718349135527
+          },
+          {
+            "city": "Miami",
+            "rows": 9,
+            "cost": 3.8,
+            "pnl": 12.0,
+            "roi": 3.1578947368421053
+          },
+          {
+            "city": "Karachi",
+            "rows": 5,
+            "cost": 2.19,
+            "pnl": 8.100000000000001,
+            "roi": 3.698630136986302
+          },
+          {
+            "city": "Chicago",
+            "rows": 3,
+            "cost": 1.22,
+            "pnl": 7.800000000000001,
+            "roi": 6.39344262295082
+          },
+          {
+            "city": "Warsaw",
+            "rows": 1,
+            "cost": 0.575,
+            "pnl": 4.25,
+            "roi": 7.391304347826088
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 10,
+            "cost": 4.3185,
+            "pnl": -3.185,
+            "roi": -0.737524603450272
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 29,
+            "cost": 12.174,
+            "pnl": 58.260000000000005,
+            "roi": 4.785608674223756
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_proxy",
+      "risk_filter": "tail_blocked",
+      "train": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "best_day_pnl": null,
+        "positive_day_rate": null
+      },
+      "holdout": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "best_day_pnl": null,
+        "positive_day_rate": null
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [],
+        "best_dates": [],
+        "city_extremes": [],
+        "by_forecast_regime": []
+      }
+    },
+    {
+      "selector": "old_side_band_proxy",
+      "risk_filter": "hist_miss_below_train_median",
+      "train": {
+        "rows": 102,
+        "active_dates": 18,
+        "cities": 32,
+        "cost_usd_1share": 50.9835,
+        "counterfactual_pnl_usd_1share": 40.16499999999999,
+        "roi": 0.7878038973393351,
+        "baseline_rows": 320,
+        "baseline_roi": -0.07039269383289164,
+        "excess_roi": 0.8581965911722267,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.42391820475080516,
+          2.432868500743027
+        ],
+        "top5_removed_roi": -1.0658962202977076,
+        "worst_day_pnl": -24.450000000000003,
+        "best_day_pnl": 25.5,
+        "positive_day_rate": 0.5555555555555556
+      },
+      "holdout": {
+        "rows": 38,
+        "active_dates": 6,
+        "cities": 16,
+        "cost_usd_1share": 18.153999999999996,
+        "counterfactual_pnl_usd_1share": 58.46000000000001,
+        "roi": 3.220226947229262,
+        "baseline_rows": 73,
+        "baseline_roi": 1.3239884923792622,
+        "excess_roi": 1.8962384548499998,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.532568780373851,
+          3.352807193495701
+        ],
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -7.1,
+        "best_day_pnl": 52.550000000000004,
+        "positive_day_rate": 0.5
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 18,
+            "cost": 9.445,
+            "pnl": -24.450000000000003,
+            "roi": -2.5886712546320805
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 7,
+            "cost": 3.2735,
+            "pnl": -12.735,
+            "roi": -3.8903314495188637
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 8,
+            "cost": 3.775,
+            "pnl": -7.750000000000001,
+            "roi": -2.0529801324503314
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 2,
+            "cost": 0.765,
+            "pnl": -7.65,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 2,
+            "cost": 0.71,
+            "pnl": -7.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 3,
+            "cost": 1.605,
+            "pnl": -6.05,
+            "roi": -3.7694704049844234
+          },
+          {
+            "event_date": "2026-05-21",
+            "rows": 1,
+            "cost": 0.53,
+            "pnl": -5.300000000000001,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 19,
+            "cost": 9.745,
+            "pnl": 52.550000000000004,
+            "roi": 5.392508978963572
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 11,
+            "cost": 5.45,
+            "pnl": 25.5,
+            "roi": 4.678899082568807
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 3,
+            "cost": 1.625,
+            "pnl": 13.75,
+            "roi": 8.461538461538462
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 5,
+            "cost": 1.665,
+            "pnl": 13.35,
+            "roi": 8.018018018018017
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 11,
+            "cost": 5.7299999999999995,
+            "pnl": 12.7,
+            "roi": 2.216404886561955
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 11,
+            "cost": 4.775,
+            "pnl": 12.250000000000002,
+            "roi": 2.565445026178011
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 3,
+            "cost": 1.815,
+            "pnl": 11.850000000000001,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 2,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "BuenosAires",
+            "rows": 4,
+            "cost": 1.63,
+            "pnl": -16.299999999999997,
+            "roi": -9.999999999999998
+          },
+          {
+            "city": "Paris",
+            "rows": 6,
+            "cost": 3.34,
+            "pnl": -13.4,
+            "roi": -4.0119760479041915
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 1,
+            "cost": 0.645,
+            "pnl": -6.45,
+            "roi": -10.0
+          },
+          {
+            "city": "KualaLumpur",
+            "rows": 1,
+            "cost": 0.635,
+            "pnl": -6.35,
+            "roi": -10.0
+          },
+          {
+            "city": "PanamaCity",
+            "rows": 1,
+            "cost": 0.565,
+            "pnl": -5.6499999999999995,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 14,
+            "cost": 5.5425,
+            "pnl": 34.574999999999996,
+            "roi": 6.238159675236806
+          },
+          {
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 2.875,
+            "pnl": 21.25,
+            "roi": 7.391304347826087
+          },
+          {
+            "city": "Miami",
+            "rows": 16,
+            "cost": 7.455,
+            "pnl": 15.450000000000003,
+            "roi": 2.0724346076458757
+          },
+          {
+            "city": "Chicago",
+            "rows": 6,
+            "cost": 2.69,
+            "pnl": 13.100000000000001,
+            "roi": 4.869888475836432
+          },
+          {
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 10,
+            "cost": 4.3185,
+            "pnl": -3.185,
+            "roi": -0.737524603450272
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 101,
+            "cost": 52.645,
+            "pnl": 43.55,
+            "roi": 0.8272390540412193
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 29,
+            "cost": 12.174,
+            "pnl": 58.260000000000005,
+            "roi": 4.785608674223756
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_proxy",
+      "risk_filter": "market_model_l1_not_top_quartile",
+      "train": {
+        "rows": 116,
+        "active_dates": 20,
+        "cities": 39,
+        "cost_usd_1share": 58.10850000000001,
+        "counterfactual_pnl_usd_1share": 8.91500000000002,
+        "roi": 0.15341989554023971,
+        "baseline_rows": 320,
+        "baseline_roi": -0.07039269383289164,
+        "excess_roi": 0.22381258937313137,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.788490383565555,
+          1.3380844699797985
+        ],
+        "top5_removed_roi": -1.1129762889270154,
+        "worst_day_pnl": -31.8,
+        "best_day_pnl": 17.25,
+        "positive_day_rate": 0.65
+      },
+      "holdout": {
+        "rows": 41,
+        "active_dates": 8,
+        "cities": 20,
+        "cost_usd_1share": 18.648999999999997,
+        "counterfactual_pnl_usd_1share": 23.51,
+        "roi": 1.2606574079039092,
+        "baseline_rows": 73,
+        "baseline_roi": 1.3239884923792622,
+        "excess_roi": -0.06333108447535296,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.566648806951626,
+          1.928682086448073
+        ],
+        "top5_removed_roi": -5.479204339963835,
+        "worst_day_pnl": -9.940000000000001,
+        "best_day_pnl": 28.1,
+        "positive_day_rate": 0.625
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 16,
+            "cost": 8.18,
+            "pnl": -31.8,
+            "roi": -3.8875305623471883
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 5,
+            "cost": 2.2085,
+            "pnl": -12.085,
+            "roi": -5.472039846049356
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 3,
+            "cost": 1.09,
+            "pnl": -10.9,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 7,
+            "cost": 2.9939999999999998,
+            "pnl": -9.940000000000001,
+            "roi": -3.3199732798931203
+          },
+          {
+            "event_date": "2026-06-05",
+            "rows": 2,
+            "cost": 0.72,
+            "pnl": -7.199999999999999,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 2,
+            "cost": 0.71,
+            "pnl": -7.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 8,
+            "cost": 3.59,
+            "pnl": -5.900000000000001,
+            "roi": -1.643454038997215
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 1,
+            "cost": 0.55,
+            "pnl": -5.5,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 16,
+            "cost": 8.19,
+            "pnl": 28.1,
+            "roi": 3.4310134310134313
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 4,
+            "cost": 1.275,
+            "pnl": 17.25,
+            "roi": 13.529411764705884
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 10,
+            "cost": 4.88,
+            "pnl": 11.200000000000001,
+            "roi": 2.295081967213115
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 2,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 13,
+            "cost": 7.08,
+            "pnl": 9.2,
+            "roi": 1.2994350282485874
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          },
+          {
+            "event_date": "2026-05-15",
+            "rows": 6,
+            "cost": 3.32,
+            "pnl": 6.800000000000001,
+            "roi": 2.0481927710843375
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 5,
+            "cost": 2.34,
+            "pnl": 6.599999999999999,
+            "roi": 2.8205128205128203
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "NYC",
+            "rows": 9,
+            "cost": 3.715,
+            "pnl": -17.15,
+            "roi": -4.616419919246298
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 4,
+            "cost": 1.63,
+            "pnl": -16.299999999999997,
+            "roi": -9.999999999999998
+          },
+          {
+            "city": "Paris",
+            "rows": 6,
+            "cost": 3.395,
+            "pnl": -13.950000000000001,
+            "roi": -4.10898379970545
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 10,
+            "cost": 3.8425000000000002,
+            "pnl": 31.575,
+            "roi": 8.217306441119062
+          },
+          {
+            "city": "Warsaw",
+            "rows": 7,
+            "cost": 3.51,
+            "pnl": 24.9,
+            "roi": 7.094017094017094
+          },
+          {
+            "city": "Chengdu",
+            "rows": 4,
+            "cost": 1.9300000000000002,
+            "pnl": 10.7,
+            "roi": 5.544041450777201
+          },
+          {
+            "city": "Milan",
+            "rows": 2,
+            "cost": 0.9550000000000001,
+            "pnl": 10.450000000000001,
+            "roi": 10.942408376963352
+          },
+          {
+            "city": "Karachi",
+            "rows": 9,
+            "cost": 3.955,
+            "pnl": 10.450000000000001,
+            "roi": 2.642225031605563
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 123,
+            "cost": 62.285,
+            "pnl": -12.849999999999996,
+            "roi": -0.20630970538652962
+          },
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 10,
+            "cost": 4.3185,
+            "pnl": -3.185,
+            "roi": -0.737524603450272
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 24,
+            "cost": 10.154,
+            "pnl": 48.46,
+            "roi": 4.772503446917471
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_proxy",
+      "risk_filter": "entropy_not_top_quartile",
+      "train": {
+        "rows": 101,
+        "active_dates": 18,
+        "cities": 33,
+        "cost_usd_1share": 48.8345,
+        "counterfactual_pnl_usd_1share": 21.655,
+        "roi": 0.4434365049299164,
+        "baseline_rows": 320,
+        "baseline_roi": -0.07039269383289164,
+        "excess_roi": 0.513829198762808,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.9500060969052725,
+          1.8410706328959865
+        ],
+        "top5_removed_roi": -1.884458738484197,
+        "worst_day_pnl": -26.700000000000003,
+        "best_day_pnl": 27.65,
+        "positive_day_rate": 0.5
+      },
+      "holdout": {
+        "rows": 40,
+        "active_dates": 8,
+        "cities": 15,
+        "cost_usd_1share": 17.939,
+        "counterfactual_pnl_usd_1share": 30.610000000000014,
+        "roi": 1.7063381459390163,
+        "baseline_rows": 73,
+        "baseline_roi": 1.3239884923792622,
+        "excess_roi": 0.38234965355975414,
+        "excess_roi_ci95_event_date_cluster": [
+          -3.4044399075017346,
+          2.056363871631454
+        ],
+        "top5_removed_roi": -7.422015983500903,
+        "worst_day_pnl": -14.49,
+        "best_day_pnl": 40.35,
+        "positive_day_rate": 0.625
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 15,
+            "cost": 7.67,
+            "pnl": -26.700000000000003,
+            "roi": -3.4810951760104305
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 6,
+            "cost": 2.449,
+            "pnl": -14.49,
+            "roi": -5.916700694160882
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 7,
+            "cost": 3.2399999999999998,
+            "pnl": -12.4,
+            "roi": -3.827160493827161
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 3,
+            "cost": 1.09,
+            "pnl": -10.9,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-05",
+            "rows": 2,
+            "cost": 0.72,
+            "pnl": -7.199999999999999,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 2,
+            "cost": 0.71,
+            "pnl": -7.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 2,
+            "cost": 0.6385000000000001,
+            "pnl": -6.385,
+            "roi": -9.999999999999998
+          },
+          {
+            "event_date": "2026-05-08",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 14,
+            "cost": 6.965,
+            "pnl": 40.35,
+            "roi": 5.793251974156497
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 10,
+            "cost": 5.234999999999999,
+            "pnl": 27.65,
+            "roi": 5.281757402101242
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 6,
+            "cost": 1.915,
+            "pnl": 20.85,
+            "roi": 10.887728459530027
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 6,
+            "cost": 3.4499999999999997,
+            "pnl": 15.5,
+            "roi": 4.492753623188406
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 8,
+            "cost": 3.92,
+            "pnl": 10.799999999999997,
+            "roi": 2.755102040816326
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 2,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 12,
+            "cost": 5.23,
+            "pnl": 7.700000000000002,
+            "roi": 1.4722753346080308
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "NYC",
+            "rows": 15,
+            "cost": 6.881,
+            "pnl": -28.81,
+            "roi": -4.186891440197646
+          },
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 4,
+            "cost": 1.63,
+            "pnl": -16.299999999999997,
+            "roi": -9.999999999999998
+          },
+          {
+            "city": "CapeTown",
+            "rows": 2,
+            "cost": 1.155,
+            "pnl": -11.55,
+            "roi": -10.0
+          },
+          {
+            "city": "Seoul",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": -5.949999999999999,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 14,
+            "cost": 5.5425,
+            "pnl": 34.574999999999996,
+            "roi": 6.238159675236806
+          },
+          {
+            "city": "Warsaw",
+            "rows": 7,
+            "cost": 3.51,
+            "pnl": 24.9,
+            "roi": 7.094017094017094
+          },
+          {
+            "city": "Tokyo",
+            "rows": 3,
+            "cost": 1.85,
+            "pnl": 11.5,
+            "roi": 6.216216216216216
+          },
+          {
+            "city": "Chengdu",
+            "rows": 4,
+            "cost": 1.9300000000000002,
+            "pnl": 10.7,
+            "roi": 5.544041450777201
+          },
+          {
+            "city": "Karachi",
+            "rows": 9,
+            "cost": 3.955,
+            "pnl": 10.450000000000001,
+            "roi": 2.642225031605563
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 10,
+            "cost": 4.3185,
+            "pnl": -3.185,
+            "roi": -0.737524603450272
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 102,
+            "cost": 50.281,
+            "pnl": -2.8099999999999983,
+            "roi": -0.055885921123287094
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 29,
+            "cost": 12.174,
+            "pnl": 58.260000000000005,
+            "roi": 4.785608674223756
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_no_low_yes",
+      "risk_filter": "no_filter",
+      "train": {
+        "rows": 136,
+        "active_dates": 20,
+        "cities": 41,
+        "cost_usd_1share": 72.3785,
+        "counterfactual_pnl_usd_1share": 36.21500000000001,
+        "roi": 0.5003557686329505,
+        "baseline_rows": 284,
+        "baseline_roi": 0.12543549364828765,
+        "excess_roi": 0.37492027498466285,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.42100888697586747,
+          1.1915866729191826
+        ],
+        "top5_removed_roi": -0.8968614401165205,
+        "worst_day_pnl": -25.800000000000004,
+        "best_day_pnl": 24.4,
+        "positive_day_rate": 0.6
+      },
+      "holdout": {
+        "rows": 45,
+        "active_dates": 8,
+        "cities": 22,
+        "cost_usd_1share": 23.189,
+        "counterfactual_pnl_usd_1share": 18.110000000000003,
+        "roi": 0.7809737375479755,
+        "baseline_rows": 62,
+        "baseline_roi": 0.22967265047518484,
+        "excess_roi": 0.5513010870727907,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.7331706196890653,
+          2.4503352113002608
+        ],
+        "top5_removed_roi": -2.92369383181979,
+        "worst_day_pnl": -11.8,
+        "best_day_pnl": 40.050000000000004,
+        "positive_day_rate": 0.375
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 17,
+            "cost": 9.58,
+            "pnl": -25.800000000000004,
+            "roi": -2.6931106471816286
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 7,
+            "cost": 3.2735,
+            "pnl": -12.735,
+            "roi": -3.8903314495188637
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 10,
+            "cost": 5.18,
+            "pnl": -11.8,
+            "roi": -2.2779922779922783
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 2,
+            "cost": 0.865,
+            "pnl": -8.65,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 6,
+            "cost": 2.794,
+            "pnl": -7.9399999999999995,
+            "roi": -2.8418038654259123
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 8,
+            "cost": 3.775,
+            "pnl": -7.750000000000001,
+            "roi": -2.0529801324503314
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 3,
+            "cost": 1.605,
+            "pnl": -6.05,
+            "roi": -3.7694704049844234
+          },
+          {
+            "event_date": "2026-05-21",
+            "rows": 1,
+            "cost": 0.53,
+            "pnl": -5.300000000000001,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 23,
+            "cost": 11.995,
+            "pnl": 40.050000000000004,
+            "roi": 3.3388912046686126
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 11,
+            "cost": 6.56,
+            "pnl": 24.4,
+            "roi": 3.7195121951219514
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 15,
+            "cost": 8.335,
+            "pnl": 16.65,
+            "roi": 1.9976004799040188
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 4,
+            "cost": 1.46,
+            "pnl": 15.399999999999999,
+            "roi": 10.54794520547945
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 10,
+            "cost": 5.545,
+            "pnl": 14.550000000000002,
+            "roi": 2.6239855725879173
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 2,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 14,
+            "cost": 7.175,
+            "pnl": 8.250000000000002,
+            "roi": 1.1498257839721258
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "NYC",
+            "rows": 12,
+            "cost": 6.2,
+            "pnl": -22.0,
+            "roi": -3.5483870967741935
+          },
+          {
+            "city": "Paris",
+            "rows": 7,
+            "cost": 3.875,
+            "pnl": -18.75,
+            "roi": -4.838709677419355
+          },
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 13,
+            "cost": 5.3175,
+            "pnl": 36.824999999999996,
+            "roi": 6.9252468265162195
+          },
+          {
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 3.275,
+            "pnl": 17.25,
+            "roi": 5.2671755725190845
+          },
+          {
+            "city": "Milan",
+            "rows": 5,
+            "cost": 2.66,
+            "pnl": 13.4,
+            "roi": 5.037593984962406
+          },
+          {
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          },
+          {
+            "city": "Chengdu",
+            "rows": 4,
+            "cost": 1.9300000000000002,
+            "pnl": 10.7,
+            "roi": 5.544041450777201
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 9,
+            "cost": 4.0935,
+            "pnl": -0.935,
+            "roi": -0.22841089532185174
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 147,
+            "cost": 80.2,
+            "pnl": 8.000000000000002,
+            "roi": 0.09975062344139653
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 25,
+            "cost": 11.274000000000001,
+            "pnl": 47.260000000000005,
+            "roi": 4.191946070604931
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_no_low_yes",
+      "risk_filter": "block_high_uncertainty",
+      "train": {
+        "rows": 21,
+        "active_dates": 11,
+        "cities": 8,
+        "cost_usd_1share": 9.733499999999998,
+        "counterfactual_pnl_usd_1share": 22.664999999999996,
+        "roi": 2.3285560178764064,
+        "baseline_rows": 210,
+        "baseline_roi": 0.5899178044230228,
+        "excess_roi": 1.7386382134533838,
+        "excess_roi_ci95_event_date_cluster": [
+          -3.333565520416842,
+          6.017124951016669
+        ],
+        "top5_removed_roi": -5.336364696280751,
+        "worst_day_pnl": -14.8,
+        "best_day_pnl": 13.5,
+        "positive_day_rate": 0.6363636363636364
+      },
+      "holdout": {
+        "rows": 13,
+        "active_dates": 5,
+        "cities": 5,
+        "cost_usd_1share": 5.6339999999999995,
+        "counterfactual_pnl_usd_1share": 23.660000000000004,
+        "roi": 4.199503017394393,
+        "baseline_rows": 62,
+        "baseline_roi": 0.22967265047518484,
+        "excess_roi": 3.969830366919208,
+        "excess_roi_ci95_event_date_cluster": [
+          -4.562953051938227,
+          8.385598664725233
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -7.94,
+        "best_day_pnl": 33.85,
+        "positive_day_rate": 0.4
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 3,
+            "cost": 1.48,
+            "pnl": -14.8,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.794,
+            "pnl": -7.94,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 3,
+            "cost": 1.195,
+            "pnl": -1.9499999999999997,
+            "roi": -1.631799163179916
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.79,
+            "pnl": 2.0999999999999988,
+            "roi": 2.658227848101264
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 6,
+            "cost": 2.6149999999999998,
+            "pnl": 33.85,
+            "roi": 12.944550669216063
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 4,
+            "cost": 1.65,
+            "pnl": 13.5,
+            "roi": 8.181818181818182
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 2,
+            "cost": 0.99,
+            "pnl": 10.1,
+            "roi": 10.202020202020202
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 1.1749999999999998,
+            "pnl": 8.25,
+            "roi": 7.021276595744682
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 3,
+            "cost": 1.21,
+            "pnl": 7.9,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Atlanta",
+            "rows": 4,
+            "cost": 1.605,
+            "pnl": -16.05,
+            "roi": -10.0
+          },
+          {
+            "city": "London",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "city": "Miami",
+            "rows": 6,
+            "cost": 3.125,
+            "pnl": -1.25,
+            "roi": -0.4
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Moscow",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "LA",
+            "rows": 11,
+            "cost": 4.2575,
+            "pnl": 37.425,
+            "roi": 8.790369935408101
+          },
+          {
+            "city": "Karachi",
+            "rows": 5,
+            "cost": 2.19,
+            "pnl": 8.100000000000001,
+            "roi": 3.698630136986302
+          },
+          {
+            "city": "Chicago",
+            "rows": 3,
+            "cost": 1.22,
+            "pnl": 7.800000000000001,
+            "roi": 6.39344262295082
+          },
+          {
+            "city": "Warsaw",
+            "rows": 1,
+            "cost": 0.575,
+            "pnl": 4.25,
+            "roi": 7.391304347826088
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 9,
+            "cost": 4.0935,
+            "pnl": -0.935,
+            "roi": -0.22841089532185174
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 25,
+            "cost": 11.274000000000001,
+            "pnl": 47.260000000000005,
+            "roi": 4.191946070604931
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_no_low_yes",
+      "risk_filter": "low_or_medium_quality",
+      "train": {
+        "rows": 21,
+        "active_dates": 11,
+        "cities": 8,
+        "cost_usd_1share": 9.733499999999998,
+        "counterfactual_pnl_usd_1share": 22.664999999999996,
+        "roi": 2.3285560178764064,
+        "baseline_rows": 210,
+        "baseline_roi": 0.5899178044230228,
+        "excess_roi": 1.7386382134533838,
+        "excess_roi_ci95_event_date_cluster": [
+          -3.5621338752396903,
+          5.96915525837713
+        ],
+        "top5_removed_roi": -5.336364696280751,
+        "worst_day_pnl": -14.8,
+        "best_day_pnl": 13.5,
+        "positive_day_rate": 0.6363636363636364
+      },
+      "holdout": {
+        "rows": 13,
+        "active_dates": 5,
+        "cities": 5,
+        "cost_usd_1share": 5.6339999999999995,
+        "counterfactual_pnl_usd_1share": 23.660000000000004,
+        "roi": 4.199503017394393,
+        "baseline_rows": 62,
+        "baseline_roi": 0.22967265047518484,
+        "excess_roi": 3.969830366919208,
+        "excess_roi_ci95_event_date_cluster": [
+          -4.280272259312971,
+          8.39668367088767
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -7.94,
+        "best_day_pnl": 33.85,
+        "positive_day_rate": 0.4
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 3,
+            "cost": 1.48,
+            "pnl": -14.8,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.794,
+            "pnl": -7.94,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 3,
+            "cost": 1.195,
+            "pnl": -1.9499999999999997,
+            "roi": -1.631799163179916
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.79,
+            "pnl": 2.0999999999999988,
+            "roi": 2.658227848101264
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 6,
+            "cost": 2.6149999999999998,
+            "pnl": 33.85,
+            "roi": 12.944550669216063
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 4,
+            "cost": 1.65,
+            "pnl": 13.5,
+            "roi": 8.181818181818182
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 2,
+            "cost": 0.99,
+            "pnl": 10.1,
+            "roi": 10.202020202020202
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 1.1749999999999998,
+            "pnl": 8.25,
+            "roi": 7.021276595744682
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 3,
+            "cost": 1.21,
+            "pnl": 7.9,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Atlanta",
+            "rows": 4,
+            "cost": 1.605,
+            "pnl": -16.05,
+            "roi": -10.0
+          },
+          {
+            "city": "London",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "city": "Miami",
+            "rows": 6,
+            "cost": 3.125,
+            "pnl": -1.25,
+            "roi": -0.4
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Moscow",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "LA",
+            "rows": 11,
+            "cost": 4.2575,
+            "pnl": 37.425,
+            "roi": 8.790369935408101
+          },
+          {
+            "city": "Karachi",
+            "rows": 5,
+            "cost": 2.19,
+            "pnl": 8.100000000000001,
+            "roi": 3.698630136986302
+          },
+          {
+            "city": "Chicago",
+            "rows": 3,
+            "cost": 1.22,
+            "pnl": 7.800000000000001,
+            "roi": 6.39344262295082
+          },
+          {
+            "city": "Warsaw",
+            "rows": 1,
+            "cost": 0.575,
+            "pnl": 4.25,
+            "roi": 7.391304347826088
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 9,
+            "cost": 4.0935,
+            "pnl": -0.935,
+            "roi": -0.22841089532185174
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 25,
+            "cost": 11.274000000000001,
+            "pnl": 47.260000000000005,
+            "roi": 4.191946070604931
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_no_low_yes",
+      "risk_filter": "tail_blocked",
+      "train": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "best_day_pnl": null,
+        "positive_day_rate": null
+      },
+      "holdout": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "best_day_pnl": null,
+        "positive_day_rate": null
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [],
+        "best_dates": [],
+        "city_extremes": [],
+        "by_forecast_regime": []
+      }
+    },
+    {
+      "selector": "old_side_band_no_low_yes",
+      "risk_filter": "hist_miss_below_train_median",
+      "train": {
+        "rows": 93,
+        "active_dates": 17,
+        "cities": 32,
+        "cost_usd_1share": 48.9635,
+        "counterfactual_pnl_usd_1share": 50.364999999999995,
+        "roi": 1.028623362300489,
+        "baseline_rows": 284,
+        "baseline_roi": 0.12543549364828765,
+        "excess_roi": 0.9031878686522014,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.5486922113244596,
+          2.556119592045304
+        ],
+        "top5_removed_roi": -0.9130738150485989,
+        "worst_day_pnl": -20.050000000000004,
+        "best_day_pnl": 25.5,
+        "positive_day_rate": 0.5882352941176471
+      },
+      "holdout": {
+        "rows": 34,
+        "active_dates": 6,
+        "cities": 16,
+        "cost_usd_1share": 17.283999999999995,
+        "counterfactual_pnl_usd_1share": 47.160000000000004,
+        "roi": 2.728535061328397,
+        "baseline_rows": 62,
+        "baseline_roi": 0.22967265047518484,
+        "excess_roi": 2.4988624108532123,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.7230623425969945,
+          4.189218433056176
+        ],
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -5.05,
+        "best_day_pnl": 52.550000000000004,
+        "positive_day_rate": 0.3333333333333333
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 16,
+            "cost": 9.005,
+            "pnl": -20.050000000000004,
+            "roi": -2.2265408106607443
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 7,
+            "cost": 3.2735,
+            "pnl": -12.735,
+            "roi": -3.8903314495188637
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 8,
+            "cost": 3.775,
+            "pnl": -7.750000000000001,
+            "roi": -2.0529801324503314
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 3,
+            "cost": 1.605,
+            "pnl": -6.05,
+            "roi": -3.7694704049844234
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-21",
+            "rows": 1,
+            "cost": 0.53,
+            "pnl": -5.300000000000001,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 19,
+            "cost": 9.745,
+            "pnl": 52.550000000000004,
+            "roi": 5.392508978963572
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 11,
+            "cost": 5.45,
+            "pnl": 25.5,
+            "roi": 4.678899082568807
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 9,
+            "cost": 5.28,
+            "pnl": 17.2,
+            "roi": 3.2575757575757573
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 3,
+            "cost": 1.625,
+            "pnl": 13.75,
+            "roi": 8.461538461538462
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 3,
+            "cost": 1.815,
+            "pnl": 11.850000000000001,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 7,
+            "cost": 3.98,
+            "pnl": 10.2,
+            "roi": 2.5628140703517586
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 2,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Paris",
+            "rows": 6,
+            "cost": 3.34,
+            "pnl": -13.4,
+            "roi": -4.0119760479041915
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 1,
+            "cost": 0.645,
+            "pnl": -6.45,
+            "roi": -10.0
+          },
+          {
+            "city": "KualaLumpur",
+            "rows": 1,
+            "cost": 0.635,
+            "pnl": -6.35,
+            "roi": -10.0
+          },
+          {
+            "city": "PanamaCity",
+            "rows": 1,
+            "cost": 0.565,
+            "pnl": -5.6499999999999995,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 13,
+            "cost": 5.3175,
+            "pnl": 36.824999999999996,
+            "roi": 6.9252468265162195
+          },
+          {
+            "city": "Chicago",
+            "rows": 5,
+            "cost": 2.45,
+            "pnl": 15.5,
+            "roi": 6.326530612244897
+          },
+          {
+            "city": "Warsaw",
+            "rows": 5,
+            "cost": 2.64,
+            "pnl": 13.599999999999998,
+            "roi": 5.1515151515151505
+          },
+          {
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          },
+          {
+            "city": "Karachi",
+            "rows": 9,
+            "cost": 3.955,
+            "pnl": 10.450000000000001,
+            "roi": 2.642225031605563
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 9,
+            "cost": 4.0935,
+            "pnl": -0.935,
+            "roi": -0.22841089532185174
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 25,
+            "cost": 11.274000000000001,
+            "pnl": 47.260000000000005,
+            "roi": 4.191946070604931
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 93,
+            "cost": 50.88,
+            "pnl": 51.199999999999996,
+            "roi": 1.0062893081761004
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_no_low_yes",
+      "risk_filter": "market_model_l1_not_top_quartile",
+      "train": {
+        "rows": 106,
+        "active_dates": 20,
+        "cities": 39,
+        "cost_usd_1share": 55.868500000000004,
+        "counterfactual_pnl_usd_1share": 21.314999999999994,
+        "roi": 0.38152089281079665,
+        "baseline_rows": 284,
+        "baseline_roi": 0.12543549364828765,
+        "excess_roi": 0.256085399162509,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.8084376122261885,
+          1.3785850108353583
+        ],
+        "top5_removed_roi": -0.781832308360878,
+        "worst_day_pnl": -27.400000000000002,
+        "best_day_pnl": 11.5,
+        "positive_day_rate": 0.65
+      },
+      "holdout": {
+        "rows": 34,
+        "active_dates": 8,
+        "cities": 20,
+        "cost_usd_1share": 17.153999999999996,
+        "counterfactual_pnl_usd_1share": 8.46,
+        "roi": 0.49317943336831077,
+        "baseline_rows": 62,
+        "baseline_roi": 0.22967265047518484,
+        "excess_roi": 0.2635067828931259,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.229454140451704,
+          2.466121035602697
+        ],
+        "top5_removed_roi": -3.5989758361337807,
+        "worst_day_pnl": -9.5,
+        "best_day_pnl": 28.1,
+        "positive_day_rate": 0.375
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 14,
+            "cost": 7.74,
+            "pnl": -27.400000000000002,
+            "roi": -3.5400516795865635
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 5,
+            "cost": 2.2085,
+            "pnl": -12.085,
+            "roi": -5.472039846049356
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 6,
+            "cost": 2.95,
+            "pnl": -9.5,
+            "roi": -3.2203389830508473
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 2,
+            "cost": 0.865,
+            "pnl": -8.65,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 6,
+            "cost": 2.794,
+            "pnl": -7.9399999999999995,
+            "roi": -2.8418038654259123
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 1,
+            "cost": 0.55,
+            "pnl": -5.5,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-21",
+            "rows": 1,
+            "cost": 0.53,
+            "pnl": -5.300000000000001,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-05",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 16,
+            "cost": 8.19,
+            "pnl": 28.1,
+            "roi": 3.4310134310134313
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 12,
+            "cost": 6.85,
+            "pnl": 11.5,
+            "roi": 1.6788321167883213
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 10,
+            "cost": 4.88,
+            "pnl": 11.200000000000001,
+            "roi": 2.295081967213115
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 3,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 2,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 7,
+            "cost": 4.08,
+            "pnl": 9.2,
+            "roi": 2.2549019607843137
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          },
+          {
+            "event_date": "2026-05-15",
+            "rows": 6,
+            "cost": 3.32,
+            "pnl": 6.800000000000001,
+            "roi": 2.0481927710843375
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "Paris",
+            "rows": 6,
+            "cost": 3.395,
+            "pnl": -13.950000000000001,
+            "roi": -4.10898379970545
+          },
+          {
+            "city": "NYC",
+            "rows": 7,
+            "cost": 3.27,
+            "pnl": -12.7,
+            "roi": -3.8837920489296636
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 10,
+            "cost": 3.8425000000000002,
+            "pnl": 31.575,
+            "roi": 8.217306441119062
+          },
+          {
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 3.275,
+            "pnl": 17.25,
+            "roi": 5.2671755725190845
+          },
+          {
+            "city": "Chengdu",
+            "rows": 4,
+            "cost": 1.9300000000000002,
+            "pnl": 10.7,
+            "roi": 5.544041450777201
+          },
+          {
+            "city": "Karachi",
+            "rows": 9,
+            "cost": 3.955,
+            "pnl": 10.450000000000001,
+            "roi": 2.642225031605563
+          },
+          {
+            "city": "Milan",
+            "rows": 2,
+            "cost": 0.9550000000000001,
+            "pnl": 10.450000000000001,
+            "roi": 10.942408376963352
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 110,
+            "cost": 59.45,
+            "pnl": -4.499999999999999,
+            "roi": -0.07569386038687971
+          },
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 9,
+            "cost": 4.0935,
+            "pnl": -0.935,
+            "roi": -0.22841089532185174
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 21,
+            "cost": 9.479,
+            "pnl": 35.21,
+            "roi": 3.714526848823716
+          }
+        ]
+      }
+    },
+    {
+      "selector": "old_side_band_no_low_yes",
+      "risk_filter": "entropy_not_top_quartile",
+      "train": {
+        "rows": 89,
+        "active_dates": 18,
+        "cities": 33,
+        "cost_usd_1share": 46.133500000000005,
+        "counterfactual_pnl_usd_1share": 38.665000000000006,
+        "roi": 0.838111133991568,
+        "baseline_rows": 284,
+        "baseline_roi": 0.12543549364828765,
+        "excess_roi": 0.7126756403432803,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.7570869345329213,
+          2.21158981138355
+        ],
+        "top5_removed_roi": -1.4835901398899176,
+        "worst_day_pnl": -22.300000000000004,
+        "best_day_pnl": 32.15,
+        "positive_day_rate": 0.5555555555555556
+      },
+      "holdout": {
+        "rows": 33,
+        "active_dates": 8,
+        "cities": 15,
+        "cost_usd_1share": 16.444,
+        "counterfactual_pnl_usd_1share": 15.560000000000002,
+        "roi": 0.9462417903186574,
+        "baseline_rows": 62,
+        "baseline_roi": 0.22967265047518484,
+        "excess_roi": 0.7165691398434726,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.9711916592737668,
+          2.599326733817056
+        ],
+        "top5_removed_roi": -3.1684656373821554,
+        "worst_day_pnl": -12.489999999999998,
+        "best_day_pnl": 40.35,
+        "positive_day_rate": 0.375
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 13,
+            "cost": 7.23,
+            "pnl": -22.300000000000004,
+            "roi": -3.084370677731674
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 5,
+            "cost": 2.249,
+            "pnl": -12.489999999999998,
+            "roi": -5.553579368608269
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 7,
+            "cost": 3.2399999999999998,
+            "pnl": -12.4,
+            "roi": -3.827160493827161
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 2,
+            "cost": 0.865,
+            "pnl": -8.65,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 2,
+            "cost": 0.6385000000000001,
+            "pnl": -6.385,
+            "roi": -9.999999999999998
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 9,
+            "cost": 4.565,
+            "pnl": -5.6499999999999995,
+            "roi": -1.2376779846659363
+          },
+          {
+            "event_date": "2026-05-08",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 14,
+            "cost": 6.965,
+            "pnl": 40.35,
+            "roi": 5.793251974156497
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 8,
+            "cost": 4.785,
+            "pnl": 32.15,
+            "roi": 6.718913270637408
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 6,
+            "cost": 3.4499999999999997,
+            "pnl": 15.5,
+            "roi": 4.492753623188406
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 4,
+            "cost": 1.46,
+            "pnl": 15.399999999999999,
+            "roi": 10.54794520547945
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 7,
+            "cost": 3.6900000000000004,
+            "pnl": 13.099999999999998,
+            "roi": 3.5501355013550127
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 2,
+            "cost": 1.045,
+            "pnl": 9.55,
+            "roi": 9.138755980861246
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 11,
+            "cost": 5.4399999999999995,
+            "pnl": 5.600000000000001,
+            "roi": 1.0294117647058827
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "NYC",
+            "rows": 12,
+            "cost": 6.2,
+            "pnl": -22.0,
+            "roi": -3.5483870967741935
+          },
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "CapeTown",
+            "rows": 2,
+            "cost": 1.155,
+            "pnl": -11.55,
+            "roi": -10.0
+          },
+          {
+            "city": "Seoul",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": -5.949999999999999,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 13,
+            "cost": 5.3175,
+            "pnl": 36.824999999999996,
+            "roi": 6.9252468265162195
+          },
+          {
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 3.275,
+            "pnl": 17.25,
+            "roi": 5.2671755725190845
+          },
+          {
+            "city": "Tokyo",
+            "rows": 3,
+            "cost": 1.85,
+            "pnl": 11.5,
+            "roi": 6.216216216216216
+          },
+          {
+            "city": "Chengdu",
+            "rows": 4,
+            "cost": 1.9300000000000002,
+            "pnl": 10.7,
+            "roi": 5.544041450777201
+          },
+          {
+            "city": "Karachi",
+            "rows": 9,
+            "cost": 3.955,
+            "pnl": 10.450000000000001,
+            "roi": 2.642225031605563
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 9,
+            "cost": 4.0935,
+            "pnl": -0.935,
+            "roi": -0.22841089532185174
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 88,
+            "cost": 47.21,
+            "pnl": 7.900000000000003,
+            "roi": 0.16733742851090877
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 25,
+            "cost": 11.274000000000001,
+            "pnl": 47.260000000000005,
+            "roi": 4.191946070604931
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_no_035_065",
+      "risk_filter": "no_filter",
+      "train": {
+        "rows": 119,
+        "active_dates": 20,
+        "cities": 41,
+        "cost_usd_1share": 66.93499999999999,
+        "counterfactual_pnl_usd_1share": 0.6500000000000012,
+        "roi": 0.009710913572869222,
+        "baseline_rows": 210,
+        "baseline_roi": -0.3298933117737514,
+        "excess_roi": 0.33960422534662066,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.4121476516631588,
+          1.0131509665838718
+        ],
+        "top5_removed_roi": -1.6750756811301717,
+        "worst_day_pnl": -29.200000000000003,
+        "best_day_pnl": 24.4,
+        "positive_day_rate": 0.5
+      },
+      "holdout": {
+        "rows": 36,
+        "active_dates": 7,
+        "cities": 22,
+        "cost_usd_1share": 20.435,
+        "counterfactual_pnl_usd_1share": 5.6499999999999995,
+        "roi": 0.27648642035723026,
+        "baseline_rows": 44,
+        "baseline_roi": -0.4325294000398644,
+        "excess_roi": 0.7090158203970947,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.13299873068669069,
+          1.9815678312471126
+        ],
+        "top5_removed_roi": -2.1491658488714425,
+        "worst_day_pnl": -5.8999999999999995,
+        "best_day_pnl": 12.05,
+        "positive_day_rate": 0.42857142857142855
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 15,
+            "cost": 8.92,
+            "pnl": -29.200000000000003,
+            "roi": -3.273542600896861
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 6,
+            "cost": 3.1799999999999997,
+            "pnl": -11.8,
+            "roi": -3.7106918238993716
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 6,
+            "cost": 3.005,
+            "pnl": -10.05,
+            "roi": -3.344425956738769
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 3,
+            "cost": 1.605,
+            "pnl": -6.05,
+            "roi": -3.7694704049844234
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": -6.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 8,
+            "cost": 4.59,
+            "pnl": -5.8999999999999995,
+            "roi": -1.2854030501089324
+          },
+          {
+            "event_date": "2026-05-21",
+            "rows": 1,
+            "cost": 0.53,
+            "pnl": -5.300000000000001,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-05",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-11",
+            "rows": 11,
+            "cost": 6.56,
+            "pnl": 24.4,
+            "roi": 3.7195121951219514
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 15,
+            "cost": 8.335,
+            "pnl": 16.65,
+            "roi": 1.9976004799040188
+          },
+          {
+            "event_date": "2026-05-29",
+            "rows": 19,
+            "cost": 10.795,
+            "pnl": 12.05,
+            "roi": 1.1162575266327004
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.895,
+            "pnl": 11.05,
+            "roi": 12.3463687150838
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 9,
+            "cost": 5.1,
+            "pnl": 9.000000000000004,
+            "roi": 1.764705882352942
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          },
+          {
+            "event_date": "2026-05-20",
+            "rows": 12,
+            "cost": 6.405,
+            "pnl": 5.95,
+            "roi": 0.9289617486338798
+          },
+          {
+            "event_date": "2026-05-22",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": 3.95,
+            "roi": 6.528925619834712
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "NYC",
+            "rows": 10,
+            "cost": 5.6899999999999995,
+            "pnl": -26.9,
+            "roi": -4.727592267135325
+          },
+          {
+            "city": "Paris",
+            "rows": 7,
+            "cost": 3.875,
+            "pnl": -18.75,
+            "roi": -4.838709677419355
+          },
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 3.275,
+            "pnl": 17.25,
+            "roi": 5.2671755725190845
+          },
+          {
+            "city": "LA",
+            "rows": 7,
+            "cost": 3.535,
+            "pnl": 14.649999999999999,
+            "roi": 4.144271570014144
+          },
+          {
+            "city": "Milan",
+            "rows": 5,
+            "cost": 2.66,
+            "pnl": 13.4,
+            "roi": 5.037593984962406
+          },
+          {
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          },
+          {
+            "city": "Madrid",
+            "rows": 2,
+            "cost": 1.025,
+            "pnl": 9.75,
+            "roi": 9.51219512195122
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 136,
+            "cost": 76.875,
+            "pnl": -18.749999999999996,
+            "roi": -0.2439024390243902
+          },
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 4,
+            "cost": 2.38,
+            "pnl": 6.200000000000001,
+            "roi": 2.605042016806723
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 15,
+            "cost": 8.115,
+            "pnl": 18.85,
+            "roi": 2.3228589032655576
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_no_035_065",
+      "risk_filter": "block_high_uncertainty",
+      "train": {
+        "rows": 13,
+        "active_dates": 9,
+        "cities": 8,
+        "cost_usd_1share": 7.1,
+        "counterfactual_pnl_usd_1share": 9.0,
+        "roi": 1.267605633802817,
+        "baseline_rows": 136,
+        "baseline_roi": -0.010961996250867448,
+        "excess_roi": 1.2785676300536843,
+        "excess_roi_ci95_event_date_cluster": [
+          -5.459337159738016,
+          6.502981720840611
+        ],
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -11.75,
+        "best_day_pnl": 11.05,
+        "positive_day_rate": 0.5555555555555556
+      },
+      "holdout": {
+        "rows": 6,
+        "active_dates": 4,
+        "cities": 5,
+        "cost_usd_1share": 3.395,
+        "counterfactual_pnl_usd_1share": 16.05,
+        "roi": 4.727540500736377,
+        "baseline_rows": 44,
+        "baseline_roi": -0.4325294000398644,
+        "excess_roi": 5.160069900776241,
+        "excess_roi_ci95_event_date_cluster": [
+          -5.567468251363092,
+          9.805160477218498
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.25,
+        "best_day_pnl": 13.3,
+        "positive_day_rate": 0.75
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 2,
+            "cost": 1.175,
+            "pnl": -11.75,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 1,
+            "cost": 0.525,
+            "pnl": -5.25,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 1,
+            "cost": 0.46,
+            "pnl": -4.6000000000000005,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.615,
+            "pnl": 3.85,
+            "roi": 6.260162601626017
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": 3.95,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 3,
+            "cost": 1.67,
+            "pnl": 13.3,
+            "roi": 7.9640718562874255
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.895,
+            "pnl": 11.05,
+            "roi": 12.3463687150838
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 2,
+            "cost": 1.03,
+            "pnl": 9.7,
+            "roi": 9.417475728155338
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 1.1749999999999998,
+            "pnl": 8.25,
+            "roi": 7.021276595744682
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": 3.95,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.615,
+            "pnl": 3.85,
+            "roi": 6.260162601626017
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Atlanta",
+            "rows": 1,
+            "cost": 0.62,
+            "pnl": -6.2,
+            "roi": -10.0
+          },
+          {
+            "city": "London",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "city": "Karachi",
+            "rows": 2,
+            "cost": 1.135,
+            "pnl": -1.3500000000000005,
+            "roi": -1.1894273127753308
+          },
+          {
+            "city": "Miami",
+            "rows": 5,
+            "cost": 2.69,
+            "pnl": 3.0999999999999996,
+            "roi": 1.1524163568773234
+          },
+          {
+            "city": "Chicago",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": 3.95,
+            "roi": 6.528925619834712
+          },
+          {
+            "city": "LA",
+            "rows": 5,
+            "cost": 2.475,
+            "pnl": 15.25,
+            "roi": 6.161616161616162
+          },
+          {
+            "city": "Warsaw",
+            "rows": 1,
+            "cost": 0.575,
+            "pnl": 4.25,
+            "roi": 7.391304347826088
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Moscow",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Paris",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 4,
+            "cost": 2.38,
+            "pnl": 6.200000000000001,
+            "roi": 2.605042016806723
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 15,
+            "cost": 8.115,
+            "pnl": 18.85,
+            "roi": 2.3228589032655576
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_no_035_065",
+      "risk_filter": "low_or_medium_quality",
+      "train": {
+        "rows": 13,
+        "active_dates": 9,
+        "cities": 8,
+        "cost_usd_1share": 7.1,
+        "counterfactual_pnl_usd_1share": 9.0,
+        "roi": 1.267605633802817,
+        "baseline_rows": 136,
+        "baseline_roi": -0.010961996250867448,
+        "excess_roi": 1.2785676300536843,
+        "excess_roi_ci95_event_date_cluster": [
+          -4.891764979641722,
+          6.674126703977171
+        ],
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -11.75,
+        "best_day_pnl": 11.05,
+        "positive_day_rate": 0.5555555555555556
+      },
+      "holdout": {
+        "rows": 6,
+        "active_dates": 4,
+        "cities": 5,
+        "cost_usd_1share": 3.395,
+        "counterfactual_pnl_usd_1share": 16.05,
+        "roi": 4.727540500736377,
+        "baseline_rows": 44,
+        "baseline_roi": -0.4325294000398644,
+        "excess_roi": 5.160069900776241,
+        "excess_roi_ci95_event_date_cluster": [
+          -4.239468339798791,
+          9.478129051781323
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.25,
+        "best_day_pnl": 13.3,
+        "positive_day_rate": 0.75
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 2,
+            "cost": 1.175,
+            "pnl": -11.75,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 1,
+            "cost": 0.525,
+            "pnl": -5.25,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 1,
+            "cost": 0.46,
+            "pnl": -4.6000000000000005,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.615,
+            "pnl": 3.85,
+            "roi": 6.260162601626017
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": 3.95,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 3,
+            "cost": 1.67,
+            "pnl": 13.3,
+            "roi": 7.9640718562874255
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.895,
+            "pnl": 11.05,
+            "roi": 12.3463687150838
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 2,
+            "cost": 1.03,
+            "pnl": 9.7,
+            "roi": 9.417475728155338
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 2,
+            "cost": 1.1749999999999998,
+            "pnl": 8.25,
+            "roi": 7.021276595744682
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "event_date": "2026-05-30",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": 3.95,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.615,
+            "pnl": 3.85,
+            "roi": 6.260162601626017
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Atlanta",
+            "rows": 1,
+            "cost": 0.62,
+            "pnl": -6.2,
+            "roi": -10.0
+          },
+          {
+            "city": "London",
+            "rows": 1,
+            "cost": 0.61,
+            "pnl": -6.1,
+            "roi": -10.0
+          },
+          {
+            "city": "Karachi",
+            "rows": 2,
+            "cost": 1.135,
+            "pnl": -1.3500000000000005,
+            "roi": -1.1894273127753308
+          },
+          {
+            "city": "Miami",
+            "rows": 5,
+            "cost": 2.69,
+            "pnl": 3.0999999999999996,
+            "roi": 1.1524163568773234
+          },
+          {
+            "city": "Chicago",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": 3.95,
+            "roi": 6.528925619834712
+          },
+          {
+            "city": "LA",
+            "rows": 5,
+            "cost": 2.475,
+            "pnl": 15.25,
+            "roi": 6.161616161616162
+          },
+          {
+            "city": "Warsaw",
+            "rows": 1,
+            "cost": 0.575,
+            "pnl": 4.25,
+            "roi": 7.391304347826088
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Moscow",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "city": "Paris",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 4,
+            "cost": 2.38,
+            "pnl": 6.200000000000001,
+            "roi": 2.605042016806723
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 15,
+            "cost": 8.115,
+            "pnl": 18.85,
+            "roi": 2.3228589032655576
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_no_035_065",
+      "risk_filter": "tail_blocked",
+      "train": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "best_day_pnl": null,
+        "positive_day_rate": null
+      },
+      "holdout": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "best_day_pnl": null,
+        "positive_day_rate": null
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [],
+        "best_dates": [],
+        "city_extremes": [],
+        "by_forecast_regime": []
+      }
+    },
+    {
+      "selector": "buy_no_035_065",
+      "risk_filter": "hist_miss_below_train_median",
+      "train": {
+        "rows": 80,
+        "active_dates": 17,
+        "cities": 31,
+        "cost_usd_1share": 44.91,
+        "counterfactual_pnl_usd_1share": 30.9,
+        "roi": 0.6880427521710087,
+        "baseline_rows": 210,
+        "baseline_roi": -0.3298933117737514,
+        "excess_roi": 1.01793606394476,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.30601112838179845,
+          2.7080472893468257
+        ],
+        "top5_removed_roi": -1.1956330339848567,
+        "worst_day_pnl": -23.450000000000003,
+        "best_day_pnl": 17.2,
+        "positive_day_rate": 0.5882352941176471
+      },
+      "holdout": {
+        "rows": 26,
+        "active_dates": 5,
+        "cities": 16,
+        "cost_usd_1share": 14.79,
+        "counterfactual_pnl_usd_1share": 32.1,
+        "roi": 2.1703853955375254,
+        "baseline_rows": 44,
+        "baseline_roi": -0.4325294000398644,
+        "excess_roi": 2.60291479557739,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.17077744935974648,
+          4.558090028462059
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.05,
+        "best_day_pnl": 24.55,
+        "positive_day_rate": 0.6
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 14,
+            "cost": 8.345,
+            "pnl": -23.450000000000003,
+            "roi": -2.810065907729179
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 6,
+            "cost": 3.1799999999999997,
+            "pnl": -11.8,
+            "roi": -3.7106918238993716
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 6,
+            "cost": 3.005,
+            "pnl": -10.05,
+            "roi": -3.344425956738769
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 3,
+            "cost": 1.605,
+            "pnl": -6.05,
+            "roi": -3.7694704049844234
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-21",
+            "rows": 1,
+            "cost": 0.53,
+            "pnl": -5.300000000000001,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 2,
+            "cost": 1.19,
+            "pnl": -1.8999999999999986,
+            "roi": -1.5966386554621836
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 15,
+            "cost": 8.545,
+            "pnl": 24.55,
+            "roi": 2.873025160912815
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 9,
+            "cost": 5.28,
+            "pnl": 17.2,
+            "roi": 3.2575757575757573
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 8,
+            "cost": 4.545,
+            "pnl": 14.55,
+            "roi": 3.2013201320132016
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 3,
+            "cost": 1.815,
+            "pnl": 11.850000000000001,
+            "roi": 6.528925619834712
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.895,
+            "pnl": 11.05,
+            "roi": 12.3463687150838
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 7,
+            "cost": 3.98,
+            "pnl": 10.2,
+            "roi": 2.5628140703517586
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          },
+          {
+            "event_date": "2026-05-15",
+            "rows": 4,
+            "cost": 2.175,
+            "pnl": 8.25,
+            "roi": 3.7931034482758625
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Paris",
+            "rows": 6,
+            "cost": 3.34,
+            "pnl": -13.4,
+            "roi": -4.0119760479041915
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 1,
+            "cost": 0.645,
+            "pnl": -6.45,
+            "roi": -10.0
+          },
+          {
+            "city": "Houston",
+            "rows": 1,
+            "cost": 0.645,
+            "pnl": -6.45,
+            "roi": -10.0
+          },
+          {
+            "city": "KualaLumpur",
+            "rows": 1,
+            "cost": 0.635,
+            "pnl": -6.35,
+            "roi": -10.0
+          },
+          {
+            "city": "LA",
+            "rows": 7,
+            "cost": 3.535,
+            "pnl": 14.649999999999999,
+            "roi": 4.144271570014144
+          },
+          {
+            "city": "Warsaw",
+            "rows": 5,
+            "cost": 2.64,
+            "pnl": 13.599999999999998,
+            "roi": 5.1515151515151505
+          },
+          {
+            "city": "Chicago",
+            "rows": 3,
+            "cost": 1.835,
+            "pnl": 11.65,
+            "roi": 6.348773841961854
+          },
+          {
+            "city": "Tokyo",
+            "rows": 7,
+            "cost": 3.915,
+            "pnl": 10.850000000000001,
+            "roi": 2.7713920817369098
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 2,
+            "cost": 1.12,
+            "pnl": 8.8,
+            "roi": 7.857142857142857
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 4,
+            "cost": 2.38,
+            "pnl": 6.200000000000001,
+            "roi": 2.605042016806723
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 15,
+            "cost": 8.115,
+            "pnl": 18.85,
+            "roi": 2.3228589032655576
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 87,
+            "cost": 49.205,
+            "pnl": 37.949999999999996,
+            "roi": 0.7712630830200182
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_no_035_065",
+      "risk_filter": "market_model_l1_not_top_quartile",
+      "train": {
+        "rows": 89,
+        "active_dates": 20,
+        "cities": 38,
+        "cost_usd_1share": 50.425000000000004,
+        "counterfactual_pnl_usd_1share": -14.249999999999993,
+        "roi": -0.2825979176995536,
+        "baseline_rows": 210,
+        "baseline_roi": -0.3298933117737514,
+        "excess_roi": 0.047295394074197805,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.9616070478444542,
+          1.0813104242157126
+        ],
+        "top5_removed_roi": -1.878172588832487,
+        "worst_day_pnl": -30.800000000000004,
+        "best_day_pnl": 11.5,
+        "positive_day_rate": 0.55
+      },
+      "holdout": {
+        "rows": 26,
+        "active_dates": 7,
+        "cities": 19,
+        "cost_usd_1share": 14.715000000000002,
+        "counterfactual_pnl_usd_1share": 2.850000000000003,
+        "roi": 0.19367991845056085,
+        "baseline_rows": 44,
+        "baseline_roi": -0.4325294000398644,
+        "excess_roi": 0.6262093184904253,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.5819989036250522,
+          2.364572088058053
+        ],
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -5.05,
+        "best_day_pnl": 8.5,
+        "positive_day_rate": 0.42857142857142855
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 12,
+            "cost": 7.08,
+            "pnl": -30.800000000000004,
+            "roi": -4.350282485875707
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 4,
+            "cost": 1.94,
+            "pnl": -9.4,
+            "roi": -4.845360824742269
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 5,
+            "cost": 2.77,
+            "pnl": -7.700000000000001,
+            "roi": -2.7797833935018055
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": -6.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-10",
+            "rows": 1,
+            "cost": 0.55,
+            "pnl": -5.5,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-21",
+            "rows": 1,
+            "cost": 0.53,
+            "pnl": -5.300000000000001,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-05",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-14",
+            "rows": 12,
+            "cost": 6.85,
+            "pnl": 11.5,
+            "roi": 1.6788321167883213
+          },
+          {
+            "event_date": "2026-05-15",
+            "rows": 5,
+            "cost": 3.06,
+            "pnl": 9.4,
+            "roi": 3.0718954248366015
+          },
+          {
+            "event_date": "2026-05-11",
+            "rows": 7,
+            "cost": 4.08,
+            "pnl": 9.2,
+            "roi": 2.2549019607843137
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 2,
+            "cost": 1.15,
+            "pnl": 8.5,
+            "roi": 7.391304347826088
+          },
+          {
+            "event_date": "2026-05-29",
+            "rows": 13,
+            "cost": 7.305,
+            "pnl": 6.950000000000002,
+            "roi": 0.9514031485284055
+          },
+          {
+            "event_date": "2026-05-20",
+            "rows": 12,
+            "cost": 6.405,
+            "pnl": 5.95,
+            "roi": 0.9289617486338798
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 1,
+            "cost": 0.48,
+            "pnl": 5.2,
+            "roi": 10.833333333333334
+          },
+          {
+            "event_date": "2026-05-22",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": 3.95,
+            "roi": 6.528925619834712
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "NYC",
+            "rows": 5,
+            "cost": 2.76,
+            "pnl": -17.599999999999998,
+            "roi": -6.3768115942028984
+          },
+          {
+            "city": "Paris",
+            "rows": 6,
+            "cost": 3.395,
+            "pnl": -13.950000000000001,
+            "roi": -4.10898379970545
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "SaoPaulo",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 3.275,
+            "pnl": 17.25,
+            "roi": 5.2671755725190845
+          },
+          {
+            "city": "Milan",
+            "rows": 2,
+            "cost": 0.9550000000000001,
+            "pnl": 10.450000000000001,
+            "roi": 10.942408376963352
+          },
+          {
+            "city": "LA",
+            "rows": 4,
+            "cost": 2.06,
+            "pnl": 9.399999999999999,
+            "roi": 4.563106796116504
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 2,
+            "cost": 1.12,
+            "pnl": 8.8,
+            "roi": 7.857142857142857
+          },
+          {
+            "city": "Moscow",
+            "rows": 2,
+            "cost": 1.1400000000000001,
+            "pnl": 8.600000000000001,
+            "roi": 7.543859649122807
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 99,
+            "cost": 56.125,
+            "pnl": -31.249999999999996,
+            "roi": -0.5567928730512249
+          },
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 4,
+            "cost": 2.38,
+            "pnl": 6.200000000000001,
+            "roi": 2.605042016806723
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 12,
+            "cost": 6.635,
+            "pnl": 13.650000000000002,
+            "roi": 2.0572720422004527
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_no_035_065",
+      "risk_filter": "entropy_not_top_quartile",
+      "train": {
+        "rows": 73,
+        "active_dates": 18,
+        "cities": 33,
+        "cost_usd_1share": 40.95,
+        "counterfactual_pnl_usd_1share": 0.49999999999999556,
+        "roi": 0.0122100122100121,
+        "baseline_rows": 210,
+        "baseline_roi": -0.3298933117737514,
+        "excess_roi": 0.34210332398376353,
+        "excess_roi_ci95_event_date_cluster": [
+          -1.3802304443283526,
+          1.9494707096057642
+        ],
+        "top5_removed_roi": -3.1123547137322425,
+        "worst_day_pnl": -25.700000000000003,
+        "best_day_pnl": 32.15,
+        "positive_day_rate": 0.3888888888888889
+      },
+      "holdout": {
+        "rows": 24,
+        "active_dates": 7,
+        "cities": 15,
+        "cost_usd_1share": 13.69,
+        "counterfactual_pnl_usd_1share": 3.100000000000005,
+        "roi": 0.22644265887509168,
+        "baseline_rows": 44,
+        "baseline_roi": -0.4325294000398644,
+        "excess_roi": 0.6589720589149561,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.6259794889583925,
+          2.471926450845704
+        ],
+        "top5_removed_roi": -5.50561797752809,
+        "worst_day_pnl": -7.199999999999999,
+        "best_day_pnl": 12.350000000000001,
+        "positive_day_rate": 0.5714285714285714
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-28",
+            "rows": 11,
+            "cost": 6.57,
+            "pnl": -25.700000000000003,
+            "roi": -3.9117199391171997
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 5,
+            "cost": 2.645,
+            "pnl": -16.45,
+            "roi": -6.2192816635160675
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 3,
+            "cost": 1.72,
+            "pnl": -7.199999999999999,
+            "roi": -4.186046511627906
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.605,
+            "pnl": -6.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-08",
+            "rows": 1,
+            "cost": 0.545,
+            "pnl": -5.45,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 8,
+            "cost": 4.535,
+            "pnl": -5.349999999999999,
+            "roi": -1.1797133406835718
+          },
+          {
+            "event_date": "2026-06-09",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-05",
+            "rows": 1,
+            "cost": 0.505,
+            "pnl": -5.05,
+            "roi": -10.0
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-11",
+            "rows": 8,
+            "cost": 4.785,
+            "pnl": 32.15,
+            "roi": 6.718913270637408
+          },
+          {
+            "event_date": "2026-05-14",
+            "rows": 7,
+            "cost": 3.6900000000000004,
+            "pnl": 13.099999999999998,
+            "roi": 3.5501355013550127
+          },
+          {
+            "event_date": "2026-05-29",
+            "rows": 10,
+            "cost": 5.765,
+            "pnl": 12.350000000000001,
+            "roi": 2.1422376409366874
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.895,
+            "pnl": 11.05,
+            "roi": 12.3463687150838
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 5,
+            "cost": 3.005,
+            "pnl": 9.950000000000003,
+            "roi": 3.3111480865224636
+          },
+          {
+            "event_date": "2026-05-20",
+            "rows": 10,
+            "cost": 5.345,
+            "pnl": 6.55,
+            "roi": 1.225444340505145
+          },
+          {
+            "event_date": "2026-06-03",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          },
+          {
+            "event_date": "2026-05-24",
+            "rows": 1,
+            "cost": 0.595,
+            "pnl": 4.050000000000001,
+            "roi": 6.806722689075632
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "NYC",
+            "rows": 10,
+            "cost": 5.6899999999999995,
+            "pnl": -26.9,
+            "roi": -4.727592267135325
+          },
+          {
+            "city": "Ankara",
+            "rows": 3,
+            "cost": 1.785,
+            "pnl": -17.849999999999998,
+            "roi": -10.0
+          },
+          {
+            "city": "BuenosAires",
+            "rows": 2,
+            "cost": 1.22,
+            "pnl": -12.2,
+            "roi": -10.0
+          },
+          {
+            "city": "CapeTown",
+            "rows": 2,
+            "cost": 1.155,
+            "pnl": -11.55,
+            "roi": -10.0
+          },
+          {
+            "city": "Houston",
+            "rows": 1,
+            "cost": 0.645,
+            "pnl": -6.45,
+            "roi": -10.0
+          },
+          {
+            "city": "Warsaw",
+            "rows": 6,
+            "cost": 3.275,
+            "pnl": 17.25,
+            "roi": 5.2671755725190845
+          },
+          {
+            "city": "LA",
+            "rows": 7,
+            "cost": 3.535,
+            "pnl": 14.649999999999999,
+            "roi": 4.144271570014144
+          },
+          {
+            "city": "Tokyo",
+            "rows": 3,
+            "cost": 1.85,
+            "pnl": 11.5,
+            "roi": 6.216216216216216
+          },
+          {
+            "city": "Amsterdam",
+            "rows": 2,
+            "cost": 1.12,
+            "pnl": 8.8,
+            "roi": 7.857142857142857
+          },
+          {
+            "city": "Manila",
+            "rows": 2,
+            "cost": 1.125,
+            "pnl": 8.75,
+            "roi": 7.777777777777778
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 78,
+            "cost": 44.145,
+            "pnl": -21.449999999999996,
+            "roi": -0.4858987427794766
+          },
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 4,
+            "cost": 2.38,
+            "pnl": 6.200000000000001,
+            "roi": 2.605042016806723
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 15,
+            "cost": 8.115,
+            "pnl": 18.85,
+            "roi": 2.3228589032655576
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_yes_025_045",
+      "risk_filter": "no_filter",
+      "train": {
+        "rows": 17,
+        "active_dates": 12,
+        "cities": 10,
+        "cost_usd_1share": 5.4435,
+        "counterfactual_pnl_usd_1share": 35.565,
+        "roi": 6.533480297602645,
+        "baseline_rows": 74,
+        "baseline_roi": 2.523481527864746,
+        "excess_roi": 4.009998769737899,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.15508053951296485,
+          7.5016710841002
+        ],
+        "top5_removed_roi": 0.4766893661602936,
+        "worst_day_pnl": -2.685,
+        "best_day_pnl": 10.950000000000001,
+        "positive_day_rate": 0.6666666666666666
+      },
+      "holdout": {
+        "rows": 9,
+        "active_dates": 4,
+        "cities": 6,
+        "cost_usd_1share": 2.754,
+        "counterfactual_pnl_usd_1share": 12.46,
+        "roi": 4.5243282498184465,
+        "baseline_rows": 18,
+        "baseline_roi": 3.4125311362329946,
+        "excess_roi": 1.1117971135854519,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.0333645061740078,
+          7.159516600325851
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.9,
+        "best_day_pnl": 28.0,
+        "positive_day_rate": 0.25
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-30",
+            "rows": 2,
+            "cost": 0.59,
+            "pnl": -5.9,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.529,
+            "pnl": -5.290000000000001,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-15",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-20",
+            "rows": 1,
+            "cost": 0.255,
+            "pnl": -2.55,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 2,
+            "cost": 0.6599999999999999,
+            "pnl": 3.4000000000000004,
+            "roi": 5.151515151515152
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 4,
+            "cost": 1.2,
+            "pnl": 28.0,
+            "roi": 23.333333333333336
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 3,
+            "cost": 0.905,
+            "pnl": 10.950000000000001,
+            "roi": 12.099447513812155
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.375,
+            "pnl": 6.25,
+            "roi": 16.666666666666668
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": 5.6499999999999995,
+            "roi": 12.988505747126435
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 1,
+            "cost": 0.445,
+            "pnl": 5.549999999999999,
+            "roi": 12.471910112359549
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.565,
+            "pnl": 4.35,
+            "roi": 7.699115044247788
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.595,
+            "pnl": 4.049999999999999,
+            "roi": 6.806722689075629
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "city": "Madrid",
+            "rows": 1,
+            "cost": 0.265,
+            "pnl": -2.6500000000000004,
+            "roi": -10.0
+          },
+          {
+            "city": "HongKong",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "city": "Atlanta",
+            "rows": 4,
+            "cost": 1.24,
+            "pnl": -2.3999999999999995,
+            "roi": -1.9354838709677415
+          },
+          {
+            "city": "Austin",
+            "rows": 2,
+            "cost": 0.6950000000000001,
+            "pnl": 3.0499999999999994,
+            "roi": 4.388489208633092
+          },
+          {
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "city": "Houston",
+            "rows": 1,
+            "cost": 0.285,
+            "pnl": 7.15,
+            "roi": 25.087719298245617
+          },
+          {
+            "city": "Karachi",
+            "rows": 4,
+            "cost": 1.31,
+            "pnl": 6.900000000000002,
+            "roi": 5.267175572519085
+          },
+          {
+            "city": "Chengdu",
+            "rows": 1,
+            "cost": 0.355,
+            "pnl": 6.45,
+            "roi": 18.169014084507044
+          },
+          {
+            "city": "PanamaCity",
+            "rows": 1,
+            "cost": 0.445,
+            "pnl": 5.549999999999999,
+            "roi": 12.471910112359549
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 5,
+            "cost": 1.7135,
+            "pnl": -7.135,
+            "roi": -4.163991829588562
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 11,
+            "cost": 3.325,
+            "pnl": 26.75,
+            "roi": 8.045112781954886
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 10,
+            "cost": 3.159,
+            "pnl": 28.410000000000004,
+            "roi": 8.993352326685661
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_yes_025_045",
+      "risk_filter": "block_high_uncertainty",
+      "train": {
+        "rows": 8,
+        "active_dates": 7,
+        "cities": 3,
+        "cost_usd_1share": 2.6334999999999997,
+        "counterfactual_pnl_usd_1share": 13.665000000000003,
+        "roi": 5.188912094171257,
+        "baseline_rows": 74,
+        "baseline_roi": 2.523481527864746,
+        "excess_roi": 2.6654305663065108,
+        "excess_roi_ci95_event_date_cluster": [
+          -6.407910346259379,
+          12.715478429017766
+        ],
+        "top5_removed_roi": -9.999999999999998,
+        "worst_day_pnl": -3.15,
+        "best_day_pnl": 6.699999999999999,
+        "positive_day_rate": 0.5714285714285714
+      },
+      "holdout": {
+        "rows": 7,
+        "active_dates": 4,
+        "cities": 4,
+        "cost_usd_1share": 2.239,
+        "counterfactual_pnl_usd_1share": 7.610000000000006,
+        "roi": 3.3988387673068363,
+        "baseline_rows": 18,
+        "baseline_roi": 3.4125311362329946,
+        "excess_roi": -0.013692368926158327,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.7558315964576856,
+          5.013322835034641
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.9,
+        "best_day_pnl": 20.55,
+        "positive_day_rate": 0.25
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-30",
+            "rows": 2,
+            "cost": 0.59,
+            "pnl": -5.9,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 1,
+            "cost": 0.315,
+            "pnl": -3.15,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 1,
+            "cost": 0.305,
+            "pnl": -3.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 1,
+            "cost": 0.269,
+            "pnl": -2.6900000000000004,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 2,
+            "cost": 0.62,
+            "pnl": 3.8000000000000003,
+            "roi": 6.129032258064517
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 3,
+            "cost": 0.945,
+            "pnl": 20.55,
+            "roi": 21.746031746031747
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 1,
+            "cost": 0.33,
+            "pnl": 6.699999999999999,
+            "roi": 20.3030303030303
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.375,
+            "pnl": 6.25,
+            "roi": 16.666666666666668
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 2,
+            "cost": 0.62,
+            "pnl": 3.8000000000000003,
+            "roi": 6.129032258064517
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 1,
+            "cost": 0.269,
+            "pnl": -2.6900000000000004,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 1,
+            "cost": 0.305,
+            "pnl": -3.05,
+            "roi": -10.0
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Atlanta",
+            "rows": 3,
+            "cost": 0.985,
+            "pnl": -9.85,
+            "roi": -10.0
+          },
+          {
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "city": "Chicago",
+            "rows": 2,
+            "cost": 0.615,
+            "pnl": 3.8500000000000005,
+            "roi": 6.260162601626017
+          },
+          {
+            "city": "Karachi",
+            "rows": 3,
+            "cost": 1.055,
+            "pnl": 9.450000000000001,
+            "roi": 8.957345971563983
+          },
+          {
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "city": "Karachi",
+            "rows": 3,
+            "cost": 1.055,
+            "pnl": 9.450000000000001,
+            "roi": 8.957345971563983
+          },
+          {
+            "city": "Chicago",
+            "rows": 2,
+            "cost": 0.615,
+            "pnl": 3.8500000000000005,
+            "roi": 6.260162601626017
+          },
+          {
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "city": "Atlanta",
+            "rows": 3,
+            "cost": 0.985,
+            "pnl": -9.85,
+            "roi": -10.0
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 5,
+            "cost": 1.7135,
+            "pnl": -7.135,
+            "roi": -4.163991829588562
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 10,
+            "cost": 3.159,
+            "pnl": 28.410000000000004,
+            "roi": 8.993352326685661
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_yes_025_045",
+      "risk_filter": "low_or_medium_quality",
+      "train": {
+        "rows": 8,
+        "active_dates": 7,
+        "cities": 3,
+        "cost_usd_1share": 2.6334999999999997,
+        "counterfactual_pnl_usd_1share": 13.665000000000003,
+        "roi": 5.188912094171257,
+        "baseline_rows": 74,
+        "baseline_roi": 2.523481527864746,
+        "excess_roi": 2.6654305663065108,
+        "excess_roi_ci95_event_date_cluster": [
+          -7.224145538127525,
+          11.988419811709887
+        ],
+        "top5_removed_roi": -9.999999999999998,
+        "worst_day_pnl": -3.15,
+        "best_day_pnl": 6.699999999999999,
+        "positive_day_rate": 0.5714285714285714
+      },
+      "holdout": {
+        "rows": 7,
+        "active_dates": 4,
+        "cities": 4,
+        "cost_usd_1share": 2.239,
+        "counterfactual_pnl_usd_1share": 7.610000000000006,
+        "roi": 3.3988387673068363,
+        "baseline_rows": 18,
+        "baseline_roi": 3.4125311362329946,
+        "excess_roi": -0.013692368926158327,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.7153490955639246,
+          4.975815772793683
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.9,
+        "best_day_pnl": 20.55,
+        "positive_day_rate": 0.25
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-30",
+            "rows": 2,
+            "cost": 0.59,
+            "pnl": -5.9,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 1,
+            "cost": 0.315,
+            "pnl": -3.15,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 1,
+            "cost": 0.305,
+            "pnl": -3.05,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 1,
+            "cost": 0.269,
+            "pnl": -2.6900000000000004,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 2,
+            "cost": 0.62,
+            "pnl": 3.8000000000000003,
+            "roi": 6.129032258064517
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 3,
+            "cost": 0.945,
+            "pnl": 20.55,
+            "roi": 21.746031746031747
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 1,
+            "cost": 0.33,
+            "pnl": 6.699999999999999,
+            "roi": 20.3030303030303
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.375,
+            "pnl": 6.25,
+            "roi": 16.666666666666668
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 2,
+            "cost": 0.62,
+            "pnl": 3.8000000000000003,
+            "roi": 6.129032258064517
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 1,
+            "cost": 0.269,
+            "pnl": -2.6900000000000004,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 1,
+            "cost": 0.305,
+            "pnl": -3.05,
+            "roi": -10.0
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Atlanta",
+            "rows": 3,
+            "cost": 0.985,
+            "pnl": -9.85,
+            "roi": -10.0
+          },
+          {
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "city": "Chicago",
+            "rows": 2,
+            "cost": 0.615,
+            "pnl": 3.8500000000000005,
+            "roi": 6.260162601626017
+          },
+          {
+            "city": "Karachi",
+            "rows": 3,
+            "cost": 1.055,
+            "pnl": 9.450000000000001,
+            "roi": 8.957345971563983
+          },
+          {
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "city": "Karachi",
+            "rows": 3,
+            "cost": 1.055,
+            "pnl": 9.450000000000001,
+            "roi": 8.957345971563983
+          },
+          {
+            "city": "Chicago",
+            "rows": 2,
+            "cost": 0.615,
+            "pnl": 3.8500000000000005,
+            "roi": 6.260162601626017
+          },
+          {
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "city": "Atlanta",
+            "rows": 3,
+            "cost": 0.985,
+            "pnl": -9.85,
+            "roi": -10.0
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 5,
+            "cost": 1.7135,
+            "pnl": -7.135,
+            "roi": -4.163991829588562
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 10,
+            "cost": 3.159,
+            "pnl": 28.410000000000004,
+            "roi": 8.993352326685661
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_yes_025_045",
+      "risk_filter": "tail_blocked",
+      "train": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "best_day_pnl": null,
+        "positive_day_rate": null
+      },
+      "holdout": {
+        "rows": 0,
+        "active_dates": 0,
+        "cities": 0,
+        "cost_usd_1share": 0.0,
+        "counterfactual_pnl_usd_1share": 0.0,
+        "roi": null,
+        "baseline_rows": 0,
+        "baseline_roi": null,
+        "excess_roi": null,
+        "excess_roi_ci95_event_date_cluster": [
+          null,
+          null
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": null,
+        "best_day_pnl": null,
+        "positive_day_rate": null
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [],
+        "best_dates": [],
+        "city_extremes": [],
+        "by_forecast_regime": []
+      }
+    },
+    {
+      "selector": "buy_yes_025_045",
+      "risk_filter": "hist_miss_below_train_median",
+      "train": {
+        "rows": 13,
+        "active_dates": 9,
+        "cities": 7,
+        "cost_usd_1share": 4.0535000000000005,
+        "counterfactual_pnl_usd_1share": 19.465,
+        "roi": 4.802022943135561,
+        "baseline_rows": 74,
+        "baseline_roi": 2.523481527864746,
+        "excess_roi": 2.2785414152708148,
+        "excess_roi_ci95_event_date_cluster": [
+          -4.451905582747613,
+          6.958549999983349
+        ],
+        "top5_removed_roi": -10.0,
+        "worst_day_pnl": -3.15,
+        "best_day_pnl": 10.950000000000001,
+        "positive_day_rate": 0.5555555555555556
+      },
+      "holdout": {
+        "rows": 8,
+        "active_dates": 4,
+        "cities": 5,
+        "cost_usd_1share": 2.4939999999999998,
+        "counterfactual_pnl_usd_1share": 15.060000000000002,
+        "roi": 6.03849238171612,
+        "baseline_rows": 18,
+        "baseline_roi": 3.4125311362329946,
+        "excess_roi": 2.625961245483125,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.34607109770383104,
+          7.838596694358415
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.9,
+        "best_day_pnl": 28.0,
+        "positive_day_rate": 0.25
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-30",
+            "rows": 2,
+            "cost": 0.59,
+            "pnl": -5.9,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 1,
+            "cost": 0.315,
+            "pnl": -3.15,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 1,
+            "cost": 0.269,
+            "pnl": -2.6900000000000004,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-15",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-20",
+            "rows": 1,
+            "cost": 0.255,
+            "pnl": -2.55,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 2,
+            "cost": 0.6599999999999999,
+            "pnl": 3.4000000000000004,
+            "roi": 5.151515151515152
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 4,
+            "cost": 1.2,
+            "pnl": 28.0,
+            "roi": 23.333333333333336
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 3,
+            "cost": 0.905,
+            "pnl": 10.950000000000001,
+            "roi": 12.099447513812155
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.375,
+            "pnl": 6.25,
+            "roi": 16.666666666666668
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.595,
+            "pnl": 4.049999999999999,
+            "roi": 6.806722689075629
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 2,
+            "cost": 0.6599999999999999,
+            "pnl": 3.4000000000000004,
+            "roi": 5.151515151515152
+          },
+          {
+            "event_date": "2026-05-20",
+            "rows": 1,
+            "cost": 0.255,
+            "pnl": -2.55,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-15",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "city": "Madrid",
+            "rows": 1,
+            "cost": 0.265,
+            "pnl": -2.6500000000000004,
+            "roi": -10.0
+          },
+          {
+            "city": "HongKong",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "city": "Atlanta",
+            "rows": 4,
+            "cost": 1.24,
+            "pnl": -2.3999999999999995,
+            "roi": -1.9354838709677415
+          },
+          {
+            "city": "Chicago",
+            "rows": 2,
+            "cost": 0.615,
+            "pnl": 3.8500000000000005,
+            "roi": 6.260162601626017
+          },
+          {
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "city": "Houston",
+            "rows": 1,
+            "cost": 0.285,
+            "pnl": 7.15,
+            "roi": 25.087719298245617
+          },
+          {
+            "city": "Karachi",
+            "rows": 4,
+            "cost": 1.31,
+            "pnl": 6.900000000000002,
+            "roi": 5.267175572519085
+          },
+          {
+            "city": "Chengdu",
+            "rows": 1,
+            "cost": 0.355,
+            "pnl": 6.45,
+            "roi": 18.169014084507044
+          },
+          {
+            "city": "Chicago",
+            "rows": 2,
+            "cost": 0.615,
+            "pnl": 3.8500000000000005,
+            "roi": 6.260162601626017
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 5,
+            "cost": 1.7135,
+            "pnl": -7.135,
+            "roi": -4.163991829588562
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 6,
+            "cost": 1.675,
+            "pnl": 13.25,
+            "roi": 7.91044776119403
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 10,
+            "cost": 3.159,
+            "pnl": 28.410000000000004,
+            "roi": 8.993352326685661
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_yes_025_045",
+      "risk_filter": "market_model_l1_not_top_quartile",
+      "train": {
+        "rows": 17,
+        "active_dates": 12,
+        "cities": 10,
+        "cost_usd_1share": 5.4435,
+        "counterfactual_pnl_usd_1share": 35.565,
+        "roi": 6.533480297602645,
+        "baseline_rows": 74,
+        "baseline_roi": 2.523481527864746,
+        "excess_roi": 4.009998769737899,
+        "excess_roi_ci95_event_date_cluster": [
+          -0.3955929669365028,
+          7.789961202697817
+        ],
+        "top5_removed_roi": 0.4766893661602936,
+        "worst_day_pnl": -2.685,
+        "best_day_pnl": 10.950000000000001,
+        "positive_day_rate": 0.6666666666666666
+      },
+      "holdout": {
+        "rows": 8,
+        "active_dates": 4,
+        "cities": 6,
+        "cost_usd_1share": 2.439,
+        "counterfactual_pnl_usd_1share": 5.609999999999999,
+        "roi": 2.3001230012300122,
+        "baseline_rows": 18,
+        "baseline_roi": 3.4125311362329946,
+        "excess_roi": -1.1124081350029824,
+        "excess_roi_ci95_event_date_cluster": [
+          -4.257048370016618,
+          5.716023033363064
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.9,
+        "best_day_pnl": 21.150000000000002,
+        "positive_day_rate": 0.25
+      },
+      "gates": {
+        "significance": "FAIL",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-30",
+            "rows": 2,
+            "cost": 0.59,
+            "pnl": -5.9,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.529,
+            "pnl": -5.290000000000001,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-15",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-20",
+            "rows": 1,
+            "cost": 0.255,
+            "pnl": -2.55,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 2,
+            "cost": 0.6599999999999999,
+            "pnl": 3.4000000000000004,
+            "roi": 5.151515151515152
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 3,
+            "cost": 0.885,
+            "pnl": 21.150000000000002,
+            "roi": 23.898305084745765
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 3,
+            "cost": 0.905,
+            "pnl": 10.950000000000001,
+            "roi": 12.099447513812155
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.375,
+            "pnl": 6.25,
+            "roi": 16.666666666666668
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": 5.6499999999999995,
+            "roi": 12.988505747126435
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 1,
+            "cost": 0.445,
+            "pnl": 5.549999999999999,
+            "roi": 12.471910112359549
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.565,
+            "pnl": 4.35,
+            "roi": 7.699115044247788
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.595,
+            "pnl": 4.049999999999999,
+            "roi": 6.806722689075629
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "city": "Chicago",
+            "rows": 1,
+            "cost": 0.3,
+            "pnl": -3.0,
+            "roi": -10.0
+          },
+          {
+            "city": "Madrid",
+            "rows": 1,
+            "cost": 0.265,
+            "pnl": -2.6500000000000004,
+            "roi": -10.0
+          },
+          {
+            "city": "HongKong",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "city": "Atlanta",
+            "rows": 4,
+            "cost": 1.24,
+            "pnl": -2.3999999999999995,
+            "roi": -1.9354838709677415
+          },
+          {
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "city": "Houston",
+            "rows": 1,
+            "cost": 0.285,
+            "pnl": 7.15,
+            "roi": 25.087719298245617
+          },
+          {
+            "city": "Karachi",
+            "rows": 4,
+            "cost": 1.31,
+            "pnl": 6.900000000000002,
+            "roi": 5.267175572519085
+          },
+          {
+            "city": "Chengdu",
+            "rows": 1,
+            "cost": 0.355,
+            "pnl": 6.45,
+            "roi": 18.169014084507044
+          },
+          {
+            "city": "PanamaCity",
+            "rows": 1,
+            "cost": 0.445,
+            "pnl": 5.549999999999999,
+            "roi": 12.471910112359549
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 5,
+            "cost": 1.7135,
+            "pnl": -7.135,
+            "roi": -4.163991829588562
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 9,
+            "cost": 2.844,
+            "pnl": 21.560000000000002,
+            "roi": 7.580872011251759
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 11,
+            "cost": 3.325,
+            "pnl": 26.75,
+            "roi": 8.045112781954886
+          }
+        ]
+      }
+    },
+    {
+      "selector": "buy_yes_025_045",
+      "risk_filter": "entropy_not_top_quartile",
+      "train": {
+        "rows": 16,
+        "active_dates": 11,
+        "cities": 9,
+        "cost_usd_1share": 5.1835,
+        "counterfactual_pnl_usd_1share": 38.16499999999999,
+        "roi": 7.3627857625156725,
+        "baseline_rows": 74,
+        "baseline_roi": 2.523481527864746,
+        "excess_roi": 4.8393042346509265,
+        "excess_roi_ci95_event_date_cluster": [
+          0.18028726669938358,
+          8.736345646303844
+        ],
+        "top5_removed_roi": 1.5229498751680433,
+        "worst_day_pnl": -2.685,
+        "best_day_pnl": 10.950000000000001,
+        "positive_day_rate": 0.7272727272727273
+      },
+      "holdout": {
+        "rows": 9,
+        "active_dates": 4,
+        "cities": 6,
+        "cost_usd_1share": 2.754,
+        "counterfactual_pnl_usd_1share": 12.46,
+        "roi": 4.5243282498184465,
+        "baseline_rows": 18,
+        "baseline_roi": 3.4125311362329946,
+        "excess_roi": 1.1117971135854519,
+        "excess_roi_ci95_event_date_cluster": [
+          -2.033364506174007,
+          7.71731960327607
+        ],
+        "top5_removed_roi": null,
+        "worst_day_pnl": -5.9,
+        "best_day_pnl": 28.0,
+        "positive_day_rate": 0.25
+      },
+      "gates": {
+        "significance": "PASS",
+        "baseline": "FAIL",
+        "forward": "FAIL"
+      },
+      "verdict": "inconclusive",
+      "attribution": {
+        "worst_dates": [
+          {
+            "event_date": "2026-05-30",
+            "rows": 2,
+            "cost": 0.59,
+            "pnl": -5.9,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-04",
+            "rows": 2,
+            "cost": 0.529,
+            "pnl": -5.290000000000001,
+            "roi": -10.000000000000002
+          },
+          {
+            "event_date": "2026-06-01",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-12",
+            "rows": 1,
+            "cost": 0.2685,
+            "pnl": -2.685,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-25",
+            "rows": 1,
+            "cost": 0.26,
+            "pnl": -2.6,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-20",
+            "rows": 1,
+            "cost": 0.255,
+            "pnl": -2.55,
+            "roi": -10.0
+          },
+          {
+            "event_date": "2026-05-28",
+            "rows": 2,
+            "cost": 0.6599999999999999,
+            "pnl": 3.4000000000000004,
+            "roi": 5.151515151515152
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.595,
+            "pnl": 4.049999999999999,
+            "roi": 6.806722689075629
+          }
+        ],
+        "best_dates": [
+          {
+            "event_date": "2026-05-29",
+            "rows": 4,
+            "cost": 1.2,
+            "pnl": 28.0,
+            "roi": 23.333333333333336
+          },
+          {
+            "event_date": "2026-05-27",
+            "rows": 3,
+            "cost": 0.905,
+            "pnl": 10.950000000000001,
+            "roi": 12.099447513812155
+          },
+          {
+            "event_date": "2026-05-07",
+            "rows": 1,
+            "cost": 0.375,
+            "pnl": 6.25,
+            "roi": 16.666666666666668
+          },
+          {
+            "event_date": "2026-05-17",
+            "rows": 1,
+            "cost": 0.42,
+            "pnl": 5.800000000000001,
+            "roi": 13.809523809523812
+          },
+          {
+            "event_date": "2026-05-16",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": 5.6499999999999995,
+            "roi": 12.988505747126435
+          },
+          {
+            "event_date": "2026-05-13",
+            "rows": 1,
+            "cost": 0.445,
+            "pnl": 5.549999999999999,
+            "roi": 12.471910112359549
+          },
+          {
+            "event_date": "2026-05-26",
+            "rows": 2,
+            "cost": 0.565,
+            "pnl": 4.35,
+            "roi": 7.699115044247788
+          },
+          {
+            "event_date": "2026-05-09",
+            "rows": 2,
+            "cost": 0.595,
+            "pnl": 4.049999999999999,
+            "roi": 6.806722689075629
+          }
+        ],
+        "city_extremes": [
+          {
+            "city": "Miami",
+            "rows": 1,
+            "cost": 0.435,
+            "pnl": -4.35,
+            "roi": -10.0
+          },
+          {
+            "city": "Madrid",
+            "rows": 1,
+            "cost": 0.265,
+            "pnl": -2.6500000000000004,
+            "roi": -10.0
+          },
+          {
+            "city": "Atlanta",
+            "rows": 4,
+            "cost": 1.24,
+            "pnl": -2.3999999999999995,
+            "roi": -1.9354838709677415
+          },
+          {
+            "city": "Austin",
+            "rows": 2,
+            "cost": 0.6950000000000001,
+            "pnl": 3.0499999999999994,
+            "roi": 4.388489208633092
+          },
+          {
+            "city": "Chicago",
+            "rows": 2,
+            "cost": 0.615,
+            "pnl": 3.8500000000000005,
+            "roi": 6.260162601626017
+          },
+          {
+            "city": "LA",
+            "rows": 6,
+            "cost": 1.7825,
+            "pnl": 22.175,
+            "roi": 12.440392706872371
+          },
+          {
+            "city": "Houston",
+            "rows": 1,
+            "cost": 0.285,
+            "pnl": 7.15,
+            "roi": 25.087719298245617
+          },
+          {
+            "city": "Karachi",
+            "rows": 4,
+            "cost": 1.31,
+            "pnl": 6.900000000000002,
+            "roi": 5.267175572519085
+          },
+          {
+            "city": "Chengdu",
+            "rows": 1,
+            "cost": 0.355,
+            "pnl": 6.45,
+            "roi": 18.169014084507044
+          },
+          {
+            "city": "PanamaCity",
+            "rows": 1,
+            "cost": 0.445,
+            "pnl": 5.549999999999999,
+            "roi": 12.471910112359549
+          }
+        ],
+        "by_forecast_regime": [
+          {
+            "forecast_regime": "medium_uncertainty_price_sensitive",
+            "rows": 5,
+            "cost": 1.7135,
+            "pnl": -7.135,
+            "roi": -4.163991829588562
+          },
+          {
+            "forecast_regime": "low_uncertainty_allowed",
+            "rows": 10,
+            "cost": 3.159,
+            "pnl": 28.410000000000004,
+            "roi": 8.993352326685661
+          },
+          {
+            "forecast_regime": "high_uncertainty_no_trade",
+            "rows": 10,
+            "cost": 3.065,
+            "pnl": 29.349999999999998,
+            "roi": 9.575856443719411
+          }
+        ]
+      }
+    }
+  ],
+  "out_json": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-06/2026-06-11-side-band-bad-day-risk-v2.json",
+  "out_md": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-06/2026-06-11-side-band-bad-day-risk-v2.md"
+}
