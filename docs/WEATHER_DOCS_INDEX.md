@@ -28,10 +28,10 @@ Status 口径：
 
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
-| [2026-06-06-account-equity-replay.md](analysis/2026-06/2026-06-06-account-equity-replay.md) | `snapshot` | 用 Polymarket public activity + raw live order files + DB fills 对齐截图 `1周 -$305.32`，确认 DB fill recovery 少覆盖真实 BUY |
-| [2026-06-06-polymarket-ui-account-loss-reconciliation.md](analysis/2026-06/2026-06-06-polymarket-ui-account-loss-reconciliation.md) | `snapshot` | Polymarket UI `1周 -$305.32` 与 fact 表已结算 PnL、公开 activity cashflow、当前 positions value 的口径差异 |
+| [2026-06-06-account-equity-replay.md](archive/analysis/2026-06/2026-06-06-account-equity-replay.md) | `snapshot` | 用 Polymarket public activity + raw live order files + DB fills 对齐截图 `1周 -$305.32`，确认 DB fill recovery 少覆盖真实 BUY |
+| [2026-06-06-polymarket-ui-account-loss-reconciliation.md](archive/analysis/2026-06/2026-06-06-polymarket-ui-account-loss-reconciliation.md) | `snapshot` | Polymarket UI `1周 -$305.32` 与 fact 表已结算 PnL、公开 activity cashflow、当前 positions value 的口径差异 |
 | [2026-06-06-live-account-reconcile-near-binary-fix.md](analysis/2026-06/2026-06-06-live-account-reconcile-near-binary-fix.md) | `snapshot` | 2026-06-06 fill 没漏、near-binary settlement 修复、最近一周 cashflow/realized/open 分拆 |
-| [2026-06-06-live-strategy-period-slice.md](analysis/2026-06/2026-06-06-live-strategy-period-slice.md) | `snapshot` | 最近 7 天/14 天/更早按日期和 strategy_instance 拆 realized、open cost、cashflow；注意它不是 Polymarket UI 账户权益曲线 |
+| [2026-06-06-live-strategy-period-slice.md](archive/analysis/2026-06/2026-06-06-live-strategy-period-slice.md) | `snapshot` | 最近 7 天/14 天/更早按日期和 strategy_instance 拆 realized、open cost、cashflow；注意它不是 Polymarket UI 账户权益曲线 |
 | [2026-06-06-three-strategy-instances-near-binary-reanalysis.md](analysis/2026-06/2026-06-06-three-strategy-instances-near-binary-reanalysis.md) | `snapshot` | near-binary 勘误后重算三个 live strategy_instance 的 recent/full realized 表现和动作建议 |
 | [2026-06-06-near-binary-city-reanalysis.md](analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md) | `snapshot` | near-binary 勘误后重算城市 alpha、recent live loss、city x side 处置 |
 
@@ -39,13 +39,13 @@ Status 口径：
 
 | 文档 | 过时原因 |
 |---|---|
-| [2026-06-03-performance-three-strategy-instances.md](analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | `missing_bracket=725`，且 side-band 漏算 YES 侧 `0.20-0.45`，三实例 realized 对比需重算 |
-| [2026-06-04-performance-side-band-entry-analysis.md](analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md) | `missing_bracket=624`，side-band realized 判定需重算 |
-| [2026-06-06-recent-live-loss-attribution.md](analysis/2026-06/2026-06-06-recent-live-loss-attribution.md) | `missing_bracket=28/734`，recent loss、open/cashflow 结论已被新对账快照覆盖 |
-| [2026-06-06-city-alpha-framework.md](analysis/2026-06/2026-06-06-city-alpha-framework.md) | `missing_bracket=734`，live city/side rank 和 settled 兑现需重算 |
-| [2026-06-06-blended-single-v0-backtest.md](analysis/2026-06/2026-06-06-blended-single-v0-backtest.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
-| [2026-06-06-blended-entry-band-backtest.md](analysis/2026-06/2026-06-06-blended-entry-band-backtest.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
-| [2026-06-06-blended-paper-fill-estimate.md](analysis/2026-06/2026-06-06-blended-paper-fill-estimate.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
+| [2026-06-03-performance-three-strategy-instances.md](archive/analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | `missing_bracket=725`，且 side-band 漏算 YES 侧 `0.20-0.45`，三实例 realized 对比需重算 |
+| [2026-06-04-performance-side-band-entry-analysis.md](archive/analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md) | `missing_bracket=624`，side-band realized 判定需重算 |
+| [2026-06-06-recent-live-loss-attribution.md](archive/analysis/2026-06/2026-06-06-recent-live-loss-attribution.md) | `missing_bracket=28/734`，recent loss、open/cashflow 结论已被新对账快照覆盖 |
+| [2026-06-06-city-alpha-framework.md](archive/analysis/2026-06/2026-06-06-city-alpha-framework.md) | `missing_bracket=734`，live city/side rank 和 settled 兑现需重算 |
+| [2026-06-06-blended-single-v0-backtest.md](archive/analysis/2026-06/2026-06-06-blended-single-v0-backtest.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
+| [2026-06-06-blended-entry-band-backtest.md](archive/analysis/2026-06/2026-06-06-blended-entry-band-backtest.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
+| [2026-06-06-blended-paper-fill-estimate.md](archive/analysis/2026-06/2026-06-06-blended-paper-fill-estimate.md) | 自检 `missing_bracket=734`，settlement/ROI/live_filled 子集需重算 |
 
 ## 当前运行入口
 
@@ -126,7 +126,7 @@ Status 口径：
 
 | 文档 | Status | Used by current decision | 读它回答什么问题 |
 |---|---|---|---|
-| [2026-06-03-performance-three-strategy-instances.md](analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | `snapshot` | yes | 三策略实例 live_real 表现、V2 停 live、Amsterdam/BuenosAires 降 T2 的证据入口 |
+| [2026-06-03-performance-three-strategy-instances.md](archive/analysis/2026-06/2026-06-03-performance-three-strategy-instances.md) | `snapshot` | yes | 三策略实例 live_real 表现、V2 停 live、Amsterdam/BuenosAires 降 T2 的证据入口 |
 | [2026-06-06-near-binary-city-reanalysis.md](analysis/2026-06/2026-06-06-near-binary-city-reanalysis.md) | `snapshot` | yes | near-binary 勘误后城市 alpha、recent live loss 和 city x side 处置重算 |
 | [2026-06-07-mid-price-core-v1-raw-degradation.md](analysis/2026-06/2026-06-07-mid-price-core-v1-raw-degradation.md) | `snapshot` | yes | raw / mid_price_core_v1 为什么 2026-06-01 后退化：side、city、edge、market divergence、tail 事件归因 |
 | [2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md](analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md) | `snapshot` | yes | v1_25_75 forecast timing 退化：`>T-28`、`T-26-28`、forecast run age、side flip、market adverse move 和 timing policy overlay |
@@ -139,23 +139,23 @@ Status 口径：
 | [2026-06-08-market-structural-edge.md](analysis/2026-06/2026-06-08-market-structural-edge.md) | `snapshot` | yes | H_B model-free 市场结构检验第一版：按日期前瞻、cluster bootstrap、Bonferroni 风险；当前 verdict=inconclusive |
 | [2026-06-08-executable-edge.md](analysis/2026-06/2026-06-08-executable-edge.md) | `snapshot` | yes | Step2 执行现实检验：live_real fill 审计 + decision-entry proxy + time-aligned raw orderbook 2B；当前 verdict=inconclusive |
 | [2026-06-09-weather-strategy-research-window-handoff.md](analysis/2026-06/2026-06-09-weather-strategy-research-window-handoff.md) | `handoff` | yes | 本窗口策略研究收口：H_A/H_B/H_C/Step2B verdict、Range RV Scanner v0 下一窗口提示词 |
-| [2026-06-09-range-rv-scanner-v0.md](analysis/2026-06/2026-06-09-range-rv-scanner-v0.md) | `snapshot` | yes | Range RV Scanner v0：city-day 区间/相邻 bracket relative value，train 显著和基准过但 holdout 前瞻失败，当前 verdict=inconclusive |
-| [2026-06-09-range-rv-scanner-v0-1.md](analysis/2026-06/2026-06-09-range-rv-scanner-v0-1.md) | `snapshot` | yes | Range RV Scanner v0.1：单腿/true-range、seen-complete/eligible-only 分家复核；所有 family 前瞻门仍失败，当前 verdict=inconclusive |
-| [2026-06-09-range-rv-positive-v0-2.md](analysis/2026-06/2026-06-09-range-rv-positive-v0-2.md) | `snapshot` | yes | Range RV v0.2 正实验：预注册 eligible adjacent_3 long profiles；decision proxy 点估计正但 excess CI / orderbook forward 不过，当前 verdict=inconclusive |
+| [2026-06-09-range-rv-scanner-v0.md](archive/analysis/2026-06/2026-06-09-range-rv-scanner-v0.md) | `snapshot` | yes | Range RV Scanner v0：city-day 区间/相邻 bracket relative value，train 显著和基准过但 holdout 前瞻失败，当前 verdict=inconclusive |
+| [2026-06-09-range-rv-scanner-v0-1.md](archive/analysis/2026-06/2026-06-09-range-rv-scanner-v0-1.md) | `snapshot` | yes | Range RV Scanner v0.1：单腿/true-range、seen-complete/eligible-only 分家复核；所有 family 前瞻门仍失败，当前 verdict=inconclusive |
+| [2026-06-09-range-rv-positive-v0-2.md](archive/analysis/2026-06/2026-06-09-range-rv-positive-v0-2.md) | `snapshot` | yes | Range RV v0.2 正实验：预注册 eligible adjacent_3 long profiles；decision proxy 点估计正但 excess CI / orderbook forward 不过，当前 verdict=inconclusive |
 | [2026-06-09-range-rv-variant-lab-v0-3.md](analysis/2026-06/2026-06-09-range-rv-variant-lab-v0-3.md) | `snapshot` | yes | Range RV v0.3 正实验：9 个预注册区间/相邻/尾部/单腿允许表达，proxy/orderbook 三门均未同时通过，当前 verdict=inconclusive |
-| [2026-06-09-range-rv-walkforward-v0-4.md](analysis/2026-06/2026-06-09-range-rv-walkforward-v0-4.md) | `snapshot` | yes | Range RV v0.4 正实验：expanding-window 只用历史日期选择算法，点估计好但 excess CI/top5 stress/orderbook 活跃日期不过，当前 verdict=inconclusive |
-| [2026-06-09-range-rv-market-shape-v0-5.md](analysis/2026-06/2026-06-09-range-rv-market-shape-v0-5.md) | `snapshot` | yes | Range RV v0.5 正实验：盘口 implied distribution shape anomaly first，eligible-only 口径下 holdout/top5/orderbook 不稳，当前 verdict=inconclusive |
-| [2026-06-09-range-rv-temporal-reversion-v0-6.md](analysis/2026-06/2026-06-09-range-rv-temporal-reversion-v0-6.md) | `snapshot` | yes | Range RV v0.6 正实验：同 city-day 前后 snapshot 市场过冲/反转表达，可形成样本仅 20 行，当前 verdict=inconclusive |
+| [2026-06-09-range-rv-walkforward-v0-4.md](archive/analysis/2026-06/2026-06-09-range-rv-walkforward-v0-4.md) | `snapshot` | yes | Range RV v0.4 正实验：expanding-window 只用历史日期选择算法，点估计好但 excess CI/top5 stress/orderbook 活跃日期不过，当前 verdict=inconclusive |
+| [2026-06-09-range-rv-market-shape-v0-5.md](archive/analysis/2026-06/2026-06-09-range-rv-market-shape-v0-5.md) | `snapshot` | yes | Range RV v0.5 正实验：盘口 implied distribution shape anomaly first，eligible-only 口径下 holdout/top5/orderbook 不稳，当前 verdict=inconclusive |
+| [2026-06-09-range-rv-temporal-reversion-v0-6.md](archive/analysis/2026-06/2026-06-09-range-rv-temporal-reversion-v0-6.md) | `snapshot` | yes | Range RV v0.6 正实验：同 city-day 前后 snapshot 市场过冲/反转表达，可形成样本仅 20 行，当前 verdict=inconclusive |
 | [2026-06-09-range-rv-market-shape-fullop-v0-7.md](analysis/2026-06/2026-06-09-range-rv-market-shape-fullop-v0-7.md) | `snapshot` | yes | Range RV v0.7 正实验：移除旧 eligible 硬门、使用 full fact opportunity + spread/orderbook 约束；样本扩大但三门仍不过，当前 verdict=inconclusive |
-| [2026-06-09-range-rv-regime-v0-8.md](analysis/2026-06/2026-06-09-range-rv-regime-v0-8.md) | `snapshot` | yes | Range RV v0.8 正实验：按模型/市场分布 regime 固定表达，full opportunity 口径下仍因 holdout/top5/orderbook 不稳，当前 verdict=inconclusive |
-| [2026-06-09-range-rv-noarb-v0-9.md](analysis/2026-06/2026-06-09-range-rv-noarb-v0-9.md) | `snapshot` | yes | Range RV v0.9 正实验：互斥 bracket no-arb；all-YES underround proxy confirmed，orderbook 接近但初版阈值下 forward 门贴边不过 |
+| [2026-06-09-range-rv-regime-v0-8.md](archive/analysis/2026-06/2026-06-09-range-rv-regime-v0-8.md) | `snapshot` | yes | Range RV v0.8 正实验：按模型/市场分布 regime 固定表达，full opportunity 口径下仍因 holdout/top5/orderbook 不稳，当前 verdict=inconclusive |
+| [2026-06-09-range-rv-noarb-v0-9.md](archive/analysis/2026-06/2026-06-09-range-rv-noarb-v0-9.md) | `snapshot` | yes | Range RV v0.9 正实验：互斥 bracket no-arb；all-YES underround proxy confirmed，orderbook 接近但初版阈值下 forward 门贴边不过 |
 | [2026-06-09-range-rv-underround-robust-v1-0.md](analysis/2026-06/2026-06-09-range-rv-underround-robust-v1-0.md) | `snapshot` | yes | Range RV v1.0 confirmed：model-free all-YES underround，proxy 0.01-0.05 与 executable 0.005-0.05 阈值均通过三门；下一步仅做 shadow/paper 工程化，不直接改 live |
 | [2026-06-09-forecast-quality-regime-signal-value.md](analysis/2026-06/2026-06-09-forecast-quality-regime-signal-value.md) | `snapshot` | yes | forecast quality regime 研究：用 fact_signal_candidates 构造 entropy/mode/adjacent/tail/calibration features，给 Range RV planner 提供 low/medium/high/tail-overpriced regime；不输出 live action |
 | [2026-06-09-forecast-quality-range-rv-overlay.md](analysis/2026-06/2026-06-09-forecast-quality-range-rv-overlay.md) | `snapshot` | yes | forecast quality filter overlay：对 forecast-first adjacent2/3 Range RV 做不筛/宽松/中等/严格过滤对比；proxy 为正但严格过滤偏死，未做 executable 三门，不输出 live action |
 | [2026-06-10-forecast-quality-range-rv-city-model.md](analysis/2026-06/2026-06-10-forecast-quality-range-rv-city-model.md) | `snapshot` | yes | forecast quality Range RV 城市/模型/数据积累分层：ECMWF 候选强于 GFS，city+model 样本薄；给出 `range_rv_forecast_quality_probe_v0` 小额试探候选，不改 live |
-| [2026-06-09-forecast-first-adjacent-range-rv-v0-1.md](analysis/2026-06/2026-06-09-forecast-first-adjacent-range-rv-v0-1.md) | `snapshot` | yes | Forecast-first adjacent2/3 Range RV：full opportunity 口径、按 event_date train/holdout、orderbook all-leg matched；significance/forward 不过，当前 verdict=inconclusive |
-| [2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md](analysis/2026-06/2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md) | `snapshot` | yes | Tail fade / uncertainty Range RV：BUY_NO tail + BUY_YES adjacent inner/center，full opportunity 口径、event_date split、orderbook executable 复核；holdout 样本/top5 stress 不足，当前 verdict=inconclusive |
-| [2026-06-09-center-shoulders-butterfly-range-rv.md](analysis/2026-06/2026-06-09-center-shoulders-butterfly-range-rv.md) | `snapshot` | yes | Range RV 专项：forecast-first center vs shoulders / butterfly 表达；center/band/tail proxy 超额不支持，shoulders 便宜样本太少且 orderbook train 覆盖不足，当前 verdict=inconclusive |
+| [2026-06-09-forecast-first-adjacent-range-rv-v0-1.md](archive/analysis/2026-06/2026-06-09-forecast-first-adjacent-range-rv-v0-1.md) | `snapshot` | yes | Forecast-first adjacent2/3 Range RV：full opportunity 口径、按 event_date train/holdout、orderbook all-leg matched；significance/forward 不过，当前 verdict=inconclusive |
+| [2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md](archive/analysis/2026-06/2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md) | `snapshot` | yes | Tail fade / uncertainty Range RV：BUY_NO tail + BUY_YES adjacent inner/center，full opportunity 口径、event_date split、orderbook executable 复核；holdout 样本/top5 stress 不足，当前 verdict=inconclusive |
+| [2026-06-09-center-shoulders-butterfly-range-rv.md](archive/analysis/2026-06/2026-06-09-center-shoulders-butterfly-range-rv.md) | `snapshot` | yes | Range RV 专项：forecast-first center vs shoulders / butterfly 表达；center/band/tail proxy 超额不支持，shoulders 便宜样本太少且 orderbook train 覆盖不足，当前 verdict=inconclusive |
 | [2026-06-10-side-band-forecast-regime-v0.md](analysis/2026-06/2026-06-10-side-band-forecast-regime-v0.md) | `snapshot` | yes | Side Band + Forecast Regime Clean Test v0：full opportunity 复现/推广 side-band 并叠加 forecast regime；旧形态历史赚过但 top5 stress/holdout 失败，三门不过，当前 verdict=inconclusive |
 | [2026-06-10-side-band-mechanism-attribution-v1.md](analysis/2026-06/2026-06-10-side-band-mechanism-attribution-v1.md) | `snapshot` | yes | Side Band 机制归因 v1：固定旧 side-band / 低价 YES / BUY_NO / forecast regime selector，对同 side/hour/price baseline 做 excess 和日期归因；top5 stress 与三门不过，当前 verdict=inconclusive |
 | [2026-06-10-weather-strategy-live-test-selection.md](analysis/2026-06/2026-06-10-weather-strategy-live-test-selection.md) | `snapshot` | yes | 本轮子 agent 策略研究总控选择：没有 real live 候选；只建议 `forecast quality soft gate + adjacent3 range` 进入 shadow/paper 观测 |
@@ -169,6 +169,7 @@ Status 口径：
 | [2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md](analysis/2026-06/2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md) | `snapshot` | yes | M3 价格 proxy 尝试：paper snapshot 只有 14 条可 join 交易，不能作为收益结论；必须补 observed/orderbook 同窗 |
 | [2026-06-10-m3-orderbook-best-ask-backtest-v0.md](analysis/2026-06/2026-06-10-m3-orderbook-best-ask-backtest-v0.md) | `superseded` | no | M3 observed-payout best-ask 早期结果；已被 settlement alignment v1 推翻，不得引用 ROI |
 | [2026-06-11-m3-settlement-alignment-v1.md](analysis/2026-06/2026-06-11-m3-settlement-alignment-v1.md) | `snapshot` | yes | M3 settlement alignment：WU/IEM observed payout 与 pm_history 官方 winner 不一致，官方结算重算后 best-ask 结果转负，当前 settlement_blocked |
+| [2026-06-11-m3-tail-no-retail-diagnosis-v0.md](analysis/2026-06/2026-06-11-m3-tail-no-retail-diagnosis-v0.md) | `snapshot` | yes | M3 高温尾部 NO 散户诊断：36 城结算对齐白名单 + 18-21h 穿档精算表；20/21h 尾部 NO 官方 ROI -27.8%、top-of-book 容量≈0，错位城市常数偏移修正不可行 |
 | [2026-06-10-adjacent3-quality-matched-baseline-v0.md](analysis/2026-06/2026-06-10-adjacent3-quality-matched-baseline-v0.md) | `snapshot` | yes | Adjacent3 medium_quality matched baseline：eligible 主口径下 same-cost random baseline 几乎无匹配，holdout 不支持 live |
 | [2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md](analysis/2026-06/2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md) | `snapshot` | yes | Opportunity fact 扩样覆盖审计：两年天气缓存不能直接当交易样本；关键缺口是历史 decision-time 市场行情/盘口进入 fact_signal_candidates |
 | [2026-06-10-april-historical-opportunity-mapping-audit-v0.md](analysis/2026-06/2026-06-10-april-historical-opportunity-mapping-audit-v0.md) | `snapshot` | yes | April historical opportunity mapping 审计：gamma/clob token 映射和 T-24 price proxy 可做原型，但缺 settlement/model probability/orderbook，不能直接算 ROI |
@@ -177,7 +178,7 @@ Status 口径：
 | [2026-06-09-model-rank-ic.md](analysis/2026-06/2026-06-09-model-rank-ic.md) | `snapshot` | yes | Ring3 模型排序/IC 检验：`model_edge_at_decision` 显著性、基准、前瞻均 FAIL；当前 verdict=inconclusive |
 | [2026-06-10-side-band-forecast-regime-clean-test-v0.md](analysis/2026-06/2026-06-10-side-band-forecast-regime-clean-test-v0.md) | `superseded` | no | Side Band + Forecast Regime Clean Test 早期重复版本；当前决策改读 `2026-06-10-side-band-forecast-regime-v0.md` 的 cost-proxy 修正版 |
 | [2026-06-08-city-model-conditional-edge.md](analysis/2026-06/2026-06-08-city-model-conditional-edge.md) | `snapshot` | yes | H_C city×model×side 条件优势检验：train 选池、holdout 复核、matched side+price baseline；当前 verdict=inconclusive |
-| [2026-06-08-HANDOFF-LANDING-VALIDATION.md](analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md) | `snapshot` | yes | 交接包文件落地、manifest 产物补齐、skill/contract/schema 假设和 git 状态校验 |
+| [2026-06-08-HANDOFF-LANDING-VALIDATION.md](archive/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md) | `snapshot` | yes | 交接包文件落地、manifest 产物补齐、skill/contract/schema 假设和 git 状态校验 |
 | [2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md](analysis/2026-06/2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md) | `design-draft` | yes | 交接包审阅和 P0-P3 改进计划 |
 | [2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md](analysis/2026-06/2026-06-08-RELIABILITY-AUDIT-AND-HANDOFF.md) | `design-draft` | yes | 策略可靠性审计和 Step1/Step2/Step3 迁移执行顺序 |
 | [2026-06-08-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | 最新 fact 重建后 basket vs legacy baseline refresh；recent slice 仍不支持上线 |
@@ -189,18 +190,18 @@ Status 口径：
 | [2026-06-08-city-x-entry-timing-research.md](analysis/2026-06/2026-06-08-city-x-entry-timing-research.md) | `snapshot` | yes | 最新 sync + fact rebuild + CLOB coverage gate 后的城市 x timing 切片：确认 `T-26-28` 先从 live 移除，`T-24-26` 需要城市和 forecast checkpoint 复核 |
 | [2026-06-07-blended-live-instance-overlay.md](analysis/2026-06/2026-06-07-blended-live-instance-overlay.md) | `snapshot` | yes | blender 叠加到真实 live instance fills 的控制变量 overlay；6 月后改善但 6 月前误杀盈利 |
 | [2026-06-07-v1-raw-regime-filter-walkforward.md](analysis/2026-06/2026-06-07-v1-raw-regime-filter-walkforward.md) | `snapshot` | yes | v1 raw 退化后的 gate walk-forward：城市层风控强于纯 blended edge gate |
-| [2026-06-06-city-alpha-framework.md](analysis/2026-06/2026-06-06-city-alpha-framework.md) | `snapshot` | yes | 城市 alpha 评价体系、paper->live 扩池反转、city x side gate |
-| [2026-06-06-city-day-distribution-quality.md](analysis/2026-06/2026-06-06-city-day-distribution-quality.md) | `snapshot` | yes | raw/market/blend_norm 分布质量和 holdout 退化问题 |
-| [2026-06-06-blended-single-v0-backtest.md](analysis/2026-06/2026-06-06-blended-single-v0-backtest.md) | `snapshot` | yes | blended single v0 shadow 策略回测、策略身份和 opportunity 对比；settled/live 结论以 2026-06-07/08 重算为准 |
-| [2026-06-06-blended-entry-band-backtest.md](analysis/2026-06/2026-06-06-blended-entry-band-backtest.md) | `snapshot` | yes | 保留 live 入场区间后的 blend gate 公平对比；settled/live 结论以 2026-06-07/08 重算为准 |
-| [2026-06-06-city-day-basket-vs-legacy-baselines.md](analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | basket vs 旧 per-bucket raw 策略的同窗、同 entry-band baseline 对比 |
-| [2026-06-06-city-day-basket-walkforward.md](analysis/2026-06/2026-06-06-city-day-basket-walkforward.md) | `snapshot` | yes | city-day basket 目标选择 walk-forward：用于拒绝过拟合候选，不批准上线 |
-| [2026-06-06-city-day-basket-optimizer-research.md](analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md) | `snapshot` | yes | city-day basket optimizer 的 headline ROI 与 tail 风险 |
-| [2026-06-06-city-day-basket-pr2b-robustness.md](analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md) | `snapshot` | yes | PR2b 全样本通过但 tail/overfit 风险的复核 |
-| [2026-06-06-city-day-basket-pr2b-sweep.md](analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md) | `snapshot` | yes | PR2b basket 参数 sweep 和候选 profile |
+| [2026-06-06-city-alpha-framework.md](archive/analysis/2026-06/2026-06-06-city-alpha-framework.md) | `snapshot` | yes | 城市 alpha 评价体系、paper->live 扩池反转、city x side gate |
+| [2026-06-06-city-day-distribution-quality.md](archive/analysis/2026-06/2026-06-06-city-day-distribution-quality.md) | `snapshot` | yes | raw/market/blend_norm 分布质量和 holdout 退化问题 |
+| [2026-06-06-blended-single-v0-backtest.md](archive/analysis/2026-06/2026-06-06-blended-single-v0-backtest.md) | `snapshot` | yes | blended single v0 shadow 策略回测、策略身份和 opportunity 对比；settled/live 结论以 2026-06-07/08 重算为准 |
+| [2026-06-06-blended-entry-band-backtest.md](archive/analysis/2026-06/2026-06-06-blended-entry-band-backtest.md) | `snapshot` | yes | 保留 live 入场区间后的 blend gate 公平对比；settled/live 结论以 2026-06-07/08 重算为准 |
+| [2026-06-06-city-day-basket-vs-legacy-baselines.md](archive/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md) | `snapshot` | yes | basket vs 旧 per-bucket raw 策略的同窗、同 entry-band baseline 对比 |
+| [2026-06-06-city-day-basket-walkforward.md](archive/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md) | `snapshot` | yes | city-day basket 目标选择 walk-forward：用于拒绝过拟合候选，不批准上线 |
+| [2026-06-06-city-day-basket-optimizer-research.md](archive/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md) | `snapshot` | yes | city-day basket optimizer 的 headline ROI 与 tail 风险 |
+| [2026-06-06-city-day-basket-pr2b-robustness.md](archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md) | `snapshot` | yes | PR2b 全样本通过但 tail/overfit 风险的复核 |
+| [2026-06-06-city-day-basket-pr2b-sweep.md](archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md) | `snapshot` | yes | PR2b basket 参数 sweep 和候选 profile |
 | [2026-06-05-city-day-basket-eval.md](analysis/2026-06/2026-06-05-city-day-basket-eval.md) | `snapshot` | yes | PR2 离线 replay：raw vs blended-single vs basket，对应 Step 2->3 gate 不通过 |
 | [2026-06-05-probability-calibration.md](analysis/2026-06/2026-06-05-probability-calibration.md) | `snapshot` | yes | 概率校准实验和 blend/recalibration 背景 |
-| [2026-06-04-performance-side-band-entry-analysis.md](analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md) | `snapshot` | yes | side-band 入场表现复盘 |
+| [2026-06-04-performance-side-band-entry-analysis.md](archive/analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md) | `snapshot` | yes | side-band 入场表现复盘 |
 | [2026-06-03-signal-side-flip-check.md](analysis/2026-06/2026-06-03-signal-side-flip-check.md) | `snapshot` | yes | 信号 side flip / snapshot bracket 演化排查 |
 | [2026-05-29-performance-city-pool-side-strategy.md](analysis/2026-05/2026-05-29-performance-city-pool-side-strategy.md) | `snapshot` | yes | city x side 白名单、Paris 降级、Madrid/Shanghai NO-only 的证据 |
 | [2026-05-29-strategy-entry-band-and-execution-quality.md](analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | `snapshot` | yes | 25-75 入场价调参、maker_queue vs mid_price 成交质量 |

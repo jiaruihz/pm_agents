@@ -393,6 +393,47 @@ Not done in this phase:
 | `2026-06-10-m3-observed-max-residual-v0.md` | 19:00+ local observed-max residual passes the first physical candidate gate, but market/execution gates are untouched. | keep active physical evidence |
 | `2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md` | Proxy paper-market backtest confirms no reliable edge signal in 4/14 sparse trades; sample concentrated in Moscow/Madrid and not executable-best-ask. | keep active-snapshot; do not cite for live/paper claims |
 
+
+## Phase 4E Archive Move Log
+
+Moved on 2026-06-11: selected pre-2026-06-10 reports from `docs/analysis/2026-06/` to `docs/archive/analysis/2026-06/` after their useful claims were absorbed into owner living docs or explicitly marked invalidated/duplicate/non-weather. This batch intentionally excludes all 2026-06-10 and 2026-06-11 files.
+
+Moved stems:
+- `2026-06-03-performance-three-strategy-instances`
+- `2026-06-04-performance-side-band-entry-analysis`
+- `2026-06-06-account-equity-replay`
+- `2026-06-06-blended-entry-band-backtest`
+- `2026-06-06-blended-paper-fill-estimate`
+- `2026-06-06-blended-single-v0-backtest`
+- `2026-06-06-city-alpha-framework`
+- `2026-06-06-city-day-basket-optimizer-research`
+- `2026-06-06-city-day-basket-pr2b-robustness`
+- `2026-06-06-city-day-basket-pr2b-sweep`
+- `2026-06-06-city-day-basket-vs-legacy-baselines`
+- `2026-06-06-city-day-basket-walkforward`
+- `2026-06-06-city-day-distribution-quality`
+- `2026-06-06-live-strategy-period-slice`
+- `2026-06-06-polymarket-ui-account-loss-reconciliation`
+- `2026-06-06-recent-live-loss-attribution`
+- `2026-06-07-blended-paper-fill-estimate`
+- `2026-06-07-live-strategy-period-slice-after-fill-fix`
+- `2026-06-07-live-strategy-period-slice-after-history-rebuild`
+- `2026-06-08-HANDOFF-LANDING-VALIDATION`
+- `2026-06-08-decisive-experiment-scripts-audit-and-handoff-draft`
+- `2026-06-09-center-shoulders-butterfly-range-rv`
+- `2026-06-09-copy-trade-rule-edge-wallet-research`
+- `2026-06-09-forecast-first-adjacent-range-rv-v0-1`
+- `2026-06-09-openai-hardware-branch-edge-research`
+- `2026-06-09-range-rv-market-shape-v0-5`
+- `2026-06-09-range-rv-noarb-v0-9`
+- `2026-06-09-range-rv-positive-v0-2`
+- `2026-06-09-range-rv-regime-v0-8`
+- `2026-06-09-range-rv-scanner-v0`
+- `2026-06-09-range-rv-scanner-v0-1`
+- `2026-06-09-range-rv-tail-fade-uncertainty-v1-1`
+- `2026-06-09-range-rv-temporal-reversion-v0-6`
+- `2026-06-09-range-rv-walkforward-v0-4`
+
 ## Hard Rules For Later Moves
 
 - A historical file can move only after its useful claim appears in the owner living doc or is explicitly marked `invalidated`.
