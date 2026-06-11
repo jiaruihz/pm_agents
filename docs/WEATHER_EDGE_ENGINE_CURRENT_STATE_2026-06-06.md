@@ -268,8 +268,8 @@ basket missed_profit $3007 > avoided_loss $2170
 ```text
 scripts/analysis/city_selection/tune_city_day_basket.py
 scripts/analysis/city_selection/validate_city_day_basket_robustness.py
-docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md
-docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md
 docs/dev_logs/2026-06-06-weather-edge-engine-pr2b.md
 ```
 
@@ -307,9 +307,9 @@ missed_profit $784 <= avoided_loss $825
 ```text
 weather_dashboard/strategy_specs/weather_edge_engine_blended_single_v0.json
 scripts/analysis/blender_shadow/backtest_weather_edge_engine_blended_single.py
-docs/analysis/2026-06/2026-06-06-blended-single-v0-backtest.md
-docs/analysis/2026-06/2026-06-06-blended-entry-band-backtest.md
-docs/analysis/2026-06/2026-06-06-blended-paper-fill-estimate.md
+docs/archive/analysis/2026-06/2026-06-06-blended-single-v0-backtest.md
+docs/archive/analysis/2026-06/2026-06-06-blended-entry-band-backtest.md
+docs/archive/analysis/2026-06/2026-06-06-blended-paper-fill-estimate.md
 ```
 
 策略 ID：
@@ -419,8 +419,8 @@ all-attempt fill rate     = 76.4%（含 error order attempts）
 
 ```text
 scripts/analysis/city_selection/research_city_day_basket_optimizer.py
-docs/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md
-docs/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.json
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.json
 ```
 
 研究问题：
@@ -458,8 +458,8 @@ combo_market_tail = market-normalized objective，去掉最好温度结果后 EV
 
 ```text
 scripts/analysis/city_selection/research_city_day_distribution_quality.py
-docs/analysis/2026-06/2026-06-06-city-day-distribution-quality.md
-docs/analysis/2026-06/2026-06-06-city-day-distribution-quality.json
+docs/archive/analysis/2026-06/2026-06-06-city-day-distribution-quality.md
+docs/archive/analysis/2026-06/2026-06-06-city-day-distribution-quality.json
 ```
 
 研究问题：
@@ -501,8 +501,8 @@ dist_blend_norm
 
 ```text
 scripts/analysis/city_selection/research_city_day_basket_walkforward.py
-docs/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md
-docs/analysis/2026-06/2026-06-06-city-day-basket-walkforward.json
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-walkforward.json
 ```
 
 研究问题：
@@ -545,8 +545,8 @@ combo_market_tail
 
 ```text
 scripts/analysis/city_selection/compare_city_day_basket_vs_legacy_baselines.py
-docs/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md
-docs/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.json
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.json
 ```
 
 研究问题：

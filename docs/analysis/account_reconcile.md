@@ -28,8 +28,8 @@ python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
 | `docs/analysis/2026-06/2026-06-06-live-account-reconcile-near-binary-fix.md` | 2026-06 | near-binary fix and account reconciliation | snapshot |
-| `docs/analysis/2026-06/2026-06-06-polymarket-ui-account-loss-reconciliation.md` | 2026-06 | UI loss vs DB/fact/account views | snapshot |
-| `docs/analysis/2026-06/2026-06-06-account-equity-replay.md` | 2026-06 | public activity + raw live order + DB alignment context | snapshot |
+| `docs/archive/analysis/2026-06/2026-06-06-polymarket-ui-account-loss-reconciliation.md` | 2026-06 | UI loss vs DB/fact/account views | snapshot |
+| `docs/archive/analysis/2026-06/2026-06-06-account-equity-replay.md` | 2026-06 | public activity + raw live order + DB alignment context | snapshot |
 | `docs/analysis/2026-06/2026-06-07-fill-recovery-and-performance-recalc.md` | 2026-06 | post-fix fill coverage gate and external account activity gap separation | snapshot |
 | `docs/analysis/2026-06/2026-06-07-live-strategy-period-slice-current.md` | 2026-06 | fill-date cashflow vs target-date strategy attribution after fill fix | snapshot |
 

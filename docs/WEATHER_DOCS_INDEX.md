@@ -160,6 +160,7 @@ Status 口径：
 | [2026-06-10-side-band-mechanism-attribution-v1.md](analysis/2026-06/2026-06-10-side-band-mechanism-attribution-v1.md) | `snapshot` | yes | Side Band 机制归因 v1：固定旧 side-band / 低价 YES / BUY_NO / forecast regime selector，对同 side/hour/price baseline 做 excess 和日期归因；top5 stress 与三门不过，当前 verdict=inconclusive |
 | [2026-06-10-weather-strategy-live-test-selection.md](analysis/2026-06/2026-06-10-weather-strategy-live-test-selection.md) | `snapshot` | yes | 本轮子 agent 策略研究总控选择：没有 real live 候选；只建议 `forecast quality soft gate + adjacent3 range` 进入 shadow/paper 观测 |
 | [2026-06-10-adjacent3-quality-shadow-journal-v0.md](analysis/2026-06/2026-06-10-adjacent3-quality-shadow-journal-v0.md) | `snapshot` | yes | Adjacent3 + forecast quality 固定 shadow journal：只记录 would-trade/orderbook 覆盖，不改 live；当前样本薄且三门不过 |
+| [2026-06-11-adjacent3-union-flexible-v0-2.md](analysis/2026-06/2026-06-11-adjacent3-union-flexible-v0-2.md) | `snapshot` | yes | Adjacent3 union/flexible v0.2：修正 BUY_YES-only 分母问题，纳入 BUY_NO 和混合表达；样本恢复但 proxy/orderbook 三门仍不过，当前 verdict=inconclusive |
 | [2026-06-10-shadow-paper-queue-v0.md](analysis/2026-06/2026-06-10-shadow-paper-queue-v0.md) | `snapshot` | yes | Shadow/Paper Queue v0：把 forecast-quality adjacent3、side-band tags、blended paper baseline、all-YES engineering shadow、April backfill 分层排队；live 队列为空 |
 | [2026-06-10-hybrid-adjacent3-single-v0.md](analysis/2026-06/2026-06-10-hybrid-adjacent3-single-v0.md) | `snapshot` | yes | Hybrid adjacent3 + single / outside NO v0：验证单腿多为 adjacent3 内重复加注，outside NO 固定口径未触发；当前三门不过 |
 | [2026-06-10-live-test-readiness-scoreboard-v0.md](analysis/2026-06/2026-06-10-live-test-readiness-scoreboard-v0.md) | `snapshot` | yes | Live-test readiness 总表：当前无真钱 live 候选；冻结 `forecast_quality_medium_adjacent3_shadow_v0` 为主 shadow 规则和硬门 |
@@ -203,11 +204,11 @@ Status 口径：
 | [2026-06-05-probability-calibration.md](analysis/2026-06/2026-06-05-probability-calibration.md) | `snapshot` | yes | 概率校准实验和 blend/recalibration 背景 |
 | [2026-06-04-performance-side-band-entry-analysis.md](archive/analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md) | `snapshot` | yes | side-band 入场表现复盘 |
 | [2026-06-03-signal-side-flip-check.md](analysis/2026-06/2026-06-03-signal-side-flip-check.md) | `snapshot` | yes | 信号 side flip / snapshot bracket 演化排查 |
-| [2026-05-29-performance-city-pool-side-strategy.md](analysis/2026-05/2026-05-29-performance-city-pool-side-strategy.md) | `snapshot` | yes | city x side 白名单、Paris 降级、Madrid/Shanghai NO-only 的证据 |
-| [2026-05-29-strategy-entry-band-and-execution-quality.md](analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | `snapshot` | yes | 25-75 入场价调参、maker_queue vs mid_price 成交质量 |
-| [2026-05-30-performance-entry-band-research.md](analysis/2026-05/2026-05-30-performance-entry-band-research.md) | `snapshot` | yes | 入场价带 0.25-0.75 的 side x price bucket EV |
-| [2026-05-30-performance-sizing-and-band-distribution.md](analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md) | `snapshot` | yes | sizing x 入场区间收益分布和反过拟合检验 |
-| [2026-05-27-performance-live-full-research.md](analysis/2026-05/2026-05-27-performance-live-full-research.md) | `snapshot` | yes | 早期 live 全量绩效归因 |
+| [2026-05-29-performance-city-pool-side-strategy.md](archive/analysis/2026-05/2026-05-29-performance-city-pool-side-strategy.md) | `snapshot` | yes | city x side 白名单、Paris 降级、Madrid/Shanghai NO-only 的证据 |
+| [2026-05-29-strategy-entry-band-and-execution-quality.md](archive/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md) | `snapshot` | yes | 25-75 入场价调参、maker_queue vs mid_price 成交质量 |
+| [2026-05-30-performance-entry-band-research.md](archive/analysis/2026-05/2026-05-30-performance-entry-band-research.md) | `snapshot` | yes | 入场价带 0.25-0.75 的 side x price bucket EV |
+| [2026-05-30-performance-sizing-and-band-distribution.md](archive/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md) | `snapshot` | yes | sizing x 入场区间收益分布和反过拟合检验 |
+| [2026-05-27-performance-live-full-research.md](archive/analysis/2026-05/2026-05-27-performance-live-full-research.md) | `snapshot` | yes | 早期 live 全量绩效归因 |
 | [WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md](WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md) | `snapshot` | no | 2026-05-23 早期实盘血缘分析 |
 | [WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md](WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md) | `snapshot` | no | 低价 YES 彩票仓研究 |
 

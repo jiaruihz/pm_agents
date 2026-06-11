@@ -493,7 +493,7 @@ def main() -> int:
             wide.append(trade)
     strict_keys = {trade.market_key for trade in strict}
     incremental = [trade for trade in wide if trade.market_key not in strict_keys]
-    out_path = Path(args.out) if args.out else ROOT / "docs" / "analysis" / "2026-05" / "2026-05-27-compare-strict-t24-vs-wide-window.md"
+    out_path = Path(args.out) if args.out else ROOT / "docs" / "archive" / "analysis" / "2026-05" / "2026-05-27-compare-strict-t24-vs-wide-window.md"
     _write_report(
         out_path=out_path,
         strict=strict,

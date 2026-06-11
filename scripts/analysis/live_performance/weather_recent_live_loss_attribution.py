@@ -24,11 +24,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end-date", default=None, help="target_date end, inclusive")
     parser.add_argument(
         "--json-out",
-        default="docs/analysis/2026-06/2026-06-06-recent-live-loss-attribution.json",
+        default="docs/archive/analysis/2026-06/2026-06-06-recent-live-loss-attribution.json",
     )
     parser.add_argument(
         "--md-out",
-        default="docs/analysis/2026-06/2026-06-06-recent-live-loss-attribution.md",
+        default="docs/archive/analysis/2026-06/2026-06-06-recent-live-loss-attribution.md",
     )
     return parser.parse_args()
 

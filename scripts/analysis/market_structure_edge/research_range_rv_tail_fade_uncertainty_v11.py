@@ -30,8 +30,8 @@ import research_range_rv_scanner as scanner  # noqa: E402
 import research_range_rv_variant_lab_v03 as variants  # noqa: E402
 
 
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-tail-fade-uncertainty-v1-1.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md"
+OUT_JSON_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-tail-fade-uncertainty-v1-1.json"
+OUT_MD_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md"
 
 MARKET_TAIL_OVERPRICED_THRESHOLDS = (0.05, 0.10, 0.15)
 MODEL_TAIL_RISK_MAX = (0.05, 0.10, 0.15)

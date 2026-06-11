@@ -25,14 +25,14 @@ Do not cite old maker_queue or May entry-band numbers as current PnL. They are m
 |---|---|---|---|
 | `docs/analysis/2026-06/2026-06-08-executable-edge.md` | 2026-06 Step2 | live_real fill audit, decision-entry proxy, time-aligned raw orderbook checks | `primary` |
 | `docs/analysis/2026-06/2026-06-07-fill-recovery-and-performance-recalc.md` | 2026-06 fill recovery | CLOB/fact recovery and performance recalculation context | `primary` |
-| `docs/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md` | 2026-05 | entry-price-window mechanism + maker/mid A/B logic | `historical-mechanism` |
-| `docs/analysis/2026-05/2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1.md` | 2026-05 | signal filtering, not quote formula, explains UNKNOWN vs mid delta | `historical-mechanism` |
-| `docs/analysis/2026-05/2026-05-26-compare-UNKNOWN-vs-mid_price_core_v1.md` | 2026-05 | early UNKNOWN vs mid comparison context; 5/20 lift driven by eligible=False t2_research exposure | `historical-mechanism` |
-| `docs/analysis/2026-05/2026-05-27-compare-execution-algorithm-window-filter.md` | 2026-05 | entry_price_window as signal filter (`25-75`) and filled vs unfilled candidate mismatch | `historical-mechanism + sizing-boundary` |
-| `docs/analysis/2026-05/2026-05-27-compare-mid-price-vs-maker-queue.md` | 2026-05 | maker_queue A/B: lower fill rate + adverse selection, micro price gain | `retired-mechanism` |
-| `docs/analysis/2026-05/2026-05-27-maker-queue-baseline-and-optimization.md` | 2026-05 | maker_queue baseline evidence, stale-fill adverse selection pattern | `retired-mechanism` |
-| `docs/analysis/2026-05/2026-05-27-maker-queue-cancel-backtest.md` | 2026-05 | stale-fill sensitivity and 4h cancel hypothesis (sample-limited) | `retired-mechanism` |
-| `docs/analysis/2026-05/2026-05-28-performance-makerqueue-v3-city-pool.md` | 2026-05-28 | city-v3 open exposure and open-mark explanation for UI drawdown perception | `retired-mechanism` |
+| `docs/archive/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md` | 2026-05 | entry-price-window mechanism + maker/mid A/B logic | `historical-mechanism` |
+| `docs/archive/analysis/2026-05/2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1.md` | 2026-05 | signal filtering, not quote formula, explains UNKNOWN vs mid delta | `historical-mechanism` |
+| `docs/archive/analysis/2026-05/2026-05-26-compare-UNKNOWN-vs-mid_price_core_v1.md` | 2026-05 | early UNKNOWN vs mid comparison context; 5/20 lift driven by eligible=False t2_research exposure | `historical-mechanism` |
+| `docs/archive/analysis/2026-05/2026-05-27-compare-execution-algorithm-window-filter.md` | 2026-05 | entry_price_window as signal filter (`25-75`) and filled vs unfilled candidate mismatch | `historical-mechanism + sizing-boundary` |
+| `docs/archive/analysis/2026-05/2026-05-27-compare-mid-price-vs-maker-queue.md` | 2026-05 | maker_queue A/B: lower fill rate + adverse selection, micro price gain | `retired-mechanism` |
+| `docs/archive/analysis/2026-05/2026-05-27-maker-queue-baseline-and-optimization.md` | 2026-05 | maker_queue baseline evidence, stale-fill adverse selection pattern | `retired-mechanism` |
+| `docs/archive/analysis/2026-05/2026-05-27-maker-queue-cancel-backtest.md` | 2026-05 | stale-fill sensitivity and 4h cancel hypothesis (sample-limited) | `retired-mechanism` |
+| `docs/archive/analysis/2026-05/2026-05-28-performance-makerqueue-v3-city-pool.md` | 2026-05-28 | city-v3 open exposure and open-mark explanation for UI drawdown perception | `retired-mechanism` |
 
 ## Absorbed Historical Claims
 

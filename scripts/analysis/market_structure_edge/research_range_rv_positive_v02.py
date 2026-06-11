@@ -31,8 +31,8 @@ sys.path.append(str(SCRIPT_DIR))
 import research_range_rv_scanner as scanner  # noqa: E402
 
 
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-positive-v0-2.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-positive-v0-2.md"
+OUT_JSON_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-positive-v0-2.json"
+OUT_MD_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-positive-v0-2.md"
 
 
 ProfilePredicate = Callable[[dict[str, Any]], bool]

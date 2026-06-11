@@ -19,7 +19,7 @@ DB_PATH = ROOT / "runtime" / "weather.db"
 EDGE_RUNTIME = ROOT / "runtime" / "weather_edge_v1"
 LIVE_ORDER_DIR = EDGE_RUNTIME / "remote_pm_agent" / "live"
 PAPER_CSV = EDGE_RUNTIME / "market_data" / "research" / "t24_paper_ledger_trades.csv"
-REPORT_DIR = ROOT / "docs" / "analysis" / "2026-05"
+REPORT_DIR = ROOT / "docs" / "archive" / "analysis" / "2026-05"
 ADDED_T1_2026_05_26 = {
     "Ankara",
     "Guangzhou",

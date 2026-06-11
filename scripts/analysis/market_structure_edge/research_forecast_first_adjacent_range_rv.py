@@ -32,8 +32,8 @@ sys.path.append(str(SCRIPT_DIR))
 import research_range_rv_scanner as scanner  # noqa: E402
 
 
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-forecast-first-adjacent-range-rv-v0-1.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-forecast-first-adjacent-range-rv-v0-1.md"
+OUT_JSON_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-forecast-first-adjacent-range-rv-v0-1.json"
+OUT_MD_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-forecast-first-adjacent-range-rv-v0-1.md"
 MASS_THRESHOLDS = (0.55, 0.60, 0.65, 0.70)
 COST_THRESHOLDS = (0.70, 0.75, 0.80)
 EDGE_THRESHOLDS = (0.05, 0.10, 0.15)

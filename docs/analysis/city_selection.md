@@ -29,13 +29,13 @@ The current city-selection state is:
 
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
-| `docs/analysis/2026-06/2026-06-06-city-alpha-framework.md` | 2026-06 pre near-binary fix | useful framework, invalidated numeric city ranks | invalidated-numbers |
-| `docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md` | 2026-06 | offline PR2b parameter sweep and guard tests | superseded-evidence |
-| `docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md` | 2026-06 | PR2b robustness and gate comparison | superseded-evidence |
-| `docs/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md` | 2026-06 | first optimizer basket research; missed-profit and top5 weakness | superseded-evidence |
-| `docs/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md` | 2026-06 | baseline-vs-basket comparison on older window | superseded-evidence |
-| `docs/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md` | 2026-06 | city-day basket walk-forward; train-selected folds not robust | superseded-evidence |
-| `docs/analysis/2026-06/2026-06-06-city-day-distribution-quality.md` | 2026-06 | distribution diagnostics before basket objective refresh | superseded-evidence |
+| `docs/archive/analysis/2026-06/2026-06-06-city-alpha-framework.md` | 2026-06 pre near-binary fix | useful framework, invalidated numeric city ranks | invalidated-numbers |
+| `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md` | 2026-06 | offline PR2b parameter sweep and guard tests | superseded-evidence |
+| `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md` | 2026-06 | PR2b robustness and gate comparison | superseded-evidence |
+| `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-optimizer-research.md` | 2026-06 | first optimizer basket research; missed-profit and top5 weakness | superseded-evidence |
+| `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-vs-legacy-baselines.md` | 2026-06 | baseline-vs-basket comparison on older window | superseded-evidence |
+| `docs/archive/analysis/2026-06/2026-06-06-city-day-basket-walkforward.md` | 2026-06 | city-day basket walk-forward; train-selected folds not robust | superseded-evidence |
+| `docs/archive/analysis/2026-06/2026-06-06-city-day-distribution-quality.md` | 2026-06 | distribution diagnostics before basket objective refresh | superseded-evidence |
 | `docs/analysis/2026-06/2026-06-08-city-day-basket-vs-legacy-baselines.md` | 2026-06 | basket vs legacy baseline refresh | active-evidence |
 | `docs/analysis/2026-06/2026-06-08-city-day-basket-walkforward.md` | 2026-06 | walk-forward check, overfit risk | active-evidence |
 | `docs/analysis/2026-06/2026-06-08-city-day-distribution-quality.md` | 2026-06 | distribution quality and normalized market distribution | active-evidence |

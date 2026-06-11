@@ -33,8 +33,8 @@ import research_range_rv_variant_lab_v03 as variants  # noqa: E402
 
 
 TARGET_METRIC = "forecast_center_shoulders_range_rv_alpha"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-center-shoulders-butterfly-range-rv.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-center-shoulders-butterfly-range-rv.md"
+OUT_JSON_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-center-shoulders-butterfly-range-rv.json"
+OUT_MD_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-center-shoulders-butterfly-range-rv.md"
 
 MIN_HOLDOUT_ACTIVE_DATES = 5
 MIN_HOLDOUT_ROWS = 10

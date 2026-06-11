@@ -28,7 +28,7 @@ Phase 4D absorbed the 2026-06-03 to 2026-06-08 live-performance snapshots into t
 | `docs/analysis/2026-06/2026-06-06-three-strategy-instances-near-binary-reanalysis.md` | 2026-06 | three strategy instances after near-binary fix | snapshot |
 | `docs/analysis/2026-06/2026-06-07-recent-live-loss-attribution-target-0531-0606.md` | 2026-06 | post-fix recent loss attribution by cohort/city/side/instance | snapshot |
 | `docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | 2026-06 | 2026-06-08 DB/gate audit and no-live-expansion conclusion | snapshot |
-| `docs/analysis/2026-05/2026-05-27-performance-live-full-research.md` | 2026-05 | early full live research | snapshot |
+| `docs/archive/analysis/2026-05/2026-05-27-performance-live-full-research.md` | 2026-05 | early full live research | snapshot |
 
 ## Absorbed Historical Claims
 

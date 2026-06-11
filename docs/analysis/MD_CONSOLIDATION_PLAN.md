@@ -434,6 +434,45 @@ Moved stems:
 - `2026-06-09-range-rv-temporal-reversion-v0-6`
 - `2026-06-09-range-rv-walkforward-v0-4`
 
+
+## Phase 4F Link And Script Hygiene Log
+
+Updated on 2026-06-11: current/living docs that still pointed at Phase 4E moved reports now point to `docs/archive/analysis/2026-06/`. Historical archive bodies were left unchanged.
+
+Also updated legacy research scripts whose default outputs targeted archived reports, so rerunning old experiments does not recreate those reports under active `docs/analysis/2026-06/`. Scripts that are imported by newer Range RV experiments remain in place; only their default report output paths were redirected to archive.
+
+Explicitly not touched in this hygiene pass:
+
+- 2026-06-10 reports and scripts.
+- 2026-06-11 reports and scripts.
+- M3 generated artifacts under `docs/analysis/2026-06/generated/`.
+
+
+## Phase 4G May Archive Move Log
+
+Moved on 2026-06-11: all 2026-05 analysis reports from `docs/analysis/2026-05/` to `docs/archive/analysis/2026-05/`. These files are retained as historical mechanism, retired-strategy, or invalidated early-live snapshots; current decisions should cite the owner living docs and current June evidence first.
+
+Updated current docs and living docs to point at the archive paths. Updated May-era analysis script defaults so reruns write old May report names into archive rather than recreating active `docs/analysis/2026-05/` entries.
+
+Moved stems:
+- `2026-05-26-compare-UNKNOWN-vs-mid_price_core_v1`
+- `2026-05-27-compare-execution-algorithm-window-filter`
+- `2026-05-27-compare-mid-price-vs-maker-queue`
+- `2026-05-27-compare-strict-t24-vs-wide-window`
+- `2026-05-27-lineage-execution-UNKNOWN-vs-mid_price_core_v1`
+- `2026-05-27-maker-queue-baseline-and-optimization`
+- `2026-05-27-maker-queue-cancel-backtest`
+- `2026-05-27-performance-city-pool-contribution`
+- `2026-05-27-performance-live-full-research`
+- `2026-05-28-compare-orig-pool-vs-new-pool`
+- `2026-05-28-performance-makerqueue-v3-city-pool`
+- `2026-05-29-entry-timing-edge`
+- `2026-05-29-performance-candidates-vs-fills-link`
+- `2026-05-29-performance-city-pool-side-strategy`
+- `2026-05-29-strategy-entry-band-and-execution-quality`
+- `2026-05-30-performance-entry-band-research`
+- `2026-05-30-performance-sizing-and-band-distribution`
+
 ## Hard Rules For Later Moves
 
 - A historical file can move only after its useful claim appears in the owner living doc or is explicitly marked `invalidated`.

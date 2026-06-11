@@ -27,8 +27,8 @@ Phase 4D absorbed the 2026-05 timing reports and 2026-06 timing baseline into th
 | `docs/analysis/2026-06/2026-06-08-city-x-entry-timing-research.md` | 2026-06 | city x timing slice and preliminary weak/strong windows | snapshot |
 | `docs/analysis/2026-06/2026-06-08-side-band-entry-timing-impact.md` | 2026-06 | side-band timing impact and limits of applying v1 timing rule | snapshot |
 | `docs/analysis/2026-06/2026-06-07-mid-price-core-v1-forecast-timing-degradation-lineage.md` | 2026-06 | v1 post-June timing lineage and forecast/market adverse-move mechanisms | snapshot |
-| `docs/analysis/2026-05/2026-05-27-compare-strict-t24-vs-wide-window.md` | 2026-05 | early strict vs 22-28h replay hypothesis | historical-hypothesis |
-| `docs/analysis/2026-05/2026-05-29-entry-timing-edge.md` | 2026-05 | early timing edge and `<T-22` fill-rate discussion | historical-hypothesis |
+| `docs/archive/analysis/2026-05/2026-05-27-compare-strict-t24-vs-wide-window.md` | 2026-05 | early strict vs 22-28h replay hypothesis | historical-hypothesis |
+| `docs/archive/analysis/2026-05/2026-05-29-entry-timing-edge.md` | 2026-05 | early timing edge and `<T-22` fill-rate discussion | historical-hypothesis |
 
 ## Absorbed Historical Claims
 

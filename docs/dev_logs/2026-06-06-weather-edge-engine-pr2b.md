@@ -22,8 +22,8 @@ PR2 原结论是 basket `missed_profit > avoided_loss`，不能进 Step 3。
 ```text
 M scripts/analysis/eval_city_day_basket.py
 A scripts/analysis/tune_city_day_basket.py
-A docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.json
-A docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md
+A docs/archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.json
+A docs/archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-sweep.md
 A docs/analysis/2026-06/2026-06-06-city-day-basket-eval.json
 ```
 
@@ -130,8 +130,8 @@ PR2b 离线 gate 已被部分参数反转。
 
 ```text
 scripts/analysis/validate_city_day_basket_robustness.py
-docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md
-docs/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.json
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.md
+docs/archive/analysis/2026-06/2026-06-06-city-day-basket-pr2b-robustness.json
 ```
 
 固定 PR2b 最佳配置，不重新调参，按 full / train / holdout / recent / live_filled 子集评估：

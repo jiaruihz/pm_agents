@@ -27,8 +27,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-scanner-v0.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-scanner-v0.md"
+OUT_JSON_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-scanner-v0.json"
+OUT_MD_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-scanner-v0.md"
 ORDERBOOK_GLOB_DEFAULT = (
     ROOT / "runtime" / "weather_edge_v1" / "market_data" / "orderbook_snapshots" / "*" / "*.jsonl.gz"
 )

@@ -25,8 +25,8 @@ import research_range_rv_variant_lab_v03 as variants
 
 
 ROOT = Path(__file__).resolve().parents[3]
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-regime-v0-8.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-regime-v0-8.md"
+OUT_JSON_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-regime-v0-8.json"
+OUT_MD_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-regime-v0-8.md"
 
 
 def parse_args() -> argparse.Namespace:

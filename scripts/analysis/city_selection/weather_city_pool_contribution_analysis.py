@@ -348,7 +348,7 @@ def main() -> int:
     if not city_pools:
         raise SystemExit("No current city pools found")
     trades, raw_candidates, unsettled = _collect(city_pools, args.shares)
-    out_path = Path(args.out) if args.out else ROOT / "docs" / "analysis" / "2026-05" / "2026-05-27-performance-city-pool-contribution.md"
+    out_path = Path(args.out) if args.out else ROOT / "docs" / "archive" / "analysis" / "2026-05" / "2026-05-27-performance-city-pool-contribution.md"
     _write_report(out_path, trades, city_pools, raw_candidates, unsettled)
     print(json.dumps({
         "out": str(out_path),

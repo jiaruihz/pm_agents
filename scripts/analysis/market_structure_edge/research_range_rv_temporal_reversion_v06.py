@@ -34,8 +34,8 @@ import research_range_rv_scanner as scanner  # noqa: E402
 import research_range_rv_variant_lab_v03 as variants  # noqa: E402
 
 
-OUT_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-temporal-reversion-v0-6.json"
-OUT_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-09-range-rv-temporal-reversion-v0-6.md"
+OUT_JSON_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-temporal-reversion-v0-6.json"
+OUT_MD_DEFAULT = ROOT / "docs" / "archive" / "analysis" / "2026-06" / "2026-06-09-range-rv-temporal-reversion-v0-6.md"
 
 
 def parse_args() -> argparse.Namespace:

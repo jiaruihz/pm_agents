@@ -7,8 +7,8 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 
 > 主题研究文档（功能待实施）。把「入场价带调参」和「仓位 sizing」作为一个整体设计。
 > 证据基础（时间点快照）：
-> - [2026-05-30-performance-entry-band-research.md](analysis/2026-05/2026-05-30-performance-entry-band-research.md)（side×价位桶 EV 结构）
-> - [2026-05-30-performance-sizing-and-band-distribution.md](analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md)（**收益分布 + 反过拟合扫描**，§7 结论以此为准）
+> - [2026-05-30-performance-entry-band-research.md](archive/analysis/2026-05/2026-05-30-performance-entry-band-research.md)（side×价位桶 EV 结构）
+> - [2026-05-30-performance-sizing-and-band-distribution.md](archive/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md)（**收益分布 + 反过拟合扫描**，§7 结论以此为准）
 > 可复跑脚本：`scripts/analysis/sizing_entry_band/weather_entry_band_research.py`、`scripts/analysis/sizing_entry_band/weather_sizing_band_study.py`
 > 口径来源：[WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md)（PnL 唯一源 `fact_trades.pnl_usd_at_fill`）
 
@@ -138,7 +138,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 
 ## 7. 分布研究修订结论（反过拟合，覆盖前文乐观处）
 
-> 来源：[2026-05-30-performance-sizing-and-band-distribution.md](analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md)。
+> 来源：[2026-05-30-performance-sizing-and-band-distribution.md](archive/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md)。
 > 方法：sizing 权重从 paper 推、live 上做样本外检验；band 整片扫描；日级 bootstrap CI。
 > **以下结论优先级高于 §2 的具体乘数**——§2 是 EV 方向，§7 是稳健性裁剪。
 

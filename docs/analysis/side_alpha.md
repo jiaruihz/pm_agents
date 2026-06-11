@@ -30,7 +30,7 @@ Side conclusions must report win-rate, ROI/PnL, top-winner dependence, matched b
 |---|---|---|---|
 | `docs/analysis/2026-06/2026-06-08-performance-side-band-alpha-summary.md` | 2026-06 | side-band alpha summary | snapshot |
 | `docs/analysis/2026-06/2026-06-08-side-band-entry-timing-impact.md` | 2026-06 | side-band timing impact | snapshot |
-| `docs/analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md` | 2026-06 | early side-band entry analysis; pre-near-binary caution applies | snapshot |
+| `docs/archive/analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md` | 2026-06 | early side-band entry analysis; pre-near-binary caution applies | snapshot |
 | `docs/analysis/2026-06/2026-06-07-v1-ecmwf-blocked-side-band-overlay.md` | 2026-06 | side-band overlay on blocked ECMWF cities; improves losses but shadow only | snapshot |
 | `docs/analysis/2026-06/2026-06-10-side-band-forecast-regime-v0.md` | 2026-06 | clean full-opportunity side-band + forecast regime test; gates failed | active-evidence |
 | `docs/analysis/2026-06/2026-06-10-side-band-mechanism-attribution-v1.md` | 2026-06 | mechanism attribution for side-band, low YES, BUY_NO, forecast regime; gates failed | active-evidence |

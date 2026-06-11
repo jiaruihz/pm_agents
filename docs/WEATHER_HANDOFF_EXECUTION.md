@@ -73,7 +73,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 | `scripts/ops/reorg_eval_layer.sh` | 脚本 | [6] 评估层重构（DRY_RUN 验证过，未真跑） |
 
 > 本机补齐与校验状态见
-> [docs/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md](analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md)。
+> [docs/archive/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md](archive/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md)。
 
 原 skill 备份在 `/tmp/weather-perf-skill.orig.md`（本机临时，迁移前自取）。
 

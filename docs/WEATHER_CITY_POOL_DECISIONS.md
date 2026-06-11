@@ -129,7 +129,7 @@ paper/research 和 side-band 影子观察。
 
 完整分析报告：
 
-- `docs/analysis/2026-05/2026-05-27-performance-live-full-research.md`
+- `docs/archive/analysis/2026-05/2026-05-27-performance-live-full-research.md`
 
 ## 昨天新增 8 城怎么处理
 

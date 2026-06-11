@@ -22,10 +22,10 @@ Phase 4D absorbed the May entry-band/sizing reports into the current rule:
 
 | Evidence | Window | What It Says | Status |
 |---|---|---|---|
-| `docs/analysis/2026-05/2026-05-30-performance-entry-band-research.md` | 2026-05 | entry band side x price bucket EV | snapshot |
-| `docs/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md` | 2026-05 | sizing x entry band distribution and anti-overfit check | snapshot |
-| `docs/analysis/2026-05/2026-05-27-compare-execution-algorithm-window-filter.md` | 2026-05 | `entry_price_window` as pre-trade signal filter | historical-mechanism |
-| `docs/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md` | 2026-05 | filled-vs-opportunity band disagreement and execution selection bias | historical-mechanism |
+| `docs/archive/analysis/2026-05/2026-05-30-performance-entry-band-research.md` | 2026-05 | entry band side x price bucket EV | snapshot |
+| `docs/archive/analysis/2026-05/2026-05-30-performance-sizing-and-band-distribution.md` | 2026-05 | sizing x entry band distribution and anti-overfit check | snapshot |
+| `docs/archive/analysis/2026-05/2026-05-27-compare-execution-algorithm-window-filter.md` | 2026-05 | `entry_price_window` as pre-trade signal filter | historical-mechanism |
+| `docs/archive/analysis/2026-05/2026-05-29-strategy-entry-band-and-execution-quality.md` | 2026-05 | filled-vs-opportunity band disagreement and execution selection bias | historical-mechanism |
 | `docs/analysis/2026-06/2026-06-07-v1-ecmwf-blocked-side-band-overlay.md` | 2026-06 | blocked ECMWF city side-band overlay; shadow only | snapshot |
 | `docs/WEATHER_ENTRY_BAND_AND_SIZING_DESIGN.md` | design | target design for entry bands and sizing | design-draft |
 

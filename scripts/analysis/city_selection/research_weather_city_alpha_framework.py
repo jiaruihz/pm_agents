@@ -91,11 +91,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db-path", default="runtime/weather.db")
     parser.add_argument(
         "--json-out",
-        default="docs/analysis/2026-06/2026-06-06-city-alpha-framework.json",
+        default="docs/archive/analysis/2026-06/2026-06-06-city-alpha-framework.json",
     )
     parser.add_argument(
         "--md-out",
-        default="docs/analysis/2026-06/2026-06-06-city-alpha-framework.md",
+        default="docs/archive/analysis/2026-06/2026-06-06-city-alpha-framework.md",
     )
     return parser.parse_args()
 

@@ -23,9 +23,9 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 | `docs/WEATHER_DATA_CANONICAL_SOURCES.md` | current | source/mirror/derived/legacy and required SQL checks | current-source |
 | `docs/WEATHER_DATA_PIPELINE.md` | current | N100 -> local mirror -> DB -> API flow | current-source |
 | `docs/analysis/2026-06/2026-06-03-signal-side-flip-check.md` | 2026-06 | side flip and bracket evolution investigation | snapshot |
-| `docs/analysis/2026-05/2026-05-29-performance-candidates-vs-fills-link.md` | 2026-05 | candidate vs fill linkage context | snapshot |
+| `docs/archive/analysis/2026-05/2026-05-29-performance-candidates-vs-fills-link.md` | 2026-05 | candidate vs fill linkage context | snapshot |
 | `docs/analysis/2026-06/2026-06-09-decision-window-backfill.md` | 2026-06 | analysis DB repair for decision-window coverage | snapshot |
-| `docs/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md` | 2026-06 | handoff package landing and schema validation | design-plan |
+| `docs/archive/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md` | 2026-06 | handoff package landing and schema validation | design-plan |
 | `docs/analysis/2026-06/2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md` | 2026-06 | handoff package execution gaps and three-source microstructure correction | design-plan |
 | `docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | 2026-06 | final audit: use three-gate verdicts and avoid drifting live_real counts | snapshot |
 

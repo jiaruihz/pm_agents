@@ -16,7 +16,7 @@ from typing import Any
 DB_PATH = Path("runtime/weather.db")
 LIVE_CYCLE_DIR = Path("runtime/weather_edge_v1/remote_pm_agent/live_cycle")
 REMOTE_PM_AGENT_DIR = Path("runtime/weather_edge_v1/remote_pm_agent")
-REPORT_PATH = Path("docs/analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md")
+REPORT_PATH = Path("docs/archive/analysis/2026-06/2026-06-04-performance-side-band-entry-analysis.md")
 
 CORE_CITIES = (
     "Boston",
