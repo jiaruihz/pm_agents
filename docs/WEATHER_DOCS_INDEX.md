@@ -1,11 +1,11 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-10 analysis living docs absorbed
+Updated: 2026-06-12 low-price BUY_YES lottery research added
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-06-10
+更新时间：2026-06-12
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -159,6 +159,7 @@ Status 口径：
 | [2026-06-10-side-band-forecast-regime-v0.md](analysis/2026-06/2026-06-10-side-band-forecast-regime-v0.md) | `snapshot` | yes | Side Band + Forecast Regime Clean Test v0：full opportunity 复现/推广 side-band 并叠加 forecast regime；旧形态历史赚过但 top5 stress/holdout 失败，三门不过，当前 verdict=inconclusive |
 | [2026-06-10-side-band-mechanism-attribution-v1.md](analysis/2026-06/2026-06-10-side-band-mechanism-attribution-v1.md) | `snapshot` | yes | Side Band 机制归因 v1：固定旧 side-band / 低价 YES / BUY_NO / forecast regime selector，对同 side/hour/price baseline 做 excess 和日期归因；top5 stress 与三门不过，当前 verdict=inconclusive |
 | [2026-06-11-side-band-bad-day-risk-v2.md](analysis/2026-06/2026-06-11-side-band-bad-day-risk-v2.md) | `snapshot` | yes | Side Band 坏日期风控补充 v2：固定旧 side-band / 去低价 YES / BUY_NO 0.35-0.65 selector，叠加 forecast risk filters；holdout 点估计仍受日期集中和 top5 stress 拖累，三门全不过，当前 verdict=inconclusive，不允许 live |
+| [2026-06-12-low-price-buy-yes-lottery-v0.md](analysis/2026-06/2026-06-12-low-price-buy-yes-lottery-v0.md) | `snapshot` | yes | Low-price BUY_YES lottery sleeve v0：full opportunity 口径复核 <0.10/0.10-0.20/0.20-0.25 和旧 side-band lottery leg；收益/亏损由少数日期和 city-date 命中驱动，old leg excess CI 跨 0，当前仅研究不允许 live |
 | [2026-06-10-weather-strategy-live-test-selection.md](analysis/2026-06/2026-06-10-weather-strategy-live-test-selection.md) | `snapshot` | yes | 本轮子 agent 策略研究总控选择：没有 real live 候选；只建议 `forecast quality soft gate + adjacent3 range` 进入 shadow/paper 观测 |
 | [2026-06-10-adjacent3-quality-shadow-journal-v0.md](analysis/2026-06/2026-06-10-adjacent3-quality-shadow-journal-v0.md) | `snapshot` | yes | Adjacent3 + forecast quality 固定 shadow journal：只记录 would-trade/orderbook 覆盖，不改 live；当前样本薄且三门不过 |
 | [2026-06-11-adjacent3-union-flexible-v0-2.md](analysis/2026-06/2026-06-11-adjacent3-union-flexible-v0-2.md) | `snapshot` | yes | Adjacent3 union/flexible v0.2：修正 BUY_YES-only 分母问题，纳入 BUY_NO 和混合表达；样本恢复但 proxy/orderbook 三门仍不过，当前 verdict=inconclusive |
