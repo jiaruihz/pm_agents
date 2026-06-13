@@ -19,6 +19,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import sys
 import tempfile
 import time
@@ -56,6 +57,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--orderbook-concurrency", type=int, default=80)
     parser.add_argument("--orderbook-timeout-seconds", type=float, default=4.0)
     parser.add_argument("--clob-base-url", default=CLOB_BASE_DEFAULT)
+    parser.add_argument("--proxy", default="")
     parser.add_argument("--gamma-use-cache", action="store_true")
     parser.add_argument("--out", default="")
     parser.add_argument("--summary-out", default="")
@@ -150,6 +152,49 @@ def load_weather_predict_city_configs(path: Path) -> tuple[dict[str, dict[str, A
     return dict(configs), t1, t2
 
 
+def load_weather_predict_proxy(path: Path) -> str:
+    for key in ("WEATHER_PREDICT_PROXY", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY"):
+        value = os.environ.get(key)
+        if value:
+            return value
+    env_path = path / ".env"
+    if not env_path.exists():
+        return ""
+    values: dict[str, str] = {}
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, raw_value = line.split("=", 1)
+        key = key.strip()
+        if key not in {"WEATHER_PREDICT_PROXY", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY"}:
+            continue
+        try:
+            value = shlex.split(raw_value, comments=False, posix=True)[0] if raw_value.strip() else ""
+        except Exception:
+            value = raw_value.strip().strip("\"'")
+        values[key] = value
+    for key in ("WEATHER_PREDICT_PROXY", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY"):
+        if values.get(key):
+            return values[key]
+    return ""
+
+
+def configure_proxy_env(proxy: str, weather_predict_dir: Path) -> None:
+    if not proxy:
+        return
+    os.environ.setdefault("WEATHER_PREDICT_PROXY", proxy)
+    os.environ.setdefault("HTTPS_PROXY", proxy)
+    os.environ.setdefault("HTTP_PROXY", proxy)
+    env_path = weather_predict_dir / ".env"
+    if env_path.exists() and not os.environ.get("NO_PROXY"):
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if line.startswith("NO_PROXY="):
+                os.environ["NO_PROXY"] = line.split("=", 1)[1].strip().strip("\"'")
+                break
+
+
 def selected_cities(args: argparse.Namespace, configs: dict[str, dict[str, Any]], t1: set[str], t2: set[str]) -> list[str]:
     if args.cities.strip():
         requested = [item.strip() for item in args.cities.split(",") if item.strip()]
@@ -213,6 +258,7 @@ async def fetch_token_books(
     concurrency: int,
     timeout_seconds: float,
     clob_base_url: str,
+    proxy: str,
 ) -> dict[str, dict[str, Any]]:
     sem = asyncio.Semaphore(max(1, concurrency))
     timeout = httpx.Timeout(max(0.5, timeout_seconds))
@@ -251,7 +297,7 @@ async def fetch_token_books(
             "raw": {"bids": summary["bids"], "asks": summary["asks"]},
         }
 
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, proxy=proxy or None) as client:
         pairs = await asyncio.gather(*(fetch_one(client, token_id) for token_id in token_ids))
     return dict(pairs)
 
@@ -265,7 +311,10 @@ def discover_event(gamma: PolymarketGammaClient, *, city: str, city_slug: str, t
 
 
 async def main_async(args: argparse.Namespace) -> int:
-    configs, t1, t2 = load_weather_predict_city_configs(Path(args.weather_predict_dir))
+    weather_predict_dir = Path(args.weather_predict_dir)
+    proxy = args.proxy.strip() or load_weather_predict_proxy(weather_predict_dir)
+    configure_proxy_env(proxy, weather_predict_dir)
+    configs, t1, t2 = load_weather_predict_city_configs(weather_predict_dir)
     cities = selected_cities(args, configs, t1, t2)
     dates = selected_dates(args)
     gamma = PolymarketGammaClient()
@@ -324,6 +373,7 @@ async def main_async(args: argparse.Namespace) -> int:
         concurrency=args.orderbook_concurrency,
         timeout_seconds=args.orderbook_timeout_seconds,
         clob_base_url=args.clob_base_url,
+        proxy=proxy,
     )
     rows: list[dict[str, Any]] = []
     for meta in market_rows:
@@ -368,6 +418,7 @@ async def main_async(args: argparse.Namespace) -> int:
         "orderbook_fetched_at_utc_min": fetched_times[0] if fetched_times else None,
         "orderbook_fetched_at_utc_max": fetched_times[-1] if fetched_times else None,
         "orderbook_timeout_seconds": args.orderbook_timeout_seconds,
+        "proxy_configured": bool(proxy),
     }
     summary_out = Path(args.summary_out) if args.summary_out.strip() else out.with_suffix(out.suffix + ".summary.json")
     write_json_atomic(summary_out, summary)
