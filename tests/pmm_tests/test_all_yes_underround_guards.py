@@ -133,6 +133,24 @@ def test_all_yes_guard_rejects_stale_snapshot(tmp_path: Path):
     assert "snapshot_too_old" in decision.blockers
 
 
+def test_all_yes_guard_uses_oldest_orderbook_leg_time_for_ttl(tmp_path: Path):
+    cfg = BasketGuardConfig(max_snapshot_age_seconds=180)
+    candidate = _candidate(
+        orderbook_fetched_at_utc_min="2026-06-13T18:00:00Z",
+        orderbook_fetched_at_utc_max="2026-06-13T18:32:00Z",
+    )
+
+    decision = check_candidate(
+        cfg=cfg,
+        repo_root=tmp_path,
+        candidate=candidate,
+        decision_ts_utc="2026-06-13T18:33:30Z",
+    )
+
+    assert not decision.allow
+    assert "snapshot_too_old" in decision.blockers
+
+
 def test_all_yes_guard_rejects_missing_snapshot_when_ttl_enabled(tmp_path: Path):
     cfg = BasketGuardConfig(max_snapshot_age_seconds=180)
     candidate = _candidate()

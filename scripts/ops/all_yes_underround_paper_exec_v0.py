@@ -69,7 +69,11 @@ def parse_utc(value: Any) -> datetime | None:
 
 def recording_ttl_audit(basket: dict[str, Any], max_age_seconds: float | None) -> dict[str, Any]:
     recorded_at = parse_utc(basket.get("recorded_at_utc"))
-    snapshot_ts = parse_utc(basket.get("orderbook_fetched_at_utc_max") or basket.get("snapshot_ts_utc"))
+    snapshot_ts = parse_utc(
+        basket.get("orderbook_fetched_at_utc_min")
+        or basket.get("orderbook_fetched_at_utc_max")
+        or basket.get("snapshot_ts_utc")
+    )
     if recorded_at is None or snapshot_ts is None:
         return {
             "recording_age_seconds": None,

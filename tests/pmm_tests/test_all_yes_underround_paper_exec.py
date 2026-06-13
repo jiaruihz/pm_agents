@@ -43,3 +43,18 @@ def test_recording_ttl_audit_prefers_orderbook_fetched_at():
     assert audit["ttl_equivalent"] is True
     assert audit["ttl_status"] == "live_equivalent"
     assert audit["recording_age_seconds"] == 30.0
+
+
+def test_recording_ttl_audit_uses_oldest_orderbook_leg_time():
+    basket = _basket(
+        recorded_at_utc="2026-06-13T18:35:30+00:00",
+        snapshot_ts_utc="2026-06-13T18:30:53Z",
+    )
+    basket["orderbook_fetched_at_utc_min"] = "2026-06-13T18:30:00Z"
+    basket["orderbook_fetched_at_utc_max"] = "2026-06-13T18:35:00Z"
+
+    audit = recording_ttl_audit(basket, 180)
+
+    assert audit["ttl_equivalent"] is False
+    assert audit["ttl_status"] == "stale_recording"
+    assert audit["recording_age_seconds"] == 330.0
