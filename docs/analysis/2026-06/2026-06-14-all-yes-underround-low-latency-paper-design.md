@@ -13,7 +13,7 @@ Target metric:
 
 ```text
 live_equivalent_all_yes_underround_forward_paper
-= all-leg paper basket recorded within 180s of orderbook snapshot_ts_utc,
+= all-leg paper basket recorded within 180s of orderbook fetched_at_utc,
   with every leg present, ask depth >= 5 shares, max YES spread <= 0.05,
   total YES ask cost <= 0.98, and no real order placed.
 ```
@@ -61,6 +61,8 @@ SNAPSHOT_ROOT=/home/jiarui/projects/weather-predict/output/orderbook_snapshots \
   scripts/ops/start_all_yes_underround_fresh_paper_v0.sh
 ```
 
+Freshness is based on row-level `fetched_at_utc` when available, not the service-level `snapshot_ts_utc`. The runner also rejects a sidecar that appears to still be writing (`min_file_stable_seconds=10`) or has too few rows (`min_snapshot_rows=500`) so a partial gzip cannot create a false all-YES underround basket.
+
 Do not deploy this by `scp`/`rsync`. Any N100 change must go through `weather-strategy-deploy` and the git-first flow.
 
 ## Suggested User Systemd Template
@@ -80,6 +82,8 @@ Environment=PROJECT_DIR=/home/jiarui/projects/pm_agent_all_yes_fresh
 Environment=DATA_PROJECT_DIR=/home/jiarui/projects/pm_agent
 Environment=SNAPSHOT_ROOT=/home/jiarui/projects/weather-predict/output/orderbook_snapshots
 Environment=MAX_SNAPSHOT_AGE_SECONDS=180
+Environment=MIN_FILE_STABLE_SECONDS=10
+Environment=MIN_SNAPSHOT_ROWS=500
 Environment=CYCLE_INTERVAL_SECONDS=30
 ExecStart=/home/jiarui/projects/pm_agent_all_yes_fresh/scripts/ops/all_yes_underround_fresh_paper_loop_v0.sh
 Restart=always

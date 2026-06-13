@@ -96,7 +96,7 @@ def check_candidate(
         blockers.append("kill_switch_active")
 
     if cfg.max_snapshot_age_seconds is not None:
-        snapshot_ts = _parse_utc(candidate.get("snapshot_ts_utc"))
+        snapshot_ts = _parse_utc(candidate.get("orderbook_fetched_at_utc_max") or candidate.get("snapshot_ts_utc"))
         decision_ts = _parse_utc(decision_ts_utc) if decision_ts_utc is not None else datetime.now(timezone.utc)
         if snapshot_ts is None:
             blockers.append("missing_snapshot_ts")

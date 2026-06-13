@@ -1,6 +1,6 @@
 # All-YES Underround Live-Prep v0
 
-> generated_at_utc: `2026-06-13T19:27:37.639836+00:00`
+> generated_at_utc: `2026-06-13T19:38:56.894375+00:00`
 > target_metric: `current_all_yes_underround_equal_share_basket`
 > verdict: `PAPER_SHADOW_ENGINEERING_CANDIDATE`
 > Scope: scanner/live-prep only; no N100/live config changed and no orders placed.
@@ -36,7 +36,7 @@ CLOB orders with fills = [{'status': 'error', 'orders': 33, 'with_fill': 0}, {'s
 - All-YES paper passed checks: `['clob_coverage_gate_pass', 'paper_ledger_exists']`.
 - All-YES monitor blockers: `['live_equivalent_paper_ledger_empty', 'paper_baskets_not_live_equivalent', 'current_guard_audit_fail', 'forward_settled_baskets_low', 'forward_roi_not_ready', 'positive_basket_rate_not_ready', 'live_executor_missing']`; pending by date `{'2026-06-14': 2}`.
 - Stale basket guard: max snapshot age `180.0` seconds before paper/live candidate recording.
-- Fresh paper cycle: verdict `STALE_SNAPSHOT_SKIP_CYCLE`; executed `False`; latest snapshot age `1598.678` seconds; reason `snapshot_too_old`.
+- Fresh paper cycle: verdict `STALE_SNAPSHOT_SKIP_CYCLE`; executed `False`; latest snapshot age `1642.541` seconds; reason `snapshot_too_old`.
 - Repeatable local command: `scripts/ops/run_all_yes_underround_paper_v0.sh`.
 - Low-latency forward-paper command: `scripts/ops/run_all_yes_underround_fresh_paper_v0.sh`; it only records baskets while the latest snapshot is inside the TTL.
 - Guard coverage: `scripts/ops/all_yes_underround_guards.py test` and `pytest tests/pmm_tests/test_all_yes_underround_guards.py` cover all-leg completeness, depth, spread, cost, duplicate legs, underround mismatch, and kill switch.

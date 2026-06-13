@@ -50,6 +50,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gate-path", default=str(GATE_DEFAULT))
     parser.add_argument("--station-basis-gate-path", default=str(STATION_BASIS_GATE_DEFAULT))
     parser.add_argument("--max-snapshot-age-seconds", type=float, default=180.0)
+    parser.add_argument("--min-file-stable-seconds", type=float, default=10.0)
+    parser.add_argument("--min-snapshot-rows", type=int, default=500)
     parser.add_argument("--wait-seconds", type=float, default=0.0)
     parser.add_argument("--poll-seconds", type=float, default=10.0)
     parser.add_argument("--python", default=sys.executable)
@@ -60,31 +62,67 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def snapshot_freshness(snapshot_ts_utc: Any, decision_ts: datetime, max_age_seconds: float) -> dict[str, Any]:
-    snapshot_ts = parse_utc(snapshot_ts_utc)
-    if snapshot_ts is None:
+def snapshot_freshness(
+    *,
+    freshness_ts_utc: Any,
+    decision_ts: datetime,
+    max_age_seconds: float,
+    file_mtime: float,
+    min_file_stable_seconds: float,
+    rows: int,
+    min_snapshot_rows: int,
+) -> dict[str, Any]:
+    file_age = decision_ts.timestamp() - file_mtime
+    if file_age < min_file_stable_seconds:
+        return {
+            "fresh": False,
+            "reason": "snapshot_file_still_writing",
+            "snapshot_age_seconds": None,
+            "snapshot_file_age_seconds": round(file_age, 3),
+            "freshness_basis_utc": freshness_ts_utc,
+        }
+    if rows < min_snapshot_rows:
+        return {
+            "fresh": False,
+            "reason": "snapshot_rows_below_min",
+            "snapshot_age_seconds": None,
+            "snapshot_file_age_seconds": round(file_age, 3),
+            "freshness_basis_utc": freshness_ts_utc,
+            "rows": rows,
+            "min_snapshot_rows": min_snapshot_rows,
+        }
+    freshness_ts = parse_utc(freshness_ts_utc)
+    if freshness_ts is None:
         return {
             "fresh": False,
             "reason": "missing_snapshot_ts",
             "snapshot_age_seconds": None,
+            "snapshot_file_age_seconds": round(file_age, 3),
+            "freshness_basis_utc": freshness_ts_utc,
         }
-    age = (decision_ts - snapshot_ts).total_seconds()
+    age = (decision_ts - freshness_ts).total_seconds()
     if age < -1:
         return {
             "fresh": False,
             "reason": "snapshot_ts_in_future",
             "snapshot_age_seconds": round(age, 3),
+            "snapshot_file_age_seconds": round(file_age, 3),
+            "freshness_basis_utc": freshness_ts_utc,
         }
     if age > max_age_seconds:
         return {
             "fresh": False,
             "reason": "snapshot_too_old",
             "snapshot_age_seconds": round(age, 3),
+            "snapshot_file_age_seconds": round(file_age, 3),
+            "freshness_basis_utc": freshness_ts_utc,
         }
     return {
         "fresh": True,
         "reason": "fresh",
         "snapshot_age_seconds": round(age, 3),
+        "snapshot_file_age_seconds": round(file_age, 3),
+        "freshness_basis_utc": freshness_ts_utc,
     }
 
 
@@ -92,7 +130,16 @@ def load_latest_snapshot(args: argparse.Namespace) -> tuple[Path, dict[str, Any]
     path = Path(args.snapshot_path) if args.snapshot_path else latest_snapshot(Path(args.snapshot_root))
     rows = read_snapshot(path)
     summary = snapshot_summary(rows)
-    freshness = snapshot_freshness(summary.get("snapshot_ts_utc_max"), now_utc(), args.max_snapshot_age_seconds)
+    freshness_basis = summary.get("orderbook_fetched_at_utc_max") or summary.get("snapshot_ts_utc_max")
+    freshness = snapshot_freshness(
+        freshness_ts_utc=freshness_basis,
+        decision_ts=now_utc(),
+        max_age_seconds=args.max_snapshot_age_seconds,
+        file_mtime=path.stat().st_mtime,
+        min_file_stable_seconds=args.min_file_stable_seconds,
+        rows=len(rows),
+        min_snapshot_rows=args.min_snapshot_rows,
+    )
     return path, summary, freshness
 
 
@@ -125,6 +172,8 @@ def main() -> None:
         "snapshot_path": str(path),
         "snapshot_summary": summary,
         "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+        "min_file_stable_seconds": args.min_file_stable_seconds,
+        "min_snapshot_rows": args.min_snapshot_rows,
         **freshness,
         "executed_cycle": False,
         "live_now": False,

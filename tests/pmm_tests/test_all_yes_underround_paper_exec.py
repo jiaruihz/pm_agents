@@ -29,3 +29,17 @@ def test_recording_ttl_audit_fails_closed_on_missing_timestamp():
 
     assert audit["ttl_equivalent"] is False
     assert audit["ttl_status"] == "missing_timestamp"
+
+
+def test_recording_ttl_audit_prefers_orderbook_fetched_at():
+    basket = _basket(
+        recorded_at_utc="2026-06-13T18:35:30+00:00",
+        snapshot_ts_utc="2026-06-13T18:30:53Z",
+    )
+    basket["orderbook_fetched_at_utc_max"] = "2026-06-13T18:35:00Z"
+
+    audit = recording_ttl_audit(basket, 180)
+
+    assert audit["ttl_equivalent"] is True
+    assert audit["ttl_status"] == "live_equivalent"
+    assert audit["recording_age_seconds"] == 30.0

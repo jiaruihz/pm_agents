@@ -69,7 +69,7 @@ def parse_utc(value: Any) -> datetime | None:
 
 def recording_ttl_audit(basket: dict[str, Any], max_age_seconds: float | None) -> dict[str, Any]:
     recorded_at = parse_utc(basket.get("recorded_at_utc"))
-    snapshot_ts = parse_utc(basket.get("snapshot_ts_utc"))
+    snapshot_ts = parse_utc(basket.get("orderbook_fetched_at_utc_max") or basket.get("snapshot_ts_utc"))
     if recorded_at is None or snapshot_ts is None:
         return {
             "recording_age_seconds": None,
@@ -196,6 +196,8 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
             "source_scan": scan.get("snapshot_path"),
             "source_report_generated_at_utc": scan.get("generated_at_utc"),
             "snapshot_ts_utc": scan.get("snapshot_summary", {}).get("snapshot_ts_utc_max"),
+            "orderbook_fetched_at_utc_min": candidate.get("orderbook_fetched_at_utc_min"),
+            "orderbook_fetched_at_utc_max": candidate.get("orderbook_fetched_at_utc_max"),
             "event_date": candidate.get("event_date"),
             "city": candidate.get("city"),
             "event_slug": candidate.get("event_slug"),

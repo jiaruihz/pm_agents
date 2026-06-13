@@ -136,6 +136,7 @@ def group_baskets(rows: list[dict[str, Any]], args: argparse.Namespace) -> list[
     for (event_date, city, event_slug), legs in groups.items():
         legs = sorted(legs, key=lambda row: bracket_sort_key(row.get("bracket")))
         snapshot_ts_values = sorted({row.get("snapshot_ts_utc") for row in legs if row.get("snapshot_ts_utc")})
+        fetched_at_values = sorted({row.get("fetched_at_utc") for row in legs if row.get("fetched_at_utc")})
         statuses = Counter(str(row.get("status")) for row in legs)
         missing_asks = 0
         total_cost = 0.0
@@ -195,6 +196,8 @@ def group_baskets(rows: list[dict[str, Any]], args: argparse.Namespace) -> list[
                 "city": city,
                 "event_slug": event_slug,
                 "snapshot_ts_utc": snapshot_ts_values[-1] if snapshot_ts_values else None,
+                "orderbook_fetched_at_utc_min": fetched_at_values[0] if fetched_at_values else None,
+                "orderbook_fetched_at_utc_max": fetched_at_values[-1] if fetched_at_values else None,
                 "legs": len(legs),
                 "ask_legs": len(leg_rows),
                 "missing_asks": missing_asks,
@@ -231,6 +234,7 @@ def group_baskets(rows: list[dict[str, Any]], args: argparse.Namespace) -> list[
 
 def snapshot_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     snapshot_ts_values = sorted({row.get("snapshot_ts_utc") for row in rows if row.get("snapshot_ts_utc")})
+    fetched_at_values = sorted({row.get("fetched_at_utc") for row in rows if row.get("fetched_at_utc")})
     event_dates = Counter(str(row.get("event_date")) for row in rows)
     yes_events = {
         (row.get("event_date"), row.get("city"), row.get("event_slug"))
@@ -241,6 +245,8 @@ def snapshot_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "rows": len(rows),
         "snapshot_ts_utc_min": snapshot_ts_values[0] if snapshot_ts_values else None,
         "snapshot_ts_utc_max": snapshot_ts_values[-1] if snapshot_ts_values else None,
+        "orderbook_fetched_at_utc_min": fetched_at_values[0] if fetched_at_values else None,
+        "orderbook_fetched_at_utc_max": fetched_at_values[-1] if fetched_at_values else None,
         "event_dates": dict(sorted(event_dates.items())),
         "yes_event_count": len(yes_events),
         "yes_rows": sum(1 for row in rows if row.get("outcome") == "yes"),
