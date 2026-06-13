@@ -229,6 +229,27 @@ def best_ask_from_book(book: dict) -> tuple[float, float] | None:
     return float(best["price"]), float(best["size"])
 
 
+def best_bid_from_book(book: dict) -> tuple[float, float] | None:
+    bids = book.get("bids") or []
+    if not bids:
+        return None
+    best = max(bids, key=lambda b: float(b["price"]))
+    return float(best["price"]), float(best["size"])
+
+
+def book_summary(book: dict) -> dict:
+    bid = best_bid_from_book(book)
+    ask = best_ask_from_book(book)
+    return {
+        "bid_levels": len(book.get("bids") or []),
+        "ask_levels": len(book.get("asks") or []),
+        "best_bid": None if bid is None else bid[0],
+        "best_bid_size": None if bid is None else bid[1],
+        "best_ask": None if ask is None else ask[0],
+        "best_ask_size": None if ask is None else ask[1],
+    }
+
+
 def cycle(dry_run: bool = False) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     state = load_state()
@@ -361,7 +382,12 @@ def cycle(dry_run: bool = False) -> None:
             except (KeyError, json.JSONDecodeError):
                 audit_candidate(rule, label, side, "missing_token_ids")
                 continue
-            token_id = token_ids[0] if side == "BUY_YES" else token_ids[1]
+            if len(token_ids) < 2:
+                audit_candidate(rule, label, side, "missing_token_ids")
+                continue
+            yes_token_id, no_token_id = token_ids[0], token_ids[1]
+            token_id = yes_token_id if side == "BUY_YES" else no_token_id
+            opposite_token_id = no_token_id if side == "BUY_YES" else yes_token_id
             try:
                 book = fetch_json(f"{CLOB}/book", {"token_id": token_id})
             except RuntimeError as e:
@@ -371,14 +397,41 @@ def cycle(dry_run: bool = False) -> None:
                     {**cyc, "status": "book_fetch_failed", "rule": rule, "bracket": label, "error": str(e)},
                 )
                 continue
+            direct_summary = book_summary(book)
+            opposite_summary = {}
+            try:
+                opposite_summary = book_summary(fetch_json(f"{CLOB}/book", {"token_id": opposite_token_id}))
+            except RuntimeError as e:
+                opposite_summary = {"fetch_error": str(e)}
+            synthetic_long_cost = None
+            opposite_bid = opposite_summary.get("best_bid")
+            if opposite_bid is not None:
+                synthetic_long_cost = round(1.0 - float(opposite_bid), 6)
+            liquidity_audit = {
+                "token_id": token_id,
+                "opposite_token_id": opposite_token_id,
+                "direct_book": direct_summary,
+                "opposite_book": opposite_summary,
+                "synthetic_long_cost_if_mint_and_sell_opposite": synthetic_long_cost,
+            }
             ba = best_ask_from_book(book)
             if ba is None:
-                audit_candidate(rule, label, side, "no_asks", token_id=token_id)
+                audit_candidate(rule, label, side, "no_asks", **liquidity_audit)
                 continue
             ask, size = ba
             lo, hi = (YES_ASK_MIN, YES_ASK_MAX) if side == "BUY_YES" else (NO_ASK_MIN, NO_ASK_MAX)
             if not (lo <= ask <= hi):
-                audit_candidate(rule, label, side, "ask_out_of_band", token_id=token_id, ask=ask, ask_size=size, min_ask=lo, max_ask=hi)
+                audit_candidate(
+                    rule,
+                    label,
+                    side,
+                    "ask_out_of_band",
+                    ask=ask,
+                    ask_size=size,
+                    min_ask=lo,
+                    max_ask=hi,
+                    **liquidity_audit,
+                )
                 continue
             shares = min(size, MAX_SHARES)
             entry = {
@@ -408,7 +461,16 @@ def cycle(dry_run: bool = False) -> None:
                 print("DRY ENTRY:", json.dumps(entry, ensure_ascii=False))
             else:
                 append_jsonl(OUT_DIR / "entries.jsonl", entry)
-                audit_candidate(rule, label, side, "entry_logged", token_id=token_id, ask=ask, ask_size=size, shares=shares)
+                audit_candidate(
+                    rule,
+                    label,
+                    side,
+                    "entry_logged",
+                    ask=ask,
+                    ask_size=size,
+                    shares=shares,
+                    **liquidity_audit,
+                )
                 entered.add(key)
                 n_entries += 1
 
