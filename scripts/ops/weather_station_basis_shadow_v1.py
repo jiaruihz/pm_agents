@@ -55,6 +55,7 @@ if __name__ == "__main__":
                 ]
             )
         sidecars.append(["scripts/ops/station_basis_v1_pending_monitor.py"])
+        sidecars.append(["scripts/ops/station_basis_live_prep_gate_v1.py"])
         for sidecar in sidecars:
             try:
                 subprocess.run(
