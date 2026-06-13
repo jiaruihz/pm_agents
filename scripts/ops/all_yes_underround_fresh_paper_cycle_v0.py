@@ -52,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-snapshot-age-seconds", type=float, default=180.0)
     parser.add_argument("--min-file-stable-seconds", type=float, default=10.0)
     parser.add_argument("--min-snapshot-rows", type=int, default=500)
+    parser.add_argument("--snapshot-service-name", default="")
     parser.add_argument("--wait-seconds", type=float, default=0.0)
     parser.add_argument("--poll-seconds", type=float, default=10.0)
     parser.add_argument("--python", default=sys.executable)
@@ -126,6 +127,53 @@ def snapshot_freshness(
     }
 
 
+def snapshot_service_gate(service_name: str) -> dict[str, Any]:
+    service_name = service_name.strip()
+    if not service_name:
+        return {
+            "snapshot_service_name": None,
+            "snapshot_service_status": None,
+            "snapshot_service_running": False,
+        }
+    try:
+        completed = subprocess.run(
+            ["systemctl", "--user", "is-active", service_name],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except Exception as exc:
+        return {
+            "snapshot_service_name": service_name,
+            "snapshot_service_status": f"check_error:{type(exc).__name__}",
+            "snapshot_service_running": True,
+            "snapshot_service_error": str(exc),
+        }
+
+    status = (completed.stdout or completed.stderr or "").strip() or f"exit_{completed.returncode}"
+    return {
+        "snapshot_service_name": service_name,
+        "snapshot_service_status": status,
+        "snapshot_service_running": status in {"active", "activating", "reloading", "deactivating"},
+    }
+
+
+def apply_snapshot_service_gate(freshness: dict[str, Any], service_gate: dict[str, Any]) -> dict[str, Any]:
+    if not service_gate.get("snapshot_service_name"):
+        return freshness
+
+    result = {**freshness, **service_gate}
+    if service_gate.get("snapshot_service_running"):
+        result["fresh"] = False
+        result["pre_service_gate_reason"] = freshness.get("reason")
+        if str(service_gate.get("snapshot_service_status", "")).startswith("check_error:"):
+            result["reason"] = "snapshot_service_check_error"
+        else:
+            result["reason"] = "snapshot_service_running"
+    return result
+
+
 def load_latest_snapshot(args: argparse.Namespace) -> tuple[Path, dict[str, Any], dict[str, Any]]:
     path = Path(args.snapshot_path) if args.snapshot_path else latest_snapshot(Path(args.snapshot_root))
     rows = read_snapshot(path)
@@ -140,6 +188,7 @@ def load_latest_snapshot(args: argparse.Namespace) -> tuple[Path, dict[str, Any]
         rows=len(rows),
         min_snapshot_rows=args.min_snapshot_rows,
     )
+    freshness = apply_snapshot_service_gate(freshness, snapshot_service_gate(args.snapshot_service_name))
     return path, summary, freshness
 
 
@@ -174,6 +223,7 @@ def main() -> None:
         "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
         "min_file_stable_seconds": args.min_file_stable_seconds,
         "min_snapshot_rows": args.min_snapshot_rows,
+        "snapshot_service_name": args.snapshot_service_name or None,
         **freshness,
         "executed_cycle": False,
         "live_now": False,
