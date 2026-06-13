@@ -7,6 +7,7 @@ from scripts.ops.all_yes_underround_micro_snapshot_v0 import (
     extract_bracket_label,
     extract_market_tokens,
     load_weather_predict_city_configs,
+    summarize_book_payload,
     write_gzip_jsonl_atomic,
 )
 
@@ -20,6 +21,21 @@ def test_extract_market_tokens_maps_yes_no_outcomes():
     market = {"outcomes": '["Yes","No"]', "clobTokenIds": '["yes-token","no-token"]'}
 
     assert extract_market_tokens(market) == {"yes": "yes-token", "no": "no-token"}
+
+
+def test_summarize_book_payload_normalizes_raw_clob_book():
+    summary = summarize_book_payload(
+        {
+            "bids": [{"price": "0.41", "size": "7"}, {"price": "0.39", "size": "2"}],
+            "asks": [{"price": "0.44", "size": "5"}, {"price": "0.46", "size": "9"}],
+        },
+        top_n=20,
+    )
+
+    assert summary["best_bid"] == 0.41
+    assert summary["best_ask"] == 0.44
+    assert summary["spread"] == 0.03
+    assert summary["ask_size"] == 5.0
 
 
 def test_load_weather_predict_city_configs_falls_back_without_weather_predict(tmp_path: Path):

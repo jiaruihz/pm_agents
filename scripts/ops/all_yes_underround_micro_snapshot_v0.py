@@ -26,12 +26,12 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import httpx
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.platform.clients import clob as clob_client  # noqa: E402
 from src.platform.clients.polymarket_gamma import PolymarketGammaClient  # noqa: E402
 from src.strategies.rule_lawyer.services.common import normalize_json_list  # noqa: E402
 from src.strategies.weather_edge_v1.tools.weather_edge_market_data import WEATHER_CITIES, weather_event_slug  # noqa: E402
@@ -40,6 +40,7 @@ from src.strategies.weather_edge_v1.tools.weather_edge_market_data import WEATHE
 RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0"
 SNAPSHOT_DIR_DEFAULT = RUN_DIR_DEFAULT / "micro_orderbook_snapshots"
 WEATHER_PREDICT_DIR_DEFAULT = Path(os.environ.get("WEATHER_PREDICT_DIR", "/home/jiarui/projects/weather-predict"))
+CLOB_BASE_DEFAULT = os.environ.get("CLOB_BASE_URL", "https://clob.polymarket.com")
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,6 +54,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-n", type=int, default=20)
     parser.add_argument("--event-concurrency", type=int, default=12)
     parser.add_argument("--orderbook-concurrency", type=int, default=80)
+    parser.add_argument("--orderbook-timeout-seconds", type=float, default=4.0)
+    parser.add_argument("--clob-base-url", default=CLOB_BASE_DEFAULT)
     parser.add_argument("--gamma-use-cache", action="store_true")
     parser.add_argument("--out", default="")
     parser.add_argument("--summary-out", default="")
@@ -103,6 +106,27 @@ def summarize_from_levels(level_rows: list[dict[str, Any]], top_n: int) -> dict[
         "bids": bids,
         "asks": asks,
     }
+
+
+def summarize_book_payload(book_json: Any, top_n: int) -> dict[str, Any]:
+    if not isinstance(book_json, dict):
+        return summarize_from_levels([], top_n)
+    rows: list[dict[str, Any]] = []
+    for side in ("bid", "ask"):
+        key = "bids" if side == "bid" else "asks"
+        for index, entry in enumerate(book_json.get(key) or [], start=1):
+            if isinstance(entry, dict):
+                rows.append(
+                    {
+                        "side": side,
+                        "level": index,
+                        "price": entry.get("price") or entry.get("p"),
+                        "size": entry.get("size") or entry.get("q") or entry.get("quantity"),
+                    }
+                )
+            elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                rows.append({"side": side, "level": index, "price": entry[0], "size": entry[1]})
+    return summarize_from_levels(rows, top_n)
 
 
 def depth_within(levels: list[dict[str, float]], threshold_fn) -> float:
@@ -182,25 +206,42 @@ def extract_bracket_label(question: str) -> str | None:
     return None
 
 
-async def fetch_token_books(token_ids: list[str], *, top_n: int, concurrency: int) -> dict[str, dict[str, Any]]:
+async def fetch_token_books(
+    token_ids: list[str],
+    *,
+    top_n: int,
+    concurrency: int,
+    timeout_seconds: float,
+    clob_base_url: str,
+) -> dict[str, dict[str, Any]]:
     sem = asyncio.Semaphore(max(1, concurrency))
+    timeout = httpx.Timeout(max(0.5, timeout_seconds))
+    base = clob_base_url.rstrip("/")
 
-    async def fetch_one(token_id: str) -> tuple[str, dict[str, Any]]:
+    async def fetch_one(client: httpx.AsyncClient, token_id: str) -> tuple[str, dict[str, Any]]:
         async with sem:
+            fetched_at = now_utc_iso()
             try:
-                price_row, level_rows, _archive = await clob_client.fetch_price_and_book(token_id, top_n=top_n, archive_books=False)
+                response = await client.get(f"{base}/book", params={"token_id": token_id})
+                if response.status_code == 404:
+                    return token_id, {
+                        "status": "not_found",
+                        "token_id": token_id,
+                        "fetched_at_utc": fetched_at,
+                        "summary": {},
+                        "raw": {},
+                    }
+                response.raise_for_status()
+                summary = summarize_book_payload(response.json(), top_n)
             except Exception as exc:
                 return token_id, {
                     "status": "error",
                     "token_id": token_id,
-                    "fetched_at_utc": now_utc_iso(),
+                    "fetched_at_utc": fetched_at,
                     "error": f"{type(exc).__name__}: {exc}",
                     "summary": {},
                     "raw": {},
                 }
-        price_row = dict(price_row or {})
-        fetched_at = str(price_row.get("fetched_at_utc") or now_utc_iso())
-        summary = summarize_from_levels(list(level_rows or []), top_n)
         status = "ok" if summary.get("best_bid") is not None or summary.get("best_ask") is not None else "empty_book"
         return token_id, {
             "status": status,
@@ -210,7 +251,8 @@ async def fetch_token_books(token_ids: list[str], *, top_n: int, concurrency: in
             "raw": {"bids": summary["bids"], "asks": summary["asks"]},
         }
 
-    pairs = await asyncio.gather(*(fetch_one(token_id) for token_id in token_ids))
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        pairs = await asyncio.gather(*(fetch_one(client, token_id) for token_id in token_ids))
     return dict(pairs)
 
 
@@ -276,7 +318,13 @@ async def main_async(args: argparse.Namespace) -> int:
                 }
                 market_rows.append({"token_id": token_id, **token_meta[token_id]})
 
-    books = await fetch_token_books(sorted(token_meta), top_n=args.top_n, concurrency=args.orderbook_concurrency)
+    books = await fetch_token_books(
+        sorted(token_meta),
+        top_n=args.top_n,
+        concurrency=args.orderbook_concurrency,
+        timeout_seconds=args.orderbook_timeout_seconds,
+        clob_base_url=args.clob_base_url,
+    )
     rows: list[dict[str, Any]] = []
     for meta in market_rows:
         book = books.get(meta["token_id"], {"status": "missing_book", "summary": {}, "raw": {}, "fetched_at_utc": None})
@@ -319,6 +367,7 @@ async def main_async(args: argparse.Namespace) -> int:
         "status_counts": count_by(row.get("status") for row in rows),
         "orderbook_fetched_at_utc_min": fetched_times[0] if fetched_times else None,
         "orderbook_fetched_at_utc_max": fetched_times[-1] if fetched_times else None,
+        "orderbook_timeout_seconds": args.orderbook_timeout_seconds,
     }
     summary_out = Path(args.summary_out) if args.summary_out.strip() else out.with_suffix(out.suffix + ".summary.json")
     write_json_atomic(summary_out, summary)
