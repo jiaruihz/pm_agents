@@ -318,8 +318,35 @@ def cycle(dry_run: bool = False) -> None:
                         candidates.append(("no_d2_exh", mkt, parsed))
 
         n_entries = 0
+
+        def audit_candidate(rule: str, label: str, side: str, status: str, **extra) -> None:
+            if dry_run:
+                return
+            append_jsonl(
+                OUT_DIR / "candidate_audit.jsonl",
+                {
+                    "ts_utc": now_utc.isoformat(),
+                    "city": city,
+                    "target_date": str(local_date),
+                    "hour_local": hour,
+                    "rule": rule,
+                    "side": side,
+                    "bracket": label,
+                    "event_slug": es,
+                    "official_icao": icao,
+                    "unit": unit,
+                    "running_max_c": met["running_max_c"],
+                    "current_temp_c": met["current_temp_c"],
+                    "decline_c": round(met["decline_c"], 2),
+                    "running_value": running_value,
+                    "status": status,
+                    **extra,
+                },
+            )
+
         for rule, mkt, parsed in candidates:
             label = str(mkt.get("groupItemTitle") or "").strip()
+            side = "BUY_YES" if rule == "yes_bucket" else "BUY_NO"
             key = (city, str(local_date), rule) if rule == "yes_bucket" and YES_ONE_PER_CITY_DAY else (
                 city,
                 str(local_date),
@@ -327,16 +354,18 @@ def cycle(dry_run: bool = False) -> None:
                 label,
             )
             if key in entered:
+                audit_candidate(rule, label, side, "duplicate")
                 continue
             try:
                 token_ids = json.loads(mkt["clobTokenIds"])
             except (KeyError, json.JSONDecodeError):
+                audit_candidate(rule, label, side, "missing_token_ids")
                 continue
-            side = "BUY_YES" if rule == "yes_bucket" else "BUY_NO"
             token_id = token_ids[0] if side == "BUY_YES" else token_ids[1]
             try:
                 book = fetch_json(f"{CLOB}/book", {"token_id": token_id})
             except RuntimeError as e:
+                audit_candidate(rule, label, side, "book_fetch_failed", token_id=token_id, error=str(e))
                 append_jsonl(
                     OUT_DIR / "cycles.jsonl",
                     {**cyc, "status": "book_fetch_failed", "rule": rule, "bracket": label, "error": str(e)},
@@ -344,10 +373,12 @@ def cycle(dry_run: bool = False) -> None:
                 continue
             ba = best_ask_from_book(book)
             if ba is None:
+                audit_candidate(rule, label, side, "no_asks", token_id=token_id)
                 continue
             ask, size = ba
             lo, hi = (YES_ASK_MIN, YES_ASK_MAX) if side == "BUY_YES" else (NO_ASK_MIN, NO_ASK_MAX)
             if not (lo <= ask <= hi):
+                audit_candidate(rule, label, side, "ask_out_of_band", token_id=token_id, ask=ask, ask_size=size, min_ask=lo, max_ask=hi)
                 continue
             shares = min(size, MAX_SHARES)
             entry = {
@@ -377,6 +408,7 @@ def cycle(dry_run: bool = False) -> None:
                 print("DRY ENTRY:", json.dumps(entry, ensure_ascii=False))
             else:
                 append_jsonl(OUT_DIR / "entries.jsonl", entry)
+                audit_candidate(rule, label, side, "entry_logged", token_id=token_id, ask=ask, ask_size=size, shares=shares)
                 entered.add(key)
                 n_entries += 1
 
