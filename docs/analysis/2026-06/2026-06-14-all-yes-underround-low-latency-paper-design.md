@@ -54,7 +54,9 @@ The source orderbook path is owned by `weather-predict`:
 The fresh paper loop should run from the `pm_agent` repo but read that source path directly:
 
 ```bash
-cd /home/jiarui/projects/pm_agent
+cd /home/jiarui/projects/pm_agent_all_yes_fresh
+PROJECT_DIR=/home/jiarui/projects/pm_agent_all_yes_fresh \
+DATA_PROJECT_DIR=/home/jiarui/projects/pm_agent \
 SNAPSHOT_ROOT=/home/jiarui/projects/weather-predict/output/orderbook_snapshots \
   scripts/ops/start_all_yes_underround_fresh_paper_v0.sh
 ```
@@ -73,11 +75,13 @@ Description=All-YES underround fresh paper loop
 
 [Service]
 Type=simple
-WorkingDirectory=/home/jiarui/projects/pm_agent
+WorkingDirectory=/home/jiarui/projects/pm_agent_all_yes_fresh
+Environment=PROJECT_DIR=/home/jiarui/projects/pm_agent_all_yes_fresh
+Environment=DATA_PROJECT_DIR=/home/jiarui/projects/pm_agent
 Environment=SNAPSHOT_ROOT=/home/jiarui/projects/weather-predict/output/orderbook_snapshots
 Environment=MAX_SNAPSHOT_AGE_SECONDS=180
 Environment=CYCLE_INTERVAL_SECONDS=30
-ExecStart=/home/jiarui/projects/pm_agent/scripts/ops/all_yes_underround_fresh_paper_loop_v0.sh
+ExecStart=/home/jiarui/projects/pm_agent_all_yes_fresh/scripts/ops/all_yes_underround_fresh_paper_loop_v0.sh
 Restart=always
 RestartSec=10
 ```

@@ -34,6 +34,9 @@ SNAPSHOT_ROOT_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "
 SCAN_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-14-all-yes-underround-live-prep-v0.json"
 SCAN_MD_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-14-all-yes-underround-live-prep-v0.md"
 RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0"
+DB_DEFAULT = ROOT / "runtime" / "weather.db"
+GATE_DEFAULT = ROOT / "runtime" / "_dashboard_logs" / "clob_fill_coverage_gate.json"
+STATION_BASIS_GATE_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "station_basis_shadow_v1" / "live_prep_gate.json"
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,6 +46,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scan-json", default=str(SCAN_JSON_DEFAULT))
     parser.add_argument("--scan-md", default=str(SCAN_MD_DEFAULT))
     parser.add_argument("--run-dir", default=str(RUN_DIR_DEFAULT))
+    parser.add_argument("--db-path", default=str(DB_DEFAULT))
+    parser.add_argument("--gate-path", default=str(GATE_DEFAULT))
+    parser.add_argument("--station-basis-gate-path", default=str(STATION_BASIS_GATE_DEFAULT))
     parser.add_argument("--max-snapshot-age-seconds", type=float, default=180.0)
     parser.add_argument("--wait-seconds", type=float, default=0.0)
     parser.add_argument("--poll-seconds", type=float, default=10.0)
@@ -142,6 +148,18 @@ def main() -> None:
         scanner,
         "--snapshot-path",
         str(path),
+        "--db-path",
+        str(Path(args.db_path)),
+        "--gate-path",
+        str(Path(args.gate_path)),
+        "--station-basis-gate-path",
+        str(Path(args.station_basis_gate_path)),
+        "--paper-gate-path",
+        str(run_dir / "live_prep_gate.json"),
+        "--paper-monitor-path",
+        str(run_dir / "monitor.json"),
+        "--fresh-cycle-path",
+        str(run_dir / "fresh_cycle.json"),
         "--out-json",
         str(Path(args.scan_json)),
         "--out-md",
@@ -155,6 +173,10 @@ def main() -> None:
             "cycle",
             "--scan-json",
             str(Path(args.scan_json)),
+            "--db-path",
+            str(Path(args.db_path)),
+            "--gate-path",
+            str(Path(args.gate_path)),
             "--run-dir",
             str(run_dir),
             "--max-snapshot-age-seconds",
@@ -166,6 +188,10 @@ def main() -> None:
             py,
             executor,
             "monitor",
+            "--db-path",
+            str(Path(args.db_path)),
+            "--gate-path",
+            str(Path(args.gate_path)),
             "--run-dir",
             str(run_dir),
             "--max-snapshot-age-seconds",
