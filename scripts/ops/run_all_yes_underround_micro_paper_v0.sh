@@ -21,12 +21,47 @@ MICRO_CITIES="${MICRO_CITIES:-}"
 MICRO_CITY_POOL="${MICRO_CITY_POOL:-all}"
 MICRO_EVENT_CONCURRENCY="${MICRO_EVENT_CONCURRENCY:-12}"
 MICRO_ORDERBOOK_CONCURRENCY="${MICRO_ORDERBOOK_CONCURRENCY:-80}"
+SNAPSHOT_SERVICE_NAME="${SNAPSHOT_SERVICE_NAME:-}"
 MAX_SNAPSHOT_AGE_SECONDS="${MAX_SNAPSHOT_AGE_SECONDS:-180}"
 MIN_FILE_STABLE_SECONDS="${MIN_FILE_STABLE_SECONDS:-0}"
 MIN_SNAPSHOT_ROWS="${MIN_SNAPSHOT_ROWS:-100}"
 
 cd "$PROJECT_DIR"
 mkdir -p "$RUN_DIR"
+
+if [[ -n "$SNAPSHOT_SERVICE_NAME" ]]; then
+  service_status="$(systemctl --user is-active "$SNAPSHOT_SERVICE_NAME" 2>/dev/null || true)"
+  case "$service_status" in
+    active|activating|reloading|deactivating)
+      "$PY" - "$RUN_DIR" "$SNAPSHOT_SERVICE_NAME" "$service_status" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+run_dir = Path(sys.argv[1])
+service_name = sys.argv[2]
+service_status = sys.argv[3]
+run_dir.mkdir(parents=True, exist_ok=True)
+result = {
+    "command": "micro_paper_cycle",
+    "executed_cycle": False,
+    "fresh": False,
+    "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+    "live_now": False,
+    "reason": "snapshot_service_running",
+    "snapshot_service_name": service_name,
+    "snapshot_service_running": True,
+    "snapshot_service_status": service_status,
+    "verdict": "MICRO_SNAPSHOT_SKIP_CYCLE",
+}
+(run_dir / "fresh_cycle.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+print(json.dumps(result, indent=2, sort_keys=True))
+PY
+      exit 0
+      ;;
+  esac
+fi
 
 micro_args=(
   --weather-predict-dir "$WEATHER_PREDICT_DIR"
