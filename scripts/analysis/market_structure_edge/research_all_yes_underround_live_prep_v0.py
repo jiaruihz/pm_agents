@@ -320,7 +320,7 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
         f"- Candidate threshold: underround >= `{args['min_underround']}`, legs >= `{args['min_leg_count']}`, min top-of-book shares >= `{args['min_shares']}`, max YES spread <= `{args['max_spread']}`.",
         f"- Current paper/shadow candidates: `{len(candidates)}`.",
         f"- Station-basis comparison gate: `{station.get('verdict')}` with settled `{station.get('settled')}` / pending `{station.get('pending')}`.",
-        f"- All-YES paper execution gate: `{paper_gate.get('verdict')}` with baskets `{paper_gate.get('eval', {}).get('baskets')}` / settled `{paper_gate.get('eval', {}).get('settled_exactly_one_winner')}`.",
+        f"- All-YES paper execution gate: `{paper_gate.get('verdict')}` with baskets `{paper_eval.get('baskets')}` / settled `{paper_eval.get('settled_exactly_one_winner')}`.",
         f"- Live-equivalent paper baskets: `{paper_eval.get('ttl_equivalent_baskets')}`; stale/observation-only baskets `{paper_eval.get('ttl_non_equivalent_baskets')}`; max record age `{paper_eval.get('ttl_recording_age_seconds_max')}` seconds.",
         f"- Live-equivalent settled exactly-one-winner baskets: `{paper_eval.get('ttl_equivalent_settled_exactly_one_winner')}`; ROI `{paper_eval.get('ttl_equivalent_settled_roi')}`.",
         f"- All-YES paper passed checks: `{paper_passed}`.",
