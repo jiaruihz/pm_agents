@@ -256,15 +256,18 @@ def parse_iem_asos_temperature_obs(text: str, tz: ZoneInfo, local_date) -> list[
 
 def iem_asos_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
     start_utc, end_utc = iem_request_dates(tz, local_date)
+    # IEM ASOS day2 is a 00:00 boundary. Add one date so UTC-spanning local
+    # days, especially Asia/Pacific stations, include the full local day.
+    request_end_utc = end_utc + timedelta(days=1)
     params = [
         ("station", icao),
         ("data", "tmpc"),
         ("year1", str(start_utc.year)),
         ("month1", str(start_utc.month)),
         ("day1", str(start_utc.day)),
-        ("year2", str(end_utc.year)),
-        ("month2", str(end_utc.month)),
-        ("day2", str(end_utc.day)),
+        ("year2", str(request_end_utc.year)),
+        ("month2", str(request_end_utc.month)),
+        ("day2", str(request_end_utc.day)),
         ("tz", "Etc/UTC"),
         ("format", "onlycomma"),
         ("latlon", "no"),
