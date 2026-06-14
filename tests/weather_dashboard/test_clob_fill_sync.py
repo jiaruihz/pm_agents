@@ -2,11 +2,13 @@ import sqlite3
 
 import weather_dashboard.ingest.clob_fill_sync as clob_fill_sync
 from weather_dashboard.ingest.clob_fill_sync import (
+    _cap_reported_fill_to_order,
     _extract_immediate_place_fill,
     _insert_order_fill_top_up,
     _public_trade_key,
     _public_trade_matches_order,
     _select_public_partial_fills,
+    sync_clob_fills,
 )
 
 
@@ -169,6 +171,36 @@ def test_order_fill_top_up_appends_missing_partial_without_reinserting_existing(
 
     assert not inserted_again
     assert conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 2
+
+
+def test_sync_cache_only_imports_cache_without_external_scan(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    monkeypatch.setattr(clob_fill_sync, "import_cached_fills", lambda _conn, _path: 7)
+
+    def fail_if_scanned(_conn):
+        raise AssertionError("cache-only mode should not scan submitted orders")
+
+    monkeypatch.setattr(clob_fill_sync, "_get_submitted_orders", fail_if_scanned)
+
+    result = sync_clob_fills(conn, cache_only=True)
+
+    assert result["cached_imported"] == 7
+    assert result["checked"] == 0
+    assert result["cache_only"] is True
+
+
+def test_cap_reported_fill_to_order_keeps_recovered_fill_inside_order_cap():
+    shares, price = _cap_reported_fill_to_order(
+        execution_id="execution",
+        order_id="order",
+        reported_shares=12.0,
+        reported_price=0.62,
+        row_shares=5.0,
+        row_limit_price=0.40,
+    )
+
+    assert shares == 5.0
+    assert price == 0.40
 
 
 def test_extract_immediate_place_fill_uses_matched_order_making_taking_amounts():

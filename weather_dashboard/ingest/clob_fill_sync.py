@@ -334,6 +334,41 @@ def _insert_order_fill_top_up(
     )
 
 
+def _cap_reported_fill_to_order(
+    *,
+    execution_id: str,
+    order_id: str,
+    reported_shares: float,
+    reported_price: float,
+    row_shares: float,
+    row_limit_price: float,
+) -> tuple[float, float]:
+    """Keep recovered order-level fills inside the local submitted order cap."""
+    shares = reported_shares
+    price = reported_price
+    if row_shares > 0 and shares > row_shares + 1e-6:
+        log.warning(
+            "Capping recovered fill shares for execution_id=%s... order_id=%s... "
+            "reported=%.6f cap=%.6f",
+            execution_id[:12],
+            order_id[:12],
+            shares,
+            row_shares,
+        )
+        shares = row_shares
+    if row_limit_price > 0 and price > row_limit_price + 1e-6:
+        log.warning(
+            "Capping recovered fill price for execution_id=%s... order_id=%s... "
+            "reported=%.6f cap=%.6f",
+            execution_id[:12],
+            order_id[:12],
+            price,
+            row_limit_price,
+        )
+        price = row_limit_price
+    return shares, price
+
+
 def _extract_immediate_place_fill(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any] | None:
     """Extract exact immediate-match fill details from order exchange_response.
 
@@ -799,6 +834,7 @@ def sync_clob_fills(
     *,
     dry_run: bool = False,
     maker_address: str | None = None,
+    cache_only: bool = False,
 ) -> dict[str, Any]:
     """
     Sync fill status for all submitted polymarket_clob orders.
@@ -808,6 +844,8 @@ def sync_clob_fills(
     conn:           Open SQLite connection (row_factory = sqlite3.Row recommended).
     dry_run:        If True, log what would be done without writing to DB.
     maker_address:  Maker/signer address (defaults to DEFAULT_MAKER_ADDRESS).
+    cache_only:     If True, replay the audited persistent cache and skip all
+                    external CLOB/public fallback fetches.
 
     Returns
     -------
@@ -826,6 +864,7 @@ def sync_clob_fills(
         "data_incomplete": False,
         "cached_imported": 0,
         "dry_run": dry_run,
+        "cache_only": cache_only,
     }
     EXTERNAL_FETCH_ERRORS.clear()
 
@@ -833,6 +872,9 @@ def sync_clob_fills(
         summary["cached_imported"] = import_cached_fills(conn, DEFAULT_CACHE_PATH)
         if summary["cached_imported"]:
             log.info("Imported %d cached CLOB fill(s).", summary["cached_imported"])
+    if cache_only:
+        log.info("Cache-only CLOB fill sync requested; skipping external CLOB/public fallback fetches.")
+        return summary
 
     submitted = _get_submitted_orders(conn)
     if not submitted:
@@ -983,6 +1025,14 @@ def sync_clob_fills(
                         filled_shares = row_shares
                     if filled_price <= 0:
                         filled_price = row_limit_price
+                    filled_shares, filled_price = _cap_reported_fill_to_order(
+                        execution_id=execution_id,
+                        order_id=clob_order_id,
+                        reported_shares=filled_shares,
+                        reported_price=filled_price,
+                        row_shares=row_shares,
+                        row_limit_price=row_limit_price,
+                    )
 
                     inserted = _insert_order_fill_top_up(
                         conn,
@@ -1019,6 +1069,14 @@ def sync_clob_fills(
                     filled_shares = parsed["size_matched"]
                     if filled_shares > 0:
                         filled_price = parsed["price"] or row_limit_price
+                        filled_shares, filled_price = _cap_reported_fill_to_order(
+                            execution_id=execution_id,
+                            order_id=clob_order_id,
+                            reported_shares=filled_shares,
+                            reported_price=filled_price,
+                            row_shares=row_shares,
+                            row_limit_price=row_limit_price,
+                        )
                         inserted = _insert_order_fill_top_up(
                             conn,
                             base_fill_id=fill_id,
@@ -1054,13 +1112,21 @@ def sync_clob_fills(
                     row_shares=row_shares,
                     row_limit_price=row_limit_price,
                 )
+                filled_shares, filled_price = _cap_reported_fill_to_order(
+                    execution_id=execution_id,
+                    order_id=clob_order_id,
+                    reported_shares=agg["size_matched"],
+                    reported_price=agg["price"],
+                    row_shares=row_shares,
+                    row_limit_price=row_limit_price,
+                )
                 inserted = _insert_order_fill_top_up(
                     conn,
                     base_fill_id=fill_id,
                     execution_id=execution_id,
                     order_id=clob_order_id,
-                    target_shares=agg["size_matched"],
-                    target_price=agg["price"],
+                    target_shares=filled_shares,
+                    target_price=filled_price,
                     fees_usd=agg["fees_usd"],
                     filled_at_utc=agg["filled_at"],
                     dry_run=dry_run,
@@ -1136,6 +1202,36 @@ def sync_clob_fills(
                     except (TypeError, ValueError):
                         filled_price = row_limit_price
                     filled_at = _ts_to_iso(trade.get("timestamp"))
+                    existing = _existing_fill_totals(
+                        conn,
+                        execution_id=execution_id,
+                        order_id=clob_order_id,
+                    )
+                    max_cost = row_shares * row_limit_price if row_shares > 0 and row_limit_price > 0 else 0.0
+                    would_shares = existing["shares"] + filled_shares
+                    would_cost = existing["cost"] + filled_shares * filled_price
+                    if row_shares > 0 and would_shares > row_shares + 1e-6:
+                        log.warning(
+                            "Skipping public fallback fill over share cap for execution_id=%s... "
+                            "existing=%.6f candidate=%.6f cap=%.6f",
+                            execution_id[:12],
+                            existing["shares"],
+                            filled_shares,
+                            row_shares,
+                        )
+                        used_public_trade_keys.add(public_key)
+                        continue
+                    if max_cost > 0 and would_cost > max_cost + 0.02:
+                        log.warning(
+                            "Skipping public fallback fill over cost cap for execution_id=%s... "
+                            "existing_cost=%.6f candidate_cost=%.6f cap=%.6f",
+                            execution_id[:12],
+                            existing["cost"],
+                            filled_shares * filled_price,
+                            max_cost,
+                        )
+                        used_public_trade_keys.add(public_key)
+                        continue
 
                     if _insert_fill(
                         conn,
@@ -1204,6 +1300,11 @@ if __name__ == "__main__":
         help="Override the maker/signer address (default: DEFAULT_MAKER_ADDRESS).",
     )
     parser.add_argument(
+        "--cache-only",
+        action="store_true",
+        help="Only replay the persistent CLOB fill cache into the DB; skip external CLOB/public fallback fetches.",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable DEBUG logging.",
@@ -1242,6 +1343,7 @@ if __name__ == "__main__":
             db_conn,
             dry_run=args.dry_run,
             maker_address=args.maker_address,
+            cache_only=args.cache_only,
         )
         print(json.dumps(result, indent=2))
         if result.get("data_incomplete") and not args.dry_run:
