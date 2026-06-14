@@ -400,7 +400,12 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "ttl_equivalent_baskets": len(ttl_equivalent),
         "ttl_non_equivalent_baskets": len(bad_ttl),
         "stale_recorded_baskets": len(stale_recorded),
-        "ttl_equivalent_pending": len([row for row in rows if row.get("ttl_equivalent") is True and row["settlement_eval_status"] == "pending"]),
+        "ttl_equivalent_pending": len(
+            [
+                row for row in decision_rows
+                if row.get("ttl_equivalent") is True and row["settlement_eval_status"] == "pending"
+            ]
+        ),
         "ttl_equivalent_settled_exactly_one_winner": len(ttl_equivalent_exact),
         "ttl_recording_age_seconds_max": round(max(ages), 3) if ages else None,
         "settled_cost_usd": round(cost, 6),
