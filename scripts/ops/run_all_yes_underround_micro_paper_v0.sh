@@ -68,6 +68,13 @@ result = {
 (run_dir / "fresh_cycle.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 print(json.dumps(result, indent=2, sort_keys=True))
 PY
+      "$PY" scripts/ops/all_yes_underround_live_plan_v0.py plan \
+        --scan-json "$SCAN_JSON_PATH" \
+        --run-dir "$RUN_DIR" \
+        --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true
+      "$PY" scripts/ops/all_yes_underround_executor_state_v0.py check \
+        --plan-json "$RUN_DIR/latest_live_plan.json" \
+        --run-dir "$RUN_DIR" >/dev/null || true
       "$PY" scripts/ops/all_yes_underround_paper_exec_v0.py monitor \
         --db-path "$DB_PATH" \
         --gate-path "$GATE_PATH" \
@@ -121,5 +128,15 @@ PY
 
 "$PY" scripts/ops/all_yes_underround_live_plan_v0.py plan \
   --scan-json "$SCAN_JSON_PATH" \
+  --run-dir "$RUN_DIR" \
+  --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true
+
+"$PY" scripts/ops/all_yes_underround_executor_state_v0.py check \
+  --plan-json "$RUN_DIR/latest_live_plan.json" \
+  --run-dir "$RUN_DIR" >/dev/null || true
+
+"$PY" scripts/ops/all_yes_underround_paper_exec_v0.py monitor \
+  --db-path "$DB_PATH" \
+  --gate-path "$GATE_PATH" \
   --run-dir "$RUN_DIR" \
   --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true

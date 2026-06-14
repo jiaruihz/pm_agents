@@ -573,6 +573,54 @@ def live_plan_gate_items(live_plan: dict[str, Any]) -> tuple[list[dict[str, Any]
     return blockers, passed
 
 
+def executor_state_gate_items(executor_state: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if executor_state.get("status") == "missing" or not executor_state.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_executor_state_missing",
+                "message": "No all-YES dry-run executor state artifact is available for deploy review.",
+                "path": executor_state.get("path"),
+            }
+        )
+        return blockers, passed
+    if executor_state.get("live_now") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_executor_state_unsafe_live_flag",
+                "message": "The all-YES executor state artifact must never enable live submission.",
+                "live_now": executor_state.get("live_now"),
+            }
+        )
+    if executor_state.get("no_order_placed") is not True:
+        blockers.append(
+            {
+                "code": "dry_run_executor_state_order_placed",
+                "message": "The all-YES executor state artifact must prove no order was placed.",
+                "no_order_placed": executor_state.get("no_order_placed"),
+            }
+        )
+    if executor_state.get("verdict") != "DRY_RUN_EXECUTOR_READY":
+        blockers.append(
+            {
+                "code": "dry_run_executor_state_not_ready",
+                "message": "The all-YES executor state artifact must remain ready in dry-run mode.",
+                "verdict": executor_state.get("verdict"),
+                "blockers": executor_state.get("blockers"),
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_executor_state_available",
+                "message": "All-YES dry-run executor state artifact is present and fail-closed.",
+                "plans_checked": executor_state.get("plans_checked"),
+            }
+        )
+    return blockers, passed
+
+
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
@@ -758,6 +806,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     clob_gate = read_json(Path(args.gate_path))
     last_cycle = read_json(run_dir / "last_cycle.json")
     live_plan = read_json(run_dir / "latest_live_plan.json")
+    executor_state = read_json(run_dir / "latest_executor_readiness.json")
     blockers: list[dict[str, Any]] = []
     passed: list[dict[str, Any]] = []
     if not clob_gate.get("gate_pass"):
@@ -884,6 +933,9 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     live_plan_blockers, live_plan_passed = live_plan_gate_items(live_plan)
     blockers.extend(live_plan_blockers)
     passed.extend(live_plan_passed)
+    executor_state_blockers, executor_state_passed = executor_state_gate_items(executor_state)
+    blockers.extend(executor_state_blockers)
+    passed.extend(executor_state_passed)
     blockers.append(
         {
             "code": "live_executor_missing",
@@ -924,6 +976,7 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
     last_cycle = read_json(run_dir / "last_cycle.json")
     fresh_cycle = read_json(run_dir / "fresh_cycle.json")
     live_plan = read_json(run_dir / "latest_live_plan.json")
+    executor_state = read_json(run_dir / "latest_executor_readiness.json")
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
     eval_rows = read_json(run_dir / "eval.json").get("rows") or []
     unique_opportunities = compact_opportunity_rows(eval_rows)
@@ -961,6 +1014,13 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
             "planned_baskets": live_plan.get("planned_baskets"),
             "rejected_baskets": live_plan.get("rejected_baskets"),
             "live_now": live_plan.get("live_now"),
+        },
+        "latest_executor_readiness": {
+            "generated_at_utc": executor_state.get("generated_at_utc"),
+            "verdict": executor_state.get("verdict"),
+            "live_now": executor_state.get("live_now"),
+            "no_order_placed": executor_state.get("no_order_placed"),
+            "plans_checked": executor_state.get("plans_checked"),
         },
         "max_snapshot_age_seconds": last_cycle.get("max_snapshot_age_seconds"),
         "paper_baskets": len(baskets),
