@@ -72,6 +72,10 @@ PY
         --scan-json "$SCAN_JSON_PATH" \
         --run-dir "$RUN_DIR" \
         --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true
+      "$PY" scripts/ops/all_yes_underround_to_executor_plans_v0.py convert \
+        --plan-json "$RUN_DIR/latest_live_plan.json" \
+        --out-jsonl "$RUN_DIR/executor_trade_plans.jsonl" \
+        --summary-out "$RUN_DIR/executor_trade_plan_summary.json" >/dev/null || true
       "$PY" scripts/ops/all_yes_underround_executor_state_v0.py check \
         --plan-json "$RUN_DIR/latest_live_plan.json" \
         --run-dir "$RUN_DIR" >/dev/null || true
@@ -130,6 +134,11 @@ PY
   --scan-json "$SCAN_JSON_PATH" \
   --run-dir "$RUN_DIR" \
   --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true
+
+"$PY" scripts/ops/all_yes_underround_to_executor_plans_v0.py convert \
+  --plan-json "$RUN_DIR/latest_live_plan.json" \
+  --out-jsonl "$RUN_DIR/executor_trade_plans.jsonl" \
+  --summary-out "$RUN_DIR/executor_trade_plan_summary.json" >/dev/null || true
 
 "$PY" scripts/ops/all_yes_underround_executor_state_v0.py check \
   --plan-json "$RUN_DIR/latest_live_plan.json" \

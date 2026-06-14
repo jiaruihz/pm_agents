@@ -621,6 +621,48 @@ def executor_state_gate_items(executor_state: dict[str, Any]) -> tuple[list[dict
     return blockers, passed
 
 
+def executor_plan_bridge_gate_items(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if summary.get("status") == "missing" or not summary.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_executor_plan_bridge_missing",
+                "message": "No all-YES executor-plan bridge artifact is available for deploy review.",
+                "path": summary.get("path"),
+            }
+        )
+        return blockers, passed
+    if summary.get("live_now") is not False or summary.get("live_enabled") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_executor_plan_bridge_unsafe_live_flag",
+                "message": "The executor-plan bridge must keep live disabled.",
+                "live_now": summary.get("live_now"),
+                "live_enabled": summary.get("live_enabled"),
+            }
+        )
+    if summary.get("verdict") != "DRY_RUN_EXECUTOR_PLANS_READY":
+        blockers.append(
+            {
+                "code": "dry_run_executor_plan_bridge_not_ready",
+                "message": "The executor-plan bridge did not produce a ready dry-run artifact.",
+                "verdict": summary.get("verdict"),
+                "blockers": summary.get("blockers"),
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_executor_plan_bridge_available",
+                "message": "All-YES plan can be converted into live-disabled weather executor plans.",
+                "plans": summary.get("plans"),
+                "out_jsonl": summary.get("out_jsonl"),
+            }
+        )
+    return blockers, passed
+
+
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
@@ -807,6 +849,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     last_cycle = read_json(run_dir / "last_cycle.json")
     live_plan = read_json(run_dir / "latest_live_plan.json")
     executor_state = read_json(run_dir / "latest_executor_readiness.json")
+    executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
     blockers: list[dict[str, Any]] = []
     passed: list[dict[str, Any]] = []
     if not clob_gate.get("gate_pass"):
@@ -936,6 +979,9 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     executor_state_blockers, executor_state_passed = executor_state_gate_items(executor_state)
     blockers.extend(executor_state_blockers)
     passed.extend(executor_state_passed)
+    bridge_blockers, bridge_passed = executor_plan_bridge_gate_items(executor_plan_bridge)
+    blockers.extend(bridge_blockers)
+    passed.extend(bridge_passed)
     blockers.append(
         {
             "code": "live_executor_missing",
@@ -977,6 +1023,7 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
     fresh_cycle = read_json(run_dir / "fresh_cycle.json")
     live_plan = read_json(run_dir / "latest_live_plan.json")
     executor_state = read_json(run_dir / "latest_executor_readiness.json")
+    executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
     eval_rows = read_json(run_dir / "eval.json").get("rows") or []
     unique_opportunities = compact_opportunity_rows(eval_rows)
@@ -1021,6 +1068,14 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
             "live_now": executor_state.get("live_now"),
             "no_order_placed": executor_state.get("no_order_placed"),
             "plans_checked": executor_state.get("plans_checked"),
+        },
+        "latest_executor_plan_bridge": {
+            "generated_at_utc": executor_plan_bridge.get("generated_at_utc"),
+            "verdict": executor_plan_bridge.get("verdict"),
+            "live_now": executor_plan_bridge.get("live_now"),
+            "live_enabled": executor_plan_bridge.get("live_enabled"),
+            "plans": executor_plan_bridge.get("plans"),
+            "out_jsonl": executor_plan_bridge.get("out_jsonl"),
         },
         "max_snapshot_age_seconds": last_cycle.get("max_snapshot_age_seconds"),
         "paper_baskets": len(baskets),
