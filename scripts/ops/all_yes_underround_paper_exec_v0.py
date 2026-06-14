@@ -43,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-spread", type=float, default=0.05)
     parser.add_argument("--max-snapshot-age-seconds", type=float, default=180.0)
     parser.add_argument("--min-settled-baskets", type=int, default=20)
+    parser.add_argument("--min-settled-active-dates", type=int, default=7)
     parser.add_argument("--min-positive-basket-rate", type=float, default=0.55)
     parser.add_argument("--min-roi", type=float, default=0.02)
     return parser.parse_args()
@@ -303,6 +304,10 @@ def load_settlements(conn: sqlite3.Connection, condition_ids: list[str]) -> dict
     return {str(row["condition_id"]): dict(row) for row in rows}
 
 
+def sorted_unique_values(rows: list[dict[str, Any]], field: str) -> list[str]:
+    return sorted({str(row.get(field)) for row in rows if row.get(field)})
+
+
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
@@ -376,6 +381,10 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     exact = [row for row in settled if row["settlement_eval_status"] == "settled_exactly_one_winner"]
     ttl_equivalent = [row for row in decision_rows if row.get("ttl_equivalent") is True]
     ttl_equivalent_exact = [row for row in exact if row.get("ttl_equivalent") is True]
+    ttl_equivalent_pending = [
+        row for row in decision_rows
+        if row.get("ttl_equivalent") is True and row["settlement_eval_status"] == "pending"
+    ]
     stale_recorded = [row for row in decision_rows if row.get("ttl_status") == "stale_recording"]
     bad_ttl = [row for row in decision_rows if row.get("ttl_equivalent") is False]
     cost = sum(float(row.get("basket_cost_usd") or 0.0) for row in exact)
@@ -400,13 +409,14 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "ttl_equivalent_baskets": len(ttl_equivalent),
         "ttl_non_equivalent_baskets": len(bad_ttl),
         "stale_recorded_baskets": len(stale_recorded),
-        "ttl_equivalent_pending": len(
-            [
-                row for row in decision_rows
-                if row.get("ttl_equivalent") is True and row["settlement_eval_status"] == "pending"
-            ]
-        ),
+        "settled_active_event_dates": len(sorted_unique_values(exact, "event_date")),
+        "settled_event_dates": sorted_unique_values(exact, "event_date"),
+        "ttl_equivalent_pending": len(ttl_equivalent_pending),
+        "ttl_equivalent_pending_active_event_dates": len(sorted_unique_values(ttl_equivalent_pending, "event_date")),
+        "ttl_equivalent_pending_event_dates": sorted_unique_values(ttl_equivalent_pending, "event_date"),
         "ttl_equivalent_settled_exactly_one_winner": len(ttl_equivalent_exact),
+        "ttl_equivalent_settled_active_event_dates": len(sorted_unique_values(ttl_equivalent_exact, "event_date")),
+        "ttl_equivalent_settled_event_dates": sorted_unique_values(ttl_equivalent_exact, "event_date"),
         "ttl_recording_age_seconds_max": round(max(ages), 3) if ages else None,
         "settled_cost_usd": round(cost, 6),
         "settled_pnl_usd": round(pnl, 6),
@@ -491,6 +501,24 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
         )
     else:
         passed.append({"code": "forward_settled_baskets_ready", "message": "Forward paper basket sample is large enough."})
+    if eval_summary["ttl_equivalent_settled_active_event_dates"] < args.min_settled_active_dates:
+        blockers.append(
+            {
+                "code": "forward_settled_active_dates_low",
+                "message": "Need more active settled event dates before deploy review; same-day baskets are correlated.",
+                "ttl_equivalent_settled_active_event_dates": eval_summary["ttl_equivalent_settled_active_event_dates"],
+                "ttl_equivalent_settled_event_dates": eval_summary["ttl_equivalent_settled_event_dates"],
+                "required": args.min_settled_active_dates,
+            }
+        )
+    else:
+        passed.append(
+            {
+                "code": "forward_settled_active_dates_ready",
+                "message": "Forward paper sample spans enough settled event dates.",
+                "ttl_equivalent_settled_active_event_dates": eval_summary["ttl_equivalent_settled_active_event_dates"],
+            }
+        )
     if eval_summary["winner_count_anomaly"]:
         blockers.append({"code": "settlement_winner_count_anomaly", "message": "Some settled baskets did not have exactly one winning leg."})
     if eval_summary["ttl_equivalent_settled_roi"] is None or eval_summary["ttl_equivalent_settled_roi"] < args.min_roi:
@@ -539,7 +567,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
         },
         "next_actions": [
             "Keep running scanner + paper cycle on fresh snapshots.",
-            "Wait for at least 20 settled exactly-one-winner live-equivalent paper baskets with positive ROI.",
+            "Wait for at least 20 settled exactly-one-winner live-equivalent paper baskets across at least 7 active event dates with positive ROI.",
             "Design signed all-leg-or-none execution and partial-fill cancellation/unwind before any live deployment.",
             "Use weather-strategy-deploy for any N100/live change.",
         ],
@@ -583,6 +611,10 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         "stale_recorded_baskets": gate_result.get("eval", {}).get("stale_recorded_baskets"),
         "ttl_recording_age_seconds_max": gate_result.get("eval", {}).get("ttl_recording_age_seconds_max"),
         "ttl_equivalent_settled_exactly_one_winner": gate_result.get("eval", {}).get("ttl_equivalent_settled_exactly_one_winner"),
+        "ttl_equivalent_settled_active_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_settled_active_event_dates"),
+        "ttl_equivalent_settled_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_settled_event_dates"),
+        "ttl_equivalent_pending_active_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_active_event_dates"),
+        "ttl_equivalent_pending_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_event_dates"),
         "paper_eval": gate_result.get("eval"),
         "pending_by_city": dict(sorted(city_counts.items())),
         "pending_by_event_date": dict(sorted(pending_event_dates.items())),
