@@ -1,4 +1,8 @@
-from scripts.ops.all_yes_underround_paper_exec_v0 import recording_ttl_audit
+import argparse
+import json
+import sqlite3
+
+from scripts.ops.all_yes_underround_paper_exec_v0 import evaluate, recording_ttl_audit
 
 
 def _basket(recorded_at_utc="2026-06-13T18:32:00+00:00", snapshot_ts_utc="2026-06-13T18:30:53Z"):
@@ -58,3 +62,63 @@ def test_recording_ttl_audit_uses_oldest_orderbook_leg_time():
     assert audit["ttl_equivalent"] is False
     assert audit["ttl_status"] == "stale_recording"
     assert audit["recording_age_seconds"] == 330.0
+
+
+def test_evaluate_dedupes_repeated_city_event_opportunities(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.commit()
+    conn.close()
+
+    baskets = [
+        {
+            "basket_id": "b1",
+            "recorded_at_utc": "2026-06-13T18:31:00+00:00",
+            "snapshot_ts_utc": "2026-06-13T18:30:00Z",
+            "event_date": "2026-06-14",
+            "city": "Istanbul",
+            "event_slug": "highest-temperature-in-istanbul-on-june-14-2026",
+        },
+        {
+            "basket_id": "b2",
+            "recorded_at_utc": "2026-06-13T18:32:00+00:00",
+            "snapshot_ts_utc": "2026-06-13T18:31:00Z",
+            "event_date": "2026-06-14",
+            "city": "Istanbul",
+            "event_slug": "highest-temperature-in-istanbul-on-june-14-2026",
+        },
+        {
+            "basket_id": "b3",
+            "recorded_at_utc": "2026-06-13T18:33:00+00:00",
+            "snapshot_ts_utc": "2026-06-13T18:32:00Z",
+            "event_date": "2026-06-14",
+            "city": "Jeddah",
+            "event_slug": "highest-temperature-in-jeddah-on-june-14-2026",
+        },
+    ]
+    with (run_dir / "paper_baskets.jsonl").open("w") as fh:
+        for row in baskets:
+            fh.write(json.dumps(row) + "\n")
+    with (run_dir / "paper_leg_orders.jsonl").open("w") as fh:
+        for row in baskets:
+            fh.write(json.dumps({"basket_id": row["basket_id"], "condition_id": row["basket_id"] + "_c"}) + "\n")
+
+    result = evaluate(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            max_snapshot_age_seconds=180.0,
+        )
+    )
+
+    assert result["raw_baskets"] == 3
+    assert result["baskets"] == 2
+    assert result["unique_opportunity_baskets"] == 2
+    assert result["duplicate_opportunity_baskets"] == 1
+    assert result["pending"] == 2
+    assert result["ttl_equivalent_pending"] == 2
