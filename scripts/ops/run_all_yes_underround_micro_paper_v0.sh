@@ -23,6 +23,10 @@ MICRO_SNAPSHOT_DIR="${MICRO_SNAPSHOT_DIR:-$RUN_DIR/micro_orderbook_snapshots}"
 MICRO_SUMMARY_PATH="${MICRO_SUMMARY_PATH:-$RUN_DIR/micro_snapshot_summary.json}"
 SCAN_JSON_PATH="${SCAN_JSON_PATH:-$RUN_DIR/latest_scan.json}"
 SCAN_MD_PATH="${SCAN_MD_PATH:-$RUN_DIR/latest_scan.md}"
+OBSERVATION_SCAN_JSON_PATH="${OBSERVATION_SCAN_JSON_PATH:-$RUN_DIR/latest_observation_scan.json}"
+OBSERVATION_SCAN_MD_PATH="${OBSERVATION_SCAN_MD_PATH:-$RUN_DIR/latest_observation_scan.md}"
+OBSERVATION_MIN_UNDERROUND="${OBSERVATION_MIN_UNDERROUND:-0.01}"
+OBSERVATION_FORMAL_MIN_UNDERROUND="${OBSERVATION_FORMAL_MIN_UNDERROUND:-0.02}"
 MICRO_DATES="${MICRO_DATES:-}"
 MICRO_DAYS_FORWARD="${MICRO_DAYS_FORWARD:-1}"
 MICRO_CITIES="${MICRO_CITIES:-}"
@@ -114,6 +118,8 @@ PY
         --gate-path "$GATE_PATH" \
         --run-dir "$RUN_DIR" \
         --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true
+      "$PY" scripts/ops/all_yes_underround_observation_v0.py monitor \
+        --run-dir "$RUN_DIR" >/dev/null || true
       exit 0
       ;;
       esac
@@ -161,6 +167,28 @@ PY
   --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" \
   --min-file-stable-seconds "$MIN_FILE_STABLE_SECONDS" \
   --min-snapshot-rows "$MIN_SNAPSHOT_ROWS"
+
+"$PY" scripts/analysis/market_structure_edge/research_all_yes_underround_live_prep_v0.py \
+  --snapshot-path "$snapshot_path" \
+  --db-path "$DB_PATH" \
+  --gate-path "$GATE_PATH" \
+  --station-basis-gate-path "$STATION_BASIS_GATE_PATH" \
+  --paper-gate-path "$RUN_DIR/live_prep_gate.json" \
+  --paper-monitor-path "$RUN_DIR/monitor.json" \
+  --fresh-cycle-path "$RUN_DIR/fresh_cycle.json" \
+  --out-json "$OBSERVATION_SCAN_JSON_PATH" \
+  --out-md "$OBSERVATION_SCAN_MD_PATH" \
+  --min-underround "$OBSERVATION_MIN_UNDERROUND" >/dev/null || true
+
+"$PY" scripts/ops/all_yes_underround_observation_v0.py cycle \
+  --scan-json "$OBSERVATION_SCAN_JSON_PATH" \
+  --run-dir "$RUN_DIR" \
+  --min-underround "$OBSERVATION_MIN_UNDERROUND" \
+  --formal-min-underround "$OBSERVATION_FORMAL_MIN_UNDERROUND" \
+  --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true
+
+"$PY" scripts/ops/all_yes_underround_observation_v0.py monitor \
+  --run-dir "$RUN_DIR" >/dev/null || true
 
 "$PY" scripts/ops/all_yes_underround_live_plan_v0.py plan \
   --scan-json "$SCAN_JSON_PATH" \
