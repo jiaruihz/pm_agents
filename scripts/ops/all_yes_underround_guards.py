@@ -130,6 +130,7 @@ def check_candidate(
         blockers.append("spread_above_max")
 
     seen_condition_ids: set[str] = set()
+    seen_brackets: set[str] = set()
     total_cost_per_share = 0.0
     leg_orders: list[dict[str, Any]] = []
     for index, leg in enumerate(legs):
@@ -147,6 +148,12 @@ def check_candidate(
             seen_condition_ids.add(condition_id)
         if bracket is None:
             blockers.append(f"leg_{index}_missing_bracket")
+        else:
+            bracket_key = str(bracket).strip()
+            if bracket_key in seen_brackets:
+                blockers.append(f"leg_{index}_duplicate_bracket")
+            else:
+                seen_brackets.add(bracket_key)
         if best_ask is None:
             blockers.append(f"leg_{index}_missing_best_ask")
             continue

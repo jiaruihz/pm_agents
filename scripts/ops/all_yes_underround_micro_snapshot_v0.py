@@ -235,19 +235,28 @@ def extract_market_tokens(market: dict[str, Any]) -> dict[str, str]:
     return out
 
 
-BRACKET_RE = re.compile(r"\b(?:be|reach|at)\s+([+-]?\d+(?:\.\d+)?)\s*(?:°| degrees| degree|f|c)?", re.I)
+BRACKET_RE = re.compile(r"\b(?:be|reach|at)\s+([+-]?\d+(?:\.\d+)?)\s*(?:°| degrees| degree|f|c)\b", re.I)
+TEMP_RE = re.compile(r"([+-]?\d+(?:\.\d+)?)\s*(?:°\s*)?(?:f|c)\b", re.I)
+PLAIN_NUMBER_RE = re.compile(r"^[^0-9+-]*([+-]?\d+(?:\.\d+)?)[^0-9.]*$")
 
 
-def extract_bracket_label(question: str) -> str | None:
+def normalize_bracket_value(value: str) -> str:
+    return value[:-2] if value.endswith(".0") else value
+
+
+def extract_bracket_label(question: str, group_item_title: str | None = None) -> str | None:
+    title = str(group_item_title or "").strip()
+    if title:
+        match = TEMP_RE.search(title) or PLAIN_NUMBER_RE.search(title)
+        if match:
+            return normalize_bracket_value(match.group(1))
     text = str(question or "")
     match = BRACKET_RE.search(text)
     if match:
-        value = match.group(1)
-        return value[:-2] if value.endswith(".0") else value
-    numbers = re.findall(r"[+-]?\d+(?:\.\d+)?", text)
-    if numbers:
-        value = numbers[-1]
-        return value[:-2] if value.endswith(".0") else value
+        return normalize_bracket_value(match.group(1))
+    match = TEMP_RE.search(text)
+    if match:
+        return normalize_bracket_value(match.group(1))
     return None
 
 
@@ -347,7 +356,7 @@ async def main_async(args: argparse.Namespace) -> int:
         for market in markets:
             if not isinstance(market, dict):
                 continue
-            label = extract_bracket_label(str(market.get("question") or ""))
+            label = extract_bracket_label(str(market.get("question") or ""), str(market.get("groupItemTitle") or ""))
             if label is None:
                 continue
             tokens = extract_market_tokens(market)

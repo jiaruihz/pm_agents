@@ -15,6 +15,9 @@ from scripts.ops.all_yes_underround_micro_snapshot_v0 import (
 def test_extract_bracket_label_from_weather_question():
     assert extract_bracket_label("Will the highest temperature in Paris be 14°C on June 14?") == "14"
     assert extract_bracket_label("Will the highest temperature in NYC reach 92F?") == "92"
+    assert extract_bracket_label("Will the highest temperature in Seattle on June 14 be 77°F?") == "77"
+    assert extract_bracket_label("Will the highest temperature in Seattle on June 14?", "77") == "77"
+    assert extract_bracket_label("Will the highest temperature in Seattle on June 14?") is None
 
 
 def test_extract_market_tokens_maps_yes_no_outcomes():

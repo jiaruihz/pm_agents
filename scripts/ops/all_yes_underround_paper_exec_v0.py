@@ -308,6 +308,24 @@ def sorted_unique_values(rows: list[dict[str, Any]], field: str) -> list[str]:
     return sorted({str(row.get(field)) for row in rows if row.get(field)})
 
 
+def basket_shape_audit(leg_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    blockers: list[str] = []
+    brackets = [str(row.get("bracket")).strip() for row in leg_rows if row.get("bracket") is not None]
+    condition_ids = [str(row.get("condition_id")).strip() for row in leg_rows if row.get("condition_id")]
+    if len(set(condition_ids)) != len(condition_ids):
+        blockers.append("duplicate_condition_id")
+    if len(set(brackets)) != len(brackets):
+        blockers.append("duplicate_bracket")
+    if not brackets:
+        blockers.append("missing_brackets")
+    return {
+        "basket_shape_valid": not blockers,
+        "basket_shape_blockers": blockers,
+        "unique_brackets": len(set(brackets)),
+        "leg_brackets": brackets,
+    }
+
+
 def compact_opportunity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     compact: list[dict[str, Any]] = []
     for row in rows:
@@ -321,6 +339,8 @@ def compact_opportunity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "event_slug": row.get("event_slug"),
                 "ttl_equivalent": row.get("ttl_equivalent"),
                 "ttl_status": row.get("ttl_status"),
+                "basket_shape_valid": row.get("basket_shape_valid"),
+                "basket_shape_blockers": row.get("basket_shape_blockers"),
                 "recording_age_seconds": row.get("recording_age_seconds"),
                 "settlement_eval_status": row.get("settlement_eval_status"),
                 "winner_count": row.get("winner_count"),
@@ -375,6 +395,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             if yes == 1.0:
                 winners.append(leg)
         all_settled = len(leg_rows) > 0 and not missing and not unresolved and len(settled_legs) == len(leg_rows)
+        shape = basket_shape_audit(leg_rows)
         status = "pending"
         payout = None
         pnl = None
@@ -390,6 +411,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             {
                 **basket,
                 **ttl,
+                **shape,
                 "opportunity_key": opportunity_key,
                 "unique_opportunity_first": not duplicate_opportunity,
                 "duplicate_opportunity": duplicate_opportunity,
@@ -405,16 +427,20 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
     decision_rows = [row for row in rows if row.get("unique_opportunity_first")]
+    shape_invalid = [row for row in decision_rows if not row.get("basket_shape_valid")]
+    live_prep_rows = [row for row in decision_rows if row.get("basket_shape_valid")]
     settled = [row for row in decision_rows if row["settlement_eval_status"].startswith("settled_")]
     exact = [row for row in settled if row["settlement_eval_status"] == "settled_exactly_one_winner"]
-    ttl_equivalent = [row for row in decision_rows if row.get("ttl_equivalent") is True]
-    ttl_equivalent_exact = [row for row in exact if row.get("ttl_equivalent") is True]
+    live_prep_settled = [row for row in live_prep_rows if row["settlement_eval_status"].startswith("settled_")]
+    live_prep_exact = [row for row in live_prep_settled if row["settlement_eval_status"] == "settled_exactly_one_winner"]
+    ttl_equivalent = [row for row in live_prep_rows if row.get("ttl_equivalent") is True]
+    ttl_equivalent_exact = [row for row in live_prep_exact if row.get("ttl_equivalent") is True]
     ttl_equivalent_pending = [
-        row for row in decision_rows
+        row for row in live_prep_rows
         if row.get("ttl_equivalent") is True and row["settlement_eval_status"] == "pending"
     ]
-    stale_recorded = [row for row in decision_rows if row.get("ttl_status") == "stale_recording"]
-    bad_ttl = [row for row in decision_rows if row.get("ttl_equivalent") is False]
+    stale_recorded = [row for row in live_prep_rows if row.get("ttl_status") == "stale_recording"]
+    bad_ttl = [row for row in live_prep_rows if row.get("ttl_equivalent") is False]
     cost = sum(float(row.get("basket_cost_usd") or 0.0) for row in exact)
     pnl = sum(float(row.get("pnl_usd") or 0.0) for row in exact)
     ttl_cost = sum(float(row.get("basket_cost_usd") or 0.0) for row in ttl_equivalent_exact)
@@ -430,6 +456,19 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "duplicate_opportunity_baskets": len([row for row in rows if row.get("duplicate_opportunity")]),
         "baskets": len(decision_rows),
         "unique_opportunity_baskets": len(decision_rows),
+        "shape_valid_baskets": len(live_prep_rows),
+        "shape_invalid_baskets": len(shape_invalid),
+        "shape_invalid_opportunities": [
+            {
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "basket_shape_blockers": row.get("basket_shape_blockers"),
+                "unique_brackets": row.get("unique_brackets"),
+                "legs": row.get("legs"),
+            }
+            for row in shape_invalid
+        ],
         "settled": len(settled),
         "settled_exactly_one_winner": len(exact),
         "pending": len([row for row in decision_rows if row["settlement_eval_status"] == "pending"]),
@@ -505,6 +544,15 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
                 "stale_recorded_baskets": eval_summary["stale_recorded_baskets"],
                 "max_recording_age_seconds": eval_summary["ttl_recording_age_seconds_max"],
                 "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+            }
+        )
+    if eval_summary["shape_invalid_baskets"]:
+        blockers.append(
+            {
+                "code": "basket_shape_invalid",
+                "message": "Some unique paper opportunities have invalid bracket shape and are excluded from live-prep counts.",
+                "shape_invalid_baskets": eval_summary["shape_invalid_baskets"],
+                "shape_invalid_opportunities": eval_summary["shape_invalid_opportunities"],
             }
         )
     guard_audit = list(last_cycle.get("guard_audit") or [])

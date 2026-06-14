@@ -86,6 +86,16 @@ def test_all_yes_guard_rejects_duplicate_condition_id(tmp_path: Path):
     assert "leg_4_duplicate_condition_id" in decision.blockers
 
 
+def test_all_yes_guard_rejects_duplicate_bracket(tmp_path: Path):
+    candidate = _candidate()
+    candidate["legs_detail"][4]["bracket"] = candidate["legs_detail"][0]["bracket"]
+
+    decision = check_candidate(cfg=BasketGuardConfig(), repo_root=tmp_path, candidate=candidate)
+
+    assert not decision.allow
+    assert "leg_4_duplicate_bracket" in decision.blockers
+
+
 def test_all_yes_guard_rejects_underround_mismatch(tmp_path: Path):
     candidate = _candidate(underround=0.20)
 
