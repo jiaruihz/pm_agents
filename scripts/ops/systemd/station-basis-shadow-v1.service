@@ -1,0 +1,26 @@
+[Unit]
+# Station-basis v1 shadow loop — managed as a systemd USER service so it
+# survives N100 reboots (jiarui has Linger=yes) and auto-restarts on crash.
+# Replaces the old `nohup bash ... &` launch. Install:
+#   cp scripts/ops/systemd/station-basis-shadow-v1.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now station-basis-shadow-v1
+# Logs: journalctl --user -u station-basis-shadow-v1 -f
+Description=Station-basis v1 shadow loop (weather temperature station-basis strategy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jiarui/projects/pm_agent_station_basis_v1
+# Pin the exact environment the loop needs (interpreter with httpx + data root).
+Environment=PYTHON=/home/jiarui/projects/pm_agent/.venv/bin/python
+Environment=DATA_PROJECT_DIR=/home/jiarui/projects/pm_agent
+Environment=STATION_BASIS_DATA_ROOT=/home/jiarui/projects/pm_agent
+Environment=WEATHER_PREDICT_DIR=/home/jiarui/projects/weather-predict
+ExecStart=/bin/bash /home/jiarui/projects/pm_agent_station_basis_v1/scripts/ops/weather_station_basis_shadow_v1_loop.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
