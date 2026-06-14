@@ -332,6 +332,19 @@ def main() -> None:
             str(run_dir),
         ]
     )
+    run_cmd(
+        [
+            py,
+            "scripts/ops/all_yes_underround_fok_executor_v0.py",
+            "check",
+            "--plan-json",
+            str(run_dir / "latest_live_plan.json"),
+            "--executor-jsonl",
+            str(run_dir / "executor_trade_plans.jsonl"),
+            "--run-dir",
+            str(run_dir),
+        ]
+    )
 
     result["executed_cycle"] = True
     result["verdict"] = "FRESH_SNAPSHOT_CYCLE_RAN"

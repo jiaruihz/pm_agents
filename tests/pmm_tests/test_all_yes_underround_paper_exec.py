@@ -441,6 +441,22 @@ def test_gate_quarantines_legacy_invalid_shape_without_blocking(tmp_path):
         )
         + "\n"
     )
+    (run_dir / "latest_fok_executor_readiness.json").write_text(
+        json.dumps(
+            {
+                "generated_at_utc": "2026-06-14T06:10:00Z",
+                "verdict": "DRY_RUN_FOK_EXECUTOR_READY",
+                "live_now": False,
+                "live_enabled": False,
+                "no_order_placed": True,
+                "order_type": "FOK",
+                "baskets_checked": 1,
+                "executor_legs_checked": 2,
+                "clob_order_type_audit": {"module": "py_clob_client_v2.clob_types"},
+            }
+        )
+        + "\n"
+    )
     conn = sqlite3.connect(db_path)
     conn.execute(
         "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
@@ -484,6 +500,9 @@ def test_gate_quarantines_legacy_invalid_shape_without_blocking(tmp_path):
     assert "basket_shape_invalid" not in {row["code"] for row in result["blockers"]}
     assert "legacy_invalid_shape_quarantined" in {row["code"] for row in result["passed"]}
     assert "dry_run_basket_executor_available" in {row["code"] for row in result["passed"]}
+    assert "dry_run_fok_executor_available" in {row["code"] for row in result["passed"]}
+    assert "live_executor_not_armed" in {row["code"] for row in result["blockers"]}
+    assert "live_executor_missing" not in {row["code"] for row in result["blockers"]}
 
 
 def test_gate_allows_current_guard_when_any_candidate_passes(tmp_path):

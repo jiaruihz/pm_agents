@@ -853,6 +853,58 @@ def basket_executor_gate_items(summary: dict[str, Any]) -> tuple[list[dict[str, 
     return blockers, passed
 
 
+def fok_executor_gate_items(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if summary.get("status") == "missing" or not summary.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_fok_executor_missing",
+                "message": "No all-YES FOK executor readiness artifact is available for deploy review.",
+                "path": summary.get("path"),
+            }
+        )
+        return blockers, passed
+    if summary.get("live_now") is not False or summary.get("live_enabled") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_fok_executor_unsafe_live_flag",
+                "message": "The FOK executor readiness artifact must keep live disabled.",
+                "live_now": summary.get("live_now"),
+                "live_enabled": summary.get("live_enabled"),
+            }
+        )
+    if summary.get("no_order_placed") is not True:
+        blockers.append(
+            {
+                "code": "dry_run_fok_executor_order_placed",
+                "message": "The FOK executor readiness artifact must prove no order was placed.",
+                "no_order_placed": summary.get("no_order_placed"),
+            }
+        )
+    if summary.get("verdict") != "DRY_RUN_FOK_EXECUTOR_READY":
+        blockers.append(
+            {
+                "code": "dry_run_fok_executor_not_ready",
+                "message": "The all-YES FOK executor proof is not ready in dry-run mode.",
+                "verdict": summary.get("verdict"),
+                "blockers": summary.get("blockers"),
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_fok_executor_available",
+                "message": "All-YES FOK executor proof is present, non-submitting, and fail-closed.",
+                "baskets_checked": summary.get("baskets_checked"),
+                "executor_legs_checked": summary.get("executor_legs_checked"),
+                "order_type": summary.get("order_type"),
+                "clob_order_type_module": (summary.get("clob_order_type_audit") or {}).get("module"),
+            }
+        )
+    return blockers, passed
+
+
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
@@ -1101,6 +1153,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     executor_state = read_json(run_dir / "latest_executor_readiness.json")
     executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
     basket_executor = read_json(run_dir / "latest_basket_executor_readiness.json")
+    fok_executor = read_json(run_dir / "latest_fok_executor_readiness.json")
     blockers: list[dict[str, Any]] = []
     passed: list[dict[str, Any]] = []
     if clob_gate_freshness["stale"]:
@@ -1284,12 +1337,23 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     basket_executor_blockers, basket_executor_passed = basket_executor_gate_items(basket_executor)
     blockers.extend(basket_executor_blockers)
     passed.extend(basket_executor_passed)
-    blockers.append(
-        {
-            "code": "live_executor_missing",
-            "message": "This script is paper-only; live requires weather-strategy-deploy plus signed all-leg-or-none execution and partial-fill handling.",
-        }
-    )
+    fok_executor_blockers, fok_executor_passed = fok_executor_gate_items(fok_executor)
+    blockers.extend(fok_executor_blockers)
+    passed.extend(fok_executor_passed)
+    if any(row.get("code") == "dry_run_fok_executor_available" for row in passed):
+        blockers.append(
+            {
+                "code": "live_executor_not_armed",
+                "message": "FOK executor proof exists but is dry-run only; live still requires passing forward gates and weather-strategy-deploy review.",
+            }
+        )
+    else:
+        blockers.append(
+            {
+                "code": "live_executor_missing",
+                "message": "This script is paper-only; live requires weather-strategy-deploy plus signed all-leg-or-none execution and partial-fill handling.",
+            }
+        )
     verdict = "READY_FOR_DEPLOY_REVIEW" if not blockers else "NOT_READY_ACCUMULATE_PAPER_SHADOW"
     result = {
         "command": "gate",
@@ -1330,6 +1394,7 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
     executor_state = read_json(run_dir / "latest_executor_readiness.json")
     executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
     basket_executor = read_json(run_dir / "latest_basket_executor_readiness.json")
+    fok_executor = read_json(run_dir / "latest_fok_executor_readiness.json")
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
     eval_rows = read_json(run_dir / "eval.json").get("rows") or []
     unique_opportunities = compact_opportunity_rows(eval_rows)
@@ -1392,6 +1457,16 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
             "no_order_placed": basket_executor.get("no_order_placed"),
             "baskets_checked": basket_executor.get("baskets_checked"),
             "executor_legs_checked": basket_executor.get("executor_legs_checked"),
+        },
+        "latest_fok_executor_readiness": {
+            "generated_at_utc": fok_executor.get("generated_at_utc"),
+            "verdict": fok_executor.get("verdict"),
+            "live_now": fok_executor.get("live_now"),
+            "live_enabled": fok_executor.get("live_enabled"),
+            "no_order_placed": fok_executor.get("no_order_placed"),
+            "order_type": fok_executor.get("order_type"),
+            "baskets_checked": fok_executor.get("baskets_checked"),
+            "executor_legs_checked": fok_executor.get("executor_legs_checked"),
         },
         "max_snapshot_age_seconds": last_cycle.get("max_snapshot_age_seconds"),
         "paper_baskets": len(baskets),

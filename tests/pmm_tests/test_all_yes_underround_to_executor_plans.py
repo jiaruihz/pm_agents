@@ -83,6 +83,9 @@ def test_convert_writes_live_disabled_weather_executor_plans(tmp_path: Path):
     assert {row["live_enabled"] for row in rows} == {False}
     assert {row["paper_enabled"] for row in rows} == {True}
     assert {row["execution_mode"] for row in rows} == {"all_yes_dry_run_bridge"}
+    assert {row["order_type"] for row in rows} == {"FOK"}
+    assert {row["time_in_force"] for row in rows} == {"FOK"}
+    assert {row["all_yes_all_leg_or_none_required"] for row in rows} == {True}
     assert {row["risk_status"] for row in rows} == {"passed"}
     assert json.loads(summary_out.read_text())["plans"] == 2
 
