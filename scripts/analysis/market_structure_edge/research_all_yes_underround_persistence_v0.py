@@ -26,9 +26,11 @@ if str(ROOT) not in sys.path:
 from scripts.analysis.market_structure_edge.research_all_yes_underround_live_prep_v0 import (  # noqa: E402
     data_self_check,
     group_baskets,
+    parse_thresholds,
     read_json,
     read_snapshot,
     snapshot_summary,
+    underround_threshold_telemetry,
 )
 from scripts.ops.all_yes_underround_guards import BasketGuardConfig, check_candidate, decision_to_dict  # noqa: E402
 
@@ -45,6 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db-path", default=str(DB_DEFAULT))
     parser.add_argument("--snapshot-root", default=str(SNAPSHOT_ROOT_DEFAULT))
     parser.add_argument("--snapshot-date", default="2026-06-14")
+    parser.add_argument("--snapshot-glob", default="*.jsonl.gz")
     parser.add_argument("--gate-path", default=str(GATE_DEFAULT))
     parser.add_argument("--out-json", default=str(OUT_JSON_DEFAULT))
     parser.add_argument("--out-md", default=str(OUT_MD_DEFAULT))
@@ -53,6 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-shares", type=float, default=5.0)
     parser.add_argument("--max-spread", type=float, default=0.05)
     parser.add_argument("--max-basket-cost-usd", type=float, default=5.0)
+    parser.add_argument("--telemetry-underround-thresholds", default="0.005,0.01,0.02")
     return parser.parse_args()
 
 
@@ -64,11 +68,11 @@ def connect_db(path: Path) -> sqlite3.Connection:
     return conn
 
 
-def snapshot_files(root: Path, date: str) -> list[Path]:
-    return sorted((root / date).glob("orderbook_snapshot_*.jsonl.gz"))
+def snapshot_files(root: Path, date: str, pattern: str = "*.jsonl.gz") -> list[Path]:
+    return sorted((root / date).glob(pattern))
 
 
-def scan_snapshot(path: Path, args: argparse.Namespace, guard_cfg: BasketGuardConfig) -> dict[str, Any]:
+def scan_snapshot(path: Path, args: argparse.Namespace, guard_cfg: BasketGuardConfig, thresholds: list[float]) -> dict[str, Any]:
     rows = read_snapshot(path)
     basket_args = SimpleNamespace(
         min_underround=args.min_underround,
@@ -78,6 +82,7 @@ def scan_snapshot(path: Path, args: argparse.Namespace, guard_cfg: BasketGuardCo
         top_n=20,
     )
     baskets = group_baskets(rows, basket_args)
+    threshold_telemetry = underround_threshold_telemetry(baskets, thresholds)
     guarded = []
     for basket in baskets:
         if basket.get("paper_shadow_candidate"):
@@ -93,6 +98,7 @@ def scan_snapshot(path: Path, args: argparse.Namespace, guard_cfg: BasketGuardCo
         "event_dates": summary.get("event_dates"),
         "candidate_count": len(passing),
         "guarded_candidate_count": len(guarded),
+        "underround_threshold_telemetry": threshold_telemetry,
         "top_basket_count": len(baskets),
         "candidates": passing,
         "top_rejections": [row for row in baskets[:10] if not row.get("paper_shadow_candidate")],
@@ -130,6 +136,37 @@ def build_sequences(snapshot_results: list[dict[str, Any]]) -> list[dict[str, An
     return sorted(sequences, key=lambda row: (row["observations"], row["max_underround"]), reverse=True)
 
 
+def aggregate_threshold_telemetry(snapshot_results: list[dict[str, Any]], thresholds: list[float]) -> list[dict[str, Any]]:
+    aggregate: list[dict[str, Any]] = []
+    for threshold in thresholds:
+        counts = []
+        top_examples = []
+        for snap in snapshot_results:
+            row = next(
+                (item for item in snap.get("underround_threshold_telemetry", []) if float(item.get("threshold")) == threshold),
+                None,
+            )
+            count = int((row or {}).get("candidate_count") or 0)
+            counts.append(count)
+            if row and row.get("top_candidates"):
+                top_examples.append(
+                    {
+                        "snapshot_ts_utc": snap.get("snapshot_ts_utc"),
+                        "top_candidates": row.get("top_candidates")[:3],
+                    }
+                )
+        aggregate.append(
+            {
+                "threshold": threshold,
+                "snapshots_with_candidates": sum(1 for count in counts if count > 0),
+                "candidate_observations": sum(counts),
+                "max_candidates_in_snapshot": max(counts, default=0),
+                "top_examples": top_examples[:5],
+            }
+        )
+    return aggregate
+
+
 def fmt_pct(value: float | None) -> str:
     if value is None:
         return "NA"
@@ -156,6 +193,7 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
         "",
         f"- DB: `{report['db_path']}`",
         f"- Snapshot date folder: `{report['snapshot_date']}`; files scanned `{report['snapshot_files_scanned']}`.",
+        f"- Snapshot glob: `{report['snapshot_glob']}`.",
         f"- Latest snapshot: `{latest.get('path')}`; ts `{latest.get('snapshot_ts_utc')}`; current candidates `{latest.get('candidate_count')}`.",
         f"- CLOB fill coverage gate: `gate_pass={report['clob_fill_coverage_gate'].get('gate_pass')}`; fail_reasons `{report['clob_fill_coverage_gate'].get('fail_reasons')}`.",
         "",
@@ -176,6 +214,7 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
         f"- Unique candidate events: `{report['summary']['unique_candidate_events']}`.",
         f"- Max observations for one event: `{report['summary']['max_observations_per_event']}` snapshots.",
         f"- Latest scanner state: `{report['summary']['latest_state']}`.",
+        f"- Underround threshold telemetry: `{report['threshold_summary']}`.",
         "",
         "| snapshot_ts_utc | rows | yes_events | candidates | candidate cities |",
         "|---|---:|---:|---:|---|",
@@ -217,7 +256,8 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
 
 def main() -> None:
     args = parse_args()
-    files = snapshot_files(Path(args.snapshot_root), args.snapshot_date)
+    thresholds = parse_thresholds(args.telemetry_underround_thresholds)
+    files = snapshot_files(Path(args.snapshot_root), args.snapshot_date, args.snapshot_glob)
     guard_cfg = BasketGuardConfig(
         min_underround=args.min_underround,
         min_legs=args.min_leg_count,
@@ -225,8 +265,9 @@ def main() -> None:
         max_basket_cost_usd=args.max_basket_cost_usd,
         max_yes_spread=args.max_spread,
     )
-    snapshots = [scan_snapshot(path, args, guard_cfg) for path in files]
+    snapshots = [scan_snapshot(path, args, guard_cfg, thresholds) for path in files]
     sequences = build_sequences(snapshots)
+    threshold_summary = aggregate_threshold_telemetry(snapshots, thresholds)
     candidate_counts = [snap["candidate_count"] for snap in snapshots]
     latest_state = "NO_CURRENT_EXECUTABLE_BASKET"
     if snapshots and snapshots[-1]["candidate_count"] > 0:
@@ -237,6 +278,7 @@ def main() -> None:
         "target_metric": "all_yes_underround_snapshot_persistence",
         "db_path": str(Path(args.db_path)),
         "snapshot_date": args.snapshot_date,
+        "snapshot_glob": args.snapshot_glob,
         "snapshot_files_scanned": len(files),
         "parameters": {
             "min_underround": args.min_underround,
@@ -244,6 +286,7 @@ def main() -> None:
             "min_shares": args.min_shares,
             "max_spread": args.max_spread,
             "max_basket_cost_usd": args.max_basket_cost_usd,
+            "telemetry_underround_thresholds": thresholds,
         },
         "data_self_check": data_self_check(conn),
         "clob_fill_coverage_gate": {
@@ -260,6 +303,7 @@ def main() -> None:
         },
         "snapshots": snapshots,
         "sequences": sequences,
+        "threshold_summary": threshold_summary,
         "verdict": "PAPER_SHADOW_FLICKERY_OPPORTUNITY" if sequences else "NO_PERSISTENCE_EVIDENCE",
     }
     Path(args.out_json).write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
