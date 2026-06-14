@@ -414,6 +414,51 @@ def test_gate_quarantines_legacy_invalid_shape_without_blocking(tmp_path):
     assert "legacy_invalid_shape_quarantined" in {row["code"] for row in result["passed"]}
 
 
+def test_gate_blocks_stale_clob_coverage_evidence_even_if_gate_passes(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    gate_path = tmp_path / "clob_gate.json"
+    gate_path.write_text(json.dumps({"gate_pass": True}) + "\n")
+    (run_dir / "last_cycle.json").write_text(
+        json.dumps({"scanner_candidate_count": 1, "guard_audit": [{"basket_id": "latest", "guard": {"allow": True}}]}) + "\n"
+    )
+    (run_dir / "paper_baskets.jsonl").write_text("")
+    (run_dir / "paper_leg_orders.jsonl").write_text("")
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.execute("CREATE TABLE fact_trades (fact_built_at_utc TEXT)")
+    conn.execute("INSERT INTO fact_trades VALUES ('2026-06-05T13:49:08+00:00')")
+    conn.commit()
+    conn.close()
+
+    result = gate(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            gate_path=str(gate_path),
+            max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-14T06:10:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
+            min_settled_baskets=20,
+            min_settled_active_dates=7,
+            min_roi=0.02,
+            min_positive_basket_rate=0.55,
+            max_gate_fact_age_hours=48.0,
+        )
+    )
+
+    stale_blocker = next(row for row in result["blockers"] if row["code"] == "clob_coverage_gate_stale_or_fail")
+    assert stale_blocker["gate_pass"] is True
+    assert stale_blocker["freshness"]["fact_built_at_utc"] == "2026-06-05T13:49:08+00:00"
+    assert stale_blocker["freshness"]["stale_reasons"] == ["fact_built_at_utc_older_than_threshold"]
+    assert "clob_coverage_gate_pass" not in {row["code"] for row in result["passed"]}
+
+
 def test_gate_blocks_current_invalid_shape(tmp_path):
     run_dir = tmp_path / "run"
     run_dir.mkdir()

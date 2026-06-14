@@ -48,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-settled-active-dates", type=int, default=7)
     parser.add_argument("--min-positive-basket-rate", type=float, default=0.55)
     parser.add_argument("--min-roi", type=float, default=0.02)
+    parser.add_argument("--max-gate-fact-age-hours", type=float, default=48.0)
     parser.add_argument("--settlement-lag-days", type=int, default=1)
     parser.add_argument("--settlement-pipeline-hour-utc", type=int, default=9)
     parser.add_argument("--settlement-pipeline-minute-utc", type=int, default=20)
@@ -122,6 +123,12 @@ def read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"status": "missing", "path": str(path)}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def file_mtime_utc(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -293,6 +300,52 @@ def connect_db(path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=1000")
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def fact_built_at_utc(path: Path) -> dict[str, Any]:
+    try:
+        conn = connect_db(path)
+        try:
+            value = conn.execute("SELECT MAX(fact_built_at_utc) FROM fact_trades").fetchone()[0]
+        finally:
+            conn.close()
+        return {"fact_built_at_utc": value}
+    except sqlite3.Error as exc:
+        return {"fact_built_at_utc": None, "error": str(exc)}
+
+
+def coverage_gate_freshness_audit(
+    *,
+    gate_path: Path,
+    db_path: Path,
+    now_dt: datetime,
+    max_gate_fact_age_hours: float | None,
+) -> dict[str, Any]:
+    max_age_seconds = None if max_gate_fact_age_hours is None else float(max_gate_fact_age_hours) * 3600.0
+    fact = fact_built_at_utc(db_path)
+    fact_dt = parse_utc(fact.get("fact_built_at_utc"))
+    gate_mtime = file_mtime_utc(gate_path)
+    gate_dt = parse_utc(gate_mtime)
+    fact_age_seconds = round((now_dt - fact_dt).total_seconds(), 3) if fact_dt else None
+    gate_file_age_seconds = round((now_dt - gate_dt).total_seconds(), 3) if gate_dt else None
+    stale_reasons: list[str] = []
+    if max_age_seconds is not None:
+        if fact_age_seconds is not None and fact_age_seconds > max_age_seconds:
+            stale_reasons.append("fact_built_at_utc_older_than_threshold")
+        if gate_file_age_seconds is not None and gate_file_age_seconds > max_age_seconds:
+            stale_reasons.append("gate_file_mtime_older_than_threshold")
+    return {
+        "gate_path": str(gate_path),
+        "db_path": str(db_path),
+        "gate_file_mtime_utc": gate_mtime,
+        "fact_built_at_utc": fact.get("fact_built_at_utc"),
+        "fact_built_at_error": fact.get("error"),
+        "fact_age_seconds": fact_age_seconds,
+        "gate_file_age_seconds": gate_file_age_seconds,
+        "max_gate_fact_age_hours": max_gate_fact_age_hours,
+        "stale": bool(stale_reasons),
+        "stale_reasons": stale_reasons,
+    }
 
 
 def final_yes(price: Any) -> float | None:
@@ -899,17 +952,48 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
 def gate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     eval_summary = evaluate(args)
-    clob_gate = read_json(Path(args.gate_path))
+    gate_path = Path(args.gate_path)
+    db_path = Path(args.db_path)
+    clob_gate = read_json(gate_path)
+    generated_dt = datetime.now(timezone.utc)
+    max_gate_fact_age_hours = getattr(args, "max_gate_fact_age_hours", 48.0)
+    clob_gate_freshness = coverage_gate_freshness_audit(
+        gate_path=gate_path,
+        db_path=db_path,
+        now_dt=generated_dt,
+        max_gate_fact_age_hours=max_gate_fact_age_hours,
+    )
     last_cycle = read_json(run_dir / "last_cycle.json")
     live_plan = read_json(run_dir / "latest_live_plan.json")
     executor_state = read_json(run_dir / "latest_executor_readiness.json")
     executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
     blockers: list[dict[str, Any]] = []
     passed: list[dict[str, Any]] = []
-    if not clob_gate.get("gate_pass"):
-        blockers.append({"code": "clob_coverage_gate_fail", "message": "CLOB coverage gate must pass before any live readiness claim."})
+    if clob_gate_freshness["stale"]:
+        blockers.append(
+            {
+                "code": "clob_coverage_gate_stale_or_fail",
+                "message": "CLOB coverage evidence is stale and cannot support any live readiness claim.",
+                "gate_pass": clob_gate.get("gate_pass"),
+                "freshness": clob_gate_freshness,
+            }
+        )
+    elif not clob_gate.get("gate_pass"):
+        blockers.append(
+            {
+                "code": "clob_coverage_gate_fail",
+                "message": "CLOB coverage gate must pass before any live readiness claim.",
+                "freshness": clob_gate_freshness,
+            }
+        )
     else:
-        passed.append({"code": "clob_coverage_gate_pass", "message": "CLOB fill coverage gate passes."})
+        passed.append(
+            {
+                "code": "clob_coverage_gate_pass",
+                "message": "CLOB fill coverage gate passes and evidence is fresh enough for live-prep gating.",
+                "freshness": clob_gate_freshness,
+            }
+        )
     if eval_summary["baskets"] <= 0:
         blockers.append({"code": "paper_ledger_empty", "message": "No all-YES paper baskets have been recorded."})
     else:
@@ -1054,7 +1138,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     verdict = "READY_FOR_DEPLOY_REVIEW" if not blockers else "NOT_READY_ACCUMULATE_PAPER_SHADOW"
     result = {
         "command": "gate",
-        "generated_at_utc": now_utc(),
+        "generated_at_utc": generated_dt.isoformat(),
         "strategy_id": STRATEGY_ID,
         "verdict": verdict,
         "live_now": False,
@@ -1066,6 +1150,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
             "fail_reasons": clob_gate.get("fail_reasons"),
             "db_fill_cost_minus_fact_cost": clob_gate.get("db_fill_cost_minus_fact_cost"),
             "order_caps": clob_gate.get("order_caps"),
+            "freshness": clob_gate_freshness,
         },
         "next_actions": [
             "Keep running scanner + paper cycle on fresh snapshots.",
