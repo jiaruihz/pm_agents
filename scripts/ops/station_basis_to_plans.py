@@ -52,11 +52,13 @@ PILOT_RISK = RiskConfig(
 # official station (cleanest edge, liquid): Milan, London.
 PILOT_CITIES = {"Milan", "London"}
 
-# Maker resting-bid discount below the converged ask. THIS IS THE KEY
-# OPEN PARAMETER (see master design §6): too small = never improves on the
-# converged ask (no edge); too large = never fills. Placeholder pending
-# reconciliation with the N100 v1 track's calibrated maker level.
-MAKER_DISCOUNT = 0.10
+# Maker pricing (D5, calibrated 2026-06-15): the resting bid is computed at
+# PLACEMENT time from the live book via station_basis_guards.maker_resting_price
+# (= best_bid + 1 tick, capped below ask). The plan only carries the maker
+# intent + a price ceiling (the decision-time ask); the placement layer must
+# recompute against the live book, never trust this stale ceiling as the price.
+MAKER_PRICE_RULE = "best_bid_plus_tick"
+TICK = 0.01
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -83,16 +85,17 @@ def to_plan(entry: dict, shares: float, *, live_enabled: bool) -> dict:
         "event_slug": entry.get("event_slug"),
         "signal_side": side,
         "order_side": "BUY",
-        # MAKER mode: limit_price is a resting-bid CEILING. The executor's
-        # _maker_only_price rests below best_ask (won't cross). We cap our bid
-        # at ask*(1-MAKER_DISCOUNT) so we only get filled when a seller comes to
-        # us cheaper than the converged ask — that's the maker edge.
-        "limit_price": round(ask * (1.0 - MAKER_DISCOUNT), 4),
+        # MAKER mode (D5): the actual resting price = best_bid + 1 tick computed
+        # from the LIVE book at placement (station_basis_guards.maker_resting_price),
+        # NOT this stale ceiling. limit_price here is only the max we'd ever pay
+        # (decision-time ask); notional uses it as a conservative upper bound.
+        "maker_price_rule": MAKER_PRICE_RULE,
+        "limit_price": round(ask, 4),     # ceiling only; placement reprices to bid+tick
         "size": round(shares, 4),
-        "notional": round(ask * (1.0 - MAKER_DISCOUNT) * shares, 4),
+        "notional": round(ask * shares, 4),  # upper-bound notional (real fill is cheaper)
         "maker_only": True,               # this pilot is maker-only by decision
         "quote_best_ask": ask,
-        "quote_tick_size": 0.01,
+        "quote_tick_size": TICK,
         "rule": entry["rule"],
         "paper_enabled": True,
         "live_enabled": bool(live_enabled),

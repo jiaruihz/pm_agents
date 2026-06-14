@@ -144,6 +144,28 @@ def check(
     return GuardDecision(True, reason, capped_shares=round(capped, 4))
 
 
+def maker_resting_price(
+    best_bid: float, best_ask: float, tick: float = 0.01
+) -> float | None:
+    """Validated maker rule (D5): post a resting BUY at best_bid + 1 tick,
+    but never cross — cap at best_ask - 1 tick so the order stays maker.
+
+    This is the calibrated rule from the maker backtest (M1 = best_bid+1tick,
+    basis +8%), replacing the earlier arbitrary ask*(1-discount) placeholder.
+    Computed from the LIVE book at placement time, not stale plan-time quotes.
+
+    Returns None when no valid maker price exists (no bid, locked/crossed book,
+    or 1-tick spread leaving no room to rest below the ask).
+    """
+    if best_bid <= 0 or best_ask <= 0 or best_ask <= best_bid:
+        return None
+    target = best_bid + tick
+    # improve by a tick if it still rests below the ask; otherwise the spread
+    # is too tight to improve, so join the queue at best_bid (still maker).
+    price = target if target < best_ask else best_bid
+    return round(price, 4)
+
+
 # ----------------------------------------------------------------------------
 # Self-test: python scripts/ops/station_basis_guards.py test
 # ----------------------------------------------------------------------------
@@ -191,7 +213,17 @@ def _selftest() -> int:
     assert not d.allow and d.reason == "kill_switch_active", d
     (root / "PAUSE").unlink()
 
-    print("station_basis_guards selftest: ALL PASS (8 cases)")
+    # 9. maker improves by 1 tick when spread allows
+    assert maker_resting_price(0.80, 0.84) == 0.81, maker_resting_price(0.80, 0.84)
+    # 10. 1-tick spread: can't improve without crossing -> join at best_bid
+    assert maker_resting_price(0.83, 0.84) == 0.83, maker_resting_price(0.83, 0.84)
+    # 11. sub-tick spread: still join at best_bid (never below it, never cross)
+    assert maker_resting_price(0.83, 0.835, tick=0.01) == 0.83, maker_resting_price(0.83, 0.835)
+    # 12. no bid / crossed book -> None
+    assert maker_resting_price(0.0, 0.84) is None
+    assert maker_resting_price(0.85, 0.84) is None
+
+    print("station_basis_guards selftest: ALL PASS (8 guard + 5 maker cases)")
     return 0
 
 

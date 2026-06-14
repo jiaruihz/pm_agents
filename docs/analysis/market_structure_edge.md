@@ -1,8 +1,8 @@
 # Market Structure Edge
 
 > Living doc for module [2]: whether weather markets contain model-free structural edge such as favorite-longshot bias, side base-rate, or price-bucket mispricing.
-> Current status: `mixed`: broad structure inconclusive; all-YES underround is offline-confirmed but retail-live blocked; forecast-bounded Range RV remains research/shadow only after source-aware rerun.
-> Last updated: 2026-06-15 forecast-bounded Range RV source-aware rerun.
+> Current status: `mixed`: broad structure inconclusive; all-YES underround is offline-confirmed but retail-live blocked; forecast-bounded Range RV remains below live standard after orderbook-native hardening.
+> Last updated: 2026-06-15 forecast-bounded Range RV live-standard hardening.
 
 ## Current Conclusion
 
@@ -10,7 +10,7 @@ There is not yet enough evidence to promote a broad model-free market-structure 
 
 `all-YES underround` / no-arb basket tests are offline-confirmed but should not be treated as the leading retail live path. The 2026-06-09 robust run passed proxy and time-aligned executable orderbook gates across several thresholds, and the 2026-06-14 scanner/paper work proved that current underround baskets can appear in live orderbook snapshots. The retail execution gap is too large for the current goal: opportunities are sparse and flickery, gross edge is often only 2%-3% of basket cost, every YES leg must fill at the observed ask, partial fills create directional exposure, and the low-latency all-leg-or-none executor would be competing on speed and queue quality. Keep this family as market-structure evidence and an engineering sandbox, not as a tiny-live candidate for a small account.
 
-The narrower forecast-bounded Range RV branch has now been rerun with the source-aware forecast-quality base. The proxy layer still shows some positive compact width-3 rows, but the generic `default_wu` denominator does not pass both proxy and time-aligned orderbook gates with support/top5 stress. All-source `no_filter` positives are diagnostic only because they mix source-sensitive and unresolved settlement-basis cities. Keep this branch as research/shadow instrumentation unless a later run proves the default-WU orderbook result forward.
+The narrower forecast-bounded Range RV branch has now been rerun with the source-aware forecast-quality base and then hardened with orderbook-native entry selection. The closest generic candidate is `forecast_bounded_w3_cheaper`, `default_wu/no_filter`, orderbook edge >= 0.02: it passes the basic three statistical gates in the replay, but still fails live-standard support and robustness because train active dates are only 8, train top5-removed ROI is negative, and some holdout rows do not show 5 shares at top ask on every leg. Keep this branch as research/shadow instrumentation unless a later run proves the default-WU orderbook result with enough forward dates, top5 stability, and 5-share capacity.
 
 Most other Range RV variants remain `inconclusive`: adjacent2/3 forecast-first, market-shape anomalies, center/shoulder/butterfly, tail-fade/uncertainty, temporal reversion, regime-conditioned scanners, and walk-forward selectors did not pass the three-gate standard.
 
@@ -45,6 +45,7 @@ Important distinction: if BUY_NO or a price bucket works because of market struc
 | `docs/analysis/2026-06/2026-06-14-all-yes-underround-low-latency-paper-design.md` | 2026-06 low-latency paper design | fresh paper loop and N100 snapshot-source deployment shape; no orders placed; live review requires >=20 TTL-valid settled baskets, positive ROI/rate, no settlement anomaly, and separate signed executor review | design-draft |
 | `docs/analysis/2026-06/2026-06-15-retail-live-strategy-direction-v0.md` | 2026-06 goal consolidation | Demotes all-YES from retail live path despite offline confirmation; freezes next branch as forecast-bounded Range RV shadow with compact 2-4 leg baskets and strict orderbook/forward gates | current-handoff |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-source-aware-v0.md` | 2026-06 source-aware forecast-bounded Range RV | Reuses forecast-quality/source base at source/model decision-set grain; proxy default-WU width-3 looks positive but generic orderbook gates fail, so verdict remains inconclusive/no live action | active-evidence |
+| `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-live-standard-v1.md` | 2026-06 orderbook-native live-standard hardening | Uses time-aligned orderbook costs for the entry decision itself; closest default-WU width-3 cheaper rule passes basic replay gates but fails live-standard support, top5, and 5-share capacity checks | active-evidence |
 | `docs/analysis/2026-06/2026-06-09-forecast-quality-range-rv-overlay.md` | 2026-06 forecast-quality overlay | quality filters do not stably beat no-filter baseline | active-evidence |
 | `docs/archive/analysis/2026-06/2026-06-09-forecast-first-adjacent-range-rv-v0-1.md` | 2026-06 forecast-first adjacent ranges | adjacent2/3 around forecast mode failed gates | active-evidence |
 | `docs/archive/analysis/2026-06/2026-06-09-center-shoulders-butterfly-range-rv.md` | 2026-06 center/shoulder/butterfly | forecast-first butterfly structures sample-limited and inconclusive | active-evidence |
@@ -66,4 +67,4 @@ Important distinction: if BUY_NO or a price bucket works because of market struc
 2. Add explicit null baselines: always-buy-NO by price bucket, random same-price side, and market-implied outcome.
 3. Keep `all-YES underround` as research/engineering sandbox unless a later run proves low-latency all-leg retail execution; do not rank it as the leading tiny-live path.
 4. Promote only `confirmed`, `confirmed_offline`, or `shadow_candidate` labels; otherwise leave as `inconclusive`.
-5. If Range RV continues, do not broaden threshold search. Re-test only the source-aware default-WU width-3 family as shadow telemetry after more forward settlements or improved orderbook coverage.
+5. If Range RV continues, do not broaden threshold search. Re-test only `forecast_bounded_w3_cheaper default_wu/no_filter orderbook_edge>=0.02` as zero-notional shadow telemetry after more forward settlements or improved orderbook coverage; no live deployment until it passes the v1 live-standard gates.
