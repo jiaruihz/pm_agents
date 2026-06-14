@@ -31,6 +31,8 @@ State and outputs live in runtime/weather_edge_v1/station_basis_shadow/.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import math
 import os
@@ -52,6 +54,7 @@ OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/station_basis_shadow"
 GAMMA = "https://gamma-api.polymarket.com"
 CLOB = "https://clob.polymarket.com"
 METAR_API = "https://aviationweather.gov/api/data/metar"
+IEM_ASOS_API = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
 
 MONTHS = [
     "january", "february", "march", "april", "may", "june",
@@ -139,6 +142,20 @@ def fetch_json(url: str, params: dict | None = None, max_rounds: int = 3):
     raise RuntimeError(f"fetch failed {url}: {last}")
 
 
+def fetch_text(url: str, params: dict | list | None = None, max_rounds: int = 2) -> str:
+    last = None
+    for rnd in range(max_rounds):
+        for proxy in PROXIES:
+            try:
+                r = httpx.get(url, params=params, proxy=proxy, timeout=25)
+                r.raise_for_status()
+                return r.text
+            except Exception as e:  # noqa: BLE001
+                last = f"{proxy}: {type(e).__name__}"
+                time.sleep(0.5 + rnd)
+    raise RuntimeError(f"fetch failed {url}: {last}")
+
+
 def round_half_up(x: float) -> int:
     return math.floor(float(x) + 0.5)
 
@@ -169,8 +186,34 @@ def event_slug(city_slug: str, d) -> str:
     return f"highest-temperature-in-{city_slug}-on-{MONTHS[d.month - 1]}-{d.day}-{d.year}"
 
 
-def fetch_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
-    """Return running max / current temp for the local day from METAR history."""
+def summarize_temperature_obs(
+    obs: list[tuple[datetime, float]],
+    *,
+    source: str,
+    now_dt: datetime | None = None,
+) -> dict:
+    obs.sort()
+    if len(obs) < MIN_OBS:
+        return {"status": "insufficient_obs", "source": source, "n_obs": len(obs)}
+    last_dt, last_temp = obs[-1]
+    now = now_dt or datetime.now(timezone.utc)
+    age_min = (now - last_dt).total_seconds() / 60
+    if age_min > MAX_OBS_AGE_MIN:
+        return {"status": "stale_metar", "source": source, "n_obs": len(obs), "age_min": round(age_min, 1)}
+    running_max_c = max(t for _, t in obs)
+    return {
+        "status": "ok",
+        "source": source,
+        "n_obs": len(obs),
+        "age_min": round(age_min, 1),
+        "running_max_c": running_max_c,
+        "current_temp_c": last_temp,
+        "decline_c": running_max_c - last_temp,
+        "last_obs_utc": last_dt.isoformat(),
+    }
+
+
+def aviationweather_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
     data = fetch_json(METAR_API, {"ids": icao, "format": "json", "hours": "30"})
     obs = []
     for rec in data:
@@ -184,23 +227,86 @@ def fetch_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
         if dt.astimezone(tz).date() != local_date:
             continue
         obs.append((dt, float(t)))
-    obs.sort()
-    if len(obs) < MIN_OBS:
-        return {"status": "insufficient_obs", "n_obs": len(obs)}
-    last_dt, last_temp = obs[-1]
-    age_min = (datetime.now(timezone.utc) - last_dt).total_seconds() / 60
-    if age_min > MAX_OBS_AGE_MIN:
-        return {"status": "stale_metar", "n_obs": len(obs), "age_min": round(age_min, 1)}
-    running_max_c = max(t for _, t in obs)
-    return {
-        "status": "ok",
-        "n_obs": len(obs),
-        "age_min": round(age_min, 1),
-        "running_max_c": running_max_c,
-        "current_temp_c": last_temp,
-        "decline_c": running_max_c - last_temp,
-        "last_obs_utc": last_dt.isoformat(),
-    }
+    return summarize_temperature_obs(obs, source="aviationweather_metar")
+
+
+def iem_request_dates(tz: ZoneInfo, local_date) -> tuple[datetime, datetime]:
+    local_start = datetime.combine(local_date, datetime.min.time(), tzinfo=tz)
+    local_end = local_start + timedelta(days=1)
+    return local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
+
+
+def parse_iem_asos_temperature_obs(text: str, tz: ZoneInfo, local_date) -> list[tuple[datetime, float]]:
+    rows = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
+    obs: list[tuple[datetime, float]] = []
+    for row in csv.DictReader(io.StringIO("\n".join(rows))):
+        raw_temp = row.get("tmpc")
+        raw_ts = row.get("valid")
+        if not raw_temp or raw_temp == "M" or not raw_ts:
+            continue
+        try:
+            dt = datetime.fromisoformat(raw_ts.replace(" ", "T")).replace(tzinfo=timezone.utc)
+            temp = float(raw_temp)
+        except ValueError:
+            continue
+        if dt.astimezone(tz).date() == local_date:
+            obs.append((dt, temp))
+    return obs
+
+
+def iem_asos_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
+    start_utc, end_utc = iem_request_dates(tz, local_date)
+    params = [
+        ("station", icao),
+        ("data", "tmpc"),
+        ("year1", str(start_utc.year)),
+        ("month1", str(start_utc.month)),
+        ("day1", str(start_utc.day)),
+        ("year2", str(end_utc.year)),
+        ("month2", str(end_utc.month)),
+        ("day2", str(end_utc.day)),
+        ("tz", "Etc/UTC"),
+        ("format", "onlycomma"),
+        ("latlon", "no"),
+        ("elev", "no"),
+        ("missing", "M"),
+        ("trace", "T"),
+        ("direct", "no"),
+        ("report_type", "1"),
+        ("report_type", "2"),
+        ("report_type", "3"),
+        ("report_type", "4"),
+    ]
+    text = fetch_text(IEM_ASOS_API, params)
+    obs = parse_iem_asos_temperature_obs(text, tz, local_date)
+    return summarize_temperature_obs(obs, source="iem_asos")
+
+
+def fetch_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
+    """Return running max / current temp for the local day from official-station observations."""
+    try:
+        primary = aviationweather_metar_day(icao, tz, local_date)
+    except RuntimeError as exc:
+        primary = {"status": "metar_fetch_failed", "source": "aviationweather_metar", "error": str(exc), "n_obs": 0}
+    if primary.get("status") == "ok" or os.environ.get("STATION_BASIS_DISABLE_IEM_FALLBACK") == "1":
+        return primary
+    try:
+        fallback = iem_asos_metar_day(icao, tz, local_date)
+    except RuntimeError as exc:
+        primary["fallback_source"] = "iem_asos"
+        primary["fallback_error"] = str(exc)
+        return primary
+    if fallback.get("status") == "ok":
+        fallback["primary_source"] = primary.get("source")
+        fallback["primary_status"] = primary.get("status")
+        fallback["primary_n_obs"] = primary.get("n_obs")
+        fallback["primary_age_min"] = primary.get("age_min")
+        return fallback
+    primary["fallback_source"] = fallback.get("source")
+    primary["fallback_status"] = fallback.get("status")
+    primary["fallback_n_obs"] = fallback.get("n_obs")
+    primary["fallback_age_min"] = fallback.get("age_min")
+    return primary
 
 
 def parse_label(label: str, question: str) -> dict | None:
