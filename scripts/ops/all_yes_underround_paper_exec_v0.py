@@ -475,6 +475,86 @@ def settlement_pending_audit(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
     return sorted(audit, key=lambda row: (str(row.get("event_date")), str(row.get("city")), str(row.get("recorded_at_utc"))))
 
 
+def live_plan_gate_items(live_plan: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if live_plan.get("status") == "missing" or not live_plan.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_live_plan_missing",
+                "message": "No all-YES dry-run live plan artifact is available for deploy review.",
+                "path": live_plan.get("path"),
+            }
+        )
+        return blockers, passed
+    if live_plan.get("live_now") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_live_plan_unsafe_live_flag",
+                "message": "The all-YES live plan artifact must never enable live submission.",
+                "live_now": live_plan.get("live_now"),
+            }
+        )
+    if live_plan.get("verdict") != "DRY_RUN_PLAN_ONLY":
+        blockers.append(
+            {
+                "code": "dry_run_live_plan_bad_verdict",
+                "message": "The all-YES live plan artifact must remain dry-run only.",
+                "verdict": live_plan.get("verdict"),
+            }
+        )
+    unsafe_plans: list[dict[str, Any]] = []
+    for plan in list(live_plan.get("plans") or []):
+        intents = list(plan.get("order_intents") or [])
+        unsafe_reasons: list[str] = []
+        if plan.get("live_submit_enabled") is not False:
+            unsafe_reasons.append("live_submit_enabled_not_false")
+        if plan.get("no_order_placed") is not True:
+            unsafe_reasons.append("no_order_placed_not_true")
+        if not intents:
+            unsafe_reasons.append("missing_order_intents")
+        if any(intent.get("submit_now") is not False for intent in intents):
+            unsafe_reasons.append("order_intent_submit_now_not_false")
+        if plan.get("partial_fill_policy") != "block_live_until_cancel_or_unwind_engine_exists":
+            unsafe_reasons.append("partial_fill_policy_not_blocking_live")
+        if unsafe_reasons:
+            unsafe_plans.append(
+                {
+                    "plan_id": plan.get("plan_id"),
+                    "city": plan.get("city"),
+                    "event_date": plan.get("event_date"),
+                    "unsafe_reasons": unsafe_reasons,
+                }
+            )
+    if unsafe_plans:
+        blockers.append(
+            {
+                "code": "dry_run_live_plan_unsafe_order_intents",
+                "message": "Some dry-run live plans are not safely marked as non-submitting.",
+                "unsafe_plans": unsafe_plans,
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_live_plan_available",
+                "message": "All-YES dry-run live plan artifact is present and non-submitting.",
+                "scanner_candidate_count": live_plan.get("scanner_candidate_count"),
+                "planned_baskets": live_plan.get("planned_baskets"),
+                "rejected_baskets": live_plan.get("rejected_baskets"),
+            }
+        )
+        if int(live_plan.get("planned_baskets") or 0) > 0:
+            passed.append(
+                {
+                    "code": "dry_run_live_plan_order_intents_safe",
+                    "message": "Dry-run all-leg order intents are marked non-submitting.",
+                    "planned_baskets": live_plan.get("planned_baskets"),
+                }
+            )
+    return blockers, passed
+
+
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
@@ -659,6 +739,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     eval_summary = evaluate(args)
     clob_gate = read_json(Path(args.gate_path))
     last_cycle = read_json(run_dir / "last_cycle.json")
+    live_plan = read_json(run_dir / "latest_live_plan.json")
     blockers: list[dict[str, Any]] = []
     passed: list[dict[str, Any]] = []
     if not clob_gate.get("gate_pass"):
@@ -782,6 +863,9 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
         )
     else:
         passed.append({"code": "positive_basket_rate_ready", "message": "Live-equivalent positive basket rate passes threshold.", "positive_basket_rate": eval_summary["ttl_equivalent_positive_basket_rate"]})
+    live_plan_blockers, live_plan_passed = live_plan_gate_items(live_plan)
+    blockers.extend(live_plan_blockers)
+    passed.extend(live_plan_passed)
     blockers.append(
         {
             "code": "live_executor_missing",

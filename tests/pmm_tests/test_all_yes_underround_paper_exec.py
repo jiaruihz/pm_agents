@@ -2,7 +2,7 @@ import argparse
 import json
 import sqlite3
 
-from scripts.ops.all_yes_underround_paper_exec_v0 import evaluate, gate, monitor, recording_ttl_audit
+from scripts.ops.all_yes_underround_paper_exec_v0 import evaluate, gate, live_plan_gate_items, monitor, recording_ttl_audit
 
 
 def _basket(recorded_at_utc="2026-06-13T18:32:00+00:00", snapshot_ts_utc="2026-06-13T18:30:53Z"):
@@ -14,6 +14,67 @@ def _basket(recorded_at_utc="2026-06-13T18:32:00+00:00", snapshot_ts_utc="2026-0
 
 def _leg(basket_id: str, condition_id: str, bracket: str):
     return {"basket_id": basket_id, "condition_id": condition_id, "bracket": bracket}
+
+
+def test_live_plan_gate_blocks_missing_artifact():
+    blockers, passed = live_plan_gate_items({"status": "missing", "path": "/tmp/missing.json"})
+
+    assert [row["code"] for row in blockers] == ["dry_run_live_plan_missing"]
+    assert passed == []
+
+
+def test_live_plan_gate_accepts_non_submitting_dry_run_plan():
+    blockers, passed = live_plan_gate_items(
+        {
+            "generated_at_utc": "2026-06-14T05:00:00+00:00",
+            "verdict": "DRY_RUN_PLAN_ONLY",
+            "live_now": False,
+            "scanner_candidate_count": 1,
+            "planned_baskets": 1,
+            "rejected_baskets": 0,
+            "plans": [
+                {
+                    "plan_id": "p1",
+                    "live_submit_enabled": False,
+                    "no_order_placed": True,
+                    "partial_fill_policy": "block_live_until_cancel_or_unwind_engine_exists",
+                    "order_intents": [{"submit_now": False}],
+                }
+            ],
+        }
+    )
+
+    assert blockers == []
+    assert {row["code"] for row in passed} == {
+        "dry_run_live_plan_available",
+        "dry_run_live_plan_order_intents_safe",
+    }
+
+
+def test_live_plan_gate_blocks_unsafe_submit_flags():
+    blockers, passed = live_plan_gate_items(
+        {
+            "generated_at_utc": "2026-06-14T05:00:00+00:00",
+            "verdict": "DRY_RUN_PLAN_ONLY",
+            "live_now": True,
+            "scanner_candidate_count": 1,
+            "planned_baskets": 1,
+            "rejected_baskets": 0,
+            "plans": [
+                {
+                    "plan_id": "p1",
+                    "live_submit_enabled": True,
+                    "no_order_placed": False,
+                    "partial_fill_policy": "allow",
+                    "order_intents": [{"submit_now": True}],
+                }
+            ],
+        }
+    )
+
+    assert "dry_run_live_plan_unsafe_live_flag" in {row["code"] for row in blockers}
+    assert "dry_run_live_plan_unsafe_order_intents" in {row["code"] for row in blockers}
+    assert passed == []
 
 
 def test_recording_ttl_audit_marks_fresh_basket_live_equivalent():
