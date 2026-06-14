@@ -4,7 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$ROOT}"
 DATA_PROJECT_DIR="${DATA_PROJECT_DIR:-$PROJECT_DIR}"
-PY="${PYTHON:-$PROJECT_DIR/.venv/bin/python}"
+if [[ -n "${PYTHON:-}" ]]; then
+  PY="$PYTHON"
+elif [[ -x "$PROJECT_DIR/.venv/bin/python" ]]; then
+  PY="$PROJECT_DIR/.venv/bin/python"
+elif [[ -x "$DATA_PROJECT_DIR/.venv/bin/python" ]]; then
+  PY="$DATA_PROJECT_DIR/.venv/bin/python"
+else
+  PY="python3"
+fi
 
 RUN_DIR="${RUN_DIR:-$DATA_PROJECT_DIR/runtime/weather_edge_v1/all_yes_underround_paper_v0}"
 DB_PATH="${DB_PATH:-$DATA_PROJECT_DIR/runtime/weather.db}"
