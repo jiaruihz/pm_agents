@@ -32,6 +32,8 @@ MICRO_ORDERBOOK_CONCURRENCY="${MICRO_ORDERBOOK_CONCURRENCY:-80}"
 MICRO_ORDERBOOK_TIMEOUT_SECONDS="${MICRO_ORDERBOOK_TIMEOUT_SECONDS:-4}"
 MICRO_PROXY="${MICRO_PROXY:-}"
 SNAPSHOT_SERVICE_NAME="${SNAPSHOT_SERVICE_NAME:-}"
+SNAPSHOT_SERVICE_WAIT_SECONDS="${SNAPSHOT_SERVICE_WAIT_SECONDS:-120}"
+SNAPSHOT_SERVICE_POLL_SECONDS="${SNAPSHOT_SERVICE_POLL_SECONDS:-5}"
 MAX_SNAPSHOT_AGE_SECONDS="${MAX_SNAPSHOT_AGE_SECONDS:-180}"
 MIN_FILE_STABLE_SECONDS="${MIN_FILE_STABLE_SECONDS:-0}"
 MIN_SNAPSHOT_ROWS="${MIN_SNAPSHOT_ROWS:-100}"
@@ -43,7 +45,31 @@ if [[ -n "$SNAPSHOT_SERVICE_NAME" ]]; then
   service_status="$(systemctl --user is-active "$SNAPSHOT_SERVICE_NAME" 2>/dev/null || true)"
   case "$service_status" in
     active|activating|reloading|deactivating)
-      "$PY" - "$RUN_DIR" "$SNAPSHOT_SERVICE_NAME" "$service_status" <<'PY'
+      wait_start_epoch="$(date +%s)"
+      wait_deadline=$((wait_start_epoch + SNAPSHOT_SERVICE_WAIT_SECONDS))
+      waited_seconds=0
+      while [[ "$SNAPSHOT_SERVICE_WAIT_SECONDS" -gt 0 && "$(date +%s)" -lt "$wait_deadline" ]]; do
+        sleep "$SNAPSHOT_SERVICE_POLL_SECONDS"
+        waited_seconds=$(( $(date +%s) - wait_start_epoch ))
+        service_status="$(systemctl --user is-active "$SNAPSHOT_SERVICE_NAME" 2>/dev/null || true)"
+        case "$service_status" in
+          active|activating|reloading|deactivating)
+            ;;
+          *)
+            break
+            ;;
+        esac
+      done
+      case "$service_status" in
+        active|activating|reloading|deactivating)
+          ;;
+        *)
+          echo "snapshot service ${SNAPSHOT_SERVICE_NAME} cleared after ${waited_seconds}s status=${service_status}; continuing micro capture"
+          ;;
+      esac
+      case "$service_status" in
+        active|activating|reloading|deactivating)
+      "$PY" - "$RUN_DIR" "$SNAPSHOT_SERVICE_NAME" "$service_status" "$waited_seconds" "$SNAPSHOT_SERVICE_WAIT_SECONDS" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -52,6 +78,8 @@ from pathlib import Path
 run_dir = Path(sys.argv[1])
 service_name = sys.argv[2]
 service_status = sys.argv[3]
+waited_seconds = int(float(sys.argv[4]))
+wait_limit_seconds = int(float(sys.argv[5]))
 run_dir.mkdir(parents=True, exist_ok=True)
 result = {
     "command": "micro_paper_cycle",
@@ -63,6 +91,8 @@ result = {
     "snapshot_service_name": service_name,
     "snapshot_service_running": True,
     "snapshot_service_status": service_status,
+    "snapshot_service_waited_seconds": waited_seconds,
+    "snapshot_service_wait_limit_seconds": wait_limit_seconds,
     "verdict": "MICRO_SNAPSHOT_SKIP_CYCLE",
 }
 (run_dir / "fresh_cycle.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -85,6 +115,8 @@ PY
         --run-dir "$RUN_DIR" \
         --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true
       exit 0
+      ;;
+      esac
       ;;
   esac
 fi
