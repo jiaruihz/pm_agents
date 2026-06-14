@@ -1,15 +1,15 @@
 import argparse
 
-from scripts.analysis.market_structure_edge.research_all_yes_underround_live_prep_v0 import group_baskets
+from scripts.analysis.market_structure_edge.research_all_yes_underround_live_prep_v0 import group_baskets, underround_threshold_telemetry
 
 
-def _row(idx: int, *, bracket=None, condition_id=None):
-    price = [0.10, 0.15, 0.20, 0.22, 0.28][idx]
+def _row(idx: int, *, bracket=None, condition_id=None, city="Seattle", prices=None):
+    price = (prices or [0.10, 0.15, 0.20, 0.22, 0.28])[idx]
     return {
         "outcome": "yes",
         "event_date": "2026-06-14",
-        "city": "Seattle",
-        "event_slug": "highest-temperature-in-seattle-on-june-14-2026",
+        "city": city,
+        "event_slug": f"highest-temperature-in-{city.lower()}-on-june-14-2026",
         "condition_id": condition_id or f"condition-{idx}",
         "bracket": bracket if bracket is not None else str(20 + idx),
         "snapshot_ts_utc": "2026-06-13T18:00:00Z",
@@ -52,3 +52,17 @@ def test_scanner_rejects_duplicate_condition_id_as_non_shadow_candidate():
     assert len(baskets) == 1
     assert baskets[0]["paper_shadow_candidate"] is False
     assert "duplicate_condition_id" in baskets[0]["blockers"]
+
+
+def test_underround_threshold_telemetry_counts_valid_lower_threshold_near_misses():
+    strict_prices = [0.10, 0.15, 0.20, 0.22, 0.28]
+    near_miss_prices = [0.10, 0.15, 0.20, 0.22, 0.315]
+    rows = [_row(idx, city="Strict", prices=strict_prices) for idx in range(5)]
+    rows.extend(_row(idx, city="NearMiss", prices=near_miss_prices) for idx in range(5))
+
+    baskets = group_baskets(rows, _args())
+    telemetry = underround_threshold_telemetry(baskets, [0.005, 0.01, 0.02])
+
+    counts = {row["threshold"]: row["candidate_count"] for row in telemetry}
+    assert counts == {0.005: 2, 0.01: 2, 0.02: 1}
+    assert telemetry[0]["top_candidates"][0]["city"] == "Strict"

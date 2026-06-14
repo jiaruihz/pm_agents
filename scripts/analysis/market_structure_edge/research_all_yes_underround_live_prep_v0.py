@@ -47,6 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-shares", type=float, default=5.0)
     parser.add_argument("--max-spread", type=float, default=0.05)
     parser.add_argument("--top-n", type=int, default=20)
+    parser.add_argument("--telemetry-underround-thresholds", default="0.005,0.01,0.02")
     return parser.parse_args()
 
 
@@ -269,6 +270,46 @@ def fmt_pct(value: float | None) -> str:
     return f"{value * 100:+.1f}%"
 
 
+def parse_thresholds(value: str) -> list[float]:
+    thresholds: list[float] = []
+    for item in value.split(","):
+        text = item.strip()
+        if not text:
+            continue
+        thresholds.append(float(text))
+    return sorted(set(thresholds))
+
+
+def underround_threshold_telemetry(baskets: list[dict[str, Any]], thresholds: list[float]) -> list[dict[str, Any]]:
+    telemetry: list[dict[str, Any]] = []
+    for threshold in thresholds:
+        eligible_rows = []
+        for row in baskets:
+            blockers = [item for item in row.get("blockers", []) if item != "underround_below_threshold"]
+            underround = row.get("underround")
+            if blockers or underround is None or float(underround) < threshold:
+                continue
+            eligible_rows.append(row)
+        telemetry.append(
+            {
+                "threshold": threshold,
+                "candidate_count": len(eligible_rows),
+                "top_candidates": [
+                    {
+                        "event_date": row.get("event_date"),
+                        "city": row.get("city"),
+                        "underround": row.get("underround"),
+                        "total_yes_ask_cost": row.get("total_yes_ask_cost"),
+                        "min_ask_size": row.get("min_ask_size"),
+                        "max_yes_spread": row.get("max_yes_spread"),
+                    }
+                    for row in eligible_rows[:5]
+                ],
+            }
+        )
+    return telemetry
+
+
 def candidate_line(row: dict[str, Any]) -> str:
     blockers = ",".join(row["blockers"]) if row["blockers"] else ""
     return (
@@ -297,6 +338,7 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
     )
     paper_eval = paper_gate.get("eval") or {}
     fresh_cycle = report["fresh_cycle"]
+    telemetry = report["underround_threshold_telemetry"]
     lines = [
         "# All-YES Underround Live-Prep v0",
         "",
@@ -329,6 +371,7 @@ def write_md(path: Path, report: dict[str, Any]) -> None:
         "",
         f"- Candidate threshold: underround >= `{args['min_underround']}`, legs >= `{args['min_leg_count']}`, min top-of-book shares >= `{args['min_shares']}`, max YES spread <= `{args['max_spread']}`.",
         f"- Current paper/shadow candidates: `{len(candidates)}`.",
+        f"- Same-family threshold telemetry: `{telemetry}`.",
         f"- Station-basis comparison gate: `{station.get('verdict')}` with settled `{station.get('settled')}` / pending `{station.get('pending')}`.",
         f"- All-YES paper execution gate: `{paper_gate.get('verdict')}` with baskets `{paper_eval.get('baskets')}` / settled `{paper_eval.get('settled_exactly_one_winner')}`.",
         f"- Live-equivalent paper baskets: `{paper_eval.get('ttl_equivalent_baskets')}`; stale/observation-only baskets `{paper_eval.get('ttl_non_equivalent_baskets')}`; max record age `{paper_eval.get('ttl_recording_age_seconds_max')}` seconds.",
@@ -390,6 +433,7 @@ def main() -> None:
     rows = read_snapshot(snapshot_path)
     baskets = group_baskets(rows, args)
     paper_candidates = [row for row in baskets if row["paper_shadow_candidate"]]
+    thresholds = parse_thresholds(args.telemetry_underround_thresholds)
     conn = connect_db(Path(args.db_path))
     gate = read_json(Path(args.gate_path))
     station_gate = read_json(Path(args.station_basis_gate_path))
@@ -408,6 +452,7 @@ def main() -> None:
             "min_shares": args.min_shares,
             "max_spread": args.max_spread,
             "top_n": args.top_n,
+            "telemetry_underround_thresholds": thresholds,
         },
         "snapshot_summary": snapshot_summary(rows),
         "data_self_check": data_self_check(conn),
@@ -455,6 +500,7 @@ def main() -> None:
         },
         "event_count": len(baskets),
         "paper_shadow_candidate_count": len(paper_candidates),
+        "underround_threshold_telemetry": underround_threshold_telemetry(baskets, thresholds),
         "paper_shadow_candidates": paper_candidates,
         "top_baskets": baskets[: args.top_n],
         "verdict": "PAPER_SHADOW_ENGINEERING_CANDIDATE" if paper_candidates else "NO_CURRENT_EXECUTABLE_BASKET",

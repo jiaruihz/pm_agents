@@ -1083,6 +1083,8 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     gate_result = gate(args)
     last_cycle = read_json(run_dir / "last_cycle.json")
+    latest_scan_path = Path(last_cycle.get("source_scan") or run_dir / "latest_scan.json")
+    latest_scan = read_json(latest_scan_path)
     fresh_cycle = read_json(run_dir / "fresh_cycle.json")
     live_plan = read_json(run_dir / "latest_live_plan.json")
     executor_state = read_json(run_dir / "latest_executor_readiness.json")
@@ -1106,7 +1108,8 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         "strategy_id": STRATEGY_ID,
         "verdict": gate_result.get("verdict"),
         "live_now": False,
-        "latest_scan_path": last_cycle.get("source_scan"),
+        "latest_scan_path": str(latest_scan_path),
+        "latest_underround_threshold_telemetry": latest_scan.get("underround_threshold_telemetry"),
         "latest_fresh_cycle": {
             "generated_at_utc": fresh_cycle.get("generated_at_utc"),
             "verdict": fresh_cycle.get("verdict"),
