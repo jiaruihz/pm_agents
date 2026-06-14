@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,11 +34,15 @@ REQUIRED_ORDER_TYPE = "FOK"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["check"])
+    parser.add_argument("command", choices=["check", "execute"])
     parser.add_argument("--plan-json", default=str(PLAN_JSON_DEFAULT))
     parser.add_argument("--executor-jsonl", default=str(EXECUTOR_JSONL_DEFAULT))
     parser.add_argument("--run-dir", default=str(RUN_DIR_DEFAULT))
     parser.add_argument("--mock-fill-json", default="")
+    parser.add_argument("--out-jsonl", default="")
+    parser.add_argument("--live", action="store_true")
+    parser.add_argument("--confirm-live", action="store_true")
+    parser.add_argument("--arm", action="store_true")
     return parser.parse_args()
 
 
@@ -69,6 +74,13 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 def append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, sort_keys=True) + "\n")
+
+
+def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
         for row in rows:
             fh.write(json.dumps(row, sort_keys=True) + "\n")
 
@@ -342,9 +354,240 @@ def build_state(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+def extract_order_id(payload: Any) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("order_id", "orderID", "id"):
+        value = payload.get(key)
+        if value:
+            return str(value)
+    data = payload.get("data")
+    if isinstance(data, dict):
+        for key in ("order_id", "orderID", "id"):
+            value = data.get(key)
+            if value:
+                return str(value)
+    return ""
+
+
+def live_flags_valid(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "live", False) and getattr(args, "confirm_live", False) and getattr(args, "arm", False))
+
+
+def build_live_fok_place_fn():
+    try:
+        from py_clob_client_v2.client import ClobClient
+        from py_clob_client_v2.clob_types import ApiCreds, OrderArgsV2, OrderType
+        from py_clob_client_v2.constants import POLYGON
+
+        clob_v2 = True
+    except ModuleNotFoundError:
+        from py_clob_client.client import ClobClient
+        from py_clob_client.clob_types import ApiCreds, OrderArgs, OrderType
+        from py_clob_client.constants import POLYGON
+
+        OrderArgsV2 = OrderArgs  # type: ignore[assignment]
+        clob_v2 = False
+
+    host = os.getenv("CLOB_BASE_URL", "").strip() or os.getenv("PM_API_BASE_URL", "").strip() or "https://clob.polymarket.com"
+    chain_id = int(os.getenv("CLOB_CHAIN_ID", str(POLYGON)))
+    private_key = os.getenv("POLYGON_WALLET_PRIVATE_KEY", "").strip() or os.getenv("PM", "").strip()
+    if not private_key:
+        raise RuntimeError("missing POLYGON_WALLET_PRIVATE_KEY or PM")
+
+    signature_type_raw = int(os.getenv("CLOB_SIGNATURE_TYPE", "-1"))
+    funder = os.getenv("PM_ADDRESS", "").strip()
+    try:
+        signer_addr = ClobClient(host, chain_id=chain_id, key=private_key).get_address()
+    except Exception:
+        signer_addr = ""
+    signature_type = signature_type_raw
+    if signature_type < 0:
+        signature_type = 1 if funder and signer_addr and funder.lower() != signer_addr.lower() else 0
+
+    api_key = os.getenv("CLOB_API_KEY", "").strip()
+    api_secret = os.getenv("CLOB_SECRET", "").strip()
+    api_pass = os.getenv("CLOB_PASS_PHRASE", "").strip()
+    creds = ApiCreds(api_key=api_key, api_secret=api_secret, api_passphrase=api_pass) if api_key and api_secret and api_pass else None
+    client = ClobClient(
+        host,
+        chain_id=chain_id,
+        key=private_key,
+        creds=creds,
+        signature_type=signature_type,
+        funder=funder or None,
+    )
+    if creds is None:
+        if clob_v2:
+            client.set_api_creds(client.derive_api_key())
+        else:
+            client.set_api_creds(client.create_or_derive_api_creds())
+
+    def place(row: dict[str, Any]) -> dict[str, Any]:
+        signed_order = client.create_order(
+            OrderArgsV2(
+                token_id=str(row["token_id"]),
+                price=float(row["limit_price"]),
+                size=float(row["size"]),
+                side=str(row.get("order_side") or "BUY"),
+            )
+        )
+        if clob_v2:
+            response = client.post_order(signed_order, order_type=OrderType.FOK)
+        else:
+            response = client.post_order(signed_order, orderType=OrderType.FOK)
+        return {
+            "place": response,
+            "clob_client": "py_clob_client_v2" if clob_v2 else "py_clob_client",
+            "order_type": REQUIRED_ORDER_TYPE,
+            "order_id": extract_order_id(response),
+        }
+
+    return place
+
+
+def execute_baskets(
+    *,
+    args: argparse.Namespace,
+    live_place_fn: Any | None = None,
+) -> dict[str, Any]:
+    run_dir = Path(args.run_dir)
+    out_path = Path(args.out_jsonl) if args.out_jsonl else run_dir / "fok_executor_orders.jsonl"
+    plan_path = Path(args.plan_json)
+    executor_path = Path(args.executor_jsonl)
+    live_plan = read_json(plan_path)
+    executor_rows = read_jsonl(executor_path)
+    executor_by_basket = rows_by_basket(executor_rows)
+    readiness_args = argparse.Namespace(
+        command="check",
+        plan_json=str(plan_path),
+        executor_jsonl=str(executor_path),
+        run_dir=str(run_dir),
+        mock_fill_json=getattr(args, "mock_fill_json", ""),
+    )
+    readiness = build_state(readiness_args)
+    rows: list[dict[str, Any]] = []
+    blockers: list[dict[str, Any]] = []
+    live_requested = bool(getattr(args, "live", False))
+    live_enabled = live_flags_valid(args)
+
+    if live_requested and not live_enabled:
+        blockers.append(
+            {
+                "code": "live_flags_missing",
+                "message": "Live FOK execution requires --live --confirm-live --arm together.",
+            }
+        )
+    if readiness.get("verdict") != "DRY_RUN_FOK_EXECUTOR_READY":
+        blockers.append(
+            {
+                "code": "fok_readiness_not_ready",
+                "verdict": readiness.get("verdict"),
+                "blockers": readiness.get("blockers"),
+            }
+        )
+
+    if live_enabled and live_place_fn is None:
+        live_place_fn = build_live_fok_place_fn()
+
+    for basket_plan in list(live_plan.get("plans") or []):
+        basket_id = str(basket_plan.get("plan_id") or "")
+        leg_rows = executor_by_basket.get(basket_id, [])
+        filled: list[int] = []
+        failed: list[int] = []
+        basket_records: list[dict[str, Any]] = []
+        for row in leg_rows:
+            leg_index_text = str(row.get("child_order_role") or "").replace("all_yes_leg_", "")
+            try:
+                leg_index = int(leg_index_text)
+            except Exception:
+                leg_index = -1
+            record = {
+                "record_type": "all_yes_fok_executor_order",
+                "generated_at_utc": now_utc(),
+                "strategy_id": STRATEGY_ID,
+                "source_basket_plan_id": basket_id,
+                "city": basket_plan.get("city"),
+                "event_date": basket_plan.get("event_date"),
+                "leg_index": leg_index,
+                "token_id": row.get("token_id"),
+                "bracket": row.get("bracket"),
+                "limit_price": row.get("limit_price"),
+                "size": row.get("size"),
+                "order_type": REQUIRED_ORDER_TYPE,
+                "live_requested": live_requested,
+                "live_enabled": live_enabled,
+                "no_order_placed": not live_enabled,
+            }
+            if blockers:
+                record.update({"status": "blocked", "blockers": blockers})
+            elif not live_enabled:
+                record.update({"status": "dry_run_would_submit_fok"})
+            else:
+                try:
+                    assert live_place_fn is not None
+                    response = live_place_fn(row)
+                    order_id = extract_order_id(response.get("place")) or str(response.get("order_id") or "")
+                    filled.append(leg_index)
+                    record.update(
+                        {
+                            "status": "submitted_fok",
+                            "no_order_placed": False,
+                            "order_id": order_id,
+                            "exchange_response": response,
+                        }
+                    )
+                except Exception as exc:
+                    failed.append(leg_index)
+                    record.update(
+                        {
+                            "status": "error_fail_closed",
+                            "error": f"{type(exc).__name__}: {exc}",
+                            "requires_unwind_filled_leg_indexes": sorted(filled),
+                        }
+                    )
+            basket_records.append(record)
+        if live_enabled and failed:
+            for record in basket_records:
+                record["basket_status"] = "fail_closed_unwind_required"
+                record["requires_unwind_filled_leg_indexes"] = sorted(filled)
+        elif live_enabled and basket_records:
+            for record in basket_records:
+                record["basket_status"] = "all_legs_submitted_fok"
+        rows.extend(basket_records)
+
+    write_jsonl(out_path, rows)
+    result = {
+        "command": "execute",
+        "generated_at_utc": now_utc(),
+        "strategy_id": STRATEGY_ID,
+        "live_requested": live_requested,
+        "live_enabled": live_enabled,
+        "no_order_placed": not live_enabled,
+        "order_type": REQUIRED_ORDER_TYPE,
+        "plan_path": str(plan_path),
+        "executor_jsonl": str(executor_path),
+        "out_jsonl": str(out_path),
+        "baskets": len(list(live_plan.get("plans") or [])),
+        "orders_written": len(rows),
+        "blockers": blockers,
+        "readiness_verdict": readiness.get("verdict"),
+        "verdict": "LIVE_FOK_EXECUTION_ATTEMPTED" if live_enabled and not blockers else "DRY_RUN_FOK_EXECUTOR_EXECUTED",
+    }
+    (run_dir / "latest_fok_executor_execute.json").write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    append_jsonl(run_dir / "fok_executor_execute_history.jsonl", [result])
+    return result
+
+
 def main() -> None:
     args = parse_args()
-    result = build_state(args)
+    if args.command == "execute":
+        result = execute_baskets(args=args)
+    else:
+        result = build_state(args)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
