@@ -31,6 +31,55 @@ WIDTH = 3
 EDGE_THRESHOLD = 0.02
 MIN_TOP_ASK_SIZE = 5.0
 
+FALLBACK_DEFAULT_WU_CITIES = {
+    "Amsterdam",
+    "Ankara",
+    "Atlanta",
+    "Austin",
+    "Beijing",
+    "BuenosAires",
+    "Busan",
+    "CapeTown",
+    "Chengdu",
+    "Chongqing",
+    "Dallas",
+    "Denver",
+    "Guangzhou",
+    "Helsinki",
+    "Houston",
+    "Jeddah",
+    "Karachi",
+    "LA",
+    "Lucknow",
+    "Madrid",
+    "Manila",
+    "Miami",
+    "Munich",
+    "NYC",
+    "SanFrancisco",
+    "SaoPaulo",
+    "Seattle",
+    "Shanghai",
+    "Singapore",
+    "Taipei",
+    "Tokyo",
+    "Warsaw",
+    "Wellington",
+    "Wuhan",
+}
+FALLBACK_SOURCE_SENSITIVE_CITIES = {
+    "Chicago",
+    "HongKong",
+    "Jakarta",
+    "KualaLumpur",
+    "London",
+    "Milan",
+    "PanamaCity",
+    "Paris",
+}
+FALLBACK_BLOCKED_CITIES = {"Moscow", "Seoul", "Shenzhen"}
+FALLBACK_DEFAULT_WATCHLIST_CITIES = {"MexicoCity"}
+
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -87,7 +136,10 @@ def source_bucket(settlement_source_class: str) -> str:
 
 
 def load_source_registry() -> dict[str, dict[str, Any]]:
-    registry = source_registry.build_registry()
+    try:
+        registry = source_registry.build_registry()
+    except FileNotFoundError:
+        return fallback_source_registry()
     required = {"city", "settlement_source_class", "official_station_or_feed", "mapping_rule"}
     missing = required.difference(registry.columns)
     if missing:
@@ -101,6 +153,39 @@ def load_source_registry() -> dict[str, dict[str, Any]]:
             "source_bucket": source_bucket(cls),
             "official_station_or_feed": row.get("official_station_or_feed"),
             "mapping_rule": row.get("mapping_rule"),
+        }
+    return out
+
+
+def fallback_source_registry() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for city in FALLBACK_DEFAULT_WU_CITIES:
+        out[city] = {
+            "settlement_source_class": "default_wu_station_by_rules",
+            "source_bucket": "default_wu",
+            "official_station_or_feed": None,
+            "mapping_rule": "whole-degree WU station max",
+        }
+    for city in FALLBACK_SOURCE_SENSITIVE_CITIES:
+        out[city] = {
+            "settlement_source_class": "source_sensitive_confirmed_fallback",
+            "source_bucket": "source_sensitive_confirmed",
+            "official_station_or_feed": None,
+            "mapping_rule": "runtime fallback; excluded from generic Range RV shadow",
+        }
+    for city in FALLBACK_BLOCKED_CITIES:
+        out[city] = {
+            "settlement_source_class": "blocked_unresolved_settlement_basis",
+            "source_bucket": "blocked_unresolved",
+            "official_station_or_feed": None,
+            "mapping_rule": "runtime fallback; excluded from generic Range RV shadow",
+        }
+    for city in FALLBACK_DEFAULT_WATCHLIST_CITIES:
+        out[city] = {
+            "settlement_source_class": "default_source_watchlist",
+            "source_bucket": "default_watchlist",
+            "official_station_or_feed": None,
+            "mapping_rule": "runtime fallback; excluded from generic Range RV shadow",
         }
     return out
 
