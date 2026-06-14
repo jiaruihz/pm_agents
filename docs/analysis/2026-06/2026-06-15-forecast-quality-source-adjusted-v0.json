@@ -1,0 +1,3687 @@
+{
+  "generated_at_utc": "2026-06-14T16:34:28.657440+00:00",
+  "target_metric": "forecast_quality_source_adjusted_reliability_v0",
+  "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+  "db_last_modified_utc": "2026-06-14T16:08:24.970078+00:00",
+  "self_check": {
+    "max_fact_built_at_utc": "2026-06-14T16:08:13.367378+00:00",
+    "trade_class_distribution": [
+      {
+        "trade_class": "live_real",
+        "rows": 855
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 624
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "settlement_status": "",
+        "rows": 150
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 4250
+      }
+    ],
+    "candidate_coverage": {
+      "rows": 29313,
+      "eligible": 10031,
+      "paper_ordered": 3824,
+      "live_filled": 348
+    },
+    "order_fill_coverage": [
+      {
+        "status": "error",
+        "orders": 33,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 961,
+        "with_fill": 855
+      }
+    ]
+  },
+  "split": {
+    "method": "event_date chronological 70/30 split",
+    "train_start": "2026-05-06",
+    "train_end": "2026-05-28",
+    "holdout_start": "2026-05-29",
+    "holdout_end": "2026-06-10",
+    "train_dates": 21,
+    "holdout_dates": 10
+  },
+  "thresholds": {
+    "entropy_q25": 0.6742758225006347,
+    "entropy_q50": 0.7955240765636074,
+    "entropy_q75": 0.8664904992612193,
+    "mode_prob_q25": 0.43882277571459,
+    "mode_prob_q75": 0.5772332970091156,
+    "adj3_q25": 0.9999999999999999,
+    "adj3_q50": 1.0,
+    "adj3_q75": 1.0,
+    "tail_q25": 0.0,
+    "tail_q50": 0.0,
+    "tail_q75": 0.0,
+    "l1_q75": 1.0982259817712179,
+    "market_tail_q75": 0.0,
+    "variance_q75": 1.1136007052615688,
+    "hist_adj3_q33": 1.0,
+    "hist_adj3_q67": 1.0,
+    "hist_distance_q67": 1.0,
+    "cross_model_distance_q75": 2.0
+  },
+  "funnel": {
+    "fact_signal_candidates_loaded": 16600,
+    "settled_candidate_rows_loaded": 2268,
+    "decision_sets": 262,
+    "source_matched_decision_sets": 262,
+    "strategy_rows": 776,
+    "strategy_algorithms": 3
+  },
+  "registry_class_summary": [
+    {
+      "settlement_source_class": "default_wu_station_by_rules",
+      "cities": 34,
+      "candidate_rows": 21290,
+      "settled_candidate_rows": 2694,
+      "settled_dates": 617
+    },
+    {
+      "settlement_source_class": "official_station_diff_confirmed",
+      "cities": 7,
+      "candidate_rows": 3816,
+      "settled_candidate_rows": 491,
+      "settled_dates": 106
+    },
+    {
+      "settlement_source_class": "no_recent_market_or_unknown_rules",
+      "cities": 4,
+      "candidate_rows": 85,
+      "settled_candidate_rows": 19,
+      "settled_dates": 3
+    },
+    {
+      "settlement_source_class": "blocked_unresolved_settlement_basis",
+      "cities": 3,
+      "candidate_rows": 1884,
+      "settled_candidate_rows": 245,
+      "settled_dates": 52
+    },
+    {
+      "settlement_source_class": "non_wu_source_by_rules",
+      "cities": 2,
+      "candidate_rows": 1119,
+      "settled_candidate_rows": 152,
+      "settled_dates": 37
+    },
+    {
+      "settlement_source_class": "default_source_watchlist",
+      "cities": 1,
+      "candidate_rows": 626,
+      "settled_candidate_rows": 8,
+      "settled_dates": 3
+    },
+    {
+      "settlement_source_class": "special_source_confirmed",
+      "cities": 1,
+      "candidate_rows": 493,
+      "settled_candidate_rows": 53,
+      "settled_dates": 13
+    }
+  ],
+  "population_comparison": [
+    {
+      "population": "all_decision_sets",
+      "all": {
+        "rows": 262,
+        "event_dates": 31,
+        "cities": 48,
+        "model_mode_hit": 0.3244274809160305,
+        "adjacent3_hit": 0.9351145038167938,
+        "tail_miss": 0.0648854961832061,
+        "mean_mode_final_distance": 0.9885496183206107,
+        "adjacent3_bootstrap": {
+          "mean": 0.9666832583031741,
+          "ci95": [
+            0.9499230205278592,
+            0.9823084278974882
+          ],
+          "dates": 31
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.03331674169682585,
+          "ci95": [
+            0.017691572102511793,
+            0.05007697947214075
+          ],
+          "dates": 31
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.27099236641221375,
+          "forecast_quality_low": 0.7290076335877863,
+          "city_model_reliable": 0.30916030534351147,
+          "city_model_unreliable": 0.17557251908396945,
+          "model_market_disagreement_high": 0.2900763358778626,
+          "tail_risk_high": 0.3473282442748092
+        }
+      },
+      "train": {
+        "rows": 198,
+        "event_dates": 21,
+        "cities": 47,
+        "model_mode_hit": 0.31313131313131315,
+        "adjacent3_hit": 0.9292929292929293,
+        "tail_miss": 0.0707070707070707,
+        "mean_mode_final_distance": 0.9949494949494949,
+        "adjacent3_bootstrap": {
+          "mean": 0.9566456490369534,
+          "ci95": [
+            0.932917058786624,
+            0.979004329004329
+          ],
+          "dates": 21
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.043354350963046615,
+          "ci95": [
+            0.020995670995670995,
+            0.06708294121337595
+          ],
+          "dates": 21
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.29292929292929293,
+          "forecast_quality_low": 0.7070707070707071,
+          "city_model_reliable": 0.26262626262626265,
+          "city_model_unreliable": 0.13131313131313133,
+          "model_market_disagreement_high": 0.29292929292929293,
+          "tail_risk_high": 0.36363636363636365
+        }
+      },
+      "holdout": {
+        "rows": 64,
+        "event_dates": 10,
+        "cities": 35,
+        "model_mode_hit": 0.359375,
+        "adjacent3_hit": 0.953125,
+        "tail_miss": 0.046875,
+        "mean_mode_final_distance": 0.96875,
+        "adjacent3_bootstrap": {
+          "mean": 0.9877622377622377,
+          "ci95": [
+            0.970979020979021,
+            1.0
+          ],
+          "dates": 10
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.012237762237762238,
+          "ci95": [
+            0.0,
+            0.02902097902097902
+          ],
+          "dates": 10
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.203125,
+          "forecast_quality_low": 0.796875,
+          "city_model_reliable": 0.453125,
+          "city_model_unreliable": 0.3125,
+          "model_market_disagreement_high": 0.28125,
+          "tail_risk_high": 0.296875
+        }
+      }
+    },
+    {
+      "population": "default_wu_only",
+      "all": {
+        "rows": 188,
+        "event_dates": 30,
+        "cities": 34,
+        "model_mode_hit": 0.32978723404255317,
+        "adjacent3_hit": 0.9361702127659575,
+        "tail_miss": 0.06382978723404255,
+        "mean_mode_final_distance": 0.9680851063829787,
+        "adjacent3_bootstrap": {
+          "mean": 0.9646171802054155,
+          "ci95": [
+            0.9425892273576099,
+            0.9840617997198879
+          ],
+          "dates": 30
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0353828197945845,
+          "ci95": [
+            0.01593820028011204,
+            0.057410772642390265
+          ],
+          "dates": 30
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.28191489361702127,
+          "forecast_quality_low": 0.7180851063829787,
+          "city_model_reliable": 0.3191489361702128,
+          "city_model_unreliable": 0.1702127659574468,
+          "model_market_disagreement_high": 0.2712765957446808,
+          "tail_risk_high": 0.35106382978723405
+        }
+      },
+      "train": {
+        "rows": 142,
+        "event_dates": 20,
+        "cities": 33,
+        "model_mode_hit": 0.323943661971831,
+        "adjacent3_hit": 0.9295774647887324,
+        "tail_miss": 0.07042253521126761,
+        "mean_mode_final_distance": 0.971830985915493,
+        "adjacent3_bootstrap": {
+          "mean": 0.9519257703081234,
+          "ci95": [
+            0.9215668767507003,
+            0.9799133403361343
+          ],
+          "dates": 20
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.04807422969187675,
+          "ci95": [
+            0.02008665966386555,
+            0.07843312324929971
+          ],
+          "dates": 20
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.29577464788732394,
+          "forecast_quality_low": 0.704225352112676,
+          "city_model_reliable": 0.2746478873239437,
+          "city_model_unreliable": 0.1267605633802817,
+          "model_market_disagreement_high": 0.28169014084507044,
+          "tail_risk_high": 0.3732394366197183
+        }
+      },
+      "holdout": {
+        "rows": 46,
+        "event_dates": 10,
+        "cities": 25,
+        "model_mode_hit": 0.34782608695652173,
+        "adjacent3_hit": 0.9565217391304348,
+        "tail_miss": 0.043478260869565216,
+        "mean_mode_final_distance": 0.9565217391304348,
+        "adjacent3_bootstrap": {
+          "mean": 0.99,
+          "ci95": [
+            0.97,
+            1.0
+          ],
+          "dates": 10
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.01,
+          "ci95": [
+            0.0,
+            0.030000000000000006
+          ],
+          "dates": 10
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2391304347826087,
+          "forecast_quality_low": 0.7608695652173914,
+          "city_model_reliable": 0.45652173913043476,
+          "city_model_unreliable": 0.30434782608695654,
+          "model_market_disagreement_high": 0.2391304347826087,
+          "tail_risk_high": 0.2826086956521739
+        }
+      }
+    },
+    {
+      "population": "default_wu_plus_watchlist",
+      "all": {
+        "rows": 188,
+        "event_dates": 30,
+        "cities": 34,
+        "model_mode_hit": 0.32978723404255317,
+        "adjacent3_hit": 0.9361702127659575,
+        "tail_miss": 0.06382978723404255,
+        "mean_mode_final_distance": 0.9680851063829787,
+        "adjacent3_bootstrap": {
+          "mean": 0.9646171802054155,
+          "ci95": [
+            0.9425892273576099,
+            0.9840617997198879
+          ],
+          "dates": 30
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0353828197945845,
+          "ci95": [
+            0.01593820028011204,
+            0.057410772642390265
+          ],
+          "dates": 30
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.28191489361702127,
+          "forecast_quality_low": 0.7180851063829787,
+          "city_model_reliable": 0.3191489361702128,
+          "city_model_unreliable": 0.1702127659574468,
+          "model_market_disagreement_high": 0.2712765957446808,
+          "tail_risk_high": 0.35106382978723405
+        }
+      },
+      "train": {
+        "rows": 142,
+        "event_dates": 20,
+        "cities": 33,
+        "model_mode_hit": 0.323943661971831,
+        "adjacent3_hit": 0.9295774647887324,
+        "tail_miss": 0.07042253521126761,
+        "mean_mode_final_distance": 0.971830985915493,
+        "adjacent3_bootstrap": {
+          "mean": 0.9519257703081234,
+          "ci95": [
+            0.9215668767507003,
+            0.9799133403361343
+          ],
+          "dates": 20
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.04807422969187675,
+          "ci95": [
+            0.02008665966386555,
+            0.07843312324929971
+          ],
+          "dates": 20
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.29577464788732394,
+          "forecast_quality_low": 0.704225352112676,
+          "city_model_reliable": 0.2746478873239437,
+          "city_model_unreliable": 0.1267605633802817,
+          "model_market_disagreement_high": 0.28169014084507044,
+          "tail_risk_high": 0.3732394366197183
+        }
+      },
+      "holdout": {
+        "rows": 46,
+        "event_dates": 10,
+        "cities": 25,
+        "model_mode_hit": 0.34782608695652173,
+        "adjacent3_hit": 0.9565217391304348,
+        "tail_miss": 0.043478260869565216,
+        "mean_mode_final_distance": 0.9565217391304348,
+        "adjacent3_bootstrap": {
+          "mean": 0.99,
+          "ci95": [
+            0.97,
+            1.0
+          ],
+          "dates": 10
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.01,
+          "ci95": [
+            0.0,
+            0.030000000000000006
+          ],
+          "dates": 10
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2391304347826087,
+          "forecast_quality_low": 0.7608695652173914,
+          "city_model_reliable": 0.45652173913043476,
+          "city_model_unreliable": 0.30434782608695654,
+          "model_market_disagreement_high": 0.2391304347826087,
+          "tail_risk_high": 0.2826086956521739
+        }
+      }
+    },
+    {
+      "population": "source_sensitive_confirmed",
+      "all": {
+        "rows": 45,
+        "event_dates": 20,
+        "cities": 8,
+        "model_mode_hit": 0.35555555555555557,
+        "adjacent3_hit": 0.9111111111111111,
+        "tail_miss": 0.08888888888888889,
+        "mean_mode_final_distance": 1.1333333333333333,
+        "adjacent3_bootstrap": {
+          "mean": 0.9333333333333332,
+          "ci95": [
+            0.85,
+            1.0
+          ],
+          "dates": 20
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.06666666666666667,
+          "ci95": [
+            0.0,
+            0.15
+          ],
+          "dates": 20
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2222222222222222,
+          "forecast_quality_low": 0.7777777777777778,
+          "city_model_reliable": 0.2222222222222222,
+          "city_model_unreliable": 0.28888888888888886,
+          "model_market_disagreement_high": 0.3333333333333333,
+          "tail_risk_high": 0.26666666666666666
+        }
+      },
+      "train": {
+        "rows": 34,
+        "event_dates": 15,
+        "cities": 8,
+        "model_mode_hit": 0.3235294117647059,
+        "adjacent3_hit": 0.9117647058823529,
+        "tail_miss": 0.08823529411764706,
+        "mean_mode_final_distance": 1.1764705882352942,
+        "adjacent3_bootstrap": {
+          "mean": 0.9333333333333333,
+          "ci95": [
+            0.8222222222222223,
+            1.0
+          ],
+          "dates": 15
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.06666666666666667,
+          "ci95": [
+            0.0,
+            0.17777777777777776
+          ],
+          "dates": 15
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.29411764705882354,
+          "forecast_quality_low": 0.7058823529411765,
+          "city_model_reliable": 0.20588235294117646,
+          "city_model_unreliable": 0.23529411764705882,
+          "model_market_disagreement_high": 0.3235294117647059,
+          "tail_risk_high": 0.23529411764705882
+        }
+      },
+      "holdout": {
+        "rows": 11,
+        "event_dates": 5,
+        "cities": 6,
+        "model_mode_hit": 0.45454545454545453,
+        "adjacent3_hit": 0.9090909090909091,
+        "tail_miss": 0.09090909090909091,
+        "mean_mode_final_distance": 1.0,
+        "adjacent3_bootstrap": {
+          "mean": 0.9333333333333332,
+          "ci95": [
+            0.7999999999999999,
+            1.0
+          ],
+          "dates": 5
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.06666666666666667,
+          "ci95": [
+            0.0,
+            0.2
+          ],
+          "dates": 5
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.0,
+          "forecast_quality_low": 1.0,
+          "city_model_reliable": 0.2727272727272727,
+          "city_model_unreliable": 0.45454545454545453,
+          "model_market_disagreement_high": 0.36363636363636365,
+          "tail_risk_high": 0.36363636363636365
+        }
+      }
+    },
+    {
+      "population": "blocked_unresolved",
+      "all": {
+        "rows": 19,
+        "event_dates": 14,
+        "cities": 3,
+        "model_mode_hit": 0.21052631578947367,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.8947368421052632,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 14
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 14
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2631578947368421,
+          "forecast_quality_low": 0.7368421052631579,
+          "city_model_reliable": 0.5263157894736842,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.42105263157894735,
+          "tail_risk_high": 0.5263157894736842
+        }
+      },
+      "train": {
+        "rows": 14,
+        "event_dates": 11,
+        "cities": 3,
+        "model_mode_hit": 0.21428571428571427,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.7857142857142857,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 11
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 11
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.21428571428571427,
+          "forecast_quality_low": 0.7857142857142857,
+          "city_model_reliable": 0.42857142857142855,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.42857142857142855,
+          "tail_risk_high": 0.5714285714285714
+        }
+      },
+      "holdout": {
+        "rows": 5,
+        "event_dates": 3,
+        "cities": 2,
+        "model_mode_hit": 0.2,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 1.2,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 3
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 3
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.4,
+          "forecast_quality_low": 0.6,
+          "city_model_reliable": 0.8,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.4,
+          "tail_risk_high": 0.4
+        }
+      }
+    }
+  ],
+  "source_bucket_quality": [
+    {
+      "source_bucket": "default_wu",
+      "all": {
+        "rows": 188,
+        "event_dates": 30,
+        "cities": 34,
+        "model_mode_hit": 0.32978723404255317,
+        "adjacent3_hit": 0.9361702127659575,
+        "tail_miss": 0.06382978723404255,
+        "mean_mode_final_distance": 0.9680851063829787,
+        "adjacent3_bootstrap": {
+          "mean": 0.9646171802054155,
+          "ci95": [
+            0.9425892273576099,
+            0.9840617997198879
+          ],
+          "dates": 30
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0353828197945845,
+          "ci95": [
+            0.01593820028011204,
+            0.057410772642390265
+          ],
+          "dates": 30
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.28191489361702127,
+          "forecast_quality_low": 0.7180851063829787,
+          "city_model_reliable": 0.3191489361702128,
+          "city_model_unreliable": 0.1702127659574468,
+          "model_market_disagreement_high": 0.2712765957446808,
+          "tail_risk_high": 0.35106382978723405
+        }
+      },
+      "train": {
+        "rows": 142,
+        "event_dates": 20,
+        "cities": 33,
+        "model_mode_hit": 0.323943661971831,
+        "adjacent3_hit": 0.9295774647887324,
+        "tail_miss": 0.07042253521126761,
+        "mean_mode_final_distance": 0.971830985915493,
+        "adjacent3_bootstrap": {
+          "mean": 0.9519257703081234,
+          "ci95": [
+            0.9215668767507003,
+            0.9799133403361343
+          ],
+          "dates": 20
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.04807422969187675,
+          "ci95": [
+            0.02008665966386555,
+            0.07843312324929971
+          ],
+          "dates": 20
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.29577464788732394,
+          "forecast_quality_low": 0.704225352112676,
+          "city_model_reliable": 0.2746478873239437,
+          "city_model_unreliable": 0.1267605633802817,
+          "model_market_disagreement_high": 0.28169014084507044,
+          "tail_risk_high": 0.3732394366197183
+        }
+      },
+      "holdout": {
+        "rows": 46,
+        "event_dates": 10,
+        "cities": 25,
+        "model_mode_hit": 0.34782608695652173,
+        "adjacent3_hit": 0.9565217391304348,
+        "tail_miss": 0.043478260869565216,
+        "mean_mode_final_distance": 0.9565217391304348,
+        "adjacent3_bootstrap": {
+          "mean": 0.99,
+          "ci95": [
+            0.97,
+            1.0
+          ],
+          "dates": 10
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.01,
+          "ci95": [
+            0.0,
+            0.030000000000000006
+          ],
+          "dates": 10
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2391304347826087,
+          "forecast_quality_low": 0.7608695652173914,
+          "city_model_reliable": 0.45652173913043476,
+          "city_model_unreliable": 0.30434782608695654,
+          "model_market_disagreement_high": 0.2391304347826087,
+          "tail_risk_high": 0.2826086956521739
+        }
+      }
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "all": {
+        "rows": 45,
+        "event_dates": 20,
+        "cities": 8,
+        "model_mode_hit": 0.35555555555555557,
+        "adjacent3_hit": 0.9111111111111111,
+        "tail_miss": 0.08888888888888889,
+        "mean_mode_final_distance": 1.1333333333333333,
+        "adjacent3_bootstrap": {
+          "mean": 0.9333333333333332,
+          "ci95": [
+            0.85,
+            1.0
+          ],
+          "dates": 20
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.06666666666666667,
+          "ci95": [
+            0.0,
+            0.15
+          ],
+          "dates": 20
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2222222222222222,
+          "forecast_quality_low": 0.7777777777777778,
+          "city_model_reliable": 0.2222222222222222,
+          "city_model_unreliable": 0.28888888888888886,
+          "model_market_disagreement_high": 0.3333333333333333,
+          "tail_risk_high": 0.26666666666666666
+        }
+      },
+      "train": {
+        "rows": 34,
+        "event_dates": 15,
+        "cities": 8,
+        "model_mode_hit": 0.3235294117647059,
+        "adjacent3_hit": 0.9117647058823529,
+        "tail_miss": 0.08823529411764706,
+        "mean_mode_final_distance": 1.1764705882352942,
+        "adjacent3_bootstrap": {
+          "mean": 0.9333333333333333,
+          "ci95": [
+            0.8222222222222223,
+            1.0
+          ],
+          "dates": 15
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.06666666666666667,
+          "ci95": [
+            0.0,
+            0.17777777777777776
+          ],
+          "dates": 15
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.29411764705882354,
+          "forecast_quality_low": 0.7058823529411765,
+          "city_model_reliable": 0.20588235294117646,
+          "city_model_unreliable": 0.23529411764705882,
+          "model_market_disagreement_high": 0.3235294117647059,
+          "tail_risk_high": 0.23529411764705882
+        }
+      },
+      "holdout": {
+        "rows": 11,
+        "event_dates": 5,
+        "cities": 6,
+        "model_mode_hit": 0.45454545454545453,
+        "adjacent3_hit": 0.9090909090909091,
+        "tail_miss": 0.09090909090909091,
+        "mean_mode_final_distance": 1.0,
+        "adjacent3_bootstrap": {
+          "mean": 0.9333333333333332,
+          "ci95": [
+            0.7999999999999999,
+            1.0
+          ],
+          "dates": 5
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.06666666666666667,
+          "ci95": [
+            0.0,
+            0.2
+          ],
+          "dates": 5
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.0,
+          "forecast_quality_low": 1.0,
+          "city_model_reliable": 0.2727272727272727,
+          "city_model_unreliable": 0.45454545454545453,
+          "model_market_disagreement_high": 0.36363636363636365,
+          "tail_risk_high": 0.36363636363636365
+        }
+      }
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "all": {
+        "rows": 19,
+        "event_dates": 14,
+        "cities": 3,
+        "model_mode_hit": 0.21052631578947367,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.8947368421052632,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 14
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 14
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2631578947368421,
+          "forecast_quality_low": 0.7368421052631579,
+          "city_model_reliable": 0.5263157894736842,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.42105263157894735,
+          "tail_risk_high": 0.5263157894736842
+        }
+      },
+      "train": {
+        "rows": 14,
+        "event_dates": 11,
+        "cities": 3,
+        "model_mode_hit": 0.21428571428571427,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.7857142857142857,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 11
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 11
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.21428571428571427,
+          "forecast_quality_low": 0.7857142857142857,
+          "city_model_reliable": 0.42857142857142855,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.42857142857142855,
+          "tail_risk_high": 0.5714285714285714
+        }
+      },
+      "holdout": {
+        "rows": 5,
+        "event_dates": 3,
+        "cities": 2,
+        "model_mode_hit": 0.2,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 1.2,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 3
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 3
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.4,
+          "forecast_quality_low": 0.6,
+          "city_model_reliable": 0.8,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.4,
+          "tail_risk_high": 0.4
+        }
+      }
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "all": {
+        "rows": 10,
+        "event_dates": 7,
+        "cities": 3,
+        "model_mode_hit": 0.3,
+        "adjacent3_hit": 0.9,
+        "tail_miss": 0.1,
+        "mean_mode_final_distance": 0.9,
+        "adjacent3_bootstrap": {
+          "mean": 0.9642857142857143,
+          "ci95": [
+            0.8928571428571429,
+            1.0
+          ],
+          "dates": 7
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.03571428571428571,
+          "ci95": [
+            0.0,
+            0.10714285714285714
+          ],
+          "dates": 7
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.3,
+          "forecast_quality_low": 0.7,
+          "city_model_reliable": 0.1,
+          "city_model_unreliable": 0.1,
+          "model_market_disagreement_high": 0.2,
+          "tail_risk_high": 0.3
+        }
+      },
+      "train": {
+        "rows": 8,
+        "event_dates": 5,
+        "cities": 3,
+        "model_mode_hit": 0.25,
+        "adjacent3_hit": 0.875,
+        "tail_miss": 0.125,
+        "mean_mode_final_distance": 1.0,
+        "adjacent3_bootstrap": {
+          "mean": 0.95,
+          "ci95": [
+            0.85,
+            1.0
+          ],
+          "dates": 5
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.05,
+          "ci95": [
+            0.0,
+            0.15
+          ],
+          "dates": 5
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.375,
+          "forecast_quality_low": 0.625,
+          "city_model_reliable": 0.0,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.125,
+          "tail_risk_high": 0.375
+        }
+      },
+      "holdout": {
+        "rows": 2,
+        "event_dates": 2,
+        "cities": 2,
+        "model_mode_hit": 0.5,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.5,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 2
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 2
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.0,
+          "forecast_quality_low": 1.0,
+          "city_model_reliable": 0.5,
+          "city_model_unreliable": 0.5,
+          "model_market_disagreement_high": 0.5,
+          "tail_risk_high": 0.0
+        }
+      }
+    }
+  ],
+  "source_class_quality": [
+    {
+      "settlement_source_class": "default_wu_station_by_rules",
+      "all": {
+        "rows": 188,
+        "event_dates": 30,
+        "cities": 34,
+        "model_mode_hit": 0.32978723404255317,
+        "adjacent3_hit": 0.9361702127659575,
+        "tail_miss": 0.06382978723404255,
+        "mean_mode_final_distance": 0.9680851063829787,
+        "adjacent3_bootstrap": {
+          "mean": 0.9646171802054155,
+          "ci95": [
+            0.9425892273576099,
+            0.9840617997198879
+          ],
+          "dates": 30
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0353828197945845,
+          "ci95": [
+            0.01593820028011204,
+            0.057410772642390265
+          ],
+          "dates": 30
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.28191489361702127,
+          "forecast_quality_low": 0.7180851063829787,
+          "city_model_reliable": 0.3191489361702128,
+          "city_model_unreliable": 0.1702127659574468,
+          "model_market_disagreement_high": 0.2712765957446808,
+          "tail_risk_high": 0.35106382978723405
+        }
+      },
+      "train": {
+        "rows": 142,
+        "event_dates": 20,
+        "cities": 33,
+        "model_mode_hit": 0.323943661971831,
+        "adjacent3_hit": 0.9295774647887324,
+        "tail_miss": 0.07042253521126761,
+        "mean_mode_final_distance": 0.971830985915493,
+        "adjacent3_bootstrap": {
+          "mean": 0.9519257703081234,
+          "ci95": [
+            0.9215668767507003,
+            0.9799133403361343
+          ],
+          "dates": 20
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.04807422969187675,
+          "ci95": [
+            0.02008665966386555,
+            0.07843312324929971
+          ],
+          "dates": 20
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.29577464788732394,
+          "forecast_quality_low": 0.704225352112676,
+          "city_model_reliable": 0.2746478873239437,
+          "city_model_unreliable": 0.1267605633802817,
+          "model_market_disagreement_high": 0.28169014084507044,
+          "tail_risk_high": 0.3732394366197183
+        }
+      },
+      "holdout": {
+        "rows": 46,
+        "event_dates": 10,
+        "cities": 25,
+        "model_mode_hit": 0.34782608695652173,
+        "adjacent3_hit": 0.9565217391304348,
+        "tail_miss": 0.043478260869565216,
+        "mean_mode_final_distance": 0.9565217391304348,
+        "adjacent3_bootstrap": {
+          "mean": 0.99,
+          "ci95": [
+            0.97,
+            1.0
+          ],
+          "dates": 10
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.01,
+          "ci95": [
+            0.0,
+            0.030000000000000006
+          ],
+          "dates": 10
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2391304347826087,
+          "forecast_quality_low": 0.7608695652173914,
+          "city_model_reliable": 0.45652173913043476,
+          "city_model_unreliable": 0.30434782608695654,
+          "model_market_disagreement_high": 0.2391304347826087,
+          "tail_risk_high": 0.2826086956521739
+        }
+      }
+    },
+    {
+      "settlement_source_class": "official_station_diff_confirmed",
+      "all": {
+        "rows": 40,
+        "event_dates": 20,
+        "cities": 7,
+        "model_mode_hit": 0.325,
+        "adjacent3_hit": 0.9,
+        "tail_miss": 0.1,
+        "mean_mode_final_distance": 1.2,
+        "adjacent3_bootstrap": {
+          "mean": 0.925,
+          "ci95": [
+            0.8333333333333333,
+            1.0
+          ],
+          "dates": 20
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.07499999999999998,
+          "ci95": [
+            0.0,
+            0.16666666666666666
+          ],
+          "dates": 20
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.225,
+          "forecast_quality_low": 0.775,
+          "city_model_reliable": 0.2,
+          "city_model_unreliable": 0.325,
+          "model_market_disagreement_high": 0.375,
+          "tail_risk_high": 0.3
+        }
+      },
+      "train": {
+        "rows": 30,
+        "event_dates": 15,
+        "cities": 7,
+        "model_mode_hit": 0.3,
+        "adjacent3_hit": 0.9,
+        "tail_miss": 0.1,
+        "mean_mode_final_distance": 1.2333333333333334,
+        "adjacent3_bootstrap": {
+          "mean": 0.9222222222222223,
+          "ci95": [
+            0.8,
+            1.0
+          ],
+          "dates": 15
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.07777777777777777,
+          "ci95": [
+            0.0,
+            0.19999999999999998
+          ],
+          "dates": 15
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.3,
+          "forecast_quality_low": 0.7,
+          "city_model_reliable": 0.2,
+          "city_model_unreliable": 0.26666666666666666,
+          "model_market_disagreement_high": 0.36666666666666664,
+          "tail_risk_high": 0.26666666666666666
+        }
+      },
+      "holdout": {
+        "rows": 10,
+        "event_dates": 5,
+        "cities": 5,
+        "model_mode_hit": 0.4,
+        "adjacent3_hit": 0.9,
+        "tail_miss": 0.1,
+        "mean_mode_final_distance": 1.1,
+        "adjacent3_bootstrap": {
+          "mean": 0.9333333333333332,
+          "ci95": [
+            0.7999999999999999,
+            1.0
+          ],
+          "dates": 5
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.06666666666666667,
+          "ci95": [
+            0.0,
+            0.2
+          ],
+          "dates": 5
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.0,
+          "forecast_quality_low": 1.0,
+          "city_model_reliable": 0.2,
+          "city_model_unreliable": 0.5,
+          "model_market_disagreement_high": 0.4,
+          "tail_risk_high": 0.4
+        }
+      }
+    },
+    {
+      "settlement_source_class": "blocked_unresolved_settlement_basis",
+      "all": {
+        "rows": 19,
+        "event_dates": 14,
+        "cities": 3,
+        "model_mode_hit": 0.21052631578947367,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.8947368421052632,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 14
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 14
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2631578947368421,
+          "forecast_quality_low": 0.7368421052631579,
+          "city_model_reliable": 0.5263157894736842,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.42105263157894735,
+          "tail_risk_high": 0.5263157894736842
+        }
+      },
+      "train": {
+        "rows": 14,
+        "event_dates": 11,
+        "cities": 3,
+        "model_mode_hit": 0.21428571428571427,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.7857142857142857,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 11
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 11
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.21428571428571427,
+          "forecast_quality_low": 0.7857142857142857,
+          "city_model_reliable": 0.42857142857142855,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.42857142857142855,
+          "tail_risk_high": 0.5714285714285714
+        }
+      },
+      "holdout": {
+        "rows": 5,
+        "event_dates": 3,
+        "cities": 2,
+        "model_mode_hit": 0.2,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 1.2,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 3
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 3
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.4,
+          "forecast_quality_low": 0.6,
+          "city_model_reliable": 0.8,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.4,
+          "tail_risk_high": 0.4
+        }
+      }
+    },
+    {
+      "settlement_source_class": "non_wu_source_by_rules",
+      "all": {
+        "rows": 8,
+        "event_dates": 7,
+        "cities": 2,
+        "model_mode_hit": 0.25,
+        "adjacent3_hit": 0.875,
+        "tail_miss": 0.125,
+        "mean_mode_final_distance": 1.0,
+        "adjacent3_bootstrap": {
+          "mean": 0.9285714285714286,
+          "ci95": [
+            0.7857142857142857,
+            1.0
+          ],
+          "dates": 7
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.07142857142857142,
+          "ci95": [
+            0.0,
+            0.21428571428571427
+          ],
+          "dates": 7
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.25,
+          "forecast_quality_low": 0.75,
+          "city_model_reliable": 0.125,
+          "city_model_unreliable": 0.125,
+          "model_market_disagreement_high": 0.25,
+          "tail_risk_high": 0.25
+        }
+      },
+      "train": {
+        "rows": 6,
+        "event_dates": 5,
+        "cities": 2,
+        "model_mode_hit": 0.16666666666666666,
+        "adjacent3_hit": 0.8333333333333334,
+        "tail_miss": 0.16666666666666666,
+        "mean_mode_final_distance": 1.1666666666666667,
+        "adjacent3_bootstrap": {
+          "mean": 0.9,
+          "ci95": [
+            0.7,
+            1.0
+          ],
+          "dates": 5
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.1,
+          "ci95": [
+            0.0,
+            0.3
+          ],
+          "dates": 5
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.3333333333333333,
+          "forecast_quality_low": 0.6666666666666666,
+          "city_model_reliable": 0.0,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.16666666666666666,
+          "tail_risk_high": 0.3333333333333333
+        }
+      },
+      "holdout": {
+        "rows": 2,
+        "event_dates": 2,
+        "cities": 2,
+        "model_mode_hit": 0.5,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.5,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 2
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 2
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.0,
+          "forecast_quality_low": 1.0,
+          "city_model_reliable": 0.5,
+          "city_model_unreliable": 0.5,
+          "model_market_disagreement_high": 0.5,
+          "tail_risk_high": 0.0
+        }
+      }
+    },
+    {
+      "settlement_source_class": "special_source_confirmed",
+      "all": {
+        "rows": 5,
+        "event_dates": 5,
+        "cities": 1,
+        "model_mode_hit": 0.6,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.6,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 5
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 5
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.2,
+          "forecast_quality_low": 0.8,
+          "city_model_reliable": 0.4,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.0,
+          "tail_risk_high": 0.0
+        }
+      },
+      "train": {
+        "rows": 4,
+        "event_dates": 4,
+        "cities": 1,
+        "model_mode_hit": 0.5,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.75,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 4
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 4
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.25,
+          "forecast_quality_low": 0.75,
+          "city_model_reliable": 0.25,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.0,
+          "tail_risk_high": 0.0
+        }
+      },
+      "holdout": {
+        "rows": 1,
+        "event_dates": 1,
+        "cities": 1,
+        "model_mode_hit": 1.0,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.0,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 1
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 1
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.0,
+          "forecast_quality_low": 1.0,
+          "city_model_reliable": 1.0,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.0,
+          "tail_risk_high": 0.0
+        }
+      }
+    },
+    {
+      "settlement_source_class": "no_recent_market_or_unknown_rules",
+      "all": {
+        "rows": 2,
+        "event_dates": 1,
+        "cities": 1,
+        "model_mode_hit": 0.5,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.5,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 1
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 1
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.5,
+          "forecast_quality_low": 0.5,
+          "city_model_reliable": 0.0,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.0,
+          "tail_risk_high": 0.5
+        }
+      },
+      "train": {
+        "rows": 2,
+        "event_dates": 1,
+        "cities": 1,
+        "model_mode_hit": 0.5,
+        "adjacent3_hit": 1.0,
+        "tail_miss": 0.0,
+        "mean_mode_final_distance": 0.5,
+        "adjacent3_bootstrap": {
+          "mean": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "dates": 1
+        },
+        "tail_miss_bootstrap": {
+          "mean": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "dates": 1
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": 0.5,
+          "forecast_quality_low": 0.5,
+          "city_model_reliable": 0.0,
+          "city_model_unreliable": 0.0,
+          "model_market_disagreement_high": 0.0,
+          "tail_risk_high": 0.5
+        }
+      },
+      "holdout": {
+        "rows": 0,
+        "event_dates": 0,
+        "cities": 0,
+        "model_mode_hit": null,
+        "adjacent3_hit": null,
+        "tail_miss": null,
+        "mean_mode_final_distance": null,
+        "adjacent3_bootstrap": {
+          "mean": null,
+          "ci95": [
+            null,
+            null
+          ],
+          "dates": 0
+        },
+        "label_rates": {
+          "forecast_quality_medium_plus": null,
+          "forecast_quality_low": null,
+          "city_model_reliable": null,
+          "city_model_unreliable": null,
+          "model_market_disagreement_high": null,
+          "tail_risk_high": null
+        }
+      }
+    }
+  ],
+  "source_bucket_overlay": [
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "adjacent3_yes_cost085",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 11,
+            "event_dates": 9,
+            "cities": 3,
+            "cost": 7.368000000000001,
+            "pnl": 3.6320000000000006,
+            "roi": 0.49294245385450597,
+            "roi_ci95": [
+              0.3559299053554542,
+              0.6589313242889329
+            ],
+            "top5_removed_roi": 0.31643903241731114
+          },
+          "holdout": {
+            "rows": 3,
+            "event_dates": 1,
+            "cities": 2,
+            "cost": 1.573,
+            "pnl": 1.427,
+            "roi": 0.9071837253655436,
+            "roi_ci95": [
+              0.9071837253655436,
+              0.9071837253655436
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.845,
+            "pnl": 0.15500000000000003,
+            "roi": 0.18343195266272194,
+            "roi_ci95": [
+              0.18343195266272194,
+              0.18343195266272194
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.5105,
+            "pnl": 0.48950000000000005,
+            "roi": 0.9588638589618024,
+            "roi_ci95": [
+              0.9588638589618024,
+              0.9588638589618024
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.309510501191784,
+          "holdout_excess_roi_vs_bucket_family": 0.05168013359625878
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.845,
+            "pnl": 0.15500000000000003,
+            "roi": 0.18343195266272194,
+            "roi_ci95": [
+              0.18343195266272194,
+              0.18343195266272194
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.5105,
+            "pnl": 0.48950000000000005,
+            "roi": 0.9588638589618024,
+            "roi_ci95": [
+              0.9588638589618024,
+              0.9588638589618024
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.309510501191784,
+          "holdout_excess_roi_vs_bucket_family": 0.05168013359625878
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 5,
+            "event_dates": 5,
+            "cities": 1,
+            "cost": 3.6885,
+            "pnl": 1.3114999999999999,
+            "roi": 0.3555645926528399,
+            "roi_ci95": [
+              0.25313283208020054,
+              0.4712373105781961
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 2,
+            "event_dates": 1,
+            "cities": 2,
+            "cost": 1.0625,
+            "pnl": 0.9374999999999999,
+            "roi": 0.8823529411764705,
+            "roi_ci95": [
+              0.8823529411764705,
+              0.8823529411764705
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.13737786120166606,
+          "holdout_excess_roi_vs_bucket_family": -0.02483078418907314
+        }
+      ]
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 22,
+            "event_dates": 10,
+            "cities": 3,
+            "cost": 13.9125,
+            "pnl": -2.9125,
+            "roi": -0.2093441150044924,
+            "roi_ci95": [
+              -0.4458956362693759,
+              0.0029292290270490203
+            ],
+            "top5_removed_roi": -0.4240460763138949
+          },
+          "holdout": {
+            "rows": 7,
+            "event_dates": 3,
+            "cities": 2,
+            "cost": 3.8200000000000003,
+            "pnl": 0.17999999999999994,
+            "roi": 0.04712041884816753,
+            "roi_ci95": [
+              -0.3730407523510971,
+              0.8348623853211011
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 7,
+            "event_dates": 2,
+            "cities": 2,
+            "cost": 4.470000000000001,
+            "pnl": -1.4700000000000002,
+            "roi": -0.32885906040268453,
+            "roi_ci95": [
+              -0.3485342019543974,
+              -0.2857142857142858
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 4,
+            "event_dates": 2,
+            "cities": 1,
+            "cost": 1.9250000000000003,
+            "pnl": -0.9249999999999999,
+            "roi": -0.4805194805194805,
+            "roi_ci95": [
+              -1.0,
+              -0.3730407523510972
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.11951494539819213,
+          "holdout_excess_roi_vs_bucket_family": -0.5276398993676481
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 7,
+            "event_dates": 2,
+            "cities": 2,
+            "cost": 4.470000000000001,
+            "pnl": -1.4700000000000002,
+            "roi": -0.32885906040268453,
+            "roi_ci95": [
+              -0.3485342019543974,
+              -0.2857142857142858
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 4,
+            "event_dates": 2,
+            "cities": 1,
+            "cost": 1.9250000000000003,
+            "pnl": -0.9249999999999999,
+            "roi": -0.4805194805194805,
+            "roi_ci95": [
+              -1.0,
+              -0.3730407523510972
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.11951494539819213,
+          "holdout_excess_roi_vs_bucket_family": -0.5276398993676481
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 10,
+            "event_dates": 6,
+            "cities": 1,
+            "cost": 6.07,
+            "pnl": -1.0700000000000003,
+            "roi": -0.17627677100494238,
+            "roi_ci95": [
+              -0.5180722891566265,
+              0.1925042589437819
+            ],
+            "top5_removed_roi": -0.2857142857142858
+          },
+          "holdout": {
+            "rows": 6,
+            "event_dates": 3,
+            "cities": 2,
+            "cost": 3.49,
+            "pnl": 0.51,
+            "roi": 0.1461318051575931,
+            "roi_ci95": [
+              -0.3730407523510971,
+              0.8348623853211011
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.033067343999550025,
+          "holdout_excess_roi_vs_bucket_family": 0.09901138630942558
+        }
+      ]
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 11,
+            "event_dates": 8,
+            "cities": 3,
+            "cost": 7.567500000000001,
+            "pnl": 1.4324999999999999,
+            "roi": 0.1892963330029732,
+            "roi_ci95": [
+              -0.20373446852899146,
+              0.47548391750977625
+            ],
+            "top5_removed_roi": -0.28888888888888886
+          },
+          "holdout": {
+            "rows": 4,
+            "event_dates": 3,
+            "cities": 2,
+            "cost": 2.49,
+            "pnl": 1.51,
+            "roi": 0.606425702811245,
+            "roi_ci95": [
+              0.48148148148148134,
+              0.8348623853211011
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 3,
+            "event_dates": 2,
+            "cities": 2,
+            "cost": 2.1050000000000004,
+            "pnl": 0.8949999999999999,
+            "roi": 0.4251781472684084,
+            "roi_ci95": [
+              0.4184397163120567,
+              0.43884892086330923
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.595,
+            "pnl": 0.405,
+            "roi": 0.680672268907563,
+            "roi_ci95": [
+              0.680672268907563,
+              0.680672268907563
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.23588181426543522,
+          "holdout_excess_roi_vs_bucket_family": 0.07424656609631808
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 3,
+            "event_dates": 2,
+            "cities": 2,
+            "cost": 2.1050000000000004,
+            "pnl": 0.8949999999999999,
+            "roi": 0.4251781472684084,
+            "roi_ci95": [
+              0.4184397163120567,
+              0.43884892086330923
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.595,
+            "pnl": 0.405,
+            "roi": 0.680672268907563,
+            "roi_ci95": [
+              0.680672268907563,
+              0.680672268907563
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.23588181426543522,
+          "holdout_excess_roi_vs_bucket_family": 0.07424656609631808
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 4,
+            "event_dates": 4,
+            "cities": 1,
+            "cost": 2.67,
+            "pnl": 1.3299999999999998,
+            "roi": 0.49812734082397,
+            "roi_ci95": [
+              0.4491445612933604,
+              0.5625
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 4,
+            "event_dates": 3,
+            "cities": 2,
+            "cost": 2.49,
+            "pnl": 1.51,
+            "roi": 0.606425702811245,
+            "roi_ci95": [
+              0.48148148148148134,
+              0.8348623853211011
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.3088310078209968,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        }
+      ]
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "adjacent3_yes_cost085",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 90,
+            "event_dates": 17,
+            "cities": 30,
+            "cost": 53.672000000000004,
+            "pnl": 16.328000000000003,
+            "roi": 0.30421821433894763,
+            "roi_ci95": [
+              0.24357121274116172,
+              0.36897060212824606
+            ],
+            "top5_removed_roi": 0.26197709745267583
+          },
+          "holdout": {
+            "rows": 26,
+            "event_dates": 3,
+            "cities": 20,
+            "cost": 15.2695,
+            "pnl": 3.7304999999999997,
+            "roi": 0.2443105537181964,
+            "roi_ci95": [
+              0.11248454882571077,
+              0.40745953553835335
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 20,
+            "event_dates": 9,
+            "cities": 11,
+            "cost": 15.439,
+            "pnl": 4.561,
+            "roi": 0.29542068786838527,
+            "roi_ci95": [
+              0.26084524001239606,
+              0.32243636888494964
+            ],
+            "top5_removed_roi": 0.2343774108933806
+          },
+          "holdout": {
+            "rows": 5,
+            "event_dates": 2,
+            "cities": 4,
+            "cost": 3.379,
+            "pnl": 0.621,
+            "roi": 0.18378218407812963,
+            "roi_ci95": [
+              -0.21996879875195005,
+              0.4306151645207439
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.008797526470562367,
+          "holdout_excess_roi_vs_bucket_family": -0.060528369640066776
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 20,
+            "event_dates": 9,
+            "cities": 11,
+            "cost": 15.439,
+            "pnl": 4.561,
+            "roi": 0.29542068786838527,
+            "roi_ci95": [
+              0.26084524001239606,
+              0.32243636888494964
+            ],
+            "top5_removed_roi": 0.2343774108933806
+          },
+          "holdout": {
+            "rows": 5,
+            "event_dates": 2,
+            "cities": 4,
+            "cost": 3.379,
+            "pnl": 0.621,
+            "roi": 0.18378218407812963,
+            "roi_ci95": [
+              -0.21996879875195005,
+              0.4306151645207439
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.008797526470562367,
+          "holdout_excess_roi_vs_bucket_family": -0.060528369640066776
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 18,
+            "event_dates": 9,
+            "cities": 7,
+            "cost": 11.688,
+            "pnl": 3.3120000000000003,
+            "roi": 0.2833675564681725,
+            "roi_ci95": [
+              0.058414305865963044,
+              0.4982903438830215
+            ],
+            "top5_removed_roi": -0.05771495877502947
+          },
+          "holdout": {
+            "rows": 8,
+            "event_dates": 2,
+            "cities": 6,
+            "cost": 5.288,
+            "pnl": -0.28800000000000014,
+            "roi": -0.05446293494704995,
+            "roi_ci95": [
+              -0.23968827219159858,
+              0.12888052681091247
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.020850657870775113,
+          "holdout_excess_roi_vs_bucket_family": -0.29877348866524633
+        }
+      ]
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 215,
+            "event_dates": 20,
+            "cities": 33,
+            "cost": 122.10650000000001,
+            "pnl": 13.8935,
+            "roi": 0.11378182160654837,
+            "roi_ci95": [
+              -0.00682968172125455,
+              0.2417337965091964
+            ],
+            "top5_removed_roi": 0.0320815717483213
+          },
+          "holdout": {
+            "rows": 73,
+            "event_dates": 10,
+            "cities": 24,
+            "cost": 41.88399999999999,
+            "pnl": -0.8840000000000006,
+            "roi": -0.021105911565275515,
+            "roi_ci95": [
+              -0.3432061584446529,
+              0.11040018090552321
+            ],
+            "top5_removed_roi": -0.4582294939863473
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 60,
+            "event_dates": 16,
+            "cities": 15,
+            "cost": 31.177500000000002,
+            "pnl": 5.8225,
+            "roi": 0.18675326758078742,
+            "roi_ci95": [
+              -0.09828136712582461,
+              0.502662537676522
+            ],
+            "top5_removed_roi": -0.10514541387024608
+          },
+          "holdout": {
+            "rows": 23,
+            "event_dates": 4,
+            "cities": 6,
+            "cost": 12.584,
+            "pnl": 2.416,
+            "roi": 0.1919898283534647,
+            "roi_ci95": [
+              -0.623918766453554,
+              0.6145307769929366
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.07297144597423905,
+          "holdout_excess_roi_vs_bucket_family": 0.21309573991874023
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 60,
+            "event_dates": 16,
+            "cities": 15,
+            "cost": 31.177500000000002,
+            "pnl": 5.8225,
+            "roi": 0.18675326758078742,
+            "roi_ci95": [
+              -0.09828136712582461,
+              0.502662537676522
+            ],
+            "top5_removed_roi": -0.10514541387024608
+          },
+          "holdout": {
+            "rows": 23,
+            "event_dates": 4,
+            "cities": 6,
+            "cost": 12.584,
+            "pnl": 2.416,
+            "roi": 0.1919898283534647,
+            "roi_ci95": [
+              -0.623918766453554,
+              0.6145307769929366
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.07297144597423905,
+          "holdout_excess_roi_vs_bucket_family": 0.21309573991874023
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 57,
+            "event_dates": 15,
+            "cities": 9,
+            "cost": 30.465500000000002,
+            "pnl": 4.5345,
+            "roi": 0.14884049170373045,
+            "roi_ci95": [
+              -0.10281767528095274,
+              0.41494524434429303
+            ],
+            "top5_removed_roi": -0.1391925626237411
+          },
+          "holdout": {
+            "rows": 39,
+            "event_dates": 8,
+            "cities": 9,
+            "cost": 21.469,
+            "pnl": 2.5309999999999997,
+            "roi": 0.11789091247845729,
+            "roi_ci95": [
+              -0.5658937519473187,
+              0.39452764565089155
+            ],
+            "top5_removed_roi": -1.0
+          },
+          "train_excess_roi_vs_bucket_family": 0.03505867009718208,
+          "holdout_excess_roi_vs_bucket_family": 0.13899682404373281
+        }
+      ]
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 113,
+            "event_dates": 20,
+            "cities": 33,
+            "cost": 70.2175,
+            "pnl": 6.7825000000000015,
+            "roi": 0.0965927297326165,
+            "roi_ci95": [
+              -0.047062323793890894,
+              0.23275817648389824
+            ],
+            "top5_removed_roi": 0.016953069927079834
+          },
+          "holdout": {
+            "rows": 39,
+            "event_dates": 10,
+            "cities": 22,
+            "cost": 24.724999999999998,
+            "pnl": -3.725,
+            "roi": -0.1506572295247725,
+            "roi_ci95": [
+              -0.39074435122640944,
+              0.025337062613975104
+            ],
+            "top5_removed_roi": -0.2364590789787641
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 28,
+            "event_dates": 13,
+            "cities": 15,
+            "cost": 16.743000000000002,
+            "pnl": 3.2569999999999997,
+            "roi": 0.19452905691930955,
+            "roi_ci95": [
+              -0.09647038715050094,
+              0.5333853595050327
+            ],
+            "top5_removed_roi": -0.13817868428612468
+          },
+          "holdout": {
+            "rows": 10,
+            "event_dates": 4,
+            "cities": 5,
+            "cost": 6.62,
+            "pnl": 0.3799999999999999,
+            "roi": 0.057401812688821746,
+            "roi_ci95": [
+              -0.39879759519038077,
+              0.31578947368421056
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.09793632718669305,
+          "holdout_excess_roi_vs_bucket_family": 0.20805904221359425
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 28,
+            "event_dates": 13,
+            "cities": 15,
+            "cost": 16.743000000000002,
+            "pnl": 3.2569999999999997,
+            "roi": 0.19452905691930955,
+            "roi_ci95": [
+              -0.09647038715050094,
+              0.5333853595050327
+            ],
+            "top5_removed_roi": -0.13817868428612468
+          },
+          "holdout": {
+            "rows": 10,
+            "event_dates": 4,
+            "cities": 5,
+            "cost": 6.62,
+            "pnl": 0.3799999999999999,
+            "roi": 0.057401812688821746,
+            "roi_ci95": [
+              -0.39879759519038077,
+              0.31578947368421056
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.09793632718669305,
+          "holdout_excess_roi_vs_bucket_family": 0.20805904221359425
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 27,
+            "event_dates": 12,
+            "cities": 9,
+            "cost": 15.926999999999998,
+            "pnl": 3.0729999999999995,
+            "roi": 0.19294280153198973,
+            "roi_ci95": [
+              -0.062177831534652964,
+              0.48059954636516966
+            ],
+            "top5_removed_roi": -0.04020475631865202
+          },
+          "holdout": {
+            "rows": 18,
+            "event_dates": 7,
+            "cities": 8,
+            "cost": 11.73,
+            "pnl": 0.27,
+            "roi": 0.02301790281329922,
+            "roi_ci95": [
+              -0.3664202745512144,
+              0.2631578947368421
+            ],
+            "top5_removed_roi": -1.0
+          },
+          "train_excess_roi_vs_bucket_family": 0.09635007179937323,
+          "holdout_excess_roi_vs_bucket_family": 0.17367513233807172
+        }
+      ]
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "algorithm": "adjacent3_yes_cost085",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 7,
+            "event_dates": 4,
+            "cities": 3,
+            "cost": 4.7935,
+            "pnl": 1.2065,
+            "roi": 0.25169500365077707,
+            "roi_ci95": [
+              0.20481927710843364,
+              0.3142763265976672
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.73,
+            "pnl": 0.27,
+            "roi": 0.36986301369863017,
+            "roi_ci95": [
+              0.36986301369863017,
+              0.36986301369863017
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 3,
+            "event_dates": 2,
+            "cities": 2,
+            "cost": 2.0585000000000004,
+            "pnl": -0.05850000000000011,
+            "roi": -0.028418751518095746,
+            "roi_ci95": [
+              -0.17931883463274517,
+              0.19047619047619035
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.2801137551688728,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 3,
+            "event_dates": 2,
+            "cities": 2,
+            "cost": 2.0585000000000004,
+            "pnl": -0.05850000000000011,
+            "roi": -0.028418751518095746,
+            "roi_ci95": [
+              -0.17931883463274517,
+              0.19047619047619035
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.2801137551688728,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": null,
+          "holdout_excess_roi_vs_bucket_family": null
+        }
+      ]
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 12,
+            "event_dates": 5,
+            "cities": 3,
+            "cost": 6.5200000000000005,
+            "pnl": -2.5199999999999996,
+            "roi": -0.3865030674846625,
+            "roi_ci95": [
+              -0.5708154506437768,
+              -0.031007751937984503
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 4,
+            "event_dates": 2,
+            "cities": 2,
+            "cost": 2.5300000000000002,
+            "pnl": -0.5299999999999999,
+            "roi": -0.2094861660079051,
+            "roi_ci95": [
+              -0.2805755395683453,
+              -0.12280701754385964
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 5,
+            "event_dates": 2,
+            "cities": 1,
+            "cost": 2.7449999999999997,
+            "pnl": -0.7449999999999999,
+            "roi": -0.2714025500910746,
+            "roi_ci95": [
+              -0.4152046783625731,
+              -0.033816425120772924
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.1151005173935879,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 5,
+            "event_dates": 2,
+            "cities": 1,
+            "cost": 2.7449999999999997,
+            "pnl": -0.7449999999999999,
+            "roi": -0.2714025500910746,
+            "roi_ci95": [
+              -0.4152046783625731,
+              -0.033816425120772924
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.1151005173935879,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 2,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 1.1400000000000001,
+            "pnl": -0.14,
+            "roi": -0.12280701754385964,
+            "roi_ci95": [
+              -0.12280701754385964,
+              -0.12280701754385964
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": null,
+          "holdout_excess_roi_vs_bucket_family": 0.08667914846404545
+        }
+      ]
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 6,
+            "event_dates": 4,
+            "cities": 3,
+            "cost": 3.92,
+            "pnl": -0.92,
+            "roi": -0.23469387755102042,
+            "roi_ci95": [
+              -0.6124031007751938,
+              0.4933918195283081
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 2,
+            "event_dates": 2,
+            "cities": 2,
+            "cost": 1.315,
+            "pnl": 0.685,
+            "roi": 0.5209125475285171,
+            "roi_ci95": [
+              0.42857142857142866,
+              0.6260162601626017
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 2,
+            "event_dates": 2,
+            "cities": 1,
+            "cost": 1.44,
+            "pnl": 0.56,
+            "roi": 0.38888888888888895,
+            "roi_ci95": [
+              0.35135135135135137,
+              0.42857142857142866
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.6235827664399094,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 2,
+            "event_dates": 2,
+            "cities": 1,
+            "cost": 1.44,
+            "pnl": 0.56,
+            "roi": 0.38888888888888895,
+            "roi_ci95": [
+              0.35135135135135137,
+              0.42857142857142866
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.6235827664399094,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.615,
+            "pnl": 0.385,
+            "roi": 0.6260162601626017,
+            "roi_ci95": [
+              0.6260162601626017,
+              0.6260162601626017
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": null,
+          "holdout_excess_roi_vs_bucket_family": 0.10510371263408458
+        }
+      ]
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "adjacent3_yes_cost085",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 16,
+            "event_dates": 9,
+            "cities": 7,
+            "cost": 8.682500000000001,
+            "pnl": -0.6825,
+            "roi": -0.07860639216815436,
+            "roi_ci95": [
+              -0.4761627423246527,
+              0.3742720729519224
+            ],
+            "top5_removed_roi": -0.566583595189078
+          },
+          "holdout": {
+            "rows": 6,
+            "event_dates": 2,
+            "cities": 5,
+            "cost": 3.7159999999999997,
+            "pnl": 0.28400000000000003,
+            "roi": 0.07642626480086115,
+            "roi_ci95": [
+              -0.05123339658444022,
+              0.24378109452736318
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 7,
+            "event_dates": 7,
+            "cities": 5,
+            "cost": 4.9705,
+            "pnl": 0.02949999999999986,
+            "roi": 0.005935016597927745,
+            "roi_ci95": [
+              -0.41553157282538733,
+              0.37069457102237074
+            ],
+            "top5_removed_roi": -1.0
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.08454140876608211,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 7,
+            "event_dates": 7,
+            "cities": 5,
+            "cost": 4.9705,
+            "pnl": 0.02949999999999986,
+            "roi": 0.005935016597927745,
+            "roi_ci95": [
+              -0.41553157282538733,
+              0.37069457102237074
+            ],
+            "top5_removed_roi": -1.0
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.08454140876608211,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 3,
+            "event_dates": 3,
+            "cities": 1,
+            "cost": 1.5505,
+            "pnl": -0.5505,
+            "roi": -0.3550467591099645,
+            "roi_ci95": [
+              -1.0,
+              2.1201248049921997
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 1,
+            "event_dates": 1,
+            "cities": 1,
+            "cost": 0.85,
+            "pnl": 0.15000000000000002,
+            "roi": 0.17647058823529416,
+            "roi_ci95": [
+              0.17647058823529416,
+              0.17647058823529416
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.2764403669418102,
+          "holdout_excess_roi_vs_bucket_family": 0.10004432343443301
+        }
+      ]
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 53,
+            "event_dates": 15,
+            "cities": 8,
+            "cost": 29.422500000000003,
+            "pnl": -3.4224999999999994,
+            "roi": -0.11632254227207067,
+            "roi_ci95": [
+              -0.3534635159004233,
+              0.11929834513437278
+            ],
+            "top5_removed_roi": -0.36795533551037607
+          },
+          "holdout": {
+            "rows": 19,
+            "event_dates": 5,
+            "cities": 5,
+            "cost": 11.115,
+            "pnl": 0.8849999999999999,
+            "roi": 0.0796221322537112,
+            "roi_ci95": [
+              -0.24617212613099407,
+              0.42857142857142855
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 17,
+            "event_dates": 9,
+            "cities": 6,
+            "cost": 9.126000000000001,
+            "pnl": -3.1260000000000003,
+            "roi": -0.3425378040762656,
+            "roi_ci95": [
+              -0.7694481521889305,
+              0.06221440824576427
+            ],
+            "top5_removed_roi": -1.0
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.22621526180419493,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 17,
+            "event_dates": 9,
+            "cities": 6,
+            "cost": 9.126000000000001,
+            "pnl": -3.1260000000000003,
+            "roi": -0.3425378040762656,
+            "roi_ci95": [
+              -0.7694481521889305,
+              0.06221440824576427
+            ],
+            "top5_removed_roi": -1.0
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.22621526180419493,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 12,
+            "event_dates": 5,
+            "cities": 2,
+            "cost": 7.615000000000001,
+            "pnl": -0.6149999999999999,
+            "roi": -0.08076165462902167,
+            "roi_ci95": [
+              -0.4082840236686389,
+              0.23239436619718312
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 5,
+            "event_dates": 2,
+            "cities": 1,
+            "cost": 2.67,
+            "pnl": 0.32999999999999996,
+            "roi": 0.12359550561797751,
+            "roi_ci95": [
+              -0.42857142857142866,
+              1.173913043478261
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.035560887643049,
+          "holdout_excess_roi_vs_bucket_family": 0.04397337336426631
+        }
+      ]
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filters": [
+        {
+          "filter": "no_quality_filter",
+          "train": {
+            "rows": 27,
+            "event_dates": 13,
+            "cities": 8,
+            "cost": 16.051499999999997,
+            "pnl": -4.0515,
+            "roi": -0.25240631716662,
+            "roi_ci95": [
+              -0.6167614375671626,
+              0.0915153823505469
+            ],
+            "top5_removed_roi": -0.6677740863787375
+          },
+          "holdout": {
+            "rows": 9,
+            "event_dates": 5,
+            "cities": 4,
+            "cost": 5.815,
+            "pnl": -0.8150000000000001,
+            "roi": -0.14015477214101463,
+            "roi_ci95": [
+              -0.5485327313769751,
+              0.26582278481012656
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": 0.0,
+          "holdout_excess_roi_vs_bucket_family": 0.0
+        },
+        {
+          "filter": "forecast_quality_medium_plus",
+          "train": {
+            "rows": 8,
+            "event_dates": 8,
+            "cities": 5,
+            "cost": 4.77,
+            "pnl": -1.77,
+            "roi": -0.37106918238993714,
+            "roi_ci95": [
+              -0.8089156935665804,
+              0.2578616352201258
+            ],
+            "top5_removed_roi": -1.0
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.11866286522331715,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "exclude_forecast_quality_low",
+          "train": {
+            "rows": 8,
+            "event_dates": 8,
+            "cities": 5,
+            "cost": 4.77,
+            "pnl": -1.77,
+            "roi": -0.37106918238993714,
+            "roi_ci95": [
+              -0.8089156935665804,
+              0.2578616352201258
+            ],
+            "top5_removed_roi": -1.0
+          },
+          "holdout": {
+            "rows": 0,
+            "event_dates": 0,
+            "cities": 0,
+            "cost": 0.0,
+            "pnl": 0.0,
+            "roi": null,
+            "roi_ci95": [
+              null,
+              null
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.11866286522331715,
+          "holdout_excess_roi_vs_bucket_family": null
+        },
+        {
+          "filter": "city_model_reliable",
+          "train": {
+            "rows": 6,
+            "event_dates": 5,
+            "cities": 2,
+            "cost": 3.7350000000000003,
+            "pnl": -1.735,
+            "roi": -0.464524765729585,
+            "roi_ci95": [
+              -1.0,
+              0.35135135135135137
+            ],
+            "top5_removed_roi": null
+          },
+          "holdout": {
+            "rows": 2,
+            "event_dates": 2,
+            "cities": 1,
+            "cost": 1.32,
+            "pnl": -0.32000000000000006,
+            "roi": -0.24242424242424246,
+            "roi_ci95": [
+              -1.0,
+              0.6528925619834711
+            ],
+            "top5_removed_roi": null
+          },
+          "train_excess_roi_vs_bucket_family": -0.21211844856296502,
+          "holdout_excess_roi_vs_bucket_family": -0.10226947028322783
+        }
+      ]
+    }
+  ],
+  "selected_overlay_rows": [
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "city_model_reliable",
+      "train_rows": 5,
+      "train_roi": 0.3555645926528399,
+      "holdout_rows": 2,
+      "holdout_dates": 1,
+      "holdout_roi": 0.8823529411764705,
+      "holdout_excess": -0.02483078418907314,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "exclude_forecast_quality_low",
+      "train_rows": 1,
+      "train_roi": 0.18343195266272194,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.9588638589618024,
+      "holdout_excess": 0.05168013359625878,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "forecast_quality_medium_plus",
+      "train_rows": 1,
+      "train_roi": 0.18343195266272194,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.9588638589618024,
+      "holdout_excess": 0.05168013359625878,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "no_quality_filter",
+      "train_rows": 11,
+      "train_roi": 0.49294245385450597,
+      "holdout_rows": 3,
+      "holdout_dates": 1,
+      "holdout_roi": 0.9071837253655436,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "city_model_reliable",
+      "train_rows": 10,
+      "train_roi": -0.17627677100494238,
+      "holdout_rows": 6,
+      "holdout_dates": 3,
+      "holdout_roi": 0.1461318051575931,
+      "holdout_excess": 0.09901138630942558,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "exclude_forecast_quality_low",
+      "train_rows": 7,
+      "train_roi": -0.32885906040268453,
+      "holdout_rows": 4,
+      "holdout_dates": 2,
+      "holdout_roi": -0.4805194805194805,
+      "holdout_excess": -0.5276398993676481,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "forecast_quality_medium_plus",
+      "train_rows": 7,
+      "train_roi": -0.32885906040268453,
+      "holdout_rows": 4,
+      "holdout_dates": 2,
+      "holdout_roi": -0.4805194805194805,
+      "holdout_excess": -0.5276398993676481,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "no_quality_filter",
+      "train_rows": 22,
+      "train_roi": -0.2093441150044924,
+      "holdout_rows": 7,
+      "holdout_dates": 3,
+      "holdout_roi": 0.04712041884816753,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "city_model_reliable",
+      "train_rows": 4,
+      "train_roi": 0.49812734082397,
+      "holdout_rows": 4,
+      "holdout_dates": 3,
+      "holdout_roi": 0.606425702811245,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "exclude_forecast_quality_low",
+      "train_rows": 3,
+      "train_roi": 0.4251781472684084,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.680672268907563,
+      "holdout_excess": 0.07424656609631808,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "forecast_quality_medium_plus",
+      "train_rows": 3,
+      "train_roi": 0.4251781472684084,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.680672268907563,
+      "holdout_excess": 0.07424656609631808,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "blocked_unresolved",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "no_quality_filter",
+      "train_rows": 11,
+      "train_roi": 0.1892963330029732,
+      "holdout_rows": 4,
+      "holdout_dates": 3,
+      "holdout_roi": 0.606425702811245,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "city_model_reliable",
+      "train_rows": 18,
+      "train_roi": 0.2833675564681725,
+      "holdout_rows": 8,
+      "holdout_dates": 2,
+      "holdout_roi": -0.05446293494704995,
+      "holdout_excess": -0.29877348866524633,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "exclude_forecast_quality_low",
+      "train_rows": 20,
+      "train_roi": 0.29542068786838527,
+      "holdout_rows": 5,
+      "holdout_dates": 2,
+      "holdout_roi": 0.18378218407812963,
+      "holdout_excess": -0.060528369640066776,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "forecast_quality_medium_plus",
+      "train_rows": 20,
+      "train_roi": 0.29542068786838527,
+      "holdout_rows": 5,
+      "holdout_dates": 2,
+      "holdout_roi": 0.18378218407812963,
+      "holdout_excess": -0.060528369640066776,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "no_quality_filter",
+      "train_rows": 90,
+      "train_roi": 0.30421821433894763,
+      "holdout_rows": 26,
+      "holdout_dates": 3,
+      "holdout_roi": 0.2443105537181964,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "city_model_reliable",
+      "train_rows": 57,
+      "train_roi": 0.14884049170373045,
+      "holdout_rows": 39,
+      "holdout_dates": 8,
+      "holdout_roi": 0.11789091247845729,
+      "holdout_excess": 0.13899682404373281,
+      "top5_removed": -1.0
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "exclude_forecast_quality_low",
+      "train_rows": 60,
+      "train_roi": 0.18675326758078742,
+      "holdout_rows": 23,
+      "holdout_dates": 4,
+      "holdout_roi": 0.1919898283534647,
+      "holdout_excess": 0.21309573991874023,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "forecast_quality_medium_plus",
+      "train_rows": 60,
+      "train_roi": 0.18675326758078742,
+      "holdout_rows": 23,
+      "holdout_dates": 4,
+      "holdout_roi": 0.1919898283534647,
+      "holdout_excess": 0.21309573991874023,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "no_quality_filter",
+      "train_rows": 215,
+      "train_roi": 0.11378182160654837,
+      "holdout_rows": 73,
+      "holdout_dates": 10,
+      "holdout_roi": -0.021105911565275515,
+      "holdout_excess": 0.0,
+      "top5_removed": -0.4582294939863473
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "city_model_reliable",
+      "train_rows": 27,
+      "train_roi": 0.19294280153198973,
+      "holdout_rows": 18,
+      "holdout_dates": 7,
+      "holdout_roi": 0.02301790281329922,
+      "holdout_excess": 0.17367513233807172,
+      "top5_removed": -1.0
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "exclude_forecast_quality_low",
+      "train_rows": 28,
+      "train_roi": 0.19452905691930955,
+      "holdout_rows": 10,
+      "holdout_dates": 4,
+      "holdout_roi": 0.057401812688821746,
+      "holdout_excess": 0.20805904221359425,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "forecast_quality_medium_plus",
+      "train_rows": 28,
+      "train_roi": 0.19452905691930955,
+      "holdout_rows": 10,
+      "holdout_dates": 4,
+      "holdout_roi": 0.057401812688821746,
+      "holdout_excess": 0.20805904221359425,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "default_wu",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "no_quality_filter",
+      "train_rows": 113,
+      "train_roi": 0.0965927297326165,
+      "holdout_rows": 39,
+      "holdout_dates": 10,
+      "holdout_roi": -0.1506572295247725,
+      "holdout_excess": 0.0,
+      "top5_removed": -0.2364590789787641
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "no_quality_filter",
+      "train_rows": 7,
+      "train_roi": 0.25169500365077707,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.36986301369863017,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "city_model_reliable",
+      "train_rows": 0,
+      "train_roi": null,
+      "holdout_rows": 2,
+      "holdout_dates": 1,
+      "holdout_roi": -0.12280701754385964,
+      "holdout_excess": 0.08667914846404545,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "no_quality_filter",
+      "train_rows": 12,
+      "train_roi": -0.3865030674846625,
+      "holdout_rows": 4,
+      "holdout_dates": 2,
+      "holdout_roi": -0.2094861660079051,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "city_model_reliable",
+      "train_rows": 0,
+      "train_roi": null,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.6260162601626017,
+      "holdout_excess": 0.10510371263408458,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "other_or_unknown",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "no_quality_filter",
+      "train_rows": 6,
+      "train_roi": -0.23469387755102042,
+      "holdout_rows": 2,
+      "holdout_dates": 2,
+      "holdout_roi": 0.5209125475285171,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "city_model_reliable",
+      "train_rows": 3,
+      "train_roi": -0.3550467591099645,
+      "holdout_rows": 1,
+      "holdout_dates": 1,
+      "holdout_roi": 0.17647058823529416,
+      "holdout_excess": 0.10004432343443301,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "adjacent3_yes_cost085",
+      "filter": "no_quality_filter",
+      "train_rows": 16,
+      "train_roi": -0.07860639216815436,
+      "holdout_rows": 6,
+      "holdout_dates": 2,
+      "holdout_roi": 0.07642626480086115,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "city_model_reliable",
+      "train_rows": 12,
+      "train_roi": -0.08076165462902167,
+      "holdout_rows": 5,
+      "holdout_dates": 2,
+      "holdout_roi": 0.12359550561797751,
+      "holdout_excess": 0.04397337336426631,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "side_band_best_leg_mid_cost_e008_top4",
+      "filter": "no_quality_filter",
+      "train_rows": 53,
+      "train_roi": -0.11632254227207067,
+      "holdout_rows": 19,
+      "holdout_dates": 5,
+      "holdout_roi": 0.0796221322537112,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "city_model_reliable",
+      "train_rows": 6,
+      "train_roi": -0.464524765729585,
+      "holdout_rows": 2,
+      "holdout_dates": 2,
+      "holdout_roi": -0.24242424242424246,
+      "holdout_excess": -0.10226947028322783,
+      "top5_removed": null
+    },
+    {
+      "source_bucket": "source_sensitive_confirmed",
+      "algorithm": "single_leg_buy_no_cost40_75_edge010_top1",
+      "filter": "no_quality_filter",
+      "train_rows": 27,
+      "train_roi": -0.25240631716662,
+      "holdout_rows": 9,
+      "holdout_dates": 5,
+      "holdout_roi": -0.14015477214101463,
+      "holdout_excess": 0.0,
+      "top5_removed": null
+    }
+  ],
+  "headline": {
+    "default_wu_decision_sets": 188,
+    "default_wu_cities": 34,
+    "source_sensitive_decision_sets": 45,
+    "source_sensitive_cities": 8,
+    "blocked_decision_sets": 19,
+    "blocked_cities": 3
+  },
+  "reuse_contract_update": {
+    "grain": "city + event_date + forecast_source/model_version + decision_snapshot_ts_utc",
+    "required_source_fields": [
+      "settlement_source_class",
+      "official_station_or_feed",
+      "mapping_rule"
+    ],
+    "generic_denominator": "default_wu, optionally default_watchlist if explicitly reported",
+    "blocked_rule": "exclude blocked_unresolved from source-sensitive feature claims",
+    "source_sensitive_rule": "rebuild source features from HKO/WIHH/official station before feature-source claims"
+  },
+  "limitations": [
+    "Decision-price proxy only; no time-aligned orderbook execution claim.",
+    "Source buckets become sample-thin in holdout.",
+    "The registry is city-level; future market-level rule changes still need pre-entry checks.",
+    "Forecast issue/run timestamp is still not materialized in fact_signal_candidates."
+  ],
+  "verdict": {
+    "significance": "FAIL",
+    "baseline": "FAIL",
+    "forward": "FAIL",
+    "conclusion": "inconclusive",
+    "allowed_action": "research/shadow instrumentation only; no live config change"
+  }
+}

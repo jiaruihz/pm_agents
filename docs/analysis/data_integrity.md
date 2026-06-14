@@ -2,7 +2,7 @@
 
 > Living doc for module [0]: snapshot health, side flips, candidate/fill linkage, fact-table coverage, and known data gaps.
 > Current status: `current-reference` for analysis preflight; current source docs remain `WEATHER_DATA_CANONICAL_SOURCES.md` and `WEATHER_ANALYSIS_CONTRACT.md`.
-> Last updated: 2026-06-14 CLOB cache gate repair + settlement source registry v0.
+> Last updated: 2026-06-15 source-aware forecast-quality preflight.
 
 ## Current Conclusion
 
@@ -15,8 +15,9 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 3. **`fact_signal_candidates` and `fact_trades` are different grains.** Candidate counterfactuals measure opportunity/capture; fill facts measure executed PnL. Joining them is valid only after orphan checks and denominator labels.
 4. **Decision-window coverage is an analysis-quality gate.** Backfilled rows must be marked by `decision_window_source`; high `decision_window_missing` means over-fine slices should be downgraded.
 5. **Settlement truth and feature source are different things.** `pm_history` / `final_yes` remains the market payout truth, but source-sensitive features must know whether the city settles from the configured station, a different official station, or a special feed such as HKO.
-6. **Handoff and experiment reports are method evidence unless their scripts have run under current gates.** Do not cite a handoff manifest as proof that a strategy edge is confirmed.
-7. **CLOB fill cache must be cap-safe before live_real reporting.** On 2026-06-14 the local cache was repaired with `scripts/ops/repair_clob_fill_cache_for_gate.py --replace`: 579 stale rows outside the current submitted-order universe and one over-cap Chengdu duplicate were removed, with backup at `runtime/weather_edge_v1/clob_fills.jsonl.bak_gate_repair_20260613T183739Z`. After rebuild, `weather_clob_fill_coverage_gate.py` passed with 855 DB/cache/fact live_real fills and zero cost delta.
+6. **Forecast-quality labels must be source-aware.** The 2026-06-15 source-adjusted rerun keeps the base layer useful, but generic reliability claims should default to `default_wu_station_by_rules` and explicitly tag source-sensitive confirmed / blocked unresolved cities.
+7. **Handoff and experiment reports are method evidence unless their scripts have run under current gates.** Do not cite a handoff manifest as proof that a strategy edge is confirmed.
+8. **CLOB fill cache must be cap-safe before live_real reporting.** On 2026-06-14 the local cache was repaired with `scripts/ops/repair_clob_fill_cache_for_gate.py --replace`: 579 stale rows outside the current submitted-order universe and one over-cap Chengdu duplicate were removed, with backup at `runtime/weather_edge_v1/clob_fills.jsonl.bak_gate_repair_20260613T183739Z`. After rebuild, `weather_clob_fill_coverage_gate.py` passed with 855 DB/cache/fact live_real fills and zero cost delta.
 
 ## Evidence Map
 
@@ -28,6 +29,7 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 | `docs/archive/analysis/2026-05/2026-05-29-performance-candidates-vs-fills-link.md` | 2026-05 | candidate vs fill linkage context | snapshot |
 | `docs/analysis/2026-06/2026-06-09-decision-window-backfill.md` | 2026-06 | analysis DB repair for decision-window coverage | snapshot |
 | `docs/analysis/2026-06/2026-06-14-settlement-source-registry-v0.md` | 2026-06 | city-level settlement source classes for feature alignment: official station diff, HKO/Jakarta special fixes, blocked unresolved cities | active-evidence |
+| `docs/analysis/2026-06/2026-06-15-forecast-quality-source-adjusted-v0.md` | 2026-06 | forecast-quality reliability stratified by settlement source class; default WU is generic denominator, HK/Jakarta/station-diff require source-aware adapters | active-evidence |
 | `docs/archive/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md` | 2026-06 | handoff package landing and schema validation | design-plan |
 | `docs/analysis/2026-06/2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md` | 2026-06 | handoff package execution gaps and three-source microstructure correction | design-plan |
 | `docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | 2026-06 | final audit: use three-gate verdicts and avoid drifting live_real counts | snapshot |
@@ -57,6 +59,7 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 | CLOB fill coverage | `weather_clob_fill_coverage_gate.py gate_pass=true`, with DB/cache/fact cost delta 0 and `over_order_keys=0` |
 | Decision window | Coverage and `decision_window_source` distribution before counterfactual or timing claims |
 | Settlement source | For source-sensitive research, join the city to `settlement_source_registry_v0` and state whether it is default, station-diff, special-source, watchlist, or blocked |
+| Forecast quality source adjustment | For forecast-quality/reliability research, report source bucket (`default_wu`, `source_sensitive_confirmed`, `blocked_unresolved`, etc.) next to quality-label baselines |
 | Grain labeling | State whether each table uses candidate, fill, order, city-day, or account-equity grain |
 
 ## Open Work
@@ -65,3 +68,4 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 2. If raw live files are newer than DB, report DB lag instead of forcing a PnL conclusion.
 3. Add a small reusable orphan/coverage table for future candidate-vs-fill reports.
 4. Promote settlement source registry fields into a fact-table sidecar once the schema is agreed.
+5. Promote source-aware forecast-quality labels into the same sidecar so Range RV, adjacent3, side-band, BUY_NO, and basket scripts consume one reliability layer.

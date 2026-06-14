@@ -1,11 +1,11 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-14 settlement source registry + forecast quality living-doc updates
+Updated: 2026-06-15 source-aware forecast quality update
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-06-14
+更新时间：2026-06-15
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -89,7 +89,7 @@ Status 口径：
 
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
-| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | 模型概率相对市场是否有 alpha 的 living doc；当前结论：global probability alpha 为负，model edge rank alpha 未确认；forecast quality 只可作为 shared reliability layer / shadow tag |
+| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | 模型概率相对市场是否有 alpha 的 living doc；当前结论：global probability alpha 为负，model edge rank alpha 未确认；forecast quality 只可作为 source-aware shared reliability layer / shadow tag |
 | [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | `current-source` | weather_edge_engine 当前接手入口：blender shadow/paper 与 city-day basket 下一步 |
 | [WEATHER_PROBABILITY_MODEL_REVIEW.md](WEATHER_PROBABILITY_MODEL_REVIEW.md) | `current-reference` | 生产 baseline `model_p_yes` 的问题、条件模型缺口、季节/forecast jump 风险 |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) | `current-reference` | 概率模型从 M0 可观测骨架到 lead-time/ensemble/ML 的路线图 |
@@ -105,7 +105,7 @@ Status 口径：
 
 | 文档 | Status | 主线层 | 读它回答什么问题 |
 |---|---|---:|---|
-| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | [1] | 模型概率相对市场是否有 alpha；forecast quality / reliability labels 如何作为 shared layer 影响 signal、shadow 分层或 sizing |
+| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | [1] | 模型概率相对市场是否有 alpha；forecast quality / reliability labels 如何作为 source-aware shared layer 影响 signal、shadow 分层或 sizing |
 | [market_structure_edge.md](analysis/market_structure_edge.md) | `current-reference` | [2] | 是否存在 model-free 的市场结构 edge，例如 favorite-longshot、BUY_NO base-rate、price-bucket mispricing |
 | [execution_quality.md](analysis/execution_quality.md) | `current-reference` | [4] | maker-only 扣 spread、queue、逆向选择和 fill selection 后是否仍有可成交 edge；2026-06-14 本机 CLOB cache repair 后 coverage gate 已可通过 |
 | [entry_timing.md](analysis/entry_timing.md) | `current-reference` | [3] | target-date lead time、forecast checkpoint、decision window 对计划和成交的影响 |
@@ -190,6 +190,7 @@ Status 口径：
 | [2026-06-13-maker-backtest-v0.md](analysis/2026-06/2026-06-13-maker-backtest-v0.md) | `snapshot` | yes | 白名单 maker 路线关闭：衰竭后挂被动 NO 单 fill 31% 但 filled ROI -17.7%（t=-3.8），点差是逆向选择补偿不是免费钱；修复城市 maker（+8.1% t=1.0）不如直接 taker（+9.6% t=4.3）——有信息优势时应吃单不应挂单 |
 | [2026-06-13-settlement-basis-batch2-v0.md](analysis/2026-06/2026-06-13-settlement-basis-batch2-v0.md) | `snapshot` | yes | 结算源审计第二批：HongKong 修复（HKO Daily Extract 小数 + floor 映射 = 100%）、Jakarta 修复（官方站 WIHH 非 WIII = 8/8）→ 可交易城市 6→8；Moscow 89%/Seoul 78% 根因未明不入池；公开 GitHub bot 实锤用错站（NYC=KNYC vs 官方 KLGA） |
 | [2026-06-14-settlement-source-registry-v0.md](analysis/2026-06/2026-06-14-settlement-source-registry-v0.md) | `snapshot` | yes | 城市级 settlement source registry：34 城默认 WU 站点匹配、7 城官方站点错位确认（含 Jakarta WIHH）、HongKong HKO floor 特殊源确认、Moscow/Seoul/Shenzhen blocked；用于 M3/forecast-quality/station-basis 的 source-sensitive feature alignment，不给 live 动作 |
+| [2026-06-15-forecast-quality-source-adjusted-v0.md](analysis/2026-06/2026-06-15-forecast-quality-source-adjusted-v0.md) | `snapshot` | yes | Forecast quality source-adjusted v0：把 forecast-quality base 接 settlement_source_registry；默认 WU 是 generic denominator（188 decision sets/34 城），source-sensitive confirmed 45/8 城需官方源适配（HK=HKO、Jakarta=WIHH），blocked unresolved 19/3 城不得混入 source-sensitive claims；结论仍 research/shadow only |
 | [2026-06-13-forecast-basis-sleeve-v0.md](analysis/2026-06/2026-06-13-forecast-basis-sleeve-v0.md) | `snapshot` | yes | 早场（10-13h 峰值前）预报 basis sleeve：网格预报能区分同城两站（71% 落不同档），但 edge 取决于"市场早场锚哪个站"且因城而异——Milan(+50%)/London(+50%) 市场锚官方站可开，KualaLumpur(-46%)/Chicago(-28%) 市场锚错误站反亏；需逐市场 anchor gate，不能整池开；核心仍是 14-17h 峰值后观测 sleeve |
 | [2026-06-13-station-basis-execution-design.md](analysis/2026-06/2026-06-13-station-basis-execution-design.md) | `design-draft` | yes | Station-basis 执行架构：三层（shadow 信号 / exec 风控 dry_run / eval go-no-go），风控边界 8 例单测，真钱下单硬门锁死（默认 dry_run，_place_live_order raise）；path-to-live 清单第 1-5 项完成，卡在 shadow ≥40 笔验证（现 7 笔）；操作命令 + 紧急 PAUSE 在此 |
 | [2026-06-14-station-basis-live-candidate-v1.md](analysis/2026-06/2026-06-14-station-basis-live-candidate-v1.md) | `snapshot` | yes | Station-basis live candidate v1：诊断 v0 forward YES early divergence；排除 Milan/Jakarta，收敛为 5 城 taker、16h official-bucket YES one-per-city-day + NO d1/d2 exhaustion；历史 YES h16 live5 ROI +120.7%、holdout +74.3%、prefix walk-forward +94.9%，NO d1 live5 holdout +19.8%；已接本机 v1 dry-run 风控审计 ledger，并将 live-core shadow/eval 收紧到 ask<=0.90；forward shadow 当前 1 笔 PanamaCity no_d1 pending，ask 0.825 所在 0.80-0.90 桶历史/holdout 为正，pending monitor 显示 thesis 仍 alive；新增 `station_basis_live_prep_gate_v1.py` 输出 live-prep gate，CLOB coverage gate 已修复为 true，当前 verdict=`NOT_READY_ACCUMULATE_SHADOW`，blockers=forward settled=0/核心规则 forward 门未过，仍不允许 live |
