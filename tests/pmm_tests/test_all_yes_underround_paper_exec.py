@@ -328,6 +328,14 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
     )
 
     assert result["latest_fresh_cycle"]["verdict"] == "FRESH_SNAPSHOT_CYCLE_RAN"
+    assert result["latest_live_plan"] == {
+        "generated_at_utc": None,
+        "verdict": None,
+        "scanner_candidate_count": None,
+        "planned_baskets": None,
+        "rejected_baskets": None,
+        "live_now": None,
+    }
     assert result["unique_opportunities"] == [
         {
             "recorded_at_utc": "2026-06-14T04:48:46+00:00",

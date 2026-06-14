@@ -118,3 +118,8 @@ PY
   --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" \
   --min-file-stable-seconds "$MIN_FILE_STABLE_SECONDS" \
   --min-snapshot-rows "$MIN_SNAPSHOT_ROWS"
+
+"$PY" scripts/ops/all_yes_underround_live_plan_v0.py plan \
+  --scan-json "$SCAN_JSON_PATH" \
+  --run-dir "$RUN_DIR" \
+  --max-snapshot-age-seconds "$MAX_SNAPSHOT_AGE_SECONDS" >/dev/null || true

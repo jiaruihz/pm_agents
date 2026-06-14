@@ -821,6 +821,7 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
     gate_result = gate(args)
     last_cycle = read_json(run_dir / "last_cycle.json")
     fresh_cycle = read_json(run_dir / "fresh_cycle.json")
+    live_plan = read_json(run_dir / "latest_live_plan.json")
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
     eval_rows = read_json(run_dir / "eval.json").get("rows") or []
     unique_opportunities = compact_opportunity_rows(eval_rows)
@@ -851,6 +852,14 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         },
         "latest_scanner_candidate_count": last_cycle.get("scanner_candidate_count"),
         "latest_appended_baskets": last_cycle.get("appended_baskets"),
+        "latest_live_plan": {
+            "generated_at_utc": live_plan.get("generated_at_utc"),
+            "verdict": live_plan.get("verdict"),
+            "scanner_candidate_count": live_plan.get("scanner_candidate_count"),
+            "planned_baskets": live_plan.get("planned_baskets"),
+            "rejected_baskets": live_plan.get("rejected_baskets"),
+            "live_now": live_plan.get("live_now"),
+        },
         "max_snapshot_age_seconds": last_cycle.get("max_snapshot_age_seconds"),
         "paper_baskets": len(baskets),
         "paper_unique_opportunity_baskets": gate_result.get("eval", {}).get("unique_opportunity_baskets"),
