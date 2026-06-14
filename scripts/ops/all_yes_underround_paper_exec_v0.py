@@ -143,6 +143,14 @@ def basket_id(scan: dict[str, Any], candidate: dict[str, Any]) -> str:
     )
 
 
+def opportunity_key_from_parts(event_date: Any, city: Any, event_slug: Any) -> str:
+    return "|".join([str(event_date), str(city), str(event_slug)])
+
+
+def opportunity_key_from_basket(row: dict[str, Any]) -> str:
+    return opportunity_key_from_parts(row.get("event_date"), row.get("city"), row.get("event_slug"))
+
+
 def leg_order_id(bid: str, condition_id: str) -> str:
     return f"{bid}|{condition_id}"
 
@@ -152,7 +160,9 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
     basket_path = run_dir / "paper_baskets.jsonl"
     leg_path = run_dir / "paper_leg_orders.jsonl"
     scan = read_json(Path(args.scan_json))
-    existing = {str(row.get("basket_id")) for row in read_jsonl(basket_path)}
+    existing_rows = read_jsonl(basket_path)
+    existing = {str(row.get("basket_id")) for row in existing_rows}
+    existing_opportunities = {opportunity_key_from_basket(row) for row in existing_rows}
     guard_cfg = BasketGuardConfig(
         min_underround=args.min_underround,
         shares_per_leg=args.shares_per_leg,
@@ -168,6 +178,7 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
 
     for candidate in list(scan.get("paper_shadow_candidates") or [])[: args.max_baskets_per_cycle]:
         bid = basket_id(scan, candidate)
+        opportunity_key = opportunity_key_from_parts(candidate.get("event_date"), candidate.get("city"), candidate.get("event_slug"))
         decision_ts = now_utc()
         guard = check_candidate(cfg=guard_cfg, repo_root=ROOT, candidate=candidate, decision_ts_utc=decision_ts)
         guard_audit.append(
@@ -188,7 +199,7 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
             continue
-        if bid in existing:
+        if bid in existing or opportunity_key in existing_opportunities:
             continue
 
         basket = {
@@ -197,6 +208,7 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
             "execution_mode": "paper_all_leg_or_none",
             "no_order_placed": True,
             "basket_id": bid,
+            "opportunity_key": opportunity_key,
             "source_scan": scan.get("snapshot_path"),
             "source_report_generated_at_utc": scan.get("generated_at_utc"),
             "snapshot_ts_utc": scan.get("snapshot_summary", {}).get("snapshot_ts_utc_max"),
@@ -216,6 +228,7 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
             "guard": decision_to_dict(guard),
         }
         baskets_to_append.append(basket)
+        existing_opportunities.add(opportunity_key)
         for leg in guard.leg_orders:
             price = float(leg["price"])
             condition_id = str(leg["condition_id"])
@@ -224,6 +237,7 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
                     "recorded_at_utc": basket["recorded_at_utc"],
                     "strategy_id": STRATEGY_ID,
                     "basket_id": bid,
+                    "opportunity_key": opportunity_key,
                     "leg_order_id": leg_order_id(bid, condition_id),
                     "event_date": candidate.get("event_date"),
                     "city": candidate.get("city"),
@@ -303,8 +317,13 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     settlements = load_settlements(conn, sorted(set(condition_ids)))
 
     rows: list[dict[str, Any]] = []
+    seen_opportunities: set[str] = set()
     for basket in baskets:
         bid = str(basket.get("basket_id"))
+        opportunity_key = str(basket.get("opportunity_key") or opportunity_key_from_basket(basket))
+        duplicate_opportunity = opportunity_key in seen_opportunities
+        if not duplicate_opportunity:
+            seen_opportunities.add(opportunity_key)
         ttl = recording_ttl_audit(basket, args.max_snapshot_age_seconds)
         leg_rows = legs_by_basket.get(bid, [])
         missing = [leg for leg in leg_rows if str(leg.get("condition_id")) not in settlements]
@@ -338,6 +357,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             {
                 **basket,
                 **ttl,
+                "opportunity_key": opportunity_key,
+                "unique_opportunity_first": not duplicate_opportunity,
+                "duplicate_opportunity": duplicate_opportunity,
                 "settlement_eval_status": status,
                 "settled_legs": len(settled_legs),
                 "missing_settlement_legs": len(missing),
@@ -349,12 +371,13 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 "winner_brackets": [leg.get("bracket") for leg in winners],
             }
         )
-    settled = [row for row in rows if row["settlement_eval_status"].startswith("settled_")]
+    decision_rows = [row for row in rows if row.get("unique_opportunity_first")]
+    settled = [row for row in decision_rows if row["settlement_eval_status"].startswith("settled_")]
     exact = [row for row in settled if row["settlement_eval_status"] == "settled_exactly_one_winner"]
-    ttl_equivalent = [row for row in rows if row.get("ttl_equivalent") is True]
+    ttl_equivalent = [row for row in decision_rows if row.get("ttl_equivalent") is True]
     ttl_equivalent_exact = [row for row in exact if row.get("ttl_equivalent") is True]
-    stale_recorded = [row for row in rows if row.get("ttl_status") == "stale_recording"]
-    bad_ttl = [row for row in rows if row.get("ttl_equivalent") is False]
+    stale_recorded = [row for row in decision_rows if row.get("ttl_status") == "stale_recording"]
+    bad_ttl = [row for row in decision_rows if row.get("ttl_equivalent") is False]
     cost = sum(float(row.get("basket_cost_usd") or 0.0) for row in exact)
     pnl = sum(float(row.get("pnl_usd") or 0.0) for row in exact)
     ttl_cost = sum(float(row.get("basket_cost_usd") or 0.0) for row in ttl_equivalent_exact)
@@ -366,11 +389,14 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "db_path": str(Path(args.db_path)),
         "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
-        "baskets": len(rows),
+        "raw_baskets": len(rows),
+        "duplicate_opportunity_baskets": len([row for row in rows if row.get("duplicate_opportunity")]),
+        "baskets": len(decision_rows),
+        "unique_opportunity_baskets": len(decision_rows),
         "settled": len(settled),
         "settled_exactly_one_winner": len(exact),
-        "pending": len([row for row in rows if row["settlement_eval_status"] == "pending"]),
-        "winner_count_anomaly": len([row for row in rows if row["settlement_eval_status"] == "settled_winner_count_anomaly"]),
+        "pending": len([row for row in decision_rows if row["settlement_eval_status"] == "pending"]),
+        "winner_count_anomaly": len([row for row in decision_rows if row["settlement_eval_status"] == "settled_winner_count_anomaly"]),
         "ttl_equivalent_baskets": len(ttl_equivalent),
         "ttl_non_equivalent_baskets": len(bad_ttl),
         "stale_recorded_baskets": len(stale_recorded),
@@ -524,7 +550,10 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
     last_cycle = read_json(run_dir / "last_cycle.json")
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
     eval_rows = read_json(run_dir / "eval.json").get("rows") or []
-    pending_rows = [row for row in eval_rows if row.get("settlement_eval_status") == "pending"]
+    pending_rows = [
+        row for row in eval_rows
+        if row.get("unique_opportunity_first") and row.get("settlement_eval_status") == "pending"
+    ]
     city_counts: dict[str, int] = {}
     pending_event_dates: dict[str, int] = {}
     for row in pending_rows:
@@ -542,6 +571,8 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         "latest_appended_baskets": last_cycle.get("appended_baskets"),
         "max_snapshot_age_seconds": last_cycle.get("max_snapshot_age_seconds"),
         "paper_baskets": len(baskets),
+        "paper_unique_opportunity_baskets": gate_result.get("eval", {}).get("unique_opportunity_baskets"),
+        "paper_duplicate_opportunity_baskets": gate_result.get("eval", {}).get("duplicate_opportunity_baskets"),
         "ttl_equivalent_baskets": gate_result.get("eval", {}).get("ttl_equivalent_baskets"),
         "ttl_non_equivalent_baskets": gate_result.get("eval", {}).get("ttl_non_equivalent_baskets"),
         "stale_recorded_baskets": gate_result.get("eval", {}).get("stale_recorded_baskets"),
