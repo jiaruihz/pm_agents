@@ -6,7 +6,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_DIR"
 
-PY="${PYTHON:-$PROJECT_DIR/.venv/bin/python}"
+DATA_PROJECT_DIR="${DATA_PROJECT_DIR:-$PROJECT_DIR}"
+if [[ -n "${PYTHON:-}" ]]; then
+  PY="$PYTHON"
+elif [[ -x "$PROJECT_DIR/.venv/bin/python" ]]; then
+  PY="$PROJECT_DIR/.venv/bin/python"
+elif [[ -x "$DATA_PROJECT_DIR/.venv/bin/python" ]]; then
+  PY="$DATA_PROJECT_DIR/.venv/bin/python"
+else
+  PY="python3"
+fi
 i=0
 while true; do
   "$PY" scripts/ops/weather_station_basis_shadow_v1.py cycle || true

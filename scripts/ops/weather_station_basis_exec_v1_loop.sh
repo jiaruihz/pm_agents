@@ -7,7 +7,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_DIR"
-PY="$PROJECT_DIR/.venv/bin/python"
+DATA_PROJECT_DIR="${DATA_PROJECT_DIR:-$PROJECT_DIR}"
+if [[ -n "${PYTHON:-}" ]]; then
+  PY="$PYTHON"
+elif [[ -x "$PROJECT_DIR/.venv/bin/python" ]]; then
+  PY="$PROJECT_DIR/.venv/bin/python"
+elif [[ -x "$DATA_PROJECT_DIR/.venv/bin/python" ]]; then
+  PY="$DATA_PROJECT_DIR/.venv/bin/python"
+else
+  PY="python3"
+fi
 
 export STATION_BASIS_EXEC_MODE="${STATION_BASIS_EXEC_MODE:-dry_run}"
 
