@@ -71,6 +71,26 @@ def test_live_plan_builds_non_submitting_order_intents(tmp_path: Path):
     assert plan["no_order_placed"] is True
     assert plan["all_leg_or_none_required"] is True
     assert plan["partial_fill_policy"] == "block_live_until_cancel_or_unwind_engine_exists"
+    assert plan["execution_contract"] == {
+        "contract_version": "all_yes_execution_contract_v0",
+        "live_submit_enabled": False,
+        "no_order_placed": True,
+        "order_submission_mode": "disabled_dry_run_only",
+        "all_leg_or_none_required": True,
+        "per_leg_time_in_force": "FOK_OR_CANCEL_REQUIRED_BEFORE_LIVE",
+        "partial_fill_policy": "reject_partial_before_live",
+        "partial_fill_live_action": "cancel_unfilled_then_unwind_filled_or_pause_strategy",
+        "max_snapshot_age_seconds": 180.0,
+        "required_before_live": [
+            "signed_all_leg_order_submitter",
+            "post_submit_fill_polling",
+            "cancel_all_unfilled_legs_on_any_partial_or_reject",
+            "unwind_filled_yes_legs_if_cancel_fails",
+            "basket_cost_hard_cap_enforced_at_submit",
+            "weather_strategy_deploy_review",
+        ],
+    }
+    assert result["execution_contract"] == plan["execution_contract"]
     assert len(plan["order_intents"]) == 5
     assert {intent["submit_now"] for intent in plan["order_intents"]} == {False}
     assert (run_dir / "latest_live_plan.json").exists()

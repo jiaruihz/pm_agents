@@ -28,6 +28,7 @@ from scripts.ops.all_yes_underround_guards import BasketGuardConfig, check_candi
 SCAN_JSON_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0" / "latest_scan.json"
 RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0"
 STRATEGY_ID = "all_yes_underround_basket_v0"
+EXECUTION_CONTRACT_VERSION = "all_yes_execution_contract_v0"
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,6 +76,28 @@ def plan_id(scan: dict[str, Any], candidate: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
 
 
+def build_execution_contract(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "contract_version": EXECUTION_CONTRACT_VERSION,
+        "live_submit_enabled": False,
+        "no_order_placed": True,
+        "order_submission_mode": "disabled_dry_run_only",
+        "all_leg_or_none_required": True,
+        "per_leg_time_in_force": "FOK_OR_CANCEL_REQUIRED_BEFORE_LIVE",
+        "partial_fill_policy": "reject_partial_before_live",
+        "partial_fill_live_action": "cancel_unfilled_then_unwind_filled_or_pause_strategy",
+        "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+        "required_before_live": [
+            "signed_all_leg_order_submitter",
+            "post_submit_fill_polling",
+            "cancel_all_unfilled_legs_on_any_partial_or_reject",
+            "unwind_filled_yes_legs_if_cancel_fails",
+            "basket_cost_hard_cap_enforced_at_submit",
+            "weather_strategy_deploy_review",
+        ],
+    }
+
+
 def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     scan_path = Path(args.scan_json)
@@ -91,6 +114,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
 
     plans: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
+    execution_contract = build_execution_contract(args)
     for candidate in list(scan.get("paper_shadow_candidates") or [])[: args.max_baskets_per_cycle]:
         guard = check_candidate(cfg=guard_cfg, repo_root=ROOT, candidate=candidate, decision_ts_utc=decision_ts)
         common = {
@@ -122,6 +146,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
                 "expected_profit_usd": guard.expected_profit_usd,
                 "all_leg_or_none_required": True,
                 "partial_fill_policy": "block_live_until_cancel_or_unwind_engine_exists",
+                "execution_contract": execution_contract,
                 "live_blockers": [
                     "no_signed_order_submitter_in_this_script",
                     "no_partial_fill_cancel_or_unwind_engine",
@@ -156,6 +181,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "scanner_candidate_count": len(list(scan.get("paper_shadow_candidates") or [])),
         "planned_baskets": len(plans),
         "rejected_baskets": len(rejected),
+        "execution_contract": execution_contract,
         "plans": plans,
         "rejected": rejected,
         "verdict": "DRY_RUN_PLAN_ONLY",

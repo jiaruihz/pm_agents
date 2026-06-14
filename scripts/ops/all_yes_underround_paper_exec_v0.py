@@ -27,6 +27,7 @@ DB_DEFAULT = ROOT / "runtime" / "weather.db"
 GATE_DEFAULT = ROOT / "runtime" / "_dashboard_logs" / "clob_fill_coverage_gate.json"
 RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0"
 STRATEGY_ID = "all_yes_underround_basket_v0"
+EXECUTION_CONTRACT_VERSION = "all_yes_execution_contract_v0"
 
 
 def parse_args() -> argparse.Namespace:
@@ -506,6 +507,7 @@ def live_plan_gate_items(live_plan: dict[str, Any]) -> tuple[list[dict[str, Any]
     unsafe_plans: list[dict[str, Any]] = []
     for plan in list(live_plan.get("plans") or []):
         intents = list(plan.get("order_intents") or [])
+        contract = dict(plan.get("execution_contract") or {})
         unsafe_reasons: list[str] = []
         if plan.get("live_submit_enabled") is not False:
             unsafe_reasons.append("live_submit_enabled_not_false")
@@ -517,6 +519,22 @@ def live_plan_gate_items(live_plan: dict[str, Any]) -> tuple[list[dict[str, Any]
             unsafe_reasons.append("order_intent_submit_now_not_false")
         if plan.get("partial_fill_policy") != "block_live_until_cancel_or_unwind_engine_exists":
             unsafe_reasons.append("partial_fill_policy_not_blocking_live")
+        if contract.get("contract_version") != EXECUTION_CONTRACT_VERSION:
+            unsafe_reasons.append("execution_contract_bad_version")
+        if contract.get("live_submit_enabled") is not False:
+            unsafe_reasons.append("execution_contract_live_submit_enabled_not_false")
+        if contract.get("no_order_placed") is not True:
+            unsafe_reasons.append("execution_contract_no_order_placed_not_true")
+        if contract.get("all_leg_or_none_required") is not True:
+            unsafe_reasons.append("execution_contract_all_leg_or_none_not_true")
+        if contract.get("order_submission_mode") != "disabled_dry_run_only":
+            unsafe_reasons.append("execution_contract_order_submission_mode_not_disabled")
+        if contract.get("per_leg_time_in_force") != "FOK_OR_CANCEL_REQUIRED_BEFORE_LIVE":
+            unsafe_reasons.append("execution_contract_time_in_force_not_blocking_live")
+        if contract.get("partial_fill_policy") != "reject_partial_before_live":
+            unsafe_reasons.append("execution_contract_partial_fill_policy_not_reject")
+        if contract.get("partial_fill_live_action") != "cancel_unfilled_then_unwind_filled_or_pause_strategy":
+            unsafe_reasons.append("execution_contract_partial_fill_action_not_fail_closed")
         if unsafe_reasons:
             unsafe_plans.append(
                 {

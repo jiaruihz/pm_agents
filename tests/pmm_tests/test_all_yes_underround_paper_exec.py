@@ -5,6 +5,21 @@ import sqlite3
 from scripts.ops.all_yes_underround_paper_exec_v0 import evaluate, gate, live_plan_gate_items, monitor, recording_ttl_audit
 
 
+def _execution_contract(**overrides):
+    row = {
+        "contract_version": "all_yes_execution_contract_v0",
+        "live_submit_enabled": False,
+        "no_order_placed": True,
+        "order_submission_mode": "disabled_dry_run_only",
+        "all_leg_or_none_required": True,
+        "per_leg_time_in_force": "FOK_OR_CANCEL_REQUIRED_BEFORE_LIVE",
+        "partial_fill_policy": "reject_partial_before_live",
+        "partial_fill_live_action": "cancel_unfilled_then_unwind_filled_or_pause_strategy",
+    }
+    row.update(overrides)
+    return row
+
+
 def _basket(recorded_at_utc="2026-06-13T18:32:00+00:00", snapshot_ts_utc="2026-06-13T18:30:53Z"):
     return {
         "recorded_at_utc": recorded_at_utc,
@@ -38,6 +53,7 @@ def test_live_plan_gate_accepts_non_submitting_dry_run_plan():
                     "live_submit_enabled": False,
                     "no_order_placed": True,
                     "partial_fill_policy": "block_live_until_cancel_or_unwind_engine_exists",
+                    "execution_contract": _execution_contract(),
                     "order_intents": [{"submit_now": False}],
                 }
             ],
@@ -74,6 +90,32 @@ def test_live_plan_gate_blocks_unsafe_submit_flags():
 
     assert "dry_run_live_plan_unsafe_live_flag" in {row["code"] for row in blockers}
     assert "dry_run_live_plan_unsafe_order_intents" in {row["code"] for row in blockers}
+    assert passed == []
+
+
+def test_live_plan_gate_blocks_missing_execution_contract():
+    blockers, passed = live_plan_gate_items(
+        {
+            "generated_at_utc": "2026-06-14T05:00:00+00:00",
+            "verdict": "DRY_RUN_PLAN_ONLY",
+            "live_now": False,
+            "scanner_candidate_count": 1,
+            "planned_baskets": 1,
+            "rejected_baskets": 0,
+            "plans": [
+                {
+                    "plan_id": "p1",
+                    "live_submit_enabled": False,
+                    "no_order_placed": True,
+                    "partial_fill_policy": "block_live_until_cancel_or_unwind_engine_exists",
+                    "order_intents": [{"submit_now": False}],
+                }
+            ],
+        }
+    )
+
+    unsafe = next(row for row in blockers if row["code"] == "dry_run_live_plan_unsafe_order_intents")
+    assert "execution_contract_bad_version" in unsafe["unsafe_plans"][0]["unsafe_reasons"]
     assert passed == []
 
 
