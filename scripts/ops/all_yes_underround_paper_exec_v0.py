@@ -1045,15 +1045,24 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
         )
     guard_audit = list(last_cycle.get("guard_audit") or [])
     guard_failures = [row for row in guard_audit if not row.get("guard", {}).get("allow")]
+    guard_allowed = [row for row in guard_audit if row.get("guard", {}).get("allow")]
     scanner_candidate_count = last_cycle.get("scanner_candidate_count")
     if scanner_candidate_count == 0:
         blockers.append({"code": "no_current_scanner_candidates", "message": "Latest scanner run found no current all-YES underround candidates."})
     elif not guard_audit:
         blockers.append({"code": "current_guard_audit_missing", "message": "Latest cycle did not audit current scanner candidates through the all-leg guard."})
-    elif guard_failures:
-        blockers.append({"code": "current_guard_audit_fail", "message": "Some current scanner candidates failed the all-leg guard.", "failures": guard_failures})
+    elif guard_allowed:
+        passed.append(
+            {
+                "code": "current_guard_audit_has_allowed",
+                "message": "At least one current scanner candidate passes the shared all-leg guard.",
+                "allowed_candidates": len(guard_allowed),
+                "rejected_candidates": len(guard_failures),
+                "rejections": guard_failures,
+            }
+        )
     else:
-        passed.append({"code": "current_guard_audit_pass", "message": "Current scanner candidates pass the shared all-leg guard.", "candidates": len(guard_audit)})
+        blockers.append({"code": "current_guard_audit_fail", "message": "No current scanner candidates passed the all-leg guard.", "failures": guard_failures})
     if eval_summary["ttl_equivalent_settled_exactly_one_winner"] < args.min_settled_baskets:
         blockers.append(
             {

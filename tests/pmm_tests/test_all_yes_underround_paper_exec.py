@@ -414,6 +414,57 @@ def test_gate_quarantines_legacy_invalid_shape_without_blocking(tmp_path):
     assert "legacy_invalid_shape_quarantined" in {row["code"] for row in result["passed"]}
 
 
+def test_gate_allows_current_guard_when_any_candidate_passes(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    gate_path = tmp_path / "clob_gate.json"
+    gate_path.write_text(json.dumps({"gate_pass": True}) + "\n")
+    (run_dir / "last_cycle.json").write_text(
+        json.dumps(
+            {
+                "scanner_candidate_count": 2,
+                "guard_audit": [
+                    {"basket_id": "allowed", "guard": {"allow": True}},
+                    {
+                        "basket_id": "rejected",
+                        "guard": {"allow": False, "blockers": ["snapshot_too_old"]},
+                    },
+                ],
+            }
+        )
+        + "\n"
+    )
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.commit()
+    conn.close()
+    (run_dir / "paper_baskets.jsonl").write_text("")
+    (run_dir / "paper_leg_orders.jsonl").write_text("")
+
+    result = gate(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            gate_path=str(gate_path),
+            max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-14T06:10:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
+            min_settled_baskets=20,
+            min_settled_active_dates=7,
+            min_roi=0.02,
+            min_positive_basket_rate=0.55,
+        )
+    )
+
+    assert "current_guard_audit_has_allowed" in {row["code"] for row in result["passed"]}
+    assert "current_guard_audit_fail" not in {row["code"] for row in result["blockers"]}
+
+
 def test_gate_blocks_stale_clob_coverage_evidence_even_if_gate_passes(tmp_path):
     run_dir = tmp_path / "run"
     run_dir.mkdir()

@@ -282,6 +282,12 @@ def main() -> None:
             str(args.max_snapshot_age_seconds),
         ]
     )
+
+    result["executed_cycle"] = True
+    result["verdict"] = "FRESH_SNAPSHOT_CYCLE_RAN"
+    result["last_cycle"] = read_json(run_dir / "last_cycle.json")
+    write_result(run_dir, result)
+
     run_cmd(
         [
             py,
@@ -297,13 +303,9 @@ def main() -> None:
             str(args.max_snapshot_age_seconds),
         ]
     )
-    run_cmd(scanner_args)
-
-    result["executed_cycle"] = True
-    result["verdict"] = "FRESH_SNAPSHOT_CYCLE_RAN"
-    result["last_cycle"] = read_json(run_dir / "last_cycle.json")
     result["monitor"] = read_json(run_dir / "monitor.json")
     write_result(run_dir, result)
+    run_cmd(scanner_args)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
