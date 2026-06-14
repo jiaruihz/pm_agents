@@ -105,6 +105,23 @@ maker 下单价（**开火前需最终确定的唯一参数**）：
   否则回落到 best_bid。需要在 plan 里给出**明确的目标挂价**（绝对水平或相对 bid）。
 - ⚠️ 与 N100 v1 track 的口径需调和（v1 选 16h/排除 Milan/ask≤0.90；本对账说 14h 更可成交）。
 
+## 6.5 关键决策表（每个选择讲清楚）
+
+每一行 = 一个必须做的选择，含选项、证据、当前决定、待办。
+
+| # | 选择 | 选项 | 证据 | 当前决定 | 状态/待办 |
+|---|---|---|---|---|---|
+| D1 | 成交角色 | taker 吃单 / **maker 挂单** / maker_queue | taker 实时多在 0.999 或无单（v1 0/41）；maker 是仓库验证过形态、现有执行器默认即 maker-only | **maker** | ✅ 已定（用户 06-15）。本轮不用 taker/queue |
+| D2 | 入场时点 | **14h** / 16h | 14h 可成交率最高（NO d1 66%）；16h edge 更干净但可成交率低（v1 报 YES h16 +120%，但样本/口径不同） | **倾向 14h 起，16h 仍挂**（maker 挂单可跨时点存活，时点影响小于 taker） | ⏳ 与 v1 的 16h 口径需调和 |
+| D3 | 城市池 | 6 城 / v1 的 5 城（排除 Milan/Jakarta） | 可成交对账：Paris/London/Milan 最佳；v1 因 forward divergence 排除 Milan | **Paris/London/Milan 优先开，PanamaCity/Chicago 次之** | ⏳ Milan 取舍需调和 |
+| D4 | 代码载体 | Mac v0 scaffold / **N100 v1 track** | v1 在生产机、有 key/CLOB 链路、有 live-prep gate；v0 是 Mac 研究脚手架，live 环境未验证 | **N100 v1 为实盘载体**，v0 为研究/参考 | ⏳ 两套需收敛 |
+| D5 | maker 挂价 | best_bid+1tick（验证过）/ ask×(1-d) 占位 | maker-backtest M1 = best_bid+1tick → basis +8% | **best_bid+1tick** | ❌ 现 bridge 是 ask×0.9 占位，待改 |
+| D6 | ask 上限 | 0.97 / 0.90 | v1 收紧到 ≤0.90 | 跟 v1 用 **0.90** | ⏳ 调和 |
+| D7 | 资金规模 | pilot $1/笔·$10/日 / shadow-parity $5·$50 | 首轮目的是验证实时 fill，非盈利 | **pilot $1/$10** | ✅ |
+| D8 | 上线门 | 直接开 / 过 live-prep gate | gate 现 NOT_READY（forward settled=0，根因=v1 采样偏差） | **先修 v1 采样→累积→过 gate** | ⏳ 解锁的关键一步 |
+
+> 总原则：D1/D7 已定且保守；D2/D3/D6 是"我的对账 vs v1 口径"的调和项；D5/D8 是开火前的硬待办。
+
 ## 7. 风险与资金边界（station_basis_guards.py，8 例单测）
 
 | 参数 | shadow-parity | live pilot |
