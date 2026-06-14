@@ -343,6 +343,10 @@ def compact_opportunity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "basket_shape_blockers": row.get("basket_shape_blockers"),
                 "recording_age_seconds": row.get("recording_age_seconds"),
                 "settlement_eval_status": row.get("settlement_eval_status"),
+                "settled_legs": row.get("settled_legs"),
+                "missing_settlement_legs": row.get("missing_settlement_legs"),
+                "unresolved_settlement_legs": row.get("unresolved_settlement_legs"),
+                "pending_reason": row.get("pending_reason"),
                 "winner_count": row.get("winner_count"),
                 "winner_brackets": row.get("winner_brackets"),
                 "total_yes_ask_cost": row.get("total_yes_ask_cost"),
@@ -354,6 +358,50 @@ def compact_opportunity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             }
         )
     return sorted(compact, key=lambda row: (str(row.get("event_date")), str(row.get("city")), str(row.get("recorded_at_utc"))))
+
+
+def pending_reason(row: dict[str, Any]) -> str | None:
+    if row.get("settlement_eval_status") != "pending":
+        return None
+    if int(row.get("missing_settlement_legs") or 0) > 0:
+        return "missing_settlement_rows"
+    if int(row.get("unresolved_settlement_legs") or 0) > 0:
+        return "settlement_rows_unresolved"
+    if int(row.get("legs") or 0) <= 0:
+        return "missing_paper_legs"
+    return "pending_unknown"
+
+
+def count_values(rows: list[dict[str, Any]], field: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        value = row.get(field)
+        if value is None:
+            continue
+        key = str(value)
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def settlement_pending_audit(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    audit: list[dict[str, Any]] = []
+    for row in rows:
+        audit.append(
+            {
+                "recorded_at_utc": row.get("recorded_at_utc"),
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "ttl_equivalent": row.get("ttl_equivalent"),
+                "basket_shape_valid": row.get("basket_shape_valid"),
+                "pending_reason": row.get("pending_reason"),
+                "legs": row.get("legs"),
+                "settled_legs": row.get("settled_legs"),
+                "missing_settlement_legs": row.get("missing_settlement_legs"),
+                "unresolved_settlement_legs": row.get("unresolved_settlement_legs"),
+            }
+        )
+    return sorted(audit, key=lambda row: (str(row.get("event_date")), str(row.get("city")), str(row.get("recorded_at_utc"))))
 
 
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
@@ -426,6 +474,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 "winner_brackets": [leg.get("bracket") for leg in winners],
             }
         )
+        rows[-1]["pending_reason"] = pending_reason(rows[-1])
     decision_rows = [row for row in rows if row.get("unique_opportunity_first")]
     shape_invalid = [row for row in decision_rows if not row.get("basket_shape_valid")]
     live_prep_rows = [row for row in decision_rows if row.get("basket_shape_valid")]
@@ -439,6 +488,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         row for row in live_prep_rows
         if row.get("ttl_equivalent") is True and row["settlement_eval_status"] == "pending"
     ]
+    pending_rows = [row for row in live_prep_rows if row["settlement_eval_status"] == "pending"]
     stale_recorded = [row for row in live_prep_rows if row.get("ttl_status") == "stale_recording"]
     bad_ttl = [row for row in live_prep_rows if row.get("ttl_equivalent") is False]
     cost = sum(float(row.get("basket_cost_usd") or 0.0) for row in exact)
@@ -472,6 +522,14 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "settled": len(settled),
         "settled_exactly_one_winner": len(exact),
         "pending": len([row for row in decision_rows if row["settlement_eval_status"] == "pending"]),
+        "live_prep_pending": len(pending_rows),
+        "pending_reason_counts": count_values(pending_rows, "pending_reason"),
+        "ttl_equivalent_pending_reason_counts": count_values(ttl_equivalent_pending, "pending_reason"),
+        "ttl_equivalent_pending_settlement_audit": settlement_pending_audit(ttl_equivalent_pending),
+        "pending_missing_settlement_legs": sum(int(row.get("missing_settlement_legs") or 0) for row in pending_rows),
+        "pending_unresolved_settlement_legs": sum(int(row.get("unresolved_settlement_legs") or 0) for row in pending_rows),
+        "ttl_equivalent_pending_missing_settlement_legs": sum(int(row.get("missing_settlement_legs") or 0) for row in ttl_equivalent_pending),
+        "ttl_equivalent_pending_unresolved_settlement_legs": sum(int(row.get("unresolved_settlement_legs") or 0) for row in ttl_equivalent_pending),
         "winner_count_anomaly": len([row for row in decision_rows if row["settlement_eval_status"] == "settled_winner_count_anomaly"]),
         "ttl_equivalent_baskets": len(ttl_equivalent),
         "ttl_non_equivalent_baskets": len(bad_ttl),
@@ -595,6 +653,18 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
                 "ttl_equivalent_settled_active_event_dates": eval_summary["ttl_equivalent_settled_active_event_dates"],
             }
         )
+    if eval_summary["ttl_equivalent_pending"]:
+        blockers.append(
+            {
+                "code": "forward_settlements_pending",
+                "message": "Some live-equivalent paper baskets are still pending settlement evaluation.",
+                "ttl_equivalent_pending": eval_summary["ttl_equivalent_pending"],
+                "ttl_equivalent_pending_event_dates": eval_summary["ttl_equivalent_pending_event_dates"],
+                "ttl_equivalent_pending_reason_counts": eval_summary["ttl_equivalent_pending_reason_counts"],
+                "ttl_equivalent_pending_missing_settlement_legs": eval_summary["ttl_equivalent_pending_missing_settlement_legs"],
+                "ttl_equivalent_pending_unresolved_settlement_legs": eval_summary["ttl_equivalent_pending_unresolved_settlement_legs"],
+            }
+        )
     if eval_summary["winner_count_anomaly"]:
         blockers.append({"code": "settlement_winner_count_anomaly", "message": "Some settled baskets did not have exactly one winning leg."})
     if eval_summary["ttl_equivalent_settled_roi"] is None or eval_summary["ttl_equivalent_settled_roi"] < args.min_roi:
@@ -701,6 +771,10 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         "ttl_equivalent_settled_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_settled_event_dates"),
         "ttl_equivalent_pending_active_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_active_event_dates"),
         "ttl_equivalent_pending_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_event_dates"),
+        "ttl_equivalent_pending_reason_counts": gate_result.get("eval", {}).get("ttl_equivalent_pending_reason_counts"),
+        "ttl_equivalent_pending_settlement_audit": gate_result.get("eval", {}).get("ttl_equivalent_pending_settlement_audit"),
+        "ttl_equivalent_pending_missing_settlement_legs": gate_result.get("eval", {}).get("ttl_equivalent_pending_missing_settlement_legs"),
+        "ttl_equivalent_pending_unresolved_settlement_legs": gate_result.get("eval", {}).get("ttl_equivalent_pending_unresolved_settlement_legs"),
         "paper_eval": gate_result.get("eval"),
         "unique_opportunities": unique_opportunities,
         "pending_by_city": dict(sorted(city_counts.items())),

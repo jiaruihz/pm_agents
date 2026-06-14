@@ -126,6 +126,9 @@ def test_evaluate_dedupes_repeated_city_event_opportunities(tmp_path):
     assert result["duplicate_opportunity_baskets"] == 1
     assert result["pending"] == 2
     assert result["ttl_equivalent_pending"] == 2
+    assert result["ttl_equivalent_pending_reason_counts"] == {"missing_settlement_rows": 2}
+    assert result["ttl_equivalent_pending_missing_settlement_legs"] == 2
+    assert result["ttl_equivalent_pending_unresolved_settlement_legs"] == 0
 
 
 def test_evaluate_excludes_shape_invalid_baskets_from_live_prep_counts(tmp_path):
@@ -320,6 +323,10 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
             "basket_shape_blockers": [],
             "recording_age_seconds": 6.0,
             "settlement_eval_status": "pending",
+            "settled_legs": 0,
+            "missing_settlement_legs": 1,
+            "unresolved_settlement_legs": 0,
+            "pending_reason": "missing_settlement_rows",
             "winner_count": None,
             "winner_brackets": [],
             "total_yes_ask_cost": 0.978,
@@ -330,3 +337,64 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
             "roi": None,
         }
     ]
+    assert result["ttl_equivalent_pending_reason_counts"] == {"missing_settlement_rows": 1}
+    assert result["ttl_equivalent_pending_settlement_audit"] == [
+        {
+            "recorded_at_utc": "2026-06-14T04:48:46+00:00",
+            "event_date": "2026-06-14",
+            "city": "Seattle",
+            "event_slug": "highest-temperature-in-seattle-on-june-14-2026",
+            "ttl_equivalent": True,
+            "basket_shape_valid": True,
+            "pending_reason": "missing_settlement_rows",
+            "legs": None,
+            "settled_legs": 0,
+            "missing_settlement_legs": 1,
+            "unresolved_settlement_legs": 0,
+        }
+    ]
+
+
+def test_evaluate_separates_unresolved_settlement_rows_from_missing_rows(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO settlements VALUES (?, ?, ?, ?)",
+        [
+            ("b1_c1", "31", None, "pending"),
+            ("b1_c2", "32", 0.0, "settled"),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    basket = {
+        "basket_id": "b1",
+        "recorded_at_utc": "2026-06-14T04:48:46+00:00",
+        "snapshot_ts_utc": "2026-06-14T04:48:40Z",
+        "event_date": "2026-06-14",
+        "city": "Istanbul",
+        "event_slug": "highest-temperature-in-istanbul-on-june-14-2026",
+    }
+    (run_dir / "paper_baskets.jsonl").write_text(json.dumps(basket) + "\n")
+    with (run_dir / "paper_leg_orders.jsonl").open("w") as fh:
+        fh.write(json.dumps(_leg("b1", "b1_c1", "31")) + "\n")
+        fh.write(json.dumps(_leg("b1", "b1_c2", "32")) + "\n")
+
+    result = evaluate(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            max_snapshot_age_seconds=180.0,
+        )
+    )
+
+    assert result["ttl_equivalent_pending"] == 1
+    assert result["ttl_equivalent_pending_reason_counts"] == {"settlement_rows_unresolved": 1}
+    assert result["ttl_equivalent_pending_missing_settlement_legs"] == 0
+    assert result["ttl_equivalent_pending_unresolved_settlement_legs"] == 1
