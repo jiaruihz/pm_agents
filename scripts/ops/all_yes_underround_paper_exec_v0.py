@@ -28,6 +28,7 @@ GATE_DEFAULT = ROOT / "runtime" / "_dashboard_logs" / "clob_fill_coverage_gate.j
 RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0"
 STRATEGY_ID = "all_yes_underround_basket_v0"
 EXECUTION_CONTRACT_VERSION = "all_yes_execution_contract_v0"
+DEFAULT_INVALID_SHAPE_QUARANTINE_BEFORE_UTC = "2026-06-14T06:00:00+00:00"
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,6 +51,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--settlement-lag-days", type=int, default=1)
     parser.add_argument("--settlement-pipeline-hour-utc", type=int, default=9)
     parser.add_argument("--settlement-pipeline-minute-utc", type=int, default=20)
+    parser.add_argument(
+        "--quarantine-invalid-shape-before-utc",
+        default=DEFAULT_INVALID_SHAPE_QUARANTINE_BEFORE_UTC,
+        help="Treat invalid basket-shape observations recorded before this UTC timestamp as legacy quarantined observations.",
+    )
     parser.add_argument("--settlement-now-utc", default=None, help=argparse.SUPPRESS)
     return parser.parse_args()
 
@@ -348,6 +354,8 @@ def compact_opportunity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "ttl_status": row.get("ttl_status"),
                 "basket_shape_valid": row.get("basket_shape_valid"),
                 "basket_shape_blockers": row.get("basket_shape_blockers"),
+                "basket_shape_quarantined": row.get("basket_shape_quarantined"),
+                "basket_shape_quarantine_reason": row.get("basket_shape_quarantine_reason"),
                 "recording_age_seconds": row.get("recording_age_seconds"),
                 "settlement_eval_status": row.get("settlement_eval_status"),
                 "settled_legs": row.get("settled_legs"),
@@ -476,6 +484,25 @@ def settlement_pending_audit(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             }
         )
     return sorted(audit, key=lambda row: (str(row.get("event_date")), str(row.get("city")), str(row.get("recorded_at_utc"))))
+
+
+def invalid_shape_quarantine(row: dict[str, Any], before_utc: Any) -> dict[str, Any]:
+    if row.get("basket_shape_valid"):
+        return {
+            "basket_shape_quarantined": False,
+            "basket_shape_quarantine_reason": None,
+        }
+    cutoff = parse_utc(before_utc)
+    recorded_at = parse_utc(row.get("recorded_at_utc"))
+    if cutoff is not None and recorded_at is not None and recorded_at < cutoff:
+        return {
+            "basket_shape_quarantined": True,
+            "basket_shape_quarantine_reason": "recorded_before_shape_guard_fix",
+        }
+    return {
+        "basket_shape_quarantined": False,
+        "basket_shape_quarantine_reason": "current_or_unknown_invalid_shape",
+    }
 
 
 def live_plan_gate_items(live_plan: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -681,6 +708,11 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     settlement_lag_days = int(getattr(args, "settlement_lag_days", 1))
     settlement_pipeline_hour_utc = int(getattr(args, "settlement_pipeline_hour_utc", 9))
     settlement_pipeline_minute_utc = int(getattr(args, "settlement_pipeline_minute_utc", 20))
+    quarantine_invalid_before_utc = getattr(
+        args,
+        "quarantine_invalid_shape_before_utc",
+        DEFAULT_INVALID_SHAPE_QUARANTINE_BEFORE_UTC,
+    )
 
     rows: list[dict[str, Any]] = []
     seen_opportunities: set[str] = set()
@@ -739,6 +771,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 "winner_brackets": [leg.get("bracket") for leg in winners],
             }
         )
+        rows[-1].update(invalid_shape_quarantine(rows[-1], quarantine_invalid_before_utc))
         rows[-1]["pending_reason"] = pending_reason(rows[-1])
         rows[-1].update(
             settlement_due_audit(
@@ -751,6 +784,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         )
     decision_rows = [row for row in rows if row.get("unique_opportunity_first")]
     shape_invalid = [row for row in decision_rows if not row.get("basket_shape_valid")]
+    shape_invalid_current = [row for row in shape_invalid if not row.get("basket_shape_quarantined")]
+    shape_invalid_quarantined = [row for row in shape_invalid if row.get("basket_shape_quarantined")]
     live_prep_rows = [row for row in decision_rows if row.get("basket_shape_valid")]
     settled = [row for row in decision_rows if row["settlement_eval_status"].startswith("settled_")]
     exact = [row for row in settled if row["settlement_eval_status"] == "settled_exactly_one_winner"]
@@ -776,6 +811,7 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "db_path": str(Path(args.db_path)),
         "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+        "quarantine_invalid_shape_before_utc": quarantine_invalid_before_utc,
         "settlement_now_utc": settlement_now.isoformat(),
         "settlement_schedule": {
             "lag_days": settlement_lag_days,
@@ -788,16 +824,32 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "unique_opportunity_baskets": len(decision_rows),
         "shape_valid_baskets": len(live_prep_rows),
         "shape_invalid_baskets": len(shape_invalid),
+        "shape_invalid_current_baskets": len(shape_invalid_current),
+        "shape_invalid_quarantined_baskets": len(shape_invalid_quarantined),
         "shape_invalid_opportunities": [
             {
                 "event_date": row.get("event_date"),
                 "city": row.get("city"),
                 "event_slug": row.get("event_slug"),
                 "basket_shape_blockers": row.get("basket_shape_blockers"),
+                "basket_shape_quarantined": row.get("basket_shape_quarantined"),
+                "basket_shape_quarantine_reason": row.get("basket_shape_quarantine_reason"),
                 "unique_brackets": row.get("unique_brackets"),
                 "legs": row.get("legs"),
             }
             for row in shape_invalid
+        ],
+        "shape_invalid_current_opportunities": [
+            {
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "basket_shape_blockers": row.get("basket_shape_blockers"),
+                "basket_shape_quarantine_reason": row.get("basket_shape_quarantine_reason"),
+                "unique_brackets": row.get("unique_brackets"),
+                "legs": row.get("legs"),
+            }
+            for row in shape_invalid_current
         ],
         "settled": len(settled),
         "settled_exactly_one_winner": len(exact),
@@ -889,13 +941,22 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
                 "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
             }
         )
-    if eval_summary["shape_invalid_baskets"]:
+    if eval_summary["shape_invalid_current_baskets"]:
         blockers.append(
             {
                 "code": "basket_shape_invalid",
                 "message": "Some unique paper opportunities have invalid bracket shape and are excluded from live-prep counts.",
-                "shape_invalid_baskets": eval_summary["shape_invalid_baskets"],
-                "shape_invalid_opportunities": eval_summary["shape_invalid_opportunities"],
+                "shape_invalid_baskets": eval_summary["shape_invalid_current_baskets"],
+                "shape_invalid_opportunities": eval_summary["shape_invalid_current_opportunities"],
+            }
+        )
+    if eval_summary["shape_invalid_quarantined_baskets"]:
+        passed.append(
+            {
+                "code": "legacy_invalid_shape_quarantined",
+                "message": "Legacy invalid basket-shape observations are quarantined and excluded from live-prep counts.",
+                "shape_invalid_quarantined_baskets": eval_summary["shape_invalid_quarantined_baskets"],
+                "quarantine_invalid_shape_before_utc": eval_summary["quarantine_invalid_shape_before_utc"],
             }
         )
     guard_audit = list(last_cycle.get("guard_audit") or [])
@@ -1083,6 +1144,8 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         "paper_baskets": len(baskets),
         "paper_unique_opportunity_baskets": gate_result.get("eval", {}).get("unique_opportunity_baskets"),
         "paper_duplicate_opportunity_baskets": gate_result.get("eval", {}).get("duplicate_opportunity_baskets"),
+        "shape_invalid_current_baskets": gate_result.get("eval", {}).get("shape_invalid_current_baskets"),
+        "shape_invalid_quarantined_baskets": gate_result.get("eval", {}).get("shape_invalid_quarantined_baskets"),
         "ttl_equivalent_baskets": gate_result.get("eval", {}).get("ttl_equivalent_baskets"),
         "ttl_non_equivalent_baskets": gate_result.get("eval", {}).get("ttl_non_equivalent_baskets"),
         "stale_recorded_baskets": gate_result.get("eval", {}).get("stale_recorded_baskets"),

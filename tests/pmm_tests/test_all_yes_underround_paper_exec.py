@@ -344,9 +344,126 @@ def test_evaluate_excludes_shape_invalid_baskets_from_live_prep_counts(tmp_path)
     assert result["unique_opportunity_baskets"] == 1
     assert result["shape_valid_baskets"] == 0
     assert result["shape_invalid_baskets"] == 1
+    assert result["shape_invalid_current_baskets"] == 0
+    assert result["shape_invalid_quarantined_baskets"] == 1
     assert result["ttl_equivalent_baskets"] == 0
     assert result["ttl_equivalent_pending"] == 0
     assert result["shape_invalid_opportunities"][0]["basket_shape_blockers"] == ["duplicate_bracket"]
+    assert result["shape_invalid_opportunities"][0]["basket_shape_quarantined"] is True
+
+
+def test_gate_quarantines_legacy_invalid_shape_without_blocking(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    gate_path = tmp_path / "clob_gate.json"
+    gate_path.write_text(json.dumps({"gate_pass": True}) + "\n")
+    (run_dir / "last_cycle.json").write_text(
+        json.dumps({"scanner_candidate_count": 1, "guard_audit": [{"basket_id": "latest", "guard": {"allow": True}}]}) + "\n"
+    )
+    (run_dir / "latest_live_plan.json").write_text(
+        json.dumps({"generated_at_utc": "2026-06-14T06:10:00Z", "verdict": "DRY_RUN_PLAN_ONLY", "live_now": False, "planned_baskets": 0, "rejected_baskets": 0}) + "\n"
+    )
+    (run_dir / "latest_executor_readiness.json").write_text(
+        json.dumps({"generated_at_utc": "2026-06-14T06:10:00Z", "verdict": "DRY_RUN_EXECUTOR_READY", "live_now": False, "no_order_placed": True}) + "\n"
+    )
+    (run_dir / "executor_trade_plan_summary.json").write_text(
+        json.dumps({"generated_at_utc": "2026-06-14T06:10:00Z", "verdict": "DRY_RUN_EXECUTOR_PLANS_READY", "live_now": False, "live_enabled": False}) + "\n"
+    )
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.commit()
+    conn.close()
+    (run_dir / "paper_baskets.jsonl").write_text(
+        json.dumps(
+            {
+                "basket_id": "legacy_bad",
+                "recorded_at_utc": "2026-06-14T04:48:46+00:00",
+                "snapshot_ts_utc": "2026-06-14T04:48:40Z",
+                "event_date": "2026-06-14",
+                "city": "Seattle",
+                "event_slug": "highest-temperature-in-seattle-on-june-14-2026",
+            }
+        )
+        + "\n"
+    )
+    with (run_dir / "paper_leg_orders.jsonl").open("w") as fh:
+        fh.write(json.dumps(_leg("legacy_bad", "b1_c1", "14")) + "\n")
+        fh.write(json.dumps(_leg("legacy_bad", "b1_c2", "14")) + "\n")
+
+    result = gate(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            gate_path=str(gate_path),
+            max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-14T06:10:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
+            min_settled_baskets=20,
+            min_settled_active_dates=7,
+            min_roi=0.02,
+            min_positive_basket_rate=0.55,
+        )
+    )
+
+    assert "basket_shape_invalid" not in {row["code"] for row in result["blockers"]}
+    assert "legacy_invalid_shape_quarantined" in {row["code"] for row in result["passed"]}
+
+
+def test_gate_blocks_current_invalid_shape(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    gate_path = tmp_path / "clob_gate.json"
+    gate_path.write_text(json.dumps({"gate_pass": True}) + "\n")
+    (run_dir / "last_cycle.json").write_text(
+        json.dumps({"scanner_candidate_count": 1, "guard_audit": [{"basket_id": "latest", "guard": {"allow": True}}]}) + "\n"
+    )
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.commit()
+    conn.close()
+    (run_dir / "paper_baskets.jsonl").write_text(
+        json.dumps(
+            {
+                "basket_id": "current_bad",
+                "recorded_at_utc": "2026-06-14T06:10:00+00:00",
+                "snapshot_ts_utc": "2026-06-14T06:09:55Z",
+                "event_date": "2026-06-14",
+                "city": "Seattle",
+                "event_slug": "highest-temperature-in-seattle-on-june-14-2026",
+            }
+        )
+        + "\n"
+    )
+    with (run_dir / "paper_leg_orders.jsonl").open("w") as fh:
+        fh.write(json.dumps(_leg("current_bad", "b1_c1", "14")) + "\n")
+        fh.write(json.dumps(_leg("current_bad", "b1_c2", "14")) + "\n")
+
+    result = gate(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            gate_path=str(gate_path),
+            max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-14T06:10:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
+            min_settled_baskets=20,
+            min_settled_active_dates=7,
+            min_roi=0.02,
+            min_positive_basket_rate=0.55,
+        )
+    )
+
+    assert "basket_shape_invalid" in {row["code"] for row in result["blockers"]}
 
 
 def test_gate_requires_settled_active_event_dates_not_just_basket_count(tmp_path):
@@ -515,6 +632,8 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
             "ttl_status": "live_equivalent",
             "basket_shape_valid": True,
             "basket_shape_blockers": [],
+            "basket_shape_quarantined": False,
+            "basket_shape_quarantine_reason": None,
             "recording_age_seconds": 6.0,
             "settlement_eval_status": "pending",
             "settled_legs": 0,
