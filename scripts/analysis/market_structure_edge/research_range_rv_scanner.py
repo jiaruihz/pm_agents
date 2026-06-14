@@ -180,9 +180,17 @@ def load_candidates(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def group_decision_sets(candidates: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in candidates:
-        grouped[(str(row["city"]), str(row["event_date"]), str(row["decision_snapshot_ts_utc"]))].append(row)
+        grouped[
+            (
+                str(row["city"]),
+                str(row["event_date"]),
+                str(row["forecast_source"]),
+                str(row["model_version"]),
+                str(row["decision_snapshot_ts_utc"]),
+            )
+        ].append(row)
     decision_sets: list[list[dict[str, Any]]] = []
     for items in grouped.values():
         unique_by_bracket: dict[str, dict[str, Any]] = {}
@@ -298,13 +306,16 @@ def enumerate_ranges(decision_sets: list[list[dict[str, Any]]]) -> list[RangeRow
             out.append(
                 {
                     "range_id": (
-                        f"{base['city']}|{base['event_date']}|{base['decision_snapshot_ts_utc']}|"
+                        f"{base['city']}|{base['event_date']}|{base['forecast_source']}|"
+                        f"{base['model_version']}|{base['decision_snapshot_ts_utc']}|"
                         f"{range_type}|{start}|{end}|{direction}"
                     ),
                     "city": base["city"],
                     "city_pool": base["city_pool"],
                     "event_date": base["event_date"],
                     "target_date": base["event_date"],
+                    "forecast_source": base["forecast_source"],
+                    "model_version": base["model_version"],
                     "decision_snapshot_ts_utc": base["decision_snapshot_ts_utc"],
                     "decision_dt": decision_dt,
                     "decision_hours_to_settle": base["decision_hours_to_settle"],

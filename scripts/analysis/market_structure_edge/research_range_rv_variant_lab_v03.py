@@ -134,13 +134,18 @@ def make_candidate(
     no_edges = [-score_edge(leg) for leg in legs if leg["side"] == "BUY_NO"]
     leg_edge = sum(yes_edges) + sum(no_edges)
     return {
-        "candidate_id": f"{algorithm}|{base['city']}|{base['event_date']}|{base['decision_snapshot_ts_utc']}|"
-        + ",".join(f"{leg['side']}:{leg['bracket']}" for leg in legs),
+        "candidate_id": (
+            f"{algorithm}|{base['city']}|{base['event_date']}|{base.get('forecast_source', '')}|"
+            f"{base.get('model_version', '')}|{base['decision_snapshot_ts_utc']}|"
+            + ",".join(f"{leg['side']}:{leg['bracket']}" for leg in legs)
+        ),
         "algorithm": algorithm,
         "city": base["city"],
         "city_pool": base["city_pool"],
         "event_date": base["event_date"],
         "target_date": base["event_date"],
+        "forecast_source": base.get("forecast_source"),
+        "model_version": base.get("model_version"),
         "decision_snapshot_ts_utc": base["decision_snapshot_ts_utc"],
         "decision_dt": scanner.parse_ts(str(base["decision_snapshot_ts_utc"])),
         "n_legs": len(legs),

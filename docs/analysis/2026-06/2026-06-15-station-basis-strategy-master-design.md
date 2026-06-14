@@ -145,9 +145,18 @@ fail-closed；day-state 从账本重建，重启不重置额度。
 [评估] station_basis_eval.py             shadow vs回测 + 断流 + go/no-go(≥40结算)
 ```
 
-数据/产物全在 `runtime/weather_edge_v1/station_basis_*`。N100 另有 v1 track
-（`/home/jiarui/projects/pm_agent_station_basis_v1`，codex 分支，更细的 live-candidate-v1
-+ live-prep gate），两套需收敛为一套生产口径。
+数据/产物全在 `runtime/weather_edge_v1/station_basis_*`。
+
+**版本收敛（2026-06-15）**：v0 与 v1 已合并成一条历史（commit d1dd362→d1dd3623）。
+- **v0 .py = 基础库**（`weather_station_basis_shadow.py` / `weather_station_basis_exec.py`
+  / `station_basis_guards.py`）：被 v1 import，**保留**。
+- **v1 = 唯一生产 runtime**：`weather_station_basis_shadow_v1.py`（5 城、16h YES one-per-day、
+  ask≤0.90）+ sidecars（readiness / exec_v1 / pending_monitor / live_prep_gate）。
+- v0 的 standalone 启动脚本已删除（退役）；Mac 上的 v0 shadow loop 已停。
+- **唯一运行点 = N100** `/home/jiarui/projects/pm_agent_station_basis_v1`，
+  `weather_station_basis_shadow_v1_loop.sh`（15 分钟/cycle，nohup + pid file）。
+  管理：`start_weather_station_basis_shadow_v1.sh` 启动；`cat runtime/.../station_basis_shadow_v1/loop.pid` 看 pid；
+  停 = kill pid 或放 PAUSE 文件。注意 nohup loop **不抗重启**，N100 重启后需手动重新 start。
 
 ## 9. Path to Live
 
