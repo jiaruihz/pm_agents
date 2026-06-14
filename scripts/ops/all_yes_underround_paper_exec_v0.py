@@ -29,6 +29,7 @@ RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_pap
 STRATEGY_ID = "all_yes_underround_basket_v0"
 EXECUTION_CONTRACT_VERSION = "all_yes_execution_contract_v0"
 DEFAULT_INVALID_SHAPE_QUARANTINE_BEFORE_UTC = "2026-06-14T06:00:00+00:00"
+SOURCE_SNAPSHOT_MTIME_TOLERANCE_SECONDS = 5.0
 
 
 def parse_args() -> argparse.Namespace:
@@ -129,6 +130,55 @@ def file_mtime_utc(path: Path) -> str | None:
     if not path.exists():
         return None
     return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
+
+
+def source_snapshot_audit(
+    basket: dict[str, Any],
+    *,
+    mtime_tolerance_seconds: float = SOURCE_SNAPSHOT_MTIME_TOLERANCE_SECONDS,
+) -> dict[str, Any]:
+    source = basket.get("source_scan")
+    if not source:
+        return {
+            "source_snapshot_valid": False,
+            "source_snapshot_status": "missing_source_scan",
+            "source_snapshot_blockers": ["missing_source_scan"],
+        }
+    path = Path(str(source))
+    if not path.is_absolute():
+        path = ROOT / path
+    recorded_at = parse_utc(basket.get("recorded_at_utc"))
+    if recorded_at is None:
+        return {
+            "source_snapshot_valid": False,
+            "source_snapshot_status": "missing_recorded_at",
+            "source_snapshot_path": str(path),
+            "source_snapshot_blockers": ["missing_recorded_at"],
+        }
+    if not path.exists():
+        return {
+            "source_snapshot_valid": False,
+            "source_snapshot_status": "source_snapshot_missing",
+            "source_snapshot_path": str(path),
+            "source_snapshot_blockers": ["source_snapshot_missing"],
+        }
+    stat = path.stat()
+    mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+    changed_after_seconds = (mtime - recorded_at).total_seconds()
+    blockers: list[str] = []
+    status = "source_snapshot_stable"
+    if changed_after_seconds > mtime_tolerance_seconds:
+        blockers.append("source_snapshot_changed_after_recording")
+        status = "source_snapshot_changed_after_recording"
+    return {
+        "source_snapshot_valid": not blockers,
+        "source_snapshot_status": status,
+        "source_snapshot_path": str(path),
+        "source_snapshot_size_bytes": stat.st_size,
+        "source_snapshot_mtime_utc": mtime.isoformat(),
+        "source_snapshot_changed_after_recording_seconds": round(changed_after_seconds, 3),
+        "source_snapshot_blockers": blockers,
+    }
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -232,7 +282,10 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
             "opportunity_key": opportunity_key,
             "source_scan": scan.get("snapshot_path"),
             "source_report_generated_at_utc": scan.get("generated_at_utc"),
+            "source_scan_size_bytes": Path(str(scan.get("snapshot_path"))).stat().st_size if scan.get("snapshot_path") and Path(str(scan.get("snapshot_path"))).exists() else None,
+            "source_scan_mtime_utc": file_mtime_utc(Path(str(scan.get("snapshot_path")))) if scan.get("snapshot_path") else None,
             "snapshot_ts_utc": scan.get("snapshot_summary", {}).get("snapshot_ts_utc_max"),
+            "snapshot_rows": scan.get("snapshot_summary", {}).get("rows"),
             "orderbook_fetched_at_utc_min": candidate.get("orderbook_fetched_at_utc_min"),
             "orderbook_fetched_at_utc_max": candidate.get("orderbook_fetched_at_utc_max"),
             "event_date": candidate.get("event_date"),
@@ -805,10 +858,19 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             pnl = payout - float(basket.get("basket_cost_usd") or 0.0)
             roi = pnl / float(basket.get("basket_cost_usd") or 1.0)
             status = "settled_exactly_one_winner" if winner_count == 1 else "settled_winner_count_anomaly"
+        source = source_snapshot_audit(basket)
+        if not source.get("source_snapshot_valid"):
+            ttl = {
+                **ttl,
+                "ttl_original_status": ttl.get("ttl_status"),
+                "ttl_equivalent": False,
+                "ttl_status": "source_snapshot_invalid",
+            }
         rows.append(
             {
                 **basket,
                 **ttl,
+                **source,
                 **shape,
                 "opportunity_key": opportunity_key,
                 "unique_opportunity_first": not duplicate_opportunity,
@@ -839,7 +901,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     shape_invalid = [row for row in decision_rows if not row.get("basket_shape_valid")]
     shape_invalid_current = [row for row in shape_invalid if not row.get("basket_shape_quarantined")]
     shape_invalid_quarantined = [row for row in shape_invalid if row.get("basket_shape_quarantined")]
-    live_prep_rows = [row for row in decision_rows if row.get("basket_shape_valid")]
+    source_invalid = [row for row in decision_rows if not row.get("source_snapshot_valid")]
+    live_prep_rows = [row for row in decision_rows if row.get("basket_shape_valid") and row.get("source_snapshot_valid")]
     settled = [row for row in decision_rows if row["settlement_eval_status"].startswith("settled_")]
     exact = [row for row in settled if row["settlement_eval_status"] == "settled_exactly_one_winner"]
     live_prep_settled = [row for row in live_prep_rows if row["settlement_eval_status"].startswith("settled_")]
@@ -879,6 +942,21 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "shape_invalid_baskets": len(shape_invalid),
         "shape_invalid_current_baskets": len(shape_invalid_current),
         "shape_invalid_quarantined_baskets": len(shape_invalid_quarantined),
+        "source_snapshot_invalid_baskets": len(source_invalid),
+        "source_snapshot_invalid_opportunities": [
+            {
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "source_snapshot_status": row.get("source_snapshot_status"),
+                "source_snapshot_blockers": row.get("source_snapshot_blockers"),
+                "source_snapshot_path": row.get("source_snapshot_path"),
+                "source_snapshot_mtime_utc": row.get("source_snapshot_mtime_utc"),
+                "source_snapshot_changed_after_recording_seconds": row.get("source_snapshot_changed_after_recording_seconds"),
+                "recorded_at_utc": row.get("recorded_at_utc"),
+            }
+            for row in source_invalid
+        ],
         "shape_invalid_opportunities": [
             {
                 "event_date": row.get("event_date"),
@@ -1041,6 +1119,15 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
                 "message": "Legacy invalid basket-shape observations are quarantined and excluded from live-prep counts.",
                 "shape_invalid_quarantined_baskets": eval_summary["shape_invalid_quarantined_baskets"],
                 "quarantine_invalid_shape_before_utc": eval_summary["quarantine_invalid_shape_before_utc"],
+            }
+        )
+    if eval_summary["source_snapshot_invalid_baskets"]:
+        blockers.append(
+            {
+                "code": "source_snapshot_invalid",
+                "message": "Some paper baskets reference source snapshot files that are missing or changed after recording; exclude them from live-prep counts.",
+                "source_snapshot_invalid_baskets": eval_summary["source_snapshot_invalid_baskets"],
+                "source_snapshot_invalid_opportunities": eval_summary["source_snapshot_invalid_opportunities"],
             }
         )
     guard_audit = list(last_cycle.get("guard_audit") or [])

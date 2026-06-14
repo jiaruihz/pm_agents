@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sqlite3
 
 from scripts.ops.all_yes_underround_paper_exec_v0 import cycle, evaluate, gate, live_plan_gate_items, monitor, recording_ttl_audit
@@ -29,6 +30,13 @@ def _basket(recorded_at_utc="2026-06-13T18:32:00+00:00", snapshot_ts_utc="2026-0
 
 def _leg(basket_id: str, condition_id: str, bracket: str):
     return {"basket_id": basket_id, "condition_id": condition_id, "bracket": bracket}
+
+
+def _source_snapshot(tmp_path):
+    path = tmp_path / "source_snapshot.jsonl.gz"
+    path.write_text("snapshot")
+    os.utime(path, (0, 0))
+    return str(path)
 
 
 def _candidate(**overrides):
@@ -253,6 +261,7 @@ def test_evaluate_dedupes_repeated_city_event_opportunities(tmp_path):
             "basket_id": "b1",
             "recorded_at_utc": "2026-06-13T18:31:00+00:00",
             "snapshot_ts_utc": "2026-06-13T18:30:00Z",
+            "source_scan": _source_snapshot(tmp_path),
             "event_date": "2026-06-14",
             "city": "Istanbul",
             "event_slug": "highest-temperature-in-istanbul-on-june-14-2026",
@@ -261,6 +270,7 @@ def test_evaluate_dedupes_repeated_city_event_opportunities(tmp_path):
             "basket_id": "b2",
             "recorded_at_utc": "2026-06-13T18:32:00+00:00",
             "snapshot_ts_utc": "2026-06-13T18:31:00Z",
+            "source_scan": _source_snapshot(tmp_path),
             "event_date": "2026-06-14",
             "city": "Istanbul",
             "event_slug": "highest-temperature-in-istanbul-on-june-14-2026",
@@ -269,6 +279,7 @@ def test_evaluate_dedupes_repeated_city_event_opportunities(tmp_path):
             "basket_id": "b3",
             "recorded_at_utc": "2026-06-13T18:33:00+00:00",
             "snapshot_ts_utc": "2026-06-13T18:32:00Z",
+            "source_scan": _source_snapshot(tmp_path),
             "event_date": "2026-06-14",
             "city": "Jeddah",
             "event_slug": "highest-temperature-in-jeddah-on-june-14-2026",
@@ -350,6 +361,51 @@ def test_evaluate_excludes_shape_invalid_baskets_from_live_prep_counts(tmp_path)
     assert result["ttl_equivalent_pending"] == 0
     assert result["shape_invalid_opportunities"][0]["basket_shape_blockers"] == ["duplicate_bracket"]
     assert result["shape_invalid_opportunities"][0]["basket_shape_quarantined"] is True
+
+
+def test_evaluate_excludes_basket_when_source_snapshot_changes_after_recording(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.commit()
+    conn.close()
+    source = tmp_path / "source_snapshot.jsonl.gz"
+    source.write_text("partial")
+    os.utime(source, (1781421000, 1781421000))
+    basket = {
+        "basket_id": "b1",
+        "recorded_at_utc": "2026-06-14T07:08:56+00:00",
+        "snapshot_ts_utc": "2026-06-14T07:08:40Z",
+        "source_scan": str(source),
+        "event_date": "2026-06-15",
+        "city": "Austin",
+        "event_slug": "highest-temperature-in-austin-on-june-15-2026",
+    }
+    (run_dir / "paper_baskets.jsonl").write_text(json.dumps(basket) + "\n")
+    (run_dir / "paper_leg_orders.jsonl").write_text(json.dumps(_leg("b1", "b1_c1", "77")) + "\n")
+
+    result = evaluate(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-14T08:00:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
+        )
+    )
+
+    assert result["source_snapshot_invalid_baskets"] == 1
+    assert result["source_snapshot_invalid_opportunities"][0]["source_snapshot_blockers"] == [
+        "source_snapshot_changed_after_recording"
+    ]
+    assert result["ttl_equivalent_baskets"] == 0
+    assert result["ttl_equivalent_pending"] == 0
 
 
 def test_gate_quarantines_legacy_invalid_shape_without_blocking(tmp_path):
@@ -601,6 +657,7 @@ def test_gate_requires_settled_active_event_dates_not_just_basket_count(tmp_path
             "basket_id": "b1",
             "recorded_at_utc": "2026-06-14T18:31:00+00:00",
             "snapshot_ts_utc": "2026-06-14T18:30:00Z",
+            "source_scan": _source_snapshot(tmp_path),
             "event_date": "2026-06-15",
             "city": "Istanbul",
             "event_slug": "highest-temperature-in-istanbul-on-june-15-2026",
@@ -611,6 +668,7 @@ def test_gate_requires_settled_active_event_dates_not_just_basket_count(tmp_path
             "basket_id": "b2",
             "recorded_at_utc": "2026-06-14T18:32:00+00:00",
             "snapshot_ts_utc": "2026-06-14T18:31:00Z",
+            "source_scan": _source_snapshot(tmp_path),
             "event_date": "2026-06-15",
             "city": "Jeddah",
             "event_slug": "highest-temperature-in-jeddah-on-june-15-2026",
@@ -680,6 +738,7 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
         "basket_id": "b1",
         "recorded_at_utc": "2026-06-14T04:48:46+00:00",
         "snapshot_ts_utc": "2026-06-14T04:48:40Z",
+        "source_scan": _source_snapshot(tmp_path),
         "event_date": "2026-06-14",
         "city": "Seattle",
         "event_slug": "highest-temperature-in-seattle-on-june-14-2026",
@@ -793,6 +852,7 @@ def test_evaluate_separates_unresolved_settlement_rows_from_missing_rows(tmp_pat
         "basket_id": "b1",
         "recorded_at_utc": "2026-06-14T04:48:46+00:00",
         "snapshot_ts_utc": "2026-06-14T04:48:40Z",
+        "source_scan": _source_snapshot(tmp_path),
         "event_date": "2026-06-14",
         "city": "Istanbul",
         "event_slug": "highest-temperature-in-istanbul-on-june-14-2026",
@@ -836,6 +896,7 @@ def test_evaluate_marks_missing_settlement_rows_overdue_after_pipeline_time(tmp_
         "basket_id": "b1",
         "recorded_at_utc": "2026-06-13T23:08:54+00:00",
         "snapshot_ts_utc": "2026-06-13T23:08:50Z",
+        "source_scan": _source_snapshot(tmp_path),
         "event_date": "2026-06-14",
         "city": "Istanbul",
         "event_slug": "highest-temperature-in-istanbul-on-june-14-2026",
