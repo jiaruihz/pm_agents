@@ -143,11 +143,17 @@ def group_baskets(rows: list[dict[str, Any]], args: argparse.Namespace) -> list[
         min_ask_size: float | None = None
         max_spread: float | None = None
         leg_rows = []
+        condition_ids: list[str] = []
+        brackets: list[str] = []
         for row in legs:
             summary = yes_summary(row)
             ask = summary["best_ask"]
             bid = summary["best_bid"]
             ask_size = summary["ask_size"]
+            if row.get("condition_id"):
+                condition_ids.append(str(row.get("condition_id")).strip())
+            if row.get("bracket") is not None:
+                brackets.append(str(row.get("bracket")).strip())
             if ask is None:
                 missing_asks += 1
                 continue
@@ -179,6 +185,10 @@ def group_baskets(rows: list[dict[str, Any]], args: argparse.Namespace) -> list[
         blockers = []
         if len(legs) < args.min_leg_count:
             blockers.append("leg_count_below_live_floor")
+        if len(set(condition_ids)) != len(condition_ids):
+            blockers.append("duplicate_condition_id")
+        if len(set(brackets)) != len(brackets):
+            blockers.append("duplicate_bracket")
         if missing_asks:
             blockers.append("missing_best_ask")
         if underround is None or underround < args.min_underround:

@@ -2,7 +2,7 @@ import argparse
 import json
 import sqlite3
 
-from scripts.ops.all_yes_underround_paper_exec_v0 import evaluate, gate, live_plan_gate_items, monitor, recording_ttl_audit
+from scripts.ops.all_yes_underround_paper_exec_v0 import cycle, evaluate, gate, live_plan_gate_items, monitor, recording_ttl_audit
 
 
 def _execution_contract(**overrides):
@@ -29,6 +29,72 @@ def _basket(recorded_at_utc="2026-06-13T18:32:00+00:00", snapshot_ts_utc="2026-0
 
 def _leg(basket_id: str, condition_id: str, bracket: str):
     return {"basket_id": basket_id, "condition_id": condition_id, "bracket": bracket}
+
+
+def _candidate(**overrides):
+    legs = [
+        {
+            "condition_id": f"condition-{idx}",
+            "bracket": str(20 + idx),
+            "best_ask": price,
+            "best_bid": max(price - 0.01, 0.001),
+            "ask_size": 10.0,
+        }
+        for idx, price in enumerate([0.10, 0.15, 0.20, 0.22, 0.28])
+    ]
+    row = {
+        "event_date": "2026-06-14",
+        "city": "TestCity",
+        "event_slug": "highest-temperature-in-test-city-on-june-14-2026",
+        "underround": 0.05,
+        "total_yes_ask_cost": 0.95,
+        "max_yes_spread": 0.01,
+        "snapshot_ts_utc": "2026-06-13T18:00:00Z",
+        "legs_detail": legs,
+    }
+    row.update(overrides)
+    return row
+
+
+def _cycle_args(scan_json, run_dir):
+    return argparse.Namespace(
+        command="cycle",
+        scan_json=str(scan_json),
+        run_dir=str(run_dir),
+        shares_per_leg=5.0,
+        max_baskets_per_cycle=1,
+        max_basket_cost_usd=5.0,
+        min_underround=0.02,
+        max_spread=0.05,
+        max_snapshot_age_seconds=None,
+    )
+
+
+def test_cycle_fills_slots_after_rejecting_bad_candidate(tmp_path):
+    scan_json = tmp_path / "scan.json"
+    run_dir = tmp_path / "run"
+    bad = _candidate()
+    bad["legs_detail"][4]["bracket"] = bad["legs_detail"][0]["bracket"]
+    good = _candidate(city="GoodCity", event_slug="highest-temperature-in-good-city-on-june-14-2026")
+    scan_json.write_text(
+        json.dumps(
+            {
+                "snapshot_path": "/tmp/snapshot.jsonl.gz",
+                "snapshot_summary": {"snapshot_ts_utc_max": "2026-06-13T18:00:00Z"},
+                "paper_shadow_candidates": [bad, good],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = cycle(_cycle_args(scan_json, run_dir))
+
+    assert result["appended_baskets"] == 1
+    assert result["rejected"][0]["city"] == "TestCity"
+    assert "leg_4_duplicate_bracket" in result["rejected"][0]["guard"]["blockers"]
+    rows = [json.loads(line) for line in (run_dir / "paper_baskets.jsonl").read_text().splitlines()]
+    assert rows[0]["city"] == "GoodCity"
 
 
 def test_live_plan_gate_blocks_missing_artifact():

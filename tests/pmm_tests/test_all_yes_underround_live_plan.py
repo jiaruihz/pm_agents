@@ -119,3 +119,31 @@ def test_live_plan_rejects_guard_failures_without_order_intents(tmp_path: Path):
     assert result["rejected_baskets"] == 1
     assert result["rejected"][0]["status"] == "rejected_by_guard"
     assert "underround_below_min" in result["rejected"][0]["guard"]["blockers"]
+
+
+def test_live_plan_fills_slots_after_rejecting_bad_candidate(tmp_path: Path):
+    scan_json = tmp_path / "scan.json"
+    run_dir = tmp_path / "run"
+    bad = _candidate()
+    bad["legs_detail"][4]["bracket"] = bad["legs_detail"][0]["bracket"]
+    good = _candidate(city="GoodCity", event_slug="highest-temperature-in-good-city-on-june-14-2026")
+    args = _args(scan_json, run_dir)
+    args.max_baskets_per_cycle = 1
+    scan_json.write_text(
+        json.dumps(
+            {
+                "snapshot_path": "/tmp/snapshot.jsonl.gz",
+                "snapshot_summary": {"snapshot_ts_utc_max": "2026-06-13T18:00:00Z"},
+                "paper_shadow_candidates": [bad, good],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = build_plan(args)
+
+    assert result["planned_baskets"] == 1
+    assert result["rejected_baskets"] == 1
+    assert result["plans"][0]["city"] == "GoodCity"
+    assert "leg_4_duplicate_bracket" in result["rejected"][0]["guard"]["blockers"]

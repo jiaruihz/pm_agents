@@ -182,7 +182,7 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
     rejected: list[dict[str, Any]] = []
     guard_audit: list[dict[str, Any]] = []
 
-    for candidate in list(scan.get("paper_shadow_candidates") or [])[: args.max_baskets_per_cycle]:
+    for candidate in list(scan.get("paper_shadow_candidates") or []):
         bid = basket_id(scan, candidate)
         opportunity_key = opportunity_key_from_parts(candidate.get("event_date"), candidate.get("city"), candidate.get("event_slug"))
         decision_ts = now_utc()
@@ -204,6 +204,8 @@ def cycle(args: argparse.Namespace) -> dict[str, Any]:
                     "guard": decision_to_dict(guard),
                 }
             )
+            continue
+        if len(baskets_to_append) >= args.max_baskets_per_cycle:
             continue
         if bid in existing or opportunity_key in existing_opportunities:
             continue

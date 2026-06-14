@@ -115,7 +115,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     plans: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     execution_contract = build_execution_contract(args)
-    for candidate in list(scan.get("paper_shadow_candidates") or [])[: args.max_baskets_per_cycle]:
+    for candidate in list(scan.get("paper_shadow_candidates") or []):
         guard = check_candidate(cfg=guard_cfg, repo_root=ROOT, candidate=candidate, decision_ts_utc=decision_ts)
         common = {
             "strategy_id": STRATEGY_ID,
@@ -137,6 +137,8 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         }
         if not guard.allow:
             rejected.append({**common, "status": "rejected_by_guard"})
+            continue
+        if len(plans) >= args.max_baskets_per_cycle:
             continue
         plans.append(
             {
