@@ -144,6 +144,7 @@ def _write_plan_and_executor(tmp_path: Path):
     run_dir = tmp_path / "run"
     plan_json = tmp_path / "latest_live_plan.json"
     executor_jsonl = tmp_path / "executor_trade_plans.jsonl"
+    gate_json = tmp_path / "live_prep_gate.json"
     plan_json.write_text(
         json.dumps(
             {
@@ -166,14 +167,20 @@ def _write_plan_and_executor(tmp_path: Path):
         + "\n",
         encoding="utf-8",
     )
-    return run_dir, plan_json, executor_jsonl
+    gate_json.write_text(
+        json.dumps({"generated_at_utc": "2026-06-14T06:10:00Z", "verdict": "NOT_READY_ACCUMULATE_PAPER_SHADOW", "blockers": []})
+        + "\n",
+        encoding="utf-8",
+    )
+    return run_dir, plan_json, executor_jsonl, gate_json
 
 
-def _execute_args(run_dir: Path, plan_json: Path, executor_jsonl: Path, out_jsonl: Path, **overrides):
+def _execute_args(run_dir: Path, plan_json: Path, executor_jsonl: Path, gate_json: Path, out_jsonl: Path, **overrides):
     row = {
         "command": "execute",
         "plan_json": str(plan_json),
         "executor_jsonl": str(executor_jsonl),
+        "gate_json": str(gate_json),
         "run_dir": str(run_dir),
         "mock_fill_json": "",
         "out_jsonl": str(out_jsonl),
@@ -186,10 +193,10 @@ def _execute_args(run_dir: Path, plan_json: Path, executor_jsonl: Path, out_json
 
 
 def test_execute_baskets_dry_run_writes_would_submit_rows(tmp_path: Path):
-    run_dir, plan_json, executor_jsonl = _write_plan_and_executor(tmp_path)
+    run_dir, plan_json, executor_jsonl, gate_json = _write_plan_and_executor(tmp_path)
     out_jsonl = tmp_path / "orders.jsonl"
 
-    result = execute_baskets(args=_execute_args(run_dir, plan_json, executor_jsonl, out_jsonl))
+    result = execute_baskets(args=_execute_args(run_dir, plan_json, executor_jsonl, gate_json, out_jsonl))
 
     assert result["verdict"] == "DRY_RUN_FOK_EXECUTOR_EXECUTED"
     assert result["live_enabled"] is False
@@ -201,11 +208,13 @@ def test_execute_baskets_dry_run_writes_would_submit_rows(tmp_path: Path):
 
 
 def test_execute_baskets_blocks_live_without_all_flags(tmp_path: Path):
-    run_dir, plan_json, executor_jsonl = _write_plan_and_executor(tmp_path)
+    run_dir, plan_json, executor_jsonl, gate_json = _write_plan_and_executor(tmp_path)
+    gate_json.write_text(json.dumps({"verdict": "READY_FOR_DEPLOY_REVIEW", "blockers": []}) + "\n", encoding="utf-8")
     out_jsonl = tmp_path / "orders.jsonl"
 
-    result = execute_baskets(args=_execute_args(run_dir, plan_json, executor_jsonl, out_jsonl, live=True))
+    result = execute_baskets(args=_execute_args(run_dir, plan_json, executor_jsonl, gate_json, out_jsonl, live=True))
 
+    assert result["verdict"] == "FOK_EXECUTION_BLOCKED"
     assert result["live_requested"] is True
     assert result["live_enabled"] is False
     assert [row["code"] for row in result["blockers"]] == ["live_flags_missing"]
@@ -214,8 +223,28 @@ def test_execute_baskets_blocks_live_without_all_flags(tmp_path: Path):
     assert {row["no_order_placed"] for row in rows} == {True}
 
 
-def test_execute_baskets_can_use_injected_live_fok_place_fn(tmp_path: Path):
-    run_dir, plan_json, executor_jsonl = _write_plan_and_executor(tmp_path)
+def test_execute_baskets_blocks_live_when_live_prep_gate_not_ready(tmp_path: Path):
+    run_dir, plan_json, executor_jsonl, gate_json = _write_plan_and_executor(tmp_path)
+    out_jsonl = tmp_path / "orders.jsonl"
+
+    result = execute_baskets(
+        args=_execute_args(run_dir, plan_json, executor_jsonl, gate_json, out_jsonl, live=True, confirm_live=True, arm=True),
+    )
+
+    assert result["verdict"] == "FOK_EXECUTION_BLOCKED"
+    assert result["live_requested"] is True
+    assert result["live_enabled"] is True
+    assert result["no_order_placed"] is True
+    assert [row["code"] for row in result["blockers"]] == ["live_prep_gate_not_ready"]
+    assert result["live_gate_verdict"] == "NOT_READY_ACCUMULATE_PAPER_SHADOW"
+    rows = [json.loads(line) for line in out_jsonl.read_text().splitlines()]
+    assert {row["status"] for row in rows} == {"blocked"}
+    assert {row["no_order_placed"] for row in rows} == {True}
+
+
+def test_execute_baskets_can_use_injected_live_fok_place_fn_when_gate_ready(tmp_path: Path):
+    run_dir, plan_json, executor_jsonl, gate_json = _write_plan_and_executor(tmp_path)
+    gate_json.write_text(json.dumps({"verdict": "READY_FOR_DEPLOY_REVIEW", "blockers": []}) + "\n", encoding="utf-8")
     out_jsonl = tmp_path / "orders.jsonl"
     calls = []
 
@@ -224,7 +253,7 @@ def test_execute_baskets_can_use_injected_live_fok_place_fn(tmp_path: Path):
         return {"place": {"order_id": f"order-{row['token_id']}"}}
 
     result = execute_baskets(
-        args=_execute_args(run_dir, plan_json, executor_jsonl, out_jsonl, live=True, confirm_live=True, arm=True),
+        args=_execute_args(run_dir, plan_json, executor_jsonl, gate_json, out_jsonl, live=True, confirm_live=True, arm=True),
         live_place_fn=fake_place,
     )
 

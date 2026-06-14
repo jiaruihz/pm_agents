@@ -27,9 +27,11 @@ if str(ROOT) not in sys.path:
 RUN_DIR_DEFAULT = ROOT / "runtime" / "weather_edge_v1" / "all_yes_underround_paper_v0"
 PLAN_JSON_DEFAULT = RUN_DIR_DEFAULT / "latest_live_plan.json"
 EXECUTOR_JSONL_DEFAULT = RUN_DIR_DEFAULT / "executor_trade_plans.jsonl"
+GATE_JSON_DEFAULT = RUN_DIR_DEFAULT / "live_prep_gate.json"
 STRATEGY_ID = "all_yes_underround_basket_v0"
 EXECUTION_CONTRACT_VERSION = "all_yes_execution_contract_v0"
 REQUIRED_ORDER_TYPE = "FOK"
+LIVE_GATE_READY_VERDICT = "READY_FOR_DEPLOY_REVIEW"
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("command", choices=["check", "execute"])
     parser.add_argument("--plan-json", default=str(PLAN_JSON_DEFAULT))
     parser.add_argument("--executor-jsonl", default=str(EXECUTOR_JSONL_DEFAULT))
+    parser.add_argument("--gate-json", default=str(GATE_JSON_DEFAULT))
     parser.add_argument("--run-dir", default=str(RUN_DIR_DEFAULT))
     parser.add_argument("--mock-fill-json", default="")
     parser.add_argument("--out-jsonl", default="")
@@ -374,6 +377,24 @@ def live_flags_valid(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "live", False) and getattr(args, "confirm_live", False) and getattr(args, "arm", False))
 
 
+def live_gate_blocker(gate: dict[str, Any]) -> dict[str, Any] | None:
+    if gate.get("status") in {"missing", "invalid"}:
+        return {
+            "code": "live_prep_gate_missing_or_invalid",
+            "message": "Live FOK execution requires a valid all-YES live_prep_gate.json.",
+            "path": gate.get("path"),
+            "status": gate.get("status"),
+        }
+    if gate.get("verdict") != LIVE_GATE_READY_VERDICT:
+        return {
+            "code": "live_prep_gate_not_ready",
+            "message": "Live FOK execution is blocked until the all-YES live-prep gate reaches READY_FOR_DEPLOY_REVIEW.",
+            "verdict": gate.get("verdict"),
+            "blocker_codes": [row.get("code") for row in list(gate.get("blockers") or [])],
+        }
+    return None
+
+
 def build_live_fok_place_fn():
     try:
         from py_clob_client_v2.client import ClobClient
@@ -455,7 +476,9 @@ def execute_baskets(
     out_path = Path(args.out_jsonl) if args.out_jsonl else run_dir / "fok_executor_orders.jsonl"
     plan_path = Path(args.plan_json)
     executor_path = Path(args.executor_jsonl)
+    gate_path = Path(args.gate_json)
     live_plan = read_json(plan_path)
+    live_gate = read_json(gate_path)
     executor_rows = read_jsonl(executor_path)
     executor_by_basket = rows_by_basket(executor_rows)
     readiness_args = argparse.Namespace(
@@ -478,6 +501,10 @@ def execute_baskets(
                 "message": "Live FOK execution requires --live --confirm-live --arm together.",
             }
         )
+    if live_requested:
+        gate_blocker = live_gate_blocker(live_gate)
+        if gate_blocker is not None:
+            blockers.append(gate_blocker)
     if readiness.get("verdict") != "DRY_RUN_FOK_EXECUTOR_READY":
         blockers.append(
             {
@@ -487,7 +514,7 @@ def execute_baskets(
             }
         )
 
-    if live_enabled and live_place_fn is None:
+    if live_enabled and not blockers and live_place_fn is None:
         live_place_fn = build_live_fok_place_fn()
 
     for basket_plan in list(live_plan.get("plans") or []):
@@ -517,7 +544,7 @@ def execute_baskets(
                 "order_type": REQUIRED_ORDER_TYPE,
                 "live_requested": live_requested,
                 "live_enabled": live_enabled,
-                "no_order_placed": not live_enabled,
+                "no_order_placed": bool(blockers) or not live_enabled,
             }
             if blockers:
                 record.update({"status": "blocked", "blockers": blockers})
@@ -563,16 +590,22 @@ def execute_baskets(
         "strategy_id": STRATEGY_ID,
         "live_requested": live_requested,
         "live_enabled": live_enabled,
-        "no_order_placed": not live_enabled,
+        "no_order_placed": bool(blockers) or not live_enabled,
         "order_type": REQUIRED_ORDER_TYPE,
         "plan_path": str(plan_path),
         "executor_jsonl": str(executor_path),
+        "gate_json": str(gate_path),
+        "live_gate_verdict": live_gate.get("verdict"),
         "out_jsonl": str(out_path),
         "baskets": len(list(live_plan.get("plans") or [])),
         "orders_written": len(rows),
         "blockers": blockers,
         "readiness_verdict": readiness.get("verdict"),
-        "verdict": "LIVE_FOK_EXECUTION_ATTEMPTED" if live_enabled and not blockers else "DRY_RUN_FOK_EXECUTOR_EXECUTED",
+        "verdict": (
+            "FOK_EXECUTION_BLOCKED"
+            if blockers
+            else ("LIVE_FOK_EXECUTION_ATTEMPTED" if live_enabled else "DRY_RUN_FOK_EXECUTOR_EXECUTED")
+        ),
     }
     (run_dir / "latest_fok_executor_execute.json").write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n",
