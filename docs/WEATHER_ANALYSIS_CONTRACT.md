@@ -1,7 +1,7 @@
 # Weather Analysis Contract
 
 Status: current-source
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-06-13 weather.db query reliability; preserve content dates below
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -36,6 +36,37 @@ scripts/weather_dashboard/run_stack.sh
 4. N100 raw（`jiarui@192.168.0.200:~/projects/weather-predict/output/`）— 最后手段
 
 **每降一级必须在报告"数据快照"段写明原因。**
+
+### SQLite 查询可靠性（硬规定）
+
+`runtime/weather.db` 是 WAL 模式 SQLite。普通分析只读查询必须有明确 timeout，避免无界交互式 sqlite 卡住；不要在只读连接里运行 checkpoint / WAL 修复类 PRAGMA。
+
+CLI 推荐：
+
+```bash
+sqlite3 -batch -cmd ".timeout 1000" runtime/weather.db "SELECT COUNT(*) FROM fact_signal_candidates;"
+```
+
+Python 推荐：
+
+```python
+import sqlite3
+
+conn = sqlite3.connect("file:runtime/weather.db?mode=ro", uri=True, timeout=1.0)
+conn.execute("PRAGMA query_only=ON")
+conn.execute("PRAGMA busy_timeout=1000")
+conn.row_factory = sqlite3.Row
+```
+
+长查询、bootstrap、join-heavy 研究优先在 `run_stack.sh` 完成后制作一致性 snapshot，再读 snapshot：
+
+```bash
+mkdir -p runtime/analysis_snapshots
+sqlite3 -batch -cmd ".timeout 5000" runtime/weather.db \
+  "VACUUM INTO 'runtime/analysis_snapshots/weather_YYYYMMDD_HHMMSS.db';"
+```
+
+`immutable=1` 只用于一致性 snapshot 或确认 WAL 为空且没有活跃 writer 的静态 DB；不要直接对仍可能由 dashboard / rebuild 写入的 live `runtime/weather.db` 使用 `immutable=1`。
 
 ### 禁止清单
 
@@ -222,7 +253,9 @@ missing_bracket: 725 -> 0 after rebuild
 
 ```python
 import sqlite3
-conn = sqlite3.connect("runtime/weather.db")
+conn = sqlite3.connect("file:runtime/weather.db?mode=ro", uri=True, timeout=1.0)
+conn.execute("PRAGMA query_only=ON")
+conn.execute("PRAGMA busy_timeout=1000")
 conn.row_factory = sqlite3.Row
 
 # --- 最常用：取所有已结算成交，直接用预算好的 PnL ---
@@ -321,7 +354,10 @@ rows = conn.execute("""
 
 ```python
 import sqlite3
-conn = sqlite3.connect("runtime/weather.db"); conn.row_factory = sqlite3.Row
+conn = sqlite3.connect("file:runtime/weather.db?mode=ro", uri=True, timeout=1.0)
+conn.execute("PRAGMA query_only=ON")
+conn.execute("PRAGMA busy_timeout=1000")
+conn.row_factory = sqlite3.Row
 
 # 全 eligible 机会宇宙的城市/方向反事实 alpha（settled + 决策窗存在）
 rows = conn.execute("""

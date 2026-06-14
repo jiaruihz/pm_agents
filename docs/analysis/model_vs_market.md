@@ -2,7 +2,7 @@
 
 > Living doc for module [1]: whether the weather probability model has alpha beyond market prices.
 > Current status: `inconclusive` for residual model use, negative for global probability alpha and unconfirmed for rank alpha.
-> Last updated: 2026-06-11 Phase 4D batch-02.
+> Last updated: 2026-06-14 forecast quality / reliability base v0 handoff.
 
 Quant lineage anchor: model outputs enter the chain through Signal / candidate fields such as `model_p_yes`, `model_side_prob`, and model-derived edge. This document evaluates whether those fields should influence Signal, TradePlan, or sizing; it does not redefine fill PnL or account cashflow.
 
@@ -18,6 +18,17 @@ This does not prove the model has no remaining use, but the first rank-IC pass a
 2. **Conditional subpools**: model value could still exist in specific city, forecast source, season, or lead-time slices, but any such pool must pass train/holdout validation before live use.
 
 Important nuance: `model_side_prob` has positive IC against raw side win and decision ROI, but that mostly says high-probability sides win more often. It is not enough to prove tradable edge because the actionable score is excess over entry price / market price, and that score is not significant.
+
+### Forecast Quality / Reliability Base
+
+The 2026-06-13 forecast-quality-base v0 pass changes how follow-up research should use model information. The current conclusion is:
+
+- Forecast quality has value as a **shared reliability layer**, not as a standalone live strategy.
+- `forecast_quality_medium_plus` and `city_model_reliable` are the most useful soft allow / risk tags so far, especially for BUY_NO single-leg and side-band proxy overlays.
+- `forecast_quality_low`, `tail_risk_high`, and `model_market_disagreement_high` are diagnostic weak-quality or risk tags. They are not hard no-trade gates yet.
+- Cross-family evidence is directionally useful but still fails live gates: holdout samples are thin, top-date stress is unstable, and this v0 uses decision-price proxy rather than time-aligned executable pricing.
+
+Any future Range RV, adjacent3, side-band, single-leg, or basket study that uses forecast reliability should consume the same base labels at `city + event_date + forecast_source/model_version + decision_snapshot_ts_utc` grain, then compare against that family’s no-quality-filter baseline. Do not copy the v0 thresholds into live config; rederive thresholds on the train window for each rerun.
 
 ## Absorbed Historical Claims
 
@@ -40,6 +51,7 @@ Important nuance: `model_side_prob` has positive IC against raw side win and dec
 | `docs/analysis/2026-06/2026-06-08-blender-signal-value-research.md` | 2026-06 blender research | blender hard-gate and sizing signal value | cross-domain-reference |
 | `docs/analysis/2026-06/2026-06-09-decision-window-backfill.md` | 2026-06-09 local DB repair | backfilled 2,186 candidate decision windows from raw orderbook with 0.005 wear | active-evidence |
 | `docs/analysis/2026-06/2026-06-09-model-rank-ic.md` | 2026-05-12 to 2026-06-06 candidate rows | Ring3 rank/IC test after backfill; model edge ranking still inconclusive | active-evidence |
+| `docs/analysis/2026-06/2026-06-13-forecast-quality-base-v0.md` | 2026-05-06 to 2026-06-10 settled decision sets | reusable forecast reliability labels and cross-family overlays; research/shadow only | active-evidence |
 
 ## Required Gates Before Live Use
 
@@ -62,7 +74,10 @@ Conclusion labels:
 
 ## Open Work
 
-1. Re-run IC after latest N100 sync + DB rebuild if the local snapshot is refreshed.
-2. Extend rank-IC only as a shadow research path for pre-declared city, forecast source, and lead-time buckets.
-3. Keep market-structure tests in `market_structure_edge.md`; do not conflate model alpha with BUY_NO base-rate.
-4. Do not use `model_side_prob` alone as a live gate; any live proposal must prove excess over market/entry price.
+1. Materialize `forecast_run_ts_utc`, forecast issuance/checkpoint age, and forecast-source run id into `fact_signal_candidates`.
+2. Materialize same-checkpoint ECMWF/GFS paired distribution features: mode distance, L1 distribution gap, entropy gap, and paired confidence/mass features.
+3. Promote forecast-quality labels into a reusable generated artifact or fact-table sidecar so strategy scripts consume the same reliability layer.
+4. Re-run IC and reliability labels after each latest N100 sync + DB rebuild when the local snapshot is refreshed.
+5. Extend rank-IC and reliability tests only for pre-declared city, forecast source, lead-time, and strategy-family buckets.
+6. Keep market-structure tests in `market_structure_edge.md`; do not conflate model reliability with BUY_NO base-rate.
+7. Do not use `model_side_prob` or forecast-quality labels alone as a live gate; any live proposal must prove excess over market/entry price and survive time-aligned orderbook checks.

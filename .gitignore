@@ -83,6 +83,9 @@ runtime/verify_market_analysis_cn/
 # Generated analysis artifacts; keep Markdown conclusions in git.
 docs/analysis/**/*.json
 docs/analysis/**/*.jsonl
+# Reproducible analysis CSVs under generated/ are bulky (~270MB); scripts
+# regenerate them and reports cite the numbers. Keep them out of git.
+docs/analysis/**/generated/**/*.csv
 
 # Local agent state
 .claude/

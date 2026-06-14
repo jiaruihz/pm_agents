@@ -76,6 +76,25 @@ SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 
 **禁止**：读 `runtime/_legacy/*.db`（已退役）、绕过 `fact_trades` 自算 fill PnL、绕过 `fact_signal_candidates` 自算成交质量/漏单/滑点。  
 **当前已知口径/缺口**：2026-06-07 修正后 live fill recovery 的硬标准是 `weather_clob_fill_coverage_gate.py gate_pass=true`，且 `missing_order_rows=0`、`over_order_keys=0`、DB/cache/fact 成本差为 0；`live_real` 行数会随新增真实成交变化，不要写死。2026-06-06 之前大量 `missing_bracket` 是 settlement near-binary bug，`pm_history` raw `0.9995/0.0005` 必须归一化为 `1/0`，旧报告需重算。`gfs_365d_*` cache 文件名误标，实际 ~735 天。`decision_window_missing` ~44%。
 
+### weather.db 查询可靠性约定
+
+`runtime/weather.db` 是 WAL 模式 SQLite。普通分析读库时不要用无界交互式 sqlite，也不要在只读连接里跑 checkpoint / WAL 修复类 PRAGMA。推荐 CLI 读法：
+
+```bash
+sqlite3 -batch -cmd ".timeout 1000" runtime/weather.db "SELECT COUNT(*) FROM fact_signal_candidates;"
+```
+
+Python 脚本默认只读打开，并设置 busy timeout：
+
+```python
+conn = sqlite3.connect("file:runtime/weather.db?mode=ro", uri=True, timeout=1.0)
+conn.execute("PRAGMA query_only=ON")
+conn.execute("PRAGMA busy_timeout=1000")
+conn.row_factory = sqlite3.Row
+```
+
+长查询、bootstrap、join-heavy 研究或多人/多进程同时分析时，先在 `run_stack.sh` 完成后制作一致性 snapshot，再对 snapshot 用 `immutable=1` 读取；不要直接对仍可能有 WAL 写入的 live DB 使用 `immutable=1`。
+
 ---
 
 ## 全局工程姿态：个人项目，默认直接推进

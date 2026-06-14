@@ -2,7 +2,7 @@
 
 > Living doc for module [0]: snapshot health, side flips, candidate/fill linkage, fact-table coverage, and known data gaps.
 > Current status: `current-reference` for analysis preflight; current source docs remain `WEATHER_DATA_CANONICAL_SOURCES.md` and `WEATHER_ANALYSIS_CONTRACT.md`.
-> Last updated: 2026-06-09 Phase 4D pilot.
+> Last updated: 2026-06-14 CLOB cache gate repair + settlement source registry v0.
 
 ## Current Conclusion
 
@@ -14,7 +14,9 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 2. **Side flips are not automatically side bugs.** The 2026-06-03 check showed flips were mostly forecast/probability version instability amplified by narrow brackets; monitor them as stability/size factors unless formula or token inversion evidence appears.
 3. **`fact_signal_candidates` and `fact_trades` are different grains.** Candidate counterfactuals measure opportunity/capture; fill facts measure executed PnL. Joining them is valid only after orphan checks and denominator labels.
 4. **Decision-window coverage is an analysis-quality gate.** Backfilled rows must be marked by `decision_window_source`; high `decision_window_missing` means over-fine slices should be downgraded.
-5. **Handoff and experiment reports are method evidence unless their scripts have run under current gates.** Do not cite a handoff manifest as proof that a strategy edge is confirmed.
+5. **Settlement truth and feature source are different things.** `pm_history` / `final_yes` remains the market payout truth, but source-sensitive features must know whether the city settles from the configured station, a different official station, or a special feed such as HKO.
+6. **Handoff and experiment reports are method evidence unless their scripts have run under current gates.** Do not cite a handoff manifest as proof that a strategy edge is confirmed.
+7. **CLOB fill cache must be cap-safe before live_real reporting.** On 2026-06-14 the local cache was repaired with `scripts/ops/repair_clob_fill_cache_for_gate.py --replace`: 579 stale rows outside the current submitted-order universe and one over-cap Chengdu duplicate were removed, with backup at `runtime/weather_edge_v1/clob_fills.jsonl.bak_gate_repair_20260613T183739Z`. After rebuild, `weather_clob_fill_coverage_gate.py` passed with 855 DB/cache/fact live_real fills and zero cost delta.
 
 ## Evidence Map
 
@@ -25,9 +27,11 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 | `docs/analysis/2026-06/2026-06-03-signal-side-flip-check.md` | 2026-06 | side flip and bracket evolution investigation | snapshot |
 | `docs/archive/analysis/2026-05/2026-05-29-performance-candidates-vs-fills-link.md` | 2026-05 | candidate vs fill linkage context | snapshot |
 | `docs/analysis/2026-06/2026-06-09-decision-window-backfill.md` | 2026-06 | analysis DB repair for decision-window coverage | snapshot |
+| `docs/analysis/2026-06/2026-06-14-settlement-source-registry-v0.md` | 2026-06 | city-level settlement source classes for feature alignment: official station diff, HKO/Jakarta special fixes, blocked unresolved cities | active-evidence |
 | `docs/archive/analysis/2026-06/2026-06-08-HANDOFF-LANDING-VALIDATION.md` | 2026-06 | handoff package landing and schema validation | design-plan |
 | `docs/analysis/2026-06/2026-06-08-HANDOFF-REVIEW-AND-IMPROVEMENT-PLAN.md` | 2026-06 | handoff package execution gaps and three-source microstructure correction | design-plan |
 | `docs/analysis/2026-06/2026-06-08-decisive-experiment-scripts-audit-and-handoff.md` | 2026-06 | final audit: use three-gate verdicts and avoid drifting live_real counts | snapshot |
+| `scripts/ops/repair_clob_fill_cache_for_gate.py` | 2026-06-14 | local cap-safe CLOB cache repair; drops stale current-DB-nonmatching rows and over-cap duplicate fills before rebuild | active-tool |
 
 ## Absorbed Historical Claims
 
@@ -37,7 +41,9 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 | Candidate/fill linkage had zero paper/live orphans in the 2026-05-29 snapshot | Keep as bridge evidence, but rerun current orphan checks before fresh analysis |
 | Candidate counterfactuals can show missed opportunity but `paper_ordered` is not live execution intent | Never call paper-not-live rows "missed live orders" without live intent/order evidence |
 | Decision-window backfill reduced missing rows but used `orderbook_backfill` sources | Treat as analysis DB repair only; it does not change N100 live behavior |
+| HK/Jakarta/station-diff cities use settlement sources that differ from local configured station assumptions | Attach `settlement_source_class`; rebuild source-sensitive features from official station/feed or block the city |
 | Handoff manifests initially mixed present files, missing scripts, and future plans | Use landing validation and final audit as method/history; current source remains contract plus live docs |
+| One Chengdu order had a duplicate local fill causing DB fills to exceed order cap by about `$1.41` | Repaired local cache to 855 current submitted-order fills; `clob_fill_sync.py` now caps recovered order-level fills and skips public fallback rows that would exceed order caps |
 
 ## Required Preflight
 
@@ -48,7 +54,9 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 | Settlement | `settlement_status` counts in `fact_trades` |
 | Candidate coverage | `fact_signal_candidates` eligible/paper/live coverage |
 | Order/fill linkage | CLOB `orders` joined to `fills` by execution_id |
+| CLOB fill coverage | `weather_clob_fill_coverage_gate.py gate_pass=true`, with DB/cache/fact cost delta 0 and `over_order_keys=0` |
 | Decision window | Coverage and `decision_window_source` distribution before counterfactual or timing claims |
+| Settlement source | For source-sensitive research, join the city to `settlement_source_registry_v0` and state whether it is default, station-diff, special-source, watchlist, or blocked |
 | Grain labeling | State whether each table uses candidate, fill, order, city-day, or account-equity grain |
 
 ## Open Work
@@ -56,3 +64,4 @@ Phase 4D absorbed the side-flip, candidate-link, decision-window, and handoff au
 1. Keep side-flip and snapshot-health analysis here, not in live-performance conclusions.
 2. If raw live files are newer than DB, report DB lag instead of forcing a PnL conclusion.
 3. Add a small reusable orphan/coverage table for future candidate-vs-fill reports.
+4. Promote settlement source registry fields into a fact-table sidecar once the schema is agreed.

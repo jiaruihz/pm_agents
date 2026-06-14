@@ -1,0 +1,4 @@
+event_date,city,bracket,direction,no_cost,no_edge,shares_at_5usd,notional_usd,decision_snapshot_ts_utc,forecast_quality_low,order_type
+2026-06-13,Amsterdam,18,BUY_NO,0.7150,0.1104,6.99,5.00,2026-06-12T22:00:53Z,0,zero_notional_shadow
+2026-06-13,Lucknow,37,BUY_NO,0.7100,0.2083,7.04,5.00,2026-06-12T18:00:53Z,0,zero_notional_shadow
+2026-06-13,Moscow,27,BUY_NO,0.6450,0.1775,7.75,5.00,2026-06-12T20:00:53Z,0,zero_notional_shadow

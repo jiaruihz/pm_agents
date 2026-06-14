@@ -1,11 +1,11 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-12 low-price BUY_YES lottery research added
+Updated: 2026-06-14 settlement source registry + forecast quality living-doc updates
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-06-12
+更新时间：2026-06-14
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -89,7 +89,7 @@ Status 口径：
 
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
-| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | 模型概率相对市场是否有 alpha 的 living doc；当前结论：global probability alpha 为负，model edge rank alpha 未确认 |
+| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | 模型概率相对市场是否有 alpha 的 living doc；当前结论：global probability alpha 为负，model edge rank alpha 未确认；forecast quality 只可作为 shared reliability layer / shadow tag |
 | [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | `current-source` | weather_edge_engine 当前接手入口：blender shadow/paper 与 city-day basket 下一步 |
 | [WEATHER_PROBABILITY_MODEL_REVIEW.md](WEATHER_PROBABILITY_MODEL_REVIEW.md) | `current-reference` | 生产 baseline `model_p_yes` 的问题、条件模型缺口、季节/forecast jump 风险 |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) | `current-reference` | 概率模型从 M0 可观测骨架到 lead-time/ensemble/ML 的路线图 |
@@ -105,9 +105,9 @@ Status 口径：
 
 | 文档 | Status | 主线层 | 读它回答什么问题 |
 |---|---|---:|---|
-| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | [1] | 模型概率相对市场是否有 alpha；模型字段是否可影响 signal / sizing |
+| [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | [1] | 模型概率相对市场是否有 alpha；forecast quality / reliability labels 如何作为 shared layer 影响 signal、shadow 分层或 sizing |
 | [market_structure_edge.md](analysis/market_structure_edge.md) | `current-reference` | [2] | 是否存在 model-free 的市场结构 edge，例如 favorite-longshot、BUY_NO base-rate、price-bucket mispricing |
-| [execution_quality.md](analysis/execution_quality.md) | `current-reference` | [4] | maker-only 扣 spread、queue、逆向选择和 fill selection 后是否仍有可成交 edge |
+| [execution_quality.md](analysis/execution_quality.md) | `current-reference` | [4] | maker-only 扣 spread、queue、逆向选择和 fill selection 后是否仍有可成交 edge；2026-06-14 本机 CLOB cache repair 后 coverage gate 已可通过 |
 | [entry_timing.md](analysis/entry_timing.md) | `current-reference` | [3] | target-date lead time、forecast checkpoint、decision window 对计划和成交的影响 |
 | [side_alpha.md](analysis/side_alpha.md) | `current-reference` | [2] | BUY_NO / BUY_YES、side-band 是否有持久超额，而不是单纯 win-rate |
 | [city_selection.md](analysis/city_selection.md) | `current-reference` | [3] | 城市池、city-day basket、城市 x model x side 选择证据；live 事实仍以 CITY_POOL_DECISIONS 为准 |
@@ -116,7 +116,7 @@ Status 口径：
 | [blender_shadow.md](analysis/blender_shadow.md) | `current-reference` | [1] | blender / edge-engine 字段作为 shadow、paper 或 sizing signal 是否有价值 |
 | [live_performance.md](analysis/live_performance.md) | `current-reference` | [5][6] | live 策略绩效曲线、strategy_instance 归因、settled/open/quasi-settled 拆分 |
 | [account_reconcile.md](analysis/account_reconcile.md) | `current-reference` | [5] | 钱包余额、CLOB fill、cashflow、DB/fact 对账 |
-| [data_integrity.md](analysis/data_integrity.md) | `current-reference` | [0] | snapshot 健康、side flip、candidate/fill linkage、fact-table coverage 和分析前自检 |
+| [data_integrity.md](analysis/data_integrity.md) | `current-reference` | [0] | snapshot 健康、side flip、candidate/fill linkage、fact-table coverage、settlement source registry、CLOB cache gate repair 和分析前自检 |
 | [SCRIPT_MIGRATION_MANIFEST.md](analysis/SCRIPT_MIGRATION_MANIFEST.md) | `current-reference` | [0]-[6] | Phase 3A/3B 脚本迁移归属表：old path、new path、owner living doc |
 | [MD_CONSOLIDATION_PLAN.md](analysis/MD_CONSOLIDATION_PLAN.md) | `current-reference` | [6] | Phase 4A/4B Markdown 审计表：口径有效性、重复、勘误、owner living doc、后续动作 |
 
@@ -150,9 +150,13 @@ Status 口径：
 | [2026-06-09-range-rv-regime-v0-8.md](archive/analysis/2026-06/2026-06-09-range-rv-regime-v0-8.md) | `snapshot` | yes | Range RV v0.8 正实验：按模型/市场分布 regime 固定表达，full opportunity 口径下仍因 holdout/top5/orderbook 不稳，当前 verdict=inconclusive |
 | [2026-06-09-range-rv-noarb-v0-9.md](archive/analysis/2026-06/2026-06-09-range-rv-noarb-v0-9.md) | `snapshot` | yes | Range RV v0.9 正实验：互斥 bracket no-arb；all-YES underround proxy confirmed，orderbook 接近但初版阈值下 forward 门贴边不过 |
 | [2026-06-09-range-rv-underround-robust-v1-0.md](analysis/2026-06/2026-06-09-range-rv-underround-robust-v1-0.md) | `snapshot` | yes | Range RV v1.0 confirmed：model-free all-YES underround，proxy 0.01-0.05 与 executable 0.005-0.05 阈值均通过三门；下一步仅做 shadow/paper 工程化，不直接改 live |
+| [2026-06-14-all-yes-underround-live-prep-v0.md](analysis/2026-06/2026-06-14-all-yes-underround-live-prep-v0.md) | `snapshot` | yes | All-YES underround live-prep scanner + 本机 all-leg paper executor：2026-06-14 02:30 orderbook 找到 Busan/MexicoCity 两个 equal-share 5-share paper/shadow 候选，并记录 2 baskets / 20 leg orders；full 03:00 snapshot 另有 Denver +2.8% underround，但 fresh runner 因 snapshot age 1274.191s > 180s 跳过、paper guard 以 `snapshot_too_old` 拒绝；两笔已记录 basket 也因记录晚于 snapshot 1353.209s 而 `ttl_equivalent_baskets=0`、只能作 observation-only；真钱 live 仍卡在 live-equivalent forward sample、signed basket executor、partial-fill 处理和 deploy 流程 |
+| [2026-06-14-all-yes-underround-persistence-v0.md](analysis/2026-06/2026-06-14-all-yes-underround-persistence-v0.md) | `snapshot` | yes | All-YES underround snapshot persistence：扫描 2026-06-14 已同步 7 个 orderbook snapshot，3 个有候选；Busan 连续 2 个 snapshot，MexicoCity 1 个 snapshot，Denver 最新 03:00 1 个 snapshot；证明方向真实但稀疏，真钱 live 必须低延迟、snapshot-driven、stale basket fail-closed |
+| [2026-06-14-all-yes-underround-low-latency-paper-design.md](analysis/2026-06/2026-06-14-all-yes-underround-low-latency-paper-design.md) | `design-draft` | yes | All-YES underround 低延迟 forward-paper 采集设计：新增 fresh cycle/loop/start 脚手架，N100 预期读 `/home/jiarui/projects/weather-predict/output/orderbook_snapshots`，只记录 180s TTL 内 paper basket；当前不部署、不下单，tiny-live review 前需 >=20 个 TTL-valid settled baskets、ROI>=+2%、positive rate>=55%、无 settlement anomaly、另行签名 executor/partial-fill 评审 |
 | [2026-06-09-forecast-quality-regime-signal-value.md](analysis/2026-06/2026-06-09-forecast-quality-regime-signal-value.md) | `snapshot` | yes | forecast quality regime 研究：用 fact_signal_candidates 构造 entropy/mode/adjacent/tail/calibration features，给 Range RV planner 提供 low/medium/high/tail-overpriced regime；不输出 live action |
 | [2026-06-09-forecast-quality-range-rv-overlay.md](analysis/2026-06/2026-06-09-forecast-quality-range-rv-overlay.md) | `snapshot` | yes | forecast quality filter overlay：对 forecast-first adjacent2/3 Range RV 做不筛/宽松/中等/严格过滤对比；proxy 为正但严格过滤偏死，未做 executable 三门，不输出 live action |
 | [2026-06-10-forecast-quality-range-rv-city-model.md](analysis/2026-06/2026-06-10-forecast-quality-range-rv-city-model.md) | `snapshot` | yes | forecast quality Range RV 城市/模型/数据积累分层：ECMWF 候选强于 GFS，city+model 样本薄；给出 `range_rv_forecast_quality_probe_v0` 小额试探候选，不改 live |
+| [2026-06-13-forecast-quality-base-v0.md](analysis/2026-06/2026-06-13-forecast-quality-base-v0.md) | `snapshot` | yes | Forecast quality / reliability base v0：把 entropy、adjacent mass、city-model history、model-market disagreement 转成可复用标签，并在 adjacent3、side-band、BUY_NO single-leg 三类表达上做同标签 overlay；当前只支持 shadow/research，不允许 live |
 | [2026-06-09-forecast-first-adjacent-range-rv-v0-1.md](archive/analysis/2026-06/2026-06-09-forecast-first-adjacent-range-rv-v0-1.md) | `snapshot` | yes | Forecast-first adjacent2/3 Range RV：full opportunity 口径、按 event_date train/holdout、orderbook all-leg matched；significance/forward 不过，当前 verdict=inconclusive |
 | [2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md](archive/analysis/2026-06/2026-06-09-range-rv-tail-fade-uncertainty-v1-1.md) | `snapshot` | yes | Tail fade / uncertainty Range RV：BUY_NO tail + BUY_YES adjacent inner/center，full opportunity 口径、event_date split、orderbook executable 复核；holdout 样本/top5 stress 不足，当前 verdict=inconclusive |
 | [2026-06-09-center-shoulders-butterfly-range-rv.md](archive/analysis/2026-06/2026-06-09-center-shoulders-butterfly-range-rv.md) | `snapshot` | yes | Range RV 专项：forecast-first center vs shoulders / butterfly 表达；center/band/tail proxy 超额不支持，shoulders 便宜样本太少且 orderbook train 覆盖不足，当前 verdict=inconclusive |
@@ -165,9 +169,13 @@ Status 口径：
 | [2026-06-11-adjacent3-union-flexible-v0-2.md](analysis/2026-06/2026-06-11-adjacent3-union-flexible-v0-2.md) | `snapshot` | yes | Adjacent3 union/flexible v0.2：修正 BUY_YES-only 分母问题，纳入 BUY_NO 和混合表达；样本恢复但 proxy/orderbook 三门仍不过，当前 verdict=inconclusive |
 | [2026-06-11-denominator-audit-v0.md](analysis/2026-06/2026-06-11-denominator-audit-v0.md) | `snapshot` | yes | Weather strategy denominator audit v0：扫描 Range/adjacent/side-band 研究脚本的 BUY_YES-only、eligible、settled/orderbook 前置过滤风险；输出 union universe 新标准，不给 live 动作 |
 | [2026-06-11-union-top-strategy-rerun-v0.md](analysis/2026-06/2026-06-11-union-top-strategy-rerun-v0.md) | `snapshot` | yes | Union top strategy rerun v0：按 BUY_YES+BUY_NO union universe 重跑 Range/shape/adjacent top 表达；5216 rows/17 algorithms，proxy/orderbook 三门仍不过，当前 verdict=inconclusive |
+| [2026-06-11-range-dual-expression-v0.md](analysis/2026-06/2026-06-11-range-dual-expression-v0.md) | `snapshot` | yes | Range Dual Expression v0：把同一区间用 inside YES、outside NO、choose-cheaper 三种等效表达重跑；样本扩大到 10248 rows/18 algorithms，但 orderbook 三门仍不过，当前 verdict=inconclusive |
 | [2026-06-10-shadow-paper-queue-v0.md](analysis/2026-06/2026-06-10-shadow-paper-queue-v0.md) | `snapshot` | yes | Shadow/Paper Queue v0：把 forecast-quality adjacent3、side-band tags、blended paper baseline、all-YES engineering shadow、April backfill 分层排队；live 队列为空 |
 | [2026-06-10-hybrid-adjacent3-single-v0.md](analysis/2026-06/2026-06-10-hybrid-adjacent3-single-v0.md) | `snapshot` | yes | Hybrid adjacent3 + single / outside NO v0：验证单腿多为 adjacent3 内重复加注，outside NO 固定口径未触发；当前三门不过 |
 | [2026-06-10-live-test-readiness-scoreboard-v0.md](analysis/2026-06/2026-06-10-live-test-readiness-scoreboard-v0.md) | `snapshot` | yes | Live-test readiness 总表：当前无真钱 live 候选；冻结 `forecast_quality_medium_adjacent3_shadow_v0` 为主 shadow 规则和硬门 |
+| [2026-06-13-forecast-quality-live-candidate-v0.md](analysis/2026-06/2026-06-13-forecast-quality-live-candidate-v0.md) | `snapshot` | yes | Forecast quality BUY_NO live-candidate refresh：ECMWF + forecast_quality_low=0 + 0.40-0.75 NO cost + city-date top1；fresh orderbook rerun 降级为 shadow_only，不给 live 动作 |
+| [2026-06-13-forecast-quality-shadow-candidates-v0.md](analysis/2026-06/2026-06-13-forecast-quality-shadow-candidates-v0.md) | `snapshot` | yes | Forecast quality BUY_NO zero-notional shadow candidates：fresh event_date>=2026-06-13，3 单/3 城，全部 BUY_NO；仅 shadow 记录，不下 live |
+| [2026-06-13-forecast-quality-buy-no-shadow-journal-v0.md](analysis/2026-06/2026-06-13-forecast-quality-buy-no-shadow-journal-v0.md) | `snapshot` | yes | Forecast quality BUY_NO zero-notional shadow journal：把 3 条 fresh 候选固化为去重 JSONL journal；本机记录，不改 N100/live，不下单 |
 | [2026-06-10-m3-observed-max-strategy-handoff.md](analysis/2026-06/2026-06-10-m3-observed-max-strategy-handoff.md) | `snapshot` | yes | M3 傍晚已观测最高温策略原始交接稿：旧 forecast-only 路线为何失败、M3 物理假设和验证纪律 |
 | [2026-06-10-m3-observed-max-strategy-plan.md](analysis/2026-06/2026-06-10-m3-observed-max-strategy-plan.md) | `design-draft` | yes | M3 结合当前 live/edge-engine 现状后的执行规划：先补 observed running max 事实层和物理残差实验，不改 live |
 | [2026-06-10-m3-observed-max-residual-v0.md](analysis/2026-06/2026-06-10-m3-observed-max-residual-v0.md) | `snapshot` | yes | M3 P2 物理残差实验 v0：49 城 WU 缓存显示当地 19:00 后 P95 residual 为 0°C，下一步做 bad-case 事前过滤 |
@@ -175,6 +183,15 @@ Status 口径：
 | [2026-06-10-m3-orderbook-best-ask-backtest-v0.md](analysis/2026-06/2026-06-10-m3-orderbook-best-ask-backtest-v0.md) | `superseded` | no | M3 observed-payout best-ask 早期结果；已被 settlement alignment v1 推翻，不得引用 ROI |
 | [2026-06-11-m3-settlement-alignment-v1.md](analysis/2026-06/2026-06-11-m3-settlement-alignment-v1.md) | `snapshot` | yes | M3 settlement alignment：WU/IEM observed payout 与 pm_history 官方 winner 不一致，官方结算重算后 best-ask 结果转负，当前 settlement_blocked |
 | [2026-06-11-m3-tail-no-retail-diagnosis-v0.md](analysis/2026-06/2026-06-11-m3-tail-no-retail-diagnosis-v0.md) | `snapshot` | yes | M3 高温尾部 NO 散户诊断：36 城结算对齐白名单 + 18-21h 穿档精算表；20/21h 尾部 NO 官方 ROI -27.8%、top-of-book 容量≈0，错位城市常数偏移修正不可行 |
+| [2026-06-12-official-resolution-source-and-entry-timing-v0.md](analysis/2026-06/2026-06-12-official-resolution-source-and-entry-timing-v0.md) | `snapshot` | yes | 官方 resolution source 识别（52 城）：6 错位城市为站点不同（Paris→LFPB 等），官方站对齐 ~100%；14-17h 窗口重建后发现站点 basis edge：修复 6 城 14-16h tail NO / official-bucket YES ROI +5~+23%，白名单对照全负；下一步 shadow 验证 |
+| [2026-06-12-m3-exhaustion-no-strategy-v0.md](analysis/2026-06/2026-06-12-m3-exhaustion-no-strategy-v0.md) | `snapshot` | yes | 温度衰竭买 NO 策略：decline_from_max 信号物理上强于钟点（15h 回落≥2°C 穿档仅 1.4%），但白名单市场已定价（全变体负）；可行版本=衰竭×站点basis，修复 6 城 d≥1 NO +5.5%（日度 t=3.0、16/21 天正、6/6 城正）；13h 前衰竭信号不可信；附录：截面模型选择也为负——白名单市场 ask 对实际胜率校准近乎完美（0.917 vs 0.917），气候学模型打不过实时定价，白名单仅剩 maker 方向 |
+| [2026-06-13-maker-backtest-v0.md](analysis/2026-06/2026-06-13-maker-backtest-v0.md) | `snapshot` | yes | 白名单 maker 路线关闭：衰竭后挂被动 NO 单 fill 31% 但 filled ROI -17.7%（t=-3.8），点差是逆向选择补偿不是免费钱；修复城市 maker（+8.1% t=1.0）不如直接 taker（+9.6% t=4.3）——有信息优势时应吃单不应挂单 |
+| [2026-06-13-settlement-basis-batch2-v0.md](analysis/2026-06/2026-06-13-settlement-basis-batch2-v0.md) | `snapshot` | yes | 结算源审计第二批：HongKong 修复（HKO Daily Extract 小数 + floor 映射 = 100%）、Jakarta 修复（官方站 WIHH 非 WIII = 8/8）→ 可交易城市 6→8；Moscow 89%/Seoul 78% 根因未明不入池；公开 GitHub bot 实锤用错站（NYC=KNYC vs 官方 KLGA） |
+| [2026-06-14-settlement-source-registry-v0.md](analysis/2026-06/2026-06-14-settlement-source-registry-v0.md) | `snapshot` | yes | 城市级 settlement source registry：34 城默认 WU 站点匹配、7 城官方站点错位确认（含 Jakarta WIHH）、HongKong HKO floor 特殊源确认、Moscow/Seoul/Shenzhen blocked；用于 M3/forecast-quality/station-basis 的 source-sensitive feature alignment，不给 live 动作 |
+| [2026-06-13-forecast-basis-sleeve-v0.md](analysis/2026-06/2026-06-13-forecast-basis-sleeve-v0.md) | `snapshot` | yes | 早场（10-13h 峰值前）预报 basis sleeve：网格预报能区分同城两站（71% 落不同档），但 edge 取决于"市场早场锚哪个站"且因城而异——Milan(+50%)/London(+50%) 市场锚官方站可开，KualaLumpur(-46%)/Chicago(-28%) 市场锚错误站反亏；需逐市场 anchor gate，不能整池开；核心仍是 14-17h 峰值后观测 sleeve |
+| [2026-06-13-station-basis-execution-design.md](analysis/2026-06/2026-06-13-station-basis-execution-design.md) | `design-draft` | yes | Station-basis 执行架构：三层（shadow 信号 / exec 风控 dry_run / eval go-no-go），风控边界 8 例单测，真钱下单硬门锁死（默认 dry_run，_place_live_order raise）；path-to-live 清单第 1-5 项完成，卡在 shadow ≥40 笔验证（现 7 笔）；操作命令 + 紧急 PAUSE 在此 |
+| [2026-06-14-station-basis-live-candidate-v1.md](analysis/2026-06/2026-06-14-station-basis-live-candidate-v1.md) | `snapshot` | yes | Station-basis live candidate v1：诊断 v0 forward YES early divergence；排除 Milan/Jakarta，收敛为 5 城 taker、16h official-bucket YES one-per-city-day + NO d1/d2 exhaustion；历史 YES h16 live5 ROI +120.7%、holdout +74.3%、prefix walk-forward +94.9%，NO d1 live5 holdout +19.8%；已接本机 v1 dry-run 风控审计 ledger，并将 live-core shadow/eval 收紧到 ask<=0.90；forward shadow 当前 1 笔 PanamaCity no_d1 pending，ask 0.825 所在 0.80-0.90 桶历史/holdout 为正，pending monitor 显示 thesis 仍 alive；新增 `station_basis_live_prep_gate_v1.py` 输出 live-prep gate，CLOB coverage gate 已修复为 true，当前 verdict=`NOT_READY_ACCUMULATE_SHADOW`，blockers=forward settled=0/核心规则 forward 门未过，仍不允许 live |
+| [2026-06-14-executability-reconcile-v0.md](analysis/2026-06/2026-06-14-executability-reconcile-v0.md) | `snapshot` | yes | 可成交性对账（回测 ask≤0.97 vs N100 v1 实时 0/41）：edge=真实但稀有，非回测假象。全集 executable 占比 YES 57%（per city-day 83%）/NO d1 24%（47%）/NO d2 8%；ask 可吃非 dust（中位 21-57 股）；executable 子集 ROI 复现 YES +11.7%/NO d1 +7.3%。v1 的 0/41 是采样偏差（只采最差的 PanamaCity/Chicago 且 15h 已收敛）——executable% 强依赖时点（NO d1 14h 66%→17h 3%）与城市；每周约 YES 30 + NO d1 10 机会。残余风险：实时 taker 能否真吃到 + 仅 3 周样本 |
 | [2026-06-10-adjacent3-quality-matched-baseline-v0.md](analysis/2026-06/2026-06-10-adjacent3-quality-matched-baseline-v0.md) | `snapshot` | yes | Adjacent3 medium_quality matched baseline：eligible 主口径下 same-cost random baseline 几乎无匹配，holdout 不支持 live |
 | [2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md](analysis/2026-06/2026-06-10-opportunity-fact-expansion-coverage-audit-v0.md) | `snapshot` | yes | Opportunity fact 扩样覆盖审计：两年天气缓存不能直接当交易样本；关键缺口是历史 decision-time 市场行情/盘口进入 fact_signal_candidates |
 | [2026-06-10-april-historical-opportunity-mapping-audit-v0.md](analysis/2026-06/2026-06-10-april-historical-opportunity-mapping-audit-v0.md) | `snapshot` | yes | April historical opportunity mapping 审计：gamma/clob token 映射和 T-24 price proxy 可做原型，但缺 settlement/model probability/orderbook，不能直接算 ROI |

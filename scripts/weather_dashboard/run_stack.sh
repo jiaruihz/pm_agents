@@ -52,10 +52,42 @@ err() { printf '\033[1;31m[run_stack]\033[0m %s\n' "$*" >&2; }
 
 pid_listening_on_port() {
   local port="$1"
-  ss -ltnp 2>/dev/null \
-    | awk -v port=":$port" '$4 ~ port {print $0}' \
-    | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' \
-    | sort -u
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp 2>/dev/null \
+      | awk -v port=":$port" '$4 ~ port {print $0}' \
+      | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' \
+      | sort -u
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u
+  fi
+}
+
+port_listening() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -tln 2>/dev/null | grep -q ":$port "
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1
+  else
+    return 1
+  fi
+}
+
+file_size() {
+  local path="$1"
+  [[ -f "$path" ]] || {
+    echo "absent"
+    return
+  }
+  stat -c '%s bytes' "$path" 2>/dev/null || stat -f '%z bytes' "$path"
+}
+
+start_detached() {
+  if command -v setsid >/dev/null 2>&1; then
+    setsid nohup "$@"
+  else
+    nohup "$@"
+  fi
 }
 
 stop_known_frontend() {
@@ -72,9 +104,8 @@ stop_known_frontend() {
 
 stop_frontend_port_if_busy() {
   local port="$1"
-  local pids pid cmd
-  mapfile -t pids < <(pid_listening_on_port "$port")
-  for pid in "${pids[@]:-}"; do
+  local pid cmd
+  while IFS= read -r pid; do
     [[ -z "$pid" ]] && continue
     cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
     if [[ "$cmd" == *"vite"* || "$cmd" == *"strategy_dashboard"* || "$cmd" == *"node"* ]]; then
@@ -85,7 +116,7 @@ stop_frontend_port_if_busy() {
       err "Port $port is occupied by non-frontend process pid=$pid: $cmd"
       exit 1
     fi
-  done
+  done < <(pid_listening_on_port "$port")
 }
 
 ensure_linux_node() {
@@ -148,7 +179,7 @@ has_parquet_engine() {
 
 show_status() {
   log "Repo:        $REPO_ROOT"
-  log "DB path:     $DB_PATH ($([[ -f $DB_PATH ]] && stat -c '%s bytes' "$DB_PATH" || echo 'absent'))"
+  log "DB path:     $DB_PATH ($(file_size "$DB_PATH"))"
   if [[ -f "$DB_PATH" ]]; then
     "$VENV/python" -c "
 from weather_dashboard.db.connection import get_conn
@@ -165,8 +196,8 @@ except Exception as e:
     print(f'  [DB] error: {e}')
 " 2>&1 || true
   fi
-  log "API port:    $API_PORT  $(ss -tln 2>/dev/null | grep -q ":$API_PORT " && echo '(listening)' || echo '(idle)')"
-  log "FE port:     $FE_PORT  $(ss -tln 2>/dev/null | grep -q ":$FE_PORT " && echo '(listening)' || echo '(idle)')"
+  log "API port:    $API_PORT  $(port_listening "$API_PORT" && echo '(listening)' || echo '(idle)')"
+  log "FE port:     $FE_PORT  $(port_listening "$FE_PORT" && echo '(listening)' || echo '(idle)')"
 }
 
 if [[ $STATUS_ONLY -eq 1 ]]; then
@@ -284,18 +315,18 @@ show_status
 #  old PMM/ARB framework and is not used by the weather dashboard.
 #  See docs/WEATHER_DATA_PIPELINE.md §5.5.)
 if [[ $START_API -eq 1 ]]; then
-  if ss -tln 2>/dev/null | grep -q ":$API_PORT "; then
+  if port_listening "$API_PORT"; then
     warn "Port $API_PORT already in use — assuming API is already running"
   else
     log "Starting API on :$API_PORT (logs: $LOG_DIR/api.log)"
-    # setsid creates a new process group so the API survives if the invoking shell exits.
+    # setsid creates a new process group where available; macOS falls back to nohup.
     WEATHER_DB_PATH="$DB_PATH" \
-      setsid nohup "$VENV/uvicorn" weather_dashboard.api.app:app \
+      start_detached "$VENV/uvicorn" weather_dashboard.api.app:app \
         --host 0.0.0.0 --port "$API_PORT" --reload \
         >"$LOG_DIR/api.log" 2>&1 &
     echo $! > "$LOG_DIR/api.pid"
     sleep 2
-    if ! ss -tln 2>/dev/null | grep -q ":$API_PORT "; then
+    if ! port_listening "$API_PORT"; then
       err "API failed to start — tail of log:"
       tail -20 "$LOG_DIR/api.log" >&2
       exit 1
@@ -313,16 +344,16 @@ if [[ $START_FE -eq 1 ]]; then
   fi
   stop_known_frontend
   stop_frontend_port_if_busy "$FE_PORT"
-  if ss -tln 2>/dev/null | grep -q ":$FE_PORT "; then
+  if port_listening "$FE_PORT"; then
     err "Port $FE_PORT is still busy after stopping old frontend"
     exit 1
   else
     log "Starting frontend on :$FE_PORT (logs: $LOG_DIR/fe.log)"
-    (cd "$FE_DIR" && setsid nohup npm run dev -- --host 0.0.0.0 --port "$FE_PORT" --strictPort \
+    (cd "$FE_DIR" && start_detached npm run dev -- --host 0.0.0.0 --port "$FE_PORT" --strictPort \
         >"$LOG_DIR/fe.log" 2>&1 &
      echo $! > "$LOG_DIR/fe.pid")
     sleep 5
-    if ! ss -tln 2>/dev/null | grep -q ":$FE_PORT "; then
+    if ! port_listening "$FE_PORT"; then
       err "Frontend failed to start on fixed port :$FE_PORT — tail of log:"
       tail -30 "$LOG_DIR/fe.log" >&2
       exit 1
@@ -339,6 +370,10 @@ fi
 # binding to the same port (EADDRINUSE). We detect mirrored mode and instead
 # REMOVE any stale proxies rather than adding new ones.
 setup_windows_portproxy() {
+  if ! command -v powershell.exe >/dev/null 2>&1; then
+    return
+  fi
+
   # Detect WSL2 mirrored networking via .wslconfig
   local networking_mode
   networking_mode="$(powershell.exe -NoProfile -NonInteractive -Command \

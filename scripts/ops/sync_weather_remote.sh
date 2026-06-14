@@ -42,7 +42,12 @@ for arg in "$@"; do
   esac
 done
 
-RSYNC_FLAGS=(-az --info=stats1,progress2)
+RSYNC_FLAGS=(-az)
+if rsync --help 2>/dev/null | grep -q -- '--info='; then
+  RSYNC_FLAGS+=(--info=stats1,progress2)
+else
+  RSYNC_FLAGS+=(--stats --progress)
+fi
 [[ "$DRY_RUN" == "1" ]] && RSYNC_FLAGS+=(--dry-run)
 
 WEATHER_SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes)
@@ -50,6 +55,9 @@ N100_SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10
 
 log()  { printf '\033[1;36m[sync]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[sync]\033[0m %s\n' "$*"; }
+iso_now() {
+  date -Is 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S%z'
+}
 
 # ---- Block 1: market_data from weather-predict machine ----
 sync_market() {
@@ -166,7 +174,7 @@ sync_live() {
   log "remote_pm_agent: $(find "$N100_LOCAL" -type f | wc -l) files, $(du -sh "$N100_LOCAL" 2>/dev/null | cut -f1)"
 }
 
-echo "date: $(date -Is)"
+echo "date: $(iso_now)"
 [[ "$SYNC_MARKET" == "1" ]] && sync_market
 [[ "$SYNC_LIVE" == "1" ]]   && sync_live
 echo "done."
