@@ -308,6 +308,34 @@ def sorted_unique_values(rows: list[dict[str, Any]], field: str) -> list[str]:
     return sorted({str(row.get(field)) for row in rows if row.get(field)})
 
 
+def compact_opportunity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compact: list[dict[str, Any]] = []
+    for row in rows:
+        if not row.get("unique_opportunity_first"):
+            continue
+        compact.append(
+            {
+                "recorded_at_utc": row.get("recorded_at_utc"),
+                "event_date": row.get("event_date"),
+                "city": row.get("city"),
+                "event_slug": row.get("event_slug"),
+                "ttl_equivalent": row.get("ttl_equivalent"),
+                "ttl_status": row.get("ttl_status"),
+                "recording_age_seconds": row.get("recording_age_seconds"),
+                "settlement_eval_status": row.get("settlement_eval_status"),
+                "winner_count": row.get("winner_count"),
+                "winner_brackets": row.get("winner_brackets"),
+                "total_yes_ask_cost": row.get("total_yes_ask_cost"),
+                "underround": row.get("underround"),
+                "basket_cost_usd": row.get("basket_cost_usd"),
+                "gross_profit_if_complete_usd": row.get("gross_profit_if_complete_usd"),
+                "pnl_usd": row.get("pnl_usd"),
+                "roi": row.get("roi"),
+            }
+        )
+    return sorted(compact, key=lambda row: (str(row.get("event_date")), str(row.get("city")), str(row.get("recorded_at_utc"))))
+
+
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
@@ -581,8 +609,10 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     gate_result = gate(args)
     last_cycle = read_json(run_dir / "last_cycle.json")
+    fresh_cycle = read_json(run_dir / "fresh_cycle.json")
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
     eval_rows = read_json(run_dir / "eval.json").get("rows") or []
+    unique_opportunities = compact_opportunity_rows(eval_rows)
     pending_rows = [
         row for row in eval_rows
         if row.get("unique_opportunity_first") and row.get("settlement_eval_status") == "pending"
@@ -600,6 +630,14 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         "verdict": gate_result.get("verdict"),
         "live_now": False,
         "latest_scan_path": last_cycle.get("source_scan"),
+        "latest_fresh_cycle": {
+            "generated_at_utc": fresh_cycle.get("generated_at_utc"),
+            "verdict": fresh_cycle.get("verdict"),
+            "reason": fresh_cycle.get("reason"),
+            "executed_cycle": fresh_cycle.get("executed_cycle"),
+            "snapshot_age_seconds": fresh_cycle.get("snapshot_age_seconds"),
+            "snapshot_path": fresh_cycle.get("snapshot_path"),
+        },
         "latest_scanner_candidate_count": last_cycle.get("scanner_candidate_count"),
         "latest_appended_baskets": last_cycle.get("appended_baskets"),
         "max_snapshot_age_seconds": last_cycle.get("max_snapshot_age_seconds"),
@@ -616,6 +654,7 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         "ttl_equivalent_pending_active_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_active_event_dates"),
         "ttl_equivalent_pending_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_event_dates"),
         "paper_eval": gate_result.get("eval"),
+        "unique_opportunities": unique_opportunities,
         "pending_by_city": dict(sorted(city_counts.items())),
         "pending_by_event_date": dict(sorted(pending_event_dates.items())),
         "passed_codes": [item.get("code") for item in gate_result.get("passed", [])],

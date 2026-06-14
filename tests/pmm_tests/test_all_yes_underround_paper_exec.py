@@ -2,7 +2,7 @@ import argparse
 import json
 import sqlite3
 
-from scripts.ops.all_yes_underround_paper_exec_v0 import evaluate, gate, recording_ttl_audit
+from scripts.ops.all_yes_underround_paper_exec_v0 import evaluate, gate, monitor, recording_ttl_audit
 
 
 def _basket(recorded_at_utc="2026-06-13T18:32:00+00:00", snapshot_ts_utc="2026-06-13T18:30:53Z"):
@@ -204,3 +204,83 @@ def test_gate_requires_settled_active_event_dates_not_just_basket_count(tmp_path
     assert result["eval"]["ttl_equivalent_settled_active_event_dates"] == 1
     assert "forward_settled_baskets_ready" in {row["code"] for row in result["passed"]}
     assert "forward_settled_active_dates_low" in {row["code"] for row in result["blockers"]}
+
+
+def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    gate_path = tmp_path / "clob_gate.json"
+    gate_path.write_text(json.dumps({"gate_pass": True}) + "\n")
+    (run_dir / "last_cycle.json").write_text(
+        json.dumps({"scanner_candidate_count": 0, "appended_baskets": 0, "max_snapshot_age_seconds": 180.0}) + "\n"
+    )
+    (run_dir / "fresh_cycle.json").write_text(
+        json.dumps(
+            {
+                "generated_at_utc": "2026-06-14T04:48:46+00:00",
+                "verdict": "FRESH_SNAPSHOT_CYCLE_RAN",
+                "reason": "fresh",
+                "executed_cycle": True,
+                "snapshot_age_seconds": 1.5,
+                "snapshot_path": "/tmp/snapshot.jsonl.gz",
+            }
+        )
+        + "\n"
+    )
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.commit()
+    conn.close()
+    basket = {
+        "basket_id": "b1",
+        "recorded_at_utc": "2026-06-14T04:48:46+00:00",
+        "snapshot_ts_utc": "2026-06-14T04:48:40Z",
+        "event_date": "2026-06-14",
+        "city": "Seattle",
+        "event_slug": "highest-temperature-in-seattle-on-june-14-2026",
+        "shares_per_leg": 5,
+        "total_yes_ask_cost": 0.978,
+        "underround": 0.022,
+        "basket_cost_usd": 4.89,
+        "gross_profit_if_complete_usd": 0.11,
+    }
+    (run_dir / "paper_baskets.jsonl").write_text(json.dumps(basket) + "\n")
+    (run_dir / "paper_leg_orders.jsonl").write_text(json.dumps({"basket_id": "b1", "condition_id": "b1_c"}) + "\n")
+
+    result = monitor(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            gate_path=str(gate_path),
+            max_snapshot_age_seconds=180.0,
+            min_settled_baskets=20,
+            min_settled_active_dates=7,
+            min_positive_basket_rate=0.55,
+            min_roi=0.02,
+        )
+    )
+
+    assert result["latest_fresh_cycle"]["verdict"] == "FRESH_SNAPSHOT_CYCLE_RAN"
+    assert result["unique_opportunities"] == [
+        {
+            "recorded_at_utc": "2026-06-14T04:48:46+00:00",
+            "event_date": "2026-06-14",
+            "city": "Seattle",
+            "event_slug": "highest-temperature-in-seattle-on-june-14-2026",
+            "ttl_equivalent": True,
+            "ttl_status": "live_equivalent",
+            "recording_age_seconds": 6.0,
+            "settlement_eval_status": "pending",
+            "winner_count": None,
+            "winner_brackets": [],
+            "total_yes_ask_cost": 0.978,
+            "underround": 0.022,
+            "basket_cost_usd": 4.89,
+            "gross_profit_if_complete_usd": 0.11,
+            "pnl_usd": None,
+            "roi": None,
+        }
+    ]
