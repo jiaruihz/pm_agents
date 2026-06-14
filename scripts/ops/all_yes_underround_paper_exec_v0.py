@@ -12,7 +12,7 @@ import argparse
 import json
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +46,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-settled-active-dates", type=int, default=7)
     parser.add_argument("--min-positive-basket-rate", type=float, default=0.55)
     parser.add_argument("--min-roi", type=float, default=0.02)
+    parser.add_argument("--settlement-lag-days", type=int, default=1)
+    parser.add_argument("--settlement-pipeline-hour-utc", type=int, default=9)
+    parser.add_argument("--settlement-pipeline-minute-utc", type=int, default=20)
+    parser.add_argument("--settlement-now-utc", default=None, help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -347,6 +351,9 @@ def compact_opportunity_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "missing_settlement_legs": row.get("missing_settlement_legs"),
                 "unresolved_settlement_legs": row.get("unresolved_settlement_legs"),
                 "pending_reason": row.get("pending_reason"),
+                "pending_due_status": row.get("pending_due_status"),
+                "expected_settlement_after_utc": row.get("expected_settlement_after_utc"),
+                "seconds_until_expected_settlement": row.get("seconds_until_expected_settlement"),
                 "winner_count": row.get("winner_count"),
                 "winner_brackets": row.get("winner_brackets"),
                 "total_yes_ask_cost": row.get("total_yes_ask_cost"),
@@ -372,6 +379,67 @@ def pending_reason(row: dict[str, Any]) -> str | None:
     return "pending_unknown"
 
 
+def expected_settlement_after_utc(
+    target_date: Any,
+    *,
+    lag_days: int,
+    pipeline_hour_utc: int,
+    pipeline_minute_utc: int,
+) -> datetime | None:
+    try:
+        target = datetime.strptime(str(target_date), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+    hour = min(max(int(pipeline_hour_utc), 0), 23)
+    minute = min(max(int(pipeline_minute_utc), 0), 59)
+    expected_date = target + timedelta(days=int(lag_days))
+    return datetime.combine(expected_date, time(hour=hour, minute=minute), tzinfo=timezone.utc)
+
+
+def settlement_due_audit(
+    row: dict[str, Any],
+    *,
+    now_dt: datetime,
+    lag_days: int,
+    pipeline_hour_utc: int,
+    pipeline_minute_utc: int,
+) -> dict[str, Any]:
+    if row.get("settlement_eval_status") != "pending":
+        return {
+            "expected_settlement_after_utc": None,
+            "seconds_until_expected_settlement": None,
+            "pending_due_status": None,
+        }
+    expected = expected_settlement_after_utc(
+        row.get("event_date"),
+        lag_days=lag_days,
+        pipeline_hour_utc=pipeline_hour_utc,
+        pipeline_minute_utc=pipeline_minute_utc,
+    )
+    if expected is None:
+        return {
+            "expected_settlement_after_utc": None,
+            "seconds_until_expected_settlement": None,
+            "pending_due_status": "unknown_schedule",
+        }
+    seconds_until = (expected - now_dt).total_seconds()
+    prefix = "not_due" if seconds_until > 0 else "overdue"
+    reason = str(row.get("pending_reason") or "pending_unknown")
+    if reason == "missing_settlement_rows":
+        suffix = "missing_rows"
+    elif reason == "settlement_rows_unresolved":
+        suffix = "unresolved_rows"
+    elif reason == "missing_paper_legs":
+        suffix = "missing_paper_legs"
+    else:
+        suffix = "unknown"
+    return {
+        "expected_settlement_after_utc": expected.isoformat(),
+        "seconds_until_expected_settlement": round(seconds_until, 3),
+        "pending_due_status": f"{prefix}_{suffix}",
+    }
+
+
 def count_values(rows: list[dict[str, Any]], field: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     for row in rows:
@@ -395,6 +463,9 @@ def settlement_pending_audit(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "ttl_equivalent": row.get("ttl_equivalent"),
                 "basket_shape_valid": row.get("basket_shape_valid"),
                 "pending_reason": row.get("pending_reason"),
+                "pending_due_status": row.get("pending_due_status"),
+                "expected_settlement_after_utc": row.get("expected_settlement_after_utc"),
+                "seconds_until_expected_settlement": row.get("seconds_until_expected_settlement"),
                 "legs": row.get("legs"),
                 "settled_legs": row.get("settled_legs"),
                 "missing_settlement_legs": row.get("missing_settlement_legs"),
@@ -416,6 +487,10 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             condition_ids.append(str(leg["condition_id"]))
     conn = connect_db(Path(args.db_path))
     settlements = load_settlements(conn, sorted(set(condition_ids)))
+    settlement_now = parse_utc(getattr(args, "settlement_now_utc", None)) or datetime.now(timezone.utc)
+    settlement_lag_days = int(getattr(args, "settlement_lag_days", 1))
+    settlement_pipeline_hour_utc = int(getattr(args, "settlement_pipeline_hour_utc", 9))
+    settlement_pipeline_minute_utc = int(getattr(args, "settlement_pipeline_minute_utc", 20))
 
     rows: list[dict[str, Any]] = []
     seen_opportunities: set[str] = set()
@@ -475,6 +550,15 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
         rows[-1]["pending_reason"] = pending_reason(rows[-1])
+        rows[-1].update(
+            settlement_due_audit(
+                rows[-1],
+                now_dt=settlement_now,
+                lag_days=settlement_lag_days,
+                pipeline_hour_utc=settlement_pipeline_hour_utc,
+                pipeline_minute_utc=settlement_pipeline_minute_utc,
+            )
+        )
     decision_rows = [row for row in rows if row.get("unique_opportunity_first")]
     shape_invalid = [row for row in decision_rows if not row.get("basket_shape_valid")]
     live_prep_rows = [row for row in decision_rows if row.get("basket_shape_valid")]
@@ -502,6 +586,12 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "db_path": str(Path(args.db_path)),
         "max_snapshot_age_seconds": args.max_snapshot_age_seconds,
+        "settlement_now_utc": settlement_now.isoformat(),
+        "settlement_schedule": {
+            "lag_days": settlement_lag_days,
+            "pipeline_hour_utc": settlement_pipeline_hour_utc,
+            "pipeline_minute_utc": settlement_pipeline_minute_utc,
+        },
         "raw_baskets": len(rows),
         "duplicate_opportunity_baskets": len([row for row in rows if row.get("duplicate_opportunity")]),
         "baskets": len(decision_rows),
@@ -524,7 +614,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "pending": len([row for row in decision_rows if row["settlement_eval_status"] == "pending"]),
         "live_prep_pending": len(pending_rows),
         "pending_reason_counts": count_values(pending_rows, "pending_reason"),
+        "pending_due_status_counts": count_values(pending_rows, "pending_due_status"),
         "ttl_equivalent_pending_reason_counts": count_values(ttl_equivalent_pending, "pending_reason"),
+        "ttl_equivalent_pending_due_status_counts": count_values(ttl_equivalent_pending, "pending_due_status"),
         "ttl_equivalent_pending_settlement_audit": settlement_pending_audit(ttl_equivalent_pending),
         "pending_missing_settlement_legs": sum(int(row.get("missing_settlement_legs") or 0) for row in pending_rows),
         "pending_unresolved_settlement_legs": sum(int(row.get("unresolved_settlement_legs") or 0) for row in pending_rows),
@@ -661,6 +753,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
                 "ttl_equivalent_pending": eval_summary["ttl_equivalent_pending"],
                 "ttl_equivalent_pending_event_dates": eval_summary["ttl_equivalent_pending_event_dates"],
                 "ttl_equivalent_pending_reason_counts": eval_summary["ttl_equivalent_pending_reason_counts"],
+                "ttl_equivalent_pending_due_status_counts": eval_summary["ttl_equivalent_pending_due_status_counts"],
                 "ttl_equivalent_pending_missing_settlement_legs": eval_summary["ttl_equivalent_pending_missing_settlement_legs"],
                 "ttl_equivalent_pending_unresolved_settlement_legs": eval_summary["ttl_equivalent_pending_unresolved_settlement_legs"],
             }
@@ -772,6 +865,7 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
         "ttl_equivalent_pending_active_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_active_event_dates"),
         "ttl_equivalent_pending_event_dates": gate_result.get("eval", {}).get("ttl_equivalent_pending_event_dates"),
         "ttl_equivalent_pending_reason_counts": gate_result.get("eval", {}).get("ttl_equivalent_pending_reason_counts"),
+        "ttl_equivalent_pending_due_status_counts": gate_result.get("eval", {}).get("ttl_equivalent_pending_due_status_counts"),
         "ttl_equivalent_pending_settlement_audit": gate_result.get("eval", {}).get("ttl_equivalent_pending_settlement_audit"),
         "ttl_equivalent_pending_missing_settlement_legs": gate_result.get("eval", {}).get("ttl_equivalent_pending_missing_settlement_legs"),
         "ttl_equivalent_pending_unresolved_settlement_legs": gate_result.get("eval", {}).get("ttl_equivalent_pending_unresolved_settlement_legs"),

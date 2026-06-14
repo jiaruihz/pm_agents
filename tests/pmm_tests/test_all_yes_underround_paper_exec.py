@@ -117,6 +117,10 @@ def test_evaluate_dedupes_repeated_city_event_opportunities(tmp_path):
             run_dir=str(run_dir),
             db_path=str(db_path),
             max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-14T05:00:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
         )
     )
 
@@ -127,6 +131,7 @@ def test_evaluate_dedupes_repeated_city_event_opportunities(tmp_path):
     assert result["pending"] == 2
     assert result["ttl_equivalent_pending"] == 2
     assert result["ttl_equivalent_pending_reason_counts"] == {"missing_settlement_rows": 2}
+    assert result["ttl_equivalent_pending_due_status_counts"] == {"not_due_missing_rows": 2}
     assert result["ttl_equivalent_pending_missing_settlement_legs"] == 2
     assert result["ttl_equivalent_pending_unresolved_settlement_legs"] == 0
 
@@ -160,6 +165,10 @@ def test_evaluate_excludes_shape_invalid_baskets_from_live_prep_counts(tmp_path)
             run_dir=str(run_dir),
             db_path=str(db_path),
             max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-14T05:00:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
         )
     )
 
@@ -244,6 +253,10 @@ def test_gate_requires_settled_active_event_dates_not_just_basket_count(tmp_path
             min_settled_active_dates=2,
             min_positive_basket_rate=0.55,
             min_roi=0.02,
+            settlement_now_utc="2026-06-14T05:00:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
         )
     )
 
@@ -307,6 +320,10 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
             min_settled_active_dates=7,
             min_positive_basket_rate=0.55,
             min_roi=0.02,
+            settlement_now_utc="2026-06-14T05:00:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
         )
     )
 
@@ -327,6 +344,9 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
             "missing_settlement_legs": 1,
             "unresolved_settlement_legs": 0,
             "pending_reason": "missing_settlement_rows",
+            "pending_due_status": "not_due_missing_rows",
+            "expected_settlement_after_utc": "2026-06-15T09:20:00+00:00",
+            "seconds_until_expected_settlement": 102000.0,
             "winner_count": None,
             "winner_brackets": [],
             "total_yes_ask_cost": 0.978,
@@ -338,6 +358,7 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
         }
     ]
     assert result["ttl_equivalent_pending_reason_counts"] == {"missing_settlement_rows": 1}
+    assert result["ttl_equivalent_pending_due_status_counts"] == {"not_due_missing_rows": 1}
     assert result["ttl_equivalent_pending_settlement_audit"] == [
         {
             "recorded_at_utc": "2026-06-14T04:48:46+00:00",
@@ -347,6 +368,9 @@ def test_monitor_includes_unique_opportunity_detail_and_fresh_cycle(tmp_path):
             "ttl_equivalent": True,
             "basket_shape_valid": True,
             "pending_reason": "missing_settlement_rows",
+            "pending_due_status": "not_due_missing_rows",
+            "expected_settlement_after_utc": "2026-06-15T09:20:00+00:00",
+            "seconds_until_expected_settlement": 102000.0,
             "legs": None,
             "settled_legs": 0,
             "missing_settlement_legs": 1,
@@ -391,10 +415,55 @@ def test_evaluate_separates_unresolved_settlement_rows_from_missing_rows(tmp_pat
             run_dir=str(run_dir),
             db_path=str(db_path),
             max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-14T05:00:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
         )
     )
 
     assert result["ttl_equivalent_pending"] == 1
     assert result["ttl_equivalent_pending_reason_counts"] == {"settlement_rows_unresolved": 1}
+    assert result["ttl_equivalent_pending_due_status_counts"] == {"not_due_unresolved_rows": 1}
     assert result["ttl_equivalent_pending_missing_settlement_legs"] == 0
     assert result["ttl_equivalent_pending_unresolved_settlement_legs"] == 1
+
+
+def test_evaluate_marks_missing_settlement_rows_overdue_after_pipeline_time(tmp_path):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    db_path = tmp_path / "weather.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE settlements (condition_id TEXT PRIMARY KEY, bracket TEXT, final_price REAL, settlement_status TEXT)"
+    )
+    conn.commit()
+    conn.close()
+
+    basket = {
+        "basket_id": "b1",
+        "recorded_at_utc": "2026-06-13T23:08:54+00:00",
+        "snapshot_ts_utc": "2026-06-13T23:08:50Z",
+        "event_date": "2026-06-14",
+        "city": "Istanbul",
+        "event_slug": "highest-temperature-in-istanbul-on-june-14-2026",
+    }
+    (run_dir / "paper_baskets.jsonl").write_text(json.dumps(basket) + "\n")
+    (run_dir / "paper_leg_orders.jsonl").write_text(json.dumps(_leg("b1", "b1_c1", "31")) + "\n")
+
+    result = evaluate(
+        argparse.Namespace(
+            run_dir=str(run_dir),
+            db_path=str(db_path),
+            max_snapshot_age_seconds=180.0,
+            settlement_now_utc="2026-06-15T10:00:00Z",
+            settlement_lag_days=1,
+            settlement_pipeline_hour_utc=9,
+            settlement_pipeline_minute_utc=20,
+        )
+    )
+
+    assert result["ttl_equivalent_pending_reason_counts"] == {"missing_settlement_rows": 1}
+    assert result["ttl_equivalent_pending_due_status_counts"] == {"overdue_missing_rows": 1}
+    assert result["ttl_equivalent_pending_settlement_audit"][0]["expected_settlement_after_utc"] == "2026-06-15T09:20:00+00:00"
+    assert result["ttl_equivalent_pending_settlement_audit"][0]["seconds_until_expected_settlement"] == -2400.0
