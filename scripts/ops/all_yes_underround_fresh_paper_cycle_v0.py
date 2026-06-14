@@ -282,6 +282,56 @@ def main() -> None:
             str(args.max_snapshot_age_seconds),
         ]
     )
+    run_cmd(
+        [
+            py,
+            "scripts/ops/all_yes_underround_live_plan_v0.py",
+            "plan",
+            "--scan-json",
+            str(Path(args.scan_json)),
+            "--run-dir",
+            str(run_dir),
+            "--max-snapshot-age-seconds",
+            str(args.max_snapshot_age_seconds),
+        ]
+    )
+    run_cmd(
+        [
+            py,
+            "scripts/ops/all_yes_underround_to_executor_plans_v0.py",
+            "convert",
+            "--plan-json",
+            str(run_dir / "latest_live_plan.json"),
+            "--out-jsonl",
+            str(run_dir / "executor_trade_plans.jsonl"),
+            "--summary-out",
+            str(run_dir / "executor_trade_plan_summary.json"),
+        ]
+    )
+    run_cmd(
+        [
+            py,
+            "scripts/ops/all_yes_underround_executor_state_v0.py",
+            "check",
+            "--plan-json",
+            str(run_dir / "latest_live_plan.json"),
+            "--run-dir",
+            str(run_dir),
+        ]
+    )
+    run_cmd(
+        [
+            py,
+            "scripts/ops/all_yes_underround_basket_executor_v0.py",
+            "check",
+            "--plan-json",
+            str(run_dir / "latest_live_plan.json"),
+            "--executor-jsonl",
+            str(run_dir / "executor_trade_plans.jsonl"),
+            "--run-dir",
+            str(run_dir),
+        ]
+    )
 
     result["executed_cycle"] = True
     result["verdict"] = "FRESH_SNAPSHOT_CYCLE_RAN"

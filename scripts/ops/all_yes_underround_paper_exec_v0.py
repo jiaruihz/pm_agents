@@ -798,6 +798,61 @@ def executor_plan_bridge_gate_items(summary: dict[str, Any]) -> tuple[list[dict[
     return blockers, passed
 
 
+def basket_executor_gate_items(summary: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    blockers: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
+    if summary.get("status") == "missing" or not summary.get("generated_at_utc"):
+        blockers.append(
+            {
+                "code": "dry_run_basket_executor_missing",
+                "message": "No all-YES basket-level executor readiness artifact is available for deploy review.",
+                "path": summary.get("path"),
+            }
+        )
+        return blockers, passed
+    if summary.get("live_now") is not False or summary.get("live_enabled") is not False:
+        blockers.append(
+            {
+                "code": "dry_run_basket_executor_unsafe_live_flag",
+                "message": "The basket executor readiness artifact must keep live disabled.",
+                "live_now": summary.get("live_now"),
+                "live_enabled": summary.get("live_enabled"),
+            }
+        )
+    if summary.get("no_order_placed") is not True:
+        blockers.append(
+            {
+                "code": "dry_run_basket_executor_order_placed",
+                "message": "The basket executor readiness artifact must prove no order was placed.",
+                "no_order_placed": summary.get("no_order_placed"),
+            }
+        )
+    if summary.get("verdict") != "DRY_RUN_BASKET_EXECUTOR_READY":
+        blockers.append(
+            {
+                "code": "dry_run_basket_executor_not_ready",
+                "message": "The all-YES basket executor contract is not ready in dry-run mode.",
+                "verdict": summary.get("verdict"),
+                "blockers": summary.get("blockers"),
+            }
+        )
+    if not blockers:
+        passed.append(
+            {
+                "code": "dry_run_basket_executor_available",
+                "message": "All-YES basket-level dry-run executor artifact is present and fail-closed.",
+                "baskets_checked": summary.get("baskets_checked"),
+                "executor_legs_checked": summary.get("executor_legs_checked"),
+                "fail_closed_paths": sum(
+                    1
+                    for row in list(summary.get("basket_states") or [])
+                    if row.get("status") == "fail_closed_cancel_or_unwind_required"
+                ),
+            }
+        )
+    return blockers, passed
+
+
 def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir)
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
@@ -1045,6 +1100,7 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     live_plan = read_json(run_dir / "latest_live_plan.json")
     executor_state = read_json(run_dir / "latest_executor_readiness.json")
     executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
+    basket_executor = read_json(run_dir / "latest_basket_executor_readiness.json")
     blockers: list[dict[str, Any]] = []
     passed: list[dict[str, Any]] = []
     if clob_gate_freshness["stale"]:
@@ -1225,6 +1281,9 @@ def gate(args: argparse.Namespace) -> dict[str, Any]:
     bridge_blockers, bridge_passed = executor_plan_bridge_gate_items(executor_plan_bridge)
     blockers.extend(bridge_blockers)
     passed.extend(bridge_passed)
+    basket_executor_blockers, basket_executor_passed = basket_executor_gate_items(basket_executor)
+    blockers.extend(basket_executor_blockers)
+    passed.extend(basket_executor_passed)
     blockers.append(
         {
             "code": "live_executor_missing",
@@ -1270,6 +1329,7 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
     live_plan = read_json(run_dir / "latest_live_plan.json")
     executor_state = read_json(run_dir / "latest_executor_readiness.json")
     executor_plan_bridge = read_json(run_dir / "executor_trade_plan_summary.json")
+    basket_executor = read_json(run_dir / "latest_basket_executor_readiness.json")
     baskets = read_jsonl(run_dir / "paper_baskets.jsonl")
     eval_rows = read_json(run_dir / "eval.json").get("rows") or []
     unique_opportunities = compact_opportunity_rows(eval_rows)
@@ -1323,6 +1383,15 @@ def monitor(args: argparse.Namespace) -> dict[str, Any]:
             "live_enabled": executor_plan_bridge.get("live_enabled"),
             "plans": executor_plan_bridge.get("plans"),
             "out_jsonl": executor_plan_bridge.get("out_jsonl"),
+        },
+        "latest_basket_executor_readiness": {
+            "generated_at_utc": basket_executor.get("generated_at_utc"),
+            "verdict": basket_executor.get("verdict"),
+            "live_now": basket_executor.get("live_now"),
+            "live_enabled": basket_executor.get("live_enabled"),
+            "no_order_placed": basket_executor.get("no_order_placed"),
+            "baskets_checked": basket_executor.get("baskets_checked"),
+            "executor_legs_checked": basket_executor.get("executor_legs_checked"),
         },
         "max_snapshot_age_seconds": last_cycle.get("max_snapshot_age_seconds"),
         "paper_baskets": len(baskets),

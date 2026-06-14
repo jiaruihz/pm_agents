@@ -156,6 +156,10 @@ def test_success_marker_is_written_before_monitor_reads_fresh_cycle(monkeypatch,
     assert [cmd[1] for cmd in commands] == [
         "scripts/analysis/market_structure_edge/research_all_yes_underround_live_prep_v0.py",
         "scripts/ops/all_yes_underround_paper_exec_v0.py",
+        "scripts/ops/all_yes_underround_live_plan_v0.py",
+        "scripts/ops/all_yes_underround_to_executor_plans_v0.py",
+        "scripts/ops/all_yes_underround_executor_state_v0.py",
+        "scripts/ops/all_yes_underround_basket_executor_v0.py",
         "scripts/ops/all_yes_underround_paper_exec_v0.py",
         "scripts/analysis/market_structure_edge/research_all_yes_underround_live_prep_v0.py",
     ]

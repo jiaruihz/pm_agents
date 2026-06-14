@@ -113,6 +113,10 @@ PY
       "$PY" scripts/ops/all_yes_underround_executor_state_v0.py check \
         --plan-json "$RUN_DIR/latest_live_plan.json" \
         --run-dir "$RUN_DIR" >/dev/null || true
+      "$PY" scripts/ops/all_yes_underround_basket_executor_v0.py check \
+        --plan-json "$RUN_DIR/latest_live_plan.json" \
+        --executor-jsonl "$RUN_DIR/executor_trade_plans.jsonl" \
+        --run-dir "$RUN_DIR" >/dev/null || true
       "$PY" scripts/ops/all_yes_underround_paper_exec_v0.py monitor \
         --db-path "$DB_PATH" \
         --gate-path "$GATE_PATH" \
@@ -202,6 +206,11 @@ PY
 
 "$PY" scripts/ops/all_yes_underround_executor_state_v0.py check \
   --plan-json "$RUN_DIR/latest_live_plan.json" \
+  --run-dir "$RUN_DIR" >/dev/null || true
+
+"$PY" scripts/ops/all_yes_underround_basket_executor_v0.py check \
+  --plan-json "$RUN_DIR/latest_live_plan.json" \
+  --executor-jsonl "$RUN_DIR/executor_trade_plans.jsonl" \
   --run-dir "$RUN_DIR" >/dev/null || true
 
 "$PY" scripts/ops/all_yes_underround_paper_exec_v0.py monitor \
