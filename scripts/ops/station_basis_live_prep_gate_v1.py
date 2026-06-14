@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +30,8 @@ EXEC = DATA_ROOT / "runtime/weather_edge_v1/station_basis_exec_v1"
 CLOB_GATE = DATA_ROOT / "runtime/_dashboard_logs/clob_fill_coverage_gate.json"
 OUT = SHADOW / "live_prep_gate.json"
 MAX_MONITOR_AGE_MIN = 45
+PRICE_TELEMETRY_WINDOW_HOURS = 24
+LIVE_CORE_ASK_CAP = 0.90
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -55,6 +57,122 @@ def age_minutes(value: str | None, now: datetime) -> float | None:
     if ts is None:
         return None
     return round((now - ts).total_seconds() / 60, 1)
+
+
+def as_float(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def ask_band(ask: float | None) -> str:
+    if ask is None:
+        return "no_ask"
+    if ask <= 0.90:
+        return "<=0.90"
+    if ask <= 0.97:
+        return "0.90-0.97"
+    if ask <= 0.995:
+        return "0.97-0.995"
+    return ">0.995"
+
+
+def count_by(rows: list[dict[str, Any]], field: str) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for row in rows:
+        key = str(row.get(field) or "missing")
+        out[key] = out.get(key, 0) + 1
+    return dict(sorted(out.items()))
+
+
+def candidate_price_telemetry(
+    rows: list[dict[str, Any]],
+    *,
+    now: datetime,
+    window_hours: int = PRICE_TELEMETRY_WINDOW_HOURS,
+) -> dict[str, Any]:
+    cutoff = now - timedelta(hours=window_hours)
+    recent = []
+    for row in rows:
+        ts = parse_dt(row.get("ts_utc"))
+        if ts is not None and ts >= cutoff:
+            recent.append(row)
+
+    ask_rows = [row for row in recent if as_float(row.get("ask")) is not None]
+    price_eligible = [
+        row for row in recent
+        if row.get("status") == "entry_logged" or (as_float(row.get("ask")) is not None and as_float(row.get("ask")) <= LIVE_CORE_ASK_CAP)
+    ]
+    blocked_by_price = [
+        row for row in recent
+        if row.get("status") == "ask_out_of_band" and as_float(row.get("ask")) is not None
+    ]
+    by_rule: dict[str, dict[str, Any]] = {}
+    for row in recent:
+        rule = str(row.get("rule") or "missing")
+        bucket = by_rule.setdefault(rule, {"rows": 0, "status_counts": {}, "min_ask": None, "min_ask_row": None})
+        bucket["rows"] += 1
+        status = str(row.get("status") or "missing")
+        bucket["status_counts"][status] = bucket["status_counts"].get(status, 0) + 1
+        ask = as_float(row.get("ask"))
+        if ask is not None and (bucket["min_ask"] is None or ask < bucket["min_ask"]):
+            bucket["min_ask"] = ask
+            bucket["min_ask_row"] = {
+                "ts_utc": row.get("ts_utc"),
+                "city": row.get("city"),
+                "bracket": row.get("bracket"),
+                "side": row.get("side"),
+                "ask": ask,
+                "status": row.get("status"),
+                "win_roi_if_fills": round((1.0 - ask) / ask, 6) if ask > 0 else None,
+            }
+
+    min_ask_row = None
+    if ask_rows:
+        best = min(ask_rows, key=lambda row: as_float(row.get("ask")) or 99.0)
+        ask = as_float(best.get("ask"))
+        min_ask_row = {
+            "ts_utc": best.get("ts_utc"),
+            "city": best.get("city"),
+            "rule": best.get("rule"),
+            "bracket": best.get("bracket"),
+            "side": best.get("side"),
+            "ask": ask,
+            "status": best.get("status"),
+            "win_roi_if_fills": round((1.0 - ask) / ask, 6) if ask and ask > 0 else None,
+        }
+
+    return {
+        "window_hours": window_hours,
+        "recent_rows": len(recent),
+        "status_counts": count_by(recent, "status"),
+        "ask_band_counts": count_by([{"band": ask_band(as_float(row.get("ask")))} for row in recent], "band"),
+        "price_eligible_rows": len(price_eligible),
+        "blocked_by_price_rows": len(blocked_by_price),
+        "near_miss_ask_90_97_rows": len([row for row in blocked_by_price if (as_float(row.get("ask")) or 0.0) <= 0.97]),
+        "high_ask_gt_97_rows": len([row for row in blocked_by_price if (as_float(row.get("ask")) or 0.0) > 0.97]),
+        "no_ask_rows": len([row for row in recent if row.get("status") == "no_asks"]),
+        "min_ask_row": min_ask_row,
+        "by_rule": by_rule,
+        "latest_rows": [
+            {
+                "ts_utc": row.get("ts_utc"),
+                "city": row.get("city"),
+                "rule": row.get("rule"),
+                "side": row.get("side"),
+                "bracket": row.get("bracket"),
+                "status": row.get("status"),
+                "ask": row.get("ask"),
+                "ask_band": ask_band(as_float(row.get("ask"))),
+                "obs_source": row.get("obs_source"),
+                "obs_primary_status": row.get("obs_primary_status"),
+            }
+            for row in recent[-10:]
+        ],
+    }
 
 
 def add_blocker(blockers: list[dict[str, Any]], code: str, message: str, **detail: Any) -> None:
@@ -262,6 +380,32 @@ def readiness_status(now: datetime, blockers: list[dict[str, Any]], passed: list
     return status
 
 
+def candidate_telemetry_status(now: datetime, blockers: list[dict[str, Any]], passed: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = read_jsonl(SHADOW / "candidate_audit.jsonl")
+    telemetry = candidate_price_telemetry(rows, now=now)
+    if telemetry["recent_rows"] <= 0:
+        add_blocker(blockers, "candidate_telemetry_empty", "No recent station-basis v1 weather-qualified candidate audit rows.")
+    elif telemetry["price_eligible_rows"] > 0:
+        add_pass(
+            passed,
+            "recent_price_eligible_candidates_seen",
+            "Recent station-basis v1 candidate audit includes price-eligible rows.",
+            price_eligible_rows=telemetry["price_eligible_rows"],
+            window_hours=telemetry["window_hours"],
+        )
+    else:
+        add_blocker(
+            blockers,
+            "recent_candidates_price_or_liquidity_blocked",
+            "Recent station-basis v1 weather-qualified candidates were blocked by price or missing asks.",
+            window_hours=telemetry["window_hours"],
+            status_counts=telemetry["status_counts"],
+            ask_band_counts=telemetry["ask_band_counts"],
+            min_ask_row=telemetry["min_ask_row"],
+        )
+    return telemetry
+
+
 def build_payload() -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     blockers: list[dict[str, Any]] = []
@@ -279,6 +423,7 @@ def build_payload() -> dict[str, Any]:
     dry_run = dry_run_status(blockers, passed, entries)
     pending = pending_monitor_status(now, blockers, passed)
     readiness = readiness_status(now, blockers, passed)
+    candidate_telemetry = candidate_telemetry_status(now, blockers, passed)
 
     if settlements:
         add_pass(passed, "forward_settlements_exist", "v1 has settled forward entries.", settled=len(settlements))
@@ -311,6 +456,7 @@ def build_payload() -> dict[str, Any]:
             "dry_run_execution": dry_run,
             "pending_monitor": pending,
             "readiness": readiness,
+            "candidate_telemetry": candidate_telemetry,
         },
         "next_actions": [
             "Keep v1 zero-notional shadow running until yes_bucket and no_d1_exh each have >=40 price-eligible settled forward rows.",
