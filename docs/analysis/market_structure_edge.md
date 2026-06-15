@@ -2,7 +2,7 @@
 
 > Living doc for module [2]: whether weather markets contain model-free structural edge such as favorite-longshot bias, side base-rate, or price-bucket mispricing.
 > Current status: `mixed`: broad structure inconclusive; all-YES underround is offline-confirmed but retail-live blocked; forecast-bounded Range RV remains below live standard after orderbook-native hardening and is limited to zero-notional shadow telemetry.
-> Last updated: 2026-06-16 settlement_outcomes upgrade for all-YES basket facts and forecast-bounded Range RV zero-notional shadow runner.
+> Last updated: 2026-06-16 settlement_outcomes upgrade for all-YES basket facts; forecast-bounded Range RV shadow handoff/evaluator.
 
 ## Current Conclusion
 
@@ -47,7 +47,10 @@ Important distinction: if BUY_NO or a price bucket works because of market struc
 | `docs/analysis/2026-06/2026-06-15-retail-live-strategy-direction-v0.md` | 2026-06 goal consolidation | Demotes all-YES from retail live path despite offline confirmation; freezes next branch as forecast-bounded Range RV shadow with compact 2-4 leg baskets and strict orderbook/forward gates | current-handoff |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-source-aware-v0.md` | 2026-06 source-aware forecast-bounded Range RV | Reuses forecast-quality/source base at source/model decision-set grain; proxy default-WU width-3 looks positive but generic orderbook gates fail, so verdict remains inconclusive/no live action | active-evidence |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-live-standard-v1.md` | 2026-06 orderbook-native live-standard hardening | Uses time-aligned orderbook costs for the entry decision itself; closest default-WU width-3 cheaper rule passes basic replay gates but fails live-standard support, top5, and 5-share capacity checks | active-evidence |
+| `docs/analysis/2026-06/2026-06-16-range-rv-shadow-handoff-v0.md` | 2026-06 Range RV shadow handoff | Single entrypoint for current forecast-bounded Range RV shadow: strategy id, file inventory, runtime data paths, commands, gates, and do-not-do rules | current-handoff |
+| `docs/analysis/2026-06/2026-06-16-range-rv-shadow-status-v0.md` | 2026-06 Range RV shadow status | Evaluates N100 zero-notional shadow journal against pm_history; current settled evidence remains only Miami 2026-06-14, so verdict is keep collecting shadow data | shadow-telemetry |
 | `scripts/ops/range_rv_shadow_v0.py` | 2026-06 N100 zero-notional telemetry | Reads latest weather-predict snapshot at `city + event_date + forecast_source/model_version + decision_snapshot_ts_utc`, keeps only `default_wu`, and appends selected `forecast_bounded_w3_cheaper` shadow plans without submitting orders | shadow-telemetry |
+| `scripts/analysis/market_structure_edge/evaluate_range_rv_shadow_v0.py` | 2026-06 Range RV shadow evaluator | Durable evaluator for synced shadow journal + pm_history; reports raw rows, dedup latest/first, event-date funnel, and settled city/expression splits | active-tool |
 | `docs/analysis/2026-06/2026-06-09-forecast-quality-range-rv-overlay.md` | 2026-06 forecast-quality overlay | quality filters do not stably beat no-filter baseline | active-evidence |
 | `docs/archive/analysis/2026-06/2026-06-09-forecast-first-adjacent-range-rv-v0-1.md` | 2026-06 forecast-first adjacent ranges | adjacent2/3 around forecast mode failed gates | active-evidence |
 | `docs/archive/analysis/2026-06/2026-06-09-center-shoulders-butterfly-range-rv.md` | 2026-06 center/shoulder/butterfly | forecast-first butterfly structures sample-limited and inconclusive | active-evidence |

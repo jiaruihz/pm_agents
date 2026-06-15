@@ -1,0 +1,272 @@
+{
+  "by_event_date": [
+    {
+      "dedup_first_settled": {
+        "cities": 1,
+        "effective_cost": 0.834,
+        "event_dates": 1,
+        "hit_rate": 1.0,
+        "pnl": 0.16600000000000004,
+        "roi": 0.19904076738609117,
+        "rows": 1,
+        "snapshots": 1,
+        "unique_decision_groups": 1
+      },
+      "dedup_latest_settled": {
+        "cities": 1,
+        "effective_cost": 0.8959999999999999,
+        "event_dates": 1,
+        "hit_rate": 1.0,
+        "pnl": 0.10400000000000009,
+        "roi": 0.11607142857142869,
+        "rows": 1,
+        "snapshots": 1,
+        "unique_decision_groups": 1
+      },
+      "event_date": "2026-06-14",
+      "raw_settled": {
+        "cities": 1,
+        "effective_cost": 1.73,
+        "event_dates": 1,
+        "hit_rate": 1.0,
+        "pnl": 0.27000000000000013,
+        "roi": 0.1560693641618498,
+        "rows": 2,
+        "snapshots": 2,
+        "unique_decision_groups": 1
+      },
+      "settled_rows": 2,
+      "shadow_rows": 2,
+      "unsettled_rows": 0,
+      "unsettled_status": {}
+    },
+    {
+      "dedup_first_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "dedup_latest_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "event_date": "2026-06-15",
+      "raw_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "settled_rows": 0,
+      "shadow_rows": 303,
+      "unsettled_rows": 303,
+      "unsettled_status": {
+        "missing_event": 303
+      }
+    },
+    {
+      "dedup_first_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "dedup_latest_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "event_date": "2026-06-16",
+      "raw_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "settled_rows": 0,
+      "shadow_rows": 327,
+      "unsettled_rows": 327,
+      "unsettled_status": {
+        "missing_event": 327
+      }
+    }
+  ],
+  "dedup_latest_by_city": [
+    {
+      "cities": 1,
+      "city": "Miami",
+      "effective_cost": 0.8959999999999999,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.10400000000000009,
+      "roi": 0.11607142857142869,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    }
+  ],
+  "dedup_latest_by_expression": [
+    {
+      "cities": 1,
+      "effective_cost": 0.8959999999999999,
+      "event_dates": 1,
+      "expression": "outside_no",
+      "hit_rate": 1.0,
+      "pnl": 0.10400000000000009,
+      "roi": 0.11607142857142869,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    }
+  ],
+  "dedup_latest_by_model": [
+    {
+      "cities": 1,
+      "effective_cost": 0.8959999999999999,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "model_version": "gfs",
+      "pnl": 0.10400000000000009,
+      "roi": 0.11607142857142869,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    }
+  ],
+  "generated_at_utc": "2026-06-15T16:37:57.147598+00:00",
+  "journal": {
+    "all_no_order_placed": true,
+    "all_zero_notional_shadow": true,
+    "cities": 17,
+    "event_dates": [
+      "2026-06-14",
+      "2026-06-15",
+      "2026-06-16"
+    ],
+    "max_shadow_generated_at_utc": "2026-06-15T16:07:59.035212+00:00",
+    "max_snapshot_ts_utc": "2026-06-15T15:30:42Z",
+    "min_shadow_generated_at_utc": "2026-06-14T17:37:28.402414+00:00",
+    "min_snapshot_ts_utc": "2026-06-14T17:00:20Z",
+    "rows": 632,
+    "unique_decision_groups": 34
+  },
+  "journal_path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/remote_pm_agent/range_rv_shadow_v0/shadow_journal.jsonl",
+  "overall_dedup_first_settled": {
+    "cities": 1,
+    "effective_cost": 0.834,
+    "event_dates": 1,
+    "hit_rate": 1.0,
+    "pnl": 0.16600000000000004,
+    "roi": 0.19904076738609117,
+    "rows": 1,
+    "snapshots": 1,
+    "unique_decision_groups": 1
+  },
+  "overall_dedup_latest_settled": {
+    "cities": 1,
+    "effective_cost": 0.8959999999999999,
+    "event_dates": 1,
+    "hit_rate": 1.0,
+    "pnl": 0.10400000000000009,
+    "roi": 0.11607142857142869,
+    "rows": 1,
+    "snapshots": 1,
+    "unique_decision_groups": 1
+  },
+  "overall_raw_settled": {
+    "cities": 1,
+    "effective_cost": 1.73,
+    "event_dates": 1,
+    "hit_rate": 1.0,
+    "pnl": 0.27000000000000013,
+    "roi": 0.1560693641618498,
+    "rows": 2,
+    "snapshots": 2,
+    "unique_decision_groups": 1
+  },
+  "pm_history_dir": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history",
+  "self_check": {
+    "candidate_coverage": {
+      "eligible": 10366,
+      "live_filled": 348,
+      "paper_ordered": 3968,
+      "rows": 30140
+    },
+    "max_fact_built_at_utc": "2026-06-15T16:31:04.483297+00:00",
+    "order_fill_coverage": [
+      {
+        "orders": 33,
+        "status": "error",
+        "with_fill": 0
+      },
+      {
+        "orders": 961,
+        "status": "submitted",
+        "with_fill": 855
+      }
+    ],
+    "settlement_status_distribution": [
+      {
+        "rows": 150,
+        "settlement_status": ""
+      },
+      {
+        "rows": 4250,
+        "settlement_status": "settled"
+      }
+    ],
+    "trade_class_distribution": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ]
+  },
+  "target_metric": "forecast_bounded_range_rv_shadow_forward_telemetry_v0"
+}
