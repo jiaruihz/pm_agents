@@ -7,6 +7,12 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not curr
 
 Last updated: 2026-06-03
 
+2026-06-16 update: Phase 1 has started on the settlement side. `pm_agent`
+schema v3 now materializes `settlement_outcomes`, a DB-level
+`source_system + city + target_date + bracket` outcome layer built from
+weather-predict `pm_history`. This does not move the settlement producer; it
+removes ad hoc raw pm_history fallbacks from downstream basket research.
+
 ## Conclusion
 
 Unifying the data protocol is high value and should happen first. Unifying the
@@ -114,6 +120,13 @@ one of these record types:
 | `weather_fill` | Simulated or real fill | dashboard ingest / CLOB sync |
 | `weather_settlement` | Final token/bracket outcome | settlement producer |
 
+Current DB mapping:
+
+| DB layer | Grain | Purpose |
+|---|---|---|
+| `settlements` | `target_date + condition_id + bracket` when condition_id is known | trade/fill joins and existing fact builders |
+| `settlement_outcomes` | `source_system + city + target_date + bracket` | source-grain settlement truth for basket, city-day, and source-sensitive research |
+
 Canonical field names should follow `WEATHER_SYSTEM_CONTRACT.md`:
 
 - `target_date`, not `event_date`
@@ -166,6 +179,7 @@ Validation:
 - Dashboard rebuild must ingest both legacy and canonical fields.
 - Field audit should report zero missing canonical fields for new files.
 - PnL/fact tables should be unchanged except for IDs/metadata.
+- Settlement validation should report non-zero `settlement_outcomes` coverage and no strategy-specific raw pm_history fallback for current DB snapshots.
 
 ### Phase 2: Create a canonical market snapshot builder in pm_agent
 
@@ -261,7 +275,7 @@ expanded.
 |---|---|---|
 | City universe drift | pm_agent market-data helper currently has an older city list | One city universe provider, sourced from `city_pools.py` until ported |
 | Forecast/model drift | pm_agent does not currently reproduce all weather-predict model probability logic | Keep weather-predict as probability provider until parity test passes |
-| Settlement drift | dashboard PnL depends on `pm_history` token/bracket truth | Do not move settlement producer until cache parity is proven |
+| Settlement drift | dashboard PnL depends on `pm_history` token/bracket truth | Keep weather-predict as the settlement producer, materialize `settlement_outcomes` in pm_agent, and do not move producer ownership until cache parity is proven |
 | Paper semantic confusion | research paper and live shadow answer different questions | Separate record role/state fields |
 | Adapter permanence | field aliases can hide bad producer output forever | Require schema_version and deprecation date |
 | Live cutover risk | collector omissions can suppress live opportunities | Shadow run before live signal builder uses canonical snapshots |
@@ -271,8 +285,9 @@ expanded.
 1. Add a field audit command:
    `scripts/ops/weather_protocol_audit.py`
 
-   It should scan latest snapshot/signal/plan/order files and report missing
-   canonical fields, legacy field usage, and producer/schema versions.
+   It should scan latest snapshot/signal/plan/order/settlement files and report
+   missing canonical fields, legacy field usage, producer/schema versions, and
+   `settlement_outcomes` coverage.
 
 2. Add canonical aliases in pm_agent live outputs:
    `forecast_source`, `model_p_yes`, `order_side=BUY_YES|BUY_NO`.

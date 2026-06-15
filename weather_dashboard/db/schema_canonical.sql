@@ -142,6 +142,25 @@ CREATE TABLE IF NOT EXISTS settlements (
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS settlement_outcomes (
+    settlement_outcome_id TEXT PRIMARY KEY,
+    source_system TEXT NOT NULL CHECK (source_system IN ('pm_history','polymarket_api','manual_backfill')),
+    source_path TEXT,
+    city TEXT NOT NULL,
+    target_date TEXT NOT NULL,
+    bracket TEXT NOT NULL,
+    unit TEXT,
+    condition_id TEXT,
+    market_id TEXT,
+    token_id TEXT,
+    raw_final_price REAL,
+    final_price REAL NOT NULL,
+    settlement_status TEXT NOT NULL CHECK (settlement_status IN ('settled','missing_event','missing_bracket')),
+    question TEXT,
+    payload TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS run_artifacts (
     artifact_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES runs(run_id),
@@ -185,6 +204,12 @@ CREATE INDEX IF NOT EXISTS idx_fills_execution_id ON fills(execution_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_settlements_market
     ON settlements(target_date, condition_id, bracket)
     WHERE condition_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_settlement_outcomes_city_bracket
+    ON settlement_outcomes(source_system, city, target_date, bracket);
+CREATE INDEX IF NOT EXISTS idx_settlement_outcomes_condition
+    ON settlement_outcomes(condition_id);
+CREATE INDEX IF NOT EXISTS idx_settlement_outcomes_date_city
+    ON settlement_outcomes(target_date, city);
 CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
 CREATE INDEX IF NOT EXISTS idx_run_alerts_run_id ON run_alerts(run_id);
 
@@ -246,6 +271,18 @@ CREATE TRIGGER IF NOT EXISTS settlements_canonical_before_delete
 BEFORE DELETE ON settlements
 BEGIN
     SELECT RAISE(ABORT, 'settlements is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS settlement_outcomes_canonical_before_update
+BEFORE UPDATE ON settlement_outcomes
+BEGIN
+    SELECT RAISE(ABORT, 'settlement_outcomes is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS settlement_outcomes_canonical_before_delete
+BEFORE DELETE ON settlement_outcomes
+BEGIN
+    SELECT RAISE(ABORT, 'settlement_outcomes is append-only');
 END;
 
 CREATE TRIGGER IF NOT EXISTS ingestion_log_canonical_before_update

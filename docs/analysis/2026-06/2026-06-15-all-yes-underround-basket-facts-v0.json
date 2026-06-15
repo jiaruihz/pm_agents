@@ -1,0 +1,428 @@
+{
+  "buffer_stats": {
+    "legs_min_median_max": [
+      5,
+      10.0,
+      11
+    ],
+    "per_leg_buffer_cents_min_median_p90_max": [
+      0.18181818181818182,
+      0.30000000000000004,
+      0.5181818181818182,
+      0.9199999999999999
+    ],
+    "strategy_candidate_observations": 297,
+    "survive_extra_cost_by_per_leg_cents": {
+      "0.1": 297,
+      "0.25": 215,
+      "0.5": 34,
+      "1.0": 0
+    },
+    "underround_min_median_p90_max": [
+      0.02,
+      0.028,
+      0.045,
+      0.071
+    ]
+  },
+  "clob_fill_coverage_gate": {
+    "cache_checks": {
+      "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/clob_fills.jsonl": {
+        "cost_usd": 2261.969673,
+        "distinct_executions": 498,
+        "distinct_fill_ids": 855,
+        "missing_order_cost_usd": 0.0,
+        "missing_order_rows": 0,
+        "multi_fill_executions": 229,
+        "over_order_cost_usd": 0.0,
+        "over_order_excess_cost_usd": 0.0,
+        "over_order_keys": 0,
+        "rows": 855,
+        "top_over_order": []
+      }
+    },
+    "db": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "db_fills": {
+      "cost_usd": 2261.969673,
+      "distinct_executions": 498,
+      "distinct_fill_ids": 855,
+      "missing_order_cost_usd": 0.0,
+      "missing_order_rows": 0,
+      "multi_fill_executions": 229,
+      "over_order_cost_usd": 0.0,
+      "over_order_excess_cost_usd": 0.0,
+      "over_order_keys": 0,
+      "rows": 855,
+      "top_over_order": []
+    },
+    "db_vs_primary_cache": {
+      "cache_not_in_db": 0,
+      "db_cost_minus_cache_cost": 0.0,
+      "db_not_in_cache": 0,
+      "sample_cache_not_in_db": [],
+      "sample_db_not_in_cache": []
+    },
+    "fact_trades_live_real": {
+      "cost_usd": 2261.969673,
+      "executions": 498,
+      "fill_ids": 855,
+      "rows": 855
+    },
+    "fail_reasons": [],
+    "gate_pass": true,
+    "order_caps": 604
+  },
+  "contract": {
+    "basket_grain": "strategy_id + snapshot_ts_utc + event_date + city + event_slug",
+    "leg_grain": "basket_id + condition_id",
+    "settlement_priority": [
+      "settlements.condition_id",
+      "settlement_outcomes city/target_date/bracket",
+      "pm_history city/date/bracket migration fallback"
+    ],
+    "source_layers": [
+      "historical_orderbook_snapshot",
+      "forward_paper_ledger",
+      "future_live_fok"
+    ]
+  },
+  "data_gaps": [
+    "27 historical strategy-candidate observations still lack fully resolved settlement outcomes."
+  ],
+  "data_self_check": {
+    "clob_orders_with_fills": [
+      {
+        "orders": 33,
+        "status": "error",
+        "with_fill": 0
+      },
+      {
+        "orders": 961,
+        "status": "submitted",
+        "with_fill": 855
+      }
+    ],
+    "fact_built_at_utc": "2026-06-15T16:08:57.366089+00:00",
+    "fact_signal_candidates_coverage": {
+      "eligible": 10365,
+      "live_filled": 348,
+      "paper_ordered": 3968,
+      "rows": 30136
+    },
+    "fact_trades_by_class": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ],
+    "fact_trades_by_settlement": [
+      {
+        "rows": 150,
+        "settlement_status": null
+      },
+      {
+        "rows": 4250,
+        "settlement_status": "settled"
+      }
+    ]
+  },
+  "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+  "generated_at_utc": "2026-06-15T16:12:28.191053+00:00",
+  "outputs": {
+    "baskets": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/all_yes_underround_basket_v0/fact_baskets.jsonl",
+    "legs": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/all_yes_underround_basket_v0/fact_basket_legs.jsonl",
+    "summary": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/all_yes_underround_basket_v0/summary.json"
+  },
+  "parameters": {
+    "max_basket_cost_usd": 5.0,
+    "max_spread": 0.05,
+    "min_leg_count": 5,
+    "min_shares": 5.0,
+    "min_underround": 0.02,
+    "pm_history_dir": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history",
+    "thresholds": [
+      0.005,
+      0.01,
+      0.02,
+      0.03,
+      0.05
+    ]
+  },
+  "settlement_source_summary": {
+    "city_bracket_settlements_loaded": 18011,
+    "condition_settlements_loaded": 2044
+  },
+  "snapshot_files_scanned": 1338,
+  "snapshot_first": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-05-19/orderbook_snapshot_20260519_0100.jsonl.gz",
+  "snapshot_last": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-06-16/orderbook_snapshot_20260616_0000.jsonl.gz",
+  "summary": {
+    "basket_rows": 101530,
+    "by_snapshot_date": {
+      "2026-05-19": {
+        "basket_rows": 1557,
+        "snapshots": 46
+      },
+      "2026-05-20": {
+        "basket_rows": 3571,
+        "quality_guard_pass": 650,
+        "snapshots": 48
+      },
+      "2026-05-21": {
+        "basket_rows": 3843,
+        "quality_guard_pass": 1216,
+        "snapshots": 48,
+        "strategy_candidates": 1
+      },
+      "2026-05-22": {
+        "basket_rows": 3773,
+        "quality_guard_pass": 1434,
+        "snapshots": 48,
+        "strategy_candidates": 3
+      },
+      "2026-05-23": {
+        "basket_rows": 3625,
+        "quality_guard_pass": 1580,
+        "snapshots": 48,
+        "strategy_candidates": 7
+      },
+      "2026-05-24": {
+        "basket_rows": 3689,
+        "quality_guard_pass": 1683,
+        "snapshots": 48,
+        "strategy_candidates": 16
+      },
+      "2026-05-25": {
+        "basket_rows": 3650,
+        "quality_guard_pass": 1924,
+        "snapshots": 48,
+        "strategy_candidates": 6
+      },
+      "2026-05-26": {
+        "basket_rows": 3214,
+        "quality_guard_pass": 1590,
+        "snapshots": 47,
+        "strategy_candidates": 6
+      },
+      "2026-05-27": {
+        "basket_rows": 3742,
+        "quality_guard_pass": 1639,
+        "snapshots": 48,
+        "strategy_candidates": 6
+      },
+      "2026-05-28": {
+        "basket_rows": 3890,
+        "quality_guard_pass": 2138,
+        "snapshots": 48,
+        "strategy_candidates": 8
+      },
+      "2026-05-29": {
+        "basket_rows": 3890,
+        "quality_guard_pass": 1657,
+        "snapshots": 49,
+        "strategy_candidates": 12
+      },
+      "2026-05-30": {
+        "basket_rows": 3889,
+        "quality_guard_pass": 1492,
+        "snapshots": 48,
+        "strategy_candidates": 20
+      },
+      "2026-05-31": {
+        "basket_rows": 3871,
+        "quality_guard_pass": 1535,
+        "snapshots": 48,
+        "strategy_candidates": 17
+      },
+      "2026-06-01": {
+        "basket_rows": 3832,
+        "quality_guard_pass": 1950,
+        "snapshots": 48,
+        "strategy_candidates": 37
+      },
+      "2026-06-02": {
+        "basket_rows": 3794,
+        "quality_guard_pass": 1970,
+        "snapshots": 48,
+        "strategy_candidates": 8
+      },
+      "2026-06-03": {
+        "basket_rows": 3738,
+        "quality_guard_pass": 2097,
+        "snapshots": 48,
+        "strategy_candidates": 9
+      },
+      "2026-06-04": {
+        "basket_rows": 3244,
+        "quality_guard_pass": 1826,
+        "snapshots": 42,
+        "strategy_candidates": 26
+      },
+      "2026-06-05": {
+        "basket_rows": 3367,
+        "quality_guard_pass": 1718,
+        "snapshots": 48,
+        "strategy_candidates": 11
+      },
+      "2026-06-06": {
+        "basket_rows": 3378,
+        "quality_guard_pass": 1837,
+        "snapshots": 49,
+        "strategy_candidates": 6
+      },
+      "2026-06-07": {
+        "basket_rows": 3872,
+        "quality_guard_pass": 1942,
+        "snapshots": 48,
+        "strategy_candidates": 9
+      },
+      "2026-06-08": {
+        "basket_rows": 3847,
+        "quality_guard_pass": 1942,
+        "snapshots": 48,
+        "strategy_candidates": 3
+      },
+      "2026-06-09": {
+        "basket_rows": 3820,
+        "quality_guard_pass": 1916,
+        "snapshots": 48,
+        "strategy_candidates": 8
+      },
+      "2026-06-10": {
+        "basket_rows": 3774,
+        "quality_guard_pass": 2158,
+        "snapshots": 48,
+        "strategy_candidates": 15
+      },
+      "2026-06-11": {
+        "basket_rows": 3315,
+        "quality_guard_pass": 1782,
+        "snapshots": 48,
+        "strategy_candidates": 8
+      },
+      "2026-06-12": {
+        "basket_rows": 3807,
+        "quality_guard_pass": 2193,
+        "snapshots": 48,
+        "strategy_candidates": 9
+      },
+      "2026-06-13": {
+        "basket_rows": 3844,
+        "quality_guard_pass": 2213,
+        "snapshots": 48,
+        "strategy_candidates": 10
+      },
+      "2026-06-14": {
+        "basket_rows": 3845,
+        "quality_guard_pass": 2234,
+        "snapshots": 48,
+        "strategy_candidates": 19
+      },
+      "2026-06-15": {
+        "basket_rows": 3800,
+        "quality_guard_pass": 2143,
+        "snapshots": 48,
+        "strategy_candidates": 17
+      },
+      "2026-06-16": {
+        "basket_rows": 49,
+        "quality_guard_pass": 20,
+        "snapshots": 1
+      }
+    },
+    "generated_at_utc": "2026-06-15T16:12:28.191053+00:00",
+    "leg_rows": 827189,
+    "parameters": {
+      "max_basket_cost_usd": 5.0,
+      "max_spread": 0.05,
+      "min_leg_count": 5,
+      "min_shares": 5.0,
+      "min_underround": 0.02,
+      "pm_history_dir": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history",
+      "thresholds": [
+        0.005,
+        0.01,
+        0.02,
+        0.03,
+        0.05
+      ]
+    },
+    "quality_guard_pass": 48479,
+    "snapshot_files_scanned": 1338,
+    "snapshot_first": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-05-19/orderbook_snapshot_20260519_0100.jsonl.gz",
+    "snapshot_last": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-06-16/orderbook_snapshot_20260616_0000.jsonl.gz",
+    "strategy_candidate_active_dates": 27,
+    "strategy_candidate_pending": 27,
+    "strategy_candidate_settled_exactly_one_winner": 270,
+    "strategy_candidate_unique_events": 195,
+    "strategy_candidate_winner_count_anomaly": 0,
+    "strategy_candidates": 297,
+    "strategy_id": "all_yes_underround_basket_v0"
+  },
+  "target_metric": "all_yes_underround_basket_fact_refresh_v0",
+  "threshold_stats": [
+    {
+      "active_event_dates": 28,
+      "candidate_observations": 947,
+      "settled_cost_unit": 862.197,
+      "settled_exactly_one_winner": 877,
+      "settled_pnl_unit": 14.803,
+      "settled_roi": 0.01716893007050593,
+      "threshold": 0.005,
+      "unique_events": 435
+    },
+    {
+      "active_event_dates": 28,
+      "candidate_observations": 649,
+      "settled_cost_unit": 587.131,
+      "settled_exactly_one_winner": 600,
+      "settled_pnl_unit": 12.869,
+      "settled_roi": 0.021918447501494555,
+      "threshold": 0.01,
+      "unique_events": 336
+    },
+    {
+      "active_event_dates": 27,
+      "candidate_observations": 297,
+      "settled_cost_unit": 261.722,
+      "settled_exactly_one_winner": 270,
+      "settled_pnl_unit": 8.278,
+      "settled_roi": 0.03162898036848259,
+      "threshold": 0.02,
+      "unique_events": 195
+    },
+    {
+      "active_event_dates": 26,
+      "candidate_observations": 123,
+      "settled_cost_unit": 106.524,
+      "settled_exactly_one_winner": 111,
+      "settled_pnl_unit": 4.476,
+      "settled_roi": 0.042018700011265064,
+      "threshold": 0.03,
+      "unique_events": 86
+    },
+    {
+      "active_event_dates": 8,
+      "candidate_observations": 18,
+      "settled_cost_unit": 16.922,
+      "settled_exactly_one_winner": 18,
+      "settled_pnl_unit": 1.078,
+      "settled_roi": 0.06370405389433874,
+      "threshold": 0.05,
+      "unique_events": 13
+    }
+  ],
+  "verdict_text": "Historical all-YES orderbook facts are now on a single basket grain. Use this output for opportunity, settlement, and retail-cost sensitivity; do not use it as live approval, because forward TTL-valid all-leg fills remain a separate evidence layer."
+}

@@ -30,7 +30,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | 实盘下单凭证（真金 CLOB 提交记录） | `runtime/weather_edge_v1/live/*.jsonl` + `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` （已被 ingest 到 `orders` 表，venue=`polymarket_clob`） | — |
 | 实盘成交（真金 CLOB fills） | `fills` 表 join `orders WHERE venue='polymarket_clob'`，并用 raw `clob_fills.jsonl` + `weather_clob_fill_coverage_gate.py` 做 fill_id / order cap reconciliation | public activity 不能单独当 order-level 真相 |
 | 概率模型 / 错误分布 cache | N100 `cache/gfs_365d_*.json`（**实际 ~735 天，不是 365 天**）；本机镜像 `runtime/weather_edge_v1/market_data/cache/` | — |
-| 结算（pm_history） | `settlements` 表 / N100 `cache/pm_history/*.json`，near-binary raw price 归一化后使用 | 旧 `t24_paper_ledger_summary.json` 的 "by_date" 块 |
+| 结算（pm_history） | `settlements` 表用于 condition_id trade join；`settlement_outcomes` 表用于 city/date/bracket basket 或 source-grain research | 旧 `t24_paper_ledger_summary.json` 的 "by_date" 块；策略脚本临时直读 raw pm_history |
 
 **唯一 DB**：`runtime/weather.db`。其他 `.db` 文件已搬到 `runtime/_legacy/`（见 §3）。
 
@@ -82,7 +82,8 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 │    orders        — 订单（venue ∈ paper / snapshot_replay / polymarket_clob)│
 │    fills         — 成交（status ∈ filled/partial/cancelled/expired/        │
 │                          simulated）                                       │
-│    settlements   — 结算（pm_history → 每 bracket final_price）             │
+│    settlements   — 结算（condition_id/bracket trade join）                 │
+│    settlement_outcomes — pm_history 源头粒度 city/date/bracket outcome     │
 │    runs          — 跑批身份（execution_mode ∈ snapshot_replay/paper/live） │
 │                                                                            │
 │  派生分析层（derived facts, 由 build_weather_*.py 物化）：                 │
@@ -100,7 +101,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | **N100** `output/paper_snapshots/*.jsonl` | source | N100 半小时 snapshot timer | rsync→镜像 | T1+T2 全池 |
 | **N100** `output/paper_trades/paper_orders.jsonl` | source | N100 paper engine | rsync→镜像 | 全池 paper ledger（**不是** live intent） |
 | **N100** `output/research/t24_paper_*_trades.csv` | derived（结算后） | N100 `settle_t24_paper.py` | run_stack.sh ingest | 不是结算源头，源头是 `pm_history` |
-| **N100** `cache/pm_history/<City>_<date>.json` | source | N100 `daily_pipeline.py` | `pm_history_settlements` ingest | 结算唯一权威源；raw `0.9995/0.0005` 必须按 near-binary 规则归一化为 `1/0` |
+| **N100** `cache/pm_history/<City>_<date>.json` | source | N100 `daily_pipeline.py` | `pm_history_settlements` ingest → `settlements` + `settlement_outcomes` | 结算唯一权威源；raw `0.9995/0.0005` 必须按 near-binary 规则归一化为 `1/0` |
 | **N100** `cache/gfs_v4_<City>_*.json` | source | N100 GFS fetcher | `compute_error_distribution` / 校准 | **实际 ~735 天**（2 年）。本机镜像 `market_data/cache/gfs_v4/`（2026-06-05 起加入 sync） |
 | **N100** `cache/gfs_daily_*.json` | source | N100 GFS daily fetcher | 校准辅助 | 本机镜像 `market_data/cache/gfs_daily/`（2026-06-05 起加入 sync） |
 | **N100** `cache/ecmwf_v4_<City>_*.json` | source | N100 ECMWF fetcher | 多模型 ensemble | 本机镜像 `market_data/cache/ecmwf_v4/`（2026-06-05 起加入 sync） |
@@ -117,6 +118,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | **本机** `runtime/weather.db` | **canonical operational DB** | `weather_dashboard_refresh.sh` 增量 ingest；`run_stack.sh` 全量 rebuild | 所有分析 / API / 前端 | **唯一分析 DB**。日常不删库；全量 rebuild 只在确认 raw 输入 + CLOB fill cache / 外部 CLOB 同步可用时执行。 |
 | **本机** `runtime/weather.db.fact_trades` | derived（唯一已成交 PnL 源） | `build_weather_fact_trades.py` | 所有绩效分析 | grain = 每 fill 一行 |
 | **本机** `runtime/weather.db.fact_signal_candidates` | derived（唯一全机会源） | `build_weather_signal_candidates.py` | 成交质量 / 漏单 / 城市 alpha 分析 | grain = 每 `(condition_id,side,event_date)` 一行 |
+| **本机** `runtime/weather.db.settlement_outcomes` | canonical source-grain layer | `pm_history_settlements.py` | basket / city-day / source-sensitive settlement research | grain = 每 `(source_system, city, target_date, bracket)` 一行；不要再让每个策略脚本自己读 raw pm_history 定义 fallback |
 | **本机** `runtime/weather_decision_journal.db` | **活跃 sidecar** | `scripts/ops/weather_decision_journal.py` | `weather_position_monitor.py` | 仍在用，不动 |
 | **本机** `runtime/_legacy/strategy_runtime.db` | legacy（PMM 已退役） | （已无 writer） | （已无 reader） | 保留作历史参考 |
 | ~~`runtime/weather_v2.db`~~ | **已删除（2026-06-05）** | — | — | 完全被 `runtime/weather.db` 替代，无独有数据 |

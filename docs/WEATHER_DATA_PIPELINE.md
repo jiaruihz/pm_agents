@@ -198,7 +198,8 @@ Side tables (mutable):
 │     │                                                               │
 │     ├─ python -m weather_dashboard.ingest.pm_history_settlements    │
 │     │     reads:  cache/pm_history/{City}_{date}.json               │
-│     │     writes: settlements (one row per bracket)                 │
+│     │     writes: settlements (condition_id join),                  │
+│     │             settlement_outcomes (city/date/bracket source)    │
 │     │                                                               │
 │     ├─ python -m weather_dashboard.ingest.clob_fill_sync            │
 │     │     reads:  exchange_response matched fills, authenticated    │
@@ -411,7 +412,7 @@ id directly.
 |---|---|---|
 | `legacy_migration/research_csv.py` | `t24_paper_*.csv` | signals, plans, orders, fills, settlements (paper/explore state) |
 | `legacy_migration/live_cycle.py` | `live_cycle/*.json` + siblings | signals, plans, orders, fills (live state), strategy_config |
-| `ingest/pm_history_settlements.py` | `cache/pm_history/*.json` | settlements (authoritative — pm_history is upstream truth; raw near-binary prices normalized to 1/0) |
+| `ingest/pm_history_settlements.py` | `cache/pm_history/*.json` | `settlements` for condition_id trade joins; `settlement_outcomes` for city/date/bracket source-grain research; raw near-binary prices normalized to 1/0 |
 | `ingest/clob_fill_sync.py` | Polymarket data-api or CLOB | fills (status='filled') for real on-chain matches |
 | `db/consolidate_configs.py` | strategy_config | config_aliases |
 | `metrics/save.py` | the canonical caliber above | per-run cached metrics on `runs.metrics` |
@@ -573,6 +574,7 @@ In order:
 2. **Settlements stale?**
    ```sql
    SELECT MAX(target_date) FROM settlements;
+   SELECT MAX(target_date), COUNT(*) FROM settlement_outcomes;
    ```
    If older than yesterday, run `python -m weather_dashboard.ingest.pm_history_settlements`.
 3. **Fills stale or under-ingested?**

@@ -1,0 +1,209 @@
+{
+  "audits": [
+    {
+      "canonical_complete": false,
+      "kind": "weather_predict_orderbook_snapshot",
+      "legacy_alias_counts": {
+        "event_date": 200,
+        "outcome": 200
+      },
+      "legacy_value_counts": {},
+      "missing_required_counts": {
+        "market_price": 200,
+        "producer_run_id": 200,
+        "producer_system": 200,
+        "schema_version": 200,
+        "signal_side": 200,
+        "target_date": 200
+      },
+      "path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-06-16/orderbook_snapshot_20260616_0000.jsonl.gz",
+      "present_required_counts": {
+        "bracket": 200,
+        "city": 200,
+        "condition_id": 200,
+        "market_id": 200,
+        "snapshot_ts_utc": 200,
+        "token_id": 200
+      },
+      "required_fields": [
+        "producer_system",
+        "producer_run_id",
+        "schema_version",
+        "snapshot_ts_utc",
+        "target_date",
+        "city",
+        "bracket",
+        "condition_id",
+        "market_id",
+        "token_id",
+        "market_price",
+        "signal_side"
+      ],
+      "rows_sampled": 200
+    },
+    {
+      "canonical_complete": false,
+      "kind": "weather_predict_research_paper_order",
+      "legacy_alias_counts": {
+        "event_date": 200,
+        "market_yes_price": 200,
+        "mode": 200,
+        "model": 200,
+        "model_prob": 200,
+        "side": 200
+      },
+      "legacy_value_counts": {},
+      "missing_required_counts": {
+        "market_price": 200,
+        "model_p_yes": 200,
+        "model_version": 200,
+        "order_side": 200,
+        "producer_run_id": 200,
+        "producer_system": 200,
+        "schema_version": 200,
+        "target_date": 200
+      },
+      "path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/paper_trades/paper_orders.jsonl",
+      "present_required_counts": {},
+      "required_fields": [
+        "producer_system",
+        "producer_run_id",
+        "schema_version",
+        "target_date",
+        "model_version",
+        "model_p_yes",
+        "market_price",
+        "order_side"
+      ],
+      "rows_sampled": 200
+    },
+    {
+      "canonical_complete": false,
+      "kind": "pm_agent_live_signal",
+      "legacy_alias_counts": {
+        "model_probability_yes": 1,
+        "profile": 1,
+        "source_run_id": 1,
+        "source_system": 1
+      },
+      "legacy_value_counts": {
+        "order_side=BUY": 1
+      },
+      "missing_required_counts": {
+        "forecast_source": 1,
+        "model_p_yes": 1,
+        "producer_run_id": 1,
+        "producer_system": 1,
+        "schema_version": 1
+      },
+      "path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/remote_pm_agent/signals/live_mid_price_core_v1_side_band_20260610T234812Z_signals.jsonl",
+      "present_required_counts": {
+        "order_side": 1,
+        "signal_side": 1,
+        "target_date": 1
+      },
+      "required_fields": [
+        "producer_system",
+        "producer_run_id",
+        "schema_version",
+        "target_date",
+        "forecast_source",
+        "model_p_yes",
+        "order_side",
+        "signal_side"
+      ],
+      "rows_sampled": 1
+    },
+    {
+      "canonical_complete": false,
+      "kind": "pm_agent_trade_plan",
+      "legacy_alias_counts": {
+        "model_token_probability": 1,
+        "profile": 1
+      },
+      "legacy_value_counts": {
+        "order_side=BUY": 1
+      },
+      "missing_required_counts": {
+        "forecast_source": 1,
+        "model_p_yes": 1,
+        "producer_run_id": 1,
+        "producer_system": 1,
+        "schema_version": 1
+      },
+      "path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/remote_pm_agent/plans/live_mid_price_core_v1_side_band_20260610T201723Z_trade_plans.jsonl",
+      "present_required_counts": {
+        "execution_policy": 1,
+        "order_side": 1,
+        "target_date": 1
+      },
+      "required_fields": [
+        "producer_system",
+        "producer_run_id",
+        "schema_version",
+        "target_date",
+        "forecast_source",
+        "model_p_yes",
+        "order_side",
+        "execution_policy"
+      ],
+      "rows_sampled": 1
+    },
+    {
+      "canonical_complete": false,
+      "kind": "pm_agent_live_order",
+      "legacy_alias_counts": {
+        "model_token_probability": 1
+      },
+      "legacy_value_counts": {
+        "order_side=BUY": 1
+      },
+      "missing_required_counts": {
+        "producer_run_id": 1,
+        "producer_system": 1,
+        "schema_version": 1
+      },
+      "path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/remote_pm_agent/live/live_mid_price_core_v1_side_band_20260610T201723Z_orders.jsonl",
+      "present_required_counts": {
+        "execution_id": 1,
+        "execution_policy": 1,
+        "order_side": 1,
+        "target_date": 1
+      },
+      "required_fields": [
+        "producer_system",
+        "producer_run_id",
+        "schema_version",
+        "target_date",
+        "order_side",
+        "execution_policy",
+        "execution_id"
+      ],
+      "rows_sampled": 1
+    },
+    {
+      "by_status": [
+        {
+          "rows": 18011,
+          "settlement_status": "settled"
+        }
+      ],
+      "city_days": 1639,
+      "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+      "kind": "settlement_outcomes",
+      "max_target_date": "2026-06-14",
+      "null_condition_id": 15967,
+      "rows": 18011,
+      "table_exists": true
+    }
+  ],
+  "generated_at_utc": "2026-06-15T16:16:28.587238+00:00",
+  "sample_rows": 200,
+  "sources": {
+    "pm_agent_live_order": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/remote_pm_agent/live/live_mid_price_core_v1_side_band_20260610T201723Z_orders.jsonl",
+    "pm_agent_live_signal": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/remote_pm_agent/signals/live_mid_price_core_v1_side_band_20260610T234812Z_signals.jsonl",
+    "pm_agent_trade_plan": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/remote_pm_agent/plans/live_mid_price_core_v1_side_band_20260610T201723Z_trade_plans.jsonl",
+    "weather_predict_orderbook_snapshot": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots/2026-06-16/orderbook_snapshot_20260616_0000.jsonl.gz",
+    "weather_predict_research_paper_order": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/paper_trades/paper_orders.jsonl"
+  }
+}

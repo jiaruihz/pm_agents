@@ -7,7 +7,7 @@ from pathlib import Path
 from weather_dashboard.db.connection import get_conn
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def apply_schema_canonical(conn: sqlite3.Connection) -> None:
@@ -15,14 +15,14 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
     schema_path = Path(__file__).parent / "schema_canonical.sql"
     conn.executescript(schema_path.read_text(encoding="utf-8"))
 
-    row = conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()
-    if row[0] == 0:
+    row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
+    if row[0] is None or int(row[0]) < SCHEMA_VERSION:
         conn.execute(
             "INSERT INTO schema_version (version, applied_at_utc, description) VALUES (?, ?, ?)",
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "canonical weather lineage schema",
+                "canonical weather lineage schema with settlement_outcomes",
             ),
         )
     conn.commit()

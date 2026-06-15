@@ -1,7 +1,7 @@
 # Weather Analysis Contract
 
 Status: current-source
-Updated: 2026-06-13 weather.db query reliability; preserve content dates below
+Updated: 2026-06-16 settlement_outcomes source-grain layer; preserve content dates below
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -210,6 +210,11 @@ python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 - **旧口径“只认精确 1.0 / 0.0”已废弃**；用旧口径生成的 `missing_bracket`、settled PnL、ROI、win rate、city/side rank 都可能低估/偏移。
 - `missing_bracket` 只表示 `pm_history` 中找不到对应 bracket / event，不再表示 near-binary price 未归一化。
 - 引用 2026-06-06 之前的报告时，若报告头中有大量 `missing_bracket`（例如 725/734/28 这类数），必须先按新结算规则重建 `runtime/weather.db` 并重算。
+
+2026-06-16 起，`pm_history_settlements.py` 必须双写：
+
+- `settlements`：用于 `condition_id + bracket` 的 trade/fill join，保持现有 fact builders 口径。
+- `settlement_outcomes`：用于 `source_system + city + target_date + bracket` 的源头结算 grain。篮子、city-day、source-sensitive 研究必须优先读这张 DB 表；不要在每个策略脚本里各自直读 raw `pm_history` 并定义不同 fallback。
 
 2026-06-06 已验证基线（历史快照；后续成交会改变 live_real 行数，最终以 CLOB coverage gate 为准）：
 

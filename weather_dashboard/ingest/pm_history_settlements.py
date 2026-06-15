@@ -22,16 +22,20 @@ pm_history file `City_2026-05-NN.json`:
         ...
     ] }
 
-Settlement row (canonical schema):
+Settlement rows (canonical schema):
     settlement_id, target_date, condition_id, market_id, bracket, token_id,
     final_price, settlement_status
+
+Settlement outcome rows (source-grain schema):
+    source_system, city, target_date, bracket, condition_id, market_id,
+    token_id, raw_final_price, final_price, settlement_status, source_path
 
 Files with `null` content or empty `brackets` are skipped (genuine upstream
 gaps). For each bracket, condition_id and market_id are looked up from the
 `signals` table by (city, target_date, bracket) -- the same market the
 strategy was trading. Settlements with no signal row get `condition_id=NULL`
-and won't join in queries; this is acceptable for brackets the strategy
-never touched.
+and won't join in trade queries. `settlement_outcomes` still preserves the
+city/date/bracket truth for basket research and later condition-id enrichment.
 
 Idempotent: re-running is safe.
 
@@ -45,9 +49,17 @@ import argparse
 import json
 import sqlite3
 from pathlib import Path
-from typing import Iterable
 
 from src.strategies.weather_edge_v1.ids import make_settlement_id
+from weather_dashboard.ingest.settlement_outcomes import (
+    ensure_settlement_outcomes_schema,
+    insert_settlement_outcome,
+    normalize_final_price,
+    outcome_from_pm_history_bracket,
+    parse_pm_history_filename,
+    settlement_status as outcome_settlement_status,
+    stored_final_price,
+)
 
 DEFAULT_PMH_DIR = "runtime/weather_edge_v1/market_data/cache/pm_history"
 
@@ -78,31 +90,16 @@ def _binary_final_price(final_price) -> float | None:
     Some pm_history files store resolved brackets as 0.9995 / 0.0005 while
     the downstream settlement contract expects binary 1.0 / 0.0.
     """
-    try:
-        value = float(final_price)
-    except (TypeError, ValueError):
-        return None
-    if value >= 0.99:
-        return 1.0
-    if value <= 0.01:
-        return 0.0
-    return None
+    return normalize_final_price(final_price)
 
 
 def _settlement_status(final_price) -> str:
-    if _binary_final_price(final_price) is not None:
-        return "settled"
-    return "missing_bracket"
+    return outcome_settlement_status(final_price)
 
 
 def _parse_filename(name: str) -> tuple[str, str] | None:
     """`Beijing_2026-05-20.json` -> ('Beijing', '2026-05-20'). Skips others."""
-    base = name[:-5] if name.endswith(".json") else name
-    if base.startswith("prices_") or "_2026-" not in base:
-        return None
-    if len(base) < 11 or base[-11] != "_":
-        return None
-    return base[:-11], base[-10:]
+    return parse_pm_history_filename(name)
 
 
 def _signal_lookup_map(conn: sqlite3.Connection) -> dict[tuple, tuple[str, str]]:
@@ -123,12 +120,14 @@ def _signal_lookup_map(conn: sqlite3.Connection) -> dict[tuple, tuple[str, str]]
 
 def ingest(conn: sqlite3.Connection, pmh_dir: str, *, dry_run: bool = False) -> dict:
     conn.row_factory = sqlite3.Row
+    ensure_settlement_outcomes_schema(conn)
     sig_lookup = _signal_lookup_map(conn)
     files = sorted(Path(pmh_dir).glob("*_2026-*.json"))
 
     stats = {
         "files_seen": 0, "files_skipped_null": 0,
         "brackets_seen": 0, "settlements_inserted": 0,
+        "settlement_outcomes_inserted": 0,
         "no_signal_match": 0, "dry_run": dry_run,
     }
 
@@ -158,19 +157,27 @@ def ingest(conn: sqlite3.Connection, pmh_dir: str, *, dry_run: bool = False) -> 
             if condition_id is None:
                 stats["no_signal_match"] += 1
             sid = _settlement_id(date, condition_id, market_id, label)
-            normalized_final_price = _binary_final_price(final_price)
-            stored_final_price = normalized_final_price if normalized_final_price is not None else float(final_price)
             status = _settlement_status(final_price)
 
             if dry_run:
                 continue
+            outcome = outcome_from_pm_history_bracket(
+                source_path=f,
+                city=city,
+                target_date=date,
+                unit=d.get("unit"),
+                bracket=b,
+                condition_id=condition_id,
+                market_id=market_id,
+            )
+            if outcome:
+                stats["settlement_outcomes_inserted"] += insert_settlement_outcome(conn, outcome)
             cur = conn.execute(
                 """INSERT OR IGNORE INTO settlements
                    (settlement_id, target_date, condition_id, market_id, bracket,
                     token_id, final_price, settlement_status)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (sid, date, condition_id, market_id, label, token_id,
-                 stored_final_price, status),
+                (sid, date, condition_id, market_id, label, token_id, stored_final_price(final_price), status),
             )
             stats["settlements_inserted"] += cur.rowcount or 0
 

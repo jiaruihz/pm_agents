@@ -65,7 +65,7 @@ def latest_snapshot(root: Path) -> Path:
 
 
 def connect_db(path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=1.0)
+    conn = sqlite3.connect(str(path), timeout=1.0)
     conn.execute("PRAGMA query_only=ON")
     conn.execute("PRAGMA busy_timeout=1000")
     conn.row_factory = sqlite3.Row

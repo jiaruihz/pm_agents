@@ -22,6 +22,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.ops.all_yes_underround_guards import BasketGuardConfig, check_candidate, decision_to_dict
+from scripts.analysis.market_structure_edge.all_yes_underround_settlement import (
+    PM_HISTORY_DEFAULT,
+    load_city_bracket_settlements,
+    resolve_leg_settlement,
+)
 SCAN_JSON_DEFAULT = ROOT / "docs" / "analysis" / "2026-06" / "2026-06-14-all-yes-underround-live-prep-v0.json"
 DB_DEFAULT = ROOT / "runtime" / "weather.db"
 GATE_DEFAULT = ROOT / "runtime" / "_dashboard_logs" / "clob_fill_coverage_gate.json"
@@ -38,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scan-json", default=str(SCAN_JSON_DEFAULT))
     parser.add_argument("--db-path", default=str(DB_DEFAULT))
     parser.add_argument("--gate-path", default=str(GATE_DEFAULT))
+    parser.add_argument("--pm-history-dir", default=str(PM_HISTORY_DEFAULT))
     parser.add_argument("--run-dir", default=str(RUN_DIR_DEFAULT))
     parser.add_argument("--shares-per-leg", type=float, default=5.0)
     parser.add_argument("--max-baskets-per-cycle", type=int, default=2)
@@ -420,7 +426,7 @@ def load_settlements(conn: sqlite3.Connection, condition_ids: list[str]) -> dict
         f"SELECT condition_id, bracket, final_price, settlement_status FROM settlements WHERE condition_id IN ({placeholders})",
         condition_ids,
     ).fetchall()
-    return {str(row["condition_id"]): dict(row) for row in rows}
+    return {str(row["condition_id"]): {**dict(row), "settlement_source": "settlements_condition_id"} for row in rows}
 
 
 def sorted_unique_values(rows: list[dict[str, Any]], field: str) -> list[str]:
@@ -916,7 +922,12 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         if leg.get("condition_id"):
             condition_ids.append(str(leg["condition_id"]))
     conn = connect_db(Path(args.db_path))
-    settlements = load_settlements(conn, sorted(set(condition_ids)))
+    try:
+        settlements = load_settlements(conn, sorted(set(condition_ids)))
+        pm_history_dir = getattr(args, "pm_history_dir", None)
+        city_bracket_settlements = load_city_bracket_settlements(conn, pm_history_dir)
+    finally:
+        conn.close()
     settlement_now = parse_utc(getattr(args, "settlement_now_utc", None)) or datetime.now(timezone.utc)
     settlement_lag_days = int(getattr(args, "settlement_lag_days", 1))
     settlement_pipeline_hour_utc = int(getattr(args, "settlement_pipeline_hour_utc", 9))
@@ -937,13 +948,20 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             seen_opportunities.add(opportunity_key)
         ttl = recording_ttl_audit(basket, args.max_snapshot_age_seconds)
         leg_rows = legs_by_basket.get(bid, [])
-        missing = [leg for leg in leg_rows if str(leg.get("condition_id")) not in settlements]
+        missing = []
         settled_legs = []
         unresolved = []
         winners = []
         for leg in leg_rows:
-            settlement = settlements.get(str(leg.get("condition_id")))
+            settlement = resolve_leg_settlement(
+                leg=leg,
+                city=basket.get("city"),
+                event_date=basket.get("event_date"),
+                condition_settlements=settlements,
+                city_bracket_settlements=city_bracket_settlements,
+            )
             if settlement is None:
+                missing.append(leg)
                 continue
             yes = final_yes(settlement.get("final_price"))
             if settlement.get("settlement_status") != "settled" or yes is None:

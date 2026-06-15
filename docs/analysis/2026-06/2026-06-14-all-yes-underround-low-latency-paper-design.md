@@ -1,7 +1,7 @@
 # All-YES Underround Low-Latency Paper Design v0
 
 Status: design-draft
-Updated: 2026-06-14
+Updated: 2026-06-16 settlement_outcomes upgrade
 Source of truth: no
 Used by: WEATHER_DOCS_INDEX.md; analysis/market_structure_edge.md
 
@@ -23,12 +23,14 @@ This is still paper/shadow only. It does not place orders and does not modify N1
 ## Current Evidence Snapshot
 
 - Offline robust evidence: `2026-06-09-range-rv-underround-robust-v1-0.md` confirmed all-YES underround in proxy and executable orderbook thresholds.
-- Local 2026-06-14 persistence scan: 7 snapshots, 3 with guard-passing candidates, 4 total observations.
+- Canonical historical denominator: `2026-06-15-all-yes-underround-basket-facts-v0.md` scans 1,338 orderbook snapshots from 2026-05-19 through 2026-06-16 into runtime `fact_baskets.jsonl` and `fact_basket_legs.jsonl`; at 0.02 underround it has 297 strategy-candidate observations, 270 settled exactly-one-winner observations, and +3.16% settled unit ROI.
+- Settlement evaluation now uses `settlements.condition_id` first, then DB `settlement_outcomes` at `city/target_date/bracket` source grain. Direct pm_history reads are migration fallback only for old DB snapshots.
+- Local 2026-06-14 persistence scan: 7 snapshots, 3 with guard-passing candidates, 4 total observations. This is a local live-prep slice, not the all-history denominator.
 - Candidate sequence:
   - Busan 2026-06-14: 2 observations, max underround +3.0%.
   - MexicoCity 2026-06-14: 1 observation, max underround +2.5%.
   - Denver 2026-06-14: 1 observation, max underround +2.8%.
-- Current paper ledger: 2 baskets / 20 leg orders, but both were recorded 1353.209s after snapshot and are observation-only.
+- Current paper ledger: Busan and MexicoCity settled exactly-one-winner for +2.83% paper ROI after the pm_history fallback fix, but both were recorded 1353.209s after snapshot and remain observation-only.
 - Fresh runner state: latest Denver candidate was skipped because snapshot age was 1274.191s > 180s.
 - Live-equivalent forward sample: 0 baskets, 0 settled.
 
@@ -36,9 +38,11 @@ This is still paper/shadow only. It does not place orders and does not modify N1
 
 | Component | Role | Places orders? |
 |---|---|---|
+| `scripts/analysis/market_structure_edge/build_all_yes_underround_basket_facts_v0.py` | Builds the canonical all-history basket and leg facts, plus the current denominator report | no |
+| `scripts/analysis/market_structure_edge/all_yes_underround_settlement.py` | Shared settlement resolver: condition_id first, then DB settlement_outcomes city/date/bracket source grain | no |
 | `scripts/analysis/market_structure_edge/research_all_yes_underround_live_prep_v0.py` | Scans latest orderbook snapshot and writes current candidate report | no |
 | `scripts/ops/all_yes_underround_guards.py` | Pure all-leg guard; rejects missing legs, shallow depth, wide spread, stale snapshot, duplicate condition IDs, cost cap, kill switch | no |
-| `scripts/ops/all_yes_underround_paper_exec_v0.py` | Appends all-leg paper baskets, evaluates settlements, writes live-prep gate and monitor | no |
+| `scripts/ops/all_yes_underround_paper_exec_v0.py` | Appends all-leg paper baskets, evaluates settlements with the shared resolver, writes live-prep gate and monitor | no |
 | `scripts/ops/all_yes_underround_fresh_paper_cycle_v0.py` | Runs scanner + paper cycle only when snapshot is fresh under TTL | no |
 | `scripts/ops/all_yes_underround_fresh_paper_loop_v0.sh` | Repeats the fresh cycle for same-host low-latency capture | no |
 | `scripts/ops/start_all_yes_underround_fresh_paper_v0.sh` | Starts the loop with pid/log files | no |
