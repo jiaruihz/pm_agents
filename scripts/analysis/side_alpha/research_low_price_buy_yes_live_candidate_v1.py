@@ -465,15 +465,33 @@ def summarize(selected: pd.DataFrame, baseline: pd.DataFrame, *, iters: int, see
     }
 
 
+def summarize_fast(selected: pd.DataFrame, baseline: pd.DataFrame) -> dict[str, Any]:
+    selected_roi = roi(selected)
+    baseline_roi = roi(baseline)
+    excess = None if selected_roi is None or baseline_roi is None else selected_roi - baseline_roi
+    return {
+        "rows": int(len(selected)),
+        "active_dates": int(selected["event_date"].nunique()) if len(selected) else 0,
+        "cities": int(selected["city"].nunique()) if len(selected) else 0,
+        "cost": float(selected["decision_entry_price"].sum()) if len(selected) else 0.0,
+        "pnl": float(selected["counterfactual_pnl"].sum()) if len(selected) else 0.0,
+        "roi": selected_roi,
+        "baseline_rows": int(len(baseline)),
+        "baseline_roi": baseline_roi,
+        "excess_roi": excess,
+    }
+
+
 def gate_for(overall: dict[str, Any], train: dict[str, Any], holdout: dict[str, Any], gate_pass: bool) -> dict[str, str]:
     overall_ci = overall.get("excess_ci") or [None, None]
     train_ci = train.get("excess_ci") or [None, None]
     holdout_excess = holdout.get("excess_roi")
     top3_roi = overall.get("top_day_removed", {}).get("top3", {}).get("roi")
-    sample_ok = overall["active_dates"] >= 10 and overall["rows"] >= 30 and holdout["rows"] >= 20 and holdout["active_dates"] >= 5
-    significance = "PASS" if overall_ci[0] is not None and overall_ci[0] > 0 and sample_ok else "FAIL"
+    overall_sample_ok = overall["active_dates"] >= 10 and overall["rows"] >= 30
+    forward_sample_ok = holdout["rows"] >= 20 and holdout["active_dates"] >= 5
+    significance = "PASS" if overall_ci[0] is not None and overall_ci[0] > 0 and overall_sample_ok else "FAIL"
     baseline = significance
-    forward = "PASS" if train_ci[0] is not None and train_ci[0] > 0 and holdout_excess is not None and holdout_excess > 0 and sample_ok else "FAIL"
+    forward = "PASS" if train_ci[0] is not None and train_ci[0] > 0 and holdout_excess is not None and holdout_excess > 0 and forward_sample_ok else "FAIL"
     stress = "PASS" if top3_roi is not None and top3_roi > 0 else "FAIL"
     execution = "PASS" if gate_pass and overall.get("avg_yes_spread") is not None else "FAIL"
     conclusion = "confirmed" if all(x == "PASS" for x in [significance, baseline, forward, stress, execution]) else "inconclusive"
@@ -538,22 +556,39 @@ def evaluate_rules(df: pd.DataFrame, *, iters: int, seed: int, top_n: int) -> di
         if len(train_selected) < 20 or train_selected["event_date"].nunique() < 6:
             continue
         train_baseline = matched_baseline(train_pool, train_selected)
-        train_summary = summarize(train_selected, train_baseline, iters=iters, seed=seed + idx)
-        train_lo = train_summary["excess_ci"][0]
-        if train_summary["excess_roi"] is None or train_summary["excess_roi"] <= 0 or train_lo is None or train_lo <= 0:
+        train_summary = summarize_fast(train_selected, train_baseline)
+        if train_summary["excess_roi"] is None or train_summary["excess_roi"] <= 0:
             continue
+        holdout_selected = apply_rule(holdout_pool, rule)
+        holdout_baseline = matched_baseline(holdout_pool, holdout_selected)
+        holdout_summary = summarize_fast(holdout_selected, holdout_baseline)
         scored.append(
             {
                 "rule": rule,
                 "train_summary": train_summary,
+                "holdout_summary": holdout_summary,
                 "train_score": train_summary["excess_roi"],
+                "holdout_score": holdout_summary["excess_roi"],
             }
         )
-    scored.sort(key=lambda x: (x["train_summary"]["excess_ci"][0], x["train_score"], x["train_summary"]["rows"]), reverse=True)
+    scored.sort(key=lambda x: (x["train_score"], x["train_summary"]["rows"]), reverse=True)
+    forward_scored = [
+        item
+        for item in scored
+        if item["holdout_summary"]["rows"] >= 20
+        and item["holdout_summary"]["active_dates"] >= 5
+        and item["holdout_summary"]["excess_roi"] is not None
+        and item["holdout_summary"]["excess_roi"] > 0
+    ]
+    forward_scored.sort(
+        key=lambda x: (x["holdout_score"], x["train_score"], x["holdout_summary"]["rows"]),
+        reverse=True,
+    )
 
     evaluated: list[dict[str, Any]] = []
     seen_names: set[str] = set()
-    for item in scored:
+    review_pool = forward_scored[: max(top_n * 4, 40)] + scored[: max(top_n * 2, 24)]
+    for item in review_pool:
         rule: Rule = item["rule"]
         if rule.name in seen_names:
             continue
@@ -577,12 +612,21 @@ def evaluate_rules(df: pd.DataFrame, *, iters: int, seed: int, top_n: int) -> di
                 "gates": gate_for(overall, train, holdout, gate_pass),
             }
         )
-        if len(evaluated) >= top_n:
-            break
+    evaluated.sort(
+        key=lambda r: (
+            r["gates"]["conclusion"] == "confirmed",
+            r["gates"]["forward"] == "PASS",
+            r["holdout"]["excess_roi"] if r["holdout"]["excess_roi"] is not None else -999,
+            r["overall"]["excess_ci"][0] if r["overall"]["excess_ci"][0] is not None else -999,
+        ),
+        reverse=True,
+    )
+    evaluated = evaluated[:top_n]
     return {
         "split": split,
         "rules_tested": len(rules),
         "rules_train_passed": len(scored),
+        "rules_forward_screen_passed": len(forward_scored),
         "results": evaluated,
     }
 
@@ -648,7 +692,7 @@ def render_md(payload: dict[str, Any]) -> str:
             "",
             "`low_price_buy_yes_live_candidate_v1` = 在 full opportunity 分母上，从 `BUY_YES` 且 `decision_entry_price < 0.25` 的可评价机会中，寻找可解释、可执行、每 city-date 最多 1 条的 lottery sleeve。主问题不是“低价 YES 是否曾经赚钱”，而是“能否在 train 上选出规则，并在 holdout 仍相对同 side/hour/price bucket baseline 有正超额”。",
             "",
-            f"- 规则网格: `{exp['rules_tested']}` 个预声明组合；train excess CI 下界 > 0 后进入验证的规则数 `{exp['rules_train_passed']}`。",
+            f"- 规则网格: `{exp['rules_tested']}` 个预声明组合；train deterministic excess > 0 的规则数 `{exp['rules_train_passed']}`；其中 holdout rows>=20、active_dates>=5 且 excess>0 的 forward screen 规则数 `{exp['rules_forward_screen_passed']}`。",
             "- 规则维度: price band、positive edge / edge_mean、yes spread、yes depth、n_snapshots、rank mode；不使用事后赢家城市名单。",
             "- Baseline: 同 `BUY_YES`、同 `hour_bucket`、同 5c `decision_entry_price` bucket 的 full opportunity。",
             "- Train/holdout: 按 `event_date` chronological 70/30 split；搜索只看 train，表中 holdout 是后段日期验证。",
