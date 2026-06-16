@@ -42,45 +42,43 @@
     },
     {
       "dedup_first_settled": {
-        "cities": 0,
-        "effective_cost": 0,
-        "event_dates": 0,
-        "hit_rate": null,
-        "pnl": 0,
-        "roi": null,
-        "rows": 0,
-        "snapshots": 0,
-        "unique_decision_groups": 0
+        "cities": 16,
+        "effective_cost": 9.717,
+        "event_dates": 1,
+        "hit_rate": 0.625,
+        "pnl": 0.28300000000000036,
+        "roi": 0.029124215292785874,
+        "rows": 16,
+        "snapshots": 7,
+        "unique_decision_groups": 16
       },
       "dedup_latest_settled": {
-        "cities": 0,
-        "effective_cost": 0,
-        "event_dates": 0,
-        "hit_rate": null,
-        "pnl": 0,
-        "roi": null,
-        "rows": 0,
-        "snapshots": 0,
-        "unique_decision_groups": 0
+        "cities": 16,
+        "effective_cost": 11.394,
+        "event_dates": 1,
+        "hit_rate": 0.6875,
+        "pnl": -0.394,
+        "roi": -0.03457960329998245,
+        "rows": 16,
+        "snapshots": 15,
+        "unique_decision_groups": 16
       },
       "event_date": "2026-06-15",
       "raw_settled": {
-        "cities": 0,
-        "effective_cost": 0,
-        "event_dates": 0,
-        "hit_rate": null,
-        "pnl": 0,
-        "roi": null,
-        "rows": 0,
-        "snapshots": 0,
-        "unique_decision_groups": 0
+        "cities": 16,
+        "effective_cost": 196.99099999999999,
+        "event_dates": 1,
+        "hit_rate": 0.6451612903225806,
+        "pnl": 3.009000000000003,
+        "roi": 0.015274809509063882,
+        "rows": 310,
+        "snapshots": 50,
+        "unique_decision_groups": 16
       },
-      "settled_rows": 0,
-      "shadow_rows": 303,
-      "unsettled_rows": 303,
-      "unsettled_status": {
-        "missing_event": 303
-      }
+      "settled_rows": 310,
+      "shadow_rows": 310,
+      "unsettled_rows": 0,
+      "unsettled_status": {}
     },
     {
       "dedup_first_settled": {
@@ -118,10 +116,52 @@
         "unique_decision_groups": 0
       },
       "settled_rows": 0,
-      "shadow_rows": 327,
-      "unsettled_rows": 327,
+      "shadow_rows": 722,
+      "unsettled_rows": 722,
       "unsettled_status": {
-        "missing_event": 327
+        "missing_event": 722
+      }
+    },
+    {
+      "dedup_first_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "dedup_latest_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "event_date": "2026-06-17",
+      "raw_settled": {
+        "cities": 0,
+        "effective_cost": 0,
+        "event_dates": 0,
+        "hit_rate": null,
+        "pnl": 0,
+        "roi": null,
+        "rows": 0,
+        "snapshots": 0,
+        "unique_decision_groups": 0
+      },
+      "settled_rows": 0,
+      "shadow_rows": 240,
+      "unsettled_rows": 240,
+      "unsettled_status": {
+        "missing_event": 240
       }
     }
   ],
@@ -129,11 +169,191 @@
     {
       "cities": 1,
       "city": "Miami",
-      "effective_cost": 0.8959999999999999,
+      "effective_cost": 1.799,
+      "event_dates": 2,
+      "hit_rate": 0.5,
+      "pnl": -0.7989999999999999,
+      "roi": -0.4441356309060589,
+      "rows": 2,
+      "snapshots": 2,
+      "unique_decision_groups": 2
+    },
+    {
+      "cities": 1,
+      "city": "Karachi",
+      "effective_cost": 0.5289999999999999,
       "event_dates": 1,
       "hit_rate": 1.0,
-      "pnl": 0.10400000000000009,
-      "roi": 0.11607142857142869,
+      "pnl": 0.4710000000000001,
+      "roi": 0.8903591682419663,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Singapore",
+      "effective_cost": 0.55,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.44999999999999996,
+      "roi": 0.818181818181818,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Munich",
+      "effective_cost": 0.735,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.265,
+      "roi": 0.36054421768707484,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Lucknow",
+      "effective_cost": 0.77,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.22999999999999998,
+      "roi": 0.2987012987012987,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Shanghai",
+      "effective_cost": 0.781,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.21899999999999997,
+      "roi": 0.2804097311139564,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Guangzhou",
+      "effective_cost": 0.79,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.20999999999999996,
+      "roi": 0.2658227848101265,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Warsaw",
+      "effective_cost": 0.8449999999999998,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.15500000000000025,
+      "roi": 0.18343195266272225,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "LA",
+      "effective_cost": 0.867,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.133,
+      "roi": 0.15340253748558247,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Madrid",
+      "effective_cost": 0.9260000000000002,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.07399999999999984,
+      "roi": 0.0799136069114469,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Seattle",
+      "effective_cost": 0.9390000000000001,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.06099999999999994,
+      "roi": 0.06496272630457928,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Jeddah",
+      "effective_cost": 0.95,
+      "event_dates": 1,
+      "hit_rate": 1.0,
+      "pnl": 0.050000000000000044,
+      "roi": 0.052631578947368474,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Manila",
+      "effective_cost": 0.01,
+      "event_dates": 1,
+      "hit_rate": 0.0,
+      "pnl": -0.01,
+      "roi": -1.0,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Chengdu",
+      "effective_cost": 0.239,
+      "event_dates": 1,
+      "hit_rate": 0.0,
+      "pnl": -0.239,
+      "roi": -1.0,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "NYC",
+      "effective_cost": 0.7269999999999999,
+      "event_dates": 1,
+      "hit_rate": 0.0,
+      "pnl": -0.7269999999999999,
+      "roi": -1.0,
+      "rows": 1,
+      "snapshots": 1,
+      "unique_decision_groups": 1
+    },
+    {
+      "cities": 1,
+      "city": "Ankara",
+      "effective_cost": 0.8330000000000002,
+      "event_dates": 1,
+      "hit_rate": 0.0,
+      "pnl": -0.8330000000000002,
+      "roi": -1.0,
       "rows": 1,
       "snapshots": 1,
       "unique_decision_groups": 1
@@ -141,33 +361,57 @@
   ],
   "dedup_latest_by_expression": [
     {
-      "cities": 1,
-      "effective_cost": 0.8959999999999999,
-      "event_dates": 1,
+      "cities": 11,
+      "effective_cost": 9.215,
+      "event_dates": 2,
       "expression": "outside_no",
-      "hit_rate": 1.0,
-      "pnl": 0.10400000000000009,
-      "roi": 0.11607142857142869,
-      "rows": 1,
-      "snapshots": 1,
-      "unique_decision_groups": 1
+      "hit_rate": 0.6666666666666666,
+      "pnl": -1.2149999999999999,
+      "roi": -0.13185024416711882,
+      "rows": 12,
+      "snapshots": 12,
+      "unique_decision_groups": 12
+    },
+    {
+      "cities": 5,
+      "effective_cost": 3.075,
+      "event_dates": 1,
+      "expression": "inside_yes",
+      "hit_rate": 0.8,
+      "pnl": 0.9249999999999999,
+      "roi": 0.30081300813008127,
+      "rows": 5,
+      "snapshots": 5,
+      "unique_decision_groups": 5
     }
   ],
   "dedup_latest_by_model": [
     {
-      "cities": 1,
-      "effective_cost": 0.8959999999999999,
-      "event_dates": 1,
-      "hit_rate": 1.0,
+      "cities": 8,
+      "effective_cost": 6.463,
+      "event_dates": 2,
+      "hit_rate": 0.6666666666666666,
       "model_version": "gfs",
-      "pnl": 0.10400000000000009,
-      "roi": 0.11607142857142869,
-      "rows": 1,
-      "snapshots": 1,
-      "unique_decision_groups": 1
+      "pnl": -0.46299999999999997,
+      "roi": -0.07163855794522667,
+      "rows": 9,
+      "snapshots": 9,
+      "unique_decision_groups": 9
+    },
+    {
+      "cities": 8,
+      "effective_cost": 5.827,
+      "event_dates": 1,
+      "hit_rate": 0.75,
+      "model_version": "ecmwf",
+      "pnl": 0.17300000000000004,
+      "roi": 0.0296893770379269,
+      "rows": 8,
+      "snapshots": 8,
+      "unique_decision_groups": 8
     }
   ],
-  "generated_at_utc": "2026-06-15T16:37:57.147598+00:00",
+  "generated_at_utc": "2026-06-16T14:05:28.761024+00:00",
   "journal": {
     "all_no_order_placed": true,
     "all_zero_notional_shadow": true,
@@ -175,58 +419,59 @@
     "event_dates": [
       "2026-06-14",
       "2026-06-15",
-      "2026-06-16"
+      "2026-06-16",
+      "2026-06-17"
     ],
-    "max_shadow_generated_at_utc": "2026-06-15T16:07:59.035212+00:00",
-    "max_snapshot_ts_utc": "2026-06-15T15:30:42Z",
+    "max_shadow_generated_at_utc": "2026-06-16T13:38:21.012746+00:00",
+    "max_snapshot_ts_utc": "2026-06-16T13:00:51Z",
     "min_shadow_generated_at_utc": "2026-06-14T17:37:28.402414+00:00",
     "min_snapshot_ts_utc": "2026-06-14T17:00:20Z",
-    "rows": 632,
-    "unique_decision_groups": 34
+    "rows": 1274,
+    "unique_decision_groups": 48
   },
   "journal_path": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/remote_pm_agent/range_rv_shadow_v0/shadow_journal.jsonl",
   "overall_dedup_first_settled": {
-    "cities": 1,
-    "effective_cost": 0.834,
-    "event_dates": 1,
-    "hit_rate": 1.0,
-    "pnl": 0.16600000000000004,
-    "roi": 0.19904076738609117,
-    "rows": 1,
-    "snapshots": 1,
-    "unique_decision_groups": 1
+    "cities": 16,
+    "effective_cost": 10.551,
+    "event_dates": 2,
+    "hit_rate": 0.6470588235294118,
+    "pnl": 0.4490000000000004,
+    "roi": 0.04255520803715292,
+    "rows": 17,
+    "snapshots": 7,
+    "unique_decision_groups": 17
   },
   "overall_dedup_latest_settled": {
-    "cities": 1,
-    "effective_cost": 0.8959999999999999,
-    "event_dates": 1,
-    "hit_rate": 1.0,
-    "pnl": 0.10400000000000009,
-    "roi": 0.11607142857142869,
-    "rows": 1,
-    "snapshots": 1,
-    "unique_decision_groups": 1
+    "cities": 16,
+    "effective_cost": 12.29,
+    "event_dates": 2,
+    "hit_rate": 0.7058823529411765,
+    "pnl": -0.2899999999999999,
+    "roi": -0.02359641985353946,
+    "rows": 17,
+    "snapshots": 15,
+    "unique_decision_groups": 17
   },
   "overall_raw_settled": {
-    "cities": 1,
-    "effective_cost": 1.73,
-    "event_dates": 1,
-    "hit_rate": 1.0,
-    "pnl": 0.27000000000000013,
-    "roi": 0.1560693641618498,
-    "rows": 2,
-    "snapshots": 2,
-    "unique_decision_groups": 1
+    "cities": 16,
+    "effective_cost": 198.721,
+    "event_dates": 2,
+    "hit_rate": 0.6474358974358975,
+    "pnl": 3.279000000000003,
+    "roi": 0.01650052083071242,
+    "rows": 312,
+    "snapshots": 50,
+    "unique_decision_groups": 17
   },
   "pm_history_dir": "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/cache/pm_history",
   "self_check": {
     "candidate_coverage": {
-      "eligible": 10366,
+      "eligible": 10658,
       "live_filled": 348,
-      "paper_ordered": 3968,
-      "rows": 30140
+      "paper_ordered": 4066,
+      "rows": 30865
     },
-    "max_fact_built_at_utc": "2026-06-15T16:31:04.483297+00:00",
+    "max_fact_built_at_utc": "2026-06-16T09:47:20.726087+00:00",
     "order_fill_coverage": [
       {
         "orders": 33,

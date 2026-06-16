@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[3]
 TARGET_METRIC = "forecast_bounded_range_rv_shadow_forward_telemetry_v0"
 OUT_JSON_DEFAULT = ROOT / "docs/analysis/2026-06/2026-06-16-range-rv-shadow-status-v0.json"
 OUT_MD_DEFAULT = ROOT / "docs/analysis/2026-06/2026-06-16-range-rv-shadow-status-v0.md"
+SETTLED_YES_THRESHOLD = 0.99
 
 
 def default_journal_path() -> Path:
@@ -140,7 +141,7 @@ def winner_for(pm_history_dir: Path, city: str, event_date: str) -> tuple[str | 
     winners = []
     for bracket in data.get("brackets", []):
         price = safe_float(bracket.get("final_price"))
-        if price is not None and price >= 0.999:
+        if price is not None and price >= SETTLED_YES_THRESHOLD:
             winners.append(str(bracket.get("label")))
     if len(winners) != 1:
         return None, f"winner_count_{len(winners)}"
