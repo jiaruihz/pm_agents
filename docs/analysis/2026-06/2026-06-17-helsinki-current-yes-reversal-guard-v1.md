@@ -20,6 +20,8 @@ The runner now computes observation age and inferred METAR cadence from observat
 
 The runner now vetoes current-YES candidates when the current running max is within 1.0C of the next higher bracket. This is deliberately conservative after the 20C to 21C reversal case.
 
+The timezone and observation-clock pieces live in `src/strategies/weather_edge_v1/tools/official_observation_clock.py`. New weather live/shadow branches should use that module instead of reimplementing fixed UTC offsets or METAR cadence logic in strategy scripts.
+
 Default live guard values:
 
 - `max_obs_age_min = 20`

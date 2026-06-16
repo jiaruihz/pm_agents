@@ -46,6 +46,13 @@ if str(ROOT) not in sys.path:
 
 from src.strategies.weather_edge_v1.tools.execution_pipeline import read_jsonl, stable_hash
 from src.strategies.weather_edge_v1.tools.live_state import read_live_state
+from src.strategies.weather_edge_v1.tools.official_observation_clock import (
+    ObservationClockConfig,
+    city_timezone_name,
+    observation_clock_guard,
+    station_timezone,
+    timezone_label,
+)
 
 
 STRATEGY_INSTANCE = "theta_current_yes_tiny_live_v1"
@@ -116,59 +123,6 @@ class Station:
     timezone_name: str | None = None
 
 
-CITY_TIMEZONE: dict[str, str] = {
-    "Amsterdam": "Europe/Amsterdam",
-    "Ankara": "Europe/Istanbul",
-    "Atlanta": "America/New_York",
-    "Austin": "America/Chicago",
-    "Beijing": "Asia/Shanghai",
-    "BuenosAires": "America/Argentina/Buenos_Aires",
-    "Busan": "Asia/Seoul",
-    "CapeTown": "Africa/Johannesburg",
-    "Chengdu": "Asia/Shanghai",
-    "Chicago": "America/Chicago",
-    "Chongqing": "Asia/Shanghai",
-    "Dallas": "America/Chicago",
-    "Denver": "America/Denver",
-    "Guangzhou": "Asia/Shanghai",
-    "Helsinki": "Europe/Helsinki",
-    "HongKong": "Asia/Hong_Kong",
-    "Houston": "America/Chicago",
-    "Istanbul": "Europe/Istanbul",
-    "Jakarta": "Asia/Jakarta",
-    "Jeddah": "Asia/Riyadh",
-    "Karachi": "Asia/Karachi",
-    "KualaLumpur": "Asia/Kuala_Lumpur",
-    "LA": "America/Los_Angeles",
-    "Lagos": "Africa/Lagos",
-    "London": "Europe/London",
-    "Lucknow": "Asia/Kolkata",
-    "Madrid": "Europe/Madrid",
-    "Manila": "Asia/Manila",
-    "MexicoCity": "America/Mexico_City",
-    "Miami": "America/New_York",
-    "Milan": "Europe/Rome",
-    "Moscow": "Europe/Moscow",
-    "Munich": "Europe/Berlin",
-    "NYC": "America/New_York",
-    "PanamaCity": "America/Panama",
-    "Paris": "Europe/Paris",
-    "SanFrancisco": "America/Los_Angeles",
-    "SaoPaulo": "America/Sao_Paulo",
-    "Seattle": "America/Los_Angeles",
-    "Seoul": "Asia/Seoul",
-    "Shanghai": "Asia/Shanghai",
-    "Shenzhen": "Asia/Shanghai",
-    "Singapore": "Asia/Singapore",
-    "Taipei": "Asia/Taipei",
-    "TelAviv": "Asia/Jerusalem",
-    "Tokyo": "Asia/Tokyo",
-    "Warsaw": "Europe/Warsaw",
-    "Wellington": "Pacific/Auckland",
-    "Wuhan": "Asia/Shanghai",
-}
-
-
 def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -184,15 +138,6 @@ def to_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return default
-
-
-def station_timezone(station: Station) -> ZoneInfo | timezone:
-    if station.timezone_name:
-        try:
-            return ZoneInfo(station.timezone_name)
-        except Exception:
-            pass
-    return timezone(timedelta(hours=station.utc_offset))
 
 
 def parse_env_value(raw_value: str) -> str:
@@ -369,7 +314,7 @@ def load_stations() -> dict[str, Station]:
             icao=str(item["icao"]).upper(),
             unit=str(item["unit"]).upper(),
             utc_offset=int(item["utc_offset"]),
-            timezone_name=safe_str(item.get("timezone")) or CITY_TIMEZONE.get(str(item["city"])),
+            timezone_name=safe_str(item.get("timezone")) or city_timezone_name(str(item["city"])),
         )
         for item in data["stations"]
     }
@@ -513,20 +458,6 @@ def iem_obs(icao: str, tz: ZoneInfo, local_date) -> list[dict[str, Any]]:
     return out
 
 
-def infer_metar_cadence_minutes(obs: list[dict[str, Any]]) -> float | None:
-    times = sorted(x["ts"] for x in obs if isinstance(x.get("ts"), datetime))
-    if len(times) < 3:
-        return None
-    gaps = [
-        (b - a).total_seconds() / 60.0
-        for a, b in zip(times, times[1:])
-        if 5.0 <= (b - a).total_seconds() / 60.0 <= 90.0
-    ]
-    if not gaps:
-        return None
-    return float(np.median(gaps[-8:]))
-
-
 def fetch_obs(
     station: Station,
     now: datetime,
@@ -548,37 +479,19 @@ def fetch_obs(
             source = "iem_asos"
         except Exception as exc:  # noqa: BLE001
             return {"status": "obs_fetch_failed", "source": source, "error": f"{type(exc).__name__}: {exc}", "n_obs": len(obs)}
-    obs = sorted((x for x in obs if x["ts"] <= now), key=lambda x: x["ts"])
-    if len(obs) < 6:
-        return {
-            "status": "insufficient_obs_asof",
-            "source": source,
-            "n_obs": len(obs),
-            "timezone": getattr(tz, "key", None) or str(tz),
-        }
+    status, common, obs = observation_clock_guard(
+        obs,
+        now,
+        station=station,
+        source=source,
+        config=ObservationClockConfig(
+            max_obs_age_min=max_obs_age_min,
+            pre_update_blackout_min=pre_update_blackout_min,
+        ),
+    )
+    if status != "ok":
+        return {"status": status, **common}
     last = obs[-1]
-    age_min = (now - last["ts"]).total_seconds() / 60.0
-    cadence_min = infer_metar_cadence_minutes(obs)
-    minutes_to_next = None
-    if cadence_min is not None:
-        minutes_to_next = cadence_min - age_min
-    common = {
-        "source": source,
-        "n_obs": len(obs),
-        "age_min": round(age_min, 1),
-        "last_obs_utc": last["ts"].isoformat(),
-        "timezone": getattr(tz, "key", None) or str(tz),
-        "cadence_min": round(cadence_min, 1) if cadence_min is not None else None,
-        "minutes_to_next_obs": round(minutes_to_next, 1) if minutes_to_next is not None else None,
-    }
-    if age_min > max_obs_age_min:
-        return {"status": "stale_obs", "max_obs_age_min": max_obs_age_min, **common}
-    if minutes_to_next is not None and 0.0 <= minutes_to_next <= pre_update_blackout_min:
-        return {
-            "status": "pre_metar_update_blackout",
-            "pre_update_blackout_min": pre_update_blackout_min,
-            **common,
-        }
     temps = [float(x["tmpc"]) for x in obs if math.isfinite(float(x["tmpc"]))]
     if not temps:
         return {"status": "missing_temp", **common}
@@ -664,7 +577,7 @@ def build_current_rows(
                     "status": "outside_hour",
                     "hour_local": hour,
                     "local_time": local_now.isoformat(timespec="seconds"),
-                    "timezone": getattr(tz, "key", None) or str(tz),
+                    "timezone": timezone_label(tz),
                 }
             )
             continue
@@ -730,7 +643,7 @@ def build_current_rows(
             "city": city,
             "target_date": target_date,
             "unit": unit,
-            "timezone": getattr(tz, "key", None) or str(tz),
+            "timezone": timezone_label(tz),
             "local_time": local_now.isoformat(timespec="seconds"),
             "decision_hour_local": hour,
             "month": int(str(target_date)[5:7]),

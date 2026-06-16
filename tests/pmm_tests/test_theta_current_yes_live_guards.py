@@ -42,6 +42,26 @@ def test_helsinki_uses_iana_dst_for_live_hour_gate():
     assert audits[0]["timezone"] == "Europe/Helsinki"
 
 
+def test_other_dst_cities_use_city_timezone_mapping_without_explicit_tz():
+    station = live.Station("NYC", "KNYC", "F", -5, None)
+    snapshot_ts = datetime(2026, 6, 16, 20, 30, tzinfo=timezone.utc)
+
+    rows, audits = live.build_current_rows(
+        {"ts_utc": snapshot_ts.isoformat()},
+        [_record("NYC", "80"), _record("NYC", "81")],
+        {"NYC": station},
+        snapshot_ts,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=1,
+    )
+
+    assert rows.empty
+    assert audits[0]["status"] == "outside_hour"
+    assert audits[0]["hour_local"] == 16
+    assert audits[0]["timezone"] == "America/New_York"
+
+
 def test_fetch_obs_blocks_pre_metar_update_blackout(monkeypatch):
     now = datetime(2026, 6, 16, 13, 18, tzinfo=timezone.utc)
     start = datetime(2026, 6, 16, 9, 50, tzinfo=timezone.utc)
