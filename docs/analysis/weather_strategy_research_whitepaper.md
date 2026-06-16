@@ -76,6 +76,7 @@ reheat_risk
 当前项目入口：
 
 - [reheat_risk.md](reheat_risk.md)
+- [2026-06-16-current-yes-peak-vs-fade-v1.md](2026-06/2026-06-16-current-yes-peak-vs-fade-v1.md)
 - [2026-06-16-theta-yes-current-live-gate-v9.md](2026-06/2026-06-16-theta-yes-current-live-gate-v9.md)
 - [2026-06-16-theta-current-yes-forecast-peak-clock-v2.md](2026-06/2026-06-16-theta-current-yes-forecast-peak-clock-v2.md)
 
@@ -182,9 +183,12 @@ Reusable prompts for these tasks live in
 
 1. A 已完成 v1：后续策略头默认消费共享 reheat feature factory，不再各自
    materialize observed max / orderbook / settlement。
-2. 下一步做 B + E：current YES 已经最接近 tiny-live，但卡在 timing 和执行。
-3. C 作为 expression 层校准，防止执着 NO carry。
-4. D 单独做凸性研究，不要和 no-reheat 策略混成一个 PnL。
+2. B 已完成 factory-backed v1：current YES timing 后续默认 fade-confirmed
+   为主、peak-forming 只保留 narrow early shadow sleeve；不做 live change。
+3. 下一步做 E：current YES 已经最接近 tiny-live，但卡在 execution freshness
+   和 fresh ask slippage。
+4. C 作为 expression 层校准，防止执着 NO carry。
+5. D 单独做凸性研究，不要和 no-reheat 策略混成一个 PnL。
 
 ## 命名规则
 

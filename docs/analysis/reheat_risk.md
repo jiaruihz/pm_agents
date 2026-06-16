@@ -155,13 +155,19 @@ move a script only when it becomes the maintained entrypoint for a new result.
 
 ## Research Queue
 
-1. `reheat_feature_factory`: materialize one shared city-hour/bracket fact layer.
-2. `current_yes_peak_forming`: buy current YES before visible fade.
-3. `current_yes_fade_confirmed`: buy current YES after visible fade.
+1. `reheat_feature_factory`: v1 completed; keep downstream strategy heads on
+   the shared factory output.
+2. `current_yes_peak_forming` vs `current_yes_fade_confirmed`: factory-backed
+   v1 completed in
+   `docs/analysis/2026-06/2026-06-16-current-yes-peak-vs-fade-v1.md`.
+   Current conclusion is fade-first shadow only: fixed holdout favors
+   fade-confirmed, peak-forming remains a narrow early shadow sleeve, and there
+   is no N100/live change.
 4. `higher_no_carry_expression`: compare current YES vs d1/d2 NO payoff.
 5. `low_price_yes_reheat_reversal`: use the same physical base for the opposite
    reheat/convexity expression.
-6. `execution_freshness_gate`: require fresh CLOB ask before taker conversion.
+6. `execution_freshness_gate`: next priority for the current-YES branch; require
+   fresh CLOB ask before taker conversion.
 
 ## Naming Rules
 
