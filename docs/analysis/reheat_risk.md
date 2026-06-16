@@ -163,7 +163,10 @@ move a script only when it becomes the maintained entrypoint for a new result.
    Current conclusion is fade-first shadow only: fixed holdout favors
    fade-confirmed, peak-forming remains a narrow early shadow sleeve, and there
    is no N100/live change.
-4. `higher_no_carry_expression`: compare current YES vs d1/d2 NO payoff.
+4. `higher_no_carry_expression`: factory-backed v1 completed in
+   `docs/analysis/2026-06/2026-06-16-higher-no-carry-expression-selector-v1.md`.
+   NO carry/ladder did not prove stable positive excess ROI versus same-window
+   current YES, so this remains shadow-only expression telemetry.
 5. `low_price_yes_reheat_reversal`: use the same physical base for the opposite
    reheat/convexity expression.
 6. `execution_freshness_gate`: next priority for the current-YES branch; require

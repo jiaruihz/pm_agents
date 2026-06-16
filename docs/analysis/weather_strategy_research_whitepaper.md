@@ -77,6 +77,7 @@ reheat_risk
 
 - [reheat_risk.md](reheat_risk.md)
 - [2026-06-16-current-yes-peak-vs-fade-v1.md](2026-06/2026-06-16-current-yes-peak-vs-fade-v1.md)
+- [2026-06-16-higher-no-carry-expression-selector-v1.md](2026-06/2026-06-16-higher-no-carry-expression-selector-v1.md)
 - [2026-06-16-theta-yes-current-live-gate-v9.md](2026-06/2026-06-16-theta-yes-current-live-gate-v9.md)
 - [2026-06-16-theta-current-yes-forecast-peak-clock-v2.md](2026-06/2026-06-16-theta-current-yes-forecast-peak-clock-v2.md)
 
@@ -187,7 +188,8 @@ Reusable prompts for these tasks live in
    为主、peak-forming 只保留 narrow early shadow sleeve；不做 live change。
 3. 下一步做 E：current YES 已经最接近 tiny-live，但卡在 execution freshness
    和 fresh ask slippage。
-4. C 作为 expression 层校准，防止执着 NO carry。
+4. C 已完成 factory-backed v1：NO carry/ladder 没有证明能稳定打赢同窗
+   current YES，只保留 shadow-only expression telemetry。
 5. D 单独做凸性研究，不要和 no-reheat 策略混成一个 PnL。
 
 ## 命名规则
