@@ -113,6 +113,60 @@ class Station:
     icao: str
     unit: str
     utc_offset: int
+    timezone_name: str | None = None
+
+
+CITY_TIMEZONE: dict[str, str] = {
+    "Amsterdam": "Europe/Amsterdam",
+    "Ankara": "Europe/Istanbul",
+    "Atlanta": "America/New_York",
+    "Austin": "America/Chicago",
+    "Beijing": "Asia/Shanghai",
+    "BuenosAires": "America/Argentina/Buenos_Aires",
+    "Busan": "Asia/Seoul",
+    "CapeTown": "Africa/Johannesburg",
+    "Chengdu": "Asia/Shanghai",
+    "Chicago": "America/Chicago",
+    "Chongqing": "Asia/Shanghai",
+    "Dallas": "America/Chicago",
+    "Denver": "America/Denver",
+    "Guangzhou": "Asia/Shanghai",
+    "Helsinki": "Europe/Helsinki",
+    "HongKong": "Asia/Hong_Kong",
+    "Houston": "America/Chicago",
+    "Istanbul": "Europe/Istanbul",
+    "Jakarta": "Asia/Jakarta",
+    "Jeddah": "Asia/Riyadh",
+    "Karachi": "Asia/Karachi",
+    "KualaLumpur": "Asia/Kuala_Lumpur",
+    "LA": "America/Los_Angeles",
+    "Lagos": "Africa/Lagos",
+    "London": "Europe/London",
+    "Lucknow": "Asia/Kolkata",
+    "Madrid": "Europe/Madrid",
+    "Manila": "Asia/Manila",
+    "MexicoCity": "America/Mexico_City",
+    "Miami": "America/New_York",
+    "Milan": "Europe/Rome",
+    "Moscow": "Europe/Moscow",
+    "Munich": "Europe/Berlin",
+    "NYC": "America/New_York",
+    "PanamaCity": "America/Panama",
+    "Paris": "Europe/Paris",
+    "SanFrancisco": "America/Los_Angeles",
+    "SaoPaulo": "America/Sao_Paulo",
+    "Seattle": "America/Los_Angeles",
+    "Seoul": "Asia/Seoul",
+    "Shanghai": "Asia/Shanghai",
+    "Shenzhen": "Asia/Shanghai",
+    "Singapore": "Asia/Singapore",
+    "Taipei": "Asia/Taipei",
+    "TelAviv": "Asia/Jerusalem",
+    "Tokyo": "Asia/Tokyo",
+    "Warsaw": "Europe/Warsaw",
+    "Wellington": "Pacific/Auckland",
+    "Wuhan": "Asia/Shanghai",
+}
 
 
 def now_utc() -> str:
@@ -130,6 +184,15 @@ def to_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return default
+
+
+def station_timezone(station: Station) -> ZoneInfo | timezone:
+    if station.timezone_name:
+        try:
+            return ZoneInfo(station.timezone_name)
+        except Exception:
+            pass
+    return timezone(timedelta(hours=station.utc_offset))
 
 
 def parse_env_value(raw_value: str) -> str:
@@ -306,6 +369,7 @@ def load_stations() -> dict[str, Station]:
             icao=str(item["icao"]).upper(),
             unit=str(item["unit"]).upper(),
             utc_offset=int(item["utc_offset"]),
+            timezone_name=safe_str(item.get("timezone")) or CITY_TIMEZONE.get(str(item["city"])),
         )
         for item in data["stations"]
     }
@@ -449,8 +513,28 @@ def iem_obs(icao: str, tz: ZoneInfo, local_date) -> list[dict[str, Any]]:
     return out
 
 
-def fetch_obs(station: Station, now: datetime) -> dict[str, Any]:
-    tz = timezone(timedelta(hours=station.utc_offset))
+def infer_metar_cadence_minutes(obs: list[dict[str, Any]]) -> float | None:
+    times = sorted(x["ts"] for x in obs if isinstance(x.get("ts"), datetime))
+    if len(times) < 3:
+        return None
+    gaps = [
+        (b - a).total_seconds() / 60.0
+        for a, b in zip(times, times[1:])
+        if 5.0 <= (b - a).total_seconds() / 60.0 <= 90.0
+    ]
+    if not gaps:
+        return None
+    return float(np.median(gaps[-8:]))
+
+
+def fetch_obs(
+    station: Station,
+    now: datetime,
+    *,
+    max_obs_age_min: float,
+    pre_update_blackout_min: float,
+) -> dict[str, Any]:
+    tz = station_timezone(station)
     local_date = now.astimezone(tz).date()
     try:
         obs = aviationweather_obs(station.icao, tz, local_date)
@@ -464,16 +548,40 @@ def fetch_obs(station: Station, now: datetime) -> dict[str, Any]:
             source = "iem_asos"
         except Exception as exc:  # noqa: BLE001
             return {"status": "obs_fetch_failed", "source": source, "error": f"{type(exc).__name__}: {exc}", "n_obs": len(obs)}
-    obs = sorted(obs, key=lambda x: x["ts"])
+    obs = sorted((x for x in obs if x["ts"] <= now), key=lambda x: x["ts"])
     if len(obs) < 6:
-        return {"status": "insufficient_obs", "source": source, "n_obs": len(obs)}
+        return {
+            "status": "insufficient_obs_asof",
+            "source": source,
+            "n_obs": len(obs),
+            "timezone": getattr(tz, "key", None) or str(tz),
+        }
     last = obs[-1]
     age_min = (now - last["ts"]).total_seconds() / 60.0
-    if age_min > 75:
-        return {"status": "stale_obs", "source": source, "n_obs": len(obs), "age_min": round(age_min, 1)}
+    cadence_min = infer_metar_cadence_minutes(obs)
+    minutes_to_next = None
+    if cadence_min is not None:
+        minutes_to_next = cadence_min - age_min
+    common = {
+        "source": source,
+        "n_obs": len(obs),
+        "age_min": round(age_min, 1),
+        "last_obs_utc": last["ts"].isoformat(),
+        "timezone": getattr(tz, "key", None) or str(tz),
+        "cadence_min": round(cadence_min, 1) if cadence_min is not None else None,
+        "minutes_to_next_obs": round(minutes_to_next, 1) if minutes_to_next is not None else None,
+    }
+    if age_min > max_obs_age_min:
+        return {"status": "stale_obs", "max_obs_age_min": max_obs_age_min, **common}
+    if minutes_to_next is not None and 0.0 <= minutes_to_next <= pre_update_blackout_min:
+        return {
+            "status": "pre_metar_update_blackout",
+            "pre_update_blackout_min": pre_update_blackout_min,
+            **common,
+        }
     temps = [float(x["tmpc"]) for x in obs if math.isfinite(float(x["tmpc"]))]
     if not temps:
-        return {"status": "missing_temp", "source": source, "n_obs": len(obs)}
+        return {"status": "missing_temp", **common}
     def asof(minutes: int, key: str) -> float:
         target = now - timedelta(minutes=minutes)
         prev = [x for x in obs if x["ts"] <= target]
@@ -491,10 +599,7 @@ def fetch_obs(station: Station, now: datetime) -> dict[str, Any]:
     relh_3h = asof(180, "relh")
     return {
         "status": "ok",
-        "source": source,
-        "n_obs": len(obs),
-        "age_min": round(age_min, 1),
-        "last_obs_utc": last["ts"].isoformat(),
+        **common,
         "running_max_c": max(temps),
         "current_temp_c": tmpc_now,
         "decline_c": max(temps) - tmpc_now,
@@ -531,7 +636,16 @@ def records_by_city(records: list[dict[str, Any]]) -> dict[tuple[str, str], list
     return out
 
 
-def build_current_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], stations: dict[str, Station], now: datetime) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+def build_current_rows(
+    snapshot: dict[str, Any],
+    records: list[dict[str, Any]],
+    stations: dict[str, Station],
+    now: datetime,
+    *,
+    max_obs_age_min: float,
+    pre_update_blackout_min: float,
+    min_gap_to_next_bracket_c: float,
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     grouped = records_by_city(records)
     rows: list[dict[str, Any]] = []
     audits: list[dict[str, Any]] = []
@@ -539,12 +653,27 @@ def build_current_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], 
         station = stations.get(city)
         if station is None:
             continue
-        local_now = now + timedelta(hours=station.utc_offset)
+        tz = station_timezone(station)
+        local_now = now.astimezone(tz)
         hour = local_now.hour
         if hour < 13 or hour > 15:
-            audits.append({"city": city, "target_date": target_date, "status": "outside_hour", "hour_local": hour})
+            audits.append(
+                {
+                    "city": city,
+                    "target_date": target_date,
+                    "status": "outside_hour",
+                    "hour_local": hour,
+                    "local_time": local_now.isoformat(timespec="seconds"),
+                    "timezone": getattr(tz, "key", None) or str(tz),
+                }
+            )
             continue
-        obs = fetch_obs(station, now)
+        obs = fetch_obs(
+            station,
+            now,
+            max_obs_age_min=max_obs_age_min,
+            pre_update_blackout_min=pre_update_blackout_min,
+        )
         if obs.get("status") != "ok":
             audits.append({"city": city, "target_date": target_date, "status": obs.get("status"), "obs": obs, "hour_local": hour})
             continue
@@ -572,6 +701,24 @@ def build_current_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], 
             audits.append({"city": city, "target_date": target_date, "status": "no_d1_sibling", "running_value": running_value})
             continue
         d1_record, d1_parsed = sorted(d1, key=lambda rp: float(rp[1]["low"]))[0]
+        gap_running = float(d1_parsed["low"]) - running_native
+        gap_running_c = gap_running * 5.0 / 9.0 if unit == "F" else gap_running
+        if gap_running_c <= min_gap_to_next_bracket_c + 1e-9:
+            audits.append(
+                {
+                    "city": city,
+                    "target_date": target_date,
+                    "status": "too_close_to_next_bracket",
+                    "running_value": running_value,
+                    "current_bracket": safe_str(current_record.get("bracket")),
+                    "d1_bracket": safe_str(d1_record.get("bracket")),
+                    "gap_running_to_d1_low_native": round(gap_running, 3),
+                    "gap_running_to_d1_low_c": round(gap_running_c, 3),
+                    "min_gap_to_next_bracket_c": min_gap_to_next_bracket_c,
+                    "hour_local": hour,
+                }
+            )
+            continue
         yes_ask = to_float(current_record.get("yes_best_ask"), 0.0)
         yes_size = to_float(current_record.get("yes_ask_size"), 0.0)
         no_ask = to_float(d1_record.get("no_best_ask"), 0.0)
@@ -579,17 +726,19 @@ def build_current_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], 
         if yes_ask <= 0 or no_ask <= 0:
             audits.append({"city": city, "target_date": target_date, "status": "missing_ask", "yes_ask": yes_ask, "d1_no_ask": no_ask})
             continue
-        gap_running = float(d1_parsed["low"]) - running_native
         row = {
             "city": city,
             "target_date": target_date,
             "unit": unit,
+            "timezone": getattr(tz, "key", None) or str(tz),
+            "local_time": local_now.isoformat(timespec="seconds"),
             "decision_hour_local": hour,
             "month": int(str(target_date)[5:7]),
             "decline_c": obs["decline_c"],
             "decline_native": running_native - current_native,
             "decline_band": (running_native - current_native) / 2.0 if unit == "F" else running_native - current_native,
             "gap_running_to_d1_low_native": gap_running,
+            "gap_running_to_d1_low_c": gap_running_c,
             "gap_current_to_d1_low_native": gap_running + (running_native - current_native),
             "running_value": running_value,
             "current_native": current_native,
@@ -708,7 +857,12 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "d1_no_ask": round(float(row["d1_no_ask"]), 6),
         "d1_no_bracket": row["d1_no_bracket"],
         "decline_c": round(float(row["decline_c"]), 6),
+        "obs_age_min": round(float((row.get("obs") or {}).get("age_min") or 0.0), 6),
+        "minutes_to_next_obs": round(float((row.get("obs") or {}).get("minutes_to_next_obs") or -1.0), 6),
+        "gap_running_to_d1_low_c": round(float(row.get("gap_running_to_d1_low_c") or 0.0), 6),
         "decision_hour_local": int(row["decision_hour_local"]),
+        "decision_local_time": safe_str(row.get("local_time")),
+        "decision_timezone": safe_str(row.get("timezone")),
         "snapshot_ts_utc": safe_str(row.get("snapshot_ts_utc")),
         "source_snapshot_path": safe_str(row.get("snapshot_path")),
     }
@@ -784,7 +938,15 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         return result
 
     model_artifact = load_model_artifact()
-    current, audits = build_current_rows(snapshot, records, load_stations(), snapshot_ts)
+    current, audits = build_current_rows(
+        snapshot,
+        records,
+        load_stations(),
+        snapshot_ts,
+        max_obs_age_min=args.max_obs_age_min,
+        pre_update_blackout_min=args.pre_metar_update_blackout_min,
+        min_gap_to_next_bracket_c=args.min_gap_to_next_bracket_c,
+    )
     candidates: list[dict[str, Any]] = []
     if not current.empty:
         current["p_yes_win"] = score_rows(current[MODEL_FEATURES], model_artifact)
@@ -856,6 +1018,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "min_available_notional": args.min_available_notional,
             "max_taker_cushion": args.max_taker_cushion,
             "cross_tick_buffer": args.cross_tick_buffer,
+            "max_obs_age_min": args.max_obs_age_min,
+            "pre_metar_update_blackout_min": args.pre_metar_update_blackout_min,
+            "min_gap_to_next_bracket_c": args.min_gap_to_next_bracket_c,
             "max_orders": args.max_orders,
         },
         "plan_out": str(PLAN_OUT),
@@ -877,6 +1042,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "available_notional_at_ask": round(float(r["available_notional_at_ask"]), 4),
                 "fresh_available_notional": round(float(r["fresh_available_notional"]), 4),
                 "decline_c": round(float(r["decline_c"]), 3),
+                "obs_age_min": round(float((r.get("obs") or {}).get("age_min") or 0.0), 1),
+                "minutes_to_next_obs": round(float((r.get("obs") or {}).get("minutes_to_next_obs") or -1.0), 1),
+                "gap_running_to_d1_low_c": round(float(r.get("gap_running_to_d1_low_c") or 0.0), 3),
             }
             for r in candidates
         ],
@@ -933,6 +1101,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cross-tick-buffer", type=float, default=0.001)
     parser.add_argument("--max-orders", type=int, default=20)
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
+    parser.add_argument("--max-obs-age-min", type=float, default=20.0)
+    parser.add_argument("--pre-metar-update-blackout-min", type=float, default=6.0)
+    parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=1.0)
     parser.add_argument("--interval-seconds", type=float, default=900.0)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--confirm-live", action="store_true")

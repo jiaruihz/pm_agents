@@ -25,6 +25,9 @@ MAX_TAKER_CUSHION="${MAX_TAKER_CUSHION:-0.02}"
 CROSS_TICK_BUFFER="${CROSS_TICK_BUFFER:-0.001}"
 MAX_ORDERS="${MAX_ORDERS:-20}"
 MAX_SNAPSHOT_AGE_MIN="${MAX_SNAPSHOT_AGE_MIN:-45}"
+MAX_OBS_AGE_MIN="${MAX_OBS_AGE_MIN:-20}"
+PRE_METAR_UPDATE_BLACKOUT_MIN="${PRE_METAR_UPDATE_BLACKOUT_MIN:-6}"
+MIN_GAP_TO_NEXT_BRACKET_C="${MIN_GAP_TO_NEXT_BRACKET_C:-1}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-900}"
 
 nohup "$PYTHON_BIN" scripts/ops/weather_theta_current_yes_tiny_live.py loop \
@@ -37,6 +40,9 @@ nohup "$PYTHON_BIN" scripts/ops/weather_theta_current_yes_tiny_live.py loop \
   --cross-tick-buffer "$CROSS_TICK_BUFFER" \
   --max-orders "$MAX_ORDERS" \
   --max-snapshot-age-min "$MAX_SNAPSHOT_AGE_MIN" \
+  --max-obs-age-min "$MAX_OBS_AGE_MIN" \
+  --pre-metar-update-blackout-min "$PRE_METAR_UPDATE_BLACKOUT_MIN" \
+  --min-gap-to-next-bracket-c "$MIN_GAP_TO_NEXT_BRACKET_C" \
   --interval-seconds "$INTERVAL_SECONDS" \
   >>"$LOG_FILE" 2>&1 &
 
