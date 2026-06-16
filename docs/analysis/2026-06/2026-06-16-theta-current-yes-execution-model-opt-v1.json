@@ -1,0 +1,190 @@
+{
+  "context": {
+    "city_pool": {
+      "cities": [
+        "Amsterdam",
+        "Ankara",
+        "Atlanta",
+        "Austin",
+        "Beijing",
+        "BuenosAires",
+        "Busan",
+        "CapeTown",
+        "Chengdu",
+        "Chongqing",
+        "Dallas",
+        "Denver",
+        "Guangzhou",
+        "Helsinki",
+        "Houston",
+        "Istanbul",
+        "Jeddah",
+        "Karachi",
+        "LA",
+        "Lucknow",
+        "Madrid",
+        "Manila",
+        "Miami",
+        "Munich",
+        "NYC",
+        "SanFrancisco",
+        "SaoPaulo",
+        "Seattle",
+        "Shanghai",
+        "Singapore",
+        "Taipei",
+        "TelAviv",
+        "Tokyo",
+        "Warsaw",
+        "Wellington",
+        "Wuhan"
+      ],
+      "count": 36,
+      "units": {
+        "C": 26,
+        "F": 10
+      }
+    },
+    "model": {
+      "artifact_type": "theta_current_yes_live_logistic_v1",
+      "categorical_features": [
+        "city",
+        "unit"
+      ],
+      "city_category_count": 36,
+      "numeric_feature_count": 24,
+      "strategy_id": "theta_current_yes_no_reheat_live5_v1",
+      "train_rows": 1527
+    }
+  },
+  "db_self_check": {
+    "clob_orders_fills": [
+      {
+        "orders": 33,
+        "status": "error",
+        "with_fill": 0
+      },
+      {
+        "orders": 961,
+        "status": "submitted",
+        "with_fill": 855
+      }
+    ],
+    "fact_built_at_utc": "2026-06-16T15:50:05.971834+00:00",
+    "settlement_status": [
+      {
+        "rows": 90,
+        "settlement_status": null
+      },
+      {
+        "rows": 4310,
+        "settlement_status": "settled"
+      }
+    ],
+    "signal_coverage": {
+      "eligible": 10685,
+      "live_filled": 348,
+      "paper_ordered": 4123,
+      "rows": 30919
+    },
+    "trade_class": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ]
+  },
+  "generated_at_utc": "2026-06-16T16:54:31+00:00",
+  "orders": [
+    {
+      "book_best_ask": 0.99,
+      "book_best_ask_size": 992.86,
+      "book_best_bid": 0.969,
+      "bracket": "25",
+      "city": "Shanghai",
+      "created_at_utc": "2026-06-16T05:17:02+00:00",
+      "edge_at_current_ask": -0.039428999999999936,
+      "edge_change_vs_posted": -0.15999999999999992,
+      "extra_cost_same_shares_vs_original": 0.9638550400000003,
+      "fixed_5usd_shares_at_current_ask": 5.05050505050505,
+      "model_edge_at_posted": 0.120571,
+      "model_p_yes": 0.950571,
+      "order_id": "0x389b62ad6c31c18768a9cd02ac5faab168bd54d85e2299e14155705226078f4c",
+      "place_status": "live",
+      "posted_notional": 5.0,
+      "posted_price": 0.83,
+      "posted_shares": 6.024096,
+      "same_shares_cost_at_current_ask": 5.96385504,
+      "share_loss_fixed_notional": 0.97359094949495,
+      "side": "BUY_YES",
+      "target_date": "2026-06-16",
+      "true_taker_possible_now": true
+    },
+    {
+      "book_best_ask": null,
+      "book_best_ask_size": 0.0,
+      "book_best_bid": 0.998,
+      "bracket": "34",
+      "city": "Taipei",
+      "created_at_utc": "2026-06-16T05:48:51+00:00",
+      "edge_at_current_ask": null,
+      "edge_change_vs_posted": null,
+      "extra_cost_same_shares_vs_original": null,
+      "fixed_5usd_shares_at_current_ask": null,
+      "model_edge_at_posted": 0.064077,
+      "model_p_yes": 0.858077,
+      "order_id": "0xa102f2dd6149388de6f1b0b053753bfcc0673dc5b32da2ba12807135f0eb1f5e",
+      "place_status": "live",
+      "posted_notional": 5.0,
+      "posted_price": 0.794,
+      "posted_shares": 6.297229,
+      "same_shares_cost_at_current_ask": null,
+      "share_loss_fixed_notional": null,
+      "side": "BUY_YES",
+      "target_date": "2026-06-16",
+      "true_taker_possible_now": false
+    },
+    {
+      "book_best_ask": 0.998,
+      "book_best_ask_size": 192.28,
+      "book_best_bid": 0.992,
+      "bracket": "29",
+      "city": "Chongqing",
+      "created_at_utc": "2026-06-16T07:09:27+00:00",
+      "edge_at_current_ask": -0.11880000000000002,
+      "edge_change_vs_posted": -0.17800000000000002,
+      "extra_cost_same_shares_vs_original": 1.0853658780000002,
+      "fixed_5usd_shares_at_current_ask": 5.01002004008016,
+      "model_edge_at_posted": 0.0592,
+      "model_p_yes": 0.8792,
+      "order_id": "0x0e42829d39f47360a8c265a6a74d6ef4e5f25c0fcd55cd75dc4b581f73afa8a7",
+      "place_status": "live",
+      "posted_notional": 5.0,
+      "posted_price": 0.82,
+      "posted_shares": 6.097561,
+      "same_shares_cost_at_current_ask": 6.085365878,
+      "share_loss_fixed_notional": 1.0875409599198393,
+      "side": "BUY_YES",
+      "target_date": "2026-06-16",
+      "true_taker_possible_now": true
+    }
+  ],
+  "recommendation": {
+    "action": "do_not_use_unconditional_taker",
+    "do_not_add_second_hard_gate": "p_yes_win - fresh_ask >= 0.05",
+    "guard": "cross only when fresh_ask <= snapshot_ask + 0.02 and top ask notional >= $5",
+    "patch_direction": "fresh_book_guarded_taker"
+  }
+}

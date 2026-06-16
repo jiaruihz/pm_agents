@@ -1,17 +1,17 @@
 # Theta Current YES Execution / Model Optimization v1
 
 Status: research_only
-Generated: 2026-06-16T08:17:14+00:00
+Generated: 2026-06-16T16:54:31+00:00
 Target metric: `theta_current_yes_execution_loss` = today's submitted current-YES orders where snapshot-ask limit became a resting CLOB order, and the cost of converting that intent into true taker execution.
 
 ## Data Snapshot
 
 - Evidence layer: raw live order response copied from the live-control thread + public CLOB book check + local model artifacts. This is not settled PnL and not wallet cashflow.
 - Row grain: one row = one submitted live order (`exchange_response.place.status=live`), not one fill.
-- Local DB self-check fact_built_at_utc: `2026-06-15T16:31:04.483297+00:00`.
+- Local DB self-check fact_built_at_utc: `2026-06-16T15:50:05.971834+00:00`.
 - fact_trades by class: `[{'trade_class': 'live_real', 'rows': 855}, {'trade_class': 'live_simulated', 'rows': 624}, {'trade_class': 'paper', 'rows': 2285}, {'trade_class': 'snapshot_replay', 'rows': 636}]`.
-- fact_trades settlement: `[{'settlement_status': None, 'rows': 150}, {'settlement_status': 'settled', 'rows': 4250}]`.
-- fact_signal_candidates coverage: `{'rows': 30140, 'eligible': 10366, 'paper_ordered': 3968, 'live_filled': 348}`.
+- fact_trades settlement: `[{'settlement_status': None, 'rows': 90}, {'settlement_status': 'settled', 'rows': 4310}]`.
+- fact_signal_candidates coverage: `{'rows': 30919, 'eligible': 10685, 'paper_ordered': 4123, 'live_filled': 348}`.
 - CLOB orders/fills join: `[{'status': 'error', 'orders': 33, 'with_fill': 0}, {'status': 'submitted', 'orders': 961, 'with_fill': 855}]`.
 
 ## Trading Recommendation

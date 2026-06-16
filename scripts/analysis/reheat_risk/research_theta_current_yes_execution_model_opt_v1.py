@@ -237,7 +237,15 @@ Target metric: `theta_current_yes_execution_loss` = today's submitted current-YE
 
 Do not convert the current live branch into unconditional true-taker.
 
-The correct patch direction is: refresh CLOB book immediately before placement, recompute edge at the fresh best ask, and only cross if `p_yes_win - fresh_ask >= 0.05` after a small slippage buffer. Otherwise keep the order passive or skip. For today's examples, chasing the current ask would have destroyed the modeled edge on Shanghai and Chongqing; Taipei had no ask available in the checked book.
+The correct patch direction is: refresh CLOB book immediately before placement and only cross if the fresh best ask is still close to the decision snapshot. For the current $5 test branch, the executable guard should be:
+
+```text
+initial signal: p_yes_win - snapshot_ask >= 0.05
+execution guard: fresh_ask <= snapshot_ask + 0.02
+depth guard: fresh ask has at least $5 available
+```
+
+Do not add a second hard `p_yes_win - fresh_ask >= 0.05` gate. The `0.02` cushion already bounds the worst-case edge decay from the initial 5-point edge to about 3 points. For tiny-live discovery, that is a better tradeoff than over-filtering away the few executable cases.
 
 ## Today's Orders
 
@@ -282,7 +290,22 @@ Interpretation:
 
 5. Candidate decision change:
    - Replace `snapshot_best_ask_taker` with `fresh_book_guarded_taker`.
-   - Recommended logic: if `fresh_ask <= snapshot_ask + 0.02` and `p_yes_win - fresh_ask >= 0.05`, cross; else do not chase.
+   - Recommended logic: if `fresh_ask <= snapshot_ask + 0.02` and there is enough top-of-book depth, cross; else do not chase.
+
+## Expected Profit Convention
+
+For a fixed-notional BUY_YES order, model EV should be reported in dollars as:
+
+```text
+expected_profit_usd = notional * (p_yes_win / execution_price - 1)
+```
+
+The 2-cent taker cushion is usually not fatal at $5 size. Example intuition:
+
+- Shanghai: `p=0.9506`, $5 at `0.83` has model EV about `+$0.73`; at `0.85`, about `+$0.59`.
+- Chongqing: `p=0.8792`, $5 at `0.82` has model EV about `+$0.36`; at `0.84`, about `+$0.23`.
+
+So the cushion can cost roughly 10-15 cents per $5 order in expected value while materially improving fill probability. The live runner should record `edge_at_limit` and `expected_profit_usd_model` for every accepted plan.
 
 ## Current Model Context
 
@@ -308,7 +331,8 @@ def main() -> int:
         "recommendation": {
             "action": "do_not_use_unconditional_taker",
             "patch_direction": "fresh_book_guarded_taker",
-            "guard": "cross only when fresh_ask <= snapshot_ask + 0.02 and p_yes_win - fresh_ask >= 0.05",
+            "guard": "cross only when fresh_ask <= snapshot_ask + 0.02 and top ask notional >= $5",
+            "do_not_add_second_hard_gate": "p_yes_win - fresh_ask >= 0.05",
         },
     }
     OUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
