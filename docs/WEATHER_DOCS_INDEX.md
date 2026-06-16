@@ -1,11 +1,11 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-15 source-aware forecast quality update
+Updated: 2026-06-16 research structure hygiene update
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-06-15
+更新时间：2026-06-16
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -106,22 +106,26 @@ Status 口径：
 | 文档 | Status | 主线层 | 读它回答什么问题 |
 |---|---|---:|---|
 | [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | [1] | 模型概率相对市场是否有 alpha；forecast quality / reliability labels 如何作为 source-aware shared layer 影响 signal、shadow 分层或 sizing |
+| [weather_strategy_research_whitepaper.md](analysis/weather_strategy_research_whitepaper.md) | `current-reference` | [0]-[6] | 天气策略总白皮书：pre_predict 与 reheat_risk 两条主分支、共享事实层、可派给不同模型的研究任务包 |
+| [reheat_risk_delegation_prompts.md](analysis/reheat_risk_delegation_prompts.md) | `current-reference` | [0]-[6] | reheat-risk 研究任务提示词：feature factory、peak/fade timing、NO carry expression、cleanup 等可派发线程 |
+| [pre_predict.md](analysis/pre_predict.md) | `current-reference` | [1]-[2] | 赛前/早盘预测分支：forecast max、historical error、forecast quality、Range RV、低价 YES prior |
 | [market_structure_edge.md](analysis/market_structure_edge.md) | `current-reference` | [2] | 是否存在 model-free 的市场结构 edge，例如 favorite-longshot、BUY_NO base-rate、price-bucket mispricing |
 | [execution_quality.md](analysis/execution_quality.md) | `current-reference` | [4] | maker-only 扣 spread、queue、逆向选择和 fill selection 后是否仍有可成交 edge；2026-06-14 本机 CLOB cache repair 后 coverage gate 已可通过 |
 | [entry_timing.md](analysis/entry_timing.md) | `current-reference` | [3] | target-date lead time、forecast checkpoint、decision window 对计划和成交的影响 |
 | [side_alpha.md](analysis/side_alpha.md) | `current-reference` | [2] | BUY_NO / BUY_YES、side-band 是否有持久超额，而不是单纯 win-rate |
 | [city_selection.md](analysis/city_selection.md) | `current-reference` | [3] | 城市池、city-day basket、城市 x model x side 选择证据；live 事实仍以 CITY_POOL_DECISIONS 为准 |
-| [observed_max_m3.md](analysis/observed_max_m3.md) | `current-reference` | [0]-[2] | M3 傍晚已观测 running max 研究；当前卡在 WU/IEM observed max 与 pm_history 官方结算不一致，不是 live/paper/shadow 交易规则 |
+| [reheat_risk.md](analysis/reheat_risk.md) | `current-reference` | [0]-[2] | 日内二次升温风险当前入口：共同底层 reheat risk 模型 + current YES / higher NO carry / low-price YES reheat reversal 多个表达头；维护脚本在 `scripts/analysis/reheat_risk/` |
 | [sizing_entry_band.md](analysis/sizing_entry_band.md) | `current-reference` | [3] | 仓位、entry price band、side-specific band 是否改善风险调整后的 executable edge |
 | [blender_shadow.md](analysis/blender_shadow.md) | `current-reference` | [1] | blender / edge-engine 字段作为 shadow、paper 或 sizing signal 是否有价值 |
 | [live_performance.md](analysis/live_performance.md) | `current-reference` | [5][6] | live 策略绩效曲线、strategy_instance 归因、settled/open/quasi-settled 拆分 |
 | [account_reconcile.md](analysis/account_reconcile.md) | `current-reference` | [5] | 钱包余额、CLOB fill、cashflow、DB/fact 对账 |
 | [data_integrity.md](analysis/data_integrity.md) | `current-reference` | [0] | snapshot 健康、side flip、candidate/fill linkage、fact-table coverage、settlement source registry、CLOB cache gate repair 和分析前自检 |
-| [SCRIPT_MIGRATION_MANIFEST.md](analysis/SCRIPT_MIGRATION_MANIFEST.md) | `current-reference` | [0]-[6] | Phase 3A/3B 脚本迁移归属表：old path、new path、owner living doc |
+| [SCRIPT_MIGRATION_MANIFEST.md](analysis/SCRIPT_MIGRATION_MANIFEST.md) | `current-reference` | [0]-[6] | Phase 3A/3B 脚本迁移归属表 + 2026-06-16 pre_predict/reheat_risk overlay：old path、new path、owner living doc |
 | [MD_CONSOLIDATION_PLAN.md](analysis/MD_CONSOLIDATION_PLAN.md) | `current-reference` | [6] | Phase 4A/4B Markdown 审计表：口径有效性、重复、勘误、owner living doc、后续动作 |
 | [2026-06-16-weather-protocol-audit-v0.md](analysis/2026-06/2026-06-16-weather-protocol-audit-v0.md) | `current-reference` | [0] | weather-predict / pm_agent producer protocol audit：当前 snapshot/paper/signals/plans/orders 仍缺 canonical aliases 和 schema metadata；`settlement_outcomes` 已作为 pm_history source-grain DB 桥接层 |
 
 ## 历史分析快照
+| [2026-06-16-weather-research-structure-hygiene.md](analysis/2026-06/2026-06-16-weather-research-structure-hygiene.md) | `current-reference` | [0]-[6] | weather research 结构清理记录：pre_predict/reheat_risk 脚本归属、observed_max archival 边界、moved/indexed-only/archival-kept/still-dirty 清单 |
 
 这些文档是时间点证据。正文默认不改；如果被当前决策引用，在“Used by current decision”列标明。
 

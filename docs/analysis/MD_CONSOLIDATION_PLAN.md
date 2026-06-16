@@ -51,7 +51,8 @@ Not done in this phase:
 | `entry_timing.md` | entry timing edge, strict vs wide window, city x entry timing, timing baseline, timing plan |
 | `side_alpha.md` | side-band entry analysis, side-band alpha summary, side-band timing impact |
 | `city_selection.md` | city pool contribution, city pool side strategy, city-day basket family, city/model conditional edge |
-| `observed_max_m3.md` | M3 observed running max handoff, plan, residual physical-layer experiment |
+| `reheat_risk.md` | current reheat-risk branch owner: shared intraday observed-path model, current YES, higher NO carry, low-price YES reheat reversal |
+| `archive/analysis/observed_max_reheat_risk_legacy.md` | archival observed-max handoff, plan, residual physical-layer experiment; not current owner |
 | `sizing_entry_band.md` | entry band research, sizing and band distribution |
 | `blender_shadow.md` | blender backtests, overlays, edge v2 shadow, filtered operational base |
 | `live_performance.md` | live full research, live period slices, PnL curves, recent loss attribution, three strategy instances |
@@ -384,12 +385,17 @@ Not done in this phase:
 | `2026-06-10-weather-strategy-live-test-selection.md` | No new real live-test candidate; adjacent3 only enters shadow/paper observation. | keep active synthesis evidence |
 | `2026-06-10-live-test-readiness-scoreboard-v0.md` | Readiness scoreboard freezes adjacent3 shadow and defers all live scheduling. | keep active readiness evidence |
 
-### `observed_max_m3.md` absorbed on 2026-06-10
+### `reheat_risk.md` / `archive/analysis/observed_max_reheat_risk_legacy.md` split on 2026-06-16
+
+Current owner is `docs/analysis/reheat_risk.md`. The archived observed-max
+legacy doc remains a historical handoff only.
+
+### `archive/analysis/observed_max_reheat_risk_legacy.md` absorbed on 2026-06-10
 
 | File | Absorbed claim | Archive readiness |
 |---|---|---|
-| `2026-06-10-m3-observed-max-strategy-handoff.md` | M3 is a new observed-running-max information structure; external claims need local reproduction. | keep active framing evidence |
-| `2026-06-10-m3-observed-max-strategy-plan.md` | M3 must start with fact layer and physical residual gates; no live/paper config change. | keep active design evidence |
+| `2026-06-10-m3-observed-max-strategy-handoff.md` | reheat-risk is a new observed-running-max information structure; external claims need local reproduction. | keep active framing evidence |
+| `2026-06-10-m3-observed-max-strategy-plan.md` | reheat-risk must start with fact layer and physical residual gates; no live/paper config change. | keep active design evidence |
 | `2026-06-10-m3-observed-max-residual-v0.md` | 19:00+ local observed-max residual passes the first physical candidate gate, but market/execution gates are untouched. | keep active physical evidence |
 | `2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md` | Proxy paper-market backtest confirms no reliable edge signal in 4/14 sparse trades; sample concentrated in Moscow/Madrid and not executable-best-ask. | keep active-snapshot; do not cite for live/paper claims |
 
@@ -445,7 +451,7 @@ Explicitly not touched in this hygiene pass:
 
 - 2026-06-10 reports and scripts.
 - 2026-06-11 reports and scripts.
-- M3 generated artifacts under `docs/analysis/2026-06/generated/`.
+- reheat-risk generated artifacts under `docs/analysis/2026-06/generated/`.
 
 
 ## Phase 4G May Archive Move Log

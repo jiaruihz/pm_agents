@@ -43,7 +43,7 @@ ECMWF cache is NOT used: it is a continuous (non-vintage) series and stops
 2026-04-29, so it cannot provide leakage-free features in either window.
 
 Usage:
-    .venv/bin/python scripts/analysis/observed_max/research_m3_jump_model_v1.py [--skip-fetch]
+    .venv/bin/python scripts/analysis/reheat_risk/research_m3_jump_model_v1.py [--skip-fetch]
 """
 
 from __future__ import annotations
@@ -175,6 +175,7 @@ def build_city_features(city: str, icao: str, tz_name: str, rows: pd.DataFrame) 
     wu["temp"] = pd.to_numeric(wu["temp"], errors="coerce")
     wu = wu.dropna(subset=["temp"])
     wu["ts"] = pd.to_datetime(wu["valid_utc"], utc=True)
+    wu["ts_np"] = wu["ts"].dt.tz_convert("UTC").dt.tz_localize(None)
     wu = wu.sort_values("ts")
     # native unit values
     wu["val"] = wu["temp"] if is_f else (wu["temp"] - 32.0) * 5.0 / 9.0
@@ -185,11 +186,12 @@ def build_city_features(city: str, icao: str, tz_name: str, rows: pd.DataFrame) 
     if iem_path.exists():
         iem = pd.read_csv(iem_path, na_values=["M"], low_memory=False)
         iem["ts"] = pd.to_datetime(iem["valid"], utc=True)
+        iem["ts_np"] = iem["ts"].dt.tz_convert("UTC").dt.tz_localize(None)
         iem = iem.sort_values("ts")
         for c in ("tmpf", "dwpf", "relh", "sknt"):
             iem[c] = pd.to_numeric(iem[c], errors="coerce")
         iem["sky"] = iem["skyc1"].map(SKY_CODE)
-        iem_ts = iem["ts"].to_numpy()
+        iem_ts = iem["ts_np"].to_numpy(dtype="datetime64[ns]")
         iem_dwpf = iem["dwpf"].to_numpy(dtype=float)
         iem_tmpf = iem["tmpf"].to_numpy(dtype=float)
         iem_relh = iem["relh"].to_numpy(dtype=float)
@@ -215,10 +217,10 @@ def build_city_features(city: str, icao: str, tz_name: str, rows: pd.DataFrame) 
         feat["decline_c_v0"] = r.running_max_c - r.current_temp_c  # for v0 baseline
 
         cutoff_local = pd.Timestamp(f"{date} {hour:02d}:00", tz=tz)
-        cutoff = cutoff_local.tz_convert("UTC").to_datetime64()
+        cutoff = np.datetime64(cutoff_local.tz_convert("UTC").tz_localize(None).to_datetime64(), "ns")
         day = wu_by_day.get(date)
         if day is not None:
-            ts = day["ts"].to_numpy()
+            ts = day["ts_np"].to_numpy(dtype="datetime64[ns]")
             val = day["val"].to_numpy(dtype=float)
             i = np.searchsorted(ts, cutoff, side="right")
             if i > 0:

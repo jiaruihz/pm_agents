@@ -1,7 +1,7 @@
 # Weather Analysis Script Migration Manifest
 
 Status: current-reference
-Updated: 2026-06-09 Phase 3A/3B executed
+Updated: 2026-06-16 reheat_risk/pre_predict overlay
 Source of truth: no
 Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; docs/analysis living docs
 
@@ -11,9 +11,29 @@ This manifest records the target owner for scripts moved during Phase 3B. Histor
 
 - Scripts that build or backfill fact-table fields belong to `scripts/etl/`.
 - Weather evaluation scripts belong under `scripts/analysis/<living_doc_topic>/`.
+- New pre-path forecast research belongs under `scripts/analysis/pre_predict/`.
+- New intraday observed-path/reheat research belongs under `scripts/analysis/reheat_risk/`.
+- Historical `scripts/analysis/observed_max/` scripts are archival unless a script
+  is intentionally promoted into `reheat_risk` as the maintained entrypoint.
 - Copy-trade research is a separate strategy family and belongs to `scripts/copy_trade/`.
 - Current docs and run scripts should point at the new paths after Phase 3B.
 - Historical snapshots may keep old paths as time-point evidence until Phase 3C.
+
+## 2026-06-16 Research-Branch Overlay
+
+This overlay records the branch split introduced after the original Phase 3B
+script migration. It does not rewrite historical report filenames.
+
+| Path / family | Owner | Status |
+|---|---|---|
+| `scripts/analysis/pre_predict/README.md` | pre_predict | indexed-only; no maintained script migrated in this cleanup |
+| `scripts/analysis/reheat_risk/research_m3_exhaustion_source_aware_restart_v1.py` | reheat_risk | maintained bridge from M3 exhaustion to source-aware reheat risk |
+| `scripts/analysis/reheat_risk/research_m3_jump_model_v1.py` | reheat_risk | maintained physical jump-risk model entrypoint |
+| `scripts/analysis/reheat_risk/research_m3_jump_model_v2_quote_calibration.py` | reheat_risk | maintained quote-calibration continuation |
+| `scripts/analysis/reheat_risk/research_m3_jump_model_v3_bad_case_attribution.py` | reheat_risk | maintained bad-case attribution continuation |
+| `scripts/analysis/reheat_risk/research_theta_*.py` | reheat_risk | maintained current YES / higher NO carry / execution / peak-clock research chain |
+| `scripts/analysis/observed_max/research_m3_*.py` except rows above | observed_max archive | archival-kept; do not use as new entrypoints unless promoted in a later cleanup |
+| `scripts/analysis/observed_max/research_station_basis_*.py`, `research_settlement_*.py`, `research_official_*.py` | observed_max / station-basis history | archival-kept or station-basis-adjacent; not moved by this reheat cleanup |
 
 ## Manifest
 
