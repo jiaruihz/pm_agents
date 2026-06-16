@@ -98,6 +98,17 @@ city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket/ou
 
 这层应该服务两个分支，而不是被某个策略私有化。
 
+当前实现：
+
+- `reheat_feature_factory_v1` 已落地，入口为
+  [2026-06-16-reheat-feature-factory-v1.md](2026-06/2026-06-16-reheat-feature-factory-v1.md)。
+- 这版支持 observed path、current YES、d1/d2 NO、target YES sibling quote 和
+  source-grain settlement label 的共享消费。
+- 仍缺 forecast peak context：`forecast_peak_hour_local` /
+  `forecast_peak_delta_hours_local` / `forecast_values_hash` 在当前 DB 快照中
+  为 0% 覆盖。后续 forecast-peak-clock 研究应先修 upstream fact population
+  或显式 backfill，不能让各策略私自重建一套 forecast cache。
+
 ## 研究任务包
 
 下面几个任务适合拆给不同模型并行做。每个任务都必须先写清楚 target metric 和 row grain，再开始跑数。
@@ -169,8 +180,9 @@ Reusable prompts for these tasks live in
 
 ## 当前优先级
 
-1. 先做 A：没有共享 reheat feature factory，后面的策略会继续口径漂移。
-2. 再做 B + E：current YES 已经最接近 tiny-live，但卡在 timing 和执行。
+1. A 已完成 v1：后续策略头默认消费共享 reheat feature factory，不再各自
+   materialize observed max / orderbook / settlement。
+2. 下一步做 B + E：current YES 已经最接近 tiny-live，但卡在 timing 和执行。
 3. C 作为 expression 层校准，防止执着 NO carry。
 4. D 单独做凸性研究，不要和 no-reheat 策略混成一个 PnL。
 

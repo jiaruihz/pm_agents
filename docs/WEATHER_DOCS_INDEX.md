@@ -126,6 +126,7 @@ Status 口径：
 
 ## 历史分析快照
 | [2026-06-16-weather-research-structure-hygiene.md](analysis/2026-06/2026-06-16-weather-research-structure-hygiene.md) | `current-reference` | [0]-[6] | weather research 结构清理记录：pre_predict/reheat_risk 脚本归属、observed_max archival 边界、moved/indexed-only/archival-kept/still-dirty 清单 |
+| [2026-06-16-reheat-feature-factory-v1.md](analysis/2026-06/2026-06-16-reheat-feature-factory-v1.md) | `current-reference` | yes | Reheat-risk 共享日内事实层 v1：row grain=`city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome`，物化 88,621 feature rows / 8,696 date-city-hour states；observed path、METAR dewpoint/RH/wind/temp-trend、current YES、d1/d2 NO、target YES 和 `settlement_outcomes` label 可用；forecast peak 字段当前 0% 覆盖，后续 forecast-peak-clock 需先修 upstream fact population 或显式 backfill |
 
 这些文档是时间点证据。正文默认不改；如果被当前决策引用，在“Used by current decision”列标明。
 

@@ -28,6 +28,37 @@ This model should use one shared intraday fact layer: METAR/current observation,
 running max, decline from max, forecast peak clock, dew point/RH, wind, sky,
 solar/local time, orderbook quote, snapshot age, and final settlement label.
 
+## Current Shared Feature Layer
+
+`reheat_feature_factory_v1` is the maintained first shared materializer for this
+branch:
+
+- Script: `scripts/analysis/reheat_risk/research_reheat_feature_factory_v1.py`
+- Report: `docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.md`
+- Coverage CSV: `docs/analysis/2026-06/generated/reheat_feature_factory_v1/coverage_by_date_city_hour.csv`
+
+Current row grain:
+
+```text
+city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome
+```
+
+Current conclusion:
+
+- The shared layer is good enough to support downstream `current_yes_peak_forming`,
+  `current_yes_fade_confirmed`, `higher_no_carry`, and
+  `low_price_yes_reheat_reversal` research without each strategy rebuilding its
+  own observed-max/orderbook/settlement facts.
+- It materialized 88,621 feature rows and 8,696 date/city/hour state rows on the
+  2026-05-19..2026-06-14 replay window.
+- Observed path, METAR dewpoint/RH/wind/temp-trend, current YES, d1/d2 NO,
+  target YES, and settlement labels are usable.
+- Forecast peak fields are still the blocking gap: `forecast_peak_hour_local`,
+  `forecast_peak_delta_hours_local`, and `forecast_values_hash` exist in the
+  schema but were 0% populated in the current DB snapshot used by v1. Do not
+  treat forecast-peak-clock variants as backtestable until upstream fact
+  population or a documented backfill fixes this.
+
 ## Strategy Heads
 
 ### `current_yes_peak_forming`
