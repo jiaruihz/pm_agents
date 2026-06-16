@@ -1,0 +1,159 @@
+{
+  "generated_at_utc": "2026-06-16T16:02:08+00:00",
+  "target_metric": "reheat_risk_shared_feature_factory",
+  "row_grain": "city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome",
+  "evidence_layer": "time-aligned orderbook replay / opportunity feature layer, not live fills",
+  "data_self_check": {
+    "fact_trades_max_built_at_utc": "2026-06-16T15:50:05.971834+00:00",
+    "fact_trades_by_class": [
+      {
+        "trade_class": "live_real",
+        "rows": 855
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 624
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "settlement_status": "",
+        "rows": 90
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 4310
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "rows": 30919,
+      "eligible": 10685,
+      "paper_ordered": 4123,
+      "live_filled": 348
+    },
+    "clob_order_fill_join": [
+      {
+        "status": "error",
+        "orders": 33,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 961,
+        "with_fill": 855
+      }
+    ]
+  },
+  "funnel": {
+    "orderbook_files_seen": 1289,
+    "orderbook_records_seen": 1630457,
+    "orderbook_records_ok": 1594612,
+    "orderbook_records_kept_before_dedupe": 165491,
+    "records_missing_timezone": 354107,
+    "records_wrong_local_date_or_hour": 1072724,
+    "records_without_observed_state": 2290,
+    "records_without_quote": 0,
+    "quote_rows_after_hourly_dedupe": 88621,
+    "feature_rows": 88621,
+    "state_rows_date_city_hour": 8696,
+    "active_dates": 27,
+    "cities": 36,
+    "complete_core_state_rows": 6210
+  },
+  "field_non_null_rates_by_feature_row": {
+    "current_temp_c": 1.0,
+    "running_max_c": 1.0,
+    "decline_from_max_c": 1.0,
+    "minutes_since_running_max": 0.9688335721781519,
+    "forecast_peak_hour_local": 0.0,
+    "forecast_peak_delta_hours_local": 0.0,
+    "forecast_values_hash": 0.0,
+    "dwpf_now": 0.9843377980388396,
+    "relative_humidity_pct": 0.9843377980388396,
+    "wind_speed_kt": 0.9843377980388396,
+    "sky_cover_code": 0.7474639193870527,
+    "temp_trend_1h_f": 0.9839541417948342,
+    "current_yes_ask": 0.845612213809368,
+    "d1_no_ask": 0.8581825978041322,
+    "d2_no_ask": 0.8147278861669356,
+    "target_yes_ask": 0.9856241748569752,
+    "final_winning_bracket": 1.0,
+    "current_bracket_held": 1.0,
+    "d1_hit": 1.0,
+    "skip_over_d1": 1.0,
+    "target_hit": 1.0
+  },
+  "field_coverage_by_state_rate": {
+    "has_current_temp": 1.0,
+    "has_running_max": 1.0,
+    "has_minutes_since_max": 0.9576816927322908,
+    "has_forecast_peak_hour": 0.0,
+    "has_forecast_hash": 0.0,
+    "has_dewpoint": 0.9832106715731371,
+    "has_rh": 0.9832106715731371,
+    "has_wind": 0.9832106715731371,
+    "has_sky": 0.7428702851885924,
+    "has_temp_trend": 0.9830956761729531,
+    "has_current_yes_quote": 0.8169273229070837,
+    "has_d1_no_quote": 0.7909383624655014,
+    "has_d2_no_quote": 0.6762879484820608,
+    "has_any_target_yes_quote": 0.9767709291628335,
+    "has_final_winner": 1.0
+  },
+  "missing_field_state_counts": {
+    "forecast_hash": 8696,
+    "forecast_peak_hour": 8696,
+    "d2_no_quote": 2815,
+    "sky": 2236,
+    "d1_no_quote": 1818,
+    "current_yes_quote": 1592,
+    "minutes_since_max": 368,
+    "any_target_yes_quote": 202,
+    "temp_trend": 147,
+    "dewpoint": 146,
+    "rh": 146,
+    "wind": 146
+  },
+  "forecast_gap": {
+    "fact_signal_candidates_rows": 30919,
+    "forecast_peak_hour_feature_row_rate": 0.0,
+    "forecast_values_hash_feature_row_rate": 0.0
+  },
+  "inputs": {
+    "db": "runtime/weather.db",
+    "orderbook_dir": "runtime/weather_edge_v1/market_data/orderbook_snapshots",
+    "observed_detail": "docs/analysis/2026-06/generated/m3_observed_max_v5_h10_21_theta_patch_20260614/m3_observed_max_residual_detail.csv",
+    "station_summary": "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json",
+    "ext_cache_dir": "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v6",
+    "start_date": "2026-05-19",
+    "end_date": "2026-06-14",
+    "decision_hours": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21
+    ]
+  },
+  "outputs": {
+    "feature_rows_csv": "docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv",
+    "coverage_by_date_city_hour_csv": "docs/analysis/2026-06/generated/reheat_feature_factory_v1/coverage_by_date_city_hour.csv",
+    "json": "docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.json",
+    "markdown": "docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.md"
+  }
+}
