@@ -21,6 +21,8 @@ PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
 MAX_ORDER_NOTIONAL="${MAX_ORDER_NOTIONAL:-5}"
 MAX_CITY_DAY_NOTIONAL="${MAX_CITY_DAY_NOTIONAL:-10}"
 MIN_AVAILABLE_NOTIONAL="${MIN_AVAILABLE_NOTIONAL:-5}"
+MAX_TAKER_CUSHION="${MAX_TAKER_CUSHION:-0.02}"
+CROSS_TICK_BUFFER="${CROSS_TICK_BUFFER:-0.001}"
 MAX_ORDERS="${MAX_ORDERS:-20}"
 MAX_SNAPSHOT_AGE_MIN="${MAX_SNAPSHOT_AGE_MIN:-45}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-900}"
@@ -31,6 +33,8 @@ nohup "$PYTHON_BIN" scripts/ops/weather_theta_current_yes_tiny_live.py loop \
   --max-order-notional "$MAX_ORDER_NOTIONAL" \
   --max-city-day-notional "$MAX_CITY_DAY_NOTIONAL" \
   --min-available-notional "$MIN_AVAILABLE_NOTIONAL" \
+  --max-taker-cushion "$MAX_TAKER_CUSHION" \
+  --cross-tick-buffer "$CROSS_TICK_BUFFER" \
   --max-orders "$MAX_ORDERS" \
   --max-snapshot-age-min "$MAX_SNAPSHOT_AGE_MIN" \
   --interval-seconds "$INTERVAL_SECONDS" \

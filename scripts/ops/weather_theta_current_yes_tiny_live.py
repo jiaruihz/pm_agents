@@ -6,6 +6,7 @@ This is an independent live branch for the frozen v9 rule:
   BUY_YES current running-max bracket
   local hour 13-15, decline_c >= 0.5
   yes_ask >= 0.55, p_yes_win >= 0.5, p_yes_win - yes_ask >= 0.05
+  fresh CLOB ask rechecked before execution, fresh_ask <= snapshot_ask + 0.02
   d1 NO sibling quote visible
   $5/order, $10/city-day cap, top-of-book available notional >= $5
 
@@ -61,6 +62,7 @@ LIVE_OUT = ROOT / "runtime/weather_edge_v1/live/theta_current_yes_tiny_live_v1_o
 
 METAR_API = "https://aviationweather.gov/api/data/metar"
 IEM_ASOS_API = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
+CLOB_BOOK_API = "https://clob.polymarket.com/book"
 
 BASE_FEATURES = [
     "decision_hour_local",
@@ -194,6 +196,71 @@ def fetch_text(url: str, params: list[tuple[str, Any]], max_rounds: int = 2) -> 
                 last = f"{proxy}: {type(exc).__name__}: {exc}"
                 time.sleep(0.4 + rnd)
     raise RuntimeError(f"fetch failed {url}: {last}")
+
+
+def book_levels(book: Any, side: str) -> list[tuple[float, float]]:
+    rows = book.get(f"{side}s") if isinstance(book, dict) else []
+    out: list[tuple[float, float]] = []
+    for item in rows or []:
+        try:
+            price = float(item.get("price"))
+            size = float(item.get("size"))
+        except Exception:
+            continue
+        if price > 0 and size > 0:
+            out.append((price, size))
+    return sorted(out, reverse=(side == "bid"))
+
+
+def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    book = fetch_json(CLOB_BOOK_API, {"token_id": str(row["token_id"])}, max_rounds=1)
+    asks = book_levels(book, "ask")
+    bids = book_levels(book, "bid")
+    if not asks:
+        return {"status": "rejected", "reason": "fresh_book_no_ask", "best_bid": bids[0][0] if bids else 0.0}
+    fresh_ask, fresh_ask_size = asks[0]
+    p_yes = float(row["p_yes_win"])
+    snapshot_ask = float(row["yes_current_ask"])
+    max_by_cushion = snapshot_ask + float(args.max_taker_cushion)
+    max_price = min(max_by_cushion, 0.999)
+    limit_price = min(fresh_ask + float(args.cross_tick_buffer), max_price)
+    fresh_available = fresh_ask * fresh_ask_size
+    if fresh_ask > max_price + 1e-9:
+        return {
+            "status": "rejected",
+            "reason": "fresh_ask_exceeds_cushion",
+            "best_bid": bids[0][0] if bids else 0.0,
+            "fresh_ask": fresh_ask,
+            "fresh_ask_size": fresh_ask_size,
+            "fresh_available_notional": fresh_available,
+            "max_taker_price": max_price,
+            "edge_at_fresh_ask": p_yes - fresh_ask,
+        }
+    if fresh_available + 1e-9 < float(args.max_order_notional):
+        return {
+            "status": "rejected",
+            "reason": "fresh_ask_insufficient_size",
+            "best_bid": bids[0][0] if bids else 0.0,
+            "fresh_ask": fresh_ask,
+            "fresh_ask_size": fresh_ask_size,
+            "fresh_available_notional": fresh_available,
+            "max_taker_price": max_price,
+            "edge_at_fresh_ask": p_yes - fresh_ask,
+        }
+    return {
+        "status": "accepted",
+        "best_bid": bids[0][0] if bids else 0.0,
+        "fresh_ask": fresh_ask,
+        "fresh_ask_size": fresh_ask_size,
+        "fresh_available_notional": fresh_available,
+        "max_taker_price": max_price,
+        "limit_price": limit_price,
+        "edge_at_fresh_ask": p_yes - fresh_ask,
+        "edge_at_limit": p_yes - limit_price,
+        "expected_profit_usd": float(args.max_order_notional) * (p_yes / limit_price - 1.0),
+        "derived_min_edge_after_full_cushion": max(0.0, 0.05 - float(args.max_taker_cushion)),
+        "cushion_paid_vs_snapshot": limit_price - snapshot_ask,
+    }
 
 
 def parse_utc(value: Any) -> datetime | None:
@@ -566,7 +633,11 @@ def prior_city_day_notional(strategy_instance: str) -> dict[tuple[str, str], flo
 
 
 def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> dict[str, Any]:
-    price = float(row["yes_current_ask"])
+    snapshot_price = float(row["yes_current_ask"])
+    price = float(row.get("taker_limit_price") or snapshot_price)
+    fresh_ask = float(row.get("fresh_best_ask") or snapshot_price)
+    fresh_bid = float(row.get("fresh_best_bid") or 0.0)
+    derived_min_edge = float(row.get("derived_min_edge_after_full_cushion") or 0.03)
     size = round(notional / price, 6)
     base = {
         "strategy": "weather_edge_v1",
@@ -589,20 +660,20 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "signal_side": "BUY_YES",
         "order_side": "BUY",
         "market_price": round(price, 6),
-        "best_bid": 0.0,
-        "best_ask": round(price, 6),
-        "spread": 0.0,
+        "best_bid": round(fresh_bid, 6),
+        "best_ask": round(fresh_ask, 6),
+        "spread": round(max(0.0, fresh_ask - fresh_bid), 6) if fresh_bid > 0 and fresh_ask > 0 else 0.0,
         "limit_price": round(price, 6),
         "quote_status": "accepted",
-        "quote_reason": "theta_current_yes_taker_at_snapshot_ask",
+        "quote_reason": "theta_current_yes_fresh_book_guarded_taker",
         "quote_edge": round(float(row["p_yes_win"]) - price, 6),
-        "required_quote_edge": 0.05,
+        "required_quote_edge": round(derived_min_edge, 6),
         "model_token_probability": round(float(row["p_yes_win"]), 6),
-        "quote_best_bid": 0.0,
-        "quote_best_ask": round(price, 6),
-        "quote_spread": 0.0,
+        "quote_best_bid": round(fresh_bid, 6),
+        "quote_best_ask": round(fresh_ask, 6),
+        "quote_spread": round(max(0.0, fresh_ask - fresh_bid), 6) if fresh_bid > 0 and fresh_ask > 0 else 0.0,
         "quote_tick_size": 0.001,
-        "quote_mode": "snapshot_best_ask_taker",
+        "quote_mode": "fresh_book_guarded_taker",
         "child_order_role": "single",
         "maker_only": False,
         "notional_fraction": 1.0,
@@ -617,7 +688,7 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "fixed_order_shares": 0.0,
         "max_order_shares": size,
         "edge": round(float(row["p_yes_win"]) - price, 6),
-        "min_edge": 0.05,
+        "min_edge": round(derived_min_edge, 6),
         "model_p_yes_used": round(float(row["p_yes_win"]), 6),
         "market_implied_p_yes": round(price, 6),
         "shadow_decision": "tiny_live_confirmed_v9",
@@ -626,7 +697,14 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "model_version": "theta_current_yes_v8_train_logistic",
         "paper_enabled": True,
         "live_enabled": bool(live_enabled),
-        "available_notional_at_ask": round(float(row["available_notional_at_ask"]), 6),
+        "snapshot_yes_ask": round(snapshot_price, 6),
+        "fresh_best_ask": round(fresh_ask, 6),
+        "fresh_best_bid": round(fresh_bid, 6),
+        "available_notional_at_ask": round(float(row.get("fresh_available_notional") or row["available_notional_at_ask"]), 6),
+        "taker_max_price": round(float(row.get("taker_max_price") or price), 6),
+        "taker_cushion_paid_vs_snapshot": round(float(row.get("taker_cushion_paid_vs_snapshot") or 0.0), 6),
+        "derived_min_edge_after_full_cushion": round(derived_min_edge, 6),
+        "expected_profit_usd_model": round(float(row.get("expected_profit_usd") or 0.0), 6),
         "d1_no_ask": round(float(row["d1_no_ask"]), 6),
         "d1_no_bracket": row["d1_no_bracket"],
         "decline_c": round(float(row["decline_c"]), 6),
@@ -724,13 +802,36 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         prior = prior_city_day_notional(STRATEGY_INSTANCE)
         for _, row in selected.sort_values(["ev", "available_notional_at_ask"], ascending=[False, False]).iterrows():
             key = (str(row["city"]), str(row["target_date"]))
+            row_dict = row.to_dict()
+            try:
+                taker_quote = fresh_taker_quote(row_dict, args)
+            except Exception as exc:  # noqa: BLE001
+                audits.append({"city": key[0], "target_date": key[1], "status": "fresh_book_fetch_failed", "error": f"{type(exc).__name__}: {exc}"})
+                continue
+            if taker_quote.get("status") != "accepted":
+                audits.append({"city": key[0], "target_date": key[1], "status": taker_quote.get("reason", "fresh_book_rejected"), **taker_quote})
+                continue
+            row_dict.update(
+                {
+                    "fresh_best_bid": taker_quote.get("best_bid", 0.0),
+                    "fresh_best_ask": taker_quote["fresh_ask"],
+                    "fresh_ask_size": taker_quote["fresh_ask_size"],
+                    "fresh_available_notional": taker_quote["fresh_available_notional"],
+                    "taker_max_price": taker_quote["max_taker_price"],
+                    "taker_limit_price": taker_quote["limit_price"],
+                    "edge_at_fresh_ask": taker_quote["edge_at_fresh_ask"],
+                    "edge_at_limit": taker_quote["edge_at_limit"],
+                    "expected_profit_usd": taker_quote["expected_profit_usd"],
+                    "derived_min_edge_after_full_cushion": taker_quote["derived_min_edge_after_full_cushion"],
+                    "taker_cushion_paid_vs_snapshot": taker_quote["cushion_paid_vs_snapshot"],
+                }
+            )
             if prior.get(key, 0.0) + args.max_order_notional > args.max_city_day_notional + 1e-9:
                 audits.append({"city": key[0], "target_date": key[1], "status": "city_day_cap", "prior_notional": prior.get(key, 0.0)})
                 continue
             if len(candidates) >= args.max_orders:
                 audits.append({"city": key[0], "target_date": key[1], "status": "max_orders_reached"})
                 continue
-            row_dict = row.to_dict()
             candidates.append(row_dict)
             prior[key] = prior.get(key, 0.0) + args.max_order_notional
 
@@ -753,6 +854,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_order_notional": args.max_order_notional,
             "max_city_day_notional": args.max_city_day_notional,
             "min_available_notional": args.min_available_notional,
+            "max_taker_cushion": args.max_taker_cushion,
+            "cross_tick_buffer": args.cross_tick_buffer,
             "max_orders": args.max_orders,
         },
         "plan_out": str(PLAN_OUT),
@@ -764,9 +867,15 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "hour": int(r["decision_hour_local"]),
                 "bracket": r["current_bracket"],
                 "ask": round(float(r["yes_current_ask"]), 4),
+                "fresh_ask": round(float(r["fresh_best_ask"]), 4),
+                "limit_price": round(float(r["taker_limit_price"]), 4),
                 "p_yes_win": round(float(r["p_yes_win"]), 4),
                 "ev": round(float(r["ev"]), 4),
+                "edge_at_limit": round(float(r["edge_at_limit"]), 4),
+                "expected_profit_usd": round(float(r["expected_profit_usd"]), 4),
+                "taker_cushion_paid_vs_snapshot": round(float(r["taker_cushion_paid_vs_snapshot"]), 4),
                 "available_notional_at_ask": round(float(r["available_notional_at_ask"]), 4),
+                "fresh_available_notional": round(float(r["fresh_available_notional"]), 4),
                 "decline_c": round(float(r["decline_c"]), 3),
             }
             for r in candidates
@@ -820,6 +929,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-order-notional", type=float, default=5.0)
     parser.add_argument("--max-city-day-notional", type=float, default=10.0)
     parser.add_argument("--min-available-notional", type=float, default=5.0)
+    parser.add_argument("--max-taker-cushion", type=float, default=0.02)
+    parser.add_argument("--cross-tick-buffer", type=float, default=0.001)
     parser.add_argument("--max-orders", type=int, default=20)
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--interval-seconds", type=float, default=900.0)
