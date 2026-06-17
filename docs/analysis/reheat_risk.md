@@ -132,6 +132,15 @@ Current conclusion:
   telemetry complete enough to score forecast-clock features before
   `weather-predict` native fields are deployed. Runtime activation still
   requires the N100 current-YES loop to load the new code.
+- Telemetry activation runbook v17 is complete in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-telemetry-activation-runbook-v17.md`.
+  The start script now has an explicit `THETA_CURRENT_YES_MODE=telemetry` path
+  that omits live flags and can accumulate forward would-order rows with
+  forecast peak fields. The default remains `live`, so this is not a silent
+  production behavior change. A read-only status helper now reports loop state,
+  latest summary counts, telemetry decision-status distribution, and forecast
+  peak fetch status. N100 activation still needs explicit deploy/start
+  confirmation.
 
 ## Strategy Heads
 
@@ -236,8 +245,9 @@ move a script only when it becomes the maintained entrypoint for a new result.
    present. Research backfill v3 proves the feature can be joined and measured,
    and dataset v1 promotes the historical current-YES replay universe into a
    shared research table. Forecast-clock itself is still not live-ready; next
-   step is upstream `weather-predict` snapshot producer/cache deployment, then
-   sync + rebuild for forward telemetry using native point-in-time fields.
+   step is N100 forward telemetry activation with the pm_agent fallback, plus
+   upstream `weather-predict` snapshot producer/cache deployment so native
+   point-in-time fields eventually replace the fallback.
 3. `current_yes_peak_forming` vs `current_yes_fade_confirmed`: factory-backed
    v1 completed in
    `docs/analysis/2026-06/2026-06-16-current-yes-peak-vs-fade-v1.md`.

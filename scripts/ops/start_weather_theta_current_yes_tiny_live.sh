@@ -18,6 +18,7 @@ if [[ -s "$PID_FILE" ]]; then
 fi
 
 PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
+THETA_CURRENT_YES_MODE="${THETA_CURRENT_YES_MODE:-live}"
 MAX_ORDER_NOTIONAL="${MAX_ORDER_NOTIONAL:-5}"
 MAX_CITY_DAY_NOTIONAL="${MAX_CITY_DAY_NOTIONAL:-10}"
 MIN_AVAILABLE_NOTIONAL="${MIN_AVAILABLE_NOTIONAL:-5}"
@@ -29,23 +30,39 @@ MAX_OBS_AGE_MIN="${MAX_OBS_AGE_MIN:-20}"
 PRE_METAR_UPDATE_BLACKOUT_MIN="${PRE_METAR_UPDATE_BLACKOUT_MIN:-6}"
 MIN_GAP_TO_NEXT_BRACKET_C="${MIN_GAP_TO_NEXT_BRACKET_C:-0}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-900}"
+NO_TELEGRAM="${NO_TELEGRAM:-0}"
 
-nohup "$PYTHON_BIN" scripts/ops/weather_theta_current_yes_tiny_live.py loop \
-  --live \
-  --confirm-live \
-  --max-order-notional "$MAX_ORDER_NOTIONAL" \
-  --max-city-day-notional "$MAX_CITY_DAY_NOTIONAL" \
-  --min-available-notional "$MIN_AVAILABLE_NOTIONAL" \
-  --max-taker-cushion "$MAX_TAKER_CUSHION" \
-  --cross-tick-buffer "$CROSS_TICK_BUFFER" \
-  --max-orders "$MAX_ORDERS" \
-  --max-snapshot-age-min "$MAX_SNAPSHOT_AGE_MIN" \
-  --max-obs-age-min "$MAX_OBS_AGE_MIN" \
-  --pre-metar-update-blackout-min "$PRE_METAR_UPDATE_BLACKOUT_MIN" \
-  --min-gap-to-next-bracket-c "$MIN_GAP_TO_NEXT_BRACKET_C" \
-  --interval-seconds "$INTERVAL_SECONDS" \
-  >>"$LOG_FILE" 2>&1 &
+if [[ "$THETA_CURRENT_YES_MODE" != "live" && "$THETA_CURRENT_YES_MODE" != "telemetry" ]]; then
+  echo "invalid THETA_CURRENT_YES_MODE=$THETA_CURRENT_YES_MODE (expected live or telemetry)" >&2
+  exit 2
+fi
+
+args=(
+  scripts/ops/weather_theta_current_yes_tiny_live.py
+  loop
+  --max-order-notional "$MAX_ORDER_NOTIONAL"
+  --max-city-day-notional "$MAX_CITY_DAY_NOTIONAL"
+  --min-available-notional "$MIN_AVAILABLE_NOTIONAL"
+  --max-taker-cushion "$MAX_TAKER_CUSHION"
+  --cross-tick-buffer "$CROSS_TICK_BUFFER"
+  --max-orders "$MAX_ORDERS"
+  --max-snapshot-age-min "$MAX_SNAPSHOT_AGE_MIN"
+  --max-obs-age-min "$MAX_OBS_AGE_MIN"
+  --pre-metar-update-blackout-min "$PRE_METAR_UPDATE_BLACKOUT_MIN"
+  --min-gap-to-next-bracket-c "$MIN_GAP_TO_NEXT_BRACKET_C"
+  --interval-seconds "$INTERVAL_SECONDS"
+)
+
+if [[ "$THETA_CURRENT_YES_MODE" == "live" ]]; then
+  args+=(--live --confirm-live)
+fi
+
+if [[ "$NO_TELEGRAM" == "1" ]]; then
+  args+=(--no-telegram)
+fi
+
+nohup "$PYTHON_BIN" "${args[@]}" >>"$LOG_FILE" 2>&1 &
 
 pid="$!"
 echo "$pid" >"$PID_FILE"
-echo "started pid=$pid log=$LOG_FILE"
+echo "started mode=$THETA_CURRENT_YES_MODE pid=$pid log=$LOG_FILE"
