@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-RUNTIME_DIR="runtime/weather_edge_v1/theta_current_yes_tiny_live_v1"
+RUNTIME_DIR="${THETA_CURRENT_YES_RUNTIME_DIR:-runtime/weather_edge_v1/theta_current_yes_tiny_live_v1}"
 PID_FILE="$RUNTIME_DIR/loop.pid"
 
 if [[ ! -s "$PID_FILE" ]]; then

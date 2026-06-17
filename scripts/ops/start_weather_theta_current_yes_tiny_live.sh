@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-RUNTIME_DIR="runtime/weather_edge_v1/theta_current_yes_tiny_live_v1"
+RUNTIME_DIR="${THETA_CURRENT_YES_RUNTIME_DIR:-runtime/weather_edge_v1/theta_current_yes_tiny_live_v1}"
 PID_FILE="$RUNTIME_DIR/loop.pid"
 LOG_FILE="$RUNTIME_DIR/loop.log"
 mkdir -p "$RUNTIME_DIR" "runtime/weather_edge_v1/live"
@@ -65,4 +65,4 @@ nohup "$PYTHON_BIN" "${args[@]}" >>"$LOG_FILE" 2>&1 &
 
 pid="$!"
 echo "$pid" >"$PID_FILE"
-echo "started mode=$THETA_CURRENT_YES_MODE pid=$pid log=$LOG_FILE"
+echo "started mode=$THETA_CURRENT_YES_MODE instance=${THETA_CURRENT_YES_STRATEGY_INSTANCE:-theta_current_yes_tiny_live_v1} pid=$pid log=$LOG_FILE"

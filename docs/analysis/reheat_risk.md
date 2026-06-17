@@ -151,6 +151,13 @@ Current conclusion:
   24.6% and ROI -18.0%, while `diagnostic_gfs_1_to_4h_after_peak` has win rate
   80.8% and ROI +0.8% with CI still crossing zero. This keeps forecast-clock in
   the model/telemetry layer, not as a live hard gate.
+- Parallel forecast telemetry rollout v19 is deployment-ready in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-parallel-telemetry-rollout-v19.md`.
+  The runner and wrappers now support a separate
+  `theta_current_yes_forecast_telemetry_v1` runtime via
+  `THETA_CURRENT_YES_RUNTIME_DIR` and `THETA_CURRENT_YES_STRATEGY_INSTANCE`.
+  This allows no-live forward telemetry to run alongside the existing
+  `theta_current_yes_tiny_live_v1` loop instead of sharing its PID/output files.
 
 ## Strategy Heads
 
@@ -275,8 +282,8 @@ move a script only when it becomes the maintained entrypoint for a new result.
    guard from half-hour replay. Next priority is production telemetry: fresh CLOB
    ask, snapshot age, obs age, minutes-to-next official observation,
    minutes-since-running-max, and source profile on every would-order before
-   taker conversion. Local v0 implementation is complete; N100 deployment and
-   settled forward analysis remain.
+   taker conversion. Local v0 implementation is complete; N100 parallel
+   telemetry deployment and settled forward analysis remain.
 
 ## Naming Rules
 
