@@ -49,7 +49,6 @@ from weather_metar_cross_prev_no_shadow import (  # noqa: E402
 
 DATA_ROOT = Path(os.environ.get("TIMING_MONITOR_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
 OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/source_orderbook_timing"
-FAST_HTTP_TIMEOUT_SEC = float(os.environ.get("TIMING_MONITOR_HTTP_TIMEOUT_SEC", "3.0"))
 CHECKWX_URL = "https://www.checkwx.com/weather/{icao}/metar"
 METAR_TEMP_RE = re.compile(r"\s(M?\d{2})/(M?\d{2}|//)")
 CHECKWX_OBS_RE = re.compile(r"Observed.*?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)", re.IGNORECASE | re.DOTALL)
@@ -159,7 +158,6 @@ def fetch_aviationweather_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any)
         source.METAR_API,
         {"ids": cfg.official_icao, "format": "json", "hours": "2"},
         max_rounds=1,
-        timeout_sec=FAST_HTTP_TIMEOUT_SEC,
     )
     records = parse_aviationweather_records(data, tz, local_date) if isinstance(data, list) else []
     if not records:
@@ -177,7 +175,7 @@ def fetch_aviationweather_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any)
 
 
 def fetch_checkwx_latest(cfg: CityConfig) -> dict[str, Any]:
-    text = source.fetch_text(CHECKWX_URL.format(icao=cfg.official_icao), max_rounds=1, timeout_sec=FAST_HTTP_TIMEOUT_SEC)
+    text = source.fetch_text(CHECKWX_URL.format(icao=cfg.official_icao), max_rounds=1)
     raw_match = re.search(rf"{cfg.official_icao}\s+\d{{6}}Z[^<]+", text)
     raw_metar = raw_match.group(0).strip() if raw_match else ""
     observed_match = CHECKWX_OBS_RE.search(text)
@@ -217,7 +215,7 @@ def fetch_iem_asos_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any) -> dic
         ("report_type", "3"),
         ("report_type", "4"),
     ]
-    text = source.fetch_text(source.IEM_ASOS_API, params, max_rounds=1, timeout_sec=FAST_HTTP_TIMEOUT_SEC)
+    text = source.fetch_text(source.IEM_ASOS_API, params, max_rounds=1)
     rows = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
     records: list[tuple[datetime, float, dict[str, str]]] = []
     for row in csv.DictReader(io.StringIO("\n".join(rows))):
@@ -326,7 +324,7 @@ def fetch_orderbook_rows(cfg: CityConfig, now_utc: datetime, temp_c: float | Non
     tz = ZoneInfo(cfg.timezone_name)
     local_date = now_utc.astimezone(tz).date()
     event_slug = source.event_slug(cfg.slug, local_date)
-    events = source.fetch_json(f"{source.GAMMA}/events", {"slug": event_slug}, max_rounds=1, timeout_sec=FAST_HTTP_TIMEOUT_SEC)
+    events = source.fetch_json(f"{source.GAMMA}/events", {"slug": event_slug}, max_rounds=1)
     markets = events[0].get("markets") if events else []
     if not markets:
         return [{"ts_utc": now_utc.isoformat(), "city": cfg.city, "event_slug": event_slug, "status": "no_event"}]
@@ -337,7 +335,7 @@ def fetch_orderbook_rows(cfg: CityConfig, now_utc: datetime, temp_c: float | Non
             try:
                 book_fetch_start_utc = datetime.now(timezone.utc)
                 book = source.book_summary(
-                    source.fetch_json(f"{source.CLOB}/book", {"token_id": token_id}, max_rounds=1, timeout_sec=FAST_HTTP_TIMEOUT_SEC)
+                    source.fetch_json(f"{source.CLOB}/book", {"token_id": token_id}, max_rounds=1)
                 )
                 book_fetch_end_utc = datetime.now(timezone.utc)
                 status = "ok"
@@ -493,7 +491,6 @@ def main() -> int:
                 "base_interval_sec": args.base_interval_sec,
                 "burst_interval_sec": args.burst_interval_sec,
                 "burst_window_min": args.burst_window_min,
-                "http_timeout_sec": FAST_HTTP_TIMEOUT_SEC,
             },
             ensure_ascii=False,
             sort_keys=True,
