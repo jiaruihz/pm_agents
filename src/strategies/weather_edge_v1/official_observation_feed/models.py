@@ -27,19 +27,8 @@ class SourceProfile:
     fallback_sources: tuple[str, ...] = field(default_factory=tuple)
     rules_recheck_required: bool = True
     blocked_reason: str = ""
-
-    @property
-    def live_eligible(self) -> bool:
-        blocked = {
-            "blocked_unresolved_settlement_basis",
-            "default_source_watchlist",
-            "no_recent_market_or_unknown_rules",
-        }
-        if self.settlement_source_class in blocked:
-            return False
-        if not self.primary_source:
-            return False
-        return True
+    live_eligible: bool = True
+    source_profile_note: str = ""
 
 
 @dataclass(frozen=True)

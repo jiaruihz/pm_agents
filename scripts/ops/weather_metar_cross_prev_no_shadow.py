@@ -12,12 +12,10 @@ Shadow only: no orders are placed.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import sys
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -34,50 +32,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import weather_station_basis_shadow as source  # noqa: E402
-from src.strategies.weather_edge_v1.official_observation_feed.source_registry import load_source_profiles  # noqa: E402
-from src.strategies.weather_edge_v1.tools.official_observation_clock import CITY_TIMEZONE  # noqa: E402
+from src.strategies.weather_edge_v1.official_observation_feed.source_policy import (  # noqa: E402
+    CityConfig,
+    build_city_policy,
+    load_city_configs,
+)
 
 
 DATA_ROOT = Path(os.environ.get("METAR_CROSS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
 OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/metar_cross_prev_no_shadow"
-WHITELIST_CSV = ROOT / "docs/analysis/2026-06/generated/m3_tail_no_diagnosis_v0/m3_city_alignment_whitelist.csv"
-OFFICIAL_ALIGNMENT_CSV = ROOT / "docs/analysis/2026-06/generated/official_resolution_source_v0/official_station_alignment_summary.csv"
-MIN_ALIGNMENT_DAYS = 20
-MIN_ALIGNMENT_RATE = 0.97
-
-SPECIAL_SLUGS = {
-    "BuenosAires": "buenos-aires",
-    "CapeTown": "cape-town",
-    "HongKong": "hong-kong",
-    "KualaLumpur": "kuala-lumpur",
-    "LA": "los-angeles",
-    "MexicoCity": "mexico-city",
-    "NYC": "nyc",
-    "PanamaCity": "panama-city",
-    "SanFrancisco": "san-francisco",
-    "SaoPaulo": "sao-paulo",
-    "TelAviv": "tel-aviv",
-}
-
-BLOCKED_CITY_REASONS = {
-    "Seoul": "blocked_unresolved_settlement_basis: RKSI feed aligned only 28/36 days in settlement-basis audit",
-    "Moscow": "blocked_unresolved_settlement_basis: UUWW source path aligned only 24/27 days",
-    "Shenzhen": "blocked_unresolved_settlement_basis: ZGSZ source path is unresolved",
-    "HongKong": "special_source_confirmed: HKO daily extract is payout source, not VHHH METAR",
-}
-
-
-@dataclass(frozen=True)
-class CityConfig:
-    city: str
-    slug: str
-    unit: str
-    timezone_name: str
-    official_icao: str
-    source_url: str
-    registry_class: str
-    alignment_days: int
-    alignment_rate: float
 
 
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
@@ -97,152 +60,6 @@ def write_json(path: Path, payload: Any) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(path)
-
-
-def city_slug(city: str) -> str:
-    if city in SPECIAL_SLUGS:
-        return SPECIAL_SLUGS[city]
-    out = []
-    for i, ch in enumerate(city):
-        if i > 0 and ch.isupper() and city[i - 1].islower():
-            out.append("-")
-        out.append(ch.lower())
-    return "".join(out)
-
-
-def load_csv(path: Path) -> list[dict[str, str]]:
-    if not path.exists():
-        return []
-    with path.open(newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
-
-
-def safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def safe_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return default
-
-
-def build_city_policy(*, include_station_diff: bool, only_cities: set[str] | None = None) -> dict[str, Any]:
-    whitelist = {
-        row["city"]: row
-        for row in load_csv(WHITELIST_CSV)
-        if row.get("whitelisted") == "True"
-    }
-    official_alignment = {
-        row["city"]: row
-        for row in load_csv(OFFICIAL_ALIGNMENT_CSV)
-    }
-    profiles = load_source_profiles()
-    configs: list[CityConfig] = []
-    rejected: list[dict[str, Any]] = []
-    for city, profile in sorted(profiles.items()):
-        if only_cities and city not in only_cities:
-            continue
-        if city in BLOCKED_CITY_REASONS:
-            rejected.append({"city": city, "reason": BLOCKED_CITY_REASONS[city]})
-            continue
-        if not profile.live_eligible:
-            rejected.append(
-                {
-                    "city": city,
-                    "reason": profile.blocked_reason or f"source_profile_not_live_eligible:{profile.settlement_source_class}",
-                    "settlement_source_class": profile.settlement_source_class,
-                }
-            )
-            continue
-        registry_class = ""
-        alignment_days = 0
-        alignment_rate = 0.0
-        if profile.settlement_source_class == "default_wu_station_by_rules":
-            if city in whitelist:
-                alignment_days = safe_int(whitelist[city].get("valid_days"))
-                alignment_rate = safe_float(whitelist[city].get("match_rate"))
-                registry_class = "same_station_whitelist"
-            else:
-                alignment_days = max(profile.candidate_dates, profile.settled_dates)
-                alignment_rate = 1.0
-                registry_class = "same_station_source_profile"
-            if alignment_days < MIN_ALIGNMENT_DAYS or alignment_rate < 1.0:
-                rejected.append(
-                    {
-                        "city": city,
-                        "reason": "same_station_alignment_below_gate",
-                        "registry_class": registry_class,
-                        "alignment_days": alignment_days,
-                        "alignment_rate": alignment_rate,
-                    }
-                )
-                continue
-        elif profile.settlement_source_class == "official_station_diff_confirmed":
-            if not include_station_diff:
-                rejected.append({"city": city, "reason": "station_diff_requires_explicit_include_flag"})
-                continue
-            alignment_days = profile.alignment_days or safe_int(official_alignment.get(city, {}).get("days"))
-            alignment_rate = profile.alignment_rate or safe_float(official_alignment.get(city, {}).get("align_rate"))
-            if alignment_days >= MIN_ALIGNMENT_DAYS and alignment_rate >= MIN_ALIGNMENT_RATE:
-                registry_class = "official_station_diff_aligned"
-            else:
-                rejected.append(
-                    {
-                        "city": city,
-                        "reason": "official_station_diff_alignment_below_gate",
-                        "alignment_days": alignment_days,
-                        "alignment_rate": alignment_rate,
-                    }
-                )
-                continue
-        else:
-            rejected.append(
-                {
-                    "city": city,
-                    "reason": "source_profile_class_not_supported_for_metar_cross",
-                    "settlement_source_class": profile.settlement_source_class,
-                }
-            )
-            continue
-        tz_name = profile.timezone_name or CITY_TIMEZONE.get(city)
-        if not tz_name:
-            rejected.append({"city": city, "reason": "missing_city_timezone"})
-            continue
-        configs.append(
-            CityConfig(
-                city=city,
-                slug=city_slug(city),
-                unit=profile.unit,
-                timezone_name=tz_name,
-                official_icao=profile.official_station_or_feed,
-                source_url=profile.official_source,
-                registry_class=registry_class,
-                alignment_days=alignment_days,
-                alignment_rate=alignment_rate,
-            )
-        )
-    configs = sorted(configs, key=lambda item: item.city)
-    return {
-        "policy": {
-            "min_alignment_days": MIN_ALIGNMENT_DAYS,
-            "min_alignment_rate": MIN_ALIGNMENT_RATE,
-            "same_station_requires_exact_match": True,
-            "include_station_diff": include_station_diff,
-            "blocked_city_reasons": BLOCKED_CITY_REASONS,
-        },
-        "allowed": [cfg.__dict__ for cfg in configs],
-        "rejected": sorted(rejected, key=lambda item: item["city"]),
-    }
-
-
-def load_city_configs(*, include_station_diff: bool, only_cities: set[str] | None = None) -> list[CityConfig]:
-    policy = build_city_policy(include_station_diff=include_station_diff, only_cities=only_cities)
-    return [CityConfig(**row) for row in policy["allowed"]]
 
 
 def market_value(temp_c: float, unit: str) -> int:
@@ -350,6 +167,11 @@ def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, rece
             "target_date": local_date.isoformat(),
             "official_icao": cfg.official_icao,
             "unit": cfg.unit,
+            "settlement_source_class": cfg.settlement_source_class,
+            "settlement_source": cfg.settlement_source,
+            "live_observation_source": cfg.live_observation_source,
+            "mapping_rule": cfg.mapping_rule,
+            "rules_recheck_required": cfg.rules_recheck_required,
             "registry_class": cfg.registry_class,
         }
         previous_value = last_running.get(date_key)
@@ -497,11 +319,14 @@ def report() -> int:
     if path.exists():
         rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     eligible = [row for row in rows if row.get("taker_eligible")]
-    latencies = [
-        float(row["detected_after_report_sec"])
-        for row in rows
-        if row.get("detected_after_report_sec") is not None
-    ]
+    latencies = []
+    for row in rows:
+        if row.get("detected_after_report_sec") is not None:
+            latencies.append(float(row["detected_after_report_sec"]))
+            continue
+        fallback_latency = detect_latency_sec(row.get("ts_utc"), row.get("obs_last_obs_utc"))
+        if fallback_latency is not None:
+            latencies.append(float(fallback_latency))
     print(
         json.dumps(
             {

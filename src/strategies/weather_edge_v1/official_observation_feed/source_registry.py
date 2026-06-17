@@ -58,12 +58,24 @@ def _default_fallback_sources(row: dict[str, Any]) -> tuple[str, ...]:
     return ()
 
 
+def _default_live_eligible(row: dict[str, Any], *, primary_source: str, blocked_reason: str) -> bool:
+    cls = _clean(row.get("settlement_source_class"))
+    blocked = {
+        "blocked_unresolved_settlement_basis",
+        "default_source_watchlist",
+        "no_recent_market_or_unknown_rules",
+    }
+    return bool(primary_source) and not blocked_reason and cls not in blocked
+
+
 def source_profile_from_registry_row(row: dict[str, Any]) -> SourceProfile:
     city = _clean(row.get("city"))
     cls = _clean(row.get("settlement_source_class"))
     blocked_reason = ""
     if cls in {"blocked_unresolved_settlement_basis", "default_source_watchlist", "no_recent_market_or_unknown_rules"}:
         blocked_reason = _clean(row.get("downstream_action")) or cls
+    primary_source = _default_primary_source(row)
+    fallback_sources = _default_fallback_sources(row)
     return SourceProfile(
         city=city,
         unit=(_clean(row.get("unit")) or "C").upper(),
@@ -82,10 +94,12 @@ def source_profile_from_registry_row(row: dict[str, Any]) -> SourceProfile:
         settled_candidate_rows=_int_or_none(row.get("settled_candidate_rows")) or 0,
         candidate_dates=_int_or_none(row.get("candidate_dates")) or 0,
         settled_dates=_int_or_none(row.get("settled_dates")) or 0,
-        primary_source=_default_primary_source(row),
-        fallback_sources=_default_fallback_sources(row),
+        primary_source=primary_source,
+        fallback_sources=fallback_sources,
         rules_recheck_required=cls in {"default_wu_station_by_rules", "official_station_diff_confirmed"},
         blocked_reason=blocked_reason,
+        live_eligible=_default_live_eligible(row, primary_source=primary_source, blocked_reason=blocked_reason),
+        source_profile_note=_clean(row.get("source_profile_note")),
     )
 
 
@@ -112,6 +126,8 @@ def _source_profile_from_profile_row(row: dict[str, Any]) -> SourceProfile:
         fallback_sources=tuple(row.get("fallback_sources") or ()),
         rules_recheck_required=bool(row.get("rules_recheck_required", True)),
         blocked_reason=_clean(row.get("blocked_reason")),
+        live_eligible=bool(row.get("live_eligible", False)),
+        source_profile_note=_clean(row.get("source_profile_note")),
     )
 
 
