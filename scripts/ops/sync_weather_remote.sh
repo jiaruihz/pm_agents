@@ -124,7 +124,7 @@ sync_live() {
     return 0
   fi
 
-  for subdir in live_cycle signals plans live paper range_rv_shadow_v0; do
+  for subdir in live_cycle signals plans live paper range_rv_shadow_v0 theta_current_yes_tiny_live_v1; do
     mkdir -p "$N100_LOCAL/$subdir"
     log "  syncing $subdir/"
     rsync "${RSYNC_FLAGS[@]}" -e "ssh ${N100_SSH_OPTS[*]}" \

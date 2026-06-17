@@ -53,13 +53,17 @@ Current conclusion:
   2026-05-19..2026-06-14 replay window.
 - Observed path, METAR dewpoint/RH/wind/temp-trend, current YES, d1/d2 NO,
   target YES, and settlement labels are usable.
-- Forecast peak fields are still the blocking gap: `forecast_peak_hour_local`,
-  `forecast_peak_delta_hours_local`, and `forecast_values_hash` exist in the
-  schema. `fact_signal_candidates` now has deterministic cache-derived backfill
-  support in `scripts/etl/build_weather_signal_candidates.py`, but the current
-  mirrored hourly forecast cache only fills 108 / 30,919 candidate rows
-  (2026-05-06..05-07), with 0% overlap against the 2026-05-19..06-14 reheat
-  factory replay window.
+- Forecast peak fields are no longer a total research blocker. The
+  `fact_signal_candidates` schema/builder still only fills 108 historical rows
+  from mirrored hourly cache, but a reusable research backfill now exists:
+  `scripts/analysis/reheat_risk/build_forecast_peak_clock_backfill_dataset_v1.py`
+  materializes
+  `runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv`
+  for the current-YES replay universe. It covers 831 city-date rows / 36 cities
+  / 2026-05-19..2026-06-14 with 100% GFS and ECMWF peak-clock coverage. This
+  supports research and shadow telemetry; production snapshots still need native
+  point-in-time peak fields before forecast-clock can be trusted for live
+  promotion.
 - Research-only forecast-clock backfill now exists in
   `docs/analysis/2026-06/2026-06-17-theta-current-yes-forecast-peak-clock-backfill-v3.md`:
   it uses Open-Meteo historical forecast to fill 3,239 replay rows / 27 dates.
@@ -193,10 +197,11 @@ move a script only when it becomes the maintained entrypoint for a new result.
    the shared factory output.
 2. `forecast_peak_clock_data_fill`: pm_agent fact builder now derives
    `forecast_peak_*`/`forecast_values_hash` from mirrored hourly cache when
-   present. Research backfill v3 proves the data can be joined and measured, but
-   forecast-clock itself is not live-ready. Next step is upstream
-   `weather-predict` snapshot producer/cache deployment, then sync + rebuild for
-   forward telemetry.
+   present. Research backfill v3 proves the feature can be joined and measured,
+   and dataset v1 promotes the historical current-YES replay universe into a
+   shared research table. Forecast-clock itself is still not live-ready; next
+   step is upstream `weather-predict` snapshot producer/cache deployment, then
+   sync + rebuild for forward telemetry using native point-in-time fields.
 3. `current_yes_peak_forming` vs `current_yes_fade_confirmed`: factory-backed
    v1 completed in
    `docs/analysis/2026-06/2026-06-16-current-yes-peak-vs-fade-v1.md`.
