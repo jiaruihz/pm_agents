@@ -30,6 +30,26 @@ def test_parse_label_keeps_positive_fahrenheit_ranges():
     assert live.bracket_contains(parsed, 75)
 
 
+def test_build_current_rows_requires_target_date_to_match_station_local_date():
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+    snapshot_ts = datetime(2026, 6, 17, 20, 30, tzinfo=timezone.utc)
+
+    rows, audits = live.build_current_rows(
+        {"ts_utc": snapshot_ts.isoformat()},
+        [_record("LA", "74-75"), _record("LA", "76-77")],
+        {"LA": station},
+        snapshot_ts,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=1,
+    )
+
+    assert rows.empty
+    assert audits[0]["status"] == "target_date_not_local_date"
+    assert audits[0]["target_date"] == "2026-06-16"
+    assert audits[0]["local_date"] == "2026-06-17"
+
+
 def test_helsinki_uses_iana_dst_for_live_hour_gate():
     station = live.Station("Helsinki", "EFHK", "C", 2, "Europe/Helsinki")
     snapshot_ts = datetime(2026, 6, 16, 13, 18, tzinfo=timezone.utc)

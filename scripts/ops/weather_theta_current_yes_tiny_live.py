@@ -568,6 +568,19 @@ def build_current_rows(
             continue
         tz = station_timezone(station)
         local_now = now.astimezone(tz)
+        local_date = local_now.date().isoformat()
+        if target_date != local_date:
+            audits.append(
+                {
+                    "city": city,
+                    "target_date": target_date,
+                    "status": "target_date_not_local_date",
+                    "local_date": local_date,
+                    "local_time": local_now.isoformat(timespec="seconds"),
+                    "timezone": timezone_label(tz),
+                }
+            )
+            continue
         hour = local_now.hour
         if hour < 13 or hour > 15:
             audits.append(
