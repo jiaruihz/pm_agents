@@ -33,6 +33,7 @@ OBSERVED_DETAIL = (
 )
 STATION_SUMMARY = ROOT / "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json"
 EXT_CACHE_DIR = ROOT / "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v6"
+FORECAST_PEAK_BACKFILL = ROOT / "runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv"
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/reheat_feature_factory_v1"
 OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.json"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.md"
@@ -57,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--observed-detail", default=str(OBSERVED_DETAIL))
     parser.add_argument("--station-summary", default=str(STATION_SUMMARY))
     parser.add_argument("--ext-cache-dir", default=str(EXT_CACHE_DIR))
+    parser.add_argument("--forecast-peak-backfill", default=str(FORECAST_PEAK_BACKFILL))
     parser.add_argument("--out-dir", default=str(OUT_DIR))
     parser.add_argument("--out-json", default=str(OUT_JSON))
     parser.add_argument("--out-md", default=str(OUT_MD))
@@ -258,6 +260,16 @@ def load_forecasts(conn: sqlite3.Connection, start: str, end: str) -> pd.DataFra
     df["outcome"] = df["side"].apply(candidate_outcome)
     df["forecast_snapshot_ts"] = pd.to_datetime(df["decision_snapshot_ts_utc"], utc=True, errors="coerce")
     return df.dropna(subset=["outcome"]).copy()
+
+
+def load_forecast_peak_backfill(path: Path, start: str, end: str) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    if df.empty:
+        return df
+    df["target_date"] = df["target_date"].astype(str)
+    return df[df["target_date"].between(start, end)].copy()
 
 
 def load_station_summary(path: Path) -> dict[str, dict[str, Any]]:
@@ -604,6 +616,100 @@ def add_forecasts(rows: pd.DataFrame, forecasts: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([rows.reset_index(drop=True), pd.DataFrame(filled).reset_index(drop=True)], axis=1)
 
 
+def add_forecast_peak_backfill(rows: pd.DataFrame, peak: pd.DataFrame) -> pd.DataFrame:
+    out = rows.copy()
+    peak_cols = [
+        "gfs_forecast_model_name",
+        "gfs_forecast_max_f",
+        "gfs_forecast_max_native",
+        "gfs_forecast_peak_hour_local",
+        "gfs_forecast_peak_time_local",
+        "gfs_forecast_peak_hour_utc",
+        "gfs_forecast_peak_time_utc",
+        "gfs_forecast_hourly_count",
+        "gfs_forecast_values_hash",
+        "gfs_forecast_timezone",
+        "gfs_forecast_utc_offset_seconds",
+        "gfs_forecast_cache_status",
+        "ecmwf_forecast_model_name",
+        "ecmwf_forecast_max_f",
+        "ecmwf_forecast_max_native",
+        "ecmwf_forecast_peak_hour_local",
+        "ecmwf_forecast_peak_time_local",
+        "ecmwf_forecast_peak_hour_utc",
+        "ecmwf_forecast_peak_time_utc",
+        "ecmwf_forecast_hourly_count",
+        "ecmwf_forecast_values_hash",
+        "ecmwf_forecast_timezone",
+        "ecmwf_forecast_utc_offset_seconds",
+        "ecmwf_forecast_cache_status",
+        "gfs_forecast_peak_present",
+        "ecmwf_forecast_peak_present",
+        "forecast_peak_models_agree_le_1h",
+        "forecast_peak_hour_spread",
+    ]
+    if peak.empty:
+        for col in peak_cols:
+            out[col] = np.nan
+        out["forecast_peak_backfill_join_status"] = "missing_backfill_file"
+        out["forecast_clock_source"] = np.where(out["forecast_peak_hour_local"].notna(), "native_fact", "missing")
+        return out
+
+    keep_cols = ["city", "target_date"] + [col for col in peak_cols if col in peak.columns]
+    deduped = peak[keep_cols].drop_duplicates(["city", "target_date"]).copy()
+    out = out.merge(deduped, on=["city", "target_date"], how="left")
+    out["forecast_peak_backfill_join_status"] = np.where(
+        out["gfs_forecast_peak_hour_local"].notna() | out["ecmwf_forecast_peak_hour_local"].notna(),
+        "matched_city_date",
+        "no_backfill_city_date",
+    )
+
+    out["gfs_forecast_peak_delta_hours_local"] = out["decision_hour_local"] - pd.to_numeric(
+        out["gfs_forecast_peak_hour_local"], errors="coerce"
+    )
+    out["ecmwf_forecast_peak_delta_hours_local"] = out["decision_hour_local"] - pd.to_numeric(
+        out["ecmwf_forecast_peak_hour_local"], errors="coerce"
+    )
+    out["gfs_forecast_gap_to_running_native"] = pd.to_numeric(out["gfs_forecast_max_native"], errors="coerce") - pd.to_numeric(
+        out["running_native"], errors="coerce"
+    )
+    out["ecmwf_forecast_gap_to_running_native"] = pd.to_numeric(out["ecmwf_forecast_max_native"], errors="coerce") - pd.to_numeric(
+        out["running_native"], errors="coerce"
+    )
+
+    native_present = out["forecast_peak_hour_local"].notna()
+    gfs_present = out["gfs_forecast_peak_hour_local"].notna()
+    out["forecast_clock_source"] = np.select(
+        [native_present, gfs_present],
+        ["native_fact", "backfill_gfs_primary"],
+        default="missing",
+    )
+    for col in [
+        "forecast_source",
+        "forecast_peak_time_local",
+        "forecast_peak_time_utc",
+        "forecast_values_hash",
+        "forecast_peak_source",
+        "forecast_timezone",
+    ]:
+        out[col] = out[col].astype("object")
+    fill_mask = ~native_present & gfs_present
+    out.loc[fill_mask, "forecast_source"] = out.loc[fill_mask, "gfs_forecast_model_name"]
+    out.loc[fill_mask, "forecast_max_f"] = out.loc[fill_mask, "gfs_forecast_max_f"]
+    out.loc[fill_mask, "forecast_max_native"] = out.loc[fill_mask, "gfs_forecast_max_native"]
+    out.loc[fill_mask, "forecast_peak_hour_local"] = out.loc[fill_mask, "gfs_forecast_peak_hour_local"]
+    out.loc[fill_mask, "forecast_peak_time_local"] = out.loc[fill_mask, "gfs_forecast_peak_time_local"]
+    out.loc[fill_mask, "forecast_peak_hour_utc"] = out.loc[fill_mask, "gfs_forecast_peak_hour_utc"]
+    out.loc[fill_mask, "forecast_peak_time_utc"] = out.loc[fill_mask, "gfs_forecast_peak_time_utc"]
+    out.loc[fill_mask, "forecast_hourly_count"] = out.loc[fill_mask, "gfs_forecast_hourly_count"]
+    out.loc[fill_mask, "forecast_values_hash"] = out.loc[fill_mask, "gfs_forecast_values_hash"]
+    out.loc[fill_mask, "forecast_peak_source"] = "backfill_gfs_primary"
+    out.loc[fill_mask, "forecast_timezone"] = out.loc[fill_mask, "gfs_forecast_timezone"]
+    out.loc[fill_mask, "forecast_utc_offset_seconds"] = out.loc[fill_mask, "gfs_forecast_utc_offset_seconds"]
+    out.loc[fill_mask, "forecast_peak_delta_hours_local"] = out.loc[fill_mask, "gfs_forecast_peak_delta_hours_local"]
+    return out
+
+
 def coverage_by_state(rows: pd.DataFrame) -> pd.DataFrame:
     checks = {
         "has_current_temp": "current_temp_c",
@@ -658,6 +764,14 @@ def summarize_coverage(rows: pd.DataFrame, state: pd.DataFrame, orderbook_meta: 
         "forecast_peak_hour_local",
         "forecast_peak_delta_hours_local",
         "forecast_values_hash",
+        "gfs_forecast_peak_hour_local",
+        "gfs_forecast_peak_delta_hours_local",
+        "gfs_forecast_gap_to_running_native",
+        "ecmwf_forecast_peak_hour_local",
+        "ecmwf_forecast_peak_delta_hours_local",
+        "ecmwf_forecast_gap_to_running_native",
+        "forecast_peak_models_agree_le_1h",
+        "forecast_peak_hour_spread",
         "dwpf_now",
         "relative_humidity_pct",
         "wind_speed_kt",
@@ -699,6 +813,12 @@ def summarize_coverage(rows: pd.DataFrame, state: pd.DataFrame, orderbook_meta: 
             "fact_signal_candidates_rows": self_check["fact_signal_candidate_coverage"]["rows"],
             "forecast_peak_hour_feature_row_rate": rates.get("forecast_peak_hour_local"),
             "forecast_values_hash_feature_row_rate": rates.get("forecast_values_hash"),
+            "gfs_forecast_peak_hour_feature_row_rate": rates.get("gfs_forecast_peak_hour_local"),
+            "ecmwf_forecast_peak_hour_feature_row_rate": rates.get("ecmwf_forecast_peak_hour_local"),
+            "forecast_peak_sources": {
+                str(k): int(v)
+                for k, v in rows.get("forecast_clock_source", pd.Series(dtype=object)).fillna("missing").value_counts().items()
+            },
         },
     }
 
@@ -729,7 +849,7 @@ def write_report(payload: dict[str, Any], out_md: Path, feature_csv: Path, state
         "",
         "This first shared factory is usable for downstream reheat-risk research on observed path, current YES, d1/d2 NO, target YES quotes, and settlement labels. It should replace strategy-private materializers for `current_yes_peak_forming`, `current_yes_fade_confirmed`, `higher_no_carry`, and `low_price_yes_reheat_reversal`.",
         "",
-        "The important gap is forecast peak context: the columns exist in `fact_signal_candidates`, but the current DB snapshot has effectively no populated `forecast_peak_hour_local` or `forecast_values_hash`, so forecast-peak-clock experiments can consume the schema but must wait for upstream population or a documented backfill.",
+        "The former largest gap was forecast peak context. This factory now consumes the documented `forecast_peak_clock_backfill_v1.csv` city-date layer when native `fact_signal_candidates` peak fields are missing, and exposes both GFS and ECMWF peak-clock features. This makes forecast peak clock usable for shared research tables; it is still a backfilled research feature, not proof of production native point-in-time coverage.",
         "",
         "No live action is implied. This is an opportunity/replay feature layer, not fill PnL.",
         "",
@@ -768,6 +888,10 @@ def write_report(payload: dict[str, Any], out_md: Path, feature_csv: Path, state
         ("forecast_peak_hour_local", "has_forecast_peak_hour"),
         ("forecast_peak_delta_hours_local", "has_forecast_peak_hour"),
         ("forecast_values_hash", "has_forecast_hash"),
+        ("gfs_forecast_peak_hour_local", "has_forecast_peak_hour"),
+        ("gfs_forecast_peak_delta_hours_local", "has_forecast_peak_hour"),
+        ("ecmwf_forecast_peak_hour_local", "has_forecast_peak_hour"),
+        ("ecmwf_forecast_peak_delta_hours_local", "has_forecast_peak_hour"),
         ("dwpf_now", "has_dewpoint"),
         ("relative_humidity_pct", "has_rh"),
         ("wind_speed_kt", "has_wind"),
@@ -824,6 +948,7 @@ def main() -> int:
     observed_path = Path(args.observed_detail)
     station_summary_path = Path(args.station_summary)
     ext_dir = Path(args.ext_cache_dir)
+    forecast_peak_backfill_path = Path(args.forecast_peak_backfill)
     out_dir = Path(args.out_dir)
     out_json = Path(args.out_json)
     out_md = Path(args.out_md)
@@ -856,6 +981,8 @@ def main() -> int:
     ext = load_ext_cache(ext_dir, station_summary, args.start_date, args.end_date)
     rows = add_weather_features(rows, ext)
     rows = add_forecasts(rows, forecasts)
+    peak_backfill = load_forecast_peak_backfill(forecast_peak_backfill_path, args.start_date, args.end_date)
+    rows = add_forecast_peak_backfill(rows, peak_backfill)
 
     state = coverage_by_state(rows)
     feature_csv = out_dir / "reheat_feature_rows.csv"
@@ -870,6 +997,9 @@ def main() -> int:
         "observed_detail": str(observed_path.relative_to(ROOT)) if observed_path.is_absolute() else str(observed_path),
         "station_summary": str(station_summary_path.relative_to(ROOT)) if station_summary_path.is_absolute() else str(station_summary_path),
         "ext_cache_dir": str(ext_dir.relative_to(ROOT)) if ext_dir.is_absolute() else str(ext_dir),
+        "forecast_peak_backfill": str(forecast_peak_backfill_path.relative_to(ROOT))
+        if forecast_peak_backfill_path.is_absolute()
+        else str(forecast_peak_backfill_path),
         "start_date": args.start_date,
         "end_date": args.end_date,
         "decision_hours": sorted(hours),

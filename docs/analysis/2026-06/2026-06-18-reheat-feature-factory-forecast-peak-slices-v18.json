@@ -1,0 +1,775 @@
+{
+  "generated_at_utc": "2026-06-17T17:20:34+00:00",
+  "target_metric": "forecast_peak_clock_model_incremental_value",
+  "evidence_layer": "shared reheat feature factory opportunity replay, not live fills",
+  "split_date": "2026-06-01",
+  "taker_cushion": 0.02,
+  "data_self_check": {
+    "fact_trades_max_built_at_utc": "2026-06-17T17:09:13.232107+00:00",
+    "fact_trades_by_class": [
+      {
+        "trade_class": "live_real",
+        "rows": 855
+      },
+      {
+        "trade_class": "live_simulated",
+        "rows": 624
+      },
+      {
+        "trade_class": "paper",
+        "rows": 2285
+      },
+      {
+        "trade_class": "snapshot_replay",
+        "rows": 636
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "settlement_status": "",
+        "rows": 150
+      },
+      {
+        "settlement_status": "settled",
+        "rows": 4250
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "rows": 31499,
+      "eligible": 10961,
+      "paper_ordered": 4274,
+      "live_filled": 348
+    },
+    "clob_order_fill_join": [
+      {
+        "status": "error",
+        "orders": 33,
+        "with_fill": 0
+      },
+      {
+        "status": "submitted",
+        "orders": 961,
+        "with_fill": 855
+      }
+    ]
+  },
+  "clob_fill_gate": {
+    "gate_pass": true,
+    "fail_reasons": [],
+    "missing_order_rows": 0,
+    "over_order_keys": 0,
+    "db_fill_cost_minus_fact_cost": 0.0
+  },
+  "funnel": {
+    "state_rows": 8696,
+    "active_dates": 27,
+    "cities": 36,
+    "clocked_current_yes_rows": 3612
+  },
+  "rule_summary": [
+    {
+      "rule": "all_clocked_current_yes",
+      "period": "train",
+      "rows": 1743,
+      "active_dates": 13,
+      "cities": 36,
+      "yes_win_rate": 0.4480780263912794,
+      "yes_cost": 858.952,
+      "yes_pnl": -77.95200000000001,
+      "yes_roi": -0.09075245182501468,
+      "yes_roi_ci95": [
+        -0.1453050131153363,
+        -0.03530337974501186
+      ],
+      "paired_rows": 1655,
+      "d1_no_win_rate": 0.6948640483383686,
+      "d1_no_cost": 1233.909,
+      "d1_no_pnl": -83.90900000000003,
+      "d1_no_roi": -0.06800258365892463,
+      "d1_no_roi_ci95": [
+        -0.09952705267994028,
+        -0.034540865321523506
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.004623520034025659,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.021716070149313062,
+        0.03103300807192944
+      ]
+    },
+    {
+      "rule": "all_clocked_current_yes",
+      "period": "holdout",
+      "rows": 1869,
+      "active_dates": 14,
+      "cities": 36,
+      "yes_win_rate": 0.4810058855002675,
+      "yes_cost": 955.443,
+      "yes_pnl": -56.44300000000001,
+      "yes_roi": -0.05907521432466407,
+      "yes_roi_ci95": [
+        -0.11873742451708139,
+        -0.0014236867038553568
+      ],
+      "paired_rows": 1802,
+      "d1_no_win_rate": 0.6798002219755827,
+      "d1_no_cost": 1311.4650000000001,
+      "d1_no_pnl": -86.46500000000003,
+      "d1_no_roi": -0.06593008582005622,
+      "d1_no_roi_ci95": [
+        -0.09874858935659207,
+        -0.03673323684105548
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.026138265524991173,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.01850151511448609,
+        0.06906495045755322
+      ]
+    },
+    {
+      "rule": "all_clocked_current_yes",
+      "period": "all",
+      "rows": 3612,
+      "active_dates": 27,
+      "cities": 36,
+      "yes_win_rate": 0.46511627906976744,
+      "yes_cost": 1814.395,
+      "yes_pnl": -134.39500000000004,
+      "yes_roi": -0.07407152246341069,
+      "yes_roi_ci95": [
+        -0.11293064840108236,
+        -0.03332473006707935
+      ],
+      "paired_rows": 3457,
+      "d1_no_win_rate": 0.6870118599942147,
+      "d1_no_cost": 2545.374,
+      "d1_no_pnl": -170.37400000000008,
+      "d1_no_roi": -0.06693476086421882,
+      "d1_no_roi_ci95": [
+        -0.0897229797168881,
+        -0.04376691685629978
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.01585501517965943,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.011173094853041843,
+        0.04373911215341423
+      ]
+    },
+    {
+      "rule": "v9_like_fade_confirmed_physical",
+      "period": "train",
+      "rows": 164,
+      "active_dates": 13,
+      "cities": 32,
+      "yes_win_rate": 0.7317073170731707,
+      "yes_cost": 124.94300000000001,
+      "yes_pnl": -4.943000000000001,
+      "yes_roi": -0.03956204029037242,
+      "yes_roi_ci95": [
+        -0.12150242300466126,
+        0.029722597537341154
+      ],
+      "paired_rows": 153,
+      "d1_no_win_rate": 0.7712418300653595,
+      "d1_no_cost": 129.079,
+      "d1_no_pnl": -11.079000000000002,
+      "d1_no_roi": -0.08583115766313654,
+      "d1_no_roi_ci95": [
+        -0.14795214159491785,
+        -0.029059947384704198
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.03942573434098858,
+      "yes_minus_d1_no_roi_ci95": [
+        0.005025255164344841,
+        0.07069179366337845
+      ]
+    },
+    {
+      "rule": "v9_like_fade_confirmed_physical",
+      "period": "holdout",
+      "rows": 174,
+      "active_dates": 13,
+      "cities": 33,
+      "yes_win_rate": 0.7988505747126436,
+      "yes_cost": 138.894,
+      "yes_pnl": 0.10599999999999854,
+      "yes_roi": 0.0007631719152735074,
+      "yes_roi_ci95": [
+        -0.0727008096697354,
+        0.06256944240093906
+      ],
+      "paired_rows": 157,
+      "d1_no_win_rate": 0.8471337579617835,
+      "d1_no_cost": 133.495,
+      "d1_no_pnl": -0.49500000000000166,
+      "d1_no_roi": -0.003708004045095334,
+      "d1_no_roi_ci95": [
+        -0.06564987509347657,
+        0.047824039679839205
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.0030901580794434683,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.02855491575079883,
+        0.029039622089127925
+      ]
+    },
+    {
+      "rule": "v9_like_fade_confirmed_physical",
+      "period": "all",
+      "rows": 338,
+      "active_dates": 26,
+      "cities": 34,
+      "yes_win_rate": 0.7662721893491125,
+      "yes_cost": 263.837,
+      "yes_pnl": -4.8370000000000015,
+      "yes_roi": -0.01833328911411213,
+      "yes_roi_ci95": [
+        -0.07288788960855877,
+        0.030200721847487236
+      ],
+      "paired_rows": 310,
+      "d1_no_win_rate": 0.8096774193548387,
+      "d1_no_cost": 262.57399999999996,
+      "d1_no_pnl": -11.574000000000003,
+      "d1_no_roi": -0.044079002490726445,
+      "d1_no_roi_ci95": [
+        -0.09078480380576749,
+        -0.000717677765874457
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.020814691975168716,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.002647053882852578,
+        0.042210761570328964
+      ]
+    },
+    {
+      "rule": "forecast_fade_both_peaks_passed",
+      "period": "train",
+      "rows": 115,
+      "active_dates": 13,
+      "cities": 28,
+      "yes_win_rate": 0.9217391304347826,
+      "yes_cost": 99.80299999999998,
+      "yes_pnl": 6.196999999999999,
+      "yes_roi": 0.062092321874091964,
+      "yes_roi_ci95": [
+        0.019717328851323244,
+        0.11350724663739403
+      ],
+      "paired_rows": 97,
+      "d1_no_win_rate": 0.9072164948453608,
+      "d1_no_cost": 87.575,
+      "d1_no_pnl": 0.4249999999999996,
+      "d1_no_roi": 0.004852983157293743,
+      "d1_no_roi_ci95": [
+        -0.025212275131131442,
+        0.039014070693006386
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.03878522622775263,
+      "yes_minus_d1_no_roi_ci95": [
+        0.02032797100505963,
+        0.059576008631970566
+      ]
+    },
+    {
+      "rule": "forecast_fade_both_peaks_passed",
+      "period": "holdout",
+      "rows": 100,
+      "active_dates": 12,
+      "cities": 27,
+      "yes_win_rate": 0.85,
+      "yes_cost": 88.88900000000001,
+      "yes_pnl": -3.8890000000000002,
+      "yes_roi": -0.04375119531100586,
+      "yes_roi_ci95": [
+        -0.1564541042795306,
+        0.06069223857455967
+      ],
+      "paired_rows": 89,
+      "d1_no_win_rate": 0.8426966292134831,
+      "d1_no_cost": 80.437,
+      "d1_no_pnl": -5.437000000000001,
+      "d1_no_roi": -0.06759327175304898,
+      "d1_no_roi_ci95": [
+        -0.1857728222630742,
+        0.049614825588986944
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.016561449536771338,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.024466429461985455,
+        0.04020101176269664
+      ]
+    },
+    {
+      "rule": "forecast_fade_both_peaks_passed",
+      "period": "all",
+      "rows": 215,
+      "active_dates": 25,
+      "cities": 33,
+      "yes_win_rate": 0.8883720930232558,
+      "yes_cost": 188.692,
+      "yes_pnl": 2.307999999999998,
+      "yes_roi": 0.012231573145655343,
+      "yes_roi_ci95": [
+        -0.05286401998792604,
+        0.0706512853135772
+      ],
+      "paired_rows": 186,
+      "d1_no_win_rate": 0.8763440860215054,
+      "d1_no_cost": 168.012,
+      "d1_no_pnl": -5.0120000000000005,
+      "d1_no_roi": -0.029831202533152395,
+      "d1_no_roi_ci95": [
+        -0.09773859109675716,
+        0.02699568018274225
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.028119220652644387,
+      "yes_minus_d1_no_roi_ci95": [
+        0.00841619362512974,
+        0.04507221058357664
+      ]
+    },
+    {
+      "rule": "forecast_fade_passed_low_gap",
+      "period": "train",
+      "rows": 57,
+      "active_dates": 12,
+      "cities": 19,
+      "yes_win_rate": 0.9122807017543859,
+      "yes_cost": 50.592000000000006,
+      "yes_pnl": 1.4079999999999995,
+      "yes_roi": 0.027830487033523074,
+      "yes_roi_ci95": [
+        -0.038780025615004335,
+        0.10508290654405744
+      ],
+      "paired_rows": 48,
+      "d1_no_win_rate": 0.8958333333333334,
+      "d1_no_cost": 44.282000000000004,
+      "d1_no_pnl": -1.2820000000000005,
+      "d1_no_roi": -0.02895081522966443,
+      "d1_no_roi_ci95": [
+        -0.07407586005880891,
+        0.029647840892519053
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.020302484202842346,
+      "yes_minus_d1_no_roi_ci95": [
+        0.005391308932248247,
+        0.03140205811090251
+      ]
+    },
+    {
+      "rule": "forecast_fade_passed_low_gap",
+      "period": "holdout",
+      "rows": 50,
+      "active_dates": 11,
+      "cities": 21,
+      "yes_win_rate": 0.82,
+      "yes_cost": 44.495,
+      "yes_pnl": -3.495,
+      "yes_roi": -0.07854815147769413,
+      "yes_roi_ci95": [
+        -0.23593747511827248,
+        0.057812165842589046
+      ],
+      "paired_rows": 43,
+      "d1_no_win_rate": 0.813953488372093,
+      "d1_no_cost": 38.516999999999996,
+      "d1_no_pnl": -3.5170000000000003,
+      "d1_no_roi": -0.0913103305034141,
+      "d1_no_roi_ci95": [
+        -0.28240412118830555,
+        0.0728365365285541
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": -0.0036233786693273145,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.07408534999703739,
+        0.03213923167078131
+      ]
+    },
+    {
+      "rule": "forecast_fade_passed_low_gap",
+      "period": "all",
+      "rows": 107,
+      "active_dates": 23,
+      "cities": 27,
+      "yes_win_rate": 0.8691588785046729,
+      "yes_cost": 95.08700000000002,
+      "yes_pnl": -2.0870000000000006,
+      "yes_roi": -0.021948321011284404,
+      "yes_roi_ci95": [
+        -0.10880232899340624,
+        0.0571228725725765
+      ],
+      "paired_rows": 91,
+      "d1_no_win_rate": 0.8571428571428571,
+      "d1_no_cost": 82.799,
+      "d1_no_pnl": -4.799,
+      "d1_no_roi": -0.057959637193685916,
+      "d1_no_roi_ci95": [
+        -0.1466610360702558,
+        0.020941936734333685
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.009179351342113933,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.022715272483315754,
+        0.027683581724593346
+      ]
+    },
+    {
+      "rule": "peak_forming_near_agree",
+      "period": "train",
+      "rows": 418,
+      "active_dates": 13,
+      "cities": 36,
+      "yes_win_rate": 0.6722488038277512,
+      "yes_cost": 289.62800000000004,
+      "yes_pnl": -8.628000000000004,
+      "yes_roi": -0.029789937436988146,
+      "yes_roi_ci95": [
+        -0.08913220107568492,
+        0.031766007765308635
+      ],
+      "paired_rows": 396,
+      "d1_no_win_rate": 0.7070707070707071,
+      "d1_no_cost": 300.082,
+      "d1_no_pnl": -20.082000000000008,
+      "d1_no_roi": -0.06692170806646186,
+      "d1_no_roi_ci95": [
+        -0.134196765958833,
+        -0.0057601914980783325
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.0383101180027392,
+      "yes_minus_d1_no_roi_ci95": [
+        0.011298513661831275,
+        0.061414702720058494
+      ]
+    },
+    {
+      "rule": "peak_forming_near_agree",
+      "period": "holdout",
+      "rows": 420,
+      "active_dates": 14,
+      "cities": 36,
+      "yes_win_rate": 0.6142857142857143,
+      "yes_cost": 276.618,
+      "yes_pnl": -18.618000000000006,
+      "yes_roi": -0.0673058152397892,
+      "yes_roi_ci95": [
+        -0.15129644586561639,
+        0.004257205886442491
+      ],
+      "paired_rows": 408,
+      "d1_no_win_rate": 0.6568627450980392,
+      "d1_no_cost": 299.28999999999996,
+      "d1_no_pnl": -31.290000000000006,
+      "d1_no_roi": -0.1045474289150991,
+      "d1_no_roi_ci95": [
+        -0.19271192333435072,
+        -0.04087920154130863
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.04406427559017499,
+      "yes_minus_d1_no_roi_ci95": [
+        0.0025052760083612855,
+        0.08735439603769642
+      ]
+    },
+    {
+      "rule": "peak_forming_near_agree",
+      "period": "all",
+      "rows": 838,
+      "active_dates": 27,
+      "cities": 36,
+      "yes_win_rate": 0.6431980906921241,
+      "yes_cost": 566.246,
+      "yes_pnl": -27.24600000000001,
+      "yes_roi": -0.04811689618999518,
+      "yes_roi_ci95": [
+        -0.09783255006561002,
+        -0.0006821671342566483
+      ],
+      "paired_rows": 804,
+      "d1_no_win_rate": 0.681592039800995,
+      "d1_no_cost": 599.3720000000001,
+      "d1_no_pnl": -51.37200000000001,
+      "d1_no_roi": -0.08570970949593909,
+      "d1_no_roi_ci95": [
+        -0.14064962441207876,
+        -0.04058644910385558
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.04117424275786747,
+      "yes_minus_d1_no_roi_ci95": [
+        0.016520070515195946,
+        0.0659883489285208
+      ]
+    },
+    {
+      "rule": "danger_gfs_peak_still_2h_ahead",
+      "period": "train",
+      "rows": 752,
+      "active_dates": 12,
+      "cities": 36,
+      "yes_win_rate": 0.1529255319148936,
+      "yes_cost": 182.54899999999998,
+      "yes_pnl": -67.549,
+      "yes_roi": -0.3700321557499631,
+      "yes_roi_ci95": [
+        -0.5342479791517319,
+        -0.20237468125990238
+      ],
+      "paired_rows": 726,
+      "d1_no_win_rate": 0.6446280991735537,
+      "d1_no_cost": 506.97299999999996,
+      "d1_no_pnl": -38.973000000000006,
+      "d1_no_roi": -0.07687391636240985,
+      "d1_no_roi_ci95": [
+        -0.12269800392931565,
+        -0.03059698375089
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": -0.08222654573129468,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.14395151819750338,
+        -0.01672796974219989
+      ]
+    },
+    {
+      "rule": "danger_gfs_peak_still_2h_ahead",
+      "period": "holdout",
+      "rows": 828,
+      "active_dates": 14,
+      "cities": 36,
+      "yes_win_rate": 0.2463768115942029,
+      "yes_cost": 248.69,
+      "yes_pnl": -44.690000000000005,
+      "yes_roi": -0.17970163657565646,
+      "yes_roi_ci95": [
+        -0.29927181329368713,
+        -0.05454722223528744
+      ],
+      "paired_rows": 807,
+      "d1_no_win_rate": 0.6319702602230484,
+      "d1_no_cost": 548.476,
+      "d1_no_pnl": -38.47600000000001,
+      "d1_no_roi": -0.07015074497334435,
+      "d1_no_roi_ci95": [
+        -0.12093598191251316,
+        -0.02563049748773583
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": -0.0161281006160422,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.1130638761223748,
+        0.07954661220832288
+      ]
+    },
+    {
+      "rule": "danger_gfs_peak_still_2h_ahead",
+      "period": "all",
+      "rows": 1580,
+      "active_dates": 26,
+      "cities": 36,
+      "yes_win_rate": 0.20189873417721518,
+      "yes_cost": 431.23900000000003,
+      "yes_pnl": -112.239,
+      "yes_roi": -0.26027098662226744,
+      "yes_roi_ci95": [
+        -0.36851995780898467,
+        -0.1475416978611028
+      ],
+      "paired_rows": 1533,
+      "d1_no_win_rate": 0.6379647749510763,
+      "d1_no_cost": 1055.449,
+      "d1_no_pnl": -77.44900000000001,
+      "d1_no_roi": -0.07338014437457424,
+      "d1_no_roi_ci95": [
+        -0.10801032182436801,
+        -0.0401809450966513
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": -0.04674525621590577,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.10665954161675226,
+        0.018880359986438652
+      ]
+    },
+    {
+      "rule": "diagnostic_gfs_1_to_4h_after_peak",
+      "period": "train",
+      "rows": 324,
+      "active_dates": 13,
+      "cities": 35,
+      "yes_win_rate": 0.8487654320987654,
+      "yes_cost": 264.059,
+      "yes_pnl": 10.940999999999997,
+      "yes_roi": 0.041433921964409454,
+      "yes_roi_ci95": [
+        -0.00760886087701909,
+        0.08218220039098846
+      ],
+      "paired_rows": 290,
+      "d1_no_win_rate": 0.8586206896551725,
+      "d1_no_cost": 250.47199999999998,
+      "d1_no_pnl": -1.4720000000000049,
+      "d1_no_roi": -0.005876904404484354,
+      "d1_no_roi_ci95": [
+        -0.04230694185442325,
+        0.022278369673146645
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.042327276636476216,
+      "yes_minus_d1_no_roi_ci95": [
+        0.010630999245294205,
+        0.06813289763507897
+      ]
+    },
+    {
+      "rule": "diagnostic_gfs_1_to_4h_after_peak",
+      "period": "holdout",
+      "rows": 334,
+      "active_dates": 14,
+      "cities": 36,
+      "yes_win_rate": 0.8083832335329342,
+      "yes_cost": 267.98400000000004,
+      "yes_pnl": 2.0159999999999965,
+      "yes_roi": 0.007522837184309497,
+      "yes_roi_ci95": [
+        -0.045195745792366786,
+        0.05975082777124295
+      ],
+      "paired_rows": 307,
+      "d1_no_win_rate": 0.8241042345276873,
+      "d1_no_cost": 257.04200000000003,
+      "d1_no_pnl": -4.042000000000003,
+      "d1_no_roi": -0.015725056605535293,
+      "d1_no_roi_ci95": [
+        -0.06715281128728547,
+        0.033682817104814675
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.022224757923900922,
+      "yes_minus_d1_no_roi_ci95": [
+        0.0007497669338046124,
+        0.045129325161955766
+      ]
+    },
+    {
+      "rule": "diagnostic_gfs_1_to_4h_after_peak",
+      "period": "all",
+      "rows": 658,
+      "active_dates": 27,
+      "cities": 36,
+      "yes_win_rate": 0.8282674772036475,
+      "yes_cost": 532.0430000000001,
+      "yes_pnl": 12.956999999999994,
+      "yes_roi": 0.024353294752491792,
+      "yes_roi_ci95": [
+        -0.012783042086817277,
+        0.05920149086670837
+      ],
+      "paired_rows": 597,
+      "d1_no_win_rate": 0.8408710217755444,
+      "d1_no_cost": 507.51399999999995,
+      "d1_no_pnl": -5.5140000000000065,
+      "d1_no_roi": -0.010864724913992534,
+      "d1_no_roi_ci95": [
+        -0.04241712691433722,
+        0.019531888777510747
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.032114234571416954,
+      "yes_minus_d1_no_roi_ci95": [
+        0.013180339456362345,
+        0.05062697321507375
+      ]
+    },
+    {
+      "rule": "paired_current_yes_vs_d1_no_clocked",
+      "period": "train",
+      "rows": 1655,
+      "active_dates": 12,
+      "cities": 36,
+      "yes_win_rate": 0.4368580060422961,
+      "yes_cost": 802.202,
+      "yes_pnl": -79.20200000000003,
+      "yes_roi": -0.09873074362816352,
+      "yes_roi_ci95": [
+        -0.15435739857294417,
+        -0.04183596759515887
+      ],
+      "paired_rows": 1655,
+      "d1_no_win_rate": 0.6948640483383686,
+      "d1_no_cost": 1233.909,
+      "d1_no_pnl": -83.90900000000003,
+      "d1_no_roi": -0.06800258365892463,
+      "d1_no_roi_ci95": [
+        -0.09952705267994028,
+        -0.034540865321523506
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.004623520034025659,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.021716070149313062,
+        0.03103300807192944
+      ]
+    },
+    {
+      "rule": "paired_current_yes_vs_d1_no_clocked",
+      "period": "holdout",
+      "rows": 1802,
+      "active_dates": 14,
+      "cities": 36,
+      "yes_win_rate": 0.47447280799112096,
+      "yes_cost": 912.4010000000001,
+      "yes_pnl": -57.40100000000002,
+      "yes_roi": -0.06291203100391167,
+      "yes_roi_ci95": [
+        -0.12347509348664355,
+        -0.004168021571959585
+      ],
+      "paired_rows": 1802,
+      "d1_no_win_rate": 0.6798002219755827,
+      "d1_no_cost": 1311.4650000000001,
+      "d1_no_pnl": -86.46500000000003,
+      "d1_no_roi": -0.06593008582005622,
+      "d1_no_roi_ci95": [
+        -0.09874858935659207,
+        -0.03673323684105548
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.026138265524991173,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.01850151511448609,
+        0.06906495045755322
+      ]
+    },
+    {
+      "rule": "paired_current_yes_vs_d1_no_clocked",
+      "period": "all",
+      "rows": 3457,
+      "active_dates": 26,
+      "cities": 36,
+      "yes_win_rate": 0.456465143187735,
+      "yes_cost": 1714.603,
+      "yes_pnl": -136.603,
+      "yes_roi": -0.07967033768166742,
+      "yes_roi_ci95": [
+        -0.12294277362441802,
+        -0.036844562950460416
+      ],
+      "paired_rows": 3457,
+      "d1_no_win_rate": 0.6870118599942147,
+      "d1_no_cost": 2545.374,
+      "d1_no_pnl": -170.37400000000008,
+      "d1_no_roi": -0.06693476086421882,
+      "d1_no_roi_ci95": [
+        -0.0897229797168881,
+        -0.04376691685629978
+      ],
+      "yes_minus_d1_no_roi_on_paired_cost": 0.01585501517965943,
+      "yes_minus_d1_no_roi_ci95": [
+        -0.011173094853041843,
+        0.04373911215341423
+      ]
+    }
+  ],
+  "outputs": {
+    "json": "docs/analysis/2026-06/2026-06-18-reheat-feature-factory-forecast-peak-slices-v18.json",
+    "markdown": "docs/analysis/2026-06/2026-06-18-reheat-feature-factory-forecast-peak-slices-v18.md",
+    "rule_summary_csv": "docs/analysis/2026-06/generated/reheat_feature_factory_forecast_peak_slices_v18/rule_summary.csv"
+  },
+  "inputs": {
+    "feature_rows": "docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv"
+  }
+}

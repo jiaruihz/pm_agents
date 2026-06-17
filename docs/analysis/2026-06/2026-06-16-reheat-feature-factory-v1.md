@@ -3,8 +3,8 @@
 ## Data Snapshot
 
 - Data source: `runtime/weather.db` (`fact_signal_candidates`, `fact_trades`, `settlement_outcomes`) plus time-aligned raw orderbook snapshots under `runtime/weather_edge_v1/market_data/orderbook_snapshots`.
-- Generated at UTC: `2026-06-16T16:02:08+00:00`.
-- DB fact built at UTC: `2026-06-16T15:50:05.971834+00:00`.
+- Generated at UTC: `2026-06-17T17:19:27+00:00`.
+- DB fact built at UTC: `2026-06-17T17:09:13.232107+00:00`.
 - Row grain: `city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome`.
 - Evidence layer: time-aligned orderbook replay / opportunity feature layer, not live fills.
 
@@ -12,7 +12,7 @@
 
 This first shared factory is usable for downstream reheat-risk research on observed path, current YES, d1/d2 NO, target YES quotes, and settlement labels. It should replace strategy-private materializers for `current_yes_peak_forming`, `current_yes_fade_confirmed`, `higher_no_carry`, and `low_price_yes_reheat_reversal`.
 
-The important gap is forecast peak context: the columns exist in `fact_signal_candidates`, but the current DB snapshot has effectively no populated `forecast_peak_hour_local` or `forecast_values_hash`, so forecast-peak-clock experiments can consume the schema but must wait for upstream population or a documented backfill.
+The former largest gap was forecast peak context. This factory now consumes the documented `forecast_peak_clock_backfill_v1.csv` city-date layer when native `fact_signal_candidates` peak fields are missing, and exposes both GFS and ECMWF peak-clock features. This makes forecast peak clock usable for shared research tables; it is still a backfilled research feature, not proof of production native point-in-time coverage.
 
 No live action is implied. This is an opportunity/replay feature layer, not fill PnL.
 
@@ -20,7 +20,7 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
 
 ```json
 {
-  "fact_trades_max_built_at_utc": "2026-06-16T15:50:05.971834+00:00",
+  "fact_trades_max_built_at_utc": "2026-06-17T17:09:13.232107+00:00",
   "fact_trades_by_class": [
     {
       "trade_class": "live_real",
@@ -42,17 +42,17 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
   "fact_trades_by_settlement_status": [
     {
       "settlement_status": "",
-      "rows": 90
+      "rows": 150
     },
     {
       "settlement_status": "settled",
-      "rows": 4310
+      "rows": 4250
     }
   ],
   "fact_signal_candidate_coverage": {
-    "rows": 30919,
-    "eligible": 10685,
-    "paper_ordered": 4123,
+    "rows": 31499,
+    "eligible": 10961,
+    "paper_ordered": 4274,
     "live_filled": 348
   },
   "clob_order_fill_join": [
@@ -94,9 +94,13 @@ Core state means current temp, running max, minutes since max, current YES quote
 | `running_max_c` | 100.0% | 100.0% |
 | `decline_from_max_c` | 100.0% | 100.0% |
 | `minutes_since_running_max` | 96.9% | 95.8% |
-| `forecast_peak_hour_local` | 0.0% | 0.0% |
-| `forecast_peak_delta_hours_local` | 0.0% | 0.0% |
-| `forecast_values_hash` | 0.0% | 0.0% |
+| `forecast_peak_hour_local` | 95.7% | 94.1% |
+| `forecast_peak_delta_hours_local` | 95.7% | 94.1% |
+| `forecast_values_hash` | 95.7% | 94.1% |
+| `gfs_forecast_peak_hour_local` | 95.7% | 94.1% |
+| `gfs_forecast_peak_delta_hours_local` | 95.7% | 94.1% |
+| `ecmwf_forecast_peak_hour_local` | 95.7% | 94.1% |
+| `ecmwf_forecast_peak_delta_hours_local` | 95.7% | 94.1% |
 | `dwpf_now` | 98.4% | 98.3% |
 | `relative_humidity_pct` | 98.4% | 98.3% |
 | `wind_speed_kt` | 98.4% | 98.3% |
@@ -120,12 +124,12 @@ The coverage CSV has one row per `target_date + city + decision_hour_local` with
 
 | Missing field | State rows |
 |---|---:|
-| `forecast_hash` | 8696 |
-| `forecast_peak_hour` | 8696 |
 | `d2_no_quote` | 2815 |
 | `sky` | 2236 |
 | `d1_no_quote` | 1818 |
 | `current_yes_quote` | 1592 |
+| `forecast_hash` | 509 |
+| `forecast_peak_hour` | 509 |
 | `minutes_since_max` | 368 |
 | `any_target_yes_quote` | 202 |
 | `temp_trend` | 147 |

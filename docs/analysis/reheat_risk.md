@@ -141,6 +141,16 @@ Current conclusion:
   latest summary counts, telemetry decision-status distribution, and forecast
   peak fetch status. N100 activation still needs explicit deploy/start
   confirmation.
+- Feature-factory forecast peak slices v18 are complete in
+  `docs/analysis/2026-06/2026-06-18-reheat-feature-factory-forecast-peak-slices-v18.md`.
+  The shared `reheat_feature_factory_v1` now consumes
+  `forecast_peak_clock_backfill_v1.csv` when native fact-table peak fields are
+  missing, so GFS/ECMWF peak clock coverage rises to 95.7% of feature rows and
+  94.1% of date/city/hour states. Holdout confirms the feature is useful for
+  risk labeling: `danger_gfs_peak_still_2h_ahead` has current-YES win rate
+  24.6% and ROI -18.0%, while `diagnostic_gfs_1_to_4h_after_peak` has win rate
+  80.8% and ROI +0.8% with CI still crossing zero. This keeps forecast-clock in
+  the model/telemetry layer, not as a live hard gate.
 
 ## Strategy Heads
 
@@ -238,8 +248,9 @@ move a script only when it becomes the maintained entrypoint for a new result.
 
 ## Research Queue
 
-1. `reheat_feature_factory`: v1 completed; keep downstream strategy heads on
-   the shared factory output.
+1. `reheat_feature_factory`: v1 completed and now forecast-clock enriched via
+   the documented backfill table. Keep downstream strategy heads on the shared
+   factory output instead of private joins.
 2. `forecast_peak_clock_data_fill`: pm_agent fact builder now derives
    `forecast_peak_*`/`forecast_values_hash` from mirrored hourly cache when
    present. Research backfill v3 proves the feature can be joined and measured,
