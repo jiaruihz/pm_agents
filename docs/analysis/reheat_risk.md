@@ -123,6 +123,15 @@ Current conclusion:
   local and N100 `weather-predict` copies are not git worktrees, so this is a
   deploy/repo-state blocker rather than a modeling blocker. Do not claim
   production native peak fields are live until this is resolved.
+- Current-YES forecast peak live fallback v16 is complete in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-forecast-peak-live-fallback-v16.md`.
+  The `pm_agent` runner can now derive forecast peak fields itself from
+  Open-Meteo hourly forecast when snapshots lack native `forecast_peak_*`,
+  cache the payload, and log `forecast_peak_fetch_status` into plans/forward
+  telemetry. This does not change the v9 trading rule; it only makes forward
+  telemetry complete enough to score forecast-clock features before
+  `weather-predict` native fields are deployed. Runtime activation still
+  requires the N100 current-YES loop to load the new code.
 
 ## Strategy Heads
 

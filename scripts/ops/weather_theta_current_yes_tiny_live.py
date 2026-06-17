@@ -75,6 +75,53 @@ LIVE_OUT = ROOT / "runtime/weather_edge_v1/live/theta_current_yes_tiny_live_v1_o
 METAR_API = "https://aviationweather.gov/api/data/metar"
 IEM_ASOS_API = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
 CLOB_BOOK_API = "https://clob.polymarket.com/book"
+FORECAST_PEAK_CACHE_DIR = RUNTIME_DIR / "forecast_peak_cache"
+
+OPEN_METEO_MODEL_BY_SOURCE = {
+    "open_meteo_live_gfs": "gfs",
+    "open_meteo_live_ecmwf": "ecmwf",
+    "gfs": "gfs",
+    "ecmwf": "ecmwf",
+}
+
+CITY_COORDS = {
+    "Amsterdam": (52.31, 4.76),
+    "Ankara": (40.13, 32.99),
+    "Atlanta": (33.64, -84.43),
+    "Austin": (30.19, -97.67),
+    "Beijing": (40.08, 116.58),
+    "BuenosAires": (-34.82, -58.53),
+    "Busan": (35.18, 128.94),
+    "CapeTown": (-33.96, 18.6),
+    "Chengdu": (30.58, 103.95),
+    "Chongqing": (29.72, 106.64),
+    "Dallas": (32.85, -96.85),
+    "Denver": (39.72, -104.75),
+    "Guangzhou": (23.39, 113.3),
+    "Helsinki": (60.32, 24.97),
+    "Houston": (29.65, -95.28),
+    "Istanbul": (41.26, 28.74),
+    "Jeddah": (21.68, 39.16),
+    "Karachi": (24.91, 67.16),
+    "LA": (33.94, -118.41),
+    "Lucknow": (26.76, 80.89),
+    "Madrid": (40.47, -3.56),
+    "Manila": (14.51, 121.02),
+    "Miami": (25.8, -80.29),
+    "Munich": (48.35, 11.79),
+    "NYC": (40.78, -73.87),
+    "SanFrancisco": (37.62, -122.38),
+    "SaoPaulo": (-23.43, -46.47),
+    "Seattle": (47.45, -122.31),
+    "Shanghai": (31.14, 121.81),
+    "Singapore": (1.36, 103.99),
+    "Taipei": (25.07, 121.55),
+    "TelAviv": (32.01, 34.89),
+    "Tokyo": (35.55, 139.78),
+    "Warsaw": (52.17, 20.97),
+    "Wellington": (-41.33, 174.81),
+    "Wuhan": (30.78, 114.21),
+}
 
 BASE_FEATURES = [
     "decision_hour_local",
@@ -195,6 +242,140 @@ def fetch_json(url: str, params: dict | None = None, max_rounds: int = 2) -> Any
                 last = f"{proxy}: {type(exc).__name__}: {exc}"
                 time.sleep(0.4 + rnd)
     raise RuntimeError(f"fetch failed {url}: {last}")
+
+
+def forecast_values_hash(times: list[Any], temps: list[Any]) -> str:
+    payload = [
+        [str(ts), None if temp is None else round(float(temp), 3)]
+        for ts, temp in zip(times or [], temps or [], strict=False)
+    ]
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def forecast_details_from_open_meteo(payload: dict[str, Any], *, source_model: str) -> dict[str, Any] | None:
+    hourly = payload.get("hourly", {}) if isinstance(payload, dict) else {}
+    times = hourly.get("time", []) or []
+    temps = hourly.get("temperature_2m", []) or []
+    pairs: list[tuple[str, float]] = []
+    for ts, temp in zip(times, temps, strict=False):
+        if temp is None:
+            continue
+        try:
+            pairs.append((str(ts), float(temp)))
+        except Exception:
+            continue
+    if not pairs:
+        return None
+    max_f = max(temp for _, temp in pairs)
+    peak_local_time = min(ts for ts, temp in pairs if abs(temp - max_f) < 1e-9)
+    utc_offset_seconds = int(payload.get("utc_offset_seconds") or 0)
+    try:
+        local_dt = datetime.fromisoformat(peak_local_time)
+        peak_utc = (local_dt - timedelta(seconds=utc_offset_seconds)).replace(tzinfo=timezone.utc)
+        peak_time_utc = peak_utc.isoformat().replace("+00:00", "Z")
+        peak_hour_utc = peak_utc.hour
+    except Exception:
+        peak_time_utc = None
+        peak_hour_utc = None
+    return {
+        "forecast_max_f": max_f,
+        "forecast_peak_hour_local": int(peak_local_time[11:13]),
+        "forecast_peak_time_local": peak_local_time,
+        "forecast_peak_hour_utc": peak_hour_utc,
+        "forecast_peak_time_utc": peak_time_utc,
+        "forecast_hourly_count": len(pairs),
+        "forecast_values_hash": forecast_values_hash(times, temps),
+        "forecast_peak_source": f"open_meteo_live_{source_model}",
+        "forecast_timezone": payload.get("timezone"),
+        "forecast_utc_offset_seconds": utc_offset_seconds,
+        "forecast_peak_fetch_status": "derived",
+    }
+
+
+def forecast_model_from_record(record: dict[str, Any]) -> str:
+    raw = safe_str(record.get("forecast_source")) or safe_str(record.get("model")) or "gfs"
+    return OPEN_METEO_MODEL_BY_SOURCE.get(raw, raw if raw in {"gfs", "ecmwf"} else "gfs")
+
+
+def fetch_live_forecast_peak_details(city: str, target_date: str, model: str) -> dict[str, Any]:
+    coords = CITY_COORDS.get(city)
+    if coords is None:
+        return {"forecast_peak_fetch_status": "missing_city_coords"}
+    if model not in {"gfs", "ecmwf"}:
+        return {"forecast_peak_fetch_status": "unsupported_model", "forecast_peak_source": f"open_meteo_live_{model}"}
+    cache_path = FORECAST_PEAK_CACHE_DIR / f"{city}_{target_date}_{model}.json"
+    if cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            details = forecast_details_from_open_meteo(cached, source_model=model)
+            if details:
+                details["forecast_peak_fetch_status"] = "cache"
+                details["forecast_peak_cache_path"] = str(cache_path)
+                return details
+        except Exception:
+            pass
+    lat, lon = coords
+    payload = fetch_json(
+        f"https://api.open-meteo.com/v1/{model}",
+        {
+            "latitude": lat,
+            "longitude": lon,
+            "hourly": "temperature_2m",
+            "temperature_unit": "fahrenheit",
+            "timezone": "auto",
+            "start_date": target_date,
+            "end_date": target_date,
+        },
+        max_rounds=2,
+    )
+    FORECAST_PEAK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    details = forecast_details_from_open_meteo(payload, source_model=model)
+    if not details:
+        return {"forecast_peak_fetch_status": "empty_forecast_payload", "forecast_peak_cache_path": str(cache_path)}
+    details["forecast_peak_fetch_status"] = "fetched"
+    details["forecast_peak_cache_path"] = str(cache_path)
+    return details
+
+
+def forecast_peak_fields_from_record(record: dict[str, Any], *, city: str, target_date: str, unit: str, now_local: datetime) -> dict[str, Any]:
+    out = {
+        "forecast_source": safe_str(record.get("forecast_source")),
+        "forecast_max_f": record.get("forecast_max_f"),
+        "forecast_max_native": record.get("forecast_max_native"),
+        "forecast_peak_hour_local": record.get("forecast_peak_hour_local"),
+        "forecast_peak_time_local": record.get("forecast_peak_time_local"),
+        "forecast_peak_hour_utc": record.get("forecast_peak_hour_utc"),
+        "forecast_peak_time_utc": record.get("forecast_peak_time_utc"),
+        "forecast_hourly_count": record.get("forecast_hourly_count"),
+        "forecast_values_hash": record.get("forecast_values_hash"),
+        "forecast_peak_source": record.get("forecast_peak_source"),
+        "forecast_timezone": record.get("forecast_timezone"),
+        "forecast_utc_offset_seconds": record.get("forecast_utc_offset_seconds"),
+        "forecast_peak_fetch_status": "snapshot_native" if record.get("forecast_peak_hour_local") is not None and record.get("forecast_values_hash") else "snapshot_missing",
+        "forecast_peak_cache_path": "",
+    }
+    if out["forecast_peak_fetch_status"] == "snapshot_missing":
+        has_forecast_source = any(record.get(key) not in (None, "") for key in ("forecast_source", "forecast_max_f", "model"))
+        if has_forecast_source:
+            try:
+                fetched = fetch_live_forecast_peak_details(city, target_date, forecast_model_from_record(record))
+                out.update({k: v for k, v in fetched.items() if v is not None})
+            except Exception as exc:  # noqa: BLE001
+                out["forecast_peak_fetch_status"] = f"fetch_failed:{type(exc).__name__}"
+                out["forecast_peak_error"] = str(exc)[:300]
+        else:
+            out["forecast_peak_fetch_status"] = "snapshot_missing_no_forecast_source"
+    if out.get("forecast_max_f") is not None and out.get("forecast_max_native") in (None, ""):
+        max_f = to_float(out.get("forecast_max_f"), np.nan)
+        if math.isfinite(max_f):
+            out["forecast_max_native"] = (max_f - 32.0) * 5.0 / 9.0 if unit == "C" else max_f
+    if out.get("forecast_peak_delta_hours_local") in (None, "") and out.get("forecast_peak_hour_local") not in (None, ""):
+        peak = to_float(out.get("forecast_peak_hour_local"), np.nan)
+        if math.isfinite(peak):
+            out["forecast_peak_delta_hours_local"] = now_local.hour + now_local.minute / 60.0 - peak
+    return out
 
 
 def fetch_text(url: str, params: list[tuple[str, Any]], max_rounds: int = 2) -> str:
@@ -655,6 +836,13 @@ def build_current_rows(
         if yes_ask <= 0 or no_ask <= 0:
             audits.append({"city": city, "target_date": target_date, "status": "missing_ask", "yes_ask": yes_ask, "d1_no_ask": no_ask})
             continue
+        forecast_fields = forecast_peak_fields_from_record(
+            current_record,
+            city=city,
+            target_date=target_date,
+            unit=unit,
+            now_local=local_now,
+        )
         row = {
             "city": city,
             "target_date": target_date,
@@ -689,17 +877,7 @@ def build_current_rows(
             "snapshot_ts_utc": snapshot.get("ts_utc"),
             "snapshot_path": str(latest_snapshot() or ""),
             "obs": obs,
-            "forecast_source": safe_str(current_record.get("forecast_source")),
-            "forecast_max_f": current_record.get("forecast_max_f"),
-            "forecast_max_native": current_record.get("forecast_max_native"),
-            "forecast_peak_hour_local": current_record.get("forecast_peak_hour_local"),
-            "forecast_peak_time_local": current_record.get("forecast_peak_time_local"),
-            "forecast_peak_hour_utc": current_record.get("forecast_peak_hour_utc"),
-            "forecast_peak_time_utc": current_record.get("forecast_peak_time_utc"),
-            "forecast_hourly_count": current_record.get("forecast_hourly_count"),
-            "forecast_values_hash": current_record.get("forecast_values_hash"),
-            "forecast_peak_source": current_record.get("forecast_peak_source"),
-            "forecast_peak_delta_hours_local": current_record.get("forecast_peak_delta_hours_local"),
+            **forecast_fields,
             **{k: obs.get(k, np.nan) for k in ("tmpf_now", "dwpf_now", "dewpoint_depression_f", "relh_now", "sknt_now", "sky_now", "d_tmpf_1h", "d_tmpf_3h", "d_dwpf_3h", "d_relh_3h")},
         }
         rows.append(row)
@@ -811,6 +989,11 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "forecast_peak_time_utc": row.get("forecast_peak_time_utc"),
         "forecast_peak_source": row.get("forecast_peak_source"),
         "forecast_values_hash": row.get("forecast_values_hash"),
+        "forecast_timezone": row.get("forecast_timezone"),
+        "forecast_utc_offset_seconds": row.get("forecast_utc_offset_seconds"),
+        "forecast_hourly_count": row.get("forecast_hourly_count"),
+        "forecast_peak_fetch_status": row.get("forecast_peak_fetch_status"),
+        "forecast_peak_cache_path": row.get("forecast_peak_cache_path"),
         "forecast_peak_delta_hours_local": forecast_peak_delta(row),
         "decision_hour_local": int(row["decision_hour_local"]),
         "decision_local_time": safe_str(row.get("local_time")),
@@ -974,6 +1157,12 @@ def current_yes_forward_telemetry_row(
         "forecast_peak_time_utc": row.get("forecast_peak_time_utc"),
         "forecast_peak_source": row.get("forecast_peak_source"),
         "forecast_values_hash": row.get("forecast_values_hash"),
+        "forecast_timezone": row.get("forecast_timezone"),
+        "forecast_utc_offset_seconds": row.get("forecast_utc_offset_seconds"),
+        "forecast_hourly_count": row.get("forecast_hourly_count"),
+        "forecast_peak_fetch_status": row.get("forecast_peak_fetch_status"),
+        "forecast_peak_cache_path": row.get("forecast_peak_cache_path"),
+        "forecast_peak_error": row.get("forecast_peak_error"),
         "forecast_peak_delta_hours_local": forecast_peak_delta(row),
         "config": {
             "max_order_notional": float(args.max_order_notional),
@@ -1315,6 +1504,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "obs_age_min": round(float((r.get("obs") or {}).get("age_min") or 0.0), 1),
                 "minutes_to_next_obs": round(float((r.get("obs") or {}).get("minutes_to_next_obs") or -1.0), 1),
                 "gap_running_to_d1_low_c": round(float(r.get("gap_running_to_d1_low_c") or 0.0), 3),
+                "forecast_peak_hour_local": r.get("forecast_peak_hour_local"),
+                "forecast_peak_delta_hours_local": forecast_peak_delta(r),
+                "forecast_peak_fetch_status": r.get("forecast_peak_fetch_status"),
             }
             for r in candidates
         ],

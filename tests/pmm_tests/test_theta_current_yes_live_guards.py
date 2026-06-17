@@ -151,6 +151,30 @@ def test_fetch_obs_reports_minutes_since_running_max(monkeypatch):
     assert result["minutes_since_running_max"] == 95.0
 
 
+def test_forecast_details_from_open_meteo_uses_earliest_peak_hour():
+    payload = {
+        "timezone": "Europe/Helsinki",
+        "utc_offset_seconds": 10800,
+        "hourly": {
+            "time": [
+                "2026-06-16T12:00",
+                "2026-06-16T13:00",
+                "2026-06-16T14:00",
+                "2026-06-16T15:00",
+            ],
+            "temperature_2m": [68.0, 69.8, 69.8, 68.9],
+        },
+    }
+
+    info = live.forecast_details_from_open_meteo(payload, source_model="ecmwf")
+
+    assert info["forecast_max_f"] == 69.8
+    assert info["forecast_peak_hour_local"] == 13
+    assert info["forecast_peak_time_utc"] == "2026-06-16T10:00:00Z"
+    assert info["forecast_values_hash"]
+    assert info["forecast_peak_source"] == "open_meteo_live_ecmwf"
+
+
 def test_build_current_rows_allows_one_c_gap_for_current_yes(monkeypatch):
     now = datetime(2026, 6, 16, 4, 10, tzinfo=timezone.utc)
     station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")
@@ -195,7 +219,77 @@ def test_build_current_rows_allows_one_c_gap_for_current_yes(monkeypatch):
     assert rows.iloc[0]["current_bracket"] == "20"
     assert rows.iloc[0]["d1_no_bracket"] == "21"
     assert rows.iloc[0]["gap_running_to_d1_low_c"] == 1.0
+    assert rows.iloc[0]["forecast_peak_fetch_status"] == "snapshot_missing_no_forecast_source"
     assert audits == []
+
+
+def test_build_current_rows_fetches_peak_clock_when_snapshot_lacks_native_fields(monkeypatch):
+    now = datetime(2026, 6, 16, 4, 10, tzinfo=timezone.utc)
+    station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")
+    rec20 = {
+        **_record("Tokyo", "20"),
+        "forecast_source": "open_meteo_live_gfs",
+        "forecast_max_f": 69.8,
+    }
+
+    def fake_fetch_obs(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "test",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-16T04:00:00+00:00",
+            "timezone": "Asia/Tokyo",
+            "cadence_min": 30.0,
+            "minutes_to_next_obs": 20.0,
+            "running_max_c": 20.0,
+            "current_temp_c": 19.0,
+            "decline_c": 1.0,
+            "tmpf_now": 66.2,
+            "dwpf_now": 50.0,
+            "dewpoint_depression_f": 16.2,
+            "relh_now": 50.0,
+            "sknt_now": 5.0,
+            "sky_now": 1.0,
+            "d_tmpf_1h": -1.0,
+            "d_tmpf_3h": -2.0,
+            "d_dwpf_3h": 0.0,
+            "d_relh_3h": 0.0,
+        }
+
+    def fake_forecast(city, target_date, model):
+        assert (city, target_date, model) == ("Tokyo", "2026-06-16", "gfs")
+        return {
+            "forecast_max_f": 69.8,
+            "forecast_peak_hour_local": 13,
+            "forecast_peak_time_local": "2026-06-16T13:00",
+            "forecast_peak_hour_utc": 4,
+            "forecast_peak_time_utc": "2026-06-16T04:00:00Z",
+            "forecast_hourly_count": 24,
+            "forecast_values_hash": "hash-from-fallback",
+            "forecast_peak_source": "open_meteo_live_gfs",
+            "forecast_peak_fetch_status": "fetched",
+        }
+
+    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_live_forecast_peak_details", fake_forecast)
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [rec20, _record("Tokyo", "21")],
+        {"Tokyo": station},
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert audits == []
+    assert len(rows) == 1
+    row = rows.iloc[0]
+    assert row["forecast_peak_hour_local"] == 13
+    assert row["forecast_peak_delta_hours_local"] == 0.16666666666666607
+    assert row["forecast_values_hash"] == "hash-from-fallback"
+    assert row["forecast_peak_fetch_status"] == "fetched"
 
 
 def test_build_current_rows_can_optionally_veto_gap_above_threshold(monkeypatch):
@@ -355,4 +449,5 @@ def test_run_once_writes_forward_telemetry_for_planned_candidate(tmp_path, monke
     assert rows[0]["minutes_since_running_max"] == 40.0
     assert rows[0]["fresh_best_ask"] == 0.79
     assert rows[0]["forecast_peak_hour_local"] == 13
-    assert rows[0]["forecast_peak_delta_hours_local"] == 0.0
+    assert rows[0]["forecast_peak_delta_hours_local"] == 0.16666666666666607
+    assert rows[0]["forecast_peak_fetch_status"] == "snapshot_native"
