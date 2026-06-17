@@ -280,6 +280,7 @@ def make_candidate(
         if outside and all(x is not None for x in no_prices)
         else None
     )
+    no_gross_cost = sum(float(x) for x in no_prices) if outside and all(x is not None for x in no_prices) else None
     if yes_cost is None and no_eff_cost is None:
         return None
     if no_eff_cost is not None and yes_cost is not None and no_eff_cost < yes_cost:
@@ -325,6 +326,8 @@ def make_candidate(
         )
 
     min_ask_size = min((float(leg["ask_size"]) for leg in legs if leg["ask_size"] is not None), default=None)
+    inside_yes_orderbook_edge = model_mass - yes_cost if yes_cost is not None else None
+    outside_no_orderbook_edge = model_mass - no_eff_cost if no_eff_cost is not None else None
     reject_reasons = []
     if missing_reasons:
         reject_reasons.extend(sorted(set(missing_reasons)))
@@ -351,6 +354,7 @@ def make_candidate(
     selected = not reject_reasons
     return {
         "record_type": "range_rv_shadow_candidate",
+        "shadow_schema_version": 2,
         "strategy_id": STRATEGY_ID,
         "execution_mode": "zero_notional_shadow",
         "no_order_placed": True,
@@ -374,9 +378,32 @@ def make_candidate(
         "inside_brackets": [str(row.get("bracket")) for row in inside],
         "range_model_mass_norm": model_mass,
         "inside_yes_cost": yes_cost,
+        "inside_yes_orderbook_edge": inside_yes_orderbook_edge,
         "outside_no_effective_cost": no_eff_cost,
+        "outside_no_gross_cost": no_gross_cost,
+        "outside_no_orderbook_edge": outside_no_orderbook_edge,
         "effective_range_cost": float(effective_cost),
         "orderbook_edge": orderbook_edge,
+        "variant_flags": {
+            "current_no_low_cost_gt025": float(effective_cost) > 0.25,
+            "current_mid_cost_050_075": 0.50 < float(effective_cost) <= 0.75,
+            "current_cap075_gt025": 0.25 < float(effective_cost) <= 0.75,
+            "current_cap080_gt025": 0.25 < float(effective_cost) <= 0.80,
+            "current_inside_expression_only": expression == "inside_yes",
+            "current_outside_expression_only_diag": expression == "outside_no",
+            "inside_native_edge002": inside_yes_orderbook_edge is not None
+            and inside_yes_orderbook_edge >= edge_threshold,
+            "inside_native_edge002_mid_cost_050_075": inside_yes_orderbook_edge is not None
+            and inside_yes_orderbook_edge >= edge_threshold
+            and yes_cost is not None
+            and 0.50 < yes_cost <= 0.75,
+            "inside_native_edge002_cap080_gt025": inside_yes_orderbook_edge is not None
+            and inside_yes_orderbook_edge >= edge_threshold
+            and yes_cost is not None
+            and 0.25 < yes_cost <= 0.80,
+        },
+        "forecast_quality_low": None,
+        "forecast_quality_label_status": "not_materialized_in_runtime_snapshot",
         "edge_threshold": edge_threshold,
         "min_top_ask_size_required": min_top_ask_size,
         "min_leg_ask_size": min_ask_size,
