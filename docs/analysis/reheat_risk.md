@@ -107,6 +107,14 @@ Current conclusion:
   with planned, fresh-book rejected, snapshot-rule rejected, and obs/hour blocked
   would-order rows. This is not a live policy change; it is the evidence layer
   needed to measure forward hit rate and taker ROI after enough rows settle.
+- Live readiness v15 is complete in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-live-readiness-v15.md`.
+  Current gate state: historical v9 PASS (31 holdout orders / 11 days, YES ROI
+  +16.2%, YES-over-d1-NO +4.1%), forecast-clock upgrade FAIL, forward telemetry
+  FAIL (only 44 non-live smoke rows, planned=0), and production native peak
+  fields FAIL. Therefore the branch is not ready for live upgrade; next required
+  evidence is N100 forward telemetry activation plus native point-in-time
+  forecast peak fields from `weather-predict`.
 
 ## Strategy Heads
 
