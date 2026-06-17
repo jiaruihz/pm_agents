@@ -468,7 +468,7 @@ def main() -> int:
     parser.add_argument("--cities", nargs="*", default=["Shanghai", "Tokyo"])
     parser.add_argument("--include-station-diff", action="store_true")
     parser.add_argument("--sources", nargs="*", default=["profile_primary", "checkwx_html"])
-    parser.add_argument("--bracket-radius", type=int, default=2)
+    parser.add_argument("--bracket-radius", type=int, default=1)
     parser.add_argument("--base-interval-sec", type=float, default=20.0)
     parser.add_argument("--burst-interval-sec", type=float, default=2.0)
     parser.add_argument("--burst-window-min", type=float, default=10.0)
