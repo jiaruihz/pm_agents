@@ -25,7 +25,6 @@ import io
 import json
 import math
 import os
-import re
 import shlex
 import subprocess
 import sys
@@ -46,6 +45,10 @@ if str(ROOT) not in sys.path:
 
 from src.strategies.weather_edge_v1.tools.execution_pipeline import read_jsonl, stable_hash
 from src.strategies.weather_edge_v1.tools.live_state import read_live_state
+from src.strategies.weather_edge_v1.official_observation_feed.market_brackets import (
+    bracket_contains,
+    parse_label_dict,
+)
 from src.strategies.weather_edge_v1.tools.official_observation_clock import (
     ObservationClockConfig,
     city_timezone_name,
@@ -353,30 +356,7 @@ def score_rows(rows: pd.DataFrame, artifact: dict[str, Any]) -> np.ndarray:
 
 
 def parse_label(label: str, question: str = "") -> dict[str, Any] | None:
-    lab = str(label).replace("°C", "").replace("°F", "").replace("°", "").strip()
-    q = str(question).lower()
-    nums = re.findall(r"(?<!\d)-?\d+(?:\.\d+)?", lab)
-    if not nums:
-        return None
-    is_bottom = "or below" in q or "or lower" in q
-    is_top = lab.endswith("+") or "or higher" in q or "or above" in q
-    if is_bottom:
-        return {"low": None, "high": float(nums[0]), "bottom": True, "top": False, "label": lab}
-    if is_top:
-        return {"low": float(nums[0]), "high": None, "bottom": False, "top": True, "label": lab}
-    if "-" in lab and len(nums) >= 2:
-        return {"low": float(nums[0]), "high": float(nums[1]), "bottom": False, "top": False, "label": lab}
-    return {"low": float(nums[0]), "high": float(nums[0]), "bottom": False, "top": False, "label": lab}
-
-
-def bracket_contains(parsed: dict[str, Any], value: float) -> bool:
-    low = parsed.get("low")
-    high = parsed.get("high")
-    if parsed.get("bottom"):
-        return high is not None and value <= float(high)
-    if parsed.get("top"):
-        return low is not None and value >= float(low)
-    return low is not None and high is not None and float(low) <= value <= float(high)
+    return parse_label_dict(label, question, include_label=True)
 
 
 def round_half_up(x: float) -> int:

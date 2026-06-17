@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+import json
+
+from src.strategies.weather_edge_v1.official_observation_feed.market_brackets import (
+    bracket_contains,
+    parse_label_dict,
+    parse_market_bracket,
+)
+from src.strategies.weather_edge_v1.official_observation_feed.source_registry import (
+    load_source_profiles,
+)
+
+
+def test_market_bracket_parser_keeps_positive_ranges_and_tails():
+    parsed = parse_market_bracket("74-75", "Will the highest temperature be between 74-75°F?")
+    assert parsed is not None
+    assert parsed.low == 74.0
+    assert parsed.high == 75.0
+    assert parsed.contains(74)
+    assert parsed.contains(75)
+    assert not parsed.contains(76)
+
+    top = parse_label_dict("94+", "Will the highest temperature be 94°F or higher?")
+    assert top == {"low": 94.0, "high": None, "bottom": False, "top": True, "label": "94+"}
+    assert bracket_contains(top, 96)
+
+    bottom = parse_label_dict("72", "Will the highest temperature be 72°F or below?")
+    assert bottom == {"low": None, "high": 72.0, "bottom": True, "top": False, "label": "72"}
+    assert bracket_contains(bottom, 71)
+
+
+def test_source_registry_marks_confirmed_and_blocked_profiles(tmp_path):
+    registry = {
+        "registry": [
+            {
+                "city": "Paris",
+                "unit": "C",
+                "settlement_source_class": "official_station_diff_confirmed",
+                "official_station_or_feed": "LFPB",
+                "mapping_rule": "whole-degree official station max",
+            },
+            {
+                "city": "Seoul",
+                "unit": "C",
+                "settlement_source_class": "blocked_unresolved_settlement_basis",
+                "official_station_or_feed": "unknown_effective_source",
+                "mapping_rule": "unresolved",
+                "downstream_action": "exclude until root cause is found",
+            },
+        ]
+    }
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    profiles = load_source_profiles(path)
+
+    assert profiles["Paris"].official_station_or_feed == "LFPB"
+    assert profiles["Paris"].primary_source == "aviationweather_metar"
+    assert profiles["Paris"].fallback_sources == ("iem_asos",)
+    assert profiles["Paris"].live_eligible
+    assert not profiles["Seoul"].live_eligible
+    assert profiles["Seoul"].blocked_reason == "exclude until root cause is found"

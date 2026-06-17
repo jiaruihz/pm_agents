@@ -47,6 +47,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from src.strategies.weather_edge_v1.official_observation_feed.market_brackets import parse_label_dict
+
 ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = Path(os.environ.get("STATION_BASIS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
 OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/station_basis_shadow"
@@ -314,20 +316,7 @@ def fetch_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
 
 def parse_label(label: str, question: str) -> dict | None:
     """Parse bracket label into low/high; flags bottom/top tails."""
-    lab = str(label).replace("°C", "").replace("°F", "").replace("°", "").strip()
-    q = str(question).lower()
-    nums = re.findall(r"(?<!\d)-?\d+(?:\.\d+)?", lab)
-    if not nums:
-        return None
-    is_bottom = "or below" in q or "or lower" in q
-    is_top = lab.endswith("+") or "or higher" in q or "or above" in q
-    if is_bottom:
-        return {"low": None, "high": float(nums[0]), "bottom": True, "top": False}
-    if is_top:
-        return {"low": float(nums[0]), "high": None, "bottom": False, "top": True}
-    if "-" in lab and len(nums) >= 2:
-        return {"low": float(nums[0]), "high": float(nums[1]), "bottom": False, "top": False}
-    return {"low": float(nums[0]), "high": float(nums[0]), "bottom": False, "top": False}
+    return parse_label_dict(label, question, include_label=False)
 
 
 def best_ask_from_book(book: dict) -> tuple[float, float] | None:
