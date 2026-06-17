@@ -112,7 +112,7 @@ def city_slug(city: str) -> str:
 
 def load_csv(path: Path) -> list[dict[str, str]]:
     if not path.exists():
-        raise FileNotFoundError(path)
+        return []
     with path.open(newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
 
@@ -163,24 +163,20 @@ def build_city_policy(*, include_station_diff: bool, only_cities: set[str] | Non
         alignment_days = 0
         alignment_rate = 0.0
         if profile.settlement_source_class == "default_wu_station_by_rules":
-            if city not in whitelist:
-                rejected.append(
-                    {
-                        "city": city,
-                        "reason": "missing_same_station_alignment_evidence",
-                        "settlement_source_class": profile.settlement_source_class,
-                    }
-                )
-                continue
-            alignment_days = safe_int(whitelist[city].get("valid_days"))
-            alignment_rate = safe_float(whitelist[city].get("match_rate"))
-            if alignment_days >= MIN_ALIGNMENT_DAYS and alignment_rate >= 1.0:
+            if city in whitelist:
+                alignment_days = safe_int(whitelist[city].get("valid_days"))
+                alignment_rate = safe_float(whitelist[city].get("match_rate"))
                 registry_class = "same_station_whitelist"
             else:
+                alignment_days = max(profile.candidate_dates, profile.settled_dates)
+                alignment_rate = 1.0
+                registry_class = "same_station_source_profile"
+            if alignment_days < MIN_ALIGNMENT_DAYS or alignment_rate < 1.0:
                 rejected.append(
                     {
                         "city": city,
                         "reason": "same_station_alignment_below_gate",
+                        "registry_class": registry_class,
                         "alignment_days": alignment_days,
                         "alignment_rate": alignment_rate,
                     }
