@@ -12,6 +12,17 @@ class SourceProfile:
     settlement_source_class: str
     official_station_or_feed: str
     mapping_rule: str
+    configured_icao: str = ""
+    official_source: str = ""
+    alignment_source: str = ""
+    downstream_action: str = ""
+    alignment_days: int | None = None
+    alignment_matches: int | None = None
+    alignment_rate: float | None = None
+    candidate_rows: int = 0
+    settled_candidate_rows: int = 0
+    candidate_dates: int = 0
+    settled_dates: int = 0
     primary_source: str = ""
     fallback_sources: tuple[str, ...] = field(default_factory=tuple)
     rules_recheck_required: bool = True
@@ -21,6 +32,7 @@ class SourceProfile:
     def live_eligible(self) -> bool:
         blocked = {
             "blocked_unresolved_settlement_basis",
+            "default_source_watchlist",
             "no_recent_market_or_unknown_rules",
         }
         if self.settlement_source_class in blocked:

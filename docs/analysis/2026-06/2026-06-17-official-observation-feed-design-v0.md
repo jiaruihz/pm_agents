@@ -171,8 +171,16 @@ flowchart LR
 
 - 新增 `src/strategies/weather_edge_v1/official_observation_feed/`，先放三个稳定原语：`MarketBracket` parser、`SourceProfile` registry adapter、feed payload dataclass。
 - `weather_theta_current_yes_tiny_live.py` 和 `weather_station_basis_shadow.py` 已改为共用 `official_observation_feed.market_brackets`，修复并固化 `74-75` 这种正数区间不能被误读成 `74,-75` 的问题。
-- `SourceProfile` 现在可直接读取 `2026-06-14-settlement-source-registry-v0.json`，把城市映射成 `primary_source` / `fallback_sources` / `blocked_reason` / `live_eligible`。
+- `SourceProfile` 现在默认读取运行层 `source_profiles.json`，并兼容读取 `2026-06-14-settlement-source-registry-v0.json` 作为生成输入，把城市映射成 `primary_source` / `fallback_sources` / `blocked_reason` / `live_eligible`。
 - current-YES live runner 另已接入真实 IANA timezone/DST、target-date 必须等于 station local date、obs age、pre-METAR blackout、next-bracket gap 等硬 guard；这些 guard 仍由现有 runner 执行，尚未迁入 feed daemon。
+
+2026-06-17 追加：`SourceProfile` 已从 analysis artifact 提升为运行层 sidecar：
+
+- 运行层文件：`src/strategies/weather_edge_v1/official_observation_feed/source_profiles.json`。
+- 生成入口：`scripts/analysis/observed_max/build_official_observation_source_profiles.py`。
+- 当前覆盖 52 个城市，全部维护 IANA timezone、unit、configured station、official station/feed、settlement source class、mapping rule、primary/fallback source、rules recheck、blocked reason、coverage counts。
+- source class 分布：34 `default_wu_station_by_rules`、7 `official_station_diff_confirmed`、1 `special_source_confirmed`、2 `non_wu_source_by_rules`、1 `default_source_watchlist`、3 `blocked_unresolved_settlement_basis`、4 `no_recent_market_or_unknown_rules`。
+- live eligibility：41 城 `live_eligible=true`，均为 AviationWeather METAR primary + IEM ASOS same-station fallback；MexicoCity 有 METAR source 但因 watchlist 不 live eligible；HongKong/HKO、Istanbul/TelAviv non-WU、Moscow/Seoul/Shenzhen unresolved、Boston/Lagos/Minneapolis/Phoenix unknown rules 全部不 live eligible。
 
 这一步的边界也很明确：
 

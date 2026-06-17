@@ -61,3 +61,21 @@ def test_source_registry_marks_confirmed_and_blocked_profiles(tmp_path):
     assert profiles["Paris"].live_eligible
     assert not profiles["Seoul"].live_eligible
     assert profiles["Seoul"].blocked_reason == "exclude until root cause is found"
+
+
+def test_default_source_profiles_cover_current_city_universe():
+    profiles = load_source_profiles()
+
+    assert len(profiles) == 52
+    assert sum(profile.live_eligible for profile in profiles.values()) == 41
+    assert sum(profile.primary_source == "aviationweather_metar" for profile in profiles.values()) == 42
+    assert not [profile.city for profile in profiles.values() if profile.timezone_name == "UTC"]
+
+    assert profiles["Paris"].official_station_or_feed == "LFPB"
+    assert profiles["Paris"].live_eligible
+    assert profiles["MexicoCity"].primary_source == "aviationweather_metar"
+    assert not profiles["MexicoCity"].live_eligible
+    assert profiles["HongKong"].official_station_or_feed == "HKO"
+    assert not profiles["HongKong"].live_eligible
+    assert profiles["Boston"].timezone_name == "America/New_York"
+    assert not profiles["Boston"].live_eligible
