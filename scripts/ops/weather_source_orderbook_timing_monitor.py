@@ -49,6 +49,7 @@ from weather_metar_cross_prev_no_shadow import (  # noqa: E402
 
 DATA_ROOT = Path(os.environ.get("TIMING_MONITOR_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
 OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/source_orderbook_timing"
+FAST_HTTP_TIMEOUT_SEC = float(os.environ.get("TIMING_MONITOR_HTTP_TIMEOUT_SEC", "3.0"))
 CHECKWX_URL = "https://www.checkwx.com/weather/{icao}/metar"
 METAR_TEMP_RE = re.compile(r"\s(M?\d{2})/(M?\d{2}|//)")
 CHECKWX_OBS_RE = re.compile(r"Observed.*?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)", re.IGNORECASE | re.DOTALL)
@@ -154,7 +155,12 @@ def parse_aviationweather_records(data: list[dict[str, Any]], tz: ZoneInfo, loca
 
 
 def fetch_aviationweather_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any) -> dict[str, Any]:
-    data = source.fetch_json(source.METAR_API, {"ids": cfg.official_icao, "format": "json", "hours": "2"})
+    data = source.fetch_json(
+        source.METAR_API,
+        {"ids": cfg.official_icao, "format": "json", "hours": "2"},
+        max_rounds=1,
+        timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+    )
     records = parse_aviationweather_records(data, tz, local_date) if isinstance(data, list) else []
     if not records:
         return {"status": "empty", "source": "aviationweather_metar", "station": cfg.official_icao}
@@ -171,7 +177,7 @@ def fetch_aviationweather_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any)
 
 
 def fetch_checkwx_latest(cfg: CityConfig) -> dict[str, Any]:
-    text = source.fetch_text(CHECKWX_URL.format(icao=cfg.official_icao))
+    text = source.fetch_text(CHECKWX_URL.format(icao=cfg.official_icao), max_rounds=1, timeout_sec=FAST_HTTP_TIMEOUT_SEC)
     raw_match = re.search(rf"{cfg.official_icao}\s+\d{{6}}Z[^<]+", text)
     raw_metar = raw_match.group(0).strip() if raw_match else ""
     observed_match = CHECKWX_OBS_RE.search(text)
@@ -211,7 +217,7 @@ def fetch_iem_asos_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any) -> dic
         ("report_type", "3"),
         ("report_type", "4"),
     ]
-    text = source.fetch_text(source.IEM_ASOS_API, params)
+    text = source.fetch_text(source.IEM_ASOS_API, params, max_rounds=1, timeout_sec=FAST_HTTP_TIMEOUT_SEC)
     rows = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
     records: list[tuple[datetime, float, dict[str, str]]] = []
     for row in csv.DictReader(io.StringIO("\n".join(rows))):
@@ -320,7 +326,7 @@ def fetch_orderbook_rows(cfg: CityConfig, now_utc: datetime, temp_c: float | Non
     tz = ZoneInfo(cfg.timezone_name)
     local_date = now_utc.astimezone(tz).date()
     event_slug = source.event_slug(cfg.slug, local_date)
-    events = source.fetch_json(f"{source.GAMMA}/events", {"slug": event_slug})
+    events = source.fetch_json(f"{source.GAMMA}/events", {"slug": event_slug}, max_rounds=1, timeout_sec=FAST_HTTP_TIMEOUT_SEC)
     markets = events[0].get("markets") if events else []
     if not markets:
         return [{"ts_utc": now_utc.isoformat(), "city": cfg.city, "event_slug": event_slug, "status": "no_event"}]
@@ -329,11 +335,17 @@ def fetch_orderbook_rows(cfg: CityConfig, now_utc: datetime, temp_c: float | Non
         token_ids = json.loads(market["clobTokenIds"])
         for side, token_id in (("YES", token_ids[0]), ("NO", token_ids[1])):
             try:
-                book = source.book_summary(source.fetch_json(f"{source.CLOB}/book", {"token_id": token_id}))
+                book_fetch_start_utc = datetime.now(timezone.utc)
+                book = source.book_summary(
+                    source.fetch_json(f"{source.CLOB}/book", {"token_id": token_id}, max_rounds=1, timeout_sec=FAST_HTTP_TIMEOUT_SEC)
+                )
+                book_fetch_end_utc = datetime.now(timezone.utc)
                 status = "ok"
             except Exception as exc:  # noqa: BLE001
                 book = {"error": f"{type(exc).__name__}: {exc}"}
                 status = "book_fetch_failed"
+                book_fetch_start_utc = None
+                book_fetch_end_utc = None
             row = {
                 "ts_utc": now_utc.isoformat(),
                 "local_detect_ts_utc": now_utc.isoformat(),
@@ -345,6 +357,11 @@ def fetch_orderbook_rows(cfg: CityConfig, now_utc: datetime, temp_c: float | Non
                 "side": side,
                 "token_id": token_id,
                 "status": status,
+                "book_fetch_start_utc": None if book_fetch_start_utc is None else book_fetch_start_utc.isoformat(),
+                "book_fetch_end_utc": None if book_fetch_end_utc is None else book_fetch_end_utc.isoformat(),
+                "book_fetch_latency_sec": None
+                if book_fetch_start_utc is None or book_fetch_end_utc is None
+                else round((book_fetch_end_utc - book_fetch_start_utc).total_seconds(), 3),
                 **book,
             }
             row["payload_hash"] = stable_hash({k: row.get(k) for k in ("best_bid", "best_bid_size", "best_ask", "best_ask_size", "bid_levels", "ask_levels")})
@@ -452,11 +469,11 @@ def main() -> int:
     parser.add_argument("command", choices=["cycle", "loop", "report", "source-policy"], nargs="?", default="cycle")
     parser.add_argument("--cities", nargs="*", default=["Shanghai", "Tokyo"])
     parser.add_argument("--include-station-diff", action="store_true")
-    parser.add_argument("--sources", nargs="*", default=["source_profiles", "checkwx_html"])
+    parser.add_argument("--sources", nargs="*", default=["profile_primary", "checkwx_html"])
     parser.add_argument("--bracket-radius", type=int, default=2)
-    parser.add_argument("--base-interval-sec", type=float, default=60.0)
-    parser.add_argument("--burst-interval-sec", type=float, default=3.0)
-    parser.add_argument("--burst-window-min", type=float, default=8.0)
+    parser.add_argument("--base-interval-sec", type=float, default=20.0)
+    parser.add_argument("--burst-interval-sec", type=float, default=2.0)
+    parser.add_argument("--burst-window-min", type=float, default=10.0)
     args = parser.parse_args()
 
     if args.command == "report":
@@ -466,7 +483,22 @@ def main() -> int:
     configs = load_city_configs(include_station_diff=args.include_station_diff, only_cities=set(args.cities or []) or None)
     if not configs:
         raise SystemExit("no eligible city configs")
-    print(json.dumps({"command": args.command, "cities": [cfg.city for cfg in configs], "sources": args.sources, "out_dir": str(OUT_DIR)}, ensure_ascii=False, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "command": args.command,
+                "cities": [cfg.city for cfg in configs],
+                "sources": args.sources,
+                "out_dir": str(OUT_DIR),
+                "base_interval_sec": args.base_interval_sec,
+                "burst_interval_sec": args.burst_interval_sec,
+                "burst_window_min": args.burst_window_min,
+                "http_timeout_sec": FAST_HTTP_TIMEOUT_SEC,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
     while True:
         counts = cycle_once(configs, sources=args.sources, bracket_radius=args.bracket_radius)
         print(json.dumps({"ts_utc": datetime.now(timezone.utc).isoformat(), **counts}, sort_keys=True))
