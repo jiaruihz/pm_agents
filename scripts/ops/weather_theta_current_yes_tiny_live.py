@@ -1017,7 +1017,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--max-obs-age-min", type=float, default=20.0)
     parser.add_argument("--pre-metar-update-blackout-min", type=float, default=6.0)
-    parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=1.0)
+    parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=0.0)
     parser.add_argument("--min-local-hour", type=int, default=13)
     parser.add_argument("--max-local-hour", type=int, default=15)
     parser.add_argument("--interval-seconds", type=float, default=900.0)

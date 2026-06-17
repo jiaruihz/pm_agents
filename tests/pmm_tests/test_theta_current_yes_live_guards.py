@@ -123,7 +123,7 @@ def test_fetch_obs_blocks_pre_metar_update_blackout(monkeypatch):
     assert result["minutes_to_next_obs"] == 2.0
 
 
-def test_build_current_rows_vetoes_one_c_gap_to_next_bracket(monkeypatch):
+def test_build_current_rows_allows_one_c_gap_for_current_yes(monkeypatch):
     now = datetime(2026, 6, 16, 4, 10, tzinfo=timezone.utc)
     station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")
 
@@ -160,7 +160,54 @@ def test_build_current_rows_vetoes_one_c_gap_to_next_bracket(monkeypatch):
         now,
         max_obs_age_min=20,
         pre_update_blackout_min=6,
-        min_gap_to_next_bracket_c=1,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert len(rows) == 1
+    assert rows.iloc[0]["current_bracket"] == "20"
+    assert rows.iloc[0]["d1_no_bracket"] == "21"
+    assert rows.iloc[0]["gap_running_to_d1_low_c"] == 1.0
+    assert audits == []
+
+
+def test_build_current_rows_can_optionally_veto_gap_above_threshold(monkeypatch):
+    now = datetime(2026, 6, 16, 4, 10, tzinfo=timezone.utc)
+    station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")
+
+    def fake_fetch_obs(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "test",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-16T04:00:00+00:00",
+            "timezone": "Asia/Tokyo",
+            "cadence_min": 30.0,
+            "minutes_to_next_obs": 20.0,
+            "running_max_c": 20.0,
+            "current_temp_c": 19.0,
+            "decline_c": 1.0,
+            "tmpf_now": 66.2,
+            "dwpf_now": 50.0,
+            "dewpoint_depression_f": 16.2,
+            "relh_now": 50.0,
+            "sknt_now": 5.0,
+            "sky_now": 1.0,
+            "d_tmpf_1h": -1.0,
+            "d_tmpf_3h": -2.0,
+            "d_dwpf_3h": 0.0,
+            "d_relh_3h": 0.0,
+        }
+
+    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [_record("Tokyo", "20"), _record("Tokyo", "21")],
+        {"Tokyo": station},
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=1.01,
     )
 
     assert rows.empty
