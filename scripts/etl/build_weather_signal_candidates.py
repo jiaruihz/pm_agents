@@ -21,11 +21,14 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -33,6 +36,10 @@ import pandas as pd
 # Paths
 # ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.weather_edge_v1.tools.official_observation_clock import city_timezone_name
 DB_PATH = ROOT / "runtime" / "weather.db"
 PARQUET_PATH = (
     ROOT / "runtime" / "weather_edge_v1" / "market_data" / "research"
@@ -42,6 +49,7 @@ SNAPSHOT_DIR = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "paper_sna
 PAPER_ORDERS_PATH = (
     ROOT / "runtime" / "weather_edge_v1" / "market_data" / "paper_trades" / "paper_orders.jsonl"
 )
+FORECAST_CACHE_ROOT = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "cache"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -71,6 +79,213 @@ def _hours_to_settle(rec: dict) -> float | None:
     return _safe_float(rec.get("hours_to_settle"))
 
 
+def _safe_int(v: Any) -> int | None:
+    fv = _safe_float(v)
+    return int(fv) if fv is not None else None
+
+
+def _parse_utc_ts(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _forecast_source_model(value: Any) -> str | None:
+    text = str(value or "").strip().lower()
+    if "ecmwf" in text:
+        return "ecmwf"
+    if "gfs" in text:
+        return "gfs"
+    return None
+
+
+def _forecast_values_hash(rows: list[tuple[str, float]]) -> str:
+    payload = [[str(ts), round(float(temp), 3)] for ts, temp in rows]
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+class _ForecastPeakIndex:
+    """Derive forecast peak-clock fields from mirrored hourly forecast cache.
+
+    Snapshot records are the source of truth. This index only fills missing
+    forecast_peak_* fields when a matching city/model/date hourly cache exists.
+    """
+
+    SOURCE_DIRS = {
+        "gfs": "gfs_v4",
+        "ecmwf": "ecmwf_v4",
+    }
+
+    def __init__(self, cache_root: Path):
+        self.cache_root = cache_root
+        self._by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
+        self.files_seen = 0
+        self.files_loaded = 0
+        self.derived_city_dates = 0
+        self.min_date: str | None = None
+        self.max_date: str | None = None
+        self._load()
+
+    @staticmethod
+    def _cache_city_from_path(path: Path, source_model: str) -> str:
+        stem = path.stem
+        prefix = f"{source_model}_v4_"
+        if stem.startswith(prefix):
+            stem = stem[len(prefix) :]
+        return stem.rsplit("_", 2)[0]
+
+    @staticmethod
+    def _aliases(city: str) -> set[str]:
+        aliases = {city}
+        if city == "LA":
+            aliases.add("LosAngeles")
+        if city == "LosAngeles":
+            aliases.add("LA")
+        return aliases
+
+    def _load(self) -> None:
+        for source_model, dirname in self.SOURCE_DIRS.items():
+            folder = self.cache_root / dirname
+            if not folder.exists():
+                continue
+            for path in sorted(folder.glob(f"{source_model}_v4_*.json")):
+                self.files_seen += 1
+                try:
+                    payload = json.loads(path.read_text())
+                except Exception:
+                    continue
+                derived = self._derive_file(path, payload, source_model)
+                if not derived:
+                    continue
+                self.files_loaded += 1
+                for key, row in derived.items():
+                    self._by_key[key] = row
+                    date = key[2]
+                    self.min_date = date if self.min_date is None else min(self.min_date, date)
+                    self.max_date = date if self.max_date is None else max(self.max_date, date)
+                self.derived_city_dates += len(derived)
+
+    def _derive_file(
+        self,
+        path: Path,
+        payload: dict[str, Any],
+        source_model: str,
+    ) -> dict[tuple[str, str, str], dict[str, Any]]:
+        hourly = payload.get("hourly", {}) if isinstance(payload, dict) else {}
+        times = hourly.get("time") or []
+        temps = hourly.get("temperature_2m") or []
+        if not times or not temps or len(times) != len(temps):
+            return {}
+
+        city = self._cache_city_from_path(path, source_model)
+        tz_name = city_timezone_name(city) or "UTC"
+        try:
+            city_tz = ZoneInfo(tz_name)
+        except Exception:
+            city_tz = ZoneInfo("UTC")
+            tz_name = "UTC"
+
+        payload_tz = str(payload.get("timezone") or "").strip()
+        payload_offset = _safe_int(payload.get("utc_offset_seconds")) or 0
+        payload_is_utc = payload_tz.upper() in {"GMT", "UTC", ""} and payload_offset == 0
+
+        by_local_date: dict[str, list[tuple[datetime, float]]] = {}
+        for raw_ts, raw_temp in zip(times, temps, strict=False):
+            try:
+                temp = float(raw_temp)
+            except Exception:
+                continue
+            try:
+                naive = datetime.fromisoformat(str(raw_ts))
+            except ValueError:
+                continue
+            if naive.tzinfo is not None:
+                local_dt = naive.astimezone(city_tz)
+            elif payload_is_utc:
+                local_dt = naive.replace(tzinfo=timezone.utc).astimezone(city_tz)
+            else:
+                local_dt = naive.replace(tzinfo=city_tz)
+            by_local_date.setdefault(local_dt.date().isoformat(), []).append((local_dt, temp))
+
+        out: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for date, rows in by_local_date.items():
+            if not rows:
+                continue
+            max_f = max(temp for _, temp in rows)
+            peak_dt = min(dt for dt, temp in rows if abs(temp - max_f) < 1e-9)
+            peak_utc = peak_dt.astimezone(timezone.utc)
+            hash_rows = [
+                (dt.replace(tzinfo=None).isoformat(timespec="minutes"), temp)
+                for dt, temp in sorted(rows, key=lambda x: x[0])
+            ]
+            utc_offset = int(peak_dt.utcoffset().total_seconds()) if peak_dt.utcoffset() else 0
+            try:
+                source_file = str(path.relative_to(ROOT))
+            except ValueError:
+                source_file = str(path)
+            row = {
+                "forecast_max_f": max_f,
+                "forecast_peak_hour_local": peak_dt.hour,
+                "forecast_peak_time_local": peak_dt.replace(tzinfo=None).isoformat(timespec="minutes"),
+                "forecast_peak_hour_utc": peak_utc.hour,
+                "forecast_peak_time_utc": peak_utc.isoformat().replace("+00:00", "Z"),
+                "forecast_hourly_count": len(rows),
+                "forecast_values_hash": _forecast_values_hash(hash_rows),
+                "forecast_peak_source": f"open_meteo_live_{source_model}",
+                "forecast_timezone": tz_name,
+                "forecast_utc_offset_seconds": utc_offset,
+                "forecast_peak_source_file": source_file,
+            }
+            for alias in self._aliases(city):
+                out[(alias, source_model, date)] = row
+        return out
+
+    def enrich(self, rec: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        if rec.get("forecast_peak_hour_local") is not None and rec.get("forecast_values_hash"):
+            return rec, False
+        city = str(rec.get("city") or "").strip()
+        event_date = str(rec.get("event_date") or "").strip()
+        source_model = _forecast_source_model(rec.get("forecast_source") or rec.get("model"))
+        if not city or not event_date or not source_model:
+            return rec, False
+        derived = self._by_key.get((city, source_model, event_date))
+        if not derived:
+            return rec, False
+
+        out = dict(rec)
+        for key, value in derived.items():
+            if key == "forecast_peak_source_file":
+                continue
+            if out.get(key) in (None, ""):
+                out[key] = value
+        unit = str(out.get("unit") or "").upper()
+        max_f = _safe_float(out.get("forecast_max_f"))
+        if max_f is not None and out.get("forecast_max_native") in (None, ""):
+            out["forecast_max_native"] = (max_f - 32.0) * 5.0 / 9.0 if unit == "C" else max_f
+        peak_hour = _safe_float(out.get("forecast_peak_hour_local"))
+        ts = _parse_utc_ts(out.get("ts_utc"))
+        tz_name = out.get("forecast_timezone") or city_timezone_name(city)
+        if peak_hour is not None and ts is not None and out.get("forecast_peak_delta_hours_local") in (None, "") and tz_name:
+            try:
+                local_ts = ts.astimezone(ZoneInfo(str(tz_name)))
+                out["forecast_peak_delta_hours_local"] = (
+                    local_ts.hour + local_ts.minute / 60.0 - float(peak_hour)
+                )
+            except Exception:
+                pass
+        return out, True
+
+
 # ---------------------------------------------------------------------------
 # DDL
 # ---------------------------------------------------------------------------
@@ -91,6 +306,22 @@ CREATE TABLE IF NOT EXISTS fact_signal_candidates (
   icao                TEXT,
   unit                TEXT,
   forecast_source     TEXT,
+  forecast_max_f      REAL,
+  forecast_max_native REAL,
+  forecast_peak_hour_local INTEGER,
+  forecast_peak_time_local TEXT,
+  forecast_peak_hour_utc INTEGER,
+  forecast_peak_time_utc TEXT,
+  forecast_hourly_count INTEGER,
+  forecast_values_hash TEXT,
+  forecast_peak_source TEXT,
+  forecast_timezone TEXT,
+  forecast_utc_offset_seconds INTEGER,
+  forecast_peak_delta_hours_local REAL,
+  forecast_max_in_bracket INTEGER,
+  forecast_max_above_bracket_f REAL,
+  forecast_max_below_bracket_f REAL,
+  forecast_max_above_metar_max_f REAL,
   model_version       TEXT,
   time_bucket         TEXT,
   window              TEXT,
@@ -186,6 +417,16 @@ class _Opportunity:
         "condition_id", "side", "event_date",
         "market_id", "bracket", "city", "city_pool", "icao", "unit",
         "forecast_source", "model_version", "time_bucket", "window",
+        "dec_forecast_max_f", "dec_forecast_max_native",
+        "dec_forecast_peak_hour_local", "dec_forecast_peak_time_local",
+        "dec_forecast_peak_hour_utc", "dec_forecast_peak_time_utc",
+        "dec_forecast_hourly_count", "dec_forecast_values_hash",
+        "dec_forecast_peak_source",
+        "dec_forecast_timezone", "dec_forecast_utc_offset_seconds",
+        "dec_forecast_peak_delta_hours_local",
+        "dec_forecast_max_in_bracket",
+        "dec_forecast_max_above_bracket_f", "dec_forecast_max_below_bracket_f",
+        "dec_forecast_max_above_metar_max_f",
         "first_seen_ts_utc", "last_seen_ts_utc", "n_snapshots",
         "edge_max", "_edge_sum", "_edge_count", "best_entry_price",
         "eligible",
@@ -210,6 +451,22 @@ class _Opportunity:
         self.model_version = None
         self.time_bucket = None
         self.window = None
+        self.dec_forecast_max_f = None
+        self.dec_forecast_max_native = None
+        self.dec_forecast_peak_hour_local = None
+        self.dec_forecast_peak_time_local = None
+        self.dec_forecast_peak_hour_utc = None
+        self.dec_forecast_peak_time_utc = None
+        self.dec_forecast_hourly_count = None
+        self.dec_forecast_values_hash = None
+        self.dec_forecast_peak_source = None
+        self.dec_forecast_timezone = None
+        self.dec_forecast_utc_offset_seconds = None
+        self.dec_forecast_peak_delta_hours_local = None
+        self.dec_forecast_max_in_bracket = None
+        self.dec_forecast_max_above_bracket_f = None
+        self.dec_forecast_max_below_bracket_f = None
+        self.dec_forecast_max_above_metar_max_f = None
         self.first_seen_ts_utc = None
         self.last_seen_ts_utc = None
         self.n_snapshots = 0
@@ -284,6 +541,22 @@ class _Opportunity:
                 self.dec_yes_depth_ask_5c = _safe_float(rec.get("yes_depth_ask_5c"))
                 self.dec_no_depth_ask_5c = _safe_float(rec.get("no_depth_ask_5c"))
                 self.dec_shares = _safe_float(rec.get("shares"))
+                self.dec_forecast_max_f = _safe_float(rec.get("forecast_max_f"))
+                self.dec_forecast_max_native = _safe_float(rec.get("forecast_max_native"))
+                self.dec_forecast_peak_hour_local = _safe_float(rec.get("forecast_peak_hour_local"))
+                self.dec_forecast_peak_time_local = rec.get("forecast_peak_time_local")
+                self.dec_forecast_peak_hour_utc = _safe_float(rec.get("forecast_peak_hour_utc"))
+                self.dec_forecast_peak_time_utc = rec.get("forecast_peak_time_utc")
+                self.dec_forecast_hourly_count = _safe_float(rec.get("forecast_hourly_count"))
+                self.dec_forecast_values_hash = rec.get("forecast_values_hash")
+                self.dec_forecast_peak_source = rec.get("forecast_peak_source")
+                self.dec_forecast_timezone = rec.get("forecast_timezone")
+                self.dec_forecast_utc_offset_seconds = _safe_float(rec.get("forecast_utc_offset_seconds"))
+                self.dec_forecast_peak_delta_hours_local = _safe_float(rec.get("forecast_peak_delta_hours_local"))
+                self.dec_forecast_max_in_bracket = _safe_float(rec.get("forecast_max_in_bracket"))
+                self.dec_forecast_max_above_bracket_f = _safe_float(rec.get("forecast_max_above_bracket_f"))
+                self.dec_forecast_max_below_bracket_f = _safe_float(rec.get("forecast_max_below_bracket_f"))
+                self.dec_forecast_max_above_metar_max_f = _safe_float(rec.get("forecast_max_above_metar_max_f"))
 
     @property
     def edge_mean(self) -> float | None:
@@ -295,8 +568,12 @@ class _Opportunity:
 # ---------------------------------------------------------------------------
 
 def _load_universe(
-    snapshot_dir: Path, target_hts: float, hts_min: float, hts_max: float
-) -> tuple[dict[tuple, _Opportunity], int, int]:
+    snapshot_dir: Path,
+    target_hts: float,
+    hts_min: float,
+    hts_max: float,
+    forecast_index: _ForecastPeakIndex | None = None,
+) -> tuple[dict[tuple, _Opportunity], int, int, int]:
     """Stream all snapshots into opportunity accumulators keyed by
     (condition_id, side, event_date). Records missing condition_id are dropped.
     Returns (opportunities, n_files, n_dropped_no_cid).
@@ -304,6 +581,7 @@ def _load_universe(
     files = sorted(glob.glob(str(snapshot_dir / "*.json")))
     opps: dict[tuple, _Opportunity] = {}
     n_dropped = 0
+    n_forecast_enriched = 0
     for f in files:
         try:
             data = json.loads(Path(f).read_text())
@@ -312,6 +590,9 @@ def _load_universe(
         for rec in data.get("records", []):
             if not isinstance(rec, dict):
                 continue
+            if forecast_index is not None:
+                rec, enriched = forecast_index.enrich(rec)
+                n_forecast_enriched += int(enriched)
             cid = rec.get("condition_id")
             side = rec.get("side")
             event_date = rec.get("event_date")
@@ -326,7 +607,7 @@ def _load_universe(
                 opp = _Opportunity(cid, side, str(event_date))
                 opps[key] = opp
             opp.observe(rec, target_hts, hts_min, hts_max)
-    return opps, len(files), n_dropped
+    return opps, len(files), n_dropped, n_forecast_enriched
 
 
 def _load_paper_orders(path: Path) -> tuple[dict[tuple, dict], dict]:
@@ -461,12 +742,20 @@ def build(
     paper_orders_path: Path = PAPER_ORDERS_PATH,
     hts_min: float = 22.0,
     hts_max: float = 24.0,
+    forecast_cache_root: Path = FORECAST_CACHE_ROOT,
 ) -> tuple[list[dict], list[str], dict]:
     """Build candidate rows. Returns (rows, alerts, stats)."""
     target_hts = (hts_min + hts_max) / 2.0
     window_label = f"hts_{int(hts_min)}_{int(hts_max)}" if hts_min == int(hts_min) and hts_max == int(hts_max) else f"hts_{hts_min}_{hts_max}"
 
-    opps, n_files, n_dropped = _load_universe(snapshot_dir, target_hts, hts_min, hts_max)
+    forecast_index = _ForecastPeakIndex(forecast_cache_root)
+    opps, n_files, n_dropped, n_forecast_enriched = _load_universe(
+        snapshot_dir,
+        target_hts,
+        hts_min,
+        hts_max,
+        forecast_index=forecast_index,
+    )
     paper_orders, paper_stats = _load_paper_orders(paper_orders_path)
     live_fills = _load_live_fills(conn)
     settlements = _load_settlements(conn)
@@ -543,6 +832,42 @@ def build(
             "icao": opp.icao,
             "unit": opp.unit,
             "forecast_source": opp.forecast_source,
+            "forecast_max_f": opp.dec_forecast_max_f,
+            "forecast_max_native": opp.dec_forecast_max_native,
+            "forecast_peak_hour_local": (
+                int(opp.dec_forecast_peak_hour_local)
+                if opp.dec_forecast_peak_hour_local is not None
+                else None
+            ),
+            "forecast_peak_time_local": opp.dec_forecast_peak_time_local,
+            "forecast_peak_hour_utc": (
+                int(opp.dec_forecast_peak_hour_utc)
+                if opp.dec_forecast_peak_hour_utc is not None
+                else None
+            ),
+            "forecast_peak_time_utc": opp.dec_forecast_peak_time_utc,
+            "forecast_hourly_count": (
+                int(opp.dec_forecast_hourly_count)
+                if opp.dec_forecast_hourly_count is not None
+                else None
+            ),
+            "forecast_values_hash": opp.dec_forecast_values_hash,
+            "forecast_peak_source": opp.dec_forecast_peak_source,
+            "forecast_timezone": opp.dec_forecast_timezone,
+            "forecast_utc_offset_seconds": (
+                int(opp.dec_forecast_utc_offset_seconds)
+                if opp.dec_forecast_utc_offset_seconds is not None
+                else None
+            ),
+            "forecast_peak_delta_hours_local": opp.dec_forecast_peak_delta_hours_local,
+            "forecast_max_in_bracket": (
+                int(opp.dec_forecast_max_in_bracket)
+                if opp.dec_forecast_max_in_bracket is not None
+                else None
+            ),
+            "forecast_max_above_bracket_f": opp.dec_forecast_max_above_bracket_f,
+            "forecast_max_below_bracket_f": opp.dec_forecast_max_below_bracket_f,
+            "forecast_max_above_metar_max_f": opp.dec_forecast_max_above_metar_max_f,
             "model_version": opp.model_version,
             "time_bucket": opp.time_bucket,
             "window": opp.window,
@@ -600,6 +925,12 @@ def build(
     stats = {
         "n_files": n_files,
         "n_dropped_no_cid": n_dropped,
+        "forecast_cache_files_seen": forecast_index.files_seen,
+        "forecast_cache_files_loaded": forecast_index.files_loaded,
+        "forecast_cache_city_dates": forecast_index.derived_city_dates,
+        "forecast_cache_min_date": forecast_index.min_date,
+        "forecast_cache_max_date": forecast_index.max_date,
+        "n_records_forecast_enriched": n_forecast_enriched,
         "n_opportunities": len(rows),
         "n_paper_order_rows": paper_stats["raw_rows"],
         "n_paper_orders": len(paper_orders),
@@ -652,12 +983,25 @@ def print_summary(rows: list[dict], alerts: list[str], stats: dict) -> None:
     eligible = sum(1 for r in rows if r["eligible"] == 1)
     settled = sum(1 for r in rows if r["final_yes"] is not None)
     missed_fill = sum(1 for r in rows if r["paper_ordered"] == 1 and r["live_filled"] == 0)
+    forecast_peak = sum(1 for r in rows if r.get("forecast_peak_hour_local") is not None)
+    forecast_hash = sum(1 for r in rows if r.get("forecast_values_hash"))
     print(f"paper_ordered        : {paper}")
     print(f"live_filled          : {live}")
     print(f"missed_fill          : {missed_fill}")
     print(f"eligible=1           : {eligible}")
     print(f"decision_window_miss : {missing} ({missing/total*100:.1f}%)")
     print(f"settled              : {settled} ({settled/total*100:.1f}%)")
+    print(
+        f"forecast peak fields : {forecast_peak} peak_hour / {forecast_hash} hash "
+        f"({forecast_peak/total*100:.1f}% / {forecast_hash/total*100:.1f}%)"
+    )
+    print(
+        f"forecast cache       : {stats['forecast_cache_files_loaded']}/"
+        f"{stats['forecast_cache_files_seen']} files loaded, "
+        f"{stats['forecast_cache_city_dates']} city-dates "
+        f"({stats['forecast_cache_min_date']}..{stats['forecast_cache_max_date']}), "
+        f"{stats['n_records_forecast_enriched']} snapshot records enriched"
+    )
     print(
         f"paper orders total   : {stats['n_paper_order_rows']} rows / "
         f"{stats['n_paper_orders']} keys "
@@ -692,6 +1036,7 @@ def main() -> None:
                     help="Write the DB table only; skip parquet export")
     ap.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR))
     ap.add_argument("--paper-orders", default=str(PAPER_ORDERS_PATH))
+    ap.add_argument("--forecast-cache-root", default=str(FORECAST_CACHE_ROOT))
     ap.add_argument("--decision-hts-min", type=float, default=22.0)
     ap.add_argument("--decision-hts-max", type=float, default=24.0)
     ap.add_argument("--dry-run", action="store_true",
@@ -710,6 +1055,7 @@ def main() -> None:
             paper_orders_path=Path(args.paper_orders),
             hts_min=args.decision_hts_min,
             hts_max=args.decision_hts_max,
+            forecast_cache_root=Path(args.forecast_cache_root),
         )
         print_summary(rows, alerts, stats)
         if args.dry_run:

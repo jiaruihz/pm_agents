@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import json
 from datetime import datetime, timedelta, timezone
 
 from scripts.ops import weather_theta_current_yes_tiny_live as live
@@ -123,6 +125,32 @@ def test_fetch_obs_blocks_pre_metar_update_blackout(monkeypatch):
     assert result["minutes_to_next_obs"] == 2.0
 
 
+def test_fetch_obs_reports_minutes_since_running_max(monkeypatch):
+    now = datetime(2026, 6, 16, 13, 25, tzinfo=timezone.utc)
+    obs = [
+        {"ts": datetime(2026, 6, 16, 9, 50, tzinfo=timezone.utc), "tmpc": 18.0, "dwpc": 9.0, "relh": 50.0, "sknt": 5.0, "sky": 1.0},
+        {"ts": datetime(2026, 6, 16, 10, 50, tzinfo=timezone.utc), "tmpc": 19.0, "dwpc": 9.0, "relh": 50.0, "sknt": 5.0, "sky": 1.0},
+        {"ts": datetime(2026, 6, 16, 11, 50, tzinfo=timezone.utc), "tmpc": 20.0, "dwpc": 9.0, "relh": 50.0, "sknt": 5.0, "sky": 1.0},
+        {"ts": datetime(2026, 6, 16, 12, 50, tzinfo=timezone.utc), "tmpc": 19.0, "dwpc": 9.0, "relh": 50.0, "sknt": 5.0, "sky": 1.0},
+        {"ts": datetime(2026, 6, 16, 13, 20, tzinfo=timezone.utc), "tmpc": 19.0, "dwpc": 9.0, "relh": 50.0, "sknt": 5.0, "sky": 1.0},
+        {"ts": datetime(2026, 6, 16, 13, 25, tzinfo=timezone.utc), "tmpc": 19.0, "dwpc": 9.0, "relh": 50.0, "sknt": 5.0, "sky": 1.0},
+    ]
+
+    monkeypatch.setattr(live, "aviationweather_obs", lambda *_args: obs)
+    station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")
+    result = live.fetch_obs(
+        station,
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=0,
+    )
+
+    assert result["status"] == "ok"
+    assert result["running_max_c"] == 20.0
+    assert result["running_max_obs_utc"] == "2026-06-16T11:50:00+00:00"
+    assert result["minutes_since_running_max"] == 95.0
+
+
 def test_build_current_rows_allows_one_c_gap_for_current_yes(monkeypatch):
     now = datetime(2026, 6, 16, 4, 10, tzinfo=timezone.utc)
     station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")
@@ -213,3 +241,118 @@ def test_build_current_rows_can_optionally_veto_gap_above_threshold(monkeypatch)
     assert rows.empty
     assert audits[0]["status"] == "too_close_to_next_bracket"
     assert audits[0]["gap_running_to_d1_low_c"] == 1.0
+
+
+def test_run_once_writes_forward_telemetry_for_planned_candidate(tmp_path, monkeypatch):
+    snapshot_path = tmp_path / "snapshot.json"
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "ts_utc": "2026-06-16T04:10:00+00:00",
+                "records": [
+                    {
+                        **_record("Tokyo", "20", 0.78),
+                        "forecast_source": "open_meteo_live_gfs",
+                        "forecast_peak_hour_local": 13,
+                        "forecast_peak_time_local": "2026-06-16T13:00",
+                        "forecast_values_hash": "hash-test",
+                    },
+                    _record("Tokyo", "21", 0.20),
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    plan_out = tmp_path / "plans.jsonl"
+    summary_out = tmp_path / "summary.json"
+    history_out = tmp_path / "history.jsonl"
+    telemetry_out = tmp_path / "forward_telemetry.jsonl"
+
+    monkeypatch.setattr(live, "PLAN_OUT", plan_out)
+    monkeypatch.setattr(live, "SUMMARY_OUT", summary_out)
+    monkeypatch.setattr(live, "HISTORY_OUT", history_out)
+    monkeypatch.setattr(live, "FORWARD_TELEMETRY_OUT", telemetry_out)
+    monkeypatch.setattr(live, "latest_snapshot", lambda: snapshot_path)
+    monkeypatch.setattr(live, "snapshot_dir", lambda: tmp_path)
+    monkeypatch.setattr(live, "load_stations", lambda: {"Tokyo": live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")})
+    monkeypatch.setattr(live, "load_source_profiles", lambda: {})
+    monkeypatch.setattr(live, "load_model_artifact", lambda: {})
+    monkeypatch.setattr(live, "score_rows", lambda rows, artifact: [0.9] * len(rows))
+    monkeypatch.setattr(live, "prior_city_day_notional", lambda _instance: {})
+    monkeypatch.setattr(
+        live,
+        "fresh_taker_quote",
+        lambda row, args: {
+            "status": "accepted",
+            "best_bid": 0.77,
+            "fresh_ask": 0.79,
+            "fresh_ask_size": 10.0,
+            "fresh_available_notional": 7.9,
+            "max_taker_price": 0.80,
+            "limit_price": 0.791,
+            "edge_at_fresh_ask": 0.11,
+            "edge_at_limit": 0.109,
+            "expected_profit_usd": 0.689,
+            "derived_min_edge_after_full_cushion": 0.03,
+            "cushion_paid_vs_snapshot": 0.011,
+        },
+    )
+
+    def fake_fetch_obs(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "test_metar",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-16T04:00:00+00:00",
+            "timezone": "Asia/Tokyo",
+            "cadence_min": 30.0,
+            "minutes_to_next_obs": 20.0,
+            "running_max_c": 20.0,
+            "running_max_obs_utc": "2026-06-16T03:30:00+00:00",
+            "minutes_since_running_max": 40.0,
+            "current_temp_c": 19.0,
+            "decline_c": 1.0,
+            "tmpf_now": 66.2,
+            "dwpf_now": 50.0,
+            "dewpoint_depression_f": 16.2,
+            "relh_now": 50.0,
+            "sknt_now": 5.0,
+            "sky_now": 1.0,
+            "d_tmpf_1h": -1.0,
+            "d_tmpf_3h": -2.0,
+            "d_dwpf_3h": 0.0,
+            "d_relh_3h": 0.0,
+        }
+
+    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    args = argparse.Namespace(
+        snapshot=str(snapshot_path),
+        max_order_notional=5.0,
+        max_city_day_notional=10.0,
+        min_available_notional=5.0,
+        max_taker_cushion=0.02,
+        cross_tick_buffer=0.001,
+        max_orders=20,
+        max_snapshot_age_min=1_000_000.0,
+        max_obs_age_min=20.0,
+        pre_metar_update_blackout_min=6.0,
+        min_gap_to_next_bracket_c=0.0,
+        min_local_hour=13,
+        max_local_hour=15,
+        live=False,
+        confirm_live=False,
+        no_telegram=True,
+    )
+
+    result = live.run_once(args)
+    rows = [json.loads(line) for line in telemetry_out.read_text(encoding="utf-8").splitlines()]
+
+    assert result["forward_telemetry_rows"] == 1
+    assert rows[0]["decision_status"] == "planned"
+    assert rows[0]["city"] == "Tokyo"
+    assert rows[0]["obs_source"] == "test_metar"
+    assert rows[0]["minutes_since_running_max"] == 40.0
+    assert rows[0]["fresh_best_ask"] == 0.79
+    assert rows[0]["forecast_peak_hour_local"] == 13
+    assert rows[0]["forecast_peak_delta_hours_local"] == 0.0

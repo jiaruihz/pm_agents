@@ -1,0 +1,353 @@
+{
+  "clob_gate": {
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "fail_reasons": [],
+    "gate_pass": true,
+    "missing_order_rows": 0,
+    "over_order_keys": 0
+  },
+  "coverage": {
+    "active_dates": 27,
+    "date_max": "2026-06-14",
+    "date_min": "2026-05-19",
+    "feature_rows": 3239,
+    "joined_rows": 3239,
+    "rows_with_ecmwf_peak": 3239,
+    "rows_with_gfs_peak": 3239
+  },
+  "data_self_check": {
+    "clob_order_fill_join": [
+      {
+        "orders": 33,
+        "status": "error",
+        "with_fill": 0
+      },
+      {
+        "orders": 961,
+        "status": "submitted",
+        "with_fill": 855
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "eligible": 10961,
+      "live_filled": 348,
+      "paper_ordered": 4274,
+      "rows": 31496
+    },
+    "fact_trades_by_class": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "rows": 150,
+        "settlement_status": ""
+      },
+      {
+        "rows": 4250,
+        "settlement_status": "settled"
+      }
+    ],
+    "fact_trades_max_built_at_utc": "2026-06-17T15:49:12.423102+00:00",
+    "forecast_peak_fact_coverage": {
+      "max_event_date": "2026-06-18",
+      "min_event_date": "2026-05-05",
+      "rows": 31496,
+      "with_hash": 108,
+      "with_peak_hour": 108
+    }
+  },
+  "evidence_layer": "historical orderbook replay plus Open-Meteo historical forecast backfill",
+  "forecast_backfill": {
+    "city_count": 36,
+    "city_date_count": 831,
+    "date_max": "2026-06-14",
+    "date_min": "2026-05-19",
+    "errors": [],
+    "fetch_stats": {
+      "cache": 72,
+      "error": 0,
+      "fetched": 0,
+      "missing_city_config": 0
+    },
+    "peak_city_date_rows": 904
+  },
+  "generated_at_utc": "2026-06-17T15:58:35+00:00",
+  "grid_top10": [
+    {
+      "head": "peak_forming",
+      "holdout_dates": 11,
+      "holdout_orders": 22,
+      "holdout_roi": 0.09333804872660097,
+      "holdout_win_rate": 0.8181818181818182,
+      "model": "gfs",
+      "rule": "gfs_peak_forming|ask>=0.55|edge>=0.08|d<=0.1|delta-1-0.0",
+      "train_dates": 12,
+      "train_orders": 16,
+      "train_roi": 0.24016889012028358
+    },
+    {
+      "head": "peak_forming",
+      "holdout_dates": 11,
+      "holdout_orders": 18,
+      "holdout_roi": -0.02406360271770743,
+      "holdout_win_rate": 0.7777777777777778,
+      "model": "gfs",
+      "rule": "gfs_peak_forming|ask>=0.65|edge>=0.08|d<=0.1|delta-1-0.0",
+      "train_dates": 11,
+      "train_orders": 15,
+      "train_roi": 0.20588775180081717
+    },
+    {
+      "head": "peak_forming",
+      "holdout_dates": 12,
+      "holdout_orders": 25,
+      "holdout_roi": 0.06859225903658679,
+      "holdout_win_rate": 0.84,
+      "model": "gfs",
+      "rule": "gfs_peak_forming|ask>=0.65|edge>=0.08|d<=0.1|delta-1-1.0",
+      "train_dates": 11,
+      "train_orders": 23,
+      "train_roi": 0.20323094459878693
+    },
+    {
+      "head": "peak_forming",
+      "holdout_dates": 12,
+      "holdout_orders": 28,
+      "holdout_roi": 0.1393816820756188,
+      "holdout_win_rate": 0.8571428571428571,
+      "model": "gfs",
+      "rule": "gfs_peak_forming|ask>=0.55|edge>=0.08|d<=0.1|delta-1-1.0",
+      "train_dates": 12,
+      "train_orders": 26,
+      "train_roi": 0.19597555220580948
+    },
+    {
+      "head": "peak_forming",
+      "holdout_dates": 13,
+      "holdout_orders": 36,
+      "holdout_roi": 0.1424845978594723,
+      "holdout_win_rate": 0.8611111111111112,
+      "model": "ecmwf",
+      "rule": "ecmwf_peak_forming|ask>=0.55|edge>=0.08|d<=0.1|delta-1-1.0",
+      "train_dates": 11,
+      "train_orders": 28,
+      "train_roi": 0.16919898865202473
+    },
+    {
+      "head": "peak_forming",
+      "holdout_dates": 12,
+      "holdout_orders": 26,
+      "holdout_roi": 0.08166373769769315,
+      "holdout_win_rate": 0.8461538461538461,
+      "model": "gfs",
+      "rule": "gfs_peak_forming|ask>=0.65|edge>=0.08|d<=0.1|delta-1-2.0",
+      "train_dates": 11,
+      "train_orders": 26,
+      "train_roi": 0.16277645066745283
+    },
+    {
+      "head": "fade_confirmed",
+      "holdout_dates": 11,
+      "holdout_orders": 15,
+      "holdout_roi": 0.014135159319760398,
+      "holdout_win_rate": 0.8666666666666667,
+      "model": "ecmwf",
+      "rule": "ecmwf_fade_confirmed|ask>=0.55|edge>=0.05|d>=0.5|delta0-4.0",
+      "train_dates": 9,
+      "train_orders": 14,
+      "train_roi": 0.160910496814213
+    },
+    {
+      "head": "fade_confirmed",
+      "holdout_dates": 11,
+      "holdout_orders": 15,
+      "holdout_roi": 0.014135159319760398,
+      "holdout_win_rate": 0.8666666666666667,
+      "model": "ecmwf",
+      "rule": "ecmwf_fade_confirmed|ask>=0.55|edge>=0.05|d>=0.5|delta0-6.0",
+      "train_dates": 9,
+      "train_orders": 14,
+      "train_roi": 0.160910496814213
+    },
+    {
+      "head": "peak_forming",
+      "holdout_dates": 14,
+      "holdout_orders": 53,
+      "holdout_roi": 0.010458874257480358,
+      "holdout_win_rate": 0.8113207547169812,
+      "model": "ecmwf",
+      "rule": "ecmwf_peak_forming|ask>=0.55|edge>=0.03|d<=0.1|delta-1-0.0",
+      "train_dates": 12,
+      "train_orders": 57,
+      "train_roi": 0.15375121218567603
+    },
+    {
+      "head": "peak_forming",
+      "holdout_dates": 12,
+      "holdout_orders": 29,
+      "holdout_roi": 0.14865992421871305,
+      "holdout_win_rate": 0.8620689655172413,
+      "model": "gfs",
+      "rule": "gfs_peak_forming|ask>=0.55|edge>=0.08|d<=0.1|delta-1-2.0",
+      "train_dates": 12,
+      "train_orders": 28,
+      "train_roi": 0.1515996301681203
+    }
+  ],
+  "holdout_rule_summary_plus_2c": [
+    {
+      "active_dates": 11,
+      "avg_ask": 0.7935161290322581,
+      "avg_edge_snapshot": 0.09434568273106964,
+      "avg_p_yes_win": 0.8878618117633276,
+      "avg_price": 0.813516129032258,
+      "cities": 14,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "head": "fade_confirmed",
+      "model": "none",
+      "notional": 155.0,
+      "orders": 31,
+      "orders_per_active_day": 2.8181818181818183,
+      "period": "holdout",
+      "pnl_usd": 25.090628037671372,
+      "roi": 0.1618750195978798,
+      "roi_ci95": [
+        0.026856795459473903,
+        0.2794171542853064
+      ],
+      "rule": "v9_fixed_fade_confirmed",
+      "taker_cushion": 0.02,
+      "win_rate": 0.9354838709677419,
+      "wins": 29
+    },
+    {
+      "active_dates": 6,
+      "avg_ask": 0.8733000000000001,
+      "avg_edge_snapshot": 0.0819083304256912,
+      "avg_p_yes_win": 0.9552083304256913,
+      "avg_price": 0.8933,
+      "cities": 9,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-03",
+      "head": "fade_confirmed",
+      "model": "gfs",
+      "notional": 50.0,
+      "orders": 10,
+      "orders_per_active_day": 1.6666666666666667,
+      "period": "holdout",
+      "pnl_usd": 6.056749555104799,
+      "roi": 0.12113499110209598,
+      "roi_ci95": [
+        0.10288208610336595,
+        0.1429833044950714
+      ],
+      "rule": "gfs_after_peak_fade_confirmed",
+      "taker_cushion": 0.02,
+      "win_rate": 1.0,
+      "wins": 10
+    },
+    {
+      "active_dates": 11,
+      "avg_ask": 0.8321333333333334,
+      "avg_edge_snapshot": 0.09095921843908603,
+      "avg_p_yes_win": 0.9230925517724192,
+      "avg_price": 0.8521333333333333,
+      "cities": 10,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "head": "fade_confirmed",
+      "model": "ecmwf",
+      "notional": 75.0,
+      "orders": 15,
+      "orders_per_active_day": 1.3636363636363635,
+      "period": "holdout",
+      "pnl_usd": 1.0601369489820298,
+      "roi": 0.014135159319760398,
+      "roi_ci95": [
+        -0.25679762953879764,
+        0.19588433865508026
+      ],
+      "rule": "ecmwf_after_peak_fade_confirmed",
+      "taker_cushion": 0.02,
+      "win_rate": 0.8666666666666667,
+      "wins": 13
+    },
+    {
+      "active_dates": 12,
+      "avg_ask": 0.771675,
+      "avg_edge_snapshot": 0.1031928054592334,
+      "avg_p_yes_win": 0.8748678054592334,
+      "avg_price": 0.791675,
+      "cities": 18,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "head": "peak_forming",
+      "model": "gfs",
+      "notional": 200.0,
+      "orders": 40,
+      "orders_per_active_day": 3.3333333333333335,
+      "period": "holdout",
+      "pnl_usd": 18.1705858861118,
+      "roi": 0.090852929430559,
+      "roi_ci95": [
+        -0.11110054412574726,
+        0.26407834714015693
+      ],
+      "rule": "gfs_peak_forming_plateau",
+      "taker_cushion": 0.02,
+      "win_rate": 0.85,
+      "wins": 34
+    },
+    {
+      "active_dates": 13,
+      "avg_ask": 0.7681481481481481,
+      "avg_edge_snapshot": 0.10316148223505896,
+      "avg_p_yes_win": 0.871309630383207,
+      "avg_price": 0.788148148148148,
+      "cities": 16,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "head": "peak_forming",
+      "model": "ecmwf",
+      "notional": 270.0,
+      "orders": 54,
+      "orders_per_active_day": 4.153846153846154,
+      "period": "holdout",
+      "pnl_usd": 17.115197966933405,
+      "roi": 0.06338962209975335,
+      "roi_ci95": [
+        -0.06864639212926868,
+        0.1798472651692394
+      ],
+      "rule": "ecmwf_peak_forming_plateau",
+      "taker_cushion": 0.02,
+      "win_rate": 0.8333333333333334,
+      "wins": 45
+    }
+  ],
+  "outputs": {
+    "grid_csv": "docs/analysis/2026-06/generated/theta_current_yes_forecast_peak_clock_backfill_v3/grid_search.csv",
+    "joined_csv": "docs/analysis/2026-06/generated/theta_current_yes_forecast_peak_clock_backfill_v3/forecast_peak_joined_rows.csv",
+    "json": "docs/analysis/2026-06/2026-06-17-theta-current-yes-forecast-peak-clock-backfill-v3.json",
+    "md": "docs/analysis/2026-06/2026-06-17-theta-current-yes-forecast-peak-clock-backfill-v3.md",
+    "summary_csv": "docs/analysis/2026-06/generated/theta_current_yes_forecast_peak_clock_backfill_v3/rule_summary.csv"
+  },
+  "row_grain": "current YES replay row; live-style deduped before ROI summaries",
+  "split_date": "2026-06-01"
+}

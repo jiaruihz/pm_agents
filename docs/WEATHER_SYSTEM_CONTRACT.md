@@ -46,6 +46,22 @@ N100 两个 repo 产出的文件格式 = 本文档约定的契约。pm_agent das
 | 模型P(YES) | `model_p_yes` | REAL 0-1 | ~~`model_prob`~~ ~~`model_probability_yes`~~ 废弃 |
 | YES盘口价 | `market_price` | REAL 0-1 | ~~`market_yes_price`~~ 废弃 |
 | 预报源 | `forecast_source` | TEXT | ~~`profile`~~ 废弃；见 §4 |
+| 预报最高温 | `forecast_max_f` | REAL °F | Open-Meteo hourly `temperature_2m` 目标日最大值 |
+| 预报最高温（市场单位） | `forecast_max_native` | REAL °C/°F | 若该城市合约单位为 C 则由 `forecast_max_f` 转 C；F 城市同 `forecast_max_f` |
+| 预报最高温小时（本地） | `forecast_peak_hour_local` | INTEGER 0-23 | 目标日 hourly forecast 首个最高温小时，按 Open-Meteo `timezone=auto` 的本地时间 |
+| 预报最高温时间（本地） | `forecast_peak_time_local` | TEXT ISO-like | 例如 `2026-06-16T14:00` |
+| 预报最高温小时（UTC） | `forecast_peak_hour_utc` | INTEGER 0-23 | 用 forecast response `utc_offset_seconds` 从本地峰值时间换算 |
+| 预报最高温时间（UTC） | `forecast_peak_time_utc` | TEXT ISO-8601 | 例如 `2026-06-16T06:00:00Z` |
+| 预报小时数 | `forecast_hourly_count` | INTEGER | 该 target_date 可用 hourly 温度点数量 |
+| 预报序列hash | `forecast_values_hash` | TEXT | 对目标日 hourly `(time, temperature_2m)` 序列做 SHA256 前16位，用于判断 forecast 是否换版 |
+| 预报峰值源 | `forecast_peak_source` | TEXT | 通常同 `forecast_source`，例如 `open_meteo_live_gfs` |
+| 预报源时区 | `forecast_timezone` | TEXT | Open-Meteo response timezone，用于审计本地峰值小时 |
+| 预报UTC偏移秒 | `forecast_utc_offset_seconds` | INTEGER | Open-Meteo response `utc_offset_seconds` |
+| 决策相对峰值小时 | `forecast_peak_delta_hours_local` | REAL | `decision_local_hour - forecast_peak_hour_local`；正数表示已过预报峰值小时 |
+| 预报最高温是否落入本 bracket | `forecast_max_in_bracket` | INTEGER 0/1 | 按当前 record 的 bracket 边界判断 |
+| 预报最高温高出本 bracket | `forecast_max_above_bracket_f` | REAL °F | 若未高出则 0；top bracket 可能为空 |
+| 预报最高温低于本 bracket | `forecast_max_below_bracket_f` | REAL °F | 若未低于则 0 |
+| 预报最高温高出已观测最高温 | `forecast_max_above_metar_max_f` | REAL °F | `forecast_max_f - metar_current_max_f`，METAR 缺失时为空 |
 | 边际优势 | `edge` | REAL | |
 | 绝对边际 | `abs_edge` | REAL | |
 | 城市池 | `city_pool` | TEXT | t1_trading / t2_research |
@@ -188,6 +204,26 @@ order_id, shares, cost_usd, entry_price, settlement_status, final_price, pnl_usd
 
 > 当前 CSV 还用旧字段名（`model`、`event_date`、`model_prob`、`market_yes_price`）——adapter 做临时兼容。待 N100 侧改名后删 adapter（§6）。
 
+### 4.1.1 paper_snapshots/*.json forecast peak fields
+
+`weather-predict` snapshot record 必须保留 forecast peak clock 字段。它们是
+`forecast_source` 同一次 Open-Meteo hourly response 的派生值，不允许用实际观测最高温反推。
+
+```
+forecast_max_f, forecast_max_native,
+forecast_peak_hour_local, forecast_peak_time_local,
+forecast_peak_hour_utc, forecast_peak_time_utc,
+forecast_hourly_count, forecast_values_hash, forecast_peak_source,
+forecast_timezone, forecast_utc_offset_seconds,
+forecast_peak_delta_hours_local,
+forecast_max_in_bracket,
+forecast_max_above_bracket_f, forecast_max_below_bracket_f,
+forecast_max_above_metar_max_f
+```
+
+`pm_agent` 的 `fact_signal_candidates` 保存这些字段的**决策窗代表 snapshot**值；历史旧
+snapshot 缺字段时为 NULL，不做回填猜测。
+
 ### 4.2 live_*_signals.jsonl
 
 必含字段：
@@ -211,6 +247,35 @@ execution_policy, token_id, venue, exchange_response, status, created_at_utc
 ```
 
 > 当前 `order_side` = "BUY"（非 "BUY_YES"/"BUY_NO"）——待修正。
+
+### 4.4 theta_current_yes forward_telemetry.jsonl
+
+current-YES no-reheat 分支的分钟级 would-order 证据层；它不是订单源，
+不代表已成交，也不进入 live PnL。用于之后按真实前瞻样本评估 hit rate、
+taker ROI、METAR 更新窗口和 fresh-book 滑点。
+
+路径：
+
+```text
+runtime/weather_edge_v1/theta_current_yes_tiny_live_v1/forward_telemetry.jsonl
+```
+
+核心字段：
+
+```text
+record_type, telemetry_version, telemetry_run_id, strategy_instance,
+decision_status, city, target_date, current_bracket, decision_local_time,
+decision_timezone, snapshot_ts_utc, snapshot_age_min,
+obs_source, obs_age_min, obs_cadence_min, minutes_to_next_obs,
+last_obs_utc, running_max_obs_utc, minutes_since_running_max,
+decline_c, gap_running_to_d1_low_c,
+yes_current_ask, available_notional_at_ask, fresh_best_ask,
+fresh_ask_size, taker_limit_price, edge_at_fresh_ask, edge_at_limit,
+forecast_peak_hour_local, forecast_peak_time_local,
+forecast_peak_source, forecast_values_hash, forecast_peak_delta_hours_local,
+source_profile_class, source_profile_primary_source,
+source_profile_station_or_feed, source_profile_live_eligible
+```
 
 ---
 

@@ -49,6 +49,7 @@ from src.strategies.weather_edge_v1.official_observation_feed.market_brackets im
     bracket_contains,
     parse_label_dict,
 )
+from src.strategies.weather_edge_v1.official_observation_feed.source_registry import load_source_profiles
 from src.strategies.weather_edge_v1.tools.official_observation_clock import (
     ObservationClockConfig,
     city_timezone_name,
@@ -68,6 +69,7 @@ PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
+FORWARD_TELEMETRY_OUT = RUNTIME_DIR / "forward_telemetry.jsonl"
 LIVE_OUT = ROOT / "runtime/weather_edge_v1/live/theta_current_yes_tiny_live_v1_orders.jsonl"
 
 METAR_API = "https://aviationweather.gov/api/data/metar"
@@ -475,6 +477,21 @@ def fetch_obs(
     temps = [float(x["tmpc"]) for x in obs if math.isfinite(float(x["tmpc"]))]
     if not temps:
         return {"status": "missing_temp", **common}
+    running_max_c = max(temps)
+    running_max_hits = [
+        row["ts"]
+        for row in obs
+        if row.get("ts") <= now
+        and math.isfinite(to_float(row.get("tmpc"), np.nan))
+        and abs(to_float(row.get("tmpc"), np.nan) - running_max_c) < 1e-9
+    ]
+    running_max_obs_utc = max(running_max_hits) if running_max_hits else None
+    minutes_since_running_max = (
+        (now - running_max_obs_utc).total_seconds() / 60.0
+        if running_max_obs_utc is not None
+        else np.nan
+    )
+
     def asof(minutes: int, key: str) -> float:
         target = now - timedelta(minutes=minutes)
         prev = [x for x in obs if x["ts"] <= target]
@@ -493,9 +510,11 @@ def fetch_obs(
     return {
         "status": "ok",
         **common,
-        "running_max_c": max(temps),
+        "running_max_c": running_max_c,
+        "running_max_obs_utc": running_max_obs_utc.isoformat() if running_max_obs_utc else "",
+        "minutes_since_running_max": minutes_since_running_max,
         "current_temp_c": tmpc_now,
-        "decline_c": max(temps) - tmpc_now,
+        "decline_c": running_max_c - tmpc_now,
         "tmpf_now": tmpf_now,
         "dwpf_now": dwpf_now,
         "dewpoint_depression_f": tmpf_now - dwpf_now if math.isfinite(tmpf_now) and math.isfinite(dwpf_now) else np.nan,
@@ -670,6 +689,17 @@ def build_current_rows(
             "snapshot_ts_utc": snapshot.get("ts_utc"),
             "snapshot_path": str(latest_snapshot() or ""),
             "obs": obs,
+            "forecast_source": safe_str(current_record.get("forecast_source")),
+            "forecast_max_f": current_record.get("forecast_max_f"),
+            "forecast_max_native": current_record.get("forecast_max_native"),
+            "forecast_peak_hour_local": current_record.get("forecast_peak_hour_local"),
+            "forecast_peak_time_local": current_record.get("forecast_peak_time_local"),
+            "forecast_peak_hour_utc": current_record.get("forecast_peak_hour_utc"),
+            "forecast_peak_time_utc": current_record.get("forecast_peak_time_utc"),
+            "forecast_hourly_count": current_record.get("forecast_hourly_count"),
+            "forecast_values_hash": current_record.get("forecast_values_hash"),
+            "forecast_peak_source": current_record.get("forecast_peak_source"),
+            "forecast_peak_delta_hours_local": current_record.get("forecast_peak_delta_hours_local"),
             **{k: obs.get(k, np.nan) for k in ("tmpf_now", "dwpf_now", "dewpoint_depression_f", "relh_now", "sknt_now", "sky_now", "d_tmpf_1h", "d_tmpf_3h", "d_dwpf_3h", "d_relh_3h")},
         }
         rows.append(row)
@@ -769,7 +799,19 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "decline_c": round(float(row["decline_c"]), 6),
         "obs_age_min": round(float((row.get("obs") or {}).get("age_min") or 0.0), 6),
         "minutes_to_next_obs": round(float((row.get("obs") or {}).get("minutes_to_next_obs") or -1.0), 6),
+        "running_max_obs_utc": safe_str((row.get("obs") or {}).get("running_max_obs_utc")),
+        "minutes_since_running_max": round(float((row.get("obs") or {}).get("minutes_since_running_max") or -1.0), 6),
         "gap_running_to_d1_low_c": round(float(row.get("gap_running_to_d1_low_c") or 0.0), 6),
+        "forecast_source": safe_str(row.get("forecast_source")),
+        "forecast_max_f": row.get("forecast_max_f"),
+        "forecast_max_native": row.get("forecast_max_native"),
+        "forecast_peak_hour_local": row.get("forecast_peak_hour_local"),
+        "forecast_peak_time_local": row.get("forecast_peak_time_local"),
+        "forecast_peak_hour_utc": row.get("forecast_peak_hour_utc"),
+        "forecast_peak_time_utc": row.get("forecast_peak_time_utc"),
+        "forecast_peak_source": row.get("forecast_peak_source"),
+        "forecast_values_hash": row.get("forecast_values_hash"),
+        "forecast_peak_delta_hours_local": forecast_peak_delta(row),
         "decision_hour_local": int(row["decision_hour_local"]),
         "decision_local_time": safe_str(row.get("local_time")),
         "decision_timezone": safe_str(row.get("timezone")),
@@ -799,6 +841,221 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def first_rule_reject_reason(row: dict[str, Any], args: argparse.Namespace) -> str:
+    if to_float(row.get("decline_c"), 0.0) < 0.5:
+        return "snapshot_rule_decline_lt_0_5"
+    if to_float(row.get("yes_current_ask"), 0.0) < 0.55:
+        return "snapshot_rule_yes_ask_lt_0_55"
+    if to_float(row.get("p_yes_win"), 0.0) < 0.5:
+        return "snapshot_rule_p_yes_lt_0_5"
+    if to_float(row.get("ev"), -999.0) < 0.05:
+        return "snapshot_rule_edge_lt_0_05"
+    if to_float(row.get("available_notional_at_ask"), 0.0) < float(args.min_available_notional):
+        return "snapshot_rule_insufficient_size"
+    if not safe_str(row.get("token_id")):
+        return "snapshot_rule_missing_token"
+    return "snapshot_rule_passed"
+
+
+def source_profile_fields(city: str, profiles: dict[str, Any]) -> dict[str, Any]:
+    profile = profiles.get(city)
+    if profile is None:
+        return {
+            "source_profile_found": False,
+            "source_profile_class": "",
+            "source_profile_primary_source": "",
+            "source_profile_station_or_feed": "",
+            "source_profile_live_eligible": None,
+        }
+    return {
+        "source_profile_found": True,
+        "source_profile_class": profile.settlement_source_class,
+        "source_profile_primary_source": profile.primary_source,
+        "source_profile_station_or_feed": profile.official_station_or_feed,
+        "source_profile_configured_icao": profile.configured_icao,
+        "source_profile_mapping_rule": profile.mapping_rule,
+        "source_profile_live_eligible": profile.live_eligible,
+        "source_profile_blocked_reason": profile.blocked_reason,
+        "source_profile_alignment_days": profile.alignment_days,
+        "source_profile_alignment_rate": profile.alignment_rate,
+    }
+
+
+def forecast_peak_delta(row: dict[str, Any]) -> float | None:
+    raw = row.get("forecast_peak_delta_hours_local")
+    try:
+        if raw not in (None, ""):
+            return float(raw)
+    except Exception:
+        pass
+    peak = to_float(row.get("forecast_peak_hour_local"), np.nan)
+    hour = to_float(row.get("decision_hour_local"), np.nan)
+    if math.isfinite(peak) and math.isfinite(hour):
+        return hour - peak
+    return None
+
+
+def current_yes_forward_telemetry_row(
+    row: dict[str, Any],
+    *,
+    decision_status: str,
+    args: argparse.Namespace,
+    run_id: str,
+    snapshot_path: Path,
+    snapshot_age_min: float,
+    source_profiles: dict[str, Any],
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    obs = row.get("obs") or {}
+    limit_price = to_float(row.get("taker_limit_price"), to_float(row.get("yes_current_ask"), 0.0))
+    fresh_ask = to_float(row.get("fresh_best_ask"), to_float(row.get("fresh_ask"), 0.0))
+    fresh_bid = to_float(row.get("fresh_best_bid"), to_float(row.get("best_bid"), 0.0))
+    p_yes = to_float(row.get("p_yes_win"), np.nan)
+    expected_profit = (
+        float(args.max_order_notional) * (p_yes / limit_price - 1.0)
+        if math.isfinite(p_yes) and limit_price > 0
+        else None
+    )
+    base = {
+        "record_type": "theta_current_yes_forward_telemetry",
+        "telemetry_version": 1,
+        "strategy_instance": STRATEGY_INSTANCE,
+        "strategy_id": STRATEGY_ID,
+        "created_at_utc": now_utc(),
+        "telemetry_run_id": run_id,
+        "decision_status": decision_status,
+        "city": safe_str(row.get("city")),
+        "target_date": safe_str(row.get("target_date")),
+        "current_bracket": safe_str(row.get("current_bracket")),
+        "d1_no_bracket": safe_str(row.get("d1_no_bracket")),
+        "token_id": safe_str(row.get("token_id")),
+        "market_id": safe_str(row.get("market_id")),
+        "event_slug": safe_str(row.get("event_slug")),
+        "decision_local_time": safe_str(row.get("local_time")),
+        "decision_timezone": safe_str(row.get("timezone")),
+        "decision_hour_local": int(to_float(row.get("decision_hour_local"), -1)),
+        "snapshot_ts_utc": safe_str(row.get("snapshot_ts_utc")),
+        "snapshot_path": str(snapshot_path),
+        "snapshot_age_min": round(float(snapshot_age_min), 6),
+        "obs_source": safe_str(obs.get("source")),
+        "obs_age_min": to_float(obs.get("age_min"), np.nan),
+        "obs_cadence_min": obs.get("cadence_min"),
+        "minutes_to_next_obs": obs.get("minutes_to_next_obs"),
+        "last_obs_utc": safe_str(obs.get("last_obs_utc")),
+        "running_max_obs_utc": safe_str(obs.get("running_max_obs_utc")),
+        "minutes_since_running_max": to_float(obs.get("minutes_since_running_max"), np.nan),
+        "current_temp_c": to_float(obs.get("current_temp_c"), np.nan),
+        "running_max_c": to_float(obs.get("running_max_c"), np.nan),
+        "decline_c": to_float(row.get("decline_c"), np.nan),
+        "gap_running_to_d1_low_c": to_float(row.get("gap_running_to_d1_low_c"), np.nan),
+        "yes_current_ask": to_float(row.get("yes_current_ask"), np.nan),
+        "yes_current_size": to_float(row.get("yes_current_size"), np.nan),
+        "available_notional_at_ask": to_float(row.get("available_notional_at_ask"), np.nan),
+        "d1_no_ask": to_float(row.get("d1_no_ask"), np.nan),
+        "p_yes_win": p_yes,
+        "snapshot_edge": to_float(row.get("ev"), np.nan),
+        "fresh_best_bid": fresh_bid,
+        "fresh_best_ask": fresh_ask,
+        "fresh_ask_size": to_float(row.get("fresh_ask_size"), np.nan),
+        "fresh_available_notional": to_float(row.get("fresh_available_notional"), np.nan),
+        "taker_limit_price": limit_price,
+        "taker_max_price": to_float(row.get("taker_max_price"), np.nan),
+        "edge_at_fresh_ask": to_float(row.get("edge_at_fresh_ask"), np.nan),
+        "edge_at_limit": to_float(row.get("edge_at_limit"), np.nan),
+        "expected_profit_usd_model": expected_profit,
+        "forecast_source": safe_str(row.get("forecast_source")),
+        "forecast_max_f": row.get("forecast_max_f"),
+        "forecast_max_native": row.get("forecast_max_native"),
+        "forecast_peak_hour_local": row.get("forecast_peak_hour_local"),
+        "forecast_peak_time_local": row.get("forecast_peak_time_local"),
+        "forecast_peak_hour_utc": row.get("forecast_peak_hour_utc"),
+        "forecast_peak_time_utc": row.get("forecast_peak_time_utc"),
+        "forecast_peak_source": row.get("forecast_peak_source"),
+        "forecast_values_hash": row.get("forecast_values_hash"),
+        "forecast_peak_delta_hours_local": forecast_peak_delta(row),
+        "config": {
+            "max_order_notional": float(args.max_order_notional),
+            "max_city_day_notional": float(args.max_city_day_notional),
+            "min_available_notional": float(args.min_available_notional),
+            "max_taker_cushion": float(args.max_taker_cushion),
+            "cross_tick_buffer": float(args.cross_tick_buffer),
+            "max_obs_age_min": float(args.max_obs_age_min),
+            "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
+            "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
+            "min_local_hour": int(args.min_local_hour),
+            "max_local_hour": int(args.max_local_hour),
+        },
+    }
+    base.update(source_profile_fields(safe_str(row.get("city")), source_profiles))
+    if extra:
+        base.update(extra)
+    return json_ready(base)
+
+
+def current_yes_audit_telemetry_row(
+    audit: dict[str, Any],
+    *,
+    args: argparse.Namespace,
+    run_id: str,
+    snapshot: dict[str, Any],
+    snapshot_path: Path,
+    snapshot_age_min: float,
+    source_profiles: dict[str, Any],
+) -> dict[str, Any]:
+    obs = audit.get("obs") or {}
+    city = safe_str(audit.get("city"))
+    row = {
+        "record_type": "theta_current_yes_forward_telemetry",
+        "telemetry_version": 1,
+        "strategy_instance": STRATEGY_INSTANCE,
+        "strategy_id": STRATEGY_ID,
+        "created_at_utc": now_utc(),
+        "telemetry_run_id": run_id,
+        "decision_status": safe_str(audit.get("status")) or "audit_blocked",
+        "city": city,
+        "target_date": safe_str(audit.get("target_date")),
+        "current_bracket": safe_str(audit.get("current_bracket")),
+        "d1_no_bracket": safe_str(audit.get("d1_bracket") or audit.get("d1_no_bracket")),
+        "decision_local_time": safe_str(audit.get("local_time")),
+        "decision_timezone": safe_str(audit.get("timezone") or obs.get("timezone")),
+        "decision_hour_local": int(to_float(audit.get("hour_local"), -1)),
+        "snapshot_ts_utc": safe_str(snapshot.get("ts_utc")),
+        "snapshot_path": str(snapshot_path),
+        "snapshot_age_min": round(float(snapshot_age_min), 6),
+        "obs_source": safe_str(obs.get("source")),
+        "obs_age_min": to_float(obs.get("age_min"), np.nan),
+        "obs_cadence_min": obs.get("cadence_min"),
+        "minutes_to_next_obs": obs.get("minutes_to_next_obs"),
+        "last_obs_utc": safe_str(obs.get("last_obs_utc")),
+        "running_max_obs_utc": safe_str(obs.get("running_max_obs_utc")),
+        "minutes_since_running_max": to_float(obs.get("minutes_since_running_max"), np.nan),
+        "current_temp_c": to_float(obs.get("current_temp_c"), np.nan),
+        "running_max_c": to_float(obs.get("running_max_c"), np.nan),
+        "decline_c": to_float(obs.get("decline_c"), np.nan),
+        "gap_running_to_d1_low_c": to_float(audit.get("gap_running_to_d1_low_c"), np.nan),
+        "p_yes_win": None,
+        "snapshot_edge": None,
+        "config": {
+            "max_order_notional": float(args.max_order_notional),
+            "max_city_day_notional": float(args.max_city_day_notional),
+            "min_available_notional": float(args.min_available_notional),
+            "max_taker_cushion": float(args.max_taker_cushion),
+            "cross_tick_buffer": float(args.cross_tick_buffer),
+            "max_obs_age_min": float(args.max_obs_age_min),
+            "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
+            "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
+            "min_local_hour": int(args.min_local_hour),
+            "max_local_hour": int(args.max_local_hour),
+        },
+    }
+    row.update(source_profile_fields(city, source_profiles))
+    if audit.get("error"):
+        row["error"] = safe_str(audit.get("error"))
+    if audit.get("reason"):
+        row["reason"] = safe_str(audit.get("reason"))
+    return json_ready(row)
 
 
 def json_ready(value: Any) -> Any:
@@ -834,6 +1091,14 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     snapshot, records = snapshot_records(snap_path)
     snapshot_ts = parse_utc(snapshot.get("ts_utc")) or datetime.now(timezone.utc)
     age_min = (datetime.now(timezone.utc) - snapshot_ts).total_seconds() / 60.0
+    telemetry_run_id = stable_hash(
+        {
+            "strategy_instance": STRATEGY_INSTANCE,
+            "snapshot_ts_utc": snapshot.get("ts_utc"),
+            "snapshot": str(snap_path),
+            "created_at_utc": now_utc(),
+        }
+    )
     if age_min > args.max_snapshot_age_min:
         result = {
             "generated_at_utc": now_utc(),
@@ -848,6 +1113,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         return result
 
     model_artifact = load_model_artifact()
+    source_profiles = load_source_profiles()
     current, audits = build_current_rows(
         snapshot,
         records,
@@ -860,19 +1126,37 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         max_local_hour=args.max_local_hour,
     )
     candidates: list[dict[str, Any]] = []
+    telemetry_rows: list[dict[str, Any]] = [
+        current_yes_audit_telemetry_row(
+            audit,
+            args=args,
+            run_id=telemetry_run_id,
+            snapshot=snapshot,
+            snapshot_path=snap_path,
+            snapshot_age_min=age_min,
+            source_profiles=source_profiles,
+        )
+        for audit in audits
+    ]
     if not current.empty:
         current["p_yes_win"] = score_rows(current[MODEL_FEATURES], model_artifact)
         current["ev"] = current["p_yes_win"] - current["yes_current_ask"]
         current["available_notional_at_ask"] = current["yes_current_ask"] * current["yes_current_size"]
-        mask = (
-            current["decline_c"].ge(0.5)
-            & current["yes_current_ask"].ge(0.55)
-            & current["p_yes_win"].ge(0.5)
-            & current["ev"].ge(0.05)
-            & current["available_notional_at_ask"].ge(args.min_available_notional)
-            & current["token_id"].astype(str).ne("")
-        )
-        selected = current[mask].copy()
+        statuses = current.apply(lambda item: first_rule_reject_reason(item.to_dict(), args), axis=1)
+        for idx, status in statuses.items():
+            if status != "snapshot_rule_passed":
+                telemetry_rows.append(
+                    current_yes_forward_telemetry_row(
+                        current.loc[idx].to_dict(),
+                        decision_status=status,
+                        args=args,
+                        run_id=telemetry_run_id,
+                        snapshot_path=snap_path,
+                        snapshot_age_min=age_min,
+                        source_profiles=source_profiles,
+                    )
+                )
+        selected = current[statuses.eq("snapshot_rule_passed")].copy()
         prior = prior_city_day_notional(STRATEGY_INSTANCE)
         for _, row in selected.sort_values(["ev", "available_notional_at_ask"], ascending=[False, False]).iterrows():
             key = (str(row["city"]), str(row["target_date"]))
@@ -880,10 +1164,44 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             try:
                 taker_quote = fresh_taker_quote(row_dict, args)
             except Exception as exc:  # noqa: BLE001
-                audits.append({"city": key[0], "target_date": key[1], "status": "fresh_book_fetch_failed", "error": f"{type(exc).__name__}: {exc}"})
+                error = f"{type(exc).__name__}: {exc}"
+                audits.append({"city": key[0], "target_date": key[1], "status": "fresh_book_fetch_failed", "error": error})
+                telemetry_rows.append(
+                    current_yes_forward_telemetry_row(
+                        row_dict,
+                        decision_status="fresh_book_fetch_failed",
+                        args=args,
+                        run_id=telemetry_run_id,
+                        snapshot_path=snap_path,
+                        snapshot_age_min=age_min,
+                        source_profiles=source_profiles,
+                        extra={"fresh_book_error": error},
+                    )
+                )
                 continue
             if taker_quote.get("status") != "accepted":
                 audits.append({"city": key[0], "target_date": key[1], "status": taker_quote.get("reason", "fresh_book_rejected"), **taker_quote})
+                row_dict.update(
+                    {
+                        "fresh_best_bid": taker_quote.get("best_bid", 0.0),
+                        "fresh_best_ask": taker_quote.get("fresh_ask", 0.0),
+                        "fresh_ask_size": taker_quote.get("fresh_ask_size", 0.0),
+                        "fresh_available_notional": taker_quote.get("fresh_available_notional", 0.0),
+                        "taker_max_price": taker_quote.get("max_taker_price", 0.0),
+                        "edge_at_fresh_ask": taker_quote.get("edge_at_fresh_ask", np.nan),
+                    }
+                )
+                telemetry_rows.append(
+                    current_yes_forward_telemetry_row(
+                        row_dict,
+                        decision_status=safe_str(taker_quote.get("reason")) or "fresh_book_rejected",
+                        args=args,
+                        run_id=telemetry_run_id,
+                        snapshot_path=snap_path,
+                        snapshot_age_min=age_min,
+                        source_profiles=source_profiles,
+                    )
+                )
                 continue
             row_dict.update(
                 {
@@ -902,16 +1220,52 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             )
             if prior.get(key, 0.0) + args.max_order_notional > args.max_city_day_notional + 1e-9:
                 audits.append({"city": key[0], "target_date": key[1], "status": "city_day_cap", "prior_notional": prior.get(key, 0.0)})
+                telemetry_rows.append(
+                    current_yes_forward_telemetry_row(
+                        row_dict,
+                        decision_status="city_day_cap",
+                        args=args,
+                        run_id=telemetry_run_id,
+                        snapshot_path=snap_path,
+                        snapshot_age_min=age_min,
+                        source_profiles=source_profiles,
+                        extra={"prior_notional": prior.get(key, 0.0)},
+                    )
+                )
                 continue
             if len(candidates) >= args.max_orders:
                 audits.append({"city": key[0], "target_date": key[1], "status": "max_orders_reached"})
+                telemetry_rows.append(
+                    current_yes_forward_telemetry_row(
+                        row_dict,
+                        decision_status="max_orders_reached",
+                        args=args,
+                        run_id=telemetry_run_id,
+                        snapshot_path=snap_path,
+                        snapshot_age_min=age_min,
+                        source_profiles=source_profiles,
+                    )
+                )
                 continue
             candidates.append(row_dict)
+            telemetry_rows.append(
+                current_yes_forward_telemetry_row(
+                    row_dict,
+                    decision_status="planned",
+                    args=args,
+                    run_id=telemetry_run_id,
+                    snapshot_path=snap_path,
+                    snapshot_age_min=age_min,
+                    source_profiles=source_profiles,
+                )
+            )
             prior[key] = prior.get(key, 0.0) + args.max_order_notional
 
     live_enabled = bool(args.live and args.confirm_live)
     plans = [build_plan(row, notional=args.max_order_notional, live_enabled=live_enabled) for row in candidates]
     write_jsonl(PLAN_OUT, plans)
+    for telemetry_row in telemetry_rows:
+        append_jsonl(FORWARD_TELEMETRY_OUT, telemetry_row)
     result = {
         "generated_at_utc": now_utc(),
         "status": "planned",
@@ -938,6 +1292,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_orders": args.max_orders,
         },
         "plan_out": str(PLAN_OUT),
+        "forward_telemetry_out": str(FORWARD_TELEMETRY_OUT),
+        "forward_telemetry_rows": len(telemetry_rows),
         "live_out": str(LIVE_OUT),
         "candidates": [
             {

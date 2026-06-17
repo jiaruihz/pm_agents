@@ -1,0 +1,406 @@
+{
+  "bad_cases": [
+    {
+      "city": "Miami",
+      "current_bracket": "90-91",
+      "decision_hour_local": 14,
+      "decision_snapshot_ts_utc": "2026-06-01T18:30:53+00:00",
+      "decline_c": 1.1111111111111107,
+      "edge_snapshot": 0.07469294281305128,
+      "label_yes_wins": 0,
+      "minutes_since_running_max": 97.88333333333334,
+      "minutes_to_next_obs": 22.116666666666667,
+      "obs_age_min": 37.88333333333333,
+      "p_yes_win": 0.9246929428130513,
+      "pre_update_blackout_6m": false,
+      "target_date": "2026-06-01",
+      "yes_current_ask": 0.85
+    },
+    {
+      "city": "Munich",
+      "current_bracket": "16",
+      "decision_hour_local": 15,
+      "decision_snapshot_ts_utc": "2026-06-11T13:30:53+00:00",
+      "decline_c": 3.3333333333333304,
+      "edge_snapshot": 0.104915468131486,
+      "label_yes_wins": 0,
+      "minutes_since_running_max": 3310.883333333333,
+      "minutes_to_next_obs": 19.116666666666667,
+      "obs_age_min": 40.88333333333333,
+      "p_yes_win": 0.874915468131486,
+      "pre_update_blackout_6m": false,
+      "target_date": "2026-06-11",
+      "yes_current_ask": 0.77
+    }
+  ],
+  "clob_gate": {
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "fail_reasons": [],
+    "gate_pass": true,
+    "missing_order_rows": 0,
+    "over_order_keys": 0
+  },
+  "coverage": {
+    "base_replay_rows": 3239,
+    "holdout_replay_rows": 1712,
+    "obs_clock_join_rate": 0.9234331583822167,
+    "obs_clock_joined_rows": 2991,
+    "v9_active_dates": 11,
+    "v9_cities": 14,
+    "v9_holdout_candidates": 31
+  },
+  "data_self_check": {
+    "clob_order_fill_join": [
+      {
+        "orders": 33,
+        "status": "error",
+        "with_fill": 0
+      },
+      {
+        "orders": 961,
+        "status": "submitted",
+        "with_fill": 855
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "eligible": 10961,
+      "live_filled": 348,
+      "paper_ordered": 4274,
+      "rows": 31496
+    },
+    "fact_trades_by_class": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "rows": 150,
+        "settlement_status": ""
+      },
+      {
+        "rows": 4250,
+        "settlement_status": "settled"
+      }
+    ],
+    "fact_trades_max_built_at_utc": "2026-06-17T16:09:29.241520+00:00"
+  },
+  "evidence_layer": "v8 current-YES orderbook replay joined with deduped reheat factory obs-clock telemetry; not minute-level live telemetry",
+  "generated_at_utc": "2026-06-17T16:19:36+00:00",
+  "guard_summary": [
+    {
+      "avg_ask": 0.7935161290322581,
+      "avg_edge": 0.09434568273106964,
+      "avg_minutes_since_max": 1707.283333333333,
+      "avg_minutes_to_next_obs": 24.716666666666665,
+      "avg_obs_age_min": 35.28333333333334,
+      "avg_p_yes_win": 0.8878618117633276,
+      "blackout_rate": 0.0,
+      "cities": 14,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "dates": 11,
+      "guard": "v9_no_obs_guard",
+      "notional": 155.0,
+      "orders": 31,
+      "orders_per_date": 2.8181818181818183,
+      "pnl_usd": 25.090628037671372,
+      "roi": 0.1618750195978798,
+      "roi_ci95": [
+        0.02866479353117505,
+        0.27765898937235095
+      ],
+      "stale_rate": 1.0,
+      "win_rate": 0.9354838709677419,
+      "wins": 29.0
+    },
+    {
+      "avg_ask": null,
+      "avg_edge": null,
+      "avg_minutes_since_max": null,
+      "avg_minutes_to_next_obs": null,
+      "avg_obs_age_min": null,
+      "avg_p_yes_win": null,
+      "blackout_rate": null,
+      "cities": 0,
+      "date_max": null,
+      "date_min": null,
+      "dates": 0,
+      "guard": "obs_age_le_20m",
+      "notional": null,
+      "orders": 0,
+      "orders_per_date": null,
+      "pnl_usd": 0.0,
+      "roi": null,
+      "roi_ci95": [
+        null,
+        null
+      ],
+      "stale_rate": null,
+      "win_rate": null,
+      "wins": null
+    },
+    {
+      "avg_ask": 0.7935161290322581,
+      "avg_edge": 0.09434568273106964,
+      "avg_minutes_since_max": 1707.283333333333,
+      "avg_minutes_to_next_obs": 24.716666666666665,
+      "avg_obs_age_min": 35.28333333333334,
+      "avg_p_yes_win": 0.8878618117633276,
+      "blackout_rate": 0.0,
+      "cities": 14,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "dates": 11,
+      "guard": "no_pre_update_blackout_6m",
+      "notional": 155.0,
+      "orders": 31,
+      "orders_per_date": 2.8181818181818183,
+      "pnl_usd": 25.090628037671372,
+      "roi": 0.1618750195978798,
+      "roi_ci95": [
+        0.02866479353117505,
+        0.27765898937235095
+      ],
+      "stale_rate": 1.0,
+      "win_rate": 0.9354838709677419,
+      "wins": 29.0
+    },
+    {
+      "avg_ask": null,
+      "avg_edge": null,
+      "avg_minutes_since_max": null,
+      "avg_minutes_to_next_obs": null,
+      "avg_obs_age_min": null,
+      "avg_p_yes_win": null,
+      "blackout_rate": null,
+      "cities": 0,
+      "date_max": null,
+      "date_min": null,
+      "dates": 0,
+      "guard": "combined_obs_clock_guard",
+      "notional": null,
+      "orders": 0,
+      "orders_per_date": null,
+      "pnl_usd": 0.0,
+      "roi": null,
+      "roi_ci95": [
+        null,
+        null
+      ],
+      "stale_rate": null,
+      "win_rate": null,
+      "wins": null
+    },
+    {
+      "avg_ask": 0.7887083333333335,
+      "avg_edge": 0.09970641571166823,
+      "avg_minutes_since_max": 2131.3,
+      "avg_minutes_to_next_obs": 26.2,
+      "avg_obs_age_min": 33.800000000000004,
+      "avg_p_yes_win": 0.8884147490450015,
+      "blackout_rate": 0.0,
+      "cities": 13,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "dates": 9,
+      "guard": "minutes_since_max_ge_30",
+      "notional": 120.0,
+      "orders": 24,
+      "orders_per_date": 2.6666666666666665,
+      "pnl_usd": 17.669431726465277,
+      "roi": 0.14724526438721064,
+      "roi_ci95": [
+        -0.024325612228594855,
+        0.2854588997709973
+      ],
+      "stale_rate": 1.0,
+      "win_rate": 0.9166666666666666,
+      "wins": 22.0
+    },
+    {
+      "avg_ask": 0.7887083333333335,
+      "avg_edge": 0.09970641571166823,
+      "avg_minutes_since_max": 2131.3,
+      "avg_minutes_to_next_obs": 26.2,
+      "avg_obs_age_min": 33.800000000000004,
+      "avg_p_yes_win": 0.8884147490450015,
+      "blackout_rate": 0.0,
+      "cities": 13,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "dates": 9,
+      "guard": "minutes_since_max_ge_45",
+      "notional": 120.0,
+      "orders": 24,
+      "orders_per_date": 2.6666666666666665,
+      "pnl_usd": 17.669431726465277,
+      "roi": 0.14724526438721064,
+      "roi_ci95": [
+        -0.024325612228594855,
+        0.2854588997709973
+      ],
+      "stale_rate": 1.0,
+      "win_rate": 0.9166666666666666,
+      "wins": 22.0
+    },
+    {
+      "avg_ask": null,
+      "avg_edge": null,
+      "avg_minutes_since_max": null,
+      "avg_minutes_to_next_obs": null,
+      "avg_obs_age_min": null,
+      "avg_p_yes_win": null,
+      "blackout_rate": null,
+      "cities": 0,
+      "date_max": null,
+      "date_min": null,
+      "dates": 0,
+      "guard": "obs_clock_and_max_ge_30",
+      "notional": null,
+      "orders": 0,
+      "orders_per_date": null,
+      "pnl_usd": 0.0,
+      "roi": null,
+      "roi_ci95": [
+        null,
+        null
+      ],
+      "stale_rate": null,
+      "win_rate": null,
+      "wins": null
+    }
+  ],
+  "outputs": {
+    "bad_cases_csv": "docs/analysis/2026-06/generated/theta_current_yes_observation_execution_guard_v13/bad_cases.csv",
+    "bin_csv": "docs/analysis/2026-06/generated/theta_current_yes_observation_execution_guard_v13/slice_bins.csv",
+    "candidates_csv": "docs/analysis/2026-06/generated/theta_current_yes_observation_execution_guard_v13/v9_candidates.csv",
+    "guard_csv": "docs/analysis/2026-06/generated/theta_current_yes_observation_execution_guard_v13/guard_summary.csv",
+    "json": "docs/analysis/2026-06/2026-06-18-theta-current-yes-observation-execution-guard-v13.json",
+    "md": "docs/analysis/2026-06/2026-06-18-theta-current-yes-observation-execution-guard-v13.md"
+  },
+  "row_grain": "deduped v9 current-YES candidate from v8 replay: city/date/current_bracket with max two brackets per city-date",
+  "slice_bins": [
+    {
+      "avg_ask": 0.7893,
+      "avg_edge": 0.09566374407242731,
+      "avg_minutes_since_max": 1707.283333333333,
+      "avg_minutes_to_next_obs": 24.716666666666665,
+      "avg_obs_age_min": 35.28333333333334,
+      "avg_p_yes_win": 0.8849637440724273,
+      "blackout_rate": 0.0,
+      "cities": 14,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "dates": 11,
+      "dimension": "obs_age_bin",
+      "notional": 150.0,
+      "orders": 30,
+      "orders_per_date": 2.727272727272727,
+      "pnl_usd": 24.77147910150116,
+      "roi": 0.16514319401000774,
+      "roi_ci95": [
+        0.02751996138648941,
+        0.2812991665371365
+      ],
+      "stale_rate": 1.0,
+      "value": "30+",
+      "win_rate": 0.9333333333333333,
+      "wins": 28
+    },
+    {
+      "avg_ask": 0.7916666666666666,
+      "avg_edge": 0.07949305751546365,
+      "avg_minutes_since_max": 11.216666666666667,
+      "avg_minutes_to_next_obs": 18.783333333333335,
+      "avg_obs_age_min": 41.21666666666666,
+      "avg_p_yes_win": 0.8711597241821304,
+      "blackout_rate": 0.0,
+      "cities": 3,
+      "date_max": "2026-06-12",
+      "date_min": "2026-06-07",
+      "dates": 3,
+      "dimension": "minutes_since_max_bin",
+      "notional": 30.0,
+      "orders": 6,
+      "orders_per_date": 2.0,
+      "pnl_usd": 7.10204737503588,
+      "roi": 0.23673491250119602,
+      "roi_ci95": [
+        0.2123800916904365,
+        0.2743506493506493
+      ],
+      "stale_rate": 1.0,
+      "value": "0-15",
+      "win_rate": 1.0,
+      "wins": 6
+    },
+    {
+      "avg_ask": 0.791695652173913,
+      "avg_edge": 0.1009257395759465,
+      "avg_minutes_since_max": 1111.3181159420294,
+      "avg_minutes_to_next_obs": 26.073188405797104,
+      "avg_obs_age_min": 33.926811594202896,
+      "avg_p_yes_win": 0.8926213917498594,
+      "blackout_rate": 0.0,
+      "cities": 13,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "dates": 9,
+      "dimension": "minutes_since_max_bin",
+      "notional": 115.0,
+      "orders": 23,
+      "orders_per_date": 2.5555555555555554,
+      "pnl_usd": 15.912674969708519,
+      "roi": 0.13837108669311757,
+      "roi_ci95": [
+        -0.030117884079166813,
+        0.28184468854279415
+      ],
+      "stale_rate": 1.0,
+      "value": "60+",
+      "win_rate": 0.9130434782608695,
+      "wins": 21
+    },
+    {
+      "avg_ask": 0.7935161290322581,
+      "avg_edge": 0.09434568273106964,
+      "avg_minutes_since_max": 1707.283333333333,
+      "avg_minutes_to_next_obs": 24.716666666666665,
+      "avg_obs_age_min": 35.28333333333334,
+      "avg_p_yes_win": 0.8878618117633276,
+      "blackout_rate": 0.0,
+      "cities": 14,
+      "date_max": "2026-06-13",
+      "date_min": "2026-06-01",
+      "dates": 11,
+      "dimension": "pre_update_blackout_6m",
+      "notional": 155.0,
+      "orders": 31,
+      "orders_per_date": 2.8181818181818183,
+      "pnl_usd": 25.090628037671372,
+      "roi": 0.1618750195978798,
+      "roi_ci95": [
+        0.02866479353117505,
+        0.27765898937235095
+      ],
+      "stale_rate": 1.0,
+      "value": "False",
+      "win_rate": 0.9354838709677419,
+      "wins": 29
+    }
+  ]
+}

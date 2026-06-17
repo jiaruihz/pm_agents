@@ -55,9 +55,43 @@ Current conclusion:
   target YES, and settlement labels are usable.
 - Forecast peak fields are still the blocking gap: `forecast_peak_hour_local`,
   `forecast_peak_delta_hours_local`, and `forecast_values_hash` exist in the
-  schema but were 0% populated in the current DB snapshot used by v1. Do not
-  treat forecast-peak-clock variants as backtestable until upstream fact
-  population or a documented backfill fixes this.
+  schema. `fact_signal_candidates` now has deterministic cache-derived backfill
+  support in `scripts/etl/build_weather_signal_candidates.py`, but the current
+  mirrored hourly forecast cache only fills 108 / 30,919 candidate rows
+  (2026-05-06..05-07), with 0% overlap against the 2026-05-19..06-14 reheat
+  factory replay window.
+- Research-only forecast-clock backfill now exists in
+  `docs/analysis/2026-06/2026-06-17-theta-current-yes-forecast-peak-clock-backfill-v3.md`:
+  it uses Open-Meteo historical forecast to fill 3,239 replay rows / 27 dates.
+  Result: fixed v9 fade-confirmed remains the strongest live candidate
+  (holdout 31 orders / 11 dates, taker +2c ROI +16.2%, CI [+2.7%, +27.9%]);
+  GFS forecast-clock fade has 10 orders / 6 dates and is low-sample; peak-forming
+  variants have more rows but CI crosses 0. Production snapshots still need
+  native forecast peak fields before live promotion.
+- Model-level forecast-clock v12 is also complete in
+  `docs/analysis/2026-06/2026-06-17-theta-current-yes-forecast-clock-model-v12.md`.
+  Forecast-clock features slightly improve all-holdout Brier in backfill
+  research, but fail the live-like slice: market ask Brier 0.0659, v9 0.0688,
+  best forecast-clock HGB 0.0719. Model-selected live-rule ROI also falls
+  versus v9 (+16.2% for v9 vs +9.1% to +12.2% for forecast-clock variants).
+  Treat forecast-clock as telemetry/feature logging, not a live upgrade.
+- Observation/execution freshness v13 is complete in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-observation-execution-guard-v13.md`.
+  It joins v8 current-YES replay to deduped factory obs-clock telemetry, so the
+  v9 baseline matches v12 again: 31 orders / 11 dates, 29 wins, taker +2c ROI
+  +16.2%. Simple guards do not add alpha: `obs_age <= 20m` leaves no half-hour
+  replay orders, `pre_update_blackout=6m` blocks none, and
+  `minutes_since_running_max >= 30m/45m` misses both losing cases while lowering
+  ROI. Treat obs clock as live risk telemetry / accident guard only; the missing
+  evidence layer is minute-level forward would-order telemetry.
+- Forward telemetry v0 is implemented locally in
+  `scripts/ops/weather_theta_current_yes_tiny_live.py` and documented in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-forward-telemetry-v0.md`.
+  It writes
+  `runtime/weather_edge_v1/theta_current_yes_tiny_live_v1/forward_telemetry.jsonl`
+  with planned, fresh-book rejected, snapshot-rule rejected, and obs/hour blocked
+  would-order rows. This is not a live policy change; it is the evidence layer
+  needed to measure forward hit rate and taker ROI after enough rows settle.
 
 ## Strategy Heads
 
@@ -157,20 +191,30 @@ move a script only when it becomes the maintained entrypoint for a new result.
 
 1. `reheat_feature_factory`: v1 completed; keep downstream strategy heads on
    the shared factory output.
-2. `current_yes_peak_forming` vs `current_yes_fade_confirmed`: factory-backed
+2. `forecast_peak_clock_data_fill`: pm_agent fact builder now derives
+   `forecast_peak_*`/`forecast_values_hash` from mirrored hourly cache when
+   present. Research backfill v3 proves the data can be joined and measured, but
+   forecast-clock itself is not live-ready. Next step is upstream
+   `weather-predict` snapshot producer/cache deployment, then sync + rebuild for
+   forward telemetry.
+3. `current_yes_peak_forming` vs `current_yes_fade_confirmed`: factory-backed
    v1 completed in
    `docs/analysis/2026-06/2026-06-16-current-yes-peak-vs-fade-v1.md`.
    Current conclusion is fade-first shadow only: fixed holdout favors
    fade-confirmed, peak-forming remains a narrow early shadow sleeve, and there
-   is no N100/live change.
+   is no N100/live change. Forecast-clock v3/v12 did not overturn this.
 4. `higher_no_carry_expression`: factory-backed v1 completed in
    `docs/analysis/2026-06/2026-06-16-higher-no-carry-expression-selector-v1.md`.
    NO carry/ladder did not prove stable positive excess ROI versus same-window
    current YES, so this remains shadow-only expression telemetry.
 5. `low_price_yes_reheat_reversal`: use the same physical base for the opposite
    reheat/convexity expression.
-6. `execution_freshness_gate`: next priority for the current-YES branch; require
-   fresh CLOB ask before taker conversion.
+6. `execution_freshness_gate`: v13 says not to promote a new historical alpha
+   guard from half-hour replay. Next priority is production telemetry: fresh CLOB
+   ask, snapshot age, obs age, minutes-to-next official observation,
+   minutes-since-running-max, and source profile on every would-order before
+   taker conversion. Local v0 implementation is complete; N100 deployment and
+   settled forward analysis remain.
 
 ## Naming Rules
 

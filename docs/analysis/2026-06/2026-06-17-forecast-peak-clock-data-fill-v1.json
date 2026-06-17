@@ -1,0 +1,315 @@
+{
+  "cache_summary": {
+    "ecmwf": {
+      "files": 52,
+      "folder": "runtime/weather_edge_v1/market_data/cache/ecmwf_v4",
+      "hourly_files": 52,
+      "latest_files": [
+        {
+          "end": "2026-04-29",
+          "file": "ecmwf_v4_Shenzhen_2025-05-10_2026-04-29.json",
+          "start": "2025-05-10"
+        },
+        {
+          "end": "2026-04-29",
+          "file": "ecmwf_v4_Singapore_2025-05-10_2026-04-29.json",
+          "start": "2025-05-10"
+        },
+        {
+          "end": "2026-04-29",
+          "file": "ecmwf_v4_Taipei_2025-05-10_2026-04-29.json",
+          "start": "2025-05-10"
+        },
+        {
+          "end": "2026-04-29",
+          "file": "ecmwf_v4_TelAviv_2025-05-10_2026-04-29.json",
+          "start": "2025-05-10"
+        },
+        {
+          "end": "2026-04-29",
+          "file": "ecmwf_v4_Tokyo_2025-05-10_2026-04-29.json",
+          "start": "2025-05-10"
+        },
+        {
+          "end": "2026-04-29",
+          "file": "ecmwf_v4_Warsaw_2025-05-10_2026-04-29.json",
+          "start": "2025-05-10"
+        },
+        {
+          "end": "2026-04-29",
+          "file": "ecmwf_v4_Wellington_2025-05-10_2026-04-29.json",
+          "start": "2025-05-10"
+        },
+        {
+          "end": "2026-04-29",
+          "file": "ecmwf_v4_Wuhan_2025-05-10_2026-04-29.json",
+          "start": "2025-05-10"
+        }
+      ],
+      "max_date": "2026-04-29",
+      "min_date": "2025-05-10"
+    },
+    "gfs": {
+      "files": 67,
+      "folder": "runtime/weather_edge_v1/market_data/cache/gfs_v4",
+      "hourly_files": 67,
+      "latest_files": [
+        {
+          "end": "2026-05-06",
+          "file": "gfs_v4_Miami_2024-05-01_2026-05-06.json",
+          "start": "2024-05-01"
+        },
+        {
+          "end": "2026-05-06",
+          "file": "gfs_v4_NYC_2024-05-01_2026-05-06.json",
+          "start": "2024-05-01"
+        },
+        {
+          "end": "2026-05-06",
+          "file": "gfs_v4_Paris_2024-05-01_2026-05-06.json",
+          "start": "2024-05-01"
+        },
+        {
+          "end": "2026-05-06",
+          "file": "gfs_v4_Phoenix_2024-05-01_2026-05-06.json",
+          "start": "2024-05-01"
+        },
+        {
+          "end": "2026-05-06",
+          "file": "gfs_v4_Seoul_2024-05-01_2026-05-06.json",
+          "start": "2024-05-01"
+        },
+        {
+          "end": "2026-05-06",
+          "file": "gfs_v4_Shanghai_2024-05-01_2026-05-06.json",
+          "start": "2024-05-01"
+        },
+        {
+          "end": "2026-05-06",
+          "file": "gfs_v4_Tokyo_2024-05-01_2026-05-06.json",
+          "start": "2024-05-01"
+        },
+        {
+          "end": "2026-05-06",
+          "file": "gfs_v4_Warsaw_2024-05-01_2026-05-06.json",
+          "start": "2024-05-01"
+        }
+      ],
+      "max_date": "2026-05-06",
+      "min_date": "2024-05-01"
+    }
+  },
+  "candidate_by_date_with_peak": [
+    {
+      "event_date": "2026-05-06",
+      "rows": 203,
+      "with_hash": 82,
+      "with_peak_hour": 82
+    },
+    {
+      "event_date": "2026-05-07",
+      "rows": 220,
+      "with_hash": 26,
+      "with_peak_hour": 26
+    }
+  ],
+  "candidate_by_source": [
+    {
+      "forecast_source": "open_meteo_live_ecmwf",
+      "rows": 17663,
+      "with_hash": 0,
+      "with_peak_hour": 0
+    },
+    {
+      "forecast_source": "open_meteo_live_gfs",
+      "rows": 13256,
+      "with_hash": 108,
+      "with_peak_hour": 108
+    }
+  ],
+  "candidate_overall": {
+    "max_event_date": "2026-06-17",
+    "min_event_date": "2026-05-05",
+    "peak_hour_coverage": 0.0034929978330476407,
+    "rows": 30919,
+    "with_forecast_max_f": 17631,
+    "with_hash": 108,
+    "with_peak_hour": 108
+  },
+  "evidence_layer": "fact_signal_candidates enrichment and forecast cache coverage audit; not live fills",
+  "examples": [
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Austin",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 10,
+      "forecast_peak_hour_utc": 15,
+      "forecast_peak_time_local": "2026-05-06T10:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "08cdcaa180642138"
+    },
+    {
+      "city": "Chicago",
+      "event_date": "2026-05-06",
+      "forecast_peak_hour_local": 16,
+      "forecast_peak_hour_utc": 21,
+      "forecast_peak_time_local": "2026-05-06T16:00",
+      "forecast_source": "open_meteo_live_gfs",
+      "forecast_values_hash": "b1b1d738dc429341"
+    }
+  ],
+  "feature_factory": {
+    "exists": true,
+    "feature_rows": 88621,
+    "forecast_peak_hour_feature_row_rate": 0.0,
+    "forecast_values_hash_feature_row_rate": 0.0,
+    "generated_at_utc": "2026-06-17T15:31:25+00:00",
+    "state_rows": 8696
+  },
+  "generated_at_utc": "2026-06-17T15:33:33+00:00",
+  "self_check": {
+    "clob_order_fill_join": [
+      {
+        "orders": 33,
+        "status": "error",
+        "with_fill": 0
+      },
+      {
+        "orders": 961,
+        "status": "submitted",
+        "with_fill": 855
+      }
+    ],
+    "fact_signal_candidate_coverage": {
+      "eligible": 10685,
+      "live_filled": 348,
+      "paper_ordered": 4123,
+      "rows": 30919
+    },
+    "fact_trades_by_class": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "rows": 90,
+        "settlement_status": null
+      },
+      {
+        "rows": 4310,
+        "settlement_status": "settled"
+      }
+    ],
+    "fact_trades_max_built_at_utc": "2026-06-16T15:50:05.971834+00:00"
+  },
+  "target_metric": "forecast_peak_clock_data_fill_v1",
+  "verdict": {
+    "blocking_gap": "N100 weather-predict hourly forecast cache and paper snapshots do not yet cover the 2026-05-19..06-14 reheat replay window with peak/hash fields",
+    "code_path": "fact_signal_candidates builder now derives forecast_peak_* fields from mirrored hourly cache when available",
+    "current_coverage": "low_sample",
+    "next_action": "deploy/enable weather-predict forecast peak clock snapshot producer, sync fresh snapshots, then rebuild fact_signal_candidates and reheat feature factory"
+  }
+}

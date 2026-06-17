@@ -325,7 +325,13 @@ runtime/weather_edge_v1/live_cycle/loop.log
 runtime/weather_edge_v1/signals/live_*_signals.jsonl
 runtime/weather_edge_v1/plans/live_*_trade_plans.jsonl
 runtime/weather_edge_v1/live/live_*_orders.jsonl
+runtime/weather_edge_v1/theta_current_yes_tiny_live_v1/forward_telemetry.jsonl
 ```
+
+`theta_current_yes_tiny_live_v1/forward_telemetry.jsonl` is a would-order
+evidence layer, not an order/fill ledger. It records planned, fresh-book
+rejected, snapshot-rule rejected, and obs/hour blocked current-YES candidates
+with observation clock, fresh ask, forecast peak, and source-profile fields.
 
 Important live PnL note: `live_*_orders.jsonl` records submitted/error order
 attempts, not actual fills. Real live CLOB fill-level PnL is in the dashboard
