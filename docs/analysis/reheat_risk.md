@@ -115,6 +115,14 @@ Current conclusion:
   fields FAIL. Therefore the branch is not ready for live upgrade; next required
   evidence is N100 forward telemetry activation plus native point-in-time
   forecast peak fields from `weather-predict`.
+- Native forecast peak field audit v1 is complete in
+  `docs/analysis/2026-06/2026-06-18-weather-predict-forecast-peak-native-field-audit-v1.md`.
+  Local `/Users/deepsleep/projects/weather-predict/paper_snapshot.py` already
+  contains and smoke-tests the native `forecast_peak_*` implementation, but N100
+  `/home/jiarui/projects/weather-predict/paper_snapshot.py` does not. Both
+  local and N100 `weather-predict` copies are not git worktrees, so this is a
+  deploy/repo-state blocker rather than a modeling blocker. Do not claim
+  production native peak fields are live until this is resolved.
 
 ## Strategy Heads
 
