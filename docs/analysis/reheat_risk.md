@@ -79,6 +79,17 @@ Current conclusion:
   best forecast-clock HGB 0.0719. Model-selected live-rule ROI also falls
   versus v9 (+16.2% for v9 vs +9.1% to +12.2% for forecast-clock variants).
   Treat forecast-clock as telemetry/feature logging, not a live upgrade.
+- Forecast peak scorecard v14 is complete in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-forecast-peak-scorecard-v14.md`.
+  It reuses the shared `forecast_peak_clock_backfill_v1.csv` table instead of a
+  one-off API join. Result: v9 fixed fade-confirmed remains the baseline
+  (holdout 31 orders / 11 dates, YES ROI +16.2%, YES-over-d1-NO +4.1% CI
+  [+1.3%, +7.2%]). Adding forecast-clock filters shrinks sample: both forecast
+  peaks passed gives 14 orders / 9 dates, YES ROI +17.1%, but below sample
+  gate; after-peak-agree gives 7 orders / 6 dates. Diagnostic bins show a real
+  risk shape: GFS peak still >=2h ahead is bad in holdout (14 orders, ROI
+  -27.8%), while +1h..+4h after peak is positive. Treat this as a model feature
+  and forward telemetry target, not a live hard guard yet.
 - Observation/execution freshness v13 is complete in
   `docs/analysis/2026-06/2026-06-18-theta-current-yes-observation-execution-guard-v13.md`.
   It joins v8 current-YES replay to deduped factory obs-clock telemetry, so the
