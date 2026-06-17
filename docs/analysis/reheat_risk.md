@@ -164,6 +164,13 @@ Current conclusion:
   alongside the old live loop. First remote cycle wrote 42 audit rows with
   `live_enabled=False` and `plans=0`; useful forecast-peak rows require future
   active local windows.
+- Forecast guard live upgrade v21 is deployed in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-forecast-guard-live-upgrade-v21.md`.
+  The default live rule now rejects missing forecast peak and rejects forecast
+  peak delta `< -1.999h`, blocking the clearest v18 danger bucket before any
+  tiny-live order. The old live process was replaced by a single new
+  `theta_current_yes_tiny_live_v1` process on N100; first post-restart cycle had
+  `plans=0`, and the live order file stayed at 5 historical rows.
 
 ## Strategy Heads
 
