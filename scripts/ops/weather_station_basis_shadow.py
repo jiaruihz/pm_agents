@@ -316,7 +316,7 @@ def parse_label(label: str, question: str) -> dict | None:
     """Parse bracket label into low/high; flags bottom/top tails."""
     lab = str(label).replace("°C", "").replace("°F", "").replace("°", "").strip()
     q = str(question).lower()
-    nums = re.findall(r"-?\d+(?:\.\d+)?", lab)
+    nums = re.findall(r"(?<!\d)-?\d+(?:\.\d+)?", lab)
     if not nums:
         return None
     is_bottom = "or below" in q or "or lower" in q

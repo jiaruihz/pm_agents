@@ -3,9 +3,16 @@ from zoneinfo import ZoneInfo
 
 from scripts.ops.weather_station_basis_shadow import (
     aviationweather_metar_day,
+    parse_label,
     parse_iem_asos_temperature_obs,
     summarize_temperature_obs,
 )
+
+
+def test_parse_label_keeps_positive_fahrenheit_ranges():
+    parsed = parse_label("74-75", "Will the highest temperature in New York City be between 74-75°F?")
+
+    assert parsed == {"low": 74.0, "high": 75.0, "bottom": False, "top": False}
 
 
 def test_parse_iem_asos_temperature_obs_filters_local_day():

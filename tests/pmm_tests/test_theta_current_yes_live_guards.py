@@ -22,6 +22,14 @@ def _record(city: str, bracket: str, ask: float = 0.78) -> dict:
     }
 
 
+def test_parse_label_keeps_positive_fahrenheit_ranges():
+    parsed = live.parse_label("74-75", "Will the highest temperature in New York City be between 74-75°F?")
+
+    assert parsed == {"low": 74.0, "high": 75.0, "bottom": False, "top": False, "label": "74-75"}
+    assert live.bracket_contains(parsed, 74)
+    assert live.bracket_contains(parsed, 75)
+
+
 def test_helsinki_uses_iana_dst_for_live_hour_gate():
     station = live.Station("Helsinki", "EFHK", "C", 2, "Europe/Helsinki")
     snapshot_ts = datetime(2026, 6, 16, 13, 18, tzinfo=timezone.utc)
