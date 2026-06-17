@@ -194,3 +194,14 @@ flowchart LR
 2. 抽 `RunningMaxState` builder：统一 local-day 过滤、mapping rule、obs age、next observation clock。
 3. 增加 `cache.py` / `cli.py once`：每 15 分钟写 `observations.jsonl`、`running_state.jsonl`、`source_health.jsonl`、`latest_state.json`。
 4. 先让 METAR-cross shadow 只读 feed state；确认完全对齐后，再让 station-basis shadow/current-YES tiny-live 切过去。
+
+## 2026-06-17 implementation slice 2
+
+METAR-cross latency 方向已经进入 shadow measurement 层：
+
+- 新增 `weather_metar_cross_prev_no_shadow.py`：监听官方站 METAR running max 穿档，记录上一档 NO 是否还有 taker ask；只写 shadow ledger，不下单。
+- 新增 `weather_source_orderbook_timing_monitor.py`：对比 AviationWeather / CheckWX 等源的更新时间、payload hash、温度变化与 Polymarket orderbook 变化，用来判断瓶颈是源延迟、轮询延迟，还是盘口被更快对手提前打掉。
+- METAR-cross 的城市准入现在从 `source_profiles.json` 读取 source class、official station/feed、timezone、live eligibility；同站城市再叠加历史 alignment whitelist，station-diff 城市必须显式 `--include-station-diff`。
+- 当前默认仍只适合 shadow：Shanghai/Tokyo 这类 same-station verified 城市可跑；Seoul/Moscow/Shenzhen/HongKong 继续 hard ban；Paris/London/Chicago 等 station-diff 城市只适合第二阶段显式开启并 rules recheck。
+
+这一步仍未完成统一 feed daemon：METAR-cross 现在使用 `SourceProfile` 做准入，但观测拉取仍直接在脚本内请求 AviationWeather。下一步应把它切到 `ObservationRecord` / `RunningMaxState` cache 后再考虑真钱 taker。

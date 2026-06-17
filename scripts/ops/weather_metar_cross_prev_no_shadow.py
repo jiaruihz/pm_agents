@@ -1,0 +1,576 @@
+#!/usr/bin/env python3
+"""METAR crossing shadow bot for previous-temperature NO taker tests.
+
+Signal:
+  When the official station running max first crosses threshold T, the exact
+  T-1 bucket can no longer settle YES. This script checks whether the NO book
+  for that bucket still has taker liquidity and records the opportunity.
+
+Shadow only: no orders are placed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import os
+import sys
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+OPS = Path(__file__).resolve().parent
+ROOT = OPS.parents[1]
+VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
+if sys.prefix == sys.base_prefix and VENV_PYTHON.exists():
+    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]])
+if str(OPS) not in sys.path:
+    sys.path.insert(0, str(OPS))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import weather_station_basis_shadow as source  # noqa: E402
+from src.strategies.weather_edge_v1.official_observation_feed.source_registry import load_source_profiles  # noqa: E402
+from src.strategies.weather_edge_v1.tools.official_observation_clock import CITY_TIMEZONE  # noqa: E402
+
+
+DATA_ROOT = Path(os.environ.get("METAR_CROSS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
+OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/metar_cross_prev_no_shadow"
+WHITELIST_CSV = ROOT / "docs/analysis/2026-06/generated/m3_tail_no_diagnosis_v0/m3_city_alignment_whitelist.csv"
+OFFICIAL_ALIGNMENT_CSV = ROOT / "docs/analysis/2026-06/generated/official_resolution_source_v0/official_station_alignment_summary.csv"
+MIN_ALIGNMENT_DAYS = 20
+MIN_ALIGNMENT_RATE = 0.97
+
+SPECIAL_SLUGS = {
+    "BuenosAires": "buenos-aires",
+    "CapeTown": "cape-town",
+    "HongKong": "hong-kong",
+    "KualaLumpur": "kuala-lumpur",
+    "LA": "los-angeles",
+    "MexicoCity": "mexico-city",
+    "NYC": "nyc",
+    "PanamaCity": "panama-city",
+    "SanFrancisco": "san-francisco",
+    "SaoPaulo": "sao-paulo",
+    "TelAviv": "tel-aviv",
+}
+
+BLOCKED_CITY_REASONS = {
+    "Seoul": "blocked_unresolved_settlement_basis: RKSI feed aligned only 28/36 days in settlement-basis audit",
+    "Moscow": "blocked_unresolved_settlement_basis: UUWW source path aligned only 24/27 days",
+    "Shenzhen": "blocked_unresolved_settlement_basis: ZGSZ source path is unresolved",
+    "HongKong": "special_source_confirmed: HKO daily extract is payout source, not VHHH METAR",
+}
+
+
+@dataclass(frozen=True)
+class CityConfig:
+    city: str
+    slug: str
+    unit: str
+    timezone_name: str
+    official_icao: str
+    source_url: str
+    registry_class: str
+    alignment_days: int
+    alignment_rate: float
+
+
+def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def read_json(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def city_slug(city: str) -> str:
+    if city in SPECIAL_SLUGS:
+        return SPECIAL_SLUGS[city]
+    out = []
+    for i, ch in enumerate(city):
+        if i > 0 and ch.isupper() and city[i - 1].islower():
+            out.append("-")
+        out.append(ch.lower())
+    return "".join(out)
+
+
+def load_csv(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        raise FileNotFoundError(path)
+    with path.open(newline="", encoding="utf-8") as fh:
+        return list(csv.DictReader(fh))
+
+
+def safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def build_city_policy(*, include_station_diff: bool, only_cities: set[str] | None = None) -> dict[str, Any]:
+    whitelist = {
+        row["city"]: row
+        for row in load_csv(WHITELIST_CSV)
+        if row.get("whitelisted") == "True"
+    }
+    official_alignment = {
+        row["city"]: row
+        for row in load_csv(OFFICIAL_ALIGNMENT_CSV)
+    }
+    profiles = load_source_profiles()
+    configs: list[CityConfig] = []
+    rejected: list[dict[str, Any]] = []
+    for city, profile in sorted(profiles.items()):
+        if only_cities and city not in only_cities:
+            continue
+        if city in BLOCKED_CITY_REASONS:
+            rejected.append({"city": city, "reason": BLOCKED_CITY_REASONS[city]})
+            continue
+        if not profile.live_eligible:
+            rejected.append(
+                {
+                    "city": city,
+                    "reason": profile.blocked_reason or f"source_profile_not_live_eligible:{profile.settlement_source_class}",
+                    "settlement_source_class": profile.settlement_source_class,
+                }
+            )
+            continue
+        registry_class = ""
+        alignment_days = 0
+        alignment_rate = 0.0
+        if profile.settlement_source_class == "default_wu_station_by_rules":
+            if city not in whitelist:
+                rejected.append(
+                    {
+                        "city": city,
+                        "reason": "missing_same_station_alignment_evidence",
+                        "settlement_source_class": profile.settlement_source_class,
+                    }
+                )
+                continue
+            alignment_days = safe_int(whitelist[city].get("valid_days"))
+            alignment_rate = safe_float(whitelist[city].get("match_rate"))
+            if alignment_days >= MIN_ALIGNMENT_DAYS and alignment_rate >= 1.0:
+                registry_class = "same_station_whitelist"
+            else:
+                rejected.append(
+                    {
+                        "city": city,
+                        "reason": "same_station_alignment_below_gate",
+                        "alignment_days": alignment_days,
+                        "alignment_rate": alignment_rate,
+                    }
+                )
+                continue
+        elif profile.settlement_source_class == "official_station_diff_confirmed":
+            if not include_station_diff:
+                rejected.append({"city": city, "reason": "station_diff_requires_explicit_include_flag"})
+                continue
+            alignment_days = profile.alignment_days or safe_int(official_alignment.get(city, {}).get("days"))
+            alignment_rate = profile.alignment_rate or safe_float(official_alignment.get(city, {}).get("align_rate"))
+            if alignment_days >= MIN_ALIGNMENT_DAYS and alignment_rate >= MIN_ALIGNMENT_RATE:
+                registry_class = "official_station_diff_aligned"
+            else:
+                rejected.append(
+                    {
+                        "city": city,
+                        "reason": "official_station_diff_alignment_below_gate",
+                        "alignment_days": alignment_days,
+                        "alignment_rate": alignment_rate,
+                    }
+                )
+                continue
+        else:
+            rejected.append(
+                {
+                    "city": city,
+                    "reason": "source_profile_class_not_supported_for_metar_cross",
+                    "settlement_source_class": profile.settlement_source_class,
+                }
+            )
+            continue
+        tz_name = profile.timezone_name or CITY_TIMEZONE.get(city)
+        if not tz_name:
+            rejected.append({"city": city, "reason": "missing_city_timezone"})
+            continue
+        configs.append(
+            CityConfig(
+                city=city,
+                slug=city_slug(city),
+                unit=profile.unit,
+                timezone_name=tz_name,
+                official_icao=profile.official_station_or_feed,
+                source_url=profile.official_source,
+                registry_class=registry_class,
+                alignment_days=alignment_days,
+                alignment_rate=alignment_rate,
+            )
+        )
+    configs = sorted(configs, key=lambda item: item.city)
+    return {
+        "policy": {
+            "min_alignment_days": MIN_ALIGNMENT_DAYS,
+            "min_alignment_rate": MIN_ALIGNMENT_RATE,
+            "same_station_requires_exact_match": True,
+            "include_station_diff": include_station_diff,
+            "blocked_city_reasons": BLOCKED_CITY_REASONS,
+        },
+        "allowed": [cfg.__dict__ for cfg in configs],
+        "rejected": sorted(rejected, key=lambda item: item["city"]),
+    }
+
+
+def load_city_configs(*, include_station_diff: bool, only_cities: set[str] | None = None) -> list[CityConfig]:
+    policy = build_city_policy(include_station_diff=include_station_diff, only_cities=only_cities)
+    return [CityConfig(**row) for row in policy["allowed"]]
+
+
+def market_value(temp_c: float, unit: str) -> int:
+    if unit == "F":
+        return source.round_half_up(temp_c * 9.0 / 5.0 + 32.0)
+    return source.round_half_up(temp_c)
+
+
+def crossed_prev_no_brackets(previous_value: int | None, current_value: int) -> list[int]:
+    if previous_value is None or current_value <= previous_value:
+        return []
+    return [threshold - 1 for threshold in range(previous_value + 1, current_value + 1)]
+
+
+def parsed_label_matches_no_target(parsed: dict[str, Any] | None, target: int) -> bool:
+    if parsed is None or parsed.get("top"):
+        return False
+    low = parsed.get("low")
+    high = parsed.get("high")
+    if low is None:
+        return high is not None and target <= float(high)
+    if high is None:
+        return False
+    return float(low) <= target <= float(high)
+
+
+def load_state() -> dict[str, Any]:
+    return read_json(OUT_DIR / "state.json", {"last_running_value": {}, "fired": []})
+
+
+def save_state(state: dict[str, Any]) -> None:
+    write_json(OUT_DIR / "state.json", state)
+
+
+def find_no_market(markets: list[dict[str, Any]], target_bracket: int) -> tuple[dict[str, Any], dict[str, Any]] | tuple[None, None]:
+    for market in markets:
+        label = str(market.get("groupItemTitle") or "")
+        parsed = source.parse_label(label, str(market.get("question") or ""))
+        if parsed_label_matches_no_target(parsed, target_bracket):
+            return market, parsed
+    return None, None
+
+
+def parse_metar_records(data: list[dict[str, Any]], tz: ZoneInfo, local_date: Any) -> list[tuple[datetime, float]]:
+    obs = []
+    for rec in data:
+        temp = rec.get("temp")
+        ts = rec.get("reportTime")
+        if temp is None or not ts:
+            continue
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt.astimezone(tz).date() == local_date:
+            obs.append((dt, float(temp)))
+    return sorted(obs)
+
+
+def recent_metar_summary(icao: str, tz: ZoneInfo, local_date: Any, *, hours: float) -> dict[str, Any]:
+    data = source.fetch_json(source.METAR_API, {"ids": icao, "format": "json", "hours": str(hours)})
+    obs = parse_metar_records(data, tz, local_date)
+    if not obs:
+        return {"status": "no_recent_obs", "source": "aviationweather_metar_recent", "n_obs": 0}
+    last_dt, last_temp = obs[-1]
+    now = datetime.now(timezone.utc)
+    age_min = (now - last_dt).total_seconds() / 60.0
+    return {
+        "status": "ok",
+        "source": "aviationweather_metar_recent",
+        "n_obs": len(obs),
+        "age_min": round(age_min, 1),
+        "running_max_c": max(temp for _, temp in obs),
+        "current_temp_c": last_temp,
+        "last_obs_utc": last_dt.isoformat(),
+    }
+
+
+def detect_latency_sec(ts_utc: str | None, obs_last_obs_utc: str | None) -> float | None:
+    if not ts_utc or not obs_last_obs_utc:
+        return None
+    try:
+        ts = datetime.fromisoformat(ts_utc)
+        obs = datetime.fromisoformat(obs_last_obs_utc)
+    except ValueError:
+        return None
+    return round((ts - obs).total_seconds(), 3)
+
+
+def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, recent_hours: float) -> dict[str, int]:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    state = load_state()
+    fired = {tuple(item) for item in state.get("fired", [])}
+    last_running = dict(state.get("last_running_value") or {})
+    now_utc = datetime.now(timezone.utc)
+    counts = {"cities": 0, "crossings": 0, "opportunities": 0, "errors": 0}
+
+    for cfg in configs:
+        counts["cities"] += 1
+        tz = ZoneInfo(cfg.timezone_name)
+        local_date = now_utc.astimezone(tz).date()
+        date_key = f"{cfg.city}|{local_date.isoformat()}"
+        cycle_row: dict[str, Any] = {
+            "ts_utc": now_utc.isoformat(),
+            "city": cfg.city,
+            "target_date": local_date.isoformat(),
+            "official_icao": cfg.official_icao,
+            "unit": cfg.unit,
+            "registry_class": cfg.registry_class,
+        }
+        previous_value = last_running.get(date_key)
+        try:
+            if previous_value is None:
+                met = source.aviationweather_metar_day(cfg.official_icao, tz, local_date)
+            else:
+                met = recent_metar_summary(cfg.official_icao, tz, local_date, hours=recent_hours)
+        except Exception as exc:  # noqa: BLE001
+            counts["errors"] += 1
+            append_jsonl(OUT_DIR / "cycles.jsonl", {**cycle_row, "status": "metar_fetch_failed", "error": str(exc)})
+            continue
+        cycle_row.update(
+            {
+                "metar_status": met.get("status"),
+                "obs_source": met.get("source"),
+                "obs_last_obs_utc": met.get("last_obs_utc"),
+                "obs_age_min": met.get("age_min"),
+                "n_obs": met.get("n_obs"),
+            }
+        )
+        if met.get("status") != "ok":
+            append_jsonl(OUT_DIR / "cycles.jsonl", {**cycle_row, "status": met.get("status", "metar_not_ok")})
+            continue
+
+        recent_value = market_value(float(met["running_max_c"]), cfg.unit)
+        current_value = recent_value if previous_value is None else max(int(previous_value), recent_value)
+        crossings = crossed_prev_no_brackets(previous_value, current_value)
+        cycle_row.update(
+            {
+                "status": "ok_no_cross" if not crossings else "ok_cross",
+                "running_value": current_value,
+                "recent_running_value": recent_value,
+                "previous_running_value": previous_value,
+                "crossed_prev_no_brackets": crossings,
+                "running_max_c": met.get("running_max_c"),
+                "current_temp_c": met.get("current_temp_c"),
+            }
+        )
+        append_jsonl(OUT_DIR / "cycles.jsonl", cycle_row)
+        last_running[date_key] = current_value
+        if not crossings:
+            continue
+
+        event_slug = source.event_slug(cfg.slug, local_date)
+        try:
+            events = source.fetch_json(f"{source.GAMMA}/events", {"slug": event_slug})
+        except RuntimeError as exc:
+            counts["errors"] += 1
+            append_jsonl(OUT_DIR / "opportunities.jsonl", {**cycle_row, "status": "gamma_fetch_failed", "event_slug": event_slug, "error": str(exc)})
+            continue
+        markets = events[0].get("markets") if events else []
+        if not markets:
+            append_jsonl(OUT_DIR / "opportunities.jsonl", {**cycle_row, "status": "no_event", "event_slug": event_slug})
+            continue
+        desc = str(markets[0].get("description") or "")
+        match = source.WU_URL_RE.search(desc)
+        rules_icao = match.group(1) if match else None
+        if rules_icao != cfg.official_icao:
+            append_jsonl(
+                OUT_DIR / "opportunities.jsonl",
+                {**cycle_row, "status": "RULES_STATION_MISMATCH", "event_slug": event_slug, "rules_icao": rules_icao},
+            )
+            continue
+
+        for target_bracket in crossings:
+            fire_key = (cfg.city, local_date.isoformat(), target_bracket)
+            if fire_key in fired:
+                continue
+            fired.add(fire_key)
+            counts["crossings"] += 1
+            market, parsed = find_no_market(markets, target_bracket)
+            base_row = {
+                **cycle_row,
+                "status": "cross_detected",
+                "event_slug": event_slug,
+                "target_no_bracket": target_bracket,
+                "rules_icao": rules_icao,
+                "market_question": None if market is None else market.get("question"),
+                "market_label": None if market is None else market.get("groupItemTitle"),
+                "parsed_label": parsed,
+            }
+            if market is None:
+                append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "market_not_found"})
+                continue
+            try:
+                token_ids = json.loads(market["clobTokenIds"])
+                yes_token_id = token_ids[0]
+                no_token_id = token_ids[1]
+            except (KeyError, IndexError, json.JSONDecodeError) as exc:
+                append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "missing_no_token", "error": str(exc)})
+                continue
+            yes_book_summary = {}
+            try:
+                no_book = source.fetch_json(f"{source.CLOB}/book", {"token_id": no_token_id})
+            except RuntimeError as exc:
+                append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "book_fetch_failed", "token_id": no_token_id, "error": str(exc)})
+                continue
+            no_book_summary = source.book_summary(no_book)
+            try:
+                yes_book_summary = source.book_summary(source.fetch_json(f"{source.CLOB}/book", {"token_id": yes_token_id}))
+            except RuntimeError as exc:
+                yes_book_summary = {"fetch_error": str(exc)}
+            yes_best_bid = yes_book_summary.get("best_bid")
+            synthetic_no_cost = None if yes_best_bid is None else round(1.0 - float(yes_best_bid), 6)
+            book_audit = {
+                "yes_token_id": yes_token_id,
+                "no_token_id": no_token_id,
+                "no_book": no_book_summary,
+                "yes_book": yes_book_summary,
+                "synthetic_no_cost_if_mint_and_sell_yes_bid": synthetic_no_cost,
+                "detected_after_report_sec": detect_latency_sec(cycle_row.get("ts_utc"), cycle_row.get("obs_last_obs_utc")),
+            }
+            best = source.best_ask_from_book(no_book)
+            if best is None:
+                append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "no_asks", "token_id": no_token_id, **book_audit})
+                continue
+            ask, size = best
+            opportunity = {
+                **base_row,
+                "book_status": "ok",
+                "token_id": no_token_id,
+                "best_ask": ask,
+                "best_ask_size": size,
+                "max_ask": max_ask,
+                "taker_eligible": ask <= max_ask,
+                "gross_profit_if_wins_per_share": round(1.0 - ask, 6),
+                "dry_run": dry_run,
+                **book_audit,
+            }
+            if ask <= max_ask:
+                counts["opportunities"] += 1
+            append_jsonl(OUT_DIR / "opportunities.jsonl", opportunity)
+
+    state["last_running_value"] = last_running
+    state["fired"] = [list(item) for item in sorted(fired)]
+    if not dry_run:
+        save_state(state)
+    return counts
+
+
+def report() -> int:
+    rows = []
+    path = OUT_DIR / "opportunities.jsonl"
+    if path.exists():
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    eligible = [row for row in rows if row.get("taker_eligible")]
+    latencies = [
+        float(row["detected_after_report_sec"])
+        for row in rows
+        if row.get("detected_after_report_sec") is not None
+    ]
+    print(
+        json.dumps(
+            {
+                "opportunity_rows": len(rows),
+                "taker_eligible_rows": len(eligible),
+                "latest_ts_utc": max((row.get("ts_utc") or "" for row in rows), default=""),
+                "by_status": {status: sum(1 for row in rows if row.get("book_status") == status or row.get("status") == status) for status in sorted({row.get("book_status") or row.get("status") for row in rows})},
+                "detected_after_report_sec": {
+                    "min": min(latencies) if latencies else None,
+                    "max": max(latencies) if latencies else None,
+                    "avg": round(sum(latencies) / len(latencies), 3) if latencies else None,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def print_city_policy(*, include_station_diff: bool, only_cities: set[str] | None = None) -> int:
+    print(json.dumps(build_city_policy(include_station_diff=include_station_diff, only_cities=only_cities), ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Shadow test for METAR crossing -> previous bucket NO taker opportunities.")
+    parser.add_argument("command", choices=["cycle", "loop", "report", "city-policy"], nargs="?", default="cycle")
+    parser.add_argument("--cities", nargs="*", help="Optional city allowlist, e.g. Shanghai Tokyo.")
+    parser.add_argument("--include-station-diff", action="store_true", help="Also include WU official-station-diff cities with >=97% alignment.")
+    parser.add_argument("--max-ask", type=float, default=0.995)
+    parser.add_argument("--interval-sec", type=float, default=20.0)
+    parser.add_argument("--recent-hours", type=float, default=2.0, help="After baseline, poll only recent METAR records and carry forward running max from state.")
+    parser.add_argument("--dry-run", action="store_true", help="Do not update state.json; useful for smoke tests.")
+    args = parser.parse_args()
+
+    if args.command == "report":
+        return report()
+    if args.command == "city-policy":
+        return print_city_policy(include_station_diff=args.include_station_diff, only_cities=set(args.cities or []) or None)
+
+    configs = load_city_configs(include_station_diff=args.include_station_diff, only_cities=set(args.cities or []) or None)
+    if not configs:
+        raise SystemExit("no eligible city configs")
+    print(
+        json.dumps(
+            {
+                "command": args.command,
+                "cities": [cfg.city for cfg in configs],
+                "out_dir": str(OUT_DIR),
+                "max_ask": args.max_ask,
+                "dry_run": args.dry_run,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    while True:
+        counts = cycle_once(configs, max_ask=args.max_ask, dry_run=args.dry_run, recent_hours=args.recent_hours)
+        print(json.dumps({"ts_utc": datetime.now(timezone.utc).isoformat(), **counts}, sort_keys=True))
+        if args.command == "cycle":
+            return 0
+        time.sleep(args.interval_sec)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
