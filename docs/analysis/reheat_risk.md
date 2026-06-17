@@ -158,6 +158,12 @@ Current conclusion:
   `THETA_CURRENT_YES_RUNTIME_DIR` and `THETA_CURRENT_YES_STRATEGY_INSTANCE`.
   This allows no-live forward telemetry to run alongside the existing
   `theta_current_yes_tiny_live_v1` loop instead of sharing its PID/output files.
+- Parallel telemetry deploy v20 is complete in
+  `docs/analysis/2026-06/2026-06-18-theta-current-yes-parallel-telemetry-deploy-v20.md`.
+  N100 now runs `theta_current_yes_forecast_telemetry_v1` as telemetry-only
+  alongside the old live loop. First remote cycle wrote 42 audit rows with
+  `live_enabled=False` and `plans=0`; useful forecast-peak rows require future
+  active local windows.
 
 ## Strategy Heads
 
