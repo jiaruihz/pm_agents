@@ -149,6 +149,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         max_obs_age_min=args.max_obs_age_min,
         pre_update_blackout_min=args.pre_metar_update_blackout_min,
         min_gap_to_next_bracket_c=args.min_gap_to_next_bracket_c,
+        min_local_hour=args.min_local_hour,
+        max_local_hour=args.max_local_hour,
     )
     selected = select_higher_no_candidates(current_rows, args)
     candidates = [candidate_row(row.to_dict(), args) for _, row in selected.iterrows()]
@@ -180,6 +182,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_snapshot_age_min": float(args.max_snapshot_age_min),
             "max_obs_age_min": float(args.max_obs_age_min),
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
+            "min_local_hour": int(args.min_local_hour),
+            "max_local_hour": int(args.max_local_hour),
             "shadow_notional": float(args.shadow_notional),
         },
     }
@@ -201,6 +205,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--max-obs-age-min", type=float, default=20.0)
     parser.add_argument("--pre-metar-update-blackout-min", type=float, default=6.0)
+    parser.add_argument("--min-local-hour", type=int, default=13)
+    parser.add_argument("--max-local-hour", type=int, default=17)
     parser.add_argument("--shadow-notional", type=float, default=5.0)
     parser.add_argument("--interval-seconds", type=float, default=900.0)
     return parser.parse_args()

@@ -538,6 +538,8 @@ def build_current_rows(
     max_obs_age_min: float,
     pre_update_blackout_min: float,
     min_gap_to_next_bracket_c: float,
+    min_local_hour: int = 13,
+    max_local_hour: int = 15,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     grouped = records_by_city(records)
     rows: list[dict[str, Any]] = []
@@ -562,13 +564,15 @@ def build_current_rows(
             )
             continue
         hour = local_now.hour
-        if hour < 13 or hour > 15:
+        if hour < min_local_hour or hour > max_local_hour:
             audits.append(
                 {
                     "city": city,
                     "target_date": target_date,
                     "status": "outside_hour",
                     "hour_local": hour,
+                    "min_local_hour": min_local_hour,
+                    "max_local_hour": max_local_hour,
                     "local_time": local_now.isoformat(timespec="seconds"),
                     "timezone": timezone_label(tz),
                 }
@@ -852,6 +856,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         max_obs_age_min=args.max_obs_age_min,
         pre_update_blackout_min=args.pre_metar_update_blackout_min,
         min_gap_to_next_bracket_c=args.min_gap_to_next_bracket_c,
+        min_local_hour=args.min_local_hour,
+        max_local_hour=args.max_local_hour,
     )
     candidates: list[dict[str, Any]] = []
     if not current.empty:
@@ -927,6 +933,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_obs_age_min": args.max_obs_age_min,
             "pre_metar_update_blackout_min": args.pre_metar_update_blackout_min,
             "min_gap_to_next_bracket_c": args.min_gap_to_next_bracket_c,
+            "min_local_hour": args.min_local_hour,
+            "max_local_hour": args.max_local_hour,
             "max_orders": args.max_orders,
         },
         "plan_out": str(PLAN_OUT),
@@ -1010,6 +1018,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-obs-age-min", type=float, default=20.0)
     parser.add_argument("--pre-metar-update-blackout-min", type=float, default=6.0)
     parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=1.0)
+    parser.add_argument("--min-local-hour", type=int, default=13)
+    parser.add_argument("--max-local-hour", type=int, default=15)
     parser.add_argument("--interval-seconds", type=float, default=900.0)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--confirm-live", action="store_true")
