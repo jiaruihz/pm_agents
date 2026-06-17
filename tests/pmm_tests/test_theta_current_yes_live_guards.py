@@ -292,6 +292,27 @@ def test_build_current_rows_fetches_peak_clock_when_snapshot_lacks_native_fields
     assert row["forecast_peak_fetch_status"] == "fetched"
 
 
+def test_first_rule_rejects_missing_or_far_ahead_forecast_peak():
+    args = argparse.Namespace(
+        min_available_notional=5.0,
+        allow_missing_forecast_peak=False,
+        min_forecast_peak_delta_hours=-1.999,
+    )
+    base = {
+        "decline_c": 1.0,
+        "yes_current_ask": 0.78,
+        "p_yes_win": 0.9,
+        "ev": 0.12,
+        "available_notional_at_ask": 10.0,
+        "token_id": "yes-token",
+        "forecast_peak_delta_hours_local": 0.5,
+    }
+
+    assert live.first_rule_reject_reason(base, args) == "snapshot_rule_passed"
+    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": -2.0}, args) == "snapshot_rule_forecast_peak_too_far_ahead"
+    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": None}, args) == "snapshot_rule_missing_forecast_peak"
+
+
 def test_build_current_rows_can_optionally_veto_gap_above_threshold(monkeypatch):
     now = datetime(2026, 6, 16, 4, 10, tzinfo=timezone.utc)
     station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")

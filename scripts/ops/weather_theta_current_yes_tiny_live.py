@@ -1035,6 +1035,12 @@ def first_rule_reject_reason(row: dict[str, Any], args: argparse.Namespace) -> s
         return "snapshot_rule_p_yes_lt_0_5"
     if to_float(row.get("ev"), -999.0) < 0.05:
         return "snapshot_rule_edge_lt_0_05"
+    peak_delta = forecast_peak_delta(row)
+    if peak_delta is None and not getattr(args, "allow_missing_forecast_peak", False):
+        return "snapshot_rule_missing_forecast_peak"
+    min_peak_delta = float(getattr(args, "min_forecast_peak_delta_hours", -1.999))
+    if peak_delta is not None and float(peak_delta) < min_peak_delta:
+        return "snapshot_rule_forecast_peak_too_far_ahead"
     if to_float(row.get("available_notional_at_ask"), 0.0) < float(args.min_available_notional):
         return "snapshot_rule_insufficient_size"
     if not safe_str(row.get("token_id")):
@@ -1173,6 +1179,8 @@ def current_yes_forward_telemetry_row(
             "max_obs_age_min": float(args.max_obs_age_min),
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
+            "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
+            "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -1235,6 +1243,8 @@ def current_yes_audit_telemetry_row(
             "max_obs_age_min": float(args.max_obs_age_min),
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
+            "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
+            "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -1476,6 +1486,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_obs_age_min": args.max_obs_age_min,
             "pre_metar_update_blackout_min": args.pre_metar_update_blackout_min,
             "min_gap_to_next_bracket_c": args.min_gap_to_next_bracket_c,
+            "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
+            "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "min_local_hour": args.min_local_hour,
             "max_local_hour": args.max_local_hour,
             "max_orders": args.max_orders,
@@ -1566,6 +1578,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-obs-age-min", type=float, default=20.0)
     parser.add_argument("--pre-metar-update-blackout-min", type=float, default=6.0)
     parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=0.0)
+    parser.add_argument("--allow-missing-forecast-peak", action="store_true")
+    parser.add_argument("--min-forecast-peak-delta-hours", type=float, default=-1.999)
     parser.add_argument("--min-local-hour", type=int, default=13)
     parser.add_argument("--max-local-hour", type=int, default=15)
     parser.add_argument("--interval-seconds", type=float, default=900.0)

@@ -29,6 +29,8 @@ MAX_SNAPSHOT_AGE_MIN="${MAX_SNAPSHOT_AGE_MIN:-45}"
 MAX_OBS_AGE_MIN="${MAX_OBS_AGE_MIN:-20}"
 PRE_METAR_UPDATE_BLACKOUT_MIN="${PRE_METAR_UPDATE_BLACKOUT_MIN:-6}"
 MIN_GAP_TO_NEXT_BRACKET_C="${MIN_GAP_TO_NEXT_BRACKET_C:-0}"
+MIN_FORECAST_PEAK_DELTA_HOURS="${MIN_FORECAST_PEAK_DELTA_HOURS:--1.999}"
+ALLOW_MISSING_FORECAST_PEAK="${ALLOW_MISSING_FORECAST_PEAK:-0}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-900}"
 NO_TELEGRAM="${NO_TELEGRAM:-0}"
 
@@ -50,8 +52,13 @@ args=(
   --max-obs-age-min "$MAX_OBS_AGE_MIN"
   --pre-metar-update-blackout-min "$PRE_METAR_UPDATE_BLACKOUT_MIN"
   --min-gap-to-next-bracket-c "$MIN_GAP_TO_NEXT_BRACKET_C"
+  --min-forecast-peak-delta-hours "$MIN_FORECAST_PEAK_DELTA_HOURS"
   --interval-seconds "$INTERVAL_SECONDS"
 )
+
+if [[ "$ALLOW_MISSING_FORECAST_PEAK" == "1" ]]; then
+  args+=(--allow-missing-forecast-peak)
+fi
 
 if [[ "$THETA_CURRENT_YES_MODE" == "live" ]]; then
   args+=(--live --confirm-live)
