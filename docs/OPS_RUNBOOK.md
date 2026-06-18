@@ -183,3 +183,24 @@ scripts/ops/after_reboot.sh --status      # 仅看状态
 1. 给 Telegram Research Bot 接入 heartbeat
 2. 给常驻进程做统一 pid/log/service 约定
 3. 再决定要不要上 systemd user services
+
+## 8. 备份策略（2026-06-19 从 AGENTS.md/CLAUDE.md 迁入）
+
+N100 备份入口：
+```bash
+ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/backup_data.sh'
+```
+
+备份输出：
+```text
+/home/jiarui/weather-predict-backups/weather-predict-data-YYYYMMDDTHHMMSSZ.tar.zst
+/home/jiarui/weather-predict-backups/weather-predict-data-YYYYMMDDTHHMMSSZ.tar.zst.sha256
+```
+
+备份范围：`output/`、`cache/pm_history/`、`cache/wu_obs/`、`cache/iem_v2_*.csv`
+
+最低要求：
+- N100 本地保留最近 14 天 tar 包。
+- 本机 `runtime/weather_edge_v1/market_data/` 是第二份镜像。
+- 每天同步一次，重启或故障后手动同步一次。
+- 大文件原始 cache 不进 git，只走 `rsync` / `tar`。

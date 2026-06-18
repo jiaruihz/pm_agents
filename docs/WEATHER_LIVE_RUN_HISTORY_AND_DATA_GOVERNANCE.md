@@ -27,6 +27,15 @@ Use these labels:
 
 Do not describe local early live as "not ours". It is ours, just not part of the clean current N100 T1 strategy identity.
 
+### 1.1 取代说明：早期 5 月"盈利模式"结论已作废（2026-06-19）
+
+AGENTS.md / CLAUDE.md 早期"已知的盈利模式"段（BUY_NO 胜率 76% vs YES 12%、Warsaw ROI +52.9%、
+ECMWF +12% vs GFS +1.4%、LA 经常 missing_bracket）是 **near-binary settlement 修复前**的口径，已作废，
+2026-06-19 从常驻文件删除，不再作为现行结论。当前权威结论见评估层 living docs：
+`analysis/side_alpha.md`（胜率 ≠ alpha）、`analysis/city_selection.md`（pre-fix 城市 ROI `invalidated-numbers`）、
+`analysis/model_vs_market.md`（global probability alpha 为负）。`missing_bracket` 本身是 near-binary bug，
+已 725→0 修复，不是 LA 数据问题。
+
 ## 2. Confirmed Live Rollout Timeline
 
 Source files audited:

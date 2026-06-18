@@ -1,428 +1,111 @@
-# PM Agent — Project Context
+# PM Agent — 项目上下文（Codex）
 
-> Claude Code 相关约定见 `CLAUDE.md`；两份文件应保持核心项目规范一致。
+> 工作风格见全局 `~/.codex/AGENTS.md`（做完再交 / 缺数据自己补 / 先修根因 / 信息够了就动手 / 输出给人看）。
+> 本文件与 `CLAUDE.md` 应保持核心规范一致（两份共享主体，改一处同步另一处）。
+> 历史 WSL 宿主命令约定（`wsl -d Ubuntu-24.04 -- ...`）已退场，需要时查 git 历史；当前机器是 Mac。
 
-## 当前主线：天气温度策略（必读，不要被 README 误导）
+## 0. 当前主线
 
-**README 描述的是旧 PMM/ARB 框架，当前活跃主线是天气策略。**
+天气温度策略。**README 描述的是旧 PMM/ARB 框架，已不是活跃主线，别被它误导。**
 
-关键目录：
+## 1. 系统主轴：一条量化血缘，所有工作都挂上去
+
+本项目不是一堆独立脚本，是一个有完整血缘的量化系统：
 
 ```text
-weather_dashboard/          ← Python 后端：FastAPI + SQLite DB + ingest 管道
-frontend/strategy_dashboard/← React 前端（src/pages/weather/ 是天气策略页面）
-scripts/weather_dashboard/  ← run_stack.sh 一键启动脚本
-runtime/weather_edge_v1/    ← 数据目录（N100 镜像 + DB，不进 git）
-docs/WEATHER_SYSTEM_CONTRACT.md      ← 字段名/枚举契约（改字段必读）
-docs/WEATHER_STRATEGY_QUANT_DESIGN.md← 架构设计
-docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
+signal candidate → plan → order → fill → settlement
 ```
 
-生产端（N100，**两个 repo 各管一块**）：
-- `jiarui@192.168.0.200:/home/jiarui/projects/weather-predict` ← 信号原料 + 行情/天气 cache（systemd timer）
-- `jiarui@192.168.0.200:/home/jiarui/projects/pm_agent`         ← 实盘交易执行（live_cycle loop 写 `runtime/weather_edge_v1/live/*.jsonl`）
+canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`（成交粒度），
+由 `weather_dashboard/legacy_migration/*` 从 N100 镜像重建到 `runtime/weather.db`。
 
-分析端（当前这台 Mac）：`/Users/deepsleep/projects/pm_agents`（拉两边镜像 → 本机 `runtime/weather.db` 重建）
-历史 WSL 分析端：`/home/rui/projects/pm_agent`（只有在实际 shell 是 WSL/Linux 时才使用）
+**做任何新分析 / 脚本 / 特征 / 看板前，先定位它在血缘哪一层：**
+- 读数据 → 从 canonical 表读，不绕过去自算 fill / PnL / 漏单 / 滑点。
+- 产新信号 / 特征 → 挂进 `fact_signal_candidates` 机会粒度，不另建并行的一次性表。
+- 不确定结构往哪挂 → 先读 `WEATHER_STRATEGY_QUANT_DESIGN.md`，别先写脚本。
 
-当前这台 Mac 可直接承担本机分析、看板、回测、脚本开发和 N100 部署 staging：
-- 项目根目录：`/Users/deepsleep/projects/pm_agents`
-- 默认 shell：macOS `zsh` / Darwin；不要套 `wsl -d ...`
-- 本机命令示例：`cd /Users/deepsleep/projects/pm_agents && scripts/ops/sync_weather_remote.sh`
-- N100 访问：从 Mac 直接 `ssh jiarui@192.168.0.200 '<command>'`
-- 本机只做镜像分析和 staging；不会因为能跑脚本就自动成为生产采集/下单来源。
+完整设计 [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) ·
+字段契约 [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md)
 
-> 完整四角色 + 数据链路图见 [docs/WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) 和 [docs/WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md)。**不要再以为 N100 只跑 weather-predict**。
+## 2. 机器与角色（摘要，细节见 [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md)）
 
-## Weather 策略分析强制规约
+- **本机 = Mac** `/Users/deepsleep/projects/pm_agents`：分析 / 看板 / 回测 / 脚本开发 / N100 部署 staging。默认 `zsh`/Darwin，**不要套 `wsl`**。
+- **N100** `jiarui@192.168.0.200`，两个 repo 各管一块：
+  - `weather-predict`（systemd timer）：snapshot / orderbook / pm_history / GFS / 观测 cache —— 信号原料与行情。
+  - `pm_agent`（foreground loop）：读信号 → plan → CLOB 下单 → live JSONL / live_cycle —— 实盘执行。
+- 本机只读 N100 镜像做分析，**不作生产采集 / 下单来源**。N100 访问：`ssh jiarui@192.168.0.200 '<command>'`。
+- 判断生产是否断流先看 N100 doctor（`ssh ... 'cd ~/projects/weather-predict && scripts/ops/doctor_restart.sh'`），不要用本机镜像新旧直接判断。
 
-**任何 weather 策略分析请求必须先 invoke 对应 skill，不准跳过：**
+数据流、镜像目录逐条映射、备份 → [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) ·
+[WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) · [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md)
 
-| 分析类型 | 触发词 | Skill |
-|---|---|---|
-| 历史绩效 / A/B 对比 | 绩效、PnL、ROI、win rate、胜率、切片、对比、A/B、回测结果、策略表现 | `weather-strategy-performance` |
-| 单日血缘 / 逐笔复盘 | 单日、血缘、逐笔、当日复盘、为什么下了这单、信号到结算 | `weather-strategy-lineage` |
-| 持仓敞口 / 未平仓 | 持仓、敞口、未结算、未平仓、风险、当前仓位、open position | `weather-strategy-exposure` |
-| 账户余额 / CLOB 对账 | 余额、钱包、账户、USDC、cash、cashflow、资金少了、买入成本、submitted notional、actual fill cost、CLOB 对账、fill_id 对不上 | `weather-live-account-reconcile` |
-| 策略/参数部署到 N100 | 部署策略、上线策略、新 policy、切换策略、修改参数部署、上 V2/V3、启动新分支、城市池、加城市、移除城市、T1/T2、city_pools、paper_policy、N100 代码改动 | `weather-strategy-deploy` |
+## 3. 硬边界与工程姿态
 
-**禁止**：在不 invoke skill 的情况下直接写一次性 pandas 脚本做策略分析。  
-**禁止**：任何改变 N100 生产行为的代码/配置变更（city_pools、paper_policy、execution_policy 等）通过 `scp`/`rsync` 直接推送，必须走 `weather-strategy-deploy` skill 的 git-first 流程。  
-**口径唯一来源**：`docs/WEATHER_ANALYSIS_CONTRACT.md`（§2 PnL 公式、§5 切片维度白名单、§6 默认城市池）
+**硬边界（不可逆操作，必须守）**：涉及 N100 live / 私钥 / 余额 / 真实 CLOB 下单 / 删数据 / 远端部署，
+保留显式确认、暂停开关、notional 上限、可追溯日志。生产行为变更（city_pools / paper_policy /
+execution_policy / live_cycle）走 [weather-strategy-deploy] 的 **git-first** 流程，**不许 `scp`/`rsync` 直推**
+——直推绕过版本审计，事故无法回溯。
 
-### Live 账户余额 / CLOB 对账强制口径
+**工程姿态（个人研究项目，默认直接推进）**：少写与当前目标无关的防御性兜底；**显式失败优于静默 fallback**
+（数据缺失 / 字段不一致 / 盘口不可用时报错暴露原因，不偷偷换旧字段旧数据继续跑）；兼容逻辑要标注删除时机。
+**但"少兜底" ≠ 绕过资金安全或不可逆操作的硬边界。**
 
-用户问“余额少了 / 最近几天账户亏了 / 钱包对不上 / CLOB fill 对不上”时，必须走 `weather-live-account-reconcile`，使用：
+## 4. 研究防跑偏
+
+用户提出的往往是一个很具体的失败模式 / 交易形态。先把问题收敛成一句明确的 **target metric / target slice**，
+再跑数据写脚本：先复述目标指标 → 先锁分母（事前持仓形态 vs 事后结算形态，不混用）→ 结论先给交易动作
+（保留 / 过滤 / 降 size / shadow / 不改 live）再给证据。**不要擅自把"某个坏场景怎么优化"扩大成"整个分支砍不砍"。**
+发现口径漂移立刻暂停纠正，不继续堆结果。
+
+## 5. 分析必走的 skill + 硬口径（细则见 [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)）
+
+weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚本：
+
+| 触发 | skill |
+|---|---|
+| 绩效 / PnL / ROI / 胜率 / 切片 / 对比 / 回测结果 | `weather-strategy-performance` |
+| 单日血缘 / 逐笔复盘 / 为什么下这单 | `weather-strategy-lineage` |
+| 持仓 / 敞口 / 未结算 / 风险 | `weather-strategy-exposure` |
+| 余额 / 钱包 / USDC / CLOB 对账 / fill 对不上 | `weather-live-account-reconcile` |
+| 部署 / 上线策略 / 城市池 / 参数 / T1/T2 | `weather-strategy-deploy` |
+| 补全 / 重建底表 / 同步 / 数据陈旧 / 重新结算 | `weather-fact-rebuild` |
+
+发布任何 `live_real` PnL / ROI / 曲线前的硬 gate（踩过坑换来的，不是形式）：
+- 先跑 5 行 SQL 自检（数据新鲜度 / trade_class 分布 / 结算 / 机会覆盖 / 订单成交）。
+- `python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py` 必须 `gate_pass=true`，否则停下先修数据链。
+- 现金流 / 余额用 `fill_date_bj`，**不用 `order_date_bj`**（后者受回填污染，只作下单归属诊断）。
+- `submitted_notional` / `posted_notional` / `actual_fill_cost` / `open_cost` / `realized_pnl` 分开报；open cost 不是亏损。
+- 已结算才报 `pnl_usd_at_fill`；未结算只报 MTM 并附 `val_snapshot_ts_utc`，估值旧就明说旧。
+- pm_history near-binary `0.9995/0.0005` 必须归一化为 `1/0`（旧报告需重算）。
+- 不读 `runtime/_legacy/*.db` 等退役库；不绕过 `fact_trades` 自算 fill PnL、不绕过 `fact_signal_candidates` 自算成交质量。
+
+## 6. 高频命令
 
 ```bash
-python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py --start YYYY-MM-DD --end YYYY-MM-DD --date-field fill_date_bj --group-by instance,selected_date
+# 看板（建库+ingest+API+FE；已有库加 --no-rebuild；仅看状态 --status）
+scripts/weather_dashboard/run_stack.sh [--no-rebuild|--status|--api-only|--fe-only]
+#   入口 http://localhost:5173/weather/runs · /weather/live · http://localhost:8000/docs
+
+# 同步 N100 镜像（分析"最新/今天"前先同步；--dry-run 预演）
+scripts/ops/sync_weather_remote.sh [--dry-run]
 ```
 
-硬规定：
-- **禁止**用 `fact_trades.order_date_bj` 解释钱包现金流或余额变化；它可能受回填/重建链路污染，只能作为策略下单归属诊断字段。
-- `target_date` 是天气合约目标日，不是现金流日期；`fill_date_bj` 才是已成交买入真正花钱日期。
-- `submitted_notional_usd` / `posted_notional_usd` / `actual_fill_cost_usd` / `open_cost_usd` / `realized_pnl_usd` 必须分开报；`cost_usd` 或 open cost 不是“亏损”。
-- 已结算 PnL 只看 `settlement_status='settled'` 的 `pnl_usd_at_fill`；未结算只能报 MTM，并必须附 `val_snapshot_ts_utc`，估值旧就明确说旧。
-- 如果 raw live order 文件比 DB 新，必须用脚本里的 Raw Live Order Files 段补充 submitted/posted notional，并说明 DB 滞后。
-- 最终结论前必须报告 fill_id reconciliation：`db_live_real_distinct_fills`、`raw_clob_distinct_fills`、`db_not_in_raw`、`raw_not_in_db`。
-- 最终结论前必须跑 `python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py`；`gate_pass=false` 时禁止发布 live_real PnL/ROI/曲线。
-- 2026-06-07 勘误：Polymarket public activity 不是逐 order 权威 fill 来源，只能作受 order cap 约束的 fallback；真实 fill 优先 `exchange_response.place.status=matched` 和 authenticated CLOB order/trade 数据。旧口径 `live_real=1316` / raw CLOB cost 约 `$3499` 已作废；fill 行数会随新增成交变化，最终以 `weather_clob_fill_coverage_gate.py gate_pass=true` 为准。
-
-### 分析前数据源自检（强制 5 行 SQL）
-
-任何 weather 分析、模型评估、报告前，先跑这 5 个查询确认数据真在「权威源」上、缺口在哪。完整说明见 `docs/WEATHER_DATA_CANONICAL_SOURCES.md`。
-
-```sql
-SELECT MAX(fact_built_at_utc) FROM fact_trades;                       -- 数据新鲜度
-SELECT trade_class, COUNT(*) FROM fact_trades GROUP BY trade_class;   -- live_real / paper / snapshot_replay 分布
-SELECT settlement_status, COUNT(*) FROM fact_trades GROUP BY settlement_status;  -- settled/unsettled
-SELECT COUNT(*), SUM(eligible), SUM(paper_ordered), SUM(live_filled) FROM fact_signal_candidates;  -- 机会粒度覆盖
-SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 1 ELSE 0 END) with_fill
-  FROM orders o LEFT JOIN fills f USING(execution_id) WHERE o.venue='polymarket_clob' GROUP BY o.status;
-```
-
-**禁止**：读 `runtime/_legacy/*.db`（已退役）、绕过 `fact_trades` 自算 fill PnL、绕过 `fact_signal_candidates` 自算成交质量/漏单/滑点。  
-**当前已知口径/缺口**：2026-06-07 修正后 live fill recovery 的硬标准是 `weather_clob_fill_coverage_gate.py gate_pass=true`，且 `missing_order_rows=0`、`over_order_keys=0`、DB/cache/fact 成本差为 0；`live_real` 行数会随新增真实成交变化，不要写死。2026-06-06 之前大量 `missing_bracket` 是 settlement near-binary bug，`pm_history` raw `0.9995/0.0005` 必须归一化为 `1/0`，旧报告需重算。`gfs_365d_*` cache 文件名误标，实际 ~735 天。`decision_window_missing` ~44%。
-
-### weather.db 查询可靠性约定
-
-`runtime/weather.db` 是 WAL 模式 SQLite。普通分析读库时不要用无界交互式 sqlite，也不要在只读连接里跑 checkpoint / WAL 修复类 PRAGMA。推荐 CLI 读法：
-
+读 `runtime/weather.db`（WAL，只读）：不要用无界交互式 sqlite，不在只读连接里跑 checkpoint/WAL 修复 PRAGMA。
 ```bash
 sqlite3 -batch -cmd ".timeout 1000" runtime/weather.db "SELECT COUNT(*) FROM fact_signal_candidates;"
 ```
-
-Python 脚本默认只读打开，并设置 busy timeout：
-
 ```python
 conn = sqlite3.connect("file:runtime/weather.db?mode=ro", uri=True, timeout=1.0)
-conn.execute("PRAGMA query_only=ON")
-conn.execute("PRAGMA busy_timeout=1000")
-conn.row_factory = sqlite3.Row
+conn.execute("PRAGMA query_only=ON"); conn.execute("PRAGMA busy_timeout=1000")
 ```
 
-长查询、bootstrap、join-heavy 研究或多人/多进程同时分析时，先在 `run_stack.sh` 完成后制作一致性 snapshot，再对 snapshot 用 `immutable=1` 读取；不要直接对仍可能有 WAL 写入的 live DB 使用 `immutable=1`。
-
----
-
-## 全局工程姿态：个人项目，默认直接推进
-
-这是个人研究/交易项目，不是承载外部线上流量的多租户生产系统。默认实现时不要为了“看起来稳妥”层层加保守兜底、静默 fallback、双路径兼容或过度抽象。
-
-默认偏好:
-- **直接实现主路径**：优先把当前要验证的策略、看板或分析链路跑通，少写与当前目标无关的防御性分支。
-- **显式失败优于静默兜底**：数据缺失、字段不一致、盘口不可用时，优先报错/告警并暴露原因；不要偷偷换旧字段、旧数据、默认值继续跑，除非文档已约定这是兼容层。
-- **兼容逻辑要有退出条件**：如果必须兼容历史字段或旧文件，在代码/文档里标明原因和删除时机，不要无限期保留。
-- **研究和本机工具可以激进**：回测、对比脚本、dashboard、本机分析默认选择可观测、可调参、可快速迭代的实现，而不是最保守的企业级兜底。
-- **真实下单仍保留硬边界**：涉及 N100 live、私钥、余额、真实 CLOB 下单、删除数据、远端部署时，保留显式确认、暂停开关、notional 上限和可追溯日志；不要把“少兜底”理解成绕过资金安全或不可逆操作。
-
-## 策略研究防跑偏约定（重要）
-
-天气策略研究中，用户提出的往往是一个很具体的失败模式或交易形态。Agent 必须先把问题收敛成一句明确的 **target metric / target slice**，再跑数据、写脚本或写结论。
-
-默认流程:
-- **先复述目标指标**：例如 `bought_no_hit_and_net_loss` = “pure NO city-day 中买了多个 NO，最终温度命中其中一个被买 NO bracket，导致该腿亏满且整组 city-day 净亏”。
-- **先锁分母**：明确是在看事前持仓形态（如 `pure_no_basket`）还是事后结算形态（如 `no_wins_only`），不要把两者混用。
-- **所有表格必须回答目标指标**：如果表格只是在说明背景（如 pure NO 总体 PnL），必须标注为背景，不能拿它替代主结论。
-- **不要擅自扩大问题**：用户问“某个坏场景怎么优化”，不要扩展成“整个分支是否赚钱/是否该砍”；除非明确说明这是额外 sanity check。
-- **结论先给交易动作**：先回答应该保留、过滤、降 size、shadow 还是不改 live，再给证据和细分数据。
-- **发现口径漂移要立刻纠正**：如果分析过程中发现 target metric、样本分母或字段含义不一致，先暂停修正口径，不继续堆更多结果。
-
-## Weather 策略接手入口
-
-天气策略相关开发、实盘排查、回测分析优先从这里开始:
-
-- [docs/WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md)
-
-这份入口文档记录当前 live 口径、N100 检查命令、关键代码路径、近期实盘事故结论和后续设计项。不要只凭本文件下方的历史摘要判断当前实盘状态。
-
-## Weather Dashboard 一键启动
-
-本机看板（独立于 N100 生产，不发单）。任何 agent 启动看板都用同一个脚本:
-
-```bash
-scripts/weather_dashboard/run_stack.sh             # 全量：建库+ingest+API+FE
-scripts/weather_dashboard/run_stack.sh --no-rebuild
-scripts/weather_dashboard/run_stack.sh --status
-```
-
-设计文档:
-- **系统接口契约**（字段名/枚举/ID算法，改字段前必读）: [docs/WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md)
-- 核心量化架构设计 spec: [docs/WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md)
-- 数据模型缺口审计（P0已完成，P1待办）: [docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](docs/WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md)
-- 早期实盘历史与回填治理: [docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)
-- 数据管道与统一 PnL 口径（数据流全链路 / 脚本职责 / 已知缺口 / 运维 runbook）: [docs/WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md)
-
-启动后:
-- 看板 <http://localhost:5173/weather/runs>
-- Live  <http://localhost:5173/weather/live>
-- API   <http://localhost:8000/docs>
-
-## 桌面端 / Host-aware 命令执行约定
-
-关键限制: Codex 桌面端可能在不同宿主环境里调用命令。先判断当前 shell/OS，再选择命令形态；不要因为文档里出现 WSL 路径就默认当前机器有 `wsl`。
-
-当前这台机器是 Mac（`/Users/deepsleep/projects/pm_agents`）。在这台机器上：
-- 所有本机构建、测试、同步、看板脚本都直接在 repo 根目录运行。
-- 访问 N100 时直接用 macOS `ssh`，例如 `ssh jiarui@192.168.0.200 'hostname'`。
-- 如果旧文档给出 `wsl -d Ubuntu-24.04 -- ...`，在本机应翻译成等价的直接命令。
-
-Mac 本机例子:
-```bash
-cd /Users/deepsleep/projects/pm_agents
-pytest
-npm test
-scripts/ops/sync_weather_remote.sh
-scripts/weather_dashboard/run_stack.sh --status
-```
-
-历史 Windows/WSL 限制: 如果 Codex 桌面端在 Windows 环境里调用命令，即使代码目录来自 WSL，当前 shell 是 PowerShell/CMD 时也不是 WSL 里的 bash。
-
-本项目在桌面端操作时，文件可以通过 Windows 侧 WSL 路径打开:
-```text
-\\wsl.localhost\Ubuntu-24.04\home\rui\projects\pm_agent
-```
-
-执行命令前先判断当前环境:
-- 如果当前 shell 已经在 WSL/Linux 中，正常执行即可，例如 `pytest`、`npm test`。
-- 如果当前 shell 是 Windows PowerShell/CMD，所有构建、测试、安装、脚本运行命令都应显式通过 WSL 执行:
-
-```bash
-wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && <command>"
-```
-
-Windows shell 下的例子:
-```bash
-wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && pytest"
-wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && npm test"
-```
-
-PowerShell 引号很容易把上一层查询拆坏，尤其是嵌套 `bash -lc`、`ssh '<command>'`、`python -c`、`awk`/`sed` 或包含 JSON/SQL 的命令时。遇到复杂查询时不要硬塞一长串混合引号；优先进入 WSL 后用 bash 原生命令执行，或把复杂逻辑写成临时脚本/项目脚本再调用。若必须从 PowerShell 发起，先用最小只读命令验证 quoting，再跑真实查询。
-
-如果后续迁移到其他 WSL 发行版或用户名，按实际路径替换 `Ubuntu-24.04`、`rui` 和项目目录即可。若回到 Mac 侧，则以 `/Users/deepsleep/projects/pm_agents` 为准。
-
-## Weather 数据分工与数据真相
-
-### N100 远端：生产采集机
-
-远端机器: `jiarui@192.168.0.200`
-远端 base: `/home/jiarui/projects/weather-predict`
-
-### N100 SSH 约定
-
-当前这台 Mac 直接从本机发起 SSH:
-```bash
-ssh jiarui@192.168.0.200 '<command>'
-ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/weather-predict && <command>'
-ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && <command>'
-```
-
-只有在 Windows/PowerShell 宿主里，才从 WSL 侧发起:
-```bash
-wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 '<command>'
-```
-
-WSL 内已配置 `~/.ssh/config`，`192.168.0.200` 使用:
-```sshconfig
-Host 192.168.0.200
-  HostName 192.168.0.200
-  User jiarui
-  IdentityFile ~/.ssh/id_ed25519_weather_deploy
-  IdentitiesOnly yes
-```
-
-因此在 WSL 内也可以直接运行:
-```bash
-ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/weather-predict && <command>'
-```
-
-N100 是生产数据真相，负责:
-- systemd timers
-- 实时半小时 Polymarket snapshot
-- paper order ledger
-- 每日 settlement / `pm_history` / GFS cache refresh
-- T2 盘口先行采集
-- 天气观测数据补全的生产运行
-
-生产数据目录:
-- `/home/jiarui/projects/weather-predict/output/paper_snapshots/`
-- `/home/jiarui/projects/weather-predict/output/paper_trades/`
-- `/home/jiarui/projects/weather-predict/output/research/`
-- `/home/jiarui/projects/weather-predict/cache/pm_history/`
-- `/home/jiarui/projects/weather-predict/cache/wu_obs/`
-- `/home/jiarui/projects/weather-predict/cache/iem_v2_*.csv`
-
-健康检查入口:
-```bash
-ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/doctor_restart.sh'
-```
-
-规则: 判断生产是否断流时，先看 N100 doctor/check；不要用本机镜像的新旧直接判断生产状态。
-
-### 本机 pm_agent：分析、看板、策略开发机
-
-本机只拉 N100 数据镜像，用于分析、回测、报表、前端看板和策略开发。本机不作为生产采集来源，也不直接影响远端 paper order，除非明确执行部署。
-
-本机镜像根目录:
-```text
-/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/
-```
-
-镜像目录映射:
-- N100 `output/paper_snapshots/` → 本机 `runtime/weather_edge_v1/market_data/paper_snapshots/`
-- N100 `output/paper_trades/` → 本机 `runtime/weather_edge_v1/market_data/paper_trades/`
-- N100 `output/research/` → 本机 `runtime/weather_edge_v1/market_data/research/`
-- N100 `cache/pm_history/` → 本机 `runtime/weather_edge_v1/market_data/cache/pm_history/`
-- N100 `cache/wu_obs/` → 本机 `runtime/weather_edge_v1/market_data/cache/wu_obs/`
-- N100 `cache/iem_v2_*.csv` → 本机 `runtime/weather_edge_v1/market_data/cache/iem/`
-
-同步入口:
-```bash
-cd /Users/deepsleep/projects/pm_agents
-scripts/ops/sync_weather_remote.sh
-```
-
-同步 dry-run:
-```bash
-cd /Users/deepsleep/projects/pm_agents
-scripts/ops/sync_weather_remote.sh --dry-run
-```
-
-分析前口径:
-- 先确认是否需要最新数据；需要时先运行 `scripts/ops/sync_weather_remote.sh`。
-- 本机分析只读 `runtime/weather_edge_v1/market_data/` 镜像。
-- 如果镜像落后，先同步；不要直接判断生产断了。
-
-Paper ledger 口径:
-- N100 半小时 snapshot 覆盖 T1 + T2 全部 configured cities。
-- `output/paper_trades/paper_orders.jsonl` 是全池 paper ledger，T1/T2 都可以入池。
-- 每条 ledger row 用 `city_pool` 区分 `t1_trading` / `t2_research`。
-- `eligible_for_paper_order=false` 表示该城市不是生产交易池，不表示不能进入 paper ledger。
-- 绩效分析优先看 `output/research/t24_paper_ledger_summary.json` 里的 `overall` 和 `by_pool`；需要组合策略时再按 `by_city` / `by_side` / `by_model` / `by_pool_side` / `by_pool_model` 切片。
-- 每日 `daily_pipeline.py` 的 settlement / `pm_history` 覆盖 `FULL_CITY_CONFIGS`，因此 T2 ledger row 后续也应可结算。
-
-### 本机 weather-predict：开发副本
-
-`/Users/deepsleep/projects/weather-predict` 是当前 Mac 侧约定的开发副本路径（如果存在），用来改代码、测试脚本，不作为数据真相，也不靠它判断生产是否断了。历史 WSL 路径是 `/home/rui/projects/weather-predict`。
-
-生产脚本改动流程:
-1. 本机 `weather-predict` 改代码
-2. 本机 `py_compile` / test
-3. `rsync` 到 N100
-4. N100 跑 `scripts/ops/doctor_restart.sh`
-5. N100 手动 smoke 一次
-
-天气数据补全策略:
-- 补全逻辑可以在本机开发副本中实现和验证。
-- 生产补全最终应部署到 N100 执行，结果落到 N100 生产 cache。
-- pm_agent 只通过同步后的镜像读取补全结果。
-
-T2 天气数据补全入口:
-```bash
-# N100 生产运行，默认补 RESEARCH_T2_CITIES
-ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && python3 scripts/ops/fill_t2_weather_cache.py'
-
-# 本机同步后查看补全结果
-cd /Users/deepsleep/projects/pm_agents
-scripts/ops/sync_weather_remote.sh
-cat runtime/weather_edge_v1/market_data/research/t2_weather_cache_fill_summary.json
-```
-
-补全产物口径:
-- N100 `cache/iem_v2_<ICAO>_<start>_<end>.csv` → 本机 `runtime/weather_edge_v1/market_data/cache/iem/`
-- N100 `cache/wu_obs/wu_obs_<ICAO>.csv` → 本机 `runtime/weather_edge_v1/market_data/cache/wu_obs/`
-- N100 `output/research/t2_weather_cache_fill_summary.json` → 本机 `runtime/weather_edge_v1/market_data/research/`
-- HongKong 当前使用 `VHHH`，不是无 IEM 覆盖的 `VHKO`。
-
-### 备份策略
-
-N100 备份入口:
-```bash
-ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/backup_data.sh'
-```
-
-备份输出:
-```text
-/home/jiarui/weather-predict-backups/weather-predict-data-YYYYMMDDTHHMMSSZ.tar.zst
-/home/jiarui/weather-predict-backups/weather-predict-data-YYYYMMDDTHHMMSSZ.tar.zst.sha256
-```
-
-备份范围:
-- `output/`
-- `cache/pm_history/`
-- `cache/wu_obs/`
-- `cache/iem_v2_*.csv`
-
-最低要求:
-- N100 本地保留最近 14 天 tar 包。
-- `pm_agent/runtime/weather_edge_v1/market_data/` 是第二份镜像。
-- 每天同步一次，重启或故障后手动同步一次。
-- 大文件原始 cache 不进 git，只走 `rsync` / `tar`。
-
-## Weather 策略盈利查询方法
-
-### 方法1: 用现成脚本（推荐）
-
-远端运行:
-```bash
-cd ~/projects/weather-predict
-python3 scripts/analysis/settle_t24_paper.py --source ledger
-```
-
-输出 `output/research/t24_paper_ledger_summary.json`，包含按日期/城市/模型/SIDE的 PnL 汇总。
-
-关键字段说明:
-- `by_date["2026-05-09"]` 即当天结算结果
-- `overall.pnl_usd`: 总盈利
-- `overall.roi`: 投资回报率
-- `overall.win_rate`: 胜率
-- `unsettled`: 未结算的交易（因 missing_bracket 或 missing_event）
-
-### 方法2: 用 snapshot replay
-
-远端运行:
-```bash
-cd ~/projects/weather-predict
-python3 scripts/analysis/settle_t24_paper.py --source snapshots
-```
-
-输出 `output/research/t24_paper_snapshot_replay_summary.json`。
-
-### 结算数据（pm_history）
-
-每城市每日一个文件: `cache/pm_history/{City}_{date}.json`
-
-读取方式（Python）:
-```python
-import json
-d = json.load(open(f"cache/pm_history/Tokyo_2026-05-09.json"))
-winners = [b["label"] for b in d["brackets"] if b.get("final_price") == 1.0]
-# winners = ["23"]  表示当天东京最高温23°C
-```
-
-## 已知的盈利模式
-
-- **BUY_NO 远强于 BUY_YES**: win_rate ~76% vs ~12%
-- ** Warsaw 表现最好**: ROI +52.9%（5/8-5/10累计）
-- **ECMwf 模型优于 GFS**: ROI +12% vs +1.4%（同周期累计）
-- **LA 数据经常 missing_bracket**，结算失败率高
-
----
-
-## 文档索引
-
-> 完整文档目录、状态分级和历史快照索引统一维护在
-> [docs/WEATHER_DOCS_INDEX.md](docs/WEATHER_DOCS_INDEX.md)。每次新增、删除、
-> 归档或改变 weather 文档职责时，只维护这份总索引；本节只保留最高频入口。
-
-### 最高频权威入口
-
-| 文档 | 用途 |
-|---|---|
-| [WEATHER_DOCS_INDEX.md](docs/WEATHER_DOCS_INDEX.md) | weather 文档总索引：状态分级、当前入口、历史快照、维护规则 |
-| [WEATHER_STRATEGY_ENTRYPOINT.md](docs/WEATHER_STRATEGY_ENTRYPOINT.md) | 实盘接手入口：当前 live 实例、N100 检查、近期关键决策 |
-| [WEATHER_CITY_POOL_DECISIONS.md](docs/WEATHER_CITY_POOL_DECISIONS.md) | 城市池决策日志：当前 T1/T2、升降级依据、回滚条件 |
-| [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md) | 分析口径唯一来源：PnL、切片、账户现金流、数据自检 |
-| [WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) | 数据源真相：source/mirror/derived/legacy 和已知缺口 |
-| [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) | `weather-predict` 与 `pm_agent` 的生产/本机职责边界 |
-| [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | edge engine 当前接手入口：blender shadow/paper 与 city-day basket 下一步 |
+## 7. 文档入口
+
+完整索引与权威性分级：[WEATHER_DOCS_INDEX.md](docs/WEATHER_DOCS_INDEX.md)（新增 / 归档文档只维护那里）。
+最高频：[STRATEGY_ENTRYPOINT](docs/WEATHER_STRATEGY_ENTRYPOINT.md)（实盘接手）·
+[CITY_POOL_DECISIONS](docs/WEATHER_CITY_POOL_DECISIONS.md) · [ANALYSIS_CONTRACT](docs/WEATHER_ANALYSIS_CONTRACT.md) ·
+[DATA_CANONICAL_SOURCES](docs/WEATHER_DATA_CANONICAL_SOURCES.md) · [REPO_BOUNDARY](docs/WEATHER_REPO_BOUNDARY.md) ·
+[EDGE_ENGINE_CURRENT_STATE](docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md)。
+
+> 早期"已知盈利模式"（5 月 BUY_NO/Warsaw/ECMWF/LA）已作废，当前结论以评估层 living docs 为准，
+> 见 [WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md §1.1](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)。
