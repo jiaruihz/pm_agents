@@ -29,7 +29,7 @@ Source of truth: 否（这是提案，认可后才改 AGENTS.md / CLAUDE.md）
 | `sync_weather_remote.sh` 同步入口 | 常驻留**命令** | 高频 | 否 |
 | 备份策略全段 | **移走** → `OPS_RUNBOOK.md` | 低频运维 | 否 |
 | 盈利查询方法 1/2（settle_t24_paper 用法） | **移走** → `weather-strategy-performance` skill / runbook | how-to，非常驻 | 否 |
-| "已知的盈利模式"（BUY_NO>YES、Warsaw、ECMWF…） | **移走** → 对应 analysis living doc | 时间点快照，非不变量，且可能过时 | 否（且过时风险） |
+| "已知的盈利模式"（BUY_NO>YES、Warsaw、ECMWF、LA missing_bracket） | **删除**（不迁数字）+ 治理文档留 1 行取代说明 | near-binary 修复前的旧口径，与当前 living docs 冲突，详见 Part E | 否（**主动误导源**） |
 | T2 天气补全入口与产物口径 | **移走** → `WEATHER_DATA_PIPELINE.md` | 低频流程细节 | 否 |
 | weather.db WAL 只读可靠性约定（仅 AGENTS.md 有） | 常驻留**精简版** | 高频读库陷阱 | 否（实用） |
 | 文档索引段 | 常驻留**指针**到 `WEATHER_DOCS_INDEX.md` | 索引已是唯一来源 | 否 |
@@ -131,7 +131,29 @@ DATA_CANONICAL_SOURCES · REPO_BOUNDARY · EDGE_ENGINE_CURRENT_STATE。
 
 **被移走（非删除）的内容** 全部进已有权威文档（DATA_PIPELINE / CANONICAL_SOURCES / REPO_BOUNDARY /
 ANALYSIS_CONTRACT / OPS_RUNBOOK / 对应 skill），不丢信息，只是不再在常驻层重复。
-唯一**真正删除**的候选是「已知的盈利模式」那种过时时间点快照——但也会先迁进 analysis living doc 留档，不直接丢。
+唯一**真正删除**的是「已知的盈利模式」段——理由见 Part E，它与当前 living docs 冲突，是主动误导源；
+不迁数字（迁错数字只是换地方误导），只在 `WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md`
+留一行"早期 5 月 BUY_NO/Warsaw/ECMWF 盈利结论为 near-binary 修复前口径，已被评估层 living docs 取代"。
+
+---
+
+## Part E — 过时/冲突结论登记（防误导）
+
+研究 living docs 本身维护良好（每份带 Current Conclusion + Absorbed Historical Claims + status 标记，
+过时项已标 `invalidated-numbers` / `superseded-evidence` / `pre-near-binary`）。**误导风险集中在常驻文件**，
+不在研究层。下表是常驻层与当前 living docs 冲突的结论，重构时按"处理"列执行：
+
+| 常驻旧结论 | 当前权威结论（living doc） | 处理 |
+|---|---|---|
+| BUY_NO 胜率 76% vs YES 12% = 盈利模式 | `side_alpha.md`：胜率高 ≠ alpha，可能 fairly priced/unprofitable；且数字为 near-binary 前 | 删；如需提 BUY_NO 只说"历史方向证据，未确认 alpha，见 side_alpha.md" |
+| Warsaw ROI +52.9%（5/8–5/10） | `city_selection.md`：整城 ROI 太粗，pre-fix 数字 `invalidated-numbers` | 删 |
+| ECMWF +12% vs GFS +1.4% | 无当前 living doc 支持为现行事实；5 月累计、near-binary 前 | 删 |
+| LA 经常 missing_bracket | missing_bracket 是 near-binary settlement bug 本身，已 725→0 修复，非 LA 数据问题 | 删（否则误导 agent 为错误理由怀疑 LA） |
+
+判断依据（确认非关键决策）：当前实盘城市池与方向决策由 `WEATHER_CITY_POOL_DECISIONS.md` /
+`WEATHER_STRATEGY_ENTRYPOINT.md` 定义，不依赖这段旧"盈利模式"。删除它不影响任何 live 决策。
+
+> 后续若做更深的研究层去冲突（living docs 之间、snapshot 之间），单列一轮；本轮只清常驻层这 4 条主动误导项。
 
 ---
 
