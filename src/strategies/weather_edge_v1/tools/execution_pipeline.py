@@ -598,7 +598,12 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "source_strategy_instance": safe_str(plan.get("source_strategy_instance")),
         "strategy_id": safe_str(plan.get("strategy_id")),
         "strategy_family": safe_str(plan.get("strategy_family")),
+        "profile": safe_str(plan.get("profile")),
+        "combo": safe_str(plan.get("combo")),
+        "entry_profile": safe_str(plan.get("entry_profile")),
         "probability_source": safe_str(plan.get("probability_source")),
+        "model_version": safe_str(plan.get("model_version")),
+        "probability_branch": safe_str(plan.get("probability_branch")),
         "decision_mode": safe_str(plan.get("decision_mode")),
         "execution_mode": safe_str(plan.get("execution_mode")),
         "venue": "polymarket_clob",
@@ -664,9 +669,15 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "sizing_mode": safe_str(plan.get("sizing_mode")),
         "fixed_order_shares": to_float(plan.get("fixed_order_shares"), 0.0),
         "max_order_shares": to_float(plan.get("max_order_shares"), 0.0),
+        "source_plan_status": safe_str(plan.get("status")),
+        "risk_status": safe_str(plan.get("risk_status")),
+        "risk_reason": safe_str(plan.get("risk_reason")),
         "model_p_yes_raw": to_float(plan.get("model_p_yes_raw"), 0.0),
         "market_implied_p_yes": to_float(plan.get("market_implied_p_yes"), 0.0),
         "model_p_yes_used": to_float(plan.get("model_p_yes_used"), 0.0),
+        "p_yes_win_base_current_yes_model": plan.get("p_yes_win_base_current_yes_model"),
+        "p_yes_win_fade_confirmed_specialist": plan.get("p_yes_win_fade_confirmed_specialist"),
+        "fade_confirmed_specialist_delta": plan.get("fade_confirmed_specialist_delta"),
         "blend_alpha": to_float(plan.get("blend_alpha"), 0.0),
         "blend_beta": to_float(plan.get("blend_beta"), 0.0),
         "blend_mode": safe_str(plan.get("blend_mode")),
@@ -678,6 +689,15 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "edge_raw_side": to_float(plan.get("edge_raw_side"), 0.0),
         "shadow_decision": safe_str(plan.get("shadow_decision")),
         "shadow_reason": safe_str(plan.get("shadow_reason")),
+        "snapshot_ts_utc": safe_str(plan.get("snapshot_ts_utc")),
+        "source_snapshot_path": safe_str(plan.get("source_snapshot_path")),
+        "decision_local_time": safe_str(plan.get("decision_local_time")),
+        "decision_timezone": safe_str(plan.get("decision_timezone")),
+        "running_max_obs_utc": safe_str(plan.get("running_max_obs_utc")),
+        "obs_age_min": to_float(plan.get("obs_age_min"), 0.0),
+        "minutes_to_next_obs": to_float(plan.get("minutes_to_next_obs"), 0.0),
+        "minutes_since_running_max": to_float(plan.get("minutes_since_running_max"), 0.0),
+        "forecast_peak_delta_hours_local": plan.get("forecast_peak_delta_hours_local"),
     }
     return {
         "record_type": "weather_edge_live_order",
@@ -687,6 +707,19 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "exchange_response": response,
         **base,
     }
+
+
+def submitted_live_signal_ids(path: Path) -> set[str]:
+    out: set[str] = set()
+    if not path.exists():
+        return out
+    for row in read_jsonl(path):
+        if safe_str(row.get("status")) != "submitted":
+            continue
+        signal_id = safe_str(row.get("signal_id"))
+        if signal_id:
+            out.add(signal_id)
+    return out
 
 
 def execute_trade_plans(
@@ -709,7 +742,10 @@ def execute_trade_plans(
 
     live_orders: List[Dict[str, Any]] = []
     live_skipped = 0
+    live_skipped_existing_signal = 0
     live_errors = 0
+    existing_live_signal_ids = submitted_live_signal_ids(live_out)
+    batch_live_signal_ids: set[str] = set()
     if config.live and not config.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
     if config.live and live_place_fn is None:
@@ -721,10 +757,16 @@ def execute_trade_plans(
         if not bool(plan.get("live_enabled", False)):
             live_skipped += 1
             continue
+        signal_id = safe_str(plan.get("signal_id"))
+        if signal_id and (signal_id in existing_live_signal_ids or signal_id in batch_live_signal_ids):
+            live_skipped_existing_signal += 1
+            continue
         try:
             assert live_place_fn is not None
             response = live_place_fn(plan)
             live_orders.append(build_live_order_record(plan, response, status="submitted"))
+            if signal_id:
+                batch_live_signal_ids.add(signal_id)
         except Exception as exc:
             live_errors += 1
             response = getattr(exc, "weather_execution_response", None)
@@ -755,6 +797,7 @@ def execute_trade_plans(
         "live_orders": len(live_orders),
         "live_written": live_result["written"],
         "live_skipped_disabled": live_skipped,
+        "live_skipped_existing_signal": live_skipped_existing_signal,
         "live_errors": live_errors,
         "paper_out": str(paper_out),
         "live_out": str(live_out),

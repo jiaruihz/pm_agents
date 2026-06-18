@@ -517,6 +517,12 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             signal = normalize_signal(self._paper_decision())
             assert signal is not None
             plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "entry_profile": "peak_forming_micro",
+                "running_max_obs_utc": "2026-06-18T11:20:00+00:00",
+                "snapshot_ts_utc": "2026-06-18T11:30:53Z",
+            }
             plans = Path(tmp) / "plans.jsonl"
             paper = Path(tmp) / "paper.jsonl"
             live = Path(tmp) / "live.jsonl"
@@ -540,6 +546,58 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(rows[0]["requested_price"], rows[0]["limit_price"])
             self.assertEqual(rows[0]["posted_notional"], 0.0)
             self.assertEqual(rows[0]["quote_status"], "accepted")
+            self.assertEqual(rows[0]["entry_profile"], "peak_forming_micro")
+            self.assertEqual(rows[0]["running_max_obs_utc"], "2026-06-18T11:20:00+00:00")
+            self.assertEqual(rows[0]["snapshot_ts_utc"], "2026-06-18T11:30:53Z")
+
+    def test_execute_trade_plans_skips_existing_live_signal_before_place(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            live.write_text(json.dumps({"status": "submitted", "signal_id": plan["signal_id"]}) + "\n")
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "should-not-place"},
+            )
+
+            self.assertEqual(result["live_skipped_existing_signal"], 1)
+            self.assertEqual(result["live_written"], 0)
+            self.assertEqual(calls, [])
+            self.assertEqual(len(live.read_text().splitlines()), 1)
+
+    def test_execute_trade_plans_skips_duplicate_live_signal_in_same_batch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n" + json.dumps(plan) + "\n")
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "live-1"},
+            )
+
+            self.assertEqual(result["live_written"], 1)
+            self.assertEqual(result["live_skipped_existing_signal"], 1)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(live.read_text().splitlines()), 1)
 
     def test_execute_trade_plans_preserves_live_error_diagnostics(self):
         class DiagnosticError(RuntimeError):

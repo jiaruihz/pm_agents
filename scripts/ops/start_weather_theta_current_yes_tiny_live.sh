@@ -48,9 +48,18 @@ PEAK_FORMING_CLOUD_CLEARING_MIN_DROP="${PEAK_FORMING_CLOUD_CLEARING_MIN_DROP:-2}
 PEAK_FORMING_WARMING_TREND_MIN_D_TMPF_3H="${PEAK_FORMING_WARMING_TREND_MIN_D_TMPF_3H:-1.5}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-900}"
 NO_TELEGRAM="${NO_TELEGRAM:-0}"
+ALLOW_SHARED_CURRENT_YES_LIVE="${ALLOW_SHARED_CURRENT_YES_LIVE:-0}"
 
 if [[ "$THETA_CURRENT_YES_MODE" != "live" && "$THETA_CURRENT_YES_MODE" != "telemetry" ]]; then
   echo "invalid THETA_CURRENT_YES_MODE=$THETA_CURRENT_YES_MODE (expected live or telemetry)" >&2
+  exit 2
+fi
+
+if [[ "$THETA_CURRENT_YES_MODE" == "live" \
+  && "${THETA_CURRENT_YES_STRATEGY_INSTANCE:-theta_current_yes_tiny_live_v1}" == "theta_current_yes_tiny_live_v1" \
+  && "$THETA_CURRENT_YES_ENTRY_PROFILE_MODE" == "both" \
+  && "$ALLOW_SHARED_CURRENT_YES_LIVE" != "1" ]]; then
+  echo "refusing legacy shared current-YES live instance; use start_weather_theta_current_yes_split_live.sh or set ALLOW_SHARED_CURRENT_YES_LIVE=1" >&2
   exit 2
 fi
 

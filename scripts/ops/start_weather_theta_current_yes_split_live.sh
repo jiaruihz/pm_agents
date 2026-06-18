@@ -9,6 +9,7 @@ STOP_SHARED_CURRENT_YES_INSTANCE="${STOP_SHARED_CURRENT_YES_INSTANCE:-1}"
 
 if [[ "$STOP_SHARED_CURRENT_YES_INSTANCE" == "1" ]]; then
   THETA_CURRENT_YES_RUNTIME_DIR="runtime/weather_edge_v1/theta_current_yes_tiny_live_v1" \
+  KILL_ALL_CURRENT_YES_LOOPS="1" \
     scripts/ops/stop_weather_theta_current_yes_tiny_live.sh >/dev/null || true
 fi
 

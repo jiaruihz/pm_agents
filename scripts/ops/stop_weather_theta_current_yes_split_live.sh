@@ -12,4 +12,6 @@ stop_instance() {
 
 stop_instance "runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1"
 stop_instance "runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1"
-stop_instance "runtime/weather_edge_v1/theta_current_yes_tiny_live_v1"
+THETA_CURRENT_YES_RUNTIME_DIR="runtime/weather_edge_v1/theta_current_yes_tiny_live_v1" \
+KILL_ALL_CURRENT_YES_LOOPS="1" \
+  scripts/ops/stop_weather_theta_current_yes_tiny_live.sh
