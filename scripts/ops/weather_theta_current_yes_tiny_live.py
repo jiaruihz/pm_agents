@@ -899,6 +899,34 @@ def prior_city_day_notional(strategy_instance: str) -> dict[tuple[str, str], flo
     return out
 
 
+def observation_epoch_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
+    obs = row.get("obs") if isinstance(row.get("obs"), dict) else {}
+    bracket = safe_str(row.get("current_bracket") or row.get("bracket"))
+    running_max_obs_utc = safe_str(row.get("running_max_obs_utc") or obs.get("running_max_obs_utc"))
+    return (
+        safe_str(row.get("city")),
+        safe_str(row.get("target_date")),
+        bracket,
+        running_max_obs_utc,
+    )
+
+
+def prior_observation_epoch_keys(strategy_instance: str) -> set[tuple[str, str, str, str]]:
+    out: set[tuple[str, str, str, str]] = set()
+    live_dirs = [ROOT / "runtime/weather_edge_v1/live", ROOT / "runtime/weather_edge_v1/remote_pm_agent/live"]
+    for live_dir in live_dirs:
+        if not live_dir.exists():
+            continue
+        for path in live_dir.glob("*.jsonl"):
+            for row in read_jsonl(path):
+                if safe_str(row.get("strategy_instance")) != strategy_instance or safe_str(row.get("status")) != "submitted":
+                    continue
+                key = observation_epoch_key(row)
+                if all(key):
+                    out.add(key)
+    return out
+
+
 def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> dict[str, Any]:
     snapshot_price = float(row["yes_current_ask"])
     price = float(row.get("taker_limit_price") or snapshot_price)
@@ -1412,9 +1440,34 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 )
         selected = current[statuses.eq("snapshot_rule_passed")].copy()
         prior = prior_city_day_notional(STRATEGY_INSTANCE)
+        prior_epochs = prior_observation_epoch_keys(STRATEGY_INSTANCE)
         for _, row in selected.sort_values(["ev", "available_notional_at_ask"], ascending=[False, False]).iterrows():
             key = (str(row["city"]), str(row["target_date"]))
             row_dict = row.to_dict()
+            epoch_key = observation_epoch_key(row_dict)
+            if all(epoch_key) and epoch_key in prior_epochs:
+                audits.append(
+                    {
+                        "city": key[0],
+                        "target_date": key[1],
+                        "status": "observation_epoch_cap",
+                        "bracket": epoch_key[2],
+                        "running_max_obs_utc": epoch_key[3],
+                    }
+                )
+                telemetry_rows.append(
+                    current_yes_forward_telemetry_row(
+                        row_dict,
+                        decision_status="observation_epoch_cap",
+                        args=args,
+                        run_id=telemetry_run_id,
+                        snapshot_path=snap_path,
+                        snapshot_age_min=age_min,
+                        source_profiles=source_profiles,
+                        extra={"observation_epoch_key": "|".join(epoch_key)},
+                    )
+                )
+                continue
             try:
                 taker_quote = fresh_taker_quote(row_dict, args)
             except Exception as exc:  # noqa: BLE001
@@ -1514,6 +1567,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 )
             )
             prior[key] = prior.get(key, 0.0) + args.max_order_notional
+            if all(epoch_key):
+                prior_epochs.add(epoch_key)
 
     live_enabled = bool(args.live and args.confirm_live)
     plans = [build_plan(row, notional=args.max_order_notional, live_enabled=live_enabled) for row in candidates]

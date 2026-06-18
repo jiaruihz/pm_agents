@@ -342,6 +342,23 @@ def test_first_rule_allows_peak_forming_current_high_when_enabled():
     assert live.first_rule_reject_reason({**base, "yes_current_ask": 0.98}, args) == "snapshot_rule_peak_forming_ask_gt_max"
 
 
+def test_observation_epoch_key_uses_running_max_metar_timestamp():
+    row = {
+        "city": "Shanghai",
+        "target_date": "2026-06-18",
+        "current_bracket": "27",
+        "obs": {"running_max_obs_utc": "2026-06-18T06:00:00+00:00"},
+    }
+
+    assert live.observation_epoch_key(row) == (
+        "Shanghai",
+        "2026-06-18",
+        "27",
+        "2026-06-18T06:00:00+00:00",
+    )
+    assert live.observation_epoch_key({**row, "obs": {"running_max_obs_utc": "2026-06-18T06:30:00+00:00"}}) != live.observation_epoch_key(row)
+
+
 def test_build_current_rows_can_optionally_veto_gap_above_threshold(monkeypatch):
     now = datetime(2026, 6, 16, 4, 10, tzinfo=timezone.utc)
     station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")
