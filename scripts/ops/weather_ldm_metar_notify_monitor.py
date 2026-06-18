@@ -267,8 +267,27 @@ def run_probe(args: argparse.Namespace) -> int:
         str(args.total_timeout_sec),
     ]
     started = utc_now()
-    proc = subprocess.run(cmd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=args.total_timeout_sec + 10)
+    timed_out = False
+    try:
+        proc = subprocess.run(
+            cmd,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=args.total_timeout_sec + args.outer_grace_sec,
+        )
+        output = proc.stdout
+        returncode: int | None = proc.returncode
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        raw_output = exc.stdout or ""
+        output = raw_output.decode("utf-8", errors="replace") if isinstance(raw_output, bytes) else raw_output
+        returncode = None
     ended = utc_now()
+    status = classify_probe_output(output)
+    if timed_out and status == "unknown":
+        status = "timeout"
     row = {
         "tool": args.tool,
         "upstream": args.upstream,
@@ -277,9 +296,10 @@ def run_probe(args: argparse.Namespace) -> int:
         "started_at_utc": iso_utc(started),
         "ended_at_utc": iso_utc(ended),
         "elapsed_sec": round((ended - started).total_seconds(), 3),
-        "returncode": proc.returncode,
-        "status": classify_probe_output(proc.stdout),
-        "output_tail": proc.stdout[-4000:],
+        "returncode": returncode,
+        "status": status,
+        "timed_out": timed_out,
+        "output_tail": output[-4000:],
     }
     append_jsonl(Path(args.out_dir) / "ldm_probe.jsonl", row)
     print(json.dumps(row, ensure_ascii=False, indent=2, sort_keys=True))
@@ -391,6 +411,7 @@ def build_parser() -> argparse.ArgumentParser:
     probe_cmd.add_argument("--offset-sec", type=int, default=300)
     probe_cmd.add_argument("--rpc-timeout-sec", type=int, default=5)
     probe_cmd.add_argument("--total-timeout-sec", type=int, default=25)
+    probe_cmd.add_argument("--outer-grace-sec", type=int, default=10)
     probe_cmd.set_defaults(func=run_probe)
 
     config_cmd = probe.add_parser("write-config", help="Write a minimal ldmd.conf and runbook for a product queue")

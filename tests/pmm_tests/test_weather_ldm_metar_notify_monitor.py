@@ -53,3 +53,4 @@ def test_parse_metar_lines_can_filter_source_profile_stations():
 def test_classify_probe_output_identifies_access_and_reset():
     assert classify_probe_output("ERROR FEEDME(host): 7: Access denied by remote server") == "access_denied"
     assert classify_probe_output("RPC: Unable to receive; errno = Connection reset by peer") == "connection_reset"
+    assert classify_probe_output("NOTE  Starting Up\nNOTE  OK\n") == "connected_no_products"
