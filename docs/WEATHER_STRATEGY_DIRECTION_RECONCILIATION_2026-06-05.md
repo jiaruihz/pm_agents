@@ -9,7 +9,7 @@ Status: `snapshot`。本文保留 2026-06-05 策略方向对齐记录；当前�
 
 > 2026-06-05。回答用户问题：「他的策略对还是你现在的这个对？我们怎么把研究融进去？」
 >
-> 结论先行：**`docs/模型优化研究.md` 的战略框架本质上是对的，但有 3 个数据假设已经过时**。
+> 结论先行：**`docs/WEATHER_MODEL_OPTIMIZATION_RESEARCH_2026-06-05.md` 的战略框架本质上是对的，但有 3 个数据假设已经过时**。
 > 我今天的发现不是要替代他的 Phase 0-4 路线，而是**在 Phase 0/1 里塞进一个免费 alpha 通道**，
 > 并把 "edge 不存在" 的判定标准做得比"14 笔删 1 笔翻负"更严格。
 
@@ -182,7 +182,7 @@ Status: `snapshot`。本文保留 2026-06-05 策略方向对齐记录；当前�
 
 按优先级（高 → 低）：
 
-1. **接受 Phase 0-4 框架作为外层战略路线**，把 `docs/模型优化研究.md` 移到 `docs/` 顶级索引（CLAUDE.md "核心参考文档" 段）。
+1. **接受 Phase 0-4 框架作为外层战略路线**，把 `docs/WEATHER_MODEL_OPTIMIZATION_RESEARCH_2026-06-05.md` 移到 `docs/` 顶级索引（CLAUDE.md "核心参考文档" 段）。
 2. **按本文 §3 的修订版执行 Phase 0**：
    - 上 0.3-model + 0.7-market ensemble（A1, 走 weather-strategy-deploy skill）
    - 黑名单 4 城（A2）
@@ -194,7 +194,7 @@ Status: `snapshot`。本文保留 2026-06-05 策略方向对齐记录；当前�
 
 ---
 
-## 附：建议在 `docs/模型优化研究.md` 顶部加一条同步标注
+## 附：建议在 `docs/WEATHER_MODEL_OPTIMIZATION_RESEARCH_2026-06-05.md` 顶部加一条同步标注
 
 ```markdown
 > **2026-06-05 同步注**：本文档战略框架仍然成立，但 3 处数据假设已过时：

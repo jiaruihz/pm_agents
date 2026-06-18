@@ -97,7 +97,7 @@ Status 口径：
 | [WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) | `snapshot` | 2026-06-05 blend model 实施计划背景，当前结论以 edge engine current state 为准 |
 | [WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md](WEATHER_STRATEGY_AND_MODEL_REVIEW_2026-06-05.md) | `snapshot` | 2026-06-05 策略/模型复盘，作为时间点证据，不定义当前生产 |
 | [WEATHER_STRATEGY_DIRECTION_RECONCILIATION_2026-06-05.md](WEATHER_STRATEGY_DIRECTION_RECONCILIATION_2026-06-05.md) | `snapshot` | 2026-06-05 策略方向对齐记录，当前执行以后续入口为准 |
-| [模型优化研究.md](模型优化研究.md) | `snapshot` | 中文模型优化研究笔记，保留背景，当前有效动作以 roadmap/current state 为准 |
+| [WEATHER_MODEL_OPTIMIZATION_RESEARCH_2026-06-05.md](WEATHER_MODEL_OPTIMIZATION_RESEARCH_2026-06-05.md) | `snapshot` | 2026-06-05 模型优化研究战略笔记（原 `模型优化研究.md`），保留背景，当前有效动作以 roadmap/current state 为准 |
 
 ## 评估层 Living Docs
 
