@@ -283,17 +283,42 @@ def ext_cache_path(ext_dir: Path, station: dict[str, Any], start: str, end: str)
     return ext_dir / f"iem_ext_{str(station.get('icao')).upper()}_{start}_{end}.csv"
 
 
+def ext_cache_paths(ext_dir: Path, station: dict[str, Any], start: str, end: str) -> list[Path]:
+    exact = ext_cache_path(ext_dir, station, start, end)
+    if exact.exists():
+        return [exact]
+    icao = str(station.get("icao") or "").upper()
+    if not icao:
+        return []
+    paths: list[Path] = []
+    prefix = f"iem_ext_{icao}_"
+    for path in sorted(ext_dir.glob(f"{prefix}*.csv")):
+        stem = path.stem
+        try:
+            raw_range = stem.removeprefix(prefix)
+            file_start, file_end = raw_range.rsplit("_", 1)
+        except ValueError:
+            continue
+        if file_end >= start and file_start <= end:
+            paths.append(path)
+    return paths
+
+
 def load_ext_cache(ext_dir: Path, station_summary: dict[str, dict[str, Any]], start: str, end: str) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for city, station in station_summary.items():
-        path = ext_cache_path(ext_dir, station, start, end)
-        if not path.exists():
+        paths = ext_cache_paths(ext_dir, station, start, end)
+        if not paths:
             continue
-        df = pd.read_csv(path, na_values=["M"], low_memory=False)
+        frames = [pd.read_csv(path, na_values=["M"], low_memory=False) for path in paths]
+        df = pd.concat(frames, ignore_index=True)
         if "valid" not in df:
             continue
         df["ts"] = pd.to_datetime(df["valid"], utc=True, errors="coerce")
         df = df.dropna(subset=["ts"]).sort_values("ts").copy()
+        start_ts = pd.Timestamp(start, tz="UTC") - pd.Timedelta(days=1)
+        end_ts = pd.Timestamp(end, tz="UTC") + pd.Timedelta(days=1)
+        df = df[df["ts"].between(start_ts, end_ts)].drop_duplicates("ts").copy()
         for col in ["tmpf", "dwpf", "relh", "sknt"]:
             df[col] = pd.to_numeric(df.get(col), errors="coerce")
         df["sky"] = df.get("skyc1").map(SKY_CODE) if "skyc1" in df else np.nan
@@ -534,12 +559,24 @@ def add_truth(rows: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_weather_features(rows: pd.DataFrame, ext: dict[str, dict[str, Any]]) -> pd.DataFrame:
+    weather_feature_cols = [
+        "tmpf_now",
+        "dwpf_now",
+        "dewpoint_depression_f",
+        "relative_humidity_pct",
+        "wind_speed_kt",
+        "sky_cover_code",
+        "temp_trend_1h_f",
+        "temp_trend_3h_f",
+        "minutes_since_running_max",
+    ]
+    empty_features = {col: np.nan for col in weather_feature_cols}
     feature_rows: list[dict[str, Any]] = []
     for row in rows.itertuples(index=False):
         city_ext = ext.get(row.city)
         ts_raw = pd.to_datetime(row.decision_snapshot_ts_utc, utc=True, errors="coerce")
         if city_ext is None or pd.isna(ts_raw):
-            feature_rows.append({})
+            feature_rows.append(empty_features.copy())
             continue
         target = np.datetime64(ts_raw.tz_convert("UTC").tz_localize(None).to_datetime64(), "ns")
         ts = city_ext["ts"]
@@ -550,7 +587,8 @@ def add_weather_features(rows: pd.DataFrame, ext: dict[str, dict[str, Any]]) -> 
         sky_now = asof_value(ts, city_ext["sky"], target, 90)
         tmpf_1h = asof_value(ts, city_ext["tmpf"], target - np.timedelta64(1, "h"), 90)
         tmpf_3h = asof_value(ts, city_ext["tmpf"], target - np.timedelta64(3, "h"), 90)
-        feature_rows.append(
+        feature = empty_features.copy()
+        feature.update(
             {
                 "tmpf_now": tmpf_now,
                 "dwpf_now": dwpf_now,
@@ -563,6 +601,7 @@ def add_weather_features(rows: pd.DataFrame, ext: dict[str, dict[str, Any]]) -> 
                 "minutes_since_running_max": minutes_since_running_max(city_ext, target, float(row.running_max_f)),
             }
         )
+        feature_rows.append(feature)
     return pd.concat([rows.reset_index(drop=True), pd.DataFrame(feature_rows).reset_index(drop=True)], axis=1)
 
 
@@ -802,6 +841,8 @@ def summarize_coverage(rows: pd.DataFrame, state: pd.DataFrame, orderbook_meta: 
             **orderbook_meta,
             "feature_rows": int(len(rows)),
             "state_rows_date_city_hour": int(len(state)),
+            "min_target_date": str(rows["target_date"].min()) if len(rows) else None,
+            "max_target_date": str(rows["target_date"].max()) if len(rows) else None,
             "active_dates": int(rows["target_date"].nunique()) if len(rows) else 0,
             "cities": int(rows["city"].nunique()) if len(rows) else 0,
             "complete_core_state_rows": int(state["complete_core"].sum()) if len(state) else 0,
@@ -842,6 +883,7 @@ def write_report(payload: dict[str, Any], out_md: Path, feature_csv: Path, state
         f"- Data source: `runtime/weather.db` (`fact_signal_candidates`, `fact_trades`, `settlement_outcomes`) plus time-aligned raw orderbook snapshots under `runtime/weather_edge_v1/market_data/orderbook_snapshots`.",
         f"- Generated at UTC: `{payload['generated_at_utc']}`.",
         f"- DB fact built at UTC: `{payload['data_self_check']['fact_trades_max_built_at_utc']}`.",
+        f"- Actual feature target-date range: `{f.get('min_target_date')}`..`{f.get('max_target_date')}` ({f.get('active_dates')} active dates).",
         f"- Row grain: `{payload['row_grain']}`.",
         f"- Evidence layer: {payload['evidence_layer']}.",
         "",

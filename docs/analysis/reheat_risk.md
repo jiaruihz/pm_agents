@@ -171,6 +171,18 @@ Current conclusion:
   tiny-live order. The old live process was replaced by a single new
   `theta_current_yes_tiny_live_v1` process on N100; first post-restart cycle had
   `plans=0`, and the live order file stayed at 5 historical rows.
+- Peak-forming hazard v1 is complete in
+  `docs/analysis/2026-06/2026-06-19-current-yes-peak-forming-hazard-v1.md`.
+  It trains a dedicated peak-forming model on the shared feature factory instead
+  of only adding live if/else filters. Holdout result: market ask is already a
+  very strong survival proxy (AUC 0.946/Brier 0.092), weather/forecast-only has
+  real but weaker signal (AUC 0.905/Brier 0.124), and weather+price hazard v1
+  only slightly improves Brier to 0.091. The live-like hazard rule has 233
+  holdout rows / 14 dates / ROI +1.6% with date-bootstrap CI [-7.4%, +10.9%],
+  so this remains research/shadow only and does not replace live. Data layer
+  note: after sync + DB rebuild, orderbook/pm_history are newer, but the shared
+  observed-detail input still materializes only through 2026-06-14; next work is
+  extending official observation/observed-detail coverage before retraining.
 
 ## Strategy Heads
 
@@ -285,6 +297,9 @@ move a script only when it becomes the maintained entrypoint for a new result.
    Current conclusion is fade-first shadow only: fixed holdout favors
    fade-confirmed, peak-forming remains a narrow early shadow sleeve, and there
    is no N100/live change. Forecast-clock v3/v12 did not overturn this.
+   Peak-forming hazard v1 confirms the same direction with a dedicated model:
+   it is a useful research probability layer, but it fails the significance gate
+   as a live replacement.
 4. `higher_no_carry_expression`: factory-backed v1 completed in
    `docs/analysis/2026-06/2026-06-16-higher-no-carry-expression-selector-v1.md`.
    NO carry/ladder did not prove stable positive excess ROI versus same-window

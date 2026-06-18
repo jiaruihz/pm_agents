@@ -3,8 +3,9 @@
 ## Data Snapshot
 
 - Data source: `runtime/weather.db` (`fact_signal_candidates`, `fact_trades`, `settlement_outcomes`) plus time-aligned raw orderbook snapshots under `runtime/weather_edge_v1/market_data/orderbook_snapshots`.
-- Generated at UTC: `2026-06-17T17:19:27+00:00`.
-- DB fact built at UTC: `2026-06-17T17:09:13.232107+00:00`.
+- Generated at UTC: `2026-06-18T16:53:03+00:00`.
+- DB fact built at UTC: `2026-06-18T16:42:11.906813+00:00`.
+- Actual feature target-date range: `2026-05-19`..`2026-06-14` (27 active dates).
 - Row grain: `city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome`.
 - Evidence layer: time-aligned orderbook replay / opportunity feature layer, not live fills.
 
@@ -20,7 +21,7 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
 
 ```json
 {
-  "fact_trades_max_built_at_utc": "2026-06-17T17:09:13.232107+00:00",
+  "fact_trades_max_built_at_utc": "2026-06-18T16:42:11.906813+00:00",
   "fact_trades_by_class": [
     {
       "trade_class": "live_real",
@@ -50,9 +51,9 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
     }
   ],
   "fact_signal_candidate_coverage": {
-    "rows": 31499,
-    "eligible": 10961,
-    "paper_ordered": 4274,
+    "rows": 32318,
+    "eligible": 11305,
+    "paper_ordered": 4377,
     "live_filled": 348
   },
   "clob_order_fill_join": [
@@ -74,10 +75,10 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
 
 | Stage | Rows/count |
 |---|---:|
-| orderbook files seen | 1289 |
-| orderbook records seen | 1630457 |
-| ok orderbook records | 1594612 |
-| kept before hourly dedupe | 165491 |
+| orderbook files seen | 1431 |
+| orderbook records seen | 1809041 |
+| ok orderbook records | 1773179 |
+| kept before hourly dedupe | 165495 |
 | feature rows after hourly dedupe/enrichment | 88621 |
 | date/city/hour state rows | 8696 |
 | complete core state rows | 6210 |

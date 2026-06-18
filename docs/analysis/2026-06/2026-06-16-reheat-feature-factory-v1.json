@@ -1,10 +1,10 @@
 {
-  "generated_at_utc": "2026-06-17T17:19:27+00:00",
+  "generated_at_utc": "2026-06-18T16:53:03+00:00",
   "target_metric": "reheat_risk_shared_feature_factory",
   "row_grain": "city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome",
   "evidence_layer": "time-aligned orderbook replay / opportunity feature layer, not live fills",
   "data_self_check": {
-    "fact_trades_max_built_at_utc": "2026-06-17T17:09:13.232107+00:00",
+    "fact_trades_max_built_at_utc": "2026-06-18T16:42:11.906813+00:00",
     "fact_trades_by_class": [
       {
         "trade_class": "live_real",
@@ -34,9 +34,9 @@
       }
     ],
     "fact_signal_candidate_coverage": {
-      "rows": 31499,
-      "eligible": 10961,
-      "paper_ordered": 4274,
+      "rows": 32318,
+      "eligible": 11305,
+      "paper_ordered": 4377,
       "live_filled": 348
     },
     "clob_order_fill_join": [
@@ -53,17 +53,19 @@
     ]
   },
   "funnel": {
-    "orderbook_files_seen": 1289,
-    "orderbook_records_seen": 1630457,
-    "orderbook_records_ok": 1594612,
-    "orderbook_records_kept_before_dedupe": 165491,
-    "records_missing_timezone": 354107,
-    "records_wrong_local_date_or_hour": 1072724,
-    "records_without_observed_state": 2290,
+    "orderbook_files_seen": 1431,
+    "orderbook_records_seen": 1809041,
+    "orderbook_records_ok": 1773179,
+    "orderbook_records_kept_before_dedupe": 165495,
+    "records_missing_timezone": 397545,
+    "records_wrong_local_date_or_hour": 1189182,
+    "records_without_observed_state": 20957,
     "records_without_quote": 0,
     "quote_rows_after_hourly_dedupe": 88621,
     "feature_rows": 88621,
     "state_rows_date_city_hour": 8696,
+    "min_target_date": "2026-05-19",
+    "max_target_date": "2026-06-14",
     "active_dates": 27,
     "cities": 36,
     "complete_core_state_rows": 6210
@@ -131,7 +133,7 @@
     "wind": 146
   },
   "forecast_gap": {
-    "fact_signal_candidates_rows": 31499,
+    "fact_signal_candidates_rows": 32318,
     "forecast_peak_hour_feature_row_rate": 0.9573238848579908,
     "forecast_values_hash_feature_row_rate": 0.9573238848579908,
     "gfs_forecast_peak_hour_feature_row_rate": 0.9573238848579908,
@@ -149,7 +151,7 @@
     "ext_cache_dir": "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v6",
     "forecast_peak_backfill": "runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv",
     "start_date": "2026-05-19",
-    "end_date": "2026-06-14",
+    "end_date": "2026-06-17",
     "decision_hours": [
       10,
       11,
