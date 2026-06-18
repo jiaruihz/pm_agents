@@ -975,6 +975,25 @@ def inferred_entry_profile_for_strategy_instance(strategy_instance: str) -> str:
     return ""
 
 
+def inferred_entry_profile_for_row(row: dict[str, Any]) -> str:
+    explicit = safe_str(row.get("entry_profile"))
+    if explicit:
+        return explicit
+    row_instance = safe_str(row.get("strategy_instance"))
+    profile = inferred_entry_profile_for_strategy_instance(row_instance)
+    if profile:
+        return profile
+    text = " ".join(
+        safe_str(row.get(key)).lower()
+        for key in ("combo", "shadow_decision", "shadow_reason", "decision_mode")
+    )
+    if "peak_forming" in text or "micro_probe" in text:
+        return "peak_forming_micro"
+    if "fade_confirmed" in text or "confirmed_v9" in text:
+        return "fade_confirmed"
+    return ""
+
+
 def prior_row_matches_strategy(row: dict[str, Any], strategy_instance: str) -> bool:
     row_instance = safe_str(row.get("strategy_instance"))
     if row_instance == strategy_instance:
@@ -983,7 +1002,7 @@ def prior_row_matches_strategy(row: dict[str, Any], strategy_instance: str) -> b
     return (
         bool(profile)
         and row_instance == LEGACY_SHARED_STRATEGY_INSTANCE
-        and safe_str(row.get("entry_profile")) == profile
+        and inferred_entry_profile_for_row(row) == profile
     )
 
 
@@ -999,6 +1018,33 @@ def prior_city_day_notional(strategy_instance: str) -> dict[tuple[str, str], flo
                     continue
                 key = (safe_str(row.get("city")), safe_str(row.get("target_date")))
                 out[key] = out.get(key, 0.0) + max(0.0, to_float(row.get("posted_notional", row.get("notional")), 0.0))
+    return out
+
+
+def strategy_signal_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
+    token_or_market = safe_str(row.get("token_id")) or safe_str(row.get("market_id"))
+    bracket = safe_str(row.get("current_bracket") or row.get("bracket"))
+    return (
+        safe_str(row.get("city")),
+        safe_str(row.get("target_date")),
+        token_or_market,
+        bracket,
+    )
+
+
+def prior_strategy_signal_keys(strategy_instance: str) -> set[tuple[str, str, str, str]]:
+    out: set[tuple[str, str, str, str]] = set()
+    live_dirs = [ROOT / "runtime/weather_edge_v1/live", ROOT / "runtime/weather_edge_v1/remote_pm_agent/live"]
+    for live_dir in live_dirs:
+        if not live_dir.exists():
+            continue
+        for path in live_dir.glob("*.jsonl"):
+            for row in read_jsonl(path):
+                if not prior_row_matches_strategy(row, strategy_instance) or safe_str(row.get("status")) != "submitted":
+                    continue
+                key = strategy_signal_key(row)
+                if all(key):
+                    out.add(key)
     return out
 
 
@@ -1644,9 +1690,34 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         selected = current[statuses.eq("snapshot_rule_passed")].copy()
         prior = prior_city_day_notional(STRATEGY_INSTANCE)
         prior_epochs = prior_observation_epoch_keys(STRATEGY_INSTANCE)
+        prior_signal_keys = prior_strategy_signal_keys(STRATEGY_INSTANCE)
         for _, row in selected.sort_values(["ev", "available_notional_at_ask"], ascending=[False, False]).iterrows():
             key = (str(row["city"]), str(row["target_date"]))
             row_dict = row.to_dict()
+            signal_key = strategy_signal_key(row_dict)
+            if all(signal_key) and signal_key in prior_signal_keys:
+                audits.append(
+                    {
+                        "city": key[0],
+                        "target_date": key[1],
+                        "status": "strategy_signal_cap",
+                        "token_or_market": signal_key[2],
+                        "bracket": signal_key[3],
+                    }
+                )
+                telemetry_rows.append(
+                    current_yes_forward_telemetry_row(
+                        row_dict,
+                        decision_status="strategy_signal_cap",
+                        args=args,
+                        run_id=telemetry_run_id,
+                        snapshot_path=snap_path,
+                        snapshot_age_min=age_min,
+                        source_profiles=source_profiles,
+                        extra={"strategy_signal_key": "|".join(signal_key)},
+                    )
+                )
+                continue
             epoch_key = observation_epoch_key(row_dict)
             if all(epoch_key) and epoch_key in prior_epochs:
                 audits.append(
@@ -1772,6 +1843,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             prior[key] = prior.get(key, 0.0) + args.max_order_notional
             if all(epoch_key):
                 prior_epochs.add(epoch_key)
+            if all(signal_key):
+                prior_signal_keys.add(signal_key)
 
     live_enabled = bool(args.live and args.confirm_live)
     plans = [build_plan(row, notional=args.max_order_notional, live_enabled=live_enabled) for row in candidates]

@@ -468,6 +468,43 @@ def test_split_instances_count_matching_legacy_profile_as_prior_risk():
     assert not live.prior_row_matches_strategy(legacy_peak, "theta_current_yes_fade_confirmed_tiny_live_v1")
 
 
+def test_split_instances_infer_missing_legacy_profile_from_shadow_fields():
+    legacy_peak = {
+        "strategy_instance": "theta_current_yes_tiny_live_v1",
+        "shadow_decision": "tiny_live_peak_forming_micro_v1",
+        "shadow_reason": "forecast_peak_current_high_micro_probe",
+    }
+    legacy_fade = {
+        "strategy_instance": "theta_current_yes_tiny_live_v1",
+        "combo": "current_yes_fade_confirmed_v9",
+        "shadow_decision": "tiny_live_confirmed_v9",
+    }
+
+    assert live.inferred_entry_profile_for_row(legacy_peak) == "peak_forming_micro"
+    assert live.inferred_entry_profile_for_row(legacy_fade) == "fade_confirmed"
+    assert live.prior_row_matches_strategy(legacy_peak, "theta_current_yes_peak_forming_micro_tiny_live_v1")
+    assert not live.prior_row_matches_strategy(legacy_peak, "theta_current_yes_fade_confirmed_tiny_live_v1")
+    assert live.prior_row_matches_strategy(legacy_fade, "theta_current_yes_fade_confirmed_tiny_live_v1")
+    assert not live.prior_row_matches_strategy(legacy_fade, "theta_current_yes_peak_forming_micro_tiny_live_v1")
+
+
+def test_strategy_signal_key_matches_candidate_and_live_order_shapes():
+    candidate = {
+        "city": "Helsinki",
+        "target_date": "2026-06-18",
+        "current_bracket": "22",
+        "token_id": "yes-token",
+    }
+    live_order = {
+        "city": "Helsinki",
+        "target_date": "2026-06-18",
+        "bracket": "22",
+        "token_id": "yes-token",
+    }
+
+    assert live.strategy_signal_key(candidate) == live.strategy_signal_key(live_order)
+
+
 def test_probability_branch_scores_shadow_fade_specialist_until_enabled(monkeypatch):
     rows = [
         {"decline_c": 0.5, "yes_current_ask": 0.7},
