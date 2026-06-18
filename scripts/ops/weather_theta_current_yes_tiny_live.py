@@ -61,6 +61,7 @@ from src.strategies.weather_edge_v1.tools.official_observation_clock import (
 
 STRATEGY_INSTANCE = os.environ.get("THETA_CURRENT_YES_STRATEGY_INSTANCE", "theta_current_yes_tiny_live_v1")
 STRATEGY_ID = "theta_current_yes_no_reheat_live5_v1"
+LEGACY_SHARED_STRATEGY_INSTANCE = "theta_current_yes_tiny_live_v1"
 TRAIN_FEATURES = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_full_replay_v8/feature_rows.csv"
 MODEL_ARTIFACT = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_live_gate_v9/live_model.json"
 STATION_SUMMARY = ROOT / "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json"
@@ -884,6 +885,26 @@ def build_current_rows(
     return pd.DataFrame(rows), audits
 
 
+def inferred_entry_profile_for_strategy_instance(strategy_instance: str) -> str:
+    if "fade_confirmed" in strategy_instance:
+        return "fade_confirmed"
+    if "peak_forming" in strategy_instance:
+        return "peak_forming_micro"
+    return ""
+
+
+def prior_row_matches_strategy(row: dict[str, Any], strategy_instance: str) -> bool:
+    row_instance = safe_str(row.get("strategy_instance"))
+    if row_instance == strategy_instance:
+        return True
+    profile = inferred_entry_profile_for_strategy_instance(strategy_instance)
+    return (
+        bool(profile)
+        and row_instance == LEGACY_SHARED_STRATEGY_INSTANCE
+        and safe_str(row.get("entry_profile")) == profile
+    )
+
+
 def prior_city_day_notional(strategy_instance: str) -> dict[tuple[str, str], float]:
     out: dict[tuple[str, str], float] = {}
     live_dirs = [ROOT / "runtime/weather_edge_v1/live", ROOT / "runtime/weather_edge_v1/remote_pm_agent/live"]
@@ -892,7 +913,7 @@ def prior_city_day_notional(strategy_instance: str) -> dict[tuple[str, str], flo
             continue
         for path in live_dir.glob("*.jsonl"):
             for row in read_jsonl(path):
-                if safe_str(row.get("strategy_instance")) != strategy_instance or safe_str(row.get("status")) != "submitted":
+                if not prior_row_matches_strategy(row, strategy_instance) or safe_str(row.get("status")) != "submitted":
                     continue
                 key = (safe_str(row.get("city")), safe_str(row.get("target_date")))
                 out[key] = out.get(key, 0.0) + max(0.0, to_float(row.get("posted_notional", row.get("notional")), 0.0))
@@ -919,7 +940,7 @@ def prior_observation_epoch_keys(strategy_instance: str) -> set[tuple[str, str, 
             continue
         for path in live_dir.glob("*.jsonl"):
             for row in read_jsonl(path):
-                if safe_str(row.get("strategy_instance")) != strategy_instance or safe_str(row.get("status")) != "submitted":
+                if not prior_row_matches_strategy(row, strategy_instance) or safe_str(row.get("status")) != "submitted":
                     continue
                 key = observation_epoch_key(row)
                 if all(key):
@@ -1066,6 +1087,11 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
         fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def entry_profile_enabled(profile: str, args: argparse.Namespace) -> bool:
+    mode = safe_str(getattr(args, "entry_profile_mode", "both")) or "both"
+    return mode == "both" or mode == profile
+
+
 def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tuple[str, str]:
     decline = to_float(row.get("decline_c"), 0.0)
     ask = to_float(row.get("yes_current_ask"), 0.0)
@@ -1089,6 +1115,8 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
             return "snapshot_rule_p_yes_lt_0_5", ""
         if edge < 0.05:
             return "snapshot_rule_edge_lt_0_05", ""
+        if not entry_profile_enabled("fade_confirmed", args):
+            return "snapshot_rule_fade_confirmed_disabled", ""
         return "snapshot_rule_passed", "fade_confirmed"
 
     if not getattr(args, "enable_peak_forming_live", False):
@@ -1106,6 +1134,8 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
     min_peak_forming_delta = float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0))
     if peak_delta is not None and float(peak_delta) < min_peak_forming_delta:
         return "snapshot_rule_peak_forming_forecast_peak_ahead", ""
+    if not entry_profile_enabled("peak_forming_micro", args):
+        return "snapshot_rule_peak_forming_disabled", ""
     return "snapshot_rule_passed", "peak_forming_micro"
 
 
@@ -1247,6 +1277,7 @@ def current_yes_forward_telemetry_row(
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
+            "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
@@ -1318,6 +1349,7 @@ def current_yes_audit_telemetry_row(
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
+            "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
@@ -1597,6 +1629,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "pre_metar_update_blackout_min": args.pre_metar_update_blackout_min,
             "min_gap_to_next_bracket_c": args.min_gap_to_next_bracket_c,
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
+            "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
@@ -1697,6 +1730,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pre-metar-update-blackout-min", type=float, default=6.0)
     parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=0.0)
     parser.add_argument("--allow-missing-forecast-peak", action="store_true")
+    parser.add_argument("--entry-profile-mode", choices=["both", "fade_confirmed", "peak_forming_micro"], default="both")
     parser.add_argument("--min-forecast-peak-delta-hours", type=float, default=-1.999)
     parser.add_argument("--enable-peak-forming-live", action="store_true")
     parser.add_argument("--peak-forming-max-decline-c", type=float, default=0.25)

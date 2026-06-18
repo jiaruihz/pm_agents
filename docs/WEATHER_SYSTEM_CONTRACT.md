@@ -257,7 +257,8 @@ taker ROI、METAR 更新窗口和 fresh-book 滑点。
 路径：
 
 ```text
-runtime/weather_edge_v1/theta_current_yes_tiny_live_v1/forward_telemetry.jsonl
+runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1/forward_telemetry.jsonl
+runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1/forward_telemetry.jsonl
 ```
 
 核心字段：

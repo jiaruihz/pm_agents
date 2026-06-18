@@ -325,23 +325,40 @@ runtime/weather_edge_v1/live_cycle/loop.log
 runtime/weather_edge_v1/signals/live_*_signals.jsonl
 runtime/weather_edge_v1/plans/live_*_trade_plans.jsonl
 runtime/weather_edge_v1/live/live_*_orders.jsonl
-runtime/weather_edge_v1/theta_current_yes_tiny_live_v1/forward_telemetry.jsonl
+runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1/forward_telemetry.jsonl
+runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1/forward_telemetry.jsonl
 ```
 
-`theta_current_yes_tiny_live_v1/forward_telemetry.jsonl` is a would-order
-evidence layer, not an order/fill ledger. It records planned, fresh-book
-rejected, snapshot-rule rejected, and obs/hour blocked current-YES candidates
-with observation clock, fresh ask, forecast peak, and source-profile fields.
+current-YES `forward_telemetry.jsonl` files are would-order evidence layers,
+not order/fill ledgers. They record planned, fresh-book rejected,
+snapshot-rule rejected, and obs/hour blocked current-YES candidates with
+observation clock, fresh ask, forecast peak, and source-profile fields.
 
-2026-06-18 live implementation note: `theta_current_yes_tiny_live_v1` has two
-explicit entry profiles under the same runner:
+2026-06-18 live implementation note: current-YES is split into two live
+strategy instances. They share the same runner, model, METAR path, and CLOB
+fresh-book guard, but have separate `strategy_instance`, runtime dirs,
+telemetry files, live order files, and `$5` city-day caps:
 
-- `fade_confirmed`: current running-max bracket after a real fade
-  (`decline_c>=0.5`), the original v9 tiny-live path.
-- `peak_forming_micro`: current running-max bracket while still near the high
-  (`decline_c<=0.25`), enabled as a micro-live probe when forecast peak is now
-  or within the next hour, ask is `0.50..0.97`, model `p>=0.60`, and snapshot
-  edge is at least `0.02`.
+| strategy_instance | entry_profile_mode | Runtime dir | Entry profile |
+|---|---|---|---|
+| `theta_current_yes_fade_confirmed_tiny_live_v1` | `fade_confirmed` | `runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1` | current running-max bracket after a real fade (`decline_c>=0.5`), the original v9 tiny-live path |
+| `theta_current_yes_peak_forming_micro_tiny_live_v1` | `peak_forming_micro` | `runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1` | current running-max bracket while still near the high (`decline_c<=0.25`), micro-live probe |
+
+`peak_forming_micro` is enabled as a micro-live probe when forecast peak is now
+or within the next hour, ask is `0.50..0.97`, model `p>=0.60`, and snapshot
+edge is at least `0.02`.
+
+Start/stop/status the split pair with:
+
+```bash
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && scripts/ops/start_weather_theta_current_yes_split_live.sh'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && scripts/ops/status_weather_theta_current_yes_split_live.sh'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && scripts/ops/stop_weather_theta_current_yes_split_live.sh'
+```
+
+The old shared `theta_current_yes_tiny_live_v1` runtime is legacy/shared mode.
+The split start script stops it by default so the two entry profiles do not
+compete for one shared city-day cap or produce mixed instance statistics.
 
 If US afternoon windows show no live orders, check
 `forward_telemetry.jsonl.decision_status` before concluding the model has no

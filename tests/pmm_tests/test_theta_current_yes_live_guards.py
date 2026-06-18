@@ -325,6 +325,7 @@ def test_first_rule_allows_peak_forming_current_high_when_enabled():
         peak_forming_min_p=0.60,
         peak_forming_min_edge=0.02,
         peak_forming_min_forecast_delta_hours=-1.0,
+        entry_profile_mode="both",
     )
     base = {
         "decline_c": 0.0,
@@ -340,6 +341,59 @@ def test_first_rule_allows_peak_forming_current_high_when_enabled():
     assert live.classify_entry_profile(base, args) == ("snapshot_rule_passed", "peak_forming_micro")
     assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": -1.25}, args) == "snapshot_rule_peak_forming_forecast_peak_ahead"
     assert live.first_rule_reject_reason({**base, "yes_current_ask": 0.98}, args) == "snapshot_rule_peak_forming_ask_gt_max"
+
+
+def test_entry_profile_mode_splits_fade_and_peak_instances():
+    args = argparse.Namespace(
+        min_available_notional=5.0,
+        allow_missing_forecast_peak=False,
+        min_forecast_peak_delta_hours=-1.999,
+        enable_peak_forming_live=True,
+        peak_forming_max_decline_c=0.25,
+        peak_forming_min_ask=0.50,
+        peak_forming_max_ask=0.97,
+        peak_forming_min_p=0.60,
+        peak_forming_min_edge=0.02,
+        peak_forming_min_forecast_delta_hours=-1.0,
+        entry_profile_mode="both",
+    )
+    base = {
+        "yes_current_ask": 0.70,
+        "p_yes_win": 0.78,
+        "ev": 0.08,
+        "available_notional_at_ask": 10.0,
+        "token_id": "yes-token",
+        "forecast_peak_delta_hours_local": 0.0,
+    }
+    fade = {**base, "decline_c": 0.5}
+    peak = {**base, "decline_c": 0.0}
+
+    assert live.classify_entry_profile(fade, argparse.Namespace(**{**vars(args), "entry_profile_mode": "fade_confirmed"})) == (
+        "snapshot_rule_passed",
+        "fade_confirmed",
+    )
+    assert live.first_rule_reject_reason(peak, argparse.Namespace(**{**vars(args), "entry_profile_mode": "fade_confirmed"})) == "snapshot_rule_peak_forming_disabled"
+    assert live.first_rule_reject_reason(fade, argparse.Namespace(**{**vars(args), "entry_profile_mode": "peak_forming_micro"})) == "snapshot_rule_fade_confirmed_disabled"
+    assert live.classify_entry_profile(peak, argparse.Namespace(**{**vars(args), "entry_profile_mode": "peak_forming_micro"})) == (
+        "snapshot_rule_passed",
+        "peak_forming_micro",
+    )
+
+
+def test_split_instances_count_matching_legacy_profile_as_prior_risk():
+    legacy_peak = {
+        "strategy_instance": "theta_current_yes_tiny_live_v1",
+        "entry_profile": "peak_forming_micro",
+    }
+    legacy_fade = {
+        "strategy_instance": "theta_current_yes_tiny_live_v1",
+        "entry_profile": "fade_confirmed",
+    }
+
+    assert live.prior_row_matches_strategy(legacy_peak, "theta_current_yes_peak_forming_micro_tiny_live_v1")
+    assert not live.prior_row_matches_strategy(legacy_fade, "theta_current_yes_peak_forming_micro_tiny_live_v1")
+    assert live.prior_row_matches_strategy(legacy_fade, "theta_current_yes_fade_confirmed_tiny_live_v1")
+    assert not live.prior_row_matches_strategy(legacy_peak, "theta_current_yes_fade_confirmed_tiny_live_v1")
 
 
 def test_observation_epoch_key_uses_running_max_metar_timestamp():
