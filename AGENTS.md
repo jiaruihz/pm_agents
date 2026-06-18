@@ -22,7 +22,15 @@ docs/WEATHER_STRATEGY_ENTRYPOINT.md  ← 实盘入口
 - `jiarui@192.168.0.200:/home/jiarui/projects/weather-predict` ← 信号原料 + 行情/天气 cache（systemd timer）
 - `jiarui@192.168.0.200:/home/jiarui/projects/pm_agent`         ← 实盘交易执行（live_cycle loop 写 `runtime/weather_edge_v1/live/*.jsonl`）
 
-分析端（本机）：`/home/rui/projects/pm_agent`（拉两边镜像 → 本机 `runtime/weather.db` 重建）
+分析端（当前这台 Mac）：`/Users/deepsleep/projects/pm_agents`（拉两边镜像 → 本机 `runtime/weather.db` 重建）
+历史 WSL 分析端：`/home/rui/projects/pm_agent`（只有在实际 shell 是 WSL/Linux 时才使用）
+
+当前这台 Mac 可直接承担本机分析、看板、回测、脚本开发和 N100 部署 staging：
+- 项目根目录：`/Users/deepsleep/projects/pm_agents`
+- 默认 shell：macOS `zsh` / Darwin；不要套 `wsl -d ...`
+- 本机命令示例：`cd /Users/deepsleep/projects/pm_agents && scripts/ops/sync_weather_remote.sh`
+- N100 访问：从 Mac 直接 `ssh jiarui@192.168.0.200 '<command>'`
+- 本机只做镜像分析和 staging；不会因为能跑脚本就自动成为生产采集/下单来源。
 
 > 完整四角色 + 数据链路图见 [docs/WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) 和 [docs/WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md)。**不要再以为 N100 只跑 weather-predict**。
 
@@ -150,9 +158,25 @@ scripts/weather_dashboard/run_stack.sh --status
 - Live  <http://localhost:5173/weather/live>
 - API   <http://localhost:8000/docs>
 
-## 桌面端 / WSL 命令执行约定
+## 桌面端 / Host-aware 命令执行约定
 
-关键限制: Codex 桌面端当前可能在 Windows 环境里调用命令。即使代码目录来自 WSL，如果当前 shell 是 PowerShell/CMD，也不是 WSL 里的 bash。
+关键限制: Codex 桌面端可能在不同宿主环境里调用命令。先判断当前 shell/OS，再选择命令形态；不要因为文档里出现 WSL 路径就默认当前机器有 `wsl`。
+
+当前这台机器是 Mac（`/Users/deepsleep/projects/pm_agents`）。在这台机器上：
+- 所有本机构建、测试、同步、看板脚本都直接在 repo 根目录运行。
+- 访问 N100 时直接用 macOS `ssh`，例如 `ssh jiarui@192.168.0.200 'hostname'`。
+- 如果旧文档给出 `wsl -d Ubuntu-24.04 -- ...`，在本机应翻译成等价的直接命令。
+
+Mac 本机例子:
+```bash
+cd /Users/deepsleep/projects/pm_agents
+pytest
+npm test
+scripts/ops/sync_weather_remote.sh
+scripts/weather_dashboard/run_stack.sh --status
+```
+
+历史 Windows/WSL 限制: 如果 Codex 桌面端在 Windows 环境里调用命令，即使代码目录来自 WSL，当前 shell 是 PowerShell/CMD 时也不是 WSL 里的 bash。
 
 本项目在桌面端操作时，文件可以通过 Windows 侧 WSL 路径打开:
 ```text
@@ -175,7 +199,7 @@ wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && npm test"
 
 PowerShell 引号很容易把上一层查询拆坏，尤其是嵌套 `bash -lc`、`ssh '<command>'`、`python -c`、`awk`/`sed` 或包含 JSON/SQL 的命令时。遇到复杂查询时不要硬塞一长串混合引号；优先进入 WSL 后用 bash 原生命令执行，或把复杂逻辑写成临时脚本/项目脚本再调用。若必须从 PowerShell 发起，先用最小只读命令验证 quoting，再跑真实查询。
 
-如果后续迁移到其他 WSL 发行版或用户名，按实际路径替换 `Ubuntu-24.04`、`rui` 和项目目录即可。
+如果后续迁移到其他 WSL 发行版或用户名，按实际路径替换 `Ubuntu-24.04`、`rui` 和项目目录即可。若回到 Mac 侧，则以 `/Users/deepsleep/projects/pm_agents` 为准。
 
 ## Weather 数据分工与数据真相
 
@@ -186,7 +210,14 @@ PowerShell 引号很容易把上一层查询拆坏，尤其是嵌套 `bash -lc`�
 
 ### N100 SSH 约定
 
-Codex 桌面端里不要从 Windows 侧直接调用 `ssh`；当前 Windows `ssh` 可能被沙箱包装脚本拦截。访问 N100 时从 WSL 侧发起:
+当前这台 Mac 直接从本机发起 SSH:
+```bash
+ssh jiarui@192.168.0.200 '<command>'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/weather-predict && <command>'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && <command>'
+```
+
+只有在 Windows/PowerShell 宿主里，才从 WSL 侧发起:
 ```bash
 wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 '<command>'
 ```
@@ -234,7 +265,7 @@ ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/doctor_re
 
 本机镜像根目录:
 ```text
-/home/rui/projects/pm_agent/runtime/weather_edge_v1/market_data/
+/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/
 ```
 
 镜像目录映射:
@@ -247,13 +278,13 @@ ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/doctor_re
 
 同步入口:
 ```bash
-cd /home/rui/projects/pm_agent
+cd /Users/deepsleep/projects/pm_agents
 scripts/ops/sync_weather_remote.sh
 ```
 
 同步 dry-run:
 ```bash
-cd /home/rui/projects/pm_agent
+cd /Users/deepsleep/projects/pm_agents
 scripts/ops/sync_weather_remote.sh --dry-run
 ```
 
@@ -272,7 +303,7 @@ Paper ledger 口径:
 
 ### 本机 weather-predict：开发副本
 
-`/home/rui/projects/weather-predict` 只是开发副本，用来改代码、测试脚本，不作为数据真相，也不靠它判断生产是否断了。
+`/Users/deepsleep/projects/weather-predict` 是当前 Mac 侧约定的开发副本路径（如果存在），用来改代码、测试脚本，不作为数据真相，也不靠它判断生产是否断了。历史 WSL 路径是 `/home/rui/projects/weather-predict`。
 
 生产脚本改动流程:
 1. 本机 `weather-predict` 改代码
@@ -292,7 +323,7 @@ T2 天气数据补全入口:
 ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && python3 scripts/ops/fill_t2_weather_cache.py'
 
 # 本机同步后查看补全结果
-cd /home/rui/projects/pm_agent
+cd /Users/deepsleep/projects/pm_agents
 scripts/ops/sync_weather_remote.sh
 cat runtime/weather_edge_v1/market_data/research/t2_weather_cache_fill_summary.json
 ```

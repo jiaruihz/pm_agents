@@ -17,8 +17,9 @@ shared runtime code.
 |---|---|---|---|
 | N100 `/home/jiarui/projects/weather-predict` | Production market data and paper research collector | market snapshots, orderbook snapshots, paper ledger, city pools, weather caches, settlement history | live CLOB execution, pm_agent dashboard DB |
 | N100 `/home/jiarui/projects/pm_agent` | Production live execution | live signal files, trade plans, real CLOB order submissions, strategy instances, pause state, Telegram/live doctor | weather model cache generation, paper snapshot timer |
-| Local `/home/rui/projects/pm_agent` | Analysis, dashboard, and deployment staging | dashboard DB, ingest/migration, fact tables, strategy research, local code staging for N100 `pm_agent` | direct production data collection |
-| Local `/home/rui/projects/weather-predict` | Development copy for weather-predict | local edits/tests for N100 `weather-predict` scripts | production truth |
+| Local Mac `/Users/deepsleep/projects/pm_agents` | Analysis, dashboard, and deployment staging | dashboard DB, ingest/migration, fact tables, strategy research, local code staging for N100 `pm_agent` | direct production data collection |
+| Local Mac `/Users/deepsleep/projects/weather-predict` | Development copy for weather-predict | local edits/tests for N100 `weather-predict` scripts | production truth |
+| Historical WSL `/home/rui/projects/pm_agent` | Legacy analysis path, only when the actual shell is WSL/Linux | same local-analysis role as above | direct production data collection |
 
 ## Data Boundary
 

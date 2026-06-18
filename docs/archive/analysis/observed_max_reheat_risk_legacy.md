@@ -1,18 +1,18 @@
-# Observed Max M3
+# Observed Max reheat-risk
 
-> Living doc for modules [0]-[2]: observed running max / late-day residual research for a possible M3 weather strategy.
+> Living doc for modules [0]-[2]: observed running max / late-day residual research for a possible reheat-risk weather strategy.
 > Current status: `source_registry_ready_but_trading_blocked`; not a live, paper, or shadow trading rule yet.
 > Last updated: 2026-06-14 settlement source registry v0
 
-Quant lineage anchor: M3 changes the information source before signal generation. Instead of forecasting tomorrow's final high at T-22 to T-28, it asks whether the current target day's observed running max is already effectively locked by local evening. That places M3 first in [0] data and [1] model/physical-feature validation before it can become a [2] signal.
+Quant lineage anchor: reheat-risk changes the information source before signal generation. Instead of forecasting tomorrow's final high at T-22 to T-28, it asks whether the current target day's observed running max is already effectively locked by local evening. That places reheat-risk first in [0] data and [1] model/physical-feature validation before it can become a [2] signal.
 
 ## Current Conclusion
 
-M3 is a valid physical research direction, but it is not approved for live, paper, or shadow trading.
+reheat-risk is a valid physical research direction, but it is not approved for live, paper, or shadow trading.
 
 The refreshed physical-layer residual experiment supports the core hypothesis: in the current WU/IEM cache, local 19:00-21:00 running max usually equals the final daily max, with low cross-bucket residual risk. Core 9 also passes the refreshed v1 physical gate.
 
-M3 reached historical orderbook best-ask testing, but the first apparent positive result did not survive settlement alignment. Using WU/IEM observed max as payout truth made `below_running_max_buy_no` look strongly positive; using `pm_history` official winner labels on the same v1 trades made it negative.
+reheat-risk reached historical orderbook best-ask testing, but the first apparent positive result did not survive settlement alignment. Using WU/IEM observed max as payout truth made `below_running_max_buy_no` look strongly positive; using `pm_history` official winner labels on the same v1 trades made it negative.
 
 The current blocker is upstream of execution:
 
@@ -33,15 +33,15 @@ The settlement source registry v0 (2026-06-14) converts that blocker into a usab
 1. `pm_history` / `final_yes` remains the market payout truth. The registry is about whether our observed/forecast feature source is aligned with the station/feed/rule that Polymarket settles against.
 2. Confirmed official station-diff cities: Chicago KORD, KualaLumpur WMKK, London EGLC, Milan LIMC, PanamaCity MPMG, Paris LFPB, and Jakarta WIHH. These can only be studied with official-source features and per-market rules recheck.
 3. HongKong is a confirmed special-source city: HKO Daily Extract absolute daily max, decimal precision, floor-to-integer bracket mapping. VHHH/IEM/WU must not be used as the payout feature source for HK.
-4. Moscow, Seoul, and Shenzhen remain blocked unresolved settlement-basis cities. Do not include them in M3, station-basis, or source-sensitive forecast-quality conclusions until their mismatch is explained.
+4. Moscow, Seoul, and Shenzhen remain blocked unresolved settlement-basis cities. Do not include them in reheat-risk, station-basis, or source-sensitive forecast-quality conclusions until their mismatch is explained.
 5. This makes source-sensitive research possible again, but not trading-approved: the next gate is a reusable official-source fact layer plus time-aligned orderbook retests, not a live config change.
 
 ## Absorbed Historical Claims
 
-1. The M3 handoff is useful as strategy framing, but external/deep-research numbers are not repo-verified until reproduced in local scripts and fact/cache outputs.
-2. The M3 strategy plan correctly freezes the boundary: do not modify N100 live config, do not replace current production strategy, and do not introduce market price/PnL before the observed-max fact layer is validated.
+1. The reheat-risk handoff is useful as strategy framing, but external/deep-research numbers are not repo-verified until reproduced in local scripts and fact/cache outputs.
+2. The reheat-risk strategy plan correctly freezes the boundary: do not modify N100 live config, do not replace current production strategy, and do not introduce market price/PnL before the observed-max fact layer is validated.
 3. The residual v0 report is the first local evidence: 49 cached cities and current core 9 pass the 19:00+ physical gate, but 18:00 is weaker for Paris/Amsterdam/Helsinki/Madrid and core 9 tail cases include Boston/NYC/London.
-4. M3 should start with 20:00/21:00 local as the cleaner research window; 18:00 is observation-only until secondary-warming filters are validated.
+4. reheat-risk should start with 20:00/21:00 local as the cleaner research window; 18:00 is observation-only until secondary-warming filters are validated.
 5. Proxy paper-snapshot joins in `2026-06-10-m3-paper-snapshot-proxy-backtest-v0.md` produce highly concentrated 2- to 14-trade windows (core cities limited to Moscow/Madrid), and are `inconclusive` for ROI; they are blocked on dataset overlap and lack executable best-ask.
 6. WU/IEM cache was refreshed on N100 and synced locally through 2026-06-10. The refreshed v1 residual outputs preserve the 20:00/21:00 physical case.
 7. The 2026-06-10 orderbook best-ask v0/v1 observed-payout results are superseded. Settlement alignment v1 shows official `pm_history` winner labels disagree with WU/IEM observed payout often enough to flip the result negative.
@@ -73,7 +73,7 @@ The settlement source registry v0 (2026-06-14) converts that blocker into a usab
 
 ## Open Work
 
-1. Promote `settlement_source_registry_v0` into a generated sidecar joined by city/date for M3, station-basis, forecast-quality, and basket research.
+1. Promote `settlement_source_registry_v0` into a generated sidecar joined by city/date for reheat-risk, station-basis, forecast-quality, and basket research.
 2. Build live-capable official-source fetchers for HKO and WIHH, and official-station running-max fetchers for the station-diff cities.
 3. Diagnose Moscow/Seoul/Shenzhen mismatch dates against official rendered page values, METAR/WU minute history, and rounding/precision rules.
 4. Recompute orderbook best-ask only after official-source feature alignment passes for the target city set.

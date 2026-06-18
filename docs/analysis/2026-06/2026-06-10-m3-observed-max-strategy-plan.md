@@ -1,4 +1,4 @@
-# M3 Observed-Max Strategy Plan — 2026-06-10
+# reheat-risk Observed-Max Strategy Plan — 2026-06-10
 
 Status: design-draft
 Updated: 2026-06-10
@@ -66,7 +66,7 @@ residual_c = final_daily_max_c - observed_running_max_c_at_decision_time
 
 ## 当前策略现状
 
-当前生产 live 不是 M3，也不应被 M3 直接替换。
+当前生产 live 不是 reheat-risk，也不应被 reheat-risk 直接替换。
 
 生产默认只应运行两个 `mid_price_core_v1` 实例：
 
@@ -87,11 +87,11 @@ residual_c = final_daily_max_c - observed_running_max_c_at_decision_time
 - city-day basket 仍是研究候选；PR2b headline 好，但 holdout/recent/top5 stress 不稳，不能 canary。
 - 2026-06-10 的多个 Range RV / side-band / forecast-regime 实验整体没有给出真钱 live 候选；较明确的动作是 shadow/paper 观察，而不是改 live。
 
-因此，M3 的定位应是“新研究主线”，不是现有参数微调。
+因此，reheat-risk 的定位应是“新研究主线”，不是现有参数微调。
 
-## M3 与现有路线的关系
+## reheat-risk 与现有路线的关系
 
-M3 改的是信息时间轴。
+reheat-risk 改的是信息时间轴。
 
 旧 A/B/C、side-band、blender、basket 的共同基础仍是 forecast-first：在目标日前约
 22-28 小时，用 forecast/model/market distribution 判断未来最高温落在哪些 bracket。
@@ -101,7 +101,7 @@ M3 改的是信息时间轴。
 - 城市/模型/side 子池有样本内亮点，但 holdout 易翻车。
 - 组合/basket 能改善表达方式，但如果底层分布不稳，会把 tail risk 包装成更复杂的策略。
 
-M3 的不同点：
+reheat-risk 的不同点：
 
 - 用“当天已观测 running max”作为硬事实下界，而不是提前一天预测。
 - 把问题从“精确预测最终最高温”改成“傍晚后残差是否已经塌缩”。
@@ -120,14 +120,14 @@ M3 的不同点：
 结论：
 
 ```text
-M3 当前只能是 research/shadow 方向；不得改 N100 live 下单配置。
+reheat-risk 当前只能是 research/shadow 方向；不得改 N100 live 下单配置。
 ```
 
 落地要求：
 
 - 不修改 `mid_price_core_v1_*` 的 live gate。
 - 不新增真钱 live instance。
-- 不把 M3 的外部 deep-research 数字当成本仓库已验证结论。
+- 不把 reheat-risk 的外部 deep-research 数字当成本仓库已验证结论。
 - 后续如涉及 N100 代码、city pool、paper policy 或 live instance，必须走 `weather-strategy-deploy` 的 git-first 流程。
 
 ### P1：补“已观测 running max”事实层
@@ -284,7 +284,7 @@ reason_codes
 
 ## Kill 条件
 
-任一条件成立，M3 应干净降级为 null 或只保留为研究记录：
+任一条件成立，reheat-risk 应干净降级为 null 或只保留为研究记录：
 
 - 主要城市在 19:00/20:00 的 P95 residual_c 接近或超过 1°C。
 - `residual_bucket_delta >= 1` 的 case 多且没有事前可见过滤特征。
@@ -294,7 +294,7 @@ reason_codes
 
 ## 推荐最近执行顺序
 
-1. 存档原始 M3 交接稿，并在 docs index 里标明它是 snapshot，不是生产口径。
+1. 存档原始 reheat-risk 交接稿，并在 docs index 里标明它是 snapshot，不是生产口径。
 2. 做 `observed_running_max` 数据覆盖审计：按城市列出可重建的逐时观测天数。
 3. 写 P2 物理残差脚本，只输出残差分布，不读市场价格。
 4. 如果 P2 看到候选城市，再写二次升温 bad case filter 审计。
@@ -302,7 +302,7 @@ reason_codes
 
 当前不建议做：
 
-- 直接把 M3 上真钱 live。
-- 用现有 forecast-first `fact_signal_candidates` 硬拼一个 M3 ROI。
+- 直接把 reheat-risk 上真钱 live。
+- 用现有 forecast-first `fact_signal_candidates` 硬拼一个 reheat-risk ROI。
 - 先调 city_pool 或 live allowlist。
-- 先做复杂 basket/optimizer；M3 的第一性问题是物理残差，不是组合优化。
+- 先做复杂 basket/optimizer；reheat-risk 的第一性问题是物理残差，不是组合优化。

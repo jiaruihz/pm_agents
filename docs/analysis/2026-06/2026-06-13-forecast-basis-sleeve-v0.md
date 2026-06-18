@@ -3,7 +3,7 @@
 Status: snapshot
 Updated: 2026-06-13
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/observed_max_m3.md
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/reheat_risk.md
 前置: 2026-06-12-official-resolution-source-and-entry-timing-v0.md（其下一步：把 basis edge 前移到预报时段）
 
 ## 任务与结论一句话

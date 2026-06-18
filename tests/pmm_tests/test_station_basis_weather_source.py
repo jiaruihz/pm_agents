@@ -61,17 +61,19 @@ def test_summarize_temperature_obs_marks_fresh_iem_source():
 
 
 def test_aviationweather_metar_day_keeps_only_requested_local_day(monkeypatch):
-    now = datetime.now(timezone.utc)
     tz = ZoneInfo("Asia/Kuala_Lumpur")
+    now = datetime.now(timezone.utc)
     local_date = now.astimezone(tz).date()
+    local_start_utc = datetime.combine(local_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
     prev_local = datetime.combine(local_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc) - timedelta(minutes=30)
+    last_obs = max(now - timedelta(minutes=25), local_start_utc + timedelta(minutes=30))
     today_rows = [
-        (now - timedelta(minutes=50), 28),
-        (now - timedelta(minutes=45), 29),
-        (now - timedelta(minutes=40), 30),
-        (now - timedelta(minutes=35), 31),
-        (now - timedelta(minutes=30), 32),
-        (now - timedelta(minutes=25), 25),
+        (last_obs - timedelta(minutes=25), 28),
+        (last_obs - timedelta(minutes=20), 29),
+        (last_obs - timedelta(minutes=15), 30),
+        (last_obs - timedelta(minutes=10), 31),
+        (last_obs - timedelta(minutes=5), 32),
+        (last_obs, 25),
     ]
 
     def fake_fetch_json(_url, _params):

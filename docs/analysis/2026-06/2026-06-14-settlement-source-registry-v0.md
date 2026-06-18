@@ -87,9 +87,9 @@ Important distinction: `pm_history` / `final_yes` remains the market settlement 
 
 | city | class | configured | official | align | days | settled_candidate_rows | action |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Moscow | blocked_unresolved_settlement_basis | UUWW | unknown_effective_source | 88.9% | 27 | 88 | exclude from official-source M3/station-basis research until root cause is found |
-| Seoul | blocked_unresolved_settlement_basis | RKSI | unknown_effective_source | 77.8% | 36 | 109 | exclude from official-source M3/station-basis research until root cause is found |
-| Shenzhen | blocked_unresolved_settlement_basis | ZGSZ | unresolved_wu_feed | 71.4% | 28 | 48 | exclude from official-source M3/station-basis research until root cause is found |
+| Moscow | blocked_unresolved_settlement_basis | UUWW | unknown_effective_source | 88.9% | 27 | 88 | exclude from official-source reheat-risk/station-basis research until root cause is found |
+| Seoul | blocked_unresolved_settlement_basis | RKSI | unknown_effective_source | 77.8% | 36 | 109 | exclude from official-source reheat-risk/station-basis research until root cause is found |
+| Shenzhen | blocked_unresolved_settlement_basis | ZGSZ | unresolved_wu_feed | 71.4% | 28 | 48 | exclude from official-source reheat-risk/station-basis research until root cause is found |
 | MexicoCity | default_source_watchlist | MMMX | MMMX | 96.4% | 28 | 8 | allowed for broad research but keep in settlement-watchlist |
 | Boston | no_recent_market_or_unknown_rules | KBOS | None | rules_only |  | 0 | do not use for source-sensitive research until rules/settlement source is identified |
 | Lagos | no_recent_market_or_unknown_rules | DNMM | None | rules_only |  | 19 | do not use for source-sensitive research until rules/settlement source is identified |
@@ -109,7 +109,7 @@ Important distinction: `pm_history` / `final_yes` remains the market settlement 
 ## Research Reuse Rules
 
 - Forecast-quality / model-reliability research: attach `settlement_source_class` as a covariate. Do not mix `blocked_unresolved_settlement_basis` cities into a generic city-model reliability label.
-- M3 / observed-running-max research: only use official-source confirmed cities. For station-diff cities, rebuild running max from the official station/feed before any orderbook backtest.
+- reheat-risk / observed-running-max research: only use official-source confirmed cities. For station-diff cities, rebuild running max from the official station/feed before any orderbook backtest.
 - Station-basis strategies: confirmed station-diff cities are candidates only after per-market rules recheck. The edge is the market watching the wrong station, not generic temperature theta.
 - HongKong: use HKO Daily Extract / live HKO feed semantics, decimal daily max, and floor-to-bracket mapping. VHHH/IEM is not an acceptable settlement feature source.
 - Jakarta: use WIHH/Halim, not WIII/Soekarno-Hatta, for settlement/source features.
@@ -118,7 +118,7 @@ Important distinction: `pm_history` / `final_yes` remains the market settlement 
 
 ## Next Research Directions
 
-1. Promote this registry into a generated sidecar artifact joined by city/date in forecast-quality, M3, station-basis, and basket scripts.
+1. Promote this registry into a generated sidecar artifact joined by city/date in forecast-quality, reheat-risk, station-basis, and basket scripts.
 2. Add official source fields to fact tables: `settlement_source_class`, `official_station_or_feed`, `settlement_mapping_rule`, and `source_verified_at`.
 3. Build live-capable HKO and WIHH source fetchers before HK/Jakarta can enter any shadow feed.
 4. Rerun forecast-quality base excluding or separately tagging station-diff/special-source/blocked cities to measure how much of reliability is source mismatch.

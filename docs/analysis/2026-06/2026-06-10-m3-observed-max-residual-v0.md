@@ -1,4 +1,4 @@
-# M3 Observed-Max Residual v0 — Physical Layer Experiment
+# reheat-risk Observed-Max Residual v0 — Physical Layer Experiment
 
 Status: snapshot
 Updated: 2026-06-10
@@ -7,7 +7,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; 2026-06-10-m3-observed-max-strat
 
 ## 数据快照
 
-本报告只验证 M3 的第一层物理问题：当地傍晚已观测 running max 到最终当日 max 的残差。
+本报告只验证 reheat-risk 的第一层物理问题：当地傍晚已观测 running max 到最终当日 max 的残差。
 本轮不读取 market price、orderbook、fills、PnL，也不输出 live 动作。
 
 本次未执行完整 N100 `sync_weather_remote.sh` + `run_stack.sh`，使用本机缓存：
@@ -190,7 +190,7 @@ Core 9 最大残差样例：
 | NYC | 2026-01-09 | 18-20 | 8.89 | 12.22 | 3.33 | 4 |
 | Tokyo | 2026-03-31 | 18 | 17.78 | 21.11 | 3.33 | 4 |
 
-这些 bad cases 符合 M3 设计里说的“二次升温 / 晚间反弹”尾部风险。P2 结果支持进入 P3：专门研究 bad case 是否可由事前风向、温度斜率、云量/天气现象过滤。
+这些 bad cases 符合 reheat-risk 设计里说的“二次升温 / 晚间反弹”尾部风险。P2 结果支持进入 P3：专门研究 bad case 是否可由事前风向、温度斜率、云量/天气现象过滤。
 
 ## 结论分级
 
@@ -201,7 +201,7 @@ forward=NA
 conclusion=physical_candidate
 ```
 
-这不是 `confirmed`，也不是 live 候选。它只说明 M3 第一性物理假设在当前 WU 历史缓存上成立：
+这不是 `confirmed`，也不是 live 候选。它只说明 reheat-risk 第一性物理假设在当前 WU 历史缓存上成立：
 
 ```text
 在 2024-04-30 至 2026-05-12 的 49 城 WU 缓存中，当地 19:00 以后，

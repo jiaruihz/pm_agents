@@ -1,9 +1,9 @@
-# M3 温度衰竭买 NO 策略 v0
+# reheat-risk 温度衰竭买 NO 策略 v0
 
 Status: snapshot
 Updated: 2026-06-12
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/observed_max_m3.md
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/reheat_risk.md
 前置: 2026-06-12-official-resolution-source-and-entry-timing-v0.md
 
 ## 问题

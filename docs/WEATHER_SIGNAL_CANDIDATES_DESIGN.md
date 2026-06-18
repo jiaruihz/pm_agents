@@ -80,6 +80,10 @@ grain = 一个机会 `(condition_id, side, event_date)`。三层对齐:
 按 §1 的**决策窗参数**(默认 `hours_to_settle ∈ [22,24]`)选出代表那条 snapshot 塌缩成一行,
 同时计算全天聚合列(诊断用)。带内无 snapshot 的机会标 `decision_window_missing=1`。
 
+`forecast_peak_*` / `forecast_values_hash` / `forecast_max_*` 字段同样取自这条**决策窗代表
+snapshot**。历史 snapshot 没有这些字段时保留 NULL；builder 不用实际观测最高温或旧 cache
+反推，避免把未来信息混进 forecast-clock 策略回测。
+
 **三个布尔标志把链路标清楚**(这是本表的核心产出):
 
 | 标志 | 含义 | 来源 join |
@@ -114,6 +118,22 @@ CREATE TABLE IF NOT EXISTS fact_signal_candidates (
   icao                TEXT,
   unit                TEXT,
   forecast_source     TEXT,               -- e.g. open_meteo_live_ecmwf
+  forecast_max_f      REAL,               -- 决策窗 forecast hourly 目标日最高温，单位 F
+  forecast_max_native REAL,               -- 决策窗 forecast hourly 目标日最高温，按市场单位 C/F
+  forecast_peak_hour_local INTEGER,        -- 决策窗 forecast 首个最高温小时，本地 0-23
+  forecast_peak_time_local TEXT,
+  forecast_peak_hour_utc INTEGER,
+  forecast_peak_time_utc TEXT,
+  forecast_hourly_count INTEGER,
+  forecast_values_hash TEXT,              -- 目标日 hourly forecast 序列 hash
+  forecast_peak_source TEXT,              -- e.g. open_meteo_live_ecmwf
+  forecast_timezone TEXT,
+  forecast_utc_offset_seconds INTEGER,
+  forecast_peak_delta_hours_local REAL,   -- decision local hour - forecast_peak_hour_local
+  forecast_max_in_bracket INTEGER,        -- forecast max 是否落在该 bracket
+  forecast_max_above_bracket_f REAL,
+  forecast_max_below_bracket_f REAL,
+  forecast_max_above_metar_max_f REAL,    -- forecast_max_f - metar_current_max_f
   model_version       TEXT,               -- ecmwf / gfs
   time_bucket         TEXT,               -- 决策窗 snapshot 的 bucket 标签
   window              TEXT,

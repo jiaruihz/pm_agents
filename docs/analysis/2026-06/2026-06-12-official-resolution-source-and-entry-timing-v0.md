@@ -1,9 +1,9 @@
-# Official Resolution Source 识别 + M3 入场时机研究 v0
+# Official Resolution Source 识别 + reheat-risk 入场时机研究 v0
 
 Status: snapshot
 Updated: 2026-06-12
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/observed_max_m3.md
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/reheat_risk.md
 前置: 2026-06-11-m3-tail-no-retail-diagnosis-v0.md（其下一步 1/2 即本报告）
 
 ## 任务与结论一句话

@@ -1,16 +1,16 @@
-# M3 Orderbook Best-Ask Backtest v0
+# reheat-risk Orderbook Best-Ask Backtest v0
 
 Status: superseded
 Updated: 2026-06-10
 Source of truth: no
-Superseded by / Used by: 2026-06-11-m3-settlement-alignment-v1.md; WEATHER_DOCS_INDEX.md; analysis/observed_max_m3.md
+Superseded by / Used by: 2026-06-11-m3-settlement-alignment-v1.md; WEATHER_DOCS_INDEX.md; analysis/reheat_risk.md
 
 ## 2026-06-11 勘误
 
 本报告的 observed-payout ROI 不得再引用为收益结论。
 
 后续 settlement alignment 发现，WU/IEM observed final max 与 `pm_history` 官方
-winning bracket 不稳定一致。用官方 winner label 重算同一方向后，M3 v1 best-ask
+winning bracket 不稳定一致。用官方 winner label 重算同一方向后，reheat-risk v1 best-ask
 收益转负。当前结论改读：
 
 ```text
@@ -19,7 +19,7 @@ docs/analysis/2026-06/2026-06-11-m3-settlement-alignment-v1.md
 
 ## 结论先行
 
-这次补全后，M3 已经从 paper price proxy 接到历史 orderbook best ask。
+这次补全后，reheat-risk 已经从 paper price proxy 接到历史 orderbook best ask。
 
 但这里的收益是 **historical orderbook best-ask backtest**，不是 live PnL、不是
 CLOB fill ROI，也没有模拟 queue position / latency / partial fill。
@@ -46,7 +46,7 @@ below_running_max_buy_no
 Action:
 
 ```text
-M3 可以继续推进到 shadow/paper 设计，但还不能直接上 live。
+reheat-risk 可以继续推进到 shadow/paper 设计，但还不能直接上 live。
 优先方向是 below_running_max_buy_no，而不是 observed_bucket_buy_yes。
 ```
 
@@ -94,7 +94,7 @@ scripts/ops/sync_weather_remote.sh
 
 ## 物理层 v1
 
-补全后重跑 M3 observed running max residual：
+补全后重跑 reheat-risk observed running max residual：
 
 ```bash
 .venv/bin/python scripts/analysis/observed_max/research_m3_observed_max_residual.py \

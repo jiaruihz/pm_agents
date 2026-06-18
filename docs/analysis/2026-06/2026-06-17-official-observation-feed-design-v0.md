@@ -110,6 +110,38 @@ runtime/weather_edge_v1/official_observation_feed/
 | `blocked_unresolved_settlement_basis` | Moscow/Seoul/Shenzhen 这类不得给 live consumer 输出 `eligible=true` |
 | `no_recent_market_or_unknown_rules` | 不进 source-sensitive live/replay，直到规则源识别 |
 
+## METAR / ASOS 报文链路和速度分层
+
+速度型 `刚穿 T -> 抢 T-1 NO` 不能把 `aviationweather` 当成唯一事实源。它只是一个下游分发面；真正要测的是同一条官方观测报文从站点到不同公开镜像的到达时间差。
+
+已确认的公开链路位置：
+
+| 层 | 例子 | 速度判断 | 用途 |
+|---|---|---|---|
+| 站点/传感器 | US ASOS/AWOS；国际机场 METAR station | 最上游；ASOS 自身可每分钟更新，routine METAR 通常半小时/小时，SPECI 可插入 | source truth 的物理起点 |
+| 航空气象交换/国家发布 | FAA/NWS/DOD ASOS 体系；国际 ICAO/WMO/AFTN/METAR 分发 | 理论上最快，但公开 API 不一定可用 | 需要继续找 direct feed / subscription / local official portal |
+| NOAA/NWS Aviation Weather Center | `aviationweather.gov/api/data/metar` | 机器 API；全球 METAR；有 rate limit；不保证 10s | 当前 primary，必须测速 |
+| AWC cache | `aviationweather.gov/data/cache/metars.cache.csv.gz` | 官方说明 all-current METAR cache once/minute | 可测 API vs cache 是否同层；不应假设能 10s |
+| MADIS / OMO | MADIS One Minute ASOS / HFMETAR | 美国 ASOS 可能更接近 1-minute 源；访问/覆盖有限 | Chicago/US cities second-stage candidate，不适合 ZSPD/RJTT 默认 |
+| IEM ASOS | IEM ASOS/AWOS/METAR archive | IEM 页面说明 realtime ingest 每 10 分钟同步 | 历史/校验/fallback；不适合 10s 抢单 |
+| 第三方 METAR 镜像 | CheckWX、OGIMET、商业天气 API | 可能快也可能慢，取决于上游 | 只做 timing compare；不能替代 settlement source |
+| 特殊 settlement 源 | HongKong HKO daily extract 等 | 非 METAR；需独立 realtime client | 未实现前 hard ban |
+
+Source notes from public docs checked 2026-06-17:
+
+- NWS ASOS page: ASOS is a joint NWS/FAA/DOD program, airport-focused, continuously observing real-time weather; it issues hourly and special observations when criteria are met.
+- NWS ASOS technical page: ASOS updates observations every minute, detects significant changes, disseminates hourly/special observations, and transmits observations automatically.
+- AviationWeather Data API: METAR coverage is worldwide, supports raw/JSON/CSV/XML/etc.; API access is rate-limited and AWC recommends cache files for broad/frequent access.
+- AviationWeather cache: all-current METAR CSV/XML cache updates once a minute.
+- IEM ASOS download page: IEM archive sources include Unidata IDD, NCEI ISD, and MADIS One Minute ASOS; its processed archive says realtime ingest syncs every 10 minutes.
+- MADIS: global observational database that ingests NOAA and non-NOAA data, decodes/normalizes, quality-checks, stores flags, and provides distribution services.
+
+Implication for live candidates:
+
+- Shanghai/ZSPD and Tokyo/RJTT are still first-stage because settlement/rules source matches METAR station, but their fastest public source is not proven. We must compare `aviationweather_metar`, `aviationweather_cache_csv`, `checkwx_html`, and any discovered local official aviation weather endpoint.
+- Paris/London/Chicago stay second-stage. Chicago may benefit from US-only MADIS/OMO/ASOS channels; Paris/London need local aviation meteorological source search.
+- Seoul/Moscow/Shenzhen/HongKong stay banned until the settlement source and realtime source are reconciled.
+
 ## Consumer 关系
 
 ```mermaid

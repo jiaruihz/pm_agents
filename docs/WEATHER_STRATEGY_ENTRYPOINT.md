@@ -121,7 +121,7 @@ strategies only by `execution_policy`: two instances can share
 Start the intended production set with:
 
 ```bash
-wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && scripts/ops/start_weather_three_strategy_instances.sh'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && scripts/ops/start_weather_three_strategy_instances.sh'
 ```
 
 The script name is historical; by default it now starts two instances. V2 only
@@ -220,10 +220,12 @@ first.
 
 ## Production Checks
 
-Run N100 commands from WSL, not directly from Windows PowerShell:
+Run N100 commands from the current host correctly. On the Mac checkout at
+`/Users/deepsleep/projects/pm_agents`, use direct SSH. On a Windows/PowerShell
+host, run the same SSH command through WSL instead of Windows `ssh`.
 
 ```bash
-wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_status.py status --json'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_status.py status --json'
 ```
 
 ## N100 pm_agent Git Deployment Record
@@ -256,20 +258,20 @@ into the live worktree with `scp`/`rsync`.
 Health check:
 
 ```bash
-wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_doctor.py --http-timeout 6 --sync-dry-run --require-live-loop --require-telegram-control'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_doctor.py --http-timeout 6 --sync-dry-run --require-live-loop --require-telegram-control'
 ```
 
 Dry-run one live cycle without placing orders:
 
 ```bash
-wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_cycle.py --dry-run-live --no-telegram'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_cycle.py --dry-run-live --no-telegram'
 ```
 
 Pause/resume:
 
 ```bash
-wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_status.py pause --reason "manual review" --source claude'
-wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_status.py resume'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_status.py pause --reason "manual review" --source claude'
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_status.py resume'
 ```
 
 Telegram commands also exist:
@@ -441,7 +443,7 @@ Working conclusions as of 2026-05-16:
 Before making research claims, sync the latest N100 mirror first:
 
 ```bash
-cd /home/rui/projects/pm_agent
+cd /Users/deepsleep/projects/pm_agents
 scripts/ops/sync_weather_remote.sh
 ```
 
@@ -483,7 +485,7 @@ Do not implement these casually during emergency live fixes:
 
 1. Read this file and `docs/OPS_RUNBOOK.md`.
 2. Check N100 status and pause state.
-3. Make local changes in `/home/rui/projects/pm_agent`.
+3. Make local changes in `/Users/deepsleep/projects/pm_agents` on this Mac; use `/home/rui/projects/pm_agent` only from an actual WSL/Linux shell.
 4. Run focused tests.
 5. Commit and push.
 6. Deploy only the touched files to N100, or use the agreed deployment script if present.

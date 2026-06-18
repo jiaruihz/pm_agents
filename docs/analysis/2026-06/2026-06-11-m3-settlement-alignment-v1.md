@@ -1,18 +1,18 @@
-# M3 Settlement Alignment v1
+# reheat-risk Settlement Alignment v1
 
 Status: snapshot
 Updated: 2026-06-11
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/observed_max_m3.md
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/reheat_risk.md
 
 ## 数据快照
 
 数据源：镜像 CSV/JSON，而不是 `fact_trades` fill-grain 绩效表。
 
-原因：本报告验证 M3 的 source/settlement alignment。它回答的是：
+原因：本报告验证 reheat-risk 的 source/settlement alignment。它回答的是：
 
 ```text
-WU/IEM observed final max 能否替代 pm_history 官方 winning bracket 来判定 M3 payout？
+WU/IEM observed final max 能否替代 pm_history 官方 winning bracket 来判定 reheat-risk payout？
 ```
 
 它不是 live PnL，不是 CLOB fill ROI，也不使用账户真实成交。
@@ -36,7 +36,7 @@ conclusion=inconclusive
 
 ## 勘误结论
 
-M3 的 v0/v1 observed-payout orderbook 回测不能作为收益结论。
+reheat-risk 的 v0/v1 observed-payout orderbook 回测不能作为收益结论。
 
 根因：
 
@@ -81,7 +81,7 @@ docs/analysis/2026-06/generated/m3_settlement_alignment_v1/
 
 - F 市场基本可由 WU/IEM `final_max_f` 对齐，仍有约 3.85% mismatch。
 - C 市场即使用 `round(final_max_c)`，也只有 85.54% 和官方 winner 一致。
-- 这说明 M3 的核心风险不是 orderbook 价格，而是官方 settlement source / unit / rounding / station 口径。
+- 这说明 reheat-risk 的核心风险不是 orderbook 价格，而是官方 settlement source / unit / rounding / station 口径。
 
 ## Unit-Aware Best-Ask v1
 
@@ -134,7 +134,7 @@ observed-payout 口径下，v1 仍看似赚钱：
 ```text
 Milan 2026-05-20
 running_max_c=27.22
-M3 v1 would buy NO on bracket 25
+reheat-risk v1 would buy NO on bracket 25
 pm_history winner_labels=25
 official payout for BUY_NO = 0
 ```
@@ -143,7 +143,7 @@ official payout for BUY_NO = 0
 
 ## 当前动作
 
-M3 当前状态降级为：
+reheat-risk 当前状态降级为：
 
 ```text
 settlement_blocked

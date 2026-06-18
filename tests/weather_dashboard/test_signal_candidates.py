@@ -5,8 +5,8 @@ import sqlite3
 
 import pytest
 
-from scripts.analysis.build_weather_fact_trades import FACT_DDL
-from scripts.analysis.build_weather_signal_candidates import (
+from scripts.etl.build_weather_fact_trades import FACT_DDL
+from scripts.etl.build_weather_signal_candidates import (
     build,
     write_db,
     _counterfactual_pnl,
@@ -127,6 +127,54 @@ def test_decision_window_picks_closest_to_target(tmp_path, canon_db):
     # best_entry_price = cheapest across ALL snapshots = 0.40
     assert r["best_entry_price"] == 0.40
     assert r["n_snapshots"] == 3
+
+
+def test_decision_window_preserves_forecast_peak_fields(tmp_path, canon_db):
+    snap = tmp_path / "snaps"
+    _write_snapshot(snap, "s1.json", "2026-05-08T02:00:00Z", [
+        _rec(
+            hours_to_settle=23.0,
+            forecast_max_f=86.0,
+            forecast_max_native=30.0,
+            forecast_peak_hour_local=14,
+            forecast_peak_time_local="2026-05-09T14:00",
+            forecast_peak_hour_utc=5,
+            forecast_peak_time_utc="2026-05-09T05:00:00Z",
+            forecast_hourly_count=24,
+            forecast_values_hash="abc123def4567890",
+            forecast_peak_source="open_meteo_live_ecmwf",
+            forecast_timezone="Asia/Tokyo",
+            forecast_utc_offset_seconds=32400,
+            forecast_peak_delta_hours_local=-1.0,
+            forecast_max_in_bracket=1,
+            forecast_max_above_bracket_f=0.0,
+            forecast_max_below_bracket_f=0.0,
+            forecast_max_above_metar_max_f=1.8,
+        )
+    ])
+
+    rows, _, _ = build(canon_db, snapshot_dir=snap,
+                       paper_orders_path=tmp_path / "none.jsonl",
+                       hts_min=22.0, hts_max=24.0)
+
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["forecast_max_f"] == pytest.approx(86.0)
+    assert r["forecast_max_native"] == pytest.approx(30.0)
+    assert r["forecast_peak_hour_local"] == 14
+    assert r["forecast_peak_time_local"] == "2026-05-09T14:00"
+    assert r["forecast_peak_hour_utc"] == 5
+    assert r["forecast_peak_time_utc"] == "2026-05-09T05:00:00Z"
+    assert r["forecast_hourly_count"] == 24
+    assert r["forecast_values_hash"] == "abc123def4567890"
+    assert r["forecast_peak_source"] == "open_meteo_live_ecmwf"
+    assert r["forecast_timezone"] == "Asia/Tokyo"
+    assert r["forecast_utc_offset_seconds"] == 32400
+    assert r["forecast_peak_delta_hours_local"] == pytest.approx(-1.0)
+    assert r["forecast_max_in_bracket"] == 1
+    assert r["forecast_max_above_bracket_f"] == pytest.approx(0.0)
+    assert r["forecast_max_below_bracket_f"] == pytest.approx(0.0)
+    assert r["forecast_max_above_metar_max_f"] == pytest.approx(1.8)
 
 
 def test_decision_window_missing_when_no_snapshot_in_band(tmp_path, canon_db):

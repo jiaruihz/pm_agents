@@ -1,13 +1,13 @@
-# M3 Tail-NO Retail Diagnosis v0
+# reheat-risk Tail-NO Retail Diagnosis v0
 
 Status: snapshot
 Updated: 2026-06-11
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/observed_max_m3.md
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; analysis/reheat_risk.md
 
 ## 问题
 
-用户提出的 M3 表达是：当天下午/傍晚，在「物理上不支持二次升温」的城市，
+用户提出的 reheat-risk 表达是：当天下午/傍晚，在「物理上不支持二次升温」的城市，
 买入**高于当前 observed running max 的高温尾部 bracket 的 NO**，做一个
 类 theta（收剩余不确定性溢价）的策略，并要求评估散户可行性。
 
@@ -151,6 +151,6 @@ Wellington。即使方向有边际，绝对收益也是美分级。
 3. **角色互换评估**：taker 没空间不代表 maker 没空间。在零穿档城市
    20h 后**挂 YES 卖单/NO 买单提供流动性**收 spread，承担的尾部风险
    有精算表定价。这是数据已支持、还没评估的方向。
-4. 若 14-17h 仍无边际：M3 作为独立策略关闭，把穿档精算表降级为现有
+4. 若 14-17h 仍无边际：reheat-risk 作为独立策略关闭，把穿档精算表降级为现有
    策略的**风控/退出模块**（持仓的 bracket 被 running max 穿越后立即
    止损卖出，而不是等结算）。

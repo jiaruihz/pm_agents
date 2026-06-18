@@ -1,4 +1,4 @@
-# M3 Paper Snapshot Proxy Backtest v0
+# reheat-risk Paper Snapshot Proxy Backtest v0
 
 Status: snapshot
 Updated: 2026-06-10
@@ -7,7 +7,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; 2026-06-10-m3-observed-max-resid
 
 ## 数据快照
 
-本报告尝试把 M3 observed running max 接到现有历史价格 proxy。
+本报告尝试把 reheat-risk observed running max 接到现有历史价格 proxy。
 
 重要限制：这不是 executable orderbook backtest。它使用
 `runtime/weather_edge_v1/remote_pm_agent/market_data/paper_snapshots/` 里的
@@ -21,7 +21,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; 2026-06-10-m3-observed-max-resid
 | paper snapshots | 2026-05-05 to 2026-05-17 |
 | orderbook snapshots | 2026-05-19 to 2026-06-10 |
 
-因此当前本机 `orderbook_snapshots` 和 observed cache 没有重叠窗口；无法直接算 M3 的 best-ask 收益。
+因此当前本机 `orderbook_snapshots` 和 observed cache 没有重叠窗口；无法直接算 reheat-risk 的 best-ask 收益。
 
 ## Target Metric
 
@@ -119,7 +119,7 @@ forward=NA
 conclusion=inconclusive
 ```
 
-不要引用上面的 ROI 作为 M3 收益。原因：
+不要引用上面的 ROI 作为 reheat-risk 收益。原因：
 
 - 20/21 点只有 4 条交易、1 个 city-day。
 - 18-21 点也只有 14 条交易、2 个 city-day。
@@ -131,7 +131,7 @@ conclusion=inconclusive
 因此当前收益问题的诚实答案是：
 
 ```text
-本地现有数据还不能给 M3 严肃 ROI。
+本地现有数据还不能给 reheat-risk 严肃 ROI。
 P2 物理层已过，但 P4 收益层需要先补 observed cache 与 orderbook 的重叠窗口。
 ```
 
