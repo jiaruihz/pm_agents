@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -268,22 +269,35 @@ def run_probe(args: argparse.Namespace) -> int:
     ]
     started = utc_now()
     timed_out = False
+    proc = subprocess.Popen(
+        cmd,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
     try:
-        proc = subprocess.run(
-            cmd,
-            env=env,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=args.total_timeout_sec + args.outer_grace_sec,
-        )
-        output = proc.stdout
+        output, _ = proc.communicate(timeout=args.total_timeout_sec + args.outer_grace_sec)
         returncode: int | None = proc.returncode
     except subprocess.TimeoutExpired as exc:
         timed_out = True
-        raw_output = exc.stdout or ""
-        output = raw_output.decode("utf-8", errors="replace") if isinstance(raw_output, bytes) else raw_output
-        returncode = None
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            output, _ = proc.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            output, _ = proc.communicate()
+        if not output:
+            raw_output = exc.output or exc.stdout or ""
+            output = raw_output.decode("utf-8", errors="replace") if isinstance(raw_output, bytes) else raw_output
+        returncode = proc.returncode
     ended = utc_now()
     status = classify_probe_output(output)
     if timed_out and status == "unknown":
