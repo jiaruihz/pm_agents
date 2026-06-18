@@ -14,12 +14,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
+
+import httpx
 
 OPS = Path(__file__).resolve().parent
 ROOT = OPS.parents[1]
@@ -41,6 +45,30 @@ from src.strategies.weather_edge_v1.official_observation_feed.source_policy impo
 
 DATA_ROOT = Path(os.environ.get("METAR_CROSS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
 OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/metar_cross_prev_no_shadow"
+FAST_HTTP_TIMEOUT_SEC = float(os.environ.get("METAR_CROSS_HTTP_TIMEOUT_SEC", "3.0"))
+FAST_PROXY_MODE = os.environ.get("METAR_CROSS_PROXY_MODE", "direct").strip().lower()
+WEATHER_PROXY_MODE = os.environ.get("METAR_CROSS_WEATHER_PROXY_MODE", FAST_PROXY_MODE).strip().lower()
+MARKET_PROXY_MODE = os.environ.get("METAR_CROSS_MARKET_PROXY_MODE", FAST_PROXY_MODE).strip().lower()
+EXPLICIT_WEATHER_PROXY = os.environ.get("METAR_CROSS_WEATHER_PROXY", "").strip()
+EXPLICIT_MARKET_PROXY = os.environ.get("METAR_CROSS_MARKET_PROXY", "").strip()
+WRH_API_KEY_JS = "https://www.weather.gov/source/wrh/apiKey.js"
+SYNOPTIC_TIMESERIES_API = "https://api.synopticdata.com/v2/stations/timeseries"
+SYNOPTIC_TOKEN_RE = re.compile(r"['\"]([a-f0-9]{32})['\"]")
+SYNOPTIC_TOKEN_CACHE: str | None = None
+
+
+def proxy_candidates(mode: str, explicit_proxy: str = "") -> list[str | None]:
+    if explicit_proxy:
+        return [explicit_proxy]
+    if mode == "all":
+        return source.PROXIES
+    if mode == "first":
+        return source.PROXIES[:1]
+    return [None]
+
+
+WEATHER_PROXY_CANDIDATES = proxy_candidates(WEATHER_PROXY_MODE, EXPLICIT_WEATHER_PROXY)
+MARKET_PROXY_CANDIDATES = proxy_candidates(MARKET_PROXY_MODE, EXPLICIT_MARKET_PROXY)
 
 
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
@@ -86,6 +114,20 @@ def parsed_label_matches_no_target(parsed: dict[str, Any] | None, target: int) -
     return float(low) <= target <= float(high)
 
 
+def parsed_label_is_dead_for_running_value(parsed: dict[str, Any] | None, target: int, running_value: int) -> bool:
+    """Only trade NO when the whole bracket is below the observed running max."""
+    if parsed is None or parsed.get("top"):
+        return False
+    high = parsed.get("high")
+    if high is None:
+        return False
+    try:
+        high_int = int(float(high))
+    except (TypeError, ValueError):
+        return False
+    return high_int == target and high_int < running_value
+
+
 def load_state() -> dict[str, Any]:
     return read_json(OUT_DIR / "state.json", {"last_running_value": {}, "fired": []})
 
@@ -99,6 +141,15 @@ def find_no_market(markets: list[dict[str, Any]], target_bracket: int) -> tuple[
         label = str(market.get("groupItemTitle") or "")
         parsed = source.parse_label(label, str(market.get("question") or ""))
         if parsed_label_matches_no_target(parsed, target_bracket):
+            return market, parsed
+    return None, None
+
+
+def find_dead_no_market(markets: list[dict[str, Any]], target_bracket: int, running_value: int) -> tuple[dict[str, Any], dict[str, Any]] | tuple[None, None]:
+    for market in markets:
+        label = str(market.get("groupItemTitle") or "")
+        parsed = source.parse_label(label, str(market.get("question") or ""))
+        if parsed_label_is_dead_for_running_value(parsed, target_bracket, running_value):
             return market, parsed
     return None, None
 
@@ -118,8 +169,45 @@ def parse_metar_records(data: list[dict[str, Any]], tz: ZoneInfo, local_date: An
     return sorted(obs)
 
 
+def in_update_window(now_utc: datetime, *, window_min: float) -> bool:
+    minute = now_utc.minute + now_utc.second / 60.0
+    distance_to_half_hour = min(abs(minute - 0.0), abs(minute - 30.0), abs(minute - 60.0))
+    return distance_to_half_hour <= window_min
+
+
+def aviationweather_metar_day_fast(icao: str, tz: ZoneInfo, local_date: Any) -> dict[str, Any]:
+    data = source.fetch_json(
+        source.METAR_API,
+        {"ids": icao, "format": "json", "hours": "30"},
+        max_rounds=1,
+        timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+        proxy_candidates=WEATHER_PROXY_CANDIDATES,
+    )
+    obs = parse_metar_records(data, tz, local_date)
+    if not obs:
+        return {"status": "no_recent_obs", "source": "aviationweather_metar_day_fast", "n_obs": 0}
+    last_dt, last_temp = obs[-1]
+    now = datetime.now(timezone.utc)
+    age_min = (now - last_dt).total_seconds() / 60.0
+    return {
+        "status": "ok",
+        "source": "aviationweather_metar_day_fast",
+        "n_obs": len(obs),
+        "age_min": round(age_min, 1),
+        "running_max_c": max(temp for _, temp in obs),
+        "current_temp_c": last_temp,
+        "last_obs_utc": last_dt.isoformat(),
+    }
+
+
 def recent_metar_summary(icao: str, tz: ZoneInfo, local_date: Any, *, hours: float) -> dict[str, Any]:
-    data = source.fetch_json(source.METAR_API, {"ids": icao, "format": "json", "hours": str(hours)})
+    data = source.fetch_json(
+        source.METAR_API,
+        {"ids": icao, "format": "json", "hours": str(hours)},
+        max_rounds=1,
+        timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+        proxy_candidates=WEATHER_PROXY_CANDIDATES,
+    )
     obs = parse_metar_records(data, tz, local_date)
     if not obs:
         return {"status": "no_recent_obs", "source": "aviationweather_metar_recent", "n_obs": 0}
@@ -137,6 +225,107 @@ def recent_metar_summary(icao: str, tz: ZoneInfo, local_date: Any, *, hours: flo
     }
 
 
+def synoptic_token() -> str:
+    global SYNOPTIC_TOKEN_CACHE
+    if SYNOPTIC_TOKEN_CACHE:
+        return SYNOPTIC_TOKEN_CACHE
+    explicit = os.environ.get("METAR_CROSS_SYNOP_TOKEN", "").strip() or os.environ.get("SYNOPTIC_TOKEN", "").strip()
+    if explicit:
+        SYNOPTIC_TOKEN_CACHE = explicit
+        return SYNOPTIC_TOKEN_CACHE
+    text = source.fetch_text(
+        WRH_API_KEY_JS,
+        max_rounds=1,
+        timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+        proxy_candidates=WEATHER_PROXY_CANDIDATES,
+    )
+    match = SYNOPTIC_TOKEN_RE.search(text)
+    if not match:
+        raise RuntimeError("weather.gov Synoptic token not found")
+    SYNOPTIC_TOKEN_CACHE = match.group(1)
+    return SYNOPTIC_TOKEN_CACHE
+
+
+def synoptic_summary(icao: str, tz: ZoneInfo, local_date: Any, *, minutes: int) -> dict[str, Any]:
+    params = {
+            "STID": icao,
+            "recent": str(minutes),
+            "vars": "air_temp",
+            "units": "temp|C",
+            "obtimezone": "utc",
+            "token": synoptic_token(),
+            "output": "json",
+    }
+    last = None
+    for proxy in WEATHER_PROXY_CANDIDATES:
+        try:
+            response = httpx.get(
+                SYNOPTIC_TIMESERIES_API,
+                params=params,
+                headers={
+                    "User-Agent": "Mozilla/5.0 pm-agent-weather-latency-research",
+                    "Referer": f"https://www.weather.gov/wrh/timeseries?site={icao}",
+                    "Origin": "https://www.weather.gov",
+                },
+                proxy=proxy,
+                timeout=FAST_HTTP_TIMEOUT_SEC,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            break
+        except Exception as exc:  # noqa: BLE001
+            last = f"{proxy}: {type(exc).__name__}"
+    else:
+        raise RuntimeError(f"fetch failed {SYNOPTIC_TIMESERIES_API}: {last}")
+    stations = payload.get("STATION") or []
+    if not stations:
+        return {"status": "no_recent_obs", "source": "synopticdata_timeseries", "n_obs": 0}
+    obs_payload = stations[0].get("OBSERVATIONS") or {}
+    times = obs_payload.get("date_time") or []
+    temps = obs_payload.get("air_temp_set_1") or obs_payload.get("air_temp") or []
+    if not isinstance(times, list):
+        times = [times]
+    if not isinstance(temps, list):
+        temps = [temps]
+    obs: list[tuple[datetime, float]] = []
+    for raw_ts, raw_temp in zip(times, temps):
+        if raw_ts in (None, "") or raw_temp in (None, ""):
+            continue
+        try:
+            dt = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+            temp = float(raw_temp)
+        except (TypeError, ValueError):
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt.astimezone(tz).date() == local_date:
+            obs.append((dt, temp))
+    obs = sorted(obs)
+    if not obs:
+        return {"status": "no_recent_obs", "source": "synopticdata_timeseries", "n_obs": 0}
+    last_dt, last_temp = obs[-1]
+    now = datetime.now(timezone.utc)
+    age_min = (now - last_dt).total_seconds() / 60.0
+    return {
+        "status": "ok",
+        "source": "synopticdata_timeseries",
+        "n_obs": len(obs),
+        "age_min": round(age_min, 1),
+        "running_max_c": max(temp for _, temp in obs),
+        "current_temp_c": last_temp,
+        "last_obs_utc": last_dt.isoformat(),
+    }
+
+
+def observation_summary(cfg: CityConfig, tz: ZoneInfo, local_date: Any, *, previous_value: Any, recent_hours: float, obs_source: str) -> dict[str, Any]:
+    if obs_source == "synopticdata_timeseries":
+        minutes = 1800 if previous_value is None else max(60, int(recent_hours * 60))
+        return synoptic_summary(cfg.official_icao, tz, local_date, minutes=minutes)
+    if previous_value is None:
+        return aviationweather_metar_day_fast(cfg.official_icao, tz, local_date)
+    return recent_metar_summary(cfg.official_icao, tz, local_date, hours=recent_hours)
+
+
 def detect_latency_sec(ts_utc: str | None, obs_last_obs_utc: str | None) -> float | None:
     if not ts_utc or not obs_last_obs_utc:
         return None
@@ -148,16 +337,145 @@ def detect_latency_sec(ts_utc: str | None, obs_last_obs_utc: str | None) -> floa
     return round((ts - obs).total_seconds(), 3)
 
 
-def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, recent_hours: float) -> dict[str, int]:
+def extract_order_id(payload: Any) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("order_id", "orderID", "id"):
+        value = payload.get(key)
+        if value:
+            return str(value)
+    data = payload.get("data")
+    if isinstance(data, dict):
+        for key in ("order_id", "orderID", "id"):
+            value = data.get(key)
+            if value:
+                return str(value)
+    return ""
+
+
+def build_live_fok_place_fn() -> Any:
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(ROOT / ".env")
+    except Exception:
+        pass
+    try:
+        from py_clob_client_v2.client import ClobClient
+        from py_clob_client_v2.clob_types import ApiCreds, OrderArgsV2, OrderType
+        from py_clob_client_v2.constants import POLYGON
+        import py_clob_client_v2.http_helpers.helpers as clob_http_helpers
+
+        order_args_cls = OrderArgsV2
+        clob_v2 = True
+    except ModuleNotFoundError:
+        from py_clob_client.client import ClobClient
+        from py_clob_client.clob_types import ApiCreds, OrderArgs, OrderType
+        from py_clob_client.constants import POLYGON
+        import py_clob_client.http_helpers.helpers as clob_http_helpers
+
+        order_args_cls = OrderArgs
+        clob_v2 = False
+    clob_proxy = next((proxy for proxy in MARKET_PROXY_CANDIDATES if proxy), None)
+    if clob_proxy:
+        clob_http_helpers._http_client = httpx.Client(http2=True, proxy=clob_proxy, timeout=FAST_HTTP_TIMEOUT_SEC)  # noqa: SLF001
+    host = os.getenv("CLOB_BASE_URL", "").strip() or os.getenv("PM_API_BASE_URL", "").strip() or "https://clob.polymarket.com"
+    private_key = os.getenv("POLYGON_WALLET_PRIVATE_KEY", "").strip() or os.getenv("PM", "").strip()
+    if not private_key:
+        raise RuntimeError("missing POLYGON_WALLET_PRIVATE_KEY or PM")
+    chain_id = int(os.getenv("CLOB_CHAIN_ID", str(POLYGON)))
+    funder = os.getenv("PM_ADDRESS", "").strip()
+    signature_type_raw = int(os.getenv("CLOB_SIGNATURE_TYPE", "-1"))
+    try:
+        signer_addr = ClobClient(host, chain_id=chain_id, key=private_key).get_address()
+    except Exception:
+        signer_addr = ""
+    signature_type = signature_type_raw
+    if signature_type < 0:
+        signature_type = 1 if funder and signer_addr and funder.lower() != signer_addr.lower() else 0
+    api_key = os.getenv("CLOB_API_KEY", "").strip()
+    api_secret = os.getenv("CLOB_SECRET", "").strip()
+    api_pass = os.getenv("CLOB_PASS_PHRASE", "").strip()
+    creds = ApiCreds(api_key=api_key, api_secret=api_secret, api_passphrase=api_pass) if api_key and api_secret and api_pass else None
+    client = ClobClient(host, chain_id=chain_id, key=private_key, creds=creds, signature_type=signature_type, funder=funder or None)
+    if creds is None:
+        if clob_v2:
+            client.set_api_creds(client.derive_api_key())
+        else:
+            client.set_api_creds(client.create_or_derive_api_creds())
+
+    def place(row: dict[str, Any]) -> dict[str, Any]:
+        signed_order = client.create_order(
+            order_args_cls(
+                token_id=str(row["token_id"]),
+                price=float(row["limit_price"]),
+                size=float(row["size"]),
+                side="BUY",
+            )
+        )
+        if clob_v2:
+            response = client.post_order(signed_order, order_type=OrderType.FOK)
+        else:
+            response = client.post_order(signed_order, orderType=OrderType.FOK)
+        return {
+            "place": response,
+            "order_id": extract_order_id(response),
+            "clob_client": "py_clob_client_v2" if clob_v2 else "py_clob_client",
+            "order_type": "FOK",
+            "signature_type": signature_type,
+            "funder": funder,
+            "signer": signer_addr,
+            "clob_proxy_enabled": bool(clob_proxy),
+        }
+
+    return place
+
+
+def spent_notional(path: Path, *, target_date: str | None = None, city: str | None = None) -> float:
+    total = 0.0
+    if not path.exists():
+        return total
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if target_date and row.get("target_date") != target_date:
+            continue
+        if city and row.get("city") != city:
+            continue
+        if row.get("live_attempted") is not True:
+            continue
+        total += float(row.get("submitted_notional_usd") or 0.0)
+    return round(total, 6)
+
+
+def cycle_once(
+    configs: list[CityConfig],
+    *,
+    max_ask: float,
+    dry_run: bool,
+    recent_hours: float,
+    obs_source: str,
+    live: bool,
+    confirm_live: bool,
+    max_notional_per_trade: float,
+    max_notional_per_city_day: float,
+    max_notional_total_day: float,
+    max_workers: int = 12,
+    live_place_fn: Any | None = None,
+) -> dict[str, int]:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     state = load_state()
     fired = {tuple(item) for item in state.get("fired", [])}
     last_running = dict(state.get("last_running_value") or {})
     now_utc = datetime.now(timezone.utc)
-    counts = {"cities": 0, "crossings": 0, "opportunities": 0, "errors": 0}
+    counts = {"cities": 0, "crossings": 0, "opportunities": 0, "live_attempts": 0, "live_submitted": 0, "errors": 0}
+    live_enabled = bool(live and confirm_live and not dry_run)
 
-    for cfg in configs:
-        counts["cities"] += 1
+    def fetch_observation(cfg: CityConfig) -> dict[str, Any]:
         tz = ZoneInfo(cfg.timezone_name)
         local_date = now_utc.astimezone(tz).date()
         date_key = f"{cfg.city}|{local_date.isoformat()}"
@@ -176,14 +494,50 @@ def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, rece
         }
         previous_value = last_running.get(date_key)
         try:
-            if previous_value is None:
-                met = source.aviationweather_metar_day(cfg.official_icao, tz, local_date)
-            else:
-                met = recent_metar_summary(cfg.official_icao, tz, local_date, hours=recent_hours)
+            met = observation_summary(
+                cfg,
+                tz,
+                local_date,
+                previous_value=previous_value,
+                recent_hours=recent_hours,
+                obs_source=obs_source,
+            )
         except Exception as exc:  # noqa: BLE001
+            return {
+                "cfg": cfg,
+                "local_date": local_date,
+                "date_key": date_key,
+                "previous_value": previous_value,
+                "cycle_row": cycle_row,
+                "met": None,
+                "error": str(exc),
+            }
+        return {
+            "cfg": cfg,
+            "local_date": local_date,
+            "date_key": date_key,
+            "previous_value": previous_value,
+            "cycle_row": cycle_row,
+            "met": met,
+            "error": None,
+        }
+
+    with ThreadPoolExecutor(max_workers=max(1, max_workers)) as executor:
+        futures = {executor.submit(fetch_observation, cfg): cfg for cfg in configs}
+        observed_rows = [future.result() for future in as_completed(futures)]
+
+    for observed in observed_rows:
+        counts["cities"] += 1
+        cfg = observed["cfg"]
+        local_date = observed["local_date"]
+        date_key = observed["date_key"]
+        previous_value = observed["previous_value"]
+        cycle_row = observed["cycle_row"]
+        if observed["error"]:
             counts["errors"] += 1
-            append_jsonl(OUT_DIR / "cycles.jsonl", {**cycle_row, "status": "metar_fetch_failed", "error": str(exc)})
+            append_jsonl(OUT_DIR / "cycles.jsonl", {**cycle_row, "status": "metar_fetch_failed", "error": observed["error"]})
             continue
+        met = observed["met"]
         cycle_row.update(
             {
                 "metar_status": met.get("status"),
@@ -218,7 +572,13 @@ def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, rece
 
         event_slug = source.event_slug(cfg.slug, local_date)
         try:
-            events = source.fetch_json(f"{source.GAMMA}/events", {"slug": event_slug})
+            events = source.fetch_json(
+                f"{source.GAMMA}/events",
+                {"slug": event_slug},
+                max_rounds=1,
+                timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+                proxy_candidates=MARKET_PROXY_CANDIDATES,
+            )
         except RuntimeError as exc:
             counts["errors"] += 1
             append_jsonl(OUT_DIR / "opportunities.jsonl", {**cycle_row, "status": "gamma_fetch_failed", "event_slug": event_slug, "error": str(exc)})
@@ -243,19 +603,20 @@ def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, rece
                 continue
             fired.add(fire_key)
             counts["crossings"] += 1
-            market, parsed = find_no_market(markets, target_bracket)
+            market, parsed = find_dead_no_market(markets, target_bracket, current_value)
             base_row = {
                 **cycle_row,
                 "status": "cross_detected",
                 "event_slug": event_slug,
                 "target_no_bracket": target_bracket,
+                "dead_bracket_guard": "parsed_high_must_equal_target_and_be_below_running_value",
                 "rules_icao": rules_icao,
                 "market_question": None if market is None else market.get("question"),
                 "market_label": None if market is None else market.get("groupItemTitle"),
                 "parsed_label": parsed,
             }
             if market is None:
-                append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "market_not_found"})
+                append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "dead_no_market_not_found_or_ambiguous"})
                 continue
             try:
                 token_ids = json.loads(market["clobTokenIds"])
@@ -266,13 +627,29 @@ def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, rece
                 continue
             yes_book_summary = {}
             try:
-                no_book = source.fetch_json(f"{source.CLOB}/book", {"token_id": no_token_id})
+                book_fetch_start_utc = datetime.now(timezone.utc)
+                no_book = source.fetch_json(
+                    f"{source.CLOB}/book",
+                    {"token_id": no_token_id},
+                    max_rounds=1,
+                    timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+                    proxy_candidates=MARKET_PROXY_CANDIDATES,
+                )
+                no_book_fetched_utc = datetime.now(timezone.utc)
             except RuntimeError as exc:
                 append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "book_fetch_failed", "token_id": no_token_id, "error": str(exc)})
                 continue
             no_book_summary = source.book_summary(no_book)
             try:
-                yes_book_summary = source.book_summary(source.fetch_json(f"{source.CLOB}/book", {"token_id": yes_token_id}))
+                yes_book_summary = source.book_summary(
+                    source.fetch_json(
+                        f"{source.CLOB}/book",
+                        {"token_id": yes_token_id},
+                        max_rounds=1,
+                        timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+                        proxy_candidates=MARKET_PROXY_CANDIDATES,
+                    )
+                )
             except RuntimeError as exc:
                 yes_book_summary = {"fetch_error": str(exc)}
             yes_best_bid = yes_book_summary.get("best_bid")
@@ -284,12 +661,32 @@ def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, rece
                 "yes_book": yes_book_summary,
                 "synthetic_no_cost_if_mint_and_sell_yes_bid": synthetic_no_cost,
                 "detected_after_report_sec": detect_latency_sec(cycle_row.get("ts_utc"), cycle_row.get("obs_last_obs_utc")),
+                "book_fetch_start_utc": book_fetch_start_utc.isoformat(),
+                "no_book_fetched_utc": no_book_fetched_utc.isoformat(),
+                "book_fetch_latency_sec": round((no_book_fetched_utc - book_fetch_start_utc).total_seconds(), 3),
             }
             best = source.best_ask_from_book(no_book)
             if best is None:
                 append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "no_asks", "token_id": no_token_id, **book_audit})
                 continue
             ask, size = best
+            order_size = min(float(size), float(max_notional_per_trade) / float(ask)) if ask > 0 else 0.0
+            submitted_notional = round(order_size * float(ask), 6)
+            city_day_spent = spent_notional(OUT_DIR / "orders.jsonl", target_date=local_date.isoformat(), city=cfg.city)
+            total_day_spent = spent_notional(OUT_DIR / "orders.jsonl", target_date=local_date.isoformat())
+            live_blockers: list[str] = []
+            if ask > max_ask:
+                live_blockers.append("ask_above_max")
+            if order_size <= 0:
+                live_blockers.append("zero_order_size")
+            if submitted_notional > max_notional_per_trade + 1e-9:
+                live_blockers.append("trade_notional_above_cap")
+            if city_day_spent + submitted_notional > max_notional_per_city_day + 1e-9:
+                live_blockers.append("city_day_notional_cap")
+            if total_day_spent + submitted_notional > max_notional_total_day + 1e-9:
+                live_blockers.append("total_day_notional_cap")
+            if live and not confirm_live:
+                live_blockers.append("confirm_live_missing")
             opportunity = {
                 **base_row,
                 "book_status": "ok",
@@ -297,13 +694,47 @@ def cycle_once(configs: list[CityConfig], *, max_ask: float, dry_run: bool, rece
                 "best_ask": ask,
                 "best_ask_size": size,
                 "max_ask": max_ask,
-                "taker_eligible": ask <= max_ask,
+                "taker_eligible": not live_blockers,
                 "gross_profit_if_wins_per_share": round(1.0 - ask, 6),
                 "dry_run": dry_run,
+                "live_requested": live,
+                "live_enabled": live_enabled,
+                "live_blockers": live_blockers,
+                "max_notional_per_trade": max_notional_per_trade,
+                "max_notional_per_city_day": max_notional_per_city_day,
+                "max_notional_total_day": max_notional_total_day,
+                "city_day_spent_before": city_day_spent,
+                "total_day_spent_before": total_day_spent,
+                "planned_size": round(order_size, 4),
+                "planned_notional_usd": submitted_notional,
                 **book_audit,
             }
-            if ask <= max_ask:
+            if not live_blockers:
                 counts["opportunities"] += 1
+            if live_enabled and not live_blockers:
+                order_row = {
+                    **opportunity,
+                    "order_side": "BUY",
+                    "limit_price": ask,
+                    "size": round(order_size, 4),
+                    "submitted_notional_usd": submitted_notional,
+                    "live_attempted": True,
+                    "live_attempt_ts_utc": datetime.now(timezone.utc).isoformat(),
+                }
+                counts["live_attempts"] += 1
+                try:
+                    if live_place_fn is None:
+                        live_place_fn = build_live_fok_place_fn()
+                    response = live_place_fn(order_row)
+                    order_row["exchange_response"] = response
+                    order_row["live_submit_status"] = "submitted"
+                    order_row["order_id"] = response.get("order_id")
+                    counts["live_submitted"] += 1
+                except Exception as exc:  # noqa: BLE001
+                    order_row["live_submit_status"] = "submit_failed"
+                    order_row["error"] = f"{type(exc).__name__}: {exc}"
+                    counts["errors"] += 1
+                append_jsonl(OUT_DIR / "orders.jsonl", order_row)
             append_jsonl(OUT_DIR / "opportunities.jsonl", opportunity)
 
     state["last_running_value"] = last_running
@@ -359,10 +790,22 @@ def main() -> int:
     parser.add_argument("--cities", nargs="*", help="Optional city allowlist, e.g. Shanghai Tokyo.")
     parser.add_argument("--include-station-diff", action="store_true", help="Also include WU official-station-diff cities with >=97% alignment.")
     parser.add_argument("--max-ask", type=float, default=0.995)
-    parser.add_argument("--interval-sec", type=float, default=20.0)
+    parser.add_argument("--obs-source", choices=["aviationweather_metar", "synopticdata_timeseries"], default=os.environ.get("METAR_CROSS_OBS_SOURCE", "aviationweather_metar"))
+    parser.add_argument("--live", action="store_true", help="Actually submit FOK BUY NO orders when all guards pass.")
+    parser.add_argument("--confirm-live", action="store_true", help="Required with --live.")
+    parser.add_argument("--max-notional-per-trade", type=float, default=float(os.environ.get("METAR_CROSS_MAX_NOTIONAL_PER_TRADE", "10")))
+    parser.add_argument("--max-notional-per-city-day", type=float, default=float(os.environ.get("METAR_CROSS_MAX_NOTIONAL_PER_CITY_DAY", "10")))
+    parser.add_argument("--max-notional-total-day", type=float, default=float(os.environ.get("METAR_CROSS_MAX_NOTIONAL_TOTAL_DAY", "50")))
+    parser.add_argument("--interval-sec", type=float, default=None, help="Alias for --base-interval-sec.")
+    parser.add_argument("--base-interval-sec", type=float, default=20.0)
+    parser.add_argument("--burst-interval-sec", type=float, default=2.0)
+    parser.add_argument("--burst-window-min", type=float, default=10.0)
+    parser.add_argument("--max-workers", type=int, default=12)
     parser.add_argument("--recent-hours", type=float, default=2.0, help="After baseline, poll only recent METAR records and carry forward running max from state.")
     parser.add_argument("--dry-run", action="store_true", help="Do not update state.json; useful for smoke tests.")
     args = parser.parse_args()
+    if args.interval_sec is not None:
+        args.base_interval_sec = args.interval_sec
 
     if args.command == "report":
         return report()
@@ -380,17 +823,46 @@ def main() -> int:
                 "out_dir": str(OUT_DIR),
                 "max_ask": args.max_ask,
                 "dry_run": args.dry_run,
+                "obs_source": args.obs_source,
+                "live": args.live,
+                "confirm_live": args.confirm_live,
+                "max_notional_per_trade": args.max_notional_per_trade,
+                "max_notional_per_city_day": args.max_notional_per_city_day,
+                "max_notional_total_day": args.max_notional_total_day,
+                "base_interval_sec": args.base_interval_sec,
+                "burst_interval_sec": args.burst_interval_sec,
+                "burst_window_min": args.burst_window_min,
+                "max_workers": args.max_workers,
+                "http_timeout_sec": FAST_HTTP_TIMEOUT_SEC,
+                "proxy_mode": FAST_PROXY_MODE,
+                "weather_proxy_mode": WEATHER_PROXY_MODE,
+                "market_proxy_mode": MARKET_PROXY_MODE,
+                "explicit_weather_proxy": bool(EXPLICIT_WEATHER_PROXY),
+                "explicit_market_proxy": bool(EXPLICIT_MARKET_PROXY),
             },
             ensure_ascii=False,
             sort_keys=True,
         )
     )
     while True:
-        counts = cycle_once(configs, max_ask=args.max_ask, dry_run=args.dry_run, recent_hours=args.recent_hours)
+        counts = cycle_once(
+            configs,
+            max_ask=args.max_ask,
+            dry_run=args.dry_run,
+            recent_hours=args.recent_hours,
+            obs_source=args.obs_source,
+            live=args.live,
+            confirm_live=args.confirm_live,
+            max_notional_per_trade=args.max_notional_per_trade,
+            max_notional_per_city_day=args.max_notional_per_city_day,
+            max_notional_total_day=args.max_notional_total_day,
+            max_workers=args.max_workers,
+        )
         print(json.dumps({"ts_utc": datetime.now(timezone.utc).isoformat(), **counts}, sort_keys=True))
         if args.command == "cycle":
             return 0
-        time.sleep(args.interval_sec)
+        sleep_sec = args.burst_interval_sec if in_update_window(datetime.now(timezone.utc), window_min=args.burst_window_min) else args.base_interval_sec
+        time.sleep(sleep_sec)
 
 
 if __name__ == "__main__":

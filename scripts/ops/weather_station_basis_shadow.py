@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import io
 import json
 import math
@@ -130,12 +131,19 @@ def _weather_predict_proxy_candidates() -> list[str | None]:
 PROXIES = _weather_predict_proxy_candidates()
 
 
-def fetch_json(url: str, params: dict | None = None, max_rounds: int = 3):
+def fetch_json(
+    url: str,
+    params: dict | None = None,
+    max_rounds: int = 3,
+    timeout_sec: float = 25,
+    proxy_candidates: list[str | None] | None = None,
+):
     last = None
+    proxies = PROXIES if proxy_candidates is None else proxy_candidates
     for rnd in range(max_rounds):
-        for proxy in PROXIES:
+        for proxy in proxies:
             try:
-                r = httpx.get(url, params=params, proxy=proxy, timeout=25)
+                r = httpx.get(url, params=params, proxy=proxy, timeout=timeout_sec)
                 r.raise_for_status()
                 return r.json()
             except Exception as e:  # noqa: BLE001
@@ -144,14 +152,43 @@ def fetch_json(url: str, params: dict | None = None, max_rounds: int = 3):
     raise RuntimeError(f"fetch failed {url}: {last}")
 
 
-def fetch_text(url: str, params: dict | list | None = None, max_rounds: int = 2) -> str:
+def fetch_text(
+    url: str,
+    params: dict | list | None = None,
+    max_rounds: int = 2,
+    timeout_sec: float = 25,
+    proxy_candidates: list[str | None] | None = None,
+) -> str:
     last = None
+    proxies = PROXIES if proxy_candidates is None else proxy_candidates
     for rnd in range(max_rounds):
-        for proxy in PROXIES:
+        for proxy in proxies:
             try:
-                r = httpx.get(url, params=params, proxy=proxy, timeout=25)
+                r = httpx.get(url, params=params, proxy=proxy, timeout=timeout_sec)
                 r.raise_for_status()
                 return r.text
+            except Exception as e:  # noqa: BLE001
+                last = f"{proxy}: {type(e).__name__}"
+                time.sleep(0.5 + rnd)
+    raise RuntimeError(f"fetch failed {url}: {last}")
+
+
+def fetch_bytes(
+    url: str,
+    params: dict | list | None = None,
+    max_rounds: int = 2,
+    timeout_sec: float = 25,
+    proxy_candidates: list[str | None] | None = None,
+) -> bytes:
+    last = None
+    proxies = PROXIES if proxy_candidates is None else proxy_candidates
+    for rnd in range(max_rounds):
+        for proxy in proxies:
+            try:
+                r = httpx.get(url, params=params, proxy=proxy, timeout=timeout_sec)
+                r.raise_for_status()
+                data = r.content
+                return gzip.decompress(data) if data.startswith(b"\x1f\x8b") else data
             except Exception as e:  # noqa: BLE001
                 last = f"{proxy}: {type(e).__name__}"
                 time.sleep(0.5 + rnd)
