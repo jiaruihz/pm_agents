@@ -1,0 +1,288 @@
+{
+  "current_date_local": "2026-06-19",
+  "fact_self_check": {
+    "fact_signal_candidate_coverage": {
+      "eligible": 11305,
+      "live_filled": 348,
+      "paper_ordered": 4377,
+      "rows": 32318
+    },
+    "fact_trades_by_class": [
+      {
+        "rows": 855,
+        "trade_class": "live_real"
+      },
+      {
+        "rows": 624,
+        "trade_class": "live_simulated"
+      },
+      {
+        "rows": 2285,
+        "trade_class": "paper"
+      },
+      {
+        "rows": 636,
+        "trade_class": "snapshot_replay"
+      }
+    ],
+    "fact_trades_by_settlement_status": [
+      {
+        "rows": 150,
+        "settlement_status": ""
+      },
+      {
+        "rows": 4250,
+        "settlement_status": "settled"
+      }
+    ],
+    "fact_trades_max_built_at_utc": "2026-06-18T16:42:11.906813+00:00"
+  },
+  "generated_at_utc": "2026-06-18T17:18:50+00:00",
+  "layers": {
+    "forecast_peak_backfill": {
+      "active_dates": 27,
+      "exists": true,
+      "max_date": "2026-06-14",
+      "min_date": "2026-05-19",
+      "path": "runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv",
+      "rows": 831,
+      "size_bytes": 499153
+    },
+    "iem_ext_patch": {
+      "files": 36,
+      "files_with_valid": 36,
+      "max_valid_utc": "2026-06-13T23:58:00+00:00",
+      "min_valid_utc": "2026-05-19T00:00:00+00:00",
+      "rows": 34806,
+      "top_files": [
+        {
+          "file": "iem_ext_KBKF_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:58:00+00:00",
+          "min_valid_utc": "2026-05-19T00:58:00+00:00",
+          "rows": 686
+        },
+        {
+          "file": "iem_ext_KSFO_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:56:00+00:00",
+          "min_valid_utc": "2026-05-19T00:56:00+00:00",
+          "rows": 683
+        },
+        {
+          "file": "iem_ext_EHAM_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:55:00+00:00",
+          "min_valid_utc": "2026-05-19T00:25:00+00:00",
+          "rows": 1246
+        },
+        {
+          "file": "iem_ext_KAUS_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:53:00+00:00",
+          "min_valid_utc": "2026-05-19T00:53:00+00:00",
+          "rows": 769
+        },
+        {
+          "file": "iem_ext_KDAL_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:53:00+00:00",
+          "min_valid_utc": "2026-05-19T00:53:00+00:00",
+          "rows": 765
+        },
+        {
+          "file": "iem_ext_KHOU_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:53:00+00:00",
+          "min_valid_utc": "2026-05-19T00:53:00+00:00",
+          "rows": 757
+        },
+        {
+          "file": "iem_ext_KLAX_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:53:00+00:00",
+          "min_valid_utc": "2026-05-19T00:53:00+00:00",
+          "rows": 705
+        },
+        {
+          "file": "iem_ext_KMIA_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:53:00+00:00",
+          "min_valid_utc": "2026-05-19T00:53:00+00:00",
+          "rows": 705
+        },
+        {
+          "file": "iem_ext_KSEA_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:53:00+00:00",
+          "min_valid_utc": "2026-05-19T00:53:00+00:00",
+          "rows": 696
+        },
+        {
+          "file": "iem_ext_KATL_2026-05-19_2026-06-14.csv",
+          "max_valid_utc": "2026-06-13T23:52:00+00:00",
+          "min_valid_utc": "2026-05-19T00:52:00+00:00",
+          "rows": 757
+        }
+      ]
+    },
+    "iem_v2_cache": {
+      "files": 90,
+      "files_with_valid": 90,
+      "max_valid_utc": "2026-06-09T23:58:00+00:00",
+      "min_valid_utc": "2024-04-30T00:00:00+00:00",
+      "rows": 1967873,
+      "top_files": [
+        {
+          "file": "iem_v2_KBKF_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:58:00+00:00",
+          "min_valid_utc": "2024-04-30T00:58:00+00:00",
+          "rows": 19657
+        },
+        {
+          "file": "iem_v2_KSFO_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:56:00+00:00",
+          "min_valid_utc": "2024-04-30T00:56:00+00:00",
+          "rows": 20944
+        },
+        {
+          "file": "iem_v2_EHAM_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:55:00+00:00",
+          "min_valid_utc": "2024-04-30T00:25:00+00:00",
+          "rows": 36913
+        },
+        {
+          "file": "iem_v2_KBOS_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:54:00+00:00",
+          "min_valid_utc": "2024-04-30T00:54:00+00:00",
+          "rows": 21945
+        },
+        {
+          "file": "iem_v2_KAUS_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 21203
+        },
+        {
+          "file": "iem_v2_KDAL_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 21393
+        },
+        {
+          "file": "iem_v2_KHOU_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 22053
+        },
+        {
+          "file": "iem_v2_KLAX_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 22268
+        },
+        {
+          "file": "iem_v2_KMDW_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 21219
+        },
+        {
+          "file": "iem_v2_KMIA_2024-04-30_2026-06-10.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 20890
+        }
+      ]
+    },
+    "observed_detail": {
+      "active_dates": 27,
+      "exists": true,
+      "max_date": "2026-06-14",
+      "min_date": "2026-05-19",
+      "path": "docs/analysis/2026-06/generated/m3_observed_max_v5_h10_21_theta_patch_20260614/m3_observed_max_residual_detail.csv",
+      "rows": 11398,
+      "size_bytes": 2351450
+    },
+    "orderbook": {
+      "date_dirs": 32,
+      "max_date": "2026-06-19",
+      "min_date": "2026-05-19",
+      "path": "runtime/weather_edge_v1/market_data/orderbook_snapshots"
+    },
+    "reheat_feature_rows": {
+      "active_dates": 27,
+      "exists": true,
+      "max_date": "2026-06-14",
+      "min_date": "2026-05-19",
+      "path": "docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv",
+      "rows": 88621,
+      "size_bytes": 113989883
+    },
+    "settlement_outcomes": {
+      "city_dates": 1780,
+      "max_date": "2026-06-17",
+      "min_date": "2026-05-04"
+    },
+    "wu_obs_cache": {
+      "files": 52,
+      "files_with_valid": 52,
+      "max_valid_utc": "2026-06-09T23:58:00+00:00",
+      "min_valid_utc": "2024-04-30T00:00:00+00:00",
+      "rows": 1470936,
+      "top_files": [
+        {
+          "file": "wu_obs_KBKF.csv",
+          "max_valid_utc": "2026-06-09T23:58:00+00:00",
+          "min_valid_utc": "2024-04-30T00:58:00+00:00",
+          "rows": 19657
+        },
+        {
+          "file": "wu_obs_KSFO.csv",
+          "max_valid_utc": "2026-06-09T23:56:00+00:00",
+          "min_valid_utc": "2024-04-30T00:56:00+00:00",
+          "rows": 20943
+        },
+        {
+          "file": "wu_obs_EHAM.csv",
+          "max_valid_utc": "2026-06-09T23:55:00+00:00",
+          "min_valid_utc": "2024-04-30T00:25:00+00:00",
+          "rows": 36913
+        },
+        {
+          "file": "wu_obs_KBOS.csv",
+          "max_valid_utc": "2026-06-09T23:54:00+00:00",
+          "min_valid_utc": "2024-04-30T00:54:00+00:00",
+          "rows": 21935
+        },
+        {
+          "file": "wu_obs_KAUS.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 21200
+        },
+        {
+          "file": "wu_obs_KDAL.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 21391
+        },
+        {
+          "file": "wu_obs_KHOU.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 22041
+        },
+        {
+          "file": "wu_obs_KLAX.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 22267
+        },
+        {
+          "file": "wu_obs_KMDW.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 21218
+        },
+        {
+          "file": "wu_obs_KMIA.csv",
+          "max_valid_utc": "2026-06-09T23:53:00+00:00",
+          "min_valid_utc": "2024-04-30T00:53:00+00:00",
+          "rows": 20886
+        }
+      ]
+    }
+  }
+}

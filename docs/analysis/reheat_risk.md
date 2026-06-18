@@ -183,6 +183,15 @@ Current conclusion:
   note: after sync + DB rebuild, orderbook/pm_history are newer, but the shared
   observed-detail input still materializes only through 2026-06-14; next work is
   extending official observation/observed-detail coverage before retraining.
+- Data freshness audit v1 is complete in
+  `docs/analysis/2026-06/2026-06-19-reheat-feature-data-freshness-v1.md`.
+  It explains why the 2026-06-19 run still trained on a feature table ending
+  2026-06-14: orderbook snapshots are present through 2026-06-19 and
+  `settlement_outcomes` through 2026-06-17, but `wu_obs` production mirror stops
+  at 2026-06-09 UTC, the one-off IEM ext patch stops at 2026-06-13 UTC, and both
+  observed-detail plus forecast peak backfill stop at target_date 2026-06-14.
+  Future reheat/current-YES/NO-carry/reversal research must run this audit or an
+  equivalent max-date check before interpreting model results.
 
 ## Strategy Heads
 
@@ -282,7 +291,10 @@ move a script only when it becomes the maintained entrypoint for a new result.
 
 1. `reheat_feature_factory`: v1 completed and now forecast-clock enriched via
    the documented backfill table. Keep downstream strategy heads on the shared
-   factory output instead of private joins.
+   factory output instead of private joins. Before rerunning model heads, check
+   `2026-06-19-reheat-feature-data-freshness-v1.md` or rerun the freshness audit
+   so the feature layer does not silently lag behind raw orderbook/settlement
+   data.
 2. `forecast_peak_clock_data_fill`: pm_agent fact builder now derives
    `forecast_peak_*`/`forecast_values_hash` from mirrored hourly cache when
    present. Research backfill v3 proves the feature can be joined and measured,
