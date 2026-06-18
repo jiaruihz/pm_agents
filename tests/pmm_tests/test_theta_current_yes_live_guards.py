@@ -396,6 +396,36 @@ def test_split_instances_count_matching_legacy_profile_as_prior_risk():
     assert not live.prior_row_matches_strategy(legacy_peak, "theta_current_yes_fade_confirmed_tiny_live_v1")
 
 
+def test_probability_branch_scores_shadow_fade_specialist_until_enabled(monkeypatch):
+    rows = [
+        {"decline_c": 0.5, "yes_current_ask": 0.7},
+        {"decline_c": 0.0, "yes_current_ask": 0.7},
+    ]
+    current = live.pd.DataFrame(rows)
+    for col in live.MODEL_FEATURES:
+        if col not in current.columns:
+            current[col] = "Tokyo" if col == "city" else ("C" if col == "unit" else 0.0)
+    base_artifact = {"artifact_type": "base"}
+    fade_artifact = {"artifact_type": "fade"}
+
+    def fake_score(frame, artifact):
+        if artifact["artifact_type"] == "base":
+            return live.np.asarray([0.8, 0.6])
+        return live.np.asarray([0.9, 0.4])
+
+    monkeypatch.setattr(live, "score_rows", fake_score)
+    base_args = argparse.Namespace(fade_confirmed_model_mode="base")
+    scored = live.apply_probability_branch_scores(current, args=base_args, base_artifact=base_artifact, fade_artifact=fade_artifact)
+    assert scored["p_yes_win"].tolist() == [0.8, 0.6]
+    assert scored["p_yes_win_fade_confirmed_specialist"].tolist() == [0.9, 0.4]
+    assert scored["probability_branch"].tolist() == ["base_current_yes_model", "base_current_yes_model"]
+
+    specialist_args = argparse.Namespace(fade_confirmed_model_mode="specialist")
+    scored = live.apply_probability_branch_scores(current, args=specialist_args, base_artifact=base_artifact, fade_artifact=fade_artifact)
+    assert scored["p_yes_win"].tolist() == [0.9, 0.6]
+    assert scored["probability_branch"].tolist() == ["fade_confirmed_specialist_v1", "base_current_yes_model"]
+
+
 def test_observation_epoch_key_uses_running_max_metar_timestamp():
     row = {
         "city": "Shanghai",
@@ -491,8 +521,8 @@ def test_run_once_writes_forward_telemetry_for_planned_candidate(tmp_path, monke
     monkeypatch.setattr(live, "snapshot_dir", lambda: tmp_path)
     monkeypatch.setattr(live, "load_stations", lambda: {"Tokyo": live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")})
     monkeypatch.setattr(live, "load_source_profiles", lambda: {})
-    monkeypatch.setattr(live, "load_model_artifact", lambda: {})
-    monkeypatch.setattr(live, "score_rows", lambda rows, artifact: [0.9] * len(rows))
+    monkeypatch.setattr(live, "load_model_artifact", lambda *args, **kwargs: {})
+    monkeypatch.setattr(live, "score_rows", lambda rows, artifact: live.np.asarray([0.9] * len(rows)))
     monkeypatch.setattr(live, "prior_city_day_notional", lambda _instance: {})
     monkeypatch.setattr(
         live,

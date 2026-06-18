@@ -348,6 +348,15 @@ telemetry files, live order files, and `$5` city-day caps:
 or within the next hour, ask is `0.50..0.97`, model `p>=0.60`, and snapshot
 edge is at least `0.02`.
 
+2026-06-18 fade model branch: `theta_current_yes_fade_confirmed_tiny_live_v1`
+now has a dedicated fade-confirmed specialist artifact at
+`docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/fade_confirmed_model.json`.
+The live default is still `FADE_CONFIRMED_MODEL_MODE=base`, because the first
+specialist artifact underperformed the base model on holdout live-like ROI
+(+13.7% vs +18.3%). The runner records both base p and specialist shadow p in
+forward telemetry; only set `FADE_CONFIRMED_MODEL_MODE=specialist` after a
+separate promotion decision.
+
 Start/stop/status the split pair with:
 
 ```bash

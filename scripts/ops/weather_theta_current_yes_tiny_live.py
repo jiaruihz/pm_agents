@@ -64,6 +64,7 @@ STRATEGY_ID = "theta_current_yes_no_reheat_live5_v1"
 LEGACY_SHARED_STRATEGY_INSTANCE = "theta_current_yes_tiny_live_v1"
 TRAIN_FEATURES = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_full_replay_v8/feature_rows.csv"
 MODEL_ARTIFACT = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_live_gate_v9/live_model.json"
+FADE_CONFIRMED_MODEL_ARTIFACT = ROOT / "docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/fade_confirmed_model.json"
 STATION_SUMMARY = ROOT / "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json"
 RUNTIME_DIR = ROOT / os.environ.get("THETA_CURRENT_YES_RUNTIME_DIR", "runtime/weather_edge_v1/theta_current_yes_tiny_live_v1")
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
@@ -507,8 +508,8 @@ def load_stations() -> dict[str, Station]:
     }
 
 
-def load_model_artifact() -> dict[str, Any]:
-    return json.loads(MODEL_ARTIFACT.read_text(encoding="utf-8"))
+def load_model_artifact(path: Path = MODEL_ARTIFACT) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def score_rows(rows: pd.DataFrame, artifact: dict[str, Any]) -> np.ndarray:
@@ -537,6 +538,52 @@ def score_rows(rows: pd.DataFrame, artifact: dict[str, Any]) -> np.ndarray:
     coef = np.asarray(artifact["coef"], dtype=float)
     logits = transformed @ coef + float(artifact["intercept"])
     return 1.0 / (1.0 + np.exp(-logits))
+
+
+def fade_confirmed_model_artifact_path(args: argparse.Namespace) -> Path:
+    raw = safe_str(getattr(args, "fade_confirmed_model_artifact", "")) or str(FADE_CONFIRMED_MODEL_ARTIFACT)
+    path = Path(raw)
+    return path if path.is_absolute() else ROOT / path
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def apply_probability_branch_scores(
+    current: pd.DataFrame,
+    *,
+    args: argparse.Namespace,
+    base_artifact: dict[str, Any],
+    fade_artifact: dict[str, Any] | None,
+) -> pd.DataFrame:
+    out = current.copy()
+    base_p = score_rows(out[MODEL_FEATURES], base_artifact)
+    out["p_yes_win_base_current_yes_model"] = base_p
+    out["p_yes_win"] = base_p
+    out["probability_source"] = "theta_current_yes_v8_train_logistic"
+    out["model_version"] = "theta_current_yes_v8_train_logistic"
+    out["probability_branch"] = "base_current_yes_model"
+
+    if fade_artifact is None:
+        out["p_yes_win_fade_confirmed_specialist"] = np.nan
+        out["fade_confirmed_specialist_delta"] = np.nan
+        return out
+
+    fade_p = score_rows(out[MODEL_FEATURES], fade_artifact)
+    out["p_yes_win_fade_confirmed_specialist"] = fade_p
+    out["fade_confirmed_specialist_delta"] = fade_p - base_p
+    mode = safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base"
+    if mode == "specialist":
+        fade_mask = out["decline_c"].astype(float).ge(0.5)
+        out.loc[fade_mask, "p_yes_win"] = fade_p[fade_mask.to_numpy()]
+        out.loc[fade_mask, "probability_source"] = "theta_current_yes_fade_confirmed_specialist_v1"
+        out.loc[fade_mask, "model_version"] = "theta_current_yes_fade_confirmed_logistic_v1"
+        out.loc[fade_mask, "probability_branch"] = "fade_confirmed_specialist_v1"
+    return out
 
 
 def parse_label(label: str, question: str = "") -> dict[str, Any] | None:
@@ -971,7 +1018,7 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "strategy_instance": STRATEGY_INSTANCE,
         "strategy_id": STRATEGY_ID,
         "strategy_family": "theta_current_yes",
-        "probability_source": "theta_current_yes_v8_train_logistic",
+        "probability_source": safe_str(row.get("probability_source")) or "theta_current_yes_v8_train_logistic",
         "decision_mode": "current_running_max_yes_no_reheat",
         "entry_profile": entry_profile,
         "execution_mode": "tiny_live_taker",
@@ -1022,7 +1069,11 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "shadow_decision": shadow_decision,
         "shadow_reason": shadow_reason,
         "obs_source": safe_str((row.get("obs") or {}).get("source")),
-        "model_version": "theta_current_yes_v8_train_logistic",
+        "model_version": safe_str(row.get("model_version")) or "theta_current_yes_v8_train_logistic",
+        "probability_branch": safe_str(row.get("probability_branch")) or "base_current_yes_model",
+        "p_yes_win_base_current_yes_model": row.get("p_yes_win_base_current_yes_model"),
+        "p_yes_win_fade_confirmed_specialist": row.get("p_yes_win_fade_confirmed_specialist"),
+        "fade_confirmed_specialist_delta": row.get("fade_confirmed_specialist_delta"),
         "paper_enabled": True,
         "live_enabled": bool(live_enabled),
         "snapshot_yes_ask": round(snapshot_price, 6),
@@ -1241,6 +1292,12 @@ def current_yes_forward_telemetry_row(
         "available_notional_at_ask": to_float(row.get("available_notional_at_ask"), np.nan),
         "d1_no_ask": to_float(row.get("d1_no_ask"), np.nan),
         "p_yes_win": p_yes,
+        "p_yes_win_base_current_yes_model": to_float(row.get("p_yes_win_base_current_yes_model"), np.nan),
+        "p_yes_win_fade_confirmed_specialist": to_float(row.get("p_yes_win_fade_confirmed_specialist"), np.nan),
+        "fade_confirmed_specialist_delta": to_float(row.get("fade_confirmed_specialist_delta"), np.nan),
+        "probability_source": safe_str(row.get("probability_source")),
+        "probability_branch": safe_str(row.get("probability_branch")),
+        "model_version": safe_str(row.get("model_version")),
         "snapshot_edge": to_float(row.get("ev"), np.nan),
         "fresh_best_bid": fresh_bid,
         "fresh_best_ask": fresh_ask,
@@ -1278,6 +1335,8 @@ def current_yes_forward_telemetry_row(
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
+            "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
+            "fade_confirmed_model_artifact": display_path(fade_confirmed_model_artifact_path(args)),
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
@@ -1350,6 +1409,8 @@ def current_yes_audit_telemetry_row(
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
+            "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
+            "fade_confirmed_model_artifact": display_path(fade_confirmed_model_artifact_path(args)),
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
@@ -1390,6 +1451,8 @@ def json_ready(value: Any) -> Any:
 
 
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    (ROOT / "runtime/weather_edge_v1/live").mkdir(parents=True, exist_ok=True)
     state = read_live_state(ROOT / "runtime/weather_edge_v1/live_cycle")
     if state.get("paused"):
         result = {"generated_at_utc": now_utc(), "status": "paused", "reason": state.get("reason", "")}
@@ -1425,6 +1488,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         return result
 
     model_artifact = load_model_artifact()
+    fade_model_path = fade_confirmed_model_artifact_path(args)
+    needs_fade_model = (safe_str(getattr(args, "entry_profile_mode", "both")) or "both") != "peak_forming_micro"
+    fade_model_artifact = load_model_artifact(fade_model_path) if needs_fade_model and fade_model_path.exists() else None
     source_profiles = load_source_profiles()
     current, audits = build_current_rows(
         snapshot,
@@ -1451,7 +1517,12 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         for audit in audits
     ]
     if not current.empty:
-        current["p_yes_win"] = score_rows(current[MODEL_FEATURES], model_artifact)
+        current = apply_probability_branch_scores(
+            current,
+            args=args,
+            base_artifact=model_artifact,
+            fade_artifact=fade_model_artifact,
+        )
         current["ev"] = current["p_yes_win"] - current["yes_current_ask"]
         current["available_notional_at_ask"] = current["yes_current_ask"] * current["yes_current_size"]
         classifications = current.apply(lambda item: classify_entry_profile(item.to_dict(), args), axis=1)
@@ -1630,6 +1701,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "min_gap_to_next_bracket_c": args.min_gap_to_next_bracket_c,
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
+            "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
+            "fade_confirmed_model_artifact": display_path(fade_model_path),
+            "fade_confirmed_model_loaded": fade_model_artifact is not None,
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
@@ -1657,6 +1731,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "fresh_ask": round(float(r["fresh_best_ask"]), 4),
                 "limit_price": round(float(r["taker_limit_price"]), 4),
                 "p_yes_win": round(float(r["p_yes_win"]), 4),
+                "p_yes_win_base_current_yes_model": round(float(r.get("p_yes_win_base_current_yes_model") or np.nan), 4),
+                "p_yes_win_fade_confirmed_specialist": round(float(r.get("p_yes_win_fade_confirmed_specialist") or np.nan), 4),
+                "probability_branch": r.get("probability_branch"),
                 "ev": round(float(r["ev"]), 4),
                 "edge_at_limit": round(float(r["edge_at_limit"]), 4),
                 "expected_profit_usd": round(float(r["expected_profit_usd"]), 4),
@@ -1731,6 +1808,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=0.0)
     parser.add_argument("--allow-missing-forecast-peak", action="store_true")
     parser.add_argument("--entry-profile-mode", choices=["both", "fade_confirmed", "peak_forming_micro"], default="both")
+    parser.add_argument("--fade-confirmed-model-mode", choices=["base", "specialist"], default="base")
+    parser.add_argument("--fade-confirmed-model-artifact", default=str(FADE_CONFIRMED_MODEL_ARTIFACT.relative_to(ROOT)))
     parser.add_argument("--min-forecast-peak-delta-hours", type=float, default=-1.999)
     parser.add_argument("--enable-peak-forming-live", action="store_true")
     parser.add_argument("--peak-forming-max-decline-c", type=float, default=0.25)

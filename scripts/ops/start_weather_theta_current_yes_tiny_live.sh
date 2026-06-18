@@ -32,6 +32,8 @@ MIN_GAP_TO_NEXT_BRACKET_C="${MIN_GAP_TO_NEXT_BRACKET_C:-0}"
 MIN_FORECAST_PEAK_DELTA_HOURS="${MIN_FORECAST_PEAK_DELTA_HOURS:--1.999}"
 ALLOW_MISSING_FORECAST_PEAK="${ALLOW_MISSING_FORECAST_PEAK:-0}"
 THETA_CURRENT_YES_ENTRY_PROFILE_MODE="${THETA_CURRENT_YES_ENTRY_PROFILE_MODE:-both}"
+FADE_CONFIRMED_MODEL_MODE="${FADE_CONFIRMED_MODEL_MODE:-base}"
+FADE_CONFIRMED_MODEL_ARTIFACT="${FADE_CONFIRMED_MODEL_ARTIFACT:-docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/fade_confirmed_model.json}"
 ENABLE_PEAK_FORMING_LIVE="${ENABLE_PEAK_FORMING_LIVE:-1}"
 PEAK_FORMING_MAX_DECLINE_C="${PEAK_FORMING_MAX_DECLINE_C:-0.25}"
 PEAK_FORMING_MIN_ASK="${PEAK_FORMING_MIN_ASK:-0.50}"
@@ -62,6 +64,8 @@ args=(
   --min-gap-to-next-bracket-c "$MIN_GAP_TO_NEXT_BRACKET_C"
   --min-forecast-peak-delta-hours "$MIN_FORECAST_PEAK_DELTA_HOURS"
   --entry-profile-mode "$THETA_CURRENT_YES_ENTRY_PROFILE_MODE"
+  --fade-confirmed-model-mode "$FADE_CONFIRMED_MODEL_MODE"
+  --fade-confirmed-model-artifact "$FADE_CONFIRMED_MODEL_ARTIFACT"
   --interval-seconds "$INTERVAL_SECONDS"
 )
 
@@ -93,4 +97,4 @@ nohup "$PYTHON_BIN" "${args[@]}" >>"$LOG_FILE" 2>&1 &
 
 pid="$!"
 echo "$pid" >"$PID_FILE"
-echo "started mode=$THETA_CURRENT_YES_MODE instance=${THETA_CURRENT_YES_STRATEGY_INSTANCE:-theta_current_yes_tiny_live_v1} entry_profile_mode=$THETA_CURRENT_YES_ENTRY_PROFILE_MODE pid=$pid log=$LOG_FILE"
+echo "started mode=$THETA_CURRENT_YES_MODE instance=${THETA_CURRENT_YES_STRATEGY_INSTANCE:-theta_current_yes_tiny_live_v1} entry_profile_mode=$THETA_CURRENT_YES_ENTRY_PROFILE_MODE fade_confirmed_model_mode=$FADE_CONFIRMED_MODEL_MODE pid=$pid log=$LOG_FILE"
