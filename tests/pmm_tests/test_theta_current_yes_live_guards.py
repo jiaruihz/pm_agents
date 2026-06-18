@@ -313,6 +313,35 @@ def test_first_rule_rejects_missing_or_far_ahead_forecast_peak():
     assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": None}, args) == "snapshot_rule_missing_forecast_peak"
 
 
+def test_first_rule_allows_peak_forming_current_high_when_enabled():
+    args = argparse.Namespace(
+        min_available_notional=5.0,
+        allow_missing_forecast_peak=False,
+        min_forecast_peak_delta_hours=-1.999,
+        enable_peak_forming_live=True,
+        peak_forming_max_decline_c=0.25,
+        peak_forming_min_ask=0.50,
+        peak_forming_max_ask=0.97,
+        peak_forming_min_p=0.60,
+        peak_forming_min_edge=0.02,
+        peak_forming_min_forecast_delta_hours=-1.0,
+    )
+    base = {
+        "decline_c": 0.0,
+        "yes_current_ask": 0.66,
+        "p_yes_win": 0.77,
+        "ev": 0.11,
+        "available_notional_at_ask": 10.0,
+        "token_id": "yes-token",
+        "forecast_peak_delta_hours_local": 0.0,
+    }
+
+    assert live.first_rule_reject_reason({**base}, argparse.Namespace(**{**vars(args), "enable_peak_forming_live": False})) == "snapshot_rule_decline_lt_0_5"
+    assert live.classify_entry_profile(base, args) == ("snapshot_rule_passed", "peak_forming_micro")
+    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": -1.25}, args) == "snapshot_rule_peak_forming_forecast_peak_ahead"
+    assert live.first_rule_reject_reason({**base, "yes_current_ask": 0.98}, args) == "snapshot_rule_peak_forming_ask_gt_max"
+
+
 def test_build_current_rows_can_optionally_veto_gap_above_threshold(monkeypatch):
     now = datetime(2026, 6, 16, 4, 10, tzinfo=timezone.utc)
     station = live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")

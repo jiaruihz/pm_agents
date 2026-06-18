@@ -333,6 +333,23 @@ evidence layer, not an order/fill ledger. It records planned, fresh-book
 rejected, snapshot-rule rejected, and obs/hour blocked current-YES candidates
 with observation clock, fresh ask, forecast peak, and source-profile fields.
 
+2026-06-18 live implementation note: `theta_current_yes_tiny_live_v1` has two
+explicit entry profiles under the same runner:
+
+- `fade_confirmed`: current running-max bracket after a real fade
+  (`decline_c>=0.5`), the original v9 tiny-live path.
+- `peak_forming_micro`: current running-max bracket while still near the high
+  (`decline_c<=0.25`), enabled as a micro-live probe when forecast peak is now
+  or within the next hour, ask is `0.50..0.97`, model `p>=0.60`, and snapshot
+  edge is at least `0.02`.
+
+If US afternoon windows show no live orders, check
+`forward_telemetry.jsonl.decision_status` before concluding the model has no
+signal. A high count of `snapshot_rule_decline_lt_0_5` means the peak-forming
+profile is disabled or not deployed; a high count of
+`snapshot_rule_peak_forming_*` means the new profile is running but its own
+guards are filtering.
+
 Important live PnL note: `live_*_orders.jsonl` records submitted/error order
 attempts, not actual fills. Real live CLOB fill-level PnL is in the dashboard
 DB (`runtime/weather.db`) via `orders.venue='polymarket_clob'` joined to

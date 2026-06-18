@@ -906,6 +906,17 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
     fresh_bid = float(row.get("fresh_best_bid") or 0.0)
     derived_min_edge = float(row.get("derived_min_edge_after_full_cushion") or 0.03)
     size = round(notional / price, 6)
+    entry_profile = safe_str(row.get("entry_profile")) or "fade_confirmed"
+    if entry_profile == "peak_forming_micro":
+        combo = "current_yes_peak_forming_micro_v1"
+        shadow_decision = "tiny_live_peak_forming_micro_v1"
+        shadow_reason = "forecast_peak_current_high_micro_probe"
+        entry_price_window = "0.50-0.97"
+    else:
+        combo = "current_yes_fade_confirmed_v9"
+        shadow_decision = "tiny_live_confirmed_v9"
+        shadow_reason = "significance_baseline_forward_execution_pass"
+        entry_price_window = "0.55-1.00"
     base = {
         "strategy": "weather_edge_v1",
         "strategy_instance": STRATEGY_INSTANCE,
@@ -913,9 +924,10 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "strategy_family": "theta_current_yes",
         "probability_source": "theta_current_yes_v8_train_logistic",
         "decision_mode": "current_running_max_yes_no_reheat",
+        "entry_profile": entry_profile,
         "execution_mode": "tiny_live_taker",
         "profile": "weather_plus_price_train_period_frozen",
-        "combo": "current_yes_fixed_rule_v9",
+        "combo": combo,
         "city": row["city"],
         "city_pool": "source_aligned_theta",
         "target_date": row["target_date"],
@@ -950,7 +962,7 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "notional": round(size * price, 6),
         "execution_policy": "theta_current_yes_taker_v1",
         "tick_size": 0.001,
-        "entry_price_window": "0.55-1.00",
+        "entry_price_window": entry_price_window,
         "sizing_mode": "notional",
         "fixed_order_shares": 0.0,
         "max_order_shares": size,
@@ -958,8 +970,8 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "min_edge": round(derived_min_edge, 6),
         "model_p_yes_used": round(float(row["p_yes_win"]), 6),
         "market_implied_p_yes": round(price, 6),
-        "shadow_decision": "tiny_live_confirmed_v9",
-        "shadow_reason": "significance_baseline_forward_execution_pass",
+        "shadow_decision": shadow_decision,
+        "shadow_reason": shadow_reason,
         "obs_source": safe_str((row.get("obs") or {}).get("source")),
         "model_version": "theta_current_yes_v8_train_logistic",
         "paper_enabled": True,
@@ -1026,26 +1038,52 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
         fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def first_rule_reject_reason(row: dict[str, Any], args: argparse.Namespace) -> str:
-    if to_float(row.get("decline_c"), 0.0) < 0.5:
-        return "snapshot_rule_decline_lt_0_5"
-    if to_float(row.get("yes_current_ask"), 0.0) < 0.55:
-        return "snapshot_rule_yes_ask_lt_0_55"
-    if to_float(row.get("p_yes_win"), 0.0) < 0.5:
-        return "snapshot_rule_p_yes_lt_0_5"
-    if to_float(row.get("ev"), -999.0) < 0.05:
-        return "snapshot_rule_edge_lt_0_05"
+def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tuple[str, str]:
+    decline = to_float(row.get("decline_c"), 0.0)
+    ask = to_float(row.get("yes_current_ask"), 0.0)
+    p_yes = to_float(row.get("p_yes_win"), 0.0)
+    edge = to_float(row.get("ev"), -999.0)
     peak_delta = forecast_peak_delta(row)
     if peak_delta is None and not getattr(args, "allow_missing_forecast_peak", False):
-        return "snapshot_rule_missing_forecast_peak"
+        return "snapshot_rule_missing_forecast_peak", ""
     min_peak_delta = float(getattr(args, "min_forecast_peak_delta_hours", -1.999))
     if peak_delta is not None and float(peak_delta) < min_peak_delta:
-        return "snapshot_rule_forecast_peak_too_far_ahead"
+        return "snapshot_rule_forecast_peak_too_far_ahead", ""
     if to_float(row.get("available_notional_at_ask"), 0.0) < float(args.min_available_notional):
-        return "snapshot_rule_insufficient_size"
+        return "snapshot_rule_insufficient_size", ""
     if not safe_str(row.get("token_id")):
-        return "snapshot_rule_missing_token"
-    return "snapshot_rule_passed"
+        return "snapshot_rule_missing_token", ""
+
+    if decline >= 0.5:
+        if ask < 0.55:
+            return "snapshot_rule_yes_ask_lt_0_55", ""
+        if p_yes < 0.5:
+            return "snapshot_rule_p_yes_lt_0_5", ""
+        if edge < 0.05:
+            return "snapshot_rule_edge_lt_0_05", ""
+        return "snapshot_rule_passed", "fade_confirmed"
+
+    if not getattr(args, "enable_peak_forming_live", False):
+        return "snapshot_rule_decline_lt_0_5", ""
+    if decline > float(getattr(args, "peak_forming_max_decline_c", 0.25)):
+        return "snapshot_rule_peak_forming_decline_gt_max", ""
+    if ask < float(getattr(args, "peak_forming_min_ask", 0.50)):
+        return "snapshot_rule_peak_forming_ask_lt_min", ""
+    if ask > float(getattr(args, "peak_forming_max_ask", 0.97)):
+        return "snapshot_rule_peak_forming_ask_gt_max", ""
+    if p_yes < float(getattr(args, "peak_forming_min_p", 0.60)):
+        return "snapshot_rule_peak_forming_p_lt_min", ""
+    if edge < float(getattr(args, "peak_forming_min_edge", 0.02)):
+        return "snapshot_rule_peak_forming_edge_lt_min", ""
+    min_peak_forming_delta = float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0))
+    if peak_delta is not None and float(peak_delta) < min_peak_forming_delta:
+        return "snapshot_rule_peak_forming_forecast_peak_ahead", ""
+    return "snapshot_rule_passed", "peak_forming_micro"
+
+
+def first_rule_reject_reason(row: dict[str, Any], args: argparse.Namespace) -> str:
+    status, _profile = classify_entry_profile(row, args)
+    return status
 
 
 def source_profile_fields(city: str, profiles: dict[str, Any]) -> dict[str, Any]:
@@ -1115,6 +1153,7 @@ def current_yes_forward_telemetry_row(
         "created_at_utc": now_utc(),
         "telemetry_run_id": run_id,
         "decision_status": decision_status,
+        "entry_profile": safe_str(row.get("entry_profile")),
         "city": safe_str(row.get("city")),
         "target_date": safe_str(row.get("target_date")),
         "current_bracket": safe_str(row.get("current_bracket")),
@@ -1181,6 +1220,13 @@ def current_yes_forward_telemetry_row(
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
+            "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
+            "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
+            "peak_forming_min_ask": float(getattr(args, "peak_forming_min_ask", 0.50)),
+            "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
+            "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
+            "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
+            "peak_forming_min_forecast_delta_hours": float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -1245,6 +1291,13 @@ def current_yes_audit_telemetry_row(
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
+            "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
+            "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
+            "peak_forming_min_ask": float(getattr(args, "peak_forming_min_ask", 0.50)),
+            "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
+            "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
+            "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
+            "peak_forming_min_forecast_delta_hours": float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -1341,7 +1394,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         current["p_yes_win"] = score_rows(current[MODEL_FEATURES], model_artifact)
         current["ev"] = current["p_yes_win"] - current["yes_current_ask"]
         current["available_notional_at_ask"] = current["yes_current_ask"] * current["yes_current_size"]
-        statuses = current.apply(lambda item: first_rule_reject_reason(item.to_dict(), args), axis=1)
+        classifications = current.apply(lambda item: classify_entry_profile(item.to_dict(), args), axis=1)
+        statuses = classifications.apply(lambda item: item[0])
+        current["entry_profile"] = classifications.apply(lambda item: item[1])
         for idx, status in statuses.items():
             if status != "snapshot_rule_passed":
                 telemetry_rows.append(
@@ -1488,6 +1543,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "min_gap_to_next_bracket_c": args.min_gap_to_next_bracket_c,
             "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
+            "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
+            "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
+            "peak_forming_min_ask": float(getattr(args, "peak_forming_min_ask", 0.50)),
+            "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
+            "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
+            "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
+            "peak_forming_min_forecast_delta_hours": float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0)),
             "min_local_hour": args.min_local_hour,
             "max_local_hour": args.max_local_hour,
             "max_orders": args.max_orders,
@@ -1500,6 +1562,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "city": r["city"],
                 "target_date": r["target_date"],
+                "entry_profile": r.get("entry_profile"),
                 "hour": int(r["decision_hour_local"]),
                 "bracket": r["current_bracket"],
                 "ask": round(float(r["yes_current_ask"]), 4),
@@ -1580,6 +1643,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=0.0)
     parser.add_argument("--allow-missing-forecast-peak", action="store_true")
     parser.add_argument("--min-forecast-peak-delta-hours", type=float, default=-1.999)
+    parser.add_argument("--enable-peak-forming-live", action="store_true")
+    parser.add_argument("--peak-forming-max-decline-c", type=float, default=0.25)
+    parser.add_argument("--peak-forming-min-ask", type=float, default=0.50)
+    parser.add_argument("--peak-forming-max-ask", type=float, default=0.97)
+    parser.add_argument("--peak-forming-min-p", type=float, default=0.60)
+    parser.add_argument("--peak-forming-min-edge", type=float, default=0.02)
+    parser.add_argument("--peak-forming-min-forecast-delta-hours", type=float, default=-1.0)
     parser.add_argument("--min-local-hour", type=int, default=13)
     parser.add_argument("--max-local-hour", type=int, default=15)
     parser.add_argument("--interval-seconds", type=float, default=900.0)
