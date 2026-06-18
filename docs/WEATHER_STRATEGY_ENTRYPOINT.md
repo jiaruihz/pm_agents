@@ -348,6 +348,13 @@ telemetry files, live order files, and `$5` city-day caps:
 or within the next hour, ask is `0.50..0.97`, model `p>=0.60`, and snapshot
 edge is at least `0.02`.
 
+2026-06-18 METAR climate guard: `peak_forming_micro` also applies peak-only
+vetoes before live order planning. It skips fresh running-max prints, observed
+temperature above forecast max, rapid METAR cloud clearing such as `BKN/OVC`
+to `FEW/CAVOK`, and still-warming 3-hour temperature paths. These guards are
+intended to block Shanghai-like "cloud opens after first high" reversals; they
+do not apply to `fade_confirmed`.
+
 2026-06-18 fade model branch: `theta_current_yes_fade_confirmed_tiny_live_v1`
 now has a dedicated fade-confirmed specialist artifact at
 `docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/fade_confirmed_model.json`.

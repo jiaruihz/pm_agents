@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from scripts.ops import weather_theta_current_yes_tiny_live as live
 
@@ -30,6 +31,29 @@ def test_parse_label_keeps_positive_fahrenheit_ranges():
     assert parsed == {"low": 74.0, "high": 75.0, "bottom": False, "top": False, "label": "74-75"}
     assert live.bracket_contains(parsed, 74)
     assert live.bracket_contains(parsed, 75)
+
+
+def test_aviationweather_obs_parses_cloud_cover(monkeypatch):
+    def fake_fetch_json(_url, _params):
+        return [
+            {
+                "reportTime": "2026-06-18T06:00:00.000Z",
+                "temp": 27,
+                "dewp": 23,
+                "relh": 78.8,
+                "wdir": 70,
+                "wspd": 6,
+                "cover": "FEW",
+                "rawOb": "ZSPD 180600Z 07003MPS 020V120 9999 FEW015 27/23 Q1008 NOSIG",
+            }
+        ]
+
+    monkeypatch.setattr(live, "fetch_json", fake_fetch_json)
+
+    rows = live.aviationweather_obs("ZSPD", ZoneInfo("Asia/Shanghai"), datetime(2026, 6, 18).date())
+
+    assert rows[0]["sky"] == live.SKY_CODE["FEW"]
+    assert rows[0]["drct"] == 70
 
 
 def test_build_current_rows_requires_target_date_to_match_station_local_date():
@@ -341,6 +365,54 @@ def test_first_rule_allows_peak_forming_current_high_when_enabled():
     assert live.classify_entry_profile(base, args) == ("snapshot_rule_passed", "peak_forming_micro")
     assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": -1.25}, args) == "snapshot_rule_peak_forming_forecast_peak_ahead"
     assert live.first_rule_reject_reason({**base, "yes_current_ask": 0.98}, args) == "snapshot_rule_peak_forming_ask_gt_max"
+
+
+def test_peak_forming_metar_veto_blocks_shanghai_like_cloud_clearing():
+    args = argparse.Namespace(
+        min_available_notional=5.0,
+        allow_missing_forecast_peak=False,
+        min_forecast_peak_delta_hours=-1.999,
+        enable_peak_forming_live=True,
+        peak_forming_max_decline_c=0.25,
+        peak_forming_min_ask=0.50,
+        peak_forming_max_ask=0.97,
+        peak_forming_min_p=0.60,
+        peak_forming_min_edge=0.02,
+        peak_forming_min_forecast_delta_hours=-1.0,
+        entry_profile_mode="both",
+        disable_peak_forming_metar_veto=False,
+        peak_forming_min_minutes_since_running_max=10.0,
+        peak_forming_forecast_bust_margin_c=0.1,
+        peak_forming_clear_sky_max_code=1.0,
+        peak_forming_prior_cloud_min_code=3.0,
+        peak_forming_cloud_clearing_min_drop=2.0,
+        peak_forming_warming_trend_min_d_tmpf_3h=1.5,
+    )
+    row = {
+        "unit": "C",
+        "decline_c": 0.0,
+        "yes_current_ask": 0.89,
+        "p_yes_win": 0.943,
+        "ev": 0.053,
+        "available_notional_at_ask": 45.0,
+        "token_id": "yes-token",
+        "forecast_peak_delta_hours_local": 3.0,
+        "forecast_max_native": 26.78,
+        "running_max_c": 27.0,
+        "minutes_since_running_max": 0.15,
+        "sky_now": 1.0,
+        "sky_1h": 3.0,
+        "d_tmpf_3h": 1.8,
+    }
+
+    assert live.first_rule_reject_reason(row, args) == "snapshot_rule_peak_forming_cloud_clearing"
+    assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan}, args) == "snapshot_rule_peak_forming_forecast_busted"
+    assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0}, args) == "snapshot_rule_peak_forming_warming_trend"
+    assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0, "d_tmpf_3h": 0.0}, args) == "snapshot_rule_peak_forming_fresh_running_max"
+    assert live.classify_entry_profile(
+        {**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0, "d_tmpf_3h": 0.0, "minutes_since_running_max": 15.0},
+        args,
+    ) == ("snapshot_rule_passed", "peak_forming_micro")
 
 
 def test_entry_profile_mode_splits_fade_and_peak_instances():

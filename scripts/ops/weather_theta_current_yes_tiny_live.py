@@ -604,14 +604,22 @@ def aviationweather_obs(icao: str, tz: ZoneInfo, local_date) -> list[dict[str, A
         temp_c = rec.get("temp")
         if temp_c is None:
             continue
+        cover = safe_str(rec.get("cover")).upper()
+        clouds = rec.get("clouds") if isinstance(rec.get("clouds"), list) else []
+        if not cover and clouds and isinstance(clouds[0], dict):
+            cover = safe_str(clouds[0].get("cover")).upper()
+        raw_ob = safe_str(rec.get("rawOb")).upper()
+        if not cover and "CAVOK" in raw_ob:
+            cover = "CAVOK"
         out.append(
             {
                 "ts": ts,
                 "tmpc": to_float(temp_c, np.nan),
                 "dwpc": to_float(rec.get("dewp"), np.nan),
                 "relh": to_float(rec.get("relh"), np.nan),
+                "drct": to_float(rec.get("wdir"), np.nan),
                 "sknt": to_float(rec.get("wspd"), np.nan),
-                "sky": np.nan,
+                "sky": SKY_CODE.get(cover, np.nan),
             }
         )
     return out
@@ -736,6 +744,9 @@ def fetch_obs(
     tmpc_3h = asof(180, "tmpc")
     dwpc_3h = asof(180, "dwpc")
     relh_3h = asof(180, "relh")
+    sky_now = to_float(last.get("sky"), np.nan)
+    sky_1h = asof(60, "sky")
+    sky_3h = asof(180, "sky")
     return {
         "status": "ok",
         **common,
@@ -748,8 +759,13 @@ def fetch_obs(
         "dwpf_now": dwpf_now,
         "dewpoint_depression_f": tmpf_now - dwpf_now if math.isfinite(tmpf_now) and math.isfinite(dwpf_now) else np.nan,
         "relh_now": to_float(last.get("relh"), np.nan),
+        "drct_now": to_float(last.get("drct"), np.nan),
         "sknt_now": to_float(last.get("sknt"), np.nan),
-        "sky_now": to_float(last.get("sky"), np.nan),
+        "sky_now": sky_now,
+        "sky_1h": sky_1h,
+        "sky_3h": sky_3h,
+        "d_sky_1h": sky_now - sky_1h if math.isfinite(sky_now) and math.isfinite(sky_1h) else np.nan,
+        "d_sky_3h": sky_now - sky_3h if math.isfinite(sky_now) and math.isfinite(sky_3h) else np.nan,
         "d_tmpf_1h": (tmpc_now - tmpc_1h) * 9.0 / 5.0 if math.isfinite(tmpc_now) and math.isfinite(tmpc_1h) else np.nan,
         "d_tmpf_3h": (tmpc_now - tmpc_3h) * 9.0 / 5.0 if math.isfinite(tmpc_now) and math.isfinite(tmpc_3h) else np.nan,
         "d_dwpf_3h": (dwpc_now - dwpc_3h) * 9.0 / 5.0 if math.isfinite(dwpc_now) and math.isfinite(dwpc_3h) else np.nan,
@@ -926,7 +942,26 @@ def build_current_rows(
             "snapshot_path": str(latest_snapshot() or ""),
             "obs": obs,
             **forecast_fields,
-            **{k: obs.get(k, np.nan) for k in ("tmpf_now", "dwpf_now", "dewpoint_depression_f", "relh_now", "sknt_now", "sky_now", "d_tmpf_1h", "d_tmpf_3h", "d_dwpf_3h", "d_relh_3h")},
+            **{
+                k: obs.get(k, np.nan)
+                for k in (
+                    "tmpf_now",
+                    "dwpf_now",
+                    "dewpoint_depression_f",
+                    "relh_now",
+                    "drct_now",
+                    "sknt_now",
+                    "sky_now",
+                    "sky_1h",
+                    "sky_3h",
+                    "d_sky_1h",
+                    "d_sky_3h",
+                    "d_tmpf_1h",
+                    "d_tmpf_3h",
+                    "d_dwpf_3h",
+                    "d_relh_3h",
+                )
+            },
         }
         rows.append(row)
     return pd.DataFrame(rows), audits
@@ -1143,6 +1178,48 @@ def entry_profile_enabled(profile: str, args: argparse.Namespace) -> bool:
     return mode == "both" or mode == profile
 
 
+def native_temp_to_c(value: float, unit: str) -> float:
+    return (value - 32.0) * 5.0 / 9.0 if safe_str(unit).upper() == "F" else value
+
+
+def peak_forming_metar_veto_reason(row: dict[str, Any], args: argparse.Namespace) -> str:
+    if getattr(args, "disable_peak_forming_metar_veto", False):
+        return ""
+
+    obs = row.get("obs") if isinstance(row.get("obs"), dict) else {}
+    sky_now = to_float(row.get("sky_now") or obs.get("sky_now"), np.nan)
+    sky_1h = to_float(row.get("sky_1h") or obs.get("sky_1h"), np.nan)
+    cloud_drop = sky_1h - sky_now if math.isfinite(sky_now) and math.isfinite(sky_1h) else np.nan
+    if (
+        math.isfinite(cloud_drop)
+        and sky_now <= float(getattr(args, "peak_forming_clear_sky_max_code", 1.0))
+        and sky_1h >= float(getattr(args, "peak_forming_prior_cloud_min_code", 3.0))
+        and cloud_drop >= float(getattr(args, "peak_forming_cloud_clearing_min_drop", 2.0))
+    ):
+        return "snapshot_rule_peak_forming_cloud_clearing"
+
+    forecast_max_native = to_float(row.get("forecast_max_native"), np.nan)
+    running_max_c = to_float(row.get("running_max_c") or obs.get("running_max_c"), np.nan)
+    if math.isfinite(forecast_max_native) and math.isfinite(running_max_c):
+        forecast_max_c = native_temp_to_c(forecast_max_native, safe_str(row.get("unit")))
+        if running_max_c - forecast_max_c >= float(getattr(args, "peak_forming_forecast_bust_margin_c", 0.1)):
+            return "snapshot_rule_peak_forming_forecast_busted"
+
+    d_tmpf_3h = to_float(row.get("d_tmpf_3h") or obs.get("d_tmpf_3h"), np.nan)
+    if math.isfinite(d_tmpf_3h) and d_tmpf_3h >= float(getattr(args, "peak_forming_warming_trend_min_d_tmpf_3h", 1.5)):
+        return "snapshot_rule_peak_forming_warming_trend"
+
+    minutes_since_running_max = to_float(
+        row.get("minutes_since_running_max") or obs.get("minutes_since_running_max"),
+        np.nan,
+    )
+    min_minutes = float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0))
+    if math.isfinite(minutes_since_running_max) and minutes_since_running_max < min_minutes:
+        return "snapshot_rule_peak_forming_fresh_running_max"
+
+    return ""
+
+
 def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tuple[str, str]:
     decline = to_float(row.get("decline_c"), 0.0)
     ask = to_float(row.get("yes_current_ask"), 0.0)
@@ -1185,6 +1262,9 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
     min_peak_forming_delta = float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0))
     if peak_delta is not None and float(peak_delta) < min_peak_forming_delta:
         return "snapshot_rule_peak_forming_forecast_peak_ahead", ""
+    metar_veto = peak_forming_metar_veto_reason(row, args)
+    if metar_veto:
+        return metar_veto, ""
     if not entry_profile_enabled("peak_forming_micro", args):
         return "snapshot_rule_peak_forming_disabled", ""
     return "snapshot_rule_passed", "peak_forming_micro"
@@ -1286,6 +1366,21 @@ def current_yes_forward_telemetry_row(
         "current_temp_c": to_float(obs.get("current_temp_c"), np.nan),
         "running_max_c": to_float(obs.get("running_max_c"), np.nan),
         "decline_c": to_float(row.get("decline_c"), np.nan),
+        "tmpf_now": to_float(row.get("tmpf_now") or obs.get("tmpf_now"), np.nan),
+        "dwpf_now": to_float(row.get("dwpf_now") or obs.get("dwpf_now"), np.nan),
+        "dewpoint_depression_f": to_float(row.get("dewpoint_depression_f") or obs.get("dewpoint_depression_f"), np.nan),
+        "relh_now": to_float(row.get("relh_now") or obs.get("relh_now"), np.nan),
+        "drct_now": to_float(row.get("drct_now") or obs.get("drct_now"), np.nan),
+        "sknt_now": to_float(row.get("sknt_now") or obs.get("sknt_now"), np.nan),
+        "sky_now": to_float(row.get("sky_now") or obs.get("sky_now"), np.nan),
+        "sky_1h": to_float(row.get("sky_1h") or obs.get("sky_1h"), np.nan),
+        "sky_3h": to_float(row.get("sky_3h") or obs.get("sky_3h"), np.nan),
+        "d_sky_1h": to_float(row.get("d_sky_1h") or obs.get("d_sky_1h"), np.nan),
+        "d_sky_3h": to_float(row.get("d_sky_3h") or obs.get("d_sky_3h"), np.nan),
+        "d_tmpf_1h": to_float(row.get("d_tmpf_1h") or obs.get("d_tmpf_1h"), np.nan),
+        "d_tmpf_3h": to_float(row.get("d_tmpf_3h") or obs.get("d_tmpf_3h"), np.nan),
+        "d_dwpf_3h": to_float(row.get("d_dwpf_3h") or obs.get("d_dwpf_3h"), np.nan),
+        "d_relh_3h": to_float(row.get("d_relh_3h") or obs.get("d_relh_3h"), np.nan),
         "gap_running_to_d1_low_c": to_float(row.get("gap_running_to_d1_low_c"), np.nan),
         "yes_current_ask": to_float(row.get("yes_current_ask"), np.nan),
         "yes_current_size": to_float(row.get("yes_current_size"), np.nan),
@@ -1345,6 +1440,11 @@ def current_yes_forward_telemetry_row(
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
             "peak_forming_min_forecast_delta_hours": float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0)),
+            "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
+            "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
+            "peak_forming_forecast_bust_margin_c": float(getattr(args, "peak_forming_forecast_bust_margin_c", 0.1)),
+            "peak_forming_cloud_clearing_min_drop": float(getattr(args, "peak_forming_cloud_clearing_min_drop", 2.0)),
+            "peak_forming_warming_trend_min_d_tmpf_3h": float(getattr(args, "peak_forming_warming_trend_min_d_tmpf_3h", 1.5)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -1712,6 +1812,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
             "peak_forming_min_forecast_delta_hours": float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0)),
+            "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
+            "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
+            "peak_forming_forecast_bust_margin_c": float(getattr(args, "peak_forming_forecast_bust_margin_c", 0.1)),
+            "peak_forming_cloud_clearing_min_drop": float(getattr(args, "peak_forming_cloud_clearing_min_drop", 2.0)),
+            "peak_forming_warming_trend_min_d_tmpf_3h": float(getattr(args, "peak_forming_warming_trend_min_d_tmpf_3h", 1.5)),
             "min_local_hour": args.min_local_hour,
             "max_local_hour": args.max_local_hour,
             "max_orders": args.max_orders,
@@ -1743,6 +1848,14 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "decline_c": round(float(r["decline_c"]), 3),
                 "obs_age_min": round(float((r.get("obs") or {}).get("age_min") or 0.0), 1),
                 "minutes_to_next_obs": round(float((r.get("obs") or {}).get("minutes_to_next_obs") or -1.0), 1),
+                "minutes_since_running_max": round(float((r.get("obs") or {}).get("minutes_since_running_max") or -1.0), 1),
+                "relh_now": round(float(r.get("relh_now") or np.nan), 1),
+                "drct_now": round(float(r.get("drct_now") or np.nan), 1),
+                "sknt_now": round(float(r.get("sknt_now") or np.nan), 1),
+                "sky_now": round(float(r.get("sky_now") or np.nan), 1),
+                "sky_1h": round(float(r.get("sky_1h") or np.nan), 1),
+                "d_sky_1h": round(float(r.get("d_sky_1h") or np.nan), 1),
+                "d_tmpf_3h": round(float(r.get("d_tmpf_3h") or np.nan), 1),
                 "gap_running_to_d1_low_c": round(float(r.get("gap_running_to_d1_low_c") or 0.0), 3),
                 "forecast_peak_hour_local": r.get("forecast_peak_hour_local"),
                 "forecast_peak_delta_hours_local": forecast_peak_delta(r),
@@ -1818,6 +1931,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--peak-forming-min-p", type=float, default=0.60)
     parser.add_argument("--peak-forming-min-edge", type=float, default=0.02)
     parser.add_argument("--peak-forming-min-forecast-delta-hours", type=float, default=-1.0)
+    parser.add_argument("--disable-peak-forming-metar-veto", action="store_true")
+    parser.add_argument("--peak-forming-min-minutes-since-running-max", type=float, default=10.0)
+    parser.add_argument("--peak-forming-forecast-bust-margin-c", type=float, default=0.1)
+    parser.add_argument("--peak-forming-clear-sky-max-code", type=float, default=1.0)
+    parser.add_argument("--peak-forming-prior-cloud-min-code", type=float, default=3.0)
+    parser.add_argument("--peak-forming-cloud-clearing-min-drop", type=float, default=2.0)
+    parser.add_argument("--peak-forming-warming-trend-min-d-tmpf-3h", type=float, default=1.5)
     parser.add_argument("--min-local-hour", type=int, default=13)
     parser.add_argument("--max-local-hour", type=int, default=15)
     parser.add_argument("--interval-seconds", type=float, default=900.0)
