@@ -346,16 +346,17 @@ telemetry files, live order files, and `$5` city-day caps:
 | `theta_current_yes_fade_confirmed_tiny_live_v1` | `fade_confirmed` | `runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1` | current running-max bracket after a real fade (`decline_c>=0.5`), the original v9 tiny-live path |
 | `theta_current_yes_peak_forming_micro_tiny_live_v1` | `peak_forming_micro` | `runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1` | current running-max bracket while still near the high (`decline_c<=0.25`), micro-live probe |
 
-`peak_forming_micro` is enabled as a micro-live probe when forecast peak is now
-or within the next hour, ask is `0.50..0.97`, model `p>=0.60`, and snapshot
-edge is at least `0.02`.
+`peak_forming_micro` is enabled as a micro-live probe when ask is `0.50..0.97`,
+model `p>=0.60`, snapshot edge is at least `0.02`, and the current running-max
+print is not too fresh.
 
-2026-06-18 METAR climate guard: `peak_forming_micro` also applies peak-only
-vetoes before live order planning. It skips fresh running-max prints, observed
-temperature above forecast max, rapid METAR cloud clearing such as `BKN/OVC`
-to `FEW/CAVOK`, and still-warming 3-hour temperature paths. These guards are
-intended to block Shanghai-like "cloud opens after first high" reversals; they
-do not apply to `fade_confirmed`.
+2026-06-19 filter simplification: forecast peak clock, forecast max gap,
+cloud-clearing state, METAR warming trend, and local hour are model/telemetry
+context, not live hard filters. The live runner keeps only critical vetoes:
+data freshness, pre-METAR-update blackout, fixed risk caps, fresh CLOB taker
+cushion/depth, and `peak_forming_micro` fresh-running-max wait. Snapshot
+top-of-book minimum notional is no longer a pre-model filter; fresh-book
+execution now checks cumulative executable ask depth inside the taker limit.
 
 2026-06-18 fade model branch: `theta_current_yes_fade_confirmed_tiny_live_v1`
 now has a dedicated fade-confirmed specialist artifact at

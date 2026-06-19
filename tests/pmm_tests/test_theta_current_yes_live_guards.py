@@ -178,10 +178,36 @@ def test_build_current_rows_allows_explicit_market_local_date_mapping(monkeypatc
     assert rows.iloc[0]["current_bracket"] == "70-71"
 
 
-def test_helsinki_uses_iana_dst_for_live_hour_gate():
+def test_helsinki_uses_iana_dst_without_live_hour_gate(monkeypatch):
     station = live.Station("Helsinki", "EFHK", "C", 2, "Europe/Helsinki")
     snapshot_ts = datetime(2026, 6, 16, 13, 18, tzinfo=timezone.utc)
 
+    def fake_fetch_obs(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "test",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-16T13:10:00+00:00",
+            "timezone": "Europe/Helsinki",
+            "cadence_min": 30.0,
+            "minutes_to_next_obs": 20.0,
+            "running_max_c": 20.0,
+            "current_temp_c": 19.0,
+            "decline_c": 1.0,
+            "tmpf_now": 66.2,
+            "dwpf_now": 50.0,
+            "dewpoint_depression_f": 16.2,
+            "relh_now": 50.0,
+            "sknt_now": 5.0,
+            "sky_now": 1.0,
+            "d_tmpf_1h": -1.0,
+            "d_tmpf_3h": -2.0,
+            "d_dwpf_3h": 0.0,
+            "d_relh_3h": 0.0,
+        }
+
+    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": snapshot_ts.isoformat()},
         [_record("Helsinki", "20"), _record("Helsinki", "21")],
@@ -189,19 +215,45 @@ def test_helsinki_uses_iana_dst_for_live_hour_gate():
         snapshot_ts,
         max_obs_age_min=20,
         pre_update_blackout_min=6,
-        min_gap_to_next_bracket_c=1,
+        min_gap_to_next_bracket_c=0,
     )
 
-    assert rows.empty
-    assert audits[0]["status"] == "outside_hour"
-    assert audits[0]["hour_local"] == 16
-    assert audits[0]["timezone"] == "Europe/Helsinki"
+    assert audits == []
+    assert len(rows) == 1
+    assert rows.iloc[0]["decision_hour_local"] == 16
+    assert rows.iloc[0]["timezone"] == "Europe/Helsinki"
 
 
-def test_other_dst_cities_use_city_timezone_mapping_without_explicit_tz():
+def test_other_dst_cities_use_city_timezone_mapping_without_hour_gate(monkeypatch):
     station = live.Station("NYC", "KNYC", "F", -5, None)
     snapshot_ts = datetime(2026, 6, 16, 20, 30, tzinfo=timezone.utc)
 
+    def fake_fetch_obs(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "test",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-16T20:20:00+00:00",
+            "timezone": "America/New_York",
+            "cadence_min": 30.0,
+            "minutes_to_next_obs": 20.0,
+            "running_max_c": (80.0 - 32.0) * 5.0 / 9.0,
+            "current_temp_c": (79.0 - 32.0) * 5.0 / 9.0,
+            "decline_c": 5.0 / 9.0,
+            "tmpf_now": 79.0,
+            "dwpf_now": 55.0,
+            "dewpoint_depression_f": 24.0,
+            "relh_now": 45.0,
+            "sknt_now": 6.0,
+            "sky_now": 1.0,
+            "d_tmpf_1h": -1.0,
+            "d_tmpf_3h": -2.0,
+            "d_dwpf_3h": 0.0,
+            "d_relh_3h": 0.0,
+        }
+
+    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": snapshot_ts.isoformat()},
         [_record("NYC", "80"), _record("NYC", "81")],
@@ -209,13 +261,13 @@ def test_other_dst_cities_use_city_timezone_mapping_without_explicit_tz():
         snapshot_ts,
         max_obs_age_min=20,
         pre_update_blackout_min=6,
-        min_gap_to_next_bracket_c=1,
+        min_gap_to_next_bracket_c=0,
     )
 
-    assert rows.empty
-    assert audits[0]["status"] == "outside_hour"
-    assert audits[0]["hour_local"] == 16
-    assert audits[0]["timezone"] == "America/New_York"
+    assert audits == []
+    assert len(rows) == 1
+    assert rows.iloc[0]["decision_hour_local"] == 16
+    assert rows.iloc[0]["timezone"] == "America/New_York"
 
 
 def test_fetch_obs_blocks_pre_metar_update_blackout(monkeypatch):
@@ -418,7 +470,7 @@ def test_build_current_rows_fetches_peak_clock_when_snapshot_lacks_native_fields
     assert row["forecast_peak_fetch_status"] == "fetched"
 
 
-def test_first_rule_rejects_missing_or_far_ahead_forecast_peak():
+def test_first_rule_treats_forecast_peak_as_model_context_not_hard_gate():
     args = argparse.Namespace(
         min_available_notional=5.0,
         allow_missing_forecast_peak=False,
@@ -435,8 +487,9 @@ def test_first_rule_rejects_missing_or_far_ahead_forecast_peak():
     }
 
     assert live.first_rule_reject_reason(base, args) == "snapshot_rule_passed"
-    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": -2.0}, args) == "snapshot_rule_forecast_peak_too_far_ahead"
-    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": None}, args) == "snapshot_rule_missing_forecast_peak"
+    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": -2.0}, args) == "snapshot_rule_passed"
+    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": None}, args) == "snapshot_rule_passed"
+    assert live.first_rule_reject_reason({**base, "available_notional_at_ask": 0.25}, args) == "snapshot_rule_passed"
 
 
 def test_first_rule_allows_peak_forming_current_high_when_enabled():
@@ -465,11 +518,11 @@ def test_first_rule_allows_peak_forming_current_high_when_enabled():
 
     assert live.first_rule_reject_reason({**base}, argparse.Namespace(**{**vars(args), "enable_peak_forming_live": False})) == "snapshot_rule_decline_lt_0_5"
     assert live.classify_entry_profile(base, args) == ("snapshot_rule_passed", "peak_forming_micro")
-    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": -1.25}, args) == "snapshot_rule_peak_forming_forecast_peak_ahead"
+    assert live.first_rule_reject_reason({**base, "forecast_peak_delta_hours_local": -1.25}, args) == "snapshot_rule_passed"
     assert live.first_rule_reject_reason({**base, "yes_current_ask": 0.98}, args) == "snapshot_rule_peak_forming_ask_gt_max"
 
 
-def test_peak_forming_metar_veto_blocks_shanghai_like_cloud_clearing():
+def test_peak_forming_metar_veto_only_blocks_too_fresh_running_max():
     args = argparse.Namespace(
         min_available_notional=5.0,
         allow_missing_forecast_peak=False,
@@ -507,12 +560,12 @@ def test_peak_forming_metar_veto_blocks_shanghai_like_cloud_clearing():
         "d_tmpf_3h": 1.8,
     }
 
-    assert live.first_rule_reject_reason(row, args) == "snapshot_rule_peak_forming_cloud_clearing"
-    assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan}, args) == "snapshot_rule_peak_forming_forecast_busted"
-    assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0}, args) == "snapshot_rule_peak_forming_warming_trend"
+    assert live.first_rule_reject_reason(row, args) == "snapshot_rule_peak_forming_fresh_running_max"
+    assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan}, args) == "snapshot_rule_peak_forming_fresh_running_max"
+    assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0}, args) == "snapshot_rule_peak_forming_fresh_running_max"
     assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0, "d_tmpf_3h": 0.0}, args) == "snapshot_rule_peak_forming_fresh_running_max"
     assert live.classify_entry_profile(
-        {**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0, "d_tmpf_3h": 0.0, "minutes_since_running_max": 15.0},
+        {**row, "minutes_since_running_max": 15.0},
         args,
     ) == ("snapshot_rule_passed", "peak_forming_micro")
 

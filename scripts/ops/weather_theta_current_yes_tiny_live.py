@@ -8,7 +8,7 @@ This is an independent live branch for the frozen v9 rule:
   yes_ask >= 0.55, p_yes_win >= 0.5, p_yes_win - yes_ask >= 0.05
   fresh CLOB ask rechecked before execution, fresh_ask <= snapshot_ask + 0.02
   d1 NO sibling quote visible
-  $5/order, $5/city-day cap, top-of-book available notional >= $5
+  $5/order, $5/city-day cap, executable ask depth inside the taker limit >= $5
 
 It writes standard weather_edge_trade_plan JSONL rows and can hand them to the
 existing weather_order_executor.  Default mode is plan-only; live submission
@@ -45,15 +45,13 @@ if str(ROOT) not in sys.path:
 
 from src.strategies.weather_edge_v1.tools.execution_pipeline import read_jsonl, stable_hash
 from src.strategies.weather_edge_v1.tools.live_state import read_live_state
-from src.strategies.weather_edge_v1.official_observation_feed.market_brackets import (
-    bracket_contains,
-    parse_label_dict,
-)
-from src.strategies.weather_edge_v1.official_observation_feed.source_registry import load_source_profiles
-from src.strategies.weather_edge_v1.tools.official_observation_clock import (
+from weather_data_feed import (
     ObservationClockConfig,
+    bracket_contains,
     city_timezone_name,
+    load_source_profiles,
     observation_clock_guard,
+    parse_label_dict,
     station_timezone,
     timezone_label,
 )
@@ -419,8 +417,6 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
     snapshot_ask = float(row["yes_current_ask"])
     max_by_cushion = snapshot_ask + float(args.max_taker_cushion)
     max_price = min(max_by_cushion, 0.999)
-    limit_price = min(fresh_ask + float(args.cross_tick_buffer), max_price)
-    fresh_available = fresh_ask * fresh_ask_size
     if fresh_ask > max_price + 1e-9:
         return {
             "status": "rejected",
@@ -428,18 +424,22 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
             "best_bid": bids[0][0] if bids else 0.0,
             "fresh_ask": fresh_ask,
             "fresh_ask_size": fresh_ask_size,
-            "fresh_available_notional": fresh_available,
+            "fresh_available_notional": fresh_ask * fresh_ask_size,
             "max_taker_price": max_price,
             "edge_at_fresh_ask": p_yes - fresh_ask,
         }
-    if fresh_available + 1e-9 < float(args.max_order_notional):
+    executable = [(price, size) for price, size in asks if price <= max_price + 1e-9]
+    executable_notional = sum(price * size for price, size in executable)
+    worst_executable_ask = max((price for price, _size in executable), default=fresh_ask)
+    limit_price = min(worst_executable_ask + float(args.cross_tick_buffer), max_price)
+    if executable_notional + 1e-9 < float(args.max_order_notional):
         return {
             "status": "rejected",
-            "reason": "fresh_ask_insufficient_size",
+            "reason": "fresh_book_insufficient_depth",
             "best_bid": bids[0][0] if bids else 0.0,
             "fresh_ask": fresh_ask,
             "fresh_ask_size": fresh_ask_size,
-            "fresh_available_notional": fresh_available,
+            "fresh_available_notional": executable_notional,
             "max_taker_price": max_price,
             "edge_at_fresh_ask": p_yes - fresh_ask,
         }
@@ -448,7 +448,7 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
         "best_bid": bids[0][0] if bids else 0.0,
         "fresh_ask": fresh_ask,
         "fresh_ask_size": fresh_ask_size,
-        "fresh_available_notional": fresh_available,
+        "fresh_available_notional": executable_notional,
         "max_taker_price": max_price,
         "limit_price": limit_price,
         "edge_at_fresh_ask": p_yes - fresh_ask,
@@ -903,20 +903,6 @@ def build_current_rows(
                 audits.append(date_audit)
             continue
         hour = local_now.hour
-        if hour < min_local_hour or hour > max_local_hour:
-            audits.append(
-                {
-                    "city": city,
-                    "target_date": target_date,
-                    "status": "outside_hour",
-                    "hour_local": hour,
-                    "min_local_hour": min_local_hour,
-                    "max_local_hour": max_local_hour,
-                    "local_time": local_time,
-                    "timezone": timezone_name,
-                }
-            )
-            continue
         obs = fetch_obs(
             station,
             now,
@@ -1309,28 +1295,6 @@ def peak_forming_metar_veto_reason(row: dict[str, Any], args: argparse.Namespace
         return ""
 
     obs = row.get("obs") if isinstance(row.get("obs"), dict) else {}
-    sky_now = to_float(row.get("sky_now") or obs.get("sky_now"), np.nan)
-    sky_1h = to_float(row.get("sky_1h") or obs.get("sky_1h"), np.nan)
-    cloud_drop = sky_1h - sky_now if math.isfinite(sky_now) and math.isfinite(sky_1h) else np.nan
-    if (
-        math.isfinite(cloud_drop)
-        and sky_now <= float(getattr(args, "peak_forming_clear_sky_max_code", 1.0))
-        and sky_1h >= float(getattr(args, "peak_forming_prior_cloud_min_code", 3.0))
-        and cloud_drop >= float(getattr(args, "peak_forming_cloud_clearing_min_drop", 2.0))
-    ):
-        return "snapshot_rule_peak_forming_cloud_clearing"
-
-    forecast_max_native = to_float(row.get("forecast_max_native"), np.nan)
-    running_max_c = to_float(row.get("running_max_c") or obs.get("running_max_c"), np.nan)
-    if math.isfinite(forecast_max_native) and math.isfinite(running_max_c):
-        forecast_max_c = native_temp_to_c(forecast_max_native, safe_str(row.get("unit")))
-        if running_max_c - forecast_max_c >= float(getattr(args, "peak_forming_forecast_bust_margin_c", 0.1)):
-            return "snapshot_rule_peak_forming_forecast_busted"
-
-    d_tmpf_3h = to_float(row.get("d_tmpf_3h") or obs.get("d_tmpf_3h"), np.nan)
-    if math.isfinite(d_tmpf_3h) and d_tmpf_3h >= float(getattr(args, "peak_forming_warming_trend_min_d_tmpf_3h", 1.5)):
-        return "snapshot_rule_peak_forming_warming_trend"
-
     minutes_since_running_max = to_float(
         row.get("minutes_since_running_max") or obs.get("minutes_since_running_max"),
         np.nan,
@@ -1347,14 +1311,6 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
     ask = to_float(row.get("yes_current_ask"), 0.0)
     p_yes = to_float(row.get("p_yes_win"), 0.0)
     edge = to_float(row.get("ev"), -999.0)
-    peak_delta = forecast_peak_delta(row)
-    if peak_delta is None and not getattr(args, "allow_missing_forecast_peak", False):
-        return "snapshot_rule_missing_forecast_peak", ""
-    min_peak_delta = float(getattr(args, "min_forecast_peak_delta_hours", -1.999))
-    if peak_delta is not None and float(peak_delta) < min_peak_delta:
-        return "snapshot_rule_forecast_peak_too_far_ahead", ""
-    if to_float(row.get("available_notional_at_ask"), 0.0) < float(args.min_available_notional):
-        return "snapshot_rule_insufficient_size", ""
     if not safe_str(row.get("token_id")):
         return "snapshot_rule_missing_token", ""
 
@@ -1381,9 +1337,6 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
         return "snapshot_rule_peak_forming_p_lt_min", ""
     if edge < float(getattr(args, "peak_forming_min_edge", 0.02)):
         return "snapshot_rule_peak_forming_edge_lt_min", ""
-    min_peak_forming_delta = float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0))
-    if peak_delta is not None and float(peak_delta) < min_peak_forming_delta:
-        return "snapshot_rule_peak_forming_forecast_peak_ahead", ""
     metar_veto = peak_forming_metar_veto_reason(row, args)
     if metar_veto:
         return metar_veto, ""
@@ -2067,7 +2020,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--snapshot")
     parser.add_argument("--max-order-notional", type=float, default=5.0)
     parser.add_argument("--max-city-day-notional", type=float, default=5.0)
-    parser.add_argument("--min-available-notional", type=float, default=5.0)
+    parser.add_argument("--min-available-notional", type=float, default=0.0)
     parser.add_argument("--max-taker-cushion", type=float, default=0.02)
     parser.add_argument("--cross-tick-buffer", type=float, default=0.001)
     parser.add_argument("--max-orders", type=int, default=20)

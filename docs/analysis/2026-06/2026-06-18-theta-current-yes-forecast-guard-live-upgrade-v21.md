@@ -1,7 +1,11 @@
 # Current-YES Forecast Guard Live Upgrade v21
 
 Date: 2026-06-18
-Status: deployed to N100 live path
+Status: superseded on 2026-06-19 by `2026-06-19-theta-current-yes-filter-simplification-v22.md`
+
+Supersession note: this document records the 2026-06-18 deployment state. On
+2026-06-19 the forecast peak hard guard was removed from live planning and kept
+only as model/telemetry context.
 
 ## What Changed
 
