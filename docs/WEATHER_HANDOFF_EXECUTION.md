@@ -1,13 +1,17 @@
 # Weather 策略 · 交接执行总文档
 
-Status: design-draft
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Status: snapshot（2026-06-08 交接已完成，保留作历史记录）
+Updated: 2026-06-19 status 更正：交接已 push 并吸收，下方"未 push/唯一入口"框架已过时
 Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; draft/design reference, not current production fact
 
-> **这是迁移 agent 的唯一入口。** 本轮工作把"为什么这套策略一直找不到效果"诊断清楚，并把
-> 分析体系、项目结构、分析 skill 一并升级到科学态。本文串起全部产出 + 执行顺序 + 校验清单。
-> 生成 2026-06-08。**未 git push**，由你迁移。代码（src/、ops 运行脚本）本轮未改。
+> **已完成的历史交接记录（2026-06-08）。** 当时的方法论升级（绩效三道门、分析 skill 科学化）
+> 已吸收进 `WEATHER_ANALYSIS_CONTRACT.md §0`（绩效结论三道门）和 `skills/weather-strategy-performance/SKILL.md`，
+> 也已 git push。**当前入口请用** `WEATHER_STRATEGY_REVIEW_PIPELINE.md`（复盘流水线）和
+> `WEATHER_ARCHITECTURE_SPINE.md`（[0]–[6] 分层）。本文保留诊断与执行顺序作历史背景，不再是"唯一入口"。
+
+> （原始交接说明，时间点证据，正文保留不改：）
+> 本轮工作把"为什么这套策略一直找不到效果"诊断清楚，并把分析体系、项目结构、分析 skill 一并升级到科学态。
+> 生成 2026-06-08。代码（src/、ops 运行脚本）本轮未改。
 
 ---
 

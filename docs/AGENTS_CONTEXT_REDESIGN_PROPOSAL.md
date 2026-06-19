@@ -1,8 +1,8 @@
 # 项目常驻上下文重构提案（草稿，未应用）
 
-Status: `design-draft`
+Status: `snapshot`（**已应用 2026-06-19**：AGENTS.md/CLAUDE.md 已按本提案瘦身，保留此文作设计记录）
 Updated: 2026-06-19
-Source of truth: 否（这是提案，认可后才改 AGENTS.md / CLAUDE.md）
+Source of truth: 否（设计记录；当前常驻文件以 AGENTS.md/CLAUDE.md 实际内容为准）
 
 本文档解决一个根因问题：常驻上下文（`AGENTS.md` / `CLAUDE.md`，各 ~430/500 行、154 行逐字重复、
 64 处"禁止/必须"）把预算花在**重复的数据目录琐事 + 禁止清单**上，而真正该常驻的

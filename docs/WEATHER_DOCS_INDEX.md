@@ -56,7 +56,7 @@ Status 口径：
 | [WEATHER_STRATEGY_REVIEW_PIPELINE.md](WEATHER_STRATEGY_REVIEW_PIPELINE.md) | `current-reference` | 一条策略跑完后怎么一步步复盘：preflight→成交质量→绩效→对账→关联参数→结论；每阶段的 canonical 源/gate/skill/living doc 与 live-vs-shadow 比法 |
 | [WEATHER_CITY_POOL_DECISIONS.md](WEATHER_CITY_POOL_DECISIONS.md) | `current-source` | 当前 T1/T2 城市池、pm_agent 实例级 live allowlist、为什么升降级、回滚条件是什么 |
 | [WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md) | `current-source` | weather 分析、PnL、切片、账户对账必须用什么口径 |
-| [WEATHER_HANDOFF_EXECUTION.md](WEATHER_HANDOFF_EXECUTION.md) | `design-draft` | 2026-06-08 方法论/结构重整交接入口；用于迁移执行顺序，不直接定义 live 生产状态 |
+| [WEATHER_HANDOFF_EXECUTION.md](WEATHER_HANDOFF_EXECUTION.md) | `snapshot` | 2026-06-08 方法论/结构重整交接的历史记录；方法已吸收进 ANALYSIS_CONTRACT §0 + performance skill。当前复盘入口改用 STRATEGY_REVIEW_PIPELINE / ARCHITECTURE_SPINE |
 | [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md) | `design-draft` | 天气策略 [0]–[6] 主线骨架和评估层重构映射 |
 | [OPS_RUNBOOK.md](OPS_RUNBOOK.md) | `current-reference` | 常驻进程、日志、通用运维命令在哪里 |
 | [WEATHER_DASHBOARD_TROUBLESHOOTING.md](WEATHER_DASHBOARD_TROUBLESHOOTING.md) | `current-reference` | 本机 dashboard / API / FE 出问题时怎么排查 |
