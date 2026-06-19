@@ -431,6 +431,22 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
     executable_notional = sum(price * size for price, size in executable)
     worst_executable_ask = max((price for price, _size in executable), default=fresh_ask)
     limit_price = min(worst_executable_ask + float(args.cross_tick_buffer), max_price)
+    required_edge = required_fresh_quote_edge(row, args)
+    edge_at_limit = p_yes - limit_price
+    if edge_at_limit + 1e-9 < required_edge:
+        return {
+            "status": "rejected",
+            "reason": "fresh_edge_below_required",
+            "best_bid": bids[0][0] if bids else 0.0,
+            "fresh_ask": fresh_ask,
+            "fresh_ask_size": fresh_ask_size,
+            "fresh_available_notional": executable_notional,
+            "max_taker_price": max_price,
+            "limit_price": limit_price,
+            "edge_at_fresh_ask": p_yes - fresh_ask,
+            "edge_at_limit": edge_at_limit,
+            "required_quote_edge": required_edge,
+        }
     if executable_notional + 1e-9 < float(args.max_order_notional):
         return {
             "status": "rejected",
@@ -441,6 +457,8 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
             "fresh_available_notional": executable_notional,
             "max_taker_price": max_price,
             "edge_at_fresh_ask": p_yes - fresh_ask,
+            "edge_at_limit": edge_at_limit,
+            "required_quote_edge": required_edge,
         }
     return {
         "status": "accepted",
@@ -451,9 +469,10 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
         "max_taker_price": max_price,
         "limit_price": limit_price,
         "edge_at_fresh_ask": p_yes - fresh_ask,
-        "edge_at_limit": p_yes - limit_price,
+        "edge_at_limit": edge_at_limit,
+        "required_quote_edge": required_edge,
         "expected_profit_usd": float(args.max_order_notional) * (p_yes / limit_price - 1.0),
-        "derived_min_edge_after_full_cushion": max(0.0, 0.05 - float(args.max_taker_cushion)),
+        "derived_min_edge_after_full_cushion": required_edge,
         "cushion_paid_vs_snapshot": limit_price - snapshot_ask,
     }
 
@@ -491,6 +510,29 @@ def snapshot_dir() -> Path:
 def latest_snapshot() -> Path | None:
     files = sorted(snapshot_dir().glob("snapshot_*.json"), key=lambda p: p.stat().st_mtime)
     return files[-1] if files else None
+
+
+def snapshot_freshness_time(snapshot: dict[str, Any], snapshot_path: Path) -> tuple[datetime, str]:
+    for key in ("generated_at_utc", "snapshot_generated_at_utc", "snapshot_fetched_at_utc"):
+        parsed = parse_utc(snapshot.get(key))
+        if parsed is not None:
+            return parsed, key
+    logical_ts = parse_utc(snapshot.get("ts_utc"))
+    try:
+        file_mtime = datetime.fromtimestamp(snapshot_path.stat().st_mtime, timezone.utc)
+    except OSError:
+        file_mtime = None
+    if logical_ts is None:
+        return (file_mtime or datetime.now(timezone.utc)), "file_mtime_utc"
+    if file_mtime is not None and (file_mtime - logical_ts).total_seconds() > 300:
+        return file_mtime, "file_mtime_utc"
+    return logical_ts, "ts_utc"
+
+
+def required_fresh_quote_edge(row: dict[str, Any], args: argparse.Namespace) -> float:
+    if safe_str(row.get("entry_profile")) == "peak_forming_micro":
+        return max(0.0, float(getattr(args, "peak_forming_min_edge", 0.02)))
+    return max(0.0, 0.05 - float(args.max_taker_cushion))
 
 
 def load_stations() -> dict[str, Station]:
@@ -1619,11 +1661,14 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError("no paper snapshot found")
     snapshot, records = snapshot_records(snap_path)
     snapshot_ts = parse_utc(snapshot.get("ts_utc")) or datetime.now(timezone.utc)
-    age_min = (datetime.now(timezone.utc) - snapshot_ts).total_seconds() / 60.0
+    snapshot_freshness_ts, snapshot_freshness_source = snapshot_freshness_time(snapshot, snap_path)
+    snapshot_file_mtime = datetime.fromtimestamp(snap_path.stat().st_mtime, timezone.utc)
+    age_min = (datetime.now(timezone.utc) - snapshot_freshness_ts).total_seconds() / 60.0
     telemetry_run_id = stable_hash(
         {
             "strategy_instance": STRATEGY_INSTANCE,
             "snapshot_ts_utc": snapshot.get("ts_utc"),
+            "snapshot_freshness_ts_utc": snapshot_freshness_ts.isoformat(),
             "snapshot": str(snap_path),
             "created_at_utc": now_utc(),
         }
@@ -1634,6 +1679,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "status": "stale_snapshot",
             "snapshot": str(snap_path),
             "snapshot_ts_utc": snapshot.get("ts_utc"),
+            "snapshot_freshness_ts_utc": snapshot_freshness_ts.isoformat(),
+            "snapshot_freshness_source": snapshot_freshness_source,
+            "snapshot_file_mtime_utc": snapshot_file_mtime.isoformat(),
             "age_min": round(age_min, 1),
             "max_snapshot_age_min": args.max_snapshot_age_min,
         }
@@ -1778,6 +1826,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                         "fresh_available_notional": taker_quote.get("fresh_available_notional", 0.0),
                         "taker_max_price": taker_quote.get("max_taker_price", 0.0),
                         "edge_at_fresh_ask": taker_quote.get("edge_at_fresh_ask", np.nan),
+                        "edge_at_limit": taker_quote.get("edge_at_limit", np.nan),
+                        "required_quote_edge": taker_quote.get("required_quote_edge", np.nan),
                     }
                 )
                 telemetry_rows.append(
@@ -1802,6 +1852,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                     "taker_limit_price": taker_quote["limit_price"],
                     "edge_at_fresh_ask": taker_quote["edge_at_fresh_ask"],
                     "edge_at_limit": taker_quote["edge_at_limit"],
+                    "required_quote_edge": taker_quote.get(
+                        "required_quote_edge",
+                        taker_quote.get("derived_min_edge_after_full_cushion", required_fresh_quote_edge(row_dict, args)),
+                    ),
                     "expected_profit_usd": taker_quote["expected_profit_usd"],
                     "derived_min_edge_after_full_cushion": taker_quote["derived_min_edge_after_full_cushion"],
                     "taker_cushion_paid_vs_snapshot": taker_quote["cushion_paid_vs_snapshot"],
@@ -1866,6 +1920,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "snapshot": str(snap_path),
         "snapshot_dir": str(snapshot_dir()),
         "snapshot_ts_utc": snapshot.get("ts_utc"),
+        "snapshot_freshness_ts_utc": snapshot_freshness_ts.isoformat(),
+        "snapshot_freshness_source": snapshot_freshness_source,
+        "snapshot_file_mtime_utc": snapshot_file_mtime.isoformat(),
         "snapshot_age_min": round(age_min, 1),
         "current_rows": int(0 if current.empty else len(current)),
         "candidate_rows": len(candidates),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -54,6 +55,81 @@ def test_aviationweather_obs_parses_cloud_cover(monkeypatch):
 
     assert rows[0]["sky"] == live.SKY_CODE["FEW"]
     assert rows[0]["drct"] == 70
+
+
+def test_snapshot_freshness_uses_file_mtime_when_generation_finishes_late(tmp_path):
+    snapshot_path = tmp_path / "snapshot_20260619_2138.json"
+    snapshot_path.write_text("{}", encoding="utf-8")
+    logical_ts = datetime(2026, 6, 19, 13, 38, 43, tzinfo=timezone.utc)
+    mtime = datetime(2026, 6, 19, 14, 18, 29, tzinfo=timezone.utc)
+    os.utime(snapshot_path, (mtime.timestamp(), mtime.timestamp()))
+
+    freshness_ts, source = live.snapshot_freshness_time({"ts_utc": logical_ts.isoformat()}, snapshot_path)
+
+    assert freshness_ts == mtime
+    assert source == "file_mtime_utc"
+
+
+def test_fresh_taker_quote_uses_peak_forming_min_edge(monkeypatch):
+    monkeypatch.setattr(
+        live,
+        "fetch_json",
+        lambda *_args, **_kwargs: {
+            "asks": [{"price": "0.740", "size": "10"}],
+            "bids": [{"price": "0.720", "size": "10"}],
+        },
+    )
+    args = argparse.Namespace(
+        max_taker_cushion=0.02,
+        cross_tick_buffer=0.001,
+        max_order_notional=5.0,
+        peak_forming_min_edge=0.02,
+    )
+
+    quote = live.fresh_taker_quote(
+        {
+            "token_id": "yes-token",
+            "p_yes_win": 0.766,
+            "yes_current_ask": 0.740,
+            "entry_profile": "peak_forming_micro",
+        },
+        args,
+    )
+
+    assert quote["status"] == "accepted"
+    assert quote["required_quote_edge"] == 0.02
+    assert round(quote["edge_at_limit"], 3) == 0.025
+
+
+def test_fresh_taker_quote_rejects_peak_forming_edge_below_required(monkeypatch):
+    monkeypatch.setattr(
+        live,
+        "fetch_json",
+        lambda *_args, **_kwargs: {
+            "asks": [{"price": "0.740", "size": "10"}],
+            "bids": [{"price": "0.720", "size": "10"}],
+        },
+    )
+    args = argparse.Namespace(
+        max_taker_cushion=0.02,
+        cross_tick_buffer=0.001,
+        max_order_notional=5.0,
+        peak_forming_min_edge=0.02,
+    )
+
+    quote = live.fresh_taker_quote(
+        {
+            "token_id": "yes-token",
+            "p_yes_win": 0.750358,
+            "yes_current_ask": 0.740,
+            "entry_profile": "peak_forming_micro",
+        },
+        args,
+    )
+
+    assert quote["status"] == "rejected"
+    assert quote["reason"] == "fresh_edge_below_required"
+    assert quote["required_quote_edge"] == 0.02
 
 
 def test_build_current_rows_reports_missing_local_date_market_when_snapshot_rolls_ahead():
