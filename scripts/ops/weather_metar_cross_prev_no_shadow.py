@@ -36,7 +36,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import weather_station_basis_shadow as source  # noqa: E402
-from src.strategies.weather_edge_v1.official_observation_feed.source_policy import (  # noqa: E402
+from weather_data_feed.source_policy import (  # noqa: E402
     CityConfig,
     build_city_policy,
     load_city_configs,

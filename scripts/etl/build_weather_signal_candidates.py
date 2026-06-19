@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.strategies.weather_edge_v1.tools.official_observation_clock import city_timezone_name
+from weather_data_feed import city_timezone_name
 DB_PATH = ROOT / "runtime" / "weather.db"
 PARQUET_PATH = (
     ROOT / "runtime" / "weather_edge_v1" / "market_data" / "research"

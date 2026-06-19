@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from weather_data_feed import (
+    city_local_datetime,
     city_local_date,
     city_scan_dates,
     load_city_configs,
     load_source_profiles,
+    local_settle_utc,
     market_snapshot_record,
     normalize_snapshot_record,
 )
@@ -25,8 +27,14 @@ def test_city_calendar_uses_iana_timezone_and_dst():
     now = "2026-06-16T13:18:54Z"
 
     assert city_local_date("Helsinki", now).isoformat() == "2026-06-16"
+    assert city_local_datetime("Helsinki", now).hour == 16
     assert datetime(2026, 6, 16, 13, 18, 54, tzinfo=timezone.utc).astimezone(station_timezone(StationStub())).hour == 16
     assert timezone_label(station_timezone(StationStub())) == "Europe/Helsinki"
+
+
+def test_local_settle_utc_uses_dst_not_static_offset():
+    assert local_settle_utc("Helsinki", "2026-06-16").isoformat() == "2026-06-16T19:00:00+00:00"
+    assert local_settle_utc("NYC", "2026-06-19").isoformat() == "2026-06-20T02:00:00+00:00"
 
 
 def test_city_scan_dates_are_per_city_not_machine_date():

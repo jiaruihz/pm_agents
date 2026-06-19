@@ -118,6 +118,36 @@ def city_local_date(city: str, now_utc: str | datetime | None = None, timezone_n
     return parse_now_utc(now_utc).astimezone(ZoneInfo(tz_name)).date()
 
 
+def city_local_datetime(city: str, now_utc: str | datetime | None = None, timezone_name: str | None = None) -> datetime:
+    tz_name = timezone_name or city_timezone_name(city)
+    if not tz_name:
+        raise ValueError(f"missing timezone for city={city!r}")
+    return parse_now_utc(now_utc).astimezone(ZoneInfo(tz_name))
+
+
+def local_settle_utc(
+    city: str,
+    target_date: str | date,
+    *,
+    settle_hour_local: int = 22,
+    timezone_name: str | None = None,
+) -> datetime:
+    tz_name = timezone_name or city_timezone_name(city)
+    if not tz_name:
+        raise ValueError(f"missing timezone for city={city!r}")
+    target = target_date if isinstance(target_date, date) else date.fromisoformat(str(target_date))
+    local_dt = datetime(
+        target.year,
+        target.month,
+        target.day,
+        settle_hour_local,
+        0,
+        0,
+        tzinfo=ZoneInfo(tz_name),
+    )
+    return local_dt.astimezone(timezone.utc)
+
+
 def city_scan_dates(
     city: str,
     now_utc: str | datetime | None = None,

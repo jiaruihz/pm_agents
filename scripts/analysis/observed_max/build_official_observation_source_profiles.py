@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.strategies.weather_edge_v1.official_observation_feed.source_registry import (
+from weather_data_feed.source_registry import (
     DEFAULT_RESEARCH_REGISTRY_JSON,
     DEFAULT_SOURCE_PROFILES_JSON,
     source_profile_from_registry_row,

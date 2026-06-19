@@ -34,9 +34,7 @@ if sys.prefix == sys.base_prefix and VENV_PYTHON.exists():
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.strategies.weather_edge_v1.official_observation_feed.source_registry import (  # noqa: E402
-    load_source_profiles,
-)
+from weather_data_feed import load_source_profiles  # noqa: E402
 
 
 DATA_ROOT = Path(os.environ.get("LDM_METAR_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)

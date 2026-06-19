@@ -2,9 +2,11 @@
 
 from weather_data_feed.city_calendar import (
     CITY_TIMEZONE,
+    city_local_datetime,
     city_local_date,
     city_scan_dates,
     city_timezone_name,
+    local_settle_utc,
     parse_now_utc,
     station_timezone,
     timezone_label,
@@ -43,6 +45,7 @@ __all__ = [
     "SourceProfile",
     "bracket_contains",
     "build_city_policy",
+    "city_local_datetime",
     "city_local_date",
     "city_scan_dates",
     "city_timezone_name",
@@ -53,6 +56,7 @@ __all__ = [
     "observation_clock_guard",
     "parse_label_dict",
     "parse_market_bracket",
+    "local_settle_utc",
     "parse_now_utc",
     "source_profile_for_city",
     "station_timezone",

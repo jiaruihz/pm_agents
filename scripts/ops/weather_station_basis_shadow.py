@@ -48,7 +48,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from src.strategies.weather_edge_v1.official_observation_feed.market_brackets import parse_label_dict
+from weather_data_feed import parse_label_dict
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = Path(os.environ.get("STATION_BASIS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
