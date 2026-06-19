@@ -332,6 +332,66 @@ def test_build_current_rows_allows_explicit_market_local_date_mapping(monkeypatc
     assert rows.iloc[0]["current_bracket"] == "70-71"
 
 
+def test_build_current_rows_falls_back_to_market_prices_when_orderbook_missing(monkeypatch):
+    now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+
+    def fake_fetch_obs(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "test",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-18T20:20:00+00:00",
+            "timezone": "America/Los_Angeles",
+            "cadence_min": 30.0,
+            "minutes_to_next_obs": 20.0,
+            "running_max_c": (70.0 - 32.0) * 5.0 / 9.0,
+            "current_temp_c": (68.0 - 32.0) * 5.0 / 9.0,
+            "decline_c": 2.0 * 5.0 / 9.0,
+            "tmpf_now": 68.0,
+            "dwpf_now": 50.0,
+            "dewpoint_depression_f": 18.0,
+            "relh_now": 45.0,
+            "sknt_now": 6.0,
+            "sky_now": 1.0,
+            "d_tmpf_1h": -1.0,
+            "d_tmpf_3h": -2.0,
+            "d_dwpf_3h": 0.0,
+            "d_relh_3h": 0.0,
+        }
+
+    current = {
+        **_record("LA", "70-71", event_date="2026-06-18"),
+        "yes_best_ask": None,
+        "yes_ask_size": None,
+        "market_yes_price": 0.42,
+    }
+    d1 = {
+        **_record("LA", "72-73", event_date="2026-06-18"),
+        "no_best_ask": None,
+        "no_ask_size": None,
+        "market_yes_price": 0.18,
+    }
+
+    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [current, d1],
+        {"LA": station},
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert audits == []
+    assert len(rows) == 1
+    assert rows.iloc[0]["yes_current_ask"] == 0.42
+    assert round(rows.iloc[0]["d1_no_ask"], 2) == 0.82
+    assert rows.iloc[0]["snapshot_price_source"] == "market_yes_price_fallback"
+
+
 def test_helsinki_uses_iana_dst_without_live_hour_gate(monkeypatch):
     station = live.Station("Helsinki", "EFHK", "C", 2, "Europe/Helsinki")
     snapshot_ts = datetime(2026, 6, 16, 13, 18, tzinfo=timezone.utc)

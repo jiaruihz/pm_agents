@@ -1080,6 +1080,19 @@ def build_current_rows(
         yes_size = to_float(current_record.get("yes_ask_size"), 0.0)
         no_ask = to_float(d1_record.get("no_best_ask"), 0.0)
         no_size = to_float(d1_record.get("no_ask_size"), 0.0)
+        price_source = "snapshot_orderbook"
+        if yes_ask <= 0:
+            yes_ask = to_float(current_record.get("market_yes_price"), 0.0)
+            price_source = "market_yes_price_fallback"
+        if no_ask <= 0:
+            d1_yes_price = to_float(d1_record.get("market_yes_price"), 0.0)
+            if d1_yes_price > 0:
+                no_ask = max(0.0, 1.0 - d1_yes_price)
+                price_source = (
+                    "market_yes_price_fallback"
+                    if price_source == "market_yes_price_fallback"
+                    else "snapshot_orderbook_with_d1_market_fallback"
+                )
         if yes_ask <= 0 or no_ask <= 0:
             audits.append({"city": city, "target_date": target_date, "status": "missing_ask", "yes_ask": yes_ask, "d1_no_ask": no_ask})
             continue
@@ -1112,6 +1125,7 @@ def build_current_rows(
             "yes_current_size": yes_size,
             "d1_no_ask": no_ask,
             "d1_no_size": no_size,
+            "snapshot_price_source": price_source,
             "ask_gap_d1_no_minus_yes": no_ask - yes_ask,
             "log_yes_size": math.log1p(max(0.0, yes_size)),
             "log_no_size": math.log1p(max(0.0, no_size)),
