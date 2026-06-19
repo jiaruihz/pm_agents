@@ -80,6 +80,7 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
     for text in (snapshot, daily):
         assert "weather_data_feed_service" in text
         assert "python -u -m weather_data_feed_service" in text
+        assert "EnvironmentFile=-%h/projects/weather_data_feed_service/.env" in text
         assert "WEATHER_DATA_FEED_OUTPUT_ROOT" in text
         assert "WEATHER_DATA_FEED_CACHE_ROOT" in text
         assert "weather-predict" not in text

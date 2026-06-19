@@ -22,6 +22,9 @@ systemctl --user daemon-reload
 cat <<EOF
 Installed weather data feed units into $UNIT_DST_DIR
 
+Expected optional environment file:
+  $HOME/projects/weather_data_feed_service/.env
+
 Next manual steps:
   systemctl --user enable --now weather-data-feed-snapshot.timer
   systemctl --user enable --now weather-data-feed-daily.timer
