@@ -282,6 +282,18 @@ def _build_live_cancel_fn():
     return cancel
 
 
+def _build_lazy_live_cancel_fn():
+    live_cancel_fn = None
+
+    def cancel(order_id: str) -> Dict[str, Any]:
+        nonlocal live_cancel_fn
+        if live_cancel_fn is None:
+            live_cancel_fn = _build_live_cancel_fn()
+        return live_cancel_fn(order_id)
+
+    return cancel
+
+
 def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
     try:
         from py_clob_client_v2.client import ClobClient
@@ -606,6 +618,21 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
     return place
 
 
+def _plans_require_live_place(plan_path: Path) -> bool:
+    if not plan_path.exists():
+        return False
+    for line in plan_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("record_type") == "weather_edge_trade_plan" and bool(row.get("live_enabled", False)):
+            return True
+    return False
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Execute weather_edge_v1 trade plans to paper and optionally live CLOB.")
     parser.add_argument("--plans", default=str(DEFAULT_RUNTIME_ROOT / "plans" / "trade_plans.jsonl"))
@@ -633,15 +660,16 @@ def main() -> int:
     except ModuleNotFoundError:
         pass
     args = _parser().parse_args()
+    plan_path = Path(args.plans)
     live_place_fn = (
         _build_live_place_fn(cancel_after=bool(args.cancel_after), default_maker_only=not bool(args.allow_taker))
-        if args.live
+        if args.live and _plans_require_live_place(plan_path)
         else None
     )
-    live_cancel_fn = _build_live_cancel_fn() if args.live and args.cancel_expired else None
+    live_cancel_fn = _build_lazy_live_cancel_fn() if args.live and args.cancel_expired else None
     live_out = Path(args.live_out)
     result = execute_trade_plans(
-        plan_path=Path(args.plans),
+        plan_path=plan_path,
         paper_out=Path(args.paper_out),
         live_out=live_out,
         config=ExecutorConfig(
