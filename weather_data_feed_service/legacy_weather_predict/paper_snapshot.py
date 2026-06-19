@@ -887,6 +887,8 @@ def main():
 
             now_local = city_local_datetime(city, now_utc)
 
+            unit = cfg["unit"]
+
             # Fetch METAR state (live or cache)
             icao = cfg.get("icao", "")
             metar_state = fetch_live_metar_state(weather_client, icao, target_date, city, now_utc)
@@ -898,7 +900,6 @@ def main():
 
             # Extract event-level market IDs
             event_id = ev_raw.get("id", "") if isinstance(ev_raw, dict) else ""
-            unit = cfg["unit"]
             n_recorded = 0
 
             # Build bracket list for compute_bracket_probs
