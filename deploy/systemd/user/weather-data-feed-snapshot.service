@@ -1,0 +1,15 @@
+[Unit]
+Description=Weather data feed snapshot collector
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/weather_data_feed_service
+Environment=WEATHER_DATA_FEED_OUTPUT_ROOT=%h/projects/weather_data_feed_service_runtime/output
+Environment=WEATHER_DATA_FEED_CACHE_ROOT=%h/projects/weather_data_feed_service_runtime/cache
+Environment=WEATHER_DATA_FEED_ROOT=%h/projects/weather_data_feed_service
+ExecStartPre=/usr/bin/mkdir -p %h/projects/weather_data_feed_service_runtime/output/logs %h/projects/weather_data_feed_service_runtime/cache
+ExecStart=%h/projects/weather_data_feed_service/.venv/bin/python -m weather_data_feed_service snapshot
+StandardOutput=append:%h/projects/weather_data_feed_service_runtime/output/logs/snapshot.log
+StandardError=append:%h/projects/weather_data_feed_service_runtime/output/logs/snapshot.err.log

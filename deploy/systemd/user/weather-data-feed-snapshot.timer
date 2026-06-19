@@ -1,0 +1,10 @@
+[Unit]
+Description=Run weather data feed snapshot collector every 30 minutes
+
+[Timer]
+OnCalendar=*:0/30
+Persistent=true
+Unit=weather-data-feed-snapshot.service
+
+[Install]
+WantedBy=timers.target

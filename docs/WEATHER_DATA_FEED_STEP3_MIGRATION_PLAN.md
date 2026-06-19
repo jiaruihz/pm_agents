@@ -1,6 +1,6 @@
 # Weather Data Feed — Step 3 迁移设计与执行计划（weather-predict 采集退役）
 
-Status: `design-draft`
+Status: `phase1-code-complete`
 Updated: 2026-06-19
 Source of truth: 设计计划；执行前以 N100 实际 unit/脚本为准（见 §2 探查步骤）
 Used by: WEATHER_DATA_FEED_MODULE.md（step 3 的具体落地）
@@ -78,6 +78,14 @@ Codex 只读复核（2026-06-19）：
 - `paper_snapshot.py` import 与本文记录一致：`city_pools`、`pm_edge_compare`、`calibration_backtest`、`weather_data_feed`；
 - `daily_pipeline.py` import 与本文记录一致：`pm_edge_compare`、`edge_backtest`。
 
+Phase 1 代码落地（2026-06-19）：
+- 新增 `weather_data_feed_service/`，作为同 repo 内的独立运行服务层；它复用共享包 `weather_data_feed/`，并内含一份与 N100 当前生产哈希一致的 legacy weather-predict runner 副本。
+- 新入口：`.venv/bin/python -m weather_data_feed_service snapshot` / `daily`。
+- runner 已支持 `WEATHER_DATA_FEED_OUTPUT_ROOT` / `WEATHER_DATA_FEED_CACHE_ROOT`，默认写到 service checkout 下 `runtime/output`、`runtime/cache`，不再隐式依赖 `cwd == weather-predict`。
+- systemd 模板已版本化在 `deploy/systemd/user/weather-data-feed-*.{service,timer}`；安装脚本为 `scripts/ops/install_weather_data_feed_service_units.sh`。
+- 新增 `scripts/ops/weather_data_feed_daily_parity_check.py`，用于 Phase 3 比对新旧 daily cache/output。
+- 本阶段**未启 N100 新服务、未停旧 weather-predict**。
+
 **runner 依赖（关键：当前不是纯数据采集）**：
 - `paper_snapshot.py` import：`weather_data_feed`（共享包✓）+ weather-predict 本地 `city_pools`、`pm_edge_compare`（含 `compute_bracket_probs` **模型概率**）、`calibration_backtest`（`load_wu_obs`/`load_gfs_daily`）。
 - `daily_pipeline.py` import：`pm_edge_compare`、`edge_backtest`（`fetch_settled_event`/`fetch_price_at_t_minus` 数据抓取）。
@@ -97,6 +105,7 @@ Codex 只读复核（2026-06-19）：
 **Phase 0 — 探查与基线**：执行 §2；记录当前 snapshot/daily 产物的样例 + `weather_data_feed_prod_health_check.py status=ok` 作为基线。
 
 **Phase 1 — 让采集可从独立 checkout 跑（代码，不动生产）**
+- 状态：**已完成代码与本机验证，未动生产**。
 - 在 `pm_agents` repo 内，确保两个 runner 及其 weather-predict 本地依赖（`city_pools`/`pm_edge_compare`/相关 loader/fetcher）有一份可被独立 checkout 运行的来源。
   二选一（Codex 评估后定，记进本文）：
   - (a) 把这些 runner+依赖**纳入 `pm_agents` repo**（放 `weather_data_feed_service/` 或 `scripts/data_feed/` 下），import 路径改成依赖 `weather_data_feed` 包；weather-predict 本地副本转兼容 re-export。
@@ -135,7 +144,7 @@ python3 scripts/ops/weather_data_feed_prod_health_check.py --snapshot-dir <新�
 - 若做不到，先拆慢任务或降低 snapshot 内的非必要 enrichment，不进入 Phase 4。
 
 新增 daily parity 产物：
-- `scripts/ops/weather_data_feed_daily_parity_check.py`（待实现）应输出旧/新两边 cache/output 的文件清单、mtime、size、row count/hash；
+- `scripts/ops/weather_data_feed_daily_parity_check.py` 应输出旧/新两边 cache/output 的文件清单、mtime、size、row count/hash；
 - cutover 前 daily parity 不能只靠人工 `ls`。
 
 **Phase 4 — 切换（不可逆步骤，显式确认）**
@@ -168,7 +177,7 @@ python3 scripts/ops/weather_data_feed_prod_health_check.py --snapshot-dir <新�
 ## 8. 交付确认清单（Codex 执行完逐项打勾回报）
 
 - [ ] §2 探查完成，与 §3 起点对照无遗漏 unit/依赖
-- [ ] Phase 1：runner 可从独立 checkout 跑，本机测试 + py_compile 通过
+- [x] Phase 1：runner 可从独立 checkout 跑，本机测试 + py_compile 通过
 - [ ] Phase 2：N100 新 checkout（git-first）+ 4 个新 unit 就位
 - [ ] Phase 3：parity + health 连续 N 周期 `status=ok`，字段/重复/daily 产物一致
 - [ ] Phase 4：切换完成，Mac 镜像/看板/策略 loop 读到新鲜数据

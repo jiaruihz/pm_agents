@@ -66,9 +66,10 @@ src/strategies/weather_edge_v1/tools/official_observation_clock.py
    - 保持现有 snapshot 输出路径和字段兼容。
    - 使用 `scripts/ops/weather_data_feed_parity_check.py` 验证新 snapshot 协议字段。
 
-3. **稳定后**: 再拆独立部署。**具体执行计划见 [WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md](WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md)**
+3. **正在推进**: 拆成独立运行服务。**具体执行计划见 [WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md](WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md)**
    （独立 checkout `~/projects/weather_data_feed_service/`，weather-predict 退役转 dormant）。
-   - 可以拆成独立 git repo 或独立 systemd service。
+   - 第一阶段已落地同 repo 的 `weather_data_feed_service/`，不是新 git repo；部署上会是独立 checkout + 独立 systemd + 独立 runtime。
+   - 后续是否拆新 git repo，等服务边界和产物协议稳定后再判断。
    - 输出标准 JSON/JSONL/cache/latest pointers。
    - `pm_agent` 只读数据产物；策略部署不需要重启数据采集。
 
@@ -104,9 +105,12 @@ snapshot_ts_utc
 - 已预留 `weather_data_feed/observation_sources/` 架子，供抢单 bot / current-YES / NO carry / station-basis 共用多源 METAR adapter。
 - 第一批旧解析已迁入新模块：timing monitor、station-basis、current-YES 复用共享 METAR/AviationWeather/AWC/IEM parser；网络请求、proxy、orderbook 和策略判断仍留在原脚本。
 - N100 `pm_agent` 已部署到 `bb8d21b9`，`weather-predict-snapshot.service` 已生成并验证 `weather_data_feed_snapshot_v1` snapshot。
+- `weather_data_feed_service/` Phase 1 已完成：snapshot/daily CLI、可配置 output/cache root、版本化 systemd 模板、daily parity 检查脚本、本机测试。N100 新服务尚未启用。
 
 待推进:
 
+- Phase 2：在 N100 以 git-first 新建 `~/projects/weather_data_feed_service/` 独立 checkout，启用新 timer 并行写新 runtime 目录。
+- Phase 3：连续周期跑 snapshot health + daily parity，通过前不切换正式输出路径。
 - 从抢单 bot 抽出真正的 `official_observation_feed` fetcher：IEM、NOAA tgftp、HKO、weather.gov/Synoptic、LDM 的拉取、缓存、source latency 和 failover。
 - 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
 - 在 N100 上为数据层增加独立 health/status 文件，再让策略 loop 只消费健康的数据产物。
