@@ -56,6 +56,10 @@ OUTPUT_DIR = OUTPUT_ROOT / "paper_snapshots"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ORDERBOOK_OUTPUT_DIR = OUTPUT_ROOT / "orderbook_snapshots"
 ORDERBOOK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+PM_HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0, read=5.0, write=2.0, pool=2.0)
+WEATHER_HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0, read=5.0, write=2.0, pool=2.0)
+PM_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
+WEATHER_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
 
 BASE_SHARES = 10
 
@@ -169,7 +173,7 @@ def fetch_token_orderbook(client, token_id, top_n=20):
         }
     fetched_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
     try:
-        r = client.get(f"{PM_CLOB_URL}/book", params={"token_id": token_id}, timeout=8)
+        r = client.get(f"{PM_CLOB_URL}/book", params={"token_id": token_id})
         if r.status_code == 404:
             return {
                 "status": "not_found",
@@ -582,7 +586,7 @@ def fetch_live_metar_state(client, icao, target_date_local, city, now_utc):
             "taf": "false",
             "hours": metar_hours,
         }
-        r = client.get(url, params=params, timeout=10)
+        r = client.get(url, params=params)
         if r.status_code == 200:
             data = r.json()
             if isinstance(data, list) and len(data) > 0:
@@ -682,7 +686,19 @@ def main():
 
     scan_dates = unique_city_scan_dates(CITIES, now_utc, args.target_date)
 
-    client = httpx.Client(proxy=PROXY, timeout=20, follow_redirects=True)
+    pm_client = httpx.Client(
+        proxy=PROXY,
+        timeout=PM_HTTP_TIMEOUT,
+        limits=PM_HTTP_LIMITS,
+        follow_redirects=True,
+        trust_env=False,
+    )
+    weather_client = httpx.Client(
+        timeout=WEATHER_HTTP_TIMEOUT,
+        limits=WEATHER_HTTP_LIMITS,
+        follow_redirects=True,
+        trust_env=False,
+    )
     orderbook_cache = {}
 
     print(f"{'='*90}")
@@ -741,13 +757,13 @@ def main():
             # Fetch forecast using per-city best model
             errors = None
             if model == "ecmwf":
-                forecast_info = fetch_live_ecmwf(client, city, cfg, target_date)
+                forecast_info = fetch_live_ecmwf(weather_client, city, cfg, target_date)
             else:
-                forecast_info = fetch_live_gfs(client, city, cfg, target_date)
+                forecast_info = fetch_live_gfs(weather_client, city, cfg, target_date)
             if forecast_info is None:
                 # Fallback to GFS if ECMWF unavailable
                 if model == "ecmwf":
-                    forecast_info = fetch_live_gfs(client, city, cfg, target_date)
+                    forecast_info = fetch_live_gfs(weather_client, city, cfg, target_date)
                     if forecast_info is not None:
                         model = "gfs"
                         errors = compute_error_distribution(city, cfg)
@@ -765,7 +781,7 @@ def main():
             if errors is None:
                 if model == "ecmwf":
                     # Try GFS: fetch forecast AND errors together
-                    gfs_forecast = fetch_live_gfs(client, city, cfg, target_date)
+                    gfs_forecast = fetch_live_gfs(weather_client, city, cfg, target_date)
                     gfs_errors = compute_error_distribution(city, cfg)
                     if gfs_forecast is not None and gfs_errors is not None:
                         forecast_info = gfs_forecast
@@ -776,7 +792,7 @@ def main():
                         forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
                 else:
                     # Try ECMWF: fetch forecast AND errors together
-                    ecmwf_forecast = fetch_live_ecmwf(client, city, cfg, target_date)
+                    ecmwf_forecast = fetch_live_ecmwf(weather_client, city, cfg, target_date)
                     ecmwf_errors = compute_ecmwf_error_distribution(city, cfg)
                     if ecmwf_forecast is not None and ecmwf_errors is not None:
                         forecast_info = ecmwf_forecast
@@ -794,7 +810,7 @@ def main():
             slug = f"highest-temperature-in-{city_slug}-on-{date_slug}"
 
             try:
-                r = client.get(f"{PM_GAMMA_URL}/events", params={"slug": slug})
+                r = pm_client.get(f"{PM_GAMMA_URL}/events", params={"slug": slug})
                 ev_raw = r.json()
                 if isinstance(ev_raw, list) and len(ev_raw) > 0:
                     ev_raw = ev_raw[0]
@@ -809,7 +825,7 @@ def main():
 
             # Fetch METAR state (live or cache)
             icao = cfg.get("icao", "")
-            metar_state = fetch_live_metar_state(client, icao, target_date, city, now_utc)
+            metar_state = fetch_live_metar_state(weather_client, icao, target_date, city, now_utc)
 
             # Extract event-level market IDs
             event_id = ev_raw.get("id", "") if isinstance(ev_raw, dict) else ""
@@ -849,7 +865,7 @@ def main():
                             continue
                         if token_id not in orderbook_cache:
                             orderbook_cache[token_id] = fetch_token_orderbook(
-                                client,
+                                pm_client,
                                 token_id,
                                 top_n=args.orderbook_top_n,
                             )
@@ -1048,7 +1064,8 @@ def main():
 
         time.sleep(0.3)
 
-    client.close()
+    pm_client.close()
+    weather_client.close()
 
     # Save
     fname = f"snapshot_{now_beijing.strftime('%Y%m%d_%H%M')}.json"
