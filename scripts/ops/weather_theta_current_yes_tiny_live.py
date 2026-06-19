@@ -18,10 +18,8 @@ requires both --live and --confirm-live.
 from __future__ import annotations
 
 import argparse
-import csv
 import gzip
 import hashlib
-import io
 import json
 import math
 import os
@@ -55,6 +53,7 @@ from weather_data_feed import (
     station_timezone,
     timezone_label,
 )
+from weather_data_feed.observation_sources import build_iem_local_day_params, parse_iem_asos_records
 
 
 STRATEGY_INSTANCE = os.environ.get("THETA_CURRENT_YES_STRATEGY_INSTANCE", "theta_current_yes_tiny_live_v1")
@@ -626,48 +625,21 @@ def aviationweather_obs(icao: str, tz: ZoneInfo, local_date) -> list[dict[str, A
 
 
 def iem_obs(icao: str, tz: ZoneInfo, local_date) -> list[dict[str, Any]]:
-    local_start = datetime.combine(local_date, datetime.min.time(), tzinfo=tz)
-    start_utc = local_start.astimezone(timezone.utc)
-    end_utc = (local_start + timedelta(days=1)).astimezone(timezone.utc) + timedelta(days=1)
-    params = [("station", icao)]
-    for col in ("tmpc", "dwpc", "relh", "sknt", "skyc1"):
-        params.append(("data", col))
-    params.extend(
-        [
-            ("year1", start_utc.year),
-            ("month1", start_utc.month),
-            ("day1", start_utc.day),
-            ("year2", end_utc.year),
-            ("month2", end_utc.month),
-            ("day2", end_utc.day),
-            ("tz", "Etc/UTC"),
-            ("format", "onlycomma"),
-            ("latlon", "no"),
-            ("elev", "no"),
-            ("missing", "M"),
-            ("trace", "T"),
-            ("direct", "no"),
-            ("report_type", "1"),
-            ("report_type", "2"),
-            ("report_type", "3"),
-            ("report_type", "4"),
-        ]
+    params = build_iem_local_day_params(
+        icao,
+        tz,
+        local_date,
+        columns=("tmpc", "dwpc", "relh", "sknt", "skyc1"),
+        extra_end_days=1,
     )
     text = fetch_text(IEM_ASOS_API, params)
-    rows = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
     out = []
-    for row in csv.DictReader(io.StringIO("\n".join(rows))):
-        ts = parse_utc(str(row.get("valid", "")).replace(" ", "T"))
-        if ts is None or ts.astimezone(tz).date() != local_date:
-            continue
-        raw_tmp = row.get("tmpc")
-        if raw_tmp in {None, "", "M"}:
-            continue
+    for ts, tmpc, row in parse_iem_asos_records(text, tz, local_date):
         sky_raw = safe_str(row.get("skyc1")).upper()
         out.append(
             {
                 "ts": ts,
-                "tmpc": to_float(raw_tmp, np.nan),
+                "tmpc": tmpc,
                 "dwpc": to_float(row.get("dwpc"), np.nan),
                 "relh": to_float(row.get("relh"), np.nan),
                 "sknt": to_float(row.get("sknt"), np.nan),

@@ -8,10 +8,12 @@ from weather_data_feed.observation_sources import (
     ObservationSourceRequest,
     ObservationSourceResult,
     SourceRouter,
+    build_iem_local_day_params,
     expand_source_names,
     normalize_source_name,
     parse_aviationweather_records,
     parse_awc_cache_csv_records,
+    parse_iem_asos_records,
     parse_metar_report_time,
     parse_metar_temp_c,
     parse_tgftp_header_time,
@@ -67,6 +69,35 @@ def test_aviationweather_parsers_filter_station_and_local_day():
 
     assert len(csv_records) == 1
     assert csv_records[0][2]["raw_text"] == "ZSPD 171750Z 26/23"
+
+
+def test_iem_parser_and_params_use_city_local_day():
+    tz = ZoneInfo("Asia/Shanghai")
+    params = build_iem_local_day_params("zspd", tz, "2026-06-18", columns=("tmpc", "dwpc"))
+
+    assert ("station", "ZSPD") in params
+    assert ("data", "tmpc") in params
+    assert ("data", "dwpc") in params
+    assert ("year1", "2026") in params
+    assert ("day1", "17") in params
+    assert ("day2", "19") in params
+
+    records = parse_iem_asos_records(
+        "\n".join(
+            [
+                "station,valid,tmpc,dwpc",
+                "ZSPD,2026-06-17 15:50,24,22",
+                "ZSPD,2026-06-17 16:10,25,22",
+                "ZSPD,2026-06-18 16:10,26,23",
+                "ZSPD,2026-06-18 17:10,M,23",
+            ]
+        ),
+        tz,
+        "2026-06-18",
+    )
+
+    assert [row[1] for row in records] == [25.0]
+    assert records[-1][2]["dwpc"] == "22"
 
 
 @dataclass(frozen=True)

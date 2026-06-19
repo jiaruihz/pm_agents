@@ -13,9 +13,7 @@ weather source, or other traders receiving faster data.
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
-import io
 import json
 import os
 import re
@@ -41,6 +39,17 @@ if str(ROOT) not in sys.path:
 
 import weather_station_basis_shadow as source  # noqa: E402
 from weather_data_feed import load_source_profiles  # noqa: E402
+from weather_data_feed.observation_sources import (  # noqa: E402
+    build_iem_asos_params,
+    expand_source_names as expand_observation_source_names,
+    normalize_source_name,
+    parse_aviationweather_records,
+    parse_awc_cache_csv_records,
+    parse_iem_asos_records,
+    parse_metar_report_time,
+    parse_metar_temp_c,
+    parse_tgftp_header_time,
+)
 from weather_data_feed.source_policy import (  # noqa: E402
     CityConfig,
     build_city_policy,
@@ -66,35 +75,10 @@ NOAA_TGFTP_STATION_TXT = "https://tgftp.nws.noaa.gov/data/observations/metar/sta
 WEATHER_GOV_LATEST_OBS = "https://api.weather.gov/stations/{icao}/observations/latest"
 WRH_API_KEY_JS = "https://www.weather.gov/source/wrh/apiKey.js"
 SYNOPTIC_TIMESERIES_API = "https://api.synopticdata.com/v2/stations/timeseries"
-METAR_TEMP_RE = re.compile(r"\s(M?\d{2})/(M?\d{2}|//)")
-METAR_REPORT_TIME_RE = re.compile(r"\b[A-Z0-9]{4}\s+(\d{2})(\d{2})(\d{2})Z\b")
 CHECKWX_OBS_RE = re.compile(r"Observed.*?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)", re.IGNORECASE | re.DOTALL)
 ICAO_RE = re.compile(r"^[A-Z0-9]{4}$")
 WRH_SITE_RE = re.compile(r"[?&]site=([A-Z0-9]{4})\b", re.IGNORECASE)
 SYNOPTIC_TOKEN_RE = re.compile(r"['\"]([a-f0-9]{32})['\"]")
-SOURCE_ALIASES = {
-    "aviationweather": "aviationweather_metar",
-    "aviationweather_metar": "aviationweather_metar",
-    "aviationweather_cache": "aviationweather_cache_csv",
-    "aviationweather_cache_csv": "aviationweather_cache_csv",
-    "awc_cache": "aviationweather_cache_csv",
-    "checkwx": "checkwx_html",
-    "checkwx_html": "checkwx_html",
-    "iem": "iem_asos",
-    "iem_asos": "iem_asos",
-    "noaa_tgftp": "noaa_tgftp_station_txt",
-    "noaa_tgftp_station_txt": "noaa_tgftp_station_txt",
-    "tgftp": "noaa_tgftp_station_txt",
-    "nws_api": "weather_gov_latest",
-    "nws_api_latest": "weather_gov_latest",
-    "weather_gov": "weather_gov_latest",
-    "weather_gov_latest": "weather_gov_latest",
-    "synoptic": "synopticdata_timeseries",
-    "synopticdata": "synopticdata_timeseries",
-    "synopticdata_timeseries": "synopticdata_timeseries",
-    "weather_gov_wrh": "synopticdata_timeseries",
-    "wrh_timeseries": "synopticdata_timeseries",
-}
 SYNOPTIC_TOKEN_CACHE: str | None = None
 
 
@@ -138,14 +122,6 @@ def stable_hash(payload: Any) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def parse_metar_temp_c(raw: str) -> float | None:
-    match = METAR_TEMP_RE.search(f" {raw}")
-    if not match:
-        return None
-    token = match.group(1)
-    return float(-int(token[1:]) if token.startswith("M") else int(token))
-
-
 def parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -156,35 +132,6 @@ def parse_dt(value: str | None) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def parse_tgftp_header_time(text: str) -> datetime | None:
-    first = next((line.strip() for line in text.splitlines() if line.strip()), "")
-    try:
-        return datetime.strptime(first, "%Y/%m/%d %H:%M").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def parse_metar_report_time(raw: str, reference_utc: datetime | None) -> datetime | None:
-    match = METAR_REPORT_TIME_RE.search(raw)
-    if not match or reference_utc is None:
-        return reference_utc
-    day, hour, minute = (int(match.group(i)) for i in (1, 2, 3))
-    candidate = reference_utc.replace(day=1, hour=hour, minute=minute, second=0, microsecond=0)
-    try:
-        candidate = candidate.replace(day=day)
-    except ValueError:
-        return reference_utc
-    if candidate - reference_utc > timedelta(days=15):
-        prev_month = 12 if candidate.month == 1 else candidate.month - 1
-        year = candidate.year - 1 if candidate.month == 1 else candidate.year
-        candidate = candidate.replace(year=year, month=prev_month)
-    elif reference_utc - candidate > timedelta(days=15):
-        next_month = 1 if candidate.month == 12 else candidate.month + 1
-        year = candidate.year + 1 if candidate.month == 12 else candidate.year
-        candidate = candidate.replace(year=year, month=next_month)
-    return candidate
-
-
 def source_age_sec(report_ts_utc: str | None, now_utc: datetime) -> float | None:
     dt = parse_dt(report_ts_utc)
     if not dt:
@@ -193,26 +140,15 @@ def source_age_sec(report_ts_utc: str | None, now_utc: datetime) -> float | None
 
 
 def canonical_source_name(source_name: str) -> str:
-    return SOURCE_ALIASES.get(source_name, source_name)
+    return normalize_source_name(source_name)
 
 
 def expand_source_names(cfg: CityConfig, requested_sources: list[str]) -> list[str]:
-    expanded: list[str] = []
-    for raw_name in requested_sources:
-        if raw_name == "source_profiles":
-            expanded.extend([cfg.live_observation_source, *cfg.fallback_sources])
-        elif raw_name == "profile_primary":
-            expanded.append(cfg.live_observation_source)
-        elif raw_name == "profile_fallbacks":
-            expanded.extend(cfg.fallback_sources)
-        else:
-            expanded.append(raw_name)
-    deduped: list[str] = []
-    for raw_name in expanded:
-        source_name = canonical_source_name(str(raw_name))
-        if source_name and source_name not in deduped:
-            deduped.append(source_name)
-    return deduped
+    return expand_observation_source_names(
+        requested_sources,
+        primary=cfg.live_observation_source,
+        fallback_sources=cfg.fallback_sources,
+    )
 
 
 def source_station_id(value: str) -> str:
@@ -281,48 +217,6 @@ def load_monitor_city_configs(
             source_profile_note=profile.source_profile_note,
         )
     return sorted(configs.values(), key=lambda item: item.city)
-
-
-def parse_aviationweather_records(data: list[dict[str, Any]], tz: ZoneInfo, local_date: Any) -> list[tuple[datetime, float, dict[str, Any]]]:
-    records = []
-    for rec in data:
-        temp = rec.get("temp")
-        ts = rec.get("reportTime")
-        if temp is None or not ts:
-            continue
-        try:
-            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-            temp_c = float(temp)
-        except (TypeError, ValueError):
-            continue
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        dt = parse_metar_report_time(str(rec.get("rawOb") or ""), dt) or dt
-        if dt.astimezone(tz).date() == local_date:
-            records.append((dt, temp_c, rec))
-    return sorted(records, key=lambda item: item[0])
-
-
-def parse_awc_cache_csv_records(text: str, icao: str, tz: ZoneInfo, local_date: Any) -> list[tuple[datetime, float, dict[str, str]]]:
-    records: list[tuple[datetime, float, dict[str, str]]] = []
-    for row in csv.DictReader(io.StringIO(text)):
-        station_id = str(row.get("station_id") or row.get("icaoId") or row.get("id") or "").strip()
-        if station_id != icao:
-            continue
-        temp_raw = row.get("temp_c") or row.get("temp") or row.get("temperature")
-        ts_raw = row.get("observation_time") or row.get("reportTime") or row.get("obsTime")
-        if not temp_raw or not ts_raw:
-            continue
-        try:
-            dt = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
-            temp_c = float(temp_raw)
-        except ValueError:
-            continue
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        if dt.astimezone(tz).date() == local_date:
-            records.append((dt, temp_c, row))
-    return sorted(records, key=lambda item: item[0])
 
 
 def fetch_aviationweather_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any) -> dict[str, Any]:
@@ -568,27 +462,7 @@ def fetch_iem_asos_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any) -> dic
     local_start = datetime.combine(local_date, datetime.min.time(), tzinfo=tz)
     start_utc = local_start.astimezone(timezone.utc) - timedelta(hours=2)
     end_utc = datetime.now(timezone.utc) + timedelta(hours=1)
-    params = [
-        ("station", cfg.official_icao),
-        ("data", "tmpc"),
-        ("year1", str(start_utc.year)),
-        ("month1", str(start_utc.month)),
-        ("day1", str(start_utc.day)),
-        ("year2", str(end_utc.year)),
-        ("month2", str(end_utc.month)),
-        ("day2", str(end_utc.day)),
-        ("tz", "Etc/UTC"),
-        ("format", "onlycomma"),
-        ("latlon", "no"),
-        ("elev", "no"),
-        ("missing", "M"),
-        ("trace", "T"),
-        ("direct", "no"),
-        ("report_type", "1"),
-        ("report_type", "2"),
-        ("report_type", "3"),
-        ("report_type", "4"),
-    ]
+    params = build_iem_asos_params(cfg.official_icao, start_utc, end_utc, columns=("tmpc",))
     text = source.fetch_text(
         source.IEM_ASOS_API,
         params,
@@ -596,20 +470,7 @@ def fetch_iem_asos_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any) -> dic
         timeout_sec=FAST_HTTP_TIMEOUT_SEC,
         proxy_candidates=WEATHER_PROXY_CANDIDATES,
     )
-    rows = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
-    records: list[tuple[datetime, float, dict[str, str]]] = []
-    for row in csv.DictReader(io.StringIO("\n".join(rows))):
-        raw_temp = row.get("tmpc")
-        raw_ts = row.get("valid")
-        if not raw_temp or raw_temp == "M" or not raw_ts:
-            continue
-        try:
-            dt = datetime.fromisoformat(raw_ts.replace(" ", "T")).replace(tzinfo=timezone.utc)
-            temp = float(raw_temp)
-        except ValueError:
-            continue
-        if dt.astimezone(tz).date() == local_date:
-            records.append((dt, temp, row))
+    records = parse_iem_asos_records(text, tz, local_date)
     if not records:
         return {
             "status": "empty",

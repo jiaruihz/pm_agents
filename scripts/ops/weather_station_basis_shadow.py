@@ -31,9 +31,7 @@ State and outputs live in runtime/weather_edge_v1/station_basis_shadow/.
 from __future__ import annotations
 
 import argparse
-import csv
 import gzip
-import io
 import json
 import math
 import os
@@ -42,13 +40,18 @@ import shlex
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
 
 from weather_data_feed import parse_label_dict
+from weather_data_feed.observation_sources import (
+    build_iem_local_day_params,
+    parse_aviationweather_records,
+    parse_iem_asos_temperature_obs,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_ROOT = Path(os.environ.get("STATION_BASIS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
@@ -254,71 +257,12 @@ def summarize_temperature_obs(
 
 def aviationweather_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
     data = fetch_json(METAR_API, {"ids": icao, "format": "json", "hours": "30"})
-    obs = []
-    for rec in data:
-        t = rec.get("temp")
-        ts = rec.get("reportTime")
-        if t is None or not ts:
-            continue
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        if dt.astimezone(tz).date() != local_date:
-            continue
-        obs.append((dt, float(t)))
+    obs = [(dt, temp) for dt, temp, _raw in parse_aviationweather_records(data, tz, local_date)]
     return summarize_temperature_obs(obs, source="aviationweather_metar")
 
 
-def iem_request_dates(tz: ZoneInfo, local_date) -> tuple[datetime, datetime]:
-    local_start = datetime.combine(local_date, datetime.min.time(), tzinfo=tz)
-    local_end = local_start + timedelta(days=1)
-    return local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
-
-
-def parse_iem_asos_temperature_obs(text: str, tz: ZoneInfo, local_date) -> list[tuple[datetime, float]]:
-    rows = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
-    obs: list[tuple[datetime, float]] = []
-    for row in csv.DictReader(io.StringIO("\n".join(rows))):
-        raw_temp = row.get("tmpc")
-        raw_ts = row.get("valid")
-        if not raw_temp or raw_temp == "M" or not raw_ts:
-            continue
-        try:
-            dt = datetime.fromisoformat(raw_ts.replace(" ", "T")).replace(tzinfo=timezone.utc)
-            temp = float(raw_temp)
-        except ValueError:
-            continue
-        if dt.astimezone(tz).date() == local_date:
-            obs.append((dt, temp))
-    return obs
-
-
 def iem_asos_metar_day(icao: str, tz: ZoneInfo, local_date) -> dict:
-    start_utc, end_utc = iem_request_dates(tz, local_date)
-    # IEM ASOS day2 is a 00:00 boundary. Add one date so UTC-spanning local
-    # days, especially Asia/Pacific stations, include the full local day.
-    request_end_utc = end_utc + timedelta(days=1)
-    params = [
-        ("station", icao),
-        ("data", "tmpc"),
-        ("year1", str(start_utc.year)),
-        ("month1", str(start_utc.month)),
-        ("day1", str(start_utc.day)),
-        ("year2", str(request_end_utc.year)),
-        ("month2", str(request_end_utc.month)),
-        ("day2", str(request_end_utc.day)),
-        ("tz", "Etc/UTC"),
-        ("format", "onlycomma"),
-        ("latlon", "no"),
-        ("elev", "no"),
-        ("missing", "M"),
-        ("trace", "T"),
-        ("direct", "no"),
-        ("report_type", "1"),
-        ("report_type", "2"),
-        ("report_type", "3"),
-        ("report_type", "4"),
-    ]
+    params = build_iem_local_day_params(icao, tz, local_date, columns=("tmpc",), extra_end_days=1)
     text = fetch_text(IEM_ASOS_API, params)
     obs = parse_iem_asos_temperature_obs(text, tz, local_date)
     return summarize_temperature_obs(obs, source="iem_asos")
