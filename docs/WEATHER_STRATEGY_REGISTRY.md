@@ -16,7 +16,25 @@ Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入�
 | `shadow` | 跑零 notional 影子遥测，不下单 |
 | `paper` | 纸面/回放记账 |
 | `research` | 仅离线研究，未达 shadow 标准 |
-| `shelved` | 已证伪或停用，仅留历史 |
+| `dormant` | 因方向切换暂时不用，**但未被永久证伪，保留备用**（如某分支日后跑通可复用），不归档不删 |
+| `shelved` | 停用/被新实现取代，仅留历史；本项目默认仍保留文件，不主动删除 |
+
+> 重要：本项目研究结论大多是 `inconclusive`（暂未确认），不是 `disproven`（已否定）。
+> 一条策略"当前不在主线"≠"可以清掉"。Range RV / pre_predict 等方向可能回归，相关底表/脚本一律**保留备用**。
+
+## 注意：策略会换代，执行/评估血缘不换
+
+区分两层，别混：
+
+- **策略 / 特征层 [0]–[1]（会流动）**：observed_max → reheat factory、哪些信号 live/shadow/dormant。
+  本总账跟踪的就是这层；它换方向是正常的。
+- **执行 / 评估血缘 [3]–[6]（永久基础设施，不随策略换代而重做）**：
+  `order → fill → live/shadow 对比 → PnL → 关联 strategy_config 参数 → 看板`。
+  这条链与具体策略无关，由 canonical 表（`orders` / `fills` / `fact_trades.strategy_instance` /
+  `settlements` / `strategy_config`）和看板（`run_stack.sh` 的 `/weather/live`、`/weather/runs`）支撑，
+  living docs 是 [live_performance.md](analysis/live_performance.md)([5][6]) 与
+  [account_reconcile.md](analysis/account_reconcile.md)([5])。
+  **换策略方向不动这条链；清理/重构也不碰它。**
 
 ## 血缘分支（白皮书口径）
 
@@ -56,7 +74,7 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 | 组件 | 作用 | 状态 | 备注 |
 |---|---|---|---|
 | `reheat_feature_factory_v1` | 两分支共享事实物化：observed path + current YES/d1-d2 NO/target YES quotes + source-grain settlement | 在用 | **取代旧 observed_max 各自 materialize**；仍缺 forecast peak context（`forecast_peak_hour_local` 等 0% 覆盖，待 backfill） |
-| observed_max 旧底表 | 早期日内最高温底表 | `shelved` | 已被 factory 取代，旧代号仅留历史路径；数据整理片确认归档 |
+| observed_max 旧底表 | 早期日内最高温底表 | `dormant` | 当前主线改走 reheat factory 故暂不用，**但未证伪，保留备用**——若 Range RV / pre_predict 跑通可能复用；不归档不删 |
 | forecast quality base | 共享可靠性标签层 | `shadow` | 见上 pre_predict 行 |
 
 ## 执行 / 组合 / 城市层（[3] 选择 / [4] 执行）
