@@ -75,6 +75,9 @@ METAR_API = "https://aviationweather.gov/api/data/metar"
 IEM_ASOS_API = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
 CLOB_BOOK_API = "https://clob.polymarket.com/book"
 FORECAST_PEAK_CACHE_DIR = RUNTIME_DIR / "forecast_peak_cache"
+HTTP_TIMEOUT_SEC = float(os.environ.get("THETA_CURRENT_YES_HTTP_TIMEOUT_SEC", "4"))
+HTTP_FETCH_BUDGET_SEC = float(os.environ.get("THETA_CURRENT_YES_HTTP_FETCH_BUDGET_SEC", "8"))
+FORECAST_PEAK_FETCH_BUDGET_SEC = float(os.environ.get("THETA_CURRENT_YES_FORECAST_PEAK_FETCH_BUDGET_SEC", "6"))
 
 OPEN_METEO_MODEL_BY_SOURCE = {
     "open_meteo_live_gfs": "gfs",
@@ -229,17 +232,30 @@ def proxy_candidates() -> list[str | None]:
 PROXIES = proxy_candidates()
 
 
-def fetch_json(url: str, params: dict | None = None, max_rounds: int = 2) -> Any:
+def fetch_json(
+    url: str,
+    params: dict | None = None,
+    max_rounds: int = 1,
+    *,
+    timeout_sec: float = HTTP_TIMEOUT_SEC,
+    budget_sec: float = HTTP_FETCH_BUDGET_SEC,
+) -> Any:
     last = None
+    started = time.monotonic()
     for rnd in range(max_rounds):
         for proxy in PROXIES:
+            remaining = budget_sec - (time.monotonic() - started)
+            if remaining <= 0:
+                raise RuntimeError(f"fetch timed out {url}: {last}")
             try:
-                r = httpx.get(url, params=params, proxy=proxy, timeout=20)
+                r = httpx.get(url, params=params, proxy=proxy, timeout=min(timeout_sec, remaining))
                 r.raise_for_status()
                 return r.json()
             except Exception as exc:  # noqa: BLE001
                 last = f"{proxy}: {type(exc).__name__}: {exc}"
-                time.sleep(0.4 + rnd)
+                if budget_sec - (time.monotonic() - started) <= 0:
+                    raise RuntimeError(f"fetch timed out {url}: {last}")
+                time.sleep(min(0.4 + rnd, max(0.0, budget_sec - (time.monotonic() - started))))
     raise RuntimeError(f"fetch failed {url}: {last}")
 
 
@@ -327,6 +343,7 @@ def fetch_live_forecast_peak_details(city: str, target_date: str, model: str) ->
             "end_date": target_date,
         },
         max_rounds=2,
+        budget_sec=FORECAST_PEAK_FETCH_BUDGET_SEC,
     )
     FORECAST_PEAK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -377,17 +394,30 @@ def forecast_peak_fields_from_record(record: dict[str, Any], *, city: str, targe
     return out
 
 
-def fetch_text(url: str, params: list[tuple[str, Any]], max_rounds: int = 2) -> str:
+def fetch_text(
+    url: str,
+    params: list[tuple[str, Any]],
+    max_rounds: int = 1,
+    *,
+    timeout_sec: float = HTTP_TIMEOUT_SEC,
+    budget_sec: float = HTTP_FETCH_BUDGET_SEC,
+) -> str:
     last = None
+    started = time.monotonic()
     for rnd in range(max_rounds):
         for proxy in PROXIES:
+            remaining = budget_sec - (time.monotonic() - started)
+            if remaining <= 0:
+                raise RuntimeError(f"fetch timed out {url}: {last}")
             try:
-                r = httpx.get(url, params=params, proxy=proxy, timeout=20)
+                r = httpx.get(url, params=params, proxy=proxy, timeout=min(timeout_sec, remaining))
                 r.raise_for_status()
                 return r.text
             except Exception as exc:  # noqa: BLE001
                 last = f"{proxy}: {type(exc).__name__}: {exc}"
-                time.sleep(0.4 + rnd)
+                if budget_sec - (time.monotonic() - started) <= 0:
+                    raise RuntimeError(f"fetch timed out {url}: {last}")
+                time.sleep(min(0.4 + rnd, max(0.0, budget_sec - (time.monotonic() - started))))
     raise RuntimeError(f"fetch failed {url}: {last}")
 
 
