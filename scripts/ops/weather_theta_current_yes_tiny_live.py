@@ -779,18 +779,92 @@ def snapshot_records(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return data, records
 
 
-def records_by_city(records: list[dict[str, Any]]) -> dict[tuple[str, str], list[dict[str, Any]]]:
-    out: dict[tuple[str, str], list[dict[str, Any]]] = {}
+def record_target_date(record: dict[str, Any]) -> str:
+    return safe_str(record.get("target_date")) or safe_str(record.get("event_date"))
+
+
+def record_market_local_date(record: dict[str, Any]) -> str:
+    for key in ("market_local_date", "city_local_date", "local_event_date", "target_local_date"):
+        value = safe_str(record.get(key))
+        if value:
+            return value
+    return ""
+
+
+def date_delta_days(target_date: str, local_date: str) -> int | None:
+    try:
+        return (datetime.fromisoformat(target_date).date() - datetime.fromisoformat(local_date).date()).days
+    except ValueError:
+        return None
+
+
+def records_by_city(records: list[dict[str, Any]]) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    out: dict[str, dict[str, list[dict[str, Any]]]] = {}
     seen_markets: set[str] = set()
     for record in records:
         city = safe_str(record.get("city"))
-        date = safe_str(record.get("event_date"))
+        target_date = record_target_date(record)
         market_id = safe_str(record.get("market_id")) or safe_str(record.get("condition_id"))
-        if not city or not date or not market_id or market_id in seen_markets:
+        if not city or not target_date or not market_id or market_id in seen_markets:
             continue
         seen_markets.add(market_id)
-        out.setdefault((city, date), []).append(record)
+        out.setdefault(city, {}).setdefault(target_date, []).append(record)
     return out
+
+
+def select_current_local_market_records(
+    city: str,
+    records_by_target_date: dict[str, list[dict[str, Any]]],
+    *,
+    local_date: str,
+    local_time: str,
+    timezone_name: str,
+) -> tuple[str | None, list[dict[str, Any]], dict[str, Any] | None]:
+    if local_date in records_by_target_date:
+        return local_date, records_by_target_date[local_date], None
+
+    mapped = [
+        (target_date, rows)
+        for target_date, rows in records_by_target_date.items()
+        if any(record_market_local_date(row) == local_date for row in rows)
+    ]
+    if mapped:
+        target_date, rows = sorted(mapped, key=lambda item: item[0])[0]
+        return target_date, rows, None
+
+    available_target_dates = sorted(records_by_target_date)
+    available_market_local_dates = sorted(
+        {
+            record_market_local_date(row)
+            for rows in records_by_target_date.values()
+            for row in rows
+            if record_market_local_date(row)
+        }
+    )
+    nearest_target_date = ""
+    nearest_delta_days = None
+    deltas = [
+        (abs(delta), target_date, delta)
+        for target_date in available_target_dates
+        for delta in [date_delta_days(target_date, local_date)]
+        if delta is not None
+    ]
+    if deltas:
+        _, nearest_target_date, nearest_delta_days = sorted(deltas)[0]
+    audit = {
+        "city": city,
+        "target_date": nearest_target_date,
+        "status": "no_current_local_date_market",
+        "local_date": local_date,
+        "local_time": local_time,
+        "timezone": timezone_name,
+        "available_target_dates": available_target_dates,
+        "available_target_date_count": len(available_target_dates),
+        "available_market_local_dates": available_market_local_dates,
+        "nearest_target_date": nearest_target_date,
+        "nearest_target_date_delta_days": nearest_delta_days,
+    }
+    return None, [], audit
 
 
 def build_current_rows(
@@ -808,24 +882,25 @@ def build_current_rows(
     grouped = records_by_city(records)
     rows: list[dict[str, Any]] = []
     audits: list[dict[str, Any]] = []
-    for (city, target_date), city_records in grouped.items():
+    for city, records_by_target_date in grouped.items():
         station = stations.get(city)
         if station is None:
             continue
         tz = station_timezone(station)
         local_now = now.astimezone(tz)
         local_date = local_now.date().isoformat()
-        if target_date != local_date:
-            audits.append(
-                {
-                    "city": city,
-                    "target_date": target_date,
-                    "status": "target_date_not_local_date",
-                    "local_date": local_date,
-                    "local_time": local_now.isoformat(timespec="seconds"),
-                    "timezone": timezone_label(tz),
-                }
-            )
+        timezone_name = timezone_label(tz)
+        local_time = local_now.isoformat(timespec="seconds")
+        target_date, city_records, date_audit = select_current_local_market_records(
+            city,
+            records_by_target_date,
+            local_date=local_date,
+            local_time=local_time,
+            timezone_name=timezone_name,
+        )
+        if date_audit is not None or target_date is None:
+            if date_audit is not None:
+                audits.append(date_audit)
             continue
         hour = local_now.hour
         if hour < min_local_hour or hour > max_local_hour:
@@ -837,8 +912,8 @@ def build_current_rows(
                     "hour_local": hour,
                     "min_local_hour": min_local_hour,
                     "max_local_hour": max_local_hour,
-                    "local_time": local_now.isoformat(timespec="seconds"),
-                    "timezone": timezone_label(tz),
+                    "local_time": local_time,
+                    "timezone": timezone_name,
                 }
             )
             continue
@@ -911,8 +986,9 @@ def build_current_rows(
             "city": city,
             "target_date": target_date,
             "unit": unit,
-            "timezone": timezone_label(tz),
-            "local_time": local_now.isoformat(timespec="seconds"),
+            "timezone": timezone_name,
+            "local_date": local_date,
+            "local_time": local_time,
             "decision_hour_local": hour,
             "month": int(str(target_date)[5:7]),
             "decline_c": obs["decline_c"],

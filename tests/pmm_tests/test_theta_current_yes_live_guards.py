@@ -8,20 +8,20 @@ from zoneinfo import ZoneInfo
 from scripts.ops import weather_theta_current_yes_tiny_live as live
 
 
-def _record(city: str, bracket: str, ask: float = 0.78) -> dict:
+def _record(city: str, bracket: str, ask: float = 0.78, event_date: str = "2026-06-16") -> dict:
     return {
         "city": city,
-        "event_date": "2026-06-16",
-        "market_id": f"{city}-{bracket}",
-        "condition_id": f"{city}-{bracket}",
+        "event_date": event_date,
+        "market_id": f"{city}-{event_date}-{bracket}",
+        "condition_id": f"{city}-{event_date}-{bracket}",
         "bracket": bracket,
         "question": f"Will {city} hit {bracket} C?",
         "yes_best_ask": ask,
         "yes_ask_size": 20,
         "no_best_ask": 0.90,
         "no_ask_size": 20,
-        "yes_token_id": f"yes-{city}-{bracket}",
-        "event_slug": f"{city.lower()}-{bracket}",
+        "yes_token_id": f"yes-{city}-{event_date}-{bracket}",
+        "event_slug": f"{city.lower()}-{event_date}-{bracket}",
     }
 
 
@@ -56,7 +56,7 @@ def test_aviationweather_obs_parses_cloud_cover(monkeypatch):
     assert rows[0]["drct"] == 70
 
 
-def test_build_current_rows_requires_target_date_to_match_station_local_date():
+def test_build_current_rows_reports_missing_local_date_market_when_snapshot_rolls_ahead():
     station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
     snapshot_ts = datetime(2026, 6, 17, 20, 30, tzinfo=timezone.utc)
 
@@ -71,9 +71,111 @@ def test_build_current_rows_requires_target_date_to_match_station_local_date():
     )
 
     assert rows.empty
-    assert audits[0]["status"] == "target_date_not_local_date"
-    assert audits[0]["target_date"] == "2026-06-16"
+    assert audits[0]["status"] == "no_current_local_date_market"
     assert audits[0]["local_date"] == "2026-06-17"
+    assert audits[0]["available_target_dates"] == ["2026-06-16"]
+    assert audits[0]["nearest_target_date_delta_days"] == -1
+
+
+def test_build_current_rows_prefers_city_local_date_when_snapshot_has_multiple_market_dates(monkeypatch):
+    now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+
+    def fake_fetch_obs(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "test",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-18T20:20:00+00:00",
+            "timezone": "America/Los_Angeles",
+            "cadence_min": 30.0,
+            "minutes_to_next_obs": 20.0,
+            "running_max_c": 21.1,
+            "current_temp_c": 20.0,
+            "decline_c": 1.1,
+            "tmpf_now": 68.0,
+            "dwpf_now": 50.0,
+            "dewpoint_depression_f": 18.0,
+            "relh_now": 45.0,
+            "sknt_now": 6.0,
+            "sky_now": 1.0,
+            "d_tmpf_1h": -1.0,
+            "d_tmpf_3h": -2.0,
+            "d_dwpf_3h": 0.0,
+            "d_relh_3h": 0.0,
+        }
+
+    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [
+            _record("LA", "68-69", event_date="2026-06-18"),
+            _record("LA", "70-71", event_date="2026-06-18"),
+            _record("LA", "72-73", event_date="2026-06-18"),
+            _record("LA", "74-75", event_date="2026-06-19"),
+        ],
+        {"LA": station},
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert audits == []
+    assert len(rows) == 1
+    assert rows.iloc[0]["target_date"] == "2026-06-18"
+    assert rows.iloc[0]["current_bracket"] == "70-71"
+
+
+def test_build_current_rows_allows_explicit_market_local_date_mapping(monkeypatch):
+    now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+
+    def fake_fetch_obs(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "test",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-18T20:20:00+00:00",
+            "timezone": "America/Los_Angeles",
+            "cadence_min": 30.0,
+            "minutes_to_next_obs": 20.0,
+            "running_max_c": 21.1,
+            "current_temp_c": 20.0,
+            "decline_c": 1.1,
+            "tmpf_now": 68.0,
+            "dwpf_now": 50.0,
+            "dewpoint_depression_f": 18.0,
+            "relh_now": 45.0,
+            "sknt_now": 6.0,
+            "sky_now": 1.0,
+            "d_tmpf_1h": -1.0,
+            "d_tmpf_3h": -2.0,
+            "d_dwpf_3h": 0.0,
+            "d_relh_3h": 0.0,
+        }
+
+    mapped_current = {**_record("LA", "70-71", event_date="2026-06-19"), "market_local_date": "2026-06-18"}
+    mapped_d1 = {**_record("LA", "72-73", event_date="2026-06-19"), "market_local_date": "2026-06-18"}
+
+    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [mapped_current, mapped_d1],
+        {"LA": station},
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert audits == []
+    assert len(rows) == 1
+    assert rows.iloc[0]["target_date"] == "2026-06-19"
+    assert rows.iloc[0]["local_date"] == "2026-06-18"
+    assert rows.iloc[0]["current_bracket"] == "70-71"
 
 
 def test_helsinki_uses_iana_dst_for_live_hour_gate():
