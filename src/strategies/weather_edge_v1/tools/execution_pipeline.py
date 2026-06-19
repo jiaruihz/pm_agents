@@ -483,6 +483,7 @@ def plan_trades(
 
 
 LivePlaceFn = Callable[[Dict[str, Any]], Dict[str, Any]]
+LiveCancelFn = Callable[[str], Dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -490,10 +491,151 @@ class ExecutorConfig:
     live: bool = False
     confirm_live: bool = False
     cancel_after: bool = False
+    cancel_expired: bool = False
+    cancel_log_path: Optional[Path] = None
 
 
 def _execution_id(plan: Dict[str, Any], venue: str) -> str:
     return stable_hash({"plan_id": safe_str(plan.get("plan_id")), "venue": venue})
+
+
+def _parse_utc(value: Any) -> Optional[datetime]:
+    text = safe_str(value)
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _extract_live_order_id(row: Dict[str, Any]) -> str:
+    explicit = safe_str(row.get("order_id") or row.get("clob_order_id"))
+    if explicit:
+        return explicit
+    response = row.get("exchange_response")
+    if not isinstance(response, dict):
+        return ""
+    place = response.get("place")
+    if isinstance(place, dict):
+        for key in ("orderID", "order_id", "id"):
+            value = safe_str(place.get(key))
+            if value:
+                return value
+    for key in ("orderID", "order_id", "id"):
+        value = safe_str(response.get(key))
+        if value:
+            return value
+    return ""
+
+
+def cancel_log_path_for_live_out(live_out: Path) -> Path:
+    return live_out.with_name(f"{live_out.stem}_cancels.jsonl")
+
+
+def _cancel_id(row: Dict[str, Any], order_id: str) -> str:
+    return stable_hash(
+        {
+            "execution_id": safe_str(row.get("execution_id")),
+            "order_id": order_id,
+            "expires_at_utc": safe_str(row.get("expires_at_utc")),
+        }
+    )
+
+
+def cancel_expired_live_orders(
+    *,
+    live_out: Path,
+    cancel_out: Path,
+    live_cancel_fn: LiveCancelFn,
+    now: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    existing_cancel_ids = {
+        safe_str(row.get("cancel_id"))
+        for row in read_jsonl(cancel_out)
+        if safe_str(row.get("cancel_id"))
+    }
+    cancel_rows: List[Dict[str, Any]] = []
+    expired_seen = 0
+    skipped_missing_expiry = 0
+    skipped_future = 0
+    skipped_duplicate = 0
+    skipped_no_order_id = 0
+    cancel_errors = 0
+    for row in read_jsonl(live_out):
+        if safe_str(row.get("record_type")) != "weather_edge_live_order":
+            continue
+        if safe_str(row.get("status")) != "submitted":
+            continue
+        expires_at = _parse_utc(row.get("expires_at_utc"))
+        if expires_at is None:
+            skipped_missing_expiry += 1
+            continue
+        if expires_at > now:
+            skipped_future += 1
+            continue
+        expired_seen += 1
+        order_id = _extract_live_order_id(row)
+        if not order_id:
+            skipped_no_order_id += 1
+            continue
+        cancel_id = _cancel_id(row, order_id)
+        if cancel_id in existing_cancel_ids:
+            skipped_duplicate += 1
+            continue
+        created_at = utc_now_iso()
+        base = {
+            "record_type": "weather_edge_live_order_cancel",
+            "cancel_id": cancel_id,
+            "created_at_utc": created_at,
+            "order_id": order_id,
+            "source_execution_id": safe_str(row.get("execution_id")),
+            "source_plan_id": safe_str(row.get("plan_id")),
+            "strategy_instance": safe_str(row.get("strategy_instance")),
+            "strategy_family": safe_str(row.get("strategy_family")),
+            "city": safe_str(row.get("city")),
+            "target_date": safe_str(row.get("target_date")),
+            "bracket": safe_str(row.get("bracket")),
+            "token_id": safe_str(row.get("token_id")),
+            "expires_at_utc": expires_at.isoformat(),
+            "cancel_reason": "expired_order_ttl",
+        }
+        try:
+            response = live_cancel_fn(order_id)
+            cancel_rows.append({**base, "status": "cancel_submitted", "cancel_response": response})
+        except Exception as exc:  # noqa: BLE001
+            cancel_errors += 1
+            cancel_rows.append(
+                {
+                    **base,
+                    "status": "cancel_error",
+                    "cancel_error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+        existing_cancel_ids.add(cancel_id)
+    cancel_result = append_jsonl_dedup(cancel_out, cancel_rows, key_field="cancel_id") if cancel_rows else {
+        "written": 0,
+        "skipped_existing": 0,
+    }
+    return {
+        "cancel_expired_checked": True,
+        "cancel_out": str(cancel_out),
+        "expired_seen": expired_seen,
+        "cancel_attempted": len(cancel_rows),
+        "cancel_written": cancel_result["written"],
+        "cancel_skipped_existing": cancel_result["skipped_existing"],
+        "cancel_errors": cancel_errors,
+        "cancel_skipped_missing_expiry": skipped_missing_expiry,
+        "cancel_skipped_future": skipped_future,
+        "cancel_skipped_duplicate": skipped_duplicate,
+        "cancel_skipped_no_order_id": skipped_no_order_id,
+    }
 
 
 def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
@@ -729,7 +871,21 @@ def execute_trade_plans(
     live_out: Path,
     config: ExecutorConfig,
     live_place_fn: Optional[LivePlaceFn] = None,
+    live_cancel_fn: Optional[LiveCancelFn] = None,
 ) -> Dict[str, Any]:
+    if config.cancel_expired:
+        if not config.live or not config.confirm_live:
+            raise RuntimeError("--cancel-expired requires live=true and confirm_live=true")
+        if live_cancel_fn is None:
+            raise RuntimeError("cancel_expired requested but no live_cancel_fn was provided")
+        cancel_summary = cancel_expired_live_orders(
+            live_out=live_out,
+            cancel_out=config.cancel_log_path or cancel_log_path_for_live_out(live_out),
+            live_cancel_fn=live_cancel_fn,
+        )
+    else:
+        cancel_summary = {"cancel_expired_checked": False}
+
     plans = [
         row
         for row in read_jsonl(plan_path)
@@ -748,7 +904,7 @@ def execute_trade_plans(
     batch_live_signal_ids: set[str] = set()
     if config.live and not config.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
-    if config.live and live_place_fn is None:
+    if config.live and live_place_fn is None and any(bool(plan.get("live_enabled", False)) for plan in plans):
         raise RuntimeError("live execution requested but no live_place_fn was provided")
 
     for plan in plans:
@@ -801,4 +957,5 @@ def execute_trade_plans(
         "live_errors": live_errors,
         "paper_out": str(paper_out),
         "live_out": str(live_out),
+        **cancel_summary,
     }

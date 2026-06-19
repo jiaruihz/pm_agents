@@ -636,6 +636,46 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(rows[0]["best_bid"], 0.39)
             self.assertEqual(rows[0]["best_ask"], 0.40)
 
+    def test_execute_trade_plans_cancels_expired_live_orders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            cancels = Path(tmp) / "live_cancels.jsonl"
+            plans.write_text("")
+            live.write_text(
+                json.dumps(
+                    {
+                        "record_type": "weather_edge_live_order",
+                        "execution_id": "exec-1",
+                        "plan_id": "plan-1",
+                        "status": "submitted",
+                        "strategy_instance": "test-instance",
+                        "expires_at_utc": "2020-01-01T00:00:00+00:00",
+                        "exchange_response": {"place": {"orderID": "order-1"}},
+                    }
+                )
+                + "\n"
+            )
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True, cancel_expired=True, cancel_log_path=cancels),
+                live_cancel_fn=lambda order_id: calls.append(order_id) or {"cancelled": order_id},
+            )
+
+            self.assertEqual(calls, ["order-1"])
+            self.assertEqual(result["cancel_expired_checked"], True)
+            self.assertEqual(result["cancel_attempted"], 1)
+            self.assertEqual(result["cancel_written"], 1)
+            rows = [json.loads(line) for line in cancels.read_text().splitlines()]
+            self.assertEqual(rows[0]["record_type"], "weather_edge_live_order_cancel")
+            self.assertEqual(rows[0]["status"], "cancel_submitted")
+            self.assertEqual(rows[0]["order_id"], "order-1")
+
 
 if __name__ == "__main__":
     unittest.main()

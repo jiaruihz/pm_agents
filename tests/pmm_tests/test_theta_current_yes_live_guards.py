@@ -163,6 +163,21 @@ def test_fresh_taker_quote_accepts_thin_depth_when_edge_passes(monkeypatch):
     assert quote["edge_at_limit"] >= 0.02
 
 
+def test_order_expiry_tracks_next_observation_clock():
+    fields = live.order_expiry_fields({"obs": {"minutes_to_next_obs": 19.6}})
+
+    assert fields["expiry_policy"] == "observation_clock_next_obs_plus_5m_max_90m_v1"
+    assert fields["order_ttl_min"] == 24.6
+    assert fields["expires_at_utc"]
+
+
+def test_order_expiry_falls_back_when_clock_missing():
+    fields = live.order_expiry_fields({"obs": {}})
+
+    assert fields["expiry_policy"] == "fixed_60m_missing_observation_clock_v1"
+    assert fields["order_ttl_min"] == 60.0
+
+
 def test_build_current_rows_reports_missing_local_date_market_when_snapshot_rolls_ahead():
     station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
     snapshot_ts = datetime(2026, 6, 17, 20, 30, tzinfo=timezone.utc)

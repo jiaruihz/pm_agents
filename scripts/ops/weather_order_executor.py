@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 from src.strategies.weather_edge_v1.tools.execution_pipeline import (
     DEFAULT_RUNTIME_ROOT,
     ExecutorConfig,
+    cancel_log_path_for_live_out,
     execute_trade_plans,
 )
 from src.strategies.weather_edge_v1.tools.execution_policy import (
@@ -218,6 +219,67 @@ def _send_execution_telegram(result: Dict[str, Any], *, live_out: Path) -> None:
         send_telegram_message_sync("\n".join(lines))
     except Exception as exc:
         print(f"[WARN] telegram send failed: {type(exc).__name__}: {exc}")
+
+
+def _cancel_order(client: Any, *, clob_v2: bool, order_payload_cls: Any, order_id: str) -> Any:
+    if clob_v2:
+        return client.cancel_order(order_payload_cls(orderID=order_id))
+    return client.cancel(order_id)
+
+
+def _build_live_cancel_fn():
+    try:
+        from py_clob_client_v2.client import ClobClient
+        from py_clob_client_v2.clob_types import ApiCreds, OrderPayload
+        from py_clob_client_v2.constants import POLYGON
+
+        clob_v2 = True
+    except ModuleNotFoundError:
+        from py_clob_client.client import ClobClient
+        from py_clob_client.clob_types import ApiCreds
+        from py_clob_client.constants import POLYGON
+
+        OrderPayload = None  # type: ignore[assignment]
+        clob_v2 = False
+
+    host = os.getenv("CLOB_BASE_URL", "").strip() or os.getenv("PM_API_BASE_URL", "").strip() or "https://clob.polymarket.com"
+    chain_id = int(os.getenv("CLOB_CHAIN_ID", str(POLYGON)))
+    private_key = os.getenv("POLYGON_WALLET_PRIVATE_KEY", "").strip() or os.getenv("PM", "").strip()
+    if not private_key:
+        raise RuntimeError("missing POLYGON_WALLET_PRIVATE_KEY or PM")
+
+    signature_type_raw = int(os.getenv("CLOB_SIGNATURE_TYPE", "-1"))
+    funder = os.getenv("PM_ADDRESS", "").strip()
+    try:
+        signer_addr = ClobClient(host, chain_id=chain_id, key=private_key).get_address()
+    except Exception:
+        signer_addr = ""
+    signature_type = signature_type_raw
+    if signature_type < 0:
+        signature_type = 1 if funder and signer_addr and funder.lower() != signer_addr.lower() else 0
+
+    api_key = os.getenv("CLOB_API_KEY", "").strip()
+    api_secret = os.getenv("CLOB_SECRET", "").strip()
+    api_pass = os.getenv("CLOB_PASS_PHRASE", "").strip()
+    creds = ApiCreds(api_key=api_key, api_secret=api_secret, api_passphrase=api_pass) if api_key and api_secret and api_pass else None
+    client = ClobClient(
+        host,
+        chain_id=chain_id,
+        key=private_key,
+        creds=creds,
+        signature_type=signature_type,
+        funder=funder or None,
+    )
+    if creds is None:
+        if clob_v2:
+            client.set_api_creds(client.derive_api_key())
+        else:
+            client.set_api_creds(client.create_or_derive_api_creds())
+
+    def cancel(order_id: str) -> Dict[str, Any]:
+        return {"cancel": _cancel_order(client, clob_v2=clob_v2, order_payload_cls=OrderPayload, order_id=order_id)}
+
+    return cancel
 
 
 def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
@@ -536,10 +598,7 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
         if cancel_after:
             order_id = _extract_order_id(response)
             if order_id:
-                if clob_v2:
-                    result["cancel"] = client.cancel_order(OrderPayload(orderID=order_id))
-                else:
-                    result["cancel"] = client.cancel(order_id)
+                result["cancel"] = _cancel_order(client, clob_v2=clob_v2, order_payload_cls=OrderPayload, order_id=order_id)
             else:
                 result["cancel_error"] = "missing order id"
         return result
@@ -555,6 +614,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--live", action="store_true", help="Submit live orders for plans marked live_enabled=true.")
     parser.add_argument("--confirm-live", action="store_true", help="Required with --live.")
     parser.add_argument("--cancel-after", action="store_true", help="Cancel live orders immediately after placement.")
+    parser.add_argument("--cancel-expired", action="store_true", help="Cancel previously submitted live orders whose expires_at_utc has passed.")
+    parser.add_argument("--cancel-log", default="", help="JSONL path for expired-order cancel records. Defaults next to --live-out.")
     parser.add_argument(
         "--allow-taker",
         action="store_true",
@@ -577,16 +638,21 @@ def main() -> int:
         if args.live
         else None
     )
+    live_cancel_fn = _build_live_cancel_fn() if args.live and args.cancel_expired else None
+    live_out = Path(args.live_out)
     result = execute_trade_plans(
         plan_path=Path(args.plans),
         paper_out=Path(args.paper_out),
-        live_out=Path(args.live_out),
+        live_out=live_out,
         config=ExecutorConfig(
             live=bool(args.live),
             confirm_live=bool(args.confirm_live),
             cancel_after=bool(args.cancel_after),
+            cancel_expired=bool(args.cancel_expired),
+            cancel_log_path=Path(args.cancel_log) if args.cancel_log else cancel_log_path_for_live_out(live_out),
         ),
         live_place_fn=live_place_fn,
+        live_cancel_fn=live_cancel_fn,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     if args.live and not args.no_telegram:

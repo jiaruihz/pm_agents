@@ -8,7 +8,7 @@ This is an independent live branch for the frozen v9 rule:
   yes_ask >= 0.55, p_yes_win >= 0.5, p_yes_win - yes_ask >= 0.05
   fresh CLOB ask rechecked before execution, fresh_ask <= snapshot_ask + 0.02
   d1 NO sibling quote visible
-  $5/order, $5/city-day cap, executable ask depth inside the taker limit >= $5
+  $5/order and $5/city-day cap
 
 It writes standard weather_edge_trade_plan JSONL rows and can hand them to the
 existing weather_order_executor.  Default mode is plan-only; live submission
@@ -1139,6 +1139,23 @@ def prior_observation_epoch_keys(strategy_instance: str) -> set[tuple[str, str, 
     return out
 
 
+def order_expiry_fields(row: dict[str, Any]) -> dict[str, Any]:
+    obs = row.get("obs") if isinstance(row.get("obs"), dict) else {}
+    minutes_to_next = to_float(obs.get("minutes_to_next_obs") or row.get("minutes_to_next_obs"), np.nan)
+    if math.isfinite(minutes_to_next) and minutes_to_next >= 0:
+        ttl_min = min(90.0, max(10.0, minutes_to_next + 5.0))
+        expiry_policy = "observation_clock_next_obs_plus_5m_max_90m_v1"
+    else:
+        ttl_min = 60.0
+        expiry_policy = "fixed_60m_missing_observation_clock_v1"
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=ttl_min)
+    return {
+        "expires_at_utc": expires_at.isoformat(timespec="seconds"),
+        "order_ttl_min": round(ttl_min, 6),
+        "expiry_policy": expiry_policy,
+    }
+
+
 def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> dict[str, Any]:
     snapshot_price = float(row["yes_current_ask"])
     price = float(row.get("taker_limit_price") or snapshot_price)
@@ -1256,6 +1273,7 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "decision_timezone": safe_str(row.get("timezone")),
         "snapshot_ts_utc": safe_str(row.get("snapshot_ts_utc")),
         "source_snapshot_path": safe_str(row.get("snapshot_path")),
+        **order_expiry_fields(row),
     }
     return {
         "record_type": "weather_edge_trade_plan",
@@ -1991,7 +2009,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "audit_counts": dict(pd.Series([safe_str(a.get("status")) for a in audits]).value_counts()) if audits else {},
     }
     executor_result = None
-    if args.live and plans:
+    if args.live:
         if not args.confirm_live:
             raise RuntimeError("--live requires --confirm-live")
         cmd = [
@@ -2006,6 +2024,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "--live",
             "--confirm-live",
             "--allow-taker",
+            "--cancel-expired",
         ]
         if args.no_telegram:
             cmd.append("--no-telegram")
@@ -2020,10 +2039,6 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         except Exception:
             executor_result = None
         result["executor_result"] = executor_result
-    elif args.live:
-        if not args.confirm_live:
-            raise RuntimeError("--live requires --confirm-live")
-        result["executor_result"] = {"status": "skipped", "reason": "no_plans"}
     result = json_ready(result)
     SUMMARY_OUT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     append_jsonl(HISTORY_OUT, result)
