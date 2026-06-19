@@ -53,17 +53,17 @@ src/strategies/weather_edge_v1/tools/official_observation_clock.py
 
 ## Repo 与部署策略
 
-推荐分三步:
+当前按三步推进:
 
-1. **现在**: 同仓库独立包。
+1. **已完成**: 同仓库独立包。
    - 所有数据层代码进 `weather_data_feed/`。
    - 旧 strategy 路径只保留兼容 re-export。
    - `pm_agent` 新策略直接 import `weather_data_feed`。
 
-2. **下一步**: 让 `weather-predict` 使用同一数据层。
-   - 先以 vendored package / checked-out package / installable path 方式接入。
+2. **已在 N100 接入**: 让 `weather-predict` 使用同一数据层。
+   - 当前生产 `weather-predict` 通过 sibling `~/projects/pm_agent/weather_data_feed` 接入。
    - 保持现有 snapshot 输出路径和字段兼容。
-   - 增加 shadow parity：新 reader 与旧 snapshot 输出在若干天内字段一致。
+   - 使用 `scripts/ops/weather_data_feed_parity_check.py` 验证新 snapshot 协议字段。
 
 3. **稳定后**: 再拆独立部署。
    - 可以拆成独立 git repo 或独立 systemd service。
@@ -93,17 +93,17 @@ snapshot_ts_utc
 
 ## 迁移状态
 
-已完成的本机迁移:
+已完成:
 
 - `pm_agent` active scripts 直接 import `weather_data_feed`；旧 strategy 路径继续作为兼容 re-export。
-- `weather-predict/paper_snapshot.py` 本机副本通过 sibling `pm_agent` / `pm_agents` path 使用同一个 `weather_data_feed` 包。
+- `weather-predict/paper_snapshot.py` 本机副本和 N100 生产副本都通过 sibling `pm_agent` / `pm_agents` path 使用同一个 `weather_data_feed` 包。
 - `paper_snapshot.py` 的 city scan dates、city local date、settle UTC 和 METAR local-day 口径已迁到 IANA timezone / DST。
 - 新增 `scripts/ops/weather_data_feed_parity_check.py`，用于检查 snapshot 是否满足 `market_local_date` / `city_local_date_at_snapshot` 等协议字段。
 - 已预留 `weather_data_feed/observation_sources/` 架子，供抢单 bot / current-YES / NO carry / station-basis 共用多源 METAR adapter。
+- N100 `pm_agent` 已部署到 `da8fdb5f`，`weather-predict-snapshot.service` 已生成并验证 `weather_data_feed_snapshot_v1` snapshot。
 
 待推进:
 
-- 把本机 `weather-predict` 改动按生产流程同步到 N100。由于 `weather-predict` 当前不是 git worktree，生产同步必须先备份并明确记录。
 - 从抢单 bot 抽出真正的 `official_observation_feed` fetcher：IEM、NOAA tgftp、HKO、weather.gov/Synoptic、LDM 的拉取、缓存、source latency 和 failover。
 - 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
 - 在 N100 上为数据层增加独立 health/status 文件，再让策略 loop 只消费健康的数据产物。
