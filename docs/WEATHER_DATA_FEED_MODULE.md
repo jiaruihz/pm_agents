@@ -38,6 +38,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `source_policy.py` | 从 profile 生成 live-capable city configs |
 | `market_brackets.py` | bracket label 解析与 contains 判断 |
 | `observation_clock.py` | METAR cadence、obs age、pre-update blackout guard |
+| `observation_sources/` | 多源官方观测层架子：source alias、METAR parser、AviationWeather/AWC cache parser、adapter router 协议 |
 | `snapshot_protocol.py` | 标准 snapshot 字段和 legacy alias normalization |
 | `models.py` | SourceProfile、ObservationRecord、RunningMaxState、MarketSnapshotRecord 等共享 dataclass |
 
@@ -98,10 +99,31 @@ snapshot_ts_utc
 - `weather-predict/paper_snapshot.py` 本机副本通过 sibling `pm_agent` / `pm_agents` path 使用同一个 `weather_data_feed` 包。
 - `paper_snapshot.py` 的 city scan dates、city local date、settle UTC 和 METAR local-day 口径已迁到 IANA timezone / DST。
 - 新增 `scripts/ops/weather_data_feed_parity_check.py`，用于检查 snapshot 是否满足 `market_local_date` / `city_local_date_at_snapshot` 等协议字段。
+- 已预留 `weather_data_feed/observation_sources/` 架子，供抢单 bot / current-YES / NO carry / station-basis 共用多源 METAR adapter。
 
 待推进:
 
 - 把本机 `weather-predict` 改动按生产流程同步到 N100。由于 `weather-predict` 当前不是 git worktree，生产同步必须先备份并明确记录。
-- 抽出真正的 `official_observation_feed` fetcher：AviationWeather、IEM、NOAA tgftp、HKO、weather.gov/Synoptic 的拉取、缓存、source latency 和 failover。
+- 从抢单 bot 抽出真正的 `official_observation_feed` fetcher：IEM、NOAA tgftp、HKO、weather.gov/Synoptic、LDM 的拉取、缓存、source latency 和 failover。
 - 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
 - 在 N100 上为数据层增加独立 health/status 文件，再让策略 loop 只消费健康的数据产物。
+
+## Observation Sources 迁移边界
+
+抢单 bot 里的多源 METAR 逻辑应进入 `weather_data_feed/observation_sources/`，但只迁移数据层部分：
+
+| 进入数据层 | 留在策略/抢单 bot |
+|---|---|
+| source alias / source profile expansion | orderbook timing / price reaction |
+| METAR raw text parser | 是否抢单、买哪个 bracket |
+| AviationWeather / IEM / TGFTP / Synoptic / LDM fetcher | notional、risk、dedup、下单 |
+| source latency / fetch status / quality flags | 策略实例状态和 live execution |
+| normalized `ObservationRecord` / `RunningMaxState` | PnL、settlement、策略评估 |
+
+第一版抽取顺序：
+
+1. 纯 parser 和 alias：已经有架子和测试。
+2. AviationWeather / AWC cache / IEM / TGFTP adapter：从 timing monitor 搬纯数据代码。
+3. Synoptic / weather.gov / CheckWX adapter：保留 token/proxy 配置，但输出统一 `ObservationSourceResult`。
+4. LDM parser：先接 parse-file / pqcat 输出，不把 daemon 管理放进数据层。
+5. 策略脚本逐个改成 `feed.day_observations(...)` / `feed.latest(...)`，旧函数保留兼容一段时间。

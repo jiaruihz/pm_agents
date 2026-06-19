@@ -1,0 +1,39 @@
+"""Official observation source adapters and parsers.
+
+This package is intentionally data-only. It should not contain strategy
+selection, orderbook logic, sizing, or live order submission.
+"""
+
+from weather_data_feed.observation_sources.aliases import SOURCE_ALIASES, expand_source_names, normalize_source_name
+from weather_data_feed.observation_sources.aviationweather import (
+    parse_aviationweather_records,
+    parse_awc_cache_csv_records,
+)
+from weather_data_feed.observation_sources.metar import (
+    parse_metar_report_time,
+    parse_metar_temp_c,
+    parse_tgftp_header_time,
+)
+from weather_data_feed.observation_sources.router import (
+    ObservationSourceAdapter,
+    ObservationSourceError,
+    ObservationSourceRequest,
+    ObservationSourceResult,
+    SourceRouter,
+)
+
+__all__ = [
+    "ObservationSourceAdapter",
+    "ObservationSourceError",
+    "ObservationSourceRequest",
+    "ObservationSourceResult",
+    "SOURCE_ALIASES",
+    "SourceRouter",
+    "expand_source_names",
+    "normalize_source_name",
+    "parse_aviationweather_records",
+    "parse_awc_cache_csv_records",
+    "parse_metar_report_time",
+    "parse_metar_temp_c",
+    "parse_tgftp_header_time",
+]
