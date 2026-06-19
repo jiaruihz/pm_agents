@@ -5,17 +5,25 @@ Updated: 2026-06-09 metadata pass; preserve content dates below
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-06-01
+Last updated: 2026-06-19（三模块边界 + 数据层 + live 实例对齐）
 
-This document defines the runtime boundary between the two active weather
-repositories. It is meant to prevent agents from treating similar file names as
-shared runtime code.
+This document defines the runtime boundary between the weather modules. It is
+meant to prevent agents from treating similar file names as shared runtime code,
+and to keep the **data layer / collection / execution** separate.
+
+模块边界（按职责，不按机器）：`weather_data_feed/`（数据逻辑包）· weather-predict（采集运行，
+调用 feed）· pm_agent（消费 → 策略/执行）· Mac pm_agents（分析/看板）。采集运行正按
+[WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md](WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md)
+从 weather-predict 迁到独立 `weather_data_feed_service/`，迁完 weather-predict 转 dormant；
+**迁移期 weather-predict 仍在采集**。模块设计见 [WEATHER_DATA_FEED_MODULE.md](WEATHER_DATA_FEED_MODULE.md)。
 
 ## Runtime Roles
 
 | Repo / host path | Runtime role | Owns | Must not own |
 |---|---|---|---|
-| N100 `/home/jiarui/projects/weather-predict` | Production market data and paper research collector | market snapshots, orderbook snapshots, paper ledger, city pools, weather caches, settlement history | live CLOB execution, pm_agent dashboard DB |
+| `weather_data_feed/`（pm_agents 包，vendored 到 N100） | Data layer (逻辑) | city calendar, source profiles, observation parsers, snapshot protocol normalization | strategy/sizing/order/wallet/dashboard 逻辑 |
+| N100 `weather_data_feed_service/`（step-3 后新建） | Data collection runtime（迁移目标） | 跑 snapshot + daily-pipeline，产标准数据产物 | 策略/下单 |
+| N100 `/home/jiarui/projects/weather-predict` | 采集运行（**迁移期仍在跑**，调用 weather_data_feed；step-3 后退役 dormant） | market snapshots, orderbook snapshots, paper ledger, city pools, weather caches, settlement history | live CLOB execution, pm_agent dashboard DB |
 | N100 `/home/jiarui/projects/pm_agent` | Production live execution | live signal files, trade plans, real CLOB order submissions, strategy instances, pause state, Telegram/live doctor | weather model cache generation, paper snapshot timer |
 | Local Mac `/Users/deepsleep/projects/pm_agents` | Analysis, dashboard, and deployment staging | dashboard DB, ingest/migration, fact tables, strategy research, local code staging for N100 `pm_agent` | direct production data collection |
 | Local Mac `/Users/deepsleep/projects/weather-predict` | Development copy for weather-predict | local edits/tests for N100 `weather-predict` scripts | production truth |
@@ -127,11 +135,16 @@ Active weather-predict paper policy:
 
 - `mid_price_core_v1`
 
-Active pm_agent live strategy instances:
+Active pm_agent live strategy instances（2026-06-19 更新，权威以
+[WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) /
+[WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md) 为准）：
 
-- `mid_price_core_v1_25_75`
-- `mid_price_core_v1_side_band`
-- `mid_price_core_v2_25_75`
+- **current YES tiny-live**：`weather_theta_current_yes_tiny_live.py` 的 `fade_confirmed` + `peak_forming_micro`（$5 微仓）。
+- **metar-cross prev-NO**：`weather_metar_cross_prev_no_shadow.py --live`（$10/单·$50/天）。
+- shadow（零 notional）：station-basis、range-rv、higher-no-carry。
+
+旧 `mid_price_core_v1_25_75 / _side_band / v2_25_75` 已**因实盘亏损停用**（live_real 成交停在 2026-06-11），
+转历史；不是证伪，是停用决策。
 
 Historical dashboard migrations may still recognize `maker_queue_v1` so old
 rows remain readable. That is not permission to generate new rows.
