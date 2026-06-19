@@ -1,6 +1,6 @@
 # Weather Data Feed — Step 3 迁移设计与执行计划（weather-predict 采集退役）
 
-Status: `phase1-code-complete`
+Status: `phase2-parallel-running`
 Updated: 2026-06-19
 Source of truth: 设计计划；执行前以 N100 实际 unit/脚本为准（见 §2 探查步骤）
 Used by: WEATHER_DATA_FEED_MODULE.md（step 3 的具体落地）
@@ -86,6 +86,15 @@ Phase 1 代码落地（2026-06-19）：
 - 新增 `scripts/ops/weather_data_feed_daily_parity_check.py`，用于 Phase 3 比对新旧 daily cache/output。
 - 本阶段**未启 N100 新服务、未停旧 weather-predict**。
 
+Phase 2 并行服务落地（2026-06-19）：
+- 本机 staging checkout 已建立：`/Users/deepsleep/projects/weather_data_feed_service`，独立 `.venv`，用于本机 smoke，不作为生产采集源。
+- N100 已建立独立 checkout：`~/projects/weather_data_feed_service/`，当前验证 SHA `60d2d8d`；runtime 写入 `~/projects/weather_data_feed_service_runtime/`。
+- N100 新 unit 已安装并验证：`weather-data-feed-snapshot.{service,timer}`、`weather-data-feed-daily.{service,timer}`；旧 `weather-predict` 两个 unit 未停。
+- 并行期发现并修复 3 个迁移口径坑：新 unit 必须加载 `.env`/proxy；新 runtime cache 必须 seed 旧 cache；snapshot timer 不能固定半小时重入，改为上一轮 inactive 后再排下一轮。
+- 首个干净单轮 snapshot 成功：`snapshot_20260620_0101.json`，726 records，运行 6m35s，`data_feed_schema_version=weather_data_feed_snapshot_v1`，无必备字段缺失、无重复 `(city,target_date,token_id,bracket)`。
+- `weather_data_feed_daily_parity_check.py` 对 `cache/pm_history`、`cache/gfs_daily`、`cache/wu_obs` 返回 `status=ok`。
+- `weather_data_feed_prod_health_check.py --snapshot-dir <新输出>` 返回整体 `status=warn`：新 snapshot 本身 `snapshot_parity.status=ok`，warn 来自 current-YES summary 仍引用旧 snapshot `2026-06-19T14:54:53Z`，不是新数据产物结构失败。
+
 **runner 依赖（关键：当前不是纯数据采集）**：
 - `paper_snapshot.py` import：`weather_data_feed`（共享包✓）+ weather-predict 本地 `city_pools`、`pm_edge_compare`（含 `compute_bracket_probs` **模型概率**）、`calibration_backtest`（`load_wu_obs`/`load_gfs_daily`）。
 - `daily_pipeline.py` import：`pm_edge_compare`、`edge_backtest`（`fetch_settled_event`/`fetch_price_at_t_minus` 数据抓取）。
@@ -122,6 +131,7 @@ Phase 1 代码落地（2026-06-19）：
 - **不动 N100。** 本机 + CI 跑通 runner（py_compile + 现有 `tests/pmm_tests/test_weather_data_feed_*`）。
 
 **Phase 2 — 在 N100 起独立服务（并行，不停旧的）**
+- 状态：**已完成首轮并行部署与单轮 snapshot 验证；尚未 cutover**。
 - N100 新建 `~/projects/weather_data_feed_service/`：git clone/worktree 同一 `pm_agents` repo（**git-first**，不 scp）。建独立 `.venv`。
 - 新建 `weather-data-feed-snapshot.{service,timer}` 和 `weather-data-feed-daily.{service,timer}`（systemd --user），ExecStart 指向新 checkout 的 runner。
   unit 文件必须来自 repo 模板/安装脚本；允许写入 `~/.config/systemd/user/`，但写入内容必须可由 git SHA 复现。
@@ -178,7 +188,7 @@ python3 scripts/ops/weather_data_feed_prod_health_check.py --snapshot-dir <新�
 
 - [ ] §2 探查完成，与 §3 起点对照无遗漏 unit/依赖
 - [x] Phase 1：runner 可从独立 checkout 跑，本机测试 + py_compile 通过
-- [ ] Phase 2：N100 新 checkout（git-first）+ 4 个新 unit 就位
+- [x] Phase 2：N100 新 checkout（git-first）+ 4 个新 unit 就位
 - [ ] Phase 3：parity + health 连续 N 周期 `status=ok`，字段/重复/daily 产物一致
 - [ ] Phase 4：切换完成，Mac 镜像/看板/策略 loop 读到新鲜数据
 - [ ] Phase 5：weather-predict 转 dormant（保留），文档全部更新
