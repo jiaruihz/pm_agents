@@ -52,7 +52,8 @@ Status 口径：
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
 | [WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) | `current-source` | 现在 N100 应跑哪些 live 实例、每条实例的 allowed cities、怎么检查、近期事故/决策是什么 |
-| [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md) | `current-reference` | 我们一共研究过哪些策略：每条的灵感/盈利规则、当前状态(live/shadow/research/shelved)、是否可行、属于血缘哪一层 |
+| [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md) | `current-reference` | 我们一共研究过哪些策略：每条的灵感/盈利规则、当前状态(live/shadow/research/dormant)、是否可行、属于血缘哪一层 |
+| [WEATHER_STRATEGY_REVIEW_PIPELINE.md](WEATHER_STRATEGY_REVIEW_PIPELINE.md) | `current-reference` | 一条策略跑完后怎么一步步复盘：preflight→成交质量→绩效→对账→关联参数→结论；每阶段的 canonical 源/gate/skill/living doc 与 live-vs-shadow 比法 |
 | [WEATHER_CITY_POOL_DECISIONS.md](WEATHER_CITY_POOL_DECISIONS.md) | `current-source` | 当前 T1/T2 城市池、pm_agent 实例级 live allowlist、为什么升降级、回滚条件是什么 |
 | [WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md) | `current-source` | weather 分析、PnL、切片、账户对账必须用什么口径 |
 | [WEATHER_HANDOFF_EXECUTION.md](WEATHER_HANDOFF_EXECUTION.md) | `design-draft` | 2026-06-08 方法论/结构重整交接入口；用于迁移执行顺序，不直接定义 live 生产状态 |
