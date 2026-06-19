@@ -10,6 +10,28 @@ from scripts.ops import weather_theta_current_yes_tiny_live as live
 
 
 def _record(city: str, bracket: str, ask: float = 0.78, event_date: str = "2026-06-16") -> dict:
+    metar_defaults = {
+        "LA": {
+            "metar_current_max_f": 70.0,
+            "metar_latest_temp_f": 68.0,
+            "metar_latest_ts_utc": f"{event_date}T20:20:00+00:00",
+        },
+        "NYC": {
+            "metar_current_max_f": 80.0,
+            "metar_latest_temp_f": 79.0,
+            "metar_latest_ts_utc": f"{event_date}T20:20:00+00:00",
+        },
+        "Helsinki": {
+            "metar_current_max_f": 68.0,
+            "metar_latest_temp_f": 66.2,
+            "metar_latest_ts_utc": f"{event_date}T13:10:00+00:00",
+        },
+        "Tokyo": {
+            "metar_current_max_f": 68.0,
+            "metar_latest_temp_f": 66.2,
+            "metar_latest_ts_utc": f"{event_date}T04:00:00+00:00",
+        },
+    }
     return {
         "city": city,
         "event_date": event_date,
@@ -23,6 +45,16 @@ def _record(city: str, bracket: str, ask: float = 0.78, event_date: str = "2026-
         "no_ask_size": 20,
         "yes_token_id": f"yes-{city}-{event_date}-{bracket}",
         "event_slug": f"{city.lower()}-{event_date}-{bracket}",
+        "metar_obs_count_today": 10,
+        "metar_source": "test_snapshot_metar",
+        **metar_defaults.get(
+            city,
+            {
+                "metar_current_max_f": 70.0,
+                "metar_latest_temp_f": 68.0,
+                "metar_latest_ts_utc": f"{event_date}T04:00:00+00:00",
+            },
+        ),
     }
 
 
@@ -982,8 +1014,8 @@ def test_run_once_writes_forward_telemetry_for_planned_candidate(tmp_path, monke
     assert result["forward_telemetry_rows"] == 1
     assert rows[0]["decision_status"] == "planned"
     assert rows[0]["city"] == "Tokyo"
-    assert rows[0]["obs_source"] == "test_metar"
-    assert rows[0]["minutes_since_running_max"] == 40.0
+    assert rows[0]["obs_source"] == "paper_snapshot_metar"
+    assert rows[0]["minutes_since_running_max"] is None
     assert rows[0]["fresh_best_ask"] == 0.79
     assert rows[0]["forecast_peak_hour_local"] == 13
     assert rows[0]["forecast_peak_delta_hours_local"] == 0.16666666666666607

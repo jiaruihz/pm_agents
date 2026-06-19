@@ -827,6 +827,78 @@ def snapshot_records(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return data, records
 
 
+def snapshot_metar_obs(
+    city_records: list[dict[str, Any]],
+    station: Station,
+    now: datetime,
+    *,
+    max_obs_age_min: float,
+    pre_update_blackout_min: float,
+) -> dict[str, Any]:
+    candidates = [
+        row
+        for row in city_records
+        if row.get("metar_latest_ts_utc") not in (None, "")
+        and row.get("metar_latest_temp_f") not in (None, "")
+        and row.get("metar_current_max_f") not in (None, "")
+    ]
+    if not candidates:
+        return {"status": "snapshot_metar_missing", "source": "paper_snapshot_metar", "n_obs": 0}
+    record = max(candidates, key=lambda row: to_float(row.get("metar_obs_count_today"), 0.0))
+    last_obs = parse_utc(record.get("metar_latest_ts_utc"))
+    if last_obs is None:
+        return {"status": "snapshot_metar_bad_ts", "source": "paper_snapshot_metar", "n_obs": 0}
+    n_obs = int(max(0.0, to_float(record.get("metar_obs_count_today"), 0.0)))
+    if n_obs < ObservationClockConfig().min_obs_asof:
+        return {"status": "insufficient_obs_asof", "source": "paper_snapshot_metar", "n_obs": n_obs, "timezone": station.timezone_name}
+    age_min = (now - last_obs).total_seconds() / 60.0
+    cadence_min = 60.0
+    minutes_to_next = cadence_min - age_min
+    common = {
+        "source": "paper_snapshot_metar",
+        "n_obs": n_obs,
+        "age_min": round(age_min, 1),
+        "last_obs_utc": last_obs.isoformat(),
+        "timezone": station.timezone_name,
+        "cadence_min": cadence_min,
+        "minutes_to_next_obs": round(minutes_to_next, 1),
+    }
+    if age_min > max_obs_age_min:
+        return {"status": "stale_obs", "max_obs_age_min": max_obs_age_min, **common}
+    if 0.0 <= minutes_to_next <= pre_update_blackout_min:
+        return {"status": "pre_metar_update_blackout", "pre_update_blackout_min": pre_update_blackout_min, **common}
+    latest_f = to_float(record.get("metar_latest_temp_f"), np.nan)
+    running_f = to_float(record.get("metar_current_max_f"), np.nan)
+    if not math.isfinite(latest_f) or not math.isfinite(running_f):
+        return {"status": "snapshot_metar_bad_temp", **common}
+    tmpc_now = (latest_f - 32.0) * 5.0 / 9.0
+    running_max_c = (running_f - 32.0) * 5.0 / 9.0
+    return {
+        "status": "ok",
+        **common,
+        "running_max_c": running_max_c,
+        "running_max_obs_utc": last_obs.isoformat(),
+        "minutes_since_running_max": np.nan,
+        "current_temp_c": tmpc_now,
+        "decline_c": running_max_c - tmpc_now,
+        "tmpf_now": latest_f,
+        "dwpf_now": np.nan,
+        "dewpoint_depression_f": np.nan,
+        "relh_now": np.nan,
+        "drct_now": np.nan,
+        "sknt_now": np.nan,
+        "sky_now": np.nan,
+        "sky_1h": np.nan,
+        "sky_3h": np.nan,
+        "d_sky_1h": np.nan,
+        "d_sky_3h": np.nan,
+        "d_tmpf_1h": np.nan,
+        "d_tmpf_3h": np.nan,
+        "d_dwpf_3h": np.nan,
+        "d_relh_3h": np.nan,
+    }
+
+
 def record_target_date(record: dict[str, Any]) -> str:
     return safe_str(record.get("target_date")) or safe_str(record.get("event_date"))
 
@@ -951,7 +1023,8 @@ def build_current_rows(
                 audits.append(date_audit)
             continue
         hour = local_now.hour
-        obs = fetch_obs(
+        obs = snapshot_metar_obs(
+            city_records,
             station,
             now,
             max_obs_age_min=max_obs_age_min,
