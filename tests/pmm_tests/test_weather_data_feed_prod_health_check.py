@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 
 from scripts.ops.weather_data_feed_prod_health_check import (
+    check_live_orders,
     check_snapshot_duplicates,
     check_telemetry,
     overall_status,
@@ -76,3 +77,20 @@ def test_prod_health_overall_status_warns_on_stale_but_fails_on_structural_error
 
     sections["snapshot_duplicates"]["duplicate_record_count"] = 1
     assert overall_status(sections) == "fail"
+
+
+def test_live_order_check_defaults_to_current_yes_split_files(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    legacy = live_dir / "theta_current_yes_tiny_live_v1_orders.jsonl"
+    current = live_dir / "theta_current_yes_peak_forming_micro_tiny_live_v1_orders.jsonl"
+    legacy.write_text("{}\n", encoding="utf-8")
+    current.write_text("{}\n", encoding="utf-8")
+
+    report = check_live_orders(live_dir, tail_rows=10)
+
+    assert report["scope"] == "current_yes_split_live_order_files"
+    assert report["files"] == [str(current)]
+
+    all_report = check_live_orders(live_dir, tail_rows=10, all_files=True)
+    assert str(legacy) in all_report["files"]

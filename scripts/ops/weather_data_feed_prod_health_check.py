@@ -35,6 +35,10 @@ DEFAULT_SUMMARY_FILES = (
     ROOT / "runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1/latest_summary.json",
 )
 DEFAULT_LIVE_DIR = ROOT / "runtime/weather_edge_v1/live"
+CURRENT_YES_LIVE_ORDER_PATTERNS = (
+    "theta_current_yes_fade_confirmed_tiny_live_v1_orders.jsonl",
+    "theta_current_yes_peak_forming_micro_tiny_live_v1_orders.jsonl",
+)
 SNAPSHOT_SCHEMA_VERSION = "weather_data_feed_snapshot_v1"
 
 
@@ -153,8 +157,13 @@ def check_telemetry(path: Path, *, tail_rows: int) -> dict[str, Any]:
     }
 
 
-def check_live_orders(live_dir: Path, *, tail_rows: int) -> dict[str, Any]:
-    files = sorted(live_dir.glob("*orders.jsonl")) if live_dir.exists() else []
+def check_live_orders(live_dir: Path, *, tail_rows: int, all_files: bool = False) -> dict[str, Any]:
+    if not live_dir.exists():
+        files = []
+    elif all_files:
+        files = sorted(live_dir.glob("*orders.jsonl"))
+    else:
+        files = [live_dir / pattern for pattern in CURRENT_YES_LIVE_ORDER_PATTERNS if (live_dir / pattern).exists()]
     rows: list[dict[str, Any]] = []
     for path in files:
         for row in read_jsonl_tail(path, tail_rows):
@@ -171,6 +180,7 @@ def check_live_orders(live_dir: Path, *, tail_rows: int) -> dict[str, Any]:
     parse_errors = sum(1 for row in rows if row.get("_parse_error"))
     return {
         "live_dir": str(live_dir),
+        "scope": "all_live_order_files" if all_files else "current_yes_split_live_order_files",
         "files": [str(path) for path in files],
         "checked_rows": len(rows),
         "parse_error_count": parse_errors,
@@ -233,6 +243,7 @@ def main() -> int:
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--tail-telemetry-rows", type=int, default=5000)
     parser.add_argument("--tail-live-order-rows", type=int, default=2000)
+    parser.add_argument("--all-live-order-files", action="store_true")
     args = parser.parse_args()
 
     now_utc = datetime.now(timezone.utc)
@@ -250,7 +261,11 @@ def main() -> int:
         "snapshot_parity": check_snapshot(snapshot_path),
         "snapshot_duplicates": check_snapshot_duplicates(snapshot_path, now_utc=now_utc, max_age_min=args.max_snapshot_age_min),
         "telemetry": [check_telemetry(path, tail_rows=args.tail_telemetry_rows) for path in telemetry_files],
-        "live_orders": check_live_orders(runtime_root / "live", tail_rows=args.tail_live_order_rows),
+        "live_orders": check_live_orders(
+            runtime_root / "live",
+            tail_rows=args.tail_live_order_rows,
+            all_files=args.all_live_order_files,
+        ),
         "summaries": check_summaries(summary_files),
     }
     report = {
