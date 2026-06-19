@@ -11,7 +11,7 @@ Paper trade snapshot recorder.
 """
 import gzip
 import hashlib
-import json, os, sys, re, time
+import json, math, os, sys, re, time
 import httpx
 import numpy as np
 from pathlib import Path
@@ -60,6 +60,8 @@ PM_HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0, read=5.0, write=2.0, pool=2.0)
 WEATHER_HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0, read=5.0, write=2.0, pool=2.0)
 PM_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
 WEATHER_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
+DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "current_d1")
+DEFAULT_ORDERBOOK_BUDGET_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC", "120"))
 
 BASE_SHARES = 10
 
@@ -432,6 +434,54 @@ def parse_bracket_bounds(label, unit):
     return lo_f, hi_f
 
 
+def round_half_up_float(value):
+    return math.floor(float(value) + 0.5)
+
+
+def orderbook_disabled_book(status):
+    return {"status": status, "summary": {}, "raw": {}, "fetched_at_utc": None}
+
+
+def orderbook_targets_for_current_yes(markets, unit, metar_state):
+    """Return (label, outcome) pairs needed by current-YES.
+
+    The live strategy only needs current-bracket YES ask and next-higher-bracket
+    NO ask. Fetching every token for every weather bracket makes the snapshot
+    service miss its production cadence.
+    """
+    metar_max_f = metar_state.get("metar_current_max_f")
+    if metar_max_f is None:
+        return set()
+
+    if unit == "C":
+        running_native = (float(metar_max_f) - 32.0) * 5.0 / 9.0
+        running_compare_f = round_half_up_float(running_native) * 9.0 / 5.0 + 32.0
+    else:
+        running_compare_f = round_half_up_float(float(metar_max_f))
+
+    parsed = []
+    for mkt in markets:
+        label = _extract_bracket_label(mkt.get("question", ""))
+        if label is None:
+            continue
+        lo_f, hi_f = parse_bracket_bounds(label, unit)
+        if lo_f is None or hi_f is None:
+            continue
+        parsed.append((label, lo_f, hi_f))
+
+    targets = set()
+    current = [(label, hi_f) for label, lo_f, hi_f in parsed if lo_f <= running_compare_f <= hi_f]
+    if current:
+        current_label, _ = sorted(current, key=lambda item: item[1])[0]
+        targets.add((current_label, "yes"))
+
+    d1 = [(label, lo_f) for label, lo_f, _ in parsed if lo_f > running_compare_f]
+    if d1:
+        d1_label, _ = sorted(d1, key=lambda item: item[1])[0]
+        targets.add((d1_label, "no"))
+    return targets
+
+
 def classify_window(hours_to_settle):
     """Legacy window classification (kept for backward compatibility)."""
     if hours_to_settle < 0:
@@ -670,6 +720,18 @@ def main():
     parser.add_argument("--target-date", default=None)
     parser.add_argument("--shares", type=int, default=BASE_SHARES)
     parser.add_argument("--orderbook-top-n", type=int, default=20)
+    parser.add_argument(
+        "--orderbook-scope",
+        choices=("current_d1", "all"),
+        default=DEFAULT_ORDERBOOK_SCOPE if DEFAULT_ORDERBOOK_SCOPE in {"current_d1", "all"} else "current_d1",
+        help="Fetch orderbooks only for current-YES required brackets by default; use all for research snapshots.",
+    )
+    parser.add_argument(
+        "--orderbook-budget-sec",
+        type=float,
+        default=DEFAULT_ORDERBOOK_BUDGET_SEC,
+        help="Maximum wall-clock seconds spent on orderbook enrichment before continuing snapshot generation.",
+    )
     parser.add_argument("--no-orderbook", action="store_true", help="Disable CLOB orderbook enrichment.")
     parser.add_argument("--now-utc", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -700,6 +762,8 @@ def main():
         trust_env=False,
     )
     orderbook_cache = {}
+    orderbook_started_at = time.monotonic()
+    orderbook_disabled_reason = "disabled" if args.no_orderbook else None
 
     print(f"{'='*90}")
     print(f" Paper Snapshot | Beijing {now_beijing.strftime('%Y-%m-%d %H:%M:%S')} | Shares: {args.shares}")
@@ -826,6 +890,11 @@ def main():
             # Fetch METAR state (live or cache)
             icao = cfg.get("icao", "")
             metar_state = fetch_live_metar_state(weather_client, icao, target_date, city, now_utc)
+            orderbook_targets = (
+                orderbook_targets_for_current_yes(markets, unit, metar_state)
+                if args.orderbook_scope == "current_d1"
+                else None
+            )
 
             # Extract event-level market IDs
             event_id = ev_raw.get("id", "") if isinstance(ev_raw, dict) else ""
@@ -860,8 +929,18 @@ def main():
                 yes_book = {"status": "disabled", "summary": {}, "raw": {}, "fetched_at_utc": None}
                 no_book = {"status": "disabled", "summary": {}, "raw": {}, "fetched_at_utc": None}
                 if not args.no_orderbook:
+                    if (
+                        orderbook_disabled_reason is None
+                        and args.orderbook_budget_sec >= 0
+                        and time.monotonic() - orderbook_started_at > args.orderbook_budget_sec
+                    ):
+                        orderbook_disabled_reason = "orderbook_budget_exhausted"
                     for outcome_name, token_id in (("yes", yes_token_id), ("no", no_token_id)):
                         if not token_id:
+                            continue
+                        if orderbook_disabled_reason is not None:
+                            continue
+                        if orderbook_targets is not None and (label, outcome_name) not in orderbook_targets:
                             continue
                         if token_id not in orderbook_cache:
                             orderbook_cache[token_id] = fetch_token_orderbook(
@@ -891,6 +970,10 @@ def main():
                             )
                     yes_book = orderbook_cache.get(yes_token_id, yes_book)
                     no_book = orderbook_cache.get(no_token_id, no_book)
+                    if yes_book.get("status") == "disabled":
+                        yes_book = orderbook_disabled_book(orderbook_disabled_reason or "orderbook_scope_skipped")
+                    if no_book.get("status") == "disabled":
+                        no_book = orderbook_disabled_book(orderbook_disabled_reason or "orderbook_scope_skipped")
                 market_map[label] = {
                     "yes_price": yes_price,
                     "last_trade": last_trade,
@@ -1052,7 +1135,11 @@ def main():
                     "event_slug": slug,
                     "market_id": market_map.get(label, {}).get("market_id", ""),
                     "condition_id": market_map.get(label, {}).get("condition_id", ""),
-                    "clob_price_source": "clob_top_of_book" if not args.no_orderbook else "disabled",
+                    "clob_price_source": (
+                        "disabled"
+                        if args.no_orderbook
+                        else f"clob_top_of_book_{args.orderbook_scope}"
+                    ),
                     **prefixed_book_fields("yes", yes_token_id, yes_book, orderbook_archive),
                     **prefixed_book_fields("no", no_token_id, no_book, orderbook_archive),
                 }

@@ -533,6 +533,7 @@ def snapshot_dir() -> Path:
             candidates.append(Path(str(os.environ[key])).expanduser())
     if os.environ.get("WEATHER_PREDICT_DIR"):
         candidates.append(Path(str(os.environ["WEATHER_PREDICT_DIR"])).expanduser() / "output/paper_snapshots")
+    candidates.append(Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots"))
     candidates.append(Path("/home/jiarui/projects/weather-predict/output/paper_snapshots"))
     candidates.append(ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots")
     for path in candidates:
