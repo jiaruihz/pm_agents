@@ -19,6 +19,9 @@ signal candidate → plan → order → fill → settlement
 canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`（成交粒度），
 由 `weather_dashboard/legacy_migration/*` 从 N100 镜像重建到 `runtime/weather.db`。
 
+这条血缘（含 `order → fill → live/shadow 对比 → PnL → strategy_config 参数 → 看板`）是**基础设施，与具体策略无关**：
+换策略方向只动上层信号/特征，不重做这条链。暂时不用的策略/底表是 dormant（保留备用），不是 dead，不归档不删。
+
 **做任何新分析 / 脚本 / 特征 / 看板前，先定位它在血缘哪一层：**
 - 读数据 → 从 canonical 表读，不绕过去自算 fill / PnL / 漏单 / 滑点。
 - 产新信号 / 特征 → 挂进 `fact_signal_candidates` 机会粒度，不另建并行的一次性表。
@@ -108,5 +111,7 @@ conn.execute("PRAGMA query_only=ON"); conn.execute("PRAGMA busy_timeout=1000")
 [DATA_CANONICAL_SOURCES](docs/WEATHER_DATA_CANONICAL_SOURCES.md) · [REPO_BOUNDARY](docs/WEATHER_REPO_BOUNDARY.md) ·
 [EDGE_ENGINE_CURRENT_STATE](docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md)。
 
-> 早期"已知盈利模式"（5 月 BUY_NO/Warsaw/ECMWF/LA）已作废，当前结论以评估层 living docs 为准，
-> 见 [WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md §1.1](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)。
+> 早期那组"盈利模式"**数字**（5 月 BUY_NO 胜率 / Warsaw / ECMWF / LA）是 near-binary 修复前口径，**已作废**——
+> 但这是数字作废，不是方向被否（BUY_NO 等是 unconfirmed，不是 disproven）。各策略当前状态/灵感/血缘归属见
+> [STRATEGY_REGISTRY](docs/WEATHER_STRATEGY_REGISTRY.md)，口径背景见
+> [LIVE_RUN_HISTORY §1.1](docs/WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md)。

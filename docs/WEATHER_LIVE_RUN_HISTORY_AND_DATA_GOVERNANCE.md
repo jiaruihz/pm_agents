@@ -36,6 +36,9 @@ ECMWF +12% vs GFS +1.4%、LA 经常 missing_bracket）是 **near-binary settleme
 `analysis/model_vs_market.md`（global probability alpha 为负）。`missing_bracket` 本身是 near-binary bug，
 已 725→0 修复，不是 LA 数据问题。
 
+注意：作废的是**修复前的具体数字**，不是把 BUY_NO / ECMWF 这些方向判死——它们当前是 `unconfirmed`（未确认）
+而非 `disproven`（已否定），各策略当前状态见 [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md)。
+
 ## 2. Confirmed Live Rollout Timeline
 
 Source files audited:
