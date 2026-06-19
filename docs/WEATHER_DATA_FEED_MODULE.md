@@ -90,10 +90,18 @@ snapshot_ts_utc
 这些字段解决的是之前美洲市场被北京时间/机器日期滚动误过滤的问题。`target_date` 是市场结算日期，
 `city_local_date_at_snapshot` 是采集时城市本地日，两者不能硬等同。
 
-## 后续迁移任务
+## 迁移状态
 
-- 把 `weather-predict/paper_snapshot.py` 里的 per-city scan dates 改成调用 `weather_data_feed.city_calendar`。
-- 把 current-YES live runner 的 source profile / bracket / observation clock import 改成直接用 `weather_data_feed`。
+已完成的本机迁移:
+
+- `pm_agent` active scripts 直接 import `weather_data_feed`；旧 strategy 路径继续作为兼容 re-export。
+- `weather-predict/paper_snapshot.py` 本机副本通过 sibling `pm_agent` / `pm_agents` path 使用同一个 `weather_data_feed` 包。
+- `paper_snapshot.py` 的 city scan dates、city local date、settle UTC 和 METAR local-day 口径已迁到 IANA timezone / DST。
+- 新增 `scripts/ops/weather_data_feed_parity_check.py`，用于检查 snapshot 是否满足 `market_local_date` / `city_local_date_at_snapshot` 等协议字段。
+
+待推进:
+
+- 把本机 `weather-predict` 改动按生产流程同步到 N100。由于 `weather-predict` 当前不是 git worktree，生产同步必须先备份并明确记录。
 - 抽出真正的 `official_observation_feed` fetcher：AviationWeather、IEM、NOAA tgftp、HKO、weather.gov/Synoptic 的拉取、缓存、source latency 和 failover。
-- 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`.
+- 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
 - 在 N100 上为数据层增加独立 health/status 文件，再让策略 loop 只消费健康的数据产物。
