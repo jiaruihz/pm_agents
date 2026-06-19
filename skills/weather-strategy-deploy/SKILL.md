@@ -251,18 +251,19 @@ wsl -d Ubuntu-24.04 -- ssh jiarui@192.168.0.200 \
 
 适用：新增/切换 execution policy、live cycle、branch daemon。
 
-当前 N100 生产目标不是“按 execution_policy 数策略”，而是默认两条明确的
-`strategy_instance`：
+> ⚠️ 当前 live 状态以 `WEATHER_STRATEGY_ENTRYPOINT.md` / `WEATHER_STRATEGY_REGISTRY.md` 为准，别信本节旧举例。
+> **更新 2026-06-19**：下面那套 `mid_price_core_*` 已**因实盘亏损被全部停掉**，不再是生产默认。
+> 当前真 live 是 reheat_risk 的 **current YES tiny-live**（`fade_confirmed` + `peak_forming_micro`，$5 微仓）
+> 和 **metar-cross prev-NO**（N100 `weather_theta_current_yes_tiny_live.py` / `weather_metar_cross_prev_no_shadow.py --live`）。
+> 下表保留作**部署机制的历史示例**（怎么把一条 strategy_instance 上 live），不是当前生产清单：
 
-| strategy_instance | execution_policy | source_strategy_instance | 入场/edge |
+| strategy_instance（历史示例） | execution_policy | source_strategy_instance | 入场/edge |
 |---|---|---|---|
 | `mid_price_core_v1_25_75` | `mid_price_core_v1` | direct | global 0.25-0.75, edge>=0.10 |
 | `mid_price_core_v1_side_band` | `mid_price_core_v1` | direct | YES 0.20-0.45 edge>=0.20; NO 0.35-0.65 edge>=0.10 |
 
-`mid_price_core_v2_25_75` was stopped from live on 2026-06-06. It may only be
-started deliberately for a named shadow/live experiment with
-`START_MID_PRICE_CORE_V2_25_75=1`; do not count it as part of default
-production.
+`mid_price_core_v2_25_75` 早在 2026-06-06 即停 live，其余 mid_price 实例 2026-06-11 后也停。
+以上仅说明部署/启停机制，当前不属于生产。
 
 正常启动入口是：
 

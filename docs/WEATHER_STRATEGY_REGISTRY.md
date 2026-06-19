@@ -67,8 +67,9 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 
 | 策略 / 家族 | 灵感 / 盈利规则 | 状态 | 是否可行（当前结论） | 血缘层 · 入口 doc |
 |---|---|---|---|---|
-| current_yes_fade_confirmed | 日内已回落后更稳健地买 current YES | `shadow`（最接近 tiny-live） | 默认 current-YES timing head；卡在 execution freshness / fresh-ask 滑点 | [1]-[2] reheat_risk |
-| current_yes_peak_forming | 当前仍在高位时买 current YES | `shadow`（narrow early sleeve） | 早买省价 vs 二次升温风险未净赚；只保留窄 shadow | [1]-[2] reheat_risk |
+| current_yes_fade_confirmed | 日内已回落后更稳健地买 current YES | **`live`（tiny-live $5/单·$5/城日）** | **当前 live 之一**（N100 `weather_theta_current_yes_tiny_live.py --entry-profile-mode fade_confirmed --live`，2026-06-19 起）；默认 timing head，但整支仍卡 execution freshness / fresh-ask 滑点 → 当作前向取证探针，按执行质量评估不按 PnL | [1]-[2] reheat_risk |
+| current_yes_peak_forming_micro | 当前仍在高位时买 current YES（微仓） | **`live`（tiny-live $5）** | **当前 live 之一**（同脚本 `--entry-profile-mode peak_forming_micro --enable-peak-forming-live`）；注意：已从白皮书旧口径"shadow only"**升级为 micro live**（用户 2026-06-19 确认有意为之） | [1]-[2] reheat_risk |
+| metar_cross_prev_no | 用实时 METAR 交叉前日 NO（latency/source basis） | **`live`（$10/单·$50/天）** | **当前也在 live**（N100 `weather_metar_cross_prev_no_shadow.py --live`）；6-17/18 新线，仓位上限比 current-YES 大，研究背书与回填证据待复盘补 | [0]-[2] reheat_risk |
 | higher_no_carry | 买更高温档 NO（ladder carry） | `shadow`（telemetry only） | 没证明能稳定打赢同窗 current YES，仅 shadow 表达遥测 | [2] reheat_risk |
 | low_price_yes_reheat_reversal | 需二次升温才命中的低价 YES，升级成 `forecast prior × reheat condition` | `research` | 凸性研究，小仓 shadow 候选，不直接 live；单独记 PnL | [1]-[2] reheat_risk |
 
@@ -89,18 +90,20 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 | execution_quality | maker 扣 spread/queue/逆选后是否仍有可成交 edge | `research` | inconclusive | [4] execution_quality |
 | city_selection / city-day basket | city×side×instance 选择、篮子组合 | `shadow` | 篮子仅 shadow，live 城市池由 CITY_POOL_DECISIONS 治理 | [3] city_selection |
 | blender / edge-engine | blender 字段作 shadow/paper/size signal | `shadow` | 不作 live hard gate | [1] blender_shadow |
-| mid_price_core v1 / v2 | 早期中价核心策略 | `shelved` | V2 于 2026-06-06 停 live | 历史 |
+| mid_price_core v1 / v2 / maker_queue | 早期中价核心策略 | `shelved` | **2026-06 因实盘亏损被用户停掉**（v2 6-06，其余 live_real 成交停在 6-11）；是停用决策，非证伪 | 历史 |
 
 ---
 
 ## 当前优先级（白皮书口径，2026-06-16）
 
 1. 共享 reheat feature factory（A）已 v1：策略头默认消费它，不再各自 materialize。
-2. current YES timing（B）已 v1：默认 fade-confirmed，peak-forming 仅 narrow early shadow，不改 live。
-3. **下一步 E**：current YES 最接近 tiny-live，卡 execution freshness / fresh-ask 滑点。
+2. current YES timing（B）已 v1。**更新（2026-06-19）：fade_confirmed 与 peak_forming_micro 现已双双 tiny-live（$5）**，
+   白皮书旧口径"peak-forming 仅 shadow / 不改 live"已被取代。
+3. **下一步 E**：current YES 已进 tiny-live，但核心未解的仍是 execution freshness / fresh-ask 滑点 → 复盘看执行存活，不看早期 PnL。
 4. higher NO carry（C）已 v1：未稳定打赢 current YES，仅 shadow telemetry。
 5. low-price YES reheat reversal（D）单独做凸性研究，不与 no-reheat 策略混 PnL。
 
 > 早期"已知盈利模式"（5 月 BUY_NO/Warsaw/ECMWF/LA）是 near-binary 修复前口径，**已作废**，
-> 见 `WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md §1.1`。当前没有任何"已确认稳定盈利"的 live alpha；
-> 最接近的是 current YES（卡执行）和离线确认但散户被否的 all-YES underround。
+> 见 `WEATHER_LIVE_RUN_HISTORY_AND_DATA_GOVERNANCE.md §1.1`。**当前没有任何"已确认稳定盈利"的 live alpha**：
+> 在跑的 current YES（fade_confirmed + peak_forming_micro）与 metar-cross 是 **tiny-live 前向取证**（$5–$10 微仓），
+> 不是已证实策略；评估按执行质量/滑点，别按早期 PnL。旧 mid_price_core 已因亏损停用。

@@ -33,7 +33,8 @@ bash scripts/ops/sync_weather_remote.sh
 bash scripts/weather_dashboard/run_stack.sh
 ```
 
-然后运行账户级对账脚本：
+然后运行账户级对账脚本（下面 `--instances` 与日期是**历史示例**；当前 live 实例是 current-YES tiny-live，
+见 `WEATHER_STRATEGY_REGISTRY.md`，按实际复盘窗口替换）：
 
 ```bash
 python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py \

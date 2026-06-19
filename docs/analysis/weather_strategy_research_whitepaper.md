@@ -184,8 +184,10 @@ Reusable prompts for these tasks live in
 
 1. A 已完成 v1：后续策略头默认消费共享 reheat feature factory，不再各自
    materialize observed max / orderbook / settlement。
-2. B 已完成 factory-backed v1：current YES timing 后续默认 fade-confirmed
-   为主、peak-forming 只保留 narrow early shadow sleeve；不做 live change。
+2. B 已完成 factory-backed v1：current YES timing 默认 fade-confirmed 为主。
+   **更新 2026-06-19：fade_confirmed 与 peak_forming_micro 现已双双 tiny-live（$5 微仓，`--live --confirm-live`）。**
+   本条原写"peak-forming 只保留 shadow / 不做 live change"已过时——已升级为 micro live（用户有意为之），
+   评估按 execution freshness/滑点的前向取证，不按早期 PnL。当前 live 状态以 `WEATHER_STRATEGY_REGISTRY.md` 为准。
 3. 下一步做 E：current YES 已经最接近 tiny-live，但卡在 execution freshness
    和 fresh ask slippage。
 4. C 已完成 factory-backed v1：NO carry/ladder 没有证明能稳定打赢同窗

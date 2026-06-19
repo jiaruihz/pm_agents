@@ -5,7 +5,21 @@ Updated: 2026-06-09 metadata pass; preserve content dates below
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-06-08
+Last updated: 2026-06-08（live 实例现状见下方 2026-06-19 更正横幅）
+
+> ## ⚠️ 当前 live 现状更正（2026-06-19，必读，优先于下方 mid_price 内容）
+>
+> 本文下方大量 `mid_price_core_v1_25_75` / `_side_band` "当前默认 live" 的描述**已过时**。
+> 实情（N100 `ps` + 用户确认）：
+> - **mid_price_core 全部已停**（实盘亏损，用户决策；live_real 成交停在 2026-06-11）。
+> - **当前真 live = reheat_risk current YES tiny-live**：`weather_theta_current_yes_tiny_live.py`
+>   的 `fade_confirmed` + `peak_forming_micro` 两个 profile（`--live --confirm-live`，$5 微仓），2026-06-19 起。
+> - **另有 metar-cross prev-NO 在 live**（`weather_metar_cross_prev_no_shadow.py --live`，$10/单·$50/天）。
+> - shadow：station-basis、range-rv、higher-no-carry（零 notional）。
+> - 这些是 **tiny-live 前向取证**，不是已证实策略；评估按执行质量/滑点，不按早期 PnL。
+>
+> 下方 mid_price 章节保留作**历史血缘与部署机制参考**。完整 current-YES live 规格（城市池/gate/参数）
+> 待从 N100 运行配置补写。live 策略总览见 [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md)。
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.
 
