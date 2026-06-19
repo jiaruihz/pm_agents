@@ -52,6 +52,15 @@ writer.
 
 ## Code Boundary
 
+Shared weather data primitives live in the local `pm_agents` git worktree under:
+
+- `weather_data_feed/`
+
+This package is the staging source for cross-repo data logic: city timezone and
+target-date calendar, source profiles, bracket parsing, observation clock
+guards, and snapshot protocol normalization. It must not contain strategy
+selection, sizing, live order submission, wallet logic, or dashboard PnL logic.
+
 `pm_agent` may call weather-predict only through explicit bridge tooling:
 
 - `scripts/ops/weather_predict_bridge.py`
@@ -62,6 +71,11 @@ execution loop does not import weather-predict modules.
 
 `weather-predict` should not import pm_agent code. It writes files that pm_agent
 later consumes.
+
+The temporary strategy-path observation modules under
+`src/strategies/weather_edge_v1/official_observation_feed/` are compatibility
+re-exports of `weather_data_feed`. New shared data code should be added to
+`weather_data_feed`, not under a strategy directory.
 
 ## Deployment Boundary
 

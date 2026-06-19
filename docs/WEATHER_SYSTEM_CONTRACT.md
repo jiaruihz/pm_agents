@@ -191,6 +191,25 @@ open_meteo_live_ecmwf    — Open-Meteo API + ECMWF 模型
 
 ## 4. 文件交换格式（N100 → pm_agent）
 
+### 4.0 Shared data-feed snapshot fields
+
+`weather_data_feed.snapshot_protocol` defines the minimum cross-repo snapshot
+date fields:
+
+```
+city
+target_date
+market_local_date
+city_local_date_at_snapshot
+snapshot_ts_utc
+```
+
+`target_date` is the market settlement date. `city_local_date_at_snapshot` is
+the city-local calendar date at collection time. They are allowed to differ,
+especially for American cities while the machine/UTC/Asia date has already
+rolled forward. Strategy code must not require `target_date ==
+city_local_date_at_snapshot` as a generic market-selection rule.
+
 ### 4.1 t24_paper_ledger_trades.csv（主要分析源）
 
 必含字段（pm_agent ingest 依赖）：

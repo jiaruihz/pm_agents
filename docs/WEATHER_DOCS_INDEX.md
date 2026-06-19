@@ -68,6 +68,7 @@ Status 口径：
 | [WEATHER_REPO_BOUNDARY.md](WEATHER_REPO_BOUNDARY.md) | `current-source` | `weather-predict` 和 `pm_agent` 各自负责什么，生产/本机边界在哪里 |
 | [WEATHER_DATA_CANONICAL_SOURCES.md](WEATHER_DATA_CANONICAL_SOURCES.md) | `current-source` | 哪些表/文件是 source、mirror、derived、legacy，分析前先查什么 |
 | [WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md) | `current-source` | N100 -> 本机镜像 -> DB -> API 的脚本职责和数据链路 |
+| [WEATHER_DATA_FEED_MODULE.md](WEATHER_DATA_FEED_MODULE.md) | `current-source` | 新 `weather_data_feed` 共用数据模块的 repo/deploy 边界、当前模块职责、后续拆独立部署路径 |
 | [WEATHER_SYSTEM_CONTRACT.md](WEATHER_SYSTEM_CONTRACT.md) | `current-source` | 字段名、枚举、ID 算法、跨 repo contract 怎么定义 |
 | [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | `current-reference` | dashboard DB/API 分层缺口审计；P0 已完成，剩余项按当前 fact-table 口径复核 |
 | [WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md](WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md) | `design-draft` | canonical schema / paper 语义 / shadow-run cutover 怎么迁移 |
