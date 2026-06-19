@@ -132,6 +132,37 @@ def test_fresh_taker_quote_rejects_peak_forming_edge_below_required(monkeypatch)
     assert quote["required_quote_edge"] == 0.02
 
 
+def test_fresh_taker_quote_accepts_thin_depth_when_edge_passes(monkeypatch):
+    monkeypatch.setattr(
+        live,
+        "fetch_json",
+        lambda *_args, **_kwargs: {
+            "asks": [{"price": "0.740", "size": "1"}],
+            "bids": [{"price": "0.720", "size": "10"}],
+        },
+    )
+    args = argparse.Namespace(
+        max_taker_cushion=0.02,
+        cross_tick_buffer=0.001,
+        max_order_notional=5.0,
+        peak_forming_min_edge=0.02,
+    )
+
+    quote = live.fresh_taker_quote(
+        {
+            "token_id": "yes-token",
+            "p_yes_win": 0.80,
+            "yes_current_ask": 0.740,
+            "entry_profile": "peak_forming_micro",
+        },
+        args,
+    )
+
+    assert quote["status"] == "accepted"
+    assert quote["fresh_available_notional"] == 0.74
+    assert quote["edge_at_limit"] >= 0.02
+
+
 def test_build_current_rows_reports_missing_local_date_market_when_snapshot_rolls_ahead():
     station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
     snapshot_ts = datetime(2026, 6, 17, 20, 30, tzinfo=timezone.utc)

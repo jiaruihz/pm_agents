@@ -447,19 +447,6 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
             "edge_at_limit": edge_at_limit,
             "required_quote_edge": required_edge,
         }
-    if executable_notional + 1e-9 < float(args.max_order_notional):
-        return {
-            "status": "rejected",
-            "reason": "fresh_book_insufficient_depth",
-            "best_bid": bids[0][0] if bids else 0.0,
-            "fresh_ask": fresh_ask,
-            "fresh_ask_size": fresh_ask_size,
-            "fresh_available_notional": executable_notional,
-            "max_taker_price": max_price,
-            "edge_at_fresh_ask": p_yes - fresh_ask,
-            "edge_at_limit": edge_at_limit,
-            "required_quote_edge": required_edge,
-        }
     return {
         "status": "accepted",
         "best_bid": bids[0][0] if bids else 0.0,
