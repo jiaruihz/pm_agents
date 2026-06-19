@@ -110,6 +110,31 @@ snapshot_ts_utc
 - 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
 - 在 N100 上为数据层增加独立 health/status 文件，再让策略 loop 只消费健康的数据产物。
 
+## 生产数据验证计划
+
+每次数据层 / snapshot / current-YES runner 改动后，在 N100 跑:
+
+```bash
+cd ~/projects/pm_agent
+.venv/bin/python scripts/ops/weather_data_feed_prod_health_check.py \
+  --snapshot-dir ../weather-predict/output/paper_snapshots \
+  --runtime-root runtime/weather_edge_v1
+```
+
+检查内容:
+
+- `weather-predict` 最新 snapshot 是否满足 `weather_data_feed_snapshot_v1` 协议；
+- snapshot record 是否缺字段、无法 normalize、或出现 `(city,target_date,token_id,bracket)` 重复；
+- snapshot 是否 stale，默认阈值 45 分钟；
+- current-YES split telemetry 是否 JSON 损坏、缺关键字段、或同一 decision key 重复；
+- current-YES split live order 文件是否有重复 `order_id` 或重复 `(strategy_instance,city,target_date,token_id,side)`。
+
+验收口径:
+
+- `status=ok`: 可以继续让策略消费；
+- `status=warn`: 字段/重复没坏，但存在 stale snapshot、summary stale、或非致命重复风险；
+- `status=fail`: 协议、JSON、snapshot 重复或 order_id 重复等结构性问题，先修数据再谈策略信号。
+
 ## Observation Sources 迁移边界
 
 抢单 bot 里的多源 METAR 逻辑应进入 `weather_data_feed/observation_sources/`，但只迁移数据层部分：
