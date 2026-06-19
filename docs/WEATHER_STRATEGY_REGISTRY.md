@@ -8,6 +8,9 @@ Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入�
 属于量化血缘哪一层**。状态/结论的权威来源是评估层 living docs（`docs/analysis/*.md`），本表汇总它们，
 有冲突以 living doc 为准。
 
+> 关联主轴：[0]–[6] 分层定义见 [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md)；
+> 一条策略跑完怎么复盘见 [WEATHER_STRATEGY_REVIEW_PIPELINE.md](WEATHER_STRATEGY_REVIEW_PIPELINE.md)。
+
 ## 状态图例
 
 | 状态 | 含义 |

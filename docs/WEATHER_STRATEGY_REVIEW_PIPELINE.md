@@ -8,6 +8,9 @@ Source of truth: 口径以 `WEATHER_ANALYSIS_CONTRACT.md` 为准；本文只把�
 但缺一根"按什么顺序复盘"的总线。这份就是那根总线。**它是 strategy-agnostic 基础设施**——换策略方向不重做它，
 任何 live / shadow 策略跑完都走同一条链。
 
+> 关联主轴：[0]–[6] 分层定义见 [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md)；
+> 试过哪些策略、各自状态见 [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md)。
+
 ## 链路总览（挂在量化血缘上）
 
 ```text

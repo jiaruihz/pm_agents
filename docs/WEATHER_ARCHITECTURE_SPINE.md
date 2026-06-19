@@ -7,6 +7,10 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_QUANT_DESIGN.md
 
 本文定义天气策略项目的主线分层，用来约束文档、脚本、数据和分析结论的归属。它不是替代 `WEATHER_STRATEGY_QUANT_DESIGN.md` 的量化血缘链，而是把原有工程血缘链映射到更高层的策略生命周期，避免评估层继续按日期和一次性脚本发散。
 
+> 三份主轴文档分工（同一套 [0]–[6] 分层，互补不重复）：
+> 本文 = **分层定义**（每层归属什么）· [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md) = **策略清单**（试过哪些、状态、归在哪层）·
+> [WEATHER_STRATEGY_REVIEW_PIPELINE.md](WEATHER_STRATEGY_REVIEW_PIPELINE.md) = **[6] 评估层的复盘流水线**（跑完怎么一步步看）。
+
 ## 一句话主线
 
 一条天气交易决策的生命周期：
