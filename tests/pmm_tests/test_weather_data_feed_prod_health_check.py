@@ -43,7 +43,7 @@ def test_prod_health_check_flags_snapshot_duplicates_and_staleness(tmp_path):
     assert report["snapshot_age_min"] == 60.0
 
 
-def test_prod_health_check_flags_duplicate_telemetry_run_ids(tmp_path):
+def test_prod_health_check_allows_reused_run_id_but_flags_duplicate_decisions(tmp_path):
     telemetry = tmp_path / "forward_telemetry.jsonl"
     row = {
         "record_type": "theta_current_yes_forward_telemetry",
@@ -58,7 +58,8 @@ def test_prod_health_check_flags_duplicate_telemetry_run_ids(tmp_path):
 
     report = check_telemetry(telemetry, tail_rows=10)
 
-    assert report["duplicate_telemetry_run_id_count"] == 1
+    assert report["telemetry_run_id_count"] == 1
+    assert report["max_rows_per_telemetry_run_id"] == 2
     assert report["duplicate_decision_count"] == 1
     assert report["missing_required_fields"] == {}
 
@@ -67,7 +68,7 @@ def test_prod_health_overall_status_warns_on_stale_but_fails_on_structural_error
     sections = {
         "snapshot_parity": {"status": "ok"},
         "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": True},
-        "telemetry": [{"parse_error_count": 0, "duplicate_telemetry_run_id_count": 0, "duplicate_decision_count": 0}],
+        "telemetry": [{"parse_error_count": 0, "duplicate_decision_count": 0}],
         "live_orders": {"parse_error_count": 0, "duplicate_order_id_count": 0, "duplicate_strategy_city_token_count": 0},
         "summaries": [],
     }

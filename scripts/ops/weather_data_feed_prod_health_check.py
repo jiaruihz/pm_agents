@@ -133,10 +133,7 @@ def check_telemetry(path: Path, *, tail_rows: int) -> dict[str, Any]:
         for field in required:
             if not str(row.get(field) or "").strip():
                 missing[field] += 1
-    duplicate_run_ids, run_id_examples = duplicate_examples(
-        [row for row in rows if row.get("telemetry_run_id")],
-        ("telemetry_run_id",),
-    )
+    run_id_counts = Counter(str(row.get("telemetry_run_id") or "") for row in rows if row.get("telemetry_run_id"))
     duplicate_decisions, decision_examples = duplicate_examples(
         rows,
         ("strategy_instance", "created_at_utc", "city", "target_date", "market_id", "current_bracket", "decision_status"),
@@ -148,9 +145,10 @@ def check_telemetry(path: Path, *, tail_rows: int) -> dict[str, Any]:
         "checked_rows": len(rows),
         "parse_error_count": len(parse_errors),
         "missing_required_fields": dict(sorted(missing.items())),
-        "duplicate_telemetry_run_id_count": duplicate_run_ids,
+        "telemetry_run_id_count": len(run_id_counts),
+        "max_rows_per_telemetry_run_id": max(run_id_counts.values(), default=0),
         "duplicate_decision_count": duplicate_decisions,
-        "duplicate_examples": (run_id_examples + decision_examples)[:10],
+        "duplicate_examples": decision_examples[:10],
         "decision_status_counts": dict(status_counts.most_common(20)),
     }
 
@@ -213,7 +211,6 @@ def overall_status(sections: dict[str, Any]) -> str:
         parity.get("status") != "ok"
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
-        or any(item.get("duplicate_telemetry_run_id_count", 0) > 0 for item in telemetry)
         or live_orders.get("parse_error_count", 0) > 0
         or live_orders.get("duplicate_order_id_count", 0) > 0
     )
