@@ -4,6 +4,7 @@ import importlib
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -68,6 +69,44 @@ def test_legacy_runners_use_configured_runtime_roots(tmp_path, monkeypatch) -> N
     assert daily_pipeline.CACHE_GFS == cache_root / "gfs_daily"
     assert paper_snapshot.OUTPUT_DIR == output_root / "paper_snapshots"
     assert paper_snapshot.ORDERBOOK_OUTPUT_DIR == output_root / "orderbook_snapshots"
+
+
+def test_paper_snapshot_metar_accepts_epoch_obs_time(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+
+    class Response:
+        status_code = 200
+
+        def json(self):
+            return [
+                {
+                    "obsTime": 1781888100,
+                    "temp": 32,
+                }
+            ]
+
+    class Client:
+        def get(self, *_args, **_kwargs):
+            return Response()
+
+    state = paper_snapshot.fetch_live_metar_state(
+        Client(),
+        "EHAM",
+        "2026-06-19",
+        "Amsterdam",
+        datetime(2026, 6, 19, 17, 1, 46, tzinfo=timezone.utc),
+    )
+
+    assert state["metar_current_max_f"] == 90
+    assert state["metar_latest_temp_f"] == 90
+    assert state["metar_latest_ts_utc"] == "2026-06-19T16:55:00Z"
+    assert state["metar_source"] == "aviationweather_live"
 
 
 def test_systemd_units_are_versioned_for_data_feed_service() -> None:

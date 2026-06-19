@@ -646,20 +646,23 @@ def fetch_live_metar_state(client, icao, target_date_local, city, now_utc):
                     if temp_c is None:
                         continue
                     temp_f = int(round(temp_c * 9 / 5 + 32))
-                    obs_time = metar.get("obsTime")
+                    obs_time = metar.get("obsTime") or metar.get("reportTime")
                     if obs_time is None:
                         continue
                     try:
                         if isinstance(obs_time, str):
                             obs_dt = datetime.fromisoformat(obs_time.replace("Z", "+00:00"))
-                            obs_local = city_local_datetime(city, obs_dt)
-                            obs_local_date = obs_local.strftime("%Y-%m-%d")
+                            obs_key = obs_time
+                        elif isinstance(obs_time, (int, float)):
+                            obs_dt = datetime.fromtimestamp(float(obs_time), timezone.utc)
+                            obs_key = obs_dt.isoformat().replace("+00:00", "Z")
                         else:
                             continue
+                        obs_local = city_local_datetime(city, obs_dt)
+                        obs_local_date = obs_local.strftime("%Y-%m-%d")
                     except (ValueError, TypeError):
                         continue
                     if obs_local_date == target_local:
-                        obs_key = obs_time if isinstance(obs_time, str) else str(obs_time)
                         all_obs[obs_key] = (temp_f, "live")
                         live_ok = True
     except Exception:
