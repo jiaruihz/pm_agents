@@ -23,6 +23,7 @@ import hashlib
 import json
 import math
 import os
+import signal
 import shlex
 import subprocess
 import sys
@@ -232,6 +233,22 @@ def proxy_candidates() -> list[str | None]:
 PROXIES = proxy_candidates()
 
 
+def _raise_http_fetch_timeout(_signum: int, _frame: Any) -> None:
+    raise TimeoutError("http fetch deadline exceeded")
+
+
+def http_get_with_deadline(url: str, *, params: Any, proxy: str | None, timeout_sec: float) -> httpx.Response:
+    old_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _raise_http_fetch_timeout)
+    signal.setitimer(signal.ITIMER_REAL, max(0.001, timeout_sec))
+    try:
+        timeout = httpx.Timeout(timeout_sec, connect=timeout_sec, read=timeout_sec, write=timeout_sec, pool=timeout_sec)
+        return httpx.get(url, params=params, proxy=proxy, timeout=timeout)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old_handler)
+
+
 def fetch_json(
     url: str,
     params: dict | None = None,
@@ -248,7 +265,7 @@ def fetch_json(
             if remaining <= 0:
                 raise RuntimeError(f"fetch timed out {url}: {last}")
             try:
-                r = httpx.get(url, params=params, proxy=proxy, timeout=min(timeout_sec, remaining))
+                r = http_get_with_deadline(url, params=params, proxy=proxy, timeout_sec=min(timeout_sec, remaining))
                 r.raise_for_status()
                 return r.json()
             except Exception as exc:  # noqa: BLE001
@@ -410,7 +427,7 @@ def fetch_text(
             if remaining <= 0:
                 raise RuntimeError(f"fetch timed out {url}: {last}")
             try:
-                r = httpx.get(url, params=params, proxy=proxy, timeout=min(timeout_sec, remaining))
+                r = http_get_with_deadline(url, params=params, proxy=proxy, timeout_sec=min(timeout_sec, remaining))
                 r.raise_for_status()
                 return r.text
             except Exception as exc:  # noqa: BLE001
