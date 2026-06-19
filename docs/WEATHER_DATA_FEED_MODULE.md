@@ -66,7 +66,8 @@ src/strategies/weather_edge_v1/tools/official_observation_clock.py
    - 保持现有 snapshot 输出路径和字段兼容。
    - 使用 `scripts/ops/weather_data_feed_parity_check.py` 验证新 snapshot 协议字段。
 
-3. **稳定后**: 再拆独立部署。
+3. **稳定后**: 再拆独立部署。**具体执行计划见 [WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md](WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md)**
+   （独立 checkout `~/projects/weather_data_feed_service/`，weather-predict 退役转 dormant）。
    - 可以拆成独立 git repo 或独立 systemd service。
    - 输出标准 JSON/JSONL/cache/latest pointers。
    - `pm_agent` 只读数据产物；策略部署不需要重启数据采集。

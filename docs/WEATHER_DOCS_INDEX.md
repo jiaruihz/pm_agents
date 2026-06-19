@@ -72,6 +72,7 @@ Status 口径：
 | [WEATHER_SYSTEM_CONTRACT.md](WEATHER_SYSTEM_CONTRACT.md) | `current-source` | 字段名、枚举、ID 算法、跨 repo contract 怎么定义 |
 | [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | `current-reference` | dashboard DB/API 分层缺口审计；P0 已完成，剩余项按当前 fact-table 口径复核 |
 | [WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md](WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md) | `design-draft` | canonical schema / paper 语义 / shadow-run cutover 怎么迁移 |
+| [WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md](WEATHER_DATA_FEED_STEP3_MIGRATION_PLAN.md) | `design-draft` | 把采集 runner 从 weather-predict 搬到独立 `weather_data_feed_service/` 部署、weather-predict 退役转 dormant 的完整执行计划（给 Codex 执行） |
 | [2026-06-17-official-observation-feed-design-v0.md](analysis/2026-06/2026-06-17-official-observation-feed-design-v0.md) | `design-draft` | NO carry / current YES / YES reversal / station-basis / METAR-cross 共用实时官方观测层怎么抽象：source registry、AviationWeather/IEM/HKO/NWS 拉取、缓存、监听和 failover |
 | [2026-06-18-metar-fast-source-research-v0.md](analysis/2026-06/2026-06-18-metar-fast-source-research-v0.md) | `snapshot` | weather latency arb 的快源研究：新增 NOAA tgftp station TXT 候选、N100 market/weather proxy 分流、LDM/IDD PoC 下一步 |
 | [2026-06-18-hk-shenzhen-moscow-settlement-source-reroute-v0.md](analysis/2026-06/2026-06-18-hk-shenzhen-moscow-settlement-source-reroute-v0.md) | `snapshot` | HK/Shenzhen/Moscow 结算源复查：HK=HKO special confirmed，Moscow 可用 weather.gov/Synoptic UUWW 修复，Shenzhen 仍需 WU backend 复核 |
