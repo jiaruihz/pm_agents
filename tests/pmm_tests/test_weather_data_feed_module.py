@@ -107,7 +107,7 @@ def test_legacy_strategy_imports_reexport_data_module():
         city_timezone_name as legacy_city_timezone_name,
     )
 
-    assert DEFAULT_RESEARCH_REGISTRY_JSON.exists()
+    assert DEFAULT_RESEARCH_REGISTRY_JSON.name == "2026-06-14-settlement-source-registry-v0.json"
     assert DEFAULT_SOURCE_PROFILES_JSON.name == "source_profiles.json"
     assert "weather_data_feed" in str(DEFAULT_SOURCE_PROFILES_JSON)
     assert legacy_load_source_profiles()["Shanghai"] == load_source_profiles()["Shanghai"]
