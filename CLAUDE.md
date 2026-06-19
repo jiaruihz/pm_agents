@@ -31,14 +31,16 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
 完整设计 [WEATHER_STRATEGY_QUANT_DESIGN.md](docs/WEATHER_STRATEGY_QUANT_DESIGN.md) ·
 字段契约 [WEATHER_SYSTEM_CONTRACT.md](docs/WEATHER_SYSTEM_CONTRACT.md)
 
-## 2. 机器与角色（摘要，细节见 [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md)）
+## 2. 模块边界与机器（细节见 [WEATHER_REPO_BOUNDARY.md](docs/WEATHER_REPO_BOUNDARY.md) · [WEATHER_DATA_FEED_MODULE.md](docs/WEATHER_DATA_FEED_MODULE.md)）
 
-- **本机 = Mac** `/Users/deepsleep/projects/pm_agents`：分析 / 看板 / 回测 / 脚本开发 / N100 部署 staging。默认 `zsh`/Darwin，**不要套 `wsl`**。
-- **N100** `jiarui@192.168.0.200`，两个 repo 各管一块：
-  - `weather-predict`（systemd timer）：snapshot / orderbook / pm_history / GFS / 观测 cache —— 信号原料与行情。
-  - `pm_agent`（foreground loop）：读信号 → plan → CLOB 下单 → live JSONL / live_cycle —— 实盘执行。
-- 本机只读 N100 镜像做分析，**不作生产采集 / 下单来源**。N100 访问：`ssh jiarui@192.168.0.200 '<command>'`。
-- 判断生产是否断流先看 N100 doctor（`ssh ... 'cd ~/projects/weather-predict && scripts/ops/doctor_restart.sh'`），不要用本机镜像新旧直接判断。
+三个模块边界（不是按机器分，是按职责分）：
+- **数据层 = `weather_data_feed/` 包**（本仓库，vendored 到 N100）：标准化城市日历 / source profile / 官方观测 / forecast / snapshot 协议。**新的共享数据逻辑只进这个包，别再长在 strategy 目录下。**
+- **采集 = N100 `weather-predict`**：调用 `weather_data_feed` 生产 snapshot/cache，**不含策略 / 下单**。
+- **执行 = N100 `pm_agent`**：消费标准数据 → signal → plan → CLOB 下单 → live/fill（current-YES tiny-live 等；每条策略一个克隆 `pm_agent_*`）。
+
+机器：
+- **本机 = Mac** `/Users/deepsleep/projects/pm_agents`：分析 / 看板 / 回测 / 脚本开发 / N100 部署 staging。默认 `zsh`/Darwin，**不要套 `wsl`**。只读 N100 镜像做分析，**不作生产采集 / 下单来源**。N100 访问：`ssh jiarui@192.168.0.200 '<command>'`。
+- 判断生产是否断流先看 N100 doctor（`ssh ... 'cd ~/projects/weather-predict && scripts/ops/doctor_restart.sh'`）；数据层健康用 `scripts/ops/weather_data_feed_prod_health_check.py`。不要用本机镜像新旧直接判断。
 
 数据流、镜像目录逐条映射、备份 → [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) ·
 [WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) · [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md)
