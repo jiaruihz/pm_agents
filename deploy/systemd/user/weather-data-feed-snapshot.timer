@@ -2,7 +2,8 @@
 Description=Run weather data feed snapshot collector every 30 minutes
 
 [Timer]
-OnCalendar=*:0/30
+OnBootSec=5min
+OnUnitInactiveSec=30min
 Persistent=true
 Unit=weather-data-feed-snapshot.service
 

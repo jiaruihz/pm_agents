@@ -85,7 +85,7 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
         assert "WEATHER_DATA_FEED_CACHE_ROOT" in text
         assert "weather-predict" not in text
 
-    assert "OnCalendar=*:0/30" in timer
+    assert "OnUnitInactiveSec=30min" in timer
     assert "weather-data-feed-snapshot.service" in installer
     assert "weather-data-feed-daily.service" in installer
 
