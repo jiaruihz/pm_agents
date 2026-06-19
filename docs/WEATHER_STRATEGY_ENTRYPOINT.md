@@ -357,6 +357,9 @@ data freshness, pre-METAR-update blackout, fixed risk caps, fresh CLOB taker
 cushion/depth, and `peak_forming_micro` fresh-running-max wait. Snapshot
 top-of-book minimum notional is no longer a pre-model filter; fresh-book
 execution now checks cumulative executable ask depth inside the taker limit.
+The split live wrapper polls every 60 seconds by default to catch fresh
+snapshot/METAR updates quickly; duplicate signal and city-day caps still prevent
+repeat submissions on the same city-day/bracket.
 
 2026-06-18 fade model branch: `theta_current_yes_fade_confirmed_tiny_live_v1`
 now has a dedicated fade-confirmed specialist artifact at
