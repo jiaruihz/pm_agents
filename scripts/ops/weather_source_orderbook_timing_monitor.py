@@ -40,6 +40,7 @@ if str(ROOT) not in sys.path:
 import weather_station_basis_shadow as source  # noqa: E402
 from weather_data_feed import load_source_profiles  # noqa: E402
 from weather_data_feed.observation_sources import (  # noqa: E402
+    FetchSettings,
     build_iem_asos_params,
     expand_source_names as expand_observation_source_names,
     normalize_source_name,
@@ -49,6 +50,7 @@ from weather_data_feed.observation_sources import (  # noqa: E402
     parse_metar_report_time,
     parse_metar_temp_c,
     parse_tgftp_header_time,
+    snapshot_observation_source,
 )
 from weather_data_feed.source_policy import (  # noqa: E402
     CityConfig,
@@ -491,56 +493,16 @@ def fetch_iem_asos_latest(cfg: CityConfig, tz: ZoneInfo, local_date: Any) -> dic
 
 
 def source_snapshot(cfg: CityConfig, source_name: str, now_utc: datetime) -> dict[str, Any]:
-    source_name = canonical_source_name(source_name)
-    tz = ZoneInfo(cfg.timezone_name)
-    local_date = now_utc.astimezone(tz).date()
-    fetch_start_utc = datetime.now(timezone.utc)
-    if source_name == "aviationweather_metar":
-        row = fetch_aviationweather_latest(cfg, tz, local_date)
-    elif source_name == "aviationweather_cache_csv":
-        row = fetch_aviationweather_cache_csv_latest(cfg, tz, local_date)
-    elif source_name == "checkwx_html":
-        row = fetch_checkwx_latest(cfg)
-    elif source_name == "noaa_tgftp_station_txt":
-        row = fetch_noaa_tgftp_station_txt_latest(cfg)
-    elif source_name == "weather_gov_latest":
-        row = fetch_weather_gov_latest(cfg)
-    elif source_name == "synopticdata_timeseries":
-        row = fetch_synopticdata_timeseries_latest(cfg, tz, local_date)
-    elif source_name == "iem_asos":
-        row = fetch_iem_asos_latest(cfg, tz, local_date)
-    else:
-        raise ValueError(f"unknown source {source_name}")
-    fetch_end_utc = datetime.now(timezone.utc)
-    detected_after_report_sec = source_age_sec(row.get("source_report_ts_utc"), fetch_end_utc)
-    row.update(
-        {
-            "ts_utc": fetch_end_utc.isoformat(),
-            "local_detect_ts_utc": fetch_end_utc.isoformat(),
-            "source_fetch_start_utc": fetch_start_utc.isoformat(),
-            "source_fetch_end_utc": fetch_end_utc.isoformat(),
-            "source_fetch_latency_sec": round((fetch_end_utc - fetch_start_utc).total_seconds(), 3),
-            "city": cfg.city,
-            "target_date": local_date.isoformat(),
-            "unit": cfg.unit,
-            "settlement_source_class": cfg.settlement_source_class,
-            "settlement_source": cfg.settlement_source,
-            "live_observation_source": cfg.live_observation_source,
-            "mapping_rule": cfg.mapping_rule,
-            "registry_class": cfg.registry_class,
-            "source_age_sec": detected_after_report_sec,
-            "detected_after_report_sec": detected_after_report_sec,
-        }
+    return snapshot_observation_source(
+        cfg,
+        source_name,
+        now_utc,
+        settings=FetchSettings(
+            timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+            proxy_candidates=tuple(WEATHER_PROXY_CANDIDATES),
+            user_agent="pm-agent-weather-latency-research",
+        ),
     )
-    row["payload_hash"] = stable_hash(
-        {
-            "source_report_ts_utc": row.get("source_report_ts_utc"),
-            "temp_c": row.get("temp_c"),
-            "raw_metar": row.get("raw_metar"),
-            "raw_payload_hash": row.get("raw_payload_hash"),
-        }
-    )
-    return row
 
 
 def in_update_window(now_utc: datetime, *, window_min: float) -> bool:

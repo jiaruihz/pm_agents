@@ -9,6 +9,16 @@ from weather_data_feed.observation_sources.aviationweather import (
     parse_aviationweather_records,
     parse_awc_cache_csv_records,
 )
+from weather_data_feed.observation_sources.fetchers import (
+    FetchSettings,
+    ObservationFetchError,
+    fetch_observation_source,
+    infer_cadence_min,
+    snapshot_observation_source,
+    source_station_id,
+    stable_hash,
+    synoptic_obs_lists,
+)
 from weather_data_feed.observation_sources.iem import (
     IEM_ASOS_API,
     build_iem_asos_params,
@@ -35,13 +45,17 @@ __all__ = [
     "ObservationSourceError",
     "ObservationSourceRequest",
     "ObservationSourceResult",
+    "FetchSettings",
     "IEM_ASOS_API",
+    "ObservationFetchError",
     "SOURCE_ALIASES",
     "SourceRouter",
     "build_iem_asos_params",
     "build_iem_local_day_params",
     "expand_source_names",
+    "fetch_observation_source",
     "iem_request_dates",
+    "infer_cadence_min",
     "normalize_source_name",
     "parse_aviationweather_records",
     "parse_awc_cache_csv_records",
@@ -50,4 +64,8 @@ __all__ = [
     "parse_metar_report_time",
     "parse_metar_temp_c",
     "parse_tgftp_header_time",
+    "snapshot_observation_source",
+    "source_station_id",
+    "stable_hash",
+    "synoptic_obs_lists",
 ]

@@ -40,6 +40,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `observation_clock.py` | METAR cadence、obs age、pre-update blackout guard |
 | `observation_sources/` | 多源官方观测层架子：source alias、METAR parser、AviationWeather/AWC cache parser、adapter router 协议 |
 | `observation_sources/iem.py` | IEM ASOS 参数构造、本地日 CSV 解析、温度观测抽取 |
+| `observation_sources/fetchers.py` | 数据层 fetcher：AviationWeather METAR、AWC cache、IEM ASOS、NOAA TGFTP、weather.gov latest、Synoptic、CheckWX |
 | `snapshot_protocol.py` | 标准 snapshot 字段和 legacy alias normalization |
 | `models.py` | SourceProfile、ObservationRecord、RunningMaxState、MarketSnapshotRecord 等共享 dataclass |
 
@@ -110,13 +111,18 @@ snapshot_ts_utc
 - 本机镜像同步入口 `scripts/ops/sync_weather_remote.sh` 已支持 `--market-source=weather-data-feed`，可从
   `~/projects/weather_data_feed_service_runtime` 同步 snapshot / orderbook / cache 到原 canonical mirror：
   `runtime/weather_edge_v1/market_data/`。pm_agent 的 signal builder 仍消费这个本地 mirror，不迁入数据服务。
+- 多源 METAR fetcher 已从 timing monitor 迁入 `weather_data_feed/observation_sources/fetchers.py`。当前 timing monitor
+  的实际 source fetch 路径已委托给数据模块；orderbook timing、价格反应和策略判断仍留在原脚本。
+- 新增 `scripts/ops/weather_observation_source_cadence_audit.py`，用于持续记录 city/source 的 report time、first-seen time、
+  source age、fetch latency 和 estimated cadence。单次 cycle 可看当前 source age；要回答“10:00 的报文 10:xx 才拿到”
+  必须让 `loop` 跑过多个观测更新周期。
 
 待推进:
 
 - Phase 3：连续周期跑 snapshot health + daily parity；通过后把分析/看板同步默认 source 从 `weather-predict` 切到
   `weather-data-feed`。
 - `paper_trades` / `research` 这类策略或研究产物不属于数据服务核心输出；迁移前继续由旧路径或 pm_agent 事实表负责。
-- 从抢单 bot 抽出真正的 `official_observation_feed` fetcher：IEM、NOAA tgftp、HKO、weather.gov/Synoptic、LDM 的拉取、缓存、source latency 和 failover。
+- 继续抽 source-specific 的生产级缓存/限速/failover：IEM 当前容易 429，不适合作为高频主源；AWC cache 已支持 gzip 解压但只提供 cache 当前截面；LDM 仍是 parse-file/monitor 层，daemon 管理不进数据模块。
 - 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
 - 在 N100 上为数据层增加独立 health/status 文件，再让策略 loop 只消费健康的数据产物。
 

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import gzip
 from zoneinfo import ZoneInfo
 
 from weather_data_feed.models import ObservationRecord
 from weather_data_feed.observation_sources import (
+    FetchSettings,
     ObservationSourceRequest,
     ObservationSourceResult,
     SourceRouter,
     build_iem_local_day_params,
     expand_source_names,
+    infer_cadence_min,
     normalize_source_name,
     parse_aviationweather_records,
     parse_awc_cache_csv_records,
@@ -17,7 +21,10 @@ from weather_data_feed.observation_sources import (
     parse_metar_report_time,
     parse_metar_temp_c,
     parse_tgftp_header_time,
+    snapshot_observation_source,
 )
+from weather_data_feed.observation_sources import fetchers
+from weather_data_feed.source_policy import load_city_configs
 
 
 def test_observation_source_aliases_match_fast_bot_names():
@@ -138,3 +145,107 @@ def test_source_router_normalizes_adapter_keys():
 
     assert result.status == "ok"
     assert result.records[0].source_key == "aviationweather_metar"
+
+
+def test_infer_cadence_min_from_observation_records():
+    records = (
+        ObservationRecord(
+            source_key="aviationweather_metar",
+            city="Shanghai",
+            target_date="2026-06-18",
+            station_or_feed="ZSPD",
+            obs_ts_utc="2026-06-17T10:00:00+00:00",
+            ingest_ts_utc="2026-06-17T10:01:00+00:00",
+            temp_c=25.0,
+        ),
+        ObservationRecord(
+            source_key="aviationweather_metar",
+            city="Shanghai",
+            target_date="2026-06-18",
+            station_or_feed="ZSPD",
+            obs_ts_utc="2026-06-17T10:30:00+00:00",
+            ingest_ts_utc="2026-06-17T10:31:00+00:00",
+            temp_c=26.0,
+        ),
+        ObservationRecord(
+            source_key="aviationweather_metar",
+            city="Shanghai",
+            target_date="2026-06-18",
+            station_or_feed="ZSPD",
+            obs_ts_utc="2026-06-17T11:00:00+00:00",
+            ingest_ts_utc="2026-06-17T11:01:00+00:00",
+            temp_c=27.0,
+        ),
+    )
+
+    assert infer_cadence_min(list(records)) == 30.0
+
+
+def test_snapshot_observation_source_uses_data_feed_fetcher(monkeypatch):
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+
+    def fake_fetch(request, settings=None):
+        assert isinstance(settings, FetchSettings)
+        return ObservationSourceResult(
+            source_key=request.source_key,
+            status="ok",
+            records=(
+                ObservationRecord(
+                    source_key=request.source_key,
+                    city=request.city,
+                    target_date=request.target_date,
+                    station_or_feed=request.station_or_feed,
+                    obs_ts_utc="2026-06-17T10:30:00+00:00",
+                    ingest_ts_utc="2026-06-17T10:31:00+00:00",
+                    temp_c=26.0,
+                    raw_text="ZSPD 171030Z 26/23",
+                ),
+            ),
+            fetched_at_utc="2026-06-17T10:31:00+00:00",
+            latency_ms=50.0,
+            metadata={"raw_payload_hash": "abc", "source_fetch_start_utc": "2026-06-17T10:30:59+00:00"},
+        )
+
+    monkeypatch.setattr(fetchers, "fetch_observation_source", fake_fetch)
+
+    row = snapshot_observation_source(
+        cfg,
+        "aviationweather_metar",
+        datetime(2026, 6, 17, 10, 31, tzinfo=timezone.utc),
+        settings=FetchSettings(),
+    )
+
+    assert row["source"] == "aviationweather_metar"
+    assert row["temp_c"] == 26.0
+    assert row["record_count"] == 1
+    assert row["source_report_ts_utc"] == "2026-06-17T10:30:00+00:00"
+
+
+def test_awc_cache_fetcher_decompresses_gzip_payload(monkeypatch):
+    fetchers._AWC_CACHE_TEXT = None
+    payload = gzip.compress(
+        "\n".join(
+            [
+                "raw_text,station_id,observation_time,temp_c",
+                '"METAR ZSPD 171030Z 26/23",ZSPD,2026-06-17T10:30:00.000Z,26',
+            ]
+        ).encode()
+    )
+
+    class Response:
+        content = payload
+
+    monkeypatch.setattr(fetchers, "_http_get", lambda *args, **kwargs: Response())
+
+    result = fetchers.fetch_aviationweather_cache_csv(
+        ObservationSourceRequest(
+            city="Shanghai",
+            station_or_feed="ZSPD",
+            target_date="2026-06-17",
+            timezone_name="Asia/Shanghai",
+            source_key="aviationweather_cache_csv",
+        )
+    )
+
+    assert result.status == "ok"
+    assert result.records[0].temp_c == 26.0
