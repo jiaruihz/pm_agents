@@ -7,6 +7,12 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from scripts.ops import weather_theta_current_yes_tiny_live as live
+from src.strategies.weather_edge_v1.tools.current_yes_model import (
+    DEFAULT_FADE_GATE,
+    fade_live_like_mask,
+    fade_training_population_mask,
+    score_artifact,
+)
 
 
 def _record(city: str, bracket: str, ask: float = 0.78, event_date: str = "2026-06-16") -> dict:
@@ -56,6 +62,10 @@ def _record(city: str, bracket: str, ask: float = 0.78, event_date: str = "2026-
             },
         ),
     }
+
+
+def _fail_fetch_obs(*_args, **_kwargs):
+    raise AssertionError("build_current_rows should use observation cache/snapshot METAR, not direct fetch_obs")
 
 
 def test_parse_label_keeps_positive_fahrenheit_ranges():
@@ -288,7 +298,7 @@ def test_build_current_rows_prefers_city_local_date_when_snapshot_has_multiple_m
             "d_relh_3h": 0.0,
         }
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": now.isoformat()},
         [
@@ -502,6 +512,34 @@ def test_observation_cache_uses_cadence_aware_staleness_limit():
 
     assert obs["status"] == "ok"
     assert obs["effective_max_obs_age_min"] == 75.0
+    assert obs["obs_age_limit_relaxed"] is True
+
+
+def test_snapshot_metar_obs_uses_record_cadence_aware_staleness_limit():
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+    now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
+
+    obs = live.snapshot_metar_obs(
+        [
+            {
+                "metar_latest_ts_utc": "2026-06-18T19:55:00+00:00",
+                "metar_latest_temp_f": 70.0,
+                "metar_current_max_f": 71.0,
+                "metar_obs_count_today": 10,
+                "estimated_cadence_min": 30.0,
+            }
+        ],
+        station,
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+    )
+
+    assert obs["status"] == "ok"
+    assert obs["cadence_min"] == 30.0
+    assert obs["cadence_source"] == "estimated_cadence_min"
+    assert obs["effective_max_obs_age_min"] == 45.0
+    assert obs["obs_age_limit_relaxed"] is True
 
 
 def test_observation_cache_infers_hourly_cadence_for_metar_like_sources():
@@ -540,6 +578,7 @@ def test_observation_cache_infers_hourly_cadence_for_metar_like_sources():
     assert obs["status"] == "ok"
     assert obs["cadence_min"] == 60.0
     assert obs["effective_max_obs_age_min"] == 75.0
+    assert obs["obs_age_limit_relaxed"] is True
 
 
 def test_build_current_rows_allows_explicit_market_local_date_mapping(monkeypatch):
@@ -574,7 +613,7 @@ def test_build_current_rows_allows_explicit_market_local_date_mapping(monkeypatc
     mapped_current = {**_record("LA", "70-71", event_date="2026-06-19"), "market_local_date": "2026-06-18"}
     mapped_d1 = {**_record("LA", "72-73", event_date="2026-06-19"), "market_local_date": "2026-06-18"}
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": now.isoformat()},
         [mapped_current, mapped_d1],
@@ -634,7 +673,7 @@ def test_build_current_rows_falls_back_to_market_prices_when_orderbook_missing(m
         "market_yes_price": 0.18,
     }
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": now.isoformat()},
         [current, d1],
@@ -681,7 +720,7 @@ def test_helsinki_uses_iana_dst_without_live_hour_gate(monkeypatch):
             "d_relh_3h": 0.0,
         }
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": snapshot_ts.isoformat()},
         [_record("Helsinki", "20"), _record("Helsinki", "21")],
@@ -727,7 +766,7 @@ def test_other_dst_cities_use_city_timezone_mapping_without_hour_gate(monkeypatc
             "d_relh_3h": 0.0,
         }
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": snapshot_ts.isoformat()},
         [_record("NYC", "80"), _record("NYC", "81")],
@@ -856,7 +895,7 @@ def test_build_current_rows_allows_one_c_gap_for_current_yes(monkeypatch):
             "d_relh_3h": 0.0,
         }
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": now.isoformat()},
         [_record("Tokyo", "20"), _record("Tokyo", "21")],
@@ -923,7 +962,7 @@ def test_build_current_rows_fetches_peak_clock_when_snapshot_lacks_native_fields
             "forecast_peak_fetch_status": "fetched",
         }
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     monkeypatch.setattr(live, "fetch_live_forecast_peak_details", fake_forecast)
     rows, audits = live.build_current_rows(
         {"ts_utc": now.isoformat()},
@@ -947,8 +986,6 @@ def test_build_current_rows_fetches_peak_clock_when_snapshot_lacks_native_fields
 def test_first_rule_treats_forecast_peak_as_model_context_not_hard_gate():
     args = argparse.Namespace(
         min_available_notional=5.0,
-        allow_missing_forecast_peak=False,
-        min_forecast_peak_delta_hours=-1.999,
     )
     base = {
         "decline_c": 1.0,
@@ -969,15 +1006,12 @@ def test_first_rule_treats_forecast_peak_as_model_context_not_hard_gate():
 def test_first_rule_allows_peak_forming_current_high_when_enabled():
     args = argparse.Namespace(
         min_available_notional=5.0,
-        allow_missing_forecast_peak=False,
-        min_forecast_peak_delta_hours=-1.999,
         enable_peak_forming_live=True,
         peak_forming_max_decline_c=0.25,
         peak_forming_min_ask=0.50,
         peak_forming_max_ask=0.97,
         peak_forming_min_p=0.60,
         peak_forming_min_edge=0.02,
-        peak_forming_min_forecast_delta_hours=-1.0,
         entry_profile_mode="both",
     )
     base = {
@@ -988,6 +1022,7 @@ def test_first_rule_allows_peak_forming_current_high_when_enabled():
         "available_notional_at_ask": 10.0,
         "token_id": "yes-token",
         "forecast_peak_delta_hours_local": 0.0,
+        "minutes_since_running_max": 15.0,
     }
 
     assert live.first_rule_reject_reason({**base}, argparse.Namespace(**{**vars(args), "enable_peak_forming_live": False})) == "snapshot_rule_decline_lt_0_5"
@@ -999,23 +1034,15 @@ def test_first_rule_allows_peak_forming_current_high_when_enabled():
 def test_peak_forming_metar_veto_only_blocks_too_fresh_running_max():
     args = argparse.Namespace(
         min_available_notional=5.0,
-        allow_missing_forecast_peak=False,
-        min_forecast_peak_delta_hours=-1.999,
         enable_peak_forming_live=True,
         peak_forming_max_decline_c=0.25,
         peak_forming_min_ask=0.50,
         peak_forming_max_ask=0.97,
         peak_forming_min_p=0.60,
         peak_forming_min_edge=0.02,
-        peak_forming_min_forecast_delta_hours=-1.0,
         entry_profile_mode="both",
         disable_peak_forming_metar_veto=False,
         peak_forming_min_minutes_since_running_max=10.0,
-        peak_forming_forecast_bust_margin_c=0.1,
-        peak_forming_clear_sky_max_code=1.0,
-        peak_forming_prior_cloud_min_code=3.0,
-        peak_forming_cloud_clearing_min_drop=2.0,
-        peak_forming_warming_trend_min_d_tmpf_3h=1.5,
     )
     row = {
         "unit": "C",
@@ -1035,6 +1062,7 @@ def test_peak_forming_metar_veto_only_blocks_too_fresh_running_max():
     }
 
     assert live.first_rule_reject_reason(row, args) == "snapshot_rule_peak_forming_fresh_running_max"
+    assert live.first_rule_reject_reason({**row, "minutes_since_running_max": live.np.nan}, args) == "snapshot_rule_peak_forming_missing_running_max_age"
     assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan}, args) == "snapshot_rule_peak_forming_fresh_running_max"
     assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0}, args) == "snapshot_rule_peak_forming_fresh_running_max"
     assert live.first_rule_reject_reason({**row, "sky_now": live.np.nan, "sky_1h": live.np.nan, "forecast_max_native": 28.0, "d_tmpf_3h": 0.0}, args) == "snapshot_rule_peak_forming_fresh_running_max"
@@ -1047,15 +1075,12 @@ def test_peak_forming_metar_veto_only_blocks_too_fresh_running_max():
 def test_entry_profile_mode_splits_fade_and_peak_instances():
     args = argparse.Namespace(
         min_available_notional=5.0,
-        allow_missing_forecast_peak=False,
-        min_forecast_peak_delta_hours=-1.999,
         enable_peak_forming_live=True,
         peak_forming_max_decline_c=0.25,
         peak_forming_min_ask=0.50,
         peak_forming_max_ask=0.97,
         peak_forming_min_p=0.60,
         peak_forming_min_edge=0.02,
-        peak_forming_min_forecast_delta_hours=-1.0,
         entry_profile_mode="both",
     )
     base = {
@@ -1065,6 +1090,7 @@ def test_entry_profile_mode_splits_fade_and_peak_instances():
         "available_notional_at_ask": 10.0,
         "token_id": "yes-token",
         "forecast_peak_delta_hours_local": 0.0,
+        "minutes_since_running_max": 15.0,
     }
     fade = {**base, "decline_c": 0.5}
     peak = {**base, "decline_c": 0.0}
@@ -1164,6 +1190,74 @@ def test_probability_branch_scores_shadow_fade_specialist_until_enabled(monkeypa
     assert scored["probability_branch"].tolist() == ["fade_confirmed_specialist_v1", "base_current_yes_model"]
 
 
+def test_current_yes_train_and_live_share_scorer():
+    from scripts.analysis.reheat_risk import train_theta_current_yes_fade_confirmed_model_v1 as train
+
+    assert live.score_rows is score_artifact
+    assert train.score_artifact is score_artifact
+
+
+def test_fade_gate_spec_drives_training_and_live_like_masks():
+    rows = live.pd.DataFrame(
+        [
+            {
+                "decline_c": DEFAULT_FADE_GATE.min_decline_c,
+                "has_d1_no": True,
+                "decision_hour_local": DEFAULT_FADE_GATE.min_local_hour,
+                "yes_current_ask": DEFAULT_FADE_GATE.min_ask,
+                "p_model": DEFAULT_FADE_GATE.min_ask + DEFAULT_FADE_GATE.min_edge + 0.01,
+            },
+            {
+                "decline_c": DEFAULT_FADE_GATE.min_decline_c - 0.01,
+                "has_d1_no": True,
+                "decision_hour_local": DEFAULT_FADE_GATE.min_local_hour,
+                "yes_current_ask": DEFAULT_FADE_GATE.min_ask,
+                "p_model": DEFAULT_FADE_GATE.min_ask + DEFAULT_FADE_GATE.min_edge + 0.01,
+            },
+            {
+                "decline_c": DEFAULT_FADE_GATE.min_decline_c,
+                "has_d1_no": False,
+                "decision_hour_local": DEFAULT_FADE_GATE.min_local_hour,
+                "yes_current_ask": DEFAULT_FADE_GATE.min_ask,
+                "p_model": DEFAULT_FADE_GATE.min_ask + DEFAULT_FADE_GATE.min_edge + 0.01,
+            },
+            {
+                "decline_c": DEFAULT_FADE_GATE.min_decline_c,
+                "has_d1_no": True,
+                "decision_hour_local": DEFAULT_FADE_GATE.max_local_hour + 1,
+                "yes_current_ask": DEFAULT_FADE_GATE.min_ask,
+                "p_model": DEFAULT_FADE_GATE.min_ask + DEFAULT_FADE_GATE.min_edge + 0.01,
+            },
+        ]
+    )
+
+    assert fade_training_population_mask(rows, DEFAULT_FADE_GATE).tolist() == [True, False, False, True]
+    assert fade_live_like_mask(rows, "p_model", DEFAULT_FADE_GATE).tolist() == [True, True, True, False]
+
+
+def test_fade_confirmed_args_override_default_gate():
+    args = argparse.Namespace(
+        entry_profile_mode="fade_confirmed",
+        fade_confirmed_min_decline_c=0.75,
+        fade_confirmed_min_ask=0.60,
+        fade_confirmed_min_p=0.65,
+        fade_confirmed_min_edge=0.08,
+    )
+    base = {
+        "decline_c": 0.74,
+        "yes_current_ask": 0.70,
+        "p_yes_win": 0.78,
+        "ev": 0.10,
+        "token_id": "yes-token",
+    }
+
+    assert live.first_rule_reject_reason(base, args) == "snapshot_rule_decline_lt_0_5"
+    assert live.first_rule_reject_reason({**base, "decline_c": 0.75, "yes_current_ask": 0.59}, args) == "snapshot_rule_yes_ask_lt_0_55"
+    assert live.first_rule_reject_reason({**base, "decline_c": 0.75, "p_yes_win": 0.64}, args) == "snapshot_rule_p_yes_lt_0_5"
+    assert live.first_rule_reject_reason({**base, "decline_c": 0.75, "ev": 0.07}, args) == "snapshot_rule_edge_lt_0_05"
+    assert live.classify_entry_profile({**base, "decline_c": 0.75}, args) == ("snapshot_rule_passed", "fade_confirmed")
+
+
 def test_observation_epoch_key_uses_running_max_metar_timestamp():
     row = {
         "city": "Shanghai",
@@ -1210,7 +1304,7 @@ def test_build_current_rows_can_optionally_veto_gap_above_threshold(monkeypatch)
             "d_relh_3h": 0.0,
         }
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     rows, audits = live.build_current_rows(
         {"ts_utc": now.isoformat()},
         [_record("Tokyo", "20"), _record("Tokyo", "21")],
@@ -1308,7 +1402,7 @@ def test_run_once_writes_forward_telemetry_for_planned_candidate(tmp_path, monke
             "d_relh_3h": 0.0,
         }
 
-    monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
     args = argparse.Namespace(
         snapshot=str(snapshot_path),
         now_utc="2026-06-16T04:10:00+00:00",

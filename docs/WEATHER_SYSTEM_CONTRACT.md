@@ -287,6 +287,7 @@ record_type, telemetry_version, telemetry_run_id, strategy_instance,
 decision_status, city, target_date, current_bracket, decision_local_time,
 decision_timezone, snapshot_ts_utc, snapshot_age_min,
 obs_source, obs_age_min, obs_cadence_min, minutes_to_next_obs,
+obs_age_limit_relaxed, cadence_source,
 last_obs_utc, running_max_obs_utc, minutes_since_running_max,
 decline_c, gap_running_to_d1_low_c,
 yes_current_ask, available_notional_at_ask, fresh_best_ask,
@@ -299,6 +300,12 @@ forecast_peak_source, forecast_values_hash, forecast_peak_delta_hours_local,
 source_profile_class, source_profile_primary_source,
 source_profile_station_or_feed, source_profile_live_eligible
 ```
+
+For `theta_current_yes_peak_forming_micro_tiny_live_v1`,
+`minutes_since_running_max` is a required live freshness input. Missing or
+non-finite values must reject the candidate with
+`snapshot_rule_peak_forming_missing_running_max_age`; they are not equivalent
+to passing the veto.
 
 ---
 

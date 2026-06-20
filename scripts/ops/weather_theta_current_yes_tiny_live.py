@@ -4,8 +4,7 @@
 This is an independent live branch for the frozen v9 rule:
 
   BUY_YES current running-max bracket
-  local hour 13-15, decline_c >= 0.5
-  yes_ask >= 0.55, p_yes_win >= 0.5, p_yes_win - yes_ask >= 0.05
+  fade-confirmed gate thresholds come from DEFAULT_FADE_GATE / CLI args
   fresh CLOB ask rechecked before execution, fresh_ask <= snapshot_ask + 0.02
   d1 NO sibling quote visible
   $3/order and $3/city-day cap
@@ -929,6 +928,15 @@ def effective_obs_age_limit(max_obs_age_min: float, cadence_min: float | None) -
     )
 
 
+def observation_cadence_from_record(record: dict[str, Any], default: float | None = None) -> tuple[float | None, str]:
+    for key in ("cadence_min", "estimated_cadence_min", "metar_cadence_min", "observation_cadence_min"):
+        raw = record.get(key)
+        value = to_float(raw, np.nan)
+        if math.isfinite(value) and value > 0:
+            return value, key
+    return default, "fallback_default" if default is not None else "missing"
+
+
 def snapshot_metar_obs(
     city_records: list[dict[str, Any]],
     station: Station,
@@ -954,19 +962,21 @@ def snapshot_metar_obs(
     if n_obs < ObservationClockConfig().min_obs_asof:
         return {"status": "insufficient_obs_asof", "source": "paper_snapshot_metar", "n_obs": n_obs, "timezone": station.timezone_name}
     age_min = (now - last_obs).total_seconds() / 60.0
-    cadence_min = 60.0
+    cadence_min, cadence_source = observation_cadence_from_record(record, default=60.0)
     effective_max_obs_age_min = effective_obs_age_limit(max_obs_age_min, cadence_min)
-    minutes_to_next = cadence_min - age_min
+    minutes_to_next = cadence_min - age_min if cadence_min is not None else np.nan
     common = {
         "source": "paper_snapshot_metar",
         "n_obs": n_obs,
         "age_min": round(age_min, 1),
         "max_obs_age_min": max_obs_age_min,
         "effective_max_obs_age_min": round(effective_max_obs_age_min, 1),
+        "obs_age_limit_relaxed": effective_max_obs_age_min > float(max_obs_age_min),
         "last_obs_utc": last_obs.isoformat(),
         "timezone": station.timezone_name,
-        "cadence_min": cadence_min,
-        "minutes_to_next_obs": round(minutes_to_next, 1),
+        "cadence_min": None if cadence_min is None else round(float(cadence_min), 1),
+        "cadence_source": cadence_source,
+        "minutes_to_next_obs": round(float(minutes_to_next), 1) if math.isfinite(float(minutes_to_next)) else np.nan,
     }
     if age_min > effective_max_obs_age_min:
         return {"status": "stale_obs", **common}
@@ -1044,6 +1054,7 @@ def observation_cache_obs(
         "age_min": round(age_min, 1),
         "max_obs_age_min": max_obs_age_min,
         "effective_max_obs_age_min": round(effective_max_obs_age_min, 1),
+        "obs_age_limit_relaxed": effective_max_obs_age_min > float(max_obs_age_min),
         "last_obs_utc": last_obs.isoformat(),
         "timezone": station.timezone_name,
         "cadence_min": None if cadence_value is None else round(cadence_value, 1),
@@ -1654,6 +1665,8 @@ def peak_forming_metar_veto_reason(row: dict[str, Any], args: argparse.Namespace
         np.nan,
     )
     min_minutes = float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0))
+    if not math.isfinite(minutes_since_running_max):
+        return "snapshot_rule_peak_forming_missing_running_max_age"
     if math.isfinite(minutes_since_running_max) and minutes_since_running_max < min_minutes:
         return "snapshot_rule_peak_forming_fresh_running_max"
 
@@ -1692,11 +1705,11 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
         return "snapshot_rule_peak_forming_p_lt_min", ""
     if edge < float(getattr(args, "peak_forming_min_edge", 0.02)):
         return "snapshot_rule_peak_forming_edge_lt_min", ""
+    if not entry_profile_enabled("peak_forming_micro", args):
+        return "snapshot_rule_peak_forming_disabled", ""
     metar_veto = peak_forming_metar_veto_reason(row, args)
     if metar_veto:
         return metar_veto, ""
-    if not entry_profile_enabled("peak_forming_micro", args):
-        return "snapshot_rule_peak_forming_disabled", ""
     return "snapshot_rule_passed", "peak_forming_micro"
 
 
@@ -1859,23 +1872,21 @@ def current_yes_forward_telemetry_row(
             "max_obs_age_min": float(args.max_obs_age_min),
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
-            "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
             "fade_confirmed_model_artifact": display_path(fade_confirmed_model_artifact_path(args)),
-            "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
+            "fade_confirmed_min_decline_c": fade_gate_spec_from_args(args).min_decline_c,
+            "fade_confirmed_min_ask": fade_gate_spec_from_args(args).min_ask,
+            "fade_confirmed_min_p": fade_gate_spec_from_args(args).min_p_yes,
+            "fade_confirmed_min_edge": fade_gate_spec_from_args(args).min_edge,
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
             "peak_forming_min_ask": float(getattr(args, "peak_forming_min_ask", 0.50)),
             "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
-            "peak_forming_min_forecast_delta_hours": float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
-            "peak_forming_forecast_bust_margin_c": float(getattr(args, "peak_forming_forecast_bust_margin_c", 0.1)),
-            "peak_forming_cloud_clearing_min_drop": float(getattr(args, "peak_forming_cloud_clearing_min_drop", 2.0)),
-            "peak_forming_warming_trend_min_d_tmpf_3h": float(getattr(args, "peak_forming_warming_trend_min_d_tmpf_3h", 1.5)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -1944,18 +1955,19 @@ def current_yes_audit_telemetry_row(
             "max_obs_age_min": float(args.max_obs_age_min),
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
-            "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
             "fade_confirmed_model_artifact": display_path(fade_confirmed_model_artifact_path(args)),
-            "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
+            "fade_confirmed_min_decline_c": fade_gate_spec_from_args(args).min_decline_c,
+            "fade_confirmed_min_ask": fade_gate_spec_from_args(args).min_ask,
+            "fade_confirmed_min_p": fade_gate_spec_from_args(args).min_p_yes,
+            "fade_confirmed_min_edge": fade_gate_spec_from_args(args).min_edge,
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
             "peak_forming_min_ask": float(getattr(args, "peak_forming_min_ask", 0.50)),
             "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
-            "peak_forming_min_forecast_delta_hours": float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -2288,24 +2300,22 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_obs_age_min": args.max_obs_age_min,
             "pre_metar_update_blackout_min": args.pre_metar_update_blackout_min,
             "min_gap_to_next_bracket_c": args.min_gap_to_next_bracket_c,
-            "allow_missing_forecast_peak": bool(getattr(args, "allow_missing_forecast_peak", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
             "fade_confirmed_model_artifact": display_path(fade_model_path),
             "fade_confirmed_model_loaded": fade_model_artifact is not None,
-            "min_forecast_peak_delta_hours": float(getattr(args, "min_forecast_peak_delta_hours", -1.999)),
+            "fade_confirmed_min_decline_c": fade_gate_spec_from_args(args).min_decline_c,
+            "fade_confirmed_min_ask": fade_gate_spec_from_args(args).min_ask,
+            "fade_confirmed_min_p": fade_gate_spec_from_args(args).min_p_yes,
+            "fade_confirmed_min_edge": fade_gate_spec_from_args(args).min_edge,
             "enable_peak_forming_live": bool(getattr(args, "enable_peak_forming_live", False)),
             "peak_forming_max_decline_c": float(getattr(args, "peak_forming_max_decline_c", 0.25)),
             "peak_forming_min_ask": float(getattr(args, "peak_forming_min_ask", 0.50)),
             "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
-            "peak_forming_min_forecast_delta_hours": float(getattr(args, "peak_forming_min_forecast_delta_hours", -1.0)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
-            "peak_forming_forecast_bust_margin_c": float(getattr(args, "peak_forming_forecast_bust_margin_c", 0.1)),
-            "peak_forming_cloud_clearing_min_drop": float(getattr(args, "peak_forming_cloud_clearing_min_drop", 2.0)),
-            "peak_forming_warming_trend_min_d_tmpf_3h": float(getattr(args, "peak_forming_warming_trend_min_d_tmpf_3h", 1.5)),
             "min_local_hour": args.min_local_hour,
             "max_local_hour": args.max_local_hour,
             "max_orders": args.max_orders,
@@ -2407,25 +2417,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-obs-age-min", type=float, default=20.0)
     parser.add_argument("--pre-metar-update-blackout-min", type=float, default=6.0)
     parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=0.0)
-    parser.add_argument("--allow-missing-forecast-peak", action="store_true")
     parser.add_argument("--entry-profile-mode", choices=["both", "fade_confirmed", "peak_forming_micro"], default="both")
     parser.add_argument("--fade-confirmed-model-mode", choices=["base", "specialist"], default="base")
     parser.add_argument("--fade-confirmed-model-artifact", default=str(FADE_CONFIRMED_MODEL_ARTIFACT.relative_to(ROOT)))
-    parser.add_argument("--min-forecast-peak-delta-hours", type=float, default=-1.999)
+    parser.add_argument("--fade-confirmed-min-decline-c", type=float, default=DEFAULT_FADE_GATE.min_decline_c)
+    parser.add_argument("--fade-confirmed-min-ask", type=float, default=DEFAULT_FADE_GATE.min_ask)
+    parser.add_argument("--fade-confirmed-min-p", type=float, default=DEFAULT_FADE_GATE.min_p_yes)
+    parser.add_argument("--fade-confirmed-min-edge", type=float, default=DEFAULT_FADE_GATE.min_edge)
     parser.add_argument("--enable-peak-forming-live", action="store_true")
     parser.add_argument("--peak-forming-max-decline-c", type=float, default=0.25)
     parser.add_argument("--peak-forming-min-ask", type=float, default=0.50)
     parser.add_argument("--peak-forming-max-ask", type=float, default=0.97)
     parser.add_argument("--peak-forming-min-p", type=float, default=0.60)
     parser.add_argument("--peak-forming-min-edge", type=float, default=0.02)
-    parser.add_argument("--peak-forming-min-forecast-delta-hours", type=float, default=-1.0)
     parser.add_argument("--disable-peak-forming-metar-veto", action="store_true")
     parser.add_argument("--peak-forming-min-minutes-since-running-max", type=float, default=10.0)
-    parser.add_argument("--peak-forming-forecast-bust-margin-c", type=float, default=0.1)
-    parser.add_argument("--peak-forming-clear-sky-max-code", type=float, default=1.0)
-    parser.add_argument("--peak-forming-prior-cloud-min-code", type=float, default=3.0)
-    parser.add_argument("--peak-forming-cloud-clearing-min-drop", type=float, default=2.0)
-    parser.add_argument("--peak-forming-warming-trend-min-d-tmpf-3h", type=float, default=1.5)
     parser.add_argument("--min-local-hour", type=int, default=13)
     parser.add_argument("--max-local-hour", type=int, default=15)
     parser.add_argument("--interval-seconds", type=float, default=900.0)

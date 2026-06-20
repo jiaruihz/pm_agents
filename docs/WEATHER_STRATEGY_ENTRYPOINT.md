@@ -364,6 +364,16 @@ telemetry files, live order files, and `$5` city-day caps:
 model `p>=0.60`, snapshot edge is at least `0.02`, and the current running-max
 print is not too fresh.
 
+2026-06-21 safety update: `peak_forming_micro` treats missing
+`minutes_since_running_max` as a hard reject
+(`snapshot_rule_peak_forming_missing_running_max_age`) instead of silently
+passing the freshness veto. The live hot path intentionally reads the
+weather-data-feed observation cache first and only uses paper snapshot METAR
+fields as compatibility fallback; `fetch_obs` / direct AviationWeather-IEM
+fetching is a diagnostic helper, not the fallback used by `run_once`.
+Snapshot fallback now records `cadence_source` and `obs_age_limit_relaxed` so
+cadence-aware observation-age widening is visible in telemetry/audits.
+
 2026-06-19 filter simplification: forecast peak clock, forecast max gap,
 cloud-clearing state, METAR warming trend, and local hour are model/telemetry
 context, not live hard filters. The live runner keeps only critical vetoes:

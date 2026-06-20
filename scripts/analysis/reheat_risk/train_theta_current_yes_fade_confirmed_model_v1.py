@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Train a fade-confirmed specialist probability artifact for current YES.
 
-This artifact is intentionally compatible with
-`scripts/ops/weather_theta_current_yes_tiny_live.py::score_rows`.
+This artifact is scored with the same shared helper used by live.
 """
 
 from __future__ import annotations
 
 import json
 import math
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,6 +24,16 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.weather_edge_v1.tools.current_yes_model import (  # noqa: E402
+    DEFAULT_FADE_GATE,
+    fade_live_like_mask,
+    fade_training_population_mask,
+    score_artifact,
+)
+
 FEATURE_ROWS = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_full_replay_v8/feature_rows.csv"
 BASE_MODEL = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_live_gate_v9/live_model.json"
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1"
@@ -118,7 +128,7 @@ def artifact_from_model(model: Pipeline, train: pd.DataFrame) -> dict[str, Any]:
         "label": "current_yes_wins",
         "source_feature_rows": str(FEATURE_ROWS.relative_to(ROOT)),
         "trained_at_utc": now_utc(),
-        "training_filter": "period == train AND decline_c >= 0.5 AND has_d1_no",
+        "training_filter": DEFAULT_FADE_GATE.training_filter_label,
         "numeric_features": NUMERIC_FEATURES,
         "categorical_features": CAT_FEATURES,
         "numeric_medians": num_pipe.named_steps["imputer"].statistics_.tolist(),
@@ -138,31 +148,6 @@ def artifact_from_model(model: Pipeline, train: pd.DataFrame) -> dict[str, Any]:
             "random_state": SEED,
         },
     }
-
-
-def score_artifact(rows: pd.DataFrame, artifact: dict[str, Any]) -> np.ndarray:
-    numeric_features = list(artifact["numeric_features"])
-    categorical_features = list(artifact["categorical_features"])
-    numeric = rows[numeric_features].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
-    medians = np.asarray(artifact["numeric_medians"], dtype=float)
-    means = np.asarray(artifact["numeric_means"], dtype=float)
-    scales = np.asarray(artifact["numeric_scales"], dtype=float)
-    numeric = np.where(np.isfinite(numeric), numeric, medians)
-    numeric = (numeric - means) / scales
-    cat_parts = []
-    for idx, feature in enumerate(categorical_features):
-        values = rows[feature].astype(str).to_numpy()
-        cats = [str(x) for x in artifact["categories"][idx]]
-        mat = np.zeros((len(rows), len(cats)), dtype=float)
-        lookup = {cat: i for i, cat in enumerate(cats)}
-        for row_idx, value in enumerate(values):
-            col_idx = lookup.get(str(value))
-            if col_idx is not None:
-                mat[row_idx, col_idx] = 1.0
-        cat_parts.append(mat)
-    x = np.hstack([numeric] + cat_parts)
-    logits = x @ np.asarray(artifact["coef"], dtype=float) + float(artifact["intercept"])
-    return 1.0 / (1.0 + np.exp(-logits))
 
 
 def metric_row(name: str, frame: pd.DataFrame, p_col: str) -> dict[str, Any]:
@@ -217,7 +202,7 @@ def write_markdown(payload: dict[str, Any]) -> None:
         "",
         f"- rows: {payload['coverage']['train_rows']} train / {payload['coverage']['holdout_rows']} holdout",
         f"- active dates: {payload['coverage']['train_dates']} train / {payload['coverage']['holdout_dates']} holdout",
-        "- filter: `decline_c >= 0.5 AND has_d1_no`；训练只用 `period=train`。",
+        f"- filter: {DEFAULT_FADE_GATE.markdown_filter_label}",
         "",
         "## Live-Like Holdout Comparison",
         "",
@@ -246,7 +231,7 @@ def write_markdown(payload: dict[str, Any]) -> None:
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     df = load_rows()
-    fade = df[df["decline_c"].ge(0.5) & df["has_d1_no"]].copy()
+    fade = df[fade_training_population_mask(df, DEFAULT_FADE_GATE)].copy()
     train = fade[fade["period"].eq("train")].copy()
     holdout = fade[fade["period"].eq("holdout")].copy()
     model = pipeline()
@@ -267,12 +252,7 @@ def main() -> int:
     metrics.to_csv(OUT_METRICS, index=False)
 
     def live_like(p_col: str) -> pd.DataFrame:
-        out = scored[
-            scored["decision_hour_local"].between(13, 15)
-            & scored["yes_current_ask"].ge(0.55)
-            & scored[p_col].ge(0.5)
-            & ((scored[p_col] - scored["yes_current_ask"]) >= 0.05)
-        ].copy()
+        out = scored[fade_live_like_mask(scored, p_col, DEFAULT_FADE_GATE)].copy()
         return out.sort_values(["target_date", "city", "snapshot_ts_utc"])
 
     base_live = live_like("p_base")
