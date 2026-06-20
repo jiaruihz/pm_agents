@@ -54,20 +54,24 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument("runner_args", nargs=argparse.REMAINDER)
     daily = subparsers.add_parser("daily", help="Run the daily cache pipeline")
     daily.add_argument("runner_args", nargs=argparse.REMAINDER)
+    observations = subparsers.add_parser("observations", help="Build the fast observation cache")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args, unknown_args = parser.parse_known_args(argv)
     _set_default_env(args.output_root, args.cache_root)
-    runner_args = list(args.runner_args)
+    runner_args = list(getattr(args, "runner_args", [])) + list(unknown_args)
     if runner_args and runner_args[0] == "--":
         runner_args = runner_args[1:]
     if args.command == "snapshot":
         return _run_legacy("paper_snapshot", runner_args)
     if args.command == "daily":
         return _run_legacy("daily_pipeline", runner_args)
+    if args.command == "observations":
+        from weather_data_feed_service.observations import main as observations_main
+
+        return observations_main(runner_args)
     parser.error(f"unknown command: {args.command}")
     return 2
-

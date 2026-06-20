@@ -37,6 +37,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `source_registry.py` | 读取 source profile，兼容 settlement-source registry 格式 |
 | `source_policy.py` | 从 profile 生成 live-capable city configs |
 | `market_brackets.py` | bracket label 解析与 contains 判断 |
+| `observation_cache.py` | fast observation cache 协议、latest pointer 读写和 `(city,target_date)` 索引 |
 | `observation_clock.py` | METAR cadence、obs age、pre-update blackout guard |
 | `observation_sources/` | 多源官方观测层架子：source alias、METAR parser、AviationWeather/AWC cache parser、adapter router 协议 |
 | `observation_sources/iem.py` | IEM ASOS 参数构造、本地日 CSV 解析、温度观测抽取 |
@@ -116,6 +117,10 @@ snapshot_ts_utc
 - 新增 `scripts/ops/weather_observation_source_cadence_audit.py`，用于持续记录 city/source 的 report time、first-seen time、
   source age、fetch latency 和 estimated cadence。单次 cycle 可看当前 source age；要回答“10:00 的报文 10:xx 才拿到”
   必须让 `loop` 跑过多个观测更新周期。
+- 新增 `weather_data_feed_service observations` 和 `weather-data-feed-observations.timer`，用于生产 5 分钟级
+  `weather_data_feed_observation_cache_v1` latest cache：
+  `~/projects/weather_data_feed_service_runtime/output/observations/latest.json`。current-YES 优先消费该 cache；
+  full paper snapshot 里的 `metar_latest_*` 只作为 cache 文件不存在时的兼容回退。
 
 待推进:
 
@@ -124,7 +129,7 @@ snapshot_ts_utc
 - `paper_trades` / `research` 这类策略或研究产物不属于数据服务核心输出；迁移前继续由旧路径或 pm_agent 事实表负责。
 - 继续抽 source-specific 的生产级缓存/限速/failover：IEM 当前容易 429，不适合作为高频主源；AWC cache 已支持 gzip 解压但只提供 cache 当前截面；LDM 仍是 parse-file/monitor 层，daemon 管理不进数据模块。
 - 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
-- 在 N100 上为数据层增加独立 health/status 文件，再让策略 loop 只消费健康的数据产物。
+- 在 N100 上为 fast observation cache 增加独立 health/status 文件；策略 loop 已优先消费标准 cache，后续再把健康门槛显式化。
 
 ## 生产数据验证计划
 

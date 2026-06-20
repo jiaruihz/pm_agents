@@ -1,0 +1,16 @@
+[Unit]
+Description=Weather data feed fast observation cache
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/projects/weather_data_feed_service
+EnvironmentFile=-%h/projects/weather_data_feed_service/.env
+Environment=WEATHER_DATA_FEED_OUTPUT_ROOT=%h/projects/weather_data_feed_service_runtime/output
+Environment=WEATHER_DATA_FEED_CACHE_ROOT=%h/projects/weather_data_feed_service_runtime/cache
+Environment=WEATHER_DATA_FEED_ROOT=%h/projects/weather_data_feed_service
+ExecStartPre=/usr/bin/mkdir -p %h/projects/weather_data_feed_service_runtime/output/logs %h/projects/weather_data_feed_service_runtime/output/observations
+ExecStart=%h/projects/weather_data_feed_service/.venv/bin/python -u -m weather_data_feed_service observations --output %h/projects/weather_data_feed_service_runtime/output/observations/latest.json
+StandardOutput=append:%h/projects/weather_data_feed_service_runtime/output/logs/observations.log
+StandardError=append:%h/projects/weather_data_feed_service_runtime/output/logs/observations.err.log

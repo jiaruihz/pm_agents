@@ -231,6 +231,34 @@ def test_build_current_rows_reports_missing_local_date_market_when_snapshot_roll
     assert audits[0]["nearest_target_date_delta_days"] == -1
 
 
+def test_load_stations_supplements_live_source_profiles_without_watchlist_city():
+    stations = live.load_stations()
+
+    assert stations["Chicago"].icao == "KORD"
+    assert stations["Chicago"].timezone_name == "America/Chicago"
+    assert stations["PanamaCity"].icao == "MPMG"
+    assert "MexicoCity" not in stations
+
+
+def test_build_current_rows_reports_station_map_missing_for_watchlist_city():
+    now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
+
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [_record("MexicoCity", "24-25", event_date="2026-06-18")],
+        {},
+        now,
+        source_profiles=live.load_source_profiles(),
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert rows.empty
+    assert audits[0]["status"] == "station_map_missing"
+    assert audits[0]["reason"] == "source_profile_not_live_eligible"
+
+
 def test_build_current_rows_prefers_city_local_date_when_snapshot_has_multiple_market_dates(monkeypatch):
     now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
     station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
@@ -278,6 +306,58 @@ def test_build_current_rows_prefers_city_local_date_when_snapshot_has_multiple_m
 
     assert audits == []
     assert len(rows) == 1
+
+
+def test_build_current_rows_prefers_fast_observation_cache(monkeypatch):
+    now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+    observation_cache = {
+        "schema_version": "weather_data_feed_observation_cache_v1",
+        "generated_at_utc": "2026-06-18T20:29:00+00:00",
+        "records": [
+            {
+                "city": "LA",
+                "target_date": "2026-06-18",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "KLAX",
+                "timezone_name": "America/Los_Angeles",
+                "last_obs_utc": "2026-06-18T20:20:00+00:00",
+                "running_max_obs_utc": "2026-06-18T20:00:00+00:00",
+                "n_obs": 10,
+                "cadence_min": 30.0,
+                "current_temp_c": 20.0,
+                "running_max_c": 21.1,
+                "decline_c": 1.1,
+                "tmpf_now": 68.0,
+            }
+        ],
+    }
+
+    def fail_snapshot_metar(*_args, **_kwargs):
+        raise AssertionError("snapshot METAR fallback should not be used when fast cache has the city/date")
+
+    monkeypatch.setattr(live, "snapshot_metar_obs", fail_snapshot_metar)
+
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [
+            _record("LA", "68-69", event_date="2026-06-18"),
+            _record("LA", "70-71", event_date="2026-06-18"),
+            _record("LA", "72-73", event_date="2026-06-18"),
+        ],
+        {"LA": station},
+        now,
+        observation_cache=observation_cache,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert audits == []
+    assert len(rows) == 1
+    assert rows.iloc[0]["obs"]["source"] == "aviationweather_metar"
+    assert rows.iloc[0]["running_value"] == 70
     assert rows.iloc[0]["target_date"] == "2026-06-18"
     assert rows.iloc[0]["current_bracket"] == "70-71"
 
@@ -1051,6 +1131,7 @@ def test_run_once_writes_forward_telemetry_for_planned_candidate(tmp_path, monke
     monkeypatch.setattr(live, "fetch_obs", fake_fetch_obs)
     args = argparse.Namespace(
         snapshot=str(snapshot_path),
+        now_utc="2026-06-16T04:10:00+00:00",
         max_order_notional=5.0,
         max_city_day_notional=10.0,
         min_available_notional=5.0,

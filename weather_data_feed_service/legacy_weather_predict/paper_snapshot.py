@@ -43,6 +43,7 @@ from weather_data_feed import (
     city_scan_dates as data_feed_city_scan_dates,
     city_timezone_name,
     local_settle_utc,
+    load_city_configs,
     parse_now_utc,
     unique_city_scan_dates as data_feed_unique_city_scan_dates,
 )
@@ -72,6 +73,38 @@ def city_scan_dates(now_utc, city, explicit_target_date=None):
 
 def unique_city_scan_dates(cities, now_utc, explicit_target_date=None):
     return data_feed_unique_city_scan_dates(cities.keys(), now_utc, explicit_target_date=explicit_target_date)
+
+
+def load_official_observation_configs():
+    """Official observation station map for snapshot METAR enrichment."""
+    return {cfg.city: cfg for cfg in load_city_configs(include_station_diff=True)}
+
+
+def resolve_observation_station(city, cfg, official_configs=None):
+    configured_icao = str(cfg.get("icao", "") or "").upper()
+    official_cfg = (official_configs or {}).get(city)
+    if official_cfg is None:
+        return {
+            "configured_icao": configured_icao,
+            "metar_icao": configured_icao,
+            "official_observation_station": configured_icao,
+            "settlement_source_class": "",
+            "live_observation_source": "",
+            "source_profile_registry_class": "legacy_city_pool",
+            "source_profile_alignment_days": None,
+            "source_profile_alignment_rate": None,
+        }
+    metar_icao = str(official_cfg.official_icao or configured_icao).upper()
+    return {
+        "configured_icao": configured_icao,
+        "metar_icao": metar_icao,
+        "official_observation_station": metar_icao,
+        "settlement_source_class": official_cfg.settlement_source_class,
+        "live_observation_source": official_cfg.live_observation_source,
+        "source_profile_registry_class": official_cfg.registry_class,
+        "source_profile_alignment_days": official_cfg.alignment_days,
+        "source_profile_alignment_rate": official_cfg.alignment_rate,
+    }
 
 
 def normalize_json_list(value):
@@ -774,6 +807,8 @@ def main():
     print(f" City pools: T1 trading={len(TRADING_T1_CITIES)} | T2 research={len(CITIES) - len(TRADING_T1_CITIES)} | T3=0")
     print(f"{'='*90}")
 
+    official_observation_configs = load_official_observation_configs()
+
     # Pre-load historical errors per city using the best model
     all_errors = {}
     all_models = {}
@@ -894,7 +929,14 @@ def main():
 
             # Fetch METAR state (live or cache)
             icao = cfg.get("icao", "")
-            metar_state = fetch_live_metar_state(weather_client, icao, target_date, city, now_utc)
+            observation_station = resolve_observation_station(city, cfg, official_observation_configs)
+            metar_state = fetch_live_metar_state(
+                weather_client,
+                observation_station["metar_icao"],
+                target_date,
+                city,
+                now_utc,
+            )
             orderbook_targets = (
                 orderbook_targets_for_current_yes(markets, unit, metar_state)
                 if args.orderbook_scope == "current_d1"
@@ -1093,6 +1135,14 @@ def main():
                     # New cross-section fields
                     "time_bucket": time_bucket,
                     "icao": icao,
+                    "configured_icao": observation_station["configured_icao"],
+                    "metar_icao": observation_station["metar_icao"],
+                    "official_observation_station": observation_station["official_observation_station"],
+                    "settlement_source_class": observation_station["settlement_source_class"],
+                    "live_observation_source": observation_station["live_observation_source"],
+                    "source_profile_registry_class": observation_station["source_profile_registry_class"],
+                    "source_profile_alignment_days": observation_station["source_profile_alignment_days"],
+                    "source_profile_alignment_rate": observation_station["source_profile_alignment_rate"],
                     "forecast_max_f": round(fcst_f, 1),
                     "forecast_max_native": round(forecast_max_native, 1),
                     "forecast_peak_hour_local": forecast_info["peak_hour_local"],

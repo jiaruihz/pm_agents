@@ -48,6 +48,8 @@ from weather_data_feed import (
     ObservationClockConfig,
     bracket_contains,
     city_timezone_name,
+    index_observation_cache,
+    load_observation_cache,
     load_source_profiles,
     observation_clock_guard,
     parse_label_dict,
@@ -97,6 +99,7 @@ CITY_COORDS = {
     "Busan": (35.18, 128.94),
     "CapeTown": (-33.96, 18.6),
     "Chengdu": (30.58, 103.95),
+    "Chicago": (41.98, -87.91),
     "Chongqing": (29.72, 106.64),
     "Dallas": (32.85, -96.85),
     "Denver": (39.72, -104.75),
@@ -106,13 +109,19 @@ CITY_COORDS = {
     "Istanbul": (41.26, 28.74),
     "Jeddah": (21.68, 39.16),
     "Karachi": (24.91, 67.16),
+    "KualaLumpur": (2.75, 101.71),
     "LA": (33.94, -118.41),
+    "London": (51.5, 0.05),
     "Lucknow": (26.76, 80.89),
     "Madrid": (40.47, -3.56),
     "Manila": (14.51, 121.02),
+    "MexicoCity": (19.44, -99.07),
     "Miami": (25.8, -80.29),
+    "Milan": (45.63, 8.73),
     "Munich": (48.35, 11.79),
     "NYC": (40.78, -73.87),
+    "PanamaCity": (8.97, -79.56),
+    "Paris": (48.97, 2.44),
     "SanFrancisco": (37.62, -122.38),
     "SaoPaulo": (-23.43, -46.47),
     "Seattle": (47.45, -122.31),
@@ -547,6 +556,40 @@ def latest_snapshot() -> Path | None:
     return files[-1] if files else None
 
 
+def observation_cache_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    for key in ("THETA_CURRENT_YES_OBSERVATION_CACHE", "WEATHER_DATA_FEED_OBSERVATION_CACHE"):
+        if os.environ.get(key):
+            candidates.append(Path(str(os.environ[key])).expanduser())
+    candidates.append(Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json"))
+    candidates.append(ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json")
+    candidates.append(ROOT / "runtime/weather_edge_v1/observations/latest.json")
+    out: list[Path] = []
+    for path in candidates:
+        if path not in out:
+            out.append(path)
+    return out
+
+
+def latest_observation_cache_path(explicit: str | None = None) -> Path | None:
+    if explicit:
+        return Path(explicit).expanduser()
+    for path in observation_cache_candidates():
+        if path.exists():
+            return path
+    return None
+
+
+def load_latest_observation_cache(explicit: str | None = None) -> tuple[dict[str, Any] | None, Path | None, str]:
+    path = latest_observation_cache_path(explicit)
+    if path is None or not path.exists():
+        return None, path, "missing"
+    try:
+        return load_observation_cache(path), path, "ok"
+    except Exception as exc:  # noqa: BLE001
+        return None, path, f"error:{type(exc).__name__}: {exc}"
+
+
 def snapshot_freshness_time(snapshot: dict[str, Any], snapshot_path: Path) -> tuple[datetime, str]:
     for key in ("generated_at_utc", "snapshot_generated_at_utc", "snapshot_fetched_at_utc"):
         parsed = parse_utc(snapshot.get(key))
@@ -572,7 +615,7 @@ def required_fresh_quote_edge(row: dict[str, Any], args: argparse.Namespace) -> 
 
 def load_stations() -> dict[str, Station]:
     data = json.loads(STATION_SUMMARY.read_text(encoding="utf-8"))
-    return {
+    stations = {
         str(item["city"]): Station(
             city=str(item["city"]),
             icao=str(item["icao"]).upper(),
@@ -581,6 +624,49 @@ def load_stations() -> dict[str, Station]:
             timezone_name=safe_str(item.get("timezone")) or city_timezone_name(str(item["city"])),
         )
         for item in data["stations"]
+    }
+    for city, profile in load_source_profiles().items():
+        if city in stations:
+            continue
+        if not profile.live_eligible:
+            continue
+        if profile.primary_source not in {"aviationweather_metar", "aviationweather"}:
+            continue
+        station_code = safe_str(profile.official_station_or_feed).upper()
+        if not station_code or len(station_code) != 4:
+            continue
+        stations[city] = Station(
+            city=city,
+            icao=station_code,
+            unit=(safe_str(profile.unit) or "C").upper(),
+            utc_offset=0,
+            timezone_name=profile.timezone_name or city_timezone_name(city),
+        )
+    return stations
+
+
+def station_map_missing_audit(
+    city: str,
+    records_by_target_date: dict[str, list[dict[str, Any]]],
+    source_profiles: dict[str, Any] | None,
+) -> dict[str, Any]:
+    profile = (source_profiles or {}).get(city)
+    reason = "source_profile_missing"
+    if profile is not None:
+        if not profile.live_eligible:
+            reason = "source_profile_not_live_eligible"
+        elif profile.primary_source not in {"aviationweather_metar", "aviationweather"}:
+            reason = f"unsupported_primary_source:{profile.primary_source}"
+        elif not safe_str(profile.official_station_or_feed):
+            reason = "source_profile_missing_station"
+        else:
+            reason = "station_not_loaded"
+    return {
+        "city": city,
+        "target_date": "",
+        "status": "station_map_missing",
+        "reason": reason,
+        "available_target_dates": sorted(records_by_target_date),
     }
 
 
@@ -900,6 +986,84 @@ def snapshot_metar_obs(
     }
 
 
+def observation_cache_obs(
+    observation_cache: dict[str, Any],
+    city: str,
+    target_date: str,
+    station: Station,
+    now: datetime,
+    *,
+    max_obs_age_min: float,
+    pre_update_blackout_min: float,
+) -> dict[str, Any]:
+    record = index_observation_cache(observation_cache).get((city, target_date))
+    if not record:
+        return {"status": "observation_cache_missing", "source": "weather_data_feed_observation_cache", "n_obs": 0}
+    source = safe_str(record.get("source")) or "weather_data_feed_observation_cache"
+    n_obs = int(max(0.0, to_float(record.get("n_obs") or record.get("record_count"), 0.0)))
+    if record.get("status") != "ok":
+        return {
+            "status": safe_str(record.get("status")) or "observation_cache_not_ok",
+            "source": source,
+            "n_obs": n_obs,
+            "error": safe_str(record.get("error")),
+            "timezone": station.timezone_name,
+            "last_obs_utc": safe_str(record.get("last_obs_utc")),
+        }
+    last_obs = parse_utc(record.get("last_obs_utc"))
+    if last_obs is None:
+        return {"status": "observation_cache_bad_ts", "source": source, "n_obs": n_obs, "timezone": station.timezone_name}
+    if n_obs < ObservationClockConfig().min_obs_asof:
+        return {"status": "insufficient_obs_asof", "source": source, "n_obs": n_obs, "timezone": station.timezone_name}
+    age_min = (now - last_obs).total_seconds() / 60.0
+    cadence_min = to_float(record.get("cadence_min") or record.get("estimated_cadence_min"), np.nan)
+    cadence_value = None if not math.isfinite(cadence_min) else cadence_min
+    minutes_to_next = cadence_value - age_min if cadence_value is not None else np.nan
+    common = {
+        "source": source,
+        "n_obs": n_obs,
+        "age_min": round(age_min, 1),
+        "last_obs_utc": last_obs.isoformat(),
+        "timezone": station.timezone_name,
+        "cadence_min": None if cadence_value is None else round(cadence_value, 1),
+        "minutes_to_next_obs": None if cadence_value is None else round(minutes_to_next, 1),
+        "observation_cache_generated_at_utc": safe_str(observation_cache.get("generated_at_utc")),
+        "observation_cache_fetched_at_utc": safe_str(record.get("fetched_at_utc")),
+    }
+    if age_min > max_obs_age_min:
+        return {"status": "stale_obs", "max_obs_age_min": max_obs_age_min, **common}
+    if cadence_value is not None and 0.0 <= minutes_to_next <= pre_update_blackout_min:
+        return {"status": "pre_metar_update_blackout", "pre_update_blackout_min": pre_update_blackout_min, **common}
+    current_temp_c = to_float(record.get("current_temp_c"), np.nan)
+    running_max_c = to_float(record.get("running_max_c"), np.nan)
+    if not math.isfinite(current_temp_c) or not math.isfinite(running_max_c):
+        return {"status": "observation_cache_bad_temp", **common}
+    return {
+        "status": "ok",
+        **common,
+        "running_max_c": running_max_c,
+        "running_max_obs_utc": safe_str(record.get("running_max_obs_utc")) or last_obs.isoformat(),
+        "minutes_since_running_max": to_float(record.get("minutes_since_running_max"), np.nan),
+        "current_temp_c": current_temp_c,
+        "decline_c": to_float(record.get("decline_c"), running_max_c - current_temp_c),
+        "tmpf_now": to_float(record.get("tmpf_now"), current_temp_c * 9.0 / 5.0 + 32.0),
+        "dwpf_now": to_float(record.get("dwpf_now"), np.nan),
+        "dewpoint_depression_f": to_float(record.get("dewpoint_depression_f"), np.nan),
+        "relh_now": to_float(record.get("relh_now"), np.nan),
+        "drct_now": to_float(record.get("drct_now"), np.nan),
+        "sknt_now": to_float(record.get("sknt_now"), np.nan),
+        "sky_now": to_float(record.get("sky_now"), np.nan),
+        "sky_1h": to_float(record.get("sky_1h"), np.nan),
+        "sky_3h": to_float(record.get("sky_3h"), np.nan),
+        "d_sky_1h": to_float(record.get("d_sky_1h"), np.nan),
+        "d_sky_3h": to_float(record.get("d_sky_3h"), np.nan),
+        "d_tmpf_1h": to_float(record.get("d_tmpf_1h"), np.nan),
+        "d_tmpf_3h": to_float(record.get("d_tmpf_3h"), np.nan),
+        "d_dwpf_3h": to_float(record.get("d_dwpf_3h"), np.nan),
+        "d_relh_3h": to_float(record.get("d_relh_3h"), np.nan),
+    }
+
+
 def record_target_date(record: dict[str, Any]) -> str:
     return safe_str(record.get("target_date")) or safe_str(record.get("event_date"))
 
@@ -994,6 +1158,8 @@ def build_current_rows(
     stations: dict[str, Station],
     now: datetime,
     *,
+    source_profiles: dict[str, Any] | None = None,
+    observation_cache: dict[str, Any] | None = None,
     max_obs_age_min: float,
     pre_update_blackout_min: float,
     min_gap_to_next_bracket_c: float,
@@ -1006,6 +1172,7 @@ def build_current_rows(
     for city, records_by_target_date in grouped.items():
         station = stations.get(city)
         if station is None:
+            audits.append(station_map_missing_audit(city, records_by_target_date, source_profiles))
             continue
         tz = station_timezone(station)
         local_now = now.astimezone(tz)
@@ -1024,13 +1191,25 @@ def build_current_rows(
                 audits.append(date_audit)
             continue
         hour = local_now.hour
-        obs = snapshot_metar_obs(
-            city_records,
-            station,
-            now,
-            max_obs_age_min=max_obs_age_min,
-            pre_update_blackout_min=pre_update_blackout_min,
-        )
+        obs = {"status": "observation_cache_missing"}
+        if observation_cache is not None:
+            obs = observation_cache_obs(
+                observation_cache,
+                city,
+                target_date,
+                station,
+                now,
+                max_obs_age_min=max_obs_age_min,
+                pre_update_blackout_min=pre_update_blackout_min,
+            )
+        if obs.get("status") == "observation_cache_missing":
+            obs = snapshot_metar_obs(
+                city_records,
+                station,
+                now,
+                max_obs_age_min=max_obs_age_min,
+                pre_update_blackout_min=pre_update_blackout_min,
+            )
         if obs.get("status") != "ok":
             audits.append({"city": city, "target_date": target_date, "status": obs.get("status"), "obs": obs, "hour_local": hour})
             continue
@@ -1789,6 +1968,7 @@ def json_ready(value: Any) -> Any:
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     (ROOT / "runtime/weather_edge_v1/live").mkdir(parents=True, exist_ok=True)
+    decision_now = parse_utc(getattr(args, "now_utc", "")) or datetime.now(timezone.utc)
     state = read_live_state(ROOT / "runtime/weather_edge_v1/live_cycle")
     if state.get("paused"):
         result = {"generated_at_utc": now_utc(), "status": "paused", "reason": state.get("reason", "")}
@@ -1829,6 +2009,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         append_jsonl(HISTORY_OUT, result)
         return result
 
+    observation_cache, observation_cache_path, observation_cache_status = load_latest_observation_cache(
+        safe_str(getattr(args, "observation_cache", ""))
+    )
     model_artifact = load_model_artifact()
     fade_model_path = fade_confirmed_model_artifact_path(args)
     needs_fade_model = (safe_str(getattr(args, "entry_profile_mode", "both")) or "both") != "peak_forming_micro"
@@ -1838,7 +2021,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         snapshot,
         records,
         load_stations(),
-        snapshot_ts,
+        decision_now,
+        source_profiles=source_profiles,
+        observation_cache=observation_cache,
         max_obs_age_min=args.max_obs_age_min,
         pre_update_blackout_min=args.pre_metar_update_blackout_min,
         min_gap_to_next_bracket_c=args.min_gap_to_next_bracket_c,
@@ -2064,6 +2249,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "snapshot_freshness_source": snapshot_freshness_source,
         "snapshot_file_mtime_utc": snapshot_file_mtime.isoformat(),
         "snapshot_age_min": round(age_min, 1),
+        "decision_now_utc": decision_now.isoformat(),
+        "observation_cache_path": str(observation_cache_path) if observation_cache_path else "",
+        "observation_cache_status": observation_cache_status,
+        "observation_cache_generated_at_utc": safe_str((observation_cache or {}).get("generated_at_utc")),
         "current_rows": int(0 if current.empty else len(current)),
         "candidate_rows": len(candidates),
         "plans": len(plans),
@@ -2184,6 +2373,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["run", "loop"])
     parser.add_argument("--snapshot")
+    parser.add_argument("--observation-cache", default="")
+    parser.add_argument("--now-utc", default="")
     parser.add_argument("--max-order-notional", type=float, default=5.0)
     parser.add_argument("--max-city-day-notional", type=float, default=5.0)
     parser.add_argument("--min-available-notional", type=float, default=0.0)
