@@ -1,7 +1,7 @@
 # Weather Data Feed Module
 
 Status: current-source
-Updated: 2026-06-19
+Updated: 2026-06-20
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_REPO_BOUNDARY.md; WEATHER_SYSTEM_CONTRACT.md
 
@@ -121,6 +121,11 @@ snapshot_ts_utc
   `weather_data_feed_observation_cache_v1` latest cache：
   `~/projects/weather_data_feed_service_runtime/output/observations/latest.json`。current-YES 优先消费该 cache；
   full paper snapshot 里的 `metar_latest_*` 只作为 cache 文件不存在时的兼容回退。
+- `source_profiles` 中 `official_station_diff_confirmed` 且 live eligible 的城市已进入 current-YES station map
+  和 full paper snapshot METAR 拉取层：Chicago=KORD、PanamaCity=MPMG、London=EGLC、Paris=LFPB、
+  Milan=LIMC、KualaLumpur=WMKK。snapshot 仍保留旧 `icao` 字段用于兼容，同时新增 `metar_icao` /
+  `official_observation_station` / `settlement_source_class` 等审计字段。MexicoCity 仍是
+  `default_source_watchlist`，不自动进入 live。
 
 待推进:
 
