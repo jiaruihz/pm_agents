@@ -29,8 +29,8 @@ start_profile() {
     THETA_CURRENT_YES_RUNTIME_DIR="$runtime_dir" \
     THETA_CURRENT_YES_ENTRY_PROFILE_MODE="$profile_mode" \
     ENABLE_PEAK_FORMING_LIVE="$enable_peak" \
-    MAX_ORDER_NOTIONAL="${MAX_ORDER_NOTIONAL:-5}" \
-    MAX_CITY_DAY_NOTIONAL="${MAX_CITY_DAY_NOTIONAL:-5}" \
+    MAX_ORDER_NOTIONAL="${MAX_ORDER_NOTIONAL:-3}" \
+    MAX_CITY_DAY_NOTIONAL="${MAX_CITY_DAY_NOTIONAL:-3}" \
     scripts/ops/start_weather_theta_current_yes_tiny_live.sh
 }
 
