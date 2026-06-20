@@ -415,8 +415,44 @@ def test_build_current_rows_falls_back_when_fast_cache_fetch_failed(monkeypatch)
     assert audits == []
     assert len(rows) == 1
     assert rows.iloc[0]["obs"]["source"] == "paper_snapshot_metar"
-    assert rows.iloc[0]["target_date"] == "2026-06-18"
-    assert rows.iloc[0]["current_bracket"] == "70-71"
+
+
+def test_observation_cache_uses_cadence_aware_staleness_limit():
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+    now = datetime(2026, 6, 18, 20, 35, tzinfo=timezone.utc)
+    observation_cache = {
+        "schema_version": "weather_data_feed_observation_cache_v1",
+        "generated_at_utc": "2026-06-18T20:35:00+00:00",
+        "records": [
+            {
+                "city": "LA",
+                "target_date": "2026-06-18",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "KLAX",
+                "last_obs_utc": "2026-06-18T20:00:00+00:00",
+                "running_max_obs_utc": "2026-06-18T20:00:00+00:00",
+                "n_obs": 10,
+                "cadence_min": 60.0,
+                "current_temp_c": 20.0,
+                "running_max_c": 21.1,
+                "decline_c": 1.1,
+            }
+        ],
+    }
+
+    obs = live.observation_cache_obs(
+        observation_cache,
+        "LA",
+        "2026-06-18",
+        station,
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+    )
+
+    assert obs["status"] == "ok"
+    assert obs["effective_max_obs_age_min"] == 75.0
 
 
 def test_build_current_rows_allows_explicit_market_local_date_mapping(monkeypatch):

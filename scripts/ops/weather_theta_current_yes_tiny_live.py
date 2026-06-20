@@ -81,6 +81,8 @@ FORECAST_PEAK_CACHE_DIR = RUNTIME_DIR / "forecast_peak_cache"
 HTTP_TIMEOUT_SEC = float(os.environ.get("THETA_CURRENT_YES_HTTP_TIMEOUT_SEC", "4"))
 HTTP_FETCH_BUDGET_SEC = float(os.environ.get("THETA_CURRENT_YES_HTTP_FETCH_BUDGET_SEC", "8"))
 FORECAST_PEAK_FETCH_BUDGET_SEC = float(os.environ.get("THETA_CURRENT_YES_FORECAST_PEAK_FETCH_BUDGET_SEC", "6"))
+OBS_STALE_CADENCE_GRACE_MIN = 15.0
+OBS_MAX_DYNAMIC_AGE_MIN = 90.0
 OBSERVATION_CACHE_FALLBACK_STATUSES = {
     "observation_cache_missing",
     "observation_cache_not_ok",
@@ -923,6 +925,15 @@ def snapshot_records(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     return data, records
 
 
+def effective_obs_age_limit(max_obs_age_min: float, cadence_min: float | None) -> float:
+    if cadence_min is None or not math.isfinite(float(cadence_min)) or float(cadence_min) <= 0:
+        return float(max_obs_age_min)
+    return min(
+        OBS_MAX_DYNAMIC_AGE_MIN,
+        max(float(max_obs_age_min), float(cadence_min) + OBS_STALE_CADENCE_GRACE_MIN),
+    )
+
+
 def snapshot_metar_obs(
     city_records: list[dict[str, Any]],
     station: Station,
@@ -949,18 +960,21 @@ def snapshot_metar_obs(
         return {"status": "insufficient_obs_asof", "source": "paper_snapshot_metar", "n_obs": n_obs, "timezone": station.timezone_name}
     age_min = (now - last_obs).total_seconds() / 60.0
     cadence_min = 60.0
+    effective_max_obs_age_min = effective_obs_age_limit(max_obs_age_min, cadence_min)
     minutes_to_next = cadence_min - age_min
     common = {
         "source": "paper_snapshot_metar",
         "n_obs": n_obs,
         "age_min": round(age_min, 1),
+        "max_obs_age_min": max_obs_age_min,
+        "effective_max_obs_age_min": round(effective_max_obs_age_min, 1),
         "last_obs_utc": last_obs.isoformat(),
         "timezone": station.timezone_name,
         "cadence_min": cadence_min,
         "minutes_to_next_obs": round(minutes_to_next, 1),
     }
-    if age_min > max_obs_age_min:
-        return {"status": "stale_obs", "max_obs_age_min": max_obs_age_min, **common}
+    if age_min > effective_max_obs_age_min:
+        return {"status": "stale_obs", **common}
     if 0.0 <= minutes_to_next <= pre_update_blackout_min:
         return {"status": "pre_metar_update_blackout", "pre_update_blackout_min": pre_update_blackout_min, **common}
     latest_f = to_float(record.get("metar_latest_temp_f"), np.nan)
@@ -1027,11 +1041,14 @@ def observation_cache_obs(
     age_min = (now - last_obs).total_seconds() / 60.0
     cadence_min = to_float(record.get("cadence_min") or record.get("estimated_cadence_min"), np.nan)
     cadence_value = None if not math.isfinite(cadence_min) else cadence_min
+    effective_max_obs_age_min = effective_obs_age_limit(max_obs_age_min, cadence_value)
     minutes_to_next = cadence_value - age_min if cadence_value is not None else np.nan
     common = {
         "source": source,
         "n_obs": n_obs,
         "age_min": round(age_min, 1),
+        "max_obs_age_min": max_obs_age_min,
+        "effective_max_obs_age_min": round(effective_max_obs_age_min, 1),
         "last_obs_utc": last_obs.isoformat(),
         "timezone": station.timezone_name,
         "cadence_min": None if cadence_value is None else round(cadence_value, 1),
@@ -1039,8 +1056,8 @@ def observation_cache_obs(
         "observation_cache_generated_at_utc": safe_str(observation_cache.get("generated_at_utc")),
         "observation_cache_fetched_at_utc": safe_str(record.get("fetched_at_utc")),
     }
-    if age_min > max_obs_age_min:
-        return {"status": "stale_obs", "max_obs_age_min": max_obs_age_min, **common}
+    if age_min > effective_max_obs_age_min:
+        return {"status": "stale_obs", **common}
     if cadence_value is not None and 0.0 <= minutes_to_next <= pre_update_blackout_min:
         return {"status": "pre_metar_update_blackout", "pre_update_blackout_min": pre_update_blackout_min, **common}
     current_temp_c = to_float(record.get("current_temp_c"), np.nan)
