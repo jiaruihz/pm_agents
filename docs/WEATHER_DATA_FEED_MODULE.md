@@ -123,7 +123,8 @@ snapshot_ts_utc
   full paper snapshot 里的 `metar_latest_*` 只作为 cache 文件不存在时的兼容回退。
 - 生产 observation cache 必须开启 `--include-station-diff --include-fallback-sources --max-workers 4`：
   station-diff 城市是把旧 city_pool 机场修正到 Polymarket 规则/WU 结算源对应站点，不是替代口径；
-  fallback 用于在 AviationWeather 429/单源失败时尝试 IEM 等备用源，避免整轮 cache 报废。
+  fallback 链路为 `aviationweather_metar -> aviationweather_cache_csv -> iem_asos`，用于在 direct API
+  429/单源失败时避免整轮 cache 报废。
 - `source_profiles` 中 `official_station_diff_confirmed` 且 live eligible 的城市已进入 current-YES station map
   和 full paper snapshot METAR 拉取层：Chicago=KORD、PanamaCity=MPMG、London=EGLC、Paris=LFPB、
   Milan=LIMC、KualaLumpur=WMKK。snapshot 仍保留旧 `icao` 字段用于兼容，同时新增 `metar_icao` /
