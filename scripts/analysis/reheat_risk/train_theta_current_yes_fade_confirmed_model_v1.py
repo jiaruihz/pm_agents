@@ -15,12 +15,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -103,7 +97,13 @@ def load_rows() -> pd.DataFrame:
     return df
 
 
-def pipeline() -> Pipeline:
+def pipeline() -> Any:
+    from sklearn.compose import ColumnTransformer
+    from sklearn.impute import SimpleImputer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
     pre = ColumnTransformer(
         [
             ("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scale", StandardScaler())]), NUMERIC_FEATURES),
@@ -113,7 +113,7 @@ def pipeline() -> Pipeline:
     return Pipeline([("pre", pre), ("model", LogisticRegression(max_iter=3000, C=0.8, random_state=SEED))])
 
 
-def artifact_from_model(model: Pipeline, train: pd.DataFrame) -> dict[str, Any]:
+def artifact_from_model(model: Any, train: pd.DataFrame) -> dict[str, Any]:
     pre = model.named_steps["pre"]
     num_pipe = pre.named_transformers_["num"]
     cat = pre.named_transformers_["cat"]
@@ -151,6 +151,8 @@ def artifact_from_model(model: Pipeline, train: pd.DataFrame) -> dict[str, Any]:
 
 
 def metric_row(name: str, frame: pd.DataFrame, p_col: str) -> dict[str, Any]:
+    from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
+
     y = frame["label_yes_wins"].to_numpy(dtype=int)
     p = np.clip(frame[p_col].to_numpy(dtype=float), 1e-6, 1 - 1e-6)
     return {
