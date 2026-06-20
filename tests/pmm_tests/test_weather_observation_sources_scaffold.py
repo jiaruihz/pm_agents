@@ -249,3 +249,25 @@ def test_awc_cache_fetcher_decompresses_gzip_payload(monkeypatch):
 
     assert result.status == "ok"
     assert result.records[0].temp_c == 26.0
+
+
+def test_http_fetcher_ignores_environment_proxy(monkeypatch):
+    calls = []
+
+    class Response:
+        text = "ok"
+        content = b"ok"
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(*args, **kwargs):
+        calls.append(kwargs)
+        return Response()
+
+    monkeypatch.setattr(fetchers.httpx, "get", fake_get)
+
+    fetchers._http_get("https://example.test", settings=FetchSettings(proxy_candidates=(None,)))
+
+    assert calls[0]["proxy"] is None
+    assert calls[0]["trust_env"] is False

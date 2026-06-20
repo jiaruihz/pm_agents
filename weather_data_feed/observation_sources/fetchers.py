@@ -111,7 +111,14 @@ def _http_get(url: str, *, params: Any = None, settings: FetchSettings | None = 
         merged_headers.update(headers)
     for proxy in cfg.proxy_candidates or (None,):
         try:
-            response = httpx.get(url, params=params, headers=merged_headers, proxy=proxy, timeout=cfg.timeout_sec)
+            response = httpx.get(
+                url,
+                params=params,
+                headers=merged_headers,
+                proxy=proxy,
+                timeout=cfg.timeout_sec,
+                trust_env=False,
+            )
             response.raise_for_status()
             return response
         except Exception as exc:  # noqa: BLE001
