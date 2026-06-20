@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # scripts/ops/sync_weather_remote.sh
 #
-# Sync weather data from two remote sources:
-#   1. weather-predict machine → runtime/weather_edge_v1/market_data/
+# Sync weather data from remote sources:
+#   1. weather-predict or weather_data_feed_service runtime
+#      → runtime/weather_edge_v1/market_data/
 #      (paper snapshots, orderbook snapshots, research CSVs, cache)
 #   2. n100 pm_agent runtime → runtime/weather_edge_v1/remote_pm_agent/
 #      (live_cycle JSONL, signals, plans, live orders, paper orders)
@@ -10,16 +11,20 @@
 # Usage:
 #   scripts/ops/sync_weather_remote.sh              # sync both
 #   scripts/ops/sync_weather_remote.sh --dry-run    # preview only
-#   scripts/ops/sync_weather_remote.sh --market-only  # only weather-predict
+#   scripts/ops/sync_weather_remote.sh --market-only  # only market data
 #   scripts/ops/sync_weather_remote.sh --live-only    # only n100
+#   scripts/ops/sync_weather_remote.sh --market-source=weather-data-feed
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# ---- Config: weather-predict machine (market data source) ----
+# ---- Config: market data source ----
 WEATHER_REMOTE="${WEATHER_REMOTE:-jiarui@192.168.0.200}"
-WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-~/projects/weather-predict}"
+WEATHER_MARKET_SOURCE="${WEATHER_MARKET_SOURCE:-weather-predict}"
+WEATHER_PREDICT_REMOTE_DIR="${WEATHER_PREDICT_REMOTE_DIR:-~/projects/weather-predict}"
+WEATHER_DATA_FEED_RUNTIME_DIR="${WEATHER_DATA_FEED_RUNTIME_DIR:-~/projects/weather_data_feed_service_runtime}"
+WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-}"
 SSH_KEY="${WEATHER_SSH_KEY:-$HOME/.ssh/id_ed25519_weather_deploy}"
 MARKET_LOCAL="$REPO_ROOT/runtime/weather_edge_v1/market_data"
 
@@ -38,9 +43,28 @@ for arg in "$@"; do
     --dry-run)     DRY_RUN=1 ;;
     --market-only) SYNC_LIVE=0 ;;
     --live-only)   SYNC_MARKET=0 ;;
+    --market-source=*) WEATHER_MARKET_SOURCE="${arg#*=}" ;;
     *) echo "Unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
+
+case "$WEATHER_MARKET_SOURCE" in
+  weather-predict|legacy)
+    WEATHER_MARKET_SOURCE="weather-predict"
+    WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-$WEATHER_PREDICT_REMOTE_DIR}"
+    MARKET_OPTIONAL_OUTPUTS=0
+    ;;
+  weather-data-feed|weather_data_feed|weather_data_feed_service|data-feed)
+    WEATHER_MARKET_SOURCE="weather-data-feed"
+    WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-$WEATHER_DATA_FEED_RUNTIME_DIR}"
+    MARKET_OPTIONAL_OUTPUTS=1
+    ;;
+  *)
+    echo "Unknown WEATHER_MARKET_SOURCE: $WEATHER_MARKET_SOURCE" >&2
+    echo "Expected weather-predict or weather-data-feed" >&2
+    exit 2
+    ;;
+esac
 
 RSYNC_FLAGS=(-az)
 if rsync --help 2>/dev/null | grep -q -- '--info='; then
@@ -59,9 +83,18 @@ iso_now() {
   date -Is 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S%z'
 }
 
-# ---- Block 1: market_data from weather-predict machine ----
+# ---- Block 1: market_data from configured producer ----
 sync_market() {
-  log "=== Syncing market_data from $WEATHER_REMOTE:$WEATHER_REMOTE_DIR ==="
+  log "=== Syncing market_data source=$WEATHER_MARKET_SOURCE from $WEATHER_REMOTE:$WEATHER_REMOTE_DIR ==="
+
+  _remote_dir_exists() {
+    local remote_subdir="$1"
+    if [[ "$WEATHER_REMOTE" == "local" || "$WEATHER_REMOTE" == "localhost" || "$WEATHER_REMOTE" == "127.0.0.1" ]]; then
+      [[ -d "$WEATHER_REMOTE_DIR/$remote_subdir" ]]
+    else
+      ssh "${WEATHER_SSH_OPTS[@]}" "$WEATHER_REMOTE" "test -d $WEATHER_REMOTE_DIR/$remote_subdir" 2>/dev/null
+    fi
+  }
 
   _sync_dir() {
     local remote_subdir="$1" local_subdir="$2"
@@ -72,6 +105,15 @@ sync_market() {
     else
       rsync "${RSYNC_FLAGS[@]}" -e "ssh ${WEATHER_SSH_OPTS[*]}" \
         "$WEATHER_REMOTE:$WEATHER_REMOTE_DIR/$remote_subdir/" "$MARKET_LOCAL/$local_subdir/"
+    fi
+  }
+
+  _sync_dir_optional() {
+    local remote_subdir="$1" local_subdir="$2"
+    if _remote_dir_exists "$remote_subdir"; then
+      _sync_dir "$remote_subdir" "$local_subdir"
+    else
+      warn "  missing optional market dir: $WEATHER_REMOTE_DIR/$remote_subdir"
     fi
   }
 
@@ -92,8 +134,13 @@ sync_market() {
   # ---- Output ----
   _sync_dir  "output/paper_snapshots"    "paper_snapshots"
   _sync_dir  "output/orderbook_snapshots" "orderbook_snapshots"
-  _sync_dir  "output/paper_trades"       "paper_trades"
-  _sync_dir  "output/research"           "research"
+  if [[ "$MARKET_OPTIONAL_OUTPUTS" == "1" ]]; then
+    _sync_dir_optional "output/paper_trades" "paper_trades"
+    _sync_dir_optional "output/research"     "research"
+  else
+    _sync_dir "output/paper_trades" "paper_trades"
+    _sync_dir "output/research"     "research"
+  fi
   _sync_dir  "output/logs"               "logs"
 
   # ---- Cache: observation / settlement (large, already used) ----

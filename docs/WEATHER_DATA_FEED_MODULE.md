@@ -105,12 +105,17 @@ snapshot_ts_utc
 - 已预留 `weather_data_feed/observation_sources/` 架子，供抢单 bot / current-YES / NO carry / station-basis 共用多源 METAR adapter。
 - 第一批旧解析已迁入新模块：timing monitor、station-basis、current-YES 复用共享 METAR/AviationWeather/AWC/IEM parser；网络请求、proxy、orderbook 和策略判断仍留在原脚本。
 - N100 `pm_agent` 已部署到 `bb8d21b9`，`weather-predict-snapshot.service` 已生成并验证 `weather_data_feed_snapshot_v1` snapshot。
-- `weather_data_feed_service/` Phase 1 已完成：snapshot/daily CLI、可配置 output/cache root、版本化 systemd 模板、daily parity 检查脚本、本机测试。N100 新服务尚未启用。
+- `weather_data_feed_service/` 已在 N100 以独立 checkout + 独立 systemd timer 并行运行，写入
+  `~/projects/weather_data_feed_service_runtime`；旧 `weather-predict` 暂时保留为并行/回滚来源。
+- 本机镜像同步入口 `scripts/ops/sync_weather_remote.sh` 已支持 `--market-source=weather-data-feed`，可从
+  `~/projects/weather_data_feed_service_runtime` 同步 snapshot / orderbook / cache 到原 canonical mirror：
+  `runtime/weather_edge_v1/market_data/`。pm_agent 的 signal builder 仍消费这个本地 mirror，不迁入数据服务。
 
 待推进:
 
-- Phase 2：在 N100 以 git-first 新建 `~/projects/weather_data_feed_service/` 独立 checkout，启用新 timer 并行写新 runtime 目录。
-- Phase 3：连续周期跑 snapshot health + daily parity，通过前不切换正式输出路径。
+- Phase 3：连续周期跑 snapshot health + daily parity；通过后把分析/看板同步默认 source 从 `weather-predict` 切到
+  `weather-data-feed`。
+- `paper_trades` / `research` 这类策略或研究产物不属于数据服务核心输出；迁移前继续由旧路径或 pm_agent 事实表负责。
 - 从抢单 bot 抽出真正的 `official_observation_feed` fetcher：IEM、NOAA tgftp、HKO、weather.gov/Synoptic、LDM 的拉取、缓存、source latency 和 failover。
 - 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
 - 在 N100 上为数据层增加独立 health/status 文件，再让策略 loop 只消费健康的数据产物。
