@@ -42,6 +42,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.strategies.weather_edge_v1.tools.current_yes_model import (
+    DEFAULT_FADE_GATE,
+    FadeGateSpec,
+    fade_gate_reject_reason,
+    score_artifact as score_rows,
+)
 from src.strategies.weather_edge_v1.tools.execution_pipeline import read_jsonl, stable_hash
 from src.strategies.weather_edge_v1.tools.live_state import read_live_state
 from weather_data_feed import (
@@ -89,6 +95,7 @@ OBSERVATION_CACHE_FALLBACK_STATUSES = {
     "fetch_failed",
     "empty",
     "missing_temp",
+    "insufficient_obs_asof",
     "observation_cache_bad_ts",
     "observation_cache_bad_temp",
 }
@@ -196,6 +203,17 @@ class Station:
     unit: str
     utc_offset: int
     timezone_name: str | None = None
+
+
+def fade_gate_spec_from_args(args: argparse.Namespace) -> FadeGateSpec:
+    return FadeGateSpec(
+        min_decline_c=float(getattr(args, "fade_confirmed_min_decline_c", DEFAULT_FADE_GATE.min_decline_c)),
+        min_ask=float(getattr(args, "fade_confirmed_min_ask", DEFAULT_FADE_GATE.min_ask)),
+        min_p_yes=float(getattr(args, "fade_confirmed_min_p", DEFAULT_FADE_GATE.min_p_yes)),
+        min_edge=float(getattr(args, "fade_confirmed_min_edge", DEFAULT_FADE_GATE.min_edge)),
+        min_local_hour=int(getattr(args, "min_local_hour", DEFAULT_FADE_GATE.min_local_hour)),
+        max_local_hour=int(getattr(args, "max_local_hour", DEFAULT_FADE_GATE.max_local_hour)),
+    )
 
 
 def now_utc() -> str:
@@ -685,34 +703,6 @@ def load_model_artifact(path: Path = MODEL_ARTIFACT) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def score_rows(rows: pd.DataFrame, artifact: dict[str, Any]) -> np.ndarray:
-    numeric_features = list(artifact["numeric_features"])
-    categorical_features = list(artifact["categorical_features"])
-    numeric = rows[numeric_features].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
-    medians = np.asarray(artifact["numeric_medians"], dtype=float)
-    means = np.asarray(artifact["numeric_means"], dtype=float)
-    scales = np.asarray(artifact["numeric_scales"], dtype=float)
-    numeric = np.where(np.isfinite(numeric), numeric, medians)
-    numeric = (numeric - means) / scales
-
-    cat_parts = []
-    categories = artifact["categories"]
-    for idx, feature in enumerate(categorical_features):
-        values = rows[feature].astype(str).to_numpy()
-        cats = [str(x) for x in categories[idx]]
-        mat = np.zeros((len(rows), len(cats)), dtype=float)
-        lookup = {cat: i for i, cat in enumerate(cats)}
-        for row_idx, value in enumerate(values):
-            col_idx = lookup.get(str(value))
-            if col_idx is not None:
-                mat[row_idx, col_idx] = 1.0
-        cat_parts.append(mat)
-    transformed = np.concatenate([numeric, *cat_parts], axis=1)
-    coef = np.asarray(artifact["coef"], dtype=float)
-    logits = transformed @ coef + float(artifact["intercept"])
-    return 1.0 / (1.0 + np.exp(-logits))
-
-
 def fade_confirmed_model_artifact_path(args: argparse.Namespace) -> Path:
     raw = safe_str(getattr(args, "fade_confirmed_model_artifact", "")) or str(FADE_CONFIRMED_MODEL_ARTIFACT)
     path = Path(raw)
@@ -751,7 +741,7 @@ def apply_probability_branch_scores(
     out["fade_confirmed_specialist_delta"] = fade_p - base_p
     mode = safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base"
     if mode == "specialist":
-        fade_mask = out["decline_c"].astype(float).ge(0.5)
+        fade_mask = out["decline_c"].astype(float).ge(fade_gate_spec_from_args(args).min_decline_c)
         out.loc[fade_mask, "p_yes_win"] = fade_p[fade_mask.to_numpy()]
         out.loc[fade_mask, "probability_source"] = "theta_current_yes_fade_confirmed_specialist_v1"
         out.loc[fade_mask, "model_version"] = "theta_current_yes_fade_confirmed_logistic_v1"
@@ -1666,6 +1656,7 @@ def peak_forming_metar_veto_reason(row: dict[str, Any], args: argparse.Namespace
 
 
 def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tuple[str, str]:
+    fade_gate = fade_gate_spec_from_args(args)
     decline = to_float(row.get("decline_c"), 0.0)
     ask = to_float(row.get("yes_current_ask"), 0.0)
     p_yes = to_float(row.get("p_yes_win"), 0.0)
@@ -1673,13 +1664,13 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
     if not safe_str(row.get("token_id")):
         return "snapshot_rule_missing_token", ""
 
-    if decline >= 0.5:
-        if ask < 0.55:
-            return "snapshot_rule_yes_ask_lt_0_55", ""
-        if p_yes < 0.5:
-            return "snapshot_rule_p_yes_lt_0_5", ""
-        if edge < 0.05:
-            return "snapshot_rule_edge_lt_0_05", ""
+    if decline >= fade_gate.min_decline_c:
+        reject_reason = fade_gate_reject_reason(
+            {"yes_current_ask": ask, "p_yes_win": p_yes, "ev": edge},
+            fade_gate,
+        )
+        if reject_reason:
+            return reject_reason, ""
         if not entry_profile_enabled("fade_confirmed", args):
             return "snapshot_rule_fade_confirmed_disabled", ""
         return "snapshot_rule_passed", "fade_confirmed"
