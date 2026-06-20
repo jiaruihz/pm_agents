@@ -504,6 +504,44 @@ def test_observation_cache_uses_cadence_aware_staleness_limit():
     assert obs["effective_max_obs_age_min"] == 75.0
 
 
+def test_observation_cache_infers_hourly_cadence_for_metar_like_sources():
+    station = live.Station("SaoPaulo", "SBGR", "C", -3, "America/Sao_Paulo")
+    now = datetime(2026, 6, 20, 3, 49, tzinfo=timezone.utc)
+    observation_cache = {
+        "schema_version": "weather_data_feed_observation_cache_v1",
+        "generated_at_utc": "2026-06-20T03:45:00+00:00",
+        "records": [
+            {
+                "city": "SaoPaulo",
+                "target_date": "2026-06-20",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "SBGR",
+                "last_obs_utc": "2026-06-20T03:00:00+00:00",
+                "running_max_obs_utc": "2026-06-20T03:00:00+00:00",
+                "n_obs": 1,
+                "current_temp_c": 14.0,
+                "running_max_c": 14.0,
+                "decline_c": 0.0,
+            }
+        ],
+    }
+
+    obs = live.observation_cache_obs(
+        observation_cache,
+        "SaoPaulo",
+        "2026-06-20",
+        station,
+        now,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+    )
+
+    assert obs["status"] == "ok"
+    assert obs["cadence_min"] == 60.0
+    assert obs["effective_max_obs_age_min"] == 75.0
+
+
 def test_build_current_rows_allows_explicit_market_local_date_mapping(monkeypatch):
     now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
     station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")

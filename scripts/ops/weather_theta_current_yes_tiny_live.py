@@ -89,6 +89,12 @@ HTTP_FETCH_BUDGET_SEC = float(os.environ.get("THETA_CURRENT_YES_HTTP_FETCH_BUDGE
 FORECAST_PEAK_FETCH_BUDGET_SEC = float(os.environ.get("THETA_CURRENT_YES_FORECAST_PEAK_FETCH_BUDGET_SEC", "6"))
 OBS_STALE_CADENCE_GRACE_MIN = 15.0
 OBS_MAX_DYNAMIC_AGE_MIN = 90.0
+METAR_LIKE_OBSERVATION_CACHE_SOURCES = {
+    "aviationweather_metar",
+    "aviationweather_cache_csv",
+    "noaa_tgftp_station_txt",
+    "weather_gov_latest",
+}
 OBSERVATION_CACHE_FALLBACK_STATUSES = {
     "observation_cache_missing",
     "observation_cache_not_ok",
@@ -1027,6 +1033,8 @@ def observation_cache_obs(
         return {"status": "observation_cache_bad_ts", "source": source, "n_obs": n_obs, "timezone": station.timezone_name}
     age_min = (now - last_obs).total_seconds() / 60.0
     cadence_min = to_float(record.get("cadence_min") or record.get("estimated_cadence_min"), np.nan)
+    if not math.isfinite(cadence_min) and source in METAR_LIKE_OBSERVATION_CACHE_SOURCES:
+        cadence_min = 60.0
     cadence_value = None if not math.isfinite(cadence_min) else cadence_min
     effective_max_obs_age_min = effective_obs_age_limit(max_obs_age_min, cadence_value)
     minutes_to_next = cadence_value - age_min if cadence_value is not None else np.nan
