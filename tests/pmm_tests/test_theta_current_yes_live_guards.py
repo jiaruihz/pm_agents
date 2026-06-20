@@ -358,6 +358,63 @@ def test_build_current_rows_prefers_fast_observation_cache(monkeypatch):
     assert len(rows) == 1
     assert rows.iloc[0]["obs"]["source"] == "aviationweather_metar"
     assert rows.iloc[0]["running_value"] == 70
+
+
+def test_build_current_rows_falls_back_when_fast_cache_fetch_failed(monkeypatch):
+    now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+    observation_cache = {
+        "schema_version": "weather_data_feed_observation_cache_v1",
+        "generated_at_utc": "2026-06-18T20:29:00+00:00",
+        "records": [
+            {
+                "city": "LA",
+                "target_date": "2026-06-18",
+                "status": "fetch_failed",
+                "source": "aviationweather_metar",
+                "station": "KLAX",
+                "error": "HTTP 429",
+            }
+        ],
+    }
+
+    def snapshot_ok(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "source": "paper_snapshot_metar",
+            "n_obs": 10,
+            "age_min": 10.0,
+            "last_obs_utc": "2026-06-18T20:20:00+00:00",
+            "timezone": "America/Los_Angeles",
+            "cadence_min": 60.0,
+            "minutes_to_next_obs": 50.0,
+            "running_max_c": 21.1,
+            "running_max_obs_utc": "2026-06-18T20:00:00+00:00",
+            "current_temp_c": 20.0,
+            "decline_c": 1.1,
+            "tmpf_now": 68.0,
+        }
+
+    monkeypatch.setattr(live, "snapshot_metar_obs", snapshot_ok)
+
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [
+            _record("LA", "68-69", event_date="2026-06-18"),
+            _record("LA", "70-71", event_date="2026-06-18"),
+            _record("LA", "72-73", event_date="2026-06-18"),
+        ],
+        {"LA": station},
+        now,
+        observation_cache=observation_cache,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert audits == []
+    assert len(rows) == 1
+    assert rows.iloc[0]["obs"]["source"] == "paper_snapshot_metar"
     assert rows.iloc[0]["target_date"] == "2026-06-18"
     assert rows.iloc[0]["current_bracket"] == "70-71"
 

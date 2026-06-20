@@ -232,6 +232,56 @@ def test_observations_cache_row_uses_data_feed_fetcher(monkeypatch) -> None:
     assert row["cadence_min"] == 30.0
 
 
+def test_observations_cache_reuses_previous_ok_row_on_fetch_failure(monkeypatch, tmp_path) -> None:
+    import argparse
+    from weather_data_feed import build_observation_cache, write_observation_cache
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import observations
+
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+    output = tmp_path / "latest.json"
+    previous = {
+        "city": "Shanghai",
+        "target_date": "2026-06-17",
+        "status": "ok",
+        "source": "aviationweather_metar",
+        "station": "ZSPD",
+        "last_obs_utc": "2026-06-17T10:30:00+00:00",
+        "n_obs": 10,
+    }
+    write_observation_cache(build_observation_cache([previous]), output)
+
+    monkeypatch.setattr(observations, "load_city_configs", lambda **_kwargs: [cfg])
+    monkeypatch.setattr(
+        observations,
+        "observation_cache_row",
+        lambda *_args, **_kwargs: {
+            "city": "Shanghai",
+            "target_date": "2026-06-17",
+            "status": "fetch_failed",
+            "source": "aviationweather_metar",
+            "station": "ZSPD",
+            "error": "HTTP 429",
+        },
+    )
+    args = argparse.Namespace(
+        output=str(output),
+        now_utc="2026-06-17T10:40:00+00:00",
+        include_station_diff=False,
+        cities=["Shanghai"],
+        timeout_sec=3.0,
+        max_workers=1,
+        include_fallback_sources=False,
+    )
+
+    cache = observations.build_cache(args)
+    row = cache["records"][0]
+
+    assert row["status"] == "ok"
+    assert row["cache_reused_after_fetch_status"] == "fetch_failed"
+    assert row["cache_reused_after_fetch_error"] == "HTTP 429"
+
+
 def test_daily_parity_check_flags_missing_new_tree(tmp_path) -> None:
     old_root = tmp_path / "old"
     new_root = tmp_path / "new"

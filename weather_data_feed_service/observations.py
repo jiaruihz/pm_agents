@@ -14,7 +14,9 @@ from zoneinfo import ZoneInfo
 from weather_data_feed import (
     build_observation_cache,
     city_local_date,
+    index_observation_cache,
     load_city_configs,
+    load_observation_cache,
     parse_now_utc,
     write_observation_cache,
 )
@@ -198,6 +200,13 @@ def observation_cache_row(
 
 def build_cache(args: argparse.Namespace) -> dict[str, Any]:
     now_utc = parse_now_utc(args.now_utc) if args.now_utc else datetime.now(timezone.utc)
+    output = Path(args.output)
+    previous_records: dict[tuple[str, str], dict[str, Any]] = {}
+    if output.exists():
+        try:
+            previous_records = index_observation_cache(load_observation_cache(output))
+        except Exception:
+            previous_records = {}
     configs = load_city_configs(
         include_station_diff=args.include_station_diff,
         only_cities=set(args.cities or []) or None,
@@ -216,7 +225,16 @@ def build_cache(args: argparse.Namespace) -> dict[str, Any]:
             for cfg in configs
         }
         for future in as_completed(futures):
-            rows.append(future.result())
+            row = future.result()
+            previous = previous_records.get((str(row.get("city") or ""), str(row.get("target_date") or "")))
+            if row.get("status") != "ok" and previous and previous.get("status") == "ok":
+                reused = dict(previous)
+                reused["cache_reused_after_fetch_status"] = row.get("status")
+                reused["cache_reused_after_fetch_error"] = row.get("error")
+                reused["cache_reused_at_utc"] = datetime.now(timezone.utc).isoformat()
+                rows.append(reused)
+            else:
+                rows.append(row)
     cache = build_observation_cache(
         sorted(rows, key=lambda row: str(row.get("city"))),
         generated_at_utc=datetime.now(timezone.utc).isoformat(),

@@ -81,6 +81,15 @@ FORECAST_PEAK_CACHE_DIR = RUNTIME_DIR / "forecast_peak_cache"
 HTTP_TIMEOUT_SEC = float(os.environ.get("THETA_CURRENT_YES_HTTP_TIMEOUT_SEC", "4"))
 HTTP_FETCH_BUDGET_SEC = float(os.environ.get("THETA_CURRENT_YES_HTTP_FETCH_BUDGET_SEC", "8"))
 FORECAST_PEAK_FETCH_BUDGET_SEC = float(os.environ.get("THETA_CURRENT_YES_FORECAST_PEAK_FETCH_BUDGET_SEC", "6"))
+OBSERVATION_CACHE_FALLBACK_STATUSES = {
+    "observation_cache_missing",
+    "observation_cache_not_ok",
+    "fetch_failed",
+    "empty",
+    "missing_temp",
+    "observation_cache_bad_ts",
+    "observation_cache_bad_temp",
+}
 
 OPEN_METEO_MODEL_BY_SOURCE = {
     "open_meteo_live_gfs": "gfs",
@@ -1202,7 +1211,7 @@ def build_current_rows(
                 max_obs_age_min=max_obs_age_min,
                 pre_update_blackout_min=pre_update_blackout_min,
             )
-        if obs.get("status") == "observation_cache_missing":
+        if obs.get("status") in OBSERVATION_CACHE_FALLBACK_STATUSES:
             obs = snapshot_metar_obs(
                 city_records,
                 station,
