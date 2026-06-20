@@ -63,6 +63,8 @@ def _asof(records: list[ObservationRecord], now: datetime, minutes: float, attr:
 def _source_chain(cfg: CityConfig, *, include_fallback_sources: bool) -> list[str]:
     sources = [cfg.live_observation_source]
     if include_fallback_sources:
+        if normalize_source_name(cfg.live_observation_source) == "aviationweather_metar":
+            sources.append("aviationweather_cache_csv")
         sources.extend(cfg.fallback_sources)
     out: list[str] = []
     for source in sources:

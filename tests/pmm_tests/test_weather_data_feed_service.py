@@ -232,6 +232,19 @@ def test_observations_cache_row_uses_data_feed_fetcher(monkeypatch) -> None:
     assert row["cadence_min"] == 30.0
 
 
+def test_observations_source_chain_uses_awc_cache_before_iem() -> None:
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import observations
+
+    cfg = load_city_configs(include_station_diff=True, only_cities={"Chicago"})[0]
+
+    assert observations._source_chain(cfg, include_fallback_sources=True) == [
+        "aviationweather_metar",
+        "aviationweather_cache_csv",
+        "iem_asos",
+    ]
+
+
 def test_observations_cache_reuses_previous_ok_row_on_fetch_failure(monkeypatch, tmp_path) -> None:
     import argparse
     from weather_data_feed import build_observation_cache, write_observation_cache
