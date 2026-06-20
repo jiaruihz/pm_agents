@@ -95,7 +95,6 @@ OBSERVATION_CACHE_FALLBACK_STATUSES = {
     "fetch_failed",
     "empty",
     "missing_temp",
-    "insufficient_obs_asof",
     "observation_cache_bad_ts",
     "observation_cache_bad_temp",
 }
@@ -1026,8 +1025,6 @@ def observation_cache_obs(
     last_obs = parse_utc(record.get("last_obs_utc"))
     if last_obs is None:
         return {"status": "observation_cache_bad_ts", "source": source, "n_obs": n_obs, "timezone": station.timezone_name}
-    if n_obs < ObservationClockConfig().min_obs_asof:
-        return {"status": "insufficient_obs_asof", "source": source, "n_obs": n_obs, "timezone": station.timezone_name}
     age_min = (now - last_obs).total_seconds() / 60.0
     cadence_min = to_float(record.get("cadence_min") or record.get("estimated_cadence_min"), np.nan)
     cadence_value = None if not math.isfinite(cadence_min) else cadence_min

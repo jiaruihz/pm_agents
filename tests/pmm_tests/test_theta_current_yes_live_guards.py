@@ -360,6 +360,55 @@ def test_build_current_rows_prefers_fast_observation_cache(monkeypatch):
     assert rows.iloc[0]["running_value"] == 70
 
 
+def test_build_current_rows_trusts_ok_observation_cache_with_low_obs_count(monkeypatch):
+    now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
+    station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
+    observation_cache = {
+        "schema_version": "weather_data_feed_observation_cache_v1",
+        "generated_at_utc": "2026-06-18T20:29:00+00:00",
+        "records": [
+            {
+                "city": "LA",
+                "target_date": "2026-06-18",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "KLAX",
+                "timezone_name": "America/Los_Angeles",
+                "last_obs_utc": "2026-06-18T20:20:00+00:00",
+                "running_max_obs_utc": "2026-06-18T20:20:00+00:00",
+                "n_obs": 1,
+                "cadence_min": 30.0,
+                "current_temp_c": 20.0,
+                "running_max_c": 20.0,
+                "decline_c": 0.0,
+            }
+        ],
+    }
+
+    def fail_snapshot_metar(*_args, **_kwargs):
+        raise AssertionError("ok observation cache should not fall back only because n_obs is low")
+
+    monkeypatch.setattr(live, "snapshot_metar_obs", fail_snapshot_metar)
+
+    rows, audits = live.build_current_rows(
+        {"ts_utc": now.isoformat()},
+        [
+            _record("LA", "68-69", event_date="2026-06-18"),
+            _record("LA", "70-71", event_date="2026-06-18"),
+        ],
+        {"LA": station},
+        now,
+        observation_cache=observation_cache,
+        max_obs_age_min=20,
+        pre_update_blackout_min=6,
+        min_gap_to_next_bracket_c=0,
+    )
+
+    assert audits == []
+    assert len(rows) == 1
+    assert rows.iloc[0]["obs"]["source"] == "aviationweather_metar"
+
+
 def test_build_current_rows_falls_back_when_fast_cache_fetch_failed(monkeypatch):
     now = datetime(2026, 6, 18, 20, 30, tzinfo=timezone.utc)
     station = live.Station("LA", "KLAX", "F", -8, "America/Los_Angeles")
