@@ -17,6 +17,7 @@ requires both --live and --confirm-live.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import gzip
 import hashlib
 import json
@@ -327,6 +328,51 @@ def forecast_values_hash(times: list[Any], temps: list[Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def forecast_temp_path_from_pairs(pairs: list[tuple[str, float]]) -> list[dict[str, Any]]:
+    path: list[dict[str, Any]] = []
+    for ts, temp in pairs:
+        try:
+            hour = int(str(ts)[11:13])
+        except Exception:
+            continue
+        path.append({"time_local": str(ts), "hour_local": hour, "temp_f": round(float(temp), 1)})
+    return path
+
+
+def forecast_curve_summary(path: list[dict[str, Any]], *, now_local: datetime) -> dict[str, Any]:
+    by_hour: dict[int, float] = {}
+    for item in path:
+        hour = int(to_float(item.get("hour_local"), -1))
+        temp = to_float(item.get("temp_f"), np.nan)
+        if 0 <= hour <= 23 and math.isfinite(temp):
+            by_hour[hour] = temp
+    if not by_hour:
+        return {}
+    current_hour = now_local.hour
+    future = {hour: temp for hour, temp in by_hour.items() if hour >= current_hour}
+    afternoon = {hour: temp for hour, temp in by_hour.items() if hour >= 12}
+    current_temp = by_hour.get(current_hour)
+    remaining_max = max(future.values()) if future else None
+    afternoon_max = max(afternoon.values()) if afternoon else None
+    return {
+        "forecast_temp_at_decision_hour_f": current_temp,
+        "forecast_remaining_max_f": remaining_max,
+        "forecast_remaining_max_hour_local": min((hour for hour, temp in future.items() if temp == remaining_max), default=None),
+        "forecast_afternoon_max_f": afternoon_max,
+        "forecast_afternoon_max_hour_local": min((hour for hour, temp in afternoon.items() if temp == afternoon_max), default=None),
+        "forecast_reheat_after_now_f": (
+            round(float(remaining_max - current_temp), 3)
+            if current_temp is not None and remaining_max is not None
+            else None
+        ),
+        "forecast_temp_12_f": by_hour.get(12),
+        "forecast_temp_13_f": by_hour.get(13),
+        "forecast_temp_14_f": by_hour.get(14),
+        "forecast_temp_15_f": by_hour.get(15),
+        "forecast_temp_16_f": by_hour.get(16),
+    }
+
+
 def forecast_details_from_open_meteo(payload: dict[str, Any], *, source_model: str) -> dict[str, Any] | None:
     hourly = payload.get("hourly", {}) if isinstance(payload, dict) else {}
     times = hourly.get("time", []) or []
@@ -364,6 +410,7 @@ def forecast_details_from_open_meteo(payload: dict[str, Any], *, source_model: s
         "forecast_timezone": payload.get("timezone"),
         "forecast_utc_offset_seconds": utc_offset_seconds,
         "forecast_peak_fetch_status": "derived",
+        "forecast_temp_path_f": forecast_temp_path_from_pairs(pairs),
     }
 
 
@@ -425,14 +472,15 @@ def forecast_peak_fields_from_record(record: dict[str, Any], *, city: str, targe
         "forecast_peak_time_utc": record.get("forecast_peak_time_utc"),
         "forecast_hourly_count": record.get("forecast_hourly_count"),
         "forecast_values_hash": record.get("forecast_values_hash"),
+        "forecast_temp_path_f": record.get("forecast_temp_path_f") if isinstance(record.get("forecast_temp_path_f"), list) else [],
         "forecast_peak_source": record.get("forecast_peak_source"),
         "forecast_timezone": record.get("forecast_timezone"),
         "forecast_utc_offset_seconds": record.get("forecast_utc_offset_seconds"),
         "forecast_peak_fetch_status": "snapshot_native" if record.get("forecast_peak_hour_local") is not None and record.get("forecast_values_hash") else "snapshot_missing",
         "forecast_peak_cache_path": "",
     }
+    has_forecast_source = any(record.get(key) not in (None, "") for key in ("forecast_source", "forecast_max_f", "model"))
     if out["forecast_peak_fetch_status"] == "snapshot_missing":
-        has_forecast_source = any(record.get(key) not in (None, "") for key in ("forecast_source", "forecast_max_f", "model"))
         if has_forecast_source:
             try:
                 fetched = fetch_live_forecast_peak_details(city, target_date, forecast_model_from_record(record))
@@ -450,6 +498,8 @@ def forecast_peak_fields_from_record(record: dict[str, Any], *, city: str, targe
         peak = to_float(out.get("forecast_peak_hour_local"), np.nan)
         if math.isfinite(peak):
             out["forecast_peak_delta_hours_local"] = now_local.hour + now_local.minute / 60.0 - peak
+    if isinstance(out.get("forecast_temp_path_f"), list):
+        out.update(forecast_curve_summary(out["forecast_temp_path_f"], now_local=now_local))
     return out
 
 
@@ -1614,6 +1664,17 @@ def build_plan(row: dict[str, Any], *, notional: float, live_enabled: bool) -> d
         "forecast_peak_fetch_status": row.get("forecast_peak_fetch_status"),
         "forecast_peak_cache_path": row.get("forecast_peak_cache_path"),
         "forecast_peak_delta_hours_local": forecast_peak_delta(row),
+        "forecast_remaining_max_f": row.get("forecast_remaining_max_f"),
+        "forecast_remaining_max_hour_local": row.get("forecast_remaining_max_hour_local"),
+        "forecast_afternoon_max_f": row.get("forecast_afternoon_max_f"),
+        "forecast_afternoon_max_hour_local": row.get("forecast_afternoon_max_hour_local"),
+        "forecast_reheat_after_now_f": row.get("forecast_reheat_after_now_f"),
+        "forecast_temp_12_f": row.get("forecast_temp_12_f"),
+        "forecast_temp_13_f": row.get("forecast_temp_13_f"),
+        "forecast_temp_14_f": row.get("forecast_temp_14_f"),
+        "forecast_temp_15_f": row.get("forecast_temp_15_f"),
+        "forecast_temp_16_f": row.get("forecast_temp_16_f"),
+        "llm_preflight": row.get("llm_preflight") if isinstance(row.get("llm_preflight"), dict) else {},
         "decision_hour_local": int(row["decision_hour_local"]),
         "decision_local_time": safe_str(row.get("local_time")),
         "decision_timezone": safe_str(row.get("timezone")),
@@ -1805,6 +1866,191 @@ def send_trigger_signal_telegram(result: dict[str, Any]) -> None:
     if len(events) > 8:
         lines.append(f"- 另有 {len(events) - 8} 条未展开，见 latest_summary.json / forward_telemetry.jsonl")
     send_telegram_text("\n".join(lines))
+
+
+def _json_object_from_text(text: str) -> dict[str, Any]:
+    raw = safe_str(text).strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`").strip()
+        if raw.lower().startswith("json"):
+            raw = raw[4:].strip()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start < 0 or end <= start:
+            raise
+        data = json.loads(raw[start : end + 1])
+    if not isinstance(data, dict):
+        raise ValueError("LLM preflight response is not a JSON object")
+    return data
+
+
+def llm_preflight_payload(row: dict[str, Any]) -> dict[str, Any]:
+    obs = row.get("obs") if isinstance(row.get("obs"), dict) else {}
+    return json_ready(
+        {
+            "task": "pre_trade_weather_current_yes_risk_review",
+            "strategy_instance": STRATEGY_INSTANCE,
+            "city": safe_str(row.get("city")),
+            "target_date": safe_str(row.get("target_date")),
+            "entry_profile": safe_str(row.get("entry_profile")),
+            "bracket": safe_str(row.get("current_bracket")),
+            "decision_local_time": safe_str(row.get("local_time")),
+            "timezone": safe_str(row.get("timezone")),
+            "unit": safe_str(row.get("unit")),
+            "observation": {
+                "source": safe_str(obs.get("source")),
+                "current_temp_c": to_float(obs.get("current_temp_c"), np.nan),
+                "running_max_c": to_float(obs.get("running_max_c"), np.nan),
+                "decline_c": to_float(row.get("decline_c"), np.nan),
+                "obs_age_min": to_float(obs.get("age_min"), np.nan),
+                "last_obs_utc": safe_str(obs.get("last_obs_utc")),
+                "running_max_obs_utc": safe_str(obs.get("running_max_obs_utc")),
+                "minutes_to_next_obs": to_float(obs.get("minutes_to_next_obs"), np.nan),
+                "minutes_since_running_max": to_float(obs.get("minutes_since_running_max"), np.nan),
+                "d_tmpf_1h": to_float(row.get("d_tmpf_1h"), np.nan),
+                "d_tmpf_3h": to_float(row.get("d_tmpf_3h"), np.nan),
+                "relh_now": to_float(row.get("relh_now"), np.nan),
+                "d_relh_3h": to_float(row.get("d_relh_3h"), np.nan),
+                "sky_now": to_float(row.get("sky_now"), np.nan),
+                "d_sky_1h": to_float(row.get("d_sky_1h"), np.nan),
+                "sknt_now": to_float(row.get("sknt_now"), np.nan),
+            },
+            "forecast": {
+                "source": safe_str(row.get("forecast_peak_source") or row.get("forecast_source")),
+                "fetch_status": safe_str(row.get("forecast_peak_fetch_status")),
+                "max_f": row.get("forecast_max_f"),
+                "max_native": row.get("forecast_max_native"),
+                "peak_hour_local": row.get("forecast_peak_hour_local"),
+                "peak_time_local": row.get("forecast_peak_time_local"),
+                "peak_delta_hours_local": forecast_peak_delta(row),
+                "remaining_max_f": row.get("forecast_remaining_max_f"),
+                "remaining_max_hour_local": row.get("forecast_remaining_max_hour_local"),
+                "afternoon_max_f": row.get("forecast_afternoon_max_f"),
+                "afternoon_max_hour_local": row.get("forecast_afternoon_max_hour_local"),
+                "reheat_after_now_f": row.get("forecast_reheat_after_now_f"),
+                "temp_12_f": row.get("forecast_temp_12_f"),
+                "temp_13_f": row.get("forecast_temp_13_f"),
+                "temp_14_f": row.get("forecast_temp_14_f"),
+                "temp_15_f": row.get("forecast_temp_15_f"),
+                "temp_16_f": row.get("forecast_temp_16_f"),
+                "hourly_path_f": row.get("forecast_temp_path_f") if isinstance(row.get("forecast_temp_path_f"), list) else [],
+            },
+            "market_and_model": {
+                "snapshot_yes_ask": to_float(row.get("yes_current_ask"), np.nan),
+                "fresh_best_bid": to_float(row.get("fresh_best_bid"), np.nan),
+                "fresh_best_ask": to_float(row.get("fresh_best_ask"), np.nan),
+                "taker_limit_price": to_float(row.get("taker_limit_price"), np.nan),
+                "p_yes_win": to_float(row.get("p_yes_win"), np.nan),
+                "edge_at_limit": to_float(row.get("edge_at_limit"), np.nan),
+                "required_quote_edge": to_float(row.get("required_quote_edge"), np.nan),
+                "fresh_available_notional": to_float(row.get("fresh_available_notional"), np.nan),
+                "gap_running_to_d1_low_c": to_float(row.get("gap_running_to_d1_low_c"), np.nan),
+                "d1_no_ask": to_float(row.get("d1_no_ask"), np.nan),
+            },
+        }
+    )
+
+
+def ensure_llm_forecast_curve(row: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(row.get("forecast_temp_path_f"), list) and row.get("forecast_temp_path_f"):
+        return row
+    city = safe_str(row.get("city"))
+    target_date = safe_str(row.get("target_date"))
+    if not city or not target_date:
+        return row
+    if not any(row.get(key) not in (None, "") for key in ("forecast_source", "forecast_max_f", "forecast_peak_source")):
+        return row
+    try:
+        fetched = fetch_live_forecast_peak_details(city, target_date, forecast_model_from_record(row))
+    except Exception as exc:  # noqa: BLE001
+        row["llm_forecast_curve_status"] = f"fetch_failed:{type(exc).__name__}"
+        row["llm_forecast_curve_error"] = str(exc)[:300]
+        return row
+    row.update({k: v for k, v in fetched.items() if v is not None})
+    try:
+        local_time = datetime.fromisoformat(safe_str(row.get("local_time")))
+    except Exception:
+        local_time = datetime.now(timezone.utc)
+    if isinstance(row.get("forecast_temp_path_f"), list):
+        row.update(forecast_curve_summary(row["forecast_temp_path_f"], now_local=local_time))
+    row["llm_forecast_curve_status"] = safe_str(fetched.get("forecast_peak_fetch_status")) or "ok"
+    return row
+
+
+def llm_preflight_prompt(payload: dict[str, Any]) -> str:
+    return (
+        "You are a weather derivatives pre-trade risk reviewer. "
+        "Review whether a BUY_YES trade on the current running-max temperature bracket is sensible. "
+        "Think like a human weather trader: inspect the full hourly temperature path, recent observed trend, "
+        "observation cadence/freshness, humidity/cloud/wind context, and whether the model edge is credible. "
+        "Do not invent data. Prefer veto or shadow_only when the setup depends on stale observations, an abnormal "
+        "forecast curve, remaining afternoon reheat risk, or a fragile one-hour dip. "
+        "Return JSON only with keys: decision (allow|veto|shadow_only), confidence (0..1), "
+        "risk_tags (array of short strings), temperature_pattern_summary (short string), "
+        "reasons (array of short strings), action (short string). "
+        f"\n\nINPUT_JSON:\n{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
+    )
+
+
+async def _run_llm_weather_preflight_async(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    from src.agents.llm.client import LLMClient, extract_content
+
+    payload = llm_preflight_payload(row)
+    client = LLMClient(timeout_seconds=float(getattr(args, "llm_preflight_timeout_seconds", 20.0)))
+    try:
+        response = await client.chat(
+            [
+                {"role": "system", "content": "Return strict JSON. No markdown."},
+                {"role": "user", "content": llm_preflight_prompt(payload)},
+            ]
+        )
+    finally:
+        await client.aclose()
+    content = extract_content(response)
+    parsed = _json_object_from_text(content)
+    decision = safe_str(parsed.get("decision")).lower()
+    if decision not in {"allow", "veto", "shadow_only"}:
+        decision = "shadow_only"
+    return json_ready(
+        {
+            "status": "ok",
+            "decision": decision,
+            "confidence": to_float(parsed.get("confidence"), 0.0),
+            "risk_tags": parsed.get("risk_tags") if isinstance(parsed.get("risk_tags"), list) else [],
+            "temperature_pattern_summary": safe_str(parsed.get("temperature_pattern_summary"))[:500],
+            "reasons": parsed.get("reasons") if isinstance(parsed.get("reasons"), list) else [],
+            "action": safe_str(parsed.get("action"))[:300],
+            "payload_version": 1,
+        }
+    )
+
+
+def run_llm_weather_preflight(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    if not getattr(args, "enable_llm_preflight", False):
+        return {"status": "disabled", "decision": "allow", "confidence": 0.0}
+    try:
+        ensure_llm_forecast_curve(row)
+        return asyncio.run(_run_llm_weather_preflight_async(row, args))
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "error",
+            "decision": "allow",
+            "confidence": 0.0,
+            "error": f"{type(exc).__name__}: {exc}"[:500],
+            "payload_version": 1,
+        }
+
+
+def llm_preflight_blocks_trade(preflight: dict[str, Any], args: argparse.Namespace) -> bool:
+    if safe_str(getattr(args, "llm_preflight_mode", "advisory")) != "block_veto":
+        return False
+    decision = safe_str(preflight.get("decision")).lower()
+    confidence = to_float(preflight.get("confidence"), 0.0)
+    min_confidence = float(getattr(args, "llm_preflight_min_block_confidence", 0.60))
+    return decision in {"veto", "shadow_only"} and confidence >= min_confidence
 
 
 def entry_profile_enabled(profile: str, args: argparse.Namespace) -> bool:
@@ -2045,6 +2291,19 @@ def current_yes_forward_telemetry_row(
         "forecast_peak_cache_path": row.get("forecast_peak_cache_path"),
         "forecast_peak_error": row.get("forecast_peak_error"),
         "forecast_peak_delta_hours_local": forecast_peak_delta(row),
+        "forecast_remaining_max_f": row.get("forecast_remaining_max_f"),
+        "forecast_remaining_max_hour_local": row.get("forecast_remaining_max_hour_local"),
+        "forecast_afternoon_max_f": row.get("forecast_afternoon_max_f"),
+        "forecast_afternoon_max_hour_local": row.get("forecast_afternoon_max_hour_local"),
+        "forecast_reheat_after_now_f": row.get("forecast_reheat_after_now_f"),
+        "forecast_temp_12_f": row.get("forecast_temp_12_f"),
+        "forecast_temp_13_f": row.get("forecast_temp_13_f"),
+        "forecast_temp_14_f": row.get("forecast_temp_14_f"),
+        "forecast_temp_15_f": row.get("forecast_temp_15_f"),
+        "forecast_temp_16_f": row.get("forecast_temp_16_f"),
+        "llm_preflight_status": safe_str((row.get("llm_preflight") or {}).get("status")) if isinstance(row.get("llm_preflight"), dict) else "",
+        "llm_preflight_decision": safe_str((row.get("llm_preflight") or {}).get("decision")) if isinstance(row.get("llm_preflight"), dict) else "",
+        "llm_preflight_confidence": to_float((row.get("llm_preflight") or {}).get("confidence"), np.nan) if isinstance(row.get("llm_preflight"), dict) else np.nan,
         "config": {
             "max_order_notional": float(args.max_order_notional),
             "max_city_day_notional": float(args.max_city_day_notional),
@@ -2056,6 +2315,9 @@ def current_yes_forward_telemetry_row(
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
             "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
             "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
+            "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
+            "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
+            "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
             "fade_confirmed_model_artifact": display_path(fade_confirmed_model_artifact_path(args)),
@@ -2142,6 +2404,9 @@ def current_yes_audit_telemetry_row(
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
             "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
             "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
+            "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
+            "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
+            "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
             "fade_confirmed_model_artifact": display_path(fade_confirmed_model_artifact_path(args)),
@@ -2461,6 +2726,31 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                     )
                 )
                 continue
+            llm_preflight = run_llm_weather_preflight(row_dict, args)
+            row_dict["llm_preflight"] = llm_preflight
+            if llm_preflight_blocks_trade(llm_preflight, args):
+                status = f"llm_preflight_{safe_str(llm_preflight.get('decision')) or 'blocked'}"
+                audits.append({"city": key[0], "target_date": key[1], "status": status, "llm_preflight": llm_preflight})
+                telemetry_rows.append(
+                    current_yes_forward_telemetry_row(
+                        row_dict,
+                        decision_status=status,
+                        args=args,
+                        run_id=telemetry_run_id,
+                        snapshot_path=snap_path,
+                        snapshot_age_min=age_min,
+                        source_profiles=source_profiles,
+                        extra={"llm_preflight": llm_preflight},
+                    )
+                )
+                trigger_signal_events.append(
+                    trigger_signal_event(
+                        row_dict,
+                        decision_status=status,
+                        extra={"llm_preflight": llm_preflight},
+                    )
+                )
+                continue
             if len(candidates) >= args.max_orders:
                 audits.append({"city": key[0], "target_date": key[1], "status": "max_orders_reached"})
                 telemetry_rows.append(
@@ -2593,10 +2883,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "d_sky_1h": round(float(r.get("d_sky_1h") or np.nan), 1),
                 "d_tmpf_3h": round(float(r.get("d_tmpf_3h") or np.nan), 1),
                 "gap_running_to_d1_low_c": round(float(r.get("gap_running_to_d1_low_c") or 0.0), 3),
-                "forecast_peak_hour_local": r.get("forecast_peak_hour_local"),
-                "forecast_peak_delta_hours_local": forecast_peak_delta(r),
-                "forecast_peak_fetch_status": r.get("forecast_peak_fetch_status"),
-            }
+            "forecast_peak_hour_local": r.get("forecast_peak_hour_local"),
+            "forecast_peak_delta_hours_local": forecast_peak_delta(r),
+            "forecast_peak_fetch_status": r.get("forecast_peak_fetch_status"),
+            "forecast_remaining_max_hour_local": r.get("forecast_remaining_max_hour_local"),
+            "forecast_reheat_after_now_f": r.get("forecast_reheat_after_now_f"),
+            "llm_preflight": r.get("llm_preflight") if isinstance(r.get("llm_preflight"), dict) else {},
+        }
             for r in candidates
         ],
         "audit_counts": dict(pd.Series([safe_str(a.get("status")) for a in audits]).value_counts()) if audits else {},
@@ -2676,6 +2969,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=0.0)
     parser.add_argument("--min-forecast-peak-hour-local", type=float, default=12.0)
     parser.add_argument("--disable-forecast-peak-clock-veto", action="store_true")
+    parser.add_argument("--enable-llm-preflight", action="store_true")
+    parser.add_argument("--llm-preflight-mode", choices=["advisory", "block_veto"], default="advisory")
+    parser.add_argument("--llm-preflight-min-block-confidence", type=float, default=0.60)
+    parser.add_argument("--llm-preflight-timeout-seconds", type=float, default=20.0)
     parser.add_argument("--entry-profile-mode", choices=["both", "fade_confirmed", "peak_forming_micro"], default="both")
     parser.add_argument("--fade-confirmed-model-mode", choices=["base", "specialist"], default="base")
     parser.add_argument("--fade-confirmed-model-artifact", default=str(FADE_CONFIRMED_MODEL_ARTIFACT.relative_to(ROOT)))

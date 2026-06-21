@@ -864,6 +864,29 @@ def test_forecast_details_from_open_meteo_uses_earliest_peak_hour():
     assert info["forecast_peak_time_utc"] == "2026-06-16T10:00:00Z"
     assert info["forecast_values_hash"]
     assert info["forecast_peak_source"] == "open_meteo_live_ecmwf"
+    assert info["forecast_temp_path_f"] == [
+        {"time_local": "2026-06-16T12:00", "hour_local": 12, "temp_f": 68.0},
+        {"time_local": "2026-06-16T13:00", "hour_local": 13, "temp_f": 69.8},
+        {"time_local": "2026-06-16T14:00", "hour_local": 14, "temp_f": 69.8},
+        {"time_local": "2026-06-16T15:00", "hour_local": 15, "temp_f": 68.9},
+    ]
+
+
+def test_forecast_curve_summary_exposes_remaining_reheat():
+    summary = live.forecast_curve_summary(
+        [
+            {"hour_local": 11, "temp_f": 82.0},
+            {"hour_local": 12, "temp_f": 81.5},
+            {"hour_local": 13, "temp_f": 83.0},
+            {"hour_local": 14, "temp_f": 84.0},
+        ],
+        now_local=datetime(2026, 6, 16, 12, 10, tzinfo=ZoneInfo("Asia/Tokyo")),
+    )
+
+    assert summary["forecast_temp_at_decision_hour_f"] == 81.5
+    assert summary["forecast_remaining_max_f"] == 84.0
+    assert summary["forecast_remaining_max_hour_local"] == 14
+    assert summary["forecast_reheat_after_now_f"] == 2.5
 
 
 def test_build_current_rows_allows_one_c_gap_for_current_yes(monkeypatch):
@@ -1143,6 +1166,64 @@ def test_forecast_peak_clock_veto_blocks_morning_peak_for_both_profiles():
     assert live.classify_entry_profile({**base, "decline_c": 1.0, "forecast_peak_hour_local": 13}, args) == (
         "snapshot_rule_passed",
         "fade_confirmed",
+    )
+
+
+def test_llm_preflight_payload_includes_curve_weather_and_market_context():
+    row = {
+        "city": "Wuhan",
+        "target_date": "2026-06-21",
+        "entry_profile": "fade_confirmed",
+        "current_bracket": "28",
+        "local_time": "2026-06-21T11:10:24+08:00",
+        "timezone": "Asia/Shanghai",
+        "unit": "C",
+        "decline_c": 1.0,
+        "obs": {
+            "source": "aviationweather_cache_csv",
+            "current_temp_c": 27.0,
+            "running_max_c": 28.0,
+            "age_min": 10.4,
+            "minutes_to_next_obs": 49.6,
+            "minutes_since_running_max": 69.2,
+        },
+        "d_tmpf_3h": 1.8,
+        "relh_now": 62.0,
+        "sky_now": 3.0,
+        "forecast_peak_hour_local": 11,
+        "forecast_remaining_max_f": 84.0,
+        "forecast_reheat_after_now_f": 2.0,
+        "forecast_temp_path_f": [{"hour_local": 11, "temp_f": 82.8}, {"hour_local": 14, "temp_f": 84.0}],
+        "yes_current_ask": 0.711,
+        "fresh_best_ask": 0.711,
+        "taker_limit_price": 0.711,
+        "p_yes_win": 0.809,
+        "edge_at_limit": 0.098,
+    }
+
+    payload = live.llm_preflight_payload(row)
+
+    assert payload["city"] == "Wuhan"
+    assert payload["forecast"]["hourly_path_f"] == [{"hour_local": 11, "temp_f": 82.8}, {"hour_local": 14, "temp_f": 84.0}]
+    assert payload["forecast"]["reheat_after_now_f"] == 2.0
+    assert payload["observation"]["d_tmpf_3h"] == 1.8
+    assert payload["market_and_model"]["edge_at_limit"] == 0.098
+
+
+def test_llm_preflight_blocks_only_in_block_veto_mode():
+    preflight = {"status": "ok", "decision": "veto", "confidence": 0.7}
+
+    assert not live.llm_preflight_blocks_trade(
+        preflight,
+        argparse.Namespace(llm_preflight_mode="advisory", llm_preflight_min_block_confidence=0.6),
+    )
+    assert live.llm_preflight_blocks_trade(
+        preflight,
+        argparse.Namespace(llm_preflight_mode="block_veto", llm_preflight_min_block_confidence=0.6),
+    )
+    assert not live.llm_preflight_blocks_trade(
+        {**preflight, "confidence": 0.59},
+        argparse.Namespace(llm_preflight_mode="block_veto", llm_preflight_min_block_confidence=0.6),
     )
 
 

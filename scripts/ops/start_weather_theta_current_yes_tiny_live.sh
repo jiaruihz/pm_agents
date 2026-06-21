@@ -29,6 +29,12 @@ MAX_SNAPSHOT_AGE_MIN="${MAX_SNAPSHOT_AGE_MIN:-45}"
 MAX_OBS_AGE_MIN="${MAX_OBS_AGE_MIN:-20}"
 PRE_METAR_UPDATE_BLACKOUT_MIN="${PRE_METAR_UPDATE_BLACKOUT_MIN:-6}"
 MIN_GAP_TO_NEXT_BRACKET_C="${MIN_GAP_TO_NEXT_BRACKET_C:-0}"
+MIN_FORECAST_PEAK_HOUR_LOCAL="${MIN_FORECAST_PEAK_HOUR_LOCAL:-12}"
+FORECAST_PEAK_CLOCK_VETO="${FORECAST_PEAK_CLOCK_VETO:-1}"
+LLM_PREFLIGHT="${LLM_PREFLIGHT:-1}"
+LLM_PREFLIGHT_MODE="${LLM_PREFLIGHT_MODE:-advisory}"
+LLM_PREFLIGHT_MIN_BLOCK_CONFIDENCE="${LLM_PREFLIGHT_MIN_BLOCK_CONFIDENCE:-0.60}"
+LLM_PREFLIGHT_TIMEOUT_SECONDS="${LLM_PREFLIGHT_TIMEOUT_SECONDS:-20}"
 THETA_CURRENT_YES_ENTRY_PROFILE_MODE="${THETA_CURRENT_YES_ENTRY_PROFILE_MODE:-both}"
 FADE_CONFIRMED_MODEL_MODE="${FADE_CONFIRMED_MODEL_MODE:-base}"
 FADE_CONFIRMED_MODEL_ARTIFACT="${FADE_CONFIRMED_MODEL_ARTIFACT:-docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/fade_confirmed_model.json}"
@@ -40,6 +46,7 @@ PEAK_FORMING_MIN_P="${PEAK_FORMING_MIN_P:-0.60}"
 PEAK_FORMING_MIN_EDGE="${PEAK_FORMING_MIN_EDGE:-0.02}"
 PEAK_FORMING_METAR_VETO="${PEAK_FORMING_METAR_VETO:-1}"
 PEAK_FORMING_MIN_MINUTES_SINCE_RUNNING_MAX="${PEAK_FORMING_MIN_MINUTES_SINCE_RUNNING_MAX:-10}"
+PEAK_FORMING_MAX_MINUTES_AFTER_EXPECTED_OBS="${PEAK_FORMING_MAX_MINUTES_AFTER_EXPECTED_OBS:-0}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-60}"
 NO_TELEGRAM="${NO_TELEGRAM:-0}"
 ALLOW_SHARED_CURRENT_YES_LIVE="${ALLOW_SHARED_CURRENT_YES_LIVE:-0}"
@@ -70,11 +77,25 @@ args=(
   --max-obs-age-min "$MAX_OBS_AGE_MIN"
   --pre-metar-update-blackout-min "$PRE_METAR_UPDATE_BLACKOUT_MIN"
   --min-gap-to-next-bracket-c "$MIN_GAP_TO_NEXT_BRACKET_C"
+  --min-forecast-peak-hour-local "$MIN_FORECAST_PEAK_HOUR_LOCAL"
   --entry-profile-mode "$THETA_CURRENT_YES_ENTRY_PROFILE_MODE"
   --fade-confirmed-model-mode "$FADE_CONFIRMED_MODEL_MODE"
   --fade-confirmed-model-artifact "$FADE_CONFIRMED_MODEL_ARTIFACT"
   --interval-seconds "$INTERVAL_SECONDS"
 )
+
+if [[ "$FORECAST_PEAK_CLOCK_VETO" != "1" ]]; then
+  args+=(--disable-forecast-peak-clock-veto)
+fi
+
+if [[ "$LLM_PREFLIGHT" == "1" ]]; then
+  args+=(
+    --enable-llm-preflight
+    --llm-preflight-mode "$LLM_PREFLIGHT_MODE"
+    --llm-preflight-min-block-confidence "$LLM_PREFLIGHT_MIN_BLOCK_CONFIDENCE"
+    --llm-preflight-timeout-seconds "$LLM_PREFLIGHT_TIMEOUT_SECONDS"
+  )
+fi
 
 if [[ "$ENABLE_PEAK_FORMING_LIVE" == "1" ]]; then
   args+=(
@@ -85,6 +106,7 @@ if [[ "$ENABLE_PEAK_FORMING_LIVE" == "1" ]]; then
     --peak-forming-min-p "$PEAK_FORMING_MIN_P"
     --peak-forming-min-edge "$PEAK_FORMING_MIN_EDGE"
     --peak-forming-min-minutes-since-running-max "$PEAK_FORMING_MIN_MINUTES_SINCE_RUNNING_MAX"
+    --peak-forming-max-minutes-after-expected-obs "$PEAK_FORMING_MAX_MINUTES_AFTER_EXPECTED_OBS"
   )
   if [[ "$PEAK_FORMING_METAR_VETO" != "1" ]]; then
     args+=(--disable-peak-forming-metar-veto)
