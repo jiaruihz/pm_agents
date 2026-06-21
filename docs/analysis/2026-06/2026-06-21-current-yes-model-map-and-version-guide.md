@@ -301,7 +301,7 @@ weather / market snapshot
 |---|---|---|---|
 | 本地 `13–15` 点窗口 | 执行硬规则 | **① 状态层** ★ | 钟点是在替模型猜"峰过没过"；应换成"相对太阳过顶/预报峰"由状态层判断 |
 | `新高后 ≥10 分钟`（peak-forming） | 执行硬规则 | **① 状态层原始特征** ★ | 10 分钟不是封顶信号；30/60 分钟 METAR 城市至少要等完整观测周期后的新报文，确认没有更高值，才能进入 `stalled_high_candidate` |
-| `decline_c ≥ 0.5`（fade） / `≤0.25`（peak） | 执行硬规则 | **① 状态层** ★ | "回落=收盘高点结束"是错的（false fade）；mature vs false fade 该模型判 |
+| `decline_c ≥ 0.5`（fade） / `≤0.25`（peak） | 执行硬规则 | **① 状态层原始特征** ★ | `0.25C` 是旧代码容差，不是 METAR 状态单位；状态层应看官方读数/settlement bracket 是否仍在 running max，以及是否已有后续观测确认 |
 | `预报峰 ≥12 点` veto | 执行硬规则 | **① 状态层** ★ | 应换成 `forecast_remaining_max` / `reheat_after_now` 连续特征 |
 | `p_yes ≥ 0.5/0.6` | 模型阈值 | **② 概率层** | 概率本身要锚市场、重校准 |
 | `edge ≥ 0.02/0.05` | 模型阈值 | **② 概率层** | ★口径：edge 要对"真实校准概率"算，不是"model_p − 价格" |
@@ -322,7 +322,7 @@ weather / market snapshot
 用户指出的问题成立：下面这个旧条件**不能**定义为状态层买入信号：
 
 ```text
-decline <= 0.25C
+latest obs maps to running-max settlement value / bracket
 + ask 0.50-0.97
 + model p >= 0.60
 + edge >= 0.02
@@ -331,7 +331,8 @@ decline <= 0.25C
 
 它混了三件事：
 
-- `decline <= 0.25C` 和 `minutes_since_running_max` 是状态层原始特征，但 10 分钟远小于多数 METAR 城市的 30/60 分钟报文周期，不能证明"高点已形成"。
+- `decline <= 0.25C` 只是旧代码用连续摄氏度差表达"仍在 running max 附近"的容差；对整数/离散 METAR 读数来说没有独立物理含义，应改成"官方读数/round 后 settlement value / bracket 仍等于 running max"。
+- `minutes_since_running_max` 是状态层原始特征，但 10 分钟远小于多数 METAR 城市的 30/60 分钟报文周期，不能证明"高点已形成"。
 - `ask` 是执行/市场价格条件，不属于状态层。
 - `model p` 和 `edge` 是概率/EV 层条件，也不属于状态层。
 
@@ -340,7 +341,7 @@ decline <= 0.25C
 | state | 定义 | live 动作 |
 |---|---|---|
 | `fresh_high_unconfirmed` | 刚创新高，或距离最后一次 running max 尚未跨过一个完整官方观测周期 | 不买 YES；最多 telemetry |
-| `near_high_unconfirmed` | 仍在高点附近（如回落 ≤0.25C），但还没有后续观测证明不再创新高 | 不买 YES；不能用 p/edge 强行放行 |
+| `same_bracket_unconfirmed` | 最新官方读数仍映射到 running max 的 settlement value/bracket，但还没有后续观测证明不再创新高 | 不买 YES；不能用 p/edge 强行放行 |
 | `stalled_high_candidate` | 高点后至少出现 1 个新的官方观测周期，且没有更高值；同时预报余下小时没有明显 reheat | 才允许进入概率/EV 层 |
 | `mature_fade_confirmed` | 高点后回落、时间已跨过日峰/预报峰，且后续观测/预报/云风湿条件共同支持 no-reheat | 才允许作为 fade 买点候选 |
 | `false_fade_risk` | 早段回落、云层/湿度/风向/预报仍支持再升温，或还没过当地日峰 | veto 或 shadow |
@@ -349,7 +350,7 @@ decline <= 0.25C
 
 ```text
 stalled_high_candidate =
-  near_running_max
+  latest obs still maps to running-max settlement value / bracket
   + post_high_obs_count >= 1        # 对 hourly METAR 城市尤其重要
   + no_higher_print_after_high
   + after_solar_or_forecast_peak
@@ -388,7 +389,7 @@ stalled_high_candidate =
 
 ### peak-forming 当前规则
 
-下面是**当前 live 现状记录**，不是推荐的新状态定义。尤其 `minutes_since_running_max >= 10` 只说明没有在刚打印新高的瞬间追单，不能说明今天高点已形成。
+下面是**当前 live 现状记录**，不是推荐的新状态定义。尤其 `decline_c <= 0.25C` 只是旧代码容差，`minutes_since_running_max >= 10` 只说明没有在刚打印新高的瞬间追单；两者都不能说明今天高点已形成。
 
 - `decline_c <= 0.25C`。
 - `0.50 <= yes ask <= 0.97`。
