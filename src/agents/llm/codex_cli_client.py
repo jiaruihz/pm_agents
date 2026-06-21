@@ -11,6 +11,34 @@ from typing import Any, Dict, Optional, Type
 from pydantic import BaseModel
 
 
+def _strict_json_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
+    out = json.loads(json.dumps(schema))
+
+    def visit(node: Any) -> None:
+        if not isinstance(node, dict):
+            return
+        if node.get("type") == "object" or "properties" in node:
+            node["additionalProperties"] = False
+            props = node.get("properties")
+            if isinstance(props, dict):
+                node["required"] = list(props.keys())
+        for key in ("properties", "$defs", "definitions"):
+            child_map = node.get(key)
+            if isinstance(child_map, dict):
+                for child in child_map.values():
+                    visit(child)
+        for key in ("items", "anyOf", "oneOf", "allOf"):
+            child = node.get(key)
+            if isinstance(child, list):
+                for item in child:
+                    visit(item)
+            else:
+                visit(child)
+
+    visit(out)
+    return out
+
+
 def codex_cli_available() -> bool:
     return shutil.which("codex") is not None
 
@@ -32,7 +60,7 @@ def run_codex_exec_json(
     if not codex_cli_available():
         raise RuntimeError("codex CLI not found in PATH")
 
-    selected_model = model or os.getenv("CODEX_RULE_MODEL") or "gpt-5.2"
+    selected_model = model or os.getenv("CODEX_RULE_MODEL")
     selected_effort = reasoning_effort or os.getenv("CODEX_RULE_REASONING_EFFORT") or "low"
     workdir = cwd or _repo_root()
 
@@ -42,15 +70,13 @@ def run_codex_exec_json(
         output_path = tmp_path / "result.json"
 
         schema_path.write_text(
-            json.dumps(output_schema or output_model.model_json_schema(), ensure_ascii=False, indent=2),
+            json.dumps(_strict_json_schema(output_schema or output_model.model_json_schema()), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
         cmd = [
             "codex",
             "exec",
-            "-m",
-            selected_model,
             "-c",
             f'model_reasoning_effort="{selected_effort}"',
             "--ephemeral",
@@ -60,6 +86,8 @@ def run_codex_exec_json(
             str(output_path),
             "-",
         ]
+        if selected_model:
+            cmd[2:2] = ["-m", selected_model]
 
         proc = subprocess.run(
             cmd,

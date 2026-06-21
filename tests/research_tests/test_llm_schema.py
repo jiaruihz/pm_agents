@@ -1,4 +1,5 @@
 from src.strategies.rule_lawyer.parser import RuleParse, TimeWindow, EntityDef
+from src.agents.llm.codex_cli_client import _strict_json_schema
 
 
 def test_ruleparse_validation_accepts_schema():
@@ -23,3 +24,23 @@ def test_ruleparse_validation_accepts_schema():
     assert parsed.market_id == "m1"
     assert parsed.trigger_type == "procedural_vote"
     assert parsed.time_window.end_at_utc.startswith("2024")
+
+
+def test_codex_cli_strict_schema_requires_all_object_properties():
+    schema = {
+        "type": "object",
+        "properties": {
+            "decision": {"type": "string"},
+            "nested": {
+                "type": "object",
+                "properties": {"reason": {"type": "string"}},
+            },
+        },
+    }
+
+    strict = _strict_json_schema(schema)
+
+    assert strict["additionalProperties"] is False
+    assert strict["required"] == ["decision", "nested"]
+    assert strict["properties"]["nested"]["additionalProperties"] is False
+    assert strict["properties"]["nested"]["required"] == ["reason"]
