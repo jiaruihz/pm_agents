@@ -2225,6 +2225,29 @@ def forecast_peak_delta(row: dict[str, Any]) -> float | None:
     return None
 
 
+def first_finite(*values: Any) -> float:
+    for value in values:
+        parsed = to_float(value, np.nan)
+        if math.isfinite(parsed):
+            return parsed
+    return np.nan
+
+
+def peak_state_v2_shadow_fields(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    obs = row.get("obs") if isinstance(row.get("obs"), dict) else {}
+    d_tmpf_3h = first_finite(row.get("d_tmpf_3h"), obs.get("d_tmpf_3h"))
+    max_d_tmpf_3h = float(getattr(args, "peak_state_v2_max_d_tmpf_3h", 2.0))
+    is_peak_profile = safe_str(row.get("entry_profile")) == "peak_forming_micro"
+    hazard_downtrend = bool(is_peak_profile and math.isfinite(d_tmpf_3h) and d_tmpf_3h <= max_d_tmpf_3h)
+    return {
+        "peak_state_v2_version": "hazard_downtrend_dtmp3_v1",
+        "peak_state_v2_shadow_candidate": hazard_downtrend,
+        "peak_state_v2_hazard_downtrend": hazard_downtrend,
+        "peak_state_v2_d_tmpf_3h": d_tmpf_3h,
+        "peak_state_v2_max_d_tmpf_3h": max_d_tmpf_3h,
+    }
+
+
 def current_yes_forward_telemetry_row(
     row: dict[str, Any],
     *,
@@ -2376,6 +2399,7 @@ def current_yes_forward_telemetry_row(
             "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
+            "peak_state_v2_max_d_tmpf_3h": float(getattr(args, "peak_state_v2_max_d_tmpf_3h", 2.0)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
             "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
@@ -2383,6 +2407,7 @@ def current_yes_forward_telemetry_row(
             "max_local_hour": int(args.max_local_hour),
         },
     }
+    base.update(peak_state_v2_shadow_fields(row, args))
     base.update(source_profile_fields(safe_str(row.get("city")), source_profiles))
     if extra:
         base.update(extra)
@@ -2469,6 +2494,7 @@ def current_yes_audit_telemetry_row(
             "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
+            "peak_state_v2_max_d_tmpf_3h": float(getattr(args, "peak_state_v2_max_d_tmpf_3h", 2.0)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
             "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
@@ -2896,6 +2922,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
+            "peak_state_v2_max_d_tmpf_3h": float(getattr(args, "peak_state_v2_max_d_tmpf_3h", 2.0)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
             "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
@@ -3046,6 +3073,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--peak-forming-max-ask", type=float, default=0.97)
     parser.add_argument("--peak-forming-min-p", type=float, default=0.60)
     parser.add_argument("--peak-forming-min-edge", type=float, default=0.02)
+    parser.add_argument("--peak-state-v2-max-d-tmpf-3h", type=float, default=2.0)
     parser.add_argument("--disable-peak-forming-metar-veto", action="store_true")
     parser.add_argument("--peak-forming-min-minutes-since-running-max", type=float, default=10.0)
     parser.add_argument("--peak-forming-max-minutes-after-expected-obs", type=float, default=0.0)
