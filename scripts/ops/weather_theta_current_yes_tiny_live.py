@@ -7,7 +7,7 @@ This is an independent live branch for the frozen v9 rule:
   fade-confirmed gate thresholds come from DEFAULT_FADE_GATE / CLI args
   fresh CLOB ask rechecked before execution, fresh_ask <= snapshot_ask + 0.02
   d1 NO sibling quote visible
-  $3/order and $3/city-day cap
+  $1.50/order and $1.50/city-day cap
 
 It writes standard weather_edge_trade_plan JSONL rows and can hand them to the
 existing weather_order_executor.  Default mode is plan-only; live submission
@@ -2407,8 +2407,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--snapshot")
     parser.add_argument("--observation-cache", default="")
     parser.add_argument("--now-utc", default="")
-    parser.add_argument("--max-order-notional", type=float, default=3.0)
-    parser.add_argument("--max-city-day-notional", type=float, default=3.0)
+    parser.add_argument("--max-order-notional", type=float, default=1.5)
+    parser.add_argument("--max-city-day-notional", type=float, default=1.5)
     parser.add_argument("--min-available-notional", type=float, default=0.0)
     parser.add_argument("--max-taker-cushion", type=float, default=0.02)
     parser.add_argument("--cross-tick-buffer", type=float, default=0.001)
