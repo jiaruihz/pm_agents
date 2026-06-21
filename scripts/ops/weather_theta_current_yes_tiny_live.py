@@ -2071,14 +2071,14 @@ def run_llm_weather_preflight(row: dict[str, Any], args: argparse.Namespace) -> 
         return {"status": "disabled", "decision": "allow", "confidence": 0.0}
     try:
         ensure_llm_forecast_curve(row)
-        backend = safe_str(getattr(args, "llm_preflight_backend", "api")) or "api"
+        backend = safe_str(getattr(args, "llm_preflight_backend", "codex_cli")) or "codex_cli"
         if backend == "codex_cli":
             return _run_codex_weather_preflight(row, args)
         return asyncio.run(_run_llm_weather_preflight_async(row, args))
     except Exception as exc:  # noqa: BLE001
         return {
             "status": "error",
-            "backend": safe_str(getattr(args, "llm_preflight_backend", "api")) or "api",
+            "backend": safe_str(getattr(args, "llm_preflight_backend", "codex_cli")) or "codex_cli",
             "decision": "allow",
             "confidence": 0.0,
             "error": f"{type(exc).__name__}: {exc}"[:500],
@@ -2358,7 +2358,7 @@ def current_yes_forward_telemetry_row(
             "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
             "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
             "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
-            "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "api")),
+            "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "codex_cli")),
             "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
             "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
@@ -2448,7 +2448,7 @@ def current_yes_audit_telemetry_row(
             "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
             "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
             "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
-            "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "api")),
+            "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "codex_cli")),
             "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
             "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
@@ -2871,7 +2871,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
             "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
             "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
-            "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "api")),
+            "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "codex_cli")),
             "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
             "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
@@ -3018,7 +3018,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-forecast-peak-hour-local", type=float, default=12.0)
     parser.add_argument("--disable-forecast-peak-clock-veto", action="store_true")
     parser.add_argument("--enable-llm-preflight", action="store_true")
-    parser.add_argument("--llm-preflight-backend", choices=["api", "codex_cli"], default="api")
+    parser.add_argument("--llm-preflight-backend", choices=["api", "codex_cli"], default="codex_cli")
     parser.add_argument("--llm-preflight-mode", choices=["advisory", "block_veto"], default="advisory")
     parser.add_argument("--llm-preflight-min-block-confidence", type=float, default=0.60)
     parser.add_argument("--llm-preflight-timeout-seconds", type=float, default=20.0)
