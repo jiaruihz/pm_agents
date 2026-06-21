@@ -48,6 +48,11 @@ from src.strategies.weather_edge_v1.tools.current_yes_model import (
     fade_gate_reject_reason,
     score_artifact as score_rows,
 )
+from src.strategies.weather_edge_v1.tools.current_yes_codex_prompts import (
+    DEFAULT_PROMPT_VERSION,
+    build_current_yes_codex_prompt,
+    normalize_prompt_version,
+)
 from src.strategies.weather_edge_v1.tools.execution_pipeline import read_jsonl, stable_hash
 from src.strategies.weather_edge_v1.tools.live_state import read_live_state
 from weather_data_feed import (
@@ -1980,31 +1985,21 @@ def ensure_llm_forecast_curve(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
-def llm_preflight_prompt(payload: dict[str, Any]) -> str:
-    return (
-        "You are a weather derivatives pre-trade risk reviewer. "
-        "Review whether a BUY_YES trade on the current running-max temperature bracket is sensible. "
-        "Think like a human weather trader: inspect the full hourly temperature path, recent observed trend, "
-        "observation cadence/freshness, humidity/cloud/wind context, and whether the model edge is credible. "
-        "Do not invent data. Prefer veto or shadow_only when the setup depends on stale observations, an abnormal "
-        "forecast curve, remaining afternoon reheat risk, or a fragile one-hour dip. "
-        "Return JSON only with keys: decision (allow|veto|shadow_only), confidence (0..1), "
-        "risk_tags (array of short strings), temperature_pattern_summary (short string), "
-        "reasons (array of short strings), action (short string). "
-        f"\n\nINPUT_JSON:\n{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
-    )
+def llm_preflight_prompt(payload: dict[str, Any], prompt_version: str | None = None) -> str:
+    return build_current_yes_codex_prompt(payload, version=prompt_version)
 
 
 async def _run_llm_weather_preflight_async(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     from src.agents.llm.client import LLMClient, extract_content
 
     payload = llm_preflight_payload(row)
+    prompt_version = normalize_prompt_version(getattr(args, "llm_preflight_prompt_version", DEFAULT_PROMPT_VERSION))
     client = LLMClient(timeout_seconds=float(getattr(args, "llm_preflight_timeout_seconds", 20.0)))
     try:
         response = await client.chat(
             [
                 {"role": "system", "content": "Return strict JSON. No markdown."},
-                {"role": "user", "content": llm_preflight_prompt(payload)},
+                {"role": "user", "content": llm_preflight_prompt(payload, prompt_version=prompt_version)},
             ]
         )
     finally:
@@ -2025,6 +2020,7 @@ async def _run_llm_weather_preflight_async(row: dict[str, Any], args: argparse.N
             "reasons": parsed.get("reasons") if isinstance(parsed.get("reasons"), list) else [],
             "action": safe_str(parsed.get("action"))[:300],
             "payload_version": 1,
+            "prompt_version": prompt_version,
         }
     )
 
@@ -2043,8 +2039,9 @@ def _run_codex_weather_preflight(row: dict[str, Any], args: argparse.Namespace) 
         action: str = ""
 
     payload = llm_preflight_payload(row)
+    prompt_version = normalize_prompt_version(getattr(args, "llm_preflight_prompt_version", DEFAULT_PROMPT_VERSION))
     parsed = run_codex_exec_json(
-        prompt=llm_preflight_prompt(payload),
+        prompt=llm_preflight_prompt(payload, prompt_version=prompt_version),
         output_model=CodexWeatherPreflightResult,
         model=safe_str(getattr(args, "llm_preflight_codex_model", "")) or None,
         reasoning_effort=safe_str(getattr(args, "llm_preflight_codex_reasoning_effort", "")) or "low",
@@ -2062,6 +2059,7 @@ def _run_codex_weather_preflight(row: dict[str, Any], args: argparse.Namespace) 
             "reasons": parsed.get("reasons") if isinstance(parsed.get("reasons"), list) else [],
             "action": safe_str(parsed.get("action"))[:300],
             "payload_version": 1,
+            "prompt_version": prompt_version,
         }
     )
 
@@ -2083,6 +2081,7 @@ def run_llm_weather_preflight(row: dict[str, Any], args: argparse.Namespace) -> 
             "confidence": 0.0,
             "error": f"{type(exc).__name__}: {exc}"[:500],
             "payload_version": 1,
+            "prompt_version": safe_str(getattr(args, "llm_preflight_prompt_version", DEFAULT_PROMPT_VERSION)) or DEFAULT_PROMPT_VERSION,
         }
 
 
@@ -2092,7 +2091,7 @@ def llm_preflight_blocks_trade(preflight: dict[str, Any], args: argparse.Namespa
     decision = safe_str(preflight.get("decision")).lower()
     confidence = to_float(preflight.get("confidence"), 0.0)
     min_confidence = float(getattr(args, "llm_preflight_min_block_confidence", 0.60))
-    return decision in {"veto", "shadow_only"} and confidence >= min_confidence
+    return decision == "veto" and confidence >= min_confidence
 
 
 def entry_profile_enabled(profile: str, args: argparse.Namespace) -> bool:
@@ -2360,6 +2359,9 @@ def current_yes_forward_telemetry_row(
             "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
             "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "codex_cli")),
             "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
+            "llm_preflight_prompt_version": normalize_prompt_version(
+                getattr(args, "llm_preflight_prompt_version", DEFAULT_PROMPT_VERSION)
+            ),
             "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
@@ -2450,6 +2452,9 @@ def current_yes_audit_telemetry_row(
             "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
             "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "codex_cli")),
             "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
+            "llm_preflight_prompt_version": normalize_prompt_version(
+                getattr(args, "llm_preflight_prompt_version", DEFAULT_PROMPT_VERSION)
+            ),
             "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
@@ -2873,6 +2878,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
             "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "codex_cli")),
             "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
+            "llm_preflight_prompt_version": normalize_prompt_version(
+                getattr(args, "llm_preflight_prompt_version", DEFAULT_PROMPT_VERSION)
+            ),
             "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
@@ -3020,6 +3028,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--enable-llm-preflight", action="store_true")
     parser.add_argument("--llm-preflight-backend", choices=["api", "codex_cli"], default="codex_cli")
     parser.add_argument("--llm-preflight-mode", choices=["advisory", "block_veto"], default="advisory")
+    parser.add_argument("--llm-preflight-prompt-version", default=DEFAULT_PROMPT_VERSION)
     parser.add_argument("--llm-preflight-min-block-confidence", type=float, default=0.60)
     parser.add_argument("--llm-preflight-timeout-seconds", type=float, default=20.0)
     parser.add_argument("--llm-preflight-codex-model", default="")

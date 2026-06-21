@@ -1225,6 +1225,17 @@ def test_llm_preflight_blocks_only_in_block_veto_mode():
         {**preflight, "confidence": 0.59},
         argparse.Namespace(llm_preflight_mode="block_veto", llm_preflight_min_block_confidence=0.6),
     )
+    assert not live.llm_preflight_blocks_trade(
+        {"status": "ok", "decision": "shadow_only", "confidence": 0.99},
+        argparse.Namespace(llm_preflight_mode="block_veto", llm_preflight_min_block_confidence=0.6),
+    )
+
+
+def test_llm_preflight_prompt_versions_are_explicit():
+    prompt = live.llm_preflight_prompt({"city": "Wuhan"}, prompt_version="v2")
+
+    assert "PROMPT_VERSION: current_yes_codex_v2_veto_loss_detector" in prompt
+    assert '"city": "Wuhan"' in prompt
 
 
 def test_entry_profile_mode_splits_fade_and_peak_instances():
