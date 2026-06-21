@@ -1646,6 +1646,167 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
         fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def _signal_id_for_row(row: dict[str, Any]) -> str:
+    return stable_hash(
+        {
+            "strategy_instance": STRATEGY_INSTANCE,
+            "city": safe_str(row.get("city")),
+            "target_date": safe_str(row.get("target_date")),
+            "bracket": safe_str(row.get("current_bracket") or row.get("bracket")),
+        }
+    )
+
+
+def trigger_signal_event(
+    row: dict[str, Any],
+    *,
+    decision_status: str,
+    order_status: str = "blocked_before_order",
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    base = {
+        "record_type": "theta_current_yes_trigger_signal_event",
+        "created_at_utc": now_utc(),
+        "strategy_instance": STRATEGY_INSTANCE,
+        "strategy_id": STRATEGY_ID,
+        "signal_id": _signal_id_for_row(row),
+        "decision_status": decision_status,
+        "blocker": "" if decision_status in {"planned", "submitted"} else decision_status,
+        "order_status": order_status,
+        "city": safe_str(row.get("city")),
+        "target_date": safe_str(row.get("target_date")),
+        "entry_profile": safe_str(row.get("entry_profile")),
+        "bracket": safe_str(row.get("current_bracket") or row.get("bracket")),
+        "token_id": safe_str(row.get("token_id")),
+        "market_id": safe_str(row.get("market_id")),
+        "event_slug": safe_str(row.get("event_slug")),
+        "snapshot_ask": to_float(row.get("yes_current_ask"), np.nan),
+        "fresh_ask": to_float(row.get("fresh_best_ask") or row.get("fresh_ask"), np.nan),
+        "limit_price": to_float(row.get("taker_limit_price"), np.nan),
+        "p_yes_win": to_float(row.get("p_yes_win"), np.nan),
+        "snapshot_edge": to_float(row.get("ev"), np.nan),
+        "edge_at_limit": to_float(row.get("edge_at_limit"), np.nan),
+        "decline_c": to_float(row.get("decline_c"), np.nan),
+        "decision_local_time": safe_str(row.get("local_time")),
+        "decision_timezone": safe_str(row.get("timezone")),
+    }
+    if extra:
+        base.update(extra)
+    return json_ready(base)
+
+
+def _extract_live_order_id(row: dict[str, Any]) -> str:
+    response = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+    place = response.get("place") if isinstance(response.get("place"), dict) else {}
+    for source in (row, response, place):
+        for key in ("order_id", "orderID", "id", "clob_order_id"):
+            value = safe_str(source.get(key))
+            if value:
+                return value
+    return ""
+
+
+def _live_order_rows_by_plan(live_out: Path, plan_ids: set[str]) -> dict[str, dict[str, Any]]:
+    if not plan_ids:
+        return {}
+    rows: dict[str, dict[str, Any]] = {}
+    for row in read_jsonl(live_out):
+        plan_id = safe_str(row.get("plan_id"))
+        if plan_id in plan_ids:
+            rows[plan_id] = row
+    return rows
+
+
+def enrich_trigger_events_with_plans_and_orders(
+    events: list[dict[str, Any]],
+    *,
+    plans: list[dict[str, Any]],
+    live_enabled: bool,
+    live_requested: bool,
+    live_out: Path,
+) -> None:
+    plan_by_signal_id = {safe_str(plan.get("signal_id")): plan for plan in plans}
+    plan_ids = {safe_str(plan.get("plan_id")) for plan in plans if safe_str(plan.get("plan_id"))}
+    live_rows = _live_order_rows_by_plan(live_out, plan_ids) if live_requested else {}
+    for event in events:
+        if event.get("decision_status") != "planned":
+            continue
+        plan = plan_by_signal_id.get(safe_str(event.get("signal_id")))
+        if plan is None:
+            event["order_status"] = "plan_missing"
+            continue
+        plan_id = safe_str(plan.get("plan_id"))
+        event["plan_id"] = plan_id
+        event["order_notional"] = to_float(plan.get("notional"), np.nan)
+        event["limit_price"] = to_float(plan.get("limit_price"), np.nan)
+        if not live_enabled:
+            event["order_status"] = "plan_only_live_disabled"
+        elif not live_requested:
+            event["order_status"] = "plan_only_not_submitted"
+        else:
+            live_row = live_rows.get(plan_id)
+            if live_row is None:
+                event["order_status"] = "executor_no_order_record"
+                continue
+            status = safe_str(live_row.get("status")) or "unknown"
+            event["order_status"] = status
+            event["live_execution_id"] = safe_str(live_row.get("execution_id"))
+            event["live_order_id"] = _extract_live_order_id(live_row)
+            event["posted_price"] = to_float(live_row.get("posted_price"), np.nan)
+            event["posted_notional"] = to_float(live_row.get("posted_notional"), np.nan)
+            response = live_row.get("exchange_response") if isinstance(live_row.get("exchange_response"), dict) else {}
+            event["order_error"] = safe_str(response.get("error"))
+            event["error_classification"] = safe_str(response.get("error_classification"))
+
+
+def send_telegram_text(text: str) -> None:
+    from src.platform.notification.telegram import send_telegram_message_sync
+
+    send_telegram_message_sync(text)
+
+
+def _fmt_num(value: Any, digits: int = 3) -> str:
+    val = to_float(value, np.nan)
+    return "-" if not math.isfinite(val) else f"{val:.{digits}f}"
+
+
+def _trigger_event_line(event: dict[str, Any]) -> str:
+    status = safe_str(event.get("decision_status"))
+    order_status = safe_str(event.get("order_status"))
+    blocker = safe_str(event.get("blocker"))
+    suffix = f"blocked={blocker}" if blocker else f"order={order_status}"
+    if order_status == "submitted":
+        suffix = f"order=submitted id={safe_str(event.get('live_order_id')) or '-'}"
+    elif order_status == "error":
+        err = safe_str(event.get("error_classification")) or safe_str(event.get("order_error"))[:80]
+        suffix = f"order=error {err}"
+    return (
+        f"- {safe_str(event.get('city'))} {safe_str(event.get('target_date'))} "
+        f"{safe_str(event.get('bracket'))} {safe_str(event.get('entry_profile'))}: "
+        f"{status}; {suffix}; ask={_fmt_num(event.get('snapshot_ask'))}, "
+        f"fresh={_fmt_num(event.get('fresh_ask'))}, p={_fmt_num(event.get('p_yes_win'))}"
+    )
+
+
+def send_trigger_signal_telegram(result: dict[str, Any]) -> None:
+    events = result.get("trigger_signal_events") if isinstance(result.get("trigger_signal_events"), list) else []
+    if not events:
+        return
+    submitted = sum(1 for item in events if item.get("order_status") == "submitted")
+    errors = sum(1 for item in events if item.get("order_status") == "error")
+    blocked = sum(1 for item in events if safe_str(item.get("blocker")))
+    lines = [
+        "【current-YES 触发信号】",
+        f"触发 {len(events)} 条；下单成功 {submitted}，失败 {errors}，预下单拦截 {blocked}。",
+        f"snapshot={safe_str(result.get('snapshot_ts_utc'))} age={_fmt_num(result.get('snapshot_age_min'), 1)}m",
+        "",
+    ]
+    lines.extend(_trigger_event_line(event) for event in events[:8])
+    if len(events) > 8:
+        lines.append(f"- 另有 {len(events) - 8} 条未展开，见 latest_summary.json / forward_telemetry.jsonl")
+    send_telegram_text("\n".join(lines))
+
+
 def entry_profile_enabled(profile: str, args: argparse.Namespace) -> bool:
     mode = safe_str(getattr(args, "entry_profile_mode", "both")) or "both"
     return mode == "both" or mode == profile
@@ -1660,6 +1821,14 @@ def peak_forming_metar_veto_reason(row: dict[str, Any], args: argparse.Namespace
         return ""
 
     obs = row.get("obs") if isinstance(row.get("obs"), dict) else {}
+    minutes_to_next_obs = to_float(
+        row.get("minutes_to_next_obs") if row.get("minutes_to_next_obs") is not None else obs.get("minutes_to_next_obs"),
+        np.nan,
+    )
+    max_minutes_after_expected_obs = float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0))
+    if math.isfinite(minutes_to_next_obs) and minutes_to_next_obs < -max_minutes_after_expected_obs:
+        return "snapshot_rule_peak_forming_stale_after_expected_obs"
+
     minutes_since_running_max = to_float(
         row.get("minutes_since_running_max") or obs.get("minutes_since_running_max"),
         np.nan,
@@ -1673,6 +1842,16 @@ def peak_forming_metar_veto_reason(row: dict[str, Any], args: argparse.Namespace
     return ""
 
 
+def forecast_peak_clock_veto_reason(row: dict[str, Any], args: argparse.Namespace) -> str:
+    if getattr(args, "disable_forecast_peak_clock_veto", False):
+        return ""
+    peak_hour = to_float(row.get("forecast_peak_hour_local"), np.nan)
+    min_peak_hour = float(getattr(args, "min_forecast_peak_hour_local", 12.0))
+    if math.isfinite(peak_hour) and peak_hour < min_peak_hour:
+        return "snapshot_rule_forecast_peak_too_early"
+    return ""
+
+
 def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tuple[str, str]:
     fade_gate = fade_gate_spec_from_args(args)
     decline = to_float(row.get("decline_c"), 0.0)
@@ -1681,6 +1860,9 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
     edge = to_float(row.get("ev"), -999.0)
     if not safe_str(row.get("token_id")):
         return "snapshot_rule_missing_token", ""
+    peak_clock_veto = forecast_peak_clock_veto_reason(row, args)
+    if peak_clock_veto:
+        return peak_clock_veto, ""
 
     if decline >= fade_gate.min_decline_c:
         reject_reason = fade_gate_reject_reason(
@@ -1872,6 +2054,8 @@ def current_yes_forward_telemetry_row(
             "max_obs_age_min": float(args.max_obs_age_min),
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
+            "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
+            "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
             "fade_confirmed_model_artifact": display_path(fade_confirmed_model_artifact_path(args)),
@@ -1887,6 +2071,7 @@ def current_yes_forward_telemetry_row(
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
+            "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -1955,6 +2140,8 @@ def current_yes_audit_telemetry_row(
             "max_obs_age_min": float(args.max_obs_age_min),
             "pre_metar_update_blackout_min": float(args.pre_metar_update_blackout_min),
             "min_gap_to_next_bracket_c": float(args.min_gap_to_next_bracket_c),
+            "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
+            "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
             "fade_confirmed_model_artifact": display_path(fade_confirmed_model_artifact_path(args)),
@@ -1968,6 +2155,9 @@ def current_yes_audit_telemetry_row(
             "peak_forming_max_ask": float(getattr(args, "peak_forming_max_ask", 0.97)),
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
+            "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
+            "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
+            "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
             "min_local_hour": int(args.min_local_hour),
             "max_local_hour": int(args.max_local_hour),
         },
@@ -2065,6 +2255,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         max_local_hour=args.max_local_hour,
     )
     candidates: list[dict[str, Any]] = []
+    trigger_signal_events: list[dict[str, Any]] = []
     telemetry_rows: list[dict[str, Any]] = [
         current_yes_audit_telemetry_row(
             audit,
@@ -2132,6 +2323,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                         extra={"strategy_signal_key": "|".join(signal_key)},
                     )
                 )
+                trigger_signal_events.append(
+                    trigger_signal_event(
+                        row_dict,
+                        decision_status="strategy_signal_cap",
+                        extra={"strategy_signal_key": "|".join(signal_key)},
+                    )
+                )
                 continue
             epoch_key = observation_epoch_key(row_dict)
             if all(epoch_key) and epoch_key in prior_epochs:
@@ -2156,6 +2354,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                         extra={"observation_epoch_key": "|".join(epoch_key)},
                     )
                 )
+                trigger_signal_events.append(
+                    trigger_signal_event(
+                        row_dict,
+                        decision_status="observation_epoch_cap",
+                        extra={"observation_epoch_key": "|".join(epoch_key)},
+                    )
+                )
                 continue
             try:
                 taker_quote = fresh_taker_quote(row_dict, args)
@@ -2171,6 +2376,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                         snapshot_path=snap_path,
                         snapshot_age_min=age_min,
                         source_profiles=source_profiles,
+                        extra={"fresh_book_error": error},
+                    )
+                )
+                trigger_signal_events.append(
+                    trigger_signal_event(
+                        row_dict,
+                        decision_status="fresh_book_fetch_failed",
                         extra={"fresh_book_error": error},
                     )
                 )
@@ -2198,6 +2410,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                         snapshot_path=snap_path,
                         snapshot_age_min=age_min,
                         source_profiles=source_profiles,
+                    )
+                )
+                trigger_signal_events.append(
+                    trigger_signal_event(
+                        row_dict,
+                        decision_status=safe_str(taker_quote.get("reason")) or "fresh_book_rejected",
+                        extra={"fresh_quote": taker_quote},
                     )
                 )
                 continue
@@ -2234,6 +2453,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                         extra={"prior_notional": prior.get(key, 0.0)},
                     )
                 )
+                trigger_signal_events.append(
+                    trigger_signal_event(
+                        row_dict,
+                        decision_status="city_day_cap",
+                        extra={"prior_notional": prior.get(key, 0.0)},
+                    )
+                )
                 continue
             if len(candidates) >= args.max_orders:
                 audits.append({"city": key[0], "target_date": key[1], "status": "max_orders_reached"})
@@ -2248,6 +2474,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                         source_profiles=source_profiles,
                     )
                 )
+                trigger_signal_events.append(trigger_signal_event(row_dict, decision_status="max_orders_reached"))
                 continue
             candidates.append(row_dict)
             telemetry_rows.append(
@@ -2259,6 +2486,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                     snapshot_path=snap_path,
                     snapshot_age_min=age_min,
                     source_profiles=source_profiles,
+                )
+            )
+            trigger_signal_events.append(
+                trigger_signal_event(
+                    row_dict,
+                    decision_status="planned",
+                    order_status="executor_pending" if args.live else "plan_only_not_submitted",
                 )
             )
             prior[key] = prior.get(key, 0.0) + args.max_order_notional
@@ -2300,6 +2534,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_obs_age_min": args.max_obs_age_min,
             "pre_metar_update_blackout_min": args.pre_metar_update_blackout_min,
             "min_gap_to_next_bracket_c": args.min_gap_to_next_bracket_c,
+            "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
+            "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
             "fade_confirmed_model_mode": safe_str(getattr(args, "fade_confirmed_model_mode", "base")) or "base",
             "fade_confirmed_model_artifact": display_path(fade_model_path),
@@ -2316,6 +2552,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
+            "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
             "min_local_hour": args.min_local_hour,
             "max_local_hour": args.max_local_hour,
             "max_orders": args.max_orders,
@@ -2363,6 +2600,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             for r in candidates
         ],
         "audit_counts": dict(pd.Series([safe_str(a.get("status")) for a in audits]).value_counts()) if audits else {},
+        "trigger_signal_count": len(trigger_signal_events),
+        "trigger_signal_events": trigger_signal_events,
     }
     executor_result = None
     if args.live:
@@ -2382,8 +2621,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "--allow-taker",
             "--cancel-expired",
         ]
-        if args.no_telegram:
-            cmd.append("--no-telegram")
+        cmd.append("--no-telegram")
         proc = subprocess.run(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
         result["executor_cmd"] = cmd
         result["executor_returncode"] = proc.returncode
@@ -2395,6 +2633,25 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         except Exception:
             executor_result = None
         result["executor_result"] = executor_result
+    enrich_trigger_events_with_plans_and_orders(
+        trigger_signal_events,
+        plans=plans,
+        live_enabled=live_enabled,
+        live_requested=bool(args.live),
+        live_out=LIVE_OUT,
+    )
+    result["trigger_signal_events"] = trigger_signal_events
+    if trigger_signal_events and args.live and not args.no_telegram:
+        try:
+            send_trigger_signal_telegram(result)
+            result["telegram_signal_event_status"] = "sent"
+        except Exception as exc:  # noqa: BLE001
+            result["telegram_signal_event_status"] = "send_failed"
+            result["telegram_signal_event_error"] = f"{type(exc).__name__}: {exc}"
+    elif trigger_signal_events:
+        result["telegram_signal_event_status"] = "skipped_disabled"
+    else:
+        result["telegram_signal_event_status"] = "skipped_no_trigger_signal"
     result = json_ready(result)
     SUMMARY_OUT.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     append_jsonl(HISTORY_OUT, result)
@@ -2417,6 +2674,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-obs-age-min", type=float, default=20.0)
     parser.add_argument("--pre-metar-update-blackout-min", type=float, default=6.0)
     parser.add_argument("--min-gap-to-next-bracket-c", type=float, default=0.0)
+    parser.add_argument("--min-forecast-peak-hour-local", type=float, default=12.0)
+    parser.add_argument("--disable-forecast-peak-clock-veto", action="store_true")
     parser.add_argument("--entry-profile-mode", choices=["both", "fade_confirmed", "peak_forming_micro"], default="both")
     parser.add_argument("--fade-confirmed-model-mode", choices=["base", "specialist"], default="base")
     parser.add_argument("--fade-confirmed-model-artifact", default=str(FADE_CONFIRMED_MODEL_ARTIFACT.relative_to(ROOT)))
@@ -2432,6 +2691,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--peak-forming-min-edge", type=float, default=0.02)
     parser.add_argument("--disable-peak-forming-metar-veto", action="store_true")
     parser.add_argument("--peak-forming-min-minutes-since-running-max", type=float, default=10.0)
+    parser.add_argument("--peak-forming-max-minutes-after-expected-obs", type=float, default=0.0)
     parser.add_argument("--min-local-hour", type=int, default=13)
     parser.add_argument("--max-local-hour", type=int, default=15)
     parser.add_argument("--interval-seconds", type=float, default=900.0)

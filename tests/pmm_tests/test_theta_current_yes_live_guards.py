@@ -1043,6 +1043,7 @@ def test_peak_forming_metar_veto_only_blocks_too_fresh_running_max():
         entry_profile_mode="both",
         disable_peak_forming_metar_veto=False,
         peak_forming_min_minutes_since_running_max=10.0,
+        peak_forming_max_minutes_after_expected_obs=0.0,
     )
     row = {
         "unit": "C",
@@ -1070,6 +1071,79 @@ def test_peak_forming_metar_veto_only_blocks_too_fresh_running_max():
         {**row, "minutes_since_running_max": 15.0},
         args,
     ) == ("snapshot_rule_passed", "peak_forming_micro")
+
+
+def test_peak_forming_blocks_stale_after_expected_observation():
+    args = argparse.Namespace(
+        min_available_notional=5.0,
+        enable_peak_forming_live=True,
+        peak_forming_max_decline_c=0.25,
+        peak_forming_min_ask=0.50,
+        peak_forming_max_ask=0.97,
+        peak_forming_min_p=0.60,
+        peak_forming_min_edge=0.02,
+        entry_profile_mode="both",
+        disable_peak_forming_metar_veto=False,
+        peak_forming_min_minutes_since_running_max=10.0,
+        peak_forming_max_minutes_after_expected_obs=0.0,
+    )
+    row = {
+        "decline_c": 0.0,
+        "yes_current_ask": 0.71,
+        "p_yes_win": 0.74,
+        "ev": 0.03,
+        "token_id": "yes-token",
+        "forecast_peak_hour_local": 13,
+        "minutes_since_running_max": 63.9,
+        "obs": {"minutes_to_next_obs": -3.9},
+    }
+
+    assert live.first_rule_reject_reason(row, args) == "snapshot_rule_peak_forming_stale_after_expected_obs"
+    assert live.first_rule_reject_reason({**row, "obs": {"minutes_to_next_obs": 49.6}}, args) == "snapshot_rule_passed"
+
+
+def test_forecast_peak_clock_veto_blocks_morning_peak_for_both_profiles():
+    args = argparse.Namespace(
+        min_available_notional=5.0,
+        enable_peak_forming_live=True,
+        peak_forming_max_decline_c=0.25,
+        peak_forming_min_ask=0.50,
+        peak_forming_max_ask=0.97,
+        peak_forming_min_p=0.60,
+        peak_forming_min_edge=0.02,
+        entry_profile_mode="both",
+        disable_peak_forming_metar_veto=False,
+        peak_forming_min_minutes_since_running_max=10.0,
+        peak_forming_max_minutes_after_expected_obs=0.0,
+        min_forecast_peak_hour_local=12.0,
+        disable_forecast_peak_clock_veto=False,
+        fade_confirmed_min_decline_c=0.5,
+        fade_confirmed_min_ask=0.55,
+        fade_confirmed_min_p=0.64,
+        fade_confirmed_min_edge=0.03,
+    )
+    base = {
+        "yes_current_ask": 0.71,
+        "p_yes_win": 0.81,
+        "ev": 0.10,
+        "token_id": "yes-token",
+        "forecast_peak_hour_local": 11,
+        "minutes_since_running_max": 69.2,
+        "obs": {"minutes_to_next_obs": 49.6},
+    }
+
+    assert live.classify_entry_profile({**base, "decline_c": 1.0}, args) == (
+        "snapshot_rule_forecast_peak_too_early",
+        "",
+    )
+    assert live.classify_entry_profile({**base, "decline_c": 0.0}, args) == (
+        "snapshot_rule_forecast_peak_too_early",
+        "",
+    )
+    assert live.classify_entry_profile({**base, "decline_c": 1.0, "forecast_peak_hour_local": 13}, args) == (
+        "snapshot_rule_passed",
+        "fade_confirmed",
+    )
 
 
 def test_entry_profile_mode_splits_fade_and_peak_instances():
@@ -1435,3 +1509,111 @@ def test_run_once_writes_forward_telemetry_for_planned_candidate(tmp_path, monke
     assert rows[0]["forecast_peak_hour_local"] == 13
     assert rows[0]["forecast_peak_delta_hours_local"] == 0.16666666666666607
     assert rows[0]["forecast_peak_fetch_status"] == "snapshot_native"
+
+
+def test_run_once_sends_telegram_only_for_trigger_signal_with_blocker(tmp_path, monkeypatch):
+    snapshot_path = tmp_path / "snapshot.json"
+    snapshot_path.write_text(
+        json.dumps(
+            {
+                "ts_utc": "2026-06-16T04:10:00+00:00",
+                "records": [
+                    _record("Tokyo", "20", 0.78),
+                    _record("Tokyo", "21", 0.20),
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    plan_out = tmp_path / "plans.jsonl"
+    summary_out = tmp_path / "summary.json"
+    history_out = tmp_path / "history.jsonl"
+    telemetry_out = tmp_path / "forward_telemetry.jsonl"
+    live_out = tmp_path / "live_orders.jsonl"
+
+    monkeypatch.setattr(live, "PLAN_OUT", plan_out)
+    monkeypatch.setattr(live, "SUMMARY_OUT", summary_out)
+    monkeypatch.setattr(live, "HISTORY_OUT", history_out)
+    monkeypatch.setattr(live, "FORWARD_TELEMETRY_OUT", telemetry_out)
+    monkeypatch.setattr(live, "LIVE_OUT", live_out)
+    monkeypatch.setattr(live, "latest_snapshot", lambda: snapshot_path)
+    monkeypatch.setattr(live, "snapshot_dir", lambda: tmp_path)
+    monkeypatch.setattr(live, "load_stations", lambda: {"Tokyo": live.Station("Tokyo", "RJTT", "C", 9, "Asia/Tokyo")})
+    monkeypatch.setattr(live, "load_source_profiles", lambda: {})
+    monkeypatch.setattr(live, "load_model_artifact", lambda *args, **kwargs: {})
+    monkeypatch.setattr(live, "score_rows", lambda rows, artifact: live.np.asarray([0.9] * len(rows)))
+    monkeypatch.setattr(live, "prior_city_day_notional", lambda _instance: {})
+    monkeypatch.setattr(live, "prior_observation_epoch_keys", lambda _instance: set())
+    monkeypatch.setattr(live, "prior_strategy_signal_keys", lambda _instance: set())
+    monkeypatch.setattr(
+        live,
+        "fresh_taker_quote",
+        lambda row, args: {
+            "status": "rejected",
+            "reason": "fresh_edge_below_required",
+            "best_bid": 0.77,
+            "fresh_ask": 0.82,
+            "fresh_ask_size": 10.0,
+            "fresh_available_notional": 8.2,
+            "max_taker_price": 0.80,
+            "limit_price": 0.80,
+            "edge_at_fresh_ask": 0.08,
+            "edge_at_limit": 0.10,
+            "required_quote_edge": 0.11,
+        },
+    )
+
+    sent: list[str] = []
+    commands: list[list[str]] = []
+
+    class FakeProc:
+        returncode = 0
+        stdout = json.dumps(
+            {
+                "live_requested": True,
+                "plans_read": 0,
+                "live_orders": 0,
+                "live_written": 0,
+                "live_errors": 0,
+            }
+        )
+
+    def fake_run(cmd, **_kwargs):
+        commands.append(cmd)
+        return FakeProc()
+
+    monkeypatch.setattr(live.subprocess, "run", fake_run)
+    monkeypatch.setattr(live, "send_telegram_text", lambda text: sent.append(text))
+    monkeypatch.setattr(live, "fetch_obs", _fail_fetch_obs)
+    args = argparse.Namespace(
+        snapshot=str(snapshot_path),
+        now_utc="2026-06-16T04:10:00+00:00",
+        max_order_notional=5.0,
+        max_city_day_notional=10.0,
+        min_available_notional=5.0,
+        max_taker_cushion=0.02,
+        cross_tick_buffer=0.001,
+        max_orders=20,
+        max_snapshot_age_min=1_000_000.0,
+        max_obs_age_min=20.0,
+        pre_metar_update_blackout_min=6.0,
+        min_gap_to_next_bracket_c=0.0,
+        min_local_hour=13,
+        max_local_hour=15,
+        live=True,
+        confirm_live=True,
+        no_telegram=False,
+    )
+
+    result = live.run_once(args)
+
+    assert result["trigger_signal_count"] == 1
+    event = result["trigger_signal_events"][0]
+    assert event["city"] == "Tokyo"
+    assert event["decision_status"] == "fresh_edge_below_required"
+    assert event["order_status"] == "blocked_before_order"
+    assert result["telegram_signal_event_status"] == "sent"
+    assert len(sent) == 1
+    assert "Tokyo" in sent[0]
+    assert "blocked=fresh_edge_below_required" in sent[0]
+    assert commands and "--no-telegram" in commands[0]
