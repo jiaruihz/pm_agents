@@ -72,6 +72,19 @@ def local_snapshot_path(source_path: Any) -> Path | None:
     return path if path.exists() else None
 
 
+def snapshot_time(path: Path, data: dict[str, Any]) -> datetime | None:
+    parsed = parse_dt(data.get("ts_utc"))
+    if parsed is not None:
+        return parsed
+    # Filename fallback: snapshot_YYYYMMDD_HHMM.json
+    stem = path.stem
+    try:
+        date_part, time_part = stem.split("_", 2)[1:3]
+        return datetime.strptime(date_part + time_part[:4], "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
 def load_snapshot_record(order: dict[str, Any], cache: dict[Path, dict[str, Any]]) -> dict[str, Any]:
     path = local_snapshot_path(order.get("source_snapshot_path"))
     if path is None:
@@ -89,6 +102,163 @@ def load_snapshot_record(order: dict[str, Any], cache: dict[Path, dict[str, Any]
         ):
             return record
     return {}
+
+
+def round_half_up(value: float) -> int:
+    return int(math.floor(value + 0.5))
+
+
+def market_unit(record: dict[str, Any], order: dict[str, Any]) -> str:
+    question = str(record.get("question") or "")
+    if "°F" in question or " F" in question:
+        return "F"
+    if "°C" in question or " C" in question:
+        return "C"
+    bracket = str(order.get("bracket") or record.get("bracket") or "")
+    nums = [to_float(part) for part in bracket.replace("+", "").split("-")]
+    nums = [x for x in nums if math.isfinite(x)]
+    if nums and max(nums) > 60:
+        return "F"
+    return "C"
+
+
+def native_temp_value(temp_f: float, unit: str) -> int:
+    if unit == "F":
+        return round_half_up(temp_f)
+    return round_half_up((temp_f - 32.0) * 5.0 / 9.0)
+
+
+def bracket_contains_value(bracket: str, value: int) -> bool:
+    text = str(bracket or "").strip()
+    if not text:
+        return False
+    if text.endswith("+"):
+        low = to_float(text[:-1])
+        return math.isfinite(low) and value >= int(low)
+    if "-" in text:
+        lo_s, hi_s = text.split("-", 1)
+        lo = to_float(lo_s)
+        hi = to_float(hi_s)
+        return math.isfinite(lo) and math.isfinite(hi) and int(lo) <= value <= int(hi)
+    target = to_float(text)
+    return math.isfinite(target) and value == int(target)
+
+
+def build_snapshot_observation_index() -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Build point-in-time obs history from paper snapshots.
+
+    Each snapshot repeats city/date market records.  For a given city/date, the
+    pair `(metar_latest_ts_utc, metar_latest_temp_f)` is the observation visible
+    at that snapshot.  We keep the earliest snapshot that exposed each obs.
+    """
+    by_key: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
+    for path in sorted(SNAPSHOT_DIR.glob("snapshot_*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        snap_ts = snapshot_time(path, data)
+        if snap_ts is None:
+            continue
+        for record in data.get("records", []) or []:
+            target_date = str(record.get("target_date") or "")
+            if not (START_DATE <= target_date <= END_DATE):
+                continue
+            city = str(record.get("city") or "")
+            obs_ts = parse_dt(record.get("metar_latest_ts_utc"))
+            temp_f = to_float(record.get("metar_latest_temp_f"))
+            if not city or obs_ts is None or not math.isfinite(temp_f):
+                continue
+            key = (city, target_date)
+            obs_key = obs_ts.isoformat()
+            item = by_key.setdefault(key, {}).get(obs_key)
+            if item is None or snap_ts < item["first_seen_snapshot_ts_utc"]:
+                by_key.setdefault(key, {})[obs_key] = {
+                    "obs_ts_utc": obs_ts,
+                    "temp_f": temp_f,
+                    "first_seen_snapshot_ts_utc": snap_ts,
+                    "record": record,
+                    "snapshot_path": path,
+                }
+    return {key: sorted(items.values(), key=lambda x: x["obs_ts_utc"]) for key, items in by_key.items()}
+
+
+def first_touch_state(
+    order: dict[str, Any],
+    record: dict[str, Any],
+    obs_index: dict[tuple[str, str], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    path = local_snapshot_path(order.get("source_snapshot_path"))
+    decision_ts = None
+    if path is not None and path.exists():
+        try:
+            decision_ts = snapshot_time(path, json.loads(path.read_text(encoding="utf-8")))
+        except Exception:
+            decision_ts = None
+    decision_ts = decision_ts or parse_dt(order.get("snapshot_ts_utc")) or parse_dt(order.get("created_at_utc"))
+    key = (str(order.get("city") or ""), str(order.get("target_date") or ""))
+    if decision_ts is None or not record:
+        return {"ok": False, "reasons": ["missing_first_touch_snapshot_context"]}
+    obs_all = obs_index.get(key, [])
+    visible = [
+        x for x in obs_all
+        if x["obs_ts_utc"] <= decision_ts and x["first_seen_snapshot_ts_utc"] <= decision_ts
+    ]
+    if not visible:
+        return {"ok": False, "reasons": ["missing_first_touch_obs_history"]}
+    unit = market_unit(record, order)
+    values = [native_temp_value(float(x["temp_f"]), unit) for x in visible]
+    running_value = max(values)
+    bracket = str(order.get("bracket") or record.get("bracket") or "")
+    running_bracket_ok = bracket_contains_value(bracket, running_value)
+    first_idx = values.index(running_value)
+    first_obs = visible[first_idx]
+    latest_value = values[-1]
+    latest_maps_to_running = latest_value == running_value and running_bracket_ok
+    post_first = visible[first_idx + 1:]
+    post_first_count = len(post_first)
+    same_count = sum(1 for value in values if value == running_value)
+    higher_after_first = sum(1 for value in values[first_idx + 1:] if value > running_value)
+    cadence = to_float(order.get("obs_age_min")) + to_float(order.get("minutes_to_next_obs"))
+    if not math.isfinite(cadence) or cadence <= 0:
+        cadence = to_float(record.get("estimated_cadence_min"), to_float(record.get("metar_cadence_min")))
+    elapsed = (decision_ts - first_obs["obs_ts_utc"]).total_seconds() / 60.0
+    one_cadence_elapsed = math.isfinite(cadence) and elapsed >= MIN_POST_HIGH_CYCLE_FRACTION * cadence
+    plateau_ok = same_count >= 2 or one_cadence_elapsed
+    ok = (
+        running_bracket_ok
+        and latest_maps_to_running
+        and post_first_count >= 1
+        and higher_after_first == 0
+        and plateau_ok
+    )
+    reasons: list[str] = []
+    if not running_bracket_ok:
+        reasons.append("running_value_not_in_order_bracket")
+    if not latest_maps_to_running:
+        reasons.append("latest_not_running_value")
+    if post_first_count < 1:
+        reasons.append("no_post_first_high_obs")
+    if higher_after_first:
+        reasons.append("higher_after_first_high")
+    if not plateau_ok:
+        reasons.append("no_full_cadence_or_repeat_high")
+    return {
+        "ok": ok,
+        "reasons": reasons,
+        "unit": unit,
+        "running_value": running_value,
+        "latest_value": latest_value,
+        "running_bracket_ok": running_bracket_ok,
+        "latest_maps_to_running": latest_maps_to_running,
+        "first_running_max_obs_utc": first_obs["obs_ts_utc"].isoformat(),
+        "elapsed_since_first_running_max_min": elapsed,
+        "post_first_high_obs_count": post_first_count,
+        "same_running_max_obs_count": same_count,
+        "higher_after_first_high_count": higher_after_first,
+        "visible_obs_count": len(visible),
+        "cadence_min": cadence if math.isfinite(cadence) else None,
+    }
 
 
 def load_settlements() -> dict[tuple[str, str, str], dict[str, Any]]:
@@ -164,6 +334,7 @@ class EnrichedOrder:
     latest_same_bracket: bool | None
     running_bracket_ok: bool | None
     reject_reasons: list[str]
+    first_touch_state: dict[str, Any]
 
 
 def enrich_order(
@@ -171,6 +342,7 @@ def enrich_order(
     source_file: str,
     settlements: dict[tuple[str, str, str], dict[str, Any]],
     snapshot_cache: dict[Path, dict[str, Any]],
+    obs_index: dict[tuple[str, str], list[dict[str, Any]]],
 ) -> EnrichedOrder:
     profile = profile_for_order(order, source_file)
     order_status = status_for_order(order)
@@ -238,6 +410,7 @@ def enrich_order(
         reject_reasons.append("forecast_remaining_above_current_max")
     if profile == "peak_forming_micro" and latest_same_bracket is False:
         reject_reasons.append("latest_not_same_running_bracket")
+    first_state = first_touch_state(order, record, obs_index)
 
     return EnrichedOrder(
         order=order,
@@ -261,12 +434,14 @@ def enrich_order(
         latest_same_bracket=latest_same_bracket,
         running_bracket_ok=running_bracket_ok,
         reject_reasons=reject_reasons,
+        first_touch_state=first_state,
     )
 
 
 def load_orders() -> list[EnrichedOrder]:
     settlements = load_settlements()
     snapshot_cache: dict[Path, dict[str, Any]] = {}
+    obs_index = build_snapshot_observation_index()
     rows: list[EnrichedOrder] = []
     for path in ORDER_FILES:
         if not path.exists():
@@ -278,7 +453,7 @@ def load_orders() -> list[EnrichedOrder]:
             target_date = str(order.get("target_date") or "")
             if not (START_DATE <= target_date <= END_DATE):
                 continue
-            rows.append(enrich_order(order, path.name, settlements, snapshot_cache))
+            rows.append(enrich_order(order, path.name, settlements, snapshot_cache, obs_index))
     return rows
 
 
@@ -287,23 +462,40 @@ def variant_keep(row: EnrichedOrder, variant: str) -> bool:
         return True
     if variant == "fade_only_stop_peak_forming":
         return row.profile != "peak_forming_micro"
-    if variant == "cadence_only":
+    if variant == "cadence_only_last_max_v0":
         if not row.post_high_cycle_ok:
             return False
         if row.profile == "peak_forming_micro" and row.latest_same_bracket is False:
             return False
         return True
-    if variant == "cadence_after_forecast_peak":
-        return variant_keep(row, "cadence_only") and (
+    if variant == "cadence_only_first_touch_v1":
+        if row.profile == "peak_forming_micro":
+            return bool(row.first_touch_state.get("ok"))
+        return row.post_high_cycle_ok
+    if variant == "cadence_first_touch_after_forecast_peak":
+        return variant_keep(row, "cadence_only_first_touch_v1") and (
             row.forecast_peak_delta_hours_local is not None and row.forecast_peak_delta_hours_local <= 0
         )
-    if variant == "cadence_no_reheat_strict":
+    if variant == "cadence_first_touch_no_reheat_strict":
         return (
-            variant_keep(row, "cadence_after_forecast_peak")
+            variant_keep(row, "cadence_first_touch_after_forecast_peak")
             and row.forecast_max_above_metar_max_f is not None
             and row.forecast_max_above_metar_max_f <= FORECAST_REMAINING_BUFFER_F
         )
     raise ValueError(variant)
+
+
+def variant_reasons(row: EnrichedOrder, variant: str) -> list[str]:
+    if variant in {"cadence_only_first_touch_v1", "cadence_first_touch_after_forecast_peak", "cadence_first_touch_no_reheat_strict"}:
+        reasons = list(row.first_touch_state.get("reasons") or []) if row.profile == "peak_forming_micro" else list(row.reject_reasons)
+        if variant in {"cadence_first_touch_after_forecast_peak", "cadence_first_touch_no_reheat_strict"}:
+            if row.forecast_peak_delta_hours_local is None or row.forecast_peak_delta_hours_local > 0:
+                reasons.append("forecast_peak_still_future")
+        if variant == "cadence_first_touch_no_reheat_strict":
+            if row.forecast_max_above_metar_max_f is None or row.forecast_max_above_metar_max_f > FORECAST_REMAINING_BUFFER_F:
+                reasons.append("forecast_remaining_above_current_max")
+        return list(dict.fromkeys(reasons))
+    return list(row.reject_reasons)
 
 
 def summarize(rows: list[EnrichedOrder], variant: str) -> dict[str, Any]:
@@ -405,6 +597,7 @@ def order_row(row: EnrichedOrder) -> dict[str, Any]:
         "forecast_max_above_metar_max_f": row.forecast_max_above_metar_max_f,
         "latest_same_bracket": row.latest_same_bracket,
         "reject_reasons": row.reject_reasons,
+        "first_touch_state": row.first_touch_state,
     }
 
 
@@ -421,9 +614,10 @@ def main() -> None:
     variants = [
         "actual_matched",
         "fade_only_stop_peak_forming",
-        "cadence_only",
-        "cadence_after_forecast_peak",
-        "cadence_no_reheat_strict",
+        "cadence_only_last_max_v0",
+        "cadence_only_first_touch_v1",
+        "cadence_first_touch_after_forecast_peak",
+        "cadence_first_touch_no_reheat_strict",
     ]
     summaries = []
     for variant in variants:
@@ -439,7 +633,11 @@ def main() -> None:
         key = (row.profile, row.order_status)
         profile_status[key] = profile_status.get(key, 0) + 1
     blocked_examples = {
-        variant: [order_row(r) for r in rows if r.matched and r.settled and not variant_keep(r, variant)]
+        variant: [
+            {**order_row(r), "reject_reasons": variant_reasons(r, variant)}
+            for r in rows
+            if r.matched and r.settled and not variant_keep(r, variant)
+        ]
         for variant in variants
         if variant != "actual_matched"
     }
@@ -471,6 +669,8 @@ def main() -> None:
                 "latest_obs_maps_to_running_max_bracket == true",
                 "elapsed_since_first_running_max >= one expected cadence or same_running_max_obs_count >= 2",
             ],
+            "corrected_variant": "cadence_only_first_touch_v1",
+            "legacy_fail_closed_variant": "cadence_only_last_max_v0",
         },
         "parameters": {
             "min_post_high_cycle_fraction": MIN_POST_HIGH_CYCLE_FRACTION,
@@ -542,10 +742,11 @@ def main() -> None:
         "## Interpretation",
         "",
         "- `fade_only_stop_peak_forming` answers the blunt stop-loss question: what happens if peak-forming real orders are disabled and fade remains.",
-        "- `cadence_only` requires a full post-high observation cycle: `minutes_since_running_max - obs_age_min >= max(20m, 0.75 * cadence_min)`.",
-        "- `cadence_after_forecast_peak` additionally requires the decision to be at/after the forecast peak.",
-        f"- `cadence_no_reheat_strict` also requires forecast remaining max not to exceed current METAR max by more than {FORECAST_REMAINING_BUFFER_F}F.",
-        "- Because local observation history was not synced for 2026-06-18..21, this is a conservative telemetry replay, not a full first-high plateau reconstruction.",
+        "- `cadence_only_last_max_v0` is the old fail-closed lower-bound check: `minutes_since_running_max - obs_age_min >= max(20m, 0.75 * cadence_min)`.",
+        "- `cadence_only_first_touch_v1` is the corrected state gate. It reconstructs visible observations from prior paper snapshots and requires first-touch plateau evidence.",
+        "- `cadence_first_touch_after_forecast_peak` additionally requires the decision to be at/after the forecast peak.",
+        f"- `cadence_first_touch_no_reheat_strict` also requires forecast remaining max not to exceed current METAR max by more than {FORECAST_REMAINING_BUFFER_F}F.",
+        "- Observation history is reconstructed point-in-time from snapshots already written before each order's source snapshot.",
         "",
         "## Corrected Cadence Semantics",
         "",
@@ -571,7 +772,7 @@ def main() -> None:
         "+ (elapsed_since_first_running_max >= one cadence OR same_running_max_obs_count >= 2)",
         "```",
         "",
-        "So the practical read of this report is: the old peak-forming entries were not supported by the telemetry we currently log; to fairly test plateau entries, the runner must log first-touch and plateau-count fields.",
+        "The corrected v1 replay reconstructs these fields from historical snapshots for this report. The live runner should still log them directly so future telemetry does not depend on replay reconstruction.",
         "",
         "## Blocked Settled Orders",
         "",
@@ -602,10 +803,11 @@ def main() -> None:
             "| created | date | city | bracket | profile | kept by cadence_no_reheat_strict | reasons |",
             "|---|---|---|---|---|---:|---|",
         ]
+        strict_variant = "cadence_first_touch_no_reheat_strict"
         for r, e in [(order_row(x), x) for x in rows if x.matched and not x.settled]:
             lines.append(
                 f"| {r['created_at_utc']} | {r['target_date']} | {r['city']} | {r['bracket']} | {r['profile']} | "
-                f"{variant_keep(e, 'cadence_no_reheat_strict')} | {', '.join(r['reject_reasons'])} |"
+                f"{variant_keep(e, strict_variant)} | {', '.join(variant_reasons(e, strict_variant))} |"
             )
     OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(json.dumps({"json": str(OUT_JSON), "md": str(OUT_MD), "summaries": summaries}, indent=2, ensure_ascii=False))
