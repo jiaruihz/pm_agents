@@ -10,6 +10,7 @@ Target metric: 对 split current-YES live raw matched orders 做反事实过滤�
 - Settlement: `settlement_outcomes` by city/target_date/bracket.
 - `fact_trades` note: local canonical live_real fills currently stop at 2026-06-11, so this report does not use `fact_trades` for the split current-YES PnL.
 - `run_stack.sh` note: fact tables rebuilt, then script exited non-zero only because FE port 5174 stayed busy.
+- Important limitation: `cadence_only` is a fail-closed lower-bound filter using last-running-max telemetry; it cannot detect equal-high plateau because live `running_max_obs_utc` is the last observation equal to the max, not the first touch.
 
 ## Funnel
 
@@ -49,6 +50,32 @@ Target metric: 对 split current-YES live raw matched orders 做反事实过滤�
 - `cadence_after_forecast_peak` additionally requires the decision to be at/after the forecast peak.
 - `cadence_no_reheat_strict` also requires forecast remaining max not to exceed current METAR max by more than 0.9F.
 - Because local observation history was not synced for 2026-06-18..21, this is a conservative telemetry replay, not a full first-high plateau reconstruction.
+
+## Corrected Cadence Semantics
+
+The v0 `cadence_only` result should not be read as the final state-machine backtest. It answers a narrower fail-closed question: if we only trust orders where the latest observation is after the last max timestamp, what remains?
+
+That is too strict for plateau detection. If a station reports the same high twice, live `running_max_obs_utc` is refreshed to the second high, so `minutes_since_running_max - obs_age_min` stays near zero even though a full cadence may have passed since the first high.
+
+The correct state gate needs these fields:
+
+- `first_running_max_obs_utc`
+- `last_running_max_obs_utc`
+- `post_first_high_obs_count`
+- `same_running_max_obs_count` / `plateau_obs_count`
+- `higher_after_first_high_count`
+- `latest_obs_maps_to_running_max_bracket`
+
+A real `stalled_high_candidate` should mean:
+
+```text
+post_first_high_obs_count >= 1
++ higher_after_first_high_count == 0
++ latest_obs_maps_to_running_max_bracket
++ (elapsed_since_first_running_max >= one cadence OR same_running_max_obs_count >= 2)
+```
+
+So the practical read of this report is: the old peak-forming entries were not supported by the telemetry we currently log; to fairly test plateau entries, the runner must log first-touch and plateau-count fields.
 
 ## Blocked Settled Orders
 

@@ -342,7 +342,7 @@ latest obs maps to running-max settlement value / bracket
 |---|---|---|
 | `fresh_high_unconfirmed` | 刚创新高，或距离最后一次 running max 尚未跨过一个完整官方观测周期 | 不买 YES；最多 telemetry |
 | `same_bracket_unconfirmed` | 最新官方读数仍映射到 running max 的 settlement value/bracket，但还没有后续观测证明不再创新高 | 不买 YES；不能用 p/edge 强行放行 |
-| `stalled_high_candidate` | 高点后至少出现 1 个新的官方观测周期，且没有更高值；同时预报余下小时没有明显 reheat | 才允许进入概率/EV 层 |
+| `stalled_high_candidate` | **第一次**触到 running max 后至少又出现 1 个官方观测；新观测没有更高值，且最新读数仍映射到 running max bracket；同时预报余下小时没有明显 reheat | 才允许进入概率/EV 层 |
 | `mature_fade_confirmed` | 高点后回落、时间已跨过日峰/预报峰，且后续观测/预报/云风湿条件共同支持 no-reheat | 才允许作为 fade 买点候选 |
 | `false_fade_risk` | 早段回落、云层/湿度/风向/预报仍支持再升温，或还没过当地日峰 | veto 或 shadow |
 
@@ -351,12 +351,15 @@ latest obs maps to running-max settlement value / bracket
 ```text
 stalled_high_candidate =
   latest obs still maps to running-max settlement value / bracket
-  + post_high_obs_count >= 1        # 对 hourly METAR 城市尤其重要
-  + no_higher_print_after_high
+  + post_first_high_obs_count >= 1  # 对 hourly METAR 城市尤其重要
+  + higher_after_first_high_count == 0
+  + same_running_max_obs_count >= 2 or elapsed_since_first_running_max >= one cadence
   + after_solar_or_forecast_peak
   + forecast_remaining_max <= small_buffer
   + no_reheat_fuel(weather regime)
 ```
+
+注意：这里必须用 `first_running_max_obs_utc` / `post_first_high_obs_count` / `same_running_max_obs_count`。不能用旧 live 字段 `running_max_obs_utc` 直接推，因为旧字段记录的是**最后一次**等于 running max 的观测；如果同一最高读数连续报两次，它会刷新到第二次，把真实 plateau 误判成"刚到高点"。
 
 云层、湿度、风向/风速、太阳高度、预报余下高点不能拆成单个硬阈值；它们应该作为**合取状态特征**进入 `p_capped` / hazard 模型。典型组合是：已过太阳峰 + 低云/增云 + 露点约束 + 风不支持暖平流 + GFS/ECMWF 余下小时不再升。反过来，早段转晴、湿热、暖风、预报仍上修，就算短暂回落也应该归为 `false_fade_risk`。
 
@@ -482,7 +485,7 @@ Wuhan 2026-06-21 诊断：
 
 3. 把 peak-forming 当作主研究前线，但先改状态定义：
    - `fresh_high_unconfirmed` 不下单。
-   - `stalled_high_candidate` 必须 cadence-aware，至少等一个后续官方观测周期未创新高。
+   - `stalled_high_candidate` 必须 cadence-aware，用 first-touch + plateau-count 判断；至少等第一次触高后一个后续官方观测未创新高。
    - hazard v2 继续作为候选概率层。
    - promotion 必须等 forward window ROI 和 date-bootstrap CI 过门。
 

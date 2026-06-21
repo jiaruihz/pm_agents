@@ -1945,7 +1945,24 @@
       }
     ]
   },
+  "correct_state_gate": {
+    "required_fields": [
+      "first_running_max_obs_utc",
+      "last_running_max_obs_utc",
+      "post_first_high_obs_count",
+      "same_running_max_obs_count",
+      "higher_after_first_high_count",
+      "latest_obs_maps_to_running_max_bracket"
+    ],
+    "stalled_high_candidate": [
+      "post_first_high_obs_count >= 1",
+      "higher_after_first_high_count == 0",
+      "latest_obs_maps_to_running_max_bracket == true",
+      "elapsed_since_first_running_max >= one expected cadence or same_running_max_obs_count >= 2"
+    ]
+  },
   "data": {
+    "cadence_v0_limitation": "cadence_only uses last-running-max telemetry. Since live running_max_obs_utc is the last obs equal to the max, equal-high plateau refreshes the timestamp and cannot pass this v0 gate.",
     "db": "runtime/weather.db",
     "fact_trades_note": "local fact_trades live_real currently maxes at 2026-06-11, so split current-YES fills are not used for PnL",
     "order_files": [
