@@ -18,6 +18,7 @@ start_profile() {
   local runtime_dir="$2"
   local profile_mode="$3"
   local enable_peak="$4"
+  local mode="$5"
 
   if [[ "$RESTART_CURRENT_YES_SPLIT" == "1" ]]; then
     THETA_CURRENT_YES_RUNTIME_DIR="$runtime_dir" \
@@ -28,6 +29,7 @@ start_profile() {
     THETA_CURRENT_YES_STRATEGY_INSTANCE="$instance" \
     THETA_CURRENT_YES_RUNTIME_DIR="$runtime_dir" \
     THETA_CURRENT_YES_ENTRY_PROFILE_MODE="$profile_mode" \
+    THETA_CURRENT_YES_MODE="$mode" \
     ENABLE_PEAK_FORMING_LIVE="$enable_peak" \
     MAX_ORDER_NOTIONAL="${MAX_ORDER_NOTIONAL:-1.5}" \
     MAX_CITY_DAY_NOTIONAL="${MAX_CITY_DAY_NOTIONAL:-1.5}" \
@@ -38,10 +40,12 @@ start_profile \
   "theta_current_yes_fade_confirmed_tiny_live_v1" \
   "runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1" \
   "fade_confirmed" \
-  "0"
+  "0" \
+  "${FADE_CONFIRMED_THETA_CURRENT_YES_MODE:-live}"
 
 start_profile \
   "theta_current_yes_peak_forming_micro_tiny_live_v1" \
   "runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1" \
   "peak_forming_micro" \
-  "1"
+  "1" \
+  "${PEAK_FORMING_THETA_CURRENT_YES_MODE:-telemetry}"
