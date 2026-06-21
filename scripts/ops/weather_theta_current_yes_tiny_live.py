@@ -2017,7 +2017,45 @@ async def _run_llm_weather_preflight_async(row: dict[str, Any], args: argparse.N
     return json_ready(
         {
             "status": "ok",
+            "backend": "api",
             "decision": decision,
+            "confidence": to_float(parsed.get("confidence"), 0.0),
+            "risk_tags": parsed.get("risk_tags") if isinstance(parsed.get("risk_tags"), list) else [],
+            "temperature_pattern_summary": safe_str(parsed.get("temperature_pattern_summary"))[:500],
+            "reasons": parsed.get("reasons") if isinstance(parsed.get("reasons"), list) else [],
+            "action": safe_str(parsed.get("action"))[:300],
+            "payload_version": 1,
+        }
+    )
+
+
+def _run_codex_weather_preflight(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    from pydantic import BaseModel, Field
+
+    from src.agents.llm.codex_cli_client import run_codex_exec_json
+
+    class CodexWeatherPreflightResult(BaseModel):
+        decision: str = Field(pattern="^(allow|veto|shadow_only)$")
+        confidence: float = Field(ge=0.0, le=1.0)
+        risk_tags: list[str] = []
+        temperature_pattern_summary: str = ""
+        reasons: list[str] = []
+        action: str = ""
+
+    payload = llm_preflight_payload(row)
+    parsed = run_codex_exec_json(
+        prompt=llm_preflight_prompt(payload),
+        output_model=CodexWeatherPreflightResult,
+        model=safe_str(getattr(args, "llm_preflight_codex_model", "")) or None,
+        reasoning_effort=safe_str(getattr(args, "llm_preflight_codex_reasoning_effort", "")) or "low",
+        cwd=ROOT,
+        timeout_seconds=int(float(getattr(args, "llm_preflight_timeout_seconds", 180.0))),
+    )
+    return json_ready(
+        {
+            "status": "ok",
+            "backend": "codex_cli",
+            "decision": safe_str(parsed.get("decision")).lower(),
             "confidence": to_float(parsed.get("confidence"), 0.0),
             "risk_tags": parsed.get("risk_tags") if isinstance(parsed.get("risk_tags"), list) else [],
             "temperature_pattern_summary": safe_str(parsed.get("temperature_pattern_summary"))[:500],
@@ -2033,10 +2071,14 @@ def run_llm_weather_preflight(row: dict[str, Any], args: argparse.Namespace) -> 
         return {"status": "disabled", "decision": "allow", "confidence": 0.0}
     try:
         ensure_llm_forecast_curve(row)
+        backend = safe_str(getattr(args, "llm_preflight_backend", "api")) or "api"
+        if backend == "codex_cli":
+            return _run_codex_weather_preflight(row, args)
         return asyncio.run(_run_llm_weather_preflight_async(row, args))
     except Exception as exc:  # noqa: BLE001
         return {
             "status": "error",
+            "backend": safe_str(getattr(args, "llm_preflight_backend", "api")) or "api",
             "decision": "allow",
             "confidence": 0.0,
             "error": f"{type(exc).__name__}: {exc}"[:500],
@@ -2316,6 +2358,7 @@ def current_yes_forward_telemetry_row(
             "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
             "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
             "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
+            "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "api")),
             "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
             "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
@@ -2405,6 +2448,7 @@ def current_yes_audit_telemetry_row(
             "min_forecast_peak_hour_local": float(getattr(args, "min_forecast_peak_hour_local", 12.0)),
             "disable_forecast_peak_clock_veto": bool(getattr(args, "disable_forecast_peak_clock_veto", False)),
             "enable_llm_preflight": bool(getattr(args, "enable_llm_preflight", False)),
+            "llm_preflight_backend": safe_str(getattr(args, "llm_preflight_backend", "api")),
             "llm_preflight_mode": safe_str(getattr(args, "llm_preflight_mode", "advisory")),
             "llm_preflight_min_block_confidence": float(getattr(args, "llm_preflight_min_block_confidence", 0.60)),
             "entry_profile_mode": safe_str(getattr(args, "entry_profile_mode", "both")) or "both",
@@ -2970,9 +3014,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-forecast-peak-hour-local", type=float, default=12.0)
     parser.add_argument("--disable-forecast-peak-clock-veto", action="store_true")
     parser.add_argument("--enable-llm-preflight", action="store_true")
+    parser.add_argument("--llm-preflight-backend", choices=["api", "codex_cli"], default="api")
     parser.add_argument("--llm-preflight-mode", choices=["advisory", "block_veto"], default="advisory")
     parser.add_argument("--llm-preflight-min-block-confidence", type=float, default=0.60)
     parser.add_argument("--llm-preflight-timeout-seconds", type=float, default=20.0)
+    parser.add_argument("--llm-preflight-codex-model", default="")
+    parser.add_argument("--llm-preflight-codex-reasoning-effort", default="low")
     parser.add_argument("--entry-profile-mode", choices=["both", "fade_confirmed", "peak_forming_micro"], default="both")
     parser.add_argument("--fade-confirmed-model-mode", choices=["base", "specialist"], default="base")
     parser.add_argument("--fade-confirmed-model-artifact", default=str(FADE_CONFIRMED_MODEL_ARTIFACT.relative_to(ROOT)))
