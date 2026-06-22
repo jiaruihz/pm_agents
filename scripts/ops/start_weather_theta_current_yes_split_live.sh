@@ -20,6 +20,7 @@ start_profile() {
   local enable_peak="$4"
   local mode="$5"
   local max_local_hour="$6"
+  local peak_min_minutes_since_running_max="$7"
 
   if [[ "$RESTART_CURRENT_YES_SPLIT" == "1" ]]; then
     THETA_CURRENT_YES_RUNTIME_DIR="$runtime_dir" \
@@ -32,6 +33,7 @@ start_profile() {
     THETA_CURRENT_YES_ENTRY_PROFILE_MODE="$profile_mode" \
     THETA_CURRENT_YES_MODE="$mode" \
     ENABLE_PEAK_FORMING_LIVE="$enable_peak" \
+    PEAK_FORMING_MIN_MINUTES_SINCE_RUNNING_MAX="$peak_min_minutes_since_running_max" \
     MAX_ORDER_NOTIONAL="${MAX_ORDER_NOTIONAL:-1.5}" \
     MAX_CITY_DAY_NOTIONAL="${MAX_CITY_DAY_NOTIONAL:-1.5}" \
     MAX_LOCAL_HOUR="$max_local_hour" \
@@ -44,7 +46,8 @@ start_profile \
   "fade_confirmed" \
   "0" \
   "${FADE_CONFIRMED_THETA_CURRENT_YES_MODE:-live}" \
-  "${FADE_CONFIRMED_MAX_LOCAL_HOUR:-17}"
+  "${FADE_CONFIRMED_MAX_LOCAL_HOUR:-17}" \
+  "${FADE_CONFIRMED_PEAK_MIN_MINUTES_SINCE_RUNNING_MAX:-10}"
 
 start_profile \
   "theta_current_yes_peak_forming_micro_tiny_live_v1" \
@@ -52,4 +55,5 @@ start_profile \
   "peak_forming_micro" \
   "1" \
   "${PEAK_FORMING_THETA_CURRENT_YES_MODE:-telemetry}" \
-  "${PEAK_FORMING_MAX_LOCAL_HOUR:-15}"
+  "${PEAK_FORMING_MAX_LOCAL_HOUR:-15}" \
+  "${PEAK_FORMING_MIN_MINUTES_SINCE_RUNNING_MAX:-60}"
