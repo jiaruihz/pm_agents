@@ -76,6 +76,7 @@ LEGACY_SHARED_STRATEGY_INSTANCE = "theta_current_yes_tiny_live_v1"
 TRAIN_FEATURES = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_full_replay_v8/feature_rows.csv"
 MODEL_ARTIFACT = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_live_gate_v9/live_model.json"
 FADE_CONFIRMED_MODEL_ARTIFACT = ROOT / "docs/analysis/2026-06/generated/theta_current_yes_fade_confirmed_model_v1/fade_confirmed_model.json"
+PEAK_HAZARD_V2_ARTIFACT = ROOT / "docs/analysis/2026-06/generated/current_yes_peak_forming_hazard_v2/peak_forming_hazard_plateau_model.json"
 STATION_SUMMARY = ROOT / "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json"
 RUNTIME_DIR = ROOT / os.environ.get("THETA_CURRENT_YES_RUNTIME_DIR", "runtime/weather_edge_v1/theta_current_yes_tiny_live_v1")
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
@@ -768,11 +769,147 @@ def fade_confirmed_model_artifact_path(args: argparse.Namespace) -> Path:
     return path if path.is_absolute() else ROOT / path
 
 
+def peak_hazard_v2_artifact_path(args: argparse.Namespace) -> Path:
+    raw = safe_str(getattr(args, "peak_hazard_v2_artifact", "")) or str(PEAK_HAZARD_V2_ARTIFACT)
+    path = Path(raw)
+    return path if path.is_absolute() else ROOT / path
+
+
 def display_path(path: Path) -> str:
     try:
         return str(path.relative_to(ROOT))
     except ValueError:
         return str(path)
+
+
+def series_from_obs(frame: pd.DataFrame, key: str) -> pd.Series:
+    if "obs" not in frame.columns:
+        return pd.Series(np.nan, index=frame.index)
+    return frame["obs"].apply(lambda obs: obs.get(key) if isinstance(obs, dict) else np.nan)
+
+
+def numeric_series(frame: pd.DataFrame, column: str) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series(np.nan, index=frame.index)
+    return pd.to_numeric(frame[column], errors="coerce")
+
+
+def local_hour_from_utc_text(value: Any, timezone_name: Any) -> float:
+    parsed = parse_utc(value)
+    if parsed is None:
+        return np.nan
+    try:
+        tz = ZoneInfo(safe_str(timezone_name) or "UTC")
+    except Exception:
+        tz = timezone.utc
+    local = parsed.astimezone(tz)
+    return local.hour + local.minute / 60.0 + local.second / 3600.0
+
+
+def peak_hazard_v2_feature_frame(current: pd.DataFrame, artifact: dict[str, Any]) -> pd.DataFrame:
+    work = current.copy()
+    aliases = {
+        "current_yes_ask": "yes_current_ask",
+        "log_current_yes_size": "log_yes_size",
+        "decline_from_max_c": "decline_c",
+        "relative_humidity_pct": "relh_now",
+        "wind_speed_kt": "sknt_now",
+        "sky_cover_code": "sky_now",
+        "temp_trend_1h_f": "d_tmpf_1h",
+        "temp_trend_3h_f": "d_tmpf_3h",
+    }
+    for target, source in aliases.items():
+        if source in work.columns:
+            work[target] = work[source]
+
+    minutes_since = series_from_obs(work, "minutes_since_running_max")
+    work["minutes_since_running_max_capped"] = pd.to_numeric(minutes_since, errors="coerce").clip(upper=240)
+    work["decision_obs_age_min"] = pd.to_numeric(series_from_obs(work, "age_min"), errors="coerce")
+
+    running_max_obs_utc = series_from_obs(work, "running_max_obs_utc")
+    timezone_values = work["timezone"] if "timezone" in work.columns else pd.Series("UTC", index=work.index)
+    work["running_max_first_obs_hour_local"] = [
+        local_hour_from_utc_text(ts, tz) for ts, tz in zip(running_max_obs_utc, timezone_values, strict=False)
+    ]
+    first_hour = pd.to_numeric(work["running_max_first_obs_hour_local"], errors="coerce")
+    decision_hour = numeric_series(work, "decision_hour_local")
+    work["running_max_first_obs_before_noon_num"] = first_hour.lt(12.0).astype(float)
+    work["decision_minus_running_max_hour"] = decision_hour - first_hour
+    work["morning_spike_reheat_window_num"] = (first_hour.lt(12.0) & decision_hour.between(12.0, 15.5)).astype(float)
+
+    forecast_delta = work.apply(lambda row: to_float(forecast_peak_delta(row.to_dict()), np.nan), axis=1)
+    forecast_gap = numeric_series(work, "forecast_max_native") - numeric_series(work, "running_native")
+    forecast_model = work.apply(lambda row: forecast_model_from_record(row.to_dict()), axis=1)
+    work["gfs_forecast_peak_delta_hours_local"] = np.nan
+    work["ecmwf_forecast_peak_delta_hours_local"] = np.nan
+    work["gfs_forecast_gap_to_running_native"] = np.nan
+    work["ecmwf_forecast_gap_to_running_native"] = np.nan
+    gfs_mask = forecast_model.eq("gfs")
+    ecmwf_mask = forecast_model.eq("ecmwf")
+    work.loc[gfs_mask, "gfs_forecast_peak_delta_hours_local"] = forecast_delta[gfs_mask]
+    work.loc[ecmwf_mask, "ecmwf_forecast_peak_delta_hours_local"] = forecast_delta[ecmwf_mask]
+    work.loc[gfs_mask, "gfs_forecast_gap_to_running_native"] = forecast_gap[gfs_mask]
+    work.loc[ecmwf_mask, "ecmwf_forecast_gap_to_running_native"] = forecast_gap[ecmwf_mask]
+    work["min_forecast_peak_delta_hours_local"] = work[
+        ["gfs_forecast_peak_delta_hours_local", "ecmwf_forecast_peak_delta_hours_local"]
+    ].min(axis=1)
+    work["max_forecast_peak_delta_hours_local"] = work[
+        ["gfs_forecast_peak_delta_hours_local", "ecmwf_forecast_peak_delta_hours_local"]
+    ].max(axis=1)
+    work["min_forecast_gap_to_running_native"] = work[
+        ["gfs_forecast_gap_to_running_native", "ecmwf_forecast_gap_to_running_native"]
+    ].min(axis=1)
+    work["max_forecast_gap_to_running_native"] = work[
+        ["gfs_forecast_gap_to_running_native", "ecmwf_forecast_gap_to_running_native"]
+    ].max(axis=1)
+    work["forecast_peak_still_ahead_num"] = pd.to_numeric(
+        work["min_forecast_peak_delta_hours_local"], errors="coerce"
+    ).lt(0).astype(float)
+    work["warming_while_at_high_num"] = pd.to_numeric(work["temp_trend_1h_f"], errors="coerce").gt(0).astype(float)
+
+    for feature in artifact.get("numeric_features", []):
+        if feature not in work.columns:
+            work[feature] = np.nan
+    for feature in artifact.get("categorical_features", []):
+        if feature not in work.columns:
+            work[feature] = ""
+    return work[list(artifact.get("numeric_features", [])) + list(artifact.get("categorical_features", []))]
+
+
+def apply_peak_hazard_v2_shadow_scores(
+    current: pd.DataFrame,
+    *,
+    args: argparse.Namespace,
+    artifact: dict[str, Any] | None,
+) -> pd.DataFrame:
+    out = current.copy()
+    out["peak_hazard_v2_version"] = "current_yes_peak_forming_hazard_v2"
+    out["peak_hazard_v2_artifact_loaded"] = artifact is not None
+    out["peak_hazard_v2_p_survive"] = np.nan
+    out["peak_hazard_v2_edge"] = np.nan
+    out["peak_hazard_v2_shadow_candidate"] = False
+    out["peak_hazard_v2_tradable"] = False
+    if artifact is None or out.empty:
+        return out
+
+    scores = score_rows(peak_hazard_v2_feature_frame(out, artifact), artifact)
+    out["peak_hazard_v2_p_survive"] = scores
+    out["peak_hazard_v2_edge"] = scores - pd.to_numeric(out["yes_current_ask"], errors="coerce").to_numpy(dtype=float)
+    forecast_delta = out.apply(lambda row: to_float(forecast_peak_delta(row.to_dict()), np.nan), axis=1)
+    is_peak_profile = out["entry_profile"].astype(str).eq("peak_forming_micro")
+    tradable = (
+        is_peak_profile
+        & pd.to_numeric(out["decision_hour_local"], errors="coerce").between(13, 17)
+        & pd.to_numeric(out["yes_current_ask"], errors="coerce").between(0.50, 0.97)
+        & forecast_delta.fillna(-999).ge(-1.0)
+    )
+    out["peak_hazard_v2_tradable"] = tradable
+    out["peak_hazard_v2_shadow_candidate"] = (
+        tradable
+        & pd.to_numeric(out["peak_hazard_v2_p_survive"], errors="coerce").ge(0.60)
+        & pd.to_numeric(out["peak_hazard_v2_edge"], errors="coerce").ge(0.02)
+    )
+    return out
 
 
 def apply_probability_branch_scores(
@@ -2329,6 +2466,13 @@ def current_yes_forward_telemetry_row(
         "probability_source": safe_str(row.get("probability_source")),
         "probability_branch": safe_str(row.get("probability_branch")),
         "model_version": safe_str(row.get("model_version")),
+        "peak_hazard_v2_version": safe_str(row.get("peak_hazard_v2_version")),
+        "peak_hazard_v2_artifact": display_path(peak_hazard_v2_artifact_path(args)),
+        "peak_hazard_v2_artifact_loaded": bool(row.get("peak_hazard_v2_artifact_loaded", False)),
+        "peak_hazard_v2_p_survive": to_float(row.get("peak_hazard_v2_p_survive"), np.nan),
+        "peak_hazard_v2_edge": to_float(row.get("peak_hazard_v2_edge"), np.nan),
+        "peak_hazard_v2_tradable": bool(row.get("peak_hazard_v2_tradable", False)),
+        "peak_hazard_v2_shadow_candidate": bool(row.get("peak_hazard_v2_shadow_candidate", False)),
         "snapshot_edge": to_float(row.get("ev"), np.nan),
         "fresh_best_bid": fresh_bid,
         "fresh_best_ask": fresh_ask,
@@ -2400,6 +2544,7 @@ def current_yes_forward_telemetry_row(
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
             "peak_state_v2_max_d_tmpf_3h": float(getattr(args, "peak_state_v2_max_d_tmpf_3h", 2.0)),
+            "peak_hazard_v2_artifact": display_path(peak_hazard_v2_artifact_path(args)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
             "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
@@ -2495,6 +2640,7 @@ def current_yes_audit_telemetry_row(
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
             "peak_state_v2_max_d_tmpf_3h": float(getattr(args, "peak_state_v2_max_d_tmpf_3h", 2.0)),
+            "peak_hazard_v2_artifact": display_path(peak_hazard_v2_artifact_path(args)),
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
             "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
@@ -2580,6 +2726,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     fade_model_path = fade_confirmed_model_artifact_path(args)
     needs_fade_model = (safe_str(getattr(args, "entry_profile_mode", "both")) or "both") != "peak_forming_micro"
     fade_model_artifact = load_model_artifact(fade_model_path) if needs_fade_model and fade_model_path.exists() else None
+    peak_hazard_v2_path = peak_hazard_v2_artifact_path(args)
+    peak_hazard_v2_artifact = load_model_artifact(peak_hazard_v2_path) if peak_hazard_v2_path.exists() else None
     source_profiles = load_source_profiles()
     current, audits = build_current_rows(
         snapshot,
@@ -2620,6 +2768,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         classifications = current.apply(lambda item: classify_entry_profile(item.to_dict(), args), axis=1)
         statuses = classifications.apply(lambda item: item[0])
         current["entry_profile"] = classifications.apply(lambda item: item[1])
+        current = apply_peak_hazard_v2_shadow_scores(
+            current,
+            args=args,
+            artifact=peak_hazard_v2_artifact,
+        )
         for idx, status in statuses.items():
             if status != "snapshot_rule_passed":
                 telemetry_rows.append(
@@ -2923,6 +3076,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "peak_forming_min_p": float(getattr(args, "peak_forming_min_p", 0.60)),
             "peak_forming_min_edge": float(getattr(args, "peak_forming_min_edge", 0.02)),
             "peak_state_v2_max_d_tmpf_3h": float(getattr(args, "peak_state_v2_max_d_tmpf_3h", 2.0)),
+            "peak_hazard_v2_artifact": display_path(peak_hazard_v2_path),
+            "peak_hazard_v2_artifact_loaded": peak_hazard_v2_artifact is not None,
             "disable_peak_forming_metar_veto": bool(getattr(args, "disable_peak_forming_metar_veto", False)),
             "peak_forming_min_minutes_since_running_max": float(getattr(args, "peak_forming_min_minutes_since_running_max", 10.0)),
             "peak_forming_max_minutes_after_expected_obs": float(getattr(args, "peak_forming_max_minutes_after_expected_obs", 0.0)),
@@ -3063,6 +3218,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--entry-profile-mode", choices=["both", "fade_confirmed", "peak_forming_micro"], default="both")
     parser.add_argument("--fade-confirmed-model-mode", choices=["base", "specialist"], default="base")
     parser.add_argument("--fade-confirmed-model-artifact", default=str(FADE_CONFIRMED_MODEL_ARTIFACT.relative_to(ROOT)))
+    parser.add_argument("--peak-hazard-v2-artifact", default=str(PEAK_HAZARD_V2_ARTIFACT.relative_to(ROOT)))
     parser.add_argument("--fade-confirmed-min-decline-c", type=float, default=DEFAULT_FADE_GATE.min_decline_c)
     parser.add_argument("--fade-confirmed-min-ask", type=float, default=DEFAULT_FADE_GATE.min_ask)
     parser.add_argument("--fade-confirmed-min-p", type=float, default=DEFAULT_FADE_GATE.min_p_yes)
