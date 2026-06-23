@@ -15,6 +15,7 @@ const WEATHER_NAV = [
   { to: "/weather/strategies", label: "📊 Strategies", sub: "策略列表" },
   { to: "/weather/runs",       label: "⛅ Runs",        sub: "运行记录" },
   { to: "/weather/live",       label: "🔴 Live",        sub: "实盘监控" },
+  { to: "/weather/runtime",    label: "Runtime",       sub: "策略状态" },
   { to: "/weather/compare",    label: "⚖ Compare",     sub: "对比分析" },
   { to: "/weather/research",   label: "Research",      sub: "shadow 研究" },
 ];

@@ -207,6 +207,83 @@ CREATE TABLE IF NOT EXISTS ingestion_log (
     UNIQUE(source_path, source_row_hash, target_table)
 );
 
+CREATE TABLE IF NOT EXISTS weather_strategy_runtime_registry (
+    strategy_instance TEXT PRIMARY KEY,
+    strategy_id TEXT,
+    display_name TEXT NOT NULL,
+    family TEXT NOT NULL,
+    lifecycle_status TEXT NOT NULL CHECK (
+        lifecycle_status IN ('live','shadow','telemetry','paper','research','stale','shelved','blocked','monitor')
+    ),
+    execution_mode TEXT NOT NULL CHECK (
+        execution_mode IN ('live','zero_notional_shadow','telemetry','paper','research','monitor','historical')
+    ),
+    health_status TEXT NOT NULL CHECK (
+        health_status IN ('healthy','idle','stale','blocked','shelved','unknown')
+    ),
+    source_layer TEXT NOT NULL CHECK (
+        source_layer IN ('runtime_local','runtime_remote_mirror','fact_trades','docs','manual')
+    ),
+    runtime_dir TEXT,
+    summary_path TEXT,
+    primary_journal_path TEXT,
+    latest_summary_ts_utc TEXT,
+    latest_data_ts_utc TEXT,
+    latest_artifact_mtime_utc TEXT,
+    heartbeat_age_min REAL,
+    candidate_rows INTEGER NOT NULL DEFAULT 0,
+    plan_rows INTEGER NOT NULL DEFAULT 0,
+    live_order_rows INTEGER NOT NULL DEFAULT 0,
+    paper_order_rows INTEGER NOT NULL DEFAULT 0,
+    shadow_rows INTEGER NOT NULL DEFAULT 0,
+    telemetry_rows INTEGER NOT NULL DEFAULT 0,
+    fact_trade_rows INTEGER NOT NULL DEFAULT 0,
+    fact_live_real_rows INTEGER NOT NULL DEFAULT 0,
+    fact_cost_usd REAL,
+    first_target_date TEXT,
+    last_target_date TEXT,
+    latest_fill_ts_utc TEXT,
+    cap_order_notional REAL,
+    cap_city_day_notional REAL,
+    cap_total_day_notional REAL,
+    live_enabled INTEGER,
+    process_status TEXT NOT NULL DEFAULT 'unknown',
+    blocker_count INTEGER NOT NULL DEFAULT 0,
+    blockers_json TEXT NOT NULL DEFAULT '[]',
+    summary_json TEXT NOT NULL DEFAULT '{}',
+    notes TEXT,
+    refreshed_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS weather_strategy_runtime_artifacts (
+    artifact_key TEXT PRIMARY KEY,
+    strategy_instance TEXT NOT NULL REFERENCES weather_strategy_runtime_registry(strategy_instance),
+    artifact_kind TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    row_count INTEGER,
+    size_bytes INTEGER,
+    mtime_utc TEXT,
+    latest_record_ts_utc TEXT,
+    sample_json TEXT,
+    refreshed_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS weather_strategy_shadow_queue (
+    shadow_id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    family TEXT NOT NULL,
+    proposed_execution_mode TEXT NOT NULL DEFAULT 'zero_notional_shadow',
+    priority TEXT NOT NULL CHECK (priority IN ('high','medium','low')),
+    status TEXT NOT NULL CHECK (status IN ('proposed','runner_ready','active','blocked','superseded')),
+    source_doc TEXT,
+    target_runtime_dir TEXT,
+    required_fields_json TEXT NOT NULL DEFAULT '[]',
+    blockers_json TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    refreshed_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_runs_mode_state ON runs(execution_mode, state);
 CREATE INDEX IF NOT EXISTS idx_runs_producer ON runs(producer_system, producer_run_id);
 CREATE INDEX IF NOT EXISTS idx_signals_target_city ON signals(target_date, city);
@@ -228,6 +305,14 @@ CREATE INDEX IF NOT EXISTS idx_settlement_outcomes_date_city
     ON settlement_outcomes(target_date, city);
 CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
 CREATE INDEX IF NOT EXISTS idx_run_alerts_run_id ON run_alerts(run_id);
+CREATE INDEX IF NOT EXISTS idx_weather_strategy_runtime_status
+    ON weather_strategy_runtime_registry(lifecycle_status, health_status);
+CREATE INDEX IF NOT EXISTS idx_weather_strategy_runtime_family
+    ON weather_strategy_runtime_registry(family);
+CREATE INDEX IF NOT EXISTS idx_weather_strategy_artifacts_strategy
+    ON weather_strategy_runtime_artifacts(strategy_instance);
+CREATE INDEX IF NOT EXISTS idx_weather_strategy_shadow_queue_status
+    ON weather_strategy_shadow_queue(status, priority);
 
 CREATE TRIGGER IF NOT EXISTS signals_canonical_before_update
 BEFORE UPDATE ON signals

@@ -306,6 +306,14 @@ if [[ $REBUILD -eq 1 ]]; then
 
   log "  Re-computing metrics after fill+settlement+fact_trades rebuild"
   refresh_metrics >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || true
+
+  log "  Refreshing strategy runtime registry"
+  "$VENV/python" scripts/ops/refresh_weather_strategy_runtime_registry.py \
+    --db-path "$DB_PATH" \
+    --json-out "$LOG_DIR/strategy_runtime_registry_refresh.json" \
+    >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    warn "strategy runtime registry refresh failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
+  }
 fi
 
 show_status

@@ -7,7 +7,7 @@ from pathlib import Path
 from weather_dashboard.db.connection import get_conn
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def apply_schema_canonical(conn: sqlite3.Connection) -> None:
@@ -22,7 +22,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "canonical weather lineage schema with settlement_outcomes",
+                "canonical weather lineage schema with strategy runtime registry",
             ),
         )
     conn.commit()

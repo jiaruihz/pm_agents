@@ -178,9 +178,12 @@ sync_live() {
     live \
     paper \
     range_rv_shadow_v0 \
+    metar_cross_prev_no_shadow \
+    source_orderbook_timing \
     theta_current_yes_tiny_live_v1 \
     theta_current_yes_fade_confirmed_tiny_live_v1 \
-    theta_current_yes_peak_forming_micro_tiny_live_v1
+    theta_current_yes_peak_forming_micro_tiny_live_v1 \
+    theta_higher_no_carry_shadow_v1
   do
     mkdir -p "$N100_LOCAL/$subdir"
     log "  syncing $subdir/"

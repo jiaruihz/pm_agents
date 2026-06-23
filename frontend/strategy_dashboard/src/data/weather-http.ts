@@ -1,8 +1,8 @@
 // HTTP client for the weather dashboard FastAPI backend
-import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest } from "./weather-types";
+import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview } from "./weather-types";
 import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
 
-const BASE = (import.meta.env.VITE_WEATHER_API ?? "http://localhost:8000") + "/api";
+const BASE = `${import.meta.env.VITE_WEATHER_API ?? ""}/api`;
 
 async function get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   const usp = new URLSearchParams();
@@ -140,6 +140,10 @@ export const weatherApi = {
 
   getWeatherEdgeV2Latest(): Promise<WeatherEdgeV2Latest> {
     return get("/research/weather-edge-v2/latest");
+  },
+
+  getStrategyRuntimeOverview(params?: { target_date?: string }): Promise<StrategyRuntimeOverview> {
+    return get("/strategy-runtime/overview", params);
   },
 
   getRunEquity(runId: string): Promise<{ date: string; cumulative_pnl: number }[]> {

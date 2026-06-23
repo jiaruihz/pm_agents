@@ -250,6 +250,98 @@ export interface WeatherEdgeV2Latest {
   research: Record<string, unknown> | null;
 }
 
+export interface StrategyRuntimeArtifact {
+  artifact_kind: string;
+  source_path: string;
+  row_count: number;
+  size_bytes: number;
+  latest_record_ts_utc: string | null;
+  sample_target_date: string | null;
+  sample_city: string | null;
+  target_date_match: boolean;
+  refreshed_at_utc: string | null;
+}
+
+export interface StrategyRuntimeRow {
+  strategy_instance: string;
+  strategy_id: string | null;
+  display_name: string;
+  family: string;
+  lifecycle_status: string;
+  execution_mode: string;
+  health_status: string;
+  source_layer: string;
+  runtime_dir: string | null;
+  summary_path: string | null;
+  primary_journal_path: string | null;
+  latest_summary_ts_utc: string | null;
+  latest_data_ts_utc: string | null;
+  latest_artifact_mtime_utc: string | null;
+  heartbeat_age_min: number | null;
+  candidate_rows: number;
+  plan_rows: number;
+  live_order_rows: number;
+  paper_order_rows: number;
+  shadow_rows: number;
+  telemetry_rows: number;
+  fact_trade_rows: number;
+  fact_live_real_rows: number;
+  fact_cost_usd: number | null;
+  first_target_date: string | null;
+  last_target_date: string | null;
+  latest_fill_ts_utc: string | null;
+  cap_order_notional: number | null;
+  cap_city_day_notional: number | null;
+  cap_total_day_notional: number | null;
+  live_enabled: number | null;
+  process_status: string;
+  blocker_count: number;
+  blockers: unknown[];
+  notes: string | null;
+  refreshed_at_utc: string;
+  latest_sample_target_date: string | null;
+  sample_target_dates: string[];
+  sample_cities: string[];
+  target_status: string;
+  target_artifacts: StrategyRuntimeArtifact[];
+  artifacts: StrategyRuntimeArtifact[];
+}
+
+export interface StrategyShadowQueueRow {
+  shadow_id: string;
+  display_name: string;
+  family: string;
+  proposed_execution_mode: string;
+  priority: "high" | "medium" | "low";
+  status: string;
+  source_doc: string | null;
+  target_runtime_dir: string | null;
+  required_fields: unknown[];
+  blockers: unknown[];
+  notes: string | null;
+  created_at_utc: string;
+  refreshed_at_utc: string;
+}
+
+export interface StrategyRuntimeOverview {
+  target_date: string;
+  refreshed_at_utc: string | null;
+  summary: {
+    total_strategies: number;
+    live_strategies: number;
+    shadow_strategies: number;
+    telemetry_strategies: number;
+    healthy_strategies: number;
+    blocked_strategies: number;
+    stale_strategies: number;
+    target_seen_strategies: number;
+    shadow_queue_items: number;
+    shadow_queue_high: number;
+  };
+  strategies: StrategyRuntimeRow[];
+  shadow_queue: StrategyShadowQueueRow[];
+}
+
 /** /api/strategies — per-config aggregated stats */
 export interface StrategyRow {
   config_id: string;
