@@ -17,7 +17,7 @@ After=network-online.target
 WorkingDirectory=${ROOT}
 Environment=WEATHER_DB_PATH=${ROOT}/runtime/weather.db
 ExecStartPre=${ROOT}/.venv/bin/python ${ROOT}/scripts/ops/refresh_weather_strategy_runtime_registry.py --db-path ${ROOT}/runtime/weather.db --json-out ${LOG_DIR}/strategy_runtime_registry_refresh.json
-ExecStart=${ROOT}/.venv/bin/uvicorn weather_dashboard.api.app:app --host 127.0.0.1 --port ${API_PORT}
+ExecStart=${ROOT}/.venv/bin/python -m uvicorn weather_dashboard.api.app:app --host 127.0.0.1 --port ${API_PORT}
 Restart=always
 RestartSec=5
 
