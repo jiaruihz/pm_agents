@@ -1,0 +1,284 @@
+{
+  "generated_at_utc": "2026-06-24T17:42:23+00:00",
+  "target_metric": "current_bracket_no_regime_atlas_overlay_v1",
+  "data_snapshot": {
+    "sync_ran": true,
+    "run_stack_note": "fact tables and CLOB gate rebuilt; run_stack exited non-zero only because frontend port 5174 stayed busy",
+    "clob_gate_pass": true,
+    "atlas_rows": 11737,
+    "atlas_date_min": "2026-05-19",
+    "atlas_date_max": "2026-06-23",
+    "combined_rows": 4740,
+    "combined_dates": [
+      "2026-05-20",
+      "2026-05-21",
+      "2026-05-22",
+      "2026-05-23",
+      "2026-05-24",
+      "2026-05-25",
+      "2026-05-26",
+      "2026-05-27",
+      "2026-05-28",
+      "2026-05-29",
+      "2026-05-30",
+      "2026-05-31",
+      "2026-06-01",
+      "2026-06-02",
+      "2026-06-03",
+      "2026-06-04",
+      "2026-06-05",
+      "2026-06-06",
+      "2026-06-07",
+      "2026-06-08",
+      "2026-06-09",
+      "2026-06-10",
+      "2026-06-11",
+      "2026-06-12",
+      "2026-06-13",
+      "2026-06-14",
+      "2026-06-15",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-18",
+      "2026-06-19",
+      "2026-06-20",
+      "2026-06-21",
+      "2026-06-22"
+    ]
+  },
+  "source_stats": {
+    "historical": {
+      "raw_rows": 4306,
+      "mechanism_rows": 4306,
+      "trade_base_rows": 499,
+      "date_min": "2026-05-20",
+      "date_max": "2026-06-20",
+      "forecast_stats": {
+        "rows": 1072,
+        "route_status": {
+          "calibration_best_available": 839,
+          "fallback_best_available_gfs_ecmwf": 205,
+          "fallback_gfs_true_prevday": 27,
+          "fallback_gfs_historical": 1
+        },
+        "route_model": {
+          "gfs": 573,
+          "ecmwf": 499
+        },
+        "date_min": "2026-05-20",
+        "date_max": "2026-06-20"
+      }
+    },
+    "forward": {
+      "mechanism_rows": 580,
+      "source_stats": {
+        "source_stats": {
+          "rows": 784,
+          "forecast_stats": {
+            "rows": 93,
+            "route_status": {
+              "fallback_gfs_true_prevday": 92,
+              "missing_all_forecasts": 1
+            },
+            "route_model": {
+              "gfs": 92,
+              "": 1
+            },
+            "date_min": "2026-06-21",
+            "date_max": "2026-06-23"
+          }
+        },
+        "mechanism_rows": 580
+      }
+    },
+    "combined_rows": 4740,
+    "combined_dates": [
+      "2026-05-20",
+      "2026-05-21",
+      "2026-05-22",
+      "2026-05-23",
+      "2026-05-24",
+      "2026-05-25",
+      "2026-05-26",
+      "2026-05-27",
+      "2026-05-28",
+      "2026-05-29",
+      "2026-05-30",
+      "2026-05-31",
+      "2026-06-01",
+      "2026-06-02",
+      "2026-06-03",
+      "2026-06-04",
+      "2026-06-05",
+      "2026-06-06",
+      "2026-06-07",
+      "2026-06-08",
+      "2026-06-09",
+      "2026-06-10",
+      "2026-06-11",
+      "2026-06-12",
+      "2026-06-13",
+      "2026-06-14",
+      "2026-06-15",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-18",
+      "2026-06-19",
+      "2026-06-20",
+      "2026-06-21",
+      "2026-06-22"
+    ],
+    "open_rows": 146,
+    "open_dates": [
+      "2026-06-23"
+    ]
+  },
+  "label_mismatch": {
+    "cohorts": [
+      {
+        "cohort": "all_h10_14_current_no_states",
+        "rows": 4306,
+        "active_dates": 32,
+        "cities": 36,
+        "actual_peak_afternoon_rate": 0.6274965164886205,
+        "future_max_above_running_rate": 0.6539712029725964,
+        "no_win_rate": 0.6288899210404088,
+        "roi": -0.14790216172738885,
+        "afternoon_yes_no_loss_rows": 405,
+        "afternoon_yes_no_loss_share_of_afternoon": 0.14988897113249444,
+        "fp_peak_already_started_share": 0.8740740740740741,
+        "fp_final_did_not_cross_upper_share": 0.6148148148148148,
+        "fp_future_max_above_running_share": 0.18765432098765433,
+        "actual_peak_and_no_win": 2297,
+        "actual_peak_and_no_loss": 405,
+        "no_afternoon_and_no_win": 411,
+        "no_afternoon_and_no_loss": 1193
+      },
+      {
+        "cohort": "trade_base_ask10_35_depth5",
+        "rows": 499,
+        "active_dates": 32,
+        "cities": 35,
+        "actual_peak_afternoon_rate": 0.3907815631262525,
+        "future_max_above_running_rate": 0.20040080160320642,
+        "no_win_rate": 0.17835671342685372,
+        "roi": -0.19832790016699675,
+        "afternoon_yes_no_loss_rows": 111,
+        "afternoon_yes_no_loss_share_of_afternoon": 0.5692307692307692,
+        "fp_peak_already_started_share": 0.963963963963964,
+        "fp_final_did_not_cross_upper_share": 0.6576576576576577,
+        "fp_future_max_above_running_share": 0.08108108108108109,
+        "actual_peak_and_no_win": 84,
+        "actual_peak_and_no_loss": 111,
+        "no_afternoon_and_no_win": 5,
+        "no_afternoon_and_no_loss": 299
+      },
+      {
+        "cohort": "classifier_v1_selected_logit_c0p2_ge_0p50",
+        "rows": 150,
+        "active_dates": 32,
+        "cities": 32,
+        "actual_peak_afternoon_rate": 0.78,
+        "future_max_above_running_rate": 0.36666666666666664,
+        "no_win_rate": 0.32,
+        "roi": 0.37614652766804724,
+        "afternoon_yes_no_loss_rows": 70,
+        "afternoon_yes_no_loss_share_of_afternoon": 0.5982905982905983,
+        "fp_peak_already_started_share": 0.9571428571428572,
+        "fp_final_did_not_cross_upper_share": 0.6285714285714286,
+        "fp_future_max_above_running_share": 0.08571428571428572,
+        "actual_peak_and_no_win": 47,
+        "actual_peak_and_no_loss": 70,
+        "no_afternoon_and_no_win": 1,
+        "no_afternoon_and_no_loss": 32
+      }
+    ]
+  },
+  "policy_summary": [
+    {
+      "policy": "atlas_physical_trade_cap_soft_size",
+      "blocks": 33,
+      "total_trades": 625,
+      "weighted_cost_usd": 1087.9379486298665,
+      "weighted_profit_usd": 78.19908643820479,
+      "cost_weighted_roi": 0.07187825972674967,
+      "mean_block_roi": 0.052014349266765056,
+      "positive_blocks": 18,
+      "bad_blocks_roi_le_minus50": 4,
+      "avg_notional_retained": 0.3452788375425947
+    },
+    {
+      "policy": "atlas_train_shrunk_trade_cap_soft_size",
+      "blocks": 33,
+      "total_trades": 625,
+      "weighted_cost_usd": 1315.7878736135956,
+      "weighted_profit_usd": 51.78322738579439,
+      "cost_weighted_roi": 0.03935530067136145,
+      "mean_block_roi": 0.03804854072894178,
+      "positive_blocks": 17,
+      "bad_blocks_roi_le_minus50": 5,
+      "avg_notional_retained": 0.41896064967444685
+    },
+    {
+      "policy": "atlas_physical_soft_size",
+      "blocks": 33,
+      "total_trades": 625,
+      "weighted_cost_usd": 1968.75,
+      "weighted_profit_usd": 7.715574372111931,
+      "cost_weighted_roi": 0.003919021903294949,
+      "mean_block_roi": -0.01868582592406955,
+      "positive_blocks": 15,
+      "bad_blocks_roi_le_minus50": 3,
+      "avg_notional_retained": 0.6282373593781206
+    },
+    {
+      "policy": "trade_cap_soft_size",
+      "blocks": 33,
+      "total_trades": 625,
+      "weighted_cost_usd": 1692.911834857022,
+      "weighted_profit_usd": -4.28960496860968,
+      "cost_weighted_roi": -0.002533862000540605,
+      "mean_block_roi": -0.007795222796737932,
+      "positive_blocks": 16,
+      "bad_blocks_roi_le_minus50": 6,
+      "avg_notional_retained": 0.5394591078060359
+    },
+    {
+      "policy": "atlas_train_shrunk_soft_size",
+      "blocks": 33,
+      "total_trades": 625,
+      "weighted_cost_usd": 2397.244955039271,
+      "weighted_profit_usd": -73.49026878411712,
+      "cost_weighted_roi": -0.030656136591144988,
+      "mean_block_roi": -0.03671030865207342,
+      "positive_blocks": 16,
+      "bad_blocks_roi_le_minus50": 4,
+      "avg_notional_retained": 0.7672181764481464
+    },
+    {
+      "policy": "full_size_base_p40",
+      "blocks": 33,
+      "total_trades": 625,
+      "weighted_cost_usd": 3125.0,
+      "weighted_profit_usd": -180.43684245549855,
+      "cost_weighted_roi": -0.05773978958575954,
+      "mean_block_roi": -0.0698748203001707,
+      "positive_blocks": 15,
+      "bad_blocks_roi_le_minus50": 4,
+      "avg_notional_retained": 1.0
+    }
+  ],
+  "outputs": {
+    "summary_json": "docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/summary.json",
+    "mismatch_csv": "docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/afternoon_label_payoff_mismatch.csv",
+    "regime_slice_csv": "docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/base_p40_regime_slice_performance.csv",
+    "rolling_blocks_csv": "docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/atlas_soft_sizing_rolling_blocks.csv",
+    "policy_summary_csv": "docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/atlas_soft_sizing_policy_summary.csv",
+    "markdown": "docs/analysis/2026-06/2026-06-25-current-bracket-no-regime-atlas-overlay-v1.md"
+  },
+  "verdict": {
+    "status": "atlas_feature_layer_useful_but_not_confirmed_trading_rule",
+    "live_ready": false,
+    "reason": "Atlas labels explain payoff regimes and can support forward logging/soft sizing, but rolling policy results do not pass live gates."
+  }
+}
