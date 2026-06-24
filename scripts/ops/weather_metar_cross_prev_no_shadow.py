@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -41,6 +42,11 @@ from weather_data_feed.source_policy import (  # noqa: E402
     build_city_policy,
     load_city_configs,
 )
+from weather_data_feed.observation_sources import (  # noqa: E402
+    parse_metar_report_time,
+    parse_metar_temp_c,
+    parse_tgftp_header_time,
+)
 
 
 DATA_ROOT = Path(os.environ.get("METAR_CROSS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
@@ -53,6 +59,7 @@ EXPLICIT_WEATHER_PROXY = os.environ.get("METAR_CROSS_WEATHER_PROXY", "").strip()
 EXPLICIT_MARKET_PROXY = os.environ.get("METAR_CROSS_MARKET_PROXY", "").strip()
 WRH_API_KEY_JS = "https://www.weather.gov/source/wrh/apiKey.js"
 SYNOPTIC_TIMESERIES_API = "https://api.synopticdata.com/v2/stations/timeseries"
+NOAA_TGFTP_STATION_TXT = "https://tgftp.nws.noaa.gov/data/observations/metar/stations/{icao}.TXT"
 SYNOPTIC_TOKEN_RE = re.compile(r"['\"]([a-f0-9]{32})['\"]")
 SYNOPTIC_TOKEN_CACHE: str | None = None
 
@@ -225,6 +232,41 @@ def recent_metar_summary(icao: str, tz: ZoneInfo, local_date: Any, *, hours: flo
     }
 
 
+def noaa_tgftp_station_txt_latest(icao: str, previous_value: Any) -> dict[str, Any]:
+    text = source.fetch_text(
+        NOAA_TGFTP_STATION_TXT.format(icao=icao),
+        max_rounds=1,
+        timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+        proxy_candidates=WEATHER_PROXY_CANDIDATES,
+    )
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    raw_metar = lines[1] if len(lines) > 1 else ""
+    header_dt = parse_tgftp_header_time(text)
+    report_dt = parse_metar_report_time(raw_metar, header_dt)
+    temp_c = parse_metar_temp_c(raw_metar) if raw_metar else None
+    if not raw_metar or report_dt is None or temp_c is None:
+        return {"status": "missing_metar", "source": "noaa_tgftp_station_txt", "n_obs": 0}
+    now = datetime.now(timezone.utc)
+    age_min = (now - report_dt).total_seconds() / 60.0
+    running_max_c = temp_c
+    if previous_value is None:
+        # The TGFTP station text endpoint only exposes the latest METAR. A new
+        # day or empty state can seed from this value, but cannot infer earlier
+        # intraday highs until the process has observed them.
+        running_max_c = temp_c
+    return {
+        "status": "ok",
+        "source": "noaa_tgftp_station_txt",
+        "n_obs": 1,
+        "age_min": round(age_min, 1),
+        "running_max_c": running_max_c,
+        "current_temp_c": temp_c,
+        "last_obs_utc": report_dt.isoformat(),
+        "raw_metar": raw_metar,
+        "source_file_ts_utc": header_dt.isoformat() if header_dt else None,
+    }
+
+
 def synoptic_token() -> str:
     global SYNOPTIC_TOKEN_CACHE
     if SYNOPTIC_TOKEN_CACHE:
@@ -321,6 +363,13 @@ def observation_summary(cfg: CityConfig, tz: ZoneInfo, local_date: Any, *, previ
     if obs_source == "synopticdata_timeseries":
         minutes = 1800 if previous_value is None else max(60, int(recent_hours * 60))
         return synoptic_summary(cfg.official_icao, tz, local_date, minutes=minutes)
+    if obs_source == "noaa_tgftp_station_txt":
+        if previous_value is None:
+            seed = aviationweather_metar_day_fast(cfg.official_icao, tz, local_date)
+            if seed.get("status") == "ok":
+                seed["source"] = "aviationweather_metar_day_fast_seed_for_noaa_tgftp_station_txt"
+                return seed
+        return noaa_tgftp_station_txt_latest(cfg.official_icao, previous_value)
     if previous_value is None:
         return aviationweather_metar_day_fast(cfg.official_icao, tz, local_date)
     return recent_metar_summary(cfg.official_icao, tz, local_date, hours=recent_hours)
@@ -362,19 +411,19 @@ def build_live_fok_place_fn() -> Any:
         pass
     try:
         from py_clob_client_v2.client import ClobClient
-        from py_clob_client_v2.clob_types import ApiCreds, OrderArgsV2, OrderType
+        from py_clob_client_v2.clob_types import ApiCreds, MarketOrderArgsV2, OrderType
         from py_clob_client_v2.constants import POLYGON
         import py_clob_client_v2.http_helpers.helpers as clob_http_helpers
 
-        order_args_cls = OrderArgsV2
+        market_order_args_cls = MarketOrderArgsV2
         clob_v2 = True
     except ModuleNotFoundError:
         from py_clob_client.client import ClobClient
-        from py_clob_client.clob_types import ApiCreds, OrderArgs, OrderType
+        from py_clob_client.clob_types import ApiCreds, MarketOrderArgs, OrderType
         from py_clob_client.constants import POLYGON
         import py_clob_client.http_helpers.helpers as clob_http_helpers
 
-        order_args_cls = OrderArgs
+        market_order_args_cls = MarketOrderArgs
         clob_v2 = False
     clob_proxy = next((proxy for proxy in MARKET_PROXY_CANDIDATES if proxy), None)
     if clob_proxy:
@@ -405,12 +454,13 @@ def build_live_fok_place_fn() -> Any:
             client.set_api_creds(client.create_or_derive_api_creds())
 
     def place(row: dict[str, Any]) -> dict[str, Any]:
-        signed_order = client.create_order(
-            order_args_cls(
+        signed_order = client.create_market_order(
+            market_order_args_cls(
                 token_id=str(row["token_id"]),
+                amount=float(row["submitted_notional_usd"]),
                 price=float(row["limit_price"]),
-                size=float(row["size"]),
                 side="BUY",
+                order_type=OrderType.FOK,
             )
         )
         if clob_v2:
@@ -422,6 +472,7 @@ def build_live_fok_place_fn() -> Any:
             "order_id": extract_order_id(response),
             "clob_client": "py_clob_client_v2" if clob_v2 else "py_clob_client",
             "order_type": "FOK",
+            "order_mode": "market_buy_amount",
             "signature_type": signature_type,
             "funder": funder,
             "signer": signer_addr,
@@ -429,6 +480,20 @@ def build_live_fok_place_fn() -> Any:
         }
 
     return place
+
+
+def floor_to_places(value: float, places: int) -> float:
+    factor = 10**places
+    return math.floor(float(value) * factor + 1e-12) / factor
+
+
+def plan_buy_amount(best_ask: float, best_ask_size: float, max_notional_per_trade: float) -> tuple[float, float]:
+    spend_cap = min(float(max_notional_per_trade), float(best_ask) * float(best_ask_size))
+    submitted_notional = floor_to_places(spend_cap, 2)
+    if submitted_notional <= 0 or best_ask <= 0:
+        return 0.0, 0.0
+    order_size = floor_to_places(submitted_notional / float(best_ask), 5)
+    return order_size, submitted_notional
 
 
 def spent_notional(path: Path, *, target_date: str | None = None, city: str | None = None) -> float:
@@ -670,8 +735,7 @@ def cycle_once(
                 append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "no_asks", "token_id": no_token_id, **book_audit})
                 continue
             ask, size = best
-            order_size = min(float(size), float(max_notional_per_trade) / float(ask)) if ask > 0 else 0.0
-            submitted_notional = round(order_size * float(ask), 6)
+            order_size, submitted_notional = plan_buy_amount(float(ask), float(size), float(max_notional_per_trade))
             city_day_spent = spent_notional(OUT_DIR / "orders.jsonl", target_date=local_date.isoformat(), city=cfg.city)
             total_day_spent = spent_notional(OUT_DIR / "orders.jsonl", target_date=local_date.isoformat())
             live_blockers: list[str] = []
@@ -705,7 +769,7 @@ def cycle_once(
                 "max_notional_total_day": max_notional_total_day,
                 "city_day_spent_before": city_day_spent,
                 "total_day_spent_before": total_day_spent,
-                "planned_size": round(order_size, 4),
+                "planned_size": order_size,
                 "planned_notional_usd": submitted_notional,
                 **book_audit,
             }
@@ -716,7 +780,7 @@ def cycle_once(
                     **opportunity,
                     "order_side": "BUY",
                     "limit_price": ask,
-                    "size": round(order_size, 4),
+                    "size": order_size,
                     "submitted_notional_usd": submitted_notional,
                     "live_attempted": True,
                     "live_attempt_ts_utc": datetime.now(timezone.utc).isoformat(),
@@ -790,7 +854,11 @@ def main() -> int:
     parser.add_argument("--cities", nargs="*", help="Optional city allowlist, e.g. Shanghai Tokyo.")
     parser.add_argument("--include-station-diff", action="store_true", help="Also include WU official-station-diff cities with >=97% alignment.")
     parser.add_argument("--max-ask", type=float, default=0.995)
-    parser.add_argument("--obs-source", choices=["aviationweather_metar", "synopticdata_timeseries"], default=os.environ.get("METAR_CROSS_OBS_SOURCE", "aviationweather_metar"))
+    parser.add_argument(
+        "--obs-source",
+        choices=["aviationweather_metar", "synopticdata_timeseries", "noaa_tgftp_station_txt"],
+        default=os.environ.get("METAR_CROSS_OBS_SOURCE", "aviationweather_metar"),
+    )
     parser.add_argument("--live", action="store_true", help="Actually submit FOK BUY NO orders when all guards pass.")
     parser.add_argument("--confirm-live", action="store_true", help="Required with --live.")
     parser.add_argument("--max-notional-per-trade", type=float, default=float(os.environ.get("METAR_CROSS_MAX_NOTIONAL_PER_TRADE", "10")))

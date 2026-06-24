@@ -5,8 +5,10 @@ from scripts.ops.weather_metar_cross_prev_no_shadow import (
     crossed_prev_no_brackets,
     in_update_window,
     load_city_configs,
+    noaa_tgftp_station_txt_latest,
     parsed_label_is_dead_for_running_value,
     parsed_label_matches_no_target,
+    plan_buy_amount,
 )
 
 
@@ -56,3 +58,28 @@ def test_crossing_burst_window_targets_report_boundaries():
     assert in_update_window(datetime(2026, 6, 17, 4, 29, 58, tzinfo=timezone.utc), window_min=2)
     assert in_update_window(datetime(2026, 6, 17, 4, 0, 2, tzinfo=timezone.utc), window_min=2)
     assert not in_update_window(datetime(2026, 6, 17, 4, 12, 0, tzinfo=timezone.utc), window_min=2)
+
+
+def test_plan_buy_amount_uses_cent_notional_and_five_decimal_size():
+    size, notional = plan_buy_amount(0.988, 500.0, 3.0)
+    assert notional == 3.0
+    assert size == 3.03643
+
+    size, notional = plan_buy_amount(0.847, 2.0, 3.0)
+    assert notional == 1.69
+    assert size == 1.99527
+
+
+def test_noaa_tgftp_station_txt_latest_parses_station_text(monkeypatch):
+    from scripts.ops import weather_metar_cross_prev_no_shadow as mod
+
+    def fake_fetch_text(*args, **kwargs):
+        return "2026/06/24 17:53\nKORD 241751Z 24008KT 10SM FEW050 29/18 A2992 RMK AO2 SLP130 T02940178\n"
+
+    monkeypatch.setattr(mod.source, "fetch_text", fake_fetch_text)
+    row = noaa_tgftp_station_txt_latest("KORD", previous_value=83)
+    assert row["status"] == "ok"
+    assert row["source"] == "noaa_tgftp_station_txt"
+    assert row["last_obs_utc"] == "2026-06-24T17:51:00+00:00"
+    assert row["current_temp_c"] == 29.0
+    assert row["running_max_c"] == 29.0
