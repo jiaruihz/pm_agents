@@ -63,6 +63,16 @@ execution_policy / live_cycle）走 [weather-strategy-deploy] 的 **git-first** 
 （保留 / 过滤 / 降 size / shadow / 不改 live）再给证据。**不要擅自把"某个坏场景怎么优化"扩大成"整个分支砍不砍"。**
 发现口径漂移立刻暂停纠正，不继续堆结果。
 
+研究结论不要建立在单次随手阈值实验上。发现某个方向点估不好时，先做同分母 A/B、合理微调和必要反事实
+（例如固定 label/rows 后比较 source policy、城市池、阈值、forward 窗口），再下结论；但不能为了调参把
+forward 失败或非 PIT 数据包装成可 live 的证据。
+
+天气策略研究优先从第一性原理构造连续信号，再用切片解释信号，不要把切片当策略本体。比如 no-reheat /
+remaining-heat 这类问题，先定义物理目标（剩余时间是否还能打穿当前高点 / bracket）、机制特征（剩余加热能量、
+forecast ceiling margin、plateau 可靠性、reheat 机制、观测 cadence/source）和可校准概率，再用市场价格计算 EV。
+hard filter 只用于机制边界、资金安全、执行质量或已知无效数据，不用于追着坏例子一条条补洞；否则会把样本切碎成
+看似漂亮但永远不能 live 的过拟合规则。
+
 ## 5. 分析必走的 skill + 硬口径（细则见 [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)）
 
 weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚本：

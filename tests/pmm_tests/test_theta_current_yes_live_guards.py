@@ -174,6 +174,60 @@ def test_fresh_taker_quote_rejects_peak_forming_edge_below_required(monkeypatch)
     assert quote["required_quote_edge"] == 0.02
 
 
+def test_fresh_taker_quote_rejects_peak_forming_fresh_ask_below_profile_min(monkeypatch):
+    monkeypatch.setattr(
+        live,
+        "fetch_json",
+        lambda *_args, **_kwargs: {
+            "asks": [{"price": "0.010", "size": "100"}],
+            "bids": [{"price": "0.001", "size": "100"}],
+        },
+    )
+    args = argparse.Namespace(
+        max_taker_cushion=0.02,
+        cross_tick_buffer=0.001,
+        max_order_notional=5.0,
+        peak_forming_min_ask=0.50,
+        peak_forming_min_edge=0.02,
+    )
+
+    quote = live.fresh_taker_quote(
+        {
+            "token_id": "yes-token",
+            "p_yes_win": 0.623828,
+            "yes_current_ask": 0.740,
+            "entry_profile": "peak_forming_micro",
+        },
+        args,
+    )
+
+    assert quote["status"] == "rejected"
+    assert quote["reason"] == "fresh_ask_below_profile_min"
+    assert quote["fresh_ask"] == 0.01
+    assert quote["min_fresh_ask"] == 0.50
+
+
+def test_peak_state_v2_shadow_candidate_uses_3h_temperature_trend():
+    args = argparse.Namespace(peak_state_v2_max_d_tmpf_3h=2.0)
+
+    keep = live.peak_state_v2_shadow_fields(
+        {"entry_profile": "peak_forming_micro", "d_tmpf_3h": 1.8},
+        args,
+    )
+    reject_warming = live.peak_state_v2_shadow_fields(
+        {"entry_profile": "peak_forming_micro", "d_tmpf_3h": 3.6},
+        args,
+    )
+    reject_profile = live.peak_state_v2_shadow_fields(
+        {"entry_profile": "fade_confirmed", "d_tmpf_3h": 1.8},
+        args,
+    )
+
+    assert keep["peak_state_v2_shadow_candidate"] is True
+    assert reject_warming["peak_state_v2_shadow_candidate"] is False
+    assert reject_profile["peak_state_v2_shadow_candidate"] is False
+
+
 def test_fresh_taker_quote_accepts_thin_depth_when_edge_passes(monkeypatch):
     monkeypatch.setattr(
         live,

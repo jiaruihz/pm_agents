@@ -50,7 +50,7 @@ log()  { printf '\033[1;36m[refresh]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[refresh]\033[0m %s\n' "$*"; }
 err()  { printf '\033[1;31m[refresh]\033[0m %s\n' "$*" >&2; }
 
-TS="$(date -Is)"
+TS="$(date -Is 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S%z')"
 log "Weather dashboard refresh — $TS"
 log "DB: $DB_PATH"
 log ""
@@ -168,7 +168,7 @@ refresh_metrics 2>&1 | tee "$LOG_DIR/metrics_refresh.log" || {
 
 # ---- Summary ----
 log ""
-log "Refresh complete at $(date -Is)"
+log "Refresh complete at $(date -Is 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S%z')"
 if [[ -f "$DB_PATH" ]]; then
   DB_SIZE="$(stat -c '%s' "$DB_PATH" 2>/dev/null || echo '?')"
   log "DB size: $DB_SIZE bytes"

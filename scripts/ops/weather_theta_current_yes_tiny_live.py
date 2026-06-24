@@ -559,6 +559,17 @@ def fresh_taker_quote(row: dict[str, Any], args: argparse.Namespace) -> dict[str
     fresh_ask, fresh_ask_size = asks[0]
     p_yes = float(row["p_yes_win"])
     snapshot_ask = float(row["yes_current_ask"])
+    min_fresh_ask = min_fresh_ask_for_profile(row, args)
+    if fresh_ask + 1e-9 < min_fresh_ask:
+        return {
+            "status": "rejected",
+            "reason": "fresh_ask_below_profile_min",
+            "best_bid": bids[0][0] if bids else 0.0,
+            "fresh_ask": fresh_ask,
+            "fresh_ask_size": fresh_ask_size,
+            "min_fresh_ask": min_fresh_ask,
+            "edge_at_fresh_ask": p_yes - fresh_ask,
+        }
     max_by_cushion = snapshot_ask + float(args.max_taker_cushion)
     max_price = min(max_by_cushion, 0.999)
     if fresh_ask > max_price + 1e-9:
@@ -700,6 +711,12 @@ def required_fresh_quote_edge(row: dict[str, Any], args: argparse.Namespace) -> 
     if safe_str(row.get("entry_profile")) == "peak_forming_micro":
         return max(0.0, float(getattr(args, "peak_forming_min_edge", 0.02)))
     return max(0.0, 0.05 - float(args.max_taker_cushion))
+
+
+def min_fresh_ask_for_profile(row: dict[str, Any], args: argparse.Namespace) -> float:
+    if safe_str(row.get("entry_profile")) == "peak_forming_micro":
+        return max(0.0, float(getattr(args, "peak_forming_min_ask", 0.50)))
+    return max(0.0, fade_gate_spec_from_args(args).min_ask)
 
 
 def load_stations() -> dict[str, Station]:
