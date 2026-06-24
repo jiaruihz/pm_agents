@@ -300,7 +300,15 @@ move a script only when it becomes the maintained entrypoint for a new result.
    `2026-06-19-reheat-feature-data-freshness-v1.md` or rerun the freshness audit
    so the feature layer does not silently lag behind raw orderbook/settlement
    data.
-2. `forecast_peak_clock_data_fill`: pm_agent fact builder now derives
+2. `intraday_weather_regime_atlas`: v1 completed in
+   `docs/analysis/2026-06/2026-06-24-intraday-weather-regime-atlas-v1.md`.
+   It materializes reusable city/date/hour mechanism labels
+   (`day_regime`, `intraday_state`, `moisture_cloud_regime`,
+   `running_max_state`, `composite_regime`) plus expression payoff matrices for
+   current YES, current-bracket NO, d1/d2 NO, and low-price higher YES. Treat
+   these labels as weather structure and forward telemetry fields, not hard
+   gates or live approval.
+3. `forecast_peak_clock_data_fill`: pm_agent fact builder now derives
    `forecast_peak_*`/`forecast_values_hash` from mirrored hourly cache when
    present. Research backfill v3 proves the feature can be joined and measured,
    and dataset v1 promotes the historical current-YES replay universe into a
@@ -308,7 +316,7 @@ move a script only when it becomes the maintained entrypoint for a new result.
    step is N100 forward telemetry activation with the pm_agent fallback, plus
    upstream `weather-predict` snapshot producer/cache deployment so native
    point-in-time fields eventually replace the fallback.
-3. `current_yes_peak_forming` vs `current_yes_fade_confirmed`: factory-backed
+4. `current_yes_peak_forming` vs `current_yes_fade_confirmed`: factory-backed
    v1 completed in
    `docs/analysis/2026-06/2026-06-16-current-yes-peak-vs-fade-v1.md`.
    Current conclusion is fade-first shadow only: fixed holdout favors
@@ -317,13 +325,13 @@ move a script only when it becomes the maintained entrypoint for a new result.
    Peak-forming hazard v1 confirms the same direction with a dedicated model:
    it is a useful research probability layer, but it fails the significance gate
    as a live replacement.
-4. `higher_no_carry_expression`: factory-backed v1 completed in
+5. `higher_no_carry_expression`: factory-backed v1 completed in
    `docs/analysis/2026-06/2026-06-16-higher-no-carry-expression-selector-v1.md`.
    NO carry/ladder did not prove stable positive excess ROI versus same-window
    current YES, so this remains shadow-only expression telemetry.
-5. `low_price_yes_reheat_reversal`: use the same physical base for the opposite
+6. `low_price_yes_reheat_reversal`: use the same physical base for the opposite
    reheat/convexity expression.
-6. `execution_freshness_gate`: v13 says not to promote a new historical alpha
+7. `execution_freshness_gate`: v13 says not to promote a new historical alpha
    guard from half-hour replay. Next priority is production telemetry: fresh CLOB
    ask, snapshot age, obs age, minutes-to-next official observation,
    minutes-since-running-max, and source profile on every would-order before
