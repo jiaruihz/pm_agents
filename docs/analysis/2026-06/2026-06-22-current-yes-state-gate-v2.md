@@ -4,12 +4,12 @@ Target metric: 用 split current-YES `peak_forming_micro` forward telemetry 验�
 
 ## Data Snapshot
 
-- Window: target_date `2026-06-18`..`2026-06-22`; settled labels currently available through `2026-06-20`.
+- Window: target_date `2026-06-18`..`2026-06-22`; settled labels currently available through `2026-06-21`.
 - Evidence layer: `forward_telemetry.jsonl` signal telemetry + `settlement_outcomes`; this is not `live_real` fill PnL.
 - Row grain: one deduped signal epoch = `city + target_date + bracket + token_id + running_max_obs_utc`.
 - Price modes: `snapshot` = snapshot ask; `fresh` = fresh ask/limit when present; `live_like` = only current runner `planned` rows.
-- Telemetry synced after fixing split runtime sync; peak latest summary generated_at `2026-06-21T16:16:54+00:00`, live_enabled `False`.
-- `run_stack.sh` rebuilt fact tables, then exited non-zero because frontend port 5174 stayed busy; DB and CLOB coverage gate were still usable.
+- Telemetry synced after fixing split runtime sync; peak latest summary generated_at `2026-06-22T15:41:45+00:00`, live_enabled `False`.
+- run_stack.sh rebuilt fact tables before this report; DB and CLOB coverage gate were usable.
 - CLOB coverage gate: `gate_pass=True`.
 
 ## 5-line Self-check
@@ -17,9 +17,9 @@ Target metric: 用 split current-YES `peak_forming_micro` forward telemetry 验�
 ```json
 {
   "fact_signal_candidates": {
-    "max_ts": "2026-06-21T16:00:50Z",
+    "max_ts": "2026-06-22T15:00:41Z",
     "min_ts": "2026-05-05T15:27:41Z",
-    "rows": 34830
+    "rows": 35445
   },
   "fact_trades": {
     "max_ts": "2026-06-11T09:59:21+00:00",
@@ -65,67 +65,70 @@ Target metric: 用 split current-YES `peak_forming_micro` forward telemetry 验�
 
 ## Funnel
 
-- Raw peak telemetry rows in window after old peak profile pass: 1821.
-- Deduped signal epochs: 107.
-- Settled deduped signal epochs: 75.
-- Unsettled/pending signal epochs: 32.
-- Decision status counts after dedupe: `{'planned': 16, 'strategy_signal_cap': 31, 'fresh_ask_exceeds_cushion': 57, 'fresh_edge_below_required': 3}`.
+- Raw peak telemetry rows in window after old peak profile pass: 2438.
+- Deduped signal epochs: 151.
+- Settled deduped signal epochs: 124.
+- Unsettled/pending signal epochs: 27.
+- Decision status counts after dedupe: `{'planned': 23, 'strategy_signal_cap': 31, 'fresh_ask_exceeds_cushion': 90, 'fresh_edge_below_required': 7}`.
 
 ## Main Variants
 
 | variant | price | kept | settled | dates | W-L | win | avg price | ROI | PnL per $1 | date bootstrap 95% ROI |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `old_peak_snapshot_price` | snapshot | 107 | 75 | 3 | 65-10 | +86.7% | +75.4% | +15.5% | $+11.65 | [+13.1%, +34.1%] |
-| `old_peak_fresh_proxy` | fresh | 107 | 75 | 3 | 65-10 | +86.7% | +81.1% | +5.8% | $+4.35 | [+3.4%, +35.1%] |
-| `old_peak_live_planned` | live_like | 16 | 11 | 3 | 8-3 | +72.7% | +70.1% | +0.1% | $+0.01 | [-12.5%, +35.0%] |
+| `old_peak_snapshot_price` | snapshot | 151 | 124 | 4 | 98-26 | +79.0% | +75.9% | +4.2% | $+5.21 | [-12.3%, +33.6%] |
+| `old_peak_fresh_proxy` | fresh | 151 | 124 | 4 | 98-26 | +79.0% | +81.7% | -5.1% | $-6.34 | [-20.7%, +23.5%] |
+| `old_peak_live_planned` | live_like | 23 | 18 | 4 | 11-7 | +61.1% | +69.6% | -14.0% | $-2.52 | [-30.1%, +33.8%] |
 | `last_max_gap_v0` | fresh | 0 | 0 | 0 | 0-0 | NA | NA | NA | $+0.00 | NA |
-| `first_touch_plateau_v2` | fresh | 31 | 26 | 2 | 22-4 | +84.6% | +81.7% | +2.2% | $+0.58 | [-0.2%, +20.6%] |
-| `first_touch_after_forecast_peak` | fresh | 6 | 4 | 2 | 1-3 | +25.0% | +69.9% | -61.8% | $-2.47 | [-100.0%, +52.7%] |
-| `first_touch_dtmp3_le_2f` | fresh | 10 | 7 | 1 | 6-1 | +85.7% | +79.1% | +8.4% | $+0.59 | NA |
-| `first_touch_after_peak_dtmp3_le_2f` | fresh | 2 | 1 | 1 | 0-1 | +0.0% | +72.0% | -100.0% | $-1.00 | NA |
+| `first_touch_plateau_v2` | fresh | 31 | 31 | 3 | 25-6 | +80.6% | +81.7% | -2.9% | $-0.91 | [-29.9%, +20.6%] |
+| `first_touch_after_forecast_peak` | fresh | 6 | 6 | 3 | 3-3 | +50.0% | +73.6% | -33.4% | $-2.00 | [-100.0%, +52.7%] |
+| `first_touch_dtmp3_le_2f` | fresh | 10 | 10 | 2 | 8-2 | +80.0% | +80.7% | -1.1% | $-0.11 | [-23.4%, +8.4%] |
+| `first_touch_after_peak_dtmp3_le_2f` | fresh | 2 | 2 | 2 | 1-1 | +50.0% | +75.5% | -36.7% | $-0.73 | [-100.0%, +26.6%] |
 | `first_touch_no_reheat_le_0_9f` | fresh | 0 | 0 | 0 | 0-0 | NA | NA | NA | $+0.00 | NA |
-| `dtmp3_le_2f_only` | fresh | 37 | 21 | 2 | 19-2 | +90.5% | +83.5% | +9.2% | $+1.92 | [+6.0%, +28.0%] |
-| `forecast_peak_passed_only` | fresh | 32 | 16 | 2 | 11-5 | +68.8% | +74.7% | -14.1% | $-2.25 | [-18.5%, +52.7%] |
+| `dtmp3_le_2f_only` | fresh | 53 | 40 | 3 | 31-9 | +77.5% | +81.8% | -8.1% | $-3.25 | [-27.2%, +28.0%] |
+| `forecast_peak_passed_only` | fresh | 40 | 36 | 3 | 22-14 | +61.1% | +77.6% | -23.9% | $-8.62 | [-31.9%, +52.7%] |
 
 ## Grid Search
 
-Exploratory only.  The window has too few settled dates for promotion; this is used to choose what to shadow next.
+Exploratory only.  The window has too few settled dates for promotion; this is used to choose what to keep tracking next.
 
 | variant | kept | settled | dates | W-L | win | ROI | CI |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `grid_first_touch_forecast_delta_le_2` | 18 | 13 | 2 | 10-3 | +76.9% | -3.4% | [-10.7%, +20.6%] |
-| `grid_first_touch_forecast_delta_le_1` | 11 | 8 | 2 | 5-3 | +62.5% | -17.4% | [-33.1%, +29.8%] |
-| `grid_first_touch_dtmp3_le_4` | 15 | 10 | 1 | 8-2 | +80.0% | -2.9% | NA |
+| `grid_first_touch_forecast_delta_le_2` | 18 | 18 | 3 | 13-5 | +72.2% | -10.8% | [-29.9%, +20.6%] |
+| `grid_first_touch_forecast_delta_le_1` | 11 | 11 | 3 | 8-3 | +72.7% | -8.1% | [-33.1%, +29.8%] |
+| `grid_first_touch_forecast_delta_le_0.5` | 9 | 9 | 3 | 6-3 | +66.7% | -19.3% | [-70.9%, +29.8%] |
+| `grid_first_touch_dtmp3_le_4` | 15 | 15 | 2 | 11-4 | +73.3% | -11.9% | [-29.9%, -2.9%] |
+| `grid_first_touch_dtmp3_le_2` | 10 | 10 | 2 | 8-2 | +80.0% | -1.1% | [-23.4%, +8.4%] |
+| `grid_first_touch_dtmp3_le_3` | 10 | 10 | 2 | 8-2 | +80.0% | -1.1% | [-23.4%, +8.4%] |
 
 ## Finding
 
-- `old_peak_live_planned` is the closest live-action proxy: only 11 settled planned signals, 8-3, ROI about flat.  That is not enough to restore peak live.
+- `old_peak_live_planned` is the closest live-action proxy: after adding 2026-06-21 settlement it is 18 settled signals, 11-7, ROI -14.0%, and the date bootstrap CI still crosses 0.  That is a clear no-live result.
 - `last_max_gap_v0` passes zero rows because live telemetry stores the last observation equal to the running max, not the first touch.  This confirms the old cadence field is structurally wrong for plateau detection.
-- `first_touch_plateau_v2` is the right state semantics to log, but on the current settled window it does not improve enough by itself.
-- Adding `first_touch` as a hard gate currently sample-starves the best slice.  The stronger current direction is the hazard/downtrend feature `d_tmpf_3h <= 2F` without requiring first-touch as a hard pass.
+- `first_touch_plateau_v2` is the right state semantics to log, but it is not a tradable hard gate yet: 31 settled signals, ROI -2.9%, CI crosses 0.
+- Adding `first_touch` as a hard gate sample-starves the slice and does not rescue expectancy.  The previous best-looking hazard/downtrend feature `d_tmpf_3h <= 2F` also failed after 2026-06-21 settled: 40 settled signals, 31-9, ROI -8.1%, CI crosses 0.
 - `forecast_peak_passed_only` and `first_touch_after_forecast_peak` are too blunt here; they cut sample and still do not create a reliable live-grade edge.
 
 ## Recommendation
 
-Keep `peak_forming_micro` real live disabled.  Implement the next signal-layer candidate as shadow-only:
+Do not replace the old `minutes_since_running_max >= 10` live gate with a new peak-forming hard gate yet.  Keep `peak_forming_micro` real live disabled and leave fade live unchanged.
 
 ```text
-peak_state_v2_shadow_candidate =
-  old peak profile price/model gates
-  + hazard_downtrend: d_tmpf_3h <= 2F
-  + log first_touch_plateau fields for audit/model features
-  + existing price/model edge gates
+peak_state_v2_next_step =
+  telemetry/research only
+  + log first_touch_plateau fields
+  + log hazard/downtrend features such as d_tmpf_3h
+  + collect more settled forward dates before any shadow trading rule
 ```
 
-Do not require `forecast_peak_delta <= 0` or `first_touch_plateau == true` as hard gates yet; keep both as features / LLM preflight inputs because they are noisy and sample-starving in this slice.
+Shadow verdict: telemetry-only, not a new executable shadow rule.  Live verdict: no live change.
 
 Contract verdict:
 
 ```text
 significance=FAIL
-baseline=PARTIAL
+baseline=FAIL
 forward=FAIL
-conclusion=shadow_candidate
+conclusion=inconclusive
 ```
 
 ## Examples
@@ -155,6 +158,15 @@ conclusion=shadow_candidate
 | 2026-06-20T17:45:44+00:00 | 2026-06-20 | Paris | 35 | strategy_signal_cap | True | 0.766 | $+0.30 | 3.75 | 0.0 |
 | 2026-06-20T18:12:22+00:00 | 2026-06-20 | SaoPaulo | 24 | strategy_signal_cap | True | 0.865 | $+0.16 | 2.1999999999999993 | 0.0 |
 | 2026-06-20T21:01:56+00:00 | 2026-06-20 | Chicago | 76-77 | fresh_ask_exceeds_cushion | True | 0.850 | $+0.18 | 0.01666666666666572 | 1.9799999999999962 |
+| 2026-06-21T02:11:06+00:00 | 2026-06-21 | Wuhan | 28 | fresh_edge_below_required | False | 0.760 | $-1.00 | -0.8166666666666664 | 1.8 |
+| 2026-06-21T05:14:11+00:00 | 2026-06-21 | Shanghai | 27 | fresh_ask_exceeds_cushion | True | 0.968 | $+0.03 | 0.2333333333333325 | 1.8 |
+| 2026-06-21T06:12:19+00:00 | 2026-06-21 | Chongqing | 27 | strategy_signal_cap | True | 0.790 | $+0.27 | -1.8000000000000007 | 1.8 |
+| 2026-06-21T06:12:20+00:00 | 2026-06-21 | Manila | 36 | fresh_ask_exceeds_cushion | True | 0.940 | $+0.06 | -0.8000000000000007 | 1.8 |
+| 2026-06-21T06:45:25+00:00 | 2026-06-21 | KualaLumpur | 32 | fresh_ask_exceeds_cushion | False | 0.992 | $-1.00 | -2.25 | 0.0 |
+| 2026-06-21T07:17:42+00:00 | 2026-06-21 | Singapore | 31 | fresh_ask_exceeds_cushion | False | 0.780 | $-1.00 | 1.2833333333333332 | 0.0 |
+| 2026-06-21T09:37:17+00:00 | 2026-06-21 | Lucknow | 39 | planned | False | 0.002 | $-1.00 | 1.1166666666666671 | 1.8 |
+| 2026-06-21T12:01:47+00:00 | 2026-06-21 | Helsinki | 26 | fresh_ask_exceeds_cushion | False | 0.740 | $-1.00 | -1.9833333333333325 | 1.8 |
+| 2026-06-21T12:34:14+00:00 | 2026-06-21 | Helsinki | 26 | strategy_signal_cap | False | 0.710 | $-1.00 | -1.4333333333333336 | 1.8 |
 
 ### d_tmpf_3h > 2F or missing rejected losing examples
 
@@ -168,3 +180,12 @@ conclusion=shadow_candidate
 | 2026-06-20T08:45:21+00:00 | 2026-06-20 | Lucknow | 40 | strategy_signal_cap | False | 0.750 | d_tmpf_3h_gt_2_or_missing | 3.6 |
 | 2026-06-20T17:02:05+00:00 | 2026-06-20 | BuenosAires | 15 | fresh_ask_exceeds_cushion | False | 0.650 | d_tmpf_3h_gt_2_or_missing | 3.6 |
 | 2026-06-20T17:29:44+00:00 | 2026-06-20 | BuenosAires | 15 | strategy_signal_cap | False | 0.640 | d_tmpf_3h_gt_2_or_missing | None |
+| 2026-06-21T05:14:11+00:00 | 2026-06-21 | Taipei | 37 | planned | False | 0.720 | d_tmpf_3h_gt_2_or_missing | 3.6 |
+| 2026-06-21T06:35:45+00:00 | 2026-06-21 | KualaLumpur | 32 | fresh_ask_exceeds_cushion | False | 0.829 | d_tmpf_3h_gt_2_or_missing | None |
+| 2026-06-21T07:12:19+00:00 | 2026-06-21 | Karachi | 34 | planned | False | 0.610 | d_tmpf_3h_gt_2_or_missing | 3.6 |
+| 2026-06-21T08:18:47+00:00 | 2026-06-21 | Karachi | 34 | strategy_signal_cap | False | 0.600 | d_tmpf_3h_gt_2_or_missing | 3.6 |
+| 2026-06-21T14:01:17+00:00 | 2026-06-21 | Ankara | 25 | fresh_ask_exceeds_cushion | False | 0.920 | d_tmpf_3h_gt_2_or_missing | None |
+| 2026-06-21T14:45:51+00:00 | 2026-06-21 | Paris | 36 | planned | False | 0.720 | d_tmpf_3h_gt_2_or_missing | 3.6 |
+| 2026-06-21T17:09:04+00:00 | 2026-06-21 | Miami | 92-93 | fresh_ask_exceeds_cushion | False | 0.910 | d_tmpf_3h_gt_2_or_missing | None |
+| 2026-06-21T17:19:09+00:00 | 2026-06-21 | SaoPaulo | 22 | fresh_ask_exceeds_cushion | False | 0.860 | d_tmpf_3h_gt_2_or_missing | None |
+| 2026-06-21T18:08:27+00:00 | 2026-06-21 | Miami | 92-93 | fresh_ask_exceeds_cushion | False | 0.830 | d_tmpf_3h_gt_2_or_missing | 3.9599999999999986 |

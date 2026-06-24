@@ -6,6 +6,11 @@ Created: 2026-06-16
 Use `reheat_risk` for the shared physical model, and use strategy-specific
 names for trade expressions.
 
+For a human-readable map of how `current YES`, `higher NO carry`, and
+`low-price YES reheat reversal` share the same data/model base but split at
+label, edge, and PnL, read
+[`2026-06-21-reheat-risk-yes-no-expression-map.md`](2026-06/2026-06-21-reheat-risk-yes-no-expression-map.md).
+
 ## One Shared Model, Multiple Expressions
 
 The shared question is:

@@ -28,18 +28,18 @@ DB = ROOT / "runtime/weather.db"
 ORDERBOOK_DIR = ROOT / "runtime/weather_edge_v1/market_data/orderbook_snapshots"
 OBSERVED_DETAIL = (
     ROOT
-    / "docs/analysis/2026-06/generated/m3_observed_max_v5_h10_21_theta_patch_20260614"
+    / "docs/analysis/2026-06/generated/m3_observed_max_v6_h10_21_iem_patch_20260617"
     / "m3_observed_max_residual_detail.csv"
 )
 STATION_SUMMARY = ROOT / "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json"
-EXT_CACHE_DIR = ROOT / "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v6"
+EXT_CACHE_DIR = ROOT / "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v7_20260617"
 FORECAST_PEAK_BACKFILL = ROOT / "runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv"
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/reheat_feature_factory_v1"
 OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.json"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.md"
 
 DEFAULT_START = "2026-05-19"
-DEFAULT_END = "2026-06-14"
+DEFAULT_END = "2026-06-17"
 DEFAULT_HOURS = tuple(range(10, 22))
 SKY_CODE = {"CLR": 0, "SKC": 0, "NSC": 0, "NCD": 0, "CAVOK": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
 

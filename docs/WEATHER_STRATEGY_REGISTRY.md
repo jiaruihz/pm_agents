@@ -1,7 +1,7 @@
 # Weather 策略总账（我们到底试过哪些 · 灵感/规则 · 是否可行 · 血缘归属）
 
 Status: `current-reference`
-Updated: 2026-06-19 首版
+Updated: 2026-06-20 current-YES residual calibrator and alti validation
 Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入口
 
 这份是"我们一共研究过哪些策略"的单页总账。每条策略：**灵感/盈利规则 → 当前状态 → 是否可行 →
@@ -71,7 +71,9 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 | current_yes_peak_forming_micro | 当前仍在高位时买 current YES（微仓） | **`live`（tiny-live $5）** | **当前 live 之一**（同脚本 `--entry-profile-mode peak_forming_micro --enable-peak-forming-live`）；注意：已从白皮书旧口径"shadow only"**升级为 micro live**（用户 2026-06-19 确认有意为之） | [1]-[2] reheat_risk |
 | metar_cross_prev_no | 用实时 METAR 交叉前日 NO（latency/source basis） | **`live`（$10/单·$50/天）** | **当前也在 live**（N100 `weather_metar_cross_prev_no_shadow.py --live`）；6-17/18 新线，仓位上限比 current-YES 大，研究背书与回填证据待复盘补 | [0]-[2] reheat_risk |
 | higher_no_carry | 买更高温档 NO（ladder carry） | `shadow`（telemetry only） | 没证明能稳定打赢同窗 current YES，仅 shadow 表达遥测 | [2] reheat_risk |
-| low_price_yes_reheat_reversal | 需二次升温才命中的低价 YES，升级成 `forecast prior × reheat condition` | `research` | 凸性研究，小仓 shadow 候选，不直接 live；单独记 PnL | [1]-[2] reheat_risk |
+| current_bracket_no_pass_through（含 climbing_no_peak_runway） | 买当前 running-max 档 **NO**，赌午后继续创新高把它打穿；分类器挑「会午后创新高」的**便宜 NO(ask 0.01–0.35)** | `shadow_candidate`（PIT 线，zero-notional，未结算，不 live） | **canonical 线 = pass-through → afternoon-peak classifier → prevday PIT shadow**：classifier 三门 PASS（+37.6%，CI[+11%,+66%]，相对同价 baseline excess +46%，holdout AUC 0.828），PIT 前一日 GFS forecast 版 +29.7%（CI[+3.8%,+54.6%]，excess +38.1%）；同价未筛 baseline 是 -8.4%/-8.5%。forward 仅 zero-notional candidates、forecast 口径尚非生产级 PIT，**不 live**。我方 `climbing_no_peak_runway`（runway re-gate + near-noon direct）是**同笔交易、更早更糙、非 PIT** 的版本，贡献=证「整片/贵 NO(≈0.88) 已被定价、edge 只在便宜 NO+午后创新高子集」，与 baseline 一致；其 forecast 特征有**前视风险**，数字以 PIT 线为准。**待办：两个 feature factory 收敛成一个** | [1]-[2] reheat_risk · [PIT shadow v1](analysis/2026-06/2026-06-23-current-bracket-no-prevday-pit-shadow-v1.md) · [classifier v1](analysis/2026-06/2026-06-23-current-bracket-no-afternoon-peak-classifier-v1.md) · [climbing-no（我方/非PIT）](analysis/2026-06/2026-06-22-current-yes-climbing-no-peak-runway-regate-v1.md) |
+| low_price_yes_reheat_reversal | 需二次升温才命中的低价 YES，升级成 `forecast prior × reheat condition` | `research` / runner ready locally | 这是 reheat-risk 共享底座的反买头，不是独立彩票线；v1 holdout 有凸性但 CI/日期稳健性不过，zero-notional runner 已落地但 fresh observed/reheat feature 生产未接到当前日期，forward shadow blocked；下一步 trend-signal v2 验证 | [1]-[2] reheat_risk · [expression map](analysis/2026-06/2026-06-21-reheat-risk-yes-no-expression-map.md) |
+| reheat 尾部机制特征补全 | 机制覆盖审计→尾部特征补全：高 ask EV 在尾部，补暖平流(风向)/云导数等机制，而非调阈值 | `research`（方向） | **不是“气象没用”：METAR core 对 survive 有真实判别力。A/B 后续(2026-06-20)：`market+METAR core(+alti)` 正则 logistic 点估最好(logloss 0.2978，dLL vs market -0.00646)，但日期 CI 跨 0，promotion FAIL；HGB/ML 在当前 27 日期窗口退化；`d_alti_3h` 有小的条件信号，但候选模型仍不过 raw market/base gate。** 当前动作是不加模型、不改 live；继续需扩样或只把 ML 当严格 challenger。 | [1] reheat_risk · [feature-gap v1](analysis/2026-06/2026-06-19-reheat-tail-mechanism-feature-gap-v1.md) · [proper-form tail features v1](analysis/2026-06/2026-06-20-current-yes-proper-form-tail-features-v1.md) · [residual+alti v1](analysis/2026-06/2026-06-20-current-yes-residual-calibrator-alti-v1.md) |
 
 ## 共享 / 基础设施层（[0] 事实层）
 
@@ -88,6 +90,7 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 | entry_timing | target-date lead time / forecast checkpoint / decision window 限制 | `shadow` | 部分 timing 限制 shadow，未确认广义 live 自动化 | [3] entry_timing |
 | sizing / entry band | 替代统一 0.25–0.75 的入场区间与仓位 | `design-draft` | 当前 live sizing/band 仍由 entrypoint/config 定义 | [3] sizing_entry_band |
 | execution_quality | maker 扣 spread/queue/逆选后是否仍有可成交 edge | `research` | inconclusive | [4] execution_quality |
+| current-YES maker-then-taker | 现 current-YES 改 maker 挂单优先、挂不上且穿价仍划算才转 taker、ask 跑掉 toxic 单跳过；复用执行器现有 maker 基建(maker_queue_v2/mid_price_core_v2 报价引擎)，非复活旧策略 | `design-draft` | 盈利杠杆在执行端(模型已到顶)；shadow-first 四阶段，P1 hard gate=maker 成交集不 toxic | [4] · [maker-then-taker plan v0](analysis/2026-06/2026-06-20-current-yes-maker-then-taker-execution-plan-v0.md) |
 | city_selection / city-day basket | city×side×instance 选择、篮子组合 | `shadow` | 篮子仅 shadow，live 城市池由 CITY_POOL_DECISIONS 治理 | [3] city_selection |
 | blender / edge-engine | blender 字段作 shadow/paper/size signal | `shadow` | 不作 live hard gate | [1] blender_shadow |
 | mid_price_core v1 / v2 / maker_queue | 早期中价核心策略 | `shelved` | **2026-06 因实盘亏损被用户停掉**（v2 6-06，其余 live_real 成交停在 6-11）；是停用决策，非证伪 | 历史 |

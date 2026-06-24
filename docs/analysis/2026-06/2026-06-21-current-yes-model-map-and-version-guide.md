@@ -7,6 +7,9 @@
 
 这条方向是 **current-YES / no-reheat**：当某城市当前 running max 所在温度 bracket 看起来能守到结算时，买这个 bracket 的 YES。
 
+如果要看 current YES、higher NO carry、low-price YES reheat reversal 如何共用同一个 reheat-risk 数据/模型底座，读：
+[2026-06-21-reheat-risk-yes-no-expression-map.md](2026-06-21-reheat-risk-yes-no-expression-map.md)。
+
 现在的问题不是“有没有模型”，而是模型、规则、执行、LLM 审单混在了一起。正确拆法是：
 
 ```text

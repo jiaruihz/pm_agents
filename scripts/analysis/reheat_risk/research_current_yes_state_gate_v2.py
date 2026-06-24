@@ -36,6 +36,7 @@ FADE_TELEMETRY = (
 )
 OUT_JSON = ROOT / "docs/analysis/2026-06/2026-06-22-current-yes-state-gate-v2.json"
 OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-22-current-yes-state-gate-v2.md"
+GATE_JSON = ROOT / "runtime/_dashboard_logs/clob_fill_coverage_gate.json"
 
 START_DATE = "2026-06-18"
 END_DATE = "2026-06-22"
@@ -282,6 +283,17 @@ def sql_self_check() -> dict[str, Any]:
     }
     conn.close()
     return out
+
+
+def load_clob_gate_pass() -> bool | None:
+    if not GATE_JSON.exists():
+        return None
+    try:
+        payload = json.loads(GATE_JSON.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    value = payload.get("gate_pass")
+    return bool(value) if value is not None else None
 
 
 def load_peak_rows() -> list[dict[str, Any]]:
@@ -767,7 +779,7 @@ def write_report(payload: dict[str, Any]) -> None:
         "- Row grain: one deduped signal epoch = `city + target_date + bracket + token_id + running_max_obs_utc`.",
         "- Price modes: `snapshot` = snapshot ask; `fresh` = fresh ask/limit when present; `live_like` = only current runner `planned` rows.",
         f"- Telemetry synced after fixing split runtime sync; peak latest summary generated_at `{payload['data']['peak_latest_summary'].get('generated_at_utc')}`, live_enabled `{payload['data']['peak_latest_summary'].get('live_enabled')}`.",
-        "- `run_stack.sh` rebuilt fact tables, then exited non-zero because frontend port 5174 stayed busy; DB and CLOB coverage gate were still usable.",
+        f"- {payload['data']['run_stack_note']}.",
         f"- CLOB coverage gate: `gate_pass={payload['data']['clob_gate_pass']}`.",
         "",
         "## 5-line Self-check",
@@ -800,7 +812,7 @@ def write_report(payload: dict[str, Any]) -> None:
         "",
         "## Grid Search",
         "",
-        "Exploratory only.  The window has too few settled dates for promotion; this is used to choose what to shadow next.",
+        "Exploratory only.  The window has too few settled dates for promotion; this is used to choose what to keep tracking next.",
         "",
         "| variant | kept | settled | dates | W-L | win | ROI | CI |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
@@ -814,33 +826,33 @@ def write_report(payload: dict[str, Any]) -> None:
         "",
         "## Finding",
         "",
-        "- `old_peak_live_planned` is the closest live-action proxy: only 11 settled planned signals, 8-3, ROI about flat.  That is not enough to restore peak live.",
+        "- `old_peak_live_planned` is the closest live-action proxy: after adding 2026-06-21 settlement it is 18 settled signals, 11-7, ROI -14.0%, and the date bootstrap CI still crosses 0.  That is a clear no-live result.",
         "- `last_max_gap_v0` passes zero rows because live telemetry stores the last observation equal to the running max, not the first touch.  This confirms the old cadence field is structurally wrong for plateau detection.",
-        "- `first_touch_plateau_v2` is the right state semantics to log, but on the current settled window it does not improve enough by itself.",
-        "- Adding `first_touch` as a hard gate currently sample-starves the best slice.  The stronger current direction is the hazard/downtrend feature `d_tmpf_3h <= 2F` without requiring first-touch as a hard pass.",
+        "- `first_touch_plateau_v2` is the right state semantics to log, but it is not a tradable hard gate yet: 31 settled signals, ROI -2.9%, CI crosses 0.",
+        "- Adding `first_touch` as a hard gate sample-starves the slice and does not rescue expectancy.  The previous best-looking hazard/downtrend feature `d_tmpf_3h <= 2F` also failed after 2026-06-21 settled: 40 settled signals, 31-9, ROI -8.1%, CI crosses 0.",
         "- `forecast_peak_passed_only` and `first_touch_after_forecast_peak` are too blunt here; they cut sample and still do not create a reliable live-grade edge.",
         "",
         "## Recommendation",
         "",
-        "Keep `peak_forming_micro` real live disabled.  Implement the next signal-layer candidate as shadow-only:",
+        "Do not replace the old `minutes_since_running_max >= 10` live gate with a new peak-forming hard gate yet.  Keep `peak_forming_micro` real live disabled and leave fade live unchanged.",
         "",
         "```text",
-        "peak_state_v2_shadow_candidate =",
-        "  old peak profile price/model gates",
-        "  + hazard_downtrend: d_tmpf_3h <= 2F",
-        "  + log first_touch_plateau fields for audit/model features",
-        "  + existing price/model edge gates",
+        "peak_state_v2_next_step =",
+        "  telemetry/research only",
+        "  + log first_touch_plateau fields",
+        "  + log hazard/downtrend features such as d_tmpf_3h",
+        "  + collect more settled forward dates before any shadow trading rule",
         "```",
         "",
-        "Do not require `forecast_peak_delta <= 0` or `first_touch_plateau == true` as hard gates yet; keep both as features / LLM preflight inputs because they are noisy and sample-starving in this slice.",
+        "Shadow verdict: telemetry-only, not a new executable shadow rule.  Live verdict: no live change.",
         "",
         "Contract verdict:",
         "",
         "```text",
         "significance=FAIL",
-        "baseline=PARTIAL",
+        "baseline=FAIL",
         "forward=FAIL",
-        "conclusion=shadow_candidate",
+        "conclusion=inconclusive",
         "```",
         "",
         "## Examples",
@@ -922,8 +934,17 @@ def main() -> None:
                 "trigger_signal_count": latest_summary.get("trigger_signal_count"),
             },
             "sql_self_check": sql_self_check(),
-            "clob_gate_pass": True,
-            "run_stack_note": "fact tables rebuilt; run_stack exited non-zero after frontend port 5174 stayed busy",
+            "clob_gate_pass": load_clob_gate_pass(),
+            "run_stack_note": "run_stack.sh rebuilt fact tables before this report; DB and CLOB coverage gate were usable",
+        },
+        "verdict": {
+            "significance": "FAIL",
+            "baseline": "FAIL",
+            "forward": "FAIL",
+            "conclusion": "inconclusive",
+            "shadow": "telemetry_only",
+            "live": "no_live_change",
+            "fade_live": "unchanged",
         },
         "funnel": {
             "raw_peak_profile_rows": len(raw_rows),

@@ -1,7 +1,7 @@
 # Forecast Peak Clock Backfill Dataset v1
 
 Status: research_data_layer / not_live_ready_by_itself
-Generated: 2026-06-17T16:43:12+00:00
+Generated: 2026-06-21T06:07:54+00:00
 
 Target metric: `forecast_peak_clock_backfill_v1` = one reusable city-date table with GFS/ECMWF expected daily high time, expected high temperature, hourly-vector hash, and timezone metadata.
 
@@ -15,19 +15,19 @@ Target metric: `forecast_peak_clock_backfill_v1` = one reusable city-date table 
 
 ## Coverage
 
-- universe: `current_yes_replay`
-- city-date rows: `831` across `36` cities
-- date range: `2026-05-19` .. `2026-06-14`
-- GFS peak coverage: `831` / `831` = `100.0%`
-- ECMWF peak coverage: `831` / `831` = `100.0%`
-- both-model coverage: `831` / `831` = `100.0%`
-- GFS/ECMWF peak agree <= 1h: `590` / `831` = `71.0%`
+- universe: `fact_signal_candidates`
+- city-date rows: `1536` across `48` cities
+- date range: `2026-05-19` .. `2026-06-20`
+- GFS peak coverage: `1536` / `1536` = `100.0%`
+- ECMWF peak coverage: `1536` / `1536` = `100.0%`
+- both-model coverage: `1536` / `1536` = `100.0%`
+- GFS/ECMWF peak agree <= 1h: `1063` / `1536` = `69.2%`
 
 ## Cache / Fetch
 
-- fetch_missing: `False`
+- fetch_missing: `True`
 - promote_cache: `True`
-- fetch_stats: `{'promoted_cache': 72}`
+- fetch_stats: `{'fetched': 94, 'runtime_cache': 2}`
 - errors_kept: `0`
 
 ## Outputs

@@ -3,21 +3,21 @@
     "clob_gate_pass": true,
     "db": "runtime/weather.db",
     "fade_telemetry": "runtime/weather_edge_v1/remote_pm_agent/theta_current_yes_fade_confirmed_tiny_live_v1/forward_telemetry.jsonl",
-    "max_settled_target_date": "2026-06-20",
+    "max_settled_target_date": "2026-06-21",
     "peak_latest_summary": {
       "forward_telemetry_rows": 47,
-      "generated_at_utc": "2026-06-21T16:16:54+00:00",
+      "generated_at_utc": "2026-06-22T15:41:45+00:00",
       "live_enabled": false,
-      "snapshot_ts_utc": "2026-06-21T16:08:09Z",
+      "snapshot_ts_utc": "2026-06-22T15:28:19Z",
       "trigger_signal_count": 0
     },
     "peak_telemetry": "runtime/weather_edge_v1/remote_pm_agent/theta_current_yes_peak_forming_micro_tiny_live_v1/forward_telemetry.jsonl",
-    "run_stack_note": "fact tables rebuilt; run_stack exited non-zero after frontend port 5174 stayed busy",
+    "run_stack_note": "run_stack.sh rebuilt fact tables before this report; DB and CLOB coverage gate were usable",
     "sql_self_check": {
       "fact_signal_candidates": {
-        "max_ts": "2026-06-21T16:00:50Z",
+        "max_ts": "2026-06-22T15:00:41Z",
         "min_ts": "2026-05-05T15:27:41Z",
-        "rows": 34830
+        "rows": 35445
       },
       "fact_trades": {
         "max_ts": "2026-06-11T09:59:21+00:00",
@@ -517,6 +517,430 @@
         "status": "fresh_ask_exceeds_cushion",
         "target_date": "2026-06-20",
         "win": true
+      },
+      {
+        "bracket": "28",
+        "city": "Wuhan",
+        "created_at_utc": "2026-06-21T02:11:06+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "no_post_first_high_obs"
+        ],
+        "forecast_peak_delta_hours_local": -0.8166666666666664,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 10.621,
+        "obs_age_min": 11.1,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.76,
+        "status": "fresh_edge_below_required",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "27",
+        "city": "Shanghai",
+        "created_at_utc": "2026-06-21T05:14:11+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 1.0,
+        "first_touch_ok": true,
+        "first_touch_reasons": [],
+        "forecast_peak_delta_hours_local": 0.2333333333333325,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 13.432,
+        "obs_age_min": 14.2,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": 0.03305785123966953,
+        "price": 0.968,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "27",
+        "city": "Chongqing",
+        "created_at_utc": "2026-06-21T06:12:19+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 1.0,
+        "first_touch_ok": true,
+        "first_touch_reasons": [],
+        "forecast_peak_delta_hours_local": -1.8000000000000007,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 12.114,
+        "obs_age_min": 12.3,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": 0.26582278481012644,
+        "price": 0.79,
+        "status": "strategy_signal_cap",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "36",
+        "city": "Manila",
+        "created_at_utc": "2026-06-21T06:12:20+00:00",
+        "d_tmpf_1h": 3.6,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "no_post_first_high_obs"
+        ],
+        "forecast_peak_delta_hours_local": -0.8000000000000007,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 12.197,
+        "obs_age_min": 12.3,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": 0.06382978723404253,
+        "price": 0.94,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "32",
+        "city": "KualaLumpur",
+        "created_at_utc": "2026-06-21T06:45:25+00:00",
+        "d_tmpf_1h": 3.6,
+        "d_tmpf_3h": 0.0,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -2.25,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 14.724,
+        "obs_age_min": 15.4,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.992,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "31",
+        "city": "Singapore",
+        "created_at_utc": "2026-06-21T07:17:42+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 0.0,
+        "final_yes": 0.0,
+        "first_touch_ok": true,
+        "first_touch_reasons": [],
+        "forecast_peak_delta_hours_local": 1.2833333333333332,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 17.147,
+        "obs_age_min": 17.7,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.78,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "39",
+        "city": "Lucknow",
+        "created_at_utc": "2026-06-21T09:37:17+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value",
+          "no_post_first_high_obs"
+        ],
+        "forecast_peak_delta_hours_local": 1.1166666666666671,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 32.886,
+        "obs_age_min": 37.3,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.002,
+        "status": "planned",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "26",
+        "city": "Helsinki",
+        "created_at_utc": "2026-06-21T12:01:47+00:00",
+        "d_tmpf_1h": 1.8,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -1.9833333333333325,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 11.266,
+        "obs_age_min": 11.8,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.74,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "26",
+        "city": "Helsinki",
+        "created_at_utc": "2026-06-21T12:34:14+00:00",
+        "d_tmpf_1h": 1.8,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -1.4333333333333336,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 13.976,
+        "obs_age_min": 14.2,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.71,
+        "status": "strategy_signal_cap",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "26",
+        "city": "Helsinki",
+        "created_at_utc": "2026-06-21T13:01:36+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -0.9833333333333343,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 11.233,
+        "obs_age_min": 11.6,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.7,
+        "status": "strategy_signal_cap",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "28",
+        "city": "London",
+        "created_at_utc": "2026-06-21T13:34:46+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -3.4333333333333336,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 14.05,
+        "obs_age_min": 14.8,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": 0.2987012987012987,
+        "price": 0.77,
+        "status": "planned",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "28",
+        "city": "London",
+        "created_at_utc": "2026-06-21T14:01:16+00:00",
+        "d_tmpf_1h": 1.8,
+        "d_tmpf_3h": 1.8,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -1.9833333333333325,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 10.905,
+        "obs_age_min": 11.3,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": 0.3793103448275863,
+        "price": 0.725,
+        "status": "strategy_signal_cap",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "28",
+        "city": "London",
+        "created_at_utc": "2026-06-21T14:34:13+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 0.0,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -1.4333333333333336,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 13.905,
+        "obs_age_min": 14.2,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": 0.17647058823529416,
+        "price": 0.85,
+        "status": "strategy_signal_cap",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "28",
+        "city": "London",
+        "created_at_utc": "2026-06-21T15:01:29+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 0.0,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -0.9833333333333343,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 11.222,
+        "obs_age_min": 11.5,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": 0.17647058823529416,
+        "price": 0.85,
+        "status": "strategy_signal_cap",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "26",
+        "city": "Amsterdam",
+        "created_at_utc": "2026-06-21T15:07:47+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 0.0,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": 0.11666666666666714,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 11.479,
+        "obs_age_min": 12.8,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": 0.16279069767441867,
+        "price": 0.86,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "26",
+        "city": "Amsterdam",
+        "created_at_utc": "2026-06-21T15:39:53+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 0.0,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": 0.6499999999999986,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 14.453,
+        "obs_age_min": 14.9,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": 0.16279069767441867,
+        "price": 0.86,
+        "status": "strategy_signal_cap",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "39",
+        "city": "Madrid",
+        "created_at_utc": "2026-06-21T16:41:53+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 0.0,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": 1.6833333333333336,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 11.267,
+        "obs_age_min": 11.9,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": 0.031991744066047545,
+        "price": 0.969,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "94-95",
+        "city": "Miami",
+        "created_at_utc": "2026-06-21T20:04:25+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 0.9,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "missing_visible_obs_history"
+        ],
+        "forecast_peak_delta_hours_local": 3.0666666666666664,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 10.665,
+        "obs_age_min": 11.4,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": 0.030927835051546504,
+        "price": 0.97,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": true
+      },
+      {
+        "bracket": "88-89",
+        "city": "Houston",
+        "created_at_utc": "2026-06-21T21:03:58+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 0.9,
+        "final_yes": 1.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "missing_visible_obs_history"
+        ],
+        "forecast_peak_delta_hours_local": 2.0500000000000007,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 10.343,
+        "obs_age_min": 11.0,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": 0.04166666666666674,
+        "price": 0.96,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": true
       }
     ],
     "dtmp3_rejected_losers": [
@@ -693,37 +1117,238 @@
         "status": "strategy_signal_cap",
         "target_date": "2026-06-20",
         "win": false
+      },
+      {
+        "bracket": "37",
+        "city": "Taipei",
+        "created_at_utc": "2026-06-21T05:14:11+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 3.6,
+        "final_yes": 0.0,
+        "first_touch_ok": true,
+        "first_touch_reasons": [],
+        "forecast_peak_delta_hours_local": 1.2333333333333325,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 13.452,
+        "obs_age_min": 14.2,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.72,
+        "status": "planned",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "32",
+        "city": "KualaLumpur",
+        "created_at_utc": "2026-06-21T06:35:45+00:00",
+        "d_tmpf_1h": null,
+        "d_tmpf_3h": null,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -2.416666666666666,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 33.933,
+        "obs_age_min": 35.7,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.829,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "34",
+        "city": "Karachi",
+        "created_at_utc": "2026-06-21T07:12:19+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 3.6,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -0.8000000000000007,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 11.723,
+        "obs_age_min": 12.3,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.61,
+        "status": "planned",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "34",
+        "city": "Karachi",
+        "created_at_utc": "2026-06-21T08:18:47+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 3.6,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": 0.3000000000000007,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 17.982,
+        "obs_age_min": 18.8,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.6,
+        "status": "strategy_signal_cap",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "25",
+        "city": "Ankara",
+        "created_at_utc": "2026-06-21T14:01:17+00:00",
+        "d_tmpf_1h": null,
+        "d_tmpf_3h": null,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": 2.0166666666666657,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 10.794,
+        "obs_age_min": 11.3,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.92,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "36",
+        "city": "Paris",
+        "created_at_utc": "2026-06-21T14:45:51+00:00",
+        "d_tmpf_1h": 1.8,
+        "d_tmpf_3h": 3.6,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -0.25,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 14.856,
+        "obs_age_min": 15.8,
+        "obs_cadence_min": 30.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.72,
+        "status": "planned",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "92-93",
+        "city": "Miami",
+        "created_at_utc": "2026-06-21T17:09:04+00:00",
+        "d_tmpf_1h": null,
+        "d_tmpf_3h": null,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "missing_visible_obs_history"
+        ],
+        "forecast_peak_delta_hours_local": 0.15000000000000036,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 15.066,
+        "obs_age_min": 16.1,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.91,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "22",
+        "city": "SaoPaulo",
+        "created_at_utc": "2026-06-21T17:19:09+00:00",
+        "d_tmpf_1h": null,
+        "d_tmpf_3h": null,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "running_value_not_in_bracket",
+          "latest_not_running_value"
+        ],
+        "forecast_peak_delta_hours_local": -0.6833333333333336,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 18.837,
+        "obs_age_min": 19.1,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.86,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": false
+      },
+      {
+        "bracket": "92-93",
+        "city": "Miami",
+        "created_at_utc": "2026-06-21T18:08:27+00:00",
+        "d_tmpf_1h": 0.0,
+        "d_tmpf_3h": 3.9599999999999986,
+        "final_yes": 0.0,
+        "first_touch_ok": false,
+        "first_touch_reasons": [
+          "missing_visible_obs_history"
+        ],
+        "forecast_peak_delta_hours_local": 2.133333333333333,
+        "forecast_reheat_after_now_f": null,
+        "minutes_since_running_max": 14.724,
+        "obs_age_min": 15.4,
+        "obs_cadence_min": 60.0,
+        "pnl_per_1usd": -1.0,
+        "price": 0.83,
+        "status": "fresh_ask_exceeds_cushion",
+        "target_date": "2026-06-21",
+        "win": false
       }
     ]
   },
   "funnel": {
-    "deduped_signal_epochs": 107,
+    "deduped_signal_epochs": 151,
     "deduped_status_counts": {
-      "fresh_ask_exceeds_cushion": 57,
-      "fresh_edge_below_required": 3,
-      "planned": 16,
+      "fresh_ask_exceeds_cushion": 90,
+      "fresh_edge_below_required": 7,
+      "planned": 23,
       "strategy_signal_cap": 31
     },
-    "raw_peak_profile_rows": 1821,
+    "raw_peak_profile_rows": 2438,
     "raw_status_counts": {
       "city_day_cap": 1,
-      "fresh_ask_exceeds_cushion": 787,
+      "fresh_ask_exceeds_cushion": 1229,
       "fresh_book_fetch_failed": 2,
       "fresh_book_no_ask": 1,
-      "fresh_edge_below_required": 36,
-      "planned": 32,
+      "fresh_edge_below_required": 99,
+      "planned": 144,
       "strategy_signal_cap": 962
     },
-    "settled_signal_epochs": 75,
-    "unsettled_signal_epochs": 32
+    "settled_signal_epochs": 124,
+    "unsettled_signal_epochs": 27
   },
   "grid_top": [
     {
-      "active_dates": 2,
-      "avg_price": 0.7883846153846155,
-      "cost_usd_per_1usd": 13.0,
+      "active_dates": 3,
+      "avg_price": 0.7965,
+      "cost_usd_per_1usd": 18.0,
       "date_bootstrap_roi_95": [
-        -0.10656998380376592,
+        -0.29926001736835406,
         0.205895577827385
       ],
       "date_breakdown": {
@@ -740,24 +1365,31 @@
           "roi": -0.10656998380376592,
           "signals": 10,
           "wins": 7
+        },
+        "2026-06-21": {
+          "losses": 2,
+          "pnl_usd_per_1usd": -1.4963000868417702,
+          "roi": -0.29926001736835406,
+          "signals": 5,
+          "wins": 3
         }
       },
       "description": "First-touch plateau and forecast peak delta <= 2h.",
       "kept_signals": 18,
-      "losses": 3,
-      "pnl_usd_per_1usd": -0.44801310455550425,
+      "losses": 5,
+      "pnl_usd_per_1usd": -1.9443131913972744,
       "price_mode": "fresh",
-      "roi": -0.03446254650426956,
-      "settled_signals": 13,
-      "unsettled_signals": 5,
+      "roi": -0.1080173995220708,
+      "settled_signals": 18,
+      "unsettled_signals": 0,
       "variant": "grid_first_touch_forecast_delta_le_2",
-      "win_rate": 0.7692307692307693,
-      "wins": 10
+      "win_rate": 0.7222222222222222,
+      "wins": 13
     },
     {
-      "active_dates": 2,
-      "avg_price": 0.75,
-      "cost_usd_per_1usd": 8.0,
+      "active_dates": 3,
+      "avg_price": 0.7807272727272728,
+      "cost_usd_per_1usd": 11.0,
       "date_bootstrap_roi_95": [
         -0.33145407564012214,
         0.2981181369147241
@@ -776,27 +1408,77 @@
           "roi": -0.33145407564012214,
           "signals": 6,
           "wins": 3
+        },
+        "2026-06-21": {
+          "losses": 0,
+          "pnl_usd_per_1usd": 0.5036999131582298,
+          "roi": 0.16789997105274326,
+          "signals": 3,
+          "wins": 3
         }
       },
       "description": "First-touch plateau and forecast peak delta <= 1h.",
       "kept_signals": 11,
       "losses": 3,
-      "pnl_usd_per_1usd": -1.3924881800112847,
+      "pnl_usd_per_1usd": -0.8887882668530549,
       "price_mode": "fresh",
-      "roi": -0.1740610225014106,
-      "settled_signals": 8,
-      "unsettled_signals": 3,
+      "roi": -0.08079893335027771,
+      "settled_signals": 11,
+      "unsettled_signals": 0,
       "variant": "grid_first_touch_forecast_delta_le_1",
-      "win_rate": 0.625,
-      "wins": 5
+      "win_rate": 0.7272727272727273,
+      "wins": 8
     },
     {
-      "active_dates": 1,
-      "avg_price": 0.80555,
-      "cost_usd_per_1usd": 10.0,
+      "active_dates": 3,
+      "avg_price": 0.7975555555555556,
+      "cost_usd_per_1usd": 9.0,
       "date_bootstrap_roi_95": [
-        null,
-        null
+        -0.7093023255813953,
+        0.2981181369147241
+      ],
+      "date_breakdown": {
+        "2026-06-19": {
+          "losses": 0,
+          "pnl_usd_per_1usd": 0.5962362738294482,
+          "roi": 0.2981181369147241,
+          "signals": 2,
+          "wins": 2
+        },
+        "2026-06-20": {
+          "losses": 3,
+          "pnl_usd_per_1usd": -2.837209302325581,
+          "roi": -0.7093023255813953,
+          "signals": 4,
+          "wins": 1
+        },
+        "2026-06-21": {
+          "losses": 0,
+          "pnl_usd_per_1usd": 0.5036999131582298,
+          "roi": 0.16789997105274326,
+          "signals": 3,
+          "wins": 3
+        }
+      },
+      "description": "First-touch plateau and forecast peak delta <= 0.5h.",
+      "kept_signals": 9,
+      "losses": 3,
+      "pnl_usd_per_1usd": -1.7372731153379035,
+      "price_mode": "fresh",
+      "roi": -0.19303034614865594,
+      "settled_signals": 9,
+      "unsettled_signals": 0,
+      "variant": "grid_first_touch_forecast_delta_le_0.5",
+      "win_rate": 0.6666666666666666,
+      "wins": 6
+    },
+    {
+      "active_dates": 2,
+      "avg_price": 0.8095666666666667,
+      "cost_usd_per_1usd": 15.0,
+      "date_bootstrap_roi_95": [
+        -0.29926001736835406,
+        -0.0287349918343075
       ],
       "date_breakdown": {
         "2026-06-20": {
@@ -805,17 +1487,96 @@
           "roi": -0.0287349918343075,
           "signals": 10,
           "wins": 8
+        },
+        "2026-06-21": {
+          "losses": 2,
+          "pnl_usd_per_1usd": -1.4963000868417702,
+          "roi": -0.29926001736835406,
+          "signals": 5,
+          "wins": 3
         }
       },
       "description": "First-touch plateau and d_tmpf_3h <= 4F.",
       "kept_signals": 15,
-      "losses": 2,
-      "pnl_usd_per_1usd": -0.287349918343075,
+      "losses": 4,
+      "pnl_usd_per_1usd": -1.7836500051848452,
       "price_mode": "fresh",
-      "roi": -0.0287349918343075,
-      "settled_signals": 10,
-      "unsettled_signals": 5,
+      "roi": -0.11891000034565634,
+      "settled_signals": 15,
+      "unsettled_signals": 0,
       "variant": "grid_first_touch_dtmp3_le_4",
+      "win_rate": 0.7333333333333333,
+      "wins": 11
+    },
+    {
+      "active_dates": 2,
+      "avg_price": 0.80745,
+      "cost_usd_per_1usd": 10.0,
+      "date_bootstrap_roi_95": [
+        -0.233706454650068,
+        0.08434523210599594
+      ],
+      "date_breakdown": {
+        "2026-06-20": {
+          "losses": 1,
+          "pnl_usd_per_1usd": 0.5904166247419715,
+          "roi": 0.08434523210599594,
+          "signals": 7,
+          "wins": 6
+        },
+        "2026-06-21": {
+          "losses": 1,
+          "pnl_usd_per_1usd": -0.701119363950204,
+          "roi": -0.233706454650068,
+          "signals": 3,
+          "wins": 2
+        }
+      },
+      "description": "First-touch plateau and d_tmpf_3h <= 2F.",
+      "kept_signals": 10,
+      "losses": 2,
+      "pnl_usd_per_1usd": -0.11070273920823248,
+      "price_mode": "fresh",
+      "roi": -0.011070273920823248,
+      "settled_signals": 10,
+      "unsettled_signals": 0,
+      "variant": "grid_first_touch_dtmp3_le_2",
+      "win_rate": 0.8,
+      "wins": 8
+    },
+    {
+      "active_dates": 2,
+      "avg_price": 0.80745,
+      "cost_usd_per_1usd": 10.0,
+      "date_bootstrap_roi_95": [
+        -0.233706454650068,
+        0.08434523210599594
+      ],
+      "date_breakdown": {
+        "2026-06-20": {
+          "losses": 1,
+          "pnl_usd_per_1usd": 0.5904166247419715,
+          "roi": 0.08434523210599594,
+          "signals": 7,
+          "wins": 6
+        },
+        "2026-06-21": {
+          "losses": 1,
+          "pnl_usd_per_1usd": -0.701119363950204,
+          "roi": -0.233706454650068,
+          "signals": 3,
+          "wins": 2
+        }
+      },
+      "description": "First-touch plateau and d_tmpf_3h <= 3F.",
+      "kept_signals": 10,
+      "losses": 2,
+      "pnl_usd_per_1usd": -0.11070273920823248,
+      "price_mode": "fresh",
+      "roi": -0.011070273920823248,
+      "settled_signals": 10,
+      "unsettled_signals": 0,
+      "variant": "grid_first_touch_dtmp3_le_3",
       "win_rate": 0.8,
       "wins": 8
     }
@@ -836,12 +1597,12 @@
   },
   "summaries": [
     {
-      "active_dates": 3,
-      "avg_price": 0.75424,
-      "cost_usd_per_1usd": 75.0,
+      "active_dates": 4,
+      "avg_price": 0.7594435483870968,
+      "cost_usd_per_1usd": 124.0,
       "date_bootstrap_roi_95": [
-        0.1306275074305893,
-        0.3411548627012258
+        -0.1228618595296314,
+        0.33643780003456725
       ],
       "date_breakdown": {
         "2026-06-18": {
@@ -864,27 +1625,34 @@
           "roi": 0.13062750743058926,
           "signals": 66,
           "wins": 56
+        },
+        "2026-06-21": {
+          "losses": 16,
+          "pnl_usd_per_1usd": -6.441794275182868,
+          "roi": -0.13146518928944628,
+          "signals": 49,
+          "wins": 33
         }
       },
       "description": "Old peak-forming profile signal, evaluated at snapshot ask.",
-      "kept_signals": 107,
-      "losses": 10,
-      "pnl_usd_per_1usd": 11.649355690730001,
+      "kept_signals": 151,
+      "losses": 26,
+      "pnl_usd_per_1usd": 5.207561415547133,
       "price_mode": "snapshot",
-      "roi": 0.1553247425430667,
-      "settled_signals": 75,
-      "unsettled_signals": 32,
+      "roi": 0.04199646302860591,
+      "settled_signals": 124,
+      "unsettled_signals": 27,
       "variant": "old_peak_snapshot_price",
-      "win_rate": 0.8666666666666667,
-      "wins": 65
+      "win_rate": 0.7903225806451613,
+      "wins": 98
     },
     {
-      "active_dates": 3,
-      "avg_price": 0.8108000000000001,
-      "cost_usd_per_1usd": 75.0,
+      "active_dates": 4,
+      "avg_price": 0.8170403225806452,
+      "cost_usd_per_1usd": 124.0,
       "date_bootstrap_roi_95": [
-        0.033910776666790314,
-        0.3513513513513513
+        -0.20686795940150612,
+        0.23508852573246145
       ],
       "date_breakdown": {
         "2026-06-18": {
@@ -907,27 +1675,34 @@
           "roi": 0.033910776666790314,
           "signals": 66,
           "wins": 56
+        },
+        "2026-06-21": {
+          "losses": 16,
+          "pnl_usd_per_1usd": -10.694749321426658,
+          "roi": -0.2182601902331971,
+          "signals": 49,
+          "wins": 33
         }
       },
       "description": "Old peak-forming profile signal, evaluated at fresh ask/limit when available.",
-      "kept_signals": 107,
-      "losses": 10,
-      "pnl_usd_per_1usd": 4.3539079916003125,
+      "kept_signals": 151,
+      "losses": 26,
+      "pnl_usd_per_1usd": -6.340841329826347,
       "price_mode": "fresh",
-      "roi": 0.058052106554670836,
-      "settled_signals": 75,
-      "unsettled_signals": 32,
+      "roi": -0.05113581717601893,
+      "settled_signals": 124,
+      "unsettled_signals": 27,
       "variant": "old_peak_fresh_proxy",
-      "win_rate": 0.8666666666666667,
-      "wins": 65
+      "win_rate": 0.7903225806451613,
+      "wins": 98
     },
     {
-      "active_dates": 3,
-      "avg_price": 0.7007272727272728,
-      "cost_usd_per_1usd": 11.0,
+      "active_dates": 4,
+      "avg_price": 0.6958333333333333,
+      "cost_usd_per_1usd": 18.0,
       "date_bootstrap_roi_95": [
-        -0.12501468929912463,
-        0.3495276653171391
+        -0.30116855152030586,
+        0.338139640473371
       ],
       "date_breakdown": {
         "2026-06-18": {
@@ -950,19 +1725,26 @@
           "roi": -0.12501468929912463,
           "signals": 8,
           "wins": 5
+        },
+        "2026-06-21": {
+          "losses": 4,
+          "pnl_usd_per_1usd": -2.530589313690003,
+          "roi": -0.36151275909857183,
+          "signals": 7,
+          "wins": 3
         }
       },
       "description": "Rows that the current runner accepted as planned orders.",
-      "kept_signals": 16,
-      "losses": 3,
-      "pnl_usd_per_1usd": 0.014301407027116131,
+      "kept_signals": 23,
+      "losses": 7,
+      "pnl_usd_per_1usd": -2.516287906662887,
       "price_mode": "live_like",
-      "roi": 0.001300127911556012,
-      "settled_signals": 11,
+      "roi": -0.13979377259238263,
+      "settled_signals": 18,
       "unsettled_signals": 5,
       "variant": "old_peak_live_planned",
-      "win_rate": 0.7272727272727273,
-      "wins": 8
+      "win_rate": 0.6111111111111112,
+      "wins": 11
     },
     {
       "active_dates": 0,
@@ -986,11 +1768,11 @@
       "wins": 0
     },
     {
-      "active_dates": 2,
-      "avg_price": 0.817076923076923,
-      "cost_usd_per_1usd": 26.0,
+      "active_dates": 3,
+      "avg_price": 0.8171612903225807,
+      "cost_usd_per_1usd": 31.0,
       "date_bootstrap_roi_95": [
-        -0.0015125949765516173,
+        -0.29926001736835406,
         0.205895577827385
       ],
       "date_breakdown": {
@@ -1007,24 +1789,31 @@
           "roi": -0.0015125949765516173,
           "signals": 23,
           "wins": 19
+        },
+        "2026-06-21": {
+          "losses": 2,
+          "pnl_usd_per_1usd": -1.4963000868417702,
+          "roi": -0.29926001736835406,
+          "signals": 5,
+          "wins": 3
         }
       },
       "description": "Correct first-touch post-observation plateau state.",
       "kept_signals": 31,
-      "losses": 4,
-      "pnl_usd_per_1usd": 0.5828970490214682,
+      "losses": 6,
+      "pnl_usd_per_1usd": -0.913403037820302,
       "price_mode": "fresh",
-      "roi": 0.02241911727005647,
-      "settled_signals": 26,
-      "unsettled_signals": 5,
+      "roi": -0.029464614123235547,
+      "settled_signals": 31,
+      "unsettled_signals": 0,
       "variant": "first_touch_plateau_v2",
-      "win_rate": 0.8461538461538461,
-      "wins": 22
+      "win_rate": 0.8064516129032258,
+      "wins": 25
     },
     {
-      "active_dates": 2,
-      "avg_price": 0.69875,
-      "cost_usd_per_1usd": 4.0,
+      "active_dates": 3,
+      "avg_price": 0.7358333333333333,
+      "cost_usd_per_1usd": 6.0,
       "date_bootstrap_roi_95": [
         -1.0,
         0.5267175572519083
@@ -1043,27 +1832,34 @@
           "roi": -1.0,
           "signals": 3,
           "wins": 0
+        },
+        "2026-06-21": {
+          "losses": 0,
+          "pnl_usd_per_1usd": 0.4706420619185603,
+          "roi": 0.23532103095928014,
+          "signals": 2,
+          "wins": 2
         }
       },
       "description": "First-touch plateau plus forecast peak at/behind decision time.",
       "kept_signals": 6,
       "losses": 3,
-      "pnl_usd_per_1usd": -2.4732824427480917,
+      "pnl_usd_per_1usd": -2.002640380829532,
       "price_mode": "fresh",
-      "roi": -0.6183206106870229,
-      "settled_signals": 4,
-      "unsettled_signals": 2,
+      "roi": -0.33377339680492196,
+      "settled_signals": 6,
+      "unsettled_signals": 0,
       "variant": "first_touch_after_forecast_peak",
-      "win_rate": 0.25,
-      "wins": 1
+      "win_rate": 0.5,
+      "wins": 3
     },
     {
-      "active_dates": 1,
-      "avg_price": 0.7909285714285714,
-      "cost_usd_per_1usd": 7.0,
+      "active_dates": 2,
+      "avg_price": 0.80745,
+      "cost_usd_per_1usd": 10.0,
       "date_bootstrap_roi_95": [
-        null,
-        null
+        -0.233706454650068,
+        0.08434523210599594
       ],
       "date_breakdown": {
         "2026-06-20": {
@@ -1072,27 +1868,34 @@
           "roi": 0.08434523210599594,
           "signals": 7,
           "wins": 6
+        },
+        "2026-06-21": {
+          "losses": 1,
+          "pnl_usd_per_1usd": -0.701119363950204,
+          "roi": -0.233706454650068,
+          "signals": 3,
+          "wins": 2
         }
       },
       "description": "First-touch plateau plus no strong 3h warming.",
       "kept_signals": 10,
-      "losses": 1,
-      "pnl_usd_per_1usd": 0.5904166247419715,
+      "losses": 2,
+      "pnl_usd_per_1usd": -0.11070273920823248,
       "price_mode": "fresh",
-      "roi": 0.08434523210599594,
-      "settled_signals": 7,
-      "unsettled_signals": 3,
+      "roi": -0.011070273920823248,
+      "settled_signals": 10,
+      "unsettled_signals": 0,
       "variant": "first_touch_dtmp3_le_2f",
-      "win_rate": 0.8571428571428571,
-      "wins": 6
+      "win_rate": 0.8,
+      "wins": 8
     },
     {
-      "active_dates": 1,
-      "avg_price": 0.72,
-      "cost_usd_per_1usd": 1.0,
+      "active_dates": 2,
+      "avg_price": 0.755,
+      "cost_usd_per_1usd": 2.0,
       "date_bootstrap_roi_95": [
-        null,
-        null
+        -1.0,
+        0.26582278481012644
       ],
       "date_breakdown": {
         "2026-06-20": {
@@ -1101,19 +1904,26 @@
           "roi": -1.0,
           "signals": 1,
           "wins": 0
+        },
+        "2026-06-21": {
+          "losses": 0,
+          "pnl_usd_per_1usd": 0.26582278481012644,
+          "roi": 0.26582278481012644,
+          "signals": 1,
+          "wins": 1
         }
       },
       "description": "First-touch plateau, forecast peak passed, and no strong 3h warming.",
       "kept_signals": 2,
       "losses": 1,
-      "pnl_usd_per_1usd": -1.0,
+      "pnl_usd_per_1usd": -0.7341772151898736,
       "price_mode": "fresh",
-      "roi": -1.0,
-      "settled_signals": 1,
-      "unsettled_signals": 1,
+      "roi": -0.3670886075949368,
+      "settled_signals": 2,
+      "unsettled_signals": 0,
       "variant": "first_touch_after_peak_dtmp3_le_2f",
-      "win_rate": 0.0,
-      "wins": 0
+      "win_rate": 0.5,
+      "wins": 1
     },
     {
       "active_dates": 0,
@@ -1137,11 +1947,11 @@
       "wins": 0
     },
     {
-      "active_dates": 2,
-      "avg_price": 0.8345952380952381,
-      "cost_usd_per_1usd": 21.0,
+      "active_dates": 3,
+      "avg_price": 0.8180624999999999,
+      "cost_usd_per_1usd": 40.0,
       "date_bootstrap_roi_95": [
-        0.060234079602985754,
+        -0.27242995345176785,
         0.2796887796887797
       ],
       "date_breakdown": {
@@ -1158,26 +1968,33 @@
           "roi": 0.060234079602985754,
           "signals": 18,
           "wins": 16
+        },
+        "2026-06-21": {
+          "losses": 7,
+          "pnl_usd_per_1usd": -5.17616911558359,
+          "roi": -0.27242995345176785,
+          "signals": 19,
+          "wins": 12
         }
       },
       "description": "No strong 3h warming, without first-touch requirement.",
-      "kept_signals": 37,
-      "losses": 2,
-      "pnl_usd_per_1usd": 1.9232797719200827,
+      "kept_signals": 53,
+      "losses": 9,
+      "pnl_usd_per_1usd": -3.2528893436635062,
       "price_mode": "fresh",
-      "roi": 0.09158475104381346,
-      "settled_signals": 21,
-      "unsettled_signals": 16,
+      "roi": -0.08132223359158766,
+      "settled_signals": 40,
+      "unsettled_signals": 13,
       "variant": "dtmp3_le_2f_only",
-      "win_rate": 0.9047619047619048,
-      "wins": 19
+      "win_rate": 0.775,
+      "wins": 31
     },
     {
-      "active_dates": 2,
-      "avg_price": 0.7468125,
-      "cost_usd_per_1usd": 16.0,
+      "active_dates": 3,
+      "avg_price": 0.77625,
+      "cost_usd_per_1usd": 36.0,
       "date_bootstrap_roi_95": [
-        -0.18512709419975928,
+        -0.3185501012906265,
         0.5267175572519083
       ],
       "date_breakdown": {
@@ -1194,19 +2011,35 @@
           "roi": -0.18512709419975928,
           "signals": 15,
           "wins": 10
+        },
+        "2026-06-21": {
+          "losses": 9,
+          "pnl_usd_per_1usd": -6.37100202581253,
+          "roi": -0.3185501012906265,
+          "signals": 20,
+          "wins": 11
         }
       },
       "description": "Forecast peak at/behind decision time only.",
-      "kept_signals": 32,
-      "losses": 5,
-      "pnl_usd_per_1usd": -2.250188855744481,
+      "kept_signals": 40,
+      "losses": 14,
+      "pnl_usd_per_1usd": -8.621190881557013,
       "price_mode": "fresh",
-      "roi": -0.14063680348403007,
-      "settled_signals": 16,
-      "unsettled_signals": 16,
+      "roi": -0.2394775244876948,
+      "settled_signals": 36,
+      "unsettled_signals": 4,
       "variant": "forecast_peak_passed_only",
-      "win_rate": 0.6875,
-      "wins": 11
+      "win_rate": 0.6111111111111112,
+      "wins": 22
     }
-  ]
+  ],
+  "verdict": {
+    "baseline": "FAIL",
+    "conclusion": "inconclusive",
+    "fade_live": "unchanged",
+    "forward": "FAIL",
+    "live": "no_live_change",
+    "shadow": "telemetry_only",
+    "significance": "FAIL"
+  }
 }

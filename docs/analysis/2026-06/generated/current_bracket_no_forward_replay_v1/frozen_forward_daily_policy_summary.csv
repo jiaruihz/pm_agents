@@ -1,0 +1,5 @@
+target_date,settlement_status,policy,candidates,cities,weighted_notional_usd,settled_profit_usd,settled_roi,wins,win_rate,avg_p_cross,avg_p_cap,overconf_count
+2026-06-23,open,benchmark_full_size_base_p40,9,9,45.0,,,,,0.7227791128850682,0.6152296215183308,1
+2026-06-23,open,challenger_overconf_cap_soft_size,9,9,16.157333515837554,,,,,0.7227791128850682,0.6152296215183308,1
+2026-06-23,open,champion_trade_cap_soft_size,9,9,24.236000273756332,,,,,0.7227791128850682,0.6152296215183308,1
+2026-06-23,open,diagnostic_principled_cap_soft_size,9,9,15.257800982323985,,,,,0.7227791128850682,0.6152296215183308,1
