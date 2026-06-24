@@ -65,6 +65,44 @@ Verdict: `atlas_feature_layer_useful_but_not_confirmed_trading_rule`，live_read
 
 这一块仍然很差：atlas+trade_cap 没救回 6/21-6/22，只是减少暴露。说明 atlas 第一版能解释 regime，不足以独立解决 forward tail。
 
+## 6/23 Frozen Replay
+
+6/23 settlement 已可通过 atlas/settlement payoff 回填。冻结规则选中 9 笔，2 胜 7 负，ROI -15.3%，不是此前的 open 状态。
+
+| city | hour | bracket | no_ask | p_cross | p_cap | payoff | profit | day_regime | intraday_state |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| Beijing | 14 | 27 | 0.193 | 0.917 | 0.525 | 0 | -5.00 | day_open_runway | plateau_near_high |
+| CapeTown | 12 | 17 | 0.180 | 0.603 | 0.910 | 0 | -5.00 | day_forecast_busted | active_warming |
+| Chongqing | 13 | 25 | 0.260 | 0.797 | 0.717 | 0 | -5.00 | day_open_runway | pullback_uncertain |
+| Jeddah | 13 | 34 | 0.322 | 0.796 | 0.625 | 0 | -5.00 | day_open_runway | active_warming |
+| Manila | 14 | 32 | 0.240 | 0.512 | 0.922 | 0 | -5.00 | day_space_unknown | plateau_near_high |
+| NYC | 10 | 70-71 | 0.210 | 0.994 | 0.028 | 1 | +18.81 | day_open_runway | mature_fade |
+| Shanghai | 10 | 24 | 0.220 | 0.603 | 0.676 | 0 | -5.00 | day_forecast_capped | mature_fade |
+| Warsaw | 14 | 26 | 0.350 | 0.549 | 0.732 | 1 | +9.29 | day_space_unknown | false_fade_risk |
+| Wuhan | 13 | 25 | 0.130 | 0.734 | 0.403 | 0 | -5.00 | day_forecast_capped | active_warming |
+
+## Regime Meanings
+
+| regime | 人话含义 | 对 current-bracket NO 的含义 |
+| --- | --- | --- |
+| day_open_runway | forecast / remaining heat 显示当天还有明显上冲空间 | 理论上适合 NO，但如果市场也给了高 p_cross，仍可能被买贵；历史点估正，但日度稳定性一般 |
+| day_marginal_runway | 还有一点穿档空间，不是完全封顶 | 目前最像可用甜点：价格还便宜，实际仍有少量打穿概率 |
+| day_forecast_capped | forecast ceiling 接近或低于当前上界，剩余空间不够 | 典型危险区，容易“看着会热但不够穿档” |
+| day_forecast_busted | forecast/现实已经明显不一致，原 forecast 结构失效 | 稳定偏负，说明旧 forecast 信号在这里不可信 |
+| day_space_unknown | forecast/clock 覆盖不足，不能判断 runway | 样本太少，不能当 alpha，只能标 unknown |
+
+## Regime Stability
+
+| day_regime | early ROI | late ROI | 6/23 ROI | all ROI | daily pos/neg | verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| day_marginal_runway | +31.9% | +74.5% | NA | +47.7% | 16 / 12 | 最像真实模式；早晚都正，但日度仍有亏损 |
+| day_open_runway | +76.7% | -5.6% | +19.0% | +37.7% | 11 / 13 | 点估好但不稳，受少数大赢影响 |
+| day_forecast_busted | -10.5% | -3.5% | -100.0% | -8.8% | 10 / 25 | 稳定负向风险 |
+| day_forecast_capped | -34.3% | +15.3% | -100.0% | -24.0% | 9 / 22 | 总体负向，后期点估反弹但 6/23 仍差 |
+| day_space_unknown | NA | +151.5% | +42.9% | +115.3% | 2 / 0 | 样本太薄，不解释为真 alpha |
+
+结论：`day_marginal_runway` 更像真实机制；`forecast_busted/capped` 更像真实风险；`open_runway` 和 `space_unknown` 还不能直接当交易规则。
+
 ## Interpretation
 
 1. 你说的逻辑在严格定义下是对的：如果真的在决策时买 running max 所在单档 NO，且后面真实升破该档，那么 NO 应该赢。
@@ -79,3 +117,5 @@ Verdict: `atlas_feature_layer_useful_but_not_confirmed_trading_rule`，live_read
 - Regime slice performance: `docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/base_p40_regime_slice_performance.csv`
 - Rolling blocks: `docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/atlas_soft_sizing_rolling_blocks.csv`
 - Policy summary: `docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/atlas_soft_sizing_policy_summary.csv`
+- 6/23 replay: `docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/frozen_20260623_replayed_with_atlas_settlement.csv`
+- Regime stability: `docs/analysis/2026-06/generated/current_bracket_no_regime_atlas_overlay_v1/day_regime_stability_with_20260623.csv`
