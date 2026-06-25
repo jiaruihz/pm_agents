@@ -375,7 +375,10 @@ def build_city_state(
         "obs_count_day": obs.get("n_obs"),
     }
     if obs_source == "aviationweather_metar":
-        base.update(aviationweather_live_regime_features(cfg, tz, local_ts.date(), hours=recent_hours))
+        try:
+            base.update(aviationweather_live_regime_features(cfg, tz, local_ts.date(), hours=recent_hours))
+        except Exception as exc:  # noqa: BLE001
+            return None, f"live_feature_error:{type(exc).__name__}:{exc}"
     labelled = atlas.add_regime_labels(pd.DataFrame([base])).iloc[0].to_dict()
     books = market_rows_for_city(sub, running_value=running_value, running_native=running_native, unit=unit)
     if books.empty:
