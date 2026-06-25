@@ -43,6 +43,7 @@ if str(ROOT) not in sys.path:
 import research_intraday_weather_regime_atlas_v1 as atlas  # noqa: E402
 import research_regime_routed_no_expression_v1 as research  # noqa: E402
 from research_reheat_feature_factory_v1 import bracket_contains, parse_bracket  # noqa: E402
+from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc  # noqa: E402
 from weather_data_feed.source_policy import load_city_configs  # noqa: E402
 
 import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
@@ -58,6 +59,13 @@ LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
 DEFAULT_SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+DEFAULT_OBSERVATION_CACHE_PATHS = [
+    Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json"),
+    ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json",
+    ROOT / "runtime/weather_edge_v1/observations/latest.json",
+]
+OBS_STALE_CADENCE_GRACE_MIN = 15.0
+OBS_MAX_DYNAMIC_AGE_MIN = 90.0
 CORE_LIVE_REGIME_COLS = [
     "temp_trend_1h_f",
     "temp_trend_3h_f",
@@ -128,6 +136,41 @@ def load_snapshot(path: Path) -> tuple[dict[str, Any], pd.DataFrame]:
     return payload, records
 
 
+def observation_cache_candidates(explicit: str = "") -> list[Path]:
+    candidates: list[Path] = []
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    for key in ("REGIME_ROUTED_NO_OBSERVATION_CACHE", "WEATHER_DATA_FEED_OBSERVATION_CACHE"):
+        if os.environ.get(key):
+            candidates.append(Path(str(os.environ[key])).expanduser())
+    candidates.extend(DEFAULT_OBSERVATION_CACHE_PATHS)
+    out: list[Path] = []
+    for path in candidates:
+        if path not in out:
+            out.append(path)
+    return out
+
+
+def load_latest_observation_cache(explicit: str = "") -> tuple[dict[str, Any] | None, Path | None, str]:
+    candidates = observation_cache_candidates(explicit)
+    chosen = candidates[0] if explicit else next((path for path in candidates if path.exists()), None)
+    if chosen is None or not chosen.exists():
+        return None, chosen, "missing"
+    try:
+        return load_observation_cache(chosen), chosen, "ok"
+    except Exception as exc:  # noqa: BLE001
+        return None, chosen, f"error:{type(exc).__name__}:{exc}"
+
+
+def effective_obs_age_limit(max_obs_age_min: float, cadence_min: float | None) -> float:
+    if cadence_min is None or not math.isfinite(float(cadence_min)) or float(cadence_min) <= 0:
+        return float(max_obs_age_min)
+    return min(
+        OBS_MAX_DYNAMIC_AGE_MIN,
+        max(float(max_obs_age_min), float(cadence_min) + OBS_STALE_CADENCE_GRACE_MIN),
+    )
+
+
 def safe_float(value: Any, default: float = math.nan) -> float:
     try:
         out = float(value)
@@ -161,6 +204,109 @@ def sky_cover_code(record: dict[str, Any]) -> float:
             covers.append(str(cloud.get("cover")).upper())
     ranks = [cover_rank[item] for item in covers if item in cover_rank]
     return float(max(ranks)) if ranks else math.nan
+
+
+def cache_sky_cover_code(value: Any) -> float:
+    numeric = safe_float(value)
+    if math.isfinite(numeric):
+        return numeric
+    text = str(value or "").strip().upper()
+    if not text:
+        return math.nan
+    cover_rank = {"CLR": 0, "SKC": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
+    return float(cover_rank[text]) if text in cover_rank else math.nan
+
+
+def humidity_from_cache(record: dict[str, Any]) -> float:
+    relh = safe_float(record.get("relative_humidity_pct"), safe_float(record.get("relh_now")))
+    if math.isfinite(relh):
+        return relh
+    tmpf = safe_float(record.get("tmpf_now"))
+    dwpf = safe_float(record.get("dwpf_now"))
+    if not math.isfinite(tmpf) or not math.isfinite(dwpf):
+        return math.nan
+    temp_c_val = (tmpf - 32.0) * 5.0 / 9.0
+    dewpoint_c_val = (dwpf - 32.0) * 5.0 / 9.0
+    return relative_humidity_pct(temp_c_val, dewpoint_c_val)
+
+
+def observation_cache_summary(
+    observation_cache: dict[str, Any] | None,
+    *,
+    city: str,
+    target_date: str,
+    cfg: Any,
+    now_utc: datetime,
+    max_obs_age_min: float,
+) -> dict[str, Any]:
+    if observation_cache is None:
+        return {"status": "observation_cache_missing", "source": "weather_data_feed_observation_cache", "n_obs": 0}
+    record = index_observation_cache(observation_cache).get((city, target_date))
+    if not record:
+        return {"status": "observation_cache_city_date_missing", "source": "weather_data_feed_observation_cache", "n_obs": 0}
+    source = str(record.get("source") or "weather_data_feed_observation_cache")
+    n_obs = int(max(0.0, safe_float(record.get("n_obs") or record.get("record_count"), 0.0)))
+    if record.get("status") != "ok":
+        return {
+            "status": str(record.get("status") or "observation_cache_not_ok"),
+            "source": source,
+            "n_obs": n_obs,
+            "error": str(record.get("error") or ""),
+        }
+    last_obs = parse_utc(record.get("last_obs_utc"))
+    if last_obs is None:
+        return {"status": "observation_cache_bad_ts", "source": source, "n_obs": n_obs}
+    age_min = (now_utc - last_obs).total_seconds() / 60.0
+    cadence_min = safe_float(record.get("cadence_min") or record.get("estimated_cadence_min"), math.nan)
+    cadence_value = cadence_min if math.isfinite(cadence_min) else None
+    effective_max_age = effective_obs_age_limit(max_obs_age_min, cadence_value)
+    if age_min > effective_max_age:
+        return {
+            "status": "stale_obs",
+            "source": source,
+            "n_obs": n_obs,
+            "age_min": round(age_min, 1),
+            "effective_max_obs_age_min": round(effective_max_age, 1),
+            "last_obs_utc": last_obs.isoformat(),
+        }
+    current_c = safe_float(record.get("current_temp_c"))
+    running_c = safe_float(record.get("running_max_c"))
+    if not math.isfinite(current_c) or not math.isfinite(running_c):
+        return {"status": "observation_cache_bad_temp", "source": source, "n_obs": n_obs}
+    tmpf_now = safe_float(record.get("tmpf_now"), temp_f(current_c))
+    dwpf_now = safe_float(record.get("dwpf_now"))
+    dewpoint_depression = safe_float(record.get("dewpoint_depression_f"))
+    if not math.isfinite(dewpoint_depression) and math.isfinite(tmpf_now) and math.isfinite(dwpf_now):
+        dewpoint_depression = tmpf_now - dwpf_now
+    sky_value = record.get("sky_cover_code")
+    if sky_value in (None, ""):
+        sky_value = record.get("sky_now")
+    if sky_value in (None, ""):
+        sky_value = record.get("sky_code_now")
+    return {
+        "status": "ok",
+        "source": source,
+        "n_obs": n_obs,
+        "age_min": round(age_min, 1),
+        "last_obs_utc": last_obs.isoformat(),
+        "running_max_c": running_c,
+        "current_temp_c": current_c,
+        "live_feature_status": "ok",
+        "live_feature_source": "weather_data_feed_observation_cache",
+        "live_feature_record_count": n_obs,
+        "live_feature_last_obs_utc": last_obs.isoformat(),
+        "observation_cache_generated_at_utc": str(observation_cache.get("generated_at_utc") or ""),
+        "observation_cache_fetched_at_utc": str(record.get("fetched_at_utc") or ""),
+        "relative_humidity_pct": humidity_from_cache(record),
+        "sky_cover_code": cache_sky_cover_code(sky_value),
+        "dewpoint_depression_f": dewpoint_depression,
+        "wind_speed_kt": safe_float(record.get("wind_speed_kt"), safe_float(record.get("sknt_now"))),
+        "temp_trend_1h_f": safe_float(record.get("temp_trend_1h_f"), safe_float(record.get("d_tmpf_1h"))),
+        "temp_trend_3h_f": safe_float(record.get("temp_trend_3h_f"), safe_float(record.get("d_tmpf_3h"))),
+        "minutes_since_running_max": safe_float(record.get("minutes_since_running_max")),
+        "observation_cadence_min": cadence_value,
+        "official_observation_station": str(record.get("station") or cfg.official_icao),
+    }
 
 
 def trend_f(records: list[tuple[datetime, float, dict[str, Any]]], latest_dt: datetime, latest_temp_c: float, hours: float) -> float:
@@ -308,8 +454,10 @@ def build_city_state(
     city: str,
     cfg: Any,
     sub: pd.DataFrame,
+    observation_cache: dict[str, Any] | None,
     obs_source: str,
     recent_hours: float,
+    max_obs_age_min: float,
 ) -> tuple[dict[str, Any] | None, str]:
     first = sub.iloc[0]
     snapshot_ts = pd.to_datetime(str(first.get("snapshot_ts_utc")), utc=True).to_pydatetime()
@@ -319,17 +467,27 @@ def build_city_state(
     target_date = str(first.get("target_date"))
     if decision_hour not in research.DECISION_HOURS:
         return None, f"outside_decision_hours:{decision_hour}"
-    try:
-        obs = metar.observation_summary(
-            cfg,
-            tz,
-            local_ts.date(),
-            previous_value=None,
-            recent_hours=recent_hours,
-            obs_source=obs_source,
+    if obs_source == "weather_data_feed_observation_cache":
+        obs = observation_cache_summary(
+            observation_cache,
+            city=city,
+            target_date=target_date,
+            cfg=cfg,
+            now_utc=datetime.now(timezone.utc),
+            max_obs_age_min=max_obs_age_min,
         )
-    except Exception as exc:  # noqa: BLE001
-        return None, f"obs_error:{type(exc).__name__}:{exc}"
+    else:
+        try:
+            obs = metar.observation_summary(
+                cfg,
+                tz,
+                local_ts.date(),
+                previous_value=None,
+                recent_hours=recent_hours,
+                obs_source=obs_source,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return None, f"obs_error:{type(exc).__name__}:{exc}"
     if obs.get("status") != "ok":
         return None, f"obs_not_ok:{obs.get('status')}"
 
@@ -379,6 +537,29 @@ def build_city_state(
             base.update(aviationweather_live_regime_features(cfg, tz, local_ts.date(), hours=recent_hours))
         except Exception as exc:  # noqa: BLE001
             return None, f"live_feature_error:{type(exc).__name__}:{exc}"
+    elif obs_source == "weather_data_feed_observation_cache":
+        base.update(
+            {
+                key: obs.get(key)
+                for key in [
+                    "relative_humidity_pct",
+                    "sky_cover_code",
+                    "dewpoint_depression_f",
+                    "wind_speed_kt",
+                    "temp_trend_1h_f",
+                    "temp_trend_3h_f",
+                    "minutes_since_running_max",
+                    "live_feature_status",
+                    "live_feature_source",
+                    "live_feature_record_count",
+                    "live_feature_last_obs_utc",
+                    "observation_cache_generated_at_utc",
+                    "observation_cache_fetched_at_utc",
+                    "observation_cadence_min",
+                    "official_observation_station",
+                ]
+            }
+        )
     labelled = atlas.add_regime_labels(pd.DataFrame([base])).iloc[0].to_dict()
     books = market_rows_for_city(sub, running_value=running_value, running_native=running_native, unit=unit)
     if books.empty:
@@ -463,8 +644,28 @@ def build_city_state(
 def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]]:
     snapshot_path = latest_snapshot_path(Path(args.snapshot_dir), args.snapshot)
     payload, records = load_snapshot(snapshot_path)
+    now_utc = datetime.now(timezone.utc)
+    snapshot_ts = parse_utc(payload.get("ts_utc"))
+    snapshot_age_min = (now_utc - snapshot_ts).total_seconds() / 60.0 if snapshot_ts else math.nan
+    observation_cache, observation_cache_path, observation_cache_status = load_latest_observation_cache(args.observation_cache)
+    base_meta = {
+        "snapshot": str(snapshot_path.relative_to(ROOT) if snapshot_path.is_relative_to(ROOT) else snapshot_path),
+        "snapshot_ts_utc": payload.get("ts_utc"),
+        "snapshot_rows": int(len(records)),
+        "snapshot_age_min": None if not math.isfinite(snapshot_age_min) else round(snapshot_age_min, 3),
+        "max_snapshot_age_min": float(args.max_snapshot_age_min),
+        "observation_cache_path": str(observation_cache_path) if observation_cache_path else "",
+        "observation_cache_status": observation_cache_status,
+        "observation_cache_generated_at_utc": str((observation_cache or {}).get("generated_at_utc") or ""),
+    }
     if records.empty:
-        return pd.DataFrame(), {"snapshot": str(snapshot_path), "snapshot_rows": 0}
+        return pd.DataFrame(), {**base_meta, "audit_counts": {"empty_snapshot": 1}, "audits": []}
+    if math.isfinite(snapshot_age_min) and snapshot_age_min > float(args.max_snapshot_age_min):
+        return pd.DataFrame(), {
+            **base_meta,
+            "audit_counts": {"stale_snapshot": 1},
+            "audits": [{"city": "*", "status": f"stale_snapshot:{round(snapshot_age_min, 1)}"}],
+        }
     if args.target_date:
         records = records[records["target_date"].eq(str(args.target_date))].copy()
     configs = {cfg.city: cfg for cfg in load_city_configs(include_station_diff=bool(args.include_station_diff))}
@@ -482,8 +683,10 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             city=city,
             cfg=cfg,
             sub=sub,
+            observation_cache=observation_cache,
             obs_source=args.obs_source,
             recent_hours=float(args.recent_hours),
+            max_obs_age_min=float(args.max_obs_age_min),
         )
         audits.append({"city": city, "status": status})
         if row is not None:
@@ -519,17 +722,32 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & selected["live_feature_parity_ok"].astype(bool)
             & ~selected["live_duplicate_key"].astype(bool)
         )
-        selected["execution_skip_reason"] = ""
-        selected.loc[pd.to_numeric(selected["ask"], errors="coerce").lt(research.ASK_MIN), "execution_skip_reason"] = "ask_below_min"
-        selected.loc[pd.to_numeric(selected["ask"], errors="coerce").gt(research.ASK_CAPS["relaxed70"]), "execution_skip_reason"] = "ask_above_max"
-        selected.loc[pd.to_numeric(selected["soft_shares"], errors="coerce").lt(float(args.min_order_shares)), "execution_skip_reason"] = "soft_size_below_min_shares"
-        selected.loc[pd.to_numeric(selected["ask_size"], errors="coerce").lt(pd.to_numeric(selected["soft_shares"], errors="coerce")), "execution_skip_reason"] = "insufficient_top_ask_size"
-        selected.loc[selected["token_id"].astype(str).eq(""), "execution_skip_reason"] = "missing_token_id"
-        selected.loc[~selected["live_feature_parity_ok"].astype(bool), "execution_skip_reason"] = "live_feature_parity_failed"
-        selected.loc[selected["live_duplicate_key"].astype(bool), "execution_skip_reason"] = "duplicate_live_city_date_token"
+        def skip_reason(row: pd.Series) -> str:
+            if bool(row.get("execution_eligible")):
+                return ""
+            reasons: list[str] = []
+            ask = safe_float(row.get("ask"))
+            soft_shares = safe_float(row.get("soft_shares"))
+            ask_size = safe_float(row.get("ask_size"))
+            if math.isfinite(ask) and ask < research.ASK_MIN:
+                reasons.append("ask_below_min")
+            if math.isfinite(ask) and ask > research.ASK_CAPS["relaxed70"]:
+                reasons.append("ask_above_max")
+            if math.isfinite(soft_shares) and soft_shares < float(args.min_order_shares):
+                reasons.append("soft_size_below_min_shares")
+            if math.isfinite(ask_size) and math.isfinite(soft_shares) and ask_size < soft_shares:
+                reasons.append("insufficient_top_ask_size")
+            if str(row.get("token_id") or "") == "":
+                reasons.append("missing_token_id")
+            if not bool(row.get("live_feature_parity_ok")):
+                reasons.append("live_feature_parity_failed")
+            if bool(row.get("live_duplicate_key")):
+                reasons.append("duplicate_live_city_date_token")
+            return "|".join(reasons) if reasons else "not_execution_eligible"
+
+        selected["execution_skip_reason"] = selected.apply(skip_reason, axis=1)
     meta = {
-        "snapshot": str(snapshot_path.relative_to(ROOT) if snapshot_path.is_relative_to(ROOT) else snapshot_path),
-        "snapshot_ts_utc": payload.get("ts_utc"),
+        **base_meta,
         "snapshot_rows": int(len(records)),
         "audit_counts": pd.Series([a["status"].split(":", 1)[0] for a in audits]).value_counts().to_dict() if audits else {},
         "audits": audits,
@@ -720,8 +938,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-date", default="")
     parser.add_argument("--cities", nargs="*", default=[])
     parser.add_argument("--include-station-diff", action="store_true")
-    parser.add_argument("--obs-source", choices=["aviationweather_metar", "synopticdata_timeseries", "noaa_tgftp_station_txt"], default="aviationweather_metar")
+    parser.add_argument(
+        "--obs-source",
+        choices=[
+            "weather_data_feed_observation_cache",
+            "aviationweather_metar",
+            "synopticdata_timeseries",
+            "noaa_tgftp_station_txt",
+        ],
+        default="weather_data_feed_observation_cache",
+    )
+    parser.add_argument("--observation-cache", default="")
     parser.add_argument("--recent-hours", type=float, default=30.0)
+    parser.add_argument("--max-obs-age-min", type=float, default=20.0)
+    parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--base-notional", type=float, default=5.0)
     parser.add_argument("--daily-gross-cap", type=float, default=15.0)
     parser.add_argument("--min-order-shares", type=float, default=5.0)
