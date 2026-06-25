@@ -126,6 +126,56 @@ weather_metar_cross_prev_no_shadow.py loop
 
 这个排序不是永久真理。每次要改 live 策略前，都应该用最新 logs 重新算城市级 winner。
 
+## 也要维护 forecast 更新时间
+
+要。  
+如果只做“刚 cross 就抢 `T-1 NO`”，forecast 不是触发源，只是辅助判断城市风险。  
+但如果要研究 `post_cross_repricing`，forecast 就变成核心输入之一，因为市场提前撤单、提前把 `T+1`/`T+2` 拉贵，很多时候不是因为已经拿到新观测，而是因为它认为后续继续升温的概率变了。
+
+所以这里要维护两套“更新时间”：
+
+1. **观测更新时间**：某城市真实观测报文什么时候出来，我们什么时候看到。  
+   这回答“crossing 事实我们慢了多少”。
+2. **预报更新时间**：GFS/ECMWF/JMA/HRRR/ICON/AROME 等 forecast 什么时候刷新，我们什么时候拿到新版本。  
+   这回答“市场是不是在用新 forecast 或 nowcast 提前改价”。
+
+当前项目里 forecast cache 已经进入数据血缘，主要镜像位置见 `WEATHER_DATA_PIPELINE.md`：
+
+| Forecast cache | 大致含义 | 主要用途 |
+|---|---|---|
+| `runtime/weather_edge_v1/market_data/cache/gfs_v4/` | GFS hourly forecast | 全球基线预报。 |
+| `runtime/weather_edge_v1/market_data/cache/gfs_daily/` | GFS daily aggregate | 日最高温聚合。 |
+| `runtime/weather_edge_v1/market_data/cache/ecmwf_v4/` | ECMWF hourly forecast | 全球中期预报，和 GFS 分歧可作为不确定性信号。 |
+| `runtime/weather_edge_v1/market_data/cache/jma_v5/` | JMA forecast | 亚洲城市可能更有参考价值。 |
+| `runtime/weather_edge_v1/market_data/cache/hrrr_v5/` | HRRR forecast | 美国城市短临/小时级更新更重要。 |
+| `runtime/weather_edge_v1/market_data/cache/icon_eu_v5/` | ICON-EU forecast | 欧洲城市区域模型。 |
+| `runtime/weather_edge_v1/market_data/cache/arome_v5/` | AROME forecast | 欧洲局地短临模型。 |
+
+对 latency arb 来说，不能只记录“用了哪个模型”，还要记录版本和本地可见时间。每个城市、每个 forecast 源最好沉淀这些字段：
+
+- `city`
+- `forecast_source`
+- `provider_endpoint`
+- `model_init_ts_utc` 或可推断的 model run
+- `provider_visible_ts_utc`
+- `local_fetch_ts_utc`
+- `forecast_values_hash`
+- `forecast_max_native`
+- `forecast_peak_time_local`
+- `forecast_peak_time_utc`
+- `changed_since_last`
+- `local_fetch_after_provider_sec`
+
+这里要特别小心：  
+**理论更新频率不能直接当交易依据。**  
+GFS/ECMWF/HRRR/ICON/AROME 这些模型有自己的发布节奏，但我们实际用的是 Open-Meteo、官方接口、cache 或镜像层时，真正可交易的是“我们什么时候能拿到新版本”。因此文档和研究报告里应该优先写实测 cadence，而不是只写模型理论 cadence。
+
+`post_cross_repricing` 研究里，forecast 更新时间至少要回答三个问题：
+
+1. cross 前几分钟盘口提前动的时候，当时 forecast 有没有刚刷新？
+2. `T+1`/`T+2` 被提前拉贵，是不是 forecast peak 上移或 peak hour 后移导致？
+3. 哪些城市的 market repricing 更像观测驱动，哪些更像 forecast/nowcast 驱动？
+
 ## 已经抢到过什么
 
 目前 confirmed tiny-live fills：
@@ -230,6 +280,6 @@ BuenosAires 这笔很能说明问题：
 1. N100 继续收集 crossing 源和盘口数据。
 2. 做城市级“汤底统计”：看到 crossing 时，`T-1 NO ask <= 0.995` 的概率、源延迟、盘口不可买时间、成交/被挡原因。
 3. 给每个城市维护最快源 winner，不要用一个全局源结论套所有城市。
-4. 继续找真正能改变瓶颈的数据源：LDM/IDD、商业 OPMET trial、城市/机场自己的官方 endpoint。
-5. 把 `post_cross_repricing` 和原 crossing bot 分开研究：前者是概率交易，后者才是接近无方向风险的速度交易。
-
+4. 给每个城市维护 forecast 源更新时间和版本 hash，尤其是 GFS/ECMWF/JMA/HRRR/ICON/AROME 的本地可见时间。
+5. 继续找真正能改变观测瓶颈的数据源：LDM/IDD、商业 OPMET trial、城市/机场自己的官方 endpoint。
+6. 把 `post_cross_repricing` 和原 crossing bot 分开研究：前者是概率交易，后者才是接近无方向风险的速度交易。
