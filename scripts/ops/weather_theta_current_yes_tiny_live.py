@@ -84,7 +84,7 @@ SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 FORWARD_TELEMETRY_OUT = RUNTIME_DIR / "forward_telemetry.jsonl"
-PEAK_TIMING_SHADOW_STATE_OUT = RUNTIME_DIR / "peak_timing_shadow_state.json"
+PEAK_TIMING_SHADOW_STATE_OUT = RUNTIME_DIR / "peak_timing_shadow_state_v2.json"
 LIVE_OUT = ROOT / "runtime/weather_edge_v1/live" / f"{STRATEGY_INSTANCE}_orders.jsonl"
 
 METAR_API = "https://aviationweather.gov/api/data/metar"
@@ -2406,8 +2406,8 @@ def first_finite(*values: Any) -> float:
 
 def empty_peak_timing_shadow_state() -> dict[str, Any]:
     return {
-        "version": 1,
-        "state_type": "peak_yes_first_signal_quote_drift",
+        "version": 2,
+        "state_type": "peak_yes_first_valid_signal_quote_drift",
         "strategy_instance": STRATEGY_INSTANCE,
         "events": {},
     }
@@ -2422,8 +2422,8 @@ def load_peak_timing_shadow_state() -> dict[str, Any]:
     events = state.get("events")
     if not isinstance(events, dict):
         state["events"] = {}
-    state.setdefault("version", 1)
-    state.setdefault("state_type", "peak_yes_first_signal_quote_drift")
+    state.setdefault("version", 2)
+    state.setdefault("state_type", "peak_yes_first_valid_signal_quote_drift")
     state.setdefault("strategy_instance", STRATEGY_INSTANCE)
     return state
 
@@ -2456,6 +2456,20 @@ def peak_timing_shadow_probability(row: dict[str, Any]) -> float:
     return first_finite(row.get("peak_hazard_v2_p_survive"), row.get("p_yes_win"), row.get("p_yes_win_base_current_yes_model"))
 
 
+def peak_timing_shadow_can_start_event(row: dict[str, Any], price: float, edge: float) -> bool:
+    if not (math.isfinite(price) and 0.01 <= price <= 1.0 and math.isfinite(edge) and edge >= 0.0):
+        return False
+    hour = to_float(row.get("decision_hour_local"), np.nan)
+    config = row.get("config") if isinstance(row.get("config"), dict) else {}
+    min_hour = to_float(config.get("min_local_hour"), np.nan)
+    max_hour = to_float(config.get("max_local_hour"), np.nan)
+    if math.isfinite(hour) and math.isfinite(min_hour) and hour < min_hour:
+        return False
+    if math.isfinite(hour) and math.isfinite(max_hour) and hour > max_hour:
+        return False
+    return True
+
+
 def enrich_peak_timing_shadow_telemetry(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     state = load_peak_timing_shadow_state()
     events = state.setdefault("events", {})
@@ -2471,7 +2485,8 @@ def enrich_peak_timing_shadow_telemetry(rows: list[dict[str, Any]]) -> tuple[lis
         p_survive = peak_timing_shadow_probability(item)
         edge = p_survive - price if math.isfinite(p_survive) and math.isfinite(price) else np.nan
         created_first = False
-        if len(parts) == 4 and all(parts[1:]) and math.isfinite(price) and math.isfinite(edge) and edge >= 0.0 and key not in events:
+        can_start_event = peak_timing_shadow_can_start_event(item, price, edge)
+        if len(parts) == 4 and all(parts[1:]) and can_start_event and key not in events:
             events[key] = {
                 "first_seen_at_utc": now_utc(),
                 "first_signal_snapshot_ts_utc": safe_str(item.get("snapshot_ts_utc")),
@@ -2498,7 +2513,7 @@ def enrich_peak_timing_shadow_telemetry(rows: list[dict[str, Any]]) -> tuple[lis
             maker_probe_price = max(0.01, price - 0.01) if math.isfinite(price) else np.nan
             item.update(
                 {
-                    "peak_timing_shadow_version": "first_signal_quote_drift_v1",
+                    "peak_timing_shadow_version": "first_valid_signal_quote_drift_v2",
                     "peak_timing_shadow_probability_source": "runner_current_probability",
                     "peak_timing_shadow_state_key": key,
                     "peak_timing_shadow_is_first_signal": created_first,
