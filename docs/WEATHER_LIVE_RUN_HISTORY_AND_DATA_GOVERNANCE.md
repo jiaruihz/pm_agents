@@ -56,6 +56,7 @@ Source files audited:
 | 2026-05-16 | local live | broad Asia/non-T1 universe including Wuhan | 14 / 15 | 13 | $58.50 | This is the Wuhan / all-city-like error bucket. |
 | 2026-05-16 | N100 live | early N100 run, partial/dirty metadata | 17 / 18 | 9 | $90.00 | N100 started live for target 2026-05-16; not yet fully clean metadata. |
 | 2026-05-17 | N100 live | current T1 rollout, $5 notional | 17 / 18 | 10 | $90.00 | Current version family; use for ongoing live monitoring. |
+| 2026-06-25 | N100 live | regime-routed NO feature-parity + duplicate-risk incident | 2 / 2 | 1 | $6.38 | Invalid clean strategy sample; live runner used a simplified feature path vs historical atlas and allowed repeated NYC/date/token exposure. |
 
 Notes:
 
@@ -128,6 +129,53 @@ actual_city_pool = broad_or_unknown
 ### Incident C: N100 Legacy Metadata Was Not Clean
 
 Target date: `2026-05-16`
+
+### Incident D: Regime-Routed NO Live/Backtest Feature-Parity Break
+
+Target date: `2026-06-25`
+
+What happened:
+
+- `regime_routed_no_soft_balanced_tiny_live_v1` was started as a tiny-live probe from the
+  current-bracket NO / regime-routed research line.
+- The research atlas rows used PIT trend, humidity/cloud/dewpoint, wind, and running-max
+  freshness features with high historical coverage.
+- The live runner initially only consumed current/running temperature, GFS forecast max/peak,
+  and market ask/capacity; it filled the atlas mechanism fields as unknown, then treated
+  unknown as a small size discount rather than a live veto.
+- The signal id included `decision_snapshot_ts_utc`, so a later snapshot produced a new
+  signal for the same NYC `82-83` NO token. The executor deduped by signal id, not by
+  `city + target_date + token_id`, and the runner's daily cap check did not count prior
+  orders when `--target-date` was omitted.
+
+Observed live exposure:
+
+```text
+strategy_instance = regime_routed_no_soft_balanced_tiny_live_v1
+city = NYC
+target_date = 2026-06-25
+token/bracket = 82-83 NO
+orders = 2
+posted_notional ≈ $6.38
+status = paused
+```
+
+Label:
+
+```text
+run_family = regime_routed_no_live_feature_parity_incident
+run_quality = invalid_process_feature_parity_duplicate_risk
+strategy_state = paused
+```
+
+Required before any restore:
+
+- Live feature builder must compute the same mechanism fields used by the replay layer:
+  1h/3h temperature trend, humidity/cloud/dewpoint context, wind, and minutes since running max.
+- Unknown core mechanism fields must be a live veto, not a soft discount.
+- Live dedup must block repeated `city + target_date + token_id` exposure across cycles.
+- Daily cap must be keyed by actual order `target_date` when no CLI target date is supplied.
+- A parity replay and deploy review must pass before the instance can leave `paused`.
 
 What happened:
 

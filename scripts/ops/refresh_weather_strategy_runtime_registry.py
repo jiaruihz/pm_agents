@@ -158,22 +158,27 @@ def strategy_specs() -> list[StrategySpec]:
     return [
         StrategySpec(
             strategy_instance="regime_routed_no_soft_balanced_tiny_live_v1",
-            display_name="Regime-routed NO soft-balanced tiny-live",
+            display_name="Regime-routed NO soft-balanced tiny-live (paused)",
             family="reheat_risk.regime_routed_no",
-            lifecycle_status="live",
-            execution_mode="live",
+            lifecycle_status="blocked",
+            execution_mode="monitor",
             source_layer="runtime_local",
             runtime_dir="runtime/weather_edge_v1/regime_routed_no_tiny_live_v1",
             summary_file="latest_summary.json",
             primary_journal="summary_history.jsonl",
             live_order_file="live_orders.jsonl",
             paper_order_file="paper_orders.jsonl",
-            expected_live=True,
+            expected_live=False,
             artifact_files=[
                 ("summary_history", "summary_history.jsonl"),
                 ("trade_plans", "trade_plans.jsonl"),
             ],
-            notes="Tiny-live regime-routed NO profile: runway regimes buy current-bracket NO; capped regime buys d2 NO; soft-sized and min-share gated.",
+            notes=(
+                "Paused 2026-06-25 after live/backtest feature-parity incident: live runner had used "
+                "forecast/runway context without the historical atlas trend/cloud/wind/running-max features, "
+                "and duplicate city/date/token exposure was possible. Keep disabled until parity replay and "
+                "deploy review pass."
+            ),
         ),
         StrategySpec(
             strategy_instance="regime_routed_no_soft_balanced_shadow_v1",

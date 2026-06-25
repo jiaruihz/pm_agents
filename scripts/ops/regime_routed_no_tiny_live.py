@@ -19,7 +19,7 @@ import math
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -58,6 +58,20 @@ LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
 DEFAULT_SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+CORE_LIVE_REGIME_COLS = [
+    "temp_trend_1h_f",
+    "temp_trend_3h_f",
+    "relative_humidity_pct",
+    "dewpoint_depression_f",
+    "wind_speed_kt",
+    "minutes_since_running_max",
+]
+CORE_LIVE_REGIME_LABELS = [
+    "intraday_state",
+    "moisture_cloud_regime",
+    "wind_regime",
+    "running_max_state",
+]
 
 
 def utc_now_iso() -> str:
@@ -126,6 +140,96 @@ def native_value(temp_c: float, unit: str) -> float:
     return temp_c * 9.0 / 5.0 + 32.0 if str(unit).upper() == "F" else temp_c
 
 
+def temp_f(temp_c: float) -> float:
+    return temp_c * 9.0 / 5.0 + 32.0
+
+
+def relative_humidity_pct(temp_c: float, dewpoint_c: float) -> float:
+    # Magnus approximation, good enough for regime labels and fail-closed if inputs are absent.
+    numerator = math.exp((17.625 * dewpoint_c) / (243.04 + dewpoint_c))
+    denominator = math.exp((17.625 * temp_c) / (243.04 + temp_c))
+    return max(0.0, min(100.0, 100.0 * numerator / denominator))
+
+
+def sky_cover_code(record: dict[str, Any]) -> float:
+    cover_rank = {"CLR": 0, "SKC": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
+    covers: list[str] = []
+    if record.get("cover"):
+        covers.append(str(record.get("cover")).upper())
+    for cloud in record.get("clouds") or []:
+        if isinstance(cloud, dict) and cloud.get("cover"):
+            covers.append(str(cloud.get("cover")).upper())
+    ranks = [cover_rank[item] for item in covers if item in cover_rank]
+    return float(max(ranks)) if ranks else math.nan
+
+
+def trend_f(records: list[tuple[datetime, float, dict[str, Any]]], latest_dt: datetime, latest_temp_c: float, hours: float) -> float:
+    target = latest_dt - timedelta(hours=hours)
+    candidates = [(dt, temp_c) for dt, temp_c, _raw in records if dt <= target]
+    if not candidates:
+        return math.nan
+    prior_dt, prior_temp_c = candidates[-1]
+    if (target - prior_dt).total_seconds() > 90.0 * 60.0:
+        return math.nan
+    return temp_f(latest_temp_c) - temp_f(prior_temp_c)
+
+
+def aviationweather_live_regime_features(cfg: Any, tz: ZoneInfo, local_date: Any, *, hours: float) -> dict[str, Any]:
+    """Fetch PIT live METAR context used by the regime atlas labels.
+
+    The historical atlas has these fields nearly fully populated.  The live
+    runner must fail closed rather than silently substituting unknowns.
+    """
+    data = metar.source.fetch_json(
+        metar.source.METAR_API,
+        {"ids": cfg.official_icao, "format": "json", "hours": str(hours)},
+        max_rounds=1,
+        timeout_sec=metar.FAST_HTTP_TIMEOUT_SEC,
+        proxy_candidates=metar.WEATHER_PROXY_CANDIDATES,
+    )
+    if not isinstance(data, list):
+        return {"live_feature_status": "bad_aviationweather_payload"}
+
+    records: list[tuple[datetime, float, dict[str, Any]]] = []
+    for rec in data:
+        if not isinstance(rec, dict) or rec.get("temp") is None or not rec.get("reportTime"):
+            continue
+        try:
+            dt = datetime.fromisoformat(str(rec["reportTime"]).replace("Z", "+00:00"))
+            temp_c_val = float(rec["temp"])
+        except (TypeError, ValueError):
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt.astimezone(tz).date() != local_date:
+            continue
+        records.append((dt, temp_c_val, rec))
+    records.sort(key=lambda row: row[0])
+    if not records:
+        return {"live_feature_status": "no_same_day_aviationweather_records"}
+
+    latest_dt, latest_temp_c, latest = records[-1]
+    running_max_c = max(temp for _dt, temp, _raw in records)
+    max_hits = [dt for dt, temp, _raw in records if temp >= running_max_c - 0.05]
+    dewpoint_c = safe_float(latest.get("dewp"))
+    wind_kt = safe_float(latest.get("wspd"))
+    out = {
+        "live_feature_status": "ok",
+        "relative_humidity_pct": relative_humidity_pct(latest_temp_c, dewpoint_c) if math.isfinite(dewpoint_c) else math.nan,
+        "sky_cover_code": sky_cover_code(latest),
+        "dewpoint_depression_f": temp_f(latest_temp_c - dewpoint_c) - 32.0 if math.isfinite(dewpoint_c) else math.nan,
+        "wind_speed_kt": wind_kt,
+        "temp_trend_1h_f": trend_f(records, latest_dt, latest_temp_c, 1.0),
+        "temp_trend_3h_f": trend_f(records, latest_dt, latest_temp_c, 3.0),
+        "minutes_since_running_max": (
+            (latest_dt - max_hits[-1]).total_seconds() / 60.0 if max_hits else math.nan
+        ),
+        "live_feature_record_count": len(records),
+        "live_feature_last_obs_utc": latest_dt.isoformat(),
+    }
+    return out
+
+
 def tail_distance_from_running(bracket_low: float | None, running_native: float, unit: str) -> int | None:
     if bracket_low is None or float(bracket_low) <= running_native:
         return None
@@ -144,6 +248,29 @@ def order_spent_today(path: Path, target_date: str) -> float:
             continue
         total += safe_float(row.get("notional"), 0.0)
     return round(total, 6)
+
+
+def prior_live_order_keys(path: Path) -> set[tuple[str, str, str]]:
+    keys: set[tuple[str, str, str]] = set()
+    for row in read_jsonl(path):
+        if str(row.get("status") or "") not in {"submitted", "simulated_open"}:
+            continue
+        key = (str(row.get("city") or ""), str(row.get("target_date") or ""), str(row.get("token_id") or ""))
+        if all(key):
+            keys.add(key)
+    return keys
+
+
+def live_order_spent_by_date(path: Path) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for row in read_jsonl(path):
+        if str(row.get("status") or "") not in {"submitted", "simulated_open"}:
+            continue
+        target_date = str(row.get("target_date") or "")
+        if not target_date:
+            continue
+        out[target_date] = out.get(target_date, 0.0) + safe_float(row.get("notional"), 0.0)
+    return {date: round(value, 6) for date, value in out.items()}
 
 
 def market_rows_for_city(sub: pd.DataFrame, *, running_value: int, running_native: float, unit: str) -> pd.DataFrame:
@@ -241,11 +368,14 @@ def build_city_state(
         "temp_trend_1h_f": math.nan,
         "temp_trend_3h_f": math.nan,
         "minutes_since_running_max": math.nan,
+        "live_feature_status": "not_fetched",
         "obs_source": obs_source,
         "obs_last_obs_utc": obs.get("last_obs_utc"),
         "obs_age_min": obs.get("age_min"),
         "obs_count_day": obs.get("n_obs"),
     }
+    if obs_source == "aviationweather_metar":
+        base.update(aviationweather_live_regime_features(cfg, tz, local_ts.date(), hours=recent_hours))
     labelled = atlas.add_regime_labels(pd.DataFrame([base])).iloc[0].to_dict()
     books = market_rows_for_city(sub, running_value=running_value, running_native=running_native, unit=unit)
     if books.empty:
@@ -359,6 +489,21 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
     selected = pd.DataFrame(routed)
     if not selected.empty:
         selected = research.add_soft_weights(selected)
+        prior_keys = prior_live_order_keys(LIVE_OUT)
+        selected["live_duplicate_key"] = selected.apply(
+            lambda row: (
+                str(row.get("city") or ""),
+                str(row.get("target_date") or ""),
+                str(row.get("token_id") or ""),
+            )
+            in prior_keys,
+            axis=1,
+        )
+        selected["live_feature_parity_ok"] = (
+            selected["live_feature_status"].astype(str).eq("ok")
+            & selected[CORE_LIVE_REGIME_COLS].apply(lambda col: pd.to_numeric(col, errors="coerce").notna()).all(axis=1)
+            & ~selected[CORE_LIVE_REGIME_LABELS].astype(str).apply(lambda row: any("unknown" in item for item in row), axis=1)
+        )
         selected["base_notional_usd"] = float(args.base_notional)
         selected["soft_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(selected["soft_balanced"], errors="coerce")
         selected["soft_shares"] = selected["soft_notional_usd"] / pd.to_numeric(selected["ask"], errors="coerce")
@@ -368,6 +513,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & pd.to_numeric(selected["soft_shares"], errors="coerce").ge(float(args.min_order_shares))
             & pd.to_numeric(selected["ask_size"], errors="coerce").ge(pd.to_numeric(selected["soft_shares"], errors="coerce"))
             & selected["token_id"].astype(str).ne("")
+            & selected["live_feature_parity_ok"].astype(bool)
+            & ~selected["live_duplicate_key"].astype(bool)
         )
         selected["execution_skip_reason"] = ""
         selected.loc[pd.to_numeric(selected["ask"], errors="coerce").lt(research.ASK_MIN), "execution_skip_reason"] = "ask_below_min"
@@ -375,6 +522,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected.loc[pd.to_numeric(selected["soft_shares"], errors="coerce").lt(float(args.min_order_shares)), "execution_skip_reason"] = "soft_size_below_min_shares"
         selected.loc[pd.to_numeric(selected["ask_size"], errors="coerce").lt(pd.to_numeric(selected["soft_shares"], errors="coerce")), "execution_skip_reason"] = "insufficient_top_ask_size"
         selected.loc[selected["token_id"].astype(str).eq(""), "execution_skip_reason"] = "missing_token_id"
+        selected.loc[~selected["live_feature_parity_ok"].astype(bool), "execution_skip_reason"] = "live_feature_parity_failed"
+        selected.loc[selected["live_duplicate_key"].astype(bool), "execution_skip_reason"] = "duplicate_live_city_date_token"
     meta = {
         "snapshot": str(snapshot_path.relative_to(ROOT) if snapshot_path.is_relative_to(ROOT) else snapshot_path),
         "snapshot_ts_utc": payload.get("ts_utc"),
@@ -485,6 +634,15 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "forecast_peak_hour_local": safe_float(row.get("forecast_peak_hour_local"), None),
         "running_native": safe_float(row.get("running_native"), None),
         "current_native": safe_float(row.get("current_native"), None),
+        "live_feature_status": str(row.get("live_feature_status") or ""),
+        "live_feature_parity_ok": bool(row.get("live_feature_parity_ok")),
+        "temp_trend_1h_f": safe_float(row.get("temp_trend_1h_f"), None),
+        "temp_trend_3h_f": safe_float(row.get("temp_trend_3h_f"), None),
+        "relative_humidity_pct": safe_float(row.get("relative_humidity_pct"), None),
+        "sky_cover_code": safe_float(row.get("sky_cover_code"), None),
+        "dewpoint_depression_f": safe_float(row.get("dewpoint_depression_f"), None),
+        "wind_speed_kt": safe_float(row.get("wind_speed_kt"), None),
+        "minutes_since_running_max": safe_float(row.get("minutes_since_running_max"), None),
     }
 
 
@@ -494,19 +652,26 @@ def write_plans(candidates: pd.DataFrame, args: argparse.Namespace) -> list[dict
         eligible = pd.DataFrame()
     else:
         eligible = candidates[candidates["execution_eligible"].astype(bool)].copy()
-    spent = order_spent_today(LIVE_OUT, str(args.target_date or ""))
+    spent_by_date = live_order_spent_by_date(LIVE_OUT)
+    prior_keys = prior_live_order_keys(LIVE_OUT)
     plans: list[dict[str, Any]] = []
-    running_spent = spent
+    running_spent_by_date = dict(spent_by_date)
     if eligible.empty:
         PLAN_OUT.parent.mkdir(parents=True, exist_ok=True)
         PLAN_OUT.write_text("", encoding="utf-8")
         return plans
     for _, row in eligible.sort_values(["target_date", "decision_snapshot_ts_utc", "city"]).iterrows():
+        key = (str(row.get("city") or ""), str(row.get("target_date") or ""), str(row.get("token_id") or ""))
+        if key in prior_keys:
+            continue
         cost = safe_float(row.get("soft_notional_usd"), 0.0)
+        target_date = str(row.get("target_date") or "")
+        running_spent = running_spent_by_date.get(target_date, 0.0)
         if running_spent + cost > float(args.daily_gross_cap) + 1e-9:
             continue
         plans.append(build_plan(row, live_enabled=live_enabled, ttl_min=float(args.order_ttl_min)))
-        running_spent += cost
+        running_spent_by_date[target_date] = running_spent + cost
+        prior_keys.add(key)
         if len(plans) >= int(args.max_orders):
             break
     PLAN_OUT.parent.mkdir(parents=True, exist_ok=True)
