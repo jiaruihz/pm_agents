@@ -152,35 +152,27 @@ def market_rows_for_city(sub: pd.DataFrame, *, running_value: int, running_nativ
         bracket = parse_bracket(record.get("bracket"))
         if bracket is None:
             continue
-        outcome = str(record.get("outcome") or "").lower()
-        if outcome not in {"yes", "no"}:
-            continue
-        if outcome == "no":
-            ask = safe_float(record.get("no_best_ask"))
-            ask_size = safe_float(record.get("no_ask_size"))
-            bid = safe_float(record.get("no_best_bid"))
-            token_id = str(record.get("no_token_id") or "")
-        else:
-            ask = safe_float(record.get("yes_best_ask"))
-            ask_size = safe_float(record.get("yes_ask_size"))
-            bid = safe_float(record.get("yes_best_bid"))
-            token_id = str(record.get("yes_token_id") or "")
-        if not math.isfinite(ask):
-            continue
-        rows.append(
-            {
-                **record.to_dict(),
-                "outcome": outcome,
-                "bracket_low": bracket.low,
-                "bracket_high": bracket.high,
-                "book_ask": ask,
-                "book_ask_size": ask_size,
-                "book_bid": bid,
-                "book_token_id": token_id,
-                "contains_running": bracket_contains(bracket, running_value),
-                "tail_distance": tail_distance_from_running(bracket.low, running_native, unit) if outcome == "no" else None,
-            }
-        )
+        for outcome, prefix in (("yes", "yes"), ("no", "no")):
+            ask = safe_float(record.get(f"{prefix}_best_ask"))
+            ask_size = safe_float(record.get(f"{prefix}_ask_size"))
+            bid = safe_float(record.get(f"{prefix}_best_bid"))
+            token_id = str(record.get(f"{prefix}_token_id") or "")
+            if not math.isfinite(ask):
+                continue
+            rows.append(
+                {
+                    **record.to_dict(),
+                    "outcome": outcome,
+                    "bracket_low": bracket.low,
+                    "bracket_high": bracket.high,
+                    "book_ask": ask,
+                    "book_ask_size": ask_size,
+                    "book_bid": bid,
+                    "book_token_id": token_id,
+                    "contains_running": bracket_contains(bracket, running_value),
+                    "tail_distance": tail_distance_from_running(bracket.low, running_native, unit) if outcome == "no" else None,
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -241,6 +233,7 @@ def build_city_state(
         "forecast_clock_source": "paper_snapshot_live",
         "forecast_max_native": safe_float(first.get("forecast_max_native")),
         "forecast_peak_hour_local": safe_float(first.get("forecast_peak_hour_local")),
+        "forecast_gap_to_running_native": safe_float(first.get("forecast_max_native")) - running_native,
         "relative_humidity_pct": math.nan,
         "sky_cover_code": math.nan,
         "dewpoint_depression_f": math.nan,
