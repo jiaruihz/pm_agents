@@ -297,6 +297,7 @@ export interface StrategyRuntimeRow {
   process_status: string;
   blocker_count: number;
   blockers: unknown[];
+  summary: Record<string, unknown>;
   notes: string | null;
   refreshed_at_utc: string;
   latest_sample_target_date: string | null;
@@ -340,6 +341,13 @@ export interface StrategyRuntimeOverview {
   };
   strategies: StrategyRuntimeRow[];
   shadow_queue: StrategyShadowQueueRow[];
+}
+
+export interface StrategyRuntimeDetail {
+  strategy: StrategyRuntimeRow;
+  artifacts: Array<Record<string, unknown>>;
+  recent_records: Record<string, Array<Record<string, unknown>>>;
+  limit: number;
 }
 
 /** /api/strategies — per-config aggregated stats */

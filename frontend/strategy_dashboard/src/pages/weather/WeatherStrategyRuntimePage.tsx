@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
-import type { StrategyRuntimeOverview, StrategyRuntimeRow, StrategyShadowQueueRow } from "../../data/weather-types";
+import type { StrategyRuntimeDetail, StrategyRuntimeOverview, StrategyRuntimeRow, StrategyShadowQueueRow } from "../../data/weather-types";
+
+const REGIME_ROUTED_NO_LIVE = "regime_routed_no_soft_balanced_tiny_live_v1";
 
 function tomorrowLocal(): string {
   const d = new Date();
@@ -47,6 +49,35 @@ function listText(items: unknown[] | undefined, limit = 2): string {
   return items.slice(0, limit).map((item) => String(item)).join("; ");
 }
 
+function valueOf(obj: Record<string, unknown> | undefined, key: string): unknown {
+  return obj ? obj[key] : undefined;
+}
+
+function fmtUnknown(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number") return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3);
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function fmtPrice(value: unknown): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${(n * 100).toFixed(1)}c` : "-";
+}
+
+function fmtUsd(value: unknown): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? `$${n.toFixed(2)}` : "-";
+}
+
+function compactJson(value: unknown): string {
+  if (!value || typeof value !== "object") return "-";
+  return Object.entries(value as Record<string, unknown>)
+    .map(([k, v]) => `${k}: ${fmtUnknown(v)}`)
+    .join(" · ") || "-";
+}
+
 function statusColor(status: string): string {
   if (["healthy", "target_seen", "live"].includes(status)) return "var(--ok)";
   if (["blocked", "stale", "shelved"].includes(status)) return "var(--bad)";
@@ -72,8 +103,13 @@ function targetLabel(status: string): string {
 export function WeatherStrategyRuntimePage(): JSX.Element {
   const [targetDate, setTargetDate] = useState(tomorrowLocal);
   const [data, setData] = useState<StrategyRuntimeOverview | null>(null);
+  const [detail, setDetail] = useState<StrategyRuntimeDetail | null>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState(REGIME_ROUTED_NO_LIVE);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -85,10 +121,43 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [targetDate]);
+  }, [targetDate, refreshNonce]);
+
+  useEffect(() => {
+    if (!autoRefresh) return undefined;
+    const id = window.setInterval(() => setRefreshNonce((x) => x + 1), 30000);
+    return () => window.clearInterval(id);
+  }, [autoRefresh]);
 
   const activeRows = useMemo(() => data?.strategies ?? [], [data]);
   const queueRows = data?.shadow_queue ?? [];
+  const shadowRows = useMemo(
+    () => activeRows.filter((row) => row.lifecycle_status === "shadow" || row.execution_mode === "zero_notional_shadow"),
+    [activeRows],
+  );
+
+  useEffect(() => {
+    if (!data || activeRows.length === 0) return;
+    if (activeRows.some((row) => row.strategy_instance === selectedStrategy)) return;
+    const preferred = activeRows.find((row) => row.strategy_instance === REGIME_ROUTED_NO_LIVE)
+      ?? activeRows.find((row) => row.lifecycle_status === "live")
+      ?? activeRows[0];
+    setSelectedStrategy(preferred.strategy_instance);
+  }, [activeRows, data, selectedStrategy]);
+
+  useEffect(() => {
+    if (!selectedStrategy) return;
+    weatherApi
+      .getStrategyRuntimeDetail(selectedStrategy, { limit: 12 })
+      .then((res) => {
+        setDetail(res);
+        setDetailError(null);
+      })
+      .catch((e: Error) => {
+        setDetail(null);
+        setDetailError(e.message);
+      });
+  }, [selectedStrategy, refreshNonce, data?.refreshed_at_utc]);
 
   return (
     <PageFrame title="Strategy Runtime" desc="live · shadow · telemetry · target-date status">
@@ -106,6 +175,15 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
           <div style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 12 }}>
             refreshed {fmtTime(data?.refreshed_at_utc)}
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}>
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+            />
+            auto 30s
+          </label>
+          <button onClick={() => setRefreshNonce((x) => x + 1)}>Refresh</button>
         </section>
 
         {loading && <div style={mutedBlockStyle}>Loading strategy runtime registry...</div>}
@@ -117,11 +195,39 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
             <section style={panelStyle}>
               <div style={sectionHeadStyle}>
                 <div>
+                  <h2 style={sectionTitleStyle}>Live Monitor</h2>
+                  <div style={subtleStyle}>selected runtime · recent heartbeat/orders</div>
+                </div>
+                <select value={selectedStrategy} onChange={(e) => setSelectedStrategy(e.target.value)}>
+                  {activeRows.map((row) => (
+                    <option key={row.strategy_instance} value={row.strategy_instance}>
+                      {row.display_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {detailError && <div style={errorStyle}>{detailError}</div>}
+              {detail && <RuntimeDetailPanel detail={detail} />}
+            </section>
+
+            <section style={panelStyle}>
+              <div style={sectionHeadStyle}>
+                <div>
                   <h2 style={sectionTitleStyle}>Strategy Status</h2>
                   <div style={subtleStyle}>{activeRows.length} registered instances · target {data.target_date}</div>
                 </div>
               </div>
               <StrategyTable rows={activeRows} />
+            </section>
+
+            <section style={panelStyle}>
+              <div style={sectionHeadStyle}>
+                <div>
+                  <h2 style={sectionTitleStyle}>Shadow Instances</h2>
+                  <div style={subtleStyle}>{shadowRows.length} active or registered zero-notional tracks</div>
+                </div>
+              </div>
+              <ShadowInstanceTable rows={shadowRows} />
             </section>
 
             <section style={panelStyle}>
@@ -137,6 +243,146 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
         )}
       </>
     </PageFrame>
+  );
+}
+
+function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
+  const strategy = detail.strategy;
+  const summary = strategy.summary ?? {};
+  const recent = detail.recent_records ?? {};
+  const liveOrders = recent.live_orders ?? [];
+  const paperOrders = recent.paper_orders ?? [];
+  const heartbeats = recent.summary_history ?? recent.primary_journal ?? [];
+  const shadowCandidates = recent.shadow_candidates ?? [];
+  const latestHeartbeat = heartbeats.length ? heartbeats[heartbeats.length - 1] : summary;
+  const executor = valueOf(latestHeartbeat, "executor_result") as Record<string, unknown> | undefined;
+  const executorParsed = valueOf(executor, "parsed") as Record<string, unknown> | undefined;
+
+  return (
+    <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+      <div style={metricGridStyle}>
+        <Metric label="Live enabled" value={fmtUnknown(valueOf(latestHeartbeat, "live_enabled") ?? strategy.live_enabled)} color={valueOf(latestHeartbeat, "live_enabled") || strategy.live_enabled ? "var(--ok)" : "var(--muted)"} />
+        <Metric label="Routed" value={fmtUnknown(valueOf(latestHeartbeat, "routed_candidates") ?? strategy.candidate_rows)} />
+        <Metric label="Eligible" value={fmtUnknown(valueOf(latestHeartbeat, "execution_eligible") ?? strategy.plan_rows)} color={Number(valueOf(latestHeartbeat, "execution_eligible") ?? strategy.plan_rows) > 0 ? "var(--ok)" : undefined} />
+        <Metric label="Live orders" value={fmtUnknown(valueOf(executorParsed, "live_orders") ?? strategy.live_order_rows)} color={Number(valueOf(executorParsed, "live_orders") ?? strategy.live_order_rows) > 0 ? "var(--ok)" : undefined} />
+        <Metric label="Base N" value={fmtUsd(valueOf(latestHeartbeat, "base_notional") ?? strategy.cap_order_notional)} />
+        <Metric label="Day cap" value={fmtUsd(valueOf(latestHeartbeat, "daily_gross_cap") ?? strategy.cap_total_day_notional)} />
+      </div>
+
+      <div style={detailGridStyle}>
+        <InfoBox title="Latest heartbeat" rows={[
+          ["generated", fmtTime(String(valueOf(latestHeartbeat, "generated_at_utc") ?? strategy.latest_summary_ts_utc ?? ""))],
+          ["snapshot", fmtTime(String(valueOf(valueOf(latestHeartbeat, "meta") as Record<string, unknown> | undefined, "snapshot_ts_utc") ?? ""))],
+          ["by regime", compactJson(valueOf(latestHeartbeat, "candidate_by_regime"))],
+          ["skips", compactJson(valueOf(latestHeartbeat, "skip_reasons"))],
+          ["no order", fmtUnknown(valueOf(latestHeartbeat, "no_order_placed"))],
+        ]} />
+        <InfoBox title="Execution result" rows={[
+          ["plans read", fmtUnknown(valueOf(executorParsed, "plans_read"))],
+          ["paper written", fmtUnknown(valueOf(executorParsed, "paper_written"))],
+          ["live written", fmtUnknown(valueOf(executorParsed, "live_written"))],
+          ["live errors", fmtUnknown(valueOf(executorParsed, "live_errors"))],
+          ["cancel checked", fmtUnknown(valueOf(executorParsed, "cancel_expired_checked"))],
+        ]} />
+      </div>
+
+      <RecentRecordTable
+        title="Recent live orders"
+        rows={liveOrders}
+        empty="No live order records yet."
+        columns={[
+          ["time", (row) => fmtTime(String(row.placed_at_utc ?? row.created_at_utc ?? row.live_attempt_ts_utc ?? ""))],
+          ["city", (row) => fmtUnknown(row.city)],
+          ["side", (row) => fmtUnknown(row.order_side ?? row.side)],
+          ["bracket", (row) => fmtUnknown(row.bracket)],
+          ["price", (row) => fmtPrice(row.entry_price ?? row.limit_price ?? row.no_ask)],
+          ["shares", (row) => fmtUnknown(row.shares ?? row.desired_shares)],
+          ["status", (row) => fmtUnknown(row.status ?? row.order_status)],
+        ]}
+      />
+      <RecentRecordTable
+        title="Recent shadow candidates"
+        rows={shadowCandidates}
+        empty="No shadow candidate records in this artifact."
+        columns={[
+          ["time", (row) => fmtTime(String(row.created_at_utc ?? row.decision_snapshot_ts_utc ?? ""))],
+          ["city", (row) => fmtUnknown(row.city)],
+          ["regime", (row) => fmtUnknown(row.day_regime)],
+          ["expression", (row) => fmtUnknown(row.expression)],
+          ["ask", (row) => fmtPrice(row.no_ask ?? row.ask)],
+          ["soft $", (row) => fmtUsd(row.hypothetical_weighted_notional_usd ?? row.weighted_notional_usd)],
+          ["shares", (row) => fmtUnknown(row.hypothetical_weighted_shares ?? row.weighted_shares)],
+        ]}
+      />
+      <RecentRecordTable
+        title="Recent paper orders"
+        rows={paperOrders}
+        empty="No paper order records yet."
+        columns={[
+          ["time", (row) => fmtTime(String(row.placed_at_utc ?? row.created_at_utc ?? ""))],
+          ["city", (row) => fmtUnknown(row.city)],
+          ["side", (row) => fmtUnknown(row.order_side ?? row.side)],
+          ["bracket", (row) => fmtUnknown(row.bracket)],
+          ["price", (row) => fmtPrice(row.entry_price ?? row.limit_price ?? row.no_ask)],
+          ["shares", (row) => fmtUnknown(row.shares ?? row.desired_shares)],
+          ["status", (row) => fmtUnknown(row.status ?? row.order_status)],
+        ]}
+      />
+    </div>
+  );
+}
+
+function InfoBox({ title, rows }: { title: string; rows: [string, string][] }) {
+  return (
+    <div style={metricStyle}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>{title}</div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {rows.map(([label, value]) => (
+          <div key={label} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 8 }}>
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>{label}</span>
+            <span style={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-word" }}>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecentRecordTable({
+  title,
+  rows,
+  columns,
+  empty,
+}: {
+  title: string;
+  rows: Array<Record<string, unknown>>;
+  columns: [string, (row: Record<string, unknown>) => string][];
+  empty: string;
+}) {
+  return (
+    <div>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>{title}</div>
+      {rows.length === 0 ? (
+        <div style={mutedInlineStyle}>{empty}</div>
+      ) : (
+        <div style={tableWrapStyle}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                {columns.map(([label]) => <th key={label} style={thStyle}>{label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice().reverse().map((row, idx) => (
+                <tr key={String(row.shadow_decision_id ?? row.signal_id ?? row.order_id ?? idx)}>
+                  {columns.map(([label, render]) => <td key={label} style={tdStyle}>{render(row)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -282,6 +528,47 @@ function ShadowQueueTable({ rows }: { rows: StrategyShadowQueueRow[] }) {
   );
 }
 
+function ShadowInstanceTable({ rows }: { rows: StrategyRuntimeRow[] }) {
+  if (rows.length === 0) {
+    return <div style={mutedBlockStyle}>No active shadow runtimes.</div>;
+  }
+  return (
+    <div style={tableWrapStyle}>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Shadow</th>
+            <th style={thStyle}>Health</th>
+            <th style={numThStyle}>Rows</th>
+            <th style={thStyle}>Latest artifact</th>
+            <th style={thStyle}>Journal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.strategy_instance}>
+              <td style={tdStyle}>
+                <div style={{ fontWeight: 700 }}>{row.display_name}</div>
+                <div style={monoSmallStyle}>{row.strategy_instance}</div>
+              </td>
+              <td style={tdStyle}>
+                <Badge text={row.health_status} color={statusColor(row.health_status)} />
+                <div style={subtleStyle}>{row.execution_mode}</div>
+              </td>
+              <td style={numTdStyle}>
+                shadow {fmtInt(row.shadow_rows)}
+                <div style={subtleStyle}>paper {fmtInt(row.paper_order_rows)} · telemetry {fmtInt(row.telemetry_rows)}</div>
+              </td>
+              <td style={tdStyle}>{fmtTime(row.latest_data_ts_utc || row.latest_artifact_mtime_utc)}</td>
+              <td style={monoTdStyle}>{shortPath(row.primary_journal_path)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Badge({ text, color }: { text: string; color: string }) {
   return (
     <span style={{
@@ -358,6 +645,11 @@ const metricStyle: React.CSSProperties = {
   background: "var(--card)",
   padding: 12,
 };
+const detailGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gap: 10,
+};
 const tableWrapStyle: React.CSSProperties = {
   overflowX: "auto",
   marginTop: 12,
@@ -399,6 +691,10 @@ const mutedBlockStyle: React.CSSProperties = {
   color: "var(--muted)",
   textAlign: "center",
   padding: 34,
+};
+const mutedInlineStyle: React.CSSProperties = {
+  color: "var(--muted)",
+  padding: "12px 0",
 };
 const errorStyle: React.CSSProperties = {
   color: "var(--bad)",

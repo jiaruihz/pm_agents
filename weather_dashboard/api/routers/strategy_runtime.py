@@ -6,15 +6,17 @@ import json
 import sqlite3
 from collections import Counter, defaultdict
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from weather_dashboard.api.deps import get_db
 
 router = APIRouter(prefix="/strategy-runtime", tags=["strategy-runtime"])
 
 Db = Annotated[sqlite3.Connection, Depends(get_db)]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _json_list(value: str | None) -> list[Any]:
@@ -65,6 +67,51 @@ def _target_status(row: sqlite3.Row, sample_dates: set[str], target_date: str) -
     if lifecycle == "shadow":
         return "shadow_waiting"
     return "unknown"
+
+
+def _safe_runtime_path(source_path: str | None) -> Path | None:
+    if not source_path:
+        return None
+    path = Path(source_path)
+    if not path.is_absolute():
+        path = ROOT / path
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return None
+    try:
+        resolved.relative_to(ROOT)
+    except ValueError:
+        return None
+    return resolved
+
+
+def _read_recent_jsonl(path: Path | None, limit: int) -> list[dict[str, Any]]:
+    if path is None or path.suffix != ".jsonl" or not path.exists() or path.stat().st_size == 0:
+        return []
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, 2)
+            end = handle.tell()
+            block = b""
+            step = 8192
+            while end > 0 and block.count(b"\n") <= limit:
+                take = min(step, end)
+                end -= take
+                handle.seek(end)
+                block = handle.read(take) + block
+        lines = [line for line in block.splitlines() if line.strip()][-limit:]
+    except OSError:
+        return []
+    out: list[dict[str, Any]] = []
+    for line in lines:
+        try:
+            parsed = json.loads(line.decode("utf-8"))
+        except Exception as exc:
+            parsed = {"_parse_error": str(exc), "_raw": line.decode("utf-8", errors="replace")[:500]}
+        if isinstance(parsed, dict):
+            out.append(parsed)
+    return out
 
 
 @router.get("/overview")
@@ -199,4 +246,56 @@ def get_strategy_runtime_overview(
         },
         "strategies": strategies,
         "shadow_queue": shadow_queue,
+    }
+
+
+@router.get("/{strategy_instance}/detail")
+def get_strategy_runtime_detail(
+    strategy_instance: str,
+    db: Db,
+    limit: int = Query(default=12, ge=1, le=100),
+) -> dict[str, Any]:
+    """Return one runtime row plus recent records from its JSONL artifacts."""
+
+    row = db.execute(
+        """
+        SELECT *
+        FROM weather_strategy_runtime_registry
+        WHERE strategy_instance=?
+        """,
+        (strategy_instance,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"unknown strategy_instance: {strategy_instance}")
+
+    artifact_rows = db.execute(
+        """
+        SELECT *
+        FROM weather_strategy_runtime_artifacts
+        WHERE strategy_instance=?
+        ORDER BY artifact_kind, source_path
+        """,
+        (strategy_instance,),
+    ).fetchall()
+
+    artifacts: list[dict[str, Any]] = []
+    recent_records: dict[str, list[dict[str, Any]]] = {}
+    for artifact in artifact_rows:
+        item = dict(artifact)
+        source_path = item.get("source_path")
+        path = _safe_runtime_path(source_path)
+        item["recent_records_available"] = bool(path and path.suffix == ".jsonl" and path.exists())
+        artifacts.append(item)
+        recent = _read_recent_jsonl(path, limit)
+        if recent:
+            recent_records[str(item["artifact_kind"])] = recent
+
+    row_dict = dict(row)
+    row_dict["blockers"] = _json_list(row["blockers_json"])
+    row_dict["summary"] = _json_dict(row["summary_json"])
+    return {
+        "strategy": row_dict,
+        "artifacts": artifacts,
+        "recent_records": recent_records,
+        "limit": limit,
     }

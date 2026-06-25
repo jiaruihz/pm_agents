@@ -157,6 +157,40 @@ class StrategySpec:
 def strategy_specs() -> list[StrategySpec]:
     return [
         StrategySpec(
+            strategy_instance="regime_routed_no_soft_balanced_tiny_live_v1",
+            display_name="Regime-routed NO soft-balanced tiny-live",
+            family="reheat_risk.regime_routed_no",
+            lifecycle_status="live",
+            execution_mode="live",
+            source_layer="runtime_local",
+            runtime_dir="runtime/weather_edge_v1/regime_routed_no_tiny_live_v1",
+            summary_file="latest_summary.json",
+            primary_journal="summary_history.jsonl",
+            live_order_file="live_orders.jsonl",
+            paper_order_file="paper_orders.jsonl",
+            expected_live=True,
+            artifact_files=[
+                ("summary_history", "summary_history.jsonl"),
+                ("trade_plans", "trade_plans.jsonl"),
+            ],
+            notes="Tiny-live regime-routed NO profile: runway regimes buy current-bracket NO; capped regime buys d2 NO; soft-sized and min-share gated.",
+        ),
+        StrategySpec(
+            strategy_instance="regime_routed_no_soft_balanced_shadow_v1",
+            display_name="Regime-routed NO soft-balanced shadow",
+            family="reheat_risk.regime_routed_no",
+            lifecycle_status="shadow",
+            execution_mode="zero_notional_shadow",
+            source_layer="runtime_local",
+            runtime_dir="runtime/weather_edge_v1/regime_routed_no_shadow_v1",
+            summary_file="latest_summary.json",
+            primary_journal="shadow_candidates.jsonl",
+            artifact_files=[
+                ("shadow_candidates", "shadow_candidates.jsonl"),
+            ],
+            notes="Zero-notional forward shadow for the same routed expression and soft-balanced sizing policy.",
+        ),
+        StrategySpec(
             strategy_instance="theta_current_yes_fade_confirmed_tiny_live_v1",
             display_name="Current YES fade confirmed tiny-live",
             family="reheat_risk.current_yes",
@@ -482,6 +516,31 @@ def add_artifact(
     )
 
 
+def summary_int(summary: dict[str, Any], keys: list[str]) -> int:
+    for key in keys:
+        value = summary.get(key)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def summary_float(summary: dict[str, Any], caps: dict[str, Any], keys: list[str]) -> float | None:
+    for source in (caps, summary):
+        for key in keys:
+            value = source.get(key)
+            if value is None:
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
     conn.row_factory = sqlite3.Row
     refreshed_at = iso(utc_now()) or ""
@@ -546,8 +605,8 @@ def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
                 "latest_data_ts_utc": iso(data_ts),
                 "latest_artifact_mtime_utc": iso(latest_mtime),
                 "heartbeat_age_min": (utc_now() - latest_dt).total_seconds() / 60 if latest_dt else None,
-                "candidate_rows": int(summary.get("candidate_rows") or summary.get("selected_rows_before_dedupe") or 0),
-                "plan_rows": int(summary.get("plans") or 0),
+                "candidate_rows": summary_int(summary, ["candidate_rows", "routed_candidates", "selected_rows_before_dedupe"]),
+                "plan_rows": summary_int(summary, ["plans", "plans_written", "execution_eligible"]),
                 "live_order_rows": live_order_rows,
                 "paper_order_rows": paper_order_rows,
                 "shadow_rows": shadow_rows,
@@ -558,9 +617,9 @@ def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
                 "first_target_date": fact_row.get("first_target_date"),
                 "last_target_date": fact_row.get("last_target_date"),
                 "latest_fill_ts_utc": fact_row.get("latest_fill_ts_utc"),
-                "cap_order_notional": caps.get("max_order_notional") or caps.get("max_notional_per_trade"),
-                "cap_city_day_notional": caps.get("max_city_day_notional") or caps.get("max_notional_per_city_day"),
-                "cap_total_day_notional": caps.get("max_notional_total_day"),
+                "cap_order_notional": summary_float(summary, caps, ["max_order_notional", "max_notional_per_trade", "base_notional"]),
+                "cap_city_day_notional": summary_float(summary, caps, ["max_city_day_notional", "max_notional_per_city_day"]),
+                "cap_total_day_notional": summary_float(summary, caps, ["max_notional_total_day", "daily_gross_cap"]),
                 "live_enabled": None if live_enabled is None else int(bool(live_enabled)),
                 "process_status": "unknown",
                 "blocker_count": blocker_count,
@@ -575,6 +634,8 @@ def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
         add_artifact(artifact_rows, spec.strategy_instance, "live_orders", live_order_path, refreshed_at)
         add_artifact(artifact_rows, spec.strategy_instance, "paper_orders", paper_order_path, refreshed_at)
         add_artifact(artifact_rows, spec.strategy_instance, "telemetry", telemetry_path, refreshed_at)
+        for kind, path_text in spec.artifact_files:
+            add_artifact(artifact_rows, spec.strategy_instance, kind, path_for(spec, path_text), refreshed_at)
 
     conn.execute("DELETE FROM weather_strategy_runtime_artifacts")
     conn.execute("DELETE FROM weather_strategy_runtime_registry")

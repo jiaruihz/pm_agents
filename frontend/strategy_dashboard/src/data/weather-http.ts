@@ -1,5 +1,5 @@
 // HTTP client for the weather dashboard FastAPI backend
-import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview } from "./weather-types";
+import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail } from "./weather-types";
 import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
 
 const BASE = `${import.meta.env.VITE_WEATHER_API ?? ""}/api`;
@@ -144,6 +144,10 @@ export const weatherApi = {
 
   getStrategyRuntimeOverview(params?: { target_date?: string }): Promise<StrategyRuntimeOverview> {
     return get("/strategy-runtime/overview", params);
+  },
+
+  getStrategyRuntimeDetail(strategyInstance: string, params?: { limit?: number }): Promise<StrategyRuntimeDetail> {
+    return get(`/strategy-runtime/${encodeURIComponent(strategyInstance)}/detail`, params);
   },
 
   getRunEquity(runId: string): Promise<{ date: string; cumulative_pnl: number }[]> {
