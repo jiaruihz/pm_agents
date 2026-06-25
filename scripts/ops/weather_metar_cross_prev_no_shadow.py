@@ -270,6 +270,14 @@ def last_report_ts_for_city(state: dict[str, Any], city: str) -> str | None:
     return None if value is None else str(value)
 
 
+def city_base_delay_sec(city: str, base_interval_sec: float) -> float:
+    if base_interval_sec <= 1:
+        return max(0.1, base_interval_sec)
+    bucket = sum(ord(ch) for ch in city) % 1000
+    multiplier = 0.5 + bucket / 1000.0
+    return round(max(1.0, base_interval_sec * multiplier), 3)
+
+
 class RuntimeCache:
     def __init__(self, *, market_ttl_sec: float) -> None:
         self.market_ttl_sec = market_ttl_sec
@@ -1109,7 +1117,11 @@ def main() -> int:
         )
     )
     if args.scheduler_mode == "per_city":
-        next_due_by_city = {cfg.city: datetime.now(timezone.utc) for cfg in configs}
+        scheduler_start = datetime.now(timezone.utc)
+        next_due_by_city = {
+            cfg.city: scheduler_start + timedelta(seconds=city_base_delay_sec(cfg.city, args.base_interval_sec) % args.base_interval_sec)
+            for cfg in configs
+        }
         by_city = {cfg.city: cfg for cfg in configs}
         while True:
             loop_now = datetime.now(timezone.utc)
@@ -1148,7 +1160,7 @@ def main() -> int:
                     pre_window_min=args.city_hot_pre_window_min,
                     chase_window_min=args.city_hot_chase_window_min,
                 )
-                interval = args.base_interval_sec if report_changed or not hot else args.burst_interval_sec
+                interval = city_base_delay_sec(cfg.city, args.base_interval_sec) if report_changed or not hot else args.burst_interval_sec
                 next_due_by_city[cfg.city] = schedule_now + timedelta(seconds=interval)
             print(
                 json.dumps(

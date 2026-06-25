@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from scripts.ops.weather_metar_cross_prev_no_shadow import (
     build_city_policy,
+    city_base_delay_sec,
     circular_minute_distance,
     crossed_prev_no_brackets,
     in_learned_update_window,
@@ -122,6 +123,11 @@ def test_city_update_window_falls_back_before_learning():
         pre_window_min=1,
         chase_window_min=10,
     )
+
+
+def test_city_base_delay_is_stable_and_bounded():
+    assert city_base_delay_sec("Busan", 45) == city_base_delay_sec("Busan", 45)
+    assert 22.5 <= city_base_delay_sec("Busan", 45) <= 67.5
 
 
 def test_plan_buy_amount_uses_cent_notional_and_five_decimal_size():
