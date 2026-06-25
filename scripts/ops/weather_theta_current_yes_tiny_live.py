@@ -84,6 +84,7 @@ SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 FORWARD_TELEMETRY_OUT = RUNTIME_DIR / "forward_telemetry.jsonl"
+PEAK_TIMING_SHADOW_STATE_OUT = RUNTIME_DIR / "peak_timing_shadow_state.json"
 LIVE_OUT = ROOT / "runtime/weather_edge_v1/live" / f"{STRATEGY_INSTANCE}_orders.jsonl"
 
 METAR_API = "https://aviationweather.gov/api/data/metar"
@@ -2403,6 +2404,129 @@ def first_finite(*values: Any) -> float:
     return np.nan
 
 
+def empty_peak_timing_shadow_state() -> dict[str, Any]:
+    return {
+        "version": 1,
+        "state_type": "peak_yes_first_signal_quote_drift",
+        "strategy_instance": STRATEGY_INSTANCE,
+        "events": {},
+    }
+
+
+def load_peak_timing_shadow_state() -> dict[str, Any]:
+    if not PEAK_TIMING_SHADOW_STATE_OUT.exists():
+        return empty_peak_timing_shadow_state()
+    state = json.loads(PEAK_TIMING_SHADOW_STATE_OUT.read_text(encoding="utf-8"))
+    if not isinstance(state, dict):
+        return empty_peak_timing_shadow_state()
+    events = state.get("events")
+    if not isinstance(events, dict):
+        state["events"] = {}
+    state.setdefault("version", 1)
+    state.setdefault("state_type", "peak_yes_first_signal_quote_drift")
+    state.setdefault("strategy_instance", STRATEGY_INSTANCE)
+    return state
+
+
+def save_peak_timing_shadow_state(state: dict[str, Any]) -> None:
+    PEAK_TIMING_SHADOW_STATE_OUT.parent.mkdir(parents=True, exist_ok=True)
+    state["updated_at_utc"] = now_utc()
+    PEAK_TIMING_SHADOW_STATE_OUT.write_text(
+        json.dumps(json_ready(state), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def peak_timing_shadow_state_key(row: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            safe_str(row.get("strategy_instance")) or STRATEGY_INSTANCE,
+            safe_str(row.get("city")),
+            safe_str(row.get("target_date")),
+            safe_str(row.get("current_bracket")),
+        ]
+    )
+
+
+def peak_timing_shadow_price(row: dict[str, Any]) -> float:
+    return first_finite(row.get("fresh_best_ask"), row.get("yes_current_ask"), row.get("taker_limit_price"))
+
+
+def peak_timing_shadow_probability(row: dict[str, Any]) -> float:
+    return first_finite(row.get("peak_hazard_v2_p_survive"), row.get("p_yes_win"), row.get("p_yes_win_base_current_yes_model"))
+
+
+def enrich_peak_timing_shadow_telemetry(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    state = load_peak_timing_shadow_state()
+    events = state.setdefault("events", {})
+    enriched: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        if item.get("record_type") != "theta_current_yes_forward_telemetry":
+            enriched.append(item)
+            continue
+        key = peak_timing_shadow_state_key(item)
+        parts = key.split("|")
+        price = peak_timing_shadow_price(item)
+        p_survive = peak_timing_shadow_probability(item)
+        edge = p_survive - price if math.isfinite(p_survive) and math.isfinite(price) else np.nan
+        created_first = False
+        if len(parts) == 4 and all(parts[1:]) and math.isfinite(price) and math.isfinite(edge) and edge >= 0.0 and key not in events:
+            events[key] = {
+                "first_seen_at_utc": now_utc(),
+                "first_signal_snapshot_ts_utc": safe_str(item.get("snapshot_ts_utc")),
+                "first_signal_status": safe_str(item.get("decision_status")),
+                "first_signal_hour_local": item.get("decision_hour_local"),
+                "first_signal_ask": price,
+                "first_signal_p_survive": p_survive,
+                "first_signal_edge": edge,
+                "probability_source": "runner_current_probability",
+            }
+            created_first = True
+        first = events.get(key)
+        if isinstance(first, dict):
+            first_ask = to_float(first.get("first_signal_ask"), np.nan)
+            first_seen_ts = safe_str(first.get("first_seen_at_utc"))
+            hours_since_first = np.nan
+            try:
+                if first_seen_ts:
+                    hours_since_first = (
+                        datetime.now(timezone.utc) - datetime.fromisoformat(first_seen_ts.replace("Z", "+00:00"))
+                    ).total_seconds() / 3600.0
+            except Exception:
+                hours_since_first = np.nan
+            maker_probe_price = max(0.01, price - 0.01) if math.isfinite(price) else np.nan
+            item.update(
+                {
+                    "peak_timing_shadow_version": "first_signal_quote_drift_v1",
+                    "peak_timing_shadow_probability_source": "runner_current_probability",
+                    "peak_timing_shadow_state_key": key,
+                    "peak_timing_shadow_is_first_signal": created_first,
+                    "peak_timing_shadow_has_prior_signal": not created_first,
+                    "peak_timing_shadow_first_seen_at_utc": first_seen_ts,
+                    "peak_timing_shadow_first_signal_snapshot_ts_utc": safe_str(first.get("first_signal_snapshot_ts_utc")),
+                    "peak_timing_shadow_first_signal_status": safe_str(first.get("first_signal_status")),
+                    "peak_timing_shadow_first_signal_hour_local": first.get("first_signal_hour_local"),
+                    "peak_timing_shadow_first_signal_ask": first_ask,
+                    "peak_timing_shadow_first_signal_p_survive": to_float(first.get("first_signal_p_survive"), np.nan),
+                    "peak_timing_shadow_first_signal_edge": to_float(first.get("first_signal_edge"), np.nan),
+                    "peak_timing_shadow_current_ask": price,
+                    "peak_timing_shadow_current_p_survive": p_survive,
+                    "peak_timing_shadow_current_edge": edge,
+                    "peak_timing_shadow_ask_change_since_first_signal": price - first_ask
+                    if math.isfinite(price) and math.isfinite(first_ask)
+                    else np.nan,
+                    "peak_timing_shadow_hours_since_first_signal": hours_since_first,
+                    "peak_timing_shadow_maker_probe_price_1c_inside": maker_probe_price,
+                    "peak_timing_shadow_maker_probe_edge_1c_inside": p_survive - maker_probe_price
+                    if math.isfinite(p_survive) and math.isfinite(maker_probe_price)
+                    else np.nan,
+                }
+            )
+        enriched.append(item)
+    return enriched, state
+
+
 def peak_state_v2_shadow_fields(row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     obs = row.get("obs") if isinstance(row.get("obs"), dict) else {}
     d_tmpf_3h = first_finite(row.get("d_tmpf_3h"), obs.get("d_tmpf_3h"))
@@ -3055,6 +3179,15 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     live_enabled = bool(args.live and args.confirm_live)
     plans = [build_plan(row, notional=args.max_order_notional, live_enabled=live_enabled) for row in candidates]
     write_jsonl(PLAN_OUT, plans)
+    peak_timing_shadow_state: dict[str, Any] = empty_peak_timing_shadow_state()
+    peak_timing_shadow_status = "ok"
+    peak_timing_shadow_error = ""
+    try:
+        telemetry_rows, peak_timing_shadow_state = enrich_peak_timing_shadow_telemetry(telemetry_rows)
+        save_peak_timing_shadow_state(peak_timing_shadow_state)
+    except Exception as exc:  # noqa: BLE001
+        peak_timing_shadow_status = "error"
+        peak_timing_shadow_error = f"{type(exc).__name__}: {exc}"
     for telemetry_row in telemetry_rows:
         append_jsonl(FORWARD_TELEMETRY_OUT, telemetry_row)
     result = {
@@ -3121,6 +3254,12 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "plan_out": str(PLAN_OUT),
         "forward_telemetry_out": str(FORWARD_TELEMETRY_OUT),
         "forward_telemetry_rows": len(telemetry_rows),
+        "peak_timing_shadow_state_out": str(PEAK_TIMING_SHADOW_STATE_OUT),
+        "peak_timing_shadow_status": peak_timing_shadow_status,
+        "peak_timing_shadow_error": peak_timing_shadow_error,
+        "peak_timing_shadow_events": len(peak_timing_shadow_state.get("events", {}))
+        if isinstance(peak_timing_shadow_state.get("events"), dict)
+        else 0,
         "live_out": str(LIVE_OUT),
         "candidates": [
             {
