@@ -178,6 +178,7 @@ sync_live() {
     live \
     paper \
     range_rv_shadow_v0 \
+    regime_routed_no_tiny_live_v1 \
     metar_cross_prev_no_shadow \
     source_orderbook_timing \
     theta_current_yes_tiny_live_v1 \

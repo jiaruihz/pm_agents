@@ -190,7 +190,7 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
         {error && <div style={errorStyle}>{error}</div>}
 
         {data && !loading && !error && (
-          <div style={{ display: "grid", gap: 16 }}>
+          <div style={stack16Style}>
             <SummaryGrid data={data} />
             <section style={panelStyle}>
               <div style={sectionHeadStyle}>
@@ -260,7 +260,7 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
   const executorParsed = valueOf(executor, "parsed") as Record<string, unknown> | undefined;
 
   return (
-    <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+    <div style={stack12Style}>
       <div style={metricGridStyle}>
         <Metric label="Live enabled" value={fmtUnknown(valueOf(latestHeartbeat, "live_enabled") ?? strategy.live_enabled)} color={valueOf(latestHeartbeat, "live_enabled") || strategy.live_enabled ? "var(--ok)" : "var(--muted)"} />
         <Metric label="Routed" value={fmtUnknown(valueOf(latestHeartbeat, "routed_candidates") ?? strategy.candidate_rows)} />
@@ -647,6 +647,19 @@ const toolbarStyle: React.CSSProperties = {
   borderRadius: 8,
   padding: 14,
 };
+const stack16Style: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 16,
+  minWidth: 0,
+};
+const stack12Style: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 12,
+  marginTop: 12,
+  minWidth: 0,
+};
 const dateInputStyle: React.CSSProperties = {
   marginTop: 6,
   height: 30,
@@ -661,6 +674,7 @@ const panelStyle: React.CSSProperties = {
   background: "var(--card)",
   borderRadius: 8,
   padding: 16,
+  minWidth: 0,
 };
 const sectionHeadStyle: React.CSSProperties = {
   display: "flex",
@@ -687,23 +701,29 @@ const monoSmallStyle: React.CSSProperties = {
 };
 const metricGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(138px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(138px, 100%), 1fr))",
   gap: 10,
+  minWidth: 0,
 };
 const metricStyle: React.CSSProperties = {
   border: "1px solid var(--stroke)",
   borderRadius: 8,
   background: "var(--card)",
   padding: 12,
+  minWidth: 0,
 };
 const detailGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))",
   gap: 10,
+  minWidth: 0,
 };
 const tableWrapStyle: React.CSSProperties = {
   overflowX: "auto",
   marginTop: 12,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
 };
 const tableStyle: React.CSSProperties = {
   width: "100%",
@@ -757,14 +777,16 @@ const errorStyle: React.CSSProperties = {
 };
 const candidateGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
   gap: 10,
+  minWidth: 0,
 };
 const candidateCardStyle: React.CSSProperties = {
   border: "1px solid var(--stroke)",
   borderRadius: 8,
   background: "rgba(255,255,255,0.56)",
   padding: 12,
+  minWidth: 0,
 };
 const candidateCardHeadStyle: React.CSSProperties = {
   display: "flex",
