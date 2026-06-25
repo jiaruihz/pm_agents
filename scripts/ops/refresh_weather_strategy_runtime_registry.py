@@ -172,6 +172,8 @@ def strategy_specs() -> list[StrategySpec]:
             artifact_files=[
                 ("summary_history", "summary_history.jsonl"),
                 ("trade_plans", "trade_plans.jsonl"),
+                ("blocked_candidates", "blocked_candidates.jsonl"),
+                ("latest_candidates", "latest_candidates.json"),
             ],
             notes=(
                 "Tiny-live probe restored after 2026-06-25 parity incident. Runner now defaults to "

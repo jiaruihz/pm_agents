@@ -252,6 +252,7 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
   const recent = detail.recent_records ?? {};
   const liveOrders = recent.live_orders ?? [];
   const paperOrders = recent.paper_orders ?? [];
+  const blockedCandidates = recent.blocked_candidates ?? [];
   const heartbeats = recent.summary_history ?? recent.primary_journal ?? [];
   const shadowCandidates = recent.shadow_candidates ?? [];
   const latestHeartbeat = heartbeats.length ? heartbeats[heartbeats.length - 1] : summary;
@@ -273,6 +274,7 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
         <InfoBox title="Latest heartbeat" rows={[
           ["generated", fmtTime(String(valueOf(latestHeartbeat, "generated_at_utc") ?? strategy.latest_summary_ts_utc ?? ""))],
           ["snapshot", fmtTime(String(valueOf(valueOf(latestHeartbeat, "meta") as Record<string, unknown> | undefined, "snapshot_ts_utc") ?? ""))],
+          ["obs cache", fmtUnknown(valueOf(valueOf(latestHeartbeat, "meta") as Record<string, unknown> | undefined, "observation_cache_status"))],
           ["by regime", compactJson(valueOf(latestHeartbeat, "candidate_by_regime"))],
           ["skips", compactJson(valueOf(latestHeartbeat, "skip_reasons"))],
           ["no order", fmtUnknown(valueOf(latestHeartbeat, "no_order_placed"))],
@@ -286,6 +288,7 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
         ]} />
       </div>
 
+      <BlockedCandidateCards rows={blockedCandidates} />
       <RecentRecordTable
         title="Recent live orders"
         rows={liveOrders}
@@ -328,6 +331,52 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
           ["status", (row) => fmtUnknown(row.status ?? row.order_status)],
         ]}
       />
+    </div>
+  );
+}
+
+function BlockedCandidateCards({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const ordered = rows.slice().reverse();
+  return (
+    <div>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>Blocked candidates</div>
+      {ordered.length === 0 ? (
+        <div style={mutedInlineStyle}>No blocked candidate records yet.</div>
+      ) : (
+        <div className="runtime-candidate-grid" style={candidateGridStyle}>
+          {ordered.map((row, idx) => (
+            <div key={String(row.candidate_id ?? idx)} style={candidateCardStyle}>
+              <div style={candidateCardHeadStyle}>
+                <div>
+                  <div style={{ fontWeight: 800 }}>{fmtUnknown(row.city)} · {fmtUnknown(row.bracket)}</div>
+                  <div style={subtleStyle}>{fmtUnknown(row.target_date)} · {fmtUnknown(row.route_leg)}</div>
+                </div>
+                <Badge text={fmtUnknown(row.day_regime)} color="var(--accent)" />
+              </div>
+              <div style={candidateMetricGridStyle}>
+                <MiniStat label="ask" value={fmtPrice(row.ask)} />
+                <MiniStat label="shares" value={fmtUnknown(row.soft_shares)} />
+                <MiniStat label="soft $" value={fmtUsd(row.soft_notional_usd)} />
+                <MiniStat label="parity" value={fmtUnknown(row.live_feature_parity_ok)} />
+              </div>
+              <div style={blockedReasonStyle}>{fmtUnknown(row.execution_skip_reason)}</div>
+              <div style={candidateFooterStyle}>
+                <span>{fmtTime(String(row.created_at_utc ?? ""))}</span>
+                <span>{fmtUnknown(row.live_feature_source)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div style={{ color: "var(--muted)", fontSize: 10 }}>{label}</div>
+      <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700 }}>{value}</div>
     </div>
   );
 }
@@ -590,6 +639,7 @@ function Badge({ text, color }: { text: string; color: string }) {
 const toolbarStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
+  flexWrap: "wrap",
   gap: 14,
   marginBottom: 16,
   border: "1px solid var(--stroke)",
@@ -616,6 +666,7 @@ const sectionHeadStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
+  flexWrap: "wrap",
   gap: 16,
 };
 const sectionTitleStyle: React.CSSProperties = {
@@ -658,6 +709,7 @@ const tableStyle: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   fontSize: 12,
+  minWidth: 720,
 };
 const thStyle: React.CSSProperties = {
   textAlign: "left",
@@ -702,4 +754,43 @@ const errorStyle: React.CSSProperties = {
   borderRadius: 8,
   padding: 12,
   background: "var(--bad)18",
+};
+const candidateGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: 10,
+};
+const candidateCardStyle: React.CSSProperties = {
+  border: "1px solid var(--stroke)",
+  borderRadius: 8,
+  background: "rgba(255,255,255,0.56)",
+  padding: 12,
+};
+const candidateCardHeadStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 10,
+};
+const candidateMetricGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: 8,
+  marginTop: 10,
+};
+const blockedReasonStyle: React.CSSProperties = {
+  marginTop: 10,
+  color: "var(--bad)",
+  fontFamily: "monospace",
+  fontSize: 11,
+  overflowWrap: "anywhere",
+};
+const candidateFooterStyle: React.CSSProperties = {
+  marginTop: 10,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  color: "var(--muted)",
+  fontSize: 11,
+  overflowWrap: "anywhere",
 };

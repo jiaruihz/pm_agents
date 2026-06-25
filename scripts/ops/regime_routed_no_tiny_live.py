@@ -56,6 +56,8 @@ RUNTIME_DIR = ROOT / "runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
+BLOCKED_OUT = RUNTIME_DIR / "blocked_candidates.jsonl"
+LATEST_CANDIDATES_OUT = RUNTIME_DIR / "latest_candidates.json"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
 DEFAULT_SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
@@ -109,6 +111,25 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def json_safe(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, (str, int, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    return str(value)
 
 
 def stable_hash(payload: Any, *, length: int = 24) -> str:
@@ -755,6 +776,107 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
     return selected, meta
 
 
+def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) -> dict[str, Any]:
+    payload = {
+        "record_type": "regime_routed_no_candidate",
+        "created_at_utc": utc_now_iso(),
+        "candidate_id": "regime-no-candidate-" + stable_hash(
+            {
+                "city": row.get("city"),
+                "target_date": row.get("target_date"),
+                "token_id": row.get("token_id"),
+                "decision_snapshot_ts_utc": row.get("decision_snapshot_ts_utc"),
+                "route_leg": row.get("route_leg"),
+            }
+        ),
+        "strategy_id": STRATEGY_ID,
+        "strategy_instance": STRATEGY_INSTANCE,
+        "rule_id": RULE_ID,
+        "candidate_status": "accepted" if accepted else "blocked",
+        "execution_skip_reason": "" if accepted else str(row.get("execution_skip_reason") or ""),
+        "city": row.get("city"),
+        "target_date": row.get("target_date"),
+        "decision_snapshot_ts_utc": row.get("decision_snapshot_ts_utc"),
+        "day_regime": row.get("day_regime"),
+        "intraday_state": row.get("intraday_state"),
+        "moisture_cloud_regime": row.get("moisture_cloud_regime"),
+        "wind_regime": row.get("wind_regime"),
+        "running_max_state": row.get("running_max_state"),
+        "expression": row.get("expression"),
+        "route_leg": row.get("route_leg"),
+        "bracket": row.get("bracket"),
+        "ask": row.get("ask"),
+        "bid": row.get("bid"),
+        "ask_size": row.get("ask_size"),
+        "token_id": row.get("token_id"),
+        "market_id": row.get("market_id"),
+        "event_slug": row.get("event_slug"),
+        "question": row.get("question"),
+        "base_notional_usd": row.get("base_notional_usd"),
+        "soft_balanced": row.get("soft_balanced"),
+        "soft_notional_usd": row.get("soft_notional_usd"),
+        "soft_shares": row.get("soft_shares"),
+        "ask_notional": row.get("ask_notional"),
+        "live_feature_status": row.get("live_feature_status"),
+        "live_feature_source": row.get("live_feature_source"),
+        "live_feature_parity_ok": row.get("live_feature_parity_ok"),
+        "live_duplicate_key": row.get("live_duplicate_key"),
+        "temp_trend_1h_f": row.get("temp_trend_1h_f"),
+        "temp_trend_3h_f": row.get("temp_trend_3h_f"),
+        "relative_humidity_pct": row.get("relative_humidity_pct"),
+        "dewpoint_depression_f": row.get("dewpoint_depression_f"),
+        "wind_speed_kt": row.get("wind_speed_kt"),
+        "minutes_since_running_max": row.get("minutes_since_running_max"),
+        "forecast_source": row.get("forecast_source"),
+        "forecast_max_native": row.get("forecast_max_native"),
+        "forecast_peak_hour_local": row.get("forecast_peak_hour_local"),
+        "forecast_gap_to_running_native": row.get("forecast_gap_to_running_native"),
+        "running_native": row.get("running_native"),
+        "current_native": row.get("current_native"),
+        "snapshot": meta.get("snapshot"),
+        "snapshot_ts_utc": meta.get("snapshot_ts_utc"),
+        "snapshot_age_min": meta.get("snapshot_age_min"),
+        "observation_cache_path": meta.get("observation_cache_path"),
+        "observation_cache_status": meta.get("observation_cache_status"),
+        "observation_cache_generated_at_utc": meta.get("observation_cache_generated_at_utc"),
+    }
+    return json_safe(payload)
+
+
+def write_candidate_audit(candidates: pd.DataFrame, meta: dict[str, Any]) -> tuple[int, int]:
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    if candidates.empty:
+        write_json(
+            LATEST_CANDIDATES_OUT,
+            {
+                "generated_at_utc": utc_now_iso(),
+                "strategy_id": STRATEGY_ID,
+                "strategy_instance": STRATEGY_INSTANCE,
+                "meta": meta,
+                "candidates": [],
+            },
+        )
+        return 0, 0
+    records = [
+        candidate_record(row, meta=meta, accepted=bool(row.get("execution_eligible")))
+        for _, row in candidates.iterrows()
+    ]
+    blocked = [row for row in records if row.get("candidate_status") == "blocked"]
+    write_json(
+        LATEST_CANDIDATES_OUT,
+        {
+            "generated_at_utc": utc_now_iso(),
+            "strategy_id": STRATEGY_ID,
+            "strategy_instance": STRATEGY_INSTANCE,
+            "meta": meta,
+            "candidates": records,
+        },
+    )
+    for row in blocked:
+        append_jsonl(BLOCKED_OUT, row)
+    return len(records), len(blocked)
+
+
 def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[str, Any]:
     ask = safe_float(row.get("ask"))
     soft_notional = safe_float(row.get("soft_notional_usd"))
@@ -965,6 +1087,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     candidates, meta = build_candidates(args)
+    candidate_rows, blocked_candidate_rows = write_candidate_audit(candidates, meta)
     plans = write_plans(candidates, args)
     executor_result = run_executor(args)
     summary = {
@@ -981,11 +1104,15 @@ def main() -> int:
         "routed_candidates": int(len(candidates)),
         "execution_eligible": int(candidates["execution_eligible"].sum()) if not candidates.empty else 0,
         "plans_written": len(plans),
+        "candidate_rows": candidate_rows,
+        "blocked_candidate_rows": blocked_candidate_rows,
         "candidate_by_regime": candidates["day_regime"].value_counts(dropna=False).to_dict() if not candidates.empty else {},
         "skip_reasons": candidates["execution_skip_reason"].value_counts(dropna=False).to_dict() if not candidates.empty else {},
         "plans_path": str(PLAN_OUT.relative_to(ROOT)),
         "paper_out": str(PAPER_OUT.relative_to(ROOT)),
         "live_out": str(LIVE_OUT.relative_to(ROOT)),
+        "blocked_out": str(BLOCKED_OUT.relative_to(ROOT)),
+        "latest_candidates_out": str(LATEST_CANDIDATES_OUT.relative_to(ROOT)),
         "meta": meta,
         "executor_result": executor_result,
     }

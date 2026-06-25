@@ -260,6 +260,79 @@ pre {
   background: rgba(31, 39, 53, 0.06);
 }
 
+@media (max-width: 760px) {
+  .app-shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-right: 0;
+    border-bottom: 1px solid var(--stroke);
+    padding: 10px 12px;
+  }
+
+  .brand {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+
+  .brand-sub {
+    margin-bottom: 10px;
+  }
+
+  nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .nav-link {
+    flex: 0 0 auto;
+    margin-bottom: 0;
+    padding: 8px 10px;
+    min-width: 96px;
+  }
+
+  .content {
+    padding: 12px;
+  }
+
+  .page-head {
+    display: block;
+  }
+
+  .page-title {
+    font-size: 23px;
+  }
+
+  .clock {
+    margin-top: 8px;
+  }
+
+  .grid.cols-4,
+  .grid.cols-2 {
+    grid-template-columns: 1fr;
+  }
+
+  table {
+    min-width: 680px;
+  }
+
+  button,
+  input,
+  select {
+    max-width: 100%;
+  }
+
+  .runtime-candidate-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 .warn {
   color: var(--warn);
 }
