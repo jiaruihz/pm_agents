@@ -2,13 +2,18 @@ from datetime import datetime, timezone
 
 from scripts.ops.weather_metar_cross_prev_no_shadow import (
     build_city_policy,
+    circular_minute_distance,
     crossed_prev_no_brackets,
+    in_learned_update_window,
     in_update_window,
+    load_source_by_city,
     load_city_configs,
     noaa_tgftp_station_txt_latest,
     parsed_label_is_dead_for_running_value,
     parsed_label_matches_no_target,
     plan_buy_amount,
+    source_for_city,
+    update_report_minute_state,
 )
 
 
@@ -58,6 +63,21 @@ def test_crossing_burst_window_targets_report_boundaries():
     assert in_update_window(datetime(2026, 6, 17, 4, 29, 58, tzinfo=timezone.utc), window_min=2)
     assert in_update_window(datetime(2026, 6, 17, 4, 0, 2, tzinfo=timezone.utc), window_min=2)
     assert not in_update_window(datetime(2026, 6, 17, 4, 12, 0, tzinfo=timezone.utc), window_min=2)
+
+
+def test_learned_burst_window_uses_observed_report_minute():
+    state = {}
+    update_report_minute_state(state, "Busan", "2026-06-24T23:00:00+00:00")
+    assert in_learned_update_window(datetime(2026, 6, 25, 1, 4, 30, tzinfo=timezone.utc), state, window_min=5)
+    assert not in_learned_update_window(datetime(2026, 6, 25, 1, 12, 0, tzinfo=timezone.utc), state, window_min=5)
+    assert circular_minute_distance(58, 2) == 4
+
+
+def test_source_by_city_overrides_default_source():
+    cfg = load_city_configs(include_station_diff=True, only_cities={"Busan"})[0]
+    source_by_city = load_source_by_city(json_text='{"Busan":"synopticdata_timeseries"}')
+    assert source_for_city(cfg, "noaa_tgftp_station_txt", source_by_city) == "synopticdata_timeseries"
+    assert source_for_city(cfg, "noaa_tgftp_station_txt", {}) == "noaa_tgftp_station_txt"
 
 
 def test_plan_buy_amount_uses_cent_notional_and_five_decimal_size():

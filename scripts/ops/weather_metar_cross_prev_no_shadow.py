@@ -143,6 +143,111 @@ def save_state(state: dict[str, Any]) -> None:
     write_json(OUT_DIR / "state.json", state)
 
 
+def parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def elapsed_sec(start: datetime | None, end: datetime | None = None) -> float | None:
+    if start is None:
+        return None
+    return round(((end or datetime.now(timezone.utc)) - start).total_seconds(), 3)
+
+
+def load_source_by_city(*, json_text: str = "", file_path: str = "") -> dict[str, str]:
+    payload: Any = {}
+    if file_path:
+        payload = read_json(Path(file_path), {})
+    if json_text:
+        payload = json.loads(json_text)
+    if not isinstance(payload, dict):
+        raise ValueError("source-by-city payload must be a JSON object")
+    allowed = {"aviationweather_metar", "synopticdata_timeseries", "noaa_tgftp_station_txt"}
+    out = {}
+    for city, source_name in payload.items():
+        value = str(source_name).strip()
+        if value not in allowed:
+            raise ValueError(f"unsupported source for {city}: {value}")
+        out[str(city)] = value
+    return out
+
+
+def source_for_city(cfg: CityConfig, default_source: str, source_by_city: dict[str, str] | None) -> str:
+    return (source_by_city or {}).get(cfg.city, default_source)
+
+
+def report_minute(value: str | None) -> float | None:
+    dt = parse_dt(value)
+    if dt is None:
+        return None
+    return dt.minute + dt.second / 60.0
+
+
+def update_report_minute_state(state: dict[str, Any], city: str, obs_last_obs_utc: str | None) -> None:
+    minute = report_minute(obs_last_obs_utc)
+    if minute is None:
+        return
+    state.setdefault("last_report_minute_by_city", {})[city] = round(minute, 3)
+
+
+def circular_minute_distance(a: float, b: float) -> float:
+    raw = abs((a % 60.0) - (b % 60.0))
+    return min(raw, 60.0 - raw)
+
+
+def in_learned_update_window(now_utc: datetime, state: dict[str, Any], *, window_min: float) -> bool:
+    minute = now_utc.minute + now_utc.second / 60.0
+    for raw in (state.get("last_report_minute_by_city") or {}).values():
+        try:
+            if circular_minute_distance(minute, float(raw)) <= window_min:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+class RuntimeCache:
+    def __init__(self, *, market_ttl_sec: float) -> None:
+        self.market_ttl_sec = market_ttl_sec
+        self.market_cache: dict[str, dict[str, Any]] = {}
+        self.live_place_fn: Any | None = None
+
+    def get_market_bundle(self, cfg: CityConfig, local_date: Any, *, now_utc: datetime) -> dict[str, Any]:
+        event_slug = source.event_slug(cfg.slug, local_date)
+        cached = self.market_cache.get(event_slug)
+        if cached:
+            fetched_at = parse_dt(cached.get("market_fetched_utc"))
+            if fetched_at and (now_utc - fetched_at).total_seconds() <= self.market_ttl_sec:
+                return {**cached, "market_cache_hit": True, "event_slug": event_slug}
+        fetch_start = datetime.now(timezone.utc)
+        events = source.fetch_json(
+            f"{source.GAMMA}/events",
+            {"slug": event_slug},
+            max_rounds=1,
+            timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+            proxy_candidates=MARKET_PROXY_CANDIDATES,
+        )
+        fetch_end = datetime.now(timezone.utc)
+        markets = events[0].get("markets") if events else []
+        desc = str(markets[0].get("description") or "") if markets else ""
+        match = source.WU_URL_RE.search(desc)
+        bundle = {
+            "event_slug": event_slug,
+            "markets": markets or [],
+            "rules_icao": match.group(1) if match else None,
+            "market_fetched_utc": fetch_end.isoformat(),
+            "gamma_fetch_latency_sec": round((fetch_end - fetch_start).total_seconds(), 3),
+            "market_cache_hit": False,
+        }
+        self.market_cache[event_slug] = bundle
+        return bundle
+
+
 def find_no_market(markets: list[dict[str, Any]], target_bracket: int) -> tuple[dict[str, Any], dict[str, Any]] | tuple[None, None]:
     for market in markets:
         label = str(market.get("groupItemTitle") or "")
@@ -524,15 +629,18 @@ def cycle_once(
     dry_run: bool,
     recent_hours: float,
     obs_source: str,
+    source_by_city: dict[str, str] | None,
     live: bool,
     confirm_live: bool,
     max_notional_per_trade: float,
     max_notional_per_city_day: float,
     max_notional_total_day: float,
     max_workers: int = 12,
-    live_place_fn: Any | None = None,
+    runtime_cache: RuntimeCache | None = None,
 ) -> dict[str, int]:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    if runtime_cache is None:
+        runtime_cache = RuntimeCache(market_ttl_sec=300.0)
     state = load_state()
     fired = {tuple(item) for item in state.get("fired", [])}
     last_running = dict(state.get("last_running_value") or {})
@@ -558,6 +666,8 @@ def cycle_once(
             "registry_class": cfg.registry_class,
         }
         previous_value = last_running.get(date_key)
+        requested_obs_source = source_for_city(cfg, obs_source, source_by_city)
+        cycle_row["obs_source_requested"] = requested_obs_source
         try:
             met = observation_summary(
                 cfg,
@@ -565,7 +675,7 @@ def cycle_once(
                 local_date,
                 previous_value=previous_value,
                 recent_hours=recent_hours,
-                obs_source=obs_source,
+                obs_source=requested_obs_source,
             )
         except Exception as exc:  # noqa: BLE001
             return {
@@ -632,29 +742,23 @@ def cycle_once(
         )
         append_jsonl(OUT_DIR / "cycles.jsonl", cycle_row)
         last_running[date_key] = current_value
+        update_report_minute_state(state, cfg.city, met.get("last_obs_utc"))
         if not crossings:
             continue
 
-        event_slug = source.event_slug(cfg.slug, local_date)
         try:
-            events = source.fetch_json(
-                f"{source.GAMMA}/events",
-                {"slug": event_slug},
-                max_rounds=1,
-                timeout_sec=FAST_HTTP_TIMEOUT_SEC,
-                proxy_candidates=MARKET_PROXY_CANDIDATES,
-            )
+            market_bundle = runtime_cache.get_market_bundle(cfg, local_date, now_utc=datetime.now(timezone.utc))
         except RuntimeError as exc:
             counts["errors"] += 1
+            event_slug = source.event_slug(cfg.slug, local_date)
             append_jsonl(OUT_DIR / "opportunities.jsonl", {**cycle_row, "status": "gamma_fetch_failed", "event_slug": event_slug, "error": str(exc)})
             continue
-        markets = events[0].get("markets") if events else []
+        event_slug = market_bundle["event_slug"]
+        markets = market_bundle.get("markets") or []
         if not markets:
             append_jsonl(OUT_DIR / "opportunities.jsonl", {**cycle_row, "status": "no_event", "event_slug": event_slug})
             continue
-        desc = str(markets[0].get("description") or "")
-        match = source.WU_URL_RE.search(desc)
-        rules_icao = match.group(1) if match else None
+        rules_icao = market_bundle.get("rules_icao")
         if rules_icao != cfg.official_icao:
             append_jsonl(
                 OUT_DIR / "opportunities.jsonl",
@@ -679,6 +783,9 @@ def cycle_once(
                 "market_question": None if market is None else market.get("question"),
                 "market_label": None if market is None else market.get("groupItemTitle"),
                 "parsed_label": parsed,
+                "market_cache_hit": market_bundle.get("market_cache_hit"),
+                "market_fetched_utc": market_bundle.get("market_fetched_utc"),
+                "gamma_fetch_latency_sec": market_bundle.get("gamma_fetch_latency_sec"),
             }
             if market is None:
                 append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "dead_no_market_not_found_or_ambiguous"})
@@ -705,20 +812,24 @@ def cycle_once(
                 append_jsonl(OUT_DIR / "opportunities.jsonl", {**base_row, "book_status": "book_fetch_failed", "token_id": no_token_id, "error": str(exc)})
                 continue
             no_book_summary = source.book_summary(no_book)
-            try:
-                yes_book_summary = source.book_summary(
-                    source.fetch_json(
-                        f"{source.CLOB}/book",
-                        {"token_id": yes_token_id},
-                        max_rounds=1,
-                        timeout_sec=FAST_HTTP_TIMEOUT_SEC,
-                        proxy_candidates=MARKET_PROXY_CANDIDATES,
+            if live_enabled:
+                yes_book_summary = {"skipped": "speed_path_live_no_pre_order_yes_book"}
+            else:
+                try:
+                    yes_book_summary = source.book_summary(
+                        source.fetch_json(
+                            f"{source.CLOB}/book",
+                            {"token_id": yes_token_id},
+                            max_rounds=1,
+                            timeout_sec=FAST_HTTP_TIMEOUT_SEC,
+                            proxy_candidates=MARKET_PROXY_CANDIDATES,
+                        )
                     )
-                )
-            except RuntimeError as exc:
-                yes_book_summary = {"fetch_error": str(exc)}
+                except RuntimeError as exc:
+                    yes_book_summary = {"fetch_error": str(exc)}
             yes_best_bid = yes_book_summary.get("best_bid")
             synthetic_no_cost = None if yes_best_bid is None else round(1.0 - float(yes_best_bid), 6)
+            cycle_ts = parse_dt(cycle_row.get("ts_utc"))
             book_audit = {
                 "yes_token_id": yes_token_id,
                 "no_token_id": no_token_id,
@@ -729,6 +840,8 @@ def cycle_once(
                 "book_fetch_start_utc": book_fetch_start_utc.isoformat(),
                 "no_book_fetched_utc": no_book_fetched_utc.isoformat(),
                 "book_fetch_latency_sec": round((no_book_fetched_utc - book_fetch_start_utc).total_seconds(), 3),
+                "cross_to_book_fetch_start_sec": elapsed_sec(cycle_ts, book_fetch_start_utc),
+                "cross_to_no_book_fetched_sec": elapsed_sec(cycle_ts, no_book_fetched_utc),
             }
             best = source.best_ask_from_book(no_book)
             if best is None:
@@ -785,11 +898,12 @@ def cycle_once(
                     "live_attempted": True,
                     "live_attempt_ts_utc": datetime.now(timezone.utc).isoformat(),
                 }
+                order_row["cross_to_live_attempt_sec"] = elapsed_sec(cycle_ts, parse_dt(order_row["live_attempt_ts_utc"]))
                 counts["live_attempts"] += 1
                 try:
-                    if live_place_fn is None:
-                        live_place_fn = build_live_fok_place_fn()
-                    response = live_place_fn(order_row)
+                    if runtime_cache.live_place_fn is None:
+                        runtime_cache.live_place_fn = build_live_fok_place_fn()
+                    response = runtime_cache.live_place_fn(order_row)
                     order_row["exchange_response"] = response
                     order_row["live_submit_status"] = "submitted"
                     order_row["order_id"] = response.get("order_id")
@@ -864,10 +978,15 @@ def main() -> int:
     parser.add_argument("--max-notional-per-trade", type=float, default=float(os.environ.get("METAR_CROSS_MAX_NOTIONAL_PER_TRADE", "10")))
     parser.add_argument("--max-notional-per-city-day", type=float, default=float(os.environ.get("METAR_CROSS_MAX_NOTIONAL_PER_CITY_DAY", "10")))
     parser.add_argument("--max-notional-total-day", type=float, default=float(os.environ.get("METAR_CROSS_MAX_NOTIONAL_TOTAL_DAY", "50")))
+    parser.add_argument("--source-by-city-json", default=os.environ.get("METAR_CROSS_SOURCE_BY_CITY_JSON", ""), help="JSON object mapping city name to obs source.")
+    parser.add_argument("--source-by-city-file", default=os.environ.get("METAR_CROSS_SOURCE_BY_CITY_FILE", ""), help="Path to JSON object mapping city name to obs source.")
     parser.add_argument("--interval-sec", type=float, default=None, help="Alias for --base-interval-sec.")
     parser.add_argument("--base-interval-sec", type=float, default=20.0)
     parser.add_argument("--burst-interval-sec", type=float, default=2.0)
     parser.add_argument("--burst-window-min", type=float, default=10.0)
+    parser.add_argument("--learned-burst-window-min", type=float, default=float(os.environ.get("METAR_CROSS_LEARNED_BURST_WINDOW_MIN", "6.0")))
+    parser.add_argument("--market-cache-ttl-sec", type=float, default=float(os.environ.get("METAR_CROSS_MARKET_CACHE_TTL_SEC", "1800")))
+    parser.add_argument("--prebuild-live-client", action=argparse.BooleanOptionalAction, default=os.environ.get("METAR_CROSS_PREBUILD_LIVE_CLIENT", "1") != "0")
     parser.add_argument("--max-workers", type=int, default=12)
     parser.add_argument("--recent-hours", type=float, default=2.0, help="After baseline, poll only recent METAR records and carry forward running max from state.")
     parser.add_argument("--dry-run", action="store_true", help="Do not update state.json; useful for smoke tests.")
@@ -883,6 +1002,10 @@ def main() -> int:
     configs = load_city_configs(include_station_diff=args.include_station_diff, only_cities=set(args.cities or []) or None)
     if not configs:
         raise SystemExit("no eligible city configs")
+    source_by_city = load_source_by_city(json_text=args.source_by_city_json, file_path=args.source_by_city_file)
+    runtime_cache = RuntimeCache(market_ttl_sec=args.market_cache_ttl_sec)
+    if args.live and args.confirm_live and not args.dry_run and args.prebuild_live_client:
+        runtime_cache.live_place_fn = build_live_fok_place_fn()
     print(
         json.dumps(
             {
@@ -892,6 +1015,8 @@ def main() -> int:
                 "max_ask": args.max_ask,
                 "dry_run": args.dry_run,
                 "obs_source": args.obs_source,
+                "source_by_city_count": len(source_by_city),
+                "source_by_city": source_by_city,
                 "live": args.live,
                 "confirm_live": args.confirm_live,
                 "max_notional_per_trade": args.max_notional_per_trade,
@@ -900,6 +1025,9 @@ def main() -> int:
                 "base_interval_sec": args.base_interval_sec,
                 "burst_interval_sec": args.burst_interval_sec,
                 "burst_window_min": args.burst_window_min,
+                "learned_burst_window_min": args.learned_burst_window_min,
+                "market_cache_ttl_sec": args.market_cache_ttl_sec,
+                "prebuild_live_client": args.prebuild_live_client,
                 "max_workers": args.max_workers,
                 "http_timeout_sec": FAST_HTTP_TIMEOUT_SEC,
                 "proxy_mode": FAST_PROXY_MODE,
@@ -919,17 +1047,23 @@ def main() -> int:
             dry_run=args.dry_run,
             recent_hours=args.recent_hours,
             obs_source=args.obs_source,
+            source_by_city=source_by_city,
             live=args.live,
             confirm_live=args.confirm_live,
             max_notional_per_trade=args.max_notional_per_trade,
             max_notional_per_city_day=args.max_notional_per_city_day,
             max_notional_total_day=args.max_notional_total_day,
             max_workers=args.max_workers,
+            runtime_cache=runtime_cache,
         )
         print(json.dumps({"ts_utc": datetime.now(timezone.utc).isoformat(), **counts}, sort_keys=True))
         if args.command == "cycle":
             return 0
-        sleep_sec = args.burst_interval_sec if in_update_window(datetime.now(timezone.utc), window_min=args.burst_window_min) else args.base_interval_sec
+        sleep_now = datetime.now(timezone.utc)
+        state = load_state()
+        generic_burst = in_update_window(sleep_now, window_min=args.burst_window_min)
+        learned_burst = in_learned_update_window(sleep_now, state, window_min=args.learned_burst_window_min)
+        sleep_sec = args.burst_interval_sec if generic_burst or learned_burst else args.base_interval_sec
         time.sleep(sleep_sec)
 
 
