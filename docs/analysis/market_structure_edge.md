@@ -2,7 +2,7 @@
 
 > Living doc for module [2]: whether weather markets contain model-free structural edge such as favorite-longshot bias, side base-rate, or price-bucket mispricing.
 > Current status: `mixed`: broad structure inconclusive; all-YES underround is offline-confirmed but retail-live blocked; forecast-bounded Range RV remains below live standard after orderbook-native hardening and is limited to zero-notional shadow telemetry.
-> Last updated: 2026-06-25 Range RV timing/stability v2 shadow optimization.
+> Last updated: 2026-06-25 Range RV timing/stability v2 and post-cross repricing research.
 
 ## Current Conclusion
 
@@ -13,6 +13,15 @@ There is not yet enough evidence to promote a broad model-free market-structure 
 The narrower forecast-bounded Range RV branch has now been rerun with the source-aware forecast-quality base and then hardened with orderbook-native entry selection. The closest generic candidate is `forecast_bounded_w3_cheaper`, `default_wu/no_filter`, orderbook edge >= 0.02: it passes the basic three statistical gates in the replay, but still fails live-standard support and robustness because train active dates are only 8, train top5-removed ROI is negative, and some holdout rows do not show 5 shares at top ask on every leg. Forward shadow now shows that `first_trigger` is structurally wrong, while `latest_before_local_18` is the cleanest current timing policy: one row per `city + event_date + forecast_source + model_version`, latest valid signal no later than local 18:59, with 165 settled groups / 11 event dates / +9.2% shadow ROI and date-block CI about +2.1% to +16.1%. This is still shadow-only because there is no live fill evidence, no executed basket capacity proof, and the baseline/live-standard gates are not complete. METAR/regime labels from the intraday atlas should be treated as explanatory overlays only; stability and mid-cost filters reduced support and did not improve the forward sample.
 
 Most other Range RV variants remain `inconclusive`: adjacent2/3 forecast-first, market-shape anomalies, center/shoulder/butterfly, tail-fade/uncertainty, temporal reversion, regime-conditioned scanners, and walk-forward selectors did not pass the three-gate standard.
+
+New 2026-06-25 research branch: `post_cross_repricing` studies how nearby
+temperature brackets reprice after a fresh running-max crossing. This is
+market-structure/probability redistribution, not the latency bot's crossed-NO
+free-money claim. Initial N100 timing logs show crossed brackets are repriced
+fastest, while current/new-high and tail brackets move unevenly. Keep it
+`research_only` until it has real-book baselines, settlement labels, and
+forward-date validation. Living entry: `docs/analysis/post_cross_repricing.md`;
+tool: `scripts/analysis/market_structure_edge/research_post_cross_repricing_v0.py`.
 
 Important distinction: if BUY_NO or a price bucket works because of market structure, that is not evidence that the weather probability model is good. It belongs here, not in `model_vs_market.md`.
 
@@ -45,6 +54,7 @@ Important distinction: if BUY_NO or a price bucket works because of market struc
 | `docs/analysis/2026-06/2026-06-14-all-yes-underround-persistence-v0.md` | 2026-06 snapshot persistence scan | 7 snapshots scanned; 3 had guard-passing candidates; Busan persisted across 2 snapshots, MexicoCity across 1, Denver across latest 03:00; opportunity is real but sparse, so live executor must be low-latency and stale baskets must fail closed | paper-shadow-engineering |
 | `docs/analysis/2026-06/2026-06-14-all-yes-underround-low-latency-paper-design.md` | 2026-06 low-latency paper design | fresh paper loop and N100 snapshot-source deployment shape; no orders placed; live review requires >=20 TTL-valid settled baskets, positive ROI/rate, no settlement anomaly, and separate signed executor review | design-draft |
 | `docs/analysis/2026-06/2026-06-15-retail-live-strategy-direction-v0.md` | 2026-06 goal consolidation | Demotes all-YES from retail live path despite offline confirmation; freezes next branch as forecast-bounded Range RV shadow with compact 2-4 leg baskets and strict orderbook/forward gates | current-handoff |
+| `docs/analysis/post_cross_repricing.md` | 2026-06 METAR-cross microstructure fork | Defines the new post-cross repricing research task: crossed bracket collapse vs current/new-high and tail bracket probability redistribution after a fresh running-max update | current-reference |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-source-aware-v0.md` | 2026-06 source-aware forecast-bounded Range RV | Reuses forecast-quality/source base at source/model decision-set grain; proxy default-WU width-3 looks positive but generic orderbook gates fail, so verdict remains inconclusive/no live action | active-evidence |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-live-standard-v1.md` | 2026-06 orderbook-native live-standard hardening | Uses time-aligned orderbook costs for the entry decision itself; closest default-WU width-3 cheaper rule passes basic replay gates but fails live-standard support, top5, and 5-share capacity checks | active-evidence |
 | `docs/analysis/2026-06/2026-06-16-range-rv-shadow-handoff-v0.md` | 2026-06 Range RV shadow handoff | Single entrypoint for current forecast-bounded Range RV shadow: strategy id, file inventory, runtime data paths, commands, gates, and do-not-do rules | current-handoff |

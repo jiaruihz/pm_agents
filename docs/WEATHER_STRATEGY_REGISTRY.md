@@ -1,7 +1,7 @@
 # Weather 策略总账（我们到底试过哪些 · 灵感/规则 · 是否可行 · 血缘归属）
 
 Status: `current-reference`
-Updated: 2026-06-20 current-YES residual calibrator and alti validation
+Updated: 2026-06-25 latency-arb microstructure and post-cross repricing research
 Source of truth: 状态/结论以各 living doc 为准，本表只做汇总入口
 
 这份是"我们一共研究过哪些策略"的单页总账。每条策略：**灵感/盈利规则 → 当前状态 → 是否可行 →
@@ -69,7 +69,8 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 |---|---|---|---|---|
 | current_yes_fade_confirmed | 日内已回落后更稳健地买 current YES | **`live`（tiny-live $5/单·$5/城日）** | **当前 live 之一**（N100 `weather_theta_current_yes_tiny_live.py --entry-profile-mode fade_confirmed --live`，2026-06-19 起）；默认 timing head，但整支仍卡 execution freshness / fresh-ask 滑点 → 当作前向取证探针，按执行质量评估不按 PnL | [1]-[2] reheat_risk |
 | current_yes_peak_forming_micro | 当前仍在高位时买 current YES（微仓） | **`live`（tiny-live $5）** | **当前 live 之一**（同脚本 `--entry-profile-mode peak_forming_micro --enable-peak-forming-live`）；注意：已从白皮书旧口径"shadow only"**升级为 micro live**（用户 2026-06-19 确认有意为之） | [1]-[2] reheat_risk |
-| metar_cross_prev_no | 用实时 METAR 交叉前日 NO（latency/source basis） | **`live`（$10/单·$50/天）** | **当前也在 live**（N100 `weather_metar_cross_prev_no_shadow.py --live`）；6-17/18 新线，仓位上限比 current-YES 大，研究背书与回填证据待复盘补 | [0]-[2] reheat_risk |
+| metar_cross_prev_no | 用实时 METAR 交叉前日 NO（latency/source basis） | **`live`（$10/单·$50/天）** | **当前 tiny-live 前向取证**（N100 `weather_metar_cross_prev_no_shadow.py --live`）；Busan/BuenosAires 已成交小额汤底，但核心瓶颈是 public METAR/tgftp 上游延迟，盘口最快样本在 report 附近 0-60s 或更早 pre-cross 撤/清；入口见 latency microstructure doc | [0]-[2] reheat_risk · [latency microstructure](WEATHER_LATENCY_ARB_OBSERVATION_MICROSTRUCTURE.md) |
+| post_cross_repricing | 刚穿温度后观察 current/new-high 和 T+1/T+2 bracket 如何重新分配概率；不抢已死 T-1 NO，而研究市场是否过冲/慢半拍 | `research` | 新研究任务；初步 N100 book 样本显示 crossed bracket 最快归零，但 current `T` YES 与 tail repricing 很不均匀，可能比纯 latency 抢单更适合散户；必须按真实 book、same-price baseline、forward date gate 评估，不 live | [2]-[4] market_structure_edge · [post_cross_repricing](analysis/post_cross_repricing.md) |
 | higher_no_carry | 买更高温档 NO（ladder carry） | `shadow`（telemetry only） | 没证明能稳定打赢同窗 current YES，仅 shadow 表达遥测 | [2] reheat_risk |
 | current_bracket_no_pass_through（含 climbing_no_peak_runway） | 买当前 running-max 档 **NO**，赌午后继续创新高把它打穿；分类器挑「会午后创新高」的**便宜 NO(ask 0.01–0.35)** | `shadow_candidate`（PIT 线，zero-notional，未结算，不 live） | **canonical 线 = pass-through → afternoon-peak classifier → prevday PIT shadow**：classifier 三门 PASS（+37.6%，CI[+11%,+66%]，相对同价 baseline excess +46%，holdout AUC 0.828），PIT 前一日 GFS forecast 版 +29.7%（CI[+3.8%,+54.6%]，excess +38.1%）；同价未筛 baseline 是 -8.4%/-8.5%。forward 仅 zero-notional candidates、forecast 口径尚非生产级 PIT，**不 live**。我方 `climbing_no_peak_runway`（runway re-gate + near-noon direct）是**同笔交易、更早更糙、非 PIT** 的版本，贡献=证「整片/贵 NO(≈0.88) 已被定价、edge 只在便宜 NO+午后创新高子集」，与 baseline 一致；其 forecast 特征有**前视风险**，数字以 PIT 线为准。**待办：两个 feature factory 收敛成一个** | [1]-[2] reheat_risk · [PIT shadow v1](analysis/2026-06/2026-06-23-current-bracket-no-prevday-pit-shadow-v1.md) · [classifier v1](analysis/2026-06/2026-06-23-current-bracket-no-afternoon-peak-classifier-v1.md) · [climbing-no（我方/非PIT）](analysis/2026-06/2026-06-22-current-yes-climbing-no-peak-runway-regate-v1.md) |
 | low_price_yes_reheat_reversal | 需二次升温才命中的低价 YES，升级成 `forecast prior × reheat condition` | `research` / runner ready locally | 这是 reheat-risk 共享底座的反买头，不是独立彩票线；v1 holdout 有凸性但 CI/日期稳健性不过，zero-notional runner 已落地但 fresh observed/reheat feature 生产未接到当前日期，forward shadow blocked；下一步 trend-signal v2 验证 | [1]-[2] reheat_risk · [expression map](analysis/2026-06/2026-06-21-reheat-risk-yes-no-expression-map.md) |
