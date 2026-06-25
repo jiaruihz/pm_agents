@@ -1,0 +1,609 @@
+#!/usr/bin/env python3
+"""Tiny-live runner for regime-routed BUY_NO candidates.
+
+This is the live-facing expression of:
+
+- day_marginal_runway/day_open_runway -> current-bracket NO
+- day_forecast_capped                 -> d2 NO
+
+It intentionally skips soft-sized orders that fall below Polymarket's minimum
+share size instead of rounding them up.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import math
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import pandas as pd
+
+
+OPS = Path(__file__).resolve().parent
+ROOT = OPS.parents[1]
+VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
+if sys.prefix == sys.base_prefix and VENV_PYTHON.exists():
+    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]])
+if str(OPS) not in sys.path:
+    sys.path.insert(0, str(OPS))
+ANALYSIS_DIR = ROOT / "scripts/analysis/reheat_risk"
+if str(ANALYSIS_DIR) not in sys.path:
+    sys.path.insert(0, str(ANALYSIS_DIR))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import research_intraday_weather_regime_atlas_v1 as atlas  # noqa: E402
+import research_regime_routed_no_expression_v1 as research  # noqa: E402
+from research_reheat_feature_factory_v1 import bracket_contains, parse_bracket  # noqa: E402
+from weather_data_feed.source_policy import load_city_configs  # noqa: E402
+
+import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
+
+
+STRATEGY_ID = "regime_routed_no_tiny_live_v1"
+STRATEGY_INSTANCE = "regime_routed_no_soft_balanced_tiny_live_v1"
+RULE_ID = "routed_d2_relaxed70_best_ask_soft_balanced_min5shares_v1"
+RUNTIME_DIR = ROOT / "runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
+PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
+PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
+LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
+SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
+HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
+DEFAULT_SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
+def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def stable_hash(payload: Any, *, length: int = 24) -> str:
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
+
+
+def latest_snapshot_path(snapshot_dir: Path, snapshot_path: str = "") -> Path:
+    if snapshot_path:
+        path = Path(snapshot_path)
+        return path if path.is_absolute() else ROOT / path
+    candidates = sorted(snapshot_dir.glob("snapshot_*.json"))
+    if not candidates:
+        raise FileNotFoundError(f"no paper snapshots under {snapshot_dir}")
+    return candidates[-1]
+
+
+def load_snapshot(path: Path) -> tuple[dict[str, Any], pd.DataFrame]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    records = pd.DataFrame(payload.get("records") or [])
+    if records.empty:
+        return payload, records
+    records["target_date"] = records["target_date"].astype(str)
+    records["city"] = records["city"].astype(str)
+    return payload, records
+
+
+def safe_float(value: Any, default: float = math.nan) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return default
+    return out if math.isfinite(out) else default
+
+
+def native_value(temp_c: float, unit: str) -> float:
+    return temp_c * 9.0 / 5.0 + 32.0 if str(unit).upper() == "F" else temp_c
+
+
+def tail_distance_from_running(bracket_low: float | None, running_native: float, unit: str) -> int | None:
+    if bracket_low is None or float(bracket_low) <= running_native:
+        return None
+    if str(unit).upper() == "F":
+        return int(math.ceil((float(bracket_low) - running_native) / 2.0))
+    return int(round(float(bracket_low) - running_native))
+
+
+def order_spent_today(path: Path, target_date: str) -> float:
+    total = 0.0
+    for row in read_jsonl(path):
+        if row.get("target_date") != target_date:
+            continue
+        status = str(row.get("status") or "")
+        if status not in {"submitted", "simulated_open"}:
+            continue
+        total += safe_float(row.get("notional"), 0.0)
+    return round(total, 6)
+
+
+def market_rows_for_city(sub: pd.DataFrame, *, running_value: int, running_native: float, unit: str) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for _, record in sub.iterrows():
+        bracket = parse_bracket(record.get("bracket"))
+        if bracket is None:
+            continue
+        outcome = str(record.get("outcome") or "").lower()
+        if outcome not in {"yes", "no"}:
+            continue
+        if outcome == "no":
+            ask = safe_float(record.get("no_best_ask"))
+            ask_size = safe_float(record.get("no_ask_size"))
+            bid = safe_float(record.get("no_best_bid"))
+            token_id = str(record.get("no_token_id") or "")
+        else:
+            ask = safe_float(record.get("yes_best_ask"))
+            ask_size = safe_float(record.get("yes_ask_size"))
+            bid = safe_float(record.get("yes_best_bid"))
+            token_id = str(record.get("yes_token_id") or "")
+        if not math.isfinite(ask):
+            continue
+        rows.append(
+            {
+                **record.to_dict(),
+                "outcome": outcome,
+                "bracket_low": bracket.low,
+                "bracket_high": bracket.high,
+                "book_ask": ask,
+                "book_ask_size": ask_size,
+                "book_bid": bid,
+                "book_token_id": token_id,
+                "contains_running": bracket_contains(bracket, running_value),
+                "tail_distance": tail_distance_from_running(bracket.low, running_native, unit) if outcome == "no" else None,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def build_city_state(
+    *,
+    city: str,
+    cfg: Any,
+    sub: pd.DataFrame,
+    obs_source: str,
+    recent_hours: float,
+) -> tuple[dict[str, Any] | None, str]:
+    first = sub.iloc[0]
+    snapshot_ts = pd.to_datetime(str(first.get("snapshot_ts_utc")), utc=True).to_pydatetime()
+    tz = ZoneInfo(cfg.timezone_name)
+    local_ts = snapshot_ts.astimezone(tz)
+    decision_hour = int(local_ts.hour)
+    target_date = str(first.get("target_date"))
+    if decision_hour not in research.DECISION_HOURS:
+        return None, f"outside_decision_hours:{decision_hour}"
+    try:
+        obs = metar.observation_summary(
+            cfg,
+            tz,
+            local_ts.date(),
+            previous_value=None,
+            recent_hours=recent_hours,
+            obs_source=obs_source,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return None, f"obs_error:{type(exc).__name__}:{exc}"
+    if obs.get("status") != "ok":
+        return None, f"obs_not_ok:{obs.get('status')}"
+
+    current_c = safe_float(obs.get("current_temp_c"))
+    running_c = safe_float(obs.get("running_max_c"))
+    if not math.isfinite(current_c) or not math.isfinite(running_c):
+        return None, "obs_missing_temp"
+
+    unit = str(cfg.unit)
+    current_native = native_value(current_c, unit)
+    running_native = native_value(running_c, unit)
+    running_value = metar.market_value(running_c, unit)
+    base = {
+        "city": city,
+        "target_date": target_date,
+        "decision_snapshot_ts_utc": str(first.get("snapshot_ts_utc")),
+        "decision_hour_local": decision_hour,
+        "timezone": cfg.timezone_name,
+        "unit": unit,
+        "icao": cfg.official_icao,
+        "current_temp_c": current_c,
+        "running_max_c": running_c,
+        "current_native": current_native,
+        "running_native": running_native,
+        "decline_native": running_native - current_native,
+        "running_value": running_value,
+        "forecast_source": str(first.get("forecast_source") or ""),
+        "forecast_clock_source": "paper_snapshot_live",
+        "forecast_max_native": safe_float(first.get("forecast_max_native")),
+        "forecast_peak_hour_local": safe_float(first.get("forecast_peak_hour_local")),
+        "relative_humidity_pct": math.nan,
+        "sky_cover_code": math.nan,
+        "dewpoint_depression_f": math.nan,
+        "wind_speed_kt": math.nan,
+        "temp_trend_1h_f": math.nan,
+        "temp_trend_3h_f": math.nan,
+        "minutes_since_running_max": math.nan,
+        "obs_source": obs_source,
+        "obs_last_obs_utc": obs.get("last_obs_utc"),
+        "obs_age_min": obs.get("age_min"),
+        "obs_count_day": obs.get("n_obs"),
+    }
+    labelled = atlas.add_regime_labels(pd.DataFrame([base])).iloc[0].to_dict()
+    books = market_rows_for_city(sub, running_value=running_value, running_native=running_native, unit=unit)
+    if books.empty:
+        return None, "no_book_rows"
+
+    cur_yes = books[books["outcome"].eq("yes") & books["contains_running"]]
+    cur_no = books[books["outcome"].eq("no") & books["contains_running"]]
+    d2_no = books[books["outcome"].eq("no") & books["tail_distance"].eq(2)]
+    if not cur_yes.empty:
+        row = cur_yes.sort_values("book_ask").iloc[0]
+        labelled.update(
+            {
+                "current_bracket": str(row["bracket"]),
+                "current_yes_ask": row["book_ask"],
+                "current_yes_ask_size": row["book_ask_size"],
+            }
+        )
+    if not cur_no.empty:
+        row = cur_no.sort_values("book_ask").iloc[0]
+        labelled.update(
+            {
+                "current_no_ask": row["book_ask"],
+                "current_no_ask_size": row["book_ask_size"],
+                "current_no_bid": row["book_bid"],
+                "current_no_token_id": row["book_token_id"],
+                "current_no_market_id": str(row.get("market_id") or ""),
+                "current_no_event_slug": str(row.get("event_slug") or ""),
+                "current_no_question": str(row.get("question") or ""),
+            }
+        )
+    if not d2_no.empty:
+        row = d2_no.sort_values("book_ask").iloc[0]
+        labelled.update(
+            {
+                "d2_no_bracket": str(row["bracket"]),
+                "d2_no_ask": row["book_ask"],
+                "d2_no_ask_size": row["book_ask_size"],
+                "d2_no_bid": row["book_bid"],
+                "d2_no_token_id": row["book_token_id"],
+                "d2_no_market_id": str(row.get("market_id") or ""),
+                "d2_no_event_slug": str(row.get("event_slug") or ""),
+                "d2_no_question": str(row.get("question") or ""),
+            }
+        )
+
+    regime = str(labelled.get("day_regime") or "")
+    if regime in {"day_open_runway", "day_marginal_runway"} and "current_no_ask" in labelled:
+        labelled.update(
+            {
+                "expression": "current_bracket_no",
+                "route_leg": "runway_current_no",
+                "ask": labelled["current_no_ask"],
+                "ask_size": labelled["current_no_ask_size"],
+                "bid": labelled.get("current_no_bid"),
+                "token_id": labelled["current_no_token_id"],
+                "market_id": labelled["current_no_market_id"],
+                "event_slug": labelled["current_no_event_slug"],
+                "question": labelled["current_no_question"],
+                "bracket": labelled.get("current_bracket"),
+            }
+        )
+        return labelled, "routed"
+    if regime == "day_forecast_capped" and "d2_no_ask" in labelled:
+        labelled.update(
+            {
+                "expression": "d2_no",
+                "route_leg": "capped_d2_no",
+                "ask": labelled["d2_no_ask"],
+                "ask_size": labelled["d2_no_ask_size"],
+                "bid": labelled.get("d2_no_bid"),
+                "token_id": labelled["d2_no_token_id"],
+                "market_id": labelled["d2_no_market_id"],
+                "event_slug": labelled["d2_no_event_slug"],
+                "question": labelled["d2_no_question"],
+                "bracket": labelled.get("d2_no_bracket"),
+            }
+        )
+        return labelled, "routed"
+    return None, f"no_route_or_missing_book:{regime}"
+
+
+def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]]:
+    snapshot_path = latest_snapshot_path(Path(args.snapshot_dir), args.snapshot)
+    payload, records = load_snapshot(snapshot_path)
+    if records.empty:
+        return pd.DataFrame(), {"snapshot": str(snapshot_path), "snapshot_rows": 0}
+    if args.target_date:
+        records = records[records["target_date"].eq(str(args.target_date))].copy()
+    configs = {cfg.city: cfg for cfg in load_city_configs(include_station_diff=bool(args.include_station_diff))}
+    if args.cities:
+        configs = {city: cfg for city, cfg in configs.items() if city in set(args.cities)}
+
+    audits: list[dict[str, Any]] = []
+    routed: list[dict[str, Any]] = []
+    for city, cfg in sorted(configs.items()):
+        sub = records[records["city"].eq(city)].copy()
+        if sub.empty:
+            audits.append({"city": city, "status": "no_snapshot_records"})
+            continue
+        row, status = build_city_state(
+            city=city,
+            cfg=cfg,
+            sub=sub,
+            obs_source=args.obs_source,
+            recent_hours=float(args.recent_hours),
+        )
+        audits.append({"city": city, "status": status})
+        if row is not None:
+            routed.append(row)
+
+    selected = pd.DataFrame(routed)
+    if not selected.empty:
+        selected = research.add_soft_weights(selected)
+        selected["base_notional_usd"] = float(args.base_notional)
+        selected["soft_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(selected["soft_balanced"], errors="coerce")
+        selected["soft_shares"] = selected["soft_notional_usd"] / pd.to_numeric(selected["ask"], errors="coerce")
+        selected["ask_notional"] = pd.to_numeric(selected["ask"], errors="coerce") * pd.to_numeric(selected["ask_size"], errors="coerce")
+        selected["execution_eligible"] = (
+            pd.to_numeric(selected["ask"], errors="coerce").between(research.ASK_MIN, research.ASK_CAPS["relaxed70"])
+            & pd.to_numeric(selected["soft_shares"], errors="coerce").ge(float(args.min_order_shares))
+            & pd.to_numeric(selected["ask_size"], errors="coerce").ge(pd.to_numeric(selected["soft_shares"], errors="coerce"))
+            & selected["token_id"].astype(str).ne("")
+        )
+        selected["execution_skip_reason"] = ""
+        selected.loc[pd.to_numeric(selected["ask"], errors="coerce").lt(research.ASK_MIN), "execution_skip_reason"] = "ask_below_min"
+        selected.loc[pd.to_numeric(selected["ask"], errors="coerce").gt(research.ASK_CAPS["relaxed70"]), "execution_skip_reason"] = "ask_above_max"
+        selected.loc[pd.to_numeric(selected["soft_shares"], errors="coerce").lt(float(args.min_order_shares)), "execution_skip_reason"] = "soft_size_below_min_shares"
+        selected.loc[pd.to_numeric(selected["ask_size"], errors="coerce").lt(pd.to_numeric(selected["soft_shares"], errors="coerce")), "execution_skip_reason"] = "insufficient_top_ask_size"
+        selected.loc[selected["token_id"].astype(str).eq(""), "execution_skip_reason"] = "missing_token_id"
+    meta = {
+        "snapshot": str(snapshot_path.relative_to(ROOT) if snapshot_path.is_relative_to(ROOT) else snapshot_path),
+        "snapshot_ts_utc": payload.get("ts_utc"),
+        "snapshot_rows": int(len(records)),
+        "audit_counts": pd.Series([a["status"].split(":", 1)[0] for a in audits]).value_counts().to_dict() if audits else {},
+        "audits": audits,
+    }
+    return selected, meta
+
+
+def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[str, Any]:
+    ask = safe_float(row.get("ask"))
+    soft_notional = safe_float(row.get("soft_notional_usd"))
+    size = safe_float(row.get("soft_shares"))
+    expires_at = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() + ttl_min * 60.0, tz=timezone.utc)
+    signal_base = {
+        "strategy_id": STRATEGY_ID,
+        "rule_id": RULE_ID,
+        "city": row.get("city"),
+        "target_date": row.get("target_date"),
+        "decision_snapshot_ts_utc": row.get("decision_snapshot_ts_utc"),
+        "expression": row.get("expression"),
+        "bracket": row.get("bracket"),
+        "token_id": row.get("token_id"),
+    }
+    signal_id = "regime-no-" + stable_hash(signal_base)
+    plan_base = {**signal_base, "signal_id": signal_id, "live_enabled": bool(live_enabled)}
+    plan_id = "plan-" + stable_hash(plan_base)
+    return {
+        "record_type": "weather_edge_trade_plan",
+        "plan_id": plan_id,
+        "signal_id": signal_id,
+        "created_at_utc": utc_now_iso(),
+        "status": "accepted",
+        "risk_status": "passed",
+        "strategy": "weather_edge_v1",
+        "strategy_instance": STRATEGY_INSTANCE,
+        "source_strategy_instance": STRATEGY_INSTANCE,
+        "strategy_id": STRATEGY_ID,
+        "strategy_family": "reheat_risk_regime_routed_no",
+        "probability_source": "intraday_weather_regime_atlas_v1_soft_balanced",
+        "decision_mode": "regime_routed_no_soft_balanced",
+        "entry_profile": str(row.get("day_regime") or ""),
+        "execution_mode": "tiny_live_taker_skip_below_min_shares",
+        "profile": "routed_d2_relaxed70_best_ask_soft_balanced",
+        "combo": RULE_ID,
+        "city": str(row.get("city") or ""),
+        "city_pool": "source_policy_live_eligible",
+        "target_date": str(row.get("target_date") or ""),
+        "market_id": str(row.get("market_id") or ""),
+        "event_slug": str(row.get("event_slug") or ""),
+        "market_slug": str(row.get("event_slug") or ""),
+        "question": str(row.get("question") or ""),
+        "bracket": str(row.get("bracket") or ""),
+        "token_id": str(row.get("token_id") or ""),
+        "signal_side": "BUY_NO",
+        "order_side": "BUY",
+        "market_price": round(ask, 6),
+        "best_bid": round(safe_float(row.get("bid"), 0.0), 6),
+        "best_ask": round(ask, 6),
+        "spread": round(max(0.0, ask - safe_float(row.get("bid"), 0.0)), 6),
+        "limit_price": round(ask, 6),
+        "quote_status": "accepted",
+        "quote_reason": "regime_routed_no_top_ask_taker",
+        "quote_edge": 0.0,
+        "required_quote_edge": 0.0,
+        "model_token_probability": 0.0,
+        "quote_best_bid": round(safe_float(row.get("bid"), 0.0), 6),
+        "quote_best_ask": round(ask, 6),
+        "quote_spread": round(max(0.0, ask - safe_float(row.get("bid"), 0.0)), 6),
+        "quote_tick_size": 0.001,
+        "quote_mode": "top_ask_taker_live_probe",
+        "child_order_role": "single",
+        "maker_only": False,
+        "notional_fraction": 1.0,
+        "size_multiplier": round(safe_float(row.get("soft_balanced"), 0.0), 6),
+        "order_notional_cap": round(soft_notional, 6),
+        "entry_price_window": "0.10-0.70",
+        "execution_policy": "regime_routed_no_taker_v1",
+        "tick_size": 0.001,
+        "sizing_mode": "notional",
+        "fixed_order_shares": 0.0,
+        "max_order_shares": round(size, 6),
+        "size": round(size, 6),
+        "notional": round(size * ask, 6),
+        "edge": 0.0,
+        "min_edge": 0.0,
+        "paper_enabled": True,
+        "live_enabled": bool(live_enabled),
+        "shadow_decision": RULE_ID,
+        "shadow_reason": "tiny_live_user_approved_probe_skip_below_min_shares",
+        "model_version": "regime_routed_no_expression_v1",
+        "obs_source": str(row.get("obs_source") or ""),
+        "expires_at_utc": expires_at.isoformat(timespec="seconds"),
+        "order_ttl_min": round(float(ttl_min), 6),
+        "expiry_policy": "fixed_tiny_live_probe_ttl",
+        "day_regime": str(row.get("day_regime") or ""),
+        "intraday_state": str(row.get("intraday_state") or ""),
+        "moisture_cloud_regime": str(row.get("moisture_cloud_regime") or ""),
+        "wind_regime": str(row.get("wind_regime") or ""),
+        "running_max_state": str(row.get("running_max_state") or ""),
+        "soft_balanced_multiplier": round(safe_float(row.get("soft_balanced"), 0.0), 6),
+        "base_notional_usd": round(safe_float(row.get("base_notional_usd"), 0.0), 6),
+        "soft_notional_usd": round(soft_notional, 6),
+        "soft_shares": round(size, 6),
+        "forecast_source": str(row.get("forecast_source") or ""),
+        "forecast_max_native": safe_float(row.get("forecast_max_native"), None),
+        "forecast_peak_hour_local": safe_float(row.get("forecast_peak_hour_local"), None),
+        "running_native": safe_float(row.get("running_native"), None),
+        "current_native": safe_float(row.get("current_native"), None),
+    }
+
+
+def write_plans(candidates: pd.DataFrame, args: argparse.Namespace) -> list[dict[str, Any]]:
+    live_enabled = bool(args.live and args.confirm_live)
+    if candidates.empty or "execution_eligible" not in candidates.columns:
+        eligible = pd.DataFrame()
+    else:
+        eligible = candidates[candidates["execution_eligible"].astype(bool)].copy()
+    spent = order_spent_today(LIVE_OUT, str(args.target_date or ""))
+    plans: list[dict[str, Any]] = []
+    running_spent = spent
+    if eligible.empty:
+        PLAN_OUT.parent.mkdir(parents=True, exist_ok=True)
+        PLAN_OUT.write_text("", encoding="utf-8")
+        return plans
+    for _, row in eligible.sort_values(["target_date", "decision_snapshot_ts_utc", "city"]).iterrows():
+        cost = safe_float(row.get("soft_notional_usd"), 0.0)
+        if running_spent + cost > float(args.daily_gross_cap) + 1e-9:
+            continue
+        plans.append(build_plan(row, live_enabled=live_enabled, ttl_min=float(args.order_ttl_min)))
+        running_spent += cost
+        if len(plans) >= int(args.max_orders):
+            break
+    PLAN_OUT.parent.mkdir(parents=True, exist_ok=True)
+    PLAN_OUT.write_text("\n".join(json.dumps(p, ensure_ascii=False, sort_keys=True) for p in plans) + ("\n" if plans else ""), encoding="utf-8")
+    return plans
+
+
+def run_executor(args: argparse.Namespace) -> dict[str, Any] | None:
+    if not args.live:
+        return None
+    if not args.confirm_live:
+        raise RuntimeError("--live requires --confirm-live")
+    cmd = [
+        sys.executable,
+        "scripts/ops/weather_order_executor.py",
+        "--plans",
+        str(PLAN_OUT),
+        "--paper-out",
+        str(PAPER_OUT),
+        "--live-out",
+        str(LIVE_OUT),
+        "--live",
+        "--confirm-live",
+        "--allow-taker",
+        "--cancel-expired",
+        "--no-telegram",
+    ]
+    proc = subprocess.run(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
+    parsed = None
+    try:
+        start = proc.stdout.find("{")
+        end = proc.stdout.rfind("}")
+        parsed = json.loads(proc.stdout[start : end + 1]) if start >= 0 and end > start else None
+    except Exception:
+        parsed = None
+    return {"cmd": cmd, "returncode": proc.returncode, "output_tail": proc.stdout[-8000:], "parsed": parsed}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--snapshot-dir", default=str(DEFAULT_SNAPSHOT_DIR))
+    parser.add_argument("--snapshot", default="")
+    parser.add_argument("--target-date", default="")
+    parser.add_argument("--cities", nargs="*", default=[])
+    parser.add_argument("--include-station-diff", action="store_true")
+    parser.add_argument("--obs-source", choices=["aviationweather_metar", "synopticdata_timeseries", "noaa_tgftp_station_txt"], default="aviationweather_metar")
+    parser.add_argument("--recent-hours", type=float, default=30.0)
+    parser.add_argument("--base-notional", type=float, default=5.0)
+    parser.add_argument("--daily-gross-cap", type=float, default=15.0)
+    parser.add_argument("--min-order-shares", type=float, default=5.0)
+    parser.add_argument("--max-orders", type=int, default=3)
+    parser.add_argument("--order-ttl-min", type=float, default=30.0)
+    parser.add_argument("--live", action="store_true")
+    parser.add_argument("--confirm-live", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    candidates, meta = build_candidates(args)
+    plans = write_plans(candidates, args)
+    executor_result = run_executor(args)
+    summary = {
+        "generated_at_utc": utc_now_iso(),
+        "strategy_id": STRATEGY_ID,
+        "strategy_instance": STRATEGY_INSTANCE,
+        "rule_id": RULE_ID,
+        "live_requested": bool(args.live),
+        "live_enabled": bool(args.live and args.confirm_live),
+        "no_order_placed": not bool(args.live and args.confirm_live and plans),
+        "base_notional": float(args.base_notional),
+        "daily_gross_cap": float(args.daily_gross_cap),
+        "min_order_shares": float(args.min_order_shares),
+        "routed_candidates": int(len(candidates)),
+        "execution_eligible": int(candidates["execution_eligible"].sum()) if not candidates.empty else 0,
+        "plans_written": len(plans),
+        "candidate_by_regime": candidates["day_regime"].value_counts(dropna=False).to_dict() if not candidates.empty else {},
+        "skip_reasons": candidates["execution_skip_reason"].value_counts(dropna=False).to_dict() if not candidates.empty else {},
+        "plans_path": str(PLAN_OUT.relative_to(ROOT)),
+        "paper_out": str(PAPER_OUT.relative_to(ROOT)),
+        "live_out": str(LIVE_OUT.relative_to(ROOT)),
+        "meta": meta,
+        "executor_result": executor_result,
+    }
+    write_json(SUMMARY_OUT, summary)
+    append_jsonl(HISTORY_OUT, summary)
+    print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    os.chdir(ROOT)
+    raise SystemExit(main())
