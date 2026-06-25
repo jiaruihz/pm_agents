@@ -1223,6 +1223,56 @@ def test_forecast_peak_clock_veto_blocks_morning_peak_for_both_profiles():
     )
 
 
+def test_current_yes_profile_blocks_outside_configured_local_hours():
+    args = argparse.Namespace(
+        min_available_notional=5.0,
+        enable_peak_forming_live=True,
+        peak_forming_max_decline_c=0.25,
+        peak_forming_min_ask=0.50,
+        peak_forming_max_ask=0.97,
+        peak_forming_min_p=0.60,
+        peak_forming_min_edge=0.02,
+        entry_profile_mode="both",
+        disable_peak_forming_metar_veto=False,
+        peak_forming_min_minutes_since_running_max=10.0,
+        peak_forming_max_minutes_after_expected_obs=0.0,
+        min_forecast_peak_hour_local=12.0,
+        disable_forecast_peak_clock_veto=False,
+        fade_confirmed_min_decline_c=0.5,
+        fade_confirmed_min_ask=0.55,
+        fade_confirmed_min_p=0.64,
+        fade_confirmed_min_edge=0.03,
+        min_local_hour=13,
+        max_local_hour=17,
+    )
+    base = {
+        "yes_current_ask": 0.71,
+        "p_yes_win": 0.81,
+        "ev": 0.10,
+        "token_id": "yes-token",
+        "forecast_peak_hour_local": 15,
+        "minutes_since_running_max": 69.2,
+        "obs": {"minutes_to_next_obs": 49.6},
+    }
+
+    assert live.classify_entry_profile({**base, "decline_c": 1.0, "decision_hour_local": 10}, args) == (
+        "snapshot_rule_before_min_local_hour",
+        "",
+    )
+    assert live.classify_entry_profile({**base, "decline_c": 1.0, "decision_hour_local": 11}, args) == (
+        "snapshot_rule_before_min_local_hour",
+        "",
+    )
+    assert live.classify_entry_profile({**base, "decline_c": 1.0, "decision_hour_local": 18}, args) == (
+        "snapshot_rule_after_max_local_hour",
+        "",
+    )
+    assert live.classify_entry_profile({**base, "decline_c": 1.0, "decision_hour_local": 13}, args) == (
+        "snapshot_rule_passed",
+        "fade_confirmed",
+    )
+
+
 def test_llm_preflight_payload_includes_curve_weather_and_market_context():
     row = {
         "city": "Wuhan",

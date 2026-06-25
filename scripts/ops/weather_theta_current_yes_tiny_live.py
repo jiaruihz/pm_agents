@@ -2293,6 +2293,19 @@ def forecast_peak_clock_veto_reason(row: dict[str, Any], args: argparse.Namespac
     return ""
 
 
+def local_hour_veto_reason(row: dict[str, Any], args: argparse.Namespace) -> str:
+    hour = to_float(row.get("decision_hour_local"), np.nan)
+    if not math.isfinite(hour):
+        return ""
+    min_hour = float(getattr(args, "min_local_hour", DEFAULT_FADE_GATE.min_local_hour))
+    max_hour = float(getattr(args, "max_local_hour", DEFAULT_FADE_GATE.max_local_hour))
+    if hour < min_hour:
+        return "snapshot_rule_before_min_local_hour"
+    if hour > max_hour:
+        return "snapshot_rule_after_max_local_hour"
+    return ""
+
+
 def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tuple[str, str]:
     fade_gate = fade_gate_spec_from_args(args)
     decline = to_float(row.get("decline_c"), 0.0)
@@ -2301,6 +2314,9 @@ def classify_entry_profile(row: dict[str, Any], args: argparse.Namespace) -> tup
     edge = to_float(row.get("ev"), -999.0)
     if not safe_str(row.get("token_id")):
         return "snapshot_rule_missing_token", ""
+    local_hour_veto = local_hour_veto_reason(row, args)
+    if local_hour_veto:
+        return local_hour_veto, ""
     peak_clock_veto = forecast_peak_clock_veto_reason(row, args)
     if peak_clock_veto:
         return peak_clock_veto, ""
