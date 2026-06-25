@@ -1,6 +1,6 @@
 # Range RV Timing Stability v2
 
-> generated_at_utc: `2026-06-25T13:54:21.816060+00:00`
+> generated_at_utc: `2026-06-25T15:04:52.683223+00:00`
 > target_metric: `forecast_bounded_range_rv_timing_stability_v2`
 > strategy_id: `forecast_bounded_w3_cheaper_default_wu_edge002_shadow_v0`
 
@@ -8,22 +8,22 @@
 
 - Evidence layer: N100 zero-notional Range RV shadow journal plus `pm_history` settlement truth.
 - This is not live PnL. Every journal row is shadow-only and must keep `no_order_placed=true`.
-- journal_rows: `7041`; selected policy rows: `4912`.
-- snapshot range: `2026-06-14T17:00:20Z` -> `2026-06-25T12:30:37Z`.
+- journal_rows: `7076`; selected policy rows: `4931`.
+- snapshot range: `2026-06-14T17:00:20Z` -> `2026-06-25T14:00:28Z`.
 - event_dates: `2026-06-14, 2026-06-15, 2026-06-16, 2026-06-17, 2026-06-18, 2026-06-19, 2026-06-20, 2026-06-21, 2026-06-22, 2026-06-23, 2026-06-24, 2026-06-25, 2026-06-26`.
-- all_no_order_placed: `True`; source_buckets: `{"default_wu": 7041}`.
+- all_no_order_placed: `True`; source_buckets: `{"default_wu": 7076}`.
 
 ### Mandatory SQL Self-Check
 
 ```json
 {
   "candidate_coverage": {
-    "eligible": 13596,
+    "eligible": 13695,
     "live_filled": 348,
-    "paper_ordered": 5374,
-    "rows": 37655
+    "paper_ordered": 5437,
+    "rows": 37968
   },
-  "max_fact_built_at_utc": "2026-06-25T05:08:16.112570+00:00",
+  "max_fact_built_at_utc": "2026-06-25T15:03:53.788038+00:00",
   "order_fill_coverage": [
     {
       "orders": 33,
