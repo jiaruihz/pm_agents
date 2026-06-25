@@ -222,6 +222,57 @@ def finite_float(value: Any) -> float | None:
     return out if math.isfinite(out) else None
 
 
+def forecast_state_key(row: dict[str, Any]) -> str:
+    value_hash = row.get("forecast_values_hash")
+    if value_hash:
+        return f"hash:{value_hash}"
+    return "|".join(
+        [
+            f"init:{row.get('model_init_utc_estimated')}",
+            f"max:{row.get('forecast_max_f')}",
+            f"peak:{row.get('forecast_peak_time_utc')}",
+        ]
+    )
+
+
+def existing_forecast_state_first_seen(path: Path) -> dict[tuple[str, str, str, str, str], str]:
+    first_seen: dict[tuple[str, str, str, str, str], str] = {}
+    if not path.exists():
+        return first_seen
+    with path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            state = row.get("forecast_state_key")
+            if not state:
+                continue
+            key = (
+                str(row.get("city")),
+                str(row.get("event_date")),
+                str(row.get("forecast_source") or ""),
+                str(row.get("model_version") or ""),
+                str(state),
+            )
+            ts = str(row.get("forecast_state_first_seen_utc") or row.get("snapshot_ts_utc") or row.get("decision_snapshot_ts_utc") or "")
+            if ts and (key not in first_seen or ts < first_seen[key]):
+                first_seen[key] = ts
+    return first_seen
+
+
+def minutes_between(later: str, earlier: str) -> float | None:
+    try:
+        later_dt = datetime.fromisoformat(later.replace("Z", "+00:00"))
+        earlier_dt = datetime.fromisoformat(earlier.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (later_dt - earlier_dt).total_seconds() / 60.0
+
+
 def leg_price(row: dict[str, Any], side: str) -> float | None:
     return finite_float(row.get("yes_best_ask" if side == "BUY_YES" else "no_best_ask"))
 
@@ -252,9 +303,11 @@ def make_candidate(
     min_top_ask_size: float,
     snapshot_ts_utc: str,
     snapshot_path: Path,
+    forecast_first_seen: dict[tuple[str, str, str, str, str], str],
 ) -> dict[str, Any] | None:
     city, event_date, forecast_source, model_version, decision_snapshot_ts_utc = group_key
     items = sorted(rows, key=lambda r: bracket_key(r.get("bracket")))
+    base = items[0]
     probs = [finite_float(row.get("model_prob")) for row in items]
     if any(value is None for value in probs):
         return None
@@ -338,6 +391,12 @@ def make_candidate(
     if min_ask_size is None or min_ask_size < min_top_ask_size:
         reject_reasons.append("top_ask_size_below_min")
 
+    state_key = forecast_state_key(base)
+    state_lookup_key = (city, event_date, forecast_source, model_version, state_key)
+    first_seen_utc = forecast_first_seen.get(state_lookup_key, decision_snapshot_ts_utc)
+    state_age_minutes = minutes_between(decision_snapshot_ts_utc, first_seen_utc)
+    state_seen_before = state_lookup_key in forecast_first_seen
+
     stem = "|".join(
         [
             STRATEGY_ID,
@@ -368,10 +427,30 @@ def make_candidate(
         "model_version": model_version,
         "decision_snapshot_ts_utc": decision_snapshot_ts_utc,
         "city_pool": rows[0].get("city_pool"),
+        "city_local_date_at_snapshot": base.get("city_local_date_at_snapshot"),
+        "ts_local": base.get("ts_local"),
+        "timezone_name": base.get("timezone_name"),
         "source_bucket": source_meta["source_bucket"],
         "settlement_source_class": source_meta["settlement_source_class"],
         "official_station_or_feed": source_meta.get("official_station_or_feed"),
         "mapping_rule": source_meta.get("mapping_rule"),
+        "model_init_utc_estimated": base.get("model_init_utc_estimated"),
+        "model_run_age_hours_estimated": finite_float(base.get("model_run_age_hours_estimated")),
+        "forecast_target_lead_hours_estimated": finite_float(base.get("forecast_target_lead_hours_estimated")),
+        "forecast_values_hash": base.get("forecast_values_hash"),
+        "forecast_state_key": state_key,
+        "forecast_state_seen_before": state_seen_before,
+        "forecast_state_changed": not state_seen_before,
+        "forecast_state_first_seen_utc": first_seen_utc,
+        "forecast_state_age_minutes": state_age_minutes,
+        "forecast_max_f": finite_float(base.get("forecast_max_f")),
+        "forecast_max_native": finite_float(base.get("forecast_max_native")),
+        "forecast_peak_hour_local": finite_float(base.get("forecast_peak_hour_local")),
+        "forecast_peak_time_local": base.get("forecast_peak_time_local"),
+        "forecast_peak_time_utc": base.get("forecast_peak_time_utc"),
+        "metar_current_max_f": finite_float(base.get("metar_current_max_f")),
+        "metar_latest_temp_f": finite_float(base.get("metar_latest_temp_f")),
+        "metar_latest_ts_utc": base.get("metar_latest_ts_utc"),
         "algorithm": "forecast_bounded_w3_cheaper",
         "row_filter": "default_wu/no_filter",
         "expression": expression,
@@ -474,6 +553,9 @@ def main() -> int:
         key = (city, event_date, forecast_source, model_version, decision_snapshot_ts_utc)
         groups.setdefault(key, []).append(row)
 
+    journal_path = Path(args.journal)
+    forecast_first_seen = existing_forecast_state_first_seen(journal_path)
+
     candidates: list[dict[str, Any]] = []
     for key, rows in groups.items():
         city = key[0]
@@ -485,6 +567,7 @@ def main() -> int:
             min_top_ask_size=args.min_top_ask_size,
             snapshot_ts_utc=snapshot_ts_utc,
             snapshot_path=snapshot_path,
+            forecast_first_seen=forecast_first_seen,
         )
         if candidate is not None:
             candidates.append(candidate)
@@ -495,10 +578,10 @@ def main() -> int:
     if args.max_candidates > 0:
         write_rows = write_rows[: args.max_candidates]
 
-    journal_path = Path(args.journal)
     seen = existing_candidate_ids(journal_path)
     new_rows = [row for row in write_rows if str(row["candidate_id"]) not in seen]
     append_jsonl(journal_path, new_rows)
+    new_forecast_states = sum(1 for row in new_rows if row.get("forecast_state_changed") is True)
 
     summary = {
         "record_type": "range_rv_shadow_summary",
@@ -516,6 +599,7 @@ def main() -> int:
         "evaluated_candidates": len(candidates),
         "selected_candidates": len(selected),
         "journal_appended_rows": len(new_rows),
+        "journal_appended_new_forecast_states": new_forecast_states,
         "journal_path": str(journal_path),
         "skipped_pool_records": skipped_pool,
         "skipped_source_records": skipped_source,
