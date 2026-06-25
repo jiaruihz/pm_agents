@@ -19,7 +19,7 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -193,6 +193,7 @@ def update_report_minute_state(state: dict[str, Any], city: str, obs_last_obs_ut
     if minute is None:
         return
     state.setdefault("last_report_minute_by_city", {})[city] = round(minute, 3)
+    state.setdefault("last_report_ts_by_city", {})[city] = obs_last_obs_utc
 
 
 def circular_minute_distance(a: float, b: float) -> float:
@@ -209,6 +210,64 @@ def in_learned_update_window(now_utc: datetime, state: dict[str, Any], *, window
         except (TypeError, ValueError):
             continue
     return False
+
+
+def parse_report_minutes(raw: str) -> list[float]:
+    out = []
+    for item in str(raw or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        value = float(item)
+        if value < 0 or value >= 60:
+            raise ValueError(f"report minute out of range: {item}")
+        out.append(value)
+    return out
+
+
+def minute_after_target(now_minute: float, target_minute: float) -> float:
+    return (now_minute - target_minute) % 60.0
+
+
+def minute_in_pre_chase_window(now_minute: float, target_minute: float, *, pre_window_min: float, chase_window_min: float) -> bool:
+    after = minute_after_target(now_minute, target_minute)
+    return after <= chase_window_min or after >= 60.0 - pre_window_min
+
+
+def city_report_minutes(state: dict[str, Any], city: str, fallback_report_minutes: list[float]) -> list[float]:
+    raw = (state.get("last_report_minute_by_city") or {}).get(city)
+    if raw is None:
+        return fallback_report_minutes
+    try:
+        return [float(raw)]
+    except (TypeError, ValueError):
+        return fallback_report_minutes
+
+
+def in_city_update_window(
+    now_utc: datetime,
+    state: dict[str, Any],
+    city: str,
+    *,
+    fallback_report_minutes: list[float],
+    pre_window_min: float,
+    chase_window_min: float,
+) -> bool:
+    now_minute = now_utc.minute + now_utc.second / 60.0
+    for target in city_report_minutes(state, city, fallback_report_minutes):
+        if minute_in_pre_chase_window(
+            now_minute,
+            target,
+            pre_window_min=pre_window_min,
+            chase_window_min=chase_window_min,
+        ):
+            return True
+    return False
+
+
+def last_report_ts_for_city(state: dict[str, Any], city: str) -> str | None:
+    value = (state.get("last_report_ts_by_city") or {}).get(city)
+    return None if value is None else str(value)
 
 
 class RuntimeCache:
@@ -984,6 +1043,10 @@ def main() -> int:
     parser.add_argument("--base-interval-sec", type=float, default=20.0)
     parser.add_argument("--burst-interval-sec", type=float, default=2.0)
     parser.add_argument("--burst-window-min", type=float, default=10.0)
+    parser.add_argument("--scheduler-mode", choices=["batch", "per_city"], default=os.environ.get("METAR_CROSS_SCHEDULER_MODE", "batch"))
+    parser.add_argument("--city-hot-pre-window-min", type=float, default=float(os.environ.get("METAR_CROSS_CITY_HOT_PRE_WINDOW_MIN", "1.0")))
+    parser.add_argument("--city-hot-chase-window-min", type=float, default=float(os.environ.get("METAR_CROSS_CITY_HOT_CHASE_WINDOW_MIN", "10.0")))
+    parser.add_argument("--fallback-report-minutes", default=os.environ.get("METAR_CROSS_FALLBACK_REPORT_MINUTES", "0,30,53"))
     parser.add_argument("--learned-burst-window-min", type=float, default=float(os.environ.get("METAR_CROSS_LEARNED_BURST_WINDOW_MIN", "6.0")))
     parser.add_argument("--market-cache-ttl-sec", type=float, default=float(os.environ.get("METAR_CROSS_MARKET_CACHE_TTL_SEC", "1800")))
     parser.add_argument("--prebuild-live-client", action=argparse.BooleanOptionalAction, default=os.environ.get("METAR_CROSS_PREBUILD_LIVE_CLIENT", "1") != "0")
@@ -1003,6 +1066,7 @@ def main() -> int:
     if not configs:
         raise SystemExit("no eligible city configs")
     source_by_city = load_source_by_city(json_text=args.source_by_city_json, file_path=args.source_by_city_file)
+    fallback_report_minutes = parse_report_minutes(args.fallback_report_minutes)
     runtime_cache = RuntimeCache(market_ttl_sec=args.market_cache_ttl_sec)
     if args.live and args.confirm_live and not args.dry_run and args.prebuild_live_client:
         runtime_cache.live_place_fn = build_live_fok_place_fn()
@@ -1025,6 +1089,10 @@ def main() -> int:
                 "base_interval_sec": args.base_interval_sec,
                 "burst_interval_sec": args.burst_interval_sec,
                 "burst_window_min": args.burst_window_min,
+                "scheduler_mode": args.scheduler_mode,
+                "city_hot_pre_window_min": args.city_hot_pre_window_min,
+                "city_hot_chase_window_min": args.city_hot_chase_window_min,
+                "fallback_report_minutes": fallback_report_minutes,
                 "learned_burst_window_min": args.learned_burst_window_min,
                 "market_cache_ttl_sec": args.market_cache_ttl_sec,
                 "prebuild_live_client": args.prebuild_live_client,
@@ -1040,6 +1108,63 @@ def main() -> int:
             sort_keys=True,
         )
     )
+    if args.scheduler_mode == "per_city":
+        next_due_by_city = {cfg.city: datetime.now(timezone.utc) for cfg in configs}
+        by_city = {cfg.city: cfg for cfg in configs}
+        while True:
+            loop_now = datetime.now(timezone.utc)
+            due_configs = [by_city[city] for city, due_at in next_due_by_city.items() if loop_now >= due_at]
+            if not due_configs:
+                sleep_until = min(next_due_by_city.values())
+                time.sleep(max(0.1, min(1.0, (sleep_until - loop_now).total_seconds())))
+                continue
+            state_before = load_state()
+            before_report_ts = {cfg.city: last_report_ts_for_city(state_before, cfg.city) for cfg in due_configs}
+            counts = cycle_once(
+                due_configs,
+                max_ask=args.max_ask,
+                dry_run=args.dry_run,
+                recent_hours=args.recent_hours,
+                obs_source=args.obs_source,
+                source_by_city=source_by_city,
+                live=args.live,
+                confirm_live=args.confirm_live,
+                max_notional_per_trade=args.max_notional_per_trade,
+                max_notional_per_city_day=args.max_notional_per_city_day,
+                max_notional_total_day=args.max_notional_total_day,
+                max_workers=args.max_workers,
+                runtime_cache=runtime_cache,
+            )
+            schedule_now = datetime.now(timezone.utc)
+            state_after = load_state()
+            for cfg in due_configs:
+                after_report_ts = last_report_ts_for_city(state_after, cfg.city)
+                report_changed = after_report_ts is not None and after_report_ts != before_report_ts.get(cfg.city)
+                hot = in_city_update_window(
+                    schedule_now,
+                    state_after,
+                    cfg.city,
+                    fallback_report_minutes=fallback_report_minutes,
+                    pre_window_min=args.city_hot_pre_window_min,
+                    chase_window_min=args.city_hot_chase_window_min,
+                )
+                interval = args.base_interval_sec if report_changed or not hot else args.burst_interval_sec
+                next_due_by_city[cfg.city] = schedule_now + timedelta(seconds=interval)
+            print(
+                json.dumps(
+                    {
+                        "ts_utc": schedule_now.isoformat(),
+                        "scheduler_mode": "per_city",
+                        "scheduled_cities": [cfg.city for cfg in due_configs],
+                        "next_due_min_utc": min(next_due_by_city.values()).isoformat(),
+                        **counts,
+                    },
+                    sort_keys=True,
+                )
+            )
+            if args.command == "cycle":
+                return 0
+
     while True:
         counts = cycle_once(
             configs,

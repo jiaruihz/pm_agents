@@ -5,12 +5,14 @@ from scripts.ops.weather_metar_cross_prev_no_shadow import (
     circular_minute_distance,
     crossed_prev_no_brackets,
     in_learned_update_window,
+    in_city_update_window,
     in_update_window,
     load_source_by_city,
     load_city_configs,
     noaa_tgftp_station_txt_latest,
     parsed_label_is_dead_for_running_value,
     parsed_label_matches_no_target,
+    parse_report_minutes,
     plan_buy_amount,
     source_for_city,
     update_report_minute_state,
@@ -78,6 +80,48 @@ def test_source_by_city_overrides_default_source():
     source_by_city = load_source_by_city(json_text='{"Busan":"synopticdata_timeseries"}')
     assert source_for_city(cfg, "noaa_tgftp_station_txt", source_by_city) == "synopticdata_timeseries"
     assert source_for_city(cfg, "noaa_tgftp_station_txt", {}) == "noaa_tgftp_station_txt"
+
+
+def test_city_update_window_uses_learned_minute_with_pre_and_chase():
+    state = {}
+    update_report_minute_state(state, "Busan", "2026-06-24T23:00:00+00:00")
+    fallback = parse_report_minutes("30,53")
+
+    assert in_city_update_window(
+        datetime(2026, 6, 25, 1, 59, 30, tzinfo=timezone.utc),
+        state,
+        "Busan",
+        fallback_report_minutes=fallback,
+        pre_window_min=1,
+        chase_window_min=10,
+    )
+    assert in_city_update_window(
+        datetime(2026, 6, 25, 2, 4, 30, tzinfo=timezone.utc),
+        state,
+        "Busan",
+        fallback_report_minutes=fallback,
+        pre_window_min=1,
+        chase_window_min=10,
+    )
+    assert not in_city_update_window(
+        datetime(2026, 6, 25, 2, 12, 0, tzinfo=timezone.utc),
+        state,
+        "Busan",
+        fallback_report_minutes=fallback,
+        pre_window_min=1,
+        chase_window_min=10,
+    )
+
+
+def test_city_update_window_falls_back_before_learning():
+    assert in_city_update_window(
+        datetime(2026, 6, 25, 1, 52, 30, tzinfo=timezone.utc),
+        {},
+        "Unknown",
+        fallback_report_minutes=parse_report_minutes("0,30,53"),
+        pre_window_min=1,
+        chase_window_min=10,
+    )
 
 
 def test_plan_buy_amount_uses_cent_notional_and_five_decimal_size():
