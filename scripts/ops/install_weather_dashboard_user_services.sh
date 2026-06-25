@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SYSTEMD_DIR="${HOME}/.config/systemd/user"
 LOG_DIR="${ROOT}/runtime/_dashboard_logs"
-API_PORT="${WEATHER_DASHBOARD_API_PORT:-8000}"
+API_PORT="${WEATHER_DASHBOARD_API_PORT:-18080}"
 
 mkdir -p "${SYSTEMD_DIR}" "${LOG_DIR}"
 
