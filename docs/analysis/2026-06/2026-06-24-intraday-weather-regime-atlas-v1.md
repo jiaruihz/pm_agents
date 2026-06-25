@@ -3,10 +3,10 @@
 ## 数据快照
 
 - 数据源：`runtime/weather.db` + atlas feature-factory 分片；CLOB coverage gate=`True`。
-- 生成时间 UTC：`2026-06-24T12:39:26+00:00`。
-- feature rows：`118759`；state rows(city/date/hour)：`11737`；日期：`2026-05-19`..`2026-06-23`。
+- 生成时间 UTC：`2026-06-25T04:53:49+00:00`。
+- feature rows：`121129`；state rows(city/date/hour)：`11980`；日期：`2026-05-19`..`2026-06-24`。
 - 覆盖城市：`36`；小时：`[10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]`。
-- fact 自检：`fact_signal_candidates` 37054 rows / max event_date `2026-06-26`；`settlement_outcomes` max target_date `2026-06-23`。
+- fact 自检：`fact_signal_candidates` 37655 rows / max event_date `2026-06-26`；`settlement_outcomes` max target_date `2026-06-23`。
 
 ## 结论
 
@@ -18,26 +18,26 @@
 
 | day_regime | states | reheat_step | capped_day | avg_remaining | current_yes_roi | current_bracket_no_roi | d1_no_roi | lottery_yes_roi |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `day_open_runway` | 3353 | 74.6% | 23.0% | 3.21 | -4.7% | -2.8% | 0.2% | -22.4% |
-| `day_forecast_busted` | 3126 | 12.8% | 83.6% | 0.17 | 0.7% | -25.5% | -0.7% | -42.6% |
-| `day_forecast_capped` | 2677 | 25.5% | 73.1% | 0.39 | -0.6% | -15.6% | -2.4% | -52.4% |
-| `day_marginal_runway` | 2055 | 50.6% | 48.9% | 1.04 | -8.6% | 0.7% | -5.3% | -36.0% |
-| `day_space_unknown` | 526 | 42.0% | 54.4% | 1.53 | -4.0% | -2.3% | -3.2% | 2.7% |
+| `day_open_runway` | 3396 | 75.0% | 22.7% | 3.21 | -4.7% | -2.8% | 0.2% | -22.4% |
+| `day_forecast_busted` | 3146 | 12.8% | 83.1% | 0.16 | 0.7% | -25.5% | -0.7% | -42.6% |
+| `day_forecast_capped` | 2734 | 25.3% | 71.6% | 0.39 | -0.6% | -15.6% | -2.4% | -52.4% |
+| `day_marginal_runway` | 2077 | 50.6% | 48.4% | 1.04 | -8.6% | 0.7% | -5.3% | -36.0% |
+| `day_space_unknown` | 627 | 42.7% | 45.6% | 1.53 | -4.0% | -2.3% | -3.2% | 2.7% |
 
 ## Top Intraday States
 
 | intraday_state | states | reheat_step | capped_day | avg_remaining | current_yes_roi | current_bracket_no_roi | d1_no_roi |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `active_warming` | 4143 | 77.9% | 24.5% | 2.75 | -7.7% | -3.2% | -1.0% |
-| `mature_fade` | 2988 | 2.6% | 87.5% | 0.07 | 0.5% | -36.1% | 0.3% |
-| `fresh_high` | 1671 | 43.6% | 57.6% | 1.04 | -0.9% | -12.5% | -3.8% |
-| `pullback_uncertain` | 1111 | 4.7% | 92.0% | 0.09 | -0.0% | -29.6% | -0.1% |
+| `active_warming` | 4230 | 78.0% | 24.0% | 2.75 | -7.7% | -3.2% | -1.0% |
+| `mature_fade` | 3018 | 2.6% | 86.6% | 0.07 | 0.5% | -36.1% | 0.3% |
+| `fresh_high` | 1720 | 43.8% | 56.0% | 1.04 | -0.9% | -12.5% | -3.8% |
+| `pullback_uncertain` | 1149 | 4.7% | 88.9% | 0.09 | -0.0% | -29.6% | -0.1% |
 | `plateau_near_high` | 771 | 46.0% | 51.6% | 0.76 | -5.7% | -6.7% | -5.4% |
-| `false_fade_risk` | 585 | 54.7% | 44.6% | 1.80 | -2.6% | -8.1% | -4.9% |
-| `reheating_after_dip` | 321 | 15.3% | 79.1% | 0.32 | -4.2% | 2.6% | -6.0% |
-| `slow_warming` | 99 | 29.3% | 70.7% | 0.43 | -4.1% | -7.9% | -1.5% |
-| `flat_or_cooling` | 36 | 11.1% | 88.9% | 0.17 | -2.7% | -22.8% | 1.9% |
-| `state_unknown` | 12 | 16.7% | 25.0% | 1.42 | -21.2% | 44.9% | 2.9% |
+| `false_fade_risk` | 600 | 54.7% | 43.5% | 1.79 | -2.6% | -8.1% | -4.9% |
+| `reheating_after_dip` | 326 | 15.3% | 77.9% | 0.32 | -4.2% | 2.6% | -6.0% |
+| `slow_warming` | 112 | 30.4% | 62.5% | 0.45 | -4.1% | -7.9% | -1.5% |
+| `flat_or_cooling` | 40 | 12.5% | 80.0% | 0.18 | -2.7% | -22.8% | 1.9% |
+| `state_unknown` | 14 | 14.3% | 21.4% | 1.21 | -21.2% | 44.9% | 2.9% |
 
 ## Expression Matrix By Day Regime
 

@@ -93,8 +93,14 @@ STATE_VALUE_COLS = [
     "current_yes_ask",
     "d1_no_bracket",
     "d1_no_ask",
+    "d1_no_ask_size",
+    "d1_no_bid",
+    "d1_no_spread",
     "d2_no_bracket",
     "d2_no_ask",
+    "d2_no_ask_size",
+    "d2_no_bid",
+    "d2_no_spread",
     "current_bracket_held",
     "d1_hit",
     "d2_hit",
@@ -261,12 +267,8 @@ def final_native(row: pd.Series) -> float:
     return float(row["final_max_f"]) if str(row.get("unit", "")).upper() == "F" else float(row["final_max_c"])
 
 
-def add_realized_context(states: pd.DataFrame) -> pd.DataFrame:
+def add_pit_context(states: pd.DataFrame) -> pd.DataFrame:
     out = states.copy()
-    out["final_max_native"] = out.apply(lambda r: final_native(r) if pd.notna(r.get("final_max_f")) else np.nan, axis=1)
-    out["remaining_heat_native"] = pd.to_numeric(out["final_max_native"], errors="coerce") - pd.to_numeric(
-        out["running_native"], errors="coerce"
-    )
     out["forecast_gap_to_running_native"] = pd.to_numeric(out["forecast_max_native"], errors="coerce") - pd.to_numeric(
         out["running_native"], errors="coerce"
     )
@@ -274,6 +276,15 @@ def add_realized_context(states: pd.DataFrame) -> pd.DataFrame:
         out["running_native"], errors="coerce"
     )
     out["ecmwf_gap_to_running_native"] = pd.to_numeric(out["ecmwf_forecast_max_native"], errors="coerce") - pd.to_numeric(
+        out["running_native"], errors="coerce"
+    )
+    return out
+
+
+def add_realized_context(states: pd.DataFrame) -> pd.DataFrame:
+    out = states.copy()
+    out["final_max_native"] = out.apply(lambda r: final_native(r) if pd.notna(r.get("final_max_f")) else np.nan, axis=1)
+    out["remaining_heat_native"] = pd.to_numeric(out["final_max_native"], errors="coerce") - pd.to_numeric(
         out["running_native"], errors="coerce"
     )
     step = out.apply(unit_step, axis=1)
@@ -588,6 +599,7 @@ def main() -> int:
     rows = load_features(feature_paths)
     states = first_state_rows(rows)
     states = add_expression_quotes(states, rows)
+    states = add_pit_context(states)
     states = add_realized_context(states)
     states = add_regime_labels(states)
     states = add_expression_payoffs(states)

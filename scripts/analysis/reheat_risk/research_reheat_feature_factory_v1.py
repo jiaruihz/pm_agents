@@ -72,6 +72,14 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def display_path(path: Path) -> str:
+    path = path.resolve()
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def connect_ro(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
     conn.row_factory = sqlite3.Row
@@ -214,6 +222,15 @@ def load_observed(path: Path, start: str, end: str, hours: set[int]) -> pd.DataF
 
 
 def load_settlements(conn: sqlite3.Connection, start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    winner_cols = [
+        "city",
+        "target_date",
+        "final_winning_bracket",
+        "winner_final_price",
+        "unit",
+        "settlement_status",
+        "source_system",
+    ]
     rows = query_rows(
         conn,
         "SELECT city, target_date, bracket, unit, final_price, settlement_status, source_system "
@@ -222,7 +239,7 @@ def load_settlements(conn: sqlite3.Connection, start: str, end: str) -> tuple[pd
     )
     outcomes = pd.DataFrame(rows)
     if outcomes.empty:
-        return outcomes, pd.DataFrame()
+        return outcomes, pd.DataFrame(columns=winner_cols)
     outcomes["target_date"] = outcomes["target_date"].astype(str)
     outcomes["final_price"] = pd.to_numeric(outcomes["final_price"], errors="coerce")
     winners = outcomes[outcomes["final_price"].ge(0.99)].copy()
@@ -230,7 +247,7 @@ def load_settlements(conn: sqlite3.Connection, start: str, end: str) -> tuple[pd
     winners = winners.merge(winner_counts, on=["city", "target_date"], how="left")
     winners = winners[winners["winner_count"].eq(1)].copy()
     winners = winners.rename(columns={"bracket": "final_winning_bracket", "final_price": "winner_final_price"})
-    return outcomes, winners[["city", "target_date", "final_winning_bracket", "winner_final_price", "unit", "settlement_status", "source_system"]]
+    return outcomes, winners[winner_cols]
 
 
 def candidate_outcome(side: Any) -> str | None:
@@ -952,8 +969,8 @@ def write_report(payload: dict[str, Any], out_md: Path, feature_csv: Path, state
             "",
             "## Output Files",
             "",
-            f"- Feature rows CSV: `{feature_csv.relative_to(ROOT)}`",
-            f"- Date/city/hour coverage CSV: `{state_csv.relative_to(ROOT)}`",
+            f"- Feature rows CSV: `{display_path(feature_csv)}`",
+            f"- Date/city/hour coverage CSV: `{display_path(state_csv)}`",
             f"- JSON manifest: `{payload['outputs']['json']}`",
             "",
             "## Date/City/Hour Missing-Field Summary",
@@ -1034,23 +1051,21 @@ def main() -> int:
 
     payload = summarize_coverage(rows, state, orderbook_meta, self_check)
     payload["inputs"] = {
-        "db": str(db_path.relative_to(ROOT)) if db_path.is_absolute() else str(db_path),
-        "orderbook_dir": str(orderbook_dir.relative_to(ROOT)) if orderbook_dir.is_absolute() else str(orderbook_dir),
-        "observed_detail": str(observed_path.relative_to(ROOT)) if observed_path.is_absolute() else str(observed_path),
-        "station_summary": str(station_summary_path.relative_to(ROOT)) if station_summary_path.is_absolute() else str(station_summary_path),
-        "ext_cache_dir": str(ext_dir.relative_to(ROOT)) if ext_dir.is_absolute() else str(ext_dir),
-        "forecast_peak_backfill": str(forecast_peak_backfill_path.relative_to(ROOT))
-        if forecast_peak_backfill_path.is_absolute()
-        else str(forecast_peak_backfill_path),
+        "db": display_path(db_path),
+        "orderbook_dir": display_path(orderbook_dir),
+        "observed_detail": display_path(observed_path),
+        "station_summary": display_path(station_summary_path),
+        "ext_cache_dir": display_path(ext_dir),
+        "forecast_peak_backfill": display_path(forecast_peak_backfill_path),
         "start_date": args.start_date,
         "end_date": args.end_date,
         "decision_hours": sorted(hours),
     }
     payload["outputs"] = {
-        "feature_rows_csv": str(feature_csv.relative_to(ROOT)),
-        "coverage_by_date_city_hour_csv": str(state_csv.relative_to(ROOT)),
-        "json": str(out_json.relative_to(ROOT)),
-        "markdown": str(out_md.relative_to(ROOT)),
+        "feature_rows_csv": display_path(feature_csv),
+        "coverage_by_date_city_hour_csv": display_path(state_csv),
+        "json": display_path(out_json),
+        "markdown": display_path(out_md),
     }
     out_json.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     write_report(payload, out_md, feature_csv, state_csv)
