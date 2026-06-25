@@ -168,6 +168,21 @@ run_quality = invalid_process_feature_parity_duplicate_risk
 strategy_state = paused
 ```
 
+Resolution / restored probe:
+
+```text
+restored_at = 2026-06-26
+restored_commit = 0c3a38e5
+strategy_state = tiny_live_forward_probe
+```
+
+The restored runner defaults to the shared `weather_data_feed` observation cache
+instead of strategy-local live METAR feature fetches.  It also requires live
+feature parity, blocks duplicate `(city,target_date,token_id)` exposure, counts
+the daily cap by actual target date, and records snapshot / observation-cache
+freshness in the runtime summary.  This repairs the live/backtest parity process
+issue; it does not promote the strategy to a confirmed edge.
+
 Required before any restore:
 
 - Live feature builder must compute the same mechanism fields used by the replay layer:

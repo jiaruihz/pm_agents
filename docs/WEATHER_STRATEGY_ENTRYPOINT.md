@@ -15,11 +15,11 @@ Last updated: 2026-06-08（live 实例现状见下方 2026-06-19 更正横幅）
 > - **当前真 live = reheat_risk current YES tiny-live**：`weather_theta_current_yes_tiny_live.py`
 >   的 `fade_confirmed` + `peak_forming_micro` 两个 profile（`--live --confirm-live`，$5 微仓），2026-06-19 起。
 > - **另有 metar-cross prev-NO 在 live**（`weather_metar_cross_prev_no_shadow.py --live`，$10/单·$50/天）。
-> - shadow：station-basis、range-rv、higher-no-carry、regime-routed current-bracket NO（零 notional）。
-> - **regime-routed NO tiny-live 已暂停（2026-06-25）**：曾成交 NYC 82-83 NO 两笔；
->   暂停原因是 live runner 与回测 atlas 特征不等价（trend/cloud/wind/running-max freshness 未接入）
->   且同 city/date/token 可重复下单。不得恢复 live，除非先通过 feature-parity replay、重复下单 gate、
->   daily cap 校验和 deploy review。
+> - shadow：station-basis、range-rv、higher-no-carry。
+> - **regime-routed NO tiny-live 已恢复为微仓 forward probe（2026-06-26）**：2026-06-25 NYC
+>   82-83 NO 重复下单事故后，runner 已改为默认消费 `weather_data_feed` observation cache，
+>   并要求 feature parity、city/date/token 去重、真实 target-date daily cap、snapshot/cache freshness。
+>   它仍是 tiny-live 前向取证，不是 confirmed edge。
 > - 这些是 **tiny-live 前向取证**，不是已证实策略；评估按执行质量/滑点，不按早期 PnL。
 >
 > 下方 mid_price 章节保留作**历史血缘与部署机制参考**。完整 current-YES live 规格（城市池/gate/参数）
