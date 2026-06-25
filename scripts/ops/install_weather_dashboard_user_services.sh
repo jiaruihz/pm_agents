@@ -52,6 +52,7 @@ EOF
 
 systemctl --user daemon-reload
 systemctl --user enable --now pm-agent-weather-dashboard.service
+systemctl --user restart pm-agent-weather-dashboard.service
 systemctl --user enable --now pm-agent-weather-dashboard-refresh.timer
 systemctl --user status pm-agent-weather-dashboard.service --no-pager -l | sed -n '1,40p'
 systemctl --user list-timers --no-pager pm-agent-weather-dashboard-refresh.timer
