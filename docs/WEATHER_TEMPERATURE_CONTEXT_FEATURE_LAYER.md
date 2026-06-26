@@ -1,0 +1,131 @@
+# Weather Temperature Context Feature Layer
+
+Status: current-reference
+Updated: 2026-06-26
+Source of truth: yes for temperature-context feature semantics
+Used by: current YES, current-bracket NO, d1/d2 NO, Range RV, timing research
+
+## What This Is
+
+`reheat_feature_factory_v1` is no longer just a reheat-risk table in practice. It is the shared intraday temperature state layer: one city/date/hour state with observed temperature path, market brackets, forecast peak context, humidity, dewpoint, sky, wind, and trend fields.
+
+This document names the shared context layer that should sit on top of it:
+
+```text
+temperature state facts -> temperature context labels -> strategy-specific probability heads -> expression / execution
+```
+
+The context labels are not trading rules. They are reusable mechanism features for separate strategy heads:
+
+- current YES survive
+- current-bracket NO pass-through
+- d1/d2 NO escape
+- post-cross repricing
+- Range RV / city-day distribution work
+- timing and execution diagnostics
+
+## Canonical Inputs
+
+Current source table:
+
+`docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv`
+
+Current feature builder:
+
+`scripts/analysis/reheat_risk/research_temperature_context_feature_layer_v1.py`
+
+Shared feature functions:
+
+`weather_data_feed/weather_context.py`
+
+Latest generated state table:
+
+`docs/analysis/2026-06/generated/temperature_context_feature_layer_v1/temperature_context_state_rows.csv`
+
+Latest dated evidence report:
+
+`docs/analysis/2026-06/2026-06-26-temperature-context-feature-layer-v1.md`
+
+## Feature Families
+
+`cloud_warming_interaction`
+
+Combines sky cover and recent warming:
+
+- `clear_solar_warming`
+- `clear_but_not_warming`
+- `warming_through_cloud`
+- `cloud_limited_flat_or_cooling`
+- `mixed_sky_warming`
+- `mixed_sky_flat_or_cooling`
+- `cloud_warming_unknown`
+
+`moisture_cloud_interaction`
+
+Combines humidity, dewpoint depression, and sky:
+
+- `humid_cloud_suppression`
+- `humid_convective_risk`
+- `cloud_suppression`
+- `dry_heat_inertia`
+- `mixed_moisture_cloud`
+- `moisture_cloud_unknown`
+
+`marine_thermal_state`
+
+Combines city geography, wind speed, and wind direction when available:
+
+- `onshore_marine_cooling_risk`
+- `offshore_or_parallel_warming_risk`
+- `coastal_direction_unknown_mixing`
+- `coastal_light_or_unclear_flow`
+- `inland_wind_mixing`
+- `marine_wind_unknown`
+
+`forecast_peak_clock_state`
+
+Turns forecast peak timing into reusable context:
+
+- `forecast_peak_2h_plus_ahead`
+- `forecast_peak_0_to_2h_ahead`
+- `forecast_peak_passed_0_to_1h`
+- `forecast_peak_passed_1_to_2h`
+- `forecast_peak_passed_2h_plus`
+- `forecast_peak_unknown`
+
+`temperature_context_regime`
+
+A composite string joining peak clock, warming state, cloud/warming, moisture/cloud, and marine/wind context. Use it for diagnostics and grouping, not as a live gate by itself.
+
+## Current Evidence Snapshot
+
+Latest v1 coverage:
+
+- `9,800` city-date-hour state rows
+- `36` cities
+- `2026-05-19` through `2026-06-17`
+
+Selected mechanism sanity checks:
+
+| context | state rows | current YES win | current NO pass-through | d1 hit | d2 hit |
+|---|---:|---:|---:|---:|---:|
+| `clear_solar_warming` | 1,794 | 32.9% | 67.1% | 24.2% | 16.1% |
+| `cloud_limited_flat_or_cooling` | 670 | 71.5% | 28.5% | 11.6% | 6.0% |
+| `forecast_peak_2h_plus_ahead` | 3,453 | 13.6% | 86.4% | 21.9% | 22.8% |
+| `forecast_peak_passed_2h_plus` | 2,787 | 87.9% | 12.1% | 3.4% | 0.8% |
+
+These numbers are mechanism checks, not approval to trade. A strategy must still evaluate real ask, depth, settlement source, same-price baseline, holdout, and forward evidence.
+
+## Boundary
+
+- This layer is point-in-time context only. Do not fill missing live fields from future archive data.
+- Missing wind direction must remain explicit: `flow_unknown` / `coastal_direction_unknown_mixing`.
+- Current full-history feature rows mostly have wind speed, not wind direction. Live/shadow runners are now starting to record wind direction for forward replay.
+- Hard filters should not be created directly from these labels unless they represent a real mechanism boundary or data-quality constraint.
+
+## Next Steps
+
+1. Keep `reheat_feature_factory_v1` paths for compatibility, but treat the concept as `temperature_state_feature_factory`.
+2. Add wind direction to the shared observation/cache path so `marine_thermal_state` can move from unknown to onshore/offshore in forward data.
+3. Train or calibrate separate probability heads for current YES survive, current NO pass-through, and d1/d2 NO escape using this same context layer.
+4. Promote only probability/expression combinations that beat market baseline and same-price baseline in holdout plus frozen forward replay.

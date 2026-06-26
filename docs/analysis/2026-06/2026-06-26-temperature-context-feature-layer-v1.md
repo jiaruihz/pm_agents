@@ -2,6 +2,8 @@
 
 Generated: `2026-06-26T13:12:00+00:00`
 
+Canonical entry: `docs/WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md`
+
 ## Verdict
 
 `reheat_feature_factory_v1` is already the shared intraday temperature state layer, not just a reheat-specific table.  This pass adds general mechanism labels for cloud/warming, moisture/cloud, wind/ocean/geography, and forecast peak clock so the same context can be reused by current YES, current-bracket NO, d1/d2 NO, Range RV, and timing studies.
