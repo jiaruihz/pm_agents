@@ -33,13 +33,16 @@ export interface ResearchLineRow {
   line_id: string;
   title: string;
   status: string;
+  verdict_reason: string | null;
   holdout_roi: number | null;
   forward_roi: number | null;
+  repr_roi: number | null;
   ci_low: number | null;
   ci_high: number | null;
   ci_crosses_zero: boolean;
   excess_roi_vs_baseline: number | null;
   gate_ready: boolean;
+  variant_count: number;
   generated_at_utc: string | null;
   summary_path: string;
 }

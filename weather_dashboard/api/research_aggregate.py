@@ -26,27 +26,68 @@ def _first(d: dict, keys: tuple[str, ...]) -> Any:
     return None
 
 
+def _best_variant_roi(summary: dict) -> tuple[float | None, float | None, float | None]:
+    """From a `variants` list, return (best_roi, ci_low, ci_high) of the best
+    non-baseline variant by roi. Honest representative for the index row."""
+    variants = summary.get("variants")
+    if not isinstance(variants, list):
+        return (None, None, None)
+    best = None
+    for v in variants:
+        if not isinstance(v, dict) or v.get("roi") is None:
+            continue
+        name = str(v.get("variant", "")).lower()
+        if "baseline" in name:
+            continue
+        if best is None or v["roi"] > best["roi"]:
+            best = v
+    if best is None:
+        return (None, None, None)
+    return (best.get("roi"), best.get("roi_ci_low"), best.get("roi_ci_high"))
+
+
 def _normalize(line_id: str, summary: dict, summary_path: Path, analysis_root: Path) -> dict:
+    verdict = summary.get("verdict") if isinstance(summary.get("verdict"), dict) else {}
+
+    # ROI/CI: prefer top-level keys, else the best non-baseline variant.
+    holdout_roi = _first(summary, _HOLDOUT_KEYS)
+    forward_roi = _first(summary, _FORWARD_KEYS)
     ci_low = _first(summary, _CI_LOW_KEYS)
     ci_high = _first(summary, _CI_HIGH_KEYS)
-    forward_roi = _first(summary, _FORWARD_KEYS)
+    best_roi = None
+    if ci_low is None and ci_high is None:
+        best_roi, ci_low, ci_high = _best_variant_roi(summary)
+
     ci_crosses_zero = ci_low is not None and ci_high is not None and ci_low <= 0 <= ci_high
-    gate_ready = (ci_crosses_zero is False and forward_roi is not None and forward_roi > 0)
+
+    # gate: prefer the report's own verdict.live_ready; else infer.
+    if "live_ready" in verdict:
+        gate_ready = bool(verdict.get("live_ready"))
+    else:
+        gate_ready = ci_crosses_zero is False and forward_roi is not None and forward_roi > 0
+
+    status = verdict.get("status") or summary.get("status") or "unknown"
+    variants = summary.get("variants")
+    variant_count = len(variants) if isinstance(variants, list) else 0
+
     try:
         rel = str(summary_path.relative_to(analysis_root))
     except ValueError:
         rel = str(summary_path)
     return {
         "line_id": line_id,
-        "title": summary.get("title") or line_id,
-        "status": summary.get("status") or "unknown",
-        "holdout_roi": _first(summary, _HOLDOUT_KEYS),
+        "title": summary.get("title") or summary.get("strategy") or line_id,
+        "status": status,
+        "verdict_reason": verdict.get("reason"),
+        "holdout_roi": holdout_roi,
         "forward_roi": forward_roi,
+        "repr_roi": best_roi if holdout_roi is None and forward_roi is None else None,
         "ci_low": ci_low,
         "ci_high": ci_high,
         "ci_crosses_zero": ci_crosses_zero,
         "excess_roi_vs_baseline": _first(summary, _EXCESS_KEYS),
         "gate_ready": gate_ready,
+        "variant_count": variant_count,
         "generated_at_utc": summary.get("generated_at_utc") or summary.get("generated"),
         "summary_path": rel,
     }

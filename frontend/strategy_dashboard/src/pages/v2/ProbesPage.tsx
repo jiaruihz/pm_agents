@@ -83,6 +83,12 @@ function ProbeCard({ p }: { p: ProbeHealthRow }) {
   );
 }
 
+const GROUPS: { key: string; title: string; sub: string; match: (s: string | null) => boolean }[] = [
+  { key: "live", title: "实盘 live", sub: "真实下单（tiny-live 微仓）", match: (s) => s === "live" },
+  { key: "shadow", title: "影子 / 遥测 shadow", sub: "零 notional，不下单，只采前向证据", match: (s) => ["shadow", "telemetry", "monitor"].includes(s ?? "") },
+  { key: "other", title: "受阻 / 陈旧", sub: "blocked / stale，暂不产单，需排查", match: (s) => ["blocked", "stale", "shelved"].includes(s ?? "") },
+];
+
 export function ProbesPage() {
   const [probes, setProbes] = useState<ProbeHealthRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,13 +108,21 @@ export function ProbesPage() {
     };
   }, []);
 
+  const assigned = new Set<string>();
+  const grouped = GROUPS.map((g) => {
+    const items = (probes ?? []).filter((p) => g.match(p.lifecycle_status));
+    items.forEach((p) => assigned.add(p.strategy_instance));
+    return { ...g, items };
+  });
+  const leftover = (probes ?? []).filter((p) => !assigned.has(p.strategy_instance));
+  if (leftover.length) grouped.push({ key: "misc", title: "其他", sub: "", match: () => false, items: leftover });
+
   return (
     <div className="page">
       <header className="page-head">
         <h1>探针在跑</h1>
         <p className="page-sub">
-          live / shadow 前向取证探针的健康与执行质量。<strong>按执行质量评估，不按早期 PnL。</strong>
-          每 30 秒刷新。
+          前向取证探针的健康与执行质量。<strong>按执行质量评估，不按早期 PnL。</strong> 每 30 秒刷新。
         </p>
       </header>
 
@@ -118,11 +132,17 @@ export function ProbesPage() {
         <EmptyState message="注册表里没有探针" hint="weather_strategy_runtime_registry 为空，或数据库未同步。" />
       )}
 
-      <div className="probe-grid">
-        {probes?.map((p) => (
-          <ProbeCard key={p.strategy_instance} p={p} />
-        ))}
-      </div>
+      {grouped.map((g) => g.items.length > 0 && (
+        <section key={g.key} className="probe-group">
+          <div className="probe-group-head">
+            <h2>{g.title} <span className="probe-group-count">{g.items.length}</span></h2>
+            {g.sub && <span className="probe-group-sub">{g.sub}</span>}
+          </div>
+          <div className="probe-grid">
+            {g.items.map((p) => <ProbeCard key={p.strategy_instance} p={p} />)}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
