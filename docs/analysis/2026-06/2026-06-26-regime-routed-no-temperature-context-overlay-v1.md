@@ -1,6 +1,6 @@
 # Regime-Routed NO Temperature Context Overlay V1
 
-Generated: `2026-06-26T13:21:42+00:00`
+Generated: `2026-06-26T20:10:56+00:00`
 
 ## Verdict
 
@@ -27,6 +27,47 @@ Funnel: `271` selected rows, `35` dates, `35` cities, `2026-05-20`..`2026-06-23`
 | soft_temp_context_light | soft_balanced | +3.8% | -0.00 | +0.08 |
 | soft_temp_context_medium | soft_balanced | +6.2% | -0.00 | +0.12 |
 | soft_wind_context | soft_balanced | -0.4% | -0.01 | +0.00 |
+
+## Mechanism vs Filtering Audit
+
+The denominator is unchanged: all policies score the same 271 selected rows.  The temperature layer changes only the size multiplier.  In strict executable terms, the `5 shares` minimum can still turn lower-weight rows into effective non-orders, so this section separates fractional sizing from executable filtering.
+
+Light temperature context attribution:
+
+| attribution_bucket | rows | dates | cities | delta_cost_usd | delta_pnl_usd | avg_weight_delta |
+| --- | --- | --- | --- | --- | --- | --- |
+| up_winners | 41 | 22 | 21 | +10.07 | +17.34 | +0.05 |
+| down_losers | 95 | 32 | 32 | -31.56 | +31.56 | -0.07 |
+| down_winners | 99 | 33 | 32 | -26.84 | -35.92 | -0.05 |
+| up_losers | 36 | 21 | 16 | +7.57 | -7.57 | +0.04 |
+
+Strict execution-transition view for `soft_temp_context_light`:
+
+| exec_transition | rows | dates | hit_rate | full_stake_pnl_usd | baseline_weighted_pnl_usd | candidate_weighted_pnl_usd | baseline_weighted_cost_usd | candidate_weighted_cost_usd |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| both_exec | 64 | 28 | +50.0% | +219.61 | +142.02 | +146.21 | +188.24 | +188.02 |
+| base_only_exec | 13 | 12 | +38.5% | +33.86 | +6.43 | +3.42 | +24.14 | +17.82 |
+| candidate_only_exec | 3 | 2 | +0.0% | -15.00 | -6.79 | -7.39 | +6.79 | +7.39 |
+| neither_exec | 191 | 35 | +53.9% | -82.73 | -18.45 | -13.62 | +250.15 | +215.32 |
+
+Stability splits:
+
+| split | weight_policy | rows | dates | baseline_roi | candidate_roi | delta_roi | delta_pnl_usd |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| early_to_2026-06-06 | soft_temp_context_light | 130 | 18 | +15.4% | +19.8% | +4.4% | +6.42 |
+| early_to_2026-06-06 | soft_temp_context_medium | 130 | 18 | +15.4% | +22.5% | +7.1% | +10.17 |
+| late_after_2026-06-06 | soft_temp_context_light | 141 | 17 | +36.1% | +39.5% | +3.4% | -1.02 |
+| late_after_2026-06-06 | soft_temp_context_medium | 141 | 17 | +36.1% | +41.9% | +5.8% | -0.78 |
+| 2026-05-20_to_2026-05-31 | soft_temp_context_light | 94 | 12 | +13.2% | +19.5% | +6.3% | +7.82 |
+| 2026-05-20_to_2026-05-31 | soft_temp_context_medium | 94 | 12 | +13.2% | +23.5% | +10.3% | +12.43 |
+| 2026-06-01_to_2026-06-10 | soft_temp_context_light | 67 | 10 | +26.1% | +23.5% | -2.6% | -5.15 |
+| 2026-06-01_to_2026-06-10 | soft_temp_context_medium | 67 | 10 | +26.1% | +21.7% | -4.4% | -8.09 |
+| 2026-06-11_to_2026-06-23 | soft_temp_context_light | 110 | 13 | +37.2% | +42.8% | +5.6% | +2.74 |
+| 2026-06-11_to_2026-06-23 | soft_temp_context_medium | 110 | 13 | +37.2% | +46.7% | +9.5% | +5.05 |
+| route_capped_d2_no | soft_temp_context_light | 82 | 32 | +5.1% | +7.1% | +2.0% | +0.45 |
+| route_capped_d2_no | soft_temp_context_medium | 82 | 32 | +5.1% | +8.7% | +3.5% | +0.70 |
+| route_runway_current_no | soft_temp_context_light | 189 | 34 | +31.0% | +34.4% | +3.4% | +4.96 |
+| route_runway_current_no | soft_temp_context_medium | 189 | 34 | +31.0% | +36.5% | +5.5% | +8.69 |
 
 ## Where It Helped
 
@@ -105,6 +146,10 @@ Harmful route/context buckets:
 ## Interpretation
 
 - The overlay mainly helps by reducing size in historically bad or weakly negative scenes without deleting them entirely.
+- It is not a denominator filter: all 271 candidate rows remain.  However, once the strict `5 shares` order minimum is applied, `soft_temp_context_light` reduces executable rows from 77 to 67.
+- The strict executable-row change is not a clean bad-market filter: the 13 baseline-only executable rows had positive full-stake PnL in this sample, while 3 candidate-only executable rows all lost.  The headline weighted improvement comes more from fractional risk reshaping across all rows than from dropping a set of obviously bad orders.
+- Mechanically, the favorable contribution is balanced between upweighting winners (`+$17.34`) and downweighting losers (`+$31.56`), but it also wrongly downweights many winners (`-$35.92`) and upweights some losers (`-$7.57`).  That mixed attribution is why this is evidence of a useful context layer, not a confirmed trading rule.
+- Split stability is mixed: early and late halves both improve ROI, but the 2026-06-01..2026-06-10 block worsens.  This argues against treating the current coefficients as robust enough for live sizing.
 - It helps most in `runway_current_no` scenes with mixed-sky warming / dry heat inertia / peak still ahead, and by trimming weak coastal-direction-unknown or near-past-peak rows.
 - It hurts when it trims some profitable `onshore_marine_cooling_risk`, humid convective, and mixed-sky flat/cooling rows.  That says wind/ocean and cloud context still need route-specific calibration, not a single universal haircut.
 - Wind/ocean context is still limited by missing wind direction in the broad historical feature layer; it is better as forward telemetry until direction coverage is stable.
