@@ -6,7 +6,7 @@ const target = process.env.VITE_WEATHER_API ?? process.env.VITE_BFF_ORIGIN ?? "h
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5174,
+    port: Number(process.env.PORT) || 5174,
     proxy: {
       "/api": {
         target,

@@ -1,6 +1,7 @@
 // HTTP client for the weather dashboard FastAPI backend
 import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail } from "./weather-types";
 import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
+import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse } from "./v2-types";
 
 const BASE = `${import.meta.env.VITE_WEATHER_API ?? ""}/api`;
 
@@ -169,5 +170,26 @@ export const weatherApi = {
 
   getCopyTradeWallet(walletAddress: string): Promise<CopyTradeWalletDetail> {
     return get(`/copy-trade/wallets/${encodeURIComponent(walletAddress)}`);
+  },
+
+  // ── v2 redesign endpoints ─────────────────────────────────────────────────
+  getProbeHealth(): Promise<ProbeHealthResponse> {
+    return get("/probes/health");
+  },
+
+  getProbe(instance: string): Promise<ProbeDetail> {
+    return get(`/probes/${encodeURIComponent(instance)}`);
+  },
+
+  getResearchLines(): Promise<ResearchLinesResponse> {
+    return get("/research/lines");
+  },
+
+  getResearchLine(lineId: string): Promise<ResearchLineDetail> {
+    return get(`/research/lines/${encodeURIComponent(lineId)}`);
+  },
+
+  getGlossary(): Promise<GlossaryResponse> {
+    return get("/glossary");
   },
 };
