@@ -45,7 +45,11 @@ import research_regime_routed_no_expression_v1 as research  # noqa: E402
 from research_reheat_feature_factory_v1 import bracket_contains, parse_bracket  # noqa: E402
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc  # noqa: E402
 from weather_data_feed.source_policy import load_city_configs  # noqa: E402
-from weather_data_feed.weather_context import city_wind_context  # noqa: E402
+from weather_data_feed.weather_context import (  # noqa: E402
+    city_wind_context,
+    temperature_context_features,
+    temperature_context_multiplier,
+)
 
 import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
 
@@ -773,6 +777,25 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["soft_wind_context_shadow"] = (
             pd.to_numeric(selected["soft_balanced"], errors="coerce") * selected["wind_context_multiplier_shadow"]
         ).clip(0.0, 1.0)
+        temp_context = selected.apply(lambda row: temperature_context_features(row.to_dict()), axis=1, result_type="expand")
+        for col in temp_context.columns:
+            selected[col] = temp_context[col]
+        selected["temp_context_multiplier_light_shadow"] = selected.apply(
+            lambda row: temperature_context_multiplier(row.to_dict(), strength="light"),
+            axis=1,
+        )
+        selected["temp_context_multiplier_medium_shadow"] = selected.apply(
+            lambda row: temperature_context_multiplier(row.to_dict(), strength="medium"),
+            axis=1,
+        )
+        selected["soft_temp_context_light_shadow"] = (
+            pd.to_numeric(selected["soft_balanced"], errors="coerce")
+            * pd.to_numeric(selected["temp_context_multiplier_light_shadow"], errors="coerce")
+        ).clip(0.0, 1.2)
+        selected["soft_temp_context_medium_shadow"] = (
+            pd.to_numeric(selected["soft_balanced"], errors="coerce")
+            * pd.to_numeric(selected["temp_context_multiplier_medium_shadow"], errors="coerce")
+        ).clip(0.0, 1.2)
         prior_keys = prior_live_order_keys(LIVE_OUT)
         selected["live_duplicate_key"] = selected.apply(
             lambda row: (
@@ -808,6 +831,18 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["soft_wind_context_shadow_shares"] = selected["soft_wind_context_shadow_notional_usd"] / pd.to_numeric(
             selected["ask"], errors="coerce"
         )
+        selected["soft_temp_context_light_shadow_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(
+            selected["soft_temp_context_light_shadow"], errors="coerce"
+        )
+        selected["soft_temp_context_light_shadow_shares"] = selected["soft_temp_context_light_shadow_notional_usd"] / pd.to_numeric(
+            selected["ask"], errors="coerce"
+        )
+        selected["soft_temp_context_medium_shadow_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(
+            selected["soft_temp_context_medium_shadow"], errors="coerce"
+        )
+        selected["soft_temp_context_medium_shadow_shares"] = selected[
+            "soft_temp_context_medium_shadow_notional_usd"
+        ] / pd.to_numeric(selected["ask"], errors="coerce")
         selected["ask_notional"] = pd.to_numeric(selected["ask"], errors="coerce") * pd.to_numeric(selected["ask_size"], errors="coerce")
         selected["execution_eligible"] = (
             pd.to_numeric(selected["ask"], errors="coerce").between(research.ASK_MIN, research.ASK_CAPS["relaxed70"])
@@ -903,6 +938,23 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "soft_wind_context_shadow": row.get("soft_wind_context_shadow"),
         "soft_wind_context_shadow_notional_usd": row.get("soft_wind_context_shadow_notional_usd"),
         "soft_wind_context_shadow_shares": row.get("soft_wind_context_shadow_shares"),
+        "temp_context_multiplier_light_shadow": row.get("temp_context_multiplier_light_shadow"),
+        "temp_context_multiplier_medium_shadow": row.get("temp_context_multiplier_medium_shadow"),
+        "soft_temp_context_light_shadow": row.get("soft_temp_context_light_shadow"),
+        "soft_temp_context_light_shadow_notional_usd": row.get("soft_temp_context_light_shadow_notional_usd"),
+        "soft_temp_context_light_shadow_shares": row.get("soft_temp_context_light_shadow_shares"),
+        "soft_temp_context_medium_shadow": row.get("soft_temp_context_medium_shadow"),
+        "soft_temp_context_medium_shadow_notional_usd": row.get("soft_temp_context_medium_shadow_notional_usd"),
+        "soft_temp_context_medium_shadow_shares": row.get("soft_temp_context_medium_shadow_shares"),
+        "wind_thermal_state": row.get("wind_thermal_state"),
+        "marine_thermal_state": row.get("marine_thermal_state"),
+        "sky_state": row.get("sky_state"),
+        "moisture_state": row.get("moisture_state"),
+        "warming_state": row.get("warming_state"),
+        "cloud_warming_interaction": row.get("cloud_warming_interaction"),
+        "moisture_cloud_interaction": row.get("moisture_cloud_interaction"),
+        "forecast_peak_clock_state": row.get("forecast_peak_clock_state"),
+        "temperature_context_regime": row.get("temperature_context_regime"),
         "ask_notional": row.get("ask_notional"),
         "live_feature_status": row.get("live_feature_status"),
         "live_feature_source": row.get("live_feature_source"),
@@ -1069,6 +1121,10 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "wind_context_multiplier_shadow": round(safe_float(row.get("wind_context_multiplier_shadow"), 1.0), 6),
         "soft_wind_only_shadow": round(safe_float(row.get("soft_wind_only_shadow"), 0.0), 6),
         "soft_wind_context_shadow": round(safe_float(row.get("soft_wind_context_shadow"), 0.0), 6),
+        "temp_context_multiplier_light_shadow": round(safe_float(row.get("temp_context_multiplier_light_shadow"), 1.0), 6),
+        "temp_context_multiplier_medium_shadow": round(safe_float(row.get("temp_context_multiplier_medium_shadow"), 1.0), 6),
+        "soft_temp_context_light_shadow": round(safe_float(row.get("soft_temp_context_light_shadow"), 0.0), 6),
+        "soft_temp_context_medium_shadow": round(safe_float(row.get("soft_temp_context_medium_shadow"), 0.0), 6),
         "base_notional_usd": round(safe_float(row.get("base_notional_usd"), 0.0), 6),
         "soft_notional_usd": round(soft_notional, 6),
         "soft_shares": round(size, 6),
@@ -1076,6 +1132,27 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "soft_wind_only_shadow_shares": round(safe_float(row.get("soft_wind_only_shadow_shares"), 0.0), 6),
         "soft_wind_context_shadow_notional_usd": round(safe_float(row.get("soft_wind_context_shadow_notional_usd"), 0.0), 6),
         "soft_wind_context_shadow_shares": round(safe_float(row.get("soft_wind_context_shadow_shares"), 0.0), 6),
+        "soft_temp_context_light_shadow_notional_usd": round(
+            safe_float(row.get("soft_temp_context_light_shadow_notional_usd"), 0.0), 6
+        ),
+        "soft_temp_context_light_shadow_shares": round(
+            safe_float(row.get("soft_temp_context_light_shadow_shares"), 0.0), 6
+        ),
+        "soft_temp_context_medium_shadow_notional_usd": round(
+            safe_float(row.get("soft_temp_context_medium_shadow_notional_usd"), 0.0), 6
+        ),
+        "soft_temp_context_medium_shadow_shares": round(
+            safe_float(row.get("soft_temp_context_medium_shadow_shares"), 0.0), 6
+        ),
+        "wind_thermal_state": str(row.get("wind_thermal_state") or ""),
+        "marine_thermal_state": str(row.get("marine_thermal_state") or ""),
+        "sky_state": str(row.get("sky_state") or ""),
+        "moisture_state": str(row.get("moisture_state") or ""),
+        "warming_state": str(row.get("warming_state") or ""),
+        "cloud_warming_interaction": str(row.get("cloud_warming_interaction") or ""),
+        "moisture_cloud_interaction": str(row.get("moisture_cloud_interaction") or ""),
+        "forecast_peak_clock_state": str(row.get("forecast_peak_clock_state") or ""),
+        "temperature_context_regime": str(row.get("temperature_context_regime") or ""),
         "forecast_source": str(row.get("forecast_source") or ""),
         "forecast_max_native": safe_float(row.get("forecast_max_native"), None),
         "forecast_peak_hour_local": safe_float(row.get("forecast_peak_hour_local"), None),
@@ -1198,6 +1275,44 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -> dict[str, dict[str, Any]]:
+    if candidates.empty:
+        return {}
+    policies = {
+        "soft_balanced_live_policy": "soft_balanced",
+        "soft_wind_only_shadow": "soft_wind_only_shadow",
+        "soft_wind_context_shadow": "soft_wind_context_shadow",
+        "soft_temp_context_light_shadow": "soft_temp_context_light_shadow",
+        "soft_temp_context_medium_shadow": "soft_temp_context_medium_shadow",
+    }
+    ask = pd.to_numeric(candidates["ask"], errors="coerce")
+    out: dict[str, dict[str, Any]] = {}
+    base_notional = pd.to_numeric(candidates["base_notional_usd"], errors="coerce").fillna(0)
+    for name, weight_col in policies.items():
+        if weight_col not in candidates:
+            continue
+        weight = pd.to_numeric(candidates[weight_col], errors="coerce").fillna(0).clip(lower=0)
+        notional = base_notional * weight
+        shares = notional / ask
+        executable = (
+            ask.between(research.ASK_MIN, research.ASK_CAPS["relaxed70"])
+            & shares.ge(float(min_order_shares))
+            & pd.to_numeric(candidates["ask_size"], errors="coerce").ge(shares)
+            & candidates["token_id"].astype(str).ne("")
+            & candidates["live_feature_parity_ok"].astype(bool)
+            & candidates["current_no_peak_clock_ok"].astype(bool)
+            & ~candidates["live_duplicate_key"].astype(bool)
+        )
+        out[name] = {
+            "weight_col": weight_col,
+            "avg_weight": round(float(weight.mean()), 6) if len(weight) else 0.0,
+            "shadow_notional_usd": round(float(notional.sum()), 6),
+            "shadow_executable_rows": int(executable.sum()),
+            "shadow_executable_notional_usd": round(float(notional[executable].sum()), 6),
+        }
+    return out
+
+
 def main() -> int:
     args = parse_args()
     candidates, meta = build_candidates(args)
@@ -1217,6 +1332,7 @@ def main() -> int:
         "min_order_shares": float(args.min_order_shares),
         "routed_candidates": int(len(candidates)),
         "execution_eligible": int(candidates["execution_eligible"].sum()) if not candidates.empty else 0,
+        "shadow_policy_counts": shadow_policy_counts(candidates, min_order_shares=float(args.min_order_shares)),
         "plans_written": len(plans),
         "candidate_rows": candidate_rows,
         "blocked_candidate_rows": blocked_candidate_rows,

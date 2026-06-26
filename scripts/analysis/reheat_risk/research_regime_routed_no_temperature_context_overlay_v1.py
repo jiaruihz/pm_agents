@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from weather_data_feed.weather_context import temperature_context_features  # noqa: E402
+from weather_data_feed.weather_context import temperature_context_features, temperature_context_multiplier  # noqa: E402
 
 
 IN_DETAILS = ROOT / "docs/analysis/2026-06/generated/regime_routed_no_wind_context_v2/selected_with_wind_context.csv"
@@ -70,79 +70,6 @@ def md_table(rows: list[dict[str, Any]], cols: list[str]) -> str:
                 vals.append(str(val))
         lines.append("| " + " | ".join(vals) + " |")
     return "\n".join(lines)
-
-
-def temperature_multiplier(row: pd.Series, *, strength: str) -> float:
-    """Fixed first-principles sizing overlay.
-
-    BUY_NO has two routes here:
-    - runway_current_no wins when current bracket is broken later.
-    - capped_d2_no wins when the day does not reach the higher d2 bracket.
-
-    The multipliers are intentionally coarse and pre-declared.  They are not
-    fit to this payoff sample.
-    """
-    route = str(row.get("route_leg") or "")
-    cloud = str(row.get("cloud_warming_interaction") or "")
-    moisture = str(row.get("moisture_cloud_interaction") or "")
-    marine = str(row.get("marine_thermal_state") or "")
-    peak = str(row.get("forecast_peak_clock_state") or "")
-    warming = str(row.get("warming_state") or "")
-
-    if route == "runway_current_no":
-        value = 1.0
-        if peak == "forecast_peak_2h_plus_ahead":
-            value *= 1.08
-        elif peak == "forecast_peak_0_to_2h_ahead":
-            value *= 1.03
-        elif peak == "forecast_peak_passed_0_to_1h":
-            value *= 0.72
-        elif peak in {"forecast_peak_passed_1_to_2h", "forecast_peak_passed_2h_plus"}:
-            value *= 0.50
-
-        if cloud in {"clear_solar_warming", "mixed_sky_warming", "warming_through_cloud"}:
-            value *= 1.08
-        elif cloud in {"clear_but_not_warming", "cloud_limited_flat_or_cooling", "mixed_sky_flat_or_cooling"}:
-            value *= 0.82
-
-        if moisture in {"cloud_suppression", "humid_cloud_suppression"}:
-            value *= 0.88
-        elif moisture == "dry_heat_inertia":
-            value *= 1.03
-
-        if marine == "onshore_marine_cooling_risk":
-            value *= 0.86
-        elif marine == "offshore_or_parallel_warming_risk":
-            value *= 1.05
-    else:
-        value = 1.0
-        if peak == "forecast_peak_2h_plus_ahead":
-            value *= 0.82
-        elif peak == "forecast_peak_0_to_2h_ahead":
-            value *= 0.94
-        elif peak == "forecast_peak_passed_0_to_1h":
-            value *= 1.04
-        elif peak in {"forecast_peak_passed_1_to_2h", "forecast_peak_passed_2h_plus"}:
-            value *= 1.08
-
-        if cloud in {"clear_solar_warming", "mixed_sky_warming", "warming_through_cloud"}:
-            value *= 0.86
-        elif cloud in {"clear_but_not_warming", "cloud_limited_flat_or_cooling", "mixed_sky_flat_or_cooling"}:
-            value *= 1.06
-
-        if moisture in {"cloud_suppression", "humid_cloud_suppression"}:
-            value *= 1.04
-        elif moisture == "dry_heat_inertia" and warming in {"warming", "fast_warming"}:
-            value *= 0.94
-
-        if marine == "onshore_marine_cooling_risk":
-            value *= 1.05
-        elif marine == "offshore_or_parallel_warming_risk":
-            value *= 0.94
-
-    if strength == "medium":
-        value = 1.0 + 1.55 * (value - 1.0)
-    return float(np.clip(value, 0.35 if strength == "medium" else 0.55, 1.20 if strength == "medium" else 1.12))
 
 
 def summarize(frame: pd.DataFrame, weight_col: str) -> dict[str, Any]:
@@ -434,8 +361,12 @@ def main() -> int:
     df = pd.read_csv(IN_DETAILS, low_memory=False)
     labels = df.apply(lambda row: temperature_context_features(row.to_dict()), axis=1, result_type="expand")
     scored = pd.concat([df.reset_index(drop=True), labels.reset_index(drop=True)], axis=1)
-    scored["temp_context_multiplier_light"] = scored.apply(lambda row: temperature_multiplier(row, strength="light"), axis=1)
-    scored["temp_context_multiplier_medium"] = scored.apply(lambda row: temperature_multiplier(row, strength="medium"), axis=1)
+    scored["temp_context_multiplier_light"] = scored.apply(
+        lambda row: temperature_context_multiplier(row.to_dict(), strength="light"), axis=1
+    )
+    scored["temp_context_multiplier_medium"] = scored.apply(
+        lambda row: temperature_context_multiplier(row.to_dict(), strength="medium"), axis=1
+    )
     scored["soft_temp_context_light"] = (
         pd.to_numeric(scored["soft_balanced"], errors="coerce").fillna(0)
         * pd.to_numeric(scored["temp_context_multiplier_light"], errors="coerce").fillna(1)
