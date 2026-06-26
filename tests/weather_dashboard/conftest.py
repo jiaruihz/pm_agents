@@ -13,7 +13,7 @@ def tmp_db():
 @pytest.fixture
 def tmp_db_with_schema(tmp_db):
     from weather_dashboard.db.apply_schema import apply_schema
-    from scripts.analysis.build_weather_fact_trades import FACT_DDL
+    from scripts.etl.build_weather_fact_trades import FACT_DDL
     apply_schema(tmp_db)
     tmp_db.execute(FACT_DDL)
     tmp_db.commit()

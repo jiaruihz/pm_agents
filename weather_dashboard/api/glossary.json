@@ -1,0 +1,21 @@
+{
+  "open_cost": {"zh": "开仓成本", "definition": "未结算持仓的建仓花费，不是亏损；结算后才有 realized PnL", "source_doc": "WEATHER_ANALYSIS_CONTRACT.md"},
+  "posted_notional": {"zh": "挂单名义额", "definition": "实际挂到盘口的名义金额，与 submitted/filled 分开报", "source_doc": "WEATHER_SYSTEM_CONTRACT.md"},
+  "submitted_notional": {"zh": "提交名义额", "definition": "请求下单的名义金额，未必全部成交", "source_doc": "WEATHER_SYSTEM_CONTRACT.md"},
+  "actual_fill_cost": {"zh": "实际成交成本", "definition": "真正成交花掉的 USDC", "source_doc": "WEATHER_SYSTEM_CONTRACT.md"},
+  "realized_pnl": {"zh": "已实现盈亏", "definition": "仅已结算持仓才有；用 pnl_usd_at_fill", "source_doc": "WEATHER_ANALYSIS_CONTRACT.md"},
+  "fill_date_bj": {"zh": "成交日(北京)", "definition": "现金流归属用此口径；order_date_bj 受回填污染只作诊断", "source_doc": "WEATHER_ANALYSIS_CONTRACT.md"},
+  "order_date_bj": {"zh": "下单日(北京)", "definition": "仅作下单归属诊断，不用于现金流", "source_doc": "WEATHER_ANALYSIS_CONTRACT.md"},
+  "heartbeat_age_min": {"zh": "镜像心跳(分钟)", "definition": "本机镜像里该探针 artifact 的同步年龄；非生产断流判据", "source_doc": "WEATHER_DATA_PIPELINE.md"},
+  "snapshot_age_min": {"zh": "行情快照年龄(分钟)", "definition": "探针决策所用盘口快照距今分钟数；超新鲜线即偏旧", "source_doc": "WEATHER_DATA_FEED_MODULE.md"},
+  "snapshot_ts_utc": {"zh": "快照时间(UTC)", "definition": "探针所用盘口快照的生成时间", "source_doc": "WEATHER_DATA_FEED_MODULE.md"},
+  "lifecycle_status": {"zh": "生命周期状态", "definition": "live/shadow/telemetry/monitor/blocked/stale", "source_doc": "WEATHER_STRATEGY_REGISTRY.md"},
+  "health_status": {"zh": "健康状态", "definition": "探针注册表里的健康标签（ok/blocked/stale 等）", "source_doc": "WEATHER_STRATEGY_REGISTRY.md"},
+  "candidate_rows": {"zh": "候选数", "definition": "本轮探针产出的可下单候选条数", "source_doc": "WEATHER_STRATEGY_REGISTRY.md"},
+  "execution_eligible": {"zh": "可执行数", "definition": "通过全部门槛、真正可执行的候选数", "source_doc": "WEATHER_STRATEGY_REGISTRY.md"},
+  "gate_pass": {"zh": "成交覆盖门", "definition": "weather_clob_fill_coverage_gate 是否通过；false 时 PnL 不可发布", "source_doc": "WEATHER_ANALYSIS_CONTRACT.md"},
+  "excess_roi_vs_baseline": {"zh": "相对基线超额ROI", "definition": "策略 ROI 减同价未筛 baseline ROI", "source_doc": "WEATHER_STRATEGY_REVIEW_PIPELINE.md"},
+  "roi_ci_low": {"zh": "ROI置信下界", "definition": "date-block 自助法 ROI 置信区间下界", "source_doc": "WEATHER_STRATEGY_REVIEW_PIPELINE.md"},
+  "roi_ci_high": {"zh": "ROI置信上界", "definition": "date-block 自助法 ROI 置信区间上界", "source_doc": "WEATHER_STRATEGY_REVIEW_PIPELINE.md"},
+  "val_snapshot_ts_utc": {"zh": "估值快照时间(UTC)", "definition": "未结算 MTM 估值所用快照时间；旧则标注估值偏旧", "source_doc": "WEATHER_ANALYSIS_CONTRACT.md"}
+}

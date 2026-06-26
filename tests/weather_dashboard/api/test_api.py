@@ -11,7 +11,7 @@ from weather_dashboard.ingest.canonical import (
     ingest_canonical_settlements,
     ingest_canonical_signals,
 )
-from scripts.analysis.build_weather_fact_trades import build as _build_fact, write_db as _write_fact
+from scripts.etl.build_weather_fact_trades import build as _build_fact, write_db as _write_fact
 
 
 def _rebuild_fact(conn):
