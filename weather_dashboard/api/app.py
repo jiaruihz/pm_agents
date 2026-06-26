@@ -8,7 +8,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from weather_dashboard.api.routers import compare, configs, copy_trade, glossary, live, probes, research, runs, strategy_runtime
+from weather_dashboard.api.routers import (
+    compare,
+    configs,
+    copy_trade,
+    glossary,
+    live,
+    probes,
+    research,
+    research_lines,
+    runs,
+    strategy_runtime,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_DIST = ROOT / "frontend" / "strategy_dashboard" / "dist"
@@ -44,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(strategy_runtime.router, prefix="/api")
     app.include_router(glossary.router, prefix="/api")
     app.include_router(probes.router, prefix="/api")
+    app.include_router(research_lines.router, prefix="/api")
 
     @app.get("/health")
     def health():
