@@ -120,9 +120,18 @@ export interface MarketSnapshot {
   research_cities: number | null;
 }
 
+export interface ObservationSource {
+  canonical: string;
+  aliases: string[];
+  description: string;
+  kind: string;
+}
+
 export interface DataSourcesResponse {
   forecast_sources: ForecastSource[];
+  observation_sources: ObservationSource[];
   market_snapshots: MarketSnapshot[];
+  market_snapshot_cadence_min: number | null;
 }
 
 export interface GlossaryEntry {

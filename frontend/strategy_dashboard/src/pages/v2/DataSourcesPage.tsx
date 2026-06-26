@@ -68,7 +68,33 @@ export function DataSourcesPage() {
           </section>
 
           <section className="card">
+            <h2>观测源 / METAR <span className="muted">（注册表 weather_data_feed/observation_sources）</span></h2>
+            <p className="stat-caption">维护了 {data.observation_sources.length} 个标准化观测源；每个有多个别名归一到 canonical 名。悬浮看别名。</p>
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead><tr><th>canonical 源</th><th>类型</th><th>说明</th><th>别名数</th></tr></thead>
+                <tbody>
+                  {data.observation_sources.map((s) => (
+                    <tr key={s.canonical}>
+                      <td style={{ fontFamily: "ui-monospace, monospace", fontSize: 12 }}
+                          title={s.aliases.length ? `别名: ${s.aliases.join(", ")}` : "无别名"}>{s.canonical}</td>
+                      <td>{s.kind === "metar" ? <span className="badge" data-tone="fresh">METAR</span> : <span className="badge" data-tone="unknown">{s.kind}</span>}</td>
+                      <td>{s.description || "—"}</td>
+                      <td>{s.aliases.length}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="card">
             <h2>实时盘口快照 <span className="muted">（最近 {data.market_snapshots.length} 个）</span></h2>
+            <p className="stat-caption">
+              更新周期约 <strong>{data.market_snapshot_cadence_min ?? "—"} 分钟/次</strong>。
+              注意：这里读的是<strong>本机镜像</strong>，时间显示十几小时前 = 镜像未同步，<strong>不代表生产断流</strong>。
+              刷新镜像跑 <code>scripts/ops/sync_weather_remote.sh</code>；确认生产是否在产快照看 N100 doctor。
+            </p>
             {data.market_snapshots.length === 0 ? (
               <EmptyState message="没有盘口快照文件" hint="检查 runtime/.../paper_snapshots 是否已同步。" />
             ) : (

@@ -8,6 +8,12 @@ import { usd } from "./format";
 
 const STAGES = ["signal 信号", "plan 计划", "order 下单", "fill 成交", "settlement 结算"];
 
+/** Shorten the executor strategy_name (drops the _notional_$.._shares_.. suffix). */
+function shortStrategy(name: string | null): string {
+  if (!name) return "—";
+  return name.replace(/^t1_trading_/, "").replace(/_notional_.*$/, "");
+}
+
 export function DailyLineagePage() {
   const { date } = useParams();
   const navigate = useNavigate();
@@ -64,6 +70,7 @@ export function DailyLineagePage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>策略</th>
                   <th><GlossaryTerm field="bracket">档</GlossaryTerm></th>
                   <th><GlossaryTerm field="side">方向</GlossaryTerm></th>
                   <th><GlossaryTerm field="edge">edge</GlossaryTerm></th>
@@ -78,6 +85,7 @@ export function DailyLineagePage() {
               <tbody>
                 {crows.map((r) => (
                   <tr key={r.fill_id}>
+                    <td style={{ fontFamily: "ui-monospace, monospace", fontSize: 11 }} title={r.strategy_name ?? ""}>{shortStrategy(r.strategy_name)}</td>
                     <td>{r.bracket ?? "—"}</td>
                     <td>{r.side?.includes("NO") ? "NO" : "YES"}</td>
                     <td>{r.edge == null ? "—" : r.edge.toFixed(3)}</td>
