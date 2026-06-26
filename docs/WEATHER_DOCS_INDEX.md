@@ -59,6 +59,7 @@ Status 口径：
 | [WEATHER_HANDOFF_EXECUTION.md](WEATHER_HANDOFF_EXECUTION.md) | `snapshot` | 2026-06-08 方法论/结构重整交接的历史记录；方法已吸收进 ANALYSIS_CONTRACT §0 + performance skill。当前复盘入口改用 STRATEGY_REVIEW_PIPELINE / ARCHITECTURE_SPINE |
 | [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md) | `design-draft` | 天气策略 [0]–[6] 主线骨架和评估层重构映射 |
 | [OPS_RUNBOOK.md](OPS_RUNBOOK.md) | `current-reference` | 常驻进程、日志、通用运维命令在哪里 |
+| [WEATHER_DASHBOARD.md](WEATHER_DASHBOARD.md) | `current-source` | 重做后看板的信息架构 / 每页口径（在险资金、陈旧未结算、镜像≠生产、探针/研究口径）/ 新增 API |
 | [WEATHER_DASHBOARD_TROUBLESHOOTING.md](WEATHER_DASHBOARD_TROUBLESHOOTING.md) | `current-reference` | 本机 dashboard / API / FE 出问题时怎么排查 |
 
 ## 数据真相与协议
