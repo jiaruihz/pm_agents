@@ -734,6 +734,11 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & selected[CORE_LIVE_REGIME_COLS].apply(lambda col: pd.to_numeric(col, errors="coerce").notna()).all(axis=1)
             & ~selected[CORE_LIVE_REGIME_LABELS].astype(str).apply(lambda row: any("unknown" in item for item in row), axis=1)
         )
+        peak_delta = pd.to_numeric(selected.get("forecast_peak_delta_hours_local"), errors="coerce")
+        is_current_no_route = selected["route_leg"].astype(str).eq("runway_current_no") | selected["expression"].astype(str).eq(
+            "current_bracket_no"
+        )
+        selected["current_no_peak_clock_ok"] = (~is_current_no_route) | peak_delta.le(0.0)
         selected["base_notional_usd"] = float(args.base_notional)
         selected["soft_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(selected["soft_balanced"], errors="coerce")
         selected["soft_shares"] = selected["soft_notional_usd"] / pd.to_numeric(selected["ask"], errors="coerce")
@@ -744,6 +749,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & pd.to_numeric(selected["ask_size"], errors="coerce").ge(pd.to_numeric(selected["soft_shares"], errors="coerce"))
             & selected["token_id"].astype(str).ne("")
             & selected["live_feature_parity_ok"].astype(bool)
+            & selected["current_no_peak_clock_ok"].astype(bool)
             & ~selected["live_duplicate_key"].astype(bool)
         )
         def skip_reason(row: pd.Series) -> str:
@@ -765,6 +771,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
                 reasons.append("missing_token_id")
             if not bool(row.get("live_feature_parity_ok")):
                 reasons.append("live_feature_parity_failed")
+            if not bool(row.get("current_no_peak_clock_ok", True)):
+                reasons.append("current_no_peak_clock_past_or_missing")
             if bool(row.get("live_duplicate_key")):
                 reasons.append("duplicate_live_city_date_token")
             return "|".join(reasons) if reasons else "not_execution_eligible"
@@ -825,6 +833,7 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "live_feature_status": row.get("live_feature_status"),
         "live_feature_source": row.get("live_feature_source"),
         "live_feature_parity_ok": row.get("live_feature_parity_ok"),
+        "current_no_peak_clock_ok": row.get("current_no_peak_clock_ok"),
         "live_duplicate_key": row.get("live_duplicate_key"),
         "temp_trend_1h_f": row.get("temp_trend_1h_f"),
         "temp_trend_3h_f": row.get("temp_trend_3h_f"),
