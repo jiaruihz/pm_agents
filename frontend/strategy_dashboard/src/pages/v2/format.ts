@@ -50,3 +50,29 @@ export function auditZh(s: string | null | undefined): string {
   if (!s) return "—";
   return AUDIT_ZH[s] ?? s;
 }
+
+const RESEARCH_STATUS_ZH: Record<string, string> = {
+  unknown: "研究中（未标注结论）",
+  "research-only": "仅研究 · 未上线",
+  research_only: "仅研究 · 未上线",
+  research_only_not_live: "仅研究 · 未上线",
+  shadow_candidate: "影子候选",
+  shadow_candidate_but_not_live_ready: "影子候选 · 未达 live",
+  balanced_shadow_candidate_but_not_live_ready: "平衡影子候选 · 未达 live",
+  model_branch_shadow_only: "仅模型影子",
+  live: "实盘",
+  shadow: "影子",
+  disproven: "已证伪",
+};
+
+/** Human Chinese label for a research-line status; generic fallback keeps signal. */
+export function researchStatusZh(s: string | null | undefined): string {
+  if (!s) return RESEARCH_STATUS_ZH.unknown;
+  if (RESEARCH_STATUS_ZH[s]) return RESEARCH_STATUS_ZH[s];
+  const low = s.toLowerCase();
+  if (low.includes("not_live_ready")) return "候选 · 未达 live";
+  if (low.includes("shadow")) return "影子候选";
+  if (low.includes("live_ready")) return "可 live 候选";
+  if (low.includes("research")) return "仅研究 · 未上线";
+  return s; // keep the raw token rather than hide it
+}

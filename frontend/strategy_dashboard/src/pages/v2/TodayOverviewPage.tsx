@@ -45,14 +45,18 @@ export function TodayOverviewPage() {
           </div>
         </Link>
 
-        {/* Capital at risk */}
+        {/* Capital at risk = genuinely-open (recent) positions only */}
         <Link to="/performance" className="card pulse-card">
-          <div className="pulse-title">在险资金</div>
-          <div className="pulse-big">{usd(live?.clob.capital_deployed_usd ?? null)}</div>
+          <div className="pulse-title"><GlossaryTerm field="open_cost_usd">在险资金</GlossaryTerm><span className="kpi-note"> 近期未结算</span></div>
+          <div className="pulse-big">{usd(live?.clob.open_recent_cost_usd ?? null)}</div>
           <div className="pulse-detail">
-            <span><GlossaryTerm field="open_cost">开仓成本（非亏损）</GlossaryTerm></span>
-            <span>{live?.clob.open_count ?? 0} 未结算 · {live?.clob.settled_count ?? 0} 已结算</span>
+            <span>{live?.clob.open_recent_count ?? 0} 笔在场上</span>
           </div>
+          {(live?.clob.stale_unsettled_count ?? 0) > 0 && (
+            <div className="pulse-foot" style={{ color: "var(--warn)" }}>
+              另有 {live?.clob.stale_unsettled_count} 笔陈旧未结算 {usd(live?.clob.stale_unsettled_cost_usd ?? null)}（疑似漏结算，见绩效页）
+            </div>
+          )}
         </Link>
 
         {/* Settled */}

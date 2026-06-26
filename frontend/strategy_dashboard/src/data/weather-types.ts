@@ -173,6 +173,10 @@ export interface LiveSummary {
     realized_pnl_usd: number;
     open_cost_usd?: number;
     open_unrealized_pnl_usd?: number;
+    open_recent_count?: number;
+    open_recent_cost_usd?: number;
+    stale_unsettled_count?: number;
+    stale_unsettled_cost_usd?: number;
   };
   pending_orders: {
     count: number;

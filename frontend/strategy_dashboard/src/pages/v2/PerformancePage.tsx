@@ -26,6 +26,7 @@ function BookTable({ rows, showPnl }: { rows: LiveBookRow[]; showPnl: "realized"
             <th><GlossaryTerm field="cost_usd">成本</GlossaryTerm></th>
             <th><GlossaryTerm field="forecast_source">数据源</GlossaryTerm></th>
             <th>{showPnl === "realized" ? <GlossaryTerm field="pnl_usd_at_fill">已实现</GlossaryTerm> : <GlossaryTerm field="unrealized_pnl_mid">浮动(MTM)</GlossaryTerm>}</th>
+            <th>Poly</th>
           </tr>
         </thead>
         <tbody>
@@ -41,6 +42,7 @@ function BookTable({ rows, showPnl }: { rows: LiveBookRow[]; showPnl: "realized"
                 <td>{usd(r.cost_usd)}</td>
                 <td className="muted" style={{ fontSize: 11 }}>{(r.forecast_source ?? "").replace("open_meteo_live_", "") || "—"}</td>
                 <td style={{ color: (pnl ?? 0) >= 0 ? "var(--ok)" : "var(--bad)" }}>{usd(pnl, true)}</td>
+                <td>{r.poly_url ? <a href={r.poly_url} target="_blank" rel="noreferrer" className="poly-link">↗</a> : <span className="muted">—</span>}</td>
               </tr>
             );
           })}
@@ -65,6 +67,8 @@ export function PerformancePage() {
   }, []);
 
   const c = summary?.clob;
+  const recentOpen = (open ?? []).filter((r) => !r.stale_unsettled);
+  const staleOpen = (open ?? []).filter((r) => r.stale_unsettled);
 
   return (
     <div className="page">
@@ -81,8 +85,8 @@ export function PerformancePage() {
 
       <div className="kpi-grid">
         <div className="card kpi">
-          <div className="kpi-label"><GlossaryTerm field="open_cost">未结算开仓成本</GlossaryTerm><span className="kpi-note">非亏损</span></div>
-          <div className="kpi-value">{usd(c?.open_cost_usd ?? null)}</div>
+          <div className="kpi-label"><GlossaryTerm field="open_cost_usd">在险资金</GlossaryTerm><span className="kpi-note">近期·非亏损</span></div>
+          <div className="kpi-value">{usd(c?.open_recent_cost_usd ?? null)}</div>
         </div>
         <div className="card kpi">
           <div className="kpi-label">未结算浮动 <span className="kpi-note">MTM</span></div>
@@ -99,11 +103,23 @@ export function PerformancePage() {
       </div>
 
       <section className="card">
-        <h2>当前未结算持仓 <span className="muted">({open?.length ?? 0})</span></h2>
+        <h2>当前未结算持仓 <span className="muted">({recentOpen.length})</span></h2>
         {open == null && <EmptyState message="加载中…" />}
-        {open != null && open.length === 0 && <EmptyState message="当前没有未结算的 live 持仓" />}
-        {open != null && open.length > 0 && <BookTable rows={open} showPnl="mtm" />}
+        {open != null && recentOpen.length === 0 && <EmptyState message="当前没有近期未结算的 live 持仓" />}
+        {recentOpen.length > 0 && <BookTable rows={recentOpen} showPnl="mtm" />}
       </section>
+
+      {staleOpen.length > 0 && (
+        <section className="card">
+          <h2>陈旧未结算 <span className="muted">({staleOpen.length}) · 疑似漏结算</span></h2>
+          <div className="gate-banner gate-warn">
+            这些是 target_date 超过 7 天却仍未结算的旧持仓（多为已停用的 <code>mid_price_core</code> 策略，
+            <code>settlement_join_method=none</code>）。它们现实中早已结算，只是<strong>结算未回填进 fact_trades</strong>，
+            不算真正在险。修复请走结算回填（<code>weather-fact-rebuild</code> / settlement backfill）。
+          </div>
+          <BookTable rows={staleOpen} showPnl="mtm" />
+        </section>
+      )}
 
       <section className="card">
         <h2>按策略汇总（live_real）</h2>

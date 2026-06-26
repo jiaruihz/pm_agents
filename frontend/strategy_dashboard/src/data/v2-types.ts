@@ -83,6 +83,10 @@ export interface LiveBookRow {
   unrealized_pnl_mid: number | null;
   val_snapshot_ts_utc: string | null;
   fill_ts_utc: string | null;
+  condition_id: string | null;
+  market_id: string | null;
+  poly_url: string | null;
+  stale_unsettled: boolean;
 }
 
 export interface LiveBookResponse { rows: LiveBookRow[]; }

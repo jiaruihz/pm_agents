@@ -191,6 +191,11 @@ body {
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .data-table.compact th, .data-table.compact td { padding: 4px 8px; font-size: 12px; white-space: nowrap; }
 .stat-caption { font-size: 11px; color: var(--v2-muted); margin: 6px 0 0; line-height: 1.5; }
+.param-block { margin-top: 6px; }
+.param-caption { font-size: 11px; font-weight: 600; color: var(--v2-muted); margin: 8px 0 2px; }
+.pulse-foot { font-size: 11px; color: var(--v2-muted); margin-top: 6px; }
+.poly-link { color: var(--accent); text-decoration: none; font-weight: 700; }
+.poly-link:hover { text-decoration: underline; }
 
 /* ── narrative (strategy rationale) ──────────────────────────────── */
 .narrative { font-size: 14px; line-height: 1.7; color: var(--v2-ink); }

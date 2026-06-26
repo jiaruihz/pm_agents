@@ -48,7 +48,17 @@ def get_live_summary(db: Db):
                                                                              AS realized_pnl_usd,
             SUM(CASE WHEN COALESCE(settled, 0) = 1 THEN 0 ELSE cost_usd END) AS open_cost_usd,
             SUM(CASE WHEN COALESCE(settled, 0) = 1 THEN 0 ELSE COALESCE(unrealized_pnl_mid, 0) END)
-                                                                             AS open_unrealized_pnl_usd
+                                                                             AS open_unrealized_pnl_usd,
+            -- "recent open" = genuinely at-risk (target_date within 7d, awaiting settlement)
+            SUM(CASE WHEN COALESCE(settled,0)=0 AND target_date >= date('now','-7 day') THEN 1 ELSE 0 END)
+                                                                             AS open_recent_count,
+            SUM(CASE WHEN COALESCE(settled,0)=0 AND target_date >= date('now','-7 day') THEN cost_usd ELSE 0 END)
+                                                                             AS open_recent_cost_usd,
+            -- "stale unsettled" = old target_date never settled (likely missing settlement backfill)
+            SUM(CASE WHEN COALESCE(settled,0)=0 AND target_date < date('now','-7 day') THEN 1 ELSE 0 END)
+                                                                             AS stale_unsettled_count,
+            SUM(CASE WHEN COALESCE(settled,0)=0 AND target_date < date('now','-7 day') THEN cost_usd ELSE 0 END)
+                                                                             AS stale_unsettled_cost_usd
         FROM fact_trades
         WHERE trade_class = 'live_real'
         """
@@ -100,6 +110,10 @@ def get_live_summary(db: Db):
             "realized_pnl_usd": round(clob["realized_pnl_usd"] or 0.0, 4),
             "open_cost_usd": round(clob["open_cost_usd"] or 0.0, 4),
             "open_unrealized_pnl_usd": round(clob["open_unrealized_pnl_usd"] or 0.0, 4),
+            "open_recent_count": clob["open_recent_count"] or 0,
+            "open_recent_cost_usd": round(clob["open_recent_cost_usd"] or 0.0, 4),
+            "stale_unsettled_count": clob["stale_unsettled_count"] or 0,
+            "stale_unsettled_cost_usd": round(clob["stale_unsettled_cost_usd"] or 0.0, 4),
         },
         "pending_orders": {
             "count": pending["n"] or 0,
@@ -115,6 +129,27 @@ def get_live_summary(db: Db):
 # ---------------------------------------------------------------------------
 # GET /api/live/book  — canonical live_real positions straight from fact_trades
 # ---------------------------------------------------------------------------
+
+def _condition_slug_map() -> dict:
+    """Map condition_id -> Polymarket event_slug from the most recent snapshot.
+    fact_trades stores no slug, but snapshot records carry event_slug+condition_id."""
+    import glob
+    import json as _json
+    import os as _os
+    snap_dir = _os.environ.get("WEATHER_SNAPSHOTS_DIR", "runtime/weather_edge_v1/market_data/paper_snapshots")
+    files = sorted(glob.glob(_os.path.join(snap_dir, "snapshot_*.json")), reverse=True)
+    out: dict = {}
+    for fp in files[:3]:  # last few snapshots cover current + recent markets
+        try:
+            data = _json.load(open(fp, encoding="utf-8"))
+        except Exception:
+            continue
+        for rec in (data.get("records") or []):
+            cid, slug = rec.get("condition_id"), rec.get("event_slug")
+            if cid and slug and cid not in out:
+                out[cid] = slug
+    return out
+
 
 @router.get("/book")
 def get_live_book(
@@ -141,6 +176,7 @@ def get_live_book(
         f"""
         SELECT
             fill_id, strategy_name, city, city_pool, icao, target_date, bracket,
+            condition_id, market_id,
             side, forecast_source, model_version, snapshot_ts_utc, edge, market_price,
             fill_price, fill_qty, cost_usd, notional, fees_usd,
             settlement_status, COALESCE(settled, 0) AS settled, final_yes,
@@ -152,12 +188,19 @@ def get_live_book(
         """,
         params,
     ).fetchall()
+    slug_map = _condition_slug_map()
+    from datetime import date, timedelta
+    stale_before = (date.today() - timedelta(days=7)).isoformat()
     out = []
     for r in rows:
         d = dict(r)
         for k in ("pnl_usd_at_fill", "unrealized_pnl_mid", "cost_usd", "fill_price"):
             if d.get(k) is not None:
                 d[k] = round(d[k], 4)
+        slug = slug_map.get(d.get("condition_id"))
+        d["poly_url"] = f"https://polymarket.com/event/{slug}" if slug else None
+        # stale unsettled = old target_date never settled (likely missing settlement)
+        d["stale_unsettled"] = (not d.get("settled")) and bool(d.get("target_date")) and d["target_date"] < stale_before
         out.append(d)
     return {"rows": out}
 

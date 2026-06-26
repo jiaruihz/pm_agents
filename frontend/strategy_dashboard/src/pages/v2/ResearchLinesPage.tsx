@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { weatherApi } from "../../data/weather-http";
 import type { ResearchLineRow } from "../../data/v2-types";
 import { EmptyState } from "../../components/v2/EmptyState";
-import { pct } from "./format";
+import { pct, researchStatusZh } from "./format";
 
 function rocRoi(l: ResearchLineRow): number | null {
   return l.forward_roi ?? l.holdout_roi ?? l.repr_roi;
@@ -54,7 +54,7 @@ export function ResearchLinesPage() {
                       <Link to={`/research/${encodeURIComponent(l.line_id)}`}>{l.title}</Link>
                       {l.verdict_reason && <div className="row-note">{l.verdict_reason}</div>}
                     </td>
-                    <td>{l.status}</td>
+                    <td title={l.status}>{researchStatusZh(l.status)}</td>
                     <td>{pct(rocRoi(l))}</td>
                     <td>
                       {l.ci_low == null ? "—" : `[${pct(l.ci_low)}, ${pct(l.ci_high)}]`}

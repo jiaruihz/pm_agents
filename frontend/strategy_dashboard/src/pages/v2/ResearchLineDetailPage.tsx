@@ -4,6 +4,7 @@ import { weatherApi } from "../../data/weather-http";
 import type { ResearchLineDetail } from "../../data/v2-types";
 import { EmptyState } from "../../components/v2/EmptyState";
 import { GlossaryTerm } from "../../components/v2/GlossaryTerm";
+import { researchStatusZh } from "./format";
 
 /** Minimal inline markdown: **bold** and `code`. */
 function inline(text: string): React.ReactNode[] {
@@ -121,7 +122,7 @@ export function ResearchLineDetailPage() {
             <span className="badge" data-tone={verdict.live_ready ? "fresh" : "stale"}>
               {verdict.live_ready ? "够 live" : "未达 live"}
             </span>
-            <strong>{String(verdict.status ?? "")}</strong>
+            <strong title={String(verdict.status ?? "")}>{researchStatusZh(String(verdict.status ?? ""))}</strong>
           </div>
           {verdict.reason != null && <p className="verdict-reason">{String(verdict.reason)}</p>}
         </section>

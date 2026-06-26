@@ -21,6 +21,51 @@ function verdict(p: ProbeHealthRow): { tone: "good" | "warn" | "bad" | "neutral"
   return { tone: "good", text: `${lifecycleZh(p.lifecycle_status)}在跑，本轮 ${p.candidate_rows} 个候选、${num(p.execution_eligible)} 个可执行。` };
 }
 
+function fmtParam(v: unknown): string {
+  if (v === true) return "是";
+  if (v === false) return "否";
+  if (v == null || v === "") return "—";
+  if (typeof v === "string" && v.includes("/") && v.length > 28) return "…/" + v.split("/").slice(-1)[0];
+  return String(v);
+}
+
+/** Readable "参数与口径": runtime status + freshness + the probe's caps/thresholds. */
+function ProbeParams({ p }: { p: ProbeHealthRow }) {
+  const caps = (p.caps ?? {}) as Record<string, unknown>;
+  // Show notional/window/threshold caps first; hide noisy artifact paths.
+  const capEntries = Object.entries(caps).filter(([k]) => !k.endsWith("_artifact") && !k.endsWith("_model_artifact"));
+  const runtime: [string, unknown][] = [
+    ["status", p.status],
+    ["snapshot_age_min", p.snapshot_age_min],
+    ["heartbeat_age_min", p.heartbeat_age_min],
+    ["health_status", p.health_status],
+  ];
+  return (
+    <div className="param-block">
+      <div className="param-caption">运行态</div>
+      <table className="raw-table">
+        <tbody>
+          {runtime.map(([k, v]) => (
+            <tr key={k}><td><GlossaryTerm field={k} /></td><td>{fmtParam(v)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      {capEntries.length > 0 && (
+        <>
+          <div className="param-caption">下单门槛与仓位上限（hover 看英文原名 / 口径）</div>
+          <table className="raw-table">
+            <tbody>
+              {capEntries.map(([k, v]) => (
+                <tr key={k}><td><GlossaryTerm field={k} /></td><td>{fmtParam(v)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ProbeCard({ p }: { p: ProbeHealthRow }) {
   const [raw, setRaw] = useState(false);
   const v = verdict(p);
@@ -62,26 +107,9 @@ function ProbeCard({ p }: { p: ProbeHealthRow }) {
       </p>
 
       <button className="raw-toggle" onClick={() => setRaw((x) => !x)}>
-        {raw ? "收起原始字段 ▲" : "看原始字段 ▼"}
+        {raw ? "收起参数与口径 ▲" : "看参数与口径 ▼"}
       </button>
-      {raw && (
-        <table className="raw-table">
-          <tbody>
-            {Object.entries({
-              status: p.status,
-              snapshot_age_min: p.snapshot_age_min,
-              heartbeat_age_min: p.heartbeat_age_min,
-              health_status: p.health_status,
-              caps: JSON.stringify(p.caps),
-            }).map(([k, val]) => (
-              <tr key={k}>
-                <td><GlossaryTerm field={k}>{k}</GlossaryTerm></td>
-                <td>{String(val ?? "—")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {raw && <ProbeParams p={p} />}
     </div>
   );
 }
