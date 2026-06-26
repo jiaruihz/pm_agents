@@ -485,6 +485,7 @@ def build_city_state(
     tz = ZoneInfo(cfg.timezone_name)
     local_ts = snapshot_ts.astimezone(tz)
     decision_hour = int(local_ts.hour)
+    decision_hour_float = local_ts.hour + local_ts.minute / 60.0 + local_ts.second / 3600.0
     target_date = str(first.get("target_date"))
     if decision_hour not in research.DECISION_HOURS:
         return None, f"outside_decision_hours:{decision_hour}"
@@ -526,6 +527,7 @@ def build_city_state(
         "target_date": target_date,
         "decision_snapshot_ts_utc": str(first.get("snapshot_ts_utc")),
         "decision_hour_local": decision_hour,
+        "decision_hour_local_float": decision_hour_float,
         "timezone": cfg.timezone_name,
         "unit": unit,
         "icao": cfg.official_icao,
@@ -539,6 +541,7 @@ def build_city_state(
         "forecast_clock_source": "paper_snapshot_live",
         "forecast_max_native": safe_float(first.get("forecast_max_native")),
         "forecast_peak_hour_local": safe_float(first.get("forecast_peak_hour_local")),
+        "forecast_peak_delta_hours_local": decision_hour_float - safe_float(first.get("forecast_peak_hour_local")),
         "forecast_gap_to_running_native": safe_float(first.get("forecast_max_native")) - running_native,
         "relative_humidity_pct": math.nan,
         "sky_cover_code": math.nan,
@@ -797,6 +800,8 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "city": row.get("city"),
         "target_date": row.get("target_date"),
         "decision_snapshot_ts_utc": row.get("decision_snapshot_ts_utc"),
+        "decision_hour_local": row.get("decision_hour_local"),
+        "decision_hour_local_float": row.get("decision_hour_local_float"),
         "day_regime": row.get("day_regime"),
         "intraday_state": row.get("intraday_state"),
         "moisture_cloud_regime": row.get("moisture_cloud_regime"),
@@ -830,6 +835,9 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "forecast_source": row.get("forecast_source"),
         "forecast_max_native": row.get("forecast_max_native"),
         "forecast_peak_hour_local": row.get("forecast_peak_hour_local"),
+        "forecast_peak_delta_hours_local": row.get("forecast_peak_delta_hours_local"),
+        "peak_clock_state": row.get("peak_clock_state"),
+        "peak_clock_multiplier": row.get("peak_clock_multiplier"),
         "forecast_gap_to_running_native": row.get("forecast_gap_to_running_native"),
         "running_native": row.get("running_native"),
         "current_native": row.get("current_native"),
@@ -975,6 +983,11 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "forecast_source": str(row.get("forecast_source") or ""),
         "forecast_max_native": safe_float(row.get("forecast_max_native"), None),
         "forecast_peak_hour_local": safe_float(row.get("forecast_peak_hour_local"), None),
+        "forecast_peak_delta_hours_local": safe_float(row.get("forecast_peak_delta_hours_local"), None),
+        "decision_hour_local": safe_float(row.get("decision_hour_local"), None),
+        "decision_hour_local_float": safe_float(row.get("decision_hour_local_float"), None),
+        "peak_clock_state": str(row.get("peak_clock_state") or ""),
+        "peak_clock_multiplier": safe_float(row.get("peak_clock_multiplier"), None),
         "running_native": safe_float(row.get("running_native"), None),
         "current_native": safe_float(row.get("current_native"), None),
         "live_feature_status": str(row.get("live_feature_status") or ""),

@@ -219,6 +219,55 @@ def add_soft_weights(selected: pd.DataFrame) -> pd.DataFrame:
     regime_cols = ["moisture_cloud_regime", "wind_regime", "running_max_state", "intraday_state"]
     out["is_unknown_weather"] = out[regime_cols].astype(str).apply(lambda row: any("unknown" in item for item in row), axis=1)
     out["high_ask_risk"] = ((pd.to_numeric(out["ask"], errors="coerce") - 0.35) / 0.35).clip(0, 1).fillna(0)
+    if "decision_hour_local_float" in out.columns:
+        decision_hour = pd.to_numeric(out["decision_hour_local_float"], errors="coerce")
+    else:
+        decision_hour = pd.Series(np.nan, index=out.index, dtype="float64")
+    if "decision_hour_local" in out.columns:
+        decision_hour_fallback = pd.to_numeric(out["decision_hour_local"], errors="coerce")
+    else:
+        decision_hour_fallback = pd.Series(np.nan, index=out.index, dtype="float64")
+    decision_hour = decision_hour.fillna(decision_hour_fallback)
+    peak_hour = pd.to_numeric(out.get("forecast_peak_hour_local"), errors="coerce")
+    out["forecast_peak_delta_hours_local"] = decision_hour - peak_hour
+    current_no_route = out["route_leg"].astype(str).eq("runway_current_no") | out["expression"].astype(str).eq(
+        "current_bracket_no"
+    )
+    peak_delta = pd.to_numeric(out["forecast_peak_delta_hours_local"], errors="coerce")
+    out["peak_clock_state"] = np.select(
+        [
+            ~current_no_route,
+            peak_delta.isna(),
+            peak_delta.le(-2.0),
+            peak_delta.le(0.0),
+            peak_delta.le(1.0),
+        ],
+        [
+            "not_current_no_route",
+            "unknown",
+            "peak_2h_plus_ahead",
+            "peak_0_to_2h_ahead",
+            "peak_passed_0_to_1h",
+        ],
+        default="peak_passed_1h_plus",
+    )
+    out["peak_clock_multiplier"] = np.select(
+        [
+            ~current_no_route,
+            peak_delta.isna(),
+            peak_delta.le(-2.0),
+            peak_delta.le(0.0),
+            peak_delta.le(1.0),
+        ],
+        [
+            1.00,
+            0.70,
+            1.00,
+            0.70,
+            0.45,
+        ],
+        default=0.20,
+    )
 
     out["route_multiplier"] = np.select(
         [out["is_marginal_runway"], out["is_open_runway"], out["is_capped_route"]],
@@ -252,9 +301,16 @@ def add_soft_weights(selected: pd.DataFrame) -> pd.DataFrame:
         (0.25 + 0.75 * out["route_multiplier"])
         * (0.70 + 0.30 * out["price_multiplier"])
         * (0.80 + 0.20 * out["day_multiplier"])
+        * (0.50 + 0.50 * out["peak_clock_multiplier"])
     )
     out["soft_route_price"] = out["route_multiplier"] * out["price_multiplier"]
-    out["soft_balanced"] = out["route_multiplier"] * out["price_multiplier"] * out["weather_multiplier"] * out["day_multiplier"]
+    out["soft_balanced"] = (
+        out["route_multiplier"]
+        * out["price_multiplier"]
+        * out["weather_multiplier"]
+        * out["day_multiplier"]
+        * out["peak_clock_multiplier"]
+    )
     out["full_size"] = 1.0
     return out
 
