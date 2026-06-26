@@ -5,6 +5,36 @@ import type { ResearchLineDetail } from "../../data/v2-types";
 import { EmptyState } from "../../components/v2/EmptyState";
 import { GlossaryTerm } from "../../components/v2/GlossaryTerm";
 
+/** Minimal inline markdown: **bold** and `code`. */
+function inline(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+  let last = 0, m: RegExpExecArray | null, i = 0;
+  while ((m = re.exec(text))) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    const tok = m[0];
+    if (tok.startsWith("**")) parts.push(<strong key={i++}>{tok.slice(2, -2)}</strong>);
+    else parts.push(<code key={i++}>{tok.slice(1, -1)}</code>);
+    last = m.index + tok.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+/** Render the leading narrative markdown (headings + paragraphs). */
+function Narrative({ md }: { md: string }) {
+  const blocks = md.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  return (
+    <div className="narrative">
+      {blocks.map((b, i) => {
+        if (b.startsWith("## ")) return <h3 key={i}>{inline(b.slice(3))}</h3>;
+        if (b.startsWith("# ")) return <h2 key={i} className="narrative-title">{inline(b.slice(2))}</h2>;
+        return <p key={i}>{b.split("\n").map((ln, j) => <span key={j}>{inline(ln)}<br /></span>)}</p>;
+      })}
+    </div>
+  );
+}
+
 function isScalar(v: unknown): v is string | number | boolean {
   return v === null || ["string", "number", "boolean"].includes(typeof v);
 }
@@ -76,6 +106,14 @@ export function ResearchLineDetailPage() {
         <h1>{String(s.title ?? s.strategy ?? data.line_id)}</h1>
         <p className="page-sub">{data.summary_path}</p>
       </header>
+
+      {data.narrative_md && (
+        <section className="card">
+          <h2>策略思路 · 为什么这么做</h2>
+          <Narrative md={data.narrative_md} />
+          {data.doc_path && <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>完整分析：{data.doc_path}</p>}
+        </section>
+      )}
 
       {verdict && (
         <section className="card verdict-card" data-ready={String(verdict.live_ready)}>

@@ -6,6 +6,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, Query
 
 from weather_dashboard.api.deps import get_db
+from weather_dashboard.api.routers.runs import _SETTLEMENTS_DEDUP  # shared settlement dedup CTE
 
 router = APIRouter(prefix="/live", tags=["live"])
 
@@ -38,10 +39,16 @@ def get_live_summary(db: Db):
         SELECT
             COUNT(DISTINCT fill_id)                                          AS total_fills,
             SUM(cost_usd)                                                    AS capital_deployed_usd,
-            SUM(CASE WHEN settlement_status = 'settled' THEN 1 ELSE 0 END)  AS settled_count,
-            SUM(CASE WHEN settlement_status != 'settled' THEN 1 ELSE 0 END) AS open_count,
-            SUM(CASE WHEN settlement_status = 'settled' THEN pnl_usd_at_fill ELSE 0 END)
-                                                                             AS realized_pnl_usd
+            SUM(CASE WHEN COALESCE(settled, 0) = 1 THEN 1 ELSE 0 END)        AS settled_count,
+            -- open = anything not yet settled, INCLUDING NULL settlement_status
+            -- (NULL != 'settled' evaluates to NULL in SQL, so the old form
+            --  silently dropped genuinely-open positions).
+            SUM(CASE WHEN COALESCE(settled, 0) = 1 THEN 0 ELSE 1 END)        AS open_count,
+            SUM(CASE WHEN COALESCE(settled, 0) = 1 THEN pnl_usd_at_fill ELSE 0 END)
+                                                                             AS realized_pnl_usd,
+            SUM(CASE WHEN COALESCE(settled, 0) = 1 THEN 0 ELSE cost_usd END) AS open_cost_usd,
+            SUM(CASE WHEN COALESCE(settled, 0) = 1 THEN 0 ELSE COALESCE(unrealized_pnl_mid, 0) END)
+                                                                             AS open_unrealized_pnl_usd
         FROM fact_trades
         WHERE trade_class = 'live_real'
         """
@@ -91,6 +98,8 @@ def get_live_summary(db: Db):
             "settled_count": clob["settled_count"] or 0,
             "capital_deployed_usd": round(clob["capital_deployed_usd"] or 0.0, 4),
             "realized_pnl_usd": round(clob["realized_pnl_usd"] or 0.0, 4),
+            "open_cost_usd": round(clob["open_cost_usd"] or 0.0, 4),
+            "open_unrealized_pnl_usd": round(clob["open_unrealized_pnl_usd"] or 0.0, 4),
         },
         "pending_orders": {
             "count": pending["n"] or 0,
@@ -101,6 +110,82 @@ def get_live_summary(db: Db):
             "metrics": paper_metrics,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/live/book  — canonical live_real positions straight from fact_trades
+# ---------------------------------------------------------------------------
+
+@router.get("/book")
+def get_live_book(
+    db: Db,
+    status: Optional[str] = Query(None, description="open | settled | all (default all)"),
+    target_date: Optional[str] = Query(None),
+    limit: int = Query(300, ge=1, le=2000),
+):
+    """Live (real-money) positions read directly from fact_trades — the same
+    canonical source as /summary, so counts always agree. One row per fill with
+    settlement + realized PnL (settled) or MTM (open)."""
+    where = ["trade_class = 'live_real'"]
+    params: list = []
+    if status == "open":
+        where.append("COALESCE(settled, 0) = 0")
+    elif status == "settled":
+        where.append("COALESCE(settled, 0) = 1")
+    if target_date:
+        where.append("target_date = ?")
+        params.append(target_date)
+    params.append(limit)
+
+    rows = db.execute(
+        f"""
+        SELECT
+            fill_id, strategy_name, city, city_pool, icao, target_date, bracket,
+            side, forecast_source, model_version, snapshot_ts_utc, edge, market_price,
+            fill_price, fill_qty, cost_usd, notional, fees_usd,
+            settlement_status, COALESCE(settled, 0) AS settled, final_yes,
+            pnl_usd_at_fill, unrealized_pnl_mid, val_mid, val_snapshot_ts_utc, fill_ts_utc
+        FROM fact_trades
+        WHERE {' AND '.join(where)}
+        ORDER BY (COALESCE(settled,0)) ASC, fill_ts_utc DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        for k in ("pnl_usd_at_fill", "unrealized_pnl_mid", "cost_usd", "fill_price"):
+            if d.get(k) is not None:
+                d[k] = round(d[k], 4)
+        out.append(d)
+    return {"rows": out}
+
+
+# ---------------------------------------------------------------------------
+# GET /api/live/book/strategies — live_real grouped by strategy_name
+# ---------------------------------------------------------------------------
+
+@router.get("/book/strategies")
+def get_live_book_strategies(db: Db):
+    rows = db.execute(
+        """
+        SELECT
+            strategy_name,
+            COUNT(*) AS n,
+            SUM(COALESCE(settled,0)) AS settled,
+            SUM(CASE WHEN COALESCE(settled,0)=1 THEN 0 ELSE 1 END) AS open_count,
+            ROUND(SUM(cost_usd), 4) AS cost_usd,
+            ROUND(SUM(CASE WHEN COALESCE(settled,0)=1 THEN 0 ELSE cost_usd END), 4) AS open_cost_usd,
+            ROUND(SUM(CASE WHEN COALESCE(settled,0)=1 THEN pnl_usd_at_fill ELSE 0 END), 4) AS realized_pnl_usd,
+            MAX(fill_ts_utc) AS last_fill_ts_utc
+        FROM fact_trades
+        WHERE trade_class = 'live_real'
+        GROUP BY strategy_name
+        ORDER BY last_fill_ts_utc DESC
+        """
+    ).fetchall()
+    return {"strategies": [dict(r) for r in rows]}
 
 
 # ---------------------------------------------------------------------------

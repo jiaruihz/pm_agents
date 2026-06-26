@@ -9,6 +9,7 @@ import { ResearchLineDetailPage } from "../pages/v2/ResearchLineDetailPage";
 import { PerformancePage } from "../pages/v2/PerformancePage";
 import { DailyLineagePage } from "../pages/v2/DailyLineagePage";
 import { GlossaryPage } from "../pages/v2/GlossaryPage";
+import { DataSourcesPage } from "../pages/v2/DataSourcesPage";
 import { ArchivePage } from "../pages/v2/ArchivePage";
 // legacy pages (kept reachable from /archive)
 import { AccountsPage } from "../pages/AccountsPage";
@@ -42,6 +43,7 @@ export function App(): JSX.Element {
         <Route path="/performance" element={<PerformancePage />} />
         <Route path="/lineage" element={<DailyLineagePage />} />
         <Route path="/lineage/:date" element={<DailyLineagePage />} />
+        <Route path="/data-sources" element={<DataSourcesPage />} />
         <Route path="/glossary" element={<GlossaryPage />} />
         <Route path="/archive" element={<ArchivePage />} />
       </Route>

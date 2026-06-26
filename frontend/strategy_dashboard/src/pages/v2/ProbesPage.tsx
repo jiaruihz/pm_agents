@@ -53,10 +53,13 @@ function ProbeCard({ p }: { p: ProbeHealthRow }) {
           <span className="stat-value">{num(p.execution_eligible)}</span>
         </div>
         <div className="stat">
-          <span className="stat-label">主要拦截</span>
+          <span className="stat-label"><GlossaryTerm field="top_audit">主要拦截</GlossaryTerm></span>
           <span className="stat-value">{auditZh(p.top_audit)}</span>
         </div>
       </div>
+      <p className="stat-caption">
+        候选数 = 从盘口筛出的机会；可执行 = 再过新鲜度/仓位/穿价门槛后真正会下单的；主要拦截 = 本轮最多候选被挡下的原因。
+      </p>
 
       <button className="raw-toggle" onClick={() => setRaw((x) => !x)}>
         {raw ? "收起原始字段 ▲" : "看原始字段 ▼"}

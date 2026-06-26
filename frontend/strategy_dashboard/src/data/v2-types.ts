@@ -55,6 +55,74 @@ export interface ResearchLineDetail {
   line_id: string;
   summary: Record<string, unknown>;
   summary_path: string;
+  narrative_md: string | null;
+  doc_path: string | null;
+}
+
+export interface LiveBookRow {
+  fill_id: string;
+  strategy_name: string | null;
+  city: string | null;
+  city_pool: string | null;
+  target_date: string | null;
+  bracket: string | null;
+  side: string | null;
+  forecast_source: string | null;
+  model_version: string | null;
+  snapshot_ts_utc: string | null;
+  edge: number | null;
+  market_price: number | null;
+  fill_price: number | null;
+  fill_qty: number | null;
+  cost_usd: number | null;
+  notional: number | null;
+  settlement_status: string | null;
+  settled: number;
+  final_yes: number | null;
+  pnl_usd_at_fill: number | null;
+  unrealized_pnl_mid: number | null;
+  val_snapshot_ts_utc: string | null;
+  fill_ts_utc: string | null;
+}
+
+export interface LiveBookResponse { rows: LiveBookRow[]; }
+
+export interface LiveBookStrategy {
+  strategy_name: string;
+  n: number;
+  settled: number;
+  open_count: number;
+  cost_usd: number;
+  open_cost_usd: number;
+  realized_pnl_usd: number;
+  last_fill_ts_utc: string | null;
+}
+
+export interface LiveBookStrategiesResponse { strategies: LiveBookStrategy[]; }
+
+export interface ForecastSource {
+  forecast_source: string;
+  cities: number;
+  models: number;
+  rows: number;
+  latest_snapshot_ts_utc: string | null;
+  first_target_date: string | null;
+  last_target_date: string | null;
+}
+
+export interface MarketSnapshot {
+  file: string;
+  mtime_utc: string | null;
+  ts_utc: string | null;
+  ts_beijing: string | null;
+  total_records: number | null;
+  trading_cities: number | null;
+  research_cities: number | null;
+}
+
+export interface DataSourcesResponse {
+  forecast_sources: ForecastSource[];
+  market_snapshots: MarketSnapshot[];
 }
 
 export interface GlossaryEntry {

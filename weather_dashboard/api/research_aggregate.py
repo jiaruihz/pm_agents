@@ -109,8 +109,40 @@ def aggregate_research_lines(analysis_root: Path) -> list[dict]:
     return rows
 
 
+# Markers where the human narrative ends and the dense tables/appendix begin.
+_NARRATIVE_STOPS = ("## Variant Summary", "## Main Candidate", "## 数据范围", "## Model Metrics")
+
+
+def find_doc_narrative(analysis_root: Path, line_id: str) -> dict | None:
+    """Locate the analysis .md for a line and return its leading narrative
+    (title + 结论/思路), i.e. *why* the strategy is built this way. The .md is
+    named <date>-<line_id with underscores→hyphens>.md."""
+    root = Path(analysis_root)
+    slug = line_id.replace("_", "-")
+    matches = sorted(root.glob(f"*/*{slug}.md"))
+    if not matches:
+        return None
+    doc = matches[-1]
+    text = doc.read_text(encoding="utf-8")
+    # Cut at the first dense-table/appendix marker, or first markdown table row.
+    cut = len(text)
+    for marker in _NARRATIVE_STOPS:
+        idx = text.find(marker)
+        if idx != -1:
+            cut = min(cut, idx)
+    table_idx = text.find("\n| ")
+    if table_idx != -1:
+        cut = min(cut, table_idx)
+    narrative = text[:cut].strip()
+    try:
+        rel = str(doc.relative_to(root))
+    except ValueError:
+        rel = str(doc)
+    return {"doc_path": rel, "narrative_md": narrative}
+
+
 def read_research_line(analysis_root: Path, line_id: str) -> dict | None:
-    """Return the full summary.json (plus resolved path) for one line, or None."""
+    """Return the full summary.json (plus resolved path + doc narrative)."""
     root = Path(analysis_root)
     for summary_path in root.glob(f"*/generated/{line_id}/summary.json"):
         try:
@@ -121,5 +153,12 @@ def read_research_line(analysis_root: Path, line_id: str) -> dict | None:
             rel = str(summary_path.relative_to(root))
         except ValueError:
             rel = str(summary_path)
-        return {"line_id": line_id, "summary": summary, "summary_path": rel}
+        doc = find_doc_narrative(root, line_id)
+        return {
+            "line_id": line_id,
+            "summary": summary,
+            "summary_path": rel,
+            "narrative_md": doc["narrative_md"] if doc else None,
+            "doc_path": doc["doc_path"] if doc else None,
+        }
     return None

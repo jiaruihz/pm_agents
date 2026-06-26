@@ -171,6 +171,8 @@ export interface LiveSummary {
     settled_count: number;
     capital_deployed_usd: number;
     realized_pnl_usd: number;
+    open_cost_usd?: number;
+    open_unrealized_pnl_usd?: number;
   };
   pending_orders: {
     count: number;

@@ -1,7 +1,7 @@
 // HTTP client for the weather dashboard FastAPI backend
 import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail } from "./weather-types";
 import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
-import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse } from "./v2-types";
+import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse, LiveBookResponse, LiveBookStrategiesResponse, DataSourcesResponse } from "./v2-types";
 
 const BASE = `${import.meta.env.VITE_WEATHER_API ?? ""}/api`;
 
@@ -191,5 +191,17 @@ export const weatherApi = {
 
   getGlossary(): Promise<GlossaryResponse> {
     return get("/glossary");
+  },
+
+  getLiveBook(params?: { status?: string; target_date?: string; limit?: number }): Promise<LiveBookResponse> {
+    return get("/live/book", params);
+  },
+
+  getLiveBookStrategies(): Promise<LiveBookStrategiesResponse> {
+    return get("/live/book/strategies");
+  },
+
+  getDataSources(): Promise<DataSourcesResponse> {
+    return get("/data-sources");
   },
 };

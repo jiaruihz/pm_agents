@@ -21,15 +21,19 @@ def classify_freshness(age_min: float | None, warn_min: float, bad_min: float) -
     return "stale"
 
 
-def read_latest_summary(root: Path, instance: str) -> dict | None:
-    """Read <root>/<instance>/latest_summary.json, or None if missing/empty/bad."""
-    p = root / instance / "latest_summary.json"
-    if not p.exists() or p.stat().st_size == 0:
+def read_summary_at(path: Path) -> dict | None:
+    """Read a latest_summary.json at an explicit path, or None if missing/bad."""
+    if not path.exists() or path.stat().st_size == 0:
         return None
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def read_latest_summary(root: Path, instance: str) -> dict | None:
+    """Read <root>/<instance>/latest_summary.json, or None if missing/empty/bad."""
+    return read_summary_at(root / instance / "latest_summary.json")
 
 
 def _snap_age(summary: dict) -> float | None:

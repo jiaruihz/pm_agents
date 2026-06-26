@@ -12,6 +12,7 @@ from weather_dashboard.api.routers import (
     compare,
     configs,
     copy_trade,
+    data_sources,
     glossary,
     live,
     probes,
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(glossary.router, prefix="/api")
     app.include_router(probes.router, prefix="/api")
     app.include_router(research_lines.router, prefix="/api")
+    app.include_router(data_sources.router, prefix="/api")
 
     @app.get("/health")
     def health():

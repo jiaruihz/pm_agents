@@ -8,6 +8,7 @@ const MAIN_NAV = [
   { to: "/research", label: "研究证据", sub: "前向证据登记" },
   { to: "/performance", label: "绩效对账", sub: "已结算 / 现金流" },
   { to: "/lineage", label: "单日血缘", sub: "逐笔复盘" },
+  { to: "/data-sources", label: "数据源", sub: "抓取来源 / 时间 / 城市" },
 ];
 
 const SECONDARY_NAV = [

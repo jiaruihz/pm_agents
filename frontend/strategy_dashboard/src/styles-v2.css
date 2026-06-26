@@ -190,6 +190,16 @@ body {
 .row-note { font-size: 11px; color: var(--v2-muted); margin-top: 2px; max-width: 480px; line-height: 1.4; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .data-table.compact th, .data-table.compact td { padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+.stat-caption { font-size: 11px; color: var(--v2-muted); margin: 6px 0 0; line-height: 1.5; }
+
+/* ── narrative (strategy rationale) ──────────────────────────────── */
+.narrative { font-size: 14px; line-height: 1.7; color: var(--v2-ink); }
+.narrative .narrative-title { font-size: 16px; margin: 0 0 8px; }
+.narrative h3 { font-size: 14px; margin: 14px 0 4px; color: var(--accent); }
+.narrative p { margin: 6px 0; }
+.narrative code { background: #eef1f6; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.narrative strong { font-weight: 700; }
+.verdict-reason code { background: #eef1f6; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 
 /* ── responsive / mobile ─────────────────────────────────────────── */
 @media (max-width: 760px) {
