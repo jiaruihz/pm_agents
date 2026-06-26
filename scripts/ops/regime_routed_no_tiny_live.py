@@ -45,6 +45,7 @@ import research_regime_routed_no_expression_v1 as research  # noqa: E402
 from research_reheat_feature_factory_v1 import bracket_contains, parse_bracket  # noqa: E402
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc  # noqa: E402
 from weather_data_feed.source_policy import load_city_configs  # noqa: E402
+from weather_data_feed.weather_context import city_wind_context  # noqa: E402
 
 import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
 
@@ -81,6 +82,13 @@ CORE_LIVE_REGIME_LABELS = [
     "moisture_cloud_regime",
     "wind_regime",
     "running_max_state",
+]
+WIND_CONTEXT_COLS = [
+    "wind_dir_deg",
+    "wind_sector",
+    "geo_context",
+    "coastal_flow_state",
+    "is_coastal_context",
 ]
 
 
@@ -251,6 +259,14 @@ def humidity_from_cache(record: dict[str, Any]) -> float:
     return relative_humidity_pct(temp_c_val, dewpoint_c_val)
 
 
+def wind_dir_from_record(record: dict[str, Any]) -> float:
+    for key in ("wind_dir_deg", "drct_now", "wind_direction_deg", "wdir", "drct"):
+        value = safe_float(record.get(key))
+        if math.isfinite(value):
+            return value
+    return math.nan
+
+
 def observation_cache_summary(
     observation_cache: dict[str, Any] | None,
     *,
@@ -322,6 +338,7 @@ def observation_cache_summary(
         "sky_cover_code": cache_sky_cover_code(sky_value),
         "dewpoint_depression_f": dewpoint_depression,
         "wind_speed_kt": safe_float(record.get("wind_speed_kt"), safe_float(record.get("sknt_now"))),
+        "wind_dir_deg": wind_dir_from_record(record),
         "temp_trend_1h_f": safe_float(record.get("temp_trend_1h_f"), safe_float(record.get("d_tmpf_1h"))),
         "temp_trend_3h_f": safe_float(record.get("temp_trend_3h_f"), safe_float(record.get("d_tmpf_3h"))),
         "minutes_since_running_max": safe_float(record.get("minutes_since_running_max")),
@@ -380,12 +397,14 @@ def aviationweather_live_regime_features(cfg: Any, tz: ZoneInfo, local_date: Any
     max_hits = [dt for dt, temp, _raw in records if temp >= running_max_c - 0.05]
     dewpoint_c = safe_float(latest.get("dewp"))
     wind_kt = safe_float(latest.get("wspd"))
+    wind_dir = safe_float(latest.get("wdir"))
     out = {
         "live_feature_status": "ok",
         "relative_humidity_pct": relative_humidity_pct(latest_temp_c, dewpoint_c) if math.isfinite(dewpoint_c) else math.nan,
         "sky_cover_code": sky_cover_code(latest),
         "dewpoint_depression_f": temp_f(latest_temp_c - dewpoint_c) - 32.0 if math.isfinite(dewpoint_c) else math.nan,
         "wind_speed_kt": wind_kt,
+        "wind_dir_deg": wind_dir,
         "temp_trend_1h_f": trend_f(records, latest_dt, latest_temp_c, 1.0),
         "temp_trend_3h_f": trend_f(records, latest_dt, latest_temp_c, 3.0),
         "minutes_since_running_max": (
@@ -547,6 +566,7 @@ def build_city_state(
         "sky_cover_code": math.nan,
         "dewpoint_depression_f": math.nan,
         "wind_speed_kt": math.nan,
+        "wind_dir_deg": math.nan,
         "temp_trend_1h_f": math.nan,
         "temp_trend_3h_f": math.nan,
         "minutes_since_running_max": math.nan,
@@ -570,6 +590,7 @@ def build_city_state(
                     "sky_cover_code",
                     "dewpoint_depression_f",
                     "wind_speed_kt",
+                    "wind_dir_deg",
                     "temp_trend_1h_f",
                     "temp_trend_3h_f",
                     "minutes_since_running_max",
@@ -584,6 +605,7 @@ def build_city_state(
                 ]
             }
         )
+    base.update(city_wind_context(city, base.get("wind_dir_deg")))
     labelled = atlas.add_regime_labels(pd.DataFrame([base])).iloc[0].to_dict()
     books = market_rows_for_city(sub, running_value=running_value, running_native=running_native, unit=unit)
     if books.empty:
@@ -719,6 +741,38 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
     selected = pd.DataFrame(routed)
     if not selected.empty:
         selected = research.add_soft_weights(selected)
+        wind_speed = pd.to_numeric(selected.get("wind_speed_kt"), errors="coerce")
+        coastal_flow = selected.get("coastal_flow_state", pd.Series("", index=selected.index)).astype(str)
+        geo_context = selected.get("geo_context", pd.Series("", index=selected.index)).astype(str)
+        selected["wind_only_multiplier_shadow"] = pd.Series(
+            [0.80 if value >= 18 else 0.95 if value >= 10 else 1.00 for value in wind_speed.fillna(-1)],
+            index=selected.index,
+            dtype="float64",
+        )
+        selected["wind_context_multiplier_shadow"] = pd.Series(
+            [
+                0.70
+                if math.isfinite(value) and value >= 18 and flow == "onshore_marine_flow"
+                else 0.80
+                if math.isfinite(value) and value >= 18 and geo.startswith("coastal")
+                else 0.88
+                if math.isfinite(value) and value >= 18
+                else 0.90
+                if math.isfinite(value) and value >= 10 and flow == "onshore_marine_flow"
+                else 0.96
+                if math.isfinite(value) and value >= 10
+                else 1.00
+                for value, flow, geo in zip(wind_speed, coastal_flow, geo_context, strict=False)
+            ],
+            index=selected.index,
+            dtype="float64",
+        )
+        selected["soft_wind_only_shadow"] = (
+            pd.to_numeric(selected["soft_balanced"], errors="coerce") * selected["wind_only_multiplier_shadow"]
+        ).clip(0.0, 1.0)
+        selected["soft_wind_context_shadow"] = (
+            pd.to_numeric(selected["soft_balanced"], errors="coerce") * selected["wind_context_multiplier_shadow"]
+        ).clip(0.0, 1.0)
         prior_keys = prior_live_order_keys(LIVE_OUT)
         selected["live_duplicate_key"] = selected.apply(
             lambda row: (
@@ -742,6 +796,18 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["base_notional_usd"] = float(args.base_notional)
         selected["soft_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(selected["soft_balanced"], errors="coerce")
         selected["soft_shares"] = selected["soft_notional_usd"] / pd.to_numeric(selected["ask"], errors="coerce")
+        selected["soft_wind_only_shadow_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(
+            selected["soft_wind_only_shadow"], errors="coerce"
+        )
+        selected["soft_wind_only_shadow_shares"] = selected["soft_wind_only_shadow_notional_usd"] / pd.to_numeric(
+            selected["ask"], errors="coerce"
+        )
+        selected["soft_wind_context_shadow_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(
+            selected["soft_wind_context_shadow"], errors="coerce"
+        )
+        selected["soft_wind_context_shadow_shares"] = selected["soft_wind_context_shadow_notional_usd"] / pd.to_numeric(
+            selected["ask"], errors="coerce"
+        )
         selected["ask_notional"] = pd.to_numeric(selected["ask"], errors="coerce") * pd.to_numeric(selected["ask_size"], errors="coerce")
         selected["execution_eligible"] = (
             pd.to_numeric(selected["ask"], errors="coerce").between(research.ASK_MIN, research.ASK_CAPS["relaxed70"])
@@ -829,6 +895,14 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "soft_balanced": row.get("soft_balanced"),
         "soft_notional_usd": row.get("soft_notional_usd"),
         "soft_shares": row.get("soft_shares"),
+        "wind_only_multiplier_shadow": row.get("wind_only_multiplier_shadow"),
+        "wind_context_multiplier_shadow": row.get("wind_context_multiplier_shadow"),
+        "soft_wind_only_shadow": row.get("soft_wind_only_shadow"),
+        "soft_wind_only_shadow_notional_usd": row.get("soft_wind_only_shadow_notional_usd"),
+        "soft_wind_only_shadow_shares": row.get("soft_wind_only_shadow_shares"),
+        "soft_wind_context_shadow": row.get("soft_wind_context_shadow"),
+        "soft_wind_context_shadow_notional_usd": row.get("soft_wind_context_shadow_notional_usd"),
+        "soft_wind_context_shadow_shares": row.get("soft_wind_context_shadow_shares"),
         "ask_notional": row.get("ask_notional"),
         "live_feature_status": row.get("live_feature_status"),
         "live_feature_source": row.get("live_feature_source"),
@@ -840,6 +914,11 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "relative_humidity_pct": row.get("relative_humidity_pct"),
         "dewpoint_depression_f": row.get("dewpoint_depression_f"),
         "wind_speed_kt": row.get("wind_speed_kt"),
+        "wind_dir_deg": row.get("wind_dir_deg"),
+        "wind_sector": row.get("wind_sector"),
+        "geo_context": row.get("geo_context"),
+        "coastal_flow_state": row.get("coastal_flow_state"),
+        "is_coastal_context": row.get("is_coastal_context"),
         "minutes_since_running_max": row.get("minutes_since_running_max"),
         "forecast_source": row.get("forecast_source"),
         "forecast_max_native": row.get("forecast_max_native"),
@@ -986,9 +1065,17 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "wind_regime": str(row.get("wind_regime") or ""),
         "running_max_state": str(row.get("running_max_state") or ""),
         "soft_balanced_multiplier": round(safe_float(row.get("soft_balanced"), 0.0), 6),
+        "wind_only_multiplier_shadow": round(safe_float(row.get("wind_only_multiplier_shadow"), 1.0), 6),
+        "wind_context_multiplier_shadow": round(safe_float(row.get("wind_context_multiplier_shadow"), 1.0), 6),
+        "soft_wind_only_shadow": round(safe_float(row.get("soft_wind_only_shadow"), 0.0), 6),
+        "soft_wind_context_shadow": round(safe_float(row.get("soft_wind_context_shadow"), 0.0), 6),
         "base_notional_usd": round(safe_float(row.get("base_notional_usd"), 0.0), 6),
         "soft_notional_usd": round(soft_notional, 6),
         "soft_shares": round(size, 6),
+        "soft_wind_only_shadow_notional_usd": round(safe_float(row.get("soft_wind_only_shadow_notional_usd"), 0.0), 6),
+        "soft_wind_only_shadow_shares": round(safe_float(row.get("soft_wind_only_shadow_shares"), 0.0), 6),
+        "soft_wind_context_shadow_notional_usd": round(safe_float(row.get("soft_wind_context_shadow_notional_usd"), 0.0), 6),
+        "soft_wind_context_shadow_shares": round(safe_float(row.get("soft_wind_context_shadow_shares"), 0.0), 6),
         "forecast_source": str(row.get("forecast_source") or ""),
         "forecast_max_native": safe_float(row.get("forecast_max_native"), None),
         "forecast_peak_hour_local": safe_float(row.get("forecast_peak_hour_local"), None),
@@ -1007,6 +1094,11 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "sky_cover_code": safe_float(row.get("sky_cover_code"), None),
         "dewpoint_depression_f": safe_float(row.get("dewpoint_depression_f"), None),
         "wind_speed_kt": safe_float(row.get("wind_speed_kt"), None),
+        "wind_dir_deg": safe_float(row.get("wind_dir_deg"), None),
+        "wind_sector": str(row.get("wind_sector") or ""),
+        "geo_context": str(row.get("geo_context") or ""),
+        "coastal_flow_state": str(row.get("coastal_flow_state") or ""),
+        "is_coastal_context": bool(row.get("is_coastal_context")),
         "minutes_since_running_max": safe_float(row.get("minutes_since_running_max"), None),
     }
 
