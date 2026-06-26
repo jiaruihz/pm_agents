@@ -90,3 +90,167 @@ def city_wind_context(city: str, wind_dir_deg: Any) -> dict[str, Any]:
         "wind_sector": wind_direction_sector(wind_dir),
         "coastal_flow_state": flow_state,
     }
+
+
+def sky_state(sky_cover_code: Any) -> str:
+    sky = safe_float(sky_cover_code)
+    if not math.isfinite(sky):
+        return "sky_unknown"
+    if sky <= 1:
+        return "clear_or_few"
+    if sky <= 2:
+        return "scattered_cloud"
+    if sky <= 3:
+        return "broken_cloud"
+    return "overcast_or_vertical"
+
+
+def moisture_state(relative_humidity_pct: Any, dewpoint_depression_f: Any) -> str:
+    rh = safe_float(relative_humidity_pct)
+    dew_dep = safe_float(dewpoint_depression_f)
+    if not math.isfinite(rh) and not math.isfinite(dew_dep):
+        return "moisture_unknown"
+    if math.isfinite(rh) and rh >= 85:
+        return "very_humid"
+    if math.isfinite(rh) and rh >= 75:
+        return "humid"
+    if math.isfinite(dew_dep) and dew_dep >= 25:
+        return "very_dry_deep_mixing"
+    if math.isfinite(dew_dep) and dew_dep >= 15:
+        return "dry_mixed_layer"
+    return "mixed_moisture"
+
+
+def warming_state(temp_trend_1h_f: Any, temp_trend_3h_f: Any) -> str:
+    trend1 = safe_float(temp_trend_1h_f)
+    trend3 = safe_float(temp_trend_3h_f)
+    if not math.isfinite(trend1) and not math.isfinite(trend3):
+        return "warming_unknown"
+    primary = trend1 if math.isfinite(trend1) else trend3 / 3.0
+    if primary <= -1.0:
+        return "cooling"
+    if primary < 0.5:
+        return "flat"
+    if primary < 2.0:
+        return "warming"
+    return "fast_warming"
+
+
+def cloud_warming_interaction(sky_cover_code: Any, temp_trend_1h_f: Any, temp_trend_3h_f: Any) -> str:
+    sky = safe_float(sky_cover_code)
+    trend1 = safe_float(temp_trend_1h_f)
+    trend3 = safe_float(temp_trend_3h_f)
+    if not math.isfinite(sky) or (not math.isfinite(trend1) and not math.isfinite(trend3)):
+        return "cloud_warming_unknown"
+    trend = trend1 if math.isfinite(trend1) else trend3 / 3.0
+    if sky >= 3 and trend >= 1.0:
+        return "warming_through_cloud"
+    if sky >= 3 and trend < 0.5:
+        return "cloud_limited_flat_or_cooling"
+    if sky <= 1 and trend >= 1.0:
+        return "clear_solar_warming"
+    if sky <= 1 and trend < 0.5:
+        return "clear_but_not_warming"
+    if trend >= 1.0:
+        return "mixed_sky_warming"
+    return "mixed_sky_flat_or_cooling"
+
+
+def moisture_cloud_interaction(relative_humidity_pct: Any, dewpoint_depression_f: Any, sky_cover_code: Any) -> str:
+    rh = safe_float(relative_humidity_pct)
+    dew_dep = safe_float(dewpoint_depression_f)
+    sky = safe_float(sky_cover_code)
+    if not any(math.isfinite(value) for value in (rh, dew_dep, sky)):
+        return "moisture_cloud_unknown"
+    if math.isfinite(rh) and rh >= 80 and math.isfinite(sky) and sky >= 3:
+        return "humid_cloud_suppression"
+    if math.isfinite(rh) and rh >= 75:
+        return "humid_convective_risk"
+    if math.isfinite(sky) and sky >= 3:
+        return "cloud_suppression"
+    if math.isfinite(dew_dep) and dew_dep >= 25:
+        return "dry_heat_inertia"
+    return "mixed_moisture_cloud"
+
+
+def wind_thermal_interaction(
+    city: str,
+    wind_speed_kt: Any,
+    wind_dir_deg: Any = math.nan,
+) -> dict[str, Any]:
+    wind = safe_float(wind_speed_kt)
+    context = city_wind_context(city, wind_dir_deg)
+    flow = str(context["coastal_flow_state"])
+    geo = str(context["geo_context"])
+    if not math.isfinite(wind):
+        wind_state = "wind_unknown"
+    elif wind >= 18:
+        wind_state = "windy_mixing_noise"
+    elif wind >= 10:
+        wind_state = "moderate_mixing"
+    else:
+        wind_state = "light_wind"
+
+    if not math.isfinite(wind):
+        marine_state = "marine_wind_unknown"
+    elif flow == "onshore_marine_flow" and wind >= 10:
+        marine_state = "onshore_marine_cooling_risk"
+    elif flow == "offshore_or_parallel_flow" and wind >= 10:
+        marine_state = "offshore_or_parallel_warming_risk"
+    elif geo.startswith("coastal") and flow == "flow_unknown" and wind >= 10:
+        marine_state = "coastal_direction_unknown_mixing"
+    elif geo.startswith("coastal"):
+        marine_state = "coastal_light_or_unclear_flow"
+    else:
+        marine_state = "inland_wind_mixing"
+    return {**context, "wind_thermal_state": wind_state, "marine_thermal_state": marine_state}
+
+
+def forecast_peak_clock_state(forecast_peak_delta_hours_local: Any) -> str:
+    delta = safe_float(forecast_peak_delta_hours_local)
+    if not math.isfinite(delta):
+        return "forecast_peak_unknown"
+    if delta <= -2:
+        return "forecast_peak_2h_plus_ahead"
+    if delta <= 0:
+        return "forecast_peak_0_to_2h_ahead"
+    if delta <= 1:
+        return "forecast_peak_passed_0_to_1h"
+    if delta <= 2:
+        return "forecast_peak_passed_1_to_2h"
+    return "forecast_peak_passed_2h_plus"
+
+
+def temperature_context_features(record: dict[str, Any]) -> dict[str, Any]:
+    city = str(record.get("city") or "")
+    wind = wind_thermal_interaction(city, record.get("wind_speed_kt"), record.get("wind_dir_deg", math.nan))
+    cloud_warming = cloud_warming_interaction(
+        record.get("sky_cover_code"),
+        record.get("temp_trend_1h_f"),
+        record.get("temp_trend_3h_f"),
+    )
+    moisture_cloud = moisture_cloud_interaction(
+        record.get("relative_humidity_pct"),
+        record.get("dewpoint_depression_f"),
+        record.get("sky_cover_code"),
+    )
+    warming = warming_state(record.get("temp_trend_1h_f"), record.get("temp_trend_3h_f"))
+    peak_clock = forecast_peak_clock_state(record.get("forecast_peak_delta_hours_local"))
+    return {
+        **wind,
+        "sky_state": sky_state(record.get("sky_cover_code")),
+        "moisture_state": moisture_state(record.get("relative_humidity_pct"), record.get("dewpoint_depression_f")),
+        "warming_state": warming,
+        "cloud_warming_interaction": cloud_warming,
+        "moisture_cloud_interaction": moisture_cloud,
+        "forecast_peak_clock_state": peak_clock,
+        "temperature_context_regime": " | ".join(
+            [
+                peak_clock,
+                warming,
+                cloud_warming,
+                moisture_cloud,
+                str(wind["marine_thermal_state"]),
+            ]
+        ),
+    }
