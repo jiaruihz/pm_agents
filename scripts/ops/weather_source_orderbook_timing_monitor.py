@@ -48,6 +48,7 @@ from weather_data_feed.observation_sources import (  # noqa: E402
     parse_awc_cache_csv_records,
     parse_iem_asos_records,
     parse_metar_report_time,
+    parse_metar_rmk_temp_c,
     parse_metar_temp_c,
     parse_tgftp_header_time,
     snapshot_observation_source,

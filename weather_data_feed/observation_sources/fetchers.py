@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import csv
 import gzip
+import io
 import json
+import math
 import os
 import re
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from statistics import median
@@ -19,7 +23,7 @@ from weather_data_feed.observation_sources.aviationweather import (
     parse_aviationweather_records,
     parse_awc_cache_csv_records,
 )
-from weather_data_feed.observation_sources.iem import build_iem_asos_params, parse_iem_asos_records
+from weather_data_feed.observation_sources.iem import IEM_ASOS_API, build_iem_asos_params, parse_iem_asos_records
 from weather_data_feed.observation_sources.metar import (
     parse_metar_report_time,
     parse_metar_temp_c,
@@ -35,14 +39,20 @@ NOAA_TGFTP_STATION_TXT = "https://tgftp.nws.noaa.gov/data/observations/metar/sta
 WEATHER_GOV_LATEST_OBS = "https://api.weather.gov/stations/{icao}/observations/latest"
 WRH_API_KEY_JS = "https://www.weather.gov/source/wrh/apiKey.js"
 SYNOPTIC_TIMESERIES_API = "https://api.synopticdata.com/v2/stations/timeseries"
+WEATHER_COM_API_KEY = "e1f10a1e78da46f5b10a1e78da96f525"
+WEATHER_COM_CURRENT_OBS = "https://api.weather.com/v3/wx/observations/current"
+WEATHER_COM_HISTORICAL_OBS = "https://api.weather.com/v1/location/{location}/observations/historical.json"
 
 CHECKWX_OBS_RE = re.compile(r"Observed.*?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)", re.IGNORECASE | re.DOTALL)
 ICAO_RE = re.compile(r"^[A-Z0-9]{4}$")
 WRH_SITE_RE = re.compile(r"[?&]site=([A-Z0-9]{4})\b", re.IGNORECASE)
 SYNOPTIC_TOKEN_RE = re.compile(r"['\"]([a-f0-9]{32})['\"]")
+METAR_RMK_T_RE = re.compile(r"\bT([01])(\d{3})([01])(\d{3})\b")
 
 _SYNOPTIC_TOKEN_CACHE: str | None = None
 _AWC_CACHE_TEXT: str | None = None
+_IEM_RAW_TEXT_CACHE: dict[tuple[str, str, str], str] = {}
+_IEM_RAW_TEXT_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -69,6 +79,93 @@ def parse_dt(value: str | None) -> datetime | None:
     except ValueError:
         return None
     return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def arith_round(value: float) -> int:
+    return math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5)
+
+
+def c_to_f(value: float) -> float:
+    return value * 9.0 / 5.0 + 32.0
+
+
+def f_to_c(value: float) -> float:
+    return (value - 32.0) * 5.0 / 9.0
+
+
+def parse_metar_rmk_temp_c(raw_metar: str) -> float | None:
+    match = METAR_RMK_T_RE.search(str(raw_metar or ""))
+    if not match:
+        return None
+    sign = -1 if match.group(1) == "1" else 1
+    return sign * (int(match.group(2)) / 10.0)
+
+
+def metar_temp_metadata(raw_metar: str) -> dict[str, Any]:
+    main_temp_c = parse_metar_temp_c(raw_metar)
+    rmk_temp_c = parse_metar_rmk_temp_c(raw_metar)
+    out: dict[str, Any] = {
+        "main_temp_c": main_temp_c,
+        "rmk_temp_c": rmk_temp_c,
+    }
+    if main_temp_c is not None:
+        out["main_round_f"] = arith_round(c_to_f(main_temp_c))
+    if rmk_temp_c is not None:
+        out["rmk_round_f"] = arith_round(c_to_f(rmk_temp_c))
+    return out
+
+
+def weather_com_api_key() -> str:
+    return os.environ.get("TIMING_MONITOR_WEATHER_COM_API_KEY", "").strip() or os.environ.get("WEATHER_COM_API_KEY", "").strip() or WEATHER_COM_API_KEY
+
+
+def weather_com_country_for_station(station: str) -> str:
+    overrides = os.environ.get("TIMING_MONITOR_WEATHER_COM_COUNTRY_OVERRIDES", "")
+    station_key = str(station or "").upper()
+    for item in overrides.split(","):
+        if ":" not in item:
+            continue
+        key, value = item.split(":", 1)
+        if key.strip().upper() == station_key:
+            return value.strip().upper()
+    country = os.environ.get("TIMING_MONITOR_WEATHER_COM_COUNTRY", "").strip().upper()
+    if country:
+        return country
+    if station_key.startswith(("K", "P")):
+        return "US"
+    if station_key.startswith("Z"):
+        return "CN"
+    if station_key.startswith("RJ"):
+        return "JP"
+    if station_key.startswith("RK"):
+        return "KR"
+    if station_key.startswith("VHH"):
+        return "HK"
+    if station_key.startswith("WSS"):
+        return "SG"
+    if station_key.startswith("RP"):
+        return "PH"
+    if station_key.startswith("SA"):
+        return "AR"
+    if station_key.startswith("SB"):
+        return "BR"
+    if station_key.startswith("MM"):
+        return "MX"
+    if station_key.startswith("C"):
+        return "CA"
+    return "US"
+
+
+def weather_com_headers(station: str, *, history: bool) -> dict[str, str]:
+    if history:
+        referer = f"https://www.wunderground.com/history/daily/{station}"
+    else:
+        referer = f"https://www.wunderground.com/weather/{station}"
+    return {
+        "User-Agent": "Mozilla/5.0 pm-agent-weather-latency-research",
+        "Origin": "https://www.wunderground.com",
+        "Referer": referer,
+    }
 
 
 def source_station_id(value: str) -> str:
@@ -143,6 +240,7 @@ def _record(
     wind_kt: float | None = None,
     sky_code: str = "",
     latency_ms: float | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> ObservationRecord:
     raw_text = ""
     if isinstance(raw, dict):
@@ -163,6 +261,7 @@ def _record(
         sky_code=sky_code,
         raw_text=raw_text,
         source_latency_ms=latency_ms,
+        metadata=metadata or {},
     )
 
 
@@ -272,6 +371,103 @@ def fetch_iem_asos(request: ObservationSourceRequest, settings: FetchSettings | 
         for dt, temp, raw in parsed
     ]
     return _result(request, source_key=source_key, status="ok" if records else "empty", records=records, fetch_start=fetch_start, fetch_end=fetch_end, metadata={"raw_payload_hash": stable_hash(text)})
+
+
+def _csv_rows(text: str) -> list[dict[str, str]]:
+    rows = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
+    return list(csv.DictReader(io.StringIO("\n".join(rows))))
+
+
+def _iem_asos_raw_records(text: str, tz: ZoneInfo, local_date: Any, *, family: str) -> list[tuple[datetime, float, dict[str, str], dict[str, Any]]]:
+    records: list[tuple[datetime, float, dict[str, str], dict[str, Any]]] = []
+    for row in _csv_rows(text):
+        raw_ts = row.get("valid")
+        raw_metar = row.get("metar") or ""
+        if not raw_ts or not raw_metar:
+            continue
+        source_family = "madishf" if "MADISHF" in raw_metar.upper() else "routine"
+        if family == "madishf" and source_family != "madishf":
+            continue
+        if family == "routine" and source_family == "madishf":
+            continue
+        try:
+            dt = datetime.fromisoformat(str(raw_ts).replace(" ", "T")).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if dt.astimezone(tz).date().isoformat() != str(local_date):
+            continue
+        metadata = metar_temp_metadata(raw_metar)
+        tmpf = row.get("tmpf")
+        temp_f = None
+        if tmpf not in {None, "", "M"}:
+            try:
+                temp_f = float(tmpf)
+            except ValueError:
+                temp_f = None
+        if temp_f is not None:
+            temp_c = f_to_c(temp_f)
+        elif metadata.get("rmk_temp_c") is not None:
+            temp_c = float(metadata["rmk_temp_c"])
+            temp_f = c_to_f(temp_c)
+        elif metadata.get("main_temp_c") is not None:
+            temp_c = float(metadata["main_temp_c"])
+            temp_f = c_to_f(temp_c)
+        else:
+            continue
+        metadata.update(
+            {
+                "source_family": source_family,
+                "temp_f": temp_f,
+                "temp_round_f": arith_round(temp_f),
+            }
+        )
+        records.append((dt, temp_c, row, metadata))
+    return sorted(records, key=lambda item: item[0])
+
+
+def fetch_iem_asos_latest_family(
+    request: ObservationSourceRequest,
+    settings: FetchSettings | None = None,
+    *,
+    source_key: str,
+    family: str,
+) -> ObservationSourceResult:
+    tz, local_date = _target(request)
+    local_start = datetime.combine(local_date, datetime.min.time(), tzinfo=tz)
+    start_utc = local_start.astimezone(timezone.utc) - timedelta(hours=2)
+    end_utc = datetime.now(timezone.utc) + timedelta(hours=1)
+    params = build_iem_asos_params(request.station_or_feed, start_utc, end_utc, columns=("tmpf", "metar"), report_types=("1", "2"))
+    fetch_start = datetime.now(timezone.utc)
+    cache_key = (request.station_or_feed, start_utc.strftime("%Y%m%d%H"), end_utc.strftime("%Y%m%d%H"))
+    with _IEM_RAW_TEXT_LOCK:
+        text = _IEM_RAW_TEXT_CACHE.get(cache_key)
+        if text is None:
+            text = _http_get(IEM_ASOS_API, params=params, settings=settings).text
+            _IEM_RAW_TEXT_CACHE[cache_key] = text
+    fetch_end = datetime.now(timezone.utc)
+    parsed = _iem_asos_raw_records(text, tz, local_date, family=family)
+    records = [
+        _record(
+            request,
+            source_key=source_key,
+            obs_dt=dt,
+            ingest_dt=fetch_end,
+            temp_c=temp_c,
+            raw=row.get("metar") or "",
+            latency_ms=round((fetch_end - fetch_start).total_seconds() * 1000.0, 3),
+            metadata=metadata,
+        )
+        for dt, temp_c, row, metadata in parsed
+    ]
+    return _result(
+        request,
+        source_key=source_key,
+        status="ok" if records else "empty",
+        records=records,
+        fetch_start=fetch_start,
+        fetch_end=fetch_end,
+        metadata={"raw_payload_hash": stable_hash(text), "iem_family": family},
+    )
 
 
 def fetch_noaa_tgftp_station_txt(request: ObservationSourceRequest, settings: FetchSettings | None = None) -> ObservationSourceResult:
@@ -401,6 +597,125 @@ def fetch_synopticdata_timeseries(request: ObservationSourceRequest, settings: F
     return _result(request, source_key=source_key, status="ok" if records else "empty", records=records, fetch_start=fetch_start, fetch_end=fetch_end, metadata={"synoptic_station_id": station_row.get("ID"), "synoptic_station_name": station_row.get("NAME"), "raw_payload_hash": stable_hash(payload)})
 
 
+def fetch_weather_com_current(request: ObservationSourceRequest, settings: FetchSettings | None = None) -> ObservationSourceResult:
+    source_key = "weather_com_current"
+    params = {
+        "apiKey": weather_com_api_key(),
+        "language": "en-US",
+        "units": "e",
+        "format": "json",
+        "icaoCode": request.station_or_feed,
+    }
+    fetch_start = datetime.now(timezone.utc)
+    payload = _http_get(WEATHER_COM_CURRENT_OBS, params=params, settings=settings, headers=weather_com_headers(request.station_or_feed, history=False)).json()
+    fetch_end = datetime.now(timezone.utc)
+    ts_raw = payload.get("validTimeUtc")
+    temp_f = payload.get("temperature")
+    records = []
+    if ts_raw is not None and temp_f is not None:
+        try:
+            report_dt = datetime.fromtimestamp(int(ts_raw), tz=timezone.utc)
+            temp_f_float = float(temp_f)
+            metadata = {
+                "temp_f": temp_f_float,
+                "temp_round_f": arith_round(temp_f_float),
+                "max_temp_f_24h": payload.get("temperatureMax24Hour"),
+                "max_temp_f_since_7am": payload.get("temperatureMaxSince7Am"),
+                "obs_name": payload.get("obsName"),
+                "icao_code": payload.get("icaoCode"),
+                "expire_time_utc": payload.get("expireTimeUtc"),
+            }
+            records.append(
+                _record(
+                    request,
+                    source_key=source_key,
+                    obs_dt=report_dt,
+                    ingest_dt=fetch_end,
+                    temp_c=f_to_c(temp_f_float),
+                    raw=payload,
+                    latency_ms=round((fetch_end - fetch_start).total_seconds() * 1000.0, 3),
+                    metadata=metadata,
+                )
+            )
+        except (TypeError, ValueError, OSError):
+            records = []
+    return _result(
+        request,
+        source_key=source_key,
+        status="ok" if records else "missing_observation",
+        records=records,
+        fetch_start=fetch_start,
+        fetch_end=fetch_end,
+        metadata={"raw_payload_hash": stable_hash(payload)},
+    )
+
+
+def fetch_weather_com_history_hourly(request: ObservationSourceRequest, settings: FetchSettings | None = None) -> ObservationSourceResult:
+    source_key = "weather_com_history_hourly"
+    tz, local_date = _target(request)
+    country = weather_com_country_for_station(request.station_or_feed)
+    location = f"{request.station_or_feed}:9:{country}"
+    date_key = local_date.strftime("%Y%m%d")
+    params = {
+        "apiKey": weather_com_api_key(),
+        "units": "e",
+        "startDate": date_key,
+        "endDate": date_key,
+    }
+    fetch_start = datetime.now(timezone.utc)
+    payload = _http_get(
+        WEATHER_COM_HISTORICAL_OBS.format(location=location),
+        params=params,
+        settings=settings,
+        headers=weather_com_headers(request.station_or_feed, history=True),
+    ).json()
+    fetch_end = datetime.now(timezone.utc)
+    records = []
+    max_temp_f: float | None = None
+    for raw in payload.get("observations") or []:
+        ts_raw = raw.get("valid_time_gmt")
+        temp_f = raw.get("temp")
+        if ts_raw is None or temp_f is None:
+            continue
+        try:
+            report_dt = datetime.fromtimestamp(int(ts_raw), tz=timezone.utc)
+            temp_f_float = float(temp_f)
+        except (TypeError, ValueError, OSError):
+            continue
+        if report_dt.astimezone(tz).date() != local_date:
+            continue
+        max_temp_f = temp_f_float if max_temp_f is None else max(max_temp_f, temp_f_float)
+        records.append(
+            _record(
+                request,
+                source_key=source_key,
+                obs_dt=report_dt,
+                ingest_dt=fetch_end,
+                temp_c=f_to_c(temp_f_float),
+                raw=raw,
+                latency_ms=round((fetch_end - fetch_start).total_seconds() * 1000.0, 3),
+                metadata={
+                    "temp_f": temp_f_float,
+                    "temp_round_f": arith_round(temp_f_float),
+                    "max_temp_f_observed": max_temp_f,
+                    "max_temp_round_f_observed": arith_round(max_temp_f),
+                    "obs_name": raw.get("obs_name"),
+                    "icao_code": raw.get("icao"),
+                    "weather_com_location": location,
+                },
+            )
+        )
+    return _result(
+        request,
+        source_key=source_key,
+        status="ok" if records else "empty",
+        records=records,
+        fetch_start=fetch_start,
+        fetch_end=fetch_end,
+        metadata={"raw_payload_hash": stable_hash(payload), "weather_com_location": location, "record_count_raw": len(payload.get("observations") or [])},
+    )
+
+
 def fetch_observation_source(request: ObservationSourceRequest, settings: FetchSettings | None = None) -> ObservationSourceResult:
     source_key = normalize_source_name(request.source_key)
     normalized_request = ObservationSourceRequest(
@@ -418,6 +733,12 @@ def fetch_observation_source(request: ObservationSourceRequest, settings: FetchS
         return fetch_aviationweather_cache_csv(normalized_request, settings)
     if source_key == "iem_asos":
         return fetch_iem_asos(normalized_request, settings)
+    if source_key == "iem_asos_latest_raw":
+        return fetch_iem_asos_latest_family(normalized_request, settings, source_key=source_key, family="any")
+    if source_key == "iem_asos_routine_latest":
+        return fetch_iem_asos_latest_family(normalized_request, settings, source_key=source_key, family="routine")
+    if source_key == "iem_asos_madishf_latest":
+        return fetch_iem_asos_latest_family(normalized_request, settings, source_key=source_key, family="madishf")
     if source_key == "noaa_tgftp_station_txt":
         return fetch_noaa_tgftp_station_txt(normalized_request, settings)
     if source_key == "checkwx_html":
@@ -427,6 +748,10 @@ def fetch_observation_source(request: ObservationSourceRequest, settings: FetchS
     if source_key == "synopticdata_timeseries":
         minutes = int(normalized_request.metadata.get("recent_minutes") or 240)
         return fetch_synopticdata_timeseries(normalized_request, settings, minutes=minutes)
+    if source_key == "weather_com_current":
+        return fetch_weather_com_current(normalized_request, settings)
+    if source_key == "weather_com_history_hourly":
+        return fetch_weather_com_history_hourly(normalized_request, settings)
     raise ObservationFetchError(f"unknown observation source {source_key!r}")
 
 
@@ -479,12 +804,21 @@ def snapshot_observation_source(
         "record_count": len(result.records),
         "estimated_cadence_min": infer_cadence_min(list(result.records)),
     }
+    if latest:
+        row.update(latest.metadata)
+    for key, value in result.metadata.items():
+        if key not in row and key not in {"source_fetch_start_utc", "source_fetch_end_utc"}:
+            row[key] = value
     row["payload_hash"] = stable_hash(
         {
             "source_report_ts_utc": row.get("source_report_ts_utc"),
             "temp_c": row.get("temp_c"),
+            "temp_f": row.get("temp_f"),
             "raw_metar": row.get("raw_metar"),
             "raw_payload_hash": row.get("raw_payload_hash"),
+            "source_family": row.get("source_family"),
+            "max_temp_f_since_7am": row.get("max_temp_f_since_7am"),
+            "max_temp_f_observed": row.get("max_temp_f_observed"),
         }
     )
     return row

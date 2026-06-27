@@ -5,6 +5,7 @@ from scripts.ops.weather_source_orderbook_timing_monitor import (
     expand_source_names,
     in_update_window,
     load_monitor_city_configs,
+    parse_metar_rmk_temp_c,
     parse_awc_cache_csv_records,
     parse_aviationweather_records,
     parse_metar_report_time,
@@ -13,12 +14,22 @@ from scripts.ops.weather_source_orderbook_timing_monitor import (
     source_station_id,
     synoptic_obs_lists,
 )
+from weather_data_feed.observation_sources.fetchers import _iem_asos_raw_records, arith_round, c_to_f
 from src.strategies.weather_edge_v1.official_observation_feed.source_policy import load_city_configs
 
 
 def test_parse_metar_temp_c_handles_positive_and_negative():
     assert parse_metar_temp_c("ZSPD 170330Z 29003MPS 9999 SCT020 29/23 Q1008") == 29.0
     assert parse_metar_temp_c("KDEN 170330Z 01005KT 10SM FEW020 M03/M08 A2992") == -3.0
+
+
+def test_parse_metar_rmk_temp_c_exposes_tenth_degree_boundary():
+    raw = "KSFO 251956Z 30014KT 10SM FEW006 21/13 A2991 RMK AO2 SLP129 T02060128 $"
+
+    assert parse_metar_temp_c(raw) == 21.0
+    assert parse_metar_rmk_temp_c(raw) == 20.6
+    assert arith_round(c_to_f(parse_metar_temp_c(raw))) == 70
+    assert arith_round(c_to_f(parse_metar_rmk_temp_c(raw))) == 69
 
 
 def test_in_update_window_targets_hour_and_half_hour():
@@ -47,6 +58,17 @@ def test_source_expand_accepts_awc_cache_alias():
         "weather_gov_latest",
         "checkwx_html",
         "synopticdata_timeseries",
+    ]
+
+
+def test_source_expand_accepts_settlement_basis_discovery_sources():
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+
+    assert expand_source_names(cfg, ["wu_history", "wu_current", "iem_asos_madishf", "iem_asos_routine"]) == [
+        "weather_com_history_hourly",
+        "weather_com_current",
+        "iem_asos_madishf_latest",
+        "iem_asos_routine_latest",
     ]
 
 
@@ -118,6 +140,29 @@ def test_awc_cache_csv_parser_filters_station_and_local_day():
     assert latest_dt.isoformat() == "2026-06-17T11:00:00+00:00"
     assert latest_temp == 26.0
     assert latest_raw["raw_text"] == "ZSPD 171100Z 26/23"
+
+
+def test_iem_family_parser_splits_madishf_from_routine_and_keeps_boundary_fields():
+    text = "\n".join(
+        [
+            "station,valid,tmpf,metar",
+            "SFO,2026-06-25 19:50,M,KSFO 251950Z AUTO 30014KT 10SM CLR 21/13 A2991 RMK T02100130 MADISHF",
+            "SFO,2026-06-25 19:56,69.00,KSFO 251956Z 30014KT 10SM FEW006 21/13 A2991 RMK AO2 SLP129 T02060128 $",
+        ]
+    )
+
+    tz = ZoneInfo("America/Los_Angeles")
+    madishf = _iem_asos_raw_records(text, tz, "2026-06-25", family="madishf")
+    routine = _iem_asos_raw_records(text, tz, "2026-06-25", family="routine")
+
+    assert len(madishf) == 1
+    assert len(routine) == 1
+    assert madishf[0][3]["source_family"] == "madishf"
+    assert madishf[0][3]["rmk_temp_c"] == 21.0
+    assert madishf[0][3]["temp_round_f"] == 70
+    assert routine[0][3]["source_family"] == "routine"
+    assert routine[0][3]["rmk_temp_c"] == 20.6
+    assert routine[0][3]["temp_round_f"] == 69
 
 
 def test_synoptic_helpers_parse_wrh_station_and_observation_lists():

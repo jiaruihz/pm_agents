@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ class ObservationRecord:
     source_latency_ms: float | None = None
     fetch_status: str = "ok"
     quality_flags: tuple[str, ...] = field(default_factory=tuple)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
