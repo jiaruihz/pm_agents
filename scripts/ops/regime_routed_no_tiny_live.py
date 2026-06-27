@@ -428,6 +428,14 @@ def tail_distance_from_running(bracket_low: float | None, running_native: float,
     return int(round(float(bracket_low) - running_native))
 
 
+def current_no_escape_threshold_native(bracket_text: Any) -> float:
+    """Return the rounded-settlement escape threshold for a current-NO bracket."""
+    bracket = parse_bracket(bracket_text)
+    if bracket is None or bracket.high is None:
+        return math.nan
+    return float(bracket.high) + 0.5
+
+
 def order_spent_today(path: Path, target_date: str) -> float:
     total = 0.0
     for row in read_jsonl(path):
@@ -816,6 +824,13 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             "current_bracket_no"
         )
         selected["current_no_peak_clock_ok"] = (~is_current_no_route) | peak_delta.le(0.0)
+        selected["current_no_escape_threshold_native"] = selected["bracket"].apply(current_no_escape_threshold_native)
+        selected["current_no_escape_margin_native"] = pd.to_numeric(
+            selected.get("forecast_max_native"), errors="coerce"
+        ) - pd.to_numeric(selected["current_no_escape_threshold_native"], errors="coerce")
+        selected["current_no_escape_ok"] = (~is_current_no_route) | pd.to_numeric(
+            selected["current_no_escape_margin_native"], errors="coerce"
+        ).gt(float(args.min_current_no_escape_margin_native))
         selected["base_notional_usd"] = float(args.base_notional)
         selected["soft_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(selected["soft_balanced"], errors="coerce")
         selected["soft_shares"] = selected["soft_notional_usd"] / pd.to_numeric(selected["ask"], errors="coerce")
@@ -851,6 +866,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & selected["token_id"].astype(str).ne("")
             & selected["live_feature_parity_ok"].astype(bool)
             & selected["current_no_peak_clock_ok"].astype(bool)
+            & selected["current_no_escape_ok"].astype(bool)
             & ~selected["live_duplicate_key"].astype(bool)
         )
         def skip_reason(row: pd.Series) -> str:
@@ -874,6 +890,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
                 reasons.append("live_feature_parity_failed")
             if not bool(row.get("current_no_peak_clock_ok", True)):
                 reasons.append("current_no_peak_clock_past_or_missing")
+            if not bool(row.get("current_no_escape_ok", True)):
+                reasons.append("current_no_forecast_escape_margin_nonpositive")
             if bool(row.get("live_duplicate_key")):
                 reasons.append("duplicate_live_city_date_token")
             return "|".join(reasons) if reasons else "not_execution_eligible"
@@ -960,6 +978,9 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "live_feature_source": row.get("live_feature_source"),
         "live_feature_parity_ok": row.get("live_feature_parity_ok"),
         "current_no_peak_clock_ok": row.get("current_no_peak_clock_ok"),
+        "current_no_escape_threshold_native": row.get("current_no_escape_threshold_native"),
+        "current_no_escape_margin_native": row.get("current_no_escape_margin_native"),
+        "current_no_escape_ok": row.get("current_no_escape_ok"),
         "live_duplicate_key": row.get("live_duplicate_key"),
         "temp_trend_1h_f": row.get("temp_trend_1h_f"),
         "temp_trend_3h_f": row.get("temp_trend_3h_f"),
@@ -1157,6 +1178,9 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "forecast_max_native": safe_float(row.get("forecast_max_native"), None),
         "forecast_peak_hour_local": safe_float(row.get("forecast_peak_hour_local"), None),
         "forecast_peak_delta_hours_local": safe_float(row.get("forecast_peak_delta_hours_local"), None),
+        "current_no_escape_threshold_native": safe_float(row.get("current_no_escape_threshold_native"), None),
+        "current_no_escape_margin_native": safe_float(row.get("current_no_escape_margin_native"), None),
+        "current_no_escape_ok": bool(row.get("current_no_escape_ok", True)),
         "decision_hour_local": safe_float(row.get("decision_hour_local"), None),
         "decision_hour_local_float": safe_float(row.get("decision_hour_local_float"), None),
         "peak_clock_state": str(row.get("peak_clock_state") or ""),
@@ -1268,6 +1292,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-notional", type=float, default=5.0)
     parser.add_argument("--daily-gross-cap", type=float, default=15.0)
     parser.add_argument("--min-order-shares", type=float, default=5.0)
+    parser.add_argument("--min-current-no-escape-margin-native", type=float, default=0.0)
     parser.add_argument("--max-orders", type=int, default=3)
     parser.add_argument("--order-ttl-min", type=float, default=30.0)
     parser.add_argument("--live", action="store_true")
@@ -1301,6 +1326,7 @@ def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -
             & candidates["token_id"].astype(str).ne("")
             & candidates["live_feature_parity_ok"].astype(bool)
             & candidates["current_no_peak_clock_ok"].astype(bool)
+            & candidates["current_no_escape_ok"].astype(bool)
             & ~candidates["live_duplicate_key"].astype(bool)
         )
         out[name] = {
