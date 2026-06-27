@@ -825,6 +825,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         )
         selected["current_no_peak_clock_ok"] = (~is_current_no_route) | peak_delta.le(0.0)
         selected["current_no_escape_threshold_native"] = selected["bracket"].apply(current_no_escape_threshold_native)
+        selected.loc[~is_current_no_route, "current_no_escape_threshold_native"] = pd.NA
         selected["current_no_escape_margin_native"] = pd.to_numeric(
             selected.get("forecast_max_native"), errors="coerce"
         ) - pd.to_numeric(selected["current_no_escape_threshold_native"], errors="coerce")
