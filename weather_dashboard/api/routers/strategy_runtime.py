@@ -114,6 +114,19 @@ def _read_recent_jsonl(path: Path | None, limit: int) -> list[dict[str, Any]]:
     return out
 
 
+def _read_latest_candidates_json(path: Path | None, limit: int) -> list[dict[str, Any]]:
+    if path is None or path.suffix != ".json" or not path.exists() or path.stat().st_size == 0:
+        return []
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    candidates = parsed.get("candidates") if isinstance(parsed, dict) else None
+    if not isinstance(candidates, list):
+        return []
+    return [row for row in candidates[-limit:] if isinstance(row, dict)]
+
+
 @router.get("/overview")
 def get_strategy_runtime_overview(
     db: Db,
@@ -284,9 +297,15 @@ def get_strategy_runtime_detail(
         item = dict(artifact)
         source_path = item.get("source_path")
         path = _safe_runtime_path(source_path)
-        item["recent_records_available"] = bool(path and path.suffix == ".jsonl" and path.exists())
+        item["recent_records_available"] = bool(
+            path
+            and path.exists()
+            and (path.suffix == ".jsonl" or str(item["artifact_kind"]) == "latest_candidates")
+        )
         artifacts.append(item)
         recent = _read_recent_jsonl(path, limit)
+        if not recent and str(item["artifact_kind"]) == "latest_candidates":
+            recent = _read_latest_candidates_json(path, limit)
         if recent:
             recent_records[str(item["artifact_kind"])] = recent
 

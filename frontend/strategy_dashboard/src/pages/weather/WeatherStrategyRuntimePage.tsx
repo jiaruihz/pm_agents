@@ -71,6 +71,16 @@ function fmtUsd(value: unknown): string {
   return Number.isFinite(n) ? `$${n.toFixed(2)}` : "-";
 }
 
+function fmtShares(value: unknown): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : "-";
+}
+
+function fmtWeight(value: unknown): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(3) : "-";
+}
+
 function compactJson(value: unknown): string {
   if (!value || typeof value !== "object") return "-";
   return Object.entries(value as Record<string, unknown>)
@@ -98,6 +108,17 @@ function targetLabel(status: string): string {
     unknown: "unknown",
   };
   return labels[status] ?? status;
+}
+
+function policyLabel(value: string): string {
+  const labels: Record<string, string> = {
+    soft_balanced_live_policy: "live soft",
+    soft_wind_only_shadow: "wind only",
+    soft_wind_context_shadow: "wind ctx",
+    soft_temp_context_light_shadow: "temp light",
+    soft_temp_context_medium_shadow: "temp medium",
+  };
+  return labels[value] ?? value.replace(/_/g, " ");
 }
 
 export function WeatherStrategyRuntimePage(): JSX.Element {
@@ -253,6 +274,7 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
   const liveOrders = recent.live_orders ?? [];
   const paperOrders = recent.paper_orders ?? [];
   const blockedCandidates = recent.blocked_candidates ?? [];
+  const latestCandidates = recent.latest_candidates ?? [];
   const heartbeats = recent.summary_history ?? recent.primary_journal ?? [];
   const shadowCandidates = recent.shadow_candidates ?? [];
   const latestHeartbeat = heartbeats.length ? heartbeats[heartbeats.length - 1] : summary;
@@ -288,6 +310,8 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
         ]} />
       </div>
 
+      <ShadowSizingPanel counts={valueOf(latestHeartbeat, "shadow_policy_counts") as Record<string, unknown> | undefined} />
+      <LatestCandidateCards rows={latestCandidates} />
       <BlockedCandidateCards rows={blockedCandidates} />
       <RecentRecordTable
         title="Recent live orders"
@@ -299,7 +323,9 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
           ["side", (row) => fmtUnknown(row.order_side ?? row.side)],
           ["bracket", (row) => fmtUnknown(row.bracket)],
           ["price", (row) => fmtPrice(row.entry_price ?? row.limit_price ?? row.no_ask)],
-          ["shares", (row) => fmtUnknown(row.shares ?? row.desired_shares)],
+          ["shares", (row) => fmtShares(row.shares ?? row.desired_shares ?? row.size)],
+          ["temp L", (row) => fmtShares(row.soft_temp_context_light_shadow_shares)],
+          ["temp regime", (row) => fmtUnknown(row.temperature_context_regime)],
           ["status", (row) => fmtUnknown(row.status ?? row.order_status)],
         ]}
       />
@@ -327,7 +353,9 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
           ["side", (row) => fmtUnknown(row.order_side ?? row.side)],
           ["bracket", (row) => fmtUnknown(row.bracket)],
           ["price", (row) => fmtPrice(row.entry_price ?? row.limit_price ?? row.no_ask)],
-          ["shares", (row) => fmtUnknown(row.shares ?? row.desired_shares)],
+          ["shares", (row) => fmtShares(row.shares ?? row.desired_shares ?? row.size)],
+          ["temp L", (row) => fmtShares(row.soft_temp_context_light_shadow_shares)],
+          ["temp regime", (row) => fmtUnknown(row.temperature_context_regime)],
           ["status", (row) => fmtUnknown(row.status ?? row.order_status)],
         ]}
       />
@@ -335,31 +363,101 @@ function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
   );
 }
 
-function BlockedCandidateCards({ rows }: { rows: Array<Record<string, unknown>> }) {
-  const ordered = rows.slice().reverse();
+function ShadowSizingPanel({ counts }: { counts: Record<string, unknown> | undefined }) {
+  const rows = counts && typeof counts === "object" ? Object.entries(counts) : [];
   return (
     <div>
-      <div style={{ fontWeight: 700, marginBottom: 6 }}>Blocked candidates</div>
-      {ordered.length === 0 ? (
-        <div style={mutedInlineStyle}>No blocked candidate records yet.</div>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>Shadow sizing</div>
+      {rows.length === 0 ? (
+        <div style={mutedInlineStyle}>No shadow sizing records in the latest heartbeat.</div>
+      ) : (
+        <div style={tableWrapStyle}>
+          <table style={{ ...tableStyle, minWidth: 620 }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Policy</th>
+                <th style={numThStyle}>Avg weight</th>
+                <th style={numThStyle}>Shadow $</th>
+                <th style={numThStyle}>Exec rows</th>
+                <th style={numThStyle}>Exec $</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([name, raw]) => {
+                const row = raw as Record<string, unknown>;
+                return (
+                  <tr key={name}>
+                    <td style={tdStyle}>{policyLabel(name)}</td>
+                    <td style={numTdStyle}>{fmtWeight(row.avg_weight)}</td>
+                    <td style={numTdStyle}>{fmtUsd(row.shadow_notional_usd)}</td>
+                    <td style={numTdStyle}>{fmtUnknown(row.shadow_executable_rows)}</td>
+                    <td style={numTdStyle}>{fmtUsd(row.shadow_executable_notional_usd)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LatestCandidateCards({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const ordered = rows.slice().reverse();
+  return (
+    <CandidateCards
+      title="Latest candidates"
+      empty="No latest candidate records in this artifact."
+      rows={ordered}
+      showStatus
+    />
+  );
+}
+
+function BlockedCandidateCards({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const ordered = rows.slice().reverse();
+  return <CandidateCards title="Blocked candidates" empty="No blocked candidate records yet." rows={ordered} />;
+}
+
+function CandidateCards({
+  title,
+  rows,
+  empty,
+  showStatus = false,
+}: {
+  title: string;
+  rows: Array<Record<string, unknown>>;
+  empty: string;
+  showStatus?: boolean;
+}) {
+  return (
+    <div>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>{title}</div>
+      {rows.length === 0 ? (
+        <div style={mutedInlineStyle}>{empty}</div>
       ) : (
         <div className="runtime-candidate-grid" style={candidateGridStyle}>
-          {ordered.map((row, idx) => (
+          {rows.map((row, idx) => (
             <div key={String(row.candidate_id ?? idx)} style={candidateCardStyle}>
               <div style={candidateCardHeadStyle}>
                 <div>
                   <div style={{ fontWeight: 800 }}>{fmtUnknown(row.city)} · {fmtUnknown(row.bracket)}</div>
                   <div style={subtleStyle}>{fmtUnknown(row.target_date)} · {fmtUnknown(row.route_leg)}</div>
                 </div>
-                <Badge text={fmtUnknown(row.day_regime)} color="var(--accent)" />
+                <Badge text={showStatus ? fmtUnknown(row.candidate_status) : fmtUnknown(row.day_regime)} color={showStatus && row.candidate_status === "accepted" ? "var(--ok)" : "var(--accent)"} />
               </div>
               <div style={candidateMetricGridStyle}>
                 <MiniStat label="ask" value={fmtPrice(row.ask)} />
-                <MiniStat label="shares" value={fmtUnknown(row.soft_shares)} />
+                <MiniStat label="shares" value={fmtShares(row.soft_shares)} />
                 <MiniStat label="soft $" value={fmtUsd(row.soft_notional_usd)} />
+                <MiniStat label="temp L" value={fmtShares(row.soft_temp_context_light_shadow_shares)} />
+                <MiniStat label="temp M" value={fmtShares(row.soft_temp_context_medium_shadow_shares)} />
+                <MiniStat label="wind ctx" value={fmtShares(row.soft_wind_context_shadow_shares)} />
                 <MiniStat label="parity" value={fmtUnknown(row.live_feature_parity_ok)} />
               </div>
               <div style={blockedReasonStyle}>{fmtUnknown(row.execution_skip_reason)}</div>
+              <div style={contextLineStyle}>{fmtUnknown(row.temperature_context_regime)}</div>
               <div style={candidateFooterStyle}>
                 <span>{fmtTime(String(row.created_at_utc ?? ""))}</span>
                 <span>{fmtUnknown(row.live_feature_source)}</span>
@@ -803,6 +901,13 @@ const candidateMetricGridStyle: React.CSSProperties = {
 const blockedReasonStyle: React.CSSProperties = {
   marginTop: 10,
   color: "var(--bad)",
+  fontFamily: "monospace",
+  fontSize: 11,
+  overflowWrap: "anywhere",
+};
+const contextLineStyle: React.CSSProperties = {
+  marginTop: 8,
+  color: "var(--muted)",
   fontFamily: "monospace",
   fontSize: 11,
   overflowWrap: "anywhere",
