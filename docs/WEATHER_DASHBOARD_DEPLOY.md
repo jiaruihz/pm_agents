@@ -8,6 +8,40 @@ Updated: 2026-06-27
 > **安全前提（必读）**：看板暴露真实交易数据（持仓 / PnL / 策略参数 / 城市池）。
 > **绝不允许无鉴权公开暴露**。任何公网入口必须前置鉴权（Cloudflare Access 或反代 Basic Auth）。
 
+## 0.1 当前实际部署（N100，权威）
+
+公网 **https://dashboard.weekendleague.party** 已上线，落在 N100：
+
+- **主机**：N100（`jiarui@192.168.0.200`），repo `~/projects/pm_agent`，分支 `develop`。
+- **进程**：systemd **user** service `pm-agent-weather-dashboard.service`，
+  `uvicorn weather_dashboard.api.app:app --host 127.0.0.1 --port 18080`（含 ExecStartPre 刷新探针注册表）。
+  装/改服务：`scripts/ops/install_weather_dashboard_user_services.sh`。
+- **公网入口**：`cloudflared tunnel run`（token 模式，ingress 在 Cloudflare 面板配 `dashboard.weekendleague.party → 127.0.0.1:18080`）。
+- **node/npm**：在 `~/.local/bin`（非交互 ssh 的 PATH 里没有，要 `PATH=$HOME/.local/bin:$PATH`）。
+
+### 实际发布步骤（git-first 代码 + dist 制品）
+```bash
+# 1) 本机：提交后推到 N100 裸库
+git push n100 develop
+# 2) N100：拉代码
+ssh jiarui@192.168.0.200 'cd ~/projects/pm_agent && git checkout develop && git pull --ff-only origin develop'
+# 3) 前端 dist：本机构建后 rsync（dist 是 gitignore 的构建产物）
+cd frontend/strategy_dashboard && npm run build && cd ../..
+rsync -az --delete frontend/strategy_dashboard/dist/ jiarui@192.168.0.200:/home/jiarui/projects/pm_agent/frontend/strategy_dashboard/dist/
+#    （或在 N100 上 PATH=$HOME/.local/bin:$PATH npm ci && npm run build）
+# 4) 重启服务（加载新 API 路由）
+ssh jiarui@192.168.0.200 'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user restart pm-agent-weather-dashboard.service'
+# 5) 验证
+curl -s https://dashboard.weekendleague.party/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
+```
+
+### ⚠️ 鉴权现状：当前**无鉴权**，公开可读
+实测 `https://dashboard.weekendleague.party/api/live/book` 未登录即返回真实持仓——
+**任何拿到 URL 的人都能看你的实盘持仓/PnL/策略参数/数据源**。强烈建议立刻加 Cloudflare Access（§4），
+把该 hostname 限定到你的邮箱/Google 登录；隧道层就挡住匿名访问，看板本身不用改。
+
+---
+
 ## 0. 架构：单制品
 
 FastAPI (`weather_dashboard/api/app.py`) 会把构建后的前端 `frontend/strategy_dashboard/dist`
