@@ -30,6 +30,9 @@ def test_rmk_source_basis_state_uses_routine_rmk_as_proxy():
             "source": "weather_com_current",
             "status": "ok",
             "target_date": "2026-06-25",
+            "source_report_ts_utc": "2026-06-25T19:57:00+00:00",
+            "local_detect_ts_utc": "2026-06-25T20:13:00+00:00",
+            "detected_after_report_sec": 960.0,
             "temp_round_f": 69,
             "max_temp_f_since_7am": 69,
         },
@@ -44,6 +47,8 @@ def test_rmk_source_basis_state_uses_routine_rmk_as_proxy():
     assert state.false_cross_sources == {"iem_asos_madishf_latest": 70}
     assert state.wu_max_f_since_7am == 69
     assert not state.wu_current_contradicts_proxy
+    assert state.wu_temporal_relation_to_proxy == "newer_or_equal_proxy"
+    assert state.wu_report_lag_vs_proxy_sec == 60.0
 
 
 def test_rmk_source_basis_state_requires_rmk_not_main_temp():
@@ -69,6 +74,7 @@ def test_classify_opportunity_buys_proxy_yes_when_fast_cross_misprices_it():
         classify_opportunity(
             has_false_cross=True,
             wu_current_contradicts_proxy=False,
+            wu_temporal_relation_to_proxy="newer_or_equal_proxy",
             market_contains_proxy=True,
             market_contains_fast=False,
             yes_book={"best_ask": 0.08},
@@ -79,6 +85,7 @@ def test_classify_opportunity_buys_proxy_yes_when_fast_cross_misprices_it():
         classify_opportunity(
             has_false_cross=True,
             wu_current_contradicts_proxy=False,
+            wu_temporal_relation_to_proxy="newer_or_equal_proxy",
             market_contains_proxy=True,
             market_contains_fast=False,
             yes_book={"best_ask": 0.55},
@@ -89,6 +96,7 @@ def test_classify_opportunity_buys_proxy_yes_when_fast_cross_misprices_it():
         classify_opportunity(
             has_false_cross=True,
             wu_current_contradicts_proxy=False,
+            wu_temporal_relation_to_proxy="newer_or_equal_proxy",
             market_contains_proxy=False,
             market_contains_fast=True,
             yes_book={"best_ask": 0.08},
@@ -102,11 +110,26 @@ def test_classify_opportunity_separates_wu_current_contradiction():
         classify_opportunity(
             has_false_cross=True,
             wu_current_contradicts_proxy=True,
+            wu_temporal_relation_to_proxy="newer_or_equal_proxy",
             market_contains_proxy=True,
             market_contains_fast=False,
             yes_book={"best_ask": 0.08},
         )
         == "wu_current_contradicts_proxy"
+    )
+
+
+def test_classify_opportunity_waits_when_wu_current_is_older_than_rmk():
+    assert (
+        classify_opportunity(
+            has_false_cross=True,
+            wu_current_contradicts_proxy=False,
+            wu_temporal_relation_to_proxy="older_than_proxy",
+            market_contains_proxy=True,
+            market_contains_fast=False,
+            yes_book={"best_ask": 0.08},
+        )
+        == "pending_wu_current_refresh"
     )
 
 

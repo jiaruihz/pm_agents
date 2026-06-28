@@ -89,6 +89,7 @@ def classify_opportunity(
     *,
     has_false_cross: bool,
     wu_current_contradicts_proxy: bool,
+    wu_temporal_relation_to_proxy: str,
     market_contains_proxy: bool,
     market_contains_fast: bool,
     yes_book: dict[str, Any],
@@ -97,6 +98,8 @@ def classify_opportunity(
         return "no_false_cross"
     if wu_current_contradicts_proxy:
         return "wu_current_contradicts_proxy"
+    if wu_temporal_relation_to_proxy in {"missing", "older_than_proxy", "unparseable"}:
+        return "pending_wu_current_refresh"
     if not market_contains_proxy:
         return "false_cross_context"
     if market_contains_fast:
@@ -197,6 +200,7 @@ def cycle(*, cities: set[str] | None) -> int:
             status = classify_opportunity(
                 has_false_cross=basis.has_false_cross,
                 wu_current_contradicts_proxy=basis.wu_current_contradicts_proxy,
+                wu_temporal_relation_to_proxy=basis.wu_temporal_relation_to_proxy,
                 market_contains_proxy=market_contains_proxy,
                 market_contains_fast=market_contains_fast,
                 yes_book=yes,
