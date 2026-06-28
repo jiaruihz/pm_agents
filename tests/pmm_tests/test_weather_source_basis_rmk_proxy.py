@@ -1,5 +1,5 @@
 from weather_data_feed.source_basis import latest_sources, rmk_source_basis_state
-from scripts.ops.weather_rmk_source_basis_opportunity_monitor import classify_opportunity
+from scripts.ops.weather_rmk_source_basis_opportunity_monitor import classify_opportunity, trade_intent
 
 
 def test_rmk_source_basis_state_uses_routine_rmk_as_proxy():
@@ -108,3 +108,17 @@ def test_classify_opportunity_separates_wu_current_contradiction():
         )
         == "wu_current_contradicts_proxy"
     )
+
+
+def test_trade_intent_only_marks_clean_candidate_statuses():
+    assert trade_intent("candidate_yes_cheap") == {
+        "clean_rmk_basis_candidate": True,
+        "candidate_tier": "cheap",
+        "paper_action": "BUY_YES_PROXY_BRACKET",
+    }
+    assert trade_intent("candidate_yes_mid")["clean_rmk_basis_candidate"]
+    assert trade_intent("wu_current_contradicts_proxy") == {
+        "clean_rmk_basis_candidate": False,
+        "candidate_tier": "",
+        "paper_action": "NONE",
+    }

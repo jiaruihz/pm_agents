@@ -115,6 +115,26 @@ def classify_opportunity(
     return "false_cross_but_market_not_cheap"
 
 
+def trade_intent(status: str) -> dict[str, Any]:
+    if status == "candidate_yes_cheap":
+        return {
+            "clean_rmk_basis_candidate": True,
+            "candidate_tier": "cheap",
+            "paper_action": "BUY_YES_PROXY_BRACKET",
+        }
+    if status == "candidate_yes_mid":
+        return {
+            "clean_rmk_basis_candidate": True,
+            "candidate_tier": "mid",
+            "paper_action": "BUY_YES_PROXY_BRACKET",
+        }
+    return {
+        "clean_rmk_basis_candidate": False,
+        "candidate_tier": "",
+        "paper_action": "NONE",
+    }
+
+
 def cycle(*, cities: set[str] | None) -> int:
     source_rows = read_jsonl(TIMING_DIR / "sources.jsonl")
     latest_by_source = latest_sources(source_rows)
@@ -181,6 +201,7 @@ def cycle(*, cities: set[str] | None) -> int:
                 market_contains_fast=market_contains_fast,
                 yes_book=yes,
             )
+            intent = trade_intent(status)
             row = {
                 "ts_utc": now,
                 "city": city,
@@ -195,6 +216,7 @@ def cycle(*, cities: set[str] | None) -> int:
                 "market_contains_fast": market_contains_fast,
                 "status": status,
                 "basis_status": basis_status,
+                **intent,
                 "yes_best_bid": yes.get("best_bid"),
                 "yes_best_ask": yes.get("best_ask"),
                 "yes_best_ask_size": yes.get("best_ask_size"),
