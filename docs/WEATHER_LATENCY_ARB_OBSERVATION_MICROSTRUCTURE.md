@@ -1,7 +1,7 @@
 # Weather Latency Arb：观测源、轮询和盘口反应
 
 状态：当前参考文档  
-更新：2026-06-25  
+更新：2026-06-28  
 用途：解释 weather latency arb 这条线现在怎么拿天气数据、怎么轮询、慢在哪里、市场反应有多快，以及后续研究该往哪里走。  
 相关入口：`WEATHER_STRATEGY_ENTRYPOINT.md`、`WEATHER_STRATEGY_REGISTRY.md`、`analysis/post_cross_repricing.md`
 
@@ -31,9 +31,37 @@ N100 上主要看这些原始日志。它们是速度和盘口行为的证据，
 | `runtime/weather_edge_v1/metar_cross_prev_no_shadow/cycles.jsonl` | crossing bot 的城市轮询 | 验证 live bot 自己多久扫到一次城市、第一次看到新报文是什么时候。 |
 | `runtime/weather_edge_v1/metar_cross_prev_no_shadow/opportunities.jsonl` | 一次 crossing 机会 | 连接城市、温度、report time、market、token 和当时盘口。 |
 | `runtime/weather_edge_v1/metar_cross_prev_no_shadow/orders.jsonl` | 一次真实/模拟下单尝试 | 验证 taker 下单耗时、是否成交、为什么被挡。 |
+| `runtime/weather_edge_v1/source_orderbook_timing/source_basis_rmk_proxy_state.jsonl` | 每个城市一次 RMK proxy 状态 | 记录 routine RMK、fast/coarse sources、WU current 是否互相冲突。 |
+| `runtime/weather_edge_v1/source_orderbook_timing/source_basis_rmk_proxy_opportunities.jsonl` | RMK source-basis + 盘口 | 记录 fast source 看似穿档但 routine RMK 没穿时，proxy bracket 的 YES 是否还便宜。 |
 
 如果问题是“这条策略实际赚了多少钱”，要回到 canonical 表，尤其是 `fact_trades`。  
 如果问题是“我们慢在哪里、盘口什么时候动”，看上面这些 raw timing logs。
+
+## RMK source-basis 研究任务
+
+SFO 2026-06-25 的 `68-69°F` case 暴露出一个和原始 crossing bot 不同的形态：
+
+```text
+MADISHF / HFMETAR / METAR 正文整数C 看起来已经穿到更高华氏档
+routine METAR RMK T-group 的十分之一摄氏度没有穿
+WU historical/final 事后更贴近 routine RMK
+市场先跟 fast/coarse source 打掉低档 YES，随后又按 WU/RMK 口径纠正
+```
+
+这条线的交易方向不是继续买 `T-1 NO`，而是研究：
+
+> 当 fast/coarse source 误导盘口、但 routine RMK 这个 settlement proxy 仍说明低档没死时，是否可以买回对应 bracket 的 YES。
+
+当前实现：
+
+- source 适配仍由 `weather_data_feed/observation_sources` 和 `weather_source_orderbook_timing_monitor.py` 负责；
+- `weather_data_feed/source_basis.py` 只做源口径判定，不碰 orderbook、不下单；
+- `scripts/ops/weather_rmk_source_basis_opportunity_monitor.py` 消费 timing monitor 的 `sources.jsonl`，再拉对应 bracket 的 CLOB book，输出 shadow/research 日志；
+- `routine RMK` 是 US WU/F 市场的 primary settlement proxy；
+- `weather_com_current` 只做实时审计，如果 WU current/max 已经高于 RMK proxy，机会行标成 `wu_current_contradicts_proxy`，不算干净机会；
+- `weather_com_history_hourly` / WU final 更适合事后 audit 和城市 ban，不适合作为实时撤单触发。
+
+当前任务是研究/监控，不是真钱策略。只有当实时样本证明 `RMK proxy` 稳定贴 WU final、且盘口确实在 WU/RMK 纠正前留下可吃 YES ask，才进入 tiny-live 讨论。
 
 ## 城市和数据源怎么准入
 
