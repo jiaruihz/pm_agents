@@ -47,6 +47,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Optional HTTP Basic Auth — only active when DASHBOARD_AUTH env is set
+    # (public hosts must set it; local dev/tests leave it unset → no auth).
+    from weather_dashboard.api.auth import BasicAuthMiddleware
+    app.add_middleware(BasicAuthMiddleware)
+
     app.include_router(runs.router, prefix="/api")
     app.include_router(compare.router, prefix="/api")
     app.include_router(configs.router, prefix="/api")
