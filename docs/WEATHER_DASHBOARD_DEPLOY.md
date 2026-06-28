@@ -35,10 +35,21 @@ ssh jiarui@192.168.0.200 'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl -
 curl -s https://dashboard.weekendleague.party/ | grep -o 'index-[A-Za-z0-9_-]*\.js'
 ```
 
-### ⚠️ 鉴权现状：当前**无鉴权**，公开可读
-实测 `https://dashboard.weekendleague.party/api/live/book` 未登录即返回真实持仓——
-**任何拿到 URL 的人都能看你的实盘持仓/PnL/策略参数/数据源**。强烈建议立刻加 Cloudflare Access（§4），
-把该 hostname 限定到你的邮箱/Google 登录；隧道层就挡住匿名访问，看板本身不用改。
+### 鉴权现状：已加 HTTP Basic Auth（2026-06-27）
+之前无鉴权、公开可读真实持仓。现已开启**应用层 Basic Auth**（`weather_dashboard/api/auth.py`，
+env-gated）。N100 配置：systemd drop-in `~/.config/systemd/user/pm-agent-weather-dashboard.service.d/auth.conf`：
+```ini
+[Service]
+Environment=DASHBOARD_AUTH=admin:<password>
+```
+- 未登录 → 401；`/health` 仍开放（liveness）。本机 dev/测试不设此 env → 无鉴权，不受影响。
+- **改密码**：编辑该 drop-in 的 `DASHBOARD_AUTH`，`systemctl --user daemon-reload && systemctl --user restart pm-agent-weather-dashboard.service`。
+- **生成强密码**：`openssl rand -hex 16`。
+
+> Basic Auth 是即时止血。若要 SSO/邮箱登录，按 §4 上 Cloudflare Access（隧道层鉴权），
+> 之后可把 `DASHBOARD_AUTH` 去掉只留 Access，或两者叠加。
+> 隧道：token 模式，account `314dbf17…`，tunnel `b76927af-16d0-432e-a5eb-a79451dd208a`，
+> ingress/Access 在 Cloudflare Zero Trust 面板配。
 
 ---
 
