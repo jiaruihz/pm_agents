@@ -6,7 +6,7 @@ UNIT_SRC_DIR="$ROOT_DIR/deploy/systemd/user"
 UNIT_DST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 RUNTIME_ROOT="$HOME/projects/weather_data_feed_service_runtime"
 
-mkdir -p "$UNIT_DST_DIR" "$RUNTIME_ROOT/output/logs" "$RUNTIME_ROOT/cache"
+mkdir -p "$UNIT_DST_DIR" "$RUNTIME_ROOT/output/logs" "$RUNTIME_ROOT/targeted_output/logs" "$RUNTIME_ROOT/cache"
 
 for unit in \
   weather-data-feed-snapshot.service \
