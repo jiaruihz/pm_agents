@@ -11,6 +11,7 @@ from weather_data_feed import (
     local_settle_utc,
     market_snapshot_record,
     normalize_snapshot_record,
+    parse_market_event_date,
 )
 from weather_data_feed.city_calendar import station_timezone, timezone_label
 from weather_data_feed.market_brackets import bracket_contains, parse_label_dict
@@ -95,6 +96,19 @@ def test_snapshot_protocol_normalizes_legacy_aliases_and_dates():
     assert record.city == "LA"
     assert record.target_date == "2026-06-19"
     assert record.city_local_date_at_snapshot == "2026-06-18"
+
+
+def test_market_event_date_parses_slug_and_question():
+    assert (
+        parse_market_event_date(
+            {"event_slug": "highest-temperature-in-cape-town-on-june-28-2026", "target_date": "2026-06-28"}
+        )
+        == "2026-06-28"
+    )
+    assert (
+        parse_market_event_date({"question": "Will the highest temperature in Cape Town be 15°C on June 28?"}, target_year=2026)
+        == "2026-06-28"
+    )
 
 
 def test_legacy_strategy_imports_reexport_data_module():

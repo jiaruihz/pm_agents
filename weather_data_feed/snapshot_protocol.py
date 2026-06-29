@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+import re
+from datetime import date, datetime
 from typing import Any, Mapping
 
 from weather_data_feed.city_calendar import city_local_date
@@ -8,6 +9,23 @@ from weather_data_feed.models import MarketSnapshotRecord
 
 
 SNAPSHOT_SCHEMA_VERSION = "weather_data_feed_snapshot_v1"
+
+_MONTHS = {
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+}
+_SLUG_EVENT_DATE_RE = re.compile(r"(?:^|-)on-([a-z]+)-(\d{1,2})-(\d{4})(?:$|-)")
+_QUESTION_EVENT_DATE_RE = re.compile(r"\bon\s+([A-Za-z]+)\s+(\d{1,2})(?:,\s*(\d{4}))?\b")
 
 REQUIRED_SNAPSHOT_FIELDS = (
     "city",
@@ -24,6 +42,38 @@ def first_present(row: Mapping[str, Any], *keys: str) -> str:
         if value is not None and str(value).strip():
             return str(value).strip()
     return ""
+
+
+def _date_from_parts(month_text: str, day_text: str, year_text: str | int | None) -> str:
+    month = _MONTHS.get(str(month_text or "").strip().lower())
+    if month is None:
+        return ""
+    try:
+        year = int(year_text) if year_text is not None and str(year_text).strip() else 0
+        day = int(day_text)
+    except (TypeError, ValueError):
+        return ""
+    if year <= 0:
+        return ""
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return ""
+
+
+def parse_market_event_date(row: Mapping[str, Any], *, target_year: str | int | None = None) -> str:
+    """Parse the market's date from slug/question text when present."""
+    slug = first_present(row, "event_slug", "market_slug", "slug")
+    match = _SLUG_EVENT_DATE_RE.search(slug.lower())
+    if match:
+        return _date_from_parts(match.group(1), match.group(2), match.group(3))
+
+    question = first_present(row, "question")
+    match = _QUESTION_EVENT_DATE_RE.search(question)
+    if not match:
+        return ""
+    year = match.group(3) or target_year
+    return _date_from_parts(match.group(1), match.group(2), year)
 
 
 def normalize_snapshot_record(row: Mapping[str, Any], *, snapshot_ts_utc: str | datetime | None = None) -> dict[str, Any]:

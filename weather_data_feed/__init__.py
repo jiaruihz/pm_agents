@@ -35,6 +35,7 @@ from weather_data_feed.snapshot_protocol import (
     SNAPSHOT_SCHEMA_VERSION,
     market_snapshot_record,
     normalize_snapshot_record,
+    parse_market_event_date,
     validate_snapshot_record,
 )
 from weather_data_feed.source_policy import build_city_policy, load_city_configs
@@ -68,6 +69,7 @@ __all__ = [
     "normalize_snapshot_record",
     "observation_clock_guard",
     "parse_label_dict",
+    "parse_market_event_date",
     "parse_market_bracket",
     "local_settle_utc",
     "parse_now_utc",
