@@ -1,17 +1,17 @@
 # Weather Data Collection Inventory
 
 Status: current-audit
-Updated: 2026-06-30 00:18 Asia/Shanghai
+Updated: 2026-06-30 00:58 Asia/Shanghai
 Source of truth: runtime audit on Mac + N100
 Superseded by / Used by: WEATHER_DATA_FEED_MODULE.md; WEATHER_REPO_BOUNDARY.md; WEATHER_DATA_PIPELINE.md
 
 ## 结论
 
-现在不是“有了 `weather_data_feed` 还故意乱写脚本”，而是迁移到一半：
+现在不是“有了 `weather_data_feed` 还故意乱写脚本”，而是迁移正在收口：
 
 - `weather_data_feed/` 已经是共享数据逻辑包，但它本身不是运行进程。
-- `weather_data_feed_service/` 已在 N100 跑，目标是唯一采集运行；其中 `observations` 是新实现，`snapshot` / `daily` 仍是包装旧 `weather-predict` runner。
-- 旧 `weather-predict` 仍在 N100 并行跑 snapshot / daily，作为迁移期 fallback。
+- `weather_data_feed_service/` 已在 N100 跑，目标是唯一采集运行；其中 `observations` 和 `full-snapshot` 已接管运行态，`daily` 仍是包装旧 `weather-predict` runner。
+- 旧 `weather-predict` 的 snapshot timer 已停；daily 仍保留为迁移期 fallback。
 - `pm_agent` 侧仍有若干研究/策略脚本会自己拉 weather source 或 orderbook；这些不是 canonical 生产采集，但会产研究日志，容易和主数据链混在一起。
 - Mac 本机当前不跑天气采集；只跑 dashboard API 和一条给 N100 用的反向 proxy tunnel。
 
@@ -26,7 +26,7 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 
 ## 当前 N100 运行态（按职责分层）
 
-审计命令时间：`n100`，`2026-06-29T15:16-15:55Z`。
+审计命令时间：`n100`，`2026-06-29T15:16-16:58Z`。
 
 ### Producer 层
 
@@ -34,9 +34,9 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 |---|---:|---:|---|---|---|
 | `weather-data-feed-observations.timer` | active/waiting | every 5 min | **目标 producer** | `/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json` | 已经是新链路；fast obs cache，给 live 策略用 |
 | `weather-data-feed-snapshot.timer` | **disabled/inactive** | paused | **目标 producer，但未验证完成** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | 仍包装 legacy `paper_snapshot`；当前只抓 `current_d1` 盘口，不能覆盖旧全量盘口；2026-06-29 15:52Z 起暂停，避免重复 CLOB 抓取 |
-| `weather-data-feed-full-snapshot.timer` | versioned, not enabled | manual/parity first | **目标 full producer，待验证** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | 入口已迁入 `weather_data_feed_service snapshot-full --orderbook-budget-sec 240`；先安装/手动验证，不直接替旧 runner |
+| `weather-data-feed-full-snapshot.timer` | **enabled/active** | every 30 min after inactive | **目标 full producer** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | `snapshot-full -- --orderbook-budget-sec 600 --orderbook-workers 8`；2026-06-29 16:45Z 验证 47 城/800 records/1600 books/non_ok=0 |
 | `weather-data-feed-daily.timer` | active/waiting | daily | **目标 producer，但未迁完** | `.../cache/pm_history`, `.../cache/gfs_daily`, `.../cache/wu_obs` | 仍包装 legacy `daily_pipeline` |
-| `weather-predict-snapshot.timer` | active/running | every 30 min | **旧 producer / 临时 fallback** | `/home/jiarui/projects/weather-predict/output/paper_snapshots/` + `output/orderbook_snapshots/` | 目前仍是全量盘口 snapshot 的实际覆盖来源；新链路验证通过前不 disable |
+| `weather-predict-snapshot.timer` | **disabled/inactive** | paused | 旧 producer / fallback only | `/home/jiarui/projects/weather-predict/output/paper_snapshots/` + `output/orderbook_snapshots/` | 2026-06-29 16:26Z 起停用；旧数据保留，不删 |
 | `weather-predict-daily-pipeline.timer` | active/waiting | daily | **旧 producer / 临时 fallback** | `/home/jiarui/projects/weather-predict/cache/*` | settlement/history/forecast cache fallback；新链路验证通过前不 disable |
 
 ### Consumer 层
@@ -48,6 +48,8 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 | `weather_theta_current_yes_tiny_live.py` | active process | pm_agent live strategy | 消费 snapshot + observation cache，执行 tiny-live；不拥有 canonical CLOB/weather 采集 |
 | `station-basis-shadow-v1.service` | active/running | pm_agent shadow strategy | 消费数据并写 shadow runtime |
 | `weather_theta_higher_no_carry_shadow.py` | active process | pm_agent shadow strategy | 消费数据并写 shadow runtime |
+| `regime_routed_no_tiny_live.py` | active process | pm_agent live strategy | 已重启，默认按最新 snapshot producer 读取；不拥有 canonical CLOB/weather 采集 |
+| `range_rv_shadow_v0.py` | manual shadow consumer | pm_agent shadow strategy | 已验证默认读取新 data-feed full snapshot |
 | `pm-agent-weather-dashboard.service` | active/running | dashboard | 展示/读取 |
 | `pm-agent-weather-dashboard-refresh.timer` | active/waiting | dashboard metadata | runtime registry 刷新 |
 | `weather_telegram_control.py` | active process | ops control | 控制/通知，不是采集 |
@@ -68,9 +70,9 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 
 | 路径 | 文件数 | 今日文件 | 最新文件 | 说明 |
 |---|---:|---:|---|---|
-| `output/paper_snapshots/` | 400+ | 41 | `snapshot_20260629_2318.json` at 15:23Z | 新服务 snapshot；本轮成功，但 current-only 盘口覆盖不足 |
-| `output/orderbook_snapshots/` | 338+ | 2 | `orderbook_snapshot_20260629_2318.jsonl.gz` at 15:18Z | 新服务 orderbook；当前 `current_d1` scope，每轮约 6 rows |
-| `output/observations/latest.json` | 1 | 1 | 15:36Z | 5 分钟 fast observation cache；schema `weather_data_feed_observation_cache_v1` |
+| `output/paper_snapshots/` | 400+ | 45+ | `snapshot_20260630_0045.json` at 16:52Z | 新 full snapshot；47 城、800 records、`clob_top_of_book_all` |
+| `output/orderbook_snapshots/` | 338+ | 6+ | `orderbook_snapshot_20260630_0045.jsonl.gz` at 16:52Z | 新 full orderbook；1600 rows、47 城、`status=ok` 1600 |
+| `output/observations/latest.json` | 1 | 1 | 16:52Z | 5 分钟 fast observation cache；schema `weather_data_feed_observation_cache_v1` |
 | `output/logs/` | 6 | - | `observations.log` at 15:36Z, `snapshot.log` at 15:23Z | 新服务日志 |
 | `cache/` | 29409 | - | `gfs_daily/Wuhan_2026-06-28.json` at 2026-06-27 09:27Z | daily cache，沿用 legacy cache 命名 |
 
@@ -78,8 +80,8 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 
 | 路径 | 文件数 | 今日文件 | 最新文件 | 说明 |
 |---|---:|---:|---|---|
-| `output/paper_snapshots/` | 2641+ | 46+ | `snapshot_20260629_2300.json` at 15:15Z | 旧 canonical snapshot runner；747 records |
-| `output/orderbook_snapshots/` | 1935+ | 3+ | `orderbook_snapshot_20260629_2330.jsonl.gz` at 15:40Z | 旧全量 orderbook snapshots；每轮约 1000-1500 rows |
+| `output/paper_snapshots/` | 2641+ | 47+ | `snapshot_20260630_0000.json` at 16:15Z | 旧 snapshot runner 已停；最后基线 835 records |
+| `output/orderbook_snapshots/` | 1935+ | 4+ | `orderbook_snapshot_20260630_0000.jsonl.gz` at 16:15Z | 旧全量 orderbook 已停；最后基线 1670 rows/47 城/non_ok=0 |
 | `output/paper_trades/paper_orders.jsonl` | 1 | append-only | 15:15Z | paper ledger |
 | `cache/wu_obs/` | 52 | - | 2026-06-10 | WU historical observed cache，偏结算/历史，不是实时 trigger |
 | `cache/pm_history/` | 26539 | - | 2026-06-27 | Polymarket history / settlement cache |
@@ -122,9 +124,9 @@ weather-predict-snapshot.timer    -> weather-predict run_paper_snapshot.sh -> pa
 
 | producer | snapshot records | orderbook rows | 盘口 scope | 结论 |
 |---|---:|---:|---|---|
-| `weather_data_feed_service` latest normal run | 737 | 6 | `current_d1` | 适合 current-YES live 所需的少量 fresh book，不覆盖全量研究 snapshot |
-| `weather-predict` latest normal run | 747 | 1026-1494 | effectively full/all | 目前仍是全量盘口 snapshot 的实际来源 |
-| `weather_data_feed_service` staging `orderbook-scope=all` | 未完成 | 未落盘 | `all` | 手动验证超过 4 分钟仍未写出产物，已停止；不能直接切成 all scope 硬顶 |
+| `weather_data_feed_service` old targeted run | 737 | 6 | `current_d1` | 只适合 current-YES live 轻量盘口，不覆盖全量研究 snapshot |
+| `weather-predict` final baseline run | 835 | 1670 | effectively full/all | 15 分钟左右完成；已停用但数据保留 |
+| `weather_data_feed_service snapshot-full` validated run | 800 | 1600 | `all` | 6 分 54 秒完成；47 城、non_ok=0；已接管 full snapshot timer |
 
 所以短期正确动作不是让两个 timer 继续并行，也不是直接把新 producer 的 budget 拉大。CLOB/盘口采集已经开始
 收口成 `weather_data_feed_service` 的明确入口：
@@ -136,8 +138,8 @@ data-feed snapshot producer:
   - latency/research book join: 独立 research output，不进入 canonical snapshot
 ```
 
-当前临时保留旧 `weather-predict-snapshot.timer`，因为它是全量盘口覆盖来源。新 `weather-data-feed-snapshot.timer`
-已经暂停；`weather-data-feed-full-snapshot.timer` 只在手动验证和 2-3 天 parity 通过后才允许替代旧 runner。
+当前 full snapshot 已切到 `weather-data-feed-full-snapshot.timer`。旧 `weather-predict-snapshot.timer`
+已 disable，但旧数据保留；如果新 full 连续失败，可以重新 enable 旧 timer 作为回滚。
 
 ## 存在但当前没跑的采集/研究入口
 
