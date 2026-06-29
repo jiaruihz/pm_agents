@@ -43,14 +43,20 @@ from weather_data_feed.source_policy import (  # noqa: E402
     load_city_configs,
 )
 from weather_data_feed.observation_sources import (  # noqa: E402
+    normalize_source_name,
     parse_metar_report_time,
     parse_metar_temp_c,
     parse_tgftp_header_time,
+    stable_hash,
 )
 
 
 DATA_ROOT = Path(os.environ.get("METAR_CROSS_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
 OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/metar_cross_prev_no_shadow"
+DEFAULT_SOURCE_EVENTS_LATEST = Path(
+    os.environ.get("METAR_CROSS_SOURCE_EVENTS_PATH")
+    or "/home/jiarui/projects/weather_data_feed_service_runtime/output/source_events/latest.json"
+)
 FAST_HTTP_TIMEOUT_SEC = float(os.environ.get("METAR_CROSS_HTTP_TIMEOUT_SEC", "3.0"))
 FAST_PROXY_MODE = os.environ.get("METAR_CROSS_PROXY_MODE", "direct").strip().lower()
 WEATHER_PROXY_MODE = os.environ.get("METAR_CROSS_WEATHER_PROXY_MODE", "direct").strip().lower()
@@ -167,7 +173,7 @@ def load_source_by_city(*, json_text: str = "", file_path: str = "") -> dict[str
         payload = json.loads(json_text)
     if not isinstance(payload, dict):
         raise ValueError("source-by-city payload must be a JSON object")
-    allowed = {"aviationweather_metar", "synopticdata_timeseries", "noaa_tgftp_station_txt"}
+    allowed = {"aviationweather_metar", "aviationweather_cache_csv", "synopticdata_timeseries", "noaa_tgftp_station_txt"}
     out = {}
     for city, source_name in payload.items():
         value = str(source_name).strip()
@@ -547,6 +553,99 @@ def observation_summary(cfg: CityConfig, tz: ZoneInfo, local_date: Any, *, previ
     return recent_metar_summary(cfg.official_icao, tz, local_date, hours=recent_hours)
 
 
+def load_source_event_records(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        raise FileNotFoundError(f"source-events file not found: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    records = payload.get("records") if isinstance(payload, dict) else payload
+    if not isinstance(records, list):
+        raise ValueError(f"source-events records missing or invalid: {path}")
+    return [row for row in records if isinstance(row, dict)]
+
+
+def source_event_lookup(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
+    by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in load_source_event_records(path):
+        city = str(row.get("city") or "")
+        source_name = normalize_source_name(str(row.get("source") or ""))
+        if not city or not source_name:
+            continue
+        key = (city, source_name)
+        existing = by_key.get(key)
+        if existing is None or str(row.get("local_detect_ts_utc") or "") > str(existing.get("local_detect_ts_utc") or ""):
+            by_key[key] = row
+    return by_key
+
+
+def observation_summary_from_source_event(
+    cfg: CityConfig,
+    tz: ZoneInfo,
+    local_date: Any,
+    *,
+    obs_source: str,
+    source_events: dict[tuple[str, str], dict[str, Any]],
+    source_events_path: Path,
+    now_utc: datetime,
+) -> dict[str, Any]:
+    source_name = normalize_source_name(obs_source)
+    row = source_events.get((cfg.city, source_name))
+    if row is None:
+        return {
+            "status": "source_event_missing",
+            "source": source_name,
+            "n_obs": 0,
+            "error": f"missing source event in {source_events_path}",
+            "payload_hash": stable_hash({"city": cfg.city, "source": source_name, "status": "source_event_missing"}),
+            "source_input": "data_feed_source_events",
+            "source_events_path": str(source_events_path),
+        }
+    target_date = str(row.get("target_date") or "")
+    if target_date and target_date != local_date.isoformat():
+        return {
+            **row,
+            "status": "source_event_wrong_date",
+            "error": f"source event target_date={target_date}, expected {local_date.isoformat()}",
+            "source_input": "data_feed_source_events",
+            "source_events_path": str(source_events_path),
+        }
+    temp_c = row.get("temp_c")
+    if row.get("status") != "ok":
+        return {
+            **row,
+            "status": row.get("status") or "source_event_not_ok",
+            "source_input": "data_feed_source_events",
+            "source_events_path": str(source_events_path),
+        }
+    if temp_c is None:
+        return {
+            **row,
+            "status": "source_event_missing_temp",
+            "source_input": "data_feed_source_events",
+            "source_events_path": str(source_events_path),
+        }
+    report_ts = str(row.get("source_report_ts_utc") or row.get("obs_ts_utc") or row.get("last_obs_utc") or "")
+    report_dt = parse_dt(report_ts)
+    if report_dt is None:
+        report_dt = now_utc
+    age_min = (now_utc - report_dt).total_seconds() / 60.0
+    current_temp_c = float(temp_c)
+    # source-events is a latest-observation feed. The caller carries forward
+    # per-city running max from state; on cold start this seeds but does not
+    # infer earlier intraday highs.
+    return {
+        **row,
+        "status": "ok",
+        "source": source_name,
+        "source_input": "data_feed_source_events",
+        "source_events_path": str(source_events_path),
+        "n_obs": row.get("record_count") or 1,
+        "age_min": round(age_min, 1),
+        "running_max_c": current_temp_c,
+        "current_temp_c": current_temp_c,
+        "last_obs_utc": report_dt.isoformat(),
+    }
+
+
 def detect_latency_sec(ts_utc: str | None, obs_last_obs_utc: str | None) -> float | None:
     if not ts_utc or not obs_last_obs_utc:
         return None
@@ -697,6 +796,8 @@ def cycle_once(
     recent_hours: float,
     obs_source: str,
     source_by_city: dict[str, str] | None,
+    signal_input: str = "source-events",
+    source_events_path: Path = DEFAULT_SOURCE_EVENTS_LATEST,
     live: bool,
     confirm_live: bool,
     max_notional_per_trade: float,
@@ -714,6 +815,11 @@ def cycle_once(
     now_utc = datetime.now(timezone.utc)
     counts = {"cities": 0, "crossings": 0, "opportunities": 0, "live_attempts": 0, "live_submitted": 0, "errors": 0}
     live_enabled = bool(live and confirm_live and not dry_run)
+    source_events: dict[tuple[str, str], dict[str, Any]] = {}
+    if signal_input == "source-events":
+        source_events = source_event_lookup(source_events_path)
+    elif signal_input != "live-fetch":
+        raise ValueError(f"unknown signal_input {signal_input!r}")
 
     def fetch_observation(cfg: CityConfig) -> dict[str, Any]:
         tz = ZoneInfo(cfg.timezone_name)
@@ -736,14 +842,25 @@ def cycle_once(
         requested_obs_source = source_for_city(cfg, obs_source, source_by_city)
         cycle_row["obs_source_requested"] = requested_obs_source
         try:
-            met = observation_summary(
-                cfg,
-                tz,
-                local_date,
-                previous_value=previous_value,
-                recent_hours=recent_hours,
-                obs_source=requested_obs_source,
-            )
+            if signal_input == "source-events":
+                met = observation_summary_from_source_event(
+                    cfg,
+                    tz,
+                    local_date,
+                    obs_source=requested_obs_source,
+                    source_events=source_events,
+                    source_events_path=source_events_path,
+                    now_utc=now_utc,
+                )
+            else:
+                met = observation_summary(
+                    cfg,
+                    tz,
+                    local_date,
+                    previous_value=previous_value,
+                    recent_hours=recent_hours,
+                    obs_source=requested_obs_source,
+                )
         except Exception as exc:  # noqa: BLE001
             return {
                 "cfg": cfg,
@@ -784,9 +901,14 @@ def cycle_once(
             {
                 "metar_status": met.get("status"),
                 "obs_source": met.get("source"),
+                "signal_input": signal_input,
+                "source_events_path": str(source_events_path) if signal_input == "source-events" else "",
+                "obs_source_input": met.get("source_input"),
+                "obs_payload_hash": met.get("payload_hash"),
                 "obs_last_obs_utc": met.get("last_obs_utc"),
                 "obs_age_min": met.get("age_min"),
                 "n_obs": met.get("n_obs"),
+                "raw_metar": met.get("raw_metar"),
             }
         )
         if met.get("status") != "ok":
@@ -1047,6 +1169,18 @@ def main() -> int:
     parser.add_argument("--max-notional-total-day", type=float, default=float(os.environ.get("METAR_CROSS_MAX_NOTIONAL_TOTAL_DAY", "50")))
     parser.add_argument("--source-by-city-json", default=os.environ.get("METAR_CROSS_SOURCE_BY_CITY_JSON", ""), help="JSON object mapping city name to obs source.")
     parser.add_argument("--source-by-city-file", default=os.environ.get("METAR_CROSS_SOURCE_BY_CITY_FILE", ""), help="Path to JSON object mapping city name to obs source.")
+    parser.add_argument(
+        "--signal-input",
+        choices=["source-events", "live-fetch"],
+        default=os.environ.get("METAR_CROSS_SIGNAL_INPUT", "source-events"),
+        help="Read crossing signal weather rows from data-feed source-events by default; live-fetch is an explicit debug fallback.",
+    )
+    parser.add_argument(
+        "--source-events-path",
+        type=Path,
+        default=DEFAULT_SOURCE_EVENTS_LATEST,
+        help="Path to weather_data_feed_service output/source_events/latest.json.",
+    )
     parser.add_argument("--interval-sec", type=float, default=None, help="Alias for --base-interval-sec.")
     parser.add_argument("--base-interval-sec", type=float, default=20.0)
     parser.add_argument("--burst-interval-sec", type=float, default=2.0)
@@ -1087,6 +1221,8 @@ def main() -> int:
                 "max_ask": args.max_ask,
                 "dry_run": args.dry_run,
                 "obs_source": args.obs_source,
+                "signal_input": args.signal_input,
+                "source_events_path": str(args.source_events_path),
                 "source_by_city_count": len(source_by_city),
                 "source_by_city": source_by_city,
                 "live": args.live,
@@ -1139,6 +1275,8 @@ def main() -> int:
                 recent_hours=args.recent_hours,
                 obs_source=args.obs_source,
                 source_by_city=source_by_city,
+                signal_input=args.signal_input,
+                source_events_path=args.source_events_path,
                 live=args.live,
                 confirm_live=args.confirm_live,
                 max_notional_per_trade=args.max_notional_per_trade,
@@ -1185,6 +1323,8 @@ def main() -> int:
             recent_hours=args.recent_hours,
             obs_source=args.obs_source,
             source_by_city=source_by_city,
+            signal_input=args.signal_input,
+            source_events_path=args.source_events_path,
             live=args.live,
             confirm_live=args.confirm_live,
             max_notional_per_trade=args.max_notional_per_trade,

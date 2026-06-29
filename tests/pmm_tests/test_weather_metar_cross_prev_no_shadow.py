@@ -1,8 +1,10 @@
+import json
 from datetime import datetime, timezone
 
 from scripts.ops.weather_metar_cross_prev_no_shadow import (
     build_city_policy,
     city_base_delay_sec,
+    cycle_once,
     circular_minute_distance,
     crossed_prev_no_brackets,
     in_learned_update_window,
@@ -11,6 +13,7 @@ from scripts.ops.weather_metar_cross_prev_no_shadow import (
     load_source_by_city,
     load_city_configs,
     noaa_tgftp_station_txt_latest,
+    observation_summary_from_source_event,
     parsed_label_is_dead_for_running_value,
     parsed_label_matches_no_target,
     parse_report_minutes,
@@ -153,3 +156,95 @@ def test_noaa_tgftp_station_txt_latest_parses_station_text(monkeypatch):
     assert row["last_obs_utc"] == "2026-06-24T17:51:00+00:00"
     assert row["current_temp_c"] == 29.0
     assert row["running_max_c"] == 29.0
+
+
+def test_source_event_observation_summary_maps_latest_row(tmp_path):
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+    source_events = {
+        ("Shanghai", "aviationweather_metar"): {
+            "city": "Shanghai",
+            "target_date": "2026-06-17",
+            "source": "aviationweather_metar",
+            "station": "ZSPD",
+            "status": "ok",
+            "temp_c": 27.0,
+            "payload_hash": "hash-primary",
+            "source_report_ts_utc": "2026-06-17T10:00:00+00:00",
+            "raw_metar": "METAR ZSPD 171000Z 00000KT 9999 27/20 Q1008",
+        }
+    }
+
+    row = observation_summary_from_source_event(
+        cfg,
+        timezone.utc,
+        datetime(2026, 6, 17).date(),
+        obs_source="aviationweather_metar",
+        source_events=source_events,
+        source_events_path=tmp_path / "latest.json",
+        now_utc=datetime(2026, 6, 17, 10, 0, 5, tzinfo=timezone.utc),
+    )
+
+    assert row["status"] == "ok"
+    assert row["source_input"] == "data_feed_source_events"
+    assert row["current_temp_c"] == 27.0
+    assert row["running_max_c"] == 27.0
+    assert row["last_obs_utc"] == "2026-06-17T10:00:00+00:00"
+
+
+def test_cycle_once_uses_source_events_for_crossing_signal(monkeypatch, tmp_path):
+    from scripts.ops import weather_metar_cross_prev_no_shadow as mod
+
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+    source_events_path = tmp_path / "latest.json"
+    source_events_path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "city": "Shanghai",
+                        "target_date": "2026-06-30",
+                        "source": "aviationweather_metar",
+                        "station": "ZSPD",
+                        "status": "ok",
+                        "temp_c": 25.0,
+                        "payload_hash": "hash-primary",
+                        "source_report_ts_utc": "2026-06-29T18:30:00+00:00",
+                    }
+                ]
+            }
+        )
+    )
+    out_dir = tmp_path / "metar_cross"
+    monkeypatch.setattr(mod, "OUT_DIR", out_dir)
+
+    def fail_live_fetch(*_args, **_kwargs):
+        raise AssertionError("cycle_once should not live-fetch weather observations")
+
+    monkeypatch.setattr(mod, "observation_summary", fail_live_fetch)
+    monkeypatch.setattr(mod, "datetime", type("FixedDateTime", (), {
+        "now": staticmethod(lambda tz=None: datetime(2026, 6, 29, 19, 0, tzinfo=timezone.utc)),
+        "fromisoformat": staticmethod(datetime.fromisoformat),
+    }))
+
+    counts = cycle_once(
+        [cfg],
+        max_ask=0.995,
+        dry_run=True,
+        recent_hours=2,
+        obs_source="aviationweather_metar",
+        source_by_city=None,
+        signal_input="source-events",
+        source_events_path=source_events_path,
+        live=False,
+        confirm_live=False,
+        max_notional_per_trade=10,
+        max_notional_per_city_day=10,
+        max_notional_total_day=50,
+        max_workers=1,
+    )
+
+    assert counts["cities"] == 1
+    cycle_rows = [json.loads(line) for line in (out_dir / "cycles.jsonl").read_text().splitlines()]
+    assert cycle_rows[0]["signal_input"] == "source-events"
+    assert cycle_rows[0]["obs_source_input"] == "data_feed_source_events"
+    assert cycle_rows[0]["obs_payload_hash"] == "hash-primary"
