@@ -58,9 +58,12 @@ OUTPUT_DIR = OUTPUT_ROOT / "paper_snapshots"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ORDERBOOK_OUTPUT_DIR = OUTPUT_ROOT / "orderbook_snapshots"
 ORDERBOOK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-PM_HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0, read=5.0, write=2.0, pool=2.0)
+PM_HTTP_TIMEOUT = httpx.Timeout(8.0, connect=3.0, read=8.0, write=3.0, pool=10.0)
 WEATHER_HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0, read=5.0, write=2.0, pool=2.0)
-PM_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
+PM_HTTP_LIMITS = httpx.Limits(
+    max_connections=int(os.environ.get("WEATHER_DATA_FEED_PM_MAX_CONNECTIONS", "16")),
+    max_keepalive_connections=int(os.environ.get("WEATHER_DATA_FEED_PM_MAX_KEEPALIVE", "8")),
+)
 WEATHER_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
 DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "current_d1")
 DEFAULT_ORDERBOOK_BUDGET_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC", "30"))
