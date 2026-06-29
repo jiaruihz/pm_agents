@@ -65,6 +65,7 @@ WEATHER_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=
 DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "current_d1")
 DEFAULT_ORDERBOOK_BUDGET_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC", "30"))
 DEFAULT_ORDERBOOK_WORKERS = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_WORKERS", "1"))
+DEFAULT_ORDERBOOK_RETRIES = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_RETRIES", "2"))
 
 BASE_SHARES = 10
 
@@ -199,7 +200,7 @@ def summarize_orderbook(book_json, top_n=20):
     }
 
 
-def fetch_token_orderbook(client, token_id, top_n=20):
+def fetch_token_orderbook(client, token_id, top_n=20, retries=DEFAULT_ORDERBOOK_RETRIES):
     if not token_id:
         return {
             "status": "missing_token",
@@ -208,39 +209,53 @@ def fetch_token_orderbook(client, token_id, top_n=20):
             "summary": {},
             "raw": {},
         }
-    fetched_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    try:
-        r = client.get(f"{PM_CLOB_URL}/book", params={"token_id": token_id})
-        if r.status_code == 404:
+    last_error = None
+    attempts = max(1, int(retries or 0) + 1)
+    for attempt in range(attempts):
+        fetched_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        try:
+            r = client.get(f"{PM_CLOB_URL}/book", params={"token_id": token_id})
+            if r.status_code == 404:
+                return {
+                    "status": "not_found",
+                    "token_id": token_id,
+                    "fetched_at_utc": fetched_at_utc,
+                    "summary": {},
+                    "raw": {},
+                }
+            if r.status_code < 500 and r.status_code != 429:
+                r.raise_for_status()
+            elif attempt < attempts - 1:
+                time.sleep(0.2 * (attempt + 1))
+                continue
+            else:
+                r.raise_for_status()
+            raw = r.json()
+            summary = summarize_orderbook(raw, top_n=top_n)
             return {
-                "status": "not_found",
+                "status": "ok",
                 "token_id": token_id,
                 "fetched_at_utc": fetched_at_utc,
-                "summary": {},
-                "raw": {},
+                "summary": summary,
+                "raw": {
+                    "bids": summary["bids"],
+                    "asks": summary["asks"],
+                },
             }
-        r.raise_for_status()
-        raw = r.json()
-        summary = summarize_orderbook(raw, top_n=top_n)
-        return {
-            "status": "ok",
-            "token_id": token_id,
-            "fetched_at_utc": fetched_at_utc,
-            "summary": summary,
-            "raw": {
-                "bids": summary["bids"],
-                "asks": summary["asks"],
-            },
-        }
-    except Exception as exc:
-        return {
-            "status": "error",
-            "token_id": token_id,
-            "fetched_at_utc": fetched_at_utc,
-            "error": f"{type(exc).__name__}: {exc}",
-            "summary": {},
-            "raw": {},
-        }
+        except Exception as exc:
+            last_error = exc
+            if attempt < attempts - 1:
+                time.sleep(0.2 * (attempt + 1))
+                continue
+    fetched_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return {
+        "status": "error",
+        "token_id": token_id,
+        "fetched_at_utc": fetched_at_utc,
+        "error": f"{type(last_error).__name__}: {last_error}",
+        "summary": {},
+        "raw": {},
+    }
 
 
 def append_orderbook_archive(path, row):
