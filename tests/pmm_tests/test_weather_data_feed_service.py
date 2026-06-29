@@ -70,7 +70,7 @@ def test_snapshot_full_cli_forces_all_orderbook_scope(monkeypatch) -> None:
     ]
 
 
-def test_snapshot_targeted_cli_forces_current_d1_orderbook_scope(monkeypatch) -> None:
+def test_snapshot_targeted_cli_forces_strategy_live_orderbook_scope(monkeypatch) -> None:
     from weather_data_feed_service import cli
 
     calls = []
@@ -84,7 +84,7 @@ def test_snapshot_targeted_cli_forces_current_d1_orderbook_scope(monkeypatch) ->
     rc = cli.main(["snapshot-targeted", "--", "--orderbook-scope", "all"])
 
     assert rc == 0
-    assert calls == [("paper_snapshot", ["--orderbook-scope", "all", "--orderbook-scope", "current_d1"])]
+    assert calls == [("paper_snapshot", ["--orderbook-scope", "all", "--orderbook-scope", "strategy_live"])]
 
 
 def test_legacy_runners_use_configured_runtime_roots(tmp_path, monkeypatch) -> None:
@@ -148,6 +148,37 @@ def test_paper_snapshot_batch_fetches_token_orderbooks(monkeypatch, tmp_path) ->
     assert result["yes-token"][0]["city"] == "Shanghai"
     assert result["yes-token"][1]["summary"]["best_ask"] == 0.5
     assert sorted(seen) == [("no-token", 5), ("yes-token", 5)]
+
+
+def test_paper_snapshot_strategy_live_orderbook_scope_covers_active_strategy_legs(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+
+    markets = [
+        {"question": "Will the high temperature in Foo be 66-67°F?"},
+        {"question": "Will the high temperature in Foo be 68-69°F?"},
+        {"question": "Will the high temperature in Foo be 70-71°F?"},
+        {"question": "Will the high temperature in Foo be 72-73°F?"},
+        {"question": "Will the high temperature in Foo be 74-75°F?"},
+    ]
+
+    targets = paper_snapshot.orderbook_targets_for_strategy_live(
+        markets,
+        "F",
+        {"metar_current_max_f": 69.0},
+    )
+
+    assert targets == {
+        ("68-69", "yes"),
+        ("68-69", "no"),
+        ("70-71", "no"),
+        ("72-73", "no"),
+    }
 
 
 def test_paper_snapshot_metar_accepts_epoch_obs_time(monkeypatch, tmp_path) -> None:
@@ -239,6 +270,8 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
         assert "weather-predict" not in text
 
     assert "snapshot-full -- --orderbook-budget-sec 600 --orderbook-workers 8" in full_snapshot
+    assert "snapshot-targeted -- --orderbook-budget-sec 60 --orderbook-workers 4" in snapshot
+    assert "weather_data_feed_service_runtime/targeted_output" in snapshot
     assert "OnUnitInactiveSec=30min" in timer
     assert "OnUnitInactiveSec=30min" in full_snapshot_timer
     assert "OnUnitInactiveSec=5min" in observations_timer

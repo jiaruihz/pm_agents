@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument("runner_args", nargs=argparse.REMAINDER)
     snapshot_targeted = subparsers.add_parser(
         "snapshot-targeted",
-        help="Run the snapshot collector with targeted current/d1 orderbook enrichment",
+        help="Run the snapshot collector with targeted live-strategy orderbook enrichment",
     )
     snapshot_targeted.add_argument("runner_args", nargs=argparse.REMAINDER)
     snapshot_full = subparsers.add_parser(
@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "snapshot":
         return _run_legacy("paper_snapshot", runner_args)
     if args.command == "snapshot-targeted":
-        return _run_legacy("paper_snapshot", _append_forced_option(runner_args, "--orderbook-scope", "current_d1"))
+        return _run_legacy("paper_snapshot", _append_forced_option(runner_args, "--orderbook-scope", "strategy_live"))
     if args.command == "snapshot-full":
         return _run_legacy("paper_snapshot", _append_forced_option(runner_args, "--orderbook-scope", "all"))
     if args.command == "daily":

@@ -1,7 +1,7 @@
 # Weather Data Collection Inventory
 
 Status: current-audit
-Updated: 2026-06-30 00:58 Asia/Shanghai
+Updated: 2026-06-30 01:35 Asia/Shanghai
 Source of truth: runtime audit on Mac + N100
 Superseded by / Used by: WEATHER_DATA_FEED_MODULE.md; WEATHER_REPO_BOUNDARY.md; WEATHER_DATA_PIPELINE.md
 
@@ -33,7 +33,7 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 | 入口 | 当前状态 | 频率/方式 | 归属 | 产物 | 口径 |
 |---|---:|---:|---|---|---|
 | `weather-data-feed-observations.timer` | active/waiting | every 5 min | **目标 producer** | `/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json` | 已经是新链路；fast obs cache，给 live 策略用 |
-| `weather-data-feed-snapshot.timer` | **disabled/inactive** | paused | **目标 producer，但未验证完成** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | 仍包装 legacy `paper_snapshot`；当前只抓 `current_d1` 盘口，不能覆盖旧全量盘口；2026-06-29 15:52Z 起暂停，避免重复 CLOB 抓取 |
+| `weather-data-feed-snapshot.timer` | **disabled/inactive** | paused | **目标 targeted producer，待策略显式消费后再启用** | `.../targeted_output/paper_snapshots/` + `.../targeted_output/orderbook_snapshots/` | `snapshot-targeted`；`strategy_live` 盘口子集：current YES/current NO/D1 NO/D2 NO；与 canonical full output 隔离，避免窄快照污染全量消费者 |
 | `weather-data-feed-full-snapshot.timer` | **enabled/active** | every 30 min after inactive | **目标 full producer** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | `snapshot-full -- --orderbook-budget-sec 600 --orderbook-workers 8`；2026-06-29 16:45Z 验证 47 城/800 records/1600 books/non_ok=0 |
 | `weather-data-feed-daily.timer` | active/waiting | daily | **目标 producer，但未迁完** | `.../cache/pm_history`, `.../cache/gfs_daily`, `.../cache/wu_obs` | 仍包装 legacy `daily_pipeline` |
 | `weather-predict-snapshot.timer` | **disabled/inactive** | paused | 旧 producer / fallback only | `/home/jiarui/projects/weather-predict/output/paper_snapshots/` + `output/orderbook_snapshots/` | 2026-06-29 16:26Z 起停用；旧数据保留，不删 |
@@ -116,7 +116,7 @@ Mac 当前 `tmux` 只有 `cc` / `codex-phone`，`ps` 没有天气采集脚本；
 当前重复请求主要来自这两条 30 分钟 snapshot producer：
 
 ```text
-weather-data-feed-snapshot.timer  -> weather_data_feed_service snapshot -> legacy paper_snapshot
+weather-data-feed-snapshot.timer  -> weather_data_feed_service snapshot-targeted -> strategy_live scoped paper_snapshot
 weather-predict-snapshot.timer    -> weather-predict run_paper_snapshot.sh -> paper_snapshot.py
 ```
 
@@ -124,7 +124,7 @@ weather-predict-snapshot.timer    -> weather-predict run_paper_snapshot.sh -> pa
 
 | producer | snapshot records | orderbook rows | 盘口 scope | 结论 |
 |---|---:|---:|---|---|
-| `weather_data_feed_service` old targeted run | 737 | 6 | `current_d1` | 只适合 current-YES live 轻量盘口，不覆盖全量研究 snapshot |
+| `weather_data_feed_service` old targeted run | 737 | 6 | `current_d1` | 旧轻量盘口只适合 current-YES，已被 `strategy_live` 替代 |
 | `weather-predict` final baseline run | 835 | 1670 | effectively full/all | 15 分钟左右完成；已停用但数据保留 |
 | `weather_data_feed_service snapshot-full` validated run | 800 | 1600 | `all` | 6 分 54 秒完成；47 城、non_ok=0；已接管 full snapshot timer |
 
@@ -133,7 +133,7 @@ weather-predict-snapshot.timer    -> weather-predict run_paper_snapshot.sh -> pa
 
 ```text
 data-feed snapshot producer:
-  - snapshot-targeted: current_d1，给 live 策略的轻量盘口
+  - snapshot-targeted: strategy_live，给 live/near-live 策略的轻量盘口；输出隔离在 `targeted_output`
   - snapshot-full: all，给 canonical/research 全量盘口；systemd unit 已版本化，待 N100 parity 验证
   - latency/research book join: 独立 research output，不进入 canonical snapshot
 ```
@@ -183,7 +183,7 @@ data-feed snapshot producer:
 
 1. **先定唯一 producer 目标**：`weather_data_feed_service_runtime` 做目标 canonical，`weather-predict` 明确标为 migration fallback。
 2. **先修 consumer fallback**：live consumer 默认按最新 snapshot 文件选择 producer，显式 env 才强制指定目录。这样短暂停某条 producer 不会卡在 stale 目录。
-3. **验证 orderbook producer scope**：`current_d1` live 所需盘口已经对应 `snapshot-targeted`，`all` research/canonical 全量盘口已经对应 `snapshot-full`。下一步是 N100 手动跑 `snapshot-full`，确认耗时、rows、schema、token coverage。
+3. **验证 orderbook producer scope**：`strategy_live` live 所需盘口已经对应 `snapshot-targeted`，覆盖 current YES/current NO/D1 NO/D2 NO；`all` research/canonical 全量盘口已经对应 `snapshot-full`。targeted 不写 canonical output，避免 Range RV / research 消费到窄盘口。
 4. **做 2-3 天 parity validation**：比较新旧 `paper_snapshots` / `orderbook_snapshots` 的 city count、record count、token coverage、schema fields、latest lag。通过后再停旧 `weather-predict-snapshot.timer`。
 5. **把 source timing 拆回数据层**：在 data-feed-service 增加 `source_events.jsonl` / `source_cadence.jsonl`，记录 `city/source/report_ts/detect_ts/payload_hash/changed_since_last/fetch_latency`。pm_agent 的 timing monitor 只做 orderbook join。
 6. **切本机 sync 默认源**：`scripts/ops/sync_weather_remote.sh` 现在默认 `weather-predict`；parity 后默认改 `--market-source=weather-data-feed`。

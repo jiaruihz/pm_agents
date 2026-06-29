@@ -65,7 +65,7 @@ PM_HTTP_LIMITS = httpx.Limits(
     max_keepalive_connections=int(os.environ.get("WEATHER_DATA_FEED_PM_MAX_KEEPALIVE", "8")),
 )
 WEATHER_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
-DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "current_d1")
+DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "strategy_live")
 DEFAULT_ORDERBOOK_BUDGET_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC", "30"))
 DEFAULT_ORDERBOOK_WORKERS = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_WORKERS", "1"))
 DEFAULT_ORDERBOOK_RETRIES = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_RETRIES", "2"))
@@ -568,6 +568,50 @@ def orderbook_targets_for_current_yes(markets, unit, metar_state):
     return targets
 
 
+def orderbook_targets_for_strategy_live(markets, unit, metar_state):
+    """Return the compact orderbook set used by active live/near-live strategies.
+
+    This is intentionally wider than the old current_d1 scope:
+    - current bracket YES: current-YES / higher-no state features
+    - current bracket NO: regime-routed current-NO route
+    - next higher bracket NO: current-YES / higher-no d1 route
+    - second higher bracket NO: regime-routed d2 route
+
+    Range/basket research still needs the full all-bracket snapshot.
+    """
+    metar_max_f = metar_state.get("metar_current_max_f")
+    if metar_max_f is None:
+        return set()
+
+    if unit == "C":
+        running_native = (float(metar_max_f) - 32.0) * 5.0 / 9.0
+        running_compare_f = round_half_up_float(running_native) * 9.0 / 5.0 + 32.0
+    else:
+        running_compare_f = round_half_up_float(float(metar_max_f))
+
+    parsed = []
+    for mkt in markets:
+        label = _extract_bracket_label(mkt.get("question", ""))
+        if label is None:
+            continue
+        lo_f, hi_f = parse_bracket_bounds(label, unit)
+        if lo_f is None or hi_f is None:
+            continue
+        parsed.append((label, lo_f, hi_f))
+
+    targets = set()
+    current = [(label, hi_f) for label, lo_f, hi_f in parsed if lo_f <= running_compare_f <= hi_f]
+    if current:
+        current_label, _ = sorted(current, key=lambda item: item[1])[0]
+        targets.add((current_label, "yes"))
+        targets.add((current_label, "no"))
+
+    higher = [(label, lo_f) for label, lo_f, _ in parsed if lo_f > running_compare_f]
+    for label, _ in sorted(higher, key=lambda item: item[1])[:2]:
+        targets.add((label, "no"))
+    return targets
+
+
 def classify_window(hours_to_settle):
     """Legacy window classification (kept for backward compatibility)."""
     if hours_to_settle < 0:
@@ -811,9 +855,9 @@ def main():
     parser.add_argument("--orderbook-top-n", type=int, default=20)
     parser.add_argument(
         "--orderbook-scope",
-        choices=("current_d1", "all"),
-        default=DEFAULT_ORDERBOOK_SCOPE if DEFAULT_ORDERBOOK_SCOPE in {"current_d1", "all"} else "current_d1",
-        help="Fetch orderbooks only for current-YES required brackets by default; use all for research snapshots.",
+        choices=("strategy_live", "current_d1", "all"),
+        default=DEFAULT_ORDERBOOK_SCOPE if DEFAULT_ORDERBOOK_SCOPE in {"strategy_live", "current_d1", "all"} else "strategy_live",
+        help="Fetch compact live-strategy orderbooks by default; use all for canonical research snapshots.",
     )
     parser.add_argument(
         "--orderbook-budget-sec",
@@ -996,11 +1040,12 @@ def main():
                 city,
                 now_utc,
             )
-            orderbook_targets = (
-                orderbook_targets_for_current_yes(markets, unit, metar_state)
-                if args.orderbook_scope == "current_d1"
-                else None
-            )
+            if args.orderbook_scope == "strategy_live":
+                orderbook_targets = orderbook_targets_for_strategy_live(markets, unit, metar_state)
+            elif args.orderbook_scope == "current_d1":
+                orderbook_targets = orderbook_targets_for_current_yes(markets, unit, metar_state)
+            else:
+                orderbook_targets = None
 
             # Extract event-level market IDs
             event_id = ev_raw.get("id", "") if isinstance(ev_raw, dict) else ""

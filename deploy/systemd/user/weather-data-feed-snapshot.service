@@ -1,5 +1,5 @@
 [Unit]
-Description=Weather data feed snapshot collector
+Description=Weather data feed targeted live snapshot collector
 Wants=network-online.target
 After=network-online.target
 
@@ -7,10 +7,10 @@ After=network-online.target
 Type=oneshot
 WorkingDirectory=%h/projects/weather_data_feed_service
 EnvironmentFile=-%h/projects/weather_data_feed_service/.env
-Environment=WEATHER_DATA_FEED_OUTPUT_ROOT=%h/projects/weather_data_feed_service_runtime/output
+Environment=WEATHER_DATA_FEED_OUTPUT_ROOT=%h/projects/weather_data_feed_service_runtime/targeted_output
 Environment=WEATHER_DATA_FEED_CACHE_ROOT=%h/projects/weather_data_feed_service_runtime/cache
 Environment=WEATHER_DATA_FEED_ROOT=%h/projects/weather_data_feed_service
-ExecStartPre=/usr/bin/mkdir -p %h/projects/weather_data_feed_service_runtime/output/logs %h/projects/weather_data_feed_service_runtime/cache
-ExecStart=%h/projects/weather_data_feed_service/.venv/bin/python -u -m weather_data_feed_service snapshot
-StandardOutput=append:%h/projects/weather_data_feed_service_runtime/output/logs/snapshot.log
-StandardError=append:%h/projects/weather_data_feed_service_runtime/output/logs/snapshot.err.log
+ExecStartPre=/usr/bin/mkdir -p %h/projects/weather_data_feed_service_runtime/targeted_output/logs %h/projects/weather_data_feed_service_runtime/cache
+ExecStart=%h/projects/weather_data_feed_service/.venv/bin/python -u -m weather_data_feed_service snapshot-targeted -- --orderbook-budget-sec 60 --orderbook-workers 4
+StandardOutput=append:%h/projects/weather_data_feed_service_runtime/targeted_output/logs/snapshot.log
+StandardError=append:%h/projects/weather_data_feed_service_runtime/targeted_output/logs/snapshot.err.log
