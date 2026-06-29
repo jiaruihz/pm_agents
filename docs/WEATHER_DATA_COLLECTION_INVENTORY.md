@@ -1,7 +1,7 @@
 # Weather Data Collection Inventory
 
 Status: current-audit
-Updated: 2026-06-30 02:35 Asia/Shanghai
+Updated: 2026-06-30 02:55 Asia/Shanghai
 Source of truth: runtime audit on Mac + N100
 Superseded by / Used by: WEATHER_DATA_FEED_MODULE.md; WEATHER_REPO_BOUNDARY.md; WEATHER_DATA_PIPELINE.md
 
@@ -33,6 +33,7 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 | 入口 | 当前状态 | 频率/方式 | 归属 | 产物 | 口径 |
 |---|---:|---:|---|---|---|
 | `weather-data-feed-observations.timer` | active/waiting | every 5 min | **目标 producer** | `/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json` | 已经是新链路；fast obs cache，给 live 策略用 |
+| `weather-data-feed-source-events.timer` | **not enabled yet** | target 2 min after inactive | **目标 source timing producer，已版本化待启用** | `.../output/source_events/{sources.jsonl,latest.json,state.json}` | `source-events`；只记录天气 source first-seen/cadence/payload hash，不拉盘口、不下单；默认直连天气源 |
 | `weather-data-feed-snapshot.timer` | **disabled/inactive** | paused | **目标 targeted producer，待策略显式消费后再启用** | `.../targeted_output/paper_snapshots/` + `.../targeted_output/orderbook_snapshots/` | `snapshot-targeted`；`strategy_live` 盘口子集：current YES/current NO/D1 NO/D2 NO；与 canonical full output 隔离，避免窄快照污染全量消费者 |
 | `weather-data-feed-full-snapshot.timer` | **enabled/active** | every 30 min after inactive | **目标 full producer** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | `snapshot-full -- --orderbook-budget-sec 600 --orderbook-workers 8`；2026-06-29 16:45Z 验证 47 城/800 records/1600 books/non_ok=0 |
 | `weather-data-feed-daily.timer` | active/waiting | daily | **目标 producer，但未迁完** | `.../cache/pm_history`, `.../cache/gfs_daily`, `.../cache/wu_obs` | 仍包装 legacy `daily_pipeline` |
@@ -163,7 +164,7 @@ data-feed snapshot producer:
 |---:|---|---|---|
 | P0 | `weather_data_feed_service/legacy_weather_predict/pm_edge_compare.py`、`daily_pipeline.py`、`paper_snapshot.py` | 拆成 data-feed-service 原生 producer：market map、forecast cache、full snapshot、targeted live book cache | 现在仍是 legacy wrapper；targeted 已隔离，但仍会全城市 forecast scan，不是真正低延迟 producer |
 | P0 | `weather-predict-daily-pipeline.timer` | data-feed-service 原生 daily/cache pipeline | 旧 daily 仍是 fallback；forecast/WU/pm_history cache 还没完全从 legacy runner 脱离 |
-| P1 | `weather_source_orderbook_timing_monitor.py` 的天气 source 部分 | `weather_data_feed_service source-events/source-cadence` | source first-seen/cadence 是数据层事实，不该由 pm_agent 研究脚本拥有 |
+| P1 | `weather_source_orderbook_timing_monitor.py` 的天气 source 部分 | `weather_data_feed_service source-events/source-cadence` | source first-seen/cadence 是数据层事实，不该由 pm_agent 研究脚本拥有；2026-06-30 已新增 `source-events` producer，待 N100 启用与 pm_agent consumer 切读 |
 | P1 | `weather_source_orderbook_timing_monitor.py` 的盘口 join 部分 | 保留 pm_agent research consumer，但只读 data-feed source events + market map | orderbook reaction 是研究层；不要再同时负责天气源采集 |
 | P1 | `weather_metar_cross_prev_no_shadow.py` 的天气 fetch | 改读 observation/source-events，触发时只做 exact token fresh book/order | 执行脚本可以临场查盘口，但不应维护独立天气源链 |
 | P2 | `weather_rmk_source_basis_opportunity_monitor.py`、`weather_wu_source_basis_market_scan.py` | 保留 research consumer；输入改成 data-feed source-events + WU/current audit | source-basis 是研究判断，不应该自建天气采集链 |
@@ -182,6 +183,10 @@ timing/research monitor     -> 已有 WEATHER_PROXY_MODE / MARKET_PROXY_MODE 分
 
 2026-06-30 已修正 legacy data-feed runner：Open-Meteo/GFS 这类天气请求不再因为 `WEATHER_PREDICT_PROXY`
 存在而自动 fallback 到市场代理，避免不必要代理流量。
+
+2026-06-30 Mac 直连实测：在故意设置坏 `HTTPS_PROXY=http://127.0.0.1:9` 和
+`WEATHER_PREDICT_PROXY=http://127.0.0.1:9` 的情况下，Open-Meteo GFS、AviationWeather METAR、
+AviationWeather cache CSV、NOAA tgftp、weather.gov latest、IEM ASOS 均可由 data-feed 直连成功。
 
 ## 数据口径分层
 

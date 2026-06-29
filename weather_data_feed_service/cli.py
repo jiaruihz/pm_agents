@@ -70,6 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
     daily = subparsers.add_parser("daily", help="Run the daily cache pipeline")
     daily.add_argument("runner_args", nargs=argparse.REMAINDER)
     observations = subparsers.add_parser("observations", help="Build the fast observation cache")
+    source_events = subparsers.add_parser("source-events", help="Build observation source-event rows")
+    source_events.add_argument("runner_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -92,5 +94,9 @@ def main(argv: list[str] | None = None) -> int:
         from weather_data_feed_service.observations import main as observations_main
 
         return observations_main(runner_args)
+    if args.command == "source-events":
+        from weather_data_feed_service.source_events import main as source_events_main
+
+        return source_events_main(runner_args)
     parser.error(f"unknown command: {args.command}")
     return 2

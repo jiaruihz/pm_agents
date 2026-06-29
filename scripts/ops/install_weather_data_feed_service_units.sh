@@ -6,7 +6,7 @@ UNIT_SRC_DIR="$ROOT_DIR/deploy/systemd/user"
 UNIT_DST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 RUNTIME_ROOT="$HOME/projects/weather_data_feed_service_runtime"
 
-mkdir -p "$UNIT_DST_DIR" "$RUNTIME_ROOT/output/logs" "$RUNTIME_ROOT/targeted_output/logs" "$RUNTIME_ROOT/cache"
+mkdir -p "$UNIT_DST_DIR" "$RUNTIME_ROOT/output/logs" "$RUNTIME_ROOT/output/source_events" "$RUNTIME_ROOT/targeted_output/logs" "$RUNTIME_ROOT/cache"
 
 for unit in \
   weather-data-feed-snapshot.service \
@@ -15,6 +15,8 @@ for unit in \
   weather-data-feed-full-snapshot.timer \
   weather-data-feed-observations.service \
   weather-data-feed-observations.timer \
+  weather-data-feed-source-events.service \
+  weather-data-feed-source-events.timer \
   weather-data-feed-daily.service \
   weather-data-feed-daily.timer
 do
@@ -33,6 +35,7 @@ Next manual steps:
   # Keep snapshot/full-snapshot disabled until parity validation against weather-predict.
   systemctl --user status weather-data-feed-snapshot.timer weather-data-feed-full-snapshot.timer
   systemctl --user enable --now weather-data-feed-observations.timer
+  systemctl --user status weather-data-feed-source-events.timer
   systemctl --user enable --now weather-data-feed-daily.timer
   systemctl --user status weather-data-feed-observations.timer weather-data-feed-daily.timer
 

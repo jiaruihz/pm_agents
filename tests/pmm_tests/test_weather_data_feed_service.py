@@ -46,6 +46,7 @@ def test_weather_data_feed_service_cli_help_imports() -> None:
     assert "snapshot-full" in result.stdout
     assert "daily" in result.stdout
     assert "observations" in result.stdout
+    assert "source-events" in result.stdout
 
 
 def test_snapshot_full_cli_forces_all_orderbook_scope(monkeypatch) -> None:
@@ -85,6 +86,26 @@ def test_snapshot_targeted_cli_forces_strategy_live_orderbook_scope(monkeypatch)
 
     assert rc == 0
     assert calls == [("paper_snapshot", ["--orderbook-scope", "all", "--orderbook-scope", "strategy_live"])]
+
+
+def test_source_events_cli_dispatches_runner_args(monkeypatch) -> None:
+    from weather_data_feed_service import cli
+
+    calls = []
+
+    def fake_main(argv: list[str]) -> int:
+        calls.append(argv)
+        return 0
+
+    import types
+
+    fake_module = types.SimpleNamespace(main=fake_main)
+    monkeypatch.setitem(sys.modules, "weather_data_feed_service.source_events", fake_module)
+
+    rc = cli.main(["source-events", "--", "--cities", "Shanghai", "--sources", "profile_primary"])
+
+    assert rc == 0
+    assert calls == [["--cities", "Shanghai", "--sources", "profile_primary"]]
 
 
 def test_legacy_runners_use_configured_runtime_roots(tmp_path, monkeypatch) -> None:
@@ -227,6 +248,57 @@ def test_paper_snapshot_strategy_live_orderbook_scope_covers_active_strategy_leg
     }
 
 
+def test_source_events_builds_append_only_rows_without_proxy(monkeypatch, tmp_path) -> None:
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import source_events
+
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+    captured = []
+
+    def fake_snapshot(cfg_arg, source_name, now_utc, *, settings, recent_minutes):
+        captured.append((cfg_arg.city, source_name, settings.proxy_candidates, recent_minutes))
+        return {
+            "status": "ok",
+            "source": source_name,
+            "station": cfg_arg.official_icao,
+            "source_report_ts_utc": "2026-06-17T10:00:00+00:00",
+            "temp_c": 27.0,
+            "payload_hash": "hash-a",
+            "ts_utc": "2026-06-17T10:00:01+00:00",
+            "local_detect_ts_utc": "2026-06-17T10:00:01+00:00",
+            "city": cfg_arg.city,
+            "target_date": "2026-06-17",
+            "unit": cfg_arg.unit,
+        }
+
+    monkeypatch.setattr(source_events, "load_city_configs", lambda **_kwargs: [cfg])
+    monkeypatch.setattr(source_events, "snapshot_observation_source", fake_snapshot)
+
+    parser = source_events.build_parser()
+    args = parser.parse_args(
+        [
+            "--output-dir",
+            str(tmp_path / "source_events"),
+            "--now-utc",
+            "2026-06-17T10:00:01Z",
+            "--sources",
+            "profile_primary",
+            "--recent-minutes",
+            "120",
+        ]
+    )
+    payload = source_events.build_events(args)
+    source_events.write_outputs(payload, tmp_path / "source_events")
+
+    assert payload["rows"] == 1
+    assert payload["changed"] == 1
+    assert payload["records"][0]["producer"] == "weather_data_feed_service.source_events"
+    assert payload["records"][0]["changed_since_last"] is True
+    assert captured == [("Shanghai", cfg.live_observation_source, (None,), 120)]
+    assert (tmp_path / "source_events" / "sources.jsonl").exists()
+    assert (tmp_path / "source_events" / "latest.json").exists()
+
+
 def test_paper_snapshot_metar_accepts_epoch_obs_time(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
     monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
@@ -303,11 +375,13 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
     full_snapshot_timer = (unit_dir / "weather-data-feed-full-snapshot.timer").read_text()
     observations = (unit_dir / "weather-data-feed-observations.service").read_text()
     observations_timer = (unit_dir / "weather-data-feed-observations.timer").read_text()
+    source_events = (unit_dir / "weather-data-feed-source-events.service").read_text()
+    source_events_timer = (unit_dir / "weather-data-feed-source-events.timer").read_text()
     daily = (unit_dir / "weather-data-feed-daily.service").read_text()
     timer = (unit_dir / "weather-data-feed-snapshot.timer").read_text()
     installer = (ROOT / "scripts" / "ops" / "install_weather_data_feed_service_units.sh").read_text()
 
-    for text in (snapshot, full_snapshot, observations, daily):
+    for text in (snapshot, full_snapshot, observations, source_events, daily):
         assert "weather_data_feed_service" in text
         assert "python -u -m weather_data_feed_service" in text
         assert "EnvironmentFile=-%h/projects/weather_data_feed_service/.env" in text
@@ -317,12 +391,15 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
 
     assert "snapshot-full -- --orderbook-budget-sec 600 --orderbook-workers 8" in full_snapshot
     assert "snapshot-targeted -- --orderbook-budget-sec 60 --orderbook-workers 4" in snapshot
+    assert "source-events -- --output-dir" in source_events
     assert "weather_data_feed_service_runtime/targeted_output" in snapshot
     assert "OnUnitInactiveSec=30min" in timer
     assert "OnUnitInactiveSec=30min" in full_snapshot_timer
     assert "OnUnitInactiveSec=5min" in observations_timer
+    assert "OnUnitInactiveSec=2min" in source_events_timer
     assert "weather-data-feed-full-snapshot.service" in installer
     assert "weather-data-feed-observations.service" in installer
+    assert "weather-data-feed-source-events.service" in installer
     assert "weather-data-feed-snapshot.service" in installer
     assert "weather-data-feed-daily.service" in installer
 
