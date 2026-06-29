@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 
 from scripts.ops.weather_source_orderbook_timing_monitor import (
     expand_source_names,
+    find_markets_for_brackets,
     in_update_window,
     load_monitor_city_configs,
     parse_metar_rmk_temp_c,
@@ -184,6 +185,18 @@ def test_synoptic_helpers_parse_wrh_station_and_observation_lists():
 
     assert times[-1] == "2026-06-17T15:30:00Z"
     assert temps[-1] == 24.0
+
+
+def test_find_markets_for_brackets_includes_top_tail_for_full_book_monitoring():
+    markets = [
+        {"groupItemTitle": "79°F or below", "question": "79°F or below"},
+        {"groupItemTitle": "80-81°F", "question": "80-81°F"},
+        {"groupItemTitle": "82°F or higher", "question": "82°F or higher"},
+    ]
+
+    labels = [market["groupItemTitle"] for _bracket, market in find_markets_for_brackets(markets, [79, 80, 82])]
+
+    assert labels == ["79°F or below", "80-81°F", "82°F or higher"]
 
 
 def test_monitor_research_city_configs_can_include_blocked_source_profiles():

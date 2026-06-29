@@ -523,12 +523,15 @@ def find_markets_for_brackets(markets: list[dict[str, Any]], brackets: list[int]
     out = []
     for market in markets:
         parsed = source.parse_label(str(market.get("groupItemTitle") or ""), str(market.get("question") or ""))
-        if parsed is None or parsed.get("top"):
+        if parsed is None:
             continue
         low = parsed.get("low")
         high = parsed.get("high")
         for bracket in brackets:
             if low is None and high is not None and bracket <= int(float(high)):
+                out.append((bracket, market))
+                break
+            if low is not None and high is None and bracket >= int(float(low)):
                 out.append((bracket, market))
                 break
             if low is not None and high is not None and float(low) <= bracket <= float(high):
