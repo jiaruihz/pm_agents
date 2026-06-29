@@ -1,7 +1,7 @@
 # Weather Data Collection Inventory
 
 Status: current-audit
-Updated: 2026-06-29 23:45 Asia/Shanghai
+Updated: 2026-06-29 23:55 Asia/Shanghai
 Source of truth: runtime audit on Mac + N100
 Superseded by / Used by: WEATHER_DATA_FEED_MODULE.md; WEATHER_REPO_BOUNDARY.md; WEATHER_DATA_PIPELINE.md
 
@@ -26,14 +26,14 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 
 ## 当前 N100 运行态（按职责分层）
 
-审计命令时间：`n100`，`2026-06-29T15:16-15:45Z`。
+审计命令时间：`n100`，`2026-06-29T15:16-15:55Z`。
 
 ### Producer 层
 
 | 入口 | 当前状态 | 频率/方式 | 归属 | 产物 | 口径 |
 |---|---:|---:|---|---|---|
 | `weather-data-feed-observations.timer` | active/waiting | every 5 min | **目标 producer** | `/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json` | 已经是新链路；fast obs cache，给 live 策略用 |
-| `weather-data-feed-snapshot.timer` | active/waiting | every 30 min | **目标 producer，但未验证完成** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | 仍包装 legacy `paper_snapshot`；当前只抓 `current_d1` 盘口，不能覆盖旧全量盘口 |
+| `weather-data-feed-snapshot.timer` | **disabled/inactive** | paused | **目标 producer，但未验证完成** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | 仍包装 legacy `paper_snapshot`；当前只抓 `current_d1` 盘口，不能覆盖旧全量盘口；2026-06-29 15:52Z 起暂停，避免重复 CLOB 抓取 |
 | `weather-data-feed-daily.timer` | active/waiting | daily | **目标 producer，但未迁完** | `.../cache/pm_history`, `.../cache/gfs_daily`, `.../cache/wu_obs` | 仍包装 legacy `daily_pipeline` |
 | `weather-predict-snapshot.timer` | active/running | every 30 min | **旧 producer / 临时 fallback** | `/home/jiarui/projects/weather-predict/output/paper_snapshots/` + `output/orderbook_snapshots/` | 目前仍是全量盘口 snapshot 的实际覆盖来源；新链路验证通过前不 disable |
 | `weather-predict-daily-pipeline.timer` | active/waiting | daily | **旧 producer / 临时 fallback** | `/home/jiarui/projects/weather-predict/cache/*` | settlement/history/forecast cache fallback；新链路验证通过前不 disable |
@@ -136,7 +136,7 @@ data-feed snapshot producer:
 ```
 
 当前临时保留旧 `weather-predict-snapshot.timer`，因为它是全量盘口覆盖来源。新 `weather-data-feed-snapshot.timer`
-在完成全量/分层 orderbook producer 设计前，只能算迁移验证流，不应被称为 canonical。
+已经暂停；在完成全量/分层 orderbook producer 设计前，只能算迁移验证流，不应被称为 canonical。
 
 ## 存在但当前没跑的采集/研究入口
 
