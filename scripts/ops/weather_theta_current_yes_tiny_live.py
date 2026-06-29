@@ -636,16 +636,50 @@ def parse_utc(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def snapshot_dir() -> Path:
+def snapshot_dir_candidates() -> tuple[list[Path], bool]:
     candidates: list[Path] = []
+    explicit = False
     for key in ("THETA_CURRENT_YES_SNAPSHOT_DIR", "WEATHER_PREDICT_PAPER_SNAPSHOT_DIR"):
         if os.environ.get(key):
             candidates.append(Path(str(os.environ[key])).expanduser())
+            explicit = True
     if os.environ.get("WEATHER_PREDICT_DIR"):
         candidates.append(Path(str(os.environ["WEATHER_PREDICT_DIR"])).expanduser() / "output/paper_snapshots")
+        explicit = True
     candidates.append(Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots"))
     candidates.append(Path("/home/jiarui/projects/weather-predict/output/paper_snapshots"))
     candidates.append(ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots")
+    out: list[Path] = []
+    for path in candidates:
+        if path not in out:
+            out.append(path)
+    return out, explicit
+
+
+def _latest_snapshot_in_dir(path: Path) -> Path | None:
+    files = sorted(path.glob("snapshot_*.json"), key=lambda p: p.stat().st_mtime)
+    return files[-1] if files else None
+
+
+def snapshot_dir() -> Path:
+    candidates, explicit = snapshot_dir_candidates()
+    if explicit:
+        for path in candidates:
+            if path.exists():
+                return path
+        return candidates[0]
+    newest: tuple[float, Path] | None = None
+    for path in candidates:
+        if not path.exists():
+            continue
+        snap = _latest_snapshot_in_dir(path)
+        if snap is None:
+            continue
+        mtime = snap.stat().st_mtime
+        if newest is None or mtime > newest[0]:
+            newest = (mtime, path)
+    if newest is not None:
+        return newest[1]
     for path in candidates:
         if path.exists():
             return path
@@ -653,8 +687,7 @@ def snapshot_dir() -> Path:
 
 
 def latest_snapshot() -> Path | None:
-    files = sorted(snapshot_dir().glob("snapshot_*.json"), key=lambda p: p.stat().st_mtime)
-    return files[-1] if files else None
+    return _latest_snapshot_in_dir(snapshot_dir())
 
 
 def observation_cache_candidates() -> list[Path]:

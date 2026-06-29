@@ -112,6 +112,58 @@ def test_snapshot_freshness_uses_file_mtime_when_generation_finishes_late(tmp_pa
     assert source == "file_mtime_utc"
 
 
+def test_snapshot_dir_uses_newest_default_producer(monkeypatch, tmp_path):
+    data_feed_dir = tmp_path / "weather_data_feed_service_runtime" / "output" / "paper_snapshots"
+    legacy_dir = tmp_path / "weather-predict" / "output" / "paper_snapshots"
+    mirror_dir = tmp_path / "runtime" / "weather_edge_v1" / "market_data" / "paper_snapshots"
+    for path in (data_feed_dir, legacy_dir, mirror_dir):
+        path.mkdir(parents=True)
+    old_snapshot = data_feed_dir / "snapshot_20260629_2200.json"
+    new_snapshot = legacy_dir / "snapshot_20260629_2230.json"
+    old_snapshot.write_text("{}", encoding="utf-8")
+    new_snapshot.write_text("{}", encoding="utf-8")
+    old_mtime = datetime(2026, 6, 29, 14, 0, tzinfo=timezone.utc).timestamp()
+    new_mtime = datetime(2026, 6, 29, 14, 30, tzinfo=timezone.utc).timestamp()
+    os.utime(old_snapshot, (old_mtime, old_mtime))
+    os.utime(new_snapshot, (new_mtime, new_mtime))
+
+    monkeypatch.delenv("THETA_CURRENT_YES_SNAPSHOT_DIR", raising=False)
+    monkeypatch.delenv("WEATHER_PREDICT_PAPER_SNAPSHOT_DIR", raising=False)
+    monkeypatch.delenv("WEATHER_PREDICT_DIR", raising=False)
+    monkeypatch.setattr(
+        live,
+        "snapshot_dir_candidates",
+        lambda: ([data_feed_dir, legacy_dir, mirror_dir], False),
+    )
+
+    assert live.snapshot_dir() == legacy_dir
+    assert live.latest_snapshot() == new_snapshot
+
+
+def test_snapshot_dir_respects_explicit_producer(monkeypatch, tmp_path):
+    explicit_dir = tmp_path / "explicit" / "paper_snapshots"
+    fresher_dir = tmp_path / "fresher" / "paper_snapshots"
+    explicit_dir.mkdir(parents=True)
+    fresher_dir.mkdir(parents=True)
+    explicit_snapshot = explicit_dir / "snapshot_20260629_2200.json"
+    fresher_snapshot = fresher_dir / "snapshot_20260629_2230.json"
+    explicit_snapshot.write_text("{}", encoding="utf-8")
+    fresher_snapshot.write_text("{}", encoding="utf-8")
+    explicit_mtime = datetime(2026, 6, 29, 14, 0, tzinfo=timezone.utc).timestamp()
+    fresher_mtime = datetime(2026, 6, 29, 14, 30, tzinfo=timezone.utc).timestamp()
+    os.utime(explicit_snapshot, (explicit_mtime, explicit_mtime))
+    os.utime(fresher_snapshot, (fresher_mtime, fresher_mtime))
+
+    monkeypatch.setattr(
+        live,
+        "snapshot_dir_candidates",
+        lambda: ([explicit_dir, fresher_dir], True),
+    )
+
+    assert live.snapshot_dir() == explicit_dir
+    assert live.latest_snapshot() == explicit_snapshot
+
+
 def test_fresh_taker_quote_uses_peak_forming_min_edge(monkeypatch):
     monkeypatch.setattr(
         live,
