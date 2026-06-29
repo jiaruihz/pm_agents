@@ -24,9 +24,30 @@ OUTPUT_DIR = Path(os.environ.get("WEATHER_DATA_FEED_OUTPUT_ROOT", DEFAULT_RUNTIM
 # City configs: name, lat, lon, ICAO, utc_offset, unit (F or C for PM brackets), PM slug name.
 CITIES = FULL_CITY_CONFIGS
 
-PROXY = os.getenv("WEATHER_PREDICT_PROXY") or None
+# Backward-compatible market proxy. Do not reuse it for weather/forecast APIs:
+# those are normally reachable direct and can burn paid proxy traffic quickly.
+PROXY = os.getenv("WEATHER_PREDICT_MARKET_PROXY") or os.getenv("WEATHER_DATA_FEED_MARKET_PROXY") or os.getenv("WEATHER_PREDICT_PROXY") or None
+WEATHER_PROXY = os.getenv("WEATHER_DATA_FEED_WEATHER_PROXY") or os.getenv("WEATHER_PREDICT_WEATHER_PROXY") or None
 PM_GAMMA_URL = "https://gamma-api.polymarket.com"
 TARGET_DATE = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def fetch_weather_url(url: str, *, params: dict, direct_timeout: float = 10.0, proxy_timeout: float = 15.0) -> httpx.Response:
+    """Fetch non-Polymarket weather/forecast data without using the market proxy."""
+    try:
+        resp = httpx.get(url, params=params, timeout=direct_timeout, trust_env=False)
+        resp.raise_for_status()
+        return resp
+    except Exception:
+        if not WEATHER_PROXY:
+            raise
+    client = httpx.Client(proxy=WEATHER_PROXY, timeout=proxy_timeout, trust_env=False)
+    try:
+        resp = client.get(url, params=params)
+        resp.raise_for_status()
+        return resp
+    finally:
+        client.close()
 
 
 def _forecast_cache_score(path: Path) -> tuple[int, float, str]:
@@ -64,16 +85,7 @@ def fetch_gfs_forecasts() -> dict:
             "end_date": TARGET_DATE,
         }
         try:
-            try:
-                resp = httpx.get(url, params=params, timeout=10)
-                resp.raise_for_status()
-            except Exception:
-                client = httpx.Client(proxy=PROXY, timeout=15)
-                try:
-                    resp = client.get(url, params=params)
-                    resp.raise_for_status()
-                finally:
-                    client.close()
+            resp = fetch_weather_url(url, params=params)
             data = resp.json()
             temps = data["hourly"]["temperature_2m"]
             valid_temps = [t for t in temps if t is not None]
@@ -235,7 +247,7 @@ def fetch_polymarket_brackets(city: str, cfg: dict) -> dict | None:
 
     slug = f"highest-temperature-in-{city_slug}-on-{date_slug}"
 
-    client = httpx.Client(proxy=PROXY, timeout=20)
+    client = httpx.Client(proxy=PROXY, timeout=20, trust_env=False)
     try:
         resp = client.get(f"{PM_GAMMA_URL}/events", params={"slug": slug})
         if resp.status_code == 200:

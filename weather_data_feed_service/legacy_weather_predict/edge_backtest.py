@@ -145,7 +145,7 @@ TIMEPOINT_HOURS = {"t24": 24, "t12": 12}
 
 
 def _pm_client() -> httpx.Client:
-    return httpx.Client(proxy=PROXY, timeout=20)
+    return httpx.Client(proxy=PROXY, timeout=20, trust_env=False)
 
 
 # ─── 策略接口 ───

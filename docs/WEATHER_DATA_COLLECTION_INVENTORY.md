@@ -1,7 +1,7 @@
 # Weather Data Collection Inventory
 
 Status: current-audit
-Updated: 2026-06-30 01:35 Asia/Shanghai
+Updated: 2026-06-30 02:35 Asia/Shanghai
 Source of truth: runtime audit on Mac + N100
 Superseded by / Used by: WEATHER_DATA_FEED_MODULE.md; WEATHER_REPO_BOUNDARY.md; WEATHER_DATA_PIPELINE.md
 
@@ -154,6 +154,34 @@ data-feed snapshot producer:
 | `scripts/ops/weather_edge_market_data.py capture-live` | 当前无进程 | 默认 `runtime/weather_edge_v1/market_data/live_orderbook/` | 旧 Polymarket orderbook capture 工具 | 不作为 canonical；需要时改造成 data-feed-service orderbook producer 或退 dormant |
 | `scripts/ops/weather_market_snapshot.py` | wrapper，无常驻进程 | 依赖旧 strategy tool | 手动市场查询 | research/manual |
 | `scripts/ops/weather_source_probe.py` | 手动，无常驻进程 | 可选 `--out` | 城市 source 探测表 | source profile 审计工具，不是生产采集 |
+
+## 还需要一起迁移的点
+
+优先级不是“脚本多就全搬”，而是按生产数据血缘和重复请求风险排：
+
+| 优先级 | 入口 | 要迁到哪里 | 原因 |
+|---:|---|---|---|
+| P0 | `weather_data_feed_service/legacy_weather_predict/pm_edge_compare.py`、`daily_pipeline.py`、`paper_snapshot.py` | 拆成 data-feed-service 原生 producer：market map、forecast cache、full snapshot、targeted live book cache | 现在仍是 legacy wrapper；targeted 已隔离，但仍会全城市 forecast scan，不是真正低延迟 producer |
+| P0 | `weather-predict-daily-pipeline.timer` | data-feed-service 原生 daily/cache pipeline | 旧 daily 仍是 fallback；forecast/WU/pm_history cache 还没完全从 legacy runner 脱离 |
+| P1 | `weather_source_orderbook_timing_monitor.py` 的天气 source 部分 | `weather_data_feed_service source-events/source-cadence` | source first-seen/cadence 是数据层事实，不该由 pm_agent 研究脚本拥有 |
+| P1 | `weather_source_orderbook_timing_monitor.py` 的盘口 join 部分 | 保留 pm_agent research consumer，但只读 data-feed source events + market map | orderbook reaction 是研究层；不要再同时负责天气源采集 |
+| P1 | `weather_metar_cross_prev_no_shadow.py` 的天气 fetch | 改读 observation/source-events，触发时只做 exact token fresh book/order | 执行脚本可以临场查盘口，但不应维护独立天气源链 |
+| P2 | `weather_rmk_source_basis_opportunity_monitor.py`、`weather_wu_source_basis_market_scan.py` | 保留 research consumer；输入改成 data-feed source-events + WU/current audit | source-basis 是研究判断，不应该自建天气采集链 |
+| P2 | `weather_edge_market_data.py capture-live`、micro snapshot 脚本 | 标 dormant 或改成 data-feed orderbook producer 的调用入口 | 旧市场采集工具容易和 canonical orderbook snapshot 重复 |
+
+## 代理使用边界
+
+默认策略：
+
+```text
+Polymarket Gamma/CLOB       -> 可以走市场代理：WEATHER_PREDICT_PROXY / WEATHER_PREDICT_MARKET_PROXY / WEATHER_DATA_FEED_MARKET_PROXY
+天气源/forecast/cache 下载  -> 默认直连，并且 trust_env=False，不吃系统 HTTPS_PROXY
+天气源如果确实要代理      -> 必须显式设置 WEATHER_DATA_FEED_WEATHER_PROXY 或 WEATHER_PREDICT_WEATHER_PROXY
+timing/research monitor     -> 已有 WEATHER_PROXY_MODE / MARKET_PROXY_MODE 分离；默认 weather=direct、market=direct/显式配置
+```
+
+2026-06-30 已修正 legacy data-feed runner：Open-Meteo/GFS 这类天气请求不再因为 `WEATHER_PREDICT_PROXY`
+存在而自动 fallback 到市场代理，避免不必要代理流量。
 
 ## 数据口径分层
 

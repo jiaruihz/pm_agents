@@ -115,6 +115,52 @@ def test_legacy_runners_use_configured_runtime_roots(tmp_path, monkeypatch) -> N
     assert paper_snapshot.ORDERBOOK_OUTPUT_DIR == output_root / "orderbook_snapshots"
 
 
+def test_legacy_weather_fetch_does_not_reuse_market_proxy(monkeypatch) -> None:
+    monkeypatch.setenv("WEATHER_PREDICT_PROXY", "http://market-proxy.invalid:8080")
+    monkeypatch.delenv("WEATHER_DATA_FEED_WEATHER_PROXY", raising=False)
+    monkeypatch.delenv("WEATHER_PREDICT_WEATHER_PROXY", raising=False)
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    pm_edge_compare = importlib.import_module("pm_edge_compare")
+
+    get_calls = []
+    client_calls = []
+
+    def fake_get(url, *, params=None, timeout=None, trust_env=None, **_kwargs):
+        get_calls.append(
+            {
+                "url": url,
+                "params": params,
+                "timeout": timeout,
+                "trust_env": trust_env,
+            }
+        )
+        raise RuntimeError("direct failed")
+
+    def fake_client(*args, **kwargs):
+        client_calls.append({"args": args, "kwargs": kwargs})
+        raise AssertionError("weather fetch should not instantiate a proxy client")
+
+    monkeypatch.setattr(pm_edge_compare.httpx, "get", fake_get)
+    monkeypatch.setattr(pm_edge_compare.httpx, "Client", fake_client)
+
+    try:
+        pm_edge_compare.fetch_weather_url("https://api.open-meteo.com/v1/gfs", params={"latitude": 1})
+    except RuntimeError:
+        pass
+
+    assert get_calls == [
+        {
+            "url": "https://api.open-meteo.com/v1/gfs",
+            "params": {"latitude": 1},
+            "timeout": 10.0,
+            "trust_env": False,
+        }
+    ]
+    assert client_calls == []
+
+
 def test_paper_snapshot_batch_fetches_token_orderbooks(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
     monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))

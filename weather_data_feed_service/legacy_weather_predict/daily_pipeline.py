@@ -30,7 +30,7 @@ CACHE_DIR = Path(os.environ.get("WEATHER_DATA_FEED_CACHE_ROOT", DEFAULT_RUNTIME_
 CACHE_PM = CACHE_DIR / "pm_history"
 CACHE_GFS = CACHE_DIR / "gfs_daily"
 
-from pm_edge_compare import CITIES, PROXY
+from pm_edge_compare import CITIES, PROXY, fetch_weather_url
 from edge_backtest import fetch_settled_event, fetch_price_at_t_minus, TIMEPOINT_HOURS
 
 # ────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ def fetch_price_histories(events: dict, target_date: str, dry_run: bool) -> dict
         return stats
 
     print(f"  Fetching {len(all_tokens)} token price histories...")
-    client = httpx.Client(proxy=PROXY, timeout=20)
+    client = httpx.Client(proxy=PROXY, timeout=20, trust_env=False)
     try:
         for city, label, token_id in all_tokens:
             for tp, hours in TIMEPOINT_HOURS.items():
@@ -161,16 +161,7 @@ def fetch_gfs_forecast(target_date: str, dry_run: bool) -> dict:
             "end_date": target_date,
         }
         try:
-            try:
-                resp = httpx.get(url, params=params, timeout=10)
-                resp.raise_for_status()
-            except Exception:
-                client = httpx.Client(proxy=PROXY, timeout=15)
-                try:
-                    resp = client.get(url, params=params)
-                    resp.raise_for_status()
-                finally:
-                    client.close()
+            resp = fetch_weather_url(url, params=params)
 
             data = resp.json()
             temps = data["hourly"]["temperature_2m"]
