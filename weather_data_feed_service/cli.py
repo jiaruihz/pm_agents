@@ -37,6 +37,11 @@ def _run_legacy(module_name: str, argv: list[str]) -> int:
     return 0
 
 
+def _append_forced_option(argv: list[str], option: str, value: str) -> list[str]:
+    """Append an argparse option so the service mode wins over caller defaults."""
+    return [*argv, option, value]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Weather data feed service")
     parser.add_argument(
@@ -50,8 +55,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory that contains pm_history/, gfs_daily/, wu_obs/, and forecast caches.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    snapshot = subparsers.add_parser("snapshot", help="Run the snapshot collector")
+    snapshot = subparsers.add_parser("snapshot", help="Run the legacy-compatible targeted snapshot collector")
     snapshot.add_argument("runner_args", nargs=argparse.REMAINDER)
+    snapshot_targeted = subparsers.add_parser(
+        "snapshot-targeted",
+        help="Run the snapshot collector with targeted current/d1 orderbook enrichment",
+    )
+    snapshot_targeted.add_argument("runner_args", nargs=argparse.REMAINDER)
+    snapshot_full = subparsers.add_parser(
+        "snapshot-full",
+        help="Run the snapshot collector with full all-bracket orderbook enrichment",
+    )
+    snapshot_full.add_argument("runner_args", nargs=argparse.REMAINDER)
     daily = subparsers.add_parser("daily", help="Run the daily cache pipeline")
     daily.add_argument("runner_args", nargs=argparse.REMAINDER)
     observations = subparsers.add_parser("observations", help="Build the fast observation cache")
@@ -67,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
         runner_args = runner_args[1:]
     if args.command == "snapshot":
         return _run_legacy("paper_snapshot", runner_args)
+    if args.command == "snapshot-targeted":
+        return _run_legacy("paper_snapshot", _append_forced_option(runner_args, "--orderbook-scope", "current_d1"))
+    if args.command == "snapshot-full":
+        return _run_legacy("paper_snapshot", _append_forced_option(runner_args, "--orderbook-scope", "all"))
     if args.command == "daily":
         return _run_legacy("daily_pipeline", runner_args)
     if args.command == "observations":

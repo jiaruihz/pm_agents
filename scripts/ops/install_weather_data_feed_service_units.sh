@@ -11,6 +11,8 @@ mkdir -p "$UNIT_DST_DIR" "$RUNTIME_ROOT/output/logs" "$RUNTIME_ROOT/cache"
 for unit in \
   weather-data-feed-snapshot.service \
   weather-data-feed-snapshot.timer \
+  weather-data-feed-full-snapshot.service \
+  weather-data-feed-full-snapshot.timer \
   weather-data-feed-observations.service \
   weather-data-feed-observations.timer \
   weather-data-feed-daily.service \
@@ -29,9 +31,11 @@ Expected optional environment file:
 
 Next manual steps:
   systemctl --user enable --now weather-data-feed-snapshot.timer
+  # Enable full snapshot only after parity validation against weather-predict.
+  systemctl --user enable --now weather-data-feed-full-snapshot.timer
   systemctl --user enable --now weather-data-feed-observations.timer
   systemctl --user enable --now weather-data-feed-daily.timer
-  systemctl --user status weather-data-feed-snapshot.timer weather-data-feed-observations.timer weather-data-feed-daily.timer
+  systemctl --user status weather-data-feed-snapshot.timer weather-data-feed-full-snapshot.timer weather-data-feed-observations.timer weather-data-feed-daily.timer
 
 Runtime root:
   $RUNTIME_ROOT

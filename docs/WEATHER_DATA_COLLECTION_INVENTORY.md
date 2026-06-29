@@ -1,7 +1,7 @@
 # Weather Data Collection Inventory
 
 Status: current-audit
-Updated: 2026-06-29 23:55 Asia/Shanghai
+Updated: 2026-06-30 00:18 Asia/Shanghai
 Source of truth: runtime audit on Mac + N100
 Superseded by / Used by: WEATHER_DATA_FEED_MODULE.md; WEATHER_REPO_BOUNDARY.md; WEATHER_DATA_PIPELINE.md
 
@@ -34,6 +34,7 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 |---|---:|---:|---|---|---|
 | `weather-data-feed-observations.timer` | active/waiting | every 5 min | **目标 producer** | `/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json` | 已经是新链路；fast obs cache，给 live 策略用 |
 | `weather-data-feed-snapshot.timer` | **disabled/inactive** | paused | **目标 producer，但未验证完成** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | 仍包装 legacy `paper_snapshot`；当前只抓 `current_d1` 盘口，不能覆盖旧全量盘口；2026-06-29 15:52Z 起暂停，避免重复 CLOB 抓取 |
+| `weather-data-feed-full-snapshot.timer` | versioned, not enabled | manual/parity first | **目标 full producer，待验证** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | 入口已迁入 `weather_data_feed_service snapshot-full --orderbook-budget-sec 240`；先安装/手动验证，不直接替旧 runner |
 | `weather-data-feed-daily.timer` | active/waiting | daily | **目标 producer，但未迁完** | `.../cache/pm_history`, `.../cache/gfs_daily`, `.../cache/wu_obs` | 仍包装 legacy `daily_pipeline` |
 | `weather-predict-snapshot.timer` | active/running | every 30 min | **旧 producer / 临时 fallback** | `/home/jiarui/projects/weather-predict/output/paper_snapshots/` + `output/orderbook_snapshots/` | 目前仍是全量盘口 snapshot 的实际覆盖来源；新链路验证通过前不 disable |
 | `weather-predict-daily-pipeline.timer` | active/waiting | daily | **旧 producer / 临时 fallback** | `/home/jiarui/projects/weather-predict/cache/*` | settlement/history/forecast cache fallback；新链路验证通过前不 disable |
@@ -125,18 +126,18 @@ weather-predict-snapshot.timer    -> weather-predict run_paper_snapshot.sh -> pa
 | `weather-predict` latest normal run | 747 | 1026-1494 | effectively full/all | 目前仍是全量盘口 snapshot 的实际来源 |
 | `weather_data_feed_service` staging `orderbook-scope=all` | 未完成 | 未落盘 | `all` | 手动验证超过 4 分钟仍未写出产物，已停止；不能直接切成 all scope 硬顶 |
 
-所以短期正确动作不是让两个 timer 继续并行，也不是直接把新 producer 的 budget 拉大。应该把 CLOB/盘口采集
-收口成一个明确任务：
+所以短期正确动作不是让两个 timer 继续并行，也不是直接把新 producer 的 budget 拉大。CLOB/盘口采集已经开始
+收口成 `weather_data_feed_service` 的明确入口：
 
 ```text
 data-feed snapshot producer:
-  - paper snapshot: 30min
-  - orderbook canonical mode: all 或 current_d1 二选一，不能同时靠两个 repo 各抓一套
+  - snapshot-targeted: current_d1，给 live 策略的轻量盘口
+  - snapshot-full: all，给 canonical/research 全量盘口；systemd unit 已版本化，待 N100 parity 验证
   - latency/research book join: 独立 research output，不进入 canonical snapshot
 ```
 
 当前临时保留旧 `weather-predict-snapshot.timer`，因为它是全量盘口覆盖来源。新 `weather-data-feed-snapshot.timer`
-已经暂停；在完成全量/分层 orderbook producer 设计前，只能算迁移验证流，不应被称为 canonical。
+已经暂停；`weather-data-feed-full-snapshot.timer` 只在手动验证和 2-3 天 parity 通过后才允许替代旧 runner。
 
 ## 存在但当前没跑的采集/研究入口
 
@@ -180,7 +181,7 @@ data-feed snapshot producer:
 
 1. **先定唯一 producer 目标**：`weather_data_feed_service_runtime` 做目标 canonical，`weather-predict` 明确标为 migration fallback。
 2. **先修 consumer fallback**：live consumer 默认按最新 snapshot 文件选择 producer，显式 env 才强制指定目录。这样短暂停某条 producer 不会卡在 stale 目录。
-3. **拆清 orderbook producer scope**：把 `current_d1` live 所需盘口和 `all` research/canonical 全量盘口明确成一个 data-feed 任务里的两种 mode，而不是新旧 repo 各抓一套。
+3. **验证 orderbook producer scope**：`current_d1` live 所需盘口已经对应 `snapshot-targeted`，`all` research/canonical 全量盘口已经对应 `snapshot-full`。下一步是 N100 手动跑 `snapshot-full`，确认耗时、rows、schema、token coverage。
 4. **做 2-3 天 parity validation**：比较新旧 `paper_snapshots` / `orderbook_snapshots` 的 city count、record count、token coverage、schema fields、latest lag。通过后再停旧 `weather-predict-snapshot.timer`。
 5. **把 source timing 拆回数据层**：在 data-feed-service 增加 `source_events.jsonl` / `source_cadence.jsonl`，记录 `city/source/report_ts/detect_ts/payload_hash/changed_since_last/fetch_latency`。pm_agent 的 timing monitor 只做 orderbook join。
 6. **切本机 sync 默认源**：`scripts/ops/sync_weather_remote.sh` 现在默认 `weather-predict`；parity 后默认改 `--market-source=weather-data-feed`。

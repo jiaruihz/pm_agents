@@ -43,8 +43,48 @@ def test_weather_data_feed_service_cli_help_imports() -> None:
     )
     assert "Weather data feed service" in result.stdout
     assert "snapshot" in result.stdout
+    assert "snapshot-full" in result.stdout
     assert "daily" in result.stdout
     assert "observations" in result.stdout
+
+
+def test_snapshot_full_cli_forces_all_orderbook_scope(monkeypatch) -> None:
+    from weather_data_feed_service import cli
+
+    calls = []
+
+    def fake_run_legacy(module_name: str, argv: list[str]) -> int:
+        calls.append((module_name, argv))
+        return 0
+
+    monkeypatch.setattr(cli, "_run_legacy", fake_run_legacy)
+
+    rc = cli.main(["snapshot-full", "--", "--orderbook-scope", "current_d1", "--orderbook-budget-sec", "240"])
+
+    assert rc == 0
+    assert calls == [
+        (
+            "paper_snapshot",
+            ["--orderbook-scope", "current_d1", "--orderbook-budget-sec", "240", "--orderbook-scope", "all"],
+        )
+    ]
+
+
+def test_snapshot_targeted_cli_forces_current_d1_orderbook_scope(monkeypatch) -> None:
+    from weather_data_feed_service import cli
+
+    calls = []
+
+    def fake_run_legacy(module_name: str, argv: list[str]) -> int:
+        calls.append((module_name, argv))
+        return 0
+
+    monkeypatch.setattr(cli, "_run_legacy", fake_run_legacy)
+
+    rc = cli.main(["snapshot-targeted", "--", "--orderbook-scope", "all"])
+
+    assert rc == 0
+    assert calls == [("paper_snapshot", ["--orderbook-scope", "all", "--orderbook-scope", "current_d1"])]
 
 
 def test_legacy_runners_use_configured_runtime_roots(tmp_path, monkeypatch) -> None:
@@ -147,13 +187,15 @@ def test_paper_snapshot_resolves_station_diff_official_metar_station(monkeypatch
 def test_systemd_units_are_versioned_for_data_feed_service() -> None:
     unit_dir = ROOT / "deploy" / "systemd" / "user"
     snapshot = (unit_dir / "weather-data-feed-snapshot.service").read_text()
+    full_snapshot = (unit_dir / "weather-data-feed-full-snapshot.service").read_text()
+    full_snapshot_timer = (unit_dir / "weather-data-feed-full-snapshot.timer").read_text()
     observations = (unit_dir / "weather-data-feed-observations.service").read_text()
     observations_timer = (unit_dir / "weather-data-feed-observations.timer").read_text()
     daily = (unit_dir / "weather-data-feed-daily.service").read_text()
     timer = (unit_dir / "weather-data-feed-snapshot.timer").read_text()
     installer = (ROOT / "scripts" / "ops" / "install_weather_data_feed_service_units.sh").read_text()
 
-    for text in (snapshot, observations, daily):
+    for text in (snapshot, full_snapshot, observations, daily):
         assert "weather_data_feed_service" in text
         assert "python -u -m weather_data_feed_service" in text
         assert "EnvironmentFile=-%h/projects/weather_data_feed_service/.env" in text
@@ -161,8 +203,11 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
         assert "WEATHER_DATA_FEED_CACHE_ROOT" in text
         assert "weather-predict" not in text
 
+    assert "snapshot-full --orderbook-budget-sec 240" in full_snapshot
     assert "OnUnitInactiveSec=30min" in timer
+    assert "OnUnitInactiveSec=30min" in full_snapshot_timer
     assert "OnUnitInactiveSec=5min" in observations_timer
+    assert "weather-data-feed-full-snapshot.service" in installer
     assert "weather-data-feed-observations.service" in installer
     assert "weather-data-feed-snapshot.service" in installer
     assert "weather-data-feed-daily.service" in installer

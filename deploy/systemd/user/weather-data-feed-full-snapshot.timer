@@ -1,0 +1,11 @@
+[Unit]
+Description=Run weather data feed full orderbook snapshot collector every 30 minutes
+
+[Timer]
+OnBootSec=7min
+OnUnitInactiveSec=30min
+Persistent=true
+Unit=weather-data-feed-full-snapshot.service
+
+[Install]
+WantedBy=timers.target
