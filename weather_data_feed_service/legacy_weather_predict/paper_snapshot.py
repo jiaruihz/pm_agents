@@ -14,6 +14,7 @@ import hashlib
 import json, math, os, sys, re, time
 import httpx
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from datetime import datetime, timedelta, date, timezone
 from xml.etree import ElementTree
@@ -63,6 +64,7 @@ PM_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
 WEATHER_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=0)
 DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "current_d1")
 DEFAULT_ORDERBOOK_BUDGET_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC", "30"))
+DEFAULT_ORDERBOOK_WORKERS = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_WORKERS", "1"))
 
 BASE_SHARES = 10
 
@@ -245,6 +247,39 @@ def append_orderbook_archive(path, row):
     path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(path, "at", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def fetch_token_orderbook_batch(client, token_archive_rows, *, top_n=20, max_workers=1):
+    if not token_archive_rows:
+        return {}
+    workers = max(1, int(max_workers or 1))
+    rows_by_token = dict(token_archive_rows)
+    results = {}
+    if workers <= 1 or len(rows_by_token) <= 1:
+        for token_id, archive_row in rows_by_token.items():
+            results[token_id] = (archive_row, fetch_token_orderbook(client, token_id, top_n=top_n))
+        return results
+
+    with ThreadPoolExecutor(max_workers=min(workers, len(rows_by_token))) as pool:
+        futures = {
+            pool.submit(fetch_token_orderbook, client, token_id, top_n=top_n): token_id
+            for token_id in rows_by_token
+        }
+        for future in as_completed(futures):
+            token_id = futures[future]
+            try:
+                book = future.result()
+            except Exception as exc:
+                book = {
+                    "status": "error",
+                    "token_id": token_id,
+                    "fetched_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "summary": {},
+                    "raw": {},
+                }
+            results[token_id] = (rows_by_token[token_id], book)
+    return results
 
 
 def prefixed_book_fields(prefix, token_id, book, archive_path):
@@ -768,6 +803,12 @@ def main():
         default=DEFAULT_ORDERBOOK_BUDGET_SEC,
         help="Maximum wall-clock seconds spent on orderbook enrichment before continuing snapshot generation.",
     )
+    parser.add_argument(
+        "--orderbook-workers",
+        type=int,
+        default=DEFAULT_ORDERBOOK_WORKERS,
+        help="Concurrent token orderbook workers per city/event; keep at 1 for legacy serial behavior.",
+    )
     parser.add_argument("--no-orderbook", action="store_true", help="Disable CLOB orderbook enrichment.")
     parser.add_argument("--now-utc", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -950,6 +991,7 @@ def main():
             # Build bracket list for compute_bracket_probs
             bracket_list = []
             market_map = {}
+            market_entries = []
             for mkt in markets:
                 question = mkt.get("question", "")
                 label = _extract_bracket_label(question)
@@ -972,55 +1014,8 @@ def main():
                 tokens = extract_market_tokens(mkt)
                 yes_token_id = tokens["yes"]
                 no_token_id = tokens["no"]
-                yes_book = {"status": "disabled", "summary": {}, "raw": {}, "fetched_at_utc": None}
-                no_book = {"status": "disabled", "summary": {}, "raw": {}, "fetched_at_utc": None}
-                if not args.no_orderbook:
-                    if (
-                        orderbook_disabled_reason is None
-                        and args.orderbook_budget_sec >= 0
-                        and time.monotonic() - orderbook_started_at > args.orderbook_budget_sec
-                    ):
-                        orderbook_disabled_reason = "orderbook_budget_exhausted"
-                    for outcome_name, token_id in (("yes", yes_token_id), ("no", no_token_id)):
-                        if not token_id:
-                            continue
-                        if orderbook_disabled_reason is not None:
-                            continue
-                        if orderbook_targets is not None and (label, outcome_name) not in orderbook_targets:
-                            continue
-                        if token_id not in orderbook_cache:
-                            orderbook_cache[token_id] = fetch_token_orderbook(
-                                pm_client,
-                                token_id,
-                                top_n=args.orderbook_top_n,
-                            )
-                            append_orderbook_archive(
-                                orderbook_archive,
-                                {
-                                    "type": "weather_paper_snapshot_orderbook",
-                                    "snapshot_ts_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                                    "snapshot_ts_beijing": now_beijing.strftime("%Y-%m-%d %H:%M:%S"),
-                                    "city": city,
-                                    "event_date": target_date,
-                                    "market_local_date": market_local_date,
-                                    "city_local_date_at_snapshot": city_local_date_at_snapshot,
-                                    "event_slug": slug,
-                                    "market_id": market_id,
-                                    "condition_id": mkt.get("conditionId", ""),
-                                    "bracket": label,
-                                    "outcome": outcome_name,
-                                    "token_id": token_id,
-                                    "top_n": args.orderbook_top_n,
-                                    **orderbook_cache[token_id],
-                                },
-                            )
-                    yes_book = orderbook_cache.get(yes_token_id, yes_book)
-                    no_book = orderbook_cache.get(no_token_id, no_book)
-                    if yes_book.get("status") == "disabled":
-                        yes_book = orderbook_disabled_book(orderbook_disabled_reason or "orderbook_scope_skipped")
-                    if no_book.get("status") == "disabled":
-                        no_book = orderbook_disabled_book(orderbook_disabled_reason or "orderbook_scope_skipped")
-                market_map[label] = {
+                market_entries.append({
+                    "label": label,
                     "yes_price": yes_price,
                     "last_trade": last_trade,
                     "question": question,
@@ -1028,6 +1023,65 @@ def main():
                     "condition_id": mkt.get("conditionId", ""),
                     "yes_token_id": yes_token_id,
                     "no_token_id": no_token_id,
+                })
+
+            if not args.no_orderbook:
+                if (
+                    orderbook_disabled_reason is None
+                    and args.orderbook_budget_sec >= 0
+                    and time.monotonic() - orderbook_started_at > args.orderbook_budget_sec
+                ):
+                    orderbook_disabled_reason = "orderbook_budget_exhausted"
+
+                token_archive_rows = {}
+                if orderbook_disabled_reason is None:
+                    for entry in market_entries:
+                        label = entry["label"]
+                        for outcome_name, token_id in (("yes", entry["yes_token_id"]), ("no", entry["no_token_id"])):
+                            if not token_id:
+                                continue
+                            if orderbook_targets is not None and (label, outcome_name) not in orderbook_targets:
+                                continue
+                            if token_id in orderbook_cache or token_id in token_archive_rows:
+                                continue
+                            token_archive_rows[token_id] = {
+                                "type": "weather_paper_snapshot_orderbook",
+                                "snapshot_ts_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                "snapshot_ts_beijing": now_beijing.strftime("%Y-%m-%d %H:%M:%S"),
+                                "city": city,
+                                "event_date": target_date,
+                                "market_local_date": market_local_date,
+                                "city_local_date_at_snapshot": city_local_date_at_snapshot,
+                                "event_slug": slug,
+                                "market_id": entry["market_id"],
+                                "condition_id": entry["condition_id"],
+                                "bracket": label,
+                                "outcome": outcome_name,
+                                "token_id": token_id,
+                                "top_n": args.orderbook_top_n,
+                            }
+                    fetched_books = fetch_token_orderbook_batch(
+                        pm_client,
+                        token_archive_rows,
+                        top_n=args.orderbook_top_n,
+                        max_workers=args.orderbook_workers,
+                    )
+                    for token_id, (archive_row, book) in fetched_books.items():
+                        orderbook_cache[token_id] = book
+                        append_orderbook_archive(orderbook_archive, {**archive_row, **book})
+
+            for entry in market_entries:
+                yes_book = {"status": "disabled", "summary": {}, "raw": {}, "fetched_at_utc": None}
+                no_book = {"status": "disabled", "summary": {}, "raw": {}, "fetched_at_utc": None}
+                if not args.no_orderbook:
+                    yes_book = orderbook_cache.get(entry["yes_token_id"], yes_book)
+                    no_book = orderbook_cache.get(entry["no_token_id"], no_book)
+                    if yes_book.get("status") == "disabled":
+                        yes_book = orderbook_disabled_book(orderbook_disabled_reason or "orderbook_scope_skipped")
+                    if no_book.get("status") == "disabled":
+                        no_book = orderbook_disabled_book(orderbook_disabled_reason or "orderbook_scope_skipped")
+                market_map[entry["label"]] = {
+                    **entry,
                     "yes_book": yes_book,
                     "no_book": no_book,
                 }

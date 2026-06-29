@@ -115,6 +115,41 @@ def test_legacy_runners_use_configured_runtime_roots(tmp_path, monkeypatch) -> N
     assert paper_snapshot.ORDERBOOK_OUTPUT_DIR == output_root / "orderbook_snapshots"
 
 
+def test_paper_snapshot_batch_fetches_token_orderbooks(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+
+    seen = []
+
+    def fake_fetch(_client, token_id, top_n=20):
+        seen.append((token_id, top_n))
+        return {
+            "status": "ok",
+            "token_id": token_id,
+            "fetched_at_utc": "2026-06-29T16:00:00Z",
+            "summary": {"best_ask": 0.5},
+            "raw": {},
+        }
+
+    monkeypatch.setattr(paper_snapshot, "fetch_token_orderbook", fake_fetch)
+
+    rows = {
+        "yes-token": {"city": "Shanghai", "token_id": "yes-token"},
+        "no-token": {"city": "Shanghai", "token_id": "no-token"},
+    }
+    result = paper_snapshot.fetch_token_orderbook_batch(None, rows, top_n=5, max_workers=2)
+
+    assert set(result) == {"yes-token", "no-token"}
+    assert result["yes-token"][0]["city"] == "Shanghai"
+    assert result["yes-token"][1]["summary"]["best_ask"] == 0.5
+    assert sorted(seen) == [("no-token", 5), ("yes-token", 5)]
+
+
 def test_paper_snapshot_metar_accepts_epoch_obs_time(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
     monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
@@ -203,7 +238,7 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
         assert "WEATHER_DATA_FEED_CACHE_ROOT" in text
         assert "weather-predict" not in text
 
-    assert "snapshot-full --orderbook-budget-sec 240" in full_snapshot
+    assert "snapshot-full --orderbook-budget-sec 240 --orderbook-workers 8" in full_snapshot
     assert "OnUnitInactiveSec=30min" in timer
     assert "OnUnitInactiveSec=30min" in full_snapshot_timer
     assert "OnUnitInactiveSec=5min" in observations_timer
