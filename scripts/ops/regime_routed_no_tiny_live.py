@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import pandas as pd
 
 
@@ -44,6 +45,7 @@ import research_intraday_weather_regime_atlas_v1 as atlas  # noqa: E402
 import research_regime_routed_no_expression_v1 as research  # noqa: E402
 from research_reheat_feature_factory_v1 import bracket_contains, parse_bracket  # noqa: E402
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc  # noqa: E402
+from weather_data_feed.snapshot_protocol import parse_market_event_date  # noqa: E402
 from weather_data_feed.source_policy import load_city_configs  # noqa: E402
 from weather_data_feed.weather_context import (  # noqa: E402
     city_wind_context,
@@ -55,8 +57,8 @@ import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
 
 
 STRATEGY_ID = "regime_routed_no_tiny_live_v1"
-STRATEGY_INSTANCE = "regime_routed_no_soft_balanced_tiny_live_v1"
-RULE_ID = "routed_d2_relaxed70_best_ask_soft_balanced_min5shares_v1"
+STRATEGY_INSTANCE = "regime_routed_no_route_price_disciplined_tiny_live_v1"
+RULE_ID = "route_price_disciplined_no_pullback_row_risk_soft_min5shares_v1"
 RUNTIME_DIR = ROOT / "runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
@@ -94,6 +96,18 @@ WIND_CONTEXT_COLS = [
     "coastal_flow_state",
     "is_coastal_context",
 ]
+ROUTE_PRICE_CAPS = {
+    "fresh_runway_current_no": 0.55,
+    "capped_d2_no": 0.62,
+    "false_fade_reheat_current_no": 0.65,
+    "cheap_stale_tail_current_no": 0.40,
+}
+CURRENT_NO_ROUTE_LEGS = {
+    "fresh_runway_current_no",
+    "false_fade_reheat_current_no",
+    "cheap_stale_tail_current_no",
+    "runway_current_no",
+}
 
 
 def utc_now_iso() -> str:
@@ -436,6 +450,135 @@ def current_no_escape_threshold_native(bracket_text: Any) -> float:
     return float(bracket.high) + 0.5
 
 
+def filter_current_local_day_records(records: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if records.empty:
+        return records.copy(), {"input_rows": 0, "kept_rows": 0, "dropped_rows": 0}
+    out = records.copy()
+    if "city_local_date_at_snapshot" not in out.columns:
+        out["city_local_date_at_snapshot"] = ""
+    if "market_local_date" not in out.columns:
+        out["market_local_date"] = out.get("target_date", "")
+    target_date = out["target_date"].astype(str)
+    local_date = out["city_local_date_at_snapshot"].astype(str)
+    market_local_date = out["market_local_date"].astype(str)
+    current_local_market = local_date.ne("") & (market_local_date.eq(local_date) | target_date.eq(local_date))
+    kept = out[current_local_market].copy()
+    return kept, {
+        "input_rows": int(len(out)),
+        "kept_rows": int(len(kept)),
+        "dropped_rows": int((~current_local_market).sum()),
+        "dropped_target_dates": sorted(target_date[~current_local_market].dropna().unique().tolist()),
+    }
+
+
+def market_event_date_for_record(record: dict[str, Any] | pd.Series) -> str:
+    row = record.to_dict() if isinstance(record, pd.Series) else dict(record)
+    target_date = str(row.get("target_date") or "")
+    target_year = target_date[:4] if len(target_date) >= 4 else None
+    return parse_market_event_date(row, target_year=target_year)
+
+
+def market_record_date_ok(record: dict[str, Any] | pd.Series) -> bool:
+    row = record.to_dict() if isinstance(record, pd.Series) else dict(record)
+    target_date = str(row.get("target_date") or "")
+    event_date = market_event_date_for_record(row)
+    return bool(target_date and event_date and event_date == target_date)
+
+
+def current_no_runway_state_ok(row: dict[str, Any] | pd.Series) -> bool:
+    getter = row.get if isinstance(row, dict) else row.get
+    route_leg = str(getter("route_leg") or "")
+    if route_leg not in {"runway_current_no", "fresh_runway_current_no"}:
+        return True
+    return str(getter("running_max_state") or "") == "fresh_running_high" and str(getter("intraday_state") or "") in {
+        "active_warming",
+        "fresh_high",
+    }
+
+
+def route_price_cap(route_leg: Any) -> float:
+    return float(ROUTE_PRICE_CAPS.get(str(route_leg or ""), research.ASK_CAPS["relaxed70"]))
+
+
+def current_no_route_for_state(labelled: dict[str, Any]) -> str:
+    running = str(labelled.get("running_max_state") or "")
+    state = str(labelled.get("intraday_state") or "")
+    if running == "fresh_running_high" and state in {"active_warming", "fresh_high"}:
+        return "fresh_runway_current_no"
+    if state in {"false_fade_risk", "reheating_after_dip"}:
+        return "false_fade_reheat_current_no"
+    if running == "mature_fade" and state == "mature_fade":
+        return "cheap_stale_tail_current_no"
+    return ""
+
+
+def row_risk_soft_v1(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype="float64")
+    ask = pd.to_numeric(frame.get("ask"), errors="coerce")
+    route = frame["route_leg"].astype(str)
+    peak_delta = pd.to_numeric(frame.get("forecast_peak_delta_hours_local"), errors="coerce")
+    minutes_since = pd.to_numeric(frame.get("minutes_since_running_max"), errors="coerce")
+    trend_1h = pd.to_numeric(frame.get("temp_trend_1h_f"), errors="coerce")
+    wind = pd.to_numeric(frame.get("wind_speed_kt"), errors="coerce")
+    humidity = pd.to_numeric(frame.get("relative_humidity_pct"), errors="coerce")
+
+    route_mult = route.map(
+        {
+            "fresh_runway_current_no": 0.80,
+            "capped_d2_no": 0.45,
+            "false_fade_reheat_current_no": 0.65,
+            "cheap_stale_tail_current_no": 0.30,
+        }
+    ).fillna(0.50)
+    price_risk = ((ask - 0.45) / 0.25).clip(0, 1).fillna(0)
+    price_mult = (1.0 - 0.55 * price_risk).clip(0.35, 1.0)
+    peak_mult = pd.Series(1.0, index=frame.index)
+    current_no = route.isin(["fresh_runway_current_no", "false_fade_reheat_current_no", "cheap_stale_tail_current_no"])
+    peak_mult.loc[current_no] = pd.Series(
+        np.select(
+            [
+                peak_delta.loc[current_no].le(-2.0),
+                peak_delta.loc[current_no].le(0.0),
+                peak_delta.loc[current_no].le(1.0),
+            ],
+            [1.0, 0.80, 0.50],
+            default=0.25,
+        ),
+        index=frame.index[current_no],
+    )
+    freshness_mult = pd.Series(1.0, index=frame.index)
+    fresh = route.eq("fresh_runway_current_no")
+    freshness_mult.loc[fresh] = pd.Series(
+        np.select(
+            [minutes_since.loc[fresh].le(45), minutes_since.loc[fresh].le(90)],
+            [1.0, 0.70],
+            default=0.40,
+        ),
+        index=frame.index[fresh],
+    )
+    momentum_mult = pd.Series(1.0, index=frame.index)
+    momentum_routes = route.isin(["fresh_runway_current_no", "false_fade_reheat_current_no"])
+    momentum_mult.loc[momentum_routes] = pd.Series(
+        np.select(
+            [trend_1h.loc[momentum_routes].ge(0.5), trend_1h.loc[momentum_routes].ge(0.0)],
+            [1.0, 0.80],
+            default=0.50,
+        ),
+        index=frame.index[momentum_routes],
+    )
+    city_family = frame.get("city_family", pd.Series("", index=frame.index)).astype(str)
+    moisture = frame.get("moisture_cloud_regime", pd.Series("", index=frame.index)).astype(str)
+    weather_mult = (
+        1.0
+        - 0.10 * city_family.eq("humid_low_latitude").astype(float)
+        - 0.08 * wind.ge(15).fillna(False).astype(float)
+        - 0.06 * humidity.ge(70).fillna(False).astype(float)
+        - 0.06 * moisture.str.contains("convective|humid|cloud", case=False, na=False).astype(float)
+    ).clip(0.65, 1.0)
+    return (route_mult * price_mult * peak_mult * freshness_mult * momentum_mult * weather_mult).clip(0.05, 1.0)
+
+
 def order_spent_today(path: Path, target_date: str) -> float:
     total = 0.0
     for row in read_jsonl(path):
@@ -477,6 +620,8 @@ def market_rows_for_city(sub: pd.DataFrame, *, running_value: int, running_nativ
         bracket = parse_bracket(record.get("bracket"))
         if bracket is None:
             continue
+        book_target_date = str(record.get("target_date") or "")
+        book_market_event_date = market_event_date_for_record(record)
         for outcome, prefix in (("yes", "yes"), ("no", "no")):
             ask = safe_float(record.get(f"{prefix}_best_ask"))
             ask_size = safe_float(record.get(f"{prefix}_ask_size"))
@@ -494,6 +639,9 @@ def market_rows_for_city(sub: pd.DataFrame, *, running_value: int, running_nativ
                     "book_ask_size": ask_size,
                     "book_bid": bid,
                     "book_token_id": token_id,
+                    "book_target_date": book_target_date,
+                    "book_market_event_date": book_market_event_date,
+                    "book_market_date_match": bool(book_target_date and book_market_event_date == book_target_date),
                     "contains_running": bracket_contains(bracket, running_value),
                     "tail_distance": tail_distance_from_running(bracket.low, running_native, unit) if outcome == "no" else None,
                 }
@@ -518,6 +666,13 @@ def build_city_state(
     decision_hour = int(local_ts.hour)
     decision_hour_float = local_ts.hour + local_ts.minute / 60.0 + local_ts.second / 3600.0
     target_date = str(first.get("target_date"))
+    target_dates = sorted(sub["target_date"].astype(str).dropna().unique().tolist())
+    if len(target_dates) != 1:
+        return None, "mixed_target_dates:" + ",".join(target_dates[:4])
+    local_dates = sorted(sub.get("city_local_date_at_snapshot", pd.Series([], dtype=str)).astype(str).dropna().unique().tolist())
+    market_local_dates = sorted(sub.get("market_local_date", pd.Series([], dtype=str)).astype(str).dropna().unique().tolist())
+    if local_dates and market_local_dates and not set(local_dates).intersection(market_local_dates):
+        return None, "not_current_local_market"
     if decision_hour not in research.DECISION_HOURS:
         return None, f"outside_decision_hours:{decision_hour}"
     if obs_source == "weather_data_feed_observation_cache":
@@ -622,6 +777,11 @@ def build_city_state(
     books = market_rows_for_city(sub, running_value=running_value, running_native=running_native, unit=unit)
     if books.empty:
         return None, "no_book_rows"
+    books = books[
+        books["book_target_date"].astype(str).eq(target_date) & books["book_market_date_match"].astype(bool)
+    ].copy()
+    if books.empty:
+        return None, "market_date_mismatch_or_no_same_day_book_rows"
 
     cur_yes = books[books["outcome"].eq("yes") & books["contains_running"]]
     cur_no = books[books["outcome"].eq("no") & books["contains_running"]]
@@ -646,6 +806,8 @@ def build_city_state(
                 "current_no_market_id": str(row.get("market_id") or ""),
                 "current_no_event_slug": str(row.get("event_slug") or ""),
                 "current_no_question": str(row.get("question") or ""),
+                "current_no_market_event_date": str(row.get("book_market_event_date") or ""),
+                "current_no_market_date_match": bool(row.get("book_market_date_match")),
             }
         )
     if not d2_no.empty:
@@ -660,15 +822,18 @@ def build_city_state(
                 "d2_no_market_id": str(row.get("market_id") or ""),
                 "d2_no_event_slug": str(row.get("event_slug") or ""),
                 "d2_no_question": str(row.get("question") or ""),
+                "d2_no_market_event_date": str(row.get("book_market_event_date") or ""),
+                "d2_no_market_date_match": bool(row.get("book_market_date_match")),
             }
         )
 
     regime = str(labelled.get("day_regime") or "")
-    if regime in {"day_open_runway", "day_marginal_runway"} and "current_no_ask" in labelled:
+    current_no_route = current_no_route_for_state(labelled) if regime in {"day_open_runway", "day_marginal_runway"} else ""
+    if current_no_route and "current_no_ask" in labelled:
         labelled.update(
             {
                 "expression": "current_bracket_no",
-                "route_leg": "runway_current_no",
+                "route_leg": current_no_route,
                 "ask": labelled["current_no_ask"],
                 "ask_size": labelled["current_no_ask_size"],
                 "bid": labelled.get("current_no_bid"),
@@ -676,10 +841,17 @@ def build_city_state(
                 "market_id": labelled["current_no_market_id"],
                 "event_slug": labelled["current_no_event_slug"],
                 "question": labelled["current_no_question"],
+                "market_event_date": labelled.get("current_no_market_event_date"),
+                "market_date_match": labelled.get("current_no_market_date_match"),
                 "bracket": labelled.get("current_bracket"),
             }
         )
         return labelled, "routed"
+    if regime in {"day_open_runway", "day_marginal_runway"} and "current_no_ask" in labelled:
+        return None, (
+            "no_route_current_no_state_not_no_pullback:"
+            f"{labelled.get('running_max_state') or ''}:{labelled.get('intraday_state') or ''}"
+        )
     if regime == "day_forecast_capped" and "d2_no_ask" in labelled:
         labelled.update(
             {
@@ -692,6 +864,8 @@ def build_city_state(
                 "market_id": labelled["d2_no_market_id"],
                 "event_slug": labelled["d2_no_event_slug"],
                 "question": labelled["d2_no_question"],
+                "market_event_date": labelled.get("d2_no_market_event_date"),
+                "market_date_match": labelled.get("d2_no_market_date_match"),
                 "bracket": labelled.get("d2_no_bracket"),
             }
         )
@@ -726,6 +900,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         }
     if args.target_date:
         records = records[records["target_date"].eq(str(args.target_date))].copy()
+    records, current_local_meta = filter_current_local_day_records(records)
+    base_meta["current_local_day_filter"] = current_local_meta
     configs = {cfg.city: cfg for cfg in load_city_configs(include_station_diff=bool(args.include_station_diff))}
     if args.cities:
         configs = {city: cfg for city, cfg in configs.items() if city in set(args.cities)}
@@ -733,22 +909,23 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
     audits: list[dict[str, Any]] = []
     routed: list[dict[str, Any]] = []
     for city, cfg in sorted(configs.items()):
-        sub = records[records["city"].eq(city)].copy()
-        if sub.empty:
+        city_rows = records[records["city"].eq(city)].copy()
+        if city_rows.empty:
             audits.append({"city": city, "status": "no_snapshot_records"})
             continue
-        row, status = build_city_state(
-            city=city,
-            cfg=cfg,
-            sub=sub,
-            observation_cache=observation_cache,
-            obs_source=args.obs_source,
-            recent_hours=float(args.recent_hours),
-            max_obs_age_min=float(args.max_obs_age_min),
-        )
-        audits.append({"city": city, "status": status})
-        if row is not None:
-            routed.append(row)
+        for target_date, sub in city_rows.groupby("target_date", sort=True):
+            row, status = build_city_state(
+                city=city,
+                cfg=cfg,
+                sub=sub.copy(),
+                observation_cache=observation_cache,
+                obs_source=args.obs_source,
+                recent_hours=float(args.recent_hours),
+                max_obs_age_min=float(args.max_obs_age_min),
+            )
+            audits.append({"city": city, "target_date": str(target_date), "status": status})
+            if row is not None:
+                routed.append(row)
 
     selected = pd.DataFrame(routed)
     if not selected.empty:
@@ -820,10 +997,10 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & ~selected[CORE_LIVE_REGIME_LABELS].astype(str).apply(lambda row: any("unknown" in item for item in row), axis=1)
         )
         peak_delta = pd.to_numeric(selected.get("forecast_peak_delta_hours_local"), errors="coerce")
-        is_current_no_route = selected["route_leg"].astype(str).eq("runway_current_no") | selected["expression"].astype(str).eq(
-            "current_bracket_no"
-        )
-        selected["current_no_peak_clock_ok"] = (~is_current_no_route) | peak_delta.le(0.0)
+        route_leg = selected["route_leg"].astype(str)
+        is_current_no_route = route_leg.isin(CURRENT_NO_ROUTE_LEGS) | selected["expression"].astype(str).eq("current_bracket_no")
+        is_fresh_current_no_route = route_leg.isin({"runway_current_no", "fresh_runway_current_no"})
+        selected["current_no_peak_clock_ok"] = (~is_fresh_current_no_route) | peak_delta.le(0.0)
         selected["current_no_escape_threshold_native"] = selected["bracket"].apply(current_no_escape_threshold_native)
         selected.loc[~is_current_no_route, "current_no_escape_threshold_native"] = pd.NA
         selected["current_no_escape_margin_native"] = pd.to_numeric(
@@ -832,8 +1009,20 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["current_no_escape_ok"] = (~is_current_no_route) | pd.to_numeric(
             selected["current_no_escape_margin_native"], errors="coerce"
         ).gt(float(args.min_current_no_escape_margin_native))
+        selected["market_date_match_ok"] = (
+            selected.get("market_date_match", pd.Series(False, index=selected.index)).fillna(False).astype(bool)
+        )
+        selected["current_no_runway_state_ok"] = selected.apply(current_no_runway_state_ok, axis=1).fillna(False).astype(bool)
+        selected["route_price_cap"] = selected["route_leg"].map(ROUTE_PRICE_CAPS).astype(float)
+        selected["route_price_ok"] = pd.to_numeric(selected["ask"], errors="coerce").le(selected["route_price_cap"])
+        selected["row_risk_soft_v1"] = row_risk_soft_v1(selected)
         selected["base_notional_usd"] = float(args.base_notional)
-        selected["soft_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(selected["soft_balanced"], errors="coerce")
+        selected["legacy_soft_balanced_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(
+            selected["soft_balanced"], errors="coerce"
+        )
+        selected["soft_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(
+            selected["row_risk_soft_v1"], errors="coerce"
+        )
         selected["soft_shares"] = selected["soft_notional_usd"] / pd.to_numeric(selected["ask"], errors="coerce")
         selected["soft_wind_only_shadow_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(
             selected["soft_wind_only_shadow"], errors="coerce"
@@ -861,13 +1050,15 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         ] / pd.to_numeric(selected["ask"], errors="coerce")
         selected["ask_notional"] = pd.to_numeric(selected["ask"], errors="coerce") * pd.to_numeric(selected["ask_size"], errors="coerce")
         selected["execution_eligible"] = (
-            pd.to_numeric(selected["ask"], errors="coerce").between(research.ASK_MIN, research.ASK_CAPS["relaxed70"])
+            pd.to_numeric(selected["ask"], errors="coerce").ge(research.ASK_MIN)
+            & selected["route_price_ok"].astype(bool)
             & pd.to_numeric(selected["soft_shares"], errors="coerce").ge(float(args.min_order_shares))
             & pd.to_numeric(selected["ask_size"], errors="coerce").ge(pd.to_numeric(selected["soft_shares"], errors="coerce"))
             & selected["token_id"].astype(str).ne("")
             & selected["live_feature_parity_ok"].astype(bool)
             & selected["current_no_peak_clock_ok"].astype(bool)
             & selected["current_no_escape_ok"].astype(bool)
+            & selected["market_date_match_ok"].fillna(False).astype(bool)
             & ~selected["live_duplicate_key"].astype(bool)
         )
         def skip_reason(row: pd.Series) -> str:
@@ -879,8 +1070,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             ask_size = safe_float(row.get("ask_size"))
             if math.isfinite(ask) and ask < research.ASK_MIN:
                 reasons.append("ask_below_min")
-            if math.isfinite(ask) and ask > research.ASK_CAPS["relaxed70"]:
-                reasons.append("ask_above_max")
+            if not bool(row.get("route_price_ok", True)):
+                reasons.append("ask_above_route_price_cap")
             if math.isfinite(soft_shares) and soft_shares < float(args.min_order_shares):
                 reasons.append("soft_size_below_min_shares")
             if math.isfinite(ask_size) and math.isfinite(soft_shares) and ask_size < soft_shares:
@@ -893,6 +1084,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
                 reasons.append("current_no_peak_clock_past_or_missing")
             if not bool(row.get("current_no_escape_ok", True)):
                 reasons.append("current_no_forecast_escape_margin_nonpositive")
+            if not bool(row.get("market_date_match_ok", True)):
+                reasons.append("market_event_date_mismatch")
             if bool(row.get("live_duplicate_key")):
                 reasons.append("duplicate_live_city_date_token")
             return "|".join(reasons) if reasons else "not_execution_eligible"
@@ -900,7 +1093,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["execution_skip_reason"] = selected.apply(skip_reason, axis=1)
     meta = {
         **base_meta,
-        "snapshot_rows": int(len(records)),
+        "candidate_input_rows": int(len(records)),
         "audit_counts": pd.Series([a["status"].split(":", 1)[0] for a in audits]).value_counts().to_dict() if audits else {},
         "audits": audits,
     }
@@ -945,10 +1138,17 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "market_id": row.get("market_id"),
         "event_slug": row.get("event_slug"),
         "question": row.get("question"),
+        "market_event_date": row.get("market_event_date"),
+        "market_date_match": row.get("market_date_match"),
+        "market_date_match_ok": row.get("market_date_match_ok"),
         "base_notional_usd": row.get("base_notional_usd"),
         "soft_balanced": row.get("soft_balanced"),
+        "legacy_soft_balanced_notional_usd": row.get("legacy_soft_balanced_notional_usd"),
+        "row_risk_soft_v1": row.get("row_risk_soft_v1"),
         "soft_notional_usd": row.get("soft_notional_usd"),
         "soft_shares": row.get("soft_shares"),
+        "route_price_cap": row.get("route_price_cap"),
+        "route_price_ok": row.get("route_price_ok"),
         "wind_only_multiplier_shadow": row.get("wind_only_multiplier_shadow"),
         "wind_context_multiplier_shadow": row.get("wind_context_multiplier_shadow"),
         "soft_wind_only_shadow": row.get("soft_wind_only_shadow"),
@@ -982,6 +1182,7 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "current_no_escape_threshold_native": row.get("current_no_escape_threshold_native"),
         "current_no_escape_margin_native": row.get("current_no_escape_margin_native"),
         "current_no_escape_ok": row.get("current_no_escape_ok"),
+        "current_no_runway_state_ok": row.get("current_no_runway_state_ok"),
         "live_duplicate_key": row.get("live_duplicate_key"),
         "temp_trend_1h_f": row.get("temp_trend_1h_f"),
         "temp_trend_3h_f": row.get("temp_trend_3h_f"),
@@ -1077,11 +1278,13 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "source_strategy_instance": STRATEGY_INSTANCE,
         "strategy_id": STRATEGY_ID,
         "strategy_family": "reheat_risk_regime_routed_no",
-        "probability_source": "intraday_weather_regime_atlas_v1_soft_balanced",
-        "decision_mode": "regime_routed_no_soft_balanced",
+        "probability_source": "intraday_weather_regime_atlas_v1_route_price_row_risk_soft",
+        "decision_mode": "regime_routed_no_route_price_disciplined",
         "entry_profile": str(row.get("day_regime") or ""),
+        "expression": str(row.get("expression") or ""),
+        "route_leg": str(row.get("route_leg") or ""),
         "execution_mode": "tiny_live_taker_skip_below_min_shares",
-        "profile": "routed_d2_relaxed70_best_ask_soft_balanced",
+        "profile": "route_price_disciplined_no_pullback_row_risk_soft",
         "combo": RULE_ID,
         "city": str(row.get("city") or ""),
         "city_pool": "source_policy_live_eligible",
@@ -1090,6 +1293,8 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "event_slug": str(row.get("event_slug") or ""),
         "market_slug": str(row.get("event_slug") or ""),
         "question": str(row.get("question") or ""),
+        "market_event_date": str(row.get("market_event_date") or ""),
+        "market_date_match_ok": bool(row.get("market_date_match_ok")),
         "bracket": str(row.get("bracket") or ""),
         "token_id": str(row.get("token_id") or ""),
         "signal_side": "BUY_NO",
@@ -1112,7 +1317,7 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "child_order_role": "single",
         "maker_only": False,
         "notional_fraction": 1.0,
-        "size_multiplier": round(safe_float(row.get("soft_balanced"), 0.0), 6),
+        "size_multiplier": round(safe_float(row.get("row_risk_soft_v1"), 0.0), 6),
         "order_notional_cap": round(soft_notional, 6),
         "entry_price_window": "0.10-0.70",
         "execution_policy": "regime_routed_no_taker_v1",
@@ -1127,8 +1332,8 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "paper_enabled": True,
         "live_enabled": bool(live_enabled),
         "shadow_decision": RULE_ID,
-        "shadow_reason": "tiny_live_user_approved_probe_skip_below_min_shares",
-        "model_version": "regime_routed_no_expression_v1",
+        "shadow_reason": "tiny_live_user_approved_route_price_disciplined_probe_skip_below_min_shares",
+        "model_version": "regime_routed_expression_router_v3_route_price_disciplined",
         "obs_source": str(row.get("obs_source") or ""),
         "expires_at_utc": expires_at.isoformat(timespec="seconds"),
         "order_ttl_min": round(float(ttl_min), 6),
@@ -1139,6 +1344,10 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "wind_regime": str(row.get("wind_regime") or ""),
         "running_max_state": str(row.get("running_max_state") or ""),
         "soft_balanced_multiplier": round(safe_float(row.get("soft_balanced"), 0.0), 6),
+        "legacy_soft_balanced_notional_usd": round(safe_float(row.get("legacy_soft_balanced_notional_usd"), 0.0), 6),
+        "row_risk_soft_v1": round(safe_float(row.get("row_risk_soft_v1"), 0.0), 6),
+        "route_price_cap": round(safe_float(row.get("route_price_cap"), 0.0), 6),
+        "route_price_ok": bool(row.get("route_price_ok")),
         "wind_only_multiplier_shadow": round(safe_float(row.get("wind_only_multiplier_shadow"), 1.0), 6),
         "wind_context_multiplier_shadow": round(safe_float(row.get("wind_context_multiplier_shadow"), 1.0), 6),
         "soft_wind_only_shadow": round(safe_float(row.get("soft_wind_only_shadow"), 0.0), 6),
@@ -1182,6 +1391,7 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "current_no_escape_threshold_native": safe_float(row.get("current_no_escape_threshold_native"), None),
         "current_no_escape_margin_native": safe_float(row.get("current_no_escape_margin_native"), None),
         "current_no_escape_ok": bool(row.get("current_no_escape_ok", True)),
+        "current_no_runway_state_ok": bool(row.get("current_no_runway_state_ok", True)),
         "decision_hour_local": safe_float(row.get("decision_hour_local"), None),
         "decision_hour_local_float": safe_float(row.get("decision_hour_local_float"), None),
         "peak_clock_state": str(row.get("peak_clock_state") or ""),
@@ -1291,10 +1501,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-obs-age-min", type=float, default=20.0)
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--base-notional", type=float, default=5.0)
-    parser.add_argument("--daily-gross-cap", type=float, default=15.0)
+    parser.add_argument("--daily-gross-cap", type=float, default=5.0)
     parser.add_argument("--min-order-shares", type=float, default=5.0)
     parser.add_argument("--min-current-no-escape-margin-native", type=float, default=0.0)
-    parser.add_argument("--max-orders", type=int, default=3)
+    parser.add_argument("--max-orders", type=int, default=1)
     parser.add_argument("--order-ttl-min", type=float, default=30.0)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--confirm-live", action="store_true")
@@ -1305,7 +1515,8 @@ def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -
     if candidates.empty:
         return {}
     policies = {
-        "soft_balanced_live_policy": "soft_balanced",
+        "route_price_row_risk_live_policy": "row_risk_soft_v1",
+        "legacy_soft_balanced_shadow": "soft_balanced",
         "soft_wind_only_shadow": "soft_wind_only_shadow",
         "soft_wind_context_shadow": "soft_wind_context_shadow",
         "soft_temp_context_light_shadow": "soft_temp_context_light_shadow",
@@ -1321,13 +1532,15 @@ def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -
         notional = base_notional * weight
         shares = notional / ask
         executable = (
-            ask.between(research.ASK_MIN, research.ASK_CAPS["relaxed70"])
+            ask.ge(research.ASK_MIN)
+            & candidates["route_price_ok"].fillna(False).astype(bool)
             & shares.ge(float(min_order_shares))
             & pd.to_numeric(candidates["ask_size"], errors="coerce").ge(shares)
             & candidates["token_id"].astype(str).ne("")
             & candidates["live_feature_parity_ok"].astype(bool)
             & candidates["current_no_peak_clock_ok"].astype(bool)
             & candidates["current_no_escape_ok"].astype(bool)
+            & candidates["market_date_match_ok"].fillna(False).astype(bool)
             & ~candidates["live_duplicate_key"].astype(bool)
         )
         out[name] = {
