@@ -30,12 +30,11 @@ Expected optional environment file:
   $HOME/projects/weather_data_feed_service/.env
 
 Next manual steps:
-  systemctl --user enable --now weather-data-feed-snapshot.timer
-  # Enable full snapshot only after parity validation against weather-predict.
-  systemctl --user enable --now weather-data-feed-full-snapshot.timer
+  # Keep snapshot/full-snapshot disabled until parity validation against weather-predict.
+  systemctl --user status weather-data-feed-snapshot.timer weather-data-feed-full-snapshot.timer
   systemctl --user enable --now weather-data-feed-observations.timer
   systemctl --user enable --now weather-data-feed-daily.timer
-  systemctl --user status weather-data-feed-snapshot.timer weather-data-feed-full-snapshot.timer weather-data-feed-observations.timer weather-data-feed-daily.timer
+  systemctl --user status weather-data-feed-observations.timer weather-data-feed-daily.timer
 
 Runtime root:
   $RUNTIME_ROOT
