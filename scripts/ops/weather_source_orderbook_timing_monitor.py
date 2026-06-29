@@ -66,6 +66,10 @@ from weather_metar_cross_prev_no_shadow import (  # noqa: E402
 
 DATA_ROOT = Path(os.environ.get("TIMING_MONITOR_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
 OUT_DIR = DATA_ROOT / "runtime/weather_edge_v1/source_orderbook_timing"
+DEFAULT_SOURCE_EVENTS_LATEST = Path(
+    os.environ.get("TIMING_MONITOR_SOURCE_EVENTS_PATH")
+    or "/home/jiarui/projects/weather_data_feed_service_runtime/output/source_events/latest.json"
+)
 FAST_HTTP_TIMEOUT_SEC = float(os.environ.get("TIMING_MONITOR_HTTP_TIMEOUT_SEC", "3.0"))
 LEGACY_PROXY_MODE = os.environ.get("TIMING_MONITOR_PROXY_MODE", "").strip().lower()
 WEATHER_PROXY_MODE = os.environ.get("TIMING_MONITOR_WEATHER_PROXY_MODE", "direct").strip().lower()
@@ -605,11 +609,62 @@ def mark_changed(state: dict[str, Any], key: str, payload_hash: str) -> bool:
     return old != payload_hash
 
 
-def cycle_once(configs: list[CityConfig], *, sources: list[str], bracket_radius: int, max_workers: int = 12) -> dict[str, int]:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    state = read_json(OUT_DIR / "state.json", {})
-    now_utc = datetime.now(timezone.utc)
-    counts = {"cities": 0, "source_rows": 0, "source_updates": 0, "book_rows": 0, "book_updates": 0, "errors": 0}
+def load_source_event_records(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        raise FileNotFoundError(f"source-events file not found: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    records = payload.get("records") if isinstance(payload, dict) else payload
+    if not isinstance(records, list):
+        raise ValueError(f"source-events records missing or invalid: {path}")
+    return [row for row in records if isinstance(row, dict)]
+
+
+def latest_source_event_rows(path: Path, configs: list[CityConfig], sources: list[str], now_utc: datetime) -> dict[str, list[dict[str, Any]]]:
+    all_rows = load_source_event_records(path)
+    by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in all_rows:
+        city = str(row.get("city") or "")
+        source_name = canonical_source_name(str(row.get("source") or ""))
+        if not city or not source_name:
+            continue
+        existing = by_key.get((city, source_name))
+        if existing is None or str(row.get("local_detect_ts_utc") or "") > str(existing.get("local_detect_ts_utc") or ""):
+            by_key[(city, source_name)] = row
+
+    rows_by_city: dict[str, list[dict[str, Any]]] = {cfg.city: [] for cfg in configs}
+    for cfg in configs:
+        requested = expand_source_names(cfg, sources)
+        for source_name in requested:
+            normalized = canonical_source_name(source_name)
+            row = by_key.get((cfg.city, normalized))
+            if row is None:
+                row = {
+                    "ts_utc": now_utc.isoformat(),
+                    "local_detect_ts_utc": now_utc.isoformat(),
+                    "city": cfg.city,
+                    "target_date": now_utc.astimezone(ZoneInfo(cfg.timezone_name)).date().isoformat(),
+                    "source": normalized,
+                    "station": cfg.official_icao,
+                    "status": "source_event_missing",
+                    "error": f"missing source event in {path}",
+                    "payload_hash": stable_hash({"city": cfg.city, "source": normalized, "status": "source_event_missing"}),
+                }
+            else:
+                row = dict(row)
+            row["source_input"] = "data_feed_source_events"
+            row["source_events_path"] = str(path)
+            rows_by_city.setdefault(cfg.city, []).append(row)
+    return rows_by_city
+
+
+def fetch_live_source_rows(
+    configs: list[CityConfig],
+    *,
+    sources: list[str],
+    now_utc: datetime,
+    max_workers: int,
+) -> tuple[dict[str, list[dict[str, Any]]], int]:
+    errors = 0
     source_jobs: list[tuple[CityConfig, str]] = []
     for cfg in configs:
         source_jobs.extend((cfg, source_name) for source_name in expand_source_names(cfg, sources))
@@ -624,7 +679,7 @@ def cycle_once(configs: list[CityConfig], *, sources: list[str], bracket_radius:
             try:
                 row = future.result()
             except Exception as exc:  # noqa: BLE001
-                counts["errors"] += 1
+                errors += 1
                 row = {
                     "ts_utc": now_utc.isoformat(),
                     "local_detect_ts_utc": now_utc.isoformat(),
@@ -634,12 +689,39 @@ def cycle_once(configs: list[CityConfig], *, sources: list[str], bracket_radius:
                     "status": "fetch_failed",
                     "error": f"{type(exc).__name__}: {exc}",
                 }
-            key = f"source|{cfg.city}|{source_name}"
+            row["source_input"] = "live_fetch"
+            source_rows_by_city.setdefault(cfg.city, []).append(row)
+    return source_rows_by_city, errors
+
+
+def cycle_once(
+    configs: list[CityConfig],
+    *,
+    sources: list[str],
+    bracket_radius: int,
+    max_workers: int = 12,
+    source_input: str = "source-events",
+    source_events_path: Path = DEFAULT_SOURCE_EVENTS_LATEST,
+) -> dict[str, int]:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    state = read_json(OUT_DIR / "state.json", {})
+    now_utc = datetime.now(timezone.utc)
+    counts = {"cities": 0, "source_rows": 0, "source_updates": 0, "book_rows": 0, "book_updates": 0, "errors": 0}
+    if source_input == "source-events":
+        source_rows_by_city = latest_source_event_rows(source_events_path, configs, sources, now_utc)
+    elif source_input == "live-fetch":
+        source_rows_by_city, source_errors = fetch_live_source_rows(configs, sources=sources, now_utc=now_utc, max_workers=max_workers)
+        counts["errors"] += source_errors
+    else:
+        raise ValueError(f"unknown source_input {source_input!r}")
+
+    for cfg in configs:
+        for row in source_rows_by_city.get(cfg.city, []):
+            key = f"source|{cfg.city}|{row.get('target_date') or ''}|{row.get('source') or ''}|{row.get('station') or ''}"
             row["changed_since_last"] = mark_changed(state, key, row.get("payload_hash", ""))
             counts["source_rows"] += 1
             counts["source_updates"] += int(bool(row["changed_since_last"]))
             append_jsonl(OUT_DIR / "sources.jsonl", row)
-            source_rows_by_city.setdefault(cfg.city, []).append(row)
 
     def temp_for_city(cfg: CityConfig) -> float | None:
         rows = source_rows_by_city.get(cfg.city, [])
@@ -731,6 +813,18 @@ def main() -> int:
     parser.add_argument("--burst-interval-sec", type=float, default=2.0)
     parser.add_argument("--burst-window-min", type=float, default=10.0)
     parser.add_argument("--max-workers", type=int, default=12)
+    parser.add_argument(
+        "--source-input",
+        choices=["source-events", "live-fetch"],
+        default=os.environ.get("TIMING_MONITOR_SOURCE_INPUT", "source-events"),
+        help="Read weather source rows from data-feed source-events by default; live-fetch is a debug fallback.",
+    )
+    parser.add_argument(
+        "--source-events-path",
+        type=Path,
+        default=DEFAULT_SOURCE_EVENTS_LATEST,
+        help="Path to weather_data_feed_service output/source_events/latest.json.",
+    )
     args = parser.parse_args()
 
     if args.command == "report":
@@ -757,6 +851,8 @@ def main() -> int:
                 "include_research_cities": args.include_research_cities,
                 "max_workers": args.max_workers,
                 "http_timeout_sec": FAST_HTTP_TIMEOUT_SEC,
+                "source_input": args.source_input,
+                "source_events_path": str(args.source_events_path),
                 "weather_proxy_mode": WEATHER_PROXY_MODE,
                 "market_proxy_mode": MARKET_PROXY_MODE,
                 "explicit_weather_proxy": bool(EXPLICIT_WEATHER_PROXY),
@@ -768,7 +864,14 @@ def main() -> int:
     )
     while True:
         cycle_start = datetime.now(timezone.utc)
-        counts = cycle_once(configs, sources=args.sources, bracket_radius=args.bracket_radius, max_workers=args.max_workers)
+        counts = cycle_once(
+            configs,
+            sources=args.sources,
+            bracket_radius=args.bracket_radius,
+            max_workers=args.max_workers,
+            source_input=args.source_input,
+            source_events_path=args.source_events_path,
+        )
         cycle_end = datetime.now(timezone.utc)
         counts["cycle_runtime_sec"] = round((cycle_end - cycle_start).total_seconds(), 3)
         print(json.dumps({"ts_utc": datetime.now(timezone.utc).isoformat(), **counts}, sort_keys=True))

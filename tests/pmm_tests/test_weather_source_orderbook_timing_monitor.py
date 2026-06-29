@@ -1,10 +1,13 @@
+import json
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from scripts.ops.weather_source_orderbook_timing_monitor import (
+    cycle_once,
     expand_source_names,
     find_markets_for_brackets,
     in_update_window,
+    latest_source_event_rows,
     load_monitor_city_configs,
     parse_metar_rmk_temp_c,
     parse_awc_cache_csv_records,
@@ -215,3 +218,111 @@ def test_monitor_research_city_configs_can_include_blocked_source_profiles():
     assert len(research_configs) == 1
     assert research_configs[0].city == "Moscow"
     assert research_configs[0].official_icao == "UUWW"
+
+
+def test_latest_source_event_rows_reads_data_feed_source_events(tmp_path):
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+    path = tmp_path / "latest.json"
+    path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "city": "Shanghai",
+                        "target_date": "2026-06-17",
+                        "source": "aviationweather_metar",
+                        "station": "ZSPD",
+                        "status": "ok",
+                        "temp_c": 27.0,
+                        "payload_hash": "hash-primary",
+                        "local_detect_ts_utc": "2026-06-17T10:00:01+00:00",
+                    },
+                    {
+                        "city": "Shanghai",
+                        "target_date": "2026-06-17",
+                        "source": "aviationweather_cache_csv",
+                        "station": "ZSPD",
+                        "status": "ok",
+                        "temp_c": 26.0,
+                        "payload_hash": "hash-cache",
+                        "local_detect_ts_utc": "2026-06-17T10:00:02+00:00",
+                    },
+                ]
+            }
+        )
+    )
+
+    rows = latest_source_event_rows(
+        path,
+        [cfg],
+        ["profile_primary", "aviationweather_cache_csv"],
+        datetime(2026, 6, 17, 10, 0, tzinfo=timezone.utc),
+    )
+
+    assert [row["source"] for row in rows["Shanghai"]] == [
+        "aviationweather_metar",
+        "aviationweather_cache_csv",
+    ]
+    assert all(row["source_input"] == "data_feed_source_events" for row in rows["Shanghai"])
+    assert rows["Shanghai"][0]["temp_c"] == 27.0
+
+
+def test_cycle_once_uses_source_events_for_signal_inputs(monkeypatch, tmp_path):
+    import scripts.ops.weather_source_orderbook_timing_monitor as monitor
+
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+    source_events = tmp_path / "latest.json"
+    source_events.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "city": "Shanghai",
+                        "target_date": "2026-06-17",
+                        "source": "aviationweather_metar",
+                        "station": "ZSPD",
+                        "status": "ok",
+                        "temp_c": 27.0,
+                        "payload_hash": "hash-primary",
+                        "local_detect_ts_utc": "2026-06-17T10:00:01+00:00",
+                    }
+                ]
+            }
+        )
+    )
+    out_dir = tmp_path / "timing"
+    monkeypatch.setattr(monitor, "OUT_DIR", out_dir)
+
+    def fail_live_fetch(*_args, **_kwargs):
+        raise AssertionError("cycle_once should not live-fetch weather sources")
+
+    seen_temps = []
+
+    def fake_books(cfg_arg, now_utc, temp_c, *, radius):
+        seen_temps.append((cfg_arg.city, temp_c, radius))
+        return [
+            {
+                "city": cfg_arg.city,
+                "token_id": "token-1",
+                "payload_hash": "book-hash",
+                "status": "ok",
+            }
+        ]
+
+    monkeypatch.setattr(monitor, "source_snapshot", fail_live_fetch)
+    monkeypatch.setattr(monitor, "fetch_orderbook_rows", fake_books)
+
+    counts = cycle_once(
+        [cfg],
+        sources=["profile_primary"],
+        bracket_radius=1,
+        max_workers=1,
+        source_input="source-events",
+        source_events_path=source_events,
+    )
+
+    assert counts["source_rows"] == 1
+    assert counts["book_rows"] == 1
+    assert seen_temps == [("Shanghai", 27.0, 1)]
+    source_rows = [json.loads(line) for line in (out_dir / "sources.jsonl").read_text().splitlines()]
+    assert source_rows[0]["source_input"] == "data_feed_source_events"

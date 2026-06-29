@@ -26,7 +26,9 @@ if [[ ! -x "$PY" ]]; then
 fi
 
 TIMING_MONITOR_CITIES="${TIMING_MONITOR_CITIES:-Shanghai Tokyo}"
-TIMING_MONITOR_SOURCES="${TIMING_MONITOR_SOURCES:-profile_primary synopticdata_timeseries noaa_tgftp_station_txt checkwx_html}"
+TIMING_MONITOR_SOURCES="${TIMING_MONITOR_SOURCES:-profile_primary aviationweather_cache_csv}"
+TIMING_MONITOR_SOURCE_INPUT="${TIMING_MONITOR_SOURCE_INPUT:-source-events}"
+TIMING_MONITOR_SOURCE_EVENTS_PATH="${TIMING_MONITOR_SOURCE_EVENTS_PATH:-$HOME/projects/weather_data_feed_service_runtime/output/source_events/latest.json}"
 TIMING_MONITOR_BASE_INTERVAL_SEC="${TIMING_MONITOR_BASE_INTERVAL_SEC:-20}"
 TIMING_MONITOR_BURST_INTERVAL_SEC="${TIMING_MONITOR_BURST_INTERVAL_SEC:-2}"
 TIMING_MONITOR_BURST_WINDOW_MIN="${TIMING_MONITOR_BURST_WINDOW_MIN:-10}"
@@ -50,6 +52,8 @@ args=(
   --burst-window-min "$TIMING_MONITOR_BURST_WINDOW_MIN"
   --bracket-radius "$TIMING_MONITOR_BRACKET_RADIUS"
   --max-workers "$TIMING_MONITOR_MAX_WORKERS"
+  --source-input "$TIMING_MONITOR_SOURCE_INPUT"
+  --source-events-path "$TIMING_MONITOR_SOURCE_EVENTS_PATH"
   --sources $TIMING_MONITOR_SOURCES
 )
 if [[ "$TIMING_MONITOR_CITIES" != "ALL" && "$TIMING_MONITOR_CITIES" != "__all__" ]]; then
