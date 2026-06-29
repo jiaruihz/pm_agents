@@ -67,7 +67,11 @@ BLOCKED_OUT = RUNTIME_DIR / "blocked_candidates.jsonl"
 LATEST_CANDIDATES_OUT = RUNTIME_DIR / "latest_candidates.json"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
-DEFAULT_SNAPSHOT_DIR = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+DEFAULT_SNAPSHOT_DIR_CANDIDATES = [
+    Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots"),
+    Path("/home/jiarui/projects/weather-predict/output/paper_snapshots"),
+    ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
+]
 DEFAULT_OBSERVATION_CACHE_PATHS = [
     Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json"),
     ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json",
@@ -163,14 +167,33 @@ def stable_hash(payload: Any, *, length: int = 24) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
+def latest_snapshot_in_dir(snapshot_dir: Path) -> Path | None:
+    candidates = sorted(snapshot_dir.glob("snapshot_*.json")) if snapshot_dir.exists() else []
+    return candidates[-1] if candidates else None
+
+
+def default_snapshot_dir() -> Path:
+    latest_by_dir = []
+    for snapshot_dir in DEFAULT_SNAPSHOT_DIR_CANDIDATES:
+        latest = latest_snapshot_in_dir(snapshot_dir)
+        if latest is None:
+            continue
+        latest_by_dir.append((latest.stat().st_mtime, snapshot_dir))
+    if latest_by_dir:
+        return max(latest_by_dir, key=lambda item: item[0])[1]
+    return DEFAULT_SNAPSHOT_DIR_CANDIDATES[-1]
+
+
 def latest_snapshot_path(snapshot_dir: Path, snapshot_path: str = "") -> Path:
     if snapshot_path:
         path = Path(snapshot_path)
         return path if path.is_absolute() else ROOT / path
-    candidates = sorted(snapshot_dir.glob("snapshot_*.json"))
-    if not candidates:
+    latest = latest_snapshot_in_dir(snapshot_dir)
+    if latest is None and snapshot_dir == DEFAULT_SNAPSHOT_DIR_CANDIDATES[-1]:
+        latest = latest_snapshot_in_dir(default_snapshot_dir())
+    if latest is None:
         raise FileNotFoundError(f"no paper snapshots under {snapshot_dir}")
-    return candidates[-1]
+    return latest
 
 
 def load_snapshot(path: Path) -> tuple[dict[str, Any], pd.DataFrame]:
@@ -1481,7 +1504,7 @@ def run_executor(args: argparse.Namespace) -> dict[str, Any] | None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--snapshot-dir", default=str(DEFAULT_SNAPSHOT_DIR))
+    parser.add_argument("--snapshot-dir", default=str(default_snapshot_dir()))
     parser.add_argument("--snapshot", default="")
     parser.add_argument("--target-date", default="")
     parser.add_argument("--cities", nargs="*", default=[])

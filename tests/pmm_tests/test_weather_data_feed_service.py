@@ -238,7 +238,7 @@ def test_systemd_units_are_versioned_for_data_feed_service() -> None:
         assert "WEATHER_DATA_FEED_CACHE_ROOT" in text
         assert "weather-predict" not in text
 
-    assert "snapshot-full -- --orderbook-budget-sec 240 --orderbook-workers 8" in full_snapshot
+    assert "snapshot-full -- --orderbook-budget-sec 600 --orderbook-workers 8" in full_snapshot
     assert "OnUnitInactiveSec=30min" in timer
     assert "OnUnitInactiveSec=30min" in full_snapshot_timer
     assert "OnUnitInactiveSec=5min" in observations_timer

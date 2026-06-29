@@ -86,10 +86,19 @@ def now_utc() -> str:
 
 
 def default_snapshot_glob() -> str:
-    n100 = Path("/home/jiarui/projects/weather-predict/output/paper_snapshots/snapshot_*.json")
-    if n100.parent.exists():
-        return str(n100)
-    return str(ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_*.json")
+    candidates = [
+        Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots"),
+        Path("/home/jiarui/projects/weather-predict/output/paper_snapshots"),
+        ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
+    ]
+    latest_by_dir = []
+    for snapshot_dir in candidates:
+        snapshots = sorted(snapshot_dir.glob("snapshot_*.json")) if snapshot_dir.exists() else []
+        if snapshots:
+            latest_by_dir.append((snapshots[-1].stat().st_mtime, snapshot_dir))
+    if latest_by_dir:
+        return str(max(latest_by_dir, key=lambda item: item[0])[1] / "snapshot_*.json")
+    return str(candidates[-1] / "snapshot_*.json")
 
 
 def parse_args() -> argparse.Namespace:
