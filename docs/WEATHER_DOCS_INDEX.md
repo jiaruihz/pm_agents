@@ -1,7 +1,7 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-30 forecast-bias tail reversal expression selector v1
+Updated: 2026-06-30 high-price forecast-bias reversal cases v1
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -110,6 +110,7 @@ Status 口径：
 | [2026-06-30-strategy-city-fit-soft-sizing-v2.md](analysis/2026-06/2026-06-30-strategy-city-fit-soft-sizing-v2.md) | `snapshot` | 用每笔实际 forecast source 的 city/model 偏移，对比当前在跑 `regime_routed_no_route_price_disciplined_tiny_live_v1` row-risk-soft 与 city-fit soft sizing overlay：同分母 283 笔总 ROI 小幅改善但 2026-06-21 后 forward 变弱；只建议 shadow 记录，不改 live |
 | [2026-06-30-strategy-expression-stability-v1.md](analysis/2026-06/2026-06-30-strategy-expression-stability-v1.md) | `snapshot` | 拆当前策略各 expression 的稳定性、日块 bootstrap CI 和 `current_high_yes` vs 同触发点 `d1 NO` 反事实：current-NO 是主要贡献，d2-NO ROI 薄，current-high YES 样本太少；d1 NO 同点更像 peak-fade 表达但全量不稳，需 shadow 表达选择器，不直接改 live |
 | [2026-06-30-forecast-bias-tail-reversal-expression-selector-v1.md](analysis/2026-06/2026-06-30-forecast-bias-tail-reversal-expression-selector-v1.md) | `snapshot` | 独立 `forecast_bias_tail_reversal_v1` research head：固定同一 city-date-decision snapshot 比较 current_high_yes / d1 NO / d2 NO / high-tail YES proxy / current_bracket NO，并接 city+model station-vs-forecast bias 与 day/intraday/moisture/wind regime；selector 全样本 ROI -17.2%、forward 相对 train-best static current_high_yes excess -34.5% CI [-44.1%, -15.9%]，三门 FAIL，结论 `inconclusive`，不改 live、不接 current runner |
+| [2026-06-30-high-price-forecast-bias-reversal-cases-v1.md](analysis/2026-06/2026-06-30-high-price-forecast-bias-reversal-cases-v1.md) | `snapshot` | 修正后的高价 YES/NO 反转 case-mining：固定 generated expression matrix 的 city-hour decision state，统计 ask>=0.70/0.80/0.90 高置信 token 买入会输的模式；ask>=0.70 下高价 current_high YES 反转率 10.9%、高价 NO 反转率 9.0%，current_bracket NO 反转率最高 47.0%；结论 `inconclusive / case-mining-only`，下一步是分头建模 `P(high token loses | market high ask, forecast/obs/regime conflict)`，不是 selector 或 live 规则 |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) | `current-reference` | 概率模型从 M0 可观测骨架到 lead-time/ensemble/ML 的路线图 |
 | [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | `design-draft` | 城市/日组合优化器目标、约束、分布和 tail 风险怎么设计 |
 | [WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) | `snapshot` | 2026-06-05 blend model 实施计划背景，当前结论以 edge engine current state 为准 |
