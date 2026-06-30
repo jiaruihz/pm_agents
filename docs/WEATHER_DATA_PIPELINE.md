@@ -1,7 +1,7 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-06-30 source-events signal boundary
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -82,6 +82,9 @@ unless matched by a real row in `fills`.
 | `pm_agent/runtime/weather_edge_v1/plans/live_*_trade_plans.jsonl` | weather_trade_planner | every 30 min | plans the live executor considered |
 | `pm_agent/runtime/weather_edge_v1/signals/live_*_signals.jsonl` | weather_snapshot_signal_builder | every 30 min | signals fed into the planner |
 | `pm_agent/runtime/weather_edge_v1/live_cycle/{cycle_id}.json` | weather_live_cycle | every 30 min | cycle summary (config, alerts, executor result) |
+| `weather_data_feed_service_runtime/output/source_events/latest.json` | weather-data-feed-source-events.timer | every completed run + 2 min | latest city/source observation events for latency and crossing signals |
+| `weather_data_feed_service_runtime/output/source_events/sources.jsonl` | weather-data-feed-source-events.timer | append-only | source-event history with report_ts, detect_ts, payload hashes, raw METAR |
+| `weather_data_feed_service_runtime/output/observations/latest.json` | weather-data-feed-observations.timer | ~5 min | shared fast observation cache for strategy feature/state inputs |
 
 The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See
@@ -165,7 +168,13 @@ Side tables (mutable):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ N100 weather-predict                                                │
+│ N100 weather_data_feed_service                                      │
+│   source-events timer ─────▶ output/source_events/latest.json       │
+│                         └──▶ output/source_events/sources.jsonl     │
+│   observations timer ──────▶ output/observations/latest.json        │
+│   full snapshot timer ─────▶ standard market/orderbook snapshots    │
+│                                                                     │
+│ N100 weather-predict (legacy/dormant-parallel during migration)     │
 │   live cycle every 30 min ──▶ paper_snapshots, paper_orders.jsonl   │
 │   daily_pipeline       ──────▶ pm_history/                          │
 │   settle_t24_paper.py  ──MANUAL──▶ t24_paper_*.csv (derived)        │
@@ -173,6 +182,8 @@ Side tables (mutable):
 │ N100 pm_agent                                                       │
 │   weather_live_cycle.py every 30 min ──▶ signals/, plans/, live/    │
 │                                       ──▶ live_cycle/{id}.json      │
+│   latency/crossing runners consume weather_data_feed_service        │
+│   source_events; they do not own default weather polling            │
 └────────────────────────────────┬────────────────────────────────────┘
                                  │
                        sync_weather_remote.sh

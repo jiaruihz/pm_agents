@@ -1,7 +1,7 @@
 # Weather Data Feed Module
 
 Status: current-source
-Updated: 2026-06-20
+Updated: 2026-06-30 source-events signal boundary
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_REPO_BOUNDARY.md; WEATHER_SYSTEM_CONTRACT.md
 
@@ -44,6 +44,14 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `observation_sources/fetchers.py` | 数据层 fetcher：AviationWeather METAR、AWC cache、IEM ASOS、NOAA TGFTP、weather.gov latest、Synoptic、CheckWX |
 | `snapshot_protocol.py` | 标准 snapshot 字段和 legacy alias normalization |
 | `models.py` | SourceProfile、ObservationRecord、RunningMaxState、MarketSnapshotRecord 等共享 dataclass |
+
+`weather_data_feed_service/` 当前是同仓库的生产服务层，负责把数据包产物写成稳定文件协议：
+
+| 服务输出 | N100 路径 | 消费者 |
+|---|---|---|
+| `output/source_events/latest.json` + append-only `sources.jsonl` | `~/projects/weather_data_feed_service_runtime/output/source_events/` | source/orderbook timing monitor、METAR crossing prev-NO bot |
+| `output/observations/latest.json` | `~/projects/weather_data_feed_service_runtime/output/observations/` | current-YES / regime-routed 等需要 5 分钟级 observation cache 的策略 |
+| full market snapshot outputs | `~/projects/weather_data_feed_service_runtime/output/` | mirror / analysis / dashboard sync |
 
 旧路径:
 
@@ -121,6 +129,13 @@ snapshot_ts_utc
   `weather_data_feed_observation_cache_v1` latest cache：
   `~/projects/weather_data_feed_service_runtime/output/observations/latest.json`。current-YES 优先消费该 cache；
   full paper snapshot 里的 `metar_latest_*` 只作为 cache 文件不存在时的兼容回退。
+- 新增 `weather_data_feed_service source-events` 和 `weather-data-feed-source-events.timer`，用于生产抢单/测速用
+  `source_events/latest.json`：每行是一个 city/source/station 的最新观测事件，包含 `source_report_ts_utc`、
+  `local_detect_ts_utc`、`detected_after_report_sec`、`temp_c`、`raw_metar` / `raw_payload_hash`、`payload_hash`、
+  source profile 审计字段和 `changed_since_last`。生产 timer 用 `OnUnitInactiveSec=2min`，避免固定周期重入。
+- `weather_source_orderbook_timing_monitor.py` 和 `weather_metar_cross_prev_no_shadow.py` 的默认天气信号输入已经切到
+  `source-events` 文件协议。旧的直抓天气源路径只允许显式 `--source-input live-fetch` 或
+  `--signal-input live-fetch` 调试使用；策略信号不再默认各自重复抓 AviationWeather/TGFTP/CheckWX 等天气源。
 - 生产 observation cache 必须开启 `--include-station-diff --include-fallback-sources --max-workers 4`：
   station-diff 城市是把旧 city_pool 机场修正到 Polymarket 规则/WU 结算源对应站点，不是替代口径；
   fallback 链路为 `aviationweather_metar -> aviationweather_cache_csv -> iem_asos`，用于在 direct API
@@ -139,6 +154,54 @@ snapshot_ts_utc
 - 继续抽 source-specific 的生产级缓存/限速/failover：IEM 当前容易 429，不适合作为高频主源；AWC cache 已支持 gzip 解压但只提供 cache 当前截面；LDM 仍是 parse-file/monitor 层，daemon 管理不进数据模块。
 - 给数据模块增加 CLI: `weather-data-feed snapshot-health`, `source-profiles audit`, `scan-plan`。
 - 在 N100 上为 fast observation cache 增加独立 health/status 文件；策略 loop 已优先消费标准 cache，后续再把健康门槛显式化。
+
+## Source-Events 信号边界
+
+`source-events` 是“最新观测事件”层，不是策略。它只回答：
+
+```text
+某城市、某 source、某 station 最新一次观测是什么；
+这条观测报告时间是什么；
+本机/服务第一次看到它是什么时候；
+raw payload 是否相对上一轮变化。
+```
+
+生产默认源：
+
+```text
+profile_primary
+aviationweather_cache_csv
+```
+
+其中 `profile_primary` 会按 `source_profiles.json` 展开成城市官方 live source，当前大多数 live-eligible 城市为
+`aviationweather_metar`。`aviationweather_cache_csv` 作为同源 AWC cache 对照，用来度量 API/cache 的真实先后。
+
+策略侧职责保持在策略里：
+
+| 进入 source-events | 留在策略 |
+|---|---|
+| source profile expansion | crossing 判断 |
+| report/local detect/fetch latency | running max 状态机 |
+| raw METAR / payload hash / changed_since_last | 哪个 bracket 可交易 |
+| station / settlement / mapping 审计字段 | orderbook 查询、notional、下单 |
+
+`weather_metar_cross_prev_no_shadow.py` 读取 source-events 时只用最新观测 seed/更新 running max。冷启动没有 state 时，
+它不会从 latest event 反推出当天历史最高温；这会漏掉已经发生过的 crossing，但避免凭不完整历史误触发真钱路径。
+
+消费者默认：
+
+```text
+weather_source_orderbook_timing_monitor.py
+  --source-input source-events
+  --source-events-path ~/projects/weather_data_feed_service_runtime/output/source_events/latest.json
+
+weather_metar_cross_prev_no_shadow.py
+  --signal-input source-events
+  --source-events-path ~/projects/weather_data_feed_service_runtime/output/source_events/latest.json
+```
+
+如果 `source_events/latest.json` stale 或缺 city/source，消费者应该显式报 `source_event_missing` /
+`source_event_wrong_date`，不要静默回退到直抓天气源。需要临时排查上游 source 时，才手动切到 `live-fetch`。
 
 ## 生产数据验证计划
 
@@ -164,6 +227,33 @@ cd ~/projects/pm_agent
 - `status=ok`: 可以继续让策略消费；
 - `status=warn`: 字段/重复没坏，但存在 stale snapshot、summary stale、或非致命重复风险；
 - `status=fail`: 协议、JSON、snapshot 重复或 order_id 重复等结构性问题，先修数据再谈策略信号。
+
+抢单/测速链路改动后额外验证:
+
+```bash
+systemctl --user start weather-data-feed-source-events.service
+systemctl --user list-timers --all | grep weather-data-feed-source-events
+
+cd ~/projects/pm_agent
+TIMING_MONITOR_MARKET_PROXY=http://127.0.0.1:18089 \
+  .venv/bin/python scripts/ops/weather_source_orderbook_timing_monitor.py cycle \
+  --cities Shanghai \
+  --sources profile_primary aviationweather_cache_csv \
+  --source-input source-events \
+  --source-events-path ~/projects/weather_data_feed_service_runtime/output/source_events/latest.json \
+  --bracket-radius 0 --max-workers 2
+
+METAR_CROSS_MARKET_PROXY=http://127.0.0.1:18089 \
+  .venv/bin/python scripts/ops/weather_metar_cross_prev_no_shadow.py cycle \
+  --dry-run --cities Shanghai \
+  --signal-input source-events \
+  --source-events-path ~/projects/weather_data_feed_service_runtime/output/source_events/latest.json \
+  --obs-source aviationweather_metar --max-workers 1
+```
+
+通过标准：source-events latest 足够新，`rows=80 / ok=80 / cities=40`（随城市池调整可变），timing monitor
+有 `source_rows>0` 且能 join book，crossing dry-run cycle 写出 `signal_input=source-events` /
+`obs_source_input=data_feed_source_events`，且 `errors=0`。
 
 ## Observation Sources 迁移边界
 

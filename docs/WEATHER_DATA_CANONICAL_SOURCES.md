@@ -1,7 +1,7 @@
 # Weather Data Canonical Sources
 
 Status: current-source
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-06-30 source-events signal boundary
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -29,6 +29,8 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | 单笔血缘 (signal→plan→order→fill→settle) | `runtime/weather.db` 的 `signals/plans/orders/fills/settlements` | 任何 raw JSONL（除非确认底表丢字段） |
 | 实盘下单凭证（真金 CLOB 提交记录） | `runtime/weather_edge_v1/live/*.jsonl` + `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` （已被 ingest 到 `orders` 表，venue=`polymarket_clob`） | — |
 | 实盘成交（真金 CLOB fills） | `fills` 表 join `orders WHERE venue='polymarket_clob'`，并用 raw `clob_fills.jsonl` + `weather_clob_fill_coverage_gate.py` 做 fill_id / order cap reconciliation | public activity 不能单独当 order-level 真相 |
+| 抢单/测速实时天气信号 | N100 `weather_data_feed_service_runtime/output/source_events/latest.json`；历史审计读同目录 `sources.jsonl` | 策略脚本默认不要自己直抓 AviationWeather/TGFTP/CheckWX；只有显式 `live-fetch` 调试可以绕过 |
+| 5 分钟级 live observation feature/cache | N100 `weather_data_feed_service_runtime/output/observations/latest.json` | full snapshot 里的旧 `metar_latest_*` 字段只作兼容回退 |
 | 概率模型 / 错误分布 cache | N100 `cache/gfs_365d_*.json`（**实际 ~735 天，不是 365 天**）；本机镜像 `runtime/weather_edge_v1/market_data/cache/` | — |
 | 结算（pm_history） | `settlements` 表用于 condition_id trade join；`settlement_outcomes` 表用于 city/date/bracket basket 或 source-grain research | 旧 `t24_paper_ledger_summary.json` 的 "by_date" 块；策略脚本临时直读 raw pm_history |
 
@@ -50,6 +52,11 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 │     cache/wu_obs/             ← WU 实测温度                                │
 │     cache/iem_v2_*.csv        ← IEM 历史观测（每 ICAO 一份）               │
 │     cache/gfs_365d_*.json     ← GFS 历史预测 cache（实际 ~735 天）         │
+│                                                                            │
+│   weather_data_feed_service_runtime/                                       │
+│     output/source_events/latest.json  ← 最新 source-event 信号层          │
+│     output/source_events/sources.jsonl ← append-only source-event 审计     │
+│     output/observations/latest.json   ← 5 分钟级 observation cache         │
 │                                                                            │
 │   pm_agent/runtime/weather_edge_v1/                                        │
 │     live/live_<inst>_<run>_orders.jsonl  ← 真金 CLOB 提交凭证（JSONL）    │
@@ -111,6 +118,9 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | **N100** `cache/arome_v5_<City>_*.json` | source | N100 AROME fetcher | 法国专用 | 本机镜像 `market_data/cache/arome_v5/`（2026-06-05 起加入 sync） |
 | **N100** `cache/iem_v2_<ICAO>_<start>_<end>.csv` | source | N100 IEM fetcher | 概率模型/校准 | HongKong 用 `VHHH`（不是 VHKO）。本机镜像 `market_data/cache/iem/` |
 | **N100** `output/logs/*.log` | log | N100 systemd timer | 故障排查 | 本机镜像 `market_data/logs/`（2026-06-05 起加入 sync）。判断 timer 跑没跑的唯一来源 |
+| **N100** `weather_data_feed_service_runtime/output/source_events/latest.json` | source | `weather-data-feed-source-events.timer` | timing monitor / METAR crossing bot | city/source/station 最新观测事件；默认天气信号入口。包含 report_ts、detect_ts、payload hash、raw METAR、source profile 审计字段 |
+| **N100** `weather_data_feed_service_runtime/output/source_events/sources.jsonl` | source log | `weather-data-feed-source-events.timer` | latency research / source-vs-market audit | append-only；用于判断哪个源先更新、市场是否领先天气源 |
+| **N100** `weather_data_feed_service_runtime/output/observations/latest.json` | source cache | `weather-data-feed-observations.timer` | current-YES / regime-routed live feature layer | 标准 `weather_data_feed_observation_cache_v1`；策略优先读它，不再重复抓天气 API |
 | **N100** `pm_agent/runtime/logs/*.log` | log | N100 pm_agent live cycle | 故障排查 | 本机镜像 `remote_pm_agent/logs/`（2026-06-05 起加入 sync） |
 | **N100** `/home/jiarui/weather-predict-backups/*.tar.zst` | backup | N100 `backup_data.sh` | 灾难恢复 | 本机镜像 `runtime/_backups_n100/`（2026-06-05 起加入 sync，独立脚本 `sync_n100_backups.sh`） |
 | **本机** `runtime/weather_edge_v1/live/*.jsonl` | source（本机产物，已停） | 本机 `weather_live_cycle.py`（最后写入 2026-06-01） | `migrate-live-cycle` → orders | 84 文件，本机 loop 已停。仍被 ingest 扫描（兼容历史），可以原地保留 |
