@@ -279,6 +279,7 @@ def build_report(rows: list[dict[str, Any]], by_city: list[dict[str, Any]], by_s
     latest_cases = {}
     for row in chengdu_tokyo:
         latest_cases[(row["city"], row["target_date"])] = row
+    rel_out = out_dir.relative_to(ROOT) if out_dir.is_relative_to(ROOT) else out_dir
     text = f"""# Forecast Station Error Distribution v1
 
 Status: snapshot
@@ -305,6 +306,19 @@ Generated: {datetime.now(timezone.utc).isoformat(timespec="seconds")}
 - under actual by >=1 degree: `{sum(e <= -1 for e in errors) / len(errors):.1%}`.
 - under actual by >=2 degrees: `{sum(e <= -2 for e in errors) / len(errors):.1%}`.
 - over actual by >=1 degree: `{sum(e >= 1 for e in errors) / len(errors):.1%}`.
+
+## 中文摘要
+
+本报告只研究 forecast ceiling 和实际结算站点高温之间的误差，不是交易回测。
+
+- `error_native < 0`：预报低估实际站点高温，最容易伤害 `higher/tail NO`。
+- `error_native > 0`：预报高估实际站点高温，最容易伤害 `current-bracket NO` 的继续穿越逻辑。
+- Chengdu 2026-06-30 是典型 forecast under-station：ECMWF 从 30.3 下修到 27.5/28.4，但 ZUUU 实际到 32.0。
+- Tokyo 2026-06-30 是相反方向：GFS 预测 28.1/28.3，但 RJTT 截至当前 source-events 只到 27.0。
+
+这说明 forecast reliability 不能只做全局标签。对 `tail/d2 NO`，需要显式估计
+`actual_station_max - forecast_max` 的上冲风险；对 `current NO`，需要估计
+`forecast_max - actual_station_max` 的穿越失败风险。
 
 ## By City
 
@@ -335,10 +349,10 @@ needs a different buffer for over-forecast pass-through risk.
 
 Generated files:
 
-- `{out_dir / 'forecast_station_error_rows.csv'}`
-- `{out_dir / 'summary_by_city.csv'}`
-- `{out_dir / 'summary_by_forecast_source.csv'}`
-- `{out_dir / 'summary_by_decision_bucket.csv'}`
+- `{rel_out / 'forecast_station_error_rows.csv'}`
+- `{rel_out / 'summary_by_city.csv'}`
+- `{rel_out / 'summary_by_forecast_source.csv'}`
+- `{rel_out / 'summary_by_decision_bucket.csv'}`
 """
     return text
 
