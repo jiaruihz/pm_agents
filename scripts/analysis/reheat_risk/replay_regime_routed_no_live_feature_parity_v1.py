@@ -288,6 +288,8 @@ def replay_nyc_order_case(case: dict[str, Any]) -> dict[str, Any]:
     selected = research.add_soft_weights(pd.DataFrame([labelled])).iloc[0]
     soft_notional = 5.0 * float(selected["soft_balanced"])
     soft_shares = soft_notional / float(selected["ask"]) if float(selected["ask"]) else math.nan
+    live_order_shares = live.clamp_order_shares_to_top_ask(soft_shares, selected.get("ask_size"))
+    live_order_notional = live_order_shares * float(selected["ask"]) if math.isfinite(live_order_shares) else math.nan
     parity_ok = (
         str(selected.get("live_feature_status")) == "ok"
         and all(pd.notna(pd.to_numeric(selected.get(col), errors="coerce")) for col in CORE_COLS)
@@ -296,8 +298,7 @@ def replay_nyc_order_case(case: dict[str, Any]) -> dict[str, Any]:
     would_execute_without_prior_duplicate = bool(
         parity_ok
         and research.ASK_MIN <= float(selected["ask"]) <= research.ASK_CAPS["relaxed70"]
-        and soft_shares >= 5.0
-        and float(selected["ask_size"]) >= soft_shares
+        and live_order_shares >= 5.0
         and str(selected["token_id"])
     )
     return {
@@ -331,6 +332,11 @@ def replay_nyc_order_case(case: dict[str, Any]) -> dict[str, Any]:
         "soft_balanced": float(selected.get("soft_balanced")),
         "soft_notional_usd": soft_notional,
         "soft_shares": soft_shares,
+        "live_order_shares": live_order_shares,
+        "live_order_notional_usd": live_order_notional,
+        "live_order_clamped_by_top_ask": bool(
+            math.isfinite(live_order_shares) and math.isfinite(soft_shares) and live_order_shares < soft_shares
+        ),
         "live_feature_parity_ok": parity_ok,
         "would_execute_without_prior_duplicate": would_execute_without_prior_duplicate,
         "would_execute_with_existing_duplicate": False,

@@ -249,6 +249,14 @@ def safe_float(value: Any, default: float = math.nan) -> float:
     return out if math.isfinite(out) else default
 
 
+def clamp_order_shares_to_top_ask(soft_shares: Any, ask_size: Any) -> float:
+    target = safe_float(soft_shares)
+    available = safe_float(ask_size)
+    if not math.isfinite(target) or not math.isfinite(available):
+        return math.nan
+    return min(target, available)
+
+
 def native_value(temp_c: float, unit: str) -> float:
     return temp_c * 9.0 / 5.0 + 32.0 if str(unit).upper() == "F" else temp_c
 
@@ -1071,12 +1079,22 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["soft_temp_context_medium_shadow_shares"] = selected[
             "soft_temp_context_medium_shadow_notional_usd"
         ] / pd.to_numeric(selected["ask"], errors="coerce")
-        selected["ask_notional"] = pd.to_numeric(selected["ask"], errors="coerce") * pd.to_numeric(selected["ask_size"], errors="coerce")
+        ask_num = pd.to_numeric(selected["ask"], errors="coerce")
+        ask_size_num = pd.to_numeric(selected["ask_size"], errors="coerce")
+        soft_shares_num = pd.to_numeric(selected["soft_shares"], errors="coerce")
+        selected["ask_notional"] = ask_num * ask_size_num
+        selected["live_order_shares"] = [
+            clamp_order_shares_to_top_ask(soft_shares, ask_size)
+            for soft_shares, ask_size in zip(soft_shares_num, ask_size_num)
+        ]
+        selected["live_order_notional_usd"] = selected["live_order_shares"] * ask_num
+        selected["live_order_clamped_by_top_ask"] = (
+            soft_shares_num.notna() & ask_size_num.notna() & ask_size_num.lt(soft_shares_num)
+        )
         selected["execution_eligible"] = (
-            pd.to_numeric(selected["ask"], errors="coerce").ge(research.ASK_MIN)
+            ask_num.ge(research.ASK_MIN)
             & selected["route_price_ok"].astype(bool)
-            & pd.to_numeric(selected["soft_shares"], errors="coerce").ge(float(args.min_order_shares))
-            & pd.to_numeric(selected["ask_size"], errors="coerce").ge(pd.to_numeric(selected["soft_shares"], errors="coerce"))
+            & pd.to_numeric(selected["live_order_shares"], errors="coerce").ge(float(args.min_order_shares))
             & selected["token_id"].astype(str).ne("")
             & selected["live_feature_parity_ok"].astype(bool)
             & selected["current_no_peak_clock_ok"].astype(bool)
@@ -1091,14 +1109,17 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             ask = safe_float(row.get("ask"))
             soft_shares = safe_float(row.get("soft_shares"))
             ask_size = safe_float(row.get("ask_size"))
+            live_order_shares = safe_float(row.get("live_order_shares"))
             if math.isfinite(ask) and ask < research.ASK_MIN:
                 reasons.append("ask_below_min")
             if not bool(row.get("route_price_ok", True)):
                 reasons.append("ask_above_route_price_cap")
             if math.isfinite(soft_shares) and soft_shares < float(args.min_order_shares):
                 reasons.append("soft_size_below_min_shares")
-            if math.isfinite(ask_size) and math.isfinite(soft_shares) and ask_size < soft_shares:
-                reasons.append("insufficient_top_ask_size")
+            elif math.isfinite(ask_size) and ask_size < float(args.min_order_shares):
+                reasons.append("top_ask_size_below_min_shares")
+            elif not math.isfinite(live_order_shares):
+                reasons.append("missing_live_order_size")
             if str(row.get("token_id") or "") == "":
                 reasons.append("missing_token_id")
             if not bool(row.get("live_feature_parity_ok")):
@@ -1170,6 +1191,9 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "row_risk_soft_v1": row.get("row_risk_soft_v1"),
         "soft_notional_usd": row.get("soft_notional_usd"),
         "soft_shares": row.get("soft_shares"),
+        "live_order_shares": row.get("live_order_shares"),
+        "live_order_notional_usd": row.get("live_order_notional_usd"),
+        "live_order_clamped_by_top_ask": row.get("live_order_clamped_by_top_ask"),
         "route_price_cap": row.get("route_price_cap"),
         "route_price_ok": row.get("route_price_ok"),
         "wind_only_multiplier_shadow": row.get("wind_only_multiplier_shadow"),
@@ -1274,7 +1298,9 @@ def write_candidate_audit(candidates: pd.DataFrame, meta: dict[str, Any]) -> tup
 def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[str, Any]:
     ask = safe_float(row.get("ask"))
     soft_notional = safe_float(row.get("soft_notional_usd"))
-    size = safe_float(row.get("soft_shares"))
+    soft_shares = safe_float(row.get("soft_shares"))
+    size = safe_float(row.get("live_order_shares"), soft_shares)
+    live_notional = safe_float(row.get("live_order_notional_usd"), size * ask)
     expires_at = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() + ttl_min * 60.0, tz=timezone.utc)
     signal_base = {
         "strategy_id": STRATEGY_ID,
@@ -1306,7 +1332,7 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "entry_profile": str(row.get("day_regime") or ""),
         "expression": str(row.get("expression") or ""),
         "route_leg": str(row.get("route_leg") or ""),
-        "execution_mode": "tiny_live_taker_skip_below_min_shares",
+        "execution_mode": "tiny_live_taker_clamp_top_ask_skip_below_min_shares",
         "profile": "route_price_disciplined_no_pullback_row_risk_soft",
         "combo": RULE_ID,
         "city": str(row.get("city") or ""),
@@ -1341,7 +1367,7 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "maker_only": False,
         "notional_fraction": 1.0,
         "size_multiplier": round(safe_float(row.get("row_risk_soft_v1"), 0.0), 6),
-        "order_notional_cap": round(soft_notional, 6),
+        "order_notional_cap": round(live_notional, 6),
         "entry_price_window": "0.10-0.70",
         "execution_policy": "regime_routed_no_taker_v1",
         "tick_size": 0.001,
@@ -1349,7 +1375,7 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "fixed_order_shares": 0.0,
         "max_order_shares": round(size, 6),
         "size": round(size, 6),
-        "notional": round(size * ask, 6),
+        "notional": round(live_notional, 6),
         "edge": 0.0,
         "min_edge": 0.0,
         "paper_enabled": True,
@@ -1381,7 +1407,10 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "soft_temp_context_medium_shadow": round(safe_float(row.get("soft_temp_context_medium_shadow"), 0.0), 6),
         "base_notional_usd": round(safe_float(row.get("base_notional_usd"), 0.0), 6),
         "soft_notional_usd": round(soft_notional, 6),
-        "soft_shares": round(size, 6),
+        "soft_shares": round(soft_shares, 6),
+        "live_order_shares": round(size, 6),
+        "live_order_notional_usd": round(live_notional, 6),
+        "live_order_clamped_by_top_ask": bool(row.get("live_order_clamped_by_top_ask")),
         "soft_wind_only_shadow_notional_usd": round(safe_float(row.get("soft_wind_only_shadow_notional_usd"), 0.0), 6),
         "soft_wind_only_shadow_shares": round(safe_float(row.get("soft_wind_only_shadow_shares"), 0.0), 6),
         "soft_wind_context_shadow_notional_usd": round(safe_float(row.get("soft_wind_context_shadow_notional_usd"), 0.0), 6),
@@ -1456,7 +1485,7 @@ def write_plans(candidates: pd.DataFrame, args: argparse.Namespace) -> list[dict
         key = (str(row.get("city") or ""), str(row.get("target_date") or ""), str(row.get("token_id") or ""))
         if key in prior_keys:
             continue
-        cost = safe_float(row.get("soft_notional_usd"), 0.0)
+        cost = safe_float(row.get("live_order_notional_usd"), safe_float(row.get("soft_notional_usd"), 0.0))
         target_date = str(row.get("target_date") or "")
         running_spent = running_spent_by_date.get(target_date, 0.0)
         if running_spent + cost > float(args.daily_gross_cap) + 1e-9:
@@ -1554,11 +1583,16 @@ def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -
         weight = pd.to_numeric(candidates[weight_col], errors="coerce").fillna(0).clip(lower=0)
         notional = base_notional * weight
         shares = notional / ask
+        ask_size = pd.to_numeric(candidates["ask_size"], errors="coerce")
+        executable_shares = pd.Series(
+            np.where(shares.notna() & ask_size.notna(), np.minimum(shares, ask_size), np.nan),
+            index=candidates.index,
+        )
+        executable_notional = executable_shares * ask
         executable = (
             ask.ge(research.ASK_MIN)
             & candidates["route_price_ok"].fillna(False).astype(bool)
-            & shares.ge(float(min_order_shares))
-            & pd.to_numeric(candidates["ask_size"], errors="coerce").ge(shares)
+            & executable_shares.ge(float(min_order_shares))
             & candidates["token_id"].astype(str).ne("")
             & candidates["live_feature_parity_ok"].astype(bool)
             & candidates["current_no_peak_clock_ok"].astype(bool)
@@ -1571,7 +1605,7 @@ def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -
             "avg_weight": round(float(weight.mean()), 6) if len(weight) else 0.0,
             "shadow_notional_usd": round(float(notional.sum()), 6),
             "shadow_executable_rows": int(executable.sum()),
-            "shadow_executable_notional_usd": round(float(notional[executable].sum()), 6),
+            "shadow_executable_notional_usd": round(float(executable_notional[executable].sum()), 6),
         }
     return out
 
