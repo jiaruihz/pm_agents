@@ -1,7 +1,7 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-30 historical forecast station bias v1
+Updated: 2026-06-30 forecast-bias tail reversal expression selector v1
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -109,6 +109,7 @@ Status 口径：
 | [2026-06-30-strategy-regime-city-fit-overlay-v1.md](analysis/2026-06/2026-06-30-strategy-regime-city-fit-overlay-v1.md) | `snapshot` | 把 city/source forecast-bias fit 接到 current NO、higher NO、current YES 的 route/regime replay：selected current NO 在 hot-underforecast-clean 城市表现较好，但 raw matrix 显示城市分类本身不是 alpha；结论是作为 shadow selection/sizing feature，不作 live hard gate |
 | [2026-06-30-strategy-city-fit-soft-sizing-v2.md](analysis/2026-06/2026-06-30-strategy-city-fit-soft-sizing-v2.md) | `snapshot` | 用每笔实际 forecast source 的 city/model 偏移，对比当前在跑 `regime_routed_no_route_price_disciplined_tiny_live_v1` row-risk-soft 与 city-fit soft sizing overlay：同分母 283 笔总 ROI 小幅改善但 2026-06-21 后 forward 变弱；只建议 shadow 记录，不改 live |
 | [2026-06-30-strategy-expression-stability-v1.md](analysis/2026-06/2026-06-30-strategy-expression-stability-v1.md) | `snapshot` | 拆当前策略各 expression 的稳定性、日块 bootstrap CI 和 `current_high_yes` vs 同触发点 `d1 NO` 反事实：current-NO 是主要贡献，d2-NO ROI 薄，current-high YES 样本太少；d1 NO 同点更像 peak-fade 表达但全量不稳，需 shadow 表达选择器，不直接改 live |
+| [2026-06-30-forecast-bias-tail-reversal-expression-selector-v1.md](analysis/2026-06/2026-06-30-forecast-bias-tail-reversal-expression-selector-v1.md) | `snapshot` | 独立 `forecast_bias_tail_reversal_v1` research head：固定同一 city-date-decision snapshot 比较 current_high_yes / d1 NO / d2 NO / high-tail YES proxy / current_bracket NO，并接 city+model station-vs-forecast bias 与 day/intraday/moisture/wind regime；selector 全样本 ROI -17.2%、forward 相对 train-best static current_high_yes excess -34.5% CI [-44.1%, -15.9%]，三门 FAIL，结论 `inconclusive`，不改 live、不接 current runner |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) | `current-reference` | 概率模型从 M0 可观测骨架到 lead-time/ensemble/ML 的路线图 |
 | [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | `design-draft` | 城市/日组合优化器目标、约束、分布和 tail 风险怎么设计 |
 | [WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) | `snapshot` | 2026-06-05 blend model 实施计划背景，当前结论以 edge engine current state 为准 |
