@@ -1,11 +1,11 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-06-30 current-NO overconfidence reversal v1
+Updated: 2026-07-01 current-NO overconfidence reversal v2
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-06-30
+更新时间：2026-07-01
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -112,6 +112,7 @@ Status 口径：
 | [2026-06-30-forecast-bias-tail-reversal-expression-selector-v1.md](analysis/2026-06/2026-06-30-forecast-bias-tail-reversal-expression-selector-v1.md) | `snapshot` | 独立 `forecast_bias_tail_reversal_v1` research head：固定同一 city-date-decision snapshot 比较 current_high_yes / d1 NO / d2 NO / high-tail YES proxy / current_bracket NO，并接 city+model station-vs-forecast bias 与 day/intraday/moisture/wind regime；selector 全样本 ROI -17.2%、forward 相对 train-best static current_high_yes excess -34.5% CI [-44.1%, -15.9%]，三门 FAIL，结论 `inconclusive`，不改 live、不接 current runner |
 | [2026-06-30-high-price-forecast-bias-reversal-cases-v1.md](analysis/2026-06/2026-06-30-high-price-forecast-bias-reversal-cases-v1.md) | `snapshot` | 修正后的高价 YES/NO 反转 case-mining：固定 generated expression matrix 的 city-hour decision state，统计 ask>=0.70/0.80/0.90 高置信 token 买入会输的模式；ask>=0.70 下高价 current_high YES 反转率 10.9%、高价 NO 反转率 9.0%，current_bracket NO 反转率最高 47.0%；结论 `inconclusive / case-mining-only`，下一步是分头建模 `P(high token loses | market high ask, forecast/obs/regime conflict)`，不是 selector 或 live 规则 |
 | [2026-06-30-current-no-overconfidence-reversal-v1.md](analysis/2026-06/2026-06-30-current-no-overconfidence-reversal-v1.md) | `snapshot` | 独立 high-price reversal research head：研究 high current_bracket NO 过度自信时反手买 current_high YES；train-only 最佳规则 `no_ask>=0.70 & yes_ask<=0.50 & forecast_error_native>=0`，train 64 rows/19 dates ROI +50.7% CI [+4.1%, +95.8%]，同分母 excess vs current-NO +100.2% CI [+29.1%, +167.7%]；holdout 20 rows/7 dates ROI +34.2% 但 CI [-54.1%, +110.2%]，recent 4 rows/2 dates ROI +131.9%；结论 `shadow_candidate_keep_collecting`，不改 live、不接 runner，下一步 zero-notional forward telemetry + fresh-book/depth 验证 |
+| [2026-07-01-current-no-overconfidence-reversal-v2.md](analysis/2026-07/2026-07-01-current-no-overconfidence-reversal-v2.md) | `snapshot` | Frozen v1 rule 的可执行化收益压力测试：`current_bracket_no_ask>=0.70 && current_high_yes_ask<=0.50 && forecast_error_native>=0`，一城一日第一触发口径 43 trades/26 active dates/20 cities，avg YES ask 0.402，win 58.1%，ROI +47.9% CI [+8.6%, +85.2%]，同分母 current-NO baseline -47.0%、excess +94.8%；holdout 11 trades/7 dates ROI +64.3% 但 CI [-30.2%, +140.1%]；预期 `$5/signal` 下约 1.65 trades/active day、投入 $8.27/day、full-window +$3.96/day、holdout +$5.05/day。结论 `shadow_candidate_keep_collecting`，不 live；expression matrix 仍只覆盖 2026-05-19..2026-06-23，需 fresh forward telemetry/depth |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) | `current-reference` | 概率模型从 M0 可观测骨架到 lead-time/ensemble/ML 的路线图 |
 | [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | `design-draft` | 城市/日组合优化器目标、约束、分布和 tail 风险怎么设计 |
 | [WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) | `snapshot` | 2026-06-05 blend model 实施计划背景，当前结论以 edge engine current state 为准 |
