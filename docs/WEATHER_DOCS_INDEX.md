@@ -105,6 +105,7 @@ Status 口径：
 | [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | `current-source` | weather_edge_engine 当前接手入口：blender shadow/paper 与 city-day basket 下一步 |
 | [WEATHER_PROBABILITY_MODEL_REVIEW.md](WEATHER_PROBABILITY_MODEL_REVIEW.md) | `current-reference` | 生产 baseline `model_p_yes` 的问题、条件模型缺口、季节/forecast jump 风险 |
 | [2026-06-30-historical-forecast-station-bias-v1.md](analysis/2026-06/2026-06-30-historical-forecast-station-bias-v1.md) | `snapshot` | 复现早期 mid-price/probability-model 的历史 station-vs-forecast 误差层：`actual daily max - forecast daily max`，覆盖 42,705 条 city-date-model rows；用于 city/source forecast margin、正尾风险和 NO 被打穿风险解释，不是 live gate |
+| [2026-06-30-city-strategy-fit-by-forecast-bias-v1.md](analysis/2026-06/2026-06-30-city-strategy-fit-by-forecast-bias-v1.md) | `snapshot` | 基于历史 station-vs-forecast 偏移给城市/模型做策略适配分类：hot-underforecast 更适合 current-bracket NO / hot-break YES，cold-overforecast 更适合 capped higher NO / peak-fade YES；这是 calibration/selection feature，不是城市硬 gate |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) | `current-reference` | 概率模型从 M0 可观测骨架到 lead-time/ensemble/ML 的路线图 |
 | [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | `design-draft` | 城市/日组合优化器目标、约束、分布和 tail 风险怎么设计 |
 | [WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) | `snapshot` | 2026-06-05 blend model 实施计划背景，当前结论以 edge engine current state 为准 |
