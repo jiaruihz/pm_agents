@@ -1,0 +1,79 @@
+{
+  "journal": "runtime/weather_edge_v1/low_price_yes_lottery_reversal_v1/shadow_candidates.jsonl",
+  "clob_base": "https://clob.polymarket.com",
+  "market_api_calls": 32,
+  "market_api_errors": [],
+  "summary": {
+    "rows": 32,
+    "settled_rows": 32,
+    "open_rows": 0,
+    "dates": 3,
+    "cities": 23,
+    "avg_ask": 0.0581875,
+    "win_rate": 0.09375,
+    "cost": 160.0,
+    "pnl": 51.666903734610315,
+    "roi": 0.3229181483413145,
+    "roi_ci_low": -0.6428571428571428,
+    "roi_ci_high": 8.661835748792269,
+    "losing_days": 2,
+    "roi_le_minus_50_days": 1,
+    "max_daily_loss": -51.42857142857143,
+    "top_trade_removed_roi": -0.569423435466282,
+    "top_trade_removed_pnl": -88.26063249727372,
+    "winners": [
+      {
+        "target_date": "2026-06-30",
+        "city": "Beijing",
+        "bracket": "30",
+        "ask": 0.0345,
+        "pnl": 139.92753623188403
+      },
+      {
+        "target_date": "2026-06-28",
+        "city": "Shanghai",
+        "bracket": "30",
+        "ask": 0.131,
+        "pnl": 33.167938931297705
+      },
+      {
+        "target_date": "2026-06-27",
+        "city": "Jeddah",
+        "bracket": "39+",
+        "ask": 0.175,
+        "pnl": 23.571428571428573
+      }
+    ],
+    "daily": [
+      {
+        "target_date": "2026-06-27",
+        "rows": 16,
+        "wins": 1,
+        "cost": 80.0,
+        "pnl": -51.42857142857143,
+        "roi": -0.6428571428571429
+      },
+      {
+        "target_date": "2026-06-28",
+        "rows": 13,
+        "wins": 1,
+        "cost": 65.0,
+        "pnl": -26.832061068702295,
+        "roi": -0.41280093951849683
+      },
+      {
+        "target_date": "2026-06-30",
+        "rows": 3,
+        "wins": 1,
+        "cost": 15.0,
+        "pnl": 129.92753623188403,
+        "roi": 8.661835748792269
+      }
+    ]
+  },
+  "artifacts": {
+    "details_csv": "docs/analysis/2026-07/generated/low_price_yes_lottery_shadow_v1/settlement_details.csv",
+    "daily_csv": "docs/analysis/2026-07/generated/low_price_yes_lottery_shadow_v1/settlement_daily.csv",
+    "summary_json": "docs/analysis/2026-07/generated/low_price_yes_lottery_shadow_v1/settlement_summary.json"
+  }
+}

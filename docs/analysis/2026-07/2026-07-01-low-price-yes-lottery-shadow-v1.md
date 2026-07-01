@@ -84,3 +84,51 @@ Before even discussing tiny live, this head needs:
 - execution feasibility check on real depth/spread if it survives settlement.
 
 Current action: keep collecting shadow only.
+
+## Forward Settlement Check - 2026-07-01
+
+Canonical `settlements` / `settlement_outcomes` still only cover through 2026-06-26 after N100 sync + DB rebuild, so this check uses a research-only CLOB market overlay keyed by the journaled `condition_id`. It does not write canonical settlement tables.
+
+Evaluator:
+
+```bash
+.venv/bin/python scripts/analysis/forecast_quality/evaluate_low_price_yes_lottery_shadow_settlement_v1.py
+```
+
+All 32 journaled rows are now closed on the CLOB market API.
+
+| Metric | Value |
+|---|---:|
+| settled rows | 32 |
+| dates / cities | 3 / 23 |
+| avg ask | 0.0582 |
+| wins | 3 |
+| win rate | 9.4% |
+| hypothetical cost | $160.00 |
+| PnL | +$51.67 |
+| ROI | +32.3% |
+| date-block CI | [-64.3%, +866.2%] |
+| losing days | 2 / 3 |
+| <= -50% days | 1 / 3 |
+| max daily loss | -$51.43 |
+| top trade removed ROI | -56.9% |
+
+Daily:
+
+| target_date | rows | wins | cost | PnL | ROI |
+|---|---:|---:|---:|---:|---:|
+| 2026-06-27 | 16 | 1 | $80.00 | -$51.43 | -64.3% |
+| 2026-06-28 | 13 | 1 | $65.00 | -$26.83 | -41.3% |
+| 2026-06-30 | 3 | 1 | $15.00 | +$129.93 | +866.2% |
+
+Winners:
+
+| target_date | city | bracket | ask | PnL |
+|---|---|---:|---:|---:|
+| 2026-06-30 | Beijing | 30 | 0.0345 | +$139.93 |
+| 2026-06-28 | Shanghai | 30 | 0.1310 | +$33.17 |
+| 2026-06-27 | Jeddah | 39+ | 0.1750 | +$23.57 |
+
+Interpretation: the first true forward settlement is directionally supportive because it stayed positive out-of-sample, but it is not robust evidence. The result is dominated by one 3.45c Beijing YES; removing the top trade turns ROI to -56.9%. This confirms the payoff shape is genuinely lottery-like: small daily losses are expected, and a small number of tail hits determines PnL.
+
+Updated conclusion remains `shadow_candidate_keep_collecting`, not live.
