@@ -536,6 +536,107 @@ def current_no_runway_state_ok(row: dict[str, Any] | pd.Series) -> bool:
     }
 
 
+def add_reversal_shadow_fields(frame: pd.DataFrame) -> pd.DataFrame:
+    """Attach zero-notional inverse-current-YES telemetry for current-NO rows."""
+    if frame.empty:
+        return frame
+    out = frame.copy()
+    nan_series = pd.Series(np.nan, index=out.index)
+    current_yes_ask = pd.to_numeric(out["current_yes_ask"] if "current_yes_ask" in out else nan_series, errors="coerce")
+    current_yes_ask_size = pd.to_numeric(
+        out["current_yes_ask_size"] if "current_yes_ask_size" in out else nan_series,
+        errors="coerce",
+    )
+    current_no_ask = pd.to_numeric(out["current_no_ask"] if "current_no_ask" in out else out["ask"], errors="coerce")
+    is_current_no = out["expression"].astype(str).eq("current_bracket_no")
+    low_runway_or_capped = out["day_regime"].astype(str).isin({"day_forecast_capped", "day_forecast_busted"}) | pd.to_numeric(
+        out["forecast_gap_to_running_native"] if "forecast_gap_to_running_native" in out else nan_series,
+        errors="coerce",
+    ).le(1.0)
+    conflicted_state = (
+        out.get("intraday_state", pd.Series("", index=out.index))
+        .astype(str)
+        .isin({"pullback_uncertain", "false_fade_risk", "mature_fade", "plateau_near_high", "stalled_high"})
+        | out.get("running_max_state", pd.Series("", index=out.index))
+        .astype(str)
+        .isin({"pullback_from_high", "mature_fade", "stale_running_high"})
+    )
+    high_current_no_inverse = (
+        is_current_no
+        & current_no_ask.ge(0.70)
+        & current_yes_ask.le(0.50)
+        & low_runway_or_capped
+    )
+    pullback_uncertain_inverse = (
+        is_current_no
+        & out["intraday_state"].astype(str).eq("pullback_uncertain")
+        & current_yes_ask.between(0.50, 0.90, inclusive="both")
+        & current_no_ask.ge(0.40)
+    )
+    labels = np.select(
+        [pullback_uncertain_inverse, high_current_no_inverse],
+        ["expanded_pullback_uncertain_current_high_yes", "high_current_no_reverse_current_yes"],
+        default="",
+    )
+    reasons = np.select(
+        [pullback_uncertain_inverse, high_current_no_inverse],
+        [
+            "already_printed_or_pulled_back_high_same_bracket_hold_revisit_risk",
+            "high_current_no_low_current_yes_capped_or_low_runway_conflict",
+        ],
+        default="",
+    )
+    out["reversal_shadow_label"] = labels
+    out["reversal_shadow_reason"] = reasons
+    out["reversal_shadow_expression"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), "current_high_yes", "")
+    out["reversal_shadow_ask"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), current_yes_ask, np.nan)
+    out["reversal_shadow_ask_size"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), current_yes_ask_size, np.nan)
+    out["reversal_shadow_bid"] = np.where(
+        out["reversal_shadow_label"].astype(str).ne(""),
+        pd.to_numeric(out["current_yes_bid"] if "current_yes_bid" in out else nan_series, errors="coerce"),
+        np.nan,
+    )
+    out["reversal_shadow_token_id"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), out.get("current_yes_token_id", ""), "")
+    out["reversal_shadow_market_id"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), out.get("current_yes_market_id", ""), "")
+    out["reversal_shadow_event_slug"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), out.get("current_yes_event_slug", ""), "")
+    out["reversal_shadow_question"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), out.get("current_yes_question", ""), "")
+    out["reversal_shadow_market_event_date"] = np.where(
+        out["reversal_shadow_label"].astype(str).ne(""),
+        out.get("current_yes_market_event_date", ""),
+        "",
+    )
+    out["reversal_shadow_market_date_match"] = np.where(
+        out["reversal_shadow_label"].astype(str).ne(""),
+        out.get("current_yes_market_date_match", False),
+        False,
+    )
+    out["reversal_shadow_original_expression"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), "current_bracket_no", "")
+    out["reversal_shadow_original_ask"] = np.where(out["reversal_shadow_label"].astype(str).ne(""), current_no_ask, np.nan)
+    out["reversal_shadow_notional_usd"] = 0.0
+    out["reversal_shadow_live_order_allowed"] = False
+    out["reversal_shadow_policy"] = np.where(
+        out["reversal_shadow_label"].astype(str).ne(""),
+        "zero_notional_wrong_way_detector_only",
+        "",
+    )
+    out["reversal_shadow_pit_state"] = np.select(
+        [
+            out["reversal_shadow_label"].astype(str).eq("expanded_pullback_uncertain_current_high_yes"),
+            high_current_no_inverse & low_runway_or_capped & conflicted_state,
+            high_current_no_inverse & low_runway_or_capped,
+            high_current_no_inverse & conflicted_state,
+        ],
+        [
+            "pullback_uncertain",
+            "low_runway_and_conflicted",
+            "capped_or_low_runway",
+            "conflicted",
+        ],
+        default="",
+    )
+    return out
+
+
 def route_price_cap(route_leg: Any) -> float:
     return float(ROUTE_PRICE_CAPS.get(str(route_leg or ""), research.ASK_CAPS["relaxed70"]))
 
@@ -972,6 +1073,13 @@ def build_city_state(
                 "current_bracket": str(row["bracket"]),
                 "current_yes_ask": row["book_ask"],
                 "current_yes_ask_size": row["book_ask_size"],
+                "current_yes_bid": row["book_bid"],
+                "current_yes_token_id": row["book_token_id"],
+                "current_yes_market_id": str(row.get("market_id") or ""),
+                "current_yes_event_slug": str(row.get("event_slug") or ""),
+                "current_yes_question": str(row.get("question") or ""),
+                "current_yes_market_event_date": str(row.get("book_market_event_date") or ""),
+                "current_yes_market_date_match": bool(row.get("book_market_date_match")),
             }
         )
     if not cur_no.empty:
@@ -1224,6 +1332,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["market_date_match_ok"] = (
             selected.get("market_date_match", pd.Series(False, index=selected.index)).fillna(False).astype(bool)
         )
+        selected = add_reversal_shadow_fields(selected)
         selected["current_no_runway_state_ok"] = selected.apply(current_no_runway_state_ok, axis=1).fillna(False).astype(bool)
         selected["route_price_cap"] = selected["route_leg"].map(ROUTE_PRICE_CAPS).astype(float)
         selected["route_price_ok"] = pd.to_numeric(selected["ask"], errors="coerce").le(selected["route_price_cap"])
@@ -1364,6 +1473,17 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "ask": row.get("ask"),
         "bid": row.get("bid"),
         "ask_size": row.get("ask_size"),
+        "current_yes_ask": row.get("current_yes_ask"),
+        "current_yes_ask_size": row.get("current_yes_ask_size"),
+        "current_yes_bid": row.get("current_yes_bid"),
+        "current_yes_token_id": row.get("current_yes_token_id"),
+        "current_yes_market_id": row.get("current_yes_market_id"),
+        "current_yes_event_slug": row.get("current_yes_event_slug"),
+        "current_yes_question": row.get("current_yes_question"),
+        "current_yes_market_event_date": row.get("current_yes_market_event_date"),
+        "current_yes_market_date_match": row.get("current_yes_market_date_match"),
+        "current_no_ask": row.get("current_no_ask"),
+        "current_no_ask_size": row.get("current_no_ask_size"),
         "token_id": row.get("token_id"),
         "market_id": row.get("market_id"),
         "event_slug": row.get("event_slug"),
@@ -1399,6 +1519,24 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "tail_yes_shadow_market_id": row.get("tail_yes_shadow_market_id"),
         "tail_yes_shadow_event_slug": row.get("tail_yes_shadow_event_slug"),
         "tail_yes_shadow_question": row.get("tail_yes_shadow_question"),
+        "reversal_shadow_label": row.get("reversal_shadow_label"),
+        "reversal_shadow_reason": row.get("reversal_shadow_reason"),
+        "reversal_shadow_expression": row.get("reversal_shadow_expression"),
+        "reversal_shadow_ask": row.get("reversal_shadow_ask"),
+        "reversal_shadow_ask_size": row.get("reversal_shadow_ask_size"),
+        "reversal_shadow_bid": row.get("reversal_shadow_bid"),
+        "reversal_shadow_token_id": row.get("reversal_shadow_token_id"),
+        "reversal_shadow_market_id": row.get("reversal_shadow_market_id"),
+        "reversal_shadow_event_slug": row.get("reversal_shadow_event_slug"),
+        "reversal_shadow_question": row.get("reversal_shadow_question"),
+        "reversal_shadow_market_event_date": row.get("reversal_shadow_market_event_date"),
+        "reversal_shadow_market_date_match": row.get("reversal_shadow_market_date_match"),
+        "reversal_shadow_original_expression": row.get("reversal_shadow_original_expression"),
+        "reversal_shadow_original_ask": row.get("reversal_shadow_original_ask"),
+        "reversal_shadow_notional_usd": row.get("reversal_shadow_notional_usd"),
+        "reversal_shadow_live_order_allowed": row.get("reversal_shadow_live_order_allowed"),
+        "reversal_shadow_policy": row.get("reversal_shadow_policy"),
+        "reversal_shadow_pit_state": row.get("reversal_shadow_pit_state"),
         "soft_notional_usd": row.get("soft_notional_usd"),
         "soft_shares": row.get("soft_shares"),
         "live_order_shares": row.get("live_order_shares"),
@@ -1625,6 +1763,21 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "tail_yes_shadow_bid": safe_float(row.get("tail_yes_shadow_bid"), None),
         "tail_yes_shadow_ask_size": safe_float(row.get("tail_yes_shadow_ask_size"), None),
         "tail_yes_shadow_token_id": str(row.get("tail_yes_shadow_token_id") or ""),
+        "reversal_shadow_label": str(row.get("reversal_shadow_label") or ""),
+        "reversal_shadow_reason": str(row.get("reversal_shadow_reason") or ""),
+        "reversal_shadow_expression": str(row.get("reversal_shadow_expression") or ""),
+        "reversal_shadow_ask": safe_float(row.get("reversal_shadow_ask"), None),
+        "reversal_shadow_bid": safe_float(row.get("reversal_shadow_bid"), None),
+        "reversal_shadow_ask_size": safe_float(row.get("reversal_shadow_ask_size"), None),
+        "reversal_shadow_token_id": str(row.get("reversal_shadow_token_id") or ""),
+        "reversal_shadow_market_id": str(row.get("reversal_shadow_market_id") or ""),
+        "reversal_shadow_event_slug": str(row.get("reversal_shadow_event_slug") or ""),
+        "reversal_shadow_market_event_date": str(row.get("reversal_shadow_market_event_date") or ""),
+        "reversal_shadow_market_date_match": bool(row.get("reversal_shadow_market_date_match")),
+        "reversal_shadow_notional_usd": round(safe_float(row.get("reversal_shadow_notional_usd"), 0.0), 6),
+        "reversal_shadow_live_order_allowed": bool(row.get("reversal_shadow_live_order_allowed", False)),
+        "reversal_shadow_policy": str(row.get("reversal_shadow_policy") or ""),
+        "reversal_shadow_pit_state": str(row.get("reversal_shadow_pit_state") or ""),
         "route_price_cap": round(safe_float(row.get("route_price_cap"), 0.0), 6),
         "route_price_ok": bool(row.get("route_price_ok")),
         "wind_only_multiplier_shadow": round(safe_float(row.get("wind_only_multiplier_shadow"), 1.0), 6),
@@ -1873,6 +2026,16 @@ def main() -> int:
             .value_counts(dropna=False)
             .to_dict()
             if not candidates.empty
+            else {}
+        ),
+        "reversal_shadow_candidates": int(candidates["reversal_shadow_label"].astype(str).ne("").sum())
+        if (not candidates.empty and "reversal_shadow_label" in candidates)
+        else 0,
+        "reversal_shadow_by_label": (
+            candidates[candidates["reversal_shadow_label"].astype(str).ne("")]["reversal_shadow_label"]
+            .value_counts(dropna=False)
+            .to_dict()
+            if (not candidates.empty and "reversal_shadow_label" in candidates)
             else {}
         ),
         "city_source_bias_file": str(HIST_FORECAST_BIAS_SUMMARY.relative_to(ROOT)),
