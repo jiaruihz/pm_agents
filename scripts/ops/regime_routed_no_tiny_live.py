@@ -58,7 +58,7 @@ import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
 
 STRATEGY_ID = "regime_routed_no_tiny_live_v1"
 STRATEGY_INSTANCE = "regime_routed_no_route_price_disciplined_tiny_live_v1"
-RULE_ID = "route_price_disciplined_no_pullback_row_risk_soft_min5shares_v1"
+RULE_ID = "route_price_disciplined_no_pullback_row_risk_soft_weight_price_v2"
 RUNTIME_DIR = ROOT / "runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
@@ -1376,6 +1376,12 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         ask_num = pd.to_numeric(selected["ask"], errors="coerce")
         ask_size_num = pd.to_numeric(selected["ask_size"], errors="coerce")
         soft_shares_num = pd.to_numeric(selected["soft_shares"], errors="coerce")
+        soft_weight_num = pd.to_numeric(selected["row_risk_soft_v1"], errors="coerce")
+        selected["soft_weight_to_ask_ratio"] = soft_weight_num / ask_num
+        selected["min_soft_weight_to_ask_ratio"] = float(args.min_soft_weight_to_ask_ratio)
+        selected["soft_weight_price_quality_ok"] = pd.to_numeric(
+            selected["soft_weight_to_ask_ratio"], errors="coerce"
+        ).ge(float(args.min_soft_weight_to_ask_ratio))
         selected["ask_notional"] = ask_num * ask_size_num
         selected["live_order_shares"] = [
             clamp_order_shares_to_top_ask(soft_shares, ask_size)
@@ -1388,6 +1394,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["execution_eligible"] = (
             ask_num.ge(research.ASK_MIN)
             & selected["route_price_ok"].astype(bool)
+            & selected["soft_weight_price_quality_ok"].fillna(False).astype(bool)
             & pd.to_numeric(selected["live_order_shares"], errors="coerce").ge(float(args.min_order_shares))
             & selected["token_id"].astype(str).ne("")
             & selected["live_feature_parity_ok"].astype(bool)
@@ -1402,12 +1409,18 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             reasons: list[str] = []
             ask = safe_float(row.get("ask"))
             soft_shares = safe_float(row.get("soft_shares"))
+            soft_weight_ratio = safe_float(row.get("soft_weight_to_ask_ratio"))
             ask_size = safe_float(row.get("ask_size"))
             live_order_shares = safe_float(row.get("live_order_shares"))
             if math.isfinite(ask) and ask < research.ASK_MIN:
                 reasons.append("ask_below_min")
             if not bool(row.get("route_price_ok", True)):
                 reasons.append("ask_above_route_price_cap")
+            if not bool(row.get("soft_weight_price_quality_ok", False)):
+                if math.isfinite(soft_weight_ratio):
+                    reasons.append("soft_weight_to_ask_ratio_below_min")
+                else:
+                    reasons.append("missing_soft_weight_to_ask_ratio")
             if math.isfinite(soft_shares) and soft_shares < float(args.min_order_shares):
                 reasons.append("soft_size_below_min_shares")
             elif math.isfinite(ask_size) and ask_size < float(args.min_order_shares):
@@ -1539,6 +1552,9 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "reversal_shadow_pit_state": row.get("reversal_shadow_pit_state"),
         "soft_notional_usd": row.get("soft_notional_usd"),
         "soft_shares": row.get("soft_shares"),
+        "soft_weight_to_ask_ratio": row.get("soft_weight_to_ask_ratio"),
+        "min_soft_weight_to_ask_ratio": row.get("min_soft_weight_to_ask_ratio"),
+        "soft_weight_price_quality_ok": row.get("soft_weight_price_quality_ok"),
         "live_order_shares": row.get("live_order_shares"),
         "live_order_notional_usd": row.get("live_order_notional_usd"),
         "live_order_clamped_by_top_ask": row.get("live_order_clamped_by_top_ask"),
@@ -1747,6 +1763,9 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "legacy_soft_balanced_notional_usd": round(safe_float(row.get("legacy_soft_balanced_notional_usd"), 0.0), 6),
         "row_risk_soft_base_v1": round(safe_float(row.get("row_risk_soft_base_v1"), 0.0), 6),
         "row_risk_soft_v1": round(safe_float(row.get("row_risk_soft_v1"), 0.0), 6),
+        "soft_weight_to_ask_ratio": round(safe_float(row.get("soft_weight_to_ask_ratio"), 0.0), 6),
+        "min_soft_weight_to_ask_ratio": round(safe_float(row.get("min_soft_weight_to_ask_ratio"), 0.0), 6),
+        "soft_weight_price_quality_ok": bool(row.get("soft_weight_price_quality_ok", False)),
         "row_forecast_model": str(row.get("row_forecast_model") or ""),
         "city_source_bias_regime": str(row.get("city_source_bias_regime") or ""),
         "city_source_bias_multiplier_v1": round(safe_float(row.get("city_source_bias_multiplier_v1"), 1.0), 6),
@@ -1791,6 +1810,9 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "base_notional_usd": round(safe_float(row.get("base_notional_usd"), 0.0), 6),
         "soft_notional_usd": round(soft_notional, 6),
         "soft_shares": round(soft_shares, 6),
+        "soft_weight_to_ask_ratio": round(safe_float(row.get("soft_weight_to_ask_ratio"), 0.0), 6),
+        "min_soft_weight_to_ask_ratio": round(safe_float(row.get("min_soft_weight_to_ask_ratio"), 0.0), 6),
+        "soft_weight_price_quality_ok": bool(row.get("soft_weight_price_quality_ok", False)),
         "live_order_shares": round(size, 6),
         "live_order_notional_usd": round(live_notional, 6),
         "live_order_clamped_by_top_ask": bool(row.get("live_order_clamped_by_top_ask")),
@@ -1938,6 +1960,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-notional", type=float, default=5.0)
     parser.add_argument("--daily-gross-cap", type=float, default=5.0)
     parser.add_argument("--min-order-shares", type=float, default=5.0)
+    parser.add_argument("--min-soft-weight-to-ask-ratio", type=float, default=1.0)
     parser.add_argument("--min-current-no-escape-margin-native", type=float, default=0.0)
     parser.add_argument("--max-orders", type=int, default=1)
     parser.add_argument("--order-ttl-min", type=float, default=30.0)
@@ -2010,6 +2033,7 @@ def main() -> int:
         "base_notional": float(args.base_notional),
         "daily_gross_cap": float(args.daily_gross_cap),
         "min_order_shares": float(args.min_order_shares),
+        "min_soft_weight_to_ask_ratio": float(args.min_soft_weight_to_ask_ratio),
         "routed_candidates": int(len(candidates)),
         "execution_eligible": int(candidates["execution_eligible"].sum()) if not candidates.empty else 0,
         "shadow_only_candidates": int(candidates["shadow_only_route_leg"].sum()) if not candidates.empty else 0,

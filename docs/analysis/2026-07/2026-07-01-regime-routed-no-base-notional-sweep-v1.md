@@ -2,11 +2,11 @@
 
 ## Conclusion
 
-Increasing `base_N` mainly admits lower-weight rows that failed the 5-share minimum. Those incremental rows are not clearly better than the current executable core.
+Increasing `base_N` should not change the strategy denominator. The correct fix is to keep a fixed signal-quality gate, `city_bias_soft_weight / ask >= 1.0`, and leave the 5-share rule as execution plumbing.
 
-Verdict: `do_not_raise_for_edge; optional_probe_baseN_6_to_8_only_if_more_live_observations_are_worth_lower_expected_roi`.
+Verdict: `decouple_signal_quality_from_base_notional_with_weight_to_ask_ratio_gate`.
 
-Recommended live default remains `base_N=5`. If the goal is more live observations rather than immediate edge improvement, use only a small probe (`base_N=6`, at most `8`) and keep it explicitly labelled as a sizing probe.
+Recommended live default remains `base_N=5`. If notional is raised later, keep the fixed weight/price quality gate so lower-confidence rows do not enter only because the order size grew.
 
 ## Coverage
 
@@ -37,6 +37,30 @@ Recommended live default remains `base_N=5`. If the goal is more live observatio
 | $+10.00 | $+10.00 | 9.000 | 5.000 | 6.000 | +44.4% | 0.410 | $+4.10 | $+36.86 | $+5.85 | +15.9% | 1.000 |
 | $+12.00 | $+12.00 | 9.000 | 5.000 | 7.000 | +33.3% | 0.368 | $+4.41 | $+39.72 | $-4.17 | -10.5% | 2.000 |
 | $+15.00 | $+15.00 | 10.000 | 5.000 | 8.000 | +40.0% | 0.354 | $+5.31 | $+53.07 | $-3.12 | -5.9% | 1.000 |
+
+## Frozen Live-Like With Fixed Weight/Price Quality Gate
+
+| base_notional_usd | daily_cap_usd | rows | dates | cities | win_rate | avg_weight | avg_cost_usd | cost_usd | pnl_usd | roi | daily_negative_100pct |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| $+5.00 | $+5.00 | 42.000 | 31.000 | 22.000 | +47.6% | 0.477 | $+2.39 | $+100.20 | $+29.72 | +29.7% | 13.000 |
+| $+6.00 | $+6.00 | 42.000 | 31.000 | 22.000 | +47.6% | 0.477 | $+2.86 | $+120.24 | $+35.67 | +29.7% | 13.000 |
+| $+7.50 | $+7.50 | 42.000 | 31.000 | 22.000 | +47.6% | 0.477 | $+3.58 | $+150.30 | $+44.59 | +29.7% | 13.000 |
+| $+8.00 | $+8.00 | 42.000 | 31.000 | 22.000 | +47.6% | 0.477 | $+3.82 | $+160.32 | $+47.56 | +29.7% | 13.000 |
+| $+10.00 | $+10.00 | 42.000 | 31.000 | 22.000 | +47.6% | 0.477 | $+4.77 | $+200.40 | $+59.45 | +29.7% | 13.000 |
+| $+12.00 | $+12.00 | 42.000 | 31.000 | 22.000 | +47.6% | 0.477 | $+5.73 | $+240.48 | $+71.34 | +29.7% | 13.000 |
+| $+15.00 | $+15.00 | 42.000 | 31.000 | 22.000 | +47.6% | 0.477 | $+7.16 | $+300.61 | $+89.17 | +29.7% | 13.000 |
+
+## Frozen Forward With Fixed Weight/Price Quality Gate
+
+| base_notional_usd | daily_cap_usd | rows | dates | cities | win_rate | avg_weight | avg_cost_usd | cost_usd | pnl_usd | roi | daily_negative_100pct |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| $+5.00 | $+5.00 | 5.000 | 4.000 | 5.000 | +60.0% | 0.432 | $+2.16 | $+10.79 | $+7.50 | +69.5% | 1.000 |
+| $+6.00 | $+6.00 | 5.000 | 4.000 | 5.000 | +60.0% | 0.432 | $+2.59 | $+12.95 | $+9.00 | +69.5% | 1.000 |
+| $+7.50 | $+7.50 | 5.000 | 4.000 | 5.000 | +60.0% | 0.432 | $+3.24 | $+16.19 | $+11.25 | +69.5% | 1.000 |
+| $+8.00 | $+8.00 | 5.000 | 4.000 | 5.000 | +60.0% | 0.432 | $+3.45 | $+17.27 | $+12.01 | +69.5% | 1.000 |
+| $+10.00 | $+10.00 | 5.000 | 4.000 | 5.000 | +60.0% | 0.432 | $+4.32 | $+21.58 | $+15.01 | +69.5% | 1.000 |
+| $+12.00 | $+12.00 | 5.000 | 4.000 | 5.000 | +60.0% | 0.432 | $+5.18 | $+25.90 | $+18.01 | +69.5% | 1.000 |
+| $+15.00 | $+15.00 | 5.000 | 4.000 | 5.000 | +60.0% | 0.432 | $+6.48 | $+32.38 | $+22.51 | +69.5% | 1.000 |
 
 ## Incremental Rows Versus Base N = 5
 
@@ -86,11 +110,10 @@ Recommended live default remains `base_N=5`. If the goal is more live observatio
 
 ## Interpretation
 
-- `base_N=5` is conservative because many soft weights turn into fewer than 5 shares.
-- Moving to `6` adds a few rows, but their incremental ROI is weak/negative in the frozen replay and negative in the historical diagnostic.
-- Moving to `8` or `10` increases sample count, but the all-period ROI declines and the forward sample does not improve.
-- Keeping `daily_cap=5` while raising `base_N` is internally inconsistent: some high-weight rows become too large for the daily cap and are skipped.
-- Therefore the clean action is not to size up for edge. Size up only as a deliberately labelled observation probe.
+- The old executable definition used `base_N * weight / ask >= 5`; raising `base_N` mechanically lowers the required weight/price quality.
+- The fixed quality gate uses `weight / ask >= 1.0`, which reproduces the current `base_N=5` quality threshold and remains stable under future notional changes.
+- With that gate, raising `base_N` scales dollars on the same quality set instead of admitting weak rows.
+- The 5-share rule should remain only as execution plumbing for exchange/order-size constraints and top-of-book depth.
 
 ## Files
 

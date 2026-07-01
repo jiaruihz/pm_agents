@@ -85,19 +85,22 @@ def attach_sizing(frame: pd.DataFrame, *, base_n: float) -> pd.DataFrame:
     out["sim_cost_usd"] = float(base_n) * weight
     out["sim_shares"] = out["sim_cost_usd"] / ask
     out["sim_min5_executable"] = out["sim_shares"].ge(MIN_ORDER_SHARES) & payoff.notna()
+    out["sim_soft_weight_to_ask_ratio"] = weight / ask
+    out["sim_weight_price_quality_ok"] = out["sim_soft_weight_to_ask_ratio"].ge(1.0) & payoff.notna()
     out["sim_pnl_usd"] = np.where(payoff.eq(1.0), out["sim_cost_usd"] / ask - out["sim_cost_usd"], -out["sim_cost_usd"])
     return out
 
 
-def apply_daily_cap(frame: pd.DataFrame, *, cap_usd: float | None) -> pd.Series:
+def apply_daily_cap(frame: pd.DataFrame, *, cap_usd: float | None, base_mask_col: str = "sim_min5_executable") -> pd.Series:
+    base_mask = frame[base_mask_col].astype(bool)
     if cap_usd is None:
-        return frame["sim_min5_executable"].astype(bool)
+        return base_mask
     chosen: list[int] = []
     order_cols = ["target_date"]
     if "decision_snapshot_ts_utc" in frame.columns:
         order_cols.append("decision_snapshot_ts_utc")
     order_cols.append("city")
-    eligible = frame[frame["sim_min5_executable"].astype(bool)].sort_values(order_cols)
+    eligible = frame[base_mask].sort_values(order_cols)
     for _, group in eligible.groupby("target_date", sort=True):
         spent = 0.0
         for idx, row in group.iterrows():
@@ -177,8 +180,14 @@ def build_outputs(details: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, pd.Da
                 ("no_daily_cap_signal_quality", None),
                 ("daily_cap_equals_baseN_live_like", base_n),
                 ("daily_cap_fixed5_diagnostic", 5.0),
+                ("fixed_weight_price_quality_gate_daily_cap_equals_baseN", base_n),
             ]:
-                selected = apply_daily_cap(sized, cap_usd=cap)
+                base_mask_col = (
+                    "sim_weight_price_quality_ok"
+                    if cap_mode == "fixed_weight_price_quality_gate_daily_cap_equals_baseN"
+                    else "sim_min5_executable"
+                )
+                selected = apply_daily_cap(sized, cap_usd=cap, base_mask_col=base_mask_col)
                 for window, window_frame in [
                     ("all", sized),
                     (f"forward_{FORWARD_START}_plus", sized[sized["target_date"].astype(str).ge(FORWARD_START)]),
@@ -244,14 +253,21 @@ def build_outputs(details: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, pd.Da
         & sweep["cap_mode"].eq("daily_cap_equals_baseN_live_like")
         & sweep["window"].eq("all")
     ].copy()
+    fixed_quality = sweep[
+        sweep["evidence_layer"].eq("frozen_live_like_route_price")
+        & sweep["cap_mode"].eq("fixed_weight_price_quality_gate_daily_cap_equals_baseN")
+        & sweep["window"].eq("all")
+    ].copy()
     preferred = frozen_live_like[frozen_live_like["base_notional_usd"].isin([5.0, 6.0, 8.0, 10.0])].copy()
     verdict = {
-        "conclusion": "do_not_raise_for_edge; optional_probe_baseN_6_to_8_only_if_more_live_observations_are_worth_lower_expected_roi",
+        "conclusion": "decouple_signal_quality_from_base_notional_with_weight_to_ask_ratio_gate",
         "recommended_live_base_notional_usd": 5.0,
-        "optional_probe_base_notional_usd": 6.0,
-        "max_reasonable_probe_base_notional_usd": 8.0,
-        "do_not_use_base_notional_usd_at_or_above": 10.0,
+        "recommended_min_soft_weight_to_ask_ratio": 1.0,
+        "base_notional_sizeup_policy": "allowed_only_after_explicit_notional_decision; do_not_change_signal_denominator",
         "basis": finite(preferred.to_dict(orient="records")),
+        "fixed_quality_basis": finite(
+            fixed_quality[fixed_quality["base_notional_usd"].isin([5.0, 8.0, 10.0, 15.0])].to_dict(orient="records")
+        ),
     }
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -336,11 +352,11 @@ def render_md(payload: dict[str, Any], sweep: pd.DataFrame, incremental: pd.Data
             "",
             "## Conclusion",
             "",
-            "Increasing `base_N` mainly admits lower-weight rows that failed the 5-share minimum. Those incremental rows are not clearly better than the current executable core.",
+            "Increasing `base_N` should not change the strategy denominator. The correct fix is to keep a fixed signal-quality gate, `city_bias_soft_weight / ask >= 1.0`, and leave the 5-share rule as execution plumbing.",
             "",
             f"Verdict: `{payload['verdict']['conclusion']}`.",
             "",
-            "Recommended live default remains `base_N=5`. If the goal is more live observations rather than immediate edge improvement, use only a small probe (`base_N=6`, at most `8`) and keep it explicitly labelled as a sizing probe.",
+            "Recommended live default remains `base_N=5`. If notional is raised later, keep the fixed weight/price quality gate so lower-confidence rows do not enter only because the order size grew.",
             "",
             "## Coverage",
             "",
@@ -362,6 +378,26 @@ def render_md(payload: dict[str, Any], sweep: pd.DataFrame, incremental: pd.Data
             table(
                 frozen[
                     frozen["cap_mode"].eq("daily_cap_equals_baseN_live_like")
+                    & frozen["window"].eq(f"forward_{FORWARD_START}_plus")
+                ][live_like_cols],
+                live_like_cols,
+            ),
+            "",
+            "## Frozen Live-Like With Fixed Weight/Price Quality Gate",
+            "",
+            table(
+                frozen[
+                    frozen["cap_mode"].eq("fixed_weight_price_quality_gate_daily_cap_equals_baseN")
+                    & frozen["window"].eq("all")
+                ][live_like_cols],
+                live_like_cols,
+            ),
+            "",
+            "## Frozen Forward With Fixed Weight/Price Quality Gate",
+            "",
+            table(
+                frozen[
+                    frozen["cap_mode"].eq("fixed_weight_price_quality_gate_daily_cap_equals_baseN")
                     & frozen["window"].eq(f"forward_{FORWARD_START}_plus")
                 ][live_like_cols],
                 live_like_cols,
@@ -392,11 +428,10 @@ def render_md(payload: dict[str, Any], sweep: pd.DataFrame, incremental: pd.Data
             "",
             "## Interpretation",
             "",
-            "- `base_N=5` is conservative because many soft weights turn into fewer than 5 shares.",
-            "- Moving to `6` adds a few rows, but their incremental ROI is weak/negative in the frozen replay and negative in the historical diagnostic.",
-            "- Moving to `8` or `10` increases sample count, but the all-period ROI declines and the forward sample does not improve.",
-            "- Keeping `daily_cap=5` while raising `base_N` is internally inconsistent: some high-weight rows become too large for the daily cap and are skipped.",
-            "- Therefore the clean action is not to size up for edge. Size up only as a deliberately labelled observation probe.",
+            "- The old executable definition used `base_N * weight / ask >= 5`; raising `base_N` mechanically lowers the required weight/price quality.",
+            "- The fixed quality gate uses `weight / ask >= 1.0`, which reproduces the current `base_N=5` quality threshold and remains stable under future notional changes.",
+            "- With that gate, raising `base_N` scales dollars on the same quality set instead of admitting weak rows.",
+            "- The 5-share rule should remain only as execution plumbing for exchange/order-size constraints and top-of-book depth.",
             "",
             "## Files",
             "",
