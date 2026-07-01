@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+import sqlite3
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -44,6 +45,7 @@ OUT_DAILY = OUT_DIR / "daily_summary.csv"
 OUT_SCORED_ROWS = OUT_DIR / "scored_rows.csv"
 OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-01-regime-routed-no-calibrated-score-v2.md"
 CLOB_GATE = ROOT / "runtime/_dashboard_logs/clob_fill_coverage_gate.json"
+DB_PATH = ROOT / "runtime/weather.db"
 
 FORWARD_START = "2026-06-21"
 SEED = 20260701
@@ -166,6 +168,74 @@ def load_clob_gate_pass() -> bool | None:
     return bool(value) if value is not None else None
 
 
+def settlement_outcome_map() -> dict[tuple[str, str, str], float]:
+    if not DB_PATH.exists():
+        return {}
+    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=1.0)
+    try:
+        conn.execute("PRAGMA query_only=ON")
+        rows = conn.execute(
+            "SELECT city, target_date, bracket, final_price "
+            "FROM settlement_outcomes "
+            "WHERE source_system='pm_history' AND settlement_status='settled'"
+        ).fetchall()
+    finally:
+        conn.close()
+    return {(str(city), str(target_date), str(bracket)): float(final_price) for city, target_date, bracket, final_price in rows}
+
+
+def routed_bracket(row: pd.Series) -> str | None:
+    route = str(row.get("router_route") or row.get("route_leg") or "")
+    expression = str(row.get("router_expression") or row.get("expression") or "")
+    if route == "capped_d2_no" or expression == "d2_no":
+        value = row.get("d2_no_bracket")
+    elif expression.endswith("_yes") and pd.notna(row.get("current_bracket")):
+        value = row.get("current_bracket")
+    else:
+        value = row.get("current_bracket")
+    if pd.isna(value):
+        return None
+    text = str(value)
+    return text[:-2] if text.endswith(".0") else text
+
+
+def fill_payoff_from_settlements(frame: pd.DataFrame) -> pd.DataFrame:
+    outcomes = settlement_outcome_map()
+    if not outcomes:
+        return frame
+    out = frame.copy()
+    if "router_payoff" not in out.columns:
+        out["router_payoff"] = np.nan
+    if "payoff" not in out.columns:
+        out["payoff"] = np.nan
+    if "final_winning_bracket" not in out.columns:
+        out["final_winning_bracket"] = np.nan
+    missing = pd.to_numeric(out["router_payoff"], errors="coerce").isna()
+    if not missing.any():
+        return out
+    for idx, row in out[missing].iterrows():
+        city = str(row.get("city") or "")
+        target_date = str(row.get("target_date") or "")
+        bracket = routed_bracket(row)
+        if not city or not target_date or bracket is None:
+            continue
+        final_price = outcomes.get((city, target_date, bracket))
+        if final_price is None:
+            continue
+        side = str(row.get("router_side") or row.get("side") or "BUY_NO").upper()
+        payoff = final_price if side.endswith("YES") else 1.0 - final_price
+        out.at[idx, "router_payoff"] = payoff
+        out.at[idx, "payoff"] = payoff
+        winners = [
+            key_bracket
+            for (key_city, key_date, key_bracket), price in outcomes.items()
+            if key_city == city and key_date == target_date and price == 1.0
+        ]
+        if winners:
+            out.at[idx, "final_winning_bracket"] = winners[0]
+    return out
+
+
 def onehot() -> OneHotEncoder:
     try:
         return OneHotEncoder(handle_unknown="ignore", min_frequency=3, sparse_output=False)
@@ -228,7 +298,7 @@ def model_pipeline(spec: ModelSpec) -> Pipeline:
 
 
 def prepare_frame(frame: pd.DataFrame, *, evidence_layer: str) -> pd.DataFrame:
-    out = frame.copy()
+    out = fill_payoff_from_settlements(frame)
     out["evidence_layer"] = evidence_layer
     out["target_date"] = out["target_date"].astype(str)
     out["label_no_win"] = pd.to_numeric(out["router_payoff"], errors="coerce")
@@ -595,6 +665,7 @@ def render_md(payload: dict[str, Any], quality: pd.DataFrame, trades: pd.DataFra
             f"- Frozen/live-like replay: `{payload['coverage']['frozen_live_like_route_price']['min_date']}`..`{payload['coverage']['frozen_live_like_route_price']['max_date']}`, rows `{payload['coverage']['frozen_live_like_route_price']['rows']}`.",
             f"- Historical best-ask diagnostic: `{payload['coverage']['historical_best_ask_diagnostic']['min_date']}`..`{payload['coverage']['historical_best_ask_diagnostic']['max_date']}`, rows `{payload['coverage']['historical_best_ask_diagnostic']['rows']}`.",
             f"- Raw frozen rows before label/ask filtering: `{payload['raw_coverage']['frozen_live_like_route_price']['rows']}` rows through `{payload['raw_coverage']['frozen_live_like_route_price']['max_date']}`; dropped rows `{payload['raw_coverage']['frozen_live_like_route_price']['dropped_unscored_rows']}`.",
+            "- Missing replay payoff labels are backfilled from canonical `settlement_outcomes` when the routed bracket has a settled pm_history row.",
             f"- Data refresh: N100 sync completed; local fact rebuild completed but frontend restart exited non-cleanly because port 5174 stayed occupied; CLOB fill coverage gate `gate_pass={payload['data_snapshot']['clob_gate_pass']}`.",
             f"- Train/forward split: train `< {FORWARD_START}`, forward `>= {FORWARD_START}`.",
             "- Evidence is frozen/live-like candidate replay, not live_real PnL.",

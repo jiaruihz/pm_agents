@@ -1,10 +1,10 @@
 {
   "coverage": {
     "frozen_live_like_route_price": {
-      "forward_rows": 14,
-      "max_date": "2026-06-26",
+      "forward_rows": 16,
+      "max_date": "2026-06-28",
       "min_date": "2026-05-20",
-      "rows": 163,
+      "rows": 165,
       "train_rows": 149
     },
     "historical_best_ask_diagnostic": {
@@ -21,7 +21,7 @@
     "run_stack_exit_note": "non_clean_exit_after_rebuild_due_frontend_port_5174_busy",
     "sync_completed": true
   },
-  "generated_at_utc": "2026-07-01T10:46:07+00:00",
+  "generated_at_utc": "2026-07-01T12:33:17+00:00",
   "model_specs": [
     {
       "c": 0.5,
@@ -131,11 +131,11 @@
   },
   "raw_coverage": {
     "frozen_live_like_route_price": {
-      "dropped_unscored_rows": 2,
+      "dropped_unscored_rows": 0,
       "max_date": "2026-06-28",
       "min_date": "2026-05-20",
       "rows": 165,
-      "scored_rows": 163
+      "scored_rows": 165
     },
     "historical_best_ask_diagnostic": {
       "dropped_unscored_rows": 0,
