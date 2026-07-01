@@ -1,11 +1,11 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-07-01 regime-routed NO calibrated score v2
+Updated: 2026-07-02 regime-routed NO probability shadow grid v1
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-更新时间：2026-07-01
+更新时间：2026-07-02
 
 这份索引是 weather 文档的入口和权威性判断。`AGENTS.md` / `CLAUDE.md`
 只保留短入口；新增、归档或改变 weather 文档职责时，优先更新这里。
@@ -125,6 +125,7 @@ Status 口径：
 | [2026-07-01-regime-routed-no-base-notional-sweep-v1.md](analysis/2026-07/2026-07-01-regime-routed-no-base-notional-sweep-v1.md) | `snapshot` | Regime-routed NO city-bias soft 的 base notional / 5-share 最小成交门槛 sweep：指出旧口径 `base_N * weight / ask >= 5 shares` 会让放大金额机械放宽信号质量，应改为固定信号门槛 `city_bias_soft_weight / ask >= 1.0`，5-share 只保留为执行约束。旧 live-like 口径里 `N=5/6/8/10` 分别为 42/46/54/62 rows，forward 新增低权重行表现差；新 fixed quality gate 下 `N=5/8/10/15` 全部保持 42 rows/31 dates/ROI +29.7%，forward 全部保持 5 rows/4 dates/ROI +69.5%，只线性放大 dollars。结论：live runner 应固定 `min_soft_weight_to_ask_ratio=1.0`；以后是否放大 `base_N` 是资金 sizing 决策，不再改变策略分母 |
 | [2026-07-01-regime-routed-no-score-component-audit-v1.md](analysis/2026-07/2026-07-01-regime-routed-no-score-component-audit-v1.md) | `snapshot` | Regime-routed NO `row_risk_soft_v1` 组件体检：在 frozen/live-like 165 rows 上重算 route/price/peak/freshness/momentum/weather/city-source multiplier，确认 frozen 口径 score diff=0。当前 `score/ask>=1.0` daily-cap 口径 42 rows/31 dates/ROI +29.7%，AUC 约 54.7%，说明排序弱正但不是概率模型；放松到 0.8 forward 变弱，收紧到 1.2 forward 只剩 3 rows。移除 price/peak/momentum 没有给出干净 forward 改善；all-expression city/source bias 全样本点估更高但 forward 3 rows 全亏。结论：保持 live fixed quality gate，不改 live score；下一步做 calibrated score v2 shadow（P(NO wins | route, ask, peak clock, freshness, trend, weather, city/source bias)） |
 | [2026-07-01-regime-routed-no-calibrated-score-v2.md](analysis/2026-07/2026-07-01-regime-routed-no-calibrated-score-v2.md) | `snapshot` | Regime-routed NO calibrated `P(NO wins)` shadow：用 route、ask、peak clock、freshness、trend、wind/humidity/cloud、city/source bias 和当前 heuristic score 做 L2 logistic；本轮补了 6/27 TelAviv、6/28 Singapore 的 pm_history label，并在脚本里加 settlement_outcomes fallback。Frozen/live-like 可训练 165 rows，train `<2026-06-21`，forward 16 rows/8 dates。模型 forward AUC 最高 0.683，但 trading 层未胜过当前 fixed-quality heuristic：当前 score/ask gate forward 5 trades/4 dates ROI +69.5% CI [-45.0%, +203.6%]；模型 `p>=ask` probability-size 最高 ROI +61.5% 且 CI [-100.0%, +249.5%]；live-sized gate 口径更弱。Expanding WF 点估接近但没有稳定改进。结论 `shadow_only_do_not_replace_live_score`，可记录 `p_no_*` telemetry，不替换 live score |
+| [2026-07-02-regime-routed-no-probability-shadow-grid-v1.md](analysis/2026-07/2026-07-02-regime-routed-no-probability-shadow-grid-v1.md) | `snapshot` | Regime-routed NO calibrated probability shadow grid：在 `calibrated_score_v2` 的 448 scored rows 上比较 4 组 expanding walk-forward 概率模型与 10 类 overlay，包括 pure probability entry、probability gate、score/probability blend、current-entry probability haircut 和 disagreement diagnostic。Frozen/live-like 6/21+ forward 候选最多 5 trades，最好 `current_gate_size_min_score_p` ROI +71.0% 但 CI [-45.3%, +214.7%]；当前 baseline 同分母 ROI +69.5% CI [-45.0%, +203.6%]。Expanding WF 点估更高但样本 15-23 trades 且 4-6 个单日 -100% day blocks。结论 `shadow_only_more_data_needed`：概率列适合继续记录/对比，不替换当前 live fixed-quality score，也不作为 size-up approval |
 | [WEATHER_PROBABILITY_MODEL_ROADMAP.md](WEATHER_PROBABILITY_MODEL_ROADMAP.md) | `current-reference` | 概率模型从 M0 可观测骨架到 lead-time/ensemble/ML 的路线图 |
 | [WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md](WEATHER_CITY_DAY_PORTFOLIO_OPTIMIZER_DESIGN.md) | `design-draft` | 城市/日组合优化器目标、约束、分布和 tail 风险怎么设计 |
 | [WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md](WEATHER_CITY_BLEND_MODEL_IMPLEMENTATION_PLAN_2026-06-05.md) | `snapshot` | 2026-06-05 blend model 实施计划背景，当前结论以 edge engine current state 为准 |
