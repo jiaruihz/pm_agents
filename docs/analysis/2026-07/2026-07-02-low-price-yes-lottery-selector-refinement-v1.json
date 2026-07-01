@@ -1,0 +1,46 @@
+{
+  "db_snapshot": {
+    "db_path": "runtime/weather.db",
+    "fact_signal_candidates": {
+      "rows": 41047,
+      "min_event_date": "2026-05-05",
+      "max_event_date": "2026-07-01",
+      "fact_built_at_utc": "2026-07-01T16:27:01.770598+00:00"
+    },
+    "settlement_outcomes_recent": [
+      {
+        "target_date": "2026-06-26",
+        "rows": 517,
+        "settled": 517
+      },
+      {
+        "target_date": "2026-06-27",
+        "rows": 11,
+        "settled": 11
+      },
+      {
+        "target_date": "2026-06-28",
+        "rows": 11,
+        "settled": 11
+      }
+    ]
+  },
+  "forward_overlay": {
+    "market_api_calls": 223,
+    "market_api_errors": 0,
+    "sample_errors": [],
+    "raw_forward_rows": 223,
+    "closed_forward_rows": 219,
+    "open_or_unresolved_forward_rows": 4
+  },
+  "artifacts": {
+    "summary": "docs/analysis/2026-07/generated/low_price_yes_lottery_selector_refinement_v1/summary.csv",
+    "details": "docs/analysis/2026-07/generated/low_price_yes_lottery_selector_refinement_v1/details.csv",
+    "daily": "docs/analysis/2026-07/generated/low_price_yes_lottery_selector_refinement_v1/daily.csv",
+    "report": "docs/analysis/2026-07/2026-07-02-low-price-yes-lottery-selector-refinement-v1.md"
+  },
+  "champion": {
+    "selector": "no_dust_edge20_ask05_20",
+    "sizing": "payout25_cap5"
+  }
+}
