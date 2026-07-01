@@ -1,0 +1,13 @@
+evidence_layer,quantile,required_base_notional_usd
+frozen_live_like_route_price,0.25,3.5763126989523126
+frozen_live_like_route_price,0.5,5.312499999999999
+frozen_live_like_route_price,0.75,11.721517832828532
+frozen_live_like_route_price,0.9,16.091590165664236
+frozen_live_like_route_price,0.95,19.623876752473322
+frozen_live_like_route_price,1.0,47.552209046069876
+historical_best_ask_diagnostic,0.25,4.866415105776808
+historical_best_ask_diagnostic,0.5,9.687499999999998
+historical_best_ask_diagnostic,0.75,16.091590165664236
+historical_best_ask_diagnostic,0.9,25.48656527493586
+historical_best_ask_diagnostic,0.95,29.34176826859163
+historical_best_ask_diagnostic,1.0,47.552209046069876

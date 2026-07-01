@@ -1,0 +1,121 @@
+{
+  "coverage": {
+    "frozen_live_like_route_price": {
+      "max_date": "2026-06-28",
+      "min_date": "2026-05-20",
+      "rows": 165
+    },
+    "historical_best_ask_diagnostic": {
+      "max_date": "2026-06-26",
+      "min_date": "2026-05-20",
+      "rows": 283
+    }
+  },
+  "generated_at_utc": "2026-07-01T09:08:59+00:00",
+  "outputs": {
+    "incremental_csv": "docs/analysis/2026-07/generated/regime_routed_no_base_notional_sweep_v1/incremental_rows_vs_base5.csv",
+    "markdown": "docs/analysis/2026-07/2026-07-01-regime-routed-no-base-notional-sweep-v1.md",
+    "required_base_notional_distribution_csv": "docs/analysis/2026-07/generated/regime_routed_no_base_notional_sweep_v1/required_base_notional_distribution.csv",
+    "summary_json": "docs/analysis/2026-07/generated/regime_routed_no_base_notional_sweep_v1/summary.json",
+    "sweep_csv": "docs/analysis/2026-07/generated/regime_routed_no_base_notional_sweep_v1/base_notional_sweep.csv"
+  },
+  "parameters": {
+    "base_notional_values_usd": [
+      5.0,
+      6.0,
+      7.5,
+      8.0,
+      10.0,
+      12.0,
+      15.0
+    ],
+    "forward_start": "2026-06-21",
+    "min_order_shares": 5.0
+  },
+  "strategy": "regime_routed_no_city_bias_soft_base_notional_sweep_v1",
+  "verdict": {
+    "basis": [
+      {
+        "avg_ask": 0.3348095238095238,
+        "avg_cost_usd": 2.3857594761904766,
+        "avg_weight": 0.47715189523809526,
+        "base_notional_usd": 5.0,
+        "cap_mode": "daily_cap_equals_baseN_live_like",
+        "cities": 22,
+        "cost_usd": 100.20189800000001,
+        "daily_cap_usd": 5.0,
+        "daily_negative_100pct": 13,
+        "dates": 31,
+        "evidence_layer": "frozen_live_like_route_price",
+        "pnl_usd": 29.724517264730345,
+        "roi": 0.2966462498018784,
+        "rows": 42,
+        "win_rate": 0.47619047619047616,
+        "window": "all",
+        "wins": 20
+      },
+      {
+        "avg_ask": 0.34895652173913044,
+        "avg_cost_usd": 2.730030104347826,
+        "avg_weight": 0.4550050173913043,
+        "base_notional_usd": 6.0,
+        "cap_mode": "daily_cap_equals_baseN_live_like",
+        "cities": 20,
+        "cost_usd": 125.5813848,
+        "daily_cap_usd": 6.0,
+        "daily_negative_100pct": 14,
+        "dates": 33,
+        "evidence_layer": "frozen_live_like_route_price",
+        "pnl_usd": 30.557591845817267,
+        "roi": 0.24332899254521734,
+        "rows": 46,
+        "win_rate": 0.45652173913043476,
+        "window": "all",
+        "wins": 21
+      },
+      {
+        "avg_ask": 0.3581851851851852,
+        "avg_cost_usd": 3.45714573037037,
+        "avg_weight": 0.43214321629629626,
+        "base_notional_usd": 8.0,
+        "cap_mode": "daily_cap_equals_baseN_live_like",
+        "cities": 23,
+        "cost_usd": 186.68586943999998,
+        "daily_cap_usd": 8.0,
+        "daily_negative_100pct": 13,
+        "dates": 34,
+        "evidence_layer": "frozen_live_like_route_price",
+        "pnl_usd": 38.77972069505382,
+        "roi": 0.2077271344177308,
+        "rows": 54,
+        "win_rate": 0.4444444444444444,
+        "window": "all",
+        "wins": 24
+      },
+      {
+        "avg_ask": 0.38004838709677413,
+        "avg_cost_usd": 3.9547422290322585,
+        "avg_weight": 0.39547422290322587,
+        "base_notional_usd": 10.0,
+        "cap_mode": "daily_cap_equals_baseN_live_like",
+        "cities": 24,
+        "cost_usd": 245.19401820000002,
+        "daily_cap_usd": 10.0,
+        "daily_negative_100pct": 11,
+        "dates": 36,
+        "evidence_layer": "frozen_live_like_route_price",
+        "pnl_usd": 55.75897624705948,
+        "roi": 0.22740757158919742,
+        "rows": 62,
+        "win_rate": 0.4838709677419355,
+        "window": "all",
+        "wins": 30
+      }
+    ],
+    "conclusion": "do_not_raise_for_edge; optional_probe_baseN_6_to_8_only_if_more_live_observations_are_worth_lower_expected_roi",
+    "do_not_use_base_notional_usd_at_or_above": 10.0,
+    "max_reasonable_probe_base_notional_usd": 8.0,
+    "optional_probe_base_notional_usd": 6.0,
+    "recommended_live_base_notional_usd": 5.0
+  }
+}
