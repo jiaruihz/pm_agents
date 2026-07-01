@@ -1,0 +1,33 @@
+{
+  "coverage": {
+    "frozen_live_like_route_price": {
+      "max_date": "2026-06-28",
+      "max_score_recompute_abs_diff": 0.0,
+      "min_date": "2026-05-20",
+      "rows": 165
+    },
+    "historical_best_ask_diagnostic": {
+      "max_date": "2026-06-26",
+      "max_score_recompute_abs_diff": 0.195,
+      "min_date": "2026-05-20",
+      "rows": 283
+    }
+  },
+  "generated_at_utc": "2026-07-01T09:29:04+00:00",
+  "outputs": {
+    "component_summary": "docs/analysis/2026-07/generated/regime_routed_no_score_component_audit_v1/component_slice_summary.csv",
+    "markdown": "docs/analysis/2026-07/2026-07-01-regime-routed-no-score-component-audit-v1.md",
+    "score_bins": "docs/analysis/2026-07/generated/regime_routed_no_score_component_audit_v1/score_ratio_bins.csv",
+    "score_component_rows": "docs/analysis/2026-07/generated/regime_routed_no_score_component_audit_v1/score_component_rows.csv",
+    "summary_json": "docs/analysis/2026-07/generated/regime_routed_no_score_component_audit_v1/summary.json",
+    "variant_summary": "docs/analysis/2026-07/generated/regime_routed_no_score_component_audit_v1/score_variant_gate_summary.csv"
+  },
+  "strategy": "regime_routed_no_score_component_audit_v1",
+  "verdict": {
+    "baseline": "current_deployed_score",
+    "conclusion": "keep_live_score_fixed_quality_gate; research_shadow_calibrated_score_v2",
+    "forward": "THIN_MIXED",
+    "live_change": false,
+    "significance": "NA_COMPONENT_AUDIT"
+  }
+}
