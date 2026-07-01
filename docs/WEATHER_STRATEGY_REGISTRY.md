@@ -60,7 +60,7 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 | adjacent / range basket | 相邻档/区间篮子的相对定价 | `research` | inconclusive，holdout/top5 不稳 | [2] market_structure_edge |
 | all-YES underround（no-arb 篮子） | 互斥档 YES ask 之和 <1 的无套利结构 | `research` | **离线确认（+3.16% settled unit ROI）但散户 live 被否**（per-leg buffer~0.3¢、全腿成交/部分成交风险） | [2] market_structure_edge |
 | side-band / BUY_NO side alpha | BUY_NO 历史胜率高、特定价带方向偏好 | `research` | **胜率 ≠ alpha**；clean 测试三门不过，仅作特征/标签 | [2] side_alpha |
-| 低价 YES prior sleeve（lottery） | 低价高凸 longshot 档的 prior | `research` | 收益由少数日期/城市命中驱动，excess CI 跨 0，不 live | [1]-[2] pre_predict |
+| low_price_yes_lottery_tiny_live_v1 | refined low-price BUY_YES longshot：`edge>=0.20`、ask `0.05..0.20`、每 city-date 一笔，fresh-book guarded taker，固定 `$1.5/order` | **`live`（tiny-live forward probe）** | 用户 2026-07-02 批准微仓前向取证；研究结论仍是 `shadow_candidate_keep_collecting`，核心风险是少数尾部命中驱动与 taker fee/成交质量，所以只按独立 strategy family 记录，不接 regime-routed NO runner，不视为 confirmed alpha | [1]-[4] pre_predict / forecast_quality · [selector refinement](analysis/2026-07/2026-07-02-low-price-yes-lottery-selector-refinement-v1.md) |
 | station-basis（结算源 basis） | 官方结算站点 vs 市场所用站点的温差 basis | `shadow` | 当前主操作 shadow 线，`NOT_READY_ACCUMULATE_SHADOW`，有前向阻塞 | [0]-[2] 见 ENTRYPOINT |
 
 ## 分支二：reheat_risk（[0] 事实 / [1]-[2] 模型与表达）

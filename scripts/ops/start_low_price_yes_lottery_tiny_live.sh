@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+
+RUNTIME_DIR="${LOW_PRICE_YES_LOTTERY_RUNTIME_DIR:-runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1}"
+PID_FILE="$RUNTIME_DIR/loop.pid"
+LOG_FILE="$RUNTIME_DIR/loop.log"
+mkdir -p "$RUNTIME_DIR" "runtime/weather_edge_v1/live"
+
+if [[ -s "$PID_FILE" ]]; then
+  old_pid="$(cat "$PID_FILE")"
+  if kill -0 "$old_pid" 2>/dev/null; then
+    echo "already_running pid=$old_pid log=$LOG_FILE"
+    exit 0
+  fi
+fi
+
+PYTHON_BIN="${PYTHON_BIN:-.venv/bin/python}"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="python3"
+fi
+
+LOW_PRICE_YES_LOTTERY_LIVE="${LOW_PRICE_YES_LOTTERY_LIVE:-1}"
+LOW_PRICE_YES_LOTTERY_CONFIRM_LIVE="${LOW_PRICE_YES_LOTTERY_CONFIRM_LIVE:-1}"
+LOW_PRICE_YES_LOTTERY_NOTIONAL="${LOW_PRICE_YES_LOTTERY_NOTIONAL:-1.5}"
+LOW_PRICE_YES_LOTTERY_INTERVAL_SECONDS="${LOW_PRICE_YES_LOTTERY_INTERVAL_SECONDS:-300}"
+LOW_PRICE_YES_LOTTERY_MIN_ASK="${LOW_PRICE_YES_LOTTERY_MIN_ASK:-0.05}"
+LOW_PRICE_YES_LOTTERY_MAX_ASK="${LOW_PRICE_YES_LOTTERY_MAX_ASK:-0.20}"
+LOW_PRICE_YES_LOTTERY_MIN_EDGE="${LOW_PRICE_YES_LOTTERY_MIN_EDGE:-0.20}"
+LOW_PRICE_YES_LOTTERY_MAX_TAKER_CUSHION="${LOW_PRICE_YES_LOTTERY_MAX_TAKER_CUSHION:-0.01}"
+LOW_PRICE_YES_LOTTERY_MIN_FEE_EDGE="${LOW_PRICE_YES_LOTTERY_MIN_FEE_EDGE:-0.15}"
+LOW_PRICE_YES_LOTTERY_MAX_SNAPSHOT_AGE_HOURS="${LOW_PRICE_YES_LOTTERY_MAX_SNAPSHOT_AGE_HOURS:-6}"
+LOW_PRICE_YES_LOTTERY_MIN_HOURS_TO_SETTLE="${LOW_PRICE_YES_LOTTERY_MIN_HOURS_TO_SETTLE:-1}"
+LOW_PRICE_YES_LOTTERY_MAX_CANDIDATES="${LOW_PRICE_YES_LOTTERY_MAX_CANDIDATES:-80}"
+LOW_PRICE_YES_LOTTERY_NO_TELEGRAM="${LOW_PRICE_YES_LOTTERY_NO_TELEGRAM:-0}"
+
+if [[ -f "$ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/.env"
+  set +a
+fi
+
+args=(
+  scripts/ops/low_price_yes_lottery_tiny_live.py
+  loop
+  --order-notional-usd "$LOW_PRICE_YES_LOTTERY_NOTIONAL"
+  --interval-seconds "$LOW_PRICE_YES_LOTTERY_INTERVAL_SECONDS"
+  --min-ask "$LOW_PRICE_YES_LOTTERY_MIN_ASK"
+  --max-ask "$LOW_PRICE_YES_LOTTERY_MAX_ASK"
+  --min-edge "$LOW_PRICE_YES_LOTTERY_MIN_EDGE"
+  --max-taker-cushion "$LOW_PRICE_YES_LOTTERY_MAX_TAKER_CUSHION"
+  --min-fee-adjusted-edge "$LOW_PRICE_YES_LOTTERY_MIN_FEE_EDGE"
+  --max-decision-snapshot-age-hours "$LOW_PRICE_YES_LOTTERY_MAX_SNAPSHOT_AGE_HOURS"
+  --min-decision-hours-to-settle "$LOW_PRICE_YES_LOTTERY_MIN_HOURS_TO_SETTLE"
+  --max-candidates-per-run "$LOW_PRICE_YES_LOTTERY_MAX_CANDIDATES"
+)
+
+if [[ -n "${LOW_PRICE_YES_LOTTERY_MIN_EVENT_DATE:-}" ]]; then
+  args+=(--min-event-date "$LOW_PRICE_YES_LOTTERY_MIN_EVENT_DATE")
+fi
+if [[ -n "${LOW_PRICE_YES_LOTTERY_MAX_EVENT_DATE:-}" ]]; then
+  args+=(--max-event-date "$LOW_PRICE_YES_LOTTERY_MAX_EVENT_DATE")
+fi
+if [[ "$LOW_PRICE_YES_LOTTERY_LIVE" == "1" ]]; then
+  args+=(--live)
+fi
+if [[ "$LOW_PRICE_YES_LOTTERY_CONFIRM_LIVE" == "1" ]]; then
+  args+=(--confirm-live)
+fi
+if [[ "$LOW_PRICE_YES_LOTTERY_NO_TELEGRAM" == "1" ]]; then
+  args+=(--no-telegram)
+fi
+
+nohup "$PYTHON_BIN" -u "${args[@]}" >>"$LOG_FILE" 2>&1 &
+
+pid="$!"
+echo "$pid" >"$PID_FILE"
+echo "started low-price YES lottery tiny-live pid=$pid log=$LOG_FILE notional=$LOW_PRICE_YES_LOTTERY_NOTIONAL ask=${LOW_PRICE_YES_LOTTERY_MIN_ASK}-${LOW_PRICE_YES_LOTTERY_MAX_ASK} edge=$LOW_PRICE_YES_LOTTERY_MIN_EDGE live=$LOW_PRICE_YES_LOTTERY_LIVE"

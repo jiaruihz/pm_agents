@@ -180,6 +180,7 @@ sync_live() {
     range_rv_shadow_v0 \
     regime_routed_no_tiny_live_v1 \
     metar_cross_prev_no_shadow \
+    low_price_yes_lottery_tiny_live_v1 \
     source_orderbook_timing \
     theta_current_yes_tiny_live_v1 \
     theta_current_yes_fade_confirmed_tiny_live_v1 \

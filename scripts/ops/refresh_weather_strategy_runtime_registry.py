@@ -244,6 +244,32 @@ def strategy_specs() -> list[StrategySpec]:
             notes="Live loop writes under the historical shadow-named directory.",
         ),
         StrategySpec(
+            strategy_instance="low_price_yes_lottery_tiny_live_v1",
+            display_name="Low-price YES lottery tiny-live",
+            family="forecast_quality.low_price_yes_lottery",
+            lifecycle_status="live",
+            execution_mode="live",
+            source_layer="runtime_remote_mirror",
+            runtime_dir="runtime/weather_edge_v1/remote_pm_agent/low_price_yes_lottery_tiny_live_v1",
+            summary_file="latest_summary.json",
+            primary_journal="shadow_decisions.jsonl",
+            live_order_file="runtime/weather_edge_v1/remote_pm_agent/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl",
+            paper_order_file="paper_orders.jsonl",
+            expected_live=True,
+            artifact_files=[
+                ("summary_history", "summary_history.jsonl"),
+                ("shadow_decisions", "shadow_decisions.jsonl"),
+                ("blocked_candidates", "blocked_candidates.jsonl"),
+                ("latest_candidates", "latest_candidates.json"),
+                ("trade_plans", "trade_plans.jsonl"),
+            ],
+            notes=(
+                "User-approved $1.5/order forward probe for refined BUY_YES low-price lottery selector "
+                "(edge>=0.20, ask 0.05..0.20, one city-date, fresh-book guarded taker, no daily cap). "
+                "Treat as tiny-live evidence collection, not confirmed alpha."
+            ),
+        ),
+        StrategySpec(
             strategy_instance="theta_higher_no_carry_shadow_v1",
             display_name="Higher NO carry shadow",
             family="reheat_risk.higher_no_carry",
