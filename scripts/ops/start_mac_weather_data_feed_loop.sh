@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
+RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data_feed_service_runtime}"
+OUTPUT_ROOT="${WEATHER_DATA_FEED_TARGETED_OUTPUT_ROOT:-$RUNTIME_ROOT/targeted_output}"
+OBS_OUTPUT="${WEATHER_DATA_FEED_OBSERVATION_OUTPUT:-$RUNTIME_ROOT/output/observations/latest.json}"
+CACHE_ROOT="${WEATHER_DATA_FEED_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
+LOOP_DIR="${WEATHER_DATA_FEED_LOOP_DIR:-$RUNTIME_ROOT/loop}"
+PID_FILE="$LOOP_DIR/data_feed_loop.pid"
+LOG_FILE="$LOOP_DIR/data_feed_loop.log"
+PY="$SERVICE_DIR/.venv/bin/python"
+
+OBS_INTERVAL_SEC="${WEATHER_DATA_FEED_OBS_INTERVAL_SEC:-300}"
+SNAPSHOT_INTERVAL_SEC="${WEATHER_DATA_FEED_SNAPSHOT_INTERVAL_SEC:-600}"
+SNAPSHOT_ORDERBOOK_BUDGET_SEC="${WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC:-60}"
+SNAPSHOT_ORDERBOOK_WORKERS="${WEATHER_DATA_FEED_ORDERBOOK_WORKERS:-4}"
+
+mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$OUTPUT_ROOT" "$CACHE_ROOT"
+
+if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" && -f "$PID_FILE" ]]; then
+  old_pid="$(cat "$PID_FILE" || true)"
+  if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+    echo "already running pid=$old_pid log=$LOG_FILE"
+    exit 0
+  fi
+fi
+
+if [[ ! -x "$PY" ]]; then
+  PY="python3"
+fi
+
+if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" ]]; then
+  nohup env MAC_WEATHER_DATA_FEED_LOOP_CHILD=1 "$0" >>"$LOG_FILE" 2>&1 < /dev/null &
+  pid=$!
+  echo "$pid" > "$PID_FILE"
+  echo "started mac weather data-feed loop pid=$pid log=$LOG_FILE output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT cache=$CACHE_ROOT"
+  exit 0
+fi
+
+echo "$$" > "$PID_FILE"
+date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT cache=$CACHE_ROOT"
+
+{
+  cd "$SERVICE_DIR"
+  trap 'rc=$?; date -u +"[mac_data_feed] loop_exit_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"; rm -f "$PID_FILE"' EXIT
+  if [[ -f "$SERVICE_DIR/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$SERVICE_DIR/.env"
+    set +a
+  fi
+  next_obs=0
+  next_snapshot=0
+  while true; do
+    now="$(date +%s)"
+    if (( now >= next_obs )); then
+      date -u +"[mac_data_feed] observations_start_utc=%Y-%m-%dT%H:%M:%SZ"
+      set +e
+      "$PY" -u -m weather_data_feed_service \
+        observations \
+        --output "$OBS_OUTPUT"
+      rc=$?
+      set -e
+      date -u +"[mac_data_feed] observations_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
+      next_obs=$(( $(date +%s) + OBS_INTERVAL_SEC ))
+    fi
+
+    now="$(date +%s)"
+    if (( now >= next_snapshot )); then
+      date -u +"[mac_data_feed] snapshot_start_utc=%Y-%m-%dT%H:%M:%SZ"
+      set +e
+      "$PY" -u -m weather_data_feed_service \
+        --output-root "$OUTPUT_ROOT" \
+        --cache-root "$CACHE_ROOT" \
+        snapshot-targeted -- \
+        --orderbook-budget-sec "$SNAPSHOT_ORDERBOOK_BUDGET_SEC" \
+        --orderbook-workers "$SNAPSHOT_ORDERBOOK_WORKERS"
+      rc=$?
+      set -e
+      date -u +"[mac_data_feed] snapshot_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
+      next_snapshot=$(( $(date +%s) + SNAPSHOT_INTERVAL_SEC ))
+    fi
+
+    sleep 10
+  done
+}
