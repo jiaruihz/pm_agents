@@ -6,6 +6,14 @@ This replay keeps the original regime-routed candidate set eligible and applies 
 
 Verdict: `prefer_original_plus_city_bias_soft_over_tail_shadow_v4_for_shadow_candidate`，live_ready=`False`。
 
+## Current Decision
+
+Use `original_plus_city_bias_soft` as the preferred main shadow/live-candidate expression for this strategy family. It preserves the original route/candidate denominator and uses city/source forecast-bias only as a sizing overlay.
+
+Do not use the stricter V4 tail-shadow policy as the main expression. `false_fade_reheat_current_no` and `cheap_stale_tail_current_no` should remain diagnostic route tags and independent shadow slices, not hard execution blockers.
+
+Operationally, the runner should keep original routes eligible, apply `city_source_bias_multiplier_v1` through `row_risk_soft_v1`, and record tail/fade diagnostics for later review. This is still not a size-up approval because recent forward evidence is thin.
+
 ## Data Snapshot
 
 - Generated at: `2026-07-01T04:28:50+00:00`
