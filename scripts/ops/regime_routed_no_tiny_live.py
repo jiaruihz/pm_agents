@@ -120,6 +120,7 @@ SHADOW_ONLY_ROUTE_LEGS = {
     "false_fade_reheat_current_no",
     "cheap_stale_tail_current_no",
 }
+TAIL_DIAGNOSTIC_ROUTE_LEGS = SHADOW_ONLY_ROUTE_LEGS
 
 
 def utc_now_iso() -> str:
@@ -1195,10 +1196,12 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         )
         peak_delta = pd.to_numeric(selected.get("forecast_peak_delta_hours_local"), errors="coerce")
         route_leg = selected["route_leg"].astype(str)
-        selected["shadow_only_route_leg"] = route_leg.isin(SHADOW_ONLY_ROUTE_LEGS)
-        selected["shadow_only_reason"] = np.where(
-            selected["shadow_only_route_leg"],
-            "tail_or_false_fade_current_no_shadow_only",
+        selected["shadow_only_route_leg"] = False
+        selected["shadow_only_reason"] = ""
+        selected["tail_diagnostic_route_leg"] = route_leg.isin(TAIL_DIAGNOSTIC_ROUTE_LEGS)
+        selected["tail_diagnostic_reason"] = np.where(
+            selected["tail_diagnostic_route_leg"],
+            "tail_or_false_fade_current_no_diagnostic_only",
             "",
         )
         selected["tail_yes_shadow_reason"] = np.where(
@@ -1283,7 +1286,6 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & selected["current_no_escape_ok"].astype(bool)
             & selected["market_date_match_ok"].fillna(False).astype(bool)
             & ~selected["live_duplicate_key"].astype(bool)
-            & ~selected["shadow_only_route_leg"].astype(bool)
         )
         def skip_reason(row: pd.Series) -> str:
             if bool(row.get("execution_eligible")):
@@ -1293,8 +1295,6 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             soft_shares = safe_float(row.get("soft_shares"))
             ask_size = safe_float(row.get("ask_size"))
             live_order_shares = safe_float(row.get("live_order_shares"))
-            if bool(row.get("shadow_only_route_leg")):
-                reasons.append("shadow_only_route_leg")
             if math.isfinite(ask) and ask < research.ASK_MIN:
                 reasons.append("ask_below_min")
             if not bool(row.get("route_price_ok", True)):
@@ -1387,6 +1387,8 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "city_source_cold_overforecast_rate": row.get("city_source_cold_overforecast_rate"),
         "shadow_only_route_leg": row.get("shadow_only_route_leg"),
         "shadow_only_reason": row.get("shadow_only_reason"),
+        "tail_diagnostic_route_leg": row.get("tail_diagnostic_route_leg"),
+        "tail_diagnostic_reason": row.get("tail_diagnostic_reason"),
         "tail_yes_shadow_expression": row.get("tail_yes_shadow_expression"),
         "tail_yes_shadow_reason": row.get("tail_yes_shadow_reason"),
         "tail_yes_shadow_bracket": row.get("tail_yes_shadow_bracket"),
@@ -1827,7 +1829,6 @@ def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -
             & candidates["current_no_escape_ok"].astype(bool)
             & candidates["market_date_match_ok"].fillna(False).astype(bool)
             & ~candidates["live_duplicate_key"].astype(bool)
-            & ~candidates.get("shadow_only_route_leg", pd.Series(False, index=candidates.index)).fillna(False).astype(bool)
         )
         out[name] = {
             "weight_col": weight_col,
@@ -1861,6 +1862,14 @@ def main() -> int:
         "shadow_only_candidates": int(candidates["shadow_only_route_leg"].sum()) if not candidates.empty else 0,
         "shadow_only_by_route_leg": (
             candidates[candidates["shadow_only_route_leg"].fillna(False).astype(bool)]["route_leg"]
+            .value_counts(dropna=False)
+            .to_dict()
+            if not candidates.empty
+            else {}
+        ),
+        "tail_diagnostic_candidates": int(candidates["tail_diagnostic_route_leg"].sum()) if not candidates.empty else 0,
+        "tail_diagnostic_by_route_leg": (
+            candidates[candidates["tail_diagnostic_route_leg"].fillna(False).astype(bool)]["route_leg"]
             .value_counts(dropna=False)
             .to_dict()
             if not candidates.empty
