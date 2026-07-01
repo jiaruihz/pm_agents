@@ -1,0 +1,156 @@
+{
+  "coverage": {
+    "frozen_live_like_route_price": {
+      "forward_rows": 14,
+      "max_date": "2026-06-26",
+      "min_date": "2026-05-20",
+      "rows": 163,
+      "train_rows": 149
+    },
+    "historical_best_ask_diagnostic": {
+      "forward_rows": 31,
+      "max_date": "2026-06-26",
+      "min_date": "2026-05-20",
+      "rows": 283,
+      "train_rows": 252
+    }
+  },
+  "data_snapshot": {
+    "clob_gate_pass": true,
+    "fact_rebuild_completed": true,
+    "run_stack_exit_note": "non_clean_exit_after_rebuild_due_frontend_port_5174_busy",
+    "sync_completed": true
+  },
+  "generated_at_utc": "2026-07-01T10:46:07+00:00",
+  "model_specs": [
+    {
+      "c": 0.5,
+      "categorical": [
+        "router_route"
+      ],
+      "name": "logit_market_route",
+      "numeric": [
+        "router_ask"
+      ]
+    },
+    {
+      "c": 0.35,
+      "categorical": [
+        "router_route",
+        "city_family",
+        "moisture_cloud_regime",
+        "row_forecast_model"
+      ],
+      "name": "logit_mechanism_weather",
+      "numeric": [
+        "router_ask",
+        "forecast_peak_delta_hours_local",
+        "minutes_since_running_max",
+        "temp_trend_1h_f",
+        "wind_speed_kt",
+        "relative_humidity_pct",
+        "score_route_mult",
+        "score_price_mult",
+        "score_peak_mult",
+        "score_freshness_mult",
+        "score_momentum_mult",
+        "score_weather_mult"
+      ]
+    },
+    {
+      "c": 0.25,
+      "categorical": [
+        "router_route",
+        "city_family",
+        "moisture_cloud_regime",
+        "row_forecast_model",
+        "city_source_bias_regime"
+      ],
+      "name": "logit_mechanism_weather_citybias",
+      "numeric": [
+        "router_ask",
+        "forecast_peak_delta_hours_local",
+        "minutes_since_running_max",
+        "temp_trend_1h_f",
+        "wind_speed_kt",
+        "relative_humidity_pct",
+        "score_route_mult",
+        "score_price_mult",
+        "score_peak_mult",
+        "score_freshness_mult",
+        "score_momentum_mult",
+        "score_weather_mult",
+        "city_source_bias",
+        "city_source_bias_mae",
+        "city_source_bias_p90",
+        "city_source_hot_underforecast_rate",
+        "city_source_cold_overforecast_rate"
+      ]
+    },
+    {
+      "c": 0.2,
+      "categorical": [
+        "router_route",
+        "city_family",
+        "moisture_cloud_regime",
+        "row_forecast_model",
+        "city_source_bias_regime"
+      ],
+      "name": "logit_mechanism_plus_heuristic_score",
+      "numeric": [
+        "router_ask",
+        "forecast_peak_delta_hours_local",
+        "minutes_since_running_max",
+        "temp_trend_1h_f",
+        "wind_speed_kt",
+        "relative_humidity_pct",
+        "score_route_mult",
+        "score_price_mult",
+        "score_peak_mult",
+        "score_freshness_mult",
+        "score_momentum_mult",
+        "score_weather_mult",
+        "city_source_bias",
+        "city_source_bias_mae",
+        "city_source_bias_p90",
+        "city_source_hot_underforecast_rate",
+        "city_source_cold_overforecast_rate",
+        "score_deployed_weight",
+        "score_deployed_ratio"
+      ]
+    }
+  ],
+  "outputs": {
+    "daily_summary": "docs/analysis/2026-07/generated/regime_routed_no_calibrated_score_v2/daily_summary.csv",
+    "markdown": "docs/analysis/2026-07/2026-07-01-regime-routed-no-calibrated-score-v2.md",
+    "model_quality": "docs/analysis/2026-07/generated/regime_routed_no_calibrated_score_v2/model_quality.csv",
+    "scored_rows": "docs/analysis/2026-07/generated/regime_routed_no_calibrated_score_v2/scored_rows.csv",
+    "summary_json": "docs/analysis/2026-07/generated/regime_routed_no_calibrated_score_v2/summary.json",
+    "trade_summary": "docs/analysis/2026-07/generated/regime_routed_no_calibrated_score_v2/trade_summary.csv",
+    "walk_forward_summary": "docs/analysis/2026-07/generated/regime_routed_no_calibrated_score_v2/walk_forward_trade_summary.csv"
+  },
+  "raw_coverage": {
+    "frozen_live_like_route_price": {
+      "dropped_unscored_rows": 2,
+      "max_date": "2026-06-28",
+      "min_date": "2026-05-20",
+      "rows": 165,
+      "scored_rows": 163
+    },
+    "historical_best_ask_diagnostic": {
+      "dropped_unscored_rows": 0,
+      "max_date": "2026-06-26",
+      "min_date": "2026-05-20",
+      "rows": 283,
+      "scored_rows": 283
+    }
+  },
+  "strategy": "regime_routed_no_calibrated_score_v2",
+  "verdict": {
+    "baseline": "current_fixed_quality_heuristic",
+    "conclusion": "shadow_only_do_not_replace_live_score",
+    "forward": "FAIL_TO_BEAT_CURRENT_HEURISTIC",
+    "live_change": false,
+    "significance": "FAIL_FORWARD_THIN_MIXED"
+  }
+}
