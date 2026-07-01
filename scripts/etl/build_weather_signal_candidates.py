@@ -732,6 +732,29 @@ def _load_settlements(conn: sqlite3.Connection) -> dict[tuple, dict]:
     return out
 
 
+def _load_settlement_outcomes(conn: sqlite3.Connection) -> dict[tuple, dict]:
+    """settlement_outcomes keyed by (target_date, city, bracket). First wins.
+
+    `settlements` is condition-grain and can miss opportunity rows when the
+    snapshot condition_id lineage differs from the pm_history condition_id.
+    `settlement_outcomes` is the source-grain fallback for city/date/bracket
+    research denominators.
+    """
+    rows = conn.execute(
+        """
+        SELECT target_date, city, bracket, final_price, settlement_status
+        FROM settlement_outcomes
+        """
+    ).fetchall()
+    cols = ["target_date", "city", "bracket", "final_price", "settlement_status"]
+    out: dict[tuple, dict] = {}
+    for r in rows:
+        d = dict(zip(cols, r))
+        key = (d["target_date"], d["city"], str(d["bracket"]) if d["bracket"] is not None else None)
+        out.setdefault(key, d)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
@@ -759,6 +782,7 @@ def build(
     paper_orders, paper_stats = _load_paper_orders(paper_orders_path)
     live_fills = _load_live_fills(conn)
     settlements = _load_settlements(conn)
+    settlement_outcomes = _load_settlement_outcomes(conn)
 
     now_utc = datetime.now(timezone.utc).isoformat()
     alerts: list[str] = []
@@ -796,6 +820,8 @@ def build(
 
         # settlement
         sett = settlements.get((event_date, cid, opp.bracket))
+        if sett is None and opp.city:
+            sett = settlement_outcomes.get((event_date, opp.city, str(opp.bracket) if opp.bracket is not None else None))
         settlement_status = sett.get("settlement_status") if sett else None
         final_yes: float | None = None
         if settlement_status == "settled" and sett:
