@@ -41,10 +41,16 @@ import validate_reheat_tail_feature_discrimination_v1 as tail  # noqa: E402
 FEATURE_ROWS = [
     ROOT / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260519_20260620/reheat_feature_rows.csv",
     ROOT / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260621_20260623/reheat_feature_rows.csv",
+    ROOT / "docs/analysis/2026-06/generated/current_bracket_no_20260624_feature_factory/reheat_feature_rows.csv",
+    ROOT / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260625_20260628/reheat_feature_rows.csv",
+    ROOT / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260629_20260630/reheat_feature_rows.csv",
 ]
 EXT_DIRS = [
     ROOT / "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v7_20260617",
     ROOT / "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v9_20260623",
+    ROOT / "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v10_20260624",
+    ROOT / "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v11_20260628",
+    ROOT / "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v12_20260630",
 ]
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/current_yes_peak_yes_mechanism_v4"
 OUT_SCORED = OUT_DIR / "peak_yes_mechanism_v4_scored_rows.csv"

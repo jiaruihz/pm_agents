@@ -292,9 +292,12 @@ def render_report(
     expected = summary["expected"]
     holdout = periods[(periods["mode"].eq("first_city_date")) & (periods["period"].eq("holdout"))].iloc[0]
     full = modes[modes["mode"].eq("first_city_date")].iloc[0]
+    significance_pass = bool(full["roi_ci_low"] > 0)
+    baseline_pass = bool(full["excess_ci_low"] > 0)
+    forward_pass = bool(holdout["roi_ci_low"] > 0 and holdout["excess_ci_low"] > 0)
     conclusion = (
         "`shadow_candidate_keep_collecting`：去重后 full-window CI 仍为正，holdout 点估同号；但 holdout CI 跨 0，"
-        "且 expression matrix 只覆盖到 2026-06-23，不能 live。"
+        "仍不能 live。"
         if summary["conclusion"] == "shadow_candidate"
         else "`inconclusive`：可执行化去重后显著性、baseline 或 forward 不足。"
     )
@@ -325,7 +328,13 @@ def render_report(
             "",
             conclusion,
             "",
-            "significance=PASS baseline=PASS forward=FAIL conclusion="
+            "significance="
+            + ("PASS" if significance_pass else "FAIL")
+            + " baseline="
+            + ("PASS" if baseline_pass else "FAIL")
+            + " forward="
+            + ("PASS" if forward_pass else "FAIL")
+            + " conclusion="
             + ("shadow_candidate" if summary["conclusion"] == "shadow_candidate" else "inconclusive"),
             "",
             "## 数据快照",
@@ -333,7 +342,7 @@ def render_report(
             f"- DB: `{db.get('db_path')}`, fact_built_at_utc `{db.get('fact_built_at_utc')}`, CLOB gate_pass={db.get('gate_pass')}.",
             f"- fact_trades={db.get('fact_trades_rows')}, fact_signal_candidates={db.get('fact_signal_candidates_rows')}, unsettled-like={db.get('settlement_status_counts', {}).get('NULL', 0)}.",
             f"- Expression matrix coverage: {len(rows)} rows, {rows['target_date'].nunique()} dates, {rows['city'].nunique()} cities, {rows['target_date'].min()}..{rows['target_date'].max()}.",
-            "- 注意：7/1 sync/rebuild 没有把这份 expression matrix 扩展到 6/24 以后；fresh forward 仍待 zero-notional telemetry。",
+            f"- 注意：本轮已把可结算 expression matrix 扩到 {rows['target_date'].max()}；6/27..6/29 有部分状态但缺 final winner，6/30 缺日内 orderbook replay/settlement，不能计入 ROI。",
             "",
             "## Execution Granularity A/B",
             "",
