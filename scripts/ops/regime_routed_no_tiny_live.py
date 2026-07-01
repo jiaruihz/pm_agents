@@ -64,9 +64,13 @@ PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 BLOCKED_OUT = RUNTIME_DIR / "blocked_candidates.jsonl"
+SHADOW_OUT = RUNTIME_DIR / "shadow_candidates.jsonl"
 LATEST_CANDIDATES_OUT = RUNTIME_DIR / "latest_candidates.json"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
+HIST_FORECAST_BIAS_SUMMARY = (
+    ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/city_model_error_summary.csv"
+)
 DEFAULT_SNAPSHOT_DIR_CANDIDATES = [
     Path("/home/jiarui/projects/weather_data_feed_service_runtime/output/paper_snapshots"),
     Path("/home/jiarui/projects/weather-predict/output/paper_snapshots"),
@@ -111,6 +115,10 @@ CURRENT_NO_ROUTE_LEGS = {
     "false_fade_reheat_current_no",
     "cheap_stale_tail_current_no",
     "runway_current_no",
+}
+SHADOW_ONLY_ROUTE_LEGS = {
+    "false_fade_reheat_current_no",
+    "cheap_stale_tail_current_no",
 }
 
 
@@ -543,6 +551,145 @@ def current_no_route_for_state(labelled: dict[str, Any]) -> str:
     return ""
 
 
+def forecast_model_from_source(source: Any, clock_source: Any = "") -> str:
+    text = f"{source or ''} {clock_source or ''}".lower()
+    if "ecmwf" in text:
+        return "ecmwf"
+    if "gfs" in text:
+        return "gfs"
+    return "unknown"
+
+
+def classify_city_source_bias(row: pd.Series) -> str:
+    bias = safe_float(row.get("bias"))
+    p90 = safe_float(row.get("p90"))
+    p10 = safe_float(row.get("p10"))
+    hot = safe_float(row.get("pct_actual_ge_forecast_plus_1"))
+    cold = safe_float(row.get("pct_forecast_ge_actual_plus_1"))
+    mae = safe_float(row.get("mae"))
+    if bias >= 0.7 and hot >= 0.40 and cold <= 0.15:
+        return "hot_underforecast_clean"
+    if bias >= 0.5 and p90 >= 2.0 and hot >= 0.35:
+        return "hot_underforecast_noisy"
+    if bias <= -0.5 and cold >= 0.35 and hot <= 0.20:
+        return "cold_overforecast_clean"
+    if cold >= 0.25 and p10 <= -1.5:
+        return "cold_overforecast_noisy"
+    if mae <= 1.0 and hot < 0.25 and cold < 0.25 and abs(bias) < 0.35:
+        return "balanced_tight"
+    if hot >= 0.25 and cold >= 0.20:
+        return "two_sided_noisy"
+    return "mild_or_mixed"
+
+
+def load_city_source_bias_lookup() -> dict[tuple[str, str], dict[str, Any]]:
+    if not HIST_FORECAST_BIAS_SUMMARY.exists():
+        return {}
+    hist = pd.read_csv(HIST_FORECAST_BIAS_SUMMARY)
+    if hist.empty:
+        return {}
+    hist["city_source_bias_regime"] = hist.apply(classify_city_source_bias, axis=1)
+    lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    for _, row in hist.iterrows():
+        city = str(row.get("city") or "")
+        model = str(row.get("model") or "")
+        if not city or not model:
+            continue
+        lookup[(city, model)] = {
+            "city_source_bias_regime": str(row.get("city_source_bias_regime") or "unclassified"),
+            "city_source_bias_n": int(safe_float(row.get("n"), 0.0)),
+            "city_source_bias": safe_float(row.get("bias")),
+            "city_source_bias_mae": safe_float(row.get("mae")),
+            "city_source_bias_p90": safe_float(row.get("p90")),
+            "city_source_hot_underforecast_rate": safe_float(row.get("pct_actual_ge_forecast_plus_1")),
+            "city_source_cold_overforecast_rate": safe_float(row.get("pct_forecast_ge_actual_plus_1")),
+        }
+    return lookup
+
+
+def expression_group_for_bias(row: pd.Series) -> str:
+    expression = str(row.get("expression") or "")
+    route_leg = str(row.get("route_leg") or "")
+    if expression == "current_bracket_no":
+        return "current_bracket_no"
+    if route_leg == "capped_d2_no" or expression == "d2_no":
+        return "higher_no_d2"
+    if expression.endswith("_yes"):
+        return "current_high_yes"
+    return expression or "unknown"
+
+
+def city_source_bias_multiplier(expression_group: str, regime: str) -> float:
+    """Mechanism prior from forecast-vs-station bias; not fitted to live PnL."""
+    if expression_group == "current_bracket_no":
+        table = {
+            "hot_underforecast_clean": 1.15,
+            "hot_underforecast_noisy": 0.85,
+            "balanced_tight": 0.90,
+            "mild_or_mixed": 0.80,
+            "cold_overforecast_noisy": 0.75,
+            "cold_overforecast_clean": 0.65,
+            "two_sided_noisy": 0.60,
+            "unclassified": 0.80,
+        }
+    elif expression_group in {"higher_no_d1", "higher_no_d2"}:
+        table = {
+            "cold_overforecast_clean": 1.15,
+            "cold_overforecast_noisy": 1.05,
+            "balanced_tight": 1.00,
+            "mild_or_mixed": 0.90,
+            "hot_underforecast_noisy": 0.75,
+            "hot_underforecast_clean": 0.65,
+            "two_sided_noisy": 0.70,
+            "unclassified": 0.85,
+        }
+    else:
+        table = {
+            "cold_overforecast_clean": 1.10,
+            "cold_overforecast_noisy": 1.05,
+            "balanced_tight": 1.00,
+            "mild_or_mixed": 0.90,
+            "hot_underforecast_noisy": 0.80,
+            "hot_underforecast_clean": 0.65,
+            "two_sided_noisy": 0.70,
+            "unclassified": 0.85,
+        }
+    return float(table.get(regime, 0.80))
+
+
+def attach_city_source_bias(frame: pd.DataFrame, lookup: dict[tuple[str, str], dict[str, Any]]) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    out = frame.copy()
+    models: list[str] = []
+    regimes: list[str] = []
+    multipliers: list[float] = []
+    metrics: dict[str, list[Any]] = {
+        "city_source_bias_n": [],
+        "city_source_bias": [],
+        "city_source_bias_mae": [],
+        "city_source_bias_p90": [],
+        "city_source_hot_underforecast_rate": [],
+        "city_source_cold_overforecast_rate": [],
+    }
+    for _, row in out.iterrows():
+        model = forecast_model_from_source(row.get("forecast_source"), row.get("forecast_clock_source"))
+        info = lookup.get((str(row.get("city") or ""), model), {})
+        regime = str(info.get("city_source_bias_regime") or "unclassified")
+        expr_group = expression_group_for_bias(row)
+        models.append(model)
+        regimes.append(regime)
+        multipliers.append(city_source_bias_multiplier(expr_group, regime) if expr_group == "higher_no_d2" else 1.0)
+        for key in metrics:
+            metrics[key].append(info.get(key))
+    out["row_forecast_model"] = models
+    out["city_source_bias_regime"] = regimes
+    out["city_source_bias_multiplier_v1"] = multipliers
+    for key, values in metrics.items():
+        out[key] = values
+    return out
+
+
 def row_risk_soft_v1(frame: pd.DataFrame) -> pd.Series:
     if frame.empty:
         return pd.Series(dtype="float64")
@@ -843,6 +990,9 @@ def build_city_state(
         )
     if not d2_no.empty:
         row = d2_no.sort_values("book_ask").iloc[0]
+        d2_yes = books[
+            books["outcome"].eq("yes") & books["bracket"].astype(str).eq(str(row.get("bracket") or ""))
+        ].copy()
         labelled.update(
             {
                 "d2_no_bracket": str(row["bracket"]),
@@ -857,6 +1007,21 @@ def build_city_state(
                 "d2_no_market_date_match": bool(row.get("book_market_date_match")),
             }
         )
+        if not d2_yes.empty:
+            yes_row = d2_yes.sort_values("book_ask").iloc[0]
+            labelled.update(
+                {
+                    "tail_yes_shadow_expression": "same_bracket_tail_yes",
+                    "tail_yes_shadow_bracket": str(yes_row["bracket"]),
+                    "tail_yes_shadow_ask": yes_row["book_ask"],
+                    "tail_yes_shadow_ask_size": yes_row["book_ask_size"],
+                    "tail_yes_shadow_bid": yes_row["book_bid"],
+                    "tail_yes_shadow_token_id": yes_row["book_token_id"],
+                    "tail_yes_shadow_market_id": str(yes_row.get("market_id") or ""),
+                    "tail_yes_shadow_event_slug": str(yes_row.get("event_slug") or ""),
+                    "tail_yes_shadow_question": str(yes_row.get("question") or ""),
+                }
+            )
 
     regime = str(labelled.get("day_regime") or "")
     current_no_route = current_no_route_for_state(labelled) if regime in {"day_open_runway", "day_marginal_runway"} else ""
@@ -961,6 +1126,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
     selected = pd.DataFrame(routed)
     if not selected.empty:
         selected = research.add_soft_weights(selected)
+        selected = attach_city_source_bias(selected, load_city_source_bias_lookup())
         wind_speed = pd.to_numeric(selected.get("wind_speed_kt"), errors="coerce")
         coastal_flow = selected.get("coastal_flow_state", pd.Series("", index=selected.index)).astype(str)
         geo_context = selected.get("geo_context", pd.Series("", index=selected.index)).astype(str)
@@ -1029,6 +1195,18 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         )
         peak_delta = pd.to_numeric(selected.get("forecast_peak_delta_hours_local"), errors="coerce")
         route_leg = selected["route_leg"].astype(str)
+        selected["shadow_only_route_leg"] = route_leg.isin(SHADOW_ONLY_ROUTE_LEGS)
+        selected["shadow_only_reason"] = np.where(
+            selected["shadow_only_route_leg"],
+            "tail_or_false_fade_current_no_shadow_only",
+            "",
+        )
+        selected["tail_yes_shadow_reason"] = np.where(
+            route_leg.eq("capped_d2_no")
+            & selected["city_source_bias_regime"].astype(str).str.contains("hot_underforecast", na=False),
+            "hot_underforecast_city_source_same_bracket_yes_shadow",
+            np.where(route_leg.eq("capped_d2_no"), "same_bracket_yes_shadow_for_capped_d2_no", ""),
+        )
         is_current_no_route = route_leg.isin(CURRENT_NO_ROUTE_LEGS) | selected["expression"].astype(str).eq("current_bracket_no")
         is_fresh_current_no_route = route_leg.isin({"runway_current_no", "fresh_runway_current_no"})
         selected["current_no_peak_clock_ok"] = (~is_fresh_current_no_route) | peak_delta.le(0.0)
@@ -1046,7 +1224,11 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         selected["current_no_runway_state_ok"] = selected.apply(current_no_runway_state_ok, axis=1).fillna(False).astype(bool)
         selected["route_price_cap"] = selected["route_leg"].map(ROUTE_PRICE_CAPS).astype(float)
         selected["route_price_ok"] = pd.to_numeric(selected["ask"], errors="coerce").le(selected["route_price_cap"])
-        selected["row_risk_soft_v1"] = row_risk_soft_v1(selected)
+        selected["row_risk_soft_base_v1"] = row_risk_soft_v1(selected)
+        selected["row_risk_soft_v1"] = (
+            pd.to_numeric(selected["row_risk_soft_base_v1"], errors="coerce")
+            * pd.to_numeric(selected["city_source_bias_multiplier_v1"], errors="coerce").fillna(1.0)
+        ).clip(0.05, 1.0)
         selected["base_notional_usd"] = float(args.base_notional)
         selected["legacy_soft_balanced_notional_usd"] = selected["base_notional_usd"] * pd.to_numeric(
             selected["soft_balanced"], errors="coerce"
@@ -1101,6 +1283,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & selected["current_no_escape_ok"].astype(bool)
             & selected["market_date_match_ok"].fillna(False).astype(bool)
             & ~selected["live_duplicate_key"].astype(bool)
+            & ~selected["shadow_only_route_leg"].astype(bool)
         )
         def skip_reason(row: pd.Series) -> str:
             if bool(row.get("execution_eligible")):
@@ -1110,6 +1293,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             soft_shares = safe_float(row.get("soft_shares"))
             ask_size = safe_float(row.get("ask_size"))
             live_order_shares = safe_float(row.get("live_order_shares"))
+            if bool(row.get("shadow_only_route_leg")):
+                reasons.append("shadow_only_route_leg")
             if math.isfinite(ask) and ask < research.ASK_MIN:
                 reasons.append("ask_below_min")
             if not bool(row.get("route_price_ok", True)):
@@ -1145,6 +1330,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
 
 
 def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) -> dict[str, Any]:
+    candidate_status = "accepted" if accepted else "shadow_only" if bool(row.get("shadow_only_route_leg")) else "blocked"
     payload = {
         "record_type": "regime_routed_no_candidate",
         "created_at_utc": utc_now_iso(),
@@ -1160,7 +1346,7 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_INSTANCE,
         "rule_id": RULE_ID,
-        "candidate_status": "accepted" if accepted else "blocked",
+        "candidate_status": candidate_status,
         "execution_skip_reason": "" if accepted else str(row.get("execution_skip_reason") or ""),
         "city": row.get("city"),
         "target_date": row.get("target_date"),
@@ -1189,6 +1375,28 @@ def candidate_record(row: pd.Series, *, meta: dict[str, Any], accepted: bool) ->
         "soft_balanced": row.get("soft_balanced"),
         "legacy_soft_balanced_notional_usd": row.get("legacy_soft_balanced_notional_usd"),
         "row_risk_soft_v1": row.get("row_risk_soft_v1"),
+        "row_risk_soft_base_v1": row.get("row_risk_soft_base_v1"),
+        "row_forecast_model": row.get("row_forecast_model"),
+        "city_source_bias_regime": row.get("city_source_bias_regime"),
+        "city_source_bias_multiplier_v1": row.get("city_source_bias_multiplier_v1"),
+        "city_source_bias_n": row.get("city_source_bias_n"),
+        "city_source_bias": row.get("city_source_bias"),
+        "city_source_bias_mae": row.get("city_source_bias_mae"),
+        "city_source_bias_p90": row.get("city_source_bias_p90"),
+        "city_source_hot_underforecast_rate": row.get("city_source_hot_underforecast_rate"),
+        "city_source_cold_overforecast_rate": row.get("city_source_cold_overforecast_rate"),
+        "shadow_only_route_leg": row.get("shadow_only_route_leg"),
+        "shadow_only_reason": row.get("shadow_only_reason"),
+        "tail_yes_shadow_expression": row.get("tail_yes_shadow_expression"),
+        "tail_yes_shadow_reason": row.get("tail_yes_shadow_reason"),
+        "tail_yes_shadow_bracket": row.get("tail_yes_shadow_bracket"),
+        "tail_yes_shadow_ask": row.get("tail_yes_shadow_ask"),
+        "tail_yes_shadow_bid": row.get("tail_yes_shadow_bid"),
+        "tail_yes_shadow_ask_size": row.get("tail_yes_shadow_ask_size"),
+        "tail_yes_shadow_token_id": row.get("tail_yes_shadow_token_id"),
+        "tail_yes_shadow_market_id": row.get("tail_yes_shadow_market_id"),
+        "tail_yes_shadow_event_slug": row.get("tail_yes_shadow_event_slug"),
+        "tail_yes_shadow_question": row.get("tail_yes_shadow_question"),
         "soft_notional_usd": row.get("soft_notional_usd"),
         "soft_shares": row.get("soft_shares"),
         "live_order_shares": row.get("live_order_shares"),
@@ -1280,6 +1488,7 @@ def write_candidate_audit(candidates: pd.DataFrame, meta: dict[str, Any]) -> tup
         for _, row in candidates.iterrows()
     ]
     blocked = [row for row in records if row.get("candidate_status") == "blocked"]
+    shadow_only = [row for row in records if row.get("candidate_status") == "shadow_only"]
     write_json(
         LATEST_CANDIDATES_OUT,
         {
@@ -1292,6 +1501,8 @@ def write_candidate_audit(candidates: pd.DataFrame, meta: dict[str, Any]) -> tup
     )
     for row in blocked:
         append_jsonl(BLOCKED_OUT, row)
+    for row in shadow_only:
+        append_jsonl(SHADOW_OUT, row)
     return len(records), len(blocked)
 
 
@@ -1394,7 +1605,24 @@ def build_plan(row: pd.Series, *, live_enabled: bool, ttl_min: float) -> dict[st
         "running_max_state": str(row.get("running_max_state") or ""),
         "soft_balanced_multiplier": round(safe_float(row.get("soft_balanced"), 0.0), 6),
         "legacy_soft_balanced_notional_usd": round(safe_float(row.get("legacy_soft_balanced_notional_usd"), 0.0), 6),
+        "row_risk_soft_base_v1": round(safe_float(row.get("row_risk_soft_base_v1"), 0.0), 6),
         "row_risk_soft_v1": round(safe_float(row.get("row_risk_soft_v1"), 0.0), 6),
+        "row_forecast_model": str(row.get("row_forecast_model") or ""),
+        "city_source_bias_regime": str(row.get("city_source_bias_regime") or ""),
+        "city_source_bias_multiplier_v1": round(safe_float(row.get("city_source_bias_multiplier_v1"), 1.0), 6),
+        "city_source_bias_n": round(safe_float(row.get("city_source_bias_n"), 0.0), 6),
+        "city_source_bias": safe_float(row.get("city_source_bias"), None),
+        "city_source_bias_mae": safe_float(row.get("city_source_bias_mae"), None),
+        "city_source_bias_p90": safe_float(row.get("city_source_bias_p90"), None),
+        "city_source_hot_underforecast_rate": safe_float(row.get("city_source_hot_underforecast_rate"), None),
+        "city_source_cold_overforecast_rate": safe_float(row.get("city_source_cold_overforecast_rate"), None),
+        "tail_yes_shadow_expression": str(row.get("tail_yes_shadow_expression") or ""),
+        "tail_yes_shadow_reason": str(row.get("tail_yes_shadow_reason") or ""),
+        "tail_yes_shadow_bracket": str(row.get("tail_yes_shadow_bracket") or ""),
+        "tail_yes_shadow_ask": safe_float(row.get("tail_yes_shadow_ask"), None),
+        "tail_yes_shadow_bid": safe_float(row.get("tail_yes_shadow_bid"), None),
+        "tail_yes_shadow_ask_size": safe_float(row.get("tail_yes_shadow_ask_size"), None),
+        "tail_yes_shadow_token_id": str(row.get("tail_yes_shadow_token_id") or ""),
         "route_price_cap": round(safe_float(row.get("route_price_cap"), 0.0), 6),
         "route_price_ok": bool(row.get("route_price_ok")),
         "wind_only_multiplier_shadow": round(safe_float(row.get("wind_only_multiplier_shadow"), 1.0), 6),
@@ -1599,6 +1827,7 @@ def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -
             & candidates["current_no_escape_ok"].astype(bool)
             & candidates["market_date_match_ok"].fillna(False).astype(bool)
             & ~candidates["live_duplicate_key"].astype(bool)
+            & ~candidates.get("shadow_only_route_leg", pd.Series(False, index=candidates.index)).fillna(False).astype(bool)
         )
         out[name] = {
             "weight_col": weight_col,
@@ -1629,6 +1858,15 @@ def main() -> int:
         "min_order_shares": float(args.min_order_shares),
         "routed_candidates": int(len(candidates)),
         "execution_eligible": int(candidates["execution_eligible"].sum()) if not candidates.empty else 0,
+        "shadow_only_candidates": int(candidates["shadow_only_route_leg"].sum()) if not candidates.empty else 0,
+        "shadow_only_by_route_leg": (
+            candidates[candidates["shadow_only_route_leg"].fillna(False).astype(bool)]["route_leg"]
+            .value_counts(dropna=False)
+            .to_dict()
+            if not candidates.empty
+            else {}
+        ),
+        "city_source_bias_file": str(HIST_FORECAST_BIAS_SUMMARY.relative_to(ROOT)),
         "shadow_policy_counts": shadow_policy_counts(candidates, min_order_shares=float(args.min_order_shares)),
         "plans_written": len(plans),
         "candidate_rows": candidate_rows,
@@ -1639,6 +1877,7 @@ def main() -> int:
         "paper_out": str(PAPER_OUT.relative_to(ROOT)),
         "live_out": str(LIVE_OUT.relative_to(ROOT)),
         "blocked_out": str(BLOCKED_OUT.relative_to(ROOT)),
+        "shadow_out": str(SHADOW_OUT.relative_to(ROOT)),
         "latest_candidates_out": str(LATEST_CANDIDATES_OUT.relative_to(ROOT)),
         "meta": meta,
         "executor_result": executor_result,
