@@ -58,6 +58,8 @@ OUTPUT_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_OUTPUT_ROOT", DEFAULT_RUNTI
 CACHE_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_CACHE_ROOT", DEFAULT_RUNTIME_DIR / "cache"))
 OUTPUT_DIR = OUTPUT_ROOT / "paper_snapshots"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+PARTIAL_OUTPUT_DIR = OUTPUT_ROOT / "paper_snapshots_partial"
+PARTIAL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ORDERBOOK_OUTPUT_DIR = OUTPUT_ROOT / "orderbook_snapshots"
 ORDERBOOK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 PM_HTTP_TIMEOUT = httpx.Timeout(
@@ -84,8 +86,47 @@ PM_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_PM_CURL_TIMEOUT_SE
 PM_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_PM_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
 ALLOW_EMPTY_SNAPSHOT = os.environ.get("WEATHER_DATA_FEED_ALLOW_EMPTY_SNAPSHOT", "0") == "1"
 MIN_SNAPSHOT_RECORDS = int(os.environ.get("WEATHER_DATA_FEED_MIN_SNAPSHOT_RECORDS", "100"))
+MIN_SNAPSHOT_CITIES = int(os.environ.get("WEATHER_DATA_FEED_MIN_SNAPSHOT_CITIES", "35"))
+MIN_SNAPSHOT_CITY_DATE_PAIRS = int(os.environ.get("WEATHER_DATA_FEED_MIN_SNAPSHOT_CITY_DATE_PAIRS", "35"))
 
 BASE_SHARES = 10
+
+
+def snapshot_publish_quality(records):
+    cities = sorted({str(r.get("city") or "") for r in records if r.get("city")})
+    event_dates = sorted({str(r.get("event_date") or r.get("target_date") or "") for r in records if r.get("event_date") or r.get("target_date")})
+    city_date_pairs = sorted({
+        (str(r.get("city") or ""), str(r.get("event_date") or r.get("target_date") or ""))
+        for r in records
+        if r.get("city") and (r.get("event_date") or r.get("target_date"))
+    })
+    records_by_event_date = {}
+    for r in records:
+        key = str(r.get("event_date") or r.get("target_date") or "")
+        if not key:
+            continue
+        records_by_event_date[key] = records_by_event_date.get(key, 0) + 1
+    reasons = []
+    if len(records) < MIN_SNAPSHOT_RECORDS:
+        reasons.append(f"total_records_lt_{MIN_SNAPSHOT_RECORDS}")
+    if len(cities) < MIN_SNAPSHOT_CITIES:
+        reasons.append(f"unique_cities_lt_{MIN_SNAPSHOT_CITIES}")
+    if len(city_date_pairs) < MIN_SNAPSHOT_CITY_DATE_PAIRS:
+        reasons.append(f"city_date_pairs_lt_{MIN_SNAPSHOT_CITY_DATE_PAIRS}")
+    publishable = bool(ALLOW_EMPTY_SNAPSHOT or not reasons)
+    return {
+        "publishable": publishable,
+        "reasons": [] if publishable else reasons,
+        "total_records": len(records),
+        "unique_cities": len(cities),
+        "city_date_pairs": len(city_date_pairs),
+        "event_dates": event_dates,
+        "records_by_event_date": records_by_event_date,
+        "min_snapshot_records": MIN_SNAPSHOT_RECORDS,
+        "min_snapshot_cities": MIN_SNAPSHOT_CITIES,
+        "min_snapshot_city_date_pairs": MIN_SNAPSHOT_CITY_DATE_PAIRS,
+        "partial_archive_dir": str(PARTIAL_OUTPUT_DIR),
+    }
 
 
 def curl_json_get(url, params=None, *, proxy=None, timeout_sec=5.0, connect_timeout_sec=2.0):
@@ -1488,8 +1529,11 @@ def main():
         time.sleep(0.3)
 
     # Save
-    fname = f"snapshot_{now_beijing.strftime('%Y%m%d_%H%M')}.json"
-    out_file = OUTPUT_DIR / fname
+    stamp = now_beijing.strftime("%Y%m%d_%H%M")
+    fname = f"snapshot_{stamp}.json"
+    partial_fname = f"partial_snapshot_{stamp}.json"
+    publish_quality = snapshot_publish_quality(all_records)
+    out_file = OUTPUT_DIR / fname if publish_quality["publishable"] else PARTIAL_OUTPUT_DIR / partial_fname
     output = {
         "ts_beijing": now_beijing.strftime("%Y-%m-%d %H:%M:%S"),
         "ts_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -1502,13 +1546,8 @@ def main():
         "records": all_records,
         "schema_version": "v3_cross_section_forecast_peak_clock",
         "data_feed_schema_version": SNAPSHOT_SCHEMA_VERSION,
+        "snapshot_publish_quality": publish_quality,
     }
-    if len(all_records) < MIN_SNAPSHOT_RECORDS and not ALLOW_EMPTY_SNAPSHOT:
-        raise RuntimeError(
-            f"refusing to write incomplete paper snapshot: total_records={len(all_records)} "
-            f"< min_snapshot_records={MIN_SNAPSHOT_RECORDS}; "
-            "this usually means Gamma market discovery returned a partial market universe"
-        )
     with open(out_file, "w") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
 
@@ -1516,6 +1555,9 @@ def main():
     edge_trades = [r for r in all_records if r["abs_edge"] >= 0.05]
     print(f"\n{'='*90}")
     print(f" Saved: {out_file}")
+    print(f" Publishable: {publish_quality['publishable']} | reasons: {publish_quality['reasons']}")
+    if not publish_quality["publishable"]:
+        print(" Partial snapshot archived without replacing live snapshot_*.json")
     print(f" Total brackets: {len(all_records)} | Edge>=5%: {len(edge_trades)}")
     print(f"{'='*90}")
 
