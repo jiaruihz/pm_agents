@@ -69,6 +69,7 @@ DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "s
 DEFAULT_ORDERBOOK_BUDGET_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC", "30"))
 DEFAULT_ORDERBOOK_WORKERS = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_WORKERS", "1"))
 DEFAULT_ORDERBOOK_RETRIES = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_RETRIES", "2"))
+ALLOW_EMPTY_SNAPSHOT = os.environ.get("WEATHER_DATA_FEED_ALLOW_EMPTY_SNAPSHOT", "0") == "1"
 
 BASE_SHARES = 10
 
@@ -1341,6 +1342,11 @@ def main():
         "schema_version": "v3_cross_section_forecast_peak_clock",
         "data_feed_schema_version": SNAPSHOT_SCHEMA_VERSION,
     }
+    if not all_records and not ALLOW_EMPTY_SNAPSHOT:
+        raise RuntimeError(
+            "refusing to write empty paper snapshot: total_records=0; "
+            "this usually means Gamma market discovery returned no markets"
+        )
     with open(out_file, "w") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
 
