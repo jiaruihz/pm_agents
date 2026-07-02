@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-RUNTIME_DIR="$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
+RUNTIME_DIR="${REGIME_ROUTED_NO_SHADOW_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_shadow_v1}"
 PID_FILE="$RUNTIME_DIR/shadow_loop.pid"
 LOG_FILE="$RUNTIME_DIR/shadow_loop.log"
 PY="$PROJECT_DIR/.venv/bin/python"
@@ -47,7 +47,7 @@ cd "$PROJECT_DIR"
 while true; do
   date -u +"[regime_routed_no_shadow] cycle_start_utc=%Y-%m-%dT%H:%M:%SZ"
   set +e
-  "$PY" -u scripts/ops/regime_routed_no_tiny_live.py \
+  REGIME_ROUTED_NO_RUNTIME_DIR="$RUNTIME_DIR" "$PY" -u scripts/ops/regime_routed_no_tiny_live.py \
     --snapshot-dir "$SNAPSHOT_DIR" \
     --observation-cache "$OBSERVATION_CACHE" \
     --base-notional "$BASE_NOTIONAL" \

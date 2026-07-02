@@ -12,9 +12,11 @@ Paper trade snapshot recorder.
 import gzip
 import hashlib
 import json, math, os, sys, re, time
+import subprocess
+import urllib.parse
 import httpx
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 from datetime import datetime, timedelta, date, timezone
 from xml.etree import ElementTree
@@ -58,7 +60,12 @@ OUTPUT_DIR = OUTPUT_ROOT / "paper_snapshots"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 ORDERBOOK_OUTPUT_DIR = OUTPUT_ROOT / "orderbook_snapshots"
 ORDERBOOK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-PM_HTTP_TIMEOUT = httpx.Timeout(8.0, connect=3.0, read=8.0, write=3.0, pool=10.0)
+PM_HTTP_TIMEOUT = httpx.Timeout(
+    connect=float(os.environ.get("WEATHER_DATA_FEED_PM_CONNECT_TIMEOUT_SEC", "2.0")),
+    read=float(os.environ.get("WEATHER_DATA_FEED_PM_READ_TIMEOUT_SEC", "4.0")),
+    write=float(os.environ.get("WEATHER_DATA_FEED_PM_WRITE_TIMEOUT_SEC", "2.0")),
+    pool=float(os.environ.get("WEATHER_DATA_FEED_PM_POOL_TIMEOUT_SEC", "4.0")),
+)
 WEATHER_HTTP_TIMEOUT = httpx.Timeout(5.0, connect=2.0, read=5.0, write=2.0, pool=2.0)
 PM_HTTP_LIMITS = httpx.Limits(
     max_connections=int(os.environ.get("WEATHER_DATA_FEED_PM_MAX_CONNECTIONS", "16")),
@@ -68,10 +75,59 @@ WEATHER_HTTP_LIMITS = httpx.Limits(max_connections=8, max_keepalive_connections=
 DEFAULT_ORDERBOOK_SCOPE = os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_SCOPE", "strategy_live")
 DEFAULT_ORDERBOOK_BUDGET_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC", "30"))
 DEFAULT_ORDERBOOK_WORKERS = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_WORKERS", "1"))
-DEFAULT_ORDERBOOK_RETRIES = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_RETRIES", "2"))
+DEFAULT_ORDERBOOK_RETRIES = int(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_RETRIES", "0"))
+ORDERBOOK_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_CURL_TIMEOUT_SEC", "4.0"))
+ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
+WEATHER_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_WEATHER_CURL_TIMEOUT_SEC", "5.0"))
+WEATHER_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_WEATHER_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
+PM_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_PM_CURL_TIMEOUT_SEC", "5.0"))
+PM_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_PM_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
 ALLOW_EMPTY_SNAPSHOT = os.environ.get("WEATHER_DATA_FEED_ALLOW_EMPTY_SNAPSHOT", "0") == "1"
+MIN_SNAPSHOT_RECORDS = int(os.environ.get("WEATHER_DATA_FEED_MIN_SNAPSHOT_RECORDS", "100"))
 
 BASE_SHARES = 10
+
+
+def curl_json_get(url, params=None, *, proxy=None, timeout_sec=5.0, connect_timeout_sec=2.0):
+    """Fetch JSON with curl so flaky network paths cannot pin the Python process."""
+    if params:
+        query = urllib.parse.urlencode(params, doseq=True)
+        url = f"{url}{'&' if '?' in url else '?'}{query}"
+    tmp = Path(f"/tmp/weather_http_{os.getpid()}_{hashlib.sha1(url.encode()).hexdigest()[:12]}.json")
+    try:
+        cmd = [
+            "curl",
+            "--connect-timeout",
+            str(connect_timeout_sec),
+            "--max-time",
+            str(timeout_sec),
+            "-sS",
+            "-w",
+            "\n%{http_code}",
+            "-o",
+            str(tmp),
+        ]
+        if proxy:
+            cmd.extend(["-x", proxy])
+        cmd.append(url)
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            capture_output=True,
+            timeout=max(float(timeout_sec) + 1.0, float(connect_timeout_sec) + 1.0),
+        )
+        status_line = (proc.stdout or "").strip().splitlines()[-1] if (proc.stdout or "").strip() else ""
+        status_code = int(status_line) if status_line.isdigit() else 0
+        if status_code != 200:
+            return status_code, None, f"curl_status={status_code} returncode={proc.returncode} stderr={(proc.stderr or '').strip()[:180]}"
+        return status_code, json.loads(tmp.read_text(encoding="utf-8")), ""
+    except Exception as exc:
+        return 0, None, f"{type(exc).__name__}: {exc}"
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def city_scan_dates(now_utc, city, explicit_target_date=None):
@@ -217,9 +273,28 @@ def fetch_token_orderbook(client, token_id, top_n=20, retries=DEFAULT_ORDERBOOK_
     attempts = max(1, int(retries or 0) + 1)
     for attempt in range(attempts):
         fetched_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        tmp = Path(f"/tmp/weather_orderbook_{os.getpid()}_{hashlib.sha1(str(token_id).encode()).hexdigest()[:12]}.json")
         try:
-            r = client.get(f"{PM_CLOB_URL}/book", params={"token_id": token_id})
-            if r.status_code == 404:
+            url = f"{PM_CLOB_URL}/book?token_id={urllib.parse.quote(str(token_id), safe='')}"
+            cmd = [
+                "curl",
+                "--connect-timeout",
+                str(ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC),
+                "--max-time",
+                str(ORDERBOOK_CURL_TIMEOUT_SEC),
+                "-sS",
+                "-w",
+                "\n%{http_code}",
+                "-o",
+                str(tmp),
+            ]
+            if PROXY:
+                cmd.extend(["-x", PROXY])
+            cmd.append(url)
+            proc = subprocess.run(cmd, text=True, capture_output=True)
+            status_line = (proc.stdout or "").strip().splitlines()[-1] if (proc.stdout or "").strip() else ""
+            status_code = int(status_line) if status_line.isdigit() else 0
+            if status_code == 404:
                 return {
                     "status": "not_found",
                     "token_id": token_id,
@@ -227,30 +302,41 @@ def fetch_token_orderbook(client, token_id, top_n=20, retries=DEFAULT_ORDERBOOK_
                     "summary": {},
                     "raw": {},
                 }
-            if r.status_code < 500 and r.status_code != 429:
-                r.raise_for_status()
-            elif attempt < attempts - 1:
+            if status_code == 200:
+                raw = json.loads(tmp.read_text(encoding="utf-8"))
+                summary = summarize_orderbook(raw, top_n=top_n)
+                return {
+                    "status": "ok",
+                    "token_id": token_id,
+                    "fetched_at_utc": fetched_at_utc,
+                    "summary": summary,
+                    "raw": {
+                        "bids": summary["bids"],
+                        "asks": summary["asks"],
+                    },
+                }
+            if status_code >= 500 or status_code == 429:
+                last_error = RuntimeError(
+                    f"curl_status={status_code} returncode={proc.returncode} stderr={(proc.stderr or '').strip()[:180]}"
+                )
+            else:
+                last_error = RuntimeError(
+                    f"curl_status={status_code} returncode={proc.returncode} stderr={(proc.stderr or '').strip()[:180]}"
+                )
+                break
+            if attempt < attempts - 1:
                 time.sleep(0.2 * (attempt + 1))
                 continue
-            else:
-                r.raise_for_status()
-            raw = r.json()
-            summary = summarize_orderbook(raw, top_n=top_n)
-            return {
-                "status": "ok",
-                "token_id": token_id,
-                "fetched_at_utc": fetched_at_utc,
-                "summary": summary,
-                "raw": {
-                    "bids": summary["bids"],
-                    "asks": summary["asks"],
-                },
-            }
         except Exception as exc:
             last_error = exc
             if attempt < attempts - 1:
                 time.sleep(0.2 * (attempt + 1))
                 continue
+        finally:
+            try:
+                tmp.unlink()
+            except FileNotFoundError:
+                pass
     fetched_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return {
         "status": "error",
@@ -268,36 +354,95 @@ def append_orderbook_archive(path, row):
         f.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def fetch_token_orderbook_batch(client, token_archive_rows, *, top_n=20, max_workers=1):
+def orderbook_budget_book(token_id, reason="orderbook_budget_exhausted"):
+    return {
+        "status": reason,
+        "token_id": token_id,
+        "fetched_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "summary": {},
+        "raw": {},
+    }
+
+
+def fetch_token_orderbook_batch(
+    client,
+    token_archive_rows,
+    *,
+    top_n=20,
+    max_workers=1,
+    deadline_monotonic=None,
+):
     if not token_archive_rows:
         return {}
     workers = max(1, int(max_workers or 1))
     rows_by_token = dict(token_archive_rows)
     results = {}
+    pending_tokens = set(rows_by_token)
+
+    def budget_remaining():
+        if deadline_monotonic is None:
+            return None
+        return max(0.0, deadline_monotonic - time.monotonic())
+
+    def mark_budget_exhausted(tokens):
+        for token_id in tokens:
+            results[token_id] = (rows_by_token[token_id], orderbook_budget_book(token_id))
+
     if workers <= 1 or len(rows_by_token) <= 1:
         for token_id, archive_row in rows_by_token.items():
+            remaining = budget_remaining()
+            if remaining is not None and remaining <= 0:
+                mark_budget_exhausted(pending_tokens)
+                break
             results[token_id] = (archive_row, fetch_token_orderbook(client, token_id, top_n=top_n))
+            pending_tokens.discard(token_id)
         return results
 
-    with ThreadPoolExecutor(max_workers=min(workers, len(rows_by_token))) as pool:
-        futures = {
-            pool.submit(fetch_token_orderbook, client, token_id, top_n=top_n): token_id
-            for token_id in rows_by_token
-        }
-        for future in as_completed(futures):
-            token_id = futures[future]
-            try:
-                book = future.result()
-            except Exception as exc:
-                book = {
-                    "status": "error",
-                    "token_id": token_id,
-                    "fetched_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "summary": {},
-                    "raw": {},
-                }
-            results[token_id] = (rows_by_token[token_id], book)
+    def fetch_with_isolated_client(token_id):
+        with httpx.Client(
+            timeout=PM_HTTP_TIMEOUT,
+            limits=PM_HTTP_LIMITS,
+            proxy=PROXY,
+            follow_redirects=True,
+        ) as isolated_client:
+            return fetch_token_orderbook(isolated_client, token_id, top_n=top_n)
+
+    pool = ThreadPoolExecutor(max_workers=min(workers, len(rows_by_token)))
+    futures = {
+        pool.submit(fetch_with_isolated_client, token_id): token_id
+        for token_id in rows_by_token
+    }
+    pending = set(futures)
+    try:
+        while pending:
+            remaining = budget_remaining()
+            if remaining is not None and remaining <= 0:
+                break
+            timeout = remaining if remaining is not None else None
+            done, pending = wait(pending, timeout=timeout, return_when=FIRST_COMPLETED)
+            if not done:
+                break
+            for future in done:
+                token_id = futures[future]
+                pending_tokens.discard(token_id)
+                try:
+                    book = future.result()
+                except Exception as exc:
+                    book = {
+                        "status": "error",
+                        "token_id": token_id,
+                        "fetched_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "summary": {},
+                        "raw": {},
+                    }
+                results[token_id] = (rows_by_token[token_id], book)
+    finally:
+        for future in pending:
+            future.cancel()
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    mark_budget_exhausted(pending_tokens)
     return results
 
 
@@ -430,9 +575,14 @@ def _fetch_live_forecast(client, model, city, cfg, target_date):
         "start_date": target_date, "end_date": target_date,
     }
     try:
-        r = client.get(url, params=params)
-        if r.status_code == 200:
-            return _forecast_details_from_open_meteo(r.json(), source_model=model)
+        status_code, payload, _error = curl_json_get(
+            url,
+            params=params,
+            timeout_sec=WEATHER_CURL_TIMEOUT_SEC,
+            connect_timeout_sec=WEATHER_CURL_CONNECT_TIMEOUT_SEC,
+        )
+        if status_code == 200 and payload is not None:
+            return _forecast_details_from_open_meteo(payload, source_model=model)
     except:
         pass
     return None
@@ -767,9 +917,13 @@ def fetch_live_metar_state(client, icao, target_date_local, city, now_utc):
             "taf": "false",
             "hours": metar_hours,
         }
-        r = client.get(url, params=params)
-        if r.status_code == 200:
-            data = r.json()
+        status_code, data, _error = curl_json_get(
+            url,
+            params=params,
+            timeout_sec=WEATHER_CURL_TIMEOUT_SEC,
+            connect_timeout_sec=WEATHER_CURL_CONNECT_TIMEOUT_SEC,
+        )
+        if status_code == 200:
             if isinstance(data, list) and len(data) > 0:
                 target_local = str(target_date_local)
                 for metar in data:
@@ -1016,8 +1170,15 @@ def main():
             slug = f"highest-temperature-in-{city_slug}-on-{date_slug}"
 
             try:
-                r = pm_client.get(f"{PM_GAMMA_URL}/events", params={"slug": slug})
-                ev_raw = r.json()
+                status_code, ev_raw, _error = curl_json_get(
+                    f"{PM_GAMMA_URL}/events",
+                    params={"slug": slug},
+                    proxy=PROXY,
+                    timeout_sec=PM_CURL_TIMEOUT_SEC,
+                    connect_timeout_sec=PM_CURL_CONNECT_TIMEOUT_SEC,
+                )
+                if status_code != 200 or ev_raw is None:
+                    continue
                 if isinstance(ev_raw, list) and len(ev_raw) > 0:
                     ev_raw = ev_raw[0]
                 markets = ev_raw.get("markets", []) if isinstance(ev_raw, dict) else []
@@ -1129,6 +1290,9 @@ def main():
                         token_archive_rows,
                         top_n=args.orderbook_top_n,
                         max_workers=args.orderbook_workers,
+                        deadline_monotonic=orderbook_started_at + args.orderbook_budget_sec
+                        if args.orderbook_budget_sec >= 0
+                        else None,
                     )
                     for token_id, (archive_row, book) in fetched_books.items():
                         orderbook_cache[token_id] = book
@@ -1323,9 +1487,6 @@ def main():
 
         time.sleep(0.3)
 
-    pm_client.close()
-    weather_client.close()
-
     # Save
     fname = f"snapshot_{now_beijing.strftime('%Y%m%d_%H%M')}.json"
     out_file = OUTPUT_DIR / fname
@@ -1342,10 +1503,11 @@ def main():
         "schema_version": "v3_cross_section_forecast_peak_clock",
         "data_feed_schema_version": SNAPSHOT_SCHEMA_VERSION,
     }
-    if not all_records and not ALLOW_EMPTY_SNAPSHOT:
+    if len(all_records) < MIN_SNAPSHOT_RECORDS and not ALLOW_EMPTY_SNAPSHOT:
         raise RuntimeError(
-            "refusing to write empty paper snapshot: total_records=0; "
-            "this usually means Gamma market discovery returned no markets"
+            f"refusing to write incomplete paper snapshot: total_records={len(all_records)} "
+            f"< min_snapshot_records={MIN_SNAPSHOT_RECORDS}; "
+            "this usually means Gamma market discovery returned a partial market universe"
         )
     with open(out_file, "w") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)

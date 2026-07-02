@@ -16,6 +16,7 @@ DATA_FEED_RUNTIME="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data
 DATA_FEED_SNAPSHOT_DIR="$DATA_FEED_RUNTIME/targeted_output/paper_snapshots"
 DATA_FEED_OBS="$DATA_FEED_RUNTIME/output/observations/latest.json"
 REGIME_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
+SHADOW_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_shadow_v1"
 DATA_FEED_SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
 LOW_PRICE_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1"
 
@@ -47,7 +48,7 @@ EOF
 }
 
 write_launchagents() {
-  mkdir -p "$LAUNCH_DIR" "$DATA_FEED_RUNTIME/loop" "$REGIME_RUNTIME" "$LOW_PRICE_RUNTIME"
+  mkdir -p "$LAUNCH_DIR" "$DATA_FEED_RUNTIME/loop" "$REGIME_RUNTIME" "$SHADOW_RUNTIME" "$LOW_PRICE_RUNTIME"
   cat >"$DATA_FEED_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -82,8 +83,8 @@ EOF
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>$REGIME_RUNTIME/shadow_launchd.out.log</string>
-  <key>StandardErrorPath</key><string>$REGIME_RUNTIME/shadow_launchd.err.log</string>
+  <key>StandardOutPath</key><string>$SHADOW_RUNTIME/shadow_launchd.out.log</string>
+  <key>StandardErrorPath</key><string>$SHADOW_RUNTIME/shadow_launchd.err.log</string>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
 </dict>
 </plist>

@@ -31,12 +31,6 @@ DEFAULT_CANDIDATES = [
     "🇯🇵 日本 01丨1x JP",
     "🇯🇵 日本 02丨1x JP",
     "🇯🇵 日本 03丨1x JP",
-    "🇸🇬 新加坡 01丨1x SG",
-    "🇸🇬 新加坡 02丨1x SG",
-    "🇸🇬 新加坡 03丨1x SG",
-    "🇹🇼 台湾 01丨1x TW",
-    "🇹🇼 台湾 02丨1x TW",
-    "🇹🇼 台湾 03丨1x TW",
 ]
 
 
@@ -187,7 +181,7 @@ def main() -> int:
     parser.add_argument("--proxy", default=os.getenv("WEATHER_DATA_FEED_MARKET_PROXY") or os.getenv("WEATHER_PREDICT_MARKET_PROXY") or "http://127.0.0.1:7890")
     parser.add_argument("--snapshot-dir", type=Path, default=Path(os.getenv("WEATHER_DATA_FEED_SNAPSHOT_DIR", str(DEFAULT_SNAPSHOT_DIR))))
     parser.add_argument("--log", type=Path, default=Path(os.getenv("WEATHER_MARKET_PROXY_FAILOVER_LOG", str(DEFAULT_LOG))))
-    parser.add_argument("--timeout-sec", type=int, default=int(os.getenv("WEATHER_MARKET_PROXY_PROBE_TIMEOUT_SEC", "12")))
+    parser.add_argument("--timeout-sec", type=int, default=int(os.getenv("WEATHER_MARKET_PROXY_PROBE_TIMEOUT_SEC", "5")))
     parser.add_argument("--candidates", default=os.getenv("WEATHER_MARKET_PROXY_1X_CANDIDATES", ""))
     parser.add_argument("--alert", action="store_true", default=os.getenv("WEATHER_MARKET_PROXY_ALERT", "1") == "1")
     parser.add_argument("--no-switch", action="store_true", help="Probe current node only.")
@@ -215,7 +209,12 @@ def main() -> int:
         print(json.dumps(row, ensure_ascii=False, sort_keys=True))
         return 2
 
-    nodes = [before] if args.no_switch else [before] + [n for n in candidates if n != before]
+    if args.no_switch:
+        nodes = [before]
+    elif before in candidates:
+        nodes = [before] + [n for n in candidates if n != before]
+    else:
+        nodes = candidates
     selected = ""
     for node in nodes:
         if node:

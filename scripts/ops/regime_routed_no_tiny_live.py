@@ -59,7 +59,12 @@ import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
 STRATEGY_ID = "regime_routed_no_tiny_live_v1"
 STRATEGY_INSTANCE = "regime_routed_no_route_price_disciplined_tiny_live_v1"
 RULE_ID = "route_price_disciplined_no_pullback_row_risk_soft_weight_price_v2"
-RUNTIME_DIR = ROOT / "runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
+RUNTIME_DIR = Path(
+    os.environ.get(
+        "REGIME_ROUTED_NO_RUNTIME_DIR",
+        str(ROOT / "runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"),
+    )
+)
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
