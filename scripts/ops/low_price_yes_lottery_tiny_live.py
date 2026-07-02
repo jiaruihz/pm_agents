@@ -10,10 +10,12 @@ taker plans to weather_order_executor.py.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import math
 import os
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -113,6 +115,29 @@ def json_ready(value: Any) -> Any:
 def stable_hash(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+class HardTimeoutError(TimeoutError):
+    pass
+
+
+@contextlib.contextmanager
+def hard_timeout(seconds: float, label: str):
+    if seconds <= 0:
+        yield
+        return
+    old_handler = signal.getsignal(signal.SIGALRM)
+
+    def _raise_timeout(_signum, _frame):
+        raise HardTimeoutError(f"{label} exceeded {seconds:.1f}s")
+
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 
 def rel(path: Path) -> str:
@@ -508,6 +533,18 @@ def resolve_yes_token(row: dict[str, Any], cache: dict[str, Any]) -> dict[str, A
     }
 
 
+def cached_yes_token_only(row: dict[str, Any], cache: dict[str, Any]) -> dict[str, Any]:
+    condition_id = safe_str(row.get("condition_id"))
+    cached = cache.get(condition_id) if condition_id else None
+    if isinstance(cached, dict) and cached.get("yes_token_id"):
+        return {**cached, "source": "token_cache_only"}
+    return {
+        "condition_id": condition_id,
+        "yes_token_id": "",
+        "source": "live_token_resolution_disabled",
+    }
+
+
 def fetch_book(token_id: str, *, timeout_sec: float = 5.0) -> dict[str, Any]:
     url = f"{CLOB_BASE_URL.rstrip('/')}/book"
     response = requests.get(url, params={"token_id": token_id}, headers={"Accept": "application/json"}, timeout=timeout_sec)
@@ -658,7 +695,26 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
     if to_float(row.get("decision_hours_to_settle"), 0.0) < args.min_decision_hours_to_settle:
         return {**base, "decision_status": "blocked", "blocker": "decision_hours_to_settle_below_min"}
 
-    token_meta = resolve_yes_token(row, cache)
+    if args.disable_live_token_resolution:
+        token_meta = cached_yes_token_only(row, cache)
+    else:
+        try:
+            with hard_timeout(args.token_resolution_timeout_sec, "token resolution"):
+                token_meta = resolve_yes_token(row, cache)
+        except HardTimeoutError as exc:
+            return {
+                **base,
+                "decision_status": "blocked",
+                "blocker": "token_resolution_timeout",
+                "token_resolution_error": str(exc),
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                **base,
+                "decision_status": "blocked",
+                "blocker": "token_resolution_failed",
+                "token_resolution_error": f"{type(exc).__name__}: {exc}",
+            }
     enriched = {**base, "token_meta": token_meta}
     token_id = safe_str(token_meta.get("yes_token_id"))
     if not token_id:
@@ -1102,6 +1158,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--taker-fee-rate", type=float, default=0.06)
     parser.add_argument("--maker-rebate-rate", type=float, default=0.0125)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
+    parser.add_argument("--token-resolution-timeout-sec", type=float, default=15.0)
+    parser.add_argument("--disable-live-token-resolution", action="store_true")
     parser.add_argument("--executor-timeout-sec", type=float, default=180.0)
     parser.add_argument("--interval-seconds", type=float, default=300.0)
     parser.add_argument("--allow-settled", action="store_true", help="Debug only; never use for live.")

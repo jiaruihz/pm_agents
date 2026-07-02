@@ -18,7 +18,12 @@ if [[ -s "$PID_FILE" ]]; then
     echo "process=stale_pid pid=$pid"
   fi
 else
-  echo "process=not_running"
+  pids="$(pgrep -f 'scripts/ops/low_price_yes_lottery_tiny_live.py loop' || true)"
+  if [[ -n "$pids" ]]; then
+    echo "process=running pids=$(echo "$pids" | tr '\n' ',' | sed 's/,$//')"
+  else
+    echo "process=not_running"
+  fi
 fi
 
 if [[ -f "$SUMMARY_FILE" ]]; then

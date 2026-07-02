@@ -94,13 +94,35 @@ EOF
   <key>Label</key><string>$LOW_PRICE_LABEL</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/env</string>
-    <string>LOW_PRICE_YES_LOTTERY_LOOP_CHILD=1</string>
-    <string>LOW_PRICE_YES_LOTTERY_LIVE=1</string>
-    <string>LOW_PRICE_YES_LOTTERY_CONFIRM_LIVE=1</string>
-    <string>LOW_PRICE_YES_LOTTERY_NOTIONAL=1.5</string>
-    <string>LOW_PRICE_YES_LOTTERY_INTERVAL_SECONDS=300</string>
-    <string>$PROJECT_DIR/scripts/ops/start_low_price_yes_lottery_tiny_live.sh</string>
+    <string>$PROJECT_DIR/.venv/bin/python</string>
+    <string>-u</string>
+    <string>$PROJECT_DIR/scripts/ops/low_price_yes_lottery_tiny_live.py</string>
+    <string>loop</string>
+    <string>--order-notional-usd</string>
+    <string>1.5</string>
+    <string>--interval-seconds</string>
+    <string>300</string>
+    <string>--min-ask</string>
+    <string>0.05</string>
+    <string>--max-ask</string>
+    <string>0.20</string>
+    <string>--min-edge</string>
+    <string>0.20</string>
+    <string>--max-taker-cushion</string>
+    <string>0.01</string>
+    <string>--min-fee-adjusted-edge</string>
+    <string>0.15</string>
+    <string>--max-decision-snapshot-age-hours</string>
+    <string>6</string>
+    <string>--min-decision-hours-to-settle</string>
+    <string>1</string>
+    <string>--max-candidates-per-run</string>
+    <string>80</string>
+    <string>--token-resolution-timeout-sec</string>
+    <string>15</string>
+    <string>--disable-live-token-resolution</string>
+    <string>--live</string>
+    <string>--confirm-live</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
