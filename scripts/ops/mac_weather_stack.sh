@@ -29,6 +29,7 @@ Commands:
   status                 Print process, proxy, snapshot, observation, and strategy state
   verify                 Fail if required Mac shadow stack evidence is missing/stale
   proxy-status           Print mihomo selected proxy and N100 reverse tunnel status
+  proxy-failover         Probe Gamma and switch to a healthy configured 1x node
   start-live --confirm-live
                          Start real regime-routed NO tiny-live runner explicitly
   stop-live              Stop real regime-routed NO tiny-live runner
@@ -270,6 +271,7 @@ PY
 
 start_stack() {
   write_launchagents
+  bootout_label "$LOW_PRICE_LABEL"
   bootout_label "$DATA_FEED_LABEL"
   bootout_label "$SHADOW_LABEL"
   bootstrap_label "$DATA_FEED_LABEL"
@@ -278,6 +280,7 @@ start_stack() {
 }
 
 stop_stack() {
+  bootout_label "$LOW_PRICE_LABEL"
   bootout_label "$SHADOW_LABEL"
   bootout_label "$DATA_FEED_LABEL"
   status
@@ -315,6 +318,7 @@ case "${1:-}" in
   status) status ;;
   verify) verify ;;
   proxy-status) print_proxy_status ;;
+  proxy-failover) "$PROJECT_DIR/scripts/ops/weather_market_proxy_failover.py" ;;
   start-live) shift; start_live "${1:-}" ;;
   stop-live) "$PROJECT_DIR/scripts/ops/stop_regime_routed_no_tiny_live.sh" ;;
   start-low-price-live) shift; start_low_price_live "${1:-}" ;;

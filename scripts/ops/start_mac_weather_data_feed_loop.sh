@@ -15,6 +15,7 @@ OBS_INTERVAL_SEC="${WEATHER_DATA_FEED_OBS_INTERVAL_SEC:-300}"
 SNAPSHOT_INTERVAL_SEC="${WEATHER_DATA_FEED_SNAPSHOT_INTERVAL_SEC:-600}"
 SNAPSHOT_ORDERBOOK_BUDGET_SEC="${WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC:-60}"
 SNAPSHOT_ORDERBOOK_WORKERS="${WEATHER_DATA_FEED_ORDERBOOK_WORKERS:-4}"
+MARKET_PROXY_FAILOVER_SCRIPT="${WEATHER_MARKET_PROXY_FAILOVER_SCRIPT:-$HOME/projects/pm_agents/scripts/ops/weather_market_proxy_failover.py}"
 
 mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$OUTPUT_ROOT" "$CACHE_ROOT"
 
@@ -69,6 +70,21 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
     now="$(date +%s)"
     if (( now >= next_snapshot )); then
       date -u +"[mac_data_feed] snapshot_start_utc=%Y-%m-%dT%H:%M:%SZ"
+      if [[ -x "$MARKET_PROXY_FAILOVER_SCRIPT" ]]; then
+        date -u +"[mac_data_feed] market_proxy_check_start_utc=%Y-%m-%dT%H:%M:%SZ"
+        set +e
+        WEATHER_DATA_FEED_SNAPSHOT_DIR="$OUTPUT_ROOT/paper_snapshots" \
+          "$MARKET_PROXY_FAILOVER_SCRIPT"
+        proxy_rc=$?
+        set -e
+        date -u +"[mac_data_feed] market_proxy_check_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$proxy_rc"
+        if [[ "$proxy_rc" -ne 0 ]]; then
+          date -u +"[mac_data_feed] snapshot_skipped_utc=%Y-%m-%dT%H:%M:%SZ reason=market_proxy_unhealthy"
+          next_snapshot=$(( $(date +%s) + SNAPSHOT_INTERVAL_SEC ))
+          sleep 10
+          continue
+        fi
+      fi
       set +e
       "$PY" -u -m weather_data_feed_service \
         --output-root "$OUTPUT_ROOT" \
