@@ -169,7 +169,87 @@ dec_yes_spread, dec_yes_depth_ask_5c   (执行现实性)
 | lottery-selector-refinement-v1 | `shadow_candidate_keep_collecting` | 维持；no-dust 分母与 payout-cap sizing 是合理工程化，唯一注意 §2.6 口径尾巴 |
 | lottery-metar-regime-v2 | `inconclusive` | 维持；补一条：timing 结论受分母不同源限制（§4） |
 
+---
+
+## 7. 核心 alpha 论题（v1.1 补充，train-only ≤6/20 诊断）
+
+> 本节所有切片只用 train 窗（target_date ≤ 2026-06-20，383 rows / 44 dates），6/21+ 保持未触碰。
+> 这些仍是事后切片，只用于**定假说**，不用于定规则；规则在 §8 预注册后由 fresh forward 裁决。
+
+### 7.1 论题一句话
+
+**结算站热基差（station hot basis）+ 湿热城市 tail 方差没有被 next-day tail YES 的定价吸收：给 bracket 报价的边际参与者按共识预报数字定价，不带站点级误差分布；错价在"站点历史上系统性打穿预报"的城市最大，且日内不自我修正（直到 METAR 打印才 reprice）。** ask band、forecast source 都只是这个结构的粗代理。
+
+### 7.2 支撑 pattern（按证据强度排序）
+
+1. **station-bias class 在 train 上强判别，且剂量响应单调**。把 `city_strategy_fit_by_forecast_bias_v1` 的城市分类 join 到 v1 分母 train 行：
+
+| source_bias_regime | rows | dates | cities | ROI |
+|---|---:|---:|---:|---:|
+| hot_underforecast_clean | 129 | 41 | 16 | **+57.6%** |
+| hot_underforecast_noisy | 13 | 12 | 4 | +206.3% |
+| cold_overforecast_clean | 16 | 14 | 2 | +30.1% |
+| balanced_tight | 31 | 24 | 3 | -57.3% |
+| cold_overforecast_noisy | 27 | 23 | 4 | -30.4% |
+| mild_or_mixed | 31 | 24 | 5 | -79.8% |
+| 未分类（欧洲 13 城缺层） | 135 | 43 | 13 | +17.8% |
+
+   按 `hot_tail_pct` 三分位**单调**：low -30.5% / mid +44.0% / high +54.2%。单调剂量响应 + 独立数据层（站点历史误差，不是从交易结果里挖的）——这比任何 ask band 的证据形状都好。它同时解释了 v3 的假象：亚太 GFS 城市恰好多为 hot_underforecast，欧洲未分类城市落在 ECMWF 袖。
+   ⚠️ 一个必须修的 leakage：6/30 bias 层的窗口与 train 交易期重叠（部分循环论证）。下一版必须用 **as-of 滚动 bias 特征**（每个决策日只用 T-1 之前的站点误差历史），见 §8 W0。
+2. **市场不在日内修正**：50 个 train 赢单里 33 个的全生命周期最低 ask ≤ 决策 ask 的 0.7 倍（均值 0.58x）。即赢单的 ask 在决策后通常还会**继续走低**，市场对 tail 越来越不信，直到打印才跳。含义：(a) 执行窗口很宽，不需要抢；maker 挂单可能把入场改善 ~30-40%；(b) "repricing lag v4" 的真实形态是**晚间打印跳变**，不是渐进 repricing。
+3. **注意力/时区缺口**（§1.3）：前一晚 18-24 点决策行承载全部 PnL；凌晨 0-6 点行 ≈ 0。与 (1) 城市构成混杂，需城市内对照，但方向一致：给亚洲 book 报价的人在美盘深夜不在场。
+4. **模型 tail 全局 ~2x 过度自信、在 hot-basis 城市接近校准**（Shanghai win 41.7% ≈ model_p）。所以 `edge>=0.20` 是能用但错误的刻度，正确刻度是校准后的 `p_cal - ask`。
+5. **执行可行性初步为正**：train 行 median yes_spread 2c、median 5c-depth $135，仅 3/305 行 depth<$5（20% 行 depth 缺失）。$1-5/张的 taker 成交假设基本成立；$50+/张才开始碰容量。
+6. **组合角色（待验证假说）**：tail YES 袖与 regime-routed NO 主账本在同一事件上反号——NO 账本最差的日子（温度打穿）正是 tail YES 中奖的日子。若日度 PnL 负相关成立，这条袖子即使 standalone edge 一般，也值得作为 NO 账本的凸性对冲持有，sizing 可以挂在 NO 敞口上。
+
+### 7.3 数据缺口（本轮诊断直接暴露）
+
+- `forecast_max_below_bracket_f` / `forecast_max_in_bracket` 在分母行上 **98% 为空**（383 行只有 8 行有值）——bracket 距离这个第一性特征目前根本不存在，必须自己物化（bracket label 解析 + `forecast_max_native`）。
+- 城市 bias 层缺 13 个欧洲城市（Amsterdam/Madrid/Moscow/London/Milan/Paris/Warsaw/Helsinki/Munich/Ankara/Busan/HongKong/LA），而 ECMWF 袖的利润恰好在这些城市——层必须补全才能统一假说。
+- bias 特征是 6/30 静态快照，需改 as-of 滚动。
+
+## 8. 下一版详细执行计划
+
+原则：规则全部在 train（≤6/20）冻结并预注册；6/21 起的历史一律不再参与选择；评估只认 **7/03 起的 fresh forward**。
+
+### W0 — 数据缺口修补（前置，~0.5 天）
+
+1. 物化 `bracket_distance_f`（bracket 下沿 − 决策时 `forecast_max_native`，按城市 unit 换算）：进 research feature 层或 candidates builder；98% null 的现字段废弃不用。
+2. 站点 bias 层补 13 个欧洲城市 + 改造成 **as-of 滚动版**：`station_bias_asof(city, date)` 只用 date 之前的误差历史（expanding window，最少 60 天起报）。产出一张 city×date 的 PIT prior 表。
+3. forward payoff 口径统一走 `settlement_outcomes`（弃 CLOB token price）；5/17-5/19 结算缺口能补则补。
+
+### W1 — 冻结校准选择器 `low_price_yes_tail_pcal_v1`（~1-2 天）
+
+- Universe：冻结的 v1 分母（BUY_YES, ask 0.05..0.20, earliest PIT per city-date；**edge≥0.20 从分母移除**，改为下面的 EV 规则，避免双重阈值）。
+- 特征（全 PIT）：`hot_tail_pct_asof`、`station_bias_p50/p90_asof`、`bracket_distance_f`、`model_p_yes`、`ask`、`decision_local_bucket`、region。
+- 模型：带城市先验 offset 的 logistic（或 model_p 上的 isotonic + prior shift），train ≤6/20 拟合，系数冻结进 JSON。
+- 决策规则：`p_cal - ask ≥ θ`，θ 在 train 上按"日均 3-6 张票"定一次，不扫格。
+- 预注册：文档里声明尝试过的全部变体数 K 与选择理由；train 上验收 = date-block CI>0 且 p_cal 十分位 lift 单调且 paired excess vs 冻结 v1 CI>0。不过验收就承认失败，不换 6/21+ 的数据续命。
+
+### W2 — Live journal 分层 tag（不改下单，~0.5 天）
+
+给 $1 v1 live journal + shadow 脚本（`scripts/ops/low_price_yes_lottery_reversal_shadow_v1.py`）每行加：
+`p_cal`、`hot_tail_pct_asof`、`station_bias_class_asof`、`bracket_distance_f`、`decision_local_bucket`、`yes_spread`、`yes_depth_ask_5c`、`source_aware_v3`（仅对照）。pcal selector 以 zero-notional shadow 并行跑。
+
+### W3 — Fresh forward 裁决 gate（等数据，评估窗从 2026-07-03 起）
+
+- **Promote gate**（$1 → $3-5/张，仍 shadow-tag）：≥12 个已结算活跃日 且 pcal-selected date-block ROI CI>0 且 top-trade-removed>0 且 fill-feasible 子集（depth≥$25、spread≤3c）ROI 与全样本差 <15pt。
+- **Kill gate**：≥15 日且 ROI<0，或 hot-basis 层 realized win 按 CI 低于 avg ask → selector 废弃，telemetry 保留。
+- 中间不看不调：评估窗内禁止改 θ / 特征 / band。
+
+### W4 — 执行研究：maker vs taker（并行，用 live $1 的真实 fill）
+
+问题：决策价 taker 吃 ask，还是 ask−2c 挂 maker？依据 §7.2(2)（赢单 ask 决策后均值还跌到 0.58x），patient entry 期望改善大。方法：orderbook capture 可覆盖的日子做 fill-prob 加权对比 + live fill 对账（实际 fill 率 / fill price vs `decision_entry_price`）。产出一条执行策略进 W3 的 promote 版本。
+
+### W5 — 组合验证（~0.5 天）
+
+对齐日期算 tail-YES 袖（shadow + live）与 regime-routed NO 账本的日度 PnL 相关；若 bust 日显著负相关，写进 STRATEGY_REGISTRY：这条袖子的角色是 **NO 账本的凸性对冲**，sizing 规则挂 NO 敞口比例（例如 tail 袖日成本 ≤ NO 账本日均敞口的 5-10%），而不是独立 absolute size。
+
+### 失败路径的价值
+
+若 W3 kill：结论不是"cheap YES 没戏"，而是"station-basis prior 不足以在票价里兑现"——此时保留的 telemetry（p_cal、bias、距离、时段）直接喂给 current-NO 侧做**反向风险特征**（哪些 NO 会被 tail 打穿），研究不清零。
+
 ## 复核 artifacts
 
-- 复核脚本（临时，未入库）：paired date-block bootstrap、区域×source 拆分、决策时刻拆分、band 内部结构、survivorship，全部基于 `generated/low_price_yes_lottery_selector_refinement_v1/details.csv` + `runtime/weather.db` 只读。
+- 复核脚本（临时，未入库）：paired date-block bootstrap、区域×source 拆分、决策时刻拆分、band 内部结构、survivorship、train-only station-bias join、executability/repricing 诊断，全部基于 `generated/low_price_yes_lottery_selector_refinement_v1/details.csv` + `generated/city_strategy_fit_by_forecast_bias_v1/city_strategy_fit_by_forecast_bias.csv` + `runtime/weather.db` 只读。
 - 关键数字均可用本文口径从上述冻结 CSV 一行行复算。
