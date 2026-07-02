@@ -1242,7 +1242,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-edge", type=float, default=0.20)
     parser.add_argument("--max-taker-cushion", type=float, default=0.01)
     parser.add_argument("--min-fee-adjusted-edge", type=float, default=0.15)
-    parser.add_argument("--order-notional-usd", type=float, default=1.5)
+    parser.add_argument("--order-notional-usd", type=float, default=1.0)
     parser.add_argument("--min-order-shares", type=float, default=5.0)
     parser.add_argument("--max-decision-snapshot-age-hours", type=float, default=6.0)
     parser.add_argument("--min-decision-hours-to-settle", type=float, default=1.0)
