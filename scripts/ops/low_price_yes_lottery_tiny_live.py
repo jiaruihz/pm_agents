@@ -16,6 +16,7 @@ import json
 import math
 import os
 import signal
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -25,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from urllib3.util import connection as urllib3_connection
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -36,6 +38,7 @@ from src.strategies.weather_edge_v1.tools.weather_edge_market_data import weathe
 from weather_data_feed.source_policy import city_slug
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
+SNAPSHOT_DIR_DEFAULT = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
 RUNTIME_DIR = ROOT / os.environ.get(
     "LOW_PRICE_YES_LOTTERY_RUNTIME_DIR",
     "runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1",
@@ -59,6 +62,13 @@ RULE_ID = "buy_yes_edge20_ask05_20_fixed150_guarded_taker_v1"
 SOURCE_REPORT = "docs/analysis/2026-07/2026-07-02-low-price-yes-lottery-selector-refinement-v1.md"
 
 CLOB_BASE_URL = os.getenv("CLOB_BASE_URL", "").strip() or os.getenv("PM_API_BASE_URL", "").strip() or "https://clob.polymarket.com"
+
+
+def market_proxy_url() -> str:
+    proxy = os.getenv("LOW_PRICE_YES_LOTTERY_MARKET_PROXY", "").strip()
+    if proxy.lower() in {"", "direct", "none", "off", "0"}:
+        return ""
+    return proxy
 
 
 def now_utc_dt() -> datetime:
@@ -538,6 +548,11 @@ def cached_yes_token_only(row: dict[str, Any], cache: dict[str, Any]) -> dict[st
     cached = cache.get(condition_id) if condition_id else None
     if isinstance(cached, dict) and cached.get("yes_token_id"):
         return {**cached, "source": "token_cache_only"}
+    snapshot_payload = resolve_yes_token_from_local_snapshots(row)
+    if snapshot_payload.get("yes_token_id"):
+        cache[condition_id] = snapshot_payload
+        save_token_cache(cache)
+        return snapshot_payload
     return {
         "condition_id": condition_id,
         "yes_token_id": "",
@@ -545,9 +560,80 @@ def cached_yes_token_only(row: dict[str, Any], cache: dict[str, Any]) -> dict[st
     }
 
 
+def resolve_yes_token_from_local_snapshots(row: dict[str, Any]) -> dict[str, Any]:
+    condition_id = safe_str(row.get("condition_id"))
+    event_date = safe_str(row.get("event_date"))
+    if not condition_id or not event_date:
+        return {"condition_id": condition_id, "yes_token_id": "", "source": "local_snapshot_missing_key"}
+    ymd = event_date.replace("-", "")
+    for path in sorted(SNAPSHOT_DIR_DEFAULT.glob(f"snapshot_{ymd}_*.json"), reverse=True):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        records = payload.get("records") if isinstance(payload, dict) else None
+        if not isinstance(records, list):
+            continue
+        for rec in records:
+            if not isinstance(rec, dict):
+                continue
+            if safe_str(rec.get("condition_id") or rec.get("conditionId")) != condition_id:
+                continue
+            yes_token_id = safe_str(rec.get("yes_token_id"))
+            if not yes_token_id:
+                token_ids = _field_list(rec.get("clobTokenIds"))
+                outcomes = _field_list(rec.get("outcomes"))
+                for outcome, token_id in zip(outcomes, token_ids):
+                    if outcome.lower() == "yes":
+                        yes_token_id = token_id
+                        break
+                if not yes_token_id and token_ids:
+                    yes_token_id = token_ids[0]
+            if not yes_token_id:
+                continue
+            return {
+                "condition_id": condition_id,
+                "gamma_market_id": safe_str(rec.get("market_id") or rec.get("marketId")),
+                "market_slug": safe_str(rec.get("market_slug") or rec.get("slug")),
+                "event_id": safe_str(rec.get("event_id") or rec.get("eventId")),
+                "event_title": safe_str(rec.get("event_title") or rec.get("title")),
+                "question": safe_str(rec.get("question")),
+                "outcomes": _field_list(rec.get("outcomes")) or ["Yes", "No"],
+                "token_ids": [yes_token_id, safe_str(rec.get("no_token_id"))],
+                "yes_token_id": yes_token_id,
+                "no_token_id": safe_str(rec.get("no_token_id")),
+                "active": rec.get("active", True),
+                "closed": rec.get("closed", False),
+                "end_date": safe_str(rec.get("end_date") or rec.get("endDate")),
+                "resolved_at_utc": now_utc(),
+                "source": "local_paper_snapshot",
+                "source_snapshot_file": rel(path),
+            }
+    return {
+        "condition_id": condition_id,
+        "yes_token_id": "",
+        "source": "local_snapshot_not_found",
+    }
+
+
 def fetch_book(token_id: str, *, timeout_sec: float = 5.0) -> dict[str, Any]:
     url = f"{CLOB_BASE_URL.rstrip('/')}/book"
-    response = requests.get(url, params={"token_id": token_id}, headers={"Accept": "application/json"}, timeout=timeout_sec)
+    proxy = market_proxy_url()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    original_allowed_gai_family = urllib3_connection.allowed_gai_family
+    session = requests.Session()
+    session.trust_env = False
+    try:
+        urllib3_connection.allowed_gai_family = lambda: socket.AF_INET
+        response = session.get(
+            url,
+            params={"token_id": token_id},
+            headers={"Accept": "application/json"},
+            timeout=timeout_sec,
+            proxies=proxies,
+        )
+    finally:
+        urllib3_connection.allowed_gai_family = original_allowed_gai_family
     response.raise_for_status()
     payload = response.json()
     return payload if isinstance(payload, dict) else {}
@@ -971,7 +1057,24 @@ def run_executor(args: argparse.Namespace) -> dict[str, Any] | None:
         "--cancel-after",
         "--no-telegram",
     ]
-    proc = subprocess.run(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=args.executor_timeout_sec)
+    env = os.environ.copy()
+    proxy = market_proxy_url()
+    if proxy:
+        env["HTTP_PROXY"] = proxy
+        env["HTTPS_PROXY"] = proxy
+        env["ALL_PROXY"] = proxy
+    else:
+        for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+            env.pop(key, None)
+    proc = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=args.executor_timeout_sec,
+    )
     payload: dict[str, Any] = {
         "executor_cmd": cmd,
         "executor_returncode": proc.returncode,
