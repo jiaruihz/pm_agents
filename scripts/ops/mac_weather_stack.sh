@@ -6,9 +6,11 @@ UID_NUM="$(id -u)"
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
 DATA_FEED_LABEL="com.pm-agents.weather-data-feed"
 SHADOW_LABEL="com.pm-agents.regime-routed-no-shadow"
+LIVE_LABEL="com.pm-agents.regime-routed-no-live"
 LOW_PRICE_LABEL="com.pm-agents.low-price-yes-lottery-live"
 DATA_FEED_PLIST="$LAUNCH_DIR/$DATA_FEED_LABEL.plist"
 SHADOW_PLIST="$LAUNCH_DIR/$SHADOW_LABEL.plist"
+LIVE_PLIST="$LAUNCH_DIR/$LIVE_LABEL.plist"
 LOW_PRICE_PLIST="$LAUNCH_DIR/$LOW_PRICE_LABEL.plist"
 DATA_FEED_RUNTIME="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data_feed_service_runtime}"
 DATA_FEED_SNAPSHOT_DIR="$DATA_FEED_RUNTIME/targeted_output/paper_snapshots"
@@ -82,6 +84,31 @@ EOF
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$REGIME_RUNTIME/shadow_launchd.out.log</string>
   <key>StandardErrorPath</key><string>$REGIME_RUNTIME/shadow_launchd.err.log</string>
+  <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
+</dict>
+</plist>
+EOF
+  cat >"$LIVE_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LIVE_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>REGIME_ROUTED_NO_LOOP_CHILD=1</string>
+    <string>REGIME_ROUTED_NO_SNAPSHOT_DIR=$DATA_FEED_SNAPSHOT_DIR</string>
+    <string>REGIME_ROUTED_NO_OBSERVATION_CACHE=$DATA_FEED_OBS</string>
+    <string>REGIME_ROUTED_NO_BASE_NOTIONAL=${REGIME_ROUTED_NO_BASE_NOTIONAL:-9}</string>
+    <string>REGIME_ROUTED_NO_DAILY_GROSS_CAP=${REGIME_ROUTED_NO_DAILY_GROSS_CAP:-9}</string>
+    <string>REGIME_ROUTED_NO_MAX_ORDERS=${REGIME_ROUTED_NO_MAX_ORDERS:-1}</string>
+    <string>$PROJECT_DIR/scripts/ops/start_regime_routed_no_tiny_live.sh</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$REGIME_RUNTIME/loop.out</string>
+  <key>StandardErrorPath</key><string>$REGIME_RUNTIME/loop.err</string>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
 </dict>
 </plist>
@@ -225,7 +252,7 @@ PY
 
 status() {
   echo "== launchctl =="
-  launchctl list | grep -E 'weather-data-feed|regime-routed-no-shadow|low-price-yes-lottery-live|weather-api|weather-fe' || true
+  launchctl list | grep -E 'weather-data-feed|regime-routed-no-shadow|regime-routed-no-live|low-price-yes-lottery-live|weather-api|weather-fe' || true
   echo "== proxy =="
   print_proxy_status
   echo "== data/strategy =="
@@ -248,12 +275,20 @@ status() {
 
 verify() {
   status
-  python3 - "$DATA_FEED_SNAPSHOT_DIR" "$DATA_FEED_OBS" "$REGIME_RUNTIME/latest_summary.json" <<'PY'
+  python3 - "$DATA_FEED_SNAPSHOT_DIR" "$DATA_FEED_OBS" "$REGIME_RUNTIME/latest_summary.json" "$REGIME_RUNTIME/loop.pid" <<'PY'
 import glob, json, os, sys
 from datetime import datetime, timezone
-snapshot_dir, obs_path, summary_path = sys.argv[1:]
+snapshot_dir, obs_path, summary_path, live_pid_path = sys.argv[1:]
 now = datetime.now(timezone.utc)
 errors = []
+live_running = False
+if os.path.exists(live_pid_path):
+    try:
+        pid = int(open(live_pid_path).read().strip())
+        os.kill(pid, 0)
+        live_running = True
+    except Exception:
+        live_running = False
 snapshots = sorted(glob.glob(os.path.join(snapshot_dir, "snapshot_*.json")))
 if not snapshots:
     errors.append("missing targeted snapshot")
@@ -282,7 +317,9 @@ if not os.path.exists(summary_path):
 else:
     with open(summary_path) as f:
         st = json.load(f)
-    if st.get("live_enabled") is not False:
+    if live_running and st.get("live_enabled") is not True:
+        errors.append("live verify expected live_enabled=true")
+    if not live_running and st.get("live_enabled") is not False:
         errors.append("shadow verify expected live_enabled=false")
 if errors:
     print("VERIFY_FAIL " + "; ".join(errors))
@@ -313,12 +350,10 @@ start_live() {
     echo "refusing live start: pass --confirm-live" >&2
     exit 2
   fi
-  REGIME_ROUTED_NO_SNAPSHOT_DIR="$DATA_FEED_SNAPSHOT_DIR" \
-  REGIME_ROUTED_NO_OBSERVATION_CACHE="$DATA_FEED_OBS" \
-  REGIME_ROUTED_NO_BASE_NOTIONAL="${REGIME_ROUTED_NO_BASE_NOTIONAL:-9}" \
-  REGIME_ROUTED_NO_DAILY_GROSS_CAP="${REGIME_ROUTED_NO_DAILY_GROSS_CAP:-9}" \
-  REGIME_ROUTED_NO_MAX_ORDERS="${REGIME_ROUTED_NO_MAX_ORDERS:-1}" \
-  "$PROJECT_DIR/scripts/ops/start_regime_routed_no_tiny_live.sh"
+  write_launchagents
+  bootout_label "$LIVE_LABEL"
+  bootstrap_label "$LIVE_LABEL"
+  status
 }
 
 start_low_price_live() {
@@ -342,7 +377,7 @@ case "${1:-}" in
   proxy-status) print_proxy_status ;;
   proxy-failover) "$PROJECT_DIR/scripts/ops/weather_market_proxy_failover.py" ;;
   start-live) shift; start_live "${1:-}" ;;
-  stop-live) "$PROJECT_DIR/scripts/ops/stop_regime_routed_no_tiny_live.sh" ;;
+  stop-live) bootout_label "$LIVE_LABEL"; "$PROJECT_DIR/scripts/ops/stop_regime_routed_no_tiny_live.sh" ;;
   start-low-price-live) shift; start_low_price_live "${1:-}" ;;
   stop-low-price-live) bootout_label "$LOW_PRICE_LABEL"; "$PROJECT_DIR/scripts/ops/stop_low_price_yes_lottery_tiny_live.sh" ;;
   -h|--help|help|"") usage ;;

@@ -8,7 +8,7 @@ OUT_FILE="$RUNTIME_DIR/loop.out"
 PY="$PROJECT_DIR/.venv/bin/python"
 
 mkdir -p "$RUNTIME_DIR"
-if [[ -f "$PID_FILE" ]]; then
+if [[ "${REGIME_ROUTED_NO_LOOP_CHILD:-0}" != "1" && -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
   if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
     echo "already running pid=$old_pid log=$OUT_FILE"
@@ -88,21 +88,25 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
   set +a
 fi
 
-(
-  cd "$PROJECT_DIR"
-  while true; do
-    date -u +"[regime_routed_no] cycle_start_utc=%Y-%m-%dT%H:%M:%SZ"
-    set +e
-    "$PY" -u "${args[@]}"
-    rc=$?
-    set -e
-    if [[ "$rc" -ne 0 ]]; then
-      date -u +"[regime_routed_no] runner_failed_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
-    fi
-    sleep "$REGIME_ROUTED_NO_INTERVAL_SEC"
-  done
-) >>"$OUT_FILE" 2>&1 < /dev/null &
+if [[ "${REGIME_ROUTED_NO_LOOP_CHILD:-0}" != "1" ]]; then
+  nohup env REGIME_ROUTED_NO_LOOP_CHILD=1 "$0" >>"$OUT_FILE" 2>&1 < /dev/null &
+  pid=$!
+  echo "$pid" > "$PID_FILE"
+  echo "started regime-routed NO tiny-live pid=$pid log=$OUT_FILE base_N=$REGIME_ROUTED_NO_BASE_NOTIONAL daily_cap=$REGIME_ROUTED_NO_DAILY_GROSS_CAP min_soft_weight_to_ask_ratio=$REGIME_ROUTED_NO_MIN_SOFT_WEIGHT_TO_ASK_RATIO current_escape_margin_gt=$REGIME_ROUTED_NO_MIN_CURRENT_ESCAPE_MARGIN_NATIVE"
+  exit 0
+fi
 
-pid=$!
-echo "$pid" > "$PID_FILE"
-echo "started regime-routed NO tiny-live pid=$pid log=$OUT_FILE base_N=$REGIME_ROUTED_NO_BASE_NOTIONAL daily_cap=$REGIME_ROUTED_NO_DAILY_GROSS_CAP min_soft_weight_to_ask_ratio=$REGIME_ROUTED_NO_MIN_SOFT_WEIGHT_TO_ASK_RATIO current_escape_margin_gt=$REGIME_ROUTED_NO_MIN_CURRENT_ESCAPE_MARGIN_NATIVE"
+echo "$$" > "$PID_FILE"
+cd "$PROJECT_DIR"
+trap 'rc=$?; date -u +"[regime_routed_no] loop_exit_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"; rm -f "$PID_FILE"' EXIT
+while true; do
+  date -u +"[regime_routed_no] cycle_start_utc=%Y-%m-%dT%H:%M:%SZ"
+  set +e
+  "$PY" -u "${args[@]}"
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    date -u +"[regime_routed_no] runner_failed_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
+  fi
+  sleep "$REGIME_ROUTED_NO_INTERVAL_SEC"
+done
