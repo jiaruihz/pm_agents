@@ -16,7 +16,6 @@ import json
 import math
 import os
 import signal
-import socket
 import sqlite3
 import subprocess
 import sys
@@ -25,8 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import requests
-from urllib3.util import connection as urllib3_connection
+import httpx
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -619,21 +617,12 @@ def resolve_yes_token_from_local_snapshots(row: dict[str, Any]) -> dict[str, Any
 def fetch_book(token_id: str, *, timeout_sec: float = 5.0) -> dict[str, Any]:
     url = f"{CLOB_BASE_URL.rstrip('/')}/book"
     proxy = market_proxy_url()
-    proxies = {"http": proxy, "https": proxy} if proxy else None
-    original_allowed_gai_family = urllib3_connection.allowed_gai_family
-    session = requests.Session()
-    session.trust_env = False
-    try:
-        urllib3_connection.allowed_gai_family = lambda: socket.AF_INET
-        response = session.get(
+    with httpx.Client(proxy=proxy or None, timeout=timeout_sec, trust_env=False) as client:
+        response = client.get(
             url,
             params={"token_id": token_id},
             headers={"Accept": "application/json"},
-            timeout=timeout_sec,
-            proxies=proxies,
         )
-    finally:
-        urllib3_connection.allowed_gai_family = original_allowed_gai_family
     response.raise_for_status()
     payload = response.json()
     return payload if isinstance(payload, dict) else {}

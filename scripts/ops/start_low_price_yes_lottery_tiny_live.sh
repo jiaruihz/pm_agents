@@ -45,6 +45,8 @@ if [[ -f "$ROOT/.env" ]]; then
   set +a
 fi
 
+LOW_PRICE_YES_LOTTERY_MARKET_PROXY="${LOW_PRICE_YES_LOTTERY_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7890}}"
+
 args=(
   scripts/ops/low_price_yes_lottery_tiny_live.py
   loop
@@ -99,6 +101,7 @@ if [[ "${LOW_PRICE_YES_LOTTERY_LOOP_CHILD:-0}" != "1" ]]; then
     LOW_PRICE_YES_LOTTERY_TOKEN_TIMEOUT_SECONDS="$LOW_PRICE_YES_LOTTERY_TOKEN_TIMEOUT_SECONDS" \
     LOW_PRICE_YES_LOTTERY_DISABLE_LIVE_TOKEN_RESOLUTION="$LOW_PRICE_YES_LOTTERY_DISABLE_LIVE_TOKEN_RESOLUTION" \
     LOW_PRICE_YES_LOTTERY_NO_TELEGRAM="$LOW_PRICE_YES_LOTTERY_NO_TELEGRAM" \
+    LOW_PRICE_YES_LOTTERY_MARKET_PROXY="$LOW_PRICE_YES_LOTTERY_MARKET_PROXY" \
     "$0" >>"$LOG_FILE" 2>&1 < /dev/null &
   pid="$!"
   echo "$pid" >"$PID_FILE"
@@ -108,5 +111,5 @@ fi
 
 echo "$$" >"$PID_FILE"
 trap 'rm -f "$PID_FILE"' EXIT
-date -u +"[low_price_yes_lottery] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ notional=$LOW_PRICE_YES_LOTTERY_NOTIONAL live=$LOW_PRICE_YES_LOTTERY_LIVE"
+date -u +"[low_price_yes_lottery] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ notional=$LOW_PRICE_YES_LOTTERY_NOTIONAL live=$LOW_PRICE_YES_LOTTERY_LIVE proxy=$LOW_PRICE_YES_LOTTERY_MARKET_PROXY"
 "$PYTHON_BIN" -u "${args[@]}"
