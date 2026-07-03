@@ -33,12 +33,12 @@ Mac pm_agents/              = 分析/看板/镜像；不作为生产采集源
 | 入口 | 当前状态 | 频率/方式 | 归属 | 产物 | 口径 |
 |---|---:|---:|---|---|---|
 | `weather-data-feed-observations.timer` | active/waiting | every 5 min | **目标 producer** | `/home/jiarui/projects/weather_data_feed_service_runtime/output/observations/latest.json` | 已经是新链路；fast obs cache，给 live 策略用 |
-| `weather-data-feed-source-events.timer` | **not enabled yet** | target 2 min after inactive | **目标 source timing producer，已版本化待启用** | `.../output/source_events/{sources.jsonl,latest.json,state.json}` | `source-events`；只记录天气 source first-seen/cadence/payload hash，不拉盘口、不下单；默认直连天气源 |
+| `weather-data-feed-source-events.timer` | **enabled/active** | 2 min after inactive | **目标 source timing producer** | `.../output/source_events/{sources.jsonl,latest.json,state.json}` | `source-events`；40 城 × `profile_primary`/`aviationweather_cache_csv`，只记录天气 source first-seen/cadence/payload hash，不拉盘口、不下单；默认直连天气源 |
 | `weather-data-feed-snapshot.timer` | **disabled/inactive** | paused | **目标 targeted producer，待策略显式消费后再启用** | `.../targeted_output/paper_snapshots/` + `.../targeted_output/orderbook_snapshots/` | `snapshot-targeted`；`strategy_live` 盘口子集：current YES/current NO/D1 NO/D2 NO；与 canonical full output 隔离，避免窄快照污染全量消费者 |
 | `weather-data-feed-full-snapshot.timer` | **enabled/active** | every 30 min after inactive | **目标 full producer** | `.../output/paper_snapshots/` + `.../output/orderbook_snapshots/` | `snapshot-full -- --orderbook-budget-sec 600 --orderbook-workers 8`；2026-06-29 16:45Z 验证 47 城/800 records/1600 books/non_ok=0 |
-| `weather-data-feed-daily.timer` | active/waiting | daily | **目标 producer，但未迁完** | `.../cache/pm_history`, `.../cache/gfs_daily`, `.../cache/wu_obs` | 仍包装 legacy `daily_pipeline` |
+| `weather-data-feed-daily.timer` | active/waiting | daily | **目标 producer** | `.../cache/pm_history`, `.../cache/gfs_daily`, `.../cache/wu_obs` | 当前 daily/cache producer；仍有 legacy wrapper 待拆，但生产 timer 已迁到 data-feed-service |
 | `weather-predict-snapshot.timer` | **disabled/inactive** | paused | 旧 producer / fallback only | `/home/jiarui/projects/weather-predict/output/paper_snapshots/` + `output/orderbook_snapshots/` | 2026-06-29 16:26Z 起停用；旧数据保留，不删 |
-| `weather-predict-daily-pipeline.timer` | active/waiting | daily | **旧 producer / 临时 fallback** | `/home/jiarui/projects/weather-predict/cache/*` | settlement/history/forecast cache fallback；新链路验证通过前不 disable |
+| `weather-predict-daily-pipeline.timer` | **disabled/inactive** | paused | 旧 producer / fallback only | `/home/jiarui/projects/weather-predict/cache/*` | 2026-06-30 停用；旧数据保留，不删；如 data-feed daily 连续失败再作为回滚 |
 
 ### Consumer 层
 
@@ -163,8 +163,8 @@ data-feed snapshot producer:
 | 优先级 | 入口 | 要迁到哪里 | 原因 |
 |---:|---|---|---|
 | P0 | `weather_data_feed_service/legacy_weather_predict/pm_edge_compare.py`、`daily_pipeline.py`、`paper_snapshot.py` | 拆成 data-feed-service 原生 producer：market map、forecast cache、full snapshot、targeted live book cache | 现在仍是 legacy wrapper；targeted 已隔离，但仍会全城市 forecast scan，不是真正低延迟 producer |
-| P0 | `weather-predict-daily-pipeline.timer` | data-feed-service 原生 daily/cache pipeline | 旧 daily 仍是 fallback；forecast/WU/pm_history cache 还没完全从 legacy runner 脱离 |
-| P1 | `weather_source_orderbook_timing_monitor.py` 的天气 source 部分 | `weather_data_feed_service source-events/source-cadence` | source first-seen/cadence 是数据层事实，不该由 pm_agent 研究脚本拥有；2026-06-30 已新增 `source-events` producer，待 N100 启用与 pm_agent consumer 切读 |
+| P0 | `weather_data_feed_service daily` legacy wrapper | data-feed-service 原生 daily/cache pipeline | 生产 timer 已迁到 data-feed-service；后续要把内部 legacy wrapper 拆成原生 forecast/WU/pm_history cache producer |
+| P1 | `weather_source_orderbook_timing_monitor.py` 的天气 source 部分 | `weather_data_feed_service source-events/source-cadence` | source first-seen/cadence 是数据层事实，不该由 pm_agent 研究脚本拥有；2026-06-30 `source-events` producer 已在 N100 启用，后续把 pm_agent consumer 切读 |
 | P1 | `weather_source_orderbook_timing_monitor.py` 的盘口 join 部分 | 保留 pm_agent research consumer，但只读 data-feed source events + market map | orderbook reaction 是研究层；不要再同时负责天气源采集 |
 | P1 | `weather_metar_cross_prev_no_shadow.py` 的天气 fetch | 改读 observation/source-events，触发时只做 exact token fresh book/order | 执行脚本可以临场查盘口，但不应维护独立天气源链 |
 | P2 | `weather_rmk_source_basis_opportunity_monitor.py`、`weather_wu_source_basis_market_scan.py` | 保留 research consumer；输入改成 data-feed source-events + WU/current audit | source-basis 是研究判断，不应该自建天气采集链 |
@@ -194,9 +194,9 @@ AviationWeather cache CSV、NOAA tgftp、weather.gov latest、IEM ASOS 均可由
 |---|---|---|---|
 | source profile / 城市准入 | `weather_data_feed/source_profiles.json` + `source_policy.py` | 已是共享逻辑；策略和 monitor 基本在读它 | 保持唯一入口 |
 | fast observation cache | `weather_data_feed_service_runtime/output/observations/latest.json` | 已 5 分钟运行；40 records；direct weather fetch | 提升为 live 策略唯一观测 cache |
-| paper snapshot | 目标应是 `weather_data_feed_service_runtime/output/paper_snapshots/` | 新旧两套并行：data-feed-service 和 weather-predict | parity 后切 sync/default consumers 到 data-feed-service，停 weather-predict |
-| orderbook snapshot | 目标应是 data-feed-service 统一输出 | 新旧两套并行，且今天覆盖都偏少 | 保留一个 canonical producer；研究脚本只读或追加研究字段 |
-| settlement/history cache | `cache/pm_history`, `cache/wu_obs`, forecast caches | 新旧两边都有 cache；data-feed-service 仍包装 legacy daily | daily 逻辑迁出 legacy wrapper 后再停 weather-predict daily |
+| paper snapshot | 目标应是 `weather_data_feed_service_runtime/output/paper_snapshots/` | data-feed-service full snapshot 已接管；旧 weather-predict snapshot timer disabled | 继续保留旧数据作回滚，不再让旧 timer 并行生产 |
+| orderbook snapshot | 目标应是 data-feed-service 统一输出 | data-feed-service full snapshot 已接管 canonical full books；targeted snapshot 仍待启用 | 研究脚本只读或追加研究字段，不再自建 full producer |
+| settlement/history cache | `cache/pm_history`, `cache/wu_obs`, forecast caches | data-feed-service daily timer 已接管；内部仍有 legacy wrapper | 拆出原生 daily/cache producer；旧 weather-predict daily 已 dormant |
 | source timing research | `source_orderbook_timing/sources.jsonl` + `books.jsonl` | pm_agent 研究脚本直接拉多源天气和 CLOB；日志巨大，盘口失败多 | 拆成两段：天气 first-seen 进 data-feed-service；盘口反应留 pm_agent research |
 | RMK/WU basis research | `source_basis_*.jsonl` | 消费 timing monitor 的 `sources.jsonl`，再拉 orderbook | 不再自己拉天气；只消费 data-feed source-events |
 | 策略执行 | `pm_agent/runtime/weather_edge_v1/*` | current-YES / station-basis / theta 等运行中 | 只消费标准数据产物；不新增独立 fetcher |

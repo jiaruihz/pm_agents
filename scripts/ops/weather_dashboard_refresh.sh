@@ -97,10 +97,11 @@ fi
 
 # ---- Step 2: Ingest live_cycle JSONL ----
 log ""
-log "Step 2/5: Ingesting live_cycle JSONL into $DB_PATH"
+log "Step 2/5: Ingesting live_cycle and strategy-runtime JSONL into $DB_PATH"
 {
   init_canonical_db
   "$VENV/python" -m weather_dashboard.cli.ingest_live_cycle --db-path "$DB_PATH"
+  "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders --db-path "$DB_PATH"
 } 2>&1 | tee "$LOG_DIR/ingest.log" || {
   err "Ingest failed — check $LOG_DIR/ingest.log"
   exit 1

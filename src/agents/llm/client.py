@@ -1,6 +1,7 @@
 """OpenAI-compatible LLM client wrapper."""
 
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -62,9 +63,15 @@ class LLMClient:
         await self.client.aclose()
 
 
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
 def extract_content(resp_json: Dict[str, Any]) -> str:
     choices = resp_json.get("choices") or []
     if not choices:
         return ""
     message = choices[0].get("message") or {}
-    return message.get("content") or ""
+    content = message.get("content") or ""
+    # Reasoning models (MiniMax-M3 等) prepend a <think>…</think> block;
+    # strip it so downstream JSON/schema parsing sees only the answer.
+    return _THINK_BLOCK.sub("", content).strip()

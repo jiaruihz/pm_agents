@@ -9,6 +9,8 @@ The backtest uses future point-in-time YES best bid: a take-profit only counts w
 
 **2026-07-03 correction / live-like caveat:** this report's TP rows credit exits at the later observed future bid (or stressed future bid), so `bid>=0.20` can realize above 20c. The live overlay currently pre-places a resting `SELL YES @0.20`; that execution is closer to a fixed-20c exit and should not be compared to the max-bid headline. See [2026-07-03-low-price-yes-sizing-stop-v1.md](2026-07-03-low-price-yes-sizing-stop-v1.md) for the live-like replay: fixed `$0.80` + fixed-20c TP is -9.1% ROI full-window, while fixed `$0.80` + fixed-20c TP + simple time/salvage stop is +11.6% with CI crossing 0.
 
+**2026-07-04 data-audit caveat:** 78/476 May rows have no future bid path at all (they degrade to hold inside every TP policy) and 15 winners have no bid path (they can never be capped). The TP-vs-hold deltas in this report are therefore effectively driven by June data, and the live-like fixed-20c damage estimate is, if anything, understated. See [2026-07-04-low-price-yes-data-audit-hot-tail-boundary-v1.md](2026-07-04-low-price-yes-data-audit-hot-tail-boundary-v1.md) §1.2.
+
 ```text
 significance=PASS for quoted and +1c/-1c stressed full-window full-sell 20c/30c paired delta vs hold
 baseline=PASS versus same-denominator hold-to-settlement on full-window replay after friction stress

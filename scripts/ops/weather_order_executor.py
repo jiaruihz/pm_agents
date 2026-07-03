@@ -83,8 +83,10 @@ def _maker_only_price(
             return requested_price
         return best_bid if best_bid > 0 and best_bid < best_ask else 0.0
     if side == "SELL":
-        if best_bid <= 0:
+        if requested_price <= 0:
             return 0.0
+        if best_bid <= 0:
+            return requested_price
         if requested_price > best_bid:
             return requested_price
         return best_ask if best_ask > best_bid else 0.0
@@ -540,13 +542,22 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                     "quote_tick_size": tick_size,
                     "quote_mode": "executor_clamp",
                 }
-            if maker_only and order_price >= best_ask and best_ask > 0:
+            if maker_only and side == "BUY" and order_price >= best_ask and best_ask > 0:
                 raise WeatherExecutionError(
                     "maker_only_price_would_cross "
                     f"price={order_price:.6f} best_ask={best_ask:.6f}",
                     response=_diagnostics(
                         classification="maker_only_price_would_cross",
                         reason="computed_price_crosses_best_ask",
+                    ),
+                )
+            if maker_only and side == "SELL" and order_price <= best_bid and best_bid > 0:
+                raise WeatherExecutionError(
+                    "maker_only_price_would_cross "
+                    f"price={order_price:.6f} best_bid={best_bid:.6f}",
+                    response=_diagnostics(
+                        classification="maker_only_price_would_cross",
+                        reason="computed_price_crosses_best_bid",
                     ),
                 )
             if maker_only and order_price <= 0:

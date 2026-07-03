@@ -814,6 +814,7 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "source_plan_status": safe_str(plan.get("status")),
         "risk_status": safe_str(plan.get("risk_status")),
         "risk_reason": safe_str(plan.get("risk_reason")),
+        "expires_at_utc": safe_str(plan.get("expires_at_utc")),
         "model_p_yes_raw": to_float(plan.get("model_p_yes_raw"), 0.0),
         "market_implied_p_yes": to_float(plan.get("market_implied_p_yes"), 0.0),
         "model_p_yes_used": to_float(plan.get("model_p_yes_used"), 0.0),

@@ -103,11 +103,41 @@ scripts/weather_dashboard/run_stack.sh --no-rebuild   # 已有 DB 时跳过重�
 **机器重启后恢复**：
 
 ```bash
-# 从 WSL 执行
-wsl -d Ubuntu-24.04 -- ssh 192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_doctor.py --http-timeout 6'
+# 从当前 Mac 执行
+ssh jiarui@192.168.0.200 'cd /home/jiarui/projects/pm_agent && .venv/bin/python scripts/ops/weather_live_doctor.py --http-timeout 6'
 ```
 
 关键注意：`city_pool=t1_trading` 是交易池真相，N100 代理 `xray` 监听 `127.0.0.1:10809`（Gamma/CLOB/Telegram 均依赖）。doctor 通过 crontab 每 15 分钟巡检，日志在 `runtime/weather_edge_v1/live_cycle/doctor_cron.log`。
+
+**N100 代理 failover**：
+
+当 N100 原生 `127.0.0.1:10809` 访问 Gamma/CLOB 失败，但本机代理可以访问时，先用下面的只读检查确认：
+
+```bash
+scripts/ops/weather_n100_proxy_failover.sh --check-only
+```
+
+如果输出显示 N100 原代理失败、本机隧道代理可用，则执行切换：
+
+```bash
+scripts/ops/weather_n100_proxy_failover.sh
+```
+
+该脚本会检查 N100 原 `127.0.0.1:10809`，失败时建立 Mac `127.0.0.1:7897` 到 N100 `127.0.0.1:18089` 的 SSH reverse tunnel，并备份更新 N100 `~/projects/weather_data_feed_service/.env` 与 `~/projects/pm_agent/.env`。脚本不会自动重启数据/策略服务；更新后只重启受影响的 data-feed producer 或 live runner，并先确认是否会触发真实下单。这是临时兜底；长期仍应修 N100 自身 xray 节点/订阅/流量。
+
+如果只是显式切换远端代理，不走 failover 判断，直接指定目标 proxy：
+
+```bash
+# 临时走 Mac fallback
+scripts/ops/weather_n100_proxy_failover.sh --apply-proxy http://127.0.0.1:18089
+
+# N100 原生代理恢复后切回
+scripts/ops/weather_n100_proxy_failover.sh --apply-proxy http://127.0.0.1:10809
+```
+
+默认会写这些 key：`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`WEATHER_DATA_FEED_MARKET_PROXY`、`WEATHER_PREDICT_PROXY`。需要调整时用 `REMOTE_PROXY_ENV_KEYS=...`，不要改脚本逻辑。
+
+注意：本机 fallback 不能让远端数据走高倍率节点。脚本会尝试通过 Clash Verge/Mihomo 的 Unix socket 把相关 selector 分组切到 `🇯🇵 日本 01丨1x JP`；如本机代理 UI 改过规则，先确认 `Gamma/CLOB/Telegram` 不在 5x 节点上。高频 `source_orderbook_timing` 监控不要长期走本机 fallback，除非另行限频和确认节点倍率。2026-06-30 当前策略：先用 JP 1x fallback 顶到 7 月，再切回修好的 N100 原生代理。
 
 ### D. PMM Main
 

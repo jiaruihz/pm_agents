@@ -13,6 +13,7 @@ PY="$SERVICE_DIR/.venv/bin/python"
 
 OBS_INTERVAL_SEC="${WEATHER_DATA_FEED_OBS_INTERVAL_SEC:-300}"
 SNAPSHOT_INTERVAL_SEC="${WEATHER_DATA_FEED_SNAPSHOT_INTERVAL_SEC:-600}"
+SNAPSHOT_COMMAND="${WEATHER_DATA_FEED_SNAPSHOT_COMMAND:-snapshot-targeted}"
 SNAPSHOT_ORDERBOOK_BUDGET_SEC="${WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC:-60}"
 SNAPSHOT_ORDERBOOK_WORKERS="${WEATHER_DATA_FEED_ORDERBOOK_WORKERS:-1}"
 MARKET_PROXY_PROBE_TIMEOUT_SEC="${WEATHER_MARKET_PROXY_PROBE_TIMEOUT_SEC:-5}"
@@ -32,6 +33,15 @@ fi
 if [[ ! -x "$PY" ]]; then
   PY="python3"
 fi
+
+case "$SNAPSHOT_COMMAND" in
+  snapshot|snapshot-targeted|snapshot-full)
+    ;;
+  *)
+    echo "unsupported WEATHER_DATA_FEED_SNAPSHOT_COMMAND=$SNAPSHOT_COMMAND" >&2
+    exit 2
+    ;;
+esac
 
 if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" ]]; then
   nohup env MAC_WEATHER_DATA_FEED_LOOP_CHILD=1 "$0" >>"$LOG_FILE" 2>&1 < /dev/null &
@@ -93,7 +103,7 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
       "$PY" -u -m weather_data_feed_service \
         --output-root "$OUTPUT_ROOT" \
         --cache-root "$CACHE_ROOT" \
-        snapshot-targeted -- \
+        "$SNAPSHOT_COMMAND" -- \
         --orderbook-budget-sec "$SNAPSHOT_ORDERBOOK_BUDGET_SEC" \
         --orderbook-workers "$SNAPSHOT_ORDERBOOK_WORKERS"
       rc=$?

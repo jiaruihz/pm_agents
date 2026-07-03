@@ -287,7 +287,7 @@ SELECT
   o.notional,
   o.status             AS order_status,
   o.placed_at_utc,
-  o.created_at_utc     AS order_ts_utc,
+  COALESCE(o.placed_at_utc, o.created_at_utc) AS order_ts_utc,
 
   p.signal_id,
   p.config_id,

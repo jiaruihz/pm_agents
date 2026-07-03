@@ -74,6 +74,18 @@ Stop the low-price YES lottery tiny-live runner:
 scripts/ops/mac_weather_stack.sh stop-low-price-live
 ```
 
+Start the low-price YES TP20 exit overlay only after explicit approval:
+
+```bash
+scripts/ops/mac_weather_stack.sh start-low-price-take-profit --confirm-live
+```
+
+Stop the low-price YES TP20 exit overlay:
+
+```bash
+scripts/ops/mac_weather_stack.sh stop-low-price-take-profit
+```
+
 `start` does not place real orders. It starts only:
 
 - `com.pm-agents.weather-data-feed`

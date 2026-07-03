@@ -17,6 +17,16 @@ class PolymarketGammaClient:
         self.timeout = float(os.getenv("POLYMARKET_GAMMA_TIMEOUT_SEC", "4.0"))
         retries = int(os.getenv("POLYMARKET_GAMMA_RETRIES", "1"))
         self.session = requests.Session()
+        proxy = (
+            os.getenv("POLYMARKET_GAMMA_PROXY", "").strip()
+            or os.getenv("LOW_PRICE_YES_LOTTERY_MARKET_PROXY", "").strip()
+            or os.getenv("WEATHER_DATA_FEED_MARKET_PROXY", "").strip()
+            or os.getenv("WEATHER_PREDICT_MARKET_PROXY", "").strip()
+        )
+        if proxy.lower() in {"direct", "none", "off", "0"}:
+            proxy = ""
+        if proxy:
+            self.session.proxies.update({"http": proxy, "https": proxy})
         self.session.mount(
             "https://",
             HTTPAdapter(

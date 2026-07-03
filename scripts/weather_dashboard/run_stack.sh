@@ -239,6 +239,15 @@ if [[ $REBUILD -eq 1 ]]; then
     warn "  live_cycle directories missing"
   fi
 
+  log "  Migrating strategy-local runtime orders into canonical DB"
+  {
+    init_canonical_db
+    "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders --db-path "$DB_PATH"
+  } >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    err "strategy runtime order migration failed — see $LOG_DIR/migrate_live_cycle.log"
+    exit 1
+  }
+
   log "  Ingesting pm_history -> settlements (authoritative)"
   "$VENV/python" -m weather_dashboard.ingest.pm_history_settlements \
     --db-path "$DB_PATH" >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
