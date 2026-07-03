@@ -202,6 +202,32 @@ python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 
 `gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。必须先修复 `clob_fills.jsonl` / CLOB fill sync，再重建 `runtime/weather.db`。
 
+### Polymarket 交易费口径（2026-07-03 勘误）
+
+任何 weather 策略回测、执行回放、maker/taker 对比或 stop/TP 研究，只要声称是可执行 ROI，必须按 Polymarket 官方 fee 公式建模，不准自造 flat fee / gross fee 作为主口径。
+
+官方 taker fee 公式：
+
+```text
+fee = shares * feeRate * price * (1 - price)
+```
+
+当前 Weather 类别 fee 口径：
+
+```text
+taker feeRate = 0.05
+maker feeRate = 0
+maker rebate = 25% fee-curve weighted（可作为单独 upside，不得默认计入 baseline）
+fee precision = round to 5 decimals; below 0.00001 rounds to zero
+```
+
+执行研究必须同时声明：
+
+- entry/exit 是 `maker` 还是 `taker`；maker fill 不扣 taker fee，但必须单独处理 fill probability / adverse selection / queue risk。
+- 若有 `condition_id` / `token_id`，优先查询 CLOB market info（`getClobMarketInfo(conditionID)` 的 `fd={r,e,to}`）或 `/fee-rate?token_id=...` 并把返回值写进报告；查询失败时才回落类别默认 `Weather feeRate=0.05`，并注明。
+- stop/TP 若按 hit bid 或 marketable sell 执行，exit 也要扣 taker fee；若按 resting maker sell 执行，不扣 taker fee，但不能把 future max-bid touch 当成实际 fill。
+- 额外 `+1c`、queue haircut、maker fill rate stress 可以作为 sensitivity，但不能替代官方 fee baseline。
+
 ### 结算 near-binary 规则（2026-06-06 勘误）
 
 `pm_history` 里的 Polymarket 已结算价格不一定是精确 `1.0 / 0.0`；大量已基本结算的 bracket 会写成 `0.9995 / 0.0005`。因此：
