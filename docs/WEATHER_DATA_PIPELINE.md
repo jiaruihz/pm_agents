@@ -1,7 +1,7 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-07-04 Mac temporary production handoff
+Updated: 2026-07-04 Mac temporary production handoff + forecast curve lineage
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -14,6 +14,8 @@ Last updated: 2026-06-06
 > 2026-06-07 更新: 修正 CLOB fill recovery 口径。public activity 不是逐 order 权威来源；旧 fallback 在 split child order / partial fill 场景会少算或多算。新增 `weather_clob_fill_coverage_gate.py`，refresh/rebuild 后必须 fail-closed 校验 order_id、order cap、DB/cache/fact 成本一致性。
 >
 > 2026-07-04 更新: N100 7/1 发生 ext4 emergency read-only / IO error 事故后，Mac 临时接管生产。当前 market snapshot/orderbook 源为 `/Users/deepsleep/projects/weather_data_feed_service_runtime/targeted_output/`，live order 源为 `/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/live/` 和 active strategy runtime dirs。同步当前生产 market data 用 `scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only`。
+>
+> 2026-07-04 更新: full snapshot producer now persists decision-time hourly forecast curves as `targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl`, one row per city/target_date/snapshot. `build_weather_signal_candidates.py` mirrors them into `runtime/weather.db.fact_forecast_hourly_curves`; `fact_signal_candidates.forecast_values_hash` is the join key.
 
 Single source of truth for **where weather strategy data lives, who produces
 it, who consumes it, and how PnL is computed**. Read this before touching
@@ -33,7 +35,8 @@ There are **two active roles** during the 2026-07-04 incident handoff:
                               Mac (temporary production)
                               ├── weather_data_feed_service_runtime
                               │   ├── targeted_output/paper_snapshots
-                              │   └── targeted_output/orderbook_snapshots
+                              │   ├── targeted_output/orderbook_snapshots
+                              │   └── targeted_output/forecast_hourly_curves
                               └── pm_agents runtime
                                   ├── live order logs
                                   └── dashboard / fact rebuild
@@ -83,6 +86,7 @@ unless matched by a real row in `fills`.
 |---|---|---|---|
 | `weather_data_feed_service_runtime/targeted_output/paper_snapshots/snapshot_*.json` | Mac LaunchAgent `com.pm-agents.weather-data-feed` | full snapshot cadence | current production market snapshots |
 | `weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/YYYY-MM-DD/orderbook_snapshot_*.jsonl.gz` | Mac LaunchAgent `com.pm-agents.weather-data-feed` | full snapshot cadence | current production orderbook history; not backfillable if missed |
+| `weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac LaunchAgent `com.pm-agents.weather-data-feed` | full snapshot cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
 | `pm_agents/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-lottery-live` | live strategy cadence | current BUY_YES lottery CLOB order submissions |
 | `pm_agents/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-take-profit-exit` | live strategy cadence | current SELL_YES TP exit CLOB order submissions |
 | `pm_agents/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1/live_orders.jsonl` | Mac LaunchAgent `com.pm-agents.regime-routed-no-live` | live strategy cadence | current regime-routed NO live order submissions |
@@ -134,6 +138,7 @@ they go stale unless someone reruns `settle_t24_paper.py`. See
 |---|---|---|
 | `weather_data_feed_service_runtime/targeted_output/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | current Mac production snapshots |
 | `weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/` | `runtime/weather_edge_v1/market_data/orderbook_snapshots/` | current Mac production orderbook history |
+| `weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/` | `runtime/weather_edge_v1/market_data/forecast_hourly_curves/` | current Mac production hourly forecast curves |
 | `weather-predict/output/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | 30-min snapshots |
 | `weather-predict/output/paper_trades/` | `runtime/weather_edge_v1/market_data/paper_trades/` | paper ledger |
 | `weather-predict/output/research/` | `runtime/weather_edge_v1/market_data/research/` | derived CSVs + analysis reports |
@@ -265,9 +270,12 @@ Side tables (mutable):
 │     │                                                               │
 │     ├─ scripts/etl/build_weather_signal_candidates.py (DERIVED)│
 │     │     reads:  paper_snapshots/*.json, paper_orders.jsonl,       │
-│     │             fact_trades(live_real), settlements               │
+│     │             fact_trades(live_real), settlements,              │
+│     │             forecast_hourly_curves/*.jsonl                    │
 │     │     writes: fact_signal_candidates (每机会一行, 全机会宇宙→   │
 │     │             paper intended→live actual 对齐, 机会 alpha 唯一源)│
+│     │             fact_forecast_hourly_curves (每 city/date/snapshot │
+│     │             一行，用 forecast_values_hash 关联候选行)          │
 │     │             + fact_signal_candidates.parquet                  │
 │     │             window: decision hts_min/max 默认 [22,24]         │
 │     │                                                               │

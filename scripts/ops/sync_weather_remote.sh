@@ -157,9 +157,11 @@ sync_market() {
   _sync_dir  "$MARKET_OUTPUT_PREFIX/paper_snapshots"    "paper_snapshots"
   _sync_dir  "$MARKET_OUTPUT_PREFIX/orderbook_snapshots" "orderbook_snapshots"
   if [[ "$MARKET_OPTIONAL_OUTPUTS" == "1" ]]; then
+    _sync_dir_optional "$MARKET_OUTPUT_PREFIX/forecast_hourly_curves" "forecast_hourly_curves"
     _sync_dir_optional "$MARKET_OUTPUT_PREFIX/paper_trades" "paper_trades"
     _sync_dir_optional "$MARKET_OUTPUT_PREFIX/research"     "research"
   else
+    _sync_dir_optional "output/forecast_hourly_curves" "forecast_hourly_curves"
     _sync_dir "output/paper_trades" "paper_trades"
     _sync_dir "output/research"     "research"
   fi

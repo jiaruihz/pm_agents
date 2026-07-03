@@ -128,6 +128,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | **本机** `runtime/weather.db` | **canonical operational DB** | `weather_dashboard_refresh.sh` 增量 ingest；`run_stack.sh` 全量 rebuild | 所有分析 / API / 前端 | **唯一分析 DB**。日常不删库；全量 rebuild 只在确认 raw 输入 + CLOB fill cache / 外部 CLOB 同步可用时执行。 |
 | **本机** `runtime/weather.db.fact_trades` | derived（唯一已成交 PnL 源） | `build_weather_fact_trades.py` | 所有绩效分析 | grain = 每 fill 一行 |
 | **本机** `runtime/weather.db.fact_signal_candidates` | derived（唯一全机会源） | `build_weather_signal_candidates.py` | 成交质量 / 漏单 / 城市 alpha 分析 | grain = 每 `(condition_id,side,event_date)` 一行 |
+| **本机** `runtime/weather.db.fact_forecast_hourly_curves` | derived（PIT 预报曲线附表） | `build_weather_signal_candidates.py` | reheat / ceiling margin / forecast slope 等曲线特征 | grain = 每 `(city,target_date,snapshot_ts_utc,forecast_values_hash)` 一行；候选行用 `forecast_values_hash` 关联 |
 | **本机** `runtime/weather.db.settlement_outcomes` | canonical source-grain layer | `pm_history_settlements.py` | basket / city-day / source-sensitive settlement research | grain = 每 `(source_system, city, target_date, bracket)` 一行；不要再让每个策略脚本自己读 raw pm_history 定义 fallback |
 | **本机** `runtime/weather_decision_journal.db` | **活跃 sidecar** | `scripts/ops/weather_decision_journal.py` | `weather_position_monitor.py` | 仍在用，不动 |
 | **本机** `runtime/_legacy/strategy_runtime.db` | legacy（PMM 已退役） | （已无 writer） | （已无 reader） | 保留作历史参考 |

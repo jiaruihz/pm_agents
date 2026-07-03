@@ -1,7 +1,7 @@
 # Weather Strategy — 系统接口契约
 
 Status: current-source
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-07-04 forecast curve lineage + Mac handoff
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -17,7 +17,8 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 | 系统 | 职责 | 不负责 |
 |---|---|---|
-| **N100 `weather-predict`** | market snapshot / orderbook snapshot、paper ledger、城市池、天气 cache、settlement truth | live CLOB 下单、pm_agent dashboard DB |
+| **Mac `weather_data_feed_service_runtime` (temporary production)** | market snapshot / orderbook snapshot、hourly forecast curve archive during 2026-07-04 N100 recovery | long-term N100 recovery decision |
+| **N100 `weather-predict`** | historical market snapshot / orderbook snapshot、paper ledger、城市池、天气 cache、settlement truth | live CLOB 下单、pm_agent dashboard DB |
 | **N100 `pm_agent`** | live signal / plan / real CLOB order lineage、策略实例、pause/doctor/Telegram | weather model cache、paper snapshot timer |
 | **本机 `pm_agent`** | 分析 DB、看板、回测、策略研究、N100 `pm_agent` 部署 staging | 直接采集生产数据、直接写 N100 market data |
 
@@ -54,6 +55,7 @@ N100 两个 repo 产出的文件格式 = 本文档约定的契约。pm_agent das
 | 预报最高温时间（UTC） | `forecast_peak_time_utc` | TEXT ISO-8601 | 例如 `2026-06-16T06:00:00Z` |
 | 预报小时数 | `forecast_hourly_count` | INTEGER | 该 target_date 可用 hourly 温度点数量 |
 | 预报序列hash | `forecast_values_hash` | TEXT | 对目标日 hourly `(time, temperature_2m)` 序列做 SHA256 前16位，用于判断 forecast 是否换版 |
+| 预报曲线归档路径 | `forecast_hourly_curve_path` | TEXT | snapshot producer 写出的相对路径；真正曲线在 `forecast_hourly_curves/*.jsonl`，不要在每个 bracket 行重复存整条曲线 |
 | 预报峰值源 | `forecast_peak_source` | TEXT | 通常同 `forecast_source`，例如 `open_meteo_live_gfs` |
 | 预报源时区 | `forecast_timezone` | TEXT | Open-Meteo response timezone，用于审计本地峰值小时 |
 | 预报UTC偏移秒 | `forecast_utc_offset_seconds` | INTEGER | Open-Meteo response `utc_offset_seconds` |
@@ -223,9 +225,9 @@ order_id, shares, cost_usd, entry_price, settlement_status, final_price, pnl_usd
 
 > 当前 CSV 还用旧字段名（`model`、`event_date`、`model_prob`、`market_yes_price`）——adapter 做临时兼容。待 N100 侧改名后删 adapter（§6）。
 
-### 4.1.1 paper_snapshots/*.json forecast peak fields
+### 4.1.1 paper_snapshots/*.json forecast peak fields + curve archive
 
-`weather-predict` snapshot record 必须保留 forecast peak clock 字段。它们是
+snapshot record 必须保留 forecast peak clock 字段。它们是
 `forecast_source` 同一次 Open-Meteo hourly response 的派生值，不允许用实际观测最高温反推。
 
 ```
@@ -240,8 +242,21 @@ forecast_max_above_bracket_f, forecast_max_below_bracket_f,
 forecast_max_above_metar_max_f
 ```
 
-`pm_agent` 的 `fact_signal_candidates` 保存这些字段的**决策窗代表 snapshot**值；历史旧
-snapshot 缺字段时为 NULL，不做回填猜测。
+`forecast_values_hash` 是 forecast 元数据和曲线归档的连接键。full snapshot producer 同时写：
+
+```
+targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl
+```
+
+该 JSONL grain = `(city, target_date, snapshot_ts_utc, forecast_values_hash)`，字段包括
+`forecast_source` / `forecast_model` / `forecast_peak_*` / `forecast_hourly_count` /
+`forecast_timezone` / `hourly_curve`。`pm_agent` rebuild 时写入
+`runtime/weather.db.fact_forecast_hourly_curves`。研究剩余加热积分、ceiling margin、
+curve slope 等 PIT 特征时从该表按 `forecast_values_hash` 取曲线，不再事后访问第三方 API 补同日曲线。
+
+`fact_signal_candidates` 的价格、entry、spread 仍保存**决策窗代表 snapshot**值；forecast peak/hash
+字段则优先用决策窗记录，决策窗记录缺字段时用同一机会最接近目标 HTS 的 snapshot forecast 元数据补齐。
+这只补同一 PIT snapshot universe 中已经存在的 forecast 派生字段，不用实际观测或未来 API 反推。
 
 ### 4.2 live_*_signals.jsonl
 

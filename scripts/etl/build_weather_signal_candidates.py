@@ -50,6 +50,7 @@ PAPER_ORDERS_PATH = (
     ROOT / "runtime" / "weather_edge_v1" / "market_data" / "paper_trades" / "paper_orders.jsonl"
 )
 FORECAST_CACHE_ROOT = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "cache"
+FORECAST_CURVE_DIR = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "forecast_hourly_curves"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -82,6 +83,13 @@ def _hours_to_settle(rec: dict) -> float | None:
 def _safe_int(v: Any) -> int | None:
     fv = _safe_float(v)
     return int(fv) if fv is not None else None
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return None
 
 
 def _parse_utc_ts(value: Any) -> datetime | None:
@@ -390,6 +398,32 @@ CREATE TABLE IF NOT EXISTS fact_signal_candidates (
 """
 
 
+FORECAST_CURVE_DDL = """
+CREATE TABLE IF NOT EXISTS fact_forecast_hourly_curves (
+  curve_id TEXT PRIMARY KEY,
+  snapshot_ts_utc TEXT,
+  city TEXT,
+  target_date TEXT,
+  forecast_source TEXT,
+  forecast_model TEXT,
+  forecast_values_hash TEXT,
+  forecast_max_f REAL,
+  forecast_peak_hour_local INTEGER,
+  forecast_peak_time_local TEXT,
+  forecast_peak_hour_utc INTEGER,
+  forecast_peak_time_utc TEXT,
+  forecast_hourly_count INTEGER,
+  forecast_timezone TEXT,
+  forecast_timezone_abbreviation TEXT,
+  forecast_utc_offset_seconds INTEGER,
+  forecast_generationtime_ms REAL,
+  hourly_curve_json TEXT,
+  source_file TEXT,
+  fact_built_at_utc TEXT
+)
+"""
+
+
 # ---------------------------------------------------------------------------
 # Counterfactual PnL (沿用 fact_trades 已验证公式)
 # ---------------------------------------------------------------------------
@@ -427,6 +461,16 @@ class _Opportunity:
         "dec_forecast_max_in_bracket",
         "dec_forecast_max_above_bracket_f", "dec_forecast_max_below_bracket_f",
         "dec_forecast_max_above_metar_max_f",
+        "_forecast_meta_dist", "meta_forecast_max_f", "meta_forecast_max_native",
+        "meta_forecast_peak_hour_local", "meta_forecast_peak_time_local",
+        "meta_forecast_peak_hour_utc", "meta_forecast_peak_time_utc",
+        "meta_forecast_hourly_count", "meta_forecast_values_hash",
+        "meta_forecast_peak_source",
+        "meta_forecast_timezone", "meta_forecast_utc_offset_seconds",
+        "meta_forecast_peak_delta_hours_local",
+        "meta_forecast_max_in_bracket",
+        "meta_forecast_max_above_bracket_f", "meta_forecast_max_below_bracket_f",
+        "meta_forecast_max_above_metar_max_f",
         "first_seen_ts_utc", "last_seen_ts_utc", "n_snapshots",
         "edge_max", "_edge_sum", "_edge_count", "best_entry_price",
         "eligible",
@@ -467,6 +511,23 @@ class _Opportunity:
         self.dec_forecast_max_above_bracket_f = None
         self.dec_forecast_max_below_bracket_f = None
         self.dec_forecast_max_above_metar_max_f = None
+        self._forecast_meta_dist = None
+        self.meta_forecast_max_f = None
+        self.meta_forecast_max_native = None
+        self.meta_forecast_peak_hour_local = None
+        self.meta_forecast_peak_time_local = None
+        self.meta_forecast_peak_hour_utc = None
+        self.meta_forecast_peak_time_utc = None
+        self.meta_forecast_hourly_count = None
+        self.meta_forecast_values_hash = None
+        self.meta_forecast_peak_source = None
+        self.meta_forecast_timezone = None
+        self.meta_forecast_utc_offset_seconds = None
+        self.meta_forecast_peak_delta_hours_local = None
+        self.meta_forecast_max_in_bracket = None
+        self.meta_forecast_max_above_bracket_f = None
+        self.meta_forecast_max_below_bracket_f = None
+        self.meta_forecast_max_above_metar_max_f = None
         self.first_seen_ts_utc = None
         self.last_seen_ts_utc = None
         self.n_snapshots = 0
@@ -523,8 +584,29 @@ class _Opportunity:
             if self.best_entry_price is None or entry < self.best_entry_price:
                 self.best_entry_price = entry
 
-        # decision-window candidate: in band, closest to target hours_to_settle
         hts = _hours_to_settle(rec)
+        if rec.get("forecast_peak_hour_local") is not None or rec.get("forecast_values_hash"):
+            forecast_dist = abs(hts - target_hts) if hts is not None else float("inf")
+            if self._forecast_meta_dist is None or forecast_dist < self._forecast_meta_dist:
+                self._forecast_meta_dist = forecast_dist
+                self.meta_forecast_max_f = _safe_float(rec.get("forecast_max_f"))
+                self.meta_forecast_max_native = _safe_float(rec.get("forecast_max_native"))
+                self.meta_forecast_peak_hour_local = _safe_float(rec.get("forecast_peak_hour_local"))
+                self.meta_forecast_peak_time_local = rec.get("forecast_peak_time_local")
+                self.meta_forecast_peak_hour_utc = _safe_float(rec.get("forecast_peak_hour_utc"))
+                self.meta_forecast_peak_time_utc = rec.get("forecast_peak_time_utc")
+                self.meta_forecast_hourly_count = _safe_float(rec.get("forecast_hourly_count"))
+                self.meta_forecast_values_hash = rec.get("forecast_values_hash")
+                self.meta_forecast_peak_source = rec.get("forecast_peak_source")
+                self.meta_forecast_timezone = rec.get("forecast_timezone")
+                self.meta_forecast_utc_offset_seconds = _safe_float(rec.get("forecast_utc_offset_seconds"))
+                self.meta_forecast_peak_delta_hours_local = _safe_float(rec.get("forecast_peak_delta_hours_local"))
+                self.meta_forecast_max_in_bracket = _safe_float(rec.get("forecast_max_in_bracket"))
+                self.meta_forecast_max_above_bracket_f = _safe_float(rec.get("forecast_max_above_bracket_f"))
+                self.meta_forecast_max_below_bracket_f = _safe_float(rec.get("forecast_max_below_bracket_f"))
+                self.meta_forecast_max_above_metar_max_f = _safe_float(rec.get("forecast_max_above_metar_max_f"))
+
+        # decision-window candidate: in band, closest to target hours_to_settle
         if hts is not None and hts_min <= hts <= hts_max:
             dist = abs(hts - target_hts)
             if self._dec_dist is None or dist < self._dec_dist:
@@ -740,12 +822,17 @@ def _load_settlement_outcomes(conn: sqlite3.Connection) -> dict[tuple, dict]:
     `settlement_outcomes` is the source-grain fallback for city/date/bracket
     research denominators.
     """
-    rows = conn.execute(
-        """
-        SELECT target_date, city, bracket, final_price, settlement_status
-        FROM settlement_outcomes
-        """
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            """
+            SELECT target_date, city, bracket, final_price, settlement_status
+            FROM settlement_outcomes
+            """
+        ).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table: settlement_outcomes" in str(exc):
+            return {}
+        raise
     cols = ["target_date", "city", "bracket", "final_price", "settlement_status"]
     out: dict[tuple, dict] = {}
     for r in rows:
@@ -858,42 +945,54 @@ def build(
             "icao": opp.icao,
             "unit": opp.unit,
             "forecast_source": opp.forecast_source,
-            "forecast_max_f": opp.dec_forecast_max_f,
-            "forecast_max_native": opp.dec_forecast_max_native,
+            "forecast_max_f": _first_present(opp.dec_forecast_max_f, opp.meta_forecast_max_f),
+            "forecast_max_native": _first_present(opp.dec_forecast_max_native, opp.meta_forecast_max_native),
             "forecast_peak_hour_local": (
-                int(opp.dec_forecast_peak_hour_local)
-                if opp.dec_forecast_peak_hour_local is not None
+                int(_first_present(opp.dec_forecast_peak_hour_local, opp.meta_forecast_peak_hour_local))
+                if _first_present(opp.dec_forecast_peak_hour_local, opp.meta_forecast_peak_hour_local) is not None
                 else None
             ),
-            "forecast_peak_time_local": opp.dec_forecast_peak_time_local,
+            "forecast_peak_time_local": _first_present(opp.dec_forecast_peak_time_local, opp.meta_forecast_peak_time_local),
             "forecast_peak_hour_utc": (
-                int(opp.dec_forecast_peak_hour_utc)
-                if opp.dec_forecast_peak_hour_utc is not None
+                int(_first_present(opp.dec_forecast_peak_hour_utc, opp.meta_forecast_peak_hour_utc))
+                if _first_present(opp.dec_forecast_peak_hour_utc, opp.meta_forecast_peak_hour_utc) is not None
                 else None
             ),
-            "forecast_peak_time_utc": opp.dec_forecast_peak_time_utc,
+            "forecast_peak_time_utc": _first_present(opp.dec_forecast_peak_time_utc, opp.meta_forecast_peak_time_utc),
             "forecast_hourly_count": (
-                int(opp.dec_forecast_hourly_count)
-                if opp.dec_forecast_hourly_count is not None
+                int(_first_present(opp.dec_forecast_hourly_count, opp.meta_forecast_hourly_count))
+                if _first_present(opp.dec_forecast_hourly_count, opp.meta_forecast_hourly_count) is not None
                 else None
             ),
-            "forecast_values_hash": opp.dec_forecast_values_hash,
-            "forecast_peak_source": opp.dec_forecast_peak_source,
-            "forecast_timezone": opp.dec_forecast_timezone,
+            "forecast_values_hash": _first_present(opp.dec_forecast_values_hash, opp.meta_forecast_values_hash),
+            "forecast_peak_source": _first_present(opp.dec_forecast_peak_source, opp.meta_forecast_peak_source),
+            "forecast_timezone": _first_present(opp.dec_forecast_timezone, opp.meta_forecast_timezone),
             "forecast_utc_offset_seconds": (
-                int(opp.dec_forecast_utc_offset_seconds)
-                if opp.dec_forecast_utc_offset_seconds is not None
+                int(_first_present(opp.dec_forecast_utc_offset_seconds, opp.meta_forecast_utc_offset_seconds))
+                if _first_present(opp.dec_forecast_utc_offset_seconds, opp.meta_forecast_utc_offset_seconds) is not None
                 else None
             ),
-            "forecast_peak_delta_hours_local": opp.dec_forecast_peak_delta_hours_local,
+            "forecast_peak_delta_hours_local": _first_present(
+                opp.dec_forecast_peak_delta_hours_local,
+                opp.meta_forecast_peak_delta_hours_local,
+            ),
             "forecast_max_in_bracket": (
-                int(opp.dec_forecast_max_in_bracket)
-                if opp.dec_forecast_max_in_bracket is not None
+                int(_first_present(opp.dec_forecast_max_in_bracket, opp.meta_forecast_max_in_bracket))
+                if _first_present(opp.dec_forecast_max_in_bracket, opp.meta_forecast_max_in_bracket) is not None
                 else None
             ),
-            "forecast_max_above_bracket_f": opp.dec_forecast_max_above_bracket_f,
-            "forecast_max_below_bracket_f": opp.dec_forecast_max_below_bracket_f,
-            "forecast_max_above_metar_max_f": opp.dec_forecast_max_above_metar_max_f,
+            "forecast_max_above_bracket_f": _first_present(
+                opp.dec_forecast_max_above_bracket_f,
+                opp.meta_forecast_max_above_bracket_f,
+            ),
+            "forecast_max_below_bracket_f": _first_present(
+                opp.dec_forecast_max_below_bracket_f,
+                opp.meta_forecast_max_below_bracket_f,
+            ),
+            "forecast_max_above_metar_max_f": _first_present(
+                opp.dec_forecast_max_above_metar_max_f,
+                opp.meta_forecast_max_above_metar_max_f,
+            ),
             "model_version": opp.model_version,
             "time_bucket": opp.time_bucket,
             "window": opp.window,
@@ -989,6 +1088,94 @@ def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
     conn.commit()
 
 
+def _curve_id(row: dict, hourly_curve_json: str) -> str:
+    raw = json.dumps(
+        {
+            "snapshot_ts_utc": row.get("snapshot_ts_utc"),
+            "city": row.get("city"),
+            "target_date": row.get("target_date"),
+            "forecast_values_hash": row.get("forecast_values_hash"),
+            "hourly_curve_json": hourly_curve_json,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def load_forecast_curve_rows(curve_dir: Path = FORECAST_CURVE_DIR) -> list[dict]:
+    rows: dict[str, dict] = {}
+    if not curve_dir.exists():
+        return []
+    for path_str in sorted(glob.glob(str(curve_dir / "**" / "*.jsonl"), recursive=True)):
+        path = Path(path_str)
+        try:
+            rel_source = str(path.relative_to(ROOT))
+        except ValueError:
+            rel_source = str(path)
+        with path.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    raw = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                curve = raw.get("hourly_curve")
+                if not isinstance(curve, list) or not curve:
+                    continue
+                hourly_curve_json = json.dumps(curve, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                curve_id = _curve_id(raw, hourly_curve_json)
+                rows[curve_id] = {
+                    "curve_id": curve_id,
+                    "snapshot_ts_utc": raw.get("snapshot_ts_utc"),
+                    "city": raw.get("city"),
+                    "target_date": raw.get("target_date"),
+                    "forecast_source": raw.get("forecast_source"),
+                    "forecast_model": raw.get("forecast_model"),
+                    "forecast_values_hash": raw.get("forecast_values_hash"),
+                    "forecast_max_f": _safe_float(raw.get("forecast_max_f")),
+                    "forecast_peak_hour_local": _safe_int(raw.get("forecast_peak_hour_local")),
+                    "forecast_peak_time_local": raw.get("forecast_peak_time_local"),
+                    "forecast_peak_hour_utc": _safe_int(raw.get("forecast_peak_hour_utc")),
+                    "forecast_peak_time_utc": raw.get("forecast_peak_time_utc"),
+                    "forecast_hourly_count": _safe_int(raw.get("forecast_hourly_count")),
+                    "forecast_timezone": raw.get("forecast_timezone"),
+                    "forecast_timezone_abbreviation": raw.get("forecast_timezone_abbreviation"),
+                    "forecast_utc_offset_seconds": _safe_int(raw.get("forecast_utc_offset_seconds")),
+                    "forecast_generationtime_ms": _safe_float(raw.get("forecast_generationtime_ms")),
+                    "hourly_curve_json": hourly_curve_json,
+                    "source_file": rel_source,
+                    "fact_built_at_utc": datetime.now(timezone.utc).isoformat(),
+                }
+    return list(rows.values())
+
+
+def write_forecast_curve_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
+    conn.execute("DROP TABLE IF EXISTS fact_forecast_hourly_curves")
+    conn.execute(FORECAST_CURVE_DDL)
+    if not rows:
+        conn.commit()
+        return
+    cols = list(rows[0].keys())
+    placeholders = ",".join("?" for _ in cols)
+    col_list = ",".join(cols)
+    conn.executemany(
+        f"INSERT INTO fact_forecast_hourly_curves ({col_list}) VALUES ({placeholders})",
+        [[r[c] for c in cols] for r in rows],
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_fact_forecast_hourly_curves_hash "
+        "ON fact_forecast_hourly_curves(forecast_values_hash)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_fact_forecast_hourly_curves_city_date "
+        "ON fact_forecast_hourly_curves(city, target_date, snapshot_ts_utc)"
+    )
+    conn.commit()
+
+
 def write_parquet(rows: list[dict], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(rows)
@@ -1063,6 +1250,7 @@ def main() -> None:
     ap.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR))
     ap.add_argument("--paper-orders", default=str(PAPER_ORDERS_PATH))
     ap.add_argument("--forecast-cache-root", default=str(FORECAST_CACHE_ROOT))
+    ap.add_argument("--forecast-curve-dir", default=str(FORECAST_CURVE_DIR))
     ap.add_argument("--decision-hts-min", type=float, default=22.0)
     ap.add_argument("--decision-hts-max", type=float, default=24.0)
     ap.add_argument("--dry-run", action="store_true",
@@ -1083,12 +1271,16 @@ def main() -> None:
             hts_max=args.decision_hts_max,
             forecast_cache_root=Path(args.forecast_cache_root),
         )
+        curve_rows = load_forecast_curve_rows(Path(args.forecast_curve_dir))
         print_summary(rows, alerts, stats)
+        print(f"forecast hourly curves: {len(curve_rows)} rows")
         if args.dry_run:
             print("\n[dry-run] skipping write")
             return
         write_db(conn, rows)
+        write_forecast_curve_db(conn, curve_rows)
         print(f"\nfact_signal_candidates written to DB: {db_path}")
+        print(f"fact_forecast_hourly_curves written to DB: {len(curve_rows)} rows")
         if args.no_parquet:
             print("fact_signal_candidates parquet export skipped (--no-parquet)")
         else:

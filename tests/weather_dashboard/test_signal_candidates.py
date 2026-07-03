@@ -8,7 +8,9 @@ import pytest
 from scripts.etl.build_weather_fact_trades import FACT_DDL
 from scripts.etl.build_weather_signal_candidates import (
     build,
+    load_forecast_curve_rows,
     write_db,
+    write_forecast_curve_db,
     _counterfactual_pnl,
 )
 
@@ -175,6 +177,97 @@ def test_decision_window_preserves_forecast_peak_fields(tmp_path, canon_db):
     assert r["forecast_max_above_bracket_f"] == pytest.approx(0.0)
     assert r["forecast_max_below_bracket_f"] == pytest.approx(0.0)
     assert r["forecast_max_above_metar_max_f"] == pytest.approx(1.8)
+
+
+def test_forecast_metadata_uses_nearest_snapshot_when_decision_row_lacks_fields(tmp_path, canon_db):
+    snap = tmp_path / "snaps"
+    _write_snapshot(
+        snap,
+        "s1.json",
+        "2026-05-08T00:00:00Z",
+        [
+            _rec(
+                hours_to_settle=25.0,
+                entry_price=0.50,
+                forecast_max_f=86.0,
+                forecast_max_native=30.0,
+                forecast_peak_hour_local=14,
+                forecast_peak_time_local="2026-05-09T14:00",
+                forecast_peak_hour_utc=5,
+                forecast_peak_time_utc="2026-05-09T05:00:00Z",
+                forecast_hourly_count=24,
+                forecast_values_hash="snapshot-forecast-hash",
+                forecast_peak_source="open_meteo_live_ecmwf",
+                forecast_timezone="Asia/Tokyo",
+                forecast_utc_offset_seconds=32400,
+                forecast_peak_delta_hours_local=-2.0,
+            )
+        ],
+    )
+    _write_snapshot(
+        snap,
+        "s2.json",
+        "2026-05-08T02:00:00Z",
+        [_rec(hours_to_settle=23.0, entry_price=0.45)],
+    )
+
+    rows, _, _ = build(
+        canon_db,
+        snapshot_dir=snap,
+        paper_orders_path=tmp_path / "none.jsonl",
+        hts_min=22.0,
+        hts_max=24.0,
+    )
+
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["decision_hours_to_settle"] == 23.0
+    assert r["decision_entry_price"] == 0.45
+    assert r["forecast_values_hash"] == "snapshot-forecast-hash"
+    assert r["forecast_peak_hour_local"] == 14
+    assert r["forecast_peak_time_utc"] == "2026-05-09T05:00:00Z"
+
+
+def test_forecast_hourly_curve_jsonl_roundtrip(tmp_path):
+    curve_dir = tmp_path / "forecast_hourly_curves" / "2026-05-08"
+    curve_dir.mkdir(parents=True)
+    row = {
+        "snapshot_ts_utc": "2026-05-08T02:00:00Z",
+        "city": "Tokyo",
+        "target_date": "2026-05-09",
+        "forecast_source": "open_meteo_live_ecmwf",
+        "forecast_model": "ecmwf",
+        "forecast_values_hash": "snapshot-forecast-hash",
+        "forecast_max_f": 86.0,
+        "forecast_peak_hour_local": 14,
+        "forecast_peak_time_local": "2026-05-09T14:00",
+        "forecast_peak_hour_utc": 5,
+        "forecast_peak_time_utc": "2026-05-09T05:00:00Z",
+        "forecast_hourly_count": 2,
+        "forecast_timezone": "Asia/Tokyo",
+        "forecast_timezone_abbreviation": "JST",
+        "forecast_utc_offset_seconds": 32400,
+        "forecast_generationtime_ms": 2.4,
+        "hourly_curve": [
+            {"time_local": "2026-05-09T13:00", "temperature_f": 85.2},
+            {"time_local": "2026-05-09T14:00", "temperature_f": 86.0},
+        ],
+    }
+    (curve_dir / "forecast_hourly_curves_20260508_1000.jsonl").write_text(json.dumps(row) + "\n")
+
+    rows = load_forecast_curve_rows(tmp_path / "forecast_hourly_curves")
+    assert len(rows) == 1
+    assert rows[0]["forecast_values_hash"] == "snapshot-forecast-hash"
+    assert json.loads(rows[0]["hourly_curve_json"])[1]["temperature_f"] == 86.0
+
+    conn = sqlite3.connect(":memory:")
+    write_forecast_curve_db(conn, rows)
+    db_row = conn.execute(
+        "SELECT city, target_date, forecast_values_hash, forecast_hourly_count "
+        "FROM fact_forecast_hourly_curves"
+    ).fetchone()
+    assert db_row == ("Tokyo", "2026-05-09", "snapshot-forecast-hash", 2)
+    conn.close()
 
 
 def test_decision_window_missing_when_no_snapshot_in_band(tmp_path, canon_db):
