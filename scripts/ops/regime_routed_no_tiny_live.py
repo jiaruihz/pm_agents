@@ -5,6 +5,7 @@ This is the live-facing expression of:
 
 - day_marginal_runway/day_open_runway -> current-bracket NO
 - day_forecast_capped                 -> d2 NO
+- false-fade / stale-tail current-NO legs stay shadow-only diagnostics
 
 It intentionally skips soft-sized orders that fall below Polymarket's minimum
 share size instead of rounding them up.
@@ -126,6 +127,10 @@ SHADOW_ONLY_ROUTE_LEGS = {
     "cheap_stale_tail_current_no",
 }
 TAIL_DIAGNOSTIC_ROUTE_LEGS = SHADOW_ONLY_ROUTE_LEGS
+
+
+def is_shadow_only_route_leg(route_leg: Any) -> bool:
+    return str(route_leg or "") in SHADOW_ONLY_ROUTE_LEGS
 
 
 def utc_now_iso() -> str:
@@ -1309,8 +1314,12 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         )
         peak_delta = pd.to_numeric(selected.get("forecast_peak_delta_hours_local"), errors="coerce")
         route_leg = selected["route_leg"].astype(str)
-        selected["shadow_only_route_leg"] = False
-        selected["shadow_only_reason"] = ""
+        selected["shadow_only_route_leg"] = route_leg.map(is_shadow_only_route_leg)
+        selected["shadow_only_reason"] = np.where(
+            selected["shadow_only_route_leg"],
+            "route_leg_shadow_only_until_forward_evidence_recovers_after_forecast_backfill_fix",
+            "",
+        )
         selected["tail_diagnostic_route_leg"] = route_leg.isin(TAIL_DIAGNOSTIC_ROUTE_LEGS)
         selected["tail_diagnostic_reason"] = np.where(
             selected["tail_diagnostic_route_leg"],
@@ -1407,6 +1416,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             & selected["current_no_escape_ok"].astype(bool)
             & selected["market_date_match_ok"].fillna(False).astype(bool)
             & ~selected["live_duplicate_key"].astype(bool)
+            & ~selected["shadow_only_route_leg"].fillna(False).astype(bool)
         )
         def skip_reason(row: pd.Series) -> str:
             if bool(row.get("execution_eligible")):
@@ -1444,6 +1454,8 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
                 reasons.append("market_event_date_mismatch")
             if bool(row.get("live_duplicate_key")):
                 reasons.append("duplicate_live_city_date_token")
+            if bool(row.get("shadow_only_route_leg")):
+                reasons.append("shadow_only_route_leg")
             return "|".join(reasons) if reasons else "not_execution_eligible"
 
         selected["execution_skip_reason"] = selected.apply(skip_reason, axis=1)

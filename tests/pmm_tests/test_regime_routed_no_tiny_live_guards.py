@@ -76,6 +76,13 @@ def test_current_no_runway_state_requires_fresh_running_high():
     )
 
 
+def test_tail_diagnostic_route_legs_are_shadow_only():
+    assert live.is_shadow_only_route_leg("false_fade_reheat_current_no")
+    assert live.is_shadow_only_route_leg("cheap_stale_tail_current_no")
+    assert not live.is_shadow_only_route_leg("fresh_runway_current_no")
+    assert not live.is_shadow_only_route_leg("capped_d2_no")
+
+
 def test_live_order_size_clamps_to_top_ask_without_rounding_up():
     assert live.clamp_order_shares_to_top_ask(14.68, 13.0) == 13.0
     assert live.clamp_order_shares_to_top_ask(4.9, 100.0) == 4.9

@@ -1,7 +1,8 @@
 # Forecast Peak Clock Backfill Dataset v1
 
 Status: research_data_layer / not_live_ready_by_itself
-Generated: 2026-06-21T06:07:54+00:00
+Generated: 2026-07-03T22:42:59+00:00
+Forecast source: Open-Meteo Single Runs fixed run: D-1 12:00 UTC
 
 Target metric: `forecast_peak_clock_backfill_v1` = one reusable city-date table with GFS/ECMWF expected daily high time, expected high temperature, hourly-vector hash, and timezone metadata.
 
@@ -11,23 +12,29 @@ Target metric: `forecast_peak_clock_backfill_v1` = one reusable city-date table 
 
 它能解决模型层最大的口径缺口：以后判断“现在是不是接近当天预报最高温出现时间”，不必写死本地 13-15 点，也不必每个策略脚本各自去抓一次历史预报。
 
-但它仍然是 historical forecast backfill，不等于生产当时 snapshot 已经原生落盘；所以它能支持研究和 shadow telemetry，不能单独把策略推到 live 放大。
+默认口径已改成 Open-Meteo Single Runs 的固定 D-1 12:00 UTC model run；这比 stitched historical forecast 更接近 PIT，因为每个 city-date 都绑定到目标日前已经发布的完整模型 run。
+
+但它仍然是研究 backfill，不等于生产当时 snapshot 已经原生落盘；所以它能支持研究和 shadow telemetry，不能单独把策略推到 live 放大。
 
 ## Coverage
 
-- universe: `fact_signal_candidates`
+- universe: `csv`
 - city-date rows: `1536` across `48` cities
 - date range: `2026-05-19` .. `2026-06-20`
 - GFS peak coverage: `1536` / `1536` = `100.0%`
 - ECMWF peak coverage: `1536` / `1536` = `100.0%`
 - both-model coverage: `1536` / `1536` = `100.0%`
-- GFS/ECMWF peak agree <= 1h: `1063` / `1536` = `69.2%`
+- GFS/ECMWF peak agree <= 1h: `1026` / `1536` = `66.8%`
 
 ## Cache / Fetch
 
+- api_source: `single_runs`
+- run_day_offset: `1`
+- run_day_offsets: `1,2,3`
+- run_hour_utc: `12`
 - fetch_missing: `True`
-- promote_cache: `True`
-- fetch_stats: `{'fetched': 94, 'runtime_cache': 2}`
+- promote_cache: `False`
+- fetch_stats: `{'single_runs_runtime_cache': 3025, 'single_runs_fetched': 47}`
 - errors_kept: `0`
 
 ## Outputs

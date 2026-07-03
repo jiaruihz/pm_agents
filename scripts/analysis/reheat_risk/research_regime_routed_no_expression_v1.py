@@ -49,10 +49,12 @@ ASK_CAPS = {
     "relaxed50": 0.50,
     "relaxed70": 0.70,
 }
-SELECTORS = ("near_noon", "best_ask")
+SELECTORS = ("near_noon", "first_eligible", "best_ask")
 BASELINE_VARIANT = "baseline_current_no_strict35_near_noon"
-MAIN_CANDIDATE = "routed_capped_d1_no_relaxed50_best_ask"
-BALANCED_SOFT_CANDIDATE = "routed_capped_d2_no_relaxed70_best_ask"
+OPTIMISTIC_MAIN_CANDIDATE = "routed_capped_d1_no_relaxed50_best_ask"
+MAIN_CANDIDATE = "routed_capped_d1_no_relaxed50_first_eligible"
+OPTIMISTIC_BALANCED_SOFT_CANDIDATE = "routed_capped_d2_no_relaxed70_best_ask"
+BALANCED_SOFT_CANDIDATE = "routed_capped_d2_no_relaxed70_first_eligible"
 BALANCED_SOFT_POLICY = "soft_balanced"
 RECENT_START = "2026-06-21"
 
@@ -120,8 +122,12 @@ def select_one_per_city_day(frame: pd.DataFrame, selector: str) -> pd.DataFrame:
         return frame.copy()
     out = frame.copy()
     out["noon_distance"] = (pd.to_numeric(out["decision_hour_local"], errors="coerce") - 12).abs()
+    if "decision_snapshot_ts_utc" not in out.columns:
+        out["decision_snapshot_ts_utc"] = ""
     if selector == "near_noon":
         sort_cols = ["target_date", "city", "noon_distance", "decision_hour_local", "ask"]
+    elif selector == "first_eligible":
+        sort_cols = ["target_date", "city", "decision_hour_local", "decision_snapshot_ts_utc", "ask"]
     elif selector == "best_ask":
         sort_cols = ["target_date", "city", "ask", "noon_distance", "decision_hour_local"]
     else:
@@ -281,22 +287,22 @@ def add_soft_weights(selected: pd.DataFrame) -> pd.DataFrame:
         - 0.10 * out["is_mature_fade"].astype(float)
         - 0.08 * out["is_unknown_weather"].astype(float)
     ).clip(0.70, 1.0)
-    daily = out.groupby("target_date").agg(
-        capped_share=("is_capped_route", "mean"),
-        open_share=("is_open_runway", "mean"),
-        humid_share=("is_humid_family", "mean"),
-        mature_fade_share=("is_mature_fade", "mean"),
-        high_ask_share=("high_ask_risk", "mean"),
-    )
-    daily["day_risk"] = (
-        0.35 * daily["capped_share"]
-        + 0.15 * daily["open_share"]
-        + 0.15 * daily["humid_share"]
-        + 0.15 * daily["mature_fade_share"]
-        + 0.20 * daily["high_ask_share"]
+    # Live receives only the current snapshot's candidates, not the full target
+    # day's eventual cross-section. Keep replay sizing row-local so replay and
+    # live share the same information boundary.
+    out["day_risk"] = (
+        0.35 * out["is_capped_route"].astype(float)
+        + 0.15 * out["is_open_runway"].astype(float)
+        + 0.15 * out["is_humid_family"].astype(float)
+        + 0.15 * out["is_mature_fade"].astype(float)
+        + 0.20 * out["high_ask_risk"].astype(float)
     ).clip(0, 1)
-    daily["day_multiplier"] = (1.0 - 0.50 * daily["day_risk"]).clip(0.50, 1.0)
-    out = out.merge(daily[["day_risk", "day_multiplier"]], left_on="target_date", right_index=True, how="left")
+    out["day_multiplier"] = (1.0 - 0.50 * out["day_risk"]).clip(0.50, 1.0)
+    daily = out.groupby("target_date").agg(
+        replay_day_risk_mean=("day_risk", "mean"),
+        replay_day_multiplier_mean=("day_multiplier", "mean"),
+    )
+    out = out.merge(daily, left_on="target_date", right_index=True, how="left")
     out["soft_moderate"] = (
         (0.25 + 0.75 * out["route_multiplier"])
         * (0.70 + 0.30 * out["price_multiplier"])
@@ -498,7 +504,7 @@ def summarize_cities(variant: str, selected: pd.DataFrame) -> pd.DataFrame:
 
 
 def recent_predictions(states: pd.DataFrame) -> pd.DataFrame:
-    selected = variant_frame(states, MAIN_CANDIDATE, ASK_CAPS["relaxed50"], "best_ask", require_payoff=False)
+    selected = variant_frame(states, MAIN_CANDIDATE, ASK_CAPS["relaxed50"], "first_eligible", require_payoff=False)
     if selected.empty:
         return selected
     keep = [
@@ -813,7 +819,7 @@ def render_md(
             "",
             "## 结论",
             "",
-            "把 regime 当成表达式路由器这个方向可以测，但不能只看 strict 口径。这里并排比较 A strict、B relaxed ask cap、C best-ask timing：C 只按当时盘口最低 ask 选每 city-day 一笔，不用 payoff 挑时点。本报告把已结算 ROI 和最近模型候选分开，避免未结算日期被静默过滤。",
+            "把 regime 当成表达式路由器这个方向可以测，但不能只看 strict 口径。这里并排比较 A strict、B relaxed ask cap、C first-eligible live-like timing、D best-ask optimistic timing；主结论只看 first-eligible，best-ask 仅作上界对照。本报告把已结算 ROI 和最近模型候选分开，避免未结算日期被静默过滤。",
             "",
             f"Verdict: `{payload['verdict']['status']}`，live_ready=`{payload['verdict']['live_ready']}`。",
             "",
@@ -867,7 +873,7 @@ def render_md(
             "",
             "## Soft Weight Overlay",
             "",
-            "soft weight 只改 notional，不筛单。固定机制权重：`route_multiplier × price_multiplier × weather_multiplier × day_multiplier`；不使用 payoff、final max 或 settlement 训练。",
+            "soft weight 只改 notional，不筛单。固定机制权重：`route_multiplier × price_multiplier × weather_multiplier × day_multiplier`；`day_multiplier` 已改为 row-local/live-like，不使用当天完整截面、payoff、final max 或 settlement 训练。",
             "",
             markdown_table(
                 soft,
@@ -978,7 +984,7 @@ def render_md(
             "1. `day_open_runway/day_marginal_runway` 的 current-bracket NO 是 PIT 可识别的表达式，不需要知道最终最高温。",
             "2. `day_forecast_capped` 买 higher NO 也可以 PIT 识别，但不能用当天之后的 final max 或 settlement 来挑 d1/d2；只能用当时盘口和 forecast ceiling margin。",
             "3. strict 口径样本少主要来自 ask band 和 capacity；relaxed 口径用于判断信号容量，不代表已经可以下真钱。",
-            "4. best-ask timing 是 PIT-safe 的替代选择；如果它显著改变表现，说明 fixed near-noon 可能错过了更好的入场时点。",
+            "4. `first_eligible` 是 live-like 主口径；`best_ask` 虽不用 payoff，但仍是日内后视上界，只能辅助判断 fixed near-noon 是否错过入场，不可作为 live 证据。",
             "5. 当前 atlas label 本身没有用 future/settlement；future 字段只在 payoff/calibration 层。代码已把 `add_pit_context` 和 `add_realized_context` 拆开，降低误用风险。",
             "6. live 里真正难点不是 regime 当天识别不到，而是观测 feed 延迟/缺字段时必须让 label 变 `unknown`，不能用当天事后补齐的 IEM cache 假装当时可见。",
             "7. 6/25 本轮没有生成可用 observed-state rows；不能报模型候选。等 live observed feed 落表后再跑同一脚本即可进入 recent predictions。",
@@ -1034,6 +1040,10 @@ def main() -> int:
     soft_rows = []
     soft_daily_frames = []
     soft_variant_names = [
+        "routed_capped_d1_no_relaxed50_first_eligible",
+        "routed_capped_d2_no_relaxed50_first_eligible",
+        "routed_capped_d1_no_relaxed70_first_eligible",
+        "routed_capped_d2_no_relaxed70_first_eligible",
         "routed_capped_d1_no_relaxed50_best_ask",
         "routed_capped_d2_no_relaxed50_best_ask",
         "routed_capped_d1_no_relaxed70_best_ask",
@@ -1077,13 +1087,15 @@ def main() -> int:
             "selectors": list(SELECTORS),
             "baseline_variant": BASELINE_VARIANT,
             "stake_usd": STAKE_USD,
-            "selection": "one trade per city-date; near_noon or best_ask selector",
+            "selection": "one trade per city-date; first_eligible is live-like primary; best_ask is optimistic upper-bound audit",
             "recent_prediction_start": RECENT_START,
             "main_candidate": MAIN_CANDIDATE,
+            "optimistic_main_candidate": OPTIMISTIC_MAIN_CANDIDATE,
             "latest_unsettled_atlas_date": str(states.loc[states["current_bracket_held"].isna(), "target_date"].max())
             if states["current_bracket_held"].isna().any()
             else None,
             "balanced_soft_candidate": BALANCED_SOFT_CANDIDATE,
+            "optimistic_balanced_soft_candidate": OPTIMISTIC_BALANCED_SOFT_CANDIDATE,
             "balanced_soft_policy": BALANCED_SOFT_POLICY,
         },
         "pit_boundary": {
@@ -1127,7 +1139,7 @@ def main() -> int:
         "verdict": {
             "status": "balanced_shadow_candidate_but_not_live_ready",
             "live_ready": False,
-            "reason": "Soft-routed expression improves balance and tail dollars, but date-block CI still crosses zero and it has not accumulated enough frozen forward evidence for live.",
+            "reason": "Live-like first-eligible soft-routed expression has positive historical date-block CI after the PIT fixes, but it has not accumulated enough frozen forward/live evidence for live.",
         },
     }
     OUT_JSON.write_text(json.dumps(finite_or_none(payload), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

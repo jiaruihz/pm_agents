@@ -208,7 +208,13 @@ def fetch_single_run_forecast(
         "forecast_days": forecast_days,
         "timezone": "auto",
     }
-    response = client.get(SINGLE_RUN_API, params=params)
+    response = None
+    for attempt in range(5):
+        response = client.get(SINGLE_RUN_API, params=params)
+        if response.status_code not in {429, 500, 502, 503, 504}:
+            break
+        time.sleep(0.75 * (attempt + 1))
+    assert response is not None
     if response.status_code != 200:
         return {
             "status_code": response.status_code,
@@ -224,6 +230,25 @@ def fetch_single_run_forecast(
     )
     time.sleep(0.1)
     return payload, "single_runs_fetched"
+
+
+def payload_has_target_day_hourly(payload: dict[str, Any] | None, target_date: str) -> bool:
+    hourly = payload.get("hourly", {}) if isinstance(payload, dict) else {}
+    times = hourly.get("time") or []
+    temps = hourly.get("temperature_2m") or []
+    for ts, temp in zip(times, temps, strict=False):
+        if str(ts).startswith(target_date) and temp is not None:
+            return True
+    return False
+
+
+def single_run_unavailable(payload: dict[str, Any] | None) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("status_code") != 400:
+        return False
+    body = str(payload.get("body") or "").lower()
+    return "requested model run is not available" in body
 
 
 def load_single_run_payload(
@@ -269,30 +294,41 @@ def build_single_run_task(
     target_date: str,
     model: str,
     fetch_missing: bool,
-    run_day_offset: int,
+    run_day_offsets: list[int],
     run_hour_utc: int,
     forecast_days: int,
 ) -> dict[str, Any]:
+    last_result: dict[str, Any] | None = None
     with httpx.Client(timeout=60.0) as client:
-        payload, status, cache_path, run_time_utc = load_single_run_payload(
-            client,
-            city=city,
-            model=model,
-            target_date=target_date,
-            fetch_missing=fetch_missing,
-            run_day_offset=run_day_offset,
-            run_hour_utc=run_hour_utc,
-            forecast_days=forecast_days,
-        )
-    return {
-        "city": city,
-        "target_date": target_date,
-        "model": model,
-        "payload": payload,
-        "status": status,
-        "cache_path": cache_path,
-        "run_time_utc": run_time_utc,
-    }
+        for run_day_offset in run_day_offsets:
+            payload, status, cache_path, run_time_utc = load_single_run_payload(
+                client,
+                city=city,
+                model=model,
+                target_date=target_date,
+                fetch_missing=fetch_missing,
+                run_day_offset=run_day_offset,
+                run_hour_utc=run_hour_utc,
+                forecast_days=forecast_days,
+            )
+            last_result = {
+                "city": city,
+                "target_date": target_date,
+                "model": model,
+                "payload": payload,
+                "status": status,
+                "cache_path": cache_path,
+                "run_time_utc": run_time_utc,
+                "run_policy": f"d_minus_{run_day_offset}_{run_hour_utc:02d}z",
+            }
+            if status == "single_runs_error" and single_run_unavailable(payload):
+                continue
+            if payload is None or status == "single_runs_error":
+                return last_result
+            if payload_has_target_day_hourly(payload, target_date):
+                return last_result
+    assert last_result is not None
+    return last_result
 
 
 def derive_peak_rows(
@@ -359,9 +395,22 @@ def derive_peak_rows(
     return rows
 
 
-def load_universe(kind: str, start_date: str | None, end_date: str | None) -> pd.DataFrame:
+def load_universe(
+    kind: str,
+    start_date: str | None,
+    end_date: str | None,
+    universe_csv: str | None = None,
+) -> pd.DataFrame:
     if kind == "current_yes_replay":
         df = pd.read_csv(FEATURE_ROWS, usecols=["city", "target_date"])
+    elif kind == "csv":
+        if not universe_csv:
+            raise ValueError("--universe-csv is required when --universe csv")
+        df = pd.read_csv(universe_csv, usecols=lambda col: col in {"city", "target_date", "event_date"})
+        if "target_date" not in df.columns and "event_date" in df.columns:
+            df = df.rename(columns={"event_date": "target_date"})
+        if "city" not in df.columns or "target_date" not in df.columns:
+            raise ValueError("universe CSV must contain city and target_date/event_date columns")
     elif kind == "fact_signal_candidates":
         conn = sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=1.0)
         conn.execute("PRAGMA query_only=ON")
@@ -386,7 +435,7 @@ def load_universe(kind: str, start_date: str | None, end_date: str | None) -> pd
 
 
 def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any]]:
-    universe = load_universe(args.universe, args.start_date, args.end_date)
+    universe = load_universe(args.universe, args.start_date, args.end_date, args.universe_csv)
     ranges = universe.groupby("city")["target_date"].agg(["min", "max", "nunique"]).reset_index()
 
     model_frames: dict[str, pd.DataFrame] = {}
@@ -395,7 +444,11 @@ def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any
     with httpx.Client(timeout=60.0) as client:
         if args.api_source == "single_runs":
             records = universe[["city", "target_date"]].drop_duplicates().to_dict("records")
-            run_policy = f"d_minus_{args.run_day_offset}_{args.run_hour_utc:02d}z"
+            run_day_offsets = [
+                int(item.strip())
+                for item in str(args.run_day_offsets or args.run_day_offset).split(",")
+                if item.strip()
+            ]
             tasks: list[dict[str, str]] = []
             for model in FORECAST_MODELS:
                 for item in records:
@@ -415,6 +468,7 @@ def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any
                 status = str(result["status"])
                 cache_path = result["cache_path"]
                 run_time_utc = str(result["run_time_utc"])
+                run_policy = str(result["run_policy"])
                 fetch_stats[status] = fetch_stats.get(status, 0) + 1
                 if payload is None or status == "single_runs_error":
                     errors.append(
@@ -466,7 +520,7 @@ def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any
                             target_date=task["target_date"],
                             model=task["model"],
                             fetch_missing=args.fetch_missing,
-                            run_day_offset=args.run_day_offset,
+                            run_day_offsets=run_day_offsets,
                             run_hour_utc=args.run_hour_utc,
                             forecast_days=args.forecast_days,
                         )
@@ -480,7 +534,7 @@ def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any
                             target_date=task["target_date"],
                             model=task["model"],
                             fetch_missing=args.fetch_missing,
-                            run_day_offset=args.run_day_offset,
+                            run_day_offsets=run_day_offsets,
                             run_hour_utc=args.run_hour_utc,
                             forecast_days=args.forecast_days,
                         )
@@ -559,8 +613,10 @@ def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any
         "generated_at_utc": now_utc(),
         "script": str(Path(__file__).relative_to(ROOT)),
         "universe": args.universe,
+        "universe_csv": args.universe_csv,
         "api_source": args.api_source,
         "run_day_offset": args.run_day_offset if args.api_source == "single_runs" else None,
+        "run_day_offsets": args.run_day_offsets if args.api_source == "single_runs" else None,
         "run_hour_utc": args.run_hour_utc if args.api_source == "single_runs" else None,
         "forecast_days": args.forecast_days if args.api_source == "single_runs" else None,
         "workers": args.workers if args.api_source == "single_runs" else None,
@@ -645,6 +701,7 @@ def write_report(summary: dict[str, Any], out_md: Path) -> None:
         "",
         f"- api_source: `{summary['api_source']}`",
         f"- run_day_offset: `{summary['run_day_offset']}`",
+        f"- run_day_offsets: `{summary['run_day_offsets']}`",
         f"- run_hour_utc: `{summary['run_hour_utc']}`",
         f"- fetch_missing: `{summary['fetch_missing']}`",
         f"- promote_cache: `{summary['promote_cache']}`",
@@ -671,13 +728,15 @@ def write_report(summary: dict[str, Any], out_md: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--universe", choices=["current_yes_replay", "fact_signal_candidates"], default="current_yes_replay")
+    parser.add_argument("--universe", choices=["current_yes_replay", "fact_signal_candidates", "csv"], default="current_yes_replay")
+    parser.add_argument("--universe-csv")
     parser.add_argument("--start-date")
     parser.add_argument("--end-date")
     parser.add_argument("--fetch-missing", action="store_true")
     parser.add_argument("--promote-cache", action="store_true")
     parser.add_argument("--api-source", choices=["single_runs", "historical_forecast"], default="single_runs")
     parser.add_argument("--run-day-offset", type=int, default=1)
+    parser.add_argument("--run-day-offsets", default="1,2,3")
     parser.add_argument("--run-hour-utc", type=int, default=12)
     parser.add_argument("--forecast-days", type=int, default=3)
     parser.add_argument("--workers", type=int, default=8)
