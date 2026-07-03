@@ -14,12 +14,22 @@ import hashlib
 import json
 import math
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
+    TailTelemetryResources,
+    build_low_price_yes_tail_telemetry,
+    load_tail_telemetry_resources_soft,
+)
+
 DB_DEFAULT = ROOT / "runtime/weather.db"
 JOURNAL_DEFAULT = ROOT / "runtime/weather_edge_v1/low_price_yes_lottery_reversal_v1/shadow_candidates.jsonl"
 SUMMARY_DEFAULT = ROOT / "runtime/weather_edge_v1/low_price_yes_lottery_reversal_v1/latest_summary.json"
@@ -243,10 +253,12 @@ def decision_id(row: sqlite3.Row) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
-def journal_row(row: sqlite3.Row, args: argparse.Namespace) -> dict[str, Any]:
+def journal_row(row: sqlite3.Row, args: argparse.Namespace, tail_telemetry_resources: TailTelemetryResources | None) -> dict[str, Any]:
     ask = float(row["decision_entry_price"])
     notional = float(args.hypothetical_notional_usd)
     shares = notional / ask if ask > 0 else None
+    row_dict = dict(row)
+    tail_telemetry = build_low_price_yes_tail_telemetry(row_dict, tail_telemetry_resources)
     return {
         "record_type": "low_price_yes_lottery_reversal_shadow_candidate",
         "journal_schema_version": 1,
@@ -307,6 +319,7 @@ def journal_row(row: sqlite3.Row, args: argparse.Namespace) -> dict[str, Any]:
         "forecast_max_above_bracket_f": json_ready(row["forecast_max_above_bracket_f"]),
         "forecast_max_below_bracket_f": json_ready(row["forecast_max_below_bracket_f"]),
         "model_version": json_ready(row["model_version"]),
+        **tail_telemetry,
         "settlement_status_at_capture": json_ready(row["settlement_status"]),
         "final_yes_at_capture": json_ready(row["final_yes"]),
         "bracket_hit_at_capture": json_ready(row["bracket_hit"]),
@@ -380,12 +393,13 @@ def main() -> int:
         raw_counts = count_raw(conn, args, min_event_date)
         rows = load_candidates(conn, args, min_event_date)
 
+    tail_telemetry_resources = load_tail_telemetry_resources_soft()
     seen = existing_ids(journal_path)
     appended = 0
     skipped_existing = 0
     entries: list[dict[str, Any]] = []
     for row in rows:
-        entry = journal_row(row, args)
+        entry = journal_row(row, args, tail_telemetry_resources)
         if entry["shadow_decision_id"] in seen:
             skipped_existing += 1
             continue
@@ -420,6 +434,12 @@ def main() -> int:
         "skipped_existing": skipped_existing,
         "known_shadow_decision_ids": len(seen),
         "hypothetical_notional_usd": float(args.hypothetical_notional_usd),
+        "tail_telemetry_status_counts": {
+            status: sum(1 for entry in entries if str(entry.get("tail_telemetry_status") or "") == status)
+            for status in sorted({str(entry.get("tail_telemetry_status") or "") for entry in entries})
+        },
+        "tail_telemetry_model_artifact": str(entries[0].get("tail_telemetry_model_artifact") or "") if entries else "",
+        "tail_telemetry_bias_source": str(entries[0].get("tail_telemetry_bias_source") or "") if entries else "",
         "config": {
             "min_ask": float(args.min_ask),
             "max_ask": float(args.max_ask),

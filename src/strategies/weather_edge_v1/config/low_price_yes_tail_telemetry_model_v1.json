@@ -1,0 +1,480 @@
+{
+  "artifact_version": "low_price_yes_tail_telemetry_model_v1",
+  "generated_at_utc": "2026-07-02T14:52:39Z",
+  "models": {
+    "v1_edge20_city_diag": {
+      "cat_features": [
+        "forecast_model",
+        "city"
+      ],
+      "coefficients": [
+        0.176904474079344,
+        0.00700130081767985,
+        -0.07605886593808611,
+        0.012947850142882775,
+        0.2558625059889346,
+        -0.08571401317191665,
+        0.056695106783807354,
+        -0.088747803891696,
+        0.112330555928882,
+        -0.07884517289110685,
+        0.03750745768862016,
+        -0.03379520057144734,
+        -0.011581670127603243,
+        -0.0597482841670609,
+        -0.579416783054133,
+        -0.6451275171148182,
+        0.0,
+        0.14566963574402272,
+        -0.29245973145812837,
+        -0.031455978140315914,
+        -0.22960209064415893,
+        -0.29277284305321144,
+        0.16490669339371386,
+        0.20839144729812017,
+        -0.1280627321573994,
+        0.03269969956407813,
+        0.03823365466961189,
+        -0.06870219037636016,
+        -0.23192302386494804,
+        0.008978807167682394,
+        -0.12207772099418755,
+        -0.027004278211822195,
+        0.018592426358514352,
+        0.0022469052838672804,
+        -0.11776483887501014,
+        0.0732842919711738,
+        -0.13833532420477646,
+        -0.18278926366073114,
+        0.3079329101699544,
+        0.1229280880239013,
+        -0.028869256365188965,
+        -0.12231025003610743,
+        -0.07393703556263964,
+        0.16462321384172054,
+        -0.2468773978424468,
+        -0.04054171875288171,
+        -0.07323387356810096,
+        -0.03468007794737707,
+        0.22871804638431106,
+        -0.26707372320145084,
+        -0.19535428082671424,
+        -0.18141825985814125,
+        0.12379089198216145,
+        0.2617048775803149
+      ],
+      "encoder": {
+        "categorical": {
+          "city": {
+            "categories": [
+              "Amsterdam",
+              "Ankara",
+              "Atlanta",
+              "Austin",
+              "Beijing",
+              "BuenosAires",
+              "Busan",
+              "CapeTown",
+              "Chicago",
+              "Chongqing",
+              "Dallas",
+              "Denver",
+              "Helsinki",
+              "HongKong",
+              "Houston",
+              "Istanbul",
+              "Jeddah",
+              "Karachi",
+              "LA",
+              "London",
+              "Lucknow",
+              "Madrid",
+              "Manila",
+              "MexicoCity",
+              "Miami",
+              "Milan",
+              "Moscow",
+              "Munich",
+              "NYC",
+              "Paris",
+              "Seoul",
+              "Shanghai",
+              "Shenzhen",
+              "TelAviv",
+              "Tokyo",
+              "Warsaw"
+            ],
+            "min_count": 5,
+            "missing_token": "__MISSING__",
+            "other_token": "__OTHER__"
+          },
+          "forecast_model": {
+            "categories": [
+              "ecmwf",
+              "gfs"
+            ],
+            "min_count": 5,
+            "missing_token": "__MISSING__",
+            "other_token": "__OTHER__"
+          }
+        },
+        "numeric": {
+          "ask": {
+            "mean": 0.10471148825065274,
+            "median": 0.095,
+            "scale": 0.04096702709830627
+          },
+          "bias_mae": {
+            "mean": 1.7676382459568512,
+            "median": 1.7401685393258426,
+            "scale": 0.5066759487098972
+          },
+          "bias_mean": {
+            "mean": 0.9695848237124391,
+            "median": 1.1087078651685394,
+            "scale": 0.9167324542104754
+          },
+          "bias_n": {
+            "mean": 441.42297650130547,
+            "median": 356.0,
+            "scale": 159.0349935859216
+          },
+          "bias_p50": {
+            "mean": 0.9477806788511749,
+            "median": 1.1,
+            "scale": 0.8846096535221059
+          },
+          "bias_p90": {
+            "mean": 3.1449869451697126,
+            "median": 3.2,
+            "scale": 1.197067320388609
+          },
+          "cold_tail_pct": {
+            "mean": 0.1479072559747869,
+            "median": 0.09550561797752809,
+            "scale": 0.13131346898311078
+          },
+          "decision_hour_utc": {
+            "mean": 13.963446475195822,
+            "median": 15.0,
+            "scale": 6.9911335586673395
+          },
+          "edge": {
+            "mean": 0.2953960835509138,
+            "median": 0.2653,
+            "scale": 0.08651788966857203
+          },
+          "hot_tail2_pct": {
+            "mean": 0.2869715562884902,
+            "median": 0.28370786516853935,
+            "scale": 0.16420005188663356
+          },
+          "hot_tail_pct": {
+            "mean": 0.4931696369611768,
+            "median": 0.5577464788732395,
+            "scale": 0.19440370571215948
+          },
+          "logit_ask": {
+            "mean": -2.2197482233916666,
+            "median": -2.2540580520993854,
+            "scale": 0.4322300197257522
+          },
+          "logit_model_p": {
+            "mean": -0.41650632253994196,
+            "median": -0.5001730596497833,
+            "scale": 0.39892520969074907
+          },
+          "model_p_yes": {
+            "mean": 0.4001075718015666,
+            "median": 0.3775,
+            "scale": 0.09523913187507513
+          }
+        }
+      },
+      "feature_names": [
+        "num:ask",
+        "num:model_p_yes",
+        "num:edge",
+        "num:logit_model_p",
+        "num:logit_ask",
+        "num:bias_n",
+        "num:bias_mean",
+        "num:bias_p50",
+        "num:bias_p90",
+        "num:hot_tail_pct",
+        "num:hot_tail2_pct",
+        "num:cold_tail_pct",
+        "num:bias_mae",
+        "num:decision_hour_utc",
+        "cat:forecast_model=ecmwf",
+        "cat:forecast_model=gfs",
+        "cat:forecast_model=__OTHER__",
+        "cat:city=Amsterdam",
+        "cat:city=Ankara",
+        "cat:city=Atlanta",
+        "cat:city=Austin",
+        "cat:city=Beijing",
+        "cat:city=BuenosAires",
+        "cat:city=Busan",
+        "cat:city=CapeTown",
+        "cat:city=Chicago",
+        "cat:city=Chongqing",
+        "cat:city=Dallas",
+        "cat:city=Denver",
+        "cat:city=Helsinki",
+        "cat:city=HongKong",
+        "cat:city=Houston",
+        "cat:city=Istanbul",
+        "cat:city=Jeddah",
+        "cat:city=Karachi",
+        "cat:city=LA",
+        "cat:city=London",
+        "cat:city=Lucknow",
+        "cat:city=Madrid",
+        "cat:city=Manila",
+        "cat:city=MexicoCity",
+        "cat:city=Miami",
+        "cat:city=Milan",
+        "cat:city=Moscow",
+        "cat:city=Munich",
+        "cat:city=NYC",
+        "cat:city=Paris",
+        "cat:city=Seoul",
+        "cat:city=Shanghai",
+        "cat:city=Shenzhen",
+        "cat:city=TelAviv",
+        "cat:city=Tokyo",
+        "cat:city=Warsaw",
+        "cat:city=__OTHER__"
+      ],
+      "intercept": -1.224544300168945,
+      "metrics": {
+        "forward_2026_06_27_30": {
+          "auc": 0.6458333333333333,
+          "brier": 0.1314008670290894,
+          "log_loss": 0.42813569880835284,
+          "p_mean": 0.14288051382611244,
+          "positives": 3,
+          "rows": 19,
+          "y_mean": 0.15789473684210525
+        },
+        "holdout_2026_06_21_26": {
+          "auc": 0.6424731182795699,
+          "brier": 0.13132383480048435,
+          "log_loss": 0.4264254444037059,
+          "p_mean": 0.14923279210420456,
+          "positives": 12,
+          "rows": 74,
+          "y_mean": 0.16216216216216217
+        },
+        "train_pre_2026_06_21": {
+          "auc": 0.7242642642642643,
+          "brier": 0.10533803505563638,
+          "log_loss": 0.35564717323180123,
+          "p_mean": 0.14653408438151447,
+          "positives": 50,
+          "rows": 383,
+          "y_mean": 0.13054830287206268
+        }
+      },
+      "name": "v1_edge20_city_diag",
+      "numeric_features": [
+        "ask",
+        "model_p_yes",
+        "edge",
+        "logit_model_p",
+        "logit_ask",
+        "bias_n",
+        "bias_mean",
+        "bias_p50",
+        "bias_p90",
+        "hot_tail_pct",
+        "hot_tail2_pct",
+        "cold_tail_pct",
+        "bias_mae",
+        "decision_hour_utc"
+      ],
+      "type": "logistic_l2_manual_encoder"
+    },
+    "v1_edge20_no_city": {
+      "cat_features": [
+        "forecast_model"
+      ],
+      "coefficients": [
+        0.19072534340723743,
+        0.005384745411138238,
+        -0.08438268503011237,
+        0.012780659695464736,
+        0.26150031503784876,
+        -0.09818874837879259,
+        0.05142215431957197,
+        -0.07870014806216905,
+        0.1444311849857499,
+        -0.0976632971477728,
+        0.027933965550586644,
+        -0.031671152171528154,
+        -0.02072689295228187,
+        -0.06780717673133731,
+        -0.5913619111686805,
+        -0.641090374049336,
+        0.0
+      ],
+      "encoder": {
+        "categorical": {
+          "forecast_model": {
+            "categories": [
+              "ecmwf",
+              "gfs"
+            ],
+            "min_count": 5,
+            "missing_token": "__MISSING__",
+            "other_token": "__OTHER__"
+          }
+        },
+        "numeric": {
+          "ask": {
+            "mean": 0.10471148825065274,
+            "median": 0.095,
+            "scale": 0.04096702709830627
+          },
+          "bias_mae": {
+            "mean": 1.7676382459568512,
+            "median": 1.7401685393258426,
+            "scale": 0.5066759487098972
+          },
+          "bias_mean": {
+            "mean": 0.9695848237124391,
+            "median": 1.1087078651685394,
+            "scale": 0.9167324542104754
+          },
+          "bias_n": {
+            "mean": 441.42297650130547,
+            "median": 356.0,
+            "scale": 159.0349935859216
+          },
+          "bias_p50": {
+            "mean": 0.9477806788511749,
+            "median": 1.1,
+            "scale": 0.8846096535221059
+          },
+          "bias_p90": {
+            "mean": 3.1449869451697126,
+            "median": 3.2,
+            "scale": 1.197067320388609
+          },
+          "cold_tail_pct": {
+            "mean": 0.1479072559747869,
+            "median": 0.09550561797752809,
+            "scale": 0.13131346898311078
+          },
+          "decision_hour_utc": {
+            "mean": 13.963446475195822,
+            "median": 15.0,
+            "scale": 6.9911335586673395
+          },
+          "edge": {
+            "mean": 0.2953960835509138,
+            "median": 0.2653,
+            "scale": 0.08651788966857203
+          },
+          "hot_tail2_pct": {
+            "mean": 0.2869715562884902,
+            "median": 0.28370786516853935,
+            "scale": 0.16420005188663356
+          },
+          "hot_tail_pct": {
+            "mean": 0.4931696369611768,
+            "median": 0.5577464788732395,
+            "scale": 0.19440370571215948
+          },
+          "logit_ask": {
+            "mean": -2.2197482233916666,
+            "median": -2.2540580520993854,
+            "scale": 0.4322300197257522
+          },
+          "logit_model_p": {
+            "mean": -0.41650632253994196,
+            "median": -0.5001730596497833,
+            "scale": 0.39892520969074907
+          },
+          "model_p_yes": {
+            "mean": 0.4001075718015666,
+            "median": 0.3775,
+            "scale": 0.09523913187507513
+          }
+        }
+      },
+      "feature_names": [
+        "num:ask",
+        "num:model_p_yes",
+        "num:edge",
+        "num:logit_model_p",
+        "num:logit_ask",
+        "num:bias_n",
+        "num:bias_mean",
+        "num:bias_p50",
+        "num:bias_p90",
+        "num:hot_tail_pct",
+        "num:hot_tail2_pct",
+        "num:cold_tail_pct",
+        "num:bias_mae",
+        "num:decision_hour_utc",
+        "cat:forecast_model=ecmwf",
+        "cat:forecast_model=gfs",
+        "cat:forecast_model=__OTHER__"
+      ],
+      "intercept": -1.2324522852180175,
+      "metrics": {
+        "forward_2026_06_27_30": {
+          "auc": 0.5208333333333334,
+          "brier": 0.13546014002541512,
+          "log_loss": 0.4498839316085485,
+          "p_mean": 0.13678182249878032,
+          "positives": 3,
+          "rows": 19,
+          "y_mean": 0.15789473684210525
+        },
+        "holdout_2026_06_21_26": {
+          "auc": 0.646505376344086,
+          "brier": 0.1314380036091074,
+          "log_loss": 0.42583377623481483,
+          "p_mean": 0.1507192456575021,
+          "positives": 12,
+          "rows": 74,
+          "y_mean": 0.16216216216216217
+        },
+        "train_pre_2026_06_21": {
+          "auc": 0.6615015015015016,
+          "brier": 0.10920625733236891,
+          "log_loss": 0.3699676009736233,
+          "p_mean": 0.14663708965572603,
+          "positives": 50,
+          "rows": 383,
+          "y_mean": 0.13054830287206268
+        }
+      },
+      "name": "v1_edge20_no_city",
+      "numeric_features": [
+        "ask",
+        "model_p_yes",
+        "edge",
+        "logit_model_p",
+        "logit_ask",
+        "bias_n",
+        "bias_mean",
+        "bias_p50",
+        "bias_p90",
+        "hot_tail_pct",
+        "hot_tail2_pct",
+        "cold_tail_pct",
+        "bias_mae",
+        "decision_hour_utc"
+      ],
+      "type": "logistic_l2_manual_encoder"
+    }
+  },
+  "source_research": "docs/analysis/2026-07/2026-07-02-low-price-yes-tail-pcal-v1.md",
+  "source_script": "scripts/analysis/forecast_quality/materialize_low_price_yes_tail_telemetry_model_v1.py",
+  "training_denominator": "v1_edge20, historical target_date < 2026-06-21",
+  "verdict": "diagnostic_telemetry_only_not_live_selector"
+}

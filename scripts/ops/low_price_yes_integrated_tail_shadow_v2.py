@@ -340,6 +340,78 @@ def classify_live_metar(row: dict[str, Any], obs: dict[str, Any] | None, args: a
     }
 
 
+PCAL_V2_JSON = ROOT / "docs/analysis/2026-07/2026-07-03-low-price-yes-tail-pcal-v2.json"
+BIAS_ROWS_CSV = ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/daily_error_rows.csv"
+
+
+def load_pcal_v2_resources() -> dict[str, Any] | None:
+    """frozen pcal_v2 selector (research_low_price_yes_tail_pcal_v2.py); soft-fail."""
+    try:
+        frozen = json.loads(PCAL_V2_JSON.read_text(encoding="utf-8"))["frozen_selector"]
+        import csv as _csv
+
+        index: dict[tuple[str, str], list[tuple[str, float]]] = {}
+        with BIAS_ROWS_CSV.open(encoding="utf-8") as f:
+            for rec in _csv.DictReader(f):
+                try:
+                    err = float(rec["error_f_actual_minus_forecast"])
+                except (TypeError, ValueError):
+                    continue
+                index.setdefault((rec["city"], rec["model"]), []).append((rec["date"], err))
+        for key in index:
+            index[key].sort()
+        return {"frozen": frozen, "bias_index": index}
+    except Exception:
+        return None
+
+
+def pcal_v2_tags(row: dict[str, Any], res: dict[str, Any] | None) -> dict[str, Any]:
+    if not res:
+        return {"pcal_v2_status": "resources_missing"}
+    frozen = res["frozen"]
+    source = safe_str(row.get("forecast_source")).lower()
+    model_name = "ecmwf" if "ecmwf" in source else ("gfs" if "gfs" in source else "other")
+    errors = res["bias_index"].get((safe_str(row.get("city")), model_name)) or res["bias_index"].get((safe_str(row.get("city")), "gfs"))
+    target = safe_str(row.get("event_date"))
+    xs = [e for d, e in errors if d < target] if errors else []
+    if not xs:
+        return {"pcal_v2_status": "no_bias_history"}
+    xs_sorted = sorted(xs)
+    p90 = xs_sorted[min(len(xs_sorted) - 1, int(round(0.90 * (len(xs_sorted) - 1))))]
+    model_p = to_float(row.get("model_p_yes"))
+    ask = to_float(row.get("decision_entry_price"))
+    if not (math.isfinite(model_p) and math.isfinite(ask)):
+        return {"pcal_v2_status": "missing_inputs"}
+    clip = lambda p: min(max(p, 0.001), 0.999)
+    feats = {
+        "logit_model_p": math.log(clip(model_p) / (1 - clip(model_p))),
+        "logit_ask": math.log(clip(ask) / (1 - clip(ask))),
+        "bias_mean": sum(xs) / len(xs),
+        "bias_p90": p90,
+        "hot_tail_pct": sum(1 for e in xs if e >= 1.0) / len(xs),
+        "cold_tail_pct": sum(1 for e in xs if e <= -1.0) / len(xs),
+    }
+    ts = safe_str(row.get("decision_snapshot_ts_utc"))
+    hour = int(ts[11:13]) if len(ts) >= 13 and ts[11:13].isdigit() else -1
+    bucket = "h00_05" if 0 <= hour <= 5 else "h06_11" if hour <= 11 else "h12_17" if hour <= 17 else "h18_23" if hour <= 23 else "nan"
+    z = frozen["intercept"]
+    for name, mu, sd, coef in zip(frozen["num_features"], frozen["scaler_mu"], frozen["scaler_sd"], frozen["coef"]):
+        z += coef * (feats[name] - mu) / sd
+    for cat_col, coef in zip(frozen["cat_columns"], frozen["coef"][len(frozen["num_features"]):]):
+        active = cat_col == f"forecast_model_{model_name}" or cat_col == f"dec_hour_bucket_{bucket}"
+        z += coef * float(active)
+    p_cal = 1.0 / (1.0 + math.exp(-z))
+    theta = float(frozen["theta"])
+    return {
+        "pcal_v2_status": "ok",
+        "pcal_v2_p": round(p_cal, 4),
+        "pcal_v2_ev": round(p_cal - ask, 4),
+        "pcal_v2_theta": theta,
+        "pcal_v2_selected_shadow": bool(p_cal - ask >= theta),
+        "pcal_v2_policy": "frozen_selector_shadow_only_acceptance_failed_vs_v1",
+    }
+
+
 def source_aware_v3(row: dict[str, Any]) -> tuple[bool, str]:
     source = safe_str(row.get("forecast_source")).lower()
     ask = to_float(row.get("decision_entry_price"), to_float(row.get("ask")))
@@ -367,6 +439,51 @@ def decision_id(row: sqlite3.Row, cycle_id: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
+def bracket_low_native(bracket: str) -> float:
+    text = safe_str(bracket)
+    if not text:
+        return math.nan
+    if text.endswith("+"):
+        text = text[:-1]
+    if "-" in text:
+        text = text.split("-", 1)[0]
+    return to_float(text)
+
+
+def hot_tail_boundary_tags(row: dict[str, Any]) -> dict[str, Any]:
+    """E1 pre-registered telemetry (2026-07-04 audit doc).
+
+    bracket_dist_br_v1: 票的 bracket 下沿高于决策时 forecast_max 几个 bracket 宽度。
+    hot_tail_boundary_v1: dist>0 才是 hot-tail 表达；dist<=0 是"预报向下 bust"票（train 上 -10.6%）。
+    book_state_v1: 决策时 book 状态；train 上 feasible 行 ROI≈0，边际集中在 missing/thin_wide，
+    forward 需要用这个字段裁决"stale-quote 假边际 vs 无人照看的真错价"。
+    """
+    unit = safe_str(row.get("unit")).upper()
+    is_f = unit.startswith("F")
+    low_native = bracket_low_native(row.get("bracket"))
+    low_f = low_native if is_f else (low_native * 9.0 / 5.0 + 32.0 if math.isfinite(low_native) else math.nan)
+    width_f = 2.0 if is_f else 1.8
+    fmax_f = to_float(row.get("forecast_max_f"))
+    dist_br = (low_f - fmax_f) / width_f if math.isfinite(low_f) and math.isfinite(fmax_f) else math.nan
+    spread = to_float(row.get("yes_spread"))
+    depth = to_float(row.get("yes_depth_ask_5c"))
+    if not math.isfinite(spread) or not math.isfinite(depth):
+        book_state = "missing"
+    elif spread <= 0.03 and depth >= 25.0:
+        book_state = "feasible"
+    else:
+        book_state = "thin_wide"
+    return {
+        "bracket_low_native": low_native if math.isfinite(low_native) else None,
+        "bracket_low_f": round(low_f, 2) if math.isfinite(low_f) else None,
+        "bracket_dist_br_v1": round(dist_br, 3) if math.isfinite(dist_br) else None,
+        "hot_tail_boundary_v1": (dist_br > 0.0) if math.isfinite(dist_br) else None,
+        "dec_yes_spread": spread if math.isfinite(spread) else None,
+        "dec_yes_depth_ask_5c": depth if math.isfinite(depth) else None,
+        "book_state_v1": book_state,
+    }
+
+
 def build_shadow_row(
     row: sqlite3.Row,
     *,
@@ -375,9 +492,11 @@ def build_shadow_row(
     tail_resources: TailTelemetryResources | None,
     obs_index: dict[tuple[str, str], dict[str, Any]],
     obs_meta: dict[str, Any],
+    pcal_v2_resources: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     row_dict = dict(row)
     telemetry = build_low_price_yes_tail_telemetry(row_dict, tail_resources)
+    pcal_v2 = pcal_v2_tags(row_dict, pcal_v2_resources)
     obs = obs_index.get((safe_str(row["city"]), safe_str(row["event_date"])))
     live_metar = classify_live_metar(row_dict, obs, args)
     source_ok, source_reason = source_aware_v3(row_dict)
@@ -434,6 +553,7 @@ def build_shadow_row(
         "forecast_max_in_bracket": row["forecast_max_in_bracket"],
         "forecast_max_above_bracket_f": row["forecast_max_above_bracket_f"],
         "forecast_max_below_bracket_f": row["forecast_max_below_bracket_f"],
+        **hot_tail_boundary_tags(row_dict),
         "source_aware_v3_shadow": source_ok,
         "source_aware_v3_shadow_reason": source_reason,
         "station_bias_p90_high_shadow": station_bias_p90_high,
@@ -445,6 +565,7 @@ def build_shadow_row(
         "integrated_tail_shadow_candidate": integrated_score >= 3 or source_ok,
         **telemetry,
         **live_metar,
+        **pcal_v2,
         "observation_cache_status": obs_meta.get("status"),
         "observation_cache_path": obs_meta.get("path"),
         "observation_cache_generated_at_utc": obs_meta.get("generated_at_utc"),
@@ -466,6 +587,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         raw_counts = count_raw(conn, args, min_event_date)
         candidates = load_candidates(conn, args, min_event_date)
 
+    pcal_v2_resources = load_pcal_v2_resources()
     rows = [
         build_shadow_row(
             row,
@@ -474,6 +596,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             tail_resources=tail_resources,
             obs_index=obs_index,
             obs_meta=obs_meta,
+            pcal_v2_resources=pcal_v2_resources,
         )
         for row in candidates
     ]
@@ -493,6 +616,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "decision_count": len(rows),
         "shadow_rows_written": 0 if args.dry_run else len(rows),
         "source_aware_v3_count": sum(1 for row in rows if row.get("source_aware_v3_shadow")),
+        "pcal_v2_selected_count": sum(1 for row in rows if row.get("pcal_v2_selected_shadow")),
         "integrated_tail_shadow_candidate_count": sum(1 for row in rows if row.get("integrated_tail_shadow_candidate")),
         "tail_telemetry_status_counts": {
             status: sum(1 for row in rows if safe_str(row.get("tail_telemetry_status")) == status)
