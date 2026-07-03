@@ -722,6 +722,10 @@ def _side_matches_public(order_side: str, trade: dict[str, Any]) -> bool:
         return side == "BUY" and outcome in ("yes", "")
     if order_side == "BUY_NO":
         return side == "BUY" and outcome == "no"
+    if order_side == "SELL_YES":
+        return side == "SELL" and outcome in ("yes", "")
+    if order_side == "SELL_NO":
+        return side == "SELL" and outcome == "no"
     return False
 
 

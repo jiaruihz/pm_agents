@@ -119,6 +119,19 @@ stop_frontend_port_if_busy() {
   done < <(pid_listening_on_port "$port")
 }
 
+frontend_port_owned_by_stack() {
+  local port="$1"
+  local pid cmd
+  while IFS= read -r pid; do
+    [[ -z "$pid" ]] && continue
+    cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    if [[ "$cmd" == *"$FE_DIR"* && "$cmd" == *"vite"* && "$cmd" == *"--port $port"* ]]; then
+      return 0
+    fi
+  done < <(pid_listening_on_port "$port")
+  return 1
+}
+
 ensure_linux_node() {
   local node_path npm_path nvm_bin
   if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
@@ -242,7 +255,16 @@ if [[ $REBUILD -eq 1 ]]; then
   log "  Migrating strategy-local runtime orders into canonical DB"
   {
     init_canonical_db
-    "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders --db-path "$DB_PATH"
+    STRATEGY_RUNTIME_ARGS=(--db-path "$DB_PATH")
+    for order_file in \
+      "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl" \
+      "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl"
+    do
+      if [[ -f "$order_file" ]]; then
+        STRATEGY_RUNTIME_ARGS+=(--order-file "$order_file")
+      fi
+    done
+    "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders "${STRATEGY_RUNTIME_ARGS[@]}"
   } >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
     err "strategy runtime order migration failed — see $LOG_DIR/migrate_live_cycle.log"
     exit 1
@@ -359,6 +381,9 @@ if [[ $START_FE -eq 1 ]]; then
     log "Installing frontend deps (first run)"
     (cd "$FE_DIR" && npm install >"$LOG_DIR/npm_install.log" 2>&1)
   fi
+  if frontend_port_owned_by_stack "$FE_PORT"; then
+    warn "Port $FE_PORT already has this dashboard frontend; reusing existing process"
+  else
   stop_known_frontend
   stop_frontend_port_if_busy "$FE_PORT"
   if port_listening "$FE_PORT"; then
@@ -375,6 +400,7 @@ if [[ $START_FE -eq 1 ]]; then
       tail -30 "$LOG_DIR/fe.log" >&2
       exit 1
     fi
+  fi
   fi
 fi
 

@@ -52,8 +52,8 @@ def test_canonical_tables_exist(tmp_db_canonical):
 
 def test_canonical_schema_version_written(tmp_db_canonical):
     row = tmp_db_canonical.execute("SELECT version, description FROM schema_version").fetchone()
-    assert row["version"] == 3
-    assert "settlement_outcomes" in row["description"]
+    assert row["version"] == 4
+    assert "strategy runtime registry" in row["description"]
 
 
 def test_canonical_schema_has_no_legacy_field_names(tmp_db_canonical):
@@ -78,6 +78,32 @@ def test_canonical_rejects_legacy_order_side(tmp_db_canonical):
             """,
             ("c" * 64, "ord", "run", "plan", "paper", "BUY", 0.4, 10, 4, "filled"),
         )
+
+
+def test_canonical_accepts_sell_exit_order_side(tmp_db_canonical):
+    tmp_db_canonical.execute("PRAGMA foreign_keys=OFF")
+    tmp_db_canonical.execute(
+        """
+        INSERT INTO plans (
+            plan_id, run_id, signal_id, config_id, order_side,
+            execution_policy
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        ("p" * 64, "run", "s" * 64, "cfg", "SELL_YES", "take_profit_exit_v1"),
+    )
+    tmp_db_canonical.execute(
+        """
+        INSERT INTO orders (
+            execution_id, order_id, run_id, plan_id, venue, order_side,
+            entry_price, shares, cost_usd, status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("d" * 64, "ord-exit", "run", "p" * 64, "polymarket_clob", "SELL_YES", 0.2, 10, 2, "submitted"),
+    )
+    row = tmp_db_canonical.execute("SELECT order_side FROM orders").fetchone()
+    assert row["order_side"] == "SELL_YES"
 
 
 def test_can_insert_canonical_lineage(tmp_db_canonical):
@@ -279,6 +305,6 @@ def test_init_db_canonical_creates_file(tmp_path):
     conn = get_conn(str(db_path))
     try:
         row = conn.execute("SELECT version FROM schema_version").fetchone()
-        assert row["version"] == 3
+        assert row["version"] == 4
     finally:
         conn.close()

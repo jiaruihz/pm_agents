@@ -77,8 +77,8 @@ def make_plan_id(
     execution_policy: Any,
 ) -> str:
     side = _clean(order_side, "order_side").upper()
-    if side not in {"BUY_YES", "BUY_NO"}:
-        raise WeatherIdError("order_side must be BUY_YES or BUY_NO")
+    if side not in {"BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO"}:
+        raise WeatherIdError("order_side must be BUY_YES, BUY_NO, SELL_YES, or SELL_NO")
 
     return _sha256_joined([
         _clean(run_id, "run_id"),

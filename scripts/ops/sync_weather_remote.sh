@@ -14,12 +14,15 @@
 #   scripts/ops/sync_weather_remote.sh --market-only  # only market data
 #   scripts/ops/sync_weather_remote.sh --live-only    # only n100
 #   scripts/ops/sync_weather_remote.sh --market-source=weather-data-feed
+#   scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # ---- Config: market data source ----
+WEATHER_REMOTE_WAS_SET=0
+[[ -n "${WEATHER_REMOTE+x}" ]] && WEATHER_REMOTE_WAS_SET=1
 WEATHER_REMOTE="${WEATHER_REMOTE:-jiarui@192.168.0.200}"
 WEATHER_MARKET_SOURCE="${WEATHER_MARKET_SOURCE:-weather-predict}"
 WEATHER_PREDICT_REMOTE_DIR="${WEATHER_PREDICT_REMOTE_DIR:-~/projects/weather-predict}"
@@ -27,6 +30,7 @@ WEATHER_DATA_FEED_RUNTIME_DIR="${WEATHER_DATA_FEED_RUNTIME_DIR:-~/projects/weath
 WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-}"
 SSH_KEY="${WEATHER_SSH_KEY:-$HOME/.ssh/id_ed25519_weather_deploy}"
 MARKET_LOCAL="$REPO_ROOT/runtime/weather_edge_v1/market_data"
+MARKET_OUTPUT_PREFIX="output"
 
 # ---- Config: n100 pm_agent runtime source ----
 N100_REMOTE="${N100_REMOTE:-jiarui@192.168.0.200}"
@@ -59,9 +63,18 @@ case "$WEATHER_MARKET_SOURCE" in
     WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-$WEATHER_DATA_FEED_RUNTIME_DIR}"
     MARKET_OPTIONAL_OUTPUTS=1
     ;;
+  mac-weather-data-feed|mac_weather_data_feed|mac-data-feed|mac)
+    WEATHER_MARKET_SOURCE="mac-weather-data-feed"
+    if [[ "$WEATHER_REMOTE_WAS_SET" != "1" ]]; then
+      WEATHER_REMOTE="local"
+    fi
+    WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-$HOME/projects/weather_data_feed_service_runtime}"
+    MARKET_OUTPUT_PREFIX="${WEATHER_DATA_FEED_OUTPUT_PREFIX:-targeted_output}"
+    MARKET_OPTIONAL_OUTPUTS=1
+    ;;
   *)
     echo "Unknown WEATHER_MARKET_SOURCE: $WEATHER_MARKET_SOURCE" >&2
-    echo "Expected weather-predict or weather-data-feed" >&2
+    echo "Expected weather-predict, weather-data-feed, or mac-weather-data-feed" >&2
     exit 2
     ;;
 esac
@@ -131,32 +144,61 @@ sync_market() {
     fi
   }
 
+  _sync_glob_optional() {
+    local remote_subdir="$1" pattern="$2" local_subdir="$3"
+    if _remote_dir_exists "$remote_subdir"; then
+      _sync_glob "$remote_subdir" "$pattern" "$local_subdir"
+    else
+      warn "  missing optional market dir: $WEATHER_REMOTE_DIR/$remote_subdir"
+    fi
+  }
+
   # ---- Output ----
-  _sync_dir  "output/paper_snapshots"    "paper_snapshots"
-  _sync_dir  "output/orderbook_snapshots" "orderbook_snapshots"
+  _sync_dir  "$MARKET_OUTPUT_PREFIX/paper_snapshots"    "paper_snapshots"
+  _sync_dir  "$MARKET_OUTPUT_PREFIX/orderbook_snapshots" "orderbook_snapshots"
   if [[ "$MARKET_OPTIONAL_OUTPUTS" == "1" ]]; then
-    _sync_dir_optional "output/paper_trades" "paper_trades"
-    _sync_dir_optional "output/research"     "research"
+    _sync_dir_optional "$MARKET_OUTPUT_PREFIX/paper_trades" "paper_trades"
+    _sync_dir_optional "$MARKET_OUTPUT_PREFIX/research"     "research"
   else
     _sync_dir "output/paper_trades" "paper_trades"
     _sync_dir "output/research"     "research"
   fi
-  _sync_dir  "output/logs"               "logs"
+  if [[ "$MARKET_OPTIONAL_OUTPUTS" == "1" ]]; then
+    _sync_dir_optional "$MARKET_OUTPUT_PREFIX/logs" "logs"
+  else
+    _sync_dir "output/logs" "logs"
+  fi
 
   # ---- Cache: observation / settlement (large, already used) ----
-  _sync_dir  "cache/pm_history"          "cache/pm_history"
-  _sync_dir  "cache/wu_obs"              "cache/wu_obs"
-  _sync_glob "cache" "iem_v2_*.csv"      "cache/iem"
+  if [[ "$MARKET_OPTIONAL_OUTPUTS" == "1" ]]; then
+    _sync_dir_optional "cache/pm_history" "cache/pm_history"
+    _sync_dir_optional "cache/wu_obs"     "cache/wu_obs"
+    _sync_glob_optional "cache" "iem_v2_*.csv" "cache/iem"
+  else
+    _sync_dir  "cache/pm_history"          "cache/pm_history"
+    _sync_dir  "cache/wu_obs"              "cache/wu_obs"
+    _sync_glob "cache" "iem_v2_*.csv"      "cache/iem"
+  fi
 
   # ---- Cache: weather model forecast (probability model inputs) ----
   # GFS (primary), ECMWF (secondary), plus regional models for coverage.
-  _sync_glob "cache" "gfs_v4_*.json"     "cache/gfs_v4"
-  _sync_glob "cache" "gfs_daily_*.json"  "cache/gfs_daily"
-  _sync_glob "cache" "ecmwf_v4_*.json"   "cache/ecmwf_v4"
-  _sync_glob "cache" "jma_v5_*.json"     "cache/jma_v5"
-  _sync_glob "cache" "hrrr_v5_*.json"    "cache/hrrr_v5"
-  _sync_glob "cache" "icon_eu_v5_*.json" "cache/icon_eu_v5"
-  _sync_glob "cache" "arome_v5_*.json"   "cache/arome_v5"
+  if [[ "$MARKET_OPTIONAL_OUTPUTS" == "1" ]]; then
+    _sync_glob_optional "cache" "gfs_v4_*.json"     "cache/gfs_v4"
+    _sync_glob_optional "cache" "gfs_daily_*.json"  "cache/gfs_daily"
+    _sync_glob_optional "cache" "ecmwf_v4_*.json"   "cache/ecmwf_v4"
+    _sync_glob_optional "cache" "jma_v5_*.json"     "cache/jma_v5"
+    _sync_glob_optional "cache" "hrrr_v5_*.json"    "cache/hrrr_v5"
+    _sync_glob_optional "cache" "icon_eu_v5_*.json" "cache/icon_eu_v5"
+    _sync_glob_optional "cache" "arome_v5_*.json"   "cache/arome_v5"
+  else
+    _sync_glob "cache" "gfs_v4_*.json"     "cache/gfs_v4"
+    _sync_glob "cache" "gfs_daily_*.json"  "cache/gfs_daily"
+    _sync_glob "cache" "ecmwf_v4_*.json"   "cache/ecmwf_v4"
+    _sync_glob "cache" "jma_v5_*.json"     "cache/jma_v5"
+    _sync_glob "cache" "hrrr_v5_*.json"    "cache/hrrr_v5"
+    _sync_glob "cache" "icon_eu_v5_*.json" "cache/icon_eu_v5"
+    _sync_glob "cache" "arome_v5_*.json"   "cache/arome_v5"
+  fi
 
   log "market_data: $(find "$MARKET_LOCAL" -type f | wc -l) files, $(du -sh "$MARKET_LOCAL" 2>/dev/null | cut -f1)"
 }

@@ -1,17 +1,19 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-06-30 source-events signal boundary
+Updated: 2026-07-04 Mac temporary production handoff
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
 Last updated: 2026-06-06
 
-> 2026-06-05 更新: 同步覆盖扩展（7 个 weather model cache 家族 + output/logs + pm_agent runtime/logs + N100 tar backups），删除两个 legacy DB（weather_v2.db / weather_edge_v1_weather.db），新增 `scripts/ops/sync_n100_backups.sh`。详见 §2.2、§7。
+> 2026-06-05 更新: 同步覆盖扩展（7 个 weather model cache 家族 + output/logs + pm_agent runtime/logs + N100 tar backups），删除两个 legacy DB（weather_v2.db / weather_edge_v1_weather.db），新增 `scripts/ops/sync_n100_backups.sh`。详见 §2.3、§7。
 >
 > 2026-06-06 更新: 修正 settlement near-binary 口径。`pm_history` raw `0.9995 / 0.0005` 现在归一化为已结算 `1 / 0`；旧口径导致 `missing_bracket` 大量误标，相关历史报告需重算。
 >
 > 2026-06-07 更新: 修正 CLOB fill recovery 口径。public activity 不是逐 order 权威来源；旧 fallback 在 split child order / partial fill 场景会少算或多算。新增 `weather_clob_fill_coverage_gate.py`，refresh/rebuild 后必须 fail-closed 校验 order_id、order cap、DB/cache/fact 成本一致性。
+>
+> 2026-07-04 更新: N100 7/1 发生 ext4 emergency read-only / IO error 事故后，Mac 临时接管生产。当前 market snapshot/orderbook 源为 `/Users/deepsleep/projects/weather_data_feed_service_runtime/targeted_output/`，live order 源为 `/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/live/` 和 active strategy runtime dirs。同步当前生产 market data 用 `scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only`。
 
 Single source of truth for **where weather strategy data lives, who produces
 it, who consumes it, and how PnL is computed**. Read this before touching
@@ -25,19 +27,27 @@ For field-name contracts, [`WEATHER_SYSTEM_CONTRACT.md`](WEATHER_SYSTEM_CONTRACT
 
 ## 1. TL;DR
 
-There are **three machines** and **four data layers**:
+There are **two active roles** during the 2026-07-04 incident handoff:
 
 ```
-                              N100 (production)
-                              ├── raw         (always current, the truth)
-                              └── derived CSV (regenerated on demand)
+                              Mac (temporary production)
+                              ├── weather_data_feed_service_runtime
+                              │   ├── targeted_output/paper_snapshots
+                              │   └── targeted_output/orderbook_snapshots
+                              └── pm_agents runtime
+                                  ├── live order logs
+                                  └── dashboard / fact rebuild
                                        │
-                                  rsync (sync_weather_remote.sh)
+                     sync_weather_remote.sh --market-source=mac-weather-data-feed
                                        ▼
-                              local pm_agent (analysis + dashboard)
-                              ├── mirror (read-only copy of N100)
+                              pm_agents canonical mirror
+                              ├── runtime/weather_edge_v1/market_data
                               └── runtime/weather.db (dashboard DB)
 ```
+
+N100 remains the historical source and recovery target, but after the 2026-07-01
+disk incident it is not the current production truth until disk health and
+backup integrity are verified.
 
 The unified PnL caliber is:
 
@@ -67,7 +77,33 @@ unless matched by a real row in `fills`.
 
 ## 2. Data sources
 
-### 2.1 N100 production (`192.168.0.200`, user `jiarui`)
+### 2.1 Mac temporary production (`/Users/deepsleep/projects`)
+
+| Path | Producer | Refresh | What it is |
+|---|---|---|---|
+| `weather_data_feed_service_runtime/targeted_output/paper_snapshots/snapshot_*.json` | Mac LaunchAgent `com.pm-agents.weather-data-feed` | full snapshot cadence | current production market snapshots |
+| `weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/YYYY-MM-DD/orderbook_snapshot_*.jsonl.gz` | Mac LaunchAgent `com.pm-agents.weather-data-feed` | full snapshot cadence | current production orderbook history; not backfillable if missed |
+| `pm_agents/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-lottery-live` | live strategy cadence | current BUY_YES lottery CLOB order submissions |
+| `pm_agents/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-take-profit-exit` | live strategy cadence | current SELL_YES TP exit CLOB order submissions |
+| `pm_agents/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1/live_orders.jsonl` | Mac LaunchAgent `com.pm-agents.regime-routed-no-live` | live strategy cadence | current regime-routed NO live order submissions |
+
+Health gate:
+
+```bash
+.venv/bin/python scripts/ops/weather_data_feed_prod_health_check.py
+```
+
+Sync current market data before rebuilding facts:
+
+```bash
+scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only
+```
+
+### 2.2 N100 historical production / recovery (`192.168.0.200`, user `jiarui`)
+
+As of 2026-07-04 this section is historical/recovery context, not current
+production. N100 had an ext4 emergency read-only / IO error incident on
+2026-07-01; do not restore it to production by just restarting services.
 
 | Path | Producer | Refresh | What it is |
 |---|---|---|---|
@@ -90,12 +126,14 @@ The two CSVs marked ⚠ are the only N100-side artifacts without automation —
 they go stale unless someone reruns `settle_t24_paper.py`. See
 [§7 N100 automation gap](#7-n100-automation-gap).
 
-### 2.2 Local pm_agent mirror
+### 2.3 Local pm_agent mirror
 
 `scripts/ops/sync_weather_remote.sh` pulls:
 
 | Remote | Local | Notes |
 |---|---|---|
+| `weather_data_feed_service_runtime/targeted_output/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | current Mac production snapshots |
+| `weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/` | `runtime/weather_edge_v1/market_data/orderbook_snapshots/` | current Mac production orderbook history |
 | `weather-predict/output/paper_snapshots/` | `runtime/weather_edge_v1/market_data/paper_snapshots/` | 30-min snapshots |
 | `weather-predict/output/paper_trades/` | `runtime/weather_edge_v1/market_data/paper_trades/` | paper ledger |
 | `weather-predict/output/research/` | `runtime/weather_edge_v1/market_data/research/` | derived CSVs + analysis reports |
@@ -126,7 +164,7 @@ growing ~4 MB/day. Independent of the main sync above.
 canonical analysis DB is **only** `runtime/weather.db`. N100 has **no active
 SQLite DB** — production data lives in files on N100, never in a DB.
 
-### 2.3 Dashboard DB (`runtime/weather.db`)
+### 2.4 Dashboard DB (`runtime/weather.db`)
 
 Canonical schema in [`weather_dashboard/db/schema.sql`](../weather_dashboard/db/schema.sql).
 All lineage tables (`signals`, `plans`, `orders`, `fills`, `strategy_config`,

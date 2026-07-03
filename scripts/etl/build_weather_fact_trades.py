@@ -189,6 +189,10 @@ def _compute_pnl(
         return (final_yes - price) * qty - f
     if side == "BUY_NO":
         return ((1.0 - final_yes) - price) * qty - f
+    if side == "SELL_YES":
+        return (price - final_yes) * qty - f
+    if side == "SELL_NO":
+        return (price - (1.0 - final_yes)) * qty - f
     return None
 
 
@@ -506,9 +510,9 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
         trade_class = _derive_trade_class(b.get("execution_mode"), b.get("fill_status"))
 
         # alert: side vs signal_side mismatch (normalize: YES→BUY_YES, NO→BUY_NO)
-        _norm = {"YES": "BUY_YES", "NO": "BUY_NO"}
-        signal_side_norm = _norm.get(signal_side, signal_side)
-        if side and signal_side_norm and side != signal_side_norm:
+        _norm = {"YES": {"BUY_YES", "SELL_YES"}, "NO": {"BUY_NO", "SELL_NO"}}
+        signal_side_norm = _norm.get(signal_side, {signal_side})
+        if side and signal_side_norm and side not in signal_side_norm:
             alerts.append(f"SIDE_MISMATCH fill_id={fill_id} side={side} signal_side={signal_side}")
 
         # derived cost cols

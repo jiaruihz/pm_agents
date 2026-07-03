@@ -6,7 +6,7 @@ from typing import Any, Iterable, Mapping
 ALLOWED_PRODUCER_SYSTEMS = {"n100", "pm_agent_local", "legacy_migration"}
 ALLOWED_CITY_POOLS = {"t1_trading", "t2_research"}
 ALLOWED_SIGNAL_SIDES = {"YES", "NO"}
-ALLOWED_ORDER_SIDES = {"BUY_YES", "BUY_NO"}
+ALLOWED_ORDER_SIDES = {"BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO"}
 ALLOWED_FORECAST_SOURCES = {"open_meteo_live_gfs", "open_meteo_live_ecmwf"}
 ALLOWED_EXECUTION_MODES = {"snapshot_replay", "paper", "live"}
 ALLOWED_VENUES = {"paper", "snapshot_replay", "polymarket_clob"}

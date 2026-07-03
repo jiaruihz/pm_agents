@@ -31,7 +31,14 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db_canonical(args.db_path)
-    paths = [Path(p) for p in args.order_file] if args.order_file else iter_strategy_order_paths(args.root or DEFAULT_ROOTS)
+    paths = iter_strategy_order_paths(args.root or DEFAULT_ROOTS)
+    if args.order_file:
+        seen = {str(path) for path in paths}
+        for raw_path in args.order_file:
+            path = Path(raw_path)
+            if str(path) not in seen:
+                paths.append(path)
+                seen.add(str(path))
     conn = get_conn(args.db_path)
     try:
         reports = [migrate_strategy_runtime_orders(conn, order_path=path) for path in paths]

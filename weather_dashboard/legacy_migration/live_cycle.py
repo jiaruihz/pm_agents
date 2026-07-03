@@ -151,17 +151,19 @@ def _condition_id(row: dict[str, Any]) -> str:
 
 def _signal_side(row: dict[str, Any]) -> str:
     raw = str(row.get("signal_side") or row.get("side") or "").strip().upper()
-    if raw in {"BUY_YES", "YES"}:
+    if raw in {"BUY_YES", "SELL_YES", "YES"}:
         return "YES"
-    if raw in {"BUY_NO", "NO"}:
+    if raw in {"BUY_NO", "SELL_NO", "NO"}:
         return "NO"
     raise ValueError(f"unsupported signal_side: {raw!r}")
 
 
 def _order_side(row: dict[str, Any]) -> str:
     raw = str(row.get("order_side") or "").strip().upper()
-    if raw in {"BUY_YES", "BUY_NO"}:
+    if raw in {"BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO"}:
         return raw
+    if raw == "SELL":
+        return f"SELL_{_signal_side(row)}"
     side = _signal_side(row)
     return f"BUY_{side}"
 

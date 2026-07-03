@@ -22,9 +22,16 @@ if str(ROOT) not in sys.path:
 from scripts.ops.weather_data_feed_parity_check import check_snapshot, latest_snapshot, load_snapshot
 
 
+MAC_DATA_FEED_RUNTIME = ROOT.parent / "weather_data_feed_service_runtime"
 DEFAULT_SNAPSHOT_DIRS = (
+    MAC_DATA_FEED_RUNTIME / "targeted_output/paper_snapshots",
     ROOT.parent / "weather-predict/output/paper_snapshots",
     ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
+)
+DEFAULT_ORDERBOOK_DIRS = (
+    MAC_DATA_FEED_RUNTIME / "targeted_output/orderbook_snapshots",
+    ROOT.parent / "weather-predict/output/orderbook_snapshots",
+    ROOT / "runtime/weather_edge_v1/market_data/orderbook_snapshots",
 )
 DEFAULT_TELEMETRY_FILES = (
     ROOT / "runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1/forward_telemetry.jsonl",
@@ -38,6 +45,8 @@ DEFAULT_LIVE_DIR = ROOT / "runtime/weather_edge_v1/live"
 CURRENT_YES_LIVE_ORDER_PATTERNS = (
     "theta_current_yes_fade_confirmed_tiny_live_v1_orders.jsonl",
     "theta_current_yes_peak_forming_micro_tiny_live_v1_orders.jsonl",
+    "low_price_yes_lottery_tiny_live_v1_orders.jsonl",
+    "low_price_yes_take_profit_exit_v1_orders.jsonl",
 )
 SNAPSHOT_SCHEMA_VERSION = "weather_data_feed_snapshot_v1"
 
@@ -57,6 +66,22 @@ def latest_existing_snapshot_dir() -> Path:
         if path.exists():
             return path
     return DEFAULT_SNAPSHOT_DIRS[0]
+
+
+def latest_existing_orderbook_dir() -> Path:
+    for path in DEFAULT_ORDERBOOK_DIRS:
+        if path.exists():
+            return path
+    return DEFAULT_ORDERBOOK_DIRS[0]
+
+
+def latest_orderbook_snapshot(root: Path) -> Path | None:
+    files = list(root.rglob("orderbook_snapshot_*.jsonl.gz"))
+    if not files:
+        files = list(root.rglob("orderbook_snapshot_*.jsonl"))
+    if not files:
+        return None
+    return max(files, key=lambda path: path.stat().st_mtime)
 
 
 def read_jsonl_tail(path: Path, limit: int) -> list[dict[str, Any]]:
@@ -126,6 +151,30 @@ def check_snapshot_duplicates(snapshot_path: Path, *, now_utc: datetime, max_age
     }
 
 
+def check_orderbook_snapshots(orderbook_dir: Path, *, now_utc: datetime, max_age_min: float) -> dict[str, Any]:
+    latest = latest_orderbook_snapshot(orderbook_dir)
+    if latest is None:
+        return {
+            "dir": str(orderbook_dir),
+            "exists": orderbook_dir.exists(),
+            "latest_path": "",
+            "snapshot_age_min": None,
+            "missing": True,
+            "stale": False,
+        }
+    latest_mtime = datetime.fromtimestamp(latest.stat().st_mtime, tz=timezone.utc)
+    age_min = round((now_utc - latest_mtime).total_seconds() / 60.0, 3)
+    return {
+        "dir": str(orderbook_dir),
+        "exists": orderbook_dir.exists(),
+        "latest_path": str(latest),
+        "latest_mtime_utc": latest_mtime.isoformat(),
+        "snapshot_age_min": age_min,
+        "missing": False,
+        "stale": bool(age_min > max_age_min),
+    }
+
+
 def check_telemetry(path: Path, *, tail_rows: int) -> dict[str, Any]:
     rows = read_jsonl_tail(path, tail_rows)
     parse_errors = [row for row in rows if row.get("_parse_error")]
@@ -157,13 +206,21 @@ def check_telemetry(path: Path, *, tail_rows: int) -> dict[str, Any]:
     }
 
 
-def check_live_orders(live_dir: Path, *, tail_rows: int, all_files: bool = False) -> dict[str, Any]:
+def check_live_orders(
+    live_dir: Path,
+    *,
+    tail_rows: int,
+    all_files: bool = False,
+    extra_files: list[Path] | None = None,
+) -> dict[str, Any]:
     if not live_dir.exists():
         files = []
     elif all_files:
         files = sorted(live_dir.glob("*orders.jsonl"))
     else:
         files = [live_dir / pattern for pattern in CURRENT_YES_LIVE_ORDER_PATTERNS if (live_dir / pattern).exists()]
+    if extra_files:
+        files.extend(path for path in extra_files if path.exists() and path not in files)
     rows: list[dict[str, Any]] = []
     for path in files:
         for row in read_jsonl_tail(path, tail_rows):
@@ -175,7 +232,7 @@ def check_live_orders(live_dir: Path, *, tail_rows: int, all_files: bool = False
     )
     duplicate_intents, intent_examples = duplicate_examples(
         rows,
-        ("strategy_instance", "city", "target_date", "token_id", "side"),
+        ("strategy_instance", "city", "target_date", "token_id", "signal_side", "order_side"),
     )
     parse_errors = sum(1 for row in rows if row.get("_parse_error"))
     return {
@@ -215,10 +272,12 @@ def check_summaries(paths: list[Path]) -> list[dict[str, Any]]:
 def overall_status(sections: dict[str, Any]) -> str:
     parity = sections["snapshot_parity"]
     snapshot = sections["snapshot_duplicates"]
+    orderbook = sections["orderbook_snapshots"]
     telemetry = sections["telemetry"]
     live_orders = sections["live_orders"]
     hard_fail = (
         parity.get("status") != "ok"
+        or orderbook.get("missing")
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
         or live_orders.get("parse_error_count", 0) > 0
@@ -228,8 +287,8 @@ def overall_status(sections: dict[str, Any]) -> str:
         return "fail"
     warn = (
         snapshot.get("snapshot_stale")
+        or orderbook.get("stale")
         or any(item.get("duplicate_decision_count", 0) > 0 for item in telemetry)
-        or live_orders.get("duplicate_strategy_city_token_count", 0) > 0
         or any(summary.get("status") == "stale_snapshot" for summary in sections["summaries"])
     )
     return "warn" if warn else "ok"
@@ -239,8 +298,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Check production weather data feed outputs for stale, bad, or duplicate data.")
     parser.add_argument("--snapshot", default="")
     parser.add_argument("--snapshot-dir", default=str(latest_existing_snapshot_dir()))
+    parser.add_argument("--orderbook-dir", default=str(latest_existing_orderbook_dir()))
     parser.add_argument("--runtime-root", default=str(ROOT / "runtime/weather_edge_v1"))
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
+    parser.add_argument("--max-orderbook-age-min", type=float, default=75.0)
     parser.add_argument("--tail-telemetry-rows", type=int, default=5000)
     parser.add_argument("--tail-live-order-rows", type=int, default=2000)
     parser.add_argument("--all-live-order-files", action="store_true")
@@ -257,14 +318,23 @@ def main() -> int:
         runtime_root / "theta_current_yes_fade_confirmed_tiny_live_v1/latest_summary.json",
         runtime_root / "theta_current_yes_peak_forming_micro_tiny_live_v1/latest_summary.json",
     ]
+    active_live_order_files = [
+        runtime_root / "regime_routed_no_tiny_live_v1/live_orders.jsonl",
+    ]
     sections = {
         "snapshot_parity": check_snapshot(snapshot_path),
         "snapshot_duplicates": check_snapshot_duplicates(snapshot_path, now_utc=now_utc, max_age_min=args.max_snapshot_age_min),
+        "orderbook_snapshots": check_orderbook_snapshots(
+            Path(args.orderbook_dir),
+            now_utc=now_utc,
+            max_age_min=args.max_orderbook_age_min,
+        ),
         "telemetry": [check_telemetry(path, tail_rows=args.tail_telemetry_rows) for path in telemetry_files],
         "live_orders": check_live_orders(
             runtime_root / "live",
             tail_rows=args.tail_live_order_rows,
             all_files=args.all_live_order_files,
+            extra_files=active_live_order_files,
         ),
         "summaries": check_summaries(summary_files),
     }

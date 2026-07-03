@@ -37,6 +37,9 @@ from weather_dashboard.legacy_migration.live_cycle import (
 
 DEFAULT_ROOTS = (
     "runtime/weather_edge_v1/remote_pm_agent",
+    # 2026-07-04: N100 7/1 事故后 Mac 是事实执行机；本地 runner 目录与 live/<strategy>_orders.jsonl
+    # 必须进 canonical 血缘，否则 tiny-live fill 不出现在 fact_trades（数据审计 v1 §1.2）。
+    "runtime/weather_edge_v1",
 )
 SNAPSHOT_DIR = Path("runtime/weather_edge_v1/market_data/paper_snapshots")
 GAMMA_HOST = os.getenv("POLYMARKET_GAMMA_HOST", "https://gamma-api.polymarket.com").rstrip("/")
@@ -75,6 +78,32 @@ class StrategyRuntimeOrderMigrationReport:
         }
 
 
+def _mac_live_strategy_from_filename(path: Path) -> str | None:
+    name = path.name
+    if not name.endswith("_orders.jsonl"):
+        return None
+    if name in {"live_orders.jsonl", "paper_orders.jsonl"}:
+        return None
+    # live_<cycle_id>_orders.jsonl / live_mid_price_core_* 是 live-cycle journal，归 live_cycle
+    # migration 管；这里只认 Mac runner 的 <strategy_instance>_orders.jsonl。
+    if name.startswith("live_"):
+        return None
+    return name[: -len("_orders.jsonl")]
+
+
+def _order_path_shape(order_path: Path) -> tuple[str, str]:
+    """Return (strategy_instance, order_kind) for supported runtime layouts."""
+    if order_path.name == "live_orders.jsonl":
+        return order_path.parent.name, "live"
+    if order_path.name == "paper_orders.jsonl":
+        return order_path.parent.name, "paper"
+    if order_path.parent.name == "live":
+        strategy_instance = _mac_live_strategy_from_filename(order_path)
+        if strategy_instance:
+            return strategy_instance, "live"
+    return order_path.parent.name, "paper"
+
+
 def iter_strategy_order_paths(roots: Iterable[str | Path]) -> list[Path]:
     paths: list[Path] = []
     for root in roots:
@@ -85,13 +114,15 @@ def iter_strategy_order_paths(roots: Iterable[str | Path]) -> list[Path]:
             paths.append(path)
         for path in sorted(root_path.glob("*/paper_orders.jsonl")):
             paths.append(path)
+        for path in sorted((root_path / "live").glob("*_orders.jsonl")):
+            if _mac_live_strategy_from_filename(path):
+                paths.append(path)
     return paths
 
 
 def _run_id(order_path: Path, producer_system: str) -> str:
-    strategy_dir = order_path.parent.name
-    kind = order_path.stem
-    return f"{producer_system}_strategy_runtime_{strategy_dir}_{kind}"
+    strategy_instance, order_kind = _order_path_shape(order_path)
+    return f"{producer_system}_strategy_runtime_{strategy_instance}_{order_kind}"
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -213,11 +244,23 @@ def _build_snapshot_lookup(rows: list[dict[str, Any]]) -> dict[tuple[str, str], 
 
 def _side_from_runtime(raw: dict[str, Any]) -> str:
     side = str(raw.get("signal_side") or raw.get("side") or "").upper()
-    if side in {"BUY_NO", "NO"}:
+    if side in {"BUY_NO", "SELL_NO", "NO"}:
         return "NO"
-    if side in {"BUY_YES", "YES"}:
+    if side in {"BUY_YES", "SELL_YES", "YES"}:
         return "YES"
     return "NO" if str(raw.get("order_side") or "").upper() == "BUY" else side
+
+
+def _order_side_from_runtime(raw: dict[str, Any]) -> str:
+    raw_order_side = str(raw.get("order_side") or "").upper()
+    raw_signal_side = str(raw.get("signal_side") or raw.get("side") or "").upper()
+    if raw_signal_side in {"BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO"}:
+        return raw_signal_side
+    if raw_order_side in {"BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO"}:
+        return raw_order_side
+    if raw_order_side == "SELL":
+        return f"SELL_{_side_from_runtime(raw)}"
+    return "BUY_NO" if _side_from_runtime(raw) == "NO" else "BUY_YES"
 
 
 def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) -> dict[str, Any]:
@@ -253,7 +296,7 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
     row["icao"] = row.get("icao") or snap.get("icao") or CITY_ICAO.get(str(row.get("city") or ""), "")
     row["unit"] = row.get("unit") or snap.get("unit") or "F"
     row["signal_side"] = _side_from_runtime(row)
-    row["order_side"] = "BUY_NO" if row["signal_side"] == "NO" else "BUY_YES"
+    row["order_side"] = _order_side_from_runtime(row)
     row["model_p_yes"] = row.get("model_p_yes") or row.get("model_p_yes_used") or row.get("model_p_yes_raw") or snap.get("model_prob") or 0.0
     row["market_price"] = row.get("market_price") or row.get("posted_price") or row.get("limit_price") or snap.get("entry_price")
     row["edge"] = row.get("edge") or snap.get("edge") or 0.0
@@ -268,6 +311,7 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
 def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> StrategyRuntimeOrderMigrationReport:
     order_path = Path(order_path)
     producer_system = _producer_system(order_path)
+    strategy_instance, order_kind = _order_path_shape(order_path)
     run_id = _run_id(order_path, producer_system)
     report = StrategyRuntimeOrderMigrationReport(str(order_path), run_id, producer_system)
 
@@ -320,15 +364,15 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
             "config_id": config_id,
             "universe_id": f"{run_id}_universe",
             "code_version": "strategy-runtime-order-migration",
-            "execution_mode": "live" if order_path.name == "live_orders.jsonl" else "paper",
+            "execution_mode": order_kind,
             "date_range_start": min((row["target_date"] for row in signals), default=None),
             "date_range_end": max((row["target_date"] for row in signals), default=None),
             "started_at_utc": started,
             "ended_at_utc": ended,
-            "state": "live" if order_path.name == "live_orders.jsonl" else "paper",
+            "state": order_kind,
             "source_root": str(order_path.parent),
             "repro_key": f"strategy_runtime:{producer_system}:{order_path.parent.name}:{order_path.name}",
-            "tags": ["strategy_runtime", producer_system, order_path.parent.name],
+            "tags": ["strategy_runtime", producer_system, strategy_instance, order_kind],
             "metrics": None,
             "notes": f"Migrated strategy-local runtime orders from {order_path}",
         },

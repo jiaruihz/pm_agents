@@ -5,7 +5,7 @@ Updated: 2026-06-09 metadata pass; preserve content dates below
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-06-19（三模块边界 + 数据层 + live 实例对齐）
+Last updated: 2026-07-04（Mac 临时生产接管 + N100 磁盘事故边界）
 
 This document defines the runtime boundary between the weather modules. It is
 meant to prevent agents from treating similar file names as shared runtime code,
@@ -22,16 +22,29 @@ and to keep the **data layer / collection / execution** separate.
 | Repo / host path | Runtime role | Owns | Must not own |
 |---|---|---|---|
 | `weather_data_feed/`（pm_agents 包，vendored 到 N100） | Data layer (逻辑) | city calendar, source profiles, observation parsers, snapshot protocol normalization | strategy/sizing/order/wallet/dashboard 逻辑 |
-| N100 `weather_data_feed_service/`（step-3 后新建） | Data collection runtime（迁移目标） | 跑 snapshot + daily-pipeline，产标准数据产物 | 策略/下单 |
-| N100 `/home/jiarui/projects/weather-predict` | 采集运行（**迁移期仍在跑**，调用 weather_data_feed；step-3 后退役 dormant） | market snapshots, orderbook snapshots, paper ledger, city pools, weather caches, settlement history | live CLOB execution, pm_agent dashboard DB |
-| N100 `/home/jiarui/projects/pm_agent` | Production live execution | live signal files, trade plans, real CLOB order submissions, strategy instances, pause state, Telegram/live doctor | weather model cache generation, paper snapshot timer |
-| Local Mac `/Users/deepsleep/projects/pm_agents` | Analysis, dashboard, and deployment staging | dashboard DB, ingest/migration, fact tables, strategy research, local code staging for N100 `pm_agent` | direct production data collection |
+| Mac `/Users/deepsleep/projects/weather_data_feed_service_runtime` | **Temporary production data collection**（2026-07-04 incident handoff） | paper snapshots, orderbook snapshots, live data-feed runtime output | strategy/sizing/order/wallet/dashboard logic |
+| Local Mac `/Users/deepsleep/projects/pm_agents` | **Temporary production execution + dashboard**, analysis, staging | dashboard DB, ingest/migration, fact tables, strategy research, lottery live / TP exit / regime routed live LaunchAgents | N100 disk recovery |
+| N100 `weather_data_feed_service/`（step-3 后新建） | Data collection runtime（paused until disk trust restored） | snapshot + daily-pipeline standard data products after recovery | 策略/下单 |
+| N100 `/home/jiarui/projects/weather-predict` | Historical production source / recovery target after 2026-07-01 disk incident | historical market snapshots, orderbook snapshots, paper ledger, city pools, weather caches, settlement history | live CLOB execution, pm_agent dashboard DB |
+| N100 `/home/jiarui/projects/pm_agent` | Historical production live execution / recovery target after 2026-07-01 disk incident | historical live signal files, trade plans, real CLOB order submissions, strategy instances, pause state, Telegram/live doctor | current live execution until disk trust restored |
 | Local Mac `/Users/deepsleep/projects/weather-predict` | Development copy for weather-predict | local edits/tests for N100 `weather-predict` scripts | production truth |
 | Historical WSL `/home/rui/projects/pm_agent` | Legacy analysis path, only when the actual shell is WSL/Linux | same local-analysis role as above | direct production data collection |
 
 ## Data Boundary
 
-`weather-predict` is the source for market-data truth:
+During the 2026-07-04 emergency handoff, Mac `weather_data_feed_service_runtime`
+is the current market-data production source:
+
+- `targeted_output/paper_snapshots/`
+- `targeted_output/orderbook_snapshots/`
+
+Sync it into the canonical mirror with:
+
+```bash
+scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only
+```
+
+Before the N100 disk incident, `weather-predict` was the source for market-data truth:
 
 - `output/paper_snapshots/`
 - `output/orderbook_snapshots/`
@@ -47,16 +60,19 @@ and to keep the **data layer / collection / execution** separate.
 - `runtime/weather_edge_v1/live/`
 - `runtime/weather_edge_v1/live_cycle/`
 
-Local dashboard analysis consumes both sides through
-`scripts/ops/sync_weather_remote.sh`:
+Local dashboard analysis consumes current Mac market data and historical N100
+mirrors through `scripts/ops/sync_weather_remote.sh`:
 
 ```text
-N100 weather-predict/*              -> runtime/weather_edge_v1/market_data/
+Mac weather_data_feed_service_runtime/targeted_output/* -> runtime/weather_edge_v1/market_data/
+N100 weather-predict/*              -> runtime/weather_edge_v1/market_data/   (historical/recovery)
 N100 pm_agent/runtime/weather_edge_v1 -> runtime/weather_edge_v1/remote_pm_agent/
 ```
 
-The local dashboard DB is derived from these mirrors. It is not a production
-writer.
+The local dashboard DB is derived from these mirrors plus Mac live order files.
+During the handoff, Mac is a production writer for data-feed and selected live
+strategy order logs; N100 is not production truth until disk health and backups
+are verified.
 
 ## Code Boundary
 

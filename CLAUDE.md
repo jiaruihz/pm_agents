@@ -39,8 +39,9 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
 - **执行 = N100 `pm_agent`**：消费标准数据 → signal → plan → CLOB 下单 → live/fill（current-YES tiny-live 等；每条策略一个克隆 `pm_agent_*`）。
 
 机器：
-- **本机 = Mac** `/Users/deepsleep/projects/pm_agents`：分析 / 看板 / 回测 / 脚本开发 / N100 部署 staging。默认 `zsh`/Darwin，**不要套 `wsl`**。只读 N100 镜像做分析，**不作生产采集 / 下单来源**。N100 访问：`ssh jiarui@192.168.0.200 '<command>'`。
-- 判断生产是否断流先看 N100 doctor（`ssh ... 'cd ~/projects/weather-predict && scripts/ops/doctor_restart.sh'`）；数据层健康用 `scripts/ops/weather_data_feed_prod_health_check.py`。不要用本机镜像新旧直接判断。
+- **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Users/deepsleep/projects/weather_data_feed_service_runtime`（2026-07-04 起事故接管）：Mac 目前跑 data-feed snapshot/orderbook、dashboard、lottery live / TP exit / regime routed live。默认 `zsh`/Darwin，**不要套 `wsl`**。分析"最新/今天"前先同步 Mac data-feed：`scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only`，再 rebuild。
+- **N100** `ssh jiarui@192.168.0.200 '<command>'`：7/1 发生 ext4 emergency read-only / IO error 事故后，不再当作当前生产 truth；修复前只作为历史正本和备份抢救对象。恢复 N100 生产前先确认 `smartctl`/备份完整性/服务链路，而不是直接重启 timers。
+- 数据层健康用 `scripts/ops/weather_data_feed_prod_health_check.py`；它默认检查 Mac 临时生产 snapshot、orderbook 和 active live order files。
 
 数据流、镜像目录逐条映射、备份 → [WEATHER_DATA_PIPELINE.md](docs/WEATHER_DATA_PIPELINE.md) ·
 [WEATHER_DATA_CANONICAL_SOURCES.md](docs/WEATHER_DATA_CANONICAL_SOURCES.md) · [OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md)
@@ -107,7 +108,10 @@ weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚�
 scripts/weather_dashboard/run_stack.sh [--no-rebuild|--status|--api-only|--fe-only]
 #   入口 http://localhost:5173/weather/runs · /weather/live · http://localhost:8000/docs
 
-# 同步 N100 镜像（分析"最新/今天"前先同步；--dry-run 预演）
+# 同步当前 Mac 临时生产 market_data（分析"最新/今天"前先跑）
+scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only [--dry-run]
+
+# 同步 N100 镜像（N100 恢复前主要用于历史抢救；--dry-run 预演）
 scripts/ops/sync_weather_remote.sh [--dry-run]
 ```
 
