@@ -1,19 +1,19 @@
 # Current-YES Peak-YES Mechanism v4
 
 Status: research-only
-Generated: 2026-06-25T13:39:06+00:00
+Generated: 2026-07-01T02:13:33+00:00
 
 ## 一句话结论
 
-Mechanism v4 adds the missing physical features, but the hand-weighted score does not beat v3 or market and still does not create tradable peak-YES edge: holdout physics AUC 0.623 vs market 0.749; market+mechanism AUC 0.750 holdout and 0.759 forward. Learned components do not rescue it: holdout component AUC 0.672, market+components AUC 0.749 holdout / 0.804 forward. `physics edge>=2%` holdout ROI +0.3%, CI [-10.3%, +10.9%], forward ROI -1.7%. `market+mechanism edge>=0` holdout is 7 rows ROI -4.7%; `market+components edge>=0` is 788 rows ROI +2.9%.
+Mechanism v4 adds the missing physical features, but the hand-weighted score does not beat v3 or market and still does not create tradable peak-YES edge: holdout physics AUC 0.630 vs market 0.749; market+mechanism AUC 0.750 holdout and 0.794 forward. Learned components do not rescue it: holdout component AUC 0.675, market+components AUC 0.747 holdout / 0.779 forward. `physics edge>=2%` holdout ROI +0.8%, CI [-10.2%, +11.8%], forward ROI -17.6%. `market+mechanism edge>=0` holdout is 51 rows ROI +7.7%; `market+components edge>=0` is 778 rows ROI +2.6%.
 
 ## 数据范围
 
 - Atlas rows: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv`
-- Feature factory rows: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260519_20260620/reheat_feature_rows.csv, docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260621_20260623/reheat_feature_rows.csv`
-- IEM ext cache: `docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v7_20260617, docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v9_20260623`
-- Tradable peak-YES rows: 2786 / dates 36 / cities 36
-- DB fact refresh: `2026-06-25T05:08:33.713141+00:00`
+- Feature factory rows: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260519_20260620/reheat_feature_rows.csv, docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260621_20260623/reheat_feature_rows.csv, docs/analysis/2026-06/generated/current_bracket_no_20260624_feature_factory/reheat_feature_rows.csv, docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260625_20260628/reheat_feature_rows.csv, docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260629_20260630/reheat_feature_rows.csv`
+- IEM ext cache: `docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v7_20260617, docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v9_20260623, docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v10_20260624, docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v11_20260628, docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v12_20260630`
+- Tradable peak-YES rows: 2997 / dates 39 / cities 36
+- DB fact refresh: `2026-07-01T02:11:30.274017+00:00`
 
 V4 adds solar geometry, observation cadence, forecast slope-to-peak proxy, and cloud/wind/drying tendency features. Regimes remain continuous priors, not hard gates.
 
@@ -22,55 +22,55 @@ V4 adds solar geometry, observation cadence, forecast slope-to-peak proxy, and c
 | period | model | rows | break | pred break | AUC | Brier | logloss |
 |---|---|---:|---:|---:|---:|---:|---:|
 | train | market_implied_break | 935 | +28.6% | +25.2% | 0.780 | 0.165 | 0.497 |
-| train | mechanism_v4_physics | 935 | +28.6% | +28.6% | 0.641 | 0.194 | 0.573 |
-| train | market_plus_mechanism_v4 | 935 | +28.6% | +28.6% | 0.782 | 0.163 | 0.492 |
-| train | learned_components_l2 | 935 | +28.6% | +28.6% | 0.781 | 0.156 | 0.481 |
-| train | market_plus_components_l2 | 935 | +28.6% | +28.6% | 0.832 | 0.142 | 0.437 |
+| train | mechanism_v4_physics | 935 | +28.6% | +28.6% | 0.656 | 0.192 | 0.568 |
+| train | market_plus_mechanism_v4 | 935 | +28.6% | +28.6% | 0.783 | 0.162 | 0.491 |
+| train | learned_components_l2 | 935 | +28.6% | +28.6% | 0.791 | 0.154 | 0.472 |
+| train | market_plus_components_l2 | 935 | +28.6% | +28.6% | 0.839 | 0.140 | 0.431 |
 | holdout | market_implied_break | 1632 | +28.6% | +26.3% | 0.749 | 0.173 | 0.519 |
-| holdout | mechanism_v4_physics | 1632 | +28.6% | +28.3% | 0.623 | 0.197 | 0.579 |
+| holdout | mechanism_v4_physics | 1632 | +28.6% | +28.4% | 0.630 | 0.196 | 0.577 |
 | holdout | market_plus_mechanism_v4 | 1632 | +28.6% | +29.7% | 0.750 | 0.172 | 0.517 |
-| holdout | learned_components_l2 | 1632 | +28.6% | +29.9% | 0.672 | 0.199 | 0.592 |
-| holdout | market_plus_components_l2 | 1632 | +28.6% | +29.2% | 0.749 | 0.179 | 0.536 |
-| forward | market_implied_break | 219 | +27.9% | +25.0% | 0.757 | 0.176 | 0.512 |
-| forward | mechanism_v4_physics | 219 | +27.9% | +30.0% | 0.616 | 0.195 | 0.576 |
-| forward | market_plus_mechanism_v4 | 219 | +27.9% | +28.6% | 0.759 | 0.174 | 0.509 |
-| forward | learned_components_l2 | 219 | +27.9% | +30.5% | 0.694 | 0.186 | 0.554 |
-| forward | market_plus_components_l2 | 219 | +27.9% | +28.1% | 0.804 | 0.161 | 0.484 |
+| holdout | learned_components_l2 | 1632 | +28.6% | +30.0% | 0.675 | 0.199 | 0.593 |
+| holdout | market_plus_components_l2 | 1632 | +28.6% | +29.2% | 0.747 | 0.179 | 0.537 |
+| forward | market_implied_break | 430 | +32.8% | +26.4% | 0.792 | 0.178 | 0.521 |
+| forward | mechanism_v4_physics | 430 | +32.8% | +29.8% | 0.623 | 0.213 | 0.614 |
+| forward | market_plus_mechanism_v4 | 430 | +32.8% | +30.1% | 0.794 | 0.173 | 0.510 |
+| forward | learned_components_l2 | 430 | +32.8% | +32.1% | 0.625 | 0.222 | 0.643 |
+| forward | market_plus_components_l2 | 430 | +32.8% | +30.0% | 0.779 | 0.176 | 0.528 |
 
 ## EV Rules
 
 | period | rule | rows | dates | win | avg ask | ROI | CI |
 |---|---|---:|---:|---:|---:|---:|---:|
-| forward | buy_all_peak_yes | 219 | 3 | +72.1% | 0.750 | -3.8% | [-16.3%, +8.7%] |
-| forward | components_l2_edge_ge_0.02 | 85 | 3 | +69.4% | 0.626 | +11.0% | [+7.0%, +18.9%] |
-| forward | market_components_l2_edge_ge_0.00 | 105 | 3 | +77.1% | 0.735 | +5.0% | [-1.5%, +15.6%] |
-| forward | market_components_l2_edge_ge_0.02 | 81 | 3 | +74.1% | 0.714 | +3.7% | [-7.0%, +19.4%] |
-| forward | market_physics_edge_ge_0.00 | 0 | 0 | NA | NA | NA | [NA, NA] |
+| forward | buy_all_peak_yes | 430 | 6 | +67.2% | 0.736 | -8.7% | [-16.7%, -0.1%] |
+| forward | components_l2_edge_ge_0.02 | 158 | 6 | +55.1% | 0.602 | -8.5% | [-28.4%, +6.6%] |
+| forward | market_components_l2_edge_ge_0.00 | 187 | 6 | +68.4% | 0.714 | -4.1% | [-17.0%, +8.0%] |
+| forward | market_components_l2_edge_ge_0.02 | 151 | 6 | +66.9% | 0.688 | -2.8% | [-16.4%, +9.5%] |
+| forward | market_physics_edge_ge_0.00 | 4 | 2 | +100.0% | 0.883 | +13.3% | [+11.1%, +14.1%] |
 | forward | market_physics_edge_ge_0.02 | 0 | 0 | NA | NA | NA | [NA, NA] |
 | forward | market_physics_edge_ge_0.05 | 0 | 0 | NA | NA | NA | [NA, NA] |
-| forward | physics_edge_ge_0.02 | 66 | 3 | +50.0% | 0.509 | -1.7% | [-16.2%, +5.1%] |
-| forward | physics_edge_ge_0.02_ask_50_70 | 29 | 3 | +37.9% | 0.585 | -35.2% | [-52.0%, -21.2%] |
-| forward | physics_edge_ge_0.05 | 62 | 3 | +48.4% | 0.497 | -2.7% | [-19.9%, +7.7%] |
+| forward | physics_edge_ge_0.02 | 142 | 6 | +42.3% | 0.513 | -17.6% | [-33.7%, -1.7%] |
+| forward | physics_edge_ge_0.02_ask_50_70 | 60 | 6 | +41.7% | 0.583 | -28.5% | [-42.0%, -17.1%] |
+| forward | physics_edge_ge_0.05 | 124 | 6 | +41.1% | 0.492 | -16.3% | [-37.9%, +0.1%] |
 | holdout | buy_all_peak_yes | 1632 | 20 | +71.4% | 0.737 | -3.0% | [-8.4%, +2.2%] |
-| holdout | components_l2_edge_ge_0.02 | 623 | 20 | +67.6% | 0.642 | +5.3% | [-2.4%, +12.2%] |
-| holdout | market_components_l2_edge_ge_0.00 | 788 | 20 | +77.0% | 0.749 | +2.9% | [-2.5%, +7.9%] |
-| holdout | market_components_l2_edge_ge_0.02 | 641 | 20 | +74.7% | 0.719 | +3.9% | [-2.5%, +9.7%] |
-| holdout | market_physics_edge_ge_0.00 | 7 | 6 | +85.7% | 0.899 | -4.7% | [-44.6%, +13.7%] |
+| holdout | components_l2_edge_ge_0.02 | 638 | 20 | +67.7% | 0.648 | +4.5% | [-3.5%, +11.5%] |
+| holdout | market_components_l2_edge_ge_0.00 | 778 | 20 | +77.1% | 0.752 | +2.6% | [-2.7%, +7.7%] |
+| holdout | market_components_l2_edge_ge_0.02 | 639 | 20 | +75.3% | 0.726 | +3.7% | [-2.3%, +9.5%] |
+| holdout | market_physics_edge_ge_0.00 | 51 | 18 | +90.2% | 0.837 | +7.7% | [-4.8%, +17.0%] |
 | holdout | market_physics_edge_ge_0.02 | 0 | 0 | NA | NA | NA | [NA, NA] |
 | holdout | market_physics_edge_ge_0.05 | 0 | 0 | NA | NA | NA | [NA, NA] |
-| holdout | physics_edge_ge_0.02 | 585 | 20 | +53.3% | 0.531 | +0.3% | [-10.3%, +10.9%] |
-| holdout | physics_edge_ge_0.02_ask_50_70 | 250 | 20 | +59.2% | 0.588 | +0.7% | [-11.3%, +13.2%] |
-| holdout | physics_edge_ge_0.05 | 505 | 20 | +51.5% | 0.509 | +1.2% | [-9.4%, +11.9%] |
+| holdout | physics_edge_ge_0.02 | 577 | 20 | +53.6% | 0.531 | +0.8% | [-10.2%, +11.8%] |
+| holdout | physics_edge_ge_0.02_ask_50_70 | 240 | 20 | +59.2% | 0.587 | +0.8% | [-11.6%, +13.4%] |
+| holdout | physics_edge_ge_0.05 | 501 | 20 | +50.9% | 0.509 | -0.1% | [-10.5%, +10.7%] |
 | train | buy_all_peak_yes | 935 | 13 | +71.4% | 0.748 | -4.5% | [-9.7%, +1.2%] |
-| train | components_l2_edge_ge_0.02 | 340 | 13 | +70.6% | 0.651 | +8.5% | [+3.7%, +13.3%] |
-| train | market_components_l2_edge_ge_0.00 | 441 | 13 | +82.5% | 0.768 | +7.5% | [+3.5%, +11.1%] |
-| train | market_components_l2_edge_ge_0.02 | 341 | 13 | +82.1% | 0.738 | +11.3% | [+7.3%, +15.1%] |
-| train | market_physics_edge_ge_0.00 | 3 | 3 | +100.0% | 0.936 | +6.8% | [+4.3%, +9.9%] |
+| train | components_l2_edge_ge_0.02 | 354 | 13 | +72.3% | 0.663 | +9.1% | [+3.6%, +14.8%] |
+| train | market_components_l2_edge_ge_0.00 | 452 | 13 | +82.3% | 0.768 | +7.2% | [+3.6%, +11.1%] |
+| train | market_components_l2_edge_ge_0.02 | 368 | 13 | +82.1% | 0.744 | +10.2% | [+6.8%, +13.8%] |
+| train | market_physics_edge_ge_0.00 | 33 | 10 | +100.0% | 0.888 | +12.6% | [+8.7%, +17.0%] |
 | train | market_physics_edge_ge_0.02 | 0 | 0 | NA | NA | NA | [NA, NA] |
 | train | market_physics_edge_ge_0.05 | 0 | 0 | NA | NA | NA | [NA, NA] |
-| train | physics_edge_ge_0.02 | 323 | 13 | +48.9% | 0.536 | -8.7% | [-20.0%, +2.8%] |
-| train | physics_edge_ge_0.02_ask_50_70 | 146 | 12 | +54.8% | 0.588 | -6.9% | [-15.5%, +1.8%] |
-| train | physics_edge_ge_0.05 | 277 | 13 | +48.0% | 0.513 | -6.4% | [-20.7%, +8.5%] |
+| train | physics_edge_ge_0.02 | 315 | 13 | +49.5% | 0.535 | -7.3% | [-19.3%, +4.6%] |
+| train | physics_edge_ge_0.02_ask_50_70 | 140 | 12 | +57.1% | 0.588 | -2.9% | [-12.0%, +6.5%] |
+| train | physics_edge_ge_0.05 | 276 | 13 | +47.8% | 0.514 | -7.0% | [-20.6%, +6.2%] |
 
 ## Feature Coverage
 
@@ -79,11 +79,11 @@ V4 adds solar geometry, observation cadence, forecast slope-to-peak proxy, and c
 | forward | solar_altitude_deg | +100.0% |
 | forward | decision_obs_age_min | +100.0% |
 | forward | obs_per_elapsed_hour | +100.0% |
-| forward | forecast_slope_to_peak_native_per_h | +54.8% |
-| forward | d_sky_3h | +78.1% |
-| forward | d_sknt_3h | +99.5% |
-| forward | d_relh_3h | +99.5% |
-| forward | cloud_clearing_x_solar | +78.1% |
+| forward | forecast_slope_to_peak_native_per_h | +50.0% |
+| forward | d_sky_3h | +79.3% |
+| forward | d_sknt_3h | +99.8% |
+| forward | d_relh_3h | +99.8% |
+| forward | cloud_clearing_x_solar | +79.3% |
 | holdout | solar_altitude_deg | +100.0% |
 | holdout | decision_obs_age_min | +100.0% |
 | holdout | obs_per_elapsed_hour | +100.0% |
@@ -105,24 +105,24 @@ V4 adds solar geometry, observation cadence, forecast slope-to-peak proxy, and c
 
 | period | component | rows | AUC break | corr | mean |
 |---|---|---:|---:|---:|---:|
-| forward | comp_moisture_prior | 219 | 0.669 | 0.277 | 0.479 |
-| forward | comp_warming_momentum | 219 | 0.652 | 0.208 | 0.263 |
-| forward | comp_drying_solar | 219 | 0.626 | 0.182 | 0.138 |
-| forward | comp_intraday_prior | 219 | 0.621 | 0.195 | 0.580 |
-| forward | physics_break_score_raw | 219 | 0.616 | 0.185 | 0.448 |
-| forward | comp_dry_clear_reheat | 219 | 0.591 | 0.151 | 0.553 |
-| forward | comp_fresh_high | 219 | 0.590 | 0.148 | 0.595 |
-| forward | comp_forecast_peak_ahead | 219 | 0.584 | 0.152 | 0.203 |
-| forward | comp_running_max_prior | 219 | 0.575 | 0.137 | 0.501 |
-| forward | comp_cloud_clearing_solar | 219 | 0.558 | 0.111 | 0.106 |
-| forward | comp_not_faded | 219 | 0.557 | 0.120 | 0.800 |
-| forward | comp_solar_geometry | 219 | 0.535 | 0.080 | 0.557 |
-| forward | comp_solar_remaining | 219 | 0.532 | 0.070 | 0.475 |
-| forward | comp_obs_cadence_risk | 219 | 0.507 | 0.049 | 0.445 |
-| forward | comp_forecast_disagreement | 219 | 0.500 | -0.000 | 0.450 |
-| forward | comp_forecast_runway | 219 | 0.497 | -0.035 | 0.451 |
-| forward | comp_forecast_slope_to_peak | 219 | 0.488 | -0.046 | 0.462 |
-| forward | comp_day_regime_prior | 219 | 0.464 | -0.044 | 0.547 |
+| forward | comp_moisture_prior | 430 | 0.626 | 0.233 | 0.486 |
+| forward | physics_break_score_raw | 430 | 0.623 | 0.207 | 0.455 |
+| forward | comp_warming_momentum | 430 | 0.601 | 0.141 | 0.270 |
+| forward | comp_drying_solar | 430 | 0.579 | 0.130 | 0.140 |
+| forward | comp_forecast_slope_to_peak | 430 | 0.570 | 0.098 | 0.444 |
+| forward | comp_dry_clear_reheat | 430 | 0.565 | 0.106 | 0.559 |
+| forward | comp_intraday_prior | 430 | 0.563 | 0.126 | 0.582 |
+| forward | comp_solar_remaining | 430 | 0.563 | 0.112 | 0.484 |
+| forward | comp_solar_geometry | 430 | 0.559 | 0.108 | 0.567 |
+| forward | comp_day_regime_prior | 430 | 0.552 | 0.092 | 0.546 |
+| forward | comp_forecast_runway | 430 | 0.546 | 0.068 | 0.446 |
+| forward | comp_cloud_clearing_solar | 430 | 0.530 | 0.060 | 0.107 |
+| forward | comp_fresh_high | 430 | 0.530 | 0.060 | 0.654 |
+| forward | comp_forecast_peak_ahead | 430 | 0.529 | 0.049 | 0.230 |
+| forward | comp_running_max_prior | 430 | 0.527 | 0.039 | 0.525 |
+| forward | comp_not_faded | 430 | 0.516 | 0.029 | 0.804 |
+| forward | comp_forecast_disagreement | 430 | 0.500 | 0.000 | 0.450 |
+| forward | comp_obs_cadence_risk | 430 | 0.463 | -0.034 | 0.444 |
 
 ## Verdict
 

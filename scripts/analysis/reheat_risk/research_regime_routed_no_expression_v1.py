@@ -787,6 +787,26 @@ def render_md(
         else soft_daily
     )
     balanced_worst = balanced_daily.sort_values("weighted_profit_usd").head(12) if not balanced_daily.empty else balanced_daily
+    balanced_records = payload.get("balanced_soft_candidate") or []
+    if balanced_records:
+        balanced = balanced_records[0]
+        balanced_trades = balanced.get("selected_trades", balanced.get("trades", 0))
+        balanced_line = (
+            "raw 候选里 `routed_capped_d1_no_relaxed50_best_ask` 的 ROI 最高但日内 tail 偏薄；"
+            f"当前更平衡的 shadow 候选是 `{BALANCED_SOFT_CANDIDATE} + {BALANCED_SOFT_POLICY}`："
+            f"保留 {int(balanced_trades)} 笔 / "
+            f"{int(balanced.get('active_dates', 0))} 天 / "
+            f"{int(balanced.get('cities', 0))} 城，"
+            f"胜率 {pct(balanced.get('win_rate'))}，"
+            f"weighted ROI {pct(balanced.get('weighted_roi'))}，"
+            f"date-block CI [{pct(balanced.get('weighted_roi_ci_low'))}, {pct(balanced.get('weighted_roi_ci_high'))}]；"
+            "仍是 shadow 候选，不是 live 规则。"
+        )
+    else:
+        balanced_line = (
+            f"当前更平衡的 shadow 候选是 `{BALANCED_SOFT_CANDIDATE} + {BALANCED_SOFT_POLICY}`，"
+            "但本次没有生成可用 summary；不是 live 规则。"
+        )
     return "\n".join(
         [
             "# Regime-Routed NO Expression V1",
@@ -797,7 +817,7 @@ def render_md(
             "",
             f"Verdict: `{payload['verdict']['status']}`，live_ready=`{payload['verdict']['live_ready']}`。",
             "",
-            "raw 候选里 `routed_capped_d1_no_relaxed50_best_ask` 的 ROI 最高但日内 tail 偏薄；当前更平衡的 shadow 候选是 `routed_capped_d2_no_relaxed70_best_ask + soft_balanced`：保留 271 笔 / 35 天 / 35 城，胜率 51.7%，weighted ROI +22.8%，但 date-block CI 仍跨 0，所以不是 live 规则。",
+            balanced_line,
             "",
             "## Variant Summary",
             "",
