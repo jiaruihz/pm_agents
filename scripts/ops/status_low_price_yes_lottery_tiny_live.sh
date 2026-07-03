@@ -15,7 +15,12 @@ if [[ -s "$PID_FILE" ]]; then
   if kill -0 "$pid" 2>/dev/null; then
     echo "process=running pid=$pid"
   else
-    echo "process=stale_pid pid=$pid"
+    pids="$(pgrep -f 'scripts/ops/low_price_yes_lottery_tiny_live.py loop' || true)"
+    if [[ -n "$pids" ]]; then
+      echo "process=running pids=$(echo "$pids" | tr '\n' ',' | sed 's/,$//') stale_pid=$pid"
+    else
+      echo "process=stale_pid pid=$pid"
+    fi
   fi
 else
   pids="$(pgrep -f 'scripts/ops/low_price_yes_lottery_tiny_live.py loop' || true)"
@@ -41,6 +46,8 @@ for key in [
     "planned_notional_usd",
     "live_enabled",
     "live_requested",
+    "tail_telemetry_status_counts",
+    "tail_telemetry_model_artifact",
 ]:
     if key in data:
         print(f"{key}={data[key]}")

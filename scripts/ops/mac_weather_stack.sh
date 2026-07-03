@@ -8,12 +8,16 @@ DATA_FEED_LABEL="com.pm-agents.weather-data-feed"
 SHADOW_LABEL="com.pm-agents.regime-routed-no-shadow"
 LIVE_LABEL="com.pm-agents.regime-routed-no-live"
 LOW_PRICE_LABEL="com.pm-agents.low-price-yes-lottery-live"
+LOW_PRICE_TP_LABEL="com.pm-agents.low-price-yes-take-profit-exit"
 LOW_PRICE_INTEGRATED_SHADOW_LABEL="com.pm-agents.low-price-yes-integrated-tail-shadow"
+RUNTIME_MONITOR_LABEL="com.pm-agents.weather-runtime-monitor"
 DATA_FEED_PLIST="$LAUNCH_DIR/$DATA_FEED_LABEL.plist"
 SHADOW_PLIST="$LAUNCH_DIR/$SHADOW_LABEL.plist"
 LIVE_PLIST="$LAUNCH_DIR/$LIVE_LABEL.plist"
 LOW_PRICE_PLIST="$LAUNCH_DIR/$LOW_PRICE_LABEL.plist"
+LOW_PRICE_TP_PLIST="$LAUNCH_DIR/$LOW_PRICE_TP_LABEL.plist"
 LOW_PRICE_INTEGRATED_SHADOW_PLIST="$LAUNCH_DIR/$LOW_PRICE_INTEGRATED_SHADOW_LABEL.plist"
+RUNTIME_MONITOR_PLIST="$LAUNCH_DIR/$RUNTIME_MONITOR_LABEL.plist"
 DATA_FEED_RUNTIME="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data_feed_service_runtime}"
 DATA_FEED_SNAPSHOT_DIR="$DATA_FEED_RUNTIME/targeted_output/paper_snapshots"
 DATA_FEED_OBS="$DATA_FEED_RUNTIME/output/observations/latest.json"
@@ -21,7 +25,9 @@ REGIME_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_tiny_live_
 SHADOW_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_shadow_v1"
 DATA_FEED_SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
 LOW_PRICE_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1"
+LOW_PRICE_TP_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/low_price_yes_take_profit_exit_v1"
 LOW_PRICE_INTEGRATED_SHADOW_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/low_price_yes_integrated_tail_shadow_v2"
+RUNTIME_MONITOR_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/runtime_monitor"
 
 usage() {
   cat <<'EOF'
@@ -42,20 +48,27 @@ Commands:
   start-low-price-live --confirm-live
                          Start real low-price YES lottery tiny-live runner explicitly
   stop-low-price-live    Stop real low-price YES lottery tiny-live runner
+  start-low-price-take-profit --confirm-live
+                         Start real low-price YES 20c take-profit exit runner explicitly
+  stop-low-price-take-profit
+                         Stop low-price YES 20c take-profit exit runner
   start-low-price-integrated-shadow
                          Start zero-notional integrated tail shadow recorder
   stop-low-price-integrated-shadow
                          Stop zero-notional integrated tail shadow recorder
+  start-runtime-monitor  Start read-only runtime monitor
+  stop-runtime-monitor   Stop read-only runtime monitor
 
 Notes:
   - "start" does not place live orders. It starts data-feed and shadow only.
   - Real orders require "start-live --confirm-live" or
-    "start-low-price-live --confirm-live".
+    "start-low-price-live --confirm-live". Exit orders require
+    "start-low-price-take-profit --confirm-live".
 EOF
 }
 
 write_launchagents() {
-  mkdir -p "$LAUNCH_DIR" "$DATA_FEED_RUNTIME/loop" "$REGIME_RUNTIME" "$SHADOW_RUNTIME" "$LOW_PRICE_RUNTIME" "$LOW_PRICE_INTEGRATED_SHADOW_RUNTIME"
+  mkdir -p "$LAUNCH_DIR" "$DATA_FEED_RUNTIME/loop" "$REGIME_RUNTIME" "$SHADOW_RUNTIME" "$LOW_PRICE_RUNTIME" "$LOW_PRICE_TP_RUNTIME" "$LOW_PRICE_INTEGRATED_SHADOW_RUNTIME" "$RUNTIME_MONITOR_RUNTIME"
   cat >"$DATA_FEED_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -129,12 +142,20 @@ EOF
   <key>Label</key><string>$LOW_PRICE_LABEL</string>
   <key>ProgramArguments</key>
   <array>
+    <string>/usr/bin/env</string>
+    <string>LOW_PRICE_YES_LOTTERY_MARKET_PROXY=${LOW_PRICE_YES_LOTTERY_MARKET_PROXY:-http://127.0.0.1:7890}</string>
+    <string>POLYMARKET_GAMMA_TIMEOUT_SEC=${POLYMARKET_GAMMA_TIMEOUT_SEC:-3}</string>
+    <string>POLYMARKET_GAMMA_RETRIES=${POLYMARKET_GAMMA_RETRIES:-0}</string>
     <string>$PROJECT_DIR/.venv/bin/python</string>
     <string>-u</string>
     <string>$PROJECT_DIR/scripts/ops/low_price_yes_lottery_tiny_live.py</string>
     <string>loop</string>
     <string>--order-notional-usd</string>
-    <string>${LOW_PRICE_YES_LOTTERY_NOTIONAL:-1.0}</string>
+    <string>${LOW_PRICE_YES_LOTTERY_NOTIONAL:-0.8}</string>
+    <string>--maker-first-fraction</string>
+    <string>${LOW_PRICE_YES_LOTTERY_MAKER_FIRST_FRACTION:-1.0}</string>
+    <string>--taker-fallback-min-notional-usd</string>
+    <string>${LOW_PRICE_YES_LOTTERY_TAKER_FALLBACK_MIN_NOTIONAL_USD:-1.0}</string>
     <string>--interval-seconds</string>
     <string>300</string>
     <string>--min-ask</string>
@@ -153,9 +174,13 @@ EOF
     <string>1</string>
     <string>--max-candidates-per-run</string>
     <string>80</string>
+    <string>--book-timeout-sec</string>
+    <string>10</string>
+    <string>--book-retries</string>
+    <string>1</string>
+    <string>--book-failover-on-timeout</string>
     <string>--token-resolution-timeout-sec</string>
     <string>15</string>
-    <string>--disable-live-token-resolution</string>
     <string>--live</string>
     <string>--confirm-live</string>
   </array>
@@ -163,6 +188,45 @@ EOF
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$LOW_PRICE_RUNTIME/low_price_launchd.out.log</string>
   <key>StandardErrorPath</key><string>$LOW_PRICE_RUNTIME/low_price_launchd.err.log</string>
+  <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
+</dict>
+</plist>
+EOF
+  cat >"$LOW_PRICE_TP_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LOW_PRICE_TP_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>LOW_PRICE_YES_LOTTERY_MARKET_PROXY=${LOW_PRICE_YES_LOTTERY_MARKET_PROXY:-http://127.0.0.1:7890}</string>
+    <string>$PROJECT_DIR/.venv/bin/python</string>
+    <string>-u</string>
+    <string>$PROJECT_DIR/scripts/ops/low_price_yes_take_profit_exit_v1.py</string>
+    <string>loop</string>
+    <string>--interval-seconds</string>
+    <string>300</string>
+    <string>--take-profit-bid</string>
+    <string>${LOW_PRICE_YES_TAKE_PROFIT_BID:-0.20}</string>
+    <string>--maker-ttl-seconds</string>
+    <string>${LOW_PRICE_YES_TAKE_PROFIT_MAKER_TTL_SECONDS:-14400}</string>
+    <string>--enable-taker-fallback</string>
+    <string>--max-exits-per-run</string>
+    <string>${LOW_PRICE_YES_TAKE_PROFIT_MAX_EXITS_PER_RUN:-4}</string>
+    <string>--book-timeout-sec</string>
+    <string>10</string>
+    <string>--book-retries</string>
+    <string>1</string>
+    <string>--book-failover-on-timeout</string>
+    <string>--live</string>
+    <string>--confirm-live</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$LOW_PRICE_TP_RUNTIME/take_profit_launchd.out.log</string>
+  <key>StandardErrorPath</key><string>$LOW_PRICE_TP_RUNTIME/take_profit_launchd.err.log</string>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
 </dict>
 </plist>
@@ -196,6 +260,27 @@ EOF
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$LOW_PRICE_INTEGRATED_SHADOW_RUNTIME/shadow_launchd.out.log</string>
   <key>StandardErrorPath</key><string>$LOW_PRICE_INTEGRATED_SHADOW_RUNTIME/shadow_launchd.err.log</string>
+  <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
+</dict>
+</plist>
+EOF
+  cat >"$RUNTIME_MONITOR_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$RUNTIME_MONITOR_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>WEATHER_RUNTIME_MONITOR_CHILD=1</string>
+    <string>WEATHER_RUNTIME_MONITOR_INTERVAL_SECONDS=${WEATHER_RUNTIME_MONITOR_INTERVAL_SECONDS:-300}</string>
+    <string>$PROJECT_DIR/scripts/ops/start_weather_runtime_monitor.sh</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$RUNTIME_MONITOR_RUNTIME/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>$RUNTIME_MONITOR_RUNTIME/launchd.err.log</string>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
 </dict>
 </plist>
@@ -316,7 +401,7 @@ PY
 
 status() {
   echo "== launchctl =="
-  launchctl list | grep -E 'weather-data-feed|regime-routed-no-shadow|regime-routed-no-live|low-price-yes-lottery-live|low-price-yes-integrated-tail-shadow|weather-api|weather-fe' || true
+  launchctl list | grep -E 'weather-data-feed|weather-runtime-monitor|regime-routed-no-shadow|regime-routed-no-live|low-price-yes-lottery-live|low-price-yes-take-profit-exit|low-price-yes-integrated-tail-shadow|weather-api|weather-fe' || true
   echo "== proxy =="
   print_proxy_status
   echo "== data/strategy =="
@@ -335,8 +420,22 @@ status() {
   fi
   echo "== low price YES lottery live runner =="
   "$PROJECT_DIR/scripts/ops/status_low_price_yes_lottery_tiny_live.sh" || true
+  echo "== low price YES take-profit exit runner =="
+  "$PROJECT_DIR/scripts/ops/status_low_price_yes_take_profit_exit.sh" || true
   echo "== low price YES integrated tail shadow =="
   print_low_price_integrated_shadow_state
+  echo "== runtime monitor =="
+  if [[ -f "$RUNTIME_MONITOR_RUNTIME/latest_summary.json" ]]; then
+    python3 - "$RUNTIME_MONITOR_RUNTIME/latest_summary.json" <<'PY'
+import json, sys
+with open(sys.argv[1]) as f:
+    summary = json.load(f)
+keys = ["generated_at_utc", "status", "critical_alerts", "warning_alerts", "alert_count"]
+print("runtime_monitor_summary=" + json.dumps({k: summary.get(k) for k in keys}, sort_keys=True))
+PY
+  else
+    echo "runtime_monitor_summary=missing"
+  fi
 }
 
 verify() {
@@ -396,15 +495,20 @@ PY
 
 start_stack() {
   write_launchagents
+  bootout_label "$RUNTIME_MONITOR_LABEL"
+  bootout_label "$LOW_PRICE_TP_LABEL"
   bootout_label "$LOW_PRICE_LABEL"
   bootout_label "$DATA_FEED_LABEL"
   bootout_label "$SHADOW_LABEL"
   bootstrap_label "$DATA_FEED_LABEL"
   bootstrap_label "$SHADOW_LABEL"
+  bootstrap_label "$RUNTIME_MONITOR_LABEL"
   status
 }
 
 stop_stack() {
+  bootout_label "$RUNTIME_MONITOR_LABEL"
+  bootout_label "$LOW_PRICE_TP_LABEL"
   bootout_label "$LOW_PRICE_LABEL"
   bootout_label "$SHADOW_LABEL"
   bootout_label "$DATA_FEED_LABEL"
@@ -434,6 +538,22 @@ start_low_price_live() {
   "$PROJECT_DIR/scripts/ops/status_low_price_yes_lottery_tiny_live.sh"
 }
 
+start_low_price_take_profit() {
+  if [[ "${1:-}" != "--confirm-live" ]]; then
+    echo "refusing low-price take-profit live start: pass --confirm-live" >&2
+    exit 2
+  fi
+  write_launchagents
+  bootout_label "$LOW_PRICE_TP_LABEL"
+  bootstrap_label "$LOW_PRICE_TP_LABEL"
+  "$PROJECT_DIR/scripts/ops/status_low_price_yes_take_profit_exit.sh"
+}
+
+stop_low_price_take_profit() {
+  bootout_label "$LOW_PRICE_TP_LABEL"
+  "$PROJECT_DIR/scripts/ops/status_low_price_yes_take_profit_exit.sh"
+}
+
 start_low_price_integrated_shadow() {
   write_launchagents
   bootout_label "$LOW_PRICE_INTEGRATED_SHADOW_LABEL"
@@ -443,6 +563,18 @@ start_low_price_integrated_shadow() {
 
 stop_low_price_integrated_shadow() {
   bootout_label "$LOW_PRICE_INTEGRATED_SHADOW_LABEL"
+  status
+}
+
+start_runtime_monitor() {
+  write_launchagents
+  bootout_label "$RUNTIME_MONITOR_LABEL"
+  bootstrap_label "$RUNTIME_MONITOR_LABEL"
+  status
+}
+
+stop_runtime_monitor() {
+  bootout_label "$RUNTIME_MONITOR_LABEL"
   status
 }
 
@@ -459,8 +591,12 @@ case "${1:-}" in
   stop-live) bootout_label "$LIVE_LABEL"; "$PROJECT_DIR/scripts/ops/stop_regime_routed_no_tiny_live.sh" ;;
   start-low-price-live) shift; start_low_price_live "${1:-}" ;;
   stop-low-price-live) bootout_label "$LOW_PRICE_LABEL"; rm -f "$LOW_PRICE_RUNTIME/loop.pid"; "$PROJECT_DIR/scripts/ops/stop_low_price_yes_lottery_tiny_live.sh" ;;
+  start-low-price-take-profit) shift; start_low_price_take_profit "${1:-}" ;;
+  stop-low-price-take-profit) stop_low_price_take_profit ;;
   start-low-price-integrated-shadow) start_low_price_integrated_shadow ;;
   stop-low-price-integrated-shadow) stop_low_price_integrated_shadow ;;
+  start-runtime-monitor) start_runtime_monitor ;;
+  stop-runtime-monitor) stop_runtime_monitor ;;
   -h|--help|help|"") usage ;;
   *) usage; exit 2 ;;
 esac

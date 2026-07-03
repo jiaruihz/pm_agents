@@ -81,6 +81,9 @@ def normalize_probe_row(
             "freshness": "unknown",
             "candidate_rows": None,
             "execution_eligible": None,
+            "alert_count": None,
+            "critical_alerts": None,
+            "warning_alerts": None,
             "top_audit": None,
             "caps": None,
         })
@@ -94,6 +97,9 @@ def normalize_probe_row(
         "freshness": classify_freshness(age, warn_min, bad_min),
         "candidate_rows": summary.get("candidate_rows"),
         "execution_eligible": summary.get("execution_eligible"),
+        "alert_count": summary.get("alert_count"),
+        "critical_alerts": summary.get("critical_alerts"),
+        "warning_alerts": summary.get("warning_alerts"),
         "top_audit": _top_audit(summary),
         "caps": summary.get("caps") or {
             k: summary.get(k) for k in ("base_notional", "daily_gross_cap") if k in summary

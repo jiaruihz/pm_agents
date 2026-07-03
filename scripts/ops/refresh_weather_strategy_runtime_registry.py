@@ -157,6 +157,32 @@ class StrategySpec:
 def strategy_specs() -> list[StrategySpec]:
     return [
         StrategySpec(
+            strategy_instance="regime_routed_no_route_price_disciplined_tiny_live_v1",
+            display_name="Regime-routed NO route-price tiny-live",
+            family="reheat_risk.regime_routed_no",
+            lifecycle_status="live",
+            execution_mode="live",
+            source_layer="runtime_local",
+            runtime_dir="runtime/weather_edge_v1/regime_routed_no_tiny_live_v1",
+            summary_file="latest_summary.json",
+            primary_journal="summary_history.jsonl",
+            live_order_file="live_orders.jsonl",
+            paper_order_file="paper_orders.jsonl",
+            expected_live=True,
+            artifact_files=[
+                ("summary_history", "summary_history.jsonl"),
+                ("trade_plans", "trade_plans.jsonl"),
+                ("blocked_candidates", "blocked_candidates.jsonl"),
+                ("latest_candidates", "latest_candidates.json"),
+            ],
+            notes=(
+                "Current Mac live regime-routed NO runner. Uses route-price discipline, row-risk "
+                "soft sizing, shared weather_data_feed observation cache, and explicit executor "
+                "result telemetry; live orders may also appear in the older remote mirror during "
+                "migration windows."
+            ),
+        ),
+        StrategySpec(
             strategy_instance="regime_routed_no_soft_balanced_tiny_live_v1",
             display_name="Regime-routed NO soft-balanced tiny-live",
             family="reheat_risk.regime_routed_no",
@@ -196,6 +222,49 @@ def strategy_specs() -> list[StrategySpec]:
                 ("shadow_candidates", "shadow_candidates.jsonl"),
             ],
             notes="Zero-notional forward shadow for the same routed expression and soft-balanced sizing policy.",
+        ),
+        StrategySpec(
+            strategy_instance="tmax_distribution_edge_shadow_v1",
+            display_name="Tmax distribution edge shadow",
+            family="reheat_risk.tmax_distribution_edge",
+            lifecycle_status="shadow",
+            execution_mode="zero_notional_shadow",
+            source_layer="runtime_local",
+            runtime_dir="runtime/weather_edge_v1/tmax_distribution_edge_shadow_v1",
+            summary_file="latest_summary.json",
+            primary_journal="shadow_events.jsonl",
+            telemetry_file="shadow_events.jsonl",
+            artifact_files=[
+                ("shadow_events", "shadow_events.jsonl"),
+                ("latest_events", "latest_events.json"),
+                ("summary_history", "summary_history.jsonl"),
+            ],
+            notes=(
+                "Distribution-first Tmax expression selector. Estimates current/d1/d2/tail bucket "
+                "probabilities and records selected plus blocked zero-notional expression decisions; "
+                "no orders and no live sizing approval."
+            ),
+        ),
+        StrategySpec(
+            strategy_instance="weather_runtime_monitor",
+            display_name="Weather runtime monitor",
+            family="data_quality.runtime_monitor",
+            lifecycle_status="monitor",
+            execution_mode="monitor",
+            source_layer="runtime_local",
+            runtime_dir="runtime/weather_edge_v1/runtime_monitor",
+            summary_file="latest_summary.json",
+            primary_journal="alerts.jsonl",
+            telemetry_file="summary_history.jsonl",
+            artifact_files=[
+                ("alert_state", "alert_state.json"),
+                ("summary_history", "summary_history.jsonl"),
+            ],
+            notes=(
+                "Read-only monitor for weather live/shadow runtime loops. Flags stale summary files, "
+                "stale snapshots, stale target dates, executor failures, plan-without-live-order cases, "
+                "empty snapshots, and long no-live-order periods."
+            ),
         ),
         StrategySpec(
             strategy_instance="theta_current_yes_fade_confirmed_tiny_live_v1",

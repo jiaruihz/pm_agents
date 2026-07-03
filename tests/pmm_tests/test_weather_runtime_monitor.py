@@ -1,0 +1,155 @@
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from scripts.ops import weather_runtime_monitor as monitor
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+
+def append_jsonl(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+
+def test_executor_timeout_becomes_critical_alert(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 3, 15, 30, tzinfo=timezone.utc)
+    runtime = tmp_path / "regime"
+    write_json(
+        runtime / "latest_summary.json",
+        {
+            "generated_at_utc": (now - timedelta(minutes=1)).isoformat(),
+            "live_enabled": True,
+            "candidate_rows": 1,
+            "routed_candidates": 1,
+            "execution_eligible": 1,
+            "plans_written": 1,
+        },
+    )
+    append_jsonl(
+        runtime / "summary_history.jsonl",
+        [
+            {
+                "generated_at_utc": (now - timedelta(minutes=2)).isoformat(),
+                "candidate_rows": 1,
+                "routed_candidates": 1,
+                "execution_eligible": 1,
+                "plans_written": 1,
+                "executor_result": {
+                    "returncode": 1,
+                    "output_tail": "httpx.ConnectTimeout: timed out\nPolyApiException[status_code=None]",
+                },
+            }
+        ],
+    )
+    spec = monitor.WatchSpec(
+        instance="regime_test",
+        display_name="Regime test",
+        runtime_dir=runtime,
+        mode="live",
+        expected_live=True,
+    )
+    result = monitor.evaluate_spec(spec, now)
+    assert result["status"] == "critical"
+    assert any(alert["kind"] == "executor_failure" for alert in result["alerts"])
+    assert any(alert["kind"] == "plans_without_live_orders" for alert in result["alerts"])
+
+
+def test_stale_target_date_becomes_warning_for_shadow(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 3, 15, 30, tzinfo=timezone.utc)
+    runtime = tmp_path / "tmax"
+    write_json(
+        runtime / "latest_summary.json",
+        {
+            "generated_at_utc": (now - timedelta(minutes=1)).isoformat(),
+            "target_dates": ["2026-07-01"],
+            "rows_written_this_cycle": 396,
+            "selected_rows_this_cycle": 157,
+        },
+    )
+    append_jsonl(runtime / "summary_history.jsonl", [{"generated_at_utc": now.isoformat()}])
+    spec = monitor.WatchSpec(
+        instance="tmax_test",
+        display_name="Tmax test",
+        runtime_dir=runtime,
+        mode="zero_notional_shadow",
+        target_date_lag_warn_days=1,
+    )
+    result = monitor.evaluate_spec(spec, now)
+    assert result["status"] == "warning"
+    assert any(alert["kind"] == "stale_target_date" for alert in result["alerts"])
+
+
+def test_price_blocked_live_runner_is_idle_by_policy_not_failure(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 3, 15, 30, tzinfo=timezone.utc)
+    runtime = tmp_path / "regime"
+    summary = {
+        "generated_at_utc": (now - timedelta(minutes=1)).isoformat(),
+        "live_enabled": True,
+        "candidate_rows": 2,
+        "routed_candidates": 2,
+        "execution_eligible": 0,
+        "plans_written": 0,
+        "skip_reasons": {
+            "ask_above_route_price_cap|soft_weight_to_ask_ratio_below_min|soft_size_below_min_shares": 2
+        },
+        "meta": {"snapshot_age_min": 7.0},
+    }
+    write_json(runtime / "latest_summary.json", summary)
+    append_jsonl(runtime / "summary_history.jsonl", [summary])
+    spec = monitor.WatchSpec(
+        instance="regime_test",
+        display_name="Regime test",
+        runtime_dir=runtime,
+        mode="live",
+        expected_live=True,
+        no_live_order_warn_hours=None,
+    )
+    result = monitor.evaluate_spec(spec, now)
+    assert result["status"] == "idle_by_policy"
+    assert result["alerts"] == []
+
+
+def test_orderbook_stale_becomes_warning(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 3, 15, 30, tzinfo=timezone.utc)
+    old_day = tmp_path / "orderbook_snapshots" / "2026-07-01"
+    old_day.mkdir(parents=True)
+    (old_day / "orderbook_snapshot_20260701_1200.jsonl.gz").write_bytes(b"")
+
+    result = monitor.orderbook_freshness(tmp_path / "orderbook_snapshots", now)
+
+    assert result["status"] == "warning"
+    assert result["latest_date"] == "2026-07-01"
+    assert any(alert["kind"] == "full_orderbook_snapshots_stale" for alert in result["alerts"])
+
+
+def test_settlement_stale_becomes_warning(tmp_path: Path) -> None:
+    import sqlite3
+
+    now = datetime(2026, 7, 3, 15, 30, tzinfo=timezone.utc)
+    db = tmp_path / "weather.db"
+    conn = sqlite3.connect(db)
+    conn.executescript(
+        """
+        CREATE TABLE fact_signal_candidates (
+          event_date TEXT,
+          decision_snapshot_ts_utc TEXT
+        );
+        CREATE TABLE settlement_outcomes (
+          city TEXT,
+          target_date TEXT
+        );
+        INSERT INTO fact_signal_candidates VALUES ('2026-07-03', '2026-07-03T15:00:00Z');
+        INSERT INTO settlement_outcomes VALUES ('NYC', '2026-06-30');
+        """
+    )
+    conn.close()
+
+    result = monitor.db_freshness(db, now)
+
+    assert result["status"] == "warning"
+    assert result["settlement_outcomes_max_target_date"] == "2026-06-30"
+    assert any(alert["kind"] == "settlement_outcomes_stale" for alert in result["alerts"])

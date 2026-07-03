@@ -3,8 +3,8 @@
 
 This is an independent live/shadow head for the refined low-price YES lottery
 selector. It reads canonical fact_signal_candidates, rechecks the live CLOB
-book, writes shadow telemetry for every candidate, and hands accepted guarded
-taker plans to weather_order_executor.py.
+book, writes shadow telemetry for every candidate, and hands accepted maker-first
+plans to weather_order_executor.py.
 """
 
 from __future__ import annotations
@@ -33,6 +33,11 @@ if str(ROOT) not in sys.path:
 from src.platform.clients.polymarket_gamma import PolymarketGammaClient
 from src.strategies.rule_lawyer.services.market_resolver import resolve_market
 from src.strategies.weather_edge_v1.tools.weather_edge_market_data import weather_event_slug
+from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
+    TailTelemetryResources,
+    build_low_price_yes_tail_telemetry,
+    load_tail_telemetry_resources_soft,
+)
 from weather_data_feed.source_policy import city_slug
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
@@ -56,7 +61,7 @@ LIVE_OUT = LIVE_DIR / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
 STRATEGY_INSTANCE = "low_price_yes_lottery_tiny_live_v1"
 STRATEGY_ID = "low_price_yes_lottery_tiny_live_v1"
 STRATEGY_FAMILY = "forecast_quality.low_price_yes_lottery"
-RULE_ID = "buy_yes_edge20_ask05_20_fixed150_guarded_taker_v1"
+RULE_ID = "buy_yes_edge20_ask05_20_maker_first_v1"
 SOURCE_REPORT = "docs/analysis/2026-07/2026-07-02-low-price-yes-lottery-selector-refinement-v1.md"
 
 CLOB_BASE_URL = os.getenv("CLOB_BASE_URL", "").strip() or os.getenv("PM_API_BASE_URL", "").strip() or "https://clob.polymarket.com"
@@ -225,6 +230,18 @@ def signal_id_for_row(row: dict[str, Any]) -> str:
     )
 
 
+def submitted_natural_key(row: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            safe_str(row.get("target_date") or row.get("event_date")),
+            safe_str(row.get("city")),
+            safe_str(row.get("bracket")),
+            safe_str(row.get("condition_id") or row.get("market_id")),
+            "BUY_YES",
+        ]
+    )
+
+
 def existing_submitted_signal_ids(path: Path = LIVE_OUT) -> set[str]:
     out: set[str] = set()
     for row in read_jsonl(path):
@@ -235,6 +252,19 @@ def existing_submitted_signal_ids(path: Path = LIVE_OUT) -> set[str]:
         signal_id = safe_str(row.get("signal_id"))
         if signal_id:
             out.add(signal_id)
+    return out
+
+
+def existing_submitted_natural_keys(path: Path = LIVE_OUT) -> set[str]:
+    out: set[str] = set()
+    for row in read_jsonl(path):
+        if safe_str(row.get("record_type")) != "weather_edge_live_order":
+            continue
+        if safe_str(row.get("status")) != "submitted":
+            continue
+        key = submitted_natural_key(row)
+        if key:
+            out.add(key)
     return out
 
 
@@ -482,6 +512,23 @@ def resolve_yes_token(row: dict[str, Any], cache: dict[str, Any]) -> dict[str, A
     else:
         fallback = {}
     errors: list[str] = []
+
+    snapshot_payload = resolve_yes_token_from_local_snapshots(row)
+    if snapshot_payload.get("yes_token_id"):
+        cache[condition_id] = snapshot_payload
+        save_token_cache(cache)
+        return snapshot_payload
+
+    try:
+        event_payload = resolve_yes_token_from_event(row)
+        if event_payload.get("yes_token_id"):
+            cache[condition_id] = event_payload
+            save_token_cache(cache)
+            return event_payload
+        errors.append(f"event_fallback:{event_payload.get('source')}")
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"event_fallback:{type(exc).__name__}: {exc}")
+
     targets = [condition_id, safe_str(row.get("market_id"))]
     resolved = None
     for target in [x for x in dict.fromkeys(targets) if x]:
@@ -520,11 +567,6 @@ def resolve_yes_token(row: dict[str, Any], cache: dict[str, Any]) -> dict[str, A
             cache[condition_id] = payload
             save_token_cache(cache)
         return payload
-    event_payload = resolve_yes_token_from_event(row)
-    if event_payload.get("yes_token_id"):
-        cache[condition_id] = event_payload
-        save_token_cache(cache)
-        return {**event_payload, "direct_gamma_errors": errors}
     if fallback:
         return {
             **fallback,
@@ -628,6 +670,102 @@ def fetch_book(token_id: str, *, timeout_sec: float = 5.0) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def maybe_failover_market_proxy(*, timeout_sec: float) -> dict[str, Any]:
+    proxy = market_proxy_url()
+    if not proxy:
+        return {"status": "skipped", "reason": "direct_connection"}
+    script = ROOT / "scripts/ops/weather_market_proxy_failover.py"
+    if not script.exists():
+        return {"status": "skipped", "reason": "missing_failover_script"}
+    env = os.environ.copy()
+    env.setdefault("WEATHER_DATA_FEED_MARKET_PROXY", proxy)
+    proc = subprocess.run(
+        [sys.executable, str(script), "--proxy", proxy, "--timeout-sec", str(max(5, int(timeout_sec)))],
+        text=True,
+        capture_output=True,
+        timeout=max(20.0, float(timeout_sec) + 15.0),
+        env=env,
+    )
+    return {
+        "status": "ok" if proc.returncode == 0 else "failed",
+        "returncode": proc.returncode,
+        "stdout_tail": (proc.stdout or "").strip().splitlines()[-1:] or [],
+        "stderr": (proc.stderr or "").strip()[:240],
+    }
+
+
+def fetch_book_with_retry(
+    token_id: str,
+    *,
+    timeout_sec: float,
+    retries: int,
+    retry_sleep_sec: float,
+    failover_on_timeout: bool,
+) -> dict[str, Any]:
+    attempts = max(1, int(retries) + 1)
+    last_exc: Exception | None = None
+    did_failover = False
+    for attempt in range(1, attempts + 1):
+        try:
+            return fetch_book(token_id, timeout_sec=timeout_sec)
+        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+            last_exc = exc
+            if failover_on_timeout and not did_failover:
+                did_failover = True
+                try:
+                    failover = maybe_failover_market_proxy(timeout_sec=timeout_sec)
+                    print(
+                        "[low_price_yes_lottery] book_fetch_failover "
+                        f"attempt={attempt} status={failover.get('status')} token_id={token_id}",
+                        flush=True,
+                    )
+                except Exception as failover_exc:  # noqa: BLE001
+                    print(
+                        "[low_price_yes_lottery] book_fetch_failover_failed "
+                        f"{type(failover_exc).__name__}: {failover_exc}",
+                        flush=True,
+                    )
+            if attempt < attempts and retry_sleep_sec > 0:
+                time.sleep(float(retry_sleep_sec))
+        except Exception:
+            raise
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("book_fetch_failed_without_exception")
+
+
+def marketable_shares_for_notional(*, notional_usd: float, limit_price: float, min_shares: float) -> float:
+    if limit_price <= 0:
+        return 0.0
+    target_shares = max(float(min_shares), float(notional_usd) / limit_price, 1.0 / limit_price)
+    shares = math.ceil((target_shares - 1e-12) * 100.0) / 100.0
+    if shares * limit_price < 1.0:
+        shares = math.ceil((shares + 0.01) * 100.0) / 100.0
+    return round(shares, 2)
+
+
+def shares_for_notional(*, notional_usd: float, limit_price: float, min_shares: float) -> float:
+    if limit_price <= 0:
+        return 0.0
+    target_shares = max(float(min_shares), float(notional_usd) / limit_price)
+    shares = math.ceil((target_shares - 1e-12) * 100.0) / 100.0
+    return round(shares, 2)
+
+
+def maker_price_for_buy(*, best_bid: float, best_ask: float, max_price: float, tick_size: float) -> float:
+    tick = tick_size if tick_size > 0 else 0.001
+    if best_ask <= tick:
+        return 0.0
+    if best_bid > 0:
+        price = best_bid + tick
+    else:
+        price = best_ask - tick
+    price = min(price, best_ask - tick, max_price)
+    if price <= 0:
+        return 0.0
+    return round(math.floor((price + 1e-12) / tick) * tick, 6)
+
+
 def book_levels(book: dict[str, Any], side: str) -> list[tuple[float, float]]:
     rows = book.get(f"{side}s") if isinstance(book, dict) else []
     out: list[tuple[float, float]] = []
@@ -691,13 +829,21 @@ def sizing_shadow(price: float, p_yes: float, args: argparse.Namespace) -> dict[
     }
 
 
-def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dict[str, Any], submitted_signal_ids: set[str]) -> dict[str, Any]:
+def validate_candidate(
+    row: dict[str, Any],
+    args: argparse.Namespace,
+    cache: dict[str, Any],
+    submitted_signal_ids: set[str],
+    submitted_natural_keys: set[str],
+    tail_telemetry_resources: TailTelemetryResources | None,
+) -> dict[str, Any]:
     created_at = now_utc()
     signal_id = signal_id_for_row(row)
     snapshot_ts = parse_utc(row.get("decision_snapshot_ts_utc"))
     snapshot_age_hours = None
     if snapshot_ts is not None:
         snapshot_age_hours = max(0.0, (now_utc_dt() - snapshot_ts).total_seconds() / 3600.0)
+    tail_telemetry = build_low_price_yes_tail_telemetry(row, tail_telemetry_resources)
     base = {
         "record_type": "low_price_yes_lottery_tiny_live_decision",
         "created_at_utc": created_at,
@@ -746,6 +892,7 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
         "last_seen_ts_utc": safe_str(row.get("last_seen_ts_utc")),
         "n_snapshots": row.get("n_snapshots"),
         "fact_built_at_utc": safe_str(row.get("fact_built_at_utc")),
+        **tail_telemetry,
         "config": {
             "min_ask": args.min_ask,
             "max_ask": args.max_ask,
@@ -763,6 +910,14 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
 
     if signal_id in submitted_signal_ids:
         return {**base, "decision_status": "blocked", "blocker": "duplicate_submitted_signal"}
+    natural_key = submitted_natural_key(row)
+    if natural_key in submitted_natural_keys:
+        return {
+            **base,
+            "decision_status": "blocked",
+            "blocker": "duplicate_submitted_city_date_bracket",
+            "duplicate_natural_key": natural_key,
+        }
     if snapshot_ts is None:
         return {**base, "decision_status": "blocked", "blocker": "missing_decision_snapshot_ts"}
     if snapshot_age_hours is not None and snapshot_age_hours > args.max_decision_snapshot_age_hours:
@@ -800,7 +955,13 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
         return {**enriched, "decision_status": "blocked", "blocker": "market_inactive"}
 
     try:
-        book = fetch_book(token_id, timeout_sec=args.book_timeout_sec)
+        book = fetch_book_with_retry(
+            token_id,
+            timeout_sec=args.book_timeout_sec,
+            retries=args.book_retries,
+            retry_sleep_sec=args.book_retry_sleep_sec,
+            failover_on_timeout=args.book_failover_on_timeout,
+        )
     except Exception as exc:  # noqa: BLE001
         return {
             **enriched,
@@ -838,8 +999,30 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
             "fresh_edge": p_yes - fresh_ask,
         }
 
-    limit_price = max(price for price, _size in executable)
-    shares = round(float(args.order_notional_usd) / limit_price, 6) if limit_price > 0 else 0.0
+    taker_limit_price = max(price for price, _size in executable)
+    tick_size = 0.001
+    maker_limit_price = maker_price_for_buy(
+        best_bid=bids[0][0] if bids else 0.0,
+        best_ask=asks[0][0],
+        max_price=taker_limit_price,
+        tick_size=tick_size,
+    )
+    if maker_limit_price <= 0:
+        return {
+            **enriched,
+            "decision_status": "blocked",
+            "blocker": "maker_price_unavailable",
+            "token_id": token_id,
+            "fresh_best_bid": bids[0][0] if bids else 0.0,
+            "fresh_best_ask": asks[0][0],
+            "max_taker_price": max_taker_price,
+            "taker_limit_price": taker_limit_price,
+        }
+    shares = shares_for_notional(
+        notional_usd=float(args.order_notional_usd),
+        limit_price=maker_limit_price,
+        min_shares=float(args.min_order_shares),
+    )
     if shares < float(args.min_order_shares):
         return {
             **enriched,
@@ -848,7 +1031,8 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
             "token_id": token_id,
             "fresh_best_bid": bids[0][0] if bids else 0.0,
             "fresh_best_ask": asks[0][0],
-            "limit_price": limit_price,
+            "limit_price": maker_limit_price,
+            "taker_limit_price": taker_limit_price,
             "planned_shares": shares,
         }
     cumulative_shares = 0.0
@@ -874,12 +1058,12 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
         }
 
     fees = fee_metrics(
-        price=limit_price,
+        price=taker_limit_price,
         shares=shares,
         taker_fee_rate=args.taker_fee_rate,
         maker_rebate_rate=args.maker_rebate_rate,
     )
-    fee_adjusted_edge = p_yes - limit_price - fees["estimated_taker_fee_per_share"]
+    fee_adjusted_edge = p_yes - taker_limit_price - fees["estimated_taker_fee_per_share"]
     if fee_adjusted_edge < float(args.min_fee_adjusted_edge):
         return {
             **enriched,
@@ -888,13 +1072,30 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
             "token_id": token_id,
             "fresh_best_bid": bids[0][0] if bids else 0.0,
             "fresh_best_ask": asks[0][0],
-            "limit_price": limit_price,
-            "fresh_edge": p_yes - limit_price,
+            "limit_price": maker_limit_price,
+            "taker_limit_price": taker_limit_price,
+            "fresh_edge": p_yes - taker_limit_price,
             "fee_adjusted_edge": fee_adjusted_edge,
             **fees,
         }
 
-    shadow = sizing_shadow(limit_price, p_yes, args)
+    maker_fees = fee_metrics(
+        price=maker_limit_price,
+        shares=shares,
+        taker_fee_rate=args.taker_fee_rate,
+        maker_rebate_rate=args.maker_rebate_rate,
+    )
+    maker_fee_adjusted_edge = p_yes - maker_limit_price + maker_fees["estimated_maker_rebate_per_share"]
+    maker_fraction = max(0.0, min(1.0, float(args.maker_first_fraction)))
+    taker_fallback_notional = max(0.0, float(args.order_notional_usd) * (1.0 - maker_fraction))
+    taker_fallback_status = (
+        "disabled"
+        if taker_fallback_notional <= 0
+        else "skipped_below_min_marketable_notional"
+        if taker_fallback_notional < float(args.taker_fallback_min_notional_usd)
+        else "available"
+    )
+    shadow = sizing_shadow(maker_limit_price, p_yes, args)
     return {
         **enriched,
         "decision_status": "planned",
@@ -909,16 +1110,25 @@ def validate_candidate(row: dict[str, Any], args: argparse.Namespace, cache: dic
         "fresh_best_ask_size": asks[0][1],
         "fresh_spread": round(max(0.0, asks[0][0] - bids[0][0]), 6) if bids else 0.0,
         "max_taker_price": round(max_taker_price, 6),
-        "limit_price": round(limit_price, 6),
+        "taker_limit_price": round(taker_limit_price, 6),
+        "limit_price": round(maker_limit_price, 6),
+        "maker_limit_price": round(maker_limit_price, 6),
         "planned_shares": shares,
-        "planned_notional_usd": round(shares * limit_price, 6),
-        "fresh_edge": round(p_yes - limit_price, 6),
+        "planned_notional_usd": round(shares * maker_limit_price, 6),
+        "maker_planned_notional_usd": round(shares * maker_limit_price, 6),
+        "taker_fallback_notional_usd": round(taker_fallback_notional, 6),
+        "taker_fallback_status": taker_fallback_status,
+        "fresh_edge": round(p_yes - taker_limit_price, 6),
+        "maker_edge": round(p_yes - maker_limit_price, 6),
         "fee_adjusted_edge": round(fee_adjusted_edge, 6),
+        "maker_fee_adjusted_edge": round(maker_fee_adjusted_edge, 6),
         "available_shares_within_limit": round(cumulative_shares, 6),
         "available_notional_within_limit": round(cumulative_notional, 6),
-        "execution_mode": "tiny_live_guarded_taker_cancel_after",
+        "execution_mode": "tiny_live_maker_first",
         "shadow_sizing_variants": shadow,
         **fees,
+        "estimated_maker_rebate_usd": maker_fees["estimated_maker_rebate_usd"],
+        "estimated_maker_rebate_per_share": maker_fees["estimated_maker_rebate_per_share"],
     }
 
 
@@ -933,8 +1143,8 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "strategy_family": STRATEGY_FAMILY,
         "probability_source": "fact_signal_candidates_model_p_yes",
         "decision_mode": "forecast_bias_low_price_tail_yes_lottery",
-        "execution_mode": "tiny_live_guarded_taker_cancel_after",
-        "profile": "edge20_ask05_20_fixed150",
+        "execution_mode": "tiny_live_maker_first",
+        "profile": "edge20_ask05_20_maker_first_080",
         "combo": RULE_ID,
         "signal_id": safe_str(decision.get("signal_id")),
         "city": safe_str(decision.get("city")),
@@ -955,7 +1165,7 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "spread": round(to_float(decision.get("fresh_spread"), 0.0), 6),
         "limit_price": round(price, 6),
         "quote_status": "accepted",
-        "quote_reason": "low_price_yes_lottery_fresh_book_guarded_taker",
+        "quote_reason": "low_price_yes_lottery_maker_first",
         "quote_edge": round(p_yes - price, 6),
         "required_quote_edge": round(to_float(decision.get("fee_adjusted_edge"), 0.0), 6),
         "model_token_probability": round(p_yes, 6),
@@ -963,15 +1173,15 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "quote_best_ask": round(to_float(decision.get("fresh_best_ask"), 0.0), 6),
         "quote_spread": round(to_float(decision.get("fresh_spread"), 0.0), 6),
         "quote_tick_size": 0.001,
-        "quote_mode": "fresh_book_guarded_taker",
-        "child_order_role": "single",
-        "maker_only": False,
+        "quote_mode": "fresh_book_maker_first",
+        "child_order_role": "maker_first",
+        "maker_only": True,
         "notional_fraction": 1.0,
         "size_multiplier": 1.0,
         "order_notional_cap": round(to_float(decision.get("planned_notional_usd"), 0.0), 6),
         "size": round(shares, 6),
         "notional": round(shares * price, 6),
-        "execution_policy": "low_price_yes_lottery_guarded_taker_v1",
+        "execution_policy": "low_price_yes_lottery_maker_first_v1",
         "tick_size": 0.001,
         "entry_price_window": "0.05-0.20",
         "sizing_mode": "notional",
@@ -985,7 +1195,7 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "edge_raw_yes": round(p_yes - price, 6),
         "edge_used_yes": round(p_yes - price, 6),
         "shadow_decision": "low_price_yes_lottery_tiny_live_v1",
-        "shadow_reason": "user_approved_fixed_1_5_forward_probe_refined_selector",
+        "shadow_reason": "user_approved_0_8_maker_first_forward_probe",
         "obs_source": "not_used_forecast_fact_selector",
         "model_version": safe_str(decision.get("model_version")),
         "paper_enabled": True,
@@ -997,6 +1207,11 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "fresh_best_ask": round(to_float(decision.get("fresh_best_ask"), 0.0), 6),
         "fresh_best_bid": round(to_float(decision.get("fresh_best_bid"), 0.0), 6),
         "max_taker_price": round(to_float(decision.get("max_taker_price"), 0.0), 6),
+        "taker_limit_price": round(to_float(decision.get("taker_limit_price"), 0.0), 6),
+        "maker_limit_price": round(to_float(decision.get("maker_limit_price"), 0.0), 6),
+        "maker_fee_adjusted_edge": round(to_float(decision.get("maker_fee_adjusted_edge"), 0.0), 6),
+        "taker_fallback_status": safe_str(decision.get("taker_fallback_status")),
+        "taker_fallback_notional_usd": round(to_float(decision.get("taker_fallback_notional_usd"), 0.0), 6),
         "fee_adjusted_edge": round(to_float(decision.get("fee_adjusted_edge"), 0.0), 6),
         "estimated_taker_fee_usd": round(to_float(decision.get("estimated_taker_fee_usd"), 0.0), 6),
         "estimated_maker_rebate_usd": round(to_float(decision.get("estimated_maker_rebate_usd"), 0.0), 6),
@@ -1012,6 +1227,32 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "forecast_peak_hour_utc": decision.get("forecast_peak_hour_utc"),
         "forecast_peak_time_utc": safe_str(decision.get("forecast_peak_time_utc")),
         "forecast_peak_delta_hours_local": decision.get("forecast_peak_delta_hours_local"),
+        "tail_telemetry_version": safe_str(decision.get("tail_telemetry_version")),
+        "tail_telemetry_status": safe_str(decision.get("tail_telemetry_status")),
+        "forecast_model_tail": safe_str(decision.get("forecast_model_tail")),
+        "source_aware_v3": bool(decision.get("source_aware_v3")),
+        "source_aware_v3_reason": safe_str(decision.get("source_aware_v3_reason")),
+        "p_cal_no_city": decision.get("p_cal_no_city"),
+        "p_cal_no_city_ev": decision.get("p_cal_no_city_ev"),
+        "p_cal_no_city_edge": decision.get("p_cal_no_city_edge"),
+        "p_cal_city_diag": decision.get("p_cal_city_diag"),
+        "p_cal_city_diag_ev": decision.get("p_cal_city_diag_ev"),
+        "p_cal_city_diag_edge": decision.get("p_cal_city_diag_edge"),
+        "bias_n_asof": decision.get("bias_n_asof"),
+        "bias_mean_asof": decision.get("bias_mean_asof"),
+        "bias_p90_asof": decision.get("bias_p90_asof"),
+        "hot_tail_pct_asof": decision.get("hot_tail_pct_asof"),
+        "hot_tail2_pct_asof": decision.get("hot_tail2_pct_asof"),
+        "cold_tail_pct_asof": decision.get("cold_tail_pct_asof"),
+        "bias_mae_asof": decision.get("bias_mae_asof"),
+        "bracket_low_native": decision.get("bracket_low_native"),
+        "bracket_high_native": decision.get("bracket_high_native"),
+        "bracket_distance_available": decision.get("bracket_distance_available"),
+        "forecast_to_bracket_low_native": decision.get("forecast_to_bracket_low_native"),
+        "forecast_above_bracket_high_native": decision.get("forecast_above_bracket_high_native"),
+        "forecast_inside_bracket_bounds": decision.get("forecast_inside_bracket_bounds"),
+        "decision_hour_local_pit": decision.get("decision_hour_local_pit"),
+        "decision_local_bucket": safe_str(decision.get("decision_local_bucket")),
         "decision_snapshot_ts_utc": safe_str(decision.get("decision_snapshot_ts_utc")),
         "source_snapshot_path": "runtime/weather.db:fact_signal_candidates",
     }
@@ -1042,8 +1283,6 @@ def run_executor(args: argparse.Namespace) -> dict[str, Any] | None:
         str(LIVE_OUT),
         "--live",
         "--confirm-live",
-        "--allow-taker",
-        "--cancel-after",
         "--no-telegram",
     ]
     env = os.environ.copy()
@@ -1116,6 +1355,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     LIVE_DIR.mkdir(parents=True, exist_ok=True)
     cache = load_token_cache()
     submitted_signal_ids = existing_submitted_signal_ids(LIVE_OUT)
+    submitted_natural_keys = existing_submitted_natural_keys(LIVE_OUT)
+    tail_telemetry_resources = load_tail_telemetry_resources_soft()
     with connect(Path(args.db)) as conn:
         min_event_date = effective_min_event_date(conn, args)
         raw_counts = count_raw(conn, args, min_event_date)
@@ -1125,7 +1366,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     blocked: list[dict[str, Any]] = []
     planned: list[dict[str, Any]] = []
     for row in raw_candidates:
-        decision = validate_candidate(row, args, cache, submitted_signal_ids)
+        decision = validate_candidate(row, args, cache, submitted_signal_ids, submitted_natural_keys, tail_telemetry_resources)
         decisions.append(decision)
         if decision.get("decision_status") == "planned":
             planned.append(decision)
@@ -1173,6 +1414,12 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "daily_cap": None,
         "order_notional_usd": float(args.order_notional_usd),
         "planned_notional_usd": round(sum(to_float(row.get("planned_notional_usd"), 0.0) for row in planned), 6),
+        "tail_telemetry_status_counts": {
+            status: sum(1 for row in decisions if safe_str(row.get("tail_telemetry_status")) == status)
+            for status in sorted({safe_str(row.get("tail_telemetry_status")) for row in decisions})
+        },
+        "tail_telemetry_model_artifact": safe_str(decisions[0].get("tail_telemetry_model_artifact")) if decisions else "",
+        "tail_telemetry_bias_source": safe_str(decisions[0].get("tail_telemetry_bias_source")) if decisions else "",
         "config": {
             "min_ask": float(args.min_ask),
             "max_ask": float(args.max_ask),
@@ -1182,9 +1429,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_decision_snapshot_age_hours": float(args.max_decision_snapshot_age_hours),
             "min_decision_hours_to_settle": float(args.min_decision_hours_to_settle),
             "min_order_shares": float(args.min_order_shares),
+            "maker_first_fraction": float(args.maker_first_fraction),
+            "taker_fallback_min_notional_usd": float(args.taker_fallback_min_notional_usd),
             "max_candidates_per_run": int(args.max_candidates_per_run),
             "allow_settled": bool(args.allow_settled),
-            "cancel_after": True,
+            "cancel_after": False,
         },
         "files": {
             "summary": rel(SUMMARY_OUT),
@@ -1206,12 +1455,23 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "snapshot_ask": row.get("snapshot_ask"),
                 "fresh_best_ask": row.get("fresh_best_ask"),
                 "limit_price": row.get("limit_price"),
+                "maker_limit_price": row.get("maker_limit_price"),
+                "taker_limit_price": row.get("taker_limit_price"),
                 "model_p_yes": row.get("model_p_yes"),
                 "edge": row.get("edge"),
                 "fee_adjusted_edge": row.get("fee_adjusted_edge"),
+                "maker_fee_adjusted_edge": row.get("maker_fee_adjusted_edge"),
                 "planned_shares": row.get("planned_shares"),
                 "planned_notional_usd": row.get("planned_notional_usd"),
+                "taker_fallback_status": row.get("taker_fallback_status"),
+                "taker_fallback_notional_usd": row.get("taker_fallback_notional_usd"),
                 "estimated_taker_fee_usd": row.get("estimated_taker_fee_usd"),
+                "source_aware_v3": row.get("source_aware_v3"),
+                "p_cal_no_city": row.get("p_cal_no_city"),
+                "p_cal_city_diag": row.get("p_cal_city_diag"),
+                "bias_p90_asof": row.get("bias_p90_asof"),
+                "hot_tail_pct_asof": row.get("hot_tail_pct_asof"),
+                "forecast_to_bracket_low_native": row.get("forecast_to_bracket_low_native"),
             }
             for row in planned[:20]
         ],
@@ -1242,14 +1502,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-edge", type=float, default=0.20)
     parser.add_argument("--max-taker-cushion", type=float, default=0.01)
     parser.add_argument("--min-fee-adjusted-edge", type=float, default=0.15)
-    parser.add_argument("--order-notional-usd", type=float, default=1.0)
+    parser.add_argument("--order-notional-usd", type=float, default=0.8)
     parser.add_argument("--min-order-shares", type=float, default=5.0)
+    parser.add_argument("--maker-first-fraction", type=float, default=1.0)
+    parser.add_argument("--taker-fallback-min-notional-usd", type=float, default=1.0)
     parser.add_argument("--max-decision-snapshot-age-hours", type=float, default=6.0)
     parser.add_argument("--min-decision-hours-to-settle", type=float, default=1.0)
     parser.add_argument("--max-candidates-per-run", type=int, default=80)
     parser.add_argument("--taker-fee-rate", type=float, default=0.06)
     parser.add_argument("--maker-rebate-rate", type=float, default=0.0125)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
+    parser.add_argument("--book-retries", type=int, default=1)
+    parser.add_argument("--book-retry-sleep-sec", type=float, default=0.4)
+    parser.add_argument("--book-failover-on-timeout", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--token-resolution-timeout-sec", type=float, default=15.0)
     parser.add_argument("--disable-live-token-resolution", action="store_true")
     parser.add_argument("--executor-timeout-sec", type=float, default=180.0)
