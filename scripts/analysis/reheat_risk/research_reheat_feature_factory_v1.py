@@ -360,15 +360,35 @@ def asof_value(ts: np.ndarray, vals: np.ndarray, target: np.datetime64, tol_min:
     return float(vals[idx - 1])
 
 
-def minutes_since_running_max(city_ext: dict[str, Any], target: np.datetime64, running_max_f: float) -> float:
+def parse_utc_np(value: Any) -> np.datetime64 | None:
+    ts = pd.to_datetime(value, utc=True, errors="coerce")
+    if pd.isna(ts):
+        return None
+    return np.datetime64(ts.tz_convert("UTC").tz_localize(None).to_datetime64(), "ns")
+
+
+def minutes_since_running_max(
+    city_ext: dict[str, Any],
+    target: np.datetime64,
+    running_max_f: float,
+    current_temp_f: float,
+    decision_last_obs_utc: Any,
+) -> float:
     ts = city_ext["ts"]
     tmpf = city_ext["tmpf"]
     idx = np.searchsorted(ts, target, side="right")
     if idx == 0 or not math.isfinite(running_max_f):
         return float("nan")
+    # If the official current observation is itself the running max, the max
+    # clock is the official last-observation clock. Do not force a second source
+    # (IEM/METAR) to hit the exact same rounded display temperature.
+    if math.isfinite(current_temp_f) and abs(current_temp_f - running_max_f) <= 0.55:
+        last_obs = parse_utc_np(decision_last_obs_utc)
+        if last_obs is not None and last_obs <= target:
+            return float((target - last_obs) / np.timedelta64(1, "m"))
     prior_ts = ts[:idx]
     prior_tmpf = tmpf[:idx]
-    mask = np.isfinite(prior_tmpf) & (prior_tmpf >= running_max_f - 0.05)
+    mask = np.isfinite(prior_tmpf) & (prior_tmpf >= running_max_f - 0.55)
     if not mask.any():
         return float("nan")
     last_ts = prior_ts[np.where(mask)[0][-1]]
@@ -615,7 +635,13 @@ def add_weather_features(rows: pd.DataFrame, ext: dict[str, dict[str, Any]]) -> 
                 "sky_cover_code": sky_now,
                 "temp_trend_1h_f": tmpf_now - tmpf_1h if math.isfinite(tmpf_now) and math.isfinite(tmpf_1h) else np.nan,
                 "temp_trend_3h_f": tmpf_now - tmpf_3h if math.isfinite(tmpf_now) and math.isfinite(tmpf_3h) else np.nan,
-                "minutes_since_running_max": minutes_since_running_max(city_ext, target, float(row.running_max_f)),
+                "minutes_since_running_max": minutes_since_running_max(
+                    city_ext,
+                    target,
+                    float(row.running_max_f),
+                    float(row.current_temp_f),
+                    getattr(row, "decision_last_obs_utc", None),
+                ),
             }
         )
         feature_rows.append(feature)
@@ -660,14 +686,20 @@ def add_forecasts(rows: pd.DataFrame, forecasts: pd.DataFrame) -> pd.DataFrame:
             filled.append({"forecast_join_status": "no_fact_candidate"})
             continue
         row_ts = pd.to_datetime(row.decision_snapshot_ts_utc, utc=True, errors="coerce")
-        usable = frame
+        selected = None
+        status = "matched_no_snapshot_ts"
         if pd.notna(row_ts) and frame["forecast_sort_ts"].notna().any():
             asof = frame[frame["forecast_sort_ts"].le(row_ts)]
             if not asof.empty:
-                usable = asof
-        selected = usable.iloc[-1]
+                selected = asof.iloc[-1]
+                status = "matched_asof"
+            else:
+                filled.append({**{col: np.nan for col in forecast_cols}, "forecast_join_status": "matched_future"})
+                continue
+        if selected is None:
+            selected = frame.iloc[-1]
         item = {col: selected.get(col) for col in forecast_cols}
-        item["forecast_join_status"] = "matched_asof" if pd.notna(selected.get("forecast_sort_ts")) else "matched_no_snapshot_ts"
+        item["forecast_join_status"] = status
         filled.append(item)
     return pd.concat([rows.reset_index(drop=True), pd.DataFrame(filled).reset_index(drop=True)], axis=1)
 
@@ -687,6 +719,10 @@ def add_forecast_peak_backfill(rows: pd.DataFrame, peak: pd.DataFrame) -> pd.Dat
         "gfs_forecast_timezone",
         "gfs_forecast_utc_offset_seconds",
         "gfs_forecast_cache_status",
+        "gfs_forecast_api_source",
+        "gfs_forecast_run_time_utc",
+        "gfs_forecast_run_policy",
+        "gfs_forecast_cache_path",
         "ecmwf_forecast_model_name",
         "ecmwf_forecast_max_f",
         "ecmwf_forecast_max_native",
@@ -699,6 +735,10 @@ def add_forecast_peak_backfill(rows: pd.DataFrame, peak: pd.DataFrame) -> pd.Dat
         "ecmwf_forecast_timezone",
         "ecmwf_forecast_utc_offset_seconds",
         "ecmwf_forecast_cache_status",
+        "ecmwf_forecast_api_source",
+        "ecmwf_forecast_run_time_utc",
+        "ecmwf_forecast_run_policy",
+        "ecmwf_forecast_cache_path",
         "gfs_forecast_peak_present",
         "ecmwf_forecast_peak_present",
         "forecast_peak_models_agree_le_1h",
@@ -735,9 +775,15 @@ def add_forecast_peak_backfill(rows: pd.DataFrame, peak: pd.DataFrame) -> pd.Dat
 
     native_present = out["forecast_peak_hour_local"].notna()
     gfs_present = out["gfs_forecast_peak_hour_local"].notna()
+    gfs_run_policy = out.get("gfs_forecast_run_policy", pd.Series(index=out.index, dtype=object)).fillna("").astype(str)
+    gfs_backfill_source = np.where(
+        gfs_run_policy.ne(""),
+        "backfill_single_runs_" + gfs_run_policy + "_gfs_primary",
+        "backfill_gfs_primary",
+    )
     out["forecast_clock_source"] = np.select(
         [native_present, gfs_present],
-        ["native_fact", "backfill_gfs_primary"],
+        ["native_fact", gfs_backfill_source],
         default="missing",
     )
     for col in [
@@ -759,7 +805,7 @@ def add_forecast_peak_backfill(rows: pd.DataFrame, peak: pd.DataFrame) -> pd.Dat
     out.loc[fill_mask, "forecast_peak_time_utc"] = out.loc[fill_mask, "gfs_forecast_peak_time_utc"]
     out.loc[fill_mask, "forecast_hourly_count"] = out.loc[fill_mask, "gfs_forecast_hourly_count"]
     out.loc[fill_mask, "forecast_values_hash"] = out.loc[fill_mask, "gfs_forecast_values_hash"]
-    out.loc[fill_mask, "forecast_peak_source"] = "backfill_gfs_primary"
+    out.loc[fill_mask, "forecast_peak_source"] = pd.Series(gfs_backfill_source, index=out.index).loc[fill_mask]
     out.loc[fill_mask, "forecast_timezone"] = out.loc[fill_mask, "gfs_forecast_timezone"]
     out.loc[fill_mask, "forecast_utc_offset_seconds"] = out.loc[fill_mask, "gfs_forecast_utc_offset_seconds"]
     out.loc[fill_mask, "forecast_peak_delta_hours_local"] = out.loc[fill_mask, "gfs_forecast_peak_delta_hours_local"]

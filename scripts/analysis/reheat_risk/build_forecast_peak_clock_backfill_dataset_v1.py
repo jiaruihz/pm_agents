@@ -6,8 +6,8 @@ The current-YES/no-reheat family needs a point-in-time feature that answers:
 
 Historical paper snapshots mostly saved only forecast max, not the hourly
 forecast curve.  This script materializes a shared research dataset from
-Open-Meteo historical forecast payloads, using existing cached payloads by
-default and optionally fetching missing city ranges.
+Open-Meteo Single Runs fixed model runs by default, using a deterministic
+D-1 12:00 UTC run for each target city-date.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import shutil
 import sqlite3
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -40,6 +41,7 @@ from city_pools import FULL_CITY_CONFIGS  # type: ignore  # noqa: E402
 DB = ROOT / "runtime/weather.db"
 FEATURE_ROWS = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_full_replay_v8/feature_rows.csv"
 RUNTIME_CACHE_DIR = ROOT / "runtime/weather_edge_v1/market_data/cache/open_meteo_historical_forecast"
+SINGLE_RUN_CACHE_DIR = ROOT / "runtime/weather_edge_v1/market_data/cache/open_meteo_single_runs_forecast"
 LEGACY_CACHE_DIR = (
     ROOT
     / "docs/analysis/2026-06/generated/theta_current_yes_forecast_peak_clock_backfill_v3/open_meteo_historical_forecast"
@@ -52,6 +54,8 @@ FORECAST_MODELS = {
     "gfs": "gfs_seamless",
     "ecmwf": "ecmwf_ifs025",
 }
+SINGLE_RUN_API = "https://single-runs-api.open-meteo.com/v1/forecast"
+HISTORICAL_FORECAST_API = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 
 
 @dataclass(frozen=True)
@@ -64,6 +68,13 @@ class CacheHit:
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
 
 
 def forecast_values_hash(rows: list[tuple[str, float]]) -> str:
@@ -122,7 +133,7 @@ def fetch_forecast(
         "past_forecast_days": 1,
         "timezone": "auto",
     }
-    response = client.get("https://historical-forecast-api.open-meteo.com/v1/forecast", params=params)
+    response = client.get(HISTORICAL_FORECAST_API, params=params)
     if response.status_code != 200:
         return {"status_code": response.status_code, "body": response.text[:500], "params": params}, "error"
     payload = response.json()
@@ -165,7 +176,135 @@ def load_payload(
     return None, "missing_cache", None
 
 
-def derive_peak_rows(payload: dict[str, Any], *, city: str, model: str) -> list[dict[str, Any]]:
+def single_run_time_utc(target_date: str, *, run_day_offset: int, run_hour_utc: int) -> str:
+    target_day = datetime.strptime(target_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    run_day = target_day - timedelta(days=run_day_offset)
+    run_time = run_day.replace(hour=run_hour_utc, minute=0, second=0, microsecond=0)
+    return run_time.strftime("%Y-%m-%dT%H:%M")
+
+
+def single_run_cache_path(city: str, model: str, target_date: str, run_time_utc: str) -> Path:
+    run_key = run_time_utc.replace("-", "").replace(":", "").replace("T", "T") + "Z"
+    return SINGLE_RUN_CACHE_DIR / f"{model}_{city}_{target_date}_run_{run_key}.json"
+
+
+def fetch_single_run_forecast(
+    client: httpx.Client,
+    *,
+    city: str,
+    model: str,
+    target_date: str,
+    run_time_utc: str,
+    forecast_days: int,
+) -> tuple[dict[str, Any] | None, str]:
+    cfg = FULL_CITY_CONFIGS[city]
+    params = {
+        "latitude": cfg["lat"],
+        "longitude": cfg["lon"],
+        "hourly": "temperature_2m",
+        "temperature_unit": "fahrenheit",
+        "models": FORECAST_MODELS[model],
+        "run": run_time_utc,
+        "forecast_days": forecast_days,
+        "timezone": "auto",
+    }
+    response = client.get(SINGLE_RUN_API, params=params)
+    if response.status_code != 200:
+        return {
+            "status_code": response.status_code,
+            "body": response.text[:500],
+            "params": params,
+            "target_date": target_date,
+        }, "single_runs_error"
+    payload = response.json()
+    SINGLE_RUN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    single_run_cache_path(city, model, target_date, run_time_utc).write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    time.sleep(0.1)
+    return payload, "single_runs_fetched"
+
+
+def load_single_run_payload(
+    client: httpx.Client,
+    *,
+    city: str,
+    model: str,
+    target_date: str,
+    fetch_missing: bool,
+    run_day_offset: int,
+    run_hour_utc: int,
+    forecast_days: int,
+) -> tuple[dict[str, Any] | None, str, str | None, str]:
+    run_time_utc = single_run_time_utc(
+        target_date,
+        run_day_offset=run_day_offset,
+        run_hour_utc=run_hour_utc,
+    )
+    cache_path = single_run_cache_path(city, model, target_date, run_time_utc)
+    if cache_path.exists():
+        return (
+            json.loads(cache_path.read_text(encoding="utf-8")),
+            "single_runs_runtime_cache",
+            str(cache_path),
+            run_time_utc,
+        )
+    if fetch_missing:
+        payload, status = fetch_single_run_forecast(
+            client,
+            city=city,
+            model=model,
+            target_date=target_date,
+            run_time_utc=run_time_utc,
+            forecast_days=forecast_days,
+        )
+        return payload, status, str(cache_path) if status == "single_runs_fetched" else None, run_time_utc
+    return None, "single_runs_missing_cache", None, run_time_utc
+
+
+def build_single_run_task(
+    *,
+    city: str,
+    target_date: str,
+    model: str,
+    fetch_missing: bool,
+    run_day_offset: int,
+    run_hour_utc: int,
+    forecast_days: int,
+) -> dict[str, Any]:
+    with httpx.Client(timeout=60.0) as client:
+        payload, status, cache_path, run_time_utc = load_single_run_payload(
+            client,
+            city=city,
+            model=model,
+            target_date=target_date,
+            fetch_missing=fetch_missing,
+            run_day_offset=run_day_offset,
+            run_hour_utc=run_hour_utc,
+            forecast_days=forecast_days,
+        )
+    return {
+        "city": city,
+        "target_date": target_date,
+        "model": model,
+        "payload": payload,
+        "status": status,
+        "cache_path": cache_path,
+        "run_time_utc": run_time_utc,
+    }
+
+
+def derive_peak_rows(
+    payload: dict[str, Any],
+    *,
+    city: str,
+    model: str,
+    target_dates: set[str] | None = None,
+    api_source: str | None = None,
+    run_time_utc: str | None = None,
+    run_policy: str | None = None,
+) -> list[dict[str, Any]]:
     hourly = payload.get("hourly", {}) if isinstance(payload, dict) else {}
     times = hourly.get("time") or []
     temps = hourly.get("temperature_2m") or []
@@ -186,6 +325,8 @@ def derive_peak_rows(payload: dict[str, Any], *, city: str, model: str) -> list[
     offset = int(payload.get("utc_offset_seconds") or 0)
     rows: list[dict[str, Any]] = []
     for target_date, day_rows in sorted(by_date.items()):
+        if target_dates is not None and target_date not in target_dates:
+            continue
         if not day_rows:
             continue
         max_f = max(value for _, value in day_rows)
@@ -193,23 +334,28 @@ def derive_peak_rows(payload: dict[str, Any], *, city: str, model: str) -> list[
         local_dt = datetime.fromisoformat(peak_local_time)
         peak_utc = (local_dt - timedelta(seconds=offset)).replace(tzinfo=timezone.utc)
         max_native = max_f if cfg["unit"] == "F" else (max_f - 32.0) * 5.0 / 9.0
-        rows.append(
-            {
-                "city": city,
-                "target_date": target_date,
-                f"{model}_forecast_model_name": FORECAST_MODELS[model],
-                f"{model}_forecast_max_f": max_f,
-                f"{model}_forecast_max_native": max_native,
-                f"{model}_forecast_peak_hour_local": int(peak_local_time[11:13]),
-                f"{model}_forecast_peak_time_local": peak_local_time,
-                f"{model}_forecast_peak_hour_utc": int(peak_utc.hour),
-                f"{model}_forecast_peak_time_utc": peak_utc.isoformat().replace("+00:00", "Z"),
-                f"{model}_forecast_hourly_count": len(day_rows),
-                f"{model}_forecast_values_hash": forecast_values_hash(day_rows),
-                f"{model}_forecast_timezone": payload.get("timezone"),
-                f"{model}_forecast_utc_offset_seconds": offset,
-            }
-        )
+        row = {
+            "city": city,
+            "target_date": target_date,
+            f"{model}_forecast_model_name": FORECAST_MODELS[model],
+            f"{model}_forecast_max_f": max_f,
+            f"{model}_forecast_max_native": max_native,
+            f"{model}_forecast_peak_hour_local": int(peak_local_time[11:13]),
+            f"{model}_forecast_peak_time_local": peak_local_time,
+            f"{model}_forecast_peak_hour_utc": int(peak_utc.hour),
+            f"{model}_forecast_peak_time_utc": peak_utc.isoformat().replace("+00:00", "Z"),
+            f"{model}_forecast_hourly_count": len(day_rows),
+            f"{model}_forecast_values_hash": forecast_values_hash(day_rows),
+            f"{model}_forecast_timezone": payload.get("timezone"),
+            f"{model}_forecast_utc_offset_seconds": offset,
+        }
+        if api_source:
+            row[f"{model}_forecast_api_source"] = api_source
+        if run_time_utc:
+            row[f"{model}_forecast_run_time_utc"] = run_time_utc
+        if run_policy:
+            row[f"{model}_forecast_run_policy"] = run_policy
+        rows.append(row)
     return rows
 
 
@@ -247,43 +393,156 @@ def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any
     fetch_stats: dict[str, int] = {}
     errors: list[dict[str, Any]] = []
     with httpx.Client(timeout=60.0) as client:
-        for model in FORECAST_MODELS:
-            rows: list[dict[str, Any]] = []
-            for item in ranges.to_dict("records"):
-                city = str(item["city"])
-                if city not in FULL_CITY_CONFIGS:
-                    fetch_stats["missing_city_config"] = fetch_stats.get("missing_city_config", 0) + 1
-                    continue
-                payload, status, cache_path = load_payload(
-                    client,
+        if args.api_source == "single_runs":
+            records = universe[["city", "target_date"]].drop_duplicates().to_dict("records")
+            run_policy = f"d_minus_{args.run_day_offset}_{args.run_hour_utc:02d}z"
+            tasks: list[dict[str, str]] = []
+            for model in FORECAST_MODELS:
+                for item in records:
+                    city = str(item["city"])
+                    if city not in FULL_CITY_CONFIGS:
+                        fetch_stats["missing_city_config"] = fetch_stats.get("missing_city_config", 0) + 1
+                        continue
+                    tasks.append({"model": model, "city": city, "target_date": str(item["target_date"])})
+
+            rows_by_model: dict[str, list[dict[str, Any]]] = {model: [] for model in FORECAST_MODELS}
+
+            def handle_result(result: dict[str, Any]) -> None:
+                city = str(result["city"])
+                target_date = str(result["target_date"])
+                model = str(result["model"])
+                payload = result["payload"]
+                status = str(result["status"])
+                cache_path = result["cache_path"]
+                run_time_utc = str(result["run_time_utc"])
+                fetch_stats[status] = fetch_stats.get(status, 0) + 1
+                if payload is None or status == "single_runs_error":
+                    errors.append(
+                        {
+                            "city": city,
+                            "target_date": target_date,
+                            "model": model,
+                            "status": status,
+                            "cache_path": cache_path,
+                            "run_time_utc": run_time_utc,
+                            "payload": payload,
+                        }
+                    )
+                    return
+                derived = derive_peak_rows(
+                    payload,
                     city=city,
                     model=model,
-                    start_date=str(item["min"]),
-                    end_date=str(item["max"]),
-                    fetch_missing=args.fetch_missing,
-                    promote_cache=args.promote_cache,
+                    target_dates={target_date},
+                    api_source="open_meteo_single_runs",
+                    run_time_utc=run_time_utc,
+                    run_policy=run_policy,
                 )
-                fetch_stats[status] = fetch_stats.get(status, 0) + 1
-                if payload is None or status == "error":
-                    errors.append({"city": city, "model": model, "status": status, "cache_path": cache_path, "payload": payload})
-                    continue
-                derived = derive_peak_rows(payload, city=city, model=model)
+                if not derived:
+                    fetch_stats["single_runs_no_target_day_hourly"] = (
+                        fetch_stats.get("single_runs_no_target_day_hourly", 0) + 1
+                    )
+                    errors.append(
+                        {
+                            "city": city,
+                            "target_date": target_date,
+                            "model": model,
+                            "status": "single_runs_no_target_day_hourly",
+                            "cache_path": cache_path,
+                            "run_time_utc": run_time_utc,
+                        }
+                    )
+                    return
                 for row in derived:
                     row[f"{model}_forecast_cache_status"] = status
                     row[f"{model}_forecast_cache_path"] = cache_path
-                rows.extend(derived)
-            if rows:
-                frame = pd.DataFrame(rows)
-                keep = ["city", "target_date"] + [c for c in frame.columns if c.startswith(f"{model}_")]
-                model_frames[model] = frame[keep].drop_duplicates(["city", "target_date"])
+                rows_by_model[model].extend(derived)
+
+            if args.workers <= 1:
+                for task in tasks:
+                    handle_result(
+                        build_single_run_task(
+                            city=task["city"],
+                            target_date=task["target_date"],
+                            model=task["model"],
+                            fetch_missing=args.fetch_missing,
+                            run_day_offset=args.run_day_offset,
+                            run_hour_utc=args.run_hour_utc,
+                            forecast_days=args.forecast_days,
+                        )
+                    )
             else:
-                model_frames[model] = pd.DataFrame(columns=["city", "target_date"])
+                with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                    futures = [
+                        pool.submit(
+                            build_single_run_task,
+                            city=task["city"],
+                            target_date=task["target_date"],
+                            model=task["model"],
+                            fetch_missing=args.fetch_missing,
+                            run_day_offset=args.run_day_offset,
+                            run_hour_utc=args.run_hour_utc,
+                            forecast_days=args.forecast_days,
+                        )
+                        for task in tasks
+                    ]
+                    for future in as_completed(futures):
+                        try:
+                            handle_result(future.result())
+                        except Exception as exc:
+                            fetch_stats["single_runs_task_exception"] = fetch_stats.get("single_runs_task_exception", 0) + 1
+                            errors.append({"status": "single_runs_task_exception", "error": repr(exc)})
+
+            for model, rows in rows_by_model.items():
+                if rows:
+                    frame = pd.DataFrame(rows).sort_values(["city", "target_date"])
+                    keep = ["city", "target_date"] + [c for c in frame.columns if c.startswith(f"{model}_")]
+                    model_frames[model] = frame[keep].drop_duplicates(["city", "target_date"])
+                else:
+                    model_frames[model] = pd.DataFrame(columns=["city", "target_date"])
+        else:
+            for model in FORECAST_MODELS:
+                rows: list[dict[str, Any]] = []
+                for item in ranges.to_dict("records"):
+                    city = str(item["city"])
+                    if city not in FULL_CITY_CONFIGS:
+                        fetch_stats["missing_city_config"] = fetch_stats.get("missing_city_config", 0) + 1
+                        continue
+                    payload, status, cache_path = load_payload(
+                        client,
+                        city=city,
+                        model=model,
+                        start_date=str(item["min"]),
+                        end_date=str(item["max"]),
+                        fetch_missing=args.fetch_missing,
+                        promote_cache=args.promote_cache,
+                    )
+                    fetch_stats[status] = fetch_stats.get(status, 0) + 1
+                    if payload is None or status == "error":
+                        errors.append(
+                            {"city": city, "model": model, "status": status, "cache_path": cache_path, "payload": payload}
+                        )
+                        continue
+                    derived = derive_peak_rows(payload, city=city, model=model, api_source="open_meteo_historical_forecast")
+                    for row in derived:
+                        row[f"{model}_forecast_cache_status"] = status
+                        row[f"{model}_forecast_cache_path"] = cache_path
+                    rows.extend(derived)
+                if rows:
+                    frame = pd.DataFrame(rows)
+                    keep = ["city", "target_date"] + [c for c in frame.columns if c.startswith(f"{model}_")]
+                    model_frames[model] = frame[keep].drop_duplicates(["city", "target_date"])
+                else:
+                    model_frames[model] = pd.DataFrame(columns=["city", "target_date"])
 
     out = universe.copy()
     for model, frame in model_frames.items():
         out = out.merge(frame, on=["city", "target_date"], how="left")
 
     for model in FORECAST_MODELS:
+        peak_col = f"{model}_forecast_peak_hour_local"
+        if peak_col not in out.columns:
+            out[peak_col] = pd.NA
         out[f"{model}_forecast_peak_present"] = out[f"{model}_forecast_peak_hour_local"].notna()
 
     both = out[["gfs_forecast_peak_hour_local", "ecmwf_forecast_peak_hour_local"]].notna().all(axis=1)
@@ -300,6 +559,11 @@ def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any
         "generated_at_utc": now_utc(),
         "script": str(Path(__file__).relative_to(ROOT)),
         "universe": args.universe,
+        "api_source": args.api_source,
+        "run_day_offset": args.run_day_offset if args.api_source == "single_runs" else None,
+        "run_hour_utc": args.run_hour_utc if args.api_source == "single_runs" else None,
+        "forecast_days": args.forecast_days if args.api_source == "single_runs" else None,
+        "workers": args.workers if args.api_source == "single_runs" else None,
         "start_date": args.start_date,
         "end_date": args.end_date,
         "fetch_missing": bool(args.fetch_missing),
@@ -322,9 +586,9 @@ def build_dataset(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, Any
         },
         "fetch_stats": fetch_stats,
         "errors": errors[:20],
-        "output_csv": str(OUT_CSV.relative_to(ROOT)),
-        "output_json": str(OUT_JSON.relative_to(ROOT)),
-        "output_md": str(OUT_MD.relative_to(ROOT)),
+        "output_csv": display_path(Path(args.out_csv)),
+        "output_json": display_path(Path(args.out_json)),
+        "output_md": display_path(Path(args.out_md)),
     }
     return out, summary
 
@@ -340,13 +604,20 @@ def pct(value: Any) -> str:
         return "NA"
 
 
-def write_report(summary: dict[str, Any]) -> None:
+def write_report(summary: dict[str, Any], out_md: Path) -> None:
     cov = summary["coverage"]
+    api_line = (
+        f"Open-Meteo Single Runs fixed run: D-{summary['run_day_offset']} "
+        f"{int(summary['run_hour_utc']):02d}:00 UTC"
+        if summary.get("api_source") == "single_runs"
+        else "Open-Meteo historical forecast legacy mode"
+    )
     lines = [
         "# Forecast Peak Clock Backfill Dataset v1",
         "",
         "Status: research_data_layer / not_live_ready_by_itself",
         f"Generated: {summary['generated_at_utc']}",
+        f"Forecast source: {api_line}",
         "",
         "Target metric: `forecast_peak_clock_backfill_v1` = one reusable city-date table with GFS/ECMWF expected daily high time, expected high temperature, hourly-vector hash, and timezone metadata.",
         "",
@@ -356,7 +627,9 @@ def write_report(summary: dict[str, Any]) -> None:
         "",
         "它能解决模型层最大的口径缺口：以后判断“现在是不是接近当天预报最高温出现时间”，不必写死本地 13-15 点，也不必每个策略脚本各自去抓一次历史预报。",
         "",
-        "但它仍然是 historical forecast backfill，不等于生产当时 snapshot 已经原生落盘；所以它能支持研究和 shadow telemetry，不能单独把策略推到 live 放大。",
+        "默认口径已改成 Open-Meteo Single Runs 的固定 D-1 12:00 UTC model run；这比 stitched historical forecast 更接近 PIT，因为每个 city-date 都绑定到目标日前已经发布的完整模型 run。",
+        "",
+        "但它仍然是研究 backfill，不等于生产当时 snapshot 已经原生落盘；所以它能支持研究和 shadow telemetry，不能单独把策略推到 live 放大。",
         "",
         "## Coverage",
         "",
@@ -370,6 +643,9 @@ def write_report(summary: dict[str, Any]) -> None:
         "",
         "## Cache / Fetch",
         "",
+        f"- api_source: `{summary['api_source']}`",
+        f"- run_day_offset: `{summary['run_day_offset']}`",
+        f"- run_hour_utc: `{summary['run_hour_utc']}`",
         f"- fetch_missing: `{summary['fetch_missing']}`",
         f"- promote_cache: `{summary['promote_cache']}`",
         f"- fetch_stats: `{summary['fetch_stats']}`",
@@ -389,8 +665,8 @@ def write_report(summary: dict[str, Any]) -> None:
         "",
         "三道门：significance=NA, baseline=NA, forward=NA, conclusion=`research_data_layer`。这张表只是补数据口径，不直接给 live 动作。",
     ]
-    OUT_MD.parent.mkdir(parents=True, exist_ok=True)
-    OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    out_md.parent.mkdir(parents=True, exist_ok=True)
+    out_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> None:
@@ -400,14 +676,25 @@ def main() -> None:
     parser.add_argument("--end-date")
     parser.add_argument("--fetch-missing", action="store_true")
     parser.add_argument("--promote-cache", action="store_true")
+    parser.add_argument("--api-source", choices=["single_runs", "historical_forecast"], default="single_runs")
+    parser.add_argument("--run-day-offset", type=int, default=1)
+    parser.add_argument("--run-hour-utc", type=int, default=12)
+    parser.add_argument("--forecast-days", type=int, default=3)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--out-csv", default=str(OUT_CSV))
+    parser.add_argument("--out-json", default=str(OUT_JSON))
+    parser.add_argument("--out-md", default=str(OUT_MD))
     args = parser.parse_args()
 
     out, summary = build_dataset(args)
-    OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    out.to_csv(OUT_CSV, index=False)
-    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    OUT_JSON.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    write_report(summary)
+    out_csv = Path(args.out_csv)
+    out_json = Path(args.out_json)
+    out_md = Path(args.out_md)
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_csv, index=False)
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_report(summary, out_md)
     print(json.dumps(summary, indent=2, sort_keys=True))
 
 
