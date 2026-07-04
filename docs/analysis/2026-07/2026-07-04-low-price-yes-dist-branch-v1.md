@@ -6,11 +6,11 @@ Scope: only HeadA `forecast_tail_low_price_yes`. This is not a TP, METAR, or tma
 
 ## Verdict
 
-`dist<0` is a real drag and is semantically outside the HeadA thesis. The implemented selector change is **remove `dist<0` only**, and keep logging `dist=0` separately. Removing `dist<=0` is cleaner as a hot-tail definition, but it is one notch more aggressive because exact-boundary rows are tiny and noisy.
+`dist<0` is a real drag and is semantically outside the HeadA thesis. The implemented selector change is now **remove `dist<=0`**, with separate blockers for `<0` and `=0` so forward telemetry can still audit them independently. `dist=0` is tiny, but 12/12 historical rows lost and it is still not above forecast.
 
 Contract verdict for live action remains `shadow_candidate`: this was deployed as a tiny-live thesis-consistency removal, not as a size-up or confirmed alpha. The local `run_stack` refresh failed at a separate `fact_signal_candidates.candidate_id` uniqueness issue, so I am not calling this `confirmed` in this report.
 
-Implementation note: `scripts/ops/low_price_yes_lottery_tiny_live.py` now blocks rows with `forecast_to_bracket_low_native < 0` as `dist_lt0_cold_or_inside_forecast_tail_v1`. Blocked rows still append to `shadow_decisions.jsonl` and `blocked_candidates.jsonl` with bracket-distance fields for forward review.
+Implementation note: `scripts/ops/low_price_yes_lottery_tiny_live.py` now blocks rows with `forecast_to_bracket_low_native <= 0`. `<0` rows use `dist_lt0_cold_or_inside_forecast_tail_v1`; exact-boundary rows use `dist_eq0_forecast_boundary_tail_v1`. Blocked rows still append to `shadow_decisions.jsonl` and `blocked_candidates.jsonl` with bracket-distance fields for forward review.
 
 Plain English: `dist<0` means the ticket's lower bound is below the forecast max. Buying YES there is not "weather gets hotter than forecast"; it is "forecast was too high or the market underpriced a cooler/inside bracket." That may occasionally win, but it is a different bet and it has hurt this sleeve.
 
@@ -19,7 +19,7 @@ Plain English: `dist<0` means the ticket's lower bound is below the forecast max
 - Input denominator: `docs/analysis/2026-07/generated/low_price_yes_integrated_tail_v2/enriched_rows.csv`.
 - Rows: 476; dates 2026-05-06..2026-06-30; cities 48.
 - Canonical join: `runtime/weather.db:fact_signal_candidates` for `unit`, `forecast_max_f`, `yes_spread`, `yes_depth_ask_5c`.
-- DB fact build available in table: 2026-07-03T23:46:55.192828+00:00.
+- DB fact build available in table: 2026-07-04T00:07:54.039821+00:00.
 - Fee model: official Weather taker fee `shares * 0.05 * price * (1-price)`, fixed 8 shares, hold to settlement.
 - Refresh caveat: `scripts/ops/sync_weather_remote.sh` succeeded, but `run_stack.sh` failed on a separate `fact_signal_candidates.candidate_id` uniqueness error after printing a 45,053-row candidate summary. This report uses the last available canonical table built at the timestamp above.
 
@@ -127,12 +127,13 @@ Exact-boundary `dist=0` rows:
 The live selector patch is:
 
 ```text
-if forecast_max_f is available and dist < 0:
-    block as cold_or_inside_forecast_tail_v1
+if forecast_max_f is available and dist <= 0:
+    block as dist_lt0_cold_or_inside_forecast_tail_v1
+    or dist_eq0_forecast_boundary_tail_v1
 else:
     keep existing selector behavior
 ```
 
-Reason: this is a thesis-consistency removal, not a tuned ROI threshold. It removes below-forecast tickets while preserving exact-boundary rows until forward telemetry says whether `dist=0` should be blocked too.
+Reason: this is a thesis-consistency removal, not a tuned ROI threshold. It removes below-forecast tickets and exact forecast-boundary tickets while keeping the two blocker labels separate for forward review.
 
 Do not size up from this. The same audit still shows the larger uncertainty is book-state/stale-quote feasibility, not just `dist`.

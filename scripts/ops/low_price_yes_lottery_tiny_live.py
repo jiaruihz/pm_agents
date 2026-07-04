@@ -907,22 +907,29 @@ def validate_candidate(
             "min_decision_hours_to_settle": args.min_decision_hours_to_settle,
             "dedupe": "one_live_order_per_city_date_bracket_condition_signal_id",
             "daily_cap": None,
-            "block_dist_lt0_v1": not bool(args.allow_dist_lt0),
+            "block_dist_le0_v1": not bool(args.allow_dist_le0 or args.allow_dist_lt0),
         },
     }
 
+    allow_dist_le0 = bool(args.allow_dist_le0 or args.allow_dist_lt0)
     forecast_to_bracket_low_native = to_float(base.get("forecast_to_bracket_low_native"), math.nan)
     if (
-        not bool(args.allow_dist_lt0)
+        not allow_dist_le0
         and bool(base.get("bracket_distance_available"))
         and math.isfinite(forecast_to_bracket_low_native)
-        and forecast_to_bracket_low_native < 0.0
+        and forecast_to_bracket_low_native <= 0.0
     ):
+        if forecast_to_bracket_low_native < 0.0:
+            blocker = "dist_lt0_cold_or_inside_forecast_tail_v1"
+            reason = "bracket_low_below_decision_forecast_max_not_hot_tail"
+        else:
+            blocker = "dist_eq0_forecast_boundary_tail_v1"
+            reason = "bracket_low_equals_decision_forecast_max_boundary_not_hot_tail"
         return {
             **base,
             "decision_status": "blocked",
-            "blocker": "dist_lt0_cold_or_inside_forecast_tail_v1",
-            "dist_lt0_block_reason": "bracket_low_below_decision_forecast_max_not_hot_tail",
+            "blocker": blocker,
+            "dist_le0_block_reason": reason,
         }
 
     if signal_id in submitted_signal_ids:
@@ -1451,8 +1458,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_candidates_per_run": int(args.max_candidates_per_run),
             "allow_settled": bool(args.allow_settled),
             "cancel_after": False,
-            "allow_dist_lt0": bool(args.allow_dist_lt0),
-            "block_dist_lt0_v1": not bool(args.allow_dist_lt0),
+            "allow_dist_lt0_deprecated": bool(args.allow_dist_lt0),
+            "allow_dist_le0": bool(args.allow_dist_le0 or args.allow_dist_lt0),
+            "block_dist_le0_v1": not bool(args.allow_dist_le0 or args.allow_dist_lt0),
         },
         "files": {
             "summary": rel(SUMMARY_OUT),
@@ -1491,7 +1499,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "bias_p90_asof": row.get("bias_p90_asof"),
                 "hot_tail_pct_asof": row.get("hot_tail_pct_asof"),
                 "forecast_to_bracket_low_native": row.get("forecast_to_bracket_low_native"),
-                "dist_lt0_block_reason": row.get("dist_lt0_block_reason"),
+                "dist_le0_block_reason": row.get("dist_le0_block_reason"),
             }
             for row in planned[:20]
         ],
@@ -1537,7 +1545,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--book-failover-on-timeout", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--token-resolution-timeout-sec", type=float, default=15.0)
     parser.add_argument("--disable-live-token-resolution", action="store_true")
-    parser.add_argument("--allow-dist-lt0", action="store_true", help="Debug only; preserve old selector behavior for below-forecast tickets.")
+    parser.add_argument("--allow-dist-le0", action="store_true", help="Debug only; preserve old selector behavior for forecast-boundary/below-forecast tickets.")
+    parser.add_argument("--allow-dist-lt0", action="store_true", help="Deprecated debug alias for --allow-dist-le0.")
     parser.add_argument("--executor-timeout-sec", type=float, default=180.0)
     parser.add_argument("--interval-seconds", type=float, default=300.0)
     parser.add_argument("--allow-settled", action="store_true", help="Debug only; never use for live.")

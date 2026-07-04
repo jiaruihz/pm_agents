@@ -2,7 +2,7 @@
   "date_max": "2026-06-30",
   "date_min": "2026-05-06",
   "db": "runtime/weather.db",
-  "fact_built_at_utc_max": "2026-07-03T23:46:55.192828+00:00",
+  "fact_built_at_utc_max": "2026-07-04T00:07:54.039821+00:00",
   "fee_model": {
     "formula": "shares * fee_rate * price * (1 - price)",
     "shares": 8.0,
