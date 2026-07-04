@@ -123,16 +123,18 @@ def mtm_at_bid(entry_ask: float, latest_bid: float) -> dict[str, Any]:
 
 
 def latest_quote(snapshot_file: str | None, city: str, target_date: str, bracket: str) -> dict[str, Any] | None:
-    files: list[Path] = []
-    if snapshot_file:
-        files.append(SNAPSHOT_DIR / snapshot_file)
-    files.extend(sorted(SNAPSHOT_DIR.glob("snapshot_*.json"), reverse=True)[:30])
-    seen: set[Path] = set()
+    files: list[Path] = [SNAPSHOT_DIR / snapshot_file] if snapshot_file else []
+    if not files:
+        files.extend(sorted(SNAPSHOT_DIR.glob("snapshot_*.json"), reverse=True)[:30])
     for path in files:
-        if path in seen or not path.exists():
+        if not path.exists():
             continue
-        seen.add(path)
         payload = json.loads(path.read_text(encoding="utf-8"))
+        city_date_records = [
+            rec
+            for rec in payload.get("records", [])
+            if str(rec.get("city")) == city and str(rec.get("target_date")) == target_date
+        ]
         for rec in payload.get("records", []):
             if (
                 str(rec.get("city")) == city
@@ -151,6 +153,41 @@ def latest_quote(snapshot_file: str | None, city: str, target_date: str, bracket
                     "yes_book_status": rec.get("yes_book_status"),
                     "city_local_date_at_snapshot": rec.get("city_local_date_at_snapshot"),
                 }
+        if city_date_records:
+            winner = next(
+                (
+                    rec
+                    for rec in city_date_records
+                    if as_float(rec.get("yes_best_bid")) >= 0.99 or as_float(rec.get("market_yes_price")) >= 0.99
+                ),
+                None,
+            )
+            if winner is not None:
+                return {
+                    "snapshot_file": path.name,
+                    "snapshot_ts_utc": payload.get("ts_utc"),
+                    "question": None,
+                    "yes_best_bid": 0.0,
+                    "yes_best_ask": None,
+                    "yes_bid_size": None,
+                    "yes_ask_size": None,
+                    "market_yes_price": 0.0,
+                    "yes_book_status": "inferred_loser_from_snapshot_winner",
+                    "city_local_date_at_snapshot": winner.get("city_local_date_at_snapshot"),
+                    "inferred_winner_bracket": winner.get("bracket"),
+                }
+            return {
+                "snapshot_file": path.name,
+                "snapshot_ts_utc": payload.get("ts_utc"),
+                "question": None,
+                "yes_best_bid": None,
+                "yes_best_ask": None,
+                "yes_bid_size": None,
+                "yes_ask_size": None,
+                "market_yes_price": None,
+                "yes_book_status": "missing_in_latest_city_snapshot",
+                "city_local_date_at_snapshot": city_date_records[0].get("city_local_date_at_snapshot"),
+            }
     return None
 
 
@@ -358,13 +395,13 @@ def build_review(target_date_utc: str) -> dict[str, Any]:
         "branch_first_entry_tokens": branch_rows,
         "tokens": tokens,
         "verdict": {
-            "today_shadow_effect": "positive_mtm_not_settled",
+            "today_shadow_effect": "mixed_mtm_not_settled",
             "promotion_status": "shadow_candidate_keep_collecting",
             "live_action": "none",
             "main_read": (
-                "Forward scarcity broke today: Head B saw real fresh states and two tokens pumped hard. "
-                "The sample is still one target date and includes one failed false-fade and one weak second-step chase, "
-                "so it is evidence to keep shadow running, not evidence to live."
+                "Forward scarcity broke today, but the broader B4 basket faded after overshoots. "
+                "False-fade ended slightly positive because Helsinki 20 offset Helsinki 19 and Lucknow losses. "
+                "This is evidence to keep shadow running, not evidence to live."
             ),
         },
     }
@@ -398,8 +435,9 @@ def write_report(result: dict[str, Any], report_path: Path, json_path: Path) -> 
             "`shadow_candidate_keep_collecting`; no live change."
         ),
         "",
-        "Today is useful because the state finally appeared again after the prior 6/21+ trigger starvation, "
-        "but this is still intraday MTM / open-weather evidence, not settled ROI.",
+        "Today is useful because the state finally appeared again after the prior 6/21+ trigger starvation. "
+        "The result is mixed: false-fade is roughly flat/slightly positive, while the broader B4 basket is negative. "
+        "This is still intraday MTM / open-weather evidence, not settled ROI.",
         "",
         "## Data Snapshot",
         "",
@@ -465,10 +503,10 @@ def write_report(result: dict[str, Any], report_path: Path, json_path: Path) -> 
             "",
             "## Read",
             "",
-            "- Positive: Amsterdam 22 and Helsinki 19 both repriced sharply after the trigger; this is exactly the forward evidence Head B lacked.",
-            "- Negative: Lucknow 37 was a false reheat and collapsed to near zero; Helsinki 20 shows second-step chasing can be weak even after the first one-step reversal works.",
+            "- Positive: the state frequency problem eased, and Helsinki 20 ended near binary after the trigger.",
+            "- Negative: Amsterdam 22 and Helsinki 19 were overshot by the final-looking market state, while Lucknow 37 was a false reheat and collapsed to near zero.",
             "- Boundary: the latest cycle has no active trigger; the useful signal was the transient conflict window, not a persistent all-day state.",
-            "- Action: keep zero-notional shadow running; do not live-size from one day. Next review should separate first-step vs second-step re-entry and false-fade-only rows where bracket-aware B4 is false.",
+            "- Action: keep zero-notional shadow running; do not live-size from one day. Next review should separate overshoot risk, first-step vs second-step re-entry, and false-fade-only rows where bracket-aware B4 is false.",
             "",
         ]
     )
