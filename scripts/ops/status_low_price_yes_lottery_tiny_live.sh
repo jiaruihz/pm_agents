@@ -86,11 +86,31 @@ if [[ -f "$LIVE_FILE" ]]; then
 import collections, json, sys
 rows = [json.loads(line) for line in open(sys.argv[1]) if line.strip()]
 statuses = collections.Counter(str(row.get("status", "")) for row in rows)
+sizing = collections.Counter(str(row.get("sizing_mode") or row.get("live_sizing_policy") or "unknown") for row in rows)
 created = [str(row.get("created_at_utc", "")) for row in rows if row.get("created_at_utc")]
 print(f"live_rows={len(rows)}")
 print(f"live_first_created={min(created) if created else ''}")
 print(f"live_last_created={max(created) if created else ''}")
 print(f"live_status_counts={dict(statuses)}")
+print(f"live_sizing_counts={dict(sizing)}")
+print("recent_live_orders=")
+for row in rows[-5:]:
+    response = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+    place = response.get("place") if isinstance(response.get("place"), dict) else {}
+    order_id = row.get("order_id") or place.get("orderID") or place.get("order_id") or ""
+    order_id_short = str(order_id)[:10] if order_id else ""
+    print(
+        "  "
+        f"{row.get('created_at_utc','')} "
+        f"{row.get('target_date','')} {row.get('city','')} {row.get('bracket','')} "
+        f"status={row.get('status','')} "
+        f"sizing={row.get('sizing_mode') or row.get('live_sizing_policy') or 'unknown'} "
+        f"price={row.get('limit_price') or row.get('posted_price') or row.get('price')} "
+        f"shares={row.get('fixed_order_shares') or row.get('size')} "
+        f"notional={row.get('notional') or row.get('posted_notional')} "
+        f"clob_status={place.get('status','')} "
+        f"order={order_id_short}"
+    )
 PY
 else
   echo "live=missing"
