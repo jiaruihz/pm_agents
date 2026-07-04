@@ -19,7 +19,9 @@ Last updated: 2026-06-08（live 实例现状见下方 2026-06-19 更正横幅）
 > - **regime-routed NO tiny-live 已恢复为微仓 forward probe（2026-06-26）**：2026-06-25 NYC
 >   82-83 NO 重复下单事故后，runner 已改为默认消费 `weather_data_feed` observation cache，
 >   并要求 feature parity、city/date/token 去重、真实 target-date daily cap、snapshot/cache freshness。
->   它仍是 tiny-live 前向取证，不是 confirmed edge。
+>   2026-07-04 guard fix 后，false-fade / cheap-stale current-NO route legs 只作 shadow-only
+>   diagnostics，live-executable legs 只保留 fresh runway current-NO 与 capped d2-NO。它仍是
+>   tiny-live 前向取证，不是 confirmed edge。
 > - 这些是 **tiny-live 前向取证**，不是已证实策略；评估按执行质量/滑点，不按早期 PnL。
 >
 > 下方 mid_price 章节保留作**历史血缘与部署机制参考**。完整 current-YES live 规格（城市池/gate/参数）
