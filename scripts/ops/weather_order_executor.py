@@ -644,6 +644,35 @@ def _plans_require_live_place(plan_path: Path) -> bool:
     return False
 
 
+def _plans_require_live_cancel(plan_path: Path) -> bool:
+    if not plan_path.exists():
+        return False
+    for line in plan_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if (
+            row.get("record_type") == "weather_edge_trade_plan"
+            and bool(row.get("live_enabled", False))
+            and str(row.get("cancel_before_order_id") or "").strip()
+        ):
+            return True
+    return False
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be numeric, got {raw!r}") from exc
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Execute weather_edge_v1 trade plans to paper and optionally live CLOB.")
     parser.add_argument("--plans", default=str(DEFAULT_RUNTIME_ROOT / "plans" / "trade_plans.jsonl"))
@@ -672,12 +701,13 @@ def main() -> int:
         pass
     args = _parser().parse_args()
     plan_path = Path(args.plans)
+    plans_require_live_cancel = _plans_require_live_cancel(plan_path)
     live_place_fn = (
         _build_live_place_fn(cancel_after=bool(args.cancel_after), default_maker_only=not bool(args.allow_taker))
         if args.live and _plans_require_live_place(plan_path)
         else None
     )
-    live_cancel_fn = _build_lazy_live_cancel_fn() if args.live and args.cancel_expired else None
+    live_cancel_fn = _build_lazy_live_cancel_fn() if args.live and (args.cancel_expired or plans_require_live_cancel) else None
     live_out = Path(args.live_out)
     result = execute_trade_plans(
         plan_path=plan_path,
@@ -689,6 +719,8 @@ def main() -> int:
             cancel_after=bool(args.cancel_after),
             cancel_expired=bool(args.cancel_expired),
             cancel_log_path=Path(args.cancel_log) if args.cancel_log else cancel_log_path_for_live_out(live_out),
+            max_live_order_notional_usd=_env_float("WEATHER_EXECUTOR_MAX_LIVE_ORDER_NOTIONAL_USD", 25.0),
+            max_live_batch_notional_usd=_env_float("WEATHER_EXECUTOR_MAX_LIVE_BATCH_NOTIONAL_USD", 100.0),
         ),
         live_place_fn=live_place_fn,
         live_cancel_fn=live_cancel_fn,

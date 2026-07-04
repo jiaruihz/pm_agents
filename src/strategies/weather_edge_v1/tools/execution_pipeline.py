@@ -493,6 +493,8 @@ class ExecutorConfig:
     cancel_after: bool = False
     cancel_expired: bool = False
     cancel_log_path: Optional[Path] = None
+    max_live_order_notional_usd: float = 0.0
+    max_live_batch_notional_usd: float = 0.0
 
 
 def _execution_id(plan: Dict[str, Any], venue: str) -> str:
@@ -832,6 +834,16 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "edge_raw_side": to_float(plan.get("edge_raw_side"), 0.0),
         "shadow_decision": safe_str(plan.get("shadow_decision")),
         "shadow_reason": safe_str(plan.get("shadow_reason")),
+        "allow_duplicate_signal_id": bool(plan.get("allow_duplicate_signal_id", False)),
+        "execution_action": safe_str(plan.get("execution_action")),
+        "cancel_before_order_id": safe_str(plan.get("cancel_before_order_id")),
+        "source_order_id": safe_str(plan.get("source_order_id")),
+        "source_execution_id": safe_str(plan.get("source_execution_id")),
+        "source_plan_id": safe_str(plan.get("source_plan_id")),
+        "source_posted_price": to_float(plan.get("source_posted_price"), 0.0),
+        "source_filled_shares": to_float(plan.get("source_filled_shares"), 0.0),
+        "source_remaining_shares": to_float(plan.get("source_remaining_shares"), 0.0),
+        "source_order_age_min": to_float(plan.get("source_order_age_min"), 0.0),
         "snapshot_ts_utc": safe_str(plan.get("snapshot_ts_utc")),
         "source_snapshot_path": safe_str(plan.get("source_snapshot_path")),
         "decision_local_time": safe_str(plan.get("decision_local_time")),
@@ -849,6 +861,29 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "status": status,
         "exchange_response": response,
         **base,
+    }
+
+
+def live_plan_notional_usd(plan: Dict[str, Any]) -> float:
+    limit_price = to_float(plan.get("limit_price"), 0.0)
+    size = to_float(plan.get("size"), 0.0)
+    return max(
+        0.0,
+        to_float(plan.get("notional"), 0.0),
+        to_float(plan.get("order_notional_cap"), 0.0),
+        limit_price * size,
+    )
+
+
+def live_notional_guard_response(plan: Dict[str, Any], *, reason: str, notional: float, ceiling: float) -> Dict[str, Any]:
+    return {
+        "error_classification": "executor_notional_ceiling",
+        "error_reason": reason,
+        "error": f"{reason}: plan_notional={notional:.6f} ceiling={ceiling:.6f}",
+        "requested_price": to_float(plan.get("limit_price"), 0.0),
+        "posted_price": 0.0,
+        "quote_status": "rejected",
+        "quote_reason": reason,
     }
 
 
@@ -901,8 +936,11 @@ def execute_trade_plans(
     live_skipped = 0
     live_skipped_existing_signal = 0
     live_errors = 0
+    live_guard_blocks = 0
+    live_result = {"written": 0, "skipped_existing": 0}
     existing_live_signal_ids = submitted_live_signal_ids(live_out)
     batch_live_signal_ids: set[str] = set()
+    batch_live_notional = 0.0
     if config.live and not config.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
     if config.live and live_place_fn is None and any(bool(plan.get("live_enabled", False)) for plan in plans):
@@ -915,15 +953,75 @@ def execute_trade_plans(
             live_skipped += 1
             continue
         signal_id = safe_str(plan.get("signal_id"))
-        if signal_id and (signal_id in existing_live_signal_ids or signal_id in batch_live_signal_ids):
+        allow_duplicate_signal_id = bool(plan.get("allow_duplicate_signal_id", False))
+        if (
+            signal_id
+            and not allow_duplicate_signal_id
+            and (signal_id in existing_live_signal_ids or signal_id in batch_live_signal_ids)
+        ):
             live_skipped_existing_signal += 1
+            continue
+        plan_notional = live_plan_notional_usd(plan)
+        max_order_notional = max(0.0, float(config.max_live_order_notional_usd))
+        if max_order_notional > 0 and plan_notional > max_order_notional + 1e-9:
+            live_guard_blocks += 1
+            record = build_live_order_record(
+                plan,
+                live_notional_guard_response(
+                    plan,
+                    reason="max_live_order_notional_exceeded",
+                    notional=plan_notional,
+                    ceiling=max_order_notional,
+                ),
+                status="blocked",
+            )
+            live_orders.append(record)
+            result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
+            live_result["written"] += result["written"]
+            live_result["skipped_existing"] += result["skipped_existing"]
+            continue
+        max_batch_notional = max(0.0, float(config.max_live_batch_notional_usd))
+        if max_batch_notional > 0 and batch_live_notional + plan_notional > max_batch_notional + 1e-9:
+            live_guard_blocks += 1
+            record = build_live_order_record(
+                plan,
+                live_notional_guard_response(
+                    plan,
+                    reason="max_live_batch_notional_exceeded",
+                    notional=batch_live_notional + plan_notional,
+                    ceiling=max_batch_notional,
+                ),
+                status="blocked",
+            )
+            live_orders.append(record)
+            result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
+            live_result["written"] += result["written"]
+            live_result["skipped_existing"] += result["skipped_existing"]
             continue
         try:
             assert live_place_fn is not None
+            cancel_before_order_id = safe_str(plan.get("cancel_before_order_id"))
+            pre_place_cancel_response: Optional[Dict[str, Any]] = None
+            if cancel_before_order_id:
+                if live_cancel_fn is None:
+                    raise RuntimeError("cancel_before_order_id requested but no live_cancel_fn was provided")
+                pre_place_cancel_response = live_cancel_fn(cancel_before_order_id)
             response = live_place_fn(plan)
-            live_orders.append(build_live_order_record(plan, response, status="submitted"))
+            if pre_place_cancel_response is not None:
+                response = {
+                    **response,
+                    "pre_place_cancel_order_id": cancel_before_order_id,
+                    "pre_place_cancel_response": pre_place_cancel_response,
+                    "pre_place_cancel_status": "cancel_submitted",
+                }
+            record = build_live_order_record(plan, response, status="submitted")
+            live_orders.append(record)
+            result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
+            live_result["written"] += result["written"]
+            live_result["skipped_existing"] += result["skipped_existing"]
             if signal_id:
                 batch_live_signal_ids.add(signal_id)
+            batch_live_notional += plan_notional
         except Exception as exc:
             live_errors += 1
             response = getattr(exc, "weather_execution_response", None)
@@ -933,18 +1031,15 @@ def execute_trade_plans(
                 **response,
                 "error": f"{type(exc).__name__}: {exc}",
             }
-            live_orders.append(
-                build_live_order_record(
-                    plan,
-                    response,
-                    status="error",
-                )
+            record = build_live_order_record(
+                plan,
+                response,
+                status="error",
             )
-
-    live_result = append_jsonl_dedup(live_out, live_orders, key_field="execution_id") if live_orders else {
-        "written": 0,
-        "skipped_existing": 0,
-    }
+            live_orders.append(record)
+            result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
+            live_result["written"] += result["written"]
+            live_result["skipped_existing"] += result["skipped_existing"]
     return {
         "plans_read": len(plans),
         "paper_orders": len(paper_orders),
@@ -956,6 +1051,7 @@ def execute_trade_plans(
         "live_skipped_disabled": live_skipped,
         "live_skipped_existing_signal": live_skipped_existing_signal,
         "live_errors": live_errors,
+        "live_guard_blocks": live_guard_blocks,
         "paper_out": str(paper_out),
         "live_out": str(live_out),
         **cancel_summary,

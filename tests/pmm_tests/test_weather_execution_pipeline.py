@@ -599,6 +599,45 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertEqual(len(live.read_text().splitlines()), 1)
 
+    def test_execute_trade_plans_allows_explicit_lifecycle_duplicate_signal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "allow_duplicate_signal_id": True,
+                "execution_action": "maker_lifecycle_reprice_maker",
+                "cancel_before_order_id": "old-order-1",
+                "source_order_id": "old-order-1",
+                "source_execution_id": "old-exec-1",
+            }
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            live.write_text(json.dumps({"status": "submitted", "signal_id": plan["signal_id"]}) + "\n")
+            calls = []
+            cancels = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "new-order-1"},
+                live_cancel_fn=lambda order_id: cancels.append(order_id) or {"cancelled": order_id},
+            )
+
+            self.assertEqual(result["live_skipped_existing_signal"], 0)
+            self.assertEqual(result["live_written"], 1)
+            self.assertEqual(cancels, ["old-order-1"])
+            self.assertEqual(len(calls), 1)
+            rows = [json.loads(line) for line in live.read_text().splitlines()]
+            self.assertEqual(rows[-1]["execution_action"], "maker_lifecycle_reprice_maker")
+            self.assertEqual(rows[-1]["source_order_id"], "old-order-1")
+            self.assertEqual(rows[-1]["exchange_response"]["pre_place_cancel_order_id"], "old-order-1")
+
     def test_execute_trade_plans_preserves_live_error_diagnostics(self):
         class DiagnosticError(RuntimeError):
             weather_execution_response = {
@@ -635,6 +674,68 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(rows[0]["exchange_response"]["attempted_price"], 0.40)
             self.assertEqual(rows[0]["best_bid"], 0.39)
             self.assertEqual(rows[0]["best_ask"], 0.40)
+
+    def test_execute_trade_plans_persists_each_live_order_before_next_place(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan1 = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            signal2 = normalize_signal({**self._paper_decision(), "signal_id": "sig-2", "paper_id": "paper-2"})
+            assert signal2 is not None
+            plan2 = build_trade_plan(signal2, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan1) + "\n" + json.dumps(plan2) + "\n")
+            calls = []
+
+            def place(plan):
+                calls.append(plan["plan_id"])
+                if len(calls) == 2:
+                    rows = [json.loads(line) for line in live.read_text().splitlines()]
+                    self.assertEqual(len(rows), 1)
+                    self.assertEqual(rows[0]["status"], "submitted")
+                    raise RuntimeError("second order failed")
+                return {"order_id": "live-1"}
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=place,
+            )
+
+            self.assertEqual(result["live_errors"], 1)
+            self.assertEqual(result["live_written"], 2)
+            rows = [json.loads(line) for line in live.read_text().splitlines()]
+            self.assertEqual([row["status"] for row in rows], ["submitted", "error"])
+
+    def test_execute_trade_plans_blocks_over_executor_notional_ceiling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True, max_live_order_notional_usd=1.0),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "should-not-place"},
+            )
+
+            self.assertEqual(calls, [])
+            self.assertEqual(result["live_guard_blocks"], 1)
+            self.assertEqual(result["live_written"], 1)
+            rows = [json.loads(line) for line in live.read_text().splitlines()]
+            self.assertEqual(rows[0]["status"], "blocked")
+            self.assertEqual(rows[0]["exchange_response"]["error_reason"], "max_live_order_notional_exceeded")
 
     def test_execute_trade_plans_cancels_expired_live_orders(self):
         with tempfile.TemporaryDirectory() as tmp:

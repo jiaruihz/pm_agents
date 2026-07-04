@@ -20,7 +20,7 @@ import sqlite3
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +57,8 @@ PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 TOKEN_CACHE_OUT = RUNTIME_DIR / "token_cache.json"
 LIVE_OUT = LIVE_DIR / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
+FILLS_IN = ROOT / "runtime/weather_edge_v1/clob_fills.jsonl"
+LIFECYCLE_OUT = RUNTIME_DIR / "maker_lifecycle_decisions.jsonl"
 
 STRATEGY_INSTANCE = "low_price_yes_lottery_tiny_live_v1"
 STRATEGY_ID = "low_price_yes_lottery_tiny_live_v1"
@@ -273,6 +275,104 @@ def existing_submitted_natural_keys(path: Path = LIVE_OUT) -> set[str]:
         if key:
             out.add(key)
     return out
+
+
+def live_order_id(row: dict[str, Any]) -> str:
+    explicit = safe_str(row.get("order_id") or row.get("clob_order_id"))
+    if explicit:
+        return explicit
+    response = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+    place = response.get("place") if isinstance(response.get("place"), dict) else {}
+    for key in ("orderID", "order_id", "id"):
+        value = safe_str(place.get(key))
+        if value:
+            return value
+    for key in ("orderID", "order_id", "id"):
+        value = safe_str(response.get(key))
+        if value:
+            return value
+    return ""
+
+
+def fills_by_order(path: Path = FILLS_IN) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in read_jsonl(path):
+        order_id = safe_str(row.get("order_id"))
+        if not order_id:
+            continue
+        out.setdefault(order_id, []).append(row)
+    return out
+
+
+def filled_shares_for_order(order_id: str, fills: dict[str, list[dict[str, Any]]]) -> float:
+    return round(sum(to_float(row.get("filled_shares"), 0.0) for row in fills.get(order_id, [])), 6)
+
+
+def settled_city_date_brackets(db_path: Path) -> set[tuple[str, str, str]]:
+    if not db_path.exists():
+        return set()
+    out: set[tuple[str, str, str]] = set()
+    try:
+        conn = connect(db_path)
+        rows = conn.execute(
+            """
+            SELECT city, target_date, bracket
+            FROM settlement_outcomes
+            WHERE settlement_status = 'settled'
+            """
+        ).fetchall()
+        conn.close()
+    except Exception:
+        return set()
+    for row in rows:
+        out.add((safe_str(row["city"]), safe_str(row["target_date"]), safe_str(row["bracket"])))
+    return out
+
+
+def existing_lifecycle_source_orders(path: Path = LIVE_OUT) -> set[str]:
+    out: set[str] = set()
+    for row in read_jsonl(path):
+        if safe_str(row.get("record_type")) != "weather_edge_live_order":
+            continue
+        if safe_str(row.get("status")) != "submitted":
+            continue
+        source_order_id = safe_str(row.get("source_order_id"))
+        action = safe_str(row.get("execution_action"))
+        if source_order_id and action.startswith("maker_lifecycle_"):
+            out.add(source_order_id)
+    return out
+
+
+def existing_lifecycle_keys(path: Path = LIFECYCLE_OUT) -> set[str]:
+    return {
+        safe_str(row.get("lifecycle_key"))
+        for row in read_jsonl(path)
+        if safe_str(row.get("lifecycle_key"))
+        and bool(row.get("live_enabled", False))
+        and safe_str(row.get("decision_status")) == "planned"
+    }
+
+
+def cumulative_ask_depth(asks: list[tuple[float, float]], *, max_price: float, shares: float) -> float:
+    total = 0.0
+    for price, size in asks:
+        if price > max_price + 1e-9:
+            break
+        total += size
+        if total + 1e-9 >= shares:
+            break
+    return round(total, 6)
+
+
+def lifecycle_key_for(source_order_id: str, action: str, ttl_bucket_min: int) -> str:
+    return stable_hash(
+        {
+            "strategy_instance": STRATEGY_INSTANCE,
+            "source_order_id": source_order_id,
+            "action": action,
+            "ttl_bucket_min": ttl_bucket_min,
+        }
+    )
 
 
 def effective_min_event_date(conn: sqlite3.Connection, args: argparse.Namespace) -> str | None:
@@ -1395,6 +1495,333 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
     }
 
 
+def choose_lifecycle_action(
+    *,
+    order: dict[str, Any],
+    age_min: float,
+    remaining_shares: float,
+    asks: list[tuple[float, float]],
+    bids: list[tuple[float, float]],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    if not asks:
+        return {"decision_status": "blocked", "blocker": "lifecycle_no_asks"}
+    posted_price = to_float(order.get("posted_price") or order.get("limit_price"), 0.0)
+    p_yes = to_float(order.get("model_p_yes_used") or order.get("model_token_probability"), 0.0)
+    tick_size = to_float(order.get("quote_tick_size"), 0.001) or 0.001
+    best_ask, best_ask_size = asks[0]
+    best_bid = bids[0][0] if bids else 0.0
+    spread = max(0.0, best_ask - best_bid) if best_bid > 0 else 0.0
+    if posted_price <= 0 or remaining_shares < float(args.min_order_shares):
+        return {"decision_status": "blocked", "blocker": "lifecycle_remaining_below_min_or_bad_price"}
+
+    taker_max_price = min(float(args.max_ask), posted_price + float(args.maker_lifecycle_taker_max_premium))
+    taker_depth = cumulative_ask_depth(asks, max_price=taker_max_price, shares=remaining_shares)
+    taker_fee = fee_metrics(
+        price=min(best_ask, taker_max_price),
+        shares=remaining_shares,
+        taker_fee_rate=args.taker_fee_rate,
+        maker_rebate_rate=args.maker_rebate_rate,
+    )
+    taker_fee_adjusted_edge = p_yes - best_ask - to_float(taker_fee.get("estimated_taker_fee_per_share"), 0.0)
+    if (
+        bool(args.maker_lifecycle_allow_taker_fallback)
+        and age_min >= float(args.maker_lifecycle_taker_ttl_min)
+        and spread <= float(args.maker_lifecycle_spread_cap) + 1e-9
+        and best_ask <= taker_max_price + 1e-9
+        and taker_depth + 1e-9 >= remaining_shares
+        and taker_fee_adjusted_edge >= float(args.min_fee_adjusted_edge)
+    ):
+        return {
+            "decision_status": "planned",
+            "execution_action": "maker_lifecycle_taker_fallback",
+            "maker_only": False,
+            "limit_price": round(best_ask, 6),
+            "quote_mode": "maker_lifecycle_tight_taker",
+            "quote_reason": "ttl_tight_spread_no_premium_taker",
+            "best_bid": best_bid,
+            "best_ask": best_ask,
+            "spread": spread,
+            "fee_adjusted_edge": round(taker_fee_adjusted_edge, 6),
+            "estimated_taker_fee_usd": taker_fee["estimated_taker_fee_usd"],
+        }
+
+    downshift = posted_price - best_ask
+    if age_min >= float(args.maker_lifecycle_refresh_ttl_min) and downshift >= float(args.maker_lifecycle_downshift_min) - 1e-9:
+        new_price = maker_price_for_buy(
+            best_bid=best_bid,
+            best_ask=best_ask,
+            max_price=min(posted_price, float(args.max_ask)),
+            tick_size=tick_size,
+        )
+        if new_price > 0 and new_price < posted_price - 1e-9:
+            return {
+                "decision_status": "planned",
+                "execution_action": "maker_lifecycle_repost_lower",
+                "maker_only": True,
+                "limit_price": new_price,
+                "quote_mode": "maker_lifecycle_repost_lower",
+                "quote_reason": "book_moved_down_cancel_stale_overbid",
+                "best_bid": best_bid,
+                "best_ask": best_ask,
+                "spread": spread,
+                "fee_adjusted_edge": round(p_yes - new_price, 6),
+                "estimated_taker_fee_usd": 0.0,
+            }
+
+    maker_max_price = min(float(args.max_ask), posted_price + float(args.maker_lifecycle_reprice_cushion))
+    new_maker_price = maker_price_for_buy(
+        best_bid=best_bid,
+        best_ask=best_ask,
+        max_price=maker_max_price,
+        tick_size=tick_size,
+    )
+    if (
+        age_min >= float(args.maker_lifecycle_refresh_ttl_min)
+        and new_maker_price > posted_price + float(args.maker_lifecycle_min_reprice_improvement) - 1e-9
+        and p_yes - new_maker_price >= float(args.min_edge)
+    ):
+        return {
+            "decision_status": "planned",
+            "execution_action": "maker_lifecycle_reprice_maker",
+            "maker_only": True,
+            "limit_price": new_maker_price,
+            "quote_mode": "maker_lifecycle_reprice_maker",
+            "quote_reason": "maker_order_behind_current_bid",
+            "best_bid": best_bid,
+            "best_ask": best_ask,
+            "spread": spread,
+            "fee_adjusted_edge": round(p_yes - new_maker_price, 6),
+            "estimated_taker_fee_usd": 0.0,
+        }
+
+    return {
+        "decision_status": "blocked",
+        "blocker": "lifecycle_no_action",
+        "best_bid": best_bid,
+        "best_ask": best_ask,
+        "spread": spread,
+        "fee_adjusted_edge": round(taker_fee_adjusted_edge, 6),
+    }
+
+
+def build_lifecycle_plan(
+    order: dict[str, Any],
+    action: dict[str, Any],
+    *,
+    source_order_id: str,
+    remaining_shares: float,
+    filled_shares: float,
+    age_min: float,
+    lifecycle_key: str,
+    live_enabled: bool,
+) -> dict[str, Any]:
+    price = to_float(action.get("limit_price"), 0.0)
+    p_yes = to_float(order.get("model_p_yes_used") or order.get("model_token_probability"), 0.0)
+    execution_action = safe_str(action.get("execution_action"))
+    base = {
+        "strategy": "weather_edge_v1",
+        "strategy_instance": STRATEGY_INSTANCE,
+        "strategy_id": STRATEGY_ID,
+        "strategy_family": STRATEGY_FAMILY,
+        "probability_source": safe_str(order.get("probability_source")) or "fact_signal_candidates_model_p_yes",
+        "decision_mode": "forecast_bias_low_price_tail_yes_lottery",
+        "execution_mode": "tiny_live_dynamic_maker",
+        "profile": f"dynamic_maker_{execution_action}",
+        "combo": RULE_ID,
+        "signal_id": safe_str(order.get("signal_id")),
+        "city": safe_str(order.get("city")),
+        "city_pool": safe_str(order.get("city_pool")),
+        "target_date": safe_str(order.get("target_date")),
+        "market_id": safe_str(order.get("market_id")),
+        "market_slug": safe_str(order.get("market_slug")),
+        "event_slug": safe_str(order.get("event_slug") or order.get("market_slug")),
+        "event_id": safe_str(order.get("event_id")),
+        "question": safe_str(order.get("question")),
+        "bracket": safe_str(order.get("bracket")),
+        "token_id": safe_str(order.get("token_id")),
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "market_price": round(price, 6),
+        "best_bid": round(to_float(action.get("best_bid"), 0.0), 6),
+        "best_ask": round(to_float(action.get("best_ask"), 0.0), 6),
+        "spread": round(to_float(action.get("spread"), 0.0), 6),
+        "limit_price": round(price, 6),
+        "quote_status": "accepted",
+        "quote_reason": safe_str(action.get("quote_reason")),
+        "quote_edge": round(p_yes - price, 6),
+        "required_quote_edge": round(to_float(action.get("fee_adjusted_edge"), 0.0), 6),
+        "model_token_probability": round(p_yes, 6),
+        "quote_best_bid": round(to_float(action.get("best_bid"), 0.0), 6),
+        "quote_best_ask": round(to_float(action.get("best_ask"), 0.0), 6),
+        "quote_spread": round(to_float(action.get("spread"), 0.0), 6),
+        "quote_tick_size": to_float(order.get("quote_tick_size"), 0.001) or 0.001,
+        "quote_mode": safe_str(action.get("quote_mode")),
+        "child_order_role": execution_action,
+        "maker_only": bool(action.get("maker_only", True)),
+        "notional_fraction": 1.0,
+        "size_multiplier": 1.0,
+        "order_notional_cap": round(remaining_shares * price, 6),
+        "size": round(remaining_shares, 6),
+        "notional": round(remaining_shares * price, 6),
+        "execution_policy": "low_price_yes_lottery_dynamic_maker_v1",
+        "execution_action": execution_action,
+        "allow_duplicate_signal_id": True,
+        "cancel_before_order_id": source_order_id,
+        "source_order_id": source_order_id,
+        "source_execution_id": safe_str(order.get("execution_id")),
+        "source_plan_id": safe_str(order.get("plan_id")),
+        "source_posted_price": round(to_float(order.get("posted_price"), 0.0), 6),
+        "source_filled_shares": round(filled_shares, 6),
+        "source_remaining_shares": round(remaining_shares, 6),
+        "source_order_age_min": round(age_min, 3),
+        "lifecycle_key": lifecycle_key,
+        "tick_size": to_float(order.get("tick_size"), 0.001) or 0.001,
+        "entry_price_window": "0.05-0.20",
+        "sizing_mode": safe_str(order.get("sizing_mode")) or "unknown",
+        "fixed_order_shares": round(remaining_shares, 6),
+        "max_order_shares": round(max(5.0, remaining_shares), 6),
+        "edge": round(p_yes - price, 6),
+        "min_edge": 0.20,
+        "model_p_yes_used": round(p_yes, 6),
+        "model_p_yes_raw": round(to_float(order.get("model_p_yes_raw"), p_yes), 6),
+        "market_implied_p_yes": round(price, 6),
+        "edge_raw_yes": round(p_yes - price, 6),
+        "edge_used_yes": round(p_yes - price, 6),
+        "shadow_decision": "low_price_yes_lottery_dynamic_maker_v1",
+        "shadow_reason": "user_approved_dynamic_maker_lifecycle_live_probe",
+        "live_sizing_policy": safe_str(order.get("live_sizing_policy") or order.get("sizing_mode")),
+        "fee_adjusted_edge": round(to_float(action.get("fee_adjusted_edge"), 0.0), 6),
+        "estimated_taker_fee_usd": round(to_float(action.get("estimated_taker_fee_usd"), 0.0), 6),
+        "paper_enabled": False,
+        "live_enabled": bool(live_enabled),
+        "source_snapshot_path": "runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl",
+    }
+    return {
+        "record_type": "weather_edge_trade_plan",
+        "plan_id": stable_hash(base),
+        "created_at_utc": now_utc(),
+        "status": "accepted",
+        "risk_status": "passed",
+        "risk_reason": "",
+        **base,
+    }
+
+
+def lifecycle_plans(args: argparse.Namespace, *, live_enabled: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not bool(args.maker_lifecycle_enabled):
+        return [], []
+    now = now_utc_dt()
+    fills = fills_by_order()
+    settled = settled_city_date_brackets(Path(args.db))
+    replaced_source_orders = existing_lifecycle_source_orders()
+    used_lifecycle_keys = existing_lifecycle_keys()
+    decisions: list[dict[str, Any]] = []
+    plans: list[dict[str, Any]] = []
+    max_actions = max(0, int(args.maker_lifecycle_max_actions_per_run))
+    for order in read_jsonl(LIVE_OUT):
+        if len(plans) >= max_actions:
+            break
+        if safe_str(order.get("record_type")) != "weather_edge_live_order":
+            continue
+        if safe_str(order.get("status")) != "submitted":
+            continue
+        if safe_str(order.get("strategy_id") or order.get("strategy_instance")) != STRATEGY_ID:
+            continue
+        if safe_str(order.get("execution_policy")) not in {
+            "low_price_yes_lottery_maker_first_v1",
+            "low_price_yes_lottery_dynamic_maker_v1",
+        }:
+            continue
+        if not bool(order.get("maker_only", False)):
+            continue
+        source_order_id = live_order_id(order)
+        if not source_order_id or source_order_id in replaced_source_orders:
+            continue
+        if (safe_str(order.get("city")), safe_str(order.get("target_date")), safe_str(order.get("bracket"))) in settled:
+            continue
+        created = parse_utc(order.get("created_at_utc"))
+        if created is None:
+            continue
+        age_min = (now - created).total_seconds() / 60.0
+        if age_min < float(args.maker_lifecycle_refresh_ttl_min):
+            continue
+        posted_shares = to_float(order.get("size"), 0.0)
+        filled_shares = filled_shares_for_order(source_order_id, fills)
+        remaining_shares = max(0.0, posted_shares - filled_shares)
+        if remaining_shares < float(args.min_order_shares):
+            continue
+        token_id = safe_str(order.get("token_id"))
+        if not token_id:
+            continue
+        try:
+            book = fetch_book_with_retry(
+                token_id,
+                timeout_sec=float(args.book_timeout_sec),
+                retries=int(args.book_retries),
+                retry_sleep_sec=float(args.book_retry_sleep_sec),
+                failover_on_timeout=bool(args.book_failover_on_timeout),
+            )
+            asks = book_levels(book, "ask")
+            bids = book_levels(book, "bid")
+            action = choose_lifecycle_action(
+                order=order,
+                age_min=age_min,
+                remaining_shares=remaining_shares,
+                asks=asks,
+                bids=bids,
+                args=args,
+            )
+        except Exception as exc:  # noqa: BLE001
+            action = {
+                "decision_status": "blocked",
+                "blocker": "lifecycle_book_fetch_failed",
+                "book_error": f"{type(exc).__name__}: {exc}",
+            }
+        ttl_bucket_min = int(math.floor(age_min / max(1.0, float(args.maker_lifecycle_refresh_ttl_min))) * float(args.maker_lifecycle_refresh_ttl_min))
+        lifecycle_key = lifecycle_key_for(source_order_id, safe_str(action.get("execution_action") or action.get("blocker")), ttl_bucket_min)
+        decision = {
+            "record_type": "low_price_yes_maker_lifecycle_decision",
+            "created_at_utc": now_utc(),
+            "strategy_instance": STRATEGY_INSTANCE,
+            "lifecycle_key": lifecycle_key,
+            "live_enabled": bool(live_enabled),
+            "source_order_id": source_order_id,
+            "source_execution_id": safe_str(order.get("execution_id")),
+            "source_plan_id": safe_str(order.get("plan_id")),
+            "city": safe_str(order.get("city")),
+            "target_date": safe_str(order.get("target_date")),
+            "bracket": safe_str(order.get("bracket")),
+            "token_id": token_id,
+            "age_min": round(age_min, 3),
+            "posted_price": to_float(order.get("posted_price"), 0.0),
+            "posted_shares": posted_shares,
+            "filled_shares": filled_shares,
+            "remaining_shares": round(remaining_shares, 6),
+            **action,
+        }
+        if lifecycle_key in used_lifecycle_keys:
+            decision = {**decision, "decision_status": "blocked", "blocker": "lifecycle_duplicate_key"}
+        decisions.append(decision)
+        append_jsonl(LIFECYCLE_OUT, decision)
+        used_lifecycle_keys.add(lifecycle_key)
+        if decision.get("decision_status") != "planned":
+            continue
+        plans.append(
+            build_lifecycle_plan(
+                order,
+                decision,
+                source_order_id=source_order_id,
+                remaining_shares=remaining_shares,
+                filled_shares=filled_shares,
+                age_min=age_min,
+                lifecycle_key=lifecycle_key,
+                live_enabled=live_enabled,
+            )
+        )
+    return plans, decisions
+
+
 def run_executor(args: argparse.Namespace) -> dict[str, Any] | None:
     if not args.live:
         return None
@@ -1502,7 +1929,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             blocked.append(decision)
 
     live_enabled = bool(args.live and args.confirm_live)
-    plans = [build_plan(decision, live_enabled=live_enabled) for decision in planned]
+    entry_plans = [build_plan(decision, live_enabled=live_enabled) for decision in planned]
+    maker_lifecycle_plans, maker_lifecycle_decisions = lifecycle_plans(args, live_enabled=live_enabled)
+    plans = [*maker_lifecycle_plans, *entry_plans]
     write_jsonl(PLAN_OUT, plans)
     for decision in decisions:
         append_jsonl(SHADOW_OUT, decision)
@@ -1535,6 +1964,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "raw_candidate_rows_after_city_date_dedupe": len(raw_candidates),
         "decision_count": len(decisions),
         "planned_count": len(planned),
+        "entry_plan_count": len(entry_plans),
+        "maker_lifecycle_decision_count": len(maker_lifecycle_decisions),
+        "maker_lifecycle_plan_count": len(maker_lifecycle_plans),
         "blocked_count": len(blocked),
         "plans": len(plans),
         "live_requested": bool(args.live),
@@ -1561,6 +1993,16 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "sizing_policy": safe_str(args.sizing_policy),
             "maker_first_fraction": float(args.maker_first_fraction),
             "taker_fallback_min_notional_usd": float(args.taker_fallback_min_notional_usd),
+            "taker_fee_rate": float(args.taker_fee_rate),
+            "maker_lifecycle_enabled": bool(args.maker_lifecycle_enabled),
+            "maker_lifecycle_refresh_ttl_min": float(args.maker_lifecycle_refresh_ttl_min),
+            "maker_lifecycle_taker_ttl_min": float(args.maker_lifecycle_taker_ttl_min),
+            "maker_lifecycle_spread_cap": float(args.maker_lifecycle_spread_cap),
+            "maker_lifecycle_taker_max_premium": float(args.maker_lifecycle_taker_max_premium),
+            "maker_lifecycle_reprice_cushion": float(args.maker_lifecycle_reprice_cushion),
+            "maker_lifecycle_downshift_min": float(args.maker_lifecycle_downshift_min),
+            "maker_lifecycle_allow_taker_fallback": bool(args.maker_lifecycle_allow_taker_fallback),
+            "maker_lifecycle_max_actions_per_run": int(args.maker_lifecycle_max_actions_per_run),
             "max_candidates_per_run": int(args.max_candidates_per_run),
             "allow_settled": bool(args.allow_settled),
             "cancel_after": False,
@@ -1577,6 +2019,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "trade_plans": rel(PLAN_OUT),
             "paper_orders": rel(PAPER_OUT),
             "live_orders": rel(LIVE_OUT),
+            "maker_lifecycle_decisions": rel(LIFECYCLE_OUT),
             "token_cache": rel(TOKEN_CACHE_OUT),
         },
         "blocker_counts": {},
@@ -1610,6 +2053,26 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "dist_le0_block_reason": row.get("dist_le0_block_reason"),
             }
             for row in planned[:20]
+        ],
+        "maker_lifecycle_preview": [
+            {
+                "source_order_id": row.get("source_order_id"),
+                "city": row.get("city"),
+                "target_date": row.get("target_date"),
+                "bracket": row.get("bracket"),
+                "age_min": row.get("age_min"),
+                "remaining_shares": row.get("remaining_shares"),
+                "decision_status": row.get("decision_status"),
+                "execution_action": row.get("execution_action"),
+                "blocker": row.get("blocker"),
+                "posted_price": row.get("posted_price"),
+                "limit_price": row.get("limit_price"),
+                "best_bid": row.get("best_bid"),
+                "best_ask": row.get("best_ask"),
+                "spread": row.get("spread"),
+                "fee_adjusted_edge": row.get("fee_adjusted_edge"),
+            }
+            for row in maker_lifecycle_decisions[:20]
         ],
     }
     counts: dict[str, int] = {}
@@ -1646,8 +2109,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-decision-snapshot-age-hours", type=float, default=6.0)
     parser.add_argument("--min-decision-hours-to-settle", type=float, default=1.0)
     parser.add_argument("--max-candidates-per-run", type=int, default=80)
-    parser.add_argument("--taker-fee-rate", type=float, default=0.06)
+    parser.add_argument("--taker-fee-rate", type=float, default=0.05)
     parser.add_argument("--maker-rebate-rate", type=float, default=0.0125)
+    parser.add_argument("--maker-lifecycle-enabled", action="store_true", help="Manage stale maker-first orders with cancel/repost/tight taker fallback.")
+    parser.add_argument("--maker-lifecycle-refresh-ttl-min", type=float, default=15.0)
+    parser.add_argument("--maker-lifecycle-taker-ttl-min", type=float, default=30.0)
+    parser.add_argument("--maker-lifecycle-spread-cap", type=float, default=0.01)
+    parser.add_argument("--maker-lifecycle-taker-max-premium", type=float, default=0.0)
+    parser.add_argument("--maker-lifecycle-reprice-cushion", type=float, default=0.20)
+    parser.add_argument("--maker-lifecycle-downshift-min", type=float, default=0.01)
+    parser.add_argument("--maker-lifecycle-min-reprice-improvement", type=float, default=0.001)
+    parser.add_argument("--maker-lifecycle-max-actions-per-run", type=int, default=3)
+    parser.add_argument("--maker-lifecycle-allow-taker-fallback", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
     parser.add_argument("--book-retries", type=int, default=1)
     parser.add_argument("--book-retry-sleep-sec", type=float, default=0.4)
@@ -1665,6 +2138,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def enforce_live_safety_args(args: argparse.Namespace) -> None:
+    if args.live and not args.confirm_live:
+        raise RuntimeError("--live requires --confirm-live")
+    if args.allow_settled and args.live:
+        raise RuntimeError("--allow-settled cannot be used with --live")
+    if args.live and (args.allow_dist_le0 or args.allow_dist_lt0):
+        raise RuntimeError("--allow-dist-le0/--allow-dist-lt0 cannot be used with --live")
+    if args.live and getattr(args, "maker_lifecycle_enabled", False):
+        if args.maker_lifecycle_refresh_ttl_min <= 0:
+            raise RuntimeError("--maker-lifecycle-refresh-ttl-min must be positive")
+        if args.maker_lifecycle_taker_ttl_min < args.maker_lifecycle_refresh_ttl_min:
+            raise RuntimeError("--maker-lifecycle-taker-ttl-min cannot be below refresh ttl")
+        if args.maker_lifecycle_taker_max_premium > 0.01 + 1e-9:
+            raise RuntimeError("--maker-lifecycle-taker-max-premium cannot exceed 0.01 for live")
+
+
 def main() -> int:
     try:
         from dotenv import load_dotenv
@@ -1674,10 +2163,7 @@ def main() -> int:
         pass
     os.chdir(ROOT)
     args = parse_args()
-    if args.live and not args.confirm_live:
-        raise RuntimeError("--live requires --confirm-live")
-    if args.allow_settled and args.live:
-        raise RuntimeError("--allow-settled cannot be used with --live")
+    enforce_live_safety_args(args)
     if args.command == "run":
         summary = run_once(args)
         print(json.dumps(json_ready(summary), ensure_ascii=False, indent=2, sort_keys=True))
