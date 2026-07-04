@@ -64,6 +64,12 @@ STRATEGY_FAMILY = "forecast_quality.low_price_yes_lottery"
 RULE_ID = "buy_yes_edge20_ask05_20_maker_first_v1"
 SOURCE_REPORT = "docs/analysis/2026-07/2026-07-02-low-price-yes-lottery-selector-refinement-v1.md"
 DIST_BRANCH_REPORT = "docs/analysis/2026-07/2026-07-04-low-price-yes-dist-branch-v1.md"
+HEADA_REFINEMENT_REPORT = "docs/analysis/2026-07/2026-07-04-low-price-yes-heada-refinement-v1.md"
+SIZING_POLICY_CHOICES = (
+    "fixed_cash_order_notional",
+    "fixed_8_shares",
+    "price_tier_6_8_10_shares",
+)
 
 CLOB_BASE_URL = os.getenv("CLOB_BASE_URL", "").strip() or os.getenv("PM_API_BASE_URL", "").strip() or "https://clob.polymarket.com"
 
@@ -753,6 +759,62 @@ def shares_for_notional(*, notional_usd: float, limit_price: float, min_shares: 
     return round(shares, 2)
 
 
+def shares_for_fixed_count(*, shares: float, min_shares: float) -> float:
+    target_shares = max(float(min_shares), float(shares))
+    return round(math.ceil((target_shares - 1e-12) * 100.0) / 100.0, 2)
+
+
+def shares_for_price_tier_6_8_10(*, price: float, min_shares: float) -> float:
+    if price <= 0:
+        return 0.0
+    if price <= 0.08:
+        shares = 6.0
+    elif price <= 0.14:
+        shares = 8.0
+    else:
+        shares = 10.0
+    return shares_for_fixed_count(shares=shares, min_shares=min_shares)
+
+
+def shares_for_quality_price_tier_5_8_12(*, price: float, quality: float, min_shares: float) -> float:
+    if price <= 0:
+        return 0.0
+    base = 5.0 if price <= 0.08 else (8.0 if price <= 0.14 else 10.0)
+    if not math.isfinite(quality):
+        quality = 0.0
+    multiplier = 1.2 if quality >= 0.50 else (1.0 if quality >= 0.30 else 0.8)
+    shares = min(12.0, max(5.0, base * multiplier))
+    return shares_for_fixed_count(shares=shares, min_shares=min_shares)
+
+
+def sizing_quality(row: dict[str, Any]) -> float:
+    pcal_ev = to_float(row.get("p_cal_no_city_ev"), math.nan)
+    if math.isfinite(pcal_ev):
+        return pcal_ev
+    return to_float(row.get("edge"), 0.0)
+
+
+def shares_for_sizing_policy(
+    *,
+    policy: str,
+    price: float,
+    row: dict[str, Any],
+    order_notional_usd: float,
+    min_shares: float,
+) -> float:
+    if policy == "fixed_cash_order_notional":
+        return shares_for_notional(
+            notional_usd=order_notional_usd,
+            limit_price=price,
+            min_shares=min_shares,
+        )
+    if policy == "fixed_8_shares":
+        return shares_for_fixed_count(shares=8.0, min_shares=min_shares)
+    if policy == "price_tier_6_8_10_shares":
+        return shares_for_price_tier_6_8_10(price=price, min_shares=min_shares)
+    raise RuntimeError(f"unknown sizing policy {policy}")
+
+
 def maker_price_for_buy(*, best_bid: float, best_ask: float, max_price: float, tick_size: float) -> float:
     tick = tick_size if tick_size > 0 else 0.001
     if best_ask <= tick:
@@ -799,9 +861,13 @@ def fee_metrics(*, price: float, shares: float, taker_fee_rate: float, maker_reb
     }
 
 
-def sizing_shadow(price: float, p_yes: float, args: argparse.Namespace) -> dict[str, Any]:
+def sizing_shadow(price: float, p_yes: float, row: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     def one(cost: float) -> dict[str, Any]:
         shares = cost / price if price > 0 else 0.0
+        return one_shares(shares, override_cost=cost)
+
+    def one_shares(shares: float, *, override_cost: float | None = None) -> dict[str, Any]:
+        cost = float(override_cost) if override_cost is not None else shares * price
         fees = fee_metrics(
             price=price,
             shares=shares,
@@ -820,7 +886,32 @@ def sizing_shadow(price: float, p_yes: float, args: argparse.Namespace) -> dict[
         }
 
     ask_scaled_cost = max(0.0, min(5.0, 5.0 * max(0.25, min(1.0, (price - 0.05) / 0.15))))
+    price_tier_shares = shares_for_price_tier_6_8_10(price=price, min_shares=args.min_order_shares)
+    quality_tier_shares = shares_for_quality_price_tier_5_8_12(
+        price=price,
+        quality=sizing_quality(row),
+        min_shares=args.min_order_shares,
+    )
+    live_shares = shares_for_sizing_policy(
+        policy=args.sizing_policy,
+        price=price,
+        row=row,
+        order_notional_usd=args.order_notional_usd,
+        min_shares=args.min_order_shares,
+    )
     return {
+        "live_selected": {
+            **one_shares(live_shares),
+            "policy": args.sizing_policy,
+        },
+        "fixed_cash_order_notional": one(float(args.order_notional_usd)),
+        "fixed_cash_0p80": one(0.80),
+        "fixed_8_shares": one_shares(shares_for_fixed_count(shares=8.0, min_shares=args.min_order_shares)),
+        "price_tier_6_8_10_shares": one_shares(price_tier_shares),
+        "quality_price_tier_5_8_12_shares": {
+            **one_shares(quality_tier_shares),
+            "quality_score": round(sizing_quality(row), 6),
+        },
         "fixed_1_5": one(float(args.order_notional_usd)),
         "fixed_2": one(2.0),
         "fixed_5": one(5.0),
@@ -854,6 +945,7 @@ def validate_candidate(
         "rule_id": RULE_ID,
         "source_report": SOURCE_REPORT,
         "dist_branch_report": DIST_BRANCH_REPORT,
+        "heada_refinement_report": HEADA_REFINEMENT_REPORT,
         "signal_id": signal_id,
         "candidate_id": safe_str(row.get("candidate_id")),
         "city": safe_str(row.get("city")),
@@ -902,6 +994,7 @@ def validate_candidate(
             "max_taker_cushion": args.max_taker_cushion,
             "min_fee_adjusted_edge": args.min_fee_adjusted_edge,
             "order_notional_usd": args.order_notional_usd,
+            "sizing_policy": args.sizing_policy,
             "min_order_shares": args.min_order_shares,
             "max_decision_snapshot_age_hours": args.max_decision_snapshot_age_hours,
             "min_decision_hours_to_settle": args.min_decision_hours_to_settle,
@@ -1042,9 +1135,11 @@ def validate_candidate(
             "max_taker_price": max_taker_price,
             "taker_limit_price": taker_limit_price,
         }
-    shares = shares_for_notional(
-        notional_usd=float(args.order_notional_usd),
-        limit_price=maker_limit_price,
+    shares = shares_for_sizing_policy(
+        policy=safe_str(args.sizing_policy),
+        price=maker_limit_price,
+        row=enriched,
+        order_notional_usd=float(args.order_notional_usd),
         min_shares=float(args.min_order_shares),
     )
     if shares < float(args.min_order_shares):
@@ -1058,6 +1153,8 @@ def validate_candidate(
             "limit_price": maker_limit_price,
             "taker_limit_price": taker_limit_price,
             "planned_shares": shares,
+            "sizing_policy": safe_str(args.sizing_policy),
+            "sizing_reference_price": maker_limit_price,
         }
     cumulative_shares = 0.0
     cumulative_notional = 0.0
@@ -1077,6 +1174,8 @@ def validate_candidate(
             "fresh_best_ask": asks[0][0],
             "max_taker_price": max_taker_price,
             "planned_shares": shares,
+            "sizing_policy": safe_str(args.sizing_policy),
+            "sizing_reference_price": maker_limit_price,
             "available_shares_within_limit": round(cumulative_shares, 6),
             "available_notional_within_limit": round(cumulative_notional, 6),
         }
@@ -1111,7 +1210,8 @@ def validate_candidate(
     )
     maker_fee_adjusted_edge = p_yes - maker_limit_price + maker_fees["estimated_maker_rebate_per_share"]
     maker_fraction = max(0.0, min(1.0, float(args.maker_first_fraction)))
-    taker_fallback_notional = max(0.0, float(args.order_notional_usd) * (1.0 - maker_fraction))
+    planned_notional = shares * maker_limit_price
+    taker_fallback_notional = max(0.0, planned_notional * (1.0 - maker_fraction))
     taker_fallback_status = (
         "disabled"
         if taker_fallback_notional <= 0
@@ -1119,7 +1219,7 @@ def validate_candidate(
         if taker_fallback_notional < float(args.taker_fallback_min_notional_usd)
         else "available"
     )
-    shadow = sizing_shadow(maker_limit_price, p_yes, args)
+    shadow = sizing_shadow(maker_limit_price, p_yes, enriched, args)
     return {
         **enriched,
         "decision_status": "planned",
@@ -1138,8 +1238,10 @@ def validate_candidate(
         "limit_price": round(maker_limit_price, 6),
         "maker_limit_price": round(maker_limit_price, 6),
         "planned_shares": shares,
-        "planned_notional_usd": round(shares * maker_limit_price, 6),
-        "maker_planned_notional_usd": round(shares * maker_limit_price, 6),
+        "planned_notional_usd": round(planned_notional, 6),
+        "maker_planned_notional_usd": round(planned_notional, 6),
+        "sizing_policy": safe_str(args.sizing_policy),
+        "sizing_reference_price": round(maker_limit_price, 6),
         "taker_fallback_notional_usd": round(taker_fallback_notional, 6),
         "taker_fallback_status": taker_fallback_status,
         "fresh_edge": round(p_yes - taker_limit_price, 6),
@@ -1168,7 +1270,7 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "probability_source": "fact_signal_candidates_model_p_yes",
         "decision_mode": "forecast_bias_low_price_tail_yes_lottery",
         "execution_mode": "tiny_live_maker_first",
-        "profile": "edge20_ask05_20_maker_first_080",
+        "profile": f"edge20_ask05_20_maker_first_{safe_str(decision.get('sizing_policy')) or 'unknown'}",
         "combo": RULE_ID,
         "signal_id": safe_str(decision.get("signal_id")),
         "city": safe_str(decision.get("city")),
@@ -1208,8 +1310,8 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "execution_policy": "low_price_yes_lottery_maker_first_v1",
         "tick_size": 0.001,
         "entry_price_window": "0.05-0.20",
-        "sizing_mode": "notional",
-        "fixed_order_shares": 0.0,
+        "sizing_mode": safe_str(decision.get("sizing_policy")) or "unknown",
+        "fixed_order_shares": round(shares, 6),
         "max_order_shares": round(max(5.0, shares), 6),
         "edge": round(p_yes - price, 6),
         "min_edge": 0.20,
@@ -1219,7 +1321,9 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "edge_raw_yes": round(p_yes - price, 6),
         "edge_used_yes": round(p_yes - price, 6),
         "shadow_decision": "low_price_yes_lottery_tiny_live_v1",
-        "shadow_reason": "user_approved_0_8_maker_first_forward_probe",
+        "shadow_reason": "user_approved_price_tier_6_8_10_maker_first_forward_probe",
+        "live_sizing_policy": safe_str(decision.get("sizing_policy")),
+        "sizing_reference_price": round(to_float(decision.get("sizing_reference_price"), price), 6),
         "obs_source": "not_used_forecast_fact_selector",
         "model_version": safe_str(decision.get("model_version")),
         "paper_enabled": True,
@@ -1358,14 +1462,14 @@ def send_telegram_summary(summary: dict[str, Any], *, args: argparse.Namespace) 
     lines = [
         "【Low-price YES lottery tiny-live】",
         f"planned={planned} live_written={live_written} live_errors={live_errors}",
-        f"notional=${args.order_notional_usd:g}/order ask={args.min_ask:.2f}-{args.max_ask:.2f} edge>={args.min_edge:.2f}",
+        f"sizing={args.sizing_policy} cash_ref=${args.order_notional_usd:g} ask={args.min_ask:.2f}-{args.max_ask:.2f} edge>={args.min_edge:.2f}",
     ]
     for row in summary.get("planned_preview", [])[:8]:
         lines.append(
             "- "
             f"{safe_str(row.get('city'))} {safe_str(row.get('target_date'))} {safe_str(row.get('bracket'))} "
             f"ask={to_float(row.get('limit_price'), 0.0):.3f} p={to_float(row.get('model_p_yes'), 0.0):.3f} "
-            f"fee_edge={to_float(row.get('fee_adjusted_edge'), 0.0):.3f}"
+            f"shares={to_float(row.get('planned_shares'), 0.0):.2f} fee_edge={to_float(row.get('fee_adjusted_edge'), 0.0):.3f}"
         )
     try:
         send_telegram_message_sync("\n".join(lines))
@@ -1437,6 +1541,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "live_enabled": live_enabled,
         "daily_cap": None,
         "order_notional_usd": float(args.order_notional_usd),
+        "sizing_policy": safe_str(args.sizing_policy),
         "planned_notional_usd": round(sum(to_float(row.get("planned_notional_usd"), 0.0) for row in planned), 6),
         "tail_telemetry_status_counts": {
             status: sum(1 for row in decisions if safe_str(row.get("tail_telemetry_status")) == status)
@@ -1453,6 +1558,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_decision_snapshot_age_hours": float(args.max_decision_snapshot_age_hours),
             "min_decision_hours_to_settle": float(args.min_decision_hours_to_settle),
             "min_order_shares": float(args.min_order_shares),
+            "sizing_policy": safe_str(args.sizing_policy),
             "maker_first_fraction": float(args.maker_first_fraction),
             "taker_fallback_min_notional_usd": float(args.taker_fallback_min_notional_usd),
             "max_candidates_per_run": int(args.max_candidates_per_run),
@@ -1490,6 +1596,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 "maker_fee_adjusted_edge": row.get("maker_fee_adjusted_edge"),
                 "planned_shares": row.get("planned_shares"),
                 "planned_notional_usd": row.get("planned_notional_usd"),
+                "sizing_policy": row.get("sizing_policy"),
+                "sizing_reference_price": row.get("sizing_reference_price"),
                 "taker_fallback_status": row.get("taker_fallback_status"),
                 "taker_fallback_notional_usd": row.get("taker_fallback_notional_usd"),
                 "estimated_taker_fee_usd": row.get("estimated_taker_fee_usd"),
@@ -1531,6 +1639,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-taker-cushion", type=float, default=0.01)
     parser.add_argument("--min-fee-adjusted-edge", type=float, default=0.15)
     parser.add_argument("--order-notional-usd", type=float, default=0.8)
+    parser.add_argument("--sizing-policy", choices=SIZING_POLICY_CHOICES, default="fixed_cash_order_notional")
     parser.add_argument("--min-order-shares", type=float, default=5.0)
     parser.add_argument("--maker-first-fraction", type=float, default=1.0)
     parser.add_argument("--taker-fallback-min-notional-usd", type=float, default=1.0)

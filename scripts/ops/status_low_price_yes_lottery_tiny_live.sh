@@ -44,6 +44,7 @@ for key in [
     "planned_count",
     "blocked_count",
     "planned_notional_usd",
+    "sizing_policy",
     "live_enabled",
     "live_requested",
     "tail_telemetry_status_counts",

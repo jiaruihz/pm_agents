@@ -855,7 +855,7 @@ Scope: only HeadA `forecast_tail_low_price_yes`.  This is a refinement study for
 
 ## One-Line Read
 
-After removing `dist<=0`, HeadA is cleaner but still not ready to size up.  The strongest practical next step is **keep live tiny, collect fresh book-state/fill data, and shadow fixed-share / price-tier sizing**.  The two tempting quick fixes do not pass: hotter sibling replay does **not** show that we should simply buy the next higher bracket, and strict stop only looks useful in some windows after costs, so it stays telemetry.
+After removing `dist<=0`, HeadA is cleaner but still not ready to size up.  The strongest practical sizing candidate is **price-tier 6/8/10 shares**, but it is an execution geometry improvement for the tiny probe, not confirmed alpha.  The two tempting quick fixes do not pass: hotter sibling replay does **not** show that we should simply buy the next higher bracket, and strict stop only looks useful in some windows after costs, so it stays telemetry.
 
 ```text
 significance=NA/partial
@@ -900,7 +900,7 @@ Window stability for the three non-quality sizing rules:
 
 {md_table(window_focus, ['period', 'sizing', 'rows', 'dates', 'win_rate', 'avg_entry', 'avg_cost', 'roi', 'roi_ci_low', 'roi_ci_high', 'losing_days', 'max_daily_loss_usd'], 20)}
 
-Read: the strongest price bucket in this historical sleeve is not the cheapest bucket; 14-20c has the highest realized hit rate.  That is why fixed cash is not the natural default.  But price-tier still remains shadow-only because the recent window is small and the rule has not passed a fresh forward clock.
+Read: the strongest price bucket in this historical sleeve is not the cheapest bucket; 14-20c has the highest realized hit rate.  That is why fixed cash is not the natural default.  2026-07-04 operator decision: switch the tiny-live probe to `price_tier_6_8_10_shares`, while continuing to journal fixed-cash, fixed-8-share, and quality-tier counterfactuals as shadow variants.
 
 ## Mechanism Slices
 
@@ -932,12 +932,13 @@ This is too fresh to score; keep it as the W3 forward clock.  The key forward qu
 
 ## Decision
 
-No new live change from this research.
+Operator decision after this research: apply one tiny-live execution change, but do not promote the strategy or size it up.
 
 - Keep current tiny HeadA probe with `dist<=0` blocked.
-- Keep notional small; no size-up.
+- Change live sizing to `price_tier_6_8_10_shares`: 6 shares for 5-8c, 8 shares for 8-14c, 10 shares for 14-20c.
+- Keep overall exposure small; no size-up beyond that price-tier geometry.
 - Do not add strict stop yet; log it forward.
-- Shadow sizing should compare fixed cash `$0.80`, fixed 8 shares, and price-tier 6/8/10 shares.
+- Shadow sizing should compare fixed cash `$0.80`, fixed 8 shares, price-tier 6/8/10 shares, and quality-tier 5/8/12 shares.
 - Do not switch to next-hotter or basket expression without a future EV model; current sibling replay does not support it.
 
 ## Artifacts
