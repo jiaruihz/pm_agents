@@ -26,6 +26,13 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUNTIME_DIR = ROOT / "runtime" / "weather_edge_v1" / "runtime_monitor"
 DEFAULT_DB_PATH = ROOT / "runtime" / "weather.db"
 DEFAULT_ORDERBOOK_DIR = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "orderbook_snapshots"
+TOKEN_RESOLUTION_BLOCKERS = frozenset(
+    {
+        "missing_yes_token_id",
+        "token_resolution_failed",
+        "token_resolution_timeout",
+    }
+)
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -282,6 +289,7 @@ def int_value(row: dict[str, Any], *keys: str) -> int:
 
 def summarize_history(rows: list[dict[str, Any]]) -> dict[str, Any]:
     skip_reasons: Counter[str] = Counter()
+    blocker_counts: Counter[str] = Counter()
     audit_counts: Counter[str] = Counter()
     executor_failures: Counter[str] = Counter()
     latest_executor_failure: dict[str, Any] | None = None
@@ -306,6 +314,8 @@ def summarize_history(rows: list[dict[str, Any]]) -> dict[str, Any]:
         out["plans_written"] += int_value(row, "plans_written", "plans", "planned_count")
         for reason, count in (row.get("skip_reasons") or {}).items():
             skip_reasons[str(reason or "unspecified")] += int(count or 0)
+        for reason, count in (row.get("blocker_counts") or {}).items():
+            blocker_counts[str(reason or "unspecified")] += int(count or 0)
         meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
         for name, count in (meta.get("audit_counts") or row.get("audit_counts") or {}).items():
             audit_counts[str(name)] += int(count or 0)
@@ -333,6 +343,11 @@ def summarize_history(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "output_tail": output_tail[-1200:],
             }
     out["top_skip_reasons"] = skip_reasons.most_common(5)
+    out["top_blocker_counts"] = blocker_counts.most_common(8)
+    out["token_resolution_blockers"] = {
+        name: blocker_counts.get(name, 0) for name in sorted(TOKEN_RESOLUTION_BLOCKERS)
+    }
+    out["token_resolution_blocker_total"] = sum(out["token_resolution_blockers"].values())
     out["top_audit_counts"] = audit_counts.most_common(5)
     out["executor_failure_classes"] = executor_failures.most_common()
     out["latest_executor_failure"] = latest_executor_failure
@@ -442,6 +457,23 @@ def evaluate_spec(spec: WatchSpec, now: datetime) -> dict[str, Any]:
                 "detail_key": latest.get("error_class"),
                 "failure_classes": history_stats.get("executor_failure_classes"),
                 "latest_failure": latest,
+            },
+        )
+
+    if spec.expected_live and history_stats.get("token_resolution_blocker_total", 0) > 0:
+        add_alert(
+            alerts,
+            severity="critical",
+            instance=spec.instance,
+            kind="token_resolution_blockers",
+            message=(
+                f"{spec.display_name}: token resolution blocked "
+                f"{history_stats['token_resolution_blocker_total']} candidate(s) in recent window"
+            ),
+            detail={
+                "detail_key": "token_resolution_blockers",
+                "token_resolution_blockers": history_stats.get("token_resolution_blockers"),
+                "top_blocker_counts": history_stats.get("top_blocker_counts"),
             },
         )
 
@@ -561,6 +593,7 @@ def evaluate_spec(spec: WatchSpec, now: datetime) -> dict[str, Any]:
             "blocked_rows_this_cycle": summary.get("blocked_rows_this_cycle"),
             "target_dates": summary.get("target_dates"),
             "skip_reasons": summary.get("skip_reasons"),
+            "blocker_counts": summary.get("blocker_counts"),
         },
         "alerts": alerts,
     }

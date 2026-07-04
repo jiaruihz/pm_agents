@@ -61,6 +61,16 @@ def finite(value: Any) -> bool:
     return isinstance(value, (int, float)) and math.isfinite(value)
 
 
+def json_ready(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): json_ready(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [json_ready(item) for item in value]
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
+
+
 def bracket_bounds(bracket: Any) -> tuple[float, float]:
     b = str(bracket).strip().replace("°", "")
     m = re.match(r"^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$", b)
@@ -95,7 +105,7 @@ def fee(shares: float, price: float) -> float:
 
 
 def mtm_at_bid(entry_ask: float, latest_bid: float) -> dict[str, Any]:
-    if not (math.isfinite(entry_ask) and entry_ask > 0 and math.isfinite(latest_bid)):
+    if not (math.isfinite(entry_ask) and entry_ask > 0):
         return {
             "shares": None,
             "entry_fee_usd": None,
@@ -107,8 +117,19 @@ def mtm_at_bid(entry_ask: float, latest_bid: float) -> dict[str, Any]:
         }
     shares = UNIT_NOTIONAL_USD / entry_ask
     entry_fee = fee(shares, entry_ask)
-    exit_fee = fee(shares, latest_bid)
     cost = UNIT_NOTIONAL_USD + entry_fee
+    if not math.isfinite(latest_bid):
+        return {
+            "shares": shares,
+            "entry_fee_usd": entry_fee,
+            "exit_fee_usd": 0.0,
+            "cost_usd": cost,
+            "exit_revenue_usd": 0.0,
+            "pnl_usd": -cost,
+            "roi": -1.0,
+            "mark_status": "missing_bid_marked_zero",
+        }
+    exit_fee = fee(shares, latest_bid)
     exit_revenue = shares * latest_bid - exit_fee
     pnl = exit_revenue - cost
     return {
@@ -119,6 +140,7 @@ def mtm_at_bid(entry_ask: float, latest_bid: float) -> dict[str, Any]:
         "exit_revenue_usd": exit_revenue,
         "pnl_usd": pnl,
         "roi": pnl / cost if cost else None,
+        "mark_status": "bid_mark",
     }
 
 
@@ -344,6 +366,19 @@ def build_review(target_date_utc: str) -> dict[str, Any]:
     latest_rows = [r for r in decisions if r.get("cycle_id") == latest_cycle]
     latest_ok = [r for r in latest_rows if r.get("state_status") == "ok"]
     gate = json.loads(GATE_JSON.read_text(encoding="utf-8")) if GATE_JSON.exists() else {}
+    if tokens:
+        main_read = (
+            "Forward scarcity broke today, but the broader B4 basket faded after overshoots. "
+            "False-fade ended slightly positive because Helsinki 20 offset Helsinki 19 and Lucknow losses. "
+            "This is evidence to keep shadow running, not evidence to live."
+        )
+        today_shadow_effect = "mixed_mtm_not_settled"
+    else:
+        main_read = (
+            "No token-level trigger appeared in this UTC review window. "
+            "This is a frequency/coverage observation, not evidence for live."
+        )
+        today_shadow_effect = "no_trigger_rows"
 
     return {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -395,14 +430,10 @@ def build_review(target_date_utc: str) -> dict[str, Any]:
         "branch_first_entry_tokens": branch_rows,
         "tokens": tokens,
         "verdict": {
-            "today_shadow_effect": "mixed_mtm_not_settled",
+            "today_shadow_effect": today_shadow_effect,
             "promotion_status": "shadow_candidate_keep_collecting",
             "live_action": "none",
-            "main_read": (
-                "Forward scarcity broke today, but the broader B4 basket faded after overshoots. "
-                "False-fade ended slightly positive because Helsinki 20 offset Helsinki 19 and Lucknow losses. "
-                "This is evidence to keep shadow running, not evidence to live."
-            ),
+            "main_read": main_read,
         },
     }
 
@@ -435,9 +466,7 @@ def write_report(result: dict[str, Any], report_path: Path, json_path: Path) -> 
             "`shadow_candidate_keep_collecting`; no live change."
         ),
         "",
-        "Today is useful because the state finally appeared again after the prior 6/21+ trigger starvation. "
-        "The result is mixed: false-fade is roughly flat/slightly positive, while the broader B4 basket is negative. "
-        "This is still intraday MTM / open-weather evidence, not settled ROI.",
+        result["verdict"]["main_read"],
         "",
         "## Data Snapshot",
         "",
@@ -498,20 +527,28 @@ def write_report(result: dict[str, Any], report_path: Path, json_path: Path) -> 
             f"{entry.get('d1_yes_ask')} | {quote.get('yes_best_bid')} | {quote.get('yes_best_ask')} | "
             f"{fmt_pct(mark.get('roi'))} | {state} | {read} |"
         )
-    lines.extend(
-        [
-            "",
-            "## Read",
-            "",
-            "- Positive: the state frequency problem eased, and Helsinki 20 ended near binary after the trigger.",
-            "- Negative: Amsterdam 22 and Helsinki 19 were overshot by the final-looking market state, while Lucknow 37 was a false reheat and collapsed to near zero.",
-            "- Boundary: the latest cycle has no active trigger; the useful signal was the transient conflict window, not a persistent all-day state.",
-            "- Action: keep zero-notional shadow running; do not live-size from one day. Next review should separate overshoot risk, first-step vs second-step re-entry, and false-fade-only rows where bracket-aware B4 is false.",
-            "",
-        ]
-    )
+    lines.extend(["", "## Read", ""])
+    if result["tokens"]:
+        lines.extend(
+            [
+                "- Positive: the state frequency problem eased, and Helsinki 20 ended near binary after the trigger.",
+                "- Negative: Amsterdam 22 and Helsinki 19 were overshot by the final-looking market state, while Lucknow 37 was a false reheat and collapsed to near zero.",
+                "- Boundary: the latest cycle has no active trigger; the useful signal was the transient conflict window, not a persistent all-day state.",
+                "- Action: keep zero-notional shadow running; do not live-size from one day. Next review should separate overshoot risk, first-step vs second-step re-entry, and false-fade-only rows where bracket-aware B4 is false.",
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "- No token-level trigger appeared in this UTC review window.",
+                "- This is a frequency/coverage observation only; it is not evidence for or against the entry edge.",
+                "- Action: keep zero-notional shadow running and wait for fresh trigger rows before discussing live.",
+                "",
+            ]
+        )
     report_path.write_text("\n".join(lines), encoding="utf-8")
-    json_path.write_text(json.dumps(result, indent=2, sort_keys=True, default=str), encoding="utf-8")
+    json_path.write_text(json.dumps(json_ready(result), indent=2, sort_keys=True, default=str), encoding="utf-8")
 
 
 def main() -> None:

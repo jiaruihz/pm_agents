@@ -1,26 +1,26 @@
 # METAR Reversal Shadow Today v1
 
-Generated: `2026-07-04T16:31:30.318592+00:00`
+Generated: `2026-07-04T17:38:00.838518+00:00`
 
 ## Verdict
 
 `metar_reversal.rich_current_collapse_d1_yes` remains `shadow_candidate_keep_collecting`; no live change.
 
-Today is useful because the state finally appeared again after the prior 6/21+ trigger starvation. The result is mixed: false-fade is roughly flat/slightly positive, while the broader B4 basket is negative. This is still intraday MTM / open-weather evidence, not settled ROI.
+Forward scarcity broke today, but the broader B4 basket faded after overshoots. False-fade ended slightly positive because Helsinki 20 offset Helsinki 19 and Lucknow losses. This is evidence to keep shadow running, not evidence to live.
 
 ## Data Snapshot
 
 - Shadow source: `runtime/weather_edge_v1/metar_reversal_false_fade_reheat_shadow_v1`.
-- UTC window: `2026-07-04T00:01:18.644098+00:00` .. `2026-07-04T16:26:51.559974+00:00`.
-- Summary rows today: 198; unique snapshots: 44.
-- `runtime/weather.db` mtime: `2026-07-04T16:25:27.869682+00:00`; CLOB fill gate pass: `True`.
+- UTC window: `2026-07-04T00:01:18.644098+00:00` .. `2026-07-04T17:36:52.842712+00:00`.
+- Summary rows today: 212; unique snapshots: 48.
+- `runtime/weather.db` mtime: `2026-07-04T17:34:58.778611+00:00`; CLOB fill gate pass: `True`.
 
 ## Trigger Funnel
 
 - Cycles with false-fade trigger: 27 (raw trigger sum 27).
 - Cycles with B4 trigger: 32 (raw trigger sum 33).
 - Unique token-level triggers after dedupe: 4.
-- Latest cycle: `{'cycle_id': '071e942b281d', 'false_fade_reheat_conflict_triggered': 0, 'generated_at_utc': '2026-07-04T16:26:51.559974+00:00', 'rich_current_conflict_b4_triggered': 0, 'snapshot_file': 'snapshot_20260705_0010.json', 'states': 43, 'states_ok': 30}`.
+- Latest cycle: `{'cycle_id': '4da259f37e23', 'false_fade_reheat_conflict_triggered': 0, 'generated_at_utc': '2026-07-04T17:36:52.842712+00:00', 'rich_current_conflict_b4_triggered': 0, 'snapshot_file': 'snapshot_20260705_0118.json', 'states': 41, 'states_ok': 26}`.
 
 ## MTM Summary
 
