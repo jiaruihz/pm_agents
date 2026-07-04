@@ -698,11 +698,64 @@ def paired_expression_summary(expr: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
+def sizing_attribution(execution: pd.DataFrame) -> pd.DataFrame:
+    focus = execution[
+        execution["entry_profile"].eq("taker_weather_fee")
+        & execution["exit_policy"].eq("hold")
+        & execution["sizing"].isin(
+            [
+                "fixed_cash_0p80",
+                "fixed_8_shares",
+                "price_tier_6_8_10_shares",
+                "quality_price_tier_5_8_12_shares",
+            ]
+        )
+    ].copy()
+    periods = {
+        "full": pd.Series(True, index=focus.index),
+        "train_le_2026_06_20": focus["target_date"].astype(str) <= TRAIN_END,
+        "recent_ge_2026_06_21": focus["target_date"].astype(str) >= RECENT_START,
+    }
+    records: list[dict[str, Any]] = []
+    for period, mask in periods.items():
+        base = focus[mask].copy()
+        if base.empty:
+            continue
+        for (sizing, price_band), g in base.groupby(["sizing", "price_band"], dropna=False):
+            rec = summarize_perf(g, label=f"{sizing}|{price_band}", period=period)
+            rec.update(
+                {
+                    "sizing": sizing,
+                    "price_band": price_band,
+                    "avg_shares": float(g["shares"].mean()),
+                    "shares_sum": float(g["shares"].sum()),
+                    "wins": int(g["win"].sum()),
+                }
+            )
+            records.append(rec)
+    out = pd.DataFrame(records)
+    if out.empty:
+        return out
+    totals = out.groupby(["period", "sizing"], dropna=False).agg(
+        total_cost=("cost", "sum"),
+        total_shares=("shares_sum", "sum"),
+        total_rows=("rows", "sum"),
+        total_wins=("wins", "sum"),
+    )
+    out = out.join(totals, on=["period", "sizing"])
+    out["cost_pct"] = out["cost"] / out["total_cost"]
+    out["shares_pct"] = out["shares_sum"] / out["total_shares"]
+    out["rows_pct"] = out["rows"] / out["total_rows"]
+    out["wins_pct"] = np.where(out["total_wins"] > 0, out["wins"] / out["total_wins"], np.nan)
+    return out.drop(columns=["total_cost", "total_shares", "total_rows", "total_wins"])
+
+
 def make_markdown(
     *,
     base: pd.DataFrame,
     hot: pd.DataFrame,
     exec_summary: pd.DataFrame,
+    sizing_attr: pd.DataFrame,
     slices: pd.DataFrame,
     expr_summary: pd.DataFrame,
     expr_paired: pd.DataFrame,
@@ -716,10 +769,20 @@ def make_markdown(
             vals = []
             for col in cols:
                 val = row.get(col, "")
-                if col.startswith("roi") or col in {"win_rate", "stop_hit_rate", "avg_entry"}:
+                if col.startswith("roi") or col in {
+                    "win_rate",
+                    "stop_hit_rate",
+                    "avg_entry",
+                    "cost_pct",
+                    "shares_pct",
+                    "rows_pct",
+                    "wins_pct",
+                }:
                     vals.append(fmt_pct(val, signed=col.startswith("roi")))
                 elif col in {"avg_cost", "cost", "pnl", "max_daily_loss_usd"}:
                     vals.append(fmt_usd(val))
+                elif col in {"avg_shares", "shares_sum"}:
+                    vals.append(f"{float(val):.1f}" if pd.notna(val) else "")
                 elif isinstance(val, float):
                     vals.append(f"{val:.3f}")
                 else:
@@ -747,6 +810,26 @@ def make_markdown(
     focus["_order"] = focus["_rank"].map(order).fillna(99)
     focus = focus.sort_values(["_order", "sizing", "entry_profile", "exit_policy"])
 
+    window_focus = exec_summary[
+        exec_summary["sizing"].isin(["fixed_cash_0p80", "fixed_8_shares", "price_tier_6_8_10_shares"])
+        & exec_summary["entry_profile"].eq("taker_weather_fee")
+        & exec_summary["exit_policy"].eq("hold")
+    ].copy()
+    window_focus["_order"] = window_focus["sizing"].map(
+        {"fixed_cash_0p80": 1, "fixed_8_shares": 2, "price_tier_6_8_10_shares": 3}
+    )
+    window_focus = window_focus.sort_values(["period", "_order"])
+
+    attr_full = sizing_attr[
+        sizing_attr["period"].eq("full")
+        & sizing_attr["sizing"].isin(["fixed_cash_0p80", "fixed_8_shares", "price_tier_6_8_10_shares"])
+    ].copy()
+    attr_full["_order"] = attr_full["sizing"].map(
+        {"fixed_cash_0p80": 1, "fixed_8_shares": 2, "price_tier_6_8_10_shares": 3}
+    )
+    attr_full["_band_order"] = attr_full["price_band"].map({"5-8c": 1, "8-14c": 2, "14-20c": 3}).fillna(9)
+    attr_full = attr_full.sort_values(["_order", "_band_order"])
+
     slice_view = slices[slices["period"].eq("full")].copy()
     slice_view = slice_view.sort_values(["slice_type", "label"])
 
@@ -758,6 +841,11 @@ def make_markdown(
     if not live_rows.empty:
         status_counts = live_rows.groupby(["decision_status", "blocker"], dropna=False).size().reset_index(name="rows")
         live_note = md_table(status_counts, ["decision_status", "blocker", "rows"], 20)
+
+    dist_le0 = int((base["raw_dist_br"] <= 0).sum())
+    dist_lt0 = int((base["raw_dist_br"] < 0).sum())
+    dist_eq0 = int((base["raw_dist_br"] == 0).sum())
+    dist_gt0 = int((base["raw_dist_br"] > 0).sum())
 
     return f"""# HeadA Low-Price YES Refinement v1
 
@@ -782,6 +870,7 @@ conclusion=shadow_candidate for current tiny probe; no live size-up
 - CLOB fill coverage gate: `gate_pass=true` after rebuild.
 - Frozen HeadA denominator: {len(base)} rows, {base['target_date'].min()}..{base['target_date'].max()}, {base['city'].nunique()} cities.
 - Current implemented selector after 2026-07-04: `dist > 0`; historical hot-only denominator here: {len(hot)} rows / {hot['target_date'].nunique()} dates / {hot['city'].nunique()} cities.
+- `dist<=0` would have blocked {dist_le0} / {len(base)} rows ({dist_le0 / len(base):.1%}): `dist<0` {dist_lt0}, `dist=0` {dist_eq0}; remaining `dist>0` {dist_gt0}.
 - Fee model: official Weather taker `shares * 0.05 * price * (1-price)`; maker fee baseline zero.
 
 ## Execution / Sizing On Hot-Only
@@ -794,6 +883,24 @@ Interpretation:
 2. Fixed 8 shares and price-tier sizing are more coherent for this sleeve because they make the lottery payout more comparable across prices.
 3. +1c taker stress matters; this is why maker-first telemetry is still central, even though the backtest reports taker profiles.
 4. Strict stop is not a live rule yet. It is useful as telemetry because it can reduce daily drawdown, but it does not dominate hold robustly enough.
+
+## Sizing First-Principles Experiment
+
+For a binary YES ticket, one share has expected PnL `P(win) - entry - fee_per_share`.  Because this sleeve does not yet have a trusted per-row calibrated `P(win)`, the first sizing question is not Kelly sizing; it is exposure geometry.
+
+- Fixed cash `$0.80` means `shares = 0.80 / entry`: a 5c ticket gets 16 shares, a 20c ticket gets 4 shares.  This implicitly says cheaper tickets deserve much larger max payout.
+- Fixed shares means every signal gets the same max payout; cost naturally rises with entry price.
+- Price-tier sizing is the mild middle ground used here: 6 shares for 5-8c, 8 shares for 8-14c, 10 shares for 14-20c.  It only uses entry price, not city/date fitting.
+
+Full-window attribution by price bucket, same 333 hot-only rows, taker fee, hold-to-settlement:
+
+{md_table(attr_full, ['sizing', 'price_band', 'rows', 'win_rate', 'avg_entry', 'avg_shares', 'cost_pct', 'shares_pct', 'wins_pct', 'roi', 'roi_ci_low', 'roi_ci_high'], 30)}
+
+Window stability for the three non-quality sizing rules:
+
+{md_table(window_focus, ['period', 'sizing', 'rows', 'dates', 'win_rate', 'avg_entry', 'avg_cost', 'roi', 'roi_ci_low', 'roi_ci_high', 'losing_days', 'max_daily_loss_usd'], 20)}
+
+Read: the strongest price bucket in this historical sleeve is not the cheapest bucket; 14-20c has the highest realized hit rate.  That is why fixed cash is not the natural default.  But price-tier still remains shadow-only because the recent window is small and the rule has not passed a fresh forward clock.
 
 ## Mechanism Slices
 
@@ -839,6 +946,7 @@ No new live change from this research.
 - Base rows: `{(OUT_DIR / 'base_rows.csv').relative_to(ROOT)}`
 - Execution replay: `{(OUT_DIR / 'execution_replay.csv').relative_to(ROOT)}`
 - Execution summary: `{(OUT_DIR / 'execution_summary.csv').relative_to(ROOT)}`
+- Sizing attribution: `{(OUT_DIR / 'sizing_attribution.csv').relative_to(ROOT)}`
 - Slice summary: `{(OUT_DIR / 'slice_summary.csv').relative_to(ROOT)}`
 - Expression replay: `{(OUT_DIR / 'expression_replay.csv').relative_to(ROOT)}`
 - JSON: `{OUT_JSON.relative_to(ROOT)}`
@@ -896,6 +1004,7 @@ def main() -> None:
             rec.update({"sizing": sizing, "entry_profile": entry_profile, "exit_policy": exit_policy})
             exec_records.append(rec)
     exec_summary = pd.DataFrame(exec_records)
+    sizing_attr = sizing_attribution(execution)
 
     slice_input = execution[
         execution["sizing"].eq("fixed_8_shares")
@@ -921,6 +1030,7 @@ def main() -> None:
     paths.to_csv(OUT_DIR / "path_rows.csv", index=False)
     execution.to_csv(OUT_DIR / "execution_replay.csv", index=False)
     exec_summary.to_csv(OUT_DIR / "execution_summary.csv", index=False)
+    sizing_attr.to_csv(OUT_DIR / "sizing_attribution.csv", index=False)
     slices.to_csv(OUT_DIR / "slice_summary.csv", index=False)
     expr.to_csv(OUT_DIR / "expression_replay.csv", index=False)
     expr_sum.to_csv(OUT_DIR / "expression_summary.csv", index=False)
@@ -943,6 +1053,7 @@ def main() -> None:
             "maker_fee": 0,
         },
         "execution_summary": json.loads(exec_summary.to_json(orient="records")),
+        "sizing_attribution": json.loads(sizing_attr.to_json(orient="records")),
         "slice_summary": json.loads(slices.to_json(orient="records")),
         "expression_summary": json.loads(expr_sum.to_json(orient="records")) if not expr_sum.empty else [],
         "expression_paired_summary": json.loads(expr_pair.to_json(orient="records")) if not expr_pair.empty else [],
@@ -953,6 +1064,7 @@ def main() -> None:
             base=base,
             hot=hot,
             exec_summary=exec_summary,
+            sizing_attr=sizing_attr,
             slices=slices,
             expr_summary=expr_sum,
             expr_paired=expr_pair,
