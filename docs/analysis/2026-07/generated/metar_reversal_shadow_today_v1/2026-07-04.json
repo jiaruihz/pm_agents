@@ -1,0 +1,694 @@
+{
+  "branch_first_entry_tokens": {
+    "b4": [
+      {
+        "branches": [
+          "b4"
+        ],
+        "city": "Amsterdam",
+        "d1_bracket": "22",
+        "entry": {
+          "current_bracket": "21",
+          "current_yes_ask": 0.698,
+          "d1_yes_ask": 0.78,
+          "d1_yes_ask_size": 68.18,
+          "forecast_gap_native": 1.6000000000000014,
+          "forecast_max_native": 22.6,
+          "forecast_peak_delta_hours_local": -0.75,
+          "forecast_steps": 2,
+          "generated_at_utc": "2026-07-04T12:26:43.531410+00:00",
+          "running_native": 21.0,
+          "snapshot_file": "snapshot_20260704_2015.json",
+          "temp_trend_1h_f": 1.8
+        },
+        "latest": {
+          "current_bracket": "22",
+          "forecast_peak_delta_hours_local": 0.67,
+          "generated_at_utc": "2026-07-04T14:01:46.825636+00:00",
+          "relation_to_d1_by_obs_proxy": "in_bracket_now",
+          "running_native": 22.0,
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "temp_trend_1h_f": 1.8,
+          "trigger_b4": false,
+          "trigger_ff": false
+        },
+        "latest_quote": {
+          "city_local_date_at_snapshot": "2026-07-04",
+          "market_yes_price": 0.92,
+          "question": "Will the highest temperature in Amsterdam be 22\u00b0C on July 4?",
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+          "yes_ask_size": 19.98,
+          "yes_best_ask": 0.95,
+          "yes_best_bid": 0.91,
+          "yes_bid_size": 229.03,
+          "yes_book_status": "ok"
+        },
+        "mark_to_bid": {
+          "bid_size_covers_unit_notional": true,
+          "cost_usd": 1.011,
+          "entry_fee_usd": 0.010999999999999998,
+          "exit_fee_usd": 0.005249999999999998,
+          "exit_revenue_usd": 1.1614166666666665,
+          "pnl_usd": 0.15041666666666664,
+          "roi": 0.14878008572370588,
+          "shares": 1.282051282051282
+        },
+        "target_date": "2026-07-04"
+      },
+      {
+        "branches": [
+          "b4"
+        ],
+        "city": "Helsinki",
+        "d1_bracket": "19",
+        "entry": {
+          "current_bracket": "18",
+          "current_yes_ask": 0.878,
+          "d1_yes_ask": 0.16,
+          "d1_yes_ask_size": 6.5,
+          "forecast_gap_native": 2.1000000000000014,
+          "forecast_max_native": 20.1,
+          "forecast_peak_delta_hours_local": -2.03,
+          "forecast_steps": 2,
+          "generated_at_utc": "2026-07-04T12:06:42.820305+00:00",
+          "running_native": 18.0,
+          "snapshot_file": "snapshot_20260704_1958.json",
+          "temp_trend_1h_f": 1.8
+        },
+        "latest": {
+          "current_bracket": "20",
+          "forecast_peak_delta_hours_local": -0.33,
+          "generated_at_utc": "2026-07-04T14:01:46.826471+00:00",
+          "relation_to_d1_by_obs_proxy": "overshot_by_obs_proxy",
+          "running_native": 20.0,
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "temp_trend_1h_f": 1.8,
+          "trigger_b4": false,
+          "trigger_ff": false
+        },
+        "latest_quote": {
+          "city_local_date_at_snapshot": "2026-07-04",
+          "market_yes_price": 0.82,
+          "question": "Will the highest temperature in Helsinki be 19\u00b0C on July 4?",
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+          "yes_ask_size": 5.0,
+          "yes_best_ask": 0.91,
+          "yes_best_bid": 0.85,
+          "yes_bid_size": 6.27,
+          "yes_book_status": "ok"
+        },
+        "mark_to_bid": {
+          "bid_size_covers_unit_notional": true,
+          "cost_usd": 1.042,
+          "entry_fee_usd": 0.042,
+          "exit_fee_usd": 0.039843750000000004,
+          "exit_revenue_usd": 5.27265625,
+          "pnl_usd": 4.23065625,
+          "roi": 4.060130758157389,
+          "shares": 6.25
+        },
+        "target_date": "2026-07-04"
+      },
+      {
+        "branches": [
+          "b4"
+        ],
+        "city": "Helsinki",
+        "d1_bracket": "20",
+        "entry": {
+          "current_bracket": "19",
+          "current_yes_ask": 0.89,
+          "d1_yes_ask": 0.35,
+          "d1_yes_ask_size": 24.28,
+          "forecast_gap_native": 1.1000000000000014,
+          "forecast_max_native": 20.1,
+          "forecast_peak_delta_hours_local": -1.2,
+          "forecast_steps": 1,
+          "generated_at_utc": "2026-07-04T12:56:44.539392+00:00",
+          "running_native": 19.0,
+          "snapshot_file": "snapshot_20260704_2048.json",
+          "temp_trend_1h_f": 5.4
+        },
+        "latest": {
+          "current_bracket": "20",
+          "forecast_peak_delta_hours_local": -0.33,
+          "generated_at_utc": "2026-07-04T14:01:46.826471+00:00",
+          "relation_to_d1_by_obs_proxy": "in_bracket_now",
+          "running_native": 20.0,
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "temp_trend_1h_f": 1.8,
+          "trigger_b4": false,
+          "trigger_ff": false
+        },
+        "latest_quote": {
+          "city_local_date_at_snapshot": "2026-07-04",
+          "market_yes_price": 0.115,
+          "question": "Will the highest temperature in Helsinki be 20\u00b0C on July 4?",
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+          "yes_ask_size": 17.2,
+          "yes_best_ask": 0.158,
+          "yes_best_bid": 0.101,
+          "yes_bid_size": 6.45,
+          "yes_book_status": "ok"
+        },
+        "mark_to_bid": {
+          "bid_size_covers_unit_notional": true,
+          "cost_usd": 1.0325,
+          "entry_fee_usd": 0.0325,
+          "exit_fee_usd": 0.012971285714285716,
+          "exit_revenue_usd": 0.27560014285714285,
+          "pnl_usd": -0.7568998571428571,
+          "roi": -0.7330749221722588,
+          "shares": 2.857142857142857
+        },
+        "target_date": "2026-07-04"
+      },
+      {
+        "branches": [
+          "b4"
+        ],
+        "city": "Lucknow",
+        "d1_bracket": "37",
+        "entry": {
+          "current_bracket": "36",
+          "current_yes_ask": 0.91,
+          "d1_yes_ask": 0.13,
+          "d1_yes_ask_size": 6.03,
+          "forecast_gap_native": 4.799999999999997,
+          "forecast_max_native": 40.8,
+          "forecast_peak_delta_hours_local": -0.63,
+          "forecast_steps": 5,
+          "generated_at_utc": "2026-07-04T09:01:36.504127+00:00",
+          "running_native": 36.0,
+          "snapshot_file": "snapshot_20260704_1652.json",
+          "temp_trend_1h_f": 5.4
+        },
+        "latest": {
+          "current_bracket": "36",
+          "forecast_peak_delta_hours_local": 2.17,
+          "generated_at_utc": "2026-07-04T14:01:46.826777+00:00",
+          "relation_to_d1_by_obs_proxy": "not_reached",
+          "running_native": 36.0,
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "temp_trend_1h_f": -9.0,
+          "trigger_b4": false,
+          "trigger_ff": false
+        },
+        "latest_quote": {
+          "city_local_date_at_snapshot": "2026-07-04",
+          "market_yes_price": 0.0025,
+          "question": "Will the highest temperature in Lucknow be 37\u00b0C on July 4?",
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+          "yes_ask_size": 9.0,
+          "yes_best_ask": 0.004,
+          "yes_best_bid": 0.001,
+          "yes_bid_size": 800.95,
+          "yes_book_status": "ok"
+        },
+        "mark_to_bid": {
+          "bid_size_covers_unit_notional": true,
+          "cost_usd": 1.0435,
+          "entry_fee_usd": 0.0435,
+          "exit_fee_usd": 0.00038423076923076925,
+          "exit_revenue_usd": 0.007308076923076922,
+          "pnl_usd": -1.0361919230769232,
+          "roi": -0.9929965721867974,
+          "shares": 7.692307692307692
+        },
+        "target_date": "2026-07-04"
+      }
+    ],
+    "false_fade": [
+      {
+        "branches": [
+          "false_fade"
+        ],
+        "city": "Helsinki",
+        "d1_bracket": "19",
+        "entry": {
+          "current_bracket": "18",
+          "current_yes_ask": 0.878,
+          "d1_yes_ask": 0.16,
+          "d1_yes_ask_size": 6.5,
+          "forecast_gap_native": 2.1000000000000014,
+          "forecast_max_native": 20.1,
+          "forecast_peak_delta_hours_local": -2.03,
+          "forecast_steps": 2,
+          "generated_at_utc": "2026-07-04T12:06:42.820305+00:00",
+          "running_native": 18.0,
+          "snapshot_file": "snapshot_20260704_1958.json",
+          "temp_trend_1h_f": 1.8
+        },
+        "latest": {
+          "current_bracket": "20",
+          "forecast_peak_delta_hours_local": -0.33,
+          "generated_at_utc": "2026-07-04T14:01:46.826471+00:00",
+          "relation_to_d1_by_obs_proxy": "overshot_by_obs_proxy",
+          "running_native": 20.0,
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "temp_trend_1h_f": 1.8,
+          "trigger_b4": false,
+          "trigger_ff": false
+        },
+        "latest_quote": {
+          "city_local_date_at_snapshot": "2026-07-04",
+          "market_yes_price": 0.82,
+          "question": "Will the highest temperature in Helsinki be 19\u00b0C on July 4?",
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+          "yes_ask_size": 5.0,
+          "yes_best_ask": 0.91,
+          "yes_best_bid": 0.85,
+          "yes_bid_size": 6.27,
+          "yes_book_status": "ok"
+        },
+        "mark_to_bid": {
+          "bid_size_covers_unit_notional": true,
+          "cost_usd": 1.042,
+          "entry_fee_usd": 0.042,
+          "exit_fee_usd": 0.039843750000000004,
+          "exit_revenue_usd": 5.27265625,
+          "pnl_usd": 4.23065625,
+          "roi": 4.060130758157389,
+          "shares": 6.25
+        },
+        "target_date": "2026-07-04"
+      },
+      {
+        "branches": [
+          "false_fade"
+        ],
+        "city": "Helsinki",
+        "d1_bracket": "20",
+        "entry": {
+          "current_bracket": "19",
+          "current_yes_ask": 0.91,
+          "d1_yes_ask": 0.299,
+          "d1_yes_ask_size": 26.99,
+          "forecast_gap_native": 1.1000000000000014,
+          "forecast_max_native": 20.1,
+          "forecast_peak_delta_hours_local": -0.9,
+          "forecast_steps": 1,
+          "generated_at_utc": "2026-07-04T13:16:45.306608+00:00",
+          "running_native": 19.0,
+          "snapshot_file": "snapshot_20260704_2106.json",
+          "temp_trend_1h_f": 5.4
+        },
+        "latest": {
+          "current_bracket": "20",
+          "forecast_peak_delta_hours_local": -0.33,
+          "generated_at_utc": "2026-07-04T14:01:46.826471+00:00",
+          "relation_to_d1_by_obs_proxy": "in_bracket_now",
+          "running_native": 20.0,
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "temp_trend_1h_f": 1.8,
+          "trigger_b4": false,
+          "trigger_ff": false
+        },
+        "latest_quote": {
+          "city_local_date_at_snapshot": "2026-07-04",
+          "market_yes_price": 0.115,
+          "question": "Will the highest temperature in Helsinki be 20\u00b0C on July 4?",
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+          "yes_ask_size": 17.2,
+          "yes_best_ask": 0.158,
+          "yes_best_bid": 0.101,
+          "yes_bid_size": 6.45,
+          "yes_book_status": "ok"
+        },
+        "mark_to_bid": {
+          "bid_size_covers_unit_notional": true,
+          "cost_usd": 1.03505,
+          "entry_fee_usd": 0.03505,
+          "exit_fee_usd": 0.015183779264214048,
+          "exit_revenue_usd": 0.3226088628762542,
+          "pnl_usd": -0.7124411371237458,
+          "roi": -0.688315672792373,
+          "shares": 3.3444816053511706
+        },
+        "target_date": "2026-07-04"
+      },
+      {
+        "branches": [
+          "false_fade"
+        ],
+        "city": "Lucknow",
+        "d1_bracket": "37",
+        "entry": {
+          "current_bracket": "36",
+          "current_yes_ask": 0.93,
+          "d1_yes_ask": 0.29,
+          "d1_yes_ask_size": 11.19,
+          "forecast_gap_native": 4.799999999999997,
+          "forecast_max_native": 40.8,
+          "forecast_peak_delta_hours_local": -0.92,
+          "forecast_steps": null,
+          "generated_at_utc": "2026-07-04T08:46:36.042185+00:00",
+          "running_native": 36.0,
+          "snapshot_file": "snapshot_20260704_1635.json",
+          "temp_trend_1h_f": 5.4
+        },
+        "latest": {
+          "current_bracket": "36",
+          "forecast_peak_delta_hours_local": 2.17,
+          "generated_at_utc": "2026-07-04T14:01:46.826777+00:00",
+          "relation_to_d1_by_obs_proxy": "not_reached",
+          "running_native": 36.0,
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "temp_trend_1h_f": -9.0,
+          "trigger_b4": false,
+          "trigger_ff": false
+        },
+        "latest_quote": {
+          "city_local_date_at_snapshot": "2026-07-04",
+          "market_yes_price": 0.0025,
+          "question": "Will the highest temperature in Lucknow be 37\u00b0C on July 4?",
+          "snapshot_file": "snapshot_20260704_2140.json",
+          "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+          "yes_ask_size": 9.0,
+          "yes_best_ask": 0.004,
+          "yes_best_bid": 0.001,
+          "yes_bid_size": 800.95,
+          "yes_book_status": "ok"
+        },
+        "mark_to_bid": {
+          "bid_size_covers_unit_notional": true,
+          "cost_usd": 1.0355,
+          "entry_fee_usd": 0.0355,
+          "exit_fee_usd": 0.00017224137931034483,
+          "exit_revenue_usd": 0.003276034482758621,
+          "pnl_usd": -1.0322239655172414,
+          "roi": -0.9968362776603006,
+          "shares": 3.4482758620689657
+        },
+        "target_date": "2026-07-04"
+      }
+    ]
+  },
+  "data_snapshot": {
+    "clob_gate_fail_reasons": [],
+    "clob_gate_pass": true,
+    "shadow_dir": "runtime/weather_edge_v1/metar_reversal_false_fade_reheat_shadow_v1",
+    "summary_rows_today_utc": 169,
+    "summary_rows_total": 286,
+    "today_first_generated_at_utc": "2026-07-04T00:01:18.644098+00:00",
+    "today_last_generated_at_utc": "2026-07-04T14:01:46.827433+00:00",
+    "today_unique_snapshots": 35,
+    "weather_db_mtime_utc": "2026-07-04T13:57:33.973125+00:00"
+  },
+  "generated_at_utc": "2026-07-04T14:04:49.179889+00:00",
+  "mark_to_bid_summary": {
+    "all_unique_tokens": {
+      "cost_usd": 4.121,
+      "note": "MTM only; not settled ROI and not a Head B exit policy recommendation",
+      "pnl_usd": 2.5919490940065684,
+      "roi": 0.6289611972838068,
+      "tokens": 4
+    },
+    "b4": {
+      "cities": [
+        "Amsterdam",
+        "Helsinki",
+        "Lucknow"
+      ],
+      "cost_usd": 4.129,
+      "pnl_usd": 2.5879811364468863,
+      "roi": 0.6267815782143101,
+      "tokens": 4
+    },
+    "false_fade": {
+      "cities": [
+        "Helsinki",
+        "Lucknow"
+      ],
+      "cost_usd": 3.11255,
+      "pnl_usd": 2.485991147359013,
+      "roi": 0.7986991847067558,
+      "tokens": 3
+    },
+    "fee_model": "Polymarket weather taker fee: shares * 0.05 * price * (1-price), applied to entry and bid-exit mark",
+    "unit_notional_usd_per_token": 1.0
+  },
+  "target_date_utc": "2026-07-04",
+  "today_overview": {
+    "cycles_with_b4": 32,
+    "cycles_with_false_fade": 27,
+    "latest_d1_book_status": {
+      "ok": 18,
+      "orderbook_budget_exhausted": 7
+    },
+    "latest_state_status": {
+      "no_current_bracket": 1,
+      "obs_missing": 12,
+      "ok": 25
+    },
+    "latest_summary": {
+      "cycle_id": "e95539fca12b",
+      "false_fade_reheat_conflict_triggered": 0,
+      "generated_at_utc": "2026-07-04T14:01:46.827433+00:00",
+      "rich_current_conflict_b4_triggered": 0,
+      "snapshot_file": "snapshot_20260704_2140.json",
+      "states": 38,
+      "states_ok": 25
+    },
+    "sum_b4_triggers": 33,
+    "sum_false_fade_triggers": 27,
+    "unique_token_triggers": 4
+  },
+  "tokens": [
+    {
+      "branches": [
+        "b4"
+      ],
+      "city": "Amsterdam",
+      "d1_bracket": "22",
+      "entry": {
+        "current_bracket": "21",
+        "current_yes_ask": 0.698,
+        "d1_yes_ask": 0.78,
+        "d1_yes_ask_size": 68.18,
+        "forecast_gap_native": 1.6000000000000014,
+        "forecast_max_native": 22.6,
+        "forecast_peak_delta_hours_local": -0.75,
+        "forecast_steps": 2,
+        "generated_at_utc": "2026-07-04T12:26:43.531410+00:00",
+        "running_native": 21.0,
+        "snapshot_file": "snapshot_20260704_2015.json",
+        "temp_trend_1h_f": 1.8
+      },
+      "latest": {
+        "current_bracket": "22",
+        "forecast_peak_delta_hours_local": 0.67,
+        "generated_at_utc": "2026-07-04T14:01:46.825636+00:00",
+        "relation_to_d1_by_obs_proxy": "in_bracket_now",
+        "running_native": 22.0,
+        "snapshot_file": "snapshot_20260704_2140.json",
+        "temp_trend_1h_f": 1.8,
+        "trigger_b4": false,
+        "trigger_ff": false
+      },
+      "latest_quote": {
+        "city_local_date_at_snapshot": "2026-07-04",
+        "market_yes_price": 0.92,
+        "question": "Will the highest temperature in Amsterdam be 22\u00b0C on July 4?",
+        "snapshot_file": "snapshot_20260704_2140.json",
+        "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+        "yes_ask_size": 19.98,
+        "yes_best_ask": 0.95,
+        "yes_best_bid": 0.91,
+        "yes_bid_size": 229.03,
+        "yes_book_status": "ok"
+      },
+      "mark_to_bid": {
+        "bid_size_covers_unit_notional": true,
+        "cost_usd": 1.011,
+        "entry_fee_usd": 0.010999999999999998,
+        "exit_fee_usd": 0.005249999999999998,
+        "exit_revenue_usd": 1.1614166666666665,
+        "pnl_usd": 0.15041666666666664,
+        "roi": 0.14878008572370588,
+        "shares": 1.282051282051282
+      },
+      "target_date": "2026-07-04"
+    },
+    {
+      "branches": [
+        "b4",
+        "false_fade"
+      ],
+      "city": "Helsinki",
+      "d1_bracket": "19",
+      "entry": {
+        "current_bracket": "18",
+        "current_yes_ask": 0.878,
+        "d1_yes_ask": 0.16,
+        "d1_yes_ask_size": 6.5,
+        "forecast_gap_native": 2.1000000000000014,
+        "forecast_max_native": 20.1,
+        "forecast_peak_delta_hours_local": -2.03,
+        "forecast_steps": 2,
+        "generated_at_utc": "2026-07-04T12:06:42.820305+00:00",
+        "running_native": 18.0,
+        "snapshot_file": "snapshot_20260704_1958.json",
+        "temp_trend_1h_f": 1.8
+      },
+      "latest": {
+        "current_bracket": "20",
+        "forecast_peak_delta_hours_local": -0.33,
+        "generated_at_utc": "2026-07-04T14:01:46.826471+00:00",
+        "relation_to_d1_by_obs_proxy": "overshot_by_obs_proxy",
+        "running_native": 20.0,
+        "snapshot_file": "snapshot_20260704_2140.json",
+        "temp_trend_1h_f": 1.8,
+        "trigger_b4": false,
+        "trigger_ff": false
+      },
+      "latest_quote": {
+        "city_local_date_at_snapshot": "2026-07-04",
+        "market_yes_price": 0.82,
+        "question": "Will the highest temperature in Helsinki be 19\u00b0C on July 4?",
+        "snapshot_file": "snapshot_20260704_2140.json",
+        "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+        "yes_ask_size": 5.0,
+        "yes_best_ask": 0.91,
+        "yes_best_bid": 0.85,
+        "yes_bid_size": 6.27,
+        "yes_book_status": "ok"
+      },
+      "mark_to_bid": {
+        "bid_size_covers_unit_notional": true,
+        "cost_usd": 1.042,
+        "entry_fee_usd": 0.042,
+        "exit_fee_usd": 0.039843750000000004,
+        "exit_revenue_usd": 5.27265625,
+        "pnl_usd": 4.23065625,
+        "roi": 4.060130758157389,
+        "shares": 6.25
+      },
+      "target_date": "2026-07-04"
+    },
+    {
+      "branches": [
+        "b4",
+        "false_fade"
+      ],
+      "city": "Helsinki",
+      "d1_bracket": "20",
+      "entry": {
+        "current_bracket": "19",
+        "current_yes_ask": 0.89,
+        "d1_yes_ask": 0.35,
+        "d1_yes_ask_size": 24.28,
+        "forecast_gap_native": 1.1000000000000014,
+        "forecast_max_native": 20.1,
+        "forecast_peak_delta_hours_local": -1.2,
+        "forecast_steps": 1,
+        "generated_at_utc": "2026-07-04T12:56:44.539392+00:00",
+        "running_native": 19.0,
+        "snapshot_file": "snapshot_20260704_2048.json",
+        "temp_trend_1h_f": 5.4
+      },
+      "latest": {
+        "current_bracket": "20",
+        "forecast_peak_delta_hours_local": -0.33,
+        "generated_at_utc": "2026-07-04T14:01:46.826471+00:00",
+        "relation_to_d1_by_obs_proxy": "in_bracket_now",
+        "running_native": 20.0,
+        "snapshot_file": "snapshot_20260704_2140.json",
+        "temp_trend_1h_f": 1.8,
+        "trigger_b4": false,
+        "trigger_ff": false
+      },
+      "latest_quote": {
+        "city_local_date_at_snapshot": "2026-07-04",
+        "market_yes_price": 0.115,
+        "question": "Will the highest temperature in Helsinki be 20\u00b0C on July 4?",
+        "snapshot_file": "snapshot_20260704_2140.json",
+        "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+        "yes_ask_size": 17.2,
+        "yes_best_ask": 0.158,
+        "yes_best_bid": 0.101,
+        "yes_bid_size": 6.45,
+        "yes_book_status": "ok"
+      },
+      "mark_to_bid": {
+        "bid_size_covers_unit_notional": true,
+        "cost_usd": 1.0325,
+        "entry_fee_usd": 0.0325,
+        "exit_fee_usd": 0.012971285714285716,
+        "exit_revenue_usd": 0.27560014285714285,
+        "pnl_usd": -0.7568998571428571,
+        "roi": -0.7330749221722588,
+        "shares": 2.857142857142857
+      },
+      "target_date": "2026-07-04"
+    },
+    {
+      "branches": [
+        "b4",
+        "false_fade"
+      ],
+      "city": "Lucknow",
+      "d1_bracket": "37",
+      "entry": {
+        "current_bracket": "36",
+        "current_yes_ask": 0.93,
+        "d1_yes_ask": 0.29,
+        "d1_yes_ask_size": 11.19,
+        "forecast_gap_native": 4.799999999999997,
+        "forecast_max_native": 40.8,
+        "forecast_peak_delta_hours_local": -0.92,
+        "forecast_steps": null,
+        "generated_at_utc": "2026-07-04T08:46:36.042185+00:00",
+        "running_native": 36.0,
+        "snapshot_file": "snapshot_20260704_1635.json",
+        "temp_trend_1h_f": 5.4
+      },
+      "latest": {
+        "current_bracket": "36",
+        "forecast_peak_delta_hours_local": 2.17,
+        "generated_at_utc": "2026-07-04T14:01:46.826777+00:00",
+        "relation_to_d1_by_obs_proxy": "not_reached",
+        "running_native": 36.0,
+        "snapshot_file": "snapshot_20260704_2140.json",
+        "temp_trend_1h_f": -9.0,
+        "trigger_b4": false,
+        "trigger_ff": false
+      },
+      "latest_quote": {
+        "city_local_date_at_snapshot": "2026-07-04",
+        "market_yes_price": 0.0025,
+        "question": "Will the highest temperature in Lucknow be 37\u00b0C on July 4?",
+        "snapshot_file": "snapshot_20260704_2140.json",
+        "snapshot_ts_utc": "2026-07-04T13:40:32Z",
+        "yes_ask_size": 9.0,
+        "yes_best_ask": 0.004,
+        "yes_best_bid": 0.001,
+        "yes_bid_size": 800.95,
+        "yes_book_status": "ok"
+      },
+      "mark_to_bid": {
+        "bid_size_covers_unit_notional": true,
+        "cost_usd": 1.0355,
+        "entry_fee_usd": 0.0355,
+        "exit_fee_usd": 0.00017224137931034483,
+        "exit_revenue_usd": 0.003276034482758621,
+        "pnl_usd": -1.0322239655172414,
+        "roi": -0.9968362776603006,
+        "shares": 3.4482758620689657
+      },
+      "target_date": "2026-07-04"
+    }
+  ],
+  "verdict": {
+    "live_action": "none",
+    "main_read": "Forward scarcity broke today: Head B saw real fresh states and two tokens pumped hard. The sample is still one target date and includes one failed false-fade and one weak second-step chase, so it is evidence to keep shadow running, not evidence to live.",
+    "promotion_status": "shadow_candidate_keep_collecting",
+    "today_shadow_effect": "positive_mtm_not_settled"
+  }
+}
