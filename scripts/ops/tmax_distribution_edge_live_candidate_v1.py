@@ -336,6 +336,9 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
             "d2_no_ask": d2_no_ask,
             "d2_no_ask_size": d2_no_size,
             "d2_no_bid": d2_no_bid,
+            "current_question": safe_str(current_record.get("question")),
+            "d1_question": safe_str(d1_record.get("question")),
+            "d2_question": safe_str(d2_record.get("question")),
             "current_yes_token_id": safe_str(current_record.get("yes_token_id")),
             "current_no_token_id": safe_str(current_record.get("no_token_id")),
             "d1_no_token_id": safe_str(d1_record.get("no_token_id")),
@@ -343,7 +346,10 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
             "current_market_id": safe_str(current_record.get("market_id")),
             "d1_market_id": safe_str(d1_record.get("market_id")),
             "d2_market_id": safe_str(d2_record.get("market_id")),
-            "event_slug": safe_str(current_record.get("event_slug")),
+            "current_event_slug": safe_str(current_record.get("event_slug") or current_record.get("market_slug")),
+            "d1_event_slug": safe_str(d1_record.get("event_slug") or d1_record.get("market_slug")),
+            "d2_event_slug": safe_str(d2_record.get("event_slug") or d2_record.get("market_slug")),
+            "event_slug": safe_str(current_record.get("event_slug") or current_record.get("market_slug")),
             "question": safe_str(current_record.get("question")),
             "forecast_source": source or "unknown",
             "forecast_max_f": forecast_max_f,
@@ -511,6 +517,26 @@ def ask_and_token(row: pd.Series, expression: str) -> tuple[float, float, str, s
     raise ValueError(expression)
 
 
+def expression_question(row: pd.Series, expression: str) -> str:
+    if expression in {"current_yes", "current_no"}:
+        return safe_str(row.get("current_question") or row.get("question"))
+    if expression == "d1_no":
+        return safe_str(row.get("d1_question") or row.get("question"))
+    if expression == "d2_no":
+        return safe_str(row.get("d2_question") or row.get("question"))
+    raise ValueError(expression)
+
+
+def expression_event_slug(row: pd.Series, expression: str) -> str:
+    if expression in {"current_yes", "current_no"}:
+        return safe_str(row.get("current_event_slug") or row.get("event_slug") or row.get("market_slug"))
+    if expression == "d1_no":
+        return safe_str(row.get("d1_event_slug") or row.get("event_slug") or row.get("market_slug"))
+    if expression == "d2_no":
+        return safe_str(row.get("d2_event_slug") or row.get("event_slug") or row.get("market_slug"))
+    raise ValueError(expression)
+
+
 def win_prob(pred_row: pd.Series, expression: str) -> float:
     p_current = float(pred_row[f"{MODEL_METHOD}_p_current"])
     p_d1 = float(pred_row[f"{MODEL_METHOD}_p_d1"])
@@ -545,8 +571,13 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
             ask, ask_size, token_id, market_id, bracket = ask_and_token(row, expression)
             p_win = win_prob(row, expression)
             edge = p_win - ask
+            question = expression_question(row, expression)
+            event_slug = expression_event_slug(row, expression)
             base = {
                 **candidate_base(item),
+                "event_slug": event_slug,
+                "market_slug": event_slug,
+                "question": question,
                 "chosen_expression": expression,
                 "signal_side": "BUY_YES" if expression == "current_yes" else "BUY_NO",
                 "ask": ask,
@@ -596,6 +627,7 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
         "decision_hour_local",
         "decision_snapshot_ts_utc",
         "event_slug",
+        "market_slug",
         "question",
         "unit",
         "forecast_source",
@@ -785,6 +817,7 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "target_date": candidate["target_date"],
         "market_id": candidate["market_id"],
         "event_slug": candidate.get("event_slug", ""),
+        "market_slug": candidate.get("market_slug") or candidate.get("event_slug", ""),
         "question": candidate.get("question", ""),
         "bracket": candidate["bracket"],
         "token_id": candidate["token_id"],
@@ -935,12 +968,17 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     write_json(blocked_path, {"generated_at_utc": utc_now(), "events": blocked})
     write_jsonl(plans_path, plans)
     executor_result = execute_plans(args, runtime_dir, plans_path) if args.execute and plans else None
+    live_orders_written = 0
+    if isinstance(executor_result, dict) and isinstance(executor_result.get("executor_result"), dict):
+        live_orders_written = int(executor_result["executor_result"].get("live_written") or 0)
     summary = {
         "generated_at_utc": utc_now(),
         "strategy_instance": STRATEGY_INSTANCE,
         "strategy_id": STRATEGY_ID,
         "execution_mode": "live_enabled" if args.live else "paper_executor_only",
-        "no_live_order_placed": not bool(args.live),
+        "live_enabled": bool(args.live),
+        "live_orders_written": live_orders_written,
+        "no_live_order_placed": live_orders_written == 0,
         "snapshot": rel(snapshot_path),
         "snapshot_ts_utc": snapshot.get("ts_utc") or snapshot.get("snapshot_ts_utc"),
         "snapshot_age_min": snapshot_age_min,

@@ -27,15 +27,6 @@ if [[ ! -x "$PY" ]]; then
   PY="python3"
 fi
 
-ENV_PREFIX=""
-if [[ -f "$PROJECT_DIR/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$PROJECT_DIR/.env"
-  set +a
-  ENV_PREFIX="set -a; . $(printf '%q' "$PROJECT_DIR/.env"); set +a;"
-fi
-
 args=(
   "loop"
   "--runtime-dir" "$RUNTIME_DIR"
@@ -69,23 +60,37 @@ if [[ "$LIVE" == "1" ]]; then
   args+=("--live" "--confirm-live")
 fi
 
-cmd=(
-  "cd" "$PROJECT_DIR" "&&"
-  "$ENV_PREFIX"
+runner_cmd=(
   "$PY" "-u" "scripts/ops/tmax_distribution_edge_live_candidate_v1.py"
   "${args[@]}"
-  ">>" "$LOG_FILE" "2>&1"
 )
+
+runner_cmd_q=""
+for part in "${runner_cmd[@]}"; do
+  runner_cmd_q+="$(printf '%q' "$part") "
+done
+
+project_q="$(printf '%q' "$PROJECT_DIR")"
+log_q="$(printf '%q' "$LOG_FILE")"
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+  env_load="set -a; . $(printf '%q' "$PROJECT_DIR/.env"); set +a;"
+else
+  env_load=":"
+fi
+
+proxy_norm='if [[ -z ${HTTP_PROXY:-} && -n ${WEATHER_DATA_FEED_MARKET_PROXY:-} ]]; then export HTTP_PROXY="$WEATHER_DATA_FEED_MARKET_PROXY"; fi; if [[ -z ${HTTPS_PROXY:-} && -n ${WEATHER_DATA_FEED_MARKET_PROXY:-} ]]; then export HTTPS_PROXY="$WEATHER_DATA_FEED_MARKET_PROXY"; fi; if [[ -z ${ALL_PROXY:-} && -n ${WEATHER_DATA_FEED_MARKET_PROXY:-} ]]; then export ALL_PROXY="$WEATHER_DATA_FEED_MARKET_PROXY"; fi; export http_proxy="${http_proxy:-${HTTP_PROXY:-}}"; export https_proxy="${https_proxy:-${HTTPS_PROXY:-}}"; export all_proxy="${all_proxy:-${ALL_PROXY:-}}";'
+env_check="printf '[%s] env_check http_proxy=%s https_proxy=%s all_proxy=%s wallet=%s pm_addr=%s clob_base=%s\\n' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" \"\$([[ -n \${HTTP_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${HTTPS_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${ALL_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${PM:-}\${POLYGON_WALLET_PRIVATE_KEY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${PM_ADDRESS:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${CLOB_BASE_URL:-} ]] && echo 1 || echo 0)\" >> $log_q"
+bootstrap="cd $project_q && $env_load $proxy_norm $env_check && exec $runner_cmd_q >> $log_q 2>&1"
 
 if command -v tmux >/dev/null 2>&1; then
   if tmux has-session -t "$SESSION" 2>/dev/null; then
     echo "already running tmux session=$SESSION log=$LOG_FILE"
     exit 0
   fi
-  tmux new-session -d -s "$SESSION" "${cmd[*]}"
+  tmux new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
   echo "started tmux session=$SESSION log=$LOG_FILE"
   exit 0
 fi
 
-nohup bash -lc "${cmd[*]}" >/dev/null 2>&1 < /dev/null &
+nohup bash -lc "$bootstrap" >/dev/null 2>&1 < /dev/null &
 echo "started pid=$! log=$LOG_FILE"
