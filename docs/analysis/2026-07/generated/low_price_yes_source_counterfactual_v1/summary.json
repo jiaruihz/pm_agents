@@ -1,0 +1,610 @@
+{
+  "live_fills": {
+    "aligned": {
+      "cost_usd_settled": 8.568385,
+      "fills": 15,
+      "pnl_usd_settled": 0.231615000000001,
+      "roi_settled_cost": 0.02703134838128784,
+      "settled": 13,
+      "win_rate_settled": 0.07692307692307693,
+      "wins": 1
+    },
+    "all": {
+      "cost_usd_settled": 12.662495,
+      "fills": 22,
+      "pnl_usd_settled": -3.862494999999999,
+      "roi_settled_cost": -0.3050342764202473,
+      "settled": 20,
+      "win_rate_settled": 0.05,
+      "wins": 1
+    },
+    "mismatch": {
+      "cost_usd_settled": 4.09411,
+      "fills": 7,
+      "pnl_usd_settled": -4.09411,
+      "roi_settled_cost": -1.0,
+      "settled": 7,
+      "win_rate_settled": 0.0,
+      "wins": 0
+    }
+  },
+  "meta": {
+    "cache_dir": "/Users/deepsleep/projects/weather_data_feed_service_runtime/cache",
+    "counterfactual_scope": "assigned_error_dist_only; stored forecast_max_f is not changed",
+    "current_api_forecast_approx_enabled": true,
+    "current_api_forecast_approx_warning": "not point-in-time; use only to size likely forecast_max effect",
+    "db": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+    "end": "2026-07-05",
+    "pit_ecmwf_forecast_curve_reconstructed": false,
+    "start": "2026-07-02"
+  },
+  "selector_current_api_ecmwf_forecast_approx_hot_dist_gt0": {
+    "api_forecast_approx": {
+      "avg_ask": 0.08828,
+      "cities": 17,
+      "dates": 4,
+      "pnl_1share": 1.613,
+      "roi_1share": 1.1629416005767843,
+      "rows": 25,
+      "settled": 16,
+      "win_rate_settled": 0.1875,
+      "wins": 3
+    },
+    "by_date_api_forecast_approx": [
+      {
+        "avg_ask": 0.07878571428571429,
+        "cities": 7,
+        "date": "2026-07-02",
+        "dates": 1,
+        "pnl_1share": 1.4485000000000001,
+        "roi_1share": 2.6264732547597465,
+        "rows": 7,
+        "settled": 7,
+        "win_rate_settled": 0.2857142857142857,
+        "wins": 2
+      },
+      {
+        "avg_ask": 0.09066666666666667,
+        "cities": 6,
+        "date": "2026-07-03",
+        "dates": 1,
+        "pnl_1share": 0.456,
+        "roi_1share": 0.8382352941176471,
+        "rows": 6,
+        "settled": 6,
+        "win_rate_settled": 0.16666666666666666,
+        "wins": 1
+      },
+      {
+        "avg_ask": 0.08283333333333334,
+        "cities": 6,
+        "date": "2026-07-04",
+        "dates": 1,
+        "pnl_1share": -0.2915,
+        "roi_1share": -1.0,
+        "rows": 6,
+        "settled": 3,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      {
+        "avg_ask": 0.10241666666666667,
+        "cities": 6,
+        "date": "2026-07-05",
+        "dates": 1,
+        "pnl_1share": 0,
+        "roi_1share": null,
+        "rows": 6,
+        "settled": 0,
+        "win_rate_settled": null,
+        "wins": 0
+      }
+    ],
+    "delta_observed_to_api_forecast_approx": {
+      "added_count": 9,
+      "added_summary": {
+        "avg_ask": 0.09044444444444444,
+        "cities": 7,
+        "dates": 4,
+        "pnl_1share": 0.5660000000000001,
+        "roi_1share": 1.3041474654377883,
+        "rows": 9,
+        "settled": 5,
+        "win_rate_settled": 0.2,
+        "wins": 1
+      },
+      "dropped_count": 6,
+      "dropped_summary": {
+        "avg_ask": 0.09191666666666666,
+        "cities": 6,
+        "dates": 2,
+        "pnl_1share": -0.4965,
+        "roi_1share": -1.0,
+        "rows": 6,
+        "settled": 5,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      "overlap_count": 16,
+      "overlap_summary": {
+        "avg_ask": 0.0870625,
+        "cities": 11,
+        "dates": 4,
+        "pnl_1share": 1.047,
+        "roi_1share": 1.098635886673662,
+        "rows": 16,
+        "settled": 11,
+        "win_rate_settled": 0.18181818181818182,
+        "wins": 2
+      }
+    },
+    "observed_dirty": {
+      "avg_ask": 0.08838636363636364,
+      "cities": 14,
+      "dates": 4,
+      "pnl_1share": 0.5505,
+      "roi_1share": 0.3797861331493618,
+      "rows": 22,
+      "settled": 16,
+      "win_rate_settled": 0.125,
+      "wins": 2
+    }
+  },
+  "selector_current_api_ecmwf_forecast_approx_no_dist_filter": {
+    "api_forecast_approx": {
+      "avg_ask": 0.09529166666666666,
+      "cities": 22,
+      "dates": 4,
+      "pnl_1share": 1.7005000000000001,
+      "roi_1share": 0.7395085888236573,
+      "rows": 36,
+      "settled": 24,
+      "win_rate_settled": 0.16666666666666666,
+      "wins": 4
+    },
+    "by_date_api_forecast_approx": [
+      {
+        "avg_ask": 0.09315,
+        "cities": 10,
+        "date": "2026-07-02",
+        "dates": 1,
+        "pnl_1share": 1.0685,
+        "roi_1share": 1.1470746108427268,
+        "rows": 10,
+        "settled": 10,
+        "win_rate_settled": 0.2,
+        "wins": 2
+      },
+      {
+        "avg_ask": 0.10165,
+        "cities": 10,
+        "date": "2026-07-03",
+        "dates": 1,
+        "pnl_1share": 0.9835,
+        "roi_1share": 0.9675356615838663,
+        "rows": 10,
+        "settled": 10,
+        "win_rate_settled": 0.2,
+        "wins": 2
+      },
+      {
+        "avg_ask": 0.07922222222222222,
+        "cities": 9,
+        "date": "2026-07-04",
+        "dates": 1,
+        "pnl_1share": -0.35150000000000003,
+        "roi_1share": -1.0,
+        "rows": 9,
+        "settled": 4,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      {
+        "avg_ask": 0.10992857142857143,
+        "cities": 7,
+        "date": "2026-07-05",
+        "dates": 1,
+        "pnl_1share": 0,
+        "roi_1share": null,
+        "rows": 7,
+        "settled": 0,
+        "win_rate_settled": null,
+        "wins": 0
+      }
+    ],
+    "delta_observed_to_api_forecast_approx": {
+      "added_count": 9,
+      "added_summary": {
+        "avg_ask": 0.10033333333333333,
+        "cities": 8,
+        "dates": 4,
+        "pnl_1share": 0.42100000000000004,
+        "roi_1share": 0.7271157167530226,
+        "rows": 9,
+        "settled": 6,
+        "win_rate_settled": 0.16666666666666666,
+        "wins": 1
+      },
+      "dropped_count": 10,
+      "dropped_summary": {
+        "avg_ask": 0.097,
+        "cities": 8,
+        "dates": 3,
+        "pnl_1share": -0.565,
+        "roi_1share": -1.0,
+        "rows": 10,
+        "settled": 6,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      "overlap_count": 27,
+      "overlap_summary": {
+        "avg_ask": 0.09361111111111112,
+        "cities": 16,
+        "dates": 4,
+        "pnl_1share": 1.2795,
+        "roi_1share": 0.7436791630340017,
+        "rows": 27,
+        "settled": 18,
+        "win_rate_settled": 0.16666666666666666,
+        "wins": 3
+      }
+    },
+    "observed_dirty": {
+      "avg_ask": 0.09452702702702703,
+      "cities": 21,
+      "dates": 4,
+      "pnl_1share": 0.7145,
+      "roi_1share": 0.3126230584117261,
+      "rows": 37,
+      "settled": 24,
+      "win_rate_settled": 0.125,
+      "wins": 3
+    }
+  },
+  "selector_current_hot_dist_gt0": {
+    "by_date_observed_dirty": [
+      {
+        "avg_ask": 0.0643,
+        "cities": 5,
+        "date": "2026-07-02",
+        "dates": 1,
+        "pnl_1share": 1.6785,
+        "roi_1share": 5.2208398133748055,
+        "rows": 5,
+        "settled": 5,
+        "win_rate_settled": 0.4,
+        "wins": 2
+      },
+      {
+        "avg_ask": 0.09728571428571428,
+        "cities": 7,
+        "date": "2026-07-03",
+        "dates": 1,
+        "pnl_1share": -0.681,
+        "roi_1share": -1.0,
+        "rows": 7,
+        "settled": 7,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      {
+        "avg_ask": 0.09314285714285714,
+        "cities": 7,
+        "date": "2026-07-04",
+        "dates": 1,
+        "pnl_1share": -0.447,
+        "roi_1share": -1.0,
+        "rows": 7,
+        "settled": 4,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      {
+        "avg_ask": 0.09666666666666668,
+        "cities": 3,
+        "date": "2026-07-05",
+        "dates": 1,
+        "pnl_1share": 0,
+        "roi_1share": null,
+        "rows": 3,
+        "settled": 0,
+        "win_rate_settled": null,
+        "wins": 0
+      }
+    ],
+    "by_date_source_corrected_partial": [
+      {
+        "avg_ask": 0.09021428571428572,
+        "cities": 7,
+        "date": "2026-07-02",
+        "dates": 1,
+        "pnl_1share": 1.3685,
+        "roi_1share": 2.1670625494853524,
+        "rows": 7,
+        "settled": 7,
+        "win_rate_settled": 0.2857142857142857,
+        "wins": 2
+      },
+      {
+        "avg_ask": 0.0852,
+        "cities": 5,
+        "date": "2026-07-03",
+        "dates": 1,
+        "pnl_1share": -0.426,
+        "roi_1share": -1.0,
+        "rows": 5,
+        "settled": 5,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      {
+        "avg_ask": 0.10022222222222223,
+        "cities": 9,
+        "date": "2026-07-04",
+        "dates": 1,
+        "pnl_1share": 0.24800000000000003,
+        "roi_1share": 0.3297872340425532,
+        "rows": 9,
+        "settled": 7,
+        "win_rate_settled": 0.14285714285714285,
+        "wins": 1
+      },
+      {
+        "avg_ask": 0.10308333333333333,
+        "cities": 6,
+        "date": "2026-07-05",
+        "dates": 1,
+        "pnl_1share": 0,
+        "roi_1share": null,
+        "rows": 6,
+        "settled": 0,
+        "win_rate_settled": null,
+        "wins": 0
+      }
+    ],
+    "delta_observed_to_source_corrected": {
+      "added_count": 8,
+      "added_summary": {
+        "avg_ask": 0.1179375,
+        "cities": 6,
+        "dates": 3,
+        "pnl_1share": 0.38500000000000006,
+        "roi_1share": 0.6260162601626017,
+        "rows": 8,
+        "settled": 5,
+        "win_rate_settled": 0.2,
+        "wins": 1
+      },
+      "dropped_count": 3,
+      "dropped_summary": {
+        "avg_ask": 0.10333333333333333,
+        "cities": 2,
+        "dates": 2,
+        "pnl_1share": -0.255,
+        "roi_1share": -1.0,
+        "rows": 3,
+        "settled": 2,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      "overlap_count": 19,
+      "overlap_summary": {
+        "avg_ask": 0.08602631578947369,
+        "cities": 12,
+        "dates": 4,
+        "pnl_1share": 0.8055,
+        "roi_1share": 0.6743407283382168,
+        "rows": 19,
+        "settled": 14,
+        "win_rate_settled": 0.14285714285714285,
+        "wins": 2
+      }
+    },
+    "observed_dirty": {
+      "avg_ask": 0.08838636363636364,
+      "cities": 14,
+      "dates": 4,
+      "pnl_1share": 0.5505,
+      "roi_1share": 0.3797861331493618,
+      "rows": 22,
+      "settled": 16,
+      "win_rate_settled": 0.125,
+      "wins": 2
+    },
+    "source_corrected_partial": {
+      "avg_ask": 0.09548148148148149,
+      "cities": 17,
+      "dates": 4,
+      "pnl_1share": 1.1905000000000001,
+      "roi_1share": 0.6579165515335729,
+      "rows": 27,
+      "settled": 19,
+      "win_rate_settled": 0.15789473684210525,
+      "wins": 3
+    }
+  },
+  "selector_then_no_dist_filter": {
+    "by_date_observed_dirty": [
+      {
+        "avg_ask": 0.0795,
+        "cities": 7,
+        "date": "2026-07-02",
+        "dates": 1,
+        "pnl_1share": 1.4435,
+        "roi_1share": 2.5938903863432166,
+        "rows": 7,
+        "settled": 7,
+        "win_rate_settled": 0.2857142857142857,
+        "wins": 2
+      },
+      {
+        "avg_ask": 0.10486363636363637,
+        "cities": 11,
+        "date": "2026-07-03",
+        "dates": 1,
+        "pnl_1share": -0.1535,
+        "roi_1share": -0.1330732553099263,
+        "rows": 11,
+        "settled": 11,
+        "win_rate_settled": 0.09090909090909091,
+        "wins": 1
+      },
+      {
+        "avg_ask": 0.090125,
+        "cities": 12,
+        "date": "2026-07-04",
+        "dates": 1,
+        "pnl_1share": -0.5755,
+        "roi_1share": -1.0,
+        "rows": 12,
+        "settled": 6,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      {
+        "avg_ask": 0.10085714285714285,
+        "cities": 7,
+        "date": "2026-07-05",
+        "dates": 1,
+        "pnl_1share": 0,
+        "roi_1share": null,
+        "rows": 7,
+        "settled": 0,
+        "win_rate_settled": null,
+        "wins": 0
+      }
+    ],
+    "by_date_source_corrected_partial": [
+      {
+        "avg_ask": 0.09627777777777778,
+        "cities": 9,
+        "date": "2026-07-02",
+        "dates": 1,
+        "pnl_1share": 1.1335,
+        "roi_1share": 1.3081361800346218,
+        "rows": 9,
+        "settled": 9,
+        "win_rate_settled": 0.2222222222222222,
+        "wins": 2
+      },
+      {
+        "avg_ask": 0.09983333333333333,
+        "cities": 9,
+        "date": "2026-07-03",
+        "dates": 1,
+        "pnl_1share": 0.1015,
+        "roi_1share": 0.11296605453533669,
+        "rows": 9,
+        "settled": 9,
+        "win_rate_settled": 0.1111111111111111,
+        "wins": 1
+      },
+      {
+        "avg_ask": 0.09126923076923077,
+        "cities": 13,
+        "date": "2026-07-04",
+        "dates": 1,
+        "pnl_1share": 0.11950000000000002,
+        "roi_1share": 0.13571834185122092,
+        "rows": 13,
+        "settled": 9,
+        "win_rate_settled": 0.1111111111111111,
+        "wins": 1
+      },
+      {
+        "avg_ask": 0.10327777777777779,
+        "cities": 9,
+        "date": "2026-07-05",
+        "dates": 1,
+        "pnl_1share": 0,
+        "roi_1share": null,
+        "rows": 9,
+        "settled": 0,
+        "win_rate_settled": null,
+        "wins": 0
+      }
+    ],
+    "delta_observed_to_source_corrected": {
+      "added_count": 8,
+      "added_summary": {
+        "avg_ask": 0.1179375,
+        "cities": 6,
+        "dates": 3,
+        "pnl_1share": 0.38500000000000006,
+        "roi_1share": 0.6260162601626017,
+        "rows": 8,
+        "settled": 5,
+        "win_rate_settled": 0.2,
+        "wins": 1
+      },
+      "dropped_count": 5,
+      "dropped_summary": {
+        "avg_ask": 0.11199999999999999,
+        "cities": 4,
+        "dates": 3,
+        "pnl_1share": -0.255,
+        "roi_1share": -1.0,
+        "rows": 5,
+        "settled": 2,
+        "win_rate_settled": 0.0,
+        "wins": 0
+      },
+      "overlap_count": 32,
+      "overlap_summary": {
+        "avg_ask": 0.091796875,
+        "cities": 18,
+        "dates": 4,
+        "pnl_1share": 0.9695,
+        "roi_1share": 0.47746860379216943,
+        "rows": 32,
+        "settled": 22,
+        "win_rate_settled": 0.13636363636363635,
+        "wins": 3
+      }
+    },
+    "observed_dirty": {
+      "avg_ask": 0.09452702702702703,
+      "cities": 21,
+      "dates": 4,
+      "pnl_1share": 0.7145,
+      "roi_1share": 0.3126230584117261,
+      "rows": 37,
+      "settled": 24,
+      "win_rate_settled": 0.125,
+      "wins": 3
+    },
+    "source_corrected_partial": {
+      "avg_ask": 0.097025,
+      "cities": 23,
+      "dates": 4,
+      "pnl_1share": 1.3545,
+      "roi_1share": 0.512001512001512,
+      "rows": 40,
+      "settled": 27,
+      "win_rate_settled": 0.14814814814814814,
+      "wins": 4
+    }
+  },
+  "source_coverage_fact_rows": {
+    "2026-07-02": {
+      "ecmwf->ecmwf": 116,
+      "gfs->ecmwf": 428,
+      "gfs->gfs": 329
+    },
+    "2026-07-03": {
+      "ecmwf->ecmwf": 6,
+      "gfs->ecmwf": 492,
+      "gfs->gfs": 343
+    },
+    "2026-07-04": {
+      "gfs->ecmwf": 486,
+      "gfs->gfs": 339
+    },
+    "2026-07-05": {
+      "ecmwf->ecmwf": 83,
+      "gfs->ecmwf": 402,
+      "gfs->gfs": 341
+    }
+  }
+}

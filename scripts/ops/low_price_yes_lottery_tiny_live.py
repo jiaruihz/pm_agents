@@ -426,6 +426,61 @@ def count_raw(conn: sqlite3.Connection, args: argparse.Namespace, min_event_date
     return dict(row) if row is not None else {}
 
 
+def count_date_window_excluded(conn: sqlite3.Connection, args: argparse.Namespace, min_event_date: str | None) -> dict[str, Any]:
+    if not min_event_date:
+        return {
+            "rows": 0,
+            "city_date_dedupe_rows": 0,
+            "dates": 0,
+            "cities": 0,
+            "min_event_date": None,
+            "max_event_date": None,
+            "reason": "no_effective_min_event_date",
+        }
+    status_filter = "" if args.allow_settled else "AND COALESCE(settlement_status, '') <> 'settled' AND final_yes IS NULL"
+    max_filter = "AND event_date <= :max_event_date" if args.max_event_date else ""
+    row = conn.execute(
+        f"""
+        WITH matching AS (
+          SELECT
+            event_date,
+            city,
+            ROW_NUMBER() OVER (
+              PARTITION BY event_date, city
+              ORDER BY decision_snapshot_ts_utc ASC, decision_entry_price ASC, edge DESC, bracket ASC, candidate_id ASC
+            ) AS city_date_rank
+          FROM fact_signal_candidates
+          WHERE side = 'BUY_YES'
+            AND decision_entry_price BETWEEN :min_ask AND :max_ask
+            AND edge >= :min_edge
+            AND event_date < :min_event_date
+            {max_filter}
+            {status_filter}
+        )
+        SELECT
+          COUNT(*) AS rows,
+          SUM(CASE WHEN city_date_rank = 1 THEN 1 ELSE 0 END) AS city_date_dedupe_rows,
+          COUNT(DISTINCT event_date) AS dates,
+          COUNT(DISTINCT city) AS cities,
+          MIN(event_date) AS min_event_date,
+          MAX(event_date) AS max_event_date
+        FROM matching
+        """,
+        {
+            "min_ask": args.min_ask,
+            "max_ask": args.max_ask,
+            "min_edge": args.min_edge,
+            "min_event_date": min_event_date,
+            "max_event_date": args.max_event_date,
+        },
+    ).fetchone()
+    out = dict(row) if row is not None else {}
+    out["reason"] = "before_effective_min_event_date"
+    out["effective_min_event_date"] = min_event_date
+    out["selection_behavior"] = "observability_only_no_selector_change"
+    return out
+
+
 def load_candidates(conn: sqlite3.Connection, args: argparse.Namespace, min_event_date: str | None) -> list[dict[str, Any]]:
     status_filter = "" if args.allow_settled else "AND COALESCE(settlement_status, '') <> 'settled' AND final_yes IS NULL"
     max_filter = "AND event_date <= :max_event_date" if args.max_event_date else ""
@@ -1915,6 +1970,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     with connect(Path(args.db)) as conn:
         min_event_date = effective_min_event_date(conn, args)
         raw_counts = count_raw(conn, args, min_event_date)
+        date_window_excluded_counts = count_date_window_excluded(conn, args, min_event_date)
         raw_candidates = load_candidates(conn, args, min_event_date)
 
     decisions: list[dict[str, Any]] = []
@@ -1961,6 +2017,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "effective_min_event_date": min_event_date,
         "effective_max_event_date": args.max_event_date,
         "raw_matching_rows": raw_counts,
+        "date_window_excluded_matching_rows": date_window_excluded_counts,
         "raw_candidate_rows_after_city_date_dedupe": len(raw_candidates),
         "decision_count": len(decisions),
         "planned_count": len(planned),

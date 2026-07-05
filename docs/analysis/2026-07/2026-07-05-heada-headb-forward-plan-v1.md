@@ -21,9 +21,9 @@ Status: `current-reference`（计划文档；各项结论权威性以对应 livi
 ## 当前姿态（2026-07-05）
 
 tiny live：`edge>=0.20 + fee-adjusted>=0.15`、ask 5-20c、`dist>0` blocker、maker-first（1c taker cushion）、
-`price_tier_6_8_10_shares`、hold-to-settlement（TP20 已停用）。shadow v2 带
+`price_tier_6_8_10_shares`（实际从 2026-07-05 fill 起生效；7/04 canonical fills 仍是 fixed-cash `$0.8`）、hold-to-settlement（TP20/TP30/recover-stake 均不启用）。shadow v2 带
 `hot_tail_boundary_v1 / bracket_dist_br_v1 / book_state_v1 / pcal_v2_*` 全量 tag。
-评估窗 2026-07-04 起。forward 预期（蒙特卡洛）：命中率 11-14%，ROI 中心 +10~+20%、上限 +37.6%、下限 ≈0。
+评估窗从 2026-07-04 起看，但 2026-07-02..ECMWF 修复时刻的 ECMWF-assigned 城市行受 GFS fallback 污染，E1/E-book gate 需剔除或单独分层；干净 ECMWF 城市 forward 从修复后重新起算。forward 预期（蒙特卡洛）：命中率 11-14%，ROI 中心 +10~+20%、上限 +37.6%、下限 ≈0。
 
 ## A0 确定性修复（现在做，不需要预注册）
 
@@ -31,9 +31,10 @@ tiny live：`edge>=0.20 + fee-adjusted>=0.15`、ask 5-20c、`dist>0` blocker、m
 |---|---|---|---|
 | A0.1 | missing-token 从静默 block 改为告警 + token_cache 对次日市场预热 | case review P1：永久错过 2 个大赢家 | timeout/failover 已上，告警/预热待做 |
 | A0.2 | fact_refresh 健康监控接进 runtime monitor | P2：stale 门误伤 7 张票源于刷新节奏 | 待做 |
-| A0.3 | cold-share 日度 drift 指标进 shadow summary | P3：cold 占比 7 月 ~60% vs train 28% | 待做 |
+| A0.3 | cold-share 日度 drift 指标进 shadow summary，并按 assigned model 分组 | P3：cold 占比 7 月 ~60% vs train 28%；ECMWF fallback 事故可能制造假 regime drift | 待做 |
 | A0.4 | blocked journal 消费口径统一为"candidate×blocker 首见去重" | 原始行数虚高 ~100 倍 | 写进本计划，分析侧遵守 |
 | A0.5 | 7/03+ settlement 及时性（链路日跑）+ 5/18 源头缺口记录 | 反事实/结算依赖 | 链路已通，保持 |
+| A0.6 | runner 日期窗口观测面：`MAX(event_date)` 前被静默排除的匹配行数进 summary | HeadA review P1：不改 selector，但暴露日期窗口排除量 | 已落代码 |
 
 ## A1 Forward 裁决窗（7/04 起，中间不看不调）
 
@@ -54,7 +55,7 @@ tiny live：`edge>=0.20 + fee-adjusted>=0.15`、ask 5-20c、`dist>0` blocker、m
 
 | # | 实验 | 内容 | 前置 |
 |---|---|---|---|
-| A2.1 | **E2 连续 EV selector**（优先） | W0 三件套：as-of 滚动 station-bias（每决策日只用 T-1 前误差史，≥60 天起报）+ 欧洲 13 城 bias 补全 + `bracket_distance_f` 物化进 builder；然后 `p_cal(adj_dist, bias_asof) - ask ≥ θ` 替代双阈值，θ 按日均 3-6 票在 train 定一次不扫格；验收=decile 单调 + selected CI>0 + paired excess vs 冻结 v1 CI>0（pcal_v2 失败的那一门） | 无，可立即开工 |
+| A2.1 | **E2 连续 EV / as-of bias 解释层**（降预期后继续） | W0 三件套：as-of 滚动 station-bias（每决策日只用 T-1 前误差史，≥60 天起报）+ 欧洲 13 城 bias 补全 + `bracket_distance_f` 物化进 builder。hot 子集内 raw dist 分档胜率平坦（12.2/15.6/16.7/14.0/15.6%），连续距离梯度主要来自 hot/cold 边界，因此不再把它当近期 selector 替代候选卖；验收仍要求 decile 单调 + selected CI>0 + paired excess vs 冻结 v1 CI>0 | 无，可立即开工 |
 | A2.2 | E3 表达实验 | hot 触发 city-date 上决策时刻全 book 重放：单票 vs +1 格 ladder vs "+"封顶档；官方 fee、maker/taker 双口径。背景：hot 输家 43% 是 overshoot（热对了格子买矮了） | paper_snapshots 全 book 解析 |
 | A2.3 | E4 双模型分歧特征 | candidates 每城 source 固定（train 覆盖 3/383），需从 forecast cache 层物化同城同日 GFS vs ECMWF 分歧；假说：分歧大 → tail 更值钱 | forecast cache 可及性确认 |
 | A2.4 | **部分成交/时延模型**（size-up 前置） | case review P5：$0.8 要 2-4 段跨 6-11h 吃完。回测从"瞬时全额"改为 maker 队列模型（按 fill 分段实测校准），重放 $3/$5/$10 票的可实现 ROI | live fill 样本继续积累 |
@@ -63,7 +64,8 @@ tiny live：`edge>=0.20 + fee-adjusted>=0.15`、ask 5-20c、`dist>0` blocker、m
 ## A3 Exit/Stop 线（全部 shadow，无 live 变更计划）
 
 - TP/stop would-trigger telemetry 持续积累三态：`saved_loss / capped_winner_regret / missed_touch`。
-- 唯一可辩护的 TP 候选是 recover-stake @30c（delta_vs_hold +10.8% CI>0，但为 touch 口径），等 forward 三态数据再评。
+- recover-stake @30c 在 hot-only × price-tier × official fee 的当前 live 姿态上已降级关闭：full delta vs hold -21.1%，CI [-31.6%,-11.4%]；此前 +10.8% 来自含 cold 票的旧全分母，不适用于 `dist>0` live。
+- E-touch 只保留 shadow telemetry：hot 票 bid 触及 0.30 后最终胜率 51.4%（37/72）、触及 0.20 后 33.0%（38/115），可记录 `post_touch_hold_value`，但不加仓、不改规则。
 - strict dead stop：期望无改善、只微降尾部；tiny 阶段无资金占用压力，其价值在 size-up 后才存在。
 - 任何 exit 研究必须区分 touch / resting-fill / 可执行退出（TP20 教训固化为口径纪律）。
 
@@ -134,7 +136,7 @@ heat_death 分支不 live（首条规则 CI 跨 0）。
 | S1 | orderbook 采集正式化 | Mac 采集已接管（cadence ~17min），但 6/28-6/29 缺口永久；N100 修复或 Mac 转正需决策 |
 | S2 | settlement 链日跑 | 7/03+ 及时入库；5/18 源头缺口已记录为 survivorship 脚注 |
 | S3 | case review 周度化 | 把本次"五段血缘+假设记分板"做成脚本，每周自动产出（blocked 去重反事实 + fill 执行段 + HeadB 触发 case） |
-| S4 | forecast backfill PIT 修复 | Previous/Single Runs API 重建（影响 HeadB 历史证据与 atlas 层，HeadA 分母已隔离） |
+| S4 | forecast backfill PIT 修复 | Previous/Single Runs API 重建；HeadA 7/02-7/04 ECMWF outage 的“正确源会触发哪些新增票”需要 PIT/previous-run 级全量重建，不能只靠污染后的 candidates 层补齐 |
 
 # 时间线（粗）
 
