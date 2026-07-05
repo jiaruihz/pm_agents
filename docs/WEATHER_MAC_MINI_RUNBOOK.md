@@ -23,6 +23,12 @@ runtime work after disk I/O errors and an ext4 emergency read-only remount.
 The Mac path is intentionally narrower than N100: start data and shadow first,
 then explicitly switch live only when the evidence is clean.
 
+Current Mac data-feed scope is observation cache plus targeted market data. The
+Mac LaunchAgent `com.pm-agents.weather-data-feed` does not produce
+`output/source_events/latest.json`; the N100 `weather-data-feed-source-events`
+timer remains historical/recovery context unless a separate Mac source-events
+job is reviewed and installed.
+
 ## Standard Commands
 
 Install or refresh LaunchAgents:
