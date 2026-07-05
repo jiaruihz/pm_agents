@@ -1,0 +1,15 @@
+mechanism,definition,mechanism_read,recommended_use,broad_min_rows,broad_min_dates,headb_min_rows
+all_labeled_states,Rows with settlement/current/d1/d2 labels present.,Baseline denominator; not a path state.,baseline_only,0,0,0
+trend3h_cooling_lt_neg0_5,temp_trend_3h_f < -0.5F,Sustained cooling/fade path; current bracket survival should rise and upside pass-through should fall.,shared_context_feature,500,20,25
+trend3h_flat_abs_lt0_5,-0.5F <= temp_trend_3h_f < +0.5F,"Three-hour path is stalled/noisy; useful as a separate state, not as 'positive'.",shared_context_feature,300,15,20
+trend3h_warming_ge0_5,temp_trend_3h_f >= +0.5F,Clean sustained warming state; better foundation than a one-hour uptick.,shared_context_feature,500,20,25
+trend3h_strong_warming_ge2,temp_trend_3h_f >= +2.0F,Strong accumulated warming; higher upside-break risk but often already visible to price.,shared_context_feature,500,20,25
+legacy_trend3h_positive_gt0,temp_trend_3h_f > 0F,Compatibility alias for earlier HeadB overlay; broad but includes tiny positive noise.,compatibility_alias_prefer_bucket_ge0_5,500,20,25
+sustained_warming_1h3h,temp_trend_1h_f >= +0.5F AND temp_trend_3h_f >= +0.5F,Recent observation is still rising and the three-hour path confirms it; clean HeadB reheat confirmation.,shared_context_feature_headb_telemetry,300,15,20
+one_hour_warm_without_3h,temp_trend_1h_f >= +0.5F AND temp_trend_3h_f < +0.5F,One-hour bounce without sustained path confirmation; separates noisy reheat from real runway.,diagnostic_context_feature,300,15,15
+runway_sustained_warming,"temp_trend_3h_f >= +0.5F AND day_regime in {day_open_runway, day_marginal_runway}",Observed warming plus forecast space above running max; good shared d1/upside context.,shared_context_feature,300,15,20
+solar_runway_sustained_warming,"runway_sustained_warming AND solar_window in {late_morning, solar_peak_window}",Thermal runway is still physically plausible during the solar heating window.,shared_context_feature_shadow_only_if_used_for_selection,200,12,15
+late_reheat_after_dip,"temp_trend_3h_f >= +0.5F AND intraday_state in {false_fade_risk, reheating_after_dip}",Market/fade conflict setup: a pullback or fade state is being contradicted by renewed warming.,headb_specific_shadow_telemetry,100,10,10
+humid_or_cloud_warming,temp_trend_3h_f >= +0.5F AND moisture_cloud_regime in humid/cloud suppression families,Warming through humid/cloud context; mechanism is real but less clean because convection/cloud breaks can flip it.,diagnostic_context_feature,200,12,15
+mature_cooling_or_fade,"temp_trend_3h_f < -0.5F AND intraday_state in {mature_fade, flat_or_cooling}",Cleaner fade/capped-day context; useful sibling state for current YES survive and NO carry work.,shared_context_feature,200,12,10
+plateau_flat_path,"abs(temp_trend_3h_f) < 0.5F AND intraday_state in {fresh_high, plateau_near_high, pullback_uncertain}","Near-high plateau rather than active heating; often expression-specific, not a universal direction signal.",diagnostic_context_feature,100,10,10

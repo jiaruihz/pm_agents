@@ -1,7 +1,7 @@
 # Weather Temperature Context Feature Layer
 
 Status: current-reference
-Updated: 2026-06-26
+Updated: 2026-07-05
 Source of truth: yes for temperature-context feature semantics
 Used by: current YES, current-bracket NO, d1/d2 NO, Range RV, timing research
 
@@ -46,7 +46,25 @@ Latest dated evidence report:
 
 `docs/analysis/2026-06/2026-06-26-temperature-context-feature-layer-v1.md`
 
+Latest temperature-path decomposition:
+
+`docs/analysis/2026-07/2026-07-05-temperature-path-mechanism-decomposition-v1.md`
+
 ## Feature Families
+
+`temperature_path_state`
+
+Turns recent observed temperature path into reusable context labels:
+
+- `trend3h_bucket`: `cooling_lt_neg0_5`, `flat_abs_lt0_5`,
+  `warming_0_5_to_2`, `strong_warming_ge2`
+- `trend3h_warming_ge0_5`
+- `sustained_warming_1h3h`
+- `one_hour_warm_without_3h`
+- `runway_sustained_warming`
+- `solar_runway_sustained_warming`
+- `late_reheat_after_dip`
+- `exclude_trend3h_flat` for route-specific selector experiments only
 
 `cloud_warming_interaction`
 
@@ -115,6 +133,19 @@ Selected mechanism sanity checks:
 | `forecast_peak_passed_2h_plus` | 2,787 | 87.9% | 12.1% | 3.4% | 0.8% |
 
 These numbers are mechanism checks, not approval to trade. A strategy must still evaluate real ask, depth, settlement source, same-price baseline, holdout, and forward evidence.
+
+Latest temperature-path decomposition v1 coverage:
+
+- `13,725` atlas state rows, `12,972` labelled mechanism rows
+- `36` cities
+- atlas state rows `2026-05-19` through `2026-07-03`; labelled rows through `2026-07-02`
+- `trend3h_warming_ge0_5`: future break `65.5%`, d1 hit `22.6%`
+- `sustained_warming_1h3h`: future break `77.7%`, d1 hit `22.8%`
+- `one_hour_warm_without_3h`: future break `17.1%`, d1 hit `9.4%`
+
+These labels are strong physical context features. They are not standalone live
+gates; HeadB, tmax distribution, regime-routed NO, and current-YES heads must
+still evaluate expression price, fresh-book depth, and forward settlement.
 
 ## Boundary
 

@@ -1,0 +1,93 @@
+{
+  "snapshot": {
+    "generated_at_utc": "2026-07-05T05:45:08+00:00",
+    "fact_signal_candidates": {
+      "rows": 46007,
+      "min_date": "2026-05-05",
+      "max_date": "2026-07-06",
+      "built_at": "2026-07-05T05:35:54.929962+00:00"
+    },
+    "fact_trades": {
+      "rows": 4483,
+      "min_date": "2026-05-06",
+      "max_date": "2026-07-05",
+      "built_at": "2026-07-05T05:35:22.871183+00:00"
+    },
+    "recent_settlement_outcomes": [
+      {
+        "target_date": "2026-07-04",
+        "rows": 517,
+        "settled_rows": 446
+      },
+      {
+        "target_date": "2026-07-03",
+        "rows": 517,
+        "settled_rows": 517
+      },
+      {
+        "target_date": "2026-07-02",
+        "rows": 517,
+        "settled_rows": 517
+      },
+      {
+        "target_date": "2026-07-01",
+        "rows": 517,
+        "settled_rows": 517
+      },
+      {
+        "target_date": "2026-06-30",
+        "rows": 517,
+        "settled_rows": 517
+      },
+      {
+        "target_date": "2026-06-29",
+        "rows": 517,
+        "settled_rows": 517
+      },
+      {
+        "target_date": "2026-06-28",
+        "rows": 517,
+        "settled_rows": 517
+      },
+      {
+        "target_date": "2026-06-27",
+        "rows": 517,
+        "settled_rows": 517
+      }
+    ],
+    "clob_gate": {
+      "gate_pass": true,
+      "path": "runtime/_dashboard_logs/clob_fill_coverage_gate.json",
+      "fail_reasons": [],
+      "fact_trades_live_real": {
+        "cost_usd": 2438.138977,
+        "executions": 572,
+        "fill_ids": 938,
+        "rows": 938
+      },
+      "db_vs_primary_cache": {
+        "cache_not_in_db": 0,
+        "db_cost_minus_cache_cost": 0.0,
+        "db_not_in_cache": 0,
+        "sample_cache_not_in_db": [],
+        "sample_db_not_in_cache": []
+      }
+    }
+  },
+  "atlas": {
+    "path": "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv",
+    "rows": 13725,
+    "min_target_date": "2026-05-19",
+    "max_target_date": "2026-07-03",
+    "labeled_rows": 12972,
+    "labeled_min_target_date": "2026-05-19",
+    "labeled_max_target_date": "2026-07-02"
+  },
+  "outputs": {
+    "mechanism_dictionary": "docs/analysis/2026-07/generated/temperature_path_mechanism_decomposition_v1/mechanism_dictionary.csv",
+    "mechanism_physics_summary": "docs/analysis/2026-07/generated/temperature_path_mechanism_decomposition_v1/mechanism_physics_summary.csv",
+    "mechanism_expression_summary": "docs/analysis/2026-07/generated/temperature_path_mechanism_decomposition_v1/mechanism_expression_summary.csv",
+    "headb_mechanism_summary": "docs/analysis/2026-07/generated/temperature_path_mechanism_decomposition_v1/headb_mechanism_summary.csv",
+    "trend3h_bucket_by_day_regime": "docs/analysis/2026-07/generated/temperature_path_mechanism_decomposition_v1/trend3h_bucket_by_day_regime.csv"
+  }
+}
