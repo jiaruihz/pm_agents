@@ -1,0 +1,38 @@
+{
+  "baseline": {
+    "avg_entry": 0.10407957957957958,
+    "avg_shares": 7.60960960960961,
+    "cities": 47,
+    "complement_roi": NaN,
+    "complement_rows": NaN,
+    "cost": 294.70511625,
+    "dates": 53,
+    "delta_ci_high": NaN,
+    "delta_ci_low": NaN,
+    "denom_rows": 333,
+    "label": "baseline_hot_only",
+    "le_minus50pct_days": 16,
+    "losing_days": 19,
+    "max_daily_loss_roi": -1.0,
+    "max_daily_loss_usd": -11.037585,
+    "period": "full",
+    "pnl": 123.29488374999998,
+    "roi": 0.41836696057020006,
+    "roi_ci_high": 0.7630413743495473,
+    "roi_ci_low": 0.10665506460761068,
+    "roi_minus_complement": NaN,
+    "row_share": 1.0,
+    "rows": 333,
+    "top5_removed_roi": 0.28273762421471893,
+    "win_rate": 0.15015015015015015
+  },
+  "denominator": {
+    "cities": 47,
+    "dates": 53,
+    "end": "2026-06-30",
+    "rows": 333,
+    "start": "2026-05-06"
+  },
+  "generated_at_utc": "2026-07-05T14:07:50+00:00",
+  "verdict": "shadow_candidate_no_live_change"
+}
