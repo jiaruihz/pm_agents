@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as _stable  # noqa: E402
 from weather_data_feed.city_family import CITY_FAMILY_ATLAS_V1 as CITY_FAMILY  # noqa: E402
 
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1"
@@ -464,6 +465,16 @@ def add_regime_labels(states: pd.DataFrame) -> pd.DataFrame:
         + out["moisture_cloud_regime"].astype(str)
     )
     return out
+
+
+unit_step = _stable.unit_step
+label_solar_window = _stable.label_solar_window
+label_day_space = _stable.label_day_space
+label_moisture_cloud = _stable.label_moisture_cloud
+label_wind_noise = _stable.label_wind_noise
+label_running_state = _stable.label_running_state
+label_intraday_state = _stable.label_intraday_state
+add_regime_labels = _stable.add_regime_labels
 
 
 def add_expression_payoffs(states: pd.DataFrame) -> pd.DataFrame:

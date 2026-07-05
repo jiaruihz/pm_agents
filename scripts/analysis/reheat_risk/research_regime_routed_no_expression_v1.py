@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,11 @@ import requests
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as _stable  # noqa: E402
+
 ATLAS_ROWS = ROOT / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv"
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/regime_routed_no_expression_v1"
 OUT_JSON = OUT_DIR / "summary.json"
@@ -319,6 +325,24 @@ def add_soft_weights(selected: pd.DataFrame) -> pd.DataFrame:
     )
     out["full_size"] = 1.0
     return out
+
+
+ASK_MIN = _stable.ASK_MIN
+ASK_MAX = _stable.ASK_MAX
+ASK_CAPS = _stable.ASK_CAPS
+DECISION_HOURS = _stable.DECISION_HOURS
+BASELINE_VARIANT = _stable.BASELINE_VARIANT
+OPTIMISTIC_MAIN_CANDIDATE = _stable.OPTIMISTIC_MAIN_CANDIDATE
+MAIN_CANDIDATE = _stable.MAIN_CANDIDATE
+OPTIMISTIC_BALANCED_SOFT_CANDIDATE = _stable.OPTIMISTIC_BALANCED_SOFT_CANDIDATE
+BALANCED_SOFT_CANDIDATE = _stable.BALANCED_SOFT_CANDIDATE
+BALANCED_SOFT_POLICY = _stable.BALANCED_SOFT_POLICY
+expression_candidates = _stable.expression_candidates
+select_one_per_city_day = _stable.select_one_per_city_day
+apply_liquidity = _stable.apply_liquidity
+routed_candidates = _stable.routed_candidates
+variant_frame = _stable.variant_frame
+add_soft_weights = _stable.add_soft_weights
 
 
 def weighted_bootstrap_roi(selected: pd.DataFrame, weight_col: str, n: int = 5000, seed: int = 20260625) -> tuple[float | None, float | None]:

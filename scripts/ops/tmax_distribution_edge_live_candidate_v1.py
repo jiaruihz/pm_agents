@@ -32,12 +32,12 @@ if str(ROOT) not in sys.path:
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import research_intraday_weather_regime_atlas_v1 as atlas  # noqa: E402
 import research_tmax_distribution_p0_anchor_scorecard_v1 as p0  # noqa: E402
 import research_tmax_distribution_p1_fusion_scorecard_v1 as p1  # noqa: E402
 import research_tmax_distribution_p2_ev_shadow_v1 as p2  # noqa: E402
 import research_tmax_distribution_p3_feature_ablation_v1 as p3  # noqa: E402
 import research_tmax_distribution_p4_observed_label_extension_v1 as p4  # noqa: E402
+from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as regime_policy  # noqa: E402
 from src.strategies.weather_edge_v1.tools.execution_pipeline import stable_hash  # noqa: E402
 
 
@@ -431,7 +431,7 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
     if not rows:
         return pd.DataFrame(), audits
     out = pd.DataFrame(rows)
-    out = atlas.add_regime_labels(out)
+    out = regime_policy.add_regime_labels(out)
     out = add_distribution_features(out)
     return out, audits
 

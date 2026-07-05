@@ -24,10 +24,10 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT_DIR = ROOT / "scripts/analysis/reheat_risk"
-sys.path.insert(0, str(SCRIPT_DIR))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-import research_regime_routed_no_expression_v1 as research  # noqa: E402
+from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as research  # noqa: E402
 
 
 STRATEGY_ID = "regime_routed_no_soft_balanced_shadow_v1"
