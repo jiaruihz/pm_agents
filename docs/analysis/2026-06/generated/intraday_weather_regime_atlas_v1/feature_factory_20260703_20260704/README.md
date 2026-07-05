@@ -3,9 +3,9 @@
 ## Data Snapshot
 
 - Data source: `runtime/weather.db` (`fact_signal_candidates`, `fact_trades`, `settlement_outcomes`) plus time-aligned raw orderbook snapshots under `runtime/weather_edge_v1/market_data/orderbook_snapshots`.
-- Generated at UTC: `2026-07-04T16:05:23+00:00`.
-- DB fact built at UTC: `2026-07-04T13:56:56.442621+00:00`.
-- Actual feature target-date range: `2026-05-19`..`2026-06-20` (33 active dates).
+- Generated at UTC: `2026-07-04T04:16:44+00:00`.
+- DB fact built at UTC: `2026-07-04T00:27:38.408651+00:00`.
+- Actual feature target-date range: `2026-07-03`..`2026-07-03` (1 active dates).
 - Row grain: `city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome`.
 - Evidence layer: time-aligned orderbook replay / opportunity feature layer, not live fills.
 
@@ -15,19 +15,17 @@ This first shared factory is usable for downstream reheat-risk research on obser
 
 The former largest gap was forecast peak context. This factory now consumes the documented `forecast_peak_clock_backfill_v1.csv` city-date layer when native `fact_signal_candidates` peak fields are missing, and exposes both GFS and ECMWF peak-clock features. This makes forecast peak clock usable for shared research tables; it is still a backfilled research feature, not proof of production native point-in-time coverage.
 
-2026-07-04 refresh note: the 2026-05-19..2026-06-20 shard was not fully re-materialized from raw orderbooks; its stable quote/observed rows were preserved and the forecast peak columns were rejoined from the canonical PIT Single Runs backfill, replacing the old `backfill_gfs_primary` values.
-
 No live action is implied. This is an opportunity/replay feature layer, not fill PnL.
 
 ## Mandatory SQL Self-Check
 
 ```json
 {
-  "fact_trades_max_built_at_utc": "2026-07-04T13:56:56.442621+00:00",
+  "fact_trades_max_built_at_utc": "2026-07-04T00:27:38.408651+00:00",
   "fact_trades_by_class": [
     {
       "trade_class": "live_real",
-      "rows": 936
+      "rows": 931
     },
     {
       "trade_class": "live_simulated",
@@ -45,7 +43,7 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
   "fact_trades_by_settlement_status": [
     {
       "settlement_status": "",
-      "rows": 170
+      "rows": 165
     },
     {
       "settlement_status": "settled",
@@ -53,10 +51,10 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
     }
   ],
   "fact_signal_candidate_coverage": {
-    "rows": 45482,
-    "eligible": 16887,
+    "rows": 45094,
+    "eligible": 16764,
     "paper_ordered": 5834,
-    "live_filled": 401
+    "live_filled": 400
   },
   "clob_order_fill_join": [
     {
@@ -66,8 +64,8 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
     },
     {
       "status": "submitted",
-      "orders": 1055,
-      "with_fill": 936
+      "orders": 1051,
+      "with_fill": 931
     }
   ]
 }
@@ -77,15 +75,15 @@ No live action is implied. This is an opportunity/replay feature layer, not fill
 
 | Stage | Rows/count |
 |---|---:|
-| orderbook files seen | 1614 |
-| orderbook records seen | 1993375 |
-| ok orderbook records | 1957466 |
-| kept before hourly dedupe | 204846 |
-| feature rows after hourly dedupe/enrichment | 109415 |
-| date/city/hour state rows | 10792 |
-| complete core state rows | 7867 |
-| active dates | 33 |
-| cities | 36 |
+| orderbook files seen | 108 |
+| orderbook records seen | 29419 |
+| ok orderbook records | 29330 |
+| kept before hourly dedupe | 3451 |
+| feature rows after hourly dedupe/enrichment | 1160 |
+| date/city/hour state rows | 150 |
+| complete core state rows | 0 |
+| active dates | 1 |
+| cities | 22 |
 
 Core state means current temp, running max, minutes since max, current YES quote, d1 NO quote, and final winner are all present.
 
@@ -96,30 +94,30 @@ Core state means current temp, running max, minutes since max, current YES quote
 | `current_temp_c` | 100.0% | 100.0% |
 | `running_max_c` | 100.0% | 100.0% |
 | `decline_from_max_c` | 100.0% | 100.0% |
-| `minutes_since_running_max` | 97.3% | 96.4% |
-| `forecast_peak_hour_local` | 100.0% | 100.0% |
-| `forecast_peak_delta_hours_local` | 100.0% | 100.0% |
-| `forecast_values_hash` | 100.0% | 100.0% |
-| `gfs_forecast_peak_hour_local` | 100.0% | 100.0% |
-| `gfs_forecast_peak_delta_hours_local` | 100.0% | 100.0% |
-| `ecmwf_forecast_peak_hour_local` | 100.0% | 100.0% |
-| `ecmwf_forecast_peak_delta_hours_local` | 100.0% | 100.0% |
+| `minutes_since_running_max` | 100.0% | 100.0% |
+| `forecast_peak_hour_local` | 84.8% | 100.0% |
+| `forecast_peak_delta_hours_local` | 84.8% | 100.0% |
+| `forecast_values_hash` | 84.8% | 100.0% |
+| `gfs_forecast_peak_hour_local` | 0.0% | 100.0% |
+| `gfs_forecast_peak_delta_hours_local` | NA | 100.0% |
+| `ecmwf_forecast_peak_hour_local` | 0.0% | 100.0% |
+| `ecmwf_forecast_peak_delta_hours_local` | NA | 100.0% |
 | `dwpf_now` | 100.0% | 100.0% |
 | `relative_humidity_pct` | 100.0% | 100.0% |
 | `wind_speed_kt` | 100.0% | 100.0% |
-| `sky_cover_code` | 75.9% | 75.7% |
-| `temp_trend_1h_f` | 99.9% | 99.9% |
-| `current_yes_ask` | 85.2% | 82.5% |
-| `d1_no_ask` | 86.8% | 80.4% |
-| `d2_no_ask` | 82.6% | 68.9% |
-| `target_yes_ask` | 98.6% | 97.9% |
-| `final_winning_bracket` | 100.0% | 100.0% |
+| `sky_cover_code` | 81.2% | 73.3% |
+| `temp_trend_1h_f` | 100.0% | 100.0% |
+| `current_yes_ask` | 79.1% | 79.3% |
+| `d1_no_ask` | 84.0% | 82.0% |
+| `d2_no_ask` | 78.4% | 66.7% |
+| `target_yes_ask` | 92.6% | 95.3% |
+| `final_winning_bracket` | 0.0% | 0.0% |
 
 ## Output Files
 
-- Feature rows CSV: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260519_20260620/reheat_feature_rows.csv`
-- Date/city/hour coverage CSV: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260519_20260620/coverage_by_date_city_hour.csv`
-- JSON manifest: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260519_20260620.json`
+- Feature rows CSV: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260703_20260704/reheat_feature_rows.csv`
+- Date/city/hour coverage CSV: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260703_20260704/coverage_by_date_city_hour.csv`
+- JSON manifest: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/feature_factory_20260703_20260704/summary.json`
 
 ## Date/City/Hour Missing-Field Summary
 
@@ -127,16 +125,12 @@ The coverage CSV has one row per `target_date + city + decision_hour_local` with
 
 | Missing field | State rows |
 |---|---:|
-| `d2_no_quote` | 3351 |
-| `sky` | 2623 |
-| `d1_no_quote` | 2112 |
-| `current_yes_quote` | 1885 |
-| `minutes_since_max` | 388 |
-| `any_target_yes_quote` | 226 |
-| `temp_trend` | 7 |
-| `dewpoint` | 5 |
-| `rh` | 5 |
-| `wind` | 5 |
+| `final_winner` | 150 |
+| `d2_no_quote` | 50 |
+| `sky` | 40 |
+| `current_yes_quote` | 31 |
+| `d1_no_quote` | 27 |
+| `any_target_yes_quote` | 7 |
 
 Use the coverage CSV to inspect the exact date/city/hour rows before running any strategy-head experiment.
 
