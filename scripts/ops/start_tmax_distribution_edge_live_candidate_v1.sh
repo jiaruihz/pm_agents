@@ -26,11 +26,13 @@ if [[ ! -x "$PY" ]]; then
   PY="python3"
 fi
 
+ENV_PREFIX=""
 if [[ -f "$PROJECT_DIR/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
   source "$PROJECT_DIR/.env"
   set +a
+  ENV_PREFIX="set -a; source $(printf '%q' "$PROJECT_DIR/.env"); set +a;"
 fi
 
 args=(
@@ -67,6 +69,7 @@ fi
 
 cmd=(
   "cd" "$PROJECT_DIR" "&&"
+  "$ENV_PREFIX"
   "$PY" "-u" "scripts/ops/tmax_distribution_edge_live_candidate_v1.py"
   "${args[@]}"
   ">>" "$LOG_FILE" "2>&1"
