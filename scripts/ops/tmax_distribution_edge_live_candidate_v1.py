@@ -606,16 +606,20 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
         if best is None:
             continue
         best["decision_status"] = "candidate_selected_pre_fresh_book"
+        combo = f"{best['chosen_expression']}_edge02"
         best["candidate_id"] = stable_hash(
             {
                 "strategy_id": STRATEGY_ID,
                 "city": best["city"],
                 "target_date": best["target_date"],
-                "decision_snapshot_ts_utc": best["decision_snapshot_ts_utc"],
+                "combo": combo,
+                "bracket": best["bracket"],
                 "token_id": best["token_id"],
-                "chosen_expression": best["chosen_expression"],
+                "signal_side": best["signal_side"],
+                "order_side": "BUY",
             }
         )
+        best["opportunity_id"] = best["candidate_id"]
         candidates.append(best)
     return candidates, blocked
 
@@ -802,6 +806,7 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
     size = float(args.fixed_shares)
     base = {
         "signal_id": candidate["candidate_id"],
+        "opportunity_id": candidate.get("opportunity_id") or candidate["candidate_id"],
         "strategy": "weather_edge_v1",
         "strategy_instance": STRATEGY_INSTANCE,
         "source_strategy_instance": STRATEGY_INSTANCE,

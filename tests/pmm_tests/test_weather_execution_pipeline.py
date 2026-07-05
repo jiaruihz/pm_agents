@@ -575,6 +575,46 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(calls, [])
             self.assertEqual(len(live.read_text().splitlines()), 1)
 
+    def test_execute_trade_plans_skips_existing_live_opportunity_before_place(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "signal_id": "new-snapshot-signal-id",
+                "opportunity_id": "stable-city-date-token-expression",
+            }
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            live.write_text(
+                json.dumps(
+                    {
+                        "status": "submitted",
+                        "signal_id": "old-snapshot-signal-id",
+                        "opportunity_id": "stable-city-date-token-expression",
+                    }
+                )
+                + "\n"
+            )
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "should-not-place"},
+            )
+
+            self.assertEqual(result["live_skipped_existing_signal"], 0)
+            self.assertEqual(result["live_skipped_existing_opportunity"], 1)
+            self.assertEqual(result["live_written"], 0)
+            self.assertEqual(calls, [])
+            self.assertEqual(len(live.read_text().splitlines()), 1)
+
     def test_execute_trade_plans_skips_duplicate_live_signal_in_same_batch(self):
         with tempfile.TemporaryDirectory() as tmp:
             signal = normalize_signal(self._paper_decision())
@@ -683,6 +723,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             signal2 = normalize_signal({**self._paper_decision(), "signal_id": "sig-2", "paper_id": "paper-2"})
             assert signal2 is not None
             plan2 = build_trade_plan(signal2, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan2 = {**plan2, "token_id": "token-2", "market_id": "market-2"}
             plans = Path(tmp) / "plans.jsonl"
             paper = Path(tmp) / "paper.jsonl"
             live = Path(tmp) / "live.jsonl"

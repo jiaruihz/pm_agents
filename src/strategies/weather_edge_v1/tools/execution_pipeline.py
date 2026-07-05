@@ -312,6 +312,7 @@ def build_trade_plan(
     max_order_shares = float(config.max_order_shares if config.max_order_shares is not None else config.max_position)
     base = {
         "signal_id": safe_str(signal.get("signal_id")),
+        "opportunity_id": safe_str(signal.get("opportunity_id")),
         "strategy": "weather_edge_v1",
         "strategy_instance": strategy_instance,
         "source_strategy_instance": safe_str(signal.get("source_strategy_instance")) or safe_str(signal.get("strategy_instance")),
@@ -644,6 +645,7 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
     base = {
         "plan_id": safe_str(plan.get("plan_id")),
         "signal_id": safe_str(plan.get("signal_id")),
+        "opportunity_id": safe_str(plan.get("opportunity_id")),
         "strategy": "weather_edge_v1",
         "strategy_instance": safe_str(plan.get("strategy_instance")),
         "source_strategy_instance": safe_str(plan.get("source_strategy_instance")),
@@ -900,6 +902,37 @@ def submitted_live_signal_ids(path: Path) -> set[str]:
     return out
 
 
+def opportunity_key(row: Dict[str, Any]) -> str:
+    explicit = safe_str(row.get("opportunity_id"))
+    if explicit:
+        return explicit
+    return stable_hash(
+        {
+            "strategy_id": safe_str(row.get("strategy_id")),
+            "city": safe_str(row.get("city")),
+            "target_date": safe_str(row.get("target_date")),
+            "combo": safe_str(row.get("combo")),
+            "bracket": safe_str(row.get("bracket")),
+            "token_id": safe_str(row.get("token_id")),
+            "signal_side": safe_str(row.get("signal_side")),
+            "order_side": safe_str(row.get("order_side")) or "BUY",
+        }
+    )
+
+
+def submitted_live_opportunity_keys(path: Path) -> set[str]:
+    out: set[str] = set()
+    if not path.exists():
+        return out
+    for row in read_jsonl(path):
+        if safe_str(row.get("status")) != "submitted":
+            continue
+        key = opportunity_key(row)
+        if key:
+            out.add(key)
+    return out
+
+
 def execute_trade_plans(
     *,
     plan_path: Path,
@@ -935,11 +968,14 @@ def execute_trade_plans(
     live_orders: List[Dict[str, Any]] = []
     live_skipped = 0
     live_skipped_existing_signal = 0
+    live_skipped_existing_opportunity = 0
     live_errors = 0
     live_guard_blocks = 0
     live_result = {"written": 0, "skipped_existing": 0}
     existing_live_signal_ids = submitted_live_signal_ids(live_out)
+    existing_live_opportunity_keys = submitted_live_opportunity_keys(live_out)
     batch_live_signal_ids: set[str] = set()
+    batch_live_opportunity_keys: set[str] = set()
     batch_live_notional = 0.0
     if config.live and not config.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
@@ -953,6 +989,7 @@ def execute_trade_plans(
             live_skipped += 1
             continue
         signal_id = safe_str(plan.get("signal_id"))
+        opp_key = opportunity_key(plan)
         allow_duplicate_signal_id = bool(plan.get("allow_duplicate_signal_id", False))
         if (
             signal_id
@@ -960,6 +997,9 @@ def execute_trade_plans(
             and (signal_id in existing_live_signal_ids or signal_id in batch_live_signal_ids)
         ):
             live_skipped_existing_signal += 1
+            continue
+        if not allow_duplicate_signal_id and opp_key in existing_live_opportunity_keys | batch_live_opportunity_keys:
+            live_skipped_existing_opportunity += 1
             continue
         plan_notional = live_plan_notional_usd(plan)
         max_order_notional = max(0.0, float(config.max_live_order_notional_usd))
@@ -1021,6 +1061,7 @@ def execute_trade_plans(
             live_result["skipped_existing"] += result["skipped_existing"]
             if signal_id:
                 batch_live_signal_ids.add(signal_id)
+            batch_live_opportunity_keys.add(opp_key)
             batch_live_notional += plan_notional
         except Exception as exc:
             live_errors += 1
@@ -1050,6 +1091,7 @@ def execute_trade_plans(
         "live_written": live_result["written"],
         "live_skipped_disabled": live_skipped,
         "live_skipped_existing_signal": live_skipped_existing_signal,
+        "live_skipped_existing_opportunity": live_skipped_existing_opportunity,
         "live_errors": live_errors,
         "live_guard_blocks": live_guard_blocks,
         "paper_out": str(paper_out),

@@ -72,13 +72,14 @@ done
 
 project_q="$(printf '%q' "$PROJECT_DIR")"
 log_q="$(printf '%q' "$LOG_FILE")"
+proxy_helper_q="$(printf '%q' "$PROJECT_DIR/scripts/ops/weather_market_proxy_env.sh")"
 if [[ -f "$PROJECT_DIR/.env" ]]; then
   env_load="set -a; . $(printf '%q' "$PROJECT_DIR/.env"); set +a;"
 else
   env_load=":"
 fi
 
-proxy_norm='if [[ -z ${HTTP_PROXY:-} && -n ${WEATHER_DATA_FEED_MARKET_PROXY:-} ]]; then export HTTP_PROXY="$WEATHER_DATA_FEED_MARKET_PROXY"; fi; if [[ -z ${HTTPS_PROXY:-} && -n ${WEATHER_DATA_FEED_MARKET_PROXY:-} ]]; then export HTTPS_PROXY="$WEATHER_DATA_FEED_MARKET_PROXY"; fi; if [[ -z ${ALL_PROXY:-} && -n ${WEATHER_DATA_FEED_MARKET_PROXY:-} ]]; then export ALL_PROXY="$WEATHER_DATA_FEED_MARKET_PROXY"; fi; export http_proxy="${http_proxy:-${HTTP_PROXY:-}}"; export https_proxy="${https_proxy:-${HTTPS_PROXY:-}}"; export all_proxy="${all_proxy:-${ALL_PROXY:-}}";'
+proxy_norm=". $proxy_helper_q; weather_export_market_proxy_env;"
 env_check="printf '[%s] env_check http_proxy=%s https_proxy=%s all_proxy=%s wallet=%s pm_addr=%s clob_base=%s\\n' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" \"\$([[ -n \${HTTP_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${HTTPS_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${ALL_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${PM:-}\${POLYGON_WALLET_PRIVATE_KEY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${PM_ADDRESS:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${CLOB_BASE_URL:-} ]] && echo 1 || echo 0)\" >> $log_q"
 bootstrap="cd $project_q && $env_load $proxy_norm $env_check && exec $runner_cmd_q >> $log_q 2>&1"
 
