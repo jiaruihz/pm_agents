@@ -666,7 +666,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
                 live_out=live,
                 config=ExecutorConfig(live=True, confirm_live=True),
                 live_place_fn=lambda p: calls.append(p) or {"order_id": "new-order-1"},
-                live_cancel_fn=lambda order_id: cancels.append(order_id) or {"cancelled": order_id},
+                live_cancel_fn=lambda order_id: cancels.append(order_id) or {"cancel": {"canceled": [order_id], "not_canceled": {}}},
             )
 
             self.assertEqual(result["live_skipped_existing_signal"], 0)
@@ -677,6 +677,47 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(rows[-1]["execution_action"], "maker_lifecycle_reprice_maker")
             self.assertEqual(rows[-1]["source_order_id"], "old-order-1")
             self.assertEqual(rows[-1]["exchange_response"]["pre_place_cancel_order_id"], "old-order-1")
+
+    def test_execute_trade_plans_blocks_lifecycle_replacement_when_cancel_not_confirmed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "allow_duplicate_signal_id": True,
+                "execution_action": "maker_lifecycle_reprice_maker",
+                "cancel_before_order_id": "old-order-1",
+                "source_order_id": "old-order-1",
+                "source_execution_id": "old-exec-1",
+            }
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "new-order-1"},
+                live_cancel_fn=lambda order_id: {
+                    "cancel": {
+                        "canceled": [],
+                        "not_canceled": {order_id: "order can't be found - already canceled or matched"},
+                    }
+                },
+            )
+
+            self.assertEqual(result["live_written"], 1)
+            self.assertEqual(result["live_guard_blocks"], 1)
+            self.assertEqual(calls, [])
+            rows = [json.loads(line) for line in live.read_text().splitlines()]
+            self.assertEqual(rows[-1]["status"], "blocked")
+            self.assertEqual(rows[-1]["exchange_response"]["error_classification"], "pre_place_cancel_not_confirmed")
+            self.assertIn("already canceled or matched", rows[-1]["exchange_response"]["error_reason"])
 
     def test_execute_trade_plans_preserves_live_error_diagnostics(self):
         class DiagnosticError(RuntimeError):

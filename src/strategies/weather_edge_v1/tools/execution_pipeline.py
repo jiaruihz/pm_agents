@@ -933,6 +933,36 @@ def submitted_live_opportunity_keys(path: Path) -> set[str]:
     return out
 
 
+def cancel_response_allows_replacement(response: Dict[str, Any], order_id: str) -> Tuple[bool, str]:
+    """Return whether a cancel-before-replace response safely permits a new order."""
+    order_id = safe_str(order_id)
+    if not order_id:
+        return False, "missing_cancel_before_order_id"
+    if not isinstance(response, dict):
+        return False, "cancel_response_not_dict"
+
+    payload = response.get("cancel") if isinstance(response.get("cancel"), dict) else response
+    if not isinstance(payload, dict):
+        return False, "cancel_payload_not_dict"
+
+    not_canceled = payload.get("not_canceled")
+    if isinstance(not_canceled, dict) and not_canceled:
+        reason = safe_str(not_canceled.get(order_id)) or "order_not_canceled"
+        return False, f"not_canceled:{reason}"
+    if isinstance(not_canceled, list) and order_id in {safe_str(x) for x in not_canceled}:
+        return False, "not_canceled"
+
+    canceled = payload.get("canceled")
+    if isinstance(canceled, list) and order_id in {safe_str(x) for x in canceled}:
+        return True, "canceled_confirmed"
+    if safe_str(payload.get("cancelled")) == order_id or safe_str(payload.get("canceled")) == order_id:
+        return True, "canceled_confirmed"
+    if payload.get("cancelled") is True or payload.get("canceled") is True:
+        return True, "canceled_confirmed"
+
+    return False, "cancel_not_confirmed"
+
+
 def execute_trade_plans(
     *,
     plan_path: Path,
@@ -1046,6 +1076,33 @@ def execute_trade_plans(
                 if live_cancel_fn is None:
                     raise RuntimeError("cancel_before_order_id requested but no live_cancel_fn was provided")
                 pre_place_cancel_response = live_cancel_fn(cancel_before_order_id)
+                cancel_ok, cancel_reason = cancel_response_allows_replacement(
+                    pre_place_cancel_response,
+                    cancel_before_order_id,
+                )
+                if not cancel_ok:
+                    live_guard_blocks += 1
+                    record = build_live_order_record(
+                        plan,
+                        {
+                            "error_classification": "pre_place_cancel_not_confirmed",
+                            "error_reason": cancel_reason,
+                            "error": f"pre_place_cancel_not_confirmed: {cancel_reason}",
+                            "pre_place_cancel_order_id": cancel_before_order_id,
+                            "pre_place_cancel_response": pre_place_cancel_response,
+                            "pre_place_cancel_status": "not_confirmed",
+                            "requested_price": to_float(plan.get("limit_price"), 0.0),
+                            "posted_price": 0.0,
+                            "quote_status": "rejected",
+                            "quote_reason": "pre_place_cancel_not_confirmed",
+                        },
+                        status="blocked",
+                    )
+                    live_orders.append(record)
+                    result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
+                    live_result["written"] += result["written"]
+                    live_result["skipped_existing"] += result["skipped_existing"]
+                    continue
             response = live_place_fn(plan)
             if pre_place_cancel_response is not None:
                 response = {
