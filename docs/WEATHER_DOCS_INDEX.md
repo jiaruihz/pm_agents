@@ -1,7 +1,7 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-07-05 feature layering review + architecture spine refresh
+Updated: 2026-07-05 feature layering review + architecture spine refresh + observation parity report
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -76,6 +76,7 @@ Status 口径：
 | [2026-07-05-temperature-path-mechanism-decomposition-v1.md](analysis/2026-07/2026-07-05-temperature-path-mechanism-decomposition-v1.md) | `snapshot` | `trend3h_positive` / 3h 温度路径机制拆解基础报告：同步+重建后 CLOB gate=true，fact 层到 7/05-7/06，atlas 机制层到 7/03；把松散 `trend3h_positive` 收敛成 `trend3h_bucket`、`trend3h_warming_ge0_5`、`sustained_warming_1h3h`、`one_hour_warm_without_3h`、`runway_sustained_warming`、`late_reheat_after_dip` 等共享表达。物理层很强（`sustained_warming_1h3h` future break 77.7%、d1 hit 22.8%；`one_hour_warm_without_3h` future break 17.1%），但交易层仍需概率头/ask/depth/fresh-forward；结论：promote as shared context feature + HeadB shadow telemetry，不作 live gate |
 | [WEATHER_FEATURE_LAYERING_PLAN.md](WEATHER_FEATURE_LAYERING_PLAN.md) | `design-draft` | 特征/数据/执行资产的总分层设计草案；已审阅，不能照单执行，实际边界见 feature-layering review 与 ARCHITECTURE_SPINE |
 | [2026-07-05-feature-layering-plan-review-v1.md](analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md) | `current-reference` | 对 FEATURE_LAYERING_PLAN 的批判性审阅：P1-P12 哪些正确、哪些需调整、哪些误判；记录本轮已落地的 versioned CITY_FAMILY 与 shared SKY_CODE 收口 |
+| [2026-07-05-weather-observation-parity-report-v1.md](analysis/2026-07/2026-07-05-weather-observation-parity-report-v1.md) | `current-reference` | Step 2 METAR/观测解析 parity 报告：离线核对 LDM/shared METAR parser、AWC parser、metar_cross source-events adapter、theta observation_cache/snapshot freshness；结论是 parser 层可局部收编，但 metar_cross latest-event state 与 theta cadence/pre-update 语义暂不合并 |
 | [WEATHER_SYSTEM_CONTRACT.md](WEATHER_SYSTEM_CONTRACT.md) | `current-source` | 字段名、枚举、ID 算法、跨 repo contract 怎么定义 |
 | [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | `current-reference` | dashboard DB/API 分层缺口审计；P0 已完成，剩余项按当前 fact-table 口径复核 |
 | [WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md](WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md) | `design-draft` | canonical schema / paper 语义 / shadow-run cutover 怎么迁移 |
