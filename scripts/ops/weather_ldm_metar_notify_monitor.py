@@ -22,7 +22,7 @@ import signal
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -35,6 +35,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed import load_source_profiles  # noqa: E402
+from weather_data_feed.observation_sources.metar import (  # noqa: E402
+    parse_metar_report_time,
+    parse_metar_temp_c,
+)
 
 
 DATA_ROOT = Path(os.environ.get("LDM_METAR_DATA_ROOT") or os.environ.get("DATA_PROJECT_DIR") or ROOT)
@@ -48,7 +52,6 @@ METAR_RE = re.compile(
     r"(?P<prefix>\b(?:METAR|SPECI)\s+)?(?P<station>[A-Z][A-Z0-9]{3})\s+"
     r"(?P<report_ddhhmm>\d{6})Z\b(?P<body>.*?)(?:=|\s*)$"
 )
-TEMP_RE = re.compile(r"\s(?P<temp>M?\d{2})/(?P<dew>M?\d{2}|//)\b")
 LDM_LOG_TS_RE = re.compile(r"^(?P<stamp>\d{8}T\d{6}(?:\.\d+)?Z)\s+")
 
 
@@ -80,39 +83,8 @@ def parse_ldm_log_ts(line: str) -> datetime | None:
     return None
 
 
-def parse_metar_temp_c(raw: str) -> float | None:
-    match = TEMP_RE.search(f" {raw}")
-    if not match:
-        return None
-    token = match.group("temp")
-    return float(-int(token[1:]) if token.startswith("M") else int(token))
-
-
 def parse_report_time_utc(report_ddhhmm: str, reference_utc: datetime) -> datetime | None:
-    if len(report_ddhhmm) != 6 or not report_ddhhmm.isdigit():
-        return None
-    day = int(report_ddhhmm[:2])
-    hour = int(report_ddhhmm[2:4])
-    minute = int(report_ddhhmm[4:6])
-    try:
-        candidate = reference_utc.replace(day=day, hour=hour, minute=minute, second=0, microsecond=0)
-    except ValueError:
-        return None
-    if candidate - reference_utc > timedelta(days=15):
-        month = 12 if candidate.month == 1 else candidate.month - 1
-        year = candidate.year - 1 if candidate.month == 1 else candidate.year
-        try:
-            candidate = candidate.replace(year=year, month=month)
-        except ValueError:
-            return None
-    elif reference_utc - candidate > timedelta(days=15):
-        month = 1 if candidate.month == 12 else candidate.month + 1
-        year = candidate.year + 1 if candidate.month == 12 else candidate.year
-        try:
-            candidate = candidate.replace(year=year, month=month)
-        except ValueError:
-            return None
-    return candidate
+    return parse_metar_report_time(f"ZZZZ {report_ddhhmm}Z", reference_utc)
 
 
 def stable_hash(raw: str) -> str:
@@ -179,7 +151,7 @@ def parse_metar_lines(
         temp_c = parse_metar_temp_c(line)
         if temp_c is None:
             continue
-        report_ts = parse_report_time_utc(match.group("report_ddhhmm"), detect_ts_utc)
+        report_ts = parse_metar_report_time(line, detect_ts_utc)
         if report_ts is None:
             continue
         target = station_targets.get(station)

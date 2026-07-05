@@ -8,8 +8,8 @@ Harness: `/Users/deepsleep/projects/pm_agents/docs/analysis/2026-07/2026-07-05-w
 
 ## Input Windows
 
-- Mac observation cache: `/Users/deepsleep/projects/weather_data_feed_service_runtime/output/observations/latest.json` (generated_at=2026-07-05T07:41:14.931473+00:00, records=34, statuses={'ok': 31, 'fetch_failed': 3}, sources={'aviationweather_metar': 34})
-- Mac paper snapshot: `/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_20260705_1243.json, ts_utc=2026-07-05T04:43:57Z`
+- Mac observation cache: `/Users/deepsleep/projects/weather_data_feed_service_runtime/output/observations/latest.json` (generated_at=2026-07-05T16:44:05.768942+00:00, records=34, statuses={'ok': 34}, sources={'aviationweather_metar': 34})
+- Mac paper snapshot: `/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_20260705_2358.json, ts_utc=2026-07-05T15:58:57Z`
 - Current Mac source_events: missing at `/Users/deepsleep/projects/weather_data_feed_service_runtime/output/source_events/latest.json`
 - Legacy source_events sanity sample: `/Users/deepsleep/projects/pm_agents/runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/source_events/latest.json` (generated_at=2026-07-01T15:55:51.897103+00:00, records=80)
 
@@ -33,7 +33,7 @@ P10 guardrail: the main positive parity evidence uses 2026-07-05 Mac observation
 | metar_cross source-events adapter (current Mac) | 0 | 0 | 0 | 0 | `not-tested` |
 | metar_cross source-events adapter (legacy N100 recovery) | 78 | 78 | 0 | 0 | `latest-event-equivalent-stateful-running-max-specialization` |
 | theta observation_cache_obs vs weather_data_feed observation_cache | 34 | 34 | 0 | 0 | `value-equivalent-freshness-semantic-fork` |
-| theta snapshot_metar_obs vs paper_snapshot METAR fields | 33 | 31 | 0 | 2 | `value-equivalent-snapshot-specific-freshness` |
+| theta snapshot_metar_obs vs paper_snapshot METAR fields | 32 | 25 | 0 | 7 | `value-equivalent-snapshot-specific-freshness` |
 
 ## Check Details
 
@@ -63,15 +63,15 @@ P10 guardrail: the main positive parity evidence uses 2026-07-05 Mac observation
 
 ### 5. theta observation_cache_obs vs weather_data_feed observation_cache
 - Sample: `/Users/deepsleep/projects/weather_data_feed_service_runtime/output/observations/latest.json`
-- Window: `generated_at=2026-07-05T07:41:14.931473+00:00`
+- Window: `generated_at=2026-07-05T16:44:05.768942+00:00`
 - Verdict: `value-equivalent-freshness-semantic-fork`
-- Detail: weather_data_feed currently normalizes/indexes cache records; theta adds cadence-aware freshness gates. theta statuses={'ok': 31, 'fetch_failed': 3}, relaxed_age_limit_rows=31. No value diffs for accepted ok rows.
+- Detail: weather_data_feed currently normalizes/indexes cache records; theta adds cadence-aware freshness gates. theta statuses={'ok': 31, 'pre_metar_update_blackout': 3}, relaxed_age_limit_rows=34. No value diffs for accepted ok rows.
 
 ### 6. theta snapshot_metar_obs vs paper_snapshot METAR fields
-- Sample: `/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_20260705_1243.json`
-- Window: `snapshot_ts=2026-07-05T04:43:57Z`
+- Sample: `/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/market_data/paper_snapshots/snapshot_20260705_2358.json`
+- Window: `snapshot_ts=2026-07-05T15:58:57Z`
 - Verdict: `value-equivalent-snapshot-specific-freshness`
-- Detail: theta statuses={'ok': 31, 'insufficient_obs_asof': 2}. Accepted rows preserve snapshot latest/running-max values; freshness uses theta cadence/default rules. No accepted value diffs.
+- Detail: theta statuses={'ok': 25, 'pre_metar_update_blackout': 2, 'insufficient_obs_asof': 5}. Accepted rows preserve snapshot latest/running-max values; freshness uses theta cadence/default rules. No accepted value diffs.
 
 ## 收编清单
 
