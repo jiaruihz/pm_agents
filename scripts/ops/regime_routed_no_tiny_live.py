@@ -66,6 +66,7 @@ PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 BLOCKED_OUT = RUNTIME_DIR / "blocked_candidates.jsonl"
 SHADOW_OUT = RUNTIME_DIR / "shadow_candidates.jsonl"
+ACCEPTED_OUT = RUNTIME_DIR / "accepted_candidates.jsonl"
 LATEST_CANDIDATES_OUT = RUNTIME_DIR / "latest_candidates.json"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
@@ -1657,6 +1658,7 @@ def write_candidate_audit(candidates: pd.DataFrame, meta: dict[str, Any]) -> tup
     ]
     blocked = [row for row in records if row.get("candidate_status") == "blocked"]
     shadow_only = [row for row in records if row.get("candidate_status") == "shadow_only"]
+    accepted = [row for row in records if row.get("candidate_status") == "accepted"]
     write_json(
         LATEST_CANDIDATES_OUT,
         {
@@ -1671,6 +1673,8 @@ def write_candidate_audit(candidates: pd.DataFrame, meta: dict[str, Any]) -> tup
         append_jsonl(BLOCKED_OUT, row)
     for row in shadow_only:
         append_jsonl(SHADOW_OUT, row)
+    for row in accepted:
+        append_jsonl(ACCEPTED_OUT, row)
     return len(records), len(blocked)
 
 
@@ -2086,6 +2090,7 @@ def main() -> int:
         "live_out": str(LIVE_OUT.relative_to(ROOT)),
         "blocked_out": str(BLOCKED_OUT.relative_to(ROOT)),
         "shadow_out": str(SHADOW_OUT.relative_to(ROOT)),
+        "accepted_out": str(ACCEPTED_OUT.relative_to(ROOT)),
         "latest_candidates_out": str(LATEST_CANDIDATES_OUT.relative_to(ROOT)),
         "meta": meta,
         "executor_result": executor_result,
