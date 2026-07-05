@@ -8,9 +8,12 @@ then checks how those states map to physical outcomes and existing expressions.
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import sqlite3
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +26,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[3]
 DB_PATH = ROOT / "runtime/weather.db"
 GATE_JSON = ROOT / "runtime/_dashboard_logs/clob_fill_coverage_gate.json"
+ATLAS_FRESHNESS_SCRIPT = ROOT / "scripts/analysis/reheat_risk/ensure_intraday_weather_regime_atlas_fresh_v1.py"
+ATLAS_FRESHNESS_JSON = ROOT / "runtime/_analysis_logs/intraday_weather_regime_atlas_freshness_v1.json"
 ATLAS_ROWS = (
     ROOT
     / "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1"
@@ -40,6 +45,13 @@ OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-05-temperature-path-mechanism-d
 RNG_SEED = 20260705
 N_BOOT = 5000
 RECENT_START = "2026-06-21"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--target-date", default=None, help="Atlas state target date. Defaults to Asia/Shanghai T-1.")
+    parser.add_argument("--skip-atlas-refresh", action="store_true", help="Do not run the atlas freshness preflight.")
+    return parser.parse_args()
 
 
 def now_utc() -> str:
@@ -88,6 +100,29 @@ def connect_ro() -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=1000")
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def ensure_atlas_fresh(target_date: str | None) -> None:
+    cmd = [sys.executable, str(ATLAS_FRESHNESS_SCRIPT)]
+    if target_date:
+        cmd.extend(["--target-date", target_date])
+    subprocess.run(cmd, cwd=ROOT, check=True)
+
+
+def load_atlas_freshness() -> dict[str, object]:
+    if not ATLAS_FRESHNESS_JSON.exists():
+        return {"status": "not_run", "path": display_path(ATLAS_FRESHNESS_JSON)}
+    data = json.loads(ATLAS_FRESHNESS_JSON.read_text(encoding="utf-8"))
+    return {
+        "path": display_path(ATLAS_FRESHNESS_JSON),
+        "status": data.get("status"),
+        "target_date": data.get("target_date"),
+        "label_required_date": data.get("label_required_date"),
+        "state_ok": data.get("state_ok"),
+        "label_ok": data.get("label_ok"),
+        "final_atlas_state_max_date": data.get("final", {}).get("atlas", {}).get("state_max_date"),
+        "final_atlas_labeled_max_date": data.get("final", {}).get("atlas", {}).get("labeled_max_date"),
+    }
 
 
 def db_snapshot() -> dict[str, object]:
@@ -140,6 +175,7 @@ def db_snapshot() -> dict[str, object]:
         "fact_trades": trades,
         "recent_settlement_outcomes": settlements,
         "clob_gate": gate,
+        "atlas_freshness": load_atlas_freshness(),
     }
 
 
@@ -782,6 +818,7 @@ def write_outputs(
     fsc = snapshot["fact_signal_candidates"]
     trades = snapshot["fact_trades"]
     gate = snapshot["clob_gate"]
+    freshness = snapshot.get("atlas_freshness", {})
 
     lines = [
         "# Temperature Path Mechanism Decomposition v1",
@@ -815,8 +852,7 @@ def write_outputs(
         f"- CLOB fill coverage gate: `{gate.get('gate_pass')}`; fail_reasons={gate.get('fail_reasons')}.",
         f"- Atlas state rows: {len(full_atlas)} rows, {full_atlas['target_date'].min()}..{full_atlas['target_date'].max()}, {full_atlas['city'].nunique()} cities.",
         f"- Labelled mechanism rows: {len(labeled)} rows, {labeled['target_date'].min()}..{labeled['target_date'].max()}, {labeled['target_date'].nunique()} dates.",
-        "",
-        "Note: the latest canonical fact layer is fresher than the intraday atlas.  The current atlas feature layer has state rows through 2026-07-03; rows after that need a refreshed observed-path feature factory before they should enter this mechanism report.",
+        f"- Atlas freshness preflight: status `{freshness.get('status')}`, target `{freshness.get('target_date')}`, label-required `{freshness.get('label_required_date')}`, state max `{freshness.get('final_atlas_state_max_date')}`, labeled max `{freshness.get('final_atlas_labeled_max_date')}`.",
         "",
         "## Mechanism Dictionary",
         "",
@@ -952,6 +988,9 @@ def write_outputs(
 
 
 def main() -> None:
+    args = parse_args()
+    if not args.skip_atlas_refresh:
+        ensure_atlas_fresh(args.target_date)
     snapshot = db_snapshot()
     full_atlas, labeled = load_atlas()
     mechanisms = mechanism_defs()

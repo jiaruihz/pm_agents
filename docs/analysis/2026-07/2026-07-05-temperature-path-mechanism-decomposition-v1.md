@@ -1,6 +1,6 @@
 # Temperature Path Mechanism Decomposition v1
 
-Generated: 2026-07-05T05:45:08+00:00
+Generated: 2026-07-05T06:21:47+00:00
 
 Scope: research foundation only.  No live config, runner, order, or sizing behavior changed.
 
@@ -27,10 +27,9 @@ Read: `trend3h_positive` is real enough to keep as shared telemetry/context, esp
 - `fact_signal_candidates`: 46007 rows, 2026-05-05..2026-07-06, built 2026-07-05T05:35:54.929962+00:00.
 - `fact_trades`: 4483 rows, 2026-05-06..2026-07-05, built 2026-07-05T05:35:22.871183+00:00.
 - CLOB fill coverage gate: `True`; fail_reasons=[].
-- Atlas state rows: 13725 rows, 2026-05-19..2026-07-03, 36 cities.
-- Labelled mechanism rows: 12972 rows, 2026-05-19..2026-07-02, 41 dates.
-
-Note: the latest canonical fact layer is fresher than the intraday atlas.  The current atlas feature layer has state rows through 2026-07-03; rows after that need a refreshed observed-path feature factory before they should enter this mechanism report.
+- Atlas state rows: 13860 rows, 2026-05-19..2026-07-04, 36 cities.
+- Labelled mechanism rows: 13852 rows, 2026-05-19..2026-07-04, 46 dates.
+- Atlas freshness preflight: status `fresh`, target `2026-07-04`, label-required `2026-07-03`, state max `2026-07-04`, labeled max `2026-07-04`.
 
 ## Mechanism Dictionary
 
@@ -54,20 +53,20 @@ This table asks whether the path label maps to the actual temperature path, befo
 
 | mechanism | rows | dates | support | future_break_rate | current_hold_rate | d1_hit_rate | d2_hit_rate | future_break_delta_vs_complement | d1_hit_delta_vs_complement | current_hold_delta_vs_complement |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| all_labeled_states | 12972 | 41 | support_ok | 41.3% | 56.4% | 15.2% | 10.1% |  |  |  |
-| trend3h_cooling_lt_neg0_5 | 3487 | 41 | support_ok | 2.2% | 87.9% | 1.8% | 0.9% | -53.5% | -18.3% | +43.0% |
-| trend3h_flat_abs_lt0_5 | 1793 | 41 | support_ok | 14.3% | 82.5% | 9.7% | 2.8% | -31.3% | -6.4% | +30.2% |
-| trend3h_warming_ge0_5 | 7670 | 41 | support_ok | 65.5% | 36.1% | 22.6% | 16.0% | +59.1% | +18.1% | -49.8% |
-| trend3h_strong_warming_ge2 | 5833 | 41 | support_ok | 74.9% | 27.4% | 22.8% | 18.8% | +61.0% | +13.8% | -52.7% |
-| legacy_trend3h_positive_gt0 | 7674 | 41 | support_ok | 65.5% | 36.1% | 22.6% | 16.0% | +59.2% | +18.2% | -49.9% |
-| sustained_warming_1h3h | 4813 | 41 | support_ok | 77.7% | 24.6% | 22.8% | 18.7% | +57.9% | +12.1% | -50.7% |
-| one_hour_warm_without_3h | 340 | 41 | support_ok | 17.1% | 78.8% | 9.4% | 5.0% | -24.9% | -5.9% | +23.0% |
-| runway_sustained_warming | 4107 | 40 | support_ok | 81.3% | 19.4% | 19.6% | 20.7% | +58.6% | +6.4% | -54.2% |
-| solar_runway_sustained_warming | 3503 | 39 | support_ok | 89.4% | 11.7% | 18.7% | 22.9% | +65.8% | +4.8% | -61.3% |
-| late_reheat_after_dip | 751 | 41 | support_ok | 50.2% | 48.6% | 20.8% | 10.5% | +9.4% | +5.9% | -8.3% |
-| humid_or_cloud_warming | 1662 | 40 | support_ok | 67.9% | 32.4% | 21.5% | 16.7% | +30.5% | +7.3% | -27.5% |
-| mature_cooling_or_fade | 2560 | 41 | support_ok | 1.5% | 86.5% | 1.6% | 0.6% | -49.6% | -16.9% | +37.4% |
-| plateau_flat_path | 953 | 40 | support_ok | 17.3% | 80.8% | 13.1% | 2.7% | -25.9% | -2.3% | +26.3% |
+| all_labeled_states | 13852 | 46 | support_ok | 41.1% | 55.8% | 15.3% | 10.2% |  |  |  |
+| trend3h_cooling_lt_neg0_5 | 3670 | 46 | support_ok | 2.3% | 87.4% | 2.0% | 0.9% | -52.7% | -18.1% | +43.1% |
+| trend3h_flat_abs_lt0_5 | 1908 | 45 | support_ok | 14.2% | 82.3% | 9.9% | 3.0% | -31.2% | -6.3% | +30.8% |
+| trend3h_warming_ge0_5 | 8142 | 46 | support_ok | 65.4% | 35.8% | 22.7% | 16.1% | +59.1% | +17.9% | -48.4% |
+| trend3h_strong_warming_ge2 | 6211 | 46 | support_ok | 74.8% | 27.2% | 22.9% | 18.9% | +61.2% | +13.8% | -51.8% |
+| legacy_trend3h_positive_gt0 | 8146 | 46 | support_ok | 65.4% | 35.8% | 22.7% | 16.1% | +59.1% | +17.9% | -48.5% |
+| sustained_warming_1h3h | 5112 | 46 | support_ok | 77.8% | 24.2% | 22.9% | 18.8% | +58.3% | +12.0% | -50.0% |
+| one_hour_warm_without_3h | 366 | 45 | support_ok | 16.9% | 78.7% | 9.6% | 5.2% | -24.8% | -5.9% | +23.6% |
+| runway_sustained_warming | 4278 | 45 | support_ok | 81.3% | 19.2% | 19.5% | 20.7% | +58.2% | +6.0% | -52.8% |
+| solar_runway_sustained_warming | 3650 | 44 | support_ok | 89.3% | 11.5% | 18.5% | 22.8% | +65.5% | +4.4% | -60.0% |
+| late_reheat_after_dip | 791 | 45 | support_ok | 49.4% | 49.1% | 20.6% | 10.4% | +8.9% | +5.6% | -7.1% |
+| humid_or_cloud_warming | 1745 | 45 | support_ok | 67.6% | 32.4% | 21.4% | 16.6% | +30.4% | +6.9% | -26.7% |
+| mature_cooling_or_fade | 2674 | 45 | support_ok | 1.5% | 86.3% | 1.7% | 0.6% | -49.0% | -16.9% | +37.8% |
+| plateau_flat_path | 1035 | 44 | support_ok | 17.3% | 80.3% | 13.5% | 3.1% | -25.7% | -1.9% | +26.5% |
 
 ## Expression Sanity
 
@@ -75,34 +74,34 @@ Atlas expression rows are broad same-snapshot diagnostics.  They are not live fi
 
 | mechanism | expression | rows | dates | avg_ask | win_rate | roi | roi_ci_low | roi_ci_high | roi_delta_vs_complement | recent_rows | recent_roi |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| all_labeled_states | current_bracket_no | 11071 | 41 | 0.362 | 33.9% | -43.1% | -48.8% | -36.7% |  | 1875 | -46.7% |
-| all_labeled_states | current_yes | 10744 | 41 | 0.621 | 60.6% | -4.0% | -19.3% | +14.8% |  | 1837 | +6.1% |
-| all_labeled_states | d1_no | 10489 | 41 | 0.827 | 81.2% | -3.6% | -4.7% | -2.5% |  | 1809 | -4.2% |
-| all_labeled_states | d2_no | 8923 | 41 | 0.873 | 85.3% | -3.0% | -4.5% | -1.1% |  | 1482 | -4.4% |
-| late_reheat_after_dip | current_bracket_no | 640 | 41 | 0.457 | 43.0% | -18.1% | -32.4% | -1.2% | +26.5% | 101 | -32.8% |
-| late_reheat_after_dip | current_yes | 655 | 41 | 0.572 | 54.5% | +57.0% | -27.6% | +208.0% | +64.9% | 103 | +20.8% |
-| late_reheat_after_dip | d1_no | 658 | 41 | 0.807 | 76.3% | -7.7% | -12.2% | -3.1% | -4.4% | 106 | -8.7% |
-| late_reheat_after_dip | d2_no | 604 | 41 | 0.878 | 86.9% | -0.5% | -5.1% | +4.6% | +2.7% | 97 | -6.1% |
-| mature_cooling_or_fade | current_bracket_no | 2251 | 41 | 0.022 | 1.6% | -88.2% | -95.7% | -76.8% | -56.6% | 339 | -85.3% |
-| mature_cooling_or_fade | current_yes | 1709 | 41 | 0.981 | 97.8% | -0.7% | -1.8% | +0.3% | +3.8% | 287 | -1.5% |
-| mature_cooling_or_fade | d1_no | 1375 | 41 | 0.972 | 96.9% | -1.7% | -3.1% | -0.5% | +2.2% | 235 | -0.2% |
-| mature_cooling_or_fade | d2_no | 674 | 40 | 0.977 | 97.6% | -1.2% | -2.9% | +0.3% | +1.9% | 75 | -3.9% |
-| runway_sustained_warming | current_bracket_no | 2958 | 40 | 0.746 | 73.0% | -5.1% | -13.3% | +5.6% | +51.9% | 288 | +7.4% |
-| runway_sustained_warming | current_yes | 3272 | 40 | 0.260 | 23.5% | -9.7% | -51.1% | +43.4% | -8.2% | 303 | -53.7% |
-| runway_sustained_warming | d1_no | 3490 | 40 | 0.782 | 77.0% | -2.6% | -5.2% | +0.0% | +1.4% | 329 | +1.8% |
-| runway_sustained_warming | d2_no | 3628 | 40 | 0.795 | 76.5% | -4.1% | -7.3% | -0.1% | -2.0% | 334 | -11.0% |
-| sustained_warming_1h3h | current_bracket_no | 3560 | 41 | 0.687 | 66.8% | -8.8% | -14.5% | -1.8% | +50.6% | 608 | -5.7% |
-| sustained_warming_1h3h | current_yes | 3980 | 41 | 0.315 | 28.8% | -16.6% | -44.3% | +21.3% | -20.1% | 645 | -45.0% |
-| sustained_warming_1h3h | d1_no | 4158 | 41 | 0.750 | 73.6% | -4.1% | -6.3% | -1.7% | -0.8% | 697 | -5.1% |
-| sustained_warming_1h3h | d2_no | 4185 | 41 | 0.816 | 78.5% | -4.0% | -6.5% | -1.0% | -2.1% | 713 | -4.7% |
-| trend3h_flat_abs_lt0_5 | current_bracket_no | 1694 | 40 | 0.158 | 12.8% | -61.8% | -77.1% | -38.5% | -22.1% | 298 | -81.1% |
-| trend3h_flat_abs_lt0_5 | current_yes | 1614 | 40 | 0.869 | 86.4% | +28.3% | -6.3% | +90.0% | +38.0% | 289 | +159.4% |
-| trend3h_flat_abs_lt0_5 | d1_no | 1545 | 41 | 0.901 | 88.7% | -3.6% | -7.0% | -0.4% | +0.0% | 271 | -2.9% |
-| trend3h_flat_abs_lt0_5 | d2_no | 1154 | 40 | 0.958 | 95.6% | -0.8% | -2.7% | +0.8% | +2.4% | 191 | -0.4% |
-| trend3h_warming_ge0_5 | current_bracket_no | 6230 | 41 | 0.586 | 55.6% | -16.0% | -22.2% | -8.5% | +62.1% | 1066 | -18.2% |
-| trend3h_warming_ge0_5 | current_yes | 6638 | 41 | 0.428 | 40.6% | -13.0% | -32.8% | +13.1% | -23.5% | 1104 | -30.9% |
-| trend3h_warming_ge0_5 | d1_no | 6853 | 41 | 0.767 | 74.7% | -4.3% | -6.1% | -2.6% | -2.1% | 1164 | -5.7% |
-| trend3h_warming_ge0_5 | d2_no | 6664 | 41 | 0.841 | 81.6% | -3.6% | -5.4% | -1.3% | -2.4% | 1135 | -5.3% |
+| all_labeled_states | current_bracket_no | 11699 | 45 | 0.364 | 34.2% | -42.9% | -48.5% | -36.6% |  | 2503 | -44.6% |
+| all_labeled_states | current_yes | 11398 | 46 | 0.620 | 60.4% | -5.6% | -20.5% | +12.5% |  | 2491 | -3.9% |
+| all_labeled_states | d1_no | 11168 | 46 | 0.827 | 81.0% | -4.0% | -5.1% | -2.8% |  | 2488 | -5.7% |
+| all_labeled_states | d2_no | 9517 | 46 | 0.871 | 85.1% | -2.9% | -4.4% | -1.1% |  | 2076 | -3.7% |
+| late_reheat_after_dip | current_bracket_no | 671 | 45 | 0.451 | 42.2% | -19.4% | -33.6% | -3.5% | +24.9% | 132 | -35.9% |
+| late_reheat_after_dip | current_yes | 686 | 45 | 0.577 | 55.2% | +54.1% | -26.5% | +201.3% | +63.5% | 134 | +14.2% |
+| late_reheat_after_dip | d1_no | 692 | 45 | 0.806 | 76.4% | -7.6% | -12.0% | -3.1% | -3.9% | 140 | -7.8% |
+| late_reheat_after_dip | d2_no | 631 | 45 | 0.879 | 87.0% | -0.4% | -4.9% | +4.7% | +2.7% | 124 | -4.3% |
+| mature_cooling_or_fade | current_bracket_no | 2346 | 45 | 0.023 | 1.7% | -88.6% | -95.9% | -77.3% | -57.1% | 434 | -87.9% |
+| mature_cooling_or_fade | current_yes | 1788 | 45 | 0.980 | 97.8% | -0.8% | -1.8% | +0.2% | +5.7% | 366 | -1.5% |
+| mature_cooling_or_fade | d1_no | 1445 | 45 | 0.972 | 96.9% | -1.8% | -3.0% | -0.6% | +2.5% | 305 | -0.9% |
+| mature_cooling_or_fade | d2_no | 709 | 44 | 0.976 | 97.6% | -1.2% | -2.9% | +0.3% | +1.9% | 110 | -3.1% |
+| runway_sustained_warming | current_bracket_no | 3067 | 44 | 0.747 | 73.2% | -5.5% | -13.3% | +4.9% | +50.7% | 397 | +1.0% |
+| runway_sustained_warming | current_yes | 3396 | 45 | 0.259 | 23.4% | -11.6% | -51.3% | +42.3% | -8.6% | 427 | -56.0% |
+| runway_sustained_warming | d1_no | 3627 | 45 | 0.783 | 77.1% | -2.8% | -5.2% | -0.3% | +1.8% | 466 | -0.4% |
+| runway_sustained_warming | d2_no | 3773 | 45 | 0.795 | 76.5% | -4.2% | -7.3% | -0.1% | -2.1% | 479 | -9.5% |
+| sustained_warming_1h3h | current_bracket_no | 3774 | 45 | 0.688 | 67.3% | -8.1% | -13.7% | -1.6% | +51.3% | 822 | -3.4% |
+| sustained_warming_1h3h | current_yes | 4218 | 46 | 0.314 | 28.4% | -19.2% | -45.8% | +16.2% | -21.7% | 883 | -49.9% |
+| sustained_warming_1h3h | d1_no | 4411 | 46 | 0.752 | 73.5% | -4.5% | -6.7% | -2.2% | -0.9% | 950 | -6.9% |
+| sustained_warming_1h3h | d2_no | 4442 | 46 | 0.816 | 78.4% | -3.9% | -6.3% | -0.7% | -1.8% | 970 | -3.7% |
+| trend3h_flat_abs_lt0_5 | current_bracket_no | 1799 | 44 | 0.159 | 12.8% | -62.5% | -77.0% | -40.4% | -23.1% | 403 | -78.9% |
+| trend3h_flat_abs_lt0_5 | current_yes | 1716 | 44 | 0.869 | 86.4% | +26.2% | -6.2% | +83.3% | +37.5% | 391 | +116.1% |
+| trend3h_flat_abs_lt0_5 | d1_no | 1652 | 45 | 0.898 | 88.6% | -3.8% | -7.1% | -0.7% | +0.2% | 378 | -4.0% |
+| trend3h_flat_abs_lt0_5 | d2_no | 1229 | 44 | 0.957 | 95.4% | -1.1% | -2.8% | +0.6% | +2.1% | 266 | -1.8% |
+| trend3h_warming_ge0_5 | current_bracket_no | 6596 | 45 | 0.586 | 55.9% | -15.5% | -21.6% | -8.0% | +62.9% | 1432 | -15.2% |
+| trend3h_warming_ge0_5 | current_yes | 7035 | 46 | 0.428 | 40.4% | -15.0% | -34.3% | +10.1% | -24.5% | 1501 | -35.5% |
+| trend3h_warming_ge0_5 | d1_no | 7268 | 46 | 0.768 | 74.6% | -4.6% | -6.4% | -3.0% | -1.9% | 1579 | -6.8% |
+| trend3h_warming_ge0_5 | d2_no | 7060 | 46 | 0.841 | 81.5% | -3.5% | -5.3% | -1.2% | -2.2% | 1531 | -4.5% |
 
 ## HeadB Check
 

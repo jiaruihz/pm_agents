@@ -130,7 +130,12 @@ STATE_VALUE_COLS = [
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--feature-rows", nargs="+", default=[str(p) for p in DEFAULT_FEATURE_ROWS])
+    parser.add_argument(
+        "--feature-rows",
+        nargs="+",
+        default=None,
+        help="Explicit feature-row shards. Defaults to all feature_factory_*/reheat_feature_rows.csv shards.",
+    )
     parser.add_argument("--db", default=str(ROOT / "runtime/weather.db"))
     parser.add_argument("--out-dir", default=str(OUT_DIR))
     parser.add_argument("--out-json", default=str(OUT_JSON))
@@ -167,6 +172,80 @@ def query_one(conn: sqlite3.Connection, sql: str) -> dict[str, Any]:
     return dict(row) if row is not None else {}
 
 
+def table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1", (table,)).fetchone()
+    return row is not None
+
+
+def optional_table_summary(conn: sqlite3.Connection, table: str, date_col: str) -> dict[str, Any]:
+    if not table_exists(conn, table):
+        return {"rows": 0, f"min_{date_col}": None, f"max_{date_col}": None, "table_missing": True}
+    out = query_one(
+        conn,
+        f"SELECT COUNT(*) AS rows, MIN({date_col}) AS min_{date_col}, MAX({date_col}) AS max_{date_col} FROM {table}",
+    )
+    out["table_missing"] = False
+    return out
+
+
+def load_settlement_winners(db_path: Path) -> pd.DataFrame:
+    with connect_ro(db_path) as conn:
+        if not table_exists(conn, "settlement_outcomes"):
+            return pd.DataFrame(columns=["city", "target_date", "settlement_final_winning_bracket"])
+        return pd.read_sql_query(
+            """
+            SELECT
+              city,
+              target_date,
+              bracket AS settlement_final_winning_bracket
+            FROM settlement_outcomes
+            WHERE settlement_status = 'settled'
+              AND final_price >= 0.5
+            """,
+            conn,
+        ).drop_duplicates(["city", "target_date"], keep="last")
+
+
+def add_settlement_winner_context(states: pd.DataFrame, db_path: Path) -> tuple[pd.DataFrame, int]:
+    winners = load_settlement_winners(db_path)
+    if winners.empty:
+        return states, 0
+    out = states.merge(winners, on=["city", "target_date"], how="left", validate="many_to_one")
+    current = out.get("final_winning_bracket")
+    if current is None:
+        out["final_winning_bracket"] = np.nan
+        missing = pd.Series(True, index=out.index)
+    else:
+        missing = current.isna() | current.astype(str).str.strip().isin(["", "nan", "None"])
+    fillable = missing & out["settlement_final_winning_bracket"].notna()
+    out.loc[fillable, "final_winning_bracket"] = out.loc[fillable, "settlement_final_winning_bracket"]
+    out = out.drop(columns=["settlement_final_winning_bracket"])
+    return out, int(fillable.sum())
+
+
+def recompute_settlement_labels(states: pd.DataFrame) -> pd.DataFrame:
+    out = states.copy()
+    if "final_winning_bracket" not in out:
+        return out
+    winner = out["final_winning_bracket"].astype("object")
+    has_winner = winner.notna() & ~winner.astype(str).str.strip().isin(["", "nan", "None"])
+    label_pairs = [
+        ("current_bracket", "current_bracket_held"),
+        ("d1_no_bracket", "d1_hit"),
+        ("d2_no_bracket", "d2_hit"),
+        ("lottery_yes_bracket", "lottery_yes_hit"),
+    ]
+    for bracket_col, label_col in label_pairs:
+        if bracket_col not in out:
+            continue
+        out[label_col] = np.where(has_winner, winner.astype(str).eq(out[bracket_col].astype(str)), np.nan)
+    if {"current_bracket_held", "d1_hit", "d1_no_bracket"}.issubset(out.columns):
+        current_held = pd.Series(out["current_bracket_held"]).fillna(False).astype(bool)
+        d1_hit = pd.Series(out["d1_hit"]).fillna(False).astype(bool)
+        out["skip_over_d1"] = np.where(has_winner, (~current_held) & (~d1_hit) & out["d1_no_bracket"].notna(), np.nan)
+    return out
+
+
 def load_gate() -> dict[str, Any]:
     path = ROOT / "runtime/_dashboard_logs/clob_fill_coverage_gate.json"
     if not path.exists():
@@ -178,6 +257,13 @@ def load_gate() -> dict[str, Any]:
         "fact_trades_live_real": data.get("fact_trades_live_real"),
         "fail_reasons": data.get("fail_reasons"),
     }
+
+
+def discover_feature_rows(out_dir: Path) -> list[Path]:
+    paths = sorted(out_dir.glob("feature_factory_*/reheat_feature_rows.csv"))
+    if paths:
+        return paths
+    return [path for path in DEFAULT_FEATURE_ROWS if path.exists()]
 
 
 def load_features(paths: list[Path]) -> pd.DataFrame:
@@ -590,15 +676,20 @@ def write_report(payload: dict[str, Any], out_md: Path) -> None:
 
 def main() -> int:
     args = parse_args()
+    db_path = Path(args.db)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_json = Path(args.out_json)
     out_md = Path(args.out_md)
-    feature_paths = [Path(p) for p in args.feature_rows]
+    feature_paths = [Path(p) for p in args.feature_rows] if args.feature_rows else discover_feature_rows(out_dir)
+    if not feature_paths:
+        raise SystemExit(f"No feature-row shards found under {out_dir}")
 
     rows = load_features(feature_paths)
     states = first_state_rows(rows)
     states = add_expression_quotes(states, rows)
+    states, settlement_winner_filled_rows = add_settlement_winner_context(states, db_path)
+    states = recompute_settlement_labels(states)
     states = add_pit_context(states)
     states = add_realized_context(states)
     states = add_regime_labels(states)
@@ -624,11 +715,10 @@ def main() -> int:
     source_dist.to_csv(source_day_csv, index=False)
     expr_matrix.to_csv(expression_csv, index=False)
 
-    db_path = Path(args.db)
     with connect_ro(db_path) as conn:
-        fsc = query_one(conn, "SELECT COUNT(*) AS rows, MIN(event_date) AS min_event_date, MAX(event_date) AS max_event_date FROM fact_signal_candidates")
-        so = query_one(conn, "SELECT COUNT(*) AS rows, MIN(target_date) AS min_target_date, MAX(target_date) AS max_target_date FROM settlement_outcomes")
-        ft = query_one(conn, "SELECT COUNT(*) AS rows, MIN(target_date) AS min_target_date, MAX(target_date) AS max_target_date FROM fact_trades")
+        fsc = optional_table_summary(conn, "fact_signal_candidates", "event_date")
+        so = optional_table_summary(conn, "settlement_outcomes", "target_date")
+        ft = optional_table_summary(conn, "fact_trades", "target_date")
 
     payload = {
         "generated_at_utc": now_utc(),
@@ -639,12 +729,15 @@ def main() -> int:
             "fact_signal_candidates_rows": int(fsc.get("rows", 0)),
             "fact_signal_candidates_min_event_date": fsc.get("min_event_date"),
             "fact_signal_candidates_max_event_date": fsc.get("max_event_date"),
+            "fact_signal_candidates_table_missing": bool(fsc.get("table_missing")),
             "settlement_outcomes_rows": int(so.get("rows", 0)),
             "settlement_outcomes_min_target_date": so.get("min_target_date"),
             "settlement_outcomes_max_target_date": so.get("max_target_date"),
+            "settlement_outcomes_table_missing": bool(so.get("table_missing")),
             "fact_trades_rows": int(ft.get("rows", 0)),
             "fact_trades_min_target_date": ft.get("min_target_date"),
             "fact_trades_max_target_date": ft.get("max_target_date"),
+            "fact_trades_table_missing": bool(ft.get("table_missing")),
         },
         "clob_gate": load_gate(),
         "funnel": {
@@ -658,6 +751,7 @@ def main() -> int:
             "current_no_quote_coverage": float(states["current_no_ask"].notna().mean()),
             "lottery_yes_quote_coverage": float(states["lottery_yes_ask"].notna().mean()),
             "forecast_source_counts": {str(k): int(v) for k, v in states["forecast_source"].fillna("missing").value_counts().items()},
+            "settlement_winner_filled_rows": int(settlement_winner_filled_rows),
             "forecast_clock_source_counts": {str(k): int(v) for k, v in states["forecast_clock_source"].fillna("missing").value_counts().items()},
         },
         "top_day_regimes": to_records(day_summary),

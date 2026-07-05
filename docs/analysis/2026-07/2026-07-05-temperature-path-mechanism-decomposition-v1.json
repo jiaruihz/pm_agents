@@ -1,6 +1,6 @@
 {
   "snapshot": {
-    "generated_at_utc": "2026-07-05T05:45:08+00:00",
+    "generated_at_utc": "2026-07-05T06:21:47+00:00",
     "fact_signal_candidates": {
       "rows": 46007,
       "min_date": "2026-05-05",
@@ -72,16 +72,26 @@
         "sample_cache_not_in_db": [],
         "sample_db_not_in_cache": []
       }
+    },
+    "atlas_freshness": {
+      "path": "runtime/_analysis_logs/intraday_weather_regime_atlas_freshness_v1.json",
+      "status": "fresh",
+      "target_date": "2026-07-04",
+      "label_required_date": "2026-07-03",
+      "state_ok": true,
+      "label_ok": true,
+      "final_atlas_state_max_date": "2026-07-04",
+      "final_atlas_labeled_max_date": "2026-07-04"
     }
   },
   "atlas": {
     "path": "docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv",
-    "rows": 13725,
+    "rows": 13860,
     "min_target_date": "2026-05-19",
-    "max_target_date": "2026-07-03",
-    "labeled_rows": 12972,
+    "max_target_date": "2026-07-04",
+    "labeled_rows": 13852,
     "labeled_min_target_date": "2026-05-19",
-    "labeled_max_target_date": "2026-07-02"
+    "labeled_max_target_date": "2026-07-04"
   },
   "outputs": {
     "mechanism_dictionary": "docs/analysis/2026-07/generated/temperature_path_mechanism_decomposition_v1/mechanism_dictionary.csv",
