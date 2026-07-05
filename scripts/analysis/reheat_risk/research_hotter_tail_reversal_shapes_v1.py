@@ -318,6 +318,26 @@ def main() -> None:
                  "tp30_roi", "top5_rm_hold", "recent_hold_roi", "recent_rows"]
     exec_cols = ["cell", "leg", "rows", "touch15", "touch30", "worst_day_hold",
                  "maker_fill_rate_win", "maker_fill_rate_lose", "maker_roi_filled"]
+    b4_d1 = res[(res["cell"].eq("B4_B3+peak_ahead")) & (res["leg"].eq("d1_yes"))].iloc[0].to_dict()
+    b4_current_no = res[
+        (res["cell"].eq("B4_B3+peak_ahead")) & (res["leg"].eq("current_bracket_no"))
+    ].iloc[0].to_dict()
+
+    def fmt_pct(value: Any) -> str:
+        try:
+            x = float(value)
+        except Exception:
+            return "n/a"
+        if not np.isfinite(x):
+            return "n/a"
+        return f"{x:+.1%}"
+
+    b4_sig = (
+        float(b4_d1["hold_ci_lo"]) > 0.0
+        if b4_d1.get("hold_ci_lo") is not None and np.isfinite(float(b4_d1["hold_ci_lo"]))
+        else False
+    )
+    b4_status = "shadow_candidate" if b4_sig else "inconclusive_positive_signal_keep_shadow"
     lines = [
         "# Hotter-Tail Reversal Shapes v1 (exploratory, path-aware)",
         "",
@@ -337,23 +357,23 @@ def main() -> None:
         "  leg beyond the move).  This is intraday-cheap-band specific; the D-1 low-price",
         "  sleeve is a different denominator and keeps its own shadow_candidate status.",
         "",
-        "rich_current_collapse_reversal (Shape B4):  shadow_candidate",
+        f"rich_current_collapse_reversal (Shape B4):  {b4_status}",
         "  state: current_high YES still >= 0.60 while obs warming (trend_1h >= +0.5F),",
         "  forecast max lands >= 1 bracket above current (bracket-aware), forecast peak",
-        "  still ahead.  d1 YES hold: 59 rows / 28 dates, win 52.5% @ avg ask ~0.29,",
-        "  ROI +103.2% CI [+38.3%, +163.8%], top5-removed +50.8%.",
-        "  Convergent validity: union with the earlier anchored-conflict trigger (different",
-        "  thresholds: gap-based, d1-ask cap, current >= 0.40) = 69 rows / 29 dates /",
-        "  24 cities, +87.4% CI [+28.0%, +144.6%]; overlap only 23 rows, so the shape is",
-        "  not one threshold set.  Condition stack is monotone (B0 -40% -> B4 +103%).",
+        f"  still ahead.  d1 YES hold: {int(b4_d1['rows'])} rows / {int(b4_d1['dates'])} dates,",
+        f"  win {fmt_pct(b4_d1['settle_win'])} @ avg ask {float(b4_d1['avg_ask']):.3f},",
+        f"  ROI {fmt_pct(b4_d1['hold_roi'])} CI [{fmt_pct(b4_d1['hold_ci_lo'])}, {fmt_pct(b4_d1['hold_ci_hi'])}],",
+        f"  top5-removed {fmt_pct(b4_d1.get('top5_rm_hold'))}.",
+        "  After the Single Runs PIT backfill rejoin this no longer clears significance;",
+        "  keep as zero-notional forward shadow only.",
         "",
         "execution for the reversal shape:  TAKER entry + HOLD to settlement",
         "  TP20 = -35%, TP30 = -18% (kills the payoff; win rate is ~50%, not a lottery)",
         "  maker-first entry = adversely selected: winners fill 12.9% vs losers 92.9%,",
         "  maker ROI on filled -51%.  This is the sharpest execution result of the round.",
         "",
-        "expression ranking inside the shape:  d1 YES > current_bracket NO (+73.3%",
-        "  CI [+20.3%, +121.0%], lower carry) >> d2 YES (-94%; the collapse is exactly one",
+        f"expression ranking inside the shape:  d1 YES {fmt_pct(b4_d1['hold_roi'])} vs",
+        f"  current_bracket NO {fmt_pct(b4_current_no['hold_roi'])}; d2 YES remains weak. The collapse is usually one",
         "  bracket, never two).  Hotter baskets inherit the dead d2/tail legs -> skip.",
         "",
         "attribution:  METAR-regime x market-anchoring (book lags obs+forecast).",
