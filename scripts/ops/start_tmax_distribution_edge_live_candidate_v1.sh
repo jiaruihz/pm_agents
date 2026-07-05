@@ -33,7 +33,7 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
   # shellcheck disable=SC1091
   source "$PROJECT_DIR/.env"
   set +a
-  ENV_PREFIX="set -a; source $(printf '%q' "$PROJECT_DIR/.env"); set +a;"
+  ENV_PREFIX="set -a; . $(printf '%q' "$PROJECT_DIR/.env"); set +a;"
 fi
 
 args=(
