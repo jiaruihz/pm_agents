@@ -102,14 +102,16 @@
       "settled_candidate_rows": 60,
       "candidate_dates": 40,
       "settled_dates": 10,
-      "primary_source": "aviationweather_metar",
+      "primary_source": "synopticdata_timeseries",
       "fallback_sources": [
+        "aviationweather_metar",
+        "iem_asos_madishf_latest",
         "iem_asos"
       ],
       "rules_recheck_required": true,
       "blocked_reason": "",
       "live_eligible": true,
-      "source_profile_note": "live-capable METAR mirror of market rules station"
+      "source_profile_note": "live-capable SynopticData 5-min station feed verified on 2026-07-04; aviationweather and IEM remain fallbacks"
     },
     {
       "city": "Beijing",
@@ -343,14 +345,16 @@
       "settled_candidate_rows": 31,
       "candidate_dates": 34,
       "settled_dates": 10,
-      "primary_source": "aviationweather_metar",
+      "primary_source": "synopticdata_timeseries",
       "fallback_sources": [
+        "aviationweather_metar",
+        "iem_asos_madishf_latest",
         "iem_asos"
       ],
       "rules_recheck_required": true,
       "blocked_reason": "",
       "live_eligible": true,
-      "source_profile_note": "live-capable METAR mirror of market rules station"
+      "source_profile_note": "live-capable SynopticData 5-min station feed verified on 2026-07-04; aviationweather and IEM remain fallbacks"
     },
     {
       "city": "Denver",
@@ -476,14 +480,16 @@
       "settled_candidate_rows": 52,
       "candidate_dates": 34,
       "settled_dates": 11,
-      "primary_source": "aviationweather_metar",
+      "primary_source": "synopticdata_timeseries",
       "fallback_sources": [
+        "aviationweather_metar",
+        "iem_asos_madishf_latest",
         "iem_asos"
       ],
       "rules_recheck_required": true,
       "blocked_reason": "",
       "live_eligible": true,
-      "source_profile_note": "live-capable METAR mirror of market rules station"
+      "source_profile_note": "live-capable SynopticData 5-min station feed verified on 2026-07-04; aviationweather and IEM remain fallbacks"
     },
     {
       "city": "Istanbul",

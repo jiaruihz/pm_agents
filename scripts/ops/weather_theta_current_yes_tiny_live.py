@@ -100,8 +100,16 @@ OBS_MAX_DYNAMIC_AGE_MIN = 90.0
 METAR_LIKE_OBSERVATION_CACHE_SOURCES = {
     "aviationweather_metar",
     "aviationweather_cache_csv",
+    "iem_asos_madishf_latest",
     "noaa_tgftp_station_txt",
+    "synopticdata_timeseries",
     "weather_gov_latest",
+}
+SOURCE_PROFILE_LIVE_OBSERVATION_SOURCES = {
+    "aviationweather_metar",
+    "aviationweather",
+    "iem_asos_madishf_latest",
+    "synopticdata_timeseries",
 }
 OBSERVATION_CACHE_FALLBACK_STATUSES = {
     "observation_cache_missing",
@@ -770,7 +778,7 @@ def load_stations() -> dict[str, Station]:
             continue
         if not profile.live_eligible:
             continue
-        if profile.primary_source not in {"aviationweather_metar", "aviationweather"}:
+        if profile.primary_source not in SOURCE_PROFILE_LIVE_OBSERVATION_SOURCES:
             continue
         station_code = safe_str(profile.official_station_or_feed).upper()
         if not station_code or len(station_code) != 4:
@@ -795,7 +803,7 @@ def station_map_missing_audit(
     if profile is not None:
         if not profile.live_eligible:
             reason = "source_profile_not_live_eligible"
-        elif profile.primary_source not in {"aviationweather_metar", "aviationweather"}:
+        elif profile.primary_source not in SOURCE_PROFILE_LIVE_OBSERVATION_SOURCES:
             reason = f"unsupported_primary_source:{profile.primary_source}"
         elif not safe_str(profile.official_station_or_feed):
             reason = "source_profile_missing_station"

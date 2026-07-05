@@ -481,6 +481,20 @@ def test_observations_source_chain_uses_awc_cache_before_iem() -> None:
     ]
 
 
+def test_observations_source_chain_uses_synoptic_primary_for_verified_us_city() -> None:
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import observations
+
+    cfg = load_city_configs(include_station_diff=True, only_cities={"Austin"})[0]
+
+    assert observations._source_chain(cfg, include_fallback_sources=True) == [
+        "synopticdata_timeseries",
+        "aviationweather_metar",
+        "iem_asos_madishf_latest",
+        "iem_asos",
+    ]
+
+
 def test_observations_cache_reuses_previous_ok_row_on_fetch_failure(monkeypatch, tmp_path) -> None:
     import argparse
     from weather_data_feed import build_observation_cache, write_observation_cache

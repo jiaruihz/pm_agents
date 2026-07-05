@@ -9,7 +9,12 @@ from weather_data_feed.source_registry import load_source_profiles
 
 MIN_ALIGNMENT_DAYS = 20
 MIN_ALIGNMENT_RATE = 0.97
-SUPPORTED_LIVE_SOURCES = {"aviationweather_metar", "aviationweather"}
+SUPPORTED_LIVE_SOURCES = {
+    "aviationweather_metar",
+    "aviationweather",
+    "iem_asos_madishf_latest",
+    "synopticdata_timeseries",
+}
 
 SPECIAL_SLUGS = {
     "BuenosAires": "buenos-aires",
