@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -32,6 +33,11 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.sky_cover import SKY_COVER_CODE as SKY_CODE  # noqa: E402
+
 DB = ROOT / "runtime/weather.db"
 GATE = ROOT / "runtime/_dashboard_logs/clob_fill_coverage_gate.json"
 QUOTES = ROOT / "docs/analysis/2026-06/generated/theta_no_carry_expanded_replay_v4/expanded_quote_rows.csv"
@@ -46,7 +52,6 @@ END_DATE = "2026-06-14"
 SPLIT_DATE = "2026-06-01"
 SEED = 20260616
 IEM_COLS = ["tmpf", "dwpf", "relh", "drct", "sknt", "skyc1"]
-SKY_CODE = {"CLR": 0, "SKC": 0, "NSC": 0, "NCD": 0, "CAVOK": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
 
 BASE_FEATURES = [
     "decision_hour_local",

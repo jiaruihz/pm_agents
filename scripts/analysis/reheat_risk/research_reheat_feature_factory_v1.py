@@ -13,6 +13,7 @@ import gzip
 import json
 import math
 import sqlite3
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,11 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.sky_cover import SKY_COVER_CODE as SKY_CODE  # noqa: E402
+
 DB = ROOT / "runtime/weather.db"
 ORDERBOOK_DIR = ROOT / "runtime/weather_edge_v1/market_data/orderbook_snapshots"
 OBSERVED_DETAIL = (
@@ -41,7 +47,6 @@ OUT_MD = ROOT / "docs/analysis/2026-06/2026-06-16-reheat-feature-factory-v1.md"
 DEFAULT_START = "2026-05-19"
 DEFAULT_END = "2026-06-17"
 DEFAULT_HOURS = tuple(range(10, 22))
-SKY_CODE = {"CLR": 0, "SKC": 0, "NSC": 0, "NCD": 0, "CAVOK": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
 
 
 @dataclass(frozen=True)

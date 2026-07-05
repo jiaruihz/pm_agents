@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.sky_cover import SKY_COVER_CODE as SKY_CODE  # noqa: E402
+
 FEATURE_ROWS = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_full_replay_v8/feature_rows.csv"
 BASE_MODEL = ROOT / "docs/analysis/2026-06/generated/theta_yes_current_live_gate_v9/live_model.json"
 STATION_SUMMARY = ROOT / "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json"
@@ -33,7 +39,6 @@ OUT_DIR = ROOT / "docs/analysis/2026-06/generated/current_yes_proper_form_tail_f
 SEED = 20260620
 
 LABEL = "current_yes_wins"
-SKY_CODE = {"CLR": 0, "SKC": 0, "NSC": 0, "NCD": 0, "CAVOK": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
 
 P0_CHEAP = ["wind_dir_sin", "wind_dir_cos", "d_sky_3h"]
 P1_SOLAR = ["solar_altitude_deg", "solar_altitude_pos", "d_sky_3h_x_solar_altitude_pos"]

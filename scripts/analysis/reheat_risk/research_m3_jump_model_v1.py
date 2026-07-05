@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -61,6 +62,10 @@ import numpy as np
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[3]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+from weather_data_feed.sky_cover import SKY_COVER_CODE as SKY_CODE  # noqa: E402
 
 DETAIL_CSV = REPO / "docs/analysis/2026-06/generated/m3_observed_max_v3_h10_21/m3_observed_max_residual_detail.csv"
 QUOTES_CSV = REPO / "docs/analysis/2026-06/generated/m3_exhaustion_no_v0/exhaustion_tail_no_quotes.csv"
@@ -78,7 +83,6 @@ SEED = 7
 F_CITIES = {"Atlanta", "Austin", "Dallas", "Denver", "Houston", "LA", "Miami", "NYC", "SanFrancisco", "Seattle"}
 
 IEM_COLS = ["tmpf", "dwpf", "relh", "drct", "sknt", "skyc1"]
-SKY_CODE = {"CLR": 0, "SKC": 0, "NSC": 0, "NCD": 0, "CAVOK": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
 
 FEATURES_NUM = [
     "decision_hour_local", "month",

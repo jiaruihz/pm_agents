@@ -68,6 +68,7 @@ from weather_data_feed import (
     timezone_label,
 )
 from weather_data_feed.observation_sources import build_iem_local_day_params, parse_iem_asos_records
+from weather_data_feed.sky_cover import SKY_COVER_CODE as SKY_CODE
 
 
 STRATEGY_INSTANCE = os.environ.get("THETA_CURRENT_YES_STRATEGY_INSTANCE", "theta_current_yes_tiny_live_v1")
@@ -191,7 +192,6 @@ PRICE_FEATURES = ["yes_current_ask", "log_yes_size", "d1_no_ask", "ask_gap_d1_no
 CAT_FEATURES = ["city", "unit"]
 MODEL_FEATURES = BASE_FEATURES + PRICE_FEATURES + CAT_FEATURES
 
-SKY_CODE = {"CLR": 0, "SKC": 0, "NSC": 0, "NCD": 0, "CAVOK": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
 MONTHS = [
     "january",
     "february",

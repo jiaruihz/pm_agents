@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,10 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed.city_family import CITY_FAMILY_CURRENT_BRACKET_NO_V1 as CITY_FAMILY  # noqa: E402
 
 SOURCE_SELECTED = ROOT / "docs/analysis/2026-06/generated/current_bracket_no_remaining_heat_mechanism_features_v3/selected_trade_rows.csv"
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/current_bracket_no_city_climate_forensics_v1"
@@ -38,44 +43,6 @@ BOOTSTRAP_REPS = 3000
 
 # Fixed taxonomy reused from research_current_yes_no_reheat_segment_breakdown_v1.
 # This is a pre-analysis mechanism grouping, not a group selected for this PnL.
-CITY_FAMILY = {
-    "Amsterdam": "europe_cloud_break",
-    "Helsinki": "europe_cloud_break",
-    "Madrid": "europe_cloud_break",
-    "Munich": "europe_cloud_break",
-    "Warsaw": "europe_cloud_break",
-    "Ankara": "continental_dry_hot",
-    "Austin": "continental_dry_hot",
-    "Dallas": "continental_dry_hot",
-    "Denver": "continental_dry_hot",
-    "Jeddah": "continental_dry_hot",
-    "Karachi": "continental_dry_hot",
-    "Lucknow": "continental_dry_hot",
-    "Atlanta": "humid_low_latitude",
-    "Busan": "humid_low_latitude",
-    "Chengdu": "humid_low_latitude",
-    "Chongqing": "humid_low_latitude",
-    "Guangzhou": "humid_low_latitude",
-    "Houston": "humid_low_latitude",
-    "Manila": "humid_low_latitude",
-    "Miami": "humid_low_latitude",
-    "Shanghai": "humid_low_latitude",
-    "Singapore": "humid_low_latitude",
-    "Taipei": "humid_low_latitude",
-    "Tokyo": "humid_low_latitude",
-    "Wuhan": "humid_low_latitude",
-    "BuenosAires": "southern_or_maritime",
-    "CapeTown": "southern_or_maritime",
-    "Istanbul": "southern_or_maritime",
-    "LA": "southern_or_maritime",
-    "NYC": "southern_or_maritime",
-    "SanFrancisco": "southern_or_maritime",
-    "SaoPaulo": "southern_or_maritime",
-    "Seattle": "southern_or_maritime",
-    "TelAviv": "southern_or_maritime",
-    "Wellington": "southern_or_maritime",
-    "Beijing": "east_asia_continental",
-}
 
 
 def now_utc() -> str:
