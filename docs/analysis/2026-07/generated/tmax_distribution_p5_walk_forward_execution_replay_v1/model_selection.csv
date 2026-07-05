@@ -1,0 +1,11 @@
+spec,c,cv_rows,cv_dates,cv_market_logloss,cv_model_logloss,cv_blend_alpha,cv_blend_logloss,description
+loo_no_boundary,0.03,3743,19,0.6529527525647217,0.6240014568354844,0.5,0.615946123406354,full stack without bracket boundary/fractional features
+loo_no_city_source,0.03,3743,19,0.6529527525647217,0.6278669636184754,0.5,0.617995638071871,full stack without exact city/source/climate-family categories
+loo_no_meteo,0.03,3743,19,0.6529527525647217,0.6291351565975283,0.5,0.6184068495611225,full stack without wind/cloud/humidity numeric fields
+loo_no_regime,0.03,3743,19,0.6529527525647217,0.6266832243780848,0.5,0.6179845671038509,full stack without atlas regime/context categories
+market_recal,0.3,3743,19,0.6529527525647217,0.6196585013605495,0.75,0.6189221904120805,market-local probabilities only; calibration baseline
+mkt_boundary,0.03,3743,19,0.6529527525647217,0.6292298493698062,0.5,0.6207393023505728,market + path + bracket boundary/fractional-position features
+mkt_city_source,0.03,3743,19,0.6529527525647217,0.6285023743725269,0.5,0.6176524469655148,"full feature stack: path, boundary, meteo, regime, city/source"
+mkt_meteo,0.03,3743,19,0.6529527525647217,0.6262910193423503,0.5,0.6185291274112892,market + path/boundary + wind/cloud/humidity numeric fields
+mkt_path_core,0.1,3743,19,0.6529527525647217,0.6230213915448864,0.5,0.6180812837094944,"market + realized path, forecast peak clock, trend/freshness"
+mkt_regime,0.03,3743,19,0.6529527525647217,0.6278669636184754,0.5,0.617995638071871,mkt_meteo + atlas mechanism regimes; no exact city id

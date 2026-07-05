@@ -1,0 +1,3 @@
+strategy,trigger_rows_all_labels,trigger_rows_settled,trigger_rows_unsettled,trigger_date_min,trigger_date_max,unsettled_dates
+false_fade_reheat_conflict_d1_yes,47,47,0,2026-05-20,2026-06-30,
+rich_current_b4_d1_yes,70,70,0,2026-05-20,2026-06-20,
