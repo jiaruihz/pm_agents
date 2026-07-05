@@ -36,15 +36,10 @@ if sys.prefix == sys.base_prefix and VENV_PYTHON.exists():
     os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]])
 if str(OPS) not in sys.path:
     sys.path.insert(0, str(OPS))
-ANALYSIS_DIR = ROOT / "scripts/analysis/reheat_risk"
-if str(ANALYSIS_DIR) not in sys.path:
-    sys.path.insert(0, str(ANALYSIS_DIR))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import research_intraday_weather_regime_atlas_v1 as atlas  # noqa: E402
-import research_regime_routed_no_expression_v1 as research  # noqa: E402
-from research_reheat_feature_factory_v1 import bracket_contains, parse_bracket  # noqa: E402
+from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as regime_policy  # noqa: E402
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc  # noqa: E402
 from weather_data_feed.snapshot_protocol import parse_market_event_date  # noqa: E402
 from weather_data_feed.source_policy import load_city_configs  # noqa: E402
@@ -494,7 +489,7 @@ def tail_distance_from_running(bracket_low: float | None, running_native: float,
 
 def current_no_escape_threshold_native(bracket_text: Any) -> float:
     """Return the rounded-settlement escape threshold for a current-NO bracket."""
-    bracket = parse_bracket(bracket_text)
+    bracket = regime_policy.parse_bracket(bracket_text)
     if bracket is None or bracket.high is None:
         return math.nan
     return float(bracket.high) + 0.5
@@ -648,7 +643,7 @@ def add_reversal_shadow_fields(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def route_price_cap(route_leg: Any) -> float:
-    return float(ROUTE_PRICE_CAPS.get(str(route_leg or ""), research.ASK_CAPS["relaxed70"]))
+    return float(ROUTE_PRICE_CAPS.get(str(route_leg or ""), regime_policy.ASK_CAPS["relaxed70"]))
 
 
 def current_no_route_for_state(labelled: dict[str, Any]) -> str:
@@ -907,7 +902,7 @@ def live_order_spent_by_date(path: Path) -> dict[str, float]:
 def market_rows_for_city(sub: pd.DataFrame, *, running_value: int, running_native: float, unit: str) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for _, record in sub.iterrows():
-        bracket = parse_bracket(record.get("bracket"))
+        bracket = regime_policy.parse_bracket(record.get("bracket"))
         if bracket is None:
             continue
         book_target_date = str(record.get("target_date") or "")
@@ -932,7 +927,7 @@ def market_rows_for_city(sub: pd.DataFrame, *, running_value: int, running_nativ
                     "book_target_date": book_target_date,
                     "book_market_event_date": book_market_event_date,
                     "book_market_date_match": bool(book_target_date and book_market_event_date == book_target_date),
-                    "contains_running": bracket_contains(bracket, running_value),
+                    "contains_running": regime_policy.bracket_contains(bracket, running_value),
                     "tail_distance": tail_distance_from_running(bracket.low, running_native, unit) if outcome == "no" else None,
                 }
             )
@@ -963,7 +958,7 @@ def build_city_state(
     market_local_dates = sorted(sub.get("market_local_date", pd.Series([], dtype=str)).astype(str).dropna().unique().tolist())
     if local_dates and market_local_dates and not set(local_dates).intersection(market_local_dates):
         return None, "not_current_local_market"
-    if decision_hour not in research.DECISION_HOURS:
+    if decision_hour not in regime_policy.DECISION_HOURS:
         return None, f"outside_decision_hours:{decision_hour}"
     if obs_source == "weather_data_feed_observation_cache":
         obs = observation_cache_summary(
@@ -1063,7 +1058,7 @@ def build_city_state(
             }
         )
     base.update(city_wind_context(city, base.get("wind_dir_deg")))
-    labelled = atlas.add_regime_labels(pd.DataFrame([base])).iloc[0].to_dict()
+    labelled = regime_policy.add_regime_labels(pd.DataFrame([base])).iloc[0].to_dict()
     books = market_rows_for_city(sub, running_value=running_value, running_native=running_native, unit=unit)
     if books.empty:
         return None, "no_book_rows"
@@ -1244,7 +1239,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
 
     selected = pd.DataFrame(routed)
     if not selected.empty:
-        selected = research.add_soft_weights(selected)
+        selected = regime_policy.add_soft_weights(selected)
         selected = attach_city_source_bias(selected, load_city_source_bias_lookup())
         wind_speed = pd.to_numeric(selected.get("wind_speed_kt"), errors="coerce")
         coastal_flow = selected.get("coastal_flow_state", pd.Series("", index=selected.index)).astype(str)
@@ -1406,7 +1401,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             soft_shares_num.notna() & ask_size_num.notna() & ask_size_num.lt(soft_shares_num)
         )
         selected["execution_eligible"] = (
-            ask_num.ge(research.ASK_MIN)
+            ask_num.ge(regime_policy.ASK_MIN)
             & selected["route_price_ok"].astype(bool)
             & selected["soft_weight_price_quality_ok"].fillna(False).astype(bool)
             & pd.to_numeric(selected["live_order_shares"], errors="coerce").ge(float(args.min_order_shares))
@@ -1427,7 +1422,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
             soft_weight_ratio = safe_float(row.get("soft_weight_to_ask_ratio"))
             ask_size = safe_float(row.get("ask_size"))
             live_order_shares = safe_float(row.get("live_order_shares"))
-            if math.isfinite(ask) and ask < research.ASK_MIN:
+            if math.isfinite(ask) and ask < regime_policy.ASK_MIN:
                 reasons.append("ask_below_min")
             if not bool(row.get("route_price_ok", True)):
                 reasons.append("ask_above_route_price_cap")
@@ -2013,7 +2008,7 @@ def shadow_policy_counts(candidates: pd.DataFrame, *, min_order_shares: float) -
         )
         executable_notional = executable_shares * ask
         executable = (
-            ask.ge(research.ASK_MIN)
+            ask.ge(regime_policy.ASK_MIN)
             & candidates["route_price_ok"].fillna(False).astype(bool)
             & executable_shares.ge(float(min_order_shares))
             & candidates["token_id"].astype(str).ne("")
