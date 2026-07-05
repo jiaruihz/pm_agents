@@ -82,6 +82,53 @@ current_yes 在临峰前 45 分钟、fresh high 刚打印、trend_3h +3.6°F、G
 却不信 GFS 的幅度（41.3）。在"还在升温 + 未过峰 + 预报天花板远高于当前档"时，净 NO 才是顺风腿。
 CLAUDE.md §4 的临场三问（peak clock / 剩余加热窗口 / 路径状态）如实回答就能拦住这个结论。
 
+## v2 补充：12:17 current_yes 信号的模型机制复盘
+
+模型链路（`tmax_distribution_edge_live_candidate_v1.py` + P1/P3/P4 研究模块）：
+
+```text
+state 行以 running max 所在 bracket 为锚（current / d1 / d2 / tail 四桶）
+→ 多项 LR（spec=loo_no_city_source：market probs + path + boundary + meteo + regime，
+   无 city / forecast_source / city_family 特征；selected_c=0.03 强正则）
+→ p_used = 0.5 × model + 0.5 × market（selected_alpha=0.5）
+→ 四个表达取 max(p_win − fresh_ask)，过 0.02 edge 门就下单
+```
+
+12:17 的 flip 由四个机制叠加产生，**不是随机抽风**：
+
+1. **锚点重定位**：36 打印后，bracket 36 从 d1 桶变成 current 桶。11:00 的 d1_no（P(final=36)≈0.30）
+   和 12:17 的 current_yes（P(final=36)=0.59）是同一台机器在两个不同锚点状态下的输出。
+   问题不在"模型自相矛盾"，在于策略层没有记忆：它不知道自己上一笔就在同一个物理 bracket 上。
+2. **训练基率偏高 + 标签删失**：fit 集（8028 行）里"final = running max 桶"的基率本来就高，
+   且 E2 删失问题（结算低于 METAR 的 1003 行被删，恰是 current_yes 必输行）把 p_current 进一步抬高。
+3. **强正则把反向证据压扁**：C=0.03 的 LR 系数被强收缩，预测大头来自基率。
+   当时两个最强的反向信号——peak_delta=−0.75h（未到峰）和 forecast gap=+5.3°C（GFS 41.3 天花板）——
+   在模型里只有很小的权重。且 clean spec 刻意去掉了 source 特征，模型不知道这个 5.3°C 来自
+   惯性热偏的 GFS 还是可信的 ECMWF，只能按训练集里"大 gap 的平均可信度"打折。
+4. **市场混合减半了差距**：raw model P(36)≈0.72，市场≈0.45，混完 0.586；ask 0.48 → edge 0.106，
+   是四个表达里最大的，于是选 current_yes。13:03 那轮 −DZ 回落 + running_max_age 变长 + 过峰
+   让 p 升到 0.709（模型读成"plateau 确认"），只被 fresh-ask drift guard 挡住没有加仓。
+
+**三种执行政策在今天这个 city-day 的对比（毛利，5 shares/单）**：
+
+| 政策 | 今天的动作 | 结果 |
+|---|---|---:|
+| 回测口径（first-lock，每 city-day 第一单） | 1× d1_no 36@0.65 | **+$1.75（赢）** |
+| 实际发生（无 dedupe，全部执行） | 3× d1_no + 1× current_yes | +$2.80（碰巧赢，靠重复的赢腿） |
+| "以最新表达为准"（12:17 卖 NO 换 YES） | 平 NO@≈0.52 + 持 YES | **−$3.05（三者最差）** |
+
+follow-latest 今天最差不是偶然的机制：runway 日每打一个新高，模型就会在新档位上重新报"停留"，
+follow-latest 等于沿着梯子每一档都买一次 "stay"，全部输掉直到最后一档——P2 分解里
+current_yes 在 actual=d1 时 ROI −100% 就是这个形态。回测测的从来是 first-lock，
+follow-latest 从未被回测过；要评估它，用 shadow 的 `city_day_after_first_selected` blocked 行
+做同分母 replay（含卖出点差 + 双边 taker fee），不要直接改 live。
+
+**回测本身错没错**：`2026-07-05-tmax-distribution-candidate-policy-breakdown-v1.md` 内部一致、
+自我标注诚实（conclusion=shadow_candidate / no live，forward=FAIL/NA）。它"没错但不覆盖"：
+只回放每 city-day 第一条过门候选，没有建模日内后续反向信号，也就无法回答"要不要跟最新表达"；
+且其 verified 标签继承了 current_yes 删失偏差。live runner 又没实现它假设的 dedupe——
+所以今天 live 跑的政策和回测的政策不是同一个东西。
+
 ## 三道门声明
 
 significance=NA baseline=NA forward=NA conclusion=inconclusive（单 city-day，无绩效结论；
@@ -89,3 +136,30 @@ significance=NA baseline=NA forward=NA conclusion=inconclusive（单 city-day，
 
 8 环覆盖：仅环 1（描述性，单日）与环 5（执行微结构：重复下单、反向对锁、obs 滞后）。
 缺 2/3/4/6/7/8 —— 故不给任何模型层 live 动作。
+
+## v3 审阅补充：表达层不要被 Lucknow 单例带偏
+
+这次事故确认了 live runner 没有按回测的 `first city-day` 口径执行，但它**没有**证明
+`d1_no` 本身是坏表达。Exact bracket 市场里，`36 NO` 的语义就是“最终不精确停在 36”，
+它同时覆盖低于 36 和高于 36 两条路径；如果市场把 36 这个精确档位定贵了，`36 NO`
+就是合理表达。Lucknow 今天升到 37 后，`36 NO` 赢，恰好说明这个补集表达可以是对的。
+
+真正不干净的是两件事：
+
+1. 现在的表达集只覆盖 `current YES / current NO / d1 NO / d2 NO`，没有对整条 ladder 的每个
+   exact bracket 做统一比较；所以当模型认为“最终大概率落在 37”时，系统没有自然地表达
+   `37 YES`，只能通过 `36 NO` 或后续重锚后的 `36 YES` 间接表达。
+2. runner 把每轮最新 best expression 当成独立新机会，没有“目标仓位”概念。于是同一个
+   city-day 先买 NO，后买 YES，变成执行层自相矛盾。
+
+因此，更合理的表达不是简单“删 current_yes”或“把 d1_no 换成 d1_yes”，而是：
+
+```text
+预测整条 exact-bracket 分布
+→ 对每个 bracket 的 YES/NO 都计算 fee/spread 后 EV
+→ 生成 city-day 级 target book
+→ 只有当新 target book 的增量 EV 覆盖平仓点差、双边 fee 和逆选择缓冲时才调仓
+```
+
+在这个架构出来前，`current_yes` 只能保留在 shadow/replay 里验证 basis 和调仓成本；
+若恢复任何 tiny live，也必须执行 `first city-day lock`，不能 follow latest expression。
