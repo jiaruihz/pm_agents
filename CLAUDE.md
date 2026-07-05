@@ -79,6 +79,15 @@ forecast ceiling margin、plateau 可靠性、reheat 机制、观测 cadence/sou
 hard filter 只用于机制边界、资金安全、执行质量或已知无效数据，不用于追着坏例子一条条补洞；否则会把样本切碎成
 看似漂亮但永远不能 live 的过拟合规则。
 
+临场天气持仓判断必须先回答 **forecast peak clock / 剩余加热窗口 / 当前路径状态**：预报峰值在几点、决策时刻距离峰值
+还有多久或已过多久、当前温度路径是 fresh runway / plateau / pullback / fade 哪一种，再结合云雨风湿度和 source bias
+判断未来是否还能打穿当前 bracket。不要把已经发生的下一份 METAR 当成事前判断依据；如果某个温度已经打印出来，
+就直接更新该 market 的 YES/NO 胜负状态和剩余风险，不再说“下一份报文很关键”这种事后无交易意义的话。
+
+温度最高值 market 是 **exact bracket**，不是 touch market。`X YES` 只有在最终最高温正好结算为 `X` 时才赢；
+如果后面继续升到 `X+1` 或更高，`X YES` 输、`X NO` 赢。持仓判断时必须先按这个语义重估：已经“到过 X”
+不等于 `X YES` 安全，反而要重点评估 overshoot 到下一档的风险；不要把“触到当前档”误说成“当前档 YES 锁定”。
+
 ## 5. 分析必走的 skill + 硬口径（细则见 [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)）
 
 weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚本：
