@@ -658,6 +658,31 @@ def fetch_book(token_id: str, *, timeout_sec: float, retries: int) -> dict[str, 
     return data
 
 
+def fetch_book_with_curl(token_id: str, *, timeout_sec: float) -> dict[str, Any]:
+    proc = subprocess.run(
+        [
+            "curl",
+            "-fsS",
+            "--max-time",
+            str(max(1.0, float(timeout_sec))),
+            "--get",
+            CLOB_BOOK_API,
+            "--data-urlencode",
+            f"token_id={token_id}",
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"curl book fetch failed rc={proc.returncode}: {proc.stderr.strip()[:300]}")
+    data = json.loads(proc.stdout)
+    if not isinstance(data, dict):
+        raise RuntimeError("curl CLOB book response is not an object")
+    return data
+
+
 def book_levels(book: dict[str, Any], side: str) -> list[tuple[float, float]]:
     levels = book.get(f"{side}s") or []
     out = []
@@ -673,7 +698,16 @@ def fresh_quote(candidate: dict[str, Any], args: argparse.Namespace) -> dict[str
     try:
         book = fetch_book(str(candidate["token_id"]), timeout_sec=args.clob_timeout_sec, retries=args.clob_retries)
     except Exception as exc:  # noqa: BLE001
-        return {"status": "rejected", "reason": "fresh_book_fetch_failed", "error": f"{type(exc).__name__}: {exc}"}
+        httpx_error = f"{type(exc).__name__}: {exc}"
+        try:
+            book = fetch_book_with_curl(str(candidate["token_id"]), timeout_sec=args.clob_timeout_sec)
+        except Exception as curl_exc:  # noqa: BLE001
+            return {
+                "status": "rejected",
+                "reason": "fresh_book_fetch_failed",
+                "error": httpx_error,
+                "curl_error": f"{type(curl_exc).__name__}: {curl_exc}",
+            }
     asks = book_levels(book, "ask")
     bids = book_levels(book, "bid")
     if not asks:
