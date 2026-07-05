@@ -642,6 +642,24 @@ def cancel_expired_live_orders(
 
 
 def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
+    tmax_probability_fields = {
+        "tmax_probability_bucket_schema": safe_str(plan.get("tmax_probability_bucket_schema")),
+        "tmax_probability_model_spec": safe_str(plan.get("tmax_probability_model_spec")),
+        "tmax_probability_model_method": safe_str(plan.get("tmax_probability_model_method")),
+        "tmax_market_p_current": to_float(plan.get("tmax_market_p_current"), 0.0),
+        "tmax_market_p_d1": to_float(plan.get("tmax_market_p_d1"), 0.0),
+        "tmax_market_p_d2": to_float(plan.get("tmax_market_p_d2"), 0.0),
+        "tmax_market_p_tail": to_float(plan.get("tmax_market_p_tail"), 0.0),
+        "tmax_raw_model_p_current": to_float(plan.get("tmax_raw_model_p_current"), 0.0),
+        "tmax_raw_model_p_d1": to_float(plan.get("tmax_raw_model_p_d1"), 0.0),
+        "tmax_raw_model_p_d2": to_float(plan.get("tmax_raw_model_p_d2"), 0.0),
+        "tmax_raw_model_p_tail": to_float(plan.get("tmax_raw_model_p_tail"), 0.0),
+        "tmax_blend_p_current": to_float(plan.get("tmax_blend_p_current"), 0.0),
+        "tmax_blend_p_d1": to_float(plan.get("tmax_blend_p_d1"), 0.0),
+        "tmax_blend_p_d2": to_float(plan.get("tmax_blend_p_d2"), 0.0),
+        "tmax_blend_p_tail": to_float(plan.get("tmax_blend_p_tail"), 0.0),
+        "tmax_distribution": plan.get("tmax_distribution") if isinstance(plan.get("tmax_distribution"), dict) else {},
+    }
     base = {
         "plan_id": safe_str(plan.get("plan_id")),
         "signal_id": safe_str(plan.get("signal_id")),
@@ -722,6 +740,7 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "edge_raw_side": to_float(plan.get("edge_raw_side"), 0.0),
         "shadow_decision": safe_str(plan.get("shadow_decision")),
         "shadow_reason": safe_str(plan.get("shadow_reason")),
+        **tmax_probability_fields,
     }
     return {
         "record_type": "weather_edge_paper_order",
@@ -736,6 +755,24 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
     best_bid = to_float(response.get("best_bid"), to_float(plan.get("best_bid"), 0.0))
     best_ask = to_float(response.get("best_ask"), to_float(plan.get("best_ask"), 0.0))
     spread = max(0.0, best_ask - best_bid) if best_bid > 0 and best_ask > 0 else to_float(plan.get("spread"), 0.0)
+    tmax_probability_fields = {
+        "tmax_probability_bucket_schema": safe_str(plan.get("tmax_probability_bucket_schema")),
+        "tmax_probability_model_spec": safe_str(plan.get("tmax_probability_model_spec")),
+        "tmax_probability_model_method": safe_str(plan.get("tmax_probability_model_method")),
+        "tmax_market_p_current": to_float(plan.get("tmax_market_p_current"), 0.0),
+        "tmax_market_p_d1": to_float(plan.get("tmax_market_p_d1"), 0.0),
+        "tmax_market_p_d2": to_float(plan.get("tmax_market_p_d2"), 0.0),
+        "tmax_market_p_tail": to_float(plan.get("tmax_market_p_tail"), 0.0),
+        "tmax_raw_model_p_current": to_float(plan.get("tmax_raw_model_p_current"), 0.0),
+        "tmax_raw_model_p_d1": to_float(plan.get("tmax_raw_model_p_d1"), 0.0),
+        "tmax_raw_model_p_d2": to_float(plan.get("tmax_raw_model_p_d2"), 0.0),
+        "tmax_raw_model_p_tail": to_float(plan.get("tmax_raw_model_p_tail"), 0.0),
+        "tmax_blend_p_current": to_float(plan.get("tmax_blend_p_current"), 0.0),
+        "tmax_blend_p_d1": to_float(plan.get("tmax_blend_p_d1"), 0.0),
+        "tmax_blend_p_d2": to_float(plan.get("tmax_blend_p_d2"), 0.0),
+        "tmax_blend_p_tail": to_float(plan.get("tmax_blend_p_tail"), 0.0),
+        "tmax_distribution": plan.get("tmax_distribution") if isinstance(plan.get("tmax_distribution"), dict) else {},
+    }
     base = {
         "plan_id": safe_str(plan.get("plan_id")),
         "signal_id": safe_str(plan.get("signal_id")),
@@ -855,6 +892,7 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "minutes_to_next_obs": to_float(plan.get("minutes_to_next_obs"), 0.0),
         "minutes_since_running_max": to_float(plan.get("minutes_since_running_max"), 0.0),
         "forecast_peak_delta_hours_local": plan.get("forecast_peak_delta_hours_local"),
+        **tmax_probability_fields,
     }
     return {
         "record_type": "weather_edge_live_order",

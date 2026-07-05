@@ -597,6 +597,62 @@ def win_prob(pred_row: pd.Series, expression: str) -> float:
     raise ValueError(expression)
 
 
+def probability_distribution_fields(item: dict[str, Any]) -> dict[str, Any]:
+    """Return auditable four-bucket distribution fields for tmax decisions."""
+
+    buckets = p0.BUCKETS
+
+    def bucket_value(prefix: str, bucket: str) -> float:
+        base = f"{prefix}_p_{bucket}"
+        for key in [base, f"{base}_y", f"{base}_x"]:
+            value = to_float(item.get(key), math.nan)
+            if math.isfinite(value):
+                return value
+        return math.nan
+
+    def collect(prefix: str) -> dict[str, float | None]:
+        out: dict[str, float | None] = {}
+        for bucket in buckets:
+            value = bucket_value(prefix, bucket)
+            out[bucket] = round(value, 6) if math.isfinite(value) else None
+        return out
+
+    market = collect("market")
+    raw_model = collect(f"{MODEL_SPEC}_model")
+    blended = collect(MODEL_METHOD)
+    fields: dict[str, Any] = {
+        "tmax_probability_bucket_schema": "current_d1_d2_tail_v1",
+        "tmax_probability_model_spec": MODEL_SPEC,
+        "tmax_probability_model_method": MODEL_METHOD,
+        "tmax_market_p_current": market["current"],
+        "tmax_market_p_d1": market["d1"],
+        "tmax_market_p_d2": market["d2"],
+        "tmax_market_p_tail": market["tail"],
+        "tmax_raw_model_p_current": raw_model["current"],
+        "tmax_raw_model_p_d1": raw_model["d1"],
+        "tmax_raw_model_p_d2": raw_model["d2"],
+        "tmax_raw_model_p_tail": raw_model["tail"],
+        "tmax_blend_p_current": blended["current"],
+        "tmax_blend_p_d1": blended["d1"],
+        "tmax_blend_p_d2": blended["d2"],
+        "tmax_blend_p_tail": blended["tail"],
+        "tmax_distribution": {
+            "schema": "current_d1_d2_tail_v1",
+            "bucket_meaning": {
+                "current": safe_str(item.get("current_bracket")),
+                "d1": safe_str(item.get("d1_no_bracket")),
+                "d2": safe_str(item.get("d2_no_bracket")),
+                "tail": f">{safe_str(item.get('d2_no_bracket'))}",
+            },
+            "market": market,
+            "raw_model": raw_model,
+            "blended": blended,
+            "selected_method": MODEL_METHOD,
+        },
+    }
+    return fields
+
+
 def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.Namespace) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     keys = ["city", "target_date", "decision_hour_local", "actual_bucket"]
     df = live_df.merge(pred, on=keys, how="inner", validate="one_to_one")
@@ -717,6 +773,7 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
             "city_day_position_key": city_day_position_key(item),
         }
     )
+    out.update(probability_distribution_fields(item))
     return out
 
 
@@ -886,6 +943,22 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "quote_edge": round(float(candidate["p_win"]) - price, 6),
         "required_quote_edge": round(float(args.edge_threshold), 6),
         "model_token_probability": round(float(candidate["p_win"]), 6),
+        "tmax_probability_bucket_schema": candidate.get("tmax_probability_bucket_schema"),
+        "tmax_probability_model_spec": candidate.get("tmax_probability_model_spec"),
+        "tmax_probability_model_method": candidate.get("tmax_probability_model_method"),
+        "tmax_market_p_current": candidate.get("tmax_market_p_current"),
+        "tmax_market_p_d1": candidate.get("tmax_market_p_d1"),
+        "tmax_market_p_d2": candidate.get("tmax_market_p_d2"),
+        "tmax_market_p_tail": candidate.get("tmax_market_p_tail"),
+        "tmax_raw_model_p_current": candidate.get("tmax_raw_model_p_current"),
+        "tmax_raw_model_p_d1": candidate.get("tmax_raw_model_p_d1"),
+        "tmax_raw_model_p_d2": candidate.get("tmax_raw_model_p_d2"),
+        "tmax_raw_model_p_tail": candidate.get("tmax_raw_model_p_tail"),
+        "tmax_blend_p_current": candidate.get("tmax_blend_p_current"),
+        "tmax_blend_p_d1": candidate.get("tmax_blend_p_d1"),
+        "tmax_blend_p_d2": candidate.get("tmax_blend_p_d2"),
+        "tmax_blend_p_tail": candidate.get("tmax_blend_p_tail"),
+        "tmax_distribution": candidate.get("tmax_distribution"),
         "quote_best_bid": round(float(quote.get("best_bid") or 0.0), 6),
         "quote_best_ask": round(float(quote["fresh_ask"]), 6),
         "quote_spread": round(max(0.0, float(quote["fresh_ask"]) - float(quote.get("best_bid") or 0.0)), 6),
