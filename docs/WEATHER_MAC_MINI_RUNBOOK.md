@@ -127,6 +127,13 @@ WEATHER_DATA_FEED_MARKET_PROXY=http://127.0.0.1:7890
 WEATHER_PREDICT_MARKET_PROXY=http://127.0.0.1:7890
 ```
 
+Live order submission uses the same market proxy contract. The common executor
+`scripts/ops/weather_order_executor.py` maps `WEATHER_DATA_FEED_MARKET_PROXY`
+into `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` before constructing the CLOB
+client, so strategy runners should not carry their own unrelated proxy path.
+Set `WEATHER_EXECUTOR_MARKET_PROXY=direct` only for an intentional direct CLOB
+test.
+
 The selected node is controlled by mihomo/TAG. Check it with:
 
 ```bash

@@ -24,6 +24,79 @@ from src.strategies.weather_edge_v1.tools.execution_policy import (
     build_execution_quotes,
 )
 
+PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
+MARKET_PROXY_ENV_KEYS = (
+    "WEATHER_EXECUTOR_MARKET_PROXY",
+    "WEATHER_DATA_FEED_MARKET_PROXY",
+    "WEATHER_PREDICT_MARKET_PROXY",
+    "LOW_PRICE_YES_LOTTERY_MARKET_PROXY",
+)
+
+
+def _clean_proxy_value(value: str) -> str:
+    proxy = str(value or "").strip().strip('"').strip("'")
+    return "" if proxy.lower() in {"", "direct", "none", "off", "0"} else proxy
+
+
+def configure_market_proxy_env(explicit_proxy: str = "") -> Dict[str, Any]:
+    """Normalize market/CLOB proxy env before py_clob_client is constructed.
+
+    Data-feed and some strategy runners use explicit market proxy env vars, while
+    py_clob_client consumes standard HTTP(S)_PROXY variables through httpx.  Put
+    that mapping in the common executor so every live strategy uses the same
+    path instead of inheriting whichever proxy happened to be in the parent
+    process.
+    """
+
+    source = ""
+    proxy = _clean_proxy_value(explicit_proxy)
+    if proxy:
+        source = "--market-proxy"
+    elif explicit_proxy and not proxy:
+        source = "--market-proxy"
+    else:
+        for key in MARKET_PROXY_ENV_KEYS:
+            raw = os.getenv(key, "").strip()
+            if not raw:
+                continue
+            source = key
+            proxy = _clean_proxy_value(raw)
+            break
+
+    if source:
+        if proxy:
+            for key in PROXY_ENV_KEYS:
+                os.environ[key] = proxy
+            return {
+                "mode": "explicit_market_proxy",
+                "source": source,
+                "proxy": proxy,
+                "http_proxy_set": True,
+            }
+        for key in PROXY_ENV_KEYS:
+            os.environ.pop(key, None)
+        return {
+            "mode": "explicit_direct",
+            "source": source,
+            "proxy": "",
+            "http_proxy_set": False,
+        }
+
+    inherited = (
+        os.getenv("HTTPS_PROXY", "").strip()
+        or os.getenv("HTTP_PROXY", "").strip()
+        or os.getenv("ALL_PROXY", "").strip()
+        or os.getenv("https_proxy", "").strip()
+        or os.getenv("http_proxy", "").strip()
+        or os.getenv("all_proxy", "").strip()
+    )
+    return {
+        "mode": "inherited_proxy_env" if inherited else "no_proxy_configured",
+        "source": "HTTP_PROXY_ENV" if inherited else "",
+        "proxy": inherited,
+        "http_proxy_set": bool(inherited),
+    }
+
 
 def _extract_order_id(payload: Any) -> Optional[str]:
     if not isinstance(payload, dict):
@@ -678,6 +751,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--plans", default=str(DEFAULT_RUNTIME_ROOT / "plans" / "trade_plans.jsonl"))
     parser.add_argument("--paper-out", default=str(DEFAULT_RUNTIME_ROOT / "paper" / "orders.jsonl"))
     parser.add_argument("--live-out", default=str(DEFAULT_RUNTIME_ROOT / "live" / "orders.jsonl"))
+    parser.add_argument(
+        "--market-proxy",
+        default="",
+        help="Explicit market/CLOB proxy. Defaults to WEATHER_EXECUTOR_MARKET_PROXY or WEATHER_DATA_FEED_MARKET_PROXY.",
+    )
     parser.add_argument("--live", action="store_true", help="Submit live orders for plans marked live_enabled=true.")
     parser.add_argument("--confirm-live", action="store_true", help="Required with --live.")
     parser.add_argument("--cancel-after", action="store_true", help="Cancel live orders immediately after placement.")
@@ -700,6 +778,7 @@ def main() -> int:
     except ModuleNotFoundError:
         pass
     args = _parser().parse_args()
+    market_proxy = configure_market_proxy_env(args.market_proxy)
     plan_path = Path(args.plans)
     plans_require_live_cancel = _plans_require_live_cancel(plan_path)
     live_place_fn = (
@@ -725,6 +804,7 @@ def main() -> int:
         live_place_fn=live_place_fn,
         live_cancel_fn=live_cancel_fn,
     )
+    result["market_proxy"] = market_proxy
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     if args.live and not args.no_telegram:
         _send_execution_telegram(result, live_out=Path(args.live_out))
