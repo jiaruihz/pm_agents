@@ -1,6 +1,6 @@
 # Tmax Distribution P5 Walk-Forward Execution Replay v1
 
-> generated_at_utc: `2026-07-04T17:27:49+00:00`
+> generated_at_utc: `2026-07-05T14:16:37+00:00`
 > Scope: research-only walk-forward execution replay; no live runner/order behavior changed.
 
 ## 结论
@@ -15,10 +15,10 @@
 ## Funnel / Evidence
 
 - P4 scored rows: `8028`; date range `2026-05-19`..`2026-07-03`; cities `36`。
-- raw label sources: `{'settlement_outcomes': 9713, 'missing': 4012}`。
+- raw label sources: `{'settlement_outcomes': 9744, 'missing': 4116}`。
 - skipped observed-derived before 6/27: `0`。
 - scopes: `dev_cv` = 6/21 前训练窗内 expanding-CV；`verified_forward` = forward rows backed by `settlement_outcomes`；`extension_forward` = forward rows still using observed-max-derived labels。
-- DB inventory: `{'fact_signal_candidates': {'rows': 45621, 'min_date': '2026-05-05', 'max_date': '2026-07-06'}, 'fact_trades': {'rows': 4481, 'min_date': '2026-05-06', 'max_date': '2026-07-04'}, 'settlement_outcomes': {'rows': 28164, 'min_date': '2026-05-04', 'max_date': '2026-07-04'}}`。
+- DB inventory: `{'fact_signal_candidates': {'rows': 46253, 'min_date': '2026-05-05', 'max_date': '2026-07-07'}, 'fact_trades': {'rows': 4484, 'min_date': '2026-05-06', 'max_date': '2026-07-05'}, 'settlement_outcomes': {'rows': 28164, 'min_date': '2026-05-04', 'max_date': '2026-07-04'}}`。
 
 ## Primary Replay, Edge >= 0.02
 

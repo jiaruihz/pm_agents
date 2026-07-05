@@ -1,6 +1,6 @@
 # Tmax Distribution P6 Shadow Telemetry v1
 
-> generated_at_utc: `2026-07-04T17:27:50+00:00`
+> generated_at_utc: `2026-07-05T14:16:38+00:00`
 > Scope: zero-notional shadow telemetry pack; no live runner/order behavior changed.
 
 ## 结论

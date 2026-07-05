@@ -1,7 +1,7 @@
 # Weather Tmax Distribution Edge Strategy
 
 Status: current-reference
-Updated: 2026-07-04 live-like first city-day shadow selection
+Updated: 2026-07-05 exact-book bridge experiment
 Source of truth: yes for this strategy family
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_REGISTRY.md
 
@@ -28,6 +28,8 @@ live_action = none
 ```
 
 人话：它现在不是实盘策略，也不是 paper 下单策略，而是一个按真实策略逻辑持续记录“会选什么表达、为什么选/为什么不选”的 forward 取证系统。
+Lucknow 7/05 首个 live 日暴露出执行层去重/持仓血缘问题后，tmax tiny-live 保持暂停；任何恢复 live
+都必须先证明 runner 执行口径与回测口径一致。
 
 ## 策略本体
 
@@ -70,6 +72,32 @@ model_edge = P(expression wins | market + weather state) - ask
 后续同一 city-day 再次触发的小时信号不会丢弃，会记录为
 `blocked / city_day_after_first_selected`，用于复盘“如果重复追单会怎样”。
 如果最高 edge 没过阈值，则记录为 `blocked / below_edge_threshold`。
+
+## Exact-Book Bridge v1
+
+Lucknow 复盘后的表达层实验不是“删掉 d1 NO”或“马上改买 d1 YES”，而是先把 exact bracket 的
+YES/NO sibling 放到同一个矩阵里比较。
+
+当前已完成的最小 bridge：
+
+```text
+fixed four-bucket probability: current / d1 / d2 / tail
+legacy_4expr: current_yes / current_no / d1_no / d2_no
+bridge_6expr: legacy_4expr + d1_yes + d2_yes
+bridge_no_current_yes_5expr: current_no / d1_no / d2_no / d1_yes / d2_yes
+selection: first eligible city-day, fee-adjusted edge >= 0.02
+ask source for d1/d2 YES: 1 - sibling NO bid
+```
+
+关键结果见
+[2026-07-05-tmax-exact-book-bridge-v1.md](analysis/2026-07/2026-07-05-tmax-exact-book-bridge-v1.md)：
+
+- `ask>=0.40 + fee_edge02` verified 上，`bridge_no_current_yes_5expr` 点估 +9.7%，legacy_4expr +8.4%。
+- dev/verified 的 CI 仍宽，且 `d1_yes` 单腿偏弱；所以这是 `shadow_bridge_complete_not_live`，不是 live 替代。
+- `current_yes` 在 settlement-basis / below bucket 修复前仍只做 shadow；`d1_no` 保留为合法补集表达。
+
+这版 bridge 还不是 full ladder target book。真正完整版本需要逐格 hazard / full-ladder 概率、
+实时 sibling book、以及 target-book reconciliation 的平仓成本账本。
 
 ## 为什么不是继续用原来的 live 版本
 
@@ -173,20 +201,18 @@ runtime/weather_edge_v1/tmax_distribution_edge_shadow_v1/
 | `summary_history.jsonl` | 每轮 summary 历史 |
 | `shadow_loop.log` | start script 循环日志 |
 
-当前 runtime refresh：
+当前 materialized source refresh：
 
 ```text
 source = docs/analysis/2026-07/generated/tmax_distribution_p6_shadow_telemetry_v1/shadow_events.csv
-source_rows = 14088
-source_date_range = 2026-06-02..2026-07-01
-latest_target_date = 2026-07-01
-latest_rows_written = 396
-latest_selected = 157
-latest_blocked = 239
-journal_shadow_rows = 562
+source_rows = 16416
+source_date_range = 2026-06-02..2026-07-03
+selected_rows = 1562
+blocked_rows = 14854
 ```
 
-这证明 runner 可以写 runtime journal 且幂等，不会重复追加同一批 shadow event。
+这证明 P6 source 已经刷新到当前可评分分母；runtime loop 是否已消费这批 source 需要看
+`runtime/weather_edge_v1/tmax_distribution_edge_shadow_v1/latest_summary.json`，不能用旧 journal 数字替代。
 
 Runtime registry 已接入：
 

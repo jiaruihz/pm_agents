@@ -285,10 +285,28 @@ def _score_scope(scores: pd.DataFrame, scope_name: str) -> pd.DataFrame:
                 "winner_prob": float(grp["winner_prob"].mean()),
             }
         )
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "scope",
+                "method",
+                "n",
+                "dates",
+                "cities",
+                "logloss",
+                "brier",
+                "top1",
+                "winner_prob",
+            ]
+        )
     return pd.DataFrame(rows).sort_values(["scope", "logloss"]).reset_index(drop=True)
 
 
 def _add_delta(summary: pd.DataFrame, scores: pd.DataFrame) -> pd.DataFrame:
+    if summary.empty:
+        out = summary.copy()
+        out["logloss_delta_vs_market"] = pd.Series(dtype=float)
+        return out
     rows = []
     for r in summary.to_dict("records"):
         if r["method"] == "market_local_norm":
@@ -306,6 +324,8 @@ def _add_delta(summary: pd.DataFrame, scores: pd.DataFrame) -> pd.DataFrame:
 
 
 def _build_ev(base: pd.DataFrame, preds: pd.DataFrame, scope: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if preds.empty:
+        return pd.DataFrame(), pd.DataFrame()
     old_methods = list(p2.METHODS)
     try:
         p2.METHODS = METHODS
@@ -414,7 +434,8 @@ def main() -> int:
     observed_scores = scored_with_slice[scored_with_slice["eval_slice"].eq(EXTENSION_SLICE)].copy()
     verified_summary = _add_delta(_score_scope(verified_scores, "verified_forward"), verified_scores)
     observed_summary = _add_delta(_score_scope(observed_scores, "extension_forward"), observed_scores)
-    summary = pd.concat([verified_summary, observed_summary], ignore_index=True)
+    summary_parts = [x for x in [verified_summary, observed_summary] if not x.empty]
+    summary = pd.concat(summary_parts, ignore_index=True) if summary_parts else pd.DataFrame()
 
     base = p2._load_base()
     # Add derived-label state rows that P2 base excludes due missing final_winner.
@@ -452,8 +473,10 @@ def main() -> int:
         opps, ev_sum = _build_ev(base_ext, pred.drop(columns=["label_source", "eval_slice"]), scope)
         ev_opps.append(opps)
         ev_summaries.append(ev_sum)
-    ev_opps_df = pd.concat(ev_opps, ignore_index=True)
-    ev_summary = pd.concat(ev_summaries, ignore_index=True)
+    ev_opps = [x for x in ev_opps if not x.empty]
+    ev_summaries = [x for x in ev_summaries if not x.empty]
+    ev_opps_df = pd.concat(ev_opps, ignore_index=True) if ev_opps else pd.DataFrame()
+    ev_summary = pd.concat(ev_summaries, ignore_index=True) if ev_summaries else pd.DataFrame()
 
     selection_df.to_csv(OUT_DIR / "model_selection.csv", index=False)
     summary.to_csv(OUT_DIR / "score_summary.csv", index=False)
@@ -489,7 +512,7 @@ def main() -> int:
         "- 本轮补的是效果验证，不是 live 改动：用 `final_max_native` 推导 6/27+ 的 local bucket label，明确标记为 `observed_max_derived`。",
         f"- 可评分行扩到 `{df['target_date'].min()}`..`{df['target_date'].max()}`，其中 raw label sources: `{counters['label_sources_raw']}`。",
         "- 在 6/21-6/26 verified settlement 上，P3 机制版继续优于 market。",
-        "- 在 6/27-6/29 extension 上，结果只能看方向和压力，不能当正式 PnL。",
+        "- extension 部分只在存在 `observed_max_derived` 行时生成；若最新 settlement 已覆盖这些行，extension 为空是正常结果。",
         "",
         "## Proper Scoring",
         "",
@@ -505,7 +528,7 @@ def main() -> int:
         f"- `fact_trades`: `{inv['fact_trades']}`",
         f"- `settlement_outcomes`: `{inv['settlement_outcomes']}`",
         "",
-        "6/27+ 的正式 settlement 仍未完整进入 `settlement_outcomes`。本报告的 observed-derived 部分只回答“如果 observed max 口径成立，模型新日期表现如何”，不替代结算。",
+        "observed-derived 部分只回答“如果 observed max 口径成立，模型新日期表现如何”，不替代结算；若 extension 为空，说明当前可评分行已全部落在 verified settlement 口径或被标签规则排除。",
         "",
         "## Verdict",
         "",
