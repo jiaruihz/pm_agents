@@ -120,6 +120,7 @@ Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; WEATHER_TEMPERATURE_CONT
   METAR 实时逻辑住在另一条策略的 shadow runner 里被跨策略 import，应归 L0。
 
 - **P6 · CITY_FAMILY 城市气候分类在 6 个脚本里硬编码。** 改一处漏五处；这是共享参考数据，应单一来源。
+  Review v1 修正：实测是 5 份硬编码；4 份一致，atlas 的 `Beijing` taxonomy 有真实分叉，不能强行合并为单一 map。见 [feature-layering review v1](analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md)。
 
 - **P7 · METAR 解析 / SKY_CODE 在研究和 ops 层重复复制。**
   `weather_data_feed.observation_sources` 已有标准实现，但 6+ 研究脚本、4+ ops runner 各自带一份
@@ -138,6 +139,7 @@ Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; WEATHER_TEMPERATURE_CONT
 - **P10 · 已知数据口径债（不是新发现，纳入计划防遗忘）。**
   forecast peak clock backfill PIT 污染（影响 pre-6/21 的 atlas/tmax/metar-reversal 证据）；
   N100 事故后 orderbook 断采不可回填。任何共享层迁移后的 parity 校验要避开这两段污染窗口。
+  Review v1 修正：PIT 污染表述已过时；Single Runs PIT backfill rejoin 后不再是旧的无条件污染，但它仍是研究 backfill 层，不是 production-native fact 字段。见 [feature-layering review v1](analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md)。
 
 - **P11 · 执行形态各自为政，同类逻辑重复实现。**
   当前至少五种执行形态（清单见 §5.1），每种都长在某个 runner 的私有函数里：
@@ -145,6 +147,7 @@ Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; WEATHER_TEMPERATURE_CONT
   regime_routed 的 top-ask clamp、theta current YES 的 fresh-book guarded taker、metar_cross 的 FOK。
   maker 定价、TTL/改价/撤单生命周期、taker fallback 判定这几块是明显可共用的，却没有共享实现——
   下一条策略再要 maker-first 就得第四次重写同一个状态机。
+  Review v1 修正：高层重复判断成立，但不能直接抽成一个通用 `maker_then_taker` 状态机；lottery BUY lifecycle、TP20 SELL exit 和 FOK latency 语义不同，只能先抽纯 helper，再逐 runner parity。见 [feature-layering review v1](analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md)。
 
 - **P12 · 三个下单通道绕过共享 executor，直接自建 ClobClient。**
   `weather_metar_cross_prev_no_shadow.py`（FOK live）、`all_yes_underround_fok_executor_v0.py`、
@@ -152,6 +155,7 @@ Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; WEATHER_TEMPERATURE_CONT
   后果：notional guard / cancel 生命周期 / order record schema / telegram 通知这些资金安全和血缘落库逻辑
   在这三个通道里是平行实现，审计面翻倍。metar_cross 有 latency 理由用进程内 fast path，
   但 fast path 应该是共享模块的一个模式，不是平行宇宙。
+  Review v1 修正：active direct ClobClient 通道只确认 `metar_cross` 和 `all_yes_underround`；`station_basis` live placement 是未实现硬 gate，不应按活跃绕行通道收编。见 [feature-layering review v1](analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md)。
 
 ## 3. 整改计划（分阶段，live 不断、dormant 不删、血缘不动）
 
