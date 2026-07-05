@@ -637,11 +637,22 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def fetch_book(token_id: str, *, timeout_sec: float) -> dict[str, Any]:
-    with httpx.Client(timeout=timeout_sec, trust_env=True) as client:
-        response = client.get(CLOB_BOOK_API, params={"token_id": token_id})
-        response.raise_for_status()
-        data = response.json()
+def fetch_book(token_id: str, *, timeout_sec: float, retries: int) -> dict[str, Any]:
+    last_error: Exception | None = None
+    for attempt in range(max(1, int(retries) + 1)):
+        try:
+            with httpx.Client(timeout=timeout_sec, trust_env=True) as client:
+                response = client.get(CLOB_BOOK_API, params={"token_id": token_id})
+                response.raise_for_status()
+                data = response.json()
+            break
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            if attempt >= int(retries):
+                raise
+            time.sleep(min(2.0, 0.35 * (attempt + 1)))
+    else:
+        raise RuntimeError(f"book fetch failed: {last_error}")
     if not isinstance(data, dict):
         raise RuntimeError("CLOB book response is not an object")
     return data
@@ -660,7 +671,7 @@ def book_levels(book: dict[str, Any], side: str) -> list[tuple[float, float]]:
 
 def fresh_quote(candidate: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     try:
-        book = fetch_book(str(candidate["token_id"]), timeout_sec=args.clob_timeout_sec)
+        book = fetch_book(str(candidate["token_id"]), timeout_sec=args.clob_timeout_sec, retries=args.clob_retries)
     except Exception as exc:  # noqa: BLE001
         return {"status": "rejected", "reason": "fresh_book_fetch_failed", "error": f"{type(exc).__name__}: {exc}"}
     asks = book_levels(book, "ask")
@@ -946,6 +957,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-fresh-ask-drift", type=float, default=0.02)
     parser.add_argument("--fee-rate", type=float, default=0.05)
     parser.add_argument("--clob-timeout-sec", type=float, default=8.0)
+    parser.add_argument("--clob-retries", type=int, default=2)
     parser.add_argument("--execute", action="store_true", help="Run weather_order_executor after writing plans. Paper-only unless --live is also set.")
     parser.add_argument("--live", action="store_true", help="Enable live order placement through executor. Requires explicit --confirm-live.")
     parser.add_argument("--confirm-live", action="store_true")
