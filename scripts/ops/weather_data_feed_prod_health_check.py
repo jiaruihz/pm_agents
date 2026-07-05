@@ -272,7 +272,7 @@ def check_summaries(paths: list[Path]) -> list[dict[str, Any]]:
 def overall_status(sections: dict[str, Any]) -> str:
     parity = sections["snapshot_parity"]
     snapshot = sections["snapshot_duplicates"]
-    orderbook = sections["orderbook_snapshots"]
+    orderbook = sections.get("orderbook_snapshots", {})
     telemetry = sections["telemetry"]
     live_orders = sections["live_orders"]
     hard_fail = (

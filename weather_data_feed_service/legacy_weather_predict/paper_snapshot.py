@@ -171,6 +171,27 @@ def curl_json_get(url, params=None, *, proxy=None, timeout_sec=5.0, connect_time
             pass
 
 
+def fetch_aviationweather_metar_json(client, url, params):
+    """Fetch AviationWeather METAR JSON.
+
+    Production uses curl_json_get so network stalls cannot pin the Python
+    process. Tests may pass a small injected client; keep that path available so
+    timestamp parsing and local-date filtering stay directly testable.
+    """
+    if client is not None and not isinstance(client, httpx.Client):
+        try:
+            response = client.get(url, params=params)
+            return getattr(response, "status_code", None), response.json(), None
+        except Exception as exc:
+            return None, None, str(exc)
+    return curl_json_get(
+        url,
+        params=params,
+        timeout_sec=WEATHER_CURL_TIMEOUT_SEC,
+        connect_timeout_sec=WEATHER_CURL_CONNECT_TIMEOUT_SEC,
+    )
+
+
 def city_scan_dates(now_utc, city, explicit_target_date=None):
     return data_feed_city_scan_dates(city, now_utc, explicit_target_date=explicit_target_date)
 
@@ -958,12 +979,7 @@ def fetch_live_metar_state(client, icao, target_date_local, city, now_utc):
             "taf": "false",
             "hours": metar_hours,
         }
-        status_code, data, _error = curl_json_get(
-            url,
-            params=params,
-            timeout_sec=WEATHER_CURL_TIMEOUT_SEC,
-            connect_timeout_sec=WEATHER_CURL_CONNECT_TIMEOUT_SEC,
-        )
+        status_code, data, _error = fetch_aviationweather_metar_json(client, url, params)
         if status_code == 200:
             if isinstance(data, list) and len(data) > 0:
                 target_local = str(target_date_local)
