@@ -61,7 +61,7 @@ def _as_float(x: object) -> float | None:
 def _num_parts(label: object) -> list[float]:
     if label is None or (isinstance(label, float) and math.isnan(label)):
         return []
-    return [float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", str(label))]
+    return [float(x) for x in re.findall(r"(?<!\d)-?\d+(?:\.\d+)?", str(label))]
 
 
 def _interval(label: object) -> tuple[float, float] | None:

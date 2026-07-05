@@ -6,6 +6,8 @@ shadow-event rows that can be used as the contract for a future runner:
 
   - one row per config x city-date-hour
   - keep both selected and blocked rows
+  - select only the first eligible row per config x scope x city-day, matching
+    the live execution unit; later same-city-day rows remain blocked telemetry
   - store the best expression, edge, ask, context, and eventual label if known
 """
 
@@ -51,6 +53,8 @@ CONFIGS = [
 ]
 
 KEYS = ["scope", "method", "city", "target_date", "decision_hour_local"]
+SELECTION_POLICY = "first_eligible_city_day"
+SHADOW_SCHEMA_VERSION = 2
 
 
 def _event_id(row: dict[str, Any]) -> str:
@@ -64,6 +68,8 @@ def _event_id(row: dict[str, Any]) -> str:
             "decision_hour_local",
             "method",
             "chosen_expression",
+            "selection_policy",
+            "shadow_schema_version",
         ]
     )
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:20]
@@ -136,18 +142,39 @@ def _best_rows_for_config(opps: pd.DataFrame, config: dict[str, Any]) -> pd.Data
     if sub.empty:
         return pd.DataFrame()
     best = sub.sort_values(["model_edge", "model_roi"], ascending=False).groupby(KEYS, as_index=False).head(1)
+    best = best.sort_values(
+        ["scope", "city", "target_date", "decision_hour_local", "model_edge", "model_roi"],
+        ascending=[True, True, True, True, False, False],
+    ).copy()
+    best["_edge_pass"] = best["model_edge"].astype(float) >= threshold
+    best["_city_day_eligible_rank"] = np.nan
+    edge_pass = best[best["_edge_pass"]].copy()
+    if not edge_pass.empty:
+        ranks = edge_pass.groupby(["scope", "city", "target_date"], sort=False).cumcount() + 1
+        best.loc[edge_pass.index, "_city_day_eligible_rank"] = ranks.astype(float)
     rows = []
     for item in best.to_dict("records"):
-        selected = float(item["model_edge"]) >= threshold
+        edge_passed = bool(item["_edge_pass"])
+        city_day_rank = item.get("_city_day_eligible_rank")
+        selected = edge_passed and float(city_day_rank) == 1.0
+        if selected:
+            selection_reason = "edge_pass_first_city_day"
+        elif edge_passed:
+            selection_reason = "city_day_after_first_selected"
+        else:
+            selection_reason = "below_edge_threshold"
         row = {
             "shadow_event_id": None,
+            "shadow_schema_version": SHADOW_SCHEMA_VERSION,
             "shadow_config_id": config["shadow_config_id"],
             "shadow_role": config["role"],
+            "selection_policy": SELECTION_POLICY,
             "zero_notional": True,
             "no_order_placed": True,
             "selection_status": "selected" if selected else "blocked",
-            "selection_reason": "edge_pass" if selected else "below_edge_threshold",
+            "selection_reason": selection_reason,
             "edge_threshold": threshold,
+            "city_day_eligible_rank": city_day_rank,
             "scope": item["scope"],
             "city": item["city"],
             "target_date": item["target_date"],
@@ -250,12 +277,15 @@ def _write_report(events: pd.DataFrame, summary: pd.DataFrame, report: dict[str,
     focus = summary[summary["scope"].isin(["verified_forward", "extension_forward"])].copy()
     schema_cols = [
         "shadow_event_id",
+        "shadow_schema_version",
         "shadow_config_id",
+        "selection_policy",
         "zero_notional",
         "no_order_placed",
         "selection_status",
         "selection_reason",
         "edge_threshold",
+        "city_day_eligible_rank",
         "scope",
         "city",
         "target_date",
@@ -280,8 +310,8 @@ def _write_report(events: pd.DataFrame, summary: pd.DataFrame, report: dict[str,
         "## 结论",
         "",
         "- P6 没有改模型，也没有改 live；它把 P5 的表达选择结果整理成未来 shadow runner 应该写出的事件格式。",
-        "- 每个 config x city-date-hour 都保留一行：edge 通过就是 `selected`，没通过就是 `blocked/below_edge_threshold`。",
-        "- 这样以后能同时复盘“买了会怎样”和“没买的是否应该买”，避免只看 selected 样本。",
+        "- 每个 config x city-date-hour 都保留一行，但主 `selected` 口径是 live-like：每个 config x scope x city-day 只取第一条 edge-pass 机会。",
+        "- 同一 city-day 后续再次触发的小时信号不会丢，标成 `blocked/city_day_after_first_selected`，用于复盘“如果重复买会怎样”。",
         "",
         "## Candidate Configs",
         "",
@@ -332,13 +362,16 @@ def _write_report(events: pd.DataFrame, summary: pd.DataFrame, report: dict[str,
         ]
     )
     meanings = {
-        "shadow_event_id": "deterministic id for config x state x chosen expression",
+        "shadow_event_id": "deterministic id for config x state x chosen expression x selection policy",
+        "shadow_schema_version": "event schema version",
         "shadow_config_id": "candidate policy identity",
+        "selection_policy": "first eligible per config x scope x city-day",
         "zero_notional": "always true for P6",
         "no_order_placed": "always true for P6",
         "selection_status": "selected or blocked",
-        "selection_reason": "edge_pass or below_edge_threshold",
+        "selection_reason": "edge_pass_first_city_day, city_day_after_first_selected, or below_edge_threshold",
         "edge_threshold": "config threshold",
+        "city_day_eligible_rank": "1 for the first edge-pass row in a city-day; later edge-pass rows are blocked telemetry",
         "scope": "dev_cv / verified_forward / extension_forward",
         "city": "market city",
         "target_date": "weather contract date",
@@ -386,6 +419,8 @@ def main() -> int:
     report = {
         "generated_at_utc": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "source": str(P5_OPPS_PATH.relative_to(ROOT)),
+        "selection_policy": SELECTION_POLICY,
+        "shadow_schema_version": SHADOW_SCHEMA_VERSION,
         "rows": int(len(events)),
         "selected_rows": int((events["selection_status"] == "selected").sum()),
         "blocked_rows": int((events["selection_status"] == "blocked").sum()),

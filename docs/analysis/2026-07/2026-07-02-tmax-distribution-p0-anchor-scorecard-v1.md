@@ -1,6 +1,6 @@
 # Tmax Distribution P0 Anchor Scorecard v1
 
-> generated_at_utc: `2026-07-02T14:53:35+00:00`
+> generated_at_utc: `2026-07-04T15:56:54+00:00`
 > atlas: `docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv`
 > Scope: offline intraday local-distribution diagnostic only; no live runner/order behavior changed.
 
@@ -8,9 +8,9 @@
 
 - 这不是全新问题：6 月已经做过 city-day 全盘口分布质量研究，结论是 `market_norm` 通常强于 raw forecast/model 分布。
 - 这次补的是当前策略缺的 P0-local：在 intraday atlas 的 current/d1/d2/tail 四桶上，同台比较 market、forecast anchor、running-max anchor。
-- 全样本 6519 行 / 39 天 / 36 城：`market_local_norm` logloss `0.5789`，`forecast_anchor` `1.6303`，`runningmax_anchor` `1.6537`。
-- date-block delta：forecast - market logloss = `1.0682` CI [`0.9147`, `1.2425`]；runningmax - market = `1.0648` CI [`0.9930`, `1.1472`]。
-- 6/21+ forward slice 的最佳 logloss 方法是 `market_local_norm` (1025 行，logloss `0.5654`)。
+- 全样本 7586 行 / 41 天 / 36 城：`market_local_norm` logloss `0.6339`，`forecast_anchor` `2.0726`，`runningmax_anchor` `2.3932`。
+- date-block delta：forecast - market logloss = `1.4160` CI [`1.2230`, `1.6384`]；runningmax - market = `1.7175` CI [`1.5616`, `1.8586`]。
+- 6/21+ forward slice 的最佳 logloss 方法是 `market_local_norm` (1287 行，logloss `0.6355`)。
 
 交易含义：P0 没有证明“只靠 forecast 或 running max 的朴素锚”能打败盘口。下一步如果继续这条线，应该做的是融合模型：
 `P(Tmax bucket | realized path, forecast curve, bracket fractional position, solar clock, city/source basis)`，
@@ -28,62 +28,62 @@
 
 ## 数据覆盖
 
-- raw atlas rows: `13173`
-- scored rows: `6519`
-- date range: `2026-05-19` .. `2026-06-26`
+- raw atlas rows: `13725`
+- scored rows: `7586`
+- date range: `2026-05-19` .. `2026-07-02`
 - cities: `36`
-- skipped invalid label/grid: `5106`
-- skipped missing market local quote: `1548`
+- skipped invalid label/grid: `4516`
+- skipped missing market local quote: `1623`
 
 ## Full Scorecard
 
 | method | n | dates | cities | logloss | brier | top1 | winner_p | entropy |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| forecast_anchor | 6519 | 39 | 36 | 1.6303 | 0.6587 | 52.6% | 0.4121 | 0.643 |
-| market_local_norm | 6519 | 39 | 36 | 0.5789 | 0.3154 | 76.5% | 0.6720 | 0.435 |
-| runningmax_anchor | 6519 | 39 | 36 | 1.6537 | 0.7005 | 53.5% | 0.3643 | 0.669 |
-| uniform | 6519 | 39 | 36 | 1.3863 | 0.7500 | 59.3% | 0.2500 | 1.000 |
+| forecast_anchor | 7586 | 41 | 36 | 2.0726 | 0.6798 | 49.4% | 0.4282 | 0.575 |
+| market_local_norm | 7586 | 41 | 36 | 0.6339 | 0.3455 | 73.9% | 0.6474 | 0.458 |
+| runningmax_anchor | 7586 | 41 | 36 | 2.3932 | 0.7268 | 51.9% | 0.3847 | 0.582 |
+| uniform | 7586 | 41 | 36 | 1.3863 | 0.7500 | 51.9% | 0.2500 | 1.000 |
 
 ## Train / Forward
 
 | method | n | dates | cities | logloss | brier | top1 | winner_p | entropy |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| forecast_anchor | 5494 | 33 | 36 | 1.5581 | 0.6448 | 52.5% | 0.4288 | 0.613 |
-| market_local_norm | 5494 | 33 | 36 | 0.5814 | 0.3179 | 76.0% | 0.6707 | 0.435 |
-| runningmax_anchor | 5494 | 33 | 36 | 1.6625 | 0.6991 | 53.9% | 0.3649 | 0.669 |
-| uniform | 5494 | 33 | 36 | 1.3863 | 0.7500 | 59.8% | 0.2500 | 1.000 |
+| forecast_anchor | 6299 | 33 | 36 | 2.1155 | 0.6698 | 49.4% | 0.4506 | 0.524 |
+| market_local_norm | 6299 | 33 | 36 | 0.6335 | 0.3503 | 73.2% | 0.6438 | 0.461 |
+| runningmax_anchor | 6299 | 33 | 36 | 2.3932 | 0.7254 | 52.2% | 0.3860 | 0.581 |
+| uniform | 6299 | 33 | 36 | 1.3863 | 0.7500 | 52.2% | 0.2500 | 1.000 |
 
 | method | n | dates | cities | logloss | brier | top1 | winner_p | entropy |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| forecast_anchor | 1025 | 6 | 36 | 2.0172 | 0.7327 | 53.0% | 0.3227 | 0.805 |
-| market_local_norm | 1025 | 6 | 36 | 0.5654 | 0.3022 | 79.0% | 0.6788 | 0.434 |
-| runningmax_anchor | 1025 | 6 | 36 | 1.6063 | 0.7078 | 51.6% | 0.3611 | 0.668 |
-| uniform | 1025 | 6 | 36 | 1.3863 | 0.7500 | 56.6% | 0.2500 | 1.000 |
+| forecast_anchor | 1287 | 8 | 36 | 1.8624 | 0.7289 | 49.3% | 0.3183 | 0.825 |
+| market_local_norm | 1287 | 8 | 36 | 0.6355 | 0.3222 | 77.4% | 0.6649 | 0.445 |
+| runningmax_anchor | 1287 | 8 | 36 | 2.3934 | 0.7341 | 50.3% | 0.3783 | 0.589 |
+| uniform | 1287 | 8 | 36 | 1.3863 | 0.7500 | 50.3% | 0.2500 | 1.000 |
 
 ## Day Regime Slice
 
 | day_regime | method | n | logloss | brier | top1 | winner_p |
 |---|---|---:|---:|---:|---:|---:|
-| day_forecast_busted | forecast_anchor | 1559 | 0.8087 | 0.3877 | 82.7% | 0.6697 |
-| day_forecast_busted | market_local_norm | 1559 | 0.3588 | 0.2051 | 85.4% | 0.7796 |
-| day_forecast_busted | runningmax_anchor | 1559 | 0.8597 | 0.5152 | 76.4% | 0.4550 |
-| day_forecast_busted | uniform | 1559 | 1.3863 | 0.7500 | 82.7% | 0.2500 |
-| day_forecast_capped | forecast_anchor | 1614 | 1.0617 | 0.5933 | 61.7% | 0.4172 |
-| day_forecast_capped | market_local_norm | 1614 | 0.4832 | 0.2570 | 81.2% | 0.7171 |
-| day_forecast_capped | runningmax_anchor | 1614 | 1.0638 | 0.5933 | 63.8% | 0.4120 |
-| day_forecast_capped | uniform | 1614 | 1.3863 | 0.7500 | 74.2% | 0.2500 |
-| day_marginal_runway | forecast_anchor | 1195 | 1.5229 | 0.7667 | 26.6% | 0.2834 |
-| day_marginal_runway | market_local_norm | 1195 | 0.7393 | 0.4100 | 68.7% | 0.5919 |
-| day_marginal_runway | runningmax_anchor | 1195 | 1.5635 | 0.7238 | 45.4% | 0.3547 |
-| day_marginal_runway | uniform | 1195 | 1.3863 | 0.7500 | 50.0% | 0.2500 |
-| day_open_runway | forecast_anchor | 1648 | 3.1167 | 0.8728 | 32.5% | 0.3063 |
-| day_open_runway | market_local_norm | 1648 | 0.7639 | 0.4101 | 68.8% | 0.5827 |
-| day_open_runway | runningmax_anchor | 1648 | 3.1167 | 0.9672 | 28.6% | 0.2382 |
-| day_open_runway | uniform | 1648 | 1.3863 | 0.7500 | 29.9% | 0.2500 |
-| day_space_unknown | forecast_anchor | 503 | 1.3863 | 0.7500 | 57.5% | 0.2500 |
-| day_space_unknown | market_local_norm | 503 | 0.5812 | 0.3097 | 77.7% | 0.6761 |
-| day_space_unknown | runningmax_anchor | 503 | 1.4280 | 0.6900 | 50.7% | 0.3658 |
-| day_space_unknown | uniform | 503 | 1.3863 | 0.7500 | 57.5% | 0.2500 |
+| day_forecast_busted | forecast_anchor | 1857 | 1.2223 | 0.3942 | 78.6% | 0.7154 |
+| day_forecast_busted | market_local_norm | 1857 | 0.3913 | 0.2221 | 84.1% | 0.7637 |
+| day_forecast_busted | runningmax_anchor | 1857 | 0.8863 | 0.4782 | 78.6% | 0.5050 |
+| day_forecast_busted | uniform | 1857 | 1.3863 | 0.7500 | 78.6% | 0.2500 |
+| day_forecast_capped | forecast_anchor | 1491 | 1.3090 | 0.5724 | 59.0% | 0.4626 |
+| day_forecast_capped | market_local_norm | 1491 | 0.6208 | 0.3501 | 73.6% | 0.6476 |
+| day_forecast_capped | runningmax_anchor | 1491 | 1.3153 | 0.5852 | 59.6% | 0.4528 |
+| day_forecast_capped | uniform | 1491 | 1.3863 | 0.7500 | 59.6% | 0.2500 |
+| day_marginal_runway | forecast_anchor | 1324 | 1.5866 | 0.7560 | 28.5% | 0.2974 |
+| day_marginal_runway | market_local_norm | 1324 | 0.7383 | 0.4060 | 68.9% | 0.5870 |
+| day_marginal_runway | runningmax_anchor | 1324 | 2.3951 | 0.7855 | 43.6% | 0.3551 |
+| day_marginal_runway | uniform | 1324 | 1.3863 | 0.7500 | 43.6% | 0.2500 |
+| day_open_runway | forecast_anchor | 2187 | 3.8374 | 0.9262 | 30.8% | 0.2992 |
+| day_open_runway | market_local_norm | 2187 | 0.7927 | 0.4152 | 67.6% | 0.5817 |
+| day_open_runway | runningmax_anchor | 2187 | 4.3544 | 1.0000 | 29.8% | 0.2511 |
+| day_open_runway | uniform | 2187 | 1.3863 | 0.7500 | 29.8% | 0.2500 |
+| day_space_unknown | forecast_anchor | 727 | 1.3863 | 0.7500 | 49.1% | 0.2500 |
+| day_space_unknown | market_local_norm | 727 | 0.6126 | 0.3314 | 76.5% | 0.6578 |
+| day_space_unknown | runningmax_anchor | 727 | 2.5504 | 0.7236 | 49.1% | 0.3938 |
+| day_space_unknown | uniform | 727 | 1.3863 | 0.7500 | 49.1% | 0.2500 |
 
 ## Pairwise Delta
 
@@ -91,38 +91,38 @@ Positive logloss delta means the left method is worse than the right method.
 
 | slice_type | slice | left - right | n | logloss_delta | brier_delta |
 |---|---|---|---:|---:|---:|
-| all | all | forecast_anchor - market_local_norm | 6519 | 1.0514 | 0.3432 |
-| all | all | forecast_anchor - runningmax_anchor | 6519 | -0.0234 | -0.0418 |
-| all | all | market_local_norm - uniform | 6519 | -0.8074 | -0.4346 |
-| all | all | runningmax_anchor - market_local_norm | 6519 | 1.0747 | 0.3851 |
-| day_regime | day_forecast_busted | forecast_anchor - market_local_norm | 1559 | 0.4499 | 0.1827 |
-| day_regime | day_forecast_busted | forecast_anchor - runningmax_anchor | 1559 | -0.0510 | -0.1275 |
-| day_regime | day_forecast_busted | market_local_norm - uniform | 1559 | -1.0274 | -0.5449 |
-| day_regime | day_forecast_busted | runningmax_anchor - market_local_norm | 1559 | 0.5009 | 0.3101 |
-| day_regime | day_forecast_capped | forecast_anchor - market_local_norm | 1614 | 0.5786 | 0.3362 |
-| day_regime | day_forecast_capped | forecast_anchor - runningmax_anchor | 1614 | -0.0020 | 0.0000 |
-| day_regime | day_forecast_capped | market_local_norm - uniform | 1614 | -0.9031 | -0.4930 |
-| day_regime | day_forecast_capped | runningmax_anchor - market_local_norm | 1614 | 0.5806 | 0.3362 |
-| day_regime | day_marginal_runway | forecast_anchor - market_local_norm | 1195 | 0.7836 | 0.3567 |
-| day_regime | day_marginal_runway | forecast_anchor - runningmax_anchor | 1195 | -0.0406 | 0.0429 |
-| day_regime | day_marginal_runway | market_local_norm - uniform | 1195 | -0.6470 | -0.3400 |
-| day_regime | day_marginal_runway | runningmax_anchor - market_local_norm | 1195 | 0.8242 | 0.3137 |
-| day_regime | day_open_runway | forecast_anchor - market_local_norm | 1648 | 2.3528 | 0.4626 |
-| day_regime | day_open_runway | forecast_anchor - runningmax_anchor | 1648 | 0.0000 | -0.0944 |
-| day_regime | day_open_runway | market_local_norm - uniform | 1648 | -0.6224 | -0.3399 |
-| day_regime | day_open_runway | runningmax_anchor - market_local_norm | 1648 | 2.3528 | 0.5570 |
-| day_regime | day_space_unknown | forecast_anchor - market_local_norm | 503 | 0.8051 | 0.4403 |
-| day_regime | day_space_unknown | forecast_anchor - runningmax_anchor | 503 | -0.0417 | 0.0600 |
-| day_regime | day_space_unknown | market_local_norm - uniform | 503 | -0.8051 | -0.4403 |
-| day_regime | day_space_unknown | runningmax_anchor - market_local_norm | 503 | 0.8468 | 0.3804 |
-| split | forward_2026_06_21_plus | forecast_anchor - market_local_norm | 1025 | 1.4518 | 0.4305 |
-| split | forward_2026_06_21_plus | forecast_anchor - runningmax_anchor | 1025 | 0.4109 | 0.0249 |
-| split | forward_2026_06_21_plus | market_local_norm - uniform | 1025 | -0.8209 | -0.4478 |
-| split | forward_2026_06_21_plus | runningmax_anchor - market_local_norm | 1025 | 1.0409 | 0.4056 |
-| split | train_pre_2026_06_21 | forecast_anchor - market_local_norm | 5494 | 0.9767 | 0.3270 |
-| split | train_pre_2026_06_21 | forecast_anchor - runningmax_anchor | 5494 | -0.1044 | -0.0543 |
-| split | train_pre_2026_06_21 | market_local_norm - uniform | 5494 | -0.8049 | -0.4321 |
-| split | train_pre_2026_06_21 | runningmax_anchor - market_local_norm | 5494 | 1.0811 | 0.3813 |
+| all | all | forecast_anchor - market_local_norm | 7586 | 1.4387 | 0.3343 |
+| all | all | forecast_anchor - runningmax_anchor | 7586 | -0.3207 | -0.0470 |
+| all | all | market_local_norm - uniform | 7586 | -0.7524 | -0.4045 |
+| all | all | runningmax_anchor - market_local_norm | 7586 | 1.7594 | 0.3813 |
+| day_regime | day_forecast_busted | forecast_anchor - market_local_norm | 1857 | 0.8310 | 0.1721 |
+| day_regime | day_forecast_busted | forecast_anchor - runningmax_anchor | 1857 | 0.3361 | -0.0840 |
+| day_regime | day_forecast_busted | market_local_norm - uniform | 1857 | -0.9950 | -0.5279 |
+| day_regime | day_forecast_busted | runningmax_anchor - market_local_norm | 1857 | 0.4949 | 0.2561 |
+| day_regime | day_forecast_capped | forecast_anchor - market_local_norm | 1491 | 0.6882 | 0.2223 |
+| day_regime | day_forecast_capped | forecast_anchor - runningmax_anchor | 1491 | -0.0063 | -0.0127 |
+| day_regime | day_forecast_capped | market_local_norm - uniform | 1491 | -0.7655 | -0.3999 |
+| day_regime | day_forecast_capped | runningmax_anchor - market_local_norm | 1491 | 0.6945 | 0.2351 |
+| day_regime | day_marginal_runway | forecast_anchor - market_local_norm | 1324 | 0.8483 | 0.3500 |
+| day_regime | day_marginal_runway | forecast_anchor - runningmax_anchor | 1324 | -0.8086 | -0.0296 |
+| day_regime | day_marginal_runway | market_local_norm - uniform | 1324 | -0.6480 | -0.3440 |
+| day_regime | day_marginal_runway | runningmax_anchor - market_local_norm | 1324 | 1.6568 | 0.3796 |
+| day_regime | day_open_runway | forecast_anchor - market_local_norm | 2187 | 3.0448 | 0.5109 |
+| day_regime | day_open_runway | forecast_anchor - runningmax_anchor | 2187 | -0.5170 | -0.0739 |
+| day_regime | day_open_runway | market_local_norm - uniform | 2187 | -0.5936 | -0.3348 |
+| day_regime | day_open_runway | runningmax_anchor - market_local_norm | 2187 | 3.5617 | 0.5848 |
+| day_regime | day_space_unknown | forecast_anchor - market_local_norm | 727 | 0.7737 | 0.4186 |
+| day_regime | day_space_unknown | forecast_anchor - runningmax_anchor | 727 | -1.1641 | 0.0264 |
+| day_regime | day_space_unknown | market_local_norm - uniform | 727 | -0.7737 | -0.4186 |
+| day_regime | day_space_unknown | runningmax_anchor - market_local_norm | 727 | 1.9379 | 0.3922 |
+| split | forward_2026_06_21_plus | forecast_anchor - market_local_norm | 1287 | 1.2268 | 0.4067 |
+| split | forward_2026_06_21_plus | forecast_anchor - runningmax_anchor | 1287 | -0.5310 | -0.0051 |
+| split | forward_2026_06_21_plus | market_local_norm - uniform | 1287 | -0.7507 | -0.4278 |
+| split | forward_2026_06_21_plus | runningmax_anchor - market_local_norm | 1287 | 1.7578 | 0.4119 |
+| split | train_pre_2026_06_21 | forecast_anchor - market_local_norm | 6299 | 1.4819 | 0.3195 |
+| split | train_pre_2026_06_21 | forecast_anchor - runningmax_anchor | 6299 | -0.2777 | -0.0556 |
+| split | train_pre_2026_06_21 | market_local_norm - uniform | 6299 | -0.7528 | -0.3997 |
+| split | train_pre_2026_06_21 | runningmax_anchor - market_local_norm | 6299 | 1.7597 | 0.3751 |
 
 ## 产物
 
