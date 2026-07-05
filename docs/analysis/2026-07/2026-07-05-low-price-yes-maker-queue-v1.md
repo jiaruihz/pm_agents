@@ -1,6 +1,6 @@
 # Low-Price YES Maker Queue v1
 
-Generated: `2026-07-04T17:36:32.305873+00:00`
+Generated: `2026-07-04T22:54:58.725716+00:00`
 
 ## Verdict
 
@@ -10,12 +10,12 @@ The current evidence says maker entry can fill small $0.8-style orders, but it d
 
 ## Data
 
-- Live order rows: 17 (15 settled, 2 open).
-- Fill coverage: any-fill 82.4%; full-fill 76.5%; median fill fraction 100.0%.
-- Wait: median first fill 5.6 min; median complete/last fill 5.9 min.
+- Live order rows: 18 (15 settled, 3 open).
+- Fill coverage: any-fill 83.3%; full-fill 77.8%; median fill fraction 100.0%.
+- Wait: median first fill 6.2 min; median complete/last fill 6.8 min.
 - Settled actual ROI on filled shares: -30.5% ($-3.86 on $12.66).
 - Actual missed-winner cost from unfilled winning shares: $0.00.
-- Sizing modes: `{'notional': 15, 'price_tier_6_8_10_shares': 2}`.
+- Sizing modes: `{'notional': 15, 'price_tier_6_8_10_shares': 3}`.
 
 ## $1/$3/$5 Scenarios
 
@@ -26,17 +26,17 @@ Two queue models are shown:
 
 | Notional | Model | Orders | Any Fill | Full Fill | Mean Fill | Settled ROI | Missed Winner Cost | Filled Cost |
 |---:|---|---:|---:|---:|---:|---:|---:|---:|
-| $1 | absolute_fill_cap | 17 | 82.4% | 29.4% | 71.8% | -27.9% | $1.99 | $12.20 |
-| $1 | proportional_fill_fraction | 17 | 82.4% | 76.5% | 82.3% | -21.5% | $0.00 | $14.00 |
-| $3 | absolute_fill_cap | 17 | 82.4% | 0.0% | 25.9% | -33.4% | $21.97 | $13.20 |
-| $3 | proportional_fill_fraction | 17 | 82.4% | 76.5% | 82.3% | -21.5% | $0.00 | $42.00 |
-| $5 | absolute_fill_cap | 17 | 82.4% | 0.0% | 15.5% | -33.4% | $41.95 | $13.20 |
-| $5 | proportional_fill_fraction | 17 | 82.4% | 76.5% | 82.3% | -21.5% | $0.00 | $70.00 |
+| $1 | absolute_fill_cap | 18 | 83.3% | 27.8% | 72.7% | -27.9% | $1.99 | $13.09 |
+| $1 | proportional_fill_fraction | 18 | 83.3% | 77.8% | 83.3% | -21.5% | $0.00 | $15.00 |
+| $3 | absolute_fill_cap | 18 | 83.3% | 0.0% | 26.1% | -33.4% | $21.97 | $14.09 |
+| $3 | proportional_fill_fraction | 18 | 83.3% | 77.8% | 83.3% | -21.5% | $0.00 | $45.00 |
+| $5 | absolute_fill_cap | 18 | 83.3% | 0.0% | 15.7% | -33.4% | $41.95 | $14.09 |
+| $5 | proportional_fill_fraction | 18 | 83.3% | 77.8% | 83.3% | -21.5% | $0.00 | $75.00 |
 
 ## Read
 
 - The old fixed-notional maker sample mostly filled, but that sample is only 15 orders and one settled winner. It supports continuing tiny maker-first probing, not increasing ticket size.
-- The current price-tier sample is 2 orders and 0 fills so far. Keep it running until it has enough elapsed local time and settlement labels.
+- The current price-tier sample is 3 orders and 1 fills so far. Keep it running until it has enough elapsed local time and settlement labels.
 - $3/$5 needs a real partial-fill model before promotion: conservative absolute-cap fill collapses as notional rises, while proportional fill is an optimistic upper bound.
 - Missed-winner cost is currently zero in the settled order sample because the only settled winner was filled. That is good news, but too early to trust.
 
@@ -59,8 +59,9 @@ Two queue models are shown:
 | 2026-07-03T16:25:40+00:00 | Busan | 2026-07-04 | 24 | notional | 0.048 | 16.67 | 16.67 | 100.0% | 6.2 | 6.8 | settled | 0 |
 | 2026-07-03T19:46:35+00:00 | Helsinki | 2026-07-04 | 21 | notional | 0.151 | 5.30 | 5.30 | 100.0% | 109.2 | 110.9 | settled | 0 |
 | 2026-07-03T20:21:59+00:00 | Paris | 2026-07-04 | 32 | notional | 0.061 | 13.12 | 13.11 | 99.9% | 464.8 | 533.9 | settled | 0 |
-| 2026-07-04T10:19:43+00:00 | Wellington | 2026-07-05 | 15 | price_tier_6_8_10_shares | 0.111 | 8.00 | 0.00 | 0.0% | NA | NA | unsettled_or_missing | NA |
+| 2026-07-04T10:19:43+00:00 | Wellington | 2026-07-05 | 15 | price_tier_6_8_10_shares | 0.111 | 8.00 | 8.00 | 100.0% | 446.6 | 446.6 | unsettled_or_missing | NA |
 | 2026-07-04T15:00:22+00:00 | Shanghai | 2026-07-05 | 28 | price_tier_6_8_10_shares | 0.054 | 6.00 | 0.00 | 0.0% | NA | NA | unsettled_or_missing | NA |
+| 2026-07-04T19:11:22+00:00 | Helsinki | 2026-07-05 | 17 | price_tier_6_8_10_shares | 0.073 | 6.00 | 0.00 | 0.0% | NA | NA | unsettled_or_missing | NA |
 
 ## Artifacts
 

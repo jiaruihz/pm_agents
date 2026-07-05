@@ -22,6 +22,11 @@ First-principles read: full take-profit fights the convex nature of a low-price 
 
 ## Tiny-Live Exit Rollout
 
+> **2026-07-03 15:21Z superseded:** the TP20 exit overlay was disabled the same day
+> (`disable_tp20_exit_overlay`, all resting SELL orders canceled, LaunchAgent removed) after the
+> live-like fixed-20c replay in [sizing-stop v1](2026-07-03-low-price-yes-sizing-stop-v1.md) showed
+> -9.1% full-window vs hold +25.9%. Live posture is hold-to-settlement; TP/stop stay shadow telemetry.
+
 2026-07-03 operator decision: run a micro live TP20 exit overlay on Mac for the already-live V1 low-price YES sleeve.
 
 - Script: `scripts/ops/low_price_yes_take_profit_exit_v1.py`.
