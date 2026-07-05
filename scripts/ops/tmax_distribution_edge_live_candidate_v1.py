@@ -130,6 +130,51 @@ def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
         fh.write(json.dumps(json_ready(payload), ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(item, dict):
+                rows.append(item)
+    return rows
+
+
+def city_day_position_key(row: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            safe_str(row.get("strategy_id")) or STRATEGY_ID,
+            safe_str(row.get("city")).casefold(),
+            safe_str(row.get("target_date")),
+        ]
+    )
+
+
+def submitted_live_city_day_keys(path: Path) -> set[str]:
+    keys: set[str] = set()
+    for row in read_jsonl(path):
+        if safe_str(row.get("status")) != "submitted":
+            continue
+        strategy_id = safe_str(row.get("strategy_id"))
+        strategy_instance = safe_str(row.get("strategy_instance"))
+        if strategy_id and strategy_id != STRATEGY_ID:
+            continue
+        if not strategy_id and strategy_instance and strategy_instance != STRATEGY_INSTANCE:
+            continue
+        key = safe_str(row.get("city_day_position_key")) or city_day_position_key(row)
+        if key:
+            keys.add(key)
+    return keys
+
+
 def latest_snapshot_path(explicit: str = "", snapshot_dir: str = "") -> Path | None:
     if explicit:
         return Path(explicit).expanduser()
@@ -619,7 +664,8 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
                 "order_side": "BUY",
             }
         )
-        best["opportunity_id"] = best["candidate_id"]
+        best["city_day_position_key"] = city_day_position_key(best)
+        best["opportunity_id"] = best["city_day_position_key"]
         candidates.append(best)
     return candidates, blocked
 
@@ -668,6 +714,7 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
             "model_method": MODEL_METHOD,
             "zero_notional": True,
             "no_order_placed": True,
+            "city_day_position_key": city_day_position_key(item),
         }
     )
     return out
@@ -807,6 +854,7 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
     base = {
         "signal_id": candidate["candidate_id"],
         "opportunity_id": candidate.get("opportunity_id") or candidate["candidate_id"],
+        "city_day_position_key": candidate.get("city_day_position_key") or city_day_position_key(candidate),
         "strategy": "weather_edge_v1",
         "strategy_instance": STRATEGY_INSTANCE,
         "source_strategy_instance": STRATEGY_INSTANCE,
@@ -941,7 +989,20 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         candidates, candidate_blocked = build_candidates(state_df, pred, args)
         blocked.extend(candidate_blocked)
     accepted_candidates: list[dict[str, Any]] = []
+    existing_live_city_day_keys = submitted_live_city_day_keys(runtime_dir / "live_orders.jsonl") if args.live else set()
+    batch_city_day_keys: set[str] = set()
     for candidate in candidates:
+        position_key = safe_str(candidate.get("city_day_position_key")) or city_day_position_key(candidate)
+        if args.live and (position_key in existing_live_city_day_keys or position_key in batch_city_day_keys):
+            blocked.append(
+                {
+                    **candidate,
+                    "decision_status": "blocked",
+                    "block_reason": "existing_city_day_live_order",
+                    "city_day_position_key": position_key,
+                }
+            )
+            continue
         quote = fresh_quote(candidate, args)
         enriched = {**candidate, "fresh_quote": quote}
         if quote.get("status") != "accepted":
@@ -958,6 +1019,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
         accepted_candidates.append(enriched)
+        batch_city_day_keys.add(position_key)
     accepted_candidates = sorted(
         accepted_candidates,
         key=lambda r: (str(r.get("target_date")), float(r.get("decision_hour_local") or 99), str(r.get("city"))),
