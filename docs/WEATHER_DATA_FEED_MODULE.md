@@ -138,8 +138,10 @@ snapshot_ts_utc
   `--signal-input live-fetch` 调试使用；策略信号不再默认各自重复抓 AviationWeather/TGFTP/CheckWX 等天气源。
 - 生产 observation cache 必须开启 `--include-station-diff --include-fallback-sources --max-workers 4`：
   station-diff 城市是把旧 city_pool 机场修正到 Polymarket 规则/WU 结算源对应站点，不是替代口径；
-  fallback 链路为 `aviationweather_metar -> aviationweather_cache_csv -> iem_asos`，用于在 direct API
-  429/单源失败时避免整轮 cache 报废。
+  fallback 链路按 `source_profiles.json` 展开。默认 AviationWeather 城市为
+  `aviationweather_metar -> aviationweather_cache_csv -> iem_asos`；2026-07-04 实测 Austin/Dallas/Houston
+  改用 `synopticdata_timeseries` 5 分钟主源，fallback 为 `aviationweather_metar -> iem_asos_madishf_latest -> iem_asos`。
+  Denver/KBKF 当前 Synoptic 与 AviationWeather 都是 60 分钟级，仍保留 `aviationweather_metar` 主源。
 - `source_profiles` 中 `official_station_diff_confirmed` 且 live eligible 的城市已进入 current-YES station map
   和 full paper snapshot METAR 拉取层：Chicago=KORD、PanamaCity=MPMG、London=EGLC、Paris=LFPB、
   Milan=LIMC、KualaLumpur=WMKK。snapshot 仍保留旧 `icao` 字段用于兼容，同时新增 `metar_icao` /

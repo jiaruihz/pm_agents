@@ -1,132 +1,158 @@
 # 天气策略主线骨架
 
-Status: design-draft
-Updated: 2026-06-09 Phase 2 spine pass
-Source of truth: no
-Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_QUANT_DESIGN.md; WEATHER_DATA_CANONICAL_SOURCES.md; WEATHER_SYSTEM_CONTRACT.md
+Status: current-reference
+Updated: 2026-07-05 feature layering review + CITY_FAMILY landing
+Source of truth: yes for architecture orientation; field/schema contracts still defer to WEATHER_SYSTEM_CONTRACT
+Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_QUANT_DESIGN.md; WEATHER_DATA_CANONICAL_SOURCES.md; WEATHER_SYSTEM_CONTRACT.md; WEATHER_FEATURE_LAYERING_PLAN.md
 
-本文定义天气策略项目的主线分层，用来约束文档、脚本、数据和分析结论的归属。它不是替代 `WEATHER_STRATEGY_QUANT_DESIGN.md` 的量化血缘链，而是把原有工程血缘链映射到更高层的策略生命周期，避免评估层继续按日期和一次性脚本发散。
-
-> 三份主轴文档分工（同一套 [0]–[6] 分层，互补不重复）：
-> 本文 = **分层定义**（每层归属什么）· [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md) = **策略清单**（试过哪些、状态、归在哪层）·
-> [WEATHER_STRATEGY_REVIEW_PIPELINE.md](WEATHER_STRATEGY_REVIEW_PIPELINE.md) = **[6] 评估层的复盘流水线**（跑完怎么一步步看）。
-
-## 一句话主线
-
-一条天气交易决策的生命周期：
-
-```mermaid
-flowchart LR
-  D0["[0] 数据<br/>raw mirror -> fact tables"]
-  D1["[1] 模型<br/>weather features -> p(bracket)"]
-  D2["[2] 信号<br/>probability vs market -> edge"]
-  D3["[3] 决策<br/>filters / city pool / sizing -> plan"]
-  D4["[4] 执行<br/>maker-only orders -> fills"]
-  D5["[5] 结算<br/>settlement -> realized PnL"]
-  D6["[6] 评估<br/>analysis / attribution / feedback"]
-
-  D0 --> D1 --> D2 --> D3 --> D4 --> D5 --> D6
-  D6 -- "validated feedback only" --> D1
-  D6 -- "validated feedback only" --> D2
-  D6 -- "validated feedback only" --> D3
-```
-
-治理重点是 `[6] 评估层`。`[0]-[5]` 已经有相对清晰的工程血缘；混乱主要来自日期快照、一次性脚本、实验 JSON 和后验结论平铺在同一目录里。
-
-## 与量化血缘链的关系
-
-`WEATHER_STRATEGY_QUANT_DESIGN.md` 里的核心血缘链仍然有效：
+本文记录天气策略的**当前真实架构**，不是目标草案。它把策略/特征/执行资产挂回同一条量化血缘：
 
 ```text
-MarketData -> Signal -> TradePlan -> Order -> Fill -> Position -> Settlement
+signal candidate -> plan -> order -> fill -> settlement
 ```
 
-本文的 `[0]-[6]` 是业务生命周期视图；原血缘链是工程落库和可追溯视图。二者对应关系如下：
+这条主血缘由 `fact_signal_candidates`、trade plan、live/paper order JSONL、`fact_trades`、settlements 和 dashboard rebuild 支撑。换策略方向只动上层特征和策略头，不重做 order/fill/PnL/看板血缘。
 
-| 主线层 | 工程血缘锚点 | 当前真相源 / 参考 |
+## 当前总图
+
+```mermaid
+flowchart TB
+  subgraph L0["L0 采集/标准化 · weather_data_feed（共用）"]
+    OBS["官方观测/METAR/IEM/AWC/cache"]
+    FCS["forecast + peak clock archive"]
+    OBK["orderbook snapshots"]
+    GOV["source policy / city calendar / brackets / station basis / sky cover map"]
+  end
+
+  subgraph L1["L1 共享事实层（派生，可重建）"]
+    TSF["reheat_feature_factory_v1<br/>实际身份: temperature state factory<br/>当前仍在 scripts/analysis/reheat_risk + docs/generated"]
+  end
+
+  subgraph L2["L2 共享机制特征/参考层"]
+    WC["weather_context<br/>weather_data_feed/weather_context.py"]
+    ATLAS["intraday regime atlas<br/>代码仍在 reheat_risk"]
+    CF["city_family<br/>weather_data_feed/city_family.py<br/>两套命名 taxonomy"]
+    SKY["sky_cover<br/>weather_data_feed/sky_cover.py"]
+    FQ["forecast quality / reliability base"]
+    SB["station basis labels"]
+  end
+
+  subgraph L3["L3 策略头（各族私有）"]
+    HEADS["tmax distribution / remaining-heat / regime-routed /<br/>metar reversal / low-price YES / metar-cross"]
+  end
+
+  EXPR["expression selector / strategy config"]
+
+  subgraph SPINE["主血缘（canonical，不随策略换代）"]
+    SC[("fact_signal_candidates<br/>机会粒度")]
+    PLAN["TradePlan"]
+    ORD[("orders / live order JSONL")]
+    FILL[("fills / fact_trades")]
+    SETT[("settlements -> realized PnL")]
+  end
+
+  subgraph L4["L4 当前执行层"]
+    EXEC["weather_order_executor.py<br/>共享 batch executor + notional/pause/cancel 保护"]
+    PRIVATE["runner 私有执行逻辑<br/>lottery maker lifecycle / theta fresh taker / regime top-ask clamp"]
+    FAST["direct FOK fast paths<br/>metar_cross + all-YES underround"]
+  end
+
+  EVAL["[6] 评估<br/>coverage gate / execution_quality / live-vs-shadow / dashboard"]
+
+  OBS & FCS & OBK & GOV --> TSF
+  TSF --> WC & ATLAS
+  CF & SKY & FQ & SB --> HEADS
+  WC & ATLAS --> HEADS
+  HEADS --> EXPR --> SC --> PLAN
+  PLAN --> EXEC
+  PLAN --> PRIVATE
+  PLAN --> FAST
+  EXEC & PRIVATE & FAST --> ORD --> FILL --> SETT --> EVAL
+  EVAL -. "validated feedback only" .-> HEADS
+  EVAL -. "strategy_config attribution" .-> PLAN
+```
+
+## 节点分类
+
+### 主血缘节点
+
+已存在，当前不重做：
+
+| 节点 | 当前真相源 |
+|---|---|
+| `fact_signal_candidates` | `runtime/weather.db` rebuild |
+| TradePlan | strategy runner plan JSONL / `strategy_config` |
+| orders / live lineage | `runtime/weather_edge_v1/**/live_orders.jsonl` and executor outputs |
+| fills / `fact_trades` | dashboard legacy migration + CLOB fill recovery |
+| settlements / realized PnL | `settlements`, `pnl_usd_at_fill`, CLOB coverage gate |
+
+`order_events` 子表尚未落地。它仍是可取的 additive 设计，但需要走 fact rebuild/schema 流程，不能在本轮整理里偷建。
+
+### 派生节点
+
+| 节点 | 派生自 | 当前状态 |
 |---|---|---|
-| `[0] 数据` | MarketData, dashboard ingest, fact tables | `WEATHER_DATA_CANONICAL_SOURCES.md`, `WEATHER_DATA_PIPELINE.md`, `fact_trades`, `fact_signal_candidates` |
-| `[1] 模型` | model output fields on Signal | `WEATHER_PROBABILITY_MODEL_REVIEW.md`, `WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md`, `analysis/model_vs_market.md` |
-| `[2] 信号` | Signal / candidate opportunity | `fact_signal_candidates`, `WEATHER_SIGNAL_CANDIDATES_DESIGN.md` |
-| `[3] 决策` | TradePlan / strategy config | `WEATHER_STRATEGY_ENTRYPOINT.md`, `WEATHER_CITY_POOL_DECISIONS.md`, strategy instance configs |
-| `[4] 执行` | Order / Fill | N100 `pm_agent` live JSONL, `orders`, `fills`, CLOB recovery scripts |
-| `[5] 结算` | Settlement / realized PnL | `settlements`, `pnl_usd_at_fill`, `weather_clob_fill_coverage_gate.py` |
-| `[6] 评估` | Run Registry / Metrics / research docs | `docs/analysis/*.md` living docs, `WEATHER_ANALYSIS_CONTRACT.md` |
+| `reheat_feature_factory_v1` / temperature state rows | L0 mirror + `runtime/weather.db` + orderbooks + forecast peak backfill | 在用；路径/名字未迁移，仍是 Phase D 待办 |
+| `weather_context` labels | temperature/weather state rows | 已在 `weather_data_feed`，共享 |
+| intraday regime atlas | factory rows | 共享机制图谱；代码位置仍在 `scripts/analysis/reheat_risk` |
+| `CITY_FAMILY` / city climate labels | static reference taxonomy | 已收口到 `weather_data_feed.city_family`；保留 `CURRENT_BRACKET_NO_V1` 与 `ATLAS_V1` 两套语义 |
+| `SKY_CODE` / sky cover numeric map | METAR/IEM sky strings | 已收口到 `weather_data_feed.sky_cover`；parser/fetch 逻辑尚未统一 |
+| forecast quality / reliability | forecast/history layers | 共享 soft label，不是独立 live 策略 |
+| station basis | official/source basis layer | 共享 source/basis label，live 行为仍以具体 runner/entrypoint 为准 |
 
-约束：任何新分析不能绕开这条血缘自造口径。填成交质量、漏单、滑点、反事实时优先用 `fact_signal_candidates`；填 realized PnL 时优先用 `fact_trades`；发布 `live_real` 前必须通过 CLOB coverage gate。
+### 新增节点（本轮已落地）
+
+| 节点 | 说明 |
+|---|---|
+| `weather_data_feed/city_family.py` | Phase B-4 调整版；集中管理两套已存在 city-family taxonomy |
+| `tests/pmm_tests/test_weather_city_family.py` | 固定两套 taxonomy 只在 `Beijing` 上分叉，防止误合并 |
+| `weather_data_feed/sky_cover.py` | Phase B-5 子项；集中管理已存在且一致的 METAR sky-cover numeric map |
+| `tests/pmm_tests/test_weather_sky_cover.py` | 固定 sky-cover legacy mapping |
+| `docs/analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md` | 对 `WEATHER_FEATURE_LAYERING_PLAN.md` 的批判性审阅和执行边界 |
+
+### 未落地/放弃按原文执行
+
+| 计划项 | 当前处理 |
+|---|---|
+| 单一 `CITY_FAMILY` map | 不按原文执行；已改为一个模块下两套命名 taxonomy，避免行为漂移 |
+| station-basis 直连 CLOB 收编 | 原计划误判：`weather_station_basis_exec.py` live placement 是未实现硬 gate，不是 active direct ClobClient |
+| METAR parser/fetch 统一 | `SKY_CODE` 已收口，但 parser、cache、source-events、latency 逻辑未收编；需要逐 caller parity |
+| `order_events` canonical 子表 | 未落地；需要独立 schema + rebuild + dashboard/coverage 流程 |
+| metar-cross fast path 收编 | 未落地；触碰真实下单/私钥路径前必须显式确认并实测 latency |
+| factory 迁到 `runtime/weather_feature_store/` | 未落地；当前 `docs/generated` 依赖面很大，迁移必须逐消费者 parity replay |
+| stable adapter 全面替代 research import | 未落地；`regime_routed_no_stable.py` 仍是 research-backed shim，tmax live bridge 仍直接 import P0-P4 research modules |
 
 ## 七层边界
 
-### [0] 数据层
+| 层 | 职责 | 当前入口 |
+|---|---|---|
+| `[0] 数据` | 同步 market/weather/live lineage 并 rebuild fact tables | `WEATHER_DATA_CANONICAL_SOURCES.md`, `WEATHER_DATA_PIPELINE.md`, `weather_data_feed/` |
+| `[1] 事实/机制特征` | temperature state、weather context、regime、forecast reliability | `WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md`, `weather_data_feed/weather_context.py`, `weather_data_feed/city_family.py`, `weather_data_feed/sky_cover.py` |
+| `[2] 信号/表达` | `P(win)-price`、expression selector、strategy head | `fact_signal_candidates`, strategy docs/registry |
+| `[3] 决策` | city pool、entry band、sizing、risk cap | `WEATHER_STRATEGY_ENTRYPOINT.md`, `WEATHER_CITY_POOL_DECISIONS.md` |
+| `[4] 执行` | maker/taker/FOK、notional guard、fresh book、cancel/fill recovery | `weather_order_executor.py`, runner-specific execution logic, `analysis/execution_quality.md` |
+| `[5] 结算` | settlement -> realized/open/MTM PnL | `fact_trades`, `settlements`, account reconcile |
+| `[6] 评估` | live/shadow 对比、coverage gate、attribution、回写判断 | `WEATHER_ANALYSIS_CONTRACT.md`, living docs, dashboard |
 
-职责：把 N100 raw 行情、天气、live lineage 同步并重建为本机 `runtime/weather.db` 的事实表。
+## 执行层当前口径
 
-真相源：N100 `weather-predict` 的行情/天气/paper/settlement cache，加 N100 `pm_agent` 的 live execution lineage。本机 DB 是衍生物，可删可重建。
+执行统一是方向，不是已完成事实：
 
-当前治理动作：`build_weather_fact_trades.py`、`build_weather_signal_candidates.py`、decision-window backfill 这类脚本属于 ETL/ingest，不属于评估层。Phase 3B 已移动到 `scripts/etl/`。
+| 形态 | 当前实现 | 状态 |
+|---|---|---|
+| low-price YES maker-first + dynamic lifecycle | `low_price_yes_lottery_tiny_live.py` 私有 maker lifecycle + common executor | live tiny probe |
+| TP20 maker -> cancel -> taker fallback | `low_price_yes_take_profit_exit_v1.py` | disabled |
+| regime routed top-ask clamp | `regime_routed_no_tiny_live.py` | live tiny probe |
+| current YES fresh taker | `weather_theta_current_yes_tiny_live.py` | live tiny probe |
+| FOK latency | `weather_metar_cross_prev_no_shadow.py`; `all_yes_underround_fok_executor_v0.py` | metar-cross live tiny probe / all-YES research |
 
-### [1] 模型层
-
-职责：把天气特征和 forecast source 转为每个 bracket 的概率。
-
-当前结论入口：`docs/analysis/model_vs_market.md`。目前 global model probability alpha 未确认，不能单独作为 live gate；若要重新启用模型影响 live，必须证明相对市场/entry price 的超额，而不是只证明高概率 side 更常赢。
-
-### [2] 信号层
-
-职责：把模型概率与市场价格比较，产生 side、edge、candidate opportunity。
-
-当前结论入口：`docs/analysis/market_structure_edge.md`、`docs/analysis/side_alpha.md`。这里要区分模型 alpha 和 market-structure / favorite-longshot / BUY_NO base-rate，不允许把后者包装成模型预测力。
-
-### [3] 决策层
-
-职责：city pool、side allowlist、entry band、sizing、risk cap 等门控，把 candidate 变成 plan。
-
-当前事实入口：`WEATHER_STRATEGY_ENTRYPOINT.md` 和 `WEATHER_CITY_POOL_DECISIONS.md`。任何 `[6] -> [3]` 回写必须经过预注册目标指标、holdout/forward 验证和回滚条件，不能只靠后验 PnL 排名。
-
-### [4] 执行层
-
-职责：maker-only / post-only order submission、fill recovery、成交质量、可成交 edge。
-
-当前结论入口：`docs/analysis/execution_quality.md`。执行层不是单纯“下没下单”，还要回答成交的那批是否被逆向选择、扣 spread/queue 后还有没有 edge。
-
-### [5] 结算层
-
-职责：用 settlement 结果把 fill 转成 realized PnL，并分清 settled、quasi-settled、open mark、cashflow。
-
-当前结论入口：`docs/analysis/live_performance.md` 和 `docs/analysis/account_reconcile.md`。账户余额和 CLOB fill 对账必须走 `weather-live-account-reconcile` 口径。
-
-### [6] 评估层
-
-职责：回答 edge 是否真实、是否可成交、是否可放大、是否应该回写 `[1][2][3]`。
-
-当前结构：每个问题一篇 living doc，不再把当前口径散落在日期快照里。
-
-| Living doc | 主层 | 问题 |
-|---|---:|---|
-| `analysis/model_vs_market.md` | [1] | 模型相对市场是否有 alpha |
-| `analysis/market_structure_edge.md` | [2] | 是否存在 model-free 的市场结构 edge |
-| `analysis/execution_quality.md` | [4] | 扣点差、队列和逆向选择后是否仍可成交 |
-| `analysis/entry_timing.md` | [3] | 入场窗口、T-window、forecast timing 是否影响决策 |
-| `analysis/side_alpha.md` | [2] | BUY_NO / BUY_YES 和 side band 的真实差异 |
-| `analysis/city_selection.md` | [3] | 城市池、city-day basket 和地域选择 |
-| `analysis/sizing_entry_band.md` | [3] | 仓位和入场价格带 |
-| `analysis/blender_shadow.md` | [1] | blender / edge engine 作为 shadow 或 sizing signal 的价值 |
-| `analysis/live_performance.md` | [5][6] | live 策略绩效曲线与归因 |
-| `analysis/account_reconcile.md` | [5] | 钱包、CLOB、DB/fact fill 对账 |
-| `analysis/data_integrity.md` | [0] | snapshot、side flip、fact coverage 和数据完整性 |
+未来若抽 `execution_styles.py` / `order_gateway.py`，必须按 runner 做离线 parity replay；任何真实下单通道收编都另走显式确认、notional 上限、暂停开关和 latency 验收。
 
 ## 防发散纪律
 
-1. **先定层，再定文件状态。** 每个文件先归到 `[0]-[6]`；然后再在 `WEATHER_DOCS_INDEX.md` 标为 `current-source`、`current-reference`、`design-draft`、`snapshot` 或 `superseded`。
-2. **评估层按问题维护。** 新结论更新对应 living doc；日期文件只保留为 evidence snapshot。当前口径不再默认来自 `docs/analysis/YYYY-MM/`。
-3. **JSON 不承载结论。** `docs/analysis/**/*.json` 只作为可重建产物或临时证据，后续迁出 git；结论写入 Markdown living doc。
-4. **回写决策要前瞻。** city pool、entry band、ban list、sizing 的修改必须有 target metric、denominator、holdout/forward、kill condition。
-5. **工程血缘不降级。** 不因为整理目录而绕开 `signal_id -> plan_id -> execution_id -> fill_id -> settlement`，也不把 replay/heuristic 当成 live fill 真相。
-
-## Phase 2 完成标准
-
-- 本文成为 `[0]-[6]` 的总骨架。
-- `docs/analysis/` 下 11 篇 living doc 存在，并各自声明主线层、当前结论、证据快照、live action gate。
-- `WEATHER_DOCS_INDEX.md` 能从“模型与 Edge Engine / 评估层 Living Docs”直接跳到这些入口。
-- Phase 3A/3B 后，脚本迁移 manifest 已落到 `docs/analysis/SCRIPT_MIGRATION_MANIFEST.md`，topic 脚本已移动到 `scripts/analysis/<topic>/`，ETL 脚本已移动到 `scripts/etl/`，copy-trade 脚本已移动到 `scripts/copy_trade/`。
-- 不移动历史快照、不删除 tracked JSON；这些属于后续 Phase 3C/3D。
+1. 先定层，再定文件状态；冲突时以 `WEATHER_DOCS_INDEX.md` 的 current-source/current-reference 标注为准。
+2. 新共享数据逻辑进 `weather_data_feed/`，但要保留版本化语义，不强行合并历史不同口径。
+3. 研究脚本互相 import 可以作为短期现实；live/shadow runner 依赖研究脚本才是优先收口对象。
+4. JSON/CSV 产物只作 evidence 或可重建派生，不承载当前结论；当前结论写入 living docs。
+5. 不因为整理目录而绕开 `signal_id -> plan_id -> execution_id -> fill_id -> settlement`。
+6. dormant 资产保留；暂时不用不等于可删。

@@ -1,7 +1,7 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-07-05 HeadA clean EV expression research
+Updated: 2026-07-05 feature layering review + architecture spine refresh
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -57,7 +57,7 @@ Status 口径：
 | [WEATHER_CITY_POOL_DECISIONS.md](WEATHER_CITY_POOL_DECISIONS.md) | `current-source` | 当前 T1/T2 城市池、pm_agent 实例级 live allowlist、为什么升降级、回滚条件是什么 |
 | [WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md) | `current-source` | weather 分析、PnL、切片、账户对账必须用什么口径 |
 | [WEATHER_HANDOFF_EXECUTION.md](WEATHER_HANDOFF_EXECUTION.md) | `snapshot` | 2026-06-08 方法论/结构重整交接的历史记录；方法已吸收进 ANALYSIS_CONTRACT §0 + performance skill。当前复盘入口改用 STRATEGY_REVIEW_PIPELINE / ARCHITECTURE_SPINE |
-| [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md) | `design-draft` | 天气策略 [0]–[6] 主线骨架和评估层重构映射 |
+| [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md) | `current-reference` | 天气策略当前真实架构：[0]–[6] 分层、主血缘、共享/派生/新增节点、执行层已落地与未落地边界 |
 | [OPS_RUNBOOK.md](OPS_RUNBOOK.md) | `current-reference` | 常驻进程、日志、通用运维命令在哪里 |
 | [WEATHER_MAC_MINI_RUNBOOK.md](WEATHER_MAC_MINI_RUNBOOK.md) | `current-reference` | N100 只读故障期间 Mac 接管 data-feed/shadow 的启动、验证、代理、外置盘 runtime 和 live switch 命令 |
 | [WEATHER_DASHBOARD.md](WEATHER_DASHBOARD.md) | `current-source` | 重做后看板的信息架构 / 每页口径（在险资金、陈旧未结算、镜像≠生产、探针/研究口径）/ 新增 API |
@@ -74,6 +74,8 @@ Status 口径：
 | [WEATHER_DATA_FEED_MODULE.md](WEATHER_DATA_FEED_MODULE.md) | `current-source` | 新 `weather_data_feed` 共用数据模块的 repo/deploy 边界、当前模块职责、后续拆独立部署路径 |
 | [WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md](WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md) | `current-reference` | 通用日内温度状态 / context feature 层：把 `reheat_feature_factory_v1` 概念提升为 `temperature_state_feature_factory`，统一解释云量×升温、湿度×云、风×海洋/地形、forecast peak clock，并供 current YES/current NO/d1-d2 NO/Range RV 共用 |
 | [2026-07-05-temperature-path-mechanism-decomposition-v1.md](analysis/2026-07/2026-07-05-temperature-path-mechanism-decomposition-v1.md) | `snapshot` | `trend3h_positive` / 3h 温度路径机制拆解基础报告：同步+重建后 CLOB gate=true，fact 层到 7/05-7/06，atlas 机制层到 7/03；把松散 `trend3h_positive` 收敛成 `trend3h_bucket`、`trend3h_warming_ge0_5`、`sustained_warming_1h3h`、`one_hour_warm_without_3h`、`runway_sustained_warming`、`late_reheat_after_dip` 等共享表达。物理层很强（`sustained_warming_1h3h` future break 77.7%、d1 hit 22.8%；`one_hour_warm_without_3h` future break 17.1%），但交易层仍需概率头/ask/depth/fresh-forward；结论：promote as shared context feature + HeadB shadow telemetry，不作 live gate |
+| [WEATHER_FEATURE_LAYERING_PLAN.md](WEATHER_FEATURE_LAYERING_PLAN.md) | `design-draft` | 特征/数据/执行资产的总分层设计草案；已审阅，不能照单执行，实际边界见 feature-layering review 与 ARCHITECTURE_SPINE |
+| [2026-07-05-feature-layering-plan-review-v1.md](analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md) | `current-reference` | 对 FEATURE_LAYERING_PLAN 的批判性审阅：P1-P12 哪些正确、哪些需调整、哪些误判；记录本轮已落地的 versioned CITY_FAMILY 与 shared SKY_CODE 收口 |
 | [WEATHER_SYSTEM_CONTRACT.md](WEATHER_SYSTEM_CONTRACT.md) | `current-source` | 字段名、枚举、ID 算法、跨 repo contract 怎么定义 |
 | [WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md](WEATHER_DASHBOARD_DATA_MODEL_AUDIT.md) | `current-reference` | dashboard DB/API 分层缺口审计；P0 已完成，剩余项按当前 fact-table 口径复核 |
 | [WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md](WEATHER_DATA_PROTOCOL_UNIFICATION_PLAN.md) | `design-draft` | canonical schema / paper 语义 / shadow-run cutover 怎么迁移 |
