@@ -554,6 +554,11 @@ data-feed snapshot rows plus observation cache, emits `city_date_snapshot`
 frames with `source_report_ts_utc` and `detect_ts_utc` / `fetched_at_utc`
 separated, and attaches required frame metadata including `pit_provenance` on
 every row. It does not write a feature store or change any runner decision path.
+Phase 4B offline parity against the tmax live-candidate state builder matched
+828/851 shared-field comparisons on the 2026-07-01 N100 recovery sample; the
+only remaining diff is `decision_hour_local` precision (feature layer decimal
+hour vs legacy tmax integer hour bucket). See
+`docs/analysis/2026-07/2026-07-06-weather-state-frame-parity-v1.md`.
 
 Deliverables:
 

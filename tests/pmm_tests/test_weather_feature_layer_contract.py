@@ -176,6 +176,7 @@ def test_weather_state_frame_builder_carries_metadata_and_unit_contract() -> Non
             "timezone_name": "Europe/London",
             "forecast_source": "ecmwf",
             "forecast_max_native": 22.5,
+            "forecast_max_f": 72.4,
             "forecast_peak_hour_local": 16,
             "forecast_peak_delta_hours_local": -2,
         },
@@ -198,9 +199,9 @@ def test_weather_state_frame_builder_carries_metadata_and_unit_contract() -> Non
                 "relative_humidity_pct": 55,
                 "wind_speed_kt": 12,
                 "wind_dir_deg": 240,
-                "sky_now": "FEW",
-                "temp_trend_1h_f": 1.4,
-                "temp_trend_3h_f": 2.2,
+                "sky_code_now": "FEW",
+                "d_tmpf_1h": 1.4,
+                "d_tmpf_3h": 2.2,
                 "minutes_since_running_max": 35,
                 "running_max_obs_utc": "2026-07-06T18:00:00Z",
             },
@@ -254,7 +255,7 @@ def test_weather_state_frame_builder_carries_metadata_and_unit_contract() -> Non
     assert math.isclose(london["current_native"], 20.0)
     assert math.isclose(london["running_native"], 21.0)
     assert math.isclose(london["forecast_gap_to_running_native"], 1.5)
-    assert math.isclose(london["forecast_max_f"], 72.5)
+    assert math.isclose(london["forecast_max_f"], 72.4)
     assert london["station_gap_state"] == "within_expected_cadence"
     assert london["moisture_cloud_regime"] == "humid_overcast_suppression"
 

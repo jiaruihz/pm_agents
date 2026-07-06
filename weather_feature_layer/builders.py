@@ -148,7 +148,9 @@ def _build_state_row(
     running_native = _native_temp(running_max_c, unit)
     decline_native = _decline(running_native, current_native)
     forecast_max_native = _first_float(snapshot, "forecast_max_native", "forecast_tmax_native")
-    forecast_max_f = _forecast_max_f(forecast_max_native, unit)
+    forecast_max_f = _first_float(snapshot, "forecast_max_f")
+    if forecast_max_f is None:
+        forecast_max_f = _forecast_max_f(forecast_max_native, unit)
     forecast_gap_to_running_native = _gap(forecast_max_native, running_native)
     decision_hour = _decision_hour(snapshot)
 
@@ -192,13 +194,13 @@ def _build_state_row(
         "decline_from_running_max_native": decline_native,
         "tmpf_now": _first_float(obs, "tmpf_now", "tmpf"),
         "dwpf_now": _first_float(obs, "dwpf_now", "dwpf"),
-        "dewpoint_depression_f": _first_float(obs, "dewpoint_depression_f", "dewpoint_depression_native"),
+        "dewpoint_depression_f": _dewpoint_depression_f(obs),
         "relative_humidity_pct": _first_float(obs, "relative_humidity_pct", "relh_now", "relh"),
         "wind_speed_kt": _first_float(obs, "wind_speed_kt", "sknt_now", "sknt"),
         "wind_dir_deg": _first_float(obs, "wind_dir_deg", "drct_now", "drct"),
-        "sky_cover_code": _sky_cover_code(_first_value(obs, "sky_cover_code", "sky_now", "sky", "sky_cover")),
-        "temp_trend_1h_f": _first_float(obs, "temp_trend_1h_f"),
-        "temp_trend_3h_f": _first_float(obs, "temp_trend_3h_f"),
+        "sky_cover_code": _sky_cover_code(_first_value(obs, "sky_cover_code", "sky_code_now", "sky_now", "sky", "sky_cover")),
+        "temp_trend_1h_f": _first_float(obs, "temp_trend_1h_f", "d_tmpf_1h"),
+        "temp_trend_3h_f": _first_float(obs, "temp_trend_3h_f", "d_tmpf_3h"),
         "minutes_since_running_max": _first_float(obs, "minutes_since_running_max"),
         "running_max_obs_utc": running_obs_iso,
     }
@@ -321,6 +323,17 @@ def _decline(running_native: float | None, current_native: float | None) -> floa
     if running_native is None or current_native is None:
         return None
     return running_native - current_native
+
+
+def _dewpoint_depression_f(obs: Mapping[str, Any]) -> float | None:
+    value = _first_float(obs, "dewpoint_depression_f", "dewpoint_depression_native")
+    if value is not None:
+        return value
+    tmpf = _first_float(obs, "tmpf_now", "tmpf")
+    dwpf = _first_float(obs, "dwpf_now", "dwpf")
+    if tmpf is None or dwpf is None:
+        return None
+    return tmpf - dwpf
 
 
 def _decision_hour(snapshot: Mapping[str, Any]) -> float | None:
