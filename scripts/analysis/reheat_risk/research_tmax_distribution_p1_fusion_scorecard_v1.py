@@ -52,6 +52,7 @@ from research_tmax_distribution_p0_anchor_scorecard_v1 import (  # noqa: E402
     _score_distribution,
     _soft_anchor_distribution,
 )
+from weather_feature_layer.market import add_market_geometry_features  # noqa: E402
 
 
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/tmax_distribution_p1_fusion_scorecard_v1"
@@ -277,36 +278,27 @@ def _load_rows() -> tuple[pd.DataFrame, dict[str, int]]:
         row = dict(item)
         row["actual_bucket"] = actual
         row["split"] = "train_pre_2026_06_21" if str(item.get("target_date")) < TRAIN_CUTOFF else "forward_2026_06_21_plus"
-        row["hour_bucket"] = _hour_bucket(item.get("decision_hour_local"))
-        hour = _as_float(item.get("decision_hour_local"))
-        if hour is not None:
-            row["decision_hour_sin"] = math.sin(2.0 * math.pi * hour / 24.0)
-            row["decision_hour_cos"] = math.cos(2.0 * math.pi * hour / 24.0)
-        row["forecast_peak_delta_abs"] = (
-            abs(_as_float(item.get("forecast_peak_delta_hours_local")))
-            if _as_float(item.get("forecast_peak_delta_hours_local")) is not None
-            else None
-        )
-        current_upper = _safe_upper(current_iv)
-        d1_upper = _safe_upper(d1_iv)
-        d2_upper = _safe_upper(d2_iv)
-        current_mid = _safe_mid(current_iv)
-        d1_mid = _safe_mid(d1_iv)
-        d2_mid = _safe_mid(d2_iv)
-        row["forecast_minus_running_native"] = _delta(item.get("forecast_max_native"), item.get("running_native"))
-        row["forecast_minus_current_native"] = _delta(item.get("forecast_max_native"), item.get("current_native"))
-        row["running_minus_current_native"] = _delta(item.get("running_native"), item.get("current_native"))
-        row["forecast_to_current_upper_native"] = _delta(item.get("forecast_max_native"), current_upper)
-        row["forecast_to_d1_upper_native"] = _delta(item.get("forecast_max_native"), d1_upper)
-        row["forecast_to_d2_upper_native"] = _delta(item.get("forecast_max_native"), d2_upper)
-        row["forecast_to_current_mid_native"] = _delta(item.get("forecast_max_native"), current_mid)
-        row["forecast_to_d1_mid_native"] = _delta(item.get("forecast_max_native"), d1_mid)
-        row["forecast_to_d2_mid_native"] = _delta(item.get("forecast_max_native"), d2_mid)
-        row["running_to_current_upper_native"] = _delta(item.get("running_native"), current_upper)
-        row["current_to_current_upper_native"] = _delta(item.get("current_native"), current_upper)
-        if current_mid is not None:
-            row["running_position_in_current_native"] = _delta(item.get("running_native"), current_mid)
-            row["current_position_in_current_native"] = _delta(item.get("current_native"), current_mid)
+        geometry = add_market_geometry_features(pd.DataFrame([item])).iloc[0].to_dict()
+        for key in (
+            "hour_bucket",
+            "decision_hour_sin",
+            "decision_hour_cos",
+            "forecast_peak_delta_abs",
+            "forecast_minus_running_native",
+            "forecast_minus_current_native",
+            "running_minus_current_native",
+            "forecast_to_current_upper_native",
+            "forecast_to_d1_upper_native",
+            "forecast_to_d2_upper_native",
+            "forecast_to_current_mid_native",
+            "forecast_to_d1_mid_native",
+            "forecast_to_d2_mid_native",
+            "running_to_current_upper_native",
+            "current_to_current_upper_native",
+            "running_position_in_current_native",
+            "current_position_in_current_native",
+        ):
+            row[key] = geometry.get(key)
         for bucket in BUCKETS:
             row[f"market_p_{bucket}"] = market[bucket]
             row[f"market_log_p_{bucket}"] = math.log(max(EPS, market[bucket]))
