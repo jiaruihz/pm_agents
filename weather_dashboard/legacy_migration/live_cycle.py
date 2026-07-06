@@ -580,6 +580,7 @@ def _canonical_order(raw: dict[str, Any], *, run_id: str, plan_id: str) -> dict[
         "fee_adjusted_edge": _float(raw.get("fee_adjusted_edge"), _float(raw.get("required_quote_edge"))),
         "source_order_age_min": _float(raw.get("source_order_age_min")),
         "exchange_response": _json_text(exchange_response),
+        "order_payload": _json_text(raw),
         "placed_at_utc": str(raw.get("placed_at_utc") or raw.get("created_at_utc") or "").strip() or None,
     }
 

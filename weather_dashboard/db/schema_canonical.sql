@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS orders (
     fee_adjusted_edge REAL,
     source_order_age_min REAL,
     exchange_response TEXT,
+    order_payload TEXT,
     placed_at_utc TEXT,
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );

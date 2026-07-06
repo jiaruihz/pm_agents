@@ -117,6 +117,7 @@ ORDER_COLUMNS = (
     "fee_adjusted_edge",
     "source_order_age_min",
     "exchange_response",
+    "order_payload",
     "placed_at_utc",
 )
 

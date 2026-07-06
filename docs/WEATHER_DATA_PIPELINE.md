@@ -90,11 +90,15 @@ unless matched by a real row in `fills`.
 | `pm_agents/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-lottery-live` | live strategy cadence | current BUY_YES lottery CLOB order submissions |
 | `pm_agents/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-take-profit-exit` | live strategy cadence | current SELL_YES TP exit CLOB order submissions |
 | `pm_agents/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1/live_orders.jsonl` | Mac LaunchAgent `com.pm-agents.regime-routed-no-live` | live strategy cadence | current regime-routed NO live order submissions |
+| `pm_agents/runtime/weather_edge_v1/tmax_distribution_edge_live_candidate_v1/live_orders.jsonl` | Mac strategy runtime | live/shadow strategy cadence | current tmax distribution candidate live order submissions |
 
 These live JSONL sources are materialized into `runtime/weather.db.orders`.
 Use `orders` for live order-event questions such as city/date/bracket, YES/NO,
 sizing policy, score tier, maker/taker/lifecycle action, blocked/error state,
-price, shares, notional and execution policy. It remains submitted-order
+price, shares, notional and execution policy. Strategy-specific fields are kept
+as original JSON in `orders.order_payload`, so active heads such as forecast
+tail, regime-routed NO, tmax distribution and exit overlays can share one order
+lineage table without per-strategy event tables. It remains submitted-order
 lineage; realized cash/PnL still comes from `fills` and `fact_trades`.
 
 Health gate:
