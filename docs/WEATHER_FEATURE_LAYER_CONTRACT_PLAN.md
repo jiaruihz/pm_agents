@@ -1,17 +1,16 @@
 # Weather Feature Layer Contract Plan
 
-Status: design-draft
-Updated: 2026-07-06
-Source of truth: no; migration contract proposal
+Status: current-reference
+Updated: 2026-07-07
+Source of truth: yes for feature-layer scope and migration boundary; actual architecture overview remains WEATHER_ARCHITECTURE_SPINE.md
 Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; WEATHER_FEATURE_LAYERING_PLAN.md; WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md; WEATHER_DOCS_INDEX.md
 
 Revision note: 2026-07-06 review 修订：依赖方向 / factory 归属 / 落库契约 / 单位契约 / multiplier 归属 / 特征补充。
 
-Implementation progress: 2026-07-06 Phase 1-3 initial primitives landed:
-`weather_feature_layer/` skeleton, state re-export, market/regime/bias helpers,
-and parity tests. Phase 4A minimal `build_weather_state_frame()` builder landed
-for snapshot + observation-cache state frames with row-level metadata and PIT
-provenance; feature store and consumer decision-input rewires are not landed.
+Implementation progress: 2026-07-07: Phase 1-6C landed through shared
+primitives, state-frame builder, market geometry, offline feature store,
+research rewire, zero-notional shadow refs, and tiny-live telemetry-only
+`feature_frame_ref`. Live decision-input rewires are not landed.
 
 ## One-Line Decision
 
@@ -418,6 +417,45 @@ PIT 污染事故的结构性防线。
 
 同一观测在 live 所见和事后 mirror patch 后可能不同。用清理后的历史重建训练帧时，
 必须标注 `archive_reconstruction`，不得声称等价于 live capture。
+
+## Live Boundary: Capture vs Decision Input
+
+本文里的 live 分两层，不能混用。
+
+### Live feature capture
+
+这是“实时生产特征/PIT 证据落盘”。live 或 shadow runner 在决策时把它当时已经计算出的
+feature row 写进 feature store，并在 journal/plan/telemetry row 上记录 `feature_frame_ref`。
+它的用途是审计、回放、训练样本归因和后续 parity。
+
+这层允许先落地，前提是：
+
+- 不改变 selector、sizing、quote、maker/taker lifecycle、order plan。
+- feature store 写失败不能改变下单路径；只能写 `feature_frame_ref_status=error`。
+- 不触碰私钥、余额、真实 CLOB 提交逻辑。
+
+当前实际状态：
+
+- `low_price_yes_lottery_tiny_live.py` 已做 tiny-live telemetry-only capture。
+- `tmax_distribution_edge_shadow_v1`、`low_price_yes_integrated_tail_shadow_v2`、
+  `regime_routed_no_shadow_v1` 已做 zero-notional shadow capture。
+- `fact_signal_candidates` schema 未 ALTER；`feature_frame_ref` 还没有进入 canonical fact rebuild。
+
+### Live decision-input rewire
+
+这是“把某个策略的真实决策输入迁到 `weather_feature_layer`”。例如某个 live runner 不再用
+自己的私有 temperature/regime/market geometry 计算，而是直接消费 shared frame 的字段来决定
+是否下单、买哪个表达、下多少 size、用什么 quote。
+
+这层尚未落地。每个策略必须单独完成：
+
+- old implementation vs feature-layer implementation 同输入 replay。
+- route/selector/size/quote/order-plan 字段逐行 diff 等价。
+- 差异被分类为 `bug fix`、`intentional strategy-private difference` 或 `do not migrate`。
+- 涉及 live 行为变化时，单独确认并走 git-first 部署。
+
+因此，“迁移其他策略到这个特征层”不是一次性大切换；顺序是 research -> zero-notional shadow
+-> tiny-live telemetry-only -> tiny-live decision input。metar_cross FOK fast path 仍冻结。
 
 Bias 层结算延迟规则：
 

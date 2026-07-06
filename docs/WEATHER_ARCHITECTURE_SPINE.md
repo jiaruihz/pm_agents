@@ -1,7 +1,7 @@
 # 天气策略主线骨架
 
 Status: current-reference
-Updated: 2026-07-06 feature-layer primitives + weather_state_frame builder landing
+Updated: 2026-07-07 feature-layer Phase 1-6C landing and live-boundary clarification
 Source of truth: yes for architecture orientation; field/schema contracts still defer to WEATHER_SYSTEM_CONTRACT
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_QUANT_DESIGN.md; WEATHER_DATA_CANONICAL_SOURCES.md; WEATHER_SYSTEM_CONTRACT.md; WEATHER_FEATURE_LAYERING_PLAN.md
 
@@ -25,7 +25,7 @@ flowchart TB
   end
 
   subgraph L1["L1 共享事实层（派生，可重建）"]
-    WFL["weather_feature_layer/builders.py<br/>build_weather_state_frame: snapshot + observation cache -> city_date_snapshot"]
+    WFL["weather_feature_layer<br/>state frame / market geometry / feature store refs"]
     TSF["reheat_feature_factory_v1<br/>实际身份: temperature state factory<br/>当前仍在 scripts/analysis/reheat_risk + docs/generated"]
   end
 
@@ -61,6 +61,8 @@ flowchart TB
   EVAL["[6] 评估<br/>coverage gate / execution_quality / live-vs-shadow / dashboard"]
 
   OBS & FCS & OBK & GOV --> TSF
+  OBS & FCS --> WFL
+  WFL --> HEADS
   TSF --> WC & ATLAS
   CF & SKY & FQ & SB --> HEADS
   WC & ATLAS --> HEADS
@@ -98,6 +100,7 @@ flowchart TB
 | intraday regime atlas | factory rows | 共享机制图谱；代码位置仍在 `scripts/analysis/reheat_risk` |
 | `CITY_FAMILY` / city climate labels | static reference taxonomy | 已收口到 `weather_data_feed.city_family`；保留 `CURRENT_BRACKET_NO_V1` 与 `ATLAS_V1` 两套语义 |
 | `SKY_CODE` / sky cover numeric map | METAR/IEM sky strings | 已收口到 `weather_data_feed.sky_cover`；parser/fetch 逻辑尚未统一 |
+| `weather_feature_layer` | L0 snapshot/cache + runner telemetry rows | Phase 1-6C 已落地：state builder、market geometry、side quote helper、offline store、research rewire、zero-notional shadow refs、HeadA tiny-live telemetry-only refs；live decision-input 未迁移 |
 | forecast quality / reliability | forecast/history layers | 共享 soft label，不是独立 live 策略 |
 | station basis | official/source basis layer | 共享 source/basis label，live 行为仍以具体 runner/entrypoint 为准 |
 
@@ -109,6 +112,9 @@ flowchart TB
 | `tests/pmm_tests/test_weather_city_family.py` | 固定两套 taxonomy 只在 `Beijing` 上分叉，防止误合并 |
 | `weather_data_feed/sky_cover.py` | Phase B-5 子项；集中管理已存在且一致的 METAR sky-cover numeric map |
 | `tests/pmm_tests/test_weather_sky_cover.py` | 固定 sky-cover legacy mapping |
+| `weather_feature_layer/` | 独立 feature-layer 包；当前包含 state/regime/bias/market/store/runtime-ref helper |
+| `weather_feature_layer.store` | 离线 feature frame store：`rows.jsonl` / `index.json` / `manifest.json` + `feature_frame_ref` |
+| `weather_feature_layer.runtime_refs` | runner-safe telemetry ref helper；失败只写 error，不改变 shadow/live 决策 |
 | `docs/analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md` | 对 `WEATHER_FEATURE_LAYERING_PLAN.md` 的批判性审阅和执行边界 |
 
 ### 未落地/放弃按原文执行
@@ -120,8 +126,9 @@ flowchart TB
 | METAR parser/fetch 统一 | `SKY_CODE` 已收口，但 parser、cache、source-events、latency 逻辑未收编；需要逐 caller parity |
 | `order_events` canonical 子表 | 未落地；需要独立 schema + rebuild + dashboard/coverage 流程 |
 | metar-cross fast path 收编 | 未落地；触碰真实下单/私钥路径前必须显式确认并实测 latency |
-| factory 迁到 `runtime/weather_feature_store/` | 未落地；当前 `docs/generated` 依赖面很大，迁移必须逐消费者 parity replay |
-| stable adapter 全面替代 research import | 未落地；`regime_routed_no_stable.py` 仍是 research-backed shim，tmax live bridge 仍直接 import P0-P4 research modules |
+| factory 全量迁到 `runtime/weather_feature_store/` | 部分落地：offline feature store helper 已有，runner telemetry refs 已有；canonical fact rebuild / generated artifact 搬迁未做 |
+| live decision-input 统一迁到 feature layer | 未落地；当前只完成 research/zero-notional/tiny-live telemetry ref，真实 selector/size/quote/order 输入仍在各策略私有实现 |
+| stable adapter 全面替代 research import | 部分落地：`regime_routed_no_stable.py` 已自包含；tmax live bridge 仍直接 import P0-P4 research modules，后续只能逐 parity 迁 |
 
 ## 七层边界
 
