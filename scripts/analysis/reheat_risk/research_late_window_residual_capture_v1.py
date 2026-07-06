@@ -262,71 +262,54 @@ def desired_leg(bracket: Bracket, outcome: str, running_value: float, unit: str)
 def load_quotes(orderbook_dir: Path, states: pd.DataFrame, max_book_age_min: float) -> pd.DataFrame:
     state = states[["city", "target_date", "decision_hour_local", "decision_ts_utc", "running_value", "unit"]].copy()
     state["decision_ts"] = pd.to_datetime(state["decision_ts_utc"], utc=True)
-    files: list[tuple[pd.Timestamp, Path]] = []
+    state_map: dict[tuple[str, str, int], dict[str, Any]] = {}
+    for r in state.itertuples():
+        state_map[(str(r.city), str(r.target_date), int(r.decision_hour_local))] = {
+            "city": str(r.city),
+            "target_date": str(r.target_date),
+            "decision_hour_local": int(r.decision_hour_local),
+            "decision_ts": r.decision_ts,
+            "running_value": float(r.running_value),
+            "unit": str(r.unit),
+        }
+    out = []
+    tz_by_city_date = states.drop_duplicates(["city", "target_date"]).set_index(["city", "target_date"])["timezone"].to_dict()
     for date_dir in sorted(orderbook_dir.iterdir()):
         if not date_dir.is_dir():
             continue
         for path in sorted(date_dir.glob("orderbook_snapshot_*.jsonl.gz")):
-            stem = path.name.removeprefix("orderbook_snapshot_").removesuffix(".jsonl.gz")
-            try:
-                # Snapshot filenames are written in the collector host's
-                # Asia/Shanghai clock; record payloads carry the UTC truth.
-                ts = pd.Timestamp(datetime.strptime(stem, "%Y%m%d_%H%M"), tz=ZoneInfo("Asia/Shanghai")).tz_convert("UTC")
-            except ValueError:
-                continue
-            files.append((ts, path))
-    files.sort(key=lambda x: x[0])
-    file_ts = np.array([ts.to_datetime64() for ts, _ in files], dtype="datetime64[ns]")
-
-    states_by_file: dict[Path, list[dict[str, Any]]] = {}
-    for r in state.itertuples():
-        decision_np = np.datetime64(r.decision_ts.to_datetime64(), "ns")
-        idx = np.searchsorted(file_ts, decision_np, side="right") - 1
-        if idx < 0:
-            continue
-        snap_ts, path = files[idx]
-        age_min = (r.decision_ts - snap_ts).total_seconds() / 60.0
-        if age_min > max_book_age_min:
-            continue
-        states_by_file.setdefault(path, []).append(
-            {
-                "city": str(r.city),
-                "target_date": str(r.target_date),
-                "decision_hour_local": int(r.decision_hour_local),
-                "decision_ts": r.decision_ts,
-                "running_value": float(r.running_value),
-                "unit": str(r.unit),
-                "file_age_min": age_min,
-            }
-        )
-    out = []
-    for path, state_list in sorted(states_by_file.items()):
-        state_by_city_date: dict[tuple[str, str], list[dict[str, Any]]] = {}
-        for st in state_list:
-            state_by_city_date.setdefault((st["city"], st["target_date"]), []).append(st)
-        with gzip.open(path, "rt", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if rec.get("status") != "ok":
-                    continue
-                city = str(rec.get("city") or "")
-                target_date = str(rec.get("event_date") or "")
-                candidate_states = state_by_city_date.get((city, target_date))
-                if not candidate_states:
-                    continue
-                snap = pd.Timestamp(str(rec.get("snapshot_ts_utc")).replace("Z", "+00:00")).tz_convert("UTC")
-                bracket = parse_bracket(rec.get("bracket"))
-                outcome = str(rec.get("outcome") or "").lower()
-                if bracket is None or outcome not in {"yes", "no"}:
-                    continue
-                for st in candidate_states:
-                    age_min = (st["decision_ts"] - snap).total_seconds() / 60.0
-                    if age_min < -1e-9 or age_min > max_book_age_min:
+            with gzip.open(path, "rt", encoding="utf-8") as handle:
+                for line in handle:
+                    if not line.strip():
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if rec.get("status") != "ok":
+                        continue
+                    city = str(rec.get("city") or "")
+                    target_date = str(rec.get("event_date") or "")
+                    tz_name = tz_by_city_date.get((city, target_date))
+                    if not tz_name:
+                        continue
+                    try:
+                        snap_dt = datetime.fromisoformat(str(rec.get("snapshot_ts_utc")).replace("Z", "+00:00"))
+                    except ValueError:
+                        continue
+                    local_dt = snap_dt.astimezone(ZoneInfo(str(tz_name)))
+                    if local_dt.date().isoformat() != target_date:
+                        continue
+                    st = state_map.get((city, target_date, int(local_dt.hour)))
+                    if not st:
+                        continue
+                    snap = pd.Timestamp(snap_dt).tz_convert("UTC")
+                    age_min = (snap - st["decision_ts"]).total_seconds() / 60.0
+                    if age_min < -1e-9 or age_min > 59.999:
+                        continue
+                    bracket = parse_bracket(rec.get("bracket"))
+                    outcome = str(rec.get("outcome") or "").lower()
+                    if bracket is None or outcome not in {"yes", "no"}:
                         continue
                     leg = desired_leg(bracket, outcome, st["running_value"], st["unit"])
                     if leg is None:
@@ -339,6 +322,7 @@ def load_quotes(orderbook_dir: Path, states: pd.DataFrame, max_book_age_min: flo
                             "snapshot_ts_utc": snap.isoformat(),
                             "book_age_min": age_min,
                             "decision_hour_local": st["decision_hour_local"],
+                            "decision_minute_local": int(local_dt.minute),
                             "city": city,
                             "target_date": target_date,
                             "unit": st["unit"],
@@ -361,14 +345,7 @@ def load_quotes(orderbook_dir: Path, states: pd.DataFrame, max_book_age_min: flo
     if not out:
         return pd.DataFrame()
     df = pd.DataFrame(out)
-    df["snap_sort"] = pd.to_datetime(df["snapshot_ts_utc"], utc=True)
-    df = df.sort_values("snap_sort")
-    return (
-        df.groupby(["city", "target_date", "decision_hour_local", "leg", "bracket", "outcome"], as_index=False)
-        .tail(1)
-        .drop(columns=["snap_sort"])
-        .reset_index(drop=True)
-    )
+    return df.sort_values(["snapshot_ts_utc", "city", "target_date", "leg", "bracket", "outcome"]).reset_index(drop=True)
 
 
 def fee_per_share(price: float, mode: str) -> float:
@@ -478,7 +455,7 @@ def basket_rows(selected: pd.DataFrame) -> pd.DataFrame:
     if settled.empty:
         return pd.DataFrame()
     return (
-        settled.groupby(["execution_mode", "city", "target_date", "decision_hour_local"], as_index=False)
+        settled.groupby(["execution_mode", "city", "target_date", "decision_hour_local", "snapshot_ts_utc"], as_index=False)
         .agg(
             legs=("leg", "count"),
             leg_set=("leg", lambda s: ",".join(sorted(s))),
@@ -491,11 +468,48 @@ def basket_rows(selected: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def chengdu_39no_orderbook_timeline(orderbook_dir: Path) -> pd.DataFrame:
+    out: list[dict[str, Any]] = []
+    for path in sorted((orderbook_dir / "2026-07-06").glob("orderbook_snapshot_*.jsonl.gz")):
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                rec = json.loads(line)
+                if (
+                    rec.get("status") == "ok"
+                    and rec.get("city") == "Chengdu"
+                    and str(rec.get("event_date")) == "2026-07-06"
+                    and str(rec.get("bracket")) == "39"
+                    and str(rec.get("outcome")).lower() == "no"
+                ):
+                    snap_dt = datetime.fromisoformat(str(rec.get("snapshot_ts_utc")).replace("Z", "+00:00"))
+                    local_dt = snap_dt.astimezone(ZoneInfo("Asia/Shanghai"))
+                    if local_dt.hour < 14:
+                        continue
+                    out.append(
+                        {
+                            "snapshot_ts_utc": snap_dt.isoformat(),
+                            "snapshot_time_bj": local_dt.strftime("%H:%M:%S"),
+                            "best_ask": summary_num(rec, "best_ask"),
+                            "ask_size": summary_num(rec, "ask_size"),
+                            "best_bid": summary_num(rec, "best_bid"),
+                            "bid_size": summary_num(rec, "bid_size"),
+                            "spread": summary_num(rec, "spread"),
+                            "depth_ask_5c": summary_num(rec, "depth_ask_5c"),
+                            "depth_bid_5c": summary_num(rec, "depth_bid_5c"),
+                            "orderbook_file": str(path.relative_to(ROOT)),
+                        }
+                    )
+    return pd.DataFrame(out)
+
+
 def write_md(payload: dict[str, Any], md_path: Path) -> None:
     strict = pd.DataFrame(payload["summary"]["strict_by_mode_leg"])
     forward = pd.DataFrame(payload["summary"]["strict_forward_by_mode_leg"])
     basket = pd.DataFrame(payload["summary"]["basket_by_mode"])
     chengdu = pd.DataFrame(payload["chengdu_case"])
+    chengdu_39no = pd.DataFrame(payload["chengdu_39no_orderbook"])
 
     def table(df: pd.DataFrame, cols: list[str]) -> str:
         if df.empty:
@@ -518,7 +532,7 @@ def write_md(payload: dict[str, Any], md_path: Path) -> None:
         f"- DB fact built: `{payload['data_snapshot']['fact_signal_candidates_max_built_at_utc']}`; CLOB gate: `{payload['data_snapshot']['clob_gate_pass']}`",
         f"- settlement_outcomes: `{payload['data_snapshot']['settlement_min_date']}..{payload['data_snapshot']['settlement_max_date']}`",
         f"- observed shards: `{payload['data_snapshot']['observed_min_date']}..{payload['data_snapshot']['observed_max_date']}`; rows `{payload['funnel']['observed_states']}`",
-        f"- orderbook matched leg quote rows: `{payload['funnel']['quote_rows']}`; strict 1-5 point rows with depth: `{payload['funnel']['strict_depth_rows']}`",
+        f"- orderbook matched snapshot-level leg quote rows: `{payload['funnel']['quote_rows']}`; strict 1-5 point rows with depth: `{payload['funnel']['strict_depth_rows']}`",
         "",
         "## 结论",
         payload["verdict"],
@@ -533,7 +547,11 @@ def write_md(payload: dict[str, Any], md_path: Path) -> None:
         table(basket, ["execution_mode", "rows", "settled_rows", "active_dates", "cost", "pnl", "roi", "daily_pnl_ci_low", "daily_pnl_ci_high"]),
         "",
         "## Chengdu 2026-07-06 As-of Case",
-        table(chengdu, ["decision_hour_local", "leg", "execution_mode", "bracket", "entry_price", "residual_points", "top_size", "spread", "book_age_min", "running_value", "current_native", "decline_native"]),
+        table(chengdu, ["snapshot_ts_utc", "decision_hour_local", "decision_minute_local", "leg", "execution_mode", "bracket", "entry_price", "residual_points", "top_size", "spread", "book_age_min", "running_value", "current_native", "decline_native"]),
+        "",
+        "## Chengdu 39 NO Orderbook Timeline",
+        "This table is quote evidence only: the Mac observation cache kept latest state, not a 15:00/16:00 historical state for 2026-07-06, so these rows are not injected into the settled PIT replay.",
+        table(chengdu_39no, ["snapshot_time_bj", "best_ask", "ask_size", "best_bid", "bid_size", "spread", "depth_ask_5c"]),
         "",
         "## Failure cases",
         table(pd.DataFrame(payload["failure_cases"]), ["target_date", "city", "decision_hour_local", "leg", "execution_mode", "bracket", "entry_price", "residual_points", "final_winning_bracket", "pnl_per_share"]),
@@ -579,6 +597,8 @@ def main() -> int:
 
     chengdu_case = watch[(watch["city"].eq("Chengdu")) & (watch["target_date"].eq("2026-07-06"))].copy()
     chengdu_case.to_csv(out_dir / "chengdu_2026_07_06_case.csv", index=False)
+    chengdu_39no = chengdu_39no_orderbook_timeline(Path(args.orderbook_dir))
+    chengdu_39no.to_csv(out_dir / "chengdu_39no_orderbook_2026_07_06.csv", index=False)
 
     failures = (
         strict_settled[strict_settled["pnl_per_share"].lt(0)]
@@ -628,8 +648,9 @@ def main() -> int:
         ),
     }
     verdict = (
-        "Strict 1-5 point residual capture is not live-ready. Taker rows are scarce because the high-probability NO legs often have no real ask or ask above 99c; maker rows have better point estimates but are queue/fill-probability assumptions, not executable fills. "
-        "Current YES and d+1 NO are the fragile legs; d+2/d+3 NO are safer mechanically but usually priced too close to 1.00 for the requested 1-5 point residual."
+        "Snapshot-level replay fixes the top-hour miss: Chengdu 39 NO did show a tradable 95-96c residual window around 15:28-15:45 BJ on 2026-07-06. "
+        "Systematically, strict 1-5 point residual capture is still not live-ready as a taker strategy: current YES, d1 NO, and d2 NO are negative fee-after in both full sample and forward; d3 NO is positive but thin and highly autocorrelated across repeated snapshots. "
+        "Maker rows look positive across legs, but that is queue/fill-probability evidence, not realized execution."
     )
     gate_sentence = (
         "在 2026-05-19..2026-07-04，late-window strict residual 1-5 point replay 相对 market-implied zero EV 的 fee-after ROI 未同时通过显著性、可执行基准和 forward 三门；"
@@ -647,9 +668,11 @@ def main() -> int:
         },
         "summary": summary,
         "failure_cases": failures,
-        "chengdu_case": chengdu_case.sort_values(["decision_hour_local", "leg", "execution_mode"])[
+        "chengdu_case": chengdu_case.sort_values(["snapshot_ts_utc", "leg", "execution_mode"])[
             [
+                "snapshot_ts_utc",
                 "decision_hour_local",
+                "decision_minute_local",
                 "leg",
                 "execution_mode",
                 "bracket",
@@ -663,12 +686,14 @@ def main() -> int:
                 "decline_native",
             ]
         ].to_dict("records"),
+        "chengdu_39no_orderbook": chengdu_39no.to_dict("records"),
         "verdict": verdict,
         "gate_sentence": gate_sentence,
         "outputs": {
             "leg_rows": str(out_dir / "leg_rows.csv"),
             "basket_rows": str(out_dir / "basket_rows.csv"),
             "chengdu_case": str(out_dir / "chengdu_2026_07_06_case.csv"),
+            "chengdu_39no_orderbook": str(out_dir / "chengdu_39no_orderbook_2026_07_06.csv"),
             "markdown": str(Path(args.out_md)),
         },
     }
