@@ -21,6 +21,7 @@ from weather_feature_layer.contracts import (
     PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION,
     PIT_PROVENANCE_LIVE_CAPTURE,
 )
+from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 
 def test_state_reexports_weather_context_without_private_multiplier() -> None:
@@ -580,6 +581,43 @@ def test_feature_frame_store_ref_joins_opportunity_row_back_to_frame(tmp_path: P
     assert loaded["city"] == "LA"
     assert loaded["target_date"] == "2026-07-06"
     assert loaded["feature_frame_ref"]["feature_row_id"] == ref["feature_row_id"]
+
+
+def test_runtime_feature_frame_ref_attach_is_non_blocking(tmp_path: Path) -> None:
+    row = {
+        "strategy_instance": "fixture_shadow_v1",
+        "strategy_id": "fixture_shadow_v1",
+        "city": "LA",
+        "target_date": "2026-07-06",
+        "decision_snapshot_ts_utc": "2026-07-06T19:00:00Z",
+        "bracket": "82-83",
+        "model_p_yes": 0.18,
+    }
+
+    attached = attach_runtime_feature_frame_ref(
+        row,
+        store_root=tmp_path / "store",
+        feature_grain="fixture_shadow_decision",
+        source_profile_id="fixture_shadow_v1",
+        builder_version="fixture_feature_ref_v1",
+    )
+    loaded = store.load_feature_row_by_ref(tmp_path / "store", attached["feature_frame_ref"])
+
+    assert attached["feature_frame_ref_status"] == "stored"
+    assert loaded["city"] == "LA"
+    assert loaded["feature_frame_ref"]["feature_row_id"] == attached["feature_frame_ref"]["feature_row_id"]
+
+    blocking_path = tmp_path / "not_a_directory"
+    blocking_path.write_text("occupied\n", encoding="utf-8")
+    non_blocking = attach_runtime_feature_frame_ref(
+        row,
+        store_root=blocking_path,
+        feature_grain="fixture_shadow_decision",
+        source_profile_id="fixture_shadow_v1",
+        builder_version="fixture_feature_ref_v1",
+    )
+    assert non_blocking["feature_frame_ref_status"] == "error"
+    assert "feature_frame_ref_error" in non_blocking
 
 
 def test_weather_state_frame_builder_rejects_invalid_pit_provenance() -> None:

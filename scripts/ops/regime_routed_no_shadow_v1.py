@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as research  # noqa: E402
+from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref  # noqa: E402
 
 
 STRATEGY_ID = "regime_routed_no_soft_balanced_shadow_v1"
@@ -35,6 +37,7 @@ RULE_ID = "routed_d2_relaxed70_best_ask_soft_balanced_v1"
 STATE_ROWS_DEFAULT = research.ATLAS_ROWS
 JOURNAL_DEFAULT = ROOT / "runtime/weather_edge_v1/regime_routed_no_shadow_v1/shadow_candidates.jsonl"
 SUMMARY_DEFAULT = ROOT / "runtime/weather_edge_v1/regime_routed_no_shadow_v1/latest_summary.json"
+FEATURE_STORE_DEFAULT = ROOT / os.environ.get("WEATHER_FEATURE_STORE_DIR", "runtime/weather_feature_store")
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,6 +62,13 @@ def json_ready(value: Any) -> Any:
     if hasattr(value, "item"):
         return value.item()
     return value
+
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path.resolve())
 
 
 def existing_ids(path: Path) -> set[str]:
@@ -132,7 +142,7 @@ def journal_row(row: pd.Series, args: argparse.Namespace) -> dict[str, Any]:
     ask = float(row["ask"])
     expression = str(row["expression"])
     bracket = row.get("d2_no_bracket") if expression == "d2_no" else row.get("current_bracket")
-    return {
+    payload = {
         "record_type": "regime_routed_no_shadow_candidate",
         "journal_schema_version": 1,
         "strategy_id": STRATEGY_ID,
@@ -185,6 +195,22 @@ def journal_row(row: pd.Series, args: argparse.Namespace) -> dict[str, Any]:
         },
         "source_state_rows": str(Path(args.state_rows).resolve().relative_to(ROOT)),
     }
+    return attach_runtime_feature_frame_ref(
+        payload,
+        store_root=FEATURE_STORE_DEFAULT,
+        feature_grain="regime_routed_no_shadow_candidate",
+        source_profile_id=STRATEGY_ID,
+        builder_version="regime_routed_no_shadow_feature_ref_v1",
+        key_columns=(
+            "strategy_id",
+            "shadow_decision_id",
+            "city",
+            "target_date",
+            "decision_snapshot_ts_utc",
+            "expression",
+            "bracket",
+        ),
+    )
 
 
 def main() -> int:
@@ -196,9 +222,11 @@ def main() -> int:
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     appended = 0
     skipped_existing = 0
+    entries: list[dict[str, Any]] = []
     with journal_path.open("a", encoding="utf-8") as fh:
         for _, row in selected.iterrows():
             entry = journal_row(row, args)
+            entries.append(entry)
             if entry["shadow_decision_id"] in seen:
                 skipped_existing += 1
                 continue
@@ -212,10 +240,16 @@ def main() -> int:
         "rule_id": RULE_ID,
         "execution_mode": "zero_notional_shadow",
         "no_order_placed": True,
-        "journal": str(journal_path.resolve().relative_to(ROOT)),
+        "journal": rel(journal_path),
         "appended": appended,
         "skipped_existing": skipped_existing,
         "selected_rows_before_dedupe": int(len(selected)),
+        "feature_frame_ref_stored_count": sum(
+            1 for entry in entries if str(entry.get("feature_frame_ref_status") or "") == "stored"
+        ),
+        "feature_frame_ref_error_count": sum(
+            1 for entry in entries if str(entry.get("feature_frame_ref_status") or "") == "error"
+        ),
         "selected_dates": sorted(selected["target_date"].astype(str).unique().tolist()) if len(selected) else [],
         "selected_cities": int(selected["city"].nunique()) if len(selected) else 0,
         "selected_by_regime": selected["day_regime"].value_counts(dropna=False).to_dict() if len(selected) else {},

@@ -30,6 +30,7 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     load_tail_telemetry_resources_soft,
 )
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc
+from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
@@ -42,6 +43,7 @@ JOURNAL_OUT = RUNTIME_DIR / "shadow_decisions.jsonl"
 LATEST_OUT = RUNTIME_DIR / "latest_candidates.json"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 SUMMARY_HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
+FEATURE_STORE_DEFAULT = ROOT / os.environ.get("WEATHER_FEATURE_STORE_DIR", "runtime/weather_feature_store")
 
 STRATEGY_ID = "low_price_yes_integrated_tail_shadow_v2"
 RULE_ID = "v1_candidate_with_source_station_metar_shadow_tags_v2"
@@ -513,7 +515,7 @@ def build_shadow_row(
         + int(math.isfinite(pcal_city_diag_ev) and pcal_city_diag_ev >= 0.5)
         + int(live_score >= 4)
     )
-    return {
+    payload = {
         "record_type": "low_price_yes_integrated_tail_shadow_v2_decision",
         "journal_schema_version": 1,
         "created_at_utc": now_utc(),
@@ -575,6 +577,21 @@ def build_shadow_row(
         "fact_built_at_utc": row["fact_built_at_utc"],
         "source_db": rel(Path(args.db)),
     }
+    return attach_runtime_feature_frame_ref(
+        payload,
+        store_root=FEATURE_STORE_DEFAULT,
+        feature_grain="low_price_yes_integrated_tail_shadow_decision",
+        source_profile_id=STRATEGY_ID,
+        builder_version="low_price_yes_integrated_tail_shadow_feature_ref_v1",
+        key_columns=(
+            "strategy_id",
+            "candidate_id",
+            "city",
+            "target_date",
+            "decision_snapshot_ts_utc",
+            "bracket",
+        ),
+    )
 
 
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
@@ -614,6 +631,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "effective_max_event_date": args.max_event_date,
         "raw_matching_rows": raw_counts,
         "decision_count": len(rows),
+        "feature_frame_ref_stored_count": sum(1 for row in rows if safe_str(row.get("feature_frame_ref_status")) == "stored"),
+        "feature_frame_ref_error_count": sum(1 for row in rows if safe_str(row.get("feature_frame_ref_status")) == "error"),
         "shadow_rows_written": 0 if args.dry_run else len(rows),
         "source_aware_v3_count": sum(1 for row in rows if row.get("source_aware_v3_shadow")),
         "pcal_v2_selected_count": sum(1 for row in rows if row.get("pcal_v2_selected_shadow")),

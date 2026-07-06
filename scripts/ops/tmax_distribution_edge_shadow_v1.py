@@ -36,6 +36,11 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref  # noqa: E402
+
 SOURCE_DEFAULT = (
     ROOT
     / "docs/analysis/2026-07/generated/tmax_distribution_p6_shadow_telemetry_v1/shadow_events.csv"
@@ -48,6 +53,7 @@ JOURNAL_DEFAULT = RUNTIME_DIR_DEFAULT / "shadow_events.jsonl"
 LATEST_DEFAULT = RUNTIME_DIR_DEFAULT / "latest_events.json"
 SUMMARY_DEFAULT = RUNTIME_DIR_DEFAULT / "latest_summary.json"
 HISTORY_DEFAULT = RUNTIME_DIR_DEFAULT / "summary_history.jsonl"
+FEATURE_STORE_DEFAULT = ROOT / os.environ.get("WEATHER_FEATURE_STORE_DIR", "runtime/weather_feature_store")
 
 STRATEGY_INSTANCE = "tmax_distribution_edge_shadow_v1"
 STRATEGY_FAMILY = "reheat_risk.tmax_distribution_edge"
@@ -249,7 +255,21 @@ def event_payload(row: dict[str, str], *, source: Path) -> dict[str, Any]:
             "source_artifact": rel(source),
         }
     )
-    return payload
+    return attach_runtime_feature_frame_ref(
+        payload,
+        store_root=FEATURE_STORE_DEFAULT,
+        feature_grain="tmax_distribution_shadow_event",
+        source_profile_id=STRATEGY_INSTANCE,
+        builder_version="tmax_distribution_edge_shadow_feature_ref_v1",
+        key_columns=(
+            "strategy_instance",
+            "city",
+            "target_date",
+            "decision_hour_local",
+            "bracket",
+            "shadow_config_id",
+        ),
+    )
 
 
 def summarize(rows: list[dict[str, Any]], *, all_filtered_rows: list[dict[str, str]], appended: int, skipped_existing: int, source: Path, min_target_date: str | None, refresh_runs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -310,6 +330,8 @@ def summarize(rows: list[dict[str, Any]], *, all_filtered_rows: list[dict[str, s
         "target_dates": sorted({str(r.get("target_date")) for r in rows if r.get("target_date")}),
         "scopes": sorted({str(r.get("scope")) for r in rows if r.get("scope")}),
         "rows_written_this_cycle": len(rows),
+        "feature_frame_ref_stored_count": sum(1 for row in rows if str(row.get("feature_frame_ref_status") or "") == "stored"),
+        "feature_frame_ref_error_count": sum(1 for row in rows if str(row.get("feature_frame_ref_status") or "") == "error"),
         "selected_rows_this_cycle": len(selected),
         "blocked_rows_this_cycle": len(blocked),
         "appended": appended,
