@@ -580,6 +580,12 @@ book-state fields, and side-aware YES/NO quote helpers with tmax P0/P3 and
 Range RV fixture parity. It does not move tmax market-local probability
 distribution, anchor distributions, selectors, or any live consumer decision
 input.
+Phase 5C adds the initial file-backed feature store helper
+(`weather_feature_layer.store`) for offline/dry-run frames: it writes
+`rows.jsonl`, `index.json`, and `manifest.json`, and emits a `feature_frame_ref`
+that can join a sample opportunity row back to the stored frame. It does not
+ALTER `fact_signal_candidates`, start a live/shadow writer, or make any strategy
+consume the stored frame for decisions.
 
 Deliverables:
 
@@ -587,14 +593,15 @@ Deliverables:
 - Make it the single future implementation for Thermal Path; `reheat_feature_factory_v1` becomes a materialization wrapper in its later factory migration.
 - Include timestamp contract: `source_report_ts_utc` for observation time and `detect_ts_utc` / `fetched_at_utc` for detection/fetch time.
 - Keep `source_events` and `observations` semantics separate.
-- Write decision-time feature frames to the agreed feature store in live/shadow dry-run mode before any strategy consumes them for decisions.
+- [done 2026-07-06 Phase 5C, offline helper only] Write feature frames to `runtime/weather_feature_store/`-style file layout and emit `feature_frame_ref`.
+- [pending] Wire live/shadow dry-run producers to write decision-time feature frames before any strategy consumes them for decisions.
 
 Acceptance:
 
 - Theta/current YES observation-path replay matches current runner fields on the approved parity window.
 - METAR/LDM parser parity remains at the prior accepted level.
 - No theta freshness gate or metar_cross trigger logic is changed.
-- `feature_frame_ref` can be joined from a sample opportunity row back to a stored feature frame.
+- `feature_frame_ref` can be joined from a sample opportunity row back to a stored feature frame. Done for offline file store in `tests/pmm_tests/test_weather_feature_layer_contract.py`; live/shadow writer remains pending.
 
 ### Phase 5: Market Geometry Builder
 

@@ -12,10 +12,12 @@ from src.strategies.weather_edge_v1.tools import low_price_yes_tail_telemetry as
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as stable_regime
 from src.strategies.weather_edge_v1.tools import regime_routed_temperature_context
 from weather_data_feed import weather_context
-from weather_feature_layer import bias, market, regimes, state
+from weather_feature_layer import bias, market, regimes, state, store
 from weather_feature_layer.builders import build_weather_state_frame, build_weather_state_frame_with_audits
 from weather_feature_layer.contracts import (
+    DEFAULT_FEATURE_VERSION_MANIFEST,
     FEATURE_FRAME_REQUIRED_METADATA,
+    FEATURE_FRAME_SCHEMA_VERSION,
     PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION,
     PIT_PROVENANCE_LIVE_CAPTURE,
 )
@@ -528,6 +530,56 @@ def test_weather_state_frame_builder_carries_metadata_and_unit_contract() -> Non
     assert math.isclose(london["forecast_max_f"], 72.4)
     assert london["station_gap_state"] == "within_expected_cadence"
     assert london["moisture_cloud_regime"] == "humid_overcast_suppression"
+
+
+def test_feature_frame_store_ref_joins_opportunity_row_back_to_frame(tmp_path: Path) -> None:
+    metadata = {
+        "feature_schema_version": FEATURE_FRAME_SCHEMA_VERSION,
+        "feature_grain": "city_date_snapshot",
+        "as_of_ts_utc": "2026-07-06T19:00:00Z",
+        "source_profile_id": "fixture_profile",
+        "feature_version_manifest": dict(DEFAULT_FEATURE_VERSION_MANIFEST),
+        "pit_provenance": PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION,
+        "builder_version": "fixture_builder_v1",
+        "input_snapshot_id": "fixture-snapshot",
+    }
+    frame = pd.DataFrame(
+        [
+            {
+                "city": "LA",
+                "target_date": "2026-07-06",
+                "decision_snapshot_ts_utc": "2026-07-06T19:00:00Z",
+                "forecast_gap_to_running_native": 3.0,
+                **metadata,
+            }
+        ]
+    )
+    frame.attrs["feature_metadata"] = metadata
+
+    stored = store.write_feature_frame_store(frame, tmp_path)
+    ref = stored.row_refs[0]
+    opportunity_row = {"candidate_id": "fixture-candidate", "feature_frame_ref": ref}
+    loaded = store.load_feature_row_by_ref(tmp_path, opportunity_row["feature_frame_ref"])
+
+    assert stored.row_count == 1
+    assert stored.rows_path.exists()
+    assert stored.index_path.exists()
+    assert stored.manifest_path.exists()
+    for key in [
+        "feature_schema_version",
+        "feature_grain",
+        "feature_version_manifest",
+        "as_of_ts_utc",
+        "input_snapshot_id",
+        "pit_provenance",
+        "feature_row_key",
+        "feature_row_id",
+        "store_frame_id",
+    ]:
+        assert key in ref
+    assert loaded["city"] == "LA"
+    assert loaded["target_date"] == "2026-07-06"
+    assert loaded["feature_frame_ref"]["feature_row_id"] == ref["feature_row_id"]
 
 
 def test_weather_state_frame_builder_rejects_invalid_pit_provenance() -> None:

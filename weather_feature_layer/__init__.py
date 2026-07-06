@@ -16,6 +16,11 @@ from weather_feature_layer.builders import (
     build_weather_state_frame,
     build_weather_state_frame_with_audits,
 )
+from weather_feature_layer.store import (
+    feature_frame_ref_for_row,
+    load_feature_row_by_ref,
+    write_feature_frame_store,
+)
 from weather_feature_layer.state import (
     city_wind_context,
     cloud_warming_interaction,
@@ -39,11 +44,14 @@ __all__ = [
     "build_weather_state_frame_with_audits",
     "city_wind_context",
     "cloud_warming_interaction",
+    "feature_frame_ref_for_row",
     "forecast_peak_clock_state",
+    "load_feature_row_by_ref",
     "moisture_cloud_interaction",
     "moisture_state",
     "sky_state",
     "temperature_context_features",
     "warming_state",
     "wind_thermal_interaction",
+    "write_feature_frame_store",
 ]
