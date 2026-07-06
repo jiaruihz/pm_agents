@@ -183,6 +183,27 @@ EOF
     <string>--book-failover-on-timeout</string>
     <string>--token-resolution-timeout-sec</string>
     <string>15</string>
+    <string>--taker-fee-rate</string>
+    <string>0.05</string>
+    <string>--maker-rebate-rate</string>
+    <string>0</string>
+    <string>--maker-lifecycle-enabled</string>
+    <string>--maker-lifecycle-refresh-ttl-min</string>
+    <string>15</string>
+    <string>--maker-lifecycle-taker-ttl-min</string>
+    <string>30</string>
+    <string>--maker-lifecycle-spread-cap</string>
+    <string>0.01</string>
+    <string>--maker-lifecycle-taker-max-premium</string>
+    <string>0</string>
+    <string>--maker-lifecycle-reprice-cushion</string>
+    <string>0.20</string>
+    <string>--maker-lifecycle-downshift-min</string>
+    <string>0.01</string>
+    <string>--maker-lifecycle-min-reprice-improvement</string>
+    <string>0.001</string>
+    <string>--maker-lifecycle-max-actions-per-run</string>
+    <string>3</string>
     <string>--live</string>
     <string>--confirm-live</string>
   </array>
