@@ -38,6 +38,7 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     build_low_price_yes_tail_telemetry,
     load_tail_telemetry_resources_soft,
 )
+from src.strategies.weather_edge_v1.runtime import order_runtime
 from weather_data_feed.source_policy import city_slug
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
@@ -186,15 +187,7 @@ def parse_utc(value: Any) -> datetime | None:
 
 
 def json_ready(value: Any) -> Any:
-    if value is None:
-        return None
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if isinstance(value, dict):
-        return {str(k): json_ready(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [json_ready(v) for v in value]
-    return value
+    return order_runtime.json_ready(value)
 
 
 def stable_hash(payload: dict[str, Any]) -> str:
@@ -233,38 +226,19 @@ def rel(path: Path) -> str:
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(json_ready(payload), ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    order_runtime.write_json(path, payload)
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(json_ready(row), ensure_ascii=False, sort_keys=True) + "\n")
+    order_runtime.write_jsonl(path, rows)
 
 
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(json_ready(row), ensure_ascii=False, sort_keys=True) + "\n")
+    order_runtime.append_jsonl(path, row)
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return order_runtime.read_jsonl(path)
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -2056,53 +2030,17 @@ def lifecycle_plans(args: argparse.Namespace, *, live_enabled: bool) -> tuple[li
 
 
 def run_executor(args: argparse.Namespace) -> dict[str, Any] | None:
-    if not args.live:
-        return None
-    if not args.confirm_live:
-        raise RuntimeError("--live requires --confirm-live")
-    cmd = [
-        sys.executable,
-        "scripts/ops/weather_order_executor.py",
-        "--plans",
-        str(PLAN_OUT),
-        "--paper-out",
-        str(PAPER_OUT),
-        "--live-out",
-        str(LIVE_OUT),
-        "--live",
-        "--confirm-live",
-        "--no-telegram",
-    ]
-    env = os.environ.copy()
-    proxy = market_proxy_url()
-    if proxy:
-        env["HTTP_PROXY"] = proxy
-        env["HTTPS_PROXY"] = proxy
-        env["ALL_PROXY"] = proxy
-    else:
-        for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
-            env.pop(key, None)
-    proc = subprocess.run(
-        cmd,
-        cwd=ROOT,
-        env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=args.executor_timeout_sec,
+    return order_runtime.run_weather_order_executor(
+        root=ROOT,
+        plans_path=PLAN_OUT,
+        paper_out=PAPER_OUT,
+        live_out=LIVE_OUT,
+        live=bool(args.live),
+        confirm_live=bool(args.confirm_live),
+        no_telegram=True,
+        timeout_sec=float(args.executor_timeout_sec),
+        env=order_runtime.executor_proxy_env(market_proxy_url()),
     )
-    payload: dict[str, Any] = {
-        "executor_cmd": cmd,
-        "executor_returncode": proc.returncode,
-        "executor_output": proc.stdout[-8000:],
-    }
-    try:
-        start = proc.stdout.find("{")
-        end = proc.stdout.rfind("}")
-        payload["executor_result"] = json.loads(proc.stdout[start : end + 1]) if start >= 0 and end > start else None
-    except Exception:
-        payload["executor_result"] = None
-    return payload
 
 
 def send_telegram_summary(summary: dict[str, Any], *, args: argparse.Namespace) -> None:

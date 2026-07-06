@@ -124,12 +124,19 @@ Early live rollout history and backfill governance: [WEATHER_LIVE_RUN_HISTORY_AN
 | 1 | **MarketData** | 提供 point-in-time 行情快照 | `market_data_fetcher` | `snapshots/*.json` | `snapshot_ts_utc`, `market_price`, `orderbook` | 文件一旦写不改；`ts_utc` 单调 |
 | 2 | **Signal** | model 把快照转成「应该交易」的信号 | `weather_edge_model` | `signals.jsonl` | `signal_id`, `city`, `bracket`, `side`, `model_p_yes`, `edge`, `model_version` | append-only；引用 snapshot 不复制 |
 | 3 | **TradePlan** | 应用 strategy_config 决定下不下、下多少 | `weather_trade_planner` | `plans` 表 | `plan_id`, `signal_id`, `config_id`, `desired_shares`, `target_price`, `skip_reason?` | 必引用 `config_id`；skip 也要记录 |
-| 4 | **Order** | 把 plan 真实提交（paper / live） | `weather_order_executor` | `orders` 表 | `order_id`, `plan_id`, `mode`, `placed_at_utc`, `price`, `shares` | `placed_at_utc > signal.snapshot_ts_utc`（防 look-ahead） |
+| 4 | **Order** | 把 plan 真实提交（paper / live） | `src/strategies/weather_edge_v1/runtime/order_runtime.py` → `weather_order_executor` | `orders` 表 | `order_id`, `plan_id`, `mode`, `placed_at_utc`, `price`, `shares` | `placed_at_utc > signal.snapshot_ts_utc`（防 look-ahead） |
 | 5 | **Fill** | 记录实际成交（含 partial / cancel） | `paper_engine` / `polymarket_clob` | `fills` 表 | `fill_id`, `order_id`, `filled_shares`, `filled_price`, `status`, `fees_usd` | `Σ filled ≤ order.shares` |
 | 6 | **Position** | 按 (city, bracket, side) 算净仓 | `position_keeper` | derived view（由 fills 聚合） | `open_shares`, `avg_cost`, `unrealized_pnl` | 不持久化，永远从 fills 重算 |
 | 7 | **Settlement** | 事件落地 → 输赢 → 实现 PnL | `settlement_service` | `settlements` 表 | `target_date`, `bracket`, `final_yes`, `settled_at_utc`, `status` | settle 后不再改；可缺失 |
 
 #### 设计细节解释
+
+**为什么 runner 执行 glue 要共用？**
+策略 runner 可以各自决定 candidate、sizing 和 risk decision，但 plan 写盘、JSON/JSONL 序列化、
+调用 `weather_order_executor.py`、解析 executor 输出这些是执行契约，不是 alpha。它们统一走
+`src/strategies/weather_edge_v1/runtime/order_runtime.py`；否则新增 `sizing_policy`、
+`execution_action`、`source_order_id`、`order_payload` 这类字段时，每个 live runner 都要手改一遍，
+容易出现 live 能下单但 DB/看板字段缺失。
 
 **为什么 Position 是 derived view 不入库？**
 持仓本质是 fills 的累加视图。如果独立存储，会有「fills 改了但 position 没更新」的不一致风险。所有持仓查询永远从 fills 实时聚合算出（数据量不大，性能足够）。

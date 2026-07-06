@@ -18,7 +18,6 @@ import hashlib
 import json
 import math
 import os
-import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -40,6 +39,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as regime_policy  # noqa: E402
+from src.strategies.weather_edge_v1.runtime import order_runtime  # noqa: E402
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc  # noqa: E402
 from weather_data_feed.snapshot_protocol import parse_market_event_date  # noqa: E402
 from weather_data_feed.source_policy import load_city_configs  # noqa: E402
@@ -134,47 +134,19 @@ def utc_now_iso() -> str:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return rows
+    return order_runtime.read_jsonl(path)
 
 
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    order_runtime.append_jsonl(path, row)
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    order_runtime.write_json(path, payload)
 
 
 def json_safe(value: Any) -> Any:
-    if value is None:
-        return None
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if isinstance(value, (str, int, bool)):
-        return value
-    if isinstance(value, dict):
-        return {str(k): json_safe(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [json_safe(v) for v in value]
-    try:
-        if pd.isna(value):
-            return None
-    except Exception:
-        pass
-    return str(value)
+    return order_runtime.json_ready(value)
 
 
 def stable_hash(payload: Any, *, length: int = 24) -> str:
@@ -1899,8 +1871,7 @@ def write_plans(candidates: pd.DataFrame, args: argparse.Namespace) -> list[dict
     plans: list[dict[str, Any]] = []
     running_spent_by_date = dict(spent_by_date)
     if eligible.empty:
-        PLAN_OUT.parent.mkdir(parents=True, exist_ok=True)
-        PLAN_OUT.write_text("", encoding="utf-8")
+        order_runtime.write_jsonl(PLAN_OUT, [])
         return plans
     for _, row in eligible.sort_values(["target_date", "decision_snapshot_ts_utc", "city"]).iterrows():
         key = (str(row.get("city") or ""), str(row.get("target_date") or ""), str(row.get("token_id") or ""))
@@ -1916,40 +1887,23 @@ def write_plans(candidates: pd.DataFrame, args: argparse.Namespace) -> list[dict
         prior_keys.add(key)
         if len(plans) >= int(args.max_orders):
             break
-    PLAN_OUT.parent.mkdir(parents=True, exist_ok=True)
-    PLAN_OUT.write_text("\n".join(json.dumps(p, ensure_ascii=False, sort_keys=True) for p in plans) + ("\n" if plans else ""), encoding="utf-8")
+    order_runtime.write_jsonl(PLAN_OUT, plans)
     return plans
 
 
 def run_executor(args: argparse.Namespace) -> dict[str, Any] | None:
-    if not args.live:
-        return None
-    if not args.confirm_live:
-        raise RuntimeError("--live requires --confirm-live")
-    cmd = [
-        sys.executable,
-        "scripts/ops/weather_order_executor.py",
-        "--plans",
-        str(PLAN_OUT),
-        "--paper-out",
-        str(PAPER_OUT),
-        "--live-out",
-        str(LIVE_OUT),
-        "--live",
-        "--confirm-live",
-        "--allow-taker",
-        "--cancel-expired",
-        "--no-telegram",
-    ]
-    proc = subprocess.run(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
-    parsed = None
-    try:
-        start = proc.stdout.find("{")
-        end = proc.stdout.rfind("}")
-        parsed = json.loads(proc.stdout[start : end + 1]) if start >= 0 and end > start else None
-    except Exception:
-        parsed = None
-    return {"cmd": cmd, "returncode": proc.returncode, "output_tail": proc.stdout[-8000:], "parsed": parsed}
+    return order_runtime.run_weather_order_executor(
+        root=ROOT,
+        plans_path=PLAN_OUT,
+        paper_out=PAPER_OUT,
+        live_out=LIVE_OUT,
+        live=bool(args.live),
+        confirm_live=bool(args.confirm_live),
+        allow_taker=True,
+        cancel_expired=True,
+        no_telegram=True,
+        timeout_sec=180.0,
+    )
 
 
 def parse_args() -> argparse.Namespace:

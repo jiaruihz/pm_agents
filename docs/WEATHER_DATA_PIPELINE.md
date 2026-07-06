@@ -101,6 +101,15 @@ tail, regime-routed NO, tmax distribution and exit overlays can share one order
 lineage table without per-strategy event tables. It remains submitted-order
 lineage; realized cash/PnL still comes from `fills` and `fact_trades`.
 
+Runtime boundary: strategy runners own candidate selection, risk decision and
+sizing; shared execution glue lives in
+`src/strategies/weather_edge_v1/runtime/order_runtime.py`. Active live runners
+should use that helper for JSON/JSONL serialization and
+`weather_order_executor.py` invocation so order-field and persistence contract
+changes do not need to be duplicated per strategy. `weather_order_executor.py`
+still owns the actual paper/live CLOB order submission, while
+`weather_dashboard.cli.ingest_strategy_runtime_orders` owns canonical DB ingest.
+
 Health gate:
 
 ```bash
