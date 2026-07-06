@@ -1,7 +1,7 @@
 # 天气策略主线骨架
 
 Status: current-reference
-Updated: 2026-07-05 feature layering review + CITY_FAMILY landing
+Updated: 2026-07-06 feature-layer primitives + weather_state_frame builder landing
 Source of truth: yes for architecture orientation; field/schema contracts still defer to WEATHER_SYSTEM_CONTRACT
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_QUANT_DESIGN.md; WEATHER_DATA_CANONICAL_SOURCES.md; WEATHER_SYSTEM_CONTRACT.md; WEATHER_FEATURE_LAYERING_PLAN.md
 
@@ -25,6 +25,7 @@ flowchart TB
   end
 
   subgraph L1["L1 共享事实层（派生，可重建）"]
+    WFL["weather_feature_layer/builders.py<br/>build_weather_state_frame: snapshot + observation cache -> city_date_snapshot"]
     TSF["reheat_feature_factory_v1<br/>实际身份: temperature state factory<br/>当前仍在 scripts/analysis/reheat_risk + docs/generated"]
   end
 

@@ -4,11 +4,13 @@ import math
 from dataclasses import dataclass
 
 import pandas as pd
+import pytest
 
 from src.strategies.weather_edge_v1.tools import low_price_yes_tail_telemetry as tail_telemetry
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as stable_regime
 from weather_data_feed import weather_context
 from weather_feature_layer import bias, market, regimes, state
+from weather_feature_layer.builders import build_weather_state_frame, build_weather_state_frame_with_audits
 from weather_feature_layer.contracts import (
     FEATURE_FRAME_REQUIRED_METADATA,
     PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION,
@@ -151,3 +153,139 @@ def test_city_source_bias_classifier_contract() -> None:
         )
         == "cold_overforecast_clean"
     )
+
+
+def test_weather_state_frame_builder_carries_metadata_and_unit_contract() -> None:
+    snapshot_rows = [
+        {
+            "city": "LA",
+            "target_date": "2026-07-06",
+            "snapshot_ts_utc": "2026-07-06T19:00:00Z",
+            "unit": "F",
+            "timezone_name": "America/Los_Angeles",
+            "forecast_source": "gfs",
+            "forecast_max_native": 72.8,
+            "forecast_peak_hour_local": 14,
+            "forecast_peak_delta_hours_local": -2,
+        },
+        {
+            "city": "London",
+            "target_date": "2026-07-06",
+            "snapshot_ts_utc": "2026-07-06T13:00:00Z",
+            "unit": "C",
+            "timezone_name": "Europe/London",
+            "forecast_source": "ecmwf",
+            "forecast_max_native": 22.5,
+            "forecast_peak_hour_local": 16,
+            "forecast_peak_delta_hours_local": -2,
+        },
+    ]
+    observation_cache = {
+        "records": [
+            {
+                "city": "LA",
+                "target_date": "2026-07-06",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "KLAX",
+                "last_obs_utc": "2026-07-06T18:20:00Z",
+                "cadence_min": 60,
+                "current_temp_c": 20,
+                "running_max_c": 21,
+                "tmpf_now": 68,
+                "dwpf_now": 55,
+                "dewpoint_depression_f": 13,
+                "relative_humidity_pct": 55,
+                "wind_speed_kt": 12,
+                "wind_dir_deg": 240,
+                "sky_now": "FEW",
+                "temp_trend_1h_f": 1.4,
+                "temp_trend_3h_f": 2.2,
+                "minutes_since_running_max": 35,
+                "running_max_obs_utc": "2026-07-06T18:00:00Z",
+            },
+            {
+                "city": "London",
+                "target_date": "2026-07-06",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "EGLL",
+                "last_obs_utc": "2026-07-06T12:30:00Z",
+                "cadence_min": 60,
+                "current_temp_c": 20,
+                "running_max_c": 21,
+                "relative_humidity_pct": 82,
+                "wind_speed_kt": 8,
+                "wind_dir_deg": 180,
+                "sky_cover_code": 3,
+                "temp_trend_1h_f": 0.2,
+                "temp_trend_3h_f": -0.1,
+                "minutes_since_running_max": 90,
+            },
+        ]
+    }
+
+    frame, audits = build_weather_state_frame_with_audits(
+        snapshot_rows,
+        observation_cache,
+        as_of_ts_utc="2026-07-06T19:00:00Z",
+        source_profile_id="mac_weather_data_feed_v1",
+        input_snapshot_id="fixture-snapshot",
+    )
+
+    assert [audit.status for audit in audits] == ["included", "included"]
+    assert set(frame["city"]) == {"LA", "London"}
+    assert frame.attrs["feature_metadata"]["pit_provenance"] == PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION
+    for key in FEATURE_FRAME_REQUIRED_METADATA:
+        assert key in frame.columns
+
+    la = frame.set_index("city").loc["LA"]
+    assert math.isclose(la["current_native"], 68.0)
+    assert math.isclose(la["running_native"], 69.8)
+    assert math.isclose(la["forecast_gap_to_running_native"], 3.0)
+    assert la["decision_hour_local"] == 12
+    assert la["station_gap_state"] == "within_expected_cadence"
+    assert la["sky_cover_code"] == 1
+    assert la["warming_state"] == "warming"
+    assert la["solar_window"] == "solar_peak_window"
+    assert la["pit_provenance"] == PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION
+
+    london = frame.set_index("city").loc["London"]
+    assert math.isclose(london["current_native"], 20.0)
+    assert math.isclose(london["running_native"], 21.0)
+    assert math.isclose(london["forecast_gap_to_running_native"], 1.5)
+    assert math.isclose(london["forecast_max_f"], 72.5)
+    assert london["station_gap_state"] == "within_expected_cadence"
+    assert london["moisture_cloud_regime"] == "humid_overcast_suppression"
+
+
+def test_weather_state_frame_builder_rejects_invalid_pit_provenance() -> None:
+    snapshot_rows = [
+        {
+            "city": "LA",
+            "target_date": "2026-07-06",
+            "snapshot_ts_utc": "2026-07-06T19:00:00Z",
+            "unit": "F",
+        }
+    ]
+    observation_cache = {
+        "records": [
+            {
+                "city": "LA",
+                "target_date": "2026-07-06",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "KLAX",
+                "current_temp_c": 20,
+                "running_max_c": 21,
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="invalid pit_provenance"):
+        build_weather_state_frame(
+            snapshot_rows,
+            observation_cache,
+            as_of_ts_utc="2026-07-06T19:00:00Z",
+            pit_provenance="detect_time_only",
+        )

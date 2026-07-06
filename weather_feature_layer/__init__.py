@@ -11,6 +11,11 @@ from weather_feature_layer.contracts import (
     WEATHER_REGIME_VERSION,
     WEATHER_STATE_VERSION,
 )
+from weather_feature_layer.builders import (
+    WEATHER_STATE_FRAME_BUILDER_VERSION,
+    build_weather_state_frame,
+    build_weather_state_frame_with_audits,
+)
 from weather_feature_layer.state import (
     city_wind_context,
     cloud_warming_interaction,
@@ -26,9 +31,12 @@ from weather_feature_layer.state import (
 __all__ = [
     "FEATURE_FRAME_SCHEMA_VERSION",
     "MARKET_GEOMETRY_VERSION",
+    "WEATHER_STATE_FRAME_BUILDER_VERSION",
     "WEATHER_BIAS_VERSION",
     "WEATHER_REGIME_VERSION",
     "WEATHER_STATE_VERSION",
+    "build_weather_state_frame",
+    "build_weather_state_frame_with_audits",
     "city_wind_context",
     "cloud_warming_interaction",
     "forecast_peak_clock_state",

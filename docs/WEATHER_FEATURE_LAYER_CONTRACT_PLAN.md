@@ -9,8 +9,9 @@ Revision note: 2026-07-06 review 修订：依赖方向 / factory 归属 / 落库
 
 Implementation progress: 2026-07-06 Phase 1-3 initial primitives landed:
 `weather_feature_layer/` skeleton, state re-export, market/regime/bias helpers,
-and parity tests. Phase 4+ builders, feature store, and consumer decision-input
-rewires are not landed.
+and parity tests. Phase 4A minimal `build_weather_state_frame()` builder landed
+for snapshot + observation-cache state frames with row-level metadata and PIT
+provenance; feature store and consumer decision-input rewires are not landed.
 
 ## One-Line Decision
 
@@ -546,6 +547,13 @@ Acceptance:
 - Bias parity verifies no as-of frame uses target_dates whose official final max was unavailable at `as_of_ts_utc`.
 
 ### Phase 4: Weather State Builder
+
+Implementation progress: 2026-07-06 Phase 4A landed the minimal
+`weather_feature_layer.builders.build_weather_state_frame()` path. It consumes
+data-feed snapshot rows plus observation cache, emits `city_date_snapshot`
+frames with `source_report_ts_utc` and `detect_ts_utc` / `fetched_at_utc`
+separated, and attaches required frame metadata including `pit_provenance` on
+every row. It does not write a feature store or change any runner decision path.
 
 Deliverables:
 
