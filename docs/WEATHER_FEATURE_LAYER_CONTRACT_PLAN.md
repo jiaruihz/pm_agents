@@ -380,6 +380,7 @@ Every feature frame must carry:
 - `as_of_ts_utc`
 - `source_profile_id`
 - `feature_version_manifest`, for example `{weather_state: v1, weather_bias: v2, market_geometry: v1}`
+- `pit_provenance`
 - `builder_version` only as a diagnostic implementation id, not as the schema pin
 - `input_snapshot_id` or source file hash when available
 
