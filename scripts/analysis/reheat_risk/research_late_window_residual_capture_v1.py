@@ -3,8 +3,8 @@
 
 The replay is intentionally conservative:
 - observed state comes from the maintained observed-max detail shards;
-- orderbook rows are matched to the latest snapshot at or before a local
-  top-of-hour decision time;
+- orderbook rows are replayed at snapshot granularity inside the local
+  late-window hour, using only the state already visible at that hour;
 - settlement is resolved once per city/date exact bracket from
   settlement_outcomes.
 """
