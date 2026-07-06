@@ -1,6 +1,6 @@
 # HeadA Clean EV Expression Selector v1
 
-Generated: `2026-07-05T05:33:22Z`
+Generated: `2026-07-06T04:56:38Z`
 
 Scope: HeadA `forecast_tail_low_price_yes`, expression layer only.  This is the cleaner mechanism formulation requested: estimate `P(expression wins)`, subtract ask and official fee, then choose the best expression or no trade.  It does **not** change live.
 

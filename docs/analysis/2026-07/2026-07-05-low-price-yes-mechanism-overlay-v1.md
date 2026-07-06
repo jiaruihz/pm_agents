@@ -1,6 +1,6 @@
 # HeadA Low-Price YES Mechanism Overlay v1
 
-Generated: `2026-07-05T05:08:01Z`
+Generated: `2026-07-06T04:56:39Z`
 
 Scope: HeadA `forecast_tail_low_price_yes` only.  This is a first-principles mechanism study over the current low-price YES denominator.  It does not change live.
 
