@@ -175,6 +175,14 @@ Source fit 与 book state 交叉后，`feasible_book` 并不强，反而 missing
 
 ## Next Actions
 
+### Research Queue
+
+- E-score-dist-sizing: combine `dist>0` with the probability score, testing score as selector vs score-tier sizing.  First artifact: `2026-07-06-low-price-yes-score-dist-sizing-v1.md`.
+- E-book-fill-ev: turn `book_state_v1` into an EV cost layer: fill probability, stale quote risk, maker wait, taker fallback cost.
+- E-pit-source-provenance: record forecast source/run provenance for every decision snapshot and keep outage windows marked as `non_pit_approx_only`.
+- E-expression-ev: keep selected YES as baseline, but shadow same-row sibling expression EV only when `P(win)-ask-fee-fill_cost` beats selected YES.
+- E-city-source-execution: decompose city/source into forecast bias, assigned-source consistency, and live fill quality; no raw city whitelist.
+
 1. `score_rank_decile` 进 shadow journal：每张 live/shadow 票记概率 decile、同 decile forward hit rate、按 decile 的 notional/PnL。
 2. 建 HeadA EV 成本层：`expected_value = p_win - ask - official_fee - slippage - nonfill_penalty`；book_state 进入成本，不当硬 gate。
 3. 做 PIT forecast provenance：每个 decision snapshot 记录 `forecast_run_id/issue_time/source_model/fallback_reason`，outage 窗口标 `non_pit_approx_only`。
