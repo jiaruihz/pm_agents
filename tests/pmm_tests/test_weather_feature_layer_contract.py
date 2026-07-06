@@ -238,6 +238,56 @@ def test_market_geometry_matches_tmax_p0_p3_fixture_columns() -> None:
     assert math.isclose(shared.loc[0, "d2_no_spread"], 0.03)
 
 
+def test_market_side_quote_helpers_match_range_rv_and_tp_stop_semantics() -> None:
+    script_dir = Path("scripts/analysis/market_structure_edge").resolve()
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
+    import research_range_rv_scanner as range_rv  # noqa: PLC0415
+    import research_range_rv_variant_lab_v03 as variants  # noqa: PLC0415
+
+    row = {"yes_spread": 0.03, "no_spread": 0.04}
+    for side in ["BUY_YES", "BUY_NO"]:
+        assert market.side_cost_from_yes(side, 0.42) == range_rv.side_cost_from_yes(side, 0.42)
+        assert market.side_cost_from_yes(side, 0.42) == variants.leg_cost(side, 0.42)
+        assert market.side_spread(row, side) == range_rv.side_spread(row, side)
+
+    yes = market.side_quote_from_yes_book(
+        side="BUY_YES",
+        yes_best_bid=0.42,
+        yes_best_ask=0.45,
+        yes_best_bid_size=80,
+        yes_best_ask_size=120,
+    )
+    assert yes == {
+        "side": "BUY_YES",
+        "side_best_bid": 0.42,
+        "side_best_ask": 0.45,
+        "side_best_bid_size": 80.0,
+        "side_best_ask_size": 120.0,
+        "side_spread": 0.030000000000000027,
+        "side_mid": 0.435,
+        "decision_entry_price": 0.45,
+    }
+
+    no = market.side_quote_from_yes_book(
+        side="BUY_NO",
+        yes_best_bid=0.42,
+        yes_best_ask=0.45,
+        yes_best_bid_size=80,
+        yes_best_ask_size=120,
+    )
+    assert no == {
+        "side": "BUY_NO",
+        "side_best_bid": 0.55,
+        "side_best_ask": 0.5800000000000001,
+        "side_best_bid_size": 120.0,
+        "side_best_ask_size": 80.0,
+        "side_spread": 0.030000000000000027,
+        "side_mid": 0.5650000000000001,
+        "decision_entry_price": 0.5800000000000001,
+    }
+
+
 @dataclass
 class _Resources:
     bias_index: dict[tuple[str, str], list[tuple[str, float]]]

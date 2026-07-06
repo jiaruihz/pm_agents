@@ -198,6 +198,60 @@ def _market_quote_features(row: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def side_cost_from_yes(side: str, yes_price: float) -> float:
+    return float(yes_price) if side == "BUY_YES" else 1.0 - float(yes_price)
+
+
+def side_payout_from_yes(side: str, final_yes: float) -> float:
+    return float(final_yes) if side == "BUY_YES" else 1.0 - float(final_yes)
+
+
+def side_spread(row: dict[str, Any], side: str) -> float | None:
+    key = "yes_spread" if side == "BUY_YES" else "no_spread"
+    value = row.get(key)
+    out = _finite_float(value)
+    return out
+
+
+def side_quote_from_yes_book(
+    *,
+    side: str,
+    yes_best_bid: Any,
+    yes_best_ask: Any,
+    yes_best_bid_size: Any = None,
+    yes_best_ask_size: Any = None,
+) -> dict[str, Any]:
+    """Map a YES token top-of-book into the requested BUY_YES/BUY_NO side."""
+    bid = _finite_float(yes_best_bid)
+    ask = _finite_float(yes_best_ask)
+    bid_size = _finite_float(yes_best_bid_size)
+    ask_size = _finite_float(yes_best_ask_size)
+    if side == "BUY_YES":
+        side_bid = bid
+        side_ask = ask
+        side_bid_size = bid_size
+        side_ask_size = ask_size
+    elif side == "BUY_NO":
+        side_bid = None if ask is None else 1.0 - ask
+        side_ask = None if bid is None else 1.0 - bid
+        side_bid_size = ask_size
+        side_ask_size = bid_size
+    else:
+        raise ValueError(f"unsupported side: {side!r}")
+    spread = None if side_bid is None or side_ask is None else max(0.0, side_ask - side_bid)
+    mid = None if side_bid is None or side_ask is None else (side_bid + side_ask) / 2.0
+    return {
+        "side": side,
+        "side_best_bid": side_bid,
+        "side_best_ask": side_ask,
+        "side_best_bid_size": side_bid_size,
+        "side_best_ask_size": side_ask_size,
+        "side_spread": spread,
+        "side_mid": mid,
+        "decision_entry_price": side_ask,
+    }
+
+
 def bracket_distance_features(row: dict[str, Any]) -> dict[str, Any]:
     low, high = parse_bracket_bounds(row.get("bracket"))
     forecast_native = to_float(row.get("forecast_max_native"))
