@@ -48,6 +48,10 @@ from weather_data_feed.weather_context import (  # noqa: E402
     temperature_context_features,
     temperature_context_multiplier,
 )
+from weather_feature_layer.bias import (  # noqa: E402
+    classify_city_source_bias as shared_classify_city_source_bias,
+    load_city_source_bias_lookup as shared_load_city_source_bias_lookup,
+)
 
 import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
 
@@ -641,50 +645,11 @@ def forecast_model_from_source(source: Any, clock_source: Any = "") -> str:
 
 
 def classify_city_source_bias(row: pd.Series) -> str:
-    bias = safe_float(row.get("bias"))
-    p90 = safe_float(row.get("p90"))
-    p10 = safe_float(row.get("p10"))
-    hot = safe_float(row.get("pct_actual_ge_forecast_plus_1"))
-    cold = safe_float(row.get("pct_forecast_ge_actual_plus_1"))
-    mae = safe_float(row.get("mae"))
-    if bias >= 0.7 and hot >= 0.40 and cold <= 0.15:
-        return "hot_underforecast_clean"
-    if bias >= 0.5 and p90 >= 2.0 and hot >= 0.35:
-        return "hot_underforecast_noisy"
-    if bias <= -0.5 and cold >= 0.35 and hot <= 0.20:
-        return "cold_overforecast_clean"
-    if cold >= 0.25 and p10 <= -1.5:
-        return "cold_overforecast_noisy"
-    if mae <= 1.0 and hot < 0.25 and cold < 0.25 and abs(bias) < 0.35:
-        return "balanced_tight"
-    if hot >= 0.25 and cold >= 0.20:
-        return "two_sided_noisy"
-    return "mild_or_mixed"
+    return shared_classify_city_source_bias(row)
 
 
 def load_city_source_bias_lookup() -> dict[tuple[str, str], dict[str, Any]]:
-    if not HIST_FORECAST_BIAS_SUMMARY.exists():
-        return {}
-    hist = pd.read_csv(HIST_FORECAST_BIAS_SUMMARY)
-    if hist.empty:
-        return {}
-    hist["city_source_bias_regime"] = hist.apply(classify_city_source_bias, axis=1)
-    lookup: dict[tuple[str, str], dict[str, Any]] = {}
-    for _, row in hist.iterrows():
-        city = str(row.get("city") or "")
-        model = str(row.get("model") or "")
-        if not city or not model:
-            continue
-        lookup[(city, model)] = {
-            "city_source_bias_regime": str(row.get("city_source_bias_regime") or "unclassified"),
-            "city_source_bias_n": int(safe_float(row.get("n"), 0.0)),
-            "city_source_bias": safe_float(row.get("bias")),
-            "city_source_bias_mae": safe_float(row.get("mae")),
-            "city_source_bias_p90": safe_float(row.get("p90")),
-            "city_source_hot_underforecast_rate": safe_float(row.get("pct_actual_ge_forecast_plus_1")),
-            "city_source_cold_overforecast_rate": safe_float(row.get("pct_forecast_ge_actual_plus_1")),
-        }
-    return lookup
+    return shared_load_city_source_bias_lookup(HIST_FORECAST_BIAS_SUMMARY)
 
 
 def expression_group_for_bias(row: pd.Series) -> str:

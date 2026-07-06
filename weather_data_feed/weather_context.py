@@ -4,6 +4,10 @@ import math
 from typing import Any
 
 
+# Strategy code should import shared point-in-time context helpers through
+# weather_feature_layer.state after the feature-layer cutover. This module stays
+# physically in weather_data_feed during Phase 1 to preserve L1 -> L0 dependency
+# direction for vendored data-feed deployments.
 CITY_WIND_CONTEXT: dict[str, dict[str, Any]] = {
     "Amsterdam": {"geo": "coastal_marine", "onshore": [(210, 330)]},
     "Atlanta": {"geo": "inland_humid", "onshore": []},
@@ -258,6 +262,9 @@ def temperature_context_features(record: dict[str, Any]) -> dict[str, Any]:
 
 def temperature_context_multiplier(record: dict[str, Any], *, strength: str = "light") -> float:
     """Fixed temperature-context sizing overlay for regime-routed NO shadowing.
+
+    Strategy-private compatibility shim. Do not expose this through
+    weather_feature_layer.state.
 
     This is deliberately first-principles and pre-declared. It is not fit to
     realized payoff rows. The meaning of the same weather state depends on the

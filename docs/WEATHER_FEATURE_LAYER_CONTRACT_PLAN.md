@@ -7,6 +7,11 @@ Superseded by / Used by: WEATHER_ARCHITECTURE_SPINE.md; WEATHER_FEATURE_LAYERING
 
 Revision note: 2026-07-06 review 修订：依赖方向 / factory 归属 / 落库契约 / 单位契约 / multiplier 归属 / 特征补充。
 
+Implementation progress: 2026-07-06 Phase 1-3 initial primitives landed:
+`weather_feature_layer/` skeleton, state re-export, market/regime/bias helpers,
+and parity tests. Phase 4+ builders, feature store, and consumer decision-input
+rewires are not landed.
+
 ## One-Line Decision
 
 新增独立包 `weather_feature_layer/`。它不是新的策略，也不是新的 data-feed。它是 `weather_data_feed` 标准化数据之上的 point-in-time 机制特征层，统一产出“天气状态、forecast runway、城市/来源 bias、market geometry、regime state”这几类粗粒度特征，供 HeadA、HeadB、tmax、regime-routed NO、theta/current YES、station-basis、Range RV 等策略消费。

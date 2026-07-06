@@ -9,19 +9,21 @@ from __future__ import annotations
 import csv
 import json
 import math
-import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from weather_feature_layer.bias import asof_bias_features as shared_asof_bias_features
+from weather_feature_layer.market import (
+    bracket_distance_features as shared_bracket_distance_features,
+    parse_bracket_bounds as shared_parse_bracket_bounds,
+)
 
 ROOT = Path(__file__).resolve().parents[4]
 MODEL_DEFAULT = ROOT / "src/strategies/weather_edge_v1/config/low_price_yes_tail_telemetry_model_v1.json"
 BIAS_ROWS_DEFAULT = ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/daily_error_rows.csv"
-
-NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
 
 
 def safe_str(value: Any) -> str:
@@ -58,37 +60,11 @@ def forecast_model_from_source(source: Any, peak_source: Any = "") -> str:
 
 
 def parse_bracket_bounds(bracket: Any) -> tuple[float | None, float | None]:
-    text = safe_str(bracket).replace("−", "-")
-    nums = [float(x) for x in NUM_RE.findall(text)]
-    if not nums:
-        return (None, None)
-    if len(nums) == 1:
-        return (nums[0], nums[0])
-    return (min(nums[0], nums[1]), max(nums[0], nums[1]))
+    return shared_parse_bracket_bounds(bracket)
 
 
 def bracket_distance_features(row: dict[str, Any]) -> dict[str, Any]:
-    low, high = parse_bracket_bounds(row.get("bracket"))
-    forecast_native = to_float(row.get("forecast_max_native"))
-    out: dict[str, Any] = {
-        "bracket_low_native": low,
-        "bracket_high_native": high,
-        "bracket_distance_available": False,
-        "forecast_to_bracket_low_native": None,
-        "forecast_above_bracket_high_native": None,
-        "forecast_inside_bracket_bounds": None,
-    }
-    if low is None or high is None or not math.isfinite(forecast_native):
-        return out
-    out.update(
-        {
-            "bracket_distance_available": True,
-            "forecast_to_bracket_low_native": round(low - forecast_native, 6),
-            "forecast_above_bracket_high_native": round(forecast_native - high, 6),
-            "forecast_inside_bracket_bounds": bool(low <= forecast_native <= high),
-        }
-    )
-    return out
+    return shared_bracket_distance_features(row)
 
 
 def decision_local_bucket(row: dict[str, Any]) -> dict[str, Any]:
@@ -162,44 +138,7 @@ def load_tail_telemetry_resources_soft() -> TailTelemetryResources:
 
 
 def asof_bias_features(resources: TailTelemetryResources, *, city: str, forecast_model: str, target_date: str) -> dict[str, Any]:
-    rows = resources.bias_index.get((city, forecast_model), [])
-    vals = [err for date, err in rows if date < target_date]
-    out: dict[str, Any] = {
-        "bias_n_asof": len(vals),
-        "bias_mean_asof": None,
-        "bias_p50_asof": None,
-        "bias_p90_asof": None,
-        "hot_tail_pct_asof": None,
-        "hot_tail2_pct_asof": None,
-        "cold_tail_pct_asof": None,
-        "bias_mae_asof": None,
-    }
-    if not vals:
-        return out
-    vals_sorted = sorted(vals)
-
-    def quantile(q: float) -> float:
-        if len(vals_sorted) == 1:
-            return vals_sorted[0]
-        pos = (len(vals_sorted) - 1) * q
-        lo = int(math.floor(pos))
-        hi = int(math.ceil(pos))
-        if lo == hi:
-            return vals_sorted[lo]
-        return vals_sorted[lo] * (hi - pos) + vals_sorted[hi] * (pos - lo)
-
-    out.update(
-        {
-            "bias_mean_asof": sum(vals) / len(vals),
-            "bias_p50_asof": quantile(0.50),
-            "bias_p90_asof": quantile(0.90),
-            "hot_tail_pct_asof": sum(1 for x in vals if x >= 1.0) / len(vals),
-            "hot_tail2_pct_asof": sum(1 for x in vals if x >= 2.0) / len(vals),
-            "cold_tail_pct_asof": sum(1 for x in vals if x <= -1.0) / len(vals),
-            "bias_mae_asof": sum(abs(x) for x in vals) / len(vals),
-        }
-    )
-    return {k: (round(v, 6) if isinstance(v, float) and math.isfinite(v) else v) for k, v in out.items()}
+    return shared_asof_bias_features(resources, city=city, forecast_model=forecast_model, target_date=target_date)
 
 
 def score_model(model_spec: dict[str, Any], features: dict[str, Any]) -> float | None:
