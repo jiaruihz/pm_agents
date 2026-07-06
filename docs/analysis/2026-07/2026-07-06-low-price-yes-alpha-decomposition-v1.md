@@ -177,7 +177,7 @@ Source fit 与 book state 交叉后，`feasible_book` 并不强，反而 missing
 
 ### Research Queue
 
-- E-score-dist-sizing: combine `dist>0` with the probability score, testing score as selector vs score-tier sizing.  First artifact: `2026-07-06-low-price-yes-score-dist-sizing-v1.md`.
+- E-score-dist-sizing: combine `dist>0` with the probability score, testing score as selector vs score-tier sizing.  First artifact: `2026-07-06-low-price-yes-score-dist-sizing-v1.md`; 2026-07-06 user-approved tiny live overlay uses `score_tier_0p8_1p2_1p5_shares` without changing the selector.
 - E-book-fill-ev: turn `book_state_v1` into an EV cost layer: fill probability, stale quote risk, maker wait, taker fallback cost.
 - E-pit-source-provenance: record forecast source/run provenance for every decision snapshot and keep outage windows marked as `non_pit_approx_only`.
 - E-expression-ev: keep selected YES as baseline, but shadow same-row sibling expression EV only when `P(win)-ask-fee-fill_cost` beats selected YES.

@@ -153,7 +153,7 @@ EOF
     <string>--order-notional-usd</string>
     <string>${LOW_PRICE_YES_LOTTERY_NOTIONAL:-0.8}</string>
     <string>--sizing-policy</string>
-    <string>${LOW_PRICE_YES_LOTTERY_SIZING_POLICY:-price_tier_6_8_10_shares}</string>
+    <string>${LOW_PRICE_YES_LOTTERY_SIZING_POLICY:-score_tier_0p8_1p2_1p5_shares}</string>
     <string>--maker-first-fraction</string>
     <string>${LOW_PRICE_YES_LOTTERY_MAKER_FIRST_FRACTION:-1.0}</string>
     <string>--taker-fallback-min-notional-usd</string>

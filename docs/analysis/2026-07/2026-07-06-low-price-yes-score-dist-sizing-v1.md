@@ -94,7 +94,31 @@ Sizing interpretation:
 
 ## Decision
 
-Do not change live today.  Add a shadow ledger for:
+Original research decision: do not change selector; use score-tier as shadow sizing first.
+
+2026-07-06 rollout addendum: user approved a mild live sizing tilt after reviewing the mechanism and minimum-share constraints.  The deployed live policy is:
+
+```text
+score_tier_0p8_1p2_1p5_shares
+  base shares: 5-8c -> 6, 8-14c -> 8, 14-20c -> 10
+  low score:   0.8x, floor 5 shares
+  mid score:   1.2x
+  high score:  1.5x, cap 15 shares
+```
+
+Simple constraint table:
+
+| price | low | mid | high |
+| --- | --- | --- | --- |
+| 5c | 5 shares / $0.25 | 7.2 shares / $0.36 | 9 shares / $0.45 |
+| 8c | 5 shares / $0.40 | 7.2 shares / $0.58 | 9 shares / $0.72 |
+| 10c | 6.4 shares / $0.64 | 9.6 shares / $0.96 | 12 shares / $1.20 |
+| 14c | 6.4 shares / $0.90 | 9.6 shares / $1.34 | 12 shares / $1.68 |
+| 20c | 8 shares / $1.60 | 12 shares / $2.40 | 15 shares / $3.00 |
+
+Historical quick replay on the same 333-row hot denominator: total cost ratio about `1.289x`, ROI `+49.5%` vs price-tier baseline `+41.8%`, max daily loss about `$-15.46` vs `$-11.04`.  This is a tiny-live sizing overlay, not selector promotion or confirmed alpha.
+
+Keep these shadow ledgers:
 
 ```text
 score_tier_hot_train = low/mid/high

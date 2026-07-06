@@ -71,7 +71,70 @@ SIZING_POLICY_CHOICES = (
     "fixed_cash_order_notional",
     "fixed_8_shares",
     "price_tier_6_8_10_shares",
+    "score_tier_0p8_1p2_1p5_shares",
 )
+
+SCORE_DIST_MODEL_V1 = {
+    "feature_names": [
+        "entry",
+        "edge",
+        "raw_dist_br",
+        "adj_dist_p50_br",
+        "bias_n_asof",
+        "bias_mean_asof",
+        "bias_p90_asof",
+        "hot_tail_pct_asof",
+        "cold_tail_pct_asof",
+    ],
+    "medians": {
+        "entry": 0.095,
+        "edge": 0.2653,
+        "raw_dist_br": 0.4999999999999952,
+        "adj_dist_p50_br": -0.14999999999999858,
+        "bias_n_asof": 356.0,
+        "bias_mean_asof": 1.1087078651685394,
+        "bias_p90_asof": 3.2,
+        "hot_tail_pct_asof": 0.5577464788732395,
+        "cold_tail_pct_asof": 0.09550561797752809,
+    },
+    "mu": [
+        0.10471148825065274,
+        0.2953960835509138,
+        0.44566289527125075,
+        -0.07412242529735925,
+        441.42297650130547,
+        0.9695848237124391,
+        3.1449869451697126,
+        0.4931696369611768,
+        0.1479072559747869,
+    ],
+    "sd": [
+        0.04096702709830627,
+        0.08651788966857203,
+        0.7271380744250431,
+        0.4784559446782197,
+        159.0349935859216,
+        0.9167324542104754,
+        1.197067320388609,
+        0.19440370571215948,
+        0.13131346898311078,
+    ],
+    "coef": [
+        0.4221917137609502,
+        -0.03367663882423542,
+        0.05904575858609511,
+        0.2177642412425464,
+        -0.06172585579345474,
+        0.051170438778585875,
+        0.07328054075415853,
+        -0.19526860022113685,
+        -0.07272639764327733,
+    ],
+    "intercept": -1.789677290933876,
+    "hot_train_q1": 0.13126780040457206,
+    "hot_train_q2": 0.17781318659023707,
+    "source_report": "docs/analysis/2026-07/2026-07-06-low-price-yes-score-dist-sizing-v1.md",
+}
 
 CLOB_BASE_URL = os.getenv("CLOB_BASE_URL", "").strip() or os.getenv("PM_API_BASE_URL", "").strip() or "https://clob.polymarket.com"
 
@@ -942,6 +1005,99 @@ def shares_for_quality_price_tier_5_8_12(*, price: float, quality: float, min_sh
     return shares_for_fixed_count(shares=shares, min_shares=min_shares)
 
 
+def bracket_low_f_from_native(*, bracket_low_native: float, unit: str) -> float:
+    if not math.isfinite(bracket_low_native):
+        return math.nan
+    if safe_str(unit).upper().startswith("C"):
+        return bracket_low_native * 9.0 / 5.0 + 32.0
+    return bracket_low_native
+
+
+def bracket_width_f_for_unit(unit: str) -> float:
+    return 1.8 if safe_str(unit).upper().startswith("C") else 2.0
+
+
+def logistic(x: float) -> float:
+    if x >= 0:
+        z = math.exp(-x)
+        return 1.0 / (1.0 + z)
+    z = math.exp(x)
+    return z / (1.0 + z)
+
+
+def score_dist_sizing_features(row: dict[str, Any]) -> dict[str, float]:
+    medians = SCORE_DIST_MODEL_V1["medians"]
+    unit = safe_str(row.get("unit"))
+    bracket_low_native = to_float(row.get("bracket_low_native"), math.nan)
+    forecast_max_f = to_float(row.get("forecast_max_f"), math.nan)
+    bracket_low_f = bracket_low_f_from_native(bracket_low_native=bracket_low_native, unit=unit)
+    width_f = bracket_width_f_for_unit(unit)
+    raw_dist = math.nan
+    if math.isfinite(bracket_low_f) and math.isfinite(forecast_max_f) and width_f > 0:
+        raw_dist = (bracket_low_f - forecast_max_f) / width_f
+    bias_p50 = to_float(row.get("bias_p50_asof"), math.nan)
+    adj_dist = math.nan
+    if math.isfinite(bracket_low_f) and math.isfinite(forecast_max_f) and math.isfinite(bias_p50) and width_f > 0:
+        adj_dist = (bracket_low_f - forecast_max_f - bias_p50) / width_f
+    values = {
+        "entry": to_float(row.get("decision_entry_price") or row.get("snapshot_ask"), medians["entry"]),
+        "edge": to_float(row.get("edge"), medians["edge"]),
+        "raw_dist_br": raw_dist,
+        "adj_dist_p50_br": adj_dist,
+        "bias_n_asof": to_float(row.get("bias_n_asof"), medians["bias_n_asof"]),
+        "bias_mean_asof": to_float(row.get("bias_mean_asof"), medians["bias_mean_asof"]),
+        "bias_p90_asof": to_float(row.get("bias_p90_asof"), medians["bias_p90_asof"]),
+        "hot_tail_pct_asof": to_float(row.get("hot_tail_pct_asof"), medians["hot_tail_pct_asof"]),
+        "cold_tail_pct_asof": to_float(row.get("cold_tail_pct_asof"), medians["cold_tail_pct_asof"]),
+    }
+    return {key: (value if math.isfinite(value) else float(medians[key])) for key, value in values.items()}
+
+
+def score_dist_probability(row: dict[str, Any]) -> float:
+    features = score_dist_sizing_features(row)
+    score = float(SCORE_DIST_MODEL_V1["intercept"])
+    for idx, name in enumerate(SCORE_DIST_MODEL_V1["feature_names"]):
+        value = features[name]
+        mu = float(SCORE_DIST_MODEL_V1["mu"][idx])
+        sd = float(SCORE_DIST_MODEL_V1["sd"][idx]) or 1.0
+        coef = float(SCORE_DIST_MODEL_V1["coef"][idx])
+        score += coef * ((value - mu) / sd)
+    return round(logistic(score), 6)
+
+
+def score_dist_tier(score: float) -> str:
+    if not math.isfinite(score):
+        return "missing"
+    if score <= float(SCORE_DIST_MODEL_V1["hot_train_q1"]):
+        return "low"
+    if score <= float(SCORE_DIST_MODEL_V1["hot_train_q2"]):
+        return "mid"
+    return "high"
+
+
+def shares_for_score_tier_0p8_1p2_1p5(*, price: float, row: dict[str, Any], min_shares: float) -> float:
+    base = shares_for_price_tier_6_8_10(price=price, min_shares=min_shares)
+    score = score_dist_probability(row)
+    tier = score_dist_tier(score)
+    multiplier = {"low": 0.8, "mid": 1.2, "high": 1.5}.get(tier, 1.0)
+    shares = min(15.0, base * multiplier)
+    return shares_for_fixed_count(shares=shares, min_shares=min_shares)
+
+
+def score_dist_sizing_meta(row: dict[str, Any]) -> dict[str, Any]:
+    score = score_dist_probability(row)
+    tier = score_dist_tier(score)
+    multiplier = {"low": 0.8, "mid": 1.2, "high": 1.5}.get(tier, 1.0)
+    return {
+        "score_dist_sizing_model": "score_dist_sizing_v1",
+        "score_dist_sizing_source_report": SCORE_DIST_MODEL_V1["source_report"],
+        "score_dist_probability": score,
+        "score_dist_tier": tier,
+        "score_dist_multiplier": multiplier,
+        "score_dist_features": score_dist_sizing_features(row),
+    }
+
+
 def sizing_quality(row: dict[str, Any]) -> float:
     pcal_ev = to_float(row.get("p_cal_no_city_ev"), math.nan)
     if math.isfinite(pcal_ev):
@@ -967,6 +1123,8 @@ def shares_for_sizing_policy(
         return shares_for_fixed_count(shares=8.0, min_shares=min_shares)
     if policy == "price_tier_6_8_10_shares":
         return shares_for_price_tier_6_8_10(price=price, min_shares=min_shares)
+    if policy == "score_tier_0p8_1p2_1p5_shares":
+        return shares_for_score_tier_0p8_1p2_1p5(price=price, row=row, min_shares=min_shares)
     raise RuntimeError(f"unknown sizing policy {policy}")
 
 
@@ -1042,6 +1200,8 @@ def sizing_shadow(price: float, p_yes: float, row: dict[str, Any], args: argpars
 
     ask_scaled_cost = max(0.0, min(5.0, 5.0 * max(0.25, min(1.0, (price - 0.05) / 0.15))))
     price_tier_shares = shares_for_price_tier_6_8_10(price=price, min_shares=args.min_order_shares)
+    score_tier_shares = shares_for_score_tier_0p8_1p2_1p5(price=price, row=row, min_shares=args.min_order_shares)
+    score_tier_meta = score_dist_sizing_meta(row)
     quality_tier_shares = shares_for_quality_price_tier_5_8_12(
         price=price,
         quality=sizing_quality(row),
@@ -1063,6 +1223,10 @@ def sizing_shadow(price: float, p_yes: float, row: dict[str, Any], args: argpars
         "fixed_cash_0p80": one(0.80),
         "fixed_8_shares": one_shares(shares_for_fixed_count(shares=8.0, min_shares=args.min_order_shares)),
         "price_tier_6_8_10_shares": one_shares(price_tier_shares),
+        "score_tier_0p8_1p2_1p5_shares": {
+            **one_shares(score_tier_shares),
+            **score_tier_meta,
+        },
         "quality_price_tier_5_8_12_shares": {
             **one_shares(quality_tier_shares),
             "quality_score": round(sizing_quality(row), 6),
@@ -1375,6 +1539,7 @@ def validate_candidate(
         else "available"
     )
     shadow = sizing_shadow(maker_limit_price, p_yes, enriched, args)
+    score_sizing_meta = score_dist_sizing_meta(enriched)
     return {
         **enriched,
         "decision_status": "planned",
@@ -1397,6 +1562,7 @@ def validate_candidate(
         "maker_planned_notional_usd": round(planned_notional, 6),
         "sizing_policy": safe_str(args.sizing_policy),
         "sizing_reference_price": round(maker_limit_price, 6),
+        **score_sizing_meta,
         "taker_fallback_notional_usd": round(taker_fallback_notional, 6),
         "taker_fallback_status": taker_fallback_status,
         "fresh_edge": round(p_yes - taker_limit_price, 6),
@@ -1476,9 +1642,14 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "edge_raw_yes": round(p_yes - price, 6),
         "edge_used_yes": round(p_yes - price, 6),
         "shadow_decision": "low_price_yes_lottery_tiny_live_v1",
-        "shadow_reason": "user_approved_price_tier_6_8_10_maker_first_forward_probe",
+        "shadow_reason": "user_approved_score_tier_0p8_1p2_1p5_maker_first_forward_probe",
         "live_sizing_policy": safe_str(decision.get("sizing_policy")),
         "sizing_reference_price": round(to_float(decision.get("sizing_reference_price"), price), 6),
+        "score_dist_sizing_model": safe_str(decision.get("score_dist_sizing_model")),
+        "score_dist_sizing_source_report": safe_str(decision.get("score_dist_sizing_source_report")),
+        "score_dist_probability": decision.get("score_dist_probability"),
+        "score_dist_tier": safe_str(decision.get("score_dist_tier")),
+        "score_dist_multiplier": decision.get("score_dist_multiplier"),
         "obs_source": "not_used_forecast_fact_selector",
         "model_version": safe_str(decision.get("model_version")),
         "paper_enabled": True,
