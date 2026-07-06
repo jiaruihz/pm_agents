@@ -21,6 +21,7 @@ RUNTIME_MONITOR_PLIST="$LAUNCH_DIR/$RUNTIME_MONITOR_LABEL.plist"
 DATA_FEED_RUNTIME="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data_feed_service_runtime}"
 DATA_FEED_SNAPSHOT_DIR="$DATA_FEED_RUNTIME/targeted_output/paper_snapshots"
 DATA_FEED_OBS="$DATA_FEED_RUNTIME/output/observations/latest.json"
+DATA_FEED_LAUNCHD_LOG_DIR="${WEATHER_DATA_FEED_LAUNCHD_LOG_DIR:-$PROJECT_DIR/runtime/_dashboard_logs}"
 REGIME_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
 SHADOW_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_shadow_v1"
 DATA_FEED_SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
@@ -68,7 +69,7 @@ EOF
 }
 
 write_launchagents() {
-  mkdir -p "$LAUNCH_DIR" "$DATA_FEED_RUNTIME/loop" "$REGIME_RUNTIME" "$SHADOW_RUNTIME" "$LOW_PRICE_RUNTIME" "$LOW_PRICE_TP_RUNTIME" "$LOW_PRICE_INTEGRATED_SHADOW_RUNTIME" "$RUNTIME_MONITOR_RUNTIME"
+  mkdir -p "$LAUNCH_DIR" "$DATA_FEED_RUNTIME/loop" "$DATA_FEED_LAUNCHD_LOG_DIR" "$REGIME_RUNTIME" "$SHADOW_RUNTIME" "$LOW_PRICE_RUNTIME" "$LOW_PRICE_TP_RUNTIME" "$LOW_PRICE_INTEGRATED_SHADOW_RUNTIME" "$RUNTIME_MONITOR_RUNTIME"
   cat >"$DATA_FEED_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -79,12 +80,13 @@ write_launchagents() {
   <array>
     <string>/usr/bin/env</string>
     <string>MAC_WEATHER_DATA_FEED_LOOP_CHILD=1</string>
+    <string>WEATHER_DATA_FEED_RUNTIME_ROOT=$DATA_FEED_RUNTIME</string>
     <string>$PROJECT_DIR/scripts/ops/start_mac_weather_data_feed_loop.sh</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>$DATA_FEED_RUNTIME/loop/data_feed_launchd.out.log</string>
-  <key>StandardErrorPath</key><string>$DATA_FEED_RUNTIME/loop/data_feed_launchd.err.log</string>
+  <key>StandardOutPath</key><string>$DATA_FEED_LAUNCHD_LOG_DIR/data_feed_launchd.out.log</string>
+  <key>StandardErrorPath</key><string>$DATA_FEED_LAUNCHD_LOG_DIR/data_feed_launchd.err.log</string>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
 </dict>
 </plist>

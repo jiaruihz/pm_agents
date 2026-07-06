@@ -22,7 +22,7 @@ and to keep the **data layer / collection / execution** separate.
 | Repo / host path | Runtime role | Owns | Must not own |
 |---|---|---|---|
 | `weather_data_feed/`（pm_agents 包，vendored 到 N100） | Data layer (逻辑) | city calendar, source profiles, observation parsers, snapshot protocol normalization | strategy/sizing/order/wallet/dashboard 逻辑 |
-| Mac `/Users/deepsleep/projects/weather_data_feed_service_runtime` | **Temporary production data collection**（2026-07-04 incident handoff） | paper snapshots, orderbook snapshots, live data-feed runtime output | strategy/sizing/order/wallet/dashboard logic |
+| Mac `/Volumes/jrs/weather_data_feed_service_runtime`（old `/Users/deepsleep/projects/weather_data_feed_service_runtime` is a symlink） | **Temporary production data collection**（2026-07-04 incident handoff; moved to JRS APFS disk on 2026-07-06） | paper snapshots, orderbook snapshots, live data-feed runtime output | strategy/sizing/order/wallet/dashboard logic |
 | Local Mac `/Users/deepsleep/projects/pm_agents` | **Temporary production execution + dashboard**, analysis, staging | dashboard DB, ingest/migration, fact tables, strategy research, lottery live / TP exit / regime routed live LaunchAgents | N100 disk recovery |
 | N100 `weather_data_feed_service/`（step-3 后新建） | Data collection runtime（paused until disk trust restored） | snapshot + daily-pipeline standard data products after recovery | 策略/下单 |
 | N100 `/home/jiarui/projects/weather-predict` | Historical production source / recovery target after 2026-07-01 disk incident | historical market snapshots, orderbook snapshots, paper ledger, city pools, weather caches, settlement history | live CLOB execution, pm_agent dashboard DB |
@@ -33,7 +33,9 @@ and to keep the **data layer / collection / execution** separate.
 ## Data Boundary
 
 During the 2026-07-04 emergency handoff, Mac `weather_data_feed_service_runtime`
-is the current market-data production source:
+became the current market-data production source. Since 2026-07-06 the actual
+runtime lives on `/Volumes/jrs/weather_data_feed_service_runtime`; the old
+`~/projects/weather_data_feed_service_runtime` path is a symlink.
 
 - `targeted_output/paper_snapshots/`
 - `targeted_output/orderbook_snapshots/`
@@ -43,6 +45,11 @@ Sync it into the canonical mirror with:
 ```bash
 scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only
 ```
+
+Because macOS LaunchAgent jobs currently hit `Operation not permitted` when
+writing the external APFS volume, the active data-feed collector is the tmux
+session `weather_data_feed_jrs` on socket `weather-jrs`, started with
+`scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`.
 
 Before the N100 disk incident, `weather-predict` was the source for market-data truth:
 

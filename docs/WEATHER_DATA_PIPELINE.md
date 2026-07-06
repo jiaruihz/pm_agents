@@ -15,6 +15,8 @@ Last updated: 2026-06-06
 >
 > 2026-07-04 更新: N100 7/1 发生 ext4 emergency read-only / IO error 事故后，Mac 临时接管生产。当前 market snapshot/orderbook 源为 `/Users/deepsleep/projects/weather_data_feed_service_runtime/targeted_output/`，live order 源为 `/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/live/` 和 active strategy runtime dirs。同步当前生产 market data 用 `scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only`。
 >
+> 2026-07-06 更新: Mac data-feed runtime 和本地 `runtime/weather_edge_v1/market_data` mirror 已迁到 APFS 外置盘 `/Volumes/jrs`。旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 和 `runtime/weather_edge_v1/market_data` 保留为 symlink。macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，所以 data-feed 当前由 `tmux -L weather-jrs` session `weather_data_feed_jrs` 常驻；重启/拔插盘后用 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh` 恢复。
+>
 > 2026-07-04 更新: full snapshot producer now persists decision-time hourly forecast curves as `targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl`, one row per city/target_date/snapshot. `build_weather_signal_candidates.py` mirrors them into `runtime/weather.db.fact_forecast_hourly_curves`; `fact_signal_candidates.forecast_values_hash` is the join key.
 
 Single source of truth for **where weather strategy data lives, who produces
@@ -84,9 +86,9 @@ unless matched by a real row in `fills`.
 
 | Path | Producer | Refresh | What it is |
 |---|---|---|---|
-| `weather_data_feed_service_runtime/targeted_output/paper_snapshots/snapshot_*.json` | Mac LaunchAgent `com.pm-agents.weather-data-feed` | full snapshot cadence | current production market snapshots |
-| `weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/YYYY-MM-DD/orderbook_snapshot_*.jsonl.gz` | Mac LaunchAgent `com.pm-agents.weather-data-feed` | full snapshot cadence | current production orderbook history; not backfillable if missed |
-| `weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac LaunchAgent `com.pm-agents.weather-data-feed` | full snapshot cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
+| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots/snapshot_*.json` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | current production market snapshots |
+| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/orderbook_snapshots/YYYY-MM-DD/orderbook_snapshot_*.jsonl.gz` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | current production orderbook history; not backfillable if missed |
+| `/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl` | Mac tmux `weather_data_feed_jrs` | full snapshot cadence | point-in-time hourly forecast curve, one row per city/target_date/snapshot |
 | `pm_agents/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-lottery-live` | live strategy cadence | current BUY_YES lottery CLOB order submissions |
 | `pm_agents/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-take-profit-exit` | live strategy cadence | current SELL_YES TP exit CLOB order submissions |
 | `pm_agents/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1/live_orders.jsonl` | Mac LaunchAgent `com.pm-agents.regime-routed-no-live` | live strategy cadence | current regime-routed NO live order submissions |
@@ -121,6 +123,8 @@ Sync current market data before rebuilding facts:
 ```bash
 scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only
 ```
+
+`runtime/weather_edge_v1/market_data` is a symlink to `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data`, so the sync writes the canonical local mirror to the external disk as well.
 
 ### 2.2 N100 historical production / recovery (`192.168.0.200`, user `jiarui`)
 

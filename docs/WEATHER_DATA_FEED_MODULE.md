@@ -120,6 +120,12 @@ snapshot_ts_utc
 - 本机镜像同步入口 `scripts/ops/sync_weather_remote.sh` 已支持 `--market-source=weather-data-feed`，可从
   `~/projects/weather_data_feed_service_runtime` 同步 snapshot / orderbook / cache 到原 canonical mirror：
   `runtime/weather_edge_v1/market_data/`。pm_agent 的 signal builder 仍消费这个本地 mirror，不迁入数据服务。
+- 2026-07-06 起 Mac 临时生产的实际 runtime 在 `/Volumes/jrs/weather_data_feed_service_runtime`，旧
+  `~/projects/weather_data_feed_service_runtime` 是 symlink；本地 canonical mirror
+  `runtime/weather_edge_v1/market_data` 也是指向 `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data`
+  的 symlink。macOS LaunchAgent 写外置卷会触发 `Operation not permitted`，当前 data-feed 用
+  `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh` 在 `tmux -L weather-jrs` session
+  `weather_data_feed_jrs` 中常驻。
 - 多源 METAR fetcher 已从 timing monitor 迁入 `weather_data_feed/observation_sources/fetchers.py`。当前 timing monitor
   的实际 source fetch 路径已委托给数据模块；orderbook timing、价格反应和策略判断仍留在原脚本。
 - 新增 `scripts/ops/weather_observation_source_cadence_audit.py`，用于持续记录 city/source 的 report time、first-seen time、
