@@ -8,6 +8,7 @@ import pytest
 
 from src.strategies.weather_edge_v1.tools import low_price_yes_tail_telemetry as tail_telemetry
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as stable_regime
+from src.strategies.weather_edge_v1.tools import regime_routed_temperature_context
 from weather_data_feed import weather_context
 from weather_feature_layer import bias, market, regimes, state
 from weather_feature_layer.builders import build_weather_state_frame, build_weather_state_frame_with_audits
@@ -34,6 +35,10 @@ def test_state_reexports_weather_context_without_private_multiplier() -> None:
     assert state.temperature_context_features(record) == weather_context.temperature_context_features(record)
     assert state.cloud_warming_interaction(0, 1.5, 2.0) == weather_context.cloud_warming_interaction(0, 1.5, 2.0)
     assert not hasattr(state, "temperature_context_multiplier")
+    assert not hasattr(weather_context, "temperature_context_multiplier")
+    assert regime_routed_temperature_context.temperature_context_multiplier(
+        {"route_leg": "runway_current_no", **state.temperature_context_features(record)}
+    ) > 0
 
 
 def test_feature_frame_metadata_contract_includes_pit_provenance() -> None:
@@ -290,3 +295,78 @@ def test_weather_state_frame_builder_rejects_invalid_pit_provenance() -> None:
             as_of_ts_utc="2026-07-06T19:00:00Z",
             pit_provenance="detect_time_only",
         )
+
+
+def test_weather_state_frame_builder_does_not_use_utc_hour_as_local_fallback() -> None:
+    frame = build_weather_state_frame(
+        [
+            {
+                "city": "LA",
+                "target_date": "2026-07-06",
+                "snapshot_ts_utc": "2026-07-06T19:00:00Z",
+                "unit": "F",
+                "forecast_max_native": 72,
+            }
+        ],
+        {
+            "records": [
+                {
+                    "city": "LA",
+                    "target_date": "2026-07-06",
+                    "status": "ok",
+                    "source": "aviationweather_metar",
+                    "station": "KLAX",
+                    "current_temp_c": 20,
+                    "running_max_c": 21,
+                }
+            ]
+        },
+        as_of_ts_utc="2026-07-06T19:00:00Z",
+    )
+
+    row = frame.iloc[0]
+    assert pd.isna(row["decision_hour_local"])
+    assert row["solar_window"] == "hour_missing"
+
+
+def test_weather_state_frame_builder_chooses_representative_row_deterministically() -> None:
+    frame = build_weather_state_frame(
+        [
+            {
+                "city": "LA",
+                "target_date": "2026-07-06",
+                "snapshot_ts_utc": "2026-07-06T18:00:00Z",
+                "unit": "F",
+                "forecast_max_native": 70,
+                "forecast_peak_hour_local": 14,
+                "forecast_peak_delta_hours_local": -3,
+            },
+            {
+                "city": "LA",
+                "target_date": "2026-07-06",
+                "snapshot_ts_utc": "2026-07-06T19:00:00Z",
+                "unit": "F",
+                "forecast_max_native": 72,
+                "forecast_peak_hour_local": 14,
+                "forecast_peak_delta_hours_local": -2,
+            },
+        ],
+        {
+            "records": [
+                {
+                    "city": "LA",
+                    "target_date": "2026-07-06",
+                    "status": "ok",
+                    "source": "aviationweather_metar",
+                    "station": "KLAX",
+                    "current_temp_c": 20,
+                    "running_max_c": 21,
+                }
+            ]
+        },
+        as_of_ts_utc="2026-07-06T19:00:00Z",
+    )
+
+    assert len(frame) == 1
+    assert frame.iloc[0]["decision_snapshot_ts_utc"] == "2026-07-06T19:00:00Z"
+    assert frame.iloc[0]["forecast_max_native"] == 72

@@ -46,6 +46,8 @@ from weather_data_feed.source_policy import load_city_configs  # noqa: E402
 from weather_data_feed.weather_context import (  # noqa: E402
     city_wind_context,
     temperature_context_features,
+)
+from src.strategies.weather_edge_v1.tools.regime_routed_temperature_context import (  # noqa: E402
     temperature_context_multiplier,
 )
 from weather_feature_layer.bias import (  # noqa: E402

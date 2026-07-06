@@ -30,7 +30,9 @@ import research_regime_routed_expression_router_v3 as router_v3  # noqa: E402
 import research_regime_routed_expression_router_v3_live_like_entry_v1 as live_entry_v1  # noqa: E402
 import research_regime_routed_no_expression_v1 as expression_v1  # noqa: E402
 import research_regime_routed_no_mechanism_split_v2 as mechanism_v2  # noqa: E402
-from weather_data_feed.weather_context import temperature_context_multiplier  # noqa: E402
+from src.strategies.weather_edge_v1.tools.regime_routed_temperature_context import (  # noqa: E402
+    temperature_context_multiplier,
+)
 
 
 OUT_DIR = ROOT / "docs/analysis/2026-06/generated/regime_routed_v3_route_specific_timing_wf_v1"

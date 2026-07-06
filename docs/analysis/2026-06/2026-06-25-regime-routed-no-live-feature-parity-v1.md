@@ -1,6 +1,6 @@
 # Regime-Routed NO Live Feature Parity V1
 
-Generated: `2026-06-26T07:20:30+00:00`
+Generated: `2026-07-06T14:53:24+00:00`
 
 ## Verdict
 
@@ -13,15 +13,15 @@ Generated: `2026-06-26T07:20:30+00:00`
 
 | slice | rows | dates | cities | cost_usd | pnl_usd | roi | hit_rate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| main_before_parity_gate | 271 | 35 | 35 | $+1,355.00 | $+155.73 | +11.5% | +51.7% |
-| main_after_parity_gate | 264 | 35 | 35 | $+1,320.00 | $+124.94 | +9.5% | +51.5% |
-| main_failed_parity_gate | 7 | 7 | 7 | $+35.00 | $+30.80 | +88.0% | +57.1% |
+| main_before_parity_gate | 279 | 38 | 35 | $+1,395.00 | $-8.69 | -0.6% | +48.4% |
+| main_after_parity_gate | 275 | 38 | 35 | $+1,375.00 | $-37.82 | -2.8% | +48.0% |
+| main_failed_parity_gate | 4 | 4 | 4 | $+20.00 | $+29.13 | +145.6% | +75.0% |
 
 ## NYC As-Of Replay
 
 | label | asof_utc | bracket | ask | day_regime | intraday_state | moisture_cloud_regime | wind_regime | running_max_state | soft_balanced | soft_shares | live_feature_parity_ok | would_execute_without_prior_duplicate | would_execute_with_existing_duplicate |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| first_live_order | 2026-06-25T15:54:21+00:00 | 82-83 | 0.350 | day_marginal_runway | active_warming | cloud_suppression | light_wind | fresh_running_high | 1.000 | 14.286 | True | True | False |
+| first_live_order | 2026-06-25T15:54:21+00:00 | None | None | None | None | None | None | None | None | None | None | None | None |
 
 ## Boundary
 

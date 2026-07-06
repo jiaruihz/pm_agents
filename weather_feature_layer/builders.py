@@ -218,12 +218,19 @@ def _snapshot_records(snapshot_rows: Mapping[str, Any] | Iterable[Mapping[str, A
 
 
 def _representative_snapshot_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    by_key: dict[tuple[str, str], tuple[tuple[int, datetime], dict[str, Any]]] = {}
     for row in records:
         key = (str(row.get("city") or ""), str(row.get("target_date") or ""))
-        if key not in by_key or _first_float(row, "forecast_max_native", "forecast_tmax_native") is not None:
-            by_key[key] = row
-    return list(by_key.values())
+        row_sort = _representative_sort_key(row)
+        if key not in by_key or row_sort > by_key[key][0]:
+            by_key[key] = (row_sort, row)
+    return [value for _sort, value in by_key.values()]
+
+
+def _representative_sort_key(row: Mapping[str, Any]) -> tuple[int, datetime]:
+    has_forecast = 1 if _first_float(row, "forecast_max_native", "forecast_tmax_native") is not None else 0
+    snapshot_dt = parse_utc(row.get("snapshot_ts_utc") or row.get("ts_utc")) or datetime.min.replace(tzinfo=timezone.utc)
+    return has_forecast, snapshot_dt
 
 
 def _index_observations(observation_cache: Mapping[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
@@ -344,12 +351,9 @@ def _decision_hour(snapshot: Mapping[str, Any]) -> float | None:
     delta = _first_float(snapshot, "forecast_peak_delta_hours_local", "peak_delta_hours_local")
     if peak is not None and delta is not None:
         return peak + delta
-    local_ts = parse_utc(snapshot.get("city_local_ts") or snapshot.get("snapshot_local_ts"))
+    local_ts = parse_utc(snapshot.get("city_local_ts") or snapshot.get("snapshot_local_ts") or snapshot.get("ts_local"))
     if local_ts is not None:
         return local_ts.hour + local_ts.minute / 60.0
-    utc_ts = parse_utc(snapshot.get("snapshot_ts_utc") or snapshot.get("ts_utc"))
-    if utc_ts is not None:
-        return utc_ts.hour + utc_ts.minute / 60.0
     return None
 
 

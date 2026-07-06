@@ -23,7 +23,10 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from weather_data_feed.weather_context import temperature_context_features, temperature_context_multiplier  # noqa: E402
+from src.strategies.weather_edge_v1.tools.regime_routed_temperature_context import (  # noqa: E402
+    temperature_context_multiplier,
+)
+from weather_data_feed.weather_context import temperature_context_features  # noqa: E402
 
 
 IN_DETAILS = ROOT / "docs/analysis/2026-06/generated/regime_routed_no_wind_context_v2/selected_with_wind_context.csv"

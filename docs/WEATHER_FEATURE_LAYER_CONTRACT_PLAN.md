@@ -517,6 +517,11 @@ Acceptance:
 
 ### Phase 2: Regime Labels And Bracket Primitives
 
+Implementation progress: 2026-07-06 `temperature_context_multiplier()` was
+removed from `weather_data_feed.weather_context` and moved to
+`src/strategies/weather_edge_v1/tools/regime_routed_temperature_context.py`.
+It remains a regime-routed sizing overlay, not a shared feature-layer primitive.
+
 Deliverables:
 
 - Extract `parse_bracket`, `bracket_contains`, bracket low/high/mid helpers to `market.py`.
@@ -559,6 +564,10 @@ Phase 4B offline parity against the tmax live-candidate state builder matched
 only remaining diff is `decision_hour_local` precision (feature layer decimal
 hour vs legacy tmax integer hour bucket). See
 `docs/analysis/2026-07/2026-07-06-weather-state-frame-parity-v1.md`.
+Regime-routed live feature replay was rerun on 2026-07-06; historical parity
+gate coverage was 275/279 rows, but the NYC as-of replay returned
+`no_asof_records` from the current live fetch path, so that acceptance item is
+recorded as partially checked, not fully closed.
 
 Deliverables:
 
@@ -655,6 +664,11 @@ Diff standards:
 - Appropriate input for `weather_state_v1`.
 - Carries observation freshness as weather-truth credibility fields such as
   `obs_age_minutes`, `expected_report_cadence`, and `station_gap_state`.
+  `station_gap_state` currently means: non-ok observations become
+  `observation_not_ok`; missing age becomes `age_unknown`; missing cadence uses
+  `fresh_unknown_cadence` up to 90 minutes and `stale_unknown_cadence` above 90
+  minutes; known cadence uses `within_expected_cadence` until
+  `age_minutes > cadence + 10`, then `beyond_expected_cadence`.
 
 `source_events`:
 

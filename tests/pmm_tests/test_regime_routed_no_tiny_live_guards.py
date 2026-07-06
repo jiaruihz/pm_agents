@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import importlib
+import sys
+
 import pandas as pd
 
 from scripts.ops import regime_routed_no_tiny_live as live
+
+
+def test_live_runner_import_closure_excludes_training_labels():
+    sys.modules.pop("weather_feature_layer.labels", None)
+    importlib.reload(live)
+    assert "weather_feature_layer.labels" not in sys.modules
 
 
 def test_current_local_day_filter_drops_tomorrow_markets():
