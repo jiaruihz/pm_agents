@@ -1,0 +1,3 @@
+evidence_layer,city,rows,dates,cities,cost_usd,pnl_usd,roi,roi_ci_low,roi_ci_high,avg_spread,avg_top_ask_notional,win_rate
+historical_best_ask_diagnostic,CapeTown,7,7,1,4.12,-0.1200000000000001,-0.029126213592233035,-0.7506234413965087,0.5306122448979591,,,0.5714285714285714
+frozen_live_like_route_price,CapeTown,3,3,1,1.6300000000000001,0.3699999999999999,0.22699386503067476,-1.0,0.8867924528301886,,,0.6666666666666666
