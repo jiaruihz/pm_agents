@@ -575,6 +575,10 @@ Regime-routed live feature replay was rerun on 2026-07-06; historical parity
 gate coverage was 275/279 rows, but the NYC as-of replay returned
 `no_asof_records` from the current live fetch path, so that acceptance item is
 recorded as partially checked, not fully closed.
+Phase 5A adds shared exact-bracket settlement geometry and symmetric bid/ask
+book-state fields with tmax P0/P3 fixture parity. It does not move tmax
+market-local probability distribution, anchor distributions, selectors, or any
+live consumer decision input.
 
 Deliverables:
 
@@ -595,14 +599,15 @@ Acceptance:
 
 Deliverables:
 
-- Implement `add_market_geometry_features()` for `city_date_snapshot_bracket`.
-- Extract tmax P0 market-local distribution and P3 boundary features that are not model-specific.
-- Extract HeadA bracket-distance helpers into shared geometry.
-- Include bid-side sibling fields alongside ask-side fields.
+- [done 2026-07-06 Phase 5A] Implement `add_market_geometry_features()` for exact-bracket settlement geometry on `city_date_snapshot_bracket`-style rows.
+- [done 2026-07-06 Phase 5A] Extract tmax P0 interval/hour/relative-position geometry and P3 boundary features that are not model-specific.
+- [already present] Extract HeadA bracket-distance helpers into shared geometry.
+- [done 2026-07-06 Phase 5A] Include bid-side sibling fields alongside ask-side fields.
+- [deferred] Keep tmax market-local probability distribution, soft-anchor distributions, blend model, EV selector, and runner rewiring strategy-private until separate parity/replay approval.
 
 Acceptance:
 
-- tmax P0/P3 feature columns match old scripts for the same fixture rows.
+- tmax P0/P3 feature columns match old scripts for the same fixture rows. Done for interval/hour/position/boundary geometry in `tests/pmm_tests/test_weather_feature_layer_contract.py`; market probability columns remain private and are not claimed as shared parity.
 - HeadA mechanism overlay candidate rows match old bracket-distance and book-state fields.
 - Bid/ask ladder fields round-trip on Range RV and TP/stop fixture rows.
 - No `selected_expression` migration yet.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -105,6 +106,136 @@ def test_market_geometry_preserves_stable_and_tail_bracket_semantics() -> None:
     assert market.bracket_distance_features({"bracket": "36+", "forecast_max_native": 37.2}) == (
         tail_telemetry.bracket_distance_features({"bracket": "36+", "forecast_max_native": 37.2})
     )
+
+
+def test_market_geometry_matches_tmax_p0_p3_fixture_columns() -> None:
+    script_dir = Path("scripts/analysis/reheat_risk").resolve()
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
+    import research_tmax_distribution_p0_anchor_scorecard_v1 as tmax_p0  # noqa: PLC0415
+    import research_tmax_distribution_p1_fusion_scorecard_v1 as tmax_p1  # noqa: PLC0415
+    import research_tmax_distribution_p3_feature_ablation_v1 as tmax_p3  # noqa: PLC0415
+
+    rows = pd.DataFrame(
+        [
+            {
+                "current_bracket": "82-83",
+                "d1_no_bracket": "84",
+                "d2_no_bracket": "85",
+                "decision_hour_local": 13.5,
+                "forecast_peak_delta_hours_local": -1.25,
+                "forecast_max_native": 84.4,
+                "running_native": 82.04,
+                "current_native": 81.5,
+                "current_yes_ask": 0.42,
+                "current_yes_bid": 0.39,
+                "current_yes_ask_size": 120,
+                "current_yes_bid_size": 90,
+                "current_bracket_no_ask": 0.61,
+                "current_bracket_no_bid": 0.58,
+                "d1_no_ask": 0.75,
+                "d1_no_bid": 0.72,
+                "d2_no_ask": 0.91,
+                "d2_no_bid": 0.88,
+            },
+            {
+                "current_bracket": "86+",
+                "d1_no_bracket": "87+",
+                "d2_no_bracket": "below 84",
+                "decision_hour_local": None,
+                "forecast_peak_delta_hours_local": None,
+                "forecast_max_native": 86.8,
+                "running_native": 85.7,
+                "current_native": 85.1,
+                "current_yes_ask": 0.51,
+                "current_yes_bid": 0.47,
+                "current_bracket_no_ask": 0.50,
+                "current_bracket_no_bid": 0.46,
+                "d1_no_ask": 0.63,
+                "d1_no_bid": 0.60,
+                "d2_no_ask": 0.22,
+                "d2_no_bid": 0.18,
+            },
+        ]
+    )
+
+    for label in ["82-83", "84", "86+", "below 84"]:
+        assert market.settlement_interval(label) == tmax_p0._interval(label)
+
+    legacy_rows = []
+    for item in rows.to_dict("records"):
+        current_iv = tmax_p0._interval(item.get("current_bracket"))
+        d1_iv = tmax_p0._interval(item.get("d1_no_bracket"))
+        d2_iv = tmax_p0._interval(item.get("d2_no_bracket"))
+        legacy = dict(item)
+        hour = tmax_p0._as_float(item.get("decision_hour_local"))
+        legacy["hour_bucket"] = tmax_p0._hour_bucket(item.get("decision_hour_local"))
+        if hour is not None:
+            legacy["decision_hour_sin"] = math.sin(2.0 * math.pi * hour / 24.0)
+            legacy["decision_hour_cos"] = math.cos(2.0 * math.pi * hour / 24.0)
+        peak_delta = tmax_p0._as_float(item.get("forecast_peak_delta_hours_local"))
+        legacy["forecast_peak_delta_abs"] = abs(peak_delta) if peak_delta is not None else None
+        current_upper = tmax_p1._safe_upper(current_iv)
+        d1_upper = tmax_p1._safe_upper(d1_iv)
+        d2_upper = tmax_p1._safe_upper(d2_iv)
+        current_mid = tmax_p1._safe_mid(current_iv)
+        d1_mid = tmax_p1._safe_mid(d1_iv)
+        d2_mid = tmax_p1._safe_mid(d2_iv)
+        legacy["forecast_minus_running_native"] = tmax_p1._delta(item.get("forecast_max_native"), item.get("running_native"))
+        legacy["forecast_minus_current_native"] = tmax_p1._delta(item.get("forecast_max_native"), item.get("current_native"))
+        legacy["running_minus_current_native"] = tmax_p1._delta(item.get("running_native"), item.get("current_native"))
+        legacy["forecast_to_current_upper_native"] = tmax_p1._delta(item.get("forecast_max_native"), current_upper)
+        legacy["forecast_to_d1_upper_native"] = tmax_p1._delta(item.get("forecast_max_native"), d1_upper)
+        legacy["forecast_to_d2_upper_native"] = tmax_p1._delta(item.get("forecast_max_native"), d2_upper)
+        legacy["forecast_to_current_mid_native"] = tmax_p1._delta(item.get("forecast_max_native"), current_mid)
+        legacy["forecast_to_d1_mid_native"] = tmax_p1._delta(item.get("forecast_max_native"), d1_mid)
+        legacy["forecast_to_d2_mid_native"] = tmax_p1._delta(item.get("forecast_max_native"), d2_mid)
+        legacy["running_to_current_upper_native"] = tmax_p1._delta(item.get("running_native"), current_upper)
+        legacy["current_to_current_upper_native"] = tmax_p1._delta(item.get("current_native"), current_upper)
+        if current_mid is not None:
+            legacy["running_position_in_current_native"] = tmax_p1._delta(item.get("running_native"), current_mid)
+            legacy["current_position_in_current_native"] = tmax_p1._delta(item.get("current_native"), current_mid)
+        legacy_rows.append(legacy)
+    legacy_df = tmax_p3._add_boundary_features(pd.DataFrame(legacy_rows))
+    shared = market.add_market_geometry_features(rows)
+
+    columns = [
+        "hour_bucket",
+        "decision_hour_sin",
+        "decision_hour_cos",
+        "forecast_peak_delta_abs",
+        "forecast_minus_running_native",
+        "forecast_minus_current_native",
+        "running_minus_current_native",
+        "forecast_to_current_upper_native",
+        "forecast_to_d1_upper_native",
+        "forecast_to_d2_upper_native",
+        "forecast_to_current_mid_native",
+        "forecast_to_d1_mid_native",
+        "forecast_to_d2_mid_native",
+        "running_to_current_upper_native",
+        "current_to_current_upper_native",
+        "running_position_in_current_native",
+        "current_position_in_current_native",
+        "current_bracket_width_native",
+        "current_frac_in_current_bracket",
+        "running_frac_in_current_bracket",
+        "forecast_frac_in_current_bracket",
+        "current_native_frac",
+        "running_native_frac",
+        "forecast_native_frac",
+        "current_dist_to_upper_share",
+        "running_dist_to_upper_share",
+        "forecast_dist_to_upper_share",
+    ]
+    pd.testing.assert_frame_equal(shared[columns], legacy_df[columns])
+
+    assert math.isclose(shared.loc[0, "current_no_best_ask"], 0.61)
+    assert math.isclose(shared.loc[0, "current_no_best_bid"], 0.58)
+    assert math.isclose(shared.loc[0, "current_no_mid"], 0.595)
+    assert math.isclose(shared.loc[0, "current_no_spread"], 0.03)
+    assert math.isclose(shared.loc[0, "d1_no_mid"], 0.735)
+    assert math.isclose(shared.loc[0, "d2_no_spread"], 0.03)
 
 
 @dataclass
