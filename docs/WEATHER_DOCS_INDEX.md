@@ -1,7 +1,7 @@
 # Weather Docs Index
 
 Status: current-source
-Updated: 2026-07-06 regime time/route expansion report
+Updated: 2026-07-06 feature layer contract plan
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -73,6 +73,7 @@ Status 口径：
 | [WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md) | `current-source` | N100 -> 本机镜像 -> DB -> API 的脚本职责和数据链路；登记 Mac forecast-tail / regime / tmax / exit JSONL → shared `order_runtime.py` / `weather_order_executor.py` → `orders` → `fills/fact_trades` 的执行事件与成交 PnL 分层 |
 | [WEATHER_DATA_FEED_MODULE.md](WEATHER_DATA_FEED_MODULE.md) | `current-source` | 新 `weather_data_feed` 共用数据模块的 repo/deploy 边界、当前模块职责、后续拆独立部署路径 |
 | [WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md](WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md) | `current-reference` | 通用日内温度状态 / context feature 层：把 `reheat_feature_factory_v1` 概念提升为 `temperature_state_feature_factory`，统一解释云量×升温、湿度×云、风×海洋/地形、forecast peak clock，并供 current YES/current NO/d1-d2 NO/Range RV 共用 |
+| [WEATHER_FEATURE_LAYER_CONTRACT_PLAN.md](WEATHER_FEATURE_LAYER_CONTRACT_PLAN.md) | `design-draft` | 独立 `weather_feature_layer/` 包的边界和迁移计划：定义哪些机制特征共享、哪些策略特征私有、哪些字段禁止进入特征层，并按 Phase 0-7 规定 parity 验收 |
 | [2026-07-05-temperature-path-mechanism-decomposition-v1.md](analysis/2026-07/2026-07-05-temperature-path-mechanism-decomposition-v1.md) | `snapshot` | `trend3h_positive` / 3h 温度路径机制拆解基础报告：同步+重建后 CLOB gate=true，fact 层到 7/05-7/06，atlas 机制层到 7/03；把松散 `trend3h_positive` 收敛成 `trend3h_bucket`、`trend3h_warming_ge0_5`、`sustained_warming_1h3h`、`one_hour_warm_without_3h`、`runway_sustained_warming`、`late_reheat_after_dip` 等共享表达。物理层很强（`sustained_warming_1h3h` future break 77.7%、d1 hit 22.8%；`one_hour_warm_without_3h` future break 17.1%），但交易层仍需概率头/ask/depth/fresh-forward；结论：promote as shared context feature + HeadB shadow telemetry，不作 live gate |
 | [WEATHER_FEATURE_LAYERING_PLAN.md](WEATHER_FEATURE_LAYERING_PLAN.md) | `design-draft` | 特征/数据/执行资产的总分层设计草案；已审阅，不能照单执行，实际边界见 feature-layering review 与 ARCHITECTURE_SPINE |
 | [2026-07-05-feature-layering-plan-review-v1.md](analysis/2026-07/2026-07-05-feature-layering-plan-review-v1.md) | `current-reference` | 对 FEATURE_LAYERING_PLAN 的批判性审阅：P1-P12 哪些正确、哪些需调整、哪些误判；记录本轮已落地的 versioned CITY_FAMILY 与 shared SKY_CODE 收口 |
