@@ -284,6 +284,84 @@ CREATE TABLE IF NOT EXISTS weather_strategy_shadow_queue (
     refreshed_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS weather_live_order_events (
+    event_id TEXT PRIMARY KEY,
+    source_path TEXT NOT NULL,
+    source_line_no INTEGER NOT NULL,
+    source_mtime_utc TEXT,
+    record_type TEXT,
+    created_at_utc TEXT,
+    strategy_instance TEXT,
+    strategy_id TEXT,
+    strategy_family TEXT,
+    decision_mode TEXT,
+    execution_mode TEXT,
+    execution_policy TEXT,
+    execution_action TEXT,
+    child_order_role TEXT,
+    profile TEXT,
+    combo TEXT,
+    signal_id TEXT,
+    plan_id TEXT,
+    execution_id TEXT,
+    order_id TEXT,
+    source_order_id TEXT,
+    cancel_before_order_id TEXT,
+    city TEXT,
+    city_pool TEXT,
+    icao TEXT,
+    target_date TEXT,
+    bracket TEXT,
+    unit TEXT,
+    signal_side TEXT,
+    order_side TEXT,
+    token_id TEXT,
+    condition_id TEXT,
+    market_id TEXT,
+    status TEXT,
+    clob_status TEXT,
+    quote_status TEXT,
+    quote_reason TEXT,
+    error_classification TEXT,
+    error_reason TEXT,
+    order_kind TEXT,
+    maker_only INTEGER,
+    sizing_policy TEXT,
+    score_dist_sizing_model TEXT,
+    score_dist_probability REAL,
+    score_dist_tier TEXT,
+    score_dist_multiplier REAL,
+    limit_price REAL,
+    requested_price REAL,
+    posted_price REAL,
+    best_bid REAL,
+    best_ask REAL,
+    spread REAL,
+    shares REAL,
+    source_remaining_shares REAL,
+    source_filled_shares REAL,
+    notional REAL,
+    posted_notional REAL,
+    order_notional_cap REAL,
+    model_p_yes REAL,
+    edge REAL,
+    fee_adjusted_edge REAL,
+    forecast_source TEXT,
+    model_version TEXT,
+    forecast_max_native REAL,
+    forecast_max_f REAL,
+    forecast_peak_time_local TEXT,
+    decision_snapshot_ts_utc TEXT,
+    snapshot_ts_utc TEXT,
+    source_order_age_min REAL,
+    final_yes REAL,
+    settlement_status TEXT,
+    settled INTEGER,
+    contract_won INTEGER,
+    payload TEXT NOT NULL,
+    built_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_runs_mode_state ON runs(execution_mode, state);
 CREATE INDEX IF NOT EXISTS idx_runs_producer ON runs(producer_system, producer_run_id);
 CREATE INDEX IF NOT EXISTS idx_signals_target_city ON signals(target_date, city);
@@ -313,6 +391,14 @@ CREATE INDEX IF NOT EXISTS idx_weather_strategy_artifacts_strategy
     ON weather_strategy_runtime_artifacts(strategy_instance);
 CREATE INDEX IF NOT EXISTS idx_weather_strategy_shadow_queue_status
     ON weather_strategy_shadow_queue(status, priority);
+CREATE INDEX IF NOT EXISTS idx_weather_live_order_events_strategy_date
+    ON weather_live_order_events(strategy_instance, target_date, city);
+CREATE INDEX IF NOT EXISTS idx_weather_live_order_events_signal
+    ON weather_live_order_events(signal_id);
+CREATE INDEX IF NOT EXISTS idx_weather_live_order_events_status
+    ON weather_live_order_events(status, clob_status, quote_status);
+CREATE INDEX IF NOT EXISTS idx_weather_live_order_events_sizing
+    ON weather_live_order_events(sizing_policy, score_dist_tier);
 
 CREATE TRIGGER IF NOT EXISTS signals_canonical_before_update
 BEFORE UPDATE ON signals

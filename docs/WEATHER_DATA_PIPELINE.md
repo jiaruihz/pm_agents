@@ -91,6 +91,14 @@ unless matched by a real row in `fills`.
 | `pm_agents/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl` | Mac LaunchAgent `com.pm-agents.low-price-yes-take-profit-exit` | live strategy cadence | current SELL_YES TP exit CLOB order submissions |
 | `pm_agents/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1/live_orders.jsonl` | Mac LaunchAgent `com.pm-agents.regime-routed-no-live` | live strategy cadence | current regime-routed NO live order submissions |
 
+These live JSONL sources are materialized into
+`runtime/weather.db.weather_live_order_events` by
+`scripts/etl/build_weather_live_order_events.py`. Use that table for live
+order-event questions such as city/date/bracket, YES/NO, sizing policy, score
+tier, maker/taker/lifecycle action, blocked/error state, price, shares,
+notional and execution policy. It remains submitted-order lineage; realized
+cash/PnL still comes from `fills` and `fact_trades`.
+
 Health gate:
 
 ```bash
