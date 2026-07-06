@@ -151,6 +151,42 @@ def check_snapshot_duplicates(snapshot_path: Path, *, now_utc: datetime, max_age
     }
 
 
+def check_snapshot_source_model(snapshot_path: Path) -> dict[str, Any]:
+    payload = load_snapshot(snapshot_path)
+    rows = [row for row in payload.get("records", []) if isinstance(row, dict)]
+    summary = payload.get("source_model_summary")
+    forecast_source_counts = Counter(str(row.get("forecast_source") or "") for row in rows)
+    forecast_source_counts.pop("", None)
+    model_counts = Counter(str(row.get("model") or "") for row in rows)
+    model_counts.pop("", None)
+
+    if not isinstance(summary, dict):
+        return {
+            "path": str(snapshot_path),
+            "status": "missing_source_model_summary",
+            "source_model_summary": None,
+            "forecast_source_counts": dict(sorted(forecast_source_counts.items())),
+            "model_counts": dict(sorted(model_counts.items())),
+        }
+
+    fallback_counts = summary.get("fallback_counts") if isinstance(summary.get("fallback_counts"), dict) else {}
+    assigned_counts = summary.get("assigned_counts") if isinstance(summary.get("assigned_counts"), dict) else {}
+    active_counts = summary.get("active_counts") if isinstance(summary.get("active_counts"), dict) else {}
+    status = "ok"
+    if any(int(count or 0) > 0 for count in fallback_counts.values()):
+        status = "source_fallback_detected"
+    elif assigned_counts != active_counts:
+        status = "assigned_active_mismatch"
+
+    return {
+        "path": str(snapshot_path),
+        "status": status,
+        "source_model_summary": summary,
+        "forecast_source_counts": dict(sorted(forecast_source_counts.items())),
+        "model_counts": dict(sorted(model_counts.items())),
+    }
+
+
 def check_orderbook_snapshots(orderbook_dir: Path, *, now_utc: datetime, max_age_min: float) -> dict[str, Any]:
     latest = latest_orderbook_snapshot(orderbook_dir)
     if latest is None:
@@ -272,11 +308,13 @@ def check_summaries(paths: list[Path]) -> list[dict[str, Any]]:
 def overall_status(sections: dict[str, Any]) -> str:
     parity = sections["snapshot_parity"]
     snapshot = sections["snapshot_duplicates"]
+    source_model = sections["snapshot_source_model"]
     orderbook = sections.get("orderbook_snapshots", {})
     telemetry = sections["telemetry"]
     live_orders = sections["live_orders"]
     hard_fail = (
         parity.get("status") != "ok"
+        or source_model.get("status") != "ok"
         or orderbook.get("missing")
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
@@ -324,6 +362,7 @@ def main() -> int:
     sections = {
         "snapshot_parity": check_snapshot(snapshot_path),
         "snapshot_duplicates": check_snapshot_duplicates(snapshot_path, now_utc=now_utc, max_age_min=args.max_snapshot_age_min),
+        "snapshot_source_model": check_snapshot_source_model(snapshot_path),
         "orderbook_snapshots": check_orderbook_snapshots(
             Path(args.orderbook_dir),
             now_utc=now_utc,
