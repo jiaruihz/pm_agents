@@ -586,6 +586,13 @@ Phase 5C adds the initial file-backed feature store helper
 that can join a sample opportunity row back to the stored frame. It does not
 ALTER `fact_signal_candidates`, start a live/shadow writer, or make any strategy
 consume the stored frame for decisions.
+Phase 6A-C starts the low-risk consumer path: tmax P1 research consumes shared
+market geometry; zero-notional shadows (`tmax_distribution_edge_shadow_v1`,
+`low_price_yes_integrated_tail_shadow_v2`, `regime_routed_no_shadow_v1`) attach
+runtime-safe `feature_frame_ref`; HeadA tiny-live
+`low_price_yes_lottery_tiny_live.py` attaches the same ref only to telemetry
+decision rows. None of these refs are used as selector, sizing, quote, or order
+inputs.
 
 Deliverables:
 
@@ -625,9 +632,9 @@ Acceptance:
 
 Order:
 
-1. Research scripts and generated reports.
-2. Zero-notional shadows.
-3. Tiny-live telemetry-only fields.
+1. [done 2026-07-06 Phase 6A] Research scripts and generated reports: tmax P1 geometry now consumes `weather_feature_layer.market.add_market_geometry_features()`; tmax probability/anchor/model logic stays private.
+2. [done 2026-07-06 Phase 6B] Zero-notional shadows: tmax distribution shadow, low-price integrated-tail shadow, and regime-routed NO shadow attach non-blocking `feature_frame_ref` rows.
+3. [done 2026-07-06 Phase 6C] Tiny-live telemetry-only fields: HeadA low-price YES tiny-live decision rows attach non-blocking `feature_frame_ref`; plans/orders do not consume it.
 4. Tiny-live decision inputs only after replay parity.
 5. No metar_cross FOK fast path migration in this plan.
 

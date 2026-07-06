@@ -40,6 +40,7 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
 )
 from src.strategies.weather_edge_v1.runtime import order_runtime
 from weather_data_feed.source_policy import city_slug
+from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
 SNAPSHOT_DIR_DEFAULT = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
@@ -60,6 +61,7 @@ TOKEN_CACHE_OUT = RUNTIME_DIR / "token_cache.json"
 LIVE_OUT = LIVE_DIR / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
 FILLS_IN = ROOT / "runtime/weather_edge_v1/clob_fills.jsonl"
 LIFECYCLE_OUT = RUNTIME_DIR / "maker_lifecycle_decisions.jsonl"
+FEATURE_STORE_DEFAULT = ROOT / os.environ.get("WEATHER_FEATURE_STORE_DIR", "runtime/weather_feature_store")
 
 STRATEGY_INSTANCE = "low_price_yes_lottery_tiny_live_v1"
 STRATEGY_ID = "low_price_yes_lottery_tiny_live_v1"
@@ -1695,6 +1697,24 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
     }
 
 
+def attach_decision_feature_ref(decision: dict[str, Any]) -> dict[str, Any]:
+    return attach_runtime_feature_frame_ref(
+        decision,
+        store_root=FEATURE_STORE_DEFAULT,
+        feature_grain="low_price_yes_lottery_tiny_live_decision",
+        source_profile_id=STRATEGY_INSTANCE,
+        builder_version="low_price_yes_lottery_tiny_live_feature_ref_v1",
+        key_columns=(
+            "strategy_instance",
+            "signal_id",
+            "city",
+            "target_date",
+            "decision_snapshot_ts_utc",
+            "bracket",
+        ),
+    )
+
+
 def choose_lifecycle_action(
     *,
     order: dict[str, Any],
@@ -2094,6 +2114,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     planned: list[dict[str, Any]] = []
     for row in raw_candidates:
         decision = validate_candidate(row, args, cache, submitted_signal_ids, submitted_natural_keys, tail_telemetry_resources)
+        decision = attach_decision_feature_ref(decision)
         decisions.append(decision)
         if decision.get("decision_status") == "planned":
             planned.append(decision)
@@ -2136,6 +2157,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "date_window_excluded_matching_rows": date_window_excluded_counts,
         "raw_candidate_rows_after_city_date_dedupe": len(raw_candidates),
         "decision_count": len(decisions),
+        "feature_frame_ref_stored_count": sum(1 for row in decisions if safe_str(row.get("feature_frame_ref_status")) == "stored"),
+        "feature_frame_ref_error_count": sum(1 for row in decisions if safe_str(row.get("feature_frame_ref_status")) == "error"),
         "planned_count": len(planned),
         "entry_plan_count": len(entry_plans),
         "maker_lifecycle_decision_count": len(maker_lifecycle_decisions),
