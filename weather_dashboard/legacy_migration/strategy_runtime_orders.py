@@ -270,6 +270,7 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
     for key in (
         "condition_id",
         "forecast_source",
+        "model_version",
         "forecast_max_f",
         "forecast_max_native",
         "forecast_peak_hour_local",
@@ -301,6 +302,14 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
     row["market_price"] = row.get("market_price") or row.get("posted_price") or row.get("limit_price") or snap.get("entry_price")
     row["edge"] = row.get("edge") or snap.get("edge") or 0.0
     row["forecast_source"] = row.get("forecast_source") or "open_meteo_live_gfs"
+    if not row.get("model_version"):
+        source = str(row.get("forecast_source") or "").lower()
+        if "ecmwf" in source:
+            row["model_version"] = "ecmwf"
+        elif "gfs" in source:
+            row["model_version"] = "gfs"
+        else:
+            row["model_version"] = str(row.get("forecast_model_tail") or snap.get("forecast_model_tail") or "gfs")
     row["source_run_id"] = row.get("source_run_id") or row.get("strategy_instance") or row.get("strategy_id") or row.get("record_type")
     if not row.get("condition_id"):
         row["condition_id"] = snap.get("condition_id") or ""

@@ -282,14 +282,6 @@ if [[ $REBUILD -eq 1 ]]; then
     warn "backfill_missing_settlements failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
   }
 
-  log "  Building weather_live_order_events (order-event execution journal)..."
-  "$VENV/python" scripts/etl/build_weather_live_order_events.py \
-    --db-path "$DB_PATH" \
-    >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
-    err "weather_live_order_events build failed — see $LOG_DIR/migrate_live_cycle.log"
-    exit 1
-  }
-
   log "  Syncing real CLOB fills from Polymarket activity API"
   "$VENV/python" -m weather_dashboard.ingest.clob_fill_sync \
     --db-path "$DB_PATH" >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {

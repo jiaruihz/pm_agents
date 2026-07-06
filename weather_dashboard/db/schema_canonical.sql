@@ -129,6 +129,36 @@ CREATE TABLE IF NOT EXISTS orders (
     cost_usd REAL NOT NULL,
     notional REAL,
     status TEXT NOT NULL,
+    clob_status TEXT,
+    quote_status TEXT,
+    quote_mode TEXT,
+    quote_reason TEXT,
+    quote_tick_size REAL,
+    risk_status TEXT,
+    risk_reason TEXT,
+    error_classification TEXT,
+    error_reason TEXT,
+    execution_action TEXT,
+    child_order_role TEXT,
+    source_order_id TEXT,
+    cancel_before_order_id TEXT,
+    maker_only INTEGER,
+    sizing_policy TEXT,
+    score_dist_sizing_model TEXT,
+    score_dist_probability REAL,
+    score_dist_tier TEXT,
+    score_dist_multiplier REAL,
+    requested_price REAL,
+    posted_price REAL,
+    posted_notional REAL,
+    best_bid REAL,
+    best_ask REAL,
+    spread REAL,
+    model_p_yes_used REAL,
+    market_implied_p_yes REAL,
+    quote_edge REAL,
+    fee_adjusted_edge REAL,
+    source_order_age_min REAL,
     exchange_response TEXT,
     placed_at_utc TEXT,
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
@@ -284,114 +314,6 @@ CREATE TABLE IF NOT EXISTS weather_strategy_shadow_queue (
     refreshed_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
-CREATE TABLE IF NOT EXISTS weather_live_order_events (
-    event_id TEXT PRIMARY KEY,
-    source_path TEXT NOT NULL,
-    source_line_no INTEGER NOT NULL,
-    source_mtime_utc TEXT,
-    record_type TEXT,
-    created_at_utc TEXT,
-    strategy_instance TEXT,
-    strategy_id TEXT,
-    strategy_family TEXT,
-    decision_mode TEXT,
-    execution_mode TEXT,
-    execution_policy TEXT,
-    execution_action TEXT,
-    child_order_role TEXT,
-    profile TEXT,
-    combo TEXT,
-    venue TEXT,
-    clob_client TEXT,
-    market_slug TEXT,
-    market_event_id TEXT,
-    question TEXT,
-    signal_id TEXT,
-    plan_id TEXT,
-    execution_id TEXT,
-    order_id TEXT,
-    source_order_id TEXT,
-    cancel_before_order_id TEXT,
-    city TEXT,
-    city_pool TEXT,
-    icao TEXT,
-    target_date TEXT,
-    bracket TEXT,
-    unit TEXT,
-    signal_side TEXT,
-    order_side TEXT,
-    token_id TEXT,
-    condition_id TEXT,
-    market_id TEXT,
-    status TEXT,
-    clob_status TEXT,
-    quote_status TEXT,
-    quote_mode TEXT,
-    quote_tick_size REAL,
-    quote_reason TEXT,
-    risk_status TEXT,
-    risk_reason TEXT,
-    error_classification TEXT,
-    error_reason TEXT,
-    order_kind TEXT,
-    maker_only INTEGER,
-    sizing_policy TEXT,
-    score_dist_sizing_model TEXT,
-    score_dist_probability REAL,
-    score_dist_tier TEXT,
-    score_dist_multiplier REAL,
-    probability_source TEXT,
-    probability_branch TEXT,
-    shadow_decision TEXT,
-    shadow_reason TEXT,
-    entry_price_window TEXT,
-    limit_price REAL,
-    requested_price REAL,
-    posted_price REAL,
-    best_bid REAL,
-    best_ask REAL,
-    spread REAL,
-    shares REAL,
-    source_remaining_shares REAL,
-    source_filled_shares REAL,
-    notional REAL,
-    posted_notional REAL,
-    order_notional_cap REAL,
-    notional_fraction REAL,
-    size_multiplier REAL,
-    taker_fraction REAL,
-    model_p_yes REAL,
-    model_p_yes_raw REAL,
-    model_p_yes_used REAL,
-    market_implied_p_yes REAL,
-    edge REAL,
-    quote_edge REAL,
-    fee_adjusted_edge REAL,
-    estimated_taker_fee_usd REAL,
-    estimated_maker_rebate_usd REAL,
-    forecast_source TEXT,
-    model_version TEXT,
-    forecast_max_native REAL,
-    forecast_max_f REAL,
-    forecast_peak_time_local TEXT,
-    decision_snapshot_ts_utc TEXT,
-    snapshot_ts_utc TEXT,
-    source_order_age_min REAL,
-    source_plan_status TEXT,
-    source_snapshot_path TEXT,
-    tmax_probability_model_spec TEXT,
-    tmax_blend_p_current REAL,
-    tmax_blend_p_d1 REAL,
-    tmax_blend_p_d2 REAL,
-    tmax_blend_p_tail REAL,
-    final_yes REAL,
-    settlement_status TEXT,
-    settled INTEGER,
-    contract_won INTEGER,
-    payload TEXT NOT NULL,
-    built_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-);
-
 CREATE INDEX IF NOT EXISTS idx_runs_mode_state ON runs(execution_mode, state);
 CREATE INDEX IF NOT EXISTS idx_runs_producer ON runs(producer_system, producer_run_id);
 CREATE INDEX IF NOT EXISTS idx_signals_target_city ON signals(target_date, city);
@@ -401,6 +323,8 @@ CREATE INDEX IF NOT EXISTS idx_plans_run_id ON plans(run_id);
 CREATE INDEX IF NOT EXISTS idx_plans_signal_id ON plans(signal_id);
 CREATE INDEX IF NOT EXISTS idx_orders_run_id ON orders(run_id);
 CREATE INDEX IF NOT EXISTS idx_orders_plan_id ON orders(plan_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status_quote ON orders(status, clob_status, quote_status);
+CREATE INDEX IF NOT EXISTS idx_orders_sizing ON orders(sizing_policy, score_dist_tier);
 CREATE INDEX IF NOT EXISTS idx_fills_execution_id ON fills(execution_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_settlements_market
     ON settlements(target_date, condition_id, bracket)
@@ -421,14 +345,6 @@ CREATE INDEX IF NOT EXISTS idx_weather_strategy_artifacts_strategy
     ON weather_strategy_runtime_artifacts(strategy_instance);
 CREATE INDEX IF NOT EXISTS idx_weather_strategy_shadow_queue_status
     ON weather_strategy_shadow_queue(status, priority);
-CREATE INDEX IF NOT EXISTS idx_weather_live_order_events_strategy_date
-    ON weather_live_order_events(strategy_instance, target_date, city);
-CREATE INDEX IF NOT EXISTS idx_weather_live_order_events_signal
-    ON weather_live_order_events(signal_id);
-CREATE INDEX IF NOT EXISTS idx_weather_live_order_events_status
-    ON weather_live_order_events(status, clob_status, quote_status);
-CREATE INDEX IF NOT EXISTS idx_weather_live_order_events_sizing
-    ON weather_live_order_events(sizing_policy, score_dist_tier);
 
 CREATE TRIGGER IF NOT EXISTS signals_canonical_before_update
 BEFORE UPDATE ON signals

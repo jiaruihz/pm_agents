@@ -126,9 +126,9 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | **本机** `runtime/weather_edge_v1/live/*.jsonl` | source（本机产物，已停） | 本机 `weather_live_cycle.py`（最后写入 2026-06-01） | `migrate-live-cycle` → orders | 84 文件，本机 loop 已停。仍被 ingest 扫描（兼容历史），可以原地保留 |
 | **本机** `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` | mirror | rsync from N100 | `migrate-live-cycle` → orders | N100 真金 CLOB 提交凭证镜像 |
 | **本机** `runtime/weather.db` | **canonical operational DB** | `weather_dashboard_refresh.sh` 增量 ingest；`run_stack.sh` 全量 rebuild | 所有分析 / API / 前端 | **唯一分析 DB**。日常不删库；全量 rebuild 只在确认 raw 输入 + CLOB fill cache / 外部 CLOB 同步可用时执行。 |
+| **本机** `runtime/weather.db.orders` | canonical（订单/执行事件） | strategy runtime/live-cycle ingest | live 下单结果、档位、挂单/吃单、blocked/error、执行版本、score tier | grain = 每个 canonical order/execution attempt；未成交不代表现金流 |
 | **本机** `runtime/weather.db.fact_trades` | derived（唯一已成交 PnL 源） | `build_weather_fact_trades.py` | 所有绩效分析 | grain = 每 fill 一行 |
 | **本机** `runtime/weather.db.fact_signal_candidates` | derived（唯一全机会源） | `build_weather_signal_candidates.py` | 成交质量 / 漏单 / 城市 alpha 分析 | grain = 每 `(condition_id,side,event_date)` 一行 |
-| **本机** `runtime/weather.db.weather_live_order_events` | derived（执行事件 journal） | `build_weather_live_order_events.py` | live 下单结果、档位、挂单/吃单、blocked/error、执行版本、score tier | grain = 每个 live order JSONL event 一行；不是 fill/PnL truth |
 | **本机** `runtime/weather.db.fact_forecast_hourly_curves` | derived（PIT 预报曲线附表） | `build_weather_signal_candidates.py` | reheat / ceiling margin / forecast slope 等曲线特征 | grain = 每 `(city,target_date,snapshot_ts_utc,forecast_values_hash)` 一行；候选行用 `forecast_values_hash` 关联 |
 | **本机** `runtime/weather.db.settlement_outcomes` | canonical source-grain layer | `pm_history_settlements.py` | basket / city-day / source-sensitive settlement research | grain = 每 `(source_system, city, target_date, bracket)` 一行；不要再让每个策略脚本自己读 raw pm_history 定义 fallback |
 | **本机** `runtime/weather_decision_journal.db` | **活跃 sidecar** | `scripts/ops/weather_decision_journal.py` | `weather_position_monitor.py` | 仍在用，不动 |
@@ -192,14 +192,13 @@ N100 `/home/jiarui/projects/pm_agent/runtime/runtime/weather.db`（**注意路�
 
 pipeline：
 ```text
-live/*.jsonl → weather_live_order_events（逐 event 宽表：档位/挂单吃单/blocked/error/执行版本）
-             → orders(venue=polymarket_clob, status=submitted)  [via migrate-live-cycle]
+live/*.jsonl → orders(venue=polymarket_clob; 含 sizing/quote/CLOB 状态/执行版本)
              → clob_fill_sync 查 Polymarket CLOB API → fills(status=filled)
              → build_weather_fact_trades → trade_class=live_real
 ```
 `_derive_trade_class(execution_mode='live', fill_status='filled') = 'live_real'`，逻辑正确。
 
-`weather_live_order_events` 是为了避免每次人工 grep live JSONL；它可以回答“哪天哪个城市、哪个 bracket、YES/NO、score tier、挂单还是吃单、提交/blocked/error、limit/posted price、shares/notional、执行 policy/version”。但它仍然只是订单事件，不表示已经成交；钱包现金流、已结算 ROI 和 PnL 必须继续以 `fills` / `fact_trades` 为准。
+`orders` 现在直接承载稳定执行字段，可以回答“哪天哪个城市、哪个 bracket、YES/NO、score tier、挂单还是吃单、提交/blocked/error、limit/posted price、shares/notional、执行 policy/version”。但它仍然只是订单/执行 attempt，不表示已经成交；钱包现金流、已结算 ROI 和 PnL 必须继续以 `fills` / `fact_trades` 为准。
 
 **当前保护**：
 

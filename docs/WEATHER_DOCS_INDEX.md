@@ -69,8 +69,8 @@ Status 口径：
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
 | [WEATHER_REPO_BOUNDARY.md](WEATHER_REPO_BOUNDARY.md) | `current-source` | `weather-predict` 和 `pm_agent` 各自负责什么，生产/本机边界在哪里 |
-| [WEATHER_DATA_CANONICAL_SOURCES.md](WEATHER_DATA_CANONICAL_SOURCES.md) | `current-source` | 哪些表/文件是 source、mirror、derived、legacy，分析前先查什么；2026-07-06 新增 `weather_live_order_events` 作为 live 下单事件 journal（档位/挂单吃单/blocked/error/执行版本），PnL 仍以 `fact_trades` 为准 |
-| [WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md) | `current-source` | N100 -> 本机镜像 -> DB -> API 的脚本职责和数据链路；登记 Mac live JSONL → `weather_live_order_events` → `orders/fills/fact_trades` 的执行事件与成交 PnL 分层 |
+| [WEATHER_DATA_CANONICAL_SOURCES.md](WEATHER_DATA_CANONICAL_SOURCES.md) | `current-source` | 哪些表/文件是 source、mirror、derived、legacy，分析前先查什么；2026-07-06 增强 `orders` 承载 live 下单事件字段（档位/挂单吃单/blocked/error/执行版本），PnL 仍以 `fact_trades` 为准 |
+| [WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md) | `current-source` | N100 -> 本机镜像 -> DB -> API 的脚本职责和数据链路；登记 Mac live JSONL → `orders` → `fills/fact_trades` 的执行事件与成交 PnL 分层 |
 | [WEATHER_DATA_FEED_MODULE.md](WEATHER_DATA_FEED_MODULE.md) | `current-source` | 新 `weather_data_feed` 共用数据模块的 repo/deploy 边界、当前模块职责、后续拆独立部署路径 |
 | [WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md](WEATHER_TEMPERATURE_CONTEXT_FEATURE_LAYER.md) | `current-reference` | 通用日内温度状态 / context feature 层：把 `reheat_feature_factory_v1` 概念提升为 `temperature_state_feature_factory`，统一解释云量×升温、湿度×云、风×海洋/地形、forecast peak clock，并供 current YES/current NO/d1-d2 NO/Range RV 共用 |
 | [2026-07-05-temperature-path-mechanism-decomposition-v1.md](analysis/2026-07/2026-07-05-temperature-path-mechanism-decomposition-v1.md) | `snapshot` | `trend3h_positive` / 3h 温度路径机制拆解基础报告：同步+重建后 CLOB gate=true，fact 层到 7/05-7/06，atlas 机制层到 7/03；把松散 `trend3h_positive` 收敛成 `trend3h_bucket`、`trend3h_warming_ge0_5`、`sustained_warming_1h3h`、`one_hour_warm_without_3h`、`runway_sustained_warming`、`late_reheat_after_dip` 等共享表达。物理层很强（`sustained_warming_1h3h` future break 77.7%、d1 hit 22.8%；`one_hour_warm_without_3h` future break 17.1%），但交易层仍需概率头/ask/depth/fresh-forward；结论：promote as shared context feature + HeadB shadow telemetry，不作 live gate |

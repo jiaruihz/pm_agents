@@ -1911,6 +1911,8 @@ def build_lifecycle_plan(
         "min_edge": 0.20,
         "model_p_yes_used": round(p_yes, 6),
         "model_p_yes_raw": round(to_float(order.get("model_p_yes_raw"), p_yes), 6),
+        "model_version": safe_str(order.get("model_version")),
+        "forecast_source": safe_str(order.get("forecast_source")),
         "market_implied_p_yes": round(price, 6),
         "edge_raw_yes": round(p_yes - price, 6),
         "edge_used_yes": round(p_yes - price, 6),

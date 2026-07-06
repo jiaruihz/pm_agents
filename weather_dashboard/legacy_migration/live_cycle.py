@@ -505,6 +505,34 @@ def _canonical_order(raw: dict[str, Any], *, run_id: str, plan_id: str) -> dict[
         place = exchange_response.get("place")
         if isinstance(place, dict):
             order_id = str(place.get("orderID") or "").strip()
+    clob_status = None
+    quote_status = raw.get("quote_status")
+    quote_mode = raw.get("quote_mode")
+    quote_reason = raw.get("quote_reason")
+    requested_price = raw.get("requested_price")
+    posted_price = raw.get("posted_price")
+    best_bid = raw.get("best_bid") or raw.get("quote_best_bid")
+    best_ask = raw.get("best_ask") or raw.get("quote_best_ask")
+    spread = raw.get("spread") or raw.get("quote_spread")
+    error_classification = raw.get("error_classification")
+    error_reason = raw.get("error_reason") or raw.get("error")
+    if isinstance(exchange_response, dict):
+        place = exchange_response.get("place")
+        if isinstance(place, dict):
+            clob_status = place.get("status")
+        clob_status = clob_status or exchange_response.get("status")
+        quote_status = quote_status or exchange_response.get("quote_status")
+        quote_mode = quote_mode or exchange_response.get("quote_mode")
+        quote_reason = quote_reason or exchange_response.get("quote_reason")
+        requested_price = requested_price or exchange_response.get("requested_price")
+        posted_price = posted_price or exchange_response.get("posted_price")
+        best_bid = best_bid or exchange_response.get("best_bid") or exchange_response.get("quote_best_bid")
+        best_ask = best_ask or exchange_response.get("best_ask") or exchange_response.get("quote_best_ask")
+        spread = spread or exchange_response.get("spread") or exchange_response.get("quote_spread")
+        error_classification = error_classification or exchange_response.get("error_classification")
+        error_reason = error_reason or exchange_response.get("error_reason") or exchange_response.get("error")
+        if isinstance(place, dict):
+            error_reason = error_reason or place.get("errorMsg")
     execution_id = str(raw.get("execution_id") or "").strip()
     if not order_id and venue == "paper" and execution_id:
         order_id = make_paper_order_id(execution_id=execution_id)
@@ -521,6 +549,36 @@ def _canonical_order(raw: dict[str, Any], *, run_id: str, plan_id: str) -> dict[
         "cost_usd": cost_usd if cost_usd is not None else ((shares or 0.0) * (entry_price or 0.0)),
         "notional": _float(raw.get("notional"), _float(raw.get("posted_notional"))),
         "status": str(raw.get("status") or "").strip() or "submitted",
+        "clob_status": str(clob_status or "").strip() or None,
+        "quote_status": str(quote_status or "").strip() or None,
+        "quote_mode": str(quote_mode or "").strip() or None,
+        "quote_reason": str(quote_reason or "").strip() or None,
+        "quote_tick_size": _float(raw.get("quote_tick_size"), _float(exchange_response.get("quote_tick_size") if isinstance(exchange_response, dict) else None)),
+        "risk_status": str(raw.get("risk_status") or "").strip() or None,
+        "risk_reason": str(raw.get("risk_reason") or "").strip() or None,
+        "error_classification": str(error_classification or "").strip() or None,
+        "error_reason": str(error_reason or "").strip() or None,
+        "execution_action": str(raw.get("execution_action") or "").strip() or None,
+        "child_order_role": str(raw.get("child_order_role") or "").strip() or None,
+        "source_order_id": str(raw.get("source_order_id") or "").strip() or None,
+        "cancel_before_order_id": str(raw.get("cancel_before_order_id") or "").strip() or None,
+        "maker_only": 1 if raw.get("maker_only") is True else (0 if raw.get("maker_only") is False else None),
+        "sizing_policy": str(raw.get("sizing_policy") or raw.get("live_sizing_policy") or raw.get("sizing_mode") or "").strip() or None,
+        "score_dist_sizing_model": str(raw.get("score_dist_sizing_model") or "").strip() or None,
+        "score_dist_probability": _float(raw.get("score_dist_probability")),
+        "score_dist_tier": str(raw.get("score_dist_tier") or "").strip() or None,
+        "score_dist_multiplier": _float(raw.get("score_dist_multiplier")),
+        "requested_price": _float(requested_price),
+        "posted_price": _float(posted_price),
+        "posted_notional": _float(raw.get("posted_notional")),
+        "best_bid": _float(best_bid),
+        "best_ask": _float(best_ask),
+        "spread": _float(spread),
+        "model_p_yes_used": _float(raw.get("model_p_yes_used"), _float(raw.get("model_token_probability"))),
+        "market_implied_p_yes": _float(raw.get("market_implied_p_yes")),
+        "quote_edge": _float(raw.get("quote_edge"), _float(exchange_response.get("quote_edge") if isinstance(exchange_response, dict) else None)),
+        "fee_adjusted_edge": _float(raw.get("fee_adjusted_edge"), _float(raw.get("required_quote_edge"))),
+        "source_order_age_min": _float(raw.get("source_order_age_min")),
         "exchange_response": _json_text(exchange_response),
         "placed_at_utc": str(raw.get("placed_at_utc") or raw.get("created_at_utc") or "").strip() or None,
     }

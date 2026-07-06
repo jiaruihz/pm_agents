@@ -147,7 +147,24 @@ def validate_canonical_order(row: Mapping[str, Any]) -> None:
     _require_enum(row, "order_side", ALLOWED_ORDER_SIDES, "order")
     for field in ("entry_price", "shares", "cost_usd"):
         _require_float(row, field, "order")
-    for field in ("limit_price", "notional"):
+    for field in (
+        "limit_price",
+        "notional",
+        "quote_tick_size",
+        "score_dist_probability",
+        "score_dist_multiplier",
+        "requested_price",
+        "posted_price",
+        "posted_notional",
+        "best_bid",
+        "best_ask",
+        "spread",
+        "model_p_yes_used",
+        "market_implied_p_yes",
+        "quote_edge",
+        "fee_adjusted_edge",
+        "source_order_age_min",
+    ):
         if not _is_blank(row.get(field)):
             _require_float(row, field, "order")
 
