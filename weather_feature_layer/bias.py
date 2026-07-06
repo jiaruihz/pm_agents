@@ -2,11 +2,47 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
+
+
+BIAS_REFERENCE_SCHEMA_VERSION = "bias_reference_v1"
+DEFAULT_BIAS_SETTLEMENT_SOURCE = "historical_forecast_station_bias_v1"
+DEFAULT_BIAS_SOURCE_POLICY = "weather_data_feed.source_policy"
+
+
+@dataclass(frozen=True)
+class BiasReferenceMetadata:
+    schema_version: str
+    generated_at_utc: str
+    build_window_start: str | None
+    build_window_end: str | None
+    settlement_source: str
+    source_policy: str
+    input_path: str
+    input_sha256: str
+    input_row_count: int
+    city_count: int
+    model_count: int
+    snapshot_id: str
+
+
+@dataclass(frozen=True)
+class CitySourceBiasReference:
+    metadata: BiasReferenceMetadata
+    lookup: dict[tuple[str, str], dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class ErrorBiasIndexReference:
+    metadata: BiasReferenceMetadata
+    bias_index: dict[tuple[str, str], list[tuple[str, float]]]
 
 
 def to_float(value: Any, default: float = math.nan) -> float:
@@ -94,12 +130,38 @@ def classify_city_source_bias(row: Mapping[str, Any]) -> str:
     return "mild_or_mixed"
 
 
-def load_city_source_bias_lookup(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
+def load_city_source_bias_reference(
+    path: Path,
+    *,
+    generated_at_utc: str | None = None,
+    settlement_source: str = DEFAULT_BIAS_SETTLEMENT_SOURCE,
+    source_policy: str = DEFAULT_BIAS_SOURCE_POLICY,
+    snapshot_id: str | None = None,
+) -> CitySourceBiasReference:
     if not path.exists():
-        return {}
+        return CitySourceBiasReference(
+            metadata=_empty_metadata(
+                path,
+                generated_at_utc=generated_at_utc,
+                settlement_source=settlement_source,
+                source_policy=source_policy,
+                snapshot_id=snapshot_id,
+            ),
+            lookup={},
+        )
     hist = pd.read_csv(path)
     if hist.empty:
-        return {}
+        return CitySourceBiasReference(
+            metadata=_metadata_from_frame(
+                path,
+                hist,
+                generated_at_utc=generated_at_utc,
+                settlement_source=settlement_source,
+                source_policy=source_policy,
+                snapshot_id=snapshot_id,
+            ),
+            lookup={},
+        )
     hist["city_source_bias_regime"] = hist.apply(classify_city_source_bias, axis=1)
     lookup: dict[tuple[str, str], dict[str, Any]] = {}
     for _, row in hist.iterrows():
@@ -116,4 +178,164 @@ def load_city_source_bias_lookup(path: Path) -> dict[tuple[str, str], dict[str, 
             "city_source_hot_underforecast_rate": to_float(row.get("pct_actual_ge_forecast_plus_1")),
             "city_source_cold_overforecast_rate": to_float(row.get("pct_forecast_ge_actual_plus_1")),
         }
-    return lookup
+    return CitySourceBiasReference(
+        metadata=_metadata_from_frame(
+            path,
+            hist,
+            generated_at_utc=generated_at_utc,
+            settlement_source=settlement_source,
+            source_policy=source_policy,
+            snapshot_id=snapshot_id,
+        ),
+        lookup=lookup,
+    )
+
+
+def load_city_source_bias_lookup(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
+    return load_city_source_bias_reference(path).lookup
+
+
+def load_error_bias_index_reference(
+    path: Path,
+    *,
+    generated_at_utc: str | None = None,
+    settlement_source: str = DEFAULT_BIAS_SETTLEMENT_SOURCE,
+    source_policy: str = DEFAULT_BIAS_SOURCE_POLICY,
+    snapshot_id: str | None = None,
+) -> ErrorBiasIndexReference:
+    if not path.exists():
+        return ErrorBiasIndexReference(
+            metadata=_empty_metadata(
+                path,
+                generated_at_utc=generated_at_utc,
+                settlement_source=settlement_source,
+                source_policy=source_policy,
+                snapshot_id=snapshot_id,
+            ),
+            bias_index={},
+        )
+    rows = pd.read_csv(path)
+    index: dict[tuple[str, str], list[tuple[str, float]]] = {}
+    for _, row in rows.iterrows():
+        city = str(row.get("city") or "")
+        model = str(row.get("model") or "")
+        date = str(row.get("date") or "")
+        err = to_float(row.get("error_f_actual_minus_forecast"))
+        if not city or not model or not date or not math.isfinite(err):
+            continue
+        index.setdefault((city, model), []).append((date, err))
+    for key in index:
+        index[key].sort()
+    return ErrorBiasIndexReference(
+        metadata=_metadata_from_frame(
+            path,
+            rows,
+            generated_at_utc=generated_at_utc,
+            settlement_source=settlement_source,
+            source_policy=source_policy,
+            snapshot_id=snapshot_id,
+        ),
+        bias_index=index,
+    )
+
+
+def bias_reference_metadata_dict(metadata: BiasReferenceMetadata) -> dict[str, Any]:
+    return {
+        "schema_version": metadata.schema_version,
+        "generated_at_utc": metadata.generated_at_utc,
+        "build_window_start": metadata.build_window_start,
+        "build_window_end": metadata.build_window_end,
+        "settlement_source": metadata.settlement_source,
+        "source_policy": metadata.source_policy,
+        "input_path": metadata.input_path,
+        "input_sha256": metadata.input_sha256,
+        "input_row_count": metadata.input_row_count,
+        "city_count": metadata.city_count,
+        "model_count": metadata.model_count,
+        "snapshot_id": metadata.snapshot_id,
+    }
+
+
+def _metadata_from_frame(
+    path: Path,
+    frame: pd.DataFrame,
+    *,
+    generated_at_utc: str | None,
+    settlement_source: str,
+    source_policy: str,
+    snapshot_id: str | None,
+) -> BiasReferenceMetadata:
+    build_start, build_end = _build_window(frame)
+    input_sha256 = _file_sha256(path) if path.exists() else ""
+    return BiasReferenceMetadata(
+        schema_version=BIAS_REFERENCE_SCHEMA_VERSION,
+        generated_at_utc=generated_at_utc or _utc_now_iso(),
+        build_window_start=build_start,
+        build_window_end=build_end,
+        settlement_source=settlement_source,
+        source_policy=source_policy,
+        input_path=str(path),
+        input_sha256=input_sha256,
+        input_row_count=int(len(frame)),
+        city_count=_nunique(frame, "city"),
+        model_count=_nunique(frame, "model"),
+        snapshot_id=snapshot_id or input_sha256[:16],
+    )
+
+
+def _empty_metadata(
+    path: Path,
+    *,
+    generated_at_utc: str | None,
+    settlement_source: str,
+    source_policy: str,
+    snapshot_id: str | None,
+) -> BiasReferenceMetadata:
+    return BiasReferenceMetadata(
+        schema_version=BIAS_REFERENCE_SCHEMA_VERSION,
+        generated_at_utc=generated_at_utc or _utc_now_iso(),
+        build_window_start=None,
+        build_window_end=None,
+        settlement_source=settlement_source,
+        source_policy=source_policy,
+        input_path=str(path),
+        input_sha256="",
+        input_row_count=0,
+        city_count=0,
+        model_count=0,
+        snapshot_id=snapshot_id or "",
+    )
+
+
+def _build_window(frame: pd.DataFrame) -> tuple[str | None, str | None]:
+    if "date" in frame:
+        values = frame["date"].dropna().astype(str)
+    elif "first_date" in frame and "last_date" in frame:
+        starts = frame["first_date"].dropna().astype(str)
+        ends = frame["last_date"].dropna().astype(str)
+        if starts.empty or ends.empty:
+            return None, None
+        return str(starts.min()), str(ends.max())
+    else:
+        return None, None
+    if values.empty:
+        return None, None
+    return str(values.min()), str(values.max())
+
+
+def _nunique(frame: pd.DataFrame, column: str) -> int:
+    if column not in frame:
+        return 0
+    return int(frame[column].dropna().astype(str).nunique())
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")

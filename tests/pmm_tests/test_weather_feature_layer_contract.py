@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -129,6 +130,89 @@ def test_bias_asof_features_match_tail_telemetry_contract() -> None:
     assert shared["bias_n_asof"] == 3
     assert math.isclose(shared["bias_mean_asof"], 0.666667)
     assert math.isclose(shared["hot_tail_pct_asof"], 2 / 3, abs_tol=1e-6)
+
+
+def test_bias_reference_metadata_and_lookup_contract(tmp_path: Path) -> None:
+    path = tmp_path / "city_model_error_summary.csv"
+    path.write_text(
+        "\n".join(
+            [
+                "city,model,n,first_date,last_date,bias,mae,p90,p10,pct_actual_ge_forecast_plus_1,pct_forecast_ge_actual_plus_1",
+                "LA,gfs,3,2026-05-01,2026-05-03,0.8,1.1,2.5,-0.5,0.45,0.10",
+                "London,ecmwf,2,2026-05-02,2026-05-04,-0.6,1.2,0.5,-2.0,0.10,0.40",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    reference = bias.load_city_source_bias_reference(
+        path,
+        generated_at_utc="2026-07-06T00:00:00Z",
+        settlement_source="fixture_settlement",
+        source_policy="fixture_policy",
+    )
+    metadata = bias.bias_reference_metadata_dict(reference.metadata)
+
+    assert metadata["schema_version"] == "bias_reference_v1"
+    assert metadata["generated_at_utc"] == "2026-07-06T00:00:00Z"
+    assert metadata["build_window_start"] == "2026-05-01"
+    assert metadata["build_window_end"] == "2026-05-04"
+    assert metadata["settlement_source"] == "fixture_settlement"
+    assert metadata["source_policy"] == "fixture_policy"
+    assert len(metadata["input_sha256"]) == 64
+    assert metadata["input_row_count"] == 2
+    assert metadata["city_count"] == 2
+    assert metadata["model_count"] == 2
+    assert metadata["snapshot_id"] == metadata["input_sha256"][:16]
+
+    assert reference.lookup[("LA", "gfs")]["city_source_bias_regime"] == "hot_underforecast_clean"
+    assert reference.lookup[("London", "ecmwf")]["city_source_bias_regime"] == "cold_overforecast_clean"
+    assert bias.load_city_source_bias_lookup(path) == reference.lookup
+
+
+def test_error_bias_index_reference_preserves_asof_settlement_rule(tmp_path: Path) -> None:
+    path = tmp_path / "daily_error_rows.csv"
+    path.write_text(
+        "\n".join(
+            [
+                "city,model,date,error_f_actual_minus_forecast",
+                "LA,gfs,2026-05-01,1.0",
+                "LA,gfs,2026-05-02,-2.0",
+                "LA,gfs,2026-05-03,5.0",
+                "LA,gfs,2026-05-04,9.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    reference = bias.load_error_bias_index_reference(path, generated_at_utc="2026-07-06T00:00:00Z")
+    metadata = bias.bias_reference_metadata_dict(reference.metadata)
+    features = bias.asof_error_bias_features(
+        reference.bias_index,
+        city="LA",
+        forecast_model="gfs",
+        target_date="2026-05-03",
+    )
+
+    assert metadata["build_window_start"] == "2026-05-01"
+    assert metadata["build_window_end"] == "2026-05-04"
+    assert features["bias_n_asof"] == 2
+    assert features["bias_mean_asof"] == -0.5
+    assert features["hot_tail_pct_asof"] == 0.5
+
+
+def test_missing_bias_reference_is_explicit_empty(tmp_path: Path) -> None:
+    reference = bias.load_city_source_bias_reference(
+        tmp_path / "missing.csv",
+        generated_at_utc="2026-07-06T00:00:00Z",
+        snapshot_id="missing-fixture",
+    )
+
+    assert reference.lookup == {}
+    assert reference.metadata.input_row_count == 0
+    assert reference.metadata.snapshot_id == "missing-fixture"
 
 
 def test_city_source_bias_classifier_contract() -> None:

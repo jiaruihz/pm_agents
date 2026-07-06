@@ -538,6 +538,13 @@ Acceptance:
 
 ### Phase 3: Bias Layer
 
+Implementation progress: 2026-07-06 initial `bias_reference_v1` landed in
+`weather_feature_layer.bias`: city/source bias lookup and daily as-of error
+index can now be loaded with build window, settlement source, source policy,
+generated timestamp, input hash, row counts, and snapshot id. The old lookup
+API remains compatible; regime-routed tiny-live records the reference metadata
+in its summary without changing candidate behavior.
+
 Deliverables:
 
 - Move as-of bias lookup and classification primitives into `bias.py`.

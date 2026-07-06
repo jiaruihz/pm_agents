@@ -51,8 +51,9 @@ from src.strategies.weather_edge_v1.tools.regime_routed_temperature_context impo
     temperature_context_multiplier,
 )
 from weather_feature_layer.bias import (  # noqa: E402
+    bias_reference_metadata_dict,
     classify_city_source_bias as shared_classify_city_source_bias,
-    load_city_source_bias_lookup as shared_load_city_source_bias_lookup,
+    load_city_source_bias_reference as shared_load_city_source_bias_reference,
 )
 
 import weather_metar_cross_prev_no_shadow as metar  # noqa: E402
@@ -651,7 +652,11 @@ def classify_city_source_bias(row: pd.Series) -> str:
 
 
 def load_city_source_bias_lookup() -> dict[tuple[str, str], dict[str, Any]]:
-    return shared_load_city_source_bias_lookup(HIST_FORECAST_BIAS_SUMMARY)
+    return shared_load_city_source_bias_reference(HIST_FORECAST_BIAS_SUMMARY).lookup
+
+
+def load_city_source_bias_reference() -> Any:
+    return shared_load_city_source_bias_reference(HIST_FORECAST_BIAS_SUMMARY)
 
 
 def expression_group_for_bias(row: pd.Series) -> str:
@@ -1178,9 +1183,10 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
                 routed.append(row)
 
     selected = pd.DataFrame(routed)
+    city_source_bias_reference = load_city_source_bias_reference()
     if not selected.empty:
         selected = regime_policy.add_soft_weights(selected)
-        selected = attach_city_source_bias(selected, load_city_source_bias_lookup())
+        selected = attach_city_source_bias(selected, city_source_bias_reference.lookup)
         wind_speed = pd.to_numeric(selected.get("wind_speed_kt"), errors="coerce")
         coastal_flow = selected.get("coastal_flow_state", pd.Series("", index=selected.index)).astype(str)
         geo_context = selected.get("geo_context", pd.Series("", index=selected.index)).astype(str)
@@ -1399,6 +1405,7 @@ def build_candidates(args: argparse.Namespace) -> tuple[pd.DataFrame, dict[str, 
         "candidate_input_rows": int(len(records)),
         "audit_counts": pd.Series([a["status"].split(":", 1)[0] for a in audits]).value_counts().to_dict() if audits else {},
         "audits": audits,
+        "city_source_bias_reference": bias_reference_metadata_dict(city_source_bias_reference.metadata),
     }
     return selected, meta
 
@@ -2000,6 +2007,7 @@ def main() -> int:
             else {}
         ),
         "city_source_bias_file": str(HIST_FORECAST_BIAS_SUMMARY.relative_to(ROOT)),
+        "city_source_bias_reference": meta.get("city_source_bias_reference", {}),
         "shadow_policy_counts": shadow_policy_counts(candidates, min_order_shares=float(args.min_order_shares)),
         "plans_written": len(plans),
         "candidate_rows": candidate_rows,
