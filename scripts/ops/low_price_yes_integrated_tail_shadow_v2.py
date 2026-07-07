@@ -30,6 +30,7 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     load_tail_telemetry_resources_soft,
 )
 from weather_data_feed.observation_cache import index_observation_cache, load_observation_cache, parse_utc
+from weather_feature_layer.execution import classify_book_state
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 
@@ -469,12 +470,7 @@ def hot_tail_boundary_tags(row: dict[str, Any]) -> dict[str, Any]:
     dist_br = (low_f - fmax_f) / width_f if math.isfinite(low_f) and math.isfinite(fmax_f) else math.nan
     spread = to_float(row.get("yes_spread"))
     depth = to_float(row.get("yes_depth_ask_5c"))
-    if not math.isfinite(spread) or not math.isfinite(depth):
-        book_state = "missing"
-    elif spread <= 0.03 and depth >= 25.0:
-        book_state = "feasible"
-    else:
-        book_state = "thin_wide"
+    book_state = classify_book_state(spread, depth)
     return {
         "bracket_low_native": low_native if math.isfinite(low_native) else None,
         "bracket_low_f": round(low_f, 2) if math.isfinite(low_f) else None,

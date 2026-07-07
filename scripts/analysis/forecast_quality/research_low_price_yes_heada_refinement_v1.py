@@ -35,6 +35,7 @@ if str(ROOT) not in sys.path:
 from scripts.analysis.forecast_quality.research_low_price_yes_sizing_fee_stop_v2 import (
     scan_paths,
 )
+from weather_feature_layer.execution import classify_book_state
 
 INPUT = ROOT / "docs/analysis/2026-07/generated/low_price_yes_integrated_tail_v2/enriched_rows.csv"
 DB_PATH = ROOT / "runtime/weather.db"
@@ -227,16 +228,6 @@ def attach_asof_bias(df: pd.DataFrame) -> pd.DataFrame:
             }
         )
     return pd.concat([df.reset_index(drop=True), pd.DataFrame(recs)], axis=1)
-
-
-def classify_book_state(spread: Any, depth: Any) -> str:
-    s = to_float(spread)
-    d = to_float(depth)
-    if not math.isfinite(s) or not math.isfinite(d):
-        return "missing"
-    if s <= 0.03 and d >= 25.0:
-        return "feasible"
-    return "thin_wide"
 
 
 def add_distance_fields(df: pd.DataFrame) -> pd.DataFrame:
