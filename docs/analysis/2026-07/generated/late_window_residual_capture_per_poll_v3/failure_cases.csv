@@ -7,3 +7,4 @@ Chongqing,2026-06-30,2026-06-30 15:26:03,current_yes,26,0.96,4.0000000000000036,
 Chongqing,2026-06-30,2026-06-30 15:26:03,d1_no,27,0.96,4.0000000000000036,-0.96192,26,25.0,24.8,-0.57,decline,busted_lt_minus1,Will the highest temperature in Chongqing be 27°C on June 30?
 Guangzhou,2026-07-01,2026-07-01 15:15:54,d2_no,34,0.96,4.0000000000000036,-0.96192,32,30.0,33.1,2.25,decline,room_1_2,Will the highest temperature in Guangzhou be 34°C on July 1?
 Amsterdam,2026-07-04,2026-07-04 18:33:47,d2_no,23,0.96,4.0000000000000036,-0.96192,21,20.0,22.7,-3.45,decline,room_1_2,Will the highest temperature in Amsterdam be 23°C on July 4?
+Jeddah,2026-07-04,2026-07-04 15:28:21,d2_no,36,0.95,5.000000000000004,-0.95238,34,33.888888888888886,38.2,-1.53,at_high,room_gt2,Will the highest temperature in Jeddah be 36°C on July 4?

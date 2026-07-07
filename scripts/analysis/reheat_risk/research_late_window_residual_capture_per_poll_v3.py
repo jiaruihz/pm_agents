@@ -36,6 +36,8 @@ LOCAL_START_HOUR = 15
 LOCAL_END_HOUR = 18
 MIN_RESIDUAL_POINTS = 1.0
 MAX_RESIDUAL_POINTS = 5.0
+MIN_ENTRY_PRICE = 1.0 - MAX_RESIDUAL_POINTS / 100.0
+MAX_ENTRY_PRICE = 1.0 - MIN_RESIDUAL_POINTS / 100.0
 MIN_DEPTH_SHARES = 5.0
 FORWARD_START = "2026-06-29"
 FORWARD_END = "2026-07-04"
@@ -320,7 +322,7 @@ def add_buckets(df: pd.DataFrame) -> pd.DataFrame:
 
 def strict_candidates(df: pd.DataFrame) -> pd.DataFrame:
     return df[
-        df["residual_points"].between(MIN_RESIDUAL_POINTS, MAX_RESIDUAL_POINTS, inclusive="both")
+        df["entry_price"].between(MIN_ENTRY_PRICE, MAX_ENTRY_PRICE, inclusive="both")
         & (df["top_size"].fillna(0).ge(MIN_DEPTH_SHARES) | df["depth_5c"].fillna(0).ge(MIN_DEPTH_SHARES))
     ].copy()
 
@@ -333,6 +335,54 @@ def first_cross(df: pd.DataFrame) -> pd.DataFrame:
         .drop_duplicates(["city", "target_date", "leg", "bracket"], keep="first")
         .reset_index(drop=True)
     )
+
+
+def entry_policy_mask(df: pd.DataFrame, policy: str) -> pd.Series:
+    """Return an executable, PIT-only entry policy mask.
+
+    The policies are deliberately small and orthogonal so strategy research can
+    swap timing rules without rewriting the replay.
+    """
+    true = pd.Series(True, index=df.index)
+    peak = pd.to_numeric(df["forecast_peak_delta_hours_local"], errors="coerce")
+    gap = pd.to_numeric(df["forecast_gap_to_running_native"], errors="coerce")
+    hour = pd.to_numeric(df["local_hour"], errors="coerce")
+    path = df["path_state"].astype(str)
+    leg = df["leg"].astype(str)
+    at_or_fading = path.isin(["at_high", "decline"])
+
+    if policy == "all_first_cross":
+        return true
+    if policy == "d1_no_late_confirmed":
+        return leg.eq("d1_no") & hour.ge(17) & peak.ge(0.5) & at_or_fading & gap.le(1.5)
+    if policy == "d1_no_late_confirmed_any_gap":
+        return leg.eq("d1_no") & hour.ge(17) & peak.ge(0.5) & at_or_fading
+    if policy == "current_yes_late_survival":
+        return leg.eq("current_yes") & hour.ge(17) & peak.ge(0.5) & at_or_fading & gap.le(1.5)
+    if policy == "d2_no_near_peak_at_high":
+        return leg.eq("d2_no") & hour.between(15, 16, inclusive="both") & peak.between(-0.75, 0.75, inclusive="both") & path.eq("at_high")
+    if policy == "d2_no_late_confirmed":
+        return leg.eq("d2_no") & hour.ge(17) & peak.ge(0.5) & at_or_fading
+    if policy == "d3_no_residual":
+        return leg.eq("d3_no") & at_or_fading
+    if policy == "late_residual_combo":
+        return (
+            entry_policy_mask(df, "d1_no_late_confirmed")
+            | entry_policy_mask(df, "current_yes_late_survival")
+            | entry_policy_mask(df, "d2_no_near_peak_at_high")
+            | entry_policy_mask(df, "d3_no_residual")
+        )
+    raise ValueError(f"unknown policy: {policy}")
+
+
+def apply_policy(df: pd.DataFrame, policy: str) -> pd.DataFrame:
+    selected = df[entry_policy_mask(df, policy)].copy()
+    if selected.empty:
+        selected["entry_policy"] = policy
+        return selected
+    selected = first_cross(selected)
+    selected["entry_policy"] = policy
+    return selected
 
 
 def block_ci_daily_roi(df: pd.DataFrame, reps: int = 3000, seed: int = 13) -> tuple[float | None, float | None]:
@@ -496,6 +546,12 @@ def write_report(payload: dict[str, Any], out_md: Path) -> None:
         "## First-Cross By Leg",
         table(pd.DataFrame(summary["first_by_leg"]), ["leg", "period", "rows", "settled_rows", "active_dates", "cities", "avg_entry", "hit_rate", "roi", "roi_ci_low", "roi_ci_high", "pnl", "depth_5c_sum"]),
         "",
+        "## Pluggable Entry Policies",
+        table(pd.DataFrame(summary["policy_by_name"]), ["entry_policy", "period", "rows", "settled_rows", "active_dates", "cities", "avg_entry", "hit_rate", "roi", "roi_ci_low", "roi_ci_high", "pnl", "depth_5c_sum"]),
+        "",
+        "## Policy By Leg",
+        table(pd.DataFrame(summary["policy_by_name_leg"]), ["entry_policy", "leg", "period", "rows", "settled_rows", "active_dates", "hit_rate", "roi", "roi_ci_low", "roi_ci_high"]),
+        "",
         "## Peak-Window Slices",
         table(pd.DataFrame(summary["first_by_peak"]), ["leg", "peak_delta_bucket", "rows", "settled_rows", "active_dates", "hit_rate", "roi", "roi_ci_low", "roi_ci_high"]),
         "",
@@ -514,6 +570,9 @@ def write_report(payload: dict[str, Any], out_md: Path) -> None:
         "## Chengdu 2026-07-06 Case",
         "Chengdu 2026-07-06 is retained as a per-poll case replay, not in headline ROI because settlement coverage for 2026-07-06 is incomplete in the local DB.",
         table(pd.DataFrame(payload["chengdu_case"]), ["ts_beijing", "leg", "bracket", "entry_price", "residual_points", "running_value", "forecast_max_native", "forecast_peak_delta_hours_local", "path_state"], max_rows=30),
+        "",
+        "## Chengdu Policy Rows",
+        table(pd.DataFrame(payload["chengdu_policy_rows"]), ["entry_policy", "ts_beijing", "leg", "bracket", "entry_price", "residual_points", "running_value", "forecast_max_native", "forecast_peak_delta_hours_local", "path_state"], max_rows=40),
         "",
         "## Contract Gates",
         payload["contract_gates"],
@@ -539,17 +598,36 @@ def main() -> None:
     strict_all = strict_candidates(raw)
     headline = strict_all[strict_all["target_date"].isin(complete_dates)].copy()
     first = first_cross(headline)
+    policy_names = [
+        "d1_no_late_confirmed",
+        "d1_no_late_confirmed_any_gap",
+        "current_yes_late_survival",
+        "d2_no_near_peak_at_high",
+        "d2_no_late_confirmed",
+        "d3_no_residual",
+        "late_residual_combo",
+    ]
+    policy_frames = [apply_policy(headline, name) for name in policy_names]
+    policy_rows = pd.concat([f for f in policy_frames if not f.empty], ignore_index=True) if any(not f.empty for f in policy_frames) else pd.DataFrame()
     basket = basket_rows(first)
     failures = fail_cases(first)
     chengdu_case = strict_all[(strict_all["city"].eq("Chengdu")) & (strict_all["target_date"].eq("2026-07-06"))].copy()
+    chengdu_policy_frames = [apply_policy(chengdu_case, name) for name in policy_names]
+    chengdu_policy_rows = (
+        pd.concat([f for f in chengdu_policy_frames if not f.empty], ignore_index=True)
+        if any(not f.empty for f in chengdu_policy_frames)
+        else pd.DataFrame()
+    )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     raw.to_csv(args.out_dir / "raw_pit_leg_rows.csv", index=False)
     strict_all.to_csv(args.out_dir / "strict_all_snapshot_rows.csv", index=False)
     first.to_csv(args.out_dir / "first_cross_rows.csv", index=False)
+    policy_rows.to_csv(args.out_dir / "policy_rows.csv", index=False)
     basket.to_csv(args.out_dir / "basket_rows.csv", index=False)
     failures.to_csv(args.out_dir / "failure_cases.csv", index=False)
     chengdu_case.to_csv(args.out_dir / "chengdu_2026_07_06_case.csv", index=False)
+    chengdu_policy_rows.to_csv(args.out_dir / "chengdu_2026_07_06_policy_rows.csv", index=False)
 
     incomplete_dates = sorted(set(strict_all["target_date"]) - complete_dates)
     complete_max = max(complete_dates) if complete_dates else None
@@ -563,6 +641,8 @@ def main() -> None:
         "settled_complete_max_date": complete_max,
         "incomplete_dates": incomplete_dates,
         "first_by_leg": summarize(first, ["leg", "period"]),
+        "policy_by_name": summarize(policy_rows, ["entry_policy", "period"]) if not policy_rows.empty else [],
+        "policy_by_name_leg": summarize(policy_rows, ["entry_policy", "leg", "period"]) if not policy_rows.empty else [],
         "first_by_peak": summarize(first, ["leg", "peak_delta_bucket"]),
         "first_by_gap": summarize(first, ["leg", "forecast_gap_bucket"]),
         "first_by_path": summarize(first, ["leg", "path_state"]),
@@ -577,8 +657,9 @@ def main() -> None:
     positive_forward = forward[pd.to_numeric(forward.get("roi", pd.Series(dtype=float)), errors="coerce").gt(0)] if not forward.empty else pd.DataFrame()
     verdict = (
         "Per-poll replay confirms the Chengdu-style 39 NO opportunity exists in the snapshot layer, "
-        "but long-run first-cross evidence is mixed: broad current YES / d1 NO / d2 NO are not robust, "
-        "and any positive d3 NO or narrow slice remains low-sample with CI crossing zero. "
+        "and a separate late-confirmed d1 NO policy captures the Chengdu 17:10-style 38 NO setup. "
+        "Broad current YES / d1 NO / d2 NO first-cross remains mixed, while the plug-in late policies "
+        "are positive but low-sample, mostly 3-4 forward active dates. "
         "Conclusion: `inconclusive_research_shadow_only`; do not change live."
     )
     if not positive_forward.empty:
@@ -596,6 +677,9 @@ def main() -> None:
         ),
         "failure_cases": failures.to_dict("records"),
         "chengdu_case": chengdu_case.sort_values(["snapshot_ts_utc", "leg", "bracket"]).to_dict("records"),
+        "chengdu_policy_rows": chengdu_policy_rows.sort_values(["entry_policy", "snapshot_ts_utc", "leg", "bracket"]).to_dict("records")
+        if not chengdu_policy_rows.empty
+        else [],
     }
     (args.out_dir / "summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     write_report(payload, args.out_md)
