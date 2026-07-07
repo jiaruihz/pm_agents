@@ -1,0 +1,9 @@
+city,target_date,ts_beijing,leg,bracket,entry_price,residual_points,pnl_per_share,running_value,latest_native,forecast_max_native,forecast_peak_delta_hours_local,path_state,forecast_gap_bucket,question
+Shanghai,2026-06-30,2026-06-30 15:26:03,current_yes,27,0.985,1.5000000000000013,-0.98574,27,27.22222222222222,26.8,1.43,at_high,capped_minus1_0,Will the highest temperature in Shanghai be 27°C on June 30?
+Shanghai,2026-06-30,2026-06-30 15:26:03,d1_no,28,0.985,1.5000000000000013,-0.98574,27,27.22222222222222,26.8,1.43,at_high,capped_minus1_0,Will the highest temperature in Shanghai be 28°C on June 30?
+Guangzhou,2026-07-01,2026-07-01 16:37:18,current_yes,32,0.98,2.0000000000000018,-0.98098,32,30.0,33.1,3.62,decline,room_1_2,Will the highest temperature in Guangzhou be 32°C on July 1?
+Helsinki,2026-07-04,2026-07-04 18:16:58,d2_no,20,0.97,3.0000000000000027,-0.97146,18,15.0,20.1,-0.73,decline,room_gt2,Will the highest temperature in Helsinki be 20°C on July 4?
+Chongqing,2026-06-30,2026-06-30 15:26:03,current_yes,26,0.96,4.0000000000000036,-0.96192,26,25.0,24.8,-0.57,decline,busted_lt_minus1,Will the highest temperature in Chongqing be 26°C on June 30?
+Chongqing,2026-06-30,2026-06-30 15:26:03,d1_no,27,0.96,4.0000000000000036,-0.96192,26,25.0,24.8,-0.57,decline,busted_lt_minus1,Will the highest temperature in Chongqing be 27°C on June 30?
+Guangzhou,2026-07-01,2026-07-01 15:15:54,d2_no,34,0.96,4.0000000000000036,-0.96192,32,30.0,33.1,2.25,decline,room_1_2,Will the highest temperature in Guangzhou be 34°C on July 1?
+Amsterdam,2026-07-04,2026-07-04 18:33:47,d2_no,23,0.96,4.0000000000000036,-0.96192,21,20.0,22.7,-3.45,decline,room_1_2,Will the highest temperature in Amsterdam be 23°C on July 4?
