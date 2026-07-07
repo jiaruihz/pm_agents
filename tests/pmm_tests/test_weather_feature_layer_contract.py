@@ -39,11 +39,52 @@ def test_state_reexports_weather_context_without_private_multiplier() -> None:
 
     assert state.temperature_context_features(record) == weather_context.temperature_context_features(record)
     assert state.cloud_warming_interaction(0, 1.5, 2.0) == weather_context.cloud_warming_interaction(0, 1.5, 2.0)
+    assert state.heating_done_features(record) == weather_context.heating_done_features(record)
     assert not hasattr(state, "temperature_context_multiplier")
     assert not hasattr(weather_context, "temperature_context_multiplier")
     assert regime_routed_temperature_context.temperature_context_multiplier(
         {"route_leg": "runway_current_no", **state.temperature_context_features(record)}
     ) > 0
+
+
+def test_heating_done_feature_is_price_free_and_directional() -> None:
+    done = state.temperature_context_features(
+        {
+            "city": "Chengdu",
+            "unit": "C",
+            "forecast_peak_delta_hours_local": 1.25,
+            "forecast_gap_to_running_native": 0.2,
+            "decline_native": 0.4,
+            "minutes_since_running_max": 90,
+            "temp_trend_1h_f": 0.0,
+            "temp_trend_3h_f": -0.2,
+            "relative_humidity_pct": 82,
+            "sky_cover_code": 3,
+            "yes_best_ask": 0.99,
+            "no_best_ask": 0.96,
+        }
+    )
+    runway = state.temperature_context_features(
+        {
+            "city": "Chengdu",
+            "unit": "C",
+            "forecast_peak_delta_hours_local": -1.5,
+            "forecast_gap_to_running_native": 2.0,
+            "decline_native": 0.0,
+            "minutes_since_running_max": 10,
+            "temp_trend_1h_f": 1.4,
+            "temp_trend_3h_f": 3.0,
+            "relative_humidity_pct": 55,
+            "sky_cover_code": 1,
+            "yes_best_ask": 0.99,
+            "no_best_ask": 0.96,
+        }
+    )
+
+    assert done["heating_done_score_v1"] > runway["heating_done_score_v1"]
+    assert done["heating_done_bucket_v1"] in {"heating_done_confirmed", "heating_done_probable"}
+    assert runway["heating_done_bucket_v1"] == "runway_still_open"
+    assert "yes_best_ask" not in done
 
 
 def test_feature_frame_metadata_contract_includes_pit_provenance() -> None:

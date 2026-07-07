@@ -187,6 +187,60 @@ def check_snapshot_source_model(snapshot_path: Path) -> dict[str, Any]:
     }
 
 
+def check_snapshot_city_state_coverage(snapshot_path: Path) -> dict[str, Any]:
+    payload = load_snapshot(snapshot_path)
+    rows = [row for row in payload.get("records", []) if isinstance(row, dict)]
+    city_models = payload.get("city_models") if isinstance(payload.get("city_models"), dict) else {}
+    city_pools = payload.get("city_pools") if isinstance(payload.get("city_pools"), dict) else {}
+    expected_cities = set(city_pools) or set(city_models)
+    record_cities = {str(row.get("city") or "") for row in rows if str(row.get("city") or "").strip()}
+    same_local_day_rows = [
+        row
+        for row in rows
+        if str(row.get("city") or "").strip()
+        and str(row.get("target_date") or "").strip()
+        and str(row.get("city_local_date_at_snapshot") or "") == str(row.get("target_date") or "")
+    ]
+    same_local_day_cities = {str(row.get("city") or "") for row in same_local_day_rows}
+    required_fields = (
+        "metar_current_max_f",
+        "metar_latest_temp_f",
+        "forecast_peak_delta_hours_local",
+        "forecast_max_native",
+    )
+    field_city_counts: dict[str, int] = {}
+    missing_required_by_field: dict[str, list[str]] = {}
+    for field in required_fields:
+        ok_cities = {
+            str(row.get("city") or "")
+            for row in same_local_day_rows
+            if row.get(field) is not None and str(row.get(field)).strip() != ""
+        }
+        field_city_counts[field] = len(ok_cities)
+        missing_required_by_field[field] = sorted(same_local_day_cities - ok_cities)
+
+    missing_record_cities = sorted(expected_cities - record_cities)
+    missing_required_total = sorted({city for cities in missing_required_by_field.values() for city in cities})
+    status = "ok"
+    if missing_required_total:
+        status = "missing_same_day_weather_state"
+    elif missing_record_cities:
+        status = "missing_record_cities"
+
+    return {
+        "path": str(snapshot_path),
+        "status": status,
+        "expected_city_count": len(expected_cities),
+        "record_city_count": len(record_cities),
+        "same_local_day_city_count": len(same_local_day_cities),
+        "missing_record_cities": missing_record_cities,
+        "required_fields": list(required_fields),
+        "field_city_counts": field_city_counts,
+        "missing_required_by_field": missing_required_by_field,
+        "missing_required_cities": missing_required_total,
+    }
+
+
 def check_orderbook_snapshots(orderbook_dir: Path, *, now_utc: datetime, max_age_min: float) -> dict[str, Any]:
     latest = latest_orderbook_snapshot(orderbook_dir)
     if latest is None:
@@ -308,13 +362,15 @@ def check_summaries(paths: list[Path]) -> list[dict[str, Any]]:
 def overall_status(sections: dict[str, Any]) -> str:
     parity = sections["snapshot_parity"]
     snapshot = sections["snapshot_duplicates"]
-    source_model = sections["snapshot_source_model"]
+    source_model = sections.get("snapshot_source_model", {})
+    city_state = sections.get("snapshot_city_state_coverage", {})
     orderbook = sections.get("orderbook_snapshots", {})
     telemetry = sections["telemetry"]
     live_orders = sections["live_orders"]
     hard_fail = (
         parity.get("status") != "ok"
-        or source_model.get("status") != "ok"
+        or (bool(source_model) and source_model.get("status") != "ok")
+        or city_state.get("status") == "missing_same_day_weather_state"
         or orderbook.get("missing")
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
@@ -325,6 +381,7 @@ def overall_status(sections: dict[str, Any]) -> str:
         return "fail"
     warn = (
         snapshot.get("snapshot_stale")
+        or city_state.get("status") == "missing_record_cities"
         or orderbook.get("stale")
         or any(item.get("duplicate_decision_count", 0) > 0 for item in telemetry)
         or any(summary.get("status") == "stale_snapshot" for summary in sections["summaries"])
@@ -363,6 +420,7 @@ def main() -> int:
         "snapshot_parity": check_snapshot(snapshot_path),
         "snapshot_duplicates": check_snapshot_duplicates(snapshot_path, now_utc=now_utc, max_age_min=args.max_snapshot_age_min),
         "snapshot_source_model": check_snapshot_source_model(snapshot_path),
+        "snapshot_city_state_coverage": check_snapshot_city_state_coverage(snapshot_path),
         "orderbook_snapshots": check_orderbook_snapshots(
             Path(args.orderbook_dir),
             now_utc=now_utc,

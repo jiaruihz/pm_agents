@@ -224,6 +224,128 @@ def forecast_peak_clock_state(forecast_peak_delta_hours_local: Any) -> str:
     return "forecast_peak_passed_2h_plus"
 
 
+def heating_done_features(record: dict[str, Any]) -> dict[str, Any]:
+    """PIT heuristic for whether same-day warming is mostly exhausted.
+
+    This is a strategy-neutral physical state feature. It deliberately excludes
+    market price, spread, depth, settlement, and future observation labels.
+    """
+
+    unit = str(record.get("unit") or "").upper()
+    step = 1.0 if unit == "F" else 0.5
+    peak_delta = safe_float(record.get("forecast_peak_delta_hours_local"))
+    gap = safe_float(record.get("forecast_gap_to_running_native"))
+    decline = safe_float(
+        record.get("decline_native", record.get("decline_from_running_max_native"))
+    )
+    trend1 = safe_float(record.get("temp_trend_1h_f"))
+    trend3 = safe_float(record.get("temp_trend_3h_f"))
+    mins = safe_float(record.get("minutes_since_running_max"))
+    sky = safe_float(record.get("sky_cover_code"))
+    rh = safe_float(record.get("relative_humidity_pct"))
+
+    score = 0.0
+    reasons: list[str] = []
+
+    if math.isfinite(peak_delta):
+        if peak_delta >= 2.0:
+            score += 0.35
+            reasons.append("peak_passed_2h_plus")
+        elif peak_delta >= 1.0:
+            score += 0.28
+            reasons.append("peak_passed_1h_plus")
+        elif peak_delta >= 0.25:
+            score += 0.20
+            reasons.append("peak_recently_passed")
+        elif peak_delta >= -0.25:
+            score += 0.10
+            reasons.append("near_forecast_peak")
+        elif peak_delta < -1.0:
+            score -= 0.20
+            reasons.append("peak_still_ahead")
+
+    if math.isfinite(gap):
+        if gap <= 0:
+            score += 0.25
+            reasons.append("forecast_below_running_high")
+        elif gap <= step:
+            score += 0.15
+            reasons.append("forecast_room_le_1_step")
+        elif gap <= 2.0 * step:
+            score += 0.05
+            reasons.append("forecast_room_le_2_steps")
+        else:
+            score -= 0.20
+            reasons.append("forecast_room_open")
+
+    if math.isfinite(decline):
+        if decline >= step:
+            score += 0.20
+            reasons.append("pulled_back_from_high")
+        elif decline >= 0.5 * step:
+            score += 0.12
+            reasons.append("modest_pullback_from_high")
+        elif abs(decline) <= 0.25 * step:
+            score += 0.05
+            reasons.append("at_running_high_plateau")
+        elif decline < -0.25 * step:
+            score -= 0.30
+            reasons.append("still_warming_above_running")
+
+    if math.isfinite(mins):
+        if mins >= 120:
+            score += 0.15
+            reasons.append("running_high_stale_2h_plus")
+        elif mins >= 60:
+            score += 0.08
+            reasons.append("running_high_stale_1h_plus")
+        elif mins <= 30 and math.isfinite(decline) and decline <= 0.25 * step:
+            score -= 0.05
+            reasons.append("fresh_running_high")
+
+    if math.isfinite(trend1):
+        if trend1 <= -0.5:
+            score += 0.15
+            reasons.append("one_hour_cooling")
+        elif trend1 <= 0.25:
+            score += 0.08
+            reasons.append("one_hour_flat")
+        elif trend1 >= 1.0:
+            score -= 0.20
+            reasons.append("one_hour_warming")
+    if math.isfinite(trend3):
+        if trend3 <= 0:
+            score += 0.05
+            reasons.append("three_hour_not_warming")
+        elif trend3 >= 2.0:
+            score -= 0.10
+            reasons.append("three_hour_warming")
+
+    if math.isfinite(sky) and sky >= 3:
+        score += 0.05
+        reasons.append("cloud_suppression")
+    if math.isfinite(rh) and rh >= 80:
+        score += 0.04
+        reasons.append("humid_suppression")
+
+    score = max(0.0, min(1.0, score))
+    if score >= 0.70:
+        bucket = "heating_done_confirmed"
+    elif score >= 0.55:
+        bucket = "heating_done_probable"
+    elif score >= 0.40:
+        bucket = "near_peak_capping"
+    elif score >= 0.25:
+        bucket = "heating_done_uncertain"
+    else:
+        bucket = "runway_still_open"
+    return {
+        "heating_done_score_v1": round(score, 4),
+        "heating_done_bucket_v1": bucket,
+        "heating_done_reasons_v1": ";".join(reasons[:8]),
+    }
+
+
 def temperature_context_features(record: dict[str, Any]) -> dict[str, Any]:
     city = str(record.get("city") or "")
     wind = wind_thermal_interaction(city, record.get("wind_speed_kt"), record.get("wind_dir_deg", math.nan))
@@ -239,6 +361,7 @@ def temperature_context_features(record: dict[str, Any]) -> dict[str, Any]:
     )
     warming = warming_state(record.get("temp_trend_1h_f"), record.get("temp_trend_3h_f"))
     peak_clock = forecast_peak_clock_state(record.get("forecast_peak_delta_hours_local"))
+    heating_done = heating_done_features(record)
     return {
         **wind,
         "sky_state": sky_state(record.get("sky_cover_code")),
@@ -247,6 +370,7 @@ def temperature_context_features(record: dict[str, Any]) -> dict[str, Any]:
         "cloud_warming_interaction": cloud_warming,
         "moisture_cloud_interaction": moisture_cloud,
         "forecast_peak_clock_state": peak_clock,
+        **heating_done,
         "temperature_context_regime": " | ".join(
             [
                 peak_clock,

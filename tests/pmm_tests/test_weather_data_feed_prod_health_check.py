@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from scripts.ops.weather_data_feed_prod_health_check import (
     check_live_orders,
+    check_snapshot_city_state_coverage,
     check_snapshot_duplicates,
     check_telemetry,
     overall_status,
@@ -42,6 +43,44 @@ def test_prod_health_check_flags_snapshot_duplicates_and_staleness(tmp_path):
     assert report["duplicate_record_count"] == 1
     assert report["snapshot_stale"] is True
     assert report["snapshot_age_min"] == 60.0
+
+
+def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):
+    snapshot = tmp_path / "snapshot_20260707_1200.json"
+    rows = [
+        {
+            "city": "Chengdu",
+            "target_date": "2026-07-07",
+            "city_local_date_at_snapshot": "2026-07-07",
+            "metar_current_max_f": 98.6,
+            "metar_latest_temp_f": 98.6,
+            "forecast_peak_delta_hours_local": 0.75,
+            "forecast_max_native": 37.2,
+        },
+        {
+            "city": "Manila",
+            "target_date": "2026-07-07",
+            "city_local_date_at_snapshot": "2026-07-07",
+            "forecast_peak_delta_hours_local": 0.75,
+            "forecast_max_native": 34.0,
+        },
+    ]
+    snapshot.write_text(
+        json.dumps(
+            {
+                "city_pools": {"Chengdu": "t1_trading", "Manila": "t1_trading"},
+                "records": rows,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_snapshot_city_state_coverage(snapshot)
+
+    assert report["status"] == "missing_same_day_weather_state"
+    assert report["same_local_day_city_count"] == 2
+    assert report["missing_required_cities"] == ["Manila"]
+    assert report["missing_required_by_field"]["metar_current_max_f"] == ["Manila"]
 
 
 def test_prod_health_check_allows_reused_run_id_but_flags_duplicate_decisions(tmp_path):

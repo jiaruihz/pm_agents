@@ -1,0 +1,25 @@
+city,target_date,ts_beijing,leg,bracket,entry_price,residual_points,pnl_per_share,running_value,latest_native,forecast_max_native,forecast_peak_delta_hours_local,heating_done_score_v1,leg_residual_done_score_v1,path_state,forecast_gap_bucket,question
+Shanghai,2026-06-30,2026-06-30 15:26:03,current_yes,27,0.985,1.5000000000000013,-0.98574,27,27.22222222222222,26.8,1.43,0.58,0.58,at_high,capped_minus1_0,Will the highest temperature in Shanghai be 27°C on June 30?
+Shanghai,2026-06-30,2026-06-30 15:26:03,d1_no,28,0.985,1.5000000000000013,-0.98574,27,27.22222222222222,26.8,1.43,0.58,0.58,at_high,capped_minus1_0,Will the highest temperature in Shanghai be 28°C on June 30?
+Chongqing,2026-06-30,2026-06-30 15:26:03,current_yes,26,0.96,4.0000000000000036,-0.96192,26,25.0,24.8,-0.57,0.45,0.45,decline,busted_lt_minus1,Will the highest temperature in Chongqing be 26°C on June 30?
+Chongqing,2026-06-30,2026-06-30 15:26:03,d1_no,27,0.96,4.0000000000000036,-0.96192,26,25.0,24.8,-0.57,0.45,0.45,decline,busted_lt_minus1,Will the highest temperature in Chongqing be 27°C on June 30?
+Guangzhou,2026-07-01,2026-07-01 15:15:54,d2_no,34,0.96,4.0000000000000036,-0.96192,32,30.0,33.1,2.25,0.35,0.7,decline,room_1_2,Will the highest temperature in Guangzhou be 34°C on July 1?
+Chongqing,2026-07-04,2026-07-04 15:11:44,d2_no,34,0.919,8.099999999999996,-0.92272,32,32.22222222222222,31.5,-0.82,0.3,0.75,at_high,capped_minus1_0,Will the highest temperature in Chongqing be 34°C on July 4?
+Guangzhou,2026-07-01,2026-07-01 15:15:54,current_yes,32,0.749,25.1,-0.7584,32,30.0,33.1,2.25,0.35,0.35,decline,room_1_2,Will the highest temperature in Guangzhou be 32°C on July 1?
+CapeTown,2026-06-30,2026-06-30 18:39:09,d2_no,16,0.72,28.000000000000004,-0.73008,14,13.88888888888889,14.8,-1.35,0.0,0.45,at_high,room_0_1,Will the highest temperature in Cape Town be 16°C on June 30?
+Ankara,2026-06-30,2026-06-30 17:56:13,d3_no,32,0.71,29.000000000000004,-0.7202999999999999,29,28.88888888888889,30.1,-4.07,0.0,0.45,at_high,room_1_2,Will the highest temperature in Ankara be 32°C on June 30?
+Helsinki,2026-06-30,2026-06-30 16:40:31,d2_no,26,0.71,29.000000000000004,-0.7202999999999999,24,23.88888888888889,24.9,-5.33,0.0,0.45,at_high,room_0_1,Will the highest temperature in Helsinki be 26°C on June 30?
+Moscow,2026-07-01,2026-07-01 15:15:54,d3_no,29,0.7,30.000000000000004,-0.7104999999999999,26,26.11111111111111,26.9,-4.75,0.0,0.45,at_high,room_0_1,Will the highest temperature in Moscow be 29°C on July 1?
+Ankara,2026-07-02,2026-07-02 17:29:28,d2_no,34,0.66,34.0,-0.67122,32,32.22222222222222,31.9,-3.52,0.1,0.55,at_high,capped_minus1_0,Will the highest temperature in Ankara be 34°C on July 2?
+Munich,2026-06-30,2026-06-30 18:39:09,d3_no,28,0.65,35.0,-0.66137,25,25.0,26.9,-3.35,0.0,0.45,at_high,room_1_2,Will the highest temperature in Munich be 28°C on June 30?
+Moscow,2026-07-01,2026-07-01 16:37:18,d2_no,29,0.58,42.00000000000001,-0.5921799999999999,27,27.22222222222222,27.0,-3.38,0.1,0.55,at_high,capped_minus1_0,Will the highest temperature in Moscow be 29°C on July 1?
+Ankara,2026-07-04,2026-07-04 17:59:52,d2_no,30,0.55,44.99999999999999,-0.56238,28,27.77777777777778,28.6,-2.02,0.0,0.45,at_high,room_0_1,Will the highest temperature in Ankara be 30°C on July 4?
+Munich,2026-07-04,2026-07-04 18:33:47,d3_no,27,0.542,45.8,-0.5544100000000001,24,23.88888888888889,23.4,-3.45,0.1,0.55,at_high,capped_minus1_0,Will the highest temperature in Munich be 27°C on July 4?
+Ankara,2026-07-04,2026-07-04 17:26:13,d3_no,30,0.48,52.0,-0.49248,27,27.22222222222222,28.6,-2.57,0.0,0.45,at_high,room_1_2,Will the highest temperature in Ankara be 30°C on July 4?
+LA,2026-07-01,2026-07-01 15:56:37,d3_no,70-71,0.45,55.00000000000001,-0.46238,64,64.0,66.7,-13.07,0.0,0.45,at_high,room_gt2,Will the highest temperature in Los Angeles be between 70-71°F on July 1?
+Shenzhen,2026-07-01,2026-07-01 15:56:37,d1_no,33,0.3,70.0,-0.3105,32,32.22222222222222,31.5,0.93,0.5,0.5,at_high,capped_minus1_0,Will the highest temperature in Shenzhen be 33°C on July 1?
+Shenzhen,2026-07-01,2026-07-01 15:56:37,current_yes,32,0.27,73.0,-0.27986,32,32.22222222222222,31.5,0.93,0.5,0.5,at_high,capped_minus1_0,Will the highest temperature in Shenzhen be 32°C on July 1?
+Chongqing,2026-07-04,2026-07-04 15:45:27,current_yes,32,0.15,85.0,-0.15636999999999998,32,32.22222222222222,31.5,-0.25,0.4,0.4,at_high,capped_minus1_0,Will the highest temperature in Chongqing be 32°C on July 4?
+HongKong,2026-07-01,2026-07-01 15:15:54,current_yes,34,0.079,92.10000000000001,-0.08264,34,33.888888888888886,31.1,3.25,0.65,0.65,at_high,busted_lt_minus1,Will the highest temperature in Hong Kong be 34°C on July 1?
+Busan,2026-07-01,2026-07-01 15:56:37,d1_no,23,0.061,93.9,-0.06386,22,22.22222222222222,22.3,0.93,0.4,0.4,at_high,room_0_1,Will the highest temperature in Busan be 23°C or below on July 1?
+HongKong,2026-06-30,2026-06-30 15:26:03,current_yes,33,0.049,95.1,-0.05133,33,32.22222222222222,30.0,3.43,0.8,0.8,decline,busted_lt_minus1,Will the highest temperature in Hong Kong be 33°C on June 30?
