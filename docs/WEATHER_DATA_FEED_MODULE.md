@@ -165,6 +165,10 @@ snapshot_ts_utc
   - 韩国 AMOS：Seoul/RKSI、Busan/RKPK 的跑道级气温，并保留页面里的 METAR 温度锚点；
   - 这些字段是机场 microclimate feature，不是 WU/官方结算源替代。研究时应按 city/station/time 与 `source-events`
     中 METAR-like / WU-like 观测对齐，建模 `runway_temp - metar_temp`、`runway_temp - wu_temp`、滞后和日内 bias。
+  - AMSC 需要网页登录态 `sessionId`。本地/生产不要把明文写进 git；放在 data-feed service checkout 的 `.env`：
+    `WEATHER_DATA_FEED_AMSC_SESSION_ID=<sessionId>`。sessionId 里若有 `$$`，Mac loop 会按 `.env` 原文字面量重读该 key，避免 shell 展开污染。
+    Mac tmux loop 可用
+    `WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED=1` 打开周期采集，默认 interval 是 180 秒。
 - 生产 observation cache 必须开启 `--include-station-diff --include-fallback-sources --max-workers 4`：
   station-diff 城市是把旧 city_pool 机场修正到 Polymarket 规则/WU 结算源对应站点，不是替代口径；
   fallback 链路按 `source_profiles.json` 展开。默认 AviationWeather 城市为
