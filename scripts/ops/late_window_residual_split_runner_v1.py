@@ -86,6 +86,7 @@ LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 LOCAL_START_HOUR = 15
 LOCAL_END_HOUR = 18
 WEATHER_FEE_RATE = 0.05
+ACTIVE_ORDER_STATUSES = {"submitted", "simulated_open"}
 
 
 def utc_now() -> str:
@@ -380,6 +381,71 @@ def select_value_d1(df: pd.DataFrame, args: argparse.Namespace) -> tuple[pd.Data
     return selected, blocked
 
 
+def live_order_files() -> list[Path]:
+    out: list[Path] = []
+    root = ROOT / "runtime/weather_edge_v1"
+    for path in sorted(root.glob("*/live_orders.jsonl")):
+        if path not in out:
+            out.append(path)
+    if LIVE_OUT not in out:
+        out.append(LIVE_OUT)
+    return out
+
+
+def live_exposure_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for path in live_order_files():
+        for row in order_runtime.read_jsonl(path):
+            if str(row.get("status") or "") not in ACTIVE_ORDER_STATUSES:
+                continue
+            item = dict(row)
+            item["_live_order_file"] = rel(path)
+            rows.append(item)
+    return rows
+
+
+def live_guard_reason(row: pd.Series, exposures: list[dict[str, Any]]) -> str:
+    city = str(row.get("city") or "")
+    target_date = str(row.get("target_date") or "")
+    bracket = str(row.get("bracket") or "")
+    token_id = str(row.get("token_id") or "")
+    market_id = str(row.get("market_id") or "")
+    condition_id = str(row.get("condition_id") or "")
+    signal_side = "BUY_NO"
+    for exposure in exposures:
+        exp_city = str(exposure.get("city") or "")
+        exp_target_date = str(exposure.get("target_date") or "")
+        exp_token = str(exposure.get("token_id") or "")
+        exp_side = str(exposure.get("signal_side") or "").upper()
+        exp_bracket = str(exposure.get("bracket") or "")
+        exp_market_id = str(exposure.get("market_id") or "")
+        exp_condition_id = str(exposure.get("condition_id") or "")
+        exp_strategy = str(exposure.get("strategy_instance") or exposure.get("source_strategy_instance") or "")
+        if token_id and exp_token == token_id:
+            return f"live_guard_same_token:{exp_strategy}:{exposure.get('_live_order_file')}"
+        same_market = (
+            (condition_id and exp_condition_id and condition_id == exp_condition_id)
+            or (market_id and exp_market_id and market_id == exp_market_id)
+            or (city and target_date and bracket and exp_city == city and exp_target_date == target_date and exp_bracket == bracket)
+        )
+        if same_market and exp_side and exp_side != signal_side:
+            return f"live_guard_same_market_opposite_side:{exp_strategy}:{exposure.get('_live_order_file')}"
+        if exp_city == city and exp_target_date == target_date and exp_side == "BUY_NO":
+            return f"live_guard_city_day_existing_buy_no:{exp_strategy}:{exposure.get('_live_order_file')}"
+    return ""
+
+
+def apply_live_guards(selected: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if selected.empty:
+        return selected.copy(), selected.copy()
+    exposures = live_exposure_rows()
+    guarded = selected.copy()
+    guarded["live_guard_reason"] = [live_guard_reason(row, exposures) for _, row in guarded.iterrows()]
+    blocked = guarded[guarded["live_guard_reason"].astype(str).ne("")].copy()
+    passed = guarded[guarded["live_guard_reason"].astype(str).eq("")].copy()
+    return passed, blocked
+
+
 def existing_plan_keys() -> set[tuple[str, str, str]]:
     keys: set[tuple[str, str, str]] = set()
     for path in (LIVE_OUT, PAPER_OUT):
@@ -670,6 +736,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     scored = score_candidates(raw_candidates, model)
     residual = select_residual_shadow(scored, args)
     value, blocked = select_value_d1(scored, args)
+    value, live_guard_blocked = apply_live_guards(value)
+    if not live_guard_blocked.empty:
+        blocked = pd.concat([blocked, live_guard_blocked], ignore_index=True)
 
     residual_events = [
         event_payload(r, strategy_instance=RESIDUAL_INSTANCE, strategy_head="residual_high_price_no", status="shadow_only", reason="high_price_no_residual_shadow")
@@ -680,7 +749,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         for _, r in value.iterrows()
     ]
     blocked_events = [
-        event_payload(r, strategy_instance=VALUE_INSTANCE, strategy_head="value_d1_no", status="blocked", reason="p_leg_win_cost_edge_negative")
+        event_payload(
+            r,
+            strategy_instance=VALUE_INSTANCE,
+            strategy_head="value_d1_no",
+            status="blocked",
+            reason=str(r.get("live_guard_reason") or "p_leg_win_cost_edge_negative"),
+        )
         for _, r in blocked.iterrows()
     ]
     plans = write_plans(value, args)
