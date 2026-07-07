@@ -556,7 +556,9 @@ def exit_recovery_events(books: pd.DataFrame, scored: pd.DataFrame, args: argpar
         fee = fee_per_share(bid)
         exit_net = bid - fee
         scored_row = scored_by_token.get(key)
-        p_now = safe_float(getattr(scored_row, "p_leg_win_physical_v1", math.nan)) if scored_row is not None else math.nan
+        p_leg_now = safe_float(getattr(scored_row, "p_leg_win_physical_v1", math.nan)) if scored_row is not None else math.nan
+        scored_outcome = str(getattr(scored_row, "outcome", "") or "") if scored_row is not None else ""
+        p_now = 1.0 - p_leg_now if scored_outcome == "yes" and math.isfinite(p_leg_now) else p_leg_now
         hold_value = p_now if math.isfinite(p_now) else None
         exit_shadow = bool(hold_value is not None and exit_net >= hold_value + float(args.exit_edge_buffer))
         reason = "exit_net_ge_model_hold_value" if exit_shadow else "monitor_only"
