@@ -9,7 +9,10 @@ from weather_data_feed import (
     city_scan_dates,
     build_taf_signal,
     build_vertical_profile_signal,
+    fetch_open_meteo_historical_forecast,
     fetch_open_meteo_multi_model,
+    fetch_open_meteo_previous_runs,
+    fetch_open_meteo_single_run,
     forecast_enrichment_records,
     index_forecast_enrichment,
     load_city_configs,
@@ -169,6 +172,95 @@ def test_open_meteo_multi_model_parser_tracks_model_spread_and_hash(monkeypatch)
     assert day["models"]["GFS"] == 97.5
     assert day["model_spread"] == 2.5
     assert set(result.payload["hourly_values_hash_by_model"]) == {"ECMWF", "GFS"}
+
+
+def test_open_meteo_single_run_records_pit_run_metadata(monkeypatch):
+    calls = []
+    payload = {
+        "latitude": 31.14,
+        "longitude": 121.81,
+        "timezone": "Asia/Shanghai",
+        "utc_offset_seconds": 28800,
+        "hourly": {
+            "time": ["2026-07-07T13:00", "2026-07-07T14:00"],
+            "temperature_2m": [95.0, 96.0],
+        },
+    }
+
+    class Response:
+        def json(self):
+            return payload
+
+    def fake_http_get(url, **kwargs):
+        calls.append((url, kwargs["params"]))
+        return Response()
+
+    monkeypatch.setattr(forecast_sources, "_http_get", fake_http_get)
+
+    result = fetch_open_meteo_single_run(
+        31.14,
+        121.81,
+        model="ecmwf_ifs025",
+        run="2026-07-07T00:00",
+        forecast_days=2,
+        timezone_name="Asia/Shanghai",
+        target_date="2026-07-07",
+        decision_time_utc="2026-07-07T06:00:00+00:00",
+    )
+
+    assert calls[0][0] == forecast_sources.OPEN_METEO_SINGLE_RUN_API
+    assert calls[0][1]["run"] == "2026-07-07T00:00"
+    assert calls[0][1]["models"] == "ecmwf_ifs025"
+    assert result.source_key == "open_meteo_single_run"
+    assert result.payload["endpoint_kind"] == "single_run"
+    assert result.payload["issue_time_utc"] == "2026-07-07T00:00"
+    assert result.payload["decision_time_utc"] == "2026-07-07T06:00:00+00:00"
+    assert result.payload["target_day_hourly"]["forecast_max"] == 96.0
+    assert result.metadata["model_min_date"] == "2024-03-01"
+
+
+def test_open_meteo_previous_runs_and_historical_forecast_are_explicit_fallbacks(monkeypatch):
+    calls = []
+    payload = {
+        "timezone": "UTC",
+        "hourly": {
+            "time": ["2026-07-07T12:00"],
+            "temperature_2m": [90.0],
+        },
+    }
+
+    class Response:
+        def json(self):
+            return payload
+
+    def fake_http_get(url, **kwargs):
+        calls.append((url, kwargs["params"]))
+        return Response()
+
+    monkeypatch.setattr(forecast_sources, "_http_get", fake_http_get)
+
+    previous = fetch_open_meteo_previous_runs(
+        40.77,
+        -73.87,
+        model="gfs_seamless",
+        forecast_days=2,
+        target_date="2026-07-07",
+    )
+    historical = fetch_open_meteo_historical_forecast(
+        40.77,
+        -73.87,
+        model="gfs_seamless",
+        start_date="2026-07-07",
+        end_date="2026-07-07",
+        target_date="2026-07-07",
+    )
+
+    assert calls[0][0] == forecast_sources.OPEN_METEO_FORECAST_API
+    assert calls[0][1]["previous_runs"] == "true"
+    assert previous.payload["endpoint_kind"] == "previous_runs"
+    assert calls[1][0] == forecast_sources.OPEN_METEO_HISTORICAL_FORECAST_API
+    assert historical.payload["endpoint_kind"] == "historical_forecast"
+    assert historical.metadata["pit_exact"] is False
 
 
 def test_weather_context_vertical_profile_and_hourly_peak_features():

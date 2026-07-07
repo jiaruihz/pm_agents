@@ -149,6 +149,11 @@ snapshot_ts_utc
   - Open-Meteo hourly weather context（shortwave、dew point、pressure、10m/180m wind、precip probability、cloud cover、CAPE、CIN、lifted index、boundary layer height）；
   - AviationWeather TAF 原文和 peak-window 云雨、低云底、风向切换 signal；
   - vertical profile heating/suppression signal。
+  `forecast_sources.py` 也提供 PIT forecast-run primitives：`fetch_open_meteo_single_run`
+  （精确 archived run，带 `requested_run_time_utc` / `issue_time_utc` / `decision_time_utc`）、
+  `fetch_open_meteo_previous_runs` 和 `fetch_open_meteo_historical_forecast`。历史策略研究默认应优先使用
+  `single_run`；generic `historical_forecast` 只能作为显式 fallback，且 metadata 会标记 `pit_exact=false`
+  除非调用方提供可审计的 `issue_time_utc`。
   该产物只落盘为研究/feature capture，不改变现有 snapshot、策略 selector 或 live 下单逻辑；进入策略前必须走 fact-table 同分母回放和 shadow 验证。
   研究脚本应通过 `weather_data_feed.load_forecast_enrichment` / `index_forecast_enrichment` 读取该产物，避免各自重复 live-fetch Open-Meteo/TAF。
   Mac tmux loop 预留了 `WEATHER_DATA_FEED_FORECAST_ENRICHMENT_ENABLED=1` 开关，默认关闭；开启后写入

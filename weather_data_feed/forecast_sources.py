@@ -18,6 +18,8 @@ import httpx
 
 
 OPEN_METEO_FORECAST_API = "https://api.open-meteo.com/v1/forecast"
+OPEN_METEO_HISTORICAL_FORECAST_API = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+OPEN_METEO_SINGLE_RUN_API = "https://single-runs-api.open-meteo.com/v1/forecast"
 AVIATIONWEATHER_TAF_API = "https://aviationweather.gov/api/data/taf"
 
 OPEN_METEO_MULTI_MODEL_SPECS: dict[str, dict[str, Any]] = {
@@ -67,6 +69,20 @@ OPEN_METEO_CONTEXT_DAILY_FIELDS: tuple[str, ...] = (
     "sunset",
     "sunshine_duration",
 )
+
+OPEN_METEO_FORECAST_RUN_HOURLY_FIELDS: tuple[str, ...] = (
+    "temperature_2m",
+    "dew_point_2m",
+    "relative_humidity_2m",
+    "wind_speed_10m",
+    "cloud_cover",
+)
+
+OPEN_METEO_SINGLE_RUN_MODEL_MIN_DATE: dict[str, str] = {
+    "gfs_seamless": "2021-07-01",
+    "ecmwf_ifs025": "2024-03-01",
+    "kma_gdps": "2025-01-01",
+}
 
 
 @dataclass(frozen=True)
@@ -309,6 +325,212 @@ def fetch_open_meteo_weather_context(
         fetch_end=fetch_end,
         payload=payload,
         metadata={"raw_payload_hash": stable_hash(data), "request_params": params},
+    )
+
+
+def _forecast_run_payload(
+    *,
+    source: str,
+    endpoint_kind: str,
+    model: str,
+    hourly_fields: tuple[str, ...],
+    data: dict[str, Any],
+    temperature_unit: str,
+    requested_run_time_utc: str = "",
+    issue_time_utc: str = "",
+    decision_time_utc: str = "",
+    target_date: str = "",
+) -> dict[str, Any]:
+    hourly = data.get("hourly") or {}
+    summary = target_day_hourly_summary(hourly, target_date) if target_date else {}
+    return {
+        "source": source,
+        "endpoint_kind": endpoint_kind,
+        "model": model,
+        "requested_run_time_utc": requested_run_time_utc,
+        "issue_time_utc": issue_time_utc or requested_run_time_utc,
+        "decision_time_utc": decision_time_utc,
+        "target_date": target_date,
+        "latitude": data.get("latitude"),
+        "longitude": data.get("longitude"),
+        "timezone": data.get("timezone"),
+        "timezone_abbreviation": data.get("timezone_abbreviation"),
+        "utc_offset_seconds": data.get("utc_offset_seconds"),
+        "unit": temperature_unit,
+        "hourly_fields": list(hourly_fields),
+        "hourly": hourly,
+        "target_day_hourly": summary,
+        "hourly_values_hash": stable_hash(hourly),
+    }
+
+
+def fetch_open_meteo_single_run(
+    latitude: float,
+    longitude: float,
+    *,
+    model: str,
+    run: str,
+    forecast_days: int,
+    timezone_name: str = "auto",
+    target_date: str = "",
+    decision_time_utc: str = "",
+    temperature_unit: str = "fahrenheit",
+    hourly_fields: tuple[str, ...] = OPEN_METEO_FORECAST_RUN_HOURLY_FIELDS,
+    settings: ForecastFetchSettings | None = None,
+) -> ForecastFetchResult:
+    """Fetch one archived Open-Meteo model run.
+
+    This is the PIT-safe forecast-run primitive. Callers should pass the run
+    that was available before their decision timestamp; this function records
+    the requested run explicitly and does not silently substitute another run.
+    """
+
+    fetch_start = datetime.now(timezone.utc)
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "models": model,
+        "hourly": ",".join(hourly_fields),
+        "run": run,
+        "forecast_days": str(forecast_days),
+        "temperature_unit": temperature_unit,
+        "timezone": timezone_name,
+    }
+    data = _http_get(OPEN_METEO_SINGLE_RUN_API, params=params, settings=settings).json()
+    fetch_end = datetime.now(timezone.utc)
+    payload = _forecast_run_payload(
+        source="open_meteo_single_run",
+        endpoint_kind="single_run",
+        model=model,
+        hourly_fields=hourly_fields,
+        data=data,
+        temperature_unit=temperature_unit,
+        requested_run_time_utc=run,
+        issue_time_utc=run,
+        decision_time_utc=decision_time_utc,
+        target_date=target_date,
+    )
+    return _result(
+        "open_meteo_single_run",
+        status="ok" if payload["hourly"] else "empty",
+        fetch_start=fetch_start,
+        fetch_end=fetch_end,
+        payload=payload,
+        metadata={
+            "endpoint_kind": "single_run",
+            "raw_payload_hash": stable_hash(data),
+            "request_params": params,
+            "model_min_date": OPEN_METEO_SINGLE_RUN_MODEL_MIN_DATE.get(model, ""),
+        },
+    )
+
+
+def fetch_open_meteo_previous_runs(
+    latitude: float,
+    longitude: float,
+    *,
+    model: str,
+    forecast_days: int,
+    timezone_name: str = "auto",
+    target_date: str = "",
+    decision_time_utc: str = "",
+    temperature_unit: str = "fahrenheit",
+    hourly_fields: tuple[str, ...] = OPEN_METEO_FORECAST_RUN_HOURLY_FIELDS,
+    settings: ForecastFetchSettings | None = None,
+) -> ForecastFetchResult:
+    """Fetch Open-Meteo current forecast with previous-runs expansion."""
+
+    fetch_start = datetime.now(timezone.utc)
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "models": model,
+        "hourly": ",".join(hourly_fields),
+        "forecast_days": str(forecast_days),
+        "temperature_unit": temperature_unit,
+        "timezone": timezone_name,
+        "previous_runs": "true",
+    }
+    data = _http_get(OPEN_METEO_FORECAST_API, params=params, settings=settings).json()
+    fetch_end = datetime.now(timezone.utc)
+    payload = _forecast_run_payload(
+        source="open_meteo_previous_runs",
+        endpoint_kind="previous_runs",
+        model=model,
+        hourly_fields=hourly_fields,
+        data=data,
+        temperature_unit=temperature_unit,
+        decision_time_utc=decision_time_utc,
+        target_date=target_date,
+    )
+    return _result(
+        "open_meteo_previous_runs",
+        status="ok" if payload["hourly"] else "empty",
+        fetch_start=fetch_start,
+        fetch_end=fetch_end,
+        payload=payload,
+        metadata={"endpoint_kind": "previous_runs", "raw_payload_hash": stable_hash(data), "request_params": params},
+    )
+
+
+def fetch_open_meteo_historical_forecast(
+    latitude: float,
+    longitude: float,
+    *,
+    model: str,
+    start_date: str,
+    end_date: str,
+    timezone_name: str = "auto",
+    target_date: str = "",
+    decision_time_utc: str = "",
+    issue_time_utc: str = "",
+    temperature_unit: str = "fahrenheit",
+    hourly_fields: tuple[str, ...] = OPEN_METEO_FORECAST_RUN_HOURLY_FIELDS,
+    settings: ForecastFetchSettings | None = None,
+) -> ForecastFetchResult:
+    """Fetch Open-Meteo generic historical forecast archive.
+
+    This is useful as a documented fallback, but it is not equivalent to an
+    exact decision-horizon single run unless the caller supplies and audits a
+    valid issue_time_utc.
+    """
+
+    fetch_start = datetime.now(timezone.utc)
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "models": model,
+        "hourly": ",".join(hourly_fields),
+        "start_date": start_date,
+        "end_date": end_date,
+        "temperature_unit": temperature_unit,
+        "timezone": timezone_name,
+    }
+    data = _http_get(OPEN_METEO_HISTORICAL_FORECAST_API, params=params, settings=settings).json()
+    fetch_end = datetime.now(timezone.utc)
+    payload = _forecast_run_payload(
+        source="open_meteo_historical_forecast",
+        endpoint_kind="historical_forecast",
+        model=model,
+        hourly_fields=hourly_fields,
+        data=data,
+        temperature_unit=temperature_unit,
+        issue_time_utc=issue_time_utc,
+        decision_time_utc=decision_time_utc,
+        target_date=target_date,
+    )
+    return _result(
+        "open_meteo_historical_forecast",
+        status="ok" if payload["hourly"] else "empty",
+        fetch_start=fetch_start,
+        fetch_end=fetch_end,
+        payload=payload,
+        metadata={
+            "endpoint_kind": "historical_forecast",
+            "pit_exact": bool(issue_time_utc),
+            "raw_payload_hash": stable_hash(data),
+            "request_params": params,
+        },
     )
 
 
