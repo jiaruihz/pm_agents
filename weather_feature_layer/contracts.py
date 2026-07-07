@@ -7,6 +7,7 @@ WEATHER_STATE_VERSION = "weather_state_v1"
 WEATHER_REGIME_VERSION = "weather_regime_v1"
 WEATHER_BIAS_VERSION = "weather_bias_v1"
 MARKET_GEOMETRY_VERSION = "market_geometry_v1"
+EXECUTION_FEATURE_VERSION = "execution_features_v1"
 
 PIT_PROVENANCE_LIVE_CAPTURE = "live_capture"
 PIT_PROVENANCE_ARCHIVE_RECONSTRUCTION = "archive_reconstruction"
@@ -20,6 +21,7 @@ DEFAULT_FEATURE_VERSION_MANIFEST = {
     "weather_regime": WEATHER_REGIME_VERSION,
     "weather_bias": WEATHER_BIAS_VERSION,
     "market_geometry": MARKET_GEOMETRY_VERSION,
+    "execution_features": EXECUTION_FEATURE_VERSION,
 }
 
 FEATURE_FRAME_REQUIRED_METADATA = (

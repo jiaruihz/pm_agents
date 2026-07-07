@@ -337,6 +337,7 @@ weather_feature_layer/
   regimes.py            # coarse regime labels
   bias.py               # city/source/station as-of bias states
   market.py             # bracket parser, expression ladder, market geometry
+  execution.py          # orderbook spread/depth/fillability cost features
   builders.py           # PIT builders from data-feed snapshots/cache/fact rows
   labels.py             # offline labels only; never imported by live runners by default
   parity/               # shared fixtures and old-vs-new parity harnesses
@@ -358,6 +359,7 @@ Public API sketch:
 from weather_feature_layer import (
     build_weather_state_frame,
     add_bias_features,
+    add_side_execution_features,
     add_market_geometry_features,
     add_regime_features,
 )
@@ -365,7 +367,8 @@ from weather_feature_layer import (
 state = build_weather_state_frame(snapshot_rows, observation_rows, as_of_ts_utc=ts)
 state = add_regime_features(state)
 brackets = add_market_geometry_features(state, orderbook_rows)
-features = add_bias_features(brackets, bias_reference, as_of_ts_utc=ts)
+books = add_side_execution_features(brackets)
+features = add_bias_features(books, bias_reference, as_of_ts_utc=ts)
 ```
 
 Versioning:
@@ -375,8 +378,16 @@ weather_state_v1
 weather_regime_v1
 weather_bias_v1
 market_geometry_v1
+execution_features_v1
 feature_frame_v1
 ```
+
+Execution/orderbook features are shared L1 features, but their semantics are
+execution cost and fillability, not weather alpha. Shared outputs such as
+`book_state_v1`, `side_spread`, `side_depth_ask_5c`, and
+`side_fillable_notional_ask_5c` should feed sizing, maker/taker choice,
+slippage/non-fill replay, and capacity checks. They must not be treated as
+evidence that the weather probability itself is better.
 
 Every feature frame must carry:
 

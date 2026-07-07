@@ -6,6 +6,7 @@ probability, selector, and execution logic.
 
 from weather_feature_layer.contracts import (
     FEATURE_FRAME_SCHEMA_VERSION,
+    EXECUTION_FEATURE_VERSION,
     MARKET_GEOMETRY_VERSION,
     WEATHER_BIAS_VERSION,
     WEATHER_REGIME_VERSION,
@@ -15,6 +16,12 @@ from weather_feature_layer.builders import (
     WEATHER_STATE_FRAME_BUILDER_VERSION,
     build_weather_state_frame,
     build_weather_state_frame_with_audits,
+)
+from weather_feature_layer.execution import (
+    add_side_execution_features,
+    classify_book_state,
+    side_execution_features,
+    summarize_city_execution_profile,
 )
 from weather_feature_layer.store import (
     feature_frame_ref_for_row,
@@ -35,6 +42,7 @@ from weather_feature_layer.state import (
 
 __all__ = [
     "FEATURE_FRAME_SCHEMA_VERSION",
+    "EXECUTION_FEATURE_VERSION",
     "MARKET_GEOMETRY_VERSION",
     "WEATHER_STATE_FRAME_BUILDER_VERSION",
     "WEATHER_BIAS_VERSION",
@@ -42,14 +50,18 @@ __all__ = [
     "WEATHER_STATE_VERSION",
     "build_weather_state_frame",
     "build_weather_state_frame_with_audits",
+    "add_side_execution_features",
     "city_wind_context",
+    "classify_book_state",
     "cloud_warming_interaction",
     "feature_frame_ref_for_row",
     "forecast_peak_clock_state",
     "load_feature_row_by_ref",
     "moisture_cloud_interaction",
     "moisture_state",
+    "side_execution_features",
     "sky_state",
+    "summarize_city_execution_profile",
     "temperature_context_features",
     "warming_state",
     "wind_thermal_interaction",

@@ -12,7 +12,7 @@ from src.strategies.weather_edge_v1.tools import low_price_yes_tail_telemetry as
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as stable_regime
 from src.strategies.weather_edge_v1.tools import regime_routed_temperature_context
 from weather_data_feed import weather_context
-from weather_feature_layer import bias, market, regimes, state, store
+from weather_feature_layer import bias, execution, market, regimes, state, store
 from weather_feature_layer.builders import build_weather_state_frame, build_weather_state_frame_with_audits
 from weather_feature_layer.contracts import (
     DEFAULT_FEATURE_VERSION_MANIFEST,
@@ -109,6 +109,58 @@ def test_market_geometry_preserves_stable_and_tail_bracket_semantics() -> None:
     assert market.bracket_distance_features({"bracket": "36+", "forecast_max_native": 37.2}) == (
         tail_telemetry.bracket_distance_features({"bracket": "36+", "forecast_max_native": 37.2})
     )
+
+
+def test_execution_book_state_matches_legacy_heada_thresholds() -> None:
+    assert execution.classify_book_state(None, 25.0) == "missing"
+    assert execution.classify_book_state(0.03, 25.0) == "feasible"
+    assert execution.classify_book_state(0.031, 25.0) == "thin_wide"
+    assert execution.classify_book_state(0.03, 24.999) == "thin_wide"
+
+
+def test_execution_features_are_side_normalized_and_city_profiled() -> None:
+    rows = pd.DataFrame(
+        [
+            {
+                "city": "LA",
+                "side": "BUY_YES",
+                "yes_spread": 0.02,
+                "yes_depth_ask_5c": 50,
+                "decision_entry_price": 0.10,
+            },
+            {
+                "city": "LA",
+                "side": "BUY_NO",
+                "no_spread": 0.05,
+                "no_depth_ask_5c": 10,
+                "decision_entry_price": 0.40,
+            },
+            {
+                "city": "London",
+                "side": "BUY_YES",
+                "yes_spread": None,
+                "yes_depth_ask_5c": None,
+                "decision_entry_price": 0.20,
+            },
+        ]
+    )
+
+    enriched = execution.add_side_execution_features(rows)
+    la_yes = enriched.iloc[0]
+    la_no = enriched.iloc[1]
+    london = enriched.iloc[2]
+    assert la_yes["book_state_v1"] == "feasible"
+    assert la_yes["side_depth_ask_5c"] == 50
+    assert math.isclose(la_yes["side_fillable_notional_ask_5c"], 5.0)
+    assert la_no["book_state_v1"] == "thin_wide"
+    assert la_no["side_spread"] == 0.05
+    assert london["book_state_v1"] == "missing"
+
+    profile = execution.summarize_city_execution_profile(enriched).set_index("city")
+    assert profile.loc["LA", "execution_profile_rows"] == 2
+    assert math.isclose(profile.loc["LA", "book_state_feasible_rate"], 0.5)
+    assert math.isclose(profile.loc["LA", "book_state_thin_wide_rate"], 0.5)
+    assert math.isclose(profile.loc["London", "book_state_missing_rate"], 1.0)
 
 
 def test_market_geometry_matches_tmax_p0_p3_fixture_columns() -> None:
