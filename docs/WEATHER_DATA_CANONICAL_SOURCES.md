@@ -31,6 +31,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | 实盘成交（真金 CLOB fills） | `fills` 表 join `orders WHERE venue='polymarket_clob'`，并用 raw `clob_fills.jsonl` + `weather_clob_fill_coverage_gate.py` 做 fill_id / order cap reconciliation | public activity 不能单独当 order-level 真相 |
 | 抢单/测速实时天气信号 | N100 `weather_data_feed_service_runtime/output/source_events/latest.json`；历史审计读同目录 `sources.jsonl` | 策略脚本默认不要自己直抓 AviationWeather/TGFTP/CheckWX；只有显式 `live-fetch` 调试可以绕过 |
 | 5 分钟级 live observation feature/cache | N100 `weather_data_feed_service_runtime/output/observations/latest.json` | full snapshot 里的旧 `metar_latest_*` 字段只作兼容回退 |
+| 机场/官方高频参考站 enrichment | `weather_data_feed_service_runtime/output/high_frequency_observations/latest.json`；历史审计读 `high_frequency_observations.jsonl` | 不作为 settlement truth；只用于和 METAR/WU/source-events/settlement outcome 做 lag/bias/参考站关系研究 |
 | 概率模型 / 错误分布 cache | N100 `cache/gfs_365d_*.json`（**实际 ~735 天，不是 365 天**）；本机镜像 `runtime/weather_edge_v1/market_data/cache/` | — |
 | 结算（pm_history） | `settlements` 表用于 condition_id trade join；`settlement_outcomes` 表用于 city/date/bracket basket 或 source-grain research | 旧 `t24_paper_ledger_summary.json` 的 "by_date" 块；策略脚本临时直读 raw pm_history |
 
@@ -121,6 +122,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | **N100** `weather_data_feed_service_runtime/output/source_events/latest.json` | source | `weather-data-feed-source-events.timer` | timing monitor / METAR crossing bot | city/source/station 最新观测事件；默认天气信号入口。包含 report_ts、detect_ts、payload hash、raw METAR、source profile 审计字段 |
 | **N100** `weather_data_feed_service_runtime/output/source_events/sources.jsonl` | source log | `weather-data-feed-source-events.timer` | latency research / source-vs-market audit | append-only；用于判断哪个源先更新、市场是否领先天气源 |
 | **N100** `weather_data_feed_service_runtime/output/observations/latest.json` | source cache | `weather-data-feed-observations.timer` | current-YES / regime-routed live feature layer | 标准 `weather_data_feed_observation_cache_v1`；策略优先读它，不再重复抓天气 API |
+| **N100/Mac** `weather_data_feed_service_runtime/output/high_frequency_observations/latest.json` | enrichment source | `weather_data_feed_service high-frequency-observations` | airport/reference station research | 标准 `weather_high_frequency_observation_v1`；AMOS/MADIS/MSS/JMA/HKO/CoWIN/MGM/IMS/FMI 等机场或官方参考站，不替代 settlement/source-events |
 | **N100** `pm_agent/runtime/logs/*.log` | log | N100 pm_agent live cycle | 故障排查 | 本机镜像 `remote_pm_agent/logs/`（2026-06-05 起加入 sync） |
 | **N100** `/home/jiarui/weather-predict-backups/*.tar.zst` | backup | N100 `backup_data.sh` | 灾难恢复 | 本机镜像 `runtime/_backups_n100/`（2026-06-05 起加入 sync，独立脚本 `sync_n100_backups.sh`） |
 | **本机** `runtime/weather_edge_v1/live/*.jsonl` | source（本机产物，已停） | 本机 `weather_live_cycle.py`（最后写入 2026-06-01） | `migrate-live-cycle` → orders | 84 文件，本机 loop 已停。仍被 ingest 扫描（兼容历史），可以原地保留 |

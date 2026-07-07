@@ -82,6 +82,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build runway-level airport observation rows for microclimate research",
     )
     runway_observations.add_argument("runner_args", nargs=argparse.REMAINDER)
+    high_frequency_observations = subparsers.add_parser(
+        "high-frequency-observations",
+        help="Build airport/reference high-frequency observation rows for research",
+    )
+    high_frequency_observations.add_argument("runner_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -116,5 +121,9 @@ def main(argv: list[str] | None = None) -> int:
         from weather_data_feed_service.runway_observations import main as runway_observations_main
 
         return runway_observations_main(runner_args)
+    if args.command == "high-frequency-observations":
+        from weather_data_feed_service.high_frequency_observations import main as high_frequency_observations_main
+
+        return high_frequency_observations_main(runner_args)
     parser.error(f"unknown command: {args.command}")
     return 2

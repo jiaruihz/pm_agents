@@ -42,6 +42,13 @@ from weather_data_feed.forecast_enrichment_cache import (
     load_indexed_forecast_enrichment,
     normalize_forecast_enrichment_record,
 )
+from weather_data_feed.high_frequency_observation_sources import (
+    HIGH_FREQUENCY_CITY_SOURCES,
+    HighFrequencyFetchResult,
+    HighFrequencyFetchSettings,
+    fetch_high_frequency_observation,
+    supported_high_frequency_sources,
+)
 from weather_data_feed.models import (
     CityConfig,
     CrossingEvent,
@@ -108,6 +115,9 @@ __all__ = [
     "ForecastFetchResult",
     "ForecastFetchSettings",
     "FORECAST_ENRICHMENT_SCHEMA_VERSION",
+    "HIGH_FREQUENCY_CITY_SOURCES",
+    "HighFrequencyFetchResult",
+    "HighFrequencyFetchSettings",
     "bracket_contains",
     "build_city_policy",
     "build_observation_cache",
@@ -125,6 +135,7 @@ __all__ = [
     "fetch_open_meteo_weather_context",
     "fetch_amos_runway",
     "fetch_amsc_awos_runway",
+    "fetch_high_frequency_observation",
     "forecast_enrichment_records",
     "index_forecast_enrichment",
     "index_observation_cache",
@@ -148,6 +159,7 @@ __all__ = [
     "source_profile_for_city",
     "station_timezone",
     "supported_runway_cities",
+    "supported_high_frequency_sources",
     "target_day_hourly_summary",
     "timezone_label",
     "unique_city_scan_dates",

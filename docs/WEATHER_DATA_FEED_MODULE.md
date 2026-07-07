@@ -44,6 +44,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `observation_sources/fetchers.py` | 数据层 fetcher：AviationWeather METAR、AWC cache、IEM ASOS、NOAA TGFTP、weather.gov latest、Synoptic、CheckWX |
 | `forecast_sources.py` | 预测增强数据层：Open-Meteo multi-model per-model 温度、Open-Meteo hourly weather context、AviationWeather TAF、TAF peak-window signal、vertical profile heating/suppression signal |
 | `runway_sources.py` | 机场跑道级观测增强层：AMSC AWOS、韩国 AMOS 跑道点位气温；用于 microclimate/METAR-WU 对齐研究，不作为 settlement truth |
+| `high_frequency_observation_sources.py` | 机场/官方高频观测增强层：AMOS、NOAA MADIS HFMETAR、Singapore MSS、JMA、HKO、CoWIN、MGM、IMS、FMI 等；需要 key 的 CWA/KNMI/NCM/AEROWEB 显式返回 auth/config 状态 |
 | `snapshot_protocol.py` | 标准 snapshot 字段和 legacy alias normalization |
 | `models.py` | SourceProfile、ObservationRecord、RunningMaxState、MarketSnapshotRecord 等共享 dataclass |
 
@@ -55,6 +56,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `output/observations/latest.json` | `~/projects/weather_data_feed_service_runtime/output/observations/` | current-YES / regime-routed 等需要 5 分钟级 observation cache 的策略 |
 | `output/forecast_enrichment/latest.json` + append-only `forecast_enrichment.jsonl` | `~/projects/weather_data_feed_service_runtime/output/forecast_enrichment/` | forecast-quality / current-YES / NO carry / reheat/overshoot research 的预测侧 shadow feature capture |
 | `output/runway_observations/latest.json` + append-only `runway_observations.jsonl` | `~/projects/weather_data_feed_service_runtime/output/runway_observations/` | 跑道点位气温与 METAR/WU 报文温度的对齐、滞后、bias 建模研究 |
+| `output/high_frequency_observations/latest.json` + append-only `high_frequency_observations.jsonl` | `~/projects/weather_data_feed_service_runtime/output/high_frequency_observations/` | 机场/官方高频参考站与 METAR/WU/source-events/settlement outcome 的对齐、滞后、bias 建模研究 |
 | full market snapshot outputs | `~/projects/weather_data_feed_service_runtime/output/` | mirror / analysis / dashboard sync |
 
 旧路径:
@@ -169,6 +171,17 @@ snapshot_ts_utc
     `WEATHER_DATA_FEED_AMSC_SESSION_ID=<sessionId>`。sessionId 里若有 `$$`，Mac loop 会按 `.env` 原文字面量重读该 key，避免 shell 展开污染。
     Mac tmux loop 可用
     `WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED=1` 打开周期采集，默认 interval 是 180 秒。
+- 新增 `weather_data_feed/high_frequency_observation_sources.py` 和 `weather_data_feed_service high-frequency-observations`，
+  用于机场/官方高频参考站 capture。当前覆盖：
+  - 韩国 AMOS（Seoul/RKSI、Busan/RKPK）；
+  - NOAA MADIS HFMETAR（美国 11 个机场站，当前通过 IEM `MADISHF` family 轻量接入）；
+  - Singapore MSS S24、JMA AMeDAS RJTT/Haneda、HKO、CoWIN 6087、MGM Ankara/Istanbul、IMS Lod、FMI Helsinki；
+  - CWA Taipei、KNMI Amsterdam、NCM Jeddah、AEROWEB Paris 已进入统一 registry，但无 key/账号时只产
+    `auth_required` / `not_implemented` 状态，不静默当作可用数据。
+  这些产物统一使用 `weather_high_frequency_observation_v1`，研究脚本
+  `scripts/analysis/forecast_quality/research_high_frequency_settlement_alignment_v1.py`
+  可把它们和 `source-events` 的 METAR-like/WU-like 行、`settlement_outcomes` 的最终落点拼接。
+  它们不是 `output/observations/latest.json` 的替代，也不自动进入 live 策略决策。
 - 生产 observation cache 必须开启 `--include-station-diff --include-fallback-sources --max-workers 4`：
   station-diff 城市是把旧 city_pool 机场修正到 Polymarket 规则/WU 结算源对应站点，不是替代口径；
   fallback 链路按 `source_profiles.json` 展开。默认 AviationWeather 城市为

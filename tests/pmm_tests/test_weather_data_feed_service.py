@@ -48,6 +48,7 @@ def test_weather_data_feed_service_cli_help_imports() -> None:
     assert "observations" in result.stdout
     assert "source-events" in result.stdout
     assert "runway-observations" in result.stdout
+    assert "high-frequency-observations" in result.stdout
 
 
 def test_snapshot_full_cli_forces_all_orderbook_scope(monkeypatch) -> None:
