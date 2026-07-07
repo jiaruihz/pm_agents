@@ -33,20 +33,15 @@ DEFAULT_ORDERBOOK_DIRS = (
     ROOT.parent / "weather-predict/output/orderbook_snapshots",
     ROOT / "runtime/weather_edge_v1/market_data/orderbook_snapshots",
 )
-DEFAULT_TELEMETRY_FILES = (
-    ROOT / "runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1/forward_telemetry.jsonl",
-    ROOT / "runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1/forward_telemetry.jsonl",
-)
+DEFAULT_TELEMETRY_FILES: tuple[Path, ...] = ()
 DEFAULT_SUMMARY_FILES = (
-    ROOT / "runtime/weather_edge_v1/theta_current_yes_fade_confirmed_tiny_live_v1/latest_summary.json",
-    ROOT / "runtime/weather_edge_v1/theta_current_yes_peak_forming_micro_tiny_live_v1/latest_summary.json",
+    Path("regime_routed_no_shadow_v1/latest_summary.json"),
+    Path("late_window_residual_split_v1/latest_summary.json"),
 )
 DEFAULT_LIVE_DIR = ROOT / "runtime/weather_edge_v1/live"
-CURRENT_YES_LIVE_ORDER_PATTERNS = (
-    "theta_current_yes_fade_confirmed_tiny_live_v1_orders.jsonl",
-    "theta_current_yes_peak_forming_micro_tiny_live_v1_orders.jsonl",
-    "low_price_yes_lottery_tiny_live_v1_orders.jsonl",
-    "low_price_yes_take_profit_exit_v1_orders.jsonl",
+ACTIVE_LIVE_ORDER_PATTERNS: tuple[str, ...] = ()
+ACTIVE_RUNTIME_LIVE_ORDER_FILES = (
+    Path("late_window_residual_split_v1/live_orders.jsonl"),
 )
 SNAPSHOT_SCHEMA_VERSION = "weather_data_feed_snapshot_v1"
 
@@ -106,6 +101,47 @@ def read_jsonl_tail(path: Path, limit: int) -> list[dict[str, Any]]:
 
 def row_key(row: dict[str, Any], fields: Iterable[str]) -> tuple[str, ...]:
     return tuple(str(row.get(field) or "") for field in fields)
+
+
+def parse_target_date(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    try:
+        return datetime.fromisoformat(raw[:10]).date().isoformat()
+    except ValueError:
+        return ""
+
+
+def effective_order_id(row: dict[str, Any]) -> str:
+    if str(row.get("order_id") or "").strip():
+        return str(row.get("order_id")).strip()
+    if str(row.get("orderID") or "").strip():
+        return str(row.get("orderID")).strip()
+    exchange = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+    place = exchange.get("place") if isinstance(exchange.get("place"), dict) else {}
+    return str(place.get("orderID") or "").strip()
+
+
+def is_current_or_future_order(row: dict[str, Any], *, today_utc: str) -> bool:
+    target_date = parse_target_date(row.get("target_date"))
+    return bool(target_date and target_date >= today_utc)
+
+
+def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
+    if row.get("_parse_error") or not is_current_or_future_order(row, today_utc=today_utc):
+        return False
+    status = str(row.get("status") or "").lower()
+    exchange = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+    place = exchange.get("place") if isinstance(exchange.get("place"), dict) else {}
+    place_status = str(place.get("status") or "").lower()
+    if status in {"failed", "error", "rejected", "cancelled", "canceled"}:
+        return False
+    if place_status in {"failed", "error", "rejected", "cancelled", "canceled"}:
+        return False
+    if place.get("success") is False:
+        return False
+    return True
 
 
 def duplicate_examples(rows: list[dict[str, Any]], fields: tuple[str, ...], limit: int = 10) -> tuple[int, list[dict[str, Any]]]:
@@ -221,9 +257,21 @@ def check_snapshot_city_state_coverage(snapshot_path: Path) -> dict[str, Any]:
 
     missing_record_cities = sorted(expected_cities - record_cities)
     missing_required_total = sorted({city for cities in missing_required_by_field.values() for city in cities})
+    trading_pools = {"t1_trading"}
+    live_source_cities = {
+        str(row.get("city") or "")
+        for row in same_local_day_rows
+        if str(row.get("live_observation_source") or "").strip()
+    }
+    missing_required_trading = sorted(
+        city for city in missing_required_total if city_pools.get(city) in trading_pools and city in live_source_cities
+    )
+    missing_required_non_trading = sorted(city for city in missing_required_total if city not in missing_required_trading)
     status = "ok"
-    if missing_required_total:
+    if missing_required_trading:
         status = "missing_same_day_weather_state"
+    elif missing_required_total:
+        status = "missing_non_trading_weather_state"
     elif missing_record_cities:
         status = "missing_record_cities"
 
@@ -233,11 +281,14 @@ def check_snapshot_city_state_coverage(snapshot_path: Path) -> dict[str, Any]:
         "expected_city_count": len(expected_cities),
         "record_city_count": len(record_cities),
         "same_local_day_city_count": len(same_local_day_cities),
+        "same_local_day_live_source_city_count": len(live_source_cities),
         "missing_record_cities": missing_record_cities,
         "required_fields": list(required_fields),
         "field_city_counts": field_city_counts,
         "missing_required_by_field": missing_required_by_field,
         "missing_required_cities": missing_required_total,
+        "missing_required_trading_cities": missing_required_trading,
+        "missing_required_non_trading_cities": missing_required_non_trading,
     }
 
 
@@ -302,38 +353,87 @@ def check_live_orders(
     tail_rows: int,
     all_files: bool = False,
     extra_files: list[Path] | None = None,
+    now_utc: datetime | None = None,
 ) -> dict[str, Any]:
     if not live_dir.exists():
         files = []
     elif all_files:
         files = sorted(live_dir.glob("*orders.jsonl"))
     else:
-        files = [live_dir / pattern for pattern in CURRENT_YES_LIVE_ORDER_PATTERNS if (live_dir / pattern).exists()]
+        files = [live_dir / pattern for pattern in ACTIVE_LIVE_ORDER_PATTERNS if (live_dir / pattern).exists()]
     if extra_files:
         files.extend(path for path in extra_files if path.exists() and path not in files)
     rows: list[dict[str, Any]] = []
     for path in files:
         for row in read_jsonl_tail(path, tail_rows):
             row["_file"] = str(path)
+            row["_effective_order_id"] = effective_order_id(row)
             rows.append(row)
     duplicate_orders, order_examples = duplicate_examples(
-        [row for row in rows if row.get("order_id")],
-        ("order_id",),
+        [row for row in rows if row.get("_effective_order_id")],
+        ("_effective_order_id",),
     )
     duplicate_intents, intent_examples = duplicate_examples(
         rows,
         ("strategy_instance", "city", "target_date", "token_id", "signal_side", "order_side"),
     )
+    today_utc = (now_utc or datetime.now(timezone.utc)).date().isoformat()
+    effective_rows = [row for row in rows if is_effective_live_order(row, today_utc=today_utc)]
+    duplicate_current_intents, current_intent_examples = duplicate_examples(
+        effective_rows,
+        ("strategy_instance", "city", "target_date", "token_id", "signal_side", "order_side"),
+    )
+    market_groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    for row in effective_rows:
+        key = (
+            str(row.get("city") or ""),
+            str(row.get("target_date") or ""),
+            str(row.get("market_id") or row.get("condition_id") or ""),
+            str(row.get("bracket") or row.get("current_bracket") or ""),
+        )
+        if any(key):
+            market_groups.setdefault(key, []).append(row)
+    conflict_examples: list[dict[str, Any]] = []
+    for key, group_rows in market_groups.items():
+        sides = {str(row.get("signal_side") or "") for row in group_rows}
+        if "BUY_YES" not in sides or "BUY_NO" not in sides:
+            continue
+        conflict_examples.append(
+            {
+                "key": {
+                    "city": key[0],
+                    "target_date": key[1],
+                    "market_or_condition_id": key[2],
+                    "bracket": key[3],
+                },
+                "rows": [
+                    {
+                        "file": row.get("_file"),
+                        "line_no": row.get("_line_no"),
+                        "strategy_instance": row.get("strategy_instance"),
+                        "signal_side": row.get("signal_side"),
+                        "order_id": row.get("_effective_order_id"),
+                    }
+                    for row in group_rows[:6]
+                ],
+            }
+        )
     parse_errors = sum(1 for row in rows if row.get("_parse_error"))
     return {
         "live_dir": str(live_dir),
-        "scope": "all_live_order_files" if all_files else "current_yes_split_live_order_files",
+        "scope": "all_live_order_files" if all_files else "active_live_order_files",
         "files": [str(path) for path in files],
         "checked_rows": len(rows),
+        "effective_current_or_future_rows": len(effective_rows),
+        "current_or_future_cutoff_utc_date": today_utc,
         "parse_error_count": parse_errors,
         "duplicate_order_id_count": duplicate_orders,
         "duplicate_strategy_city_token_count": duplicate_intents,
+        "duplicate_current_strategy_city_token_count": duplicate_current_intents,
+        "current_yes_no_conflict_count": len(conflict_examples),
         "duplicate_examples": (order_examples + intent_examples)[:10],
+        "current_duplicate_examples": current_intent_examples[:10],
+        "current_yes_no_conflict_examples": conflict_examples[:10],
     }
 
 
@@ -376,14 +476,18 @@ def overall_status(sections: dict[str, Any]) -> str:
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
         or live_orders.get("parse_error_count", 0) > 0
         or live_orders.get("duplicate_order_id_count", 0) > 0
+        or live_orders.get("duplicate_current_strategy_city_token_count", 0) > 0
+        or live_orders.get("current_yes_no_conflict_count", 0) > 0
     )
     if hard_fail:
         return "fail"
     warn = (
         snapshot.get("snapshot_stale")
+        or city_state.get("status") == "missing_non_trading_weather_state"
         or city_state.get("status") == "missing_record_cities"
         or orderbook.get("stale")
         or any(item.get("duplicate_decision_count", 0) > 0 for item in telemetry)
+        or live_orders.get("duplicate_strategy_city_token_count", 0) > 0
         or any(summary.get("status") == "stale_snapshot" for summary in sections["summaries"])
     )
     return "warn" if warn else "ok"
@@ -405,16 +509,11 @@ def main() -> int:
     now_utc = datetime.now(timezone.utc)
     snapshot_path = Path(args.snapshot) if args.snapshot else latest_snapshot(Path(args.snapshot_dir))
     runtime_root = Path(args.runtime_root)
-    telemetry_files = [
-        runtime_root / "theta_current_yes_fade_confirmed_tiny_live_v1/forward_telemetry.jsonl",
-        runtime_root / "theta_current_yes_peak_forming_micro_tiny_live_v1/forward_telemetry.jsonl",
-    ]
-    summary_files = [
-        runtime_root / "theta_current_yes_fade_confirmed_tiny_live_v1/latest_summary.json",
-        runtime_root / "theta_current_yes_peak_forming_micro_tiny_live_v1/latest_summary.json",
-    ]
+    telemetry_files = [path if path.is_absolute() else runtime_root / path for path in DEFAULT_TELEMETRY_FILES]
+    summary_files = [path if path.is_absolute() else runtime_root / path for path in DEFAULT_SUMMARY_FILES]
     active_live_order_files = [
-        runtime_root / "regime_routed_no_tiny_live_v1/live_orders.jsonl",
+        path if path.is_absolute() else runtime_root / path
+        for path in ACTIVE_RUNTIME_LIVE_ORDER_FILES
     ]
     sections = {
         "snapshot_parity": check_snapshot(snapshot_path),
@@ -432,6 +531,7 @@ def main() -> int:
             tail_rows=args.tail_live_order_rows,
             all_files=args.all_live_order_files,
             extra_files=active_live_order_files,
+            now_utc=now_utc,
         ),
         "summaries": check_summaries(summary_files),
     }

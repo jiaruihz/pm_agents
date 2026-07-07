@@ -61,6 +61,7 @@ def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):
             "city": "Manila",
             "target_date": "2026-07-07",
             "city_local_date_at_snapshot": "2026-07-07",
+            "live_observation_source": "aviationweather_metar",
             "forecast_peak_delta_hours_local": 0.75,
             "forecast_max_native": 34.0,
         },
@@ -81,6 +82,35 @@ def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):
     assert report["same_local_day_city_count"] == 2
     assert report["missing_required_cities"] == ["Manila"]
     assert report["missing_required_by_field"]["metar_current_max_f"] == ["Manila"]
+    assert report["missing_required_trading_cities"] == ["Manila"]
+
+
+def test_prod_health_check_warns_for_non_trading_weather_state_gap(tmp_path):
+    snapshot = tmp_path / "snapshot_20260707_1200.json"
+    rows = [
+        {
+            "city": "Denver",
+            "target_date": "2026-07-07",
+            "city_local_date_at_snapshot": "2026-07-07",
+            "forecast_peak_delta_hours_local": 0.75,
+            "forecast_max_native": 94.0,
+        },
+    ]
+    snapshot.write_text(
+        json.dumps(
+            {
+                "city_pools": {"Denver": "t2_research"},
+                "records": rows,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_snapshot_city_state_coverage(snapshot)
+
+    assert report["status"] == "missing_non_trading_weather_state"
+    assert report["missing_required_trading_cities"] == []
+    assert report["missing_required_non_trading_cities"] == ["Denver"]
 
 
 def test_prod_health_check_allows_reused_run_id_but_flags_duplicate_decisions(tmp_path):
@@ -118,18 +148,83 @@ def test_prod_health_overall_status_warns_on_stale_but_fails_on_structural_error
     assert overall_status(sections) == "fail"
 
 
-def test_live_order_check_defaults_to_current_yes_split_files(tmp_path):
+def test_live_order_check_defaults_to_active_runtime_files_only(tmp_path):
     live_dir = tmp_path / "live"
     live_dir.mkdir()
     legacy = live_dir / "theta_current_yes_tiny_live_v1_orders.jsonl"
-    current = live_dir / "theta_current_yes_peak_forming_micro_tiny_live_v1_orders.jsonl"
+    current = live_dir / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
+    active_runtime = tmp_path / "late_window_live_orders.jsonl"
     legacy.write_text("{}\n", encoding="utf-8")
     current.write_text("{}\n", encoding="utf-8")
+    active_runtime.write_text("{}\n", encoding="utf-8")
 
-    report = check_live_orders(live_dir, tail_rows=10)
+    report = check_live_orders(live_dir, tail_rows=10, extra_files=[active_runtime])
 
-    assert report["scope"] == "current_yes_split_live_order_files"
-    assert report["files"] == [str(current)]
+    assert report["scope"] == "active_live_order_files"
+    assert report["files"] == [str(active_runtime)]
 
     all_report = check_live_orders(live_dir, tail_rows=10, all_files=True)
     assert str(legacy) in all_report["files"]
+    assert str(current) in all_report["files"]
+
+
+def test_live_order_check_separates_historical_duplicates_from_current_risk(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
+    old_row = {
+        "strategy_instance": "low_price_yes_lottery_tiny_live_v1",
+        "city": "Shanghai",
+        "target_date": "2026-07-05",
+        "token_id": "old-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "status": "submitted",
+    }
+    path.write_text(json.dumps(old_row) + "\n" + json.dumps(old_row) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 7, 7, tzinfo=timezone.utc),
+    )
+
+    assert report["duplicate_strategy_city_token_count"] == 1
+    assert report["duplicate_current_strategy_city_token_count"] == 0
+    assert report["current_yes_no_conflict_count"] == 0
+
+
+def test_live_order_check_flags_current_duplicate_and_yes_no_conflict(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
+    yes_row = {
+        "strategy_instance": "probe",
+        "city": "Chengdu",
+        "target_date": "2026-07-07",
+        "market_id": "market-1",
+        "bracket": "37",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "status": "submitted",
+        "exchange_response": {"place": {"success": True, "status": "matched", "orderID": "yes-order"}},
+    }
+    no_row = {
+        **yes_row,
+        "token_id": "no-token",
+        "signal_side": "BUY_NO",
+        "exchange_response": {"place": {"success": True, "status": "matched", "orderID": "no-order"}},
+    }
+    path.write_text(json.dumps(yes_row) + "\n" + json.dumps(yes_row) + "\n" + json.dumps(no_row) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 7, 7, tzinfo=timezone.utc),
+    )
+
+    assert report["duplicate_current_strategy_city_token_count"] == 1
+    assert report["current_yes_no_conflict_count"] == 1

@@ -75,7 +75,10 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
       set +e
       "$PY" -u -m weather_data_feed_service \
         observations \
-        --output "$OBS_OUTPUT"
+        --output "$OBS_OUTPUT" \
+        --include-station-diff \
+        --include-fallback-sources \
+        --max-workers 4
       rc=$?
       set -e
       date -u +"[mac_data_feed] observations_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
@@ -88,7 +91,11 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
       set +e
       WEATHER_DATA_FEED_SOURCE_EVENTS_OUTPUT_DIR="$SOURCE_EVENTS_OUTPUT" \
         "$PY" -u -m weather_data_feed_service \
-          source-events
+          source-events -- \
+          --output-dir "$SOURCE_EVENTS_OUTPUT" \
+          --include-station-diff \
+          --include-fallback-sources \
+          --max-workers 4
       rc=$?
       set -e
       date -u +"[mac_data_feed] source_events_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
