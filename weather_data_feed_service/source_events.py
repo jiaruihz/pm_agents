@@ -8,7 +8,6 @@ owning weather-source polling themselves.
 from __future__ import annotations
 
 import argparse
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,32 +25,10 @@ from weather_data_feed.observation_sources import (
 )
 
 from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
+from weather_data_feed_service.io_utils import read_json, write_json, write_latest_and_daily_jsonl
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "source_events"
-
-
-def append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-
-
-def read_json(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return default
-
-
-def write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
 
 
 def requested_sources(cfg: CityConfig, source_names: list[str], *, include_fallback_sources: bool) -> list[str]:
@@ -189,11 +166,12 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
 
 def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
     rows = list(payload.get("records") or [])
-    output_dir.mkdir(parents=True, exist_ok=True)
-    append_jsonl(output_dir / "sources.jsonl", rows)
-    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    append_jsonl(output_dir / day / "sources.jsonl", rows)
-    write_json(output_dir / "latest.json", payload)
+    write_latest_and_daily_jsonl(
+        output_dir=output_dir,
+        latest_payload=payload,
+        rows=rows,
+        jsonl_name="sources.jsonl",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

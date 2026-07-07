@@ -3,16 +3,24 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from weather_data_feed import (
+    ForecastFetchResult,
     city_local_datetime,
     city_local_date,
     city_scan_dates,
+    build_taf_signal,
+    build_vertical_profile_signal,
+    fetch_open_meteo_multi_model,
+    forecast_enrichment_records,
+    index_forecast_enrichment,
     load_city_configs,
     load_source_profiles,
     local_settle_utc,
     market_snapshot_record,
     normalize_snapshot_record,
     parse_market_event_date,
+    target_day_hourly_summary,
 )
+from weather_data_feed import forecast_sources
 from weather_data_feed.city_calendar import station_timezone, timezone_label
 from weather_data_feed.market_brackets import bracket_contains, parse_label_dict
 from weather_data_feed.snapshot_protocol import validate_snapshot_record
@@ -126,3 +134,120 @@ def test_legacy_strategy_imports_reexport_data_module():
     assert "weather_data_feed" in str(DEFAULT_SOURCE_PROFILES_JSON)
     assert legacy_load_source_profiles()["Shanghai"] == load_source_profiles()["Shanghai"]
     assert legacy_city_timezone_name("Helsinki") == "Europe/Helsinki"
+
+
+def test_open_meteo_multi_model_parser_tracks_model_spread_and_hash(monkeypatch):
+    payload = {
+        "latitude": 31.14,
+        "longitude": 121.81,
+        "timezone": "Asia/Shanghai",
+        "utc_offset_seconds": 28800,
+        "daily": {
+            "time": ["2026-07-07"],
+            "temperature_2m_max_ecmwf_ifs025": [95.0],
+            "temperature_2m_max_gfs_seamless": [97.5],
+            "temperature_2m_max_ncep_hrrr_conus": [96.0],
+        },
+        "hourly": {
+            "time": ["2026-07-07T13:00", "2026-07-07T14:00"],
+            "temperature_2m_ecmwf_ifs025": [94.0, 95.0],
+            "temperature_2m_gfs_seamless": [96.0, 97.5],
+        },
+    }
+
+    class Response:
+        def json(self):
+            return payload
+
+    monkeypatch.setattr(forecast_sources, "_http_get", lambda *_args, **_kwargs: Response())
+
+    result = fetch_open_meteo_multi_model(31.14, 121.81, forecast_days=1)
+
+    assert result.status == "ok"
+    day = result.payload["daily"]["2026-07-07"]
+    assert day["models"]["ECMWF"] == 95.0
+    assert day["models"]["GFS"] == 97.5
+    assert day["model_spread"] == 2.5
+    assert set(result.payload["hourly_values_hash_by_model"]) == {"ECMWF", "GFS"}
+
+
+def test_weather_context_vertical_profile_and_hourly_peak_features():
+    hourly = {
+        "time": ["2026-07-07T12:00", "2026-07-07T13:00", "2026-07-07T14:00"],
+        "temperature_2m": [90.0, 93.0, 92.0],
+        "cape": [50.0, 800.0, 400.0],
+        "convective_inhibition": [-5.0, -60.0, -10.0],
+        "lifted_index": [1.0, -2.0, 0.0],
+        "boundary_layer_height": [500.0, 1600.0, 1200.0],
+        "wind_speed_10m": [5.0, 6.0, 5.0],
+        "wind_direction_10m": [180.0, 180.0, 180.0],
+        "wind_speed_180m": [14.0, 15.0, 14.0],
+        "wind_direction_180m": [270.0, 270.0, 270.0],
+    }
+
+    summary = target_day_hourly_summary(hourly, "2026-07-07")
+    signal = build_vertical_profile_signal(
+        hourly,
+        target_date="2026-07-07",
+        local_hour=12,
+        first_peak_hour=summary["first_peak_hour_local"],
+        last_peak_hour=summary["last_peak_hour_local"],
+    )
+
+    assert summary["forecast_max"] == 93.0
+    assert summary["first_peak_hour_local"] == 13
+    assert signal["available"] is True
+    assert signal["suppression_risk"] == "high"
+    assert signal["trigger_risk"] == "high"
+    assert signal["mixing_strength"] == "strong"
+    assert signal["heating_setup"] == "suppressed"
+
+
+def test_taf_signal_extracts_peak_window_cloud_rain_and_wind_shift():
+    taf_payload = {
+        "issue_time": "2026-07-07T06:00:00Z",
+        "valid_time_from": "2026-07-07T06:00:00Z",
+        "valid_time_to": "2026-07-08T06:00:00Z",
+        "raw_taf": "TAF ZSPD 070000Z 0700/0800 18008KT BKN030 TEMPO 0704/0708 TSRA BKN020 FM070500 35010KT SCT030",
+    }
+
+    signal = build_taf_signal(
+        taf_payload,
+        target_date="2026-07-07",
+        utc_offset_seconds=28800,
+        first_peak_hour=12,
+        last_peak_hour=13,
+    )
+
+    assert signal["available"] is True
+    assert signal["suppression_level"] == "high"
+    assert signal["disruption_level"] == "high"
+    assert signal["low_ceiling_ft"] == 2000
+    assert signal["wind_shift"] is True
+
+
+def test_forecast_enrichment_cache_indexes_latest_city_date_record():
+    payload = {
+        "records": [
+            {
+                "city": "Shanghai",
+                "target_date": "2026-07-07",
+                "snapshot_ts_utc": "2026-07-07T01:00:00Z",
+                "status": "partial",
+            },
+            {
+                "city": "Shanghai",
+                "target_date": "2026-07-07",
+                "snapshot_ts_utc": "2026-07-07T02:00:00Z",
+                "status": "ok",
+                "open_meteo_multi_model": {"target_date": {"model_spread": 3.4}},
+            },
+        ]
+    }
+
+    rows = forecast_enrichment_records(payload)
+    indexed = index_forecast_enrichment(payload)
+
+    assert rows[0]["schema_version"] == "weather_forecast_enrichment_v1"
+    assert indexed[("Shanghai", "2026-07-07")]["status"] == "ok"
+    assert indexed[("Shanghai", "2026-07-07")]["open_meteo_multi_model"]["target_date"]["model_spread"] == 3.4

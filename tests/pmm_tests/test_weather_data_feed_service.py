@@ -108,6 +108,26 @@ def test_source_events_cli_dispatches_runner_args(monkeypatch) -> None:
     assert calls == [["--cities", "Shanghai", "--sources", "profile_primary"]]
 
 
+def test_forecast_enrichment_cli_dispatches_runner_args(monkeypatch) -> None:
+    from weather_data_feed_service import cli
+
+    calls = []
+
+    def fake_main(argv: list[str]) -> int:
+        calls.append(argv)
+        return 0
+
+    import types
+
+    fake_module = types.SimpleNamespace(main=fake_main)
+    monkeypatch.setitem(sys.modules, "weather_data_feed_service.forecast_enrichment", fake_module)
+
+    rc = cli.main(["forecast-enrichment", "--", "--cities", "Shanghai", "--no-taf"])
+
+    assert rc == 0
+    assert calls == [["--cities", "Shanghai", "--no-taf"]]
+
+
 def test_legacy_runners_use_configured_runtime_roots(tmp_path, monkeypatch) -> None:
     output_root = tmp_path / "out"
     cache_root = tmp_path / "cache"
@@ -297,6 +317,95 @@ def test_source_events_builds_append_only_rows_without_proxy(monkeypatch, tmp_pa
     assert captured == [("Shanghai", cfg.live_observation_source, (None,), 120)]
     assert (tmp_path / "source_events" / "sources.jsonl").exists()
     assert (tmp_path / "source_events" / "latest.json").exists()
+
+
+def test_forecast_enrichment_builds_shadow_rows(monkeypatch, tmp_path) -> None:
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed.forecast_sources import ForecastFetchResult
+    from weather_data_feed_service import forecast_enrichment
+
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+
+    def fake_multi_model(*_args, **_kwargs):
+        return ForecastFetchResult(
+            source_key="open_meteo_multi_model",
+            status="ok",
+            fetched_at_utc="2026-07-07T02:00:00+00:00",
+            latency_ms=10.0,
+            payload={
+                "daily": {
+                    "2026-07-07": {
+                        "models": {"ECMWF": 95.0, "GFS": 97.0},
+                        "model_count": 2,
+                        "model_spread": 2.0,
+                    }
+                },
+                "daily_dates": ["2026-07-07"],
+                "model_metadata": {"ECMWF": {"open_meteo_model": "ecmwf_ifs025"}},
+                "hourly_values_hash_by_model": {"ECMWF": "hash-a"},
+            },
+        )
+
+    def fake_context(*_args, **_kwargs):
+        return ForecastFetchResult(
+            source_key="open_meteo_weather_context",
+            status="ok",
+            fetched_at_utc="2026-07-07T02:00:00+00:00",
+            latency_ms=12.0,
+            payload={
+                "utc_offset_seconds": 28800,
+                "hourly": {
+                    "time": ["2026-07-07T12:00", "2026-07-07T13:00"],
+                    "temperature_2m": [94.0, 95.0],
+                    "cape": [100.0, 120.0],
+                    "convective_inhibition": [-5.0, -10.0],
+                    "lifted_index": [1.0, 0.5],
+                    "boundary_layer_height": [800.0, 900.0],
+                },
+                "daily": {"time": ["2026-07-07"], "temperature_2m_max": [95.0]},
+            },
+        )
+
+    def fake_taf(*_args, **_kwargs):
+        return ForecastFetchResult(
+            source_key="aviationweather_taf",
+            status="ok",
+            fetched_at_utc="2026-07-07T02:00:00+00:00",
+            latency_ms=8.0,
+            payload={
+                "issue_time": "2026-07-07T00:00:00Z",
+                "raw_taf": "TAF ZSPD 070000Z 0700/0800 18008KT SCT030",
+            },
+        )
+
+    monkeypatch.setattr(forecast_enrichment, "load_city_configs", lambda **_kwargs: [cfg])
+    monkeypatch.setattr(forecast_enrichment, "fetch_open_meteo_multi_model", fake_multi_model)
+    monkeypatch.setattr(forecast_enrichment, "fetch_open_meteo_weather_context", fake_context)
+    monkeypatch.setattr(forecast_enrichment, "fetch_aviationweather_taf", fake_taf)
+
+    args = forecast_enrichment.build_parser().parse_args(
+        [
+            "--output-dir",
+            str(tmp_path / "forecast_enrichment"),
+            "--now-utc",
+            "2026-07-07T02:00:00Z",
+            "--cities",
+            "Shanghai",
+        ]
+    )
+    payload = forecast_enrichment.build_payload(args)
+    forecast_enrichment.write_outputs(payload, tmp_path / "forecast_enrichment")
+
+    assert payload["rows"] == 1
+    assert payload["ok"] == 1
+    row = payload["records"][0]
+    assert row["schema_version"] == "weather_forecast_enrichment_v1"
+    assert row["open_meteo_multi_model"]["target_date"]["model_spread"] == 2.0
+    assert row["open_meteo_weather_context"]["target_day_hourly"]["forecast_max"] == 95.0
+    assert row["vertical_profile_signal"]["available"] is True
+    assert row["taf"]["signal"]["source"] == "aviationweather_taf"
+    assert (tmp_path / "forecast_enrichment" / "forecast_enrichment.jsonl").exists()
+    assert (tmp_path / "forecast_enrichment" / "latest.json").exists()
 
 
 def test_paper_snapshot_metar_accepts_epoch_obs_time(monkeypatch, tmp_path) -> None:

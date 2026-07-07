@@ -42,6 +42,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `observation_sources/` | 多源官方观测层架子：source alias、METAR parser、AviationWeather/AWC cache parser、adapter router 协议 |
 | `observation_sources/iem.py` | IEM ASOS 参数构造、本地日 CSV 解析、温度观测抽取 |
 | `observation_sources/fetchers.py` | 数据层 fetcher：AviationWeather METAR、AWC cache、IEM ASOS、NOAA TGFTP、weather.gov latest、Synoptic、CheckWX |
+| `forecast_sources.py` | 预测增强数据层：Open-Meteo multi-model per-model 温度、Open-Meteo hourly weather context、AviationWeather TAF、TAF peak-window signal、vertical profile heating/suppression signal |
 | `snapshot_protocol.py` | 标准 snapshot 字段和 legacy alias normalization |
 | `models.py` | SourceProfile、ObservationRecord、RunningMaxState、MarketSnapshotRecord 等共享 dataclass |
 
@@ -51,6 +52,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 |---|---|---|
 | `output/source_events/latest.json` + append-only `sources.jsonl` | `~/projects/weather_data_feed_service_runtime/output/source_events/` | source/orderbook timing monitor、METAR crossing prev-NO bot |
 | `output/observations/latest.json` | `~/projects/weather_data_feed_service_runtime/output/observations/` | current-YES / regime-routed 等需要 5 分钟级 observation cache 的策略 |
+| `output/forecast_enrichment/latest.json` + append-only `forecast_enrichment.jsonl` | `~/projects/weather_data_feed_service_runtime/output/forecast_enrichment/` | forecast-quality / current-YES / NO carry / reheat/overshoot research 的预测侧 shadow feature capture |
 | full market snapshot outputs | `~/projects/weather_data_feed_service_runtime/output/` | mirror / analysis / dashboard sync |
 
 旧路径:
@@ -142,6 +144,15 @@ snapshot_ts_utc
 - `weather_source_orderbook_timing_monitor.py` 和 `weather_metar_cross_prev_no_shadow.py` 的默认天气信号输入已经切到
   `source-events` 文件协议。旧的直抓天气源路径只允许显式 `--source-input live-fetch` 或
   `--signal-input live-fetch` 调试使用；策略信号不再默认各自重复抓 AviationWeather/TGFTP/CheckWX 等天气源。
+- 新增 `weather_data_feed/forecast_sources.py` 和 `weather_data_feed_service forecast-enrichment`，用于预测侧 shadow capture：
+  - Open-Meteo multi-model per-model daily/hourly temperature（ECMWF、AIFS、GFS、HRRR、NBM、NAM、GraphCast、AI-GFS、ICON、GEM、JMA、AROME 等）；
+  - Open-Meteo hourly weather context（shortwave、dew point、pressure、10m/180m wind、precip probability、cloud cover、CAPE、CIN、lifted index、boundary layer height）；
+  - AviationWeather TAF 原文和 peak-window 云雨、低云底、风向切换 signal；
+  - vertical profile heating/suppression signal。
+  该产物只落盘为研究/feature capture，不改变现有 snapshot、策略 selector 或 live 下单逻辑；进入策略前必须走 fact-table 同分母回放和 shadow 验证。
+  研究脚本应通过 `weather_data_feed.load_forecast_enrichment` / `index_forecast_enrichment` 读取该产物，避免各自重复 live-fetch Open-Meteo/TAF。
+  Mac tmux loop 预留了 `WEATHER_DATA_FEED_FORECAST_ENRICHMENT_ENABLED=1` 开关，默认关闭；开启后写入
+  `output/forecast_enrichment/latest.json` 和 append-only `forecast_enrichment.jsonl`。
 - 生产 observation cache 必须开启 `--include-station-diff --include-fallback-sources --max-workers 4`：
   station-diff 城市是把旧 city_pool 机场修正到 Polymarket 规则/WU 结算源对应站点，不是替代口径；
   fallback 链路按 `source_profiles.json` 展开。默认 AviationWeather 城市为
