@@ -32,7 +32,7 @@ MODEL_ID_CLEAN = "late_window_residual_physical_clean_clock_tick_obs_logit_v2"
 MODEL_ID_PLUS = "late_window_residual_physical_plus_logit_v2"
 RANDOM_SEED = 20260707
 FORWARD_START = "2026-06-29"
-FORWARD_END = "2026-07-04"
+FORWARD_END = "2026-07-06"
 FEE_RATE = 0.05
 EDGE_THRESHOLDS = [0.0, 0.01, 0.02, 0.03]
 
@@ -635,8 +635,8 @@ def main() -> None:
         f"Brier={forward_clean['brier']:.4f}, AUC={forward_clean['auc']:.4f}; plus logloss={forward_plus['logloss']:.4f}, "
         f"Brier={forward_plus['brier']:.4f}, AUC={forward_plus['auc']:.4f}. "
         f"Forward edge>=0 EV replay ROI is base={base_roi:.1%}, clean={clean_roi:.1%}, plus={plus_roi:.1%}. "
-        "Clean improves Brier/AUC slightly but not logloss or EV; plus-all overfits more. This remains research-only "
-        "because support is still only four forward active dates."
+        "Clean improves Brier slightly but not logloss, AUC, or all-leg EV; plus-all overfits more. "
+        "The d1 NO clean slice remains the only constructive candidate, but it is still research-only."
     )
     summary = {
         "model_id_base": MODEL_ID_BASE,

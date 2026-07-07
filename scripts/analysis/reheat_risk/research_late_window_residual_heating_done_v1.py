@@ -42,7 +42,7 @@ MIN_ENTRY_PRICE = 1.0 - MAX_RESIDUAL_POINTS / 100.0
 MAX_ENTRY_PRICE = 1.0 - MIN_RESIDUAL_POINTS / 100.0
 MIN_DEPTH_SHARES = 5.0
 FORWARD_START = "2026-06-29"
-FORWARD_END = "2026-07-04"
+FORWARD_END = "2026-07-06"
 HEATING_DONE_THRESHOLD = 0.35
 HIGHER_NO_RESIDUAL_THRESHOLD = 0.45
 
@@ -782,7 +782,7 @@ def main() -> None:
             "significance=FAIL/NA because current YES, d1 NO, and d2 NO forward date-block ROI CIs cross 0, "
             "while d3 NO is positive but below the active-date support gate; "
             "baseline=FAIL/NA because broad residual capture does not beat a robust zero/market baseline after fees; "
-            "forward=FAIL/NA because 2026-06-29..2026-07-04 support is small and unstable; "
+            f"forward=FAIL/NA because {FORWARD_START}..{FORWARD_END} support is still small and unstable; "
             "conclusion=inconclusive."
         ),
         "failure_cases": failures.to_dict("records"),

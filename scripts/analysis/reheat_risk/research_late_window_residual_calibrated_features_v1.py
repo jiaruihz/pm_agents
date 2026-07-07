@@ -30,7 +30,7 @@ OUT_DIR = ROOT / "docs/analysis/2026-07/generated/late_window_residual_calibrate
 OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-07-late-window-residual-calibrated-features-v1.md"
 
 FORWARD_START = "2026-06-29"
-FORWARD_END = "2026-07-04"
+FORWARD_END = "2026-07-06"
 MODEL_ID = "late_window_residual_physical_logit_v1"
 RANDOM_SEED = 20260707
 

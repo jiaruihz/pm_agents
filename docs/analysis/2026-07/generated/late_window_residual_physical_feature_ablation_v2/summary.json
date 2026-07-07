@@ -36,8 +36,8 @@
     "obs_count_log1p",
     "obs_age_minutes"
   ],
-  "date_count": 13,
-  "date_max": "2026-07-04",
+  "date_count": 15,
+  "date_max": "2026-07-06",
   "date_min": "2026-06-20",
   "excluded_input_fields": [
     "entry_price",
@@ -49,11 +49,11 @@
     "pnl",
     "roi"
   ],
-  "input_rows": 688,
+  "input_rows": 1005,
   "model_id_base": "late_window_residual_physical_base_logit_v2",
   "model_id_clean": "late_window_residual_physical_clean_clock_tick_obs_logit_v2",
   "model_id_plus": "late_window_residual_physical_plus_logit_v2",
-  "model_rows": 681,
+  "model_rows": 998,
   "plus_categorical_features": [
     "leg",
     "unit",
@@ -90,5 +90,5 @@
     "obs_count_log1p",
     "forecast_peak_delta_abs"
   ],
-  "verdict": "The lean enriched PIT physical view is the cleaner next research view because it fixes the local-clock and F/C scale issues and adds observation freshness without using market price as a model input. In strict expanding-forward probability validation, base logloss=0.4003, Brier=0.1228, AUC=0.7694; clean logloss=0.4021, Brier=0.1219, AUC=0.7720; plus logloss=0.4171, Brier=0.1271, AUC=0.7724. Forward edge>=0 EV replay ROI is base=5.0%, clean=4.2%, plus=3.3%. Clean improves Brier/AUC slightly but not logloss or EV; plus-all overfits more. This remains research-only because support is still only four forward active dates."
+  "verdict": "The lean enriched PIT physical view is the cleaner next research view because it fixes the local-clock and F/C scale issues and adds observation freshness without using market price as a model input. In strict expanding-forward probability validation, base logloss=0.4150, Brier=0.1254, AUC=0.7553; clean logloss=0.4178, Brier=0.1251, AUC=0.7540; plus logloss=0.4284, Brier=0.1288, AUC=0.7513. Forward edge>=0 EV replay ROI is base=-1.9%, clean=-2.6%, plus=-3.0%. Clean improves Brier slightly but not logloss, AUC, or all-leg EV; plus-all overfits more. The d1 NO clean slice remains the only constructive candidate, but it is still research-only."
 }

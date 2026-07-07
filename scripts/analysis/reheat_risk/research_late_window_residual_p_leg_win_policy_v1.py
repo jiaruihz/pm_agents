@@ -30,7 +30,7 @@ OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-07-late-window-residual-p-leg-win
 
 FEE_RATE = 0.05
 FORWARD_START = "2026-06-29"
-FORWARD_END = "2026-07-04"
+FORWARD_END = "2026-07-06"
 EDGE_THRESHOLDS = [0.0, 0.01, 0.02, 0.03]
 
 
@@ -296,10 +296,11 @@ def main() -> None:
         "chengdu_rows": int(len(chengdu)),
         "verdict": (
             "Using p_leg_win as an EV scorer is directionally cleaner than the raw heating_done gate, "
-            "but it is not live-ready. In non-leaky expanding-forward evaluation, edge>=0 selects "
-            "137 rows across 4 active dates with ROI +5.0% and a date-block CI that crosses 0; "
-            "edge>=3c improves to +8.8% but still crosses 0. The only clean-looking slice is d1 NO "
-            "with edge>=0/1c, but it has only 4 active dates, so treat this as a shadow scorer, not an execution rule. "
+            "but the label-completed 2026-07-05..2026-07-06 replay removes the broad all-leg edge. "
+            "In non-leaky expanding-forward evaluation, all-leg edge>=0 selects 259 rows across 6 active dates "
+            "with ROI -1.9%; edge>=3c is only +0.6% and the date-block CI still crosses 0. "
+            "The only still-interesting slice is d1 NO: edge>=0 has 85 rows / 6 dates / ROI +6.6% "
+            "with CI crossing 0, so treat it as research-only and do not start execution from this scorer alone. "
             "On Chengdu 2026-07-06, the full model scores 39 NO as high-probability but negative-EV at 95-96c, "
             "while early 38 NO is positive-EV."
         ),

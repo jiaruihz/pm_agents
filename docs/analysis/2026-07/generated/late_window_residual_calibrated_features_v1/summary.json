@@ -6,8 +6,8 @@
     "peak_delta_bucket",
     "forecast_gap_bucket"
   ],
-  "date_count": 13,
-  "date_max": "2026-07-04",
+  "date_count": 15,
+  "date_max": "2026-07-06",
   "date_min": "2026-06-20",
   "excluded_input_fields": [
     "entry_price",
@@ -18,9 +18,9 @@
     "final_yes",
     "pnl"
   ],
-  "input_rows": 688,
+  "input_rows": 1005,
   "model_id": "late_window_residual_physical_logit_v1",
-  "model_rows": 681,
+  "model_rows": 998,
   "numeric_features": [
     "local_time_float",
     "forecast_peak_delta_hours_local",
