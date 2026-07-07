@@ -43,6 +43,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `observation_sources/iem.py` | IEM ASOS 参数构造、本地日 CSV 解析、温度观测抽取 |
 | `observation_sources/fetchers.py` | 数据层 fetcher：AviationWeather METAR、AWC cache、IEM ASOS、NOAA TGFTP、weather.gov latest、Synoptic、CheckWX |
 | `forecast_sources.py` | 预测增强数据层：Open-Meteo multi-model per-model 温度、Open-Meteo hourly weather context、AviationWeather TAF、TAF peak-window signal、vertical profile heating/suppression signal |
+| `runway_sources.py` | 机场跑道级观测增强层：AMSC AWOS、韩国 AMOS 跑道点位气温；用于 microclimate/METAR-WU 对齐研究，不作为 settlement truth |
 | `snapshot_protocol.py` | 标准 snapshot 字段和 legacy alias normalization |
 | `models.py` | SourceProfile、ObservationRecord、RunningMaxState、MarketSnapshotRecord 等共享 dataclass |
 
@@ -53,6 +54,7 @@ pm_agent           ->  消费标准数据，做策略、风控、下单、事实
 | `output/source_events/latest.json` + append-only `sources.jsonl` | `~/projects/weather_data_feed_service_runtime/output/source_events/` | source/orderbook timing monitor、METAR crossing prev-NO bot |
 | `output/observations/latest.json` | `~/projects/weather_data_feed_service_runtime/output/observations/` | current-YES / regime-routed 等需要 5 分钟级 observation cache 的策略 |
 | `output/forecast_enrichment/latest.json` + append-only `forecast_enrichment.jsonl` | `~/projects/weather_data_feed_service_runtime/output/forecast_enrichment/` | forecast-quality / current-YES / NO carry / reheat/overshoot research 的预测侧 shadow feature capture |
+| `output/runway_observations/latest.json` + append-only `runway_observations.jsonl` | `~/projects/weather_data_feed_service_runtime/output/runway_observations/` | 跑道点位气温与 METAR/WU 报文温度的对齐、滞后、bias 建模研究 |
 | full market snapshot outputs | `~/projects/weather_data_feed_service_runtime/output/` | mirror / analysis / dashboard sync |
 
 旧路径:
@@ -158,6 +160,11 @@ snapshot_ts_utc
   研究脚本应通过 `weather_data_feed.load_forecast_enrichment` / `index_forecast_enrichment` 读取该产物，避免各自重复 live-fetch Open-Meteo/TAF。
   Mac tmux loop 预留了 `WEATHER_DATA_FEED_FORECAST_ENRICHMENT_ENABLED=1` 开关，默认关闭；开启后写入
   `output/forecast_enrichment/latest.json` 和 append-only `forecast_enrichment.jsonl`。
+- 新增 `weather_data_feed/runway_sources.py` 和 `weather_data_feed_service runway-observations`，用于跑道点位观测 capture：
+  - AMSC AWOS：北京、上海、广州、成都、重庆、武汉、青岛的 runway-point air temperature、RVR/MOR、风、湿度和原始 METAR；
+  - 韩国 AMOS：Seoul/RKSI、Busan/RKPK 的跑道级气温，并保留页面里的 METAR 温度锚点；
+  - 这些字段是机场 microclimate feature，不是 WU/官方结算源替代。研究时应按 city/station/time 与 `source-events`
+    中 METAR-like / WU-like 观测对齐，建模 `runway_temp - metar_temp`、`runway_temp - wu_temp`、滞后和日内 bias。
 - 生产 observation cache 必须开启 `--include-station-diff --include-fallback-sources --max-workers 4`：
   station-diff 城市是把旧 city_pool 机场修正到 Polymarket 规则/WU 结算源对应站点，不是替代口径；
   fallback 链路按 `source_profiles.json` 展开。默认 AviationWeather 城市为

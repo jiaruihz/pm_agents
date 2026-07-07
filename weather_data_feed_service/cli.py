@@ -77,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build forecast enrichment rows for shadow/research feature capture",
     )
     forecast_enrichment.add_argument("runner_args", nargs=argparse.REMAINDER)
+    runway_observations = subparsers.add_parser(
+        "runway-observations",
+        help="Build runway-level airport observation rows for microclimate research",
+    )
+    runway_observations.add_argument("runner_args", nargs=argparse.REMAINDER)
     return parser
 
 
@@ -107,5 +112,9 @@ def main(argv: list[str] | None = None) -> int:
         from weather_data_feed_service.forecast_enrichment import main as forecast_enrichment_main
 
         return forecast_enrichment_main(runner_args)
+    if args.command == "runway-observations":
+        from weather_data_feed_service.runway_observations import main as runway_observations_main
+
+        return runway_observations_main(runner_args)
     parser.error(f"unknown command: {args.command}")
     return 2
