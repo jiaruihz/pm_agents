@@ -50,6 +50,12 @@ from scripts.analysis.reheat_risk.research_late_window_residual_heating_done_v1 
     safe_float,
 )
 from src.strategies.weather_edge_v1.runtime import order_runtime  # noqa: E402
+from weather_data_feed import (  # noqa: E402
+    index_forecast_enrichment,
+    index_observation_cache,
+    load_forecast_enrichment,
+    load_observation_cache,
+)
 from weather_feature_layer.market import parse_bracket  # noqa: E402
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref  # noqa: E402
 from weather_feature_layer.state import heating_done_features  # noqa: E402
@@ -66,8 +72,20 @@ RUNTIME_DIR = Path(
     )
 )
 DEFAULT_SNAPSHOT_DIRS = [
+    Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"),
     Path("/Users/deepsleep/projects/weather_data_feed_service_runtime/targeted_output/paper_snapshots"),
     ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
+]
+DEFAULT_OBSERVATION_CACHE_PATHS = [
+    Path("/Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json"),
+    Path("/Users/deepsleep/projects/weather_data_feed_service_runtime/output/observations/latest.json"),
+    ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json",
+    ROOT / "runtime/weather_edge_v1/observations/latest.json",
+]
+DEFAULT_FORECAST_ENRICHMENT_PATHS = [
+    Path("/Volumes/jrs/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json"),
+    Path("/Users/deepsleep/projects/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json"),
+    ROOT / "runtime/weather_edge_v1/market_data/forecast_enrichment/latest.json",
 ]
 FEATURE_STORE_DEFAULT = ROOT / os.environ.get("WEATHER_FEATURE_STORE_DIR", "runtime/weather_feature_store")
 TRAIN_ROWS = ROOT / "docs/analysis/2026-07/generated/late_window_residual_heating_done_v1/first_cross_rows.csv"
@@ -136,6 +154,56 @@ def latest_snapshot_path(snapshot_dir: Path, explicit: str = "") -> Path:
 
 def load_snapshot(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def parse_utc_dt(value: Any) -> datetime | None:
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def first_existing_path(paths: list[Path]) -> Path | None:
+    for path in paths:
+        if path.exists():
+            return path
+    return None
+
+
+def default_observation_cache_path() -> str:
+    path = first_existing_path(DEFAULT_OBSERVATION_CACHE_PATHS)
+    return str(path) if path else str(DEFAULT_OBSERVATION_CACHE_PATHS[0])
+
+
+def default_forecast_enrichment_path() -> str:
+    path = first_existing_path(DEFAULT_FORECAST_ENRICHMENT_PATHS)
+    return str(path) if path else str(DEFAULT_FORECAST_ENRICHMENT_PATHS[0])
+
+
+def load_observation_index(path_text: str) -> dict[tuple[str, str], dict[str, Any]]:
+    if not path_text:
+        return {}
+    path = Path(path_text).expanduser()
+    if not path.exists():
+        return {}
+    return index_observation_cache(load_observation_cache(path))
+
+
+def load_forecast_enrichment_index(path_text: str) -> dict[tuple[str, str], dict[str, Any]]:
+    if not path_text:
+        return {}
+    path = Path(path_text).expanduser()
+    if not path.exists():
+        return {}
+    return index_forecast_enrichment(load_forecast_enrichment(path))
 
 
 def local_clock(rec: dict[str, Any], payload: dict[str, Any]) -> tuple[int | None, int | None, str]:
@@ -266,6 +334,104 @@ def snapshot_candidate_rows(path: Path) -> tuple[pd.DataFrame, pd.DataFrame, dic
     return df, books, payload
 
 
+def _forecast_enrichment_fields(row: dict[str, Any]) -> dict[str, Any]:
+    multi = row.get("open_meteo_multi_model") if isinstance(row.get("open_meteo_multi_model"), dict) else {}
+    target = multi.get("target_date") if isinstance(multi.get("target_date"), dict) else {}
+    context = row.get("open_meteo_weather_context") if isinstance(row.get("open_meteo_weather_context"), dict) else {}
+    hourly = context.get("target_day_hourly") if isinstance(context.get("target_day_hourly"), dict) else {}
+    vertical = row.get("vertical_profile_signal") if isinstance(row.get("vertical_profile_signal"), dict) else {}
+    taf = row.get("taf") if isinstance(row.get("taf"), dict) else {}
+    taf_signal = taf.get("signal") if isinstance(taf.get("signal"), dict) else {}
+    statuses = row.get("source_statuses") if isinstance(row.get("source_statuses"), dict) else {}
+    return {
+        "forecast_enrichment_status": row.get("status"),
+        "forecast_enrichment_snapshot_ts_utc": row.get("snapshot_ts_utc"),
+        "forecast_enrichment_source_statuses": json.dumps(statuses, sort_keys=True),
+        "multi_model_count": safe_float(target.get("model_count")),
+        "multi_model_max_f": safe_float(target.get("model_max")),
+        "multi_model_min_f": safe_float(target.get("model_min")),
+        "multi_model_mean_f": safe_float(target.get("model_mean")),
+        "multi_model_spread_f": safe_float(target.get("model_spread")),
+        "context_forecast_max_f": safe_float(hourly.get("forecast_max")),
+        "context_first_peak_hour_local": safe_float(hourly.get("first_peak_hour_local")),
+        "context_last_peak_hour_local": safe_float(hourly.get("last_peak_hour_local")),
+        "vertical_available": bool(vertical.get("available")),
+        "vertical_heating_setup": str(vertical.get("heating_setup") or ""),
+        "vertical_heating_score": safe_float(vertical.get("heating_score")),
+        "vertical_suppression_risk": str(vertical.get("suppression_risk") or ""),
+        "vertical_trigger_risk": str(vertical.get("trigger_risk") or ""),
+        "vertical_mixing_strength": str(vertical.get("mixing_strength") or ""),
+        "taf_available": bool(taf_signal.get("available")),
+        "taf_peak_window": str(taf_signal.get("peak_window") or ""),
+        "taf_suppression_level": str(taf_signal.get("suppression_level") or ""),
+        "taf_disruption_level": str(taf_signal.get("disruption_level") or ""),
+        "taf_issue_time": str(taf_signal.get("issue_time") or ""),
+        "taf_raw_hash": stable_hash(str(taf_signal.get("raw_taf") or ""), length=16) if taf_signal.get("raw_taf") else "",
+    }
+
+
+def attach_live_context(
+    df: pd.DataFrame,
+    *,
+    obs_index: dict[tuple[str, str], dict[str, Any]],
+    forecast_index: dict[tuple[str, str], dict[str, Any]],
+) -> pd.DataFrame:
+    if df.empty:
+        return df.copy()
+    rows: list[dict[str, Any]] = []
+    for record in df.to_dict(orient="records"):
+        row = dict(record)
+        key = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        snapshot_dt = parse_utc_dt(row.get("snapshot_ts_utc"))
+        obs = obs_index.get(key) or {}
+        obs_dt = parse_utc_dt(obs.get("last_obs_utc") or row.get("metar_latest_ts_utc"))
+        snapshot_metar_dt = parse_utc_dt(row.get("metar_latest_ts_utc"))
+        fetched_dt = parse_utc_dt(obs.get("fetched_at_utc"))
+        cadence = to_float(obs.get("cadence_min") or obs.get("estimated_cadence_min"))
+        report_after_snapshot = bool(snapshot_dt is not None and obs_dt is not None and obs_dt > snapshot_dt + timedelta(minutes=1))
+        if report_after_snapshot and snapshot_metar_dt is not None:
+            obs_dt = snapshot_metar_dt
+        obs_age = (
+            (snapshot_dt - obs_dt).total_seconds() / 60.0
+            if snapshot_dt is not None and obs_dt is not None
+            else to_float(obs.get("age_min"))
+        )
+        if not math.isfinite(obs_age):
+            obs_age = math.nan
+        minutes_to_next = cadence - obs_age if math.isfinite(cadence) and math.isfinite(obs_age) else math.nan
+        cache_after_snapshot = bool(fetched_dt is not None and snapshot_dt is not None and fetched_dt > snapshot_dt + timedelta(minutes=10))
+        row.update(
+            {
+                "obs_status": obs.get("status"),
+                "obs_source": obs.get("source"),
+                "obs_station": obs.get("station"),
+                "obs_last_obs_utc": obs.get("last_obs_utc") or row.get("metar_latest_ts_utc"),
+                "obs_fetched_at_utc": obs.get("fetched_at_utc"),
+                "obs_age_min": round(obs_age, 3) if math.isfinite(obs_age) else math.nan,
+                "obs_cadence_min": round(cadence, 3) if math.isfinite(cadence) else math.nan,
+                "minutes_to_next_obs": round(minutes_to_next, 3) if math.isfinite(minutes_to_next) else math.nan,
+                "obs_current_temp_c": safe_float(obs.get("current_temp_c")),
+                "obs_running_max_c": safe_float(obs.get("running_max_c")),
+                "obs_decline_c": safe_float(obs.get("decline_c")),
+                "obs_minutes_since_running_max": safe_float(obs.get("minutes_since_running_max")),
+                "obs_n_obs": safe_float(obs.get("n_obs") or obs.get("record_count")),
+                "obs_report_after_snapshot": report_after_snapshot,
+                "obs_cache_after_snapshot": cache_after_snapshot,
+                "obs_clock_source": "observation_cache" if obs else ("snapshot_metar_latest_ts" if row.get("metar_latest_ts_utc") else "missing"),
+            }
+        )
+        forecast = forecast_index.get(key) or {}
+        forecast_dt = parse_utc_dt(forecast.get("snapshot_ts_utc")) if forecast else None
+        forecast_after_snapshot = bool(
+            forecast_dt is not None and snapshot_dt is not None and forecast_dt > snapshot_dt + timedelta(minutes=10)
+        )
+        row["forecast_enrichment_after_snapshot"] = forecast_after_snapshot
+        if forecast and not forecast_after_snapshot:
+            row.update(_forecast_enrichment_fields(forecast))
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def add_runtime_buckets(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df.copy()
@@ -376,8 +542,27 @@ def select_value_d1(df: pd.DataFrame, args: argparse.Namespace) -> tuple[pd.Data
     ].copy()
     if base.empty:
         return base, base
-    selected = base[base["model_edge_per_share"].ge(float(args.value_min_edge))].copy()
-    blocked = base[~base.index.isin(selected.index)].copy()
+    reasons: list[str] = []
+    for _, row in base.iterrows():
+        reason = ""
+        if bool(args.require_obs_clock):
+            obs_age = to_float(row.get("obs_age_min"))
+            cadence = to_float(row.get("obs_cadence_min"))
+            minutes_to_next = to_float(row.get("minutes_to_next_obs"))
+            if row.get("obs_report_after_snapshot"):
+                reason = "obs_report_after_snapshot_recompute_required"
+            elif not math.isfinite(obs_age) or not math.isfinite(cadence):
+                reason = "missing_obs_clock"
+            elif obs_age > float(args.max_obs_age_min):
+                reason = f"obs_age_gt_{float(args.max_obs_age_min):g}m"
+            elif math.isfinite(minutes_to_next) and 0 <= minutes_to_next <= float(args.pre_update_blackout_min):
+                reason = f"pre_update_blackout_next_obs_le_{float(args.pre_update_blackout_min):g}m"
+        if not reason and to_float(row.get("model_edge_per_share")) < float(args.value_min_edge):
+            reason = "p_leg_win_cost_edge_negative"
+        reasons.append(reason)
+    base["value_block_reason"] = reasons
+    selected = base[base["value_block_reason"].astype(str).eq("")].copy()
+    blocked = base[base["value_block_reason"].astype(str).ne("")].copy()
     return selected, blocked
 
 
@@ -550,6 +735,14 @@ def build_plan(row: pd.Series, *, live_enabled: bool, shares: float, ttl_min: fl
         "model_edge_per_share": round(to_float(row.get("model_edge_per_share"), 0.0), 6),
         "forecast_peak_delta_hours_local": to_float(row.get("forecast_peak_delta_hours_local"), None),
         "forecast_gap_to_running_native": to_float(row.get("forecast_gap_to_running_native"), None),
+        "obs_age_min": to_float(row.get("obs_age_min"), None),
+        "obs_cadence_min": to_float(row.get("obs_cadence_min"), None),
+        "minutes_to_next_obs": to_float(row.get("minutes_to_next_obs"), None),
+        "obs_clock_source": str(row.get("obs_clock_source") or ""),
+        "forecast_enrichment_status": str(row.get("forecast_enrichment_status") or ""),
+        "multi_model_spread_f": to_float(row.get("multi_model_spread_f"), None),
+        "vertical_heating_setup": str(row.get("vertical_heating_setup") or ""),
+        "taf_peak_window": str(row.get("taf_peak_window") or ""),
         "path_state": str(row.get("path_state") or ""),
         "heating_done_score_v1": to_float(row.get("heating_done_score_v1"), None),
         "leg_residual_done_score_v1": to_float(row.get("leg_residual_done_score_v1"), None),
@@ -732,6 +925,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     snapshot_dir = Path(args.snapshot_dir)
     snapshot_path = latest_snapshot_path(snapshot_dir, args.snapshot)
     raw_candidates, no_books, snapshot_payload = snapshot_candidate_rows(snapshot_path)
+    raw_candidates = attach_live_context(
+        raw_candidates,
+        obs_index=load_observation_index(args.observation_cache),
+        forecast_index=load_forecast_enrichment_index(args.forecast_enrichment),
+    )
     model, model_rows, model_dates = load_probability_model(Path(args.training_rows))
     scored = score_candidates(raw_candidates, model)
     residual = select_residual_shadow(scored, args)
@@ -754,7 +952,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             strategy_instance=VALUE_INSTANCE,
             strategy_head="value_d1_no",
             status="blocked",
-            reason=str(r.get("live_guard_reason") or "p_leg_win_cost_edge_negative"),
+            reason=str(r.get("live_guard_reason") or r.get("value_block_reason") or "p_leg_win_cost_edge_negative"),
         )
         for _, r in blocked.iterrows()
     ]
@@ -819,12 +1017,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("command", nargs="?", choices=["run", "loop"], default="run")
     parser.add_argument("--snapshot-dir", default=str(default_snapshot_dir()))
     parser.add_argument("--snapshot", default="")
+    parser.add_argument("--observation-cache", default=default_observation_cache_path())
+    parser.add_argument("--forecast-enrichment", default=default_forecast_enrichment_path())
     parser.add_argument("--training-rows", default=str(TRAIN_ROWS))
     parser.add_argument("--min-depth-shares", type=float, default=5.0)
     parser.add_argument("--residual-min-price", type=float, default=0.95)
     parser.add_argument("--residual-max-price", type=float, default=0.99)
     parser.add_argument("--value-max-entry-price", type=float, default=0.95)
     parser.add_argument("--value-min-edge", type=float, default=0.0)
+    parser.add_argument("--require-obs-clock", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--max-obs-age-min", type=float, default=20.0)
+    parser.add_argument("--pre-update-blackout-min", type=float, default=30.0)
     parser.add_argument("--shares", type=float, default=5.0)
     parser.add_argument("--max-orders", type=int, default=20)
     parser.add_argument("--max-daily-cost-usd", type=float, default=25.0)
