@@ -141,3 +141,18 @@ def test_high_frequency_observations_cli_dispatches_runner_args(monkeypatch) -> 
 
     assert rc == 0
     assert calls == [["--cities", "Singapore", "--sources", "singapore_mss"]]
+
+
+def test_high_frequency_history_append_rows_keep_latest_per_station() -> None:
+    from weather_data_feed_service.high_frequency_observations import append_history_rows
+
+    rows = [
+        {"source": "noaa_madis_hfmetar", "city": "New York", "station": "KLGA", "observation_time_utc": "2026-07-08T01:00:00+00:00", "temp_c": 20},
+        {"source": "noaa_madis_hfmetar", "city": "New York", "station": "KLGA", "observation_time_utc": "2026-07-08T01:05:00+00:00", "temp_c": 21},
+        {"source": "jma_amedas", "city": "Tokyo", "station": "44166", "observation_time_utc": "2026-07-08T01:00:00+00:00", "temp_c": 29},
+    ]
+
+    append_rows = append_history_rows(rows)
+
+    assert len(append_rows) == 2
+    assert [row for row in append_rows if row["city"] == "New York"][0]["temp_c"] == 21

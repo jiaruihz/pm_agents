@@ -76,6 +76,30 @@ def _row_with_hash(row: dict[str, Any], result: HighFrequencyFetchResult) -> dic
     return out
 
 
+def append_history_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    latest_by_key: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (
+            str(row.get("source") or ""),
+            str(row.get("city") or ""),
+            str(row.get("station") or ""),
+            str(row.get("icao") or ""),
+            str(row.get("runway") or ""),
+        )
+        old = latest_by_key.get(key)
+        if old is None or str(row.get("observation_time_utc") or "") >= str(old.get("observation_time_utc") or ""):
+            latest_by_key[key] = row
+    return sorted(
+        latest_by_key.values(),
+        key=lambda row: (
+            str(row.get("city") or ""),
+            str(row.get("source") or ""),
+            str(row.get("station") or ""),
+            str(row.get("observation_time_utc") or ""),
+        ),
+    )
+
+
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     now_utc = parse_now_utc(args.now_utc) if args.now_utc else datetime.now(timezone.utc)
     settings = HighFrequencyFetchSettings(timeout_sec=args.timeout_sec)
@@ -122,10 +146,12 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
     rows = list(payload.get("records") or [])
+    append_rows = append_history_rows(rows)
+    latest_payload = {**payload, "append_rows": len(append_rows)}
     write_latest_and_daily_jsonl(
         output_dir=output_dir,
-        latest_payload=payload,
-        rows=rows,
+        latest_payload=latest_payload,
+        rows=append_rows,
         jsonl_name="high_frequency_observations.jsonl",
     )
 

@@ -8,6 +8,7 @@ OBS_OUTPUT="${WEATHER_DATA_FEED_OBSERVATION_OUTPUT:-$RUNTIME_ROOT/output/observa
 SOURCE_EVENTS_OUTPUT="${WEATHER_DATA_FEED_SOURCE_EVENTS_OUTPUT_DIR:-$RUNTIME_ROOT/output/source_events}"
 FORECAST_ENRICHMENT_OUTPUT="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_OUTPUT_DIR:-$RUNTIME_ROOT/output/forecast_enrichment}"
 RUNWAY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/runway_observations}"
+HIGH_FREQUENCY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/high_frequency_observations}"
 CACHE_ROOT="${WEATHER_DATA_FEED_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
 LOOP_DIR="${WEATHER_DATA_FEED_LOOP_DIR:-$RUNTIME_ROOT/loop}"
 PID_FILE="$LOOP_DIR/data_feed_loop.pid"
@@ -20,6 +21,10 @@ FORECAST_ENRICHMENT_ENABLED="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_ENABLED:-1}
 FORECAST_ENRICHMENT_INTERVAL_SEC="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_INTERVAL_SEC:-900}"
 RUNWAY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED:-0}"
 RUNWAY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_INTERVAL_SEC:-180}"
+RUNWAY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_SOURCES:-}"
+HIGH_FREQUENCY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_ENABLED:-0}"
+HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC:-600}"
+HIGH_FREQUENCY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-}"
 SNAPSHOT_INTERVAL_SEC="${WEATHER_DATA_FEED_SNAPSHOT_INTERVAL_SEC:-600}"
 SNAPSHOT_COMMAND="${WEATHER_DATA_FEED_SNAPSHOT_COMMAND:-snapshot-targeted}"
 SNAPSHOT_ORDERBOOK_BUDGET_SEC="${WEATHER_DATA_FEED_ORDERBOOK_BUDGET_SEC:-60}"
@@ -28,7 +33,7 @@ MARKET_PROXY_PROBE_TIMEOUT_SEC="${WEATHER_MARKET_PROXY_PROBE_TIMEOUT_SEC:-5}"
 MARKET_PROXY_1X_CANDIDATES="${WEATHER_MARKET_PROXY_1X_CANDIDATES:-🇭🇰 香港 01丨1x HK,🇭🇰 香港 02丨1x HK,🇭🇰 香港 03丨1x HK,🇭🇰 香港家宽 01丨1x HK,🇭🇰 香港家宽 02丨1x HK,🇭🇰 香港家宽 03丨1x HK,🇭🇰 香港家宽 04丨1x HK,🇯🇵 日本 01丨1x JP,🇯🇵 日本 02丨1x JP,🇯🇵 日本 03丨1x JP}"
 MARKET_PROXY_FAILOVER_SCRIPT="${WEATHER_MARKET_PROXY_FAILOVER_SCRIPT:-$HOME/projects/pm_agents/scripts/ops/weather_market_proxy_failover.py}"
 
-mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$SOURCE_EVENTS_OUTPUT" "$FORECAST_ENRICHMENT_OUTPUT" "$RUNWAY_OBSERVATIONS_OUTPUT" "$OUTPUT_ROOT" "$CACHE_ROOT"
+mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$SOURCE_EVENTS_OUTPUT" "$FORECAST_ENRICHMENT_OUTPUT" "$RUNWAY_OBSERVATIONS_OUTPUT" "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" "$OUTPUT_ROOT" "$CACHE_ROOT"
 
 if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" && -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
@@ -60,7 +65,7 @@ if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" ]]; then
 fi
 
 echo "$$" > "$PID_FILE"
-date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT source_events=$SOURCE_EVENTS_OUTPUT forecast_enrichment=$FORECAST_ENRICHMENT_OUTPUT forecast_enrichment_enabled=$FORECAST_ENRICHMENT_ENABLED runway_observations=$RUNWAY_OBSERVATIONS_OUTPUT runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED cache=$CACHE_ROOT"
+date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT source_events=$SOURCE_EVENTS_OUTPUT forecast_enrichment=$FORECAST_ENRICHMENT_OUTPUT forecast_enrichment_enabled=$FORECAST_ENRICHMENT_ENABLED runway_observations=$RUNWAY_OBSERVATIONS_OUTPUT runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED high_frequency_observations=$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT high_frequency_observations_enabled=$HIGH_FREQUENCY_OBSERVATIONS_ENABLED cache=$CACHE_ROOT"
 
 {
   cd "$SERVICE_DIR"
@@ -82,11 +87,18 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
   fi
   RUNWAY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_ENABLED:-$RUNWAY_OBSERVATIONS_ENABLED}"
   RUNWAY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_INTERVAL_SEC:-$RUNWAY_OBSERVATIONS_INTERVAL_SEC}"
-  date -u +"[mac_data_feed] runtime_config_utc=%Y-%m-%dT%H:%M:%SZ runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED runway_observations_interval_sec=$RUNWAY_OBSERVATIONS_INTERVAL_SEC"
+  RUNWAY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_SOURCES:-$RUNWAY_OBSERVATIONS_SOURCES}"
+  HIGH_FREQUENCY_OBSERVATIONS_ENABLED="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_ENABLED:-$HIGH_FREQUENCY_OBSERVATIONS_ENABLED}"
+  HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC:-$HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC}"
+  HIGH_FREQUENCY_OBSERVATIONS_SOURCES="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-$HIGH_FREQUENCY_OBSERVATIONS_SOURCES}"
+  read -r -a RUNWAY_OBSERVATIONS_SOURCE_ARGS <<< "$RUNWAY_OBSERVATIONS_SOURCES"
+  read -r -a HIGH_FREQUENCY_OBSERVATIONS_SOURCE_ARGS <<< "$HIGH_FREQUENCY_OBSERVATIONS_SOURCES"
+  date -u +"[mac_data_feed] runtime_config_utc=%Y-%m-%dT%H:%M:%SZ runway_observations_enabled=$RUNWAY_OBSERVATIONS_ENABLED runway_observations_interval_sec=$RUNWAY_OBSERVATIONS_INTERVAL_SEC runway_observations_sources=${RUNWAY_OBSERVATIONS_SOURCES:-all} high_frequency_observations_enabled=$HIGH_FREQUENCY_OBSERVATIONS_ENABLED high_frequency_observations_interval_sec=$HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC high_frequency_observations_sources=${HIGH_FREQUENCY_OBSERVATIONS_SOURCES:-all} service_dir=$SERVICE_DIR"
   next_obs=0
   next_source_events=0
   next_forecast_enrichment=0
   next_runway_observations=0
+  next_high_frequency_observations=0
   next_snapshot=0
   while true; do
     now="$(date +%s)"
@@ -141,14 +153,44 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
     if [[ "$RUNWAY_OBSERVATIONS_ENABLED" == "1" ]] && (( now >= next_runway_observations )); then
       date -u +"[mac_data_feed] runway_observations_start_utc=%Y-%m-%dT%H:%M:%SZ"
       set +e
-      "$PY" -u -m weather_data_feed_service \
-        runway-observations -- \
-        --output-dir "$RUNWAY_OBSERVATIONS_OUTPUT" \
-        --max-workers 4
+      if [[ -n "$RUNWAY_OBSERVATIONS_SOURCES" ]]; then
+        "$PY" -u -m weather_data_feed_service \
+          runway-observations -- \
+          --output-dir "$RUNWAY_OBSERVATIONS_OUTPUT" \
+          --sources "${RUNWAY_OBSERVATIONS_SOURCE_ARGS[@]}" \
+          --max-workers 4
+      else
+        "$PY" -u -m weather_data_feed_service \
+          runway-observations -- \
+          --output-dir "$RUNWAY_OBSERVATIONS_OUTPUT" \
+          --max-workers 4
+      fi
       rc=$?
       set -e
       date -u +"[mac_data_feed] runway_observations_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
       next_runway_observations=$(( $(date +%s) + RUNWAY_OBSERVATIONS_INTERVAL_SEC ))
+    fi
+
+    now="$(date +%s)"
+    if [[ "$HIGH_FREQUENCY_OBSERVATIONS_ENABLED" == "1" ]] && (( now >= next_high_frequency_observations )); then
+      date -u +"[mac_data_feed] high_frequency_observations_start_utc=%Y-%m-%dT%H:%M:%SZ"
+      set +e
+      if [[ -n "$HIGH_FREQUENCY_OBSERVATIONS_SOURCES" ]]; then
+        "$PY" -u -m weather_data_feed_service \
+          high-frequency-observations -- \
+          --output-dir "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" \
+          --sources "${HIGH_FREQUENCY_OBSERVATIONS_SOURCE_ARGS[@]}" \
+          --max-workers 4
+      else
+        "$PY" -u -m weather_data_feed_service \
+          high-frequency-observations -- \
+          --output-dir "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" \
+          --max-workers 4
+      fi
+      rc=$?
+      set -e
+      date -u +"[mac_data_feed] high_frequency_observations_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
+      next_high_frequency_observations=$(( $(date +%s) + HIGH_FREQUENCY_OBSERVATIONS_INTERVAL_SEC ))
     fi
 
     now="$(date +%s)"
