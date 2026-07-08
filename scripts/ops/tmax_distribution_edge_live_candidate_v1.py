@@ -47,6 +47,7 @@ STRATEGY_FAMILY = "reheat_risk.tmax_distribution_edge"
 MODEL_SPEC = "loo_no_city_source"
 MODEL_METHOD = f"{MODEL_SPEC}_blend"
 CLOB_BOOK_API = "https://clob.polymarket.com/book"
+FIRST_LOCK_NO_CURRENT_YES_EXPRESSIONS = ["current_no", "d1_no", "d2_no", "d1_yes", "d2_yes"]
 
 RUNTIME_DEFAULT = ROOT / "runtime/weather_edge_v1/tmax_distribution_edge_live_candidate_v1"
 SNAPSHOT_DIR_CANDIDATES = [
@@ -158,10 +159,10 @@ def city_day_position_key(row: dict[str, Any]) -> str:
     )
 
 
-def submitted_live_city_day_keys(path: Path) -> set[str]:
+def submitted_city_day_keys(path: Path, *, statuses: set[str] | None = None) -> set[str]:
     keys: set[str] = set()
     for row in read_jsonl(path):
-        if safe_str(row.get("status")) != "submitted":
+        if statuses is not None and safe_str(row.get("status")) not in statuses:
             continue
         strategy_id = safe_str(row.get("strategy_id"))
         strategy_instance = safe_str(row.get("strategy_instance"))
@@ -173,6 +174,10 @@ def submitted_live_city_day_keys(path: Path) -> set[str]:
         if key:
             keys.add(key)
     return keys
+
+
+def submitted_live_city_day_keys(path: Path) -> set[str]:
+    return submitted_city_day_keys(path, statuses={"submitted"})
 
 
 def latest_snapshot_path(explicit: str = "", snapshot_dir: str = "") -> Path | None:
@@ -332,8 +337,12 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
         current_yes_ask, current_yes_size = row_price(current_record, "yes")
         current_no_ask, current_no_size = row_price(current_record, "no")
         current_no_bid, _ = row_bid(current_record, "no")
+        d1_yes_ask, d1_yes_size = row_price(d1_record, "yes")
+        d1_yes_bid, _ = row_bid(d1_record, "yes")
         d1_no_ask, d1_no_size = row_price(d1_record, "no")
         d1_no_bid, _ = row_bid(d1_record, "no")
+        d2_yes_ask, d2_yes_size = row_price(d2_record, "yes")
+        d2_yes_bid, _ = row_bid(d2_record, "yes")
         d2_no_ask, d2_no_size = row_price(d2_record, "no")
         d2_no_bid, _ = row_bid(d2_record, "no")
         if not all(math.isfinite(x) and x > 0 for x in [current_yes_ask, current_no_ask, d1_no_ask, d2_no_ask]):
@@ -378,15 +387,23 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
             "d1_no_ask": d1_no_ask,
             "d1_no_ask_size": d1_no_size,
             "d1_no_bid": d1_no_bid,
+            "d1_yes_ask": d1_yes_ask,
+            "d1_yes_ask_size": d1_yes_size,
+            "d1_yes_bid": d1_yes_bid,
             "d2_no_ask": d2_no_ask,
             "d2_no_ask_size": d2_no_size,
             "d2_no_bid": d2_no_bid,
+            "d2_yes_ask": d2_yes_ask,
+            "d2_yes_ask_size": d2_yes_size,
+            "d2_yes_bid": d2_yes_bid,
             "current_question": safe_str(current_record.get("question")),
             "d1_question": safe_str(d1_record.get("question")),
             "d2_question": safe_str(d2_record.get("question")),
             "current_yes_token_id": safe_str(current_record.get("yes_token_id")),
             "current_no_token_id": safe_str(current_record.get("no_token_id")),
+            "d1_yes_token_id": safe_str(d1_record.get("yes_token_id")),
             "d1_no_token_id": safe_str(d1_record.get("no_token_id")),
+            "d2_yes_token_id": safe_str(d2_record.get("yes_token_id")),
             "d2_no_token_id": safe_str(d2_record.get("no_token_id")),
             "current_market_id": safe_str(current_record.get("market_id")),
             "d1_market_id": safe_str(d1_record.get("market_id")),
@@ -551,11 +568,27 @@ def ask_and_token(row: pd.Series, expression: str) -> tuple[float, float, str, s
             safe_str(row.get("d1_market_id")),
             safe_str(row.get("d1_no_bracket")),
         )
+    if expression == "d1_yes":
+        return (
+            float(row["d1_yes_ask"]),
+            to_float(row.get("d1_yes_ask_size"), 0.0),
+            safe_str(row.get("d1_yes_token_id")),
+            safe_str(row.get("d1_market_id")),
+            safe_str(row.get("d1_no_bracket")),
+        )
     if expression == "d2_no":
         return (
             float(row["d2_no_ask"]),
             to_float(row.get("d2_no_ask_size"), 0.0),
             safe_str(row.get("d2_no_token_id")),
+            safe_str(row.get("d2_market_id")),
+            safe_str(row.get("d2_no_bracket")),
+        )
+    if expression == "d2_yes":
+        return (
+            float(row["d2_yes_ask"]),
+            to_float(row.get("d2_yes_ask_size"), 0.0),
+            safe_str(row.get("d2_yes_token_id")),
             safe_str(row.get("d2_market_id")),
             safe_str(row.get("d2_no_bracket")),
         )
@@ -565,9 +598,9 @@ def ask_and_token(row: pd.Series, expression: str) -> tuple[float, float, str, s
 def expression_question(row: pd.Series, expression: str) -> str:
     if expression in {"current_yes", "current_no"}:
         return safe_str(row.get("current_question") or row.get("question"))
-    if expression == "d1_no":
+    if expression in {"d1_no", "d1_yes"}:
         return safe_str(row.get("d1_question") or row.get("question"))
-    if expression == "d2_no":
+    if expression in {"d2_no", "d2_yes"}:
         return safe_str(row.get("d2_question") or row.get("question"))
     raise ValueError(expression)
 
@@ -575,9 +608,9 @@ def expression_question(row: pd.Series, expression: str) -> str:
 def expression_event_slug(row: pd.Series, expression: str) -> str:
     if expression in {"current_yes", "current_no"}:
         return safe_str(row.get("current_event_slug") or row.get("event_slug") or row.get("market_slug"))
-    if expression == "d1_no":
+    if expression in {"d1_no", "d1_yes"}:
         return safe_str(row.get("d1_event_slug") or row.get("event_slug") or row.get("market_slug"))
-    if expression == "d2_no":
+    if expression in {"d2_no", "d2_yes"}:
         return safe_str(row.get("d2_event_slug") or row.get("event_slug") or row.get("market_slug"))
     raise ValueError(expression)
 
@@ -592,8 +625,12 @@ def win_prob(pred_row: pd.Series, expression: str) -> float:
         return 1.0 - p_current
     if expression == "d1_no":
         return 1.0 - p_d1
+    if expression == "d1_yes":
+        return p_d1
     if expression == "d2_no":
         return 1.0 - p_d2
+    if expression == "d2_yes":
+        return p_d2
     raise ValueError(expression)
 
 
@@ -658,6 +695,7 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
     df = live_df.merge(pred, on=keys, how="inner", validate="one_to_one")
     candidates: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
+    active_expressions = set(args.active_expressions)
     for item in df.to_dict("records"):
         row = pd.Series(item)
         trend3h = to_float(row.get("temp_trend_3h_f"), math.nan)
@@ -668,7 +706,17 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
             blocked.append({**candidate_base(item), "decision_status": "blocked", "block_reason": "trend3h_flat"})
             continue
         best: dict[str, Any] | None = None
-        for expression in p2.EXPRESSIONS:
+        for expression in sorted(set(p2.EXPRESSIONS) | {"d1_yes", "d2_yes"}):
+            if expression not in active_expressions:
+                blocked.append(
+                    {
+                        **candidate_base(item),
+                        "chosen_expression": expression,
+                        "decision_status": "blocked",
+                        "block_reason": "expression_not_active",
+                    }
+                )
+                continue
             ask, ask_size, token_id, market_id, bracket = ask_and_token(row, expression)
             p_win = win_prob(row, expression)
             edge = p_win - ask
@@ -676,11 +724,12 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
             event_slug = expression_event_slug(row, expression)
             base = {
                 **candidate_base(item),
+                "policy_id": args.policy_id,
                 "event_slug": event_slug,
                 "market_slug": event_slug,
                 "question": question,
                 "chosen_expression": expression,
-                "signal_side": "BUY_YES" if expression == "current_yes" else "BUY_NO",
+                "signal_side": "BUY_YES" if expression.endswith("_yes") else "BUY_NO",
                 "ask": ask,
                 "ask_size": ask_size,
                 "p_win": p_win,
@@ -706,6 +755,7 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
                 best = base
         if best is None:
             continue
+        best["policy_id"] = args.policy_id
         best["decision_status"] = "candidate_selected_pre_fresh_book"
         combo = f"{best['chosen_expression']}_edge02"
         best["candidate_id"] = stable_hash(
@@ -767,6 +817,7 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
             "strategy_instance": STRATEGY_INSTANCE,
             "strategy_id": STRATEGY_ID,
             "strategy_family": STRATEGY_FAMILY,
+            "policy_id": safe_str(item.get("policy_id")) or "",
             "model_method": MODEL_METHOD,
             "zero_notional": True,
             "no_order_placed": True,
@@ -917,10 +968,12 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "source_strategy_instance": STRATEGY_INSTANCE,
         "strategy_id": STRATEGY_ID,
         "strategy_family": STRATEGY_FAMILY,
+        "policy_id": args.policy_id,
+        "active_expressions": list(args.active_expressions),
         "probability_source": MODEL_METHOD,
-        "decision_mode": "tmax_distribution_edge_clean_edge02",
+        "decision_mode": args.policy_id,
         "execution_mode": "fresh_book_guarded_taker",
-        "profile": "clean_edge02",
+        "profile": args.policy_id,
         "combo": f"{candidate['chosen_expression']}_edge02",
         "city": candidate["city"],
         "city_pool": "tmax_distribution_edge",
@@ -980,7 +1033,7 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "edge": round(float(candidate["model_edge"]), 6),
         "min_edge": round(float(args.edge_threshold), 6),
         "shadow_decision": STRATEGY_ID,
-        "shadow_reason": "clean_edge02_realtime_materialized_fresh_book_checked",
+        "shadow_reason": f"{args.policy_id}_realtime_materialized_fresh_book_checked",
         "paper_enabled": True,
         "live_enabled": bool(live_enabled),
         "snapshot_ts_utc": candidate.get("decision_snapshot_ts_utc", ""),
@@ -1062,16 +1115,20 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         candidates, candidate_blocked = build_candidates(state_df, pred, args)
         blocked.extend(candidate_blocked)
     accepted_candidates: list[dict[str, Any]] = []
-    existing_live_city_day_keys = submitted_live_city_day_keys(runtime_dir / "live_orders.jsonl") if args.live else set()
+    existing_city_day_keys: set[str] = set()
+    if args.first_lock_city_day:
+        existing_city_day_keys.update(submitted_city_day_keys(runtime_dir / "paper_orders.jsonl", statuses={"simulated_open"}))
+    if args.live:
+        existing_city_day_keys.update(submitted_live_city_day_keys(runtime_dir / "live_orders.jsonl"))
     batch_city_day_keys: set[str] = set()
     for candidate in candidates:
         position_key = safe_str(candidate.get("city_day_position_key")) or city_day_position_key(candidate)
-        if args.live and (position_key in existing_live_city_day_keys or position_key in batch_city_day_keys):
+        if args.first_lock_city_day and (position_key in existing_city_day_keys or position_key in batch_city_day_keys):
             blocked.append(
                 {
                     **candidate,
                     "decision_status": "blocked",
-                    "block_reason": "existing_city_day_live_order",
+                    "block_reason": "existing_city_day_first_lock_order",
                     "city_day_position_key": position_key,
                 }
             )
@@ -1115,6 +1172,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "generated_at_utc": utc_now(),
         "strategy_instance": STRATEGY_INSTANCE,
         "strategy_id": STRATEGY_ID,
+        "policy_id": args.policy_id,
         "execution_mode": "live_enabled" if args.live else "paper_executor_only",
         "live_enabled": bool(args.live),
         "live_orders_written": live_orders_written,
@@ -1137,6 +1195,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "edge_threshold": args.edge_threshold,
         "fixed_shares": args.fixed_shares,
         "exclude_trend3h_flat": bool(args.exclude_trend3h_flat),
+        "first_lock_city_day": bool(args.first_lock_city_day),
+        "active_expressions": list(args.active_expressions),
         "model_meta": model_meta,
         "latest_candidates": rel(candidate_path),
         "latest_blocked": rel(blocked_path),
@@ -1160,6 +1220,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--edge-threshold", type=float, default=0.02)
     parser.add_argument("--ask-floor", type=float, default=0.20)
     parser.add_argument("--ask-ceiling", type=float, default=0.99)
+    parser.add_argument("--policy-id", default="tmax_distribution_edge_clean_edge02")
+    parser.add_argument("--active-expression", action="append", dest="active_expression", default=[])
+    parser.add_argument("--first-lock-city-day", action="store_true")
     parser.add_argument("--fixed-shares", type=float, default=5.0)
     parser.add_argument("--max-orders", type=int, default=1)
     parser.add_argument("--exclude-trend3h-flat", action="store_true", default=True)
@@ -1177,7 +1240,27 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.live and not args.confirm_live:
         raise SystemExit("--live requires --confirm-live")
+    args.active_expressions = parse_active_expressions(args.active_expression)
     return args
+
+
+def parse_active_expressions(values: list[str]) -> list[str]:
+    allowed = set(p2.EXPRESSIONS) | {"d1_yes", "d2_yes"}
+    if not values:
+        return list(p2.EXPRESSIONS)
+    out: list[str] = []
+    for value in values:
+        for part in str(value).replace(",", " ").split():
+            expr = part.strip()
+            if not expr:
+                continue
+            if expr not in allowed:
+                raise SystemExit(f"unknown active expression: {expr}; allowed={sorted(allowed)}")
+            if expr not in out:
+                out.append(expr)
+    if not out:
+        raise SystemExit("at least one active expression is required")
+    return out
 
 
 def main() -> int:
