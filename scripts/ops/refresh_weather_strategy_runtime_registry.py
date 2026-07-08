@@ -11,7 +11,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sqlite3
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -148,6 +150,8 @@ class StrategySpec:
     live_order_file: str | None = None
     paper_order_file: str | None = None
     telemetry_file: str | None = None
+    start_script: str | None = None
+    tmux_session: str | None = None
     notes: str | None = None
     default_health: str = "unknown"
     expected_live: bool | None = None
@@ -243,6 +247,31 @@ def strategy_specs() -> list[StrategySpec]:
                 "Distribution-first Tmax expression selector. Estimates current/d1/d2/tail bucket "
                 "probabilities and records selected plus blocked zero-notional expression decisions; "
                 "no orders and no live sizing approval."
+            ),
+        ),
+        StrategySpec(
+            strategy_instance="tmax_distribution_edge_first_lock_no_current_yes_shadow_v1",
+            display_name="Tmax first-lock no-current-YES shadow",
+            family="reheat_risk.tmax_distribution_edge",
+            lifecycle_status="shadow",
+            execution_mode="zero_notional_shadow",
+            source_layer="runtime_local",
+            runtime_dir="runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1",
+            summary_file="latest_summary.json",
+            primary_journal="summary_history.jsonl",
+            paper_order_file="paper_orders.jsonl",
+            start_script="scripts/ops/start_tmax_distribution_edge_first_lock_no_current_yes_shadow_v1.sh",
+            tmux_session="tmax_distribution_edge_first_lock_no_current_yes_shadow_v1",
+            artifact_files=[
+                ("summary_history", "summary_history.jsonl"),
+                ("trade_plans", "trade_plans.jsonl"),
+                ("latest_candidates", "latest_candidates.json"),
+                ("latest_blocked", "latest_blocked.json"),
+            ],
+            notes=(
+                "Realtime paper-only tmax candidate loop for the first-lock policy. Active expressions "
+                "exclude current_yes and allow current_no/d1_no/d2_no/d1_yes/d2_yes; city-day first-lock "
+                "blocks later duplicate/reversal entries. This is shadow evidence collection, not live."
             ),
         ),
         StrategySpec(
@@ -643,10 +672,26 @@ def summary_float(summary: dict[str, Any], caps: dict[str, Any], keys: list[str]
     return None
 
 
+def active_tmux_sessions() -> set[str]:
+    if not shutil.which("tmux"):
+        return set()
+    proc = subprocess.run(
+        ["tmux", "list-sessions", "-F", "#{session_name}"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return set()
+    return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+
+
 def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
     conn.row_factory = sqlite3.Row
     refreshed_at = iso(utc_now()) or ""
     fact = fact_trade_aggregates(conn)
+    tmux_sessions = active_tmux_sessions()
     registry_rows: list[dict[str, Any]] = []
     artifact_rows: list[dict[str, Any]] = []
 
@@ -707,8 +752,17 @@ def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
                 "latest_data_ts_utc": iso(data_ts),
                 "latest_artifact_mtime_utc": iso(latest_mtime),
                 "heartbeat_age_min": (utc_now() - latest_dt).total_seconds() / 60 if latest_dt else None,
-                "candidate_rows": summary_int(summary, ["candidate_rows", "routed_candidates", "selected_rows_before_dedupe"]),
-                "plan_rows": summary_int(summary, ["plans", "plans_written", "execution_eligible"]),
+                "candidate_rows": summary_int(
+                    summary,
+                    [
+                        "candidate_rows",
+                        "pre_fresh_candidates",
+                        "accepted_candidates",
+                        "routed_candidates",
+                        "selected_rows_before_dedupe",
+                    ],
+                ),
+                "plan_rows": summary_int(summary, ["plans", "plans_written", "execution_eligible", "paper_orders"]),
                 "live_order_rows": live_order_rows,
                 "paper_order_rows": paper_order_rows,
                 "shadow_rows": shadow_rows,
@@ -723,7 +777,13 @@ def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
                 "cap_city_day_notional": summary_float(summary, caps, ["max_city_day_notional", "max_notional_per_city_day"]),
                 "cap_total_day_notional": summary_float(summary, caps, ["max_notional_total_day", "daily_gross_cap"]),
                 "live_enabled": None if live_enabled is None else int(bool(live_enabled)),
-                "process_status": "unknown",
+                "process_status": (
+                    "running"
+                    if spec.tmux_session and spec.tmux_session in tmux_sessions
+                    else "stopped"
+                    if spec.tmux_session
+                    else "unknown"
+                ),
                 "blocker_count": blocker_count,
                 "blockers_json": json.dumps(blockers, ensure_ascii=False, sort_keys=True),
                 "summary_json": json.dumps(summary, ensure_ascii=False, sort_keys=True),

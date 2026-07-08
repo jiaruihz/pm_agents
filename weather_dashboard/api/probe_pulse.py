@@ -55,6 +55,13 @@ def _top_audit(summary: dict) -> str | None:
     return max(counts.items(), key=lambda kv: kv[1])[0]
 
 
+def _first_present(summary: dict, keys: tuple[str, ...]) -> object | None:
+    for key in keys:
+        if key in summary and summary.get(key) is not None:
+            return summary.get(key)
+    return None
+
+
 def normalize_probe_row(
     registry_row: dict,
     summary: dict | None,
@@ -95,8 +102,8 @@ def normalize_probe_row(
         "snapshot_age_min": age,
         "snapshot_ts_utc": _snap_ts(summary),
         "freshness": classify_freshness(age, warn_min, bad_min),
-        "candidate_rows": summary.get("candidate_rows"),
-        "execution_eligible": summary.get("execution_eligible"),
+        "candidate_rows": _first_present(summary, ("candidate_rows", "pre_fresh_candidates", "accepted_candidates")),
+        "execution_eligible": _first_present(summary, ("execution_eligible", "plans", "plans_written")),
         "alert_count": summary.get("alert_count"),
         "critical_alerts": summary.get("critical_alerts"),
         "warning_alerts": summary.get("warning_alerts"),

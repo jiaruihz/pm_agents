@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""Unified local launcher for weather strategy runtime loops.
+
+This is intentionally thin: strategy metadata lives in
+refresh_weather_strategy_runtime_registry.strategy_specs(), while individual
+strategies still own their runner implementation. The launcher gives us one
+operator entrypoint for list/status/start/stop and refreshes the dashboard
+registry after process changes.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.ops import refresh_weather_strategy_runtime_registry as registry  # noqa: E402
+from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical  # noqa: E402
+
+
+def json_ready(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): json_ready(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [json_ready(v) for v in value]
+    return value
+
+
+def specs_by_instance() -> dict[str, registry.StrategySpec]:
+    return {spec.strategy_instance: spec for spec in registry.strategy_specs()}
+
+
+def read_summary(spec: registry.StrategySpec) -> dict[str, Any]:
+    path = registry.path_for(spec, spec.summary_file)
+    return registry.read_json(path) if path else {}
+
+
+def tmux_running(session: str | None) -> bool | None:
+    if not session:
+        return None
+    return session in registry.active_tmux_sessions()
+
+
+def refresh_db(db_path: Path) -> dict[str, Any]:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        apply_schema_canonical(conn)
+        return registry.refresh(conn)
+    finally:
+        conn.close()
+
+
+def print_payload(payload: dict[str, Any]) -> None:
+    print(json.dumps(json_ready(payload), ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    rows = []
+    for spec in registry.strategy_specs():
+        rows.append(
+            {
+                "strategy_instance": spec.strategy_instance,
+                "display_name": spec.display_name,
+                "lifecycle_status": spec.lifecycle_status,
+                "execution_mode": spec.execution_mode,
+                "tmux_session": spec.tmux_session,
+                "process_status": "running" if tmux_running(spec.tmux_session) else "stopped" if spec.tmux_session else "unknown",
+                "start_script": spec.start_script,
+            }
+        )
+    print_payload({"strategies": rows})
+    return 0
+
+
+def get_spec(instance: str) -> registry.StrategySpec:
+    specs = specs_by_instance()
+    if instance not in specs:
+        raise SystemExit(f"unknown strategy_instance: {instance}")
+    return specs[instance]
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    spec = get_spec(args.strategy_instance)
+    summary = read_summary(spec)
+    print_payload(
+        {
+            "strategy_instance": spec.strategy_instance,
+            "display_name": spec.display_name,
+            "lifecycle_status": spec.lifecycle_status,
+            "execution_mode": spec.execution_mode,
+            "runtime_dir": spec.runtime_dir,
+            "summary_file": spec.summary_file,
+            "generated_at_utc": summary.get("generated_at_utc"),
+            "snapshot_ts_utc": summary.get("snapshot_ts_utc"),
+            "live_enabled": summary.get("live_enabled"),
+            "tmux_session": spec.tmux_session,
+            "process_status": "running" if tmux_running(spec.tmux_session) else "stopped" if spec.tmux_session else "unknown",
+            "start_script": spec.start_script,
+        }
+    )
+    return 0
+
+
+def require_live_confirmation(spec: registry.StrategySpec, args: argparse.Namespace, action: str) -> None:
+    if spec.lifecycle_status == "live" and not args.confirm_live:
+        raise SystemExit(f"refusing to {action} live strategy without --confirm-live: {spec.strategy_instance}")
+
+
+def cmd_start(args: argparse.Namespace) -> int:
+    spec = get_spec(args.strategy_instance)
+    require_live_confirmation(spec, args, "start")
+    if not spec.start_script:
+        raise SystemExit(f"strategy has no start_script in registry spec: {spec.strategy_instance}")
+    script = ROOT / spec.start_script
+    if not script.exists():
+        raise SystemExit(f"missing start_script: {script}")
+    proc = subprocess.run([str(script)], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    refresh = None if args.no_refresh else refresh_db(args.db_path)
+    print_payload(
+        {
+            "action": "start",
+            "strategy_instance": spec.strategy_instance,
+            "returncode": proc.returncode,
+            "output": proc.stdout.strip(),
+            "process_status": "running" if tmux_running(spec.tmux_session) else "stopped" if spec.tmux_session else "unknown",
+            "registry_refresh": refresh,
+        }
+    )
+    return proc.returncode
+
+
+def cmd_stop(args: argparse.Namespace) -> int:
+    spec = get_spec(args.strategy_instance)
+    require_live_confirmation(spec, args, "stop")
+    if not spec.tmux_session:
+        raise SystemExit(f"strategy has no tmux_session in registry spec: {spec.strategy_instance}")
+    proc = subprocess.run(["tmux", "kill-session", "-t", spec.tmux_session], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    if proc.returncode != 0 and "can't find session" not in proc.stdout.lower():
+        rc = proc.returncode
+    else:
+        rc = 0
+    refresh = None if args.no_refresh else refresh_db(args.db_path)
+    print_payload(
+        {
+            "action": "stop",
+            "strategy_instance": spec.strategy_instance,
+            "returncode": rc,
+            "output": proc.stdout.strip(),
+            "process_status": "running" if tmux_running(spec.tmux_session) else "stopped",
+            "registry_refresh": refresh,
+        }
+    )
+    return rc
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db-path", type=Path, default=registry.DEFAULT_DB)
+    parser.add_argument("--no-refresh", action="store_true")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("list")
+    status = sub.add_parser("status")
+    status.add_argument("strategy_instance")
+    start = sub.add_parser("start")
+    start.add_argument("strategy_instance")
+    start.add_argument("--confirm-live", action="store_true")
+    stop = sub.add_parser("stop")
+    stop.add_argument("strategy_instance")
+    stop.add_argument("--confirm-live", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    if args.command == "list":
+        return cmd_list(args)
+    if args.command == "status":
+        return cmd_status(args)
+    if args.command == "start":
+        return cmd_start(args)
+    if args.command == "stop":
+        return cmd_stop(args)
+    raise SystemExit(f"unknown command: {args.command}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
