@@ -10,8 +10,8 @@ from typing import Any
 import pandas as pd
 
 
-NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
-SETTLEMENT_NUM_RE = re.compile(r"(?<!\d)-?\d+(?:\.\d+)?")
+NUM_RE = re.compile(r"(?<![\d.])-?\d+(?:\.\d+)?")
+SETTLEMENT_NUM_RE = re.compile(r"(?<![\d.])-?\d+(?:\.\d+)?")
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,14 @@ def parse_bracket_bounds(bracket: Any) -> tuple[float | None, float | None]:
     preserve the existing tail-telemetry contract.
     """
     text = "" if bracket is None else str(bracket).strip().replace("−", "-")
+    if "-" in text and not text.startswith("-"):
+        left, right = text.split("-", 1)
+        try:
+            lo = float(NUM_RE.search(left).group(0))  # type: ignore[union-attr]
+            hi = float(NUM_RE.search(right).group(0))  # type: ignore[union-attr]
+            return (min(lo, hi), max(lo, hi))
+        except (AttributeError, ValueError):
+            pass
     nums = [float(x) for x in NUM_RE.findall(text)]
     if not nums:
         return (None, None)

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-_NUMBER_RE = re.compile(r"(?<!\d)-?\d+(?:\.\d+)?")
+_NUMBER_RE = re.compile(r"(?<![\d.])-?\d+(?:\.\d+)?")
 
 
 @dataclass(frozen=True)

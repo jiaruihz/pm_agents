@@ -21,6 +21,13 @@ def test_market_bracket_parser_keeps_positive_ranges_and_tails():
     assert parsed.contains(75)
     assert not parsed.contains(76)
 
+    triple = parse_market_bracket("100-101", "Will the highest temperature be between 100-101°F?")
+    assert triple is not None
+    assert triple.low == 100.0
+    assert triple.high == 101.0
+    assert triple.contains(100.5)
+    assert not triple.contains(99)
+
     top = parse_label_dict("94+", "Will the highest temperature be 94°F or higher?")
     assert top == {"low": 94.0, "high": None, "bottom": False, "top": True, "label": "94+"}
     assert bracket_contains(top, 96)

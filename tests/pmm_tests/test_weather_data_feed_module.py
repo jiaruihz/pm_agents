@@ -26,6 +26,7 @@ from weather_data_feed import (
 from weather_data_feed import forecast_sources
 from weather_data_feed.city_calendar import station_timezone, timezone_label
 from weather_data_feed.market_brackets import bracket_contains, parse_label_dict
+from weather_feature_layer.market import bracket_distance_features, parse_bracket_bounds, settlement_interval
 from weather_data_feed.snapshot_protocol import validate_snapshot_record
 
 
@@ -82,6 +83,24 @@ def test_market_bracket_helpers_are_data_module_public_api():
 
     assert parsed == {"low": 94.0, "high": None, "bottom": False, "top": True, "label": "94+"}
     assert bracket_contains(parsed, 96)
+
+
+def test_feature_layer_bracket_bounds_keep_positive_three_digit_ranges():
+    assert parse_bracket_bounds("100-101") == (100.0, 101.0)
+    assert settlement_interval("100-101") == (99.5, 101.5)
+
+    features = bracket_distance_features(
+        {
+            "bracket": "100-101",
+            "unit": "F",
+            "forecast_max_native": 98.7,
+            "forecast_max_f": 98.7,
+        }
+    )
+
+    assert features["bracket_low_native"] == 100.0
+    assert features["bracket_high_native"] == 101.0
+    assert round(features["forecast_to_bracket_low_native"], 1) == 1.3
 
 
 def test_snapshot_protocol_normalizes_legacy_aliases_and_dates():
