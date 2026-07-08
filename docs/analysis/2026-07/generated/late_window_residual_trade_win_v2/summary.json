@@ -1,0 +1,81 @@
+{
+  "ablation_results": {
+    "base_physical_only": {
+      "p_exact_col": "base_physical_only_p_exact",
+      "p_no_win_col": "base_physical_only_p_no_win",
+      "p_touch_col": "base_physical_only_p_touch"
+    },
+    "city_late_reheat_calibration": {
+      "p_exact_col": "city_late_reheat_calibration_p_exact",
+      "p_no_win_col": "city_late_reheat_calibration_p_no_win",
+      "p_touch_col": "city_late_reheat_calibration_p_touch"
+    },
+    "full_v2": {
+      "p_exact_col": "full_v2_p_exact",
+      "p_no_win_col": "full_v2_p_no_win",
+      "p_touch_col": "full_v2_p_touch"
+    },
+    "multi_model_forecast": {
+      "p_exact_col": "multi_model_forecast_p_exact",
+      "p_no_win_col": "multi_model_forecast_p_no_win",
+      "p_touch_col": "multi_model_forecast_p_touch"
+    },
+    "obs_clock_cadence": {
+      "p_exact_col": "obs_clock_cadence_p_exact",
+      "p_no_win_col": "obs_clock_cadence_p_no_win",
+      "p_touch_col": "obs_clock_cadence_p_touch"
+    },
+    "taf": {
+      "p_exact_col": "taf_p_exact",
+      "p_no_win_col": "taf_p_no_win",
+      "p_touch_col": "taf_p_touch"
+    },
+    "vertical_hourly_context": {
+      "p_exact_col": "vertical_hourly_context_p_exact",
+      "p_no_win_col": "vertical_hourly_context_p_no_win",
+      "p_touch_col": "vertical_hourly_context_p_touch"
+    }
+  },
+  "d1_rows_settled": 3177,
+  "forward_dates": 9,
+  "forward_rows": 3177,
+  "metadata": {
+    "candidate_rows": 10874,
+    "forecast_curve_records": 34201,
+    "multi_model_history_available": false,
+    "obs_history_rows": 9961,
+    "settlement_coverage": {
+      "2026-07-01": {
+        "cities": 47,
+        "rows": 517
+      },
+      "2026-07-02": {
+        "cities": 47,
+        "rows": 517
+      },
+      "2026-07-03": {
+        "cities": 47,
+        "rows": 517
+      },
+      "2026-07-04": {
+        "cities": 47,
+        "rows": 446
+      },
+      "2026-07-05": {
+        "cities": 47,
+        "rows": 517
+      },
+      "2026-07-06": {
+        "cities": 47,
+        "rows": 515
+      },
+      "2026-07-07": {
+        "cities": 47,
+        "rows": 517
+      }
+    },
+    "snapshots_seen": 647,
+    "taf_history_available": false,
+    "vertical_profile_history_available": false
+  }
+}
