@@ -16,11 +16,15 @@ Scope: research-only; no live/shadow runner changes
 - The script's `old_v1_like` column is a retrained single-stage baseline on this per-poll frame, not the exact old production/research scorer.
 - Incident context says the next key METAR was 2026-07-07 16:00:00 and touched 37C; historical paper snapshots imply touch/final-exact but do not preserve the raw first-touch minute for the 15:32 row.
 - v2 full model at that snapshot: P(touch 37 after decision)=0.652, P(final exactly 37)=0.724, P(37 NO win)=0.276.
+- v1_original_retrained_p_no_win=0.507; this is the v1 feature framework retrained on the same v2 per-poll d1 NO rows.
 - old_v1_like_p_no_win=0.485; raw physical score=0.450; market_p_no_win=0.060.
 - full_v2 forward d1 NO no_win calibration: rows=3048, dates=8, logloss=0.5840, Brier=0.1825, AUC=0.7415.
+- v1 original framework retrained on the same v2 d1 rows: logloss=0.5424, Brier=0.1771, AUC=0.7833.
 - old v1-like forward no_win: logloss=0.5336, Brier=0.1750, AUC=0.7858; p_leg_win_physical_v1 should be treated as raw physical score, not calibrated trade probability.
 - full_v2 edge>=0 executable replay: rows=213, dates=8, ROI=-3.6%, date-block CI [-12.0%,5.0%].
+- v1 original retrained edge>=0 replay: rows=92, dates=8, ROI=3.0%, date-block CI [-8.3%,19.1%].
 - old v1-like edge>=0 replay: rows=98, dates=8, ROI=-1.2%, date-block CI [-16.2%,11.4%].
+- Strategy-model verdict: on the same v2 per-poll d1 NO rows, the v1 original single-stage framework currently beats full_v2 on proper score and edge replay; use the two-stage touch/exact decomposition as a hazard feature layer, not as the final trade probability head yet.
 
 Conclusion gates: significance=FAIL/NA, baseline=FAIL/NA, forward=FAIL; conclusion=inconclusive_research_only.
 
@@ -28,6 +32,7 @@ Conclusion gates: significance=FAIL/NA, baseline=FAIL/NA, forward=FAIL; conclusi
 - Grain: polling snapshot x city x target_date x candidate leg/token.
 - Main model: d1 NO only. d2/d3/current YES are retained in candidate frame for diagnostics but not mixed into the main target.
 - Stage A predicts `touch_target_after_decision`; Stage B predicts `final_exact_target`; `p_trade_win_v2 = 1 - P(final_exact_target)` for NO.
+- Fair baseline: `v1_original_retrained` uses the original v1 physical feature framework, retrained on the same v2 per-poll d1 NO rows.
 - City identity is not a raw model input. City information enters only through prior late-reheat/overshoot rates and region bucket.
 
 ## Available PIT Features
@@ -63,6 +68,7 @@ Conclusion gates: significance=FAIL/NA, baseline=FAIL/NA, forward=FAIL; conclusi
 | market_no_ask | no_win | forward_expanding | 1474 | 9 | 0.8847 | 4.1651 | 0.8248 | 0.0806 | 0.1070 |
 | clock_only_hazard | no_win | forward_expanding | 3177 | 9 | 0.8930 | 0.4058 | 0.1214 | 0.6331 | 0.7411 |
 | raw_physical_score_v1 | no_win | forward_expanding | 3177 | 9 | 0.8930 | 1.2606 | 0.2492 | 0.7733 | 0.5242 |
+| v1_original_retrained | no_win | forward_expanding | 3048 | 8 | 0.8927 | 0.5424 | 0.1771 | 0.7833 | 0.6557 |
 | old_v1_like | no_win | forward_expanding | 3048 | 8 | 0.8927 | 0.5336 | 0.1750 | 0.7858 | 0.6621 |
 
 ## ROI Replay
@@ -118,6 +124,11 @@ Conclusion gates: significance=FAIL/NA, baseline=FAIL/NA, forward=FAIL; conclusi
 | raw_physical_score_v1 | 0.0200 | 31 | 7 | 10 | 3.8205 | 0.1795 | 0.0470 | -0.7100 | 0.7009 |
 | raw_physical_score_v1 | 0.0300 | 31 | 7 | 10 | 3.8205 | 0.1795 | 0.0470 | -0.7100 | 0.7009 |
 | raw_physical_score_v1 | 0.0500 | 31 | 7 | 10 | 3.8205 | 0.1795 | 0.0470 | -0.7100 | 0.7009 |
+| v1_original_retrained | 0.0000 | 92 | 8 | 26 | 56.2909 | 1.7091 | 0.0304 | -0.0832 | 0.1912 |
+| v1_original_retrained | 0.0100 | 66 | 8 | 20 | 31.0165 | 2.9835 | 0.0962 | -0.0642 | 0.2988 |
+| v1_original_retrained | 0.0200 | 60 | 8 | 20 | 25.6753 | 3.3247 | 0.1295 | 0.0070 | 0.3918 |
+| v1_original_retrained | 0.0300 | 56 | 8 | 20 | 22.1874 | 2.8126 | 0.1268 | -0.0025 | 0.4116 |
+| v1_original_retrained | 0.0500 | 49 | 8 | 19 | 15.9862 | 2.0138 | 0.1260 | -0.0416 | 0.4864 |
 | old_v1_like | 0.0000 | 98 | 8 | 27 | 61.7215 | -0.7215 | -0.0117 | -0.1616 | 0.1140 |
 | old_v1_like | 0.0100 | 65 | 8 | 20 | 30.2103 | -0.2103 | -0.0070 | -0.2065 | 0.1998 |
 | old_v1_like | 0.0200 | 60 | 8 | 19 | 25.3569 | -0.3569 | -0.0141 | -0.2316 | 0.2517 |
@@ -197,6 +208,13 @@ Conclusion gates: significance=FAIL/NA, baseline=FAIL/NA, forward=FAIL; conclusi
 | d1_no_forecast_below_target | 2486 | 9.0000 | 47.0000 | 0.0969 | 0.0885 | 0.9115 | 0.6228 | 0.0000 | raw_physical_score_v1 |
 | d1_no_multi_model_spread_high | 0 |  |  |  |  |  |  |  | raw_physical_score_v1 |
 | d1_no_chengdu_like_asia_hot | 741 | 8.0000 | 12.0000 | 0.0850 | 0.0756 | 0.9244 | 0.5621 | 0.0000 | raw_physical_score_v1 |
+| d1_no | 3048 | 8.0000 | 47.0000 | 0.1234 | 0.1073 | 0.8927 | 0.6557 | 0.0089 | v1_original_retrained |
+| d1_no_next_obs_le30 | 2342 | 8.0000 | 47.0000 | 0.1354 | 0.1174 | 0.8826 | 0.6458 | 0.0098 | v1_original_retrained |
+| d1_no_cadence_approx60 | 1207 | 8.0000 | 34.0000 | 0.0903 | 0.0829 | 0.9171 | 0.7054 | 0.0066 | v1_original_retrained |
+| d1_no_path_decline | 1546 | 8.0000 | 47.0000 | 0.0375 | 0.0336 | 0.9664 | 0.8564 | 0.0149 | v1_original_retrained |
+| d1_no_forecast_below_target | 2386 | 8.0000 | 47.0000 | 0.0985 | 0.0897 | 0.9103 | 0.7012 | 0.0113 | v1_original_retrained |
+| d1_no_multi_model_spread_high | 0 |  |  |  |  |  |  |  | v1_original_retrained |
+| d1_no_chengdu_like_asia_hot | 741 | 8.0000 | 12.0000 | 0.0850 | 0.0756 | 0.9244 | 0.6934 | 0.0175 | v1_original_retrained |
 | d1_no | 3048 | 8.0000 | 47.0000 | 0.1234 | 0.1073 | 0.8927 | 0.6621 | 0.0085 | old_v1_like |
 | d1_no_next_obs_le30 | 2342 | 8.0000 | 47.0000 | 0.1354 | 0.1174 | 0.8826 | 0.6396 | 0.0085 | old_v1_like |
 | d1_no_cadence_approx60 | 1207 | 8.0000 | 34.0000 | 0.0903 | 0.0829 | 0.9171 | 0.7045 | 0.0066 | old_v1_like |
@@ -206,13 +224,13 @@ Conclusion gates: significance=FAIL/NA, baseline=FAIL/NA, forward=FAIL; conclusi
 | d1_no_chengdu_like_asia_hot | 741 | 8.0000 | 12.0000 | 0.0850 | 0.0756 | 0.9244 | 0.6952 | 0.0162 | old_v1_like |
 
 ## Chengdu 2026-07-07 Case
-| snapshot_ts_utc | ts_beijing | entry_price | best_bid | spread | top_size | running_value | latest_native | path_state | obs_age_minutes | obs_cadence_min | minutes_to_next_obs | touch_target_after_decision | first_touch_minutes_after_decision | final_exact_target | no_win | incident_reported_p_leg_win_physical_v1 | incident_live_order_ts_bj | incident_next_key_metar_ts_bj | incident_first_touch_minutes_context | old_v1_like_p_no_win | full_v2_p_touch | full_v2_p_exact | full_v2_p_no_win |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-07-07T07:32:00Z | 2026-07-07 15:32:00 | 0.9400 | 0.9200 | 0.0200 | 5.0100 | 36 | 35.0000 | decline | 32.0000 | 60.0000 | 28.0000 | True |  | True | False | 0.9510 | 2026-07-07 15:39:00 | 2026-07-07 16:00:00 | 28.0000 | 0.4848 | 0.6519 | 0.7244 | 0.2756 |
-| 2026-07-07T07:46:00Z | 2026-07-07 15:46:00 |  |  |  |  | 36 | 35.0000 | decline | 46.0000 | 60.0000 | 14.0000 | True |  | True | False |  |  |  |  | 0.6652 | 0.4128 | 0.4759 | 0.5241 |
-| 2026-07-07T08:02:00Z | 2026-07-07 16:02:00 |  |  |  |  | 36 | 35.0000 | decline | 62.0000 | 60.0000 | 0.0000 | True |  | True | False |  |  |  |  | 0.8399 | 0.1653 | 0.1776 | 0.8224 |
-| 2026-07-07T08:15:00Z | 2026-07-07 16:15:00 |  |  |  |  | 36 | 36.1111 | at_high | 15.0000 | 60.0000 | 45.0000 | True | 45.0000 | True | False |  |  |  |  | 0.7673 | 0.3660 | 0.3825 | 0.6175 |
-| 2026-07-07T08:30:00Z | 2026-07-07 16:30:00 |  |  |  |  | 36 | 36.1111 | at_high | 30.0000 | 60.0000 | 30.0000 | True |  | True | False |  |  |  |  | 0.7454 | 0.3069 | 0.3260 | 0.6740 |
+| snapshot_ts_utc | ts_beijing | entry_price | best_bid | spread | top_size | running_value | latest_native | path_state | obs_age_minutes | obs_cadence_min | minutes_to_next_obs | touch_target_after_decision | first_touch_minutes_after_decision | final_exact_target | no_win | incident_reported_p_leg_win_physical_v1 | incident_live_order_ts_bj | incident_next_key_metar_ts_bj | incident_first_touch_minutes_context | v1_original_retrained_p_no_win | old_v1_like_p_no_win | full_v2_p_touch | full_v2_p_exact | full_v2_p_no_win |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-07-07T07:32:00Z | 2026-07-07 15:32:00 | 0.9400 | 0.9200 | 0.0200 | 5.0100 | 36 | 35.0000 | decline | 32.0000 | 60.0000 | 28.0000 | True |  | True | False | 0.9510 | 2026-07-07 15:39:00 | 2026-07-07 16:00:00 | 28.0000 | 0.5073 | 0.4848 | 0.6519 | 0.7244 | 0.2756 |
+| 2026-07-07T07:46:00Z | 2026-07-07 15:46:00 |  |  |  |  | 36 | 35.0000 | decline | 46.0000 | 60.0000 | 14.0000 | True |  | True | False |  |  |  |  | 0.7246 | 0.6652 | 0.4128 | 0.4759 | 0.5241 |
+| 2026-07-07T08:02:00Z | 2026-07-07 16:02:00 |  |  |  |  | 36 | 35.0000 | decline | 62.0000 | 60.0000 | 0.0000 | True |  | True | False |  |  |  |  | 0.9116 | 0.8399 | 0.1653 | 0.1776 | 0.8224 |
+| 2026-07-07T08:15:00Z | 2026-07-07 16:15:00 |  |  |  |  | 36 | 36.1111 | at_high | 15.0000 | 60.0000 | 45.0000 | True | 45.0000 | True | False |  |  |  |  | 0.7778 | 0.7673 | 0.3660 | 0.3825 | 0.6175 |
+| 2026-07-07T08:30:00Z | 2026-07-07 16:30:00 |  |  |  |  | 36 | 36.1111 | at_high | 30.0000 | 60.0000 | 30.0000 | True |  | True | False |  |  |  |  | 0.7966 | 0.7454 | 0.3069 | 0.3260 | 0.6740 |
 
 ## Data Gaps Before Live
 - Preserve historical source_events/observation cache versions, not only latest, so cadence and next-observation hazard can be computed from source truth rather than paper-snapshot proxy.

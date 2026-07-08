@@ -173,6 +173,17 @@ ABLATIONS: list[tuple[str, list[str], list[str]]] = [
     ),
 ]
 
+V1_ORIGINAL_NUMERIC = [
+    "true_local_time_float",
+    "forecast_peak_delta_hours_local",
+    "forecast_gap_to_running_native",
+    "decline_native",
+    "target_distance_native",
+    "forecast_margin_to_target_native",
+    "metar_obs_count_today",
+    "running_value",
+]
+V1_ORIGINAL_CATEGORICAL = ["leg", "unit", "path_state", "peak_delta_bucket", "forecast_gap_bucket"]
 OLD_V1_NUMERIC = BASE_FEATURES
 OLD_V1_CATEGORICAL = ["unit", "path_state", "peak_delta_bucket", "forecast_gap_bucket", "true_local_time_bucket"]
 
@@ -1072,6 +1083,12 @@ def run_models(candidates: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     d1["clock_only_p_touch"] = clock_only_hazard(d1)
     d1["clock_only_p_no_win"] = 1.0 - d1["clock_only_p_touch"].clip(0, 1)
     d1["raw_physical_score_v1"] = pd.to_numeric(d1["leg_residual_done_score_v1"], errors="coerce").clip(1e-6, 1 - 1e-6)
+    d1["v1_original_retrained_p_no_win"] = expanding_single_stage(
+        d1,
+        V1_ORIGINAL_NUMERIC,
+        V1_ORIGINAL_CATEGORICAL,
+        "v1_original_retrained_p_no_win",
+    )
     d1["old_v1_like_p_no_win"] = expanding_single_stage(d1, OLD_V1_NUMERIC, OLD_V1_CATEGORICAL, "old_v1_like_p_no_win")
 
     metric_rows = []
@@ -1103,6 +1120,7 @@ def run_models(candidates: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
         ("market_no_ask", "market_p_no_win", "no_win"),
         ("clock_only_hazard", "clock_only_p_no_win", "no_win"),
         ("raw_physical_score_v1", "raw_physical_score_v1", "no_win"),
+        ("v1_original_retrained", "v1_original_retrained_p_no_win", "no_win"),
         ("old_v1_like", "old_v1_like_p_no_win", "no_win"),
     ]:
         metric_rows.append(metric_row(label, target, "forward_expanding", d1.loc[forward_mask, target], d1.loc[forward_mask, col], d1.loc[forward_mask, "target_date"]))
@@ -1158,8 +1176,10 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
     case = chengdu_case(d1)
     full_metrics = metrics[metrics["model"].eq("full_v2")]
     full_no = full_metrics[full_metrics["target"].eq("no_win")].head(1)
+    v1r_no = metrics[(metrics["model"].eq("v1_original_retrained")) & (metrics["target"].eq("no_win"))].head(1)
     old_no = metrics[(metrics["model"].eq("old_v1_like")) & (metrics["target"].eq("no_win"))].head(1)
     full_roi0 = roi[(roi["model"].eq("full_v2")) & (roi["edge_threshold"].eq(0.0))].head(1)
+    v1r_roi0 = roi[(roi["model"].eq("v1_original_retrained")) & (roi["edge_threshold"].eq(0.0))].head(1)
     old_roi0 = roi[(roi["model"].eq("old_v1_like")) & (roi["edge_threshold"].eq(0.0))].head(1)
     lines = [
         "# Late-Window Residual Trade-Win v2",
@@ -1184,12 +1204,18 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
             "- The script's `old_v1_like` column is a retrained single-stage baseline on this per-poll frame, not the exact old production/research scorer.",
             f"- Incident context says the next key METAR was {c.get('incident_next_key_metar_ts_bj')} and touched 37C; historical paper snapshots imply touch/final-exact but do not preserve the raw first-touch minute for the 15:32 row.",
             f"- v2 full model at that snapshot: P(touch 37 after decision)={c.get('full_v2_p_touch', math.nan):.3f}, P(final exactly 37)={c.get('full_v2_p_exact', math.nan):.3f}, P(37 NO win)={c.get('full_v2_p_no_win', math.nan):.3f}.",
+            f"- v1_original_retrained_p_no_win={c.get('v1_original_retrained_p_no_win', math.nan):.3f}; this is the v1 feature framework retrained on the same v2 per-poll d1 NO rows.",
             f"- old_v1_like_p_no_win={c.get('old_v1_like_p_no_win', math.nan):.3f}; raw physical score={c.get('raw_physical_score_v1', math.nan):.3f}; market_p_no_win={c.get('market_p_no_win', math.nan):.3f}.",
         ]
     if not full_no.empty:
         r = full_no.iloc[0]
         lines.append(
             f"- full_v2 forward d1 NO no_win calibration: rows={int(r['rows'])}, dates={int(r['dates'])}, logloss={r['logloss']:.4f}, Brier={r['brier']:.4f}, AUC={r['auc']:.4f}."
+        )
+    if not v1r_no.empty:
+        r = v1r_no.iloc[0]
+        lines.append(
+            f"- v1 original framework retrained on the same v2 d1 rows: logloss={r['logloss']:.4f}, Brier={r['brier']:.4f}, AUC={r['auc']:.4f}."
         )
     if not old_no.empty:
         r = old_no.iloc[0]
@@ -1201,11 +1227,19 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
         lines.append(
             f"- full_v2 edge>=0 executable replay: rows={int(r['rows'])}, dates={int(r['dates'])}, ROI={r['roi']:.1%}, date-block CI [{r['date_block_ci_low']:.1%},{r['date_block_ci_high']:.1%}]."
         )
+    if not v1r_roi0.empty:
+        r = v1r_roi0.iloc[0]
+        lines.append(
+            f"- v1 original retrained edge>=0 replay: rows={int(r['rows'])}, dates={int(r['dates'])}, ROI={r['roi']:.1%}, date-block CI [{r['date_block_ci_low']:.1%},{r['date_block_ci_high']:.1%}]."
+        )
     if not old_roi0.empty:
         r = old_roi0.iloc[0]
         lines.append(
             f"- old v1-like edge>=0 replay: rows={int(r['rows'])}, dates={int(r['dates'])}, ROI={r['roi']:.1%}, date-block CI [{r['date_block_ci_low']:.1%},{r['date_block_ci_high']:.1%}]."
         )
+    lines.append(
+        "- Strategy-model verdict: on the same v2 per-poll d1 NO rows, the v1 original single-stage framework currently beats full_v2 on proper score and edge replay; use the two-stage touch/exact decomposition as a hazard feature layer, not as the final trade probability head yet."
+    )
     lines += [
         "",
         "Conclusion gates: significance=FAIL/NA, baseline=FAIL/NA, forward=FAIL; conclusion=inconclusive_research_only.",
@@ -1214,6 +1248,7 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
         "- Grain: polling snapshot x city x target_date x candidate leg/token.",
         "- Main model: d1 NO only. d2/d3/current YES are retained in candidate frame for diagnostics but not mixed into the main target.",
         "- Stage A predicts `touch_target_after_decision`; Stage B predicts `final_exact_target`; `p_trade_win_v2 = 1 - P(final_exact_target)` for NO.",
+        "- Fair baseline: `v1_original_retrained` uses the original v1 physical feature framework, retrained on the same v2 per-poll d1 NO rows.",
         "- City identity is not a raw model input. City information enters only through prior late-reheat/overshoot rates and region bucket.",
         "",
         "## Available PIT Features",
@@ -1257,6 +1292,7 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
             "incident_live_order_ts_bj",
             "incident_next_key_metar_ts_bj",
             "incident_first_touch_minutes_context",
+            "v1_original_retrained_p_no_win",
             "old_v1_like_p_no_win",
             "full_v2_p_touch",
             "full_v2_p_exact",
