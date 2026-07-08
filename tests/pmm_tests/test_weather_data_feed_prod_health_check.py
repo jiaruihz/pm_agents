@@ -161,11 +161,48 @@ def test_live_order_check_defaults_to_active_runtime_files_only(tmp_path):
     report = check_live_orders(live_dir, tail_rows=10, extra_files=[active_runtime])
 
     assert report["scope"] == "active_live_order_files"
-    assert report["files"] == [str(active_runtime)]
+    assert report["files"] == [str(current), str(active_runtime)]
 
     all_report = check_live_orders(live_dir, tail_rows=10, all_files=True)
     assert str(legacy) in all_report["files"]
     assert str(current) in all_report["files"]
+
+
+def test_live_order_check_treats_lifecycle_replacements_as_single_active_tip(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
+    base = {
+        "strategy_instance": "low_price_yes_lottery_tiny_live_v1",
+        "city": "Shanghai",
+        "target_date": "2026-07-08",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "status": "submitted",
+        "exchange_response": {"place": {"success": True, "status": "live"}},
+    }
+    original = {**base, "exchange_response": {"place": {"orderID": "old-order", "success": True, "status": "live"}}}
+    replacement = {
+        **base,
+        "execution_action": "maker_lifecycle_reprice_maker",
+        "source_order_id": "old-order",
+        "exchange_response": {
+            "place": {"orderID": "new-order", "success": True, "status": "live"},
+            "pre_place_cancel_response": {"cancel": {"canceled": ["old-order"], "not_canceled": {}}},
+        },
+    }
+    path.write_text(json.dumps(original) + "\n" + json.dumps(replacement) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        now_utc=datetime(2026, 7, 8, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 1
+    assert report["replaced_order_id_count"] == 1
+    assert report["duplicate_current_strategy_city_token_count"] == 0
 
 
 def test_live_order_check_separates_historical_duplicates_from_current_risk(tmp_path):

@@ -35,11 +35,14 @@ DEFAULT_ORDERBOOK_DIRS = (
 )
 DEFAULT_TELEMETRY_FILES: tuple[Path, ...] = ()
 DEFAULT_SUMMARY_FILES = (
+    Path("low_price_yes_lottery_tiny_live_v1/latest_summary.json"),
     Path("regime_routed_no_shadow_v1/latest_summary.json"),
     Path("late_window_residual_split_v1/latest_summary.json"),
 )
 DEFAULT_LIVE_DIR = ROOT / "runtime/weather_edge_v1/live"
-ACTIVE_LIVE_ORDER_PATTERNS: tuple[str, ...] = ()
+ACTIVE_LIVE_ORDER_PATTERNS: tuple[str, ...] = (
+    "low_price_yes_lottery_tiny_live_v1_orders.jsonl",
+)
 ACTIVE_RUNTIME_LIVE_ORDER_FILES = (
     Path("late_window_residual_split_v1/live_orders.jsonl"),
 )
@@ -142,6 +145,21 @@ def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
     if place.get("success") is False:
         return False
     return True
+
+
+def replaced_order_ids(rows: list[dict[str, Any]]) -> set[str]:
+    """Return order ids that were explicitly replaced by lifecycle rows."""
+    out: set[str] = set()
+    for row in rows:
+        if str(row.get("status") or "").lower() != "submitted":
+            continue
+        action = str(row.get("execution_action") or "")
+        if not action.startswith("maker_lifecycle_"):
+            continue
+        source_order_id = str(row.get("source_order_id") or row.get("cancel_before_order_id") or "").strip()
+        if source_order_id:
+            out.add(source_order_id)
+    return out
 
 
 def duplicate_examples(rows: list[dict[str, Any]], fields: tuple[str, ...], limit: int = 10) -> tuple[int, list[dict[str, Any]]]:
@@ -378,7 +396,13 @@ def check_live_orders(
         ("strategy_instance", "city", "target_date", "token_id", "signal_side", "order_side"),
     )
     today_utc = (now_utc or datetime.now(timezone.utc)).date().isoformat()
-    effective_rows = [row for row in rows if is_effective_live_order(row, today_utc=today_utc)]
+    replaced_ids = replaced_order_ids(rows)
+    effective_rows = [
+        row
+        for row in rows
+        if is_effective_live_order(row, today_utc=today_utc)
+        and (not row.get("_effective_order_id") or row.get("_effective_order_id") not in replaced_ids)
+    ]
     duplicate_current_intents, current_intent_examples = duplicate_examples(
         effective_rows,
         ("strategy_instance", "city", "target_date", "token_id", "signal_side", "order_side"),
@@ -425,6 +449,7 @@ def check_live_orders(
         "files": [str(path) for path in files],
         "checked_rows": len(rows),
         "effective_current_or_future_rows": len(effective_rows),
+        "replaced_order_id_count": len(replaced_ids),
         "current_or_future_cutoff_utc_date": today_utc,
         "parse_error_count": parse_errors,
         "duplicate_order_id_count": duplicate_orders,
