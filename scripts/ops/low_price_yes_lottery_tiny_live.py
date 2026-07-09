@@ -2295,7 +2295,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-ask", type=float, default=0.05)
     parser.add_argument("--max-ask", type=float, default=0.20)
     parser.add_argument("--min-edge", type=float, default=0.20)
-    parser.add_argument("--max-taker-cushion", type=float, default=0.01)
+    parser.add_argument("--max-taker-cushion", type=float, default=0.05)
     parser.add_argument("--min-fee-adjusted-edge", type=float, default=0.15)
     parser.add_argument("--order-notional-usd", type=float, default=0.8)
     parser.add_argument("--sizing-policy", choices=SIZING_POLICY_CHOICES, default="fixed_cash_order_notional")

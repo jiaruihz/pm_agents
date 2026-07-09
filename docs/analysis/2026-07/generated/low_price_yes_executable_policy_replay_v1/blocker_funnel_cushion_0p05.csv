@@ -1,0 +1,10 @@
+blocker,count
+decision_snapshot_too_stale,760
+dist_eq0_forecast_boundary_tail_v1,233
+dist_lt0_cold_or_inside_forecast_tail_v1,2089
+fresh_ask_exceeds_replayed_cushion_or_fee_edge,51
+fresh_book_fetch_failed,237
+missing_yes_token_id,136
+no_settled_fact_match,624
+selected,25
+sim_duplicate_after_selected,4296
