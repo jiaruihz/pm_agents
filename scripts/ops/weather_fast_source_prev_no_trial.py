@@ -210,7 +210,7 @@ def build_live_fok_limit_place_fn(proxy_url: str):
     return place
 
 
-def spent_shares(path: Path, *, target_date: str, city: str) -> float:
+def spent_market_shares(path: Path, *, target_date: str, token_id: str) -> float:
     total = 0.0
     if not path.exists():
         return total
@@ -221,7 +221,7 @@ def spent_shares(path: Path, *, target_date: str, city: str) -> float:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if row.get("target_date") == target_date and row.get("city") == city and row.get("live_attempted") is True:
+        if row.get("target_date") == target_date and str(row.get("token_id") or "") == token_id and row.get("live_attempted") is True:
             total += float(row.get("size") or 0.0)
     return round(total, 6)
 
@@ -327,9 +327,9 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             live_blockers.append("ask_above_max")
         if ask_size is None or ask_size < float(args.max_shares_per_trade):
             live_blockers.append("insufficient_top_ask_size")
-        city_day_spent = spent_shares(out_dir / "orders.jsonl", target_date=target_date, city=city)
-        if city_day_spent + float(args.max_shares_per_trade) > float(args.max_shares_per_city_day) + 1e-9:
-            live_blockers.append("city_day_share_cap")
+        market_spent = spent_market_shares(out_dir / "orders.jsonl", target_date=target_date, token_id=token.no_token_id)
+        if market_spent + float(args.max_shares_per_trade) > float(args.max_shares_per_market) + 1e-9:
+            live_blockers.append("market_share_cap")
         if args.live and city in set(args.live_cities or []) and not args.confirm_live:
             live_blockers.append("confirm_live_missing")
         opportunity = {
@@ -348,6 +348,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "fresh_book_proxy_used": book.get("proxy_used", ""),
             "max_no_ask": float(args.max_no_ask),
             "planned_shares": float(args.max_shares_per_trade),
+            "market_spent_shares": market_spent,
+            "max_shares_per_market": float(args.max_shares_per_market),
             "planned_notional_usd": round(float(args.max_shares_per_trade) * float(best_ask or 0.0), 6),
             "live_requested": bool(args.live and city in set(args.live_cities or [])),
             "live_enabled": bool(args.live and args.confirm_live and city in set(args.live_cities or [])),
@@ -424,7 +426,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--live-cities", nargs="*", default=[])
     parser.add_argument("--shadow-cities", nargs="*", default=["Tokyo", "Singapore", "Helsinki"])
     parser.add_argument("--max-shares-per-trade", type=float, default=5.0)
-    parser.add_argument("--max-shares-per-city-day", type=float, default=5.0)
+    parser.add_argument("--max-shares-per-market", type=float, default=5.0)
+    parser.add_argument("--max-shares-per-city-day", type=float, default=0.0, help=argparse.SUPPRESS)
     parser.add_argument("--max-no-ask", type=float, default=0.92)
     parser.add_argument("--max-source-age-min", type=float, default=15.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
