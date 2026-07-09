@@ -687,10 +687,13 @@ def add_artifact(
     if path is None or not path.exists():
         return
     source = rel_path(path) or str(path)
+    artifact_key = hashlib.sha1(f"{strategy_instance}:{source}:{kind}".encode("utf-8")).hexdigest()
+    if any(row.get("artifact_key") == artifact_key for row in artifacts):
+        return
     row_count = count_lines(path) if path.suffix == ".jsonl" else None
     artifacts.append(
         {
-            "artifact_key": hashlib.sha1(f"{strategy_instance}:{source}:{kind}".encode("utf-8")).hexdigest(),
+            "artifact_key": artifact_key,
             "strategy_instance": strategy_instance,
             "artifact_kind": kind,
             "source_path": source,
