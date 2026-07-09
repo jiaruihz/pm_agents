@@ -76,6 +76,7 @@ SIZING_POLICY_CHOICES = (
     "fixed_8_shares",
     "price_tier_6_8_10_shares",
     "score_tier_0p8_1p2_1p5_shares",
+    "score_tier_0p8_1p0_1p2_price_6_8_8_shares",
 )
 
 SCORE_DIST_MODEL_V1 = {
@@ -971,6 +972,13 @@ def shares_for_price_tier_6_8_10(*, price: float, min_shares: float) -> float:
     return shares_for_fixed_count(shares=shares, min_shares=min_shares)
 
 
+def shares_for_price_tier_6_8_8(*, price: float, min_shares: float) -> float:
+    if price <= 0:
+        return 0.0
+    shares = 6.0 if price <= 0.08 else 8.0
+    return shares_for_fixed_count(shares=shares, min_shares=min_shares)
+
+
 def shares_for_quality_price_tier_5_8_12(*, price: float, quality: float, min_shares: float) -> float:
     if price <= 0:
         return 0.0
@@ -1061,6 +1069,17 @@ def shares_for_score_tier_0p8_1p2_1p5(*, price: float, row: dict[str, Any], min_
     return shares_for_fixed_count(shares=shares, min_shares=min_shares)
 
 
+def shares_for_score_tier_0p8_1p0_1p2_price_6_8_8(
+    *, price: float, row: dict[str, Any], min_shares: float
+) -> float:
+    base = shares_for_price_tier_6_8_8(price=price, min_shares=min_shares)
+    score = score_dist_probability(row)
+    tier = score_dist_tier(score)
+    multiplier = {"low": 0.8, "mid": 1.0, "high": 1.2}.get(tier, 1.0)
+    shares = base * multiplier
+    return shares_for_fixed_count(shares=shares, min_shares=min_shares)
+
+
 def score_dist_sizing_meta(row: dict[str, Any]) -> dict[str, Any]:
     score = score_dist_probability(row)
     tier = score_dist_tier(score)
@@ -1104,6 +1123,8 @@ def shares_for_sizing_policy(
         return shares_for_price_tier_6_8_10(price=price, min_shares=min_shares)
     if policy == "score_tier_0p8_1p2_1p5_shares":
         return shares_for_score_tier_0p8_1p2_1p5(price=price, row=row, min_shares=min_shares)
+    if policy == "score_tier_0p8_1p0_1p2_price_6_8_8_shares":
+        return shares_for_score_tier_0p8_1p0_1p2_price_6_8_8(price=price, row=row, min_shares=min_shares)
     raise RuntimeError(f"unknown sizing policy {policy}")
 
 
@@ -1180,6 +1201,11 @@ def sizing_shadow(price: float, p_yes: float, row: dict[str, Any], args: argpars
     ask_scaled_cost = max(0.0, min(5.0, 5.0 * max(0.25, min(1.0, (price - 0.05) / 0.15))))
     price_tier_shares = shares_for_price_tier_6_8_10(price=price, min_shares=args.min_order_shares)
     score_tier_shares = shares_for_score_tier_0p8_1p2_1p5(price=price, row=row, min_shares=args.min_order_shares)
+    score_tier_reduced_shares = shares_for_score_tier_0p8_1p0_1p2_price_6_8_8(
+        price=price,
+        row=row,
+        min_shares=args.min_order_shares,
+    )
     score_tier_meta = score_dist_sizing_meta(row)
     quality_tier_shares = shares_for_quality_price_tier_5_8_12(
         price=price,
@@ -1204,6 +1230,10 @@ def sizing_shadow(price: float, p_yes: float, row: dict[str, Any], args: argpars
         "price_tier_6_8_10_shares": one_shares(price_tier_shares),
         "score_tier_0p8_1p2_1p5_shares": {
             **one_shares(score_tier_shares),
+            **score_tier_meta,
+        },
+        "score_tier_0p8_1p0_1p2_price_6_8_8_shares": {
+            **one_shares(score_tier_reduced_shares),
             **score_tier_meta,
         },
         "quality_price_tier_5_8_12_shares": {
