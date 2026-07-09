@@ -102,6 +102,12 @@ as original JSON in `orders.order_payload`, so active heads such as forecast
 tail, regime-routed NO, tmax distribution and exit overlays can share one order
 lineage table without per-strategy event tables. It remains submitted-order
 lineage; realized cash/PnL still comes from `fills` and `fact_trades`.
+`weather_dashboard_refresh.sh` and `run_stack.sh` explicitly ingest the active
+Mac live order files and then run
+`weather_dashboard.cli.check_strategy_runtime_order_coverage`; if a raw
+strategy-runtime order `execution_id` is missing from canonical `orders`, the
+refresh fails closed instead of producing a DB where submitted orders disappear
+from fill sync.
 
 Runtime boundary: strategy runners own candidate selection, risk decision and
 sizing; shared execution glue lives in

@@ -101,7 +101,26 @@ log "Step 2/5: Ingesting live_cycle and strategy-runtime JSONL into $DB_PATH"
 {
   init_canonical_db
   "$VENV/python" -m weather_dashboard.cli.ingest_live_cycle --db-path "$DB_PATH"
-  "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders --db-path "$DB_PATH"
+  STRATEGY_RUNTIME_ARGS=(--db-path "$DB_PATH")
+  STRATEGY_ORDER_FILES=()
+  for order_file in \
+    "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl" \
+    "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl" \
+    "${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}/output/fast_source_prev_no_trial/orders.jsonl"
+  do
+    if [[ -f "$order_file" ]]; then
+      STRATEGY_RUNTIME_ARGS+=(--order-file "$order_file")
+      STRATEGY_ORDER_FILES+=("$order_file")
+    fi
+  done
+  "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders "${STRATEGY_RUNTIME_ARGS[@]}"
+  if (( ${#STRATEGY_ORDER_FILES[@]} > 0 )); then
+    COVERAGE_ARGS=(--db-path "$DB_PATH")
+    for order_file in "${STRATEGY_ORDER_FILES[@]}"; do
+      COVERAGE_ARGS+=(--order-file "$order_file")
+    done
+    "$VENV/python" -m weather_dashboard.cli.check_strategy_runtime_order_coverage "${COVERAGE_ARGS[@]}"
+  fi
 } 2>&1 | tee "$LOG_DIR/ingest.log" || {
   err "Ingest failed — check $LOG_DIR/ingest.log"
   exit 1

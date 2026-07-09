@@ -270,6 +270,7 @@ if [[ $REBUILD -eq 1 ]]; then
   {
     init_canonical_db
     STRATEGY_RUNTIME_ARGS=(--db-path "$DB_PATH")
+    STRATEGY_ORDER_FILES=()
     for order_file in \
       "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl" \
       "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl" \
@@ -277,9 +278,17 @@ if [[ $REBUILD -eq 1 ]]; then
     do
       if [[ -f "$order_file" ]]; then
         STRATEGY_RUNTIME_ARGS+=(--order-file "$order_file")
+        STRATEGY_ORDER_FILES+=("$order_file")
       fi
     done
     "$VENV/python" -m weather_dashboard.cli.ingest_strategy_runtime_orders "${STRATEGY_RUNTIME_ARGS[@]}"
+    if (( ${#STRATEGY_ORDER_FILES[@]} > 0 )); then
+      COVERAGE_ARGS=(--db-path "$DB_PATH")
+      for order_file in "${STRATEGY_ORDER_FILES[@]}"; do
+        COVERAGE_ARGS+=(--order-file "$order_file")
+      done
+      "$VENV/python" -m weather_dashboard.cli.check_strategy_runtime_order_coverage "${COVERAGE_ARGS[@]}"
+    fi
   } >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
     err "strategy runtime order migration failed — see $LOG_DIR/migrate_live_cycle.log"
     exit 1
