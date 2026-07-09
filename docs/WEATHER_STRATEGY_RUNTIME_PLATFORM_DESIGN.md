@@ -1,7 +1,7 @@
 # 天气策略运行时平台 · 产品化设计
 
 Status: design-draft
-Updated: 2026-07-09 首版蓝图（统一启动器 + 策略接口 + DB 控制面 + 数据源领域模型）；补 §12 看板升级计划 + §13 数据模型 ER 关联；补 §6.5-6.8 数据源表粒度修订
+Updated: 2026-07-09 首版蓝图（统一启动器 + 策略接口 + DB 控制面 + 数据源领域模型）；补 §12 看板升级计划 + §13 数据模型 ER 关联；复盘对齐既有量化血缘：strategy_def=StrategyManifest 头粒度继任者、metadata/config/instance 三者关系（§13.4）、instance 引用 config_id 而非内联 params（§4.2）；补 §6.5-6.8 数据源表粒度修订
 Source of truth: no（目标草案，未实现）；架构口径服从 WEATHER_ARCHITECTURE_SPINE / WEATHER_SYSTEM_CONTRACT
 Superseded by / Used by: 取代 `docs/archive/UNIFIED_STRATEGY_PLATFORM_REFACTOR_PLAN.md`（旧 PMM/ARB 版）的目标定位；落地后由 WEATHER_STRATEGY_ENTRYPOINT / WEATHER_STRATEGY_REGISTRY 引用
 
@@ -131,13 +131,21 @@ harness 拥有全部横切逻辑，是消灭重复的关键：
 
 移植后，每个 head 从"600 行 runner"缩到"几十行决策逻辑 + 一个 ParamsSchema"。
 
-### 3.3 元数据模型：`strategy_def` 表（productized 版 manifest）
+### 3.3 元数据模型：`strategy_def` 表（`StrategyManifest` 的头粒度 DB 继任者）
 
-`src/strategies/<key>/manifest.yaml` + `registry.py` 手写 parser 的产品化继任者。仍以 git YAML 为作者来源，sync 进 DB：
+**先说清楚它和现有元数据的关系,别跑两套。** 策略元数据现在已经有一套——`src/strategies/<key>/manifest.yaml` → `schema.py`(`StrategyManifest`) → `registry.py`,字段还更全(`runner_module` / `strategy_module` / `meta`)。但它有两个问题:①**是文件版,不在 DB**;②**粒度停在"包"**。所以有一条三层粒度链,中间那层今天没有元数据的家:
+
+| 粒度 | 谁在管 | 现状 |
+|---|---|---|
+| **包 package** | `StrategyManifest`(manifest.yaml) | 只有 5 个:`weather_edge_v1` 等 |
+| **头/族 head/family** | ❌ 现在没人管 | lottery / tmax / regime… 全挤在 `weather_edge_v1` 一个包下 |
+| **实例 instance** | `strategy_instance`(§4.2) | 18 个 |
+
+`strategy_def` 的定位 = **把 `StrategyManifest` 提升成 DB 里、头粒度、从 committed spec 生成的继任者**,同时**取代**文件 manifest,不并排多养一套。仍以 git YAML 为作者来源,sync 进 DB:
 
 ```sql
 CREATE TABLE strategy_def (
-    strategy_key        TEXT PRIMARY KEY,
+    strategy_key        TEXT PRIMARY KEY,       -- 头粒度 key,如 low_price_yes_lottery
     family              TEXT NOT NULL,
     strategy_group      TEXT NOT NULL DEFAULT 'weather',
     domain              TEXT NOT NULL DEFAULT 'weather',
@@ -152,6 +160,8 @@ CREATE TABLE strategy_def (
     updated_at_utc      TEXT NOT NULL
 );
 ```
+
+> **落地状态(2026-07-09):** B1 只建了空壳版(`strategy_key=family` + `spec_commit`,没有 `head_module` / `params_schema_ref` 等),因为这些字段依赖 `StrategyHead` 接口——**它们要到 B3 才有内容,那时 `strategy_def` 才真正取代 manifest、装得下头粒度元数据。** 在此之前它不承载独有信息;详见 §13.4 对 metadata / config / instance 三者关系的说明。
 
 ---
 
@@ -182,8 +192,8 @@ CREATE TABLE strategy_instance (
     family                TEXT NOT NULL,
     desired_status        TEXT NOT NULL,   -- enabled/paused/shelved/blocked
     execution_mode        TEXT NOT NULL,   -- live/zero_notional_shadow/...
-    params_json           TEXT NOT NULL,   -- 经 ParamsSchema 校验
-    params_hash           TEXT NOT NULL,
+    config_id             TEXT REFERENCES strategy_config(config_id),  -- 当前在跑的参数：引用既有 config 表，不在此内联复制
+    params_hash           TEXT,            -- instance spec 指纹（B1 已建）；参数真相仍在 strategy_config
     spec_commit           TEXT,            -- 追回定义
     source_subscription_id TEXT,           -- → weather_strategy_source_subscription
     market_data_source    TEXT NOT NULL DEFAULT 'mac-weather-data-feed',
@@ -198,6 +208,9 @@ CREATE TABLE strategy_instance (
     updated_at_utc        TEXT NOT NULL
 );
 ```
+
+> **instance 是"实体"、config 是"值"(2026-07-09 修正):** 早先草案把 `params_json` 内联进本表,等于在 config 之外又存一份参数——错。参数真相源是既有 `strategy_config`(`config_id=hash(params)`),instance 只用 `config_id` **引用**当前在跑的那份;调参 = 换 `config_id` 指针(control_log 记 `edit_config`),instance_id 不变。`params_hash` 只是 spec 指纹(B1 已建),不是参数存储。三者关系详见 §13.4。
+> **落地缺口:** B1 建的 `strategy_instance` 还没有 `config_id` 列——这根桥接线是待补项(B1.1)。
 
 ### 4.3 `strategy_instance_runtime`（运行时面，实际态，harness/supervisor push）
 
@@ -911,8 +924,9 @@ GET /api/order-blotter
 
 ```mermaid
 erDiagram
-    %% ── 定义面 ──
-    strategy_def ||--o{ strategy_instance : "strategy_key 定义→实例 (1:N)"
+    %% ── 定义面（元数据）──
+    strategy_def ||--o{ strategy_instance : "strategy_key 元数据→实例 (1:N)"
+    strategy_def ||--o{ strategy_config : "strategy_key 元数据→参数 (1:N, 目前隐式*)"
     %% ── 控制面 / 运行时面 ──
     strategy_instance ||--|| strategy_instance_runtime : "instance_id 期望态↔实际态 (1:1, push)"
     strategy_instance ||--o{ strategy_control_log : "instance_id 每次控制动作 (1:N, append)"
@@ -942,7 +956,8 @@ erDiagram
 
 | 关系 | join key | 基数 | 语义 / 为什么这么连 |
 |---|---|---|---|
-| `strategy_def` → `strategy_instance` | `strategy_key` | 1:N | 一个定义可有多实例（如同一 head 的 shadow / tiny-live / 参数变体） |
+| `strategy_def` → `strategy_instance` | `strategy_key` | 1:N | 一个头(元数据)可有多实例（如同一 head 的 shadow / tiny-live / 参数变体） |
+| `strategy_def` → `strategy_config` | `strategy_key` | 1:N | 一个头有多份参数变体。**目前隐式**：config 没有 `strategy_key` 列，"哪个头"被塞进 `params.execution_policy`（如 `low_price_yes_lottery_guarded_taker_v1`）；B3 把它提成显式外键。详见 §13.4 |
 | `strategy_instance` ↔ `strategy_instance_runtime` | `instance_id` | 1:1 | 期望态与实际态分表：控制面写前者，harness/supervisor push 后者 |
 | `strategy_instance` → `strategy_control_log` | `instance_id` | 1:N | append-only 审计；DB-first 可追溯的正本 |
 | `strategy_instance` → `strategy_config` | `config_id` | N:1 | **attribution 桥**：instance 绑定一份参数快照 `strategy_config`，让下游 plan 归因不变 |
@@ -965,7 +980,33 @@ erDiagram
 2. **期望态 / 实际态分表**：`strategy_instance`（控制面，人写）与 `strategy_instance_runtime`（运行时面，机器 push）**物理分离**。避免现在 registry 把"想让它 live"和"它其实 stale 了"塞进同一个 `lifecycle_status` 的老问题。
 3. **配置 vs 事件 vs 健康分表**：`weather_city_source_profile`（目标 cadence/阈值/fallback 策略，git 作者）、`weather_data_source_event`（append-only 事实证据）与 `weather_data_source_health`（latest 读模型）分离。同一套"期望 vs 实际"范式，让静默降级 = 目标与实际不一致 = 一行可见告警，同时保留交易复盘所需的 source event 证据。
 
-### 13.4 与现有表的关系一句话总结
+### 13.4 元数据 / config / instance 三者关系（与既有量化血缘对齐）
+
+这一节是 2026-07-09 复盘补的,核心结论:**身份/参数/城市这一层,既有量化血缘(`WEATHER_STRATEGY_QUANT_DESIGN.md`)已经建好了,平台只在上面叠"操作者控制面",不重造。**
+
+**三者各管什么(职责划分):**
+
+| | 元数据表 `strategy_def`（=manifest 头粒度继任者） | `strategy_config`（既有） | `strategy_instance`（控制面新增） |
+|---|---|---|---|
+| 粒度 | 一个头一行 | 一套参数一行 | 一个运行槽一行 |
+| 本质 | 定义 / 身份（这策略**是什么**） | **值**（内容寻址 `config_id=hash(params)`） | **实体**（有生命周期，能开/关） |
+| 答的问题 | 代码入口 / 族 / 能力 / ParamsSchema | 用**哪套参数**（pool / execution / sizing / entry） | 你 start/stop 的对象、当前指向哪份 config |
+| 变化频率 | 极少（改代码才变） | 频繁（调参=新 `config_id`） | 偶尔（开/关/换 config 指针） |
+
+**基数:** `strategy_def` **1—N** `strategy_config`（一个头多份参数）；`strategy_def` **1—N** `strategy_instance`（一个头多个部署）；`strategy_instance` **N—1** `strategy_config`（实例指向当前参数，理论上同一 config 可被 shadow+live 两个实例共用——目前实际还没出现这种情况，但设计支持）。
+
+**目前实际关系(诚实版):元数据表和 config 之间没有正式连接。**
+- `strategy_config` 只有 `config_id / name / params / created_at` 四列,**没有 `strategy_key`**,也没有指向 manifest 的任何列。
+- "哪个头"这条元数据被**反规范化进 `params.execution_policy`**(如 `regime_routed_no_taker_v1` / `low_price_yes_lottery_guarded_taker_v1`)和 `name` 字符串里,每条 config 自己带一份。
+- 文件版 `StrategyManifest`(5 个包)跟这些 config 完全没连上,粒度也对不上。
+- → **所以今天要知道"这份 config 属于哪个头",只能去解析 `execution_policy` 字符串。** ER 图里 `strategy_def → strategy_config` 标 `目前隐式*` 就是指这个。**B3 的清理项:给 config 加显式 `strategy_key`,把头名从 `execution_policy` 里提出来。**
+
+**与既有 `runs` / `universes` 的边界(复用,别重建):**
+- 换参数 → 新 `config_id`；换城市/市场 → `universes`（既有,1679 行,城市集可冻结/弃用）；换执行层 → `execution_mode` / `execution_policy`；三者组合 = 一个 `runs` 行（既有,1679 行,带 `repro_key` 可复现）。
+- **`strategy_instance` ≠ `runs`**:instance 是持久运行槽(一开好几天),run 是有始有终的执行 episode;**一个 instance 一生产出很多 run**。所以 instance 单独存在、引用 `config_id`,而不是往 `runs` 上加两列。
+- 平台真正**新增**的、既有血缘里没有的,只有:`desired_status`(操作者期望态)+ `strategy_control_log`(开关审计)。`runs`/`universes` 本轮原样不动;B4 supervisor 起来后,"启动一个 instance 的一段会话"可顺带写一条 `run` 把这层接活。
+
+### 13.5 与现有表的关系一句话总结
 
 - **新增（平台）**：`strategy_def / strategy_instance / strategy_instance_runtime / strategy_control_log / strategy_instance_snapshot`——全部落 `runtime/weather.db`。
 - **新增（数据源面）**：`weather_data_source_catalog / weather_city_source_profile / weather_strategy_source_subscription / weather_data_source_run / weather_data_source_attempt / weather_data_source_event / weather_data_source_health / weather_source_alignment_feature`——全部落 `runtime/weather.db`，从 `weather_data_feed_service_runtime/output/*` materialize。
