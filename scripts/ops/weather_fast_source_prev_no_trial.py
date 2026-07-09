@@ -221,7 +221,11 @@ def spent_market_shares(path: Path, *, target_date: str, token_id: str) -> float
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if row.get("target_date") == target_date and str(row.get("token_id") or "") == token_id and row.get("live_attempted") is True:
+        if (
+            row.get("target_date") == target_date
+            and str(row.get("token_id") or "") == token_id
+            and row.get("live_submit_status") == "submitted"
+        ):
             total += float(row.get("size") or 0.0)
     return round(total, 6)
 
@@ -362,12 +366,14 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             event_rows.append(opportunity)
         live_key = "|".join([city, target_date, str(t_minus_1), str(token.no_token_id), str(src.get("source_obs_ts_utc"))])
         if args.live and args.confirm_live and city in set(args.live_cities or []) and not live_blockers and live_key not in live_order_keys:
+            limit_price = float(args.max_no_ask)
             order_row = {
                 **opportunity,
                 "order_side": "BUY",
-                "limit_price": best_ask,
+                "limit_price": limit_price,
                 "size": floor_to_places(float(args.max_shares_per_trade), 2),
-                "submitted_notional_usd": round(float(args.max_shares_per_trade) * float(best_ask), 6),
+                "submitted_notional_usd": round(float(args.max_shares_per_trade) * limit_price, 6),
+                "limit_price_policy": "max_no_ask",
                 "live_attempted": True,
                 "live_attempt_ts_utc": iso(),
             }
