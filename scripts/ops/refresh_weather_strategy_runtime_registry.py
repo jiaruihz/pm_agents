@@ -137,26 +137,7 @@ def sample_last_json(path: Path) -> str:
         return "{}"
 
 
-@dataclass
-class StrategySpec:
-    strategy_instance: str
-    display_name: str
-    family: str
-    lifecycle_status: str
-    execution_mode: str
-    source_layer: str
-    runtime_dir: str | None = None
-    summary_file: str | None = None
-    primary_journal: str | None = None
-    live_order_file: str | None = None
-    paper_order_file: str | None = None
-    telemetry_file: str | None = None
-    start_script: str | None = None
-    tmux_session: str | None = None
-    notes: str | None = None
-    default_health: str = "unknown"
-    expected_live: bool | None = None
-    artifact_files: list[tuple[str, str]] = field(default_factory=list)
+from src.strategies.runtime.specs import StrategySpec  # noqa: E402
 
 
 def strategy_specs() -> list[StrategySpec]:

@@ -89,3 +89,8 @@ docs/analysis/**/generated/**/*.csv
 
 # Local agent state
 .claude/
+
+# Strategy runtime platform is SOURCE, not runtime artifacts (override runtime/ rule)
+!src/strategies/runtime/
+!src/strategies/runtime/**
+src/strategies/runtime/**/__pycache__/

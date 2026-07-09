@@ -1,0 +1,412 @@
+- strategy_instance: regime_routed_no_route_price_disciplined_tiny_live_v1
+  display_name: Regime-routed NO route-price tiny-live
+  family: reheat_risk.regime_routed_no
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/regime_routed_no_tiny_live_v1
+  summary_file: latest_summary.json
+  primary_journal: summary_history.jsonl
+  live_order_file: live_orders.jsonl
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: Current Mac live regime-routed NO runner. Uses route-price discipline, row-risk
+    soft sizing, shared weather_data_feed observation cache, and explicit executor
+    result telemetry; live orders may also appear in the older remote mirror during
+    migration windows.
+  default_health: unknown
+  expected_live: true
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
+  - - trade_plans
+    - trade_plans.jsonl
+  - - blocked_candidates
+    - blocked_candidates.jsonl
+  - - latest_candidates
+    - latest_candidates.json
+- strategy_instance: regime_routed_no_soft_balanced_tiny_live_v1
+  display_name: Regime-routed NO soft-balanced tiny-live
+  family: reheat_risk.regime_routed_no
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_remote_mirror
+  runtime_dir: runtime/weather_edge_v1/remote_pm_agent/regime_routed_no_tiny_live_v1
+  summary_file: latest_summary.json
+  primary_journal: summary_history.jsonl
+  live_order_file: live_orders.jsonl
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: Tiny-live probe restored after 2026-06-25 parity incident. Runner now defaults
+    to weather_data_feed observation cache, requires live feature parity, blocks duplicate
+    city/date/token exposure, and enforces actual target-date daily cap. Treat as
+    forward evidence collection, not a confirmed strategy.
+  default_health: unknown
+  expected_live: true
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
+  - - trade_plans
+    - trade_plans.jsonl
+  - - blocked_candidates
+    - blocked_candidates.jsonl
+  - - latest_candidates
+    - latest_candidates.json
+- strategy_instance: regime_routed_no_soft_balanced_shadow_v1
+  display_name: Regime-routed NO soft-balanced shadow
+  family: reheat_risk.regime_routed_no
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/regime_routed_no_shadow_v1
+  summary_file: latest_summary.json
+  primary_journal: shadow_candidates.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: Zero-notional forward shadow for the same routed expression and soft-balanced
+    sizing policy.
+  default_health: unknown
+  expected_live: null
+  artifact_files:
+  - - shadow_candidates
+    - shadow_candidates.jsonl
+- strategy_instance: tmax_distribution_edge_shadow_v1
+  display_name: Tmax distribution edge shadow
+  family: reheat_risk.tmax_distribution_edge
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/tmax_distribution_edge_shadow_v1
+  summary_file: latest_summary.json
+  primary_journal: shadow_events.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: shadow_events.jsonl
+  start_script: null
+  tmux_session: null
+  notes: Distribution-first Tmax expression selector. Estimates current/d1/d2/tail
+    bucket probabilities and records selected plus blocked zero-notional expression
+    decisions; no orders and no live sizing approval.
+  default_health: unknown
+  expected_live: null
+  artifact_files:
+  - - shadow_events
+    - shadow_events.jsonl
+  - - latest_events
+    - latest_events.json
+  - - summary_history
+    - summary_history.jsonl
+- strategy_instance: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
+  display_name: Tmax first-lock no-current-YES shadow
+  family: reheat_risk.tmax_distribution_edge
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
+  summary_file: latest_summary.json
+  primary_journal: summary_history.jsonl
+  live_order_file: null
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: null
+  start_script: scripts/ops/start_tmax_distribution_edge_first_lock_no_current_yes_shadow_v1.sh
+  tmux_session: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
+  notes: Realtime paper-only tmax candidate loop for the first-lock policy. Active
+    expressions exclude current_yes and allow current_no/d1_no/d2_no/d1_yes/d2_yes;
+    city-day first-lock blocks later duplicate/reversal entries. This is shadow evidence
+    collection, not live.
+  default_health: unknown
+  expected_live: null
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
+  - - trade_plans
+    - trade_plans.jsonl
+  - - latest_candidates
+    - latest_candidates.json
+  - - latest_blocked
+    - latest_blocked.json
+- strategy_instance: tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1
+  display_name: Tmax first-lock no-current-YES tiny-live
+  family: reheat_risk.tmax_distribution_edge
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1
+  summary_file: latest_summary.json
+  primary_journal: summary_history.jsonl
+  live_order_file: live_orders.jsonl
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: null
+  start_script: scripts/ops/start_tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1.sh
+  tmux_session: tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1
+  notes: Tiny-live tmax first-lock policy. Active expressions exclude current_yes
+    and allow current_no/d1_no/d2_no/d1_yes/d2_yes; entry uses fee-adjusted edge >=
+    0.02, ask 0.40..0.99, fixed 5 shares, first city-day lock, no trend3h-flat, and
+    fresh CLOB ask/size/drift checks before executor submission.
+  default_health: unknown
+  expected_live: true
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
+  - - trade_plans
+    - trade_plans.jsonl
+  - - live_orders
+    - live_orders.jsonl
+  - - paper_orders
+    - paper_orders.jsonl
+  - - latest_candidates
+    - latest_candidates.json
+  - - latest_blocked
+    - latest_blocked.json
+- strategy_instance: weather_runtime_monitor
+  display_name: Weather runtime monitor
+  family: data_quality.runtime_monitor
+  lifecycle_status: monitor
+  execution_mode: monitor
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/runtime_monitor
+  summary_file: latest_summary.json
+  primary_journal: alerts.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: summary_history.jsonl
+  start_script: null
+  tmux_session: null
+  notes: Read-only monitor for weather live/shadow runtime loops. Flags stale summary
+    files, stale snapshots, stale target dates, executor failures, plan-without-live-order
+    cases, empty snapshots, and long no-live-order periods.
+  default_health: unknown
+  expected_live: null
+  artifact_files:
+  - - alert_state
+    - alert_state.json
+  - - summary_history
+    - summary_history.jsonl
+- strategy_instance: theta_current_yes_fade_confirmed_tiny_live_v1
+  display_name: Current YES fade confirmed tiny-live
+  family: reheat_risk.current_yes
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_remote_mirror
+  runtime_dir: runtime/weather_edge_v1/remote_pm_agent/theta_current_yes_fade_confirmed_tiny_live_v1
+  summary_file: latest_summary.json
+  primary_journal: forward_telemetry.jsonl
+  live_order_file: runtime/weather_edge_v1/remote_pm_agent/live/theta_current_yes_fade_confirmed_tiny_live_v1_orders.jsonl
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: forward_telemetry.jsonl
+  start_script: null
+  tmux_session: null
+  notes: Active N100 tiny-live profile; split from monolithic current-YES runner.
+  default_health: unknown
+  expected_live: true
+  artifact_files: []
+- strategy_instance: theta_current_yes_peak_forming_micro_tiny_live_v1
+  display_name: Current YES peak-forming micro
+  family: reheat_risk.current_yes
+  lifecycle_status: telemetry
+  execution_mode: telemetry
+  source_layer: runtime_remote_mirror
+  runtime_dir: runtime/weather_edge_v1/remote_pm_agent/theta_current_yes_peak_forming_micro_tiny_live_v1
+  summary_file: latest_summary.json
+  primary_journal: forward_telemetry.jsonl
+  live_order_file: runtime/weather_edge_v1/remote_pm_agent/live/theta_current_yes_peak_forming_micro_tiny_live_v1_orders.jsonl
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: forward_telemetry.jsonl
+  start_script: null
+  tmux_session: null
+  notes: Current process may be telemetry/paper even if historical live orders exist;
+    use live_enabled from latest summary.
+  default_health: unknown
+  expected_live: false
+  artifact_files: []
+- strategy_instance: metar_cross_prev_no_live_v1
+  display_name: METAR cross previous NO live
+  family: reheat_risk.metar_cross
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_remote_mirror
+  runtime_dir: runtime/weather_edge_v1/remote_pm_agent/metar_cross_prev_no_shadow
+  summary_file: state.json
+  primary_journal: opportunities.jsonl
+  live_order_file: orders.jsonl
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: Live loop writes under the historical shadow-named directory.
+  default_health: unknown
+  expected_live: true
+  artifact_files: []
+- strategy_instance: fast_source_prev_no_trial_v1
+  display_name: Fast-source previous NO trial
+  family: latency_arb.fast_source_prev_no
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_local
+  runtime_dir: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial
+  summary_file: latest_summary.json
+  primary_journal: opportunities.jsonl
+  live_order_file: orders.jsonl
+  paper_order_file: null
+  telemetry_file: events.jsonl
+  start_script: null
+  tmux_session: weather_fast_source_prev_no_trial
+  notes: Tokyo tiny-live / Singapore-Helsinki shadow trial for fast-source lead into
+    the next METAR. Current version records runtime telemetry locally and uses a runner-local
+    FOK CLOB submit path; migrate live submission to weather_order_executor.py before
+    treating orders/fills/fact_trades as canonical.
+  default_health: unknown
+  expected_live: true
+  artifact_files:
+  - - latest
+    - latest.json
+  - - state
+    - state.json
+  - - events
+    - events.jsonl
+- strategy_instance: low_price_yes_lottery_tiny_live_v1
+  display_name: Low-price YES lottery tiny-live
+  family: forecast_quality.low_price_yes_lottery
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_remote_mirror
+  runtime_dir: runtime/weather_edge_v1/remote_pm_agent/low_price_yes_lottery_tiny_live_v1
+  summary_file: latest_summary.json
+  primary_journal: shadow_decisions.jsonl
+  live_order_file: runtime/weather_edge_v1/remote_pm_agent/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: User-approved $1.5/order forward probe for refined BUY_YES low-price lottery
+    selector (edge>=0.20, ask 0.05..0.20, one city-date, fresh-book guarded taker,
+    no daily cap). Treat as tiny-live evidence collection, not confirmed alpha.
+  default_health: unknown
+  expected_live: true
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
+  - - shadow_decisions
+    - shadow_decisions.jsonl
+  - - blocked_candidates
+    - blocked_candidates.jsonl
+  - - latest_candidates
+    - latest_candidates.json
+  - - trade_plans
+    - trade_plans.jsonl
+- strategy_instance: theta_higher_no_carry_shadow_v1
+  display_name: Higher NO carry shadow
+  family: reheat_risk.higher_no_carry
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_remote_mirror
+  runtime_dir: runtime/weather_edge_v1/remote_pm_agent/theta_higher_no_carry_shadow_v1
+  summary_file: latest_summary.json
+  primary_journal: shadow_candidates.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: N100 loop may be fresher than the local mirror until sync completes.
+  default_health: unknown
+  expected_live: null
+  artifact_files: []
+- strategy_instance: range_rv_shadow_v0
+  display_name: Forecast-bounded Range RV shadow
+  family: range_rv
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_remote_mirror
+  runtime_dir: runtime/weather_edge_v1/remote_pm_agent/range_rv_shadow_v0
+  summary_file: latest_summary.json
+  primary_journal: shadow_journal.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: null
+  default_health: unknown
+  expected_live: null
+  artifact_files: []
+- strategy_instance: station_basis_shadow_v1
+  display_name: Station-basis shadow v1
+  family: station_basis
+  lifecycle_status: blocked
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/station_basis_shadow_v1
+  summary_file: live_prep_gate.json
+  primary_journal: entries.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: Treat as blocked/stale until continuity and forward entries recover.
+  default_health: unknown
+  expected_live: null
+  artifact_files: []
+- strategy_instance: low_price_yes_reheat_reversal_shadow_v1
+  display_name: Low-price YES reheat reversal shadow
+  family: reheat_risk.low_price_yes
+  lifecycle_status: blocked
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/low_price_yes_reheat_reversal_v1
+  summary_file: shadow_summary.json
+  primary_journal: shadow_candidates.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: Runner exists locally; forward shadow blocked by stale feature layer / zero
+    candidates.
+  default_health: unknown
+  expected_live: null
+  artifact_files: []
+- strategy_instance: source_orderbook_timing_monitor
+  display_name: Source/orderbook timing monitor
+  family: data_quality
+  lifecycle_status: monitor
+  execution_mode: monitor
+  source_layer: runtime_remote_mirror
+  runtime_dir: runtime/weather_edge_v1/remote_pm_agent/source_orderbook_timing
+  summary_file: state.json
+  primary_journal: sources.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: Data/latency monitor, not a trading strategy.
+  default_health: unknown
+  expected_live: null
+  artifact_files: []
+- strategy_instance: all_yes_underround_shadow_v0
+  display_name: All-YES underround shadow
+  family: market_structure.all_yes_underround
+  lifecycle_status: stale
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/all_yes_underround_shadow_v0
+  summary_file: null
+  primary_journal: shadow_journal.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: null
+  default_health: unknown
+  expected_live: null
+  artifact_files: []
