@@ -94,6 +94,12 @@ def to_float(value: Any, default: float = math.nan) -> float:
         return default
 
 
+def taker_fee(price: float, fee_rate: float) -> float:
+    if not math.isfinite(price):
+        return math.nan
+    return float(fee_rate) * price * (1.0 - price)
+
+
 def json_ready(value: Any) -> Any:
     if isinstance(value, float):
         return value if math.isfinite(value) else None
@@ -719,7 +725,9 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
                 continue
             ask, ask_size, token_id, market_id, bracket = ask_and_token(row, expression)
             p_win = win_prob(row, expression)
-            edge = p_win - ask
+            gross_edge = p_win - ask
+            fee = taker_fee(ask, args.fee_rate)
+            fee_adjusted_edge = gross_edge - fee
             question = expression_question(row, expression)
             event_slug = expression_event_slug(row, expression)
             base = {
@@ -733,8 +741,13 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
                 "ask": ask,
                 "ask_size": ask_size,
                 "p_win": p_win,
-                "model_edge": edge,
-                "model_roi": edge / ask if ask > 0 else None,
+                "gross_edge": gross_edge,
+                "taker_fee": fee,
+                "fee_adjusted_edge": fee_adjusted_edge,
+                "model_edge": fee_adjusted_edge,
+                "gross_roi_model": gross_edge / ask if ask > 0 else None,
+                "fee_adjusted_roi_model": fee_adjusted_edge / ask if ask > 0 else None,
+                "model_roi": fee_adjusted_edge / ask if ask > 0 else None,
                 "token_id": token_id,
                 "market_id": market_id,
                 "bracket": bracket,
@@ -746,12 +759,12 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
                 reason = "below_ask_floor"
             elif ask > args.ask_ceiling:
                 reason = "above_ask_ceiling"
-            elif edge < args.edge_threshold:
+            elif fee_adjusted_edge < args.edge_threshold:
                 reason = "below_edge_threshold"
             if reason:
                 blocked.append({**base, "decision_status": "blocked", "block_reason": reason})
                 continue
-            if best is None or (edge, base["model_roi"]) > (best["model_edge"], best["model_roi"]):
+            if best is None or (fee_adjusted_edge, base["model_roi"]) > (best["fee_adjusted_edge"], best["model_roi"]):
                 best = base
         if best is None:
             continue
@@ -907,7 +920,7 @@ def fresh_quote(candidate: dict[str, Any], args: argparse.Namespace) -> dict[str
     best_bid = bids[0][0] if bids else 0.0
     p_win = float(candidate["p_win"])
     snapshot_ask = float(candidate["ask"])
-    fee = args.fee_rate * fresh_ask * (1.0 - fresh_ask)
+    fee = taker_fee(fresh_ask, args.fee_rate)
     fee_adjusted_edge = p_win - fresh_ask - fee
     if fresh_size + 1e-9 < args.fixed_shares:
         return {
@@ -994,6 +1007,7 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "quote_status": "accepted",
         "quote_reason": "tmax_distribution_edge_fresh_book_guarded_taker",
         "quote_edge": round(float(candidate["p_win"]) - price, 6),
+        "quote_fee_adjusted_edge": round(float(quote.get("fee_adjusted_edge") or 0.0), 6),
         "required_quote_edge": round(float(args.edge_threshold), 6),
         "model_token_probability": round(float(candidate["p_win"]), 6),
         "tmax_probability_bucket_schema": candidate.get("tmax_probability_bucket_schema"),
@@ -1031,6 +1045,9 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "size": size,
         "notional": round(size * price, 6),
         "edge": round(float(candidate["model_edge"]), 6),
+        "gross_edge": round(float(candidate.get("gross_edge") or 0.0), 6),
+        "fee_adjusted_edge": round(float(candidate.get("fee_adjusted_edge") or candidate["model_edge"]), 6),
+        "candidate_taker_fee": round(float(candidate.get("taker_fee") or 0.0), 6),
         "min_edge": round(float(args.edge_threshold), 6),
         "shadow_decision": STRATEGY_ID,
         "shadow_reason": f"{args.policy_id}_realtime_materialized_fresh_book_checked",
@@ -1210,9 +1227,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
+    global STRATEGY_INSTANCE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["run", "loop"], nargs="?", default="run")
     parser.add_argument("--runtime-dir", default=str(RUNTIME_DEFAULT))
+    parser.add_argument("--strategy-instance", default=STRATEGY_INSTANCE)
     parser.add_argument("--snapshot", default="")
     parser.add_argument("--snapshot-dir", default="")
     parser.add_argument("--observation-cache", default="")
@@ -1241,6 +1260,7 @@ def parse_args() -> argparse.Namespace:
     if args.live and not args.confirm_live:
         raise SystemExit("--live requires --confirm-live")
     args.active_expressions = parse_active_expressions(args.active_expression)
+    STRATEGY_INSTANCE = safe_str(args.strategy_instance) or STRATEGY_INSTANCE
     return args
 
 

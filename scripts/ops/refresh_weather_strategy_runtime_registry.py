@@ -276,6 +276,36 @@ def strategy_specs() -> list[StrategySpec]:
             ),
         ),
         StrategySpec(
+            strategy_instance="tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1",
+            display_name="Tmax first-lock no-current-YES tiny-live",
+            family="reheat_risk.tmax_distribution_edge",
+            lifecycle_status="live",
+            execution_mode="live",
+            source_layer="runtime_local",
+            runtime_dir="runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1",
+            summary_file="latest_summary.json",
+            primary_journal="summary_history.jsonl",
+            live_order_file="live_orders.jsonl",
+            paper_order_file="paper_orders.jsonl",
+            start_script="scripts/ops/start_tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1.sh",
+            tmux_session="tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1",
+            expected_live=True,
+            artifact_files=[
+                ("summary_history", "summary_history.jsonl"),
+                ("trade_plans", "trade_plans.jsonl"),
+                ("live_orders", "live_orders.jsonl"),
+                ("paper_orders", "paper_orders.jsonl"),
+                ("latest_candidates", "latest_candidates.json"),
+                ("latest_blocked", "latest_blocked.json"),
+            ],
+            notes=(
+                "Tiny-live tmax first-lock policy. Active expressions exclude current_yes and allow "
+                "current_no/d1_no/d2_no/d1_yes/d2_yes; entry uses fee-adjusted edge >= 0.02, "
+                "ask 0.40..0.99, fixed 5 shares, first city-day lock, no trend3h-flat, and fresh "
+                "CLOB ask/size/drift checks before executor submission."
+            ),
+        ),
+        StrategySpec(
             strategy_instance="weather_runtime_monitor",
             display_name="Weather runtime monitor",
             family="data_quality.runtime_monitor",

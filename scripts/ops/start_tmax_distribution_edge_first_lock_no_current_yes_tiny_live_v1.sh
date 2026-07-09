@@ -2,21 +2,28 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-RUNTIME_DIR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1}"
-LOG_FILE="$RUNTIME_DIR/first_lock_no_current_yes_shadow_loop.log"
+RUNTIME_DIR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1}"
+LOG_FILE="$RUNTIME_DIR/first_lock_no_current_yes_tiny_live_loop.log"
 PY="$PROJECT_DIR/.venv/bin/python"
-SESSION="${TMAX_FIRST_LOCK_NO_CURRENT_YES_SESSION:-tmax_distribution_edge_first_lock_no_current_yes_shadow_v1}"
+SESSION="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_SESSION:-tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1}"
 
-INTERVAL_SEC="${TMAX_FIRST_LOCK_NO_CURRENT_YES_INTERVAL_SEC:-900}"
-ASK_FLOOR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_ASK_FLOOR:-0.40}"
-ASK_CEILING="${TMAX_FIRST_LOCK_NO_CURRENT_YES_ASK_CEILING:-0.99}"
-EDGE_THRESHOLD="${TMAX_FIRST_LOCK_NO_CURRENT_YES_EDGE_THRESHOLD:-0.02}"
-FIXED_SHARES="${TMAX_FIRST_LOCK_NO_CURRENT_YES_FIXED_SHARES:-5}"
-MAX_ORDERS="${TMAX_FIRST_LOCK_NO_CURRENT_YES_MAX_ORDERS:-1}"
-MAX_SNAPSHOT_AGE_MIN="${TMAX_FIRST_LOCK_NO_CURRENT_YES_MAX_SNAPSHOT_AGE_MIN:-60}"
-MAX_FRESH_ASK_DRIFT="${TMAX_FIRST_LOCK_NO_CURRENT_YES_MAX_FRESH_ASK_DRIFT:-0.02}"
-FEE_RATE="${TMAX_FIRST_LOCK_NO_CURRENT_YES_FEE_RATE:-0.05}"
-CLOB_RETRIES="${TMAX_FIRST_LOCK_NO_CURRENT_YES_CLOB_RETRIES:-2}"
+INTERVAL_SEC="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_INTERVAL_SEC:-900}"
+ASK_FLOOR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_ASK_FLOOR:-0.40}"
+ASK_CEILING="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_ASK_CEILING:-0.99}"
+EDGE_THRESHOLD="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_EDGE_THRESHOLD:-0.02}"
+FIXED_SHARES="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_FIXED_SHARES:-5}"
+MAX_ORDERS="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_MAX_ORDERS:-1}"
+MAX_SNAPSHOT_AGE_MIN="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_MAX_SNAPSHOT_AGE_MIN:-60}"
+MAX_FRESH_ASK_DRIFT="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_MAX_FRESH_ASK_DRIFT:-0.02}"
+FEE_RATE="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_FEE_RATE:-0.05}"
+CLOB_RETRIES="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE_CLOB_RETRIES:-2}"
+LIVE="${TMAX_FIRST_LOCK_NO_CURRENT_YES_LIVE:-1}"
+CONFIRM_LIVE="${TMAX_FIRST_LOCK_NO_CURRENT_YES_CONFIRM_LIVE:-0}"
+
+if [[ "$LIVE" == "1" && "$CONFIRM_LIVE" != "1" ]]; then
+  echo "refusing live mode: set TMAX_FIRST_LOCK_NO_CURRENT_YES_CONFIRM_LIVE=1 explicitly" >&2
+  exit 2
+fi
 
 mkdir -p "$RUNTIME_DIR"
 if [[ ! -x "$PY" ]]; then
@@ -25,7 +32,7 @@ fi
 
 runner_cmd=(
   "$PY" "-u" "scripts/ops/tmax_distribution_edge_live_candidate_v1.py" "loop"
-  "--strategy-instance" "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1"
+  "--strategy-instance" "tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1"
   "--runtime-dir" "$RUNTIME_DIR"
   "--interval-seconds" "$INTERVAL_SEC"
   "--policy-id" "first_lock_no_current_yes"
@@ -43,6 +50,10 @@ runner_cmd=(
   "--exclude-trend3h-flat"
   "--execute"
 )
+
+if [[ "$LIVE" == "1" ]]; then
+  runner_cmd+=("--live" "--confirm-live")
+fi
 
 runner_cmd_q=""
 for part in "${runner_cmd[@]}"; do
