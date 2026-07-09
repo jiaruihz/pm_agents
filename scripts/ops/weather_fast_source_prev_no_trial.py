@@ -425,7 +425,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--shadow-cities", nargs="*", default=["Tokyo", "Singapore", "Helsinki"])
     parser.add_argument("--max-shares-per-trade", type=float, default=5.0)
     parser.add_argument("--max-shares-per-city-day", type=float, default=5.0)
-    parser.add_argument("--max-no-ask", type=float, default=0.80)
+    parser.add_argument("--max-no-ask", type=float, default=0.92)
     parser.add_argument("--max-source-age-min", type=float, default=15.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
     parser.add_argument("--market-proxy", default=market_proxy_url(None))
