@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -340,6 +341,32 @@ def strategy_specs() -> list[StrategySpec]:
             live_order_file="orders.jsonl",
             expected_live=True,
             notes="Live loop writes under the historical shadow-named directory.",
+        ),
+        StrategySpec(
+            strategy_instance="fast_source_prev_no_trial_v1",
+            display_name="Fast-source previous NO trial",
+            family="latency_arb.fast_source_prev_no",
+            lifecycle_status="live",
+            execution_mode="live",
+            source_layer="runtime_local",
+            runtime_dir="/Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial",
+            summary_file="latest_summary.json",
+            primary_journal="opportunities.jsonl",
+            live_order_file="orders.jsonl",
+            telemetry_file="events.jsonl",
+            tmux_session="weather_fast_source_prev_no_trial",
+            expected_live=True,
+            artifact_files=[
+                ("latest", "latest.json"),
+                ("state", "state.json"),
+                ("events", "events.jsonl"),
+            ],
+            notes=(
+                "Tokyo tiny-live / Singapore-Helsinki shadow trial for fast-source lead into the next "
+                "METAR. Current version records runtime telemetry locally and uses a runner-local FOK "
+                "CLOB submit path; migrate live submission to weather_order_executor.py before treating "
+                "orders/fills/fact_trades as canonical."
+            ),
         ),
         StrategySpec(
             strategy_instance="low_price_yes_lottery_tiny_live_v1",
@@ -675,16 +702,23 @@ def summary_float(summary: dict[str, Any], caps: dict[str, Any], keys: list[str]
 def active_tmux_sessions() -> set[str]:
     if not shutil.which("tmux"):
         return set()
-    proc = subprocess.run(
-        ["tmux", "list-sessions", "-F", "#{session_name}"],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    if proc.returncode != 0:
-        return set()
-    return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+    sessions: set[str] = set()
+    sockets = [""] + [s.strip() for s in os.environ.get("WEATHER_RUNTIME_TMUX_SOCKETS", "weather-jrs").split(",") if s.strip()]
+    for socket in sockets:
+        cmd = ["tmux"]
+        if socket:
+            cmd.extend(["-L", socket])
+        cmd.extend(["list-sessions", "-F", "#{session_name}"])
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if proc.returncode == 0:
+            sessions.update(line.strip() for line in proc.stdout.splitlines() if line.strip())
+    return sessions
 
 
 def refresh(conn: sqlite3.Connection) -> dict[str, Any]:

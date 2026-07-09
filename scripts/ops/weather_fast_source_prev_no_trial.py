@@ -398,14 +398,25 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "status": "ok",
         "schema_version": "fast_source_prev_no_trial_latest_v1",
         "generated_at_utc": iso(),
+        "strategy_id": "fast_source_prev_no_trial_v1",
+        "strategy_instance": "fast_source_prev_no_trial_v1",
         "target_date": target_date,
         "sources": sorted(allowed_sources),
         "live_cities": args.live_cities or [],
         "shadow_cities": args.shadow_cities or [],
+        "live_enabled": bool(args.live and args.confirm_live and args.live_cities),
+        "caps": {
+            "max_shares_per_trade": float(args.max_shares_per_trade),
+            "max_shares_per_market": float(args.max_shares_per_market),
+            "max_no_ask": float(args.max_no_ask),
+            "max_source_age_min": float(args.max_source_age_min),
+        },
         "source_cities": sorted(source_rows),
         "metar_cities": sorted(metar_rows),
         "events": len(event_rows),
         "opportunities": len(opportunity_rows),
+        "candidate_rows": len(opportunity_rows),
+        "execution_eligible": len(order_rows),
         "live_orders_attempted": len(order_rows),
         "live_orders_submitted": sum(1 for row in order_rows if row.get("live_submit_status") == "submitted"),
         "paper_snapshot_path": str(paper_path) if paper_path else "",
@@ -413,6 +424,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "latest_opportunities": opportunity_rows[-20:],
     }
     write_json(out_dir / "latest.json", latest)
+    write_json(out_dir / "latest_summary.json", latest)
     return latest
 
 
