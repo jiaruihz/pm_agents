@@ -72,6 +72,7 @@ DIST_BRANCH_REPORT = "docs/analysis/2026-07/2026-07-04-low-price-yes-dist-branch
 HEADA_REFINEMENT_REPORT = "docs/analysis/2026-07/2026-07-04-low-price-yes-heada-refinement-v1.md"
 SIZING_POLICY_CHOICES = (
     "fixed_cash_order_notional",
+    "fixed_5_shares",
     "fixed_8_shares",
     "price_tier_6_8_10_shares",
     "score_tier_0p8_1p2_1p5_shares",
@@ -1095,6 +1096,8 @@ def shares_for_sizing_policy(
             limit_price=price,
             min_shares=min_shares,
         )
+    if policy == "fixed_5_shares":
+        return shares_for_fixed_count(shares=5.0, min_shares=min_shares)
     if policy == "fixed_8_shares":
         return shares_for_fixed_count(shares=8.0, min_shares=min_shares)
     if policy == "price_tier_6_8_10_shares":
@@ -2295,7 +2298,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-ask", type=float, default=0.05)
     parser.add_argument("--max-ask", type=float, default=0.20)
     parser.add_argument("--min-edge", type=float, default=0.20)
-    parser.add_argument("--max-taker-cushion", type=float, default=0.03)
+    parser.add_argument("--max-taker-cushion", type=float, default=0.01)
     parser.add_argument("--min-fee-adjusted-edge", type=float, default=0.15)
     parser.add_argument("--order-notional-usd", type=float, default=0.8)
     parser.add_argument("--sizing-policy", choices=SIZING_POLICY_CHOICES, default="fixed_cash_order_notional")
