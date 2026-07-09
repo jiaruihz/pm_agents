@@ -1,6 +1,7 @@
 import json
 import sqlite3
 
+import weather_dashboard.legacy_migration.strategy_runtime_orders as strategy_runtime_orders
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from weather_dashboard.db.connection import apply_pragmas
 from weather_dashboard.legacy_migration.strategy_runtime_orders import (
@@ -144,6 +145,110 @@ def test_migrate_mac_live_sell_yes_exit_order(tmp_path):
             "plan_order_side": "SELL_YES",
             "order_side": "SELL_YES",
             "cost_usd": 2.5,
+        }
+    finally:
+        conn.close()
+
+
+def test_snapshot_lookup_skips_rows_with_complete_market_lineage(monkeypatch):
+    def fail_snapshot_scan(_target_date):
+        raise AssertionError("snapshot scan should not run")
+
+    monkeypatch.setattr(strategy_runtime_orders, "_snapshot_files_for_date", fail_snapshot_scan)
+    lookup = strategy_runtime_orders._build_snapshot_lookup(
+        [
+            {
+                "target_date": "2026-07-09",
+                "condition_id": "0xcondition",
+                "token_id": "token-no",
+                "question": "Will the highest temperature in Helsinki be 17°C on July 9?",
+                "t_minus_1_no_bracket_c": 17,
+            }
+        ]
+    )
+    assert lookup == {}
+
+
+def test_migrate_fast_source_prev_no_matched_fok_order_creates_fill(tmp_path):
+    order_path = tmp_path / "output" / "fast_source_prev_no_trial" / "orders.jsonl"
+    _write_jsonl(
+        order_path,
+        [
+            {
+                "schema_version": "fast_source_prev_no_trial_v1",
+                "strategy_id": "fast_source_prev_no_trial_v1",
+                "strategy_instance": "fast_source_prev_no_trial_v1",
+                "city": "Helsinki",
+                "target_date": "2026-07-09",
+                "condition_id": "0xb1b1e78205c2ea08a92cd1248d68f3ae55ba06d9e827729454987f1c0b70b47d",
+                "market_id": "2826049",
+                "token_id": "98617391282593622490977003288012573295810667097836660592616146148184755841068",
+                "question": "Will the highest temperature in Helsinki be 17°C on July 9?",
+                "event_key": "Helsinki|2026-07-09|fmi|2026-07-09T13:40:00+00:00|18|17|17",
+                "order_side": "BUY",
+                "size": 5.0,
+                "best_ask": 0.82,
+                "ask_size": 8.76,
+                "limit_price": 0.92,
+                "submitted_notional_usd": 4.6,
+                "live_submit_status": "submitted",
+                "order_id": "0x847bf2533bd18fdf08a2ff7771be59068b7d5eb6a33d9ffe21d52e374ba7fe17",
+                "live_attempt_ts_utc": "2026-07-09T13:46:08.750690+00:00",
+                "ts_utc": "2026-07-09T13:46:07.986599+00:00",
+                "t_minus_1_no_bracket_c": 17,
+                "source": "fmi",
+                "source_obs_ts_utc": "2026-07-09T13:40:00+00:00",
+                "source_detect_ts_utc": "2026-07-09T13:45:48.414916+00:00",
+                "source_temp_c": 17.5,
+                "source_round_c": 18,
+                "latest_metar_report_ts_utc": "2026-07-09T13:20:00+00:00",
+                "latest_metar_temp_c": 16.0,
+                "metar_running_max_round_c": 17,
+                "exchange_response": {
+                    "place": {
+                        "status": "matched",
+                        "success": True,
+                        "orderID": "0x847bf2533bd18fdf08a2ff7771be59068b7d5eb6a33d9ffe21d52e374ba7fe17",
+                        "makingAmount": "4.599999",
+                        "takingAmount": "5.609755",
+                    }
+                },
+            }
+        ],
+    )
+
+    conn = _conn()
+    try:
+        report = migrate_strategy_runtime_orders(conn, order_path=order_path)
+        assert report.skipped_rows == 0
+        assert report.orders == 1
+        assert report.fills == 1
+
+        row = conn.execute(
+            """
+            SELECT s.city, s.bracket, s.unit, s.signal_side,
+                   o.venue, o.order_side, o.status, o.clob_status,
+                   ROUND(f.filled_shares, 6) AS filled_shares,
+                   ROUND(f.filled_price, 6) AS filled_price,
+                   f.status AS fill_status
+            FROM fills f
+            JOIN orders o ON o.execution_id = f.execution_id
+            JOIN plans p ON p.plan_id = o.plan_id
+            JOIN signals s ON s.signal_id = p.signal_id
+            """
+        ).fetchone()
+        assert dict(row) == {
+            "city": "Helsinki",
+            "bracket": "17",
+            "unit": "C",
+            "signal_side": "NO",
+            "venue": "polymarket_clob",
+            "order_side": "BUY_NO",
+            "status": "submitted",
+            "clob_status": "matched",
+            "filled_shares": 5.609755,
+            "filled_price": 0.82,
+            "fill_status": "filled",
         }
     finally:
         conn.close()

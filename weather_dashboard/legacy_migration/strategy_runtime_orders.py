@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import urllib.error
 import urllib.request
@@ -11,6 +12,7 @@ from typing import Any, Iterable
 
 from weather_dashboard.contract import CanonicalValidationError
 from weather_dashboard.ingest.canonical import (
+    ingest_canonical_fills,
     ingest_canonical_orders,
     ingest_canonical_plans,
     ingest_canonical_signals,
@@ -19,6 +21,7 @@ from weather_dashboard.ingest.canonical import (
     insert_strategy_config,
     insert_universe,
 )
+from src.strategies.weather_edge_v1.ids import make_execution_id, make_fill_id
 from weather_dashboard.legacy_migration.live_cycle import (
     CITY_ICAO,
     _canonical_order,
@@ -55,6 +58,7 @@ class StrategyRuntimeOrderMigrationReport:
     signals: int = 0
     plans: int = 0
     orders: int = 0
+    fills: int = 0
     skipped_rows: int = 0
     skipped_reasons: dict[str, int] = field(default_factory=dict)
 
@@ -72,6 +76,7 @@ class StrategyRuntimeOrderMigrationReport:
                 "signals": self.signals,
                 "plans": self.plans,
                 "orders": self.orders,
+                "fills": self.fills,
             },
             "skipped_rows": self.skipped_rows,
             "skipped_reasons": self.skipped_reasons,
@@ -97,6 +102,8 @@ def _order_path_shape(order_path: Path) -> tuple[str, str]:
         return order_path.parent.name, "live"
     if order_path.name == "paper_orders.jsonl":
         return order_path.parent.name, "paper"
+    if order_path.name == "orders.jsonl":
+        return order_path.parent.name, "live"
     if order_path.parent.name == "live":
         strategy_instance = _mac_live_strategy_from_filename(order_path)
         if strategy_instance:
@@ -154,6 +161,15 @@ def _row_token_ids(row: dict[str, Any]) -> set[str]:
     return out
 
 
+def _needs_snapshot_lookup(row: dict[str, Any]) -> bool:
+    if not str(row.get("token_id") or "").strip():
+        return False
+    has_condition = bool(str(row.get("condition_id") or "").strip())
+    has_question = bool(str(row.get("question") or "").strip())
+    has_bracket = bool(str(row.get("bracket") or row.get("t_minus_1_no_bracket_c") or "").strip())
+    return not (has_condition and has_question and has_bracket)
+
+
 def _fetch_gamma_market(market_id: str) -> dict[str, Any] | None:
     market_id = str(market_id or "").strip()
     if not market_id:
@@ -204,6 +220,8 @@ def _build_snapshot_lookup(rows: list[dict[str, Any]]) -> dict[tuple[str, str], 
     """
     wanted: dict[str, list[tuple[str, datetime | None]]] = {}
     for row in rows:
+        if not _needs_snapshot_lookup(row):
+            continue
         target_date = str(row.get("target_date") or "").strip()
         token_id = str(row.get("token_id") or "").strip()
         if target_date and token_id:
@@ -263,6 +281,51 @@ def _order_side_from_runtime(raw: dict[str, Any]) -> str:
     return "BUY_NO" if _side_from_runtime(raw) == "NO" else "BUY_YES"
 
 
+def _stable_attempt_key(raw: dict[str, Any]) -> str:
+    for key in ("order_id", "live_attempt_ts_utc", "event_key", "source_obs_ts_utc", "ts_utc"):
+        value = str(raw.get(key) or "").strip()
+        if value:
+            return value
+    return hashlib.sha256(json.dumps(raw, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _runtime_order_status(raw: dict[str, Any]) -> str:
+    submit_status = str(raw.get("live_submit_status") or "").strip()
+    if submit_status == "submit_failed":
+        return "failed"
+    if submit_status == "submitted":
+        return "submitted"
+    return str(raw.get("order_status") or raw.get("status") or "").strip() or "submitted"
+
+
+def _runtime_fill_from_order(raw: dict[str, Any], order: dict[str, Any]) -> dict[str, Any] | None:
+    response = raw.get("exchange_response")
+    if not isinstance(response, dict):
+        return None
+    place = response.get("place")
+    if not isinstance(place, dict):
+        return None
+    if place.get("status") != "matched" and place.get("success") is not True:
+        return None
+    try:
+        cost = float(place.get("makingAmount") or 0.0)
+        shares = float(place.get("takingAmount") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if cost <= 0 or shares <= 0:
+        return None
+    return {
+        "fill_id": make_fill_id(execution_id=order["execution_id"]),
+        "execution_id": order["execution_id"],
+        "order_id": order["order_id"],
+        "filled_shares": shares,
+        "filled_price": cost / shares,
+        "fees_usd": 0.0,
+        "status": "filled",
+        "filled_at_utc": raw.get("live_attempt_ts_utc") or raw.get("created_at_utc") or raw.get("ts_utc"),
+    }
+
+
 def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) -> dict[str, Any]:
     row = dict(raw)
     snap = snapshot or {}
@@ -292,14 +355,22 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
         if not row.get(key) and snap.get(key) is not None:
             row[key] = snap.get(key)
 
+    row["created_at_utc"] = row.get("created_at_utc") or row.get("live_attempt_ts_utc") or row.get("ts_utc")
     row["snapshot_ts_utc"] = row.get("snapshot_ts_utc") or snap.get("snapshot_ts_utc") or snap.get("ts_utc") or row.get("created_at_utc")
+    row["venue"] = row.get("venue") or "polymarket_clob"
+    row["status"] = _runtime_order_status(row)
+    row["bracket"] = row.get("bracket") or row.get("t_minus_1_no_bracket_c")
     row["city_pool"] = snap.get("city_pool") if snap.get("city_pool") in {"t1_trading", "t2_research"} else "t1_trading"
     row["icao"] = row.get("icao") or snap.get("icao") or CITY_ICAO.get(str(row.get("city") or ""), "")
-    row["unit"] = row.get("unit") or snap.get("unit") or "F"
+    row["unit"] = row.get("unit") or snap.get("unit") or "C"
     row["signal_side"] = _side_from_runtime(row)
     row["order_side"] = _order_side_from_runtime(row)
     row["model_p_yes"] = row.get("model_p_yes") or row.get("model_p_yes_used") or row.get("model_p_yes_raw") or snap.get("model_prob") or 0.0
-    row["market_price"] = row.get("market_price") or row.get("posted_price") or row.get("limit_price") or snap.get("entry_price")
+    row["market_price"] = row.get("market_price") or row.get("best_ask") or row.get("posted_price") or row.get("limit_price") or snap.get("entry_price")
+    row["posted_price"] = row.get("posted_price") or row.get("limit_price") or row.get("best_ask")
+    row["shares"] = row.get("shares") or row.get("size") or row.get("planned_shares")
+    row["posted_notional"] = row.get("posted_notional") or row.get("submitted_notional_usd") or row.get("planned_notional_usd")
+    row["notional"] = row.get("notional") or row.get("posted_notional")
     row["edge"] = row.get("edge") or snap.get("edge") or 0.0
     row["forecast_source"] = row.get("forecast_source") or "open_meteo_live_gfs"
     if not row.get("model_version"):
@@ -311,6 +382,7 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
         else:
             row["model_version"] = str(row.get("forecast_model_tail") or snap.get("forecast_model_tail") or "gfs")
     row["source_run_id"] = row.get("source_run_id") or row.get("strategy_instance") or row.get("strategy_id") or row.get("record_type")
+    row["execution_policy"] = row.get("execution_policy") or "fast_source_prev_no_fok"
     if not row.get("condition_id"):
         row["condition_id"] = snap.get("condition_id") or ""
     _enrich_from_gamma_market(row)
@@ -343,18 +415,29 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
     signals = []
     plans = []
     orders = []
+    fills = []
 
     for raw in enriched:
         try:
             signal = _canonical_signal(raw, producer_system=producer_system, cycle_id=run_id)
             plan = _canonical_plan(raw, run_id=run_id, config_id=config_id, signal_id=signal["signal_id"])
+            if not str(raw.get("execution_id") or "").strip():
+                raw["execution_id"] = make_execution_id(
+                    run_id=run_id,
+                    plan_id=plan["plan_id"],
+                    venue=raw.get("venue") or "polymarket_clob",
+                    attempt_index=_stable_attempt_key(raw),
+                )
             order = _canonical_order(raw, run_id=run_id, plan_id=plan["plan_id"])
+            fill = _runtime_fill_from_order(raw, order)
         except (ValueError, CanonicalValidationError) as exc:
             report.skip(f"runtime_order:{exc}")
             continue
         signals.append(signal)
         plans.append(plan)
         orders.append(order)
+        if fill is not None:
+            fills.append(fill)
 
     cities = sorted({row["city"] for row in signals})
     models = sorted({row["model_version"] for row in signals})
@@ -390,6 +473,7 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
     report.signals = ingest_canonical_signals(conn, signals, str(order_path))
     report.plans = ingest_canonical_plans(conn, plans, str(order_path))
     report.orders = ingest_canonical_orders(conn, orders, str(order_path))
+    report.fills = ingest_canonical_fills(conn, fills, str(order_path))
     _insert_artifact(conn, run_id=run_id, kind=order_path.name, path=order_path, row_count=len(raw_orders))
     return report
 

@@ -31,7 +31,8 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db_canonical(args.db_path)
-    paths = iter_strategy_order_paths(args.root or DEFAULT_ROOTS)
+    roots = args.root if args.root is not None else ([] if args.order_file else DEFAULT_ROOTS)
+    paths = iter_strategy_order_paths(roots)
     if args.order_file:
         seen = {str(path) for path in paths}
         for raw_path in args.order_file:
