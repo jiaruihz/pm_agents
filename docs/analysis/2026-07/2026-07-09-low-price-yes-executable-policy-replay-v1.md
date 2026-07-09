@@ -3,10 +3,13 @@
 Status: snapshot
 Date: 2026-07-09
 Strategy family: `forecast_tail_low_price_yes` / HeadA
+Superseded by: [2026-07-09-low-price-yes-cushion-long-window-v1.md](2026-07-09-low-price-yes-cushion-long-window-v1.md)
 
 ## 结论
 
 `max_taker_cushion=0.01` 在 7/1-7/7 的真实 runner journal 上过紧；把它放到 `0.05` 在 fresh-book 可重放分母里没有拆坏现有链路，并且会吃到 Tel Aviv 7/06 与 Shanghai 7/07 这类 1c cushion 卡掉的 winner。2026-07-09 已把 runner/default launcher/Mac stack 默认值统一改为 `0.05`。
+
+2026-07-09 后续长窗复查发现 `0.05` 有后验选择风险，当前 live 默认已降到 `0.03`；本报告只保留 7/1-7/7 runner-journal 同链路证据，不再作为当前配置依据。
 
 这不是新的 alpha 证明，只是执行配置 A/B：分母只有 runner 实际 fetch 到 fresh book 的状态行；`dist<=0` 分支由于 live runner 在 book fetch 前就 block，不能用同一链路反事实成交，仍只能 shadow 采集。
 

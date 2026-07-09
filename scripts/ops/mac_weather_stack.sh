@@ -169,7 +169,7 @@ EOF
     <string>--min-edge</string>
     <string>0.20</string>
     <string>--max-taker-cushion</string>
-    <string>0.05</string>
+    <string>0.03</string>
     <string>--min-fee-adjusted-edge</string>
     <string>0.15</string>
     <string>--max-decision-snapshot-age-hours</string>
