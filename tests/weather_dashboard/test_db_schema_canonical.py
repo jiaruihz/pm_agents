@@ -38,6 +38,8 @@ def test_canonical_tables_exist(tmp_db_canonical):
         "fills",
         "settlements",
         "settlement_outcomes",
+        "weather_observation_events",
+        "weather_intraday_state_rows",
         "run_artifacts",
         "run_alerts",
         "ingestion_log",
@@ -52,8 +54,8 @@ def test_canonical_tables_exist(tmp_db_canonical):
 
 def test_canonical_schema_version_written(tmp_db_canonical):
     row = tmp_db_canonical.execute("SELECT version, description FROM schema_version").fetchone()
-    assert row["version"] == 4
-    assert "strategy runtime registry" in row["description"]
+    assert row["version"] == 7
+    assert "control plane" in row["description"]
 
 
 def test_canonical_schema_has_no_legacy_field_names(tmp_db_canonical):
@@ -305,6 +307,6 @@ def test_init_db_canonical_creates_file(tmp_path):
     conn = get_conn(str(db_path))
     try:
         row = conn.execute("SELECT version FROM schema_version").fetchone()
-        assert row["version"] == 4
+        assert row["version"] == 7
     finally:
         conn.close()
