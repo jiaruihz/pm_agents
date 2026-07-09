@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.ops import refresh_weather_strategy_runtime_registry as registry  # noqa: E402
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical  # noqa: E402
+from src.strategies.runtime.sync import sync_instance_specs  # noqa: E402
 
 
 def json_ready(value: Any) -> Any:
@@ -65,19 +66,51 @@ def print_payload(payload: dict[str, Any]) -> None:
     print(json.dumps(json_ready(payload), ensure_ascii=False, indent=2, sort_keys=True))
 
 
+def instance_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """
+        SELECT instance_id, display_name, family, lifecycle_status, execution_mode,
+               desired_status, tmux_session, start_script, spec_commit
+        FROM strategy_instance
+        ORDER BY instance_id
+        """
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    conn = sqlite3.connect(args.db_path)
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        apply_schema_canonical(conn)
+        result = sync_instance_specs(conn)
+    finally:
+        conn.close()
+    print_payload({"action": "sync", **result})
+    return 0
+
+
 def cmd_list(args: argparse.Namespace) -> int:
-    rows = []
-    for spec in registry.strategy_specs():
-        rows.append(
-            {
-                "strategy_instance": spec.strategy_instance,
-                "display_name": spec.display_name,
-                "lifecycle_status": spec.lifecycle_status,
-                "execution_mode": spec.execution_mode,
-                "tmux_session": spec.tmux_session,
-                "process_status": "running" if tmux_running(spec.tmux_session) else "stopped" if spec.tmux_session else "unknown",
-                "start_script": spec.start_script,
-            }
+    # Read-only: never take a write lock on the live DB for a list. If the
+    # control-plane table is missing, hint to sync instead of migrating here.
+    conn = sqlite3.connect(args.db_path)
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        try:
+            rows = instance_rows(conn)
+        except sqlite3.OperationalError:
+            rows = []
+    finally:
+        conn.close()
+    if not rows:
+        print_payload({"strategies": [], "hint": "run: weather_strategy_launcher.py sync"})
+        return 0
+    tmux = registry.active_tmux_sessions()
+    for row in rows:
+        session = row.get("tmux_session")
+        row["process_status"] = (
+            "running" if session and session in tmux else "stopped" if session else "unknown"
         )
     print_payload({"strategies": rows})
     return 0
@@ -170,6 +203,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-refresh", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list")
+    sub.add_parser("sync")
     status = sub.add_parser("status")
     status.add_argument("strategy_instance")
     start = sub.add_parser("start")
@@ -185,6 +219,8 @@ def main() -> int:
     args = parse_args()
     if args.command == "list":
         return cmd_list(args)
+    if args.command == "sync":
+        return cmd_sync(args)
     if args.command == "status":
         return cmd_status(args)
     if args.command == "start":
