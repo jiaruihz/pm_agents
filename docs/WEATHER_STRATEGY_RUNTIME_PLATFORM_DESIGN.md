@@ -348,6 +348,55 @@ source event/fact    append-only 观测/预测/盘口事实，策略订单可引
 latest health        从 run/event 物化的最新健康读模型，给 dashboard 快速展示
 ```
 
+### 6.5.1 最小落地版：三张表，但必须区分数据类型
+
+上面的四层是终局模型；第一版不需要一次建八张表。**最小可用版是三张表**：
+
+```text
+weather_data_source_profile  这个源应该怎么跑
+weather_data_source_event    实际看到了什么（append-only）
+weather_data_source_health   当前是否新鲜、是否失败、dashboard 快速读
+```
+
+但三张表也必须把不同数据类型明确区分，否则后面会把盘口、预报、METAR、机场源混在一起，研究和复盘都会乱。
+
+核心分类：
+
+| data/feed 类型 | `feed_kind` | `event_type` | 例子 | 关键字段 |
+|---|---|---|---|---|
+| 盘口数据 | `orderbook` | `orderbook_quote` / `market_snapshot` | Polymarket CLOB book、paper snapshot | `condition_id`、`market_id`、`token_id`、`best_bid`、`best_ask`、`spread`、`book_ts_utc` |
+| 预报数据 | `forecast` | `forecast_enrichment` | Open-Meteo multi-model、TAF、vertical profile | `forecast_model`、`forecast_issue_ts_utc`、`forecast_peak_time_local`、`forecast_max_temp`、`payload_json` |
+| METAR / WU-like 官方观测 | `official_observation` | `official_observation` | AviationWeather、AWC cache、TGFTP、IEM/Synoptic | `source_report_ts_utc`、`local_detect_ts_utc`、`raw_metar`、`temp_c/f`、`detected_after_report_sec` |
+| 实时机场/参考站 | `high_frequency_observation` | `high_frequency_observation` | JMA AMeDAS、FMI、Singapore MSS、NOAA MADIS HFMETAR、MGM、IMS、AMOS | `observation_ts_utc`、`temp_c/f`、`source_kind`、`station_or_feed`、`source_age_sec` |
+| 跑道点位 | `runway_observation` | `runway_observation` | 韩国 AMOS runway、AMSC AWOS | `runway`、`point_temp_c`、`tdz_temp_c`、`mid_temp_c`、`end_temp_c` |
+
+所以第一版 `weather_data_source_event` 必须至少有这些通用维度：
+
+```sql
+event_id
+event_type
+feed_kind
+city
+target_date
+source_key
+source_kind
+station_or_feed
+icao
+runway
+observation_ts_utc
+source_report_ts_utc
+local_detect_ts_utc
+fetched_at_utc
+temp_c / temp_f
+condition_id / market_id / token_id
+best_bid / best_ask
+forecast_model / forecast_issue_ts_utc / forecast_max_temp
+payload_hash
+payload_json
+```
+
+也就是说，**表可以少，但类型不能糊**。第一版用三张表承载多类型事件；等发现某类查询很重，再把 `run/attempt`、`alignment_feature`、`orderbook_quote` 拆成专表或 materialized view。
+
 ### 6.6 修订版表设计：配置层
 
 **A. `weather_data_source_catalog`：source/provider 目录**
@@ -630,7 +679,7 @@ CREATE TABLE weather_source_alignment_feature (
 
 所以落地时不要改造 `weather_observation_events` 去承载所有东西。正确路线是：
 
-1. **先建 source catalog/profile/health/event 表**，从现有文件协议 materialize：
+1. **先建三张最小表**：`weather_data_source_profile / weather_data_source_event / weather_data_source_health`，用 `feed_kind` + `event_type` 区分盘口、预报、METAR、实时机场源和跑道源；从现有文件协议 materialize：
    - `output/source_events/latest.json` + `sources.jsonl`；
    - `output/high_frequency_observations/latest.json` + `high_frequency_observations.jsonl`；
    - `output/runway_observations/latest.json` + `runway_observations.jsonl`；
@@ -638,7 +687,7 @@ CREATE TABLE weather_source_alignment_feature (
    - `output/fast_source_stale_book/*` / `output/fast_source_prev_no_trial/*` 作为策略/盘口对齐输入。
 2. **dashboard 先只读展示**：`/data-sources` 改读 latest health + recent event；不要马上把控制动作放公网。
 3. **策略订单归因再补桥**：fast-source prev-NO 的 `orders.jsonl` 已经进入 canonical orders/fills；下一步是在 plan/order payload 或专门桥表里引用 `weather_data_source_event.event_id` / `weather_source_alignment_feature.feature_id`。
-4. **最后才加 supervisor required-feed gate**：等 source health materialization 稳定后，再让 supervisor 用 `weather_strategy_source_subscription` 做启动/交易前数据质量校验。
+4. **最后才拆细表和加 supervisor required-feed gate**：等 source health materialization 稳定后，再按需要拆 `run/attempt`、`alignment_feature`、`subscription`，并让 supervisor 用 `weather_strategy_source_subscription` 做启动/交易前数据质量校验。
 
 这保证不会把研究源、结算源、跑道 microclimate、盘口 telemetry 混成一个“看起来统一但没法审计”的表。
 
