@@ -4,8 +4,9 @@
 # One-shot bring-up for the weather strategy dashboard stack.
 #
 # Usage:
-#   scripts/weather_dashboard/run_stack.sh                 # full bring-up (rebuild DB + API + FE)
+#   scripts/weather_dashboard/run_stack.sh                 # full bring-up (refresh DB + API + FE)
 #   scripts/weather_dashboard/run_stack.sh --no-rebuild    # skip DB rebuild (just start API + FE)
+#   scripts/weather_dashboard/run_stack.sh --recreate-db   # delete and recreate weather.db before refresh
 #   scripts/weather_dashboard/run_stack.sh --api-only      # start only API
 #   scripts/weather_dashboard/run_stack.sh --fe-only       # start only FE
 #   scripts/weather_dashboard/run_stack.sh --status        # just show current DB / process status
@@ -29,6 +30,7 @@ LOG_DIR="$REPO_ROOT/runtime/_dashboard_logs"
 mkdir -p "$LOG_DIR"
 
 REBUILD=1
+RECREATE_DB=0
 START_API=1
 START_FE=1
 STATUS_ONLY=0
@@ -36,6 +38,7 @@ STATUS_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --no-rebuild) REBUILD=0 ;;
+    --recreate-db) RECREATE_DB=1 ;;
     --api-only)   START_FE=0 ;;
     --fe-only)    START_API=0; REBUILD=0 ;;
     --status)     STATUS_ONLY=1; REBUILD=0; START_API=0; START_FE=0 ;;
@@ -175,6 +178,10 @@ rebuild_canonical_db() {
   init_canonical_db
 }
 
+refresh_canonical_db() {
+  init_canonical_db
+}
+
 refresh_metrics() {
   "$VENV/python" -c "
 from weather_dashboard.db.connection import get_conn
@@ -218,10 +225,17 @@ if [[ $STATUS_ONLY -eq 1 ]]; then
   exit 0
 fi
 
-# ---- 1. Rebuild DB (idempotent — ingest is content-addressable) ----
+# ---- 1. Refresh DB (idempotent — ingest is content-addressable) ----
+# Default is non-destructive.  Use --recreate-db only when a clean local
+# dashboard DB is intentionally needed.
 if [[ $REBUILD -eq 1 ]]; then
-  log "Rebuilding DB at $DB_PATH"
-  rebuild_canonical_db >/dev/null
+  if [[ $RECREATE_DB -eq 1 ]]; then
+    log "Recreating DB at $DB_PATH (--recreate-db)"
+    rebuild_canonical_db >/dev/null
+  else
+    log "Refreshing DB at $DB_PATH (non-destructive; use --recreate-db to delete first)"
+    refresh_canonical_db >/dev/null
+  fi
 
   SNAP_CSV="$REPO_ROOT/runtime/weather_edge_v1/market_data/research/t24_paper_snapshot_replay_trades.csv"
   PAPER_CSV="$REPO_ROOT/runtime/weather_edge_v1/market_data/research/t24_paper_ledger_trades.csv"
