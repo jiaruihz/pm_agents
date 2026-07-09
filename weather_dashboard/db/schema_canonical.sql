@@ -208,6 +208,67 @@ CREATE TABLE IF NOT EXISTS settlement_outcomes (
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
+CREATE TABLE IF NOT EXISTS weather_observation_events (
+    observation_id TEXT PRIMARY KEY,
+    source_system TEXT NOT NULL,
+    source_path TEXT,
+    source_row_hash TEXT NOT NULL,
+    city TEXT NOT NULL,
+    icao TEXT NOT NULL,
+    timezone TEXT,
+    target_date TEXT NOT NULL,
+    obs_ts_utc TEXT NOT NULL,
+    fetched_at_utc TEXT,
+    source_report_ts_utc TEXT,
+    unit TEXT,
+    temp_f REAL,
+    temp_c REAL,
+    dewpoint_f REAL,
+    wind_speed_kt REAL,
+    wind_dir_deg REAL,
+    sky_cover TEXT,
+    raw_payload TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(source_system, source_row_hash)
+);
+
+CREATE TABLE IF NOT EXISTS weather_intraday_state_rows (
+    state_row_id TEXT PRIMARY KEY,
+    source_system TEXT NOT NULL,
+    source_path TEXT,
+    city TEXT NOT NULL,
+    icao TEXT NOT NULL,
+    timezone TEXT,
+    target_date TEXT NOT NULL,
+    decision_hour_local INTEGER NOT NULL,
+    decision_cutoff_local TEXT,
+    decision_last_obs_utc TEXT,
+    obs_count_day INTEGER,
+    obs_count_to_decision INTEGER,
+    first_obs_utc TEXT,
+    last_obs_utc TEXT,
+    current_temp_f REAL,
+    current_temp_c REAL,
+    running_max_f REAL,
+    running_max_c REAL,
+    final_max_f REAL,
+    final_max_c REAL,
+    residual_c REAL,
+    residual_ge_0_5c INTEGER,
+    residual_ge_1_0c INTEGER,
+    residual_ge_1_5c INTEGER,
+    floor_c_bucket_delta INTEGER,
+    temp_trend_1h_f REAL,
+    temp_trend_3h_f REAL,
+    minutes_since_running_max REAL,
+    dewpoint_f REAL,
+    wind_speed_kt REAL,
+    wind_dir_deg REAL,
+    sky_cover TEXT,
+    created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(source_system, city, target_date, decision_hour_local)
+);
+
 CREATE TABLE IF NOT EXISTS run_artifacts (
     artifact_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES runs(run_id),
@@ -336,6 +397,12 @@ CREATE INDEX IF NOT EXISTS idx_settlement_outcomes_condition
     ON settlement_outcomes(condition_id);
 CREATE INDEX IF NOT EXISTS idx_settlement_outcomes_date_city
     ON settlement_outcomes(target_date, city);
+CREATE INDEX IF NOT EXISTS idx_weather_observation_events_city_date
+    ON weather_observation_events(city, target_date, obs_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_weather_observation_events_icao_date
+    ON weather_observation_events(icao, target_date, obs_ts_utc);
+CREATE INDEX IF NOT EXISTS idx_weather_intraday_state_rows_city_date
+    ON weather_intraday_state_rows(city, target_date, decision_hour_local);
 CREATE INDEX IF NOT EXISTS idx_run_artifacts_run_id ON run_artifacts(run_id);
 CREATE INDEX IF NOT EXISTS idx_run_alerts_run_id ON run_alerts(run_id);
 CREATE INDEX IF NOT EXISTS idx_weather_strategy_runtime_status
@@ -346,6 +413,55 @@ CREATE INDEX IF NOT EXISTS idx_weather_strategy_artifacts_strategy
     ON weather_strategy_runtime_artifacts(strategy_instance);
 CREATE INDEX IF NOT EXISTS idx_weather_strategy_shadow_queue_status
     ON weather_strategy_shadow_queue(status, priority);
+
+-- ── Strategy runtime platform (B1/B2): definition + control plane ──────────
+CREATE TABLE IF NOT EXISTS strategy_def (
+    strategy_key     TEXT PRIMARY KEY,
+    family           TEXT NOT NULL,
+    strategy_group   TEXT NOT NULL DEFAULT 'weather',
+    domain           TEXT NOT NULL DEFAULT 'weather',
+    description      TEXT NOT NULL DEFAULT '',
+    is_active        INTEGER NOT NULL DEFAULT 1,
+    spec_commit      TEXT,
+    updated_at_utc   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE TABLE IF NOT EXISTS strategy_instance (
+    instance_id      TEXT PRIMARY KEY,
+    strategy_key     TEXT NOT NULL,
+    display_name     TEXT NOT NULL,
+    family           TEXT NOT NULL,
+    lifecycle_status TEXT NOT NULL,
+    execution_mode   TEXT NOT NULL,
+    desired_status   TEXT NOT NULL DEFAULT 'enabled'
+        CHECK (desired_status IN ('enabled','paused','shelved','blocked')),
+    source_layer     TEXT NOT NULL DEFAULT 'runtime_local',
+    runtime_dir      TEXT,
+    start_script     TEXT,
+    tmux_session     TEXT,
+    expected_live    INTEGER,
+    spec_commit      TEXT,
+    params_hash      TEXT,
+    notes            TEXT,
+    updated_at_utc   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_strategy_instance_family
+    ON strategy_instance(family);
+
+CREATE TABLE IF NOT EXISTS strategy_control_log (
+    log_id       TEXT PRIMARY KEY,
+    instance_id  TEXT NOT NULL,
+    actor        TEXT NOT NULL,
+    action       TEXT NOT NULL,
+    from_state   TEXT,
+    to_state     TEXT,
+    reason       TEXT,
+    spec_commit  TEXT,
+    params_hash  TEXT,
+    ts_utc       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_strategy_control_log_instance
+    ON strategy_control_log(instance_id, ts_utc);
 
 CREATE TRIGGER IF NOT EXISTS signals_canonical_before_update
 BEFORE UPDATE ON signals
