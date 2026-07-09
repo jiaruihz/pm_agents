@@ -364,12 +364,12 @@ latest health        从 run/event 物化的最新健康读模型，给 dashboar
 ### 6.5.1 最小落地版：先做管理面，不把明细搬进 DB
 
 上面的四层是终局模型；第一版不需要一次建八张表，也不需要把每条观测/预报/盘口明细都搬进 DB。当前文件协议
-（`latest.json` + append-only JSONL）已经能承载明细数据，DB 第一阶段应先解决**管理和可观测**：
+（`latest.json` + append-only JSONL）已经能承载明细数据，DB 第一阶段应先解决**管理和可观测**。第一版只需要两张正本表，外加一个可选派生读模型：
 
 ```text
-weather_data_source_profile       城市有哪些可用 source/station/runway，它们应该怎么跑
-weather_data_monitor_instance     某个监控任务实际扫哪些城市/源、频率、输出路径、运行状态
-weather_data_source_health        当前每个 city/source/station 是否新鲜、延迟如何、是否失败
+weather_data_source_profile       正本表: 城市有哪些可用 source/station/runway，它们应该怎么跑
+weather_data_monitor_instance     正本表: 某个监控任务实际扫哪些城市/源、频率、输出路径、运行状态
+weather_data_source_health        派生读模型/cache: 当前每个 city/source/station 是否新鲜、延迟如何、是否失败
 ```
 
 这更像策略平台里的 `strategy_def / strategy_instance / runtime`：
@@ -378,7 +378,7 @@ weather_data_source_health        当前每个 city/source/station 是否新鲜�
 |---|---|---|
 | `strategy_def` | `weather_data_source_profile` | 能力/定义：Tokyo 有 JMA AMeDAS 44166，Busan 有 AMOS RKPK，Singapore 有 MSS S24 |
 | `strategy_instance` | `weather_data_monitor_instance` | 运行实例：这个 monitor 只扫 Tokyo/Busan/Singapore，60 秒一次，输出到哪个目录 |
-| `strategy_instance_runtime` | `weather_data_source_health` | 实际状态：最近一次什么时候成功、当前 age、detect lag、是否 stale/auth_required |
+| `strategy_instance_runtime` | `weather_data_source_health` | 派生实际状态：最近一次什么时候成功、当前 age、detect lag、是否 stale/auth_required |
 
 **数据明细仍然留在文件里**：
 
@@ -453,7 +453,7 @@ summary_json
 updated_at_utc
 ```
 
-第一版 `weather_data_source_health` 建议字段：
+第一版 `weather_data_source_health` 不一定要建成物理表。它可以先是 API 读 `monitor_instance.latest_path` / `latest.json` 后动态算出来的 view；只有当 dashboard 查询慢、需要跨天趋势、或需要告警去重时，再物化成 cache 表。若物化，建议字段：
 
 ```sql
 health_key
@@ -481,9 +481,10 @@ summary_json
 refreshed_at_utc
 ```
 
-也就是说，**第一版不是数据仓库明细表，而是数据源运行管理表**。Tokyo/JMA 和 Busan/AMOS 是两条 `profile`；
+也就是说，**第一版不是数据仓库明细表，而是数据源运行管理表**。真正需要落 DB 的正本是 `profile` 和 `monitor_instance`；
+`health` 是从 monitor output 派生出来的读模型，不是新的 truth。Tokyo/JMA 和 Busan/AMOS 是两条 `profile`；
 “fast-source prev-NO trial 只监控 Tokyo/Busan/Singapore、60 秒扫一次、输出到 `/Volumes/jrs/.../fast_source_prev_no_trial`”
-是一条 `monitor_instance`；当前 Tokyo/JMA 是否新鲜、平均延迟多少，是 `health`。
+是一条 `monitor_instance`；当前 Tokyo/JMA 是否新鲜、平均延迟多少，是 API 从 latest output 计算出的 `health`。
 
 ### 6.6 修订版表设计：配置层
 
@@ -684,9 +685,9 @@ CREATE TABLE weather_data_source_event (
 
 这张表不是替代 `fact_trades`，而是给策略提供**输入证据血缘**。订单表/plan 可以通过 `order_payload` 或后续桥表引用 `event_id`，实现“这笔 Helsinki 17 NO 是因为 FMI 哪条观测触发”的 drilldown。
 
-**G. `weather_data_source_health`：latest health 读模型**
+**G. `weather_data_source_health`：latest health 读模型（可选物化）**
 
-从 run/attempt/event 物化，给 dashboard 快速读。主键用 `profile_id` 或 city/source/station/runway，不用 `city+feed_kind`。
+第一版可由 API 从 `weather_data_monitor_instance.latest_path` / latest JSON 动态计算，不必建表。只有当 dashboard 查询慢、需要告警去重、跨天趋势或离线健康统计时，再物化成这张表。主键用 `profile_id` 或 city/source/station/runway，不用 `city+feed_kind`。
 
 ```sql
 CREATE TABLE weather_data_source_health (
@@ -767,13 +768,13 @@ CREATE TABLE weather_source_alignment_feature (
 
 所以落地时不要改造 `weather_observation_events` 去承载所有东西。正确路线是：
 
-1. **先建三张管理面最小表**：`weather_data_source_profile / weather_data_monitor_instance / weather_data_source_health`，用 `feed_kind` 区分盘口、预报、METAR、实时机场源和跑道源；从现有文件协议物化管理状态和 latest health：
+1. **先建两张管理面正本表**：`weather_data_source_profile / weather_data_monitor_instance`，用 `feed_kind` 区分盘口、预报、METAR、实时机场源和跑道源；`weather_data_source_health` 先作为 API/view 从 latest output 动态计算，必要时再物化：
    - `output/source_events/latest.json` + `sources.jsonl`；
    - `output/high_frequency_observations/latest.json` + `high_frequency_observations.jsonl`；
    - `output/runway_observations/latest.json` + `runway_observations.jsonl`；
    - `output/forecast_enrichment/latest.json` + `forecast_enrichment.jsonl`；
    - `output/fast_source_stale_book/*` / `output/fast_source_prev_no_trial/*` 作为策略/盘口对齐输入。
-2. **dashboard 先只读展示**：`/data-sources` 改读 source profile、monitor instance、latest health；明细 drilldown 仍跳到原始 JSONL/sample，不把控制动作放公网。
+2. **dashboard 先只读展示**：`/data-sources` 改读 source profile、monitor instance，并动态计算 latest health；明细 drilldown 仍跳到原始 JSONL/sample，不把控制动作放公网。
 3. **策略订单归因先用文件指针**：fast-source prev-NO 的 `orders.jsonl` 已经进入 canonical orders/fills；下一步在 plan/order payload 里保留 `source_profile_id`、`monitor_instance_id`、`source_obs_ts_utc`、`payload_hash`、`source_journal_path`，足够回到 JSONL 找原始证据。
 4. **最后才拆明细/对齐表和加 supervisor required-feed gate**：等 health materialization 稳定后，再按需要拆 `event_index`、`alignment_feature`、`subscription`，并让 supervisor 用 source health 做启动/交易前数据质量校验。
 
@@ -787,7 +788,7 @@ CREATE TABLE weather_source_alignment_feature (
 - **registry 表降级为读模型**：从新的 control + runtime 表物化刷新，保留给 FE 兼容。
 - **控制动作与只读看板分面**：pause / enable-live / set-cap 走**本机 ops 控制面**（`pmctl` + 与 supervisor 同机的 localhost-only 控制页），**不放在公网只读看板上**。看板只**展示**控制状态（期望态 vs 实际态 + `strategy_control_log` 时间线），不 mutate。
 - **数据源健康面板**：`/data-sources` 从"按文件名间隔现算 cadence"升级为读
-  `weather_data_source_profile` + `weather_data_monitor_instance` + `weather_data_source_health`，
+  `weather_data_source_profile` + `weather_data_monitor_instance`，再从 latest output 动态计算 health，
   并能 drilldown 到原始 JSONL/sample；静默 fallback 和 source/METAR 对齐异常直接飘红。
 
 完整的看板升级/新增模块、接口、与硬口径一致性见 **§12**；数据模型关联见 **§13**。
@@ -800,7 +801,7 @@ CREATE TABLE weather_source_alignment_feature (
 |---|---|---|
 | **0 · 接口与 harness（零行为变更）** | 从一个 head（建议 `low_price_yes_lottery`）抽出 `BaseRunner`，定义 `StrategyHead` protocol + `ParamsSchema`，把这一个 head 移植过去 | 新旧并行跑 shadow，emit/telemetry **逐笔 parity**（TDD parity test），证明无回归 |
 | **1 · 控制面 + 运行时表 + supervisor** | 在 weather.db 落 `strategy_def/instance/runtime/control_log`；实现 `pmctl` + supervisor 管这一个 head；`start_*.sh` 改薄壳；心跳翻成 push | 该 instance 能经 `pmctl` start/stop/pause，状态与审计全落 DB；registry 对它从扫描变 push |
-| **2 · 数据源领域模型** | 先落 `weather_data_source_profile / weather_data_monitor_instance / weather_data_source_health`，从 `source_profiles.json`、high-frequency/runway registries 和 runtime output 回填；加集中陈旧/fallback 告警 | 静默 GFS fallback 类事故变成 source health 行 + 告警；fast-source monitor 实例、城市源覆盖、输出路径和延迟都能在 dashboard 看见 |
+| **2 · 数据源领域模型** | 先落 `weather_data_source_profile / weather_data_monitor_instance`，从 `source_profiles.json`、high-frequency/runway registries 和 runtime output 回填；health 先动态计算，必要时再物化；加集中陈旧/fallback 告警 | 静默 GFS fallback 类事故变成 source health 告警；fast-source monitor 实例、城市源覆盖、输出路径和延迟都能在 dashboard 看见 |
 | **3 · 全量移植 head** | 按 family 逐族移植；删各自 `start_*.sh` + 重复的 loop/pidfile/telemetry 代码；registry → 读模型 | `scripts/ops/start_*.sh` 与 bespoke runner 大幅减少；重复横切代码归零 |
 | **4 · 看板控制动作 + 数据源面板** | 看板接 `pmctl` 控制动作 + `weather_data_source_health` 面板；下线扫描式 `refresh_weather_strategy_runtime_registry.py` | 从看板可 pause/enable-live/set-cap；数据源健康可视 |
 
@@ -882,7 +883,7 @@ Phase 0/1 只碰一个 head，风险最低；主血缘（fact 表、executor、s
 | 现有模块 | 现在怎么做 | 缺口 | 升级挂到哪张新表 |
 |---|---|---|---|
 | `/probes` 探针 | 扫描 `weather_strategy_runtime_registry` 反推状态 | 无期望态 vs 实际态；三套 enum 混用；无控制审计时间线；健康靠扫描非 push | 改读 `strategy_instance`（期望）+ `strategy_instance_runtime`（push 实际）+ `strategy_control_log`（时间线） |
-| `/data-sources` | forecast 从 fact_trades、METAR 从 aliases.py、cadence = 文件名中位间隔 | 无每城×source/station 配置；无 monitor 实例；无 cadence 目标值 vs 实际值对比；**无 fallback/静默降级检测**；无高频/跑道/预测输出路径管理 | 改读 `weather_data_source_profile`（城市源配置）+ `weather_data_monitor_instance`（监控任务）+ `weather_data_source_health`（实际健康） |
+| `/data-sources` | forecast 从 fact_trades、METAR 从 aliases.py、cadence = 文件名中位间隔 | 无每城×source/station 配置；无 monitor 实例；无 cadence 目标值 vs 实际值对比；**无 fallback/静默降级检测**；无高频/跑道/预测输出路径管理 | 改读 `weather_data_source_profile`（城市源配置）+ `weather_data_monitor_instance`（监控任务），health 从 latest output 动态计算 |
 | `/` 今日总览 | 探针健康 + 在险资金脉搏 | 无数据源健康脉搏；无"期望态≠实际态"漂移告警 | 增 `weather_data_source_health` 汇总 + reconcile 漂移卡 |
 | `/weather/strategies` `/weather/runtime` | 挂 strategy_config / registry | 与 v2 `/probes` 职责重叠；无 `strategy_def` 目录视图 | 增 `strategy_def` catalog 视图，旧页归档到 `/archive` |
 | `/performance` `/lineage` | canonical fact 全链 | 基本够用；缺按 instance 的控制动作归因 | 只加 `strategy_control_log` 关联链接，不动 canonical |
@@ -896,10 +897,10 @@ Phase 0/1 只碰一个 head，风险最低；主血缘（fact 表、executor、s
 - 健康从 push 来（`strategy_instance_runtime.heartbeat_at_utc`），不再扫目录；缺心跳显式标 `no_heartbeat`。
 
 **B. 升级 `/data-sources`（→ feed 健康矩阵）**
-- **每城 × feed_kind × source 矩阵**：行=城市，列=`official_observation / high_frequency_observation / runway_observation / forecast / orderbook`，格子可展开到 source/station/runway；颜色来自 `weather_data_source_health.status`（fresh/stale/fallback_active/blocked/auth_required）。
+- **每城 × feed_kind × source 矩阵**：行=城市，列=`official_observation / high_frequency_observation / runway_observation / forecast / orderbook`，格子可展开到 source/station/runway；颜色来自动态 health status（fresh/stale/fallback_active/blocked/auth_required）。
 - **monitor instance 面板**：展示每个监控任务扫哪些城市/源、scan interval、active window、output_dir、latest_path、journal paths、host/tmux/status。
-- **cadence 目标 vs 实际**：`weather_data_source_profile.expected_cadence_sec`（配置目标）对 `weather_data_source_health.age_sec`（实际），超 `staleness_max_age_sec` 飘红。
-- **静默降级飘红**：`weather_data_source_health.fallback_used` 非空一律高亮 + 告警条——直接给 7/02-05 静默 GFS 那类事故一个一等公民入口。
+- **cadence 目标 vs 实际**：`weather_data_source_profile.expected_cadence_sec`（配置目标）对 latest output 算出的 `age_sec`（实际），超 `staleness_max_age_sec` 飘红。
+- **静默降级飘红**：动态 health 里的 `fallback_used` 非空一律高亮 + 告警条——直接给 7/02-05 静默 GFS 那类事故一个一等公民入口。
 - **source evidence drilldown**：点开一格先展示 latest sample、payload_hash、source_status、原始 JSONL 路径；需要完整回放时再跳到文件或后续 event index。
 - 继承 §3.1 双层：分开显示"镜像同步年龄"与"生产 feed 年龄"。
 
@@ -912,7 +913,7 @@ Phase 0/1 只碰一个 head，风险最低；主血缘（fact 表、executor、s
 - 全局视图：**跨实例当日已用 notional vs 全局天花板**（今天没有任何界面看得见）。
 
 **E. 今日总览加两块脉搏**
-- 数据源健康脉搏（`weather_data_source_health` 汇总：几个城市 stale / 有无 fallback_active）。
+- 数据源健康脉搏（动态 health 汇总：几个城市 stale / 有无 fallback_active）。
 - reconcile 漂移告警（有多少 instance 期望态≠实际态）。
 
 **F. 新增订单/成交明细 Blotter（当前设计缺口）**
@@ -969,7 +970,7 @@ GET /api/order-blotter
 
 **只读（进公网 API `weather_dashboard/api`）：**
 - `GET /api/strategy-runtime/*` 改读新 control+runtime 表（registry 降级为读模型，保 FE 兼容）。
-- `GET /api/data-sources` 升级：返回每城×feed×source 矩阵 + monitor instances + `weather_data_source_health` + cadence 目标/实际 + auth/fallback 状态。
+- `GET /api/data-sources` 升级：返回每城×feed×source 矩阵 + monitor instances + 动态 health + cadence 目标/实际 + auth/fallback 状态。
 - `GET /api/strategy-defs`、`GET /api/strategy-defs/{key}` — 定义 catalog。
 - `GET /api/instances/{id}/control-log` — 审计时间线（只读展示）。
 - `GET /api/feed-health` — 数据源健康矩阵。
@@ -983,7 +984,7 @@ GET /api/order-blotter
 ### 12.6 与看板硬口径的一致性（不许破坏）
 
 - 公网看板保持零 mutate；控制在本机面。
-- `weather_data_source_health` 与探针健康都必须区分**镜像同步年龄** vs **生产实际年龄**（§3.1），不能用镜像新旧推断生产断流。
+- 动态 source health 与探针健康都必须区分**镜像同步年龄** vs **生产实际年龄**（§3.1），不能用镜像新旧推断生产断流。
 - 绩效/PnL 口径不变（`live_real`、`fill_date_bj`、coverage gate、near-binary 归一化）；本轮只加控制/数据源可观测，不碰 canonical PnL 口径。
 
 ### 12.7 看板改造分期（对齐 §8）
@@ -1017,8 +1018,8 @@ erDiagram
     fact_trades ||--o{ settlements : "结算→realized PnL"
     %% ── 数据源面 ──
     weather_data_source_profile ||--o{ weather_data_monitor_instance : "profile 被 monitor 实例覆盖"
-    weather_data_source_profile ||--o{ weather_data_source_health : "profile→latest health"
-    weather_data_monitor_instance ||--o{ weather_data_source_health : "monitor→latest health"
+    weather_data_source_profile ||..o{ weather_data_source_health : "可选物化 latest health"
+    weather_data_monitor_instance ||..o{ weather_data_source_health : "可选物化 latest health"
     %% ── 只读读模型 ──
     strategy_instance_runtime ||..o{ weather_strategy_runtime_registry : "物化为看板读模型"
 ```
@@ -1036,15 +1037,15 @@ erDiagram
 | `plans` ↔ `fact_signal_candidates` | signal / 机会键 | 机会粒度对齐 | 机会粒度 canonical，不绕过自算 |
 | `fills` → `fact_trades` → `settlements` | 成交键 | canonical | 成交/结算 canonical，PnL 口径不变 |
 | `weather_data_source_profile` → `weather_data_monitor_instance` | `feed_kind/source_key/city` via JSON coverage | N:M | profile 是城市源能力；monitor instance 是实际运行任务，声明扫哪些 cities/sources 和输出路径 |
-| `weather_data_source_profile` → `weather_data_source_health` | `profile_id` | 1:1 latest | 每个城市源的最新健康、新鲜度、延迟和错误 |
-| `weather_data_monitor_instance` → `weather_data_source_health` | `monitor_instance_id` | 1:N latest | 一个 monitor 覆盖多个 city/source，health 能回到具体任务 |
+| `weather_data_source_profile` → `weather_data_source_health` | `profile_id` | 可选物化 | 每个城市源的最新健康、新鲜度、延迟和错误；第一版可由 API 动态计算，不必建表 |
+| `weather_data_monitor_instance` → `weather_data_source_health` | `monitor_instance_id` | 可选物化 | 一个 monitor 覆盖多个 city/source；health 能回到具体任务；第一版可由 latest output 动态计算 |
 | `strategy_instance_runtime` → `weather_strategy_runtime_registry` | 物化 | 读模型 | 现有 registry 表降级为看板读模型，从新表刷新，保 FE 兼容 |
 
 ### 13.3 关键建模决策（3 个必须讲清的点）
 
 1. **instance ↔ config 的桥**：`strategy_instance` **不**替代 `strategy_config`，而是**引用**它（`config_id`）。既有 `plans.config_id → orders → fills` 血缘一字不改；平台只是在 config 之上多加一层"运行时实例"的期望态/实际态/审计。这是"围着主血缘建、不动它"的具体落点。
 2. **期望态 / 实际态分表**：`strategy_instance`（控制面，人写）与 `strategy_instance_runtime`（运行时面，机器 push）**物理分离**。避免现在 registry 把"想让它 live"和"它其实 stale 了"塞进同一个 `lifecycle_status` 的老问题。
-3. **profile / monitor instance / health 分表**：`weather_data_source_profile` 是“城市有哪些源、理论怎么跑”，`weather_data_monitor_instance` 是“实际哪个任务在扫哪些城市/源、频率和输出路径是什么”，`weather_data_source_health` 是“当前是否新鲜、延迟和错误是什么”。明细仍以 JSONL 为正本，DB 第一版只保管理面和 latest health。
+3. **profile / monitor instance 是正本，health 是派生**：`weather_data_source_profile` 是“城市有哪些源、理论怎么跑”，`weather_data_monitor_instance` 是“实际哪个任务在扫哪些城市/源、频率和输出路径是什么”。“当前是否新鲜、延迟和错误是什么”可以先由 API 从 latest output 动态计算；`weather_data_source_health` 只有在 dashboard 性能、告警去重或趋势分析需要时再物化。
 
 ### 13.4 元数据 / config / instance 三者关系（与既有量化血缘对齐）
 
@@ -1075,6 +1076,6 @@ erDiagram
 ### 13.5 与现有表的关系一句话总结
 
 - **新增（平台）**：`strategy_def / strategy_instance / strategy_instance_runtime / strategy_control_log / strategy_instance_snapshot`——全部落 `runtime/weather.db`。
-- **新增（数据源面 Phase 2 最小版）**：`weather_data_source_profile / weather_data_monitor_instance / weather_data_source_health`——全部落 `runtime/weather.db`，从 `weather_data_feed_service_runtime/output/*` 和 registry materialize。`event_index / run / attempt / alignment_feature` 等明细表仅作为后续按需拆分。
+- **新增（数据源面 Phase 2 最小版）**：`weather_data_source_profile / weather_data_monitor_instance`——落 `runtime/weather.db`，从 `weather_data_feed_service_runtime/output/*` 和 registry materialize；`weather_data_source_health` 先做 API/view，必要时再物化。`event_index / run / attempt / alignment_feature` 等明细表仅作为后续按需拆分。
 - **复用不动（canonical 主血缘）**：`fact_signal_candidates / plans / orders / fills / fact_trades / settlements / strategy_config`。
 - **降级为读模型**：`weather_strategy_runtime_registry`（扫描表 → 从新表物化，供看板兼容）、`weather_strategy_shadow_queue`（并入 `strategy_def.is_active` + `strategy_instance` 生命周期后可精简）。
