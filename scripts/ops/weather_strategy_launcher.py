@@ -11,6 +11,7 @@ registry after process changes.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import sqlite3
 import subprocess
@@ -25,6 +26,8 @@ if str(ROOT) not in sys.path:
 from scripts.ops import refresh_weather_strategy_runtime_registry as registry  # noqa: E402
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical  # noqa: E402
 from src.strategies.runtime.sync import sync_instance_specs  # noqa: E402
+from src.strategies.runtime import control  # noqa: E402
+from src.strategies.runtime.specs import params_hash, spec_commit  # noqa: E402
 
 
 def json_ready(value: Any) -> Any:
@@ -148,6 +151,23 @@ def cmd_status(args: argparse.Namespace) -> int:
 def require_live_confirmation(spec: registry.StrategySpec, args: argparse.Namespace, action: str) -> None:
     if spec.lifecycle_status == "live" and not args.confirm_live:
         raise SystemExit(f"refusing to {action} live strategy without --confirm-live: {spec.strategy_instance}")
+    if spec.lifecycle_status == "live" and not args.reason:
+        raise SystemExit(f"refusing to {action} live strategy without --reason: {spec.strategy_instance}")
+
+
+def _record_action(db_path: Path, spec: registry.StrategySpec, action: str,
+                   to_state: str, reason: str | None) -> str | None:
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        apply_schema_canonical(conn)
+        return control.record_control_action(
+            conn, instance_id=spec.strategy_instance, action=action,
+            to_state=to_state, reason=reason, actor=getpass.getuser(),
+            spec_commit=spec_commit(), params_hash=params_hash(spec),
+        )
+    finally:
+        conn.close()
 
 
 def cmd_start(args: argparse.Namespace) -> int:
@@ -159,6 +179,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     if not script.exists():
         raise SystemExit(f"missing start_script: {script}")
     proc = subprocess.run([str(script)], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    log_id = _record_action(args.db_path, spec, "start", "enabled", args.reason)
     refresh = None if args.no_refresh else refresh_db(args.db_path)
     print_payload(
         {
@@ -167,6 +188,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             "returncode": proc.returncode,
             "output": proc.stdout.strip(),
             "process_status": "running" if tmux_running(spec.tmux_session) else "stopped" if spec.tmux_session else "unknown",
+            "control_log_id": log_id,
             "registry_refresh": refresh,
         }
     )
@@ -183,6 +205,7 @@ def cmd_stop(args: argparse.Namespace) -> int:
         rc = proc.returncode
     else:
         rc = 0
+    log_id = _record_action(args.db_path, spec, "stop", "paused", args.reason)
     refresh = None if args.no_refresh else refresh_db(args.db_path)
     print_payload(
         {
@@ -191,6 +214,7 @@ def cmd_stop(args: argparse.Namespace) -> int:
             "returncode": rc,
             "output": proc.stdout.strip(),
             "process_status": "running" if tmux_running(spec.tmux_session) else "stopped",
+            "control_log_id": log_id,
             "registry_refresh": refresh,
         }
     )
@@ -209,9 +233,11 @@ def parse_args() -> argparse.Namespace:
     start = sub.add_parser("start")
     start.add_argument("strategy_instance")
     start.add_argument("--confirm-live", action="store_true")
+    start.add_argument("--reason", default=None)
     stop = sub.add_parser("stop")
     stop.add_argument("strategy_instance")
     stop.add_argument("--confirm-live", action="store_true")
+    stop.add_argument("--reason", default=None)
     return parser.parse_args()
 
 
