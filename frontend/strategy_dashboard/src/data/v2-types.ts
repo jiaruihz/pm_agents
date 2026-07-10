@@ -134,7 +134,81 @@ export interface ObservationSource {
   kind: string;
 }
 
+export type DataSourceHealthStatus =
+  | "fresh"
+  | "stale"
+  | "missing"
+  | "auth_required"
+  | "fetch_failed"
+  | "unknown";
+
+export interface DataSourceProfile {
+  profile_id: string;
+  feed_kind: string;
+  city: string;
+  source_key: string;
+  source_kind: string | null;
+  station_or_feed: string | null;
+  icao: string | null;
+  runway: string | null;
+  source_role: string;
+  timezone_name: string | null;
+  expected_cadence_sec: number | null;
+  staleness_max_age_sec: number | null;
+  active_window_json: string;
+  requires_auth: number;
+  auth_ref: string | null;
+  strategy_eligible: number;
+  live_eligible: number;
+  observed_median_lag_sec: number | null;
+  observed_p95_lag_sec: number | null;
+  notes: string;
+  updated_at_utc: string;
+}
+
+export interface DataSourceMonitorInstance {
+  monitor_instance_id: string;
+  display_name: string;
+  feed_kind: string;
+  sources_json: string;
+  cities_json: string;
+  scan_interval_sec: number | null;
+  active_window_json: string;
+  output_dir: string | null;
+  latest_path: string | null;
+  journal_paths_json: string;
+  state_path: string | null;
+  proxy_policy: string | null;
+  auth_refs_json: string;
+  desired_status: string;
+  host: string;
+  tmux_session: string | null;
+  start_command: string | null;
+  summary_json: string;
+  updated_at_utc: string;
+}
+
+export interface DataSourceDynamicHealth {
+  monitor_instance_id: string;
+  display_name: string;
+  feed_kind: string;
+  status: DataSourceHealthStatus;
+  latest_generated_at_utc: string | null;
+  latest_file_mtime_utc: string | null;
+  age_sec: number | null;
+  rows: number | null;
+  source_statuses: Record<string, unknown>;
+  source_errors: Record<string, unknown>;
+  cities: string[];
+  sources: string[];
+  sample_keys: string[];
+  sample_json: unknown;
+}
+
 export interface DataSourcesResponse {
+  source_profiles: DataSourceProfile[];
+  monitor_instances: DataSourceMonitorInstance[];
+  dynamic_health: DataSourceDynamicHealth[];
   forecast_sources: ForecastSource[];
   observation_sources: ObservationSource[];
   market_snapshots: MarketSnapshot[];
