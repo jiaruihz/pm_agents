@@ -277,7 +277,7 @@
     - events.jsonl
 - strategy_instance: hko_running_max_stale_book_shadow_v1
   display_name: HKO running-max stale-book shadow
-  family: latency_arb.official_running_max_stale_book
+  family: latency_arb.official_running_extreme_stale_book
   lifecycle_status: shadow
   execution_mode: zero_notional_shadow
   source_layer: runtime_local
@@ -294,6 +294,36 @@
     HKO HK Observatory high-frequency history as official running max with floor-to-bracket
     mapping, and records prev-bracket NO, current-bracket YES, and next-bracket NO
     CLOB quotes. No live orders.
+  default_health: unknown
+  expected_live: false
+  artifact_files:
+  - - latest
+    - latest.json
+  - - state
+    - state.json
+  - - events
+    - events.jsonl
+  - - quote_snapshots
+    - quote_snapshots.jsonl
+- strategy_instance: hko_running_min_stale_book_shadow_v1
+  display_name: HKO running-min stale-book shadow
+  family: latency_arb.official_running_extreme_stale_book
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  config_id: hko_official_running_min_shadow_v1
+  runtime_dir: /Volumes/jrs/weather_data_feed_service_runtime/output/hko_running_min_stale_book_shadow
+  summary_file: latest.json
+  primary_journal: quote_snapshots.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: events.jsonl
+  start_script: scripts/ops/start_weather_hko_running_min_stale_book_shadow.sh
+  tmux_session: weather_hko_running_min_stale_book_shadow
+  notes: Zero-notional HK observer for HKO Daily Extract Absolute Daily Min. Uses
+    HKO HK Observatory high-frequency history as official running min with floor-to-bracket
+    mapping, and records previous warmer-bracket NO, current-bracket YES, and next
+    colder-bracket NO CLOB quotes. No live orders.
   default_health: unknown
   expected_live: false
   artifact_files:

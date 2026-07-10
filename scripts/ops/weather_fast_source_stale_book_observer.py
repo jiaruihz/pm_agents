@@ -193,6 +193,22 @@ def decode_json_array(value: Any) -> list[Any]:
     return []
 
 
+def parse_city_string_overrides(raw_items: list[str] | None, *, arg_name: str) -> dict[str, str]:
+    overrides: dict[str, str] = {}
+    for raw in raw_items or []:
+        for item in str(raw).replace(",", " ").split():
+            if not item:
+                continue
+            if "=" not in item:
+                raise ValueError(f"{arg_name} entries must be City=value, got {item!r}")
+            city_raw, value = item.split("=", 1)
+            city = market_city(city_raw.strip())
+            if not city or not value.strip():
+                raise ValueError(f"{arg_name} entry must be City=value, got {item!r}")
+            overrides[city] = value.strip()
+    return overrides
+
+
 def bracket_from_question(question: str) -> str:
     import re
 
@@ -211,9 +227,10 @@ def augment_market_index_from_gamma(
     *,
     target_date: str,
     cities: set[str],
+    event_slugs: dict[str, str],
     market_proxy: str,
 ) -> dict[tuple[str, str], MarketToken]:
-    event_slug_by_city: dict[str, str] = {}
+    event_slug_by_city: dict[str, str] = dict(event_slugs)
     for (city, _bracket), token in index.items():
         if cities and city not in cities:
             continue
@@ -415,6 +432,7 @@ def source_running_max_by_city(
     allowed_sources: set[str],
     allowed_cities: set[str],
     floor_cities: set[str],
+    extreme_kind: str = "max",
 ) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     if not path.exists():
@@ -447,29 +465,41 @@ def source_running_max_by_city(
                 "source_bracket_mode": mode,
                 "source_detect_ts_utc": detect_dt.isoformat(),
                 "source_obs_ts_utc": obs_dt.isoformat(),
-                "source_running_max_temp_c": temp,
-                "source_running_max_bracket_c": bracket,
-                "source_running_max_obs_ts_utc": obs_dt.isoformat(),
-                "source_running_max_detect_ts_utc": detect_dt.isoformat(),
+                "source_running_extreme_kind": extreme_kind,
+                "source_running_extreme_temp_c": temp,
+                "source_running_extreme_bracket_c": bracket,
+                "source_running_extreme_obs_ts_utc": obs_dt.isoformat(),
+                "source_running_extreme_detect_ts_utc": detect_dt.isoformat(),
             }
             old = out.get(city)
             if old is None:
                 out[city] = enriched
                 continue
-            old_bracket = int(old.get("source_running_max_bracket_c") or old.get("source_temp_round_c") or -999)
-            old_temp = safe_float(old.get("source_running_max_temp_c")) or -999.0
-            old_detect = parse_dt(old.get("source_running_max_detect_ts_utc") or old.get("source_detect_ts_utc"))
-            if (
+            old_bracket = int(old.get("source_running_extreme_bracket_c") or old.get("source_temp_round_c") or bracket)
+            old_temp = safe_float(old.get("source_running_extreme_temp_c"))
+            old_temp = old_temp if old_temp is not None else temp
+            old_detect = parse_dt(old.get("source_running_extreme_detect_ts_utc") or old.get("source_detect_ts_utc"))
+            better_extreme = (
                 bracket > old_bracket
                 or (bracket == old_bracket and temp > old_temp)
-                or (
-                    bracket == old_bracket
-                    and temp == old_temp
-                    and old_detect is not None
-                    and detect_dt > old_detect
-                )
-            ):
+            ) if extreme_kind == "max" else (
+                bracket < old_bracket
+                or (bracket == old_bracket and temp < old_temp)
+            )
+            newer_tie = bracket == old_bracket and temp == old_temp and old_detect is not None and detect_dt > old_detect
+            if better_extreme or newer_tie:
                 out[city] = enriched
+    for row in out.values():
+        if extreme_kind == "max":
+            row["source_running_max_temp_c"] = row.get("source_running_extreme_temp_c")
+            row["source_running_max_bracket_c"] = row.get("source_running_extreme_bracket_c")
+            row["source_running_max_obs_ts_utc"] = row.get("source_running_extreme_obs_ts_utc")
+            row["source_running_max_detect_ts_utc"] = row.get("source_running_extreme_detect_ts_utc")
+        else:
+            row["source_running_min_temp_c"] = row.get("source_running_extreme_temp_c")
+            row["source_running_min_bracket_c"] = row.get("source_running_extreme_bracket_c")
+            row["source_running_min_obs_ts_utc"] = row.get("source_running_extreme_obs_ts_utc")
+            row["source_running_min_detect_ts_utc"] = row.get("source_running_extreme_detect_ts_utc")
     return out
 
 
@@ -562,6 +592,14 @@ def quote_for_token(
     }
 
 
+def previous_no_bracket(source_round: int, extreme_kind: str) -> int:
+    return source_round - 1 if extreme_kind == "max" else source_round + 1
+
+
+def next_no_bracket(source_round: int, extreme_kind: str) -> int:
+    return source_round + 1 if extreme_kind == "max" else source_round - 1
+
+
 def build_quotes(
     *,
     event: dict[str, Any],
@@ -572,10 +610,11 @@ def build_quotes(
     fresh_scope: str,
 ) -> dict[str, Any]:
     city = str(event["city"])
+    source_round = int(event["source_round_c"])
     brackets = {
-        "t_minus_1": int(event["t_minus_1_no_bracket_c"]),
-        "source_round": int(event["source_round_c"]),
-        "source_plus_1": int(event["source_round_c"]) + 1,
+        "t_minus_1": int(event.get("previous_no_bracket_c") or event.get("t_minus_1_no_bracket_c") or previous_no_bracket(source_round, str(event.get("extreme_kind") or "max"))),
+        "source_round": source_round,
+        "source_plus_1": int(event.get("next_no_bracket_c") or next_no_bracket(source_round, str(event.get("extreme_kind") or "max"))),
     }
     out: dict[str, Any] = {}
     for label, bracket in brackets.items():
@@ -663,6 +702,7 @@ def classify_official_running_max(
         candidates.append("lock_next_no")
     return {
         "official_running_max_candidates": candidates,
+        "official_running_extreme_candidates": candidates,
         "official_prev_no_best_ask": prev_no_ask,
         "official_current_yes_best_ask": current_yes_ask,
         "official_next_no_best_ask": next_no_ask,
@@ -684,13 +724,17 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     sources = set(args.sources or [])
     floor_cities = {market_city(city) for city in (args.floor_cities or [])}
     allowed_cities = {market_city(city) for city in (args.cities or [])}
-    if args.signal_basis == "official-running-max":
+    extreme_kind = args.extreme_kind
+    gamma_event_slugs = parse_city_string_overrides(args.gamma_event_slug, arg_name="--gamma-event-slug")
+    official_extreme_mode = args.signal_basis in {"official-running-max", "official-running-extreme"}
+    if official_extreme_mode:
         source_rows = source_running_max_by_city(
             Path(args.high_frequency_jsonl),
             args.target_date,
             sources,
             allowed_cities,
             floor_cities,
+            extreme_kind=extreme_kind,
         )
         metar_rows = {}
     else:
@@ -706,6 +750,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             market_index,
             target_date=args.target_date,
             cities=allowed_cities,
+            event_slugs=gamma_event_slugs,
             market_proxy=args.market_proxy or "",
         )
     snapshot_quotes = build_snapshot_quote_index(orderbook_path, args.target_date)
@@ -717,15 +762,17 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     for city, src in sorted(source_rows.items()):
         metar = metar_rows.get(city)
         source_round = int(src["source_temp_round_c"])
-        if args.signal_basis == "official-running-max":
-            metar_max = source_round - 1
+        prev_no = previous_no_bracket(source_round, extreme_kind)
+        nxt_no = next_no_bracket(source_round, extreme_kind)
+        if official_extreme_mode:
+            metar_max = prev_no
         else:
             if not metar:
                 continue
             metar_max = int(metar["metar_running_max_round_c"])
             if source_round <= metar_max:
                 continue
-        t_minus_1 = source_round - 1
+        t_minus_1 = prev_no
         key = "|".join(
             [
                 city,
@@ -751,19 +798,35 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "source_temp_c": src.get("temp_c"),
             "source_round_c": source_round,
             "source_bracket_mode": src.get("source_bracket_mode") or bracket_mode_for(city, str(src.get("source") or ""), floor_cities),
+            "extreme_kind": extreme_kind,
             "running_max_basis": args.signal_basis,
+            "running_extreme_basis": args.signal_basis,
             "reference_running_max_round_c": metar_max,
-            "reference_running_max_source": "official_high_frequency_history" if args.signal_basis == "official-running-max" else "metar_like_sources",
+            "reference_running_extreme_round_c": metar_max,
+            "reference_running_max_source": "official_high_frequency_history" if official_extreme_mode else "metar_like_sources",
+            "reference_running_extreme_source": "official_high_frequency_history" if official_extreme_mode else "metar_like_sources",
             "metar_running_max_round_c": metar_max if metar else None,
             "metar_running_max_temp_c": metar.get("metar_running_max_temp_c") if metar else None,
             "latest_metar_report_ts_utc": metar.get("latest_report_ts_utc") if metar else "",
             "latest_metar_detect_ts_utc": metar.get("latest_detect_ts_utc") if metar else "",
             "latest_metar_temp_c": metar.get("latest_metar_temp_c") if metar else None,
             "source_running_max_temp_c": src.get("source_running_max_temp_c"),
+            "source_running_max_bracket_c": src.get("source_running_max_bracket_c"),
             "source_running_max_obs_ts_utc": src.get("source_running_max_obs_ts_utc"),
             "source_running_max_detect_ts_utc": src.get("source_running_max_detect_ts_utc"),
+            "source_running_min_temp_c": src.get("source_running_min_temp_c"),
+            "source_running_min_bracket_c": src.get("source_running_min_bracket_c"),
+            "source_running_min_obs_ts_utc": src.get("source_running_min_obs_ts_utc"),
+            "source_running_min_detect_ts_utc": src.get("source_running_min_detect_ts_utc"),
+            "source_running_extreme_temp_c": src.get("source_running_extreme_temp_c"),
+            "source_running_extreme_bracket_c": src.get("source_running_extreme_bracket_c"),
+            "source_running_extreme_obs_ts_utc": src.get("source_running_extreme_obs_ts_utc"),
+            "source_running_extreme_detect_ts_utc": src.get("source_running_extreme_detect_ts_utc"),
             "t_minus_1_no_bracket_c": t_minus_1,
-            "crossed_brackets_c": list(range(metar_max, source_round)),
+            "previous_no_bracket_c": prev_no,
+            "current_bracket_c": source_round,
+            "next_no_bracket_c": nxt_no,
+            "crossed_brackets_c": list(range(metar_max, source_round)) if extreme_kind == "max" else list(range(source_round + 1, metar_max + 1)),
             "paper_snapshot_path": str(paper_path) if paper_path else "",
             "orderbook_snapshot_path": str(orderbook_path) if orderbook_path else "",
             "mode": "telemetry_only_no_orders",
@@ -779,8 +842,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         if expires_at and expires_at > now:
             active_events.append(old)
 
-    # De-dupe active events by key and keep the newest copy.
-    active_by_key = {str(row.get("event_key")): row for row in active_events if row.get("event_key")}
+    # De-dupe active events by key. Current-cycle events are appended before persisted
+    # state rows, so keep the first copy to preserve freshly recomputed fields.
+    active_by_key: dict[str, dict[str, Any]] = {}
+    for row in active_events:
+        key = str(row.get("event_key") or "")
+        if key and key not in active_by_key:
+            active_by_key[key] = row
     active_events = list(active_by_key.values())
 
     for event in sorted(active_events, key=lambda row: str(row.get("created_at_utc"))):
@@ -793,7 +861,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             fresh_scope=args.fresh_scope,
         )
         classification = classify_t_minus_1_no(quotes, args.stale_no_ask_max, args.bot_priced_no_bid_min)
-        if args.signal_basis == "official-running-max":
+        if official_extreme_mode:
             classification = {
                 **classification,
                 **classify_official_running_max(
@@ -804,8 +872,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
                 ),
             }
         fallback_reference_round = None
-        if event.get("source_round_c") is not None and args.signal_basis == "official-running-max":
-            fallback_reference_round = int(event["source_round_c"]) - 1
+        if event.get("source_round_c") is not None and official_extreme_mode:
+            fallback_reference_round = previous_no_bracket(int(event["source_round_c"]), str(event.get("extreme_kind") or args.extreme_kind))
         quote_row = {
             "schema_version": "fast_source_stale_book_quote_snapshot_v1",
             "ts_utc": iso(),
@@ -818,17 +886,39 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "source_temp_c": event.get("source_temp_c"),
             "source_round_c": event.get("source_round_c"),
             "source_bracket_mode": event.get("source_bracket_mode"),
+            "extreme_kind": event.get("extreme_kind"),
             "running_max_basis": event.get("running_max_basis"),
+            "running_extreme_basis": event.get("running_extreme_basis") or event.get("running_max_basis"),
             "reference_running_max_round_c": event.get("reference_running_max_round_c", fallback_reference_round),
+            "reference_running_extreme_round_c": event.get(
+                "reference_running_extreme_round_c",
+                event.get("reference_running_max_round_c", fallback_reference_round),
+            ),
             "reference_running_max_source": event.get(
                 "reference_running_max_source",
-                "official_high_frequency_history" if args.signal_basis == "official-running-max" else "metar_like_sources",
+                "official_high_frequency_history" if official_extreme_mode else "metar_like_sources",
+            ),
+            "reference_running_extreme_source": event.get(
+                "reference_running_extreme_source",
+                event.get("reference_running_max_source", "official_high_frequency_history" if official_extreme_mode else "metar_like_sources"),
             ),
             "source_running_max_temp_c": event.get("source_running_max_temp_c"),
+            "source_running_max_bracket_c": event.get("source_running_max_bracket_c"),
             "source_running_max_obs_ts_utc": event.get("source_running_max_obs_ts_utc"),
             "source_running_max_detect_ts_utc": event.get("source_running_max_detect_ts_utc"),
+            "source_running_min_temp_c": event.get("source_running_min_temp_c"),
+            "source_running_min_bracket_c": event.get("source_running_min_bracket_c"),
+            "source_running_min_obs_ts_utc": event.get("source_running_min_obs_ts_utc"),
+            "source_running_min_detect_ts_utc": event.get("source_running_min_detect_ts_utc"),
+            "source_running_extreme_temp_c": event.get("source_running_extreme_temp_c"),
+            "source_running_extreme_bracket_c": event.get("source_running_extreme_bracket_c"),
+            "source_running_extreme_obs_ts_utc": event.get("source_running_extreme_obs_ts_utc"),
+            "source_running_extreme_detect_ts_utc": event.get("source_running_extreme_detect_ts_utc"),
             "metar_running_max_round_c": event.get("metar_running_max_round_c"),
             "t_minus_1_no_bracket_c": event.get("t_minus_1_no_bracket_c"),
+            "previous_no_bracket_c": event.get("previous_no_bracket_c"),
+            "current_bracket_c": event.get("current_bracket_c"),
+            "next_no_bracket_c": event.get("next_no_bracket_c"),
             "quotes": quotes,
             **classification,
             "mode": "telemetry_only_no_orders",
@@ -851,7 +941,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "source_cities": sorted(source_rows),
         "metar_cities": sorted(metar_rows),
         "signal_basis": args.signal_basis,
+        "extreme_kind": args.extreme_kind,
         "cities": sorted(allowed_cities),
+        "gamma_event_slugs": gamma_event_slugs,
         "new_events": len(new_events),
         "active_events": len(active_events),
         "quote_snapshots": len(quote_rows),
@@ -881,9 +973,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--high-frequency-latest", default=str(HIGH_FREQUENCY_LATEST))
     parser.add_argument("--high-frequency-jsonl", default=str(HIGH_FREQUENCY_JSONL))
     parser.add_argument("--source-events-jsonl", default=str(SOURCE_EVENTS_JSONL))
-    parser.add_argument("--signal-basis", choices=["latest-vs-metar", "official-running-max"], default="latest-vs-metar")
+    parser.add_argument(
+        "--signal-basis",
+        choices=["latest-vs-metar", "official-running-max", "official-running-extreme"],
+        default="latest-vs-metar",
+    )
+    parser.add_argument("--extreme-kind", choices=["max", "min"], default="max")
     parser.add_argument("--cities", nargs="*", default=[])
     parser.add_argument("--floor-cities", nargs="*", default=["HongKong"])
+    parser.add_argument("--gamma-event-slug", action="append", default=[])
     parser.add_argument(
         "--sources",
         nargs="*",

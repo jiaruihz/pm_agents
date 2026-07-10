@@ -246,6 +246,17 @@ MONITOR_DEFS: list[dict] = [
         "tmux_session": "weather_hko_running_max_stale_book_shadow",
     },
     {
+        "monitor_instance_id": "hko_running_min_stale_book_shadow",
+        "display_name": "HKO Running-Min Stale-Book Shadow",
+        "feed_kind": "high_frequency_observation",
+        "sources": ["hko_obs"],
+        "scan_interval_sec": 30,
+        "subdir": "hko_running_min_stale_book_shadow",
+        "journals": ["events.jsonl", "quote_snapshots.jsonl"],
+        "start_command": "scripts/ops/start_weather_hko_running_min_stale_book_shadow.sh",
+        "tmux_session": "weather_hko_running_min_stale_book_shadow",
+    },
+    {
         "monitor_instance_id": "fast_source_prev_no_trial",
         "display_name": "Fast-Source Prev-NO Trial (live)",
         "feed_kind": "high_frequency_observation",
