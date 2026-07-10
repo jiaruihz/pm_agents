@@ -75,7 +75,7 @@ def test_default_source_profiles_cover_current_city_universe():
 
     assert len(profiles) == 52
     assert sum(profile.live_eligible for profile in profiles.values()) == 41
-    assert sum(profile.primary_source == "aviationweather_metar" for profile in profiles.values()) == 39
+    assert sum(profile.primary_source == "aviationweather_metar" for profile in profiles.values()) == 41
     assert not [profile.city for profile in profiles.values() if profile.timezone_name == "UTC"]
 
     assert profiles["Austin"].primary_source == "synopticdata_timeseries"
@@ -86,6 +86,12 @@ def test_default_source_profiles_cover_current_city_universe():
     assert profiles["Paris"].live_eligible
     assert profiles["MexicoCity"].primary_source == "aviationweather_metar"
     assert not profiles["MexicoCity"].live_eligible
+    assert profiles["Seoul"].settlement_source_class == "default_source_watchlist"
+    assert profiles["Seoul"].primary_source == "aviationweather_metar"
+    assert not profiles["Seoul"].live_eligible
+    assert profiles["Shenzhen"].settlement_source_class == "default_source_watchlist"
+    assert profiles["Shenzhen"].primary_source == "aviationweather_metar"
+    assert not profiles["Shenzhen"].live_eligible
     assert profiles["HongKong"].official_station_or_feed == "HKO"
     assert not profiles["HongKong"].live_eligible
     assert profiles["Boston"].timezone_name == "America/New_York"

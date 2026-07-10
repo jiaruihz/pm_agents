@@ -11,6 +11,7 @@ from weather_data_feed.models import SourceProfile
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_PROFILES_JSON = Path(__file__).resolve().with_name("source_profiles.json")
 DEFAULT_RESEARCH_REGISTRY_JSON = ROOT / "docs/analysis/2026-06/2026-06-14-settlement-source-registry-v0.json"
+SYNOPTIC_VERIFIED_PRIMARY_CITIES = {"Austin", "Dallas", "Houston"}
 
 
 def _clean(value: Any) -> str:
@@ -42,6 +43,9 @@ def _float_or_none(value: Any) -> float | None:
 def _default_primary_source(row: dict[str, Any]) -> str:
     cls = _clean(row.get("settlement_source_class"))
     feed = _clean(row.get("official_station_or_feed"))
+    city = _clean(row.get("city"))
+    if city in SYNOPTIC_VERIFIED_PRIMARY_CITIES and cls == "default_wu_station_by_rules" and feed:
+        return "synopticdata_timeseries"
     if cls in {"default_wu_station_by_rules", "default_source_watchlist", "official_station_diff_confirmed"} and feed:
         return "aviationweather_metar"
     if cls == "special_source_confirmed" and feed == "HKO":
@@ -53,6 +57,9 @@ def _default_primary_source(row: dict[str, Any]) -> str:
 
 def _default_fallback_sources(row: dict[str, Any]) -> tuple[str, ...]:
     cls = _clean(row.get("settlement_source_class"))
+    city = _clean(row.get("city"))
+    if city in SYNOPTIC_VERIFIED_PRIMARY_CITIES and cls == "default_wu_station_by_rules":
+        return ("aviationweather_metar", "iem_asos_madishf_latest", "iem_asos")
     if cls in {"default_wu_station_by_rules", "default_source_watchlist", "official_station_diff_confirmed"}:
         return ("iem_asos",)
     return ()

@@ -78,9 +78,9 @@ Important distinction: `pm_history` / `final_yes` remains the market settlement 
 | default_wu_station_by_rules | 34 | 20675 | 2694 | 617 |
 | official_station_diff_confirmed | 7 | 3719 | 491 | 106 |
 | no_recent_market_or_unknown_rules | 4 | 85 | 19 | 3 |
-| blocked_unresolved_settlement_basis | 3 | 1826 | 245 | 52 |
+| blocked_unresolved_settlement_basis | 1 | 616 | 88 | 19 |
 | non_wu_source_by_rules | 2 | 1088 | 152 | 37 |
-| default_source_watchlist | 1 | 609 | 8 | 3 |
+| default_source_watchlist | 3 | 1819 | 165 | 36 |
 | special_source_confirmed | 1 | 478 | 53 | 13 |
 
 ## City Registry Highlights
@@ -88,8 +88,8 @@ Important distinction: `pm_history` / `final_yes` remains the market settlement 
 | city | class | configured | official | align | days | settled_candidate_rows | action |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Moscow | blocked_unresolved_settlement_basis | UUWW | unknown_effective_source | 88.9% | 27 | 88 | exclude from official-source reheat-risk/station-basis research until root cause is found |
-| Seoul | blocked_unresolved_settlement_basis | RKSI | unknown_effective_source | 77.8% | 36 | 109 | exclude from official-source reheat-risk/station-basis research until root cause is found |
-| Shenzhen | blocked_unresolved_settlement_basis | ZGSZ | unresolved_wu_feed | 71.4% | 28 | 48 | exclude from official-source reheat-risk/station-basis research until root cause is found |
+| Seoul | default_source_watchlist | RKSI | RKSI | 100.0% | 44 | 109 | settlement source reconciled, but keep shadow/watchlist until AMOS fast-lead relationship to WU RKSI is forward-qualified |
+| Shenzhen | default_source_watchlist | ZGSZ | ZGSZ | 89.3% | 28 | 48 | shadow/watchlist only; official settlement should be Bao'an/ZGSZ, but our API reconstruction still has obs_name/API-basis mismatches |
 | MexicoCity | default_source_watchlist | MMMX | MMMX | 96.4% | 28 | 8 | allowed for broad research but keep in settlement-watchlist |
 | Boston | no_recent_market_or_unknown_rules | KBOS | None | rules_only |  | 0 | do not use for source-sensitive research until rules/settlement source is identified |
 | Lagos | no_recent_market_or_unknown_rules | DNMM | None | rules_only |  | 19 | do not use for source-sensitive research until rules/settlement source is identified |
@@ -113,7 +113,9 @@ Important distinction: `pm_history` / `final_yes` remains the market settlement 
 - Station-basis strategies: confirmed station-diff cities are candidates only after per-market rules recheck. The edge is the market watching the wrong station, not generic temperature theta.
 - HongKong: use HKO Daily Extract / live HKO feed semantics, decimal daily max, and floor-to-bracket mapping. VHHH/IEM is not an acceptable settlement feature source.
 - Jakarta: use WIHH/Halim, not WIII/Soekarno-Hatta, for settlement/source features.
-- Moscow, Seoul, Shenzhen: blocked for source-sensitive trading research until the unresolved mismatch is explained.
+- Moscow: blocked for source-sensitive trading research until the unresolved mismatch is explained.
+- Seoul: current rules name WU RKSI and the refreshed 2026-05-25..2026-07-07 WU-history check matches 44/44 with round(C); keep shadow/watchlist until AMOS fast-lead relationship to WU RKSI is forward-qualified.
+- Shenzhen: current rules name WU Shenzhen Bao'an/ZGSZ. The suspicious part is our `weather_com_history_hourly` API payload for `ZGSZ:9:CN`, whose `obs_name` is Lau Fau Shan and still has recent mismatches; keep shadow/watchlist, not live, until the rendered WU daily table is captured and matched.
 - `pm_history` remains the payout label for strategy PnL; official-source reconstruction is for feature alignment, not replacing market settlement truth.
 
 ## Next Research Directions

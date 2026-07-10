@@ -22,16 +22,48 @@ from weather_data_feed.source_registry import (
 )
 
 
+REGISTRY_ROW_OVERRIDES: dict[str, dict[str, Any]] = {
+    "Seoul": {
+        "official_station_or_feed": "RKSI",
+        "settlement_source_class": "default_source_watchlist",
+        "official_source": "WU market rules station matches configured station",
+        "mapping_rule": "weather_com_history_hourly RKSI:9:KR max, round(C) to bracket",
+        "alignment_days": 44,
+        "alignment_matches": 44,
+        "alignment_rate": 1.0,
+        "alignment_source": "settlement_basis_seoul_shenzhen_20260710",
+        "downstream_action": "settlement source reconciled, but keep shadow/watchlist until AMOS fast-lead relationship to WU RKSI is forward-qualified",
+    },
+    "Shenzhen": {
+        "official_station_or_feed": "ZGSZ",
+        "settlement_source_class": "default_source_watchlist",
+        "official_source": "WU Shenzhen Bao'an Intl Airport Station from market rules",
+        "mapping_rule": "WU page station is Shenzhen Bao'an/ZGSZ; weather_com_history_hourly location ZGSZ:9:CN returns obs_name=Lau Fau Shan, so keep this as an API payload anomaly until browser-rendered daily table is captured",
+        "alignment_days": 28,
+        "alignment_matches": 25,
+        "alignment_rate": 0.8929,
+        "alignment_source": "settlement_basis_seoul_shenzhen_20260710",
+        "downstream_action": "shadow/watchlist only; official settlement should be Bao'an/ZGSZ, but our API reconstruction still has obs_name/API-basis mismatches",
+    },
+}
+
+
 def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 def as_profile_row(row: dict[str, Any]) -> dict[str, Any]:
+    override = REGISTRY_ROW_OVERRIDES.get(str(row.get("city") or ""))
+    if override:
+        row = {**row, **override}
     profile = source_profile_from_registry_row(row)
     out = asdict(profile)
     out["fallback_sources"] = list(profile.fallback_sources)
     out["live_eligible"] = profile.live_eligible
-    out["source_profile_note"] = source_profile_note(profile.settlement_source_class)
+    if profile.primary_source == "synopticdata_timeseries":
+        out["source_profile_note"] = "live-capable SynopticData 5-min station feed verified on 2026-07-04; aviationweather and IEM remain fallbacks"
+    else:
+        out["source_profile_note"] = source_profile_note(profile.settlement_source_class)
     return out
 
 
