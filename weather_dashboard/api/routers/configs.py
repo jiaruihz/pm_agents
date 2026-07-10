@@ -25,6 +25,8 @@ def _definition_payload(row: sqlite3.Row) -> dict:
         "family": row["family"],
         "strategy_name": row["strategy_name"],
         "description": row["description"],
+        "portfolio_status": row["portfolio_status"],
+        "portfolio_note": row["portfolio_note"],
         "strategy_group": row["strategy_group"],
         "domain": row["domain"],
         "is_active": bool(row["is_active"]),
@@ -78,6 +80,7 @@ def list_strategy_definitions(db: Db):
         SELECT
             d.strategy_key, d.family, d.strategy_name, d.description,
             d.strategy_group, d.domain, d.is_active, d.def_source,
+            d.portfolio_status, d.portfolio_note,
             COUNT(DISTINCT c.config_id) AS config_count,
             COUNT(DISTINCT si.instance_id) AS instance_count,
             COUNT(DISTINCT CASE WHEN rt.process_status='running' THEN si.instance_id END) AS running_instance_count,
@@ -86,8 +89,7 @@ def list_strategy_definitions(db: Db):
         LEFT JOIN strategy_config c ON c.strategy_key=d.strategy_key
         LEFT JOIN strategy_instance si ON si.strategy_key=d.strategy_key
         LEFT JOIN strategy_instance_runtime rt ON rt.instance_id=si.instance_id
-        WHERE d.domain='weather'
-          AND (c.config_id IS NOT NULL OR si.instance_id IS NOT NULL)
+        WHERE c.config_id IS NOT NULL OR si.instance_id IS NOT NULL
         GROUP BY d.strategy_key
         ORDER BY live_instance_count DESC, running_instance_count DESC, d.strategy_key
         """
@@ -102,6 +104,7 @@ def get_strategy_definition(strategy_key: str, db: Db):
         SELECT
             d.strategy_key, d.family, d.strategy_name, d.description,
             d.strategy_group, d.domain, d.is_active, d.def_source,
+            d.portfolio_status, d.portfolio_note,
             COUNT(DISTINCT c.config_id) AS config_count,
             COUNT(DISTINCT si.instance_id) AS instance_count,
             COUNT(DISTINCT CASE WHEN rt.process_status='running' THEN si.instance_id END) AS running_instance_count,

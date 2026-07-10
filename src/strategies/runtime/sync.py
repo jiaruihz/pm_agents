@@ -71,16 +71,22 @@ def _sync_runtime_defs(conn: sqlite3.Connection, commit: str | None, now: str) -
             """
             INSERT INTO strategy_def
                 (strategy_key, family, strategy_group, domain, strategy_name,
-                 meta_json, def_source, description, is_active, spec_commit, updated_at_utc)
-            VALUES (?, ?, ?, ?, ?, ?, 'runtime_definition', ?, ?, ?, ?)
+                 meta_json, def_source, description, portfolio_status, portfolio_note,
+                 is_active, spec_commit, updated_at_utc)
+            VALUES (?, ?, ?, ?, ?, ?, 'runtime_definition', ?, ?, ?, ?, ?, ?)
             ON CONFLICT(strategy_key) DO UPDATE SET
                 family=excluded.family,
                 strategy_group=excluded.strategy_group,
                 domain=excluded.domain,
                 strategy_name=excluded.strategy_name,
                 meta_json=excluded.meta_json,
-                def_source=excluded.def_source,
+                def_source=CASE
+                    WHEN strategy_def.def_source='manifest' THEN strategy_def.def_source
+                    ELSE excluded.def_source
+                END,
                 description=excluded.description,
+                portfolio_status=excluded.portfolio_status,
+                portfolio_note=excluded.portfolio_note,
                 is_active=excluded.is_active,
                 spec_commit=excluded.spec_commit,
                 updated_at_utc=excluded.updated_at_utc
@@ -89,6 +95,7 @@ def _sync_runtime_defs(conn: sqlite3.Connection, commit: str | None, now: str) -
                 definition.strategy_key, definition.family, definition.strategy_group,
                 definition.domain, definition.strategy_name,
                 json.dumps(definition.meta, ensure_ascii=False), definition.description,
+                definition.portfolio_status, definition.portfolio_note,
                 int(definition.is_active), commit, now,
             ),
         )

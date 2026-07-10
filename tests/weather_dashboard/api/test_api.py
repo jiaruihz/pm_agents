@@ -243,10 +243,12 @@ def test_strategy_management_exposes_definition_config_and_instance(client, api_
     )
     assert low_price["config_count"] >= 1
     assert low_price["instance_count"] >= 1
+    assert low_price["portfolio_status"] == "forward_live"
 
     detail = client.get("/api/strategy-definitions/forecast_quality.low_price_yes_lottery")
     assert detail.status_code == 200
     assert detail.json()["strategy"]["strategy_name"] == "低价 YES 彩票型策略"
+    assert "tiny-live" in detail.json()["strategy"]["portfolio_note"]
 
     instances = client.get("/api/strategy-instances?strategy_key=forecast_quality.low_price_yes_lottery")
     assert instances.status_code == 200

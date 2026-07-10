@@ -102,6 +102,8 @@ export interface StrategyDefinitionRow {
   domain: string;
   is_active: boolean;
   def_source: string;
+  portfolio_status: string;
+  portfolio_note: string;
   config_count: number;
   instance_count: number;
   running_instance_count: number;

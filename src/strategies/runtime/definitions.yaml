@@ -2,59 +2,95 @@
   family: forecast_quality.low_price_yes_lottery
   strategy_name: 低价 YES 彩票型策略
   description: 在低价温度 exact bracket YES 中寻找高赔率候选，以小仓位前向收集执行和结算证据。
+  portfolio_status: forward_live
+  portfolio_note: 当前主线之一：tiny-live 前向取证。不是已确认 alpha，运行与订单新鲜度以 Runtime 为准。
 - strategy_key: latency_arb.fast_source_prev_no
   family: latency_arb.fast_source_prev_no
   strategy_name: 快源前档 NO
   description: 利用更快的观测或市场更新，交易上一温度档 NO 的短时定价偏差。
+  portfolio_status: forward_live
+  portfolio_note: 当前本机前向取证线；此刻有 healthy running instance，仍按小仓和执行质量评估。
 - strategy_key: latency_arb.official_running_extreme_stale_book
   family: latency_arb.official_running_extreme_stale_book
   strategy_name: 官方实况极值陈旧盘口
   description: 在官方观测已出现新的日内极值、但对应温度盘口尚未充分更新时，记录和研究可执行的陈旧盘口机会。
+  portfolio_status: active_research
+  portfolio_note: 当前研究主线：三个 zero-notional observer 正在运行，不真实下单。
+- strategy_key: weather_edge_v1
+  family: weather_edge_v1
+  strategy_name: 旧天气概率 Edge 基线
+  description: 旧 mid_price_core 天气概率与盘口中价基线，保留完整历史 run、订单和成交血缘。
+  portfolio_status: historical
+  portfolio_note: 历史基线：mid_price_core 实盘已停，不是当前主线，也不应据旧 PnL 做决策。
 - strategy_key: reheat_risk.current_yes
   family: reheat_risk.current_yes
   strategy_name: 当前档 YES 路径策略
   description: 判断当前最高温 exact bracket 是否能守住，并显式处理继续升温导致的 overshoot 风险。
+  portfolio_status: historical_live
+  portfolio_note: 有历史 tiny-live 记录，但本机观测已陈旧；不是当前 Mac 生产主线。
 - strategy_key: reheat_risk.higher_no_carry
   family: reheat_risk.higher_no_carry
   strategy_name: 高档 NO carry
   description: 研究较高温度档 NO 在剩余升温窗口中的 carry 与尾部风险。
+  portfolio_status: dormant_research
+  portfolio_note: 暂不主线：保留 shadow/telemetry 证据，尚未达到 live 标准。
 - strategy_key: reheat_risk.low_price_yes
   family: reheat_risk.low_price_yes
   strategy_name: 低价 YES 反转研究
   description: 研究重新升温路径中的低价 YES 反转机会；当前只用于 shadow 或历史复盘。
+  portfolio_status: blocked_research
+  portfolio_note: 研究方向已保留，但当前 forward shadow 被数据/特征新鲜度阻塞。
 - strategy_key: reheat_risk.metar_cross
   family: reheat_risk.metar_cross
   strategy_name: METAR 跨档 NO
   description: 根据官方观测跨越前一温度档后的路径状态，选择前档 NO 表达。
+  portfolio_status: historical_live
+  portfolio_note: 有历史 tiny-live 记录，但本机 runtime stale；当前不作为本机主线。
 - strategy_key: reheat_risk.regime_routed_no
   family: reheat_risk.regime_routed_no
   strategy_name: Regime-routed NO
   description: 按温度路径状态选择 NO 侧表达，并以价格和容量纪律控制入场质量。
+  portfolio_status: historical_live
+  portfolio_note: 旧 tiny-live forward probe，当前本机实例均未观测到新鲜进程；保留用于血缘和复盘。
 - strategy_key: reheat_risk.tmax_distribution_edge
   family: reheat_risk.tmax_distribution_edge
   strategy_name: Tmax 分布 Edge
   description: 估计最终最高温落在 current、D1、D2 与 tail 的概率，再选择最有价值的 exact bracket 表达。
+  portfolio_status: active_research
+  portfolio_note: 当前研究主线：分布模型与 shadow 正在运行；live instance 目前 paused，未升为正式实盘。
 - strategy_key: reheat_risk.value_d1_no
   family: reheat_risk.value_d1_no
   strategy_name: D1 NO 价值探针
   description: 评估下一温度档 NO 的价格是否低估，重点核验 overshoot 风险和真实可成交容量。
+  portfolio_status: research_candidate
+  portfolio_note: 候选研究头：当前仅计划/shadow，尚未获得 tiny-live 执行批准。
 - strategy_key: range_rv
   family: range_rv
   strategy_name: 温度区间相对价值
   description: 研究同一城市温度区间之间的相对定价偏差。
+  portfolio_status: dormant_research
+  portfolio_note: 暂不主线：历史统计不满足 live/forward 标准，保留 zero-notional 研究。
 - strategy_key: station_basis
   family: station_basis
   strategy_name: 站点基差
   description: 用站点与结算城市之间的观测来源偏差构造 shadow 信号。
+  portfolio_status: blocked_research
+  portfolio_note: 暂不主线：仍缺前向覆盖与 source 条件，当前 shadow 被阻塞。
 - strategy_key: market_structure.all_yes_underround
   family: market_structure.all_yes_underround
   strategy_name: 全 YES 欠圆市场结构
   description: 监控同一市场所有 YES 合计价格异常偏低的盘口结构机会。
+  portfolio_status: historical
+  portfolio_note: 历史研究：离线结构存在，但实盘受全腿成交与部分成交风险限制，不进入主线。
 - strategy_key: data_quality.runtime_monitor
   family: data_quality.runtime_monitor
   strategy_name: 策略运行监控
   description: 只读检查 live 与 shadow runner 的心跳、数据新鲜度、执行器和空转状态。
+  portfolio_status: monitor
+  portfolio_note: 运维监控，不是交易策略。
 - strategy_key: data_quality
   family: data_quality
   strategy_name: 数据时序监控
   description: 检查观测源、orderbook 与 snapshot 的时序和同步质量，不参与交易决策。
+  portfolio_status: monitor
+  portfolio_note: 数据监控，不是交易策略。

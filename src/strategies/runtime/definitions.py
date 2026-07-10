@@ -23,6 +23,8 @@ class StrategyDefinition:
     description: str
     strategy_group: str = "weather"
     domain: str = "weather"
+    portfolio_status: str = "research"
+    portfolio_note: str = ""
     is_active: bool = True
     meta: dict[str, object] = field(default_factory=dict)
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from weather_dashboard.db.connection import get_conn
 
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 
 def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -54,6 +54,8 @@ def _ensure_strategy_def_columns(conn: sqlite3.Connection) -> None:
         "strategy_module": "TEXT NOT NULL DEFAULT ''",
         "meta_json": "TEXT NOT NULL DEFAULT '{}'",
         "def_source": "TEXT NOT NULL DEFAULT 'instance_family'",
+        "portfolio_status": "TEXT NOT NULL DEFAULT 'unclassified'",
+        "portfolio_note": "TEXT NOT NULL DEFAULT ''",
     }
     for column, decl in additions.items():
         if column not in existing:
@@ -118,7 +120,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "strategy/config/instance ownership and direct order-instance lineage",
+                "strategy catalog portfolio status and ownership lineage",
             ),
         )
     conn.commit()

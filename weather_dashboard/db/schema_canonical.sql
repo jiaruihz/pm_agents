@@ -488,6 +488,8 @@ CREATE TABLE IF NOT EXISTS strategy_def (
     meta_json        TEXT NOT NULL DEFAULT '{}',
     def_source       TEXT NOT NULL DEFAULT 'instance_family',  -- manifest | instance_family
     description      TEXT NOT NULL DEFAULT '',
+    portfolio_status TEXT NOT NULL DEFAULT 'unclassified',
+    portfolio_note   TEXT NOT NULL DEFAULT '',
     is_active        INTEGER NOT NULL DEFAULT 1,
     spec_commit      TEXT,
     updated_at_utc   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))

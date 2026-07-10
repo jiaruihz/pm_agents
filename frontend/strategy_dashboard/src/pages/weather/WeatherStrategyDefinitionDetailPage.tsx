@@ -29,6 +29,7 @@ export function WeatherStrategyDefinitionDetailPage(): JSX.Element {
           <section style={heroStyle}>
             <div style={keyStyle}>{strategy.strategy_key}</div>
             <div style={descStyle}>{strategy.description}</div>
+            <div style={portfolioStyle}>当前定位 · {strategy.portfolio_note}</div>
             <div style={metricLineStyle}>
               <Metric label="Configs" value={strategy.config_count} />
               <Metric label="Instances" value={strategy.instance_count} />
@@ -87,6 +88,7 @@ const sectionStyle: React.CSSProperties = { marginTop: 24 };
 const sectionTitleStyle: React.CSSProperties = { margin: "0 0 10px", fontSize: 16 };
 const keyStyle: React.CSSProperties = { color: "var(--muted)", fontFamily: "IBM Plex Mono, monospace", fontSize: 11, overflowWrap: "anywhere" };
 const descStyle: React.CSSProperties = { margin: "10px 0 12px", lineHeight: 1.55, fontSize: 14 };
+const portfolioStyle: React.CSSProperties = { margin: "-3px 0 12px", color: "var(--muted)", lineHeight: 1.5, fontSize: 13 };
 const metricLineStyle: React.CSSProperties = { display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12 };
 const stackStyle: React.CSSProperties = { display: "grid", gap: 8 };
 const rowLinkStyle: React.CSSProperties = { color: "inherit", textDecoration: "none" };
