@@ -182,10 +182,7 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
 
   const activeRows = useMemo(() => data?.strategies ?? [], [data]);
   const queueRows = data?.shadow_queue ?? [];
-  const shadowRows = useMemo(
-    () => activeRows.filter((row) => row.lifecycle_status === "shadow" || row.execution_mode === "zero_notional_shadow"),
-    [activeRows],
-  );
+  const groupedRows = useMemo(() => groupRuntimeRows(activeRows), [activeRows]);
 
   useEffect(() => {
     if (!data || activeRows.length === 0) return;
@@ -265,21 +262,11 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
             <section style={panelStyle}>
               <div style={sectionHeadStyle}>
                 <div>
-                  <h2 style={sectionTitleStyle}>Strategy Status</h2>
+                  <h2 style={sectionTitleStyle}>Runtime Status</h2>
                   <div style={subtleStyle}>{activeRows.length} registered instances · target {data.target_date}</div>
                 </div>
               </div>
-              <StrategyTable rows={activeRows} />
-            </section>
-
-            <section style={panelStyle}>
-              <div style={sectionHeadStyle}>
-                <div>
-                  <h2 style={sectionTitleStyle}>Shadow Instances</h2>
-                  <div style={subtleStyle}>{shadowRows.length} active or registered zero-notional tracks</div>
-                </div>
-              </div>
-              <ShadowInstanceTable rows={shadowRows} />
+              <RuntimeStatusGroups groups={groupedRows} />
             </section>
 
             <section style={panelStyle}>
@@ -296,6 +283,81 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
       </>
     </PageFrame>
   );
+}
+
+type RuntimeGroup = {
+  key: string;
+  title: string;
+  desc: string;
+  rows: StrategyRuntimeRow[];
+  color: string;
+};
+
+function groupRuntimeRows(rows: StrategyRuntimeRow[]): RuntimeGroup[] {
+  const isShadow = (row: StrategyRuntimeRow) => row.lifecycle_status === "shadow" || row.execution_mode === "zero_notional_shadow";
+  const isMonitor = (row: StrategyRuntimeRow) => ["monitor", "telemetry"].includes(row.lifecycle_status) || ["monitor", "telemetry"].includes(row.execution_mode);
+  const isBlocked = (row: StrategyRuntimeRow) => ["blocked", "stale", "shelved"].includes(row.lifecycle_status) || ["blocked", "stale", "shelved"].includes(row.health_status);
+  const isLive = (row: StrategyRuntimeRow) => row.lifecycle_status === "live" || row.execution_mode === "live";
+  const isRunning = (row: StrategyRuntimeRow) => row.process_status === "running";
+  const isStoppedish = (row: StrategyRuntimeRow) => ["stopped", "unknown", "crashed", "stale"].includes(row.process_status);
+
+  const groups: RuntimeGroup[] = [
+    {
+      key: "running_live",
+      title: "Running Live",
+      desc: "实盘意图且当前观测到进程在跑",
+      color: "var(--ok)",
+      rows: rows.filter((row) => isLive(row) && isRunning(row)),
+    },
+    {
+      key: "running_shadow",
+      title: "Running Shadow",
+      desc: "零 notional / shadow 且当前观测到进程在跑",
+      color: "var(--accent)",
+      rows: rows.filter((row) => isShadow(row) && isRunning(row)),
+    },
+    {
+      key: "stopped_live",
+      title: "Stopped / Unknown Live",
+      desc: "标记为 live，但 supervisor 未观测到本机进程；需要看是否远端镜像、已停、或缺 tmux_session",
+      color: "var(--bad)",
+      rows: rows.filter((row) => isLive(row) && isStoppedish(row)),
+    },
+    {
+      key: "stopped_shadow",
+      title: "Stopped / Unknown Shadow",
+      desc: "标记为 shadow，但当前未观测到本机进程",
+      color: "var(--muted)",
+      rows: rows.filter((row) => isShadow(row) && isStoppedish(row)),
+    },
+    {
+      key: "monitor",
+      title: "Monitor / Telemetry",
+      desc: "监控或遥测实例，不应按交易策略解读",
+      color: "var(--accent-2)",
+      rows: rows.filter((row) => isMonitor(row) && !isLive(row) && !isShadow(row)),
+    },
+    {
+      key: "blocked",
+      title: "Blocked / Stale / Shelved",
+      desc: "已明确 blocked/stale/shelved 的实例",
+      color: "var(--bad)",
+      rows: rows.filter((row) => isBlocked(row) && !isLive(row) && !isShadow(row) && !isMonitor(row)),
+    },
+  ];
+
+  const assigned = new Set(groups.flatMap((group) => group.rows.map((row) => row.strategy_instance)));
+  const otherRows = rows.filter((row) => !assigned.has(row.strategy_instance));
+  if (otherRows.length > 0) {
+    groups.push({
+      key: "other",
+      title: "Other",
+      desc: "未落入标准运行状态分组的实例",
+      color: "var(--muted)",
+      rows: otherRows,
+    });
+  }
+  return groups;
 }
 
 function RuntimeDetailPanel({ detail }: { detail: StrategyRuntimeDetail }) {
@@ -566,11 +628,16 @@ function RecentRecordTable({
 
 function SummaryGrid({ data }: { data: StrategyRuntimeOverview }) {
   const s = data.summary;
+  const running = data.strategies.filter((row) => row.process_status === "running").length;
+  const stopped = data.strategies.filter((row) => row.process_status === "stopped").length;
+  const unknown = data.strategies.filter((row) => row.process_status === "unknown").length;
   return (
     <div style={metricGridStyle}>
       <Metric label="Registered" value={String(s.total_strategies)} />
       <Metric label="Live" value={String(s.live_strategies)} color="var(--ok)" />
       <Metric label="Shadow" value={String(s.shadow_strategies)} color="var(--accent)" />
+      <Metric label="Running" value={String(running)} color={running > 0 ? "var(--ok)" : undefined} />
+      <Metric label="Stopped / unknown" value={`${stopped} / ${unknown}`} color={stopped + unknown > 0 ? "var(--bad)" : undefined} />
       <Metric label="Telemetry" value={String(s.telemetry_strategies)} />
       <Metric label="Healthy" value={String(s.healthy_strategies)} color="var(--ok)" />
       <Metric label="Blocked / stale" value={`${s.blocked_strategies} / ${s.stale_strategies}`} color={s.blocked_strategies + s.stale_strategies > 0 ? "var(--bad)" : undefined} />
@@ -589,11 +656,28 @@ function Metric({ label, value, color = "inherit" }: { label: string; value: str
   );
 }
 
-function StrategyTable({ rows }: { rows: StrategyRuntimeRow[] }) {
+function RuntimeStatusGroups({ groups }: { groups: RuntimeGroup[] }) {
   return (
-    <div style={strategyListStyle}>
-      {rows.map((row) => (
-        <StrategyRowView key={row.strategy_instance} row={row} />
+    <div style={groupStackStyle}>
+      {groups.map((group) => (
+        <section key={group.key} style={runtimeGroupStyle}>
+          <div style={runtimeGroupHeadStyle}>
+            <div>
+              <h3 style={runtimeGroupTitleStyle}>{group.title}</h3>
+              <div style={subtleStyle}>{group.desc}</div>
+            </div>
+            <Badge text={String(group.rows.length)} color={group.color} />
+          </div>
+          {group.rows.length === 0 ? (
+            <div style={mutedInlineStyle}>No instances.</div>
+          ) : (
+            <div style={strategyListStyle}>
+              {group.rows.map((row) => (
+                <StrategyRowView key={row.strategy_instance} row={row} />
+              ))}
+            </div>
+          )}
+        </section>
       ))}
     </div>
   );
@@ -621,6 +705,7 @@ function StrategyRowView({ row }: { row: StrategyRuntimeRow }) {
           <div style={strategyTitleRowStyle}>
             <h3 style={strategyCardTitleStyle}>{row.display_name}</h3>
             <Badge text={row.lifecycle_status} color={statusColor(row.lifecycle_status)} />
+            <Badge text={row.process_status} color={processColor(row.process_status)} />
             <Badge text={row.health_status} color={statusColor(row.health_status)} />
           </div>
           <div style={strategyDescriptionStyle}>{strategyDescriptionZh(row)}</div>
@@ -633,6 +718,7 @@ function StrategyRowView({ row }: { row: StrategyRuntimeRow }) {
         <MiniStat label="target" value={targetLabel(row.target_status)} />
         <MiniStat label="age" value={fmtAge(row.heartbeat_age_min)} />
         <MiniStat label="mode" value={row.execution_mode} />
+        <MiniStat label="process" value={row.process_status} />
         <MiniStat label="rows" value={counts} />
         <MiniStat label="fact / real" value={`${fmtInt(row.fact_trade_rows)} / ${fmtInt(row.fact_live_real_rows)}`} />
         <MiniStat label="cap / live" value={cap || "-"} />
@@ -655,6 +741,12 @@ function StrategyRowView({ row }: { row: StrategyRuntimeRow }) {
       </div>
     </article>
   );
+}
+
+function processColor(status: string): string {
+  if (status === "running") return "var(--ok)";
+  if (["stopped", "crashed", "stale"].includes(status)) return "var(--bad)";
+  return "var(--muted)";
 }
 
 function ShadowQueueTable({ rows }: { rows: StrategyShadowQueueRow[] }) {
@@ -688,47 +780,6 @@ function ShadowQueueTable({ rows }: { rows: StrategyShadowQueueRow[] }) {
               <td style={monoTdStyle}>{shortPath(row.target_runtime_dir)}</td>
               <td style={tdStyle}>{listText(row.required_fields, 4)}</td>
               <td style={tdStyle}>{listText(row.blockers) !== "-" ? listText(row.blockers) : row.notes ?? "-"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ShadowInstanceTable({ rows }: { rows: StrategyRuntimeRow[] }) {
-  if (rows.length === 0) {
-    return <div style={mutedBlockStyle}>No active shadow runtimes.</div>;
-  }
-  return (
-    <div style={tableWrapStyle}>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Shadow</th>
-            <th style={thStyle}>Health</th>
-            <th style={numThStyle}>Rows</th>
-            <th style={thStyle}>Latest artifact</th>
-            <th style={thStyle}>Journal</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.strategy_instance}>
-              <td style={tdStyle}>
-                <div style={{ fontWeight: 700 }}>{row.display_name}</div>
-                <div style={monoSmallStyle}>{row.strategy_instance}</div>
-              </td>
-              <td style={tdStyle}>
-                <Badge text={row.health_status} color={statusColor(row.health_status)} />
-                <div style={subtleStyle}>{row.execution_mode}</div>
-              </td>
-              <td style={numTdStyle}>
-                shadow {fmtInt(row.shadow_rows)}
-                <div style={subtleStyle}>paper {fmtInt(row.paper_order_rows)} · telemetry {fmtInt(row.telemetry_rows)}</div>
-              </td>
-              <td style={tdStyle}>{fmtTime(row.latest_data_ts_utc || row.latest_artifact_mtime_utc)}</td>
-              <td style={monoTdStyle}>{shortPath(row.primary_journal_path)}</td>
             </tr>
           ))}
         </tbody>
@@ -837,6 +888,29 @@ const strategyListStyle: React.CSSProperties = {
   gap: 10,
   marginTop: 12,
   minWidth: 0,
+};
+const groupStackStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 14,
+  marginTop: 14,
+  minWidth: 0,
+};
+const runtimeGroupStyle: React.CSSProperties = {
+  borderTop: "1px solid var(--stroke)",
+  paddingTop: 12,
+  minWidth: 0,
+};
+const runtimeGroupHeadStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  minWidth: 0,
+};
+const runtimeGroupTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 15,
 };
 const strategyCardStyle: React.CSSProperties = {
   border: "1px solid var(--stroke)",
