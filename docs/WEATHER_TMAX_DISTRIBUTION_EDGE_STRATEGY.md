@@ -116,6 +116,29 @@ canonical event inventory 中找到更低 sibling；另有 157/188 个 top-two �
 survival v2 已经覆盖的新 alpha。collector 已改为保留完整梯子；D1 real-tail/full-ladder A/B 必须等待完整 fresh
 snapshot 后重做，旧 701 行匹配样本受缺档污染，不能用于升格。
 
+## 2026-07-11 Coherent Expression Calibrator
+
+[2026-07-11-tmax-coherent-expression-calibrator-v1.md](analysis/2026-07/2026-07-11-tmax-coherent-expression-calibrator-v1.md)
+在完整四桶模型之后新增 coherent second-stage calibration，专门修正“全分布更准，但 max-edge 选中子集不准”的目标错位。
+YES/NO 仍由同一 `current/d1/d2/tail` 分布推导，保证互补；没有独立训练互相矛盾的 YES/NO 概率。
+
+三个候选只在 6/21 前按 date-equal logloss 选择：纯 global calibration、紧凑 weather context、exact-book quote geometry。
+预选 primary 是 `coherent_cal_quote(C=0.3, alpha=0.25)`，输入完整模型四桶概率和 PIT 可执行 ask/bid/spread，不含 city/source
+自由参数。6/21..7/08 同分母上：四桶 logloss `0.5887 -> 0.5875`，date-block delta CI `[-0.0045,-0.0003]`；
+fee-adjusted first-lock 为 167 笔、ROI `+11.2%`，相对完整模型 `+3.1pp`，paired CI `[+0.6pp,+5.7pp]`。
+前后半窗 ROI 均为正且均高于 baseline，16 天有 10 天 PnL delta 为正。
+
+重要边界：它只恢复了上一轮 36 个 cancelled profitable `d1_no` 中的 2 个，说明改善不是针对坏案例硬拟合；但 selected
+`d1_yes` 仍为负，winner-selection 条件校准尚未完成。由于模型架构是在看过 6/21+ 研究结果后提出，这段不能再算真正未见
+forward，当前等级只能是 `shadow_candidate`，不得恢复 live。
+
+```text
+candidate = coherent_cal_quote
+execution = zero-notional shadow only
+live_action = none
+next_evidence = fresh forward exact-book quotes + selected/blocked expression ledger
+```
+
 ## 为什么不是继续用原来的 live 版本
 
 原来的 `regime_routed_no` 更像 rule-based route：
@@ -142,6 +165,7 @@ selected/blocked = shadow 记录
 | config | method | edge threshold | 角色 |
 |---|---|---:|---|
 | `tmax_dist_clean_edge02` | `loo_no_city_source_blend` | 0.02 | 主候选：机制更干净，少依赖 city/source 记忆 |
+| `tmax_coherent_cal_quote_v1` | `coherent_cal_quote` | 0.02 | 新模型 shadow candidate：完整四桶概率 + exact-book quote calibration；未接 live |
 | `tmax_dist_city_source_edge02` | `mkt_city_source_blend` | 0.02 | 容量/城市源偏移对照：点估更强、交易更多 |
 | `tmax_dist_clean_edge10` | `loo_no_city_source_blend` | 0.10 | 高 edge 压力测试：旧样本和 verified 很强，但 recent 变薄 |
 
