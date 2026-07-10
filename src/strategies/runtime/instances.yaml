@@ -335,6 +335,36 @@
     - events.jsonl
   - - quote_snapshots
     - quote_snapshots.jsonl
+- strategy_instance: wu_running_min_stale_book_shadow_v1
+  display_name: WU airport running-min stale-book shadow
+  family: latency_arb.official_running_extreme_stale_book
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  config_id: wu_airport_running_min_shadow_v1
+  runtime_dir: /Volumes/jrs/weather_data_feed_service_runtime/output/wu_running_min_stale_book_shadow
+  summary_file: latest.json
+  primary_journal: quote_snapshots.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: events.jsonl
+  start_script: scripts/ops/start_weather_wu_running_min_stale_book_shadow.sh
+  tmux_session: weather_wu_running_min_stale_book_shadow
+  notes: Zero-notional Seoul/Tokyo observer for Wunderground airport daily-low markets.
+    Uses RKSI AMOS and RJTT JMA high-frequency history as running min proxies,
+    records previous warmer-bracket NO, current-bracket YES, and next colder-bracket
+    NO CLOB quotes. No live orders.
+  default_health: unknown
+  expected_live: false
+  artifact_files:
+  - - latest
+    - latest.json
+  - - state
+    - state.json
+  - - events
+    - events.jsonl
+  - - quote_snapshots
+    - quote_snapshots.jsonl
 - strategy_instance: low_price_yes_lottery_tiny_live_v1
   display_name: Low-price YES lottery tiny-live
   family: forecast_quality.low_price_yes_lottery

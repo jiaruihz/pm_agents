@@ -257,6 +257,17 @@ MONITOR_DEFS: list[dict] = [
         "tmux_session": "weather_hko_running_min_stale_book_shadow",
     },
     {
+        "monitor_instance_id": "wu_running_min_stale_book_shadow",
+        "display_name": "WU Airport Running-Min Stale-Book Shadow",
+        "feed_kind": "high_frequency_observation",
+        "sources": ["amos_runway", "jma_amedas"],
+        "scan_interval_sec": 30,
+        "subdir": "wu_running_min_stale_book_shadow",
+        "journals": ["events.jsonl", "quote_snapshots.jsonl"],
+        "start_command": "scripts/ops/start_weather_wu_running_min_stale_book_shadow.sh",
+        "tmux_session": "weather_wu_running_min_stale_book_shadow",
+    },
+    {
         "monitor_instance_id": "fast_source_prev_no_trial",
         "display_name": "Fast-Source Prev-NO Trial (live)",
         "feed_kind": "high_frequency_observation",
