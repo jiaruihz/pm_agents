@@ -59,6 +59,15 @@ OBS_CACHE_CANDIDATES = [
     ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json",
     ROOT / "runtime/weather_edge_v1/observations/latest.json",
 ]
+DATA_FEED_RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
+HIGH_FREQUENCY_LATEST_CANDIDATES = [
+    DATA_FEED_RUNTIME_ROOT / "output/high_frequency_observations/latest.json",
+    Path("~/projects/weather_data_feed_service_runtime/output/high_frequency_observations/latest.json").expanduser(),
+]
+SOURCE_EVENTS_LATEST_CANDIDATES = [
+    DATA_FEED_RUNTIME_ROOT / "output/source_events/latest.json",
+    Path("~/projects/weather_data_feed_service_runtime/output/source_events/latest.json").expanduser(),
+]
 
 
 def utc_now() -> str:
@@ -228,6 +237,169 @@ def load_observations(path: Path | None) -> dict[tuple[str, str], dict[str, Any]
         if city and target_date:
             out[(city, target_date)] = row
     return out
+
+
+def first_existing(paths: list[Path]) -> Path | None:
+    for path in paths:
+        if path.exists():
+            return path
+    return None
+
+
+def market_city_key(value: Any) -> str:
+    text = safe_str(value)
+    aliases = {
+        "Hong Kong": "HongKong",
+        "New York": "NYC",
+        "Los Angeles": "LA",
+        "San Francisco": "SanFrancisco",
+        "Tel Aviv": "TelAviv",
+    }
+    return aliases.get(text, text.replace(" ", ""))
+
+
+def arith_round(value: float) -> int | None:
+    if not math.isfinite(value):
+        return None
+    return int(math.floor(float(value) + 0.5))
+
+
+def native_temp_from_source(row: dict[str, Any], unit: str) -> float:
+    unit = unit.upper()
+    if unit == "F":
+        temp_f = to_float(row.get("temp_f"), math.nan)
+        if math.isfinite(temp_f):
+            return temp_f
+        temp_c = to_float(row.get("temp_c"), math.nan)
+        return temp_c * 9.0 / 5.0 + 32.0 if math.isfinite(temp_c) else math.nan
+    temp_c = to_float(row.get("temp_c"), math.nan)
+    if math.isfinite(temp_c):
+        return temp_c
+    temp_f = to_float(row.get("temp_f"), math.nan)
+    return (temp_f - 32.0) * 5.0 / 9.0 if math.isfinite(temp_f) else math.nan
+
+
+def latest_rows_by_city_date(path: Path | None) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str, Any]]:
+    if path is None or not path.exists():
+        return {}, {"path": str(path) if path else "", "status": "missing", "rows": 0}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        return {}, {"path": str(path), "status": "read_error", "error": f"{type(exc).__name__}: {exc}", "rows": 0}
+    records = [r for r in payload.get("records", []) if isinstance(r, dict)]
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in records:
+        city = market_city_key(row.get("city"))
+        target_date = safe_str(row.get("target_date"))
+        if not city or not target_date:
+            continue
+        key = (city, target_date)
+        row_dt = parse_utc(row.get("observation_time_utc") or row.get("source_report_ts_utc") or row.get("ts_utc"))
+        row_detect = parse_utc(row.get("local_detect_ts_utc") or row.get("fetched_at_utc") or row.get("source_fetch_end_utc"))
+        old = out.get(key)
+        old_dt = parse_utc(old.get("observation_time_utc") or old.get("source_report_ts_utc") or old.get("ts_utc")) if old else None
+        old_detect = parse_utc(old.get("local_detect_ts_utc") or old.get("fetched_at_utc") or old.get("source_fetch_end_utc")) if old else None
+        if old is None or (row_dt or datetime.min.replace(tzinfo=timezone.utc)) > (old_dt or datetime.min.replace(tzinfo=timezone.utc)) or (
+            row_dt == old_dt and (row_detect or datetime.min.replace(tzinfo=timezone.utc)) > (old_detect or datetime.min.replace(tzinfo=timezone.utc))
+        ):
+            out[key] = row
+    return out, {"path": str(path), "status": "ok", "rows": len(records), "keys": len(out)}
+
+
+def source_relation_to_snapshot(detect_dt: datetime | None, snapshot_dt: datetime | None) -> str:
+    if detect_dt is None or snapshot_dt is None:
+        return "unknown"
+    if detect_dt <= snapshot_dt:
+        return "known_by_snapshot"
+    return "newer_than_snapshot"
+
+
+def enrich_source_context(state_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if state_df.empty:
+        return state_df, {"status": "empty_state"}
+    hf_rows, hf_meta = latest_rows_by_city_date(first_existing(HIGH_FREQUENCY_LATEST_CANDIDATES))
+    source_rows, source_meta = latest_rows_by_city_date(first_existing(SOURCE_EVENTS_LATEST_CANDIDATES))
+    enriched: list[dict[str, Any]] = []
+    counters = Counter()
+    for item in state_df.to_dict("records"):
+        row = dict(item)
+        city = market_city_key(row.get("city"))
+        target_date = safe_str(row.get("target_date"))
+        key = (city, target_date)
+        unit = safe_str(row.get("unit")).upper()
+        snapshot_dt = parse_utc(row.get("decision_snapshot_ts_utc"))
+        running_native = to_float(row.get("running_native"), math.nan)
+        current_native = to_float(row.get("current_native"), math.nan)
+        d1_interval = p0._interval(row.get("d1_no_bracket"))
+        d2_interval = p0._interval(row.get("d2_no_bracket"))
+
+        hf = hf_rows.get(key)
+        if hf:
+            hf_temp = native_temp_from_source(hf, unit)
+            hf_round = arith_round(hf_temp)
+            running_round = arith_round(running_native)
+            detect_dt = parse_utc(hf.get("local_detect_ts_utc") or hf.get("fetched_at_utc"))
+            obs_dt = parse_utc(hf.get("observation_time_utc"))
+            relation = source_relation_to_snapshot(detect_dt, snapshot_dt)
+            counters[f"hf_{relation}"] += 1
+            row.update(
+                {
+                    "high_freq_context_status": "ok",
+                    "high_freq_source": safe_str(hf.get("source")),
+                    "high_freq_source_kind": safe_str(hf.get("source_kind")),
+                    "high_freq_source_status": safe_str(hf.get("source_status")),
+                    "high_freq_station": safe_str(hf.get("station")),
+                    "high_freq_detect_ts_utc": detect_dt.isoformat() if detect_dt else "",
+                    "high_freq_obs_ts_utc": obs_dt.isoformat() if obs_dt else "",
+                    "high_freq_relation_to_snapshot": relation,
+                    "high_freq_obs_age_min_at_snapshot": (snapshot_dt - obs_dt).total_seconds() / 60.0 if snapshot_dt and obs_dt else math.nan,
+                    "high_freq_detect_lag_min_vs_snapshot": (detect_dt - snapshot_dt).total_seconds() / 60.0 if snapshot_dt and detect_dt else math.nan,
+                    "high_freq_temp_native": hf_temp,
+                    "high_freq_temp_round_native": hf_round,
+                    "high_freq_minus_current_native": hf_temp - current_native if math.isfinite(hf_temp) and math.isfinite(current_native) else math.nan,
+                    "high_freq_minus_running_native": hf_temp - running_native if math.isfinite(hf_temp) and math.isfinite(running_native) else math.nan,
+                    "high_freq_round_minus_running_round": hf_round - running_round if hf_round is not None and running_round is not None else math.nan,
+                    "high_freq_implies_up": bool(hf_round is not None and running_round is not None and hf_round > running_round),
+                    "high_freq_implies_d1_cross": bool(hf_round is not None and d1_interval is not None and hf_round >= d1_interval[0]),
+                    "high_freq_implies_d2_cross": bool(hf_round is not None and d2_interval is not None and hf_round >= d2_interval[0]),
+                }
+            )
+        else:
+            counters["hf_missing"] += 1
+            row.update({"high_freq_context_status": "missing", "high_freq_source": "", "high_freq_relation_to_snapshot": "missing"})
+
+        src = source_rows.get(key)
+        if src:
+            src_temp = native_temp_from_source(src, unit)
+            src_detect = parse_utc(src.get("local_detect_ts_utc") or src.get("source_fetch_end_utc") or src.get("ts_utc"))
+            src_report = parse_utc(src.get("source_report_ts_utc") or src.get("ts_utc"))
+            relation = source_relation_to_snapshot(src_detect, snapshot_dt)
+            counters[f"source_event_{relation}"] += 1
+            row.update(
+                {
+                    "source_event_context_status": "ok",
+                    "source_event_source": safe_str(src.get("source") or src.get("live_observation_source")),
+                    "source_event_station": safe_str(src.get("station")),
+                    "source_event_changed_since_last": bool(src.get("changed_since_last")),
+                    "source_event_detect_ts_utc": src_detect.isoformat() if src_detect else "",
+                    "source_event_report_ts_utc": src_report.isoformat() if src_report else "",
+                    "source_event_relation_to_snapshot": relation,
+                    "source_event_temp_native": src_temp,
+                    "source_event_temp_round_native": arith_round(src_temp),
+                    "source_event_age_min_at_snapshot": (snapshot_dt - src_report).total_seconds() / 60.0 if snapshot_dt and src_report else math.nan,
+                }
+            )
+        else:
+            counters["source_event_missing"] += 1
+            row.update({"source_event_context_status": "missing", "source_event_source": "", "source_event_relation_to_snapshot": "missing"})
+        enriched.append(row)
+    summary = {
+        "status": "ok",
+        "high_frequency": hf_meta,
+        "source_events": source_meta,
+        "counters": dict(sorted(counters.items())),
+    }
+    return pd.DataFrame(enriched), summary
 
 
 def sky_code_value(value: Any) -> float:
@@ -822,6 +994,34 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
         "obs_age_min",
         "obs_source",
         "running_max_obs_utc",
+        "high_freq_context_status",
+        "high_freq_source",
+        "high_freq_source_kind",
+        "high_freq_source_status",
+        "high_freq_station",
+        "high_freq_detect_ts_utc",
+        "high_freq_obs_ts_utc",
+        "high_freq_relation_to_snapshot",
+        "high_freq_obs_age_min_at_snapshot",
+        "high_freq_detect_lag_min_vs_snapshot",
+        "high_freq_temp_native",
+        "high_freq_temp_round_native",
+        "high_freq_minus_current_native",
+        "high_freq_minus_running_native",
+        "high_freq_round_minus_running_round",
+        "high_freq_implies_up",
+        "high_freq_implies_d1_cross",
+        "high_freq_implies_d2_cross",
+        "source_event_context_status",
+        "source_event_source",
+        "source_event_station",
+        "source_event_changed_since_last",
+        "source_event_detect_ts_utc",
+        "source_event_report_ts_utc",
+        "source_event_relation_to_snapshot",
+        "source_event_temp_native",
+        "source_event_temp_round_native",
+        "source_event_age_min_at_snapshot",
     ]
     out = {k: item.get(k) for k in fields if k in item}
     out.update(
@@ -1055,6 +1255,34 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "live_enabled": bool(live_enabled),
         "snapshot_ts_utc": candidate.get("decision_snapshot_ts_utc", ""),
         "source_snapshot_path": candidate.get("snapshot_path", ""),
+        "high_freq_context_status": candidate.get("high_freq_context_status", ""),
+        "high_freq_source": candidate.get("high_freq_source", ""),
+        "high_freq_source_kind": candidate.get("high_freq_source_kind", ""),
+        "high_freq_source_status": candidate.get("high_freq_source_status", ""),
+        "high_freq_station": candidate.get("high_freq_station", ""),
+        "high_freq_detect_ts_utc": candidate.get("high_freq_detect_ts_utc", ""),
+        "high_freq_obs_ts_utc": candidate.get("high_freq_obs_ts_utc", ""),
+        "high_freq_relation_to_snapshot": candidate.get("high_freq_relation_to_snapshot", ""),
+        "high_freq_obs_age_min_at_snapshot": candidate.get("high_freq_obs_age_min_at_snapshot"),
+        "high_freq_detect_lag_min_vs_snapshot": candidate.get("high_freq_detect_lag_min_vs_snapshot"),
+        "high_freq_temp_native": candidate.get("high_freq_temp_native"),
+        "high_freq_temp_round_native": candidate.get("high_freq_temp_round_native"),
+        "high_freq_minus_current_native": candidate.get("high_freq_minus_current_native"),
+        "high_freq_minus_running_native": candidate.get("high_freq_minus_running_native"),
+        "high_freq_round_minus_running_round": candidate.get("high_freq_round_minus_running_round"),
+        "high_freq_implies_up": candidate.get("high_freq_implies_up"),
+        "high_freq_implies_d1_cross": candidate.get("high_freq_implies_d1_cross"),
+        "high_freq_implies_d2_cross": candidate.get("high_freq_implies_d2_cross"),
+        "source_event_context_status": candidate.get("source_event_context_status", ""),
+        "source_event_source": candidate.get("source_event_source", ""),
+        "source_event_station": candidate.get("source_event_station", ""),
+        "source_event_changed_since_last": candidate.get("source_event_changed_since_last"),
+        "source_event_detect_ts_utc": candidate.get("source_event_detect_ts_utc", ""),
+        "source_event_report_ts_utc": candidate.get("source_event_report_ts_utc", ""),
+        "source_event_relation_to_snapshot": candidate.get("source_event_relation_to_snapshot", ""),
+        "source_event_temp_native": candidate.get("source_event_temp_native"),
+        "source_event_temp_round_native": candidate.get("source_event_temp_round_native"),
+        "source_event_age_min_at_snapshot": candidate.get("source_event_age_min_at_snapshot"),
         "decision_local_time": str(candidate.get("decision_hour_local", "")),
         "decision_timezone": "",
         "running_max_obs_utc": candidate.get("running_max_obs_utc", ""),
@@ -1123,6 +1351,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     obs_path = observation_cache_path(args.observation_cache)
     observations = load_observations(obs_path)
     state_df, audits = build_state_rows(snapshot, records, observations)
+    source_context_summary: dict[str, Any] = {"status": "not_run"}
+    if not state_df.empty:
+        state_df, source_context_summary = enrich_source_context(state_df)
     plans: list[dict[str, Any]] = []
     candidates: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = list(audits)
@@ -1215,6 +1446,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "first_lock_city_day": bool(args.first_lock_city_day),
         "active_expressions": list(args.active_expressions),
         "model_meta": model_meta,
+        "source_context": source_context_summary,
         "latest_candidates": rel(candidate_path),
         "latest_blocked": rel(blocked_path),
         "trade_plans": rel(plans_path),
