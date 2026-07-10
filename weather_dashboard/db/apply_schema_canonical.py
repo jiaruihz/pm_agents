@@ -7,7 +7,7 @@ from pathlib import Path
 from weather_dashboard.db.connection import get_conn
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -21,6 +21,20 @@ def _ensure_order_payload_column(conn: sqlite3.Connection) -> None:
         return
     if "order_payload" not in _column_names(conn, "orders"):
         conn.execute("ALTER TABLE orders ADD COLUMN order_payload TEXT")
+    if "instance_id" not in _column_names(conn, "orders"):
+        conn.execute("ALTER TABLE orders ADD COLUMN instance_id TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_instance_id ON orders(instance_id)")
+
+
+def _ensure_strategy_config_columns(conn: sqlite3.Connection) -> None:
+    """Add strategy ownership to config rows created before the management model."""
+    if "strategy_config" not in {
+        str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }:
+        return
+    if "strategy_key" not in _column_names(conn, "strategy_config"):
+        conn.execute("ALTER TABLE strategy_config ADD COLUMN strategy_key TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_strategy_config_strategy_key ON strategy_config(strategy_key)")
 
 
 def _ensure_strategy_def_columns(conn: sqlite3.Connection) -> None:
@@ -92,6 +106,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
     schema_path = Path(__file__).parent / "schema_canonical.sql"
     conn.executescript(schema_path.read_text(encoding="utf-8"))
     _ensure_order_payload_column(conn)
+    _ensure_strategy_config_columns(conn)
     _ensure_strategy_def_columns(conn)
     _ensure_strategy_instance_columns(conn)
     _ensure_strategy_instance_runtime_columns(conn)
@@ -103,7 +118,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "strategy_instance_runtime push-state model",
+                "strategy/config/instance ownership and direct order-instance lineage",
             ),
         )
     conn.commit()

@@ -26,8 +26,12 @@ import { WeatherOrderBlotterPage } from "../pages/weather/WeatherOrderBlotterPag
 import { WeatherResearchPage } from "../pages/weather/WeatherResearchPage";
 import { WeatherStrategyRuntimePage } from "../pages/weather/WeatherStrategyRuntimePage";
 import { WeatherTradeDrilldownPage } from "../pages/weather/WeatherTradeDrilldownPage";
-import { WeatherStrategiesPage } from "../pages/weather/WeatherStrategiesPage";
-import { WeatherStrategyDetailPage } from "../pages/weather/WeatherStrategyDetailPage";
+import { WeatherConfigsPage } from "../pages/weather/WeatherStrategiesPage";
+import { WeatherConfigDetailPage } from "../pages/weather/WeatherStrategyDetailPage";
+import { WeatherStrategyManagementPage } from "../pages/weather/WeatherStrategyManagementPage";
+import { WeatherStrategyDefinitionDetailPage } from "../pages/weather/WeatherStrategyDefinitionDetailPage";
+import { WeatherStrategyInstancesPage } from "../pages/weather/WeatherStrategyInstancesPage";
+import { WeatherStrategyInstanceDetailPage } from "../pages/weather/WeatherStrategyInstanceDetailPage";
 import { CopyTradeWalletsPage } from "../pages/weather/CopyTradeWalletsPage";
 import { CopyTradeWalletDetailPage } from "../pages/weather/CopyTradeWalletDetailPage";
 
@@ -50,8 +54,12 @@ export function App(): JSX.Element {
       </Route>
 
       {/* Legacy weather pages (reachable via /archive, keep original routes) */}
-      <Route path="/weather/strategies" element={<WeatherStrategiesPage />} />
-      <Route path="/weather/strategies/:configId" element={<WeatherStrategyDetailPage />} />
+      <Route path="/weather/strategies" element={<WeatherStrategyManagementPage />} />
+      <Route path="/weather/strategies/:strategyKey" element={<WeatherStrategyDefinitionDetailPage />} />
+      <Route path="/weather/configs" element={<WeatherConfigsPage />} />
+      <Route path="/weather/configs/:configId" element={<WeatherConfigDetailPage />} />
+      <Route path="/weather/instances" element={<WeatherStrategyInstancesPage />} />
+      <Route path="/weather/instances/:instanceId" element={<WeatherStrategyInstanceDetailPage />} />
       <Route path="/weather/runs" element={<WeatherRunsPage />} />
       <Route path="/weather/compare" element={<WeatherComparePage />} />
       <Route path="/weather/research" element={<WeatherResearchPage />} />

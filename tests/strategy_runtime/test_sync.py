@@ -1,6 +1,7 @@
 import sqlite3
 
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
+from weather_dashboard.ingest.canonical import insert_strategy_config
 from src.strategies.runtime.specs import load_instance_specs
 from src.strategies.runtime.sync import sync_instance_specs
 
@@ -37,11 +38,11 @@ def test_sync_pulls_file_manifests_into_strategy_def(tmp_path):
     ).fetchone()
     assert row["def_source"] == "manifest"
     assert row["runner_module"] == "src.strategies.pmm.main"
-    # weather head families coexist as def_source='instance_family'
+    # Weather definitions are explicit git-authored catalog rows.
     fam = conn.execute(
         "SELECT def_source FROM strategy_def WHERE strategy_key LIKE 'reheat_risk.%' LIMIT 1"
     ).fetchone()
-    assert fam["def_source"] == "instance_family"
+    assert fam["def_source"] == "runtime_definition"
     conn.close()
 
 
@@ -59,4 +60,23 @@ def test_resync_preserves_operator_desired_status(tmp_path):
         ("low_price_yes_lottery_tiny_live_v1",),
     ).fetchone()
     assert row["desired_status"] == "paused"
+    conn.close()
+
+
+def test_sync_assigns_config_only_from_explicit_execution_policy(tmp_path):
+    conn = _db(tmp_path)
+    insert_strategy_config(
+        conn,
+        "cfg-low-price",
+        "low price",
+        {"execution_policy": "low_price_yes_lottery_guarded_taker_v1"},
+    )
+    insert_strategy_config(conn, "cfg-unknown", "unknown", {"execution_policy": "maker_queue_v1"})
+    sync_instance_specs(conn)
+    rows = {
+        row["config_id"]: row["strategy_key"]
+        for row in conn.execute("SELECT config_id, strategy_key FROM strategy_config")
+    }
+    assert rows["cfg-low-price"] == "forecast_quality.low_price_yes_lottery"
+    assert rows["cfg-unknown"] is None
     conn.close()

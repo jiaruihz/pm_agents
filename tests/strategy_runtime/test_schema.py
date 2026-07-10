@@ -15,7 +15,7 @@ def test_control_plane_tables_exist(tmp_path):
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
     }
-    assert {"strategy_def", "strategy_instance", "strategy_instance_runtime", "strategy_control_log"} <= tables
+    assert {"strategy_def", "strategy_instance", "strategy_instance_runtime", "strategy_control_log", "order_instance_lineage"} <= tables
     assert {"instance_id", "desired_status", "config_id", "spec_commit", "params_hash"} <= _cols(
         conn, "strategy_instance"
     )
@@ -25,4 +25,6 @@ def test_control_plane_tables_exist(tmp_path):
     assert {"instance_id", "process_status", "heartbeat_at_utc", "health_status"} <= _cols(
         conn, "strategy_instance_runtime"
     )
+    assert {"strategy_key"} <= _cols(conn, "strategy_config")
+    assert {"instance_id"} <= _cols(conn, "orders")
     conn.close()

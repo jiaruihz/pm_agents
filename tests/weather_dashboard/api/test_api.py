@@ -14,6 +14,7 @@ from weather_dashboard.ingest.canonical import (
 from scripts.etl.build_weather_fact_trades import build as _build_fact, write_db as _write_fact
 from src.strategies.runtime.specs import load_instance_specs
 from src.strategies.runtime.runtime_state import push_runtime_state
+from src.strategies.runtime.ownership import backfill_order_instance_links
 from src.strategies.runtime.sync import sync_instance_specs
 
 
@@ -208,21 +209,48 @@ def test_order_blotter_filters_by_strategy_instance(client, api_db):
     ingest_canonical_orders(api_db, [order], "orders.jsonl")
     ingest_canonical_fills(api_db, [fill], "fills.jsonl")
     ingest_canonical_settlements(api_db, [settlement], "settlements.jsonl")
-    _rebuild_fact(api_db)
     _seed_runtime_config_refs(api_db)
     sync_instance_specs(api_db)
     api_db.execute(
         "UPDATE strategy_instance SET config_id=? WHERE instance_id=?",
         (config_id, "low_price_yes_lottery_tiny_live_v1"),
     )
+    backfill_order_instance_links(api_db)
     api_db.commit()
+    _rebuild_fact(api_db)
 
     r = client.get("/api/order-blotter?trade_class=paper&instance_id=low_price_yes_lottery_tiny_live_v1")
     assert r.status_code == 200
     data = r.json()
     assert data["total"] == 1
-    assert data["filters"]["config_id"] == config_id
+    assert data["filters"]["config_id"] is None
     assert data["rows"][0]["strategy_instance"] == "low_price_yes_lottery_tiny_live_v1"
+
+
+def test_strategy_management_exposes_definition_config_and_instance(client, api_db):
+    _seed_runtime_config_refs(api_db)
+    api_db.execute(
+        "UPDATE strategy_config SET params=? WHERE config_id=?",
+        (json.dumps({"execution_policy": "low_price_yes_lottery_guarded_taker_v1"}), "live_weather_edge_v1_dfdc707d8ac7"),
+    )
+    sync_instance_specs(api_db)
+
+    definitions = client.get("/api/strategy-definitions")
+    assert definitions.status_code == 200
+    low_price = next(
+        row for row in definitions.json()
+        if row["strategy_key"] == "forecast_quality.low_price_yes_lottery"
+    )
+    assert low_price["config_count"] >= 1
+    assert low_price["instance_count"] >= 1
+
+    detail = client.get("/api/strategy-definitions/forecast_quality.low_price_yes_lottery")
+    assert detail.status_code == 200
+    assert detail.json()["strategy"]["strategy_name"] == "低价 YES 彩票型策略"
+
+    instances = client.get("/api/strategy-instances?strategy_key=forecast_quality.low_price_yes_lottery")
+    assert instances.status_code == 200
+    assert any(row["instance_id"] == "low_price_yes_lottery_tiny_live_v1" for row in instances.json())
 
 
 def test_get_run_metrics_slice_uses_canonical_fields(client, api_db):

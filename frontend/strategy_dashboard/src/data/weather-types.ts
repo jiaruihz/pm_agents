@@ -87,9 +87,60 @@ export interface TradeDrilldown {
 
 export interface ConfigRow {
   config_id: string;
+  strategy_key: string | null;
   name: string;
   params: Record<string, unknown>;
   created_at_utc: string;
+}
+
+export interface StrategyDefinitionRow {
+  strategy_key: string;
+  family: string;
+  strategy_name: string;
+  description: string;
+  strategy_group: string;
+  domain: string;
+  is_active: boolean;
+  def_source: string;
+  config_count: number;
+  instance_count: number;
+  running_instance_count: number;
+  live_instance_count: number;
+}
+
+export interface StrategyInstanceRow {
+  instance_id: string;
+  strategy_key: string;
+  display_name: string;
+  family: string;
+  lifecycle_status: string;
+  execution_mode: string;
+  desired_status: string;
+  config_id: string | null;
+  config_name: string | null;
+  source_layer: string;
+  runtime_dir: string | null;
+  expected_live: number | null;
+  notes: string | null;
+  updated_at_utc: string;
+  process_status: string;
+  health_status: string;
+  live_enabled: number | null;
+  heartbeat_at_utc: string | null;
+  last_tick_ts_utc: string | null;
+  last_data_ts_utc: string | null;
+  latest_fill_ts_utc: string | null;
+  fact_trade_rows: number | null;
+  live_order_rows: number | null;
+  plan_rows: number | null;
+  blocker_count: number | null;
+  refreshed_at_utc: string | null;
+}
+
+export interface StrategyDefinitionDetail {
+  strategy: StrategyDefinitionRow;
+  configs: Array<ConfigRow & { run_count: number; instance_count: number; last_run_at: string | null }>;
+  instances: StrategyInstanceRow[];
 }
 
 export interface UniverseRow {
@@ -271,7 +322,8 @@ export interface StrategyRuntimeArtifact {
 export interface StrategyRuntimeRow {
   strategy_instance: string;
   config_id: string | null;
-  strategy_id: string | null;
+  strategy_key: string;
+  strategy_name: string;
   display_name: string;
   family: string;
   lifecycle_status: string;
@@ -360,6 +412,8 @@ export interface StrategyRuntimeDetail {
 /** /api/strategies — per-config aggregated stats */
 export interface StrategyRow {
   config_id: string;
+  strategy_key: string | null;
+  definition_name: string | null;
   name: string;
   params: Record<string, unknown>;
   created_at_utc: string;

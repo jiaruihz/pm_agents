@@ -19,6 +19,162 @@ router = APIRouter(tags=["registry"])
 Db = Annotated[sqlite3.Connection, Depends(get_db)]
 
 
+def _definition_payload(row: sqlite3.Row) -> dict:
+    return {
+        "strategy_key": row["strategy_key"],
+        "family": row["family"],
+        "strategy_name": row["strategy_name"],
+        "description": row["description"],
+        "strategy_group": row["strategy_group"],
+        "domain": row["domain"],
+        "is_active": bool(row["is_active"]),
+        "def_source": row["def_source"],
+        "config_count": int(row["config_count"] or 0),
+        "instance_count": int(row["instance_count"] or 0),
+        "running_instance_count": int(row["running_instance_count"] or 0),
+        "live_instance_count": int(row["live_instance_count"] or 0),
+    }
+
+
+def _instance_rows(db: sqlite3.Connection, *, strategy_key: str | None = None, config_id: str | None = None) -> list[dict]:
+    where = ["1=1"]
+    params: list[str] = []
+    if strategy_key:
+        where.append("si.strategy_key=?")
+        params.append(strategy_key)
+    if config_id:
+        where.append("si.config_id=?")
+        params.append(config_id)
+    rows = db.execute(
+        f"""
+        SELECT
+            si.instance_id, si.strategy_key, si.display_name, si.family,
+            si.lifecycle_status, si.execution_mode, si.desired_status,
+            si.config_id, sc.name AS config_name, si.source_layer,
+            si.runtime_dir, si.expected_live, si.notes, si.updated_at_utc,
+            COALESCE(rt.process_status, 'unknown') AS process_status,
+            COALESCE(rt.health_status, 'unknown') AS health_status,
+            rt.live_enabled, rt.heartbeat_at_utc, rt.last_tick_ts_utc,
+            rt.last_data_ts_utc, rt.latest_fill_ts_utc, rt.fact_trade_rows,
+            rt.live_order_rows, rt.plan_rows, rt.blocker_count, rt.refreshed_at_utc
+        FROM strategy_instance si
+        LEFT JOIN strategy_config sc ON sc.config_id=si.config_id
+        LEFT JOIN strategy_instance_runtime rt ON rt.instance_id=si.instance_id
+        WHERE {' AND '.join(where)}
+        ORDER BY
+            CASE si.lifecycle_status WHEN 'live' THEN 1 WHEN 'shadow' THEN 2 WHEN 'telemetry' THEN 3 ELSE 4 END,
+            si.instance_id
+        """,
+        params,
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@router.get("/strategy-definitions")
+def list_strategy_definitions(db: Db):
+    """Top-level strategy catalog. A strategy is a trading idea, not a config."""
+    rows = db.execute(
+        """
+        SELECT
+            d.strategy_key, d.family, d.strategy_name, d.description,
+            d.strategy_group, d.domain, d.is_active, d.def_source,
+            COUNT(DISTINCT c.config_id) AS config_count,
+            COUNT(DISTINCT si.instance_id) AS instance_count,
+            COUNT(DISTINCT CASE WHEN rt.process_status='running' THEN si.instance_id END) AS running_instance_count,
+            COUNT(DISTINCT CASE WHEN si.lifecycle_status='live' THEN si.instance_id END) AS live_instance_count
+        FROM strategy_def d
+        LEFT JOIN strategy_config c ON c.strategy_key=d.strategy_key
+        LEFT JOIN strategy_instance si ON si.strategy_key=d.strategy_key
+        LEFT JOIN strategy_instance_runtime rt ON rt.instance_id=si.instance_id
+        WHERE d.domain='weather'
+          AND (c.config_id IS NOT NULL OR si.instance_id IS NOT NULL)
+        GROUP BY d.strategy_key
+        ORDER BY live_instance_count DESC, running_instance_count DESC, d.strategy_key
+        """
+    ).fetchall()
+    return [_definition_payload(row) for row in rows]
+
+
+@router.get("/strategy-definitions/{strategy_key}")
+def get_strategy_definition(strategy_key: str, db: Db):
+    row = db.execute(
+        """
+        SELECT
+            d.strategy_key, d.family, d.strategy_name, d.description,
+            d.strategy_group, d.domain, d.is_active, d.def_source,
+            COUNT(DISTINCT c.config_id) AS config_count,
+            COUNT(DISTINCT si.instance_id) AS instance_count,
+            COUNT(DISTINCT CASE WHEN rt.process_status='running' THEN si.instance_id END) AS running_instance_count,
+            COUNT(DISTINCT CASE WHEN si.lifecycle_status='live' THEN si.instance_id END) AS live_instance_count
+        FROM strategy_def d
+        LEFT JOIN strategy_config c ON c.strategy_key=d.strategy_key
+        LEFT JOIN strategy_instance si ON si.strategy_key=d.strategy_key
+        LEFT JOIN strategy_instance_runtime rt ON rt.instance_id=si.instance_id
+        WHERE d.strategy_key=?
+        GROUP BY d.strategy_key
+        """,
+        (strategy_key,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Strategy {strategy_key} not found")
+
+    configs = db.execute(
+        """
+        SELECT
+            c.config_id, c.strategy_key, c.name, c.params, c.created_at_utc,
+            COUNT(DISTINCT r.run_id) AS run_count,
+            COUNT(DISTINCT si.instance_id) AS instance_count,
+            MAX(r.started_at_utc) AS last_run_at
+        FROM strategy_config c
+        LEFT JOIN runs r ON r.config_id=c.config_id
+        LEFT JOIN strategy_instance si ON si.config_id=c.config_id
+        WHERE c.strategy_key=?
+        GROUP BY c.config_id
+        ORDER BY last_run_at DESC, c.created_at_utc DESC
+        """,
+        (strategy_key,),
+    ).fetchall()
+    config_rows = []
+    for config in configs:
+        item = dict(config)
+        try:
+            item["params"] = json.loads(item["params"] or "{}")
+        except Exception:
+            item["params"] = {}
+        config_rows.append(item)
+
+    return {
+        "strategy": _definition_payload(row),
+        "configs": config_rows,
+        "instances": _instance_rows(db, strategy_key=strategy_key),
+    }
+
+
+@router.get("/strategy-instances")
+def list_strategy_instances(
+    db: Db,
+    strategy_key: Optional[str] = Query(None),
+    config_id: Optional[str] = Query(None),
+):
+    return _instance_rows(db, strategy_key=strategy_key, config_id=config_id)
+
+
+@router.get("/strategy-instances/{instance_id}")
+def get_strategy_instance(instance_id: str, db: Db):
+    rows = _instance_rows(db)
+    instance = next((row for row in rows if row["instance_id"] == instance_id), None)
+    if instance is None:
+        raise HTTPException(status_code=404, detail=f"Strategy instance {instance_id} not found")
+    controls = [
+        dict(row)
+        for row in db.execute(
+            "SELECT * FROM strategy_control_log WHERE instance_id=? ORDER BY ts_utc DESC LIMIT 20",
+            (instance_id,),
+        ).fetchall()
+    ]
+    return {"instance": instance, "control_log": controls}
+
+
 # ── Strategies (per-config aggregated stats) ──────────────────────────────────
 
 @router.get("/strategies")
@@ -38,6 +194,8 @@ def list_strategies(db: Db, state: str = Query("all")):
         f"""
         SELECT
             c.config_id,
+            c.strategy_key,
+            sd.strategy_name AS definition_name,
             c.name,
             c.params,
             c.created_at_utc,
@@ -82,6 +240,7 @@ def list_strategies(db: Db, state: str = Query("all")):
                                                                          AS capital_deployed_usd
 
         FROM strategy_config c
+        LEFT JOIN strategy_def sd ON sd.strategy_key = c.strategy_key
         JOIN config_aliases ca ON ca.canonical_config_id = c.config_id
         LEFT JOIN runs r      ON r.config_id     = ca.alias_config_id{state_filter}
         LEFT JOIN orders o    ON o.run_id        = r.run_id
@@ -295,6 +454,9 @@ def get_strategy(config_id: str, db: Db, state: str = Query("all")):
         params = json.loads(row["params"]) if row["params"] else {}
     except Exception:
         params = {}
+    definition = db.execute(
+        "SELECT strategy_name FROM strategy_def WHERE strategy_key=?", (row["strategy_key"],)
+    ).fetchone() if row["strategy_key"] else None
 
     cap = float(agg["capital_deployed_usd"] or 0)
     pnl = float(agg["total_pnl_usd"] or 0)
@@ -303,6 +465,8 @@ def get_strategy(config_id: str, db: Db, state: str = Query("all")):
 
     return {
         "config_id": row["config_id"],
+        "strategy_key": row["strategy_key"],
+        "definition_name": definition["strategy_name"] if definition else None,
         "name": row["name"],
         "params": params,
         "created_at_utc": row["created_at_utc"],
@@ -990,6 +1154,7 @@ def list_configs(db: Db):
             params = r["params"]
         result.append({
             "config_id": r["config_id"],
+            "strategy_key": r["strategy_key"],
             "name": r["name"],
             "params": params,
             "created_at_utc": r["created_at_utc"],
@@ -1008,7 +1173,7 @@ def get_config(config_id: str, db: Db):
         params = json.loads(row["params"])
     except Exception:
         params = row["params"]
-    return {"config_id": row["config_id"], "name": row["name"],
+    return {"config_id": row["config_id"], "strategy_key": row["strategy_key"], "name": row["name"],
             "params": params, "created_at_utc": row["created_at_utc"]}
 
 

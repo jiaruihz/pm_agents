@@ -231,8 +231,10 @@ export interface OrderBlotterRow {
   execution_mode: string | null;
   venue: string | null;
   config_id: string | null;
+  strategy_key: string | null;
   strategy_id: string | null;
   strategy_name: string | null;
+  config_name: string | null;
   strategy_instance: string | null;
   run_id: string | null;
   signal_id: string | null;

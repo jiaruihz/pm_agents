@@ -76,6 +76,7 @@ PLAN_COLUMNS = (
 ORDER_COLUMNS = (
     "execution_id",
     "order_id",
+    "instance_id",
     "run_id",
     "plan_id",
     "venue",
@@ -202,10 +203,16 @@ def insert_code_version(conn, code_version: str, **fields: Any) -> None:
     conn.commit()
 
 
-def insert_strategy_config(conn, config_id: str, name: str, params: Mapping[str, Any] | str) -> None:
+def insert_strategy_config(
+    conn,
+    config_id: str,
+    name: str,
+    params: Mapping[str, Any] | str,
+    strategy_key: str | None = None,
+) -> None:
     conn.execute(
-        "INSERT OR IGNORE INTO strategy_config (config_id, name, params) VALUES (?, ?, ?)",
-        (config_id, name, _json_text(params)),
+        "INSERT OR IGNORE INTO strategy_config (config_id, strategy_key, name, params) VALUES (?, ?, ?, ?)",
+        (config_id, strategy_key, name, _json_text(params)),
     )
     conn.commit()
 

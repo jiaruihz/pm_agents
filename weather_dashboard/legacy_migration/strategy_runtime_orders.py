@@ -21,6 +21,7 @@ from weather_dashboard.ingest.canonical import (
     insert_strategy_config,
     insert_universe,
 )
+from src.strategies.runtime.ownership import strategy_key_for_params
 from src.strategies.weather_edge_v1.ids import make_execution_id, make_fill_id
 from weather_dashboard.legacy_migration.live_cycle import (
     CITY_ICAO,
@@ -412,6 +413,9 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
 
     strategy_params = _strategy_params({}, enriched)
     config_id = _strategy_config_id(strategy_params)
+    instance_exists = conn.execute(
+        "SELECT 1 FROM strategy_instance WHERE instance_id=?", (strategy_instance,)
+    ).fetchone() is not None
     signals = []
     plans = []
     orders = []
@@ -429,6 +433,7 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
                     attempt_index=_stable_attempt_key(raw),
                 )
             order = _canonical_order(raw, run_id=run_id, plan_id=plan["plan_id"])
+            order["instance_id"] = strategy_instance if instance_exists else None
             fill = _runtime_fill_from_order(raw, order)
         except (ValueError, CanonicalValidationError) as exc:
             report.skip(f"runtime_order:{exc}")
@@ -444,7 +449,13 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
     started = min((_snapshot_ts(row) for row in enriched if _snapshot_ts(row)), default=None)
     ended = max((str(row.get("created_at_utc") or "") for row in enriched if row.get("created_at_utc")), default=started)
 
-    insert_strategy_config(conn, config_id, _strategy_config_name(strategy_params), strategy_params)
+    insert_strategy_config(
+        conn,
+        config_id,
+        _strategy_config_name(strategy_params),
+        strategy_params,
+        strategy_key_for_params(strategy_params),
+    )
     insert_universe(conn, f"{run_id}_universe", f"strategy_runtime_{producer_system}_{order_path.parent.name}_{order_path.stem}", cities=cities, models=models)
     insert_code_version(conn, "strategy-runtime-order-migration")
     insert_run(

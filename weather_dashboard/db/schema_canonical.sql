@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS code_versions (
 
 CREATE TABLE IF NOT EXISTS strategy_config (
     config_id TEXT PRIMARY KEY,
+    strategy_key TEXT REFERENCES strategy_def(strategy_key),
     name TEXT NOT NULL,
     params TEXT NOT NULL,
     created_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS plans (
 CREATE TABLE IF NOT EXISTS orders (
     execution_id TEXT PRIMARY KEY,
     order_id TEXT,
+    instance_id TEXT REFERENCES strategy_instance(instance_id),
     run_id TEXT NOT NULL REFERENCES runs(run_id),
     plan_id TEXT NOT NULL REFERENCES plans(plan_id),
     venue TEXT NOT NULL CHECK (venue IN ('paper','snapshot_replay','polymarket_clob')),
@@ -513,6 +515,18 @@ CREATE TABLE IF NOT EXISTS strategy_instance (
 );
 CREATE INDEX IF NOT EXISTS idx_strategy_instance_family
     ON strategy_instance(family);
+CREATE INDEX IF NOT EXISTS idx_strategy_instance_config_id
+    ON strategy_instance(config_id);
+
+CREATE TABLE IF NOT EXISTS order_instance_lineage (
+    execution_id  TEXT PRIMARY KEY REFERENCES orders(execution_id),
+    instance_id   TEXT NOT NULL REFERENCES strategy_instance(instance_id),
+    source        TEXT NOT NULL CHECK (source IN ('runtime_order_file','run_tag','unique_config')),
+    evidence      TEXT,
+    assigned_at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_order_instance_lineage_instance
+    ON order_instance_lineage(instance_id);
 
 CREATE TABLE IF NOT EXISTS strategy_instance_runtime (
     instance_id                  TEXT PRIMARY KEY REFERENCES strategy_instance(instance_id),

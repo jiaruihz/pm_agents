@@ -121,6 +121,7 @@ class CompareResponse(BaseModel):
 
 class ConfigRow(BaseModel):
     config_id: str
+    strategy_key: Optional[str] = None
     name: str
     params: Any
     created_at_utc: str

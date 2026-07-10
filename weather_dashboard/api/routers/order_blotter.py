@@ -33,6 +33,7 @@ def get_order_blotter(
     status: str = Query("all", description="all | open | settled | unfilled"),
     instance_id: Optional[str] = Query(None),
     config_id: Optional[str] = Query(None),
+    strategy_key: Optional[str] = Query(None),
     strategy_id: Optional[str] = Query(None),
     target_date: Optional[str] = Query(None),
     city: Optional[str] = Query(None),
@@ -46,27 +47,19 @@ def get_order_blotter(
     visible in the same blotter.
     """
     effective_config_id = config_id
-    instance_unbound = False
     if instance_id:
         instance = db.execute(
-            "SELECT config_id FROM strategy_instance WHERE instance_id = ?",
+            "SELECT 1 FROM strategy_instance WHERE instance_id = ?",
             (instance_id,),
         ).fetchone()
         if instance is None:
             raise HTTPException(status_code=404, detail=f"unknown strategy_instance: {instance_id}")
-        instance_config_id = instance["config_id"]
-        if effective_config_id and instance_config_id and effective_config_id != instance_config_id:
-            instance_unbound = True
-        elif effective_config_id and not instance_config_id:
-            instance_unbound = True
-        else:
-            effective_config_id = instance_config_id
-            instance_unbound = effective_config_id is None
 
     fact_where = ["1=1"]
     fact_params: list[Any] = []
-    if instance_unbound:
-        fact_where.append("0")
+    if instance_id:
+        fact_where.append("ft.instance_id = ?")
+        fact_params.append(instance_id)
     if trade_class != "all":
         fact_where.append("ft.trade_class = ?")
         fact_params.append(trade_class)
@@ -79,6 +72,9 @@ def get_order_blotter(
     if effective_config_id:
         fact_where.append("ft.config_id = ?")
         fact_params.append(effective_config_id)
+    if strategy_key:
+        fact_where.append("ft.strategy_key = ?")
+        fact_params.append(strategy_key)
     if strategy_id:
         fact_where.append("ft.strategy_id = ?")
         fact_params.append(strategy_id)
@@ -98,8 +94,10 @@ def get_order_blotter(
             f"""
             SELECT
                 ft.trade_class, ft.execution_mode, ft.venue,
-                ft.config_id, ft.strategy_id, ft.strategy_name,
-                si.instance_id AS strategy_instance,
+                ft.config_id, ft.strategy_key, ft.strategy_id,
+                COALESCE(NULLIF(sd.strategy_name, ''), ft.strategy_name, sc.name) AS strategy_name,
+                COALESCE(ft.config_name, sc.name) AS config_name,
+                ft.instance_id AS strategy_instance,
                 ft.run_id, ft.signal_id, ft.plan_id, ft.execution_id, ft.order_id, ft.fill_id,
                 ft.target_date, ft.city, ft.city_pool, ft.icao, ft.bracket, ft.side,
                 ft.order_status, ft.fill_status,
@@ -110,7 +108,8 @@ def get_order_blotter(
                 ft.unrealized_pnl_mid, ft.val_mid, ft.val_snapshot_ts_utc,
                 ft.condition_id, ft.market_id
             FROM fact_trades ft
-            LEFT JOIN strategy_instance si ON si.config_id = ft.config_id
+            LEFT JOIN strategy_config sc ON sc.config_id = ft.config_id
+            LEFT JOIN strategy_def sd ON sd.strategy_key = ft.strategy_key
             WHERE {' AND '.join(fact_where)}
             """,
             fact_params,
@@ -119,8 +118,9 @@ def get_order_blotter(
 
     order_where = ["f.fill_id IS NULL"]
     order_params: list[Any] = []
-    if instance_unbound:
-        order_where.append("0")
+    if instance_id:
+        order_where.append("COALESCE(o.instance_id, oil.instance_id) = ?")
+        order_params.append(instance_id)
     if trade_class != "all":
         if trade_class == "live_real":
             order_where.append("o.venue = 'polymarket_clob' AND r.state = 'live'")
@@ -137,6 +137,9 @@ def get_order_blotter(
     if effective_config_id:
         order_where.append("r.config_id = ?")
         order_params.append(effective_config_id)
+    if strategy_key:
+        order_where.append("sc.strategy_key = ?")
+        order_params.append(strategy_key)
     if strategy_id:
         # No-fill canonical orders do not have a separate strategy_id column.
         order_where.append("r.config_id = ?")
@@ -160,8 +163,10 @@ def get_order_blotter(
                 f"""
                 SELECT
                     r.execution_mode, o.venue,
-                    r.config_id, r.config_id AS strategy_id, sc.name AS strategy_name,
-                    si.instance_id AS strategy_instance,
+                    r.config_id, sc.strategy_key, r.config_id AS strategy_id,
+                    COALESCE(NULLIF(sd.strategy_name, ''), sc.name) AS strategy_name,
+                    sc.name AS config_name,
+                    COALESCE(o.instance_id, oil.instance_id) AS strategy_instance,
                     r.run_id, p.signal_id, p.plan_id, o.execution_id, o.order_id,
                     NULL AS fill_id,
                     sig.target_date, sig.city, sig.city_pool, sig.icao, sig.bracket,
@@ -179,7 +184,8 @@ def get_order_blotter(
                 JOIN signals sig ON sig.signal_id = p.signal_id
                 JOIN runs r ON r.run_id = o.run_id
                 LEFT JOIN strategy_config sc ON sc.config_id = r.config_id
-                LEFT JOIN strategy_instance si ON si.config_id = r.config_id
+                LEFT JOIN strategy_def sd ON sd.strategy_key = sc.strategy_key
+                LEFT JOIN order_instance_lineage oil ON oil.execution_id=o.execution_id
                 LEFT JOIN fills f ON f.execution_id = o.execution_id
                 WHERE {' AND '.join(order_where)}
                 """,
@@ -200,6 +206,7 @@ def get_order_blotter(
             "status": status,
             "instance_id": instance_id,
             "config_id": effective_config_id,
+            "strategy_key": strategy_key,
             "strategy_id": strategy_id,
             "target_date": target_date,
             "city": city,

@@ -1,5 +1,5 @@
 // HTTP client for the weather dashboard FastAPI backend
-import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail } from "./weather-types";
+import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail, StrategyDefinitionRow, StrategyDefinitionDetail, StrategyInstanceRow } from "./weather-types";
 import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
 import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse, LiveBookResponse, LiveBookStrategiesResponse, DataSourcesResponse, OrderBlotterResponse } from "./v2-types";
 
@@ -116,6 +116,22 @@ export const weatherApi = {
     return get("/configs");
   },
 
+  listStrategyDefinitions(): Promise<StrategyDefinitionRow[]> {
+    return get("/strategy-definitions");
+  },
+
+  getStrategyDefinition(strategyKey: string): Promise<StrategyDefinitionDetail> {
+    return get(`/strategy-definitions/${encodeURIComponent(strategyKey)}`);
+  },
+
+  listStrategyInstances(params?: { strategy_key?: string; config_id?: string }): Promise<StrategyInstanceRow[]> {
+    return get("/strategy-instances", params);
+  },
+
+  getStrategyInstance(instanceId: string): Promise<{ instance: StrategyInstanceRow; control_log: Array<Record<string, unknown>> }> {
+    return get(`/strategy-instances/${encodeURIComponent(instanceId)}`);
+  },
+
   listUniverses(): Promise<UniverseRow[]> {
     return get("/universes");
   },
@@ -210,6 +226,7 @@ export const weatherApi = {
     status?: string;
     instance_id?: string;
     config_id?: string;
+    strategy_key?: string;
     strategy_id?: string;
     target_date?: string;
     city?: string;

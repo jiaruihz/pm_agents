@@ -139,7 +139,8 @@ def get_strategy_runtime_overview(
         SELECT
           si.instance_id AS strategy_instance,
           si.config_id AS config_id,
-          si.config_id AS strategy_id,
+          si.strategy_key AS strategy_key,
+          COALESCE(NULLIF(sd.strategy_name, ''), si.strategy_key) AS strategy_name,
           si.display_name,
           si.family,
           si.lifecycle_status,
@@ -176,6 +177,7 @@ def get_strategy_runtime_overview(
           si.notes,
           COALESCE(rt.refreshed_at_utc, si.updated_at_utc) AS refreshed_at_utc
         FROM strategy_instance si
+        LEFT JOIN strategy_def sd ON sd.strategy_key = si.strategy_key
         LEFT JOIN strategy_instance_runtime rt ON rt.instance_id = si.instance_id
         ORDER BY
           CASE si.lifecycle_status
@@ -314,7 +316,8 @@ def get_strategy_runtime_detail(
         SELECT
           si.instance_id AS strategy_instance,
           si.config_id AS config_id,
-          si.config_id AS strategy_id,
+          si.strategy_key AS strategy_key,
+          COALESCE(NULLIF(sd.strategy_name, ''), si.strategy_key) AS strategy_name,
           si.display_name,
           si.family,
           si.lifecycle_status,
@@ -351,6 +354,7 @@ def get_strategy_runtime_detail(
           si.notes,
           COALESCE(rt.refreshed_at_utc, si.updated_at_utc) AS refreshed_at_utc
         FROM strategy_instance si
+        LEFT JOIN strategy_def sd ON sd.strategy_key = si.strategy_key
         LEFT JOIN strategy_instance_runtime rt ON rt.instance_id = si.instance_id
         WHERE si.instance_id=?
         """,

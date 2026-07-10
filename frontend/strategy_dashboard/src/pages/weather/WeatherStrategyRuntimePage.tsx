@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import type { StrategyRuntimeDetail, StrategyRuntimeOverview, StrategyRuntimeRow, StrategyShadowQueueRow } from "../../data/weather-types";
@@ -158,10 +158,12 @@ function strategyDescriptionZh(row: StrategyRuntimeRow): string {
 }
 
 export function WeatherStrategyRuntimePage(): JSX.Element {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedInstance = searchParams.get("instance_id");
   const [targetDate, setTargetDate] = useState(tomorrowLocal);
   const [data, setData] = useState<StrategyRuntimeOverview | null>(null);
   const [detail, setDetail] = useState<StrategyRuntimeDetail | null>(null);
-  const [selectedStrategy, setSelectedStrategy] = useState(DEFAULT_RUNTIME_STRATEGY);
+  const [selectedStrategy, setSelectedStrategy] = useState(requestedInstance || DEFAULT_RUNTIME_STRATEGY);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -189,6 +191,10 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
   const activeRows = useMemo(() => data?.strategies ?? [], [data]);
   const queueRows = data?.shadow_queue ?? [];
   const groupedRows = useMemo(() => groupRuntimeRows(activeRows), [activeRows]);
+
+  useEffect(() => {
+    if (requestedInstance) setSelectedStrategy(requestedInstance);
+  }, [requestedInstance]);
 
   useEffect(() => {
     if (!data || activeRows.length === 0) return;
@@ -253,7 +259,15 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
                   <h2 style={sectionTitleStyle}>Live Monitor</h2>
                   <div style={subtleStyle}>selected runtime · recent heartbeat/orders</div>
                 </div>
-                <select value={selectedStrategy} onChange={(e) => setSelectedStrategy(e.target.value)}>
+                <select value={selectedStrategy} onChange={(e) => {
+                  const instanceId = e.target.value;
+                  setSelectedStrategy(instanceId);
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set("instance_id", instanceId);
+                    return next;
+                  });
+                }}>
                   {activeRows.map((row) => (
                     <option key={row.strategy_instance} value={row.strategy_instance}>
                       {row.display_name}
@@ -718,10 +732,11 @@ function StrategyRowView({ row }: { row: StrategyRuntimeRow }) {
             <Badge text={row.health_status} color={statusColor(row.health_status)} />
           </div>
           <div style={strategyDescriptionStyle}>{strategyDescriptionZh(row)}</div>
-          <div style={subtleStyle}>{row.family}</div>
+          <div style={subtleStyle}>{row.strategy_name} · {row.strategy_key}</div>
           <div style={monoSmallStyle}>{row.strategy_instance}</div>
           <div style={strategyActionRowStyle}>
             <span style={monoSmallInlineStyle}>config {shortId(row.config_id)}</span>
+            <Link to={`/weather/instances/${encodeURIComponent(row.strategy_instance)}`} style={linkButtonStyle}>Instance</Link>
             {orderHref ? (
               <Link to={orderHref} style={linkButtonStyle}>Orders</Link>
             ) : (

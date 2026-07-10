@@ -159,7 +159,7 @@ function buildDailyLedger(orders: StrategyOrderRow[]): DailyLedgerRow[] {
     });
 }
 
-export function WeatherStrategyDetailPage() {
+export function WeatherConfigDetailPage() {
   const { configId = "" } = useParams<{ configId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const stateParam = searchParams.get("state");
@@ -260,13 +260,13 @@ export function WeatherStrategyDetailPage() {
   return (
     <PageFrame
       title={strategy ? shortName(strategy.name) : configId.slice(-12)}
-      desc="Strategy detail · 策略详情"
+      desc="Config detail · 策略配置详情"
     >
       <>
         {/* ── Back ── */}
         <div style={{ marginBottom: 16 }}>
-          <Link to={`/weather/strategies`} style={{ color: "var(--muted)", textDecoration: "none", fontSize: 13 }}>
-            ← All strategies
+          <Link to={`/weather/configs`} style={{ color: "var(--muted)", textDecoration: "none", fontSize: 13 }}>
+            ← All configs
           </Link>
         </div>
 
@@ -284,6 +284,14 @@ export function WeatherStrategyDetailPage() {
                 <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "monospace", marginTop: 4 }}>
                   {strategy.config_id}
                 </div>
+                {strategy.strategy_key && (
+                  <Link
+                    to={`/weather/strategies/${encodeURIComponent(strategy.strategy_key)}`}
+                    style={{ display: "inline-block", marginTop: 6, color: "var(--accent-2)", textDecoration: "none", fontSize: 12 }}
+                  >
+                    Strategy · {strategy.definition_name || strategy.strategy_key}
+                  </Link>
+                )}
                 <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                   {liveEnabled  && <Badge label="LIVE"     color="var(--ok)" />}
                   {paperEnabled && <Badge label="PAPER"    color="var(--accent-2)" />}

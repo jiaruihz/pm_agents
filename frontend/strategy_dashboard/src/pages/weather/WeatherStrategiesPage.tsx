@@ -1,6 +1,5 @@
 /**
- * WeatherStrategiesPage — one card per strategy config.
- * Strategy = config_id. All dimensions live in strategy_config.params JSON.
+ * WeatherConfigsPage — one card per immutable strategy config.
  */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -72,7 +71,7 @@ function strategyPurposeZh(s: StrategyRow): string {
 
 // ── component ──────────────────────────────────────────────────────────────────
 
-export function WeatherStrategiesPage() {
+export function WeatherConfigsPage() {
   const [strategies, setStrategies] = useState<StrategyRow[]>([]);
   const [stateFilter, setStateFilter] = useState<StrategyState>("live");
   const [loading, setLoading] = useState(true);
@@ -95,8 +94,8 @@ export function WeatherStrategiesPage() {
 
   return (
     <PageFrame
-      title="Strategies"
-      desc="Per-config strategy registry · 策略配置注册表"
+      title="Configs"
+      desc="Immutable parameter versions · 策略配置版本"
     >
       <>
         <div style={topBarStyle}>
@@ -114,7 +113,7 @@ export function WeatherStrategiesPage() {
           </div>
           {!loading && (
             <div style={{ color: "var(--muted)", fontSize: 13 }}>
-              {stateFilter} · {strategies.length} strategies · {strategies.filter(s => s.settled_trades > 0).length} with settled trades
+              {stateFilter} · {strategies.length} configs · {strategies.filter(s => s.settled_trades > 0).length} with settled trades
             </div>
           )}
         </div>
@@ -123,7 +122,7 @@ export function WeatherStrategiesPage() {
 
         {loading && !error && (
           <div style={{ color: "var(--muted)", textAlign: "center", padding: 40 }}>
-            Loading strategies…
+            Loading configs…
           </div>
         )}
 
@@ -160,7 +159,7 @@ function StrategyCard({ s, stateFilter }: { s: StrategyRow; stateFilter: Strateg
   const hasSettled = s.settled_trades > 0;
 
   return (
-    <Link to={`/weather/strategies/${encodeURIComponent(s.config_id)}?state=${stateFilter}`} style={{ textDecoration: "none", color: "inherit" }}>
+    <Link to={`/weather/configs/${encodeURIComponent(s.config_id)}?state=${stateFilter}`} style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ ...cardStyle, borderLeft: `3px solid ${accentColor}`, cursor: "pointer", transition: "box-shadow 0.15s" }}
         onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.15)")}
         onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
@@ -174,6 +173,11 @@ function StrategyCard({ s, stateFilter }: { s: StrategyRow; stateFilter: Strateg
             <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2, fontFamily: "monospace" }}>
               {s.config_id.slice(-12)}
             </div>
+            {s.strategy_key && (
+              <div style={{ fontSize: 11, color: "var(--accent-2)", marginTop: 5 }}>
+                Strategy · {s.definition_name || s.strategy_key}
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
             {liveEnabled && <Badge label="LIVE" color="var(--ok)" />}

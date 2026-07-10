@@ -6,6 +6,7 @@ from pathlib import Path
 
 from weather_dashboard.db.apply_schema_canonical import init_db_canonical
 from weather_dashboard.db.connection import get_conn
+from src.strategies.runtime.sync import sync_instance_specs
 from weather_dashboard.legacy_migration.strategy_runtime_orders import (
     DEFAULT_ROOTS,
     iter_strategy_order_paths,
@@ -42,6 +43,7 @@ def main() -> None:
                 seen.add(str(path))
     conn = get_conn(args.db_path)
     try:
+        sync_instance_specs(conn)
         reports = [migrate_strategy_runtime_orders(conn, order_path=path) for path in paths]
     finally:
         conn.close()

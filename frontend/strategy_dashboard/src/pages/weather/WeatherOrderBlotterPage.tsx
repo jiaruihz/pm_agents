@@ -10,9 +10,9 @@ const TABLE_COLUMNS = [
   ["Time", 152],
   ["Kind", 68],
   ["Class", 112],
+  ["Strategy", 180],
+  ["Config", 260],
   ["Instance", 160],
-  ["Strategy ID", 132],
-  ["Strategy", 360],
   ["Date", 108],
   ["City", 124],
   ["Bracket", 92],
@@ -157,9 +157,9 @@ export function WeatherOrderBlotterPage() {
                     <td style={tdStyle}>{ts(r.fill_ts_utc ?? r.order_ts_utc)}</td>
                     <td style={tdStyle}>{r.row_kind}</td>
                     <td style={tdStyle}>{r.trade_class ?? "-"}</td>
-                    <td style={monoTdStyle} title={r.strategy_instance ?? undefined}>{shortId(r.strategy_instance)}</td>
-                    <td style={monoTdStyle} title={r.strategy_id ?? r.config_id ?? undefined}>{shortId(r.strategy_id ?? r.config_id)}</td>
                     <td style={tdStyle} title={r.strategy_name ?? undefined}>{r.strategy_name ?? "-"}</td>
+                    <td style={tdStyle} title={r.config_name ?? r.config_id ?? undefined}>{r.config_name ?? shortId(r.config_id)}</td>
+                    <td style={monoTdStyle} title={r.strategy_instance ?? undefined}>{shortId(r.strategy_instance)}</td>
                     <td style={tdStyle}>{r.target_date ?? "-"}</td>
                     <td style={tdStyle}>{r.city ?? "-"}</td>
                     <td style={monoTdStyle}>{r.bracket ?? "-"}</td>

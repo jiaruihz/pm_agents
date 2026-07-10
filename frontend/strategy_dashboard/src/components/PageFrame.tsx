@@ -12,7 +12,9 @@ function useClock() {
 
 // ---- Weather (new canonical system) ----
 const WEATHER_NAV = [
-  { to: "/weather/strategies", label: "📊 Strategies", sub: "策略列表" },
+  { to: "/weather/strategies", label: "Strategies", sub: "策略定义" },
+  { to: "/weather/configs",    label: "Configs",     sub: "参数版本" },
+  { to: "/weather/instances",  label: "Instances",   sub: "部署实例" },
   { to: "/weather/runs",       label: "⛅ Runs",        sub: "运行记录" },
   { to: "/weather/live",       label: "🔴 Live",        sub: "实盘监控" },
   { to: "/weather/orders",     label: "Orders",        sub: "订单明细" },

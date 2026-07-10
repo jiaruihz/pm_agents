@@ -319,6 +319,13 @@ if [[ $REBUILD -eq 1 ]]; then
     warn "consolidate_configs failed (non-fatal) — see $LOG_DIR/migrate_live_cycle.log"
   }
 
+  log "  Syncing strategy definitions, config ownership, and order-instance lineage"
+  "$VENV/python" scripts/ops/weather_strategy_launcher.py \
+    --db-path "$DB_PATH" sync >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    err "strategy management sync failed — see $LOG_DIR/migrate_live_cycle.log"
+    exit 1
+  }
+
   # ---- 1b. Build fact_trades BEFORE metrics (metrics reads from fact_trades) ----
   log "  Building fact_trades (唯一派生层)..."
   FACT_PARQUET_ARGS=()

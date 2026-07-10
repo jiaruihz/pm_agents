@@ -282,6 +282,7 @@ SELECT
   f.created_at_utc     AS fill_created_at_utc,
 
   o.run_id,
+  COALESCE(o.instance_id, oil.instance_id) AS instance_id,
   o.plan_id,
   o.venue,
   o.order_side         AS side,
@@ -325,7 +326,9 @@ SELECT
   r.producer_system    AS producer_system,
   r.producer_run_id    AS producer_run_id,
 
-  sc.name              AS strategy_name,
+  sc.strategy_key,
+  COALESCE(NULLIF(sd.strategy_name, ''), sc.strategy_key, sc.name) AS strategy_name,
+  sc.name              AS config_name,
   sc.config_id         AS strategy_id
 FROM fills f
 JOIN orders o        ON o.execution_id = f.execution_id
@@ -333,6 +336,8 @@ JOIN plans p         ON p.plan_id      = o.plan_id
 JOIN signals s       ON s.signal_id    = p.signal_id
 JOIN runs r          ON r.run_id       = o.run_id
 LEFT JOIN strategy_config sc ON sc.config_id = r.config_id
+LEFT JOIN strategy_def sd ON sd.strategy_key = sc.strategy_key
+LEFT JOIN order_instance_lineage oil ON oil.execution_id = o.execution_id
 WHERE f.status IN ('filled', 'simulated')
 """
 
@@ -350,8 +355,11 @@ CREATE TABLE IF NOT EXISTS fact_trades (
   signal_id            TEXT,
   run_id               TEXT,
   config_id            TEXT,
+  strategy_key         TEXT,
   strategy_id          TEXT,
   strategy_name        TEXT,
+  config_name          TEXT,
+  instance_id          TEXT,
 
   -- source / strategy dimensions
   execution_mode       TEXT,
@@ -576,8 +584,11 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
             "signal_id": b.get("signal_id"),
             "run_id": b.get("run_id"),
             "config_id": b.get("config_id"),
+            "strategy_key": b.get("strategy_key"),
             "strategy_id": b.get("strategy_id"),
             "strategy_name": b.get("strategy_name"),
+            "config_name": b.get("config_name"),
+            "instance_id": b.get("instance_id"),
             # source / strategy dims
             "execution_mode": b.get("execution_mode"),
             "fill_status": b.get("fill_status"),
