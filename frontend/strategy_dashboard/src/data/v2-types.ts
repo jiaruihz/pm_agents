@@ -61,6 +61,8 @@ export interface ResearchLineDetail {
 
 export interface LiveBookRow {
   fill_id: string;
+  config_id: string | null;
+  strategy_id: string | null;
   strategy_name: string | null;
   city: string | null;
   city_pool: string | null;
@@ -72,6 +74,7 @@ export interface LiveBookRow {
   snapshot_ts_utc: string | null;
   edge: number | null;
   market_price: number | null;
+  val_mid: number | null;
   fill_price: number | null;
   fill_qty: number | null;
   cost_usd: number | null;

@@ -32,6 +32,44 @@ function shortName(name: string): string {
     .trim();
 }
 
+function strategyPurposeZh(s: StrategyRow): string {
+  const p = s.params;
+  const policy = String(s.execution_policy ?? p.execution_policy ?? "");
+  const pool = String(p.city_pool ?? "");
+  const entry = String(p.entry_price_window ?? "");
+
+  if (policy.includes("low_price_yes_lottery")) {
+    return "低价 YES 小仓探针：在 5c-20c 的温度 exact bracket YES 里找低价高赔率候选，用于前向验证，不是已确认主力策略。";
+  }
+  if (policy.includes("low_price_yes_take_profit_exit")) {
+    return "低价 YES 止盈退出：对已有低价 YES 持仓做 position-aware revalue，满足条件时卖出锁利润或降低尾部风险。";
+  }
+  if (policy.includes("tmax_distribution_edge")) {
+    return "Tmax 分布表达选择器：先估计最终最高温落在 current/d1/d2/tail 的概率，再选择最有价值的 exact bracket 表达。";
+  }
+  if (policy.includes("value_d1_no")) {
+    return "D1 NO 价值探针：评估下一档 NO 是否被低估，重点看 overshoot 风险、真实 NO ask 和可成交容量。";
+  }
+  if (policy.includes("regime_routed_no")) {
+    return "Regime-routed NO：按温度路径状态选择 NO 侧表达，并用价格/size 纪律控制入场质量。";
+  }
+  if (policy.includes("theta_current_yes")) {
+    return "Current YES taker：围绕当前最高温 exact bracket YES 的胜率和 overshoot 风险做进场判断。";
+  }
+  if (policy.includes("maker_queue")) {
+    return "Maker queue 版本：尝试用挂单队列改善成交价格和滑点，重点评估订单质量而不只看信号本身。";
+  }
+  if (policy.includes("mid_price_core")) {
+    const poolLabel = pool === "t2_research" ? "T2 研究池" : "T1 交易池";
+    const entryLabel = entry && entry !== "full_range" ? `，入场价窗口 ${entry}` : "";
+    return `${poolLabel} 的旧 mid-price core 基线：按模型概率和盘口中价计算 edge 后进场${entryLabel}；主要用于历史对照，不代表当前活跃主线。`;
+  }
+  if (s.config_id === "legacy_research_weather_edge") {
+    return "旧研究 CSV 迁移基线：用于保留历史研究/回放数据，不是当前执行策略。";
+  }
+  return "历史策略配置：说明主要藏在 params/execution_policy 里；这页用于配置级绩效对照，不等同于当前 live runner。";
+}
+
 // ── component ──────────────────────────────────────────────────────────────────
 
 export function WeatherStrategiesPage() {
@@ -143,6 +181,8 @@ function StrategyCard({ s, stateFilter }: { s: StrategyRow; stateFilter: Strateg
             {!liveEnabled && !paperEnabled && <Badge label="INACTIVE" color="var(--muted)" />}
           </div>
         </div>
+
+        <div style={purposeStyle}>{strategyPurposeZh(s)}</div>
 
         {/* Key params grid */}
         <div style={paramsGridStyle}>
@@ -263,27 +303,34 @@ const errorStyle: React.CSSProperties = {
 };
 const gridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
-  gap: 16,
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 12,
 };
 const cardStyle: React.CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--stroke)",
-  borderRadius: 12,
+  borderRadius: 8,
   padding: "18px 20px",
   display: "flex",
   flexDirection: "column",
   gap: 14,
+  minWidth: 0,
 };
 const cardHeaderStyle: React.CSSProperties = {
   display: "flex", alignItems: "flex-start", gap: 10,
 };
 const cardTitleStyle: React.CSSProperties = {
-  fontSize: 13, fontWeight: 600,
-  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: 15, fontWeight: 700,
+  overflowWrap: "anywhere",
+};
+const purposeStyle: React.CSSProperties = {
+  color: "var(--fg)",
+  fontSize: 13,
+  lineHeight: 1.5,
+  overflowWrap: "anywhere",
 };
 const paramsGridStyle: React.CSSProperties = {
-  display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+  display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))",
   gap: "8px 12px",
 };
 const paramCellStyle: React.CSSProperties = {
@@ -300,10 +347,14 @@ const dividerStyle: React.CSSProperties = {
   height: 1, background: "var(--stroke)", margin: "0 -20px",
 };
 const statsRowStyle: React.CSSProperties = {
-  display: "flex", gap: 4,
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(92px, 100%), 1fr))",
+  gap: 8,
 };
 const cardFooterStyle: React.CSSProperties = {
   display: "flex", justifyContent: "space-between", alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
 };
 const linkStyle: React.CSSProperties = {
   color: "var(--accent-2)", textDecoration: "none", fontSize: 12,

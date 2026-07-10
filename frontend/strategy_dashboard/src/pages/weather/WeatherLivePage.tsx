@@ -10,7 +10,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
-import type { ExecutionGapRow, LivePosition, LiveSummary } from "../../data/weather-types";
+import type { ExecutionGapRow, LiveSummary } from "../../data/weather-types";
+import type { LiveBookRow } from "../../data/v2-types";
 
 const POLL_MS = 30_000;
 
@@ -25,8 +26,39 @@ function pct(n: number | null, digits = 1): string {
 
 function usd(n: number | null, sign = false): string {
   if (n == null) return "—";
-  const prefix = sign && n > 0 ? "+" : "";
-  return `${prefix}$${Math.abs(n).toFixed(2)}`;
+  const abs = `$${Math.abs(n).toFixed(2)}`;
+  if (n < 0) return `-${abs}`;
+  if (sign && n > 0) return `+${abs}`;
+  return abs;
+}
+
+function price(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n.toFixed(4);
+}
+
+function shortStrategy(name: string | null): string {
+  if (!name) return "—";
+  return name
+    .replace(/^t[12]_(trading|research)_/, "")
+    .replace(/_v\d+.*$/, "")
+    .replace(/_/g, " ");
+}
+
+function shortId(id: string | null | undefined): string {
+  if (!id) return "—";
+  if (id.startsWith("live_weather_edge_v1_")) return id.replace("live_weather_edge_v1_", "live…");
+  return id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id;
+}
+
+function poolBadge(pool: string | null): { text: string; color?: string; title: string } {
+  if (pool === "t1_trading") {
+    return { text: "T1 运行池", color: "var(--accent)", title: "运行池标签：这笔订单当时携带的 runner/config pool，不保证等于当前 city_pools.py 归类，也不是策略 ID" };
+  }
+  if (pool === "t2_research") {
+    return { text: "T2 运行池", color: "var(--accent-2)", title: "运行池标签：这笔订单当时携带的 runner/config pool，不保证等于当前 city_pools.py 归类，也不是策略 ID" };
+  }
+  return { text: pool ?? "未知", title: "运行池标签：这笔订单当时携带的 runner/config pool，不保证等于当前 city_pools.py 归类，也不是策略 ID" };
 }
 
 function pnlColor(n: number | null): string {
@@ -44,7 +76,7 @@ function sideTag(side: string | null): React.ReactNode {
   );
 }
 
-function Badge({ text, color }: { text: string; color?: string }) {
+function Badge({ text, color, title }: { text: string; color?: string; title?: string }) {
   return (
     <span style={{
       display: "inline-block", padding: "1px 7px", borderRadius: 99,
@@ -52,7 +84,7 @@ function Badge({ text, color }: { text: string; color?: string }) {
       background: color ? `${color}22` : "var(--stroke)",
       color: color ?? "var(--muted)",
       border: `1px solid ${color ?? "var(--stroke)"}`,
-    }}>{text}</span>
+    }} title={title}>{text}</span>
   );
 }
 
@@ -62,7 +94,7 @@ function Badge({ text, color }: { text: string; color?: string }) {
 
 export function WeatherLivePage() {
   const [summary, setSummary] = useState<LiveSummary | null>(null);
-  const [positions, setPositions] = useState<LivePosition[]>([]);
+  const [positions, setPositions] = useState<LiveBookRow[]>([]);
   const [gap, setGap] = useState<ExecutionGapRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,11 +106,11 @@ export function WeatherLivePage() {
     try {
       const [s, pos, g] = await Promise.all([
         weatherApi.getLiveSummary(),
-        weatherApi.getLivePositions({ limit: 200 }),
+        weatherApi.getLiveBook({ status: "all", limit: 200 }),
         weatherApi.getExecutionGap({ limit: 200 }),
       ]);
       setSummary(s);
-      setPositions(pos);
+      setPositions(pos.rows);
       setGap(g);
       setLastPoll(new Date());
       setError(null);
@@ -133,7 +165,7 @@ export function WeatherLivePage() {
                 marginBottom: -1,
               }}
             >
-              {p === "positions" ? `Panel A — CLOB Positions (${positions.length})` : `Panel B — Execution Gap (${gap.length})`}
+              {p === "positions" ? `Panel A — CLOB Positions (${positions.length})` : `Panel B — Paper vs CLOB Gap (${gap.length})`}
             </button>
           ))}
         </div>
@@ -215,12 +247,12 @@ function SummaryCard({ label, value, valueColor, sub }: {
 // Panel A: CLOB Positions
 // ---------------------------------------------------------------------------
 
-function PositionsPanel({ positions, loading }: { positions: LivePosition[]; loading: boolean }) {
+function PositionsPanel({ positions, loading }: { positions: LiveBookRow[]; loading: boolean }) {
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "settled">("all");
 
   const filtered = positions.filter((p) => {
-    if (filterStatus === "open") return p.final_price == null;
-    if (filterStatus === "settled") return p.final_price != null;
+    if (filterStatus === "open") return !p.settled;
+    if (filterStatus === "settled") return Boolean(p.settled);
     return true;
   });
 
@@ -236,9 +268,11 @@ function PositionsPanel({ positions, loading }: { positions: LivePosition[]; loa
     );
   }
 
-  const totalPnl = filtered.reduce((s, p) => s + (p.pnl_usd ?? 0), 0);
-  const settled = filtered.filter((p) => p.pnl_usd != null);
-  const winners = settled.filter((p) => (p.pnl_usd ?? 0) > 0).length;
+  const settled = filtered.filter((p) => Boolean(p.settled));
+  const open = filtered.filter((p) => !p.settled);
+  const totalRealizedPnl = settled.reduce((s, p) => s + (p.pnl_usd_at_fill ?? 0), 0);
+  const totalMtmPnl = open.reduce((s, p) => s + (p.unrealized_pnl_mid ?? 0), 0);
+  const winners = settled.filter((p) => (p.pnl_usd_at_fill ?? 0) > 0).length;
 
   return (
     <div>
@@ -258,13 +292,20 @@ function PositionsPanel({ positions, loading }: { positions: LivePosition[]; loa
           {settled.length > 0 && (
             <>
               {" · "}
-              <span style={{ color: pnlColor(totalPnl), fontWeight: 700 }}>{usd(totalPnl, true)}</span>
-              {" settled PnL"}
+              <span style={{ color: pnlColor(totalRealizedPnl), fontWeight: 700 }}>{usd(totalRealizedPnl, true)}</span>
+              {" realized"}
               {" · "}
               {winners}/{settled.length} wins
               {" ("}
               {settled.length > 0 ? pct(winners / settled.length, 0) : "—"}
               {")"}
+            </>
+          )}
+          {open.length > 0 && (
+            <>
+              {" · "}
+              <span style={{ color: pnlColor(totalMtmPnl), fontWeight: 700 }}>{usd(totalMtmPnl, true)}</span>
+              {" open MTM"}
             </>
           )}
         </span>
@@ -275,48 +316,66 @@ function PositionsPanel({ positions, loading }: { positions: LivePosition[]; loa
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--stroke)" }}>
-              {["Target Date", "City", "Bracket", "Pool", "Side", "Fill Price", "Shares", "Cost", "Signal Edge", "Settled?", "PnL"].map((h) => (
+              {[
+                "Date", "Strategy ID", "Strategy", "运行池标签", "City", "Bracket", "Side", "Entry / Now",
+                "Shares", "Cost", "Edge", "Status", "Realized / MTM", "Valuation",
+              ].map((h) => (
                 <th key={h} style={thStyle}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.map((p) => {
-              const isOpen = p.final_price == null;
+              const isOpen = !p.settled;
+              const pool = poolBadge(p.city_pool);
+              const currentPrice = p.val_mid ?? p.market_price;
+              const rowPnl = isOpen ? p.unrealized_pnl_mid : p.pnl_usd_at_fill;
               return (
                 <tr key={p.fill_id} style={{ borderBottom: "1px solid var(--stroke)" }}>
                   <td style={tdStyle}>{p.target_date ?? "—"}</td>
-                  <td style={tdStyle}>{p.city ?? "—"}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{p.bracket ?? "—"}</td>
+                  <td style={{ ...tdStyle, fontFamily: "monospace", whiteSpace: "nowrap" }}>
+                    <span title={p.strategy_id ?? p.config_id ?? undefined}>{shortId(p.strategy_id ?? p.config_id)}</span>
+                  </td>
+                  <td style={{ ...tdStyle, maxWidth: 260 }}>
+                    <span title={p.strategy_name ?? undefined}>{shortStrategy(p.strategy_name)}</span>
+                  </td>
                   <td style={tdStyle}>
                     <Badge
-                      text={p.city_pool === "t1_trading" ? "T1" : p.city_pool === "t2_research" ? "T2" : p.city_pool ?? "—"}
-                      color={p.city_pool === "t1_trading" ? "var(--accent)" : undefined}
+                      text={pool.text}
+                      color={pool.color}
+                      title={pool.title}
                     />
                   </td>
-                  <td style={tdStyle}>{sideTag(p.order_side)}</td>
+                  <td style={tdStyle}>{p.city ?? "—"}</td>
+                  <td style={{ ...tdStyle, fontFamily: "monospace" }}>{p.bracket ?? "—"}</td>
+                  <td style={tdStyle}>{sideTag(p.side)}</td>
                   <td style={{ ...tdStyle, fontFamily: "monospace" }}>
-                    {p.filled_price != null ? p.filled_price.toFixed(4) : "—"}
+                    {price(p.fill_price)}
+                    <span style={{ color: "var(--muted)" }}> / </span>
+                    {price(currentPrice)}
                   </td>
                   <td style={{ ...tdStyle, fontFamily: "monospace" }}>
-                    {p.filled_shares != null ? p.filled_shares.toFixed(3) : "—"}
+                    {p.fill_qty != null ? p.fill_qty.toFixed(3) : "—"}
                   </td>
                   <td style={{ ...tdStyle, fontFamily: "monospace" }}>{usd(p.cost_usd)}</td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", color: (p.signal_edge ?? 0) > 0 ? "var(--ok)" : "var(--muted)" }}>
-                    {p.signal_edge != null ? `${(p.signal_edge * 100).toFixed(1)}%` : "—"}
+                  <td style={{ ...tdStyle, fontFamily: "monospace", color: (p.edge ?? 0) > 0 ? "var(--ok)" : "var(--muted)" }}>
+                    {p.edge != null ? `${(p.edge * 100).toFixed(1)}%` : "—"}
                   </td>
                   <td style={tdStyle}>
                     {isOpen ? (
                       <Badge text="Open" color="var(--accent-2)" />
                     ) : (
                       <Badge
-                        text={p.final_price != null && p.final_price >= 0.99 ? "YES ✓" : "NO ✓"}
-                        color={p.final_price != null && p.final_price >= 0.99 ? "var(--ok)" : "var(--bad)"}
+                        text={p.final_yes != null && p.final_yes >= 0.99 ? "YES ✓" : "NO ✓"}
+                        color={p.final_yes != null && p.final_yes >= 0.99 ? "var(--ok)" : "var(--bad)"}
                       />
                     )}
                   </td>
-                  <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 700, color: pnlColor(p.pnl_usd) }}>
-                    {p.pnl_usd != null ? usd(p.pnl_usd, true) : "—"}
+                  <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 700, color: pnlColor(rowPnl) }}>
+                    {usd(rowPnl, true)}
+                  </td>
+                  <td style={{ ...tdStyle, color: p.stale_unsettled ? "var(--bad)" : "var(--muted)", whiteSpace: "nowrap" }}>
+                    {p.val_snapshot_ts_utc ? new Date(p.val_snapshot_ts_utc).toLocaleString() : "—"}
                   </td>
                 </tr>
               );
@@ -365,6 +424,19 @@ function ExecutionGapPanel({ rows, loading }: { rows: ExecutionGapRow[]; loading
 
   return (
     <div>
+      <div style={{
+        marginBottom: 12,
+        padding: "10px 12px",
+        border: "1px solid var(--stroke)",
+        borderRadius: 8,
+        background: "var(--card)",
+        color: "var(--muted)",
+        fontSize: 11,
+        lineHeight: 1.5,
+      }}>
+        这个面板不是新策略信号；它是在比较同一个 signal 的 paper 模拟执行和真实 CLOB 执行。
+        Gap = real − paper，正数表示真实执行比 paper 好，负数表示真实执行更差。主要用来诊断滑点、拒单和未成交。
+      </div>
       {/* Agg stats */}
       <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
         <StatChip label="Paired (paper+CLOB)" value={String(bothRows.length)} />
@@ -443,7 +515,7 @@ function ExecutionGapPanel({ rows, loading }: { rows: ExecutionGapRow[]; loading
                   {usd(r.clob_pnl_usd, true)}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 700, color: pnlColor(r.pnl_gap_usd) }}>
-                  {r.pnl_gap_usd != null ? (r.pnl_gap_usd >= 0 ? "+" : "") + usd(r.pnl_gap_usd) : "—"}
+                  {usd(r.pnl_gap_usd, true)}
                 </td>
                 <td style={tdStyle}>
                   <GapTypeBadge type={r.gap_type} />

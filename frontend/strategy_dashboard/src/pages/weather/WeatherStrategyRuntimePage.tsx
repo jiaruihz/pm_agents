@@ -3,7 +3,7 @@ import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import type { StrategyRuntimeDetail, StrategyRuntimeOverview, StrategyRuntimeRow, StrategyShadowQueueRow } from "../../data/weather-types";
 
-const REGIME_ROUTED_NO_LIVE = "regime_routed_no_soft_balanced_tiny_live_v1";
+const DEFAULT_RUNTIME_STRATEGY = "low_price_yes_lottery_tiny_live_v1";
 
 function tomorrowLocal(): string {
   const d = new Date();
@@ -121,11 +121,41 @@ function policyLabel(value: string): string {
   return labels[value] ?? value.replace(/_/g, " ");
 }
 
+function strategyDescriptionZh(row: StrategyRuntimeRow): string {
+  const byInstance: Record<string, string> = {
+    low_price_yes_lottery_tiny_live_v1: "低价 YES 彩票型小仓实盘：在 5c-20c 的温度 exact bracket YES 里找高 edge、低 notional 的候选，主要用于前向小额收集证据，不是已确认主力 alpha。",
+    theta_current_yes_fade_confirmed_tiny_live_v1: "当前档 YES fade 小仓实盘：寻找高温已经走弱、当前 exact bracket YES 可能被高估的形态；当前心跳陈旧时只代表历史注册，不代表正在新鲜执行。",
+    metar_cross_prev_no_live_v1: "METAR 跨越前值 NO 实盘链路：围绕新观测打印后对上一档/相邻档 NO 的机会做反应，偏事件驱动，需重点看最新心跳。",
+    regime_routed_no_route_price_disciplined_tiny_live_v1: "Regime-routed NO 小仓实盘：按天气路径状态选择 NO 表达，并用 route price discipline 控制入场价格和订单质量。",
+    regime_routed_no_soft_balanced_tiny_live_v1: "Regime-routed NO soft-balanced 小仓实盘：同一 NO 方向，但用软 sizing 平衡温度状态、盘口和风险，上线性质是前向证据收集。",
+    regime_routed_no_soft_balanced_shadow_v1: "Regime-routed NO 零 notional shadow：复用实盘表达和 sizing 逻辑，只记录候选与影子结果，不真实下单。",
+    tmax_distribution_edge_shadow_v1: "Tmax distribution edge shadow：估计 current/d1/d2/tail 四类最终最高温分布，再选择最有价值的 exact bracket 表达；当前只做 shadow。",
+    range_rv_shadow_v0: "Range RV shadow：围绕预测边界内外的 range/reversion 机会做零 notional 记录，用于评估 forecast-bounded 表达是否有执行价值。",
+    theta_higher_no_carry_shadow_v1: "Higher NO carry shadow：观察更高温档 NO 是否存在 carry/衰减机会，当前是影子/研究线。",
+    theta_current_yes_peak_forming_micro_tiny_live_v1: "Current YES peak-forming telemetry：记录当前档 YES 在峰值形成阶段的微仓/遥测行为；要按 latest summary 判断是否只是 telemetry。",
+    source_orderbook_timing_monitor: "数据时序监控：检查 source event、orderbook、snapshot 的延迟和同步质量；这是监控，不是交易策略。",
+    weather_runtime_monitor: "运行时监控：只读检查 live/shadow runner 的心跳、快照、executor 和空转状态；这是运维监控。",
+    low_price_yes_reheat_reversal_shadow_v1: "低价 YES reheat reversal shadow：研究低价 YES 在重新升温路径下的反转机会，当前 blocked/stale 时只保留方向和历史记录。",
+    station_basis_shadow_v1: "Station-basis shadow：用站点/城市 source basis 差异做影子信号，重点验证观测源偏差是否能转成可执行 edge。",
+    all_yes_underround_shadow_v0: "All-YES underround shadow：检查同一市场所有 YES 价格合计是否低估，用于 market-structure 方向的影子研究。",
+  };
+  if (byInstance[row.strategy_instance]) return byInstance[row.strategy_instance];
+
+  const byFamily: Record<string, string> = {
+    "forecast_quality.low_price_yes_lottery": "低价 YES 方向：寻找低概率高赔率的温度 bracket YES 候选。",
+    "reheat_risk.regime_routed_no": "Regime-routed NO 方向：根据温度路径状态选择 NO 表达并控制执行风险。",
+    "reheat_risk.current_yes": "Current YES 方向：围绕当前最高温档 YES 的成败与 overshoot 风险做判断。",
+    "reheat_risk.tmax_distribution_edge": "Tmax 分布方向：先估计最终最高温分布，再选择 bracket 表达。",
+    data_quality: "数据质量/延迟监控，不是交易策略。",
+  };
+  return byFamily[row.family] ?? row.notes ?? "该实例缺少中文说明；可先查看英文 notes 和最新 heartbeat。";
+}
+
 export function WeatherStrategyRuntimePage(): JSX.Element {
   const [targetDate, setTargetDate] = useState(tomorrowLocal);
   const [data, setData] = useState<StrategyRuntimeOverview | null>(null);
   const [detail, setDetail] = useState<StrategyRuntimeDetail | null>(null);
-  const [selectedStrategy, setSelectedStrategy] = useState(REGIME_ROUTED_NO_LIVE);
+  const [selectedStrategy, setSelectedStrategy] = useState(DEFAULT_RUNTIME_STRATEGY);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -160,7 +190,8 @@ export function WeatherStrategyRuntimePage(): JSX.Element {
   useEffect(() => {
     if (!data || activeRows.length === 0) return;
     if (activeRows.some((row) => row.strategy_instance === selectedStrategy)) return;
-    const preferred = activeRows.find((row) => row.strategy_instance === REGIME_ROUTED_NO_LIVE)
+    const preferred = activeRows.find((row) => row.strategy_instance === DEFAULT_RUNTIME_STRATEGY)
+      ?? activeRows.find((row) => row.lifecycle_status === "live" && row.health_status === "healthy")
       ?? activeRows.find((row) => row.lifecycle_status === "live")
       ?? activeRows[0];
     setSelectedStrategy(preferred.strategy_instance);
@@ -560,26 +591,10 @@ function Metric({ label, value, color = "inherit" }: { label: string; value: str
 
 function StrategyTable({ rows }: { rows: StrategyRuntimeRow[] }) {
   return (
-    <div style={tableWrapStyle}>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Strategy</th>
-            <th style={thStyle}>Mode</th>
-            <th style={thStyle}>Health</th>
-            <th style={thStyle}>Target</th>
-            <th style={numThStyle}>Rows</th>
-            <th style={thStyle}>Freshness</th>
-            <th style={thStyle}>Cap / live</th>
-            <th style={thStyle}>Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <StrategyRowView key={row.strategy_instance} row={row} />
-          ))}
-        </tbody>
-      </table>
+    <div style={strategyListStyle}>
+      {rows.map((row) => (
+        <StrategyRowView key={row.strategy_instance} row={row} />
+      ))}
     </div>
   );
 }
@@ -600,39 +615,45 @@ function StrategyRowView({ row }: { row: StrategyRuntimeRow }) {
   const blockers = listText(row.blockers);
 
   return (
-    <tr>
-      <td style={tdStyle}>
-        <div style={{ fontWeight: 700 }}>{row.display_name}</div>
-        <div style={subtleStyle}>{row.family}</div>
-        <div style={monoSmallStyle}>{row.strategy_instance}</div>
-      </td>
-      <td style={tdStyle}>
-        <Badge text={row.lifecycle_status} color={statusColor(row.lifecycle_status)} />
-        <div style={{ marginTop: 6, color: "var(--muted)" }}>{row.execution_mode}</div>
-      </td>
-      <td style={tdStyle}>
-        <Badge text={row.health_status} color={statusColor(row.health_status)} />
-        <div style={{ marginTop: 6, color: "var(--muted)" }}>age {fmtAge(row.heartbeat_age_min)}</div>
-      </td>
-      <td style={tdStyle}>
-        <Badge text={targetLabel(row.target_status)} color={statusColor(row.target_status)} />
-        <div style={{ marginTop: 6, color: "var(--muted)" }}>
-          {targetArtifacts || `latest ${row.latest_sample_target_date ?? "-"}`}
+    <article style={strategyCardStyle}>
+      <div style={strategyCardHeadStyle}>
+        <div style={{ minWidth: 0 }}>
+          <div style={strategyTitleRowStyle}>
+            <h3 style={strategyCardTitleStyle}>{row.display_name}</h3>
+            <Badge text={row.lifecycle_status} color={statusColor(row.lifecycle_status)} />
+            <Badge text={row.health_status} color={statusColor(row.health_status)} />
+          </div>
+          <div style={strategyDescriptionStyle}>{strategyDescriptionZh(row)}</div>
+          <div style={subtleStyle}>{row.family}</div>
+          <div style={monoSmallStyle}>{row.strategy_instance}</div>
         </div>
-      </td>
-      <td style={numTdStyle}>
-        <div>{counts}</div>
-        <div style={{ marginTop: 6, color: "var(--muted)" }}>fact {fmtInt(row.fact_trade_rows)} · real {fmtInt(row.fact_live_real_rows)}</div>
-      </td>
-      <td style={tdStyle}>
-        <div>{fmtTime(row.latest_data_ts_utc || row.latest_artifact_mtime_utc)}</div>
-        <div style={monoSmallStyle}>{shortPath(row.primary_journal_path)}</div>
-      </td>
-      <td style={tdStyle}>{cap || "-"}</td>
-      <td style={tdStyle}>
-        <div>{blockers !== "-" ? blockers : row.notes ?? "-"}</div>
-      </td>
-    </tr>
+      </div>
+
+      <div style={strategyMetaGridStyle}>
+        <MiniStat label="target" value={targetLabel(row.target_status)} />
+        <MiniStat label="age" value={fmtAge(row.heartbeat_age_min)} />
+        <MiniStat label="mode" value={row.execution_mode} />
+        <MiniStat label="rows" value={counts} />
+        <MiniStat label="fact / real" value={`${fmtInt(row.fact_trade_rows)} / ${fmtInt(row.fact_live_real_rows)}`} />
+        <MiniStat label="cap / live" value={cap || "-"} />
+      </div>
+
+      <div style={strategyFooterGridStyle}>
+        <div>
+          <div style={metaLabelStyle}>Freshness</div>
+          <div>{fmtTime(row.latest_data_ts_utc || row.latest_artifact_mtime_utc)}</div>
+          <div style={monoSmallStyle}>{shortPath(row.primary_journal_path)}</div>
+        </div>
+        <div>
+          <div style={metaLabelStyle}>Target artifact</div>
+          <div>{targetArtifacts || `latest ${row.latest_sample_target_date ?? "-"}`}</div>
+        </div>
+        <div>
+          <div style={metaLabelStyle}>Notes / blockers</div>
+          <div>{blockers !== "-" ? blockers : row.notes ?? "-"}</div>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -809,6 +830,67 @@ const metricStyle: React.CSSProperties = {
   background: "var(--card)",
   padding: 12,
   minWidth: 0,
+};
+const strategyListStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 10,
+  marginTop: 12,
+  minWidth: 0,
+};
+const strategyCardStyle: React.CSSProperties = {
+  border: "1px solid var(--stroke)",
+  borderRadius: 8,
+  background: "rgba(255,255,255,0.48)",
+  padding: 14,
+  minWidth: 0,
+};
+const strategyCardHeadStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 10,
+};
+const strategyTitleRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 8,
+  minWidth: 0,
+};
+const strategyCardTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 15,
+  lineHeight: 1.25,
+};
+const strategyDescriptionStyle: React.CSSProperties = {
+  marginTop: 8,
+  color: "var(--fg)",
+  fontSize: 13,
+  lineHeight: 1.5,
+  overflowWrap: "anywhere",
+};
+const strategyMetaGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
+  gap: 10,
+  marginTop: 12,
+  minWidth: 0,
+};
+const strategyFooterGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+  gap: 12,
+  marginTop: 12,
+  paddingTop: 12,
+  borderTop: "1px solid var(--stroke)",
+  fontSize: 12,
+  lineHeight: 1.45,
+  minWidth: 0,
+};
+const metaLabelStyle: React.CSSProperties = {
+  color: "var(--muted)",
+  fontSize: 11,
+  marginBottom: 4,
 };
 const detailGridStyle: React.CSSProperties = {
   display: "grid",
