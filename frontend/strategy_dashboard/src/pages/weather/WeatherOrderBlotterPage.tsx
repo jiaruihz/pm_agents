@@ -6,6 +6,25 @@ import type { OrderBlotterRow } from "../../data/v2-types";
 
 const TRADE_CLASS_OPTIONS = ["live_real", "paper", "snapshot_replay", "live_simulated", "all"];
 const STATUS_OPTIONS = ["all", "open", "settled", "unfilled"];
+const TABLE_COLUMNS = [
+  ["Time", 152],
+  ["Kind", 68],
+  ["Class", 112],
+  ["Instance", 160],
+  ["Strategy ID", 132],
+  ["Strategy", 360],
+  ["Date", 108],
+  ["City", 124],
+  ["Bracket", 92],
+  ["Side", 104],
+  ["Order", 104],
+  ["Fill", 92],
+  ["Entry / Fill / Now", 158],
+  ["Shares", 86],
+  ["Cost", 86],
+  ["Realized / MTM", 132],
+  ["Run", 150],
+] as const;
 
 function money(n: number | null | undefined, sign = false): string {
   if (n == null) return "-";
@@ -118,11 +137,14 @@ export function WeatherOrderBlotterPage() {
 
         {error && <div style={{ color: "var(--bad)", marginBottom: 12 }}>{error}</div>}
 
-        <div style={{ overflowX: "auto", background: "var(--card)", border: "1px solid var(--stroke)", borderRadius: 8 }}>
-          <table style={{ width: "100%", minWidth: 1500, borderCollapse: "collapse", fontSize: 12 }}>
+        <div style={tableWrapStyle}>
+          <table style={tableStyle}>
+            <colgroup>
+              {TABLE_COLUMNS.map(([name, width]) => <col key={name} style={{ width }} />)}
+            </colgroup>
             <thead>
               <tr>
-                {["Time", "Kind", "Class", "Instance", "Strategy ID", "Strategy", "Date", "City", "Bracket", "Side", "Order", "Fill", "Entry / Fill / Now", "Shares", "Cost", "Realized / MTM", "Run"].map((h) => (
+                {TABLE_COLUMNS.map(([h]) => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
@@ -137,7 +159,7 @@ export function WeatherOrderBlotterPage() {
                     <td style={tdStyle}>{r.trade_class ?? "-"}</td>
                     <td style={monoTdStyle} title={r.strategy_instance ?? undefined}>{shortId(r.strategy_instance)}</td>
                     <td style={monoTdStyle} title={r.strategy_id ?? r.config_id ?? undefined}>{shortId(r.strategy_id ?? r.config_id)}</td>
-                    <td style={{ ...tdStyle, maxWidth: 260 }} title={r.strategy_name ?? undefined}>{r.strategy_name ?? "-"}</td>
+                    <td style={tdStyle} title={r.strategy_name ?? undefined}>{r.strategy_name ?? "-"}</td>
                     <td style={tdStyle}>{r.target_date ?? "-"}</td>
                     <td style={tdStyle}>{r.city ?? "-"}</td>
                     <td style={monoTdStyle}>{r.bracket ?? "-"}</td>
@@ -175,7 +197,42 @@ const filterBarStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: "var(--muted)" };
 const selectStyle: React.CSSProperties = { padding: "6px 9px", border: "1px solid var(--stroke)", borderRadius: 6, background: "var(--card)" };
 const inputStyle: React.CSSProperties = { ...selectStyle, minWidth: 120 };
-const thStyle: React.CSSProperties = { textAlign: "left", padding: "8px 10px", color: "var(--muted)", borderBottom: "1px solid var(--stroke)", whiteSpace: "nowrap" };
-const tdStyle: React.CSSProperties = { padding: "7px 10px", verticalAlign: "middle", whiteSpace: "nowrap" };
+const tableWrapStyle: React.CSSProperties = {
+  overflowX: "auto",
+  background: "var(--card)",
+  border: "1px solid var(--stroke)",
+  borderRadius: 8,
+  maxWidth: "100%",
+};
+const tableStyle: React.CSSProperties = {
+  width: "100%",
+  minWidth: TABLE_COLUMNS.reduce((sum, [, width]) => sum + width, 0),
+  tableLayout: "fixed",
+  borderCollapse: "collapse",
+  fontSize: 12,
+};
+const ellipsisStyle: React.CSSProperties = {
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+const thStyle: React.CSSProperties = {
+  ...ellipsisStyle,
+  textAlign: "left",
+  padding: "8px 10px",
+  color: "var(--muted)",
+  borderBottom: "1px solid var(--stroke)",
+};
+const tdStyle: React.CSSProperties = {
+  ...ellipsisStyle,
+  padding: "7px 10px",
+  verticalAlign: "middle",
+};
 const monoTdStyle: React.CSSProperties = { ...tdStyle, fontFamily: "IBM Plex Mono, monospace", fontSize: 11 };
-const linkStyle: React.CSSProperties = { color: "var(--accent-2)", textDecoration: "none" };
+const linkStyle: React.CSSProperties = {
+  color: "var(--accent-2)",
+  textDecoration: "none",
+  display: "block",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
