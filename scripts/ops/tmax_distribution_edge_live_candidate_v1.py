@@ -39,6 +39,7 @@ import research_tmax_distribution_p3_feature_ablation_v1 as p3  # noqa: E402
 import research_tmax_distribution_p4_observed_label_extension_v1 as p4  # noqa: E402
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as regime_policy  # noqa: E402
 from src.strategies.weather_edge_v1.tools.execution_pipeline import stable_hash  # noqa: E402
+from src.strategies.weather_edge_v1.tools import tmax_coherent_calibrator as coherent_cal  # noqa: E402
 from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
 
 
@@ -47,8 +48,11 @@ STRATEGY_ID = "tmax_dist_clean_edge02_tiny_live_v1"
 STRATEGY_FAMILY = "reheat_risk.tmax_distribution_edge"
 MODEL_SPEC = "loo_no_city_source"
 MODEL_METHOD = f"{MODEL_SPEC}_blend"
+MODEL_MODE_BASE = "historical_full_features"
+MODEL_MODE_COHERENT_QUOTE = coherent_cal.PRIMARY_SPEC
 CLOB_BOOK_API = "https://clob.polymarket.com/book"
 FIRST_LOCK_NO_CURRENT_YES_EXPRESSIONS = ["current_no", "d1_no", "d2_no", "d1_yes", "d2_yes"]
+_CALIBRATOR_META_CACHE: tuple[tuple[int, str], pd.DataFrame, dict[str, Any]] | None = None
 
 RUNTIME_DEFAULT = ROOT / "runtime/weather_edge_v1/tmax_distribution_edge_live_candidate_v1"
 SNAPSHOT_DIR_CANDIDATES = [
@@ -184,25 +188,34 @@ def city_day_position_key(row: dict[str, Any]) -> str:
     )
 
 
-def submitted_city_day_keys(path: Path, *, statuses: set[str] | None = None) -> set[str]:
+def city_day_scope_key(row: dict[str, Any]) -> str:
+    return "|".join([safe_str(row.get("city")).casefold(), safe_str(row.get("target_date"))])
+
+
+def submitted_city_day_keys(
+    path: Path,
+    *,
+    statuses: set[str] | None = None,
+    any_strategy: bool = False,
+) -> set[str]:
     keys: set[str] = set()
     for row in read_jsonl(path):
         if statuses is not None and safe_str(row.get("status")) not in statuses:
             continue
         strategy_id = safe_str(row.get("strategy_id"))
         strategy_instance = safe_str(row.get("strategy_instance"))
-        if strategy_id and strategy_id != STRATEGY_ID:
+        if not any_strategy and strategy_id and strategy_id != STRATEGY_ID:
             continue
-        if not strategy_id and strategy_instance and strategy_instance != STRATEGY_INSTANCE:
+        if not any_strategy and not strategy_id and strategy_instance and strategy_instance != STRATEGY_INSTANCE:
             continue
-        key = safe_str(row.get("city_day_position_key")) or city_day_position_key(row)
+        key = city_day_scope_key(row)
         if key:
             keys.add(key)
     return keys
 
 
-def submitted_live_city_day_keys(path: Path) -> set[str]:
-    return submitted_city_day_keys(path, statuses={"submitted"})
+def submitted_live_city_day_keys(path: Path, *, any_strategy: bool = False) -> set[str]:
+    return submitted_city_day_keys(path, statuses={"submitted"}, any_strategy=any_strategy)
 
 
 def latest_snapshot_path(explicit: str = "", snapshot_dir: str = "") -> Path | None:
@@ -825,7 +838,27 @@ def add_distribution_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def fit_predict_live(live_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+def _historical_quote_meta(hist: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+    global _CALIBRATOR_META_CACHE
+    cache_key = (len(hist), str(hist["target_date"].max()))
+    if _CALIBRATOR_META_CACHE is not None and _CALIBRATOR_META_CACHE[0] == cache_key:
+        return _CALIBRATOR_META_CACHE[1], _CALIBRATOR_META_CACHE[2]
+    # Local import avoids a module cycle: the lineage replay imports this runner
+    # to guarantee that its base model definition is identical to live.
+    import research_tmax_lineage_repair_replay_v1 as lineage_repair
+
+    base_predictions, base_meta = lineage_repair.expanding_predictions(hist)
+    meta = coherent_cal.prepare_quote_rows(
+        hist,
+        base_predictions,
+        model_method=MODEL_METHOD,
+        base_variant=MODEL_MODE_BASE,
+    )
+    _CALIBRATOR_META_CACHE = (cache_key, meta, base_meta)
+    return meta, base_meta
+
+
+def fit_predict_live(live_df: pd.DataFrame, model_mode: str = MODEL_MODE_BASE) -> tuple[pd.DataFrame, dict[str, Any]]:
     hist, counters = p4._load_rows_extended()
     specs = p3._feature_specs(hist)
     p1.MODEL_SPECS = specs
@@ -844,15 +877,40 @@ def fit_predict_live(live_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any
     pred = p1._fit_predict(fit_df, live_df, MODEL_SPEC, c_value)
     pred = p1._blend_predictions(pred, 1.0, f"{MODEL_SPEC}_model")
     pred = p1._blend_predictions(pred, alpha, MODEL_METHOD)
-    meta = {
+    meta: dict[str, Any] = {
         "model_spec": MODEL_SPEC,
         "model_method": MODEL_METHOD,
+        "model_mode": model_mode,
         "selected_c": c_value,
         "selected_alpha": alpha,
         "fit_rows": int(len(fit_df)),
         "fit_date_range": [str(fit_df["target_date"].min()), str(fit_df["target_date"].max())],
         "hist_counters": counters,
     }
+    if model_mode == MODEL_MODE_COHERENT_QUOTE:
+        historical_meta, base_meta = _historical_quote_meta(hist)
+        train_meta = historical_meta[historical_meta["target_date"].lt(min_target)].copy()
+        live_base = pred.copy()
+        live_base["variant"] = MODEL_MODE_BASE
+        live_meta = coherent_cal.prepare_quote_rows(
+            live_df,
+            live_base,
+            model_method=MODEL_METHOD,
+            base_variant=MODEL_MODE_BASE,
+        )
+        pred, calibrator_meta = coherent_cal.fit_predict_quote_calibrator(
+            train_meta,
+            live_meta,
+            model_method=MODEL_METHOD,
+        )
+        meta.update(calibrator_meta)
+        meta["base_oof_meta"] = base_meta
+        meta["calibrator_fit_date_range"] = [
+            str(train_meta["target_date"].min()),
+            str(train_meta["target_date"].max()),
+        ]
+    elif model_mode != MODEL_MODE_BASE:
+        raise ValueError(f"unsupported model mode: {model_mode}")
     return pred, meta
 
 
@@ -993,10 +1051,11 @@ def probability_distribution_fields(item: dict[str, Any]) -> dict[str, Any]:
     market = collect("market")
     raw_model = collect(f"{MODEL_SPEC}_model")
     blended = collect(MODEL_METHOD)
+    selected_method = safe_str(item.get("model_mode")) or MODEL_MODE_BASE
     fields: dict[str, Any] = {
         "tmax_probability_bucket_schema": "current_d1_d2_tail_v1",
         "tmax_probability_model_spec": MODEL_SPEC,
-        "tmax_probability_model_method": MODEL_METHOD,
+        "tmax_probability_model_method": selected_method,
         "tmax_market_p_current": market["current"],
         "tmax_market_p_d1": market["d1"],
         "tmax_market_p_d2": market["d2"],
@@ -1020,7 +1079,7 @@ def probability_distribution_fields(item: dict[str, Any]) -> dict[str, Any]:
             "market": market,
             "raw_model": raw_model,
             "blended": blended,
-            "selected_method": MODEL_METHOD,
+            "selected_method": selected_method,
         },
     }
     return fields
@@ -1034,6 +1093,20 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
     active_expressions = set(args.active_expressions)
     for item in df.to_dict("records"):
         row = pd.Series(item)
+        obs_age_min = finite_or_none(row.get("obs_age_min"))
+        if obs_age_min is None:
+            blocked.append({**candidate_base(item), "decision_status": "blocked", "block_reason": "observation_age_missing"})
+            continue
+        if obs_age_min > args.max_obs_age_min:
+            blocked.append(
+                {
+                    **candidate_base(item),
+                    "decision_status": "blocked",
+                    "block_reason": "observation_stale",
+                    "max_obs_age_min": args.max_obs_age_min,
+                }
+            )
+            continue
         trend3h = to_float(row.get("temp_trend_3h_f"), math.nan)
         if args.exclude_trend3h_flat and not math.isfinite(trend3h):
             blocked.append({**candidate_base(item), "decision_status": "blocked", "block_reason": "trend3h_missing"})
@@ -1054,6 +1127,19 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
                 )
                 continue
             ask, ask_size, token_id, market_id, bracket = ask_and_token(row, expression)
+            if not math.isfinite(ask):
+                blocked.append(
+                    {
+                        **candidate_base(item),
+                        "chosen_expression": expression,
+                        "decision_status": "blocked",
+                        "block_reason": "missing_expression_ask",
+                        "token_id": token_id,
+                        "market_id": market_id,
+                        "bracket": bracket,
+                    }
+                )
+                continue
             p_win = win_prob(row, expression)
             pricing_context = expression_pricing_context(row, expression)
             gross_edge = p_win - ask
@@ -1087,8 +1173,6 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
             reason = ""
             if not token_id:
                 reason = "missing_token_id"
-            elif not math.isfinite(ask):
-                reason = "missing_expression_ask"
             elif not math.isfinite(p_win):
                 reason = "missing_expression_probability"
             elif ask < args.ask_floor:
@@ -1207,7 +1291,8 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
             "strategy_id": STRATEGY_ID,
             "strategy_family": STRATEGY_FAMILY,
             "policy_id": safe_str(item.get("policy_id")) or "",
-            "model_method": MODEL_METHOD,
+            "model_method": safe_str(item.get("model_mode")) or MODEL_MODE_BASE,
+            "model_mode": safe_str(item.get("model_mode")) or MODEL_MODE_BASE,
             "zero_notional": True,
             "no_order_placed": True,
             "city_day_position_key": city_day_position_key(item),
@@ -1401,7 +1486,7 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "strategy_family": STRATEGY_FAMILY,
         "policy_id": args.policy_id,
         "active_expressions": list(args.active_expressions),
-        "probability_source": MODEL_METHOD,
+        "probability_source": candidate.get("model_mode") or MODEL_MODE_BASE,
         "decision_mode": args.policy_id,
         "execution_mode": "fresh_book_guarded_taker",
         "profile": args.policy_id,
@@ -1584,7 +1669,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     blocked: list[dict[str, Any]] = list(audits)
     model_meta: dict[str, Any] = {}
     if not state_df.empty:
-        pred, model_meta = fit_predict_live(state_df)
+        pred, model_meta = fit_predict_live(state_df, args.model_mode)
+        state_df["model_mode"] = args.model_mode
         candidates, candidate_blocked = build_candidates(state_df, pred, args)
         blocked.extend(candidate_blocked)
     accepted_candidates: list[dict[str, Any]] = []
@@ -1593,10 +1679,15 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         existing_city_day_keys.update(submitted_city_day_keys(runtime_dir / "paper_orders.jsonl", statuses={"simulated_open"}))
     if args.live:
         existing_city_day_keys.update(submitted_live_city_day_keys(runtime_dir / "live_orders.jsonl"))
+        for prior_path in args.prior_live_orders:
+            existing_city_day_keys.update(
+                submitted_live_city_day_keys(Path(prior_path).expanduser(), any_strategy=True)
+            )
     batch_city_day_keys: set[str] = set()
     for candidate in candidates:
         position_key = safe_str(candidate.get("city_day_position_key")) or city_day_position_key(candidate)
-        if args.first_lock_city_day and (position_key in existing_city_day_keys or position_key in batch_city_day_keys):
+        scope_key = city_day_scope_key(candidate)
+        if args.first_lock_city_day and (scope_key in existing_city_day_keys or scope_key in batch_city_day_keys):
             blocked.append(
                 {
                     **candidate,
@@ -1622,7 +1713,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
         accepted_candidates.append(enriched)
-        batch_city_day_keys.add(position_key)
+        batch_city_day_keys.add(scope_key)
     accepted_sorted = sorted(
         accepted_candidates,
         key=lambda r: (str(r.get("target_date")), float(r.get("decision_hour_local") or 99), str(r.get("city"))),
@@ -1663,6 +1754,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "snapshot": rel(snapshot_path),
         "snapshot_ts_utc": snapshot.get("ts_utc") or snapshot.get("snapshot_ts_utc"),
         "snapshot_age_min": snapshot_age_min,
+        "max_obs_age_min": args.max_obs_age_min,
         "observation_cache": rel(obs_path) if obs_path else None,
         "snapshot_records": len(records),
         "state_rows": int(len(state_df)),
@@ -1680,6 +1772,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "exclude_trend3h_flat": bool(args.exclude_trend3h_flat),
         "first_lock_city_day": bool(args.first_lock_city_day),
         "active_expressions": list(args.active_expressions),
+        "model_mode": args.model_mode,
         "model_meta": model_meta,
         "source_context": source_context_summary,
         "latest_candidates": rel(candidate_path),
@@ -1694,21 +1787,29 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    global STRATEGY_INSTANCE
+    global STRATEGY_ID, STRATEGY_INSTANCE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["run", "loop"], nargs="?", default="run")
     parser.add_argument("--runtime-dir", default=str(RUNTIME_DEFAULT))
     parser.add_argument("--strategy-instance", default=STRATEGY_INSTANCE)
+    parser.add_argument("--strategy-id", default=STRATEGY_ID)
     parser.add_argument("--snapshot", default="")
     parser.add_argument("--snapshot-dir", default="")
     parser.add_argument("--observation-cache", default="")
     parser.add_argument("--max-snapshot-age-min", type=float, default=60.0)
+    parser.add_argument("--max-obs-age-min", type=float, default=90.0)
     parser.add_argument("--edge-threshold", type=float, default=0.02)
     parser.add_argument("--ask-floor", type=float, default=0.20)
     parser.add_argument("--ask-ceiling", type=float, default=0.99)
     parser.add_argument("--policy-id", default="tmax_distribution_edge_clean_edge02")
+    parser.add_argument(
+        "--model-mode",
+        choices=[MODEL_MODE_BASE, MODEL_MODE_COHERENT_QUOTE],
+        default=MODEL_MODE_BASE,
+    )
     parser.add_argument("--active-expression", action="append", dest="active_expression", default=[])
     parser.add_argument("--first-lock-city-day", action="store_true")
+    parser.add_argument("--prior-live-orders", action="append", default=[])
     parser.add_argument("--fixed-shares", type=float, default=5.0)
     parser.add_argument("--max-orders", type=int, default=1)
     parser.add_argument("--exclude-trend3h-flat", action="store_true", default=True)
@@ -1728,6 +1829,7 @@ def parse_args() -> argparse.Namespace:
         raise SystemExit("--live requires --confirm-live")
     args.active_expressions = parse_active_expressions(args.active_expression)
     STRATEGY_INSTANCE = safe_str(args.strategy_instance) or STRATEGY_INSTANCE
+    STRATEGY_ID = safe_str(args.strategy_id) or STRATEGY_ID
     return args
 
 

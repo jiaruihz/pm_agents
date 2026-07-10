@@ -29,6 +29,7 @@ for path in (ROOT, SCRIPT_DIR):
 import research_tmax_distribution_p1_fusion_scorecard_v1 as p1  # noqa: E402
 import research_tmax_distribution_p4_observed_label_extension_v1 as p4  # noqa: E402
 import research_tmax_lineage_repair_replay_v1 as repair  # noqa: E402
+from src.strategies.weather_edge_v1.tools import tmax_coherent_calibrator as shared_cal  # noqa: E402
 
 
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/tmax_coherent_expression_calibrator_v1"
@@ -173,6 +174,8 @@ def prepare_meta_rows(hist: pd.DataFrame, base_predictions: pd.DataFrame) -> pd.
 
 
 def make_calibrator(spec_name: str, c_value: float) -> Pipeline:
+    if spec_name == QUOTE:
+        return shared_cal.make_quote_calibrator(c_value)
     spec = SPECS[spec_name]
     transformers = []
     if spec["numeric"]:
@@ -205,6 +208,8 @@ def make_calibrator(spec_name: str, c_value: float) -> Pipeline:
 
 
 def raw_calibrated_predictions(train: pd.DataFrame, test: pd.DataFrame, spec_name: str, c_value: float) -> pd.DataFrame:
+    if spec_name == QUOTE:
+        return shared_cal.raw_quote_predictions(train, test, c_value=c_value)
     spec = SPECS[spec_name]
     columns = [*spec["numeric"], *spec["categorical"]]
     model = make_calibrator(spec_name, c_value)
@@ -232,6 +237,13 @@ def expanding_raw_predictions(rows: pd.DataFrame, spec_name: str, c_value: float
 
 
 def blend_prediction_frame(raw: pd.DataFrame, alpha: float, variant: str) -> pd.DataFrame:
+    if variant == QUOTE:
+        return shared_cal.blend_quote_predictions(
+            raw,
+            model_method=repair.MODEL_METHOD,
+            alpha=alpha,
+            variant=variant,
+        )
     out = raw[KEYS].copy()
     total = np.zeros(len(raw), dtype=float)
     blended: dict[str, np.ndarray] = {}

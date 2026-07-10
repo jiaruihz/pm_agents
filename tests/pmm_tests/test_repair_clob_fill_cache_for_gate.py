@@ -86,3 +86,16 @@ def test_repair_rows_drops_stale_over_cap_and_duplicate_fills(tmp_path):
     assert summary["dropped_duplicate_fill_id_rows"] == 1
     assert summary["dropped_over_cap_rows"] == 1
     assert summary["sample_dropped_over_cap"][0]["fill_id"] == "fill-2"
+
+
+def test_repair_rows_dedupes_same_physical_fill_with_different_ids(tmp_path):
+    db_path = tmp_path / "weather.db"
+    _setup_db(db_path)
+    caps = load_order_caps(db_path)
+    first = _fill("fill-1", 3.0, source="order_exchange_response_matched")
+    second = {**first, "fill_id": "fill-2", "source": "public_activity_fallback"}
+
+    repaired, summary = repair_rows([first, second], caps)
+
+    assert [row["fill_id"] for row in repaired] == ["fill-1"]
+    assert summary["dropped_duplicate_physical_key_rows"] == 1

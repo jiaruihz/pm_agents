@@ -126,6 +126,29 @@ def _already_have_fill(conn: sqlite3.Connection, fill_id: str) -> bool:
     return row is not None
 
 
+def _already_have_physical_fill(
+    conn: sqlite3.Connection,
+    *,
+    order_id: str,
+    filled_at_utc: str | None,
+    filled_shares: float,
+    filled_price: float,
+) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM fills
+        WHERE order_id = ?
+          AND COALESCE(filled_at_utc, '') = COALESCE(?, '')
+          AND ABS(filled_shares - ?) <= 0.000001
+          AND ABS(filled_price - ?) <= 0.00001
+        LIMIT 1
+        """,
+        (order_id, filled_at_utc, filled_shares, filled_price),
+    ).fetchone()
+    return row is not None
+
+
 def _ts_to_iso(ts_raw: Any) -> str | None:
     """Convert a Polymarket timestamp to an ISO-8601 UTC string.
 
@@ -208,6 +231,15 @@ def _insert_fill(
             fill_id[:12], execution_id[:12], filled_shares, filled_price, fees_usd,
         )
         return False
+    effective_filled_at = filled_at_utc or now
+    if _already_have_physical_fill(
+        conn,
+        order_id=order_id,
+        filled_at_utc=effective_filled_at,
+        filled_shares=filled_shares,
+        filled_price=filled_price,
+    ):
+        return False
     before = conn.total_changes
     conn.execute(
         """
@@ -223,7 +255,7 @@ def _insert_fill(
             filled_shares,
             filled_price,
             fees_usd,
-            filled_at_utc or now,
+            effective_filled_at,
             now,
         ),
     )
@@ -238,7 +270,7 @@ def _insert_fill(
                 "filled_shares": filled_shares,
                 "filled_price": filled_price,
                 "fees_usd": fees_usd,
-                "filled_at_utc": filled_at_utc or now,
+                "filled_at_utc": effective_filled_at,
                 "created_at_utc": now,
             }
         )

@@ -5,11 +5,40 @@ from weather_dashboard.ingest.clob_fill_sync import (
     _cap_reported_fill_to_order,
     _extract_immediate_place_fill,
     _insert_order_fill_top_up,
+    _insert_fill,
     _public_trade_key,
     _public_trade_matches_order,
     _select_public_partial_fills,
     sync_clob_fills,
 )
+
+
+def test_insert_fill_dedupes_same_physical_fill_with_different_id(monkeypatch):
+    monkeypatch.setattr(clob_fill_sync, "append_cached_fill", lambda row: None)
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """
+        CREATE TABLE fills (
+          fill_id TEXT PRIMARY KEY, execution_id TEXT, order_id TEXT,
+          filled_shares REAL, filled_price REAL, fees_usd REAL,
+          status TEXT, filled_at_utc TEXT, created_at_utc TEXT
+        )
+        """
+    )
+    kwargs = dict(
+        execution_id="exec",
+        order_id="order",
+        filled_shares=5.0,
+        filled_price=0.4,
+        fees_usd=0.0,
+        filled_at_utc="2026-07-10T01:00:00Z",
+        dry_run=False,
+    )
+
+    assert _insert_fill(conn, fill_id="first", **kwargs)
+    assert not _insert_fill(conn, fill_id="second", **kwargs)
+    assert conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 1
 
 
 def test_public_trade_fallback_requires_exact_token():

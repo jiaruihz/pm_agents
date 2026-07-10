@@ -38,7 +38,17 @@ def append_cached_fill(row: dict[str, Any], path: str | Path = DEFAULT_CACHE_PAT
 
 def import_cached_fills(conn: sqlite3.Connection, path: str | Path = DEFAULT_CACHE_PATH) -> int:
     inserted = 0
+    seen_physical_keys: set[tuple[str, str, float, float]] = set()
     for row in iter_cached_fills(path):
+        physical_key = (
+            str(row.get("order_id") or ""),
+            str(row.get("filled_at_utc") or ""),
+            round(float(row["filled_shares"]), 6),
+            round(float(row["filled_price"]), 6),
+        )
+        if physical_key in seen_physical_keys:
+            continue
+        seen_physical_keys.add(physical_key)
         before = conn.total_changes
         conn.execute(
             """

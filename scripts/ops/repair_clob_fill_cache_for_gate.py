@@ -106,7 +106,9 @@ def repair_rows(rows: list[dict[str, Any]], caps: dict[tuple[str, str], dict[str
     kept: list[dict[str, Any]] = []
     dropped_over_cap: list[dict[str, Any]] = []
     dropped_duplicate_fill_id = 0
+    dropped_duplicate_physical_key = 0
     seen_fill_ids: set[str] = set()
+    seen_physical_keys: set[tuple[str, str, float, float]] = set()
     for key, group in grouped.items():
         cap = caps[key]
         shares_sum = 0.0
@@ -118,6 +120,15 @@ def repair_rows(rows: list[dict[str, Any]], caps: dict[tuple[str, str], dict[str
                 continue
             shares = float(row.get("filled_shares") or 0.0)
             price = float(row.get("filled_price") or 0.0)
+            physical_key = (
+                str(row.get("order_id") or ""),
+                str(row.get("filled_at_utc") or ""),
+                round(shares, 6),
+                round(price, 6),
+            )
+            if physical_key in seen_physical_keys:
+                dropped_duplicate_physical_key += 1
+                continue
             cost = shares * price
             next_shares = shares_sum + shares
             next_cost = cost_sum + cost
@@ -129,6 +140,7 @@ def repair_rows(rows: list[dict[str, Any]], caps: dict[tuple[str, str], dict[str
                 continue
             kept.append(row)
             seen_fill_ids.add(fill_id)
+            seen_physical_keys.add(physical_key)
             shares_sum = next_shares
             cost_sum = next_cost
 
@@ -140,6 +152,7 @@ def repair_rows(rows: list[dict[str, Any]], caps: dict[tuple[str, str], dict[str
         "dropped_stale_order_rows": dropped_stale,
         "dropped_over_cap_rows": len(dropped_over_cap),
         "dropped_duplicate_fill_id_rows": dropped_duplicate_fill_id,
+        "dropped_duplicate_physical_key_rows": dropped_duplicate_physical_key,
         "sample_dropped_over_cap": [
             {
                 "fill_id": row.get("fill_id"),

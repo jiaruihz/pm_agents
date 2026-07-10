@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -194,7 +195,18 @@ def cmd_start(args: argparse.Namespace) -> int:
     script = ROOT / spec.start_script
     if not script.exists():
         raise SystemExit(f"missing start_script: {script}")
-    proc = subprocess.run([str(script)], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    env = os.environ.copy()
+    if spec.lifecycle_status == "live" and args.confirm_live:
+        env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
+    proc = subprocess.run(
+        [str(script)],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
     log_id = _record_action(args.db_path, spec, "start", "enabled", args.reason)
     refresh = None if args.no_refresh else refresh_db(args.db_path)
     print_payload(

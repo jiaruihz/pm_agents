@@ -42,6 +42,7 @@ def test_nan_yes_ask_does_not_mask_later_valid_expression() -> None:
                 "decision_hour_local": 12.0,
                 "actual_bucket": "current",
                 "temp_trend_3h_f": 1.0,
+                "obs_age_min": 10.0,
                 "d1_yes_ask": math.nan,
                 "d1_yes_ask_size": 0.0,
                 "d1_yes_token_id": "yes-d1",
@@ -79,12 +80,55 @@ def test_nan_yes_ask_does_not_mask_later_valid_expression() -> None:
         ask_ceiling=0.99,
         edge_threshold=0.02,
         policy_id="test",
+        max_obs_age_min=90.0,
     )
 
     selected, blocked = runner.build_candidates(live, pred, args)
 
     assert [row["chosen_expression"] for row in selected] == ["d2_no"]
     assert any(row.get("block_reason") == "missing_expression_ask" for row in blocked)
+
+
+def test_missing_observation_age_blocks_candidate() -> None:
+    live = pd.DataFrame(
+        [
+            {
+                "city": "TestCity",
+                "target_date": "2026-07-10",
+                "decision_hour_local": 12.0,
+                "actual_bucket": "current",
+                "temp_trend_3h_f": 1.0,
+                "obs_age_min": math.nan,
+            }
+        ]
+    )
+    pred = pd.DataFrame(
+        [
+            {
+                "city": "TestCity",
+                "target_date": "2026-07-10",
+                "decision_hour_local": 12.0,
+                "actual_bucket": "current",
+            }
+        ]
+    )
+    args = SimpleNamespace(
+        active_expressions=["current_no"],
+        exclude_trend3h_flat=True,
+        trend3h_flat_low=-0.5,
+        trend3h_flat_high=0.5,
+        fee_rate=0.05,
+        ask_floor=0.40,
+        ask_ceiling=0.99,
+        edge_threshold=0.02,
+        policy_id="test",
+        max_obs_age_min=90.0,
+    )
+
+    selected, blocked = runner.build_candidates(live, pred, args)
+
+    assert selected == []
+    assert [row["block_reason"] for row in blocked] == ["observation_age_missing"]
 
 
 def test_fresh_yes_quote_requires_direct_yes_ask(monkeypatch) -> None:

@@ -168,6 +168,39 @@
     - latest_candidates.json
   - - latest_blocked
     - latest_blocked.json
+- strategy_instance: tmax_coherent_cal_quote_tiny_live_v1
+  display_name: Tmax coherent quote calibrator tiny-live
+  family: reheat_risk.tmax_distribution_edge
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/tmax_coherent_cal_quote_tiny_live_v1
+  summary_file: latest_summary.json
+  primary_journal: summary_history.jsonl
+  live_order_file: live_orders.jsonl
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: null
+  start_script: scripts/ops/start_tmax_coherent_cal_quote_tiny_live_v1.sh
+  tmux_session: tmax_coherent_cal_quote_tiny_live_v1
+  notes: User-approved 5-share tiny-live probe for the coherent_cal_quote second-stage
+    calibrator. Uses the same current/d1/d2/tail base model and first-lock expression
+    policy as the predecessor, with quote-aware coherent calibration, fresh observation
+    lineage, finite sibling asks, and predecessor city-day dedupe.
+  default_health: unknown
+  expected_live: true
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
+  - - trade_plans
+    - trade_plans.jsonl
+  - - live_orders
+    - live_orders.jsonl
+  - - paper_orders
+    - paper_orders.jsonl
+  - - latest_candidates
+    - latest_candidates.json
+  - - latest_blocked
+    - latest_blocked.json
 - strategy_instance: weather_runtime_monitor
   display_name: Weather runtime monitor
   family: data_quality.runtime_monitor

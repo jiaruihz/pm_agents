@@ -9,12 +9,16 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.weather_edge_v1.ids import make_fill_id  # noqa: E402
 
 
 def _round(value: float) -> float:
@@ -88,12 +92,20 @@ def summarize_rows(
     )
     missing_order_rows = 0
     missing_order_cost = 0.0
+    physical_keys: dict[tuple[str, str, float, float], list[str]] = defaultdict(list)
+    synthetic_fill_ids: list[str] = []
     for row in rows:
         execution_id = str(row.get("execution_id") or "")
         order_id = str(row.get("order_id") or "")
         shares = float(row.get("filled_shares") or 0.0)
         price = float(row.get("filled_price") or 0.0)
         cost = shares * price
+        filled_at = str(row.get("filled_at_utc") or "")
+        physical_keys[(order_id, filled_at, _round(shares), _round(price))].append(
+            str(row.get("fill_id") or "")
+        )
+        if execution_id and str(row.get("fill_id") or "") == make_fill_id(execution_id=execution_id):
+            synthetic_fill_ids.append(str(row.get("fill_id") or ""))
         by_execution[execution_id]["fills"] += 1.0
         by_execution[execution_id]["shares"] += shares
         by_execution[execution_id]["cost"] += cost
@@ -132,6 +144,17 @@ def summarize_rows(
             )
     over_order.sort(key=lambda row: (row["cost_over"], row["shares_over"]), reverse=True)
     total_cost = sum(float(row.get("filled_shares") or 0.0) * float(row.get("filled_price") or 0.0) for row in rows)
+    duplicate_physical = [
+        {
+            "order_id": key[0],
+            "filled_at_utc": key[1],
+            "filled_shares": key[2],
+            "filled_price": key[3],
+            "fill_ids": fill_ids,
+        }
+        for key, fill_ids in physical_keys.items()
+        if len(fill_ids) > 1
+    ]
     return {
         "rows": len(rows),
         "distinct_fill_ids": len({str(row.get("fill_id") or "") for row in rows if row.get("fill_id")}),
@@ -144,6 +167,10 @@ def summarize_rows(
         "over_order_cost_usd": _round(sum(float(row["fill_cost"]) for row in over_order)),
         "over_order_excess_cost_usd": _round(sum(float(row["cost_over"]) for row in over_order)),
         "top_over_order": over_order[:25],
+        "synthetic_fill_rows": len(synthetic_fill_ids),
+        "sample_synthetic_fill_ids": synthetic_fill_ids[:25],
+        "duplicate_physical_keys": len(duplicate_physical),
+        "sample_duplicate_physical_keys": duplicate_physical[:25],
     }
 
 
@@ -158,7 +185,8 @@ def load_db_fill_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
               f.execution_id,
               f.order_id,
               f.filled_shares,
-              f.filled_price
+              f.filled_price,
+              f.filled_at_utc
             FROM fills f
             JOIN orders o ON o.execution_id = f.execution_id
             WHERE o.venue='polymarket_clob'
@@ -251,6 +279,10 @@ def main() -> int:
             )
         if cache_summary["over_order_keys"]:
             payload["fail_reasons"].append(f"cache_fills_exceed_order_cap:{cache_path}")
+        if cache_summary["synthetic_fill_rows"]:
+            payload["fail_reasons"].append(f"cache_contains_synthetic_runtime_fills:{cache_path}")
+        if cache_summary["duplicate_physical_keys"]:
+            payload["fail_reasons"].append(f"cache_contains_duplicate_physical_fills:{cache_path}")
 
         if index == 0:
             cache_fill_ids = _fill_id_set(cache_rows)
@@ -273,6 +305,10 @@ def main() -> int:
         payload["fail_reasons"].append("db_fills_missing_or_mismatched_order_id")
     if db_fills["over_order_keys"]:
         payload["fail_reasons"].append("db_fills_exceed_order_cap")
+    if db_fills["synthetic_fill_rows"]:
+        payload["fail_reasons"].append("db_contains_synthetic_runtime_fills")
+    if db_fills["duplicate_physical_keys"]:
+        payload["fail_reasons"].append("db_contains_duplicate_physical_fills")
     if abs(float(payload["db_fill_cost_minus_fact_cost"])) > 0.01:
         payload["fail_reasons"].append("fact_trades_cost_not_equal_fills_cost")
     payload["gate_pass"] = not payload["fail_reasons"]

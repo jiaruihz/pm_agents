@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -22,7 +23,7 @@ from weather_dashboard.ingest.canonical import (
     insert_universe,
 )
 from src.strategies.runtime.ownership import strategy_key_for_params
-from src.strategies.weather_edge_v1.ids import make_execution_id, make_fill_id
+from src.strategies.weather_edge_v1.ids import make_execution_id
 from weather_dashboard.legacy_migration.live_cycle import (
     CITY_ICAO,
     _canonical_order,
@@ -48,6 +49,7 @@ DEFAULT_ROOTS = (
 SNAPSHOT_DIR = Path("runtime/weather_edge_v1/market_data/paper_snapshots")
 GAMMA_HOST = os.getenv("POLYMARKET_GAMMA_HOST", "https://gamma-api.polymarket.com").rstrip("/")
 _GAMMA_MARKET_CACHE: dict[str, dict[str, Any] | None] = {}
+_CONDITION_ID_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
 
 @dataclass
@@ -299,34 +301,6 @@ def _runtime_order_status(raw: dict[str, Any]) -> str:
     return str(raw.get("order_status") or raw.get("status") or "").strip() or "submitted"
 
 
-def _runtime_fill_from_order(raw: dict[str, Any], order: dict[str, Any]) -> dict[str, Any] | None:
-    response = raw.get("exchange_response")
-    if not isinstance(response, dict):
-        return None
-    place = response.get("place")
-    if not isinstance(place, dict):
-        return None
-    if place.get("status") != "matched" and place.get("success") is not True:
-        return None
-    try:
-        cost = float(place.get("makingAmount") or 0.0)
-        shares = float(place.get("takingAmount") or 0.0)
-    except (TypeError, ValueError):
-        return None
-    if cost <= 0 or shares <= 0:
-        return None
-    return {
-        "fill_id": make_fill_id(execution_id=order["execution_id"]),
-        "execution_id": order["execution_id"],
-        "order_id": order["order_id"],
-        "filled_shares": shares,
-        "filled_price": cost / shares,
-        "fees_usd": 0.0,
-        "status": "filled",
-        "filled_at_utc": raw.get("live_attempt_ts_utc") or raw.get("created_at_utc") or raw.get("ts_utc"),
-    }
-
-
 def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) -> dict[str, Any]:
     row = dict(raw)
     snap = snapshot or {}
@@ -384,6 +358,8 @@ def _enrich_runtime_order(raw: dict[str, Any], snapshot: dict[str, Any] | None) 
             row["model_version"] = str(row.get("forecast_model_tail") or snap.get("forecast_model_tail") or "gfs")
     row["source_run_id"] = row.get("source_run_id") or row.get("strategy_instance") or row.get("strategy_id") or row.get("record_type")
     row["execution_policy"] = row.get("execution_policy") or "fast_source_prev_no_fok"
+    if not row.get("condition_id") and _CONDITION_ID_RE.fullmatch(str(row.get("market_id") or "")):
+        row["condition_id"] = row["market_id"]
     if not row.get("condition_id"):
         row["condition_id"] = snap.get("condition_id") or ""
     _enrich_from_gamma_market(row)
@@ -434,15 +410,15 @@ def migrate_strategy_runtime_orders(conn, *, order_path: str | Path) -> Strategy
                 )
             order = _canonical_order(raw, run_id=run_id, plan_id=plan["plan_id"])
             order["instance_id"] = strategy_instance if instance_exists else None
-            fill = _runtime_fill_from_order(raw, order)
         except (ValueError, CanonicalValidationError) as exc:
             report.skip(f"runtime_order:{exc}")
             continue
         signals.append(signal)
         plans.append(plan)
         orders.append(order)
-        if fill is not None:
-            fills.append(fill)
+        # Fill lineage is owned by the shared CLOB sync that runs after order
+        # migration. It replays the durable cache first, then uses the matched
+        # exchange response only as a fallback for newly seen orders.
 
     cities = sorted({row["city"] for row in signals})
     models = sorted({row["model_version"] for row in signals})

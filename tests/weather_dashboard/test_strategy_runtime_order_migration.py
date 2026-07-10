@@ -9,6 +9,7 @@ from weather_dashboard.legacy_migration.strategy_runtime_orders import (
     migrate_strategy_runtime_orders,
 )
 from scripts.etl.build_weather_fact_trades import build as build_fact_trades
+from src.strategies.runtime.sync import sync_instance_specs
 
 
 def _conn():
@@ -16,6 +17,7 @@ def _conn():
     conn.row_factory = sqlite3.Row
     apply_pragmas(conn)
     apply_schema_canonical(conn)
+    sync_instance_specs(conn)
     return conn
 
 
@@ -169,7 +171,7 @@ def test_snapshot_lookup_skips_rows_with_complete_market_lineage(monkeypatch):
     assert lookup == {}
 
 
-def test_migrate_fast_source_prev_no_matched_fok_order_creates_fill(tmp_path):
+def test_migrate_fast_source_prev_no_matched_fok_order_defers_fill_to_clob_sync(tmp_path):
     order_path = tmp_path / "output" / "fast_source_prev_no_trial" / "orders.jsonl"
     _write_jsonl(
         order_path,
@@ -222,17 +224,13 @@ def test_migrate_fast_source_prev_no_matched_fok_order_creates_fill(tmp_path):
         report = migrate_strategy_runtime_orders(conn, order_path=order_path)
         assert report.skipped_rows == 0
         assert report.orders == 1
-        assert report.fills == 1
+        assert report.fills == 0
 
         row = conn.execute(
             """
             SELECT s.city, s.bracket, s.unit, s.signal_side,
-                   o.venue, o.order_side, o.status, o.clob_status,
-                   ROUND(f.filled_shares, 6) AS filled_shares,
-                   ROUND(f.filled_price, 6) AS filled_price,
-                   f.status AS fill_status
-            FROM fills f
-            JOIN orders o ON o.execution_id = f.execution_id
+                   o.venue, o.order_side, o.status, o.clob_status
+            FROM orders o
             JOIN plans p ON p.plan_id = o.plan_id
             JOIN signals s ON s.signal_id = p.signal_id
             """
@@ -246,12 +244,27 @@ def test_migrate_fast_source_prev_no_matched_fok_order_creates_fill(tmp_path):
             "order_side": "BUY_NO",
             "status": "submitted",
             "clob_status": "matched",
-            "filled_shares": 5.609755,
-            "filled_price": 0.82,
-            "fill_status": "filled",
         }
+        assert conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0] == 0
     finally:
         conn.close()
+
+
+def test_enrich_runtime_order_recovers_condition_hash_from_market_id(monkeypatch):
+    condition_id = "0x" + "a" * 64
+    monkeypatch.setattr(strategy_runtime_orders, "_enrich_from_gamma_market", lambda row: None)
+
+    row = strategy_runtime_orders._enrich_runtime_order(
+        {
+            "market_id": condition_id,
+            "target_date": "2026-07-11",
+            "city": "Seoul",
+            "token_id": "token",
+        },
+        None,
+    )
+
+    assert row["condition_id"] == condition_id
 
 
 def test_fact_trades_uses_sell_side_cashflow_and_pnl(tmp_path):
