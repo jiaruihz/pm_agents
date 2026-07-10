@@ -12,6 +12,7 @@ from weather_dashboard.ingest.canonical import (
     ingest_canonical_signals,
 )
 from scripts.etl.build_weather_fact_trades import build as _build_fact, write_db as _write_fact
+from src.strategies.runtime.specs import load_instance_specs
 from src.strategies.runtime.runtime_state import push_runtime_state
 from src.strategies.runtime.sync import sync_instance_specs
 
@@ -20,6 +21,19 @@ def _rebuild_fact(conn):
     """Populate fact_trades from raw tables in the test DB."""
     rows, _ = _build_fact(conn)
     _write_fact(conn, rows)
+
+
+def _seed_runtime_config_refs(conn):
+    """Seed config refs required by the git-authored runtime instance spec."""
+    for config_id in sorted({s.config_id for s in load_instance_specs() if s.config_id}):
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO strategy_config (config_id, name, params)
+            VALUES (?, ?, '{}')
+            """,
+            (config_id, f"test_ref_{config_id}"),
+        )
+    conn.commit()
 
 
 # ── /health ───────────────────────────────────────────────────────────────────
@@ -186,6 +200,31 @@ def test_order_blotter_includes_unfilled_orders(client, api_db):
     assert data["rows"][0]["fill_id"] is None
 
 
+def test_order_blotter_filters_by_strategy_instance(client, api_db):
+    config_id, run_id, signal, plan, order, fill, settlement = _canonical_bundle()
+    _insert_metadata(api_db, config_id, run_id)
+    ingest_canonical_signals(api_db, [signal], "signals.jsonl")
+    ingest_canonical_plans(api_db, [plan], "plans.jsonl")
+    ingest_canonical_orders(api_db, [order], "orders.jsonl")
+    ingest_canonical_fills(api_db, [fill], "fills.jsonl")
+    ingest_canonical_settlements(api_db, [settlement], "settlements.jsonl")
+    _rebuild_fact(api_db)
+    _seed_runtime_config_refs(api_db)
+    sync_instance_specs(api_db)
+    api_db.execute(
+        "UPDATE strategy_instance SET config_id=? WHERE instance_id=?",
+        (config_id, "low_price_yes_lottery_tiny_live_v1"),
+    )
+    api_db.commit()
+
+    r = client.get("/api/order-blotter?trade_class=paper&instance_id=low_price_yes_lottery_tiny_live_v1")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 1
+    assert data["filters"]["config_id"] == config_id
+    assert data["rows"][0]["strategy_instance"] == "low_price_yes_lottery_tiny_live_v1"
+
+
 def test_get_run_metrics_slice_uses_canonical_fields(client, api_db):
     config_id, run_id, signal, plan, order, fill, settlement = _canonical_bundle()
     _insert_metadata(api_db, config_id, run_id)
@@ -206,6 +245,7 @@ def test_get_run_metrics_slice_uses_canonical_fields(client, api_db):
 
 
 def test_strategy_runtime_overview_reads_instance_runtime(client, api_db):
+    _seed_runtime_config_refs(api_db)
     sync_instance_specs(api_db)
     push_runtime_state(
         api_db,
@@ -221,6 +261,7 @@ def test_strategy_runtime_overview_reads_instance_runtime(client, api_db):
     assert r.status_code == 200
     rows = r.json()["strategies"]
     row = next(x for x in rows if x["strategy_instance"] == "low_price_yes_lottery_tiny_live_v1")
+    assert row["config_id"] == "live_weather_edge_v1_dfdc707d8ac7"
     assert row["process_status"] == "running"
     assert row["health_status"] == "healthy"
     assert row["candidate_rows"] == 3

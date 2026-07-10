@@ -39,6 +39,7 @@ export function WeatherOrderBlotterPage() {
   const targetDate = params.get("target_date") ?? "";
   const city = params.get("city") ?? "";
   const configId = params.get("config_id") ?? "";
+  const instanceId = params.get("instance_id") ?? "";
 
   const [rows, setRows] = useState<OrderBlotterRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -60,6 +61,7 @@ export function WeatherOrderBlotterPage() {
     weatherApi.getOrderBlotter({
       trade_class: tradeClass,
       status,
+      instance_id: instanceId || undefined,
       target_date: targetDate || undefined,
       city: city || undefined,
       config_id: configId || undefined,
@@ -69,7 +71,7 @@ export function WeatherOrderBlotterPage() {
       setTotal(res.total);
     }).catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [tradeClass, status, targetDate, city, configId]);
+  }, [tradeClass, status, targetDate, city, configId, instanceId]);
 
   const realized = rows.reduce((s, r) => s + (r.pnl_usd_at_fill ?? 0), 0);
   const mtm = rows.reduce((s, r) => s + (r.unrealized_pnl_mid ?? 0), 0);
@@ -99,6 +101,10 @@ export function WeatherOrderBlotterPage() {
             <span>City</span>
             <input value={city} onChange={(e) => setFilter("city", e.target.value)} placeholder="Helsinki" style={inputStyle} />
           </label>
+          <label style={labelStyle}>
+            <span>Instance</span>
+            <input value={instanceId} onChange={(e) => setFilter("instance_id", e.target.value)} placeholder="low_price_yes..." style={{ ...inputStyle, minWidth: 220 }} />
+          </label>
           <div style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 12 }}>
             {loading ? "Loading..." : `${rows.length}/${total} rows`}
             {" · unfilled "}
@@ -116,7 +122,7 @@ export function WeatherOrderBlotterPage() {
           <table style={{ width: "100%", minWidth: 1500, borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr>
-                {["Time", "Kind", "Class", "Strategy ID", "Strategy", "Date", "City", "Bracket", "Side", "Order", "Fill", "Entry / Fill / Now", "Shares", "Cost", "Realized / MTM", "Run"].map((h) => (
+                {["Time", "Kind", "Class", "Instance", "Strategy ID", "Strategy", "Date", "City", "Bracket", "Side", "Order", "Fill", "Entry / Fill / Now", "Shares", "Cost", "Realized / MTM", "Run"].map((h) => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
@@ -129,6 +135,7 @@ export function WeatherOrderBlotterPage() {
                     <td style={tdStyle}>{ts(r.fill_ts_utc ?? r.order_ts_utc)}</td>
                     <td style={tdStyle}>{r.row_kind}</td>
                     <td style={tdStyle}>{r.trade_class ?? "-"}</td>
+                    <td style={monoTdStyle} title={r.strategy_instance ?? undefined}>{shortId(r.strategy_instance)}</td>
                     <td style={monoTdStyle} title={r.strategy_id ?? r.config_id ?? undefined}>{shortId(r.strategy_id ?? r.config_id)}</td>
                     <td style={{ ...tdStyle, maxWidth: 260 }} title={r.strategy_name ?? undefined}>{r.strategy_name ?? "-"}</td>
                     <td style={tdStyle}>{r.target_date ?? "-"}</td>
@@ -148,7 +155,7 @@ export function WeatherOrderBlotterPage() {
                 );
               })}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={16} style={{ ...tdStyle, textAlign: "center", color: "var(--muted)", padding: 28 }}>No orders found.</td></tr>
+                <tr><td colSpan={17} style={{ ...tdStyle, textAlign: "center", color: "var(--muted)", padding: 28 }}>No orders found.</td></tr>
               )}
             </tbody>
           </table>

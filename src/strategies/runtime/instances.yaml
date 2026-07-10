@@ -4,6 +4,7 @@
   lifecycle_status: live
   execution_mode: live
   source_layer: runtime_local
+  config_id: live_weather_edge_v1_d077c67b40df
   runtime_dir: runtime/weather_edge_v1/regime_routed_no_tiny_live_v1
   summary_file: latest_summary.json
   primary_journal: summary_history.jsonl
@@ -109,6 +110,7 @@
   lifecycle_status: shadow
   execution_mode: zero_notional_shadow
   source_layer: runtime_local
+  config_id: live_weather_edge_v1_713a7b695581
   runtime_dir: runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
   summary_file: latest_summary.json
   primary_journal: summary_history.jsonl
@@ -138,6 +140,7 @@
   lifecycle_status: live
   execution_mode: live
   source_layer: runtime_local
+  config_id: live_weather_edge_v1_bf7fbb097124
   runtime_dir: runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1
   summary_file: latest_summary.json
   primary_journal: summary_history.jsonl
@@ -250,6 +253,7 @@
   lifecycle_status: live
   execution_mode: live
   source_layer: runtime_local
+  config_id: live_weather_edge_v1_c16645cc1165
   runtime_dir: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial
   summary_file: latest_summary.json
   primary_journal: opportunities.jsonl
@@ -277,6 +281,7 @@
   lifecycle_status: live
   execution_mode: live
   source_layer: runtime_remote_mirror
+  config_id: live_weather_edge_v1_dfdc707d8ac7
   runtime_dir: runtime/weather_edge_v1/remote_pm_agent/low_price_yes_lottery_tiny_live_v1
   summary_file: latest_summary.json
   primary_journal: shadow_decisions.jsonl

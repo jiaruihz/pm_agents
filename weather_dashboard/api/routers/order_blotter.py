@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from weather_dashboard.api.deps import get_db
 
@@ -31,6 +31,7 @@ def get_order_blotter(
     db: Db,
     trade_class: str = Query("live_real", description="live_real | paper | snapshot_replay | live_simulated | all"),
     status: str = Query("all", description="all | open | settled | unfilled"),
+    instance_id: Optional[str] = Query(None),
     config_id: Optional[str] = Query(None),
     strategy_id: Optional[str] = Query(None),
     target_date: Optional[str] = Query(None),
@@ -44,28 +45,48 @@ def get_order_blotter(
     fill are included so rejected/submitted-but-unfilled execution attempts are
     visible in the same blotter.
     """
+    effective_config_id = config_id
+    instance_unbound = False
+    if instance_id:
+        instance = db.execute(
+            "SELECT config_id FROM strategy_instance WHERE instance_id = ?",
+            (instance_id,),
+        ).fetchone()
+        if instance is None:
+            raise HTTPException(status_code=404, detail=f"unknown strategy_instance: {instance_id}")
+        instance_config_id = instance["config_id"]
+        if effective_config_id and instance_config_id and effective_config_id != instance_config_id:
+            instance_unbound = True
+        elif effective_config_id and not instance_config_id:
+            instance_unbound = True
+        else:
+            effective_config_id = instance_config_id
+            instance_unbound = effective_config_id is None
+
     fact_where = ["1=1"]
     fact_params: list[Any] = []
+    if instance_unbound:
+        fact_where.append("0")
     if trade_class != "all":
-        fact_where.append("trade_class = ?")
+        fact_where.append("ft.trade_class = ?")
         fact_params.append(trade_class)
     if status == "open":
-        fact_where.append("COALESCE(settled, 0) = 0")
+        fact_where.append("COALESCE(ft.settled, 0) = 0")
     elif status == "settled":
-        fact_where.append("COALESCE(settled, 0) = 1")
+        fact_where.append("COALESCE(ft.settled, 0) = 1")
     elif status == "unfilled":
         fact_where.append("0")
-    if config_id:
-        fact_where.append("config_id = ?")
-        fact_params.append(config_id)
+    if effective_config_id:
+        fact_where.append("ft.config_id = ?")
+        fact_params.append(effective_config_id)
     if strategy_id:
-        fact_where.append("strategy_id = ?")
+        fact_where.append("ft.strategy_id = ?")
         fact_params.append(strategy_id)
     if target_date:
-        fact_where.append("target_date = ?")
+        fact_where.append("ft.target_date = ?")
         fact_params.append(target_date)
     if city:
-        fact_where.append("city = ?")
+        fact_where.append("ft.city = ?")
         fact_params.append(city)
 
     filled = [
@@ -76,18 +97,20 @@ def get_order_blotter(
         for row in db.execute(
             f"""
             SELECT
-                trade_class, execution_mode, venue,
-                config_id, strategy_id, strategy_name,
-                run_id, signal_id, plan_id, execution_id, order_id, fill_id,
-                target_date, city, city_pool, icao, bracket, side,
-                order_status, fill_status,
-                order_ts_utc, fill_ts_utc, snapshot_ts_utc,
-                market_price, limit_price, fill_price, fill_qty,
-                cost_usd, notional, fees_usd,
-                settled, final_yes, pnl_usd_at_fill,
-                unrealized_pnl_mid, val_mid, val_snapshot_ts_utc,
-                condition_id, market_id
-            FROM fact_trades
+                ft.trade_class, ft.execution_mode, ft.venue,
+                ft.config_id, ft.strategy_id, ft.strategy_name,
+                si.instance_id AS strategy_instance,
+                ft.run_id, ft.signal_id, ft.plan_id, ft.execution_id, ft.order_id, ft.fill_id,
+                ft.target_date, ft.city, ft.city_pool, ft.icao, ft.bracket, ft.side,
+                ft.order_status, ft.fill_status,
+                ft.order_ts_utc, ft.fill_ts_utc, ft.snapshot_ts_utc,
+                ft.market_price, ft.limit_price, ft.fill_price, ft.fill_qty,
+                ft.cost_usd, ft.notional, ft.fees_usd,
+                ft.settled, ft.final_yes, ft.pnl_usd_at_fill,
+                ft.unrealized_pnl_mid, ft.val_mid, ft.val_snapshot_ts_utc,
+                ft.condition_id, ft.market_id
+            FROM fact_trades ft
+            LEFT JOIN strategy_instance si ON si.config_id = ft.config_id
             WHERE {' AND '.join(fact_where)}
             """,
             fact_params,
@@ -96,6 +119,8 @@ def get_order_blotter(
 
     order_where = ["f.fill_id IS NULL"]
     order_params: list[Any] = []
+    if instance_unbound:
+        order_where.append("0")
     if trade_class != "all":
         if trade_class == "live_real":
             order_where.append("o.venue = 'polymarket_clob' AND r.state = 'live'")
@@ -109,9 +134,9 @@ def get_order_blotter(
             order_where.append("0")
     if status in {"settled"}:
         order_where.append("0")
-    if config_id:
+    if effective_config_id:
         order_where.append("r.config_id = ?")
-        order_params.append(config_id)
+        order_params.append(effective_config_id)
     if strategy_id:
         # No-fill canonical orders do not have a separate strategy_id column.
         order_where.append("r.config_id = ?")
@@ -136,6 +161,7 @@ def get_order_blotter(
                 SELECT
                     r.execution_mode, o.venue,
                     r.config_id, r.config_id AS strategy_id, sc.name AS strategy_name,
+                    si.instance_id AS strategy_instance,
                     r.run_id, p.signal_id, p.plan_id, o.execution_id, o.order_id,
                     NULL AS fill_id,
                     sig.target_date, sig.city, sig.city_pool, sig.icao, sig.bracket,
@@ -153,6 +179,7 @@ def get_order_blotter(
                 JOIN signals sig ON sig.signal_id = p.signal_id
                 JOIN runs r ON r.run_id = o.run_id
                 LEFT JOIN strategy_config sc ON sc.config_id = r.config_id
+                LEFT JOIN strategy_instance si ON si.config_id = r.config_id
                 LEFT JOIN fills f ON f.execution_id = o.execution_id
                 WHERE {' AND '.join(order_where)}
                 """,
@@ -171,7 +198,8 @@ def get_order_blotter(
         "filters": {
             "trade_class": trade_class,
             "status": status,
-            "config_id": config_id,
+            "instance_id": instance_id,
+            "config_id": effective_config_id,
             "strategy_id": strategy_id,
             "target_date": target_date,
             "city": city,

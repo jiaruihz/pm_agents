@@ -270,6 +270,7 @@ export interface StrategyRuntimeArtifact {
 
 export interface StrategyRuntimeRow {
   strategy_instance: string;
+  config_id: string | null;
   strategy_id: string | null;
   display_name: string;
   family: string;

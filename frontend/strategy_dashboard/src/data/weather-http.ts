@@ -208,6 +208,7 @@ export const weatherApi = {
   getOrderBlotter(params?: {
     trade_class?: string;
     status?: string;
+    instance_id?: string;
     config_id?: string;
     strategy_id?: string;
     target_date?: string;

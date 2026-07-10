@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { PageFrame } from "../../components/PageFrame";
 import { weatherApi } from "../../data/weather-http";
 import type { StrategyRuntimeDetail, StrategyRuntimeOverview, StrategyRuntimeRow, StrategyShadowQueueRow } from "../../data/weather-types";
@@ -42,6 +43,11 @@ function shortPath(value: string | null | undefined): string {
   if (!value) return "-";
   const parts = value.split("/");
   return parts.slice(Math.max(0, parts.length - 3)).join("/");
+}
+
+function shortId(value: string | null | undefined): string {
+  if (!value) return "-";
+  return value.length <= 20 ? value : `${value.slice(0, 10)}...${value.slice(-6)}`;
 }
 
 function listText(items: unknown[] | undefined, limit = 2): string {
@@ -697,6 +703,9 @@ function StrategyRowView({ row }: { row: StrategyRuntimeRow }) {
     row.live_enabled != null ? `live ${row.live_enabled ? "on" : "off"}` : null,
   ].filter(Boolean).join(" · ");
   const blockers = listText(row.blockers);
+  const orderHref = row.config_id
+    ? `/weather/orders?trade_class=all&instance_id=${encodeURIComponent(row.strategy_instance)}`
+    : null;
 
   return (
     <article style={strategyCardStyle}>
@@ -711,6 +720,14 @@ function StrategyRowView({ row }: { row: StrategyRuntimeRow }) {
           <div style={strategyDescriptionStyle}>{strategyDescriptionZh(row)}</div>
           <div style={subtleStyle}>{row.family}</div>
           <div style={monoSmallStyle}>{row.strategy_instance}</div>
+          <div style={strategyActionRowStyle}>
+            <span style={monoSmallInlineStyle}>config {shortId(row.config_id)}</span>
+            {orderHref ? (
+              <Link to={orderHref} style={linkButtonStyle}>Orders</Link>
+            ) : (
+              <span style={disabledLinkStyle}>Orders unavailable</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -719,6 +736,7 @@ function StrategyRowView({ row }: { row: StrategyRuntimeRow }) {
         <MiniStat label="age" value={fmtAge(row.heartbeat_age_min)} />
         <MiniStat label="mode" value={row.execution_mode} />
         <MiniStat label="process" value={row.process_status} />
+        <MiniStat label="config" value={shortId(row.config_id)} />
         <MiniStat label="rows" value={counts} />
         <MiniStat label="fact / real" value={`${fmtInt(row.fact_trade_rows)} / ${fmtInt(row.fact_live_real_rows)}`} />
         <MiniStat label="cap / live" value={cap || "-"} />
@@ -868,6 +886,29 @@ const monoSmallStyle: React.CSSProperties = {
   fontSize: 10,
   fontFamily: "monospace",
   wordBreak: "break-word",
+};
+const monoSmallInlineStyle: React.CSSProperties = {
+  color: "var(--muted)",
+  fontSize: 10,
+  fontFamily: "monospace",
+  wordBreak: "break-word",
+};
+const strategyActionRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 8,
+  marginTop: 8,
+};
+const linkButtonStyle: React.CSSProperties = {
+  color: "var(--accent-2)",
+  textDecoration: "none",
+  fontSize: 12,
+  fontWeight: 700,
+};
+const disabledLinkStyle: React.CSSProperties = {
+  color: "var(--muted)",
+  fontSize: 12,
 };
 const metricGridStyle: React.CSSProperties = {
   display: "grid",

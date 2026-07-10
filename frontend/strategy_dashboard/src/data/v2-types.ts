@@ -233,6 +233,7 @@ export interface OrderBlotterRow {
   config_id: string | null;
   strategy_id: string | null;
   strategy_name: string | null;
+  strategy_instance: string | null;
   run_id: string | null;
   signal_id: string | null;
   plan_id: string | null;

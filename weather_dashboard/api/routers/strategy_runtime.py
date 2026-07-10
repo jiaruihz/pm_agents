@@ -138,6 +138,7 @@ def get_strategy_runtime_overview(
         """
         SELECT
           si.instance_id AS strategy_instance,
+          si.config_id AS config_id,
           si.config_id AS strategy_id,
           si.display_name,
           si.family,
@@ -312,6 +313,7 @@ def get_strategy_runtime_detail(
         """
         SELECT
           si.instance_id AS strategy_instance,
+          si.config_id AS config_id,
           si.config_id AS strategy_id,
           si.display_name,
           si.family,
