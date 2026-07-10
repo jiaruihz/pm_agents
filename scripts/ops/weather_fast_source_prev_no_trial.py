@@ -230,6 +230,28 @@ def spent_market_shares(path: Path, *, target_date: str, token_id: str) -> float
     return round(total, 6)
 
 
+def parse_city_float_overrides(raw_items: list[str] | None, *, arg_name: str) -> dict[str, float]:
+    overrides: dict[str, float] = {}
+    for raw in raw_items or []:
+        for item in str(raw).replace(",", " ").split():
+            if not item:
+                continue
+            if "=" not in item:
+                raise ValueError(f"{arg_name} entries must be City=value, got {item!r}")
+            city_raw, value_raw = item.split("=", 1)
+            city = market_city(city_raw.strip())
+            if not city:
+                raise ValueError(f"{arg_name} entry has empty city: {item!r}")
+            try:
+                value = float(value_raw)
+            except ValueError as exc:
+                raise ValueError(f"{arg_name} entry has invalid value: {item!r}") from exc
+            if value <= 0:
+                raise ValueError(f"{arg_name} entry must be positive: {item!r}")
+            overrides[city] = value
+    return overrides
+
+
 def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     out_dir = Path(args.output_dir)
@@ -241,6 +263,14 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
     all_cities = set(args.live_cities or []) | set(args.shadow_cities or [])
     allowed_sources = set(args.sources or [])
     market_proxy = market_proxy_url(args.market_proxy or None)
+    max_shares_per_trade_by_city = parse_city_float_overrides(
+        args.max_shares_per_trade_by_city,
+        arg_name="--max-shares-per-trade-by-city",
+    )
+    max_shares_per_market_by_city = parse_city_float_overrides(
+        args.max_shares_per_market_by_city,
+        arg_name="--max-shares-per-market-by-city",
+    )
 
     source_rows = latest_source_by_city(Path(args.high_frequency_latest), target_date, allowed_sources, all_cities)
     metar_rows = metar_running_max(Path(args.source_events_jsonl), target_date)
@@ -318,6 +348,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         if token is None:
             opportunity_rows.append({**common, "status": "missing_t_minus_1_market", "event_key": event_key})
             continue
+        city_max_shares_per_trade = max_shares_per_trade_by_city.get(city, float(args.max_shares_per_trade))
+        city_max_shares_per_market = max_shares_per_market_by_city.get(city, float(args.max_shares_per_market))
         book = fetch_fresh_book(token.no_token_id, proxy=market_proxy, timeout_sec=float(args.book_timeout_sec), top_n=5)
         summary = book.get("summary") or {}
         best_ask = safe_float(summary.get("best_ask"))
@@ -329,10 +361,10 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             live_blockers.append("missing_best_ask")
         elif best_ask > float(args.max_no_ask):
             live_blockers.append("ask_above_max")
-        if ask_size is None or ask_size < float(args.max_shares_per_trade):
+        if ask_size is None or ask_size < city_max_shares_per_trade:
             live_blockers.append("insufficient_top_ask_size")
         market_spent = spent_market_shares(out_dir / "orders.jsonl", target_date=target_date, token_id=token.no_token_id)
-        if market_spent + float(args.max_shares_per_trade) > float(args.max_shares_per_market) + 1e-9:
+        if market_spent + city_max_shares_per_trade > city_max_shares_per_market + 1e-9:
             live_blockers.append("market_share_cap")
         if args.live and city in set(args.live_cities or []) and not args.confirm_live:
             live_blockers.append("confirm_live_missing")
@@ -351,10 +383,10 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "fresh_book_http_status": book.get("http_status"),
             "fresh_book_proxy_used": book.get("proxy_used", ""),
             "max_no_ask": float(args.max_no_ask),
-            "planned_shares": float(args.max_shares_per_trade),
+            "planned_shares": city_max_shares_per_trade,
             "market_spent_shares": market_spent,
-            "max_shares_per_market": float(args.max_shares_per_market),
-            "planned_notional_usd": round(float(args.max_shares_per_trade) * float(best_ask or 0.0), 6),
+            "max_shares_per_market": city_max_shares_per_market,
+            "planned_notional_usd": round(city_max_shares_per_trade * float(best_ask or 0.0), 6),
             "live_requested": bool(args.live and city in set(args.live_cities or [])),
             "live_enabled": bool(args.live and args.confirm_live and city in set(args.live_cities or [])),
             "live_blockers": live_blockers,
@@ -371,8 +403,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
                 **opportunity,
                 "order_side": "BUY",
                 "limit_price": limit_price,
-                "size": floor_to_places(float(args.max_shares_per_trade), 2),
-                "submitted_notional_usd": round(float(args.max_shares_per_trade) * limit_price, 6),
+                "size": floor_to_places(city_max_shares_per_trade, 2),
+                "submitted_notional_usd": round(city_max_shares_per_trade * limit_price, 6),
                 "limit_price_policy": "max_no_ask",
                 "live_attempted": True,
                 "live_attempt_ts_utc": iso(),
@@ -414,6 +446,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "caps": {
             "max_shares_per_trade": float(args.max_shares_per_trade),
             "max_shares_per_market": float(args.max_shares_per_market),
+            "max_shares_per_trade_by_city": max_shares_per_trade_by_city,
+            "max_shares_per_market_by_city": max_shares_per_market_by_city,
             "max_no_ask": float(args.max_no_ask),
             "max_source_age_min": float(args.max_source_age_min),
         },
@@ -445,6 +479,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--shadow-cities", nargs="*", default=["Tokyo", "Singapore", "Helsinki"])
     parser.add_argument("--max-shares-per-trade", type=float, default=5.0)
     parser.add_argument("--max-shares-per-market", type=float, default=5.0)
+    parser.add_argument("--max-shares-per-trade-by-city", action="append", default=[])
+    parser.add_argument("--max-shares-per-market-by-city", action="append", default=[])
     parser.add_argument("--max-shares-per-city-day", type=float, default=0.0, help=argparse.SUPPRESS)
     parser.add_argument("--max-no-ask", type=float, default=0.92)
     parser.add_argument("--max-source-age-min", type=float, default=15.0)

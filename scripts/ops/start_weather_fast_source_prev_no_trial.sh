@@ -12,6 +12,8 @@ LIVE_CITIES="${WEATHER_FAST_PREV_NO_LIVE_CITIES:-Helsinki}"
 SHADOW_CITIES="${WEATHER_FAST_PREV_NO_SHADOW_CITIES:-Tokyo Singapore Busan LA Dallas Houston SanFrancisco}"
 MAX_SHARES_PER_TRADE="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_TRADE:-10}"
 MAX_SHARES_PER_MARKET="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_MARKET:-10}"
+MAX_SHARES_PER_TRADE_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_TRADE_BY_CITY:-}"
+MAX_SHARES_PER_MARKET_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_MARKET_BY_CITY:-}"
 MAX_NO_ASK="${WEATHER_FAST_PREV_NO_MAX_NO_ASK:-0.92}"
 MAX_SOURCE_AGE_MIN="${WEATHER_FAST_PREV_NO_MAX_SOURCE_AGE_MIN:-15}"
 BOOK_TIMEOUT_SEC="${WEATHER_FAST_PREV_NO_BOOK_TIMEOUT_SEC:-5}"
@@ -38,6 +40,12 @@ cmd=(
 )
 read -r -a source_args <<< "$SOURCES"
 cmd+=("${source_args[@]}")
+if [[ -n "$MAX_SHARES_PER_TRADE_BY_CITY" ]]; then
+  cmd+=(--max-shares-per-trade-by-city "$MAX_SHARES_PER_TRADE_BY_CITY")
+fi
+if [[ -n "$MAX_SHARES_PER_MARKET_BY_CITY" ]]; then
+  cmd+=(--max-shares-per-market-by-city "$MAX_SHARES_PER_MARKET_BY_CITY")
+fi
 cmd+=(--live-cities)
 read -r -a live_city_args <<< "$LIVE_CITIES"
 cmd+=("${live_city_args[@]}")
@@ -69,6 +77,8 @@ echo "live_cities=$LIVE_CITIES"
 echo "shadow_cities=$SHADOW_CITIES"
 echo "max_shares_per_trade=$MAX_SHARES_PER_TRADE"
 echo "max_shares_per_market=$MAX_SHARES_PER_MARKET"
+echo "max_shares_per_trade_by_city=${MAX_SHARES_PER_TRADE_BY_CITY:-none}"
+echo "max_shares_per_market_by_city=${MAX_SHARES_PER_MARKET_BY_CITY:-none}"
 echo "max_no_ask=$MAX_NO_ASK"
 echo "max_source_age_min=$MAX_SOURCE_AGE_MIN"
 echo "output_dir=$OUTPUT_DIR"
