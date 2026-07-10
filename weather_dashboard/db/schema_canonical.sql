@@ -480,6 +480,11 @@ CREATE TABLE IF NOT EXISTS strategy_def (
     family           TEXT NOT NULL,
     strategy_group   TEXT NOT NULL DEFAULT 'weather',
     domain           TEXT NOT NULL DEFAULT 'weather',
+    strategy_name    TEXT NOT NULL DEFAULT '',
+    runner_module    TEXT NOT NULL DEFAULT '',
+    strategy_module  TEXT NOT NULL DEFAULT '',
+    meta_json        TEXT NOT NULL DEFAULT '{}',
+    def_source       TEXT NOT NULL DEFAULT 'instance_family',  -- manifest | instance_family
     description      TEXT NOT NULL DEFAULT '',
     is_active        INTEGER NOT NULL DEFAULT 1,
     spec_commit      TEXT,
@@ -493,6 +498,7 @@ CREATE TABLE IF NOT EXISTS strategy_instance (
     family           TEXT NOT NULL,
     lifecycle_status TEXT NOT NULL,
     execution_mode   TEXT NOT NULL,
+    config_id        TEXT REFERENCES strategy_config(config_id),
     desired_status   TEXT NOT NULL DEFAULT 'enabled'
         CHECK (desired_status IN ('enabled','paused','shelved','blocked')),
     source_layer     TEXT NOT NULL DEFAULT 'runtime_local',

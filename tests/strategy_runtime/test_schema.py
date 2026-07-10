@@ -16,7 +16,7 @@ def test_control_plane_tables_exist(tmp_path):
         ).fetchall()
     }
     assert {"strategy_def", "strategy_instance", "strategy_control_log"} <= tables
-    assert {"instance_id", "desired_status", "spec_commit", "params_hash"} <= _cols(
+    assert {"instance_id", "desired_status", "config_id", "spec_commit", "params_hash"} <= _cols(
         conn, "strategy_instance"
     )
     assert {"log_id", "action", "from_state", "to_state", "reason"} <= _cols(

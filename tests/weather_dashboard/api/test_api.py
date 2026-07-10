@@ -147,6 +147,43 @@ def test_get_run_trades_includes_live_orders_without_fills(client, api_db):
     assert data[0]["pnl_usd"] is None
 
 
+def test_order_blotter_returns_filled_fact_rows(client, api_db):
+    config_id, run_id, signal, plan, order, fill, settlement = _canonical_bundle()
+    _insert_metadata(api_db, config_id, run_id)
+    ingest_canonical_signals(api_db, [signal], "signals.jsonl")
+    ingest_canonical_plans(api_db, [plan], "plans.jsonl")
+    ingest_canonical_orders(api_db, [order], "orders.jsonl")
+    ingest_canonical_fills(api_db, [fill], "fills.jsonl")
+    ingest_canonical_settlements(api_db, [settlement], "settlements.jsonl")
+    _rebuild_fact(api_db)
+
+    r = client.get("/api/order-blotter?trade_class=paper&limit=10")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 1
+    assert data["rows"][0]["row_kind"] == "fill"
+    assert data["rows"][0]["fill_id"] == fill["fill_id"]
+    assert data["rows"][0]["config_id"] == config_id
+    assert data["rows"][0]["pnl_usd_at_fill"] is not None
+
+
+def test_order_blotter_includes_unfilled_orders(client, api_db):
+    config_id, run_id, signal, plan, order, _, _ = _canonical_bundle()
+    order = {**order, "status": "submitted"}
+    _insert_metadata(api_db, config_id, run_id)
+    ingest_canonical_signals(api_db, [signal], "signals.jsonl")
+    ingest_canonical_plans(api_db, [plan], "plans.jsonl")
+    ingest_canonical_orders(api_db, [order], "orders.jsonl")
+
+    r = client.get("/api/order-blotter?trade_class=paper&status=unfilled&limit=10")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 1
+    assert data["rows"][0]["row_kind"] == "order"
+    assert data["rows"][0]["execution_id"] == order["execution_id"]
+    assert data["rows"][0]["fill_id"] is None
+
+
 def test_get_run_metrics_slice_uses_canonical_fields(client, api_db):
     config_id, run_id, signal, plan, order, fill, settlement = _canonical_bundle()
     _insert_metadata(api_db, config_id, run_id)

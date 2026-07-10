@@ -28,6 +28,7 @@ class StrategySpec:
     lifecycle_status: str
     execution_mode: str
     source_layer: str
+    config_id: str | None = None
     runtime_dir: str | None = None
     summary_file: str | None = None
     primary_journal: str | None = None

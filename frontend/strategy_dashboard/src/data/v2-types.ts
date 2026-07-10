@@ -224,3 +224,52 @@ export interface GlossaryEntry {
 export interface GlossaryResponse {
   fields: Record<string, GlossaryEntry>;
 }
+
+export interface OrderBlotterRow {
+  row_kind: "fill" | "order";
+  trade_class: string | null;
+  execution_mode: string | null;
+  venue: string | null;
+  config_id: string | null;
+  strategy_id: string | null;
+  strategy_name: string | null;
+  run_id: string | null;
+  signal_id: string | null;
+  plan_id: string | null;
+  execution_id: string | null;
+  order_id: string | null;
+  fill_id: string | null;
+  target_date: string | null;
+  city: string | null;
+  city_pool: string | null;
+  bracket: string | null;
+  side: string | null;
+  order_status: string | null;
+  fill_status: string | null;
+  order_ts_utc: string | null;
+  fill_ts_utc: string | null;
+  snapshot_ts_utc: string | null;
+  market_price: number | null;
+  limit_price: number | null;
+  fill_price: number | null;
+  fill_qty: number | null;
+  cost_usd: number | null;
+  notional: number | null;
+  fees_usd: number | null;
+  settled: number | null;
+  final_yes: number | null;
+  pnl_usd_at_fill: number | null;
+  unrealized_pnl_mid: number | null;
+  val_mid: number | null;
+  val_snapshot_ts_utc: string | null;
+  condition_id: string | null;
+  market_id: string | null;
+}
+
+export interface OrderBlotterResponse {
+  rows: OrderBlotterRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  filters: Record<string, string | number | null>;
+}

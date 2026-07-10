@@ -15,6 +15,7 @@ from weather_dashboard.api.routers import (
     data_sources,
     glossary,
     live,
+    order_blotter,
     probes,
     research,
     research_lines,
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(compare.router, prefix="/api")
     app.include_router(configs.router, prefix="/api")
     app.include_router(live.router, prefix="/api")
+    app.include_router(order_blotter.router, prefix="/api")
     app.include_router(research.router, prefix="/api")
     app.include_router(copy_trade.router, prefix="/api")
     app.include_router(strategy_runtime.router, prefix="/api")

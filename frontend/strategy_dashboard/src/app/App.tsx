@@ -22,6 +22,7 @@ import { WeatherRunsPage } from "../pages/weather/WeatherRunsPage";
 import { WeatherComparePage } from "../pages/weather/WeatherComparePage";
 import { WeatherHistoryPage } from "../pages/weather/WeatherHistoryPage";
 import { WeatherLivePage } from "../pages/weather/WeatherLivePage";
+import { WeatherOrderBlotterPage } from "../pages/weather/WeatherOrderBlotterPage";
 import { WeatherResearchPage } from "../pages/weather/WeatherResearchPage";
 import { WeatherStrategyRuntimePage } from "../pages/weather/WeatherStrategyRuntimePage";
 import { WeatherTradeDrilldownPage } from "../pages/weather/WeatherTradeDrilldownPage";
@@ -57,6 +58,7 @@ export function App(): JSX.Element {
       <Route path="/weather/history/:runId" element={<WeatherHistoryPage />} />
       <Route path="/weather/trade/:runId/:signalId" element={<WeatherTradeDrilldownPage />} />
       <Route path="/weather/live" element={<WeatherLivePage />} />
+      <Route path="/weather/orders" element={<WeatherOrderBlotterPage />} />
       <Route path="/weather/runtime" element={<WeatherStrategyRuntimePage />} />
       <Route path="/copy-trade/wallets" element={<CopyTradeWalletsPage />} />
       <Route path="/copy-trade/wallets/:walletAddress" element={<CopyTradeWalletDetailPage />} />

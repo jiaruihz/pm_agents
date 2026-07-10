@@ -26,6 +26,25 @@ def test_sync_populates_instances(tmp_path):
     conn.close()
 
 
+def test_sync_pulls_file_manifests_into_strategy_def(tmp_path):
+    conn = _db(tmp_path)
+    result = sync_instance_specs(conn)
+    assert result["manifest_def_rows"] >= 5
+    # file manifests land as def_source='manifest' with rich metadata
+    row = conn.execute(
+        "SELECT def_source, runner_module, domain FROM strategy_def WHERE strategy_key=?",
+        ("weather_edge_v1",),
+    ).fetchone()
+    assert row["def_source"] == "manifest"
+    assert row["runner_module"] == "src.strategies.pmm.main"
+    # weather head families coexist as def_source='instance_family'
+    fam = conn.execute(
+        "SELECT def_source FROM strategy_def WHERE strategy_key LIKE 'reheat_risk.%' LIMIT 1"
+    ).fetchone()
+    assert fam["def_source"] == "instance_family"
+    conn.close()
+
+
 def test_resync_preserves_operator_desired_status(tmp_path):
     conn = _db(tmp_path)
     sync_instance_specs(conn)

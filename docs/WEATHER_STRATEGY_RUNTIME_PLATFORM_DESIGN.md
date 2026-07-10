@@ -210,7 +210,9 @@ CREATE TABLE strategy_instance (
 ```
 
 > **instance 是"实体"、config 是"值"(2026-07-09 修正):** 早先草案把 `params_json` 内联进本表,等于在 config 之外又存一份参数——错。参数真相源是既有 `strategy_config`(`config_id=hash(params)`),instance 只用 `config_id` **引用**当前在跑的那份;调参 = 换 `config_id` 指针(control_log 记 `edit_config`),instance_id 不变。`params_hash` 只是 spec 指纹(B1 已建),不是参数存储。三者关系详见 §13.4。
-> **落地缺口:** B1 建的 `strategy_instance` 还没有 `config_id` 列——这根桥接线是待补项(B1.1)。
+> **落地状态(2026-07-10):** B1.1 已给 `strategy_instance` 补 `config_id` 可空列、schema 迁移和 spec sync 支持；
+> 当前 YAML spec 还没有写入明确 `config_id`，所以线上 DB 已有桥接列但实例绑定仍为 NULL。下一步是逐个 instance
+> 用确定映射填 YAML，而不是从 `strategy_name` 模糊猜。
 
 ### 4.3 `strategy_instance_runtime`（运行时面，实际态，harness/supervisor push）
 
@@ -916,7 +918,7 @@ Phase 0/1 只碰一个 head，风险最低；主血缘（fact 表、executor、s
 - 数据源健康脉搏（动态 health 汇总：几个城市 stale / 有无 fallback_active）。
 - reconcile 漂移告警（有多少 instance 期望态≠实际态）。
 
-**F. 新增订单/成交明细 Blotter（当前设计缺口）**
+**F. 新增订单/成交明细 Blotter（第一版已落地，仍需增强）**
 
 运行时平台不能只展示"实例在不在跑"，还必须有一个一等的**订单/成交明细表**，回答：
 
@@ -936,23 +938,26 @@ Phase 0/1 只碰一个 head，风险最低；主血缘（fact 表、executor、s
 | `GET /api/strategies/{config_id}/orders` | 按 config_id 查 order-level lineage，含 signal/plan/order/fill/settlement/PnL | 需要先知道旧 `strategy_config`，不适合运行时实例视角 |
 | `GET /api/runs/{run_id}/trades` / `trades/{signal_id}` | run 内交易和单笔纵向血缘 | 适合 drilldown，不适合全局实时 blotter |
 
-因此新产品面应新增一个统一只读接口：
+第一版已新增统一只读接口：
 
 ```text
 GET /api/order-blotter
   filters:
-    trade_class=live_real|paper|shadow|all
-    strategy_instance=
-    strategy_name=
+    trade_class=live_real|paper|snapshot_replay|live_simulated|all
+    strategy_id=
     config_id=
     target_date=
     city=
-    status=open|settled|submitted|filled|error|blocked|all
-    date_from/date_to
+    status=all|open|settled|unfilled
     limit/offset
 ```
 
-返回字段以 `fact_trades` 为成交正本，但左联 `orders/plans/signals/runs` 补齐未成交/报错订单；后续 `strategy_instance` 表落地后再通过 `run_id/config_id/order_payload` 做 instance 归因。第一版可以先读现有 canonical 表，不等控制面落地。
+返回字段以 `fact_trades` 为成交正本，同时从 `orders LEFT JOIN fills WHERE fill_id IS NULL`
+补齐 submitted/no-fill 订单。前端页面为 `/weather/orders`，左侧导航显示 `Orders / 订单明细`。
+
+剩余缺口：`strategy_instance` 级过滤还没闭环，因为当前 instance→config 映射仍未逐个落到 YAML；
+blocked/error 原因需要进一步从 runner artifact 或 `order_payload/exchange_response` 结构化展开；
+date range 和 poly/drilldown links 仍可增强。
 
 看板新增页面建议：
 
