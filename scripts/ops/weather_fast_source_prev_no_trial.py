@@ -474,9 +474,48 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--high-frequency-latest", default=str(DEFAULT_HIGH_FREQUENCY_LATEST))
     parser.add_argument("--source-events-jsonl", default=str(DEFAULT_SOURCE_EVENTS_JSONL))
-    parser.add_argument("--sources", nargs="*", default=["jma_amedas", "singapore_mss", "fmi"])
+    parser.add_argument(
+        "--sources",
+        nargs="*",
+        default=[
+            "jma_amedas",
+            "singapore_mss",
+            "fmi",
+            "amos_runway",
+            "noaa_madis_hfmetar",
+            "hko_obs",
+            "cowin_obs",
+            "mgm",
+            "ims_lod",
+        ],
+    )
     parser.add_argument("--live-cities", nargs="*", default=[])
-    parser.add_argument("--shadow-cities", nargs="*", default=["Tokyo", "Singapore", "Helsinki"])
+    parser.add_argument(
+        "--shadow-cities",
+        nargs="*",
+        default=[
+            "Tokyo",
+            "Singapore",
+            "Helsinki",
+            "Busan",
+            "Seoul",
+            "HongKong",
+            "Shenzhen",
+            "TelAviv",
+            "Ankara",
+            "Istanbul",
+            "LA",
+            "Dallas",
+            "Houston",
+            "SanFrancisco",
+            "NYC",
+            "Atlanta",
+            "Austin",
+            "Chicago",
+            "Miami",
+            "Seattle",
+        ],
+    )
     parser.add_argument("--max-shares-per-trade", type=float, default=5.0)
     parser.add_argument("--max-shares-per-market", type=float, default=5.0)
     parser.add_argument("--max-shares-per-trade-by-city", action="append", default=[])

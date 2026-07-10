@@ -33,8 +33,15 @@ DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "source_events"
 
 
 def requested_sources(cfg: CityConfig, source_names: list[str], *, include_fallback_sources: bool) -> list[str]:
+    effective_source_names = list(source_names)
+    if (
+        include_fallback_sources
+        and cfg.registry_class == "research_source_profile"
+        and effective_source_names == ["profile_primary"]
+    ):
+        effective_source_names = ["source_profiles"]
     expanded = expand_source_names(
-        source_names,
+        effective_source_names,
         primary=cfg.live_observation_source,
         fallback_sources=cfg.fallback_sources if include_fallback_sources else (),
     )
@@ -110,6 +117,8 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
     configs = load_city_configs(
         include_station_diff=args.include_station_diff,
         only_cities=set(args.cities or []) or None,
+        include_research_cities=args.include_research_cities,
+        research_cities=set(args.research_cities or []) or None,
     )
     settings = FetchSettings(
         timeout_sec=args.timeout_sec,
@@ -158,6 +167,8 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
         "non_ok": sum(1 for row in rows if row.get("status") != "ok"),
         "cities": len(configs),
         "sources": args.sources,
+        "include_research_cities": args.include_research_cities,
+        "research_cities": args.research_cities or [],
         "output_dir": str(output_dir),
         "state_path": str(state_path),
     }
@@ -184,6 +195,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sources", nargs="*", default=["profile_primary"])
     parser.add_argument("--include-station-diff", action="store_true")
     parser.add_argument("--include-fallback-sources", action="store_true")
+    parser.add_argument("--include-research-cities", action="store_true")
+    parser.add_argument("--research-cities", nargs="*", default=None)
     parser.add_argument("--timeout-sec", type=float, default=3.0)
     parser.add_argument("--max-workers", type=int, default=12)
     parser.add_argument("--recent-minutes", type=int, default=240)

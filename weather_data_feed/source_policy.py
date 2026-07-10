@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from weather_data_feed.city_calendar import CITY_TIMEZONE
@@ -14,6 +15,15 @@ SUPPORTED_LIVE_SOURCES = {
     "aviationweather",
     "iem_asos_madishf_latest",
     "synopticdata_timeseries",
+}
+ICAO_RE = re.compile(r"^[A-Z0-9]{4}$")
+WRH_SITE_RE = re.compile(r"[?&]site=([A-Z0-9]{4})\b", re.IGNORECASE)
+CITY_ALIASES = {
+    "Hong Kong": "HongKong",
+    "Los Angeles": "LA",
+    "New York": "NYC",
+    "San Francisco": "SanFrancisco",
+    "Tel Aviv": "TelAviv",
 }
 
 SPECIAL_SLUGS = {
@@ -40,6 +50,50 @@ def city_slug(city: str) -> str:
             out.append("-")
         out.append(ch.lower())
     return "".join(out)
+
+
+def canonical_city_name(city: str) -> str:
+    return CITY_ALIASES.get(city, city.replace(" ", ""))
+
+
+def canonical_city_set(cities: set[str] | None) -> set[str] | None:
+    if not cities:
+        return None
+    return {canonical_city_name(city) for city in cities if city}
+
+
+def source_station_id(value: str) -> str:
+    raw = str(value or "").strip().upper()
+    if ICAO_RE.match(raw):
+        return raw
+    match = WRH_SITE_RE.search(str(value or ""))
+    return match.group(1).upper() if match else ""
+
+
+def station_id_from_profile(profile: Any) -> str:
+    for value in (profile.official_station_or_feed, profile.official_source, profile.configured_icao):
+        station = source_station_id(value)
+        if station:
+            return station
+    return ""
+
+
+def research_live_source(profile: Any, station: str) -> str:
+    if profile.primary_source:
+        return profile.primary_source
+    raw = " ".join([str(profile.official_source or ""), str(profile.official_station_or_feed or "")]).lower()
+    if "weather.gov/wrh" in raw or profile.settlement_source_class == "non_wu_source_by_rules":
+        return "synopticdata_timeseries"
+    return "aviationweather_metar" if station else ""
+
+
+def research_fallback_sources(profile: Any, live_source: str, station: str) -> tuple[str, ...]:
+    out = list(profile.fallback_sources or ())
+    if live_source == "synopticdata_timeseries" and station and "aviationweather_metar" not in out:
+        out.append("aviationweather_metar")
+    if station and "noaa_tgftp_station_txt" not in out:
+        out.append("noaa_tgftp_station_txt")
+    return tuple(out)
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
@@ -84,6 +138,7 @@ def source_profile_row(profile: Any, *, status: str, reason: str = "", registry_
 
 
 def build_city_policy(*, include_station_diff: bool, only_cities: set[str] | None = None) -> dict[str, Any]:
+    only_cities = canonical_city_set(only_cities)
     profiles = load_source_profiles()
     configs: list[CityConfig] = []
     rejected: list[dict[str, Any]] = []
@@ -169,6 +224,59 @@ def build_city_policy(*, include_station_diff: bool, only_cities: set[str] | Non
     }
 
 
-def load_city_configs(*, include_station_diff: bool, only_cities: set[str] | None = None) -> list[CityConfig]:
+def research_city_configs(*, only_cities: set[str] | None = None, exclude_cities: set[str] | None = None) -> list[CityConfig]:
+    only_cities = canonical_city_set(only_cities)
+    exclude_cities = canonical_city_set(exclude_cities) or set()
+    configs: list[CityConfig] = []
+    for city, profile in sorted(load_source_profiles().items()):
+        if only_cities and city not in only_cities:
+            continue
+        if city in exclude_cities:
+            continue
+        station = station_id_from_profile(profile)
+        live_source = research_live_source(profile, station)
+        if not station or not live_source:
+            continue
+        tz_name = profile.timezone_name or CITY_TIMEZONE.get(city)
+        if not tz_name:
+            continue
+        note = profile.source_profile_note
+        research_note = "research-only source_events profile; does not grant live eligibility"
+        if research_note not in note:
+            note = f"{note}; {research_note}" if note else research_note
+        configs.append(
+            CityConfig(
+                city=city,
+                slug=city_slug(city),
+                unit=profile.unit,
+                timezone_name=tz_name,
+                official_icao=station,
+                settlement_source_class=profile.settlement_source_class,
+                settlement_source=profile.official_source,
+                live_observation_source=live_source,
+                fallback_sources=research_fallback_sources(profile, live_source, station),
+                mapping_rule=profile.mapping_rule,
+                registry_class="research_source_profile",
+                alignment_days=profile.alignment_days or 0,
+                alignment_rate=profile.alignment_rate or 0.0,
+                rules_recheck_required=profile.rules_recheck_required,
+                source_profile_note=note,
+            )
+        )
+    return configs
+
+
+def load_city_configs(
+    *,
+    include_station_diff: bool,
+    only_cities: set[str] | None = None,
+    include_research_cities: bool = False,
+    research_cities: set[str] | None = None,
+) -> list[CityConfig]:
     policy = build_city_policy(include_station_diff=include_station_diff, only_cities=only_cities)
-    return [CityConfig(**row) for row in policy["allowed"]]
+    configs = {row["city"]: CityConfig(**row) for row in policy["allowed"]}
+    if include_research_cities:
+        requested_research_cities = research_cities or only_cities
+        for cfg in research_city_configs(only_cities=requested_research_cities, exclude_cities=set(configs)):
+            configs[cfg.city] = cfg
+    return sorted(configs.values(), key=lambda item: item.city)

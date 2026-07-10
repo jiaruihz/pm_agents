@@ -26,6 +26,7 @@ from weather_data_feed import (
 from weather_data_feed import forecast_sources
 from weather_data_feed.city_calendar import station_timezone, timezone_label
 from weather_data_feed.market_brackets import bracket_contains, parse_label_dict
+from weather_data_feed.source_policy import research_city_configs
 from weather_feature_layer.market import bracket_distance_features, parse_bracket_bounds, settlement_interval
 from weather_data_feed.snapshot_protocol import validate_snapshot_record
 
@@ -76,6 +77,31 @@ def test_source_policy_still_builds_live_configs():
     assert [cfg.city for cfg in configs] == ["Shanghai"]
     assert configs[0].official_icao == "ZSPD"
     assert configs[0].live_observation_source == "aviationweather_metar"
+
+
+def test_research_source_policy_can_build_shadow_only_configs():
+    configs = load_city_configs(
+        include_station_diff=True,
+        include_research_cities=True,
+        research_cities={"Seoul", "HongKong", "Shenzhen", "TelAviv", "Istanbul"},
+    )
+    by_city = {cfg.city: cfg for cfg in configs}
+
+    assert by_city["Seoul"].official_icao == "RKSI"
+    assert by_city["Seoul"].live_observation_source == "aviationweather_metar"
+    assert by_city["HongKong"].official_icao == "VHHH"
+    assert by_city["Shenzhen"].official_icao == "ZGSZ"
+    assert by_city["TelAviv"].official_icao == "LLBG"
+    assert by_city["TelAviv"].live_observation_source == "synopticdata_timeseries"
+    assert by_city["TelAviv"].fallback_sources == ("aviationweather_metar", "noaa_tgftp_station_txt")
+    assert by_city["Istanbul"].official_icao == "LTFM"
+    assert all(
+        by_city[city].registry_class == "research_source_profile"
+        for city in {"Seoul", "HongKong", "Shenzhen", "TelAviv", "Istanbul"}
+    )
+
+    direct_research = {cfg.city for cfg in research_city_configs(only_cities={"Hong Kong", "Tel Aviv"})}
+    assert direct_research == {"HongKong", "TelAviv"}
 
 
 def test_market_bracket_helpers_are_data_module_public_api():

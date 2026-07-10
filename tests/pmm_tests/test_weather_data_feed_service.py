@@ -321,6 +321,32 @@ def test_source_events_builds_append_only_rows_without_proxy(monkeypatch, tmp_pa
     assert (tmp_path / "source_events" / "latest.json").exists()
 
 
+def test_source_events_expands_fallbacks_only_for_research_profiles() -> None:
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import source_events
+
+    normal_cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+    research_cfg = {
+        cfg.city: cfg
+        for cfg in load_city_configs(
+            include_station_diff=True,
+            include_research_cities=True,
+            research_cities={"HongKong"},
+        )
+    }["HongKong"]
+
+    assert source_events.requested_sources(
+        normal_cfg,
+        ["profile_primary"],
+        include_fallback_sources=True,
+    ) == ["aviationweather_metar"]
+    assert source_events.requested_sources(
+        research_cfg,
+        ["profile_primary"],
+        include_fallback_sources=True,
+    ) == ["aviationweather_metar", "noaa_tgftp_station_txt"]
+
+
 def test_forecast_enrichment_builds_shadow_rows(monkeypatch, tmp_path) -> None:
     from weather_data_feed.source_policy import load_city_configs
     from weather_data_feed.forecast_sources import ForecastFetchResult
