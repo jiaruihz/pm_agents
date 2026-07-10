@@ -27,6 +27,7 @@ from scripts.ops import refresh_weather_strategy_runtime_registry as registry  #
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical  # noqa: E402
 from src.strategies.runtime.sync import sync_instance_specs  # noqa: E402
 from src.strategies.runtime import control  # noqa: E402
+from src.strategies.runtime import runtime_state  # noqa: E402
 from src.strategies.runtime.specs import params_hash, spec_commit  # noqa: E402
 
 
@@ -73,10 +74,18 @@ def instance_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         """
-        SELECT instance_id, display_name, family, lifecycle_status, execution_mode,
-               desired_status, tmux_session, start_script, spec_commit
-        FROM strategy_instance
-        ORDER BY instance_id
+        SELECT
+            si.instance_id, si.display_name, si.family, si.lifecycle_status,
+            si.execution_mode, si.desired_status, si.tmux_session,
+            si.start_script, si.spec_commit, si.config_id,
+            COALESCE(rt.process_status, 'unknown') AS process_status,
+            COALESCE(rt.health_status, 'unknown') AS health_status,
+            rt.heartbeat_at_utc, rt.last_tick_ts_utc, rt.last_data_ts_utc,
+            rt.candidate_rows, rt.plan_rows, rt.live_order_rows,
+            rt.blocker_count, rt.refreshed_at_utc
+        FROM strategy_instance si
+        LEFT JOIN strategy_instance_runtime rt ON rt.instance_id = si.instance_id
+        ORDER BY si.instance_id
         """
     ).fetchall()
     return [dict(r) for r in rows]
@@ -84,13 +93,16 @@ def instance_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 
 def cmd_sync(args: argparse.Namespace) -> int:
     conn = sqlite3.connect(args.db_path)
+    conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=5000")
     try:
         apply_schema_canonical(conn)
         result = sync_instance_specs(conn)
+        seeded_runtime_rows = runtime_state.seed_runtime_from_legacy_registry(conn)
+        conn.commit()
     finally:
         conn.close()
-    print_payload({"action": "sync", **result})
+    print_payload({"action": "sync", **result, "seeded_runtime_rows": seeded_runtime_rows})
     return 0
 
 
@@ -109,12 +121,6 @@ def cmd_list(args: argparse.Namespace) -> int:
     if not rows:
         print_payload({"strategies": [], "hint": "run: weather_strategy_launcher.py sync"})
         return 0
-    tmux = registry.active_tmux_sessions()
-    for row in rows:
-        session = row.get("tmux_session")
-        row["process_status"] = (
-            "running" if session and session in tmux else "stopped" if session else "unknown"
-        )
     print_payload({"strategies": rows})
     return 0
 
@@ -129,6 +135,15 @@ def get_spec(instance: str) -> registry.StrategySpec:
 def cmd_status(args: argparse.Namespace) -> int:
     spec = get_spec(args.strategy_instance)
     summary = read_summary(spec)
+    conn = sqlite3.connect(args.db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        runtime_row = conn.execute(
+            "SELECT * FROM strategy_instance_runtime WHERE instance_id=?",
+            (args.strategy_instance,),
+        ).fetchone()
+    finally:
+        conn.close()
     print_payload(
         {
             "strategy_instance": spec.strategy_instance,
@@ -141,7 +156,8 @@ def cmd_status(args: argparse.Namespace) -> int:
             "snapshot_ts_utc": summary.get("snapshot_ts_utc"),
             "live_enabled": summary.get("live_enabled"),
             "tmux_session": spec.tmux_session,
-            "process_status": "running" if tmux_running(spec.tmux_session) else "stopped" if spec.tmux_session else "unknown",
+            "process_status": runtime_row["process_status"] if runtime_row else "unknown",
+            "runtime": dict(runtime_row) if runtime_row else None,
             "start_script": spec.start_script,
         }
     )
@@ -221,6 +237,113 @@ def cmd_stop(args: argparse.Namespace) -> int:
     return rc
 
 
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    """Write actual process state for every instance; optionally reconcile drift."""
+    conn = sqlite3.connect(args.db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=5000")
+    actions: list[dict[str, Any]] = []
+    try:
+        apply_schema_canonical(conn)
+        sync_instance_specs(conn)
+        runtime_state.seed_runtime_from_legacy_registry(conn)
+        tmux = registry.active_tmux_sessions()
+        rows = instance_rows(conn)
+        specs = specs_by_instance()
+        for row in rows:
+            iid = str(row["instance_id"])
+            desired = str(row["desired_status"])
+            lifecycle = str(row["lifecycle_status"])
+            session = row.get("tmux_session")
+            running = bool(session and session in tmux)
+            observed_status = "running" if running else "stopped" if session else "unknown"
+            action = "observe"
+            rc = 0
+            output = ""
+
+            if args.apply and desired == "enabled" and observed_status == "stopped":
+                spec = specs.get(iid)
+                if spec and spec.start_script:
+                    require_live_confirmation(spec, args, "start")
+                    proc = subprocess.run(
+                        [str(ROOT / spec.start_script)],
+                        cwd=ROOT,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        check=False,
+                    )
+                    rc = proc.returncode
+                    output = proc.stdout.strip()
+                    action = "start"
+                    observed_status = "running" if tmux_running(spec.tmux_session) else "stopped"
+                    control.write_control_log(
+                        conn,
+                        instance_id=iid,
+                        actor=getpass.getuser(),
+                        action="supervisor_start",
+                        from_state=desired,
+                        to_state=desired,
+                        reason=args.reason,
+                        spec_commit=row.get("spec_commit"),
+                        params_hash=None,
+                    )
+                else:
+                    action = "start_unavailable"
+            elif args.apply and desired in {"paused", "shelved", "blocked"} and observed_status == "running":
+                if lifecycle == "live" and not args.confirm_live:
+                    action = "stop_requires_confirm_live"
+                else:
+                    proc = subprocess.run(
+                        ["tmux", "kill-session", "-t", str(session)],
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        check=False,
+                    )
+                    rc = 0 if proc.returncode == 0 or "can't find session" in proc.stdout.lower() else proc.returncode
+                    output = proc.stdout.strip()
+                    action = "stop"
+                    observed_status = "stopped" if rc == 0 else observed_status
+                    control.write_control_log(
+                        conn,
+                        instance_id=iid,
+                        actor=getpass.getuser(),
+                        action="supervisor_stop",
+                        from_state=desired,
+                        to_state=desired,
+                        reason=args.reason,
+                        spec_commit=row.get("spec_commit"),
+                        params_hash=None,
+                    )
+
+            runtime_state.mark_process_state(
+                conn,
+                instance_id=iid,
+                process_status=observed_status,
+                supervisor_id=socket_id(),
+            )
+            actions.append({
+                "strategy_instance": iid,
+                "desired_status": desired,
+                "process_status": observed_status,
+                "tmux_session": session,
+                "action": action,
+                "returncode": rc,
+                "output": output[-500:] if output else "",
+            })
+        conn.commit()
+    finally:
+        conn.close()
+    print_payload({"action": "reconcile", "apply": bool(args.apply), "instances": actions})
+    return 0
+
+
+def socket_id() -> str:
+    import socket
+    return f"weather-supervisor@{socket.gethostname()}"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-path", type=Path, default=registry.DEFAULT_DB)
@@ -228,6 +351,10 @@ def parse_args() -> argparse.Namespace:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list")
     sub.add_parser("sync")
+    reconcile = sub.add_parser("reconcile")
+    reconcile.add_argument("--apply", action="store_true")
+    reconcile.add_argument("--confirm-live", action="store_true")
+    reconcile.add_argument("--reason", default=None)
     status = sub.add_parser("status")
     status.add_argument("strategy_instance")
     start = sub.add_parser("start")
@@ -247,6 +374,8 @@ def main() -> int:
         return cmd_list(args)
     if args.command == "sync":
         return cmd_sync(args)
+    if args.command == "reconcile":
+        return cmd_reconcile(args)
     if args.command == "status":
         return cmd_status(args)
     if args.command == "start":

@@ -134,12 +134,50 @@ def get_strategy_runtime_overview(
 ) -> dict[str, Any]:
     """Return operational registry rows plus target-date hints for the dashboard."""
 
-    registry_rows = db.execute(
+    runtime_rows = db.execute(
         """
-        SELECT *
-        FROM weather_strategy_runtime_registry
+        SELECT
+          si.instance_id AS strategy_instance,
+          si.config_id AS strategy_id,
+          si.display_name,
+          si.family,
+          si.lifecycle_status,
+          si.execution_mode,
+          COALESCE(rt.health_status, 'unknown') AS health_status,
+          si.source_layer,
+          si.runtime_dir,
+          rt.summary_path,
+          rt.primary_journal_path,
+          rt.latest_summary_ts_utc,
+          rt.last_data_ts_utc AS latest_data_ts_utc,
+          rt.latest_artifact_mtime_utc,
+          rt.heartbeat_age_min,
+          COALESCE(rt.candidate_rows, 0) AS candidate_rows,
+          COALESCE(rt.plan_rows, 0) AS plan_rows,
+          COALESCE(rt.live_order_rows, 0) AS live_order_rows,
+          COALESCE(rt.paper_order_rows, 0) AS paper_order_rows,
+          COALESCE(rt.shadow_rows, 0) AS shadow_rows,
+          COALESCE(rt.telemetry_rows, 0) AS telemetry_rows,
+          COALESCE(rt.fact_trade_rows, 0) AS fact_trade_rows,
+          COALESCE(rt.fact_live_real_rows, 0) AS fact_live_real_rows,
+          rt.fact_cost_usd,
+          rt.first_target_date,
+          rt.last_target_date,
+          rt.latest_fill_ts_utc,
+          NULL AS cap_order_notional,
+          NULL AS cap_city_day_notional,
+          NULL AS cap_total_day_notional,
+          rt.live_enabled,
+          COALESCE(rt.process_status, 'unknown') AS process_status,
+          COALESCE(rt.blocker_count, 0) AS blocker_count,
+          COALESCE(rt.blockers_json, '[]') AS blockers_json,
+          COALESCE(rt.summary_json, '{}') AS summary_json,
+          si.notes,
+          COALESCE(rt.refreshed_at_utc, si.updated_at_utc) AS refreshed_at_utc
+        FROM strategy_instance si
+        LEFT JOIN strategy_instance_runtime rt ON rt.instance_id = si.instance_id
         ORDER BY
-          CASE lifecycle_status
+          CASE si.lifecycle_status
             WHEN 'live' THEN 1
             WHEN 'shadow' THEN 2
             WHEN 'telemetry' THEN 3
@@ -148,8 +186,8 @@ def get_strategy_runtime_overview(
             WHEN 'stale' THEN 9
             ELSE 6
           END,
-          family,
-          strategy_instance
+          si.family,
+          si.instance_id
         """
     ).fetchall()
 
@@ -201,7 +239,7 @@ def get_strategy_runtime_overview(
         )
 
     strategies: list[dict[str, Any]] = []
-    for row in registry_rows:
+    for row in runtime_rows:
         strategy_instance = row["strategy_instance"]
         sample_dates = sample_dates_by_strategy[strategy_instance]
         row_dict = dict(row)
@@ -235,14 +273,14 @@ def get_strategy_runtime_overview(
         item["blockers"] = _json_list(row["blockers_json"])
         shadow_queue.append(item)
 
-    lifecycle_counts = Counter(row["lifecycle_status"] for row in registry_rows)
-    health_counts = Counter(row["health_status"] for row in registry_rows)
+    lifecycle_counts = Counter(row["lifecycle_status"] for row in runtime_rows)
+    health_counts = Counter(row["health_status"] for row in runtime_rows)
     target_counts = Counter(item["target_status"] for item in strategies)
 
     return {
         "target_date": target_date,
         "refreshed_at_utc": max(
-            [row["refreshed_at_utc"] for row in registry_rows if row["refreshed_at_utc"]],
+            [row["refreshed_at_utc"] for row in runtime_rows if row["refreshed_at_utc"]],
             default=None,
         ),
         "summary": {
@@ -272,9 +310,47 @@ def get_strategy_runtime_detail(
 
     row = db.execute(
         """
-        SELECT *
-        FROM weather_strategy_runtime_registry
-        WHERE strategy_instance=?
+        SELECT
+          si.instance_id AS strategy_instance,
+          si.config_id AS strategy_id,
+          si.display_name,
+          si.family,
+          si.lifecycle_status,
+          si.execution_mode,
+          COALESCE(rt.health_status, 'unknown') AS health_status,
+          si.source_layer,
+          si.runtime_dir,
+          rt.summary_path,
+          rt.primary_journal_path,
+          rt.latest_summary_ts_utc,
+          rt.last_data_ts_utc AS latest_data_ts_utc,
+          rt.latest_artifact_mtime_utc,
+          rt.heartbeat_age_min,
+          COALESCE(rt.candidate_rows, 0) AS candidate_rows,
+          COALESCE(rt.plan_rows, 0) AS plan_rows,
+          COALESCE(rt.live_order_rows, 0) AS live_order_rows,
+          COALESCE(rt.paper_order_rows, 0) AS paper_order_rows,
+          COALESCE(rt.shadow_rows, 0) AS shadow_rows,
+          COALESCE(rt.telemetry_rows, 0) AS telemetry_rows,
+          COALESCE(rt.fact_trade_rows, 0) AS fact_trade_rows,
+          COALESCE(rt.fact_live_real_rows, 0) AS fact_live_real_rows,
+          rt.fact_cost_usd,
+          rt.first_target_date,
+          rt.last_target_date,
+          rt.latest_fill_ts_utc,
+          NULL AS cap_order_notional,
+          NULL AS cap_city_day_notional,
+          NULL AS cap_total_day_notional,
+          rt.live_enabled,
+          COALESCE(rt.process_status, 'unknown') AS process_status,
+          COALESCE(rt.blocker_count, 0) AS blocker_count,
+          COALESCE(rt.blockers_json, '[]') AS blockers_json,
+          COALESCE(rt.summary_json, '{}') AS summary_json,
+          si.notes,
+          COALESCE(rt.refreshed_at_utc, si.updated_at_utc) AS refreshed_at_utc
+        FROM strategy_instance si
+        LEFT JOIN strategy_instance_runtime rt ON rt.instance_id = si.instance_id
+        WHERE si.instance_id=?
         """,
         (strategy_instance,),
     ).fetchone()

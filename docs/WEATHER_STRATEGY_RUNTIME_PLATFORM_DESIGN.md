@@ -239,6 +239,13 @@ CREATE TABLE strategy_instance_runtime (
 );
 ```
 
+> **落地状态(2026-07-10):** 第一版已落地：`strategy_instance_runtime` 建表、additive schema migration、
+> `src.strategies.runtime.runtime_state.push_runtime_state()` 写入口、`weather_strategy_launcher.py reconcile`
+> 观察/对账入口已完成。`/api/strategy-runtime/overview` 和 detail 已改为读
+> `strategy_instance + strategy_instance_runtime`，不再以 `weather_strategy_runtime_registry` 作为主状态源。
+> 当前 `reconcile` 默认只观察并写实际态；只有显式 `--apply` 才启停 tmux，live 启停仍强制
+> `--confirm-live --reason`。
+
 ### 4.4 `strategy_control_log`（append-only 审计，DB-first 的可追溯保证）
 
 ```sql
@@ -276,6 +283,12 @@ CREATE TABLE strategy_control_log (
 5. **心跳聚合**：harness push 各 instance runtime 行，supervisor 是 `process_status` 的写者。
 
 进程模型细节：supervisor + 每实例一子进程，Mac 上（短期生产）用普通 Python supervisor（asyncio / multiprocessing），一次性挂在 tmux/launchd 下常驻。`host` 字段留了多机位。迁移期：现有 `start_*.sh` 先改成 `pmctl start <instance>` 的薄壳，之后删除。
+
+> **落地状态(2026-07-10):** `weather_strategy_launcher.py reconcile` 是 supervisor 的第一版入口：
+> 它从 DB 读 `strategy_instance.desired_status`，观察 tmux 实际状态，写入
+> `strategy_instance_runtime.process_status`；`--apply` 模式可按期望态启停带 `start_script/tmux_session`
+> 的实例。该版本尚未实现常驻 loop/backoff/全局 notional cap，也未把所有 runner 改成
+> `BaseRunner` 子进程模型。
 
 ---
 
@@ -765,7 +778,7 @@ CREATE TABLE weather_source_alignment_feature (
 当前 `weather_dashboard/db/schema_canonical.sql` 已经有：
 
 - `weather_observation_events` / `weather_intraday_state_rows`：适合 WU/IEM-like 历史观测和 intraday state，不足以表达多 source/station/runway 的实时采集健康和交易触发证据；
-- `strategy_def / strategy_instance / strategy_control_log`：已有 B1/B2 雏形，但 `strategy_instance_runtime` 和数据源面表还没落；
+- `strategy_def / strategy_instance / strategy_instance_runtime / strategy_control_log`：已有第一版；数据源 profile/monitor 表也已有第一版；
 - `/api/data-sources`：已有只读接口，但当前主要是 forecast/fact_trades、source alias、snapshot 文件盘点，不是运行时 source health。
 
 所以落地时不要改造 `weather_observation_events` 去承载所有东西。正确路线是：
@@ -802,7 +815,7 @@ CREATE TABLE weather_source_alignment_feature (
 | Phase | 内容 | 交付判据 |
 |---|---|---|
 | **0 · 接口与 harness（零行为变更）** | 从一个 head（建议 `low_price_yes_lottery`）抽出 `BaseRunner`，定义 `StrategyHead` protocol + `ParamsSchema`，把这一个 head 移植过去 | 新旧并行跑 shadow，emit/telemetry **逐笔 parity**（TDD parity test），证明无回归 |
-| **1 · 控制面 + 运行时表 + supervisor** | 在 weather.db 落 `strategy_def/instance/runtime/control_log`；实现 `pmctl` + supervisor 管这一个 head；`start_*.sh` 改薄壳；心跳翻成 push | 该 instance 能经 `pmctl` start/stop/pause，状态与审计全落 DB；registry 对它从扫描变 push |
+| **1 · 控制面 + 运行时表 + supervisor** | 已落 `strategy_def/instance/runtime/control_log`；`weather_strategy_launcher.py sync/reconcile` 能写 runtime 实际态；dashboard 已读新表 | 仍需常驻 supervisor loop/backoff、全局 notional cap、把 runner 迁入 BaseRunner |
 | **2 · 数据源领域模型** | 先落 `weather_data_source_profile / weather_data_monitor_instance`，从 `source_profiles.json`、high-frequency/runway registries 和 runtime output 回填；health 先动态计算，必要时再物化；加集中陈旧/fallback 告警 | 静默 GFS fallback 类事故变成 source health 告警；fast-source monitor 实例、城市源覆盖、输出路径和延迟都能在 dashboard 看见 |
 | **3 · 全量移植 head** | 按 family 逐族移植；删各自 `start_*.sh` + 重复的 loop/pidfile/telemetry 代码；registry → 读模型 | `scripts/ops/start_*.sh` 与 bespoke runner 大幅减少；重复横切代码归零 |
 | **4 · 看板控制动作 + 数据源面板** | 看板接 `pmctl` 控制动作 + `weather_data_source_health` 面板；下线扫描式 `refresh_weather_strategy_runtime_registry.py` | 从看板可 pause/enable-live/set-cap；数据源健康可视 |
@@ -884,7 +897,7 @@ Phase 0/1 只碰一个 head，风险最低；主血缘（fact 表、executor、s
 
 | 现有模块 | 现在怎么做 | 缺口 | 升级挂到哪张新表 |
 |---|---|---|---|
-| `/probes` 探针 | 扫描 `weather_strategy_runtime_registry` 反推状态 | 无期望态 vs 实际态；三套 enum 混用；无控制审计时间线；健康靠扫描非 push | 改读 `strategy_instance`（期望）+ `strategy_instance_runtime`（push 实际）+ `strategy_control_log`（时间线） |
+| `/weather/runtime` | 已改读 `strategy_instance`（期望）+ `strategy_instance_runtime`（实际） | 还没有控制日志时间线和常驻 supervisor drift 告警 | 补 `strategy_control_log` 时间线、reconcile drift 告警 |
 | `/data-sources` | forecast 从 fact_trades、METAR 从 aliases.py、cadence = 文件名中位间隔 | 无每城×source/station 配置；无 monitor 实例；无 cadence 目标值 vs 实际值对比；**无 fallback/静默降级检测**；无高频/跑道/预测输出路径管理 | 改读 `weather_data_source_profile`（城市源配置）+ `weather_data_monitor_instance`（监控任务），health 从 latest output 动态计算 |
 | `/` 今日总览 | 探针健康 + 在险资金脉搏 | 无数据源健康脉搏；无"期望态≠实际态"漂移告警 | 增 `weather_data_source_health` 汇总 + reconcile 漂移卡 |
 | `/weather/strategies` `/weather/runtime` | 挂 strategy_config / registry | 与 v2 `/probes` 职责重叠；无 `strategy_def` 目录视图 | 增 `strategy_def` catalog 视图，旧页归档到 `/archive` |
@@ -1026,7 +1039,7 @@ erDiagram
     weather_data_source_profile ||..o{ weather_data_source_health : "可选物化 latest health"
     weather_data_monitor_instance ||..o{ weather_data_source_health : "可选物化 latest health"
     %% ── 只读读模型 ──
-    strategy_instance_runtime ||..o{ weather_strategy_runtime_registry : "物化为看板读模型"
+    strategy_instance_runtime ||..o{ weather_strategy_runtime_registry : "legacy mirror/input during migration"
 ```
 
 ### 13.2 关系逐条说明（join key / 基数 / 语义）
@@ -1044,7 +1057,7 @@ erDiagram
 | `weather_data_source_profile` → `weather_data_monitor_instance` | `feed_kind/source_key/city` via JSON coverage | N:M | profile 是城市源能力；monitor instance 是实际运行任务，声明扫哪些 cities/sources 和输出路径 |
 | `weather_data_source_profile` → `weather_data_source_health` | `profile_id` | 可选物化 | 每个城市源的最新健康、新鲜度、延迟和错误；第一版可由 API 动态计算，不必建表 |
 | `weather_data_monitor_instance` → `weather_data_source_health` | `monitor_instance_id` | 可选物化 | 一个 monitor 覆盖多个 city/source；health 能回到具体任务；第一版可由 latest output 动态计算 |
-| `strategy_instance_runtime` → `weather_strategy_runtime_registry` | 物化 | 读模型 | 现有 registry 表降级为看板读模型，从新表刷新，保 FE 兼容 |
+| `strategy_instance_runtime` ↔ `weather_strategy_runtime_registry` | 迁移输入 | legacy | registry 不再是 runtime API 主状态源；仅用于迁移期 seed/对照 |
 
 ### 13.3 关键建模决策（3 个必须讲清的点）
 

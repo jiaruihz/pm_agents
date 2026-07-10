@@ -7,7 +7,7 @@ from pathlib import Path
 from weather_dashboard.db.connection import get_conn
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -60,6 +60,33 @@ def _ensure_strategy_instance_columns(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_strategy_instance_runtime_columns(conn: sqlite3.Connection) -> None:
+    if "strategy_instance_runtime" not in {
+        str(row[0]) for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    }:
+        return
+    existing = _column_names(conn, "strategy_instance_runtime")
+    additions = {
+        "paper_order_rows": "INTEGER NOT NULL DEFAULT 0",
+        "telemetry_rows": "INTEGER NOT NULL DEFAULT 0",
+        "fact_trade_rows": "INTEGER NOT NULL DEFAULT 0",
+        "fact_live_real_rows": "INTEGER NOT NULL DEFAULT 0",
+        "fact_cost_usd": "REAL",
+        "first_target_date": "TEXT",
+        "last_target_date": "TEXT",
+        "latest_fill_ts_utc": "TEXT",
+        "latest_summary_ts_utc": "TEXT",
+        "latest_artifact_mtime_utc": "TEXT",
+        "heartbeat_age_min": "REAL",
+        "live_enabled": "INTEGER",
+        "summary_path": "TEXT",
+        "primary_journal_path": "TEXT",
+    }
+    for column, decl in additions.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE strategy_instance_runtime ADD COLUMN {column} {decl}")
+
+
 def apply_schema_canonical(conn: sqlite3.Connection) -> None:
     """Apply the canonical weather dashboard schema."""
     schema_path = Path(__file__).parent / "schema_canonical.sql"
@@ -67,6 +94,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
     _ensure_order_payload_column(conn)
     _ensure_strategy_def_columns(conn)
     _ensure_strategy_instance_columns(conn)
+    _ensure_strategy_instance_runtime_columns(conn)
 
     row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
     if row[0] is None or int(row[0]) < SCHEMA_VERSION:
@@ -75,7 +103,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "strategy_instance config_id bridge",
+                "strategy_instance_runtime push-state model",
             ),
         )
     conn.commit()

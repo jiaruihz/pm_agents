@@ -12,6 +12,8 @@ from weather_dashboard.ingest.canonical import (
     ingest_canonical_signals,
 )
 from scripts.etl.build_weather_fact_trades import build as _build_fact, write_db as _write_fact
+from src.strategies.runtime.runtime_state import push_runtime_state
+from src.strategies.runtime.sync import sync_instance_specs
 
 
 def _rebuild_fact(conn):
@@ -201,6 +203,28 @@ def test_get_run_metrics_slice_uses_canonical_fields(client, api_db):
     assert data["slices"][0]["slice_value"] == "t1_trading"
     assert data["slices"][0]["num_trades"] == 1
     assert data["slices"][0]["settled_trades"] == 1
+
+
+def test_strategy_runtime_overview_reads_instance_runtime(client, api_db):
+    sync_instance_specs(api_db)
+    push_runtime_state(
+        api_db,
+        instance_id="low_price_yes_lottery_tiny_live_v1",
+        process_status="running",
+        health_status="healthy",
+        candidate_rows=3,
+        live_order_rows=2,
+    )
+    api_db.commit()
+
+    r = client.get("/api/strategy-runtime/overview")
+    assert r.status_code == 200
+    rows = r.json()["strategies"]
+    row = next(x for x in rows if x["strategy_instance"] == "low_price_yes_lottery_tiny_live_v1")
+    assert row["process_status"] == "running"
+    assert row["health_status"] == "healthy"
+    assert row["candidate_rows"] == 3
+    assert row["live_order_rows"] == 2
 
 
 # ── /api/compare ──────────────────────────────────────────────────────────────

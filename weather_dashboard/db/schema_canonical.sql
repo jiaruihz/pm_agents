@@ -514,6 +514,45 @@ CREATE TABLE IF NOT EXISTS strategy_instance (
 CREATE INDEX IF NOT EXISTS idx_strategy_instance_family
     ON strategy_instance(family);
 
+CREATE TABLE IF NOT EXISTS strategy_instance_runtime (
+    instance_id                  TEXT PRIMARY KEY REFERENCES strategy_instance(instance_id),
+    process_status              TEXT NOT NULL DEFAULT 'unknown'
+        CHECK (process_status IN ('running','starting','stopped','crashed','stale','unknown')),
+    pid                         INTEGER,
+    supervisor_id               TEXT,
+    heartbeat_at_utc            TEXT,
+    last_tick_ts_utc            TEXT,
+    last_data_ts_utc            TEXT,
+    latest_summary_ts_utc       TEXT,
+    latest_artifact_mtime_utc   TEXT,
+    heartbeat_age_min           REAL,
+    candidate_rows              INTEGER NOT NULL DEFAULT 0,
+    plan_rows                   INTEGER NOT NULL DEFAULT 0,
+    live_order_rows             INTEGER NOT NULL DEFAULT 0,
+    paper_order_rows            INTEGER NOT NULL DEFAULT 0,
+    shadow_rows                 INTEGER NOT NULL DEFAULT 0,
+    telemetry_rows              INTEGER NOT NULL DEFAULT 0,
+    fact_trade_rows             INTEGER NOT NULL DEFAULT 0,
+    fact_live_real_rows         INTEGER NOT NULL DEFAULT 0,
+    fact_cost_usd               REAL,
+    first_target_date           TEXT,
+    last_target_date            TEXT,
+    latest_fill_ts_utc          TEXT,
+    health_status               TEXT NOT NULL DEFAULT 'unknown'
+        CHECK (health_status IN ('healthy','idle','stale','blocked','shelved','unknown')),
+    live_enabled                INTEGER,
+    summary_path                TEXT,
+    primary_journal_path        TEXT,
+    blocker_count               INTEGER NOT NULL DEFAULT 0,
+    blockers_json               TEXT NOT NULL DEFAULT '[]',
+    summary_json                TEXT NOT NULL DEFAULT '{}',
+    refreshed_at_utc            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_strategy_instance_runtime_status
+    ON strategy_instance_runtime(process_status, health_status);
+CREATE INDEX IF NOT EXISTS idx_strategy_instance_runtime_heartbeat
+    ON strategy_instance_runtime(heartbeat_at_utc DESC);
+
 CREATE TABLE IF NOT EXISTS strategy_control_log (
     log_id       TEXT PRIMARY KEY,
     instance_id  TEXT NOT NULL,
