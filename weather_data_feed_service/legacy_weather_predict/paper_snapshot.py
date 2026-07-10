@@ -267,6 +267,42 @@ def extract_market_tokens(mkt):
     return out
 
 
+def gamma_market_ladder(markets):
+    """Preserve the complete event ladder; price eligibility belongs downstream."""
+    bracket_list = []
+    market_entries = []
+    for mkt in markets:
+        question = mkt.get("question", "")
+        label = _extract_bracket_label(question)
+        if label is None:
+            continue
+        prices_raw = mkt.get("outcomePrices")
+        if not prices_raw:
+            continue
+        try:
+            prices = json.loads(prices_raw) if isinstance(prices_raw, str) else prices_raw
+            yes_price = float(prices[0])
+        except (IndexError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if not math.isfinite(yes_price) or not 0.0 <= yes_price <= 1.0:
+            continue
+        tokens = extract_market_tokens(mkt)
+        bracket_list.append((label, yes_price))
+        market_entries.append(
+            {
+                "label": label,
+                "yes_price": yes_price,
+                "last_trade": float(mkt.get("lastTradePrice", 0) or 0),
+                "question": question,
+                "market_id": mkt.get("id", ""),
+                "condition_id": mkt.get("conditionId", ""),
+                "yes_token_id": tokens["yes"],
+                "no_token_id": tokens["no"],
+            }
+        )
+    return bracket_list, market_entries
+
+
 def _to_float(value, default=0.0):
     try:
         if value is None or value == "":
@@ -1271,41 +1307,8 @@ def main():
             n_recorded = 0
 
             # Build bracket list for compute_bracket_probs
-            bracket_list = []
             market_map = {}
-            market_entries = []
-            for mkt in markets:
-                question = mkt.get("question", "")
-                label = _extract_bracket_label(question)
-                if label is None:
-                    continue
-                op = mkt.get("outcomePrices")
-                if op:
-                    try:
-                        prices = json.loads(op) if isinstance(op, str) else op
-                        yes_price = float(prices[0])
-                    except:
-                        continue
-                else:
-                    continue
-                if yes_price <= 0.001 or yes_price >= 0.999:
-                    continue
-                bracket_list.append((label, yes_price))
-                last_trade = float(mkt.get("lastTradePrice", 0) or 0)
-                market_id = mkt.get("id", "")
-                tokens = extract_market_tokens(mkt)
-                yes_token_id = tokens["yes"]
-                no_token_id = tokens["no"]
-                market_entries.append({
-                    "label": label,
-                    "yes_price": yes_price,
-                    "last_trade": last_trade,
-                    "question": question,
-                    "market_id": market_id,
-                    "condition_id": mkt.get("conditionId", ""),
-                    "yes_token_id": yes_token_id,
-                    "no_token_id": no_token_id,
-                })
+            bracket_list, market_entries = gamma_market_ladder(markets)
 
             if not args.no_orderbook:
                 if (

@@ -270,6 +270,42 @@ def test_paper_snapshot_strategy_live_orderbook_scope_covers_active_strategy_leg
     }
 
 
+def test_paper_snapshot_preserves_near_binary_ladder_siblings(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+
+    markets = [
+        {
+            "question": "Will the highest temperature in Foo be 20°C or below?",
+            "outcomePrices": "[0.0005, 0.9995]",
+            "outcomes": '["Yes", "No"]',
+            "clobTokenIds": '["yes-low", "no-low"]',
+        },
+        {
+            "question": "Will the highest temperature in Foo be 21°C?",
+            "outcomePrices": "[0.42, 0.58]",
+            "outcomes": '["Yes", "No"]',
+            "clobTokenIds": '["yes-mid", "no-mid"]',
+        },
+        {
+            "question": "Will the highest temperature in Foo be 22°C or higher?",
+            "outcomePrices": "[0.9995, 0.0005]",
+            "outcomes": '["Yes", "No"]',
+            "clobTokenIds": '["yes-high", "no-high"]',
+        },
+    ]
+
+    brackets, entries = paper_snapshot.gamma_market_ladder(markets)
+
+    assert brackets == [("20", 0.0005), ("21", 0.42), ("22+", 0.9995)]
+    assert [row["yes_token_id"] for row in entries] == ["yes-low", "yes-mid", "yes-high"]
+
+
 def test_source_events_builds_append_only_rows_without_proxy(monkeypatch, tmp_path) -> None:
     from weather_data_feed.source_policy import load_city_configs
     from weather_data_feed_service import source_events

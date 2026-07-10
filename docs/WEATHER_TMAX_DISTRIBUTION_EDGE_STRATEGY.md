@@ -1,7 +1,7 @@
 # Weather Tmax Distribution Edge Strategy
 
 Status: current-reference
-Updated: 2026-07-05 exact-book bridge experiment
+Updated: 2026-07-10 lineage repair replay
 Source of truth: yes for this strategy family
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_REGISTRY.md
 
@@ -98,6 +98,23 @@ ask source for d1/d2 YES: 1 - sibling NO bid
 
 这版 bridge 还不是 full ladder target book。真正完整版本需要逐格 hazard / full-ladder 概率、
 实时 sibling book、以及 target-book reconciliation 的平仓成本账本。
+
+## 2026-07-10 Lineage Repair
+
+[2026-07-10-tmax-lineage-repair-v1.md](analysis/2026-07/2026-07-10-tmax-lineage-repair-v1.md)
+完成 live/replay 同口径修复：共享 tail-aware bracket parser、GFS/ECMWF enrichment、RH/sky/wind observation context、
+sibling complement snapshot estimate、direct fresh executable ask、NaN ask 拦截和 blocked telemetry。`1-NO bid`
+只作估价/telemetry，不作为当前 BUY YES executor 的可成交 ask。旧 live 缺字段会让 verified-forward proper score 变差：
+logloss `0.5887 -> 0.5926`，因此 selected-trade ROI 偶然更高不能作为保留缺字段的理由。
+
+8 笔首批 live order 已按原 PIT snapshot 重放：修复后原表达在原 fill price 上有 6/8 仍过 edge 门；Busan 7/09
+`d1_no` 变成负 edge，北京 7/09 `d1_no` 在原 fill 上只差约 0.1c 未过门。live 继续暂停，先积累 repaired forward shadow。
+
+审阅里“below-ladder 是新容量”的结论已纠正。6/21..7/07 的 357 个 repaired below-ladder city-hour 全部能在
+canonical event inventory 中找到更低 sibling；另有 157/188 个 top-two 行缺 upper sibling。根因是旧 collector 在
+写事实 snapshot 前删除 `outcomePrices <=0.001 / >=0.999` 的 near-binary markets，不是市场本身没有这些档，也不是
+survival v2 已经覆盖的新 alpha。collector 已改为保留完整梯子；D1 real-tail/full-ladder A/B 必须等待完整 fresh
+snapshot 后重做，旧 701 行匹配样本受缺档污染，不能用于升格。
 
 ## 为什么不是继续用原来的 live 版本
 

@@ -39,6 +39,7 @@ import research_tmax_distribution_p3_feature_ablation_v1 as p3  # noqa: E402
 import research_tmax_distribution_p4_observed_label_extension_v1 as p4  # noqa: E402
 from src.strategies.weather_edge_v1.tools import regime_routed_no_stable as regime_policy  # noqa: E402
 from src.strategies.weather_edge_v1.tools.execution_pipeline import stable_hash  # noqa: E402
+from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
 
 
 STRATEGY_INSTANCE = "tmax_distribution_edge_live_candidate_v1"
@@ -67,6 +68,10 @@ HIGH_FREQUENCY_LATEST_CANDIDATES = [
 SOURCE_EVENTS_LATEST_CANDIDATES = [
     DATA_FEED_RUNTIME_ROOT / "output/source_events/latest.json",
     Path("~/projects/weather_data_feed_service_runtime/output/source_events/latest.json").expanduser(),
+]
+FORECAST_ENRICHMENT_LATEST_CANDIDATES = [
+    DATA_FEED_RUNTIME_ROOT / "output/forecast_enrichment/latest.json",
+    Path("~/projects/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json").expanduser(),
 ]
 
 
@@ -101,6 +106,11 @@ def to_float(value: Any, default: float = math.nan) -> float:
         return out if math.isfinite(out) else default
     except (TypeError, ValueError):
         return default
+
+
+def finite_or_none(value: Any) -> float | None:
+    out = to_float(value, math.nan)
+    return out if math.isfinite(out) else None
 
 
 def taker_fee(price: float, fee_rate: float) -> float:
@@ -261,7 +271,7 @@ def market_city_key(value: Any) -> str:
 def arith_round(value: float) -> int | None:
     if not math.isfinite(value):
         return None
-    return int(math.floor(float(value) + 0.5))
+    return int(math.floor(float(value) + 0.5) if value >= 0 else math.ceil(float(value) - 0.5))
 
 
 def native_temp_from_source(row: dict[str, Any], unit: str) -> float:
@@ -306,6 +316,16 @@ def latest_rows_by_city_date(path: Path | None) -> tuple[dict[tuple[str, str], d
     return out, {"path": str(path), "status": "ok", "rows": len(records), "keys": len(out)}
 
 
+def forecast_model_max_native(row: dict[str, Any], model: str, unit: str) -> float:
+    multi = row.get("open_meteo_multi_model") if isinstance(row.get("open_meteo_multi_model"), dict) else {}
+    target = multi.get("target_date") if isinstance(multi.get("target_date"), dict) else {}
+    models = target.get("models") if isinstance(target.get("models"), dict) else {}
+    value_f = to_float(models.get(model), math.nan)
+    if not math.isfinite(value_f):
+        return math.nan
+    return value_f if unit.upper() == "F" else (value_f - 32.0) * 5.0 / 9.0
+
+
 def source_relation_to_snapshot(detect_dt: datetime | None, snapshot_dt: datetime | None) -> str:
     if detect_dt is None or snapshot_dt is None:
         return "unknown"
@@ -319,6 +339,7 @@ def enrich_source_context(state_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[st
         return state_df, {"status": "empty_state"}
     hf_rows, hf_meta = latest_rows_by_city_date(first_existing(HIGH_FREQUENCY_LATEST_CANDIDATES))
     source_rows, source_meta = latest_rows_by_city_date(first_existing(SOURCE_EVENTS_LATEST_CANDIDATES))
+    forecast_rows, forecast_meta = latest_rows_by_city_date(first_existing(FORECAST_ENRICHMENT_LATEST_CANDIDATES))
     enriched: list[dict[str, Any]] = []
     counters = Counter()
     for item in state_df.to_dict("records"):
@@ -392,11 +413,39 @@ def enrich_source_context(state_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[st
         else:
             counters["source_event_missing"] += 1
             row.update({"source_event_context_status": "missing", "source_event_source": "", "source_event_relation_to_snapshot": "missing"})
+
+        forecast = forecast_rows.get(key)
+        if forecast:
+            forecast_dt = parse_utc(forecast.get("snapshot_ts_utc") or forecast.get("generated_at_utc"))
+            relation = source_relation_to_snapshot(forecast_dt, snapshot_dt)
+            gfs_max = forecast_model_max_native(forecast, "GFS", unit)
+            ecmwf_max = forecast_model_max_native(forecast, "ECMWF", unit)
+            row.update(
+                {
+                    "forecast_enrichment_status": safe_str(forecast.get("status")) or "ok",
+                    "forecast_enrichment_snapshot_ts_utc": forecast_dt.isoformat() if forecast_dt else "",
+                    "forecast_enrichment_relation_to_snapshot": relation,
+                    "gfs_forecast_max_native": gfs_max,
+                    "ecmwf_forecast_max_native": ecmwf_max,
+                    "gfs_gap_to_running_native": gfs_max - running_native if math.isfinite(gfs_max) else math.nan,
+                    "ecmwf_gap_to_running_native": ecmwf_max - running_native if math.isfinite(ecmwf_max) else math.nan,
+                }
+            )
+            counters[f"forecast_enrichment_{relation}"] += 1
+        else:
+            counters["forecast_enrichment_missing"] += 1
+            row.update(
+                {
+                    "forecast_enrichment_status": "missing",
+                    "forecast_enrichment_relation_to_snapshot": "missing",
+                }
+            )
         enriched.append(row)
     summary = {
         "status": "ok",
         "high_frequency": hf_meta,
         "source_events": source_meta,
+        "forecast_enrichment": forecast_meta,
         "counters": dict(sorted(counters.items())),
     }
     return pd.DataFrame(enriched), summary
@@ -406,7 +455,7 @@ def sky_code_value(value: Any) -> float:
     text = safe_str(value).upper()
     if not text:
         return math.nan
-    mapping = {"CLR": 0.0, "SKC": 0.0, "FEW": 1.0, "SCT": 2.0, "BKN": 3.0, "OVC": 4.0, "VV": 4.0}
+    mapping = {"CLR": 0.0, "SKC": 0.0, "CAVOK": 0.0, "FEW": 1.0, "SCT": 2.0, "BKN": 3.0, "OVC": 4.0, "VV": 4.0}
     for key, score in mapping.items():
         if key in text:
             return score
@@ -427,7 +476,22 @@ def native_from_obs(obs: dict[str, Any], unit: str) -> tuple[float, float]:
 
 
 def record_interval(row: dict[str, Any]) -> tuple[float, float] | None:
-    return p0._interval(row.get("bracket"))
+    parsed = parse_market_bracket(safe_str(row.get("bracket")), safe_str(row.get("question")))
+    if parsed is None:
+        return None
+    if parsed.bottom and parsed.high is not None:
+        return (-math.inf, float(parsed.high) + 0.5)
+    if parsed.top and parsed.low is not None:
+        return (float(parsed.low) - 0.5, math.inf)
+    if parsed.low is None or parsed.high is None:
+        return None
+    return (float(parsed.low) - 0.5, float(parsed.high) + 0.5)
+
+
+def record_contains_running_value(row: dict[str, Any], running_native: float) -> bool:
+    parsed = parse_market_bracket(safe_str(row.get("bracket")), safe_str(row.get("question")))
+    running_value = arith_round(running_native)
+    return bool(parsed is not None and running_value is not None and parsed.contains(float(running_value)))
 
 
 def bracket_sort_key(item: tuple[dict[str, Any], tuple[float, float]]) -> tuple[float, float]:
@@ -470,6 +534,30 @@ def row_bid(row: dict[str, Any], side: str) -> tuple[float, float]:
     return first_price_level(raw, "bid")
 
 
+def effective_yes_ask(
+    direct_ask: float,
+    direct_size: float,
+    sibling_no_bid: float,
+    sibling_no_bid_size: float,
+) -> tuple[float, float, str, float]:
+    choices: list[tuple[float, float, str]] = []
+    if math.isfinite(direct_ask) and 0.0 < direct_ask < 1.0:
+        choices.append((direct_ask, direct_size if math.isfinite(direct_size) else 0.0, "direct_yes_ask"))
+    synthetic = 1.0 - sibling_no_bid if math.isfinite(sibling_no_bid) else math.nan
+    if math.isfinite(synthetic) and 0.0 < synthetic < 1.0:
+        choices.append(
+            (
+                synthetic,
+                sibling_no_bid_size if math.isfinite(sibling_no_bid_size) else 0.0,
+                "complement_no_bid",
+            )
+        )
+    if not choices:
+        return math.nan, 0.0, "missing", synthetic
+    ask, size, source = min(choices, key=lambda item: item[0])
+    return ask, size, source, synthetic
+
+
 def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], observations: dict[tuple[str, str], dict[str, Any]]) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     audits: list[dict[str, Any]] = []
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -500,13 +588,39 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
         with_intervals = [(row, iv) for row in city_rows if (iv := record_interval(row)) is not None]
         with_intervals = sorted(with_intervals, key=bracket_sort_key)
         current_pos = None
-        for idx, (_row, interval) in enumerate(with_intervals):
-            lo, hi = interval
-            if running_native >= lo - 1e-9 and running_native <= hi + 1e-9:
+        for idx, (market_row, _interval) in enumerate(with_intervals):
+            if record_contains_running_value(market_row, running_native):
                 current_pos = idx
                 break
-        if current_pos is None or current_pos + 2 >= len(with_intervals):
-            audits.append({"city": city, "target_date": target_date, "status": "cannot_map_current_d1_d2", "running_native": running_native})
+        if current_pos is None:
+            if with_intervals and running_native < with_intervals[0][1][0]:
+                status = "below_market_ladder"
+            elif with_intervals and running_native > with_intervals[-1][1][1]:
+                status = "above_market_ladder"
+            else:
+                status = "cannot_map_current_bracket"
+            audits.append(
+                {
+                    "city": city,
+                    "target_date": target_date,
+                    "status": status,
+                    "running_native": running_native,
+                    "ladder_first_bracket": safe_str(with_intervals[0][0].get("bracket")) if with_intervals else "",
+                    "ladder_last_bracket": safe_str(with_intervals[-1][0].get("bracket")) if with_intervals else "",
+                }
+            )
+            continue
+        if current_pos + 2 >= len(with_intervals):
+            audits.append(
+                {
+                    "city": city,
+                    "target_date": target_date,
+                    "status": "top_two_ladder_truncated",
+                    "running_native": running_native,
+                    "current_bracket": safe_str(with_intervals[current_pos][0].get("bracket")),
+                    "remaining_brackets": len(with_intervals) - current_pos,
+                }
+            )
             continue
         current_record, current_iv = with_intervals[current_pos]
         d1_record, d1_iv = with_intervals[current_pos + 1]
@@ -515,14 +629,26 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
         current_yes_ask, current_yes_size = row_price(current_record, "yes")
         current_no_ask, current_no_size = row_price(current_record, "no")
         current_no_bid, _ = row_bid(current_record, "no")
-        d1_yes_ask, d1_yes_size = row_price(d1_record, "yes")
+        d1_yes_direct_ask, d1_yes_direct_size = row_price(d1_record, "yes")
         d1_yes_bid, _ = row_bid(d1_record, "yes")
         d1_no_ask, d1_no_size = row_price(d1_record, "no")
-        d1_no_bid, _ = row_bid(d1_record, "no")
-        d2_yes_ask, d2_yes_size = row_price(d2_record, "yes")
+        d1_no_bid, d1_no_bid_size = row_bid(d1_record, "no")
+        d1_yes_ask, d1_yes_size, d1_yes_quote_source, d1_yes_synthetic_ask = effective_yes_ask(
+            d1_yes_direct_ask,
+            d1_yes_direct_size,
+            d1_no_bid,
+            d1_no_bid_size,
+        )
+        d2_yes_direct_ask, d2_yes_direct_size = row_price(d2_record, "yes")
         d2_yes_bid, _ = row_bid(d2_record, "yes")
         d2_no_ask, d2_no_size = row_price(d2_record, "no")
-        d2_no_bid, _ = row_bid(d2_record, "no")
+        d2_no_bid, d2_no_bid_size = row_bid(d2_record, "no")
+        d2_yes_ask, d2_yes_size, d2_yes_quote_source, d2_yes_synthetic_ask = effective_yes_ask(
+            d2_yes_direct_ask,
+            d2_yes_direct_size,
+            d2_no_bid,
+            d2_no_bid_size,
+        )
         if not all(math.isfinite(x) and x > 0 for x in [current_yes_ask, current_no_ask, d1_no_ask, d2_no_ask]):
             audits.append({"city": city, "target_date": target_date, "status": "missing_local_ladder_ask"})
             continue
@@ -543,8 +669,9 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
             forecast_peak_delta = decision_hour - forecast_peak_hour
         source = safe_str(current_record.get("forecast_source") or current_record.get("model"))
         forecast_gap = forecast_max_native - running_native if math.isfinite(forecast_max_native) else math.nan
-        gfs_gap = forecast_gap if source.lower() == "gfs" else math.nan
-        ecmwf_gap = forecast_gap if source.lower() in {"ecmwf", "ecmwf_ifs"} else math.nan
+        source_lower = source.lower()
+        gfs_gap = forecast_gap if "gfs" in source_lower else math.nan
+        ecmwf_gap = forecast_gap if "ecmwf" in source_lower else math.nan
 
         row = {
             "city": city,
@@ -565,14 +692,22 @@ def build_state_rows(snapshot: dict[str, Any], records: list[dict[str, Any]], ob
             "d1_no_ask": d1_no_ask,
             "d1_no_ask_size": d1_no_size,
             "d1_no_bid": d1_no_bid,
+            "d1_no_bid_size": d1_no_bid_size,
             "d1_yes_ask": d1_yes_ask,
             "d1_yes_ask_size": d1_yes_size,
+            "d1_yes_ask_direct": d1_yes_direct_ask,
+            "d1_yes_ask_synthetic": d1_yes_synthetic_ask,
+            "d1_yes_quote_source": d1_yes_quote_source,
             "d1_yes_bid": d1_yes_bid,
             "d2_no_ask": d2_no_ask,
             "d2_no_ask_size": d2_no_size,
             "d2_no_bid": d2_no_bid,
+            "d2_no_bid_size": d2_no_bid_size,
             "d2_yes_ask": d2_yes_ask,
             "d2_yes_ask_size": d2_yes_size,
+            "d2_yes_ask_direct": d2_yes_direct_ask,
+            "d2_yes_ask_synthetic": d2_yes_synthetic_ask,
+            "d2_yes_quote_source": d2_yes_quote_source,
             "d2_yes_bid": d2_yes_bid,
             "current_question": safe_str(current_record.get("question")),
             "d1_question": safe_str(d1_record.get("question")),
@@ -773,6 +908,29 @@ def ask_and_token(row: pd.Series, expression: str) -> tuple[float, float, str, s
     raise ValueError(expression)
 
 
+def expression_pricing_context(row: pd.Series, expression: str) -> dict[str, Any]:
+    if expression == "d1_yes":
+        return {
+            "snapshot_quote_source": safe_str(row.get("d1_yes_quote_source")),
+            "snapshot_direct_ask": finite_or_none(row.get("d1_yes_ask_direct")),
+            "snapshot_synthetic_ask": finite_or_none(row.get("d1_yes_ask_synthetic")),
+            "sibling_no_token_id": safe_str(row.get("d1_no_token_id")),
+        }
+    if expression == "d2_yes":
+        return {
+            "snapshot_quote_source": safe_str(row.get("d2_yes_quote_source")),
+            "snapshot_direct_ask": finite_or_none(row.get("d2_yes_ask_direct")),
+            "snapshot_synthetic_ask": finite_or_none(row.get("d2_yes_ask_synthetic")),
+            "sibling_no_token_id": safe_str(row.get("d2_no_token_id")),
+        }
+    return {
+        "snapshot_quote_source": "direct_token_ask",
+        "snapshot_direct_ask": finite_or_none(ask_and_token(row, expression)[0]),
+        "snapshot_synthetic_ask": None,
+        "sibling_no_token_id": "",
+    }
+
+
 def expression_question(row: pd.Series, expression: str) -> str:
     if expression in {"current_yes", "current_no"}:
         return safe_str(row.get("current_question") or row.get("question"))
@@ -897,6 +1055,7 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
                 continue
             ask, ask_size, token_id, market_id, bracket = ask_and_token(row, expression)
             p_win = win_prob(row, expression)
+            pricing_context = expression_pricing_context(row, expression)
             gross_edge = p_win - ask
             fee = taker_fee(ask, args.fee_rate)
             fee_adjusted_edge = gross_edge - fee
@@ -923,10 +1082,15 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
                 "token_id": token_id,
                 "market_id": market_id,
                 "bracket": bracket,
+                **pricing_context,
             }
             reason = ""
             if not token_id:
                 reason = "missing_token_id"
+            elif not math.isfinite(ask):
+                reason = "missing_expression_ask"
+            elif not math.isfinite(p_win):
+                reason = "missing_expression_probability"
             elif ask < args.ask_floor:
                 reason = "below_ask_floor"
             elif ask > args.ask_ceiling:
@@ -936,7 +1100,12 @@ def build_candidates(live_df: pd.DataFrame, pred: pd.DataFrame, args: argparse.N
             if reason:
                 blocked.append({**base, "decision_status": "blocked", "block_reason": reason})
                 continue
-            if best is None or (fee_adjusted_edge, base["model_roi"]) > (best["fee_adjusted_edge"], best["model_roi"]):
+            rank = (fee_adjusted_edge, to_float(base.get("model_roi"), -math.inf))
+            best_rank = (
+                to_float(best.get("fee_adjusted_edge"), -math.inf),
+                to_float(best.get("model_roi"), -math.inf),
+            ) if best is not None else (-math.inf, -math.inf)
+            if best is None or rank > best_rank:
                 best = base
         if best is None:
             continue
@@ -973,6 +1142,13 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
         "unit",
         "forecast_source",
         "forecast_max_native",
+        "gfs_forecast_max_native",
+        "ecmwf_forecast_max_native",
+        "gfs_gap_to_running_native",
+        "ecmwf_gap_to_running_native",
+        "forecast_enrichment_status",
+        "forecast_enrichment_snapshot_ts_utc",
+        "forecast_enrichment_relation_to_snapshot",
         "forecast_peak_hour_local",
         "forecast_peak_delta_hours_local",
         "current_bracket",
@@ -1098,26 +1274,63 @@ def book_levels(book: dict[str, Any], side: str) -> list[tuple[float, float]]:
     return sorted(out, reverse=(side == "bid"))
 
 
-def fresh_quote(candidate: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+def fetch_book_resilient(token_id: str, args: argparse.Namespace) -> dict[str, Any]:
     try:
-        book = fetch_book(str(candidate["token_id"]), timeout_sec=args.clob_timeout_sec, retries=args.clob_retries)
+        return fetch_book(token_id, timeout_sec=args.clob_timeout_sec, retries=args.clob_retries)
     except Exception as exc:  # noqa: BLE001
         httpx_error = f"{type(exc).__name__}: {exc}"
         try:
-            book = fetch_book_with_curl(str(candidate["token_id"]), timeout_sec=args.clob_timeout_sec)
+            return fetch_book_with_curl(token_id, timeout_sec=args.clob_timeout_sec)
         except Exception as curl_exc:  # noqa: BLE001
-            return {
-                "status": "rejected",
-                "reason": "fresh_book_fetch_failed",
-                "error": httpx_error,
-                "curl_error": f"{type(curl_exc).__name__}: {curl_exc}",
-            }
+            raise RuntimeError(
+                f"httpx={httpx_error}; curl={type(curl_exc).__name__}: {curl_exc}"
+            ) from curl_exc
+
+
+def fresh_quote(candidate: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    try:
+        book = fetch_book_resilient(str(candidate["token_id"]), args)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "status": "rejected",
+            "reason": "fresh_book_fetch_failed",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
     asks = book_levels(book, "ask")
     bids = book_levels(book, "bid")
-    if not asks:
-        return {"status": "rejected", "reason": "fresh_book_no_ask", "best_bid": bids[0][0] if bids else 0.0}
-    fresh_ask, fresh_size = asks[0]
-    best_bid = bids[0][0] if bids else 0.0
+    ask_choices: list[tuple[float, float, str]] = []
+    bid_choices: list[tuple[float, str]] = []
+    if asks:
+        ask_choices.append((asks[0][0], asks[0][1], "direct_token_ask"))
+    if bids:
+        bid_choices.append((bids[0][0], "direct_token_bid"))
+
+    sibling_error = ""
+    fresh_synthetic_ask = None
+    sibling_no_token_id = safe_str(candidate.get("sibling_no_token_id"))
+    if safe_str(candidate.get("signal_side")) == "BUY_YES" and sibling_no_token_id:
+        try:
+            sibling_book = fetch_book_resilient(sibling_no_token_id, args)
+            sibling_bids = book_levels(sibling_book, "bid")
+            sibling_asks = book_levels(sibling_book, "ask")
+            if sibling_bids:
+                fresh_synthetic_ask = 1.0 - sibling_bids[0][0]
+            if sibling_asks:
+                bid_choices.append((1.0 - sibling_asks[0][0], "complement_no_ask"))
+        except Exception as exc:  # noqa: BLE001
+            sibling_error = f"{type(exc).__name__}: {exc}"
+
+    ask_choices = [item for item in ask_choices if math.isfinite(item[0]) and 0.0 < item[0] < 1.0]
+    if not ask_choices:
+        return {
+            "status": "rejected",
+            "reason": "fresh_book_no_effective_ask",
+            "best_bid": max((item[0] for item in bid_choices), default=0.0),
+            "fresh_synthetic_ask": fresh_synthetic_ask,
+            "sibling_book_error": sibling_error,
+        }
+    fresh_ask, fresh_size, fresh_quote_source = min(ask_choices, key=lambda item: item[0])
+    best_bid = max((item[0] for item in bid_choices), default=0.0)
     p_win = float(candidate["p_win"])
     snapshot_ask = float(candidate["ask"])
     fee = taker_fee(fresh_ask, args.fee_rate)
@@ -1129,6 +1342,7 @@ def fresh_quote(candidate: dict[str, Any], args: argparse.Namespace) -> dict[str
             "best_bid": best_bid,
             "fresh_ask": fresh_ask,
             "fresh_ask_size": fresh_size,
+            "fresh_quote_source": fresh_quote_source,
         }
     if fresh_ask < args.ask_floor - 1e-9:
         return {"status": "rejected", "reason": "fresh_ask_below_floor", "best_bid": best_bid, "fresh_ask": fresh_ask, "fresh_ask_size": fresh_size}
@@ -1160,6 +1374,10 @@ def fresh_quote(candidate: dict[str, Any], args: argparse.Namespace) -> dict[str
         "best_bid": best_bid,
         "fresh_ask": fresh_ask,
         "fresh_ask_size": fresh_size,
+        "fresh_quote_source": fresh_quote_source,
+        "fresh_direct_ask": asks[0][0] if asks else None,
+        "fresh_synthetic_ask": fresh_synthetic_ask,
+        "sibling_book_error": sibling_error,
         "fresh_available_notional": fresh_ask * fresh_size,
         "limit_price": fresh_ask,
         "fee": fee,
@@ -1231,6 +1449,13 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "quote_spread": round(max(0.0, float(quote["fresh_ask"]) - float(quote.get("best_bid") or 0.0)), 6),
         "quote_tick_size": 0.01,
         "quote_mode": "fresh_book_guarded_taker",
+        "snapshot_quote_source": candidate.get("snapshot_quote_source", ""),
+        "snapshot_direct_ask": candidate.get("snapshot_direct_ask"),
+        "snapshot_synthetic_ask": candidate.get("snapshot_synthetic_ask"),
+        "fresh_quote_source": quote.get("fresh_quote_source", ""),
+        "fresh_direct_ask": quote.get("fresh_direct_ask"),
+        "fresh_synthetic_ask": quote.get("fresh_synthetic_ask"),
+        "sibling_no_token_id": candidate.get("sibling_no_token_id", ""),
         "child_order_role": "single",
         "maker_only": False,
         "notional_fraction": 1.0,
@@ -1286,8 +1511,8 @@ def build_plan(candidate: dict[str, Any], quote: dict[str, Any], args: argparse.
         "decision_local_time": str(candidate.get("decision_hour_local", "")),
         "decision_timezone": "",
         "running_max_obs_utc": candidate.get("running_max_obs_utc", ""),
-        "obs_age_min": to_float(candidate.get("obs_age_min"), 0.0),
-        "minutes_since_running_max": to_float(candidate.get("minutes_since_running_max"), 0.0),
+        "obs_age_min": finite_or_none(candidate.get("obs_age_min")),
+        "minutes_since_running_max": finite_or_none(candidate.get("minutes_since_running_max")),
         "forecast_peak_delta_hours_local": candidate.get("forecast_peak_delta_hours_local"),
         "fresh_ask_size": quote.get("fresh_ask_size"),
         "fresh_available_notional": quote.get("fresh_available_notional"),
@@ -1398,10 +1623,20 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         )
         accepted_candidates.append(enriched)
         batch_city_day_keys.add(position_key)
-    accepted_candidates = sorted(
+    accepted_sorted = sorted(
         accepted_candidates,
         key=lambda r: (str(r.get("target_date")), float(r.get("decision_hour_local") or 99), str(r.get("city"))),
-    )[: max(0, int(args.max_orders))]
+    )
+    max_orders = max(0, int(args.max_orders))
+    for candidate in accepted_sorted[max_orders:]:
+        blocked.append(
+            {
+                **candidate,
+                "decision_status": "blocked",
+                "block_reason": "max_orders_per_cycle",
+            }
+        )
+    accepted_candidates = accepted_sorted[:max_orders]
     for candidate in accepted_candidates:
         quote = candidate["fresh_quote"]
         plans.append(build_plan(candidate, quote, args, live_enabled=bool(args.live)))

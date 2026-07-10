@@ -110,6 +110,10 @@ snapshot_ts_utc
 这些字段解决的是之前美洲市场被北京时间/机器日期滚动误过滤的问题。`target_date` 是市场结算日期，
 `city_local_date_at_snapshot` 是采集时城市本地日，两者不能硬等同。
 
+Market snapshot 必须保留 Gamma event 的完整 bracket inventory，包括 `outcomePrices` 接近 `0/1` 的
+near-binary siblings。价格是否可交易属于 strategy/execution policy，不能在数据层用 ask/price 阈值删档；
+否则 running max 会被错误判成 `below_ladder` / `top_two`，full-ladder 和 relative-step 模型都会在错误几何上运行。
+
 ## 迁移状态
 
 已完成:

@@ -55,6 +55,42 @@ _IEM_RAW_TEXT_CACHE: dict[tuple[str, str, str], str] = {}
 _IEM_RAW_TEXT_LOCK = threading.Lock()
 
 
+def relative_humidity_pct(temp_c: float | None, dewpoint_c: float | None) -> float | None:
+    """Derive RH from temperature/dewpoint when a source omits it."""
+    if temp_c is None or dewpoint_c is None:
+        return None
+    try:
+        temp = float(temp_c)
+        dewpoint = float(dewpoint_c)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(temp) or not math.isfinite(dewpoint):
+        return None
+    a, b = 17.625, 243.04
+    rh = 100.0 * math.exp(a * dewpoint / (b + dewpoint) - a * temp / (b + temp))
+    return max(0.0, min(100.0, rh))
+
+
+def aviationweather_sky_code(raw: Any) -> str:
+    if not isinstance(raw, dict):
+        return ""
+    covers: list[str] = []
+    clouds = raw.get("clouds")
+    if isinstance(clouds, list):
+        for layer in clouds:
+            if isinstance(layer, dict):
+                cover = str(layer.get("cover") or "").upper().strip()
+                if cover:
+                    covers.append(cover)
+    for key in ("cover", "sky_cover", "sky_cover_2", "sky_cover_3", "sky_cover_4"):
+        cover = str(raw.get(key) or "").upper().strip()
+        if cover:
+            covers.append(cover)
+    severity = {"CLR": 0, "SKC": 0, "CAVOK": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
+    ranked = [cover for cover in covers if cover in severity]
+    return max(ranked, key=lambda cover: severity[cover]) if ranked else ""
+
+
 @dataclass(frozen=True)
 class FetchSettings:
     timeout_sec: float = 3.0
@@ -247,6 +283,7 @@ def _record(
         raw_text = str(raw.get("rawOb") or raw.get("raw_text") or raw.get("rawMessage") or "")
     elif raw is not None:
         raw_text = str(raw)
+    relh_value = relh if relh is not None else relative_humidity_pct(temp_c, dewpoint_c)
     return ObservationRecord(
         source_key=source_key,
         city=request.city,
@@ -256,7 +293,7 @@ def _record(
         ingest_ts_utc=ingest_dt.astimezone(timezone.utc).isoformat(),
         temp_c=float(temp_c),
         dewpoint_c=dewpoint_c,
-        relh=relh,
+        relh=relh_value,
         wind_kt=wind_kt,
         sky_code=sky_code,
         raw_text=raw_text,
@@ -309,6 +346,7 @@ def fetch_aviationweather_metar(request: ObservationSourceRequest, settings: Fet
             raw=raw,
             dewpoint_c=_float_or_none(raw.get("dewp")) if isinstance(raw, dict) else None,
             wind_kt=_float_or_none(raw.get("wspd")) if isinstance(raw, dict) else None,
+            sky_code=aviationweather_sky_code(raw),
             latency_ms=round((fetch_end - fetch_start).total_seconds() * 1000.0, 3),
         )
         for dt, temp, raw in parsed
@@ -337,6 +375,9 @@ def fetch_aviationweather_cache_csv(request: ObservationSourceRequest, settings:
             ingest_dt=fetch_end,
             temp_c=temp,
             raw=raw,
+            dewpoint_c=_float_or_none(raw.get("dewpoint_c") or raw.get("dewp")),
+            wind_kt=_float_or_none(raw.get("wind_speed_kt") or raw.get("wspd")),
+            sky_code=aviationweather_sky_code(raw),
             latency_ms=round((fetch_end - fetch_start).total_seconds() * 1000.0, 3),
         )
         for dt, temp, raw in parsed

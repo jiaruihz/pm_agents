@@ -128,6 +128,7 @@ Status 口径：
 
 | 文档 | Status | 读它回答什么问题 |
 |---|---|---|
+| [2026-07-10-tmax-lineage-repair-replay-v1.md](analysis/2026-07/2026-07-10-tmax-lineage-repair-replay-v1.md) | `current-reference` | Tmax lineage 根因修复与同口径重放：补齐 live GFS/ECMWF、RH/sky/wind 特征，修 tail bracket parser、effective sibling ask、NaN ask 和 blocked telemetry；8376 历史 rows 上完整特征 proper score 稳定优于旧 live 缺失口径，8 笔 live PIT 重放有 6/8 原表达在原 fill price 仍过门。6/21..7/07 的 357 个 below-ladder 行全部来自 collector 删除 near-binary lower sibling，157/188 top-two 也缺 upper sibling；不是已证实的 survival-v2 容量。collector 已修为保留完整 event ladder，tmax live 继续暂停，等待 repaired forward shadow |
 | [model_vs_market.md](analysis/model_vs_market.md) | `current-reference` | 模型概率相对市场是否有 alpha 的 living doc；当前结论：global probability alpha 为负，model edge rank alpha 未确认；forecast quality 只可作为 source-aware shared reliability layer / shadow tag |
 | [WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md](WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md) | `current-source` | weather_edge_engine 当前接手入口：blender shadow/paper 与 city-day basket 下一步 |
 | [WEATHER_PROBABILITY_MODEL_REVIEW.md](WEATHER_PROBABILITY_MODEL_REVIEW.md) | `current-reference` | 生产 baseline `model_p_yes` 的问题、条件模型缺口、季节/forecast jump 风险 |
