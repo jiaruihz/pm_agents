@@ -54,8 +54,8 @@ def test_canonical_tables_exist(tmp_db_canonical):
 
 def test_canonical_schema_version_written(tmp_db_canonical):
     row = tmp_db_canonical.execute("SELECT version, description FROM schema_version").fetchone()
-    assert row["version"] == 7
-    assert "control plane" in row["description"]
+    assert row["version"] == 9
+    assert "data-source management" in row["description"]
 
 
 def test_canonical_schema_has_no_legacy_field_names(tmp_db_canonical):
@@ -64,7 +64,7 @@ def test_canonical_schema_has_no_legacy_field_names(tmp_db_canonical):
     ).fetchall()
     schema = "\n".join(row["sql"] for row in schema_rows)
 
-    for legacy_name in ("event_date", "model_prob", "market_yes_price", "profile", "final_yes"):
+    for legacy_name in ("event_date", "model_prob", "market_yes_price", "final_yes"):
         assert legacy_name not in schema
 
 
@@ -307,6 +307,6 @@ def test_init_db_canonical_creates_file(tmp_path):
     conn = get_conn(str(db_path))
     try:
         row = conn.execute("SELECT version FROM schema_version").fetchone()
-        assert row["version"] == 7
+        assert row["version"] == 9
     finally:
         conn.close()

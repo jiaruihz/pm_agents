@@ -1,13 +1,17 @@
-"""Data-source provenance: what data we fetched, from where, when, which cities.
+"""Data-source management: profiles, monitor instances, dynamic health, and legacy provenance.
 
-Two layers:
-  - forecast_sources: which forecast feeds actually drove decisions (from fact_trades)
-  - market_snapshots: the realtime order-book snapshots captured on disk
+Layers:
+  - source_profiles: city × source configuration from DB
+  - monitor_instances: running monitor tasks from DB
+  - dynamic_health: computed from monitor_instance.latest_path / latest.json
+  - forecast_sources: which forecast feeds drove decisions (from fact_trades, legacy compat)
+  - market_snapshots: the realtime order-book snapshots on disk (legacy compat)
 """
 
 import json
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -70,7 +74,6 @@ def _observation_sources() -> list[dict[str, Any]]:
 def _snapshot_cadence_min(files: list[Path]) -> float | None:
     """Median spacing between recent snapshot filename timestamps, in minutes."""
     import re
-    from datetime import datetime
     stamps = []
     for p in files:
         m = re.search(r"snapshot_(\d{8})_(\d{4})", p.name)
@@ -87,9 +90,198 @@ def _snapshot_cadence_min(files: list[Path]) -> float | None:
     return round(gaps[len(gaps) // 2], 1)
 
 
+def _mtime_iso(p: Path) -> str:
+    return datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc).isoformat()
+
+
+# ── Dynamic health from latest.json ─────────────────────────────────────────
+
+def _compact_sample(value: Any, *, max_chars: int = 4000) -> Any:
+    """Return a JSON-safe sample without turning the endpoint into a data dump."""
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except TypeError:
+        return None
+    if len(encoded) <= max_chars:
+        return value
+    return {"truncated": True, "json_prefix": encoded[:max_chars]}
+
+
+def _payload_rows(data: dict[str, Any]) -> int | None:
+    for key in ("rows", "candidate_rows", "latest_quote_rows"):
+        value = data.get(key)
+        if isinstance(value, int):
+            return value
+    for key in ("records", "events", "opportunities", "quote_snapshots", "latest_opportunities"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return len(value)
+    return None
+
+
+def _payload_sample(data: dict[str, Any]) -> Any:
+    for key in ("records", "events", "opportunities", "quote_snapshots", "latest_opportunities"):
+        value = data.get(key)
+        if isinstance(value, list) and value:
+            return _compact_sample(value[0])
+    return _compact_sample({k: v for k, v in data.items() if k not in {"records", "events", "opportunities", "quote_snapshots", "latest_opportunities"}})
+
+
+def _payload_cities(data: dict[str, Any]) -> list[Any]:
+    for key in ("cities", "active_job_cities", "live_cities", "source_cities", "metar_cities"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+    return []
+
+
+def _has_status(source_statuses: dict[str, Any], wanted: set[str]) -> bool:
+    return any(str(status) in wanted for status in source_statuses.values())
+
+
+def compute_dynamic_health(monitor_instances: list[dict]) -> list[dict[str, Any]]:
+    """Compute health for each monitor instance by reading its latest_path."""
+    now = datetime.now(timezone.utc)
+    results = []
+    for mi in monitor_instances:
+        mi_id = mi["monitor_instance_id"]
+        latest_path = mi.get("latest_path")
+        entry: dict[str, Any] = {
+            "monitor_instance_id": mi_id,
+            "display_name": mi["display_name"],
+            "feed_kind": mi["feed_kind"],
+            "status": "unknown",
+            "latest_generated_at_utc": None,
+            "latest_file_mtime_utc": None,
+            "age_sec": None,
+            "rows": None,
+            "source_statuses": {},
+            "source_errors": {},
+            "cities": [],
+            "sources": [],
+            "sample_keys": [],
+            "sample_json": None,
+        }
+
+        if not latest_path:
+            entry["status"] = "missing"
+            results.append(entry)
+            continue
+
+        lp = Path(latest_path)
+        if not lp.is_file():
+            entry["status"] = "missing"
+            results.append(entry)
+            continue
+
+        entry["latest_file_mtime_utc"] = _mtime_iso(lp)
+
+        try:
+            with open(lp, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            entry["status"] = "fetch_failed"
+            results.append(entry)
+            continue
+
+        gen_at = data.get("generated_at_utc")
+        entry["latest_generated_at_utc"] = gen_at
+        entry["sample_keys"] = sorted(data.keys())[:20]
+        entry["sample_json"] = _payload_sample(data)
+
+        if gen_at:
+            try:
+                gen_dt = datetime.fromisoformat(str(gen_at).replace("Z", "+00:00"))
+                if gen_dt.tzinfo is None:
+                    gen_dt = gen_dt.replace(tzinfo=timezone.utc)
+                age = (now - gen_dt).total_seconds()
+                entry["age_sec"] = round(age, 1)
+
+                scan_interval = mi.get("scan_interval_sec") or 300
+                if age < scan_interval * 5:
+                    entry["status"] = "fresh"
+                else:
+                    entry["status"] = "stale"
+            except (ValueError, TypeError):
+                entry["status"] = "unknown"
+        else:
+            entry["status"] = "unknown"
+
+        entry["rows"] = _payload_rows(data)
+
+        entry["cities"] = _payload_cities(data)
+
+        if isinstance(data.get("sources"), list):
+            entry["sources"] = data["sources"]
+
+        if isinstance(data.get("source_statuses"), dict):
+            entry["source_statuses"] = data["source_statuses"]
+        if isinstance(data.get("source_errors"), dict):
+            entry["source_errors"] = data["source_errors"]
+
+        ok = data.get("ok_sources")
+        non_ok = data.get("non_ok_sources")
+        if non_ok and isinstance(non_ok, int) and non_ok > 0:
+            entry["source_statuses"]["_ok"] = ok
+            entry["source_statuses"]["_non_ok"] = non_ok
+
+        auth_issues = data.get("auth_required_sources") or data.get("auth_required")
+        if auth_issues:
+            entry["source_statuses"]["_auth_required"] = auth_issues
+
+        if auth_issues or _has_status(entry["source_statuses"], {"auth_required"}):
+            entry["status"] = "auth_required"
+        elif entry["source_errors"] or (isinstance(non_ok, int) and non_ok > 0) or _has_status(
+            entry["source_statuses"],
+            {"fetch_failed", "failed", "error", "not_implemented"},
+        ):
+            entry["status"] = "fetch_failed"
+
+        results.append(entry)
+    return results
+
+
+def _query_source_profiles(db: sqlite3.Connection) -> list[dict]:
+    try:
+        rows = db.execute(
+            """SELECT profile_id, feed_kind, city, source_key, source_kind,
+                      station_or_feed, icao, runway, source_role, timezone_name,
+                      expected_cadence_sec, staleness_max_age_sec, active_window_json,
+                      requires_auth, auth_ref, strategy_eligible, live_eligible,
+                      observed_median_lag_sec, observed_p95_lag_sec, notes,
+                      updated_at_utc
+               FROM weather_data_source_profile
+               ORDER BY city, feed_kind, source_role"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+def _query_monitor_instances(db: sqlite3.Connection) -> list[dict]:
+    try:
+        rows = db.execute(
+            """SELECT monitor_instance_id, display_name, feed_kind, sources_json,
+                      cities_json, scan_interval_sec, active_window_json, output_dir,
+                      latest_path, journal_paths_json, state_path, proxy_policy,
+                      auth_refs_json, desired_status, host, tmux_session,
+                      start_command, summary_json, updated_at_utc
+               FROM weather_data_monitor_instance
+               ORDER BY feed_kind, monitor_instance_id"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
 @router.get("")
 def get_data_sources(db: Db, snapshots: int = Query(12, ge=1, le=100)) -> dict[str, Any]:
-    # ── forecast feeds that drove decisions ──────────────────────────────
+    # ── source profiles from DB ─────────────────────────────────────────
+    source_profiles = _query_source_profiles(db)
+    monitor_instances = _query_monitor_instances(db)
+    dynamic_health = compute_dynamic_health(monitor_instances)
+
+    # ── forecast feeds that drove decisions (legacy compat) ─────────────
     try:
         forecast_rows = db.execute(
             """
@@ -111,7 +303,7 @@ def get_data_sources(db: Db, snapshots: int = Query(12, ge=1, le=100)) -> dict[s
     except sqlite3.OperationalError:
         forecast_sources = []
 
-    # ── realtime order-book snapshots on disk ────────────────────────────
+    # ── realtime order-book snapshots on disk (legacy compat) ───────────
     market_snapshots: list[dict[str, Any]] = []
     cadence_min: float | None = None
     d = _snapshots_dir()
@@ -129,13 +321,13 @@ def get_data_sources(db: Db, snapshots: int = Query(12, ge=1, le=100)) -> dict[s
                 "research_cities": None,
             }
             try:
-                data = json.loads(p.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    meta["ts_utc"] = data.get("ts_utc")
-                    meta["ts_beijing"] = data.get("ts_beijing")
-                    meta["total_records"] = data.get("total_records")
-                    t1 = data.get("trading_t1_cities")
-                    t2 = data.get("research_t2_cities")
+                file_data = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(file_data, dict):
+                    meta["ts_utc"] = file_data.get("ts_utc")
+                    meta["ts_beijing"] = file_data.get("ts_beijing")
+                    meta["total_records"] = file_data.get("total_records")
+                    t1 = file_data.get("trading_t1_cities")
+                    t2 = file_data.get("research_t2_cities")
                     meta["trading_cities"] = len(t1) if isinstance(t1, list) else None
                     meta["research_cities"] = len(t2) if isinstance(t2, list) else None
             except Exception:
@@ -143,13 +335,11 @@ def get_data_sources(db: Db, snapshots: int = Query(12, ge=1, le=100)) -> dict[s
             market_snapshots.append(meta)
 
     return {
+        "source_profiles": source_profiles,
+        "monitor_instances": monitor_instances,
+        "dynamic_health": dynamic_health,
         "forecast_sources": forecast_sources,
         "observation_sources": _observation_sources(),
         "market_snapshots": market_snapshots,
         "market_snapshot_cadence_min": cadence_min,
     }
-
-
-def _mtime_iso(p: Path) -> str:
-    from datetime import datetime, timezone
-    return datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc).isoformat()

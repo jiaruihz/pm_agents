@@ -7,7 +7,7 @@ from pathlib import Path
 from weather_dashboard.db.connection import get_conn
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 9
 
 
 def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -36,7 +36,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
             (
                 SCHEMA_VERSION,
                 datetime.now(timezone.utc).isoformat(),
-                "canonical tables + strategy runtime control plane (def/instance/control_log)",
+                "data-source management: weather_data_source_profile + weather_data_monitor_instance",
             ),
         )
     conn.commit()

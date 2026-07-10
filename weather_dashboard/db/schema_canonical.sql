@@ -414,6 +414,66 @@ CREATE INDEX IF NOT EXISTS idx_weather_strategy_artifacts_strategy
 CREATE INDEX IF NOT EXISTS idx_weather_strategy_shadow_queue_status
     ON weather_strategy_shadow_queue(status, priority);
 
+-- ── Data-source management (Phase 2 minimal): profile + monitor instance ────
+CREATE TABLE IF NOT EXISTS weather_data_source_profile (
+    profile_id              TEXT PRIMARY KEY,
+    feed_kind               TEXT NOT NULL,
+    city                    TEXT NOT NULL,
+    source_key              TEXT NOT NULL,
+    source_kind             TEXT,
+    station_or_feed         TEXT,
+    icao                    TEXT,
+    runway                  TEXT,
+    source_role             TEXT NOT NULL DEFAULT 'primary',
+    timezone_name           TEXT,
+    expected_cadence_sec    REAL,
+    staleness_max_age_sec   REAL,
+    active_window_json      TEXT NOT NULL DEFAULT '{}',
+    requires_auth           INTEGER NOT NULL DEFAULT 0,
+    auth_ref                TEXT,
+    strategy_eligible       INTEGER NOT NULL DEFAULT 0,
+    live_eligible           INTEGER NOT NULL DEFAULT 0,
+    observed_median_lag_sec REAL,
+    observed_p95_lag_sec    REAL,
+    notes                   TEXT NOT NULL DEFAULT '',
+    updated_at_utc          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE(city, feed_kind, source_key, station_or_feed, runway)
+);
+CREATE INDEX IF NOT EXISTS idx_weather_data_source_profile_city
+    ON weather_data_source_profile(city, feed_kind);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_weather_data_source_profile_grain
+    ON weather_data_source_profile(
+        city,
+        feed_kind,
+        source_key,
+        COALESCE(station_or_feed, ''),
+        COALESCE(runway, '')
+    );
+
+CREATE TABLE IF NOT EXISTS weather_data_monitor_instance (
+    monitor_instance_id     TEXT PRIMARY KEY,
+    display_name            TEXT NOT NULL,
+    feed_kind               TEXT NOT NULL,
+    sources_json            TEXT NOT NULL DEFAULT '[]',
+    cities_json             TEXT NOT NULL DEFAULT '[]',
+    scan_interval_sec       REAL,
+    active_window_json      TEXT NOT NULL DEFAULT '{}',
+    output_dir              TEXT,
+    latest_path             TEXT,
+    journal_paths_json      TEXT NOT NULL DEFAULT '[]',
+    state_path              TEXT,
+    proxy_policy            TEXT,
+    auth_refs_json          TEXT NOT NULL DEFAULT '[]',
+    desired_status          TEXT NOT NULL DEFAULT 'enabled',
+    host                    TEXT NOT NULL DEFAULT 'mac',
+    tmux_session            TEXT,
+    start_command           TEXT,
+    summary_json            TEXT NOT NULL DEFAULT '{}',
+    updated_at_utc          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_weather_data_monitor_instance_feed
+    ON weather_data_monitor_instance(feed_kind);
+
 -- ── Strategy runtime platform (B1/B2): definition + control plane ──────────
 CREATE TABLE IF NOT EXISTS strategy_def (
     strategy_key     TEXT PRIMARY KEY,
