@@ -156,3 +156,39 @@ def test_high_frequency_history_append_rows_keep_latest_per_station() -> None:
 
     assert len(append_rows) == 2
     assert [row for row in append_rows if row["city"] == "New York"][0]["temp_c"] == 21
+
+
+def test_high_frequency_minute_window_interval_overrides_source_interval() -> None:
+    from weather_data_feed_service.high_frequency_observations import (
+        _apply_active_minute_window_intervals,
+        _parse_source_minute_window_intervals,
+    )
+
+    rules = _parse_source_minute_window_intervals(["jma_amedas=5-8,15-18,25-28,35-38,45-48,55-58:20"])
+    intervals, active = _apply_active_minute_window_intervals(
+        {"jma_amedas": 300.0, "fmi": 300.0},
+        rules,
+        now_utc=datetime(2026, 7, 9, 4, 37, 12, tzinfo=timezone.utc),
+    )
+
+    assert intervals["jma_amedas"] == 20.0
+    assert intervals["fmi"] == 300.0
+    assert active[0]["source"] == "jma_amedas"
+    assert active[0]["window_start_minute"] == 35.0
+
+
+def test_high_frequency_minute_window_interval_keeps_base_outside_window() -> None:
+    from weather_data_feed_service.high_frequency_observations import (
+        _apply_active_minute_window_intervals,
+        _parse_source_minute_window_intervals,
+    )
+
+    rules = _parse_source_minute_window_intervals(["jma_amedas=5-8,15-18,25-28,35-38,45-48,55-58:20"])
+    intervals, active = _apply_active_minute_window_intervals(
+        {"jma_amedas": 300.0},
+        rules,
+        now_utc=datetime(2026, 7, 9, 4, 39, 0, tzinfo=timezone.utc),
+    )
+
+    assert intervals["jma_amedas"] == 300.0
+    assert active == []

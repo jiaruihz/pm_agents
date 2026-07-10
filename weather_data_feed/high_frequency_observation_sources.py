@@ -502,7 +502,7 @@ def fetch_noaa_madis_hfmetar(city: str, *, settings: HighFrequencyFetchSettings 
         )
         for record in result.records
     ]
-    return _result("noaa_madis_hfmetar", city, "ok" if rows else result.status, rows, start, end, error=result.error, metadata=result.metadata)
+    return _result("noaa_madis_hfmetar", city, "ok" if rows else result.status, rows[-24:], start, end, error=result.error, metadata=result.metadata)
 
 
 def _valid_mgm_value(value: Any) -> float | None:

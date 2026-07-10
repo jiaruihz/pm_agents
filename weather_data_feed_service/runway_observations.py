@@ -21,6 +21,7 @@ from weather_data_feed.runway_sources import (
 )
 from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
 from weather_data_feed_service.io_utils import write_latest_and_daily_jsonl
+from weather_data_feed_service.scheduling import ActiveLocalWindow, filter_jobs_by_local_window
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "runway_observations"
@@ -55,6 +56,10 @@ def _target_date(city: str, now_utc: datetime) -> str:
     if city in CITY_TIMEZONES:
         return now_utc.astimezone(ZoneInfo(timezone_name)).date().isoformat()
     return city_local_date(city, now_utc).isoformat()
+
+
+def _city_timezone_name(city: str) -> str:
+    return CITY_TIMEZONES.get(city, "UTC")
 
 
 def _fetch_job(source: str, city: str, now_utc: datetime, settings: RunwayFetchSettings) -> RunwayFetchResult:
@@ -96,12 +101,17 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     now_utc = parse_now_utc(args.now_utc) if args.now_utc else datetime.now(timezone.utc)
     sources = tuple(args.sources or ["amsc_awos", "amos"])
     only_cities = set(args.cities or [])
-    jobs: list[tuple[str, str]] = []
+    candidates: list[tuple[str, str, dict[str, Any]]] = []
     for source in sources:
         for city in supported_runway_cities(source):
             if only_cities and city not in only_cities:
                 continue
-            jobs.append((source, city))
+            candidates.append((source, city, {"timezone_name": _city_timezone_name(city)}))
+    jobs, skipped_jobs = filter_jobs_by_local_window(
+        candidates,
+        now_utc=now_utc,
+        window=ActiveLocalWindow(args.active_local_start_hour, args.active_local_end_hour),
+    )
     settings = RunwayFetchSettings(timeout_sec=args.timeout_sec)
     results: list[RunwayFetchResult] = []
     with ThreadPoolExecutor(max_workers=max(1, args.max_workers)) as executor:
@@ -143,6 +153,9 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "failed_sources": sum(1 for result in results if result.status in {"fetch_failed", "auth_failed", "source_error"}),
         "sources": list(sources),
         "cities": sorted({city for _source, city in jobs}),
+        "active_local_window": ActiveLocalWindow(args.active_local_start_hour, args.active_local_end_hour).as_payload(),
+        "skipped_inactive_jobs": skipped_jobs,
+        "skipped_inactive_count": len(skipped_jobs),
         "source_statuses": source_statuses,
         "source_errors": source_errors,
     }
@@ -167,6 +180,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sources", nargs="*", default=["amsc_awos", "amos"])
     parser.add_argument("--timeout-sec", type=float, default=8.0)
     parser.add_argument("--max-workers", type=int, default=4)
+    parser.add_argument("--active-local-start-hour", type=float, default=None)
+    parser.add_argument("--active-local-end-hour", type=float, default=None)
     return parser
 
 
