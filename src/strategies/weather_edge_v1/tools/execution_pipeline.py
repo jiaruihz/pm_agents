@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from src.platform.quote_runtime.risk.safety_guard import RiskError, SafetyGuard, SecurityError
 from src.strategies.weather_edge_v1.tools.execution_policy import (
@@ -133,6 +133,12 @@ def normalize_signal(row: Dict[str, Any], *, source_system: str = "weather-predi
         "obs_source": safe_str(row.get("obs_source")) or "obs_source_v1_iem_proxy",
         "model_version": safe_str(row.get("model_version")) or safe_str(row.get("profile")),
         "snapshot_fetched_at_utc": safe_str(row.get("snapshot_fetched_at_utc")),
+        "data_epoch_ref": safe_str(row.get("data_epoch_ref")),
+        "data_epoch_ts_utc": safe_str(row.get("data_epoch_ts_utc")),
+        "next_data_update_due_utc": safe_str(row.get("next_data_update_due_utc")),
+        "cancel_before_data_update_utc": safe_str(row.get("cancel_before_data_update_utc")),
+        "cancel_reason": safe_str(row.get("cancel_reason")),
+        "post_update_reprice_required": bool(row.get("post_update_reprice_required", False)),
     }
     signal_id = safe_str(row.get("signal_id")) or stable_hash(base)
     return {
@@ -219,6 +225,8 @@ class PlannerConfig:
     high_band_shade_wide: int = 2
     high_band_min_edge: float = 0.15
     high_band_size_mult: float = 0.60
+    order_lifecycle_policy: str = ""
+    cancel_buffer_sec: int = 0
 
 
 def _policy_config(config: PlannerConfig) -> ExecutionPolicyConfig:
@@ -357,6 +365,14 @@ def build_trade_plan(
         "entry_price_max": round(eff_max_entry, 6),
         "entry_price_window": f"{eff_min_entry:.2f}-{eff_max_entry:.2f}",
         "execution_policy": safe_str(config.execution_policy),
+        "order_lifecycle_policy": safe_str(config.order_lifecycle_policy),
+        "data_epoch_ref": safe_str(signal.get("data_epoch_ref")),
+        "data_epoch_ts_utc": safe_str(signal.get("data_epoch_ts_utc")),
+        "next_data_update_due_utc": safe_str(signal.get("next_data_update_due_utc")),
+        "cancel_before_data_update_utc": safe_str(signal.get("cancel_before_data_update_utc")),
+        "cancel_buffer_sec": max(0, int(config.cancel_buffer_sec)),
+        "cancel_reason": safe_str(signal.get("cancel_reason")),
+        "post_update_reprice_required": bool(signal.get("post_update_reprice_required", False)),
         "tick_size": round(float(config.tick_size), 6),
         "min_quote_edge": round(float(config.min_quote_edge), 6),
         "max_quote_spread": round(float(config.max_quote_spread), 6),
@@ -409,6 +425,10 @@ def build_trade_plan(
         "risk_reason": "",
         **base,
     }
+    if safe_str(config.order_lifecycle_policy) == "maker_until_data_update":
+        cancel_deadline = safe_str(signal.get("cancel_before_data_update_utc"))
+        plan["expires_at_utc"] = cancel_deadline
+        plan["cancel_reason"] = safe_str(signal.get("cancel_reason")) or "pre_data_update"
     if market_price < eff_min_entry:
         return {
             **plan,
@@ -551,6 +571,15 @@ def _cancel_id(row: Dict[str, Any], order_id: str) -> str:
     )
 
 
+def _expiry_cancel_reason(row: Dict[str, Any]) -> str:
+    explicit = safe_str(row.get("cancel_reason"))
+    if explicit:
+        return explicit
+    if safe_str(row.get("order_lifecycle_policy")) == "maker_until_data_update":
+        return "pre_data_update"
+    return "expired_order_ttl"
+
+
 def cancel_expired_live_orders(
     *,
     live_out: Path,
@@ -562,7 +591,7 @@ def cancel_expired_live_orders(
     existing_cancel_ids = {
         safe_str(row.get("cancel_id"))
         for row in read_jsonl(cancel_out)
-        if safe_str(row.get("cancel_id"))
+        if safe_str(row.get("cancel_id")) and safe_str(row.get("status")) == "cancel_confirmed"
     }
     cancel_rows: List[Dict[str, Any]] = []
     expired_seen = 0
@@ -607,21 +636,47 @@ def cancel_expired_live_orders(
             "bracket": safe_str(row.get("bracket")),
             "token_id": safe_str(row.get("token_id")),
             "expires_at_utc": expires_at.isoformat(),
-            "cancel_reason": "expired_order_ttl",
+            "cancel_reason": _expiry_cancel_reason(row),
+            "order_lifecycle_policy": safe_str(row.get("order_lifecycle_policy")),
+            "data_epoch_ref": safe_str(row.get("data_epoch_ref")),
+            "data_epoch_ts_utc": safe_str(row.get("data_epoch_ts_utc")),
+            "next_data_update_due_utc": safe_str(row.get("next_data_update_due_utc")),
+            "cancel_before_data_update_utc": safe_str(row.get("cancel_before_data_update_utc")),
         }
         try:
             response = live_cancel_fn(order_id)
-            cancel_rows.append({**base, "status": "cancel_submitted", "cancel_response": response})
+            cancel_ok, cancel_status_reason = cancel_response_allows_replacement(response, order_id)
+            if cancel_ok:
+                cancel_rows.append(
+                    {
+                        **base,
+                        "status": "cancel_confirmed",
+                        "cancel_status_reason": cancel_status_reason,
+                        "cancel_response": response,
+                    }
+                )
+                existing_cancel_ids.add(cancel_id)
+            else:
+                cancel_errors += 1
+                cancel_rows.append(
+                    {
+                        **base,
+                        "cancel_id": stable_hash({"cancel_id": cancel_id, "attempted_at_utc": created_at}),
+                        "status": "cancel_error",
+                        "cancel_status_reason": cancel_status_reason,
+                        "cancel_response": response,
+                    }
+                )
         except Exception as exc:  # noqa: BLE001
             cancel_errors += 1
             cancel_rows.append(
                 {
                     **base,
+                    "cancel_id": stable_hash({"cancel_id": cancel_id, "attempted_at_utc": created_at}),
                     "status": "cancel_error",
                     "cancel_error": f"{type(exc).__name__}: {exc}",
                 }
             )
-        existing_cancel_ids.add(cancel_id)
     cancel_result = append_jsonl_dedup(cancel_out, cancel_rows, key_field="cancel_id") if cancel_rows else {
         "written": 0,
         "skipped_existing": 0,
@@ -706,6 +761,14 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "size": to_float(plan.get("size"), 0.0),
         "notional": to_float(plan.get("notional"), 0.0),
         "execution_policy": safe_str(plan.get("execution_policy")),
+        "order_lifecycle_policy": safe_str(plan.get("order_lifecycle_policy")),
+        "data_epoch_ref": safe_str(plan.get("data_epoch_ref")),
+        "data_epoch_ts_utc": safe_str(plan.get("data_epoch_ts_utc")),
+        "next_data_update_due_utc": safe_str(plan.get("next_data_update_due_utc")),
+        "cancel_before_data_update_utc": safe_str(plan.get("cancel_before_data_update_utc")),
+        "cancel_buffer_sec": int(to_float(plan.get("cancel_buffer_sec"), 0.0)),
+        "cancel_reason": safe_str(plan.get("cancel_reason")),
+        "post_update_reprice_required": bool(plan.get("post_update_reprice_required", False)),
         "tick_size": to_float(plan.get("tick_size"), 0.0),
         "min_quote_edge": to_float(plan.get("min_quote_edge"), 0.0),
         "max_quote_spread": to_float(plan.get("max_quote_spread"), 0.0),
@@ -835,6 +898,14 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "notional": to_float(plan.get("notional"), 0.0),
         "posted_notional": round(to_float(response.get("posted_price"), 0.0) * to_float(plan.get("size"), 0.0), 6),
         "execution_policy": safe_str(plan.get("execution_policy")),
+        "order_lifecycle_policy": safe_str(plan.get("order_lifecycle_policy")),
+        "data_epoch_ref": safe_str(plan.get("data_epoch_ref")),
+        "data_epoch_ts_utc": safe_str(plan.get("data_epoch_ts_utc")),
+        "next_data_update_due_utc": safe_str(plan.get("next_data_update_due_utc")),
+        "cancel_before_data_update_utc": safe_str(plan.get("cancel_before_data_update_utc")),
+        "cancel_buffer_sec": int(to_float(plan.get("cancel_buffer_sec"), 0.0)),
+        "cancel_reason": safe_str(plan.get("cancel_reason")),
+        "post_update_reprice_required": bool(plan.get("post_update_reprice_required", False)),
         "tick_size": to_float(plan.get("tick_size"), 0.0),
         "min_quote_edge": to_float(plan.get("min_quote_edge"), 0.0),
         "max_quote_spread": to_float(plan.get("max_quote_spread"), 0.0),
@@ -924,6 +995,36 @@ def live_notional_guard_response(plan: Dict[str, Any], *, reason: str, notional:
         "error_classification": "executor_notional_ceiling",
         "error_reason": reason,
         "error": f"{reason}: plan_notional={notional:.6f} ceiling={ceiling:.6f}",
+        "requested_price": to_float(plan.get("limit_price"), 0.0),
+        "posted_price": 0.0,
+        "quote_status": "rejected",
+        "quote_reason": reason,
+    }
+
+
+def lifecycle_guard_reason(plan: Dict[str, Any]) -> str:
+    if safe_str(plan.get("order_lifecycle_policy")) != "maker_until_data_update":
+        return ""
+    if not bool(plan.get("maker_only", True)):
+        return "maker_until_data_update_requires_maker_only"
+    cancel_deadline = _parse_utc(plan.get("cancel_before_data_update_utc"))
+    expires_at = _parse_utc(plan.get("expires_at_utc"))
+    if cancel_deadline is None:
+        return "missing_cancel_before_data_update_utc"
+    if expires_at is None:
+        return "missing_expires_at_utc"
+    if expires_at != cancel_deadline:
+        return "expires_at_must_equal_cancel_before_data_update_utc"
+    if cancel_deadline <= datetime.now(timezone.utc):
+        return "cancel_before_data_update_utc_not_future"
+    return ""
+
+
+def lifecycle_guard_response(plan: Dict[str, Any], reason: str) -> Dict[str, Any]:
+    return {
+        "error_classification": "order_lifecycle_guard",
+        "error_reason": reason,
+        "error": f"order_lifecycle_guard: {reason}",
         "requested_price": to_float(plan.get("limit_price"), 0.0),
         "posted_price": 0.0,
         "quote_status": "rejected",
@@ -1072,6 +1173,19 @@ def execute_trade_plans(
             continue
         if not allow_duplicate_signal_id and opp_key in existing_live_opportunity_keys | batch_live_opportunity_keys:
             live_skipped_existing_opportunity += 1
+            continue
+        lifecycle_reason = lifecycle_guard_reason(plan)
+        if lifecycle_reason:
+            live_guard_blocks += 1
+            record = build_live_order_record(
+                plan,
+                lifecycle_guard_response(plan, lifecycle_reason),
+                status="blocked",
+            )
+            live_orders.append(record)
+            result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
+            live_result["written"] += result["written"]
+            live_result["skipped_existing"] += result["skipped_existing"]
             continue
         plan_notional = live_plan_notional_usd(plan)
         max_order_notional = max(0.0, float(config.max_live_order_notional_usd))

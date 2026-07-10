@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.strategies.weather_edge_v1.tools.execution_pipeline import (
@@ -8,6 +9,7 @@ from src.strategies.weather_edge_v1.tools.execution_pipeline import (
     PlannerConfig,
     build_trade_plan,
     build_trade_plans_for_signal,
+    cancel_expired_live_orders,
     execute_trade_plans,
     import_signals,
     normalize_signal,
@@ -856,8 +858,133 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(result["cancel_written"], 1)
             rows = [json.loads(line) for line in cancels.read_text().splitlines()]
             self.assertEqual(rows[0]["record_type"], "weather_edge_live_order_cancel")
-            self.assertEqual(rows[0]["status"], "cancel_submitted")
+            self.assertEqual(rows[0]["status"], "cancel_confirmed")
             self.assertEqual(rows[0]["order_id"], "order-1")
+
+    def test_maker_until_data_update_fields_flow_to_plan_and_live_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            deadline = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+            signal = normalize_signal(
+                {
+                    **self._paper_decision(),
+                    "data_epoch_ref": "metar:paris:2026-05-10T12:00Z",
+                    "data_epoch_ts_utc": "2026-05-10T12:00:00+00:00",
+                    "next_data_update_due_utc": "2026-05-10T12:30:00+00:00",
+                    "cancel_before_data_update_utc": deadline,
+                    "post_update_reprice_required": True,
+                }
+            )
+            assert signal is not None
+            plan = build_trade_plan(
+                signal,
+                PlannerConfig(
+                    max_order_notional=2.0,
+                    min_edge=0.10,
+                    live_enabled=True,
+                    order_lifecycle_policy="maker_until_data_update",
+                    cancel_buffer_sec=90,
+                ),
+            )
+            self.assertEqual(plan["expires_at_utc"], deadline)
+            self.assertEqual(plan["cancel_reason"], "pre_data_update")
+
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda _plan: {"order_id": "live-epoch-1"},
+            )
+
+            self.assertEqual(result["live_guard_blocks"], 0)
+            row = json.loads(live.read_text().splitlines()[0])
+            self.assertEqual(row["order_lifecycle_policy"], "maker_until_data_update")
+            self.assertEqual(row["data_epoch_ref"], "metar:paris:2026-05-10T12:00Z")
+            self.assertEqual(row["cancel_before_data_update_utc"], deadline)
+            self.assertEqual(row["expires_at_utc"], deadline)
+
+    def test_live_executor_blocks_maker_until_data_update_without_deadline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(
+                signal,
+                PlannerConfig(
+                    max_order_notional=2.0,
+                    min_edge=0.10,
+                    live_enabled=True,
+                    order_lifecycle_policy="maker_until_data_update",
+                ),
+            )
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda item: calls.append(item) or {"order_id": "should-not-place"},
+            )
+
+            self.assertEqual(calls, [])
+            self.assertEqual(result["live_guard_blocks"], 1)
+            row = json.loads(live.read_text().splitlines()[0])
+            self.assertEqual(row["status"], "blocked")
+            self.assertEqual(row["exchange_response"]["error_reason"], "missing_cancel_before_data_update_utc")
+
+    def test_unconfirmed_expiry_cancel_is_retried(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            live = Path(tmp) / "live.jsonl"
+            cancels = Path(tmp) / "live_cancels.jsonl"
+            live.write_text(
+                json.dumps(
+                    {
+                        "record_type": "weather_edge_live_order",
+                        "execution_id": "exec-epoch-1",
+                        "plan_id": "plan-epoch-1",
+                        "status": "submitted",
+                        "order_lifecycle_policy": "maker_until_data_update",
+                        "cancel_reason": "pre_data_update",
+                        "expires_at_utc": "2020-01-01T00:00:00+00:00",
+                        "cancel_before_data_update_utc": "2020-01-01T00:00:00+00:00",
+                        "exchange_response": {"place": {"orderID": "order-epoch-1"}},
+                    }
+                )
+                + "\n"
+            )
+            calls = []
+
+            def cancel(order_id):
+                calls.append(order_id)
+                if len(calls) == 1:
+                    return {"cancel": {"canceled": [], "not_canceled": {order_id: "temporary failure"}}}
+                return {"cancel": {"canceled": [order_id], "not_canceled": {}}}
+
+            first = cancel_expired_live_orders(
+                live_out=live,
+                cancel_out=cancels,
+                live_cancel_fn=cancel,
+            )
+            second = cancel_expired_live_orders(
+                live_out=live,
+                cancel_out=cancels,
+                live_cancel_fn=cancel,
+            )
+
+            self.assertEqual(first["cancel_errors"], 1)
+            self.assertEqual(second["cancel_errors"], 0)
+            self.assertEqual(calls, ["order-epoch-1", "order-epoch-1"])
+            rows = [json.loads(line) for line in cancels.read_text().splitlines()]
+            self.assertEqual([row["status"] for row in rows], ["cancel_error", "cancel_confirmed"])
+            self.assertEqual(rows[-1]["cancel_reason"], "pre_data_update")
 
 
 if __name__ == "__main__":
