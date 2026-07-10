@@ -145,6 +145,25 @@ export interface StrategyDefinitionDetail {
   instances: StrategyInstanceRow[];
 }
 
+export interface StrategyInstanceExecutionSummary {
+  order_count: number;
+  fill_count: number;
+  unfilled_order_count: number;
+  filled_cost_usd: number | null;
+  last_order_ts_utc: string | null;
+  last_fill_ts_utc: string | null;
+  fact_trade_count: number;
+  settled_fill_count: number;
+  realized_pnl_usd: number | null;
+  open_mtm_usd: number | null;
+}
+
+export interface StrategyInstanceDetail {
+  instance: StrategyInstanceRow;
+  execution_summary: StrategyInstanceExecutionSummary;
+  control_log: Array<Record<string, unknown>>;
+}
+
 export interface UniverseRow {
   universe_id: string;
   name: string;

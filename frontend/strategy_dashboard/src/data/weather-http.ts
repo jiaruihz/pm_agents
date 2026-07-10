@@ -1,5 +1,5 @@
 // HTTP client for the weather dashboard FastAPI backend
-import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail, StrategyDefinitionRow, StrategyDefinitionDetail, StrategyInstanceRow } from "./weather-types";
+import type { RunSummary, RunDetail, LiveSummary, LivePosition, ExecutionGapRow, TradeDrilldown, TradeRow, ConfigRow, UniverseRow, CompareRun, StrategyRow, EquityPoint, StrategyAnalytics, PositionRow, FunnelRow, PendingOrderRow, StrategyOrderRow, MarkToMarketSummary, WeatherEdgeV2Latest, StrategyRuntimeOverview, StrategyRuntimeDetail, StrategyDefinitionRow, StrategyDefinitionDetail, StrategyInstanceRow, StrategyInstanceDetail } from "./weather-types";
 import type { CopyTradeSummary, CopyTradeWalletDetail, CopyTradeWalletList } from "./copy-trade-types";
 import type { ProbeHealthResponse, ProbeDetail, ResearchLinesResponse, ResearchLineDetail, GlossaryResponse, LiveBookResponse, LiveBookStrategiesResponse, DataSourcesResponse, OrderBlotterResponse } from "./v2-types";
 
@@ -128,7 +128,7 @@ export const weatherApi = {
     return get("/strategy-instances", params);
   },
 
-  getStrategyInstance(instanceId: string): Promise<{ instance: StrategyInstanceRow; control_log: Array<Record<string, unknown>> }> {
+  getStrategyInstance(instanceId: string): Promise<StrategyInstanceDetail> {
     return get(`/strategy-instances/${encodeURIComponent(instanceId)}`);
   },
 

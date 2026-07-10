@@ -168,6 +168,36 @@ def get_strategy_instance(instance_id: str, db: Db):
     instance = next((row for row in rows if row["instance_id"] == instance_id), None)
     if instance is None:
         raise HTTPException(status_code=404, detail=f"Strategy instance {instance_id} not found")
+    execution = db.execute(
+        """
+        SELECT
+            COUNT(DISTINCT o.execution_id) AS order_count,
+            COUNT(DISTINCT f.fill_id) AS fill_count,
+            COUNT(DISTINCT CASE WHEN f.fill_id IS NULL THEN o.execution_id END) AS unfilled_order_count,
+            SUM(CASE WHEN f.fill_id IS NOT NULL
+                THEN CAST(f.filled_shares AS REAL) * CAST(f.filled_price AS REAL) + CAST(f.fees_usd AS REAL)
+                ELSE 0 END) AS filled_cost_usd,
+            MAX(o.placed_at_utc) AS last_order_ts_utc,
+            MAX(f.filled_at_utc) AS last_fill_ts_utc
+        FROM orders o
+        LEFT JOIN order_instance_lineage oil ON oil.execution_id=o.execution_id
+        LEFT JOIN fills f ON f.execution_id=o.execution_id
+        WHERE COALESCE(o.instance_id, oil.instance_id)=?
+        """,
+        (instance_id,),
+    ).fetchone()
+    trade = db.execute(
+        """
+        SELECT
+            COUNT(*) AS fact_trade_count,
+            SUM(CASE WHEN settled=1 THEN 1 ELSE 0 END) AS settled_fill_count,
+            SUM(CASE WHEN settled=1 THEN pnl_usd_at_fill ELSE 0 END) AS realized_pnl_usd,
+            SUM(CASE WHEN settled=0 THEN unrealized_pnl_mid ELSE 0 END) AS open_mtm_usd
+        FROM fact_trades
+        WHERE instance_id=?
+        """,
+        (instance_id,),
+    ).fetchone()
     controls = [
         dict(row)
         for row in db.execute(
@@ -175,7 +205,14 @@ def get_strategy_instance(instance_id: str, db: Db):
             (instance_id,),
         ).fetchall()
     ]
-    return {"instance": instance, "control_log": controls}
+    return {
+        "instance": instance,
+        "execution_summary": {
+            **dict(execution),
+            **dict(trade),
+        },
+        "control_log": controls,
+    }
 
 
 # ── Strategies (per-config aggregated stats) ──────────────────────────────────

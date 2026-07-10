@@ -226,6 +226,13 @@ def test_order_blotter_filters_by_strategy_instance(client, api_db):
     assert data["filters"]["config_id"] is None
     assert data["rows"][0]["strategy_instance"] == "low_price_yes_lottery_tiny_live_v1"
 
+    instance = client.get("/api/strategy-instances/low_price_yes_lottery_tiny_live_v1")
+    assert instance.status_code == 200
+    summary = instance.json()["execution_summary"]
+    assert summary["order_count"] == 1
+    assert summary["fill_count"] == 1
+    assert summary["fact_trade_count"] == 1
+
 
 def test_strategy_management_exposes_definition_config_and_instance(client, api_db):
     _seed_runtime_config_refs(api_db)
