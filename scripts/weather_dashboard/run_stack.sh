@@ -274,7 +274,8 @@ if [[ $REBUILD -eq 1 ]]; then
     for order_file in \
       "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl" \
       "$REPO_ROOT/runtime/weather_edge_v1/live/low_price_yes_take_profit_exit_v1_orders.jsonl" \
-      "${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}/output/fast_source_prev_no_trial/orders.jsonl"
+      "${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}/output/fast_source_prev_no_trial/orders.jsonl" \
+      "${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}/output/hko_official_tminus1_no_live/orders.jsonl"
     do
       if [[ -f "$order_file" ]]; then
         STRATEGY_RUNTIME_ARGS+=(--order-file "$order_file")

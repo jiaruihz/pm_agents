@@ -21,6 +21,8 @@ def strategy_key_for_params(params: dict[str, Any]) -> str | None:
         return "forecast_quality.low_price_yes_lottery"
     if policy.startswith("fast_source_prev_no"):
         return "latency_arb.fast_source_prev_no"
+    if policy.startswith("hko_official_tminus1_no"):
+        return "latency_arb.hko_official_tminus1_no"
     if policy.startswith("regime_routed_no"):
         return "reheat_risk.regime_routed_no"
     if policy.startswith("theta_current_yes"):

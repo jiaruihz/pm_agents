@@ -838,6 +838,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         active_events.append(event)
 
     for old in state.get("active_events") or []:
+        # A new local market day must never keep quoting an expired prior-day
+        # signal against today's event slug.
+        if str(old.get("target_date") or "") != args.target_date:
+            continue
         expires_at = parse_dt(old.get("expires_at_utc"))
         if expires_at and expires_at > now:
             active_events.append(old)
@@ -968,7 +972,7 @@ def default_target_date() -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--target-date", default=default_target_date())
+    parser.add_argument("--target-date", default="")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--high-frequency-latest", default=str(HIGH_FREQUENCY_LATEST))
     parser.add_argument("--high-frequency-jsonl", default=str(HIGH_FREQUENCY_JSONL))
@@ -1016,12 +1020,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+    auto_target_date = not bool(args.target_date)
     if not args.loop:
+        if auto_target_date:
+            args.target_date = default_target_date()
         print(json.dumps(run_once(args), ensure_ascii=False, sort_keys=True))
         return 0
     while True:
         started = time.monotonic()
         try:
+            if auto_target_date:
+                args.target_date = default_target_date()
             latest = run_once(args)
             print(json.dumps({k: v for k, v in latest.items() if k != "latest_quote_rows"}, ensure_ascii=False, sort_keys=True), flush=True)
         except Exception as exc:  # noqa: BLE001

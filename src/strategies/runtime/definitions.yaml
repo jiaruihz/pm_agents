@@ -10,6 +10,12 @@
   description: 利用更快的观测或市场更新，交易上一温度档 NO 的短时定价偏差。
   portfolio_status: forward_live
   portfolio_note: 当前本机前向取证线；此刻有 healthy running instance，仍按小仓和执行质量评估。
+- strategy_key: latency_arb.hko_official_tminus1_no
+  family: latency_arb.hko_official_tminus1_no
+  strategy_name: HKO 官方源前档 NO
+  description: 仅用香港天文台官方站实时温度与 Daily Extract floor 结算规则，在已确认 T 后买 exact T-1 NO。
+  portfolio_status: forward_live
+  portfolio_note: HK 专用 tiny-live 前向取证；不消费 VHHH/METAR，不买当前档 YES。
 - strategy_key: latency_arb.official_running_extreme_stale_book
   family: latency_arb.official_running_extreme_stale_book
   strategy_name: 官方实况极值陈旧盘口

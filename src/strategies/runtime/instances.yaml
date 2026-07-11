@@ -338,6 +338,36 @@
     - events.jsonl
   - - quote_snapshots
     - quote_snapshots.jsonl
+- strategy_instance: hko_official_tminus1_no_live_v1
+  display_name: HKO official T-1 NO tiny live
+  family: latency_arb.hko_official_tminus1_no
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_local
+  config_id: hko_official_tminus1_no_live_v1
+  runtime_dir: /Volumes/jrs/weather_data_feed_service_runtime/output/hko_official_tminus1_no_live
+  summary_file: latest_summary.json
+  primary_journal: opportunities.jsonl
+  live_order_file: orders.jsonl
+  paper_order_file: null
+  telemetry_file: events.jsonl
+  start_script: scripts/ops/start_weather_hko_official_tminus1_no_live.sh
+  tmux_session: weather_hko_official_tminus1_no_live
+  notes: HK-only live executor. HKO Observatory floor(T) locks T-1 exact-high NO
+    against HKO Daily Extract settlement. Never consume VHHH/METAR or buy current YES.
+  default_health: unknown
+  expected_live: true
+  artifact_files:
+  - - latest
+    - latest.json
+  - - state
+    - state.json
+  - - events
+    - events.jsonl
+  - - opportunities
+    - opportunities.jsonl
+  - - orders
+    - orders.jsonl
 - strategy_instance: hko_running_min_stale_book_shadow_v1
   display_name: HKO running-min stale-book shadow
   family: latency_arb.official_running_extreme_stale_book
