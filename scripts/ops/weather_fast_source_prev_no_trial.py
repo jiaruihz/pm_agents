@@ -398,14 +398,19 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             event_rows.append(opportunity)
         live_key = "|".join([city, target_date, str(t_minus_1), str(token.no_token_id), str(src.get("source_obs_ts_utc"))])
         if args.live and args.confirm_live and city in set(args.live_cities or []) and not live_blockers and live_key not in live_order_keys:
-            limit_price = float(args.max_no_ask)
+            # Polymarket FOK BUY conserves USDC (makerAmount = size * limit_price), so pricing
+            # the order at the loose max_no_ask ceiling overspends and overbuys shares whenever
+            # the book is cheaper than the ceiling. Price at the current best ask plus a small
+            # cushion (so the FOK still clears on a minor uptick), capped by max_no_ask, to buy
+            # ~size shares instead of ceiling/best_ask times as many.
+            limit_price = round(min(float(args.max_no_ask), float(best_ask) + float(args.limit_price_cushion)), 2)
             order_row = {
                 **opportunity,
                 "order_side": "BUY",
                 "limit_price": limit_price,
                 "size": floor_to_places(city_max_shares_per_trade, 2),
                 "submitted_notional_usd": round(city_max_shares_per_trade * limit_price, 6),
-                "limit_price_policy": "max_no_ask",
+                "limit_price_policy": "best_ask_plus_cushion_capped_by_max_no_ask",
                 "live_attempted": True,
                 "live_attempt_ts_utc": iso(),
             }
@@ -522,6 +527,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-shares-per-market-by-city", action="append", default=[])
     parser.add_argument("--max-shares-per-city-day", type=float, default=0.0, help=argparse.SUPPRESS)
     parser.add_argument("--max-no-ask", type=float, default=0.92)
+    parser.add_argument(
+        "--limit-price-cushion",
+        type=float,
+        default=0.02,
+        help="Added to best_ask to form the FOK BUY limit price (capped by --max-no-ask). Keeps filled shares near size instead of ceiling/ask times as many.",
+    )
     parser.add_argument("--max-source-age-min", type=float, default=15.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
     parser.add_argument("--market-proxy", default=market_proxy_url(None))
