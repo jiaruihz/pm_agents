@@ -1,0 +1,8 @@
+field_family,source,status,reason
+captured_market_ladder,paper_snapshots records at decision_snapshot_ts_utc,allowed_if_complete_quote_ladder,captured contemporaneously; the audit verifies the entire sibling set and direct quote availability
+captured_path_observation,paper_snapshots metar_current_max_f/metar_latest_ts_utc,allowed_when_present,the saved state has a decision timestamp and source observation timestamp; missing values remain missing
+captured_forecast,paper_snapshots forecast_* fields,allowed_with_lineage_flag,"the value was saved at the decision snapshot, but model_init_utc_estimated is not an authentic run timestamp"
+atlas_or_p3_historical_forecast_backfill,intraday atlas/P3 materializations,excluded,the V2 plan explicitly disallows historical fields reconstructed without an authentic as-of lineage
+full_window_city_bias,all-date city outcomes,excluded,out-of-fold shrinkage may be tested only after the absolute PIT denominator exists; no full-window city memory
+final_winning_bracket_and_settlement_outcomes,P0 labels / settlement_outcomes,label_or_audit_only,"used only as the target or to audit collector completeness, never as a model feature"
+relative_current_d1_d2_tail,P0/exact-book bridge/coherent calibrator,excluded_as_absolute_coordinate,relative buckets re-anchor during a city-day and cannot be renamed into a fixed settlement ladder

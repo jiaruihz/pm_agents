@@ -1,0 +1,317 @@
+{
+  "blocker": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+  "comparisons": [
+    {
+      "date_block_ci": "NA",
+      "date_equal_brier": null,
+      "date_equal_logloss": null,
+      "model": "market_full_ladder",
+      "reason": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+      "roi_fee_adjusted": null,
+      "status": "not_run_data_not_answerable"
+    },
+    {
+      "date_block_ci": "NA",
+      "date_equal_brier": null,
+      "date_equal_logloss": null,
+      "model": "current_coherent_base",
+      "reason": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+      "roi_fee_adjusted": null,
+      "status": "not_run_data_not_answerable"
+    },
+    {
+      "date_block_ci": "NA",
+      "date_equal_brier": null,
+      "date_equal_logloss": null,
+      "model": "global_physical_hazard",
+      "reason": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+      "roi_fee_adjusted": null,
+      "status": "not_run_data_not_answerable"
+    },
+    {
+      "date_block_ci": "NA",
+      "date_equal_brier": null,
+      "date_equal_logloss": null,
+      "model": "market_plus_global_hazard_residual",
+      "reason": "absolute PIT denominator lacks pre-cutoff inner walk-forward support: 0 dates < 5",
+      "roi_fee_adjusted": null,
+      "status": "not_run_data_not_answerable"
+    }
+  ],
+  "counts": {
+    "absolute_complete_quoted_states": 14,
+    "absolute_eligible_states": 13,
+    "fixed_complete_ladder_city_days": 0,
+    "p0_states": 8347,
+    "post_cutoff_absolute_dates": 2,
+    "post_cutoff_absolute_rows": 13,
+    "pre_cutoff_absolute_dates": 0,
+    "pre_cutoff_absolute_rows": 0,
+    "snapshot_matched_states": 834
+  },
+  "daily": [
+    {
+      "absolute_eligible_states": 0,
+      "cities": 2,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 9,
+      "target_date": "2026-06-19"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 5,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": true,
+      "snapshot_matched_states": 13,
+      "target_date": "2026-06-20"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 10,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 10,
+      "target_date": "2026-06-21"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 9,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 9,
+      "target_date": "2026-06-22"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 5,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 5,
+      "target_date": "2026-06-25"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 2,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 3,
+      "target_date": "2026-06-26"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 10,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 10,
+      "target_date": "2026-06-27"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 16,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 62,
+      "target_date": "2026-06-29"
+    },
+    {
+      "absolute_eligible_states": 1,
+      "cities": 30,
+      "complete_identity_states": 2,
+      "complete_quoted_states": 2,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 155,
+      "target_date": "2026-06-30"
+    },
+    {
+      "absolute_eligible_states": 12,
+      "cities": 29,
+      "complete_identity_states": 12,
+      "complete_quoted_states": 12,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 132,
+      "target_date": "2026-07-01"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 9,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 28,
+      "target_date": "2026-07-02"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 19,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 79,
+      "target_date": "2026-07-03"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 26,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 155,
+      "target_date": "2026-07-05"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 18,
+      "complete_identity_states": 0,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 106,
+      "target_date": "2026-07-06"
+    },
+    {
+      "absolute_eligible_states": 0,
+      "cities": 10,
+      "complete_identity_states": 1,
+      "complete_quoted_states": 0,
+      "pre_cutoff": false,
+      "snapshot_matched_states": 58,
+      "target_date": "2026-07-07"
+    }
+  ],
+  "funnel": [
+    {
+      "cities": 36,
+      "dates": 48,
+      "note": "relative current/d1/d2/tail; not an absolute ladder",
+      "rows": 8347,
+      "stage": "p0_relative_state_universe"
+    },
+    {
+      "cities": 36,
+      "dates": 48,
+      "note": "P0 decision-state lineage",
+      "rows": 8347,
+      "stage": "has_decision_snapshot_timestamp"
+    },
+    {
+      "cities": 36,
+      "dates": 15,
+      "note": "captured paper snapshot at matching Beijing wall-clock minute",
+      "rows": 834,
+      "stage": "snapshot_path_matched"
+    },
+    {
+      "cities": 8,
+      "dates": 3,
+      "note": "after-the-fact settlement inventory audit only",
+      "rows": 15,
+      "stage": "complete_identity_ladder_audit"
+    },
+    {
+      "cities": 7,
+      "dates": 2,
+      "note": "all audited siblings have a direct/cross-side YES quote",
+      "rows": 14,
+      "stage": "complete_quoted_absolute_ladder"
+    },
+    {
+      "cities": 6,
+      "dates": 2,
+      "note": "complete quote + ordered anchors + final label present; label not a feature",
+      "rows": 13,
+      "stage": "absolute_eligible_with_label"
+    },
+    {
+      "cities": 0,
+      "dates": 0,
+      "note": "at least two matched states; every state complete-quoted; one identical absolute signature",
+      "rows": 0,
+      "stage": "fixed_complete_ladder_city_days"
+    },
+    {
+      "cities": 0,
+      "dates": 0,
+      "note": "requires at least 5 dates for inner walk-forward",
+      "rows": 0,
+      "stage": "pre_cutoff_absolute_eligible"
+    }
+  ],
+  "generated_at_utc": "2026-07-11T03:17:33+00:00",
+  "model_fit_performed": false,
+  "parameters": {
+    "fee_formula": "0.05 * price * (1 - price)",
+    "fee_helper": "scripts.analysis.reheat_risk.research_tmax_target_book_v2._fee",
+    "min_inner_train_dates": 5,
+    "outer_fold": "target_date",
+    "selection_metric": "date_equal_exact_bracket_logloss_then_brier",
+    "train_cutoff": "2026-06-21"
+  },
+  "pit_feature_audit": [
+    {
+      "field_family": "captured_market_ladder",
+      "reason": "captured contemporaneously; the audit verifies the entire sibling set and direct quote availability",
+      "source": "paper_snapshots records at decision_snapshot_ts_utc",
+      "status": "allowed_if_complete_quote_ladder"
+    },
+    {
+      "field_family": "captured_path_observation",
+      "reason": "the saved state has a decision timestamp and source observation timestamp; missing values remain missing",
+      "source": "paper_snapshots metar_current_max_f/metar_latest_ts_utc",
+      "status": "allowed_when_present"
+    },
+    {
+      "field_family": "captured_forecast",
+      "reason": "the value was saved at the decision snapshot, but model_init_utc_estimated is not an authentic run timestamp",
+      "source": "paper_snapshots forecast_* fields",
+      "status": "allowed_with_lineage_flag"
+    },
+    {
+      "field_family": "atlas_or_p3_historical_forecast_backfill",
+      "reason": "the V2 plan explicitly disallows historical fields reconstructed without an authentic as-of lineage",
+      "source": "intraday atlas/P3 materializations",
+      "status": "excluded"
+    },
+    {
+      "field_family": "full_window_city_bias",
+      "reason": "out-of-fold shrinkage may be tested only after the absolute PIT denominator exists; no full-window city memory",
+      "source": "all-date city outcomes",
+      "status": "excluded"
+    },
+    {
+      "field_family": "final_winning_bracket_and_settlement_outcomes",
+      "reason": "used only as the target or to audit collector completeness, never as a model feature",
+      "source": "P0 labels / settlement_outcomes",
+      "status": "label_or_audit_only"
+    },
+    {
+      "field_family": "relative_current_d1_d2_tail",
+      "reason": "relative buckets re-anchor during a city-day and cannot be renamed into a fixed settlement ladder",
+      "source": "P0/exact-book bridge/coherent calibrator",
+      "status": "excluded_as_absolute_coordinate"
+    }
+  ],
+  "roi_performed": false,
+  "scope": "offline absolute-ladder data answerability audit only",
+  "snapshot_inventory": {
+    "/Users/deepsleep/projects/pm_agents/runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots": 480,
+    "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots": 780
+  },
+  "sources": {
+    "coherent_baseline": "docs/analysis/2026-07/generated/tmax_coherent_expression_calibrator_v1/coherent_predictions.csv",
+    "p0_relative_states": "docs/analysis/2026-07/generated/tmax_distribution_p0_anchor_scorecard_v1/scored_rows.csv",
+    "paper_snapshot_roots": [
+      "/Users/deepsleep/projects/pm_agents/runtime/n100_recovery_20260705/weather_data_feed_service_runtime/output/paper_snapshots",
+      "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"
+    ],
+    "settlement_outcomes": "runtime/weather.db"
+  },
+  "verdict": "kill_current_historical_absolute_ladder_experiment_continue_forward_collection"
+}

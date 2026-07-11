@@ -1,0 +1,9 @@
+stage,rows,dates,cities,note
+p0_relative_state_universe,8347,48,36,relative current/d1/d2/tail; not an absolute ladder
+has_decision_snapshot_timestamp,8347,48,36,P0 decision-state lineage
+snapshot_path_matched,834,15,36,captured paper snapshot at matching Beijing wall-clock minute
+complete_identity_ladder_audit,15,3,8,after-the-fact settlement inventory audit only
+complete_quoted_absolute_ladder,14,2,7,all audited siblings have a direct/cross-side YES quote
+absolute_eligible_with_label,13,2,6,complete quote + ordered anchors + final label present; label not a feature
+fixed_complete_ladder_city_days,0,0,0,at least two matched states; every state complete-quoted; one identical absolute signature
+pre_cutoff_absolute_eligible,0,0,0,requires at least 5 dates for inner walk-forward
