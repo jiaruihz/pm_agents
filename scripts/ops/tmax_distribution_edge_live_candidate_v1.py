@@ -227,7 +227,13 @@ def latest_snapshot_path(explicit: str = "", snapshot_dir: str = "") -> Path | N
         if not directory.exists():
             continue
         for path in directory.glob("snapshot_*.json"):
-            mtime = path.stat().st_mtime
+            # The producer publishes snapshots concurrently. A directory entry can
+            # disappear between glob() and stat() during an atomic replace/cleanup;
+            # that one transient file must not hide the other complete snapshots.
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
             if newest is None or mtime > newest[0]:
                 newest = (mtime, path)
     return newest[1] if newest else None
@@ -347,6 +353,11 @@ def source_relation_to_snapshot(detect_dt: datetime | None, snapshot_dt: datetim
     return "newer_than_snapshot"
 
 
+def source_known_by_snapshot(relation: str) -> bool:
+    """Return whether a latest-file row was observable at decision time."""
+    return relation == "known_by_snapshot"
+
+
 def enrich_source_context(state_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     if state_df.empty:
         return state_df, {"status": "empty_state"}
@@ -375,27 +386,33 @@ def enrich_source_context(state_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[st
             detect_dt = parse_utc(hf.get("local_detect_ts_utc") or hf.get("fetched_at_utc"))
             obs_dt = parse_utc(hf.get("observation_time_utc"))
             relation = source_relation_to_snapshot(detect_dt, snapshot_dt)
+            known_by_snapshot = source_known_by_snapshot(relation)
+            active_temp = hf_temp if known_by_snapshot else math.nan
+            active_round = hf_round if known_by_snapshot else None
             counters[f"hf_{relation}"] += 1
             row.update(
                 {
-                    "high_freq_context_status": "ok",
-                    "high_freq_source": safe_str(hf.get("source")),
-                    "high_freq_source_kind": safe_str(hf.get("source_kind")),
-                    "high_freq_source_status": safe_str(hf.get("source_status")),
-                    "high_freq_station": safe_str(hf.get("station")),
+                    "high_freq_context_status": "ok" if known_by_snapshot else "unavailable_asof",
+                    "high_freq_source": safe_str(hf.get("source")) if known_by_snapshot else "",
+                    "high_freq_source_kind": safe_str(hf.get("source_kind")) if known_by_snapshot else "",
+                    "high_freq_source_status": safe_str(hf.get("source_status")) if known_by_snapshot else "",
+                    "high_freq_station": safe_str(hf.get("station")) if known_by_snapshot else "",
                     "high_freq_detect_ts_utc": detect_dt.isoformat() if detect_dt else "",
                     "high_freq_obs_ts_utc": obs_dt.isoformat() if obs_dt else "",
                     "high_freq_relation_to_snapshot": relation,
-                    "high_freq_obs_age_min_at_snapshot": (snapshot_dt - obs_dt).total_seconds() / 60.0 if snapshot_dt and obs_dt else math.nan,
+                    "high_freq_obs_age_min_at_snapshot": (snapshot_dt - obs_dt).total_seconds() / 60.0 if known_by_snapshot and snapshot_dt and obs_dt else math.nan,
                     "high_freq_detect_lag_min_vs_snapshot": (detect_dt - snapshot_dt).total_seconds() / 60.0 if snapshot_dt and detect_dt else math.nan,
-                    "high_freq_temp_native": hf_temp,
-                    "high_freq_temp_round_native": hf_round,
-                    "high_freq_minus_current_native": hf_temp - current_native if math.isfinite(hf_temp) and math.isfinite(current_native) else math.nan,
-                    "high_freq_minus_running_native": hf_temp - running_native if math.isfinite(hf_temp) and math.isfinite(running_native) else math.nan,
-                    "high_freq_round_minus_running_round": hf_round - running_round if hf_round is not None and running_round is not None else math.nan,
-                    "high_freq_implies_up": bool(hf_round is not None and running_round is not None and hf_round > running_round),
-                    "high_freq_implies_d1_cross": bool(hf_round is not None and d1_interval is not None and hf_round >= d1_interval[0]),
-                    "high_freq_implies_d2_cross": bool(hf_round is not None and d2_interval is not None and hf_round >= d2_interval[0]),
+                    "high_freq_temp_native": active_temp,
+                    "high_freq_temp_round_native": active_round,
+                    "high_freq_minus_current_native": active_temp - current_native if math.isfinite(active_temp) and math.isfinite(current_native) else math.nan,
+                    "high_freq_minus_running_native": active_temp - running_native if math.isfinite(active_temp) and math.isfinite(running_native) else math.nan,
+                    "high_freq_round_minus_running_round": active_round - running_round if active_round is not None and running_round is not None else math.nan,
+                    "high_freq_implies_up": bool(active_round is not None and running_round is not None and active_round > running_round),
+                    "high_freq_implies_d1_cross": bool(active_round is not None and d1_interval is not None and active_round >= d1_interval[0]),
+                    "high_freq_implies_d2_cross": bool(active_round is not None and d2_interval is not None and active_round >= d2_interval[0]),
+                    "high_freq_latest_source": safe_str(hf.get("source")),
+                    "high_freq_latest_temp_native": hf_temp,
+                    "high_freq_latest_temp_round_native": hf_round,
                 }
             )
         else:
@@ -408,19 +425,23 @@ def enrich_source_context(state_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[st
             src_detect = parse_utc(src.get("local_detect_ts_utc") or src.get("source_fetch_end_utc") or src.get("ts_utc"))
             src_report = parse_utc(src.get("source_report_ts_utc") or src.get("ts_utc"))
             relation = source_relation_to_snapshot(src_detect, snapshot_dt)
+            known_by_snapshot = source_known_by_snapshot(relation)
             counters[f"source_event_{relation}"] += 1
             row.update(
                 {
-                    "source_event_context_status": "ok",
-                    "source_event_source": safe_str(src.get("source") or src.get("live_observation_source")),
-                    "source_event_station": safe_str(src.get("station")),
-                    "source_event_changed_since_last": bool(src.get("changed_since_last")),
+                    "source_event_context_status": "ok" if known_by_snapshot else "unavailable_asof",
+                    "source_event_source": safe_str(src.get("source") or src.get("live_observation_source")) if known_by_snapshot else "",
+                    "source_event_station": safe_str(src.get("station")) if known_by_snapshot else "",
+                    "source_event_changed_since_last": bool(src.get("changed_since_last")) if known_by_snapshot else False,
                     "source_event_detect_ts_utc": src_detect.isoformat() if src_detect else "",
                     "source_event_report_ts_utc": src_report.isoformat() if src_report else "",
                     "source_event_relation_to_snapshot": relation,
-                    "source_event_temp_native": src_temp,
-                    "source_event_temp_round_native": arith_round(src_temp),
-                    "source_event_age_min_at_snapshot": (snapshot_dt - src_report).total_seconds() / 60.0 if snapshot_dt and src_report else math.nan,
+                    "source_event_temp_native": src_temp if known_by_snapshot else math.nan,
+                    "source_event_temp_round_native": arith_round(src_temp) if known_by_snapshot else None,
+                    "source_event_age_min_at_snapshot": (snapshot_dt - src_report).total_seconds() / 60.0 if known_by_snapshot and snapshot_dt and src_report else math.nan,
+                    "source_event_latest_source": safe_str(src.get("source") or src.get("live_observation_source")),
+                    "source_event_latest_temp_native": src_temp,
+                    "source_event_latest_temp_round_native": arith_round(src_temp),
                 }
             )
         else:
@@ -431,17 +452,27 @@ def enrich_source_context(state_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[st
         if forecast:
             forecast_dt = parse_utc(forecast.get("snapshot_ts_utc") or forecast.get("generated_at_utc"))
             relation = source_relation_to_snapshot(forecast_dt, snapshot_dt)
+            known_by_snapshot = source_known_by_snapshot(relation)
             gfs_max = forecast_model_max_native(forecast, "GFS", unit)
             ecmwf_max = forecast_model_max_native(forecast, "ECMWF", unit)
+            active_gfs_max = gfs_max if known_by_snapshot else to_float(row.get("gfs_forecast_max_native"), math.nan)
+            active_ecmwf_max = ecmwf_max if known_by_snapshot else to_float(row.get("ecmwf_forecast_max_native"), math.nan)
+            active_gfs_gap = gfs_max - running_native if known_by_snapshot and math.isfinite(gfs_max) else to_float(row.get("gfs_gap_to_running_native"), math.nan)
+            active_ecmwf_gap = ecmwf_max - running_native if known_by_snapshot and math.isfinite(ecmwf_max) else to_float(row.get("ecmwf_gap_to_running_native"), math.nan)
             row.update(
                 {
-                    "forecast_enrichment_status": safe_str(forecast.get("status")) or "ok",
+                    "forecast_enrichment_status": (safe_str(forecast.get("status")) or "ok") if known_by_snapshot else "unavailable_asof",
                     "forecast_enrichment_snapshot_ts_utc": forecast_dt.isoformat() if forecast_dt else "",
                     "forecast_enrichment_relation_to_snapshot": relation,
-                    "gfs_forecast_max_native": gfs_max,
-                    "ecmwf_forecast_max_native": ecmwf_max,
-                    "gfs_gap_to_running_native": gfs_max - running_native if math.isfinite(gfs_max) else math.nan,
-                    "ecmwf_gap_to_running_native": ecmwf_max - running_native if math.isfinite(ecmwf_max) else math.nan,
+                    "gfs_forecast_max_native": active_gfs_max,
+                    "ecmwf_forecast_max_native": active_ecmwf_max,
+                    "gfs_gap_to_running_native": active_gfs_gap,
+                    "ecmwf_gap_to_running_native": active_ecmwf_gap,
+                    "forecast_enrichment_latest_status": safe_str(forecast.get("status")) or "ok",
+                    "gfs_forecast_max_native_latest": gfs_max,
+                    "ecmwf_forecast_max_native_latest": ecmwf_max,
+                    "gfs_gap_to_running_native_latest": gfs_max - running_native if math.isfinite(gfs_max) else math.nan,
+                    "ecmwf_gap_to_running_native_latest": ecmwf_max - running_native if math.isfinite(ecmwf_max) else math.nan,
                 }
             )
             counters[f"forecast_enrichment_{relation}"] += 1
@@ -1233,6 +1264,11 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
         "forecast_enrichment_status",
         "forecast_enrichment_snapshot_ts_utc",
         "forecast_enrichment_relation_to_snapshot",
+        "forecast_enrichment_latest_status",
+        "gfs_forecast_max_native_latest",
+        "ecmwf_forecast_max_native_latest",
+        "gfs_gap_to_running_native_latest",
+        "ecmwf_gap_to_running_native_latest",
         "forecast_peak_hour_local",
         "forecast_peak_delta_hours_local",
         "current_bracket",
@@ -1272,6 +1308,9 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
         "high_freq_implies_up",
         "high_freq_implies_d1_cross",
         "high_freq_implies_d2_cross",
+        "high_freq_latest_source",
+        "high_freq_latest_temp_native",
+        "high_freq_latest_temp_round_native",
         "source_event_context_status",
         "source_event_source",
         "source_event_station",
@@ -1282,6 +1321,9 @@ def candidate_base(item: dict[str, Any]) -> dict[str, Any]:
         "source_event_temp_native",
         "source_event_temp_round_native",
         "source_event_age_min_at_snapshot",
+        "source_event_latest_source",
+        "source_event_latest_temp_native",
+        "source_event_latest_temp_round_native",
     ]
     out = {k: item.get(k) for k in fields if k in item}
     out.update(

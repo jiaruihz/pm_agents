@@ -1,12 +1,32 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
 
 from scripts.ops import tmax_distribution_edge_live_candidate_v1 as runner
 from weather_data_feed.observation_sources.fetchers import aviationweather_sky_code, relative_humidity_pct
+
+
+def test_latest_snapshot_ignores_entry_that_disappears_during_scan(
+    tmp_path, monkeypatch
+) -> None:
+    complete = tmp_path / "snapshot_20260711_1600.json"
+    disappearing = tmp_path / "snapshot_20260711_1615.json"
+    complete.write_text("{}", encoding="utf-8")
+    disappearing.write_text("{}", encoding="utf-8")
+    original_stat = Path.stat
+
+    def concurrent_stat(path: Path, *args, **kwargs):
+        if path == disappearing:
+            raise FileNotFoundError(path)
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", concurrent_stat)
+
+    assert runner.latest_snapshot_path(snapshot_dir=str(tmp_path)) == complete
 
 
 def test_tail_aware_running_value_mapping() -> None:
@@ -197,3 +217,159 @@ def test_observation_helpers_derive_rh_and_sky() -> None:
 
     assert rh is not None and 50.0 < rh < 60.0
     assert sky == "BKN"
+
+
+def test_source_context_does_not_expose_rows_newer_than_decision_snapshot(monkeypatch) -> None:
+    rows = iter(
+        [
+            (
+                {
+                    ("TestCity", "2026-07-10"): {
+                        "city": "TestCity",
+                        "target_date": "2026-07-10",
+                        "source": "hf_source",
+                        "temp_c": 32.0,
+                        "local_detect_ts_utc": "2026-07-10T05:10:00+00:00",
+                        "observation_time_utc": "2026-07-10T05:00:00+00:00",
+                    }
+                },
+                {"status": "ok"},
+            ),
+            (
+                {
+                    ("TestCity", "2026-07-10"): {
+                        "city": "TestCity",
+                        "target_date": "2026-07-10",
+                        "source": "source_event",
+                        "temp_c": 32.0,
+                        "local_detect_ts_utc": "2026-07-10T05:11:00+00:00",
+                        "source_report_ts_utc": "2026-07-10T05:00:00+00:00",
+                    }
+                },
+                {"status": "ok"},
+            ),
+            (
+                {
+                    ("TestCity", "2026-07-10"): {
+                        "city": "TestCity",
+                        "target_date": "2026-07-10",
+                        "status": "ok",
+                        "snapshot_ts_utc": "2026-07-10T05:12:00+00:00",
+                        "open_meteo_multi_model": {
+                            "target_date": {"models": {"GFS": 91.4, "ECMWF": 90.5}}
+                        },
+                    }
+                },
+                {"status": "ok"},
+            ),
+        ]
+    )
+    monkeypatch.setattr(runner, "latest_rows_by_city_date", lambda _path: next(rows))
+    monkeypatch.setattr(runner, "first_existing", lambda _paths: None)
+    state = pd.DataFrame(
+        [
+            {
+                "city": "TestCity",
+                "target_date": "2026-07-10",
+                "decision_snapshot_ts_utc": "2026-07-10T05:00:00+00:00",
+                "unit": "C",
+                "running_native": 31.0,
+                "current_native": 31.0,
+                "d1_no_bracket": "32",
+                "d2_no_bracket": "33",
+                "gfs_gap_to_running_native": 1.25,
+                "ecmwf_gap_to_running_native": math.nan,
+            }
+        ]
+    )
+
+    enriched, summary = runner.enrich_source_context(state)
+    row = enriched.iloc[0]
+
+    assert row["high_freq_context_status"] == "unavailable_asof"
+    assert math.isnan(row["high_freq_temp_native"])
+    assert row["high_freq_latest_temp_native"] == 32.0
+    assert not row["high_freq_implies_d1_cross"]
+    assert row["source_event_context_status"] == "unavailable_asof"
+    assert math.isnan(row["source_event_temp_native"])
+    assert row["source_event_latest_temp_native"] == 32.0
+    assert row["forecast_enrichment_status"] == "unavailable_asof"
+    assert row["gfs_gap_to_running_native"] == 1.25
+    assert math.isnan(row["ecmwf_gap_to_running_native"])
+    assert math.isclose(row["gfs_forecast_max_native_latest"], 33.0)
+    assert summary["counters"]["forecast_enrichment_newer_than_snapshot"] == 1
+
+
+def test_source_context_exposes_rows_known_by_decision_snapshot(monkeypatch) -> None:
+    rows = iter(
+        [
+            (
+                {
+                    ("TestCity", "2026-07-10"): {
+                        "city": "TestCity",
+                        "target_date": "2026-07-10",
+                        "source": "hf_source",
+                        "temp_c": 32.0,
+                        "local_detect_ts_utc": "2026-07-10T04:55:00+00:00",
+                        "observation_time_utc": "2026-07-10T04:50:00+00:00",
+                    }
+                },
+                {"status": "ok"},
+            ),
+            (
+                {
+                    ("TestCity", "2026-07-10"): {
+                        "city": "TestCity",
+                        "target_date": "2026-07-10",
+                        "source": "source_event",
+                        "temp_c": 32.0,
+                        "local_detect_ts_utc": "2026-07-10T04:56:00+00:00",
+                        "source_report_ts_utc": "2026-07-10T04:50:00+00:00",
+                    }
+                },
+                {"status": "ok"},
+            ),
+            (
+                {
+                    ("TestCity", "2026-07-10"): {
+                        "city": "TestCity",
+                        "target_date": "2026-07-10",
+                        "status": "ok",
+                        "snapshot_ts_utc": "2026-07-10T04:57:00+00:00",
+                        "open_meteo_multi_model": {
+                            "target_date": {"models": {"GFS": 91.4, "ECMWF": 90.5}}
+                        },
+                    }
+                },
+                {"status": "ok"},
+            ),
+        ]
+    )
+    monkeypatch.setattr(runner, "latest_rows_by_city_date", lambda _path: next(rows))
+    monkeypatch.setattr(runner, "first_existing", lambda _paths: None)
+    state = pd.DataFrame(
+        [
+            {
+                "city": "TestCity",
+                "target_date": "2026-07-10",
+                "decision_snapshot_ts_utc": "2026-07-10T05:00:00+00:00",
+                "unit": "C",
+                "running_native": 31.0,
+                "current_native": 31.0,
+                "d1_no_bracket": "32",
+                "d2_no_bracket": "33",
+            }
+        ]
+    )
+
+    enriched, _summary = runner.enrich_source_context(state)
+    row = enriched.iloc[0]
+
+    assert row["high_freq_context_status"] == "ok"
+    assert row["high_freq_temp_native"] == 32.0
+    assert row["high_freq_implies_d1_cross"]
+    assert row["source_event_context_status"] == "ok"
+    assert row["source_event_temp_native"] == 32.0
+    assert row["forecast_enrichment_status"] == "ok"
+    assert math.isclose(row["gfs_gap_to_running_native"], 2.0)
+    assert math.isclose(row["ecmwf_gap_to_running_native"], 1.5)

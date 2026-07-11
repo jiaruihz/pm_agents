@@ -6,6 +6,7 @@ RUNTIME_DIR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_RUNTIME_DIR:-$PROJECT_DIR/runtime/
 LOG_FILE="$RUNTIME_DIR/first_lock_no_current_yes_shadow_loop.log"
 PY="$PROJECT_DIR/.venv/bin/python"
 SESSION="${TMAX_FIRST_LOCK_NO_CURRENT_YES_SESSION:-tmax_distribution_edge_first_lock_no_current_yes_shadow_v1}"
+TMUX_SOCKET="${WEATHER_TMUX_SOCKET:-weather-jrs}"
 
 INTERVAL_SEC="${TMAX_FIRST_LOCK_NO_CURRENT_YES_INTERVAL_SEC:-900}"
 ASK_FLOOR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_ASK_FLOOR:-0.40}"
@@ -63,12 +64,12 @@ env_check="printf '[%s] env_check http_proxy=%s https_proxy=%s all_proxy=%s wall
 bootstrap="cd $project_q && $env_load $proxy_norm $env_check && exec $runner_cmd_q >> $log_q 2>&1"
 
 if command -v tmux >/dev/null 2>&1; then
-  if tmux has-session -t "$SESSION" 2>/dev/null; then
-    echo "already running tmux session=$SESSION log=$LOG_FILE"
+  if tmux -L "$TMUX_SOCKET" has-session -t "$SESSION" 2>/dev/null; then
+    echo "already running tmux_socket=$TMUX_SOCKET session=$SESSION log=$LOG_FILE"
     exit 0
   fi
-  tmux new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
-  echo "started tmux session=$SESSION log=$LOG_FILE"
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
+  echo "started tmux_socket=$TMUX_SOCKET session=$SESSION log=$LOG_FILE"
   exit 0
 fi
 
