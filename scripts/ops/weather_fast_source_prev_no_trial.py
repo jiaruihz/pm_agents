@@ -96,35 +96,46 @@ def source_cross_confirmation(
             "blocker": "" if arith_round(source_temp_c) > metar_running_max_c else "source_not_above_metar_running_max",
         }
 
-    required_margin_c = 0.7
+    qualifying_margin_c = 0.5
+    strong_margin_c = 0.7
     required_observations = 2
-    threshold_c = metar_running_max_c + required_margin_c
-    qualifies = source_temp_c + 1e-9 >= threshold_c
+    qualifying_threshold_c = metar_running_max_c + qualifying_margin_c
+    strong_threshold_c = metar_running_max_c + strong_margin_c
+    qualifies = source_temp_c > qualifying_threshold_c + 1e-9
+    strong = source_temp_c > strong_threshold_c + 1e-9
     key = f"{city}|{target_date}|{source}|{metar_running_max_c}"
     previous = dict(state.get(key) or {})
     if source_obs_ts_utc != previous.get("last_source_obs_ts_utc"):
         previous_count = int(previous.get("qualifying_distinct_observations") or 0)
         count = previous_count + 1 if qualifies and previous.get("last_observation_qualified") else (1 if qualifies else 0)
+        strong_seen = bool(previous.get("strong_observation_seen")) if qualifies and previous.get("last_observation_qualified") else False
+        strong_seen = strong_seen or strong if qualifies else False
         previous = {
             "last_source_obs_ts_utc": source_obs_ts_utc,
             "last_observation_qualified": qualifies,
             "qualifying_distinct_observations": count,
+            "strong_observation_seen": strong_seen,
             "source_temp_c": source_temp_c,
-            "threshold_c": threshold_c,
+            "qualifying_threshold_c": qualifying_threshold_c,
+            "strong_threshold_c": strong_threshold_c,
         }
         state.clear()
         state[key] = previous
     count = int(previous.get("qualifying_distinct_observations") or 0)
-    confirmed = qualifies and count >= required_observations
+    strong_seen = bool(previous.get("strong_observation_seen"))
+    confirmed = qualifies and count >= required_observations and strong_seen
     blocker = ""
     if not qualifies:
         blocker = "source_cross_margin_not_met"
     elif not confirmed:
         blocker = "source_cross_persistence_not_met"
     return {
-        "policy": "amos_margin_persistence_v1",
-        "required_margin_c": required_margin_c,
-        "threshold_c": threshold_c,
+        "policy": "amos_two_above_half_one_above_seven_v1",
+        "required_margin_c": qualifying_margin_c,
+        "threshold_c": qualifying_threshold_c,
+        "strong_margin_c": strong_margin_c,
+        "strong_threshold_c": strong_threshold_c,
+        "strong_observation_seen": strong_seen,
         "required_distinct_observations": required_observations,
         "qualifying_distinct_observations": count,
         "confirmed": confirmed,
@@ -399,6 +410,9 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "source_cross_policy": cross_confirmation["policy"],
             "source_cross_required_margin_c": cross_confirmation["required_margin_c"],
             "source_cross_threshold_c": cross_confirmation.get("threshold_c"),
+            "source_cross_strong_margin_c": cross_confirmation.get("strong_margin_c"),
+            "source_cross_strong_threshold_c": cross_confirmation.get("strong_threshold_c"),
+            "source_cross_strong_observation_seen": cross_confirmation.get("strong_observation_seen"),
             "source_cross_required_distinct_observations": cross_confirmation["required_distinct_observations"],
             "source_cross_qualifying_distinct_observations": cross_confirmation["qualifying_distinct_observations"],
             "source_cross_confirmed": cross_confirmation["confirmed"],

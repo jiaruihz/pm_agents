@@ -79,15 +79,16 @@ that execution-size error.
 The Busan AMOS live policy now requires both:
 
 ```text
-AMOS temperature >= METAR running max + 0.7 C
-two consecutive qualifying observations with distinct observation minutes
+two consecutive distinct-minute observations above METAR running max + 0.5 C
+at least one of those observations above METAR running max + 0.7 C
 ```
 
-An exact `.5 C` or `.6 C` boundary print remains in opportunity telemetry with
-`source_cross_margin_not_met`. The first `.7 C+` print is recorded with
-`source_cross_persistence_not_met`; only the second consecutive distinct minute
-becomes execution-eligible. Other city/source policies retain the existing
-arithmetic-round behavior while more Busan episodes accumulate.
+An exact `.5 C` boundary print remains in opportunity telemetry with
+`source_cross_margin_not_met`. A sequence such as `.6 C` followed by `.8 C`
+confirms; `.6 C` followed by `.7 C` does not, because neither observation is
+strictly above `.7 C`. Until both conditions hold, the row is recorded with
+`source_cross_persistence_not_met`. Other city/source policies retain the
+existing arithmetic-round behavior while more Busan episodes accumulate.
 
 This is an interim conservative live policy. It must be reevaluated on
 independent cross episodes after several additional collection days; repeated

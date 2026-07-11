@@ -205,6 +205,8 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
         else:
             book = fetch_fresh_book(token.no_token_id, proxy=proxy, timeout_sec=args.book_timeout_sec, top_n=5)
             summary = book.get("summary") or {}
+            bid = safe_float(summary.get("best_bid"))
+            bid_size = safe_float(summary.get("bid_size"))
             ask = safe_float(summary.get("best_ask"))
             ask_size = safe_float(summary.get("ask_size"))
             if book.get("status") != "ok":
@@ -229,6 +231,17 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
                 "outcome": "NO",
                 "best_ask": ask,
                 "ask_size": ask_size,
+                "best_bid": bid,
+                "bid_size": bid_size,
+                "book_liquidity_state": (
+                    "fetch_failed"
+                    if book.get("status") != "ok"
+                    else "empty_no_ask_side"
+                    if ask is None
+                    else "two_sided"
+                    if bid is not None
+                    else "ask_only"
+                ),
                 "fresh_book_status": book.get("status"),
                 "fresh_book_http_status": book.get("http_status"),
                 "fresh_book_error": book.get("error", ""),

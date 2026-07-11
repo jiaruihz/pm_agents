@@ -21,30 +21,41 @@ def test_busans_exact_half_degree_print_is_not_a_confirmed_cross():
     assert result["qualifying_distinct_observations"] == 0
 
 
-def test_busans_first_margin_print_waits_for_a_distinct_observation():
+def test_busans_first_above_half_print_waits_for_a_distinct_observation():
     state = {}
-    first = evaluate(34.7, "2026-07-11T04:46:00+00:00", state)
-    repeated_poll = evaluate(34.7, "2026-07-11T04:46:00+00:00", state)
+    first = evaluate(34.6, "2026-07-11T04:46:00+00:00", state)
+    repeated_poll = evaluate(34.6, "2026-07-11T04:46:00+00:00", state)
 
     assert first["blocker"] == "source_cross_persistence_not_met"
     assert repeated_poll["qualifying_distinct_observations"] == 1
     assert repeated_poll["confirmed"] is False
 
 
-def test_busans_second_consecutive_margin_print_confirms_cross():
+def test_busans_two_above_half_prints_with_one_above_seven_confirm_cross():
     state = {}
-    evaluate(34.7, "2026-07-11T04:46:00+00:00", state)
+    evaluate(34.6, "2026-07-11T04:46:00+00:00", state)
     result = evaluate(34.8, "2026-07-11T04:47:00+00:00", state)
 
     assert result["qualifying_distinct_observations"] == 2
     assert result["confirmed"] is True
+    assert result["strong_observation_seen"] is True
     assert result["blocker"] == ""
+
+
+def test_busans_two_above_half_prints_without_one_above_seven_do_not_confirm():
+    state = {}
+    evaluate(34.6, "2026-07-11T04:46:00+00:00", state)
+    result = evaluate(34.7, "2026-07-11T04:47:00+00:00", state)
+
+    assert result["qualifying_distinct_observations"] == 2
+    assert result["strong_observation_seen"] is False
+    assert result["confirmed"] is False
 
 
 def test_busans_nonqualifying_print_resets_persistence():
     state = {}
-    evaluate(34.7, "2026-07-11T04:46:00+00:00", state)
-    evaluate(34.6, "2026-07-11T04:47:00+00:00", state)
+    evaluate(34.8, "2026-07-11T04:46:00+00:00", state)
+    evaluate(34.5, "2026-07-11T04:47:00+00:00", state)
     result = evaluate(34.8, "2026-07-11T04:48:00+00:00", state)
 
     assert result["qualifying_distinct_observations"] == 1
