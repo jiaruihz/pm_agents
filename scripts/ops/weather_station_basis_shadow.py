@@ -123,7 +123,7 @@ def _weather_predict_proxy_candidates() -> list[str | None]:
             if values.get(key):
                 candidates.append(values[key])
 
-    candidates.extend(["http://127.0.0.1:7897", "http://127.0.0.1:7890", None])
+    candidates.extend(["http://127.0.0.1:7890", "http://127.0.0.1:7897", None])
     deduped: list[str | None] = []
     for value in candidates:
         if value not in deduped:

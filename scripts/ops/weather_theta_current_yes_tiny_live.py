@@ -280,7 +280,7 @@ def proxy_candidates() -> list[str | None]:
         for key in ("WEATHER_PREDICT_PROXY", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY"):
             if values.get(key):
                 candidates.append(values[key])
-    candidates.extend(["http://127.0.0.1:7897", "http://127.0.0.1:7890", None])
+    candidates.extend(["http://127.0.0.1:7890", "http://127.0.0.1:7897", None])
     out: list[str | None] = []
     for item in candidates:
         if item not in out:
