@@ -37,6 +37,7 @@ class StrategySpec:
     telemetry_file: str | None = None
     start_script: str | None = None
     tmux_session: str | None = None
+    screen_session: str | None = None
     notes: str | None = None
     default_health: str = "unknown"
     expected_live: bool | None = None

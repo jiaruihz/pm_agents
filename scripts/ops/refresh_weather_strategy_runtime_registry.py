@@ -403,11 +403,28 @@ def active_tmux_sessions() -> set[str]:
     return sessions
 
 
+def active_screen_sessions() -> set[str]:
+    if not shutil.which("screen"):
+        return set()
+    proc = subprocess.run(["screen", "-ls"], capture_output=True, text=True, check=False)
+    sessions: set[str] = set()
+    for line in (proc.stdout + "\n" + proc.stderr).splitlines():
+        # screen emits e.g. "\t85321.weather_hko_official_tminus1_no_live\t(Detached)".
+        if "." not in line or "(" not in line:
+            continue
+        token = line.strip().split()[0] if line.strip().split() else ""
+        pid, dot, name = token.partition(".")
+        if dot and pid.isdigit() and name:
+            sessions.add(name)
+    return sessions
+
+
 def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
     conn.row_factory = sqlite3.Row
     refreshed_at = iso(utc_now()) or ""
     fact = fact_trade_aggregates(conn)
     tmux_sessions = active_tmux_sessions()
+    screen_sessions = active_screen_sessions()
     registry_rows: list[dict[str, Any]] = []
     artifact_rows: list[dict[str, Any]] = []
 
@@ -495,9 +512,9 @@ def refresh(conn: sqlite3.Connection) -> dict[str, Any]:
                 "live_enabled": None if live_enabled is None else int(bool(live_enabled)),
                 "process_status": (
                     "running"
-                    if spec.tmux_session and spec.tmux_session in tmux_sessions
+                    if (spec.tmux_session and spec.tmux_session in tmux_sessions) or (spec.screen_session and spec.screen_session in screen_sessions)
                     else "stopped"
-                    if spec.tmux_session
+                    if spec.tmux_session or spec.screen_session
                     else "unknown"
                 ),
                 "blocker_count": blocker_count,

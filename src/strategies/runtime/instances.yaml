@@ -295,6 +295,7 @@
   telemetry_file: events.jsonl
   start_script: null
   tmux_session: weather_fast_source_prev_no_trial
+  screen_session: weather_fast_source_prev_no_trial
   notes: Tokyo tiny-live / Singapore-Helsinki shadow trial for fast-source lead into
     the next METAR. Current version records runtime telemetry locally and uses a runner-local
     FOK CLOB submit path; migrate live submission to weather_order_executor.py before
@@ -353,6 +354,7 @@
   telemetry_file: events.jsonl
   start_script: scripts/ops/start_weather_hko_official_tminus1_no_live.sh
   tmux_session: weather_hko_official_tminus1_no_live
+  screen_session: weather_hko_official_tminus1_no_live
   notes: HK-only live executor. HKO Observatory floor(T) locks T-1 exact-high NO
     against HKO Daily Extract settlement. Never consume VHHH/METAR or buy current YES.
   default_health: unknown
