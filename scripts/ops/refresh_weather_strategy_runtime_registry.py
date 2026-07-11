@@ -29,6 +29,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
+from src.strategies.runtime import runtime_state
+from src.strategies.runtime.sync import sync_instance_specs
 
 
 def utc_now() -> datetime:
@@ -600,7 +602,10 @@ def main() -> int:
     conn.row_factory = sqlite3.Row
     try:
         apply_schema_canonical(conn)
+        sync_instance_specs(conn)
         result = refresh(conn)
+        result["runtime_state_rows"] = runtime_state.seed_runtime_from_legacy_registry(conn)
+        conn.commit()
     finally:
         conn.close()
     payload = json.dumps(result, indent=2, ensure_ascii=False, sort_keys=True)
