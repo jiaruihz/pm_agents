@@ -33,6 +33,11 @@ DEFAULT_ORDERBOOK_DIRS = (
     ROOT.parent / "weather-predict/output/orderbook_snapshots",
     ROOT / "runtime/weather_edge_v1/market_data/orderbook_snapshots",
 )
+DEFAULT_FORECAST_CURVE_DIRS = (
+    MAC_DATA_FEED_RUNTIME / "targeted_output/forecast_hourly_curves",
+    ROOT.parent / "weather-predict/output/forecast_hourly_curves",
+    ROOT / "runtime/weather_edge_v1/market_data/forecast_hourly_curves",
+)
 DEFAULT_TELEMETRY_FILES: tuple[Path, ...] = ()
 DEFAULT_SUMMARY_FILES = (
     Path("low_price_yes_lottery_tiny_live_v1/latest_summary.json"),
@@ -73,10 +78,24 @@ def latest_existing_orderbook_dir() -> Path:
     return DEFAULT_ORDERBOOK_DIRS[0]
 
 
+def latest_existing_forecast_curve_dir() -> Path:
+    for path in DEFAULT_FORECAST_CURVE_DIRS:
+        if path.exists():
+            return path
+    return DEFAULT_FORECAST_CURVE_DIRS[0]
+
+
 def latest_orderbook_snapshot(root: Path) -> Path | None:
     files = list(root.rglob("orderbook_snapshot_*.jsonl.gz"))
     if not files:
         files = list(root.rglob("orderbook_snapshot_*.jsonl"))
+    if not files:
+        return None
+    return max(files, key=lambda path: path.stat().st_mtime)
+
+
+def latest_forecast_curve_capture(root: Path) -> Path | None:
+    files = list(root.glob("*/forecast_hourly_curves_*.jsonl"))
     if not files:
         return None
     return max(files, key=lambda path: path.stat().st_mtime)
@@ -223,19 +242,36 @@ def check_snapshot_source_model(snapshot_path: Path) -> dict[str, Any]:
             "model_counts": dict(sorted(model_counts.items())),
         }
 
-    fallback_counts = summary.get("fallback_counts") if isinstance(summary.get("fallback_counts"), dict) else {}
-    assigned_counts = summary.get("assigned_counts") if isinstance(summary.get("assigned_counts"), dict) else {}
-    active_counts = summary.get("active_counts") if isinstance(summary.get("active_counts"), dict) else {}
-    status = "ok"
-    if any(int(count or 0) > 0 for count in fallback_counts.values()):
-        status = "source_fallback_detected"
-    elif assigned_counts != active_counts:
-        status = "assigned_active_mismatch"
+    assigned_counts = summary.get("assigned_model_counts") if isinstance(summary.get("assigned_model_counts"), dict) else {}
+    actual_counts = summary.get("actual_model_counts") if isinstance(summary.get("actual_model_counts"), dict) else {}
+    fallback_reason_counts = (
+        summary.get("fallback_reason_counts") if isinstance(summary.get("fallback_reason_counts"), dict) else {}
+    )
+    expected_count = int(summary.get("expected_city_target_count") or 0)
+    captured_count = int(summary.get("captured_city_target_count") or 0)
+    fallback_count = int(summary.get("fallback_count") or 0)
+    missing_count = int(summary.get("missing_count") or 0)
+    lineage_errors = []
+    if summary.get("grain") != "city_target_forecast":
+        lineage_errors.append("unexpected_grain")
+    if sum(int(value or 0) for value in assigned_counts.values()) != captured_count:
+        lineage_errors.append("assigned_count_mismatch")
+    if sum(int(value or 0) for value in actual_counts.values()) != captured_count:
+        lineage_errors.append("actual_count_mismatch")
+    if captured_count + missing_count != expected_count:
+        lineage_errors.append("expected_count_mismatch")
+    if fallback_count > 0 and not fallback_reason_counts:
+        lineage_errors.append("fallback_reason_missing")
+    if fallback_count == 0 and fallback_reason_counts:
+        lineage_errors.append("fallback_reason_without_fallback")
+    status = "invalid_source_model_lineage" if lineage_errors else "ok"
 
     return {
         "path": str(snapshot_path),
         "status": status,
         "source_model_summary": summary,
+        "lineage_errors": lineage_errors,
+        "fallback_detected": fallback_count > 0,
         "forecast_source_counts": dict(sorted(forecast_source_counts.items())),
         "model_counts": dict(sorted(model_counts.items())),
     }
@@ -331,6 +367,160 @@ def check_orderbook_snapshots(orderbook_dir: Path, *, now_utc: datetime, max_age
         "snapshot_age_min": age_min,
         "missing": False,
         "stale": bool(age_min > max_age_min),
+    }
+
+
+def check_forecast_hourly_curves(
+    curve_dir: Path,
+    snapshot_path: Path,
+    *,
+    now_utc: datetime,
+    max_age_min: float,
+) -> dict[str, Any]:
+    latest = latest_forecast_curve_capture(curve_dir)
+    if latest is None:
+        return {
+            "dir": str(curve_dir),
+            "exists": curve_dir.exists(),
+            "latest_path": "",
+            "status": "missing",
+            "missing": True,
+            "stale": False,
+        }
+
+    rows = read_jsonl_tail(latest, 10000)
+    parse_errors = [row for row in rows if row.get("_parse_error")]
+    valid_rows = [row for row in rows if not row.get("_parse_error")]
+    required_fields = (
+        "capture_id",
+        "snapshot_ts_utc",
+        "available_at_utc",
+        "available_at_basis",
+        "city",
+        "target_date",
+        "forecast_source",
+        "forecast_model",
+        "forecast_assigned_model",
+        "forecast_values_hash",
+        "forecast_first_seen_utc",
+        "forecast_first_seen_basis",
+        "forecast_first_seen_source",
+        "forecast_run_lineage_status",
+        "hourly_curve",
+    )
+    missing_fields = Counter()
+    empty_curves = 0
+    invalid_fallback_rows = 0
+    early_first_seen_rows = 0
+    future_first_seen_rows = 0
+    invalid_detected_at_rows = 0
+    invalid_available_at_rows = 0
+    latest_mtime = datetime.fromtimestamp(latest.stat().st_mtime, tz=timezone.utc)
+    for row in valid_rows:
+        for field in required_fields:
+            if field == "hourly_curve":
+                if not isinstance(row.get(field), list) or not row[field]:
+                    missing_fields[field] += 1
+                continue
+            if not str(row.get(field) or "").strip():
+                missing_fields[field] += 1
+        if not isinstance(row.get("hourly_curve"), list) or not row.get("hourly_curve"):
+            empty_curves += 1
+        fallback = row.get("forecast_model_fallback")
+        assigned_model = str(row.get("forecast_assigned_model") or "")
+        active_model = str(row.get("forecast_model") or "")
+        if not isinstance(fallback, bool) or (active_model != assigned_model and not row.get("forecast_model_fallback_reason")):
+            invalid_fallback_rows += 1
+        snapshot_at = parse_utc(row.get("snapshot_ts_utc"))
+        available_at = parse_utc(row.get("available_at_utc"))
+        first_seen_at = parse_utc(row.get("forecast_first_seen_utc"))
+        detected_at = parse_utc(row.get("forecast_detected_at_utc"))
+        first_seen_source = str(row.get("forecast_first_seen_source") or "")
+        if available_at is None or snapshot_at is None or available_at < snapshot_at or available_at > latest_mtime:
+            invalid_available_at_rows += 1
+        if first_seen_at is None or available_at is None or first_seen_at > available_at:
+            future_first_seen_rows += 1
+        if first_seen_source.startswith("current_capture_") and (
+            first_seen_at is None or snapshot_at is None or first_seen_at < snapshot_at
+        ):
+            early_first_seen_rows += 1
+        if detected_at is not None:
+            if not row.get("forecast_detected_at_basis"):
+                missing_fields["forecast_detected_at_basis"] += 1
+            if (
+                snapshot_at is None
+                or available_at is None
+                or detected_at < snapshot_at
+                or detected_at > available_at
+                or (first_seen_at is not None and first_seen_at > detected_at)
+            ):
+                invalid_detected_at_rows += 1
+
+    available_times = [parse_utc(row.get("available_at_utc")) for row in valid_rows]
+    available_times = [value for value in available_times if value is not None]
+    latest_available = max(available_times) if available_times else None
+    age_min = (
+        round((now_utc - latest_available).total_seconds() / 60.0, 3)
+        if latest_available is not None
+        else None
+    )
+    capture_snapshot_times = {str(row.get("snapshot_ts_utc") or "") for row in valid_rows}
+    snapshot_payload = load_snapshot(snapshot_path)
+    snapshot_ts = str(snapshot_payload.get("snapshot_ts_utc") or snapshot_payload.get("ts_utc") or "")
+    expected_pairs = {
+        (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        for row in snapshot_payload.get("records", [])
+        if isinstance(row, dict) and row.get("city") and row.get("target_date")
+    }
+    captured_pairs = {(str(row.get("city") or ""), str(row.get("target_date") or "")) for row in valid_rows}
+    missing_pairs = sorted(expected_pairs - captured_pairs)
+
+    status = "ok"
+    if parse_errors or not valid_rows:
+        status = "invalid_jsonl"
+    elif (
+        missing_fields
+        or invalid_fallback_rows
+        or early_first_seen_rows
+        or future_first_seen_rows
+        or invalid_detected_at_rows
+        or invalid_available_at_rows
+    ):
+        status = "invalid_lineage"
+    elif age_min is None or age_min > max_age_min:
+        status = "stale"
+    elif snapshot_ts not in capture_snapshot_times:
+        status = "snapshot_mismatch"
+    elif missing_pairs:
+        status = "incomplete_city_target_coverage"
+    return {
+        "dir": str(curve_dir),
+        "exists": curve_dir.exists(),
+        "latest_path": str(latest),
+        "latest_capture_mtime_utc": latest_mtime.isoformat(),
+        "latest_capture_available_at_utc": latest_available.isoformat() if latest_available else "",
+        "latest_capture_age_min": age_min,
+        "latest_capture_snapshot_ts_utc": sorted(capture_snapshot_times),
+        "latest_snapshot_ts_utc": snapshot_ts,
+        "capture_row_count": len(valid_rows),
+        "capture_city_count": len({row.get("city") for row in valid_rows if row.get("city")}),
+        "capture_city_target_count": len(captured_pairs),
+        "expected_city_target_count": len(expected_pairs),
+        "missing_city_target_count": len(missing_pairs),
+        "missing_city_target_examples": [
+            {"city": city, "target_date": target_date} for city, target_date in missing_pairs[:20]
+        ],
+        "parse_error_count": len(parse_errors),
+        "missing_required_fields": dict(sorted(missing_fields.items())),
+        "empty_hourly_curve_count": empty_curves,
+        "invalid_fallback_lineage_count": invalid_fallback_rows,
+        "early_first_seen_count": early_first_seen_rows,
+        "future_first_seen_count": future_first_seen_rows,
+        "invalid_detected_at_count": invalid_detected_at_rows,
+        "invalid_available_at_count": invalid_available_at_rows,
+        "missing": False,
+        "stale": bool(age_min is None or age_min > max_age_min),
+        "status": status,
     }
 
 
@@ -490,6 +680,7 @@ def overall_status(sections: dict[str, Any]) -> str:
     source_model = sections.get("snapshot_source_model", {})
     city_state = sections.get("snapshot_city_state_coverage", {})
     orderbook = sections.get("orderbook_snapshots", {})
+    forecast_curves = sections.get("forecast_hourly_curves", {})
     telemetry = sections["telemetry"]
     live_orders = sections["live_orders"]
     hard_fail = (
@@ -497,6 +688,7 @@ def overall_status(sections: dict[str, Any]) -> str:
         or (bool(source_model) and source_model.get("status") != "ok")
         or city_state.get("status") == "missing_same_day_weather_state"
         or orderbook.get("missing")
+        or (bool(forecast_curves) and forecast_curves.get("status") != "ok")
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
         or live_orders.get("parse_error_count", 0) > 0
@@ -523,9 +715,11 @@ def main() -> int:
     parser.add_argument("--snapshot", default="")
     parser.add_argument("--snapshot-dir", default=str(latest_existing_snapshot_dir()))
     parser.add_argument("--orderbook-dir", default=str(latest_existing_orderbook_dir()))
+    parser.add_argument("--forecast-curve-dir", default=str(latest_existing_forecast_curve_dir()))
     parser.add_argument("--runtime-root", default=str(ROOT / "runtime/weather_edge_v1"))
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--max-orderbook-age-min", type=float, default=75.0)
+    parser.add_argument("--max-forecast-curve-age-min", type=float, default=45.0)
     parser.add_argument("--tail-telemetry-rows", type=int, default=5000)
     parser.add_argument("--tail-live-order-rows", type=int, default=2000)
     parser.add_argument("--all-live-order-files", action="store_true")
@@ -549,6 +743,12 @@ def main() -> int:
             Path(args.orderbook_dir),
             now_utc=now_utc,
             max_age_min=args.max_orderbook_age_min,
+        ),
+        "forecast_hourly_curves": check_forecast_hourly_curves(
+            Path(args.forecast_curve_dir),
+            snapshot_path,
+            now_utc=now_utc,
+            max_age_min=args.max_forecast_curve_age_min,
         ),
         "telemetry": [check_telemetry(path, tail_rows=args.tail_telemetry_rows) for path in telemetry_files],
         "live_orders": check_live_orders(

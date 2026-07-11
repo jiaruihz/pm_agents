@@ -50,6 +50,12 @@ from weather_data_feed import (
     parse_now_utc,
     unique_city_scan_dates as data_feed_unique_city_scan_dates,
 )
+from weather_data_feed.forecast_hourly_curves import (
+    build_curve_row,
+    build_hourly_curve,
+    summarize_source_models,
+    write_forecast_hourly_curve_capture,
+)
 
 PM_GAMMA_URL = "https://gamma-api.polymarket.com"
 PM_CLOB_URL = "https://clob.polymarket.com"
@@ -647,6 +653,7 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
         peak_time_utc = None
         peak_hour_utc = None
 
+    forecast_detected_at_utc = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
     return {
         "max_f": max_f,
         "peak_time_local": peak_local_time,
@@ -655,12 +662,14 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
         "peak_hour_utc": peak_hour_utc,
         "hourly_count": len(pairs),
         "values_hash": _forecast_values_hash(times, temps),
+        "hourly_curve": build_hourly_curve(times, temps),
         "source_model": source_model,
         "source_api": f"open_meteo_live_{source_model}",
         "timezone": payload.get("timezone"),
         "timezone_abbreviation": payload.get("timezone_abbreviation"),
         "utc_offset_seconds": utc_offset_seconds,
         "generationtime_ms": payload.get("generationtime_ms"),
+        "detected_at_utc": forecast_detected_at_utc,
     }
 
 
@@ -1186,6 +1195,9 @@ def main():
                     all_models[city] = "ecmwf"
 
     all_records = []
+    forecast_curve_rows = []
+    forecast_curve_seen = set()
+    forecast_city_target_expected = 0
 
     for city, cfg in CITIES.items():
         for target_date in city_scan_dates(now_utc, city, args.target_date):
@@ -1197,12 +1209,17 @@ def main():
 
             if hours_to_settle < 0 or hours_to_settle > 50:
                 continue
+            forecast_city_target_expected += 1
 
             window = classify_window(hours_to_settle)
             time_bucket = classify_time_bucket(hours_to_settle)
 
             # Estimate model cycle metadata (initial, may be updated after fallback)
-            model = all_models.get(city, "gfs")
+            assigned_model = CITY_MODEL.get(city, "gfs")
+            model = all_models.get(city, assigned_model)
+            fallback_reasons = []
+            if model != assigned_model:
+                fallback_reasons.append("assigned_error_distribution_unavailable")
             cycle_hour, model_run_age = estimate_model_cycle(now_utc_hour, model)
             settle_utc_hour = settle_utc.hour
             forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
@@ -1219,6 +1236,7 @@ def main():
                     forecast_info = fetch_live_gfs(weather_client, city, cfg, target_date)
                     if forecast_info is not None:
                         model = "gfs"
+                        fallback_reasons.append("forecast_fetch_unavailable")
                         errors = compute_error_distribution(city, cfg)
                         cycle_hour, model_run_age = estimate_model_cycle(now_utc_hour, model)
                         forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
@@ -1241,6 +1259,7 @@ def main():
                         fcst_f = forecast_info["max_f"]
                         errors = gfs_errors
                         model = "gfs"
+                        fallback_reasons.append("error_distribution_unavailable")
                         cycle_hour, model_run_age = estimate_model_cycle(now_utc_hour, model)
                         forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
                 else:
@@ -1252,9 +1271,37 @@ def main():
                         fcst_f = forecast_info["max_f"]
                         errors = ecmwf_errors
                         model = "ecmwf"
+                        fallback_reasons.append("error_distribution_unavailable")
                         cycle_hour, model_run_age = estimate_model_cycle(now_utc_hour, model)
                         forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
             probability_status = "ok" if errors is not None else "missing_error_distribution"
+            actual_model = str(forecast_info.get("source_model") or model)
+            curve_key = (city, target_date, actual_model, forecast_info.get("values_hash"))
+            if forecast_info.get("hourly_curve") and curve_key not in forecast_curve_seen:
+                forecast_curve_seen.add(curve_key)
+                forecast_curve_rows.append(
+                    build_curve_row(
+                        snapshot_ts_utc=now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        city=city,
+                        target_date=target_date,
+                        forecast_source=forecast_info["source_api"],
+                        forecast_model=actual_model,
+                        forecast_assigned_model=assigned_model,
+                        forecast_values_hash=forecast_info["values_hash"],
+                        hourly_curve=forecast_info["hourly_curve"],
+                        forecast_max_f=forecast_info["max_f"],
+                        forecast_peak_hour_local=forecast_info["peak_hour_local"],
+                        forecast_peak_time_local=forecast_info["peak_time_local"],
+                        forecast_peak_hour_utc=forecast_info["peak_hour_utc"],
+                        forecast_peak_time_utc=forecast_info["peak_time_utc"],
+                        forecast_timezone=forecast_info["timezone"],
+                        forecast_timezone_abbreviation=forecast_info.get("timezone_abbreviation"),
+                        forecast_utc_offset_seconds=forecast_info["utc_offset_seconds"],
+                        forecast_generationtime_ms=forecast_info.get("generationtime_ms"),
+                        forecast_model_fallback_reason=";".join(dict.fromkeys(fallback_reasons)) or None,
+                        forecast_detected_at_utc=forecast_info.get("detected_at_utc"),
+                    )
+                )
 
             # Fetch PM event
             city_slug = cfg.get("slug", city.lower())
@@ -1552,12 +1599,17 @@ def main():
     fname = f"snapshot_{stamp}.json"
     partial_fname = f"partial_snapshot_{stamp}.json"
     publish_quality = snapshot_publish_quality(all_records)
+    source_model_summary = summarize_source_models(
+        forecast_curve_rows,
+        expected_city_target_count=forecast_city_target_expected,
+    )
     out_file = OUTPUT_DIR / fname if publish_quality["publishable"] else PARTIAL_OUTPUT_DIR / partial_fname
     output = {
         "ts_beijing": now_beijing.strftime("%Y-%m-%d %H:%M:%S"),
         "ts_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "shares_per_trade": args.shares,
         "city_models": all_models,
+        "source_model_summary": source_model_summary,
         "city_pools": CITY_POOL_BY_CITY,
         "trading_t1_cities": sorted(TRADING_T1_CITIES),
         "research_t2_cities": sorted(set(CITIES) - set(TRADING_T1_CITIES)),
@@ -1569,11 +1621,16 @@ def main():
     }
     with open(out_file, "w") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
+    forecast_curve_archive = None
+    if publish_quality["publishable"]:
+        forecast_curve_archive = write_forecast_hourly_curve_capture(OUTPUT_ROOT, forecast_curve_rows)
 
     # Print summary
     edge_trades = [r for r in all_records if r["abs_edge"] >= 0.05]
     print(f"\n{'='*90}")
     print(f" Saved: {out_file}")
+    if forecast_curve_archive is not None:
+        print(f" Forecast curves: {forecast_curve_archive} ({len(forecast_curve_rows)} city-dates)")
     print(f" Publishable: {publish_quality['publishable']} | reasons: {publish_quality['reasons']}")
     if not publish_quality["publishable"]:
         print(" Partial snapshot archived without replacing live snapshot_*.json")

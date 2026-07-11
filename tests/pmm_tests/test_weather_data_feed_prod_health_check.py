@@ -4,12 +4,15 @@ import json
 from datetime import datetime, timezone
 
 from scripts.ops.weather_data_feed_prod_health_check import (
+    check_forecast_hourly_curves,
     check_live_orders,
     check_snapshot_city_state_coverage,
     check_snapshot_duplicates,
+    check_snapshot_source_model,
     check_telemetry,
     overall_status,
 )
+from weather_data_feed.forecast_hourly_curves import build_curve_row, write_forecast_hourly_curve_capture
 
 
 def test_prod_health_check_flags_snapshot_duplicates_and_staleness(tmp_path):
@@ -85,6 +88,35 @@ def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):
     assert report["missing_required_trading_cities"] == ["Manila"]
 
 
+def test_snapshot_source_model_health_validates_lineage_without_rejecting_fallback(tmp_path):
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "records": [],
+                "source_model_summary": {
+                    "schema_version": "forecast_source_model_summary_v1",
+                    "grain": "city_target_forecast",
+                    "expected_city_target_count": 2,
+                    "captured_city_target_count": 2,
+                    "assigned_model_counts": {"ecmwf": 2},
+                    "actual_model_counts": {"ecmwf": 1, "gfs": 1},
+                    "fallback_count": 1,
+                    "fallback_reason_counts": {"forecast_fetch_unavailable": 1},
+                    "missing_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = check_snapshot_source_model(snapshot)
+
+    assert report["status"] == "ok"
+    assert report["fallback_detected"] is True
+    assert report["lineage_errors"] == []
+
+
 def test_prod_health_check_warns_for_non_trading_weather_state_gap(tmp_path):
     snapshot = tmp_path / "snapshot_20260707_1200.json"
     rows = [
@@ -111,6 +143,82 @@ def test_prod_health_check_warns_for_non_trading_weather_state_gap(tmp_path):
     assert report["status"] == "missing_non_trading_weather_state"
     assert report["missing_required_trading_cities"] == []
     assert report["missing_required_non_trading_cities"] == ["Denver"]
+
+
+def test_prod_health_check_requires_current_complete_curve_capture(tmp_path):
+    snapshot_ts = "2026-07-11T03:00:00Z"
+    snapshot = tmp_path / "snapshot_20260711_1100.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "ts_utc": snapshot_ts,
+                "records": [{"city": "Shanghai", "target_date": "2026-07-11"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    row = build_curve_row(
+        snapshot_ts_utc=snapshot_ts,
+        city="Shanghai",
+        target_date="2026-07-11",
+        forecast_source="open_meteo_live_gfs",
+        forecast_model="gfs",
+        forecast_assigned_model="gfs",
+        forecast_values_hash="hash-a",
+        hourly_curve=[{"time_local": "2026-07-11T12:00", "temperature_f": 88.0}],
+        forecast_max_f=88.0,
+        forecast_peak_hour_local=12,
+        forecast_peak_time_local="2026-07-11T12:00",
+        forecast_peak_hour_utc=4,
+        forecast_peak_time_utc="2026-07-11T04:00:00Z",
+        forecast_timezone="Asia/Shanghai",
+        forecast_timezone_abbreviation="CST",
+        forecast_utc_offset_seconds=28800,
+        forecast_generationtime_ms=1.0,
+        forecast_model_fallback_reason=None,
+        forecast_detected_at_utc="2026-07-11T03:00:02Z",
+    )
+    write_forecast_hourly_curve_capture(
+        tmp_path,
+        [row],
+        available_at_utc=datetime(2026, 7, 11, 3, 0, 4, tzinfo=timezone.utc),
+    )
+
+    report = check_forecast_hourly_curves(
+        tmp_path / "forecast_hourly_curves",
+        snapshot,
+        now_utc=datetime(2026, 7, 11, 3, 5, tzinfo=timezone.utc),
+        max_age_min=45,
+    )
+
+    assert report["status"] == "ok"
+    assert report["capture_city_target_count"] == 1
+    assert report["early_first_seen_count"] == 0
+    assert report["future_first_seen_count"] == 0
+
+    curve_path = next((tmp_path / "forecast_hourly_curves").glob("*/forecast_hourly_curves_*.jsonl"))
+    curve_row = json.loads(curve_path.read_text(encoding="utf-8"))
+    curve_row["forecast_first_seen_utc"] = "2026-07-11T02:59:59Z"
+    curve_path.write_text(json.dumps(curve_row) + "\n", encoding="utf-8")
+    early = check_forecast_hourly_curves(
+        tmp_path / "forecast_hourly_curves",
+        snapshot,
+        now_utc=datetime(2026, 7, 11, 3, 5, tzinfo=timezone.utc),
+        max_age_min=45,
+    )
+    assert early["status"] == "invalid_lineage"
+    assert early["early_first_seen_count"] == 1
+
+    curve_row["forecast_first_seen_utc"] = "2026-07-11T03:00:05Z"
+    curve_path.write_text(json.dumps(curve_row) + "\n", encoding="utf-8")
+    future = check_forecast_hourly_curves(
+        tmp_path / "forecast_hourly_curves",
+        snapshot,
+        now_utc=datetime(2026, 7, 11, 3, 5, tzinfo=timezone.utc),
+        max_age_min=45,
+    )
+    assert future["status"] == "invalid_lineage"
+    assert future["future_first_seen_count"] == 1
 
 
 def test_prod_health_check_allows_reused_run_id_but_flags_duplicate_decisions(tmp_path):
