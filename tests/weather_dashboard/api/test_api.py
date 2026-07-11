@@ -45,6 +45,27 @@ def test_health(client):
     assert r.json() == {"status": "ok"}
 
 
+def test_live_book_exposes_strategy_instance(client, api_db):
+    config_id, run_id, signal, plan, order, fill, settlement = _canonical_bundle()
+    _insert_metadata(api_db, config_id, run_id)
+    ingest_canonical_signals(api_db, [signal], "signals.jsonl")
+    ingest_canonical_plans(api_db, [plan], "plans.jsonl")
+    ingest_canonical_orders(api_db, [order], "orders.jsonl")
+    ingest_canonical_fills(api_db, [fill], "fills.jsonl")
+    ingest_canonical_settlements(api_db, [settlement], "settlements.jsonl")
+    _rebuild_fact(api_db)
+    api_db.execute(
+        "UPDATE fact_trades SET trade_class='live_real', instance_id='fast_source_prev_no_trial_v1' WHERE fill_id=?",
+        (fill["fill_id"],),
+    )
+    api_db.commit()
+
+    response = client.get("/api/live/book")
+
+    assert response.status_code == 200
+    assert response.json()["rows"][0]["instance_id"] == "fast_source_prev_no_trial_v1"
+
+
 # ── /api/runs ─────────────────────────────────────────────────────────────────
 
 def test_list_runs_empty(client):

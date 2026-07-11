@@ -175,7 +175,7 @@ def get_live_book(
     rows = db.execute(
         f"""
         SELECT
-            fill_id, config_id, strategy_id, strategy_name, city, city_pool, icao, target_date, bracket,
+            fill_id, config_id, strategy_id, strategy_name, instance_id, city, city_pool, icao, target_date, bracket,
             condition_id, market_id,
             side, forecast_source, model_version, snapshot_ts_utc, edge, market_price,
             fill_price, fill_qty, cost_usd, notional, fees_usd,
