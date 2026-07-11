@@ -75,6 +75,63 @@ def load_state(path: Path) -> dict[str, Any]:
     return read_json(path, {"seen_event_keys": [], "live_order_keys": []})
 
 
+def source_cross_confirmation(
+    *,
+    city: str,
+    source: str,
+    target_date: str,
+    source_temp_c: float,
+    source_obs_ts_utc: str,
+    metar_running_max_c: int,
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply source-specific evidence requirements before declaring a cross."""
+    if city != "Busan" or source != "amos_runway":
+        return {
+            "policy": "arithmetic_round_v1",
+            "required_margin_c": 0.5,
+            "required_distinct_observations": 1,
+            "qualifying_distinct_observations": 1 if arith_round(source_temp_c) > metar_running_max_c else 0,
+            "confirmed": arith_round(source_temp_c) > metar_running_max_c,
+            "blocker": "" if arith_round(source_temp_c) > metar_running_max_c else "source_not_above_metar_running_max",
+        }
+
+    required_margin_c = 0.7
+    required_observations = 2
+    threshold_c = metar_running_max_c + required_margin_c
+    qualifies = source_temp_c + 1e-9 >= threshold_c
+    key = f"{city}|{target_date}|{source}|{metar_running_max_c}"
+    previous = dict(state.get(key) or {})
+    if source_obs_ts_utc != previous.get("last_source_obs_ts_utc"):
+        previous_count = int(previous.get("qualifying_distinct_observations") or 0)
+        count = previous_count + 1 if qualifies and previous.get("last_observation_qualified") else (1 if qualifies else 0)
+        previous = {
+            "last_source_obs_ts_utc": source_obs_ts_utc,
+            "last_observation_qualified": qualifies,
+            "qualifying_distinct_observations": count,
+            "source_temp_c": source_temp_c,
+            "threshold_c": threshold_c,
+        }
+        state.clear()
+        state[key] = previous
+    count = int(previous.get("qualifying_distinct_observations") or 0)
+    confirmed = qualifies and count >= required_observations
+    blocker = ""
+    if not qualifies:
+        blocker = "source_cross_margin_not_met"
+    elif not confirmed:
+        blocker = "source_cross_persistence_not_met"
+    return {
+        "policy": "amos_margin_persistence_v1",
+        "required_margin_c": required_margin_c,
+        "threshold_c": threshold_c,
+        "required_distinct_observations": required_observations,
+        "qualifying_distinct_observations": count,
+        "confirmed": confirmed,
+        "blocker": blocker,
+    }
+
+
 def latest_source_by_city(path: Path, target_date: str, allowed_sources: set[str], allowed_cities: set[str]) -> dict[str, dict[str, Any]]:
     payload = read_json(path, {})
     out: dict[str, dict[str, Any]] = {}
@@ -259,6 +316,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
     state = load_state(state_path)
     seen = set(state.get("seen_event_keys") or [])
     live_order_keys = set(state.get("live_order_keys") or [])
+    source_cross_confirmation_state = dict(state.get("source_cross_confirmation") or {})
     target_date = args.target_date or datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
     all_cities = set(args.live_cities or []) | set(args.shadow_cities or [])
     allowed_sources = set(args.sources or [])
@@ -310,6 +368,15 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         source_round = int(src["source_temp_round_c"])
         metar_max = int(metar["metar_running_max_round_c"])
         t_minus_1 = source_round - 1
+        cross_confirmation = source_cross_confirmation(
+            city=city,
+            source=str(src.get("source") or ""),
+            target_date=target_date,
+            source_temp_c=float(src["temp_c"]),
+            source_obs_ts_utc=str(src.get("source_obs_ts_utc") or ""),
+            metar_running_max_c=metar_max,
+            state=source_cross_confirmation_state,
+        )
         common = {
             **base,
             "source": src.get("source"),
@@ -329,10 +396,16 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "metar_running_max_round_c": metar_max,
             "metar_running_max_temp_c": metar.get("metar_running_max_temp_c"),
             "t_minus_1_no_bracket_c": t_minus_1,
+            "source_cross_policy": cross_confirmation["policy"],
+            "source_cross_required_margin_c": cross_confirmation["required_margin_c"],
+            "source_cross_threshold_c": cross_confirmation.get("threshold_c"),
+            "source_cross_required_distinct_observations": cross_confirmation["required_distinct_observations"],
+            "source_cross_qualifying_distinct_observations": cross_confirmation["qualifying_distinct_observations"],
+            "source_cross_confirmed": cross_confirmation["confirmed"],
         }
         blockers: list[str] = []
-        if source_round <= metar_max:
-            blockers.append("source_not_above_metar_running_max")
+        if cross_confirmation["blocker"]:
+            blockers.append(cross_confirmation["blocker"])
         if source_detect_age_min is None or source_detect_age_min > float(args.max_source_age_min):
             blockers.append("source_too_old")
         if source_obs_dt and latest_metar_report_dt and source_obs_dt <= latest_metar_report_dt:
@@ -435,6 +508,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "target_date": target_date,
         "seen_event_keys": sorted(seen)[-5000:],
         "live_order_keys": sorted(live_order_keys)[-5000:],
+        "source_cross_confirmation": source_cross_confirmation_state,
     }
     write_json(state_path, state)
     latest = {
