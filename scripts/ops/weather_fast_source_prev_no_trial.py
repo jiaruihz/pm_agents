@@ -47,6 +47,12 @@ DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/fast_source_prev_no_trial"
 DEFAULT_HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
 DEFAULT_SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl"
 
+STRICT_TWO_ABOVE_SEVEN_SOURCES = {
+    ("Busan", "amos_runway"),
+    ("Helsinki", "fmi"),
+    ("Singapore", "singapore_mss"),
+}
+
 
 def iso(dt: datetime | None = None) -> str:
     return (dt or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
@@ -86,7 +92,7 @@ def source_cross_confirmation(
     state: dict[str, Any],
 ) -> dict[str, Any]:
     """Apply source-specific evidence requirements before declaring a cross."""
-    if city != "Busan" or source != "amos_runway":
+    if (city, source) not in STRICT_TWO_ABOVE_SEVEN_SOURCES:
         return {
             "policy": "arithmetic_round_v1",
             "required_margin_c": 0.5,
@@ -96,46 +102,34 @@ def source_cross_confirmation(
             "blocker": "" if arith_round(source_temp_c) > metar_running_max_c else "source_not_above_metar_running_max",
         }
 
-    qualifying_margin_c = 0.5
-    strong_margin_c = 0.7
+    qualifying_margin_c = 0.7
     required_observations = 2
     qualifying_threshold_c = metar_running_max_c + qualifying_margin_c
-    strong_threshold_c = metar_running_max_c + strong_margin_c
     qualifies = source_temp_c > qualifying_threshold_c + 1e-9
-    strong = source_temp_c > strong_threshold_c + 1e-9
     key = f"{city}|{target_date}|{source}|{metar_running_max_c}"
     previous = dict(state.get(key) or {})
     if source_obs_ts_utc != previous.get("last_source_obs_ts_utc"):
         previous_count = int(previous.get("qualifying_distinct_observations") or 0)
         count = previous_count + 1 if qualifies and previous.get("last_observation_qualified") else (1 if qualifies else 0)
-        strong_seen = bool(previous.get("strong_observation_seen")) if qualifies and previous.get("last_observation_qualified") else False
-        strong_seen = strong_seen or strong if qualifies else False
         previous = {
             "last_source_obs_ts_utc": source_obs_ts_utc,
             "last_observation_qualified": qualifies,
             "qualifying_distinct_observations": count,
-            "strong_observation_seen": strong_seen,
             "source_temp_c": source_temp_c,
             "qualifying_threshold_c": qualifying_threshold_c,
-            "strong_threshold_c": strong_threshold_c,
         }
-        state.clear()
         state[key] = previous
     count = int(previous.get("qualifying_distinct_observations") or 0)
-    strong_seen = bool(previous.get("strong_observation_seen"))
-    confirmed = qualifies and count >= required_observations and strong_seen
+    confirmed = qualifies and count >= required_observations
     blocker = ""
     if not qualifies:
         blocker = "source_cross_margin_not_met"
     elif not confirmed:
         blocker = "source_cross_persistence_not_met"
     return {
-        "policy": "amos_two_above_half_one_above_seven_v1",
+        "policy": "two_consecutive_above_seven_v1",
         "required_margin_c": qualifying_margin_c,
         "threshold_c": qualifying_threshold_c,
-        "strong_margin_c": strong_margin_c,
-        "strong_threshold_c": strong_threshold_c,
-        "strong_observation_seen": strong_seen,
         "required_distinct_observations": required_observations,
         "qualifying_distinct_observations": count,
         "confirmed": confirmed,
