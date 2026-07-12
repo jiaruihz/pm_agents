@@ -13,15 +13,15 @@ def evaluate(temp: float, obs_ts: str, state: dict, *, city="Busan", source="amo
     )
 
 
-def test_strict_sources_require_more_than_seven_tenths():
-    result = evaluate(34.7, "2026-07-11T04:46:00+00:00", {})
+def test_persistent_sources_accept_exactly_half_degree_as_first_print():
+    result = evaluate(34.5, "2026-07-11T04:46:00+00:00", {})
 
     assert result["confirmed"] is False
-    assert result["blocker"] == "source_cross_margin_not_met"
-    assert result["qualifying_distinct_observations"] == 0
+    assert result["blocker"] == "source_cross_persistence_not_met"
+    assert result["qualifying_distinct_observations"] == 1
 
 
-def test_strict_sources_wait_for_a_second_distinct_observation():
+def test_persistent_sources_wait_for_a_second_distinct_observation():
     state = {}
     first = evaluate(34.8, "2026-07-11T04:46:00+00:00", state)
     repeated_poll = evaluate(34.8, "2026-07-11T04:46:00+00:00", state)
@@ -31,7 +31,7 @@ def test_strict_sources_wait_for_a_second_distinct_observation():
     assert repeated_poll["confirmed"] is False
 
 
-def test_strict_policy_does_not_reuse_legacy_persistence_state():
+def test_persistent_policy_does_not_reuse_legacy_persistence_state():
     state = {
         "Busan|2026-07-11|amos_runway|34": {
             "last_source_obs_ts_utc": "2026-07-11T04:45:00+00:00",
@@ -46,37 +46,38 @@ def test_strict_policy_does_not_reuse_legacy_persistence_state():
     assert result["confirmed"] is False
 
 
-def test_strict_sources_confirm_after_two_prints_above_seven_tenths():
+def test_persistent_sources_confirm_when_latest_print_reaches_seven_tenths():
     state = {}
-    evaluate(34.8, "2026-07-11T04:46:00+00:00", state)
-    result = evaluate(34.8, "2026-07-11T04:47:00+00:00", state)
+    evaluate(34.5, "2026-07-11T04:46:00+00:00", state)
+    result = evaluate(34.7, "2026-07-11T04:47:00+00:00", state)
 
     assert result["qualifying_distinct_observations"] == 2
     assert result["confirmed"] is True
-    assert result["policy"] == "two_consecutive_above_seven_v1"
+    assert result["policy"] == "two_above_half_latest_above_seven_v2"
     assert result["blocker"] == ""
 
 
-def test_print_at_exactly_seven_tenths_resets_persistence():
+def test_latest_print_below_seven_tenths_does_not_confirm():
     state = {}
     evaluate(34.8, "2026-07-11T04:46:00+00:00", state)
-    result = evaluate(34.7, "2026-07-11T04:47:00+00:00", state)
+    result = evaluate(34.6, "2026-07-11T04:47:00+00:00", state)
 
-    assert result["qualifying_distinct_observations"] == 0
+    assert result["qualifying_distinct_observations"] == 2
     assert result["confirmed"] is False
+    assert result["blocker"] == "latest_source_cross_strength_not_met"
 
 
 def test_busans_nonqualifying_print_resets_persistence():
     state = {}
     evaluate(34.8, "2026-07-11T04:46:00+00:00", state)
-    evaluate(34.5, "2026-07-11T04:47:00+00:00", state)
+    evaluate(34.4, "2026-07-11T04:47:00+00:00", state)
     result = evaluate(34.8, "2026-07-11T04:48:00+00:00", state)
 
     assert result["qualifying_distinct_observations"] == 1
     assert result["confirmed"] is False
 
 
-def test_strict_city_states_do_not_clear_each_other():
+def test_persistent_city_states_do_not_clear_each_other():
     state = {}
     evaluate(34.8, "2026-07-11T04:46:00+00:00", state)
     evaluate(34.8, "2026-07-11T04:46:00+00:00", state, city="Helsinki", source="fmi")
@@ -87,7 +88,7 @@ def test_strict_city_states_do_not_clear_each_other():
     assert helsinki["confirmed"] is True
 
 
-def test_singapore_uses_strict_confirmation_policy():
+def test_singapore_uses_persistent_confirmation_policy():
     result = evaluate(
         34.8,
         "2026-07-11T04:46:00+00:00",
@@ -96,7 +97,7 @@ def test_singapore_uses_strict_confirmation_policy():
         source="singapore_mss",
     )
 
-    assert result["policy"] == "two_consecutive_above_seven_v1"
+    assert result["policy"] == "two_above_half_latest_above_seven_v2"
     assert result["confirmed"] is False
 
 
