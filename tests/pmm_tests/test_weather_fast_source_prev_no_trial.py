@@ -31,6 +31,21 @@ def test_strict_sources_wait_for_a_second_distinct_observation():
     assert repeated_poll["confirmed"] is False
 
 
+def test_strict_policy_does_not_reuse_legacy_persistence_state():
+    state = {
+        "Busan|2026-07-11|amos_runway|34": {
+            "last_source_obs_ts_utc": "2026-07-11T04:45:00+00:00",
+            "last_observation_qualified": True,
+            "qualifying_distinct_observations": 1,
+        }
+    }
+
+    result = evaluate(34.8, "2026-07-11T04:46:00+00:00", state)
+
+    assert result["qualifying_distinct_observations"] == 1
+    assert result["confirmed"] is False
+
+
 def test_strict_sources_confirm_after_two_prints_above_seven_tenths():
     state = {}
     evaluate(34.8, "2026-07-11T04:46:00+00:00", state)

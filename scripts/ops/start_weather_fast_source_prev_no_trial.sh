@@ -5,15 +5,16 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
 TMUX_SOCKET="${WEATHER_FAST_PREV_NO_TMUX_SOCKET:-weather-jrs}"
 TMUX_SESSION="${WEATHER_FAST_PREV_NO_TMUX_SESSION:-weather_fast_source_prev_no_trial}"
+SCREEN_SESSION="${WEATHER_FAST_PREV_NO_SCREEN_SESSION:-weather_fast_source_prev_no_trial}"
 TARGET_DATE="${WEATHER_FAST_PREV_NO_TARGET_DATE:-}"
 INTERVAL_SEC="${WEATHER_FAST_PREV_NO_INTERVAL_SEC:-30}"
 SOURCES="${WEATHER_FAST_PREV_NO_SOURCES:-jma_amedas singapore_mss fmi amos_runway noaa_madis_hfmetar hko_obs cowin_obs mgm ims_lod}"
-LIVE_CITIES="${WEATHER_FAST_PREV_NO_LIVE_CITIES:-Helsinki}"
-SHADOW_CITIES="${WEATHER_FAST_PREV_NO_SHADOW_CITIES:-Tokyo Singapore Busan Seoul HongKong Shenzhen TelAviv Ankara Istanbul LA Dallas Houston SanFrancisco NYC Atlanta Austin Chicago Miami Seattle}"
+LIVE_CITIES="${WEATHER_FAST_PREV_NO_LIVE_CITIES:-Helsinki Busan Singapore Tokyo}"
+SHADOW_CITIES="${WEATHER_FAST_PREV_NO_SHADOW_CITIES:-Seoul HongKong Shenzhen TelAviv Ankara Istanbul LA Dallas Houston SanFrancisco NYC Atlanta Austin Chicago Miami Seattle}"
 MAX_SHARES_PER_TRADE="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_TRADE:-10}"
 MAX_SHARES_PER_MARKET="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_MARKET:-10}"
-MAX_SHARES_PER_TRADE_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_TRADE_BY_CITY:-}"
-MAX_SHARES_PER_MARKET_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_MARKET_BY_CITY:-}"
+MAX_SHARES_PER_TRADE_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_TRADE_BY_CITY:-Tokyo=5}"
+MAX_SHARES_PER_MARKET_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_MARKET_BY_CITY:-Tokyo=5}"
 MAX_NO_ASK="${WEATHER_FAST_PREV_NO_MAX_NO_ASK:-0.92}"
 MAX_SOURCE_AGE_MIN="${WEATHER_FAST_PREV_NO_MAX_SOURCE_AGE_MIN:-15}"
 BOOK_TIMEOUT_SEC="${WEATHER_FAST_PREV_NO_BOOK_TIMEOUT_SEC:-5}"
@@ -22,6 +23,8 @@ MARKET_PROXY="${WEATHER_FAST_PREV_NO_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PR
 ENABLE_LIVE="${WEATHER_FAST_PREV_NO_LIVE:-1}"
 CONFIRM_LIVE="${WEATHER_FAST_PREV_NO_CONFIRM_LIVE:-1}"
 LOG_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.log"
+PID_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.pid"
+START_MODE="${WEATHER_FAST_PREV_NO_START_MODE:-screen}"
 
 mkdir -p "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
 
@@ -65,11 +68,31 @@ if [[ "$CONFIRM_LIVE" == "1" ]]; then
   cmd+=(--confirm-live)
 fi
 
+if [[ -f "$PID_FILE" ]]; then
+  old_pid="$(cat "$PID_FILE" || true)"
+  if [[ "$old_pid" == screen:* ]]; then
+    screen -S "${old_pid#screen:}" -X quit 2>/dev/null || true
+  elif [[ "$old_pid" == tmux:* ]]; then
+    tmux -L "$TMUX_SOCKET" kill-session -t "${old_pid#tmux:}" 2>/dev/null || true
+  elif [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+    kill "$old_pid" 2>/dev/null || true
+    sleep 1
+  fi
+fi
 tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
-tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
-  "cd '$PROJECT_DIR' && set -a && [[ -f .env ]] && source .env || true && set +a && exec $(printf '%q ' "${cmd[@]}") >> '$LOG_FILE' 2>&1"
+screen -S "$SCREEN_SESSION" -X quit 2>/dev/null || true
+pkill -f "$PROJECT_DIR/scripts/ops/weather_fast_source_prev_no_trial.py --loop" 2>/dev/null || true
+printf -v quoted_cmd '%q ' "${cmd[@]}"
+if [[ "$START_MODE" == "tmux" ]]; then
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+    "cd $(printf '%q' "$PROJECT_DIR") && set -a && [[ -f .env ]] && source .env || true && set +a && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
+  echo "tmux:$TMUX_SESSION" > "$PID_FILE"
+else
+  screen -dmS "$SCREEN_SESSION" sh -c "cd $(printf '%q' "$PROJECT_DIR") && set -a && { [ ! -f .env ] || . ./.env || true; } && set +a && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
+  echo "screen:$SCREEN_SESSION" > "$PID_FILE"
+fi
 
-echo "started $TMUX_SESSION on tmux socket $TMUX_SOCKET"
+echo "started fast_source_prev_no_trial mode=$START_MODE"
 echo "target_date=${TARGET_DATE:-auto_today}"
 echo "interval_sec=$INTERVAL_SEC"
 echo "sources=$SOURCES"
@@ -83,5 +106,6 @@ echo "max_no_ask=$MAX_NO_ASK"
 echo "max_source_age_min=$MAX_SOURCE_AGE_MIN"
 echo "output_dir=$OUTPUT_DIR"
 echo "log=$LOG_FILE"
+echo "pid_file=$PID_FILE"
 echo "live=$ENABLE_LIVE confirm_live=$CONFIRM_LIVE"
 echo "market_proxy=$([[ -n "$MARKET_PROXY" ]] && echo configured || echo direct)"

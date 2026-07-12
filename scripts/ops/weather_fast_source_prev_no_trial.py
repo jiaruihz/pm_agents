@@ -52,6 +52,7 @@ STRICT_TWO_ABOVE_SEVEN_SOURCES = {
     ("Helsinki", "fmi"),
     ("Singapore", "singapore_mss"),
 }
+STRICT_TWO_ABOVE_SEVEN_POLICY = "two_consecutive_above_seven_v1"
 
 
 def iso(dt: datetime | None = None) -> str:
@@ -108,10 +109,13 @@ def source_cross_confirmation(
     qualifies = source_temp_c > qualifying_threshold_c + 1e-9
     key = f"{city}|{target_date}|{source}|{metar_running_max_c}"
     previous = dict(state.get(key) or {})
+    if previous.get("policy") != STRICT_TWO_ABOVE_SEVEN_POLICY:
+        previous = {}
     if source_obs_ts_utc != previous.get("last_source_obs_ts_utc"):
         previous_count = int(previous.get("qualifying_distinct_observations") or 0)
         count = previous_count + 1 if qualifies and previous.get("last_observation_qualified") else (1 if qualifies else 0)
         previous = {
+            "policy": STRICT_TWO_ABOVE_SEVEN_POLICY,
             "last_source_obs_ts_utc": source_obs_ts_utc,
             "last_observation_qualified": qualifies,
             "qualifying_distinct_observations": count,
@@ -127,7 +131,7 @@ def source_cross_confirmation(
     elif not confirmed:
         blocker = "source_cross_persistence_not_met"
     return {
-        "policy": "two_consecutive_above_seven_v1",
+        "policy": STRICT_TWO_ABOVE_SEVEN_POLICY,
         "required_margin_c": qualifying_margin_c,
         "threshold_c": qualifying_threshold_c,
         "required_distinct_observations": required_observations,
