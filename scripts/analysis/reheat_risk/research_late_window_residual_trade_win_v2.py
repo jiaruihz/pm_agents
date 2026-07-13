@@ -861,6 +861,7 @@ def metric_row(model: str, target: str, scope: str, y: pd.Series, p: pd.Series, 
 def expanding_two_stage(df: pd.DataFrame, numeric: list[str], categorical: list[str], label: str) -> pd.DataFrame:
     out = pd.DataFrame(index=df.index)
     out[f"{label}_p_touch"] = np.nan
+    out[f"{label}_p_stop_exact_given_touch"] = np.nan
     out[f"{label}_p_exact"] = np.nan
     out[f"{label}_p_no_win"] = np.nan
     features = numeric + categorical
@@ -877,15 +878,25 @@ def expanding_two_stage(df: pd.DataFrame, numeric: list[str], categorical: list[
         touch_model.fit(train[features], train["touch_target_after_decision"].astype(int))
         p_touch_train = touch_model.predict_proba(train[features])[:, 1]
         p_touch_test = touch_model.predict_proba(df.loc[test_mask, features])[:, 1]
-        exact_train = train.copy()
+        out.loc[test_mask, f"{label}_p_touch"] = p_touch_test
+
+        # final_exact_target implies that the d1 target was touched after the
+        # decision.  Model the conditional stop probability only on touched
+        # training rows, then multiply by Stage A.  Treating final_exact as an
+        # independent unconditional head can produce the impossible ordering
+        # P(final exact) > P(touch).
+        exact_train = train[train["touch_target_after_decision"].astype(bool)].copy()
+        if len(exact_train) < 40 or exact_train["final_exact_target"].nunique() < 2:
+            continue
         exact_test = df.loc[test_mask].copy()
-        exact_train[f"{label}_stage_a_p_touch"] = p_touch_train
+        exact_train[f"{label}_stage_a_p_touch"] = p_touch_train[train["touch_target_after_decision"].astype(bool).to_numpy()]
         exact_test[f"{label}_stage_a_p_touch"] = p_touch_test
         num2 = numeric + [f"{label}_stage_a_p_touch"]
         exact_model = make_model(num2, categorical)
         exact_model.fit(exact_train[num2 + categorical], exact_train["final_exact_target"].astype(int))
-        p_exact = exact_model.predict_proba(exact_test[num2 + categorical])[:, 1]
-        out.loc[test_mask, f"{label}_p_touch"] = p_touch_test
+        p_stop_exact_given_touch = exact_model.predict_proba(exact_test[num2 + categorical])[:, 1]
+        p_exact = coherent_exact_probability(p_touch_test, p_stop_exact_given_touch)
+        out.loc[test_mask, f"{label}_p_stop_exact_given_touch"] = p_stop_exact_given_touch
         out.loc[test_mask, f"{label}_p_exact"] = p_exact
         out.loc[test_mask, f"{label}_p_no_win"] = 1.0 - p_exact
     return out
@@ -908,8 +919,23 @@ def expanding_single_stage(df: pd.DataFrame, numeric: list[str], categorical: li
 
 
 def market_no_baseline(df: pd.DataFrame) -> pd.Series:
+    """Return the executable NO ask as the market-implied NO-win probability.
+
+    ``entry_price`` is already the d1 NO best ask.  The previous implementation
+    inverted it a second time, which made a high-priced NO look like a low
+    market probability and invalidated the market proper-score/ROI baseline.
+    """
+
     price = pd.to_numeric(df["entry_price"], errors="coerce")
-    return (1.0 - price).clip(1e-6, 1 - 1e-6)
+    return price.clip(1e-6, 1 - 1e-6)
+
+
+def coherent_exact_probability(p_touch: Any, p_stop_exact_given_touch: Any) -> np.ndarray:
+    """Compose a coherent exact probability from touch and conditional stop."""
+
+    touch = np.clip(np.asarray(p_touch, dtype=float), 0.0, 1.0)
+    stop = np.clip(np.asarray(p_stop_exact_given_touch, dtype=float), 0.0, 1.0)
+    return touch * stop
 
 
 def clock_only_hazard(df: pd.DataFrame) -> pd.Series:
@@ -1103,10 +1129,22 @@ def run_models(candidates: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
         ablation_results[label] = {
             "p_no_win_col": f"{label}_p_no_win",
             "p_touch_col": f"{label}_p_touch",
+            "p_stop_exact_given_touch_col": f"{label}_p_stop_exact_given_touch",
             "p_exact_col": f"{label}_p_exact",
         }
         mask = d1["target_date"].between(FORWARD_START, FORWARD_END, inclusive="both")
         metric_rows.append(metric_row(label, "touch", "forward_expanding", d1.loc[mask, "touch_target_after_decision"], d1.loc[mask, f"{label}_p_touch"], d1.loc[mask, "target_date"]))
+        touched_mask = mask & d1["touch_target_after_decision"].astype(bool)
+        metric_rows.append(
+            metric_row(
+                label,
+                "stop_exact_given_touch",
+                "forward_expanding_touched_only",
+                d1.loc[touched_mask, "final_exact_target"],
+                d1.loc[touched_mask, f"{label}_p_stop_exact_given_touch"],
+                d1.loc[touched_mask, "target_date"],
+            )
+        )
         metric_rows.append(metric_row(label, "final_exact", "forward_expanding", d1.loc[mask, "final_exact_target"], d1.loc[mask, f"{label}_p_exact"], d1.loc[mask, "target_date"]))
         metric_rows.append(metric_row(label, "no_win", "forward_expanding", d1.loc[mask, "no_win"], d1.loc[mask, f"{label}_p_no_win"], d1.loc[mask, "target_date"]))
         calibration_frames.append(calibration_table(d1[mask], f"{label}_p_no_win", "no_win", label))
@@ -1134,10 +1172,27 @@ def run_models(candidates: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     calibration = pd.concat([x for x in calibration_frames if not x.empty], ignore_index=True) if calibration_frames else pd.DataFrame()
     roi = pd.concat(roi_frames, ignore_index=True) if roi_frames else pd.DataFrame()
     slices = pd.concat(slice_frames, ignore_index=True) if slice_frames else pd.DataFrame()
+    exact_cols = [f"{label}_p_exact" for label, _, _ in ABLATIONS]
+    touch_cols = [f"{label}_p_touch" for label, _, _ in ABLATIONS]
+    coherence_violations = 0
+    max_exact_minus_touch = math.nan
+    coherence_deltas = []
+    for exact_col, touch_col in zip(exact_cols, touch_cols):
+        delta = pd.to_numeric(d1[exact_col], errors="coerce") - pd.to_numeric(d1[touch_col], errors="coerce")
+        coherence_violations += int(delta.gt(1e-12).sum())
+        coherence_deltas.extend(delta.dropna().tolist())
+    if coherence_deltas:
+        max_exact_minus_touch = float(max(coherence_deltas))
     summary = {
         "d1_rows_settled": int(len(d1)),
         "forward_rows": int(forward_mask.sum()),
         "forward_dates": int(d1.loc[forward_mask, "target_date"].nunique()),
+        "coherence_violations_p_exact_gt_p_touch": coherence_violations,
+        "max_p_exact_minus_p_touch": max_exact_minus_touch,
+        "corrections": {
+            "market_no_baseline": "entry_price_is_no_ask_no_inversion",
+            "two_stage_exact": "p_touch_times_p_stop_exact_given_touch",
+        },
         "ablation_results": ablation_results,
     }
     return d1, {"metrics": metrics, "calibration": calibration, "roi": roi, "slices": slices, "summary": summary}
@@ -1176,6 +1231,7 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
     case = chengdu_case(d1)
     full_metrics = metrics[metrics["model"].eq("full_v2")]
     full_no = full_metrics[full_metrics["target"].eq("no_win")].head(1)
+    market_no = metrics[(metrics["model"].eq("market_no_ask")) & (metrics["target"].eq("no_win"))].head(1)
     v1r_no = metrics[(metrics["model"].eq("v1_original_retrained")) & (metrics["target"].eq("no_win"))].head(1)
     old_no = metrics[(metrics["model"].eq("old_v1_like")) & (metrics["target"].eq("no_win"))].head(1)
     full_roi0 = roi[(roi["model"].eq("full_v2")) & (roi["edge_threshold"].eq(0.0))].head(1)
@@ -1185,7 +1241,7 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
         "# Late-Window Residual Trade-Win v2",
         "",
         "Status: snapshot",
-        "Date: 2026-07-08",
+        "Date: 2026-07-13 correction rerun",
         "Scope: research-only; no live/shadow runner changes",
         "",
         "## Data Snapshot",
@@ -1194,6 +1250,8 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
         f"- Settlement coverage 2026-07-05..07: {metadata['settlement_coverage']}.",
         f"- Forecast hourly curve records: {metadata['forecast_curve_records']}; observation history rows: {metadata['obs_history_rows']}.",
         "- TAF history, vertical profile history, and PIT multi-model forecast history were not present in the local market-data mirror; v2 keeps their columns as unavailable rather than leaking current/future data.",
+        "- 2026-07-13 correction: `entry_price` is already the executable NO ask, so the market p(NO win) baseline now uses it directly instead of `1-entry_price`.",
+        "- 2026-07-13 correction: Stage B now estimates `P(stop exact | touch)` on touched rows; `P(final exact)=P(touch)*P(stop exact | touch)`. The corrected output has zero `P(final exact)>P(touch)` violations.",
         "",
         "## Verdict",
     ]
@@ -1211,6 +1269,11 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
         r = full_no.iloc[0]
         lines.append(
             f"- full_v2 forward d1 NO no_win calibration: rows={int(r['rows'])}, dates={int(r['dates'])}, logloss={r['logloss']:.4f}, Brier={r['brier']:.4f}, AUC={r['auc']:.4f}."
+        )
+    if not market_no.empty:
+        r = market_no.iloc[0]
+        lines.append(
+            f"- corrected executable market baseline: rows={int(r['rows'])}, dates={int(r['dates'])}, logloss={r['logloss']:.4f}, Brier={r['brier']:.4f}, AUC={r['auc']:.4f}; it remains materially stronger than the physical heads."
         )
     if not v1r_no.empty:
         r = v1r_no.iloc[0]
@@ -1247,7 +1310,7 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
         "## Model Design",
         "- Grain: polling snapshot x city x target_date x candidate leg/token.",
         "- Main model: d1 NO only. d2/d3/current YES are retained in candidate frame for diagnostics but not mixed into the main target.",
-        "- Stage A predicts `touch_target_after_decision`; Stage B predicts `final_exact_target`; `p_trade_win_v2 = 1 - P(final_exact_target)` for NO.",
+        "- Stage A predicts `P(touch target after decision)`; Stage B predicts `P(stop exact | touch)` only on touched training rows; `P(final exact)=P(touch)*P(stop exact | touch)` and `p_trade_win_v2=1-P(final exact)` for NO.",
         "- Fair baseline: `v1_original_retrained` uses the original v1 physical feature framework, retrained on the same v2 per-poll d1 NO rows.",
         "- City identity is not a raw model input. City information enters only through prior late-reheat/overshoot rates and region bucket.",
         "",
@@ -1295,6 +1358,7 @@ def write_report(candidates: pd.DataFrame, d1: pd.DataFrame, artifacts: dict[str
             "v1_original_retrained_p_no_win",
             "old_v1_like_p_no_win",
             "full_v2_p_touch",
+            "full_v2_p_stop_exact_given_touch",
             "full_v2_p_exact",
             "full_v2_p_no_win",
         ]

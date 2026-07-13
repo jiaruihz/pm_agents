@@ -140,7 +140,50 @@ Before any live consideration:
 
 ## Current Verdict
 
-`research_only`.
+`shadow / zero-notional forward collection`.
 
 This is more promising than trying to beat every crossed-NO robot on speed, but
 it is probabilistic and must be treated like a normal strategy research line.
+
+## 2026-07-13 Unified Replay And Forward Practice
+
+The first unified `source_event_hazard_router_v1` run used 8,094 labeled PIT
+ladder states across 22 target dates / 47 cities, including 518 saved-snapshot
+cross events.  Every expression used its real YES/NO ask, ask size >= 5, and the
+official Weather taker fee.  Models were expanding by target date and compared
+against the market ladder on the same denominator.
+
+- Market probabilities beat both market+elapsed-time and market+physics on
+  current-YES and d1-YES proper score.  No residual probability head cleared the
+  baseline gate.
+- `cross current-NO continuation`, fixed edge >= 2c: 42 rows / 14 dates, ROI
+  +11.6%, date-bootstrap CI [-11.4%, +38.1%], recent four dates +3.5%.  This is
+  the only branch retained for forward observation; it is not confirmed alpha.
+- `cross current-YES exhaustion`: ROI -8.0%; `cross T+1 YES`: ROI -44.7% with a
+  negative CI; the broad immediate-reversal and exact-next expressions failed.
+- `60m no-break current YES` had +10.0% full-window point ROI but recent four
+  dates -40.7% and negative same-band excess.  Elapsed time alone is not a
+  durable reversal rule.
+- The all-expression router returned -5.5% at edge >= 2c.  Combining weak heads
+  did not create portfolio alpha.
+- Saved-snapshot 15-120 minute taker-exit markouts were negative for every
+  tested branch.  This does not answer the second-level local-first-seen
+  question; it shows that waiting for the coarse snapshot loses the repricing.
+
+Durable output:
+
+- `scripts/analysis/market_structure_edge/research_source_event_hazard_router_v1.py`
+- `docs/analysis/2026-07/2026-07-13-source-event-hazard-router-v1.md`
+- `docs/analysis/2026-07/generated/source_event_hazard_router_v1/`
+
+Forward practice is now running in a separate, no-order tmux session:
+
+```text
+session: weather_source_event_ladder_repricing_shadow
+output:  /Volumes/jrs/weather_data_feed_service_runtime/output/source_event_ladder_repricing_shadow
+scope:   all T-1/T/T+1/T+2 YES+NO books; 30s cadence; 90m episode; auto target-date
+```
+
+The existing generic stale-book observer was also restarted on 2026-07-13 so
+its target date rolls automatically again; it had remained in memory with the
+old 2026-07-09 target date despite source files continuing to update.
