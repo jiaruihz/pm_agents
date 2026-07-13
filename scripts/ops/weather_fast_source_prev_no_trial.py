@@ -253,6 +253,16 @@ def next_metar_window_status(
     }
 
 
+def next_metar_burst_cities(opportunity_rows: list[dict[str, Any]]) -> list[str]:
+    return sorted(
+        {
+            str(row.get("city") or "")
+            for row in opportunity_rows
+            if row.get("next_metar_window_eligible") and row.get("city")
+        }
+    )
+
+
 def floor_to_places(value: float, places: int) -> float:
     factor = 10**places
     return math.floor(float(value) * factor + 1e-12) / factor
@@ -609,6 +619,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "source_cross_confirmation": source_cross_confirmation_state,
     }
     write_json(state_path, state)
+    burst_cities = next_metar_burst_cities(opportunity_rows)
+    effective_interval_sec = float(args.burst_interval_sec) if burst_cities else float(args.interval_sec)
     latest = {
         "status": "ok",
         "schema_version": "fast_source_prev_no_trial_latest_v1",
@@ -637,6 +649,13 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "execution_eligible": len(order_rows),
         "live_orders_attempted": len(order_rows),
         "live_orders_submitted": sum(1 for row in order_rows if row.get("live_submit_status") == "submitted"),
+        "polling": {
+            "base_interval_sec": float(args.interval_sec),
+            "burst_interval_sec": float(args.burst_interval_sec),
+            "effective_interval_sec": effective_interval_sec,
+            "burst_active": bool(burst_cities),
+            "burst_cities": burst_cities,
+        },
         "paper_snapshot_path": str(paper_path) if paper_path else "",
         "orderbook_snapshot_path": str(orderbook_path) if orderbook_path else "",
         "latest_opportunities": opportunity_rows[-20:],
@@ -715,6 +734,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prebuild-live-client", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-sec", type=float, default=30.0)
+    parser.add_argument("--burst-interval-sec", type=float, default=10.0)
     return parser
 
 
@@ -729,7 +749,8 @@ def main() -> int:
         print(json.dumps({k: v for k, v in latest.items() if k != "latest_opportunities"}, ensure_ascii=False, sort_keys=True), flush=True)
         if not args.loop:
             return 0
-        time.sleep(max(5.0, float(args.interval_sec) - (time.monotonic() - started)))
+        effective_interval_sec = float((latest.get("polling") or {}).get("effective_interval_sec") or args.interval_sec)
+        time.sleep(max(5.0, effective_interval_sec - (time.monotonic() - started)))
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from scripts.ops.weather_fast_source_prev_no_trial import (
     metar_report_clocks,
+    next_metar_burst_cities,
     next_metar_window_status,
     source_cross_confirmation,
 )
@@ -167,3 +168,14 @@ def test_next_metar_execution_window_covers_twenty_minutes_before_and_after():
     assert at_open["next_metar_window_eligible"] is True
     assert after_due["next_metar_window_eligible"] is True
     assert too_late["next_metar_window_eligible"] is False
+
+
+def test_next_metar_burst_cities_only_includes_eligible_configured_rows():
+    rows = [
+        {"city": "Busan", "next_metar_window_eligible": True},
+        {"city": "Singapore", "next_metar_window_eligible": False},
+        {"city": "Busan", "next_metar_window_eligible": True},
+        {"status": "source_missing"},
+    ]
+
+    assert next_metar_burst_cities(rows) == ["Busan"]

@@ -8,6 +8,7 @@ TMUX_SESSION="${WEATHER_FAST_PREV_NO_TMUX_SESSION:-weather_fast_source_prev_no_t
 SCREEN_SESSION="${WEATHER_FAST_PREV_NO_SCREEN_SESSION:-weather_fast_source_prev_no_trial}"
 TARGET_DATE="${WEATHER_FAST_PREV_NO_TARGET_DATE:-}"
 INTERVAL_SEC="${WEATHER_FAST_PREV_NO_INTERVAL_SEC:-30}"
+BURST_INTERVAL_SEC="${WEATHER_FAST_PREV_NO_BURST_INTERVAL_SEC:-10}"
 SOURCES="${WEATHER_FAST_PREV_NO_SOURCES:-jma_amedas singapore_mss fmi amos_runway noaa_madis_hfmetar hko_obs cowin_obs mgm ims_lod}"
 LIVE_CITIES="${WEATHER_FAST_PREV_NO_LIVE_CITIES:-Helsinki Busan Singapore Tokyo}"
 SHADOW_CITIES="${WEATHER_FAST_PREV_NO_SHADOW_CITIES:-Seoul HongKong Shenzhen TelAviv Ankara Istanbul LA Dallas Houston SanFrancisco NYC Atlanta Austin Chicago Miami Seattle}"
@@ -35,6 +36,7 @@ cmd=(
   --loop
   --output-dir "$OUTPUT_DIR"
   --interval-sec "$INTERVAL_SEC"
+  --burst-interval-sec "$BURST_INTERVAL_SEC"
   --max-shares-per-trade "$MAX_SHARES_PER_TRADE"
   --max-shares-per-market "$MAX_SHARES_PER_MARKET"
   --max-no-ask "$MAX_NO_ASK"
@@ -97,6 +99,7 @@ fi
 echo "started fast_source_prev_no_trial mode=$START_MODE"
 echo "target_date=${TARGET_DATE:-auto_today}"
 echo "interval_sec=$INTERVAL_SEC"
+echo "burst_interval_sec=$BURST_INTERVAL_SEC"
 echo "sources=$SOURCES"
 echo "live_cities=$LIVE_CITIES"
 echo "shadow_cities=$SHADOW_CITIES"
