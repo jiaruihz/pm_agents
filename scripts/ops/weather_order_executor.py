@@ -352,7 +352,17 @@ def _build_live_cancel_fn():
             client.set_api_creds(client.create_or_derive_api_creds())
 
     def cancel(order_id: str) -> Dict[str, Any]:
-        return {"cancel": _cancel_order(client, clob_v2=clob_v2, order_payload_cls=OrderPayload, order_id=order_id)}
+        result: Dict[str, Any] = {}
+        try:
+            result["order_before_cancel"] = client.get_order(order_id)
+        except Exception as exc:
+            result["order_before_cancel_error"] = f"{type(exc).__name__}: {exc}"
+        result["cancel"] = _cancel_order(client, clob_v2=clob_v2, order_payload_cls=OrderPayload, order_id=order_id)
+        try:
+            result["order_after_cancel"] = client.get_order(order_id)
+        except Exception as exc:
+            result["order_after_cancel_error"] = f"{type(exc).__name__}: {exc}"
+        return result
 
     return cancel
 

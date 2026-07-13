@@ -721,6 +721,90 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(rows[-1]["exchange_response"]["error_classification"], "pre_place_cancel_not_confirmed")
             self.assertIn("already canceled or matched", rows[-1]["exchange_response"]["error_reason"])
 
+    def test_execute_trade_plans_blocks_partial_fill_replacement_below_exchange_minimum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "allow_duplicate_signal_id": True,
+                "execution_action": "maker_lifecycle_reprice_maker",
+                "cancel_before_order_id": "old-order-1",
+                "source_order_id": "old-order-1",
+                "replacement_requires_order_state": True,
+                "min_order_shares": 5.0,
+                "size": 5.0,
+            }
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "new-order-1"},
+                live_cancel_fn=lambda order_id: {
+                    "cancel": {"canceled": [order_id], "not_canceled": {}},
+                    "order_after_cancel": {"original_size": "5", "size_matched": "3"},
+                },
+            )
+
+            self.assertEqual(result["live_guard_blocks"], 1)
+            self.assertEqual(calls, [])
+            row = json.loads(live.read_text().splitlines()[-1])
+            self.assertEqual(row["status"], "blocked")
+            self.assertEqual(
+                row["exchange_response"]["error_classification"],
+                "replacement_remaining_below_minimum_after_cancel",
+            )
+            self.assertEqual(row["exchange_response"]["authoritative_matched_shares"], 3.0)
+            self.assertEqual(row["exchange_response"]["replacement_shares"], 2.0)
+
+    def test_execute_trade_plans_places_only_authoritative_remaining_shares(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "allow_duplicate_signal_id": True,
+                "execution_action": "maker_lifecycle_reprice_maker",
+                "cancel_before_order_id": "old-order-1",
+                "source_order_id": "old-order-1",
+                "replacement_requires_order_state": True,
+                "min_order_shares": 5.0,
+                "size": 8.0,
+                "limit_price": 0.10,
+            }
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            calls = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda p: calls.append(p) or {"order_id": "new-order-1"},
+                live_cancel_fn=lambda order_id: {
+                    "cancel": {"canceled": [order_id], "not_canceled": {}},
+                    "order_after_cancel": {"original_size": "8", "size_matched": "3"},
+                },
+            )
+
+            self.assertEqual(result["live_guard_blocks"], 0)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0]["size"], 5.0)
+            self.assertEqual(calls[0]["notional"], 0.5)
+            self.assertEqual(calls[0]["source_filled_shares"], 3.0)
+
     def test_execute_trade_plans_preserves_live_error_diagnostics(self):
         class DiagnosticError(RuntimeError):
             weather_execution_response = {

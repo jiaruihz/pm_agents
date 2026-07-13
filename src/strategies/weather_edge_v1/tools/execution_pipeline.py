@@ -1106,6 +1106,70 @@ def cancel_response_allows_replacement(response: Dict[str, Any], order_id: str) 
     return False, "cancel_not_confirmed"
 
 
+def _order_state_payload(value: Any) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    nested = value.get("order")
+    return nested if isinstance(nested, dict) else value
+
+
+def _order_state_float(state: Dict[str, Any], *keys: str) -> float:
+    for key in keys:
+        if key in state and state.get(key) is not None:
+            return to_float(state.get(key), 0.0)
+    return 0.0
+
+
+def authoritative_replacement_plan(
+    plan: Dict[str, Any],
+    cancel_response: Dict[str, Any],
+) -> Tuple[Optional[Dict[str, Any]], str, Dict[str, Any]]:
+    """Resize cancel/replace orders from the post-cancel exchange order state."""
+    if not bool(plan.get("replacement_requires_order_state", False)):
+        return plan, "not_required", {}
+
+    state = _order_state_payload(cancel_response.get("order_after_cancel"))
+    if not state:
+        return None, "missing_authoritative_order_state_after_cancel", {}
+    original = _order_state_float(state, "original_size", "originalSize", "size")
+    matched = _order_state_float(state, "size_matched", "sizeMatched", "matched_size", "matchedSize")
+    if original <= 0 or matched < 0 or matched > original + 1e-6:
+        return None, "invalid_authoritative_order_state_after_cancel", {
+            "authoritative_original_shares": original,
+            "authoritative_matched_shares": matched,
+        }
+
+    exchange_remaining = max(0.0, original - matched)
+    planned_remaining = max(0.0, to_float(plan.get("size"), 0.0))
+    replacement_shares = min(planned_remaining, exchange_remaining)
+    minimum = max(0.0, to_float(plan.get("min_order_shares"), 5.0))
+    evidence = {
+        "authoritative_original_shares": round(original, 6),
+        "authoritative_matched_shares": round(matched, 6),
+        "authoritative_remaining_shares": round(exchange_remaining, 6),
+        "planned_remaining_shares": round(planned_remaining, 6),
+        "replacement_shares": round(replacement_shares, 6),
+        "replacement_min_order_shares": round(minimum, 6),
+    }
+    if replacement_shares <= 0:
+        return None, "source_order_fully_filled_before_replacement", evidence
+    if minimum > 0 and replacement_shares < minimum - 1e-9:
+        return None, "replacement_remaining_below_minimum_after_cancel", evidence
+
+    price = max(0.0, to_float(plan.get("limit_price"), 0.0))
+    adjusted = {
+        **plan,
+        "size": round(replacement_shares, 6),
+        "notional": round(replacement_shares * price, 6),
+        "order_notional_cap": round(replacement_shares * price, 6),
+        "fixed_order_shares": round(replacement_shares, 6),
+        "source_filled_shares": round(matched, 6),
+        "source_remaining_shares": round(exchange_remaining, 6),
+        **evidence,
+    }
+    return adjusted, "authoritative_remaining_applied", evidence
+
+
 def execute_trade_plans(
     *,
     plan_path: Path,
@@ -1259,6 +1323,35 @@ def execute_trade_plans(
                     live_result["written"] += result["written"]
                     live_result["skipped_existing"] += result["skipped_existing"]
                     continue
+                adjusted_plan, replacement_reason, replacement_evidence = authoritative_replacement_plan(
+                    plan,
+                    pre_place_cancel_response,
+                )
+                if adjusted_plan is None:
+                    live_guard_blocks += 1
+                    record = build_live_order_record(
+                        plan,
+                        {
+                            "error_classification": replacement_reason,
+                            "error_reason": replacement_reason,
+                            "error": replacement_reason,
+                            "pre_place_cancel_order_id": cancel_before_order_id,
+                            "pre_place_cancel_response": pre_place_cancel_response,
+                            "pre_place_cancel_status": "cancel_confirmed_no_replacement",
+                            "requested_price": to_float(plan.get("limit_price"), 0.0),
+                            "posted_price": 0.0,
+                            "quote_status": "rejected",
+                            "quote_reason": replacement_reason,
+                            **replacement_evidence,
+                        },
+                        status="blocked",
+                    )
+                    live_orders.append(record)
+                    result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
+                    live_result["written"] += result["written"]
+                    live_result["skipped_existing"] += result["skipped_existing"]
+                    continue
+                plan = adjusted_plan
             response = live_place_fn(plan)
             if pre_place_cancel_response is not None:
                 response = {

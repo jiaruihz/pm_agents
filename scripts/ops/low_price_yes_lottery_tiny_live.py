@@ -1868,6 +1868,7 @@ def build_lifecycle_plan(
     age_min: float,
     lifecycle_key: str,
     live_enabled: bool,
+    min_order_shares: float,
 ) -> dict[str, Any]:
     price = to_float(action.get("limit_price"), 0.0)
     p_yes = to_float(order.get("model_p_yes_used") or order.get("model_token_probability"), 0.0)
@@ -1927,6 +1928,8 @@ def build_lifecycle_plan(
         "source_posted_price": round(to_float(order.get("posted_price"), 0.0), 6),
         "source_filled_shares": round(filled_shares, 6),
         "source_remaining_shares": round(remaining_shares, 6),
+        "replacement_requires_order_state": True,
+        "min_order_shares": round(min_order_shares, 6),
         "source_order_age_min": round(age_min, 3),
         "lifecycle_key": lifecycle_key,
         "tick_size": to_float(order.get("tick_size"), 0.001) or 0.001,
@@ -2077,6 +2080,7 @@ def lifecycle_plans(args: argparse.Namespace, *, live_enabled: bool) -> tuple[li
                 age_min=age_min,
                 lifecycle_key=lifecycle_key,
                 live_enabled=live_enabled,
+                min_order_shares=float(args.min_order_shares),
             )
         )
     return plans, decisions
