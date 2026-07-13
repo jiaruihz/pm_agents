@@ -2,7 +2,7 @@
 
 Date: 2026-07-13
 Strategy: `low_price_yes_lottery_tiny_live_v1`
-Status: root cause fixed locally; deployment verification required.
+Status: fixed and deployed to the Mac production HeadA runner.
 
 ## Summary
 
@@ -49,4 +49,7 @@ The HeadA lifecycle plan explicitly marks cancel/replace orders as requiring aut
 ## Verification
 
 - Focused tests: `41 passed` in `test_weather_execution_pipeline.py` and `test_low_price_yes_lottery_sizing.py`.
-- Required live verification after restart: process uses the committed SHA; a lifecycle record contains post-cancel order state; no signal's cumulative fills exceed its root planned shares.
+- Fix commit: `a18af8e`.
+- Mac HeadA restarted with `sizing_policy=fixed_5_shares`, live PID 24204.
+- First post-deploy Shanghai lifecycle replacement recorded authenticated state before cancel (`original_size=5`, `size_matched=0`, `status=LIVE`) and after cancel (`size_matched=0`, `status=CANCELED`); replacement remained 5 shares. The canceled source order is no longer open and only the replacement order is open.
+- The partial-fill branch is covered by the focused test. The next natural partial-fill replacement remains the first live proof of the below-minimum no-replacement branch.
