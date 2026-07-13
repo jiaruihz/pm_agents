@@ -1,4 +1,11 @@
-from scripts.ops.weather_fast_source_prev_no_trial import source_cross_confirmation
+import json
+from datetime import datetime, timezone
+
+from scripts.ops.weather_fast_source_prev_no_trial import (
+    metar_report_clocks,
+    next_metar_window_status,
+    source_cross_confirmation,
+)
 
 
 def evaluate(temp: float, obs_ts: str, state: dict, *, city="Busan", source="amos_runway"):
@@ -114,3 +121,49 @@ def test_other_sources_keep_existing_arithmetic_round_policy():
 
     assert result["policy"] == "arithmetic_round_v1"
     assert result["confirmed"] is True
+
+
+def test_metar_report_clock_uses_routine_reports_and_ignores_speci(tmp_path):
+    path = tmp_path / "sources.jsonl"
+    rows = [
+        ("2026-07-13T03:00:00+00:00", "METAR RKPK 130300Z"),
+        ("2026-07-13T04:00:00+00:00", "METAR RKPK 130400Z"),
+        ("2026-07-13T04:27:00+00:00", "SPECI RKPK 130427Z"),
+        ("2026-07-13T05:00:00+00:00", "METAR RKPK 130500Z"),
+    ]
+    path.write_text(
+        "".join(
+            json.dumps(
+                {
+                    "city": "Busan",
+                    "target_date": "2026-07-13",
+                    "source_report_ts_utc": report_ts,
+                    "raw_metar": raw_metar,
+                }
+            )
+            + "\n"
+            for report_ts, raw_metar in rows
+        ),
+        encoding="utf-8",
+    )
+
+    clock = metar_report_clocks(path, "2026-07-13")["Busan"]
+
+    assert clock["routine_metar_cadence_min"] == 60.0
+    assert clock["latest_routine_metar_report_ts_utc"] == "2026-07-13T05:00:00+00:00"
+    assert clock["next_expected_metar_report_ts_utc"] == "2026-07-13T06:00:00+00:00"
+
+
+def test_next_metar_execution_window_covers_twenty_minutes_before_and_after():
+    clock = {"next_expected_metar_report_ts_utc": "2026-07-13T06:00:00+00:00"}
+
+    too_early = next_metar_window_status(clock, datetime(2026, 7, 13, 5, 18, tzinfo=timezone.utc), window_min=20)
+    at_open = next_metar_window_status(clock, datetime(2026, 7, 13, 5, 40, tzinfo=timezone.utc), window_min=20)
+    after_due = next_metar_window_status(clock, datetime(2026, 7, 13, 6, 10, tzinfo=timezone.utc), window_min=20)
+    too_late = next_metar_window_status(clock, datetime(2026, 7, 13, 6, 21, tzinfo=timezone.utc), window_min=20)
+
+    assert too_early["next_metar_window_eligible"] is False
+    assert too_early["minutes_to_next_expected_metar"] == 42.0
+    assert at_open["next_metar_window_eligible"] is True
+    assert after_due["next_metar_window_eligible"] is True
+    assert too_late["next_metar_window_eligible"] is False

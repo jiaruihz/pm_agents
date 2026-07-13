@@ -15,8 +15,9 @@ import math
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -186,6 +187,72 @@ def latest_source_by_city(path: Path, target_date: str, allowed_sources: set[str
     return out
 
 
+def metar_report_clocks(path: Path, target_date: str) -> dict[str, dict[str, Any]]:
+    """Infer each city's routine METAR cadence; SPECI does not move the schedule."""
+    routine_reports: dict[str, set[datetime]] = {}
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if str(row.get("target_date") or "") != target_date:
+                continue
+            report_dt = parse_dt(row.get("source_report_ts_utc"))
+            raw_metar = str(row.get("raw_metar") or "").strip().upper()
+            if report_dt is None or not raw_metar.startswith("METAR "):
+                continue
+            city = market_city(str(row.get("city") or ""))
+            routine_reports.setdefault(city, set()).add(report_dt)
+
+    clocks: dict[str, dict[str, Any]] = {}
+    for city, report_set in routine_reports.items():
+        reports = sorted(report_set)
+        gaps = [
+            (current - previous).total_seconds() / 60.0
+            for previous, current in zip(reports, reports[1:])
+            if 15.0 <= (current - previous).total_seconds() / 60.0 <= 90.0
+        ]
+        if len(reports) < 3 or len(gaps) < 2:
+            continue
+        cadence_min = float(median(gaps[-8:]))
+        latest_report = reports[-1]
+        clocks[city] = {
+            "routine_metar_cadence_min": round(cadence_min, 3),
+            "latest_routine_metar_report_ts_utc": latest_report.isoformat(),
+            "next_expected_metar_report_ts_utc": (latest_report + timedelta(minutes=cadence_min)).isoformat(),
+            "routine_metar_report_count": len(reports),
+        }
+    return clocks
+
+
+def next_metar_window_status(
+    clock: dict[str, Any] | None,
+    now: datetime,
+    *,
+    window_min: float,
+) -> dict[str, Any]:
+    next_report = parse_dt((clock or {}).get("next_expected_metar_report_ts_utc"))
+    if next_report is None:
+        return {
+            **(clock or {}),
+            "next_metar_window_min": float(window_min),
+            "next_metar_window_eligible": False,
+            "next_metar_window_blocker": "metar_report_clock_missing",
+        }
+    minutes_to_next = (next_report - now).total_seconds() / 60.0
+    eligible = abs(minutes_to_next) <= float(window_min) + 1e-9
+    return {
+        **(clock or {}),
+        "minutes_to_next_expected_metar": round(minutes_to_next, 3),
+        "next_metar_window_distance_min": round(abs(minutes_to_next), 3),
+        "next_metar_window_min": float(window_min),
+        "next_metar_window_eligible": eligible,
+        "next_metar_window_blocker": "" if eligible else "outside_next_metar_execution_window",
+    }
+
+
 def floor_to_places(value: float, places: int) -> float:
     factor = 10**places
     return math.floor(float(value) * factor + 1e-12) / factor
@@ -351,6 +418,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
 
     source_rows = latest_source_by_city(Path(args.high_frequency_latest), target_date, allowed_sources, all_cities)
     metar_rows = metar_running_max(Path(args.source_events_jsonl), target_date)
+    metar_clocks = metar_report_clocks(Path(args.source_events_jsonl), target_date)
     paper_path = latest_paper_snapshot()
     orderbook_path = latest_orderbook_snapshot()
     market_index = build_market_index(paper_path, target_date)
@@ -387,6 +455,11 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         source_round = int(src["source_temp_round_c"])
         metar_max = int(metar["metar_running_max_round_c"])
         t_minus_1 = source_round - 1
+        next_metar_window = next_metar_window_status(
+            metar_clocks.get(city),
+            now,
+            window_min=float(args.next_metar_window_min),
+        )
         cross_confirmation = source_cross_confirmation(
             city=city,
             source=str(src.get("source") or ""),
@@ -415,6 +488,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "metar_running_max_round_c": metar_max,
             "metar_running_max_temp_c": metar.get("metar_running_max_temp_c"),
             "t_minus_1_no_bracket_c": t_minus_1,
+            **next_metar_window,
             "source_cross_policy": cross_confirmation["policy"],
             "source_cross_required_margin_c": cross_confirmation["required_margin_c"],
             "source_cross_threshold_c": cross_confirmation.get("threshold_c"),
@@ -432,6 +506,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             blockers.append("source_too_old")
         if source_obs_dt and latest_metar_report_dt and source_obs_dt <= latest_metar_report_dt:
             blockers.append("source_not_after_latest_metar")
+        if next_metar_window["next_metar_window_blocker"]:
+            blockers.append(str(next_metar_window["next_metar_window_blocker"]))
         if source_detect_dt and latest_metar_report_dt:
             common["source_obs_after_latest_metar_report_sec"] = round((source_obs_dt - latest_metar_report_dt).total_seconds(), 3) if source_obs_dt else None
         if blockers:
@@ -551,6 +627,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "max_shares_per_market_by_city": max_shares_per_market_by_city,
             "max_no_ask": float(args.max_no_ask),
             "max_source_age_min": float(args.max_source_age_min),
+            "next_metar_window_min": float(args.next_metar_window_min),
         },
         "source_cities": sorted(source_rows),
         "metar_cities": sorted(metar_rows),
@@ -630,6 +707,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Added to best_ask to form the FOK BUY limit price (capped by --max-no-ask). Keeps filled shares near size instead of ceiling/ask times as many.",
     )
     parser.add_argument("--max-source-age-min", type=float, default=15.0)
+    parser.add_argument("--next-metar-window-min", type=float, default=20.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
     parser.add_argument("--market-proxy", default=market_proxy_url(None))
     parser.add_argument("--live", action="store_true")

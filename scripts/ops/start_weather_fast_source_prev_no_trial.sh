@@ -17,6 +17,7 @@ MAX_SHARES_PER_TRADE_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_TRADE_BY_CIT
 MAX_SHARES_PER_MARKET_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_MARKET_BY_CITY:-Tokyo=5}"
 MAX_NO_ASK="${WEATHER_FAST_PREV_NO_MAX_NO_ASK:-0.94}"
 MAX_SOURCE_AGE_MIN="${WEATHER_FAST_PREV_NO_MAX_SOURCE_AGE_MIN:-15}"
+NEXT_METAR_WINDOW_MIN="${WEATHER_FAST_PREV_NO_NEXT_METAR_WINDOW_MIN:-20}"
 BOOK_TIMEOUT_SEC="${WEATHER_FAST_PREV_NO_BOOK_TIMEOUT_SEC:-5}"
 OUTPUT_DIR="${WEATHER_FAST_PREV_NO_OUTPUT_DIR:-$RUNTIME_ROOT/output/fast_source_prev_no_trial}"
 MARKET_PROXY="${WEATHER_FAST_PREV_NO_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-${WEATHER_PREDICT_MARKET_PROXY:-http://127.0.0.1:7890}}}"
@@ -38,6 +39,7 @@ cmd=(
   --max-shares-per-market "$MAX_SHARES_PER_MARKET"
   --max-no-ask "$MAX_NO_ASK"
   --max-source-age-min "$MAX_SOURCE_AGE_MIN"
+  --next-metar-window-min "$NEXT_METAR_WINDOW_MIN"
   --book-timeout-sec "$BOOK_TIMEOUT_SEC"
   --sources
 )
@@ -104,6 +106,7 @@ echo "max_shares_per_trade_by_city=${MAX_SHARES_PER_TRADE_BY_CITY:-none}"
 echo "max_shares_per_market_by_city=${MAX_SHARES_PER_MARKET_BY_CITY:-none}"
 echo "max_no_ask=$MAX_NO_ASK"
 echo "max_source_age_min=$MAX_SOURCE_AGE_MIN"
+echo "next_metar_window_min=$NEXT_METAR_WINDOW_MIN"
 echo "output_dir=$OUTPUT_DIR"
 echo "log=$LOG_FILE"
 echo "pid_file=$PID_FILE"
