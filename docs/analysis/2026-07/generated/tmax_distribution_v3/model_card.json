@@ -1,0 +1,141 @@
+{
+  "model_version": "tmax_distribution_v3",
+  "feature_contract_version": "tmax_feature_contract_v2",
+  "model_family": "full_ladder_hazard_chain_with_market_fusion",
+  "primary_route": "market_path",
+  "routes": {
+    "market_recal_global": {
+      "layers": [
+        "market_prior"
+      ],
+      "fusion": "constrained_multinomial_recalibration",
+      "coherence": false,
+      "lineage": "strict_pit"
+    },
+    "market_recal_path": {
+      "layers": [
+        "market_prior",
+        "path_energy"
+      ],
+      "fusion": "constrained_multinomial_recalibration",
+      "coherence": false,
+      "lineage": "strict_pit"
+    },
+    "weather_only": {
+      "layers": [
+        "path_energy",
+        "source_calibration"
+      ],
+      "fusion": "fixed_alpha_0",
+      "coherence": false,
+      "lineage": "strict_pit"
+    },
+    "market_path": {
+      "layers": [
+        "market_prior",
+        "path_energy"
+      ],
+      "fusion": "train_select",
+      "coherence": false,
+      "lineage": "strict_pit"
+    },
+    "market_path_source": {
+      "layers": [
+        "market_prior",
+        "path_energy",
+        "source_calibration"
+      ],
+      "fusion": "train_select",
+      "coherence": false,
+      "lineage": "strict_pit"
+    },
+    "strict_pit_full": {
+      "layers": [
+        "market_prior",
+        "path_energy",
+        "source_calibration"
+      ],
+      "fusion": "train_select",
+      "coherence": true,
+      "lineage": "strict_pit"
+    },
+    "archive_upper_bound": {
+      "layers": [
+        "market_prior",
+        "path_energy",
+        "source_calibration",
+        "weather_mechanism"
+      ],
+      "fusion": "train_select",
+      "coherence": true,
+      "lineage": "archive_reconstructed_upper_bound"
+    }
+  },
+  "outcome_space": "absolute bracket ladder expanded from PIT anchor; five-bucket below/current/d1/d2/tail aggregate for legacy comparison",
+  "pre_registered": {
+    "alpha_candidates": [
+      0.0,
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "coherence_candidates": [
+      0.0,
+      0.25,
+      0.5
+    ],
+    "market_recalibration_c_candidates": [
+      0.01,
+      0.03,
+      0.1
+    ],
+    "selection_metric": "date-equal multiclass logloss on training window only"
+  },
+  "frozen_execution_policy": {
+    "ask_floor": 0.4,
+    "ask_ceiling": 0.99,
+    "edge_threshold": 0.02,
+    "fee_formula": "shares * 0.05 * price * (1 - price)",
+    "shares": 5,
+    "min_ask_size": 5.0,
+    "expressions": [
+      "current_no",
+      "d1_no",
+      "d2_no",
+      "d1_yes",
+      "d2_yes"
+    ],
+    "selection": "first_eligible_city_day",
+    "rebalance_buffer": 0.02,
+    "adverse_selection_buffer": 0.01,
+    "frozen_source": "replay_v2_frozen_policy + target_book_rebalance_v1"
+  },
+  "denominators": {
+    "labeled_exec_states": 8094,
+    "hourly_states": 4121,
+    "paired_rows": 2777,
+    "paired_dates": 16,
+    "freeze_date": "2026-07-10"
+  },
+  "verdict": {
+    "baseline": "FAIL",
+    "significance": "FAIL",
+    "forward": "FAIL_fresh_forward_0",
+    "conclusion": "shadow_candidate_no_live",
+    "single_gap": "primary does not beat market on paired proper score; shadow forward evidence still required"
+  },
+  "known_gaps": [
+    "fresh-forward evidence = 0 dates (all in-window results retrospective_diagnostic)",
+    "forecast hourly curves only cover 2026-07-04+ (remaining-heat features flagged missing before)",
+    "weather_mechanism layer is archive-reconstructed upper bound, never live artifact",
+    "dual GFS+ECMWF same-time coverage too thin to answer forward source increments",
+    "temporal coherence was not selected (frozen weight=0); shift=0 no-break elapsed-time survival decay is not implemented"
+  ],
+  "hard_boundaries": [
+    "no live restore, no live config change, no real order",
+    "archive_upper_bound routes never enter a live artifact",
+    "missing rung/ladder kept as missingness flag, never probability 0",
+    "no per-city free alpha or one-hot memory"
+  ]
+}

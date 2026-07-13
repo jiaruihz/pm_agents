@@ -1,0 +1,69 @@
+{
+  "model_version": "tmax_distribution_v3",
+  "artifact": "frozen_primary_hazard_chain",
+  "candidate_status": "shadow_candidate",
+  "promotion": "no_live",
+  "primary_route": "market_path",
+  "train_through": "2026-07-10",
+  "train_rows": 4121,
+  "train_dates": 22,
+  "fusion_alpha_frozen": 1.0,
+  "coherence_weight_frozen": 0.0,
+  "calibrator_c_frozen": null,
+  "h_cont": 0.5893491124260355,
+  "model_description": {
+    "model_version": "tmax_distribution_v3",
+    "feature_columns": [
+      "market_p_below",
+      "market_p_current",
+      "market_p_d1",
+      "market_p_d2",
+      "market_p_tail",
+      "market_entropy",
+      "ladder_overround",
+      "quoted_rung_fraction",
+      "current_yes_spread",
+      "d1_yes_spread",
+      "d2_yes_spread",
+      "log_depth_min_anchor",
+      "rungs_above_count",
+      "boundary_pos_in_bracket",
+      "forecast_gap_to_running_f",
+      "current_minus_running_f",
+      "temp_trend_1h_f",
+      "temp_trend_3h_f",
+      "max_age_min",
+      "minutes_since_running_max",
+      "forecast_peak_delta_hours_local",
+      "forecast_ceiling_margin_f",
+      "remaining_heat_integral_f",
+      "forecast_curve_available",
+      "tracking_residual_f",
+      "obs_count_today"
+    ],
+    "c_value": 0.1,
+    "train_rows": 4121,
+    "train_dates": 22,
+    "train_through": "2026-07-10",
+    "p_below": 0.000120598166907863,
+    "h_cont": 0.5893491124260355,
+    "heads": {
+      "h0": {
+        "mode": "model",
+        "train_rows": 4121
+      },
+      "h1": {
+        "mode": "model",
+        "train_rows": 3111
+      },
+      "h2": {
+        "mode": "model",
+        "train_rows": 2573
+      }
+    }
+  },
+  "pipeline_sha256": "181bd03c18d1fe4da30b1ea274eb3fd210a76a973985fde5d5e85020d30d8c16",
+  "reload_prediction_max_abs_delta": 0.0,
+  "zero_notional": true,
+  "no_order_placed": true
+}
