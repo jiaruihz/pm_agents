@@ -1,0 +1,353 @@
+{
+  "generated_at_utc": "2026-07-14T12:12:42+00:00",
+  "input": "docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv",
+  "row_grain": "settled city-target_date-decision_hour state",
+  "data_integrity": {
+    "input_sha256": "d171f284c6c38df1878bc7eb38d7a3ba3949b385d5656b130311af80c63696dc",
+    "target_date_min": "2026-05-19",
+    "target_date_max": "2026-06-17",
+    "dedup_key_duplicates": 0,
+    "settlement_status_counts": {
+      "settled": 9800
+    },
+    "current_yes_ask_coverage": 0.8260204081632653,
+    "d1_no_ask_coverage": 0.8027551020408163
+  },
+  "funnel": {
+    "raw_feature_rows": 99819,
+    "dedup_state_rows": 9800,
+    "dates": 30,
+    "cities": 36,
+    "base_candidates": 268,
+    "strong_proxy_candidates": 36
+  },
+  "historical_feature_coverage": {
+    "available": [
+      "temperature_path",
+      "minutes_since_running_max",
+      "cloud_cover",
+      "humidity",
+      "wind_speed",
+      "dual_model_peak_clock",
+      "dual_model_forecast_gap"
+    ],
+    "missing_new_fields": [
+      "precipitation",
+      "wind_direction",
+      "forecast_remaining_3h_weather",
+      "solar_geometry"
+    ]
+  },
+  "rule": {
+    "base": "hour 13-17; decline>=0.5 native; minutes_since_max>=60; trend1h<=0F; both model peaks passed>=0.25h",
+    "strong_proxy": "base plus at least 2 of cloud_limited, humid_cloud, dual_forecast_low_gap",
+    "fee": "official Weather taker fee=0.05*p*(1-p), rounded to 5 decimals"
+  },
+  "summary": [
+    {
+      "period": "train",
+      "cohort": "base_candidate",
+      "expression": "current_yes",
+      "rows": 115,
+      "active_dates": 13,
+      "cities": 27,
+      "win_rate": 1.0,
+      "avg_ask": 0.9346521739130434,
+      "cost": 107.73104,
+      "pnl": 7.2689600000000025,
+      "roi": 0.0674732184893045,
+      "roi_ci95": [
+        0.03770301440094493,
+        0.10521469054909136
+      ]
+    },
+    {
+      "period": "train",
+      "cohort": "base_candidate",
+      "expression": "d1_no",
+      "rows": 101,
+      "active_dates": 13,
+      "cities": 27,
+      "win_rate": 1.0,
+      "avg_ask": 0.9578217821782178,
+      "cost": 96.93463000000001,
+      "pnl": 4.065370000000002,
+      "roi": 0.04193929455345321,
+      "roi_ci95": [
+        0.030883536099898575,
+        0.052472734040389
+      ]
+    },
+    {
+      "period": "train",
+      "cohort": "strong_proxy",
+      "expression": "current_yes",
+      "rows": 21,
+      "active_dates": 8,
+      "cities": 9,
+      "win_rate": 1.0,
+      "avg_ask": 0.9148571428571428,
+      "cost": 19.264819999999997,
+      "pnl": 1.7351800000000002,
+      "roi": 0.09006987867003172,
+      "roi_ci95": [
+        0.030874317644039872,
+        0.2554801121623266
+      ]
+    },
+    {
+      "period": "train",
+      "cohort": "strong_proxy",
+      "expression": "d1_no",
+      "rows": 19,
+      "active_dates": 8,
+      "cities": 9,
+      "win_rate": 1.0,
+      "avg_ask": 0.9363157894736842,
+      "cost": 17.84349,
+      "pnl": 1.1565100000000004,
+      "roi": 0.06481411427921334,
+      "roi_ci95": [
+        0.04097003956652423,
+        0.10470540013713432
+      ]
+    },
+    {
+      "period": "holdout",
+      "cohort": "base_candidate",
+      "expression": "current_yes",
+      "rows": 153,
+      "active_dates": 16,
+      "cities": 34,
+      "win_rate": 0.9869281045751634,
+      "avg_ask": 0.9558627450980393,
+      "cost": 146.50324,
+      "pnl": 4.496760000000005,
+      "roi": 0.030693928680348675,
+      "roi_ci95": [
+        0.0017940691105778912,
+        0.05874850186557511
+      ]
+    },
+    {
+      "period": "holdout",
+      "cohort": "base_candidate",
+      "expression": "d1_no",
+      "rows": 125,
+      "active_dates": 16,
+      "cities": 32,
+      "win_rate": 0.984,
+      "avg_ask": 0.9589600000000001,
+      "cost": 120.08228000000001,
+      "pnl": 2.917720000000004,
+      "roi": 0.02429767322872287,
+      "roi_ci95": [
+        -0.00740830197685822,
+        0.051457369973882026
+      ]
+    },
+    {
+      "period": "holdout",
+      "cohort": "strong_proxy",
+      "expression": "current_yes",
+      "rows": 15,
+      "active_dates": 7,
+      "cities": 8,
+      "win_rate": 1.0,
+      "avg_ask": 0.9781333333333335,
+      "cost": 14.68789,
+      "pnl": 0.31211000000000055,
+      "roi": 0.021249478311724867,
+      "roi_ci95": [
+        0.014539542829469562,
+        0.029314910083249535
+      ]
+    },
+    {
+      "period": "holdout",
+      "cohort": "strong_proxy",
+      "expression": "d1_no",
+      "rows": 13,
+      "active_dates": 6,
+      "cities": 7,
+      "win_rate": 1.0,
+      "avg_ask": 0.979923076923077,
+      "cost": 12.751740000000003,
+      "pnl": 0.24826000000000048,
+      "roi": 0.019468715641943798,
+      "roi_ci95": [
+        0.014251358533347497,
+        0.02561472782749163
+      ]
+    },
+    {
+      "period": "all",
+      "cohort": "base_candidate",
+      "expression": "current_yes",
+      "rows": 268,
+      "active_dates": 29,
+      "cities": 36,
+      "win_rate": 0.9925373134328358,
+      "avg_ask": 0.9467611940298507,
+      "cost": 254.23427999999998,
+      "pnl": 11.765720000000009,
+      "roi": 0.04627904624034182,
+      "roi_ci95": [
+        0.024627367436892367,
+        0.06894112066563597
+      ]
+    },
+    {
+      "period": "all",
+      "cohort": "base_candidate",
+      "expression": "d1_no",
+      "rows": 226,
+      "active_dates": 29,
+      "cities": 36,
+      "win_rate": 0.9911504424778761,
+      "avg_ask": 0.9584513274336284,
+      "cost": 217.01691,
+      "pnl": 6.983090000000006,
+      "roi": 0.03217763076619239,
+      "roi_ci95": [
+        0.0138882476848903,
+        0.04859555545827601
+      ]
+    },
+    {
+      "period": "all",
+      "cohort": "strong_proxy",
+      "expression": "current_yes",
+      "rows": 36,
+      "active_dates": 15,
+      "cities": 13,
+      "win_rate": 1.0,
+      "avg_ask": 0.9412222222222222,
+      "cost": 33.952709999999996,
+      "pnl": 2.047290000000001,
+      "roi": 0.06029827957768324,
+      "roi_ci95": [
+        0.02517769933272785,
+        0.13057221180622336
+      ]
+    },
+    {
+      "period": "all",
+      "cohort": "strong_proxy",
+      "expression": "d1_no",
+      "rows": 32,
+      "active_dates": 14,
+      "cities": 13,
+      "win_rate": 1.0,
+      "avg_ask": 0.9540312499999999,
+      "cost": 30.59523,
+      "pnl": 1.4047700000000007,
+      "roi": 0.04591467362722884,
+      "roi_ci95": [
+        0.028171274482392223,
+        0.06974949289314301
+      ]
+    }
+  ],
+  "paired_expression": {
+    "train_base_candidate": {
+      "rows": 101,
+      "active_dates": 13,
+      "current_yes_roi": 0.05681102147167947,
+      "d1_no_roi": 0.04193929455345321,
+      "current_yes_minus_d1_no_roi": 0.01487172691822626,
+      "delta_ci95": [
+        0.004872065103966116,
+        0.030477079212231434
+      ]
+    },
+    "train_strong_proxy": {
+      "rows": 19,
+      "active_dates": 8,
+      "current_yes_roi": 0.0992940218076791,
+      "d1_no_roi": 0.06481411427921334,
+      "current_yes_minus_d1_no_roi": 0.03447990752846576,
+      "delta_ci95": [
+        -0.007864618413235309,
+        0.19012443924260014
+      ]
+    },
+    "holdout_base_candidate": {
+      "rows": 125,
+      "active_dates": 16,
+      "current_yes_roi": 0.03506523309290371,
+      "d1_no_roi": 0.02429767322872287,
+      "current_yes_minus_d1_no_roi": 0.010767559864180837,
+      "delta_ci95": [
+        0.0036489404031034367,
+        0.01920379985994422
+      ]
+    },
+    "holdout_strong_proxy": {
+      "rows": 13,
+      "active_dates": 6,
+      "current_yes_roi": 0.023067013250291805,
+      "d1_no_roi": 0.019468715641943798,
+      "current_yes_minus_d1_no_roi": 0.0035982976083480077,
+      "delta_ci95": [
+        0.0005498150144697851,
+        0.008830963726326836
+      ]
+    },
+    "all_base_candidate": {
+      "rows": 226,
+      "active_dates": 29,
+      "current_yes_roi": 0.04475843062918293,
+      "d1_no_roi": 0.03217763076619239,
+      "current_yes_minus_d1_no_roi": 0.012580799862990537,
+      "delta_ci95": [
+        0.005932620230047674,
+        0.0208967773884818
+      ]
+    },
+    "all_strong_proxy": {
+      "rows": 32,
+      "active_dates": 14,
+      "current_yes_roi": 0.06699708009580303,
+      "d1_no_roi": 0.04591467362722884,
+      "current_yes_minus_d1_no_roi": 0.02108240646857419,
+      "delta_ci95": [
+        -0.004022154065824415,
+        0.08302169845321758
+      ]
+    }
+  },
+  "same_price_baseline": {
+    "train": {
+      "rows": 21,
+      "active_dates": 8,
+      "mean_abs_price_distance": 0.01076190476190477,
+      "max_abs_price_distance": 0.09200000000000001,
+      "candidate_roi": 0.09006987867003172,
+      "same_price_base_roi": 0.09022776934725989,
+      "excess_roi": -0.00015789067722817018,
+      "excess_ci95": [
+        -0.02569869541039917,
+        0.008701315448237334
+      ]
+    },
+    "holdout": {
+      "rows": 15,
+      "active_dates": 7,
+      "mean_abs_price_distance": 0.002133333333333335,
+      "max_abs_price_distance": 0.020000000000000018,
+      "candidate_roi": 0.021249478311724867,
+      "same_price_base_roi": 0.019794898849943336,
+      "excess_roi": 0.0014545794617815307,
+      "excess_ci95": [
+        -0.000531279659000173,
+        0.005723254782748401
+      ]
+    }
+  },
+  "outputs": {
+    "summary_csv": "docs/analysis/2026-07/generated/current_yes_heat_death_physical_backtest_v1/summary.csv",
+    "same_price_matches_csv": "docs/analysis/2026-07/generated/current_yes_heat_death_physical_backtest_v1/same_price_matches.csv",
+    "strong_proxy_rows_csv": "docs/analysis/2026-07/generated/current_yes_heat_death_physical_backtest_v1/strong_proxy_rows.csv"
+  }
+}

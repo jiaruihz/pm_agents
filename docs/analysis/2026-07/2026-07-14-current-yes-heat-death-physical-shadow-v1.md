@@ -4,6 +4,11 @@ Status: current-reference
 Date: 2026-07-14
 Verdict: `inconclusive_forward_shadow_only`
 
+Historical proxy performance is now quantified in
+`2026-07-14-current-yes-heat-death-physical-backtest-v1.md`; its result
+supersedes this report's initial `NA` gates while the complete new-feature
+forward gate remains thin.
+
 ## 结论
 
 `weather_state_v2` 新增的雨、云、风、观测时钟、solar geometry 和 forecast
