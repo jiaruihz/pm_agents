@@ -12,19 +12,26 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 ## §0 通用规约
 
-### 分析前强制数据同步（硬规定）
+### 数据刷新按问题分层（硬规定）
 
-**每次触发分析前必须先执行以下两条命令**（skill checklist 第 1.5 步）：
+**禁止为了查询单笔订单、当前 runner 状态或少量 raw lineage，执行全库同步或重建。**
 
-```bash
-# Step 1: 从 N100 拉取最新 paper ledger、snapshot CSV、pm_history
-scripts/ops/sync_weather_remote.sh
+1. 当前订单 / runner / 触发原因：先按 city、date、order_id 读取对应实例的 raw
+   `orders.jsonl`、`events.jsonl`、`opportunities.jsonl`，并报告文件覆盖时间。
+2. 已有 canonical 分析：只读检查 `runtime/weather.db` 的 mtime、目标窗口覆盖和
+   `MAX(fact_built_at_utc)`；覆盖足够就直接查询，不得为形式上的“完整 lineage”重建存量数据。
+3. 发布最新 PnL / settlement，且现有 DB 确实陈旧：优先使用增量刷新。只有增量流程不能满足、
+   且用户明确同意全量重建时，才运行：
 
-# Step 2: 重建 weather.db + fact_trades/fact_signal_candidates + CLOB coverage gate
-scripts/weather_dashboard/run_stack.sh
-```
+   ```bash
+   scripts/ops/sync_weather_remote.sh
+   scripts/weather_dashboard/run_stack.sh --rebuild
+   ```
 
-> 若 N100 不可达（SSH 超时 / 网络中断），在报告"数据快照"段注明，并写明本地缓存的最后同步时间。
+无参数 `scripts/weather_dashboard/run_stack.sh` 仅启动或复用 API + FE，保留现有 DB；
+`--rebuild` 是显式、长耗时的全量重建操作。
+
+> 若数据源不可达，在报告“数据快照”段注明，并写明本地缓存的最后覆盖时间；不得用一次全量重建掩盖源缺失。
 
 ### 数据源优先级（硬规定）
 
@@ -58,7 +65,8 @@ conn.execute("PRAGMA busy_timeout=1000")
 conn.row_factory = sqlite3.Row
 ```
 
-长查询、bootstrap、join-heavy 研究优先在 `run_stack.sh` 完成后制作一致性 snapshot，再读 snapshot：
+长查询、bootstrap、join-heavy 研究应先确认现有 DB 覆盖目标窗口，再制作一致性 snapshot 读取；
+制作 snapshot 本身不要求先跑 `run_stack.sh --rebuild`：
 
 ```bash
 mkdir -p runtime/analysis_snapshots
@@ -431,7 +439,7 @@ rows = conn.execute("""
 ### weather.db（原始规范化表，仅 fact_trades / fact_signal_candidates builder 使用）
 
 - 路径：`runtime/weather.db`
-- 刷新方式：`scripts/weather_dashboard/run_stack.sh`（重跑 ingest）
+- 日常刷新：`scripts/ops/weather_dashboard_refresh.sh`（增量 ingest）；全量派生层重算仅在明确需要时使用 `scripts/weather_dashboard/run_stack.sh --rebuild`
 - 覆盖时间：取决于镜像同步时间，详见 `WEATHER_DATA_PIPELINE.md`
 - **直接读原始表的唯一授权场景**：`build_weather_fact_trades.py` 和 `build_weather_signal_candidates.py`（两个 builder）；其他代码禁止绕过这两张底表自己 JOIN 多表算 PnL
 

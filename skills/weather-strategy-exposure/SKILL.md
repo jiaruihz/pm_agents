@@ -50,22 +50,16 @@ python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py --s
 
 先复述目标：例如 `current_live_real_open_exposure` = “查看 live_real 未结算 fill 的城市/市场/到期日敞口与三估值 unrealized PnL”。
 
-### 第 2 步：同步与数据源
+### 第 2 步：数据源与新鲜度
 
-持仓敞口要求数据新鲜。需要最新数据时：
-
-```bash
-scripts/ops/sync_weather_remote.sh
-scripts/weather_dashboard/run_stack.sh
-```
-
-检查：
+持仓敞口要求数据新鲜。先检查现有 DB：
 
 ```bash
 ls -la runtime/weather.db
 ```
 
-若无法同步，报告“数据快照”注明使用本地缓存、DB mtime、`MAX(fact_built_at_utc)`。
+目标窗口缺失时优先走增量刷新；只有增量流程不能满足且用户明确同意全量重建时，才调用
+`weather-fact-rebuild`。若无法刷新，报告“数据快照”注明使用本地缓存、DB mtime、`MAX(fact_built_at_utc)`。
 
 ### 第 3 步：完整性自检
 

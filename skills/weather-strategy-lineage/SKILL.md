@@ -41,20 +41,26 @@ description: >
 
 先复述目标：例如 `single_day_lineage_2026-05-23_live_real` = “复盘 2026-05-23 target_date 下 live_real 成交链路，逐笔解释信号、计划、订单、fill、settlement/PnL”。
 
-### 第 2 步：同步与数据源
+### 第 2 步：按问题选择数据源
 
-需要最新数据时：
+查询单笔订单、当天 runner 状态或“为什么下了这单”时，先按精确的 city / date / order_id
+读取对应策略实例的 raw `orders.jsonl`、`events.jsonl` 和 `opportunities.jsonl`。这类查询不得为了
+补一两笔 lineage 而同步全仓或重建 `runtime/weather.db`。
 
-```bash
-scripts/ops/sync_weather_remote.sh
-scripts/weather_dashboard/run_stack.sh
-```
-
-检查：
+需要 settlement / PnL 或 canonical 跨策略审计时，先只读检查现有 DB：
 
 ```bash
 ls -la runtime/weather.db
 ```
+
+只有现有 DB 确实不覆盖目标窗口、增量刷新也不能解决，并且用户明确同意全量重建时，才执行：
+
+```bash
+scripts/ops/sync_weather_remote.sh
+scripts/weather_dashboard/run_stack.sh --rebuild
+```
+
+无参数 `run_stack.sh` 只启动/复用 API 和前端，不会改写 DB。
 
 ### 第 3 步：数据完整性自检
 

@@ -24,7 +24,7 @@ Source of truth: 口径以 `WEATHER_ANALYSIS_CONTRACT.md` 为准；本文只把�
 
 | # | 阶段 | 回答什么 | canonical 源 | 硬 gate | skill | living doc |
 |---|---|---|---|---|---|---|
-| 0 | **数据自检 preflight** | 数据新鲜、底表重建、覆盖够吗 | `WEATHER_ANALYSIS_CONTRACT §0` | 先 sync+rebuild；`weather_clob_fill_coverage_gate.py gate_pass=true`；5 行 SQL；8 环覆盖自检 | `weather-fact-rebuild` | `analysis/data_integrity.md` |
+| 0 | **数据自检 preflight** | 数据新鲜、现有底表覆盖够吗 | `WEATHER_ANALYSIS_CONTRACT §0` | 先查 freshness/目标窗口；仅在确有需要且明确同意时 `--rebuild`；发布 live_real 前 `weather_clob_fill_coverage_gate.py gate_pass=true`；5 行 SQL；8 环覆盖自检 | `weather-fact-rebuild` | `analysis/data_integrity.md` |
 | 1 | **成交质量 / 执行** | 单子成没成、成交价、滑点、live vs shadow | `fact_signal_candidates`（执行微结构三源）；`orders`/`fills` | `submitted/posted/actual_fill_cost` 分开报；不绕 fact 自算滑点 | `weather-strategy-performance` | `analysis/execution_quality.md` |
 | 2 | **绩效归因** | PnL/ROI/胜率，按 instance/city/side/date 切片 | `fact_trades`（强制唯一取数源） | 绩效三道门；settled 才报 `pnl_usd_at_fill`，未结算只报 MTM+`val_snapshot_ts_utc`；near-binary 归一化 | `weather-strategy-performance` | `analysis/live_performance.md` |
 | 3 | **逐笔血缘 / 单日复盘** | 这单为什么下：signal→plan→order→fill→settlement | `signals`/`plans`/`orders`/`fills`/`settlements` | 用 canonical 链，不自拼 | `weather-strategy-lineage` | （挂 live_performance） |

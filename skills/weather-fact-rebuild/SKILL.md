@@ -31,17 +31,17 @@ description: >
 scripts/ops/sync_weather_remote.sh
 
 # 第 2 步：全链路重建（幂等）。两张底表是链条末端自动产出，不要单独跑 build_*.py
-scripts/weather_dashboard/run_stack.sh
+scripts/weather_dashboard/run_stack.sh --rebuild
 ```
 
 桌面端在 Windows shell 时，每条命令包一层：
 
 ```bash
 wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && scripts/ops/sync_weather_remote.sh"
-wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && scripts/weather_dashboard/run_stack.sh"
+wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && scripts/weather_dashboard/run_stack.sh --rebuild"
 ```
 
-`run_stack.sh`（默认 `--rebuild`）内部固定顺序（**不要拆开手跑**）：
+`run_stack.sh --rebuild` 内部固定顺序（**不要拆开手跑**）：
 
 1. `db-canonical-rebuild`（内容寻址 ingest）
 2. 迁移 legacy research CSV → 迁移 live-cycle 血缘
@@ -65,7 +65,7 @@ wsl -d Ubuntu-24.04 -- bash -lc "cd /home/rui/projects/pm_agent && scripts/weath
 - 长耗时，建议后台跑（`run_in_background`），完成后再继续分析；不要 sleep 轮询。
 - 链路命令：
   ```bash
-  scripts/ops/sync_weather_remote.sh && scripts/weather_dashboard/run_stack.sh
+  scripts/ops/sync_weather_remote.sh && scripts/weather_dashboard/run_stack.sh --rebuild
   ```
 
 ### 第 2 步：日志与失败排查
@@ -120,7 +120,7 @@ live_real 一起抹掉**。
    curl -sS -m 25 -o /dev/null -w 'http_code=%{http_code}\n' \
      'https://data-api.polymarket.com/activity?user=<FUNDER_ADDR>&limit=5&offset=0'
    ```
-4. 通了就**幂等重跑** `scripts/weather_dashboard/run_stack.sh`（无需再 sync），live_real 会恢复。
+4. 通了就**幂等重跑** `scripts/weather_dashboard/run_stack.sh --rebuild`（无需再 sync），live_real 会恢复。
    SSL 抖动通常是瞬时的，重跑即可。
 
 ### ⚠️ 致命陷阱：public activity 不是 order-level fill 真相

@@ -19,7 +19,8 @@ Source of truth: yes（看板信息架构 / 页面口径 / 接口）
 ## 1. 怎么起
 
 ```bash
-scripts/weather_dashboard/run_stack.sh [--no-rebuild]   # 建库+API+FE
+scripts/weather_dashboard/run_stack.sh                  # 启动/复用 API+FE，保留现有 DB
+# 仅在明确需要全量重建时：scripts/weather_dashboard/run_stack.sh --rebuild
 # FE http://localhost:5174 · API http://localhost:8000/docs · 默认落地 “今日总览” /
 ```
 

@@ -26,12 +26,8 @@ description: >
 
 ## 标准入口
 
-先按 `weather-fact-rebuild` 刷新数据；如果用户明确说刚刷新过且给出 `fact_built_at_utc`，可以只自检。
-
-```bash
-bash scripts/ops/sync_weather_remote.sh
-bash scripts/weather_dashboard/run_stack.sh
-```
+先检查现有 DB 与 raw CLOB fill 的覆盖。缺少最新 fill 时优先增量同步；只有增量流程不能满足、
+且用户明确同意全量重建时，才按 `weather-fact-rebuild` 执行 `run_stack.sh --rebuild`。
 
 然后运行账户级对账脚本（下面 `--instances` 与日期是**历史示例**；当前 live 实例是 current-YES tiny-live，
 见 `WEATHER_STRATEGY_REGISTRY.md`，按实际复盘窗口替换）：

@@ -69,12 +69,14 @@ scripts/ops/telegram_research_bot_ctl.sh stop
 
 用途：天气策略大盘看板（本机分析用，不参与 N100 生产）。
 
-启动命令（一键，含 DB 重建 + API + 前端）：
+启动命令（一键启动/复用 API + 前端，不改写现有 DB）：
 
 ```bash
 cd /home/rui/projects/pm_agent
-scripts/weather_dashboard/run_stack.sh --no-rebuild   # 已有 DB 时跳过重建
+scripts/weather_dashboard/run_stack.sh
 ```
+
+全量重建只能显式执行 `scripts/weather_dashboard/run_stack.sh --rebuild`。
 
 服务端口：API `:8000`，前端 `:5174`。详见 [`docs/WEATHER_DASHBOARD_TROUBLESHOOTING.md`](WEATHER_DASHBOARD_TROUBLESHOOTING.md)。
 

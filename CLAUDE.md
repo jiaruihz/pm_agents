@@ -42,7 +42,7 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
 - **执行 = N100 `pm_agent`**：消费标准数据 → signal → plan → CLOB 下单 → live/fill（current-YES tiny-live 等；每条策略一个克隆 `pm_agent_*`）。
 
 机器：
-- **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）：Mac 目前跑 data-feed snapshot/orderbook、dashboard、lottery live / TP exit / regime routed live。data-feed 因 macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，短期用 `tmux -L weather-jrs` session `weather_data_feed_jrs` 常驻；启动脚本是 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`。默认 `zsh`/Darwin，**不要套 `wsl`**。分析"最新/今天"前先同步 Mac data-feed：`scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only`，再 rebuild。
+- **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）：Mac 目前跑 data-feed snapshot/orderbook、dashboard、lottery live / TP exit / regime routed live。data-feed 因 macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，短期用 `tmux -L weather-jrs` session `weather_data_feed_jrs` 常驻；启动脚本是 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`。默认 `zsh`/Darwin，**不要套 `wsl`**。分析“最新/今天”先读取对应 Mac runtime raw；只有 canonical DB 缺目标窗口时才增量同步。全量重算必须显式同意并使用 `run_stack.sh --rebuild`。
 - **N100** `ssh jiarui@192.168.0.200 '<command>'`：7/1 发生 ext4 emergency read-only / IO error 事故后，不再当作当前生产 truth；修复前只作为历史正本和备份抢救对象。恢复 N100 生产前先确认 `smartctl`/备份完整性/服务链路，而不是直接重启 timers。
 - 数据层健康用 `scripts/ops/weather_data_feed_prod_health_check.py`；它默认检查 Mac 临时生产 snapshot、orderbook 和 active live order files。
 
@@ -116,8 +116,8 @@ weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚�
 ## 6. 高频命令
 
 ```bash
-# 看板（建库+ingest+API+FE；已有库加 --no-rebuild；仅看状态 --status）
-scripts/weather_dashboard/run_stack.sh [--no-rebuild|--status|--api-only|--fe-only]
+# 看板（默认只启动/复用 API+FE，不改 DB；全量重建必须显式 --rebuild）
+scripts/weather_dashboard/run_stack.sh [--rebuild|--status|--api-only|--fe-only]
 #   入口 http://localhost:5173/weather/runs · /weather/live · http://localhost:8000/docs
 
 # 同步当前 Mac 临时生产 market_data（分析"最新/今天"前先跑）

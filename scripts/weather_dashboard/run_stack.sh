@@ -4,9 +4,10 @@
 # One-shot bring-up for the weather strategy dashboard stack.
 #
 # Usage:
-#   scripts/weather_dashboard/run_stack.sh                 # full bring-up (refresh DB + API + FE)
-#   scripts/weather_dashboard/run_stack.sh --no-rebuild    # skip DB rebuild (just start API + FE)
-#   scripts/weather_dashboard/run_stack.sh --recreate-db   # delete and recreate weather.db before refresh
+#   scripts/weather_dashboard/run_stack.sh                 # start/reuse API + FE; preserve weather.db
+#   scripts/weather_dashboard/run_stack.sh --rebuild       # explicitly rebuild weather.db, facts, and metrics
+#   scripts/weather_dashboard/run_stack.sh --no-rebuild    # compatibility alias for the safe default
+#   scripts/weather_dashboard/run_stack.sh --recreate-db   # explicitly delete and recreate weather.db
 #   scripts/weather_dashboard/run_stack.sh --api-only      # start only API
 #   scripts/weather_dashboard/run_stack.sh --fe-only       # start only FE
 #   scripts/weather_dashboard/run_stack.sh --status        # just show current DB / process status
@@ -29,7 +30,7 @@ FE_PORT="${WEATHER_FE_PORT:-5174}"
 LOG_DIR="$REPO_ROOT/runtime/_dashboard_logs"
 mkdir -p "$LOG_DIR"
 
-REBUILD=1
+REBUILD=0
 RECREATE_DB=0
 START_API=1
 START_FE=1
@@ -37,8 +38,9 @@ STATUS_ONLY=0
 
 for arg in "$@"; do
   case "$arg" in
+    --rebuild)    REBUILD=1 ;;
     --no-rebuild) REBUILD=0 ;;
-    --recreate-db) RECREATE_DB=1 ;;
+    --recreate-db) RECREATE_DB=1; REBUILD=1 ;;
     --api-only)   START_FE=0 ;;
     --fe-only)    START_API=0; REBUILD=0 ;;
     --status)     STATUS_ONLY=1; REBUILD=0; START_API=0; START_FE=0 ;;
@@ -48,6 +50,11 @@ for arg in "$@"; do
     *) echo "Unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
+
+# Recreating the DB is always a rebuild, regardless of argument order.
+if [[ $RECREATE_DB -eq 1 ]]; then
+  REBUILD=1
+fi
 
 log() { printf '\033[1;36m[run_stack]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[run_stack]\033[0m %s\n' "$*"; }

@@ -98,16 +98,13 @@ by_city_live_real_alpha = trade_class='live_real' 且 settlement_status='settled
 - 若使用 `fact_signal_candidates`，优先用 `market_yes_price` 与 `final_yes` 构造基准。
 - 若只使用 `fact_trades.market_price`，先用 `PRAGMA table_info` 和 contract 确认它是 YES 价还是所选 side 价；无法确认时，不得发布“超额于无脑 NO”的结论，只能标 `baseline=NA`。
 
-### 第 2 步：同步、重建和数据自检
+### 第 2 步：数据新鲜度和自检
 
-默认先执行 contract 要求的同步与重建：
+先检查现有 DB 的目标窗口覆盖、mtime 和 `MAX(fact_built_at_utc)`。覆盖足够就直接查询。
+需要刷新时优先走增量流程；只有增量流程不能满足且用户明确同意全量重建时，才调用
+`weather-fact-rebuild` 执行 `run_stack.sh --rebuild`。
 
-```bash
-scripts/ops/sync_weather_remote.sh
-scripts/weather_dashboard/run_stack.sh
-```
-
-若 N100 不可达或用户明确要求只看本地缓存，在报告“数据快照”写明原因、DB mtime、`MAX(fact_built_at_utc)`。
+若数据源不可达或用户明确要求只看本地缓存，在报告“数据快照”写明原因、DB mtime、`MAX(fact_built_at_utc)`。
 
 强制自检：
 

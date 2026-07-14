@@ -127,7 +127,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | **N100** `/home/jiarui/weather-predict-backups/*.tar.zst` | backup | N100 `backup_data.sh` | 灾难恢复 | 本机镜像 `runtime/_backups_n100/`（2026-06-05 起加入 sync，独立脚本 `sync_n100_backups.sh`） |
 | **本机** `runtime/weather_edge_v1/live/*.jsonl` | source（本机产物，已停） | 本机 `weather_live_cycle.py`（最后写入 2026-06-01） | `migrate-live-cycle` → orders | 84 文件，本机 loop 已停。仍被 ingest 扫描（兼容历史），可以原地保留 |
 | **本机** `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` | mirror | rsync from N100 | `migrate-live-cycle` → orders | N100 真金 CLOB 提交凭证镜像 |
-| **本机** `runtime/weather.db` | **canonical operational DB** | `weather_dashboard_refresh.sh` 增量 ingest；`run_stack.sh` 全量 rebuild | 所有分析 / API / 前端 | **唯一分析 DB**。日常不删库；全量 rebuild 只在确认 raw 输入 + CLOB fill cache / 外部 CLOB 同步可用时执行。 |
+| **本机** `runtime/weather.db` | **canonical operational DB** | `weather_dashboard_refresh.sh` 增量 ingest；`run_stack.sh --rebuild` 全量派生层重算 | 所有分析 / API / 前端 | **唯一分析 DB**。无参数 `run_stack.sh` 只启动服务；全量重算只在确认 raw 输入 + CLOB fill cache / 外部 CLOB 同步可用且获得明确同意时执行。 |
 | **本机** `runtime/weather.db.orders` | canonical（订单/执行事件） | strategy runtime/live-cycle ingest | live 下单结果、档位、挂单/吃单、blocked/error、执行版本、score tier、策略原始 payload | grain = 每个 canonical order/execution attempt；未成交不代表现金流 |
 | **本机** `runtime/weather.db.fact_trades` | derived（唯一已成交 PnL 源） | `build_weather_fact_trades.py` | 所有绩效分析 | grain = 每 fill 一行 |
 | **本机** `runtime/weather.db.fact_signal_candidates` | derived（唯一全机会源） | `build_weather_signal_candidates.py` | 成交质量 / 漏单 / 城市 alpha 分析 | grain = 每 `(condition_id,side,event_date)` 一行 |
@@ -161,7 +161,7 @@ scripts/ops/weather_dashboard_refresh.sh
 全量重建用：
 
 ```bash
-scripts/weather_dashboard/run_stack.sh
+scripts/weather_dashboard/run_stack.sh --rebuild
 ```
 
 这是开发/修复用的 rebuild：会 `clean-db -> db-canonical-init`，然后重新 ingest 所有镜像文件。只有在确认 raw 镜像、pm_history、CLOB fill cache / CLOB API 都可用时才应该跑。否则可能丢掉 rebuild 当下无法从 raw 文件恢复的 live fill 状态。
@@ -288,7 +288,7 @@ FROM orders o LEFT JOIN fills f USING(execution_id)
 WHERE o.venue='polymarket_clob' GROUP BY o.status;
 ```
 
-任何一行返回结果与预期严重背离（如 live_real 应该 > 0 却 = 0，或历史窗口 `missing_bracket` 突然大量出现），先回 §4 查已知缺口或运行 `run_stack.sh` 重建，**不要**直接绕开 `fact_trades` 跑 raw 自算。
+任何一行返回结果与预期严重背离（如 live_real 应该 > 0 却 = 0，或历史窗口 `missing_bracket` 突然大量出现），先回 §4 查已知缺口；确需全量重算并获得明确同意后运行 `run_stack.sh --rebuild`，**不要**直接绕开 `fact_trades` 跑 raw 自算。
 
 ---
 
