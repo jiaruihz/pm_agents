@@ -567,6 +567,38 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
     assert order["t_minus_1_no_bracket"] == 21
 
 
+def test_candidate_market_falls_back_to_gamma_when_snapshot_omits_bracket(monkeypatch):
+    target_date = "2026-07-14"
+    token = MarketToken(
+        city="Istanbul",
+        target_date=target_date,
+        bracket="26",
+        question="Will Istanbul be 26C?",
+        event_slug="event",
+        market_id="market",
+        condition_id="condition",
+        yes_token_id="yes",
+        no_token_id="no",
+    )
+    monkeypatch.setattr(
+        runner,
+        "augment_market_index_from_gamma",
+        lambda index, **_kwargs: {**index, ("Istanbul", target_date, "26"): token},
+    )
+
+    resolved, index, resolution = runner.resolve_candidate_market(
+        {},
+        city="Istanbul",
+        target_date=target_date,
+        candidate=26,
+        market_proxy="http://127.0.0.1:7890",
+    )
+
+    assert resolved == token
+    assert index[("Istanbul", target_date, "26")] == token
+    assert resolution == "gamma_fallback"
+
+
 def test_metar_report_clock_uses_routine_reports_and_ignores_speci(tmp_path):
     path = tmp_path / "sources.jsonl"
     rows = [

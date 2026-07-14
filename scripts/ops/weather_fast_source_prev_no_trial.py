@@ -27,6 +27,7 @@ from scripts.ops.weather_fast_source_execution import (  # noqa: E402
     submit_post_only_gtd,
 )
 from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
+    augment_market_index_from_gamma,
     bracket_lookup,
     build_market_index,
     fetch_fresh_book,
@@ -38,6 +39,7 @@ from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
     safe_float,
     source_latest_by_city,
     target_date_for_city,
+    temperature_event_slug,
 )
 from scripts.ops.weather_market_proxy import market_proxy_url  # noqa: E402
 from weather_data_feed.fast_event_source_policy import load_fast_event_source_profiles  # noqa: E402
@@ -48,6 +50,28 @@ DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/fast_source_prev_no_trial"
 DEFAULT_HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
 DEFAULT_SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl"
 PERSISTENT_CROSS_POLICY = "persistent_candidate_margin_v4"
+
+
+def resolve_candidate_market(
+    market_index: dict[Any, Any],
+    *,
+    city: str,
+    target_date: str,
+    candidate: int,
+    market_proxy: str,
+) -> tuple[Any | None, dict[Any, Any], str]:
+    token = bracket_lookup(market_index, city, target_date, candidate)
+    if token is not None:
+        return token, market_index, "paper_snapshot"
+    augmented = augment_market_index_from_gamma(
+        market_index,
+        target_dates={target_date},
+        cities={city},
+        event_slugs={city: temperature_event_slug(city, target_date, "max")},
+        market_proxy=market_proxy,
+    )
+    token = bracket_lookup(augmented, city, target_date, candidate)
+    return token, augmented, "gamma_fallback" if token is not None else "unresolved"
 
 
 def iso(dt: datetime | None = None) -> str:
@@ -417,9 +441,22 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             continue
 
         event_key = "|".join([city, target_date, policy.source, str(src.get("source_obs_ts_utc")), str(source_value), str(metar_max), str(candidate)])
-        token = bracket_lookup(market_index, city, target_date, candidate)
+        token, market_index, market_resolution = resolve_candidate_market(
+            market_index,
+            city=city,
+            target_date=target_date,
+            candidate=candidate,
+            market_proxy=market_proxy,
+        )
         if token is None:
-            opportunity_rows.append({**common, "status": "missing_t_minus_1_market", "event_key": event_key})
+            opportunity_rows.append(
+                {
+                    **common,
+                    "status": "missing_t_minus_1_market",
+                    "event_key": event_key,
+                    "market_resolution": market_resolution,
+                }
+            )
             continue
         book = fetch_fresh_book(token.no_token_id, proxy=market_proxy, timeout_sec=args.book_timeout_sec, top_n=5)
         summary = book.get("summary") or {}
@@ -462,6 +499,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             **common,
             "status": "cross_candidate",
             "event_key": event_key,
+            "market_resolution": market_resolution,
             "question": token.question,
             "market_id": token.market_id,
             "condition_id": token.condition_id,
