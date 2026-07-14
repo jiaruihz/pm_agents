@@ -1,0 +1,129 @@
+{
+  "generated_at_utc": "2026-07-14T15:17:20.129202Z",
+  "strategy_head": "heat_death_early_dislocation_v1",
+  "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first direct quote",
+  "window": {
+    "start": "2026-07-07",
+    "end": "2026-07-13"
+  },
+  "rule": {
+    "local_hour": [
+      13.0,
+      17.0
+    ],
+    "decline_native_gte": 0.5,
+    "minutes_since_running_max_gte": 60,
+    "warming_state": [
+      "flat",
+      "cooling"
+    ],
+    "forecast_peak_passed_hours_gte": 0.25,
+    "strong_partial_support_count_gte": 2,
+    "entry_price_band": [
+      0.2,
+      0.97
+    ],
+    "quote_delay_minutes_lte": 30.0
+  },
+  "funnel": {
+    "unique_source_reports": 10176,
+    "event_states": 10176,
+    "prebase_without_forecast_clock": 432,
+    "market_aligned_prebase": 410,
+    "first_base_city_days": 130,
+    "first_strong_partial_city_days": 67,
+    "strong_executable_expression_rows": 5
+  },
+  "quote_coverage": {
+    "strong_city_days": 67,
+    "current_yes_direct_ask": 7,
+    "d1_no_direct_ask": 7,
+    "current_yes_in_entry_band": 3,
+    "d1_no_in_entry_band": 2
+  },
+  "feature_coverage": {
+    "available_pit": [
+      "METAR/SPECI precipitation",
+      "cloud layers",
+      "wind direction/speed",
+      "temperature path",
+      "forecast peak clock",
+      "direct quote"
+    ],
+    "missing_in_archive": [
+      "forecast remaining-3h precipitation/cloud/wind",
+      "coordinate-backed solar geometry"
+    ],
+    "strong_name": "strong_partial because two newly added feature families are unavailable historically"
+  },
+  "summary": [
+    {
+      "expression": "current_yes",
+      "rows": 3,
+      "active_dates": 3,
+      "cities": 2,
+      "wins": 3.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.8926666666666666,
+      "cost": 2.69103,
+      "pnl": 0.3089700000000001,
+      "roi": 0.11481477352537879,
+      "roi_ci95": [
+        0.029378461285076082,
+        0.30182906984312957
+      ]
+    },
+    {
+      "expression": "d1_no",
+      "rows": 2,
+      "active_dates": 2,
+      "cities": 2,
+      "wins": 2.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9099999999999999,
+      "cost": 1.8278400000000001,
+      "pnl": 0.17215999999999998,
+      "roi": 0.094187675070028,
+      "roi_ci95": [
+        0.029378461285076082,
+        0.1677059249398631
+      ]
+    }
+  ],
+  "busan_current_day_sanity_not_in_settled_roi": {
+    "city": "Busan",
+    "target_date": "2026-07-14",
+    "source_report_ts_utc": "2026-07-14T04:00:00Z",
+    "source_detect_ts_utc": "2026-07-14T04:06:39.103630Z",
+    "decision_snapshot_ts_utc": "2026-07-14T04:08:34Z",
+    "report_kind": "METAR",
+    "source_lane": "metar_speci_capable",
+    "current_bracket": "30",
+    "current_yes_ask": 0.84,
+    "current_yes_indicative": 0.81,
+    "d1_bracket": "31",
+    "d1_no_ask": 0.89,
+    "d1_no_indicative": 0.86,
+    "decline_native": 1.0,
+    "minutes_since_running_max_at_detect": 83.65172716666666,
+    "temp_trend_1h_f": 0.0,
+    "forecast_peak_delta_hours_local": 1.13,
+    "physical_support_reasons_partial": [
+      "cloud_limited_flat_or_cooling",
+      "moisture_cloud_suppression"
+    ]
+  },
+  "sample_gate": {
+    "required": {
+      "settled_rows": 30,
+      "active_dates": 10
+    },
+    "pass": false
+  },
+  "three_gates": {
+    "significance": "FAIL_LOW_SAMPLE",
+    "baseline": "NA_short_event_archive",
+    "forward": "FAIL_THIN",
+    "conclusion": "inconclusive_zero_notional_only"
+  }
+}
