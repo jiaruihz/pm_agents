@@ -28,6 +28,13 @@
 | city | city_pool | target_date | side | fill_price | fill_qty | cost_usd | condition_id |
 |---|---|---|---|---|---|---|---|
 
+## 开放订单与 reserved
+
+| instance | city | target_date | side | posted price | open shares | posted notional | reserved | exchange status | evidence time |
+|---|---|---|---|---:|---:|---:|---:|---|---|
+
+开放订单不得并入已成交 position cost；reserved 无 authenticated evidence 时填 N/A。
+
 ## 聚合：by_market（按 condition_id）
 
 | condition_id | city | target_date | open_positions | total_cost_usd |

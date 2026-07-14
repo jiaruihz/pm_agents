@@ -1,7 +1,7 @@
 # Weather Repo Boundary
 
 Status: current-source
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-07-15 Mac-first dynamic runtime and deploy boundary
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -23,7 +23,7 @@ and to keep the **data layer / collection / execution** separate.
 |---|---|---|---|
 | `weather_data_feed/`（pm_agents 包，vendored 到 N100） | Data layer (逻辑) | city calendar, source profiles, observation parsers, snapshot protocol normalization | strategy/sizing/order/wallet/dashboard 逻辑 |
 | Mac `/Volumes/jrs/weather_data_feed_service_runtime`（old `/Users/deepsleep/projects/weather_data_feed_service_runtime` is a symlink） | **Temporary production data collection**（2026-07-04 incident handoff; moved to JRS APFS disk on 2026-07-06） | paper snapshots, orderbook snapshots, live data-feed runtime output | strategy/sizing/order/wallet/dashboard logic |
-| Local Mac `/Users/deepsleep/projects/pm_agents` | **Temporary production execution + dashboard**, analysis, staging | dashboard DB, ingest/migration, fact tables, strategy research, lottery live / TP exit / regime routed live LaunchAgents | N100 disk recovery |
+| Local Mac `/Users/deepsleep/projects/pm_agents` | **Temporary production execution + dashboard**, analysis, staging | dashboard DB, ingest/migration, fact tables, strategy research, dynamically discovered live probe/paper/shadow runners | N100 disk recovery |
 | N100 `weather_data_feed_service/`（step-3 后新建） | Data collection runtime（paused until disk trust restored） | snapshot + daily-pipeline standard data products after recovery | 策略/下单 |
 | N100 `/home/jiarui/projects/weather-predict` | Historical production source / recovery target after 2026-07-01 disk incident | historical market snapshots, orderbook snapshots, paper ledger, city pools, weather caches, settlement history | live CLOB execution, pm_agent dashboard DB |
 | N100 `/home/jiarui/projects/pm_agent` | Historical production live execution / recovery target after 2026-07-01 disk incident | historical live signal files, trade plans, real CLOB order submissions, strategy instances, pause state, Telegram/live doctor | current live execution until disk trust restored |
@@ -112,8 +112,9 @@ re-exports of `weather_data_feed`. New shared data code should be added to
 
 Use `weather-strategy-deploy` for any production behavior change.
 
+- Mac 当前生产变更必须先在本 checkout 形成 scoped commit，再按已登记的 LaunchAgent/tmux/screen/start-stop 脚本重载；启停 live 或改变资金行为需显式确认。
 - Changes under N100 `pm_agent` must be deployed git-first to
-  `/home/jiarui/projects/pm_agent`.
+  `/home/jiarui/projects/pm_agent`，但只在磁盘健康、备份和服务链恢复验证后执行。
 - Changes under N100 `weather-predict` must be committed locally first. If the
   remote repo is still not a git worktree, backup + rsync is only a temporary
   fallback and must be reported as such.
@@ -147,7 +148,7 @@ its own script directory first, the active production paper policy is
 The root `paper_policy.py` is intentionally only a wrapper around the active
 implementation. Do not add strategy logic there.
 
-## Current Strategy Ownership
+## Strategy Ownership（实例状态动态发现）
 
 Retired:
 
@@ -158,13 +159,7 @@ Active weather-predict paper policy:
 
 - `mid_price_core_v1`
 
-Active pm_agent live strategy instances（2026-06-19 更新，权威以
-[WEATHER_STRATEGY_ENTRYPOINT.md](WEATHER_STRATEGY_ENTRYPOINT.md) /
-[WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md) 为准）：
-
-- **current YES tiny-live**：`weather_theta_current_yes_tiny_live.py` 的 `fade_confirmed` + `peak_forming_micro`（$5 微仓）。
-- **metar-cross prev-NO**：`weather_metar_cross_prev_no_shadow.py --live`（$10/单·$50/天）。
-- shadow（零 notional）：station-basis、range-rv、higher-no-carry。
+当前 strategy instance 是否 running/live 以 Mac `ps` + LaunchAgent/tmux/screen + pause/state + raw orders/exchange response 为准。`WEATHER_STRATEGY_ENTRYPOINT.md` 给盘点方法，`WEATHER_STRATEGY_REGISTRY.md` 给研究状态；两者都不替代 present-state evidence。
 
 旧 `mid_price_core_v1_25_75 / _side_band / v2_25_75` 已**因实盘亏损停用**（live_real 成交停在 2026-06-11），
 转历史；不是证伪，是停用决策。

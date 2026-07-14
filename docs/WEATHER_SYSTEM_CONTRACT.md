@@ -1,12 +1,12 @@
 # Weather Strategy — 系统接口契约
 
 Status: current-source
-Updated: 2026-07-04 forecast curve lineage + Mac handoff
+Updated: 2026-07-15 Mac producer/executor boundary and fee evidence
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
 > 版本: v1 · 2026-05-17  
-> 范围: N100 weather-predict（生产端）⟷ pm_agent（分析端）之间的数据接口规范  
+> 范围: weather data producer ⟷ strategy executor ⟷ pm_agent canonical analysis 之间的数据接口规范
 > 规则: 两侧任何 agent 修改字段名、枚举值、ID 格式前必须先更新本文档并对齐
 
 ---
@@ -17,10 +17,10 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 | 系统 | 职责 | 不负责 |
 |---|---|---|
-| **Mac `weather_data_feed_service_runtime` (temporary production)** | market snapshot / orderbook snapshot、hourly forecast curve archive during 2026-07-04 N100 recovery | long-term N100 recovery decision |
-| **N100 `weather-predict`** | historical market snapshot / orderbook snapshot、paper ledger、城市池、天气 cache、settlement truth | live CLOB 下单、pm_agent dashboard DB |
-| **N100 `pm_agent`** | live signal / plan / real CLOB order lineage、策略实例、pause/doctor/Telegram | weather model cache、paper snapshot timer |
-| **本机 `pm_agent`** | 分析 DB、看板、回测、策略研究、N100 `pm_agent` 部署 staging | 直接采集生产数据、直接写 N100 market data |
+| **Mac `weather_data_feed_service_runtime`** | 当前 market/orderbook snapshot、forecast curve、observation/source-event producer | 策略 selection、sizing、钱包、下单 |
+| **Mac `pm_agents` strategy runners** | 当前 signal/plan/order/fill、live probe/paper/shadow runtime | canonical weather source 定义 |
+| **Mac `pm_agents` canonical/dashboard** | `runtime/weather.db`、facts、看板、回测、研究、部署 staging | 替代 current raw/exchange evidence |
+| **N100 `weather-predict` / `pm_agent`** | 事故前历史、备份恢复目标；恢复验证后才可重新承接生产 | 恢复前充当 present-state truth |
 
 N100 两个 repo 产出的文件格式 = 本文档约定的契约。pm_agent dashboard
 消费这些文件，**不应** 静默地把字段改名再存 DB（会造成双方字段漂移）。

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weather Lineage"
+  short_description: "Trace weather signals, orders, fills, fees, and settlement"
+  default_prompt: "Use $weather-strategy-lineage to trace a weather order from candidate and signal through settlement."

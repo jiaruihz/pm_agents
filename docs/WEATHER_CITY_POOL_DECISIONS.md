@@ -1,13 +1,15 @@
 # 天气策略城市池决策记录
 
-Status: current-source
+Status: snapshot
 Updated: 2026-06-09 metadata pass; preserve content dates below
-Source of truth: yes
+Source of truth: no; historical decision ledger
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
 更新时间：2026-06-08
 
-这份文档专门记录天气策略城市池怎么变、为什么变、当前哪些城市可以实盘。
+> 本文是 2026-05/06 的 T1/T2 与 mid_price allowlist 决策账，历史证据保留。2026-07 当前各策略 live eligibility 必须从实例配置、进程参数、pause/state 与 raw order 动态核对；本表不再是当前 live allowlist source of truth。
+
+这份文档专门记录当时天气策略城市池怎么变、为什么变、哪些城市曾可以实盘。
 
 代码真相：
 

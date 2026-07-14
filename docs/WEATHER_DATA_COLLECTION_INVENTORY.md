@@ -1,11 +1,13 @@
 # Weather Data Collection Inventory
 
-Status: current-audit
+Status: snapshot
 Updated: 2026-06-30 02:55 Asia/Shanghai
-Source of truth: runtime audit on Mac + N100
+Source of truth: no; 2026-06-29/30 runtime audit snapshot
 Superseded by / Used by: WEATHER_DATA_FEED_MODULE.md; WEATHER_REPO_BOUNDARY.md; WEATHER_DATA_PIPELINE.md
 
-## 结论
+> 本文固定为 2026-06-29/30 N100 迁移审计快照。2026-07-04 后 Mac 已接管生产，当前 producer/consumer 状态以 `WEATHER_DATA_FEED_MODULE.md`、`WEATHER_DATA_PIPELINE.md` 和实时进程盘点为准。
+
+## 结论（历史快照）
 
 现在不是“有了 `weather_data_feed` 还故意乱写脚本”，而是迁移正在收口：
 

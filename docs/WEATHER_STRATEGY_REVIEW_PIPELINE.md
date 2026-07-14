@@ -1,10 +1,10 @@
 # Weather 策略复盘链路（一条策略跑完后，怎么一步步复盘）
 
 Status: `current-reference`
-Updated: 2026-06-19 首版
+Updated: 2026-07-15 research/probability stage, Mac raw evidence, fee and impact replay
 Source of truth: 口径以 `WEATHER_ANALYSIS_CONTRACT.md` 为准；本文只把已有零件串成有序流水线
 
-零件早就齐了（contract 定口径、5 个 skill 给流程、4 个 living doc 收结论、看板做可视化、canonical 表做事实），
+零件早就齐了（contract 定口径、7 个 weather skill 给流程、living docs 收结论、看板做可视化、canonical 表做事实），
 但缺一根"按什么顺序复盘"的总线。这份就是那根总线。**它是 strategy-agnostic 基础设施**——换策略方向不重做它，
 任何 live / shadow 策略跑完都走同一条链。
 
@@ -14,8 +14,8 @@ Source of truth: 口径以 `WEATHER_ANALYSIS_CONTRACT.md` 为准；本文只把�
 ## 链路总览（挂在量化血缘上）
 
 ```text
-[0] 数据可信吗  →  [4] 成交质量  →  [5] 绩效归因  →  [5] 账户对账  →  [3] 关联参数  →  [6] 结论=交易动作
- preflight gate     fill/slippage    PnL by slice     wallet/CLOB      strategy_config    keep/filter/shadow/stop
+[0] 数据可信吗 → [1-3] 概率/机制 → [4] 成交质量 → [5] 绩效归因 → [5] 账户对账 → [3] 参数 → [6] 动作
+ preflight gate     market residual    fill/slippage     PnL by slice    wallet/CLOB     config    shadow/stop/keep
                          │
                     live vs shadow 对比贯穿全程（execution_mode=zero_notional_shadow 的影子单与真实单同口径比）
 ```
@@ -25,12 +25,12 @@ Source of truth: 口径以 `WEATHER_ANALYSIS_CONTRACT.md` 为准；本文只把�
 | # | 阶段 | 回答什么 | canonical 源 | 硬 gate | skill | living doc |
 |---|---|---|---|---|---|---|
 | 0 | **数据自检 preflight** | 数据新鲜、现有底表覆盖够吗 | `WEATHER_ANALYSIS_CONTRACT §0` | 先查 freshness/目标窗口；仅在确有需要且明确同意时 `--rebuild`；发布 live_real 前 `weather_clob_fill_coverage_gate.py gate_pass=true`；5 行 SQL；8 环覆盖自检 | `weather-fact-rebuild` | `analysis/data_integrity.md` |
-| 1 | **成交质量 / 执行** | 单子成没成、成交价、滑点、live vs shadow | `fact_signal_candidates`（执行微结构三源）；`orders`/`fills` | `submitted/posted/actual_fill_cost` 分开报；不绕 fact 自算滑点 | `weather-strategy-performance` | `analysis/execution_quality.md` |
-| 2 | **绩效归因** | PnL/ROI/胜率，按 instance/city/side/date 切片 | `fact_trades`（强制唯一取数源） | 绩效三道门；settled 才报 `pnl_usd_at_fill`，未结算只报 MTM+`val_snapshot_ts_utc`；near-binary 归一化 | `weather-strategy-performance` | `analysis/live_performance.md` |
-| 3 | **逐笔血缘 / 单日复盘** | 这单为什么下：signal→plan→order→fill→settlement | `signals`/`plans`/`orders`/`fills`/`settlements` | 用 canonical 链，不自拼 | `weather-strategy-lineage` | （挂 live_performance） |
-| 4 | **账户对账** | DB 和钱包/CLOB 对得上吗 | `fills` + raw CLOB + public activity | `fill_date_bj`（**不用 order_date_bj**）；fill_id reconciliation | `weather-live-account-reconcile` | `analysis/account_reconcile.md` |
-| 5 | **关联策略参数** | 哪组参数产生了这个结果 | `fact_trades.strategy_instance` → `strategy_config` / `config_aliases` | 参数变更走 deploy 的 git-first | `weather-strategy-deploy` | `WEATHER_CITY_POOL_DECISIONS.md` |
-| 6 | **结论 = 交易动作** | 保留 / 过滤 / 降 size / shadow / 停 | 上述切片证据 | 先给动作再给证据；动作回写决策文档 | — | `STRATEGY_ENTRYPOINT` / `CITY_POOL_DECISIONS` |
+| 1 | **机制 / 概率 / residual** | PIT state 是否在同分母 proper score 上增量胜 market | `fact_signal_candidates` + canonical feature/model artifact + settlement | signal/evidence 双漏斗；source basis；frozen forward；不从 selected ROI 反推模型 | `weather-strategy-research` | family living doc |
+| 2 | **成交质量 / 执行** | 单子成没成、成交价、滑点、live vs shadow | `fact_signal_candidates`；current raw `orders/fills` | submitted/posted/actual fill、fee evidence 分开；maker touch 不当 fill | `weather-strategy-performance` | `analysis/execution_quality.md` |
+| 3 | **绩效归因** | fee-adjusted PnL/ROI/概率质量，按 instance/city/source/side/date 切片 | `fact_trades` + fixed-denominator opportunity/model rows | 三道门；同分母 market baseline；YES/NO 分拆；target-date bootstrap | `weather-strategy-performance` | `analysis/live_performance.md` |
+| 4 | **逐笔血缘 / 单日复盘** | candidate→signal→plan→order→fill→settlement | current raw + canonical chain | submitted size / fill / cap / rejection 分拆；事故后影响重放 | `weather-strategy-lineage` | incident/family living doc |
+| 5 | **账户与敞口** | 现金、fees、reserved、open positions、settled | raw CLOB + `fact_trades` | `fill_date_bj`；fill_id/fee reconciliation；三估值 | `weather-live-account-reconcile` / `weather-strategy-exposure` | `analysis/account_reconcile.md` |
+| 6 | **参数与动作** | 哪组参数产生结果；是否 collector/shadow/keep/stop | `instance_id` / `config_id` / runtime command | 只有 confirmed 才讨论扩 live；生产行为走 git-first deploy | `weather-strategy-deploy` | registry / entrypoint |
 
 ## live vs shadow 怎么比
 
@@ -46,5 +46,5 @@ Source of truth: 口径以 `WEATHER_ANALYSIS_CONTRACT.md` 为准；本文只把�
 
 ## 反馈回路
 
-阶段 6 的动作回写 `WEATHER_CITY_POOL_DECISIONS.md`（城市池升降级/回滚条件）和 `WEATHER_STRATEGY_ENTRYPOINT.md`（live 实例状态），
-策略本身的状态/灵感/血缘归属更新到 `WEATHER_STRATEGY_REGISTRY.md`。复盘 → 决策 → 注册，闭环。
+阶段 6 的动作回写 family living doc、`WEATHER_STRATEGY_REGISTRY.md` 与 `WEATHER_STRATEGY_ENTRYPOINT.md`。
+`WEATHER_CITY_POOL_DECISIONS.md` 只保留 2026-05/06 历史城市池账，不再承载当前实例 allowlist。复盘 → 决策 → 注册，闭环。

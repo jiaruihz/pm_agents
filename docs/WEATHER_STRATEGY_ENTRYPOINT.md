@@ -1,31 +1,40 @@
 # Weather Strategy Entrypoint
 
 Status: current-source
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-07-15 Mac-first runtime discovery and strategy-search reset
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-06-08（live 实例现状见下方 2026-06-19 更正横幅）
+## 当前接手口径（2026-07-15）
 
-> ## ⚠️ 当前 live 现状更正（2026-06-19，必读，优先于下方 mid_price 内容）
->
-> 本文下方大量 `mid_price_core_v1_25_75` / `_side_band` "当前默认 live" 的描述**已过时**。
-> 实情（N100 `ps` + 用户确认）：
-> - **mid_price_core 全部已停**（实盘亏损，用户决策；live_real 成交停在 2026-06-11）。
-> - **当前真 live = reheat_risk current YES tiny-live**：`weather_theta_current_yes_tiny_live.py`
->   的 `fade_confirmed` + `peak_forming_micro` 两个 profile（`--live --confirm-live`，$5 微仓），2026-06-19 起。
-> - **另有 metar-cross prev-NO 在 live**（`weather_metar_cross_prev_no_shadow.py --live`，$10/单·$50/天）。
-> - shadow：station-basis、range-rv、higher-no-carry。
-> - **regime-routed NO tiny-live 已恢复为微仓 forward probe（2026-06-26）**：2026-06-25 NYC
->   82-83 NO 重复下单事故后，runner 已改为默认消费 `weather_data_feed` observation cache，
->   并要求 feature parity、city/date/token 去重、真实 target-date daily cap、snapshot/cache freshness。
->   2026-07-04 guard fix 后，false-fade / cheap-stale current-NO route legs 只作 shadow-only
->   diagnostics，live-executable legs 只保留 fresh runway current-NO 与 capped d2-NO。它仍是
->   tiny-live 前向取证，不是 confirmed edge。
-> - 这些是 **tiny-live 前向取证**，不是已证实策略；评估按执行质量/滑点，不按早期 PnL。
->
-> 下方 mid_price 章节保留作**历史血缘与部署机制参考**。完整 current-YES live 规格（城市池/gate/参数）
-> 待从 N100 运行配置补写。live 策略总览见 [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md)。
+1. **生产主机是 Mac，不是 N100。** 当前 market/data-feed raw 在
+   `/Volumes/jrs/weather_data_feed_service_runtime`，执行 raw 在本仓库 `runtime/weather_edge_v1/` 及各实例目录。
+2. **当前没有 confirmed、可扩 live 的 alpha。** 2026-07-14 strategy-search reset 后，任何运行中的
+   `--live` / `--execute` 进程只按 tiny forward probe、paper executor 或 shadow 的真实参数分类，不能由进程名升格。
+3. **实例清单动态发现。** 先用 `ps`、LaunchAgent、tmux/screen，再读 pause/state、latest、events、orders 和
+   exchange response。本文和 registry 只负责路由，不替代 present-state proof。
+4. **N100 只作历史/恢复对象。** 在磁盘健康、备份完整性和服务链验证前，不重启 timers、不把 N100 raw 当当前真相。
+
+运行态盘点：
+
+```bash
+ps aux | rg 'weather|low_price|tmax|hko|source_event|regime' | rg -v 'rg '
+launchctl list | rg 'pm-agents|weather'
+tmux list-sessions
+tmux -L weather-jrs list-sessions
+screen -ls
+```
+
+当前研究/执行动作：
+
+- low-price YES / HeadA：仅固定小份额 forward probe；旧 model probability 严重高估，不能恢复 score sizing。
+- fast source：核心是 source→official/settlement→book first-seen collector；source/city eligibility 只到 shadow，稀疏日期不支持扩 live。
+- HKO / source-lock 表达：必须区分“runner 在跑”和“带 `--live --confirm-live` 真下单”；没有订单证据就不写 live。
+- tmax distribution / current-YES heat-death / source-event repricing：保持 paper/shadow，模型先在同分母 proper score 上打败 market。
+- mid_price、旧 city T1/T2 allowlist、旧 current-YES N100 启动说明均为历史材料，不定义当前生产。
+
+策略研究状态见 [WEATHER_STRATEGY_REGISTRY.md](WEATHER_STRATEGY_REGISTRY.md)；2026-07 当前 reset 证据文件是
+`docs/analysis/2026-07/2026-07-14-strategy-search-reset-v1.md`。
 
 This is the first file to read before changing, operating, or analyzing the weather strategy.
 
@@ -36,7 +45,9 @@ For early live rollout history, known mistakes, and how to split local/N100 live
 - `docs/WEATHER_CLOB_ORDERBOOK_CAPTURE.md`
 - `docs/WEATHER_REPO_BOUNDARY.md`
 
-## Current Production Posture
+## Historical Production Posture（2026-05/06，仅作血缘与事故背景）
+
+> 从本节到文末保留旧 N100/mid_price/current-YES 运维记录，不定义 2026-07 当前实例、主机、city allowlist 或 live 状态。
 
 - Production data truth is N100 `weather-predict`, not this local repository mirror.
 - Live execution runs from N100 `pm_agent` at `/home/jiarui/projects/pm_agent`.

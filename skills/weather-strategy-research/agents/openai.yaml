@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weather Strategy Research"
+  short_description: "Research PIT weather mechanisms, models, and market residuals"
+  default_prompt: "Use $weather-strategy-research to design and validate a PIT weather strategy study on the canonical evidence layer."

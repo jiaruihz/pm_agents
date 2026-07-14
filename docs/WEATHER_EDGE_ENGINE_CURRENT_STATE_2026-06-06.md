@@ -1,11 +1,13 @@
 # Weather Edge Engine Current State — 2026-06-06
 
-Status: current-source
+Status: snapshot
 Updated: 2026-06-09 metadata pass; preserve content dates below
-Source of truth: yes
+Source of truth: no; historical snapshot
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
 
+> 本文固定为 2026-06-06 blender/basket 接手快照，不定义 2026-07 当前研究主线或生产状态。当前入口见 `WEATHER_STRATEGY_ENTRYPOINT.md`、`WEATHER_STRATEGY_REGISTRY.md` 与 2026-07-14 strategy-search reset。
+>
 > 本文档把 PR1/PR2/PR2b dev log 里的关键结论抽成稳定入口，供后续两个新窗口分别接手：
 > 1. **跑策略 / shadow 双写链路**
 > 2. **研究 basket 核心算法**

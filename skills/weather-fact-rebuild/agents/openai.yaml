@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weather Fact Refresh"
+  short_description: "同步或重建天气 canonical facts 并验证完整性"
+  default_prompt: "Use $weather-fact-rebuild to refresh the required weather evidence and verify both canonical fact tables."

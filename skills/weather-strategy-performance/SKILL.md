@@ -1,266 +1,143 @@
 ---
 name: weather-strategy-performance
-description: >
-  科学评估 weather 策略的历史绩效、PnL、ROI、win rate、城市 alpha、稳定性、多维切片、
-  A/B 或回测表现。触发词：绩效、PnL、ROI、win rate、胜率、切片、对比策略、A/B、
-  回测结果、策略表现、历史表现、收益分析、城市 alpha、稳定性、分析最近 N 天 X 策略效果。
-  本 skill 的产出是带置信区间、零模型基准、前瞻复核状态的推断结论，不是裸点估计。
-  任何 keep/cut/降 size/上 live 建议必须通过显著性门、基准门、前瞻门；否则只能标
-  shadow_candidate 或 inconclusive。禁止绕过 fact_trades 自算成交 PnL；禁止绕过
-  weather.db 直接用 raw JSON/CSV 跑 pandas；禁止把候选信号或未成交机会混进 fill-grain
-  绩效表，机会 alpha/成交质量/漏单/滑点必须读 fact_signal_candidates。
+description: 评估 weather 策略、模型、shadow/live probe 的 fee-adjusted PnL、ROI、胜率、概率质量、A/B、城市/来源/side 切片、成交质量、漏单与稳定性。用于绩效、回测结果、策略对比、alpha、最近 N 天表现。必须锁 grain 与同分母基准，区分 signal funnel/evidence funnel、research/shadow/live，按 target_date block bootstrap 并做 frozen forward；禁止从少量 selected trades 或 gross ROI 直接升 live。
 ---
 
-# weather-strategy-performance
+# Weather strategy performance
 
-分析 weather 策略绩效时，先把问题当成统计推断问题，而不是描述性切片问题。目标不是只算出
-PnL/ROI/win rate，而是回答：这个 edge 相对零模型是否显著、是否不是 base-rate、是否在未用于
-挑选的时间窗仍同号。
+目标是判断是否存在可重复的 market residual，不是寻找最高历史 ROI 切片。
 
-## 数据边界
+## 先读
 
-已成交 fill 绩效唯一授权源：
+1. `AGENTS.md`
+2. `docs/WEATHER_ANALYSIS_CONTRACT.md`
+3. `docs/WEATHER_STRATEGY_REGISTRY.md`
+4. 用户点名策略的 living report
 
-```text
-runtime/weather.db.fact_trades
-```
+新机制/新特征/新策略的研究设计先用 `weather-strategy-research`；已有策略的绩效与 A/B 用本 skill。
 
-机会粒度、成交质量、漏单、滑点、全机会 alpha 唯一授权源：
+## 数据层
 
-```text
-runtime/weather.db.fact_signal_candidates
-```
-
-| 表 | grain | 回答 | PnL 列 |
-|---|---|---|---|
-| `fact_trades` | 每 fill | 已成交 realized / shadow / replay 绩效 | `pnl_usd_at_fill`, `pnl_usd_at_plan` |
-| `fact_signal_candidates` | 每机会 `(condition_id, side, event_date)` | 全机会 alpha、成交率、漏单、滑点、反事实 | `counterfactual_pnl`, `counterfactual_pnl_best` |
-
-禁止互相硬塞：
-- 不要拿候选反事实 PnL 冒充已成交绩效。
-- 不要用成交样本结论否定全机会 alpha。
-- 不要回到 raw JSON/CSV 自己 join 或自算 PnL。
-- 关联键用 `(condition_id, side, event_date)`；`fact_trades` 侧对应 `condition_id + side + target_date`。
-
-余额、钱包现金流、CLOB fill 漏记、账户亏损对账不是普通绩效问题，转 `weather-live-account-reconcile`。
-本 skill 不得用 `fact_trades.order_date_bj` 或 `cost_usd` 解释钱包现金流；现金流默认看
-`fill_date_bj` 的 actual fill cost，并区分 open cost 与 realized PnL。
-
-## 结论分级
-
-三道门的硬来源是 `docs/WEATHER_ANALYSIS_CONTRACT.md` 的“绩效结论三道门”。本节只复述执行规则；
-若与 contract 冲突，以 contract 为准。任何交易动作建议必须先过三道门：
-
-| 门 | 通过条件 | 不通过时 |
+| 问题 | grain | 授权源 |
 |---|---|---|
-| 显著性门 | ROI、超额、delta 的 bootstrap 95% CI 不跨 0 或不跨基准 | `inconclusive`，不得给 live 动作 |
-| 基准门 | 相对零模型的超额显著大于 0 | 只是 base-rate，不算 alpha |
-| 前瞻门 | train 上选出的候选，在 holdout 或后续日期仍同号且仍有超额 | 只能 `shadow_candidate`，不得改 live |
+| 已成交绩效 | fill | `fact_trades` |
+| 全机会 alpha / fill selection | opportunity | `fact_signal_candidates` |
+| 概率/分布质量 | 固定 PIT state/label | canonical feature/model artifact + settlement source |
+| 当前 order/fill 状态 | raw event/order/fill | 当前 Mac strategy runtime |
+| 钱包现金流 | account | `weather-live-account-reconcile` |
 
-| 等级 | 条件 | 允许动作 |
-|---|---|---|
-| `confirmed` | 三门全过 | 可建议 keep / cut / 调 size live |
-| `shadow_candidate` | 显著且超额，但前瞻未验证 | 只能 shadow/paper，不得改 live |
-| `inconclusive` | CI 跨 0、样本不足、未超额、或口径缺失 | 禁止 live 动作 |
+不得把 opportunity replay 称为 actual fills，也不得用 fill 样本替代全机会分母。
 
-报告中每条结论旁必须标 `significance=PASS/FAIL/NA`、`baseline=PASS/FAIL/NA`、
-`forward=PASS/FAIL/NA`。没有三门证据的 keep/cut/调 size 建议是 bug。
+## 第一步：冻结目标和分母
 
-## 执行 Checklist
-
-### 第 0 步：读 contract
-
-先读 `docs/WEATHER_ANALYSIS_CONTRACT.md`，确认：
-- `fact_trades` 是 fill-grain 绩效分析强制源。
-- `fact_signal_candidates` 是机会粒度问题强制源。
-- PnL 只读 `pnl_usd_at_fill` / `pnl_usd_at_plan`；不要重写 BUY_YES / BUY_NO 公式。
-- 切片维度必须来自 contract 白名单。
-- live_real PnL/ROI/排名/曲线发布前必须跑 `weather_clob_fill_coverage_gate.py`，`gate_pass=false` 时先修 fill 链路。
-
-未读 contract 不得继续分析。
-
-### 第 1 步：锁 target metric、分母和零模型
-
-先把用户问题收敛成一句口径，例如：
+写成一句话：
 
 ```text
-by_city_live_real_alpha = trade_class='live_real' 且 settlement_status='settled' 的 fill-grain
-城市绩效，相对同价位无脑买 NO 的超额 ROI，并用 target_date block bootstrap 给 CI。
+在 [PIT 窗口] 的 [固定 universe/grain] 上，比较 [candidate] 与 [market/same-denominator baseline]，
+主指标为 [logloss/Brier 或 fee-adjusted ROI delta]，forward 只复核不调参。
 ```
 
-必须显式锁定：
-- `trade_class`: `live_real` / `live_simulated` / `paper` / `snapshot_replay` / `all`。默认分层，不混算。
-- 时间字段：默认 `target_date`；策略下单归属诊断可用 `order_date_bj`；钱包现金流转账户对账 skill。
-- settlement：realized PnL 默认只纳入 `settlement_status='settled'`；未结算单独列 `[UNSETTLED]`。
-- 零模型：默认同价位无脑买 NO；可加市场隐含价 EV=0 或随机选边。
+必须声明：
 
-零模型要写清楚字段语义：
-- 若使用 `fact_signal_candidates`，优先用 `market_yes_price` 与 `final_yes` 构造基准。
-- 若只使用 `fact_trades.market_price`，先用 `PRAGMA table_info` 和 contract 确认它是 YES 价还是所选 side 价；无法确认时，不得发布“超额于无脑 NO”的结论，只能标 `baseline=NA`。
+- unit：event / city-day / state / expression / order / fill。
+- `trade_class`：research replay、paper、shadow、live_real 分层。
+- 时间：`target_date` 为策略归因；`fill_date_bj` 只用于现金流。
+- settlement：realized 只含 settled；unsettled 单列。
+- strategy identity：优先 `instance_id + strategy_id + config_id + execution_policy`，不只看 routing label。
+- price：YES price、selected-side ask、bid/mid、freshness 和 fee basis。
 
-### 第 2 步：数据新鲜度和自检
+## Signal funnel 与 evidence funnel
 
-先检查现有 DB 的目标窗口覆盖、mtime 和 `MAX(fact_built_at_utc)`。覆盖足够就直接查询。
-需要刷新时优先走增量流程；只有增量流程不能满足且用户明确同意全量重建时，才调用
-`weather-fact-rebuild` 执行 `run_stack.sh --rebuild`。
+分别输出，不得混成一个“筛选漏斗”。
 
-若数据源不可达或用户明确要求只看本地缓存，在报告“数据快照”写明原因、DB mtime、`MAX(fact_built_at_utc)`。
+```text
+signal funnel:
+raw universe -> mechanism candidates -> first city-day/event signal -> policy selected
 
-强制自检：
+evidence funnel:
+PIT weather coverage -> PIT quote coverage -> settlement coverage -> executable expression -> actual fill
+```
+
+每层标 grain、行数、独立 target dates。盘口/结算缺失是 coverage gap，不是策略筛除。
+
+## 数据检查
+
+先确认 DB 目标窗口与 raw 覆盖；需要刷新时走 `weather-fact-rebuild`。普通历史查询不为形式重建。
 
 ```sql
 SELECT MAX(fact_built_at_utc) FROM fact_trades;
 SELECT trade_class, COUNT(*) FROM fact_trades GROUP BY trade_class;
 SELECT settlement_status, COUNT(*) FROM fact_trades GROUP BY settlement_status;
-SELECT COUNT(*), SUM(eligible), SUM(paper_ordered), SUM(live_filled) FROM fact_signal_candidates;
-SELECT o.status, COUNT(*) orders, SUM(CASE WHEN f.execution_id IS NOT NULL THEN 1 ELSE 0 END) with_fill
-  FROM orders o LEFT JOIN fills f USING(execution_id)
-  WHERE o.venue='polymarket_clob'
-  GROUP BY o.status;
+SELECT COUNT(*), SUM(eligible), SUM(paper_ordered), SUM(live_filled),
+       SUM(decision_window_missing)
+FROM fact_signal_candidates;
+SELECT o.status, COUNT(*), COUNT(f.execution_id)
+FROM orders o LEFT JOIN fills f USING(execution_id)
+WHERE o.venue='polymarket_clob'
+GROUP BY o.status;
 ```
 
-若分析 `live_real`，还必须跑：
+发布 `live_real` 前：
 
 ```bash
-python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
+.venv/bin/python scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 ```
 
-`gate_pass=false` 时禁止发布 live_real PnL、ROI、city/side rank、近 7/15 天曲线。
+gate 不通过时只做数据链诊断。
 
-### 第 3 步：点估计只作为输入
+## 概率层先于交易层
 
-只读 `fact_trades` 聚合已成交绩效。点估计必须标注“输入，非结论”。
+模型或物理特征必须在固定全分母 PIT state 上先和 market 比：
 
-常用指标：
-- `fills`, `settled_fills`, `active_days`
-- `cost_usd`, `cost_usd_at_plan`
-- `pnl_usd_at_fill`, `pnl_usd_at_plan`
-- `fill_roi = SUM(pnl_usd_at_fill) / SUM(cost_usd)`
-- `plan_roi = SUM(pnl_usd_at_plan) / SUM(cost_usd_at_plan)`
-- `win_rate_by_count`, `win_rate_by_notional`
-- `avg_pnl_per_fill`, `positive_day_rate`, `worst_day_pnl`, `best_day_pnl`, `daily_sharpe_like`
+- logloss、Brier、calibration、AUC/rank。
+- 同一 row、同一 label、同一时间窗。
+- market-anchored residual 与模型增量分开。
+- source/city overlay 用 expanding/OOF，不能泄漏 target date。
 
-稳定性必须先按 `city + target_date` 聚合 daily PnL，再算正收益天比例、最差日、Sharpe-like。
-不要用 fill 级标准差冒充日稳定性。
+模型 proper score 没有 forward 打败 market 时，selected trade ROI 只能算探索性，不得包装成已证实 alpha。
 
-未结算估值单独列，标 `[UNSETTLED]`，不得混入 realized PnL：
-- `val_mid`
-- `val_bid`
-- `val_last_fill`
-- `unrealized_pnl_mid`
-- `val_snapshot_ts_utc`
+## 交易层
 
-### 第 4 步：统计推断
-
-对每个要上结论的指标做推断，而不是只报点估计。
-
-最低要求：
-- 对 ROI、超额 ROI、A/B delta 做 bootstrap 95% CI。
-- 优先按 `target_date` 做 block/cluster bootstrap，避免把同日多城天气相关性当成独立 fill。
-- 报 `active_days`、`settled_fills`、样本窗口、unsettled 占比。
-- 城市或切片级 keep/cut 默认需要 `active_days >= 10` 且 `settled_fills >= 30`；不满足时标 `low_sample`，只能 `inconclusive`，除非用户明确只要探索性描述。
-- 若本轮试了 K 个城市/切片/版本，报告 K，并对“最优者”做 Bonferroni、Deflated Sharpe 或至少明确“未校正，多重检验风险高”。
-
-相关性折减可以作为风险标注，不作为唯一硬闸：
-- 可估计同日跨城 outcome 平均相关 `rho_bar`。
-- 可报告 `n_eff = n / (1 + (n - 1) * rho_bar)`。
-- 若 `n_eff` 远低于 naive n，结论降级或标高风险。
-
-### 第 5 步：零模型基准
-
-必须把“赚了”翻译成“相对基准有超额”。
-
-默认基准：
-- 同价位无脑买 NO：用同一价桶、同一日期/城市池/side universe 构造。
-- 市场隐含价 EV=0：作为理论零基线，只能辅助解释。
-- 随机选边：仅用于 sanity check。
-
-结论格式必须是：
+使用可执行 side ask/bid/depth 与官方 Weather fee：
 
 ```text
-策略相对 [零模型] 的超额 ROI = X%，95% CI [a, b]，baseline=PASS/FAIL/NA。
+edge = p_win - executable_cost
+executable_cost = side ask + taker fee + declared friction
 ```
 
-裸 `win_rate=73%` 或 `ROI=+12%` 不是 live 动作依据。BUY_NO 的高 win rate 可能只是 base-rate。
+- maker 口径不扣 taker fee，但必须建 fill probability、queue、adverse selection；future touch 不是 fill。
+- `fact_trades.pnl_usd_at_fill` 已含 canonical fee 结果；同时报告 `fees_usd` 与 evidence class。
+- gross 只作诊断，不得作主结论。
+- exact bracket：触到 X 不代表 X YES 赢；继续到 X+1 会使 X YES 输。
 
-### 第 6 步：前瞻复核
+## 同分母 A/B
 
-若要给 keep/cut/调 size/live 建议，必须做前瞻复核：
-- 按 `target_date` 切 train/holdout，默认后 30% 为 holdout。
-- 只能在 train 上挑选候选规则、城市、side 或参数。
-- holdout 只复核，不再调参。
-- holdout 同号且仍有超额，才算 `forward=PASS`。
+先固定 rows/labels/quotes，再比较 source policy、模型、特征、阈值、execution overlay。A/B 输出 paired delta 与 target-date block bootstrap CI。不同 coverage、不同日期或不同 eligible universe 不能直接排名。
 
-这是历史内的伪前瞻 sanity check，不等同于上线后的真实 out-of-sample。报告必须写明。
+## 推断与 forward
 
-### 第 7 步：切片与 A/B
+- 按 `target_date` block/cluster bootstrap 95% CI。
+- 报 fills/states、独立日期、active days、unsettled/coverage。
+- 本轮试验 K 个版本/切片，报告多重检验处理或明确未校正。
+- train 选模型/阈值；frozen holdout/forward 只复核。
+- 当前默认 live 动作门仍是 significance、same-denominator baseline、forward 三门全过。
 
-优先使用 contract 白名单字段：
-- `trade_class`
-- `strategy_id`, `code_version`, `execution_policy`, `sizing_mode`
-- `city`, `city_pool`, `forecast_source`, `model_version`
-- `side`, `target_date`, `order_date_bj`, `bracket`
-- `strategy_instance` 若表中存在，必须作为 live 策略拆分的一等维度
+结论等级：
 
-A/B：两个 selector 各自过滤、各自聚合，再按同一切片键 join，输出 delta PnL / delta ROI /
-delta win rate / delta active_days。delta 必须配 bootstrap CI；CI 跨 0 判为“无显著差异”，不得据此调参。
+| 等级 | 含义 | 允许动作 |
+|---|---|---|
+| `confirmed` | 三门全过且执行口径成立 | 才能讨论 keep/cut/size；仍走 deploy |
+| `shadow_candidate` | 机制/历史成立但 forward 或执行证据不足 | zero-notional shadow/collector |
+| `inconclusive` | CI、基准、coverage、PIT 或 forward 不足 | 不改 live |
+| `rejected_for_expression` | 宽分母 fee-adjusted 反证该交易表达 | 保留数据/代码，停用该表达，不等于删除整个方向 |
 
-### 第 8 步：成交质量、漏单、机会 alpha
+## 报告
 
-当用户问成交质量、成交率、漏单、漏赢家、滑点、全机会集真实 alpha 时，读 `fact_signal_candidates`。
-不要把它混进 fill-grain realized 绩效。
+使用 `docs/analysis/templates/performance.md` 或 `performance-compare.md`。必须包含数据快照、目标 metric/grain、双漏斗、probability 与 trade 两层、fee/执行口径、paired baseline、CI/forward、三门、动作。
 
-默认输出：
-- 成交覆盖：`eligible`, `paper_ordered`, `live_filled`，live 覆盖率 = `live_filled / eligible`。
-- 滑点：`AVG(slippage_vs_paper)`；负值表示成交价较 paper 更便宜，对买方有利。
-- 漏掉的赢家：`paper_ordered=0 AND win_by_count=1` 的 `counterfactual_pnl`。
-- 全机会 alpha vs 成交样本：同一 city/side 并排候选反事实与 `fact_trades` 已成交。
-- 执行微结构：使用当前表真实存在字段，如 `market_yes_price`, `decision_entry_price`,
-  `yes_spread`, `no_spread`, `best_entry_price`, `live_fill_price`, `slippage_vs_paper`,
-  `counterfactual_pnl`, `counterfactual_pnl_best`。跑前用 `PRAGMA table_info` 确认列名；缺列就标 NA。
-
-机会粒度分母：
-
-```sql
-SELECT city, side, COUNT(*) n,
-       SUM(paper_ordered) ordered,
-       SUM(live_filled) live_fill,
-       AVG(CAST(win_by_count AS REAL)) win_rate,
-       SUM(counterfactual_pnl) cf_pnl
-FROM fact_signal_candidates
-WHERE eligible=1
-  AND final_yes IS NOT NULL
-  AND decision_window_missing=0
-GROUP BY city, side
-ORDER BY cf_pnl DESC;
-```
-
-必须报告 `decision_window_missing` 占比。`paper_ordered` 是全池 paper ledger，不是 live 意图；
-不要把 paper 未下单自动解释成 live 漏单。
-
-### 第 9 步：报告产出
-
-正式报告写到：
+默认先报 fee-adjusted PnL，并拆 YES/NO；不要让一侧掩盖另一侧亏损。最终一句：
 
 ```text
-docs/analysis/YYYY-MM/YYYY-MM-DD-performance-<topic>.md
+在 [窗口/分母]，[candidate] 相对 [same-denominator baseline] 的 [主指标 delta] 为 X
+（95% CI [a,b]），forward [PASS/FAIL/NA]，结论 [等级]，动作 [shadow/保持/不改 live]。
 ```
-
-报告必须包含：
-- 数据快照：数据源、DB mtime 或 `MAX(fact_built_at_utc)`、行数、unsettled 占比、missing_bracket、CLOB gate 状态。
-- 目标指标与分母：target metric、time field、trade_class、settlement、零模型。
-- 覆盖声明：描述切片、统计推断、零模型、前瞻、机会粒度/微结构是否覆盖。
-- 点估计总览：明确标“输入，非结论”。
-- 推断表：每条带 CI、超额、样本数、active_days、多重检验风险。
-- 三门判定表：`significance`、`baseline`、`forward`、结论等级。
-- 交易动作：只允许 `confirmed` 给 live keep/cut/调 size；`shadow_candidate` 只能 shadow/paper；`inconclusive` 不改 live。
-- 残余风险：样本不足、unsettled、trade_class 混用、CLOB gate、`decision_window_missing`、相关性、多重检验。
-
-一句话总结必须采用：
-
-```text
-在 [窗口]，[策略/切片] 相对 [零模型] 的超额 ROI 为 X%（95% CI [a,b]），
-前瞻 [PASS/FAIL/NA]，结论等级 [confirmed/shadow_candidate/inconclusive]。
-```
-
-不要用“ROI +Y%，建议保留 A 城砍 B 城”作为最终结论。

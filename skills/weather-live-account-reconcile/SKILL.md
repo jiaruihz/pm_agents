@@ -1,100 +1,82 @@
 ---
 name: weather-live-account-reconcile
-description: >
-  对账 weather 实盘账户现金变化、真实 CLOB fills、DB live_real、未结算持仓和已结算 PnL。
-  触发词：余额少了、钱包余额、cash、USDC、账户净值、最近几天实盘亏了、为什么钱变少、
-  实盘对账、CLOB fill 对不上、live_real 和 clob_fills 不一致、open orders reserved。
-  禁止：只用 settled PnL 回答余额变化；把 fill cost 当亏损；把未结算估值混入 realized PnL；
-  用 signals 快照冒充权威当前盘口；跳过 raw CLOB fill 与 fact_trades 的一致性检查。
+description: 对账 weather 实盘账户现金变化、真实 CLOB fills、submitted/posted notional、open orders、未结算持仓、fee-adjusted 已结算 PnL 与 DB live_real。用于余额少了、USDC/cash、钱包净值、CLOB fill 或 fee 对不上、live_real 与 raw 不一致、open-order reserved。禁止把 fill cost 当亏损、用 order_date_bj 解释现金流或跳过 raw/canonical reconciliation。
 ---
 
-# weather-live-account-reconcile
+# Weather live account reconcile
 
-用于回答“钱包余额为什么变少 / 最近几天实盘到底亏没亏 / 记录链路是否漏 fill”。
+回答“钱去哪了”时先拆现金、持仓、PnL 和预留资金，不能只报 settled PnL。
 
-这个问题必须分成四层，不准混说：
+## 权威层
 
-| 层 | 含义 | 默认来源 |
+| 指标 | 含义 | 来源 |
 |---|---|---|
-| `cash_cost_usd` | 真实 fill 买入花掉的现金 | `fact_trades.cost_usd` + raw `clob_fills.jsonl` 交叉检查 |
-| `submitted_or_error_cost_usd` | 提交订单名义金额，可能含未成交/失败 | `orders` |
-| `realized_pnl_usd` | 已结算真实 PnL | `fact_trades.pnl_usd_at_fill WHERE settlement_status='settled'` |
-| `open_cost_usd` / `unrealized_pnl_*` | 未结算仓位成本与估值 | `fact_trades.val_mid/val_bid/val_last_fill`，必须标注估值时间 |
+| submitted notional | 尝试提交的名义金额，可能失败/取消 | 当前策略 raw orders/events |
+| posted notional | 交易所实际接受/挂出的金额 | raw order/exchange response |
+| actual fill cost | 已成交买入花掉的现金 | raw CLOB fill + `fact_trades.cost_usd` |
+| fees | 实际或调整后的 fee | `fact_trades.fees_usd` + fee evidence fields |
+| open cost | 未结算仓位成本，不是亏损 | `fact_trades` unsettled fills |
+| realized PnL | 已结算、fee-adjusted PnL | `fact_trades.pnl_usd_at_fill` |
+| unrealized valuation | mid/bid/last_fill 估值 | `fact_trades.val_*`，附估值时间 |
+| reserved | 仍开放订单占用 | authenticated open orders；不得从 submitted notional 猜 |
 
-**余额变化不是 PnL。** 钱包可用余额下降通常先对应 `cash_cost_usd` 和 open-order reserved，
-只有 market settlement / exit 后才会进入 realized PnL。
+当前 raw 优先读本机 `runtime/weather_edge_v1/` 与 active strategy runtime。N100 镜像只用于历史窗口。
 
-## 标准入口
+## 流程
 
-先检查现有 DB 与 raw CLOB fill 的覆盖。缺少最新 fill 时优先增量同步；只有增量流程不能满足、
-且用户明确同意全量重建时，才按 `weather-fact-rebuild` 执行 `run_stack.sh --rebuild`。
-
-然后运行账户级对账脚本（下面 `--instances` 与日期是**历史示例**；当前 live 实例是 current-YES tiny-live，
-见 `WEATHER_STRATEGY_REGISTRY.md`，按实际复盘窗口替换）：
+1. 读 `AGENTS.md` 与 `docs/WEATHER_ANALYSIS_CONTRACT.md`。
+2. 用 `ps`、LaunchAgent/tmux/screen 与 raw runtime 动态发现实例；不从旧文档复制实例清单。
+3. 比较 raw 最新 order/fill 与 DB `fact_built_at_utc` / `fill_ts_utc`。
+4. DB 缺最新 fill 时先走 `weather-fact-rebuild` 的最小刷新路径。
+5. 运行固定对账脚本。
 
 ```bash
-python3 scripts/analysis/account_reconcile/weather_live_account_reconcile.py \
-  --start 2026-06-04 \
-  --end 2026-06-06 \
+.venv/bin/python scripts/analysis/account_reconcile/weather_live_account_reconcile.py \
+  --start YYYY-MM-DD \
+  --end YYYY-MM-DD \
   --date-field fill_date_bj \
-  --instances mid_price_core_v1_25_75,mid_price_core_v2_25_75,mid_price_core_v1_side_band \
+  --instances all \
   --group-by instance,selected_date
 ```
 
-常用 date lens：
+日期口径：
 
-| `--date-field` | 回答什么 |
-|---|---|
-| `fill_date_bj` | 用户“最近几天余额实际花了多少”；默认现金流口径 |
-| `target_date` | 某些天气合约日最终会赚亏多少；适合策略/城市/side 归因，不解释余额变化 |
-| `order_date_bj` | 仅作策略下单归属诊断；禁止用于钱包现金流结论 |
-| `fill_date_utc` | CLOB 成交发生在哪天；适合和 raw CLOB fills / API 对账 |
+- `fill_date_bj`：钱包现金流默认口径。
+- `fill_date_utc`：与 CLOB/API 对账。
+- `target_date`：天气合约归因，不解释余额变化。
+- `order_date_bj`：仅下单归属诊断，禁止用于钱包现金流。
 
-常用分组：
+## 必跑一致性
 
 ```bash
---group-by instance,selected_date
---group-by city,side
---group-by instance,city,side
+.venv/bin/python scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py
 ```
 
-`selected_date` 总是当前 `--date-field` 选择出来的日期，报告里必须写清楚 date lens。
+必须报告：
 
-## 必须报告
+- `db_live_real_distinct_fills` / `raw_clob_distinct_fills`
+- `db_not_in_raw` / `raw_not_in_db`
+- `missing_order_rows` / `over_order_keys`
+- DB/cache fill-id mismatch
+- DB fill cost 与 fact cost delta
+- effective fee=0 且缺 fee evidence 的 matched taker 数
+- fee evidence class 分布与 adjustment 总额
 
-1. DB 新鲜度：`fact_built_at_utc`、最新 order/fill 时间。
-2. 分析窗口和 date lens：不能省略。
-3. `cash_cost_usd` 与 `realized_pnl_usd` 分开。
-4. 未结算成本：`open_cost_usd`，单独说明它不是已亏。
-5. `unrealized_pnl_mid/bid/last_fill` 的估值时间；若估值旧或缺失，不能当当前钱包净值。
-6. Raw Live Order Files：`submitted_notional_usd` 与 `posted_notional_usd`，用于 DB 滞后时解释最新下单名义金额。
-7. raw CLOB fill 与 `fact_trades live_real` 的 fill_id reconciliation：
-   - `db_live_real_distinct_fills`
-   - `raw_clob_distinct_fills`
-   - `db_not_in_raw`
-   - `raw_not_in_db`
-8. CLOB fill coverage gate：
-   - `gate_pass`
-   - `missing_order_rows`
-   - `over_order_keys`
-   - `db_vs_primary_cache`
-   - `db_fill_cost_minus_fact_cost`
+`gate_pass=false` 时只给链路诊断，不发布 live_real PnL/ROI。
 
-## 禁止事项
+## 最终输出
 
-- 不准回答“没 settle 所以看不到策略结果”。正确说法是：
-  “看不到 realized PnL，但可以看到现金成本、未结算敞口和估值覆盖。”
-- 不准把 `target_date` 和 `order_date_bj` 混在一起。
-- 不准用 `fact_trades.order_date_bj` 解释钱包余额变化；现金流默认使用 `fill_date_bj`。
-- 不准用 `signals.market_price` 当权威当前盘口；它只是策略信号快照。
-- 不准看到 `realized_pnl_usd=0` 就说没亏；近期可能只是未结算。
-- 不准看到钱包余额下降就说策略亏；可能只是 fill cost / open positions / reserved notional。
-- 不准再写一次性 pandas 临时脚本替代 `scripts/analysis/account_reconcile/weather_live_account_reconcile.py`；脚本缺字段就先补脚本和 contract。
-- 不准用 public activity 单独解释 order-level fill；它只能作为 fallback，最终必须被 `weather_clob_fill_coverage_gate.py` 约束。
+先给余额变化桥接：
 
-## 后续分析衔接
+```text
+期初可用现金
+- actual fill cost
+- current reserved
++ settlement/redemption/exit cash inflow
++/- external transfers
+= 期末可用现金（在可见证据范围内）
+```
 
-- 若 cash cost 和 raw CLOB fill 对不上：先修数据链路，不做策略结论。
-- 若 cash cost 对得上但 open exposure 很大：转 `weather-strategy-exposure`。
-- 若 settled 覆盖足够后要评价策略：转 `weather-strategy-performance`。
-- 若某笔为什么下单/为什么反向：转 `weather-strategy-lineage`。
+然后分开列：submitted、posted、filled cash、fees、realized PnL、open cost、三估值及估值时间。若无法取得 authenticated wallet/open-order/transfer 数据，明确写“桥接不闭合”及差额，不用策略 PnL硬解释。
+
+若发现 order-chain 异常，逐条拆出 submitted size、filled size、scope/cap state 和 exchange rejection text。

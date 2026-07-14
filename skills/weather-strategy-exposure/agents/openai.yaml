@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weather Exposure"
+  short_description: "Inspect weather positions, open orders, valuation, and risk"
+  default_prompt: "Use $weather-strategy-exposure to inspect current weather positions, open orders, valuation, and concentration risk."

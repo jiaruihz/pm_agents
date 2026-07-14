@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weather Account Reconcile"
+  short_description: "Reconcile weather cash, fills, fees, exposure, and PnL"
+  default_prompt: "Use $weather-live-account-reconcile to reconcile weather live cash, fills, fees, open exposure, and realized PnL."

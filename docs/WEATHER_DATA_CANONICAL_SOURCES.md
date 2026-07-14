@@ -1,7 +1,7 @@
 # Weather Data Canonical Sources
 
 Status: current-source
-Updated: 2026-06-30 source-events signal boundary
+Updated: 2026-07-15 Mac-first raw/canonical evidence routing
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -9,7 +9,12 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 > 与之配套：[WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md)（口径定义）、[WEATHER_DATA_PIPELINE.md](WEATHER_DATA_PIPELINE.md)（脚本职责）、[WEATHER_REPO_BOUNDARY.md](WEATHER_REPO_BOUNDARY.md)（仓库职责）。本文只回答"用哪份数据 / 不要用哪份"。
 
-> **重要前提（2026-06-05 核实）**：
+> **当前前提（2026-07-15）**：
+> - Mac 是短期生产：market/data-feed raw 在 `/Volumes/jrs/weather_data_feed_service_runtime`，执行 raw 在本仓库 `runtime/weather_edge_v1/` 与各策略目录。
+> - N100 在磁盘事故恢复完成前仅是历史/抢救源，不是当前 runner、order、source-event 或 snapshot 真相。
+> - 当前状态问题先读 raw + exchange evidence；历史绩效/settlement/opportunity analysis 才以 canonical facts 为首选。
+>
+> **历史前提（2026-06-05 核实）**：
 > - **N100 上没有活跃的 SQLite DB**。所有生产数据以 JSONL/JSON 文件形态存在 `output/`（weather-predict）和 `runtime/weather_edge_v1/`（pm_agent）下。
 > - **本机 `runtime/weather.db` 是唯一的 weather SQLite DB**，由本机 ingest 脚本从两个 N100 镜像独立重建，**不是** N100 任何 DB 的拷贝。
 > - 如果你在 N100 上看到 `*.db` 文件，要么是 0 字节残留（已清理），要么是非 weather 用途（chatgpt-web-bot 之类）。任何分析都不要去 N100 上抓 SQLite。
@@ -26,20 +31,20 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 |---|---|---|
 | 历史绩效 / PnL / ROI / 胜率 | `runtime/weather.db` 的 `fact_trades` 表 | `t24_paper_*_summary.json`、raw `paper_orders.jsonl`（这些是 legacy 派生层，跳过 `fact_trades` 直读会得到旧口径） |
 | 全机会 alpha / 成交质量 / 漏单 / 滑点 | `runtime/weather.db` 的 `fact_signal_candidates` 表 | raw paper_snapshots/ JSONL |
-| 单笔血缘 (signal→plan→order→fill→settle) | `runtime/weather.db` 的 `signals/plans/orders/fills/settlements` | 任何 raw JSONL（除非确认底表丢字段） |
+| 单笔血缘 (candidate→signal→plan→order→fill→settle) | 当前策略 raw runtime + exchange response；`fact_trades` 补 settlement/fee/PnL | 为单笔问题无条件全量 rebuild；只读旧 N100 状态冒充当前 |
 | 实盘下单凭证（真金 CLOB 提交记录） | `runtime/weather_edge_v1/live/*.jsonl` + `runtime/weather_edge_v1/remote_pm_agent/live/*.jsonl` （已被 ingest 到 `orders` 表，venue=`polymarket_clob`） | — |
 | 实盘成交（真金 CLOB fills） | `fills` 表 join `orders WHERE venue='polymarket_clob'`，并用 raw `clob_fills.jsonl` + `weather_clob_fill_coverage_gate.py` 做 fill_id / order cap reconciliation | public activity 不能单独当 order-level 真相 |
-| 抢单/测速实时天气信号 | N100 `weather_data_feed_service_runtime/output/source_events/latest.json`；历史审计读同目录 `sources.jsonl` | 策略脚本默认不要自己直抓 AviationWeather/TGFTP/CheckWX；只有显式 `live-fetch` 调试可以绕过 |
-| 5 分钟级 live observation feature/cache | N100 `weather_data_feed_service_runtime/output/observations/latest.json` | full snapshot 里的旧 `metar_latest_*` 字段只作兼容回退 |
+| 抢单/测速实时天气信号 | Mac `/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/` 与 high-frequency outputs | 策略脚本默认不要各自拥有 canonical weather fetch；调试绕过必须显式 |
+| live observation feature/cache | Mac `/Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json` | full snapshot 里的旧 `metar_latest_*` 字段只作兼容回退 |
 | 机场/官方高频参考站 enrichment | `weather_data_feed_service_runtime/output/high_frequency_observations/latest.json`；历史审计读 `high_frequency_observations.jsonl` | 不作为 settlement truth；只用于和 METAR/WU/source-events/settlement outcome 做 lag/bias/参考站关系研究 |
-| 概率模型 / 错误分布 cache | N100 `cache/gfs_365d_*.json`（**实际 ~735 天，不是 365 天**）；本机镜像 `runtime/weather_edge_v1/market_data/cache/` | — |
+| 概率模型 / 错误分布 cache | 当前 Mac data-feed cache + 本机 canonical mirror；N100 `gfs_365d_*` 只作历史输入 | 静默 model/source fallback |
 | 结算（pm_history） | `settlements` 表用于 condition_id trade join；`settlement_outcomes` 表用于 city/date/bracket basket 或 source-grain research | 旧 `t24_paper_ledger_summary.json` 的 "by_date" 块；策略脚本临时直读 raw pm_history |
 
 **唯一 DB**：`runtime/weather.db`。其他 `.db` 文件已搬到 `runtime/_legacy/`（见 §3）。
 
 ---
 
-## 1. 数据流拓扑
+## 1. 数据流拓扑（下图为事故前历史；当前拓扑见 WEATHER_DATA_PIPELINE §1）
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐

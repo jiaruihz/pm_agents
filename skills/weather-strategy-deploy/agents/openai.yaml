@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weather Strategy Deploy"
+  short_description: "Verify and deploy scoped weather production behavior changes"
+  default_prompt: "Use $weather-strategy-deploy to verify and deploy a scoped weather production change safely."

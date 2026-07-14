@@ -9,6 +9,11 @@
 
 天气温度策略。**README 描述的是旧 PMM/ARB 框架，已不是活跃主线，别被它误导。**
 
+当前研究姿态（2026-07-15）：**没有一条达到 confirmed、可扩 live 的 alpha**。主研究回到全量、连续的
+`P(outcome)-market` residual：模型/物理特征先在同分母 PIT probability score 上 forward 打败 market，
+再讨论 fee-adjusted 表达。快源只按 source→official/settlement→book 的 first-seen 链积累 collector/shadow
+证据；少量事件、运行中的 probe、历史正 ROI 都不自动升级为 live 结论。
+
 ## 1. 系统主轴：一条量化血缘，所有工作都挂上去
 
 本项目不是一堆独立脚本，是一个有完整血缘的量化系统：
@@ -18,7 +23,8 @@ signal candidate → plan → order → fill → settlement
 ```
 
 canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`（成交粒度），
-由 `weather_dashboard/legacy_migration/*` 从 N100 镜像重建到 `runtime/weather.db`。
+由 `weather_dashboard/legacy_migration/*` 从当前 Mac raw、历史 N100 镜像和 canonical fill/fee 调整层重建到
+`runtime/weather.db`。DB 是分析派生层；当前进程/订单状态仍以对应 Mac raw runtime 与 exchange evidence 为准。
 
 这条血缘（含 `order → fill → live/shadow 对比 → PnL → strategy_config 参数 → 看板`）是**基础设施，与具体策略无关**：
 换策略方向只动上层信号/特征，不重做这条链。暂时不用的策略/底表是 dormant（保留备用），不是 dead，不归档不删。
@@ -38,11 +44,11 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
   forecast 是**每城固定模型**（`CITY_MODEL`：31 城 ECMWF / 49 城 GFS，按城市历史误差选定），全部 train 证据基于此口径；
   模型 fallback 必须显式告警——7/02-05 曾因 Mac cache 缺 `ecmwf_v4_*` 静默 fallback GFS 污染三天信号（见
   [heada-review-work-order-v1](docs/analysis/2026-07/2026-07-05-heada-review-work-order-v1.md) P0），别再让它静默。
-- **采集 = N100 `weather-predict`**：调用 `weather_data_feed` 生产 snapshot/cache，**不含策略 / 下单**。
-- **执行 = N100 `pm_agent`**：消费标准数据 → signal → plan → CLOB 下单 → live/fill（current-YES tiny-live 等；每条策略一个克隆 `pm_agent_*`）。
+- **采集 = `weather_data_feed_service` / 历史 `weather-predict`**：调用 `weather_data_feed` 生产 snapshot/cache，**不含策略 / 下单**；当前生产实例在 Mac。
+- **执行 = `pm_agent` strategy runners**：消费标准数据 → signal → plan → CLOB order → fill；当前实例在 Mac，N100 只保留历史/恢复边界。实例是否 live 必须从进程参数、pause/state、raw order 和 exchange response 动态核对，不能从旧文档标签推断。
 
 机器：
-- **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）：Mac 目前跑 data-feed snapshot/orderbook、dashboard、lottery live / TP exit / regime routed live。data-feed 因 macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，短期用 `tmux -L weather-jrs` session `weather_data_feed_jrs` 常驻；启动脚本是 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`。默认 `zsh`/Darwin，**不要套 `wsl`**。分析“最新/今天”先读取对应 Mac runtime raw；只有 canonical DB 缺目标窗口时才增量同步。全量重算必须显式同意并使用 `run_stack.sh --rebuild`。
+- **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）：Mac 目前跑 data-feed snapshot/orderbook、dashboard，以及若干 live probe / paper executor / zero-notional shadow；具体清单每次用 `ps` + LaunchAgent/tmux/screen + raw order files 动态盘点，不在本文件硬编码。data-feed 因 macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，短期用 tmux 常驻；启动脚本是 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`。默认 `zsh`/Darwin，**不要套 `wsl`**。分析“最新/今天”先读取对应 Mac runtime raw；只有 canonical DB 缺目标窗口时才增量同步。全量重算必须显式同意并使用 `run_stack.sh --rebuild`。
 - **N100** `ssh jiarui@192.168.0.200 '<command>'`：7/1 发生 ext4 emergency read-only / IO error 事故后，不再当作当前生产 truth；修复前只作为历史正本和备份抢救对象。恢复 N100 生产前先确认 `smartctl`/备份完整性/服务链路，而不是直接重启 timers。
 - 数据层健康用 `scripts/ops/weather_data_feed_prod_health_check.py`；它默认检查 Mac 临时生产 snapshot、orderbook 和 active live order files。
 
@@ -104,6 +110,7 @@ weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚�
 
 | 触发 | skill |
 |---|---|
+| 新策略 / 物理机制 / 概率模型 / 快源 / 特征 / PIT 研究设计 | `weather-strategy-research` |
 | 绩效 / PnL / ROI / 胜率 / 切片 / 对比 / 回测结果 | `weather-strategy-performance` |
 | 单日血缘 / 逐笔复盘 / 为什么下这单 | `weather-strategy-lineage` |
 | 持仓 / 敞口 / 未结算 / 风险 | `weather-strategy-exposure` |
@@ -113,7 +120,7 @@ weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚�
 
 发布任何 `live_real` PnL / ROI / 曲线前的硬 gate（踩过坑换来的，不是形式）：
 - 先跑 5 行 SQL 自检（数据新鲜度 / trade_class 分布 / 结算 / 机会覆盖 / 订单成交）。
-- `python3 scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py` 必须 `gate_pass=true`，否则停下先修数据链。
+- `.venv/bin/python scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py` 必须 `gate_pass=true`，否则停下先修数据链。
 - 现金流 / 余额用 `fill_date_bj`，**不用 `order_date_bj`**（后者受回填污染，只作下单归属诊断）。
 - `submitted_notional` / `posted_notional` / `actual_fill_cost` / `open_cost` / `realized_pnl` 分开报；open cost 不是亏损。
 - 已结算才报 `pnl_usd_at_fill`；未结算只报 MTM 并附 `val_snapshot_ts_utc`，估值旧就明说旧。
@@ -149,9 +156,9 @@ conn.execute("PRAGMA query_only=ON"); conn.execute("PRAGMA busy_timeout=1000")
 最高频：[STRATEGY_ENTRYPOINT](docs/WEATHER_STRATEGY_ENTRYPOINT.md)（实盘接手）·
 [STRATEGY_REGISTRY](docs/WEATHER_STRATEGY_REGISTRY.md)（试过哪些策略/状态/血缘归属）·
 [STRATEGY_REVIEW_PIPELINE](docs/WEATHER_STRATEGY_REVIEW_PIPELINE.md)（策略跑完怎么复盘）·
-[CITY_POOL_DECISIONS](docs/WEATHER_CITY_POOL_DECISIONS.md) · [ANALYSIS_CONTRACT](docs/WEATHER_ANALYSIS_CONTRACT.md) ·
+[CITY_POOL_DECISIONS](docs/WEATHER_CITY_POOL_DECISIONS.md)（历史决策账，不是当前实例 allowlist） · [ANALYSIS_CONTRACT](docs/WEATHER_ANALYSIS_CONTRACT.md) ·
 [DATA_CANONICAL_SOURCES](docs/WEATHER_DATA_CANONICAL_SOURCES.md) · [REPO_BOUNDARY](docs/WEATHER_REPO_BOUNDARY.md) ·
-[EDGE_ENGINE_CURRENT_STATE](docs/WEATHER_EDGE_ENGINE_CURRENT_STATE_2026-06-06.md)。
+[TMAX_DISTRIBUTION](docs/WEATHER_TMAX_DISTRIBUTION_EDGE_STRATEGY.md)。
 
 > 早期那组"盈利模式"**数字**（5 月 BUY_NO 胜率 / Warsaw / ECMWF / LA）是 near-binary 修复前口径，**已作废**——
 > 但这是数字作废，不是方向被否（BUY_NO 等是 unconfirmed，不是 disproven）。各策略当前状态/灵感/血缘归属见

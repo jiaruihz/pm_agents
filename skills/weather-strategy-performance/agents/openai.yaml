@@ -1,0 +1,4 @@
+interface:
+  display_name: "Weather Performance"
+  short_description: "Evaluate fee-adjusted weather performance and forward evidence"
+  default_prompt: "Use $weather-strategy-performance to evaluate a weather strategy on a fixed denominator with fees, baselines, and forward evidence."

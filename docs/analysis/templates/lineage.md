@@ -56,11 +56,17 @@
 | | desired_shares | |
 | **Order** | execution_id | |
 | | venue | |
+| | requested / posted price | |
+| | submitted shares / notional | |
 | | limit_price | |
 | | created_at（北京时间 / 当地时间） | |
+| | maker/taker / exchange status | |
+| | scoped cap / gate state | |
+| | rejection text | |
 | **Fill** | fill_id | |
 | | filled_price | |
 | | filled_shares（fill_qty） | |
+| | fees_usd / fee evidence | |
 | | fill_status | |
 | | filled_at（北京时间 / 当地时间） | |
 | **Settlement** | final_price（settlement_yes_price） | |
@@ -68,6 +74,8 @@
 | | bracket | |
 | **PnL** | pnl_usd（fill 口径） | |
 | | pnl_usd（plan 口径） | |
+
+同一 order 有 partial fills 时逐段列出，并给 authenticated `size_matched` 与累计 fill 对账。不能把 submitted size 当 fill size。
 
 ## 异常订单列表
 

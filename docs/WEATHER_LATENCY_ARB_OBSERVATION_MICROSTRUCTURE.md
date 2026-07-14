@@ -1,14 +1,16 @@
 # Weather Latency Arb：观测源、轮询和盘口反应
 
-状态：当前参考文档  
-更新：2026-06-28  
+状态：历史基础 + 当前更正
+更新：2026-07-15
 用途：解释 weather latency arb 这条线现在怎么拿天气数据、怎么轮询、慢在哪里、市场反应有多快，以及后续研究该往哪里走。  
 相关入口：`WEATHER_STRATEGY_ENTRYPOINT.md`、`WEATHER_STRATEGY_REGISTRY.md`、`analysis/post_cross_repricing.md`
 
+> **2026-07-15 更正**：快源打印 `T` 并不让 `T-1 NO` “基本不承担天气方向风险”。source 与 official/settlement basis、半度/整数边界、观测 age/path 都会产生 false cross。当前主口径是 first-seen source→official/settlement→book collector，按 source/city 校准 `p_win` 后再减 executable cost；现有 4–7 个独立日期只支持 shadow/collector，不支持扩 live。下方 N100 日志、轮询和“基本锁定”描述保留作 6 月历史背景。
+
 这份文档管的是 weather latency arb 的“速度层”。核心策略很简单：
 
-> 当某个城市的官方/准官方实时观测第一次把日内最高温从 `T-1` 或更低推到 `T` 时，马上去买 `T-1` 档位的 NO。  
-> 如果还能以合理价格吃到 NO ask，这笔理论上基本不承担天气方向风险，主要输在“别人更早看到”或者“盘口已经没货”。
+> 当某个城市的官方/准官方实时观测第一次把日内最高温从 `T-1` 或更低推到 `T` 时，研究 `T-1 NO` 是否仍有正 residual。
+> 它仍可能输在 source-basis false cross、最终 exact bracket、别人更早看到、盘口已重定价或执行/fee。
 
 截至 2026-06-25，最重要的结论是：
 
