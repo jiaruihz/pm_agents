@@ -738,7 +738,7 @@ Diff standards:
 
 - Standardized weather facts by city/station/as-of.
 - Used to answer “当前温度、running max、云、风、湿度是什么”.
-- Appropriate input for `weather_state_v1`.
+- Appropriate input for `weather_state_v2` (`weather_state_v1` remains a historical manifest value).
 - Carries observation freshness as weather-truth credibility fields such as
   `obs_age_minutes`, `expected_report_cadence`, and `station_gap_state`.
   `station_gap_state` currently means: non-ok observations become

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 FEATURE_FRAME_SCHEMA_VERSION = "feature_frame_v1"
-WEATHER_STATE_VERSION = "weather_state_v1"
+WEATHER_STATE_VERSION = "weather_state_v2"
 WEATHER_REGIME_VERSION = "weather_regime_v1"
 WEATHER_BIAS_VERSION = "weather_bias_v1"
 MARKET_GEOMETRY_VERSION = "market_geometry_v1"
@@ -47,4 +47,41 @@ FIELD_UNIT_CONTRACT = {
     "decline_from_running_max_native": UNIT_SPACE_NATIVE,
     "forecast_gap_to_running_native": UNIT_SPACE_NATIVE,
     "bracket_distance_native": UNIT_SPACE_NATIVE,
+    "wind_dir_deg": "degree",
+    "wind_speed_kt": "knot",
+    "lowest_cloud_base_ft_agl": "foot_agl",
+    "ceiling_ft_agl": "foot_agl",
+    "obs_age_minutes": "minute",
+    "expected_report_cadence": "minute",
+    "solar_elevation_deg": "degree",
+    "daylight_remaining_minutes": "minute",
+    "forecast_precip_probability_to_peak_max_pct": "percent",
 }
+
+WEATHER_PHYSICAL_FEATURE_FIELDS = (
+    "precip_state",
+    "precip_intensity_code",
+    "present_weather_codes",
+    "cloud_layer_count",
+    "lowest_cloud_base_ft_agl",
+    "ceiling_ft_agl",
+    "cloud_cover_change_1h_code",
+    "wind_dir_deg",
+    "wind_dir_sin",
+    "wind_dir_cos",
+    "wind_speed_change_1h_kt",
+    "obs_age_minutes",
+    "expected_report_cadence",
+    "obs_cadence_ratio",
+    "minutes_to_next_expected_obs",
+    "source_latency_minutes",
+    "solar_elevation_deg",
+    "solar_elevation_2h_deg",
+    "solar_elevation_delta_2h_deg",
+    "daylight_remaining_minutes",
+    "solar_heating_potential",
+    "forecast_precip_probability_to_peak_max_pct",
+    "forecast_cloud_cover_to_peak_mean_pct",
+    "forecast_wind_speed_to_peak_max_kt",
+    "forecast_wind_direction_to_peak_mean_deg",
+)

@@ -25,10 +25,10 @@ from weather_feature_layer.contracts import (
 )
 from weather_feature_layer.frame import validate_feature_metadata
 from weather_feature_layer.regimes import add_regime_labels
-from weather_feature_layer.state import city_wind_context, temperature_context_features
+from weather_feature_layer.state import city_wind_context, physical_context_features, temperature_context_features
 
 
-WEATHER_STATE_FRAME_BUILDER_VERSION = "weather_state_frame_builder_v1"
+WEATHER_STATE_FRAME_BUILDER_VERSION = "weather_state_frame_builder_v2"
 WEATHER_STATE_FRAME_GRAIN = "city_date_snapshot"
 
 
@@ -44,6 +44,7 @@ def build_weather_state_frame(
     snapshot_rows: Mapping[str, Any] | Iterable[Mapping[str, Any]],
     observation_cache: Mapping[str, Any] | None,
     *,
+    forecast_curve_rows: Mapping[str, Any] | Iterable[Mapping[str, Any]] | None = None,
     as_of_ts_utc: str | None = None,
     source_profile_id: str | None = None,
     input_snapshot_id: str | None = None,
@@ -60,6 +61,7 @@ def build_weather_state_frame(
     frame, _audits = build_weather_state_frame_with_audits(
         snapshot_rows,
         observation_cache,
+        forecast_curve_rows=forecast_curve_rows,
         as_of_ts_utc=as_of_ts_utc,
         source_profile_id=source_profile_id,
         input_snapshot_id=input_snapshot_id,
@@ -73,6 +75,7 @@ def build_weather_state_frame_with_audits(
     snapshot_rows: Mapping[str, Any] | Iterable[Mapping[str, Any]],
     observation_cache: Mapping[str, Any] | None,
     *,
+    forecast_curve_rows: Mapping[str, Any] | Iterable[Mapping[str, Any]] | None = None,
     as_of_ts_utc: str | None = None,
     source_profile_id: str | None = None,
     input_snapshot_id: str | None = None,
@@ -97,6 +100,7 @@ def build_weather_state_frame_with_audits(
         builder_version=builder_version,
     )
     validate_feature_metadata(metadata)
+    forecast_curves = _index_forecast_curves(forecast_curve_rows, resolved_as_of)
 
     rows: list[dict[str, Any]] = []
     audits: list[WeatherStateBuildAudit] = []
@@ -110,15 +114,29 @@ def build_weather_state_frame_with_audits(
         if not obs:
             audits.append(WeatherStateBuildAudit(city, target_date, "skipped", "missing_observation"))
             continue
-        row = _build_state_row(snapshot, obs, as_of_ts_utc=resolved_as_of, source_profile_id=resolved_source_profile)
+        curve = forecast_curves.get((city, target_date))
+        row = _build_state_row(
+            snapshot,
+            obs,
+            forecast_curve=curve,
+            as_of_ts_utc=resolved_as_of,
+            source_profile_id=resolved_source_profile,
+        )
         rows.append(row)
         audits.append(WeatherStateBuildAudit(city, target_date, "included", "ok"))
 
     frame = pd.DataFrame(rows)
     if not frame.empty:
-        context_rows = [temperature_context_features(row) for row in frame.to_dict("records")]
+        context_rows = []
+        for row in frame.to_dict("records"):
+            physical = physical_context_features(row)
+            context_rows.append({**physical, **temperature_context_features({**row, **physical})})
         context_frame = pd.DataFrame(context_rows, index=frame.index)
-        frame = pd.concat([frame, context_frame], axis=1)
+        for column in context_frame.columns:
+            if column in frame.columns:
+                frame[column] = context_frame[column].where(context_frame[column].notna(), frame[column])
+            else:
+                frame[column] = context_frame[column]
         frame = add_regime_labels(frame)
     frame = _attach_feature_metadata(frame, metadata)
     frame.attrs["feature_metadata"] = metadata
@@ -129,6 +147,7 @@ def build_weather_state_frame_with_audits(
 def _build_state_row(
     snapshot: Mapping[str, Any],
     obs: Mapping[str, Any],
+    forecast_curve: Mapping[str, Any] | None,
     *,
     as_of_ts_utc: str,
     source_profile_id: str,
@@ -154,6 +173,7 @@ def _build_state_row(
     forecast_gap_to_running_native = _gap(forecast_max_native, running_native)
     decision_hour = _decision_hour(snapshot)
 
+    curve = dict(forecast_curve or {})
     row: dict[str, Any] = {
         "city": str(snapshot.get("city") or obs.get("city") or ""),
         "target_date": str(snapshot.get("target_date") or obs.get("target_date") or ""),
@@ -171,6 +191,9 @@ def _build_state_row(
         "forecast_peak_hour_local": _first_float(snapshot, "forecast_peak_hour_local", "peak_hour_local"),
         "forecast_peak_delta_hours_local": _first_float(snapshot, "forecast_peak_delta_hours_local", "peak_delta_hours_local"),
         "forecast_peak_hour_spread": _first_float(snapshot, "forecast_peak_hour_spread"),
+        "hourly_curve": curve.get("hourly_curve") if isinstance(curve.get("hourly_curve"), list) else [],
+        "latitude": _coalesce_float(_first_float(snapshot, "latitude", "lat"), _first_float(curve, "latitude", "lat")),
+        "longitude": _coalesce_float(_first_float(snapshot, "longitude", "lon"), _first_float(curve, "longitude", "lon")),
         "forecast_gap_to_running_native": forecast_gap_to_running_native,
         "obs_status": _clean_str(obs.get("status")),
         "obs_source": _clean_str(obs.get("source")),
@@ -198,11 +221,16 @@ def _build_state_row(
         "relative_humidity_pct": _first_float(obs, "relative_humidity_pct", "relh_now", "relh"),
         "wind_speed_kt": _first_float(obs, "wind_speed_kt", "sknt_now", "sknt"),
         "wind_dir_deg": _first_float(obs, "wind_dir_deg", "drct_now", "drct"),
+        "raw_metar": _clean_str(_first_value(obs, "raw_metar", "raw_text")),
+        "present_weather": _first_value(obs, "present_weather", "wx_string", "wx_phrase"),
         "sky_cover_code": _sky_cover_code(_first_value(obs, "sky_cover_code", "sky_code_now", "sky_now", "sky", "sky_cover")),
         "temp_trend_1h_f": _first_float(obs, "temp_trend_1h_f", "d_tmpf_1h"),
         "temp_trend_3h_f": _first_float(obs, "temp_trend_3h_f", "d_tmpf_3h"),
         "minutes_since_running_max": _first_float(obs, "minutes_since_running_max"),
         "running_max_obs_utc": running_obs_iso,
+        "cloud_cover_change_1h_code": _first_float(obs, "cloud_cover_change_1h_code", "d_sky_1h"),
+        "ceiling_change_1h_ft": _first_float(obs, "ceiling_change_1h_ft"),
+        "wind_speed_change_1h_kt": _first_float(obs, "wind_speed_change_1h_kt", "d_wind_speed_1h_kt"),
     }
     row.update(city_wind_context(row["city"], row["wind_dir_deg"]))
     return row
@@ -239,6 +267,38 @@ def _index_observations(observation_cache: Mapping[str, Any] | None) -> dict[tup
     if all(isinstance(key, tuple) and len(key) == 2 for key in observation_cache):
         return {key: dict(value) for key, value in observation_cache.items() if isinstance(value, Mapping)}
     return index_observation_cache(observation_cache)
+
+
+def _index_forecast_curves(
+    rows: Mapping[str, Any] | Iterable[Mapping[str, Any]] | None,
+    as_of_ts_utc: str,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    if rows is None:
+        return {}
+    if isinstance(rows, Mapping):
+        raw_rows = rows.get("records") or rows.get("rows") or [rows]
+    else:
+        raw_rows = rows
+    as_of = parse_utc(as_of_ts_utc)
+    out: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
+    for item in raw_rows:
+        if not isinstance(item, Mapping):
+            continue
+        row = dict(item)
+        available = parse_utc(
+            row.get("forecast_first_seen_utc")
+            or row.get("available_at_utc")
+            or row.get("forecast_detected_at_utc")
+            or row.get("snapshot_ts_utc")
+        )
+        if available is None or (as_of is not None and available > as_of):
+            continue
+        key = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        if not all(key):
+            continue
+        if key not in out or available > out[key][0]:
+            out[key] = (available, row)
+    return {key: value[1] for key, value in out.items()}
 
 
 def _feature_metadata(
@@ -298,6 +358,10 @@ def _finite_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return out if math.isfinite(out) else None
+
+
+def _coalesce_float(*values: float | None) -> float | None:
+    return next((value for value in values if value is not None), None)
 
 
 def _clean_str(value: Any) -> str:

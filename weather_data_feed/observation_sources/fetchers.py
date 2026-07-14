@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from weather_data_feed.models import CityConfig, ObservationRecord
+from weather_data_feed.physical_features import metar_physical_features
 from weather_data_feed.observation_sources.aliases import normalize_source_name
 from weather_data_feed.observation_sources.aviationweather import (
     parse_aviationweather_records,
@@ -232,6 +233,43 @@ def infer_cadence_min(records: list[ObservationRecord]) -> float | None:
     return round(median(gaps), 1) if gaps else None
 
 
+def one_hour_observation_changes(records: list[ObservationRecord]) -> dict[str, float | None]:
+    """Return PIT changes from the closest earlier observation 30-90m back."""
+
+    empty = {
+        "cloud_cover_change_1h_code": None,
+        "ceiling_change_1h_ft": None,
+        "wind_speed_change_1h_kt": None,
+    }
+    if len(records) < 2:
+        return empty
+    latest = records[-1]
+    latest_dt = parse_dt(latest.obs_ts_utc)
+    if latest_dt is None:
+        return empty
+    candidates: list[tuple[float, ObservationRecord]] = []
+    for record in records[:-1]:
+        dt = parse_dt(record.obs_ts_utc)
+        if dt is None:
+            continue
+        gap = (latest_dt - dt).total_seconds() / 60.0
+        if 30 <= gap <= 90:
+            candidates.append((abs(gap - 60.0), record))
+    if not candidates:
+        return empty
+    prior = min(candidates, key=lambda item: item[0])[1]
+    severity = {"CLR": 0, "SKC": 0, "CAVOK": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4, "VV": 4}
+    sky_now = severity.get(str(latest.sky_code or "").upper())
+    sky_prior = severity.get(str(prior.sky_code or "").upper())
+    ceiling_now = _float_or_none(latest.metadata.get("ceiling_ft_agl"))
+    ceiling_prior = _float_or_none(prior.metadata.get("ceiling_ft_agl"))
+    return {
+        "cloud_cover_change_1h_code": sky_now - sky_prior if sky_now is not None and sky_prior is not None else None,
+        "ceiling_change_1h_ft": ceiling_now - ceiling_prior if ceiling_now is not None and ceiling_prior is not None else None,
+        "wind_speed_change_1h_kt": latest.wind_kt - prior.wind_kt if latest.wind_kt is not None and prior.wind_kt is not None else None,
+    }
+
+
 def _settings(settings: FetchSettings | None) -> FetchSettings:
     return settings or FetchSettings()
 
@@ -284,6 +322,20 @@ def _record(
     elif raw is not None:
         raw_text = str(raw)
     relh_value = relh if relh is not None else relative_humidity_pct(temp_c, dewpoint_c)
+    structured = raw if isinstance(raw, dict) else {}
+    physical = metar_physical_features(
+        raw_text,
+        structured.get("present_weather")
+        or structured.get("wxString")
+        or structured.get("wx_phrase")
+        or structured.get("wxPhraseLong"),
+    )
+    structured_wind_dir = _float_or_none(
+        structured.get("wdir")
+        or structured.get("wind_dir_deg")
+        or structured.get("windDirection")
+        or structured.get("winddir")
+    )
     return ObservationRecord(
         source_key=source_key,
         city=request.city,
@@ -298,7 +350,11 @@ def _record(
         sky_code=sky_code,
         raw_text=raw_text,
         source_latency_ms=latency_ms,
-        metadata=metadata or {},
+        metadata={
+            **physical,
+            "wind_dir_deg": structured_wind_dir if structured_wind_dir is not None else physical.get("metar_wind_dir_deg"),
+            **(metadata or {}),
+        },
     )
 
 
@@ -825,6 +881,10 @@ def snapshot_observation_source(
         "station": request.station_or_feed,
         "source_report_ts_utc": report_ts,
         "temp_c": latest.temp_c if latest else None,
+        "dewpoint_c": latest.dewpoint_c if latest else None,
+        "relative_humidity_pct": latest.relh if latest else None,
+        "wind_speed_kt": latest.wind_kt if latest else None,
+        "sky_code_now": latest.sky_code if latest else "",
         "raw_metar": latest.raw_text if latest else "",
         "raw_payload_hash": result.metadata.get("raw_payload_hash", ""),
         "ts_utc": fetch_end.isoformat(),
@@ -847,6 +907,7 @@ def snapshot_observation_source(
     }
     if latest:
         row.update(latest.metadata)
+        row.update(one_hour_observation_changes(list(result.records)))
     for key, value in result.metadata.items():
         if key not in row and key not in {"source_fetch_start_utc", "source_fetch_end_utc"}:
             row[key] = value

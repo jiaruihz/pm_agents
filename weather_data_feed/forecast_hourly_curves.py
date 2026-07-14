@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
-FORECAST_HOURLY_CURVE_SCHEMA_VERSION = "forecast_hourly_curve_v3"
+FORECAST_HOURLY_CURVE_SCHEMA_VERSION = "forecast_hourly_curve_v4"
 _BEIJING = timezone(timedelta(hours=8))
 _FIRST_SEEN_KEY_FIELDS = (
     "city",
@@ -31,19 +31,38 @@ _REQUIRED_CAPTURE_FIELDS = (
 )
 
 
-def build_hourly_curve(times: Iterable[Any], temperatures_f: Iterable[Any]) -> list[dict[str, Any]]:
+def build_hourly_curve(
+    times: Iterable[Any],
+    temperatures_f: Iterable[Any],
+    *,
+    precipitation_probability_pct: Iterable[Any] | None = None,
+    cloud_cover_pct: Iterable[Any] | None = None,
+    wind_speed_10m_kt: Iterable[Any] | None = None,
+    wind_direction_10m_deg: Iterable[Any] | None = None,
+) -> list[dict[str, Any]]:
     """Normalize the source response into the stable curve payload."""
+    time_values = list(times)
+    temp_values = list(temperatures_f)
+    optional = {
+        "precipitation_probability_pct": list(precipitation_probability_pct or []),
+        "cloud_cover_pct": list(cloud_cover_pct or []),
+        "wind_speed_10m_kt": list(wind_speed_10m_kt or []),
+        "wind_direction_10m_deg": list(wind_direction_10m_deg or []),
+    }
     curve: list[dict[str, Any]] = []
-    for time_local, temperature_f in zip(times, temperatures_f):
+    for idx, (time_local, temperature_f) in enumerate(zip(time_values, temp_values)):
         if temperature_f is None:
             continue
         try:
-            curve.append(
-                {
-                    "time_local": str(time_local),
-                    "temperature_f": round(float(temperature_f), 3),
-                }
-            )
+            row = {"time_local": str(time_local), "temperature_f": round(float(temperature_f), 3)}
+            for field, values in optional.items():
+                if idx >= len(values) or values[idx] is None:
+                    continue
+                try:
+                    row[field] = round(float(values[idx]), 3)
+                except (TypeError, ValueError):
+                    continue
+            curve.append(row)
         except (TypeError, ValueError):
             continue
     return curve
@@ -102,6 +121,8 @@ def build_curve_row(
     forecast_detected_at_utc: str | None = None,
     forecast_run_ts_utc: str | None = None,
     forecast_run_lineage_status: str = "source_response_does_not_expose_run_timestamp",
+    latitude: float | None = None,
+    longitude: float | None = None,
 ) -> dict[str, Any]:
     """Build one city/target curve row before immutable publication.
 
@@ -133,6 +154,8 @@ def build_curve_row(
         "forecast_timezone_abbreviation": forecast_timezone_abbreviation,
         "forecast_utc_offset_seconds": forecast_utc_offset_seconds,
         "forecast_generationtime_ms": forecast_generationtime_ms,
+        "latitude": latitude,
+        "longitude": longitude,
         "forecast_detected_at_utc": forecast_detected_at_utc,
         "forecast_detected_at_basis": (
             "collector_after_source_response_parse" if forecast_detected_at_utc else None

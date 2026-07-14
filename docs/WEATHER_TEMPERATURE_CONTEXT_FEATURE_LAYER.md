@@ -1,7 +1,7 @@
 # Weather Temperature Context Feature Layer
 
 Status: current-reference
-Updated: 2026-07-05
+Updated: 2026-07-14
 Source of truth: yes for temperature-context feature semantics
 Used by: current YES, current-bracket NO, d1/d2 NO, Range RV, timing research
 
@@ -26,17 +26,22 @@ The context labels are not trading rules. They are reusable mechanism features f
 
 ## Canonical Inputs
 
-Current source table:
+Canonical frame builder:
 
-`docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv`
+`weather_feature_layer.builders.build_weather_state_frame()`
 
-Current feature builder:
+Canonical frame/store contract:
 
-`scripts/analysis/reheat_risk/research_temperature_context_feature_layer_v1.py`
+`weather_state_v2` inside the existing `feature_frame_v1` envelope. Live and
+archive reconstruction use the same columns and `feature_version_manifest`;
+the PIT difference is recorded only in `pit_provenance`.
 
 Shared feature functions:
 
-`weather_data_feed/weather_context.py`
+`weather_data_feed/weather_context.py` and
+`weather_data_feed/physical_features.py`, re-exported through
+`weather_feature_layer.state`. Strategies import the feature layer, not private
+copies of parsers.
 
 Latest generated state table:
 
@@ -51,6 +56,21 @@ Latest temperature-path decomposition:
 `docs/analysis/2026-07/2026-07-05-temperature-path-mechanism-decomposition-v1.md`
 
 ## Feature Families
+
+`weather_state_v2` adds continuous, strategy-neutral physical facts without a
+new table or serialization format:
+
+- observed METAR `precip_state`, intensity, thunder/freezing flags
+- cloud layer count, lowest base, ceiling, and optional 1h changes
+- wind direction plus circular sin/cos representation
+- observation age/cadence ratio, next expected report, and source latency
+- solar elevation now/+2h, elevation change, daylight remaining, heating potential
+- forecast precipitation/cloud/wind summaries over decision-to-peak, read from
+  the canonical PIT `forecast_hourly_curve_v4`
+
+Missing inputs remain explicit through `solar_geometry_status`,
+`forecast_weather_window_status`, and null continuous fields. There is no
+silent city-coordinate, forecast, or observation fallback.
 
 `temperature_path_state`
 
@@ -156,7 +176,10 @@ still evaluate expression price, fresh-book depth, and forward settlement.
 
 ## Next Steps
 
-1. Keep `reheat_feature_factory_v1` paths for compatibility, but treat the concept as `temperature_state_feature_factory`.
-2. Add wind direction to the shared observation/cache path so `marine_thermal_state` can move from unknown to onshore/offshore in forward data.
-3. Train or calibrate separate probability heads for current YES survive, current NO pass-through, and d1/d2 NO escape using this same context layer.
-4. Promote only probability/expression combinations that beat market baseline and same-price baseline in holdout plus frozen forward replay.
+1. Keep old generated atlas paths as historical artifacts; new studies consume
+   the shared frame/store or reference it through `feature_frame_ref`.
+2. Accumulate forward `weather_state_v2` coverage before fitting a residual
+   model; do not backfill absent weather fields with future source data.
+3. Test `market probability + weather residual correction` on a frozen forward
+   split and promote only if it beats raw market proper score and fee-adjusted
+   executable ROI.

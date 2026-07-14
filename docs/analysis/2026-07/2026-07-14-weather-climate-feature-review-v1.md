@@ -91,3 +91,15 @@ delta 为 challenger - raw market；负值才是改善。CI 按 target_date bloc
 - missing：真实 maker/taker fill、YES ask depth、组合资金占用；因此不作 live 结论。
 
 Structured artifact: `docs/analysis/2026-07/generated/weather_climate_feature_review_v1/summary.json`.
+
+## Implementation follow-up
+
+The missing shared contract identified above was closed later on 2026-07-14
+without adding a parallel feature table. `weather_state_v2` now extends the
+existing `feature_frame_v1` with PIT precipitation/thunder, cloud layer/base
+and change fields, wind direction, observation age/cadence/latency, scalar
+solar geometry, and decision-to-forecast-peak precipitation/cloud/wind
+summaries. Open-Meteo capture remains the existing immutable hourly-curve
+stream, upgraded in place to `forecast_hourly_curve_v4`. This changes data
+capture and reusable features only; it does not change the research verdict or
+enable a live selector.

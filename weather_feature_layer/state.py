@@ -22,6 +22,13 @@ from weather_data_feed.weather_context import (
     wind_direction_sector,
     wind_thermal_interaction,
 )
+from weather_data_feed.physical_features import (
+    forecast_window_features,
+    metar_physical_features,
+    observation_clock_features,
+    physical_context_features,
+    solar_geometry_features,
+)
 
 __all__ = [
     "CITY_WIND_CONTEXT",
@@ -31,6 +38,11 @@ __all__ = [
     "heating_done_features",
     "moisture_cloud_interaction",
     "moisture_state",
+    "metar_physical_features",
+    "observation_clock_features",
+    "physical_context_features",
+    "solar_geometry_features",
+    "forecast_window_features",
     "safe_float",
     "sky_state",
     "temperature_context_features",

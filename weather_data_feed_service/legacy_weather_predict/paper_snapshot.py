@@ -616,11 +616,8 @@ CITY_MODEL = {
 }
 
 
-def _forecast_values_hash(times, temps):
-    payload = [
-        [str(t), None if temp is None else round(float(temp), 3)]
-        for t, temp in zip(times or [], temps or [])
-    ]
+def _forecast_values_hash(hourly_curve):
+    payload = list(hourly_curve or [])
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
@@ -629,6 +626,10 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
     hourly = payload.get("hourly", {}) if isinstance(payload, dict) else {}
     times = hourly.get("time", []) or []
     temps = hourly.get("temperature_2m", []) or []
+    precip = hourly.get("precipitation_probability", []) or []
+    cloud = hourly.get("cloud_cover", []) or []
+    wind_speed = hourly.get("wind_speed_10m", []) or []
+    wind_dir = hourly.get("wind_direction_10m", []) or []
     pairs = []
     for t, temp in zip(times, temps):
         if temp is None:
@@ -654,6 +655,14 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
         peak_hour_utc = None
 
     forecast_detected_at_utc = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    hourly_curve = build_hourly_curve(
+        times,
+        temps,
+        precipitation_probability_pct=precip,
+        cloud_cover_pct=cloud,
+        wind_speed_10m_kt=wind_speed,
+        wind_direction_10m_deg=wind_dir,
+    )
     return {
         "max_f": max_f,
         "peak_time_local": peak_local_time,
@@ -661,8 +670,8 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
         "peak_time_utc": peak_time_utc,
         "peak_hour_utc": peak_hour_utc,
         "hourly_count": len(pairs),
-        "values_hash": _forecast_values_hash(times, temps),
-        "hourly_curve": build_hourly_curve(times, temps),
+        "values_hash": _forecast_values_hash(hourly_curve),
+        "hourly_curve": hourly_curve,
         "source_model": source_model,
         "source_api": f"open_meteo_live_{source_model}",
         "timezone": payload.get("timezone"),
@@ -677,7 +686,8 @@ def _fetch_live_forecast(client, model, city, cfg, target_date):
     url = f"https://api.open-meteo.com/v1/{model}"
     params = {
         "latitude": cfg["lat"], "longitude": cfg["lon"],
-        "hourly": "temperature_2m", "temperature_unit": "fahrenheit",
+        "hourly": "temperature_2m,precipitation_probability,cloud_cover,wind_speed_10m,wind_direction_10m",
+        "temperature_unit": "fahrenheit", "wind_speed_unit": "kn",
         "timezone": "auto",
         "start_date": target_date, "end_date": target_date,
     }
@@ -1300,6 +1310,8 @@ def main():
                         forecast_generationtime_ms=forecast_info.get("generationtime_ms"),
                         forecast_model_fallback_reason=";".join(dict.fromkeys(fallback_reasons)) or None,
                         forecast_detected_at_utc=forecast_info.get("detected_at_utc"),
+                        latitude=cfg.get("lat"),
+                        longitude=cfg.get("lon"),
                     )
                 )
 

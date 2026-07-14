@@ -11,6 +11,7 @@ from weather_feature_layer.contracts import (
     WEATHER_BIAS_VERSION,
     WEATHER_REGIME_VERSION,
     WEATHER_STATE_VERSION,
+    WEATHER_PHYSICAL_FEATURE_FIELDS,
 )
 from weather_feature_layer.builders import (
     WEATHER_STATE_FRAME_BUILDER_VERSION,
@@ -35,6 +36,8 @@ from weather_feature_layer.state import (
     heating_done_features,
     moisture_cloud_interaction,
     moisture_state,
+    physical_context_features,
+    solar_geometry_features,
     sky_state,
     temperature_context_features,
     warming_state,
@@ -49,6 +52,7 @@ __all__ = [
     "WEATHER_BIAS_VERSION",
     "WEATHER_REGIME_VERSION",
     "WEATHER_STATE_VERSION",
+    "WEATHER_PHYSICAL_FEATURE_FIELDS",
     "build_weather_state_frame",
     "build_weather_state_frame_with_audits",
     "add_side_execution_features",
@@ -61,6 +65,8 @@ __all__ = [
     "load_feature_row_by_ref",
     "moisture_cloud_interaction",
     "moisture_state",
+    "physical_context_features",
+    "solar_geometry_features",
     "side_execution_features",
     "sky_state",
     "summarize_city_execution_profile",
