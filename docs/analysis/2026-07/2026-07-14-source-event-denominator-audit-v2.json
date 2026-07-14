@@ -1,6 +1,6 @@
 {
   "schema_version": "source_event_denominator_audit_v2",
-  "generated_at_utc": "2026-07-14T02:41:02.428342+00:00",
+  "generated_at_utc": "2026-07-14T04:32:02.402399+00:00",
   "status": "research_only_zero_notional",
   "data_snapshot": {
     "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
@@ -29,24 +29,45 @@
     "generic_cross_dates": 22,
     "generic_cross_cities": 40,
     "expanding_predicted_states": 5607,
-    "old_edge_selected_current_no_rows": 42
+    "old_edge_selected_current_no_rows": 42,
+    "raw_same_window_city_date_hour_candidates": 23850,
+    "labeled_unique_city_date_hours": 4121
   },
   "funnel_rows": [
     {
-      "stage": "raw city-date-local-hour snapshot candidates",
+      "lineage": "raw saved-field audit",
+      "stage": "all-window hourly-last inventory",
       "rows": 68026,
       "dates": 69,
       "cities": 49,
       "grain": "last saved snapshot per city/date/local-hour"
     },
     {
-      "stage": "clean labeled PIT states",
+      "lineage": "raw saved-field audit",
+      "stage": "same-window hourly-last inventory",
+      "rows": 23850,
+      "dates": 22,
+      "cities": 47,
+      "grain": "hourly-last inventory restricted to the v3 labeled date window"
+    },
+    {
+      "lineage": "v3 reconstructed PIT",
+      "stage": "clean labeled decision snapshots",
       "rows": 8094,
       "dates": 22,
       "cities": 47,
-      "grain": "saved ladder snapshot with reconstructable running high and label"
+      "grain": "every reconstructable decision snapshot; multiple rows per local hour"
     },
     {
+      "lineage": "v3 reconstructed PIT",
+      "stage": "clean labeled unique city-date-hours",
+      "rows": 4121,
+      "dates": 22,
+      "cities": 47,
+      "grain": "v3 states deduplicated to city/date/local-hour for comparability"
+    },
+    {
+      "lineage": "v3 reconstructed PIT",
       "stage": "generic running-high bracket advances",
       "rows": 518,
       "dates": 22,
@@ -54,6 +75,7 @@
       "grain": "current bracket changed from previous state; not source-specific"
     },
     {
+      "lineage": "v3 reconstructed PIT",
       "stage": "generic cross current-NO executable",
       "rows": 499,
       "dates": 22,
@@ -61,6 +83,7 @@
       "grain": "all cross rows with ask 0.001..0.999 and ask_size>=5"
     },
     {
+      "lineage": "v3 reconstructed PIT",
       "stage": "v1 model edge>=2c current-NO",
       "rows": 42,
       "dates": 14,
@@ -200,8 +223,8 @@
   ],
   "true_fast_source_history": {
     "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/high_frequency_observations/high_frequency_observations.jsonl",
-    "raw_profile_rows_including_repolls": 197012,
-    "unique_city_date_source_observations": 18752,
+    "raw_profile_rows_including_repolls": 201291,
+    "unique_city_date_source_observations": 19080,
     "min_date": "2026-07-07",
     "max_date": "2026-07-14",
     "dates": 8,

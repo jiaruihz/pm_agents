@@ -236,10 +236,14 @@ therefore generic observed bracket advances, not fast-source events, and the
 42-row current-NO result is a final model-selected subset rather than the full
 date-city denominator.
 
-The corrected denominator audit starts from 68,026 city-date-local-hour paper
-candidates across 69 dates / 49 cities.  Of the 8,094 reconstructable labeled
-PIT states, 518 were generic advances and 499 had executable current-NO asks and
-depth.  Trading all 499 current-NO rows returned fee-adjusted ROI -2.7%, with a
+The corrected denominator audit records 68,026 city-date-local-hour paper
+candidates across 69 dates / 49 cities, but this is a separate hourly-last raw
+inventory, not the parent denominator of the 8,094 v3 states.  The latter are
+individual reconstructed decision snapshots across 22 settled dates, with
+multiple snapshots allowed in one local hour; deduplicating them to the same
+city/date/hour grain yields 4,121 rows.  Of the 8,094 strategy-grain states, 518
+were generic advances and 499 had executable current-NO asks and depth.  Trading
+all 499 current-NO rows returned fee-adjusted ROI -2.7%, with a
 date-bootstrap CI of [-7.1%, +0.9%].  Its date-equal excess over the same-price-
 band initial-anchor baseline was -0.6%, CI [-3.7%, +2.1%].  The broad event has
 not shown alpha.

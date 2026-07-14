@@ -12,7 +12,8 @@
 ## 结论先行
 
 用户对分母的质疑成立。v1 的 `42 rows` 是最终模型筛选结果，不是全部日期城市。
-完整 raw paper universe 有 `68026` city-date-hour candidates / `69` dates / `49` cities；可形成 clean PIT state 的窗口为 `8094` states / `22` settled dates / `47` cities；其中 generic running-high bracket advances 为 `518`。
+完整 raw hourly-last inventory 有 `68026` city-date-hours / `69` dates / `49` cities。但它不能直接除以 `8094`：后者是另一条 v3 reconstructed-PIT lineage，包含 `22` 个 settled dates 上的每个 decision snapshot，同一小时可有多行。
+同窗 raw hourly-last 是 `23850`；v3 clean state 去重到同一 city/date/hour 后是 `4121`。策略实际使用未按小时去重的 `8094` decision snapshots，其中 generic running-high bracket advances 为 `518`。
 
 更关键的是：v1 的 `cross_event` 只由 `previous_current_key != current_key` 定义，代码没有 join JMA/AMOS/HKO/MSS/MADIS，也没有使用 city×source profile。所以 v1 实际评估的是 generic observed running-high 跨档，不是快源领先策略。
 
@@ -22,15 +23,17 @@
 
 ## 分母漏斗
 
-| stage | rows | dates | cities | grain |
-| --- | --- | --- | --- | --- |
-| raw city-date-local-hour snapshot candidates | 68026 | 69 | 49 | last saved snapshot per city/date/local-hour |
-| clean labeled PIT states | 8094 | 22 | 47 | saved ladder snapshot with reconstructable running high and label |
-| generic running-high bracket advances | 518 | 22 | 40 | current bracket changed from previous state; not source-specific |
-| generic cross current-NO executable | 499 | 22 | 40 | all cross rows with ask 0.001..0.999 and ask_size>=5 |
-| v1 model edge>=2c current-NO | 42 | 14 | 17 | final model-selected subset |
+| lineage | stage | rows | dates | cities | grain |
+| --- | --- | --- | --- | --- | --- |
+| raw saved-field audit | all-window hourly-last inventory | 68026 | 69 | 49 | last saved snapshot per city/date/local-hour |
+| raw saved-field audit | same-window hourly-last inventory | 23850 | 22 | 47 | hourly-last inventory restricted to the v3 labeled date window |
+| v3 reconstructed PIT | clean labeled decision snapshots | 8094 | 22 | 47 | every reconstructable decision snapshot; multiple rows per local hour |
+| v3 reconstructed PIT | clean labeled unique city-date-hours | 4121 | 22 | 47 | v3 states deduplicated to city/date/local-hour for comparability |
+| v3 reconstructed PIT | generic running-high bracket advances | 518 | 22 | 40 | current bracket changed from previous state; not source-specific |
+| v3 reconstructed PIT | generic cross current-NO executable | 499 | 22 | 40 | all cross rows with ask 0.001..0.999 and ask_size>=5 |
+| v3 reconstructed PIT | v1 model edge>=2c current-NO | 42 | 14 | 17 | final model-selected subset |
 
-### 旧 clean-state 排除原因
+### 独立的 raw saved-field hourly-last 审计排除原因
 
 | scope | state_status | rows | dates | cities |
 | --- | --- | --- | --- | --- |
@@ -57,7 +60,7 @@
 
 ## 真正快源历史覆盖
 
-- profile-matched fast observations: raw repolls `197012`，unique observations `18752`.
+- profile-matched fast observations: raw repolls `201291`，unique observations `19080`.
 - window `2026-07-07..2026-07-14` / `8` dates / `18` cities.
 - 与当前已结算 label 重叠只有 `4` dates / `61` city-dates（`2026-07-07..2026-07-10`）。
 

@@ -312,8 +312,11 @@ def render_report(payload: dict[str, Any], summary: pd.DataFrame, status: pd.Dat
             "## 结论先行",
             "",
             "用户对分母的质疑成立。v1 的 `42 rows` 是最终模型筛选结果，不是全部日期城市。",
-            f"完整 raw paper universe 有 `{funnel['raw_city_date_hour_candidates']}` city-date-hour candidates / `{funnel['raw_dates']}` dates / `{funnel['raw_cities']}` cities；"
-            f"可形成 clean PIT state 的窗口为 `{funnel['labeled_pit_states']}` states / `{funnel['state_dates']}` settled dates / `{funnel['state_cities']}` cities；"
+            f"完整 raw hourly-last inventory 有 `{funnel['raw_city_date_hour_candidates']}` city-date-hours / `{funnel['raw_dates']}` dates / `{funnel['raw_cities']}` cities。"
+            f"但它不能直接除以 `{funnel['labeled_pit_states']}`：后者是另一条 v3 reconstructed-PIT lineage，"
+            f"包含 `{funnel['state_dates']}` 个 settled dates 上的每个 decision snapshot，同一小时可有多行。",
+            f"同窗 raw hourly-last 是 `{funnel['raw_same_window_city_date_hour_candidates']}`；v3 clean state 去重到同一 city/date/hour 后是 "
+            f"`{funnel['labeled_unique_city_date_hours']}`。策略实际使用未按小时去重的 `{funnel['labeled_pit_states']}` decision snapshots，"
             f"其中 generic running-high bracket advances 为 `{funnel['generic_bracket_advances']}`。",
             "",
             "更关键的是：v1 的 `cross_event` 只由 `previous_current_key != current_key` 定义，代码没有 join JMA/AMOS/HKO/MSS/MADIS，也没有使用 city×source profile。"
@@ -331,7 +334,7 @@ def render_report(payload: dict[str, Any], summary: pd.DataFrame, status: pd.Dat
             "",
             markdown_table(pd.DataFrame(payload["funnel_rows"])),
             "",
-            "### 旧 clean-state 排除原因",
+            "### 独立的 raw saved-field hourly-last 审计排除原因",
             "",
             markdown_table(status),
             "",
@@ -444,22 +447,55 @@ def main() -> None:
         "expanding_predicted_states": predicted,
         "old_edge_selected_current_no_rows": int(old.get("rows") or 0),
     }
+    same_window_candidates = snapshot_candidates[
+        snapshot_candidates["target_date"].astype(str).between(
+            funnel["state_min_date"], funnel["state_max_date"]
+        )
+    ]
+    labeled_unique_hours = labeled.drop_duplicates(
+        ["city", "target_date", "decision_hour_local"]
+    )
+    funnel.update(
+        {
+            "raw_same_window_city_date_hour_candidates": len(same_window_candidates),
+            "labeled_unique_city_date_hours": len(labeled_unique_hours),
+        }
+    )
     funnel_rows = [
         {
-            "stage": "raw city-date-local-hour snapshot candidates",
+            "lineage": "raw saved-field audit",
+            "stage": "all-window hourly-last inventory",
             "rows": funnel["raw_city_date_hour_candidates"],
             "dates": funnel["raw_dates"],
             "cities": funnel["raw_cities"],
             "grain": "last saved snapshot per city/date/local-hour",
         },
         {
-            "stage": "clean labeled PIT states",
+            "lineage": "raw saved-field audit",
+            "stage": "same-window hourly-last inventory",
+            "rows": funnel["raw_same_window_city_date_hour_candidates"],
+            "dates": funnel["state_dates"],
+            "cities": funnel["state_cities"],
+            "grain": "hourly-last inventory restricted to the v3 labeled date window",
+        },
+        {
+            "lineage": "v3 reconstructed PIT",
+            "stage": "clean labeled decision snapshots",
             "rows": funnel["labeled_pit_states"],
             "dates": funnel["state_dates"],
             "cities": funnel["state_cities"],
-            "grain": "saved ladder snapshot with reconstructable running high and label",
+            "grain": "every reconstructable decision snapshot; multiple rows per local hour",
         },
         {
+            "lineage": "v3 reconstructed PIT",
+            "stage": "clean labeled unique city-date-hours",
+            "rows": funnel["labeled_unique_city_date_hours"],
+            "dates": funnel["state_dates"],
+            "cities": funnel["state_cities"],
+            "grain": "v3 states deduplicated to city/date/local-hour for comparability",
+        },
+        {
+            "lineage": "v3 reconstructed PIT",
             "stage": "generic running-high bracket advances",
             "rows": funnel["generic_bracket_advances"],
             "dates": funnel["generic_cross_dates"],
@@ -467,6 +503,7 @@ def main() -> None:
             "grain": "current bracket changed from previous state; not source-specific",
         },
         {
+            "lineage": "v3 reconstructed PIT",
             "stage": "generic cross current-NO executable",
             "rows": int(summary.loc[summary["expression"].eq("current_no"), "rows"].iloc[0]),
             "dates": int(summary.loc[summary["expression"].eq("current_no"), "dates"].iloc[0]),
@@ -474,6 +511,7 @@ def main() -> None:
             "grain": "all cross rows with ask 0.001..0.999 and ask_size>=5",
         },
         {
+            "lineage": "v3 reconstructed PIT",
             "stage": "v1 model edge>=2c current-NO",
             "rows": funnel["old_edge_selected_current_no_rows"],
             "dates": int(old.get("dates") or 0),
