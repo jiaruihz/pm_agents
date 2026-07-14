@@ -25,6 +25,7 @@ from weather_data_feed.city_calendar import city_timezone_name
 
 INSTANCE = "low_price_yes_lottery_tiny_live_v1"
 ENTRY_POLICY = "low_price_yes_lottery_maker_first_v1"
+INCIDENT_CUTOFF_UTC = "2026-07-14T15:48:00Z"
 
 
 def text(value: Any) -> str:
@@ -172,12 +173,17 @@ def classify_fresh(
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
+    cutoff = utc(args.incident_cutoff_utc)
+    if cutoff is None:
+        raise ValueError("invalid --incident-cutoff-utc")
     orders = [
         row
         for row in read_jsonl(Path(args.orders))
         if text(row.get("record_type")) == "weather_edge_live_order"
         and text(row.get("status")) == "submitted"
         and text(row.get("execution_policy")) == ENTRY_POLICY
+        and utc(row.get("created_at_utc")) is not None
+        and utc(row.get("created_at_utc")) < cutoff
     ]
     decisions = read_jsonl(Path(args.decisions))
     snapshots = sorted(Path(args.snapshot_dir).glob("snapshot_*.json"), key=snapshot_clock)
@@ -257,6 +263,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     local_hour_counts = Counter(row["local_hour"] for row in details if row["entry_scope"] == "D0")
     summary = {
         "orders_submitted": len(details),
+        "incident_cutoff_utc": cutoff.isoformat().replace("+00:00", "Z"),
         "snapshot_archive_start": snapshot_times[0].isoformat().replace("+00:00", "Z") if snapshot_times else "",
         "snapshot_archive_end": snapshot_times[-1].isoformat().replace("+00:00", "Z") if snapshot_times else "",
         "old_thesis_stale_gt30m_submitted": sum(row["old_thesis_stale_gt30m"] for row in details),
@@ -329,6 +336,7 @@ def write_outputs(payload: dict[str, Any], args: argparse.Namespace) -> None:
 - scope: `{json.dumps(s['scope_counts'], ensure_ascii=False)}`
 - D0 local hour: `{json.dumps(s['d0_local_hour_counts'], ensure_ascii=False)}`
 - snapshot archive: `{s['snapshot_archive_start']} .. {s['snapshot_archive_end']}`
+- incident cutoff: `{s['incident_cutoff_utc']}`（修复后订单不进入事故影响分母）
 
 ## Stale Thesis 逐笔
 
@@ -355,6 +363,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--decisions", default=str(ROOT / "runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1/shadow_decisions.jsonl"))
     parser.add_argument("--snapshot-dir", default="/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots")
     parser.add_argument("--db", default=str(ROOT / "runtime/weather.db"))
+    parser.add_argument("--incident-cutoff-utc", default=INCIDENT_CUTOFF_UTC)
     base = ROOT / "docs/analysis/2026-07/generated/heada_fresh_thesis_entry_audit_v1"
     parser.add_argument("--out-json", default=str(base / "audit.json"))
     parser.add_argument("--out-csv", default=str(base / "orders.csv"))
