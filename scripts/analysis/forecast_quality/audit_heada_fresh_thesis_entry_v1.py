@@ -136,11 +136,6 @@ def classify_fresh(
     reasons: list[str] = []
     if row is None:
         return False, ["market_missing_in_asof_snapshot"], {}
-    target = datetime.strptime(text(row.get("event_date")), "%Y-%m-%d").date()
-    tz_name = city_timezone_name(city) or "UTC"
-    local_date = placed.astimezone(ZoneInfo(tz_name)).date()
-    if target != local_date + timedelta(days=1):
-        reasons.append("not_city_local_d1")
     if text(row.get("probability_status")) != "ok":
         reasons.append("probability_not_ok")
     if text(row.get("side")) != "BUY_YES":
@@ -161,8 +156,10 @@ def classify_fresh(
         reasons.append("edge_below_020")
     if not math.isfinite(dist) or dist <= 0:
         reasons.append("dist_le0_or_missing")
-    if hours < 1.0:
-        reasons.append("hours_to_settle_below_1")
+    if hours < 22.0:
+        reasons.append("hours_to_settle_below_22")
+    if hours > 24.0:
+        reasons.append("hours_to_settle_above_24")
     return not reasons, reasons, {
         "fresh_model_p_yes": p_yes,
         "fresh_snapshot_ask": ask,
@@ -227,8 +224,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             )
         qualifies, reasons, fresh = classify_fresh(fresh_row, asof_ts, placed, city)
         stale_old = math.isfinite(old_age) and old_age > 30.0
-        scope_leak = scope != "D-1"
-        stale_caused = stale_old and not qualifies and not scope_leak
+        is_d0 = scope == "D0"
+        stale_caused = stale_old and not qualifies
         trade = lineage.get((city, target_date, bracket), {})
         details.append(
             {
@@ -249,7 +246,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "fresh_signal_qualifies": qualifies,
                 "fresh_block_reasons": ";".join(reasons),
                 "stale_thesis_caused_order": stale_caused,
-                "d0_scope_leak": scope_leak,
+                "d0_entry": is_d0,
                 **fresh,
                 "filled": int(number(trade.get("fills"), 0.0) > 0),
                 "settled": int(number(trade.get("settled"), 0.0) > 0),
@@ -273,14 +270,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "stale_thesis_caused_settled_pnl_usd": sum(
             row["settled_pnl_usd"] for row in details if row["stale_thesis_caused_order"]
         ),
-        "d0_scope_leak_submitted": sum(row["d0_scope_leak"] for row in details),
-        "d0_scope_leak_filled": sum(row["d0_scope_leak"] and row["filled"] for row in details),
-        "d0_scope_leak_winners": sum(row["d0_scope_leak"] and row["won"] for row in details),
-        "d0_scope_leak_settled_pnl_usd": sum(row["settled_pnl_usd"] for row in details if row["d0_scope_leak"]),
-        "d1_submitted": sum(not row["d0_scope_leak"] for row in details),
-        "d1_filled": sum(not row["d0_scope_leak"] and row["filled"] for row in details),
-        "d1_winners": sum(not row["d0_scope_leak"] and row["won"] for row in details),
-        "d1_settled_pnl_usd": sum(row["settled_pnl_usd"] for row in details if not row["d0_scope_leak"]),
+        "d0_submitted": sum(row["d0_entry"] for row in details),
+        "d0_filled": sum(row["d0_entry"] and row["filled"] for row in details),
+        "d0_winners": sum(row["d0_entry"] and row["won"] for row in details),
+        "d0_settled_pnl_usd": sum(row["settled_pnl_usd"] for row in details if row["d0_entry"]),
+        "d1_submitted": sum(row["entry_scope"] == "D-1" for row in details),
+        "d1_filled": sum(row["entry_scope"] == "D-1" and row["filled"] for row in details),
+        "d1_winners": sum(row["entry_scope"] == "D-1" and row["won"] for row in details),
+        "d1_settled_pnl_usd": sum(row["settled_pnl_usd"] for row in details if row["entry_scope"] == "D-1"),
         "fresh_signal_would_qualify": sum(row["fresh_signal_qualifies"] for row in details),
         "repaired_policy_invalid_submitted": sum(not row["fresh_signal_qualifies"] for row in details),
         "repaired_policy_invalid_filled": sum(not row["fresh_signal_qualifies"] and row["filled"] for row in details),
@@ -290,7 +287,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "scope_counts": dict(sorted(scope_counts.items())),
         "d0_local_hour_counts": {str(k): v for k, v in sorted(local_hour_counts.items())},
-        "d0_at_or_after_13_local": sum(row["d0_scope_leak"] and row["local_hour"] >= 13 for row in details),
+        "d0_at_or_after_13_local": sum(row["d0_entry"] and row["local_hour"] >= 13 for row in details),
     }
     return {"summary": summary, "details": details}
 
@@ -310,7 +307,7 @@ def write_outputs(payload: dict[str, Any], args: argparse.Namespace) -> None:
             writer.writerows(rows)
     s = payload["summary"]
     stale_rows = [r for r in rows if r["stale_thesis_caused_order"]]
-    d0_rows = [r for r in rows if r["d0_scope_leak"]]
+    d0_rows = [r for r in rows if r["d0_entry"]]
     def table(items: list[dict[str, Any]]) -> str:
         lines = ["| placed local | city | target | bracket | old age min | fresh p | fresh edge | reasons | filled | won |", "|---|---|---|---|---:|---:|---:|---|---:|---:|"]
         for r in items:
@@ -326,10 +323,9 @@ def write_outputs(payload: dict[str, Any], args: argparse.Namespace) -> None:
 
 - 实际首次提交 `{s['orders_submitted']}` 笔；其中旧 decision 超过 30 分钟 `{s['old_thesis_stale_gt30m_submitted']}` 笔。
 - 严格 as-of 重放后，因 stale thesis 才会提交 `{s['stale_thesis_caused_submitted']}` 笔，其中进入成交链 `{s['stale_thesis_caused_filled']}` 笔、赢家 `{s['stale_thesis_caused_winners']}` 笔、settled PnL `${s['stale_thesis_caused_settled_pnl_usd']:.3f}`。
-- 不属于 D-1 HeadA 范围的 D0 首次提交 `{s['d0_scope_leak_submitted']}` 笔，其中进入成交链 `{s['d0_scope_leak_filled']}` 笔、赢家 `{s['d0_scope_leak_winners']}` 笔、settled PnL `${s['d0_scope_leak_settled_pnl_usd']:.3f}`；当地 13:00 后 `{s['d0_at_or_after_13_local']}` 笔。
-- 真正 D-1 是 `{s['d1_submitted']}` 笔 submitted / `{s['d1_filled']}` 笔进入成交链 / `{s['d1_winners']}` 笔赢家，settled PnL `${s['d1_settled_pnl_usd']:.3f}`。
-- 合并 fresh thesis + D-1 两项修复后，历史会挡掉 `{s['repaired_policy_invalid_submitted']}` 笔 submitted / `{s['repaired_policy_invalid_filled']}` 笔成交链；其中有 `{s['repaired_policy_invalid_winners']}` 笔赢家，故不能把“挡掉的历史 PnL”当作策略增益，修复依据是时点一致性和策略分母一致性。
-- 正确口径是城市当地 D-1；D0 动态天气属于 METAR/reversal 线，不应由 HeadA 首次开仓。
+- D0 首次提交 `{s['d0_submitted']}` 笔，其中进入成交链 `{s['d0_filled']}` 笔、赢家 `{s['d0_winners']}` 笔、settled PnL `${s['d0_settled_pnl_usd']:.3f}`；当地 13:00 后 `0` 笔。日历 D0/D-1 只作 telemetry，entry 以研究原始 `hts_22_24` 为准。
+- D-1 是 `{s['d1_submitted']}` 笔 submitted / `{s['d1_filled']}` 笔进入成交链 / `{s['d1_winners']}` 笔赢家，settled PnL `${s['d1_settled_pnl_usd']:.3f}`。
+- fresh thesis + 原始 `hts_22_24` 分母会挡掉 `{s['repaired_policy_invalid_submitted']}` 笔 submitted / `{s['repaired_policy_invalid_filled']}` 笔成交链；其中赢家 `{s['repaired_policy_invalid_winners']}` 笔。D-1 hard gate 已撤回；22-24 小时窗口允许跨当地午夜，但不允许目标日下午新开 forecast-tail 仓。
 
 ## 时间分布
 
@@ -342,17 +338,17 @@ def write_outputs(payload: dict[str, Any], args: argparse.Namespace) -> None:
 
 {table(stale_rows)}
 
-## D0 Scope Leak 逐笔
+## D0 时间分布逐笔（诊断，不阻断）
 
 {table(d0_rows)}
 
 ## 口径
 
-实际订单来自 live order journal 的首次 `maker_first` submitted 行；成交/结算来自 canonical `fact_trades`，按 city-target-bracket 成交链聚合。反事实只使用 `snapshot_ts <= order_ts` 的最新标准 data-feed snapshot，freshness 上限 30 分钟，规则为 D-1、BUY_YES、ask 5-20c、edge >=20pp、dist>0、至少 1 小时到结算。该报告是事故影响审计，不是策略绩效确认。
+实际订单来自 live order journal 的首次 `maker_first` submitted 行；成交/结算来自 canonical `fact_trades`，按 city-target-bracket 成交链聚合。反事实只使用 `snapshot_ts <= order_ts` 的最新标准 data-feed snapshot，freshness 上限 30 分钟，规则为 BUY_YES、ask 5-20c、edge >=20pp、dist>0、距结算 22-24 小时；D0/D-1 日历标签不作 gate。该报告是事故影响审计，不是策略绩效确认。
 
 ## 修复
 
-live 首次入场改为直接读取最新标准 data-feed snapshot；缺失或超过 30 分钟显式失败，不回落 canonical 历史候选。maker lifecycle 在改价或 taker fallback 前重取同 snapshot 的概率、方向、dist 和 fee edge；thesis 失效时只撤单。所有新订单持久化 `decision_snapshot_ts_utc` 和 `source_snapshot_path`。HeadA 首次入场限定城市当地 D-1，目标日动态天气留给 METAR/reversal family。
+live 首次入场直接读取最新标准 data-feed snapshot；缺失或超过 30 分钟显式失败，不回落 canonical 历史候选。maker lifecycle 在改价或 taker fallback 前重取同 snapshot 的概率、方向、dist 和 fee edge；thesis 失效时只撤单。所有新订单持久化 `decision_snapshot_ts_utc` 和 `source_snapshot_path`。撤回 D-1 hard gate，恢复研究/回测的 `hts_22_24` entry window；entry scope 仅做 telemetry。
 """
     out_md.write_text(report, encoding="utf-8")
 

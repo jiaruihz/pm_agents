@@ -179,7 +179,9 @@ EOF
     <string>--max-decision-snapshot-age-hours</string>
     <string>0.5</string>
     <string>--min-decision-hours-to-settle</string>
-    <string>1</string>
+    <string>22</string>
+    <string>--max-decision-hours-to-settle</string>
+    <string>24</string>
     <string>--max-candidates-per-run</string>
     <string>80</string>
     <string>--book-timeout-sec</string>

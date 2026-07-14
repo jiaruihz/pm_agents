@@ -20,10 +20,9 @@ import sqlite3
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -42,7 +41,6 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
 )
 from src.strategies.weather_edge_v1.runtime import order_runtime
 from weather_data_feed.source_policy import city_slug
-from weather_data_feed.city_calendar import city_timezone_name
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
@@ -312,21 +310,11 @@ def normalize_snapshot_candidate(row: dict[str, Any], *, source_path: Path) -> d
     return out
 
 
-def is_d1_snapshot_row(row: dict[str, Any]) -> bool:
-    target = _event_date(row.get("event_date") or row.get("target_date"))
-    snapshot_ts = parse_utc(row.get("snapshot_ts_utc") or row.get("decision_snapshot_ts_utc"))
-    tz_name = city_timezone_name(safe_str(row.get("city")))
-    local = snapshot_ts.astimezone(ZoneInfo(tz_name)).date() if snapshot_ts is not None and tz_name else None
-    return target is not None and local is not None and target == local + timedelta(days=1)
-
-
 def load_fresh_snapshot_candidates(snapshot: dict[str, Any], args: argparse.Namespace) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
     for raw in snapshot["records"]:
         row = normalize_snapshot_candidate(raw, source_path=snapshot["path"])
         if safe_str(row.get("probability_status")) != "ok" or safe_str(row.get("side")) != "BUY_YES":
-            continue
-        if not is_d1_snapshot_row(row):
             continue
         price = to_float(row.get("decision_entry_price"), 0.0)
         if not (float(args.min_ask) <= price <= float(args.max_ask)):
@@ -334,6 +322,8 @@ def load_fresh_snapshot_candidates(snapshot: dict[str, Any], args: argparse.Name
         if to_float(row.get("edge"), 0.0) < float(args.min_edge):
             continue
         if to_float(row.get("decision_hours_to_settle"), 0.0) < float(args.min_decision_hours_to_settle):
+            continue
+        if to_float(row.get("decision_hours_to_settle"), 0.0) > float(args.max_decision_hours_to_settle):
             continue
         if args.min_event_date and safe_str(row.get("event_date")) < safe_str(args.min_event_date):
             continue
@@ -1460,6 +1450,7 @@ def validate_candidate(
             "min_order_shares": args.min_order_shares,
             "max_decision_snapshot_age_hours": args.max_decision_snapshot_age_hours,
             "min_decision_hours_to_settle": args.min_decision_hours_to_settle,
+            "max_decision_hours_to_settle": args.max_decision_hours_to_settle,
             "dedupe": "one_live_order_per_city_date_bracket_condition_signal_id",
             "daily_cap": None,
             "block_dist_le0_v1": not bool(args.allow_dist_le0 or args.allow_dist_lt0),
@@ -1503,6 +1494,8 @@ def validate_candidate(
         return {**base, "decision_status": "blocked", "blocker": "decision_snapshot_too_stale"}
     if to_float(row.get("decision_hours_to_settle"), 0.0) < args.min_decision_hours_to_settle:
         return {**base, "decision_status": "blocked", "blocker": "decision_hours_to_settle_below_min"}
+    if to_float(row.get("decision_hours_to_settle"), 0.0) > args.max_decision_hours_to_settle:
+        return {**base, "decision_status": "blocked", "blocker": "decision_hours_to_settle_above_max"}
 
     if args.disable_live_token_resolution:
         token_meta = cached_yes_token_only(row, cache)
@@ -2015,10 +2008,17 @@ def refresh_lifecycle_thesis(
         return order, "fresh_weather_market_missing"
     if safe_str(fresh_row.get("probability_status")) != "ok":
         return order, "fresh_weather_probability_not_ok"
-    if not is_d1_snapshot_row(fresh_row):
-        return order, "fresh_weather_not_d1"
     if safe_str(fresh_row.get("side")) != "BUY_YES":
         return order, "fresh_weather_side_not_buy_yes"
+    hours_to_settle = to_float(fresh_row.get("decision_hours_to_settle"), 0.0)
+    lifecycle_grace_hours = max(
+        float(args.maker_lifecycle_refresh_ttl_min),
+        float(args.maker_lifecycle_taker_ttl_min),
+    ) / 60.0
+    if hours_to_settle < float(args.min_decision_hours_to_settle) - lifecycle_grace_hours:
+        return order, "fresh_weather_outside_entry_window"
+    if hours_to_settle > float(args.max_decision_hours_to_settle):
+        return order, "fresh_weather_outside_entry_window"
     bracket_low, _ = parse_bracket_bounds(fresh_row.get("bracket"))
     forecast_max = to_float(fresh_row.get("forecast_max_native"), math.nan)
     if bracket_low is None or not math.isfinite(forecast_max):
@@ -2468,8 +2468,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "min_fee_adjusted_edge": float(args.min_fee_adjusted_edge),
             "max_decision_snapshot_age_hours": float(args.max_decision_snapshot_age_hours),
             "max_weather_snapshot_age_min": float(args.max_weather_snapshot_age_min),
-            "entry_target_scope": "city_local_d1_only",
+            "entry_target_scope": "forecast_snapshot_any_target_day",
             "min_decision_hours_to_settle": float(args.min_decision_hours_to_settle),
+            "max_decision_hours_to_settle": float(args.max_decision_hours_to_settle),
             "min_order_shares": float(args.min_order_shares),
             "sizing_policy": safe_str(args.sizing_policy),
             "maker_first_fraction": float(args.maker_first_fraction),
@@ -2590,7 +2591,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--maker-first-fraction", type=float, default=1.0)
     parser.add_argument("--taker-fallback-min-notional-usd", type=float, default=1.0)
     parser.add_argument("--max-decision-snapshot-age-hours", type=float, default=0.5)
-    parser.add_argument("--min-decision-hours-to-settle", type=float, default=1.0)
+    parser.add_argument("--min-decision-hours-to-settle", type=float, default=22.0)
+    parser.add_argument("--max-decision-hours-to-settle", type=float, default=24.0)
     parser.add_argument("--max-candidates-per-run", type=int, default=80)
     parser.add_argument("--taker-fee-rate", type=float, default=0.05)
     parser.add_argument("--maker-rebate-rate", type=float, default=0.0125)

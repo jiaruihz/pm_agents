@@ -84,6 +84,8 @@ def lifecycle_args(**overrides):
         max_ask=0.20,
         min_edge=0.20,
         min_fee_adjusted_edge=0.15,
+        min_decision_hours_to_settle=22.0,
+        max_decision_hours_to_settle=24.0,
         taker_fee_rate=0.05,
         maker_rebate_rate=0.0,
         maker_lifecycle_allow_taker_fallback=True,
@@ -99,12 +101,13 @@ def lifecycle_args(**overrides):
     return Namespace(**base)
 
 
-def test_fresh_snapshot_candidates_are_d1_only():
+def test_fresh_snapshot_candidates_do_not_drop_d0_forecast_rows():
     args = Namespace(
         min_ask=0.05,
         max_ask=0.20,
         min_edge=0.20,
-        min_decision_hours_to_settle=1.0,
+        min_decision_hours_to_settle=22.0,
+        max_decision_hours_to_settle=24.0,
         min_event_date=None,
         max_event_date=None,
         max_candidates_per_run=80,
@@ -118,7 +121,7 @@ def test_fresh_snapshot_candidates_are_d1_only():
         "entry_price": 0.08,
         "model_prob": 0.40,
         "edge": 0.32,
-        "hours_to_settle": 30,
+        "hours_to_settle": 23,
         "snapshot_ts_utc": "2026-07-14T15:15:00Z",
     }
     snapshot = {
@@ -126,12 +129,14 @@ def test_fresh_snapshot_candidates_are_d1_only():
         "records": [
             {**base, "event_date": "2026-07-14", "condition_id": "d0"},
             {**base, "event_date": "2026-07-15", "condition_id": "d1"},
+            {**base, "event_date": "2026-07-14", "condition_id": "too_late", "hours_to_settle": 10},
+            {**base, "event_date": "2026-07-16", "condition_id": "too_early", "hours_to_settle": 30},
         ],
     }
 
     rows = load_fresh_snapshot_candidates(snapshot, args)
 
-    assert [row["condition_id"] for row in rows] == ["d1"]
+    assert [row["condition_id"] for row in rows] == ["d0", "d1"]
 
 
 def test_lifecycle_refresh_rejects_stale_probability_when_fresh_edge_is_gone():
@@ -145,6 +150,7 @@ def test_lifecycle_refresh_rejects_stale_probability_when_fresh_edge_is_gone():
         "bracket": "90-91",
         "forecast_max_native": 89.0,
         "model_p_yes": 0.12,
+        "decision_hours_to_settle": 23.0,
     }
 
     _, reason = refresh_lifecycle_thesis(
@@ -155,6 +161,49 @@ def test_lifecycle_refresh_rejects_stale_probability_when_fresh_edge_is_gone():
     )
 
     assert reason == "fresh_weather_fee_edge_below_min"
+
+
+def test_lifecycle_refresh_accepts_d0_forecast_thesis():
+    order = {"model_p_yes_used": 0.32}
+    fresh = {
+        "probability_status": "ok",
+        "side": "BUY_YES",
+        "event_date": "2026-07-14",
+        "city": "Atlanta",
+        "snapshot_ts_utc": "2026-07-14T05:15:00Z",
+        "bracket": "90-91",
+        "forecast_max_native": 89.0,
+        "model_p_yes": 0.40,
+        "decision_hours_to_settle": 22.5,
+    }
+
+    refreshed, reason = refresh_lifecycle_thesis(
+        order,
+        fresh_row=fresh,
+        best_ask=0.10,
+        args=lifecycle_args(),
+    )
+
+    assert reason == ""
+    assert refreshed["model_p_yes_used"] == 0.40
+
+
+def test_lifecycle_refresh_rejects_order_far_outside_entry_window():
+    _, reason = refresh_lifecycle_thesis(
+        {"model_p_yes_used": 0.40},
+        fresh_row={
+            "probability_status": "ok",
+            "side": "BUY_YES",
+            "bracket": "90-91",
+            "forecast_max_native": 89.0,
+            "model_p_yes": 0.40,
+            "decision_hours_to_settle": 10.0,
+        },
+        best_ask=0.10,
+        args=lifecycle_args(),
+    )
+
+    assert reason == "fresh_weather_outside_entry_window"
 
 
 def test_lifecycle_prefers_lower_repost_when_book_moves_down():
