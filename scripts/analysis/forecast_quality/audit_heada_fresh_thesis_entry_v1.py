@@ -137,7 +137,7 @@ def classify_fresh(
         return False, ["market_missing_in_asof_snapshot"], {}
     target = datetime.strptime(text(row.get("event_date")), "%Y-%m-%d").date()
     tz_name = city_timezone_name(city) or "UTC"
-    local_date = snapshot_ts.astimezone(ZoneInfo(tz_name)).date() if snapshot_ts else placed.astimezone(ZoneInfo(tz_name)).date()
+    local_date = placed.astimezone(ZoneInfo(tz_name)).date()
     if target != local_date + timedelta(days=1):
         reasons.append("not_city_local_d1")
     if text(row.get("probability_status")) != "ok":
