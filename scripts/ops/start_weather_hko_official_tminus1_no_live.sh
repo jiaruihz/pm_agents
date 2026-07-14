@@ -12,6 +12,7 @@ MAX_NO_ASK="${WEATHER_HKO_LOCK_MAX_NO_ASK:-0.93}"
 MAX_SOURCE_DETECT_AGE_MIN="${WEATHER_HKO_LOCK_MAX_SOURCE_DETECT_AGE_MIN:-5}"
 MAX_SOURCE_OBSERVATION_LAG_MIN="${WEATHER_HKO_LOCK_MAX_SOURCE_OBSERVATION_LAG_MIN:-30}"
 FOK_IMMEDIATE_RETRIES="${WEATHER_HKO_LOCK_FOK_IMMEDIATE_RETRIES:-2}"
+LIVE="${WEATHER_HKO_LOCK_LIVE:-0}"
 MARKET_PROXY="${WEATHER_HKO_LOCK_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-${WEATHER_PREDICT_MARKET_PROXY:-http://127.0.0.1:7890}}}"
 OUTPUT_DIR="${WEATHER_HKO_LOCK_OUTPUT_DIR:-$RUNTIME_ROOT/output/hko_official_tminus1_no_live}"
 LOG_FILE="$RUNTIME_ROOT/loop/hko_official_tminus1_no_live.log"
@@ -23,8 +24,9 @@ cmd=(
   --loop --output-dir "$OUTPUT_DIR" --interval-sec "$INTERVAL_SEC" --shares "$SHARES"
   --max-shares-per-market "$MAX_SHARES_PER_MARKET" --max-no-ask "$MAX_NO_ASK"
   --fok-immediate-retries "$FOK_IMMEDIATE_RETRIES"
-  --max-source-detect-age-min "$MAX_SOURCE_DETECT_AGE_MIN" --max-source-observation-lag-min "$MAX_SOURCE_OBSERVATION_LAG_MIN" --live --confirm-live
+  --max-source-detect-age-min "$MAX_SOURCE_DETECT_AGE_MIN" --max-source-observation-lag-min "$MAX_SOURCE_OBSERVATION_LAG_MIN"
 )
+if [[ "$LIVE" == "1" ]]; then cmd+=(--live --confirm-live); fi
 if [[ -n "$TARGET_DATE" ]]; then cmd+=(--target-date "$TARGET_DATE"); fi
 if [[ -n "$MARKET_PROXY" ]]; then cmd+=(--market-proxy "$MARKET_PROXY"); fi
 
@@ -37,4 +39,4 @@ pkill -f "$PROJECT_DIR/scripts/ops/weather_hko_official_tminus1_no_live.py --loo
 printf -v quoted_cmd '%q ' "${cmd[@]}"
 screen -dmS "$SCREEN_SESSION" sh -c "cd $(printf '%q' "$PROJECT_DIR") && set -a && { [ ! -f .env ] || . ./.env || true; } && set +a && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
 echo "screen:$SCREEN_SESSION" > "$PID_FILE"
-echo "started hko_official_tminus1_no_live screen=$SCREEN_SESSION shares=$SHARES market_cap=$MAX_SHARES_PER_MARKET max_no_ask=$MAX_NO_ASK"
+echo "started hko_official_tminus1_no_live screen=$SCREEN_SESSION mode=$([[ "$LIVE" == "1" ]] && echo live || echo shadow) shares=$SHARES market_cap=$MAX_SHARES_PER_MARKET max_no_ask=$MAX_NO_ASK"
