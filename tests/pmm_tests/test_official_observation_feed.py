@@ -94,5 +94,11 @@ def test_default_source_profiles_cover_current_city_universe():
     assert not profiles["Shenzhen"].live_eligible
     assert profiles["HongKong"].official_station_or_feed == "HKO"
     assert not profiles["HongKong"].live_eligible
+    assert profiles["Moscow"].settlement_source_class == "non_wu_source_by_rules"
+    assert profiles["Moscow"].official_station_or_feed.endswith("site=UUWW")
+    assert profiles["Moscow"].alignment_days == 62
+    assert profiles["Moscow"].alignment_matches == 62
+    assert profiles["Moscow"].primary_source == "synopticdata_timeseries"
+    assert not profiles["Moscow"].live_eligible
     assert profiles["Boston"].timezone_name == "America/New_York"
     assert not profiles["Boston"].live_eligible

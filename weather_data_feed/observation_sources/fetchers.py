@@ -52,6 +52,7 @@ METAR_RMK_T_RE = re.compile(r"\bT([01])(\d{3})([01])(\d{3})\b")
 
 _SYNOPTIC_TOKEN_CACHE: str | None = None
 _AWC_CACHE_TEXT: str | None = None
+_AWC_CACHE_LOCK = threading.Lock()
 _IEM_RAW_TEXT_CACHE: dict[tuple[str, str, str], str] = {}
 _IEM_RAW_TEXT_LOCK = threading.Lock()
 
@@ -416,11 +417,14 @@ def fetch_aviationweather_cache_csv(request: ObservationSourceRequest, settings:
     tz, local_date = _target(request)
     fetch_start = datetime.now(timezone.utc)
     if _AWC_CACHE_TEXT is None:
-        raw_bytes = _http_get(AWC_METARS_CACHE_CSV_GZ, settings=settings).content
-        try:
-            _AWC_CACHE_TEXT = gzip.decompress(raw_bytes).decode("utf-8", errors="replace")
-        except gzip.BadGzipFile:
-            _AWC_CACHE_TEXT = raw_bytes.decode("utf-8", errors="replace")
+        # source-events fans out by city. Download the global cache once per run.
+        with _AWC_CACHE_LOCK:
+            if _AWC_CACHE_TEXT is None:
+                raw_bytes = _http_get(AWC_METARS_CACHE_CSV_GZ, settings=settings).content
+                try:
+                    _AWC_CACHE_TEXT = gzip.decompress(raw_bytes).decode("utf-8", errors="replace")
+                except gzip.BadGzipFile:
+                    _AWC_CACHE_TEXT = raw_bytes.decode("utf-8", errors="replace")
     fetch_end = datetime.now(timezone.utc)
     parsed = parse_awc_cache_csv_records(_AWC_CACHE_TEXT, request.station_or_feed, tz, local_date)
     records = [

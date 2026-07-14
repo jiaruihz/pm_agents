@@ -1,6 +1,6 @@
 {
   "profile_schema_version": 1,
-  "generated_at_utc": "2026-07-10T08:13:43.854107+00:00",
+  "generated_at_utc": "2026-07-14T20:51:07.695110+00:00",
   "generated_from": "docs/analysis/2026-06/2026-06-14-settlement-source-registry-v0.json",
   "source_profiles": [
     {
@@ -509,12 +509,15 @@
       "settled_candidate_rows": 98,
       "candidate_dates": 33,
       "settled_dates": 23,
-      "primary_source": "",
-      "fallback_sources": [],
+      "primary_source": "synopticdata_timeseries",
+      "fallback_sources": [
+        "aviationweather_metar",
+        "noaa_tgftp_station_txt"
+      ],
       "rules_recheck_required": false,
       "blocked_reason": "",
       "live_eligible": false,
-      "source_profile_note": "non-WU source requires dedicated realtime client before live eligibility"
+      "source_profile_note": "WRH/Synoptic collector is wired; source-to-book latency remains unqualified for live"
     },
     {
       "city": "Jakarta",
@@ -894,26 +897,29 @@
       "city": "Moscow",
       "unit": "C",
       "timezone_name": "Europe/Moscow",
-      "settlement_source_class": "blocked_unresolved_settlement_basis",
-      "official_station_or_feed": "unknown_effective_source",
-      "mapping_rule": "unresolved",
+      "settlement_source_class": "non_wu_source_by_rules",
+      "official_station_or_feed": "https://www.weather.gov/wrh/timeseries?site=UUWW",
+      "mapping_rule": "Synoptic air_temp_set_1 local-day max, arithmetic round C to bracket",
       "configured_icao": "UUWW",
-      "official_source": "rules source not reconciled",
-      "alignment_source": "settlement_basis_batch2_v0",
-      "downstream_action": "exclude from official-source M3/station-basis research until root cause is found",
-      "alignment_days": 27,
-      "alignment_matches": 24,
-      "alignment_rate": 0.8889,
+      "official_source": "https://www.weather.gov/wrh/timeseries?site=UUWW",
+      "alignment_source": "settlement_source_reroute_20260715",
+      "downstream_action": "source reconciled to market rules; collector/research only until source-to-book latency is forward-qualified",
+      "alignment_days": 62,
+      "alignment_matches": 62,
+      "alignment_rate": 1.0,
       "candidate_rows": 616,
       "settled_candidate_rows": 88,
       "candidate_dates": 34,
       "settled_dates": 19,
-      "primary_source": "",
-      "fallback_sources": [],
+      "primary_source": "synopticdata_timeseries",
+      "fallback_sources": [
+        "aviationweather_metar",
+        "noaa_tgftp_station_txt"
+      ],
       "rules_recheck_required": false,
-      "blocked_reason": "exclude from official-source M3/station-basis research until root cause is found",
+      "blocked_reason": "",
       "live_eligible": false,
-      "source_profile_note": "blocked until settlement basis mismatch is explained"
+      "source_profile_note": "WRH/Synoptic collector is wired; source-to-book latency remains unqualified for live"
     },
     {
       "city": "Munich",
@@ -1282,12 +1288,15 @@
       "settled_candidate_rows": 54,
       "candidate_dates": 33,
       "settled_dates": 14,
-      "primary_source": "",
-      "fallback_sources": [],
+      "primary_source": "synopticdata_timeseries",
+      "fallback_sources": [
+        "aviationweather_metar",
+        "noaa_tgftp_station_txt"
+      ],
       "rules_recheck_required": false,
       "blocked_reason": "",
       "live_eligible": false,
-      "source_profile_note": "non-WU source requires dedicated realtime client before live eligibility"
+      "source_profile_note": "WRH/Synoptic collector is wired; source-to-book latency remains unqualified for live"
     },
     {
       "city": "Tokyo",
@@ -1401,11 +1410,10 @@
   "summary": {
     "cities": 52,
     "class_counts": {
-      "blocked_unresolved_settlement_basis": 1,
       "default_source_watchlist": 3,
       "default_wu_station_by_rules": 34,
       "no_recent_market_or_unknown_rules": 4,
-      "non_wu_source_by_rules": 2,
+      "non_wu_source_by_rules": 3,
       "official_station_diff_confirmed": 7,
       "special_source_confirmed": 1
     },

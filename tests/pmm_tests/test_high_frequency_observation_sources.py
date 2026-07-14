@@ -2,13 +2,25 @@ from __future__ import annotations
 
 import sys
 import types
+import io
+import zipfile
 from datetime import datetime, timezone
 
 from weather_data_feed.high_frequency_observation_sources import (
+    fetch_aemet_10m,
     fetch_cwa,
+    fetch_ims_1m,
     fetch_knmi,
+    fetch_meteofrance_6m,
+    fetch_metservice_1m,
+    parse_aemet_payload,
+    parse_dwd_10m_zip,
+    parse_eccc_swob_xml,
     parse_hko_csv,
+    parse_ims_1m_payload,
     parse_jma_amedas_payload,
+    parse_knmi_coverage_json,
+    parse_meteofrance_payload,
     parse_singapore_mss_payload,
     supported_high_frequency_sources,
 )
@@ -111,20 +123,155 @@ def test_supported_high_frequency_sources_cover_requested_open_project_sources()
     assert sources["ims_lod"]["Tel Aviv"]["station"] == "225"
     assert sources["fmi"]["Helsinki"]["icao"] == "EFHK"
     assert sources["knmi"]["Amsterdam"]["icao"] == "EHAM"
+    assert sources["meteofrance_6m"]["Paris"]["station"] == "95088001"
+    assert sources["dwd_10m"]["Munich"]["icao"] == "EDDM"
+    assert sources["aemet_10m"]["Madrid"]["station"] == "3129"
+    assert sources["ims_1m"]["Tel Aviv"]["icao"] == "LLBG"
+    assert sources["metservice_1m"]["Wellington"]["icao"] == "NZWN"
+    assert sources["eccc_swob"]["Toronto"]["icao"] == "CYYZ"
 
 
 def test_auth_required_sources_are_explicit_when_key_missing(monkeypatch) -> None:
     monkeypatch.delenv("CWA_OPEN_DATA_AUTH", raising=False)
     monkeypatch.delenv("CWA_OPEN_DATA_API_KEY", raising=False)
     monkeypatch.delenv("KNMI_API_KEY", raising=False)
+    monkeypatch.delenv("METEOFRANCE_API_TOKEN", raising=False)
+    monkeypatch.delenv("METEOFRANCE_API_KEY", raising=False)
+    monkeypatch.delenv("AEMET_API_KEY", raising=False)
+    monkeypatch.delenv("IMS_API_TOKEN", raising=False)
+    monkeypatch.delenv("METSERVICE_API_KEY", raising=False)
 
     cwa = fetch_cwa("Taipei")
     knmi = fetch_knmi("Amsterdam")
+    meteofrance = fetch_meteofrance_6m("Paris")
+    aemet = fetch_aemet_10m("Madrid")
+    ims = fetch_ims_1m("Tel Aviv")
+    metservice = fetch_metservice_1m("Wellington")
 
     assert cwa.status == "auth_required"
     assert "CWA_OPEN_DATA" in cwa.error
     assert knmi.status == "auth_required"
     assert "KNMI_API_KEY" in knmi.error
+    assert meteofrance.status == "auth_required"
+    assert "METEOFRANCE" in meteofrance.error
+    assert aemet.status == "auth_required"
+    assert ims.status == "auth_required"
+    assert metservice.status == "auth_required"
+
+
+def test_knmi_and_meteofrance_fetchers_use_documented_auth_and_temperature_parameter(monkeypatch) -> None:
+    from weather_data_feed import high_frequency_observation_sources as sources
+
+    calls: list[dict[str, object]] = []
+
+    class Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, *, params=None, headers=None, settings=None):
+        calls.append({"url": url, "params": params, "headers": headers, "settings": settings})
+        if "knmi.nl" in url:
+            return Response(
+                {
+                    "domain": {"axes": {"t": {"values": ["2026-07-15T04:10:00Z"]}}},
+                    "ranges": {"ta": {"values": [18.6]}},
+                }
+            )
+        return Response(
+            [
+                {
+                    "type": "Feature",
+                    "properties": {"validity_time": "2026-07-15T04:12:00Z", "t": 293.15},
+                }
+            ]
+        )
+
+    monkeypatch.setattr(sources, "_http_get", fake_get)
+    monkeypatch.setenv("KNMI_API_KEY", "knmi-key")
+    monkeypatch.setenv("METEOFRANCE_API_KEY", "mf-key")
+
+    assert fetch_knmi("Amsterdam").status == "ok"
+    assert fetch_meteofrance_6m("Paris").status == "ok"
+    assert calls[0]["params"]["parameter-name"] == "ta"
+    assert calls[0]["headers"]["Authorization"] == "knmi-key"
+    assert calls[1]["headers"]["Authorization"] == "Bearer mf-key"
+    assert "/DPObs/v2/station/infrahoraire-6m" in calls[1]["url"]
+
+
+def test_new_official_source_parsers_normalize_temperature_and_timestamps() -> None:
+    fetched = datetime(2026, 7, 15, 4, 20, tzinfo=timezone.utc)
+    knmi = parse_knmi_coverage_json(
+        {
+            "coverages": [
+                {
+                    "domain": {"axes": {"t": {"values": ["2026-07-15T04:10:00Z"]}}},
+                    "ranges": {"ta": {"values": [18.6]}},
+                    "eumetnet:locationId": "0-20000-0-06240",
+                }
+            ]
+        },
+        target_date="2026-07-15",
+        fetched_at=fetched,
+    )
+    meteofrance = parse_meteofrance_payload(
+        [
+            {
+                "type": "Feature",
+                "properties": {
+                    "validity_time": "2026-07-15T04:12:00Z",
+                    "reference_time": "2026-07-15T04:18:00Z",
+                    "t": 293.15,
+                    "u": 64,
+                },
+            }
+        ],
+        target_date="2026-07-15",
+        fetched_at=fetched,
+    )
+    aemet = parse_aemet_payload(
+        [{"fint": "2026-07-15T06:10:00+02:00", "ta": 21.4, "hr": 51}],
+        target_date="2026-07-15",
+        fetched_at=fetched,
+    )
+    ims = parse_ims_1m_payload(
+        {
+            "data": [
+                {
+                    "datetime": "2026-07-15T06:15:00",
+                    "channels": [{"name": "TD", "value": 25.7}, {"name": "RH", "value": 48}],
+                }
+            ]
+        },
+        target_date="2026-07-15",
+        fetched_at=fetched,
+    )
+
+    assert knmi[0]["temp_c"] == 18.6
+    assert knmi[0]["observation_time_utc"] == "2026-07-15T04:10:00+00:00"
+    assert meteofrance[0]["temp_c"] == 20.0
+    assert meteofrance[0]["station"] == "95088001"
+    assert aemet[0]["observation_time_utc"] == "2026-07-15T04:10:00+00:00"
+    assert ims[0]["observation_time_utc"] == "2026-07-15T03:15:00+00:00"
+
+
+def test_dwd_and_eccc_public_parsers_keep_source_publication_semantics() -> None:
+    csv_text = "STATIONS_ID;MESS_DATUM;QN;TT_10;RF_10;TD_10;eor\n01262;202607150400;2;18.2;72.0;13.1;eor\n"
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("produkt_zehn_now_tu_test.txt", csv_text)
+    dwd = parse_dwd_10m_zip(buffer.getvalue(), target_date="2026-07-15")
+    eccc = parse_eccc_swob_xml(
+        """<root><element name="date_tm" value="2026-07-15T04:00:00.000Z"/><element name="air_temp" value="22.3"/><element name="max_air_temp_pst1hr" value="22.8"/></root>""",
+        target_date="2026-07-15",
+    )
+
+    assert dwd[0]["temp_c"] == 18.2
+    assert dwd[0]["station"] == "01262"
+    assert eccc[0]["temp_c"] == 22.3
+    assert eccc[0]["max_temp_c_past_1h"] == 22.8
 
 
 def test_high_frequency_observations_cli_dispatches_runner_args(monkeypatch) -> None:

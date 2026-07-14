@@ -14,10 +14,13 @@ import json
 import math
 import os
 import re
+import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
+from xml.etree import ElementTree
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -40,6 +43,12 @@ KNMI_VERSION = "1.0"
 CWA_OBSERVATIONS_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001"
 NCM_API_BASE = "https://api-mm.ncm.gov.sa"
 AEROWEB_BASE = "https://aviation.meteo.fr"
+METEOFRANCE_OBS_URL = "https://public-api.meteofrance.fr/public/DPObs/v2/station/infrahoraire-6m"
+KNMI_EDR_BASE = "https://api.dataplatform.knmi.nl/edr/v1/collections/10-minute-in-situ-meteorological-observations"
+IMS_API_BASE = "https://api.ims.gov.il/v1/envista"
+AEMET_API_BASE = "https://opendata.aemet.es/opendata/api"
+DWD_MUNICH_10M_URL = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/10_minutes/air_temperature/now/10minutenwerte_TU_01262_now.zip"
+ECCC_SWOB_LATEST_BASE = "https://dd.weather.gc.ca/today/observations/swob-ml/latest"
 
 US_HFMETAR_CITIES: dict[str, dict[str, Any]] = {
     "New York": {"station": "KLGA", "label": "LaGuardia MADIS HFMETAR", "timezone_name": "America/New_York"},
@@ -100,7 +109,25 @@ HIGH_FREQUENCY_CITY_SOURCES: dict[str, dict[str, dict[str, Any]]] = {
         "Helsinki": {"station": "100968", "label": "Helsinki-Vantaa FMI 10min", "timezone_name": "Europe/Helsinki", "icao": "EFHK"},
     },
     "knmi": {
-        "Amsterdam": {"station": "06240", "label": "Schiphol KNMI 10min", "timezone_name": "Europe/Amsterdam", "icao": "EHAM"},
+        "Amsterdam": {"station": "0-20000-0-06240", "label": "Schiphol KNMI 10min", "timezone_name": "Europe/Amsterdam", "icao": "EHAM"},
+    },
+    "meteofrance_6m": {
+        "Paris": {"station": "95088001", "label": "Le Bourget Meteo-France 6min", "timezone_name": "Europe/Paris", "icao": "LFPB"},
+    },
+    "dwd_10m": {
+        "Munich": {"station": "01262", "label": "Munich Airport DWD 10min", "timezone_name": "Europe/Berlin", "icao": "EDDM"},
+    },
+    "aemet_10m": {
+        "Madrid": {"station": "3129", "label": "Madrid Barajas AEMET", "timezone_name": "Europe/Madrid", "icao": "LEMD"},
+    },
+    "ims_1m": {
+        "Tel Aviv": {"station": "225", "label": "Lod Airport IMS 1min API", "timezone_name": "Asia/Jerusalem", "icao": "LLBG"},
+    },
+    "metservice_1m": {
+        "Wellington": {"station": "93110", "label": "Wellington Airport MetService 1min", "timezone_name": "Pacific/Auckland", "icao": "NZWN"},
+    },
+    "eccc_swob": {
+        "Toronto": {"station": "CYYZ", "label": "Toronto Pearson ECCC SWOB", "timezone_name": "America/Toronto", "icao": "CYYZ", "report_type": "MAN"},
     },
 }
 
@@ -529,6 +556,19 @@ def _local_iso_to_utc(value: Any, offset_hours: int) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
+def _zoned_iso_to_utc(value: Any, timezone_name: str) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo(timezone_name))
+    return dt.astimezone(timezone.utc)
+
+
 def fetch_mgm(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
     meta = HIGH_FREQUENCY_CITY_SOURCES["mgm"][city]
     start = datetime.now(timezone.utc)
@@ -718,11 +758,289 @@ def fetch_aeroweb(city: str, *, settings: HighFrequencyFetchSettings | None = No
     return _result("aeroweb", city, "not_implemented", [], start, datetime.now(timezone.utc), error="AEROWEB login flow intentionally not run by high-frequency service yet")
 
 
+def parse_knmi_coverage_json(payload: dict[str, Any], *, city: str = "Amsterdam", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["knmi"][city]
+    fetched = fetched_at or datetime.now(timezone.utc)
+    rows: list[dict[str, Any]] = []
+    coverages = payload.get("coverages") or ([payload] if payload.get("domain") and payload.get("ranges") else [])
+    for coverage in coverages:
+        axes = ((coverage.get("domain") or {}).get("axes") or {})
+        times = ((axes.get("t") or {}).get("values") or [])
+        ranges = coverage.get("ranges") or {}
+        temp_range = ranges.get("ta") or ranges.get("t10") or {}
+        values = temp_range.get("values") or []
+        for index, raw_time in enumerate(times):
+            temp = safe_float(values[index] if index < len(values) else None)
+            obs_dt = parse_dt(raw_time)
+            if temp is None or obs_dt is None:
+                continue
+            rows.append(
+                _base_record(
+                    source="knmi",
+                    city=city,
+                    meta=meta,
+                    target_date=target_date,
+                    obs_dt=obs_dt,
+                    fetched_at=fetched,
+                    temp_c=temp,
+                    raw={"coverage": coverage, "time_index": index},
+                    source_kind="official_airport_station",
+                    source_note="KNMI Schiphol 10-minute station observation; not runway sensor",
+                    extra={"wigos_station_id": coverage.get("eumetnet:locationId") or meta["station"]},
+                )
+            )
+    return sorted(rows, key=lambda row: row["observation_time_utc"])
+
+
 def fetch_knmi(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["knmi"][city]
     start = datetime.now(timezone.utc)
-    if not os.environ.get("KNMI_API_KEY", "").strip():
+    token = os.environ.get("KNMI_API_KEY", "").strip()
+    if not token:
         return _result("knmi", city, "auth_required", [], start, datetime.now(timezone.utc), error="KNMI_API_KEY not configured")
-    return _result("knmi", city, "not_implemented", [], start, datetime.now(timezone.utc), error="KNMI NetCDF fetch requires API key and netCDF parser wiring")
+    now = datetime.now(timezone.utc)
+    date_range = f"{(now - timedelta(minutes=40)).isoformat().replace('+00:00', 'Z')}/{now.isoformat().replace('+00:00', 'Z')}"
+    payload = _http_get(
+        f"{KNMI_EDR_BASE}/locations/{meta['station']}",
+        params={"f": "CoverageJSON", "datetime": date_range, "parameter-name": "ta"},
+        headers={"Authorization": token, "Accept": "application/prs.coverage+json"},
+        settings=settings,
+    ).json()
+    end = datetime.now(timezone.utc)
+    records = parse_knmi_coverage_json(payload, city=city, target_date=target_date, fetched_at=end)
+    return _result("knmi", city, "ok" if records else "empty", records[-12:], start, end, metadata={"raw_payload_hash": stable_hash(payload)})
+
+
+def parse_meteofrance_payload(payload: Any, *, city: str = "Paris", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["meteofrance_6m"][city]
+    fetched = fetched_at or datetime.now(timezone.utc)
+    if isinstance(payload, list):
+        raw_rows = payload
+    elif isinstance(payload, dict):
+        raw_rows = payload.get("features") or []
+    else:
+        raw_rows = []
+    rows: list[dict[str, Any]] = []
+    for item in raw_rows:
+        raw = item.get("properties") if isinstance(item, dict) and isinstance(item.get("properties"), dict) else item
+        if not isinstance(raw, dict):
+            continue
+        temp = safe_float(raw.get("t"))
+        obs_dt = parse_dt(raw.get("validity_time") or raw.get("date") or raw.get("reference_time"))
+        if temp is None or obs_dt is None:
+            continue
+        temp_c = temp - 273.15 if temp > 150 else temp
+        rows.append(
+            _base_record(
+                source="meteofrance_6m",
+                city=city,
+                meta=meta,
+                target_date=target_date,
+                obs_dt=obs_dt,
+                fetched_at=fetched,
+                temp_c=temp_c,
+                raw=item,
+                source_kind="official_airport_station",
+                source_note="Meteo-France Le Bourget 6-minute station observation; not runway sensor",
+                extra={
+                    "reference_time_utc": raw.get("reference_time"),
+                    "source_insert_time_utc": raw.get("insert_time"),
+                    "humidity": safe_float(raw.get("u")),
+                    "wind_speed_ms": safe_float(raw.get("ff")),
+                    "pressure_pa": safe_float(raw.get("pres")),
+                },
+            )
+        )
+    return sorted(rows, key=lambda row: row["observation_time_utc"])
+
+
+def fetch_meteofrance_6m(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["meteofrance_6m"][city]
+    start = datetime.now(timezone.utc)
+    token = os.environ.get("METEOFRANCE_API_TOKEN", "").strip() or os.environ.get("METEOFRANCE_API_KEY", "").strip()
+    if not token:
+        return _result("meteofrance_6m", city, "auth_required", [], start, datetime.now(timezone.utc), error="METEOFRANCE_API_TOKEN/METEOFRANCE_API_KEY not configured")
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+    payload = _http_get(METEOFRANCE_OBS_URL, params={"id_station": meta["station"], "format": "json"}, headers=headers, settings=settings).json()
+    end = datetime.now(timezone.utc)
+    records = parse_meteofrance_payload(payload, city=city, target_date=target_date, fetched_at=end)
+    return _result("meteofrance_6m", city, "ok" if records else "empty", records[-12:], start, end, metadata={"raw_payload_hash": stable_hash(payload)})
+
+
+def parse_dwd_10m_zip(content: bytes, *, city: str = "Munich", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["dwd_10m"][city]
+    fetched = fetched_at or datetime.now(timezone.utc)
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        product_names = [name for name in archive.namelist() if name.startswith("produkt_")]
+        if not product_names:
+            return []
+        text = archive.read(product_names[0]).decode("latin-1")
+    rows: list[dict[str, Any]] = []
+    for raw in csv.DictReader(io.StringIO(text), delimiter=";"):
+        normalized = {str(key or "").strip(): value.strip() if isinstance(value, str) else value for key, value in raw.items()}
+        try:
+            obs_dt = datetime.strptime(str(normalized.get("MESS_DATUM") or ""), "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        temp = safe_float(normalized.get("TT_10"))
+        if temp is None or temp <= -900:
+            continue
+        rows.append(
+            _base_record(
+                source="dwd_10m",
+                city=city,
+                meta=meta,
+                target_date=target_date,
+                obs_dt=obs_dt,
+                fetched_at=fetched,
+                temp_c=temp,
+                raw=normalized,
+                source_kind="official_airport_station",
+                source_note="DWD Munich Airport 10-minute CDC observation; publication can lag hours",
+                extra={"humidity": safe_float(normalized.get("RF_10")), "dewpoint_c": safe_float(normalized.get("TD_10"))},
+            )
+        )
+    return sorted(rows, key=lambda row: row["observation_time_utc"])
+
+
+def fetch_dwd_10m(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
+    start = datetime.now(timezone.utc)
+    response = _http_get(DWD_MUNICH_10M_URL, settings=settings)
+    end = datetime.now(timezone.utc)
+    records = parse_dwd_10m_zip(response.content, city=city, target_date=target_date, fetched_at=end)
+    return _result("dwd_10m", city, "ok" if records else "empty", records[-24:], start, end, metadata={"raw_payload_hash": stable_hash(response.content.hex())})
+
+
+def parse_aemet_payload(payload: Any, *, city: str = "Madrid", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["aemet_10m"][city]
+    fetched = fetched_at or datetime.now(timezone.utc)
+    rows: list[dict[str, Any]] = []
+    for raw in payload if isinstance(payload, list) else []:
+        temp = safe_float(raw.get("ta"))
+        obs_dt = parse_dt(raw.get("fint"))
+        if temp is None or obs_dt is None:
+            continue
+        rows.append(
+            _base_record(
+                source="aemet_10m",
+                city=city,
+                meta=meta,
+                target_date=target_date,
+                obs_dt=obs_dt,
+                fetched_at=fetched,
+                temp_c=temp,
+                raw=raw,
+                source_kind="official_airport_station",
+                source_note="AEMET Madrid Barajas conventional observation; cadence must be measured",
+                extra={"humidity": safe_float(raw.get("hr")), "pressure_hpa": safe_float(raw.get("pres")), "wind_speed_ms": safe_float(raw.get("vv")), "wind_dir": safe_float(raw.get("dv"))},
+            )
+        )
+    return sorted(rows, key=lambda row: row["observation_time_utc"])
+
+
+def fetch_aemet_10m(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["aemet_10m"][city]
+    start = datetime.now(timezone.utc)
+    token = os.environ.get("AEMET_API_KEY", "").strip()
+    if not token:
+        return _result("aemet_10m", city, "auth_required", [], start, datetime.now(timezone.utc), error="AEMET_API_KEY not configured")
+    manifest = _http_get(f"{AEMET_API_BASE}/observacion/convencional/datos/estacion/{meta['station']}", params={"api_key": token}, settings=settings).json()
+    data_url = str(manifest.get("datos") or "")
+    if not data_url:
+        return _result("aemet_10m", city, "empty", [], start, datetime.now(timezone.utc), error=f"AEMET response missing datos URL: {manifest.get('descripcion') or manifest.get('estado')}")
+    payload = _http_get(data_url, settings=settings).json()
+    end = datetime.now(timezone.utc)
+    records = parse_aemet_payload(payload, city=city, target_date=target_date, fetched_at=end)
+    return _result("aemet_10m", city, "ok" if records else "empty", records[-24:], start, end, metadata={"raw_payload_hash": stable_hash(payload)})
+
+
+def parse_ims_1m_payload(payload: dict[str, Any], *, city: str = "Tel Aviv", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["ims_1m"][city]
+    fetched = fetched_at or datetime.now(timezone.utc)
+    rows: list[dict[str, Any]] = []
+    for raw in payload.get("data") or []:
+        obs_dt = _zoned_iso_to_utc(raw.get("datetime"), meta["timezone_name"])
+        channels = {str(channel.get("name") or "").upper(): channel for channel in raw.get("channels") or []}
+        temp_channel = channels.get("TD") or channels.get("TA") or {}
+        temp = safe_float(temp_channel.get("value"))
+        if temp is None or obs_dt is None:
+            continue
+        rows.append(
+            _base_record(
+                source="ims_1m",
+                city=city,
+                meta=meta,
+                target_date=target_date,
+                obs_dt=obs_dt,
+                fetched_at=fetched,
+                temp_c=temp,
+                raw=raw,
+                source_kind="official_airport_station",
+                source_note="IMS Lod Airport authenticated 1-minute observation; naive timestamps use Asia/Jerusalem",
+                extra={"humidity": safe_float((channels.get("RH") or {}).get("value")), "wind_speed_ms": safe_float((channels.get("WS") or {}).get("value")), "wind_dir": safe_float((channels.get("WD") or {}).get("value"))},
+            )
+        )
+    return sorted(rows, key=lambda row: row["observation_time_utc"])
+
+
+def fetch_ims_1m(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["ims_1m"][city]
+    start = datetime.now(timezone.utc)
+    token = os.environ.get("IMS_API_TOKEN", "").strip()
+    if not token:
+        return _result("ims_1m", city, "auth_required", [], start, datetime.now(timezone.utc), error="IMS_API_TOKEN not configured")
+    now = datetime.now(timezone.utc)
+    params = {"from": (now - timedelta(minutes=30)).strftime("%Y/%m/%d %H:%M"), "to": now.strftime("%Y/%m/%d %H:%M")}
+    payload = _http_get(f"{IMS_API_BASE}/stations/{meta['station']}/data/", params=params, headers={"Authorization": f"ApiToken {token}"}, settings=settings).json()
+    end = datetime.now(timezone.utc)
+    records = parse_ims_1m_payload(payload, city=city, target_date=target_date, fetched_at=end)
+    return _result("ims_1m", city, "ok" if records else "empty", records[-30:], start, end, metadata={"raw_payload_hash": stable_hash(payload)})
+
+
+def parse_eccc_swob_xml(xml_text: str, *, city: str = "Toronto", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["eccc_swob"][city]
+    fetched = fetched_at or datetime.now(timezone.utc)
+    root = ElementTree.fromstring(xml_text)
+    values: dict[str, str] = {}
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] == "element" and element.get("name"):
+            values[str(element.get("name"))] = str(element.get("value") or "")
+    temp = safe_float(values.get("air_temp"))
+    obs_dt = parse_dt(values.get("date_tm"))
+    if temp is None or obs_dt is None:
+        return []
+    wind_kmh = safe_float(values.get("avg_wnd_spd_10m_pst2mts"))
+    return [
+        _base_record(
+            source="eccc_swob",
+            city=city,
+            meta=meta,
+            target_date=target_date,
+            obs_dt=obs_dt,
+            fetched_at=fetched,
+            temp_c=temp,
+            raw=values,
+            source_kind="official_airport_station",
+            source_note="ECCC/NAV CANADA SWOB airport observation; CYYZ public feed is hourly MAN",
+            extra={"dewpoint_c": safe_float(values.get("dwpt_temp")), "humidity": safe_float(values.get("rel_hum")), "wind_speed_kt": round(wind_kmh / 1.852, 3) if wind_kmh is not None else None, "max_temp_c_past_1h": safe_float(values.get("max_air_temp_pst1hr"))},
+        )
+    ]
+
+
+def fetch_eccc_swob(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
+    meta = HIGH_FREQUENCY_CITY_SOURCES["eccc_swob"][city]
+    start = datetime.now(timezone.utc)
+    text = _http_get(f"{ECCC_SWOB_LATEST_BASE}/{meta['station']}-{meta['report_type']}-swob.xml", settings=settings).text
+    end = datetime.now(timezone.utc)
+    records = parse_eccc_swob_xml(text, city=city, target_date=target_date, fetched_at=end)
+    return _result("eccc_swob", city, "ok" if records else "empty", records, start, end, metadata={"raw_payload_hash": stable_hash(text)})
+
+
+def fetch_metservice_1m(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
+    start = datetime.now(timezone.utc)
+    if not os.environ.get("METSERVICE_API_KEY", "").strip():
+        return _result("metservice_1m", city, "auth_required", [], start, datetime.now(timezone.utc), error="METSERVICE_API_KEY not configured; commercial trial/product access is required")
+    return _result("metservice_1m", city, "contract_required", [], start, datetime.now(timezone.utc), error="MetService tenant endpoint/product contract must be configured after trial activation")
 
 
 def fetch_amos_high_frequency(city: str, *, settings: HighFrequencyFetchSettings | None = None, target_date: str = "") -> HighFrequencyFetchResult:
@@ -789,6 +1107,12 @@ FETCHERS = {
     "aeroweb": fetch_aeroweb,
     "fmi": fetch_fmi,
     "knmi": fetch_knmi,
+    "meteofrance_6m": fetch_meteofrance_6m,
+    "dwd_10m": fetch_dwd_10m,
+    "aemet_10m": fetch_aemet_10m,
+    "ims_1m": fetch_ims_1m,
+    "metservice_1m": fetch_metservice_1m,
+    "eccc_swob": fetch_eccc_swob,
 }
 
 

@@ -52,12 +52,15 @@ SPECIAL_OVERRIDES = {
         "downstream_action": "use WIHH/Halim; WIII is wrong for settlement/source features",
     },
     "Moscow": {
-        "settlement_source_class": "blocked_unresolved_settlement_basis",
-        "official_source": "rules source not reconciled",
-        "official_station_or_feed": "unknown_effective_source",
-        "mapping_rule": "unresolved",
-        "alignment_source": "settlement_basis_batch2_v0",
-        "downstream_action": "exclude from official-source M3/station-basis research until root cause is found",
+        "settlement_source_class": "non_wu_source_by_rules",
+        "official_source": "https://www.weather.gov/wrh/timeseries?site=UUWW",
+        "official_station_or_feed": "https://www.weather.gov/wrh/timeseries?site=UUWW",
+        "mapping_rule": "Synoptic air_temp_set_1 local-day max, arithmetic round C to bracket",
+        "alignment_days": 62,
+        "alignment_matches": 62,
+        "alignment_rate": 1.0,
+        "alignment_source": "settlement_source_reroute_20260715",
+        "downstream_action": "source reconciled to market rules; collector/research only until source-to-book latency is forward-qualified",
     },
     "Seoul": {
         "settlement_source_class": "blocked_unresolved_settlement_basis",
@@ -179,9 +182,9 @@ def build_registry() -> pd.DataFrame:
         override = SPECIAL_OVERRIDES.get(city)
         if override:
             batch_best = best_batch.get(city, {})
-            days = batch_best.get("days")
-            matches = batch_best.get("matches")
-            align_rate = batch_best.get("align_rate")
+            days = override.get("alignment_days", batch_best.get("days"))
+            matches = override.get("alignment_matches", batch_best.get("matches"))
+            align_rate = override.get("alignment_rate", batch_best.get("align_rate"))
             official_station = override["official_station_or_feed"]
             cls = override["settlement_source_class"]
             official_source = override["official_source"]
@@ -361,7 +364,8 @@ def render_md(payload: dict[str, Any]) -> str:
         "- Station-basis strategies: confirmed station-diff cities are candidates only after per-market rules recheck. The edge is the market watching the wrong station, not generic temperature theta.",
         "- HongKong: use HKO Daily Extract / live HKO feed semantics, decimal daily max, and floor-to-bracket mapping. VHHH/IEM is not an acceptable settlement feature source.",
         "- Jakarta: use WIHH/Halim, not WIII/Soekarno-Hatta, for settlement/source features.",
-        "- Moscow, Seoul, Shenzhen: blocked for source-sensitive trading research until the unresolved mismatch is explained.",
+        "- Moscow: use WRH/Synoptic UUWW with local-day `air_temp_set_1` max; keep collector/research-only until source-to-book latency is qualified.",
+        "- Seoul and Shenzhen: blocked for source-sensitive trading research until the unresolved mismatch is explained.",
         "- `pm_history` remains the payout label for strategy PnL; official-source reconstruction is for feature alignment, not replacing market settlement truth.",
         "",
         "## Next Research Directions",
@@ -370,7 +374,7 @@ def render_md(payload: dict[str, Any]) -> str:
         "2. Add official source fields to fact tables: `settlement_source_class`, `official_station_or_feed`, `settlement_mapping_rule`, and `source_verified_at`.",
         "3. Build live-capable HKO and WIHH source fetchers before HK/Jakarta can enter any shadow feed.",
         "4. Rerun forecast-quality base excluding or separately tagging station-diff/special-source/blocked cities to measure how much of reliability is source mismatch.",
-        "5. Diagnose Moscow/Seoul/Shenzhen by fetching the exact official rendered page values around mismatch dates and comparing to METAR/WU API minute history.",
+        "5. Diagnose Seoul/Shenzhen by fetching the exact official rendered page values around mismatch dates and comparing to METAR/WU API minute history.",
         "6. Add a pre-entry rules checker for station-basis candidates; station changes must block would-trades rather than silently falling back.",
         "",
         "## Three-Gate Verdict",

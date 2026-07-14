@@ -6,7 +6,7 @@ RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data_feed
 OUTPUT_ROOT="${WEATHER_DATA_FEED_TARGETED_OUTPUT_ROOT:-$RUNTIME_ROOT/targeted_output}"
 OBS_OUTPUT="${WEATHER_DATA_FEED_OBSERVATION_OUTPUT:-$RUNTIME_ROOT/output/observations/latest.json}"
 SOURCE_EVENTS_OUTPUT="${WEATHER_DATA_FEED_SOURCE_EVENTS_OUTPUT_DIR:-$RUNTIME_ROOT/output/source_events}"
-SOURCE_EVENTS_RESEARCH_CITIES="${WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES:-Seoul HongKong Shenzhen TelAviv Istanbul}"
+SOURCE_EVENTS_RESEARCH_CITIES="${WEATHER_DATA_FEED_SOURCE_EVENTS_RESEARCH_CITIES:-Seoul HongKong Shenzhen TelAviv Istanbul Moscow}"
 FORECAST_ENRICHMENT_OUTPUT="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_OUTPUT_DIR:-$RUNTIME_ROOT/output/forecast_enrichment}"
 RUNWAY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_RUNWAY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/runway_observations}"
 HIGH_FREQUENCY_OBSERVATIONS_OUTPUT="${WEATHER_DATA_FEED_HIGH_FREQUENCY_OBSERVATIONS_OUTPUT_DIR:-$RUNTIME_ROOT/output/high_frequency_observations}"
@@ -136,6 +136,7 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
         --output-dir "$SOURCE_EVENTS_OUTPUT"
         --include-station-diff
         --include-fallback-sources
+        --include-awc-cache-first-arrival
         --max-workers 4
       )
       if [[ -n "$SOURCE_EVENTS_RESEARCH_CITIES" ]]; then

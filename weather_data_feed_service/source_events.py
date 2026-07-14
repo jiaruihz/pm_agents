@@ -32,7 +32,13 @@ from weather_data_feed_service.io_utils import read_json, write_json, write_late
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "source_events"
 
 
-def requested_sources(cfg: CityConfig, source_names: list[str], *, include_fallback_sources: bool) -> list[str]:
+def requested_sources(
+    cfg: CityConfig,
+    source_names: list[str],
+    *,
+    include_fallback_sources: bool,
+    include_awc_cache_first_arrival: bool = False,
+) -> list[str]:
     effective_source_names = list(source_names)
     if (
         include_fallback_sources
@@ -50,6 +56,15 @@ def requested_sources(cfg: CityConfig, source_names: list[str], *, include_fallb
         normalized = normalize_source_name(source)
         if normalized and normalized not in out:
             out.append(normalized)
+    if (
+        include_awc_cache_first_arrival
+        and (
+            normalize_source_name(cfg.live_observation_source) == "aviationweather_metar"
+            or "aviationweather_metar" in {normalize_source_name(source) for source in cfg.fallback_sources}
+        )
+        and "aviationweather_cache_csv" not in out
+    ):
+        out.append("aviationweather_cache_csv")
     return out
 
 
@@ -131,6 +146,7 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
             cfg,
             args.sources,
             include_fallback_sources=args.include_fallback_sources,
+            include_awc_cache_first_arrival=args.include_awc_cache_first_arrival,
         ):
             jobs.append((cfg, source_name))
 
@@ -167,6 +183,7 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
         "non_ok": sum(1 for row in rows if row.get("status") != "ok"),
         "cities": len(configs),
         "sources": args.sources,
+        "include_awc_cache_first_arrival": args.include_awc_cache_first_arrival,
         "include_research_cities": args.include_research_cities,
         "research_cities": args.research_cities or [],
         "output_dir": str(output_dir),
@@ -195,6 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sources", nargs="*", default=["profile_primary"])
     parser.add_argument("--include-station-diff", action="store_true")
     parser.add_argument("--include-fallback-sources", action="store_true")
+    parser.add_argument("--include-awc-cache-first-arrival", action="store_true")
     parser.add_argument("--include-research-cities", action="store_true")
     parser.add_argument("--research-cities", nargs="*", default=None)
     parser.add_argument("--timeout-sec", type=float, default=3.0)

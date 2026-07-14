@@ -23,6 +23,17 @@ from weather_data_feed.source_registry import (
 
 
 REGISTRY_ROW_OVERRIDES: dict[str, dict[str, Any]] = {
+    "Moscow": {
+        "official_station_or_feed": "https://www.weather.gov/wrh/timeseries?site=UUWW",
+        "settlement_source_class": "non_wu_source_by_rules",
+        "official_source": "https://www.weather.gov/wrh/timeseries?site=UUWW",
+        "mapping_rule": "Synoptic air_temp_set_1 local-day max, arithmetic round C to bracket",
+        "alignment_days": 62,
+        "alignment_matches": 62,
+        "alignment_rate": 1.0,
+        "alignment_source": "settlement_source_reroute_20260715",
+        "downstream_action": "source reconciled to market rules; collector/research only until source-to-book latency is forward-qualified",
+    },
     "Seoul": {
         "official_station_or_feed": "RKSI",
         "settlement_source_class": "default_source_watchlist",
@@ -60,8 +71,10 @@ def as_profile_row(row: dict[str, Any]) -> dict[str, Any]:
     out = asdict(profile)
     out["fallback_sources"] = list(profile.fallback_sources)
     out["live_eligible"] = profile.live_eligible
-    if profile.primary_source == "synopticdata_timeseries":
+    if profile.primary_source == "synopticdata_timeseries" and profile.settlement_source_class == "default_wu_station_by_rules":
         out["source_profile_note"] = "live-capable SynopticData 5-min station feed verified on 2026-07-04; aviationweather and IEM remain fallbacks"
+    elif profile.primary_source == "synopticdata_timeseries" and profile.settlement_source_class == "non_wu_source_by_rules":
+        out["source_profile_note"] = "WRH/Synoptic collector is wired; source-to-book latency remains unqualified for live"
     else:
         out["source_profile_note"] = source_profile_note(profile.settlement_source_class)
     return out

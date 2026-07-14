@@ -362,6 +362,7 @@ def test_source_events_expands_fallbacks_only_for_research_profiles() -> None:
     from weather_data_feed_service import source_events
 
     normal_cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
+    synoptic_cfg = load_city_configs(include_station_diff=False, only_cities={"Austin"})[0]
     research_cfg = {
         cfg.city: cfg
         for cfg in load_city_configs(
@@ -376,6 +377,18 @@ def test_source_events_expands_fallbacks_only_for_research_profiles() -> None:
         ["profile_primary"],
         include_fallback_sources=True,
     ) == ["aviationweather_metar"]
+    assert source_events.requested_sources(
+        normal_cfg,
+        ["profile_primary"],
+        include_fallback_sources=True,
+        include_awc_cache_first_arrival=True,
+    ) == ["aviationweather_metar", "aviationweather_cache_csv"]
+    assert source_events.requested_sources(
+        synoptic_cfg,
+        ["profile_primary"],
+        include_fallback_sources=True,
+        include_awc_cache_first_arrival=True,
+    ) == ["synopticdata_timeseries", "aviationweather_cache_csv"]
     assert source_events.requested_sources(
         research_cfg,
         ["profile_primary"],

@@ -51,7 +51,8 @@ def _default_primary_source(row: dict[str, Any]) -> str:
     if cls == "special_source_confirmed" and feed == "HKO":
         return ""
     if cls == "non_wu_source_by_rules":
-        return ""
+        source = f"{feed} {_clean(row.get('official_source'))}".lower()
+        return "synopticdata_timeseries" if "weather.gov/wrh" in source else ""
     return ""
 
 
@@ -62,6 +63,10 @@ def _default_fallback_sources(row: dict[str, Any]) -> tuple[str, ...]:
         return ("aviationweather_metar", "iem_asos_madishf_latest", "iem_asos")
     if cls in {"default_wu_station_by_rules", "default_source_watchlist", "official_station_diff_confirmed"}:
         return ("iem_asos",)
+    if cls == "non_wu_source_by_rules" and "weather.gov/wrh" in (
+        f"{_clean(row.get('official_station_or_feed'))} {_clean(row.get('official_source'))}".lower()
+    ):
+        return ("aviationweather_metar", "noaa_tgftp_station_txt")
     return ()
 
 
@@ -71,6 +76,7 @@ def _default_live_eligible(row: dict[str, Any], *, primary_source: str, blocked_
         "blocked_unresolved_settlement_basis",
         "default_source_watchlist",
         "no_recent_market_or_unknown_rules",
+        "non_wu_source_by_rules",
     }
     return bool(primary_source) and not blocked_reason and cls not in blocked
 
