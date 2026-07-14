@@ -76,6 +76,13 @@ execution_policy / live_cycle）走 [weather-strategy-deploy] 的 **git-first** 
 （例如固定 label/rows 后比较 source policy、城市池、阈值、forward 窗口），再下结论；但不能为了调参把
 forward 失败或非 PIT 数据包装成可 live 的证据。
 
+**禁止把阈值堆叠和数据覆盖混成“策略漏斗”**：报告必须分开列 `signal funnel`（原始机会 → 机制候选 → 首个
+city-day signal）与 `evidence funnel`（PIT 盘口覆盖 → settlement 覆盖 → executable expression → fill），并写清每层单位是
+event、city-day、expression 还是 fill。盘口/结算缺失只能记为 coverage gap，不能伪装成策略筛除；没有预注册机制或执行依据、
+且没有同分母证据支持的价格带 / support count / 多条件 AND，不得作为 eligibility hard gate。若 direct ask 只覆盖到偏晚盘口，
+由此产生的高平均入场价只能解释为 archive/collector timing bias，不能解释成“模型必须等到该价格才确认”。样本因 coverage 缩小
+时，结论是证据不足并补采集，不是把少量剩余行包装成“精筛策略”。
+
 天气策略研究优先从第一性原理构造连续信号，再用切片解释信号，不要把切片当策略本体。比如 no-reheat /
 remaining-heat 这类问题，先定义物理目标（剩余时间是否还能打穿当前高点 / bracket）、机制特征（剩余加热能量、
 forecast ceiling margin、plateau 可靠性、reheat 机制、观测 cadence/source）和可校准概率，再用市场价格计算 EV。
