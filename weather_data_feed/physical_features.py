@@ -138,7 +138,9 @@ def observation_clock_features(record: Mapping[str, Any]) -> dict[str, Any]:
         "obs_age_minutes": age,
         "expected_report_cadence": cadence,
         "obs_cadence_ratio": age / cadence if age is not None and cadence and cadence > 0 else None,
-        "minutes_to_next_expected_obs": max(cadence - age, 0.0) if age is not None and cadence is not None else None,
+        # Keep this signed.  A negative value is useful PIT information: the
+        # expected report is overdue, which is not equivalent to "due now".
+        "minutes_to_next_expected_obs": cadence - age if age is not None and cadence is not None else None,
         "source_latency_minutes": latency,
     }
 
@@ -212,9 +214,11 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
     decision_hour = _first_float(record, "decision_hour_local", "decision_hour_local_float")
     peak_hour = _first_float(record, "forecast_peak_hour_local")
     selected: list[Mapping[str, Any]] = []
+    remaining_3h: list[Mapping[str, Any]] = []
     peak_passed = decision_hour is not None and peak_hour is not None and peak_hour < decision_hour
-    if isinstance(curve, Sequence) and not isinstance(curve, (str, bytes)) and decision_hour is not None and peak_hour is not None and not peak_passed:
-        lo, hi = decision_hour, peak_hour
+    if isinstance(curve, Sequence) and not isinstance(curve, (str, bytes)) and decision_hour is not None:
+        remaining_lo = math.floor(decision_hour)
+        remaining_hi = decision_hour + 3.0
         for item in curve:
             if not isinstance(item, Mapping):
                 continue
@@ -223,21 +227,27 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
                 hour = float(time_local[11:13]) + float(time_local[14:16]) / 60.0
             except (ValueError, IndexError):
                 continue
-            if lo <= hour <= hi:
+            if peak_hour is not None and not peak_passed and decision_hour <= hour <= peak_hour:
                 selected.append(item)
+            if remaining_lo <= hour <= remaining_hi:
+                remaining_3h.append(item)
 
-    def values(*keys: str) -> list[float]:
+    def values(rows: Sequence[Mapping[str, Any]], *keys: str) -> list[float]:
         out: list[float] = []
-        for item in selected:
+        for item in rows:
             value = _first_float(item, *keys)
             if value is not None:
                 out.append(value)
         return out
 
-    precip = values("precipitation_probability_pct", "precipitation_probability")
-    cloud = values("cloud_cover_pct", "cloud_cover")
-    wind = values("wind_speed_10m_kt", "wind_speed_10m")
-    direction = values("wind_direction_10m_deg", "wind_direction_10m")
+    precip = values(selected, "precipitation_probability_pct", "precipitation_probability")
+    cloud = values(selected, "cloud_cover_pct", "cloud_cover")
+    wind = values(selected, "wind_speed_10m_kt", "wind_speed_10m")
+    direction = values(selected, "wind_direction_10m_deg", "wind_direction_10m")
+    remaining_precip = values(remaining_3h, "precipitation_probability_pct", "precipitation_probability")
+    remaining_cloud = values(remaining_3h, "cloud_cover_pct", "cloud_cover")
+    remaining_wind = values(remaining_3h, "wind_speed_10m_kt", "wind_speed_10m")
+    remaining_direction = values(remaining_3h, "wind_direction_10m_deg", "wind_direction_10m")
     status = (
         "forecast_peak_passed"
         if peak_passed
@@ -252,6 +262,14 @@ def forecast_window_features(record: Mapping[str, Any]) -> dict[str, Any]:
         "forecast_cloud_cover_to_peak_mean_pct": sum(cloud) / len(cloud) if cloud else None,
         "forecast_wind_speed_to_peak_max_kt": max(wind) if wind else None,
         "forecast_wind_direction_to_peak_mean_deg": _circular_mean(direction),
+        "forecast_remaining_3h_status": "ok" if remaining_3h else "missing_weather_hourly_curve",
+        "forecast_remaining_3h_hour_count": len(remaining_3h),
+        "forecast_precip_probability_remaining_3h_max_pct": max(remaining_precip) if remaining_precip else None,
+        "forecast_cloud_cover_remaining_3h_mean_pct": (
+            sum(remaining_cloud) / len(remaining_cloud) if remaining_cloud else None
+        ),
+        "forecast_wind_speed_remaining_3h_max_kt": max(remaining_wind) if remaining_wind else None,
+        "forecast_wind_direction_remaining_3h_mean_deg": _circular_mean(remaining_direction),
     }
 
 

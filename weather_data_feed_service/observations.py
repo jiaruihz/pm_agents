@@ -29,6 +29,8 @@ from weather_data_feed.observation_sources import (
     normalize_source_name,
 )
 from weather_data_feed.observation_sources.fetchers import parse_dt
+from weather_data_feed.observation_sources.fetchers import one_hour_observation_changes
+from weather_data_feed.physical_features import metar_physical_features
 
 from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
 
@@ -163,6 +165,17 @@ def observation_cache_row(
     relh_now = _float_or_none(latest.relh)
     relh_3h = _asof(records, fetched_at, 180.0, "relh")
     wind_kt = _float_or_none(latest.wind_kt)
+    physical = metar_physical_features(
+        latest.raw_text,
+        latest.metadata.get("present_weather")
+        or latest.metadata.get("present_weather_codes")
+        or latest.metadata.get("wx_string"),
+    )
+    wind_dir_raw = latest.metadata.get("wind_dir_deg")
+    if wind_dir_raw is None:
+        wind_dir_raw = latest.metadata.get("metar_wind_dir_deg")
+    wind_dir_deg = _float_or_none(wind_dir_raw)
+    changes = one_hour_observation_changes(records)
     return {
         "city": cfg.city,
         "target_date": target_date,
@@ -187,8 +200,24 @@ def observation_cache_row(
         "dwpf_now": _temp_f(dwpc_now),
         "dewpoint_depression_f": None if tmpf_now is None or dwpc_now is None else tmpf_now - _temp_f(dwpc_now),
         "relh_now": relh_now,
+        "relative_humidity_pct": relh_now,
         "sknt_now": wind_kt,
+        "wind_speed_kt": wind_kt,
+        "drct_now": wind_dir_deg,
+        "wind_dir_deg": wind_dir_deg,
         "sky_code_now": latest.sky_code,
+        "sky_cover_code": latest.sky_code,
+        "raw_metar": latest.raw_text,
+        "present_weather_codes": physical["present_weather_codes"],
+        "precip_state": physical["precip_state"],
+        "precip_intensity_code": physical["precip_intensity_code"],
+        "precip_observed": physical["precip_observed"],
+        "thunderstorm_observed": physical["thunderstorm_observed"],
+        "freezing_precip_observed": physical["freezing_precip_observed"],
+        "cloud_layer_count": physical["cloud_layer_count"],
+        "lowest_cloud_base_ft_agl": physical["lowest_cloud_base_ft_agl"],
+        "ceiling_ft_agl": physical["ceiling_ft_agl"],
+        **changes,
         "d_tmpf_1h": None if current_temp_c is None or tmpc_1h is None else (current_temp_c - tmpc_1h) * 9.0 / 5.0,
         "d_tmpf_3h": None if current_temp_c is None or tmpc_3h is None else (current_temp_c - tmpc_3h) * 9.0 / 5.0,
         "d_dwpf_3h": None if dwpc_now is None or dwpc_3h is None else (dwpc_now - dwpc_3h) * 9.0 / 5.0,

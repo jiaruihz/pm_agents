@@ -65,8 +65,10 @@ new table or serialization format:
 - wind direction plus circular sin/cos representation
 - observation age/cadence ratio, next expected report, and source latency
 - solar elevation now/+2h, elevation change, daylight remaining, heating potential
-- forecast precipitation/cloud/wind summaries over decision-to-peak, read from
-  the canonical PIT `forecast_hourly_curve_v4`
+- forecast precipitation/cloud/wind summaries over decision-to-peak and the
+  next remaining three hours, read from the canonical PIT
+  `forecast_hourly_curve_v4`; the remaining-three-hour family stays available
+  after forecast peak has passed
 
 Missing inputs remain explicit through `solar_geometry_status`,
 `forecast_weather_window_status`, and null continuous fields. There is no
@@ -183,3 +185,7 @@ still evaluate expression price, fresh-book depth, and forward settlement.
 3. Test `market probability + weather residual correction` on a frozen forward
    split and promote only if it beats raw market proper score and fee-adjusted
    executable ROI.
+4. The zero-notional `current_yes_heat_death_shadow_v1` collector records the
+   full same-day denominator and compares executable current-bracket YES with
+   d1 NO inside a pre-registered 13:00-17:00 local research window. Physical
+   confirmation is telemetry until forward outcomes support calibration.

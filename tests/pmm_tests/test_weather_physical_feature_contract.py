@@ -5,7 +5,12 @@ import math
 from weather_data_feed.forecast_hourly_curves import build_hourly_curve
 from weather_data_feed.models import ObservationRecord
 from weather_data_feed.observation_sources.fetchers import one_hour_observation_changes
-from weather_data_feed.physical_features import metar_physical_features, solar_geometry_features
+from weather_data_feed.physical_features import (
+    forecast_window_features,
+    metar_physical_features,
+    observation_clock_features,
+    solar_geometry_features,
+)
 from weather_feature_layer.builders import build_weather_state_frame
 from weather_feature_layer.contracts import WEATHER_PHYSICAL_FEATURE_FIELDS, WEATHER_STATE_VERSION
 
@@ -40,6 +45,41 @@ def test_solar_geometry_is_continuous_and_explicit_when_coordinates_missing() ->
     assert noon["daylight_remaining_minutes"] > 300
     assert missing["solar_geometry_status"] == "missing_timestamp_or_coordinates"
     assert missing["solar_elevation_deg"] is None
+
+
+def test_observation_clock_preserves_overdue_report_minutes() -> None:
+    clock = observation_clock_features({"obs_age_minutes": 42, "expected_report_cadence": 30})
+    assert clock["minutes_to_next_expected_obs"] == -12
+
+
+def test_forecast_remaining_three_hours_survives_after_peak() -> None:
+    features = forecast_window_features(
+        {
+            "decision_hour_local": 13.2,
+            "forecast_peak_hour_local": 12,
+            "hourly_curve": build_hourly_curve(
+                [
+                    "2026-07-14T13:00",
+                    "2026-07-14T14:00",
+                    "2026-07-14T15:00",
+                    "2026-07-14T16:00",
+                    "2026-07-14T17:00",
+                ],
+                [87, 86, 85, 84, 83],
+                precipitation_probability_pct=[58, 72, 84, 91, 95],
+                cloud_cover_pct=[72, 78, 84, 89, 95],
+                wind_speed_10m_kt=[10, 11, 12, 12, 11],
+                wind_direction_10m_deg=[215, 208, 204, 204, 206],
+            ),
+        }
+    )
+
+    assert features["forecast_weather_window_status"] == "forecast_peak_passed"
+    assert features["forecast_precip_probability_to_peak_max_pct"] is None
+    assert features["forecast_remaining_3h_status"] == "ok"
+    assert features["forecast_remaining_3h_hour_count"] == 4
+    assert features["forecast_precip_probability_remaining_3h_max_pct"] == 91
+    assert features["forecast_cloud_cover_remaining_3h_mean_pct"] == 80.75
 
 
 def test_observation_change_features_share_the_same_record_history() -> None:

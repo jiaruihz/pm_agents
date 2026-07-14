@@ -56,6 +56,10 @@ FIELD_UNIT_CONTRACT = {
     "solar_elevation_deg": "degree",
     "daylight_remaining_minutes": "minute",
     "forecast_precip_probability_to_peak_max_pct": "percent",
+    "forecast_precip_probability_remaining_3h_max_pct": "percent",
+    "forecast_cloud_cover_remaining_3h_mean_pct": "percent",
+    "forecast_wind_speed_remaining_3h_max_kt": "knot",
+    "forecast_wind_direction_remaining_3h_mean_deg": "degree",
 }
 
 WEATHER_PHYSICAL_FEATURE_FIELDS = (
@@ -84,4 +88,10 @@ WEATHER_PHYSICAL_FEATURE_FIELDS = (
     "forecast_cloud_cover_to_peak_mean_pct",
     "forecast_wind_speed_to_peak_max_kt",
     "forecast_wind_direction_to_peak_mean_deg",
+    "forecast_remaining_3h_status",
+    "forecast_remaining_3h_hour_count",
+    "forecast_precip_probability_remaining_3h_max_pct",
+    "forecast_cloud_cover_remaining_3h_mean_pct",
+    "forecast_wind_speed_remaining_3h_max_kt",
+    "forecast_wind_direction_remaining_3h_mean_deg",
 )
