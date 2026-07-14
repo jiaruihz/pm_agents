@@ -5,25 +5,58 @@ Verdict: `inconclusive_zero_notional_only`
 
 ## 结论
 
-这是一版真正按 `source event detect -> 首个后续 snapshot/quote` 对齐的早期错价重放，和 hourly-last 晚期 carry 分开。
-历史事件档案只覆盖 2026-07-07..2026-07-13 的已结算日，因此无论点估如何都达不到 10 active dates / 30 settled rows 的确认门槛。
+**上一版“最终只有 5 笔”的说法作废。5 是盘口档案缺口再叠加任意价格带后的可计算行数，不是策略信号数。**
+这次审计把 signal funnel 与 quote/settlement evidence funnel 分开，价格只作为连续 EV 输入，不再作为 eligibility hard gate。
+历史事件档案只覆盖 2026-07-07..2026-07-13 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。
 
-## Funnel
+## Signal funnel（这里才是策略漏斗）
 
 - unique source reports: 10176
-- prebase without forecast clock: 432
-- market-aligned prebase: 410
-- first base city-days: 130
-- first strong-partial city-days: 67
-- executable settled expression rows: 5
-- direct quote coverage: current YES 7/67; d1 NO 7/67
+- local 13:00-17:00 event rows: 1761
+- + decline >= 0.5: 632
+- + running high age >= 60m: 485
+- + flat/cooling path: 432
+- market-aligned event rows: 410
+- first base signal city-days: 130
+- first support>=2 diagnostic city-days: 67
 
-## Early expression result
+## Evidence coverage（不是策略筛选）
 
-| Expression | Rows | Dates | Cities | Win rate | Avg ask | Fee ROI | Date-bootstrap 95% CI |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| current_yes | 3 | 3 | 2 | +100.0% | 0.893 | +11.5% | [+2.9%, +30.2%] |
-| d1_no | 2 | 2 | 2 | +100.0% | 0.910 | +9.4% | [+2.9%, +16.8%] |
+- base direct quote coverage: current YES 19/130; d1 NO 18/130
+- support>=2 direct quote coverage: current YES 8/67; d1 NO 7/67
+- settled executable rows: base 37; support>=2 15
+- settled indicative rows (not executable): base 222; support>=2 110
+
+## Direct executable ask result
+
+| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg ask | Fee ROI | Date-bootstrap 95% CI |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| base | current_yes | 19 | 6 | 8 | +100.0% | 0.974 | +2.5% | [+0.9%, +6.8%] |
+| base | d1_no | 18 | 6 | 7 | +100.0% | 0.981 | +1.9% | [+0.7%, +4.6%] |
+| strong_partial | current_yes | 8 | 6 | 4 | +100.0% | 0.955 | +4.5% | [+1.0%, +12.5%] |
+| strong_partial | d1_no | 7 | 6 | 3 | +100.0% | 0.968 | +3.1% | [+0.7%, +8.1%] |
+
+## Broad indicative-price diagnostic（不可当成成交回测）
+
+| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg price | Fee ROI | Date-bootstrap 95% CI |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| base | current_yes | 111 | 6 | 36 | +93.7% | 0.924 | +1.2% | [-1.7%, +3.8%] |
+| base | d1_no | 111 | 6 | 36 | +94.6% | 0.942 | +0.2% | [-3.0%, +3.3%] |
+| strong_partial | current_yes | 55 | 6 | 21 | +94.5% | 0.950 | -0.6% | [-5.0%, +2.5%] |
+| strong_partial | d1_no | 55 | 6 | 21 | +94.5% | 0.960 | -1.7% | [-6.9%, +2.0%] |
+
+## support count diagnostic（base cohort，非门槛）
+
+| Support | Expression | Rows | Dates | Win rate | Avg price | Fee ROI | Date-bootstrap 95% CI |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 0 | current_yes | 32 | 6 | +93.8% | 0.901 | +3.9% | [+2.5%, +5.1%] |
+| 0 | d1_no | 32 | 6 | +96.9% | 0.938 | +3.0% | [+1.3%, +4.7%] |
+| 1 | current_yes | 31 | 6 | +93.5% | 0.916 | +1.9% | [-6.1%, +6.6%] |
+| 1 | d1_no | 31 | 6 | +93.5% | 0.922 | +1.2% | [-7.0%, +5.3%] |
+| 2 | current_yes | 26 | 6 | +88.5% | 0.919 | -4.0% | [-11.4%, +3.3%] |
+| 2 | d1_no | 26 | 6 | +88.5% | 0.938 | -6.0% | [-14.5%, +2.7%] |
+| 3+ | current_yes | 22 | 5 | +100.0% | 0.975 | +2.4% | [+1.8%, +3.1%] |
+| 3+ | d1_no | 22 | 5 | +100.0% | 0.979 | +2.0% | [+1.4%, +2.7%] |
 
 ## Busan current-day sanity check
 

@@ -1,7 +1,7 @@
 {
-  "generated_at_utc": "2026-07-14T15:17:20.129202Z",
+  "generated_at_utc": "2026-07-14T15:36:51.699781Z",
   "strategy_head": "heat_death_early_dislocation_v1",
-  "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first direct quote",
+  "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first archived direct quote after signal",
   "window": {
     "start": "2026-07-07",
     "end": "2026-07-13"
@@ -19,27 +19,36 @@
     ],
     "forecast_peak_passed_hours_gte": 0.25,
     "strong_partial_support_count_gte": 2,
-    "entry_price_band": [
-      0.2,
-      0.97
-    ],
-    "quote_delay_minutes_lte": 30.0
+    "quote_delay_minutes_lte": 30.0,
+    "price_role": "continuous EV input; never an eligibility gate"
   },
-  "funnel": {
+  "signal_funnel": {
+    "unit_note": "event rows until market alignment; then first signal per city-day",
     "unique_source_reports": 10176,
-    "event_states": 10176,
-    "prebase_without_forecast_clock": 432,
-    "market_aligned_prebase": 410,
-    "first_base_city_days": 130,
-    "first_strong_partial_city_days": 67,
-    "strong_executable_expression_rows": 5
+    "local_hour_13_17_event_rows": 1761,
+    "plus_decline_gte_0_5_event_rows": 632,
+    "plus_high_age_gte_60m_event_rows": 485,
+    "plus_path_not_warming_event_rows": 432,
+    "market_aligned_event_rows": 410,
+    "first_base_signal_city_days": 130,
+    "first_strong_partial_signal_city_days": 67
   },
-  "quote_coverage": {
-    "strong_city_days": 67,
-    "current_yes_direct_ask": 7,
-    "d1_no_direct_ask": 7,
-    "current_yes_in_entry_band": 3,
-    "d1_no_in_entry_band": 2
+  "evidence_funnel": {
+    "unit_note": "quote and settlement availability are evidence coverage, not strategy filters",
+    "base_quote_coverage": {
+      "city_days": 130,
+      "current_yes_direct_ask": 19,
+      "d1_no_direct_ask": 18
+    },
+    "strong_quote_coverage": {
+      "city_days": 67,
+      "current_yes_direct_ask": 8,
+      "d1_no_direct_ask": 7
+    },
+    "base_settled_executable_expression_rows": 37,
+    "strong_settled_executable_expression_rows": 15,
+    "base_settled_indicative_expression_rows": 222,
+    "strong_settled_indicative_expression_rows": 110
   },
   "feature_coverage": {
     "available_pit": [
@@ -56,40 +65,307 @@
     ],
     "strong_name": "strong_partial because two newly added feature families are unavailable historically"
   },
-  "summary": [
+  "executable_summary": [
     {
+      "cohort": "base",
+      "price_layer": "direct_executable_ask",
       "expression": "current_yes",
-      "rows": 3,
-      "active_dates": 3,
-      "cities": 2,
-      "wins": 3.0,
+      "rows": 19,
+      "active_dates": 6,
+      "cities": 8,
+      "wins": 19.0,
       "win_rate": 1.0,
-      "avg_ask": 0.8926666666666666,
-      "cost": 2.69103,
-      "pnl": 0.3089700000000001,
-      "roi": 0.11481477352537879,
+      "avg_ask": 0.9740526315789474,
+      "cost": 18.52837,
+      "pnl": 0.47163000000000044,
+      "roi": 0.025454478726407152,
       "roi_ci95": [
-        0.029378461285076082,
-        0.30182906984312957
+        0.009060963830815208,
+        0.06832715229766649
       ]
     },
     {
+      "cohort": "base",
+      "price_layer": "direct_executable_ask",
       "expression": "d1_no",
-      "rows": 2,
-      "active_dates": 2,
-      "cities": 2,
-      "wins": 2.0,
+      "rows": 18,
+      "active_dates": 6,
+      "cities": 7,
+      "wins": 18.0,
       "win_rate": 1.0,
-      "avg_ask": 0.9099999999999999,
-      "cost": 1.8278400000000001,
-      "pnl": 0.17215999999999998,
-      "roi": 0.094187675070028,
+      "avg_ask": 0.9807777777777777,
+      "cost": 17.66999,
+      "pnl": 0.33001000000000047,
+      "roi": 0.018676298062421118,
       "roi_ci95": [
-        0.029378461285076082,
-        0.1677059249398631
+        0.0073285340698219055,
+        0.04557942090583775
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "direct_executable_ask",
+      "expression": "current_yes",
+      "rows": 8,
+      "active_dates": 6,
+      "cities": 4,
+      "wins": 8.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.955125,
+      "cost": 7.65585,
+      "pnl": 0.3441500000000002,
+      "roi": 0.04495255262315748,
+      "roi_ci95": [
+        0.009816538775272082,
+        0.12510708608515778
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "direct_executable_ask",
+      "expression": "d1_no",
+      "rows": 7,
+      "active_dates": 6,
+      "cities": 3,
+      "wins": 7.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9684285714285714,
+      "cost": 6.78887,
+      "pnl": 0.21113000000000015,
+      "roi": 0.031099431864213063,
+      "roi_ci95": [
+        0.007250766589779881,
+        0.08142791742216422
       ]
     }
   ],
+  "indicative_summary": [
+    {
+      "cohort": "base",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 111,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 104.0,
+      "win_rate": 0.9369369369369369,
+      "avg_ask": 0.9240540540540542,
+      "cost": 102.8029,
+      "pnl": 1.1970999999999996,
+      "roi": 0.011644613138345316,
+      "roi_ci95": [
+        -0.017048517450492875,
+        0.038357674167811946
+      ]
+    },
+    {
+      "cohort": "base",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 111,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 105.0,
+      "win_rate": 0.9459459459459459,
+      "avg_ask": 0.9420405405405405,
+      "cost": 104.78112,
+      "pnl": 0.21887999999999938,
+      "roi": 0.0020889259439105003,
+      "roi_ci95": [
+        -0.030047983432089514,
+        0.0325400114124894
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9495545454545455,
+      "cost": 52.33432,
+      "pnl": -0.3343200000000006,
+      "roi": -0.006388159815585655,
+      "roi_ci95": [
+        -0.049738890487259546,
+        0.0249380512176809
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.959609090909091,
+      "cost": 52.87445,
+      "pnl": -0.8744500000000004,
+      "roi": -0.016538233494627373,
+      "roi_ci95": [
+        -0.06873969174094954,
+        0.020193153954602184
+      ]
+    }
+  ],
+  "support_slice_summary": [
+    {
+      "support_bucket": "0",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 32,
+      "active_dates": 6,
+      "cities": 24,
+      "wins": 30.0,
+      "win_rate": 0.9375,
+      "avg_ask": 0.900765625,
+      "cost": 28.887059999999998,
+      "pnl": 1.1129400000000003,
+      "roi": 0.03852728522736479,
+      "roi_ci95": [
+        0.02480450970525211,
+        0.05141352033674072
+      ]
+    },
+    {
+      "support_bucket": "0",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 32,
+      "active_dates": 6,
+      "cities": 24,
+      "wins": 31.0,
+      "win_rate": 0.96875,
+      "avg_ask": 0.9384375,
+      "cost": 30.09535,
+      "pnl": 0.9046499999999997,
+      "roi": 0.030059461013080085,
+      "roi_ci95": [
+        0.012908961993404832,
+        0.04721614569550293
+      ]
+    },
+    {
+      "support_bucket": "1",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 31,
+      "active_dates": 6,
+      "cities": 18,
+      "wins": 29.0,
+      "win_rate": 0.9354838709677419,
+      "avg_ask": 0.916241935483871,
+      "cost": 28.4706,
+      "pnl": 0.5293999999999999,
+      "roi": 0.018594620415446104,
+      "roi_ci95": [
+        -0.06141393860370682,
+        0.06605475123945521
+      ]
+    },
+    {
+      "support_bucket": "1",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 31,
+      "active_dates": 6,
+      "cities": 18,
+      "wins": 29.0,
+      "win_rate": 0.9354838709677419,
+      "avg_ask": 0.9224516129032259,
+      "cost": 28.65693,
+      "pnl": 0.3430700000000001,
+      "roi": 0.011971624315654192,
+      "roi_ci95": [
+        -0.06951529838217028,
+        0.052725620439493026
+      ]
+    },
+    {
+      "support_bucket": "2",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 26,
+      "active_dates": 6,
+      "cities": 15,
+      "wins": 23.0,
+      "win_rate": 0.8846153846153846,
+      "avg_ask": 0.9189423076923078,
+      "cost": 23.96959,
+      "pnl": -0.9695900000000001,
+      "roi": -0.04045083791587591,
+      "roi_ci95": [
+        -0.11407310283569792,
+        0.032535183636382387
+      ]
+    },
+    {
+      "support_bucket": "2",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 26,
+      "active_dates": 6,
+      "cities": 15,
+      "wins": 23.0,
+      "win_rate": 0.8846153846153846,
+      "avg_ask": 0.9381538461538461,
+      "cost": 24.45867,
+      "pnl": -1.4586700000000006,
+      "roi": -0.05963815693984998,
+      "roi_ci95": [
+        -0.14463160928351054,
+        0.0267673103984319
+      ]
+    },
+    {
+      "support_bucket": "3+",
+      "price_layer": "indicative_not_executable",
+      "expression": "current_yes",
+      "rows": 22,
+      "active_dates": 5,
+      "cities": 11,
+      "wins": 22.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9749772727272727,
+      "cost": 21.47565,
+      "pnl": 0.5243499999999995,
+      "roi": 0.02441602466048755,
+      "roi_ci95": [
+        0.018061743231549268,
+        0.031467114618099284
+      ]
+    },
+    {
+      "support_bucket": "3+",
+      "price_layer": "indicative_not_executable",
+      "expression": "d1_no",
+      "rows": 22,
+      "active_dates": 5,
+      "cities": 11,
+      "wins": 22.0,
+      "win_rate": 1.0,
+      "avg_ask": 0.9794772727272728,
+      "cost": 21.57017,
+      "pnl": 0.42983000000000005,
+      "roi": 0.0199270566713197,
+      "roi_ci95": [
+        0.014212497802539597,
+        0.02695177890869258
+      ]
+    }
+  ],
+  "overfit_audit": {
+    "previous_five_rows_was_signal_count": false,
+    "previous_five_rows_cause": "first-snapshot direct-ask archive gap plus an unjustified 0.20-0.97 price hard filter",
+    "price_hard_filter_removed": true,
+    "support_gte_2_status": "diagnostic cohort only; not an approved strategy gate",
+    "forward_runner_scope": "all physical_confirmation_base rows; quote refresh capped operationally; zero notional"
+  },
   "busan_current_day_sanity_not_in_settled_roi": {
     "city": "Busan",
     "target_date": "2026-07-14",

@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import bisect
 import csv
+import gzip
 import json
 import math
 import random
@@ -47,6 +48,7 @@ from weather_feature_layer.market import parse_bracket, settlement_interval  # n
 RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
 SOURCE_EVENTS_DIR = RUNTIME_ROOT / "output" / "source_events"
 SNAPSHOT_DIR = RUNTIME_ROOT / "targeted_output" / "paper_snapshots"
+ORDERBOOK_DIR = RUNTIME_ROOT / "targeted_output" / "orderbook_snapshots"
 DB_PATH = ROOT / "runtime" / "weather.db"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/heat_death_early_event_replay_v1"
 OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-14-heat-death-early-event-replay-v1.json"
@@ -55,8 +57,6 @@ OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-14-heat-death-early-event-replay-
 FEE_RATE = 0.05
 WINDOW_START = 13.0
 WINDOW_END = 17.0
-PRICE_MIN = 0.20
-PRICE_MAX = 0.97
 MAX_QUOTE_DELAY_MIN = 30.0
 TEMP_RE = re.compile(r"\b(M?\d{2})/(M?\d{2}|//)\b")
 SKY_RE = re.compile(r"\b(CLR|SKC|CAVOK|FEW|SCT|BKN|OVC|VV)(?:\d{3}|///)?\b")
@@ -247,6 +247,10 @@ def derive_event_states(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "precip_state": physical.get("precip_state"),
                     "physical_support_reasons_partial": support,
                     "physical_support_count_partial": len(support),
+                    "in_research_window": WINDOW_START <= hour <= WINDOW_END,
+                    "decline_gate": decline >= 0.5,
+                    "mature_high_gate": mins_since_max is not None and mins_since_max >= 60.0,
+                    "path_not_warming_gate": warm in {"flat", "cooling"},
                     "prebase_without_forecast_clock": prebase,
                     "report_kind": "SPECI" if raw.upper().startswith("SPECI") else "METAR",
                     "source_lane": "metar_speci_capable" if day_has_speci else "routine_metar_only",
@@ -267,6 +271,66 @@ def snapshot_index(snapshot_dir: Path) -> tuple[list[datetime], list[Path]]:
     pairs = [(snapshot_nominal_utc(path), path) for path in snapshot_dir.glob("snapshot_*.json")]
     ordered = sorted((dt, path) for dt, path in pairs if dt is not None)
     return [dt for dt, _path in ordered], [path for _dt, path in ordered]
+
+
+def load_book_quotes(
+    orderbook_dir: Path,
+    start: str,
+    end: str,
+) -> dict[tuple[str, str, str, str], list[dict[str, Any]]]:
+    """Index every archived direct ask; archive coverage is not a signal gate."""
+
+    out: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for path in sorted(orderbook_dir.glob("20*/orderbook_snapshot_*.jsonl.gz")):
+        try:
+            handle = gzip.open(path, "rt", encoding="utf-8")
+            with handle:
+                for line in handle:
+                    if not line.strip():
+                        continue
+                    row = json.loads(line)
+                    target_date = str(row.get("event_date") or row.get("market_local_date") or "")
+                    if not (start <= target_date <= end) or row.get("status") != "ok":
+                        continue
+                    city = str(row.get("city") or "")
+                    bracket = str(row.get("bracket") or "")
+                    outcome = str(row.get("outcome") or "").lower()
+                    fetched = parse_ts(row.get("fetched_at_utc") or row.get("snapshot_ts_utc"))
+                    best_ask = finite((row.get("summary") or {}).get("best_ask"))
+                    if not city or not bracket or outcome not in {"yes", "no"} or fetched is None or best_ask is None:
+                        continue
+                    out[(city, target_date, bracket, outcome)].append(
+                        {
+                            "ask": best_ask,
+                            "fetched_dt": fetched,
+                            "quote_ts": iso(fetched),
+                            "ask_size": finite((row.get("summary") or {}).get("ask_size")),
+                            "path": str(path),
+                        }
+                    )
+        except (OSError, EOFError, json.JSONDecodeError):
+            continue
+    for rows in out.values():
+        rows.sort(key=lambda row: row["fetched_dt"])
+    return out
+
+
+def first_archived_book_after(
+    books: Mapping[tuple[str, str, str, str], list[dict[str, Any]]],
+    *,
+    city: str,
+    target_date: str,
+    bracket: str,
+    outcome: str,
+    detect: datetime,
+) -> dict[str, Any]:
+    for row in books.get((city, target_date, bracket, outcome), []):
+        delay = (row["fetched_dt"] - detect).total_seconds() / 60.0
+        if 0 <= delay <= MAX_QUOTE_DELAY_MIN:
+            return {**row, "quote_delay_min": delay, "valid": True, "source": "orderbook_archive_first_after_signal"}
+        if delay > MAX_QUOTE_DELAY_MIN:
+            break
+    return {"ask": None, "quote_ts": None, "quote_delay_min": None, "valid": False, "source": "missing_within_30m"}
 
 
 @lru_cache(maxsize=16)
@@ -325,7 +389,11 @@ def quote(record: Mapping[str, Any] | None, side: str, detect: datetime, snapsho
     return {"ask": ask, "quote_ts": iso(quote_ts), "quote_delay_min": delay, "valid": valid}
 
 
-def attach_market(states: list[dict[str, Any]], snapshot_dir: Path) -> list[dict[str, Any]]:
+def attach_market(
+    states: list[dict[str, Any]],
+    snapshot_dir: Path,
+    books: Mapping[tuple[str, str, str, str], list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
     nominal_times, paths = snapshot_index(snapshot_dir)
     out: list[dict[str, Any]] = []
     for state in states:
@@ -359,8 +427,31 @@ def attach_market(states: list[dict[str, Any]], snapshot_dir: Path) -> list[dict
             ),
             None,
         )
-        current_yes = quote(current, "yes", detect, snapshot_ts)
-        d1_no = quote(d1, "no", detect, snapshot_ts)
+        # The actionable signal does not exist until this paper snapshot has
+        # supplied the forecast-peak clock, so quotes before snapshot_ts are
+        # not eligible even if the source report was already visible.
+        snapshot_current_yes = quote(current, "yes", snapshot_ts, snapshot_ts)
+        snapshot_d1_no = quote(d1, "no", snapshot_ts, snapshot_ts)
+        current_yes = first_archived_book_after(
+            books,
+            city=state["city"],
+            target_date=state["target_date"],
+            bracket=str(current.get("bracket") or ""),
+            outcome="yes",
+            detect=snapshot_ts,
+        )
+        d1_no = first_archived_book_after(
+            books,
+            city=state["city"],
+            target_date=state["target_date"],
+            bracket=str(d1.get("bracket") or "") if d1 else "",
+            outcome="no",
+            detect=snapshot_ts,
+        )
+        if not current_yes["valid"] and snapshot_current_yes["valid"]:
+            current_yes = {**snapshot_current_yes, "source": "paper_snapshot_direct"}
+        if not d1_no["valid"] and snapshot_d1_no["valid"]:
+            d1_no = {**snapshot_d1_no, "source": "paper_snapshot_direct"}
         peak_delta = finite(current.get("forecast_peak_delta_hours_local"))
         base = peak_delta is not None and peak_delta >= 0.25
         strong = base and int(state["physical_support_count_partial"]) >= 2
@@ -378,10 +469,14 @@ def attach_market(states: list[dict[str, Any]], snapshot_dir: Path) -> list[dict
                 "current_yes_ask": current_yes["ask"] if current_yes["valid"] else None,
                 "current_yes_quote_ts_utc": current_yes["quote_ts"],
                 "current_yes_quote_delay_min": current_yes["quote_delay_min"],
+                "current_yes_quote_source": current_yes.get("source"),
+                "current_yes_snapshot_raw_ask": snapshot_current_yes["ask"],
                 "current_yes_indicative": finite(current.get("market_yes_price")),
                 "d1_no_ask": d1_no["ask"] if d1_no["valid"] else None,
                 "d1_no_quote_ts_utc": d1_no["quote_ts"],
                 "d1_no_quote_delay_min": d1_no["quote_delay_min"],
+                "d1_no_quote_source": d1_no.get("source"),
+                "d1_no_snapshot_raw_ask": snapshot_d1_no["ask"],
                 "d1_no_indicative": None if d1 is None or finite(d1.get("market_yes_price")) is None else 1.0 - finite(d1.get("market_yes_price")),
             }
         )
@@ -425,7 +520,7 @@ def expression_rows(selected: list[dict[str, Any]], settlements: Mapping[tuple[s
             bracket = str(row.get(bracket_field) or "")
             ask = finite(row.get(ask_field))
             final_yes = settlements.get((row["target_date"], row["city"], bracket))
-            if not bracket or ask is None or final_yes is None or not (PRICE_MIN <= ask <= PRICE_MAX):
+            if not bracket or ask is None or final_yes is None or not (0 < ask < 1):
                 continue
             win = 1.0 - final_yes if invert else final_yes
             effective_cost = ask + fee(ask)
@@ -438,6 +533,39 @@ def expression_rows(selected: list[dict[str, Any]], settlements: Mapping[tuple[s
                     "effective_cost_per_share": effective_cost,
                     "win": win,
                     "pnl_per_share": win - effective_cost,
+                    "price_source": "direct_executable_ask",
+                }
+            )
+    return out
+
+
+def indicative_expression_rows(
+    selected: list[dict[str, Any]],
+    settlements: Mapping[tuple[str, str, str], float],
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in selected:
+        for expression, bracket_field, price_field, invert in (
+            ("current_yes", "current_bracket", "current_yes_indicative", False),
+            ("d1_no", "d1_bracket", "d1_no_indicative", True),
+        ):
+            bracket = str(row.get(bracket_field) or "")
+            price = finite(row.get(price_field))
+            final_yes = settlements.get((row["target_date"], row["city"], bracket))
+            if not bracket or price is None or final_yes is None or not (0 < price < 1):
+                continue
+            win = 1.0 - final_yes if invert else final_yes
+            effective_cost = price + fee(price)
+            out.append(
+                {
+                    **row,
+                    "expression": expression,
+                    "entry_ask": price,
+                    "fee_per_share": fee(price),
+                    "effective_cost_per_share": effective_cost,
+                    "win": win,
+                    "pnl_per_share": win - effective_cost,
+                    "price_source": "indicative_market_price_not_executable",
                 }
             )
     return out
@@ -485,6 +613,41 @@ def summary(rows: list[dict[str, Any]], expression: str) -> dict[str, Any]:
     }
 
 
+def expression_summaries(rows: list[dict[str, Any]], *, cohort: str, price_layer: str) -> list[dict[str, Any]]:
+    return [
+        {"cohort": cohort, "price_layer": price_layer, **summary(rows, expression)}
+        for expression in ("current_yes", "d1_no")
+    ]
+
+
+def support_bucket(value: Any) -> str:
+    count = int(value or 0)
+    return "3+" if count >= 3 else str(count)
+
+
+def support_slice_summaries(rows: list[dict[str, Any]], *, price_layer: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for bucket in ("0", "1", "2", "3+"):
+        subset = [row for row in rows if support_bucket(row.get("physical_support_count_partial")) == bucket]
+        for expression in ("current_yes", "d1_no"):
+            out.append(
+                {
+                    "support_bucket": bucket,
+                    "price_layer": price_layer,
+                    **summary(subset, expression),
+                }
+            )
+    return out
+
+
+def quote_coverage(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "city_days": len(rows),
+        "current_yes_direct_ask": sum(finite(row.get("current_yes_ask")) is not None for row in rows),
+        "d1_no_direct_ask": sum(finite(row.get("d1_no_ask")) is not None for row in rows),
+    }
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -507,6 +670,7 @@ def main() -> int:
     ap.add_argument("--end", default="2026-07-13")
     ap.add_argument("--source-events-dir", default=str(SOURCE_EVENTS_DIR))
     ap.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR))
+    ap.add_argument("--orderbook-dir", default=str(ORDERBOOK_DIR))
     ap.add_argument("--db", default=str(DB_PATH))
     ap.add_argument("--sanity-date", default="2026-07-14")
     ap.add_argument("--sanity-city", default="Busan")
@@ -515,19 +679,40 @@ def main() -> int:
     events = load_source_events(Path(args.source_events_dir), args.start, args.end)
     states = derive_event_states(events)
     prebase = [row for row in states if row["prebase_without_forecast_clock"]]
-    market_rows = attach_market(states, Path(args.snapshot_dir))
+    books = load_book_quotes(Path(args.orderbook_dir), args.start, args.end)
+    market_rows = attach_market(states, Path(args.snapshot_dir), books)
     base_first = select_first(market_rows, "physical_confirmation_base")
     strong_first = select_first(market_rows, "physical_confirmation_strong_partial")
     settlements = settlement_map(Path(args.db), args.start, args.end)
     base_expr = expression_rows(base_first, settlements)
     strong_expr = expression_rows(strong_first, settlements)
-    summaries = [summary(strong_expr, "current_yes"), summary(strong_expr, "d1_no")]
-    sample_gate_pass = all(item["rows"] >= 30 and item["active_dates"] >= 10 for item in summaries)
+    base_indicative_expr = indicative_expression_rows(base_first, settlements)
+    strong_indicative_expr = indicative_expression_rows(strong_first, settlements)
+    executable_summaries = [
+        *expression_summaries(base_expr, cohort="base", price_layer="direct_executable_ask"),
+        *expression_summaries(strong_expr, cohort="strong_partial", price_layer="direct_executable_ask"),
+    ]
+    indicative_summaries = [
+        *expression_summaries(base_indicative_expr, cohort="base", price_layer="indicative_not_executable"),
+        *expression_summaries(strong_indicative_expr, cohort="strong_partial", price_layer="indicative_not_executable"),
+    ]
+    support_slices = support_slice_summaries(base_indicative_expr, price_layer="indicative_not_executable")
+    strong_executable_summaries = [row for row in executable_summaries if row["cohort"] == "strong_partial"]
+    sample_gate_pass = all(
+        item["rows"] >= 30 and item["active_dates"] >= 10
+        for item in strong_executable_summaries
+    )
+
+    in_window = [row for row in states if row["in_research_window"]]
+    after_decline = [row for row in in_window if row["decline_gate"]]
+    after_mature_high = [row for row in after_decline if row["mature_high_gate"]]
+    after_path = [row for row in after_mature_high if row["path_not_warming_gate"]]
 
     sanity_case: dict[str, Any] | None = None
     if args.sanity_date:
         sanity_events = load_source_events(Path(args.source_events_dir), args.sanity_date, args.sanity_date)
-        sanity_market = attach_market(derive_event_states(sanity_events), Path(args.snapshot_dir))
+        sanity_books = load_book_quotes(Path(args.orderbook_dir), args.sanity_date, args.sanity_date)
+        sanity_market = attach_market(derive_event_states(sanity_events), Path(args.snapshot_dir), sanity_books)
         sanity_rows = select_first(sanity_market, "physical_confirmation_strong_partial")
         sanity_raw = next(
             (row for row in sanity_rows if row["city"] == args.sanity_city and row["target_date"] == args.sanity_date),
@@ -547,12 +732,16 @@ def main() -> int:
     write_csv(OUT_DIR / "event_states_prebase.csv", prebase)
     write_csv(OUT_DIR / "base_first_candidates.csv", base_first)
     write_csv(OUT_DIR / "strong_first_candidates.csv", strong_first)
+    write_csv(OUT_DIR / "base_expression_rows.csv", base_expr)
     write_csv(OUT_DIR / "strong_expression_rows.csv", strong_expr)
+    write_csv(OUT_DIR / "base_indicative_expression_rows.csv", base_indicative_expr)
+    write_csv(OUT_DIR / "strong_indicative_expression_rows.csv", strong_indicative_expr)
+    write_csv(OUT_DIR / "support_slice_summary.csv", support_slices)
 
     payload = {
         "generated_at_utc": iso(datetime.now(timezone.utc)),
         "strategy_head": "heat_death_early_dislocation_v1",
-        "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first direct quote",
+        "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first archived direct quote after signal",
         "window": {"start": args.start, "end": args.end},
         "rule": {
             "local_hour": [WINDOW_START, WINDOW_END],
@@ -561,39 +750,44 @@ def main() -> int:
             "warming_state": ["flat", "cooling"],
             "forecast_peak_passed_hours_gte": 0.25,
             "strong_partial_support_count_gte": 2,
-            "entry_price_band": [PRICE_MIN, PRICE_MAX],
             "quote_delay_minutes_lte": MAX_QUOTE_DELAY_MIN,
+            "price_role": "continuous EV input; never an eligibility gate",
         },
-        "funnel": {
+        "signal_funnel": {
+            "unit_note": "event rows until market alignment; then first signal per city-day",
             "unique_source_reports": len(events),
-            "event_states": len(states),
-            "prebase_without_forecast_clock": len(prebase),
-            "market_aligned_prebase": len(market_rows),
-            "first_base_city_days": len(base_first),
-            "first_strong_partial_city_days": len(strong_first),
-            "strong_executable_expression_rows": len(strong_expr),
+            "local_hour_13_17_event_rows": len(in_window),
+            "plus_decline_gte_0_5_event_rows": len(after_decline),
+            "plus_high_age_gte_60m_event_rows": len(after_mature_high),
+            "plus_path_not_warming_event_rows": len(after_path),
+            "market_aligned_event_rows": len(market_rows),
+            "first_base_signal_city_days": len(base_first),
+            "first_strong_partial_signal_city_days": len(strong_first),
         },
-        "quote_coverage": {
-            "strong_city_days": len(strong_first),
-            "current_yes_direct_ask": sum(finite(row.get("current_yes_ask")) is not None for row in strong_first),
-            "d1_no_direct_ask": sum(finite(row.get("d1_no_ask")) is not None for row in strong_first),
-            "current_yes_in_entry_band": sum(
-                finite(row.get("current_yes_ask")) is not None
-                and PRICE_MIN <= float(row["current_yes_ask"]) <= PRICE_MAX
-                for row in strong_first
-            ),
-            "d1_no_in_entry_band": sum(
-                finite(row.get("d1_no_ask")) is not None
-                and PRICE_MIN <= float(row["d1_no_ask"]) <= PRICE_MAX
-                for row in strong_first
-            ),
+        "evidence_funnel": {
+            "unit_note": "quote and settlement availability are evidence coverage, not strategy filters",
+            "base_quote_coverage": quote_coverage(base_first),
+            "strong_quote_coverage": quote_coverage(strong_first),
+            "base_settled_executable_expression_rows": len(base_expr),
+            "strong_settled_executable_expression_rows": len(strong_expr),
+            "base_settled_indicative_expression_rows": len(base_indicative_expr),
+            "strong_settled_indicative_expression_rows": len(strong_indicative_expr),
         },
         "feature_coverage": {
             "available_pit": ["METAR/SPECI precipitation", "cloud layers", "wind direction/speed", "temperature path", "forecast peak clock", "direct quote"],
             "missing_in_archive": ["forecast remaining-3h precipitation/cloud/wind", "coordinate-backed solar geometry"],
             "strong_name": "strong_partial because two newly added feature families are unavailable historically",
         },
-        "summary": summaries,
+        "executable_summary": executable_summaries,
+        "indicative_summary": indicative_summaries,
+        "support_slice_summary": support_slices,
+        "overfit_audit": {
+            "previous_five_rows_was_signal_count": False,
+            "previous_five_rows_cause": "first-snapshot direct-ask archive gap plus an unjustified 0.20-0.97 price hard filter",
+            "price_hard_filter_removed": True,
+            "support_gte_2_status": "diagnostic cohort only; not an approved strategy gate",
+            "forward_runner_scope": "all physical_confirmation_base rows; quote refresh capped operationally; zero notional",
+        },
         "busan_current_day_sanity_not_in_settled_roi": sanity_case,
         "sample_gate": {
             "required": {"settled_rows": 30, "active_dates": 10},
@@ -608,12 +802,26 @@ def main() -> int:
     }
     OUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    summary_lines = []
-    for item in summaries:
+    def table_lines(items: list[dict[str, Any]]) -> list[str]:
+        lines: list[str] = []
+        for item in items:
+            ci = item["roi_ci95"]
+            ci_text = "NA" if ci is None else f"[{pct(ci[0])}, {pct(ci[1])}]"
+            avg_ask = "NA" if item["avg_ask"] is None else f"{item['avg_ask']:.3f}"
+            lines.append(
+                f"| {item['cohort']} | {item['expression']} | {item['rows']} | {item['active_dates']} | {item['cities']} | {pct(item['win_rate'])} | {avg_ask} | {pct(item['roi'])} | {ci_text} |"
+            )
+        return lines
+
+    executable_lines = table_lines(executable_summaries)
+    indicative_lines = table_lines(indicative_summaries)
+    support_lines: list[str] = []
+    for item in support_slices:
         ci = item["roi_ci95"]
         ci_text = "NA" if ci is None else f"[{pct(ci[0])}, {pct(ci[1])}]"
-        summary_lines.append(
-            f"| {item['expression']} | {item['rows']} | {item['active_dates']} | {item['cities']} | {pct(item['win_rate'])} | {item['avg_ask']:.3f} | {pct(item['roi'])} | {ci_text} |"
+        avg_ask = "NA" if item["avg_ask"] is None else f"{item['avg_ask']:.3f}"
+        support_lines.append(
+            f"| {item['support_bucket']} | {item['expression']} | {item['rows']} | {item['active_dates']} | {pct(item['win_rate'])} | {avg_ask} | {pct(item['roi'])} | {ci_text} |"
         )
     sanity_line = (
         "未找到指定 sanity case。"
@@ -634,24 +842,45 @@ def main() -> int:
                 "",
                 "## 结论",
                 "",
-                "这是一版真正按 `source event detect -> 首个后续 snapshot/quote` 对齐的早期错价重放，和 hourly-last 晚期 carry 分开。",
-                f"历史事件档案只覆盖 {args.start}..{args.end} 的已结算日，因此无论点估如何都达不到 10 active dates / 30 settled rows 的确认门槛。",
+                "**上一版“最终只有 5 笔”的说法作废。5 是盘口档案缺口再叠加任意价格带后的可计算行数，不是策略信号数。**",
+                "这次审计把 signal funnel 与 quote/settlement evidence funnel 分开，价格只作为连续 EV 输入，不再作为 eligibility hard gate。",
+                f"历史事件档案只覆盖 {args.start}..{args.end} 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。",
                 "",
-                "## Funnel",
+                "## Signal funnel（这里才是策略漏斗）",
                 "",
                 f"- unique source reports: {len(events)}",
-                f"- prebase without forecast clock: {len(prebase)}",
-                f"- market-aligned prebase: {len(market_rows)}",
-                f"- first base city-days: {len(base_first)}",
-                f"- first strong-partial city-days: {len(strong_first)}",
-                f"- executable settled expression rows: {len(strong_expr)}",
-                f"- direct quote coverage: current YES {sum(finite(row.get('current_yes_ask')) is not None for row in strong_first)}/{len(strong_first)}; d1 NO {sum(finite(row.get('d1_no_ask')) is not None for row in strong_first)}/{len(strong_first)}",
+                f"- local 13:00-17:00 event rows: {len(in_window)}",
+                f"- + decline >= 0.5: {len(after_decline)}",
+                f"- + running high age >= 60m: {len(after_mature_high)}",
+                f"- + flat/cooling path: {len(after_path)}",
+                f"- market-aligned event rows: {len(market_rows)}",
+                f"- first base signal city-days: {len(base_first)}",
+                f"- first support>=2 diagnostic city-days: {len(strong_first)}",
                 "",
-                "## Early expression result",
+                "## Evidence coverage（不是策略筛选）",
                 "",
-                "| Expression | Rows | Dates | Cities | Win rate | Avg ask | Fee ROI | Date-bootstrap 95% CI |",
-                "|---|---:|---:|---:|---:|---:|---:|---:|",
-                *summary_lines,
+                f"- base direct quote coverage: current YES {sum(finite(row.get('current_yes_ask')) is not None for row in base_first)}/{len(base_first)}; d1 NO {sum(finite(row.get('d1_no_ask')) is not None for row in base_first)}/{len(base_first)}",
+                f"- support>=2 direct quote coverage: current YES {sum(finite(row.get('current_yes_ask')) is not None for row in strong_first)}/{len(strong_first)}; d1 NO {sum(finite(row.get('d1_no_ask')) is not None for row in strong_first)}/{len(strong_first)}",
+                f"- settled executable rows: base {len(base_expr)}; support>=2 {len(strong_expr)}",
+                f"- settled indicative rows (not executable): base {len(base_indicative_expr)}; support>=2 {len(strong_indicative_expr)}",
+                "",
+                "## Direct executable ask result",
+                "",
+                "| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg ask | Fee ROI | Date-bootstrap 95% CI |",
+                "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+                *executable_lines,
+                "",
+                "## Broad indicative-price diagnostic（不可当成成交回测）",
+                "",
+                "| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg price | Fee ROI | Date-bootstrap 95% CI |",
+                "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+                *indicative_lines,
+                "",
+                "## support count diagnostic（base cohort，非门槛）",
+                "",
+                "| Support | Expression | Rows | Dates | Win rate | Avg price | Fee ROI | Date-bootstrap 95% CI |",
+                "|---|---|---:|---:|---:|---:|---:|---:|",
+                *support_lines,
                 "",
                 "## Busan current-day sanity check",
                 "",
