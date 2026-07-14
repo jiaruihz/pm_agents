@@ -1,0 +1,477 @@
+{
+  "contract": {
+    "input": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv",
+    "target": "current exact bracket settles YES",
+    "train": "target_date < 2026-06-21",
+    "forward": "target_date >= 2026-06-21",
+    "model": "fixed LogisticRegression C=0.2; no city identity; no threshold tuning",
+    "market_probability": "mid(current YES ask, 1-current NO ask)",
+    "execution": "diagnostic BUY current NO where p_no > ask+fee and ask_size>=5"
+  },
+  "canonical_self_check": {
+    "path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+    "available": true,
+    "fact_signal_candidates_rows": 54054,
+    "fact_signal_candidates_min_date": "2026-05-05",
+    "fact_signal_candidates_max_date": "2026-07-15",
+    "fact_signal_candidates_built_at": "2026-07-14T07:58:43.800304+00:00",
+    "settlement_outcomes_rows": 32958,
+    "settlement_outcomes_min_date": "2026-05-04",
+    "settlement_outcomes_max_date": "2026-07-12"
+  },
+  "coverage": {
+    "rows": 14368,
+    "dates": 50,
+    "cities": 36,
+    "min_date": "2026-05-19",
+    "max_date": "2026-07-08",
+    "fields": {
+      "decision_hour_local": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "current_native": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "running_native": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "decline_native": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "temp_trend_1h_f": {
+        "present": true,
+        "coverage": 0.9906041202672605
+      },
+      "temp_trend_3h_f": {
+        "present": true,
+        "coverage": 0.9902561247216035
+      },
+      "minutes_since_running_max": {
+        "present": true,
+        "coverage": 0.9729955456570156
+      },
+      "forecast_gap_to_running_native": {
+        "present": true,
+        "coverage": 0.8829342984409799
+      },
+      "forecast_peak_delta_hours_local": {
+        "present": true,
+        "coverage": 0.8829342984409799
+      },
+      "relative_humidity_pct": {
+        "present": true,
+        "coverage": 0.9908825167037862
+      },
+      "dewpoint_depression_f": {
+        "present": true,
+        "coverage": 0.9908825167037862
+      },
+      "wind_speed_kt": {
+        "present": true,
+        "coverage": 0.9908825167037862
+      },
+      "sky_cover_code": {
+        "present": true,
+        "coverage": 0.7502783964365256
+      },
+      "unit": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "city_family": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "solar_window": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "day_regime": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "intraday_state": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "moisture_cloud_regime": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "wind_regime": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "running_max_state": {
+        "present": true,
+        "coverage": 1.0
+      },
+      "precip_state": {
+        "present": false,
+        "coverage": 0.0
+      },
+      "wind_dir_deg": {
+        "present": false,
+        "coverage": 0.0
+      },
+      "obs_age_minutes": {
+        "present": false,
+        "coverage": 0.0
+      },
+      "expected_report_cadence": {
+        "present": false,
+        "coverage": 0.0
+      }
+    }
+  },
+  "model_rows": {
+    "all": 11246,
+    "train": 8468,
+    "forward": 2778,
+    "forward_dates": 15
+  },
+  "metrics": {
+    "market_raw": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.19961567332504015,
+      "logloss_date_equal": 0.1973824165770987,
+      "brier_row": 0.06104175791936645,
+      "brier_date_equal": 0.05976001792104037,
+      "auc": 0.9750231295165438,
+      "delta_logloss_date_equal_vs_market": 0.0,
+      "delta_ci_low": 0.0,
+      "delta_ci_high": 0.0
+    },
+    "market_calibrated": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.2003440108995289,
+      "logloss_date_equal": 0.19895369951007602,
+      "brier_row": 0.0613912722224904,
+      "brier_date_equal": 0.06042408110383175,
+      "auc": 0.9750198487340554,
+      "delta_logloss_date_equal_vs_market": 0.001571282932977307,
+      "delta_ci_low": 4.575231231902231e-05,
+      "delta_ci_high": 0.003393086863406746
+    },
+    "thermal_only": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.4254195779509829,
+      "logloss_date_equal": 0.47032548009559455,
+      "brier_row": 0.14120590510391312,
+      "brier_date_equal": 0.15483572072356502,
+      "auc": 0.9051678885758779,
+      "delta_logloss_date_equal_vs_market": 0.2729430635184959,
+      "delta_ci_low": 0.21213033689232397,
+      "delta_ci_high": 0.34690158867558774
+    },
+    "market_plus_thermal": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.21054183347474112,
+      "logloss_date_equal": 0.218328352920264,
+      "brier_row": 0.06572333144371957,
+      "brier_date_equal": 0.06875691208777512,
+      "auc": 0.9737674100190722,
+      "delta_logloss_date_equal_vs_market": 0.020945936343165345,
+      "delta_ci_low": 0.006351370703725225,
+      "delta_ci_high": 0.04078618409082862
+    },
+    "market_plus_thermal_suppression": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.2076287425745711,
+      "logloss_date_equal": 0.21418695160757065,
+      "brier_row": 0.06473420662074529,
+      "brier_date_equal": 0.06732294139117753,
+      "auc": 0.9742436702769854,
+      "delta_logloss_date_equal_vs_market": 0.01680453503047191,
+      "delta_ci_low": 0.003587857351869654,
+      "delta_ci_high": 0.03563946502926784
+    },
+    "market_plus_all_regimes": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.2067295776584591,
+      "logloss_date_equal": 0.2124015253518877,
+      "brier_row": 0.06444516062642112,
+      "brier_date_equal": 0.0666571477967537,
+      "auc": 0.9742556998127765,
+      "delta_logloss_date_equal_vs_market": 0.015019108774789021,
+      "delta_ci_low": 0.0032632292724580924,
+      "delta_ci_high": 0.028805460342158896
+    },
+    "market75_thermal25": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.20100170789996089,
+      "logloss_date_equal": 0.20081920641248835,
+      "brier_row": 0.06166069692174455,
+      "brier_date_equal": 0.0612368167777269,
+      "auc": 0.9749260730345926,
+      "delta_logloss_date_equal_vs_market": 0.0034367898353896997,
+      "delta_ci_low": 0.00034759308789617855,
+      "delta_ci_high": 0.007402996327645467
+    },
+    "market75_thermal_suppression25": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.20030623089225613,
+      "logloss_date_equal": 0.19986864696886933,
+      "brier_row": 0.06141807385680715,
+      "brier_date_equal": 0.060912453835372624,
+      "auc": 0.9750835505940404,
+      "delta_logloss_date_equal_vs_market": 0.0024862303917705967,
+      "delta_ci_low": -0.00035035643048792376,
+      "delta_ci_high": 0.006211628850992841
+    },
+    "market75_all_regimes25": {
+      "rows": 2778,
+      "dates": 15,
+      "logloss_row": 0.1996861552007294,
+      "logloss_date_equal": 0.19920774287320928,
+      "brier_row": 0.06119500003061984,
+      "brier_date_equal": 0.06064055296237114,
+      "auc": 0.9752410281534882,
+      "delta_logloss_date_equal_vs_market": 0.001825326296110591,
+      "delta_ci_low": -0.0009412354553836302,
+      "delta_ci_high": 0.004859224516162929
+    }
+  },
+  "no_execution_replay": {
+    "market_raw": {
+      "rows": 0,
+      "dates": 0,
+      "cost": 0.0,
+      "pnl": 0.0,
+      "roi": NaN
+    },
+    "market_calibrated": {
+      "rows": 0,
+      "dates": 0,
+      "cost": 0.0,
+      "pnl": 0.0,
+      "roi": NaN
+    },
+    "thermal_only": {
+      "rows": 1124,
+      "dates": 15,
+      "cities": 36,
+      "cost": 96.54924,
+      "pnl": -16.549239999999998,
+      "roi": -0.17140725292089298,
+      "roi_ci_low": -0.3386679199966268,
+      "roi_ci_high": -0.026680442556198017,
+      "avg_edge": 0.08483333247998592
+    },
+    "market_plus_thermal": {
+      "rows": 111,
+      "dates": 13,
+      "cities": 31,
+      "cost": 22.678269999999994,
+      "pnl": -2.678269999999999,
+      "roi": -0.11809851456923301,
+      "roi_ci_low": -0.26650418388321184,
+      "roi_ci_high": 0.07802329189133145,
+      "avg_edge": 0.02385215667963919
+    },
+    "market_plus_thermal_suppression": {
+      "rows": 182,
+      "dates": 13,
+      "cities": 30,
+      "cost": 36.40212,
+      "pnl": -4.40212,
+      "roi": -0.12093031944293356,
+      "roi_ci_low": -0.302195224815098,
+      "roi_ci_high": 0.13861790442164437,
+      "avg_edge": 0.020604515992108934
+    },
+    "market_plus_all_regimes": {
+      "rows": 254,
+      "dates": 14,
+      "cities": 33,
+      "cost": 61.83741,
+      "pnl": -3.8374099999999993,
+      "roi": -0.062056447706978664,
+      "roi_ci_low": -0.29359279788475967,
+      "roi_ci_high": 0.18101252370834908,
+      "avg_edge": 0.024439037272660214
+    },
+    "market75_thermal25": {
+      "rows": 11,
+      "dates": 4,
+      "cities": 5,
+      "cost": 2.7842,
+      "pnl": 0.21580000000000002,
+      "roi": 0.07750879965519719,
+      "roi_ci_low": -1.0,
+      "roi_ci_high": 0.2971262168665323,
+      "avg_edge": 0.010700222103643837
+    },
+    "market75_thermal_suppression25": {
+      "rows": 20,
+      "dates": 9,
+      "cities": 9,
+      "cost": 6.10813,
+      "pnl": -0.10812999999999998,
+      "roi": -0.017702635667544726,
+      "roi_ci_low": -0.4551480351120991,
+      "roi_ci_high": 0.7244841542394517,
+      "avg_edge": 0.007241804265327554
+    },
+    "market75_all_regimes25": {
+      "rows": 33,
+      "dates": 11,
+      "cities": 18,
+      "cost": 7.5459,
+      "pnl": -0.5459,
+      "roi": -0.07234392186485378,
+      "roi_ci_low": -0.5812798368220559,
+      "roi_ci_high": 0.469634743745876,
+      "avg_edge": 0.0069482214025148765
+    }
+  },
+  "conditional_momentum": {
+    "rows": 3786,
+    "dates": 48,
+    "train_rows": 2942,
+    "forward_rows": 844,
+    "forward_dates": 15,
+    "metrics": {
+      "market_raw": {
+        "rows": 844,
+        "dates": 15,
+        "logloss_row": 0.2896068708081135,
+        "logloss_date_equal": 0.27618951949916926,
+        "brier_row": 0.0902566750592417,
+        "brier_date_equal": 0.08528853398757909,
+        "auc": 0.9378418597168596,
+        "delta_logloss_date_equal_vs_market": 0.0,
+        "delta_ci_low": 0.0,
+        "delta_ci_high": 0.0
+      },
+      "market_plus_move": {
+        "rows": 844,
+        "dates": 15,
+        "logloss_row": 0.2934549000960302,
+        "logloss_date_equal": 0.28381972352410345,
+        "brier_row": 0.09166695387090389,
+        "brier_date_equal": 0.08805986720110859,
+        "auc": 0.9377982893607893,
+        "delta_logloss_date_equal_vs_market": 0.007630204024934263,
+        "delta_ci_low": 0.0021115031013984598,
+        "delta_ci_high": 0.014109942073820518
+      },
+      "market_move_thermal": {
+        "rows": 844,
+        "dates": 15,
+        "logloss_row": 0.3018442192732107,
+        "logloss_date_equal": 0.3025965393463945,
+        "brier_row": 0.09573487267442567,
+        "brier_date_equal": 0.096640761649723,
+        "auc": 0.936628592878593,
+        "delta_logloss_date_equal_vs_market": 0.026407019847225266,
+        "delta_ci_low": 0.0014611585413758005,
+        "delta_ci_high": 0.06270041540199511
+      },
+      "market_move_weather_interactions": {
+        "rows": 844,
+        "dates": 15,
+        "logloss_row": 0.307454739093471,
+        "logloss_date_equal": 0.3067617921284412,
+        "brier_row": 0.0983724774778034,
+        "brier_date_equal": 0.09870637939524844,
+        "auc": 0.9340076683826684,
+        "delta_logloss_date_equal_vs_market": 0.030572272629271948,
+        "delta_ci_low": 0.003912866182300923,
+        "delta_ci_high": 0.062295921719258116
+      },
+      "market75_move_weather25": {
+        "rows": 844,
+        "dates": 15,
+        "logloss_row": 0.2904261090377453,
+        "logloss_date_equal": 0.2799477594223895,
+        "brier_row": 0.09066579461294692,
+        "brier_date_equal": 0.08681919891743237,
+        "auc": 0.9383647039897041,
+        "delta_logloss_date_equal_vs_market": 0.0037582399232202936,
+        "delta_ci_low": -0.0020555680002847902,
+        "delta_ci_high": 0.010470561668640294
+      }
+    },
+    "no_execution_replay": {
+      "market_raw": {
+        "rows": 0,
+        "dates": 0,
+        "cost": 0.0,
+        "pnl": 0.0,
+        "roi": NaN
+      },
+      "market_plus_move": {
+        "rows": 38,
+        "dates": 11,
+        "cities": 25,
+        "cost": 0.37646999999999997,
+        "pnl": -0.37646999999999997,
+        "roi": -1.0,
+        "roi_ci_low": -1.0,
+        "roi_ci_high": -1.0,
+        "avg_edge": 0.0005670981930301642
+      },
+      "market_move_thermal": {
+        "rows": 52,
+        "dates": 13,
+        "cities": 25,
+        "cost": 7.238149999999999,
+        "pnl": -1.2381499999999999,
+        "roi": -0.17105890317277206,
+        "roi_ci_low": -0.5942659421153881,
+        "roi_ci_high": 0.24407094936909687,
+        "avg_edge": 0.030699576659608603
+      },
+      "market_move_weather_interactions": {
+        "rows": 145,
+        "dates": 14,
+        "cities": 31,
+        "cost": 28.77436,
+        "pnl": -1.7743599999999997,
+        "roi": -0.06166462086385239,
+        "roi_ci_low": -0.3768164731804086,
+        "roi_ci_high": 0.21139316788445964,
+        "avg_edge": 0.039196240300669684
+      },
+      "market75_move_weather25": {
+        "rows": 36,
+        "dates": 11,
+        "cities": 17,
+        "cost": 6.44666,
+        "pnl": 0.5533399999999999,
+        "roi": 0.08583359445045961,
+        "roi_ci_low": -0.549251731640826,
+        "roi_ci_high": 1.1629655232042915,
+        "avg_edge": 0.013493685929173577
+      }
+    }
+  },
+  "review": {
+    "strong_mechanism_features": [
+      "temp_trend_1h_f/temp_trend_3h_f",
+      "minutes_since_running_max/decline_native",
+      "forecast_gap_to_running_native/forecast_peak_delta_hours_local"
+    ],
+    "weak_or_incomplete": [
+      "precip_state missing",
+      "wind_dir_deg missing in historical atlas",
+      "obs_age_minutes/cadence missing in historical atlas",
+      "sky_cover_code is coarse and 75% covered",
+      "solar_window uses fixed local-clock buckets rather than solar geometry",
+      "heating_done_score_v1 is hand-weighted and not a calibrated probability"
+    ]
+  }
+}

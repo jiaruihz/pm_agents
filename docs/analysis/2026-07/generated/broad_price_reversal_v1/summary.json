@@ -1,0 +1,197 @@
+{
+  "contract": {
+    "input": "/Users/deepsleep/projects/pm_agents/docs/analysis/2026-06/generated/intraday_weather_regime_atlas_v1/intraday_weather_regime_state_rows.csv",
+    "forward_start": "2026-06-21",
+    "move_threshold": 0.02,
+    "entry": "same-bracket next hourly state, observed ask",
+    "exit": "settlement",
+    "fee": "round(0.05*p*(1-p), 5) per share",
+    "selection": "no city, source, weather, or ask-price filter"
+  },
+  "inventory": {
+    "rows": 14368,
+    "dates": 50,
+    "cities": 36,
+    "min_date": "2026-05-19",
+    "max_date": "2026-07-08",
+    "same_bracket_rows": 7018
+  },
+  "rules": {
+    "reversal_buy_no_after_yes_rise": {
+      "all": {
+        "rows": 3043,
+        "dates": 49,
+        "cities": 36,
+        "cost": 714.38741,
+        "pnl": -115.33258000000001,
+        "roi": -0.1614426267674566,
+        "roi_ci_low": -0.2340422446246668,
+        "roi_ci_high": -0.08824829235915094,
+        "win_rate": 0.196505110451698,
+        "avg_move": 0.14520473217219848,
+        "avg_ask": 0.22995202103187645,
+        "depth_required": true
+      },
+      "train": {
+        "rows": 2354,
+        "dates": 33,
+        "cities": 36,
+        "cost": 538.55608,
+        "pnl": -105.55608000000001,
+        "roi": -0.19599830717722103,
+        "roi_ci_low": -0.28036600594432165,
+        "roi_ci_high": -0.11033439704458976,
+        "win_rate": 0.18394222599830076,
+        "avg_move": 0.14395475785896344,
+        "avg_ask": 0.22396474086661,
+        "depth_required": true
+      },
+      "forward": {
+        "rows": 689,
+        "dates": 16,
+        "cities": 36,
+        "cost": 175.83133,
+        "pnl": -9.776500000000002,
+        "roi": -0.055601581356405604,
+        "roi_ci_low": -0.19442374993086642,
+        "roi_ci_high": 0.06633312296009952,
+        "win_rate": 0.24005891016200295,
+        "avg_move": 0.1494753265602322,
+        "avg_ask": 0.25040783744557327,
+        "depth_required": true
+      }
+    },
+    "reversal_buy_yes_after_yes_fall": {
+      "all": {
+        "rows": 649,
+        "dates": 48,
+        "cities": 36,
+        "cost": 277.66851,
+        "pnl": -26.55455,
+        "roi": -0.09563399897237175,
+        "roi_ci_low": -0.174764397109995,
+        "roi_ci_high": -0.016321258849923026,
+        "win_rate": 0.38794435857805254,
+        "avg_move": -0.13175115562403697,
+        "avg_ask": 0.4216656394453004,
+        "depth_required": false
+      },
+      "train": {
+        "rows": 509,
+        "dates": 32,
+        "cities": 36,
+        "cost": 219.0051,
+        "pnl": -23.0051,
+        "roi": -0.10504367249895093,
+        "roi_ci_low": -0.18950007024619836,
+        "roi_ci_high": -0.02362447211544951,
+        "win_rate": 0.3850687622789784,
+        "avg_move": -0.1276483300589391,
+        "avg_ask": 0.42388212180746554,
+        "depth_required": false
+      },
+      "forward": {
+        "rows": 140,
+        "dates": 16,
+        "cities": 36,
+        "cost": 58.66341000000001,
+        "pnl": -3.5494499999999998,
+        "roi": -0.06050534737070346,
+        "roi_ci_low": -0.2665562727887112,
+        "roi_ci_high": 0.13551067456820573,
+        "win_rate": 0.39855072463768115,
+        "avg_move": -0.14666785714285716,
+        "avg_ask": 0.41360714285714284,
+        "depth_required": false
+      }
+    },
+    "momentum_buy_yes_after_yes_rise": {
+      "all": {
+        "rows": 3133,
+        "dates": 49,
+        "cities": 36,
+        "cost": 2588.50789,
+        "pnl": -75.41445999999996,
+        "roi": -0.029134336538568544,
+        "roi_ci_low": -0.050253857105876286,
+        "roi_ci_high": -0.010458097720496162,
+        "win_rate": 0.8021133525456292,
+        "avg_move": 0.14618863708905203,
+        "avg_ask": 0.822045643153527,
+        "depth_required": false
+      },
+      "train": {
+        "rows": 2419,
+        "dates": 33,
+        "cities": 36,
+        "cost": 2010.89606,
+        "pnl": -40.89605999999997,
+        "roi": -0.020337232149134535,
+        "roi_ci_low": -0.04342195619456585,
+        "roi_ci_high": 0.0006072789162077198,
+        "win_rate": 0.8143861099627946,
+        "avg_move": 0.14535903265812317,
+        "avg_ask": 0.8271637040099215,
+        "depth_required": false
+      },
+      "forward": {
+        "rows": 714,
+        "dates": 16,
+        "cities": 36,
+        "cost": 577.61183,
+        "pnl": -34.51839999999999,
+        "roi": -0.05976054887933994,
+        "roi_ci_low": -0.09812602981095436,
+        "roi_ci_high": -0.017574886215294693,
+        "win_rate": 0.7599431818181818,
+        "avg_move": 0.14899929971988796,
+        "avg_ask": 0.8047058823529413,
+        "depth_required": false
+      }
+    },
+    "momentum_buy_no_after_yes_fall": {
+      "all": {
+        "rows": 632,
+        "dates": 48,
+        "cities": 36,
+        "cost": 425.11887,
+        "pnl": -36.18177,
+        "roi": -0.08510977176807041,
+        "roi_ci_low": -0.13962531882317256,
+        "roi_ci_high": -0.03535216757257986,
+        "win_rate": 0.6142857142857143,
+        "avg_move": -0.13195806962025317,
+        "avg_ask": 0.6665822784810126,
+        "depth_required": true
+      },
+      "train": {
+        "rows": 493,
+        "dates": 32,
+        "cities": 36,
+        "cost": 331.88098,
+        "pnl": -27.88098,
+        "roi": -0.08400897213211796,
+        "roi_ci_low": -0.14123971786764733,
+        "roi_ci_high": -0.028926069365946726,
+        "win_rate": 0.6166328600405679,
+        "avg_move": -0.12780628803245436,
+        "avg_ask": 0.6669269776876267,
+        "depth_required": true
+      },
+      "forward": {
+        "rows": 139,
+        "dates": 16,
+        "cities": 36,
+        "cost": 93.23789,
+        "pnl": -8.30079,
+        "roi": -0.08902807646118975,
+        "roi_ci_low": -0.22806394211457748,
+        "roi_ci_high": 0.0276452093890385,
+        "win_rate": 0.6058394160583942,
+        "avg_move": -0.14668345323741006,
+        "avg_ask": 0.6653597122302158,
+        "depth_required": true
+      }
+    }
+  }
+}

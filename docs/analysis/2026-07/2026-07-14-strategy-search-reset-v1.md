@@ -20,7 +20,7 @@
 | fast-source event-time replay | 旧口径 58 rows / 5 dates 混入 7/13 condition fallback；canonical-only 只有 4 dates | canonical first-row 56 rows ROI +5.85%，但仅 4 dates | rejected-as-main-strategy；collector-only |
 | physical peak-runway BUY current NO | 16 post-hypothesis rows / 9 dates | ROI -68.6%；CI [-100%,-8.7%] | reject |
 | same-state BUY current YES reversal | 16 rows / 9 dates | ROI +10.0%；CI [-4.4%,+19.7%]；baseline excess CI positive | new shadow hypothesis；绝对 gate FAIL |
-| broad price reversal | BUY NO 3,043 rows / 49 dates；BUY YES 649 rows / 48 dates | fee-adjusted ROI -16.1% / -9.6% | reject；16-row reversal 不升格 |
+| broad price direction | momentum：上涨买 YES 3,133 rows / 49 dates、下跌买 NO 632 rows / 48 dates；reversal 亦为宽分母 | momentum fee ROI -2.9% / -8.5%；reversal -16.1% / -9.6% | 无裸方向 alpha；weather interaction 也未在 proper score 上胜 market |
 | all-YES underround old denominator | 270 settled baskets / 25 dates | gross +3.16% → fee-adjusted -0.42%；CI [-0.68%,-0.19%] | old confirmed verdict withdrawn |
 | broader full ladder | 3,419 PIT snapshots | NO-side forward only 1–2 opportunities；ROI +0.038%..+0.059%，friction kills | reject live |
 
@@ -72,4 +72,5 @@ edge  = p_win - cost
 - [current-NO fee correction](2026-07-14-current-bracket-no-prevday-pit-fee-correction-v1.md)
 - [full-ladder distribution audit](2026-07-14-full-ladder-distribution-arb-v1.md)
 - [fast-source share-cap incident](2026-07-14-fast-source-share-cap-incident-v1.md)
-- [broad price reversal](2026-07-14-broad-price-reversal-v1.md)
+- [broad price direction](2026-07-14-broad-price-reversal-v1.md)
+- [weather/climate feature review](2026-07-14-weather-climate-feature-review-v1.md)
