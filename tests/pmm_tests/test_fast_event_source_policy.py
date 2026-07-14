@@ -196,6 +196,41 @@ def test_market_index_does_not_collide_across_target_dates(tmp_path):
     assert index[("Atlanta", "2026-07-14", "86")].yes_token_id == "new"
 
 
+def test_market_index_isolates_highest_and_lowest_temperature_events(tmp_path):
+    path = tmp_path / "paper.json"
+    path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "city": "Tokyo",
+                        "target_date": "2026-07-14",
+                        "bracket": "25",
+                        "event_slug": "highest-temperature-in-tokyo-on-july-14-2026",
+                        "question": "Will the highest temperature in Tokyo be 25C?",
+                        "yes_token_id": "highest",
+                    },
+                    {
+                        "city": "Tokyo",
+                        "target_date": "2026-07-14",
+                        "bracket": "25",
+                        "event_slug": "lowest-temperature-in-tokyo-on-july-14-2026",
+                        "question": "Will the lowest temperature in Tokyo be 25C?",
+                        "yes_token_id": "lowest",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    highest = build_market_index(path, {"2026-07-14"}, "max")
+    lowest = build_market_index(path, {"2026-07-14"}, "min")
+
+    assert highest[("Tokyo", "2026-07-14", "25")].yes_token_id == "highest"
+    assert lowest[("Tokyo", "2026-07-14", "25")].yes_token_id == "lowest"
+
+
 def test_market_ladder_uses_real_range_brackets_not_numeric_plus_minus_one(tmp_path):
     path = tmp_path / "paper.json"
     path.write_text(

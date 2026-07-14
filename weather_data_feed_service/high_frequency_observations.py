@@ -80,11 +80,15 @@ def _jobs(source_names: list[str], city_names: list[str] | None, now_utc: dateti
             if selected_cities and city not in selected_cities:
                 continue
             candidates.append((source, city, meta))
-    return filter_jobs_by_local_window(
-        candidates,
+    always_active_cities = set(args.always_active_cities or [])
+    always_active = [(source, city) for source, city, _meta in candidates if city in always_active_cities]
+    window_candidates = [row for row in candidates if row[1] not in always_active_cities]
+    window_active, skipped = filter_jobs_by_local_window(
+        window_candidates,
         now_utc=now_utc,
         window=ActiveLocalWindow(args.active_local_start_hour, args.active_local_end_hour),
     )
+    return sorted(set(always_active + window_active)), skipped
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -293,6 +297,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "active_job_cities": sorted({city for _source, city in active_jobs}),
         "fetch_attempt_cities": sorted({city for _source, city in jobs}),
         "active_local_window": ActiveLocalWindow(args.active_local_start_hour, args.active_local_end_hour).as_payload(),
+        "always_active_cities": sorted(set(args.always_active_cities or [])),
         "skipped_inactive_jobs": skipped_jobs,
         "skipped_inactive_count": len(skipped_jobs),
         "source_min_interval_sec": source_min_intervals,
@@ -347,6 +352,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-workers", type=int, default=8)
     parser.add_argument("--active-local-start-hour", type=float, default=None)
     parser.add_argument("--active-local-end-hour", type=float, default=None)
+    parser.add_argument("--always-active-cities", nargs="*", default=[])
     parser.add_argument("--source-min-interval-sec", action="append", default=[])
     parser.add_argument("--source-minute-window-min-interval-sec", action="append", default=[])
     parser.add_argument("--state-path", default="")

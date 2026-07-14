@@ -145,6 +145,28 @@ def test_high_frequency_observations_cli_dispatches_runner_args(monkeypatch) -> 
     assert calls == [["--cities", "Singapore", "--sources", "singapore_mss"]]
 
 
+def test_high_frequency_always_active_cities_bypass_daytime_window() -> None:
+    from weather_data_feed_service.high_frequency_observations import _jobs, build_parser
+
+    args = build_parser().parse_args(
+        [
+            "--sources",
+            "jma_amedas",
+            "singapore_mss",
+            "--active-local-start-hour",
+            "6",
+            "--active-local-end-hour",
+            "22",
+            "--always-active-cities",
+            "Tokyo",
+        ]
+    )
+    active, skipped = _jobs(args.sources, args.cities, datetime(2026, 7, 14, 17, 0, tzinfo=timezone.utc), args)
+
+    assert ("jma_amedas", "Tokyo") in active
+    assert any(row["city"] == "Singapore" and row["reason"] == "outside_active_local_window" for row in skipped)
+
+
 def test_high_frequency_history_append_rows_keep_latest_per_station() -> None:
     from weather_data_feed_service.high_frequency_observations import append_history_rows
 

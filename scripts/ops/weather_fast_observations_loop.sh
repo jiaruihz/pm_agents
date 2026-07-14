@@ -16,6 +16,7 @@ MAX_WORKERS="${WEATHER_FAST_OBS_MAX_WORKERS:-8}"
 TIMEOUT_SEC="${WEATHER_FAST_OBS_TIMEOUT_SEC:-5}"
 ACTIVE_LOCAL_START_HOUR="${WEATHER_FAST_OBS_ACTIVE_LOCAL_START_HOUR:-6}"
 ACTIVE_LOCAL_END_HOUR="${WEATHER_FAST_OBS_ACTIVE_LOCAL_END_HOUR:-22}"
+ALWAYS_ACTIVE_CITIES="${WEATHER_FAST_OBS_ALWAYS_ACTIVE_CITIES:-Seoul Tokyo}"
 PY="$SERVICE_DIR/.venv/bin/python"
 
 mkdir -p "$LOOP_DIR" "$RUNWAY_OUTPUT" "$HIGH_FREQUENCY_OUTPUT"
@@ -25,7 +26,7 @@ if [[ ! -x "$PY" ]]; then
 fi
 
 echo "$$" > "$PID_FILE"
-date -u +"[fast_obs] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ interval_sec=$INTERVAL_SEC runway_sources=$RUNWAY_SOURCES high_frequency_sources=$HIGH_FREQUENCY_SOURCES high_frequency_source_min_interval_sec=$HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC high_frequency_source_minute_window_min_interval_sec=$HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC active_local_start_hour=$ACTIVE_LOCAL_START_HOUR active_local_end_hour=$ACTIVE_LOCAL_END_HOUR"
+date -u +"[fast_obs] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ interval_sec=$INTERVAL_SEC runway_sources=$RUNWAY_SOURCES high_frequency_sources=$HIGH_FREQUENCY_SOURCES high_frequency_source_min_interval_sec=$HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC high_frequency_source_minute_window_min_interval_sec=$HIGH_FREQUENCY_SOURCE_MINUTE_WINDOW_MIN_INTERVAL_SEC active_local_start_hour=$ACTIVE_LOCAL_START_HOUR active_local_end_hour=$ACTIVE_LOCAL_END_HOUR always_active_cities=$ALWAYS_ACTIVE_CITIES"
 
 cd "$SERVICE_DIR"
 trap 'rc=$?; date -u +"[fast_obs] loop_exit_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"; rm -f "$PID_FILE"' EXIT
@@ -49,6 +50,7 @@ while true; do
   date -u +"[fast_obs] high_frequency_start_utc=%Y-%m-%dT%H:%M:%SZ"
   set +e
   read -r -a high_frequency_source_args <<< "$HIGH_FREQUENCY_SOURCES"
+  read -r -a always_active_city_args <<< "$ALWAYS_ACTIVE_CITIES"
   read -r -a high_frequency_interval_args <<< "$HIGH_FREQUENCY_SOURCE_MIN_INTERVAL_SEC"
   high_frequency_interval_cli=()
   for interval_arg in "${high_frequency_interval_args[@]}"; do
@@ -64,6 +66,7 @@ while true; do
     --sources "${high_frequency_source_args[@]}" \
     --active-local-start-hour "$ACTIVE_LOCAL_START_HOUR" \
     --active-local-end-hour "$ACTIVE_LOCAL_END_HOUR" \
+    --always-active-cities "${always_active_city_args[@]}" \
     "${high_frequency_interval_cli[@]}" \
     --max-workers "$MAX_WORKERS" \
     --timeout-sec "$TIMEOUT_SEC"

@@ -155,6 +155,7 @@ class MarketToken:
 def build_market_index(
     snapshot_path: Path | None,
     target_dates: set[str] | None = None,
+    extreme_kind: str | None = None,
 ) -> dict[tuple[str, str, str], MarketToken]:
     if snapshot_path is None:
         return {}
@@ -179,11 +180,26 @@ def build_market_index(
             yes_token_id=str(row.get("yes_token_id") or ""),
             no_token_id=str(row.get("no_token_id") or ""),
         )
+        if extreme_kind and market_token_extreme_kind(token) != extreme_kind:
+            continue
         out[(city, target_date, bracket)] = token
     return out
 
 
-def load_market_index_cache(path: Path, target_dates: set[str]) -> dict[tuple[str, str, str], MarketToken]:
+def market_token_extreme_kind(token: MarketToken) -> str:
+    identity = f"{token.event_slug} {token.question}".lower()
+    if "lowest-temperature" in identity or "lowest temperature" in identity:
+        return "min"
+    if "highest-temperature" in identity or "highest temperature" in identity:
+        return "max"
+    return ""
+
+
+def load_market_index_cache(
+    path: Path,
+    target_dates: set[str],
+    extreme_kind: str | None = None,
+) -> dict[tuple[str, str, str], MarketToken]:
     if not path.exists():
         return {}
     try:
@@ -200,6 +216,8 @@ def load_market_index_cache(path: Path, target_dates: set[str]) -> dict[tuple[st
         try:
             token = MarketToken(**{field: str(row.get(field) or "") for field in MarketToken.__dataclass_fields__})
         except TypeError:
+            continue
+        if extreme_kind and market_token_extreme_kind(token) != extreme_kind:
             continue
         if token.city and token.target_date and token.bracket:
             out[(token.city, token.target_date, token.bracket)] = token
@@ -945,8 +963,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         metar_rows = metar_running_max(Path(args.source_events_jsonl), args.target_date, city_profiles, now)
     paper_path = latest_paper_snapshot()
     orderbook_path = latest_orderbook_snapshot()
-    market_index = load_market_index_cache(market_index_cache_path, target_dates)
-    market_index.update(build_market_index(paper_path, target_dates))
+    market_index = load_market_index_cache(market_index_cache_path, target_dates, extreme_kind)
+    market_index.update(build_market_index(paper_path, target_dates, extreme_kind))
     if args.gamma_market_index:
         market_index = augment_market_index_from_gamma(
             market_index,
