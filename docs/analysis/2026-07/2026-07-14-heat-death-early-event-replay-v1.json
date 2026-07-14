@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-07-14T16:29:56.802140Z",
+  "generated_at_utc": "2026-07-14T16:57:26.323122Z",
   "strategy_head": "heat_death_early_dislocation_v1",
   "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first archived direct quote after signal",
   "window": {
@@ -48,7 +48,111 @@
     "base_settled_executable_expression_rows": 37,
     "strong_settled_executable_expression_rows": 15,
     "base_settled_indicative_expression_rows": 222,
-    "strong_settled_indicative_expression_rows": 110
+    "strong_settled_indicative_expression_rows": 110,
+    "base_settled_price_history_proxy_expression_rows": 220,
+    "strong_settled_price_history_proxy_expression_rows": 110
+  },
+  "evidence_coverage_audit": [
+    {
+      "cohort": "base",
+      "expression": "current_yes",
+      "signal_city_days": 130,
+      "leg_present": 130,
+      "indicative_price_present": 130,
+      "indicative_but_no_direct_ask": 111,
+      "settlement_present": 111,
+      "indicative_and_settled": 111,
+      "first_snapshot_direct_ask": 16,
+      "direct_ask_within_30m": 19,
+      "direct_and_settled": 19,
+      "direct_active_dates": 6,
+      "settled_active_dates": 6,
+      "first_snapshot_book_status_counts": {
+        "ok": 16,
+        "orderbook_budget_exhausted": 113,
+        "orderbook_scope_skipped": 1
+      },
+      "direct_quote_source_counts": {
+        "orderbook_archive_first_after_signal": 19
+      }
+    },
+    {
+      "cohort": "base",
+      "expression": "d1_no",
+      "signal_city_days": 130,
+      "leg_present": 130,
+      "indicative_price_present": 130,
+      "indicative_but_no_direct_ask": 112,
+      "settlement_present": 111,
+      "indicative_and_settled": 111,
+      "first_snapshot_direct_ask": 16,
+      "direct_ask_within_30m": 18,
+      "direct_and_settled": 18,
+      "direct_active_dates": 6,
+      "settled_active_dates": 6,
+      "first_snapshot_book_status_counts": {
+        "ok": 16,
+        "orderbook_budget_exhausted": 113,
+        "orderbook_scope_skipped": 1
+      },
+      "direct_quote_source_counts": {
+        "orderbook_archive_first_after_signal": 18
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "expression": "current_yes",
+      "signal_city_days": 67,
+      "leg_present": 67,
+      "indicative_price_present": 67,
+      "indicative_but_no_direct_ask": 59,
+      "settlement_present": 55,
+      "indicative_and_settled": 55,
+      "first_snapshot_direct_ask": 7,
+      "direct_ask_within_30m": 8,
+      "direct_and_settled": 8,
+      "direct_active_dates": 6,
+      "settled_active_dates": 6,
+      "first_snapshot_book_status_counts": {
+        "ok": 8,
+        "orderbook_budget_exhausted": 59
+      },
+      "direct_quote_source_counts": {
+        "orderbook_archive_first_after_signal": 8
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "expression": "d1_no",
+      "signal_city_days": 67,
+      "leg_present": 67,
+      "indicative_price_present": 67,
+      "indicative_but_no_direct_ask": 60,
+      "settlement_present": 55,
+      "indicative_and_settled": 55,
+      "first_snapshot_direct_ask": 7,
+      "direct_ask_within_30m": 7,
+      "direct_and_settled": 7,
+      "direct_active_dates": 6,
+      "settled_active_dates": 6,
+      "first_snapshot_book_status_counts": {
+        "ok": 8,
+        "orderbook_budget_exhausted": 59
+      },
+      "direct_quote_source_counts": {
+        "orderbook_archive_first_after_signal": 7
+      }
+    }
+  ],
+  "historical_collection_diagnosis": {
+    "root_cause": "bounded strategy-scoped orderbook enrichment, not missing weather signals",
+    "snapshot_interval_seconds_default": 600,
+    "orderbook_scope_default": "strategy_live",
+    "orderbook_budget_seconds_default": 60,
+    "orderbook_workers_default": 1,
+    "effect": "most paper records retain indicative market prices but lack a contemporaneous executable ask",
+    "recoverable_layer": "CLOB /prices-history minute price is still available for most selected tokens",
+    "irrecoverable_layer": "historical best ask, size, depth, spread and guaranteed taker fill where orderbooks were not archived"
   },
   "feature_coverage": {
     "available_pit": [
@@ -210,6 +314,492 @@
       "roi_ci95": [
         -0.06873969174094954,
         0.020193153954602184
+      ]
+    }
+  ],
+  "price_history_proxy_summary": [
+    {
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 104.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.934259090909091,
+      "cost": 102.99415,
+      "pnl": 1.0058500000000004,
+      "roi": 0.009766088656491659,
+      "roi_ci95": [
+        -0.022183797667012013,
+        0.03908897340145873
+      ]
+    },
+    {
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 105.0,
+      "win_rate": 0.9545454545454546,
+      "avg_ask": 0.9558590909090909,
+      "cost": 105.34528,
+      "pnl": -0.34528000000000075,
+      "roi": -0.0032776029452862127,
+      "roi_ci95": [
+        -0.03507312459435599,
+        0.02722715940269358
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9496,
+      "cost": 52.34265,
+      "pnl": -0.3426499999999999,
+      "roi": -0.006546286823460408,
+      "roi_ci95": [
+        -0.05880742344254019,
+        0.027914667458298018
+      ]
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9602090909090909,
+      "cost": 52.908,
+      "pnl": -0.9080000000000004,
+      "roi": -0.017161865880396168,
+      "roi_ci95": [
+        -0.07279633774281148,
+        0.021522039235844292
+      ]
+    }
+  ],
+  "price_history_proxy_slippage_sensitivity": [
+    {
+      "slippage_add": 0.0,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 104.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.934259090909091,
+      "cost": 102.99415,
+      "pnl": 1.0058500000000004,
+      "roi": 0.009766088656491659,
+      "roi_ci95": [
+        -0.022183797667012013,
+        0.03908897340145873
+      ]
+    },
+    {
+      "slippage_add": 0.0,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 105.0,
+      "win_rate": 0.9545454545454546,
+      "avg_ask": 0.9558590909090909,
+      "cost": 105.34528,
+      "pnl": -0.34528000000000075,
+      "roi": -0.0032776029452862127,
+      "roi_ci95": [
+        -0.03507312459435599,
+        0.02722715940269358
+      ]
+    },
+    {
+      "slippage_add": 0.0,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9496,
+      "cost": 52.34265,
+      "pnl": -0.3426499999999999,
+      "roi": -0.006546286823460408,
+      "roi_ci95": [
+        -0.05880742344254019,
+        0.027914667458298018
+      ]
+    },
+    {
+      "slippage_add": 0.0,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9602090909090909,
+      "cost": 52.908,
+      "pnl": -0.9080000000000004,
+      "roi": -0.017161865880396168,
+      "roi_ci95": [
+        -0.07279633774281148,
+        0.021522039235844292
+      ]
+    },
+    {
+      "slippage_add": 0.01,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 104.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9426772727272728,
+      "cost": 103.88057,
+      "pnl": 0.11942999999999976,
+      "roi": 0.0011496856438119251,
+      "roi_ci95": [
+        -0.030675846390337623,
+        0.030511987798738052
+      ]
+    },
+    {
+      "slippage_add": 0.01,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 105.0,
+      "win_rate": 0.9545454545454546,
+      "avg_ask": 0.9636545454545454,
+      "cost": 106.16428,
+      "pnl": -1.1642800000000006,
+      "roi": -0.010966777149527134,
+      "roi_ci95": [
+        -0.04295061840038767,
+        0.019660639358865507
+      ]
+    },
+    {
+      "slippage_add": 0.01,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9584,
+      "cost": 52.80496,
+      "pnl": -0.80496,
+      "roi": -0.015244022531216764,
+      "roi_ci95": [
+        -0.06781209396860866,
+        0.01974387297091364
+      ]
+    },
+    {
+      "slippage_add": 0.01,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9684909090909092,
+      "cost": 53.34265,
+      "pnl": -1.3426500000000003,
+      "roi": -0.025170290564866957,
+      "roi_ci95": [
+        -0.08046912508789349,
+        0.014010531960237034
+      ]
+    },
+    {
+      "slippage_add": 0.02,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 104.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9485181818181818,
+      "cost": 104.49687,
+      "pnl": -0.4968700000000001,
+      "roi": -0.0047548792609769085,
+      "roi_ci95": [
+        -0.03718358849874805,
+        0.0249112676017932
+      ]
+    },
+    {
+      "slippage_add": 0.02,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 105.0,
+      "win_rate": 0.9545454545454546,
+      "avg_ask": 0.9687181818181818,
+      "cost": 106.69709,
+      "pnl": -1.6970900000000004,
+      "roi": -0.015905682151218934,
+      "roi_ci95": [
+        -0.04812264531767644,
+        0.01547893592992246
+      ]
+    },
+    {
+      "slippage_add": 0.02,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9645909090909092,
+      "cost": 53.13052,
+      "pnl": -1.1305200000000002,
+      "roi": -0.021278165544022537,
+      "roi_ci95": [
+        -0.07436715753036803,
+        0.014741968368057466
+      ]
+    },
+    {
+      "slippage_add": 0.02,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9740454545454545,
+      "cost": 53.63446,
+      "pnl": -1.6344600000000002,
+      "roi": -0.030474064621886756,
+      "roi_ci95": [
+        -0.08649430771765497,
+        0.009751917290267855
+      ]
+    },
+    {
+      "slippage_add": 0.03,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 104.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.953,
+      "cost": 104.97058,
+      "pnl": -0.9705800000000001,
+      "roi": -0.009246209747531167,
+      "roi_ci95": [
+        -0.04188426644951907,
+        0.02089390637177806
+      ]
+    },
+    {
+      "slippage_add": 0.03,
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 110,
+      "active_dates": 6,
+      "cities": 36,
+      "wins": 105.0,
+      "win_rate": 0.9545454545454546,
+      "avg_ask": 0.9726,
+      "cost": 107.10589,
+      "pnl": -2.1058900000000005,
+      "roi": -0.019661757163868396,
+      "roi_ci95": [
+        -0.05215533497103879,
+        0.012346942839958637
+      ]
+    },
+    {
+      "slippage_add": 0.03,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9692272727272727,
+      "cost": 53.37456,
+      "pnl": -1.3745600000000002,
+      "roi": -0.025753092859219825,
+      "roi_ci95": [
+        -0.0790832725407912,
+        0.011170808388592138
+      ]
+    },
+    {
+      "slippage_add": 0.03,
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 55,
+      "active_dates": 6,
+      "cities": 21,
+      "wins": 52.0,
+      "win_rate": 0.9454545454545454,
+      "avg_ask": 0.9785636363636363,
+      "cost": 53.87178,
+      "pnl": -1.8717800000000002,
+      "roi": -0.03474509288536596,
+      "roi_ci95": [
+        -0.09188649229806232,
+        0.00649747658233717
+      ]
+    }
+  ],
+  "price_history_proxy_direct_overlap": [
+    {
+      "expression": "current_yes",
+      "overlap_rows": 19,
+      "mean_direct_ask_minus_history": 0.01842105263157892,
+      "median_direct_ask_minus_history": 0.00649999999999995,
+      "p90_direct_ask_minus_history": 0.02299999999999991
+    },
+    {
+      "expression": "d1_no",
+      "overlap_rows": 18,
+      "mean_direct_ask_minus_history": 0.006583333333333306,
+      "median_direct_ask_minus_history": 0.005499999999999949,
+      "p90_direct_ask_minus_history": 0.020000000000000018
+    }
+  ],
+  "same_snapshot_ask_premium": [
+    {
+      "expression": "current_yes",
+      "overlap_rows": 16,
+      "mean_ask_minus_indicative": 0.02415624999999997,
+      "median_ask_minus_indicative": 0.008499999999999952,
+      "p90_ask_minus_indicative": 0.025000000000000022
+    },
+    {
+      "expression": "d1_no",
+      "overlap_rows": 16,
+      "mean_ask_minus_indicative": 0.00931249999999998,
+      "median_ask_minus_indicative": 0.0044999999999999485,
+      "p90_ask_minus_indicative": 0.025000000000000022
+    }
+  ],
+  "anchor_price_band_0_80_0_90_diagnostic": [
+    {
+      "cohort": "base_anchor_price_band_0.80_0.90",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 7,
+      "active_dates": 5,
+      "cities": 6,
+      "wins": 6.0,
+      "win_rate": 0.8571428571428571,
+      "avg_ask": 0.8564999999999999,
+      "cost": 6.03822,
+      "pnl": -0.03821999999999992,
+      "roi": -0.006329679938789895,
+      "roi_ci95": [
+        -0.5221621208356428,
+        0.17591919083320592
+      ]
+    },
+    {
+      "cohort": "base_anchor_price_band_0.80_0.90",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 9,
+      "active_dates": 5,
+      "cities": 8,
+      "wins": 7.0,
+      "win_rate": 0.7777777777777778,
+      "avg_ask": 0.8492222222222222,
+      "cost": 7.7001,
+      "pnl": -0.7001000000000001,
+      "roi": -0.0909208971312061,
+      "roi_ci95": [
+        -0.3396532915642028,
+        0.15332462298641875
+      ]
+    },
+    {
+      "cohort": "strong_anchor_price_band_0.80_0.90",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "current_yes",
+      "rows": 2,
+      "active_dates": 2,
+      "cities": 2,
+      "wins": 1.0,
+      "win_rate": 0.5,
+      "avg_ask": 0.85425,
+      "cost": 1.72081,
+      "pnl": -0.72081,
+      "roi": -0.418878318931201,
+      "roi_ci95": [
+        -1.0,
+        0.11445447453471527
+      ]
+    },
+    {
+      "cohort": "strong_anchor_price_band_0.80_0.90",
+      "price_layer": "clob_price_history_proxy",
+      "expression": "d1_no",
+      "rows": 2,
+      "active_dates": 2,
+      "cities": 2,
+      "wins": 1.0,
+      "win_rate": 0.5,
+      "avg_ask": 0.8175,
+      "cost": 1.64991,
+      "pnl": -0.64991,
+      "roi": -0.3939063342849004,
+      "roi_ci95": [
+        -1.0,
+        0.19465749169713056
       ]
     }
   ],

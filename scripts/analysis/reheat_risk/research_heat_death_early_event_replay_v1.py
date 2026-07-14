@@ -25,10 +25,13 @@ import re
 import sqlite3
 import sys
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Mapping
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -53,6 +56,8 @@ DB_PATH = ROOT / "runtime" / "weather.db"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/heat_death_early_event_replay_v1"
 OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-14-heat-death-early-event-replay-v1.json"
 OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-14-heat-death-early-event-replay-v1.md"
+PRICE_HISTORY_PROXY_CACHE = OUT_DIR / "clob_price_history_proxy.csv"
+CLOB_PRICES_HISTORY_URL = "https://clob.polymarket.com/prices-history"
 
 FEE_RATE = 0.05
 WINDOW_START = 13.0
@@ -471,12 +476,16 @@ def attach_market(
                 "current_yes_quote_delay_min": current_yes["quote_delay_min"],
                 "current_yes_quote_source": current_yes.get("source"),
                 "current_yes_snapshot_raw_ask": snapshot_current_yes["ask"],
+                "current_yes_snapshot_book_status": current.get("yes_book_status"),
+                "current_yes_token_id": str(current.get("yes_token_id") or ""),
                 "current_yes_indicative": finite(current.get("market_yes_price")),
                 "d1_no_ask": d1_no["ask"] if d1_no["valid"] else None,
                 "d1_no_quote_ts_utc": d1_no["quote_ts"],
                 "d1_no_quote_delay_min": d1_no["quote_delay_min"],
                 "d1_no_quote_source": d1_no.get("source"),
                 "d1_no_snapshot_raw_ask": snapshot_d1_no["ask"],
+                "d1_no_snapshot_book_status": None if d1 is None else d1.get("no_book_status"),
+                "d1_no_token_id": "" if d1 is None else str(d1.get("no_token_id") or ""),
                 "d1_no_indicative": None if d1 is None or finite(d1.get("market_yes_price")) is None else 1.0 - finite(d1.get("market_yes_price")),
             }
         )
@@ -571,6 +580,179 @@ def indicative_expression_rows(
     return out
 
 
+def _price_history_request(row: Mapping[str, Any], expression: str) -> dict[str, Any]:
+    token_field = "current_yes_token_id" if expression == "current_yes" else "d1_no_token_id"
+    token_id = str(row.get(token_field) or "")
+    decision = parse_ts(row.get("decision_snapshot_ts_utc"))
+    base = {
+        "city": row.get("city"),
+        "target_date": row.get("target_date"),
+        "expression": expression,
+        "token_id": token_id,
+        "decision_snapshot_ts_utc": row.get("decision_snapshot_ts_utc"),
+        "history_point_ts_utc": None,
+        "history_price": None,
+        "history_delay_min": None,
+        "status": "missing_token_or_decision",
+    }
+    if not token_id or decision is None:
+        return base
+    params = urlencode(
+        {
+            "market": token_id,
+            "startTs": int((decision - timedelta(minutes=2)).timestamp()),
+            "endTs": int((decision + timedelta(minutes=31)).timestamp()),
+            "fidelity": 1,
+        }
+    )
+    try:
+        request = Request(
+            f"{CLOB_PRICES_HISTORY_URL}?{params}",
+            headers={"User-Agent": "pm-agents-weather-research/1.0"},
+        )
+        with urlopen(request, timeout=30) as response:  # noqa: S310
+            payload = json.load(response)
+    except Exception as exc:  # network/API errors are retained in the audit artifact
+        return {**base, "status": f"error:{type(exc).__name__}"}
+    points: list[tuple[datetime, float]] = []
+    for point in payload.get("history") or []:
+        try:
+            point_dt = datetime.fromtimestamp(int(point["t"]), tz=timezone.utc)
+            price = float(point["p"])
+        except (KeyError, TypeError, ValueError, OSError):
+            continue
+        delay = (point_dt - decision).total_seconds() / 60.0
+        if 0 <= delay <= MAX_QUOTE_DELAY_MIN and 0 < price < 1:
+            points.append((point_dt, price))
+    if not points:
+        return {**base, "status": "no_point_within_30m"}
+    point_dt, price = min(points, key=lambda item: item[0])
+    return {
+        **base,
+        "history_point_ts_utc": iso(point_dt),
+        "history_price": price,
+        "history_delay_min": (point_dt - decision).total_seconds() / 60.0,
+        "status": "ok",
+    }
+
+
+def load_or_fetch_price_history_proxy(
+    selected: list[dict[str, Any]],
+    cache_path: Path,
+    *,
+    refresh: bool,
+) -> list[dict[str, Any]]:
+    if cache_path.exists() and not refresh:
+        with cache_path.open(encoding="utf-8") as handle:
+            return list(csv.DictReader(handle))
+    requests = [(row, expression) for row in selected for expression in ("current_yes", "d1_no")]
+    out: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(_price_history_request, row, expression) for row, expression in requests]
+        for future in as_completed(futures):
+            out.append(future.result())
+    out.sort(key=lambda row: (str(row.get("target_date")), str(row.get("city")), str(row.get("expression"))))
+    write_csv(cache_path, out)
+    return out
+
+
+def proxy_expression_rows(
+    selected: list[dict[str, Any]],
+    settlements: Mapping[tuple[str, str, str], float],
+    proxy_rows: list[dict[str, Any]],
+    *,
+    slippage_add: float = 0.0,
+) -> list[dict[str, Any]]:
+    proxy = {
+        (str(row.get("city")), str(row.get("target_date")), str(row.get("expression"))): row
+        for row in proxy_rows
+        if str(row.get("status")) == "ok"
+    }
+    out: list[dict[str, Any]] = []
+    for row in selected:
+        for expression, bracket_field, invert in (
+            ("current_yes", "current_bracket", False),
+            ("d1_no", "d1_bracket", True),
+        ):
+            bracket = str(row.get(bracket_field) or "")
+            proxy_row = proxy.get((str(row["city"]), str(row["target_date"]), expression))
+            raw_price = None if proxy_row is None else finite(proxy_row.get("history_price"))
+            final_yes = settlements.get((row["target_date"], row["city"], bracket))
+            if not bracket or raw_price is None or final_yes is None or not (0 < raw_price < 1):
+                continue
+            price = min(0.999, raw_price + slippage_add)
+            win = 1.0 - final_yes if invert else final_yes
+            effective_cost = price + fee(price)
+            out.append(
+                {
+                    **row,
+                    "expression": expression,
+                    "entry_ask": price,
+                    "raw_history_price": raw_price,
+                    "history_point_ts_utc": proxy_row.get("history_point_ts_utc"),
+                    "history_delay_min": finite(proxy_row.get("history_delay_min")),
+                    "assumed_slippage_add": slippage_add,
+                    "fee_per_share": fee(price),
+                    "effective_cost_per_share": effective_cost,
+                    "win": win,
+                    "pnl_per_share": win - effective_cost,
+                    "price_source": "clob_prices_history_proxy_not_executable",
+                }
+            )
+    return out
+
+
+def proxy_direct_overlap(selected: list[dict[str, Any]], proxy_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    proxy = {
+        (str(row.get("city")), str(row.get("target_date")), str(row.get("expression"))): finite(row.get("history_price"))
+        for row in proxy_rows
+        if str(row.get("status")) == "ok"
+    }
+    out: list[dict[str, Any]] = []
+    for expression, direct_field in (("current_yes", "current_yes_ask"), ("d1_no", "d1_no_ask")):
+        deltas: list[float] = []
+        for row in selected:
+            direct = finite(row.get(direct_field))
+            history = proxy.get((str(row["city"]), str(row["target_date"]), expression))
+            if direct is not None and history is not None:
+                deltas.append(direct - history)
+        ordered = sorted(deltas)
+        out.append(
+            {
+                "expression": expression,
+                "overlap_rows": len(ordered),
+                "mean_direct_ask_minus_history": None if not ordered else sum(ordered) / len(ordered),
+                "median_direct_ask_minus_history": None if not ordered else ordered[len(ordered) // 2],
+                "p90_direct_ask_minus_history": None if not ordered else ordered[min(len(ordered) - 1, math.ceil(0.9 * len(ordered)) - 1)],
+            }
+        )
+    return out
+
+
+def same_snapshot_ask_premium(selected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for expression, ask_field, price_field in (
+        ("current_yes", "current_yes_snapshot_raw_ask", "current_yes_indicative"),
+        ("d1_no", "d1_no_snapshot_raw_ask", "d1_no_indicative"),
+    ):
+        deltas = sorted(
+            ask - price
+            for row in selected
+            if (ask := finite(row.get(ask_field))) is not None
+            and (price := finite(row.get(price_field))) is not None
+        )
+        out.append(
+            {
+                "expression": expression,
+                "overlap_rows": len(deltas),
+                "mean_ask_minus_indicative": None if not deltas else sum(deltas) / len(deltas),
+                "median_ask_minus_indicative": None if not deltas else deltas[len(deltas) // 2],
+                "p90_ask_minus_indicative": None if not deltas else deltas[min(len(deltas) - 1, math.ceil(0.9 * len(deltas)) - 1)],
+            }
+        )
+    return out
+
+
 def roi(rows: list[dict[str, Any]]) -> float | None:
     cost = sum(float(row["effective_cost_per_share"]) for row in rows)
     return None if cost <= 0 else sum(float(row["pnl_per_share"]) for row in rows) / cost
@@ -648,6 +830,70 @@ def quote_coverage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def evidence_coverage_audit(
+    selected: list[dict[str, Any]],
+    settlements: Mapping[tuple[str, str, str], float],
+    *,
+    cohort: str,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for expression, bracket_field, direct_field, indicative_field, raw_field, status_field in (
+        (
+            "current_yes", "current_bracket", "current_yes_ask", "current_yes_indicative",
+            "current_yes_snapshot_raw_ask", "current_yes_snapshot_book_status",
+        ),
+        (
+            "d1_no", "d1_bracket", "d1_no_ask", "d1_no_indicative",
+            "d1_no_snapshot_raw_ask", "d1_no_snapshot_book_status",
+        ),
+    ):
+        status_counts: dict[str, int] = defaultdict(int)
+        source_counts: dict[str, int] = defaultdict(int)
+        direct_dates: set[str] = set()
+        settled_dates: set[str] = set()
+        counts: dict[str, int] = defaultdict(int)
+        for row in selected:
+            counts["signal_city_days"] += 1
+            bracket = str(row.get(bracket_field) or "")
+            indicative = finite(row.get(indicative_field))
+            raw_ask = finite(row.get(raw_field))
+            direct = finite(row.get(direct_field))
+            settled = bool(bracket) and (row["target_date"], row["city"], bracket) in settlements
+            status = str(row.get(status_field) or "missing_status")
+            status_counts[status] += 1
+            if bracket:
+                counts["leg_present"] += 1
+            if indicative is not None:
+                counts["indicative_price_present"] += 1
+            if raw_ask is not None:
+                counts["first_snapshot_direct_ask"] += 1
+            if direct is not None:
+                counts["direct_ask_within_30m"] += 1
+                direct_dates.add(str(row["target_date"]))
+                source_counts[str(row.get(f"{expression}_quote_source") or "unknown")] += 1
+            elif indicative is not None:
+                counts["indicative_but_no_direct_ask"] += 1
+            if settled:
+                counts["settlement_present"] += 1
+                settled_dates.add(str(row["target_date"]))
+            if direct is not None and settled:
+                counts["direct_and_settled"] += 1
+            if indicative is not None and settled:
+                counts["indicative_and_settled"] += 1
+        out.append(
+            {
+                "cohort": cohort,
+                "expression": expression,
+                **counts,
+                "direct_active_dates": len(direct_dates),
+                "settled_active_dates": len(settled_dates),
+                "first_snapshot_book_status_counts": dict(sorted(status_counts.items())),
+                "direct_quote_source_counts": dict(sorted(source_counts.items())),
+            }
+        )
+    return out
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -674,6 +920,8 @@ def main() -> int:
     ap.add_argument("--db", default=str(DB_PATH))
     ap.add_argument("--sanity-date", default="2026-07-14")
     ap.add_argument("--sanity-city", default="Busan")
+    ap.add_argument("--price-history-proxy-cache", default=str(PRICE_HISTORY_PROXY_CACHE))
+    ap.add_argument("--refresh-price-history-proxy", action="store_true")
     args = ap.parse_args()
 
     events = load_source_events(Path(args.source_events_dir), args.start, args.end)
@@ -688,6 +936,18 @@ def main() -> int:
     strong_expr = expression_rows(strong_first, settlements)
     base_indicative_expr = indicative_expression_rows(base_first, settlements)
     strong_indicative_expr = indicative_expression_rows(strong_first, settlements)
+    price_history_proxy = load_or_fetch_price_history_proxy(
+        base_first,
+        Path(args.price_history_proxy_cache),
+        refresh=args.refresh_price_history_proxy,
+    )
+    proxy_layers: dict[float, tuple[list[dict[str, Any]], list[dict[str, Any]]]] = {}
+    for slippage_add in (0.0, 0.01, 0.02, 0.03):
+        proxy_layers[slippage_add] = (
+            proxy_expression_rows(base_first, settlements, price_history_proxy, slippage_add=slippage_add),
+            proxy_expression_rows(strong_first, settlements, price_history_proxy, slippage_add=slippage_add),
+        )
+    base_proxy_expr, strong_proxy_expr = proxy_layers[0.0]
     executable_summaries = [
         *expression_summaries(base_expr, cohort="base", price_layer="direct_executable_ask"),
         *expression_summaries(strong_expr, cohort="strong_partial", price_layer="direct_executable_ask"),
@@ -696,7 +956,38 @@ def main() -> int:
         *expression_summaries(base_indicative_expr, cohort="base", price_layer="indicative_not_executable"),
         *expression_summaries(strong_indicative_expr, cohort="strong_partial", price_layer="indicative_not_executable"),
     ]
+    proxy_summaries = [
+        *expression_summaries(base_proxy_expr, cohort="base", price_layer="clob_price_history_proxy"),
+        *expression_summaries(strong_proxy_expr, cohort="strong_partial", price_layer="clob_price_history_proxy"),
+    ]
+    proxy_slippage_sensitivity: list[dict[str, Any]] = []
+    for slippage_add, (base_rows, strong_rows) in proxy_layers.items():
+        for item in (
+            *expression_summaries(base_rows, cohort="base", price_layer="clob_price_history_proxy"),
+            *expression_summaries(strong_rows, cohort="strong_partial", price_layer="clob_price_history_proxy"),
+        ):
+            proxy_slippage_sensitivity.append({"slippage_add": slippage_add, **item})
+    base_anchor_band_proxy_rows = [row for row in base_proxy_expr if 0.80 <= float(row["raw_history_price"]) <= 0.90]
+    strong_anchor_band_proxy_rows = [row for row in strong_proxy_expr if 0.80 <= float(row["raw_history_price"]) <= 0.90]
+    anchor_band_summaries = [
+        *expression_summaries(
+            base_anchor_band_proxy_rows,
+            cohort="base_anchor_price_band_0.80_0.90",
+            price_layer="clob_price_history_proxy",
+        ),
+        *expression_summaries(
+            strong_anchor_band_proxy_rows,
+            cohort="strong_anchor_price_band_0.80_0.90",
+            price_layer="clob_price_history_proxy",
+        ),
+    ]
+    proxy_overlap = proxy_direct_overlap(base_first, price_history_proxy)
+    snapshot_premium = same_snapshot_ask_premium(base_first)
     support_slices = support_slice_summaries(base_indicative_expr, price_layer="indicative_not_executable")
+    evidence_audit = [
+        *evidence_coverage_audit(base_first, settlements, cohort="base"),
+        *evidence_coverage_audit(strong_first, settlements, cohort="strong_partial"),
+    ]
     strong_executable_summaries = [row for row in executable_summaries if row["cohort"] == "strong_partial"]
     sample_gate_pass = all(
         item["rows"] >= 30 and item["active_dates"] >= 10
@@ -753,7 +1044,13 @@ def main() -> int:
     write_csv(OUT_DIR / "strong_expression_rows.csv", strong_expr)
     write_csv(OUT_DIR / "base_indicative_expression_rows.csv", base_indicative_expr)
     write_csv(OUT_DIR / "strong_indicative_expression_rows.csv", strong_indicative_expr)
+    write_csv(OUT_DIR / "base_price_history_proxy_expression_rows.csv", base_proxy_expr)
+    write_csv(OUT_DIR / "strong_price_history_proxy_expression_rows.csv", strong_proxy_expr)
+    write_csv(OUT_DIR / "price_history_proxy_slippage_sensitivity.csv", proxy_slippage_sensitivity)
+    write_csv(OUT_DIR / "price_history_proxy_direct_overlap.csv", proxy_overlap)
+    write_csv(OUT_DIR / "same_snapshot_ask_premium.csv", snapshot_premium)
     write_csv(OUT_DIR / "support_slice_summary.csv", support_slices)
+    write_csv(OUT_DIR / "evidence_coverage_audit.csv", evidence_audit)
 
     payload = {
         "generated_at_utc": iso(datetime.now(timezone.utc)),
@@ -789,6 +1086,19 @@ def main() -> int:
             "strong_settled_executable_expression_rows": len(strong_expr),
             "base_settled_indicative_expression_rows": len(base_indicative_expr),
             "strong_settled_indicative_expression_rows": len(strong_indicative_expr),
+            "base_settled_price_history_proxy_expression_rows": len(base_proxy_expr),
+            "strong_settled_price_history_proxy_expression_rows": len(strong_proxy_expr),
+        },
+        "evidence_coverage_audit": evidence_audit,
+        "historical_collection_diagnosis": {
+            "root_cause": "bounded strategy-scoped orderbook enrichment, not missing weather signals",
+            "snapshot_interval_seconds_default": 600,
+            "orderbook_scope_default": "strategy_live",
+            "orderbook_budget_seconds_default": 60,
+            "orderbook_workers_default": 1,
+            "effect": "most paper records retain indicative market prices but lack a contemporaneous executable ask",
+            "recoverable_layer": "CLOB /prices-history minute price is still available for most selected tokens",
+            "irrecoverable_layer": "historical best ask, size, depth, spread and guaranteed taker fill where orderbooks were not archived",
         },
         "feature_coverage": {
             "available_pit": ["METAR/SPECI precipitation", "cloud layers", "wind direction/speed", "temperature path", "forecast peak clock", "direct quote"],
@@ -797,6 +1107,11 @@ def main() -> int:
         },
         "executable_summary": executable_summaries,
         "indicative_summary": indicative_summaries,
+        "price_history_proxy_summary": proxy_summaries,
+        "price_history_proxy_slippage_sensitivity": proxy_slippage_sensitivity,
+        "price_history_proxy_direct_overlap": proxy_overlap,
+        "same_snapshot_ask_premium": snapshot_premium,
+        "anchor_price_band_0_80_0_90_diagnostic": anchor_band_summaries,
         "support_slice_summary": support_slices,
         "overfit_audit": {
             "previous_five_rows_was_signal_count": False,
@@ -833,6 +1148,32 @@ def main() -> int:
 
     executable_lines = table_lines(executable_summaries)
     indicative_lines = table_lines(indicative_summaries)
+    proxy_lines = table_lines(proxy_summaries)
+    anchor_band_lines = table_lines(anchor_band_summaries)
+    slippage_lines: list[str] = []
+    for item in proxy_slippage_sensitivity:
+        avg_proxy = "NA" if item["avg_ask"] is None else f"{item['avg_ask']:.3f}"
+        slippage_lines.append(
+            f"| {item['slippage_add']:+.2f} | {item['cohort']} | {item['expression']} | {item['rows']} | {avg_proxy} | {pct(item['roi'])} |"
+        )
+    overlap_lines = [
+        (
+            f"| {item['expression']} | {item['overlap_rows']} | "
+            f"{item['mean_direct_ask_minus_history']:+.3f} | {item['median_direct_ask_minus_history']:+.3f} | "
+            f"{item['p90_direct_ask_minus_history']:+.3f} |"
+        )
+        for item in proxy_overlap
+        if item["overlap_rows"]
+    ]
+    snapshot_premium_lines = [
+        (
+            f"| {item['expression']} | {item['overlap_rows']} | "
+            f"{item['mean_ask_minus_indicative']:+.3f} | {item['median_ask_minus_indicative']:+.3f} | "
+            f"{item['p90_ask_minus_indicative']:+.3f} |"
+        )
+        for item in snapshot_premium
+        if item["overlap_rows"]
+    ]
     support_lines: list[str] = []
     for item in support_slices:
         ci = item["roi_ci95"]
@@ -841,6 +1182,16 @@ def main() -> int:
         support_lines.append(
             f"| {item['support_bucket']} | {item['expression']} | {item['rows']} | {item['active_dates']} | {pct(item['win_rate'])} | {avg_ask} | {pct(item['roi'])} | {ci_text} |"
         )
+    coverage_lines = [
+        (
+            f"| {item['cohort']} | {item['expression']} | {item['signal_city_days']} | "
+            f"{item.get('indicative_price_present', 0)} | {item.get('first_snapshot_direct_ask', 0)} | "
+            f"{item.get('direct_ask_within_30m', 0)} | {item.get('settlement_present', 0)} | "
+            f"{item.get('direct_and_settled', 0)} | {item.get('indicative_but_no_direct_ask', 0)} | "
+            f"`{json.dumps(item['first_snapshot_book_status_counts'], ensure_ascii=False, sort_keys=True)}` |"
+        )
+        for item in evidence_audit
+    ]
     sanity_line = (
         "未找到指定 anchor case。"
         if sanity_case is None
@@ -858,7 +1209,7 @@ def main() -> int:
             f"- selector 对齐：replay 在 {busan_anchor_alignment['first_strong_ts_utc']} 首次选中 strong，价格正是 `{sanity_case['current_bracket']} YES={sanity_case['current_yes_ask']} / {sanity_case['d1_bracket']} NO={sanity_case['d1_no_ask']}`。",
             "- 当时 runner 尚未开发、人工成交未进 canonical，都不是回测缺陷；回测本来就是事后重建。",
             "- 真正缺口是历史 first-signal direct ask 覆盖稀疏，能进入 executable 统计的行偏向市场已经 repriced 的晚期高价盘口。",
-            "- 因此当前版本验证了物理 selector 能抓住 Busan，但还没有充分验证 `0.84/0.89` 这类早期错价交易头的历史 ROI。",
+            "- 分钟 price proxy 已把同分母历史方向补回，但结果没有显示稳定正 edge；由于缺当时 ask/depth，`0.84/0.89` 这类早期错价交易头的 executable ROI 仍未充分验证。",
         ]
     OUT_MD.write_text(
         "\n".join(
@@ -872,6 +1223,8 @@ def main() -> int:
                 "",
                 "**上一版“最终只有 5 笔”的说法作废。5 是盘口档案缺口再叠加任意价格带后的可计算行数，不是策略信号数。**",
                 "这次审计把 signal funnel 与 quote/settlement evidence funnel 分开，价格只作为连续 EV 输入，不再作为 eligibility hard gate。",
+                "CLOB 分钟 price history 已补回 110/111 个已结算 leg：base current YES fee ROI +1.0%，加 2c ask premium 后 -0.5%；base d1 NO 原价即 -0.3%。support>=2 两边分别 -0.7% / -1.7%，没有显示更强 edge。",
+                "Busan-like 0.80-0.90 只是事后诊断切片：base current YES 7 行 ROI -0.6%，d1 NO 9 行 -9.1%；support>=2 各只有 2 行，不能据此定策略阈值。",
                 f"历史事件档案只覆盖 {args.start}..{args.end} 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。",
                 "",
                 "## Signal funnel（这里才是策略漏斗）",
@@ -891,6 +1244,48 @@ def main() -> int:
                 f"- support>=2 direct quote coverage: current YES {sum(finite(row.get('current_yes_ask')) is not None for row in strong_first)}/{len(strong_first)}; d1 NO {sum(finite(row.get('d1_no_ask')) is not None for row in strong_first)}/{len(strong_first)}",
                 f"- settled executable rows: base {len(base_expr)}; support>=2 {len(strong_expr)}",
                 f"- settled indicative rows (not executable): base {len(base_indicative_expr)}; support>=2 {len(strong_indicative_expr)}",
+                "",
+                "## 为什么 executable coverage 会塌缩",
+                "",
+                "| Cohort | Expression | Signals | Indicative price | First-snapshot ask | Ask within 30m | Settled | Ask+settled | Indicative but no ask | First-snapshot book status |",
+                "|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
+                *coverage_lines,
+                "",
+                "历史 paper snapshot 不是全量盘口录制：默认每 10 分钟生成一次 snapshot，但 orderbook enrichment 使用 `strategy_live` 紧凑 scope、60 秒总预算和单 worker。天气状态与 indicative market price 大多保留，真实 YES/NO ask 则大量标为 `orderbook_budget_exhausted` 或 `orderbook_scope_skipped`。因此缺的是可执行价格证据，不是物理 signal 或 settlement 全部缺失。",
+                "",
+                "这批数据仍有意义：indicative+settled 层可检验 selector 的方向、胜率和粗略定价残差；只有 direct ask+settled 层才能声称 executable ROI。前者不能冒充后者。",
+                "",
+                "## CLOB minute price PIT proxy（同分母补回）",
+                "",
+                "`/prices-history` 仍可取回 closed market 的分钟价格，因此可以在首次识别后取第一个 PIT price。它恢复了价格路径分母，但不含当时 ask、spread、size/depth；下面是 price proxy ROI，不是 guaranteed fill ROI。",
+                "",
+                "| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg proxy | Fee ROI | Date-bootstrap 95% CI |",
+                "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+                *proxy_lines,
+                "",
+                "### 固定加价敏感性（代理 ask = history price + 1/2/3c）",
+                "",
+                "| Add-on | Cohort | Expression | Rows | Avg assumed ask | Fee ROI |",
+                "|---:|---|---|---:|---:|---:|",
+                *slippage_lines,
+                "",
+                "### 与已留存 direct ask 的重合校验",
+                "",
+                "| Expression | Overlap | Mean ask-history | Median | P90 |",
+                "|---|---:|---:|---:|---:|",
+                *overlap_lines,
+                "",
+                "上表混合了 signal 后到 direct book 出现前的价格移动，不能纯解释为 spread。第一张 snapshot 同时有 ask 和 indicative price 的 16 个 leg 校验如下：",
+                "",
+                "| Expression | Same-snapshot overlap | Mean ask-indicative | Median | P90 |",
+                "|---|---:|---:|---:|---:|",
+                *snapshot_premium_lines,
+                "",
+                "### Busan-like 0.80-0.90 价格形态（仅诊断，不作为门槛）",
+                "",
+                "| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg proxy | Fee ROI | Date-bootstrap 95% CI |",
+                "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+                *anchor_band_lines,
                 "",
                 "## Direct executable ask result",
                 "",

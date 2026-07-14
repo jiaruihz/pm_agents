@@ -7,6 +7,8 @@ Verdict: `inconclusive_zero_notional_only`
 
 **上一版“最终只有 5 笔”的说法作废。5 是盘口档案缺口再叠加任意价格带后的可计算行数，不是策略信号数。**
 这次审计把 signal funnel 与 quote/settlement evidence funnel 分开，价格只作为连续 EV 输入，不再作为 eligibility hard gate。
+CLOB 分钟 price history 已补回 110/111 个已结算 leg：base current YES fee ROI +1.0%，加 2c ask premium 后 -0.5%；base d1 NO 原价即 -0.3%。support>=2 两边分别 -0.7% / -1.7%，没有显示更强 edge。
+Busan-like 0.80-0.90 只是事后诊断切片：base current YES 7 行 ROI -0.6%，d1 NO 9 行 -9.1%；support>=2 各只有 2 行，不能据此定策略阈值。
 历史事件档案只覆盖 2026-07-07..2026-07-13 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。
 
 ## Signal funnel（这里才是策略漏斗）
@@ -26,6 +28,74 @@ Verdict: `inconclusive_zero_notional_only`
 - support>=2 direct quote coverage: current YES 8/67; d1 NO 7/67
 - settled executable rows: base 37; support>=2 15
 - settled indicative rows (not executable): base 222; support>=2 110
+
+## 为什么 executable coverage 会塌缩
+
+| Cohort | Expression | Signals | Indicative price | First-snapshot ask | Ask within 30m | Settled | Ask+settled | Indicative but no ask | First-snapshot book status |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| base | current_yes | 130 | 130 | 16 | 19 | 111 | 19 | 111 | `{"ok": 16, "orderbook_budget_exhausted": 113, "orderbook_scope_skipped": 1}` |
+| base | d1_no | 130 | 130 | 16 | 18 | 111 | 18 | 112 | `{"ok": 16, "orderbook_budget_exhausted": 113, "orderbook_scope_skipped": 1}` |
+| strong_partial | current_yes | 67 | 67 | 7 | 8 | 55 | 8 | 59 | `{"ok": 8, "orderbook_budget_exhausted": 59}` |
+| strong_partial | d1_no | 67 | 67 | 7 | 7 | 55 | 7 | 60 | `{"ok": 8, "orderbook_budget_exhausted": 59}` |
+
+历史 paper snapshot 不是全量盘口录制：默认每 10 分钟生成一次 snapshot，但 orderbook enrichment 使用 `strategy_live` 紧凑 scope、60 秒总预算和单 worker。天气状态与 indicative market price 大多保留，真实 YES/NO ask 则大量标为 `orderbook_budget_exhausted` 或 `orderbook_scope_skipped`。因此缺的是可执行价格证据，不是物理 signal 或 settlement 全部缺失。
+
+这批数据仍有意义：indicative+settled 层可检验 selector 的方向、胜率和粗略定价残差；只有 direct ask+settled 层才能声称 executable ROI。前者不能冒充后者。
+
+## CLOB minute price PIT proxy（同分母补回）
+
+`/prices-history` 仍可取回 closed market 的分钟价格，因此可以在首次识别后取第一个 PIT price。它恢复了价格路径分母，但不含当时 ask、spread、size/depth；下面是 price proxy ROI，不是 guaranteed fill ROI。
+
+| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg proxy | Fee ROI | Date-bootstrap 95% CI |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| base | current_yes | 110 | 6 | 36 | +94.5% | 0.934 | +1.0% | [-2.2%, +3.9%] |
+| base | d1_no | 110 | 6 | 36 | +95.5% | 0.956 | -0.3% | [-3.5%, +2.7%] |
+| strong_partial | current_yes | 55 | 6 | 21 | +94.5% | 0.950 | -0.7% | [-5.9%, +2.8%] |
+| strong_partial | d1_no | 55 | 6 | 21 | +94.5% | 0.960 | -1.7% | [-7.3%, +2.2%] |
+
+### 固定加价敏感性（代理 ask = history price + 1/2/3c）
+
+| Add-on | Cohort | Expression | Rows | Avg assumed ask | Fee ROI |
+|---:|---|---|---:|---:|---:|
+| +0.00 | base | current_yes | 110 | 0.934 | +1.0% |
+| +0.00 | base | d1_no | 110 | 0.956 | -0.3% |
+| +0.00 | strong_partial | current_yes | 55 | 0.950 | -0.7% |
+| +0.00 | strong_partial | d1_no | 55 | 0.960 | -1.7% |
+| +0.01 | base | current_yes | 110 | 0.943 | +0.1% |
+| +0.01 | base | d1_no | 110 | 0.964 | -1.1% |
+| +0.01 | strong_partial | current_yes | 55 | 0.958 | -1.5% |
+| +0.01 | strong_partial | d1_no | 55 | 0.968 | -2.5% |
+| +0.02 | base | current_yes | 110 | 0.949 | -0.5% |
+| +0.02 | base | d1_no | 110 | 0.969 | -1.6% |
+| +0.02 | strong_partial | current_yes | 55 | 0.965 | -2.1% |
+| +0.02 | strong_partial | d1_no | 55 | 0.974 | -3.0% |
+| +0.03 | base | current_yes | 110 | 0.953 | -0.9% |
+| +0.03 | base | d1_no | 110 | 0.973 | -2.0% |
+| +0.03 | strong_partial | current_yes | 55 | 0.969 | -2.6% |
+| +0.03 | strong_partial | d1_no | 55 | 0.979 | -3.5% |
+
+### 与已留存 direct ask 的重合校验
+
+| Expression | Overlap | Mean ask-history | Median | P90 |
+|---|---:|---:|---:|---:|
+| current_yes | 19 | +0.018 | +0.006 | +0.023 |
+| d1_no | 18 | +0.007 | +0.005 | +0.020 |
+
+上表混合了 signal 后到 direct book 出现前的价格移动，不能纯解释为 spread。第一张 snapshot 同时有 ask 和 indicative price 的 16 个 leg 校验如下：
+
+| Expression | Same-snapshot overlap | Mean ask-indicative | Median | P90 |
+|---|---:|---:|---:|---:|
+| current_yes | 16 | +0.024 | +0.008 | +0.025 |
+| d1_no | 16 | +0.009 | +0.004 | +0.025 |
+
+### Busan-like 0.80-0.90 价格形态（仅诊断，不作为门槛）
+
+| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg proxy | Fee ROI | Date-bootstrap 95% CI |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| base_anchor_price_band_0.80_0.90 | current_yes | 7 | 5 | 6 | +85.7% | 0.856 | -0.6% | [-52.2%, +17.6%] |
+| base_anchor_price_band_0.80_0.90 | d1_no | 9 | 5 | 8 | +77.8% | 0.849 | -9.1% | [-34.0%, +15.3%] |
+| strong_anchor_price_band_0.80_0.90 | current_yes | 2 | 2 | 2 | +50.0% | 0.854 | -41.9% | [-100.0%, +11.4%] |
+| strong_anchor_price_band_0.80_0.90 | d1_no | 2 | 2 | 2 | +50.0% | 0.818 | -39.4% | [-100.0%, +19.5%] |
 
 ## Direct executable ask result
 
@@ -67,7 +137,7 @@ Busan 2026-07-14 在 2026-07-14T04:08:34Z 首次 strong-partial：30 YES ask=0.8
 - selector 对齐：replay 在 2026-07-14T04:08:34Z 首次选中 strong，价格正是 `30 YES=0.84 / 31 NO=0.89`。
 - 当时 runner 尚未开发、人工成交未进 canonical，都不是回测缺陷；回测本来就是事后重建。
 - 真正缺口是历史 first-signal direct ask 覆盖稀疏，能进入 executable 统计的行偏向市场已经 repriced 的晚期高价盘口。
-- 因此当前版本验证了物理 selector 能抓住 Busan，但还没有充分验证 `0.84/0.89` 这类早期错价交易头的历史 ROI。
+- 分钟 price proxy 已把同分母历史方向补回，但结果没有显示稳定正 edge；由于缺当时 ask/depth，`0.84/0.89` 这类早期错价交易头的 executable ROI 仍未充分验证。
 
 ## Feature coverage boundary
 
