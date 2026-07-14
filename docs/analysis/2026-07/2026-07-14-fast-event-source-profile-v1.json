@@ -1,0 +1,123 @@
+{
+  "schema_version": "fast_event_source_profile_audit_v1",
+  "generated_at_utc": "2026-07-14T01:44:43.422594+00:00",
+  "profile": {
+    "profiles": 22,
+    "cities": 21,
+    "live_eligible": 0,
+    "basis_counts": {
+      "cross_station_proxy": 1,
+      "cross_station_reference": 1,
+      "official_settlement_feed": 1,
+      "same_airport_alternate_sensor": 3,
+      "same_city_secondary_sensor": 1,
+      "same_station_alternate_feed": 4,
+      "same_station_mirror": 11
+    },
+    "calibration_counts": {
+      "alignment_and_repricing_pending": 7,
+      "basis_confirmed_repricing_pending": 1,
+      "blocked_cross_station_basis": 2,
+      "same_station_forward_pending": 11,
+      "secondary_sensor_alignment_pending": 1
+    }
+  },
+  "coverage": {
+    "research_cities": 47,
+    "profile_cities_in_research": 21,
+    "no_fast_profile_cities": [
+      "Amsterdam",
+      "Beijing",
+      "BuenosAires",
+      "CapeTown",
+      "Chengdu",
+      "Chongqing",
+      "Guangzhou",
+      "Jeddah",
+      "Karachi",
+      "KualaLumpur",
+      "London",
+      "Lucknow",
+      "Madrid",
+      "Manila",
+      "MexicoCity",
+      "Milan",
+      "Moscow",
+      "Munich",
+      "PanamaCity",
+      "Paris",
+      "SaoPaulo",
+      "Shanghai",
+      "Taipei",
+      "Warsaw",
+      "Wellington",
+      "Wuhan"
+    ],
+    "policy": "no profile blocks only source_event head; it does not ban the city from unrelated strategies"
+  },
+  "replay": {
+    "all": {
+      "rows": 42,
+      "dates": 14,
+      "cities": 17,
+      "win_rate": 0.4523809523809524,
+      "roi": 0.11557471473580254,
+      "roi_ci_low": -0.11489716931647305,
+      "roi_ci_high": 0.37395654349201035
+    },
+    "profile_covered": {
+      "rows": 36,
+      "dates": 14,
+      "cities": 12,
+      "win_rate": 0.4166666666666667,
+      "roi": 0.0442591851297492,
+      "roi_ci_low": -0.19455281922917772,
+      "roi_ci_high": 0.33684885968508743
+    },
+    "no_profile": {
+      "rows": 6,
+      "dates": 4,
+      "cities": 5,
+      "win_rate": 0.6666666666666666,
+      "roi": 0.49962696779176174,
+      "roi_ci_low": -0.06929126529852482,
+      "roi_ci_high": 2.0821152556999865
+    }
+  },
+  "telemetry_impact": [
+    {
+      "root": "/Volumes/jrs/weather_data_feed_service_runtime/output/source_event_ladder_repricing_shadow",
+      "events.jsonl": {
+        "rows": 79,
+        "wrong_unit_us_rows": 8,
+        "wrong_unit_us_event_keys": 8
+      },
+      "quote_snapshots.jsonl": {
+        "rows": 5198,
+        "wrong_unit_us_rows": 581,
+        "wrong_unit_us_event_keys": 8
+      }
+    },
+    {
+      "root": "/Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_stale_book",
+      "events.jsonl": {
+        "rows": 135,
+        "wrong_unit_us_rows": 36,
+        "wrong_unit_us_event_keys": 36
+      },
+      "quote_snapshots.jsonl": {
+        "rows": 3524,
+        "wrong_unit_us_rows": 1458,
+        "wrong_unit_us_event_keys": 36
+      }
+    }
+  ],
+  "fixes": [
+    "per-city local target_date instead of Asia/Shanghai global rollover",
+    "profile-driven C/F conversion and rounding/floor semantics",
+    "real market ladder intervals instead of numeric bracket plus/minus one",
+    "one event per city/date/source/market-bracket episode",
+    "persistent city/date market-token index with Gamma fill only when missing"
+  ],
+  "verdict": "calibration_only_zero_notional_no_live"
+}

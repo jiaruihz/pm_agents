@@ -13,11 +13,10 @@ import math
 import os
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +24,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.ops.weather_market_proxy import market_httpx_client, market_proxy_url  # noqa: E402
+from weather_data_feed.city_calendar import city_local_date  # noqa: E402
+from weather_data_feed.fast_event_source_policy import (  # noqa: E402
+    FastEventSourceProfile,
+    fast_event_source_profile_for,
+    load_fast_event_source_profiles,
+    market_value_from_temp_c,
+)
+from weather_data_feed.market_brackets import bracket_contains, parse_label_dict  # noqa: E402
+from weather_data_feed.source_policy import city_slug  # noqa: E402
 
 RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
 HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
@@ -66,27 +74,6 @@ def parse_dt(value: Any) -> datetime | None:
 
 def iso(dt: datetime | None = None) -> str:
     return (dt or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
-
-
-def arith_round(value: float) -> int:
-    return int(math.floor(float(value) + 0.5))
-
-
-def floor_bracket(value: float) -> int:
-    return int(math.floor(float(value)))
-
-
-def bracket_mode_for(city: str, source: str, floor_cities: set[str]) -> str:
-    if city in floor_cities:
-        return "floor"
-    if city == "HongKong" and source == "hko_obs":
-        return "floor"
-    return "arith_round"
-
-
-def temp_bracket_c(value: float, *, city: str, source: str, floor_cities: set[str]) -> int:
-    mode = bracket_mode_for(city, source, floor_cities)
-    return floor_bracket(value) if mode == "floor" else arith_round(value)
 
 
 def market_city(city: str) -> str:
@@ -154,13 +141,17 @@ class MarketToken:
     no_token_id: str
 
 
-def build_market_index(snapshot_path: Path | None, target_date: str) -> dict[tuple[str, str], MarketToken]:
+def build_market_index(
+    snapshot_path: Path | None,
+    target_dates: set[str] | None = None,
+) -> dict[tuple[str, str, str], MarketToken]:
     if snapshot_path is None:
         return {}
     payload = read_json(snapshot_path)
-    out: dict[tuple[str, str], MarketToken] = {}
+    out: dict[tuple[str, str, str], MarketToken] = {}
     for row in payload.get("records") or []:
-        if str(row.get("target_date") or "") != target_date:
+        target_date = str(row.get("target_date") or "")
+        if target_dates and target_date not in target_dates:
             continue
         city = str(row.get("city") or "")
         bracket = str(row.get("bracket") or "")
@@ -177,8 +168,53 @@ def build_market_index(snapshot_path: Path | None, target_date: str) -> dict[tup
             yes_token_id=str(row.get("yes_token_id") or ""),
             no_token_id=str(row.get("no_token_id") or ""),
         )
-        out[(city, bracket)] = token
+        out[(city, target_date, bracket)] = token
     return out
+
+
+def load_market_index_cache(path: Path, target_dates: set[str]) -> dict[tuple[str, str, str], MarketToken]:
+    if not path.exists():
+        return {}
+    try:
+        payload = read_json(path)
+    except Exception:
+        return {}
+    out: dict[tuple[str, str, str], MarketToken] = {}
+    for row in payload.get("markets") or []:
+        if not isinstance(row, dict):
+            continue
+        target_date = str(row.get("target_date") or "")
+        if target_date not in target_dates:
+            continue
+        try:
+            token = MarketToken(**{field: str(row.get(field) or "") for field in MarketToken.__dataclass_fields__})
+        except TypeError:
+            continue
+        if token.city and token.target_date and token.bracket:
+            out[(token.city, token.target_date, token.bracket)] = token
+    return out
+
+
+def save_market_index_cache(path: Path, index: dict[tuple[str, str, str], MarketToken]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": "fast_source_market_index_v1",
+        "generated_at_utc": iso(),
+        "markets": [asdict(token) for _key, token in sorted(index.items())],
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def temperature_event_slug(city: str, target_date: str, extreme_kind: str) -> str:
+    target = datetime.fromisoformat(target_date)
+    adjective = "lowest" if extreme_kind == "min" else "highest"
+    return f"{adjective}-temperature-in-{city_slug(city)}-on-{target.strftime('%B').lower()}-{target.day}-{target.year}"
+
+
+def source_market_episode_key(city: str, target_date: str, source: str, market_bracket: str) -> str:
+    return "|".join([city, target_date, source, market_bracket])
 
 
 def decode_json_array(value: Any) -> list[Any]:
@@ -212,36 +248,47 @@ def parse_city_string_overrides(raw_items: list[str] | None, *, arg_name: str) -
 def bracket_from_question(question: str) -> str:
     import re
 
-    match = re.search(r"be\s+(\d+)\s*°?C(?:\s+or\s+(higher|above|below|lower))?", question, flags=re.IGNORECASE)
+    match = re.search(
+        r"be\s+(?:between\s+)?(-?\d+)(?:\s*(?:-|to)\s*(-?\d+))?\s*°?[CF]"
+        r"(?:\s+or\s+(higher|above|below|lower))?",
+        question,
+        flags=re.IGNORECASE,
+    )
     if not match:
         return ""
     bracket = match.group(1)
-    qualifier = (match.group(2) or "").lower()
+    upper = match.group(2)
+    if upper is not None:
+        return f"{bracket}-{upper}"
+    qualifier = (match.group(3) or "").lower()
     if qualifier in {"higher", "above"}:
         return f"{bracket}+"
     return bracket
 
 
 def augment_market_index_from_gamma(
-    index: dict[tuple[str, str], MarketToken],
+    index: dict[tuple[str, str, str], MarketToken],
     *,
-    target_date: str,
+    target_dates: set[str],
     cities: set[str],
     event_slugs: dict[str, str],
     market_proxy: str,
-) -> dict[tuple[str, str], MarketToken]:
-    event_slug_by_city: dict[str, str] = dict(event_slugs)
-    for (city, _bracket), token in index.items():
+) -> dict[tuple[str, str, str], MarketToken]:
+    event_slug_by_city_date: dict[tuple[str, str], str] = {}
+    if len(target_dates) == 1:
+        explicit_date = next(iter(target_dates))
+        event_slug_by_city_date.update({(city, explicit_date): slug for city, slug in event_slugs.items()})
+    for (city, target_date, _bracket), token in index.items():
         if cities and city not in cities:
             continue
-        if token.target_date == target_date and token.event_slug:
-            event_slug_by_city.setdefault(city, token.event_slug)
-    if not event_slug_by_city:
+        if target_date in target_dates and token.event_slug:
+            event_slug_by_city_date.setdefault((city, target_date), token.event_slug)
+    if not event_slug_by_city_date:
         return index
     proxy_url = market_proxy_url(market_proxy or None)
     out = dict(index)
     with market_httpx_client(proxy_url, timeout=6.0) as client:
-        for city, event_slug in sorted(event_slug_by_city.items()):
+        for (city, target_date), event_slug in sorted(event_slug_by_city_date.items()):
             try:
                 response = client.get(
                     f"{PM_GAMMA_URL.rstrip('/')}/events",
@@ -267,7 +314,7 @@ def augment_market_index_from_gamma(
                 no_token = token_by_outcome.get("no", "")
                 if not yes_token and not no_token:
                     continue
-                out[(city, bracket)] = MarketToken(
+                out[(city, target_date, bracket)] = MarketToken(
                     city=city,
                     target_date=target_date,
                     bracket=bracket,
@@ -281,15 +328,71 @@ def augment_market_index_from_gamma(
     return out
 
 
-def bracket_lookup(index: dict[tuple[str, str], MarketToken], city: str, bracket: int) -> MarketToken | None:
-    exact = index.get((city, str(bracket)))
+def bracket_lookup(
+    index: dict[tuple[str, str, str], MarketToken],
+    city: str,
+    target_date: str,
+    bracket: int,
+) -> MarketToken | None:
+    exact = index.get((city, target_date, str(bracket)))
     if exact:
         return exact
-    # Endpoint markets can be labelled "25 or below" in the question while the
-    # bracket field remains "25"; keep a conservative fallback for "34+".
-    for (row_city, row_bracket), token in index.items():
-        if row_city == city and row_bracket.rstrip("+") == str(bracket):
-            return token
+    matches: list[MarketToken] = []
+    for (row_city, row_target_date, row_bracket), token in index.items():
+        if row_city != city or row_target_date != target_date:
+            continue
+        try:
+            parsed = parse_label_dict(row_bracket, token.question)
+        except Exception:
+            continue
+        if bracket_contains(parsed, bracket):
+            matches.append(token)
+    return matches[0] if len(matches) == 1 else None
+
+
+def ordered_market_tokens(
+    index: dict[tuple[str, str, str], MarketToken],
+    city: str,
+    target_date: str,
+) -> list[MarketToken]:
+    rows: list[tuple[float, float, MarketToken]] = []
+    for (row_city, row_target_date, row_bracket), token in index.items():
+        if row_city != city or row_target_date != target_date:
+            continue
+        try:
+            parsed = parse_label_dict(row_bracket, token.question)
+        except Exception:
+            continue
+        low = float("-inf") if parsed.get("low") is None else float(parsed["low"])
+        high = float("inf") if parsed.get("high") is None else float(parsed["high"])
+        rows.append((low, high, token))
+    rows.sort(key=lambda item: (item[0], item[1]))
+    return [token for _low, _high, token in rows]
+
+
+def market_date_has_tokens(
+    index: dict[tuple[str, str, str], MarketToken],
+    city: str,
+    target_date: str,
+) -> bool:
+    return any(row_city == city and row_target_date == target_date for row_city, row_target_date, _bracket in index)
+
+
+def relative_market_token(
+    index: dict[tuple[str, str, str], MarketToken],
+    city: str,
+    target_date: str,
+    market_value: int,
+    offset: int,
+) -> MarketToken | None:
+    current = bracket_lookup(index, city, target_date, market_value)
+    if current is None:
+        return None
+    ladder = ordered_market_tokens(index, city, target_date)
+    for idx, token in enumerate(ladder):
+        if token.bracket == current.bracket:
+            target_idx = idx + offset
+            return ladder[target_idx] if 0 <= target_idx < len(ladder) else None
     return None
 
 
@@ -371,8 +474,11 @@ def fetch_fresh_book(token_id: str, *, proxy: str = "", timeout_sec: float = 4.0
         }
 
 
-def build_snapshot_quote_index(path: Path | None, target_date: str) -> dict[tuple[str, str, str], dict[str, Any]]:
-    out: dict[tuple[str, str, str], dict[str, Any]] = {}
+def build_snapshot_quote_index(
+    path: Path | None,
+    target_dates: set[str] | None = None,
+) -> dict[tuple[str, str, str, str], dict[str, Any]]:
+    out: dict[tuple[str, str, str, str], dict[str, Any]] = {}
     if path is None:
         return out
     opener = gzip.open if path.suffix == ".gz" else open
@@ -381,28 +487,54 @@ def build_snapshot_quote_index(path: Path | None, target_date: str) -> dict[tupl
             if not line.strip():
                 continue
             row = json.loads(line)
-            if str(row.get("target_date") or row.get("market_local_date") or row.get("event_date") or "") != target_date:
+            target_date = str(row.get("target_date") or row.get("market_local_date") or row.get("event_date") or "")
+            if target_dates and target_date not in target_dates:
                 continue
             city = str(row.get("city") or "")
             bracket = str(row.get("bracket") or "")
             outcome = str(row.get("outcome") or "").lower()
             if city and bracket and outcome in {"yes", "no"}:
-                out[(city, bracket, outcome)] = row
+                out[(city, target_date, bracket, outcome)] = row
     return out
 
 
-def source_latest_by_city(path: Path, target_date: str, allowed_sources: set[str]) -> dict[str, dict[str, Any]]:
+def target_date_for_city(city: str, now_utc: datetime, explicit_target_date: str = "") -> str:
+    return explicit_target_date or city_local_date(city, now_utc).isoformat()
+
+
+def profiles_by_city(
+    profiles: dict[tuple[str, str], FastEventSourceProfile],
+) -> dict[str, FastEventSourceProfile]:
+    out: dict[str, FastEventSourceProfile] = {}
+    for (city, _source), profile in profiles.items():
+        if profile.collector_enabled:
+            out.setdefault(city, profile)
+    return out
+
+
+def source_latest_by_city(
+    path: Path,
+    explicit_target_date: str,
+    allowed_sources: set[str],
+    profiles: dict[tuple[str, str], FastEventSourceProfile],
+    now_utc: datetime,
+) -> dict[tuple[str, str], dict[str, Any]]:
     payload = read_json(path)
-    out: dict[str, dict[str, Any]] = {}
+    out: dict[tuple[str, str], dict[str, Any]] = {}
     for row in payload.get("records") or []:
-        if allowed_sources and str(row.get("source") or "") not in allowed_sources:
-            continue
-        if str(row.get("target_date") or "") != target_date:
+        source = str(row.get("source") or "")
+        if allowed_sources and source not in allowed_sources:
             continue
         temp = safe_float(row.get("temp_c"))
         if temp is None:
             continue
         city = market_city(str(row.get("city") or ""))
+        target_date = str(row.get("target_date") or "")
+        if target_date != target_date_for_city(city, now_utc, explicit_target_date):
+            continue
+        profile = fast_event_source_profile_for(city, source, profiles)
+        if profile is None or not profile.collector_enabled:
+            continue
         detect_dt = parse_dt(row.get("local_detect_ts_utc") or row.get("fetched_at_utc"))
         obs_dt = parse_dt(row.get("observation_time_utc"))
         if detect_dt is None or obs_dt is None:
@@ -410,31 +542,37 @@ def source_latest_by_city(path: Path, target_date: str, allowed_sources: set[str
         enriched = {
             **row,
             "market_city": city,
-            "source_temp_round_c": arith_round(temp),
+            "market_unit": profile.market_unit,
+            "source_market_value": market_value_from_temp_c(temp, profile),
+            "source_temp_round_c": market_value_from_temp_c(temp, profile),
+            "source_bracket_mode": profile.bracket_rounding,
+            "fast_source_profile": profile.__dict__,
             "source_detect_ts_utc": detect_dt.isoformat(),
             "source_obs_ts_utc": obs_dt.isoformat(),
         }
-        old = out.get(city)
+        key = (city, target_date)
+        old = out.get(key)
         if old is None:
-            out[city] = enriched
+            out[key] = enriched
             continue
-        old_round = int(old.get("source_temp_round_c") or -999)
-        new_round = int(enriched["source_temp_round_c"])
+        old_round = int(old.get("source_market_value") or old.get("source_temp_round_c") or -999)
+        new_round = int(enriched["source_market_value"])
         old_detect = parse_dt(old.get("source_detect_ts_utc")) or datetime.min.replace(tzinfo=timezone.utc)
         if new_round > old_round or (new_round == old_round and detect_dt > old_detect):
-            out[city] = enriched
+            out[key] = enriched
     return out
 
 
 def source_running_max_by_city(
     path: Path,
-    target_date: str,
+    explicit_target_date: str,
     allowed_sources: set[str],
     allowed_cities: set[str],
-    floor_cities: set[str],
+    profiles: dict[tuple[str, str], FastEventSourceProfile],
+    now_utc: datetime,
     extreme_kind: str = "max",
-) -> dict[str, dict[str, Any]]:
-    out: dict[str, dict[str, Any]] = {}
+) -> dict[tuple[str, str], dict[str, Any]]:
+    out: dict[tuple[str, str], dict[str, Any]] = {}
     if not path.exists():
         return out
     with path.open(encoding="utf-8") as fh:
@@ -445,24 +583,31 @@ def source_running_max_by_city(
             source = str(row.get("source") or "")
             if allowed_sources and source not in allowed_sources:
                 continue
-            if str(row.get("target_date") or "") != target_date:
-                continue
             city = market_city(str(row.get("city") or ""))
             if allowed_cities and city not in allowed_cities:
+                continue
+            target_date = str(row.get("target_date") or "")
+            if target_date != target_date_for_city(city, now_utc, explicit_target_date):
+                continue
+            profile = fast_event_source_profile_for(city, source, profiles)
+            if profile is None or not profile.collector_enabled:
                 continue
             temp = safe_float(row.get("temp_c"))
             obs_dt = parse_dt(row.get("observation_time_utc"))
             detect_dt = parse_dt(row.get("local_detect_ts_utc") or row.get("fetched_at_utc"))
             if temp is None or obs_dt is None or detect_dt is None:
                 continue
-            bracket = temp_bracket_c(temp, city=city, source=source, floor_cities=floor_cities)
-            mode = bracket_mode_for(city, source, floor_cities)
+            bracket = market_value_from_temp_c(temp, profile)
+            mode = profile.bracket_rounding
             enriched = {
                 **row,
                 "market_city": city,
+                "market_unit": profile.market_unit,
+                "source_market_value": bracket,
                 "source_temp_round_c": bracket,
                 "source_bracket_c": bracket,
                 "source_bracket_mode": mode,
+                "fast_source_profile": profile.__dict__,
                 "source_detect_ts_utc": detect_dt.isoformat(),
                 "source_obs_ts_utc": obs_dt.isoformat(),
                 "source_running_extreme_kind": extreme_kind,
@@ -471,9 +616,10 @@ def source_running_max_by_city(
                 "source_running_extreme_obs_ts_utc": obs_dt.isoformat(),
                 "source_running_extreme_detect_ts_utc": detect_dt.isoformat(),
             }
-            old = out.get(city)
+            key = (city, target_date)
+            old = out.get(key)
             if old is None:
-                out[city] = enriched
+                out[key] = enriched
                 continue
             old_bracket = int(old.get("source_running_extreme_bracket_c") or old.get("source_temp_round_c") or bracket)
             old_temp = safe_float(old.get("source_running_extreme_temp_c"))
@@ -488,7 +634,7 @@ def source_running_max_by_city(
             )
             newer_tie = bracket == old_bracket and temp == old_temp and old_detect is not None and detect_dt > old_detect
             if better_extreme or newer_tie:
-                out[city] = enriched
+                out[key] = enriched
     for row in out.values():
         if extreme_kind == "max":
             row["source_running_max_temp_c"] = row.get("source_running_extreme_temp_c")
@@ -503,8 +649,13 @@ def source_running_max_by_city(
     return out
 
 
-def metar_running_max(path: Path, target_date: str) -> dict[str, dict[str, Any]]:
-    out: dict[str, dict[str, Any]] = {}
+def metar_running_max(
+    path: Path,
+    explicit_target_date: str,
+    city_profiles: dict[str, FastEventSourceProfile],
+    now_utc: datetime,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    out: dict[tuple[str, str], dict[str, Any]] = {}
     if not path.exists():
         return out
     with path.open(encoding="utf-8") as fh:
@@ -512,19 +663,29 @@ def metar_running_max(path: Path, target_date: str) -> dict[str, dict[str, Any]]
             if not line.strip():
                 continue
             row = json.loads(line)
-            if row.get("source") not in METAR_LIKE_SOURCES or str(row.get("target_date") or "") != target_date:
+            if row.get("source") not in METAR_LIKE_SOURCES:
                 continue
             temp = safe_float(row.get("temp_c"))
             if temp is None:
                 continue
             city = market_city(str(row.get("city") or ""))
+            profile = city_profiles.get(city)
+            if profile is None:
+                continue
+            target_date = str(row.get("target_date") or "")
+            if target_date != target_date_for_city(city, now_utc, explicit_target_date):
+                continue
             report_dt = parse_dt(row.get("source_report_ts_utc"))
             detect_dt = parse_dt(row.get("local_detect_ts_utc") or row.get("ts_utc"))
-            temp_round = arith_round(temp)
-            cur = out.get(city)
+            temp_round = market_value_from_temp_c(temp, profile)
+            key = (city, target_date)
+            cur = out.get(key)
             latest_report = parse_dt(cur.get("latest_report_ts_utc")) if cur else None
             if cur is None:
-                out[city] = {
+                out[key] = {
+                    "market_unit": profile.market_unit,
+                    "target_date": target_date,
+                    "metar_running_max_market_value": temp_round,
                     "metar_running_max_round_c": temp_round,
                     "metar_running_max_temp_c": temp,
                     "latest_metar_temp_c": temp,
@@ -535,6 +696,7 @@ def metar_running_max(path: Path, target_date: str) -> dict[str, dict[str, Any]]
                 }
             else:
                 if temp_round > int(cur["metar_running_max_round_c"]):
+                    cur["metar_running_max_market_value"] = temp_round
                     cur["metar_running_max_round_c"] = temp_round
                     cur["metar_running_max_temp_c"] = temp
                 if report_dt and (latest_report is None or report_dt >= latest_report):
@@ -554,14 +716,14 @@ def quote_for_token(
     token: MarketToken | None,
     *,
     outcome: str,
-    snapshot_quotes: dict[tuple[str, str, str], dict[str, Any]],
+    snapshot_quotes: dict[tuple[str, str, str, str], dict[str, Any]],
     market_proxy: str,
     fetch_fresh: bool,
 ) -> dict[str, Any]:
     if token is None:
         return {"status": "missing_market", "outcome": outcome}
     token_id = token.yes_token_id if outcome == "yes" else token.no_token_id
-    snap = snapshot_quotes.get((token.city, token.bracket, outcome)) or {}
+    snap = snapshot_quotes.get((token.city, token.target_date, token.bracket, outcome)) or {}
     fresh = fetch_fresh_book(token_id, proxy=market_proxy) if fetch_fresh else {"status": "disabled", "summary": {}}
     return {
         "status": "ok",
@@ -603,26 +765,29 @@ def next_no_bracket(source_round: int, extreme_kind: str) -> int:
 def build_quotes(
     *,
     event: dict[str, Any],
-    market_index: dict[tuple[str, str], MarketToken],
-    snapshot_quotes: dict[tuple[str, str, str], dict[str, Any]],
+    market_index: dict[tuple[str, str, str], MarketToken],
+    snapshot_quotes: dict[tuple[str, str, str, str], dict[str, Any]],
     market_proxy: str,
     fetch_fresh: bool,
     fresh_scope: str,
 ) -> dict[str, Any]:
     city = str(event["city"])
-    source_round = int(event["source_round_c"])
-    brackets = {
-        "t_minus_1": int(event.get("previous_no_bracket_c") or event.get("t_minus_1_no_bracket_c") or previous_no_bracket(source_round, str(event.get("extreme_kind") or "max"))),
-        "source_round": source_round,
-        "source_plus_1": int(event.get("next_no_bracket_c") or next_no_bracket(source_round, str(event.get("extreme_kind") or "max"))),
+    target_date = str(event["target_date"])
+    source_round = int(event.get("source_market_value") or event["source_round_c"])
+    extreme_kind = str(event.get("extreme_kind") or "max")
+    direction = 1 if extreme_kind == "max" else -1
+    tokens = {
+        "t_minus_1": relative_market_token(market_index, city, target_date, source_round, -direction),
+        "source_round": relative_market_token(market_index, city, target_date, source_round, 0),
+        "source_plus_1": relative_market_token(market_index, city, target_date, source_round, direction),
     }
     out: dict[str, Any] = {}
-    for label, bracket in brackets.items():
-        token = bracket_lookup(market_index, city, bracket)
+    for label, token in tokens.items():
         fetch_yes = fetch_fresh and fresh_scope == "all"
         fetch_no = fetch_fresh and (fresh_scope == "all" or label == "t_minus_1")
         out[label] = {
-            "bracket_c": bracket,
+            "bracket": token.bracket if token else "",
+            "market_unit": event.get("market_unit"),
             "yes": quote_for_token(token, outcome="yes", snapshot_quotes=snapshot_quotes, market_proxy=market_proxy, fetch_fresh=fetch_yes),
             "no": quote_for_token(token, outcome="no", snapshot_quotes=snapshot_quotes, market_proxy=market_proxy, fetch_fresh=fetch_no),
         }
@@ -717,13 +882,25 @@ def classify_official_running_max(
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
     out_dir = Path(args.output_dir)
     state_path = out_dir / "state.json"
+    market_index_cache_path = out_dir / "market_index.json"
     state = load_state(state_path)
     seen = set(state.get("seen_event_keys") or [])
     now = datetime.now(timezone.utc)
 
     sources = set(args.sources or [])
-    floor_cities = {market_city(city) for city in (args.floor_cities or [])}
     allowed_cities = {market_city(city) for city in (args.cities or [])}
+    fast_profiles = load_fast_event_source_profiles()
+    fast_profiles = {
+        key: profile
+        for key, profile in fast_profiles.items()
+        if profile.source in sources and profile.collector_enabled and (not allowed_cities or profile.city in allowed_cities)
+    }
+    city_profiles = profiles_by_city(fast_profiles)
+    city_target_dates = {
+        city: target_date_for_city(city, now, args.target_date)
+        for city in sorted(city_profiles)
+    }
+    target_dates = set(city_target_dates.values())
     extreme_kind = args.extreme_kind
     gamma_event_slugs = parse_city_string_overrides(args.gamma_event_slug, arg_name="--gamma-event-slug")
     official_extreme_mode = args.signal_basis in {"official-running-max", "official-running-extreme"}
@@ -733,35 +910,62 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             args.target_date,
             sources,
             allowed_cities,
-            floor_cities,
+            fast_profiles,
+            now,
             extreme_kind=extreme_kind,
         )
         metar_rows = {}
     else:
-        source_rows = source_latest_by_city(Path(args.high_frequency_latest), args.target_date, sources)
+        source_rows = source_latest_by_city(
+            Path(args.high_frequency_latest),
+            args.target_date,
+            sources,
+            fast_profiles,
+            now,
+        )
         if allowed_cities:
-            source_rows = {city: row for city, row in source_rows.items() if city in allowed_cities}
-        metar_rows = metar_running_max(Path(args.source_events_jsonl), args.target_date)
+            source_rows = {key: row for key, row in source_rows.items() if key[0] in allowed_cities}
+        metar_rows = metar_running_max(Path(args.source_events_jsonl), args.target_date, city_profiles, now)
     paper_path = latest_paper_snapshot()
     orderbook_path = latest_orderbook_snapshot()
-    market_index = build_market_index(paper_path, args.target_date)
+    market_index = load_market_index_cache(market_index_cache_path, target_dates)
+    market_index.update(build_market_index(paper_path, target_dates))
     if args.gamma_market_index:
         market_index = augment_market_index_from_gamma(
             market_index,
-            target_date=args.target_date,
+            target_dates=target_dates,
             cities=allowed_cities,
             event_slugs=gamma_event_slugs,
             market_proxy=args.market_proxy or "",
         )
-    snapshot_quotes = build_snapshot_quote_index(orderbook_path, args.target_date)
+    gamma_on_missing_city_dates: list[str] = []
+    for (city, target_date), src in sorted(source_rows.items()):
+        if market_date_has_tokens(market_index, city, target_date):
+            continue
+        market_index = augment_market_index_from_gamma(
+            market_index,
+            target_dates={target_date},
+            cities={city},
+            event_slugs={city: temperature_event_slug(city, target_date, extreme_kind)},
+            market_proxy=args.market_proxy or "",
+        )
+        if market_date_has_tokens(market_index, city, target_date):
+            gamma_on_missing_city_dates.append(f"{city}|{target_date}")
+    snapshot_quotes = build_snapshot_quote_index(orderbook_path, target_dates)
 
     new_events = []
     quote_rows = []
     active_events = []
+    same_market_bracket_rows = 0
+    missing_market_context_rows = 0
 
-    for city, src in sorted(source_rows.items()):
-        metar = metar_rows.get(city)
-        source_round = int(src["source_temp_round_c"])
+    for (city, target_date), src in sorted(source_rows.items()):
+        metar = metar_rows.get((city, target_date))
+        source_round = int(src.get("source_market_value") or src["source_temp_round_c"])
+        source = str(src.get("source") or "")
+        profile = fast_event_source_profile_for(city, source, fast_profiles)
+        if profile is None:
+            continue
         prev_no = previous_no_bracket(source_round, extreme_kind)
         nxt_no = next_no_bracket(source_round, extreme_kind)
         if official_extreme_mode:
@@ -772,32 +976,44 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             metar_max = int(metar["metar_running_max_round_c"])
             if source_round <= metar_max:
                 continue
-        t_minus_1 = prev_no
-        key = "|".join(
-            [
-                city,
-                args.target_date,
-                str(src.get("source")),
-                str(src.get("source_obs_ts_utc")),
-                str(source_round),
-                str(metar_max),
-                str(t_minus_1),
-            ]
+        direction = 1 if extreme_kind == "max" else -1
+        source_token = relative_market_token(market_index, city, target_date, source_round, 0)
+        metar_token = (
+            relative_market_token(market_index, city, target_date, source_round, -direction)
+            if official_extreme_mode
+            else bracket_lookup(market_index, city, target_date, metar_max)
         )
+        if source_token is None or metar_token is None:
+            missing_market_context_rows += 1
+            continue
+        if not official_extreme_mode and source_token.bracket == metar_token.bracket:
+            same_market_bracket_rows += 1
+            continue
+        previous_token = relative_market_token(market_index, city, target_date, source_round, -direction)
+        next_token = relative_market_token(market_index, city, target_date, source_round, direction)
+        t_minus_1 = previous_token.bracket if previous_token else ""
+        key = source_market_episode_key(city, target_date, source, source_token.bracket)
         event = {
-            "schema_version": "fast_source_stale_book_event_v1",
+            "schema_version": "fast_source_stale_book_event_v2",
             "event_key": key,
             "created_at_utc": iso(now),
             "expires_at_utc": iso(now + timedelta(minutes=float(args.follow_minutes))),
             "city": city,
-            "target_date": args.target_date,
-            "source": src.get("source"),
+            "target_date": target_date,
+            "source": source,
             "station": src.get("station"),
             "source_obs_ts_utc": src.get("source_obs_ts_utc"),
             "source_detect_ts_utc": src.get("source_detect_ts_utc"),
             "source_temp_c": src.get("temp_c"),
+            "source_market_value": source_round,
             "source_round_c": source_round,
-            "source_bracket_mode": src.get("source_bracket_mode") or bracket_mode_for(city, str(src.get("source") or ""), floor_cities),
+            "market_unit": profile.market_unit,
+            "source_bracket_mode": profile.bracket_rounding,
+            "fast_source_profile": profile.__dict__,
+            "source_basis_class": profile.source_basis_class,
+            "source_calibration_status": profile.calibration_status,
+            "source_live_eligible": profile.live_eligible,
+            "source_blocked_reason": profile.blocked_reason,
             "extreme_kind": extreme_kind,
             "running_max_basis": args.signal_basis,
             "running_extreme_basis": args.signal_basis,
@@ -823,10 +1039,16 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "source_running_extreme_obs_ts_utc": src.get("source_running_extreme_obs_ts_utc"),
             "source_running_extreme_detect_ts_utc": src.get("source_running_extreme_detect_ts_utc"),
             "t_minus_1_no_bracket_c": t_minus_1,
-            "previous_no_bracket_c": prev_no,
-            "current_bracket_c": source_round,
-            "next_no_bracket_c": nxt_no,
-            "crossed_brackets_c": list(range(metar_max, source_round)) if extreme_kind == "max" else list(range(source_round + 1, metar_max + 1)),
+            "previous_no_bracket_c": t_minus_1,
+            "previous_market_bracket": t_minus_1,
+            "current_bracket_c": source_token.bracket,
+            "current_market_bracket": source_token.bracket,
+            "current_bracket_value": source_round,
+            "next_no_bracket_c": next_token.bracket if next_token else "",
+            "next_market_bracket": next_token.bracket if next_token else "",
+            "reference_market_bracket": metar_token.bracket,
+            "crossed_brackets_c": [metar_token.bracket, source_token.bracket],
+            "crossed_market_brackets": [metar_token.bracket, source_token.bracket],
             "paper_snapshot_path": str(paper_path) if paper_path else "",
             "orderbook_snapshot_path": str(orderbook_path) if orderbook_path else "",
             "mode": "telemetry_only_no_orders",
@@ -840,7 +1062,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     for old in state.get("active_events") or []:
         # A new local market day must never keep quoting an expired prior-day
         # signal against today's event slug.
-        if str(old.get("target_date") or "") != args.target_date:
+        if str(old.get("schema_version") or "") != "fast_source_stale_book_event_v2":
+            continue
+        old_city = str(old.get("city") or "")
+        if str(old.get("target_date") or "") != target_date_for_city(old_city, now, args.target_date):
             continue
         expires_at = parse_dt(old.get("expires_at_utc"))
         if expires_at and expires_at > now:
@@ -854,6 +1079,22 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         if key and key not in active_by_key:
             active_by_key[key] = row
     active_events = list(active_by_key.values())
+
+    for event in active_events:
+        city = str(event.get("city") or "")
+        target_date = str(event.get("target_date") or "")
+        if not city or not target_date or market_date_has_tokens(market_index, city, target_date):
+            continue
+        market_index = augment_market_index_from_gamma(
+            market_index,
+            target_dates={target_date},
+            cities={city},
+            event_slugs={city: temperature_event_slug(city, target_date, extreme_kind)},
+            market_proxy=args.market_proxy or "",
+        )
+        if market_date_has_tokens(market_index, city, target_date):
+            gamma_on_missing_city_dates.append(f"{city}|{target_date}")
+    save_market_index_cache(market_index_cache_path, market_index)
 
     for event in sorted(active_events, key=lambda row: str(row.get("created_at_utc"))):
         quotes = build_quotes(
@@ -879,7 +1120,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         if event.get("source_round_c") is not None and official_extreme_mode:
             fallback_reference_round = previous_no_bracket(int(event["source_round_c"]), str(event.get("extreme_kind") or args.extreme_kind))
         quote_row = {
-            "schema_version": "fast_source_stale_book_quote_snapshot_v1",
+            "schema_version": "fast_source_stale_book_quote_snapshot_v2",
             "ts_utc": iso(),
             "event_key": event.get("event_key"),
             "city": event.get("city"),
@@ -888,8 +1129,14 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "source_obs_ts_utc": event.get("source_obs_ts_utc"),
             "source_detect_ts_utc": event.get("source_detect_ts_utc"),
             "source_temp_c": event.get("source_temp_c"),
+            "source_market_value": event.get("source_market_value"),
             "source_round_c": event.get("source_round_c"),
+            "market_unit": event.get("market_unit"),
             "source_bracket_mode": event.get("source_bracket_mode"),
+            "source_basis_class": event.get("source_basis_class"),
+            "source_calibration_status": event.get("source_calibration_status"),
+            "source_live_eligible": event.get("source_live_eligible"),
+            "source_blocked_reason": event.get("source_blocked_reason"),
             "extreme_kind": event.get("extreme_kind"),
             "running_max_basis": event.get("running_max_basis"),
             "running_extreme_basis": event.get("running_extreme_basis") or event.get("running_max_basis"),
@@ -921,8 +1168,12 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "metar_running_max_round_c": event.get("metar_running_max_round_c"),
             "t_minus_1_no_bracket_c": event.get("t_minus_1_no_bracket_c"),
             "previous_no_bracket_c": event.get("previous_no_bracket_c"),
+            "previous_market_bracket": event.get("previous_market_bracket"),
             "current_bracket_c": event.get("current_bracket_c"),
+            "current_market_bracket": event.get("current_market_bracket"),
             "next_no_bracket_c": event.get("next_no_bracket_c"),
+            "next_market_bracket": event.get("next_market_bracket"),
+            "reference_market_bracket": event.get("reference_market_bracket"),
             "quotes": quotes,
             **classification,
             "mode": "telemetry_only_no_orders",
@@ -932,18 +1183,25 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
 
     state = {
         "updated_at_utc": iso(),
-        "target_date": args.target_date,
+        "target_date": args.target_date or "per_city_local",
+        "city_target_dates": city_target_dates,
         "seen_event_keys": sorted(seen)[-5000:],
         "active_events": active_events,
     }
     save_state(state_path, state)
     latest = {
         "status": "ok",
-        "schema_version": "fast_source_stale_book_latest_v1",
+        "schema_version": "fast_source_stale_book_latest_v2",
         "generated_at_utc": iso(),
-        "target_date": args.target_date,
-        "source_cities": sorted(source_rows),
-        "metar_cities": sorted(metar_rows),
+        "target_date": args.target_date or "per_city_local",
+        "target_dates": sorted(target_dates),
+        "city_target_dates": city_target_dates,
+        "source_cities": sorted({city for city, _target_date in source_rows}),
+        "source_city_dates": [f"{city}|{target_date}" for city, target_date in sorted(source_rows)],
+        "metar_cities": sorted({city for city, _target_date in metar_rows}),
+        "metar_city_dates": [f"{city}|{target_date}" for city, target_date in sorted(metar_rows)],
+        "fast_source_profile_count": len(fast_profiles),
+        "fast_source_profile_live_eligible_count": sum(profile.live_eligible for profile in fast_profiles.values()),
         "signal_basis": args.signal_basis,
         "extreme_kind": args.extreme_kind,
         "cities": sorted(allowed_cities),
@@ -956,18 +1214,16 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "paper_snapshot_path": str(paper_path) if paper_path else "",
         "orderbook_snapshot_path": str(orderbook_path) if orderbook_path else "",
         "gamma_market_index": bool(args.gamma_market_index),
+        "gamma_on_missing_city_dates": sorted(gamma_on_missing_city_dates),
+        "same_market_bracket_rows": same_market_bracket_rows,
+        "missing_market_context_rows": missing_market_context_rows,
+        "market_index_cache_path": str(market_index_cache_path),
         "events_path": str(out_dir / "events.jsonl"),
         "quote_snapshots_path": str(out_dir / "quote_snapshots.jsonl"),
         "latest_quote_rows": quote_rows[-20:],
     }
     (out_dir / "latest.json").write_text(json.dumps(latest, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
     return latest
-
-
-def default_target_date() -> str:
-    # Keep the always-on observer attached to the active local market day.
-    # Use --target-date explicitly for pre-market dry runs.
-    return datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1020,17 +1276,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    auto_target_date = not bool(args.target_date)
     if not args.loop:
-        if auto_target_date:
-            args.target_date = default_target_date()
         print(json.dumps(run_once(args), ensure_ascii=False, sort_keys=True))
         return 0
     while True:
         started = time.monotonic()
         try:
-            if auto_target_date:
-                args.target_date = default_target_date()
             latest = run_once(args)
             print(json.dumps({k: v for k, v in latest.items() if k != "latest_quote_rows"}, ensure_ascii=False, sort_keys=True), flush=True)
         except Exception as exc:  # noqa: BLE001

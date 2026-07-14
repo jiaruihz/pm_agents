@@ -187,3 +187,42 @@ scope:   all T-1/T/T+1/T+2 YES+NO books; 30s cadence; 90m episode; auto target-d
 The existing generic stale-book observer was also restarted on 2026-07-13 so
 its target date rolls automatically again; it had remained in memory with the
 old 2026-07-09 target date despite source files continuing to update.
+
+## 2026-07-14 Fast-event Source Profile And Collector Correction
+
+The first forward collector was not suitable for live calibration.  It used one
+Asia/Shanghai `target_date` for all cities, treated every `temp_c` value as a C
+market bracket, and moved previous/current/next by numeric one-degree steps.
+Those assumptions fail for US local dates, F markets, and range brackets such
+as `76-77 F`.
+
+The v2 collector now:
+
+- routes `target_date` by each city local calendar;
+- converts source and METAR temperature through a `city x source` profile with
+  explicit market unit and rounding/floor semantics;
+- resolves previous/current/next from the real market ladder intervals;
+- keeps a persistent `(city,target_date,bracket)` token index and fills missing
+  local-day markets from Gamma only when required;
+- emits one episode per `(city,target_date,source,market bracket)`, rather than
+  one event per repeated source report.
+
+The profile contains 22 source rows / 21 cities and deliberately grants zero
+live eligibility.  On the historical candidate denominator, the source-profile
+covered subset is 36 rows / 14 dates / 12 cities with ROI +4.4% and date
+bootstrap CI [-19.5%, +33.7%], weaker than the pooled +11.6% result.  Therefore
+the status remains `calibration_only_zero_notional_no_live`.
+
+Historical v1 impact is telemetry-only: the dedicated collector contains 8 US
+events / 581 quote rows with wrong C-vs-F bracket values; the generic observer
+contains 36 US events / 1,458 quote rows.  No live orders were affected.  These
+v1 rows must not be used for repricing conclusions.
+
+Durable profile and audit:
+
+- `weather_data_feed/fast_event_source_profiles.json`
+- `docs/analysis/2026-07/2026-07-14-fast-event-source-profile-v1.md`
+
+Cities without a fast-event profile are excluded only from this source-event
+head.  They are not globally banned from forecast, regime, lottery, Tmax, or
+ordinary METAR/WU strategies.

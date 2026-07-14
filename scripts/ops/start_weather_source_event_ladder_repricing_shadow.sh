@@ -4,7 +4,7 @@ set -euo pipefail
 # Dedicated zero-notional collector for post-cross ladder repricing research.
 # It deliberately uses a separate tmux session/output tree from the existing
 # T-1 NO observer and never passes an explicit target date, so the underlying
-# observer rolls to the active Asia/Shanghai market day automatically.
+# observer routes every city through its own local market date.
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
@@ -40,7 +40,7 @@ tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
   "cd '$PROJECT_DIR' && exec $(printf '%q ' "${cmd[@]}") >> '$LOG_FILE' 2>&1"
 
 echo "started $TMUX_SESSION on tmux socket $TMUX_SOCKET"
-echo "target_date=auto_today"
+echo "target_date=per_city_local"
 echo "interval_seconds=$INTERVAL_SECONDS"
 echo "follow_minutes=$FOLLOW_MINUTES"
 echo "sources=$SOURCES"
