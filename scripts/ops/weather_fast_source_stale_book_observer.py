@@ -424,6 +424,7 @@ def summarize_book(raw: dict[str, Any], top_n: int = 20) -> dict[str, Any]:
         "best_ask": best_ask,
         "bid_size": bids[0]["size"] if bids else None,
         "ask_size": asks[0]["size"] if asks else None,
+        "tick_size": safe_float(raw.get("tick_size")),
         "spread": round(best_ask - best_bid, 6) if best_bid is not None and best_ask is not None else None,
         "bids": bids,
         "asks": asks,
@@ -461,7 +462,7 @@ def fetch_fresh_book(token_id: str, *, proxy: str = "", timeout_sec: float = 4.0
             "http_status": response.status_code,
             "proxy_used": proxy_url,
             "summary": summary,
-            "raw": {"bids": summary["bids"], "asks": summary["asks"]},
+            "raw": {"bids": summary["bids"], "asks": summary["asks"], "tick_size": summary["tick_size"]},
         }
     except Exception as exc:  # noqa: BLE001
         return {

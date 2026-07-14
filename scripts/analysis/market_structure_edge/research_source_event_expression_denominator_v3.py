@@ -138,9 +138,11 @@ def quote_fields(record: dict[str, Any] | None, prefix: str) -> dict[str, float]
         f"{prefix}_yes_ask": math.nan if ask is None else float(ask),
         f"{prefix}_yes_bid": math.nan if bid is None else float(bid),
         f"{prefix}_yes_ask_size": finite((record or {}).get("yes_ask_size")) or math.nan,
+        f"{prefix}_yes_depth_ask_5c": finite((record or {}).get("yes_depth_ask_5c")) or math.nan,
         f"{prefix}_no_ask": finite((record or {}).get("no_best_ask")) or math.nan,
         f"{prefix}_no_bid": finite((record or {}).get("no_best_bid")) or math.nan,
         f"{prefix}_no_ask_size": finite((record or {}).get("no_ask_size")) or math.nan,
+        f"{prefix}_no_depth_ask_5c": finite((record or {}).get("no_depth_ask_5c")) or math.nan,
     }
 
 
@@ -226,6 +228,21 @@ def materialize_expression_states(
             current_quote = quote_fields(current, "current")
             d1_quote = quote_fields(d1, "d1")
             previous_quote = quote_fields(previous, "prev")
+            current_parsed = parse_market_bracket(
+                str(current.get("bracket") or ""), str(current.get("question") or "")
+            )
+            first = records[0]
+            forecast_max_native = finite(first.get("forecast_max_native"))
+            forecast_gap_native = (
+                None if forecast_max_native is None else forecast_max_native - running
+            )
+            forecast_gap_f = (
+                None
+                if forecast_gap_native is None
+                else forecast_gap_native * (9.0 / 5.0 if unit == "C" else 1.0)
+            )
+            if path_state is None:
+                path_state = {}
             if d1 is None:
                 counts["d1_rung_absent_but_current_retained"] += 1
             rows.append(
@@ -237,6 +254,33 @@ def materialize_expression_states(
                     "snapshot_root_priority": int(group.get("root_priority") or 0),
                     "running_source": running_source,
                     "running_native": running,
+                    "current_native": finite(path_state.get("current_native")),
+                    "current_minus_running_f": (
+                        None
+                        if finite(path_state.get("current_native")) is None
+                        else (float(path_state["current_native"]) - running)
+                        * (9.0 / 5.0 if unit == "C" else 1.0)
+                    ),
+                    "temp_trend_1h_f": finite(path_state.get("temp_trend_1h_f")),
+                    "temp_trend_3h_f": finite(path_state.get("temp_trend_3h_f")),
+                    "max_age_min": finite(path_state.get("max_age_min")),
+                    "minutes_since_running_max": finite(path_state.get("minutes_since_running_max")),
+                    "latest_obs_ts_utc": path_state.get("latest_obs_ts_utc"),
+                    "decision_hour_local": finite(
+                        str(first.get("ts_local") or "")[11:13]
+                    ),
+                    "unit": unit,
+                    "forecast_max_native": forecast_max_native,
+                    "forecast_gap_to_running_f": forecast_gap_f,
+                    "forecast_peak_hour_local": finite(first.get("forecast_peak_hour_local")),
+                    "forecast_peak_delta_hours_local": finite(
+                        first.get("forecast_peak_delta_hours_local")
+                    ),
+                    "forecast_source": str(first.get("forecast_source") or ""),
+                    "current_bracket_low": None if current_parsed is None else current_parsed.low,
+                    "current_bracket_high": None if current_parsed is None else current_parsed.high,
+                    "current_bracket_bottom": bool(current_parsed and current_parsed.bottom),
+                    "current_bracket_top": bool(current_parsed and current_parsed.top),
                     "current_key": current_key,
                     "d1_key": d1_key,
                     "prev_key": previous_key,

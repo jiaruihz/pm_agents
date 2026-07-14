@@ -5,14 +5,20 @@ import scripts.ops.weather_fast_source_prev_no_trial as runner
 
 from scripts.ops.weather_fast_source_prev_no_trial import (
     build_parser,
+    exact_share_maker_intent,
     metar_report_clocks,
     next_metar_burst_cities,
     next_metar_window_status,
+    resolve_share_cap_pause,
     source_cross_confirmation,
-    submit_fok_with_immediate_retries,
 )
 from scripts.ops.weather_fast_source_city_policy import CITY_POLICIES
-from scripts.ops.weather_fast_source_execution import spent_market_shares
+from scripts.ops.weather_fast_source_execution import (
+    audit_order_share_caps,
+    spent_market_shares,
+    submit_fok_with_immediate_retries,
+    submit_post_only_gtd,
+)
 from scripts.ops.weather_fast_source_stale_book_observer import MarketToken
 
 
@@ -272,6 +278,40 @@ def test_ambiguous_submit_error_is_not_retried():
     assert len(place_calls) == 1
 
 
+def test_fok_post_fill_invariant_marks_share_cap_violation():
+    result = submit_fok_with_immediate_retries(
+        {
+            "token_id": "token",
+            "size": 5.0,
+            "desired_shares": 5.0,
+            "max_shares_per_market": 5.0,
+            "best_ask": 0.33,
+            "ask_size": 20.0,
+            "limit_price": 0.92,
+        },
+        place=lambda _row: {
+            "order_id": "overfill",
+            "place": {
+                "success": True,
+                "status": "matched",
+                "orderID": "overfill",
+                "takingAmount": "13.823528",
+                "makingAmount": "4.599999",
+            },
+        },
+        fetch_book_fn=lambda *_args, **_kwargs: {},
+        market_proxy="",
+        book_timeout_sec=5.0,
+        max_no_ask=0.94,
+        immediate_retries=0,
+    )
+
+    assert result["live_submit_status"] == "share_cap_violation"
+    assert result["share_cap_check"]["share_cap_violation"] is True
+    assert result["share_cap_check"]["share_cap_excess_shares"] == 8.823528
+    assert result["error"] == "actual_fill_shares_exceeded_desired_or_market_cap"
+
+
 def test_market_cap_uses_actual_exchange_fill_shares(tmp_path):
     path = tmp_path / "orders.jsonl"
     path.write_text(
@@ -289,6 +329,137 @@ def test_market_cap_uses_actual_exchange_fill_shares(tmp_path):
     )
 
     assert spent_market_shares(path, target_date="2026-07-14", token_id="token") == 5.037507
+
+
+def test_market_cap_reserves_all_shares_of_a_posted_maker_order(tmp_path):
+    path = tmp_path / "orders.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "target_date": "2026-07-15",
+                "token_id": "token",
+                "size": 5.0,
+                "desired_shares": 5.0,
+                "live_submit_status": "posted",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert spent_market_shares(path, target_date="2026-07-15", token_id="token") == 5.0
+
+
+def test_low_ask_exact_share_intent_uses_post_only_gtd_not_fok_usdc_spend():
+    now = datetime(2026, 7, 14, 1, 0, tzinfo=timezone.utc)
+
+    intent = exact_share_maker_intent(
+        best_ask=0.33,
+        tick_size=0.01,
+        desired_shares=5.0,
+        now=now,
+        effective_lifetime_sec=45,
+    )
+
+    assert intent["limit_price"] == 0.32
+    assert intent["size"] == 5.0
+    assert intent["desired_shares"] == 5.0
+    assert intent["submitted_notional_usd"] == 1.6
+    assert intent["order_type"] == "GTD"
+    assert intent["post_only"] is True
+    assert intent["share_cap_enforcement"] == "resting_post_only_signed_size_v1"
+    assert intent["expiration"] == int(now.timestamp()) + 60 + 45
+
+
+def test_post_only_gtd_accepts_only_a_resting_order_and_reserves_exact_shares():
+    calls = []
+
+    def place(row):
+        calls.append(dict(row))
+        return {
+            "order_id": "maker-order",
+            "order_type": "GTD",
+            "order_mode": "post_only_gtd_buy_shares",
+            "post_only": True,
+            "place": {
+                "success": True,
+                "status": "live",
+                "orderID": "maker-order",
+                "takingAmount": "5",
+                "makingAmount": "1.6",
+            },
+        }
+
+    result = submit_post_only_gtd(
+        {
+            "token_id": "token",
+            "limit_price": 0.32,
+            "size": 5.0,
+            "desired_shares": 5.0,
+            "max_shares_per_market": 5.0,
+            "expiration": 123,
+            "share_cap_enforcement": "resting_post_only_signed_size_v1",
+        },
+        place=place,
+    )
+
+    assert result["live_submit_status"] == "submitted"
+    assert result["live_order_posted"] is True
+    assert result["actual_fill_shares"] is None
+    assert calls[0]["size"] == 5.0
+
+
+def test_post_fill_share_cap_violation_is_visible_and_pauses_post_fix_orders(tmp_path):
+    path = tmp_path / "orders.jsonl"
+    old = {
+        "target_date": "2026-07-11",
+        "city": "Busan",
+        "desired_shares": 5.0,
+        "max_shares_per_market": 5.0,
+        "actual_fill_shares": 13.823528,
+        "live_submit_status": "submitted",
+        "order_id": "old",
+    }
+    post_fix = {
+        "target_date": "2026-07-15",
+        "city": "Tokyo",
+        "desired_shares": 5.0,
+        "max_shares_per_market": 5.0,
+        "actual_fill_shares": 5.01,
+        "live_submit_status": "share_cap_violation",
+        "share_cap_enforcement": "resting_post_only_signed_size_v1",
+        "order_id": "new",
+    }
+    path.write_text(json.dumps(old) + "\n" + json.dumps(post_fix) + "\n", encoding="utf-8")
+
+    audit = audit_order_share_caps(path)
+
+    assert audit["share_cap_anomaly_count"] == 2
+    assert audit["post_fix_share_cap_anomaly_count"] == 1
+    assert audit["pause_required"] is True
+    assert audit["post_fix_pause_required"] is True
+    assert audit["share_cap_anomalies"][0]["share_cap_excess_shares"] == 8.823528
+
+
+def test_historical_acknowledgement_does_not_clear_a_post_fix_pause():
+    historical_only = {
+        "share_cap_anomaly_count": 12,
+        "post_fix_pause_required": False,
+    }
+    post_fix = {
+        "share_cap_anomaly_count": 13,
+        "post_fix_pause_required": True,
+    }
+
+    assert resolve_share_cap_pause({}, historical_only, historical_acknowledged=False) == (
+        True,
+        "historical_actual_fill_exceeded_desired_or_market_cap_requires_acknowledgement",
+    )
+    assert resolve_share_cap_pause({}, historical_only, historical_acknowledged=True) == (False, "")
+    assert resolve_share_cap_pause({}, post_fix, historical_acknowledged=True) == (
+        True,
+        "post_fix_actual_fill_exceeded_desired_or_market_cap",
+    )
 
 
 def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, monkeypatch):
@@ -349,7 +520,7 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
     monkeypatch.setattr(
         runner,
         "fetch_fresh_book",
-        lambda *_args, **_kwargs: {"status": "ok", "summary": {"best_ask": 0.8, "ask_size": 10.0}},
+        lambda *_args, **_kwargs: {"status": "ok", "summary": {"best_ask": 0.8, "ask_size": 10.0, "tick_size": 0.01}},
     )
     args = build_parser().parse_args(
         [
@@ -367,12 +538,15 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
     )
     place = lambda _row: {
         "order_id": "order",
+        "order_type": "GTD",
+        "order_mode": "post_only_gtd_buy_shares",
+        "post_only": True,
         "place": {
             "success": True,
-            "status": "matched",
+            "status": "live",
             "orderID": "order",
             "takingAmount": "5",
-            "makingAmount": "4",
+            "makingAmount": "3.95",
         },
     }
 
@@ -381,11 +555,15 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
 
     assert latest["live_orders_submitted"] == 1
     assert latest["city_policies"]["Tokyo"]["shares_per_trade"] == 5.0
-    assert order["limit_price"] == 0.8
+    assert order["limit_price"] == 0.79
     assert order["source_runway"] == "15R/33L"
     assert order["source_primary_runway"] == "15L"
     assert order["source_is_preferred_temperature_runway"] is True
-    assert order["actual_fill_shares"] == 5.0
+    assert order["actual_fill_shares"] is None
+    assert order["live_submit_status"] == "submitted"
+    assert order["live_order_posted"] is True
+    assert order["post_only"] is True
+    assert order["order_type"] == "GTD"
     assert order["t_minus_1_no_bracket"] == 21
 
 

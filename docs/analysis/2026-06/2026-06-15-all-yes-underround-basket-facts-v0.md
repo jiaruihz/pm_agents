@@ -1,5 +1,7 @@
 # All-YES Underround Basket Facts v0
 
+> **2026-07-14 fee correction:** 本报告的 `+3.16%` 是 gross、未扣 Weather taker fee，不能再作为 confirmed/executable ROI。固定同一 270 个 settled baskets 后，fee-adjusted ROI 为 `-0.42%`，date-bootstrap CI `[-0.68%,-0.19%]`；详见 [fee correction v1](../../2026-07/2026-07-14-all-yes-underround-fee-correction-v1.md)。
+
 > generated_at_utc: `2026-06-15T16:12:28.191053+00:00`
 > target_metric: `all_yes_underround_basket_fact_refresh_v0`
 > contract: `strategy_id + snapshot_ts_utc + event_date + city + event_slug`

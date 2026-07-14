@@ -1,5 +1,7 @@
 # Current-Bracket NO Prevday PIT Shadow v1
 
+> **2026-07-14 fee correction:** 本报告的 `+29.7% CI [+3.8%,+54.6%]` 是 gross。固定同一 191 trades 加官方 Weather taker fee 后为 `+25.79%`，但 date-bootstrap CI 变为 `[-0.07%,+50.75%]`，绝对 significance 从 PASS 降为 FAIL；相对同价 baseline 的 excess 仍为正。详见 [fee correction v1](../../2026-07/2026-07-14-current-bracket-no-prevday-pit-fee-correction-v1.md)。
+
 ## 数据快照
 
 - 事实表已重建；CLOB fill coverage gate：`True`。

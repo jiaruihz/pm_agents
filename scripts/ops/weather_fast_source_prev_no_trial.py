@@ -19,10 +19,12 @@ if str(ROOT) not in sys.path:
 
 from scripts.ops.weather_fast_source_city_policy import FastSourceCityPolicy, configured_city_policies  # noqa: E402
 from scripts.ops.weather_fast_source_execution import (  # noqa: E402
-    build_live_fok_limit_place_fn,
-    is_definitive_fok_unfilled_error,
+    audit_order_share_caps,
+    build_live_post_only_gtd_place_fn,
+    exact_share_maker_intent,
+    resolve_share_cap_pause,
     spent_market_shares,
-    submit_fok_with_immediate_retries,
+    submit_post_only_gtd,
 )
 from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
     bracket_lookup,
@@ -264,6 +266,14 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
     out_dir = Path(args.output_dir)
     state_path = out_dir / "state.json"
     state = load_state(state_path)
+    orders_path = out_dir / "orders.jsonl"
+    share_cap_audit = audit_order_share_caps(orders_path)
+    historical_acknowledged = bool(args.acknowledge_historical_share_cap_incidents)
+    share_cap_paused, share_cap_pause_reason = resolve_share_cap_pause(
+        state,
+        share_cap_audit,
+        historical_acknowledged=historical_acknowledged,
+    )
     seen = set(state.get("seen_event_keys") or [])
     live_order_keys = set(state.get("live_order_keys") or [])
     confirmation_state = dict(state.get("source_cross_confirmation") or {})
@@ -415,9 +425,10 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         summary = book.get("summary") or {}
         best_ask = safe_float(summary.get("best_ask"))
         ask_size = safe_float(summary.get("ask_size"))
+        tick_size = safe_float(summary.get("tick_size"))
         desired_shares = float(policy.shares_per_trade)
         market_cap = float(policy.max_shares_per_market)
-        market_spent = spent_market_shares(out_dir / "orders.jsonl", target_date=target_date, token_id=token.no_token_id)
+        market_spent = spent_market_shares(orders_path, target_date=target_date, token_id=token.no_token_id)
         live_blockers: list[str] = []
         if book.get("status") != "ok":
             live_blockers.append("fresh_book_not_ok")
@@ -425,12 +436,28 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             live_blockers.append("missing_best_ask")
         elif best_ask > policy.max_no_ask:
             live_blockers.append("ask_above_max")
+        if tick_size is None:
+            live_blockers.append("missing_tick_size")
         if live_city and (ask_size is None or ask_size < desired_shares):
             live_blockers.append("insufficient_top_ask_size")
         if live_city and market_spent + desired_shares > market_cap + 1e-9:
             live_blockers.append("market_share_cap")
         if args.live and live_city and not args.confirm_live:
             live_blockers.append("confirm_live_missing")
+        if args.live and live_city and share_cap_paused:
+            live_blockers.append("share_cap_paused")
+        maker_intent: dict[str, Any] | None = None
+        if best_ask is not None and tick_size is not None and desired_shares > 0:
+            try:
+                maker_intent = exact_share_maker_intent(
+                    best_ask=best_ask,
+                    tick_size=tick_size,
+                    desired_shares=desired_shares,
+                    now=now,
+                    effective_lifetime_sec=args.maker_effective_lifetime_sec,
+                )
+            except ValueError:
+                live_blockers.append("exact_share_maker_intent_invalid")
         opportunity = {
             **common,
             "status": "cross_candidate",
@@ -441,6 +468,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "token_id": token.no_token_id,
             "best_ask": best_ask,
             "ask_size": ask_size,
+            "tick_size": tick_size,
             "fresh_book_status": book.get("status"),
             "fresh_book_error": book.get("error", ""),
             "fresh_book_http_status": book.get("http_status"),
@@ -453,6 +481,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "live_requested": bool(args.live and live_city),
             "live_enabled": bool(args.live and args.confirm_live and live_city),
             "live_blockers": live_blockers,
+            "share_cap_execution_mode": "post_only_gtd_buy_shares",
         }
         opportunity_rows.append(opportunity)
         if event_key not in seen:
@@ -460,39 +489,26 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             seen.add(event_key)
             event_rows.append(opportunity)
         live_key = "|".join([city, target_date, str(candidate), token.no_token_id, str(src.get("source_obs_ts_utc"))])
-        if args.live and args.confirm_live and live_city and not live_blockers and live_key not in live_order_keys:
+        if args.live and args.confirm_live and live_city and not live_blockers and maker_intent is not None and live_key not in live_order_keys:
             order_row = {
                 **opportunity,
                 "order_side": "BUY",
-                "limit_price": float(best_ask),
-                "size": desired_shares,
-                "desired_shares": desired_shares,
-                "submitted_notional_usd": round(desired_shares * float(best_ask), 6),
-                "limit_price_policy": "exact_live_best_ask_v1",
+                **maker_intent,
                 "live_attempted": True,
                 "live_attempt_ts_utc": iso(),
             }
             if "place" not in live_place_cache:
-                live_place_cache["place"] = build_live_fok_limit_place_fn(market_proxy)
-            result = submit_fok_with_immediate_retries(
-                order_row,
-                place=live_place_cache["place"],
-                fetch_book_fn=fetch_fresh_book,
-                market_proxy=market_proxy,
-                book_timeout_sec=args.book_timeout_sec,
-                max_no_ask=policy.max_no_ask,
-                immediate_retries=args.fok_immediate_retries,
-            )
+                live_place_cache["place"] = build_live_post_only_gtd_place_fn(market_proxy)
+            result = submit_post_only_gtd(order_row, place=live_place_cache["place"])
             order_row = result["order_row"]
             order_row.update(
                 {
-                    "fok_retry_policy": "immediate_definitive_unfilled_only_v2",
-                    "fok_immediate_retries_configured": args.fok_immediate_retries,
-                    "fok_attempt_count": len(result["attempts"]),
-                    "fok_attempts": result["attempts"],
                     "live_submit_status": result["live_submit_status"],
-                    "actual_fill_shares": result["actual_fill_shares"],
-                    "actual_fill_cost_usd": result["actual_fill_cost_usd"],
+                    "actual_fill_shares": result.get("actual_fill_shares"),
+                    "actual_fill_cost_usd": result.get("actual_fill_cost_usd"),
+                    "live_order_posted": bool(result.get("live_order_posted")),
+                    "exchange_order_status": result.get("exchange_order_status"),
+                    "share_cap_check": result.get("share_cap_check"),
                 }
             )
             if result["exchange_response"] is not None:
@@ -500,6 +516,9 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
                 order_row["exchange_response"] = response
                 order_row["order_id"] = response.get("order_id")
                 live_order_keys.add(live_key)
+            if result["live_submit_status"] == "share_cap_violation":
+                share_cap_paused = True
+                share_cap_pause_reason = "post_fix_actual_fill_exceeded_desired_or_market_cap"
             if result["error"]:
                 order_row["error"] = result["error"]
             append_jsonl(out_dir / "orders.jsonl", order_row)
@@ -521,6 +540,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "seen_event_keys": sorted(seen)[-5000:],
             "live_order_keys": sorted(live_order_keys)[-5000:],
             "source_cross_confirmation": confirmation_state,
+            "share_cap_paused": share_cap_paused,
+            "share_cap_pause_reason": share_cap_pause_reason,
         },
     )
     burst_cities = next_metar_burst_cities(opportunity_rows)
@@ -550,7 +571,14 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "max_source_detect_age_min": args.max_source_detect_age_min,
             "max_source_observation_lag_min": args.max_source_observation_lag_min,
             "next_metar_window_min": args.next_metar_window_min,
-            "fok_immediate_retries": args.fok_immediate_retries,
+            "maker_effective_lifetime_sec": args.maker_effective_lifetime_sec,
+            "share_cap_enforcement": "resting_post_only_signed_size_v1",
+        },
+        "share_cap_health": {
+            **share_cap_audit,
+            "paused": share_cap_paused,
+            "pause_reason": share_cap_pause_reason,
+            "historical_incidents_acknowledged": historical_acknowledged,
         },
         "source_cities": sorted({city for city, _target_date in source_rows}),
         "metar_cities": sorted({city for city, _target_date in metar_rows}),
@@ -559,6 +587,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         "execution_eligible": len(order_rows),
         "live_orders_attempted": len(order_rows),
         "live_orders_submitted": sum(row.get("live_submit_status") == "submitted" for row in order_rows),
+        "live_orders_posted": sum(bool(row.get("live_order_posted")) for row in order_rows),
         "polling": {
             "base_interval_sec": args.interval_sec,
             "burst_interval_sec": args.burst_interval_sec,
@@ -590,6 +619,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--next-metar-window-min", type=float, default=20.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
     parser.add_argument("--fok-immediate-retries", type=int, default=2)
+    parser.add_argument("--maker-effective-lifetime-sec", type=float, default=45.0)
+    parser.add_argument("--acknowledge-historical-share-cap-incidents", action="store_true")
     parser.add_argument("--market-proxy", default=market_proxy_url(None))
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--confirm-live", action="store_true")
@@ -604,7 +635,7 @@ def main() -> int:
     args = build_parser().parse_args()
     live_place_cache: dict[str, Any] = {}
     if args.live and args.confirm_live and args.prebuild_live_client:
-        live_place_cache["place"] = build_live_fok_limit_place_fn(market_proxy_url(args.market_proxy or None))
+        live_place_cache["place"] = build_live_post_only_gtd_place_fn(market_proxy_url(args.market_proxy or None))
     while True:
         started = time.monotonic()
         latest = run_once(args, live_place_cache)

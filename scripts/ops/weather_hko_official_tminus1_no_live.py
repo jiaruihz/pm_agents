@@ -25,9 +25,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.ops.weather_fast_source_execution import (
-    build_live_fok_limit_place_fn,
+    audit_order_share_caps,
+    build_live_post_only_gtd_place_fn,
+    exact_share_maker_intent,
+    resolve_share_cap_pause,
     spent_market_shares,
-    submit_fok_with_immediate_retries,
+    submit_post_only_gtd,
 )
 from scripts.ops.weather_fast_source_stale_book_observer import (
     HIGH_FREQUENCY_JSONL,
@@ -132,6 +135,14 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
     out_dir = Path(args.output_dir)
     state_path = out_dir / "state.json"
     state = read_json(state_path, {"seen_event_keys": [], "live_order_keys": []})
+    orders_path = out_dir / "orders.jsonl"
+    share_cap_audit = audit_order_share_caps(orders_path)
+    historical_acknowledged = bool(args.acknowledge_historical_share_cap_incidents)
+    share_cap_paused, share_cap_pause_reason = resolve_share_cap_pause(
+        state,
+        share_cap_audit,
+        historical_acknowledged=historical_acknowledged,
+    )
     seen = set(state.get("seen_event_keys") or [])
     live_order_keys = set(state.get("live_order_keys") or [])
     now = datetime.now(timezone.utc)
@@ -162,7 +173,7 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
             "schema_version": "hko_official_tminus1_no_live_v1",
             "strategy_id": STRATEGY_ID,
             "strategy_instance": STRATEGY_ID,
-            "execution_policy": "hko_official_tminus1_no_fok",
+            "execution_policy": "hko_official_tminus1_no_post_only_gtd",
             "created_at_utc": iso(),
             "target_date": target_date,
             "city": "HongKong",
@@ -193,6 +204,7 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
         if token is None:
             blockers.append("missing_t_minus_1_market")
             opportunity = {**base, "status": "blocked", "blockers": blockers}
+            maker_intent = None
         else:
             book = fetch_fresh_book(token.no_token_id, proxy=proxy, timeout_sec=args.book_timeout_sec, top_n=5)
             summary = book.get("summary") or {}
@@ -200,21 +212,38 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
             bid_size = safe_float(summary.get("bid_size"))
             ask = safe_float(summary.get("best_ask"))
             ask_size = safe_float(summary.get("ask_size"))
+            tick_size = safe_float(summary.get("tick_size"))
             if book.get("status") != "ok":
                 blockers.append("fresh_book_not_ok")
             if ask is None:
                 blockers.append("missing_best_ask")
             elif ask > args.max_no_ask:
                 blockers.append("ask_above_max")
+            if tick_size is None:
+                blockers.append("missing_tick_size")
             if ask_size is None or ask_size < args.shares:
                 blockers.append("insufficient_top_ask_size")
+            if args.live and share_cap_paused:
+                blockers.append("share_cap_paused")
             already_spent = spent_market_shares(
-                out_dir / "orders.jsonl",
+                orders_path,
                 target_date=target_date,
                 token_id=token.no_token_id,
             )
             if already_spent + args.shares > args.max_shares_per_market + 1e-9:
                 blockers.append("market_share_cap")
+            maker_intent = None
+            if ask is not None and tick_size is not None:
+                try:
+                    maker_intent = exact_share_maker_intent(
+                        best_ask=ask,
+                        tick_size=tick_size,
+                        desired_shares=args.shares,
+                        now=now,
+                        effective_lifetime_sec=args.maker_effective_lifetime_sec,
+                    )
+                except ValueError:
+                    blockers.append("exact_share_maker_intent_invalid")
             opportunity = {
                 **base,
                 "status": "lock_candidate",
@@ -226,6 +255,7 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
                 "outcome": "NO",
                 "best_ask": ask,
                 "ask_size": ask_size,
+                "tick_size": tick_size,
                 "best_bid": bid,
                 "bid_size": bid_size,
                 "book_liquidity_state": (
@@ -249,6 +279,7 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
                 "live_requested": bool(args.live),
                 "live_enabled": bool(args.live and args.confirm_live),
                 "live_blockers": blockers,
+                "share_cap_execution_mode": "post_only_gtd_buy_shares",
             }
 
         opportunities.append(opportunity)
@@ -260,39 +291,31 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
         if token is None:
             continue
         live_key = "|".join([target_date, str(t_minus_1), token.no_token_id])
-        if not (args.live and args.confirm_live) or blockers or live_key in live_order_keys:
+        if (
+            not (args.live and args.confirm_live)
+            or blockers
+            or maker_intent is None
+            or live_key in live_order_keys
+        ):
             continue
         order_row = {
             **opportunity,
-            "limit_price": float(ask),
-            "size": args.shares,
-            "desired_shares": args.shares,
-            "submitted_notional_usd": round(args.shares * float(ask), 6),
-            "limit_price_policy": "exact_live_best_ask_v1",
+            **maker_intent,
             "live_attempted": True,
             "live_attempt_ts_utc": iso(),
         }
         if "place" not in live_client:
-            live_client["place"] = build_live_fok_limit_place_fn(proxy)
-        result = submit_fok_with_immediate_retries(
-            order_row,
-            place=live_client["place"],
-            fetch_book_fn=fetch_fresh_book,
-            market_proxy=proxy,
-            book_timeout_sec=args.book_timeout_sec,
-            max_no_ask=args.max_no_ask,
-            immediate_retries=args.fok_immediate_retries,
-        )
+            live_client["place"] = build_live_post_only_gtd_place_fn(proxy)
+        result = submit_post_only_gtd(order_row, place=live_client["place"])
         order_row = result["order_row"]
         order_row.update(
             {
-                "fok_retry_policy": "immediate_definitive_unfilled_only_v2",
-                "fok_immediate_retries_configured": args.fok_immediate_retries,
-                "fok_attempt_count": len(result["attempts"]),
-                "fok_attempts": result["attempts"],
                 "live_submit_status": result["live_submit_status"],
-                "actual_fill_shares": result["actual_fill_shares"],
-                "actual_fill_cost_usd": result["actual_fill_cost_usd"],
+                "actual_fill_shares": result.get("actual_fill_shares"),
+                "actual_fill_cost_usd": result.get("actual_fill_cost_usd"),
+                "live_order_posted": bool(result.get("live_order_posted")),
+                "exchange_order_status": result.get("exchange_order_status"),
+                "share_cap_check": result.get("share_cap_check"),
             }
         )
         if result["exchange_response"] is not None:
@@ -300,6 +323,9 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
             order_row["exchange_response"] = response
             order_row["order_id"] = response.get("order_id")
             live_order_keys.add(live_key)
+        if result["live_submit_status"] == "share_cap_violation":
+            share_cap_paused = True
+            share_cap_pause_reason = "post_fix_actual_fill_exceeded_desired_or_market_cap"
         if result["error"]:
             order_row["error"] = result["error"]
         append_jsonl(out_dir / "orders.jsonl", order_row)
@@ -307,7 +333,14 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
 
     for row in opportunities:
         append_jsonl(out_dir / "opportunities.jsonl", row)
-    state = {"updated_at_utc": iso(), "target_date": target_date, "seen_event_keys": sorted(seen)[-5000:], "live_order_keys": sorted(live_order_keys)[-5000:]}
+    state = {
+        "updated_at_utc": iso(),
+        "target_date": target_date,
+        "seen_event_keys": sorted(seen)[-5000:],
+        "live_order_keys": sorted(live_order_keys)[-5000:],
+        "share_cap_paused": share_cap_paused,
+        "share_cap_pause_reason": share_cap_pause_reason,
+    }
     write_json(state_path, state)
     latest = {
         "status": "ok",
@@ -321,11 +354,18 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
         "settlement_source": "HKO Daily Extract Absolute Daily Max",
         "execution_mode": "live" if args.live and args.confirm_live else "shadow",
         "live_enabled": bool(args.live and args.confirm_live),
-        "caps": {"shares_per_trade": args.shares, "max_shares_per_market": args.max_shares_per_market, "max_no_ask": args.max_no_ask, "max_source_detect_age_min": args.max_source_detect_age_min, "max_source_observation_lag_min": args.max_source_observation_lag_min, "fok_immediate_retries": args.fok_immediate_retries},
+        "caps": {"shares_per_trade": args.shares, "max_shares_per_market": args.max_shares_per_market, "max_no_ask": args.max_no_ask, "max_source_detect_age_min": args.max_source_detect_age_min, "max_source_observation_lag_min": args.max_source_observation_lag_min, "maker_effective_lifetime_sec": args.maker_effective_lifetime_sec, "share_cap_enforcement": "resting_post_only_signed_size_v1"},
+        "share_cap_health": {
+            **share_cap_audit,
+            "paused": share_cap_paused,
+            "pause_reason": share_cap_pause_reason,
+            "historical_incidents_acknowledged": historical_acknowledged,
+        },
         "events": len(events),
         "candidate_rows": len(opportunities),
         "live_orders_attempted": len(orders),
         "live_orders_submitted": sum(row.get("live_submit_status") == "submitted" for row in orders),
+        "live_orders_posted": sum(bool(row.get("live_order_posted")) for row in orders),
         "latest_opportunities": opportunities[-20:],
     }
     write_json(out_dir / "latest.json", latest)
@@ -344,6 +384,8 @@ def main() -> int:
     parser.add_argument("--max-source-observation-lag-min", type=float, default=30.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
     parser.add_argument("--fok-immediate-retries", type=int, default=2)
+    parser.add_argument("--maker-effective-lifetime-sec", type=float, default=45.0)
+    parser.add_argument("--acknowledge-historical-share-cap-incidents", action="store_true")
     parser.add_argument("--shares", type=float, default=5.0)
     parser.add_argument("--max-shares-per-market", type=float, default=5.0)
     parser.add_argument("--max-no-ask", type=float, default=0.93)
