@@ -58,9 +58,16 @@ Verdict: `inconclusive_zero_notional_only`
 | 3+ | current_yes | 22 | 5 | +100.0% | 0.975 | +2.4% | [+1.8%, +3.1%] |
 | 3+ | d1_no | 22 | 5 | +100.0% | 0.979 | +2.0% | [+1.4%, +2.7%] |
 
-## Busan current-day sanity check
+## Busan executed anchor case
 
 Busan 2026-07-14 在 2026-07-14T04:08:34Z 首次 strong-partial：30 YES ask=0.84，31 NO ask=0.89。该日未纳入上面的已结算 ROI。
+
+用户确认这是实际人工成交的 anchor trade；本报告此前称为 sanity case 不准确。
+
+- replay 首次 strong signal：2026-07-14T04:08:34Z。
+- forward runner 首条 Busan row：2026-07-14T11:47:59Z（晚 459.4 分钟），mode=zero_notional_shadow，live_action=none。
+- canonical 中匹配 `30 YES / 31 NO` 的 strategy fill：0 行。
+- 因此断点不在 signal selector：回放确实选中了该形态；断在 runner 启动时点、zero-notional 执行边界，以及人工成交未进入 strategy order/fill lineage。
 
 ## Feature coverage boundary
 

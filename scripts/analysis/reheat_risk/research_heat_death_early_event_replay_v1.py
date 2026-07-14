@@ -50,6 +50,7 @@ SOURCE_EVENTS_DIR = RUNTIME_ROOT / "output" / "source_events"
 SNAPSHOT_DIR = RUNTIME_ROOT / "targeted_output" / "paper_snapshots"
 ORDERBOOK_DIR = RUNTIME_ROOT / "targeted_output" / "orderbook_snapshots"
 DB_PATH = ROOT / "runtime" / "weather.db"
+FORWARD_OUTPUT_DIR = ROOT / "runtime" / "weather_edge_v1" / "current_yes_heat_death_shadow_v1"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/heat_death_early_event_replay_v1"
 OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-14-heat-death-early-event-replay-v1.json"
 OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-14-heat-death-early-event-replay-v1.md"
@@ -648,6 +649,63 @@ def quote_coverage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def first_forward_anchor_row(output_dir: Path, city: str, target_date: str) -> dict[str, Any] | None:
+    decisions_path = output_dir / "state_decisions.jsonl"
+    summaries_path = output_dir / "summary_history.jsonl"
+    if not decisions_path.exists() or not summaries_path.exists():
+        return None
+    summary_by_snapshot = {
+        str(row.get("snapshot_file") or ""): row
+        for row in iter_jsonl(summaries_path)
+        if row.get("snapshot_file")
+    }
+    for row in iter_jsonl(decisions_path):
+        if row.get("city") != city or row.get("target_date") != target_date:
+            continue
+        summary_row = summary_by_snapshot.get(str(row.get("snapshot_file") or ""), {})
+        return {
+            "snapshot_file": row.get("snapshot_file"),
+            "snapshot_ts_utc": summary_row.get("snapshot_ts_utc"),
+            "generated_at_utc": summary_row.get("generated_at_utc"),
+            "mode": summary_row.get("mode"),
+            "live_action": summary_row.get("live_action"),
+            "decision_hour_local": row.get("decision_hour_local"),
+            "physical_confirmation_profile": row.get("physical_confirmation_profile"),
+        }
+    return None
+
+
+def canonical_anchor_trade_rows(
+    db_path: Path,
+    *,
+    city: str,
+    target_date: str,
+    current_bracket: str,
+    d1_bracket: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
+    conn.execute("PRAGMA query_only=ON")
+    conn.execute("PRAGMA busy_timeout=2000")
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """
+        SELECT strategy_id, instance_id, trade_class, execution_mode, bracket,
+               side, fill_ts_utc, fill_price, fill_qty, order_id, signal_id
+        FROM fact_trades
+        WHERE city = ? AND target_date = ?
+          AND ((bracket = ? AND side = 'BUY_YES')
+               OR (bracket = ? AND side = 'BUY_NO'))
+        ORDER BY fill_ts_utc
+        """,
+        (city, target_date, current_bracket, d1_bracket),
+    ).fetchall()
+    freshness = conn.execute(
+        "SELECT MAX(fact_built_at_utc) AS fact_built_at_utc, MAX(fill_ts_utc) AS max_fill_ts_utc FROM fact_trades"
+    ).fetchone()
+    conn.close()
+    return [dict(row) for row in rows], dict(freshness)
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -672,6 +730,7 @@ def main() -> int:
     ap.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR))
     ap.add_argument("--orderbook-dir", default=str(ORDERBOOK_DIR))
     ap.add_argument("--db", default=str(DB_PATH))
+    ap.add_argument("--forward-output-dir", default=str(FORWARD_OUTPUT_DIR))
     ap.add_argument("--sanity-date", default="2026-07-14")
     ap.add_argument("--sanity-city", default="Busan")
     args = ap.parse_args()
@@ -727,6 +786,44 @@ def main() -> int:
                 "temp_trend_1h_f", "forecast_peak_delta_hours_local", "physical_support_reasons_partial",
             ]
             sanity_case = {field: sanity_raw.get(field) for field in sanity_fields}
+
+    busan_anchor_lineage: dict[str, Any] | None = None
+    if sanity_case is not None:
+        first_forward = first_forward_anchor_row(
+            Path(args.forward_output_dir),
+            str(sanity_case["city"]),
+            str(sanity_case["target_date"]),
+        )
+        canonical_rows, db_freshness = canonical_anchor_trade_rows(
+            Path(args.db),
+            city=str(sanity_case["city"]),
+            target_date=str(sanity_case["target_date"]),
+            current_bracket=str(sanity_case["current_bracket"]),
+            d1_bracket=str(sanity_case["d1_bracket"]),
+        )
+        replay_ts = parse_ts(sanity_case.get("decision_snapshot_ts_utc"))
+        forward_ts = parse_ts((first_forward or {}).get("snapshot_ts_utc"))
+        busan_anchor_lineage = {
+            "role": "user-reported executed anchor case; not merely a quote sanity case",
+            "replay_first_strong_ts_utc": sanity_case.get("decision_snapshot_ts_utc"),
+            "replay_current_yes_ask": sanity_case.get("current_yes_ask"),
+            "replay_d1_no_ask": sanity_case.get("d1_no_ask"),
+            "first_forward_row": first_forward,
+            "forward_started_after_replay_minutes": (
+                None
+                if replay_ts is None or forward_ts is None
+                else (forward_ts - replay_ts).total_seconds() / 60.0
+            ),
+            "matching_strategy_canonical_fill_rows": canonical_rows,
+            "matching_strategy_canonical_fill_count": len(canonical_rows),
+            "canonical_db_freshness": db_freshness,
+            "lineage_breaks": [
+                "forward runner started after the target signal",
+                "forward runner was zero-notional and had no plan/order path",
+                "personal/manual fill is not represented in local strategy order/fill lineage",
+                "target date was outside the settled replay window",
+            ],
+        }
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     write_csv(OUT_DIR / "event_states_prebase.csv", prebase)
@@ -788,7 +885,8 @@ def main() -> int:
             "support_gte_2_status": "diagnostic cohort only; not an approved strategy gate",
             "forward_runner_scope": "all physical_confirmation_base rows; quote refresh capped operationally; zero notional",
         },
-        "busan_current_day_sanity_not_in_settled_roi": sanity_case,
+        "busan_executed_anchor_not_in_settled_roi": sanity_case,
+        "busan_anchor_lineage_audit": busan_anchor_lineage,
         "sample_gate": {
             "required": {"settled_rows": 30, "active_dates": 10},
             "pass": sample_gate_pass,
@@ -824,7 +922,7 @@ def main() -> int:
             f"| {item['support_bucket']} | {item['expression']} | {item['rows']} | {item['active_dates']} | {pct(item['win_rate'])} | {avg_ask} | {pct(item['roi'])} | {ci_text} |"
         )
     sanity_line = (
-        "未找到指定 sanity case。"
+        "未找到指定 anchor case。"
         if sanity_case is None
         else (
             f"{sanity_case['city']} {sanity_case['target_date']} 在 {sanity_case['decision_snapshot_ts_utc']} "
@@ -832,6 +930,19 @@ def main() -> int:
             f"{sanity_case['d1_bracket']} NO ask={sanity_case['d1_no_ask']}。该日未纳入上面的已结算 ROI。"
         )
     )
+    lineage_lines = ["未找到 forward/canonical lineage。"]
+    if busan_anchor_lineage is not None:
+        first_forward = busan_anchor_lineage.get("first_forward_row") or {}
+        gap = busan_anchor_lineage.get("forward_started_after_replay_minutes")
+        gap_text = "NA" if gap is None else f"{float(gap):.1f} 分钟"
+        lineage_lines = [
+            "用户确认这是实际人工成交的 anchor trade；本报告此前称为 sanity case 不准确。",
+            "",
+            f"- replay 首次 strong signal：{busan_anchor_lineage['replay_first_strong_ts_utc']}。",
+            f"- forward runner 首条 Busan row：{first_forward.get('snapshot_ts_utc')}（晚 {gap_text}），mode={first_forward.get('mode')}，live_action={first_forward.get('live_action')}。",
+            f"- canonical 中匹配 `{sanity_case['current_bracket']} YES / {sanity_case['d1_bracket']} NO` 的 strategy fill：{busan_anchor_lineage['matching_strategy_canonical_fill_count']} 行。",
+            "- 因此断点不在 signal selector：回放确实选中了该形态；断在 runner 启动时点、zero-notional 执行边界，以及人工成交未进入 strategy order/fill lineage。",
+        ]
     OUT_MD.write_text(
         "\n".join(
             [
@@ -882,9 +993,11 @@ def main() -> int:
                 "|---|---|---:|---:|---:|---:|---:|---:|",
                 *support_lines,
                 "",
-                "## Busan current-day sanity check",
+                "## Busan executed anchor case",
                 "",
                 sanity_line,
+                "",
+                *lineage_lines,
                 "",
                 "## Feature coverage boundary",
                 "",
