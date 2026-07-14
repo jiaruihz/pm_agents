@@ -599,6 +599,51 @@ def test_candidate_market_falls_back_to_gamma_when_snapshot_omits_bracket(monkey
     assert resolution == "gamma_fallback"
 
 
+def test_candidate_market_rejects_value_inside_lower_bound_bucket(monkeypatch):
+    target_date = "2026-07-14"
+    lower_bucket = MarketToken(
+        city="Helsinki",
+        target_date=target_date,
+        bracket="20",
+        question="Will the highest temperature in Helsinki be 20C or below?",
+        event_slug="event",
+        market_id="market",
+        condition_id="condition",
+        yes_token_id="yes",
+        no_token_id="no",
+    )
+    index = {("Helsinki", target_date, "20"): lower_bucket}
+    monkeypatch.setattr(runner, "augment_market_index_from_gamma", lambda current, **_kwargs: current)
+
+    resolved, _index, resolution = runner.resolve_candidate_market(
+        index,
+        city="Helsinki",
+        target_date=target_date,
+        candidate=18,
+        market_proxy="http://127.0.0.1:7890",
+    )
+
+    assert resolved is None
+    assert resolution == "unresolved"
+
+
+def test_candidate_market_accepts_lower_bound_boundary():
+    token = MarketToken(
+        city="Helsinki",
+        target_date="2026-07-14",
+        bracket="20",
+        question="Will the highest temperature in Helsinki be 20C or below?",
+        event_slug="event",
+        market_id="market",
+        condition_id="condition",
+        yes_token_id="yes",
+        no_token_id="no",
+    )
+
+    assert runner.candidate_market_is_lockable(token, 20) is True
+    assert runner.candidate_market_is_lockable(token, 19) is False
+
+
 def test_metar_report_clock_uses_routine_reports_and_ignores_speci(tmp_path):
     path = tmp_path / "sources.jsonl"
     rows = [

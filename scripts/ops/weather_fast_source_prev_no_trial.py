@@ -43,6 +43,7 @@ from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
 )
 from scripts.ops.weather_market_proxy import market_proxy_url  # noqa: E402
 from weather_data_feed.fast_event_source_policy import load_fast_event_source_profiles  # noqa: E402
+from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
 
 
 RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
@@ -50,6 +51,13 @@ DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/fast_source_prev_no_trial"
 DEFAULT_HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
 DEFAULT_SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl"
 PERSISTENT_CROSS_POLICY = "persistent_candidate_margin_v4"
+
+
+def candidate_market_is_lockable(token: Any, candidate: int) -> bool:
+    parsed = parse_market_bracket(str(token.bracket), str(token.question))
+    if parsed is None or parsed.top or parsed.high is None:
+        return False
+    return float(parsed.high) == float(candidate)
 
 
 def resolve_candidate_market(
@@ -61,7 +69,7 @@ def resolve_candidate_market(
     market_proxy: str,
 ) -> tuple[Any | None, dict[Any, Any], str]:
     token = bracket_lookup(market_index, city, target_date, candidate)
-    if token is not None:
+    if token is not None and candidate_market_is_lockable(token, candidate):
         return token, market_index, "paper_snapshot"
     augmented = augment_market_index_from_gamma(
         market_index,
@@ -71,6 +79,8 @@ def resolve_candidate_market(
         market_proxy=market_proxy,
     )
     token = bracket_lookup(augmented, city, target_date, candidate)
+    if token is not None and not candidate_market_is_lockable(token, candidate):
+        token = None
     return token, augmented, "gamma_fallback" if token is not None else "unresolved"
 
 

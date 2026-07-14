@@ -261,6 +261,36 @@ run_quality = invalid_process_execution_sizing_and_freshness
 contaminated_window_end = 2026-07-14T02:00:24Z
 ```
 
+### Incident G: Lower-Bound Market Containment Produced False Locks
+
+Target date: `2026-07-14`
+
+What happened:
+
+- Helsinki's `20C or below` market was returned by containment lookup for candidate values `18C`
+  and `19C`.
+- The runner consequently emitted three false lock candidates for `18 -> 19` and `19 -> 20`.
+  Crossing either value does not guarantee that `20C or below NO` wins; only a `20 -> 21` crossing
+  locks that lower-bound market.
+- All three false candidates had NO asks above the configured cap (`0.990`, `0.993`, `0.990`).
+  They produced zero order rows, zero submissions, and zero fills.
+
+Correction:
+
+- A previous-NO candidate may use an exact or ranged market only at that market's upper boundary.
+- Top buckets are never lockable by a higher-temperature crossing.
+- Exclude the three Helsinki events from cross-precision denominators.
+
+Label:
+
+```text
+run_family = fast_source_prev_no_lower_bound_containment_incident
+run_quality = invalid_signal_market_semantics
+contaminated_window = 2026-07-14T08:32:17Z..2026-07-14T09:32:04Z
+affected_events = 3
+affected_orders = 0
+```
+
 Resolution / restored probe:
 
 ```text
