@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-07-14T16:22:38.861503Z",
+  "generated_at_utc": "2026-07-14T16:29:56.802140Z",
   "strategy_head": "heat_death_early_dislocation_v1",
   "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first archived direct quote after signal",
   "window": {
@@ -389,32 +389,18 @@
       "moisture_cloud_suppression"
     ]
   },
-  "busan_anchor_lineage_audit": {
-    "role": "user-reported executed anchor case; not merely a quote sanity case",
-    "replay_first_strong_ts_utc": "2026-07-14T04:08:34Z",
-    "replay_current_yes_ask": 0.84,
-    "replay_d1_no_ask": 0.89,
-    "first_forward_row": {
-      "snapshot_file": "snapshot_20260714_1947.json",
-      "snapshot_ts_utc": "2026-07-14T11:47:59Z",
-      "generated_at_utc": "2026-07-14T11:53:30Z",
-      "mode": "zero_notional_shadow",
-      "live_action": "none",
-      "decision_hour_local": 20.78,
-      "physical_confirmation_profile": "physical_confirmed_strong"
-    },
-    "forward_started_after_replay_minutes": 459.4166666666667,
-    "matching_strategy_canonical_fill_rows": [],
-    "matching_strategy_canonical_fill_count": 0,
-    "canonical_db_freshness": {
-      "fact_built_at_utc": "2026-07-14T07:54:56.361829+00:00",
-      "max_fill_ts_utc": "2026-07-14T04:07:10+00:00"
-    },
-    "lineage_breaks": [
-      "forward runner started after the target signal",
-      "forward runner was zero-notional and had no plan/order path",
-      "personal/manual fill is not represented in local strategy order/fill lineage",
-      "target date was outside the settled replay window"
+  "busan_anchor_backtest_alignment": {
+    "role": "user-reported executed anchor case that defines the intended early-dislocation morphology",
+    "selector_match": true,
+    "first_strong_ts_utc": "2026-07-14T04:08:34Z",
+    "current_yes_ask": 0.84,
+    "d1_no_ask": 0.89,
+    "included_in_settled_roi_window": false,
+    "why_not_in_settled_roi": "target_date 2026-07-14 is outside the settled replay window ending 2026-07-13",
+    "actual_backtest_gap": "historical first-signal direct executable quote coverage is sparse and skewed toward already-repriced late books",
+    "not_a_backtest_gap": [
+      "the forward runner did not exist yet",
+      "the personal fill is not in strategy canonical lineage"
     ]
   },
   "sample_gate": {
