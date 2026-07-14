@@ -120,8 +120,19 @@ def latest_file(paths: list[Path]) -> Path | None:
     return sorted(paths)[-1] if paths else None
 
 
+def latest_valid_json_file(paths: list[Path]) -> Path | None:
+    """Return the newest complete JSON file, skipping in-progress snapshots."""
+    for path in sorted(paths, reverse=True):
+        try:
+            read_json(path)
+        except (OSError, json.JSONDecodeError):
+            continue
+        return path
+    return None
+
+
 def latest_paper_snapshot() -> Path | None:
-    return latest_file(list(PAPER_SNAPSHOT_DIR.glob("snapshot_*.json")))
+    return latest_valid_json_file(list(PAPER_SNAPSHOT_DIR.glob("snapshot_*.json")))
 
 
 def latest_orderbook_snapshot() -> Path | None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import scripts.ops.weather_fast_source_stale_book_observer as observer
 from scripts.ops.weather_fast_source_stale_book_observer import (
     bracket_from_question,
     bracket_lookup,
@@ -217,6 +218,16 @@ def test_market_ladder_uses_real_range_brackets_not_numeric_plus_minus_one(tmp_p
     assert relative_market_token(index, "SanFrancisco", "2026-07-13", 77, 1).bracket == "78-79"
     assert market_date_has_tokens(index, "SanFrancisco", "2026-07-13")
     assert not market_date_has_tokens(index, "SanFrancisco", "2026-07-14")
+
+
+def test_latest_paper_snapshot_skips_in_progress_json(tmp_path, monkeypatch):
+    older = tmp_path / "snapshot_20260714_1200.json"
+    newest = tmp_path / "snapshot_20260714_1230.json"
+    older.write_text('{"records": []}', encoding="utf-8")
+    newest.write_text('{"records": [', encoding="utf-8")
+    monkeypatch.setattr(observer, "PAPER_SNAPSHOT_DIR", tmp_path)
+
+    assert observer.latest_paper_snapshot() == older
 
 
 def test_event_key_deduplicates_repeated_source_reports_within_same_market_bracket():
