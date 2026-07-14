@@ -959,6 +959,7 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "source_remaining_shares": to_float(plan.get("source_remaining_shares"), 0.0),
         "source_order_age_min": to_float(plan.get("source_order_age_min"), 0.0),
         "snapshot_ts_utc": safe_str(plan.get("snapshot_ts_utc")),
+        "decision_snapshot_ts_utc": safe_str(plan.get("decision_snapshot_ts_utc") or plan.get("snapshot_ts_utc")),
         "source_snapshot_path": safe_str(plan.get("source_snapshot_path")),
         "decision_local_time": safe_str(plan.get("decision_local_time")),
         "decision_timezone": safe_str(plan.get("decision_timezone")),

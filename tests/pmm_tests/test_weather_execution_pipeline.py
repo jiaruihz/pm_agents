@@ -716,6 +716,28 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(row["status"], "cancelled")
             self.assertEqual(row["execution_action"], "maker_lifecycle_cancel_stale_thesis")
 
+    def test_live_order_persists_decision_snapshot_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan["decision_snapshot_ts_utc"] = "2026-07-14T15:31:02Z"
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+
+            execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda _plan: {"order_id": "live-1"},
+            )
+
+            row = json.loads(live.read_text().splitlines()[-1])
+            self.assertEqual(row["decision_snapshot_ts_utc"], "2026-07-14T15:31:02Z")
+
     def test_execute_trade_plans_blocks_lifecycle_replacement_when_cancel_not_confirmed(self):
         with tempfile.TemporaryDirectory() as tmp:
             signal = normalize_signal(self._paper_decision())

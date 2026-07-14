@@ -1851,6 +1851,7 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "decision_hour_local_pit": decision.get("decision_hour_local_pit"),
         "decision_local_bucket": safe_str(decision.get("decision_local_bucket")),
         "decision_snapshot_ts_utc": safe_str(decision.get("decision_snapshot_ts_utc")),
+        "snapshot_ts_utc": safe_str(decision.get("decision_snapshot_ts_utc")),
         "source_snapshot_path": safe_str(decision.get("source_snapshot_path"))
         or "runtime/weather.db:fact_signal_candidates",
     }
@@ -2147,6 +2148,7 @@ def build_lifecycle_plan(
         "paper_enabled": False,
         "live_enabled": bool(live_enabled),
         "decision_snapshot_ts_utc": safe_str(order.get("decision_snapshot_ts_utc")),
+        "snapshot_ts_utc": safe_str(order.get("decision_snapshot_ts_utc")),
         "source_snapshot_path": safe_str(order.get("source_snapshot_path"))
         or "runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl",
     }
