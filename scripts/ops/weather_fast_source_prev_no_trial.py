@@ -29,7 +29,6 @@ if str(ROOT) not in sys.path:
 
 from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
     PM_CLOB_URL,
-    arith_round,
     bracket_lookup,
     build_market_index,
     fetch_fresh_book,
@@ -41,6 +40,8 @@ from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
     safe_float,
 )
 from scripts.ops.weather_market_proxy import market_proxy_url  # noqa: E402
+from weather_data_feed.fast_event_source_policy import load_fast_event_source_profiles  # noqa: E402
+from weather_data_feed.observation_sources.fetchers import arith_round  # noqa: E402
 
 
 RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
@@ -53,7 +54,7 @@ PERSISTENT_CROSS_SOURCES = {
     ("Helsinki", "fmi"),
     ("Singapore", "singapore_mss"),
 }
-PERSISTENT_CROSS_POLICY = "two_above_half_latest_above_seven_v2"
+PERSISTENT_CROSS_POLICY = "two_above_half_latest_above_seven_candidate_v3"
 
 
 def iso(dt: datetime | None = None) -> str:
@@ -91,6 +92,7 @@ def source_cross_confirmation(
     source_temp_c: float,
     source_obs_ts_utc: str,
     metar_running_max_c: int,
+    candidate_no_bracket_c: int,
     state: dict[str, Any],
 ) -> dict[str, Any]:
     """Apply source-specific evidence requirements before declaring a cross."""
@@ -104,14 +106,26 @@ def source_cross_confirmation(
             "blocker": "" if arith_round(source_temp_c) > metar_running_max_c else "source_not_above_metar_running_max",
         }
 
+    if candidate_no_bracket_c < metar_running_max_c:
+        return {
+            "policy": PERSISTENT_CROSS_POLICY,
+            "basis": "candidate_no_bracket",
+            "basis_c": candidate_no_bracket_c,
+            "required_margin_c": 0.5,
+            "required_distinct_observations": 2,
+            "qualifying_distinct_observations": 0,
+            "confirmed": False,
+            "blocker": "source_not_above_metar_running_max",
+        }
+
     qualifying_margin_c = 0.5
     strong_margin_c = 0.7
     required_observations = 2
-    qualifying_threshold_c = metar_running_max_c + qualifying_margin_c
-    strong_threshold_c = metar_running_max_c + strong_margin_c
+    qualifying_threshold_c = candidate_no_bracket_c + qualifying_margin_c
+    strong_threshold_c = candidate_no_bracket_c + strong_margin_c
     qualifies = source_temp_c >= qualifying_threshold_c - 1e-9
     latest_is_strong = source_temp_c >= strong_threshold_c - 1e-9
-    key = f"{city}|{target_date}|{source}|{metar_running_max_c}"
+    key = f"{city}|{target_date}|{source}|{candidate_no_bracket_c}"
     previous = dict(state.get(key) or {})
     if previous.get("policy") != PERSISTENT_CROSS_POLICY:
         previous = {}
@@ -140,6 +154,8 @@ def source_cross_confirmation(
         blocker = "latest_source_cross_strength_not_met"
     return {
         "policy": PERSISTENT_CROSS_POLICY,
+        "basis": "candidate_no_bracket",
+        "basis_c": candidate_no_bracket_c,
         "required_margin_c": qualifying_margin_c,
         "threshold_c": qualifying_threshold_c,
         "strong_margin_c": strong_margin_c,
@@ -149,6 +165,119 @@ def source_cross_confirmation(
         "qualifying_distinct_observations": count,
         "confirmed": confirmed,
         "blocker": blocker,
+    }
+
+
+def is_definitive_fok_unfilled_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "couldn't be fully filled" in message and "fok" in message
+
+
+def submit_fok_with_immediate_retries(
+    order_row: dict[str, Any],
+    *,
+    place: Any,
+    fetch_book_fn: Any,
+    market_proxy: str,
+    book_timeout_sec: float,
+    max_no_ask: float,
+    limit_price_cushion: float,
+    immediate_retries: int,
+) -> dict[str, Any]:
+    """Retry only definitive FOK rejections; ambiguous transport errors must not duplicate orders."""
+    working = dict(order_row)
+    attempts: list[dict[str, Any]] = []
+    total_attempts = 1 + max(0, int(immediate_retries))
+    last_error = ""
+
+    for attempt_number in range(1, total_attempts + 1):
+        if attempt_number > 1:
+            book = fetch_book_fn(
+                str(working["token_id"]),
+                proxy=market_proxy,
+                timeout_sec=float(book_timeout_sec),
+                top_n=5,
+            )
+            summary = book.get("summary") or {}
+            best_ask = safe_float(summary.get("best_ask"))
+            ask_size = safe_float(summary.get("ask_size"))
+            retry_blockers: list[str] = []
+            if book.get("status") != "ok":
+                retry_blockers.append("fresh_book_not_ok")
+            if best_ask is None:
+                retry_blockers.append("missing_best_ask")
+            elif best_ask > float(max_no_ask):
+                retry_blockers.append("ask_above_max")
+            if ask_size is None or ask_size < float(working["size"]):
+                retry_blockers.append("insufficient_top_ask_size")
+            if retry_blockers:
+                last_error = "immediate_retry_blocked:" + ",".join(retry_blockers)
+                attempts.append(
+                    {
+                        "attempt": attempt_number,
+                        "attempt_ts_utc": iso(),
+                        "status": "retry_blocked",
+                        "best_ask": best_ask,
+                        "ask_size": ask_size,
+                        "blockers": retry_blockers,
+                        "fresh_book_status": book.get("status"),
+                        "fresh_book_error": book.get("error", ""),
+                    }
+                )
+                break
+            limit_price = round(min(float(max_no_ask), float(best_ask) + float(limit_price_cushion)), 2)
+            working.update(
+                {
+                    "best_ask": best_ask,
+                    "ask_size": ask_size,
+                    "fresh_book_status": book.get("status"),
+                    "fresh_book_error": book.get("error", ""),
+                    "fresh_book_http_status": book.get("http_status"),
+                    "fresh_book_proxy_used": book.get("proxy_used", ""),
+                    "limit_price": limit_price,
+                    "planned_notional_usd": round(float(working["size"]) * float(best_ask), 6),
+                    "submitted_notional_usd": round(float(working["size"]) * limit_price, 6),
+                }
+            )
+
+        attempt = {
+            "attempt": attempt_number,
+            "attempt_ts_utc": iso(),
+            "best_ask": working.get("best_ask"),
+            "ask_size": working.get("ask_size"),
+            "limit_price": working.get("limit_price"),
+        }
+        try:
+            response = place(working)
+        except Exception as exc:  # noqa: BLE001
+            last_error = f"{type(exc).__name__}: {exc}"
+            attempt.update(
+                {
+                    "status": "submit_failed",
+                    "error": last_error,
+                    "definitive_fok_unfilled": is_definitive_fok_unfilled_error(exc),
+                }
+            )
+            attempts.append(attempt)
+            if attempt["definitive_fok_unfilled"] and attempt_number < total_attempts:
+                continue
+            break
+        attempt.update({"status": "submitted", "order_id": response.get("order_id")})
+        attempts.append(attempt)
+        return {
+            "order_row": working,
+            "attempts": attempts,
+            "exchange_response": response,
+            "live_submit_status": "submitted",
+            "error": "",
+        }
+
+    return {
+        "order_row": working,
+        "attempts": attempts,
+        "exchange_response": None,
+        "live_submit_status": "submit_failed",
+        "error": last_error,
     }
 
 
@@ -427,11 +556,22 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
     )
 
     source_rows = latest_source_by_city(Path(args.high_frequency_latest), target_date, allowed_sources, all_cities)
-    metar_rows = metar_running_max(Path(args.source_events_jsonl), target_date)
+    fast_profiles = load_fast_event_source_profiles()
+    city_profiles = {
+        profile.city: profile
+        for profile in fast_profiles.values()
+        if profile.collector_enabled and profile.city in all_cities
+    }
+    metar_rows_by_date = metar_running_max(Path(args.source_events_jsonl), target_date, city_profiles, now)
+    metar_rows = {
+        city: row
+        for (city, row_target_date), row in metar_rows_by_date.items()
+        if row_target_date == target_date
+    }
     metar_clocks = metar_report_clocks(Path(args.source_events_jsonl), target_date)
     paper_path = latest_paper_snapshot()
     orderbook_path = latest_orderbook_snapshot()
-    market_index = build_market_index(paper_path, target_date)
+    market_index = build_market_index(paper_path, {target_date})
 
     event_rows: list[dict[str, Any]] = []
     opportunity_rows: list[dict[str, Any]] = []
@@ -477,6 +617,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             source_temp_c=float(src["temp_c"]),
             source_obs_ts_utc=str(src.get("source_obs_ts_utc") or ""),
             metar_running_max_c=metar_max,
+            candidate_no_bracket_c=t_minus_1,
             state=source_cross_confirmation_state,
         )
         common = {
@@ -500,6 +641,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "t_minus_1_no_bracket_c": t_minus_1,
             **next_metar_window,
             "source_cross_policy": cross_confirmation["policy"],
+            "source_cross_confirmation_basis": cross_confirmation.get("basis", "metar_running_max"),
+            "source_cross_confirmation_basis_c": cross_confirmation.get("basis_c", metar_max),
             "source_cross_required_margin_c": cross_confirmation["required_margin_c"],
             "source_cross_threshold_c": cross_confirmation.get("threshold_c"),
             "source_cross_strong_margin_c": cross_confirmation.get("strong_margin_c"),
@@ -525,7 +668,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             continue
 
         event_key = "|".join([city, target_date, str(src.get("source")), str(src.get("source_obs_ts_utc")), str(source_round), str(metar_max), str(t_minus_1)])
-        token = bracket_lookup(market_index, city, t_minus_1)
+        token = bracket_lookup(market_index, city, target_date, t_minus_1)
         if token is None:
             opportunity_rows.append({**common, "status": "missing_t_minus_1_market", "event_key": event_key})
             continue
@@ -595,17 +738,31 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
                 "live_attempted": True,
                 "live_attempt_ts_utc": iso(),
             }
-            try:
-                if "place" not in live_place_cache:
-                    live_place_cache["place"] = build_live_fok_limit_place_fn(market_proxy)
-                response = live_place_cache["place"](order_row)
+            if "place" not in live_place_cache:
+                live_place_cache["place"] = build_live_fok_limit_place_fn(market_proxy)
+            result = submit_fok_with_immediate_retries(
+                order_row,
+                place=live_place_cache["place"],
+                fetch_book_fn=fetch_fresh_book,
+                market_proxy=market_proxy,
+                book_timeout_sec=float(args.book_timeout_sec),
+                max_no_ask=float(args.max_no_ask),
+                limit_price_cushion=float(args.limit_price_cushion),
+                immediate_retries=int(args.fok_immediate_retries),
+            )
+            order_row = result["order_row"]
+            order_row["fok_retry_policy"] = "immediate_definitive_unfilled_only_v1"
+            order_row["fok_immediate_retries_configured"] = int(args.fok_immediate_retries)
+            order_row["fok_attempt_count"] = len(result["attempts"])
+            order_row["fok_attempts"] = result["attempts"]
+            order_row["live_submit_status"] = result["live_submit_status"]
+            if result["exchange_response"] is not None:
+                response = result["exchange_response"]
                 order_row["exchange_response"] = response
                 order_row["order_id"] = response.get("order_id")
-                order_row["live_submit_status"] = "submitted"
                 live_order_keys.add(live_key)
-            except Exception as exc:  # noqa: BLE001
-                order_row["live_submit_status"] = "submit_failed"
-                order_row["error"] = f"{type(exc).__name__}: {exc}"
+            if result["error"]:
+                order_row["error"] = result["error"]
             append_jsonl(out_dir / "orders.jsonl", order_row)
             order_rows.append(order_row)
 
@@ -640,6 +797,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "max_no_ask": float(args.max_no_ask),
             "max_source_age_min": float(args.max_source_age_min),
             "next_metar_window_min": float(args.next_metar_window_min),
+            "fok_immediate_retries": int(args.fok_immediate_retries),
         },
         "source_cities": sorted(source_rows),
         "metar_cities": sorted(metar_rows),
@@ -728,6 +886,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-source-age-min", type=float, default=15.0)
     parser.add_argument("--next-metar-window-min", type=float, default=20.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
+    parser.add_argument("--fok-immediate-retries", type=int, default=2)
     parser.add_argument("--market-proxy", default=market_proxy_url(None))
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--confirm-live", action="store_true")

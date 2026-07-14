@@ -6,17 +6,28 @@ from scripts.ops.weather_fast_source_prev_no_trial import (
     next_metar_burst_cities,
     next_metar_window_status,
     source_cross_confirmation,
+    submit_fok_with_immediate_retries,
 )
 
 
-def evaluate(temp: float, obs_ts: str, state: dict, *, city="Busan", source="amos_runway"):
+def evaluate(
+    temp: float,
+    obs_ts: str,
+    state: dict,
+    *,
+    city="Busan",
+    source="amos_runway",
+    metar_running_max=34,
+    candidate_no_bracket=34,
+):
     return source_cross_confirmation(
         city=city,
         source=source,
         target_date="2026-07-11",
         source_temp_c=temp,
         source_obs_ts_utc=obs_ts,
-        metar_running_max_c=34,
+        metar_running_max_c=metar_running_max,
+        candidate_no_bracket_c=candidate_no_bracket,
         state=state,
     )
 
@@ -61,7 +72,7 @@ def test_persistent_sources_confirm_when_latest_print_reaches_seven_tenths():
 
     assert result["qualifying_distinct_observations"] == 2
     assert result["confirmed"] is True
-    assert result["policy"] == "two_above_half_latest_above_seven_v2"
+    assert result["policy"] == "two_above_half_latest_above_seven_candidate_v3"
     assert result["blocker"] == ""
 
 
@@ -105,7 +116,7 @@ def test_singapore_uses_persistent_confirmation_policy():
         source="singapore_mss",
     )
 
-    assert result["policy"] == "two_above_half_latest_above_seven_v2"
+    assert result["policy"] == "two_above_half_latest_above_seven_candidate_v3"
     assert result["confirmed"] is False
 
 
@@ -117,11 +128,118 @@ def test_other_sources_keep_existing_arithmetic_round_policy():
         source_temp_c=21.5,
         source_obs_ts_utc="2026-07-11T15:00:00+00:00",
         metar_running_max_c=21,
+        candidate_no_bracket_c=21,
         state={},
     )
 
     assert result["policy"] == "arithmetic_round_v1"
     assert result["confirmed"] is True
+
+
+def test_persistent_confirmation_is_scoped_to_candidate_no_bracket():
+    state = {}
+    evaluate(
+        29.6,
+        "2026-07-14T00:41:00+00:00",
+        state,
+        metar_running_max=29,
+        candidate_no_bracket=29,
+    )
+    evaluate(
+        29.8,
+        "2026-07-14T00:51:00+00:00",
+        state,
+        metar_running_max=29,
+        candidate_no_bracket=29,
+    )
+
+    first_30_no_print = evaluate(
+        30.6,
+        "2026-07-14T00:58:00+00:00",
+        state,
+        metar_running_max=29,
+        candidate_no_bracket=30,
+    )
+    confirmed_30_no = evaluate(
+        30.7,
+        "2026-07-14T00:59:00+00:00",
+        state,
+        metar_running_max=29,
+        candidate_no_bracket=30,
+    )
+
+    assert first_30_no_print["qualifying_distinct_observations"] == 1
+    assert first_30_no_print["confirmed"] is False
+    assert first_30_no_print["threshold_c"] == 30.5
+    assert first_30_no_print["strong_threshold_c"] == 30.7
+    assert confirmed_30_no["qualifying_distinct_observations"] == 2
+    assert confirmed_30_no["confirmed"] is True
+
+
+def test_definitive_fok_rejection_retries_immediately_with_a_fresh_book():
+    place_calls = []
+    fetch_calls = []
+
+    def place(row):
+        place_calls.append(dict(row))
+        if len(place_calls) == 1:
+            raise RuntimeError("FOK order couldn't be fully filled")
+        return {"order_id": "retry-order-id", "place": {"status": "matched"}}
+
+    def fetch_book(token_id, **kwargs):
+        fetch_calls.append((token_id, kwargs))
+        return {
+            "status": "ok",
+            "summary": {"best_ask": 0.87, "ask_size": 35.6},
+            "http_status": 200,
+            "proxy_used": "proxy",
+        }
+
+    result = submit_fok_with_immediate_retries(
+        {
+            "token_id": "30-no-token",
+            "size": 10.0,
+            "best_ask": 0.73,
+            "ask_size": 76.4,
+            "limit_price": 0.75,
+        },
+        place=place,
+        fetch_book_fn=fetch_book,
+        market_proxy="proxy",
+        book_timeout_sec=5.0,
+        max_no_ask=0.94,
+        limit_price_cushion=0.02,
+        immediate_retries=2,
+    )
+
+    assert result["live_submit_status"] == "submitted"
+    assert len(place_calls) == 2
+    assert len(fetch_calls) == 1
+    assert result["order_row"]["best_ask"] == 0.87
+    assert result["order_row"]["limit_price"] == 0.89
+    assert [attempt["status"] for attempt in result["attempts"]] == ["submit_failed", "submitted"]
+
+
+def test_ambiguous_submit_error_is_not_retried():
+    place_calls = []
+
+    def place(row):
+        place_calls.append(dict(row))
+        raise TimeoutError("network timeout")
+
+    result = submit_fok_with_immediate_retries(
+        {"token_id": "30-no-token", "size": 10.0, "best_ask": 0.73, "ask_size": 76.4, "limit_price": 0.75},
+        place=place,
+        fetch_book_fn=lambda *_args, **_kwargs: {},
+        market_proxy="proxy",
+        book_timeout_sec=5.0,
+        max_no_ask=0.94,
+        limit_price_cushion=0.02,
+        immediate_retries=2,
+    )
+
+    assert result["live_submit_status"] == "submit_failed"
+    assert len(place_calls) == 1
 
 
 def test_metar_report_clock_uses_routine_reports_and_ignores_speci(tmp_path):

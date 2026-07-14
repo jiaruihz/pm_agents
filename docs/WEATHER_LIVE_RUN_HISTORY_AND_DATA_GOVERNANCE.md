@@ -5,7 +5,7 @@ Updated: 2026-06-09 metadata pass; preserve content dates below
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
 
-Last updated: 2026-05-17
+Last updated: 2026-07-14
 
 This document records the early weather live-trading rollout history, known mistakes, and data-model rules needed to keep future analysis reproducible. Read it with:
 
@@ -166,6 +166,46 @@ Label:
 run_family = regime_routed_no_live_feature_parity_incident
 run_quality = invalid_process_feature_parity_duplicate_risk
 strategy_state = paused
+```
+
+### Incident E: Fast-Source Candidate-Bracket Confirmation Mismatch
+
+Target date: `2026-07-14`
+
+What happened:
+
+- Busan AMOS `30.6C` mapped to the `30C NO` candidate while the METAR running max was `29C`.
+- Persistent-cross state and thresholds were incorrectly keyed to the METAR running max, so prior
+  `29.5C+` observations counted toward confirmation of the higher `30C NO` bracket.
+- The first FOK attempt at `09:59:39 KST` was definitively rejected as not fully fillable; the next
+  runner-cycle retry filled at `10:00:29 KST`, about 50 seconds later and at a worse ask.
+
+Observed live exposure:
+
+```text
+strategy_instance = fast_source_prev_no_trial_v1
+city = Busan
+target_date = 2026-07-14
+token/bracket = 30C NO
+matched_cost = $8.899998
+matched_shares = 10.348835
+order_id = 0x65ef26d51e094452cd75a9b4feb3f2c1a8d1756b46def53f8e1aa9fad20f444d
+```
+
+Correction:
+
+- Version persistent confirmation by `city + date + source + candidate NO bracket`.
+- Require two distinct observations at `candidate + 0.5C` or above, with the latest at
+  `candidate + 0.7C` or above.
+- Retry only definitive FOK-unfilled rejections immediately after refreshing the live book;
+  do not retry ambiguous transport failures that could duplicate an accepted order.
+
+Label:
+
+```text
+run_family = fast_source_prev_no_trial_candidate_basis_incident
+run_quality = invalid_process_confirmation_basis_mismatch
+strategy_state = live_corrected_after_2026-07-14
 ```
 
 Resolution / restored probe:
