@@ -34,7 +34,13 @@ AMSC_AWOS_AIRPORTS: dict[str, dict[str, str]] = {
 }
 
 AMOS_AIRPORTS: dict[str, dict[str, str]] = {
-    "Seoul": {"station": "RKSI", "stn_id": "113", "label": "Incheon Intl"},
+    "Seoul": {
+        "station": "RKSI",
+        "stn_id": "113",
+        "label": "Incheon Intl",
+        "primary_runway": "15L",
+        "preferred_temperature_runway": "15R/33L",
+    },
     "Busan": {"station": "RKPK", "stn_id": "153", "label": "Gimhae Intl"},
 }
 
@@ -391,6 +397,9 @@ def parse_amos_runway_html(
     station: str,
     target_date: str = "",
 ) -> list[dict[str, Any]]:
+    airport_meta = AMOS_AIRPORTS.get(city, {})
+    primary_runway = _normalize_runway(airport_meta.get("primary_runway"))
+    preferred_temperature_runway = _normalize_runway(airport_meta.get("preferred_temperature_runway"))
     lines = _html_lines(text)
     obs_time_utc, obs_time_local = _extract_amos_observation_time(text, station)
     metar_match = re.search(rf"METAR\s+{re.escape(station)}\s.*?=", text or "", re.DOTALL)
@@ -453,6 +462,11 @@ def parse_amos_runway_html(
                 "station": station,
                 "target_date": target_date,
                 "runway": runway,
+                "primary_runway": primary_runway,
+                "preferred_temperature_runway": preferred_temperature_runway,
+                "is_preferred_temperature_runway": bool(
+                    preferred_temperature_runway and _normalize_runway(runway) == preferred_temperature_runway
+                ),
                 "observation_time_utc": obs_time_utc,
                 "observation_time_local": obs_time_local,
                 "point_temp_c": round(sum(temps) / len(temps), 3),

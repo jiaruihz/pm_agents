@@ -313,6 +313,10 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
                 "source": "jma_amedas",
                 "temp_c": 21.5,
                 "source_market_value": 22,
+                "runway": "15R/33L",
+                "primary_runway": "15L",
+                "preferred_temperature_runway": "15R/33L",
+                "is_preferred_temperature_runway": True,
                 "source_obs_ts_utc": (now - timedelta(minutes=2)).isoformat(),
                 "source_detect_ts_utc": (now - timedelta(minutes=1)).isoformat(),
             }
@@ -378,6 +382,9 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
     assert latest["live_orders_submitted"] == 1
     assert latest["city_policies"]["Tokyo"]["shares_per_trade"] == 5.0
     assert order["limit_price"] == 0.8
+    assert order["source_runway"] == "15R/33L"
+    assert order["source_primary_runway"] == "15L"
+    assert order["source_is_preferred_temperature_runway"] is True
     assert order["actual_fill_shares"] == 5.0
     assert order["t_minus_1_no_bracket"] == 21
 

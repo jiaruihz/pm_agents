@@ -134,6 +134,47 @@ def test_source_latest_prefers_newer_observation_even_when_temperature_falls(tmp
     assert rows[("Tokyo", "2026-07-14")]["source_obs_ts_utc"] == "2026-07-14T02:20:00+00:00"
 
 
+def test_source_latest_prefers_configured_runway_for_same_observation_minute(tmp_path):
+    profiles = load_fast_event_source_profiles()
+    now = datetime(2026, 7, 14, 5, 0, tzinfo=timezone.utc)
+    path = tmp_path / "latest.json"
+    path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "city": "Seoul",
+                        "target_date": "2026-07-14",
+                        "source": "amos_runway",
+                        "runway": "16L/34R",
+                        "temp_c": 29.1,
+                        "is_preferred_temperature_runway": False,
+                        "observation_time_utc": "2026-07-14T04:58:00Z",
+                        "local_detect_ts_utc": "2026-07-14T04:58:34Z",
+                    },
+                    {
+                        "city": "Seoul",
+                        "target_date": "2026-07-14",
+                        "source": "amos_runway",
+                        "runway": "15R/33L",
+                        "temp_c": 29.2,
+                        "is_preferred_temperature_runway": True,
+                        "observation_time_utc": "2026-07-14T04:58:00Z",
+                        "local_detect_ts_utc": "2026-07-14T04:58:34Z",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rows = source_latest_by_city(path, "", {"amos_runway"}, profiles, now)
+
+    selected = rows[("Seoul", "2026-07-14")]
+    assert selected["runway"] == "15R/33L"
+    assert selected["temp_c"] == 29.2
+
+
 def test_market_index_does_not_collide_across_target_dates(tmp_path):
     path = tmp_path / "paper.json"
     path.write_text(

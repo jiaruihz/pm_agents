@@ -102,6 +102,8 @@ def test_supported_high_frequency_sources_cover_requested_open_project_sources()
     sources = supported_high_frequency_sources()
 
     assert sources["amos_runway"]["Seoul"]["station"] == "RKSI"
+    assert sources["amos_runway"]["Seoul"]["primary_runway"] == "15L"
+    assert sources["amos_runway"]["Seoul"]["preferred_temperature_runway"] == "15R/33L"
     assert sources["noaa_madis_hfmetar"]["New York"]["station"] == "KLGA"
     assert sources["singapore_mss"]["Singapore"]["station"] == "S24"
     assert sources["jma_amedas"]["Tokyo"]["station"] == "44166"

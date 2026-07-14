@@ -57,7 +57,13 @@ US_HFMETAR_CITIES: dict[str, dict[str, Any]] = {
 
 HIGH_FREQUENCY_CITY_SOURCES: dict[str, dict[str, dict[str, Any]]] = {
     "amos_runway": {
-        "Seoul": {"station": "RKSI", "label": "Incheon AMOS runway air temperature", "timezone_name": "Asia/Seoul"},
+        "Seoul": {
+            "station": "RKSI",
+            "label": "Incheon AMOS runway air temperature",
+            "timezone_name": "Asia/Seoul",
+            "primary_runway": "15L",
+            "preferred_temperature_runway": "15R/33L",
+        },
         "Busan": {"station": "RKPK", "label": "Gimhae AMOS runway air temperature", "timezone_name": "Asia/Seoul"},
     },
     "noaa_madis_hfmetar": US_HFMETAR_CITIES,
@@ -731,7 +737,26 @@ def fetch_amos_high_frequency(city: str, *, settings: HighFrequencyFetchSettings
         if obs_dt is None or temp is None:
             continue
         meta = HIGH_FREQUENCY_CITY_SOURCES["amos_runway"][city]
-        extra = {k: raw.get(k) for k in ("runway", "runway_temp_min_c", "runway_temp_max_c", "runway_temp_avg_c", "dewpoint_c", "wind_dir", "wind_speed", "rvr", "mor", "raw_metar", "metar_temp_c") if k in raw}
+        extra = {
+            k: raw.get(k)
+            for k in (
+                "runway",
+                "primary_runway",
+                "preferred_temperature_runway",
+                "is_preferred_temperature_runway",
+                "runway_temp_min_c",
+                "runway_temp_max_c",
+                "runway_temp_avg_c",
+                "dewpoint_c",
+                "wind_dir",
+                "wind_speed",
+                "rvr",
+                "mor",
+                "raw_metar",
+                "metar_temp_c",
+            )
+            if k in raw
+        }
         records.append(
             _base_record(
                 source="amos_runway",

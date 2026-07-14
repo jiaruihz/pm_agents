@@ -69,6 +69,9 @@ def test_amos_parser_pairs_runway_rows_and_preserves_metar_anchor() -> None:
     assert len(rows) == 1
     assert rows[0]["source"] == "amos"
     assert rows[0]["runway"] == "15L/33R"
+    assert rows[0]["primary_runway"] == "15L"
+    assert rows[0]["preferred_temperature_runway"] == "15R/33L"
+    assert rows[0]["is_preferred_temperature_runway"] is False
     assert rows[0]["point_temp_c"] == 29.1
     assert rows[0]["metar_temp_c"] == 29.0
     assert rows[0]["observation_time_utc"] == "2026-07-07T05:20:00+00:00"

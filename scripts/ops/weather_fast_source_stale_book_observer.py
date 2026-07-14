@@ -557,7 +557,13 @@ def source_latest_by_city(
             continue
         old_obs = parse_dt(old.get("source_obs_ts_utc")) or datetime.min.replace(tzinfo=timezone.utc)
         old_detect = parse_dt(old.get("source_detect_ts_utc")) or datetime.min.replace(tzinfo=timezone.utc)
-        if obs_dt > old_obs or (obs_dt == old_obs and detect_dt > old_detect):
+        preferred = bool(enriched.get("is_preferred_temperature_runway"))
+        old_preferred = bool(old.get("is_preferred_temperature_runway"))
+        if (
+            obs_dt > old_obs
+            or (obs_dt == old_obs and preferred and not old_preferred)
+            or (obs_dt == old_obs and preferred == old_preferred and detect_dt > old_detect)
+        ):
             out[key] = enriched
     return out
 
