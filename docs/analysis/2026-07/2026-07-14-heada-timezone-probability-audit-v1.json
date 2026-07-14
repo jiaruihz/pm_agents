@@ -1,0 +1,507 @@
+{
+  "generated_at_utc": "2026-07-14T15:12:41.259377+00:00",
+  "db": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+  "cache": "/Volumes/jrs/weather_data_feed_service_runtime/cache",
+  "fact_built_at_utc": "2026-07-14T07:58:43.800304+00:00",
+  "settled_range": [
+    "2026-05-06",
+    "2026-07-13"
+  ],
+  "neutral_rows": 2660,
+  "neutral_dates": 68,
+  "results": {
+    "full": {
+      "probability": {
+        "rows": 2660,
+        "dates": 68,
+        "realized": 0.11353383458646617,
+        "legacy_p": {
+          "mean": 0.24117571428571427,
+          "brier": 0.1249519000225564,
+          "auc": 0.5834196956675598
+        },
+        "corrected_p": {
+          "mean": 0.24579125144766514,
+          "brier": 0.12868795879896316,
+          "auc": 0.5828636064910773
+        },
+        "ask": {
+          "mean": 0.1112265037593985,
+          "brier": 0.09822279971804511,
+          "auc": 0.6416321217329761
+        }
+      },
+      "legacy_selector": {
+        "rows": 425,
+        "dates": 67,
+        "cities": 48,
+        "wins": 63,
+        "win_rate": 0.14823529411764705,
+        "avg_ask": 0.10304352941176469,
+        "avg_legacy_p": 0.3863454117647059,
+        "avg_corrected_p": 0.4007765096324537,
+        "cost_per_share": 43.793499999999995,
+        "pnl_per_share": 17.277312287500003,
+        "roi": 0.394517731798098,
+        "roi_ci_low": 0.10163218088913392,
+        "roi_ci_high": 0.7346488519760703,
+        "losing_days": 24,
+        "le_minus_50pct_days": 21,
+        "max_daily_loss_5shares": -6.49618125
+      },
+      "corrected_selector": {
+        "rows": 455,
+        "dates": 67,
+        "cities": 47,
+        "wins": 66,
+        "win_rate": 0.14505494505494507,
+        "avg_ask": 0.1042098901098901,
+        "avg_legacy_p": 0.37917142857142855,
+        "avg_corrected_p": 0.3989457649312349,
+        "cost_per_share": 47.415499999999994,
+        "pnl_per_share": 16.4982641875,
+        "roi": 0.34795086390526303,
+        "roi_ci_low": 0.05300717864991314,
+        "roi_ci_high": 0.6696494029369335,
+        "losing_days": 24,
+        "le_minus_50pct_days": 21,
+        "max_daily_loss_5shares": -7.12258125
+      },
+      "overlap": 414,
+      "legacy_only": 11,
+      "corrected_only": 41
+    },
+    "train_through_2026_06_20": {
+      "probability": {
+        "rows": 1742,
+        "dates": 46,
+        "realized": 0.11882893226176808,
+        "legacy_p": {
+          "mean": 0.2418226750861079,
+          "brier": 0.1282295135074627,
+          "auc": 0.5793057325843051
+        },
+        "corrected_p": {
+          "mean": 0.24627571169661922,
+          "brier": 0.1315089735598533,
+          "auc": 0.5797652205384821
+        },
+        "ask": {
+          "mean": 0.11303731343283582,
+          "brier": 0.10170895608495982,
+          "auc": 0.6528820280413539
+        }
+      },
+      "legacy_selector": {
+        "rows": 285,
+        "dates": 45,
+        "cities": 46,
+        "wins": 41,
+        "win_rate": 0.14385964912280702,
+        "avg_ask": 0.10578421052631579,
+        "avg_legacy_p": 0.3880971929824561,
+        "avg_corrected_p": 0.4014802476654927,
+        "cost_per_share": 30.1485,
+        "pnl_per_share": 9.527603312500002,
+        "roi": 0.3160224658772411,
+        "roi_ci_low": -0.03777311927779378,
+        "roi_ci_high": 0.704045435034944,
+        "losing_days": 18,
+        "le_minus_50pct_days": 15,
+        "max_daily_loss_5shares": -6.49618125
+      },
+      "corrected_selector": {
+        "rows": 298,
+        "dates": 45,
+        "cities": 45,
+        "wins": 43,
+        "win_rate": 0.14429530201342283,
+        "avg_ask": 0.10684563758389261,
+        "avg_legacy_p": 0.3841305369127517,
+        "avg_corrected_p": 0.40072901990503146,
+        "cost_per_share": 31.839999999999996,
+        "pnl_per_share": 9.763313725,
+        "roi": 0.3066367375942211,
+        "roi_ci_low": -0.04646027429420927,
+        "roi_ci_high": 0.6936079423815175,
+        "losing_days": 17,
+        "le_minus_50pct_days": 15,
+        "max_daily_loss_5shares": -7.12258125
+      },
+      "overlap": 277,
+      "legacy_only": 8,
+      "corrected_only": 21
+    },
+    "recent_ge_2026_06_21": {
+      "probability": {
+        "rows": 918,
+        "dates": 22,
+        "realized": 0.10348583877995643,
+        "legacy_p": {
+          "mean": 0.23994803921568625,
+          "brier": 0.118732289248366,
+          "auc": 0.5901835390420157
+        },
+        "corrected_p": {
+          "mean": 0.2448719379904996,
+          "brier": 0.12333479135509536,
+          "auc": 0.5890643985419198
+        },
+        "ask": {
+          "mean": 0.10779030501089325,
+          "brier": 0.09160745724400872,
+          "auc": 0.6138453667583296
+        }
+      },
+      "legacy_selector": {
+        "rows": 140,
+        "dates": 22,
+        "cities": 38,
+        "wins": 22,
+        "win_rate": 0.15714285714285714,
+        "avg_ask": 0.09746428571428571,
+        "avg_legacy_p": 0.3827792857142857,
+        "avg_corrected_p": 0.3993439000651959,
+        "cost_per_share": 13.645,
+        "pnl_per_share": 7.749708975000001,
+        "roi": 0.5679522883840236,
+        "roi_ci_low": 0.046126852816699516,
+        "roi_ci_high": 1.199822718385776,
+        "losing_days": 6,
+        "le_minus_50pct_days": 6,
+        "max_daily_loss_5shares": -3.5864234375000006
+      },
+      "corrected_selector": {
+        "rows": 157,
+        "dates": 22,
+        "cities": 37,
+        "wins": 23,
+        "win_rate": 0.1464968152866242,
+        "avg_ask": 0.09920700636942675,
+        "avg_legacy_p": 0.36975859872611466,
+        "avg_corrected_p": 0.3955609879746017,
+        "cost_per_share": 15.5755,
+        "pnl_per_share": 6.7349504625000005,
+        "roi": 0.43240669400661297,
+        "roi_ci_low": -0.041729666774745405,
+        "roi_ci_high": 0.9788548167626381,
+        "losing_days": 7,
+        "le_minus_50pct_days": 6,
+        "max_daily_loss_5shares": -4.453617875
+      },
+      "overlap": 137,
+      "legacy_only": 3,
+      "corrected_only": 20
+    },
+    "forward_ge_2026_07_01": {
+      "probability": {
+        "rows": 525,
+        "dates": 13,
+        "realized": 0.11619047619047619,
+        "legacy_p": {
+          "mean": 0.23679200000000003,
+          "brier": 0.12420131676190475,
+          "auc": 0.5891040135669869
+        },
+        "corrected_p": {
+          "mean": 0.2412206747047406,
+          "brier": 0.1285749107280394,
+          "auc": 0.5858359242509892
+        },
+        "ask": {
+          "mean": 0.10625904761904763,
+          "brier": 0.10042930857142857,
+          "auc": 0.6391852741661955
+        }
+      },
+      "legacy_selector": {
+        "rows": 75,
+        "dates": 13,
+        "cities": 30,
+        "wins": 12,
+        "win_rate": 0.16,
+        "avg_ask": 0.09387333333333334,
+        "avg_legacy_p": 0.390292,
+        "avg_corrected_p": 0.410325074030388,
+        "cost_per_share": 7.0405,
+        "pnl_per_share": 4.645607762500001,
+        "roi": 0.6598406025850438,
+        "roi_ci_low": -0.2716255074643391,
+        "roi_ci_high": 1.7833462453364677,
+        "losing_days": 5,
+        "le_minus_50pct_days": 5,
+        "max_daily_loss_5shares": -3.55691475
+      },
+      "corrected_selector": {
+        "rows": 85,
+        "dates": 13,
+        "cities": 32,
+        "wins": 12,
+        "win_rate": 0.1411764705882353,
+        "avg_ask": 0.09611764705882353,
+        "avg_legacy_p": 0.37386,
+        "avg_corrected_p": 0.40520688459615184,
+        "cost_per_share": 8.17,
+        "pnl_per_share": 3.466885,
+        "roi": 0.424343329253366,
+        "roi_ci_low": -0.350525020919344,
+        "roi_ci_high": 1.3503202108454675,
+        "losing_days": 5,
+        "le_minus_50pct_days": 5,
+        "max_daily_loss_5shares": -3.9196103125000006
+      },
+      "overlap": 74,
+      "legacy_only": 1,
+      "corrected_only": 11
+    },
+    "fresh_ge_2026_07_08": {
+      "probability": {
+        "rows": 230,
+        "dates": 6,
+        "realized": 0.10434782608695652,
+        "legacy_p": {
+          "mean": 0.24381086956521741,
+          "brier": 0.12130181013043478,
+          "auc": 0.5579490291262137
+        },
+        "corrected_p": {
+          "mean": 0.2490182705986276,
+          "brier": 0.1265404709507683,
+          "auc": 0.5599716828478964
+        },
+        "ask": {
+          "mean": 0.1061,
+          "brier": 0.09112810652173912,
+          "auc": 0.67040857605178
+        }
+      },
+      "legacy_selector": {
+        "rows": 39,
+        "dates": 6,
+        "cities": 24,
+        "wins": 3,
+        "win_rate": 0.07692307692307693,
+        "avg_ask": 0.08971794871794872,
+        "avg_legacy_p": 0.3823538461538462,
+        "avg_corrected_p": 0.40277045993254273,
+        "cost_per_share": 3.499,
+        "pnl_per_share": -0.6561098249999998,
+        "roi": -0.18751352529294077,
+        "roi_ci_low": -0.7719805563149261,
+        "roi_ci_high": 0.3553116372672547,
+        "losing_days": 3,
+        "le_minus_50pct_days": 3,
+        "max_daily_loss_5shares": -3.5272665625
+      },
+      "corrected_selector": {
+        "rows": 44,
+        "dates": 6,
+        "cities": 28,
+        "wins": 3,
+        "win_rate": 0.06818181818181818,
+        "avg_ask": 0.0919090909090909,
+        "avg_legacy_p": 0.37058181818181823,
+        "avg_corrected_p": 0.3983701800616721,
+        "cost_per_share": 4.044,
+        "pnl_per_share": -1.2250360750000002,
+        "roi": -0.3029268236894165,
+        "roi_ci_low": -0.8035830143165796,
+        "roi_ci_high": 0.187888231970413,
+        "losing_days": 3,
+        "le_minus_50pct_days": 3,
+        "max_daily_loss_5shares": -3.9196103125000006
+      },
+      "overlap": 39,
+      "legacy_only": 0,
+      "corrected_only": 5
+    }
+  },
+  "diagnostics": {
+    "source": {
+      "ecmwf": {
+        "rows": 261,
+        "dates": 62,
+        "cities": 29,
+        "wins": 37,
+        "win_rate": 0.1417624521072797,
+        "avg_ask": 0.10437547892720307,
+        "avg_legacy_p": 0.3777835249042146,
+        "avg_corrected_p": 0.38131324739458494,
+        "cost_per_share": 27.242,
+        "pnl_per_share": 8.561887099999998,
+        "roi": 0.3142899603553336,
+        "roi_ci_low": -0.0727142719040377,
+        "roi_ci_high": 0.7303693089170433,
+        "losing_days": 34,
+        "le_minus_50pct_days": 33,
+        "max_daily_loss_5shares": -4.6956500000000005
+      },
+      "gfs": {
+        "rows": 164,
+        "dates": 62,
+        "cities": 26,
+        "wins": 26,
+        "win_rate": 0.15853658536585366,
+        "avg_ask": 0.10092378048780486,
+        "avg_legacy_p": 0.3999713414634146,
+        "avg_corrected_p": 0.43175157941345227,
+        "cost_per_share": 16.551499999999997,
+        "pnl_per_share": 8.7154251875,
+        "roi": 0.5265640689665589,
+        "roi_ci_low": 0.0005361671417384194,
+        "roi_ci_high": 1.1339006386557597,
+        "losing_days": 40,
+        "le_minus_50pct_days": 40,
+        "max_daily_loss_5shares": -3.55691475
+      }
+    },
+    "ask_band": {
+      "(0.048, 0.08]": {
+        "rows": 167,
+        "dates": 62,
+        "cities": 44,
+        "wins": 16,
+        "win_rate": 0.09580838323353294,
+        "avg_ask": 0.06472155688622756,
+        "avg_legacy_p": 0.3518652694610778,
+        "avg_corrected_p": 0.35769521363990125,
+        "cost_per_share": 10.808500000000002,
+        "pnl_per_share": 4.686686487500001,
+        "roi": 0.4336111844844336,
+        "roi_ci_low": -0.21979782143140056,
+        "roi_ci_high": 1.190441545599573,
+        "losing_days": 48,
+        "le_minus_50pct_days": 48,
+        "max_daily_loss_5shares": -2.8074775625000004
+      },
+      "(0.08, 0.12]": {
+        "rows": 129,
+        "dates": 58,
+        "cities": 38,
+        "wins": 16,
+        "win_rate": 0.12403100775193798,
+        "avg_ask": 0.10049999999999999,
+        "avg_legacy_p": 0.3867271317829457,
+        "avg_corrected_p": 0.40624436484247145,
+        "cost_per_share": 12.9645,
+        "pnl_per_share": 2.4533637625000004,
+        "roi": 0.18923705214238887,
+        "roi_ci_low": -0.26282411860169985,
+        "roi_ci_high": 0.6592337884199864,
+        "losing_days": 42,
+        "le_minus_50pct_days": 42,
+        "max_daily_loss_5shares": -3.2206750625000002
+      },
+      "(0.12, 0.16]": {
+        "rows": 82,
+        "dates": 52,
+        "cities": 35,
+        "wins": 17,
+        "win_rate": 0.2073170731707317,
+        "avg_ask": 0.14016463414634145,
+        "avg_legacy_p": 0.4212634146341463,
+        "avg_corrected_p": 0.440241753322631,
+        "cost_per_share": 11.4935,
+        "pnl_per_share": 5.0128599375,
+        "roi": 0.43614738221603516,
+        "roi_ci_low": -0.13829192799416126,
+        "roi_ci_high": 1.0854226937504086,
+        "losing_days": 35,
+        "le_minus_50pct_days": 35,
+        "max_daily_loss_5shares": -2.31968125
+      },
+      "(0.16, 0.201]": {
+        "rows": 47,
+        "dates": 32,
+        "cities": 22,
+        "wins": 14,
+        "win_rate": 0.2978723404255319,
+        "avg_ask": 0.1814255319148936,
+        "avg_legacy_p": 0.44689148936170214,
+        "avg_corrected_p": 0.4699908314637176,
+        "cost_per_share": 8.527,
+        "pnl_per_share": 5.124402099999999,
+        "roi": 0.6009618975020523,
+        "roi_ci_low": -0.1303283090622724,
+        "roi_ci_high": 1.404215792470967,
+        "losing_days": 20,
+        "le_minus_50pct_days": 20,
+        "max_daily_loss_5shares": -2.6273974375
+      }
+    },
+    "probability_inflation_quartile": {
+      "(-0.00183, 0.00169]": {
+        "rows": 106,
+        "dates": 52,
+        "cities": 27,
+        "wins": 17,
+        "win_rate": 0.16037735849056603,
+        "avg_ask": 0.10106603773584905,
+        "avg_legacy_p": 0.3863698113207547,
+        "avg_corrected_p": 0.38632656883881944,
+        "cost_per_share": 10.713,
+        "pnl_per_share": 5.814560425000001,
+        "roi": 0.5427574372258005,
+        "roi_ci_low": -0.06199726639924959,
+        "roi_ci_high": 1.2244614610608233,
+        "losing_days": 35,
+        "le_minus_50pct_days": 35,
+        "max_daily_loss_5shares": -3.3733359375
+      },
+      "(-0.0187, -0.00183]": {
+        "rows": 106,
+        "dates": 53,
+        "cities": 26,
+        "wins": 16,
+        "win_rate": 0.1509433962264151,
+        "avg_ask": 0.09623584905660376,
+        "avg_legacy_p": 0.3490745283018868,
+        "avg_corrected_p": 0.3575535472637034,
+        "cost_per_share": 10.200999999999999,
+        "pnl_per_share": 5.345540949999999,
+        "roi": 0.5240212675227919,
+        "roi_ci_low": -0.1647108604536138,
+        "roi_ci_high": 1.2052836248756156,
+        "losing_days": 40,
+        "le_minus_50pct_days": 40,
+        "max_daily_loss_5shares": -2.7204873125
+      },
+      "(-0.228, -0.0187]": {
+        "rows": 107,
+        "dates": 51,
+        "cities": 19,
+        "wins": 15,
+        "win_rate": 0.14018691588785046,
+        "avg_ask": 0.11568224299065419,
+        "avg_legacy_p": 0.43019906542056074,
+        "avg_corrected_p": 0.48963242564878046,
+        "cost_per_share": 12.377999999999998,
+        "pnl_per_share": 2.0836720500000006,
+        "roi": 0.16833673048957834,
+        "roi_ci_low": -0.38185556268444726,
+        "roi_ci_high": 0.792829356163694,
+        "losing_days": 38,
+        "le_minus_50pct_days": 38,
+        "max_daily_loss_5shares": -2.8436711875
+      },
+      "(0.00169, 0.106]": {
+        "rows": 106,
+        "dates": 53,
+        "cities": 27,
+        "wins": 15,
+        "win_rate": 0.14150943396226415,
+        "avg_ask": 0.09907075471698114,
+        "avg_legacy_p": 0.3793245283018867,
+        "avg_corrected_p": 0.36875523341986716,
+        "cost_per_share": 10.5015,
+        "pnl_per_share": 4.0335388624999995,
+        "roi": 0.38409168809217725,
+        "roi_ci_low": -0.2505541003463174,
+        "roi_ci_high": 1.0838523014019303,
+        "losing_days": 39,
+        "le_minus_50pct_days": 39,
+        "max_daily_loss_5shares": -2.2974081875000003
+      }
+    }
+  }
+}

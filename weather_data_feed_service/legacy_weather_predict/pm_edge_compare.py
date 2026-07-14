@@ -15,6 +15,7 @@ from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 
 from city_pools import FULL_CITY_CONFIGS
+from weather_data_feed.forecast_history import forecast_hourly_daily_max_local
 
 BASE_DIR = Path(__file__).parent
 DEFAULT_RUNTIME_DIR = BASE_DIR.parent / "runtime"
@@ -129,17 +130,7 @@ def compute_error_distribution(city: str, cfg: dict) -> np.ndarray | None:
         print(f"  [WARN] {city}: No GFS historical cache found (gfs_365d_*/gfs_v4_*)")
         return None
     gfs_data = json.loads(gfs_file.read_text())
-    gfs_hourly = gfs_data["hourly"]
-    gfs_times = gfs_hourly["time"]  # local time strings
-    gfs_temps = gfs_hourly["temperature_2m"]  # in Fahrenheit
-
-    # Build GFS daily max (by local date)
-    gfs_daily_max = {}
-    for t, temp in zip(gfs_times, gfs_temps):
-        if temp is None:
-            continue
-        date = t[:10]
-        gfs_daily_max[date] = max(gfs_daily_max.get(date, -999), temp)
+    gfs_daily_max = forecast_hourly_daily_max_local(gfs_data, city=city)
 
     # Load WU observations
     wu_file = CACHE_DIR / "wu_obs" / f"wu_obs_{cfg['icao']}.csv"

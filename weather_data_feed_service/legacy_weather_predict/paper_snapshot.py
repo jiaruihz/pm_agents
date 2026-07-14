@@ -56,6 +56,7 @@ from weather_data_feed.forecast_hourly_curves import (
     summarize_source_models,
     write_forecast_hourly_curve_capture,
 )
+from weather_data_feed.forecast_history import forecast_hourly_daily_max_local
 
 PM_GAMMA_URL = "https://gamma-api.polymarket.com"
 PM_CLOB_URL = "https://clob.polymarket.com"
@@ -726,16 +727,7 @@ def compute_ecmwf_error_distribution(city: str, cfg: dict):
     if not ecmwf_files:
         return None
     ecmwf_data = json.loads(ecmwf_files[0].read_text())
-    ecmwf_hourly = ecmwf_data["hourly"]
-    ecmwf_times = ecmwf_hourly["time"]
-    ecmwf_temps = ecmwf_hourly["temperature_2m"]
-
-    ecmwf_daily_max = {}
-    for t, temp in zip(ecmwf_times, ecmwf_temps):
-        if temp is None:
-            continue
-        d = t[:10]
-        ecmwf_daily_max[d] = max(ecmwf_daily_max.get(d, -999), temp)
+    ecmwf_daily_max = forecast_hourly_daily_max_local(ecmwf_data, city=city)
 
     wu_file = CACHE_DIR / "wu_obs" / f"wu_obs_{cfg['icao']}.csv"
     if not wu_file.exists():

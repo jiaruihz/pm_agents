@@ -19,6 +19,8 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta
 
+from weather_data_feed.forecast_history import forecast_hourly_daily_max_local
+
 # ─── 配置 ──────────────────────────────────────────────────────────────────
 
 BASE_DIR = Path(__file__).parent
@@ -109,33 +111,7 @@ def load_gfs_daily(city, utc_offset):
     if "hourly" not in raw:
         return {}
 
-    times = raw["hourly"].get("time", [])
-    temps = raw["hourly"].get("temperature_2m", [])
-
-    if not times or not temps:
-        return {}
-
-    daily_max = {}
-    for t_str, temp_c in zip(times, temps):
-        if temp_c is None:
-            continue
-        try:
-            dt_utc = datetime.fromisoformat(t_str)
-        except ValueError:
-            continue
-
-        # 转换为当地时间
-        from datetime import timedelta
-        dt_local = dt_utc + timedelta(hours=utc_offset)
-        date_str = dt_local.strftime("%Y-%m-%d")
-
-        # GFS 缓存已是 °F（Open-Meteo 拉取时设置了 &temperature_unit=fahrenheit）
-        temp_f = temp_c  # 变量名保留，实际已是 °F
-
-        if date_str not in daily_max or temp_f > daily_max[date_str]:
-            daily_max[date_str] = temp_f
-
-    return daily_max
+    return forecast_hourly_daily_max_local(raw, city=city)
 
 
 MODEL_PREFIXES = {
@@ -160,24 +136,7 @@ def load_model_daily(city, utc_offset, model="gfs"):
 
     if "hourly" not in raw:
         return {}
-    times = raw["hourly"].get("time", [])
-    temps = raw["hourly"].get("temperature_2m", [])
-    if not times or not temps:
-        return {}
-
-    daily_max = {}
-    for t_str, temp_f in zip(times, temps):
-        if temp_f is None:
-            continue
-        try:
-            dt_utc = datetime.fromisoformat(t_str)
-        except ValueError:
-            continue
-        dt_local = dt_utc + timedelta(hours=utc_offset)
-        date_str = dt_local.strftime("%Y-%m-%d")
-        if date_str not in daily_max or temp_f > daily_max[date_str]:
-            daily_max[date_str] = temp_f
-    return daily_max
+    return forecast_hourly_daily_max_local(raw, city=city)
 
 
 def empirical_cdf(x, errors_sorted):
