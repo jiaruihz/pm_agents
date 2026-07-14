@@ -260,3 +260,35 @@ Durable audit:
 - `scripts/analysis/market_structure_edge/audit_source_event_denominator_v2.py`
 - `docs/analysis/2026-07/2026-07-14-source-event-denominator-audit-v2.md`
 - `docs/analysis/2026-07/generated/source_event_denominator_audit_v2/`
+
+## 2026-07-14 Expression-Specific Denominator Correction
+
+The v1/v2 replay inherited the Tmax full-ladder requirement that current, d1,
+and d2 all exist before a state is materialized.  That is invalid for this
+strategy family: current YES/NO only needs the current token; d1 only needs one
+higher rung.  A market naturally ending at current or d1 is not missing data.
+
+The corrected v3 replay materializes each expression independently and fills
+settlement winners from canonical `settlement_outcomes`.  Historical Gamma gaps
+were recovered through saved snapshot condition IDs and the closed CLOB market
+endpoint, expanding winner coverage to 2,954 / 2,956 snapshot city-days; only
+Cape Town 2026-05-17 and Buenos Aires 2026-07-09 remain unrecoverable because
+the winning condition is absent from the saved ladder.
+
+Running max means the highest observation that was already first-seen by the
+decision timestamp.  v3 reconstructs it from embedded snapshot observations
+plus the source/orderbook timing log, then falls back to the value saved in the
+snapshot itself.  It does not use final-day history retroactively.  This yields
+26,383 expression states and 1,075 generic bracket advances; 835 raw decisions
+with no d1 rung are retained for current rather than discarded.
+
+On executable generic crosses, current YES is -8.9% fee-adjusted ROI (426 rows),
+current NO -3.5% (366), d1 YES -23.2% (297), and d1 NO -2.3% (417).  Current NO
+95% CI is [-9.2%, +0.8%] and same-band excess is -2.2%, CI [-7.3%, +2.2%].
+The corrected denominator therefore does not rescue the generic-cross alpha.
+
+Durable output:
+
+- `scripts/analysis/market_structure_edge/research_source_event_expression_denominator_v3.py`
+- `docs/analysis/2026-07/2026-07-14-source-event-expression-denominator-v3.md`
+- `scripts/ops/backfill_weather_pm_history_from_snapshot_conditions.py`

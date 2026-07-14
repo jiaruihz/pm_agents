@@ -1,12 +1,13 @@
 # Source-Event Denominator Audit v2
 
 > 2026-07-14; research-only; zero notional; supersedes treating v1's 42 rows as the full fast-source denominator.
+> Superseded for current/d1 performance by `source-event-expression-denominator-v3`: v2 inherited a full-ladder current+d1+d2 state gate that is not valid for expression-specific trading.
 
 ## 数据快照
 
-- canonical DB: `/Users/deepsleep/projects/pm_agents/runtime/weather.db`; mtime `2026-07-14T02:36:29.208461+00:00`.
-- fact_signal_candidates `53834`; fact_trades `4571`; unsettled `0`; missing_bracket `0`.
-- settlement_outcomes: `2026-05-04..2026-07-10` / `67` dates / `49` cities.
+- canonical DB: `/Users/deepsleep/projects/pm_agents/runtime/weather.db`; mtime `2026-07-14T04:52:10.513403+00:00`.
+- fact_signal_candidates `53905`; fact_trades `4574`; unsettled `0`; missing_bracket `0`.
+- settlement_outcomes: `2026-05-04..2026-07-12` / `70` dates / `49` cities.
 - strategy grain is PIT saved ladder state / first quote after a generic running-high bracket advance; it is not fill-grain realized PnL.
 
 ## 结论先行
@@ -60,9 +61,9 @@
 
 ## 真正快源历史覆盖
 
-- profile-matched fast observations: raw repolls `201291`，unique observations `19080`.
+- profile-matched fast observations: raw repolls `202647`，unique observations `19185`.
 - window `2026-07-07..2026-07-14` / `8` dates / `18` cities.
-- 与当前已结算 label 重叠只有 `4` dates / `61` city-dates（`2026-07-07..2026-07-10`）。
+- 与当前已结算 label 重叠只有 `6` dates / `97` city-dates（`2026-07-07..2026-07-12`）。
 
 因此两个月盘口历史并不等于两个月 fast-source 历史。5/05 起确实有盘口，但 profile-matched 高频文件从 7/08 UTC 才开始持续保存；按城市本地 target_date 归属后最早可落到 7/07。不能用 generic METAR/WU 跨档冒充 fast-source alpha，也不能把缺失的早期快源事后补造成 PIT 数据。
 

@@ -301,6 +301,7 @@ def render_report(payload: dict[str, Any], summary: pd.DataFrame, status: pd.Dat
             "# Source-Event Denominator Audit v2",
             "",
             "> 2026-07-14; research-only; zero notional; supersedes treating v1's 42 rows as the full fast-source denominator.",
+            "> Superseded for current/d1 performance by `source-event-expression-denominator-v3`: v2 inherited a full-ladder current+d1+d2 state gate that is not valid for expression-specific trading.",
             "",
             "## 数据快照",
             "",

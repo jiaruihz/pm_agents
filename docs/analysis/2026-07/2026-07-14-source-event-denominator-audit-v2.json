@@ -1,17 +1,17 @@
 {
   "schema_version": "source_event_denominator_audit_v2",
-  "generated_at_utc": "2026-07-14T04:32:02.402399+00:00",
+  "generated_at_utc": "2026-07-14T05:07:05.787371+00:00",
   "status": "research_only_zero_notional",
   "data_snapshot": {
     "db_path": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
-    "db_mtime_utc": "2026-07-14T02:36:29.208461+00:00",
-    "fact_signal_candidates": 53834,
-    "fact_trades": 4571,
+    "db_mtime_utc": "2026-07-14T04:52:10.513403+00:00",
+    "fact_signal_candidates": 53905,
+    "fact_trades": 4574,
     "unsettled_trades": 0,
     "missing_bracket_trades": 0,
     "settlement_min_date": "2026-05-04",
-    "settlement_max_date": "2026-07-10",
-    "settlement_dates": 67,
+    "settlement_max_date": "2026-07-12",
+    "settlement_dates": 70,
     "settlement_cities": 49
   },
   "funnel": {
@@ -223,16 +223,16 @@
   ],
   "true_fast_source_history": {
     "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/high_frequency_observations/high_frequency_observations.jsonl",
-    "raw_profile_rows_including_repolls": 201291,
-    "unique_city_date_source_observations": 19080,
+    "raw_profile_rows_including_repolls": 202647,
+    "unique_city_date_source_observations": 19185,
     "min_date": "2026-07-07",
     "max_date": "2026-07-14",
     "dates": 8,
     "cities": 18,
-    "settled_overlap_dates": 4,
-    "settled_overlap_city_dates": 61,
+    "settled_overlap_dates": 6,
+    "settled_overlap_city_dates": 97,
     "settled_overlap_min_date": "2026-07-07",
-    "settled_overlap_max_date": "2026-07-10"
+    "settled_overlap_max_date": "2026-07-12"
   },
   "research_semantics_correction": "v1 cross_event is a generic current-bracket change and contains no high-frequency source join",
   "gates": {

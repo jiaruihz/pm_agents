@@ -1,0 +1,118 @@
+{
+  "schema_version": "source_event_expression_denominator_v3",
+  "generated_at_utc": "2026-07-14T05:05:48.123153+00:00",
+  "status": "research_only_zero_notional",
+  "settlement_snapshot": {
+    "min_date": "2026-05-04",
+    "max_date": "2026-07-12",
+    "dates": 70,
+    "cities": 49
+  },
+  "settlement_coverage": {
+    "candidate_city_days": 2956,
+    "settled_city_days": 2954,
+    "missing_city_days": 2,
+    "missing_by_date": {
+      "2026-05-17": 1,
+      "2026-07-09": 1
+    }
+  },
+  "running_history_coverage": {
+    "embedded_events": 24277,
+    "source_timing_ok_repolls": 608973,
+    "combined_unique_pit_events": 26366
+  },
+  "funnel": {
+    "raw_decision_groups": 380576,
+    "canonical_settlement_available": 380386,
+    "missing_pit_running_max": 274858,
+    "running_from_embedded_history": 105468,
+    "running_outside_saved_ladder": 59542,
+    "current_anchor_mapped": 45986,
+    "d1_rung_absent_but_current_retained": 835,
+    "running_from_saved_snapshot": 60,
+    "missing_canonical_settlement": 190,
+    "deduplicated_expression_states": 26383,
+    "generic_cross_events": 1075
+  },
+  "summary": [
+    {
+      "expression": "current_yes",
+      "rows": 426,
+      "dates": 25,
+      "cities": 40,
+      "avg_ask": 0.32016666666666665,
+      "win_rate": 0.29577464788732394,
+      "roi": -0.08885078774634471,
+      "roi_ci_low": -0.17321788628992132,
+      "roi_ci_high": 0.015730710531271185,
+      "same_band_initial_rows": 1278,
+      "same_band_initial_roi": -0.055721945669952706,
+      "date_equal_excess_roi": -0.07754316636722126,
+      "excess_ci_low": -0.2194190613784723,
+      "excess_ci_high": 0.03985799485964148,
+      "recent_4_dates": "2026-07-08,2026-07-09,2026-07-10,2026-07-11",
+      "recent_roi": -0.039506470982118305
+    },
+    {
+      "expression": "current_no",
+      "rows": 366,
+      "dates": 22,
+      "cities": 39,
+      "avg_ask": 0.7266885245901639,
+      "win_rate": 0.7049180327868853,
+      "roi": -0.035294065738577164,
+      "roi_ci_low": -0.09188007226690535,
+      "roi_ci_high": 0.0078103868239028295,
+      "same_band_initial_rows": 1227,
+      "same_band_initial_roi": -0.0352000901112797,
+      "date_equal_excess_roi": -0.021925298984582748,
+      "excess_ci_low": -0.07271686664738057,
+      "excess_ci_high": 0.021845292241276702,
+      "recent_4_dates": "2026-07-08,2026-07-09,2026-07-10,2026-07-11",
+      "recent_roi": -0.03891707437311951
+    },
+    {
+      "expression": "d1_yes",
+      "rows": 297,
+      "dates": 16,
+      "cities": 39,
+      "avg_ask": 0.27750168350168347,
+      "win_rate": 0.21885521885521886,
+      "roi": -0.23175603786568114,
+      "roi_ci_low": -0.30276155876220157,
+      "roi_ci_high": -0.15639032351184615,
+      "same_band_initial_rows": 1159,
+      "same_band_initial_roi": -0.22223856103333783,
+      "date_equal_excess_roi": -0.017191235530759373,
+      "excess_ci_low": -0.22465474312122996,
+      "excess_ci_high": 0.16597656861202525,
+      "recent_4_dates": "2026-07-03,2026-07-04,2026-07-05,2026-07-06",
+      "recent_roi": -0.30839450007642233
+    },
+    {
+      "expression": "d1_no",
+      "rows": 417,
+      "dates": 25,
+      "cities": 38,
+      "avg_ask": 0.7736522781774581,
+      "win_rate": 0.762589928057554,
+      "roi": -0.02256053239590945,
+      "roi_ci_low": -0.04187900336860765,
+      "roi_ci_high": -0.0015640948306135866,
+      "same_band_initial_rows": 1285,
+      "same_band_initial_roi": -0.016342736456995716,
+      "date_equal_excess_roi": 0.005824252902859909,
+      "excess_ci_low": -0.022938274356237586,
+      "excess_ci_high": 0.03570612587987522,
+      "recent_4_dates": "2026-07-08,2026-07-09,2026-07-10,2026-07-11",
+      "recent_roi": -0.026850226615851146
+    }
+  ],
+  "verdict": {
+    "significance": "FAIL",
+    "baseline": "FAIL",
+    "forward": "FAIL",
+    "conclusion": "inconclusive"
+  }
+}
