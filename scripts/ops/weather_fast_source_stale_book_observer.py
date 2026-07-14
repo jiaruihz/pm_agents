@@ -555,10 +555,9 @@ def source_latest_by_city(
         if old is None:
             out[key] = enriched
             continue
-        old_round = int(old.get("source_market_value") or old.get("source_temp_round_c") or -999)
-        new_round = int(enriched["source_market_value"])
+        old_obs = parse_dt(old.get("source_obs_ts_utc")) or datetime.min.replace(tzinfo=timezone.utc)
         old_detect = parse_dt(old.get("source_detect_ts_utc")) or datetime.min.replace(tzinfo=timezone.utc)
-        if new_round > old_round or (new_round == old_round and detect_dt > old_detect):
+        if obs_dt > old_obs or (obs_dt == old_obs and detect_dt > old_detect):
             out[key] = enriched
     return out
 

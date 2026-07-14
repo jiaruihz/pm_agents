@@ -9,15 +9,12 @@ SCREEN_SESSION="${WEATHER_FAST_PREV_NO_SCREEN_SESSION:-weather_fast_source_prev_
 TARGET_DATE="${WEATHER_FAST_PREV_NO_TARGET_DATE:-}"
 INTERVAL_SEC="${WEATHER_FAST_PREV_NO_INTERVAL_SEC:-30}"
 BURST_INTERVAL_SEC="${WEATHER_FAST_PREV_NO_BURST_INTERVAL_SEC:-10}"
-SOURCES="${WEATHER_FAST_PREV_NO_SOURCES:-jma_amedas singapore_mss fmi amos_runway noaa_madis_hfmetar hko_obs cowin_obs mgm ims_lod}"
+SOURCES="${WEATHER_FAST_PREV_NO_SOURCES:-jma_amedas singapore_mss fmi amos_runway mgm ims_lod}"
 LIVE_CITIES="${WEATHER_FAST_PREV_NO_LIVE_CITIES:-Helsinki Busan Singapore Tokyo}"
-SHADOW_CITIES="${WEATHER_FAST_PREV_NO_SHADOW_CITIES:-Seoul HongKong Shenzhen TelAviv Ankara Istanbul LA Dallas Houston SanFrancisco NYC Atlanta Austin Chicago Miami Seattle}"
-MAX_SHARES_PER_TRADE="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_TRADE:-10}"
-MAX_SHARES_PER_MARKET="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_MARKET:-10}"
-MAX_SHARES_PER_TRADE_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_TRADE_BY_CITY:-Tokyo=5}"
-MAX_SHARES_PER_MARKET_BY_CITY="${WEATHER_FAST_PREV_NO_MAX_SHARES_PER_MARKET_BY_CITY:-Tokyo=5}"
-MAX_NO_ASK="${WEATHER_FAST_PREV_NO_MAX_NO_ASK:-0.94}"
+SHADOW_CITIES="${WEATHER_FAST_PREV_NO_SHADOW_CITIES:-Seoul TelAviv Ankara Istanbul}"
 MAX_SOURCE_AGE_MIN="${WEATHER_FAST_PREV_NO_MAX_SOURCE_AGE_MIN:-15}"
+MAX_SOURCE_DETECT_AGE_MIN="${WEATHER_FAST_PREV_NO_MAX_SOURCE_DETECT_AGE_MIN:-5}"
+MAX_SOURCE_OBSERVATION_LAG_MIN="${WEATHER_FAST_PREV_NO_MAX_SOURCE_OBSERVATION_LAG_MIN:-15}"
 NEXT_METAR_WINDOW_MIN="${WEATHER_FAST_PREV_NO_NEXT_METAR_WINDOW_MIN:-20}"
 BOOK_TIMEOUT_SEC="${WEATHER_FAST_PREV_NO_BOOK_TIMEOUT_SEC:-5}"
 FOK_IMMEDIATE_RETRIES="${WEATHER_FAST_PREV_NO_FOK_IMMEDIATE_RETRIES:-2}"
@@ -38,10 +35,9 @@ cmd=(
   --output-dir "$OUTPUT_DIR"
   --interval-sec "$INTERVAL_SEC"
   --burst-interval-sec "$BURST_INTERVAL_SEC"
-  --max-shares-per-trade "$MAX_SHARES_PER_TRADE"
-  --max-shares-per-market "$MAX_SHARES_PER_MARKET"
-  --max-no-ask "$MAX_NO_ASK"
   --max-source-age-min "$MAX_SOURCE_AGE_MIN"
+  --max-source-detect-age-min "$MAX_SOURCE_DETECT_AGE_MIN"
+  --max-source-observation-lag-min "$MAX_SOURCE_OBSERVATION_LAG_MIN"
   --next-metar-window-min "$NEXT_METAR_WINDOW_MIN"
   --book-timeout-sec "$BOOK_TIMEOUT_SEC"
   --fok-immediate-retries "$FOK_IMMEDIATE_RETRIES"
@@ -49,12 +45,6 @@ cmd=(
 )
 read -r -a source_args <<< "$SOURCES"
 cmd+=("${source_args[@]}")
-if [[ -n "$MAX_SHARES_PER_TRADE_BY_CITY" ]]; then
-  cmd+=(--max-shares-per-trade-by-city "$MAX_SHARES_PER_TRADE_BY_CITY")
-fi
-if [[ -n "$MAX_SHARES_PER_MARKET_BY_CITY" ]]; then
-  cmd+=(--max-shares-per-market-by-city "$MAX_SHARES_PER_MARKET_BY_CITY")
-fi
 cmd+=(--live-cities)
 read -r -a live_city_args <<< "$LIVE_CITIES"
 cmd+=("${live_city_args[@]}")
@@ -105,12 +95,10 @@ echo "burst_interval_sec=$BURST_INTERVAL_SEC"
 echo "sources=$SOURCES"
 echo "live_cities=$LIVE_CITIES"
 echo "shadow_cities=$SHADOW_CITIES"
-echo "max_shares_per_trade=$MAX_SHARES_PER_TRADE"
-echo "max_shares_per_market=$MAX_SHARES_PER_MARKET"
-echo "max_shares_per_trade_by_city=${MAX_SHARES_PER_TRADE_BY_CITY:-none}"
-echo "max_shares_per_market_by_city=${MAX_SHARES_PER_MARKET_BY_CITY:-none}"
-echo "max_no_ask=$MAX_NO_ASK"
+echo "city_trade_policy=scripts/ops/weather_fast_source_city_policy.py"
 echo "max_source_age_min=$MAX_SOURCE_AGE_MIN"
+echo "max_source_detect_age_min=$MAX_SOURCE_DETECT_AGE_MIN"
+echo "max_source_observation_lag_min=$MAX_SOURCE_OBSERVATION_LAG_MIN"
 echo "next_metar_window_min=$NEXT_METAR_WINDOW_MIN"
 echo "fok_immediate_retries=$FOK_IMMEDIATE_RETRIES"
 echo "output_dir=$OUTPUT_DIR"

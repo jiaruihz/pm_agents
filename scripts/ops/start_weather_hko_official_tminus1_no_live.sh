@@ -11,6 +11,7 @@ MAX_SHARES_PER_MARKET="${WEATHER_HKO_LOCK_MAX_SHARES_PER_MARKET:-5}"
 MAX_NO_ASK="${WEATHER_HKO_LOCK_MAX_NO_ASK:-0.93}"
 MAX_SOURCE_DETECT_AGE_MIN="${WEATHER_HKO_LOCK_MAX_SOURCE_DETECT_AGE_MIN:-5}"
 MAX_SOURCE_OBSERVATION_LAG_MIN="${WEATHER_HKO_LOCK_MAX_SOURCE_OBSERVATION_LAG_MIN:-30}"
+FOK_IMMEDIATE_RETRIES="${WEATHER_HKO_LOCK_FOK_IMMEDIATE_RETRIES:-2}"
 MARKET_PROXY="${WEATHER_HKO_LOCK_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-${WEATHER_PREDICT_MARKET_PROXY:-http://127.0.0.1:7890}}}"
 OUTPUT_DIR="${WEATHER_HKO_LOCK_OUTPUT_DIR:-$RUNTIME_ROOT/output/hko_official_tminus1_no_live}"
 LOG_FILE="$RUNTIME_ROOT/loop/hko_official_tminus1_no_live.log"
@@ -21,6 +22,7 @@ cmd=(
   "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/scripts/ops/weather_hko_official_tminus1_no_live.py"
   --loop --output-dir "$OUTPUT_DIR" --interval-sec "$INTERVAL_SEC" --shares "$SHARES"
   --max-shares-per-market "$MAX_SHARES_PER_MARKET" --max-no-ask "$MAX_NO_ASK"
+  --fok-immediate-retries "$FOK_IMMEDIATE_RETRIES"
   --max-source-detect-age-min "$MAX_SOURCE_DETECT_AGE_MIN" --max-source-observation-lag-min "$MAX_SOURCE_OBSERVATION_LAG_MIN" --live --confirm-live
 )
 if [[ -n "$TARGET_DATE" ]]; then cmd+=(--target-date "$TARGET_DATE"); fi

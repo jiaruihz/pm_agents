@@ -271,12 +271,23 @@ MONITOR_DEFS: list[dict] = [
         "monitor_instance_id": "fast_source_prev_no_trial",
         "display_name": "Fast-Source Prev-NO Trial (live)",
         "feed_kind": "high_frequency_observation",
-        "sources": ["amos_runway", "noaa_madis_hfmetar", "jma_amedas", "singapore_mss", "fmi"],
-        "scan_interval_sec": 60,
+        "sources": ["amos_runway", "jma_amedas", "singapore_mss", "fmi", "mgm", "ims_lod"],
+        "scan_interval_sec": 30,
         "subdir": "fast_source_prev_no_trial",
         "journals": ["events.jsonl", "opportunities.jsonl", "orders.jsonl"],
         "start_command": "scripts/ops/start_weather_fast_source_prev_no_trial.sh",
-        "tmux_session": "weather_data_feed_jrs",
+        "tmux_session": "weather_fast_source_prev_no_trial",
+    },
+    {
+        "monitor_instance_id": "hko_official_tminus1_no_live",
+        "display_name": "HKO Official T-1 NO (live)",
+        "feed_kind": "high_frequency_observation",
+        "sources": ["hko_obs"],
+        "scan_interval_sec": 30,
+        "subdir": "hko_official_tminus1_no_live",
+        "journals": ["events.jsonl", "opportunities.jsonl", "orders.jsonl"],
+        "start_command": "scripts/ops/start_weather_hko_official_tminus1_no_live.sh",
+        "tmux_session": "weather_hko_official_tminus1_no_live",
     },
     {
         "monitor_instance_id": "orderbook_snapshots",
@@ -329,6 +340,10 @@ def build_monitor_instances(runtime_root: str) -> list[dict]:
                     cities = latest_data["cities"]
                 elif isinstance(latest_data.get("active_job_cities"), list):
                     cities = latest_data["active_job_cities"]
+                elif isinstance(latest_data.get("target_dates_by_city"), dict):
+                    cities = sorted(latest_data["target_dates_by_city"])
+                elif latest_data.get("city"):
+                    cities = [str(latest_data["city"])]
                 summary = {
                     k: latest_data.get(k)
                     for k in ("generated_at_utc", "producer", "ok_sources", "non_ok_sources",

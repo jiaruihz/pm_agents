@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -23,7 +24,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.ops.weather_fast_source_prev_no_trial import build_live_fok_limit_place_fn
+from scripts.ops.weather_fast_source_execution import (
+    build_live_fok_limit_place_fn,
+    spent_market_shares,
+    submit_fok_with_immediate_retries,
+)
 from scripts.ops.weather_fast_source_stale_book_observer import (
     HIGH_FREQUENCY_JSONL,
     augment_market_index_from_gamma,
@@ -38,7 +43,7 @@ from scripts.ops.weather_fast_source_stale_book_observer import (
 from scripts.ops.weather_market_proxy import market_proxy_url
 
 
-RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
 DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/hko_official_tminus1_no_live"
 STRATEGY_ID = "hko_official_tminus1_no_live_v1"
 
@@ -122,20 +127,6 @@ def first_seen_hko_crosses(path: Path, target_date: str) -> list[dict[str, Any]]
     return crosses
 
 
-def spent_shares(path: Path, target_date: str, token_id: str) -> float:
-    total = 0.0
-    if not path.exists():
-        return total
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if row.get("target_date") == target_date and row.get("token_id") == token_id and row.get("live_submit_status") == "submitted":
-            total += float(row.get("size") or 0.0)
-    return round(total, 6)
-
-
 def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str, Any]:
     target_date = args.target_date or default_target_date()
     out_dir = Path(args.output_dir)
@@ -146,10 +137,10 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
     now = datetime.now(timezone.utc)
     proxy = market_proxy_url(args.market_proxy or None)
     paper_path = latest_paper_snapshot()
-    market_index = build_market_index(paper_path, target_date)
+    market_index = build_market_index(paper_path, {target_date})
     market_index = augment_market_index_from_gamma(
         market_index,
-        target_date=target_date,
+        target_dates={target_date},
         cities={"HongKong"},
         event_slugs={"HongKong": event_slug(target_date)},
         market_proxy=proxy,
@@ -198,7 +189,7 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
             blockers.append("source_detect_too_old")
         if source_observation_lag_min is None or source_observation_lag_min > args.max_source_observation_lag_min:
             blockers.append("source_observation_delay_too_high")
-        token = bracket_lookup(market_index, "HongKong", t_minus_1)
+        token = bracket_lookup(market_index, "HongKong", target_date, t_minus_1)
         if token is None:
             blockers.append("missing_t_minus_1_market")
             opportunity = {**base, "status": "blocked", "blockers": blockers}
@@ -217,7 +208,11 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
                 blockers.append("ask_above_max")
             if ask_size is None or ask_size < args.shares:
                 blockers.append("insufficient_top_ask_size")
-            already_spent = spent_shares(out_dir / "orders.jsonl", target_date, token.no_token_id)
+            already_spent = spent_market_shares(
+                out_dir / "orders.jsonl",
+                target_date=target_date,
+                token_id=token.no_token_id,
+            )
             if already_spent + args.shares > args.max_shares_per_market + 1e-9:
                 blockers.append("market_share_cap")
             opportunity = {
@@ -269,24 +264,44 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
             continue
         order_row = {
             **opportunity,
-            "limit_price": args.max_no_ask,
+            "limit_price": float(ask),
             "size": args.shares,
-            "submitted_notional_usd": round(args.shares * args.max_no_ask, 6),
-            "limit_price_policy": "max_no_ask",
+            "desired_shares": args.shares,
+            "submitted_notional_usd": round(args.shares * float(ask), 6),
+            "limit_price_policy": "exact_live_best_ask_v1",
             "live_attempted": True,
             "live_attempt_ts_utc": iso(),
         }
-        try:
-            if "place" not in live_client:
-                live_client["place"] = build_live_fok_limit_place_fn(proxy)
-            response = live_client["place"](order_row)
+        if "place" not in live_client:
+            live_client["place"] = build_live_fok_limit_place_fn(proxy)
+        result = submit_fok_with_immediate_retries(
+            order_row,
+            place=live_client["place"],
+            fetch_book_fn=fetch_fresh_book,
+            market_proxy=proxy,
+            book_timeout_sec=args.book_timeout_sec,
+            max_no_ask=args.max_no_ask,
+            immediate_retries=args.fok_immediate_retries,
+        )
+        order_row = result["order_row"]
+        order_row.update(
+            {
+                "fok_retry_policy": "immediate_definitive_unfilled_only_v2",
+                "fok_immediate_retries_configured": args.fok_immediate_retries,
+                "fok_attempt_count": len(result["attempts"]),
+                "fok_attempts": result["attempts"],
+                "live_submit_status": result["live_submit_status"],
+                "actual_fill_shares": result["actual_fill_shares"],
+                "actual_fill_cost_usd": result["actual_fill_cost_usd"],
+            }
+        )
+        if result["exchange_response"] is not None:
+            response = result["exchange_response"]
             order_row["exchange_response"] = response
             order_row["order_id"] = response.get("order_id")
-            order_row["live_submit_status"] = "submitted"
             live_order_keys.add(live_key)
-        except Exception as exc:  # noqa: BLE001
-            order_row["live_submit_status"] = "submit_failed"
-            order_row["error"] = f"{type(exc).__name__}: {exc}"
+        if result["error"]:
+            order_row["error"] = result["error"]
         append_jsonl(out_dir / "orders.jsonl", order_row)
         orders.append(order_row)
 
@@ -306,7 +321,7 @@ def run_once(args: argparse.Namespace, live_client: dict[str, Any]) -> dict[str,
         "settlement_source": "HKO Daily Extract Absolute Daily Max",
         "execution_mode": "live" if args.live and args.confirm_live else "shadow",
         "live_enabled": bool(args.live and args.confirm_live),
-        "caps": {"shares_per_trade": args.shares, "max_shares_per_market": args.max_shares_per_market, "max_no_ask": args.max_no_ask, "max_source_detect_age_min": args.max_source_detect_age_min, "max_source_observation_lag_min": args.max_source_observation_lag_min},
+        "caps": {"shares_per_trade": args.shares, "max_shares_per_market": args.max_shares_per_market, "max_no_ask": args.max_no_ask, "max_source_detect_age_min": args.max_source_detect_age_min, "max_source_observation_lag_min": args.max_source_observation_lag_min, "fok_immediate_retries": args.fok_immediate_retries},
         "events": len(events),
         "candidate_rows": len(opportunities),
         "live_orders_attempted": len(orders),
@@ -328,6 +343,7 @@ def main() -> int:
     parser.add_argument("--max-source-detect-age-min", type=float, default=5.0)
     parser.add_argument("--max-source-observation-lag-min", type=float, default=30.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
+    parser.add_argument("--fok-immediate-retries", type=int, default=2)
     parser.add_argument("--shares", type=float, default=5.0)
     parser.add_argument("--max-shares-per-market", type=float, default=5.0)
     parser.add_argument("--max-no-ask", type=float, default=0.93)

@@ -98,6 +98,42 @@ def test_source_latest_keeps_simultaneous_local_dates_and_market_units(tmp_path)
     assert rows[("Tokyo", "2026-07-14")]["source_market_value"] == 31
 
 
+def test_source_latest_prefers_newer_observation_even_when_temperature_falls(tmp_path):
+    profiles = load_fast_event_source_profiles()
+    now = datetime(2026, 7, 14, 2, 30, tzinfo=timezone.utc)
+    path = tmp_path / "latest.json"
+    path.write_text(
+        json.dumps(
+            {
+                "records": [
+                    {
+                        "city": "Tokyo",
+                        "target_date": "2026-07-14",
+                        "source": "jma_amedas",
+                        "temp_c": 33.0,
+                        "observation_time_utc": "2026-07-14T02:10:00Z",
+                        "local_detect_ts_utc": "2026-07-14T02:11:00Z",
+                    },
+                    {
+                        "city": "Tokyo",
+                        "target_date": "2026-07-14",
+                        "source": "jma_amedas",
+                        "temp_c": 32.0,
+                        "observation_time_utc": "2026-07-14T02:20:00Z",
+                        "local_detect_ts_utc": "2026-07-14T02:21:00Z",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rows = source_latest_by_city(path, "", {"jma_amedas"}, profiles, now)
+
+    assert rows[("Tokyo", "2026-07-14")]["temp_c"] == 32.0
+    assert rows[("Tokyo", "2026-07-14")]["source_obs_ts_utc"] == "2026-07-14T02:20:00+00:00"
+
+
 def test_market_index_does_not_collide_across_target_dates(tmp_path):
     path = tmp_path / "paper.json"
     path.write_text(

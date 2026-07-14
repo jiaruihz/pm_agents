@@ -208,6 +208,59 @@ run_quality = invalid_process_confirmation_basis_mismatch
 strategy_state = live_corrected_after_2026-07-14
 ```
 
+### Incident F: Fast-Source Execution Sizing And Shared-Policy Audit
+
+Audit date: `2026-07-14`
+
+Reproduction:
+
+```bash
+.venv/bin/python scripts/analysis/market_structure_edge/audit_fast_source_live_chain_v1.py
+```
+
+Measured impact before the correction:
+
+```text
+submitted orders = 13
+intended shares = 95.000000
+actual matched shares = 111.562142
+orders above intended shares = 12
+excess matched shares = 16.562142
+max actual/intended ratio = 2.764706
+stale (>15m) cross-candidate telemetry rows = 1127
+stale (>15m) submitted orders = 0
+```
+
+Root causes:
+
+- FOK BUY orders used `best ask + cushion`, so the signed USDC maker amount bought more shares
+  whenever execution occurred below the limit. The per-market cap counted requested `size`, not
+  the exchange `takingAmount`.
+- Observation freshness was emitted but the blocker checked detection age only.
+- One global Asia/Shanghai target date and a local arithmetic-round helper bypassed the shared
+  city calendar and source profile.
+- The shared latest-source selector preferred the highest temperature instead of the newest
+  observation and could merge two source feeds for one city.
+- The HKO dedicated runner still used obsolete market-index call signatures and its own older
+  FOK implementation; it would fail after restart.
+
+Correction:
+
+- Submit at the freshly observed best ask, retry only definitive FOK-unfilled responses, require
+  a matched response, persist actual fill shares/cost, and enforce later cap checks from actual fills.
+- Check observation age, detection age, observation-to-detection lag, monotonic observation time,
+  city-local target date, and the exact source bound by city policy.
+- Keep exact-C/METAR signal flow generic; keep HKO official floor semantics in a dedicated signal
+  runner; share book fetch, FOK retry, match validation, and cap accounting between both.
+
+Label:
+
+```text
+run_family = fast_source_prev_no_live_chain_pre_v2
+run_quality = invalid_process_execution_sizing_and_freshness
+contaminated_window_end = 2026-07-14T02:00:24Z
+```
+
 Resolution / restored probe:
 
 ```text
@@ -407,6 +460,23 @@ For early live cleanup:
 - Add derived classification in DB/report artifacts.
 - If a source row is wrong or missing metadata, preserve it and add a correction/classification table.
 - Mark invalid process runs as `retired`, not deleted.
+
+### 6.5 Fast-Source Common And City-Specific Boundaries
+
+The reusable layers are deliberately narrow:
+
+```text
+source profile  -> station/unit/rounding/settlement-basis/calibration
+city policy     -> strategy handler/mode/thresholds/shares/caps
+common runner   -> local date/freshness/METAR clock/market lookup/book checks
+common executor -> exact-best-ask FOK/retry/match proof/actual-fill cap
+```
+
+Busan, Helsinki, Singapore, Tokyo, Seoul, Ankara, Istanbul, and Tel Aviv use the generic
+`metar_prev_no_exact` handler. Hong Kong does not: HKO Daily Extract and floor semantics belong
+to `weather_hko_official_tminus1_no_live.py`, while its order execution still uses the common
+executor. US Fahrenheit range markets and lowest-temperature strategies likewise stay out of
+the exact-C handler and use separate signal handlers rather than city conditionals in the runner.
 
 ## 7. Immediate Follow-Up Work
 
