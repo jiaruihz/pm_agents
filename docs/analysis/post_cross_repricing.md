@@ -226,3 +226,33 @@ Durable profile and audit:
 Cities without a fast-event profile are excluded only from this source-event
 head.  They are not globally banned from forecast, regime, lottery, Tmax, or
 ordinary METAR/WU strategies.
+
+## 2026-07-14 Denominator And Event-Semantics Correction
+
+The v1 `cross_event` name was too broad: its implementation only checked whether
+the saved running-high bracket changed from the prior snapshot.  It did not join
+JMA, AMOS, HKO, MSS, MADIS, or the new city-source profiles.  The 518 rows are
+therefore generic observed bracket advances, not fast-source events, and the
+42-row current-NO result is a final model-selected subset rather than the full
+date-city denominator.
+
+The corrected denominator audit starts from 68,026 city-date-local-hour paper
+candidates across 69 dates / 49 cities.  Of the 8,094 reconstructable labeled
+PIT states, 518 were generic advances and 499 had executable current-NO asks and
+depth.  Trading all 499 current-NO rows returned fee-adjusted ROI -2.7%, with a
+date-bootstrap CI of [-7.1%, +0.9%].  Its date-equal excess over the same-price-
+band initial-anchor baseline was -0.6%, CI [-3.7%, +2.1%].  The broad event has
+not shown alpha.
+
+True profile-matched high-frequency history only begins in the persisted 2026-
+07-08 UTC file (city-local target dates can be 2026-07-07).  With settlement
+labels currently through 2026-07-10, it provides only four overlapping target
+dates / 61 city-dates, not a two-month fast-source replay.  Keep the corrected
+collector at zero notional until a separate forward window passes significance,
+same-denominator baseline, and execution gates.
+
+Durable audit:
+
+- `scripts/analysis/market_structure_edge/audit_source_event_denominator_v2.py`
+- `docs/analysis/2026-07/2026-07-14-source-event-denominator-audit-v2.md`
+- `docs/analysis/2026-07/generated/source_event_denominator_audit_v2/`
