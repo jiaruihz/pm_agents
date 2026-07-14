@@ -1216,7 +1216,9 @@ def execute_trade_plans(
     batch_live_notional = 0.0
     if config.live and not config.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
-    if config.live and live_place_fn is None and any(bool(plan.get("live_enabled", False)) for plan in plans):
+    if config.live and live_place_fn is None and any(
+        bool(plan.get("live_enabled", False)) and not bool(plan.get("cancel_only", False)) for plan in plans
+    ):
         raise RuntimeError("live execution requested but no live_place_fn was provided")
 
     for plan in plans:
@@ -1237,6 +1239,35 @@ def execute_trade_plans(
             continue
         if not allow_duplicate_signal_id and opp_key in existing_live_opportunity_keys | batch_live_opportunity_keys:
             live_skipped_existing_opportunity += 1
+            continue
+        if bool(plan.get("cancel_only", False)):
+            cancel_order_id = safe_str(plan.get("cancel_before_order_id"))
+            if not cancel_order_id or live_cancel_fn is None:
+                raise RuntimeError("cancel_only plan requires cancel_before_order_id and live_cancel_fn")
+            try:
+                cancel_response = live_cancel_fn(cancel_order_id)
+                cancel_ok, cancel_reason = cancel_response_allows_replacement(cancel_response, cancel_order_id)
+            except Exception as exc:
+                cancel_response = {"error": f"{type(exc).__name__}: {exc}"}
+                cancel_ok, cancel_reason = False, "cancel_only_request_failed"
+            response = {
+                "pre_place_cancel_order_id": cancel_order_id,
+                "pre_place_cancel_response": cancel_response,
+                "pre_place_cancel_status": "cancel_confirmed" if cancel_ok else "not_confirmed",
+                "requested_price": 0.0,
+                "posted_price": 0.0,
+                "quote_status": "cancelled" if cancel_ok else "rejected",
+                "quote_reason": safe_str(plan.get("quote_reason")) or cancel_reason,
+                "error_classification": "" if cancel_ok else "cancel_only_not_confirmed",
+                "error_reason": "" if cancel_ok else cancel_reason,
+            }
+            record = build_live_order_record(plan, response, status="cancelled" if cancel_ok else "blocked")
+            live_orders.append(record)
+            result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
+            live_result["written"] += result["written"]
+            live_result["skipped_existing"] += result["skipped_existing"]
+            if not cancel_ok:
+                live_guard_blocks += 1
             continue
         lifecycle_reason = lifecycle_guard_reason(plan)
         if lifecycle_reason:

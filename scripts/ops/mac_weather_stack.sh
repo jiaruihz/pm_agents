@@ -152,6 +152,10 @@ EOF
     <string>-u</string>
     <string>$PROJECT_DIR/scripts/ops/low_price_yes_lottery_tiny_live.py</string>
     <string>loop</string>
+    <string>--snapshot-dir</string>
+    <string>$DATA_FEED_SNAPSHOT_DIR</string>
+    <string>--max-weather-snapshot-age-min</string>
+    <string>30</string>
     <string>--order-notional-usd</string>
     <string>${LOW_PRICE_YES_LOTTERY_NOTIONAL:-0.8}</string>
     <string>--sizing-policy</string>
@@ -173,7 +177,7 @@ EOF
     <string>--min-fee-adjusted-edge</string>
     <string>0.15</string>
     <string>--max-decision-snapshot-age-hours</string>
-    <string>6</string>
+    <string>0.5</string>
     <string>--min-decision-hours-to-settle</string>
     <string>1</string>
     <string>--max-candidates-per-run</string>

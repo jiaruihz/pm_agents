@@ -680,6 +680,42 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(rows[-1]["source_order_id"], "old-order-1")
             self.assertEqual(rows[-1]["exchange_response"]["pre_place_cancel_order_id"], "old-order-1")
 
+    def test_execute_trade_plans_supports_cancel_only_without_placing_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "allow_duplicate_signal_id": True,
+                "execution_action": "maker_lifecycle_cancel_stale_thesis",
+                "cancel_only": True,
+                "cancel_before_order_id": "old-order-1",
+                "source_order_id": "old-order-1",
+                "paper_enabled": False,
+            }
+            plans = Path(tmp) / "plans.jsonl"
+            paper = Path(tmp) / "paper.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            cancels = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=paper,
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=None,
+                live_cancel_fn=lambda order_id: cancels.append(order_id)
+                or {"cancel": {"canceled": [order_id], "not_canceled": {}}},
+            )
+
+            self.assertEqual(cancels, ["old-order-1"])
+            self.assertEqual(result["live_written"], 1)
+            row = json.loads(live.read_text().splitlines()[-1])
+            self.assertEqual(row["status"], "cancelled")
+            self.assertEqual(row["execution_action"], "maker_lifecycle_cancel_stale_thesis")
+
     def test_execute_trade_plans_blocks_lifecycle_replacement_when_cancel_not_confirmed(self):
         with tempfile.TemporaryDirectory() as tmp:
             signal = normalize_signal(self._paper_decision())

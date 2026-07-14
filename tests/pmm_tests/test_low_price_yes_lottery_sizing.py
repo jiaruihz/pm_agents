@@ -5,6 +5,8 @@ import pytest
 from scripts.ops.low_price_yes_lottery_tiny_live import (
     choose_lifecycle_action,
     enforce_live_safety_args,
+    load_fresh_snapshot_candidates,
+    refresh_lifecycle_thesis,
     shares_for_price_tier_6_8_10,
     shares_for_sizing_policy,
     sizing_shadow,
@@ -78,6 +80,7 @@ def test_debug_distance_override_cannot_run_live():
 def lifecycle_args(**overrides):
     base = dict(
         min_order_shares=5.0,
+        min_ask=0.05,
         max_ask=0.20,
         min_edge=0.20,
         min_fee_adjusted_edge=0.15,
@@ -94,6 +97,64 @@ def lifecycle_args(**overrides):
     )
     base.update(overrides)
     return Namespace(**base)
+
+
+def test_fresh_snapshot_candidates_are_d1_only():
+    args = Namespace(
+        min_ask=0.05,
+        max_ask=0.20,
+        min_edge=0.20,
+        min_decision_hours_to_settle=1.0,
+        min_event_date=None,
+        max_event_date=None,
+        max_candidates_per_run=80,
+    )
+    base = {
+        "probability_status": "ok",
+        "side": "BUY_YES",
+        "city": "Atlanta",
+        "snapshot_ts_utc": "2026-07-14T15:15:00Z",
+        "bracket": "90-91",
+        "entry_price": 0.08,
+        "model_prob": 0.40,
+        "edge": 0.32,
+        "hours_to_settle": 30,
+        "snapshot_ts_utc": "2026-07-14T15:15:00Z",
+    }
+    snapshot = {
+        "path": __import__("pathlib").Path("snapshot.json"),
+        "records": [
+            {**base, "event_date": "2026-07-14", "condition_id": "d0"},
+            {**base, "event_date": "2026-07-15", "condition_id": "d1"},
+        ],
+    }
+
+    rows = load_fresh_snapshot_candidates(snapshot, args)
+
+    assert [row["condition_id"] for row in rows] == ["d1"]
+
+
+def test_lifecycle_refresh_rejects_stale_probability_when_fresh_edge_is_gone():
+    order = {"model_p_yes_used": 0.42}
+    fresh = {
+        "probability_status": "ok",
+        "side": "BUY_YES",
+        "event_date": "2026-07-15",
+        "city": "Atlanta",
+        "snapshot_ts_utc": "2026-07-14T15:15:00Z",
+        "bracket": "90-91",
+        "forecast_max_native": 89.0,
+        "model_p_yes": 0.12,
+    }
+
+    _, reason = refresh_lifecycle_thesis(
+        order,
+        fresh_row=fresh,
+        best_ask=0.10,
+        args=lifecycle_args(),
+    )
+
+    assert reason == "fresh_weather_fee_edge_below_min"
 
 
 def test_lifecycle_prefers_lower_repost_when_book_moves_down():

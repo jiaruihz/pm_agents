@@ -722,7 +722,11 @@ def _plans_require_live_place(plan_path: Path) -> bool:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if row.get("record_type") == "weather_edge_trade_plan" and bool(row.get("live_enabled", False)):
+        if (
+            row.get("record_type") == "weather_edge_trade_plan"
+            and bool(row.get("live_enabled", False))
+            and not bool(row.get("cancel_only", False))
+        ):
             return True
     return False
 

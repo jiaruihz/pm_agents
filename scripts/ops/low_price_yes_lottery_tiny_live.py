@@ -2,9 +2,9 @@
 """Low-price YES lottery tiny-live head.
 
 This is an independent live/shadow head for the refined low-price YES lottery
-selector. It reads canonical fact_signal_candidates, rechecks the live CLOB
-book, writes shadow telemetry for every candidate, and hands accepted maker-first
-plans to weather_order_executor.py.
+selector. Live entry and maker lifecycle decisions read the latest standardized
+data-feed snapshot so weather probability and the rechecked CLOB book refer to
+the same decision time. Canonical facts remain the research and lineage layer.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -37,13 +38,23 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     TailTelemetryResources,
     build_low_price_yes_tail_telemetry,
     load_tail_telemetry_resources_soft,
+    parse_bracket_bounds,
 )
 from src.strategies.weather_edge_v1.runtime import order_runtime
 from weather_data_feed.source_policy import city_slug
+from weather_data_feed.city_calendar import city_timezone_name
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
-SNAPSHOT_DIR_DEFAULT = ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"
+MAC_DATA_FEED_SNAPSHOT_DIR = Path(
+    "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"
+)
+SNAPSHOT_DIR_DEFAULT = Path(
+    os.environ.get(
+        "WEATHER_DATA_FEED_SNAPSHOT_DIR",
+        str(MAC_DATA_FEED_SNAPSHOT_DIR if MAC_DATA_FEED_SNAPSHOT_DIR.exists() else ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots"),
+    )
+)
 RUNTIME_DIR = ROOT / os.environ.get(
     "LOW_PRICE_YES_LOTTERY_RUNTIME_DIR",
     "runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1",
@@ -251,6 +262,105 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=1000")
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def load_latest_data_feed_snapshot(snapshot_dir: Path, *, max_age_min: float) -> dict[str, Any]:
+    paths = sorted(snapshot_dir.glob("snapshot_*.json"), reverse=True)
+    if not paths:
+        raise RuntimeError(f"no data-feed snapshots under {snapshot_dir}")
+    path = paths[0]
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("records"), list):
+        raise RuntimeError(f"invalid data-feed snapshot payload: {path}")
+    snapshot_ts = parse_utc(payload.get("ts_utc"))
+    if snapshot_ts is None:
+        raise RuntimeError(f"data-feed snapshot missing ts_utc: {path}")
+    age_min = max(0.0, (now_utc_dt() - snapshot_ts).total_seconds() / 60.0)
+    if age_min > max_age_min:
+        raise RuntimeError(
+            f"data-feed snapshot stale: age_min={age_min:.1f} max_age_min={max_age_min:.1f} path={path}"
+        )
+    return {
+        "path": path,
+        "snapshot_ts_utc": snapshot_ts.isoformat().replace("+00:00", "Z"),
+        "age_min": age_min,
+        "records": [row for row in payload["records"] if isinstance(row, dict)],
+    }
+
+
+def normalize_snapshot_candidate(row: dict[str, Any], *, source_path: Path) -> dict[str, Any]:
+    out = dict(row)
+    out.update(
+        {
+            "candidate_id": safe_str(row.get("condition_id")) or stable_hash(
+                {
+                    "city": row.get("city"),
+                    "event_date": row.get("event_date"),
+                    "bracket": row.get("bracket"),
+                }
+            ),
+            "decision_snapshot_ts_utc": safe_str(row.get("snapshot_ts_utc") or row.get("ts_utc")),
+            "decision_hours_to_settle": to_float(row.get("hours_to_settle"), 0.0),
+            "decision_entry_price": to_float(row.get("entry_price") or row.get("market_yes_price"), 0.0),
+            "model_p_yes": to_float(row.get("model_prob"), 0.0),
+            "model_version": safe_str(row.get("model")),
+            "decision_window_label": safe_str(row.get("window")),
+            "source_snapshot_path": rel(source_path),
+            "fact_built_at_utc": "",
+        }
+    )
+    return out
+
+
+def is_d1_snapshot_row(row: dict[str, Any]) -> bool:
+    target = _event_date(row.get("event_date") or row.get("target_date"))
+    snapshot_ts = parse_utc(row.get("snapshot_ts_utc") or row.get("decision_snapshot_ts_utc"))
+    tz_name = city_timezone_name(safe_str(row.get("city")))
+    local = snapshot_ts.astimezone(ZoneInfo(tz_name)).date() if snapshot_ts is not None and tz_name else None
+    return target is not None and local is not None and target == local + timedelta(days=1)
+
+
+def load_fresh_snapshot_candidates(snapshot: dict[str, Any], args: argparse.Namespace) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    for raw in snapshot["records"]:
+        row = normalize_snapshot_candidate(raw, source_path=snapshot["path"])
+        if safe_str(row.get("probability_status")) != "ok" or safe_str(row.get("side")) != "BUY_YES":
+            continue
+        if not is_d1_snapshot_row(row):
+            continue
+        price = to_float(row.get("decision_entry_price"), 0.0)
+        if not (float(args.min_ask) <= price <= float(args.max_ask)):
+            continue
+        if to_float(row.get("edge"), 0.0) < float(args.min_edge):
+            continue
+        if to_float(row.get("decision_hours_to_settle"), 0.0) < float(args.min_decision_hours_to_settle):
+            continue
+        if args.min_event_date and safe_str(row.get("event_date")) < safe_str(args.min_event_date):
+            continue
+        if args.max_event_date and safe_str(row.get("event_date")) > safe_str(args.max_event_date):
+            continue
+        selected.append(row)
+
+    selected.sort(
+        key=lambda row: (
+            safe_str(row.get("event_date")),
+            safe_str(row.get("city")),
+            to_float(row.get("decision_entry_price"), 0.0),
+            -to_float(row.get("edge"), 0.0),
+            safe_str(row.get("bracket")),
+        )
+    )
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in selected:
+        key = (safe_str(row.get("event_date")), safe_str(row.get("city")))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+        if len(deduped) >= int(args.max_candidates_per_run):
+            break
+    return deduped
 
 
 def load_token_cache(path: Path = TOKEN_CACHE_OUT) -> dict[str, Any]:
@@ -709,6 +819,26 @@ def resolve_yes_token_from_event(row: dict[str, Any]) -> dict[str, Any]:
 
 def resolve_yes_token(row: dict[str, Any], cache: dict[str, Any]) -> dict[str, Any]:
     condition_id = safe_str(row.get("condition_id"))
+    direct_token_id = safe_str(row.get("yes_token_id"))
+    if direct_token_id:
+        return {
+            "condition_id": condition_id,
+            "gamma_market_id": safe_str(row.get("market_id")),
+            "market_slug": safe_str(row.get("market_slug") or row.get("event_slug")),
+            "event_id": safe_str(row.get("event_id")),
+            "event_title": safe_str(row.get("event_title")),
+            "question": safe_str(row.get("question")),
+            "outcomes": ["Yes", "No"],
+            "token_ids": [direct_token_id, safe_str(row.get("no_token_id"))],
+            "yes_token_id": direct_token_id,
+            "no_token_id": safe_str(row.get("no_token_id")),
+            "active": True,
+            "closed": False,
+            "end_date": safe_str(row.get("end_date")),
+            "resolved_at_utc": now_utc(),
+            "source": "current_data_feed_snapshot",
+            "source_snapshot_file": safe_str(row.get("source_snapshot_path")),
+        }
     cached = cache.get(condition_id) if condition_id else None
     if isinstance(cached, dict) and cached.get("yes_token_id"):
         fallback = dict(cached)
@@ -788,6 +918,8 @@ def resolve_yes_token(row: dict[str, Any], cache: dict[str, Any]) -> dict[str, A
 
 def cached_yes_token_only(row: dict[str, Any], cache: dict[str, Any]) -> dict[str, Any]:
     condition_id = safe_str(row.get("condition_id"))
+    if safe_str(row.get("yes_token_id")):
+        return resolve_yes_token(row, cache)
     cached = cache.get(condition_id) if condition_id else None
     if isinstance(cached, dict) and cached.get("yes_token_id"):
         return {**cached, "source": "token_cache_only"}
@@ -1314,6 +1446,8 @@ def validate_candidate(
         "last_seen_ts_utc": safe_str(row.get("last_seen_ts_utc")),
         "n_snapshots": row.get("n_snapshots"),
         "fact_built_at_utc": safe_str(row.get("fact_built_at_utc")),
+        "candidate_source": safe_str(row.get("candidate_source")) or "canonical_fact",
+        "source_snapshot_path": safe_str(row.get("source_snapshot_path")),
         **tail_telemetry,
         "config": {
             "min_ask": args.min_ask,
@@ -1597,7 +1731,7 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "strategy_instance": STRATEGY_INSTANCE,
         "strategy_id": STRATEGY_ID,
         "strategy_family": STRATEGY_FAMILY,
-        "probability_source": "fact_signal_candidates_model_p_yes",
+        "probability_source": "current_data_feed_snapshot_model_prob",
         "decision_mode": "forecast_bias_low_price_tail_yes_lottery",
         "execution_mode": "tiny_live_maker_first",
         "profile": f"edge20_ask05_20_maker_first_{safe_str(decision.get('sizing_policy')) or 'unknown'}",
@@ -1717,7 +1851,8 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
         "decision_hour_local_pit": decision.get("decision_hour_local_pit"),
         "decision_local_bucket": safe_str(decision.get("decision_local_bucket")),
         "decision_snapshot_ts_utc": safe_str(decision.get("decision_snapshot_ts_utc")),
-        "source_snapshot_path": "runtime/weather.db:fact_signal_candidates",
+        "source_snapshot_path": safe_str(decision.get("source_snapshot_path"))
+        or "runtime/weather.db:fact_signal_candidates",
     }
     return {
         "record_type": "weather_edge_trade_plan",
@@ -1858,6 +1993,57 @@ def choose_lifecycle_action(
     }
 
 
+def snapshot_record_index(snapshot: dict[str, Any]) -> dict[tuple[str, str, str], dict[str, Any]]:
+    out: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for raw in snapshot["records"]:
+        row = normalize_snapshot_candidate(raw, source_path=snapshot["path"])
+        key = (safe_str(row.get("city")), safe_str(row.get("event_date")), safe_str(row.get("bracket")))
+        if all(key):
+            out[key] = row
+    return out
+
+
+def refresh_lifecycle_thesis(
+    order: dict[str, Any],
+    *,
+    fresh_row: dict[str, Any] | None,
+    best_ask: float,
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], str]:
+    if fresh_row is None:
+        return order, "fresh_weather_market_missing"
+    if safe_str(fresh_row.get("probability_status")) != "ok":
+        return order, "fresh_weather_probability_not_ok"
+    if not is_d1_snapshot_row(fresh_row):
+        return order, "fresh_weather_not_d1"
+    if safe_str(fresh_row.get("side")) != "BUY_YES":
+        return order, "fresh_weather_side_not_buy_yes"
+    bracket_low, _ = parse_bracket_bounds(fresh_row.get("bracket"))
+    forecast_max = to_float(fresh_row.get("forecast_max_native"), math.nan)
+    if bracket_low is None or not math.isfinite(forecast_max):
+        return order, "fresh_weather_distance_missing"
+    if bracket_low - forecast_max <= 0:
+        return order, "fresh_weather_dist_le0"
+    p_yes = to_float(fresh_row.get("model_p_yes"), 0.0)
+    if p_yes <= 0:
+        return order, "fresh_weather_probability_missing"
+    if not (float(args.min_ask) <= best_ask <= float(args.max_ask)):
+        return order, "fresh_weather_book_outside_entry_band"
+    fee_per_share = float(args.taker_fee_rate) * best_ask * (1.0 - best_ask)
+    if p_yes - best_ask - fee_per_share < float(args.min_fee_adjusted_edge):
+        return order, "fresh_weather_fee_edge_below_min"
+    return {
+        **order,
+        "model_p_yes_used": p_yes,
+        "model_token_probability": p_yes,
+        "model_p_yes_raw": p_yes,
+        "model_version": safe_str(fresh_row.get("model_version")),
+        "forecast_source": safe_str(fresh_row.get("forecast_source")),
+        "decision_snapshot_ts_utc": safe_str(fresh_row.get("decision_snapshot_ts_utc")),
+        "source_snapshot_path": safe_str(fresh_row.get("source_snapshot_path")),
+    }, ""
+
+
 def build_lifecycle_plan(
     order: dict[str, Any],
     action: dict[str, Any],
@@ -1870,7 +2056,8 @@ def build_lifecycle_plan(
     live_enabled: bool,
     min_order_shares: float,
 ) -> dict[str, Any]:
-    price = to_float(action.get("limit_price"), 0.0)
+    cancel_only = bool(action.get("cancel_only", False))
+    price = 0.0 if cancel_only else to_float(action.get("limit_price"), 0.0)
     p_yes = to_float(order.get("model_p_yes_used") or order.get("model_token_probability"), 0.0)
     execution_action = safe_str(action.get("execution_action"))
     base = {
@@ -1901,7 +2088,7 @@ def build_lifecycle_plan(
         "best_ask": round(to_float(action.get("best_ask"), 0.0), 6),
         "spread": round(to_float(action.get("spread"), 0.0), 6),
         "limit_price": round(price, 6),
-        "quote_status": "accepted",
+        "quote_status": "cancel_requested" if cancel_only else "accepted",
         "quote_reason": safe_str(action.get("quote_reason")),
         "quote_edge": round(p_yes - price, 6),
         "required_quote_edge": round(to_float(action.get("fee_adjusted_edge"), 0.0), 6),
@@ -1928,7 +2115,8 @@ def build_lifecycle_plan(
         "source_posted_price": round(to_float(order.get("posted_price"), 0.0), 6),
         "source_filled_shares": round(filled_shares, 6),
         "source_remaining_shares": round(remaining_shares, 6),
-        "replacement_requires_order_state": True,
+        "replacement_requires_order_state": not cancel_only,
+        "cancel_only": cancel_only,
         "min_order_shares": round(min_order_shares, 6),
         "source_order_age_min": round(age_min, 3),
         "lifecycle_key": lifecycle_key,
@@ -1958,7 +2146,9 @@ def build_lifecycle_plan(
         "estimated_taker_fee_usd": round(to_float(action.get("estimated_taker_fee_usd"), 0.0), 6),
         "paper_enabled": False,
         "live_enabled": bool(live_enabled),
-        "source_snapshot_path": "runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl",
+        "decision_snapshot_ts_utc": safe_str(order.get("decision_snapshot_ts_utc")),
+        "source_snapshot_path": safe_str(order.get("source_snapshot_path"))
+        or "runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl",
     }
     return {
         "record_type": "weather_edge_trade_plan",
@@ -1971,7 +2161,12 @@ def build_lifecycle_plan(
     }
 
 
-def lifecycle_plans(args: argparse.Namespace, *, live_enabled: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def lifecycle_plans(
+    args: argparse.Namespace,
+    *,
+    live_enabled: bool,
+    weather_snapshot: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not bool(args.maker_lifecycle_enabled):
         return [], []
     now = now_utc_dt()
@@ -1982,6 +2177,7 @@ def lifecycle_plans(args: argparse.Namespace, *, live_enabled: bool) -> tuple[li
     decisions: list[dict[str, Any]] = []
     plans: list[dict[str, Any]] = []
     max_actions = max(0, int(args.maker_lifecycle_max_actions_per_run))
+    fresh_index = snapshot_record_index(weather_snapshot)
     for order in read_jsonl(LIVE_OUT):
         if len(plans) >= max_actions:
             break
@@ -2027,14 +2223,45 @@ def lifecycle_plans(args: argparse.Namespace, *, live_enabled: bool) -> tuple[li
             )
             asks = book_levels(book, "ask")
             bids = book_levels(book, "bid")
-            action = choose_lifecycle_action(
-                order=order,
-                age_min=age_min,
-                remaining_shares=remaining_shares,
-                asks=asks,
-                bids=bids,
+            fresh_row = fresh_index.get(
+                (safe_str(order.get("city")), safe_str(order.get("target_date")), safe_str(order.get("bracket")))
+            )
+            refreshed_order, invalid_reason = refresh_lifecycle_thesis(
+                order,
+                fresh_row=fresh_row,
+                best_ask=asks[0][0] if asks else 0.0,
                 args=args,
             )
+            if invalid_reason:
+                action = {
+                    "decision_status": "planned",
+                    "execution_action": "maker_lifecycle_cancel_stale_thesis",
+                    "maker_only": True,
+                    "cancel_only": True,
+                    "limit_price": 0.0,
+                    "quote_mode": "maker_lifecycle_cancel_only",
+                    "quote_reason": invalid_reason,
+                    "fresh_thesis_status": "invalid",
+                    "fresh_thesis_reason": invalid_reason,
+                    "best_bid": bids[0][0] if bids else 0.0,
+                    "best_ask": asks[0][0] if asks else 0.0,
+                    "spread": max(0.0, asks[0][0] - bids[0][0]) if asks and bids else 0.0,
+                    "fee_adjusted_edge": 0.0,
+                }
+            else:
+                order = refreshed_order
+                action = {
+                    **choose_lifecycle_action(
+                        order=order,
+                        age_min=age_min,
+                        remaining_shares=remaining_shares,
+                        asks=asks,
+                        bids=bids,
+                        args=args,
+                    ),
+                    "fresh_thesis_status": "valid",
+                    "fresh_thesis_reason": "",
+                }
         except Exception as exc:  # noqa: BLE001
             action = {
                 "decision_status": "blocked",
@@ -2061,6 +2288,8 @@ def lifecycle_plans(args: argparse.Namespace, *, live_enabled: bool) -> tuple[li
             "posted_shares": posted_shares,
             "filled_shares": filled_shares,
             "remaining_shares": round(remaining_shares, 6),
+            "weather_snapshot_ts_utc": safe_str(weather_snapshot.get("snapshot_ts_utc")),
+            "weather_snapshot_age_min": round(to_float(weather_snapshot.get("age_min"), 0.0), 3),
             **action,
         }
         if lifecycle_key in used_lifecycle_keys:
@@ -2140,11 +2369,17 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     submitted_signal_ids = existing_submitted_signal_ids(LIVE_OUT)
     submitted_natural_keys = existing_submitted_natural_keys(LIVE_OUT)
     tail_telemetry_resources = load_tail_telemetry_resources_soft()
+    weather_snapshot = load_latest_data_feed_snapshot(
+        Path(args.snapshot_dir),
+        max_age_min=float(args.max_weather_snapshot_age_min),
+    )
     with connect(Path(args.db)) as conn:
         min_event_date = effective_min_event_date(conn, args)
         raw_counts = count_raw(conn, args, min_event_date)
         date_window_excluded_counts = count_date_window_excluded(conn, args, min_event_date)
-        raw_candidates = load_candidates(conn, args, min_event_date)
+    raw_candidates = load_fresh_snapshot_candidates(weather_snapshot, args)
+    for row in raw_candidates:
+        row["candidate_source"] = "current_data_feed_snapshot"
 
     decisions: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
@@ -2160,7 +2395,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
 
     live_enabled = bool(args.live and args.confirm_live)
     entry_plans = [build_plan(decision, live_enabled=live_enabled) for decision in planned]
-    maker_lifecycle_plans, maker_lifecycle_decisions = lifecycle_plans(args, live_enabled=live_enabled)
+    maker_lifecycle_plans, maker_lifecycle_decisions = lifecycle_plans(
+        args,
+        live_enabled=live_enabled,
+        weather_snapshot=weather_snapshot,
+    )
     plans = [*maker_lifecycle_plans, *entry_plans]
     write_jsonl(PLAN_OUT, plans)
     for decision in decisions:
@@ -2187,6 +2426,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "rule_id": RULE_ID,
         "source_report": SOURCE_REPORT,
         "db": rel(Path(args.db)),
+        "candidate_source": "current_data_feed_snapshot",
+        "weather_snapshot_path": rel(weather_snapshot["path"]),
+        "weather_snapshot_ts_utc": weather_snapshot["snapshot_ts_utc"],
+        "weather_snapshot_age_min": round(float(weather_snapshot["age_min"]), 3),
+        "weather_snapshot_record_count": len(weather_snapshot["records"]),
         "runtime_dir": rel(RUNTIME_DIR),
         "effective_min_event_date": min_event_date,
         "effective_max_event_date": args.max_event_date,
@@ -2221,6 +2465,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "max_taker_cushion": float(args.max_taker_cushion),
             "min_fee_adjusted_edge": float(args.min_fee_adjusted_edge),
             "max_decision_snapshot_age_hours": float(args.max_decision_snapshot_age_hours),
+            "max_weather_snapshot_age_min": float(args.max_weather_snapshot_age_min),
+            "entry_target_scope": "city_local_d1_only",
             "min_decision_hours_to_settle": float(args.min_decision_hours_to_settle),
             "min_order_shares": float(args.min_order_shares),
             "sizing_policy": safe_str(args.sizing_policy),
@@ -2327,6 +2573,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["run", "loop"], nargs="?", default="run")
     parser.add_argument("--db", default=str(DB_DEFAULT))
+    parser.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR_DEFAULT))
+    parser.add_argument("--max-weather-snapshot-age-min", type=float, default=30.0)
     parser.add_argument("--min-event-date", default=None, help="Default: latest unsettled matching event_date.")
     parser.add_argument("--max-event-date", default=None)
     parser.add_argument("--min-ask", type=float, default=0.05)
@@ -2339,7 +2587,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-order-shares", type=float, default=5.0)
     parser.add_argument("--maker-first-fraction", type=float, default=1.0)
     parser.add_argument("--taker-fallback-min-notional-usd", type=float, default=1.0)
-    parser.add_argument("--max-decision-snapshot-age-hours", type=float, default=6.0)
+    parser.add_argument("--max-decision-snapshot-age-hours", type=float, default=0.5)
     parser.add_argument("--min-decision-hours-to-settle", type=float, default=1.0)
     parser.add_argument("--max-candidates-per-run", type=int, default=80)
     parser.add_argument("--taker-fee-rate", type=float, default=0.05)
