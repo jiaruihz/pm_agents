@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from scripts.ops.weather_live_runtime_patrol import evaluate
+from scripts.ops.weather_live_runtime_patrol import evaluate, notification_kind
 
 
 def test_repeated_deterministic_submit_failures_require_runner_stop():
@@ -36,3 +36,13 @@ def test_fresh_runner_without_submit_failures_is_ok():
     )
     assert health["status"] == "ok"
     assert health["stop_runner_required"] is False
+
+
+def test_telegram_notifications_fire_once_per_incident_and_on_recovery():
+    critical = {"status": "critical", "reasons": ["runner_latest_stale"]}
+    assert notification_kind(critical, {}) == "critical"
+    assert notification_kind(
+        critical,
+        {"last_status": "critical", "last_notified_fingerprint": "runner_latest_stale"},
+    ) == ""
+    assert notification_kind({"status": "ok", "reasons": []}, {"last_status": "critical"}) == "recovered"

@@ -8,6 +8,7 @@ import json
 import os
 import signal
 import subprocess
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,6 +16,9 @@ from typing import Any
 
 
 DEFAULT_RUNTIME_ROOT = Path("/Volumes/jrs/weather_data_feed_service_runtime")
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 RUNNER_PATTERN = "scripts/ops/weather_fast_source_prev_no_trial.py --loop"
 DETERMINISTIC_SUBMIT_ERRORS = (
     "invalid expiration value",
@@ -121,6 +125,57 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+def notification_kind(health: dict[str, Any], state: dict[str, Any]) -> str:
+    current = str(health.get("status") or "")
+    previous = str(state.get("last_status") or "")
+    fingerprint = "|".join(str(value) for value in health.get("reasons") or [])
+    if current == "critical" and fingerprint != str(state.get("last_notified_fingerprint") or ""):
+        return "critical"
+    if current == "ok" and previous == "critical":
+        return "recovered"
+    return ""
+
+
+def telegram_message(kind: str, health: dict[str, Any]) -> str:
+    if kind == "recovered":
+        return "【weather live 巡检】链路已恢复，runner 与 latest 均正常。"
+    lines = [
+        "【weather live 巡检】CRITICAL，已禁止静默重试",
+        "原因：" + ", ".join(str(value) for value in health.get("reasons") or ["unknown"]),
+        f"近 5 分钟：attempts={health.get('recent_order_attempts')} failures={health.get('recent_submit_failures')}",
+    ]
+    stopped = health.get("runner_stopped_pids") or []
+    if stopped:
+        lines.append("已熔断 live runner：" + ",".join(str(value) for value in stopped))
+    lines.append("请在 Codex 当前天气任务发送：检查并修复 weather live 巡检告警")
+    return "\n".join(lines)
+
+
+def notify_telegram(health: dict[str, Any], *, state_path: Path) -> dict[str, Any]:
+    state = read_json(state_path)
+    kind = notification_kind(health, state)
+    result: dict[str, Any] = {"kind": kind, "attempted": False, "sent": False}
+    if kind:
+        result["attempted"] = True
+        try:
+            from src.platform.notification.telegram import send_telegram_message_sync
+
+            response = send_telegram_message_sync(telegram_message(kind, health))
+            result["sent"] = True
+            result["message_id"] = (response.get("result") or response).get("message_id") if isinstance(response, dict) else None
+        except Exception as exc:
+            result["error"] = f"{type(exc).__name__}: {exc}"
+    fingerprint = "|".join(str(value) for value in health.get("reasons") or [])
+    state["last_status"] = health.get("status")
+    state["updated_at_utc"] = health.get("checked_at_utc")
+    if result["sent"] and kind == "critical":
+        state["last_notified_fingerprint"] = fingerprint
+    elif result["sent"] and kind == "recovered":
+        state["last_notified_fingerprint"] = ""
+    write_json(state_path, state)
+    return result
+
+
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     latest = read_json(Path(args.runner_dir) / "latest.json")
@@ -142,6 +197,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             except ProcessLookupError:
                 pass
         health["runner_stopped_pids"] = stopped
+    if args.telegram:
+        health["telegram_notification"] = notify_telegram(health, state_path=Path(args.notification_state))
     write_json(Path(args.output), health)
     return health
 
@@ -154,6 +211,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-latest-age-sec", type=float, default=180.0)
     parser.add_argument("--failure-threshold", type=int, default=3)
     parser.add_argument("--stop-runner-on-submit-failure", action="store_true")
+    parser.add_argument("--telegram", action="store_true")
+    parser.add_argument(
+        "--notification-state",
+        default=str(DEFAULT_RUNTIME_ROOT / "output/live_runtime_patrol/notification_state.json"),
+    )
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-sec", type=float, default=60.0)
     return parser

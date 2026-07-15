@@ -10,7 +10,7 @@ mkdir -p "$RUNTIME_ROOT/loop" "$RUNTIME_ROOT/output/live_runtime_patrol"
 screen -S "$SESSION" -X quit 2>/dev/null || true
 pkill -f "$PROJECT_DIR/scripts/ops/weather_live_runtime_patrol.py --loop" 2>/dev/null || true
 screen -dmS "$SESSION" sh -c \
-  "cd $(printf '%q' "$PROJECT_DIR") && exec $(printf '%q' "$PROJECT_DIR/.venv/bin/python") $(printf '%q' "$PROJECT_DIR/scripts/ops/weather_live_runtime_patrol.py") --loop --interval-sec 60 --lookback-min 5 --stop-runner-on-submit-failure >> $(printf '%q' "$LOG_FILE") 2>&1"
+  "cd $(printf '%q' "$PROJECT_DIR") && set -a && { [ ! -f .env ] || . ./.env || true; } && set +a && exec $(printf '%q' "$PROJECT_DIR/.venv/bin/python") $(printf '%q' "$PROJECT_DIR/scripts/ops/weather_live_runtime_patrol.py") --loop --interval-sec 60 --lookback-min 5 --stop-runner-on-submit-failure --telegram >> $(printf '%q' "$LOG_FILE") 2>&1"
 
 echo "started weather live runtime patrol session=$SESSION interval_sec=60"
 echo "health=$RUNTIME_ROOT/output/live_runtime_patrol/latest.json"
