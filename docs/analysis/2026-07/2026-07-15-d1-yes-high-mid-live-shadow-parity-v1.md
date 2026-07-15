@@ -46,6 +46,15 @@ Backtest: [scripts/analysis/market_structure_edge/research_market_calibration_cu
 
 要把 live 覆盖从 ~5 城恢复到 36 城需切 `snapshot-full`。审计 `start_mac_weather_data_feed_jrs_tmux.sh` 发现：该 committed 启动器**未设** `WEATHER_DATA_FEED_SNAPSHOT_COMMAND`（默认 targeted），且把 `HIGH_FREQUENCY_OBSERVATIONS_ENABLED` 默认设 **0**，而当前运行的 feed 这些是**开着**的（live 快源/hko 头在消费）。→ **用该启动器盲重启会关掉 live 头依赖的高频观测**。因此不盲重启生产 feed；安全路径是独立的全 ladder orderbook 采集 loop（不碰 live feed），作为单独一步执行/确认。
 
+## 六、漂移是否改变之前的结论？——不改变（已核）
+
+两处漂移**都只在 runner（live/shadow）里，回测脚本不含它们**，已逐项验证：
+1. `research_market_calibration_curve_v1.py` grep `obs_age/age/freshness` = 空 → 回测从未加 obs 门槛。
+2. 回测 d1 口径直接用 atlas `d1_no_ask/d1_no_bid`（factory 已按最高 ask 定档）→ 本就是"修复后"口径。
+3. 重跑 probe 数字逐位不变：all-rows +2.18% CI[+0.04%,+4.47%]、first-row +2.24% CI[-0.64%,+5.19%]、forward +6.62% CI[+3.47%,+9.89%]。
+
+方向上：漂移让 live 本来比回测**更严**（多 45min 门槛 + d1 可能选错档），修复是把 live **对齐**回测。因此校准曲线的全部结论（静态 taker 面关闭 / d1_yes_high_mid 为唯一候选 / `inconclusive_positive_signal_shadow_only` 不 live）**均不变**。唯一新增的 forward-only 差异是 live 允许 45–120min obs（回测 population 最旧 60min），已用 `obs_age_in_backtest_band` flag 分层，只在 shadow 自身 forward 记录里体现，不回改回测。
+
 ## 结论
 
-shadow 的**入场条件、价格口径、d1 身份、结算标签与回测逐条一致**，两处早期漂移已修，剩余为已标注的结构性差异。promotion 以 shadow 自身 forward 记录为准。**当前不 live。**
+shadow 的**入场条件、价格口径、d1 身份、结算标签与回测逐条一致**，两处早期漂移已修，剩余为已标注的结构性差异。漂移仅在 runner、回测结论不变。promotion 以 shadow 自身 forward 记录为准。**当前不 live。**
