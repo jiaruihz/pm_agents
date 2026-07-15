@@ -50,7 +50,8 @@ RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/j
 DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/fast_source_prev_no_trial"
 DEFAULT_HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
 DEFAULT_SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl"
-PERSISTENT_CROSS_POLICY = "persistent_candidate_margin_v4"
+PERSISTENT_CROSS_POLICY = "persistent_candidate_margin_v5"
+SOURCE_OBSERVATION_HISTORY_SUFFIX = "__source_observations__"
 
 
 def source_temp_in_market_unit(temp_c: float, market_unit: str) -> float:
@@ -179,6 +180,30 @@ def source_cross_confirmation(
         }
     if policy.confirmation_policy != "persistent_candidate_margin":
         raise ValueError(f"unsupported confirmation_policy={policy.confirmation_policy!r}")
+
+    current_obs = parse_dt(source_obs_ts_utc)
+    history_key = f"{city}|{target_date}|{source}|{SOURCE_OBSERVATION_HISTORY_SUFFIX}"
+    history_state = dict(state.get(history_key) or {})
+    if history_state.get("policy") != PERSISTENT_CROSS_POLICY:
+        history_state = {}
+    observations = list(history_state.get("observations") or [])
+    previous_obs = parse_dt(observations[-1].get("source_obs_ts_utc")) if observations else None
+    out_of_order = current_obs is not None and previous_obs is not None and current_obs < previous_obs
+    if source_obs_ts_utc and not out_of_order and (
+        not observations or source_obs_ts_utc != observations[-1].get("source_obs_ts_utc")
+    ):
+        observations.append(
+            {
+                "source_obs_ts_utc": source_obs_ts_utc,
+                "source_market_temp": source_market_temp,
+            }
+        )
+        observations = observations[-16:]
+        state[history_key] = {
+            "policy": PERSISTENT_CROSS_POLICY,
+            "observations": observations,
+        }
+
     if candidate_no_bracket < metar_running_max_value:
         return {
             "policy": PERSISTENT_CROSS_POLICY,
@@ -196,27 +221,21 @@ def source_cross_confirmation(
     qualifies = source_market_temp >= qualifying_threshold - 1e-9
     latest_is_strong = source_market_temp >= strong_threshold - 1e-9
     key = f"{city}|{target_date}|{source}|{candidate_no_bracket}"
-    previous = dict(state.get(key) or {})
-    if previous.get("policy") != PERSISTENT_CROSS_POLICY:
-        previous = {}
-    current_obs = parse_dt(source_obs_ts_utc)
-    previous_obs = parse_dt(previous.get("last_source_obs_ts_utc"))
-    out_of_order = current_obs is not None and previous_obs is not None and current_obs < previous_obs
-    if source_obs_ts_utc != previous.get("last_source_obs_ts_utc") and not out_of_order:
-        previous_count = int(previous.get("qualifying_distinct_observations") or 0)
-        count = previous_count + 1 if qualifies and previous.get("last_observation_qualified") else (1 if qualifies else 0)
-        previous = {
-            "policy": PERSISTENT_CROSS_POLICY,
-            "last_source_obs_ts_utc": source_obs_ts_utc,
-            "last_observation_qualified": qualifies,
-            "qualifying_distinct_observations": count,
-            "source_market_temp": source_market_temp,
-            "qualifying_threshold_c": qualifying_threshold,
-            "strong_threshold_c": strong_threshold,
-            "latest_observation_strong": latest_is_strong,
-        }
-        state[key] = previous
-    count = int(previous.get("qualifying_distinct_observations") or 0)
+    count = 0
+    for observation in reversed(observations):
+        if float(observation["source_market_temp"]) < qualifying_threshold - 1e-9:
+            break
+        count += 1
+    state[key] = {
+        "policy": PERSISTENT_CROSS_POLICY,
+        "last_source_obs_ts_utc": source_obs_ts_utc,
+        "last_observation_qualified": qualifies,
+        "qualifying_distinct_observations": count,
+        "source_market_temp": source_market_temp,
+        "qualifying_threshold_c": qualifying_threshold,
+        "strong_threshold_c": strong_threshold,
+        "latest_observation_strong": latest_is_strong,
+    }
     confirmed = not out_of_order and qualifies and count >= policy.required_distinct_observations and latest_is_strong
     blocker = ""
     if out_of_order:

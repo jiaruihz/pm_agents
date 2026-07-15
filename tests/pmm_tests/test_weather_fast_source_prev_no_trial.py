@@ -94,7 +94,7 @@ def test_persistent_sources_confirm_when_latest_print_reaches_seven_tenths():
 
     assert result["qualifying_distinct_observations"] == 2
     assert result["confirmed"] is True
-    assert result["policy"] == "persistent_candidate_margin_v4"
+    assert result["policy"] == "persistent_candidate_margin_v5"
     assert result["blocker"] == ""
 
 
@@ -138,7 +138,7 @@ def test_singapore_uses_persistent_confirmation_policy():
         source="singapore_mss",
     )
 
-    assert result["policy"] == "persistent_candidate_margin_v4"
+    assert result["policy"] == "persistent_candidate_margin_v5"
     assert result["confirmed"] is False
 
 
@@ -198,6 +198,84 @@ def test_persistent_confirmation_is_scoped_to_candidate_no_bracket():
     assert first_30_no_print["strong_threshold_c"] == 30.7
     assert confirmed_30_no["qualifying_distinct_observations"] == 2
     assert confirmed_30_no["confirmed"] is True
+
+
+def test_nonqualifying_observation_resets_other_bracket_streak():
+    state = {}
+    evaluate(
+        32.5,
+        "2026-07-15T05:24:00+00:00",
+        state,
+        city="Singapore",
+        source="singapore_mss",
+        metar_running_max=32,
+        candidate_no_bracket=32,
+    )
+    evaluate(
+        31.9,
+        "2026-07-15T05:39:00+00:00",
+        state,
+        city="Singapore",
+        source="singapore_mss",
+        metar_running_max=32,
+        candidate_no_bracket=31,
+    )
+    first_new_cross = evaluate(
+        33.0,
+        "2026-07-15T05:44:00+00:00",
+        state,
+        city="Singapore",
+        source="singapore_mss",
+        metar_running_max=32,
+        candidate_no_bracket=32,
+    )
+    confirmed = evaluate(
+        32.9,
+        "2026-07-15T05:49:00+00:00",
+        state,
+        city="Singapore",
+        source="singapore_mss",
+        metar_running_max=32,
+        candidate_no_bracket=32,
+    )
+
+    assert first_new_cross["qualifying_distinct_observations"] == 1
+    assert first_new_cross["confirmed"] is False
+    assert confirmed["qualifying_distinct_observations"] == 2
+    assert confirmed["confirmed"] is True
+
+    evaluate(
+        32.1,
+        "2026-07-15T05:58:00+00:00",
+        state,
+        city="Singapore",
+        source="singapore_mss",
+        metar_running_max=32,
+        candidate_no_bracket=31,
+    )
+    first_after_pullback = evaluate(
+        32.5,
+        "2026-07-15T06:04:00+00:00",
+        state,
+        city="Singapore",
+        source="singapore_mss",
+        metar_running_max=32,
+        candidate_no_bracket=32,
+    )
+    second_after_pullback = evaluate(
+        32.8,
+        "2026-07-15T06:08:00+00:00",
+        state,
+        city="Singapore",
+        source="singapore_mss",
+        metar_running_max=32,
+        candidate_no_bracket=32,
+    )
+
+    assert first_after_pullback["qualifying_distinct_observations"] == 1
+    assert first_after_pullback["confirmed"] is False
+    assert second_after_pullback["qualifying_distinct_observations"] == 2
+    assert second_after_pullback["confirmed"] is True
 
 
 def test_out_of_order_observation_cannot_confirm_persistence():
