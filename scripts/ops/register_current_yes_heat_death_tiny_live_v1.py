@@ -146,8 +146,8 @@ def main() -> int:
     statements.append(
         (
             """UPDATE strategy_instance
-               SET desired_status='retired', expected_live=0,
-                   notes='retired 2026-07-15: split into h1_late_carry/h2_early_dislocation heads; zero orders were submitted under this instance',
+               SET desired_status='shelved', expected_live=0,
+                   notes='shelved 2026-07-15: split into h1_late_carry/h2_early_dislocation heads; zero orders were submitted under this instance',
                    updated_at_utc=strftime('%Y-%m-%dT%H:%M:%SZ','now')
                WHERE instance_id=?""",
             (RETIRED_INSTANCE_ID,),
