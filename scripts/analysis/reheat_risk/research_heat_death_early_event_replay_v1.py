@@ -636,21 +636,41 @@ def _price_history_request(row: Mapping[str, Any], expression: str) -> dict[str,
     }
 
 
+def proxy_row_key(row: Mapping[str, Any], expression: str | None = None) -> tuple[str, str, str, str]:
+    return (
+        str(row.get("city")),
+        str(row.get("target_date")),
+        expression if expression is not None else str(row.get("expression")),
+        str(row.get("decision_snapshot_ts_utc") or ""),
+    )
+
+
 def load_or_fetch_price_history_proxy(
-    selected: list[dict[str, Any]],
+    cohorts: list[list[dict[str, Any]]],
     cache_path: Path,
     *,
     refresh: bool,
 ) -> list[dict[str, Any]]:
+    # Each cohort's first signal per city-day can occur at a different decision
+    # snapshot, so requests are keyed by decision ts, not just city-day.
+    requests: dict[tuple[str, str, str, str], tuple[dict[str, Any], str]] = {}
+    for cohort in cohorts:
+        for row in cohort:
+            for expression in ("current_yes", "d1_no"):
+                requests.setdefault(proxy_row_key(row, expression), (row, expression))
+    cached: dict[tuple[str, str, str, str], dict[str, Any]] = {}
     if cache_path.exists() and not refresh:
         with cache_path.open(encoding="utf-8") as handle:
-            return list(csv.DictReader(handle))
-    requests = [(row, expression) for row in selected for expression in ("current_yes", "d1_no")]
-    out: list[dict[str, Any]] = []
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        futures = [pool.submit(_price_history_request, row, expression) for row, expression in requests]
-        for future in as_completed(futures):
-            out.append(future.result())
+            for row in csv.DictReader(handle):
+                cached[proxy_row_key(row)] = row
+    missing = [requests[key] for key in requests if key not in cached]
+    if missing:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [pool.submit(_price_history_request, row, expression) for row, expression in missing]
+            for future in as_completed(futures):
+                fetched = future.result()
+                cached[proxy_row_key(fetched)] = fetched
+    out = [row for key, row in cached.items() if key in requests]
     out.sort(key=lambda row: (str(row.get("target_date")), str(row.get("city")), str(row.get("expression"))))
     write_csv(cache_path, out)
     return out
@@ -664,7 +684,7 @@ def proxy_expression_rows(
     slippage_add: float = 0.0,
 ) -> list[dict[str, Any]]:
     proxy = {
-        (str(row.get("city")), str(row.get("target_date")), str(row.get("expression"))): row
+        proxy_row_key(row): row
         for row in proxy_rows
         if str(row.get("status")) == "ok"
     }
@@ -675,7 +695,7 @@ def proxy_expression_rows(
             ("d1_no", "d1_bracket", True),
         ):
             bracket = str(row.get(bracket_field) or "")
-            proxy_row = proxy.get((str(row["city"]), str(row["target_date"]), expression))
+            proxy_row = proxy.get(proxy_row_key(row, expression))
             raw_price = None if proxy_row is None else finite(proxy_row.get("history_price"))
             final_yes = settlements.get((row["target_date"], row["city"], bracket))
             if not bracket or raw_price is None or final_yes is None or not (0 < raw_price < 1):
@@ -704,7 +724,7 @@ def proxy_expression_rows(
 
 def proxy_direct_overlap(selected: list[dict[str, Any]], proxy_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     proxy = {
-        (str(row.get("city")), str(row.get("target_date")), str(row.get("expression"))): finite(row.get("history_price"))
+        proxy_row_key(row): finite(row.get("history_price"))
         for row in proxy_rows
         if str(row.get("status")) == "ok"
     }
@@ -713,7 +733,7 @@ def proxy_direct_overlap(selected: list[dict[str, Any]], proxy_rows: list[dict[s
         deltas: list[float] = []
         for row in selected:
             direct = finite(row.get(direct_field))
-            history = proxy.get((str(row["city"]), str(row["target_date"]), expression))
+            history = proxy.get(proxy_row_key(row, expression))
             if direct is not None and history is not None:
                 deltas.append(direct - history)
         ordered = sorted(deltas)
@@ -910,6 +930,10 @@ def pct(value: float | None) -> str:
     return "NA" if value is None else f"{100 * value:+.1f}%"
 
 
+def find_summary(items: list[dict[str, Any]], cohort: str, expression: str) -> dict[str, Any]:
+    return next(item for item in items if item["cohort"] == cohort and item["expression"] == expression)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--start", default="2026-07-07")
@@ -931,13 +955,22 @@ def main() -> int:
     market_rows = attach_market(states, Path(args.snapshot_dir), books)
     base_first = select_first(market_rows, "physical_confirmation_base")
     strong_first = select_first(market_rows, "physical_confirmation_strong_partial")
+    # The Busan anchor trade defined this strategy's target morphology, so its
+    # city-day is in-sample by construction and never enters evidence layers.
+    anchor_key = (args.sanity_city, args.sanity_date)
+    anchor_in_window = bool(args.sanity_date) and args.start <= args.sanity_date <= args.end
+    base_first_signal_count = len(base_first)
+    strong_first_signal_count = len(strong_first)
+    if anchor_in_window:
+        base_first = [row for row in base_first if (row["city"], row["target_date"]) != anchor_key]
+        strong_first = [row for row in strong_first if (row["city"], row["target_date"]) != anchor_key]
     settlements = settlement_map(Path(args.db), args.start, args.end)
     base_expr = expression_rows(base_first, settlements)
     strong_expr = expression_rows(strong_first, settlements)
     base_indicative_expr = indicative_expression_rows(base_first, settlements)
     strong_indicative_expr = indicative_expression_rows(strong_first, settlements)
     price_history_proxy = load_or_fetch_price_history_proxy(
-        base_first,
+        [base_first, strong_first],
         Path(args.price_history_proxy_cache),
         refresh=args.refresh_price_history_proxy,
     )
@@ -1028,7 +1061,11 @@ def main() -> int:
             "current_yes_ask": sanity_case.get("current_yes_ask"),
             "d1_no_ask": sanity_case.get("d1_no_ask"),
             "included_in_settled_roi_window": False,
-            "why_not_in_settled_roi": "target_date 2026-07-14 is outside the settled replay window ending 2026-07-13",
+            "why_not_in_settled_roi": (
+                "excluded as defining anchor: the morphology was specified from this executed trade, so it is in-sample by construction"
+                if anchor_in_window
+                else f"target_date {args.sanity_date} is outside the settled replay window ending {args.end}"
+            ),
             "actual_backtest_gap": "historical first-signal direct executable quote coverage is sparse and skewed toward already-repriced late books",
             "not_a_backtest_gap": [
                 "the forward runner did not exist yet",
@@ -1075,8 +1112,9 @@ def main() -> int:
             "plus_high_age_gte_60m_event_rows": len(after_mature_high),
             "plus_path_not_warming_event_rows": len(after_path),
             "market_aligned_event_rows": len(market_rows),
-            "first_base_signal_city_days": len(base_first),
-            "first_strong_partial_signal_city_days": len(strong_first),
+            "first_base_signal_city_days": base_first_signal_count,
+            "first_strong_partial_signal_city_days": strong_first_signal_count,
+            "anchor_city_day_excluded_from_evidence": anchor_in_window,
         },
         "evidence_funnel": {
             "unit_note": "quote and settlement availability are evidence coverage, not strategy filters",
@@ -1223,9 +1261,24 @@ def main() -> int:
                 "",
                 "**上一版“最终只有 5 笔”的说法作废。5 是盘口档案缺口再叠加任意价格带后的可计算行数，不是策略信号数。**",
                 "这次审计把 signal funnel 与 quote/settlement evidence funnel 分开，价格只作为连续 EV 输入，不再作为 eligibility hard gate。",
-                "CLOB 分钟 price history 已补回 110/111 个已结算 leg：base current YES fee ROI +1.0%，加 2c ask premium 后 -0.5%；base d1 NO 原价即 -0.3%。support>=2 两边分别 -0.7% / -1.7%，没有显示更强 edge。",
-                "Busan-like 0.80-0.90 只是事后诊断切片：base current YES 7 行 ROI -0.6%，d1 NO 9 行 -9.1%；support>=2 各只有 2 行，不能据此定策略阈值。",
-                f"历史事件档案只覆盖 {args.start}..{args.end} 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。",
+                (
+                    f"CLOB 分钟 price history 补回 {find_summary(proxy_summaries, 'base', 'current_yes')['rows']}/"
+                    f"{find_summary(indicative_summaries, 'base', 'current_yes')['rows']} 个已结算 leg："
+                    f"base current YES fee ROI {pct(find_summary(proxy_summaries, 'base', 'current_yes')['roi'])}，"
+                    f"加 2c ask premium 后 {pct(next(i for i in proxy_slippage_sensitivity if i['slippage_add'] == 0.02 and i['cohort'] == 'base' and i['expression'] == 'current_yes')['roi'])}；"
+                    f"base d1 NO 原价即 {pct(find_summary(proxy_summaries, 'base', 'd1_no')['roi'])}。"
+                    f"support>=2 两边分别 {pct(find_summary(proxy_summaries, 'strong_partial', 'current_yes')['roi'])} / "
+                    f"{pct(find_summary(proxy_summaries, 'strong_partial', 'd1_no')['roi'])}，没有显示更强 edge。"
+                ),
+                (
+                    f"Busan-like 0.80-0.90 只是事后诊断切片：base current YES {find_summary(anchor_band_summaries, 'base_anchor_price_band_0.80_0.90', 'current_yes')['rows']} 行 "
+                    f"ROI {pct(find_summary(anchor_band_summaries, 'base_anchor_price_band_0.80_0.90', 'current_yes')['roi'])}，"
+                    f"d1 NO {find_summary(anchor_band_summaries, 'base_anchor_price_band_0.80_0.90', 'd1_no')['rows']} 行 "
+                    f"{pct(find_summary(anchor_band_summaries, 'base_anchor_price_band_0.80_0.90', 'd1_no')['roi'])}；"
+                    f"support>=2 各只有 {find_summary(anchor_band_summaries, 'strong_anchor_price_band_0.80_0.90', 'current_yes')['rows']} 行，不能据此定策略阈值。"
+                ),
+                f"历史事件档案只覆盖 {args.start}..{args.end} 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。"
+                + ("Busan {} anchor city-day 已按预注册原则从全部证据层剔除（定义形态的 in-sample 交易）。".format(args.sanity_date) if anchor_in_window else ""),
                 "",
                 "## Signal funnel（这里才是策略漏斗）",
                 "",
@@ -1235,8 +1288,13 @@ def main() -> int:
                 f"- + running high age >= 60m: {len(after_mature_high)}",
                 f"- + flat/cooling path: {len(after_path)}",
                 f"- market-aligned event rows: {len(market_rows)}",
-                f"- first base signal city-days: {len(base_first)}",
-                f"- first support>=2 diagnostic city-days: {len(strong_first)}",
+                f"- first base signal city-days: {base_first_signal_count}",
+                f"- first support>=2 diagnostic city-days: {strong_first_signal_count}",
+                *(
+                    [f"- anchor 剔除：Busan {args.sanity_date} 从证据层移除（定义形态的 in-sample 交易），证据分母为 base {len(base_first)} / strong {len(strong_first)}"]
+                    if anchor_in_window
+                    else []
+                ),
                 "",
                 "## Evidence coverage（不是策略筛选）",
                 "",

@@ -16,6 +16,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 INPUT = ROOT / "docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv"
+PEAK_CLOCK_BACKFILL = ROOT / "runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv"
 OUT_DIR = ROOT / "docs/analysis/2026-07/generated/current_yes_heat_death_physical_backtest_v1"
 OUT_JSON = ROOT / "docs/analysis/2026-07/2026-07-14-current-yes-heat-death-physical-backtest-v1.json"
 OUT_MD = ROOT / "docs/analysis/2026-07/2026-07-14-current-yes-heat-death-physical-backtest-v1.md"
@@ -84,6 +85,50 @@ def bootstrap_paired_delta(
         if left_cost_sum > 0 and right_cost_sum > 0:
             draws.append(float(sample[:, 0].sum() / left_cost_sum - sample[:, 2].sum() / right_cost_sum))
     return [float(np.quantile(draws, 0.025)), float(np.quantile(draws, 0.975))]
+
+
+def peak_clock_provenance(states: pd.DataFrame) -> dict[str, Any]:
+    if not PEAK_CLOCK_BACKFILL.exists():
+        return {"status": "backfill_csv_missing", "path": str(PEAK_CLOCK_BACKFILL)}
+    backfill = pd.read_csv(PEAK_CLOCK_BACKFILL, low_memory=False)
+    out: dict[str, Any] = {
+        "path": str(PEAK_CLOCK_BACKFILL.relative_to(ROOT)),
+        "rows": int(len(backfill)),
+        "gfs_api_source_counts": backfill["gfs_forecast_api_source"].value_counts().to_dict(),
+        "ecmwf_api_source_counts": backfill["ecmwf_forecast_api_source"].value_counts().to_dict(),
+        "gfs_run_policy_counts": backfill["gfs_forecast_run_policy"].value_counts().to_dict(),
+        "ecmwf_run_policy_counts": backfill["ecmwf_forecast_run_policy"].value_counts().to_dict(),
+        "single_runs_share": float(
+            (
+                backfill["gfs_forecast_api_source"].eq("open_meteo_single_runs")
+                & backfill["ecmwf_forecast_api_source"].eq("open_meteo_single_runs")
+            ).mean()
+        ),
+    }
+    # The clean CSV on disk is not enough: the factory rows this backtest
+    # consumes embed the backfill values as of factory build time. Verify the
+    # embedded values agree with the current (single-runs) CSV.
+    factory = states[["city", "target_date", "gfs_forecast_peak_hour_local"]].dropna().drop_duplicates(
+        ["city", "target_date"]
+    )
+    merged = factory.merge(
+        backfill[["city", "target_date", "gfs_forecast_peak_hour_local"]].rename(
+            columns={"gfs_forecast_peak_hour_local": "backfill_gfs_peak_hour_local"}
+        ),
+        on=["city", "target_date"],
+        how="inner",
+    )
+    agreement = float(
+        merged["gfs_forecast_peak_hour_local"].astype(float).sub(merged["backfill_gfs_peak_hour_local"].astype(float)).abs().le(1e-6).mean()
+    ) if len(merged) else None
+    out["factory_vs_backfill_compared_city_dates"] = int(len(merged))
+    out["factory_vs_backfill_gfs_peak_hour_agreement"] = agreement
+    out["status"] = (
+        "verified_clean" if agreement is not None and agreement >= 0.999
+        else "factory_embeds_stale_backfill" if agreement is not None
+        else "no_overlap"
+    )
+    return out
 
 
 def load_states() -> pd.DataFrame:
@@ -303,6 +348,7 @@ def main() -> int:
             "available": ["temperature_path", "minutes_since_running_max", "cloud_cover", "humidity", "wind_speed", "dual_model_peak_clock", "dual_model_forecast_gap"],
             "missing_new_fields": ["precipitation", "wind_direction", "forecast_remaining_3h_weather", "solar_geometry"],
         },
+        "peak_clock_provenance": peak_clock_provenance(states),
         "rule": {
             "base": "hour 13-17; decline>=0.5 native; minutes_since_max>=60; trend1h<=0F; both model peaks passed>=0.25h",
             "strong_proxy": "base plus at least 2 of cloud_limited, humid_cloud, dual_forecast_low_gap",
@@ -337,8 +383,27 @@ def main() -> int:
         "",
         "## Funnel",
         "",
-        "- 99,819 bracket rows -> 9,800 city-date-hour states -> 268 base candidates -> 36 strong proxy candidates。",
-        "- train: < 2026-06-01；holdout: >= 2026-06-01。规则是在读取结果前按 forward runner 口径冻结，但 peak clock 来自 historical forecast API backfill，并非当时生产 snapshot 原生 PIT 字段，因此整个历史仍属于 source-sensitive retrospective replay。",
+        (
+            f"- {payload['funnel']['raw_feature_rows']:,} bracket rows -> {payload['funnel']['dedup_state_rows']:,} city-date-hour states -> "
+            f"{payload['funnel']['base_candidates']} base candidates -> {payload['funnel']['strong_proxy_candidates']} strong proxy candidates。"
+        ),
+        "- train: < 2026-06-01；holdout: >= 2026-06-01。规则是在读取结果前按 forward runner 口径冻结。",
+        "",
+        "## Peak clock provenance（2026-07-15 复核）",
+        "",
+        (
+            f"- backfill CSV `{payload['peak_clock_provenance'].get('path', 'unknown')}`：single-runs 占比 "
+            f"{payload['peak_clock_provenance'].get('single_runs_share', float('nan')):.1%}，"
+            f"run policy = `{json.dumps(payload['peak_clock_provenance'].get('gfs_run_policy_counts', {}), ensure_ascii=False)}`；"
+            f"factory 行内嵌值与该 CSV 的 GFS peak hour 一致率 = "
+            f"{payload['peak_clock_provenance'].get('factory_vs_backfill_gfs_peak_hour_agreement', float('nan')):.1%}"
+            f"（{payload['peak_clock_provenance'].get('factory_vs_backfill_compared_city_dates', 0)} city-dates）。"
+        ),
+        (
+            "- **provenance = verified_clean**：本次输入 factory 行的 peak clock 与 single-runs D-1 12z 重建一致，无未来信息泄漏；剩余 source 风险是与生产 runner 最新 run 的 parity，不是 leakage。"
+            if payload['peak_clock_provenance'].get('status') == 'verified_clean'
+            else "- **provenance = factory_embeds_stale_backfill**：factory 行内嵌的 peak clock 与干净 single-runs 重建不一致，本回测的 peak-clock gate 仍在疑似近实况拼接的旧 backfill 上，全部绝对 ROI 应视为 source-contaminated，直到 factory 用干净 backfill 重建并重跑。"
+        ),
         "",
         "## Holdout",
         "",
@@ -362,7 +427,18 @@ def main() -> int:
         "## Three Gates",
         "",
         "```text",
-        f"significance={'PASS' if holdout_yes['roi_ci95'][0] is not None and holdout_yes['roi_ci95'][0] > 0 else 'FAIL'} for absolute current YES proxy ROI",
+        (
+            "significance="
+            + (
+                "PASS"
+                if holdout_yes["roi_ci95"][0] is not None and holdout_yes["roi_ci95"][0] > 0
+                and int(holdout_yes["rows"]) >= 30 and int(holdout_yes["active_dates"]) >= 12
+                else "FAIL_LOW_SAMPLE"
+                if holdout_yes["roi_ci95"][0] is not None and holdout_yes["roi_ci95"][0] > 0
+                else "FAIL"
+            )
+            + f" for absolute current YES proxy ROI (rows={int(holdout_yes['rows'])}, dates={int(holdout_yes['active_dates'])}; preregistered floor: 30 rows / 12 dates)"
+        ),
         f"baseline={'PASS' if baseline_holdout['excess_ci95'][0] is not None and baseline_holdout['excess_ci95'][0] > 0 else 'FAIL'} for same-price physical-overlay excess",
         "forward=FAIL_THIN for complete new weather_state_v2 features",
         "conclusion=inconclusive; zero-notional forward only",

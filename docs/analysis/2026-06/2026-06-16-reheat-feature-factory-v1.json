@@ -1,14 +1,14 @@
 {
-  "generated_at_utc": "2026-06-21T05:20:48+00:00",
+  "generated_at_utc": "2026-07-15T06:42:02+00:00",
   "target_metric": "reheat_risk_shared_feature_factory",
   "row_grain": "city + target_date + decision_snapshot_ts_utc + decision_hour_local + bracket + outcome",
   "evidence_layer": "time-aligned orderbook replay / opportunity feature layer, not live fills",
   "data_self_check": {
-    "fact_trades_max_built_at_utc": "2026-06-21T05:04:12.724103+00:00",
+    "fact_trades_max_built_at_utc": "2026-07-14T20:01:31.349826+00:00",
     "fact_trades_by_class": [
       {
         "trade_class": "live_real",
-        "rows": 855
+        "rows": 1029
       },
       {
         "trade_class": "live_simulated",
@@ -25,30 +25,40 @@
     ],
     "fact_trades_by_settlement_status": [
       {
-        "settlement_status": "",
-        "rows": 150
+        "settlement_status": "missing_bracket",
+        "rows": 29
       },
       {
         "settlement_status": "settled",
-        "rows": 4250
+        "rows": 4545
       }
     ],
     "fact_signal_candidate_coverage": {
-      "rows": 34450,
-      "eligible": 12252,
-      "paper_ordered": 4691,
-      "live_filled": 348
+      "rows": 54054,
+      "eligible": 20574,
+      "paper_ordered": 5834,
+      "live_filled": 462
     },
     "clob_order_fill_join": [
       {
+        "status": "blocked",
+        "orders": 1269,
+        "with_fill": 0
+      },
+      {
         "status": "error",
-        "orders": 33,
+        "orders": 64,
+        "with_fill": 0
+      },
+      {
+        "status": "failed",
+        "orders": 5,
         "with_fill": 0
       },
       {
         "status": "submitted",
-        "orders": 961,
-        "with_fill": 855
+        "orders": 1227,
+        "with_fill": 1029
       }
     ]
   },
@@ -68,13 +78,13 @@
     "max_target_date": "2026-06-17",
     "active_dates": 30,
     "cities": 36,
-    "complete_core_state_rows": 7131
+    "complete_core_state_rows": 7396
   },
   "field_non_null_rates_by_feature_row": {
     "current_temp_c": 1.0,
     "running_max_c": 1.0,
     "decline_from_max_c": 1.0,
-    "minutes_since_running_max": 0.9720494094310702,
+    "minutes_since_running_max": 1.0,
     "forecast_peak_hour_local": 1.0,
     "forecast_peak_delta_hours_local": 1.0,
     "forecast_values_hash": 1.0,
@@ -104,7 +114,7 @@
   "field_coverage_by_state_rate": {
     "has_current_temp": 1.0,
     "has_running_max": 1.0,
-    "has_minutes_since_max": 0.9618367346938775,
+    "has_minutes_since_max": 1.0,
     "has_forecast_peak_hour": 1.0,
     "has_forecast_hash": 1.0,
     "has_dewpoint": 0.9996938775510205,
@@ -123,7 +133,6 @@
     "sky": 2336,
     "d1_no_quote": 1933,
     "current_yes_quote": 1705,
-    "minutes_since_max": 374,
     "any_target_yes_quote": 221,
     "temp_trend": 4,
     "dewpoint": 3,
@@ -131,22 +140,23 @@
     "wind": 3
   },
   "forecast_gap": {
-    "fact_signal_candidates_rows": 34450,
+    "fact_signal_candidates_rows": 54054,
     "forecast_peak_hour_feature_row_rate": 1.0,
     "forecast_values_hash_feature_row_rate": 1.0,
     "gfs_forecast_peak_hour_feature_row_rate": 1.0,
     "ecmwf_forecast_peak_hour_feature_row_rate": 1.0,
     "forecast_peak_sources": {
-      "backfill_gfs_primary": 99819
+      "backfill_single_runs_d_minus_1_12z_gfs_primary": 97527,
+      "backfill_single_runs_d_minus_2_12z_gfs_primary": 2292
     }
   },
   "inputs": {
     "db": "runtime/weather.db",
-    "orderbook_dir": "runtime/weather_edge_v1/market_data/orderbook_snapshots",
+    "orderbook_dir": "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data/orderbook_snapshots",
     "observed_detail": "docs/analysis/2026-06/generated/m3_observed_max_v6_h10_21_iem_patch_20260617/m3_observed_max_residual_detail.csv",
     "station_summary": "docs/analysis/2026-06/generated/theta_no_wu_obs_patch_v1/summary.json",
     "ext_cache_dir": "docs/analysis/2026-06/generated/theta_no_iem_ext_patch_v7_20260617",
-    "forecast_peak_backfill": "runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv",
+    "forecast_peak_backfill": "/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv",
     "start_date": "2026-05-19",
     "end_date": "2026-06-17",
     "decision_hours": [

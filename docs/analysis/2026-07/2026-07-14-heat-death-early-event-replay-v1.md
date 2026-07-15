@@ -7,36 +7,37 @@ Verdict: `inconclusive_zero_notional_only`
 
 **上一版“最终只有 5 笔”的说法作废。5 是盘口档案缺口再叠加任意价格带后的可计算行数，不是策略信号数。**
 这次审计把 signal funnel 与 quote/settlement evidence funnel 分开，价格只作为连续 EV 输入，不再作为 eligibility hard gate。
-CLOB 分钟 price history 已补回 110/111 个已结算 leg：base current YES fee ROI +1.0%，加 2c ask premium 后 -0.5%；base d1 NO 原价即 -0.3%。support>=2 两边分别 -0.7% / -1.7%，没有显示更强 edge。
-Busan-like 0.80-0.90 只是事后诊断切片：base current YES 7 行 ROI -0.6%，d1 NO 9 行 -9.1%；support>=2 各只有 2 行，不能据此定策略阈值。
-历史事件档案只覆盖 2026-07-07..2026-07-13 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。
+CLOB 分钟 price history 补回 151/152 个已结算 leg：base current YES fee ROI +0.3%，加 2c ask premium 后 -1.1%；base d1 NO 原价即 -1.3%。support>=2 两边分别 +0.6% / -1.4%，没有显示更强 edge。
+Busan-like 0.80-0.90 只是事后诊断切片：base current YES 8 行 ROI -13.2%，d1 NO 10 行 -18.4%；support>=2 各只有 2 行，不能据此定策略阈值。
+历史事件档案只覆盖 2026-07-07..2026-07-14 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。Busan 2026-07-14 anchor city-day 已按预注册原则从全部证据层剔除（定义形态的 in-sample 交易）。
 
 ## Signal funnel（这里才是策略漏斗）
 
-- unique source reports: 10176
-- local 13:00-17:00 event rows: 1761
-- + decline >= 0.5: 632
-- + running high age >= 60m: 485
-- + flat/cooling path: 432
-- market-aligned event rows: 410
-- first base signal city-days: 130
-- first support>=2 diagnostic city-days: 67
+- unique source reports: 11842
+- local 13:00-17:00 event rows: 2045
+- + decline >= 0.5: 746
+- + running high age >= 60m: 580
+- + flat/cooling path: 518
+- market-aligned event rows: 494
+- first base signal city-days: 153
+- first support>=2 diagnostic city-days: 78
+- anchor 剔除：Busan 2026-07-14 从证据层移除（定义形态的 in-sample 交易），证据分母为 base 152 / strong 77
 
 ## Evidence coverage（不是策略筛选）
 
-- base direct quote coverage: current YES 19/130; d1 NO 18/130
-- support>=2 direct quote coverage: current YES 8/67; d1 NO 7/67
-- settled executable rows: base 37; support>=2 15
-- settled indicative rows (not executable): base 222; support>=2 110
+- base direct quote coverage: current YES 22/152; d1 NO 21/152
+- support>=2 direct quote coverage: current YES 9/77; d1 NO 8/77
+- settled executable rows: base 43; support>=2 17
+- settled indicative rows (not executable): base 303; support>=2 153
 
 ## 为什么 executable coverage 会塌缩
 
 | Cohort | Expression | Signals | Indicative price | First-snapshot ask | Ask within 30m | Settled | Ask+settled | Indicative but no ask | First-snapshot book status |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| base | current_yes | 130 | 130 | 16 | 19 | 111 | 19 | 111 | `{"ok": 16, "orderbook_budget_exhausted": 113, "orderbook_scope_skipped": 1}` |
-| base | d1_no | 130 | 130 | 16 | 18 | 111 | 18 | 112 | `{"ok": 16, "orderbook_budget_exhausted": 113, "orderbook_scope_skipped": 1}` |
-| strong_partial | current_yes | 67 | 67 | 7 | 8 | 55 | 8 | 59 | `{"ok": 8, "orderbook_budget_exhausted": 59}` |
-| strong_partial | d1_no | 67 | 67 | 7 | 7 | 55 | 7 | 60 | `{"ok": 8, "orderbook_budget_exhausted": 59}` |
+| base | current_yes | 152 | 152 | 18 | 22 | 152 | 22 | 130 | `{"ok": 18, "orderbook_budget_exhausted": 131, "orderbook_scope_skipped": 3}` |
+| base | d1_no | 152 | 151 | 18 | 21 | 151 | 21 | 130 | `{"missing_status": 1, "ok": 18, "orderbook_budget_exhausted": 130, "orderbook_scope_skipped": 3}` |
+| strong_partial | current_yes | 77 | 77 | 7 | 9 | 77 | 9 | 68 | `{"ok": 8, "orderbook_budget_exhausted": 68, "orderbook_scope_skipped": 1}` |
+| strong_partial | d1_no | 77 | 76 | 7 | 8 | 76 | 8 | 68 | `{"missing_status": 1, "ok": 8, "orderbook_budget_exhausted": 67, "orderbook_scope_skipped": 1}` |
 
 历史 paper snapshot 不是全量盘口录制：默认每 10 分钟生成一次 snapshot，但 orderbook enrichment 使用 `strategy_live` 紧凑 scope、60 秒总预算和单 worker。天气状态与 indicative market price 大多保留，真实 YES/NO ask 则大量标为 `orderbook_budget_exhausted` 或 `orderbook_scope_skipped`。因此缺的是可执行价格证据，不是物理 signal 或 settlement 全部缺失。
 
@@ -48,52 +49,52 @@ Busan-like 0.80-0.90 只是事后诊断切片：base current YES 7 行 ROI -0.6%
 
 | Cohort | Expression | Rows | Dates | Cities | Win rate | Avg proxy | Fee ROI | Date-bootstrap 95% CI |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| base | current_yes | 110 | 6 | 36 | +94.5% | 0.934 | +1.0% | [-2.2%, +3.9%] |
-| base | d1_no | 110 | 6 | 36 | +95.5% | 0.956 | -0.3% | [-3.5%, +2.7%] |
-| strong_partial | current_yes | 55 | 6 | 21 | +94.5% | 0.950 | -0.7% | [-5.9%, +2.8%] |
-| strong_partial | d1_no | 55 | 6 | 21 | +94.5% | 0.960 | -1.7% | [-7.3%, +2.2%] |
+| base | current_yes | 151 | 8 | 39 | +92.1% | 0.916 | +0.3% | [-2.8%, +3.1%] |
+| base | d1_no | 150 | 8 | 39 | +94.7% | 0.957 | -1.3% | [-4.3%, +1.5%] |
+| strong_partial | current_yes | 77 | 8 | 25 | +93.5% | 0.927 | +0.6% | [-4.1%, +4.3%] |
+| strong_partial | d1_no | 76 | 8 | 25 | +94.7% | 0.959 | -1.4% | [-5.5%, +1.4%] |
 
 ### 固定加价敏感性（代理 ask = history price + 1/2/3c）
 
 | Add-on | Cohort | Expression | Rows | Avg assumed ask | Fee ROI |
 |---:|---|---|---:|---:|---:|
-| +0.00 | base | current_yes | 110 | 0.934 | +1.0% |
-| +0.00 | base | d1_no | 110 | 0.956 | -0.3% |
-| +0.00 | strong_partial | current_yes | 55 | 0.950 | -0.7% |
-| +0.00 | strong_partial | d1_no | 55 | 0.960 | -1.7% |
-| +0.01 | base | current_yes | 110 | 0.943 | +0.1% |
-| +0.01 | base | d1_no | 110 | 0.964 | -1.1% |
-| +0.01 | strong_partial | current_yes | 55 | 0.958 | -1.5% |
-| +0.01 | strong_partial | d1_no | 55 | 0.968 | -2.5% |
-| +0.02 | base | current_yes | 110 | 0.949 | -0.5% |
-| +0.02 | base | d1_no | 110 | 0.969 | -1.6% |
-| +0.02 | strong_partial | current_yes | 55 | 0.965 | -2.1% |
-| +0.02 | strong_partial | d1_no | 55 | 0.974 | -3.0% |
-| +0.03 | base | current_yes | 110 | 0.953 | -0.9% |
-| +0.03 | base | d1_no | 110 | 0.973 | -2.0% |
-| +0.03 | strong_partial | current_yes | 55 | 0.969 | -2.6% |
-| +0.03 | strong_partial | d1_no | 55 | 0.979 | -3.5% |
+| +0.00 | base | current_yes | 151 | 0.916 | +0.3% |
+| +0.00 | base | d1_no | 150 | 0.957 | -1.3% |
+| +0.00 | strong_partial | current_yes | 77 | 0.927 | +0.6% |
+| +0.00 | strong_partial | d1_no | 76 | 0.959 | -1.4% |
+| +0.01 | base | current_yes | 151 | 0.924 | -0.5% |
+| +0.01 | base | d1_no | 150 | 0.965 | -2.0% |
+| +0.01 | strong_partial | current_yes | 77 | 0.935 | -0.2% |
+| +0.01 | strong_partial | d1_no | 76 | 0.966 | -2.1% |
+| +0.02 | base | current_yes | 151 | 0.930 | -1.1% |
+| +0.02 | base | d1_no | 150 | 0.970 | -2.5% |
+| +0.02 | strong_partial | current_yes | 77 | 0.941 | -0.8% |
+| +0.02 | strong_partial | d1_no | 76 | 0.971 | -2.6% |
+| +0.03 | base | current_yes | 151 | 0.934 | -1.6% |
+| +0.03 | base | d1_no | 150 | 0.974 | -2.9% |
+| +0.03 | strong_partial | current_yes | 77 | 0.945 | -1.2% |
+| +0.03 | strong_partial | d1_no | 76 | 0.975 | -3.0% |
 
 ### 与已留存 direct ask 的重合校验
 
 | Expression | Overlap | Mean ask-history | Median | P90 |
 |---|---:|---:|---:|---:|
-| current_yes | 19 | +0.018 | +0.006 | +0.023 |
-| d1_no | 18 | +0.007 | +0.005 | +0.020 |
+| current_yes | 22 | +0.016 | +0.005 | +0.015 |
+| d1_no | 21 | +0.006 | +0.005 | +0.010 |
 
 上表混合了 signal 后到 direct book 出现前的价格移动，不能纯解释为 spread。第一张 snapshot 同时有 ask 和 indicative price 的 16 个 leg 校验如下：
 
 | Expression | Same-snapshot overlap | Mean ask-indicative | Median | P90 |
 |---|---:|---:|---:|---:|
-| current_yes | 16 | +0.024 | +0.008 | +0.025 |
-| d1_no | 16 | +0.009 | +0.004 | +0.025 |
+| current_yes | 18 | +0.025 | +0.008 | +0.064 |
+| d1_no | 18 | +0.013 | +0.004 | +0.035 |
 
 ### Busan-like 0.80-0.90 价格形态（仅诊断，不作为门槛）
 
 | Cohort | Expression | Rows | Dates | Cities | Win rate | Avg proxy | Fee ROI | Date-bootstrap 95% CI |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| base_anchor_price_band_0.80_0.90 | current_yes | 7 | 5 | 6 | +85.7% | 0.856 | -0.6% | [-52.2%, +17.6%] |
-| base_anchor_price_band_0.80_0.90 | d1_no | 9 | 5 | 8 | +77.8% | 0.849 | -9.1% | [-34.0%, +15.3%] |
+| base_anchor_price_band_0.80_0.90 | current_yes | 8 | 6 | 7 | +75.0% | 0.858 | -13.2% | [-61.2%, +15.8%] |
+| base_anchor_price_band_0.80_0.90 | d1_no | 10 | 6 | 9 | +70.0% | 0.851 | -18.4% | [-50.8%, +6.0%] |
 | strong_anchor_price_band_0.80_0.90 | current_yes | 2 | 2 | 2 | +50.0% | 0.854 | -41.9% | [-100.0%, +11.4%] |
 | strong_anchor_price_band_0.80_0.90 | d1_no | 2 | 2 | 2 | +50.0% | 0.818 | -39.4% | [-100.0%, +19.5%] |
 
@@ -101,32 +102,32 @@ Busan-like 0.80-0.90 只是事后诊断切片：base current YES 7 行 ROI -0.6%
 
 | Cohort | Expression | Rows | Dates | Cities | Win rate | Avg ask | Fee ROI | Date-bootstrap 95% CI |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| base | current_yes | 19 | 6 | 8 | +100.0% | 0.974 | +2.5% | [+0.9%, +6.8%] |
-| base | d1_no | 18 | 6 | 7 | +100.0% | 0.981 | +1.9% | [+0.7%, +4.6%] |
-| strong_partial | current_yes | 8 | 6 | 4 | +100.0% | 0.955 | +4.5% | [+1.0%, +12.5%] |
-| strong_partial | d1_no | 7 | 6 | 3 | +100.0% | 0.968 | +3.1% | [+0.7%, +8.1%] |
+| base | current_yes | 22 | 7 | 8 | +100.0% | 0.976 | +2.3% | [+0.9%, +5.9%] |
+| base | d1_no | 21 | 7 | 7 | +100.0% | 0.983 | +1.6% | [+0.6%, +3.8%] |
+| strong_partial | current_yes | 9 | 7 | 4 | +100.0% | 0.960 | +4.0% | [+0.8%, +10.9%] |
+| strong_partial | d1_no | 8 | 7 | 3 | +100.0% | 0.972 | +2.7% | [+0.6%, +6.9%] |
 
 ## Broad indicative-price diagnostic（不可当成成交回测）
 
 | Cohort | Expression | Rows | Dates | Cities | Win rate | Avg price | Fee ROI | Date-bootstrap 95% CI |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| base | current_yes | 111 | 6 | 36 | +93.7% | 0.924 | +1.2% | [-1.7%, +3.8%] |
-| base | d1_no | 111 | 6 | 36 | +94.6% | 0.942 | +0.2% | [-3.0%, +3.3%] |
-| strong_partial | current_yes | 55 | 6 | 21 | +94.5% | 0.950 | -0.6% | [-5.0%, +2.5%] |
-| strong_partial | d1_no | 55 | 6 | 21 | +94.5% | 0.960 | -1.7% | [-6.9%, +2.0%] |
+| base | current_yes | 152 | 8 | 39 | +91.4% | 0.905 | +0.8% | [-1.8%, +3.1%] |
+| base | d1_no | 151 | 8 | 39 | +94.0% | 0.941 | -0.2% | [-2.9%, +2.3%] |
+| strong_partial | current_yes | 77 | 8 | 25 | +93.5% | 0.926 | +0.8% | [-3.2%, +4.2%] |
+| strong_partial | d1_no | 76 | 8 | 25 | +94.7% | 0.955 | -1.0% | [-4.9%, +1.7%] |
 
 ## support count diagnostic（base cohort，非门槛）
 
 | Support | Expression | Rows | Dates | Win rate | Avg price | Fee ROI | Date-bootstrap 95% CI |
 |---|---|---:|---:|---:|---:|---:|---:|
-| 0 | current_yes | 32 | 6 | +93.8% | 0.901 | +3.9% | [+2.5%, +5.1%] |
-| 0 | d1_no | 32 | 6 | +96.9% | 0.938 | +3.0% | [+1.3%, +4.7%] |
-| 1 | current_yes | 31 | 6 | +93.5% | 0.916 | +1.9% | [-6.1%, +6.6%] |
-| 1 | d1_no | 31 | 6 | +93.5% | 0.922 | +1.2% | [-7.0%, +5.3%] |
-| 2 | current_yes | 26 | 6 | +88.5% | 0.919 | -4.0% | [-11.4%, +3.3%] |
-| 2 | d1_no | 26 | 6 | +88.5% | 0.938 | -6.0% | [-14.5%, +2.7%] |
-| 3+ | current_yes | 22 | 5 | +100.0% | 0.975 | +2.4% | [+1.8%, +3.1%] |
-| 3+ | d1_no | 22 | 5 | +100.0% | 0.979 | +2.0% | [+1.4%, +2.7%] |
+| 0 | current_yes | 42 | 8 | +90.5% | 0.902 | +0.1% | [-5.8%, +4.3%] |
+| 0 | d1_no | 42 | 8 | +95.2% | 0.942 | +0.9% | [-3.6%, +3.9%] |
+| 1 | current_yes | 40 | 8 | +90.0% | 0.882 | +1.8% | [-4.6%, +5.8%] |
+| 1 | d1_no | 40 | 8 | +92.5% | 0.918 | +0.5% | [-5.6%, +4.6%] |
+| 2 | current_yes | 36 | 8 | +86.1% | 0.875 | -1.9% | [-8.7%, +4.5%] |
+| 2 | d1_no | 36 | 8 | +88.9% | 0.933 | -5.0% | [-11.8%, +1.4%] |
+| 3+ | current_yes | 34 | 7 | +100.0% | 0.967 | +3.2% | [+1.6%, +5.6%] |
+| 3+ | d1_no | 33 | 7 | +100.0% | 0.973 | +2.6% | [+1.3%, +4.4%] |
 
 ## Busan executed anchor case
 

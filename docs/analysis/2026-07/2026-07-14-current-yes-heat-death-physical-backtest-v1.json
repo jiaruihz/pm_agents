@@ -1,9 +1,9 @@
 {
-  "generated_at_utc": "2026-07-14T12:12:42+00:00",
+  "generated_at_utc": "2026-07-15T06:44:17+00:00",
   "input": "docs/analysis/2026-06/generated/reheat_feature_factory_v1/reheat_feature_rows.csv",
   "row_grain": "settled city-target_date-decision_hour state",
   "data_integrity": {
-    "input_sha256": "d171f284c6c38df1878bc7eb38d7a3ba3949b385d5656b130311af80c63696dc",
+    "input_sha256": "405176ddcaff55c2cebc58c13f7b173d277f09121e24893f119adef1ec9f7150",
     "target_date_min": "2026-05-19",
     "target_date_max": "2026-06-17",
     "dedup_key_duplicates": 0,
@@ -18,8 +18,8 @@
     "dedup_state_rows": 9800,
     "dates": 30,
     "cities": 36,
-    "base_candidates": 268,
-    "strong_proxy_candidates": 36
+    "base_candidates": 244,
+    "strong_proxy_candidates": 23
   },
   "historical_feature_coverage": {
     "available": [
@@ -38,6 +38,28 @@
       "solar_geometry"
     ]
   },
+  "peak_clock_provenance": {
+    "path": "runtime/weather_edge_v1/market_data/research/forecast_peak_clock_backfill_v1.csv",
+    "rows": 1536,
+    "gfs_api_source_counts": {
+      "open_meteo_single_runs": 1536
+    },
+    "ecmwf_api_source_counts": {
+      "open_meteo_single_runs": 1536
+    },
+    "gfs_run_policy_counts": {
+      "d_minus_1_12z": 1500,
+      "d_minus_2_12z": 36
+    },
+    "ecmwf_run_policy_counts": {
+      "d_minus_1_12z": 1489,
+      "d_minus_2_12z": 47
+    },
+    "single_runs_share": 1.0,
+    "factory_vs_backfill_compared_city_dates": 1040,
+    "factory_vs_backfill_gfs_peak_hour_agreement": 1.0,
+    "status": "verified_clean"
+  },
   "rule": {
     "base": "hour 13-17; decline>=0.5 native; minutes_since_max>=60; trend1h<=0F; both model peaks passed>=0.25h",
     "strong_proxy": "base plus at least 2 of cloud_limited, humid_cloud, dual_forecast_low_gap",
@@ -48,300 +70,300 @@
       "period": "train",
       "cohort": "base_candidate",
       "expression": "current_yes",
-      "rows": 115,
-      "active_dates": 13,
-      "cities": 27,
-      "win_rate": 1.0,
-      "avg_ask": 0.9346521739130434,
-      "cost": 107.73104,
-      "pnl": 7.2689600000000025,
-      "roi": 0.0674732184893045,
-      "roi_ci95": [
-        0.03770301440094493,
-        0.10521469054909136
-      ]
-    },
-    {
-      "period": "train",
-      "cohort": "base_candidate",
-      "expression": "d1_no",
       "rows": 101,
       "active_dates": 13,
-      "cities": 27,
-      "win_rate": 1.0,
-      "avg_ask": 0.9578217821782178,
-      "cost": 96.93463000000001,
-      "pnl": 4.065370000000002,
-      "roi": 0.04193929455345321,
+      "cities": 26,
+      "win_rate": 0.9900990099009901,
+      "avg_ask": 0.9522970297029704,
+      "cost": 96.36811999999999,
+      "pnl": 3.6318800000000033,
+      "roi": 0.037687567216212206,
       "roi_ci95": [
-        0.030883536099898575,
-        0.052472734040389
+        0.029435270637676265,
+        0.04673341077131444
+      ]
+    },
+    {
+      "period": "train",
+      "cohort": "base_candidate",
+      "expression": "d1_no",
+      "rows": 86,
+      "active_dates": 13,
+      "cities": 26,
+      "win_rate": 0.9883720930232558,
+      "avg_ask": 0.9621279069767441,
+      "cost": 82.89465,
+      "pnl": 2.105350000000002,
+      "roi": 0.025397899623196454,
+      "roi_ci95": [
+        0.0021884147704799655,
+        0.045004561626345314
       ]
     },
     {
       "period": "train",
       "cohort": "strong_proxy",
       "expression": "current_yes",
-      "rows": 21,
+      "rows": 16,
       "active_dates": 8,
-      "cities": 9,
+      "cities": 6,
       "win_rate": 1.0,
-      "avg_ask": 0.9148571428571428,
-      "cost": 19.264819999999997,
-      "pnl": 1.7351800000000002,
-      "roi": 0.09006987867003172,
+      "avg_ask": 0.9723125,
+      "cost": 15.57749,
+      "pnl": 0.4225100000000007,
+      "roi": 0.02712311161811054,
       "roi_ci95": [
-        0.030874317644039872,
-        0.2554801121623266
+        0.015168778788772035,
+        0.05534131360331791
       ]
     },
     {
       "period": "train",
       "cohort": "strong_proxy",
       "expression": "d1_no",
-      "rows": 19,
+      "rows": 12,
       "active_dates": 8,
-      "cities": 9,
+      "cities": 6,
       "win_rate": 1.0,
-      "avg_ask": 0.9363157894736842,
-      "cost": 17.84349,
-      "pnl": 1.1565100000000004,
-      "roi": 0.06481411427921334,
+      "avg_ask": 0.9593333333333334,
+      "cost": 11.5343,
+      "pnl": 0.46570000000000034,
+      "roi": 0.04037522866580549,
       "roi_ci95": [
-        0.04097003956652423,
-        0.10470540013713432
+        0.01692286767164073,
+        0.07901349437884281
       ]
     },
     {
       "period": "holdout",
       "cohort": "base_candidate",
       "expression": "current_yes",
-      "rows": 153,
+      "rows": 143,
       "active_dates": 16,
-      "cities": 34,
-      "win_rate": 0.9869281045751634,
-      "avg_ask": 0.9558627450980393,
-      "cost": 146.50324,
-      "pnl": 4.496760000000005,
-      "roi": 0.030693928680348675,
+      "cities": 33,
+      "win_rate": 0.9790209790209791,
+      "avg_ask": 0.9596783216783216,
+      "cost": 137.47704,
+      "pnl": 2.5229600000000048,
+      "roi": 0.0183518644276892,
       "roi_ci95": [
-        0.0017940691105778912,
-        0.05874850186557511
+        -0.010759462752743292,
+        0.0389478322155022
       ]
     },
     {
       "period": "holdout",
       "cohort": "base_candidate",
       "expression": "d1_no",
-      "rows": 125,
+      "rows": 115,
       "active_dates": 16,
-      "cities": 32,
-      "win_rate": 0.984,
-      "avg_ask": 0.9589600000000001,
-      "cost": 120.08228000000001,
-      "pnl": 2.917720000000004,
-      "roi": 0.02429767322872287,
+      "cities": 33,
+      "win_rate": 0.991304347826087,
+      "avg_ask": 0.9615652173913043,
+      "cost": 110.77679000000002,
+      "pnl": 3.2232100000000035,
+      "roi": 0.029096437981277513,
       "roi_ci95": [
-        -0.00740830197685822,
-        0.051457369973882026
+        0.006351417086904445,
+        0.04455286477023037
       ]
     },
     {
       "period": "holdout",
       "cohort": "strong_proxy",
       "expression": "current_yes",
-      "rows": 15,
-      "active_dates": 7,
+      "rows": 7,
+      "active_dates": 6,
+      "cities": 4,
+      "win_rate": 1.0,
+      "avg_ask": 0.9431428571428572,
+      "cost": 6.617299999999999,
+      "pnl": 0.38270000000000026,
+      "roi": 0.057833255255164535,
+      "roi_ci95": [
+        0.012271258329094484,
+        0.18062825164697652
+      ]
+    },
+    {
+      "period": "holdout",
+      "cohort": "strong_proxy",
+      "expression": "d1_no",
+      "rows": 6,
+      "active_dates": 6,
+      "cities": 4,
+      "win_rate": 1.0,
+      "avg_ask": 0.9414999999999999,
+      "cost": 5.662579999999999,
+      "pnl": 0.3374200000000003,
+      "roi": 0.059587679114467315,
+      "roi_ci95": [
+        0.011374592921726405,
+        0.1649806807370445
+      ]
+    },
+    {
+      "period": "all",
+      "cohort": "base_candidate",
+      "expression": "current_yes",
+      "rows": 244,
+      "active_dates": 29,
+      "cities": 35,
+      "win_rate": 0.9836065573770492,
+      "avg_ask": 0.9566229508196721,
+      "cost": 233.84516,
+      "pnl": 6.154840000000007,
+      "roi": 0.026320151334327413,
+      "roi_ci95": [
+        0.009995089876365616,
+        0.03894796586004245
+      ]
+    },
+    {
+      "period": "all",
+      "cohort": "base_candidate",
+      "expression": "d1_no",
+      "rows": 201,
+      "active_dates": 29,
+      "cities": 35,
+      "win_rate": 0.9900497512437811,
+      "avg_ask": 0.9618059701492537,
+      "cost": 193.67144,
+      "pnl": 5.328560000000006,
+      "roi": 0.027513401046638606,
+      "roi_ci95": [
+        0.012315021525418208,
+        0.03998854555161812
+      ]
+    },
+    {
+      "period": "all",
+      "cohort": "strong_proxy",
+      "expression": "current_yes",
+      "rows": 23,
+      "active_dates": 14,
       "cities": 8,
       "win_rate": 1.0,
-      "avg_ask": 0.9781333333333335,
-      "cost": 14.68789,
-      "pnl": 0.31211000000000055,
-      "roi": 0.021249478311724867,
+      "avg_ask": 0.9634347826086956,
+      "cost": 22.19479,
+      "pnl": 0.805210000000001,
+      "roi": 0.03627923490152423,
       "roi_ci95": [
-        0.014539542829469562,
-        0.029314910083249535
-      ]
-    },
-    {
-      "period": "holdout",
-      "cohort": "strong_proxy",
-      "expression": "d1_no",
-      "rows": 13,
-      "active_dates": 6,
-      "cities": 7,
-      "win_rate": 1.0,
-      "avg_ask": 0.979923076923077,
-      "cost": 12.751740000000003,
-      "pnl": 0.24826000000000048,
-      "roi": 0.019468715641943798,
-      "roi_ci95": [
-        0.014251358533347497,
-        0.02561472782749163
-      ]
-    },
-    {
-      "period": "all",
-      "cohort": "base_candidate",
-      "expression": "current_yes",
-      "rows": 268,
-      "active_dates": 29,
-      "cities": 36,
-      "win_rate": 0.9925373134328358,
-      "avg_ask": 0.9467611940298507,
-      "cost": 254.23427999999998,
-      "pnl": 11.765720000000009,
-      "roi": 0.04627904624034182,
-      "roi_ci95": [
-        0.024627367436892367,
-        0.06894112066563597
-      ]
-    },
-    {
-      "period": "all",
-      "cohort": "base_candidate",
-      "expression": "d1_no",
-      "rows": 226,
-      "active_dates": 29,
-      "cities": 36,
-      "win_rate": 0.9911504424778761,
-      "avg_ask": 0.9584513274336284,
-      "cost": 217.01691,
-      "pnl": 6.983090000000006,
-      "roi": 0.03217763076619239,
-      "roi_ci95": [
-        0.0138882476848903,
-        0.04859555545827601
-      ]
-    },
-    {
-      "period": "all",
-      "cohort": "strong_proxy",
-      "expression": "current_yes",
-      "rows": 36,
-      "active_dates": 15,
-      "cities": 13,
-      "win_rate": 1.0,
-      "avg_ask": 0.9412222222222222,
-      "cost": 33.952709999999996,
-      "pnl": 2.047290000000001,
-      "roi": 0.06029827957768324,
-      "roi_ci95": [
-        0.02517769933272785,
-        0.13057221180622336
+        0.016253410426430637,
+        0.07574269897310718
       ]
     },
     {
       "period": "all",
       "cohort": "strong_proxy",
       "expression": "d1_no",
-      "rows": 32,
+      "rows": 18,
       "active_dates": 14,
-      "cities": 13,
+      "cities": 8,
       "win_rate": 1.0,
-      "avg_ask": 0.9540312499999999,
-      "cost": 30.59523,
-      "pnl": 1.4047700000000007,
-      "roi": 0.04591467362722884,
+      "avg_ask": 0.953388888888889,
+      "cost": 17.19688,
+      "pnl": 0.8031200000000006,
+      "roi": 0.04670149468973445,
       "roi_ci95": [
-        0.028171274482392223,
-        0.06974949289314301
+        0.01811641819886795,
+        0.0898526312616954
       ]
     }
   ],
   "paired_expression": {
     "train_base_candidate": {
-      "rows": 101,
+      "rows": 86,
       "active_dates": 13,
-      "current_yes_roi": 0.05681102147167947,
-      "d1_no_roi": 0.04193929455345321,
-      "current_yes_minus_d1_no_roi": 0.01487172691822626,
+      "current_yes_roi": 0.03123701854576657,
+      "d1_no_roi": 0.025397899623196454,
+      "current_yes_minus_d1_no_roi": 0.005839118922570115,
       "delta_ci95": [
-        0.004872065103966116,
-        0.030477079212231434
+        0.0015910691176758195,
+        0.011119085240140754
       ]
     },
     "train_strong_proxy": {
-      "rows": 19,
+      "rows": 12,
       "active_dates": 8,
-      "current_yes_roi": 0.0992940218076791,
-      "d1_no_roi": 0.06481411427921334,
-      "current_yes_minus_d1_no_roi": 0.03447990752846576,
+      "current_yes_roi": 0.03301783247033306,
+      "d1_no_roi": 0.04037522866580549,
+      "current_yes_minus_d1_no_roi": -0.007357396195472432,
       "delta_ci95": [
-        -0.007864618413235309,
-        0.19012443924260014
+        -0.01415508220553489,
+        0.0034918869320690396
       ]
     },
     "holdout_base_candidate": {
-      "rows": 125,
+      "rows": 115,
       "active_dates": 16,
-      "current_yes_roi": 0.03506523309290371,
-      "d1_no_roi": 0.02429767322872287,
-      "current_yes_minus_d1_no_roi": 0.010767559864180837,
+      "current_yes_roi": 0.02884733134756696,
+      "d1_no_roi": 0.029096437981277513,
+      "current_yes_minus_d1_no_roi": -0.0002491066337105517,
       "delta_ci95": [
-        0.0036489404031034367,
-        0.01920379985994422
+        -0.020848451584917032,
+        0.014352859073866808
       ]
     },
     "holdout_strong_proxy": {
-      "rows": 13,
+      "rows": 6,
       "active_dates": 6,
-      "current_yes_roi": 0.023067013250291805,
-      "d1_no_roi": 0.019468715641943798,
-      "current_yes_minus_d1_no_roi": 0.0035982976083480077,
+      "current_yes_roi": 0.06632544252505869,
+      "d1_no_roi": 0.059587679114467315,
+      "current_yes_minus_d1_no_roi": 0.006737763410591374,
       "delta_ci95": [
-        0.0005498150144697851,
-        0.008830963726326836
+        0.0014682543820859605,
+        0.01608170666248432
       ]
     },
     "all_base_candidate": {
-      "rows": 226,
+      "rows": 201,
       "active_dates": 29,
-      "current_yes_roi": 0.04475843062918293,
-      "d1_no_roi": 0.03217763076619239,
-      "current_yes_minus_d1_no_roi": 0.012580799862990537,
+      "current_yes_roi": 0.029871849092773947,
+      "d1_no_roi": 0.027513401046638606,
+      "current_yes_minus_d1_no_roi": 0.002358448046135341,
       "delta_ci95": [
-        0.005932620230047674,
-        0.0208967773884818
+        -0.010319985663176065,
+        0.010955148349356307
       ]
     },
     "all_strong_proxy": {
-      "rows": 32,
+      "rows": 18,
       "active_dates": 14,
-      "current_yes_roi": 0.06699708009580303,
-      "d1_no_roi": 0.04591467362722884,
-      "current_yes_minus_d1_no_roi": 0.02108240646857419,
+      "current_yes_roi": 0.043886738288895694,
+      "d1_no_roi": 0.04670149468973445,
+      "current_yes_minus_d1_no_roi": -0.0028147564008387596,
       "delta_ci95": [
-        -0.004022154065824415,
-        0.08302169845321758
+        -0.009913112586731186,
+        0.0065067655828239595
       ]
     }
   },
   "same_price_baseline": {
     "train": {
-      "rows": 21,
+      "rows": 16,
       "active_dates": 8,
-      "mean_abs_price_distance": 0.01076190476190477,
-      "max_abs_price_distance": 0.09200000000000001,
-      "candidate_roi": 0.09006987867003172,
-      "same_price_base_roi": 0.09022776934725989,
-      "excess_roi": -0.00015789067722817018,
+      "mean_abs_price_distance": 0.0036875000000000033,
+      "max_abs_price_distance": 0.030000000000000027,
+      "candidate_roi": 0.02712311161811054,
+      "same_price_base_roi": 0.02365277697804909,
+      "excess_roi": 0.0034703346400614503,
       "excess_ci95": [
-        -0.02569869541039917,
-        0.008701315448237334
+        0.00028310769098607256,
+        0.008958100023341643
       ]
     },
     "holdout": {
-      "rows": 15,
-      "active_dates": 7,
-      "mean_abs_price_distance": 0.002133333333333335,
-      "max_abs_price_distance": 0.020000000000000018,
-      "candidate_roi": 0.021249478311724867,
-      "same_price_base_roi": 0.019794898849943336,
-      "excess_roi": 0.0014545794617815307,
+      "rows": 7,
+      "active_dates": 6,
+      "mean_abs_price_distance": 0.03314285714285714,
+      "max_abs_price_distance": 0.127,
+      "candidate_roi": 0.057833255255164535,
+      "same_price_base_roi": 0.054116853370839844,
+      "excess_roi": 0.003716401884324691,
       "excess_ci95": [
-        -0.000531279659000173,
-        0.005723254782748401
+        -0.043484140037535444,
+        0.06481844502580135
       ]
     }
   },

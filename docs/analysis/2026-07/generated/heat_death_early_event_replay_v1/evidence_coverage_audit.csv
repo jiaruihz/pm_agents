@@ -1,5 +1,5 @@
 cohort,direct_active_dates,direct_and_settled,direct_ask_within_30m,direct_quote_source_counts,expression,first_snapshot_book_status_counts,first_snapshot_direct_ask,indicative_and_settled,indicative_but_no_direct_ask,indicative_price_present,leg_present,settled_active_dates,settlement_present,signal_city_days
-base,6,19,19,{'orderbook_archive_first_after_signal': 19},current_yes,"{'ok': 16, 'orderbook_budget_exhausted': 113, 'orderbook_scope_skipped': 1}",16,111,111,130,130,6,111,130
-base,6,18,18,{'orderbook_archive_first_after_signal': 18},d1_no,"{'ok': 16, 'orderbook_budget_exhausted': 113, 'orderbook_scope_skipped': 1}",16,111,112,130,130,6,111,130
-strong_partial,6,8,8,{'orderbook_archive_first_after_signal': 8},current_yes,"{'ok': 8, 'orderbook_budget_exhausted': 59}",7,55,59,67,67,6,55,67
-strong_partial,6,7,7,{'orderbook_archive_first_after_signal': 7},d1_no,"{'ok': 8, 'orderbook_budget_exhausted': 59}",7,55,60,67,67,6,55,67
+base,7,22,22,{'orderbook_archive_first_after_signal': 22},current_yes,"{'ok': 18, 'orderbook_budget_exhausted': 131, 'orderbook_scope_skipped': 3}",18,152,130,152,152,8,152,152
+base,7,21,21,{'orderbook_archive_first_after_signal': 21},d1_no,"{'missing_status': 1, 'ok': 18, 'orderbook_budget_exhausted': 130, 'orderbook_scope_skipped': 3}",18,151,130,151,151,8,151,152
+strong_partial,7,9,9,{'orderbook_archive_first_after_signal': 9},current_yes,"{'ok': 8, 'orderbook_budget_exhausted': 68, 'orderbook_scope_skipped': 1}",7,77,68,77,77,8,77,77
+strong_partial,7,8,8,{'orderbook_archive_first_after_signal': 8},d1_no,"{'missing_status': 1, 'ok': 8, 'orderbook_budget_exhausted': 67, 'orderbook_scope_skipped': 1}",7,76,68,76,76,8,76,77
