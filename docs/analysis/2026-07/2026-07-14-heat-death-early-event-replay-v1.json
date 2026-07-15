@@ -1,10 +1,35 @@
 {
-  "generated_at_utc": "2026-07-15T06:39:36.145691Z",
+  "generated_at_utc": "2026-07-15T12:41:41.147861Z",
   "strategy_head": "heat_death_early_dislocation_v1",
   "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first archived direct quote after signal",
   "window": {
     "start": "2026-07-07",
-    "end": "2026-07-14"
+    "end": "2026-07-15"
+  },
+  "date_coverage": {
+    "input_target_dates": [
+      "2026-07-07",
+      "2026-07-08",
+      "2026-07-09",
+      "2026-07-10",
+      "2026-07-11",
+      "2026-07-12",
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15"
+    ],
+    "settled_target_dates": [
+      "2026-07-07",
+      "2026-07-08",
+      "2026-07-09",
+      "2026-07-10",
+      "2026-07-11",
+      "2026-07-12",
+      "2026-07-13",
+      "2026-07-14"
+    ],
+    "unsettled_base_signal_city_days": 15,
+    "unsettled_strong_signal_city_days": 6
   },
   "rule": {
     "local_hour": [
@@ -24,25 +49,25 @@
   },
   "signal_funnel": {
     "unit_note": "event rows until market alignment; then first signal per city-day",
-    "unique_source_reports": 11842,
-    "local_hour_13_17_event_rows": 2045,
-    "plus_decline_gte_0_5_event_rows": 746,
-    "plus_high_age_gte_60m_event_rows": 580,
-    "plus_path_not_warming_event_rows": 518,
-    "market_aligned_event_rows": 494,
-    "first_base_signal_city_days": 153,
-    "first_strong_partial_signal_city_days": 78,
+    "unique_source_reports": 12998,
+    "local_hour_13_17_event_rows": 2226,
+    "plus_decline_gte_0_5_event_rows": 827,
+    "plus_high_age_gte_60m_event_rows": 644,
+    "plus_path_not_warming_event_rows": 575,
+    "market_aligned_event_rows": 551,
+    "first_base_signal_city_days": 168,
+    "first_strong_partial_signal_city_days": 84,
     "anchor_city_day_excluded_from_evidence": true
   },
   "evidence_funnel": {
     "unit_note": "quote and settlement availability are evidence coverage, not strategy filters",
     "base_quote_coverage": {
-      "city_days": 152,
+      "city_days": 167,
       "current_yes_direct_ask": 22,
       "d1_no_direct_ask": 21
     },
     "strong_quote_coverage": {
-      "city_days": 77,
+      "city_days": 83,
       "current_yes_direct_ask": 9,
       "d1_no_direct_ask": 8
     },
@@ -57,10 +82,10 @@
     {
       "cohort": "base",
       "expression": "current_yes",
-      "signal_city_days": 152,
-      "leg_present": 152,
-      "indicative_price_present": 152,
-      "indicative_but_no_direct_ask": 130,
+      "signal_city_days": 167,
+      "leg_present": 167,
+      "indicative_price_present": 167,
+      "indicative_but_no_direct_ask": 145,
       "settlement_present": 152,
       "indicative_and_settled": 152,
       "first_snapshot_direct_ask": 18,
@@ -70,7 +95,7 @@
       "settled_active_dates": 8,
       "first_snapshot_book_status_counts": {
         "ok": 18,
-        "orderbook_budget_exhausted": 131,
+        "orderbook_budget_exhausted": 146,
         "orderbook_scope_skipped": 3
       },
       "direct_quote_source_counts": {
@@ -80,10 +105,10 @@
     {
       "cohort": "base",
       "expression": "d1_no",
-      "signal_city_days": 152,
-      "leg_present": 151,
-      "indicative_price_present": 151,
-      "indicative_but_no_direct_ask": 130,
+      "signal_city_days": 167,
+      "leg_present": 166,
+      "indicative_price_present": 166,
+      "indicative_but_no_direct_ask": 145,
       "settlement_present": 151,
       "indicative_and_settled": 151,
       "first_snapshot_direct_ask": 18,
@@ -94,7 +119,7 @@
       "first_snapshot_book_status_counts": {
         "missing_status": 1,
         "ok": 18,
-        "orderbook_budget_exhausted": 130,
+        "orderbook_budget_exhausted": 145,
         "orderbook_scope_skipped": 3
       },
       "direct_quote_source_counts": {
@@ -104,10 +129,10 @@
     {
       "cohort": "strong_partial",
       "expression": "current_yes",
-      "signal_city_days": 77,
-      "leg_present": 77,
-      "indicative_price_present": 77,
-      "indicative_but_no_direct_ask": 68,
+      "signal_city_days": 83,
+      "leg_present": 83,
+      "indicative_price_present": 83,
+      "indicative_but_no_direct_ask": 74,
       "settlement_present": 77,
       "indicative_and_settled": 77,
       "first_snapshot_direct_ask": 7,
@@ -117,7 +142,7 @@
       "settled_active_dates": 8,
       "first_snapshot_book_status_counts": {
         "ok": 8,
-        "orderbook_budget_exhausted": 68,
+        "orderbook_budget_exhausted": 74,
         "orderbook_scope_skipped": 1
       },
       "direct_quote_source_counts": {
@@ -127,10 +152,10 @@
     {
       "cohort": "strong_partial",
       "expression": "d1_no",
-      "signal_city_days": 77,
-      "leg_present": 76,
-      "indicative_price_present": 76,
-      "indicative_but_no_direct_ask": 68,
+      "signal_city_days": 83,
+      "leg_present": 82,
+      "indicative_price_present": 82,
+      "indicative_but_no_direct_ask": 74,
       "settlement_present": 76,
       "indicative_and_settled": 76,
       "first_snapshot_direct_ask": 7,
@@ -141,7 +166,7 @@
       "first_snapshot_book_status_counts": {
         "missing_status": 1,
         "ok": 8,
-        "orderbook_budget_exhausted": 67,
+        "orderbook_budget_exhausted": 73,
         "orderbook_scope_skipped": 1
       },
       "direct_quote_source_counts": {
@@ -394,6 +419,152 @@
         -0.05491620232761055,
         0.014422266794183285
       ]
+    }
+  ],
+  "paired_expression_economics": [
+    {
+      "cohort": "base",
+      "price_layer": "direct_executable_ask",
+      "rows": 21,
+      "active_dates": 7,
+      "cities": 7,
+      "current_yes_win_rate": 1.0,
+      "d1_no_win_rate": 1.0,
+      "d1_extra_win_rate": 0.0,
+      "avg_d1_minus_current_ask": 0.006952380952380953,
+      "current_yes_roi": 0.023306537320720373,
+      "d1_no_roi": 0.0163393489330131,
+      "current_yes_minus_d1_no_roi": 0.006967188387707272,
+      "roi_delta_ci95": [
+        0.00040724488592795705,
+        0.020737177589788144
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 21,
+        "both_lose_exact_d1": 0,
+        "d1_only_win_d2_plus": 0,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "direct_executable_ask",
+      "rows": 8,
+      "active_dates": 7,
+      "cities": 3,
+      "current_yes_win_rate": 1.0,
+      "d1_no_win_rate": 1.0,
+      "d1_extra_win_rate": 0.0,
+      "avg_d1_minus_current_ask": 0.014875,
+      "current_yes_roi": 0.042621045045139,
+      "d1_no_roi": 0.027231918150160784,
+      "current_yes_minus_d1_no_roi": 0.015389126894978216,
+      "roi_delta_ci95": [
+        -0.0007517719487192872,
+        0.047631084339998644
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 8,
+        "both_lose_exact_d1": 0,
+        "d1_only_win_d2_plus": 0,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "base",
+      "price_layer": "indicative_not_executable",
+      "rows": 151,
+      "active_dates": 8,
+      "cities": 39,
+      "current_yes_win_rate": 0.9139072847682119,
+      "d1_no_win_rate": 0.9403973509933775,
+      "d1_extra_win_rate": 0.026490066225165563,
+      "avg_d1_minus_current_ask": 0.036241721854304645,
+      "current_yes_roi": 0.00824562266144551,
+      "d1_no_roi": -0.0022577782262152906,
+      "current_yes_minus_d1_no_roi": 0.010503400887660802,
+      "roi_delta_ci95": [
+        0.004322443360600465,
+        0.016575316732921532
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 138,
+        "both_lose_exact_d1": 9,
+        "d1_only_win_d2_plus": 4,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "indicative_not_executable",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "current_yes_win_rate": 0.9342105263157895,
+      "d1_no_win_rate": 0.9473684210526315,
+      "d1_extra_win_rate": 0.013157894736842105,
+      "avg_d1_minus_current_ask": 0.030144736842105262,
+      "current_yes_roi": 0.008257629989614938,
+      "d1_no_roi": -0.009633106204607335,
+      "current_yes_minus_d1_no_roi": 0.017890736194222275,
+      "roi_delta_ci95": [
+        0.003762325996045583,
+        0.037474230758493536
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 71,
+        "both_lose_exact_d1": 4,
+        "d1_only_win_d2_plus": 1,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "base",
+      "price_layer": "clob_price_history_proxy",
+      "rows": 150,
+      "active_dates": 8,
+      "cities": 39,
+      "current_yes_win_rate": 0.92,
+      "d1_no_win_rate": 0.9466666666666667,
+      "d1_extra_win_rate": 0.02666666666666667,
+      "avg_d1_minus_current_ask": 0.042426666666666675,
+      "current_yes_roi": 0.003131733658057257,
+      "d1_no_roi": -0.013127763676624493,
+      "current_yes_minus_d1_no_roi": 0.01625949733468175,
+      "roi_delta_ci95": [
+        0.009770488179197477,
+        0.02371737804017808
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 138,
+        "both_lose_exact_d1": 8,
+        "d1_only_win_d2_plus": 4,
+        "current_only_win_inconsistent": 0
+      }
+    },
+    {
+      "cohort": "strong_partial",
+      "price_layer": "clob_price_history_proxy",
+      "rows": 76,
+      "active_dates": 8,
+      "cities": 25,
+      "current_yes_win_rate": 0.9342105263157895,
+      "d1_no_win_rate": 0.9473684210526315,
+      "d1_extra_win_rate": 0.013157894736842105,
+      "avg_d1_minus_current_ask": 0.032644736842105275,
+      "current_yes_roi": 0.006304996871241862,
+      "d1_no_roi": -0.013952571118670817,
+      "current_yes_minus_d1_no_roi": 0.020257567989912677,
+      "roi_delta_ci95": [
+        0.004838010273580879,
+        0.043743780382810606
+      ],
+      "outcome_counts": {
+        "both_win_stop_current": 71,
+        "both_lose_exact_d1": 4,
+        "d1_only_win_d2_plus": 1,
+        "current_only_win_inconsistent": 0
+      }
     }
   ],
   "price_history_proxy_slippage_sensitivity": [
@@ -959,7 +1130,8 @@
     "previous_five_rows_cause": "first-snapshot direct-ask archive gap plus an unjustified 0.20-0.97 price hard filter",
     "price_hard_filter_removed": true,
     "support_gte_2_status": "diagnostic cohort only; not an approved strategy gate",
-    "forward_runner_scope": "all physical_confirmation_base rows; quote refresh capped operationally; zero notional"
+    "shadow_runner_scope": "all physical_confirmation_base rows; quote refresh capped operationally; zero notional",
+    "tiny_live_probe_scope": "physical_confirmation_strong rows in H2 ask 0.50-0.93; fixed 10 shares; no size-up approval"
   },
   "busan_executed_anchor_not_in_settled_roi": {
     "city": "Busan",
@@ -1009,6 +1181,6 @@
     "significance": "FAIL_LOW_SAMPLE",
     "baseline": "NA_short_event_archive",
     "forward": "FAIL_THIN",
-    "conclusion": "inconclusive_zero_notional_only"
+    "conclusion": "inconclusive_tiny_live_probe_only"
   }
 }

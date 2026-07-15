@@ -28,6 +28,12 @@ Verdict: `historical_proxy_positive_but_no_incremental_alpha`
 
 同一 6 行 / 6 天 paired denominator 上，current YES - d1 NO ROI = +0.7%，95% CI [+0.1%, +1.6%]。点估和 bootstrap 偏向 current YES，但只有 6 个日期，低于策略确认门槛，不能升格为稳定表达优势。
 
+## current YES vs d1 NO：表达差异
+
+current YES 赢在最终最高温正好停在当前档；d1 NO 赢在最终最高温不是下一档。由于当前档已经打印，二者在停当前档时都赢、只升一档时都输；只有升两档及以上时 d1 NO 额外获胜。因此 d1 NO 本质上是多买了一份 `d2+ overshoot` 保险。
+
+严格 H1 late-carry 同分母（strong proxy 且 current YES ask 0.95-0.99）holdout 只有 5 行 / 5 天。d1 NO 平均 ask 溢价 +0.3%，额外 d2+ 获胜率 +0.0%；current YES - d1 NO ROI = +0.3%，95% CI [+0.1%, +0.7%]。样本不足，不能把 secondary d1 NO 替换为 primary expression。
+
 ## Data Integrity Self-Check
 
 - date coverage: 2026-05-19..2026-06-17；dedup key duplicates=0。
@@ -44,5 +50,5 @@ Verdict: `historical_proxy_positive_but_no_incremental_alpha`
 significance=FAIL_LOW_SAMPLE for absolute current YES proxy ROI (rows=7, dates=6; preregistered floor: 30 rows / 12 dates)
 baseline=FAIL for same-price physical-overlay excess
 forward=FAIL_THIN for complete new weather_state_v2 features
-conclusion=inconclusive; zero-notional forward only
+conclusion=inconclusive; shadow plus fixed-10-share tiny-live probe only; no size-up
 ```

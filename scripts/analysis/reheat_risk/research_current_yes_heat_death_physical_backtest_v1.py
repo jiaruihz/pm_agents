@@ -232,6 +232,64 @@ def paired_expression_summary(rows: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def paired_expression_economics(rows: pd.DataFrame) -> dict[str, Any]:
+    """Compare current YES with d1 NO on identical signal rows.
+
+    Once the current bracket has printed, d1 NO differs from current YES only
+    by insuring the >=d2 overshoot tail.  The one-step overshoot loses both.
+    """
+    paired = rows[
+        rows["current_yes_ask"].between(0.01, 0.99)
+        & rows["d1_no_ask"].between(0.01, 0.99)
+        & rows["current_bracket_held"].notna()
+        & rows["d1_hit"].notna()
+    ].copy()
+    if paired.empty:
+        return {"rows": 0, "active_dates": 0}
+    current_win = paired["current_bracket_held"].astype(float)
+    d1_win = paired["d1_no_win"].astype(float)
+    paired["outcome_bucket"] = np.select(
+        [
+            current_win.eq(1) & d1_win.eq(1),
+            current_win.eq(0) & d1_win.eq(0),
+            current_win.eq(0) & d1_win.eq(1),
+            current_win.eq(1) & d1_win.eq(0),
+        ],
+        ["both_win_stop_current", "both_lose_exact_d1", "d1_only_win_d2_plus", "current_only_win_inconsistent"],
+        default="unclassified",
+    )
+    ask_premium = paired["d1_no_ask"] - paired["current_yes_ask"]
+    cost_premium = paired["d1_no_cost"] - paired["current_yes_cost"]
+    d1_extra_win = d1_win - current_win
+    d1_minus_current_pnl = paired["d1_no_pnl"] - paired["current_yes_pnl"]
+    yes_roi = float(paired["current_yes_pnl"].sum() / paired["current_yes_cost"].sum())
+    d1_roi = float(paired["d1_no_pnl"].sum() / paired["d1_no_cost"].sum())
+    bucket_counts = paired["outcome_bucket"].value_counts().to_dict()
+    return {
+        "rows": int(len(paired)),
+        "active_dates": int(paired["target_date"].nunique()),
+        "cities": int(paired["city"].nunique()),
+        "current_yes_win_rate": float(current_win.mean()),
+        "d1_no_win_rate": float(d1_win.mean()),
+        "d1_extra_win_rate": float(d1_extra_win.mean()),
+        "avg_d1_minus_current_ask": float(ask_premium.mean()),
+        "avg_d1_minus_current_effective_cost": float(cost_premium.mean()),
+        "avg_d1_minus_current_pnl_per_share": float(d1_minus_current_pnl.mean()),
+        "current_yes_roi": yes_roi,
+        "d1_no_roi": d1_roi,
+        "current_yes_minus_d1_no_roi": yes_roi - d1_roi,
+        "roi_delta_ci95": bootstrap_paired_delta(
+            paired, "current_yes_pnl", "current_yes_cost", "d1_no_pnl", "d1_no_cost"
+        ),
+        "outcome_counts": {
+            "both_win_stop_current": int(bucket_counts.get("both_win_stop_current", 0)),
+            "both_lose_exact_d1": int(bucket_counts.get("both_lose_exact_d1", 0)),
+            "d1_only_win_d2_plus": int(bucket_counts.get("d1_only_win_d2_plus", 0)),
+            "current_only_win_inconsistent": int(bucket_counts.get("current_only_win_inconsistent", 0)),
+        },
+    }
+
+
 def same_price_matches(states: pd.DataFrame, period: str) -> pd.DataFrame:
     selected = states[states["period"].eq(period) & states["strong_proxy"]].copy()
     pool = states[states["period"].eq(period) & states["base_candidate"] & ~states["strong_proxy"]].copy()
@@ -294,6 +352,8 @@ def main() -> int:
     states = load_states()
     summary_rows: list[dict[str, Any]] = []
     paired: dict[str, Any] = {}
+    paired_economics: dict[str, Any] = {}
+    late_carry_economics: dict[str, Any] = {}
     for period in ("train", "holdout", "all"):
         period_mask = pd.Series(True, index=states.index) if period == "all" else states["period"].eq(period)
         for cohort, mask in (("base_candidate", states["base_candidate"]), ("strong_proxy", states["strong_proxy"])):
@@ -301,6 +361,13 @@ def main() -> int:
             for expression in ("current_yes", "d1_no"):
                 summary_rows.append({"period": period, "cohort": cohort, **expression_summary(sample, expression)})
             paired[f"{period}_{cohort}"] = paired_expression_summary(sample)
+            paired_economics[f"{period}_{cohort}"] = paired_expression_economics(sample)
+        late_sample = states[
+            period_mask
+            & states["strong_proxy"]
+            & states["current_yes_ask"].between(0.95, 0.99)
+        ].copy()
+        late_carry_economics[period] = paired_expression_economics(late_sample)
 
     matches_train = same_price_matches(states, "train")
     matches_holdout = same_price_matches(states, "holdout")
@@ -356,6 +423,8 @@ def main() -> int:
         },
         "summary": summary_rows,
         "paired_expression": paired,
+        "paired_expression_economics": paired_economics,
+        "late_carry_expression_economics": late_carry_economics,
         "same_price_baseline": match_summary,
         "outputs": {
             "summary_csv": str((OUT_DIR / "summary.csv").relative_to(ROOT)),
@@ -368,6 +437,7 @@ def main() -> int:
     holdout_yes = summary[(summary["period"].eq("holdout")) & (summary["cohort"].eq("strong_proxy")) & (summary["expression"].eq("current_yes"))].iloc[0]
     holdout_d1 = summary[(summary["period"].eq("holdout")) & (summary["cohort"].eq("strong_proxy")) & (summary["expression"].eq("d1_no"))].iloc[0]
     paired_holdout = paired["holdout_strong_proxy"]
+    late_holdout = late_carry_economics["holdout"]
     baseline_holdout = match_summary["holdout"]
     lines = [
         "# Current YES Heat-Death Physical Backtest v1",
@@ -414,6 +484,19 @@ def main() -> int:
         "",
         f"同一 {paired_holdout['rows']} 行 / {paired_holdout['active_dates']} 天 paired denominator 上，current YES - d1 NO ROI = {pct(paired_holdout['current_yes_minus_d1_no_roi'])}，95% CI [{pct(paired_holdout['delta_ci95'][0])}, {pct(paired_holdout['delta_ci95'][1])}]。点估和 bootstrap 偏向 current YES，但只有 6 个日期，低于策略确认门槛，不能升格为稳定表达优势。",
         "",
+        "## current YES vs d1 NO：表达差异",
+        "",
+        "current YES 赢在最终最高温正好停在当前档；d1 NO 赢在最终最高温不是下一档。由于当前档已经打印，二者在停当前档时都赢、只升一档时都输；只有升两档及以上时 d1 NO 额外获胜。因此 d1 NO 本质上是多买了一份 `d2+ overshoot` 保险。",
+        "",
+        (
+            f"严格 H1 late-carry 同分母（strong proxy 且 current YES ask 0.95-0.99）holdout 只有 {late_holdout.get('rows', 0)} 行 / "
+            f"{late_holdout.get('active_dates', 0)} 天。d1 NO 平均 ask 溢价 {pct(late_holdout.get('avg_d1_minus_current_ask'))}，"
+            f"额外 d2+ 获胜率 {pct(late_holdout.get('d1_extra_win_rate'))}；current YES - d1 NO ROI = "
+            f"{pct(late_holdout.get('current_yes_minus_d1_no_roi'))}，95% CI "
+            f"[{pct((late_holdout.get('roi_delta_ci95') or [None, None])[0])}, {pct((late_holdout.get('roi_delta_ci95') or [None, None])[1])}]。"
+            "样本不足，不能把 secondary d1 NO 替换为 primary expression。"
+        ),
+        "",
         "## Data Integrity Self-Check",
         "",
         f"- date coverage: {payload['data_integrity']['target_date_min']}..{payload['data_integrity']['target_date_max']}；dedup key duplicates={payload['data_integrity']['dedup_key_duplicates']}。",
@@ -441,7 +524,7 @@ def main() -> int:
         ),
         f"baseline={'PASS' if baseline_holdout['excess_ci95'][0] is not None and baseline_holdout['excess_ci95'][0] > 0 else 'FAIL'} for same-price physical-overlay excess",
         "forward=FAIL_THIN for complete new weather_state_v2 features",
-        "conclusion=inconclusive; zero-notional forward only",
+        "conclusion=inconclusive; shadow plus fixed-10-share tiny-live probe only; no size-up",
         "```",
     ]
     OUT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")

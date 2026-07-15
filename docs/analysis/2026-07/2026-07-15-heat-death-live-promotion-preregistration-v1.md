@@ -11,8 +11,8 @@ Scope: `current_yes_heat_death_physical_v1` 家族的两个入场 regime。判�
 
 | Head | 定义 | 赚什么 | 当前证据状态 |
 |---|---|---|---|
-| **H1 late-carry** | 确认后以 ask >= 0.95 买 current YES(或 d1 NO) | 晚盘 carry premium,左尾一次亏损抹掉 ~20-50 笔 | 2026-07-15 用干净 single-runs peak clock 重建 factory 重跑([backtest](2026-07-14-current-yes-heat-death-physical-backtest-v1.md)):holdout 缩到 7 行/6 天 +5.8% CI [+1.2,+18.1],significance=FAIL_LOW_SAMPLE;相对同价 base-fade 超额 +0.4% CI 跨 0,物理增量仍不存在;旧 15 行 +2.1% 证据建立在污染 peak clock 上,作废 |
-| **H2 early dislocation** | 首次确认时 ask <= 0.93 买入(Busan 0.84 形态) | 市场 repricing 行情 | [early replay](2026-07-14-heat-death-early-event-replay-v1.md) 扩窗 7/07-14(8 结算日,anchor 剔除)后 proxy base current YES +0.31%,+2c 溢价后 -1.13%,CI 全跨 0;可执行首信号盘口历史覆盖稀疏,证据为零 |
+| **H1 late-carry** | 确认后以 ask >= 0.95 买 current YES(或 d1 NO) | 晚盘 carry premium,左尾一次亏损抹掉 ~20-50 笔 | 2026-07-15 用干净 single-runs peak clock 重建 factory 重跑([backtest](2026-07-14-current-yes-heat-death-physical-backtest-v1.md)):holdout strong 7 行/6 天 +5.8% CI [+1.2,+18.1]；严格 H1 paired 仅 5 行/5 天，两边全赢，current YES +1.70%、d1 NO +1.37%；significance=FAIL_LOW_SAMPLE，相对同价 base-fade 超额 CI 跨 0 |
+| **H2 early dislocation** | 首次确认时 ask <= 0.93 买入(Busan 0.84 形态) | 市场 repricing 行情 | [early replay](2026-07-14-heat-death-early-event-replay-v1.md) 输入扩到 7/07-15，ROI 使用 7/07-14 八个结算日(anchor 剔除)：proxy 同分母 150 行 current YES +0.31%、d1 NO -1.31%；d1 多赢 2.67pp 但平均贵 4.24c，YES-d1 +1.63pp CI[+0.98,+2.37]。广州 forward fill @0.89 用户确认获胜，但 canonical settlement 待落库，仍不足晋升 |
 
 0.93 < ask < 0.95 是预注册的隔离带:两边的主分析都不收这段,防止边界挑选。
 tiny-live probe(`current_yes_heat_death_tiny_live_v1`,10 shares,<=3 单/UTC 日,max-ask 0.99)的
@@ -90,5 +90,7 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
 - shadow v1:运行中,zero-notional,per-snapshot 决策分母 + 候选 token 聚焦盘口刷新(今日 pair 1/1 成功)。
 - tiny-live probe:已拆为 H1/H2 双实例(见 §4);拆分前原实例有广州 `30 YES @ 0.89 x 10` 一笔成交。原始 instance 血缘不改写,绩效分析按成交价归入 H2 regime。
 - H1 历史证据:干净 PIT 重跑后 holdout 只剩 7 行,carry 点估为正但低于样本地板;物理增量在干净数据上仍不存在;
-  旧 15 行证据作废(污染 peak clock 抬高了候选数与显著性)。
-- H2 历史证据:扩窗 8 结算日后 proxy 无正边际(+2c 后 -1.13%);可执行层空白,等 forward。
+  严格 H1 价格段 paired 只有 5 行/5 天，两边全赢，current YES 因平均入场更便宜而略优；旧 15 行证据作废。
+- canonical 注册:strategy definition、H1/H2 config 与两个 enabled instance 均已落库；H1 新实例当前 0 order/0 fill。
+- H2 历史证据:8 个结算日的 proxy current YES 只有 +0.31%，CI 跨 0；d1 NO 的额外 overshoot 胜率不足覆盖溢价。
+- H2 forward:广州 2026-07-15 先在 14:17 PIT strong signal 显示 current 30 indicative 0.84，legacy probe 于 14:24 成交 `30 YES @0.89 x10`，用户确认最终获胜；fact row 已有 fill，但官方/canonical settlement 尚未写入，因此暂不计 realized PnL。原 instance 血缘不改写，分析归 H2 regime。

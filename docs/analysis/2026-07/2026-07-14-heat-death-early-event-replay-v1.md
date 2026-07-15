@@ -1,7 +1,7 @@
 # Heat-Death Early Event Replay v1
 
 Status: current-reference
-Verdict: `inconclusive_zero_notional_only`
+Verdict: `inconclusive_tiny_live_probe_only`
 
 ## 结论
 
@@ -9,24 +9,24 @@ Verdict: `inconclusive_zero_notional_only`
 这次审计把 signal funnel 与 quote/settlement evidence funnel 分开，价格只作为连续 EV 输入，不再作为 eligibility hard gate。
 CLOB 分钟 price history 补回 151/152 个已结算 leg：base current YES fee ROI +0.3%，加 2c ask premium 后 -1.1%；base d1 NO 原价即 -1.3%。support>=2 两边分别 +0.6% / -1.4%，没有显示更强 edge。
 Busan-like 0.80-0.90 只是事后诊断切片：base current YES 8 行 ROI -13.2%，d1 NO 10 行 -18.4%；support>=2 各只有 2 行，不能据此定策略阈值。
-历史事件档案只覆盖 2026-07-07..2026-07-14 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。Busan 2026-07-14 anchor city-day 已按预注册原则从全部证据层剔除（定义形态的 in-sample 交易）。
+事件输入已覆盖 2026-07-07..2026-07-15，但 ROI 只使用 8 个已结算日（截至 2026-07-14）；H2 只维持 fixed-10-share tiny-live probe，不具备 size-up 证据。Busan 2026-07-14 anchor city-day 已按预注册原则从全部证据层剔除（定义形态的 in-sample 交易）。
 
 ## Signal funnel（这里才是策略漏斗）
 
-- unique source reports: 11842
-- local 13:00-17:00 event rows: 2045
-- + decline >= 0.5: 746
-- + running high age >= 60m: 580
-- + flat/cooling path: 518
-- market-aligned event rows: 494
-- first base signal city-days: 153
-- first support>=2 diagnostic city-days: 78
-- anchor 剔除：Busan 2026-07-14 从证据层移除（定义形态的 in-sample 交易），证据分母为 base 152 / strong 77
+- unique source reports: 12998
+- local 13:00-17:00 event rows: 2226
+- + decline >= 0.5: 827
+- + running high age >= 60m: 644
+- + flat/cooling path: 575
+- market-aligned event rows: 551
+- first base signal city-days: 168
+- first support>=2 diagnostic city-days: 84
+- anchor 剔除：Busan 2026-07-14 从证据层移除（定义形态的 in-sample 交易），证据分母为 base 167 / strong 83
 
 ## Evidence coverage（不是策略筛选）
 
-- base direct quote coverage: current YES 22/152; d1 NO 21/152
-- support>=2 direct quote coverage: current YES 9/77; d1 NO 8/77
+- base direct quote coverage: current YES 22/167; d1 NO 21/167
+- support>=2 direct quote coverage: current YES 9/83; d1 NO 8/83
 - settled executable rows: base 43; support>=2 17
 - settled indicative rows (not executable): base 303; support>=2 153
 
@@ -34,10 +34,10 @@ Busan-like 0.80-0.90 只是事后诊断切片：base current YES 8 行 ROI -13.2
 
 | Cohort | Expression | Signals | Indicative price | First-snapshot ask | Ask within 30m | Settled | Ask+settled | Indicative but no ask | First-snapshot book status |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| base | current_yes | 152 | 152 | 18 | 22 | 152 | 22 | 130 | `{"ok": 18, "orderbook_budget_exhausted": 131, "orderbook_scope_skipped": 3}` |
-| base | d1_no | 152 | 151 | 18 | 21 | 151 | 21 | 130 | `{"missing_status": 1, "ok": 18, "orderbook_budget_exhausted": 130, "orderbook_scope_skipped": 3}` |
-| strong_partial | current_yes | 77 | 77 | 7 | 9 | 77 | 9 | 68 | `{"ok": 8, "orderbook_budget_exhausted": 68, "orderbook_scope_skipped": 1}` |
-| strong_partial | d1_no | 77 | 76 | 7 | 8 | 76 | 8 | 68 | `{"missing_status": 1, "ok": 8, "orderbook_budget_exhausted": 67, "orderbook_scope_skipped": 1}` |
+| base | current_yes | 167 | 167 | 18 | 22 | 152 | 22 | 145 | `{"ok": 18, "orderbook_budget_exhausted": 146, "orderbook_scope_skipped": 3}` |
+| base | d1_no | 167 | 166 | 18 | 21 | 151 | 21 | 145 | `{"missing_status": 1, "ok": 18, "orderbook_budget_exhausted": 145, "orderbook_scope_skipped": 3}` |
+| strong_partial | current_yes | 83 | 83 | 7 | 9 | 77 | 9 | 74 | `{"ok": 8, "orderbook_budget_exhausted": 74, "orderbook_scope_skipped": 1}` |
+| strong_partial | d1_no | 83 | 82 | 7 | 8 | 76 | 8 | 74 | `{"missing_status": 1, "ok": 8, "orderbook_budget_exhausted": 73, "orderbook_scope_skipped": 1}` |
 
 历史 paper snapshot 不是全量盘口录制：默认每 10 分钟生成一次 snapshot，但 orderbook enrichment 使用 `strategy_live` 紧凑 scope、60 秒总预算和单 worker。天气状态与 indicative market price 大多保留，真实 YES/NO ask 则大量标为 `orderbook_budget_exhausted` 或 `orderbook_scope_skipped`。因此缺的是可执行价格证据，不是物理 signal 或 settlement 全部缺失。
 
@@ -98,6 +98,19 @@ Busan-like 0.80-0.90 只是事后诊断切片：base current YES 8 行 ROI -13.2
 | strong_anchor_price_band_0.80_0.90 | current_yes | 2 | 2 | 2 | +50.0% | 0.854 | -41.9% | [-100.0%, +11.4%] |
 | strong_anchor_price_band_0.80_0.90 | d1_no | 2 | 2 | 2 | +50.0% | 0.818 | -39.4% | [-100.0%, +19.5%] |
 
+## current YES vs d1 NO（严格同一 signal 分母）
+
+current YES 只有最终最高温正好停在当前档才赢；d1 NO 只要求最终最高温不是下一档。当前档已经打印后，停在当前档时两者都赢，只升一档时两者都输，只有升两档及以上时 d1 NO 额外赢。因此 d1 NO 是 `d2+ overshoot` 保险，是否值得取决于额外胜率能否覆盖价格溢价。
+
+| Price layer | Cohort | Paired rows | Dates | Current YES win | d1 NO win | d1-current ask | Current YES ROI | d1 NO ROI | YES-d1 ROI | 95% CI |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| direct_executable_ask | base | 21 | 7 | +100.0% | +100.0% | +0.007 | +2.3% | +1.6% | +0.7% | [+0.0%, +2.1%] |
+| direct_executable_ask | strong_partial | 8 | 7 | +100.0% | +100.0% | +0.015 | +4.3% | +2.7% | +1.5% | [-0.1%, +4.8%] |
+| indicative_not_executable | base | 151 | 8 | +91.4% | +94.0% | +0.036 | +0.8% | -0.2% | +1.1% | [+0.4%, +1.7%] |
+| indicative_not_executable | strong_partial | 76 | 8 | +93.4% | +94.7% | +0.030 | +0.8% | -1.0% | +1.8% | [+0.4%, +3.7%] |
+| clob_price_history_proxy | base | 150 | 8 | +92.0% | +94.7% | +0.042 | +0.3% | -1.3% | +1.6% | [+1.0%, +2.4%] |
+| clob_price_history_proxy | strong_partial | 76 | 8 | +93.4% | +94.7% | +0.033 | +0.6% | -1.4% | +2.0% | [+0.5%, +4.4%] |
+
 ## Direct executable ask result
 
 | Cohort | Expression | Rows | Dates | Cities | Win rate | Avg ask | Fee ROI | Date-bootstrap 95% CI |
@@ -150,7 +163,7 @@ Busan 2026-07-14 在 2026-07-14T04:08:34Z 首次 strong-partial：30 YES ask=0.8
 significance=FAIL_LOW_SAMPLE
 baseline=NA_short_event_archive
 forward=FAIL_THIN
-conclusion=inconclusive_zero_notional_only
+conclusion=inconclusive_tiny_live_probe_only
 ```
 
 完整逐事件行见 `generated/heat_death_early_event_replay_v1/`。

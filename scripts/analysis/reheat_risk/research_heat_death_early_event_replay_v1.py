@@ -822,6 +822,113 @@ def expression_summaries(rows: list[dict[str, Any]], *, cohort: str, price_layer
     ]
 
 
+def paired_expression_economics(
+    rows: list[dict[str, Any]],
+    *,
+    cohort: str,
+    price_layer: str,
+    seed: int = 20260715,
+    reps: int = 5000,
+) -> dict[str, Any]:
+    """Compare both expressions only where the same signal has both prices."""
+
+    grouped: dict[tuple[str, str, str], dict[str, dict[str, Any]]] = defaultdict(dict)
+    for row in rows:
+        grouped[
+            (
+                str(row.get("city")),
+                str(row.get("target_date")),
+                str(row.get("decision_snapshot_ts_utc") or ""),
+            )
+        ][str(row.get("expression"))] = row
+    pairs: list[dict[str, Any]] = []
+    for (city, target_date, decision_ts), legs in grouped.items():
+        current = legs.get("current_yes")
+        d1 = legs.get("d1_no")
+        if current is None or d1 is None:
+            continue
+        current_win = float(current["win"])
+        d1_win = float(d1["win"])
+        if current_win == 1.0 and d1_win == 1.0:
+            bucket = "both_win_stop_current"
+        elif current_win == 0.0 and d1_win == 0.0:
+            bucket = "both_lose_exact_d1"
+        elif current_win == 0.0 and d1_win == 1.0:
+            bucket = "d1_only_win_d2_plus"
+        else:
+            bucket = "current_only_win_inconsistent"
+        pairs.append(
+            {
+                "city": city,
+                "target_date": target_date,
+                "decision_snapshot_ts_utc": decision_ts,
+                "current_yes_ask": float(current["entry_ask"]),
+                "d1_no_ask": float(d1["entry_ask"]),
+                "current_yes_cost": float(current["effective_cost_per_share"]),
+                "d1_no_cost": float(d1["effective_cost_per_share"]),
+                "current_yes_pnl": float(current["pnl_per_share"]),
+                "d1_no_pnl": float(d1["pnl_per_share"]),
+                "current_yes_win": current_win,
+                "d1_no_win": d1_win,
+                "outcome_bucket": bucket,
+            }
+        )
+
+    def paired_delta(sample: list[dict[str, Any]]) -> float | None:
+        current_cost = sum(row["current_yes_cost"] for row in sample)
+        d1_cost = sum(row["d1_no_cost"] for row in sample)
+        if current_cost <= 0 or d1_cost <= 0:
+            return None
+        current_roi = sum(row["current_yes_pnl"] for row in sample) / current_cost
+        d1_roi = sum(row["d1_no_pnl"] for row in sample) / d1_cost
+        return current_roi - d1_roi
+
+    if not pairs:
+        return {"cohort": cohort, "price_layer": price_layer, "rows": 0, "active_dates": 0}
+    current_cost = sum(row["current_yes_cost"] for row in pairs)
+    d1_cost = sum(row["d1_no_cost"] for row in pairs)
+    current_roi = sum(row["current_yes_pnl"] for row in pairs) / current_cost
+    d1_roi = sum(row["d1_no_pnl"] for row in pairs) / d1_cost
+    dates = sorted({row["target_date"] for row in pairs})
+    ci: list[float] | None = None
+    if len(dates) >= 2:
+        by_date = {date: [row for row in pairs if row["target_date"] == date] for date in dates}
+        rng = random.Random(seed)
+        values: list[float] = []
+        for _ in range(reps):
+            sample = [row for date in rng.choices(dates, k=len(dates)) for row in by_date[date]]
+            value = paired_delta(sample)
+            if value is not None:
+                values.append(value)
+        values.sort()
+        if values:
+            ci = [values[int(0.025 * (len(values) - 1))], values[int(0.975 * (len(values) - 1))]]
+    buckets: dict[str, int] = defaultdict(int)
+    for row in pairs:
+        buckets[row["outcome_bucket"]] += 1
+    return {
+        "cohort": cohort,
+        "price_layer": price_layer,
+        "rows": len(pairs),
+        "active_dates": len(dates),
+        "cities": len({row["city"] for row in pairs}),
+        "current_yes_win_rate": sum(row["current_yes_win"] for row in pairs) / len(pairs),
+        "d1_no_win_rate": sum(row["d1_no_win"] for row in pairs) / len(pairs),
+        "d1_extra_win_rate": sum(row["d1_no_win"] - row["current_yes_win"] for row in pairs) / len(pairs),
+        "avg_d1_minus_current_ask": sum(row["d1_no_ask"] - row["current_yes_ask"] for row in pairs) / len(pairs),
+        "current_yes_roi": current_roi,
+        "d1_no_roi": d1_roi,
+        "current_yes_minus_d1_no_roi": current_roi - d1_roi,
+        "roi_delta_ci95": ci,
+        "outcome_counts": {
+            "both_win_stop_current": buckets["both_win_stop_current"],
+            "both_lose_exact_d1": buckets["both_lose_exact_d1"],
+            "d1_only_win_d2_plus": buckets["d1_only_win_d2_plus"],
+            "current_only_win_inconsistent": buckets["current_only_win_inconsistent"],
+        },
+    }
+
+
 def support_bucket(value: Any) -> str:
     count = int(value or 0)
     return "3+" if count >= 3 else str(count)
@@ -965,6 +1072,7 @@ def main() -> int:
         base_first = [row for row in base_first if (row["city"], row["target_date"]) != anchor_key]
         strong_first = [row for row in strong_first if (row["city"], row["target_date"]) != anchor_key]
     settlements = settlement_map(Path(args.db), args.start, args.end)
+    settled_target_dates = sorted({key[0] for key in settlements})
     base_expr = expression_rows(base_first, settlements)
     strong_expr = expression_rows(strong_first, settlements)
     base_indicative_expr = indicative_expression_rows(base_first, settlements)
@@ -992,6 +1100,14 @@ def main() -> int:
     proxy_summaries = [
         *expression_summaries(base_proxy_expr, cohort="base", price_layer="clob_price_history_proxy"),
         *expression_summaries(strong_proxy_expr, cohort="strong_partial", price_layer="clob_price_history_proxy"),
+    ]
+    paired_economics = [
+        paired_expression_economics(base_expr, cohort="base", price_layer="direct_executable_ask"),
+        paired_expression_economics(strong_expr, cohort="strong_partial", price_layer="direct_executable_ask"),
+        paired_expression_economics(base_indicative_expr, cohort="base", price_layer="indicative_not_executable"),
+        paired_expression_economics(strong_indicative_expr, cohort="strong_partial", price_layer="indicative_not_executable"),
+        paired_expression_economics(base_proxy_expr, cohort="base", price_layer="clob_price_history_proxy"),
+        paired_expression_economics(strong_proxy_expr, cohort="strong_partial", price_layer="clob_price_history_proxy"),
     ]
     proxy_slippage_sensitivity: list[dict[str, Any]] = []
     for slippage_add, (base_rows, strong_rows) in proxy_layers.items():
@@ -1088,12 +1204,25 @@ def main() -> int:
     write_csv(OUT_DIR / "same_snapshot_ask_premium.csv", snapshot_premium)
     write_csv(OUT_DIR / "support_slice_summary.csv", support_slices)
     write_csv(OUT_DIR / "evidence_coverage_audit.csv", evidence_audit)
+    write_csv(OUT_DIR / "paired_expression_economics.csv", paired_economics)
 
     payload = {
         "generated_at_utc": iso(datetime.now(timezone.utc)),
         "strategy_head": "heat_death_early_dislocation_v1",
         "decision_clock": "new METAR/SPECI detect -> first later paper snapshot -> first archived direct quote after signal",
         "window": {"start": args.start, "end": args.end},
+        "date_coverage": {
+            "input_target_dates": sorted({row["target_date"] for row in base_first}),
+            "settled_target_dates": settled_target_dates,
+            "unsettled_base_signal_city_days": sum(
+                not any((row["target_date"], row["city"], str(row.get(field) or "")) in settlements for field in ("current_bracket", "d1_bracket"))
+                for row in base_first
+            ),
+            "unsettled_strong_signal_city_days": sum(
+                not any((row["target_date"], row["city"], str(row.get(field) or "")) in settlements for field in ("current_bracket", "d1_bracket"))
+                for row in strong_first
+            ),
+        },
         "rule": {
             "local_hour": [WINDOW_START, WINDOW_END],
             "decline_native_gte": 0.5,
@@ -1146,6 +1275,7 @@ def main() -> int:
         "executable_summary": executable_summaries,
         "indicative_summary": indicative_summaries,
         "price_history_proxy_summary": proxy_summaries,
+        "paired_expression_economics": paired_economics,
         "price_history_proxy_slippage_sensitivity": proxy_slippage_sensitivity,
         "price_history_proxy_direct_overlap": proxy_overlap,
         "same_snapshot_ask_premium": snapshot_premium,
@@ -1156,7 +1286,8 @@ def main() -> int:
             "previous_five_rows_cause": "first-snapshot direct-ask archive gap plus an unjustified 0.20-0.97 price hard filter",
             "price_hard_filter_removed": True,
             "support_gte_2_status": "diagnostic cohort only; not an approved strategy gate",
-            "forward_runner_scope": "all physical_confirmation_base rows; quote refresh capped operationally; zero notional",
+            "shadow_runner_scope": "all physical_confirmation_base rows; quote refresh capped operationally; zero notional",
+            "tiny_live_probe_scope": "physical_confirmation_strong rows in H2 ask 0.50-0.93; fixed 10 shares; no size-up approval",
         },
         "busan_executed_anchor_not_in_settled_roi": sanity_case,
         "busan_anchor_backtest_alignment": busan_anchor_alignment,
@@ -1168,7 +1299,7 @@ def main() -> int:
             "significance": "FAIL_LOW_SAMPLE" if not sample_gate_pass else "PASS",
             "baseline": "NA_short_event_archive",
             "forward": "FAIL_THIN",
-            "conclusion": "inconclusive_zero_notional_only",
+            "conclusion": "inconclusive_tiny_live_probe_only",
         },
     }
     OUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -1188,6 +1319,16 @@ def main() -> int:
     indicative_lines = table_lines(indicative_summaries)
     proxy_lines = table_lines(proxy_summaries)
     anchor_band_lines = table_lines(anchor_band_summaries)
+    paired_lines: list[str] = []
+    for item in paired_economics:
+        ci = item.get("roi_delta_ci95")
+        ci_text = "NA" if ci is None else f"[{pct(ci[0])}, {pct(ci[1])}]"
+        paired_lines.append(
+            f"| {item['price_layer']} | {item['cohort']} | {item['rows']} | {item['active_dates']} | "
+            f"{pct(item.get('current_yes_win_rate'))} | {pct(item.get('d1_no_win_rate'))} | "
+            f"{item.get('avg_d1_minus_current_ask', 0):+.3f} | {pct(item.get('current_yes_roi'))} | "
+            f"{pct(item.get('d1_no_roi'))} | {pct(item.get('current_yes_minus_d1_no_roi'))} | {ci_text} |"
+        )
     slippage_lines: list[str] = []
     for item in proxy_slippage_sensitivity:
         avg_proxy = "NA" if item["avg_ask"] is None else f"{item['avg_ask']:.3f}"
@@ -1255,7 +1396,7 @@ def main() -> int:
                 "# Heat-Death Early Event Replay v1",
                 "",
                 "Status: current-reference",
-                "Verdict: `inconclusive_zero_notional_only`",
+                "Verdict: `inconclusive_tiny_live_probe_only`",
                 "",
                 "## 结论",
                 "",
@@ -1277,7 +1418,8 @@ def main() -> int:
                     f"{pct(find_summary(anchor_band_summaries, 'base_anchor_price_band_0.80_0.90', 'd1_no')['roi'])}；"
                     f"support>=2 各只有 {find_summary(anchor_band_summaries, 'strong_anchor_price_band_0.80_0.90', 'current_yes')['rows']} 行，不能据此定策略阈值。"
                 ),
-                f"历史事件档案只覆盖 {args.start}..{args.end} 的已结算日，因此仍不足以确认策略；forward runner 继续是 zero-notional。"
+                f"事件输入已覆盖 {args.start}..{args.end}，但 ROI 只使用 {len(settled_target_dates)} 个已结算日（截至 {settled_target_dates[-1] if settled_target_dates else 'NA'}）；"
+                "H2 只维持 fixed-10-share tiny-live probe，不具备 size-up 证据。"
                 + ("Busan {} anchor city-day 已按预注册原则从全部证据层剔除（定义形态的 in-sample 交易）。".format(args.sanity_date) if anchor_in_window else ""),
                 "",
                 "## Signal funnel（这里才是策略漏斗）",
@@ -1345,6 +1487,14 @@ def main() -> int:
                 "|---|---|---:|---:|---:|---:|---:|---:|---:|",
                 *anchor_band_lines,
                 "",
+                "## current YES vs d1 NO（严格同一 signal 分母）",
+                "",
+                "current YES 只有最终最高温正好停在当前档才赢；d1 NO 只要求最终最高温不是下一档。当前档已经打印后，停在当前档时两者都赢，只升一档时两者都输，只有升两档及以上时 d1 NO 额外赢。因此 d1 NO 是 `d2+ overshoot` 保险，是否值得取决于额外胜率能否覆盖价格溢价。",
+                "",
+                "| Price layer | Cohort | Paired rows | Dates | Current YES win | d1 NO win | d1-current ask | Current YES ROI | d1 NO ROI | YES-d1 ROI | 95% CI |",
+                "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+                *paired_lines,
+                "",
                 "## Direct executable ask result",
                 "",
                 "| Cohort | Expression | Rows | Dates | Cities | Win rate | Avg ask | Fee ROI | Date-bootstrap 95% CI |",
@@ -1379,7 +1529,7 @@ def main() -> int:
                 "significance=FAIL_LOW_SAMPLE",
                 "baseline=NA_short_event_archive",
                 "forward=FAIL_THIN",
-                "conclusion=inconclusive_zero_notional_only",
+                "conclusion=inconclusive_tiny_live_probe_only",
                 "```",
                 "",
                 "完整逐事件行见 `generated/heat_death_early_event_replay_v1/`。",
