@@ -27,7 +27,7 @@ screen -ls
 
 当前研究/执行动作：
 
-- low-price YES / HeadA：仅固定小份额 forward probe；旧 model probability 严重高估，不能恢复 score sizing。
+- low-price YES / HeadA：2026-07-15 已从 tiny-live 切为同 selector zero-notional shadow；每个首个 would-live signal 记录 fresh best ask/size、maker limit、shares 和 notional。旧 model probability 严重高估，不恢复 score sizing。
 - fast source：核心是 source→official/settlement→book first-seen collector；source/city eligibility 只到 shadow，稀疏日期不支持扩 live。
 - HKO / source-lock 表达：必须区分“runner 在跑”和“带 `--live --confirm-live` 真下单”；没有订单证据就不写 live。
 - tmax distribution / current-YES heat-death / source-event repricing：保持 paper/shadow，模型先在同分母 proper score 上打败 market。

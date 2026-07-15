@@ -8,6 +8,7 @@ DATA_FEED_LABEL="com.pm-agents.weather-data-feed"
 SHADOW_LABEL="com.pm-agents.regime-routed-no-shadow"
 LIVE_LABEL="com.pm-agents.regime-routed-no-live"
 LOW_PRICE_LABEL="com.pm-agents.low-price-yes-lottery-live"
+LOW_PRICE_SHADOW_LABEL="com.pm-agents.low-price-yes-lottery-shadow"
 LOW_PRICE_TP_LABEL="com.pm-agents.low-price-yes-take-profit-exit"
 LOW_PRICE_INTEGRATED_SHADOW_LABEL="com.pm-agents.low-price-yes-integrated-tail-shadow"
 RUNTIME_MONITOR_LABEL="com.pm-agents.weather-runtime-monitor"
@@ -15,6 +16,7 @@ DATA_FEED_PLIST="$LAUNCH_DIR/$DATA_FEED_LABEL.plist"
 SHADOW_PLIST="$LAUNCH_DIR/$SHADOW_LABEL.plist"
 LIVE_PLIST="$LAUNCH_DIR/$LIVE_LABEL.plist"
 LOW_PRICE_PLIST="$LAUNCH_DIR/$LOW_PRICE_LABEL.plist"
+LOW_PRICE_SHADOW_PLIST="$LAUNCH_DIR/$LOW_PRICE_SHADOW_LABEL.plist"
 LOW_PRICE_TP_PLIST="$LAUNCH_DIR/$LOW_PRICE_TP_LABEL.plist"
 LOW_PRICE_INTEGRATED_SHADOW_PLIST="$LAUNCH_DIR/$LOW_PRICE_INTEGRATED_SHADOW_LABEL.plist"
 RUNTIME_MONITOR_PLIST="$LAUNCH_DIR/$RUNTIME_MONITOR_LABEL.plist"
@@ -49,6 +51,8 @@ Commands:
   start-low-price-live --confirm-live
                          Start real low-price YES lottery tiny-live runner explicitly
   stop-low-price-live    Stop real low-price YES lottery tiny-live runner
+  start-low-price-shadow Start the same selector as zero-notional shadow
+  stop-low-price-shadow  Stop low-price YES lottery shadow
   start-low-price-take-profit --confirm-live
                          Start real low-price YES 20c take-profit exit runner explicitly
   stop-low-price-take-profit
@@ -219,6 +223,29 @@ EOF
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$LOW_PRICE_RUNTIME/low_price_launchd.out.log</string>
   <key>StandardErrorPath</key><string>$LOW_PRICE_RUNTIME/low_price_launchd.err.log</string>
+  <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
+</dict>
+</plist>
+EOF
+  cat >"$LOW_PRICE_SHADOW_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LOW_PRICE_SHADOW_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>LOW_PRICE_YES_LOTTERY_LOOP_CHILD=1</string>
+    <string>LOW_PRICE_YES_LOTTERY_SNAPSHOT_DIR=$DATA_FEED_SNAPSHOT_DIR</string>
+    <string>LOW_PRICE_YES_LOTTERY_MARKET_PROXY=${LOW_PRICE_YES_LOTTERY_MARKET_PROXY:-http://127.0.0.1:7890}</string>
+    <string>$PROJECT_DIR/scripts/ops/start_low_price_yes_lottery_tiny_live.sh</string>
+    <string>--shadow</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$LOW_PRICE_RUNTIME/low_price_shadow_launchd.out.log</string>
+  <key>StandardErrorPath</key><string>$LOW_PRICE_RUNTIME/low_price_shadow_launchd.err.log</string>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
 </dict>
 </plist>
@@ -432,7 +459,7 @@ PY
 
 status() {
   echo "== launchctl =="
-  launchctl list | grep -E 'weather-data-feed|weather-runtime-monitor|regime-routed-no-shadow|regime-routed-no-live|low-price-yes-lottery-live|low-price-yes-take-profit-exit|low-price-yes-integrated-tail-shadow|weather-api|weather-fe' || true
+  launchctl list | grep -E 'weather-data-feed|weather-runtime-monitor|regime-routed-no-shadow|regime-routed-no-live|low-price-yes-lottery-(live|shadow)|low-price-yes-take-profit-exit|low-price-yes-integrated-tail-shadow|weather-api|weather-fe' || true
   echo "== proxy =="
   print_proxy_status
   echo "== data/strategy =="
@@ -528,6 +555,7 @@ start_stack() {
   write_launchagents
   bootout_label "$RUNTIME_MONITOR_LABEL"
   bootout_label "$LOW_PRICE_TP_LABEL"
+  bootout_label "$LOW_PRICE_SHADOW_LABEL"
   bootout_label "$LOW_PRICE_LABEL"
   bootout_label "$DATA_FEED_LABEL"
   bootout_label "$SHADOW_LABEL"
@@ -540,6 +568,7 @@ start_stack() {
 stop_stack() {
   bootout_label "$RUNTIME_MONITOR_LABEL"
   bootout_label "$LOW_PRICE_TP_LABEL"
+  bootout_label "$LOW_PRICE_SHADOW_LABEL"
   bootout_label "$LOW_PRICE_LABEL"
   bootout_label "$SHADOW_LABEL"
   bootout_label "$DATA_FEED_LABEL"
@@ -563,9 +592,19 @@ start_low_price_live() {
     exit 2
   fi
   write_launchagents
+  bootout_label "$LOW_PRICE_SHADOW_LABEL"
   bootout_label "$LOW_PRICE_LABEL"
   rm -f "$LOW_PRICE_RUNTIME/loop.pid"
   bootstrap_label "$LOW_PRICE_LABEL"
+  "$PROJECT_DIR/scripts/ops/status_low_price_yes_lottery_tiny_live.sh"
+}
+
+start_low_price_shadow() {
+  write_launchagents
+  bootout_label "$LOW_PRICE_LABEL"
+  bootout_label "$LOW_PRICE_SHADOW_LABEL"
+  rm -f "$LOW_PRICE_RUNTIME/loop.pid"
+  bootstrap_label "$LOW_PRICE_SHADOW_LABEL"
   "$PROJECT_DIR/scripts/ops/status_low_price_yes_lottery_tiny_live.sh"
 }
 
@@ -622,6 +661,8 @@ case "${1:-}" in
   stop-live) bootout_label "$LIVE_LABEL"; "$PROJECT_DIR/scripts/ops/stop_regime_routed_no_tiny_live.sh" ;;
   start-low-price-live) shift; start_low_price_live "${1:-}" ;;
   stop-low-price-live) bootout_label "$LOW_PRICE_LABEL"; rm -f "$LOW_PRICE_RUNTIME/loop.pid"; "$PROJECT_DIR/scripts/ops/stop_low_price_yes_lottery_tiny_live.sh" ;;
+  start-low-price-shadow) start_low_price_shadow ;;
+  stop-low-price-shadow) bootout_label "$LOW_PRICE_SHADOW_LABEL"; rm -f "$LOW_PRICE_RUNTIME/loop.pid"; "$PROJECT_DIR/scripts/ops/stop_low_price_yes_lottery_tiny_live.sh" ;;
   start-low-price-take-profit) shift; start_low_price_take_profit "${1:-}" ;;
   stop-low-price-take-profit) stop_low_price_take_profit ;;
   start-low-price-integrated-shadow) start_low_price_integrated_shadow ;;

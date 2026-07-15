@@ -62,6 +62,7 @@ LIVE_DIR = ROOT / "runtime/weather_edge_v1/live"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
 SHADOW_OUT = RUNTIME_DIR / "shadow_decisions.jsonl"
+WOULD_LIVE_OUT = RUNTIME_DIR / "would_live_entries.jsonl"
 BLOCKED_OUT = RUNTIME_DIR / "blocked_candidates.jsonl"
 LATEST_CANDIDATES_OUT = RUNTIME_DIR / "latest_candidates.json"
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
@@ -416,6 +417,36 @@ def existing_submitted_natural_keys(path: Path = LIVE_OUT) -> set[str]:
         if key:
             out.add(key)
     return out
+
+
+def existing_would_live_signal_ids(path: Path = WOULD_LIVE_OUT) -> set[str]:
+    return {
+        safe_str(row.get("signal_id"))
+        for row in read_jsonl(path)
+        if bool(row.get("would_live_entry")) and safe_str(row.get("signal_id"))
+    }
+
+
+def existing_would_live_natural_keys(path: Path = WOULD_LIVE_OUT) -> set[str]:
+    return {
+        submitted_natural_key(row)
+        for row in read_jsonl(path)
+        if bool(row.get("would_live_entry")) and submitted_natural_key(row)
+    }
+
+
+def annotate_runtime_decision(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any]:
+    would_live = safe_str(decision.get("decision_status")) == "planned"
+    return {
+        **decision,
+        "runtime_execution_mode": "live" if live_enabled else "shadow",
+        "would_live_entry": would_live,
+        "would_live_best_ask": to_float(decision.get("fresh_best_ask"), 0.0) if would_live else None,
+        "would_live_best_ask_size": to_float(decision.get("fresh_best_ask_size"), 0.0) if would_live else None,
+        "would_live_maker_limit_price": to_float(decision.get("maker_limit_price"), 0.0) if would_live else None,
+        "would_live_shares": to_float(decision.get("planned_shares"), 0.0) if would_live else None,
+        "would_live_notional_usd": to_float(decision.get("planned_notional_usd"), 0.0) if would_live else None,
+    }
 
 
 def live_order_id(row: dict[str, Any]) -> str:
@@ -2367,9 +2398,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     generated_at = now_utc()
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     LIVE_DIR.mkdir(parents=True, exist_ok=True)
+    live_enabled = bool(args.live and args.confirm_live)
     cache = load_token_cache()
     submitted_signal_ids = existing_submitted_signal_ids(LIVE_OUT)
     submitted_natural_keys = existing_submitted_natural_keys(LIVE_OUT)
+    if not live_enabled:
+        submitted_signal_ids.update(existing_would_live_signal_ids())
+        submitted_natural_keys.update(existing_would_live_natural_keys())
     tail_telemetry_resources = load_tail_telemetry_resources_soft()
     weather_snapshot = load_latest_data_feed_snapshot(
         Path(args.snapshot_dir),
@@ -2388,6 +2423,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     planned: list[dict[str, Any]] = []
     for row in raw_candidates:
         decision = validate_candidate(row, args, cache, submitted_signal_ids, submitted_natural_keys, tail_telemetry_resources)
+        decision = annotate_runtime_decision(decision, live_enabled=live_enabled)
         decision = attach_decision_feature_ref(decision)
         decisions.append(decision)
         if decision.get("decision_status") == "planned":
@@ -2395,7 +2431,6 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         else:
             blocked.append(decision)
 
-    live_enabled = bool(args.live and args.confirm_live)
     entry_plans = [build_plan(decision, live_enabled=live_enabled) for decision in planned]
     maker_lifecycle_plans, maker_lifecycle_decisions = lifecycle_plans(
         args,
@@ -2406,6 +2441,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     write_jsonl(PLAN_OUT, plans)
     for decision in decisions:
         append_jsonl(SHADOW_OUT, decision)
+        if bool(decision.get("would_live_entry")) and not live_enabled:
+            append_jsonl(WOULD_LIVE_OUT, decision)
     for decision in blocked:
         append_jsonl(BLOCKED_OUT, decision)
     write_json(
@@ -2443,6 +2480,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "feature_frame_ref_stored_count": sum(1 for row in decisions if safe_str(row.get("feature_frame_ref_status")) == "stored"),
         "feature_frame_ref_error_count": sum(1 for row in decisions if safe_str(row.get("feature_frame_ref_status")) == "error"),
         "planned_count": len(planned),
+        "would_live_entry_count": sum(bool(row.get("would_live_entry")) for row in decisions),
         "entry_plan_count": len(entry_plans),
         "maker_lifecycle_decision_count": len(maker_lifecycle_decisions),
         "maker_lifecycle_plan_count": len(maker_lifecycle_plans),
@@ -2496,6 +2534,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "summary": rel(SUMMARY_OUT),
             "summary_history": rel(HISTORY_OUT),
             "shadow_decisions": rel(SHADOW_OUT),
+            "would_live_entries": rel(WOULD_LIVE_OUT),
             "blocked_candidates": rel(BLOCKED_OUT),
             "latest_candidates": rel(LATEST_CANDIDATES_OUT),
             "trade_plans": rel(PLAN_OUT),

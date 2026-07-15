@@ -3,6 +3,7 @@ from argparse import Namespace
 import pytest
 
 from scripts.ops.low_price_yes_lottery_tiny_live import (
+    annotate_runtime_decision,
     choose_lifecycle_action,
     enforce_live_safety_args,
     load_fresh_snapshot_candidates,
@@ -11,6 +12,26 @@ from scripts.ops.low_price_yes_lottery_tiny_live import (
     shares_for_sizing_policy,
     sizing_shadow,
 )
+
+
+def test_shadow_would_live_decision_records_fresh_best_ask():
+    row = annotate_runtime_decision(
+        {
+            "decision_status": "planned",
+            "fresh_best_ask": 0.11,
+            "fresh_best_ask_size": 17.0,
+            "maker_limit_price": 0.101,
+            "planned_shares": 5.0,
+            "planned_notional_usd": 0.505,
+        },
+        live_enabled=False,
+    )
+
+    assert row["runtime_execution_mode"] == "shadow"
+    assert row["would_live_entry"] is True
+    assert row["would_live_best_ask"] == 0.11
+    assert row["would_live_best_ask_size"] == 17.0
+    assert row["would_live_maker_limit_price"] == 0.101
 
 
 def test_price_tier_6_8_10_boundaries():

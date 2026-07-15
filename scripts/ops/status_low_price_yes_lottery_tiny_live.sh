@@ -8,6 +8,7 @@ RUNTIME_DIR="${LOW_PRICE_YES_LOTTERY_RUNTIME_DIR:-runtime/weather_edge_v1/low_pr
 PID_FILE="$RUNTIME_DIR/loop.pid"
 SUMMARY_FILE="$RUNTIME_DIR/latest_summary.json"
 SHADOW_FILE="$RUNTIME_DIR/shadow_decisions.jsonl"
+WOULD_LIVE_FILE="$RUNTIME_DIR/would_live_entries.jsonl"
 LIVE_FILE="runtime/weather_edge_v1/live/low_price_yes_lottery_tiny_live_v1_orders.jsonl"
 
 if [[ -s "$PID_FILE" ]]; then
@@ -42,6 +43,7 @@ for key in [
     "effective_min_event_date",
     "decision_count",
     "planned_count",
+    "would_live_entry_count",
     "blocked_count",
     "planned_notional_usd",
     "sizing_policy",
@@ -78,6 +80,28 @@ print(f"blocker_counts={dict(blockers)}")
 PY
 else
   echo "shadow=missing"
+fi
+
+if [[ -f "$WOULD_LIVE_FILE" ]]; then
+  echo "would_live=$WOULD_LIVE_FILE"
+  python3 - <<'PY' "$WOULD_LIVE_FILE"
+import json, sys
+rows = [json.loads(line) for line in open(sys.argv[1]) if line.strip()]
+print(f"would_live_rows={len(rows)}")
+for row in rows[-5:]:
+    print(
+        "  "
+        f"{row.get('created_at_utc','')} "
+        f"{row.get('target_date','')} {row.get('city','')} {row.get('bracket','')} "
+        f"ask={row.get('would_live_best_ask')} "
+        f"ask_size={row.get('would_live_best_ask_size')} "
+        f"maker={row.get('would_live_maker_limit_price')} "
+        f"shares={row.get('would_live_shares')} "
+        f"notional={row.get('would_live_notional_usd')}"
+    )
+PY
+else
+  echo "would_live=missing (no eligible shadow entry yet)"
 fi
 
 if [[ -f "$LIVE_FILE" ]]; then

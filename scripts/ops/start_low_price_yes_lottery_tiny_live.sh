@@ -4,6 +4,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+RUN_MODE="${1:-live}"
+if [[ "$RUN_MODE" != "live" && "$RUN_MODE" != "--shadow" ]]; then
+  echo "usage: $0 [--shadow]" >&2
+  exit 2
+fi
+
 RUNTIME_DIR="${LOW_PRICE_YES_LOTTERY_RUNTIME_DIR:-runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1}"
 PID_FILE="$RUNTIME_DIR/loop.pid"
 LOG_FILE="$RUNTIME_DIR/loop.log"
@@ -65,6 +71,13 @@ if [[ -f "$ROOT/.env" ]]; then
   # shellcheck disable=SC1091
   source "$ROOT/.env"
   set +a
+fi
+
+if [[ "$RUN_MODE" == "--shadow" ]]; then
+  LOW_PRICE_YES_LOTTERY_LIVE=0
+  LOW_PRICE_YES_LOTTERY_CONFIRM_LIVE=0
+  LOW_PRICE_YES_LOTTERY_MAKER_LIFECYCLE_ENABLED=0
+  LOW_PRICE_YES_LOTTERY_NO_TELEGRAM=1
 fi
 
 LOW_PRICE_YES_LOTTERY_MARKET_PROXY="${LOW_PRICE_YES_LOTTERY_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7890}}"
