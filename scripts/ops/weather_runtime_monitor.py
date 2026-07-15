@@ -641,6 +641,17 @@ def default_specs(root: Path) -> list[WatchSpec]:
             history_window_min=360,
             target_date_lag_warn_days=1,
         ),
+        WatchSpec(
+            instance="d1_yes_high_mid_shadow_v1",
+            display_name="d1 YES high-mid favorite low-estimation shadow",
+            runtime_dir=root / "d1_yes_high_mid_shadow_v1",
+            mode="zero_notional_shadow",
+            expected_live=False,
+            stale_after_min=45,
+            bad_after_min=180,
+            history_window_min=360,
+            target_date_lag_warn_days=1,
+        ),
     ]
 
 
