@@ -70,7 +70,7 @@ def test_all_stale_sources_fail_closed(tmp_path: Path) -> None:
     ) is None
 
 
-def test_coverage_requires_36_scanned_cities(tmp_path: Path) -> None:
+def test_coverage_requires_36_book_cities_for_target_dates(tmp_path: Path) -> None:
     full = snapshot_file(tmp_path / "full_ladder_output", "20260715_1502", complete=True)
     targeted = snapshot_file(tmp_path / "targeted_output", "20260715_1533", complete=False)
 

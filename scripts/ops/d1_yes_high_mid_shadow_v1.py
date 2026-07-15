@@ -239,9 +239,13 @@ def latest_orderbook_file(orderbook_dirs: list[Path], prefer_max_age_sec: float 
     return None
 
 
-def coverage_note(orderbook_file: Path | None, cities_scanned: int) -> str:
+def coverage_note(orderbook_file: Path | None, book_cities_for_target_dates: int) -> str:
     if orderbook_file is not None and is_full_ladder_dir(orderbook_file.parent.parent):
-        return "full_ladder" if cities_scanned >= FULL_LADDER_MIN_CITIES else "full_ladder_partial"
+        return (
+            "full_ladder"
+            if book_cities_for_target_dates >= FULL_LADDER_MIN_CITIES
+            else "full_ladder_partial"
+        )
     return "narrow_targeted_coverage"
 
 
@@ -403,6 +407,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     triggers_this_cycle = 0
     new_positions = 0
     cities_scanned = 0
+    cities_with_usable_d1_quote = 0
     invalid_obs_age_rows = 0
     invalid_book_age_rows = 0
     events: list[dict[str, Any]] = []
@@ -423,6 +428,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         no_ask = to_float(d1_no.get("ask"))
         if not math.isfinite(no_bid) or not math.isfinite(no_ask):
             continue
+        cities_with_usable_d1_quote += 1
         d1_yes_ask = 1.0 - no_bid          # taker cost for YES
         d1_yes_mid = 1.0 - (no_ask + no_bid) / 2.0
         obs_age = to_float(rec.get("age_min"))
@@ -566,6 +572,9 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         else None
     )
     target_dates = sorted({str(rec.get("target_date")) for rec in observations.values() if rec.get("target_date")})
+    book_cities_for_target_dates = len(
+        {city for city, target_date in ladder if target_date in set(target_dates)}
+    )
     summary = {
         "strategy_id": STRATEGY_ID,
         "rule_id": RULE_ID,
@@ -580,7 +589,9 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "latest_target_date": max(target_dates) if target_dates else None,
         "cities_with_obs": len(observations),
         "book_city_date_pairs": len(ladder),
+        "book_cities_for_target_dates": book_cities_for_target_dates,
         "cities_scanned_with_book": cities_scanned,
+        "cities_with_usable_d1_quote": cities_with_usable_d1_quote,
         "invalid_obs_age_rows": invalid_obs_age_rows,
         "invalid_book_age_rows": invalid_book_age_rows,
         "triggers_this_cycle": triggers_this_cycle,
@@ -597,7 +608,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "settled_pnl": round(settled_pnl, 6),
         "settled_roi": round(settled_pnl / settled_cost, 6) if settled_cost > 0 else None,
         "settled_now": settled_now,
-        "coverage_note": coverage_note(ob_file, cities_scanned),
+        "coverage_note": coverage_note(ob_file, book_cities_for_target_dates),
     }
     if not args.dry_run:
         write_json(SUMMARY_OUT, summary)
