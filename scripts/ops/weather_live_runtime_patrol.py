@@ -58,8 +58,16 @@ def read_recent_orders(path: Path, *, cutoff: datetime) -> list[dict[str, Any]]:
 
 
 def runner_pids() -> list[int]:
-    result = subprocess.run(["pgrep", "-f", RUNNER_PATTERN], capture_output=True, text=True, check=False)
-    return [int(value) for value in result.stdout.split() if value.isdigit() and int(value) != os.getpid()]
+    result = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=False)
+    pids: list[int] = []
+    for line in result.stdout.splitlines():
+        value, _, command = line.strip().partition(" ")
+        if not value.isdigit() or RUNNER_PATTERN not in command:
+            continue
+        if "python" not in command.lower() or "sh -c" in command or "login -" in command:
+            continue
+        pids.append(int(value))
+    return pids
 
 
 def deterministic_error(row: dict[str, Any]) -> str:
