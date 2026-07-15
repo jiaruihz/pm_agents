@@ -63,6 +63,9 @@ ACTIVE_HEAD = ""
 DEFAULT_SHADOW_DECISIONS = (
     ROOT / "runtime/weather_edge_v1/current_yes_heat_death_shadow_v1/state_decisions.jsonl"
 )
+LEGACY_SINGLE_HEAD_LIVE_ORDERS = (
+    ROOT / "runtime/weather_edge_v1/current_yes_heat_death_tiny_live_v1/live_orders.jsonl"
+)
 
 
 def utc_now() -> str:
@@ -146,14 +149,26 @@ def submitted_signal_ids(live_orders: Path) -> set[str]:
     }
 
 
-def submitted_today_count(live_orders: Path, *, now: datetime) -> int:
+def submitted_city_days(live_order_paths: list[Path]) -> set[tuple[str, str]]:
+    return {
+        (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        for path in live_order_paths
+        for row in read_jsonl(path)
+        if str(row.get("status") or "") == "submitted"
+        and str(row.get("city") or "")
+        and str(row.get("target_date") or "")
+    }
+
+
+def submitted_today_count(live_order_paths: list[Path], *, now: datetime) -> int:
     count = 0
-    for row in read_jsonl(live_orders):
-        if str(row.get("status") or "") != "submitted":
-            continue
-        created = parse_utc(row.get("created_at_utc"))
-        if created is not None and created.date() == now.astimezone(timezone.utc).date():
-            count += 1
+    for path in live_order_paths:
+        for row in read_jsonl(path):
+            if str(row.get("status") or "") != "submitted":
+                continue
+            created = parse_utc(row.get("created_at_utc"))
+            if created is not None and created.date() == now.astimezone(timezone.utc).date():
+                count += 1
     return count
 
 
@@ -280,6 +295,7 @@ def choose_plans(
     rows: list[dict[str, Any]],
     *,
     live_orders: Path,
+    legacy_live_orders: list[Path] | None = None,
     shares: float,
     min_ask: float,
     max_ask: float,
@@ -299,10 +315,13 @@ def choose_plans(
         "daily_cap": 0,
     }
     submitted = submitted_signal_ids(live_orders)
-    remaining = max(0, int(max_orders_per_utc_day) - submitted_today_count(live_orders, now=now))
+    all_live_order_paths = [live_orders, *(legacy_live_orders or [])]
+    prior_city_days = submitted_city_days(all_live_order_paths)
+    remaining = max(0, int(max_orders_per_utc_day) - submitted_today_count(all_live_order_paths, now=now))
     eligible: list[dict[str, Any]] = []
     for row in rows:
-        if signal_id(row) in submitted:
+        city_day = (str(row.get("city") or ""), str(row.get("target_date") or ""))
+        if signal_id(row) in submitted or city_day in prior_city_days:
             counts["already_submitted_city_days"] += 1
             continue
         ask = finite(row.get("fresh_current_yes_ask"))
@@ -393,6 +412,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     plans, funnel = choose_plans(
         refreshed,
         live_orders=live_orders,
+        legacy_live_orders=[LEGACY_SINGLE_HEAD_LIVE_ORDERS] if ACTIVE_HEAD == "h2_early_dislocation" else [],
         shares=float(args.fixed_order_shares),
         min_ask=min_ask,
         max_ask=max_ask,

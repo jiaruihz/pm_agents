@@ -86,6 +86,46 @@ def test_choose_plans_applies_depth_dedup_and_daily_cap(tmp_path: Path) -> None:
     assert counts["daily_cap"] == 1
 
 
+def test_h2_legacy_order_counts_for_city_day_dedup_and_daily_cap(tmp_path: Path) -> None:
+    _select_h2()
+    live_orders = tmp_path / "h2_live.jsonl"
+    legacy_orders = tmp_path / "legacy_live.jsonl"
+    legacy_orders.write_text(
+        json.dumps(
+            {
+                "record_type": "weather_edge_live_order",
+                "strategy_instance": "current_yes_heat_death_tiny_live_v1",
+                "status": "submitted",
+                "city": "Guangzhou",
+                "target_date": "2026-07-15",
+                "created_at_utc": "2026-07-15T06:24:16Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    plans, counts = live.choose_plans(
+        [
+            {**_row(city="Guangzhou"), "target_date": "2026-07-15"},
+            {**_row(city="Busan", ask=0.85), "target_date": "2026-07-15"},
+        ],
+        live_orders=live_orders,
+        legacy_live_orders=[legacy_orders],
+        shares=10,
+        min_ask=0.50,
+        max_ask=0.93,
+        min_top_ask_shares=10,
+        max_orders_per_utc_day=2,
+        live_enabled=True,
+        ttl_min=15,
+        now=datetime(2026, 7, 15, 7, 0, tzinfo=timezone.utc),
+    )
+
+    assert [row["city"] for row in plans] == ["Busan"]
+    assert counts["already_submitted_city_days"] == 1
+    assert counts["daily_cap"] == 0
+
+
 def test_latest_strong_rows_keeps_latest_fresh_city_day(tmp_path: Path) -> None:
     path = tmp_path / "decisions.jsonl"
     rows = [
