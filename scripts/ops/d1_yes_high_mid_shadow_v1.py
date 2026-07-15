@@ -68,7 +68,14 @@ RUNTIME_ROOT = Path(
     )
 )
 OBS_DEFAULT = RUNTIME_ROOT / "output/observations/latest.json"
-ORDERBOOK_DEFAULT = RUNTIME_ROOT / "targeted_output/orderbook_snapshots"
+# Prefer the dedicated full-ladder capture (all cities); fall back to the
+# targeted feed (~5 cities) when the full-ladder loop is not running.  The
+# runner picks the freshest snapshot file across these dirs each cycle.
+ORDERBOOK_DIRS_DEFAULT = [
+    RUNTIME_ROOT / "full_ladder_output/orderbook_snapshots",
+    RUNTIME_ROOT / "targeted_output/orderbook_snapshots",
+]
+ORDERBOOK_DEFAULT = ORDERBOOK_DIRS_DEFAULT[0]
 
 RUNTIME_DIR = ROOT / "runtime/weather_edge_v1/d1_yes_high_mid_shadow_v1"
 JOURNAL_OUT = RUNTIME_DIR / "shadow_events.jsonl"
@@ -134,7 +141,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("command", choices=["run", "loop"], nargs="?", default="run")
     parser.add_argument("--db", default=str(DB_DEFAULT))
     parser.add_argument("--observation-cache", default=str(OBS_DEFAULT))
-    parser.add_argument("--orderbook-dir", default=str(ORDERBOOK_DEFAULT))
+    parser.add_argument("--orderbook-dir", action="append", default=None,
+                        help="orderbook snapshot dir; repeatable. Default: full-ladder then targeted.")
     parser.add_argument("--mid-threshold", type=float, default=MID_THRESHOLD)
     parser.add_argument("--max-obs-age-min", type=float, default=PATHOLOGICAL_OBS_AGE_MIN,
                         help="reject only pathologically stale obs (live-only failure); "
@@ -162,7 +170,7 @@ def load_observations(path: Path) -> tuple[dict[str, dict[str, Any]], str | None
     return out, generated
 
 
-def latest_orderbook_file(orderbook_dir: Path) -> Path | None:
+def _latest_in_dir(orderbook_dir: Path) -> Path | None:
     if not orderbook_dir.exists():
         return None
     candidates: list[Path] = []
@@ -179,6 +187,26 @@ def latest_orderbook_file(orderbook_dir: Path) -> Path | None:
     if not candidates:
         return None
     return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+def latest_orderbook_file(orderbook_dirs: list[Path], prefer_max_age_sec: float = 2400.0) -> Path | None:
+    """Priority-ordered pick: use the first dir's latest file if it is fresh
+    (within prefer_max_age_sec, default 40 min = 2x the full-ladder cadence);
+    otherwise fall through to the next dir.  This keeps the broad full-ladder
+    dir authoritative when its loop is healthy, and falls back to the narrow
+    targeted feed only when full-ladder capture is stale/down -- rather than
+    letting a more recent narrow snapshot mask the broad one.
+    """
+    now = time.time()
+    last_seen: Path | None = None
+    for d in orderbook_dirs:
+        f = _latest_in_dir(d)
+        if f is None:
+            continue
+        last_seen = last_seen or f
+        if now - f.stat().st_mtime <= prefer_max_age_sec:
+            return f
+    return last_seen
 
 
 def best_level(levels: list[dict[str, Any]] | None, side: str) -> tuple[float, float]:
@@ -326,9 +354,9 @@ def settled_bracket(conn: sqlite3.Connection, city: str, target_date: str) -> st
 def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     cycle_ts = now_utc()
     obs_path = Path(args.observation_cache)
-    ob_dir = Path(args.orderbook_dir)
+    ob_dirs = [Path(d) for d in (args.orderbook_dir or [str(p) for p in ORDERBOOK_DIRS_DEFAULT])]
     observations, obs_generated = load_observations(obs_path)
-    ob_file = latest_orderbook_file(ob_dir)
+    ob_file = latest_orderbook_file(ob_dirs)
     ladder = load_ladder(ob_file) if ob_file else {}
 
     positions: dict[str, Any] = {}
