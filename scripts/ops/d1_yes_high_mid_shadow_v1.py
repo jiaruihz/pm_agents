@@ -30,6 +30,7 @@ import gzip
 import json
 import math
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -91,6 +92,8 @@ MID_THRESHOLD = 0.80
 # obs_age is always recorded; `obs_age_in_backtest_band` flags <= 61 min.
 PATHOLOGICAL_OBS_AGE_MIN = 120.0
 BACKTEST_OBS_AGE_BAND_MIN = 61.0
+MAX_BOOK_AGE_MIN = 60.0
+FULL_LADDER_MIN_CITIES = 36
 # v1.1 pre-registered secondary guards (recorded, not gating v1)
 V11_MAX_ASK = 0.95
 V11_MAX_REMAINING_HEAT = 1.3
@@ -102,6 +105,18 @@ def now_utc_dt() -> datetime:
 
 def now_utc() -> str:
     return now_utc_dt().isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def parse_utc(value: Any) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def to_float(value: Any, default: float = math.nan) -> float:
@@ -147,6 +162,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-obs-age-min", type=float, default=PATHOLOGICAL_OBS_AGE_MIN,
                         help="reject only pathologically stale obs (live-only failure); "
                              "the backtest applied no obs-age filter")
+    parser.add_argument("--max-book-age-min", type=float, default=MAX_BOOK_AGE_MIN,
+                        help="reject missing/stale per-token quotes (data-validity guard)")
     parser.add_argument("--interval-seconds", type=float, default=600.0)
     parser.add_argument("--dry-run", action="store_true", help="do not write journal/positions")
     return parser.parse_args()
@@ -170,7 +187,18 @@ def load_observations(path: Path) -> tuple[dict[str, dict[str, Any]], str | None
     return out, generated
 
 
-def _latest_in_dir(orderbook_dir: Path) -> Path | None:
+def completion_marker(orderbook_file: Path) -> Path | None:
+    match = re.fullmatch(r"orderbook_snapshot_(\d{8}_\d{4})\.jsonl(?:\.gz)?", orderbook_file.name)
+    if match is None or len(orderbook_file.parents) < 3:
+        return None
+    return orderbook_file.parents[2] / "paper_snapshots" / f"snapshot_{match.group(1)}.json"
+
+
+def is_full_ladder_dir(orderbook_dir: Path) -> bool:
+    return orderbook_dir.parent.name == "full_ladder_output"
+
+
+def _latest_in_dir(orderbook_dir: Path, *, require_complete: bool = False) -> Path | None:
     if not orderbook_dir.exists():
         return None
     candidates: list[Path] = []
@@ -181,6 +209,10 @@ def _latest_in_dir(orderbook_dir: Path) -> Path | None:
             if f.name.startswith("orderbook_snapshot_") and (
                 f.suffix in {".gz", ".jsonl"} or f.name.endswith(".jsonl.gz")
             ):
+                if require_complete:
+                    marker = completion_marker(f)
+                    if marker is None or not marker.exists():
+                        continue
                 candidates.append(f)
         if candidates:
             break
@@ -198,15 +230,19 @@ def latest_orderbook_file(orderbook_dirs: list[Path], prefer_max_age_sec: float 
     letting a more recent narrow snapshot mask the broad one.
     """
     now = time.time()
-    last_seen: Path | None = None
     for d in orderbook_dirs:
-        f = _latest_in_dir(d)
+        f = _latest_in_dir(d, require_complete=is_full_ladder_dir(d))
         if f is None:
             continue
-        last_seen = last_seen or f
         if now - f.stat().st_mtime <= prefer_max_age_sec:
             return f
-    return last_seen
+    return None
+
+
+def coverage_note(orderbook_file: Path | None, cities_scanned: int) -> str:
+    if orderbook_file is not None and is_full_ladder_dir(orderbook_file.parent.parent):
+        return "full_ladder" if cities_scanned >= FULL_LADDER_MIN_CITIES else "full_ladder_partial"
+    return "narrow_targeted_coverage"
 
 
 def best_level(levels: list[dict[str, Any]] | None, side: str) -> tuple[float, float]:
@@ -352,7 +388,8 @@ def settled_bracket(conn: sqlite3.Connection, city: str, target_date: str) -> st
 # main cycle
 # --------------------------------------------------------------------------- #
 def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
-    cycle_ts = now_utc()
+    cycle_dt = now_utc_dt()
+    cycle_ts = cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
     obs_path = Path(args.observation_cache)
     ob_dirs = [Path(d) for d in (args.orderbook_dir or [str(p) for p in ORDERBOOK_DIRS_DEFAULT])]
     observations, obs_generated = load_observations(obs_path)
@@ -366,6 +403,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     triggers_this_cycle = 0
     new_positions = 0
     cities_scanned = 0
+    invalid_obs_age_rows = 0
+    invalid_book_age_rows = 0
     events: list[dict[str, Any]] = []
 
     for city, rec in observations.items():
@@ -387,15 +426,27 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         d1_yes_ask = 1.0 - no_bid          # taker cost for YES
         d1_yes_mid = 1.0 - (no_ask + no_bid) / 2.0
         obs_age = to_float(rec.get("age_min"))
+        book_ts = parse_utc(d1_no.get("fetched_at_utc"))
+        book_age = (cycle_dt - book_ts).total_seconds() / 60.0 if book_ts else math.nan
 
         # Trigger CONDITION is identical to the backtest: d1_yes_mid >= 0.80.
-        # The only additional live guard is rejecting pathologically stale obs
-        # (>120 min) that the continuously-captured backtest never contained.
-        pathological_stale = math.isfinite(obs_age) and obs_age > args.max_obs_age_min
-        triggered = math.isfinite(d1_yes_mid) and d1_yes_mid >= args.mid_threshold and not pathological_stale
+        # Missing/pathologically stale observations and missing/stale quotes are
+        # data-invalid live states, not strategy filters, so they fail closed.
+        obs_valid = math.isfinite(obs_age) and obs_age <= args.max_obs_age_min
+        book_valid = math.isfinite(book_age) and 0.0 <= book_age <= args.max_book_age_min
+        if not obs_valid:
+            invalid_obs_age_rows += 1
+        if not book_valid:
+            invalid_book_age_rows += 1
+        triggered = (
+            math.isfinite(d1_yes_mid)
+            and d1_yes_mid >= args.mid_threshold
+            and obs_valid
+            and book_valid
+        )
         if not triggered:
             continue
-        obs_age_in_backtest_band = (not math.isfinite(obs_age)) or obs_age <= BACKTEST_OBS_AGE_BAND_MIN
+        obs_age_in_backtest_band = obs_age <= BACKTEST_OBS_AGE_BAND_MIN
         triggers_this_cycle += 1
 
         pos_key = f"{city}|{target_date}"
@@ -423,12 +474,20 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             "entry_cost_with_fee": round(d1_yes_ask + fee(d1_yes_ask), 6),
             "obs_age_min": round(obs_age, 2) if math.isfinite(obs_age) else None,
             "obs_age_in_backtest_band": bool(obs_age_in_backtest_band),
+            "book_age_min": round(book_age, 2) if math.isfinite(book_age) else None,
             "minutes_since_running_max": rec.get("minutes_since_running_max"),
             "d_tmpf_1h": rec.get("d_tmpf_1h"),
             "d_tmpf_3h": rec.get("d_tmpf_3h"),
             "sky_code_now": rec.get("sky_code_now"),
             "wind_speed_kt": rec.get("wind_speed_kt"),
             "relative_humidity_pct": rec.get("relative_humidity_pct"),
+            "orderbook_file": rel(ob_file) if ob_file else None,
+            "orderbook_snapshot_complete": bool(
+                ob_file
+                and is_full_ladder_dir(ob_file.parent.parent)
+                and completion_marker(ob_file)
+                and completion_marker(ob_file).exists()
+            ),
             "book_fetched_at_utc": d1_no.get("fetched_at_utc"),
             "obs_generated_at_utc": obs_generated,
             "condition_id": d1_no.get("condition_id"),
@@ -448,6 +507,9 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 "d1_yes_ask": round(d1_yes_ask, 4),
                 "entry_cost_with_fee": round(d1_yes_ask + fee(d1_yes_ask), 6),
                 "entry_cycle_ts_utc": cycle_ts,
+                "book_fetched_at_utc": d1_no.get("fetched_at_utc"),
+                "book_age_min": round(book_age, 2),
+                "orderbook_file": rel(ob_file) if ob_file else None,
                 "settled": False,
             }
             new_positions += 1
@@ -498,17 +560,36 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     settled_wins = sum(1 for p in settled_positions if p.get("win"))
     settled_cost = sum(p["entry_cost_with_fee"] for p in settled_positions)
     settled_pnl = sum(p.get("pnl_at_settlement") or 0.0 for p in settled_positions)
+    snapshot_age_min = (
+        max(0.0, (cycle_dt.timestamp() - ob_file.stat().st_mtime) / 60.0)
+        if ob_file is not None
+        else None
+    )
+    target_dates = sorted({str(rec.get("target_date")) for rec in observations.values() if rec.get("target_date")})
     summary = {
         "strategy_id": STRATEGY_ID,
         "rule_id": RULE_ID,
         "source_report": SOURCE_REPORT,
+        "generated_at_utc": cycle_ts,
         "cycle_ts_utc": cycle_ts,
         "obs_generated_at_utc": obs_generated,
         "orderbook_file": rel(ob_file) if ob_file else None,
+        "orderbook_complete_marker": rel(completion_marker(ob_file)) if ob_file and completion_marker(ob_file) else None,
+        "snapshot_age_min": round(snapshot_age_min, 2) if snapshot_age_min is not None else None,
+        "target_dates": target_dates,
+        "latest_target_date": max(target_dates) if target_dates else None,
         "cities_with_obs": len(observations),
+        "book_city_date_pairs": len(ladder),
         "cities_scanned_with_book": cities_scanned,
+        "invalid_obs_age_rows": invalid_obs_age_rows,
+        "invalid_book_age_rows": invalid_book_age_rows,
         "triggers_this_cycle": triggers_this_cycle,
+        "candidate_rows": triggers_this_cycle,
         "new_positions_this_cycle": new_positions,
+        "selected_rows_this_cycle": new_positions,
+        "rows_written_this_cycle": len(events),
+        "live_requested": False,
+        "live_enabled": False,
         "open_positions_total": len(positions),
         "settled_positions_total": len(settled_positions),
         "settled_wins": settled_wins,
@@ -516,9 +597,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "settled_pnl": round(settled_pnl, 6),
         "settled_roi": round(settled_pnl / settled_cost, 6) if settled_cost > 0 else None,
         "settled_now": settled_now,
-        "coverage_note": (
-            "full_ladder" if cities_scanned >= 20 else "narrow_targeted_coverage"
-        ),
+        "coverage_note": coverage_note(ob_file, cities_scanned),
     }
     if not args.dry_run:
         write_json(SUMMARY_OUT, summary)

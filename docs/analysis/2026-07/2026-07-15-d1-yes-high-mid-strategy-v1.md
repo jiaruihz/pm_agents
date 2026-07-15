@@ -49,11 +49,12 @@ Contract: significance=MARGINAL(all-rows CI>0, dedup CI 跨 0); baseline=同价 
 
 策略需要**全 ladder（36+ 城 × 全档）盘口**。2026-07-15 已落地：独立的 `snapshot-full` 采集 loop
 （`scripts/ops/start_full_ladder_orderbook_capture.sh` → `_full_ladder_capture_loop_body.sh`，专用 tmux
-`-L weather-full-ladder` socket、输出到 JRS `full_ladder_output/`、20min 一轮、经本地 market proxy），**不触碰
-live data-feed**（快源/hko 头依赖的高频观测不受影响）。首轮实测覆盖 ~34 城，runner `coverage_note` 已由
-`narrow_targeted_coverage` 翻为 `full_ladder`（scanned≈28）。runner 优先读 full-ladder 目录、stale 时才回退
-targeted。关键坑（已解）：Polymarket gamma/CLOB 必须走本地代理 `127.0.0.1:7890`，直连在并发下被限流（curl 28
-超时、只抓到 ~4 城）；tmux 写 JRS 需专用 socket（默认 server 缺外置卷写权限）。
+`-L weather-full-ladder` socket、输出到 JRS `full_ladder_output/`、完成后间隔 20min、单轮 orderbook budget
+900s、经本地 market proxy），**不触碰 live data-feed**（快源/hko 头依赖的高频观测不受影响）。runner 只读取
+已有同名 `paper_snapshots/snapshot_*.json` 完成标记的 full-ladder 文件，避免消费采集中逐行追加的半成品；完整
+覆盖必须 `cities_scanned_with_book>=36` 才标 `full_ladder`，不足时标 `full_ladder_partial`。full-ladder 完成文件
+超过 40min 时才回退 targeted。关键坑（已解）：Polymarket gamma/CLOB 必须走本地代理 `127.0.0.1:7890`，
+直连在并发下被限流（curl 28 超时、只抓到 ~4 城）；tmux 写 JRS 需专用 socket（默认 server 缺外置卷写权限）。
 
 ## 血缘接入
 
