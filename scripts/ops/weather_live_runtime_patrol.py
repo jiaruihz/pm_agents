@@ -142,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runner-dir", default=str(DEFAULT_RUNTIME_ROOT / "output/fast_source_prev_no_trial"))
     parser.add_argument("--output", default=str(DEFAULT_RUNTIME_ROOT / "output/live_runtime_patrol/latest.json"))
-    parser.add_argument("--lookback-min", type=float, default=15.0)
+    parser.add_argument("--lookback-min", type=float, default=5.0)
     parser.add_argument("--max-latest-age-sec", type=float, default=180.0)
     parser.add_argument("--failure-threshold", type=int, default=3)
     parser.add_argument("--stop-runner-on-submit-failure", action="store_true")
