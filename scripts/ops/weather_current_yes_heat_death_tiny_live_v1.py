@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
-"""Tiny-live executor for the current-YES heat-death late-carry signal.
+"""Tiny-live executor for the current-YES heat-death signal, split by entry regime.
 
 The signal remains owned by ``weather_current_yes_heat_death_shadow_v1.py``.
 This adapter only turns the latest fresh ``physical_confirmation_strong`` row
 into one fixed-share current-bracket BUY_YES order per city/target-date.  It is
 an explicitly small forward probe, not a claim that the strategy is confirmed.
+
+Per the preregistered promotion criteria
+(docs/analysis/2026-07/2026-07-15-heat-death-live-promotion-preregistration-v1.md)
+the probe runs as two separately attributed instances split by entry ask:
+
+* ``h1_late_carry``       ask in [0.95, 0.99] — late-carry premium head
+* ``h2_early_dislocation`` ask in [0.50, 0.93] — Busan-style repricing head
+
+0.93-0.95 is the preregistered buffer band: neither head trades it.  The H2
+floor 0.50 is a money-safety guard for an unattended probe: an ask far below
+the signal-implied probability usually means bracket/data mismatch, not free
+money.
 """
 
 from __future__ import annotations
@@ -28,11 +40,29 @@ from scripts.ops import weather_current_yes_heat_death_shadow_v1 as shadow
 
 
 STRATEGY_ID = "current_yes_heat_death_physical_v1"
-STRATEGY_INSTANCE = "current_yes_heat_death_tiny_live_v1"
+HEADS: dict[str, dict[str, Any]] = {
+    "h1_late_carry": {
+        "instance": "current_yes_heat_death_tiny_live_h1_late_carry_v1",
+        "decision_mode": "late_carry_heat_death_strong_current_yes",
+        "combo": "current_yes_heat_death_late_carry_v1",
+        "min_ask": 0.95,
+        "max_ask": 0.99,
+    },
+    "h2_early_dislocation": {
+        "instance": "current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
+        "decision_mode": "early_dislocation_heat_death_strong_current_yes",
+        "combo": "current_yes_heat_death_early_dislocation_v1",
+        "min_ask": 0.50,
+        "max_ask": 0.93,
+    },
+}
+# Set from --head at startup; no default on purpose (explicit failure over
+# silently trading the wrong regime).
+STRATEGY_INSTANCE = ""
+ACTIVE_HEAD = ""
 DEFAULT_SHADOW_DECISIONS = (
     ROOT / "runtime/weather_edge_v1/current_yes_heat_death_shadow_v1/state_decisions.jsonl"
 )
-DEFAULT_OUTPUT_DIR = ROOT / "runtime/weather_edge_v1/current_yes_heat_death_tiny_live_v1"
 
 
 def utc_now() -> str:
@@ -185,10 +215,11 @@ def build_plan(row: Mapping[str, Any], *, shares: float, live_enabled: bool, ttl
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_INSTANCE,
         "strategy_family": "reheat_risk",
-        "decision_mode": "late_carry_heat_death_strong_current_yes",
+        "decision_mode": HEADS[ACTIVE_HEAD]["decision_mode"],
         "execution_mode": "tiny_live_taker_probe",
         "profile": "physical_confirmation_strong_forward_probe",
-        "combo": "current_yes_heat_death_late_carry_v1",
+        "combo": HEADS[ACTIVE_HEAD]["combo"],
+        "entry_regime_head": ACTIVE_HEAD,
         "city": str(row.get("city") or ""),
         "city_pool": "all_canonical_weather_state_v2",
         "target_date": str(row.get("target_date") or ""),
@@ -250,6 +281,7 @@ def choose_plans(
     *,
     live_orders: Path,
     shares: float,
+    min_ask: float,
     max_ask: float,
     min_top_ask_shares: float,
     max_orders_per_utc_day: int,
@@ -262,6 +294,7 @@ def choose_plans(
         "already_submitted_city_days": 0,
         "missing_or_bad_book": 0,
         "ask_above_cap": 0,
+        "ask_below_floor": 0,
         "insufficient_top_ask_depth": 0,
         "daily_cap": 0,
     }
@@ -280,6 +313,9 @@ def choose_plans(
         if ask > max_ask:
             counts["ask_above_cap"] += 1
             continue
+        if ask < min_ask:
+            counts["ask_below_floor"] += 1
+            continue
         if ask_size + 1e-9 < min_top_ask_shares:
             counts["insufficient_top_ask_depth"] += 1
             continue
@@ -291,7 +327,7 @@ def choose_plans(
     return plans, counts
 
 
-def execute_plans(args: argparse.Namespace, plans_path: Path, output_dir: Path) -> dict[str, Any]:
+def execute_plans(args: argparse.Namespace, plans_path: Path, output_dir: Path, *, max_ask: float) -> dict[str, Any]:
     command = [
         sys.executable,
         str(ROOT / "scripts/ops/weather_order_executor.py"),
@@ -308,9 +344,9 @@ def execute_plans(args: argparse.Namespace, plans_path: Path, output_dir: Path) 
     if args.live:
         command.extend(["--live", "--confirm-live", "--allow-taker", "--cancel-expired"])
     env = os.environ.copy()
-    env["WEATHER_EXECUTOR_MAX_LIVE_ORDER_NOTIONAL_USD"] = str(float(args.fixed_order_shares) * float(args.max_ask))
+    env["WEATHER_EXECUTOR_MAX_LIVE_ORDER_NOTIONAL_USD"] = str(float(args.fixed_order_shares) * max_ask)
     env["WEATHER_EXECUTOR_MAX_LIVE_BATCH_NOTIONAL_USD"] = str(
-        float(args.fixed_order_shares) * float(args.max_ask) * int(args.max_orders_per_utc_day)
+        float(args.fixed_order_shares) * max_ask * int(args.max_orders_per_utc_day)
     )
     completed = subprocess.run(
         command,
@@ -333,9 +369,17 @@ def execute_plans(args: argparse.Namespace, plans_path: Path, output_dir: Path) 
 
 
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
+    global STRATEGY_INSTANCE, ACTIVE_HEAD
     if args.live and not args.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
-    output_dir = Path(args.output_dir)
+    head = HEADS[args.head]
+    ACTIVE_HEAD = args.head
+    STRATEGY_INSTANCE = str(head["instance"])
+    min_ask = float(args.min_ask) if args.min_ask is not None else float(head["min_ask"])
+    max_ask = float(args.max_ask) if args.max_ask is not None else float(head["max_ask"])
+    if not (0.0 < min_ask < max_ask < 1.0):
+        raise RuntimeError(f"invalid ask band for {args.head}: [{min_ask}, {max_ask}]")
+    output_dir = Path(args.output_dir) if args.output_dir else ROOT / f"runtime/weather_edge_v1/{head['instance']}"
     output_dir.mkdir(parents=True, exist_ok=True)
     decisions_path = Path(args.shadow_decisions)
     live_orders = output_dir / "live_orders.jsonl"
@@ -350,7 +394,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         refreshed,
         live_orders=live_orders,
         shares=float(args.fixed_order_shares),
-        max_ask=float(args.max_ask),
+        min_ask=min_ask,
+        max_ask=max_ask,
         min_top_ask_shares=float(args.fixed_order_shares),
         max_orders_per_utc_day=int(args.max_orders_per_utc_day),
         live_enabled=bool(args.live and args.confirm_live),
@@ -359,18 +404,20 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     )
     plans_path = output_dir / "current_plans.jsonl"
     write_jsonl(plans_path, plans)
-    execution = execute_plans(args, plans_path, output_dir)
+    execution = execute_plans(args, plans_path, output_dir, max_ask=max_ask)
     summary = {
         "status": "ok" if execution["exit_code"] == 0 else "executor_error",
         "generated_at_utc": utc_now(),
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_INSTANCE,
+        "entry_regime_head": ACTIVE_HEAD,
         "mode": "tiny_live_forward_probe" if args.live else "paper_would_order",
         "live_enabled": bool(args.live and args.confirm_live),
         "shadow_decisions": str(decisions_path),
         "fixed_order_shares": float(args.fixed_order_shares),
         "max_orders_per_utc_day": int(args.max_orders_per_utc_day),
-        "max_ask": float(args.max_ask),
+        "min_ask": min_ask,
+        "max_ask": max_ask,
         "candidate_funnel": funnel,
         "plans": len(plans),
         "planned_city_days": [f"{row['city']}:{row['target_date']}" for row in plans],
@@ -384,11 +431,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("command", nargs="?", choices=("run", "loop"), default="run")
+    ap.add_argument("--head", required=True, choices=sorted(HEADS))
     ap.add_argument("--shadow-decisions", default=str(DEFAULT_SHADOW_DECISIONS))
-    ap.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    ap.add_argument("--output-dir", default=None, help="defaults to runtime/weather_edge_v1/<head instance>")
     ap.add_argument("--fixed-order-shares", type=float, default=10.0)
     ap.add_argument("--max-orders-per-utc-day", type=int, default=3)
-    ap.add_argument("--max-ask", type=float, default=0.99)
+    ap.add_argument("--min-ask", type=float, default=None, help="defaults to the head's preregistered floor")
+    ap.add_argument("--max-ask", type=float, default=None, help="defaults to the head's preregistered cap")
     ap.add_argument("--max-snapshot-age-min", type=float, default=20.0)
     ap.add_argument("--order-ttl-min", type=float, default=15.0)
     ap.add_argument("--book-timeout-sec", type=float, default=5.0)

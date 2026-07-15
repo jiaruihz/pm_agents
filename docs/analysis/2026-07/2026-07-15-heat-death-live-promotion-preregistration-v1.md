@@ -59,11 +59,21 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
   显示 early 入场更优;否则 early 线并入 H1,不单独 live。
 - 通过后动作:同 H1 的 deploy 流程;T1 上限相同。
 
-## 4. 预注册的运营缺口(不改判据,但影响积累速度)
+## 4. Probe 部署形态(2026-07-15 用户确认后实施)
 
-- probe max-ask 0.99 会让 fill 天然偏向 H1;H2 的 fill 积累依赖市场恰好给出 <= 0.93 的首确认。
-  **建议**(需走 deploy 流程另行确认,本文档不改生产):增加一条 max-ask 0.93 的 probe 变体,
-  或把现 probe 拆成双 cap,以免 H2 永远只有 shadow 证据。
+原单实例 probe(max-ask 0.99,零成交)已退役,拆分为两个独立归属的 head 实例
+(git-first:runner/start/register 脚本同 commit 变更):
+
+| 实例 | ask 带 | 其余参数 |
+|---|---|---|
+| `current_yes_heat_death_tiny_live_h1_late_carry_v1` | [0.95, 0.99] | 10 shares、<=3 单/UTC 日、depth>=10、TTL 15m |
+| `current_yes_heat_death_tiny_live_h2_early_dislocation_v1` | [0.50, 0.93] | 同上 |
+
+- 0.93-0.95 buffer band 两头都不交易(预注册第 0 节)。
+- H2 的 0.50 下限是无人值守 live probe 的资金安全边界:首确认后 ask 远低于信号隐含概率,
+  大概率是 bracket/数据错配而非免费错价;此类行留给 shadow 记录,不用真钱验证。
+- 同一 city-day 两头可先后各成交一次(视 ask 路径穿越两个带),这是设计行为:两头是独立策略,
+  各自 per-city-day 去重,合计敞口上限 20 shares/city-day。
 - 东亚快源盲窗(hko/jma/amos 未接入 running-high)会推迟首确认时点,对 H2 是入场价劣化;
   该修复属于数据层工作,不影响本判据。
 
@@ -78,7 +88,7 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
 ## 6. 当前状态快照(2026-07-15,写入时点)
 
 - shadow v1:运行中,zero-notional,per-snapshot 决策分母 + 候选 token 聚焦盘口刷新(今日 pair 1/1 成功)。
-- tiny-live probe:运行中,`--live --confirm-live`,尚无 fill(今日 1 个 strong 候选被 ask cap 挡住)。
+- tiny-live probe:已拆为 H1/H2 双实例(见 §4);拆分时原实例零成交,无血缘迁移。
 - H1 历史证据:干净 PIT 重跑后 holdout 只剩 7 行,carry 点估为正但低于样本地板;物理增量在干净数据上仍不存在;
   旧 15 行证据作废(污染 peak clock 抬高了候选数与显著性)。
 - H2 历史证据:扩窗 8 结算日后 proxy 无正边际(+2c 后 -1.13%);可执行层空白,等 forward。
