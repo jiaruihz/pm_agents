@@ -15,6 +15,7 @@ from scripts.ops.weather_fast_source_prev_no_trial import (
 )
 from scripts.ops.weather_fast_source_city_policy import CITY_POLICIES
 from scripts.ops.weather_fast_source_execution import (
+    GTD_SECURITY_THRESHOLD_SEC,
     audit_order_share_caps,
     spent_market_shares,
     submit_fok_with_immediate_retries,
@@ -374,7 +375,8 @@ def test_low_ask_exact_share_intent_uses_post_only_gtd_not_fok_usdc_spend():
     assert intent["order_type"] == "GTD"
     assert intent["post_only"] is True
     assert intent["share_cap_enforcement"] == "resting_post_only_signed_size_v1"
-    assert intent["expiration"] == int(now.timestamp()) + 60 + 45
+    assert intent["expiration"] == int(now.timestamp()) + GTD_SECURITY_THRESHOLD_SEC + 45
+    assert intent["gtd_security_threshold_sec"] == 180
 
 
 def test_post_only_gtd_accepts_only_a_resting_order_and_reserves_exact_shares():

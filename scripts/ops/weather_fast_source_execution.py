@@ -11,6 +11,9 @@ import httpx
 
 PM_CLOB_URL = "https://clob.polymarket.com"
 SHARE_CAP_TOLERANCE = 1e-5
+# CLOB V2 rejected GTD expirations below roughly 180 seconds on 2026-07-15,
+# despite the public documentation still describing a 60-second threshold.
+GTD_SECURITY_THRESHOLD_SEC = 180
 
 
 def iso() -> str:
@@ -50,8 +53,8 @@ def exact_share_maker_intent(
         "limit_price_policy": "one_tick_below_best_ask_post_only_v1",
         "order_type": "GTD",
         "post_only": True,
-        # Polymarket requires a 60-second GTD security offset.
-        "expiration": int(now.timestamp()) + 60 + lifetime,
+        "expiration": int(now.timestamp()) + GTD_SECURITY_THRESHOLD_SEC + lifetime,
+        "gtd_security_threshold_sec": GTD_SECURITY_THRESHOLD_SEC,
         "effective_lifetime_sec": lifetime,
         "share_cap_enforcement": "resting_post_only_signed_size_v1",
     }
