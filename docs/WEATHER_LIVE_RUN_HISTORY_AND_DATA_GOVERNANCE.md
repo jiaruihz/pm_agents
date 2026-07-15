@@ -352,6 +352,37 @@ max_order_notional = 5.00
 entry_price_window = 0.25-0.75
 ```
 
+### Incident I: D1 High-Mid Shadow Consumed Growing Full-Ladder Files
+
+Window: `2026-07-15T06:57:27Z` .. `2026-07-15T07:37:29Z`.
+
+What happened:
+
+- The dedicated `snapshot-full` collector appends token books directly to its final `.jsonl.gz` while
+  a pass is running. The first version of `d1_yes_high_mid_shadow_v1` selected that newest file by
+  mtime, so three cycles consumed incomplete city coverage (`1`, `15`, and `15` observed city-books).
+- One promotion-track event was emitted: Beijing `2026-07-15`, d1 bracket `38`, YES ask `0.938`,
+  mid `0.9165`, book age about `3m`, observation age `35.16m`. The row itself had a fresh valid quote;
+  the defect is its incomplete cross-city evidence denominator, not its per-row market lineage.
+- This instance is `zero_notional_shadow`: submitted orders=`0`, fills=`0`, cash impact=`$0`.
+
+How to label / handle:
+
+```text
+contamination = partial_full_ladder_snapshot
+affected_cycle_count = 3
+affected_selected_events = 1  # Beijing 2026-07-15 d1 YES
+financial_impact_usd = 0
+research_status = coverage_gap_exclude_from_full_coverage_cohort
+```
+
+- Preserve the raw journal and Beijing paper position. Do not call omitted cities `no_signal`; the
+  source file was still growing, so missing cities are coverage gaps.
+- Fixed in `7319b84`: full-ladder files require a matching completed `paper_snapshots/snapshot_*.json`
+  marker, missing/stale obs and quotes fail closed, and monitor heartbeat/snapshot fields are explicit.
+- Coverage accounting was corrected in `446c6e5`: a completed target-date book universe of at least
+  36 cities is `full_ladder`; observed-book intersection and usable d1 quotes are reported separately.
+
 ## 4. Current PnL Interpretation
 
 Do not use only current wallet positions to evaluate historical performance. That misses closed positions and confuses realized vs open PnL.
