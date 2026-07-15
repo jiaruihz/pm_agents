@@ -9,8 +9,8 @@ SCREEN_SESSION="${WEATHER_FAST_PREV_NO_SCREEN_SESSION:-weather_fast_source_prev_
 TARGET_DATE="${WEATHER_FAST_PREV_NO_TARGET_DATE:-}"
 INTERVAL_SEC="${WEATHER_FAST_PREV_NO_INTERVAL_SEC:-30}"
 BURST_INTERVAL_SEC="${WEATHER_FAST_PREV_NO_BURST_INTERVAL_SEC:-10}"
-SOURCES="${WEATHER_FAST_PREV_NO_SOURCES:-jma_amedas singapore_mss fmi amos_runway mgm ims_lod}"
-LIVE_CITIES="${WEATHER_FAST_PREV_NO_LIVE_CITIES:-Helsinki Busan Singapore Tokyo}"
+SOURCES="${WEATHER_FAST_PREV_NO_SOURCES:-jma_amedas singapore_mss fmi amos_runway mgm ims_lod noaa_madis_hfmetar}"
+LIVE_CITIES="${WEATHER_FAST_PREV_NO_LIVE_CITIES:-Helsinki Busan Singapore Tokyo Miami SanFrancisco Atlanta}"
 SHADOW_CITIES="${WEATHER_FAST_PREV_NO_SHADOW_CITIES:-Seoul TelAviv Ankara Istanbul}"
 MAX_SOURCE_AGE_MIN="${WEATHER_FAST_PREV_NO_MAX_SOURCE_AGE_MIN:-15}"
 MAX_SOURCE_DETECT_AGE_MIN="${WEATHER_FAST_PREV_NO_MAX_SOURCE_DETECT_AGE_MIN:-5}"
@@ -22,6 +22,7 @@ OUTPUT_DIR="${WEATHER_FAST_PREV_NO_OUTPUT_DIR:-$RUNTIME_ROOT/output/fast_source_
 MARKET_PROXY="${WEATHER_FAST_PREV_NO_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-${WEATHER_PREDICT_MARKET_PROXY:-http://127.0.0.1:7890}}}"
 ENABLE_LIVE="${WEATHER_FAST_PREV_NO_LIVE:-1}"
 CONFIRM_LIVE="${WEATHER_FAST_PREV_NO_CONFIRM_LIVE:-1}"
+ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS="${WEATHER_FAST_PREV_NO_ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS:-1}"
 LOG_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.log"
 PID_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.pid"
 START_MODE="${WEATHER_FAST_PREV_NO_START_MODE:-screen}"
@@ -62,6 +63,9 @@ if [[ "$ENABLE_LIVE" == "1" ]]; then
 fi
 if [[ "$CONFIRM_LIVE" == "1" ]]; then
   cmd+=(--confirm-live)
+fi
+if [[ "$ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS" == "1" ]]; then
+  cmd+=(--acknowledge-historical-share-cap-incidents)
 fi
 
 if [[ -f "$PID_FILE" ]]; then
@@ -105,4 +109,5 @@ echo "output_dir=$OUTPUT_DIR"
 echo "log=$LOG_FILE"
 echo "pid_file=$PID_FILE"
 echo "live=$ENABLE_LIVE confirm_live=$CONFIRM_LIVE"
+echo "acknowledge_historical_share_cap_incidents=$ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS"
 echo "market_proxy=$([[ -n "$MARKET_PROXY" ]] && echo configured || echo direct)"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trade the previous exact-C bracket NO from a faster observation source."""
+"""Trade the previous temperature bracket NO from a faster observation source."""
 
 from __future__ import annotations
 
@@ -53,6 +53,10 @@ DEFAULT_SOURCE_EVENTS_JSONL = RUNTIME_ROOT / "output/source_events/sources.jsonl
 PERSISTENT_CROSS_POLICY = "persistent_candidate_margin_v4"
 
 
+def source_temp_in_market_unit(temp_c: float, market_unit: str) -> float:
+    return float(temp_c) * 9.0 / 5.0 + 32.0 if market_unit == "F" else float(temp_c)
+
+
 def candidate_market_is_lockable(token: Any, candidate: int) -> bool:
     parsed = parse_market_bracket(str(token.bracket), str(token.question))
     if parsed is None or parsed.top or parsed.high is None:
@@ -82,6 +86,42 @@ def resolve_candidate_market(
     if token is not None and not candidate_market_is_lockable(token, candidate):
         token = None
     return token, augmented, "gamma_fallback" if token is not None else "unresolved"
+
+
+def resolve_range_candidate_market(
+    market_index: dict[Any, Any],
+    *,
+    city: str,
+    target_date: str,
+    metar_running_max_value: int,
+    market_proxy: str,
+) -> tuple[Any | None, dict[Any, Any], int | None, str]:
+    """Resolve the finite 2F bracket containing the known METAR running max."""
+    token = bracket_lookup(market_index, city, target_date, metar_running_max_value)
+    resolution = "paper_snapshot"
+    if token is None:
+        market_index = augment_market_index_from_gamma(
+            market_index,
+            target_dates={target_date},
+            cities={city},
+            event_slugs={city: temperature_event_slug(city, target_date, "max")},
+            market_proxy=market_proxy,
+        )
+        token = bracket_lookup(market_index, city, target_date, metar_running_max_value)
+        resolution = "gamma_fallback" if token is not None else "unresolved"
+    if token is None:
+        return None, market_index, None, resolution
+    parsed = parse_market_bracket(str(token.bracket), str(token.question))
+    if parsed is None or parsed.top or parsed.high is None:
+        return None, market_index, None, "unsupported_open_top_bracket"
+    if not parsed.bottom and (
+        parsed.low is None or abs((float(parsed.high) - float(parsed.low)) - 1.0) > 1e-9
+    ):
+        return None, market_index, None, "unsupported_non_2f_range"
+    upper = int(parsed.high)
+    if abs(float(parsed.high) - upper) > 1e-9:
+        return None, market_index, None, "unsupported_fractional_range"
+    return token, market_index, upper, resolution
 
 
 def iso(dt: datetime | None = None) -> str:
@@ -280,8 +320,15 @@ def _load_runtime_inputs(args: argparse.Namespace, now: datetime) -> dict[str, A
         profile = profiles.get((city, policy.source))
         if profile is None or not profile.collector_enabled:
             raise RuntimeError(f"missing enabled fast-source profile for {city}/{policy.source}")
-        if policy.signal_handler != "metar_prev_no_exact" or profile.market_unit != "C":
-            raise RuntimeError(f"generic exact-C runner cannot handle {city}/{policy.source}: {profile.market_unit}")
+        supported_handler = (
+            (policy.signal_handler == "metar_prev_no_exact" and profile.market_unit == "C")
+            or (policy.signal_handler == "metar_prev_no_range_2f" and profile.market_unit == "F")
+        )
+        if not supported_handler:
+            raise RuntimeError(
+                f"unsupported fast-source handler/unit for {city}/{policy.source}: "
+                f"{policy.signal_handler}/{profile.market_unit}"
+            )
         if policy.default_mode == "live_trial" and not profile.live_eligible and not policy.source_profile_override_reason:
             raise RuntimeError(f"live-trial source override reason missing for {city}/{policy.source}")
         city_profiles[city] = profile
@@ -375,14 +422,41 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         detect_age = (now - source_detect_dt).total_seconds() / 60.0 if source_detect_dt else None
         observation_lag = (source_detect_dt - source_obs_dt).total_seconds() / 60.0 if source_obs_dt and source_detect_dt else None
         source_value = int(src["source_market_value"])
+        source_temp_c = float(src["temp_c"])
+        source_market_temp = source_temp_in_market_unit(source_temp_c, profile.market_unit)
         metar_max = int(metar["metar_running_max_market_value"])
         candidate = source_value - 1
+        resolved_token = None
+        market_resolution = ""
+        if policy.signal_handler == "metar_prev_no_range_2f":
+            resolved_token, market_index, range_upper, market_resolution = resolve_range_candidate_market(
+                market_index,
+                city=city,
+                target_date=target_date,
+                metar_running_max_value=metar_max,
+                market_proxy=market_proxy,
+            )
+            if range_upper is None:
+                opportunity_rows.append(
+                    {
+                        **base,
+                        "status": "missing_t_minus_1_market",
+                        "market_resolution": market_resolution,
+                        "source": policy.source,
+                        "source_market_unit": profile.market_unit,
+                        "source_market_temp": round(source_market_temp, 3),
+                        "source_market_value": source_value,
+                        "metar_running_max_market_value": metar_max,
+                    }
+                )
+                continue
+            candidate = range_upper
         window = next_metar_window_status(clocks.get((city, target_date)), now, window_min=args.next_metar_window_min)
         confirmation = source_cross_confirmation(
             city=city,
             source=policy.source,
             target_date=target_date,
-            source_market_temp=float(src["temp_c"]),
+            source_market_temp=source_market_temp,
             source_market_value=source_value,
             source_obs_ts_utc=str(src.get("source_obs_ts_utc") or ""),
             metar_running_max_value=metar_max,
@@ -406,6 +480,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "source_obs_lag_min": round(observation_lag, 3) if observation_lag is not None else None,
             "source_temp_c": src.get("temp_c"),
             "source_market_unit": profile.market_unit,
+            "source_market_temp": round(source_market_temp, 3),
             "source_market_value": source_value,
             "source_round_c": source_value,
             "latest_metar_report_ts_utc": metar.get("latest_report_ts_utc"),
@@ -418,6 +493,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "metar_running_max_temp_c": metar.get("metar_running_max_temp_c"),
             "t_minus_1_no_bracket": candidate,
             "t_minus_1_no_bracket_c": candidate,
+            "t_minus_1_no_market_bracket": str(resolved_token.bracket) if resolved_token is not None else str(candidate),
             **window,
             "source_cross_policy": confirmation["policy"],
             "source_cross_confirmation_basis": confirmation.get("basis"),
@@ -434,11 +510,17 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         blockers: list[str] = []
         if confirmation["blocker"]:
             blockers.append(confirmation["blocker"])
-        if source_age is None or source_age < -1.0 or source_age > args.max_source_age_min:
+        max_source_age_min = float(policy.max_source_age_min or args.max_source_age_min)
+        max_source_observation_lag_min = float(
+            policy.max_source_observation_lag_min or args.max_source_observation_lag_min
+        )
+        common["max_source_age_min"] = max_source_age_min
+        common["max_source_observation_lag_min"] = max_source_observation_lag_min
+        if source_age is None or source_age < -1.0 or source_age > max_source_age_min:
             blockers.append("source_observation_too_old")
         if detect_age is None or detect_age < -1.0 or detect_age > args.max_source_detect_age_min:
             blockers.append("source_detection_too_old")
-        if observation_lag is None or observation_lag < -1.0 or observation_lag > args.max_source_observation_lag_min:
+        if observation_lag is None or observation_lag < -1.0 or observation_lag > max_source_observation_lag_min:
             blockers.append("source_observation_lag_too_high")
         if source_obs_dt and latest_metar_dt and source_obs_dt <= latest_metar_dt:
             blockers.append("source_not_after_latest_metar")
@@ -451,13 +533,15 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             continue
 
         event_key = "|".join([city, target_date, policy.source, str(src.get("source_obs_ts_utc")), str(source_value), str(metar_max), str(candidate)])
-        token, market_index, market_resolution = resolve_candidate_market(
-            market_index,
-            city=city,
-            target_date=target_date,
-            candidate=candidate,
-            market_proxy=market_proxy,
-        )
+        token = resolved_token
+        if token is None:
+            token, market_index, market_resolution = resolve_candidate_market(
+                market_index,
+                city=city,
+                target_date=target_date,
+                candidate=candidate,
+                market_proxy=market_proxy,
+            )
         if token is None:
             opportunity_rows.append(
                 {
@@ -511,6 +595,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "event_key": event_key,
             "market_resolution": market_resolution,
             "question": token.question,
+            "t_minus_1_no_market_bracket": token.bracket,
             "market_id": token.market_id,
             "condition_id": token.condition_id,
             "token_id": token.no_token_id,
@@ -612,6 +697,10 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
                     "shares_per_trade": policy.shares_per_trade,
                     "max_shares_per_market": policy.max_shares_per_market,
                     "max_no_ask": policy.max_no_ask,
+                    "max_source_age_min": float(policy.max_source_age_min or args.max_source_age_min),
+                    "max_source_observation_lag_min": float(
+                        policy.max_source_observation_lag_min or args.max_source_observation_lag_min
+                    ),
                 }
                 for city, policy in policies.items()
             },

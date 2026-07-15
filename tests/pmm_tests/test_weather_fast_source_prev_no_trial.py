@@ -10,6 +10,7 @@ from scripts.ops.weather_fast_source_prev_no_trial import (
     next_metar_burst_cities,
     next_metar_window_status,
     resolve_share_cap_pause,
+    source_temp_in_market_unit,
     source_cross_confirmation,
 )
 from scripts.ops.weather_fast_source_city_policy import CITY_POLICIES
@@ -53,6 +54,11 @@ def test_persistent_sources_accept_exactly_half_degree_as_first_print():
     assert result["confirmed"] is False
     assert result["blocker"] == "source_cross_persistence_not_met"
     assert result["qualifying_distinct_observations"] == 1
+
+
+def test_fahrenheit_source_temperature_is_compared_in_market_units():
+    assert source_temp_in_market_unit(31.0, "F") == 87.8
+    assert source_temp_in_market_unit(31.0, "C") == 31.0
 
 
 def test_persistent_sources_wait_for_a_second_distinct_observation():
@@ -554,7 +560,7 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
     order = json.loads((tmp_path / "out" / "orders.jsonl").read_text(encoding="utf-8"))
 
     assert latest["live_orders_submitted"] == 1
-    assert latest["city_policies"]["Tokyo"]["shares_per_trade"] == 5.0
+    assert latest["city_policies"]["Tokyo"]["shares_per_trade"] == 10.0
     assert order["limit_price"] == 0.79
     assert order["source_runway"] == "15R/33L"
     assert order["source_primary_runway"] == "15L"
@@ -642,6 +648,60 @@ def test_candidate_market_accepts_lower_bound_boundary():
 
     assert runner.candidate_market_is_lockable(token, 20) is True
     assert runner.candidate_market_is_lockable(token, 19) is False
+
+
+def test_range_candidate_uses_bracket_containing_metar_running_max():
+    token = MarketToken(
+        city="Miami",
+        target_date="2026-07-15",
+        bracket="86-87",
+        question="Will the highest temperature in Miami be between 86-87F?",
+        event_slug="event",
+        market_id="market",
+        condition_id="condition",
+        yes_token_id="yes",
+        no_token_id="no",
+    )
+    index = {("Miami", "2026-07-15", "86-87"): token}
+
+    resolved, _index, upper, resolution = runner.resolve_range_candidate_market(
+        index,
+        city="Miami",
+        target_date="2026-07-15",
+        metar_running_max_value=86,
+        market_proxy="http://127.0.0.1:7890",
+    )
+
+    assert resolved == token
+    assert upper == 87
+    assert resolution == "paper_snapshot"
+
+
+def test_range_candidate_rejects_open_top_bracket():
+    token = MarketToken(
+        city="Miami",
+        target_date="2026-07-15",
+        bracket="104+",
+        question="Will the highest temperature in Miami be 104F or higher?",
+        event_slug="event",
+        market_id="market",
+        condition_id="condition",
+        yes_token_id="yes",
+        no_token_id="no",
+    )
+    index = {("Miami", "2026-07-15", "104+"): token}
+
+    resolved, _index, upper, resolution = runner.resolve_range_candidate_market(
+        index,
+        city="Miami",
+        target_date="2026-07-15",
+        metar_running_max_value=104,
+        market_proxy="http://127.0.0.1:7890",
+    )
+
+    assert resolved is None
+    assert upper is None
+    assert resolution == "unsupported_open_top_bracket"
 
 
 def test_metar_report_clock_uses_routine_reports_and_ignores_speci(tmp_path):

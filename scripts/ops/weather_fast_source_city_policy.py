@@ -17,12 +17,30 @@ class FastSourceCityPolicy:
     shares_per_trade: float
     max_shares_per_market: float
     max_no_ask: float
+    max_source_age_min: float | None = None
+    max_source_observation_lag_min: float | None = None
     source_profile_override_reason: str = ""
 
 
 # Strategy policy belongs here, not in the data-source registry. The source registry
 # still owns station, unit, rounding, settlement basis, and calibration status.
 CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
+    ("Atlanta", "noaa_madis_hfmetar"): FastSourceCityPolicy(
+        city="Atlanta",
+        source="noaa_madis_hfmetar",
+        default_mode="live_trial",
+        signal_handler="metar_prev_no_range_2f",
+        confirmation_policy="persistent_candidate_margin",
+        required_distinct_observations=2,
+        qualifying_margin=0.5,
+        strong_margin=0.7,
+        shares_per_trade=5.0,
+        max_shares_per_market=5.0,
+        max_no_ask=0.94,
+        max_source_age_min=30.0,
+        max_source_observation_lag_min=30.0,
+        source_profile_override_reason="user_approved_tiny_live_trial_low_sample_forward_probe",
+    ),
     ("Busan", "amos_runway"): FastSourceCityPolicy(
         city="Busan",
         source="amos_runway",
@@ -51,6 +69,38 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         max_no_ask=0.94,
         source_profile_override_reason="user_approved_tiny_live_trial_pending_source_alignment",
     ),
+    ("Miami", "noaa_madis_hfmetar"): FastSourceCityPolicy(
+        city="Miami",
+        source="noaa_madis_hfmetar",
+        default_mode="live_trial",
+        signal_handler="metar_prev_no_range_2f",
+        confirmation_policy="persistent_candidate_margin",
+        required_distinct_observations=2,
+        qualifying_margin=0.5,
+        strong_margin=0.7,
+        shares_per_trade=5.0,
+        max_shares_per_market=5.0,
+        max_no_ask=0.94,
+        max_source_age_min=30.0,
+        max_source_observation_lag_min=30.0,
+        source_profile_override_reason="user_approved_tiny_live_trial_low_sample_forward_probe",
+    ),
+    ("SanFrancisco", "noaa_madis_hfmetar"): FastSourceCityPolicy(
+        city="SanFrancisco",
+        source="noaa_madis_hfmetar",
+        default_mode="live_trial",
+        signal_handler="metar_prev_no_range_2f",
+        confirmation_policy="persistent_candidate_margin",
+        required_distinct_observations=2,
+        qualifying_margin=0.5,
+        strong_margin=0.7,
+        shares_per_trade=5.0,
+        max_shares_per_market=5.0,
+        max_no_ask=0.94,
+        max_source_age_min=30.0,
+        max_source_observation_lag_min=30.0,
+        source_profile_override_reason="user_approved_tiny_live_trial_low_sample_forward_probe",
+    ),
     ("Singapore", "singapore_mss"): FastSourceCityPolicy(
         city="Singapore",
         source="singapore_mss",
@@ -74,8 +124,8 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         required_distinct_observations=1,
         qualifying_margin=0.5,
         strong_margin=0.5,
-        shares_per_trade=5.0,
-        max_shares_per_market=5.0,
+        shares_per_trade=10.0,
+        max_shares_per_market=10.0,
         max_no_ask=0.94,
         source_profile_override_reason="user_approved_tiny_live_trial_pending_source_alignment",
     ),
