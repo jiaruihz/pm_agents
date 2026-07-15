@@ -3,8 +3,10 @@
 
 Two separately attributed instances per the preregistered promotion criteria
 (docs/analysis/2026-07/2026-07-15-heat-death-live-promotion-preregistration-v1.md).
-The original single-cap instance ``current_yes_heat_death_tiny_live_v1`` never
-submitted an order and is retired here.
+The original single-cap instance ``current_yes_heat_death_tiny_live_v1``
+submitted one Guangzhou 30 YES order at 0.89 before the split. It remains in
+its original lineage and is retired here; analysis attributes that fill to the
+H2 entry-price regime without rewriting its source instance.
 """
 
 from __future__ import annotations
@@ -147,7 +149,7 @@ def main() -> int:
         (
             """UPDATE strategy_instance
                SET desired_status='shelved', expected_live=0,
-                   notes='shelved 2026-07-15: split into h1_late_carry/h2_early_dislocation heads; zero orders were submitted under this instance',
+                   notes='shelved 2026-07-15 after one matched Guangzhou 30 YES order at 0.89; source lineage remains on this instance and analysis attributes the fill to H2 by entry-price regime',
                    updated_at_utc=strftime('%Y-%m-%dT%H:%M:%SZ','now')
                WHERE instance_id=?""",
             (RETIRED_INSTANCE_ID,),

@@ -580,6 +580,18 @@ def _expiry_cancel_reason(row: Dict[str, Any]) -> str:
     return "expired_order_ttl"
 
 
+def _terminal_order_status_from_cancel_response(response: Dict[str, Any]) -> str:
+    """Return an authoritative terminal exchange status, if the cancel call exposed one."""
+    if not isinstance(response, dict):
+        return ""
+    for key in ("order_after_cancel", "order_before_cancel", "order"):
+        state = _order_state_payload(response.get(key))
+        status = safe_str(state.get("status")).upper()
+        if status in {"MATCHED", "CANCELED", "CANCELLED", "EXPIRED"}:
+            return status
+    return ""
+
+
 def cancel_expired_live_orders(
     *,
     live_out: Path,
@@ -591,7 +603,8 @@ def cancel_expired_live_orders(
     existing_cancel_ids = {
         safe_str(row.get("cancel_id"))
         for row in read_jsonl(cancel_out)
-        if safe_str(row.get("cancel_id")) and safe_str(row.get("status")) == "cancel_confirmed"
+        if safe_str(row.get("cancel_id"))
+        and safe_str(row.get("status")) in {"cancel_confirmed", "cancel_not_needed"}
     }
     cancel_rows: List[Dict[str, Any]] = []
     expired_seen = 0
@@ -600,6 +613,7 @@ def cancel_expired_live_orders(
     skipped_duplicate = 0
     skipped_no_order_id = 0
     cancel_errors = 0
+    cancel_not_needed_terminal = 0
     for row in read_jsonl(live_out):
         if safe_str(row.get("record_type")) != "weather_edge_live_order":
             continue
@@ -656,6 +670,18 @@ def cancel_expired_live_orders(
                     }
                 )
                 existing_cancel_ids.add(cancel_id)
+            elif terminal_status := _terminal_order_status_from_cancel_response(response):
+                cancel_not_needed_terminal += 1
+                cancel_rows.append(
+                    {
+                        **base,
+                        "status": "cancel_not_needed",
+                        "cancel_status_reason": f"order_terminal_{terminal_status.lower()}",
+                        "terminal_order_status": terminal_status,
+                        "cancel_response": response,
+                    }
+                )
+                existing_cancel_ids.add(cancel_id)
             else:
                 cancel_errors += 1
                 cancel_rows.append(
@@ -689,6 +715,7 @@ def cancel_expired_live_orders(
         "cancel_written": cancel_result["written"],
         "cancel_skipped_existing": cancel_result["skipped_existing"],
         "cancel_errors": cancel_errors,
+        "cancel_not_needed_terminal": cancel_not_needed_terminal,
         "cancel_skipped_missing_expiry": skipped_missing_expiry,
         "cancel_skipped_future": skipped_future,
         "cancel_skipped_duplicate": skipped_duplicate,

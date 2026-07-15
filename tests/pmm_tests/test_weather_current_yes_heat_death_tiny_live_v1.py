@@ -7,6 +7,11 @@ from pathlib import Path
 from scripts.ops import weather_current_yes_heat_death_tiny_live_v1 as live
 
 
+def _select_h2() -> None:
+    live.ACTIVE_HEAD = "h2_early_dislocation"
+    live.STRATEGY_INSTANCE = live.HEADS[live.ACTIVE_HEAD]["instance"]
+
+
 def _row(*, city: str = "Busan", ask: float = 0.84, ask_size: float = 20.0) -> dict:
     return {
         "city": city,
@@ -28,12 +33,14 @@ def _row(*, city: str = "Busan", ask: float = 0.84, ask_size: float = 20.0) -> d
 
 
 def test_signal_id_dedupes_snapshot_and_bracket() -> None:
+    _select_h2()
     left = _row()
     right = {**left, "snapshot_file": "new.json", "current_bracket": "31"}
     assert live.signal_id(left) == live.signal_id(right)
 
 
 def test_build_plan_is_fixed_ten_share_current_yes_probe() -> None:
+    _select_h2()
     plan = live.build_plan(_row(), shares=10, live_enabled=True, ttl_min=15)
     assert plan["record_type"] == "weather_edge_trade_plan"
     assert plan["signal_side"] == "BUY_YES"
@@ -44,6 +51,7 @@ def test_build_plan_is_fixed_ten_share_current_yes_probe() -> None:
 
 
 def test_choose_plans_applies_depth_dedup_and_daily_cap(tmp_path: Path) -> None:
+    _select_h2()
     live_orders = tmp_path / "live.jsonl"
     now = datetime(2026, 7, 14, 4, 10, tzinfo=timezone.utc)
     submitted = live.build_plan(_row(city="Busan"), shares=10, live_enabled=True, ttl_min=15)
@@ -63,6 +71,7 @@ def test_choose_plans_applies_depth_dedup_and_daily_cap(tmp_path: Path) -> None:
         rows,
         live_orders=live_orders,
         shares=10,
+        min_ask=0.50,
         max_ask=0.99,
         min_top_ask_shares=10,
         max_orders_per_utc_day=3,

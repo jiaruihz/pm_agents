@@ -61,7 +61,7 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
 
 ## 4. Probe 部署形态(2026-07-15 用户确认后实施)
 
-原单实例 probe(max-ask 0.99,零成交)已退役,拆分为两个独立归属的 head 实例
+原单实例 probe(max-ask 0.99)在拆分前成交广州 `30 YES @ 0.89 x 10`,随后退役并拆分为两个独立归属的 head 实例
 (git-first:runner/start/register 脚本同 commit 变更):
 
 | 实例 | ask 带 | 其余参数 |
@@ -88,7 +88,7 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
 ## 6. 当前状态快照(2026-07-15,写入时点)
 
 - shadow v1:运行中,zero-notional,per-snapshot 决策分母 + 候选 token 聚焦盘口刷新(今日 pair 1/1 成功)。
-- tiny-live probe:已拆为 H1/H2 双实例(见 §4);拆分时原实例零成交,无血缘迁移。
+- tiny-live probe:已拆为 H1/H2 双实例(见 §4);拆分前原实例有广州 `30 YES @ 0.89 x 10` 一笔成交。原始 instance 血缘不改写,绩效分析按成交价归入 H2 regime。
 - H1 历史证据:干净 PIT 重跑后 holdout 只剩 7 行,carry 点估为正但低于样本地板;物理增量在干净数据上仍不存在;
   旧 15 行证据作废(污染 peak clock 抬高了候选数与显著性)。
 - H2 历史证据:扩窗 8 结算日后 proxy 无正边际(+2c 后 -1.13%);可执行层空白,等 forward。

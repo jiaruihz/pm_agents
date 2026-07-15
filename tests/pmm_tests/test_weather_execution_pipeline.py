@@ -1128,6 +1128,61 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual([row["status"] for row in rows], ["cancel_error", "cancel_confirmed"])
             self.assertEqual(rows[-1]["cancel_reason"], "pre_data_update")
 
+    def test_expired_fully_matched_order_is_terminal_and_not_retried(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            live = Path(tmp) / "live.jsonl"
+            cancels = Path(tmp) / "live_cancels.jsonl"
+            order_id = "matched-order-1"
+            live.write_text(
+                json.dumps(
+                    {
+                        "record_type": "weather_edge_live_order",
+                        "execution_id": "exec-matched-1",
+                        "plan_id": "plan-matched-1",
+                        "status": "submitted",
+                        "expires_at_utc": "2020-01-01T00:00:00+00:00",
+                        "exchange_response": {"place": {"orderID": order_id}},
+                    }
+                )
+                + "\n"
+            )
+            calls = []
+
+            def cancel(value):
+                calls.append(value)
+                return {
+                    "cancel": {
+                        "canceled": [],
+                        "not_canceled": {value: "order can't be found - already canceled or matched"},
+                    },
+                    "order_after_cancel": {
+                        "id": value,
+                        "original_size": "10",
+                        "size_matched": "10",
+                        "status": "MATCHED",
+                    },
+                }
+
+            first = cancel_expired_live_orders(
+                live_out=live,
+                cancel_out=cancels,
+                live_cancel_fn=cancel,
+            )
+            second = cancel_expired_live_orders(
+                live_out=live,
+                cancel_out=cancels,
+                live_cancel_fn=cancel,
+            )
+
+            self.assertEqual(calls, [order_id])
+            self.assertEqual(first["cancel_errors"], 0)
+            self.assertEqual(first["cancel_not_needed_terminal"], 1)
+            self.assertEqual(second["cancel_skipped_duplicate"], 1)
+            rows = [json.loads(line) for line in cancels.read_text().splitlines()]
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["status"], "cancel_not_needed")
+            self.assertEqual(rows[0]["cancel_status_reason"], "order_terminal_matched")
+
 
 if __name__ == "__main__":
     unittest.main()
