@@ -313,7 +313,7 @@ def test_source_events_builds_append_only_rows_without_proxy(monkeypatch, tmp_pa
     cfg = load_city_configs(include_station_diff=False, only_cities={"Shanghai"})[0]
     captured = []
 
-    def fake_snapshot(cfg_arg, source_name, now_utc, *, settings, recent_minutes):
+    def fake_snapshot(cfg_arg, source_name, now_utc, *, settings, recent_minutes, include_record_rows=False):
         captured.append((cfg_arg.city, source_name, settings.proxy_candidates, recent_minutes))
         return {
             "status": "ok",
@@ -355,6 +355,41 @@ def test_source_events_builds_append_only_rows_without_proxy(monkeypatch, tmp_pa
     assert captured == [("Shanghai", cfg.live_observation_source, (None,), 120)]
     assert (tmp_path / "source_events" / "sources.jsonl").exists()
     assert (tmp_path / "source_events" / "latest.json").exists()
+
+
+def test_source_events_recovers_missing_awc_report_as_late_backfill(tmp_path) -> None:
+    from weather_data_feed_service import source_events
+
+    journal = tmp_path / "sources.jsonl"
+    existing = {
+        "city": "Busan",
+        "target_date": "2026-07-16",
+        "source": "aviationweather_metar",
+        "station": "RKPK",
+        "source_report_ts_utc": "2026-07-16T04:00:00+00:00",
+        "payload_hash": "existing",
+    }
+    journal.write_text(json.dumps(existing) + "\n", encoding="utf-8")
+    latest = {
+        **existing,
+        "source_report_ts_utc": "2026-07-16T06:29:00+00:00",
+        "payload_hash": "latest",
+    }
+    missing = {
+        **existing,
+        "source_report_ts_utc": "2026-07-16T05:00:00+00:00",
+        "temp_c": 33.0,
+        "raw_metar": "METAR RKPK 160500Z 29003KT CAVOK 33/21 Q1002",
+        "payload_hash": "missing",
+    }
+    state = {}
+
+    rows = source_events.late_awc_backfills([latest], [existing, missing, latest], state, journal_path=journal)
+
+    assert [row["source_report_ts_utc"] for row in rows] == ["2026-07-16T05:00:00+00:00"]
+    assert rows[0]["first_seen_type"] == "late_backfill"
+    assert rows[0]["original_first_seen_unknown"] is True
+    assert rows[0]["recovered_from_multi_record_payload"] is True
 
 
 def test_source_events_expands_fallbacks_only_for_research_profiles() -> None:

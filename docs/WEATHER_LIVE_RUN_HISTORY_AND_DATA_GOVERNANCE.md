@@ -660,6 +660,26 @@ stops when the ask exceeds the city cap or top-level depth is insufficient.
 Direct taker fallback remains disabled because the previous FOK BUY path did not
 provide a reliable hard share cap.
 
+### 6.8 2026-07-16 AWC Multi-Report Persistence Gap
+
+Pollution window for the Busan incident: the source-event collector had no run
+between `2026-07-16T04:44:38Z` and `06:54:13Z`. Its first successful AWC response
+after recovery contained the missing `05:00Z` and `06:00Z` RKPK routine METARs
+plus the newer `06:29Z` SPECI, but the old persistence path stored only the last
+record in the response. The two routine rows were therefore absent from the
+local journal even though AWC retained and later returned them.
+
+Correction: AWC source-event collection now indexes every report timestamp in
+the returned multi-record payload and appends previously unseen rows as
+`first_seen_type=late_backfill`. These rows also carry
+`original_first_seen_unknown=true`, so they restore the official temperature
+path but are excluded from first-arrival latency evidence. The one-time upgrade
+recovered 939 omitted AWC report rows across 46 configured cities; a targeted
+Busan reconciliation then restored `05:00Z 33 C` and `06:00Z 35 C`. The compact
+report index is persisted in collector state, preventing repeated journal scans
+or duplicate backfills. This was an incremental journal repair; no canonical DB
+or existing raw file was rebuilt.
+
 ## 7. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:

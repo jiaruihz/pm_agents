@@ -213,12 +213,15 @@ def test_snapshot_observation_source_uses_data_feed_fetcher(monkeypatch):
         "aviationweather_metar",
         datetime(2026, 6, 17, 10, 31, tzinfo=timezone.utc),
         settings=FetchSettings(),
+        include_record_rows=True,
     )
 
     assert row["source"] == "aviationweather_metar"
     assert row["temp_c"] == 26.0
     assert row["record_count"] == 1
     assert row["source_report_ts_utc"] == "2026-06-17T10:30:00+00:00"
+    assert row["_record_rows"][0]["source_report_ts_utc"] == "2026-06-17T10:30:00+00:00"
+    assert row["_record_rows"][0]["raw_metar"] == "ZSPD 171030Z 26/23"
 
 
 def test_awc_cache_fetcher_decompresses_gzip_payload(monkeypatch):

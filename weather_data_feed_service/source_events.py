@@ -26,10 +26,12 @@ from weather_data_feed.observation_sources import (
 )
 
 from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
-from weather_data_feed_service.io_utils import read_json, write_json, write_latest_and_daily_jsonl
+from weather_data_feed_service.io_utils import append_jsonl, read_json, write_json, write_latest_and_daily_jsonl
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "source_events"
+AWC_RECONCILE_SOURCES = {"aviationweather_metar"}
+AWC_INDEX_STATE_KEY = "__awc_report_index_v1"
 
 
 def requested_sources(
@@ -83,6 +85,7 @@ def fetch_source_row(
             now_utc,
             settings=settings,
             recent_minutes=recent_minutes,
+            include_record_rows=normalize_source_name(source_name) in AWC_RECONCILE_SOURCES,
         )
         row["producer"] = "weather_data_feed_service.source_events"
         return row
@@ -127,6 +130,72 @@ def annotate_changed(rows: list[dict[str, Any]], state: dict[str, Any]) -> tuple
     return rows, changed
 
 
+def awc_report_key(row: dict[str, Any]) -> str:
+    return "|".join(
+        str(row.get(part) or "")
+        for part in ("city", "target_date", "source", "station", "source_report_ts_utc")
+    )
+
+
+def bootstrap_awc_report_index(path: Path) -> dict[str, str]:
+    index: dict[str, str] = {}
+    if not path.exists():
+        return index
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if normalize_source_name(row.get("source")) not in AWC_RECONCILE_SOURCES:
+                continue
+            if not row.get("source_report_ts_utc"):
+                continue
+            index[awc_report_key(row)] = str(row.get("payload_hash") or stable_hash(row))
+    return index
+
+
+def late_awc_backfills(
+    latest_rows: list[dict[str, Any]],
+    record_rows: list[dict[str, Any]],
+    state: dict[str, Any],
+    *,
+    journal_path: Path,
+) -> list[dict[str, Any]]:
+    if AWC_INDEX_STATE_KEY not in state:
+        state[AWC_INDEX_STATE_KEY] = bootstrap_awc_report_index(journal_path)
+    index = dict(state.get(AWC_INDEX_STATE_KEY) or {})
+    latest_keys = {awc_report_key(row) for row in latest_rows if row.get("source_report_ts_utc")}
+    backfills: list[dict[str, Any]] = []
+    for raw_row in record_rows:
+        row = dict(raw_row)
+        row.pop("_record_rows", None)
+        key = awc_report_key(row)
+        payload_hash = str(row.get("payload_hash") or stable_hash(row))
+        previous_hash = index.get(key)
+        index[key] = payload_hash
+        if key in latest_keys or previous_hash is not None:
+            continue
+        row.update(
+            {
+                "producer": "weather_data_feed_service.source_events",
+                "first_seen_type": "late_backfill",
+                "original_first_seen_unknown": True,
+                "recovered_from_multi_record_payload": True,
+                "changed_since_last": False,
+            }
+        )
+        backfills.append(row)
+    dates = sorted({key.split("|")[1] for key in index if len(key.split("|")) >= 2})
+    keep_dates = set(dates[-3:])
+    state[AWC_INDEX_STATE_KEY] = {
+        key: value for key, value in index.items() if len(key.split("|")) >= 2 and key.split("|")[1] in keep_dates
+    }
+    return sorted(backfills, key=lambda row: (str(row.get("city")), str(row.get("source_report_ts_utc"))))
+
+
 def build_events(args: argparse.Namespace) -> dict[str, Any]:
     now_utc = parse_now_utc(args.now_utc) if args.now_utc else datetime.now(timezone.utc)
     configs = load_city_configs(
@@ -151,6 +220,7 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
             jobs.append((cfg, source_name))
 
     rows: list[dict[str, Any]] = []
+    record_rows: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=max(1, args.max_workers)) as executor:
         futures = {
             executor.submit(
@@ -164,11 +234,19 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
             for cfg, source_name in jobs
         }
         for future in as_completed(futures):
-            rows.append(future.result())
+            row = future.result()
+            record_rows.extend(row.pop("_record_rows", []) or [])
+            rows.append(row)
 
     output_dir = Path(args.output_dir)
     state_path = Path(args.state_path) if args.state_path else output_dir / "state.json"
     state = read_json(state_path, {})
+    backfill_rows = late_awc_backfills(
+        rows,
+        record_rows,
+        state,
+        journal_path=output_dir / "sources.jsonl",
+    )
     rows, changed = annotate_changed(rows, state)
     rows = sorted(rows, key=lambda row: (str(row.get("city")), str(row.get("source")), str(row.get("station"))))
     write_json(state_path, state)
@@ -179,6 +257,7 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
         "producer": "weather_data_feed_service.source_events",
         "rows": len(rows),
         "changed": changed,
+        "late_backfill_rows": len(backfill_rows),
         "ok": sum(1 for row in rows if row.get("status") == "ok"),
         "non_ok": sum(1 for row in rows if row.get("status") != "ok"),
         "cities": len(configs),
@@ -188,17 +267,29 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
         "research_cities": args.research_cities or [],
         "output_dir": str(output_dir),
         "state_path": str(state_path),
+        "history_reconcile_only": bool(args.history_reconcile_only),
     }
-    payload = {**summary, "records": rows}
+    payload = {
+        **summary,
+        "records": [] if args.history_reconcile_only else rows,
+        "append_records": backfill_rows,
+    }
     return payload
 
 
 def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
     rows = list(payload.get("records") or [])
+    append_rows = list(payload.get("append_records") or [])
+    latest_payload = {key: value for key, value in payload.items() if key != "append_records"}
+    if payload.get("history_reconcile_only"):
+        day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        append_jsonl(output_dir / "sources.jsonl", append_rows)
+        append_jsonl(output_dir / day / "sources.jsonl", append_rows)
+        return
     write_latest_and_daily_jsonl(
         output_dir=output_dir,
-        latest_payload=payload,
-        rows=rows,
+        latest_payload=latest_payload,
+        rows=rows + append_rows,
         jsonl_name="sources.jsonl",
     )
 
@@ -218,6 +309,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout-sec", type=float, default=3.0)
     parser.add_argument("--max-workers", type=int, default=12)
     parser.add_argument("--recent-minutes", type=int, default=240)
+    parser.add_argument("--history-reconcile-only", action="store_true")
     return parser
 
 
@@ -225,7 +317,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     payload = build_events(args)
     write_outputs(payload, Path(args.output_dir))
-    print(json.dumps({k: v for k, v in payload.items() if k != "records"}, ensure_ascii=False, sort_keys=True))
+    print(
+        json.dumps(
+            {k: v for k, v in payload.items() if k not in {"records", "append_records"}},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
     return 0
 
 

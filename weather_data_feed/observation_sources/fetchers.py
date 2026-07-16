@@ -863,6 +863,7 @@ def snapshot_observation_source(
     *,
     settings: FetchSettings | None = None,
     recent_minutes: int = 240,
+    include_record_rows: bool = False,
 ) -> dict[str, Any]:
     source_key = normalize_source_name(source_name)
     tz = ZoneInfo(cfg.timezone_name)
@@ -927,6 +928,34 @@ def snapshot_observation_source(
             "max_temp_f_observed": row.get("max_temp_f_observed"),
         }
     )
+    if include_record_rows:
+        record_rows: list[dict[str, Any]] = []
+        for record in result.records:
+            record_row = dict(row)
+            record_row.update(
+                {
+                    "source_report_ts_utc": record.obs_ts_utc,
+                    "temp_c": record.temp_c,
+                    "dewpoint_c": record.dewpoint_c,
+                    "relative_humidity_pct": record.relh,
+                    "wind_speed_kt": record.wind_kt,
+                    "sky_code_now": record.sky_code,
+                    "raw_metar": record.raw_text,
+                    "source_age_sec": source_age_sec(record.obs_ts_utc, fetch_end),
+                    "detected_after_report_sec": source_age_sec(record.obs_ts_utc, fetch_end),
+                    **record.metadata,
+                }
+            )
+            record_row["payload_hash"] = stable_hash(
+                {
+                    "source_report_ts_utc": record.obs_ts_utc,
+                    "temp_c": record.temp_c,
+                    "raw_metar": record.raw_text,
+                    "metadata": record.metadata,
+                }
+            )
+            record_rows.append(record_row)
+        row["_record_rows"] = record_rows
     return row
 
 
