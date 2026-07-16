@@ -141,6 +141,17 @@ def _best_bid_ask_from_book(book: Any) -> Tuple[float, float]:
     return best_bid, best_ask
 
 
+def _best_ask_size_from_book(book: Any, best_ask: float) -> float:
+    asks = (book.get("asks") or []) if isinstance(book, dict) else (getattr(book, "asks", None) or [])
+    size = 0.0
+    for item in asks:
+        price = _to_float(item.get("price"), 0.0) if isinstance(item, dict) else _to_float(getattr(item, "price", 0.0), 0.0)
+        qty = _to_float(item.get("size"), 0.0) if isinstance(item, dict) else _to_float(getattr(item, "size", 0.0), 0.0)
+        if abs(price - best_ask) <= 1e-9:
+            size += max(0.0, qty)
+    return size
+
+
 def _maker_only_price(
     *,
     side: str,
@@ -486,7 +497,7 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                 **(quote if isinstance(quote, dict) else {}),
             }
 
-        needs_live_policy_quote = execution_policy == "mid_price_core_v2"
+        needs_live_policy_quote = execution_policy in {"mid_price_core_v2", "d1_yes_high_mid_taker_v1"}
         if maker_only or needs_live_policy_quote:
             try:
                 book = client.get_order_book(str(plan["token_id"]))
@@ -498,7 +509,41 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                 ) from exc
             best_bid, best_ask = _best_bid_ask_from_book(book)
             tick_size = _get_tick_size(client, str(plan["token_id"]), _to_float(plan.get("quote_tick_size"), 0.01))
-            if execution_policy == "mid_price_core_v2":
+            if execution_policy == "d1_yes_high_mid_taker_v1":
+                min_mid = _to_float(plan.get("min_live_mid"), 0.80)
+                top_ask_size = _best_ask_size_from_book(book, best_ask)
+                live_mid = (best_bid + best_ask) / 2.0 if best_bid > 0 and best_ask > 0 else 0.0
+                if best_bid <= 0 or best_ask <= 0:
+                    raise WeatherExecutionError(
+                        "d1_yes_live_quote_missing",
+                        response=_diagnostics(classification="d1_yes_live_quote_missing", reason="missing_bid_or_ask"),
+                    )
+                if live_mid + 1e-9 < min_mid:
+                    raise WeatherExecutionError(
+                        f"d1_yes_live_mid_below_trigger mid={live_mid:.6f} required={min_mid:.6f}",
+                        response=_diagnostics(classification="d1_yes_live_mid_below_trigger", reason="fresh_mid_below_trigger"),
+                    )
+                if top_ask_size + 1e-9 < _to_float(plan.get("size"), 0.0):
+                    raise WeatherExecutionError(
+                        f"d1_yes_live_top_ask_depth_insufficient size={top_ask_size:.6f}",
+                        response=_diagnostics(classification="d1_yes_live_top_ask_depth_insufficient", reason="fresh_top_ask_depth_below_order_size"),
+                    )
+                order_price = best_ask
+                maker_only = False
+                quote = {
+                    "quote_status": "accepted",
+                    "quote_reason": "fresh_d1_yes_mid_and_depth_revalidated",
+                    "quote_edge": 0.0,
+                    "required_quote_edge": 0.0,
+                    "model_token_probability": live_mid,
+                    "quote_best_bid": best_bid,
+                    "quote_best_ask": best_ask,
+                    "quote_spread": max(0.0, best_ask - best_bid),
+                    "quote_tick_size": tick_size,
+                    "quote_mode": "fresh_top_ask_taker_recheck",
+                    "fresh_top_ask_size": top_ask_size,
+                }
+            elif execution_policy == "mid_price_core_v2":
                 quotes = build_execution_quotes(
                     plan,
                     ExecutionPolicyConfig(

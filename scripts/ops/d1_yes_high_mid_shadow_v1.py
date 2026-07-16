@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Zero-notional shadow runner for the d1_yes_high_mid_v1 strategy.
+"""Shadow/live runner for the d1_yes_high_mid_v1 strategy.
 
 Strategy (frozen v1, see docs/analysis/2026-07/2026-07-15-market-calibration-curve-v1.md):
     When the market prices "final max lands exactly one bracket above the current
@@ -7,11 +7,11 @@ Strategy (frozen v1, see docs/analysis/2026-07/2026-07-15-market-calibration-cur
     1 - d1_no_bid, hold to settlement.  One entry per city-date (first qualifying
     poll).  No city / hour / weather filter in v1.
 
-This runner never submits an order.  It reads the live observation feed and the
-live orderbook snapshot each cycle, reconstructs the current/d1 ladder anchoring
-with the SAME semantics as the offline factory (imported below), records every
-would-be entry to a journal, and backfills the settlement label from
-settlement_outcomes when available.
+The default CLI remains zero-notional shadow.  With ``--live --confirm-live`` it
+routes Taipei to shadow and submits fixed-share BUY YES taker plans for other
+cities only when current -> d1 is an unambiguous adjacent bounded bracket and
+the directly observed YES ask has sufficient depth.  Open-upper ``X+`` and
+invalid/missing current-bracket cases always remain shadow.
 
 Two accounting tracks are written per event:
   * promotion track: first qualifying poll per (city, target_date) -> promotion
@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import math
 import os
@@ -34,7 +35,7 @@ import re
 import sqlite3
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,8 @@ Bracket = _factory.Bracket
 bracket_contains = _factory.bracket_contains
 parse_bracket = _factory.parse_bracket
 round_half_up = _factory.round_half_up
+
+from src.strategies.weather_edge_v1.runtime import order_runtime  # noqa: E402
 
 STRATEGY_ID = "d1_yes_high_mid_shadow_v1"
 RULE_ID = "d1_yes_mid_ge_0p80_first_per_city_date_taker_v1"
@@ -83,6 +86,9 @@ JOURNAL_OUT = RUNTIME_DIR / "shadow_events.jsonl"
 POSITIONS_OUT = RUNTIME_DIR / "open_positions.json"
 SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
 SUMMARY_HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
+PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
+PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
+LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 
 MID_THRESHOLD = 0.80
 # Parity: the backtest applied NO obs-age filter (it included every trigger; the
@@ -97,6 +103,9 @@ FULL_LADDER_MIN_CITIES = 36
 # v1.1 pre-registered secondary guards (recorded, not gating v1)
 V11_MAX_ASK = 0.95
 V11_MAX_REMAINING_HEAT = 1.3
+LIVE_SHADOW_CITIES = {"Taipei"}
+ACTIVE_ORDER_STATUSES = {"submitted", "simulated_open"}
+MAX_YES_PARITY_GAP = 0.011
 
 
 def now_utc_dt() -> datetime:
@@ -165,8 +174,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-book-age-min", type=float, default=MAX_BOOK_AGE_MIN,
                         help="reject missing/stale per-token quotes (data-validity guard)")
     parser.add_argument("--interval-seconds", type=float, default=600.0)
+    parser.add_argument("--strategy-instance", default=STRATEGY_ID)
+    parser.add_argument("--runtime-dir", default=str(RUNTIME_DIR))
+    parser.add_argument("--shares", type=float, default=5.0)
+    parser.add_argument("--max-orders-per-day", type=int, default=10)
+    parser.add_argument("--max-daily-cost-usd", type=float, default=50.0)
+    parser.add_argument("--order-ttl-min", type=float, default=45.0)
+    parser.add_argument("--live", action="store_true", help="submit eligible non-Taipei plans")
+    parser.add_argument("--confirm-live", action="store_true", help="required with --live")
     parser.add_argument("--dry-run", action="store_true", help="do not write journal/positions")
     return parser.parse_args()
+
+
+def configure_runtime(args: argparse.Namespace) -> None:
+    global STRATEGY_ID, RUNTIME_DIR, JOURNAL_OUT, POSITIONS_OUT, SUMMARY_OUT
+    global SUMMARY_HISTORY_OUT, PLAN_OUT, PAPER_OUT, LIVE_OUT
+    STRATEGY_ID = str(args.strategy_instance)
+    RUNTIME_DIR = Path(args.runtime_dir)
+    JOURNAL_OUT = RUNTIME_DIR / "shadow_events.jsonl"
+    POSITIONS_OUT = RUNTIME_DIR / "open_positions.json"
+    SUMMARY_OUT = RUNTIME_DIR / "latest_summary.json"
+    SUMMARY_HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
+    PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
+    PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
+    LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 
 
 # --------------------------------------------------------------------------- #
@@ -309,6 +340,9 @@ def load_ladder(path: Path) -> dict[tuple[str, str], dict[str, dict[str, Any]]]:
                 "fetched_at_utc": row.get("fetched_at_utc"),
                 "condition_id": row.get("condition_id"),
                 "token_id": row.get("token_id"),
+                "market_id": row.get("market_id"),
+                "event_slug": row.get("event_slug"),
+                "question": row.get("question"),
             }
             key = (city, str(event_date))
             ladder.setdefault(key, {}).setdefault(bracket, {})[outcome] = quote
@@ -326,45 +360,51 @@ def running_native(rec: dict[str, Any]) -> tuple[float, str]:
     return rmax_c, "C"
 
 
-def tail_distance(bracket_low: float, running: float, unit: str) -> int | None:
-    if not (math.isfinite(bracket_low) and math.isfinite(running)):
-        return None
-    if bracket_low <= running:
-        return None
-    if unit == "F":
-        return int(math.ceil((bracket_low - running) / 2.0))
-    return int(round(bracket_low - running))
-
-
 def find_current_and_d1(
     brackets: dict[str, dict[str, Any]], running: float, unit: str
-) -> tuple[str | None, str | None, dict[str, Any] | None]:
-    """Return (current_bracket, d1_bracket, d1_no_quote)."""
+) -> tuple[str | None, str | None, dict[str, Any] | None, dict[str, Any] | None]:
+    """Return the rounded-running bracket and its immediate higher sibling.
+
+    The old raw-distance implementation classified a Fahrenheit running max of
+    93.92 as d1=94-95 even though settlement rounds it to 94 and therefore
+    94-95 is the current bracket.  Anchor current first, then walk the actual
+    market ladder.  A missing intermediate bracket fails closed instead of
+    silently turning d2+ into d1.
+    """
     if not math.isfinite(running):
-        return None, None, None
+        return None, None, None, None
     running_value = float(round_half_up(running))
-    current_bracket = None
-    # d1 tie-break mirrors the factory: among distance==1 NO brackets, keep the
-    # highest NO ask (factory sorts ask desc then drop_duplicates keeps first).
-    d1_candidates: list[tuple[float, str, dict[str, Any]]] = []
+    parsed: list[tuple[Bracket, str, dict[str, Any]]] = []
     for raw_bracket, sides in brackets.items():
         b = parse_bracket(raw_bracket)
         if b is None:
             continue
-        if "yes" in sides and bracket_contains(b, running_value):
-            # most specific (ranged) bracket wins, matching factory specificity sort
-            if current_bracket is None or (b.high is not None):
-                current_bracket = raw_bracket
-        if b.low is not None and "no" in sides:
-            dist = tail_distance(float(b.low), running, unit)
-            if dist == 1:
-                no_ask = to_float(sides["no"].get("ask"))
-                d1_candidates.append((no_ask if math.isfinite(no_ask) else -1.0, raw_bracket, sides["no"]))
-    if not d1_candidates:
-        return current_bracket, None, None
-    d1_candidates.sort(key=lambda x: x[0], reverse=True)
-    _, d1_bracket, d1_no_quote = d1_candidates[0]
-    return current_bracket, d1_bracket, d1_no_quote
+        parsed.append((b, raw_bracket, sides))
+
+    current_candidates = [item for item in parsed if "yes" in item[2] and bracket_contains(item[0], running_value)]
+    if not current_candidates:
+        return None, None, None, None
+
+    def width(item: tuple[Bracket, str, dict[str, Any]]) -> float:
+        b = item[0]
+        return (b.high - b.low) if b.low is not None and b.high is not None else math.inf
+
+    current_b, current_bracket, _ = min(current_candidates, key=width)
+    if current_b.high is None:
+        return current_bracket, None, None, None
+    higher = [
+        item for item in parsed
+        if item[0].low is not None
+        and float(item[0].low) > float(current_b.high)
+        and "yes" in item[2]
+        and "no" in item[2]
+    ]
+    if not higher:
+        return current_bracket, None, None, None
+    d1_b, d1_bracket, d1_sides = min(higher, key=lambda item: float(item[0].low))
+    if float(d1_b.low) - float(current_b.high) > 1.000001:
+        return current_bracket, None, None, None
+    return current_bracket, d1_bracket, d1_sides["no"], d1_sides["yes"]
 
 
 # --------------------------------------------------------------------------- #
@@ -388,10 +428,155 @@ def settled_bracket(conn: sqlite3.Connection, city: str, target_date: str) -> st
     return winners[0] if len(winners) == 1 else None
 
 
+def stable_hash(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def live_order_files() -> list[Path]:
+    root = ROOT / "runtime/weather_edge_v1"
+    paths = set(root.glob("*/live_orders.jsonl"))
+    paths.update(root.glob("live/*orders.jsonl"))
+    paths.add(LIVE_OUT)
+    return sorted(paths)
+
+
+def live_guard_reason(event: dict[str, Any]) -> str:
+    city = str(event.get("city") or "")
+    target_date = str(event.get("target_date") or "")
+    token_id = str(event.get("d1_yes_token_id") or "")
+    condition_id = str(event.get("condition_id") or "")
+    bracket = str(event.get("d1_bracket") or "")
+    for path in live_order_files():
+        for row in order_runtime.read_jsonl(path):
+            if str(row.get("status") or "") not in ACTIVE_ORDER_STATUSES:
+                continue
+            if str(row.get("target_date") or "") != target_date:
+                continue
+            exp_city = str(row.get("city") or "")
+            exp_token = str(row.get("token_id") or "")
+            exp_condition = str(row.get("condition_id") or row.get("market_id") or "")
+            exp_bracket = str(row.get("bracket") or "")
+            exp_side = str(row.get("signal_side") or "").upper()
+            if token_id and exp_token == token_id:
+                return f"same_token_active:{rel(path)}"
+            same_market = exp_city == city and (
+                (condition_id and exp_condition == condition_id)
+                or (bracket and exp_bracket == bracket)
+            )
+            if same_market and exp_side and exp_side != "BUY_YES":
+                return f"same_market_opposite_side:{rel(path)}"
+            if exp_city == city and exp_side == "BUY_NO":
+                return f"city_day_existing_buy_no:{rel(path)}"
+    return ""
+
+
+def live_daily_usage(cycle_dt: datetime) -> tuple[int, float]:
+    bj_day = cycle_dt.astimezone(timezone(timedelta(hours=8))).date()
+    count = 0
+    cost = 0.0
+    for row in order_runtime.read_jsonl(LIVE_OUT):
+        if str(row.get("status") or "") != "submitted":
+            continue
+        created = parse_utc(row.get("created_at_utc"))
+        if created is None or created.astimezone(timezone(timedelta(hours=8))).date() != bj_day:
+            continue
+        count += 1
+        cost += to_float(row.get("posted_notional"), to_float(row.get("notional"), 0.0))
+    return count, cost
+
+
+def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: datetime) -> dict[str, Any]:
+    ask = to_float(event.get("d1_yes_direct_ask"))
+    bid = to_float(event.get("d1_yes_direct_bid"), 0.0)
+    signal_base = {
+        "strategy_instance": STRATEGY_ID,
+        "city": event.get("city"),
+        "target_date": event.get("target_date"),
+        "bracket": event.get("d1_bracket"),
+        "token_id": event.get("d1_yes_token_id"),
+    }
+    signal_id = "d1-yes-high-mid-" + stable_hash(signal_base)
+    expires_at = cycle_dt + timedelta(minutes=float(args.order_ttl_min))
+    shares = float(args.shares)
+    spread = max(0.0, ask - bid) if bid > 0 else None
+    return {
+        "record_type": "weather_edge_trade_plan",
+        "plan_id": "plan-" + stable_hash({**signal_base, "signal_id": signal_id}),
+        "signal_id": signal_id,
+        "opportunity_id": signal_id,
+        "created_at_utc": cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "status": "accepted",
+        "risk_status": "passed",
+        "strategy": "weather_edge_v1",
+        "strategy_id": STRATEGY_ID,
+        "strategy_instance": STRATEGY_ID,
+        "source_strategy_instance": STRATEGY_ID,
+        "strategy_family": "market_structure_edge.favorite_low_estimation",
+        "strategy_head": "d1_yes_high_mid",
+        "probability_source": "market_d1_yes_mid_ge_0p80",
+        "decision_mode": "first_qualifying_city_date",
+        "execution_mode": "tiny_live_taker_5shares_taipei_shadow",
+        "profile": "d1_yes_high_mid",
+        "combo": RULE_ID,
+        "city": str(event.get("city") or ""),
+        "city_pool": "all_except_taipei_live",
+        "target_date": str(event.get("target_date") or ""),
+        "market_id": str(event.get("market_id") or event.get("condition_id") or ""),
+        "market_slug": str(event.get("event_slug") or ""),
+        "bracket": str(event.get("d1_bracket") or ""),
+        "token_id": str(event.get("d1_yes_token_id") or ""),
+        "condition_id": str(event.get("condition_id") or ""),
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "market_price": round(ask, 6),
+        "best_bid": round(bid, 6) if bid > 0 else 0.0,
+        "best_ask": round(ask, 6),
+        "spread": round(spread, 6) if spread is not None else None,
+        "limit_price": round(ask, 6),
+        "quote_status": "accepted",
+        "quote_reason": "direct_yes_top_ask_taker",
+        "quote_edge": 0.0,
+        "required_quote_edge": 0.0,
+        "model_token_probability": round(to_float(event.get("d1_yes_mid"), 0.0), 6),
+        "quote_best_bid": round(bid, 6) if bid > 0 else 0.0,
+        "quote_best_ask": round(ask, 6),
+        "quote_spread": round(spread, 6) if spread is not None else None,
+        "quote_tick_size": 0.001,
+        "quote_mode": "top_ask_taker_live",
+        "child_order_role": "single",
+        "maker_only": False,
+        "execution_policy": "d1_yes_high_mid_taker_v1",
+        "min_live_mid": float(args.mid_threshold),
+        "tick_size": 0.001,
+        "sizing_mode": "fixed_shares",
+        "fixed_order_shares": round(shares, 6),
+        "max_order_shares": round(shares, 6),
+        "size": round(shares, 6),
+        "notional": round(shares * ask, 6),
+        "order_notional_cap": round(shares * ask, 6),
+        "paper_enabled": True,
+        "live_enabled": True,
+        "shadow_decision": "live_except_taipei",
+        "shadow_reason": "Taipei remains zero-notional shadow",
+        "model_version": "d1_yes_high_mid_v1",
+        "expires_at_utc": expires_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "order_ttl_min": round(float(args.order_ttl_min), 6),
+        "decision_snapshot_ts_utc": str(event.get("book_fetched_at_utc") or ""),
+        "snapshot_ts_utc": str(event.get("book_fetched_at_utc") or ""),
+        "source_snapshot_path": str(event.get("orderbook_file") or ""),
+        "running_max_obs_utc": str(event.get("obs_generated_at_utc") or ""),
+        "obs_age_min": event.get("obs_age_min"),
+        "minutes_since_running_max": event.get("minutes_since_running_max"),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # main cycle
 # --------------------------------------------------------------------------- #
 def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
+    if args.live and not args.confirm_live:
+        raise RuntimeError("--live requires --confirm-live")
     cycle_dt = now_utc_dt()
     cycle_ts = cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
     obs_path = Path(args.observation_cache)
@@ -411,6 +596,10 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     invalid_obs_age_rows = 0
     invalid_book_age_rows = 0
     events: list[dict[str, Any]] = []
+    plans: list[dict[str, Any]] = []
+    live_planned = 0
+    shadow_first = 0
+    daily_order_count, daily_cost = live_daily_usage(cycle_dt)
 
     for city, rec in observations.items():
         target_date = rec.get("target_date")
@@ -421,8 +610,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             continue
         cities_scanned += 1
         running, unit = running_native(rec)
-        current_bracket, d1_bracket, d1_no = find_current_and_d1(ladder[key], running, unit)
-        if d1_bracket is None or d1_no is None:
+        current_bracket, d1_bracket, d1_no, d1_yes = find_current_and_d1(ladder[key], running, unit)
+        if d1_bracket is None or d1_no is None or d1_yes is None:
             continue
         no_bid = to_float(d1_no.get("bid"))
         no_ask = to_float(d1_no.get("ask"))
@@ -431,6 +620,9 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         cities_with_usable_d1_quote += 1
         d1_yes_ask = 1.0 - no_bid          # taker cost for YES
         d1_yes_mid = 1.0 - (no_ask + no_bid) / 2.0
+        direct_yes_ask = to_float(d1_yes.get("ask"))
+        direct_yes_bid = to_float(d1_yes.get("bid"))
+        parity_gap = abs(direct_yes_ask - d1_yes_ask) if math.isfinite(direct_yes_ask) else math.nan
         obs_age = to_float(rec.get("age_min"))
         book_ts = parse_utc(d1_no.get("fetched_at_utc"))
         book_age = (cycle_dt - book_ts).total_seconds() / 60.0 if book_ts else math.nan
@@ -471,6 +663,12 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             "current_bracket": current_bracket,
             "d1_bracket": d1_bracket,
             "d1_yes_ask": round(d1_yes_ask, 4),
+            "d1_yes_direct_ask": round(direct_yes_ask, 4) if math.isfinite(direct_yes_ask) else None,
+            "d1_yes_direct_bid": round(direct_yes_bid, 4) if math.isfinite(direct_yes_bid) else None,
+            "d1_yes_parity_gap": round(parity_gap, 6) if math.isfinite(parity_gap) else None,
+            "d1_yes_ask_size": d1_yes.get("ask_size"),
+            "d1_yes_depth_ask_5c": d1_yes.get("depth_ask_5c"),
+            "d1_yes_token_id": d1_yes.get("token_id"),
             "d1_yes_mid": round(d1_yes_mid, 4),
             "d1_no_bid": round(no_bid, 4),
             "d1_no_ask": round(no_ask, 4),
@@ -497,13 +695,56 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             "book_fetched_at_utc": d1_no.get("fetched_at_utc"),
             "obs_generated_at_utc": obs_generated,
             "condition_id": d1_no.get("condition_id"),
+            "market_id": d1_yes.get("market_id"),
+            "event_slug": d1_yes.get("event_slug"),
             # v1.1 pre-registered guards (recorded; remaining_heat requires forecast join, null here)
             "v11_ask_ok": bool(d1_yes_ask <= V11_MAX_ASK),
             "v11_remaining_heat_ok": None,
             "settled_bracket": None,
             "win": None,
             "pnl_at_settlement": None,
+            "execution_mode": "telemetry" if not is_first else "shadow",
+            "live_blocker": None,
         }
+
+        if is_first:
+            blocker = ""
+            d1_parsed = parse_bracket(d1_bracket)
+            if city in LIVE_SHADOW_CITIES:
+                blocker = "city_policy_taipei_shadow"
+            elif d1_parsed is None or d1_parsed.high is None:
+                blocker = "open_upper_or_unparsed_d1_shadow"
+            elif current_bracket == d1_bracket:
+                blocker = "invalid_same_current_and_d1"
+            elif not str(d1_yes.get("token_id") or ""):
+                blocker = "missing_yes_token"
+            elif not math.isfinite(direct_yes_ask):
+                blocker = "missing_direct_yes_ask"
+            elif not math.isfinite(parity_gap) or parity_gap > MAX_YES_PARITY_GAP:
+                blocker = "yes_no_quote_parity_mismatch"
+            elif to_float(d1_yes.get("ask_size"), 0.0) < float(args.shares):
+                blocker = "insufficient_top_ask_depth"
+            elif to_float(d1_yes.get("depth_ask_5c"), 0.0) < float(args.shares):
+                blocker = "insufficient_ask_depth_5c"
+            else:
+                blocker = live_guard_reason(event)
+
+            order_cost = float(args.shares) * direct_yes_ask if math.isfinite(direct_yes_ask) else math.inf
+            if not blocker and daily_order_count + live_planned >= int(args.max_orders_per_day):
+                blocker = "strategy_daily_order_cap"
+            if not blocker and daily_cost + sum(to_float(p.get("notional"), 0.0) for p in plans) + order_cost > float(args.max_daily_cost_usd) + 1e-9:
+                blocker = "strategy_daily_cost_cap"
+            if not blocker and not (args.live and args.confirm_live):
+                blocker = "live_not_requested"
+
+            if blocker:
+                event["execution_mode"] = "zero_notional_shadow"
+                event["live_blocker"] = blocker
+                shadow_first += 1
+            else:
+                event["execution_mode"] = "tiny_live_taker_5shares"
+                plans.append(build_live_plan(event, args, cycle_dt))
+                live_planned += 1
         events.append(event)
         if is_first and not args.dry_run:
             positions[pos_key] = {
@@ -516,6 +757,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 "book_fetched_at_utc": d1_no.get("fetched_at_utc"),
                 "book_age_min": round(book_age, 2),
                 "orderbook_file": rel(ob_file) if ob_file else None,
+                "execution_mode": event["execution_mode"],
+                "live_blocker": event["live_blocker"],
                 "settled": False,
             }
             new_positions += 1
@@ -557,7 +800,22 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 )
         conn.close()
 
+    executor_result = None
     if not args.dry_run:
+        order_runtime.write_jsonl(PLAN_OUT, plans)
+        if args.live:
+            executor_result = order_runtime.run_weather_order_executor(
+                root=ROOT,
+                plans_path=PLAN_OUT,
+                paper_out=PAPER_OUT,
+                live_out=LIVE_OUT,
+                live=True,
+                confirm_live=bool(args.confirm_live),
+                allow_taker=True,
+                cancel_expired=True,
+                no_telegram=False,
+                timeout_sec=180.0,
+            )
         for event in events:
             append_jsonl(JOURNAL_OUT, event)
         write_json(POSITIONS_OUT, positions)
@@ -599,8 +857,17 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "new_positions_this_cycle": new_positions,
         "selected_rows_this_cycle": new_positions,
         "rows_written_this_cycle": len(events),
-        "live_requested": False,
-        "live_enabled": False,
+        "live_requested": bool(args.live),
+        "live_enabled": bool(args.live and args.confirm_live),
+        "live_policy": {"Taipei": "zero_notional_shadow", "other_cities": "live_if_exact_and_executable"},
+        "fixed_order_shares": float(args.shares),
+        "max_orders_per_day": int(args.max_orders_per_day),
+        "max_daily_cost_usd": float(args.max_daily_cost_usd),
+        "live_orders_before_cycle_today": daily_order_count,
+        "live_cost_before_cycle_today": round(daily_cost, 6),
+        "live_plans_this_cycle": live_planned,
+        "shadow_first_signals_this_cycle": shadow_first,
+        "executor_result": executor_result,
         "open_positions_total": len(positions),
         "settled_positions_total": len(settled_positions),
         "settled_wins": settled_wins,
@@ -618,6 +885,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> int:
     args = parse_args()
+    configure_runtime(args)
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     if args.command == "run":
         summary = run_cycle(args)
@@ -630,6 +898,7 @@ def main() -> int:
             print(
                 f"[{summary['cycle_ts_utc']}] scanned={summary['cities_scanned_with_book']} "
                 f"triggers={summary['triggers_this_cycle']} new_pos={summary['new_positions_this_cycle']} "
+                f"live_plans={summary['live_plans_this_cycle']} "
                 f"open={summary['open_positions_total']} settled={summary['settled_positions_total']} "
                 f"roi={summary['settled_roi']} coverage={summary['coverage_note']}",
                 flush=True,

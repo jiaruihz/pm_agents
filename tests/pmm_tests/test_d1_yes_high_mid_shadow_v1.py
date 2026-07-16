@@ -77,3 +77,50 @@ def test_coverage_requires_36_book_cities_for_target_dates(tmp_path: Path) -> No
     assert runner.coverage_note(full, 35) == "full_ladder_partial"
     assert runner.coverage_note(full, 36) == "full_ladder"
     assert runner.coverage_note(targeted, 36) == "narrow_targeted_coverage"
+
+
+def quote(token: str) -> dict[str, object]:
+    return {"token_id": token, "ask": 0.5, "bid": 0.49}
+
+
+def test_fahrenheit_current_is_anchored_before_selecting_d1() -> None:
+    ladder = {
+        "92-93": {"yes": quote("y92"), "no": quote("n92")},
+        "94-95": {"yes": quote("y94"), "no": quote("n94")},
+        "96-97": {"yes": quote("y96"), "no": quote("n96")},
+    }
+
+    current, d1, d1_no, d1_yes = runner.find_current_and_d1(ladder, 93.92, "F")
+
+    assert current == "94-95"
+    assert d1 == "96-97"
+    assert d1_no == ladder["96-97"]["no"]
+    assert d1_yes == ladder["96-97"]["yes"]
+
+
+def test_missing_current_bracket_fails_closed() -> None:
+    ladder = {"38": {"yes": quote("y38"), "no": quote("n38")}}
+
+    assert runner.find_current_and_d1(ladder, 36.1, "C") == (None, None, None, None)
+
+
+def test_missing_intermediate_bracket_does_not_turn_d2_into_d1() -> None:
+    ladder = {
+        "37": {"yes": quote("y37"), "no": quote("n37")},
+        "39+": {"yes": quote("y39"), "no": quote("n39")},
+    }
+
+    assert runner.find_current_and_d1(ladder, 37.1, "C") == ("37", None, None, None)
+
+
+def test_exact_celsius_current_selects_immediate_higher_bracket() -> None:
+    ladder = {
+        "37": {"yes": quote("y37"), "no": quote("n37")},
+        "38": {"yes": quote("y38"), "no": quote("n38")},
+    }
+
+    current, d1, _, d1_yes = runner.find_current_and_d1(ladder, 37.1, "C")
+
+    assert current == "37"
+    assert d1 == "38"
+    assert d1_yes == ladder["38"]["yes"]

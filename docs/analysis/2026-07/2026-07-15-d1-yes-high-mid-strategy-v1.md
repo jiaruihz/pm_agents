@@ -1,11 +1,19 @@
-# Strategy: d1_yes_high_mid_v1（favorite 侧低估收割 · zero-notional shadow）
+# Strategy: d1_yes_high_mid_v1（favorite 侧低估收割 · Taipei shadow / 其他城市 tiny-live）
 
-Status: `shadow_candidate_no_live`
-Strategy ID: `d1_yes_high_mid_shadow_v1`（instance）· family `market_structure_edge.favorite_low_estimation`
+Status: `user_authorized_tiny_live_with_taipei_shadow`
+Strategy ID: `d1_yes_high_mid_live_v1`（active instance；历史 shadow instance 保留）· family `market_structure_edge.favorite_low_estimation`
 Created: 2026-07-15
 Source research: [market calibration curve v1](2026-07-15-market-calibration-curve-v1.md)
 Runner: [scripts/ops/d1_yes_high_mid_shadow_v1.py](../../../scripts/ops/d1_yes_high_mid_shadow_v1.py)
-Runtime dir: `runtime/weather_edge_v1/d1_yes_high_mid_shadow_v1/`
+Runtime dir: `runtime/weather_edge_v1/d1_yes_high_mid_live_v1/`
+
+## 当前执行政策（2026-07-16 用户明确授权）
+
+- Taipei：继续 zero-notional shadow。
+- 其他城市：首个合格 poll 固定 5 shares BUY YES tiny-live；每天最多 10 笔 / $50 cost。
+- 资金动作前必须重新读取该 YES token 的实时 CLOB：fresh mid 仍需 ≥0.80、top ask 深度 ≥5；按 fresh top ask 提交 taker limit。
+- `X+` open-upper、current 缺失、current=d1、ladder 中间档缺失、YES/NO 同 outcome 报价不互补等语义/执行异常只记 shadow，不下单。这些是 exact-bracket 身份和可成交性边界，不是城市/天气 alpha filter。
+- 研究 promotion gate 尚未满足；本次 tiny-live 是用户在知悉证据仍属 inconclusive 后的显式资金决策，不改写研究 verdict。
 
 ## 一句话
 
@@ -13,7 +21,7 @@ Runtime dir: `runtime/weather_edge_v1/d1_yes_high_mid_shadow_v1/`
 
 ## 冻结入场规则（v1，promotion 证据轨）
 
-1. 触发：`d1_yes_mid >= 0.80`，其中 `d1` = running-max 上一档 exact bracket（`tail_distance == 1`，语义与回测 factory `add_state_siblings` 完全一致，runner 直接 import 复用）。
+1. 触发：`d1_yes_mid >= 0.80`，其中先按结算 half-up rounding 锚定 current bracket，再取 ladder 中紧邻的上一档 bounded exact bracket；缺 current / 缺中间档时 fail closed。
 2. 入场：taker，成交价 `d1_yes_ask = 1 - d1_no_bid`；fee = `0.05*p*(1-p)`。
 3. 去重：每个 `(city, target_date)` 只取**首个**满足条件的 poll（promotion 分母）；同 city-date 后续 poll 记为 telemetry 轨，不并入 promotion ROI。
 4. 新鲜度 parity gate：`obs_age <= 45min`（回测触发行 99% 满足，非新 filter，是防止用比回测更旧的观测交易）。
@@ -43,7 +51,7 @@ Contract: significance=MARGINAL(all-rows CI>0, dedup CI 跨 0); baseline=同价 
 - NO bid 深度证据：5-share 可成交无穿档（runner 已记 `d1_no_bid_size` / `d1_no_depth_bid_5c`）；
 - 幽灵报价审计：触发时 book 报价在下单时刻仍可成交（per-poll telemetry 轨对比）。
 
-满足后才以固定 5 shares taker 起 tiny-live，走执行确认与 CLOB/live gate；maker improve 版本仅 telemetry，不混 ROI。**当前不推荐任何 live。**
+原研究规则是满足后才讨论固定 5 shares tiny-live；截至 2026-07-16 gate 仍未自然通过。用户已显式授权上述拆分 tiny-live，故执行状态升级，但研究结论仍为 inconclusive，不能把用户授权写成统计 promotion pass。
 
 ## 采集依赖（重要）
 
@@ -61,11 +69,21 @@ Contract: significance=MARGINAL(all-rows CI>0, dedup CI 跨 0); baseline=同价 
 ## 血缘接入
 
 - L2 market_structure_edge；消费 L0 observations（running max）+ L0 orderbook snapshots；不新建并行事实表。
-- canonical 策略血缘：`strategy_def` key `d1_yes_high_mid`，`strategy_instance` / `weather_strategy_shadow_queue` / `weather_strategy_runtime_registry` instance `d1_yes_high_mid_shadow_v1`（execution_mode=zero_notional_shadow）。
-- 零 notional：不写 `orders`/`fills`/`fact_trades`；结算标签从 `settlement_outcomes` 回填到 journal。
+- canonical 策略血缘：`strategy_def` key `d1_yes_high_mid`；active instance `d1_yes_high_mid_live_v1`，historical instance `d1_yes_high_mid_shadow_v1` 保留为 superseded-for-now。
+- Taipei / execution-blocked 行只写 shadow journal；真实订单写 `runtime/weather_edge_v1/d1_yes_high_mid_live_v1/live_orders.jsonl`，后续由 canonical rebuild 接入 order→fill→settlement。
 
 ## 已知限制
 
-- 整数边界 running value 的 current-bracket 归属存在轻微歧义（相邻档在整数点重叠），对零 notional telemetry 影响可忽略；d1 由 `tail_distance==1` 判定，不受影响。
+- 2026-07-16 已修复旧 runner 先按 raw running 算 tail distance 的错误：例如 93.92°F 会结算 round 到 94，`94-95` 必须是 current 而不是 d1。旧 shadow 污染窗口和逐条影响另做重放记录；无真实资金影响。
 - forecast remaining-heat 尚未 join（v1.1 guard 半开）。
 - 发现路径含 ~50 格校准扫描的事后选择，需 fresh-forward 洗清。
+
+## 2026-07-16 current→d1 语义修复影响账
+
+污染窗口 `2026-07-15T07:37:29Z`–`2026-07-16T00:19:11Z`。旧 shadow promotion 共 10 个 city-day，修复后 6 个受影响：
+
+- Chongqing、Lucknow、Paris、London、BuenosAires：当时 ladder 缺 current bracket，旧逻辑仍凭 raw distance 造出 d1；正确口径为无有效 d1，不应入分母/下单。
+- Chicago：93.92°F round 为 94，旧逻辑把 `94-95` 同时当 current 和 d1；正确 d1 是 `96-97`。
+- Beijing、Helsinki、Madrid、Jeddah 的 current→d1 身份不变；但 Jeddah d1=`38+` 按当前资金政策仍只 shadow。
+
+影响金额 `$0`：该窗口 runner 为 zero-notional shadow。逐条重放证据见 [generated audit](generated/d1_yes_high_mid_shadow_semantics_audit_v1.json)；后续研究使用旧 journal 时须剔除上述 6 行或按 corrected fields 重建。

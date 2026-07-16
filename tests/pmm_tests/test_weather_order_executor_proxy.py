@@ -46,3 +46,16 @@ def test_configure_market_proxy_env_direct_clears_proxy(monkeypatch):
     assert status["proxy"] == ""
     for key in mod.PROXY_ENV_KEYS:
         assert key not in mod.os.environ
+
+
+def test_best_ask_size_aggregates_only_fresh_top_level():
+    mod = load_executor_module()
+    book = {
+        "asks": [
+            {"price": "0.91", "size": "3"},
+            {"price": "0.91", "size": "2.5"},
+            {"price": "0.92", "size": "100"},
+        ]
+    }
+
+    assert mod._best_ask_size_from_book(book, 0.91) == 5.5

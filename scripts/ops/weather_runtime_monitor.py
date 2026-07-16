@@ -652,6 +652,19 @@ def default_specs(root: Path) -> list[WatchSpec]:
             history_window_min=360,
             target_date_lag_warn_days=1,
         ),
+        WatchSpec(
+            instance="d1_yes_high_mid_live_v1",
+            display_name="d1 YES high-mid live (Taipei shadow)",
+            runtime_dir=root / "d1_yes_high_mid_live_v1",
+            mode="tiny_live_taker_5shares_taipei_shadow",
+            expected_live=True,
+            live_orders_file=str(root / "d1_yes_high_mid_live_v1" / "live_orders.jsonl"),
+            stale_after_min=15,
+            bad_after_min=45,
+            history_window_min=360,
+            target_date_lag_warn_days=1,
+            no_live_order_warn_hours=24,
+        ),
     ]
 
 
