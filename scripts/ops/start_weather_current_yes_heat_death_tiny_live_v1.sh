@@ -34,6 +34,8 @@ start_head() {
       --max-orders-per-utc-day 3 \
       --max-snapshot-age-min 20 \
       --order-ttl-min 15 \
+      --maker-chase-refresh-sec 30 \
+      --maker-chase-window-min 3 \
       --interval-seconds 30 \
       --live --confirm-live >> '$log_file' 2>&1"
 

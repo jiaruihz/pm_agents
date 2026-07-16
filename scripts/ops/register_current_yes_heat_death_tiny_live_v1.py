@@ -26,16 +26,16 @@ PREREG_DOC = "docs/analysis/2026-07/2026-07-15-heat-death-live-promotion-preregi
 HEADS = {
     "h1_late_carry": {
         "instance_id": "current_yes_heat_death_tiny_live_h1_late_carry_v1",
-        "config_id": "current_yes_heat_death_tiny_live_h1_late_carry_v2_split5x5",
-        "display_name": "current YES heat-death H1 late-carry split 5+5 probe",
-        "config_name": "heat-death H1 late-carry 5 taker + 5 maker, ask 0.95-0.99",
+        "config_id": "current_yes_heat_death_tiny_live_h1_late_carry_v3_maker_first_chase",
+        "display_name": "current YES heat-death H1 late-carry maker-first chase probe",
+        "config_name": "heat-death H1 5 taker + 5 maker-first chase, ask 0.95-0.99",
         "min_ask": 0.95,
         "max_ask": 0.99,
         "total_shares": 10,
         "taker_shares": 5,
         "maker_shares": 5,
         "min_top_ask_shares": 5,
-        "execution": "5-share fresh-book taker + one-shot 5-share post-only maker",
+        "execution": "5-share fresh-book taker + 5-share maker-first chase; 3m capped taker fallback",
         "execution_mode": "tiny_live_split_taker_maker_probe",
     },
     "h2_early_dislocation": {
@@ -91,7 +91,7 @@ def main() -> int:
                 ),
                 "instance_family",
                 "tiny_live_forward_probe",
-                "H1 split 5 taker + 5 maker; H2 5-share taker; not confirmed or approved for size-up",
+                "H1 5 taker + 5 maker-first chase with capped fallback; H2 5-share taker; not confirmed or approved for size-up",
             ),
         ),
     ]
@@ -124,6 +124,15 @@ def main() -> int:
                             "max_snapshot_age_min": 20,
                             "order_ttl_min": 15,
                             "execution": spec["execution"],
+                            "maker_chase_refresh_sec": 30 if head == "h1_late_carry" else None,
+                            "maker_chase_window_min": 3 if head == "h1_late_carry" else None,
+                            "maker_chase_reprice_limit": None,
+                            "maker_price_cap": "initial fresh ask" if head == "h1_late_carry" else None,
+                            "maker_taker_fallback": (
+                                "after 3m only when fresh ask <= initial fresh ask and ask depth >= 5"
+                                if head == "h1_late_carry"
+                                else None
+                            ),
                         }
                     ),
                     STRATEGY_KEY,

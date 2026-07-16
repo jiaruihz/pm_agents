@@ -43,7 +43,7 @@ STRATEGY_ID = "current_yes_heat_death_physical_v1"
 HEADS: dict[str, dict[str, Any]] = {
     "h1_late_carry": {
         "instance": "current_yes_heat_death_tiny_live_h1_late_carry_v1",
-        "config_id": "current_yes_heat_death_tiny_live_h1_late_carry_v2_split5x5",
+        "config_id": "current_yes_heat_death_tiny_live_h1_late_carry_v3_maker_first_chase",
         "decision_mode": "late_carry_heat_death_strong_current_yes",
         "combo": "current_yes_heat_death_late_carry_v1",
         "min_ask": 0.95,
@@ -208,6 +208,56 @@ def latest_strong_rows(
     return list(latest.values())
 
 
+def latest_fresh_rows(
+    decisions_path: Path,
+    *,
+    max_snapshot_age_min: float,
+    now: datetime,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    latest: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in read_jsonl(decisions_path):
+        city = str(row.get("city") or "")
+        target_date = str(row.get("target_date") or "")
+        snapshot_ts = parse_utc(row.get("decision_snapshot_ts_utc"))
+        if not city or not target_date or snapshot_ts is None:
+            continue
+        age_min = (now - snapshot_ts).total_seconds() / 60.0
+        if age_min < -1.0 or age_min > max_snapshot_age_min:
+            continue
+        key = (city, target_date)
+        prior = latest.get(key)
+        if prior is None or str(row.get("decision_snapshot_ts_utc")) > str(prior.get("decision_snapshot_ts_utc")):
+            latest[key] = row
+    return latest
+
+
+def live_order_id(row: Mapping[str, Any]) -> str:
+    response = row.get("exchange_response") if isinstance(row.get("exchange_response"), Mapping) else {}
+    place = response.get("place") if isinstance(response.get("place"), Mapping) else {}
+    for payload in (row, place, response):
+        for key in ("order_id", "orderID", "clob_order_id", "id"):
+            value = str(payload.get(key) or "").strip()
+            if value:
+                return value
+    return ""
+
+
+def handled_maker_source_order_ids(live_orders: Path) -> set[str]:
+    handled: set[str] = set()
+    for row in read_jsonl(live_orders):
+        source_order_id = str(row.get("source_order_id") or "")
+        if not source_order_id or not str(row.get("execution_action") or "").startswith("h1_maker_"):
+            continue
+        response = row.get("exchange_response") if isinstance(row.get("exchange_response"), Mapping) else {}
+        if str(response.get("error_classification") or "") in {
+            "pre_place_cancel_not_confirmed",
+            "cancel_only_not_confirmed",
+        }:
+            continue
+        handled.add(source_order_id)
+    return handled
+
+
 def refresh_current_yes_quotes(
     rows: list[dict[str, Any]],
     *,
@@ -239,6 +289,7 @@ def build_plan(
     child_order_role: str,
     live_enabled: bool,
     ttl_min: float,
+    maker_chase_window_min: float = 3.0,
 ) -> dict[str, Any]:
     ask = float(row["fresh_current_yes_ask"])
     bid = finite(row.get("fresh_current_yes_bid")) or 0.0
@@ -258,6 +309,7 @@ def build_plan(
         quote_reason = "fresh_top_ask_has_fixed_share_depth"
     sid = signal_id(row)
     now = datetime.now(timezone.utc)
+    maker_deadline = now + timedelta(minutes=maker_chase_window_min)
     base = {
         "strategy": "weather_edge_v1",
         "strategy_id": STRATEGY_ID,
@@ -314,6 +366,15 @@ def build_plan(
         "forecast_peak_delta_hours_local": row.get("forecast_peak_delta_hours_local"),
         "expires_at_utc": (now + timedelta(minutes=ttl_min)).isoformat(timespec="seconds"),
     }
+    if maker_only:
+        base.update(
+            {
+                "maker_price_cap": round(ask, 6),
+                "maker_lifecycle_root_created_at_utc": now.isoformat(timespec="seconds"),
+                "maker_lifecycle_deadline_utc": maker_deadline.isoformat(timespec="seconds"),
+                "maker_lifecycle_reprice_count": 0,
+            }
+        )
     return {
         "record_type": "weather_edge_trade_plan",
         "plan_id": stable_hash({**base, "signal_id": sid, "child_order_role": child_order_role}),
@@ -334,6 +395,7 @@ def build_opportunity_plans(
     maker_shares: float,
     live_enabled: bool,
     ttl_min: float,
+    maker_chase_window_min: float = 3.0,
 ) -> list[dict[str, Any]]:
     plans = [
         build_plan(
@@ -342,6 +404,7 @@ def build_opportunity_plans(
             child_order_role="taker" if maker_shares > 0 else "single",
             live_enabled=live_enabled,
             ttl_min=ttl_min,
+            maker_chase_window_min=maker_chase_window_min,
         )
     ]
     if maker_shares > 0:
@@ -352,9 +415,203 @@ def build_opportunity_plans(
                 child_order_role="maker",
                 live_enabled=live_enabled,
                 ttl_min=ttl_min,
+                maker_chase_window_min=maker_chase_window_min,
             )
         )
     return plans
+
+
+def build_h1_maker_lifecycle_plan(
+    order: Mapping[str, Any],
+    *,
+    action: str,
+    limit_price: float,
+    maker_only: bool,
+    source_order_id: str,
+    live_enabled: bool,
+    now: datetime,
+) -> dict[str, Any]:
+    shares = finite(order.get("size")) or 0.0
+    signal = str(order.get("signal_id") or "")
+    tick_size = finite(order.get("quote_tick_size")) or 0.001
+    base = {
+        "strategy": "weather_edge_v1",
+        "strategy_id": STRATEGY_ID,
+        "strategy_instance": STRATEGY_INSTANCE,
+        "config_id": HEADS[ACTIVE_HEAD]["config_id"],
+        "strategy_family": "reheat_risk",
+        "decision_mode": HEADS[ACTIVE_HEAD]["decision_mode"],
+        "execution_mode": "tiny_live_split_taker_maker_probe",
+        "profile": "physical_confirmation_strong_maker_first_lifecycle",
+        "combo": HEADS[ACTIVE_HEAD]["combo"],
+        "entry_regime_head": ACTIVE_HEAD,
+        "city": str(order.get("city") or ""),
+        "city_pool": str(order.get("city_pool") or "all_canonical_weather_state_v2"),
+        "target_date": str(order.get("target_date") or ""),
+        "market_id": str(order.get("market_id") or ""),
+        "bracket": str(order.get("bracket") or ""),
+        "token_id": str(order.get("token_id") or ""),
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "child_order_role": action,
+        "limit_price": round(limit_price, 6),
+        "quote_status": "cancel_requested" if action == "h1_maker_cancel_stale_thesis" else "accepted",
+        "quote_reason": action,
+        "quote_best_bid": finite(order.get("lifecycle_best_bid")) or 0.0,
+        "quote_best_ask": finite(order.get("lifecycle_best_ask")) or 0.0,
+        "quote_tick_size": round(tick_size, 6),
+        "quote_mode": action,
+        "maker_only": maker_only,
+        "allow_duplicate_signal_id": True,
+        "size": round(shares, 6),
+        "notional": round(shares * limit_price, 6),
+        "order_notional_cap": round(shares * limit_price, 6),
+        "execution_policy": (
+            "current_yes_heat_death_maker_chase_v1"
+            if maker_only
+            else "current_yes_heat_death_maker_fallback_taker_v1"
+        ),
+        "execution_action": action,
+        "cancel_before_order_id": source_order_id,
+        "source_order_id": source_order_id,
+        "source_execution_id": str(order.get("execution_id") or ""),
+        "source_plan_id": str(order.get("plan_id") or ""),
+        "source_posted_price": round(finite(order.get("posted_price")) or 0.0, 6),
+        "source_remaining_shares": round(shares, 6),
+        "replacement_requires_order_state": action != "h1_maker_cancel_stale_thesis",
+        "cancel_only": action == "h1_maker_cancel_stale_thesis",
+        "min_order_shares": 5.0,
+        "tick_size": round(tick_size, 6),
+        "sizing_mode": "fixed_shares",
+        "fixed_order_shares": round(shares, 6),
+        "max_order_shares": round(shares, 6),
+        "paper_enabled": False,
+        "live_enabled": bool(live_enabled),
+        "decision_snapshot_ts_utc": str(order.get("decision_snapshot_ts_utc") or ""),
+        "expires_at_utc": str(order.get("expires_at_utc") or ""),
+        "maker_price_cap": round(finite(order.get("maker_price_cap")) or 0.0, 6),
+        "maker_lifecycle_root_created_at_utc": str(order.get("maker_lifecycle_root_created_at_utc") or ""),
+        "maker_lifecycle_deadline_utc": str(order.get("maker_lifecycle_deadline_utc") or ""),
+        "maker_lifecycle_reprice_count": int(finite(order.get("maker_lifecycle_reprice_count")) or 0) + 1,
+    }
+    return {
+        "record_type": "weather_edge_trade_plan",
+        "plan_id": stable_hash({**base, "signal_id": signal, "created_at_utc": now.isoformat()}),
+        "signal_id": signal,
+        "opportunity_id": signal,
+        "created_at_utc": now.isoformat(timespec="seconds"),
+        "status": "accepted",
+        "risk_status": "passed",
+        "risk_reason": "",
+        **base,
+    }
+
+
+def h1_maker_lifecycle_plans(
+    *,
+    live_orders: Path,
+    latest_rows: Mapping[tuple[str, str], Mapping[str, Any]],
+    live_enabled: bool,
+    refresh_sec: float,
+    proxy: str | None,
+    timeout_sec: float,
+    now: datetime,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if ACTIVE_HEAD != "h1_late_carry":
+        return [], []
+    handled = handled_maker_source_order_ids(live_orders)
+    candidates: list[dict[str, Any]] = []
+    for row in read_jsonl(live_orders):
+        if str(row.get("status") or "") != "submitted" or not bool(row.get("maker_only")):
+            continue
+        if str(row.get("strategy_instance") or "") != STRATEGY_INSTANCE:
+            continue
+        order_id = live_order_id(row)
+        if not order_id or order_id in handled:
+            continue
+        created = parse_utc(row.get("created_at_utc"))
+        if created is None or (now - created).total_seconds() < refresh_sec:
+            continue
+        candidates.append(row)
+
+    plans: list[dict[str, Any]] = []
+    decisions: list[dict[str, Any]] = []
+    with shadow.market_httpx_client(proxy, timeout=timeout_sec) as client:
+        for order in candidates:
+            source_order_id = live_order_id(order)
+            key = (str(order.get("city") or ""), str(order.get("target_date") or ""))
+            thesis = latest_rows.get(key)
+            thesis_ok = bool(thesis and thesis.get("physical_confirmation_strong")) and str(
+                thesis.get("current_yes_token_id") or ""
+            ) == str(order.get("token_id") or "")
+            action = ""
+            blocker = ""
+            best_bid = 0.0
+            best_ask = 0.0
+            next_price = 0.0
+            maker_only = True
+            if not thesis_ok:
+                action = "h1_maker_cancel_stale_thesis"
+            else:
+                quote = shadow._fetch_token_book(client, str(order.get("token_id") or ""))
+                best_bid = finite(quote.get("bid")) or 0.0
+                best_ask = finite(quote.get("ask")) or 0.0
+                ask_size = finite(quote.get("ask_size")) or 0.0
+                tick_size = finite(quote.get("tick_size")) or finite(order.get("quote_tick_size")) or 0.001
+                cap = finite(order.get("maker_price_cap")) or 0.0
+                posted = finite(order.get("posted_price")) or finite(order.get("limit_price")) or 0.0
+                deadline = parse_utc(order.get("maker_lifecycle_deadline_utc"))
+                if str(quote.get("book_status") or "") != "ok" or best_ask <= 0 or cap <= 0 or deadline is None:
+                    blocker = "h1_maker_bad_fresh_book_or_state"
+                elif now >= deadline and best_ask <= cap + 1e-9 and ask_size >= 5.0:
+                    action = "h1_maker_taker_fallback"
+                    next_price = best_ask
+                    maker_only = False
+                elif now >= deadline:
+                    blocker = "h1_maker_fallback_price_or_depth_not_allowed"
+                elif best_bid > 0 and best_bid < best_ask:
+                    next_price = min(best_bid + tick_size, best_ask - tick_size, cap)
+                    if next_price > posted + tick_size - 1e-9:
+                        action = "h1_maker_reprice"
+                    else:
+                        blocker = "h1_maker_already_at_best_allowed_price"
+                else:
+                    blocker = "h1_maker_no_resting_price"
+            lifecycle_order = {
+                **order,
+                "lifecycle_best_bid": best_bid,
+                "lifecycle_best_ask": best_ask,
+            }
+            decision = {
+                "record_type": "current_yes_heat_death_h1_maker_lifecycle_decision",
+                "created_at_utc": now.isoformat(timespec="seconds"),
+                "source_order_id": source_order_id,
+                "city": key[0],
+                "target_date": key[1],
+                "posted_price": finite(order.get("posted_price")) or 0.0,
+                "maker_price_cap": finite(order.get("maker_price_cap")) or 0.0,
+                "reprice_count": int(finite(order.get("maker_lifecycle_reprice_count")) or 0),
+                "best_bid": best_bid,
+                "best_ask": best_ask,
+                "action": action,
+                "blocker": blocker,
+                "next_price": round(next_price, 6),
+                "live_enabled": bool(live_enabled),
+            }
+            decisions.append(decision)
+            if action:
+                plans.append(
+                    build_h1_maker_lifecycle_plan(
+                        lifecycle_order,
+                        action=action,
+                        limit_price=next_price,
+                        maker_only=maker_only,
+                        source_order_id=source_order_id,
+                        live_enabled=live_enabled,
+                        now=now,
+                    )
+                )
+    return plans, decisions
 
 
 def choose_plans(
@@ -372,6 +629,7 @@ def choose_plans(
     live_enabled: bool,
     ttl_min: float,
     now: datetime,
+    maker_chase_window_min: float = 3.0,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     counts = {
         "fresh_strong_rows": len(rows),
@@ -427,6 +685,7 @@ def choose_plans(
             maker_shares=maker_shares,
             live_enabled=live_enabled,
             ttl_min=ttl_min,
+            maker_chase_window_min=maker_chase_window_min,
         )
     ]
     return plans, counts
@@ -501,11 +760,18 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError(
             f"share split mismatch for {args.head}: total={total_shares} taker={taker_shares} maker={maker_shares}"
         )
+    if float(args.maker_chase_refresh_sec) <= 0 or float(args.maker_chase_window_min) <= 0:
+        raise RuntimeError("maker chase refresh and window must both be positive")
     output_dir = Path(args.output_dir) if args.output_dir else ROOT / f"runtime/weather_edge_v1/{head['instance']}"
     output_dir.mkdir(parents=True, exist_ok=True)
     decisions_path = Path(args.shadow_decisions)
     live_orders = output_dir / "live_orders.jsonl"
     now = datetime.now(timezone.utc)
+    latest_rows = latest_fresh_rows(
+        decisions_path,
+        max_snapshot_age_min=float(args.max_snapshot_age_min),
+        now=now,
+    )
     rows = latest_strong_rows(
         decisions_path,
         max_snapshot_age_min=float(args.max_snapshot_age_min),
@@ -530,8 +796,22 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         max_orders_per_utc_day=int(args.max_orders_per_utc_day),
         live_enabled=bool(args.live and args.confirm_live),
         ttl_min=float(args.order_ttl_min),
+        maker_chase_window_min=float(args.maker_chase_window_min),
         now=now,
     )
+    lifecycle_plans, lifecycle_decisions = h1_maker_lifecycle_plans(
+        live_orders=live_orders,
+        latest_rows=latest_rows,
+        live_enabled=bool(args.live and args.confirm_live),
+        refresh_sec=float(args.maker_chase_refresh_sec),
+        proxy=args.market_proxy,
+        timeout_sec=float(args.book_timeout_sec),
+        now=now,
+    )
+    for decision in lifecycle_decisions:
+        append_jsonl(output_dir / "maker_lifecycle_decisions.jsonl", decision)
+    entry_plans = plans
+    plans = [*lifecycle_plans, *entry_plans]
     plans_path = output_dir / "current_plans.jsonl"
     write_jsonl(plans_path, plans)
     execution = execute_plans(
@@ -542,7 +822,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         total_shares=total_shares,
         max_child_shares=max(taker_shares, maker_shares),
     )
-    planned_city_days = sorted({f"{row['city']}:{row['target_date']}" for row in plans})
+    planned_city_days = sorted({f"{row['city']}:{row['target_date']}" for row in entry_plans})
     summary = {
         "status": "ok" if execution["exit_code"] == 0 else "executor_error",
         "generated_at_utc": utc_now(),
@@ -555,11 +835,18 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "fixed_order_shares": total_shares,
         "taker_order_shares": taker_shares,
         "maker_order_shares": maker_shares,
+        "maker_chase_enabled": ACTIVE_HEAD == "h1_late_carry" and maker_shares > 0,
+        "maker_chase_refresh_sec": float(args.maker_chase_refresh_sec),
+        "maker_chase_window_min": float(args.maker_chase_window_min),
+        "maker_chase_reprice_limit": None,
         "max_orders_per_utc_day": int(args.max_orders_per_utc_day),
         "min_ask": min_ask,
         "max_ask": max_ask,
         "candidate_funnel": funnel,
         "plans": len(plans),
+        "entry_plans": len(entry_plans),
+        "maker_lifecycle_plans": len(lifecycle_plans),
+        "maker_lifecycle_decisions": len(lifecycle_decisions),
         "planned_city_days": planned_city_days,
         "execution": execution,
     }
@@ -582,6 +869,8 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-ask", type=float, default=None, help="defaults to the head's preregistered cap")
     ap.add_argument("--max-snapshot-age-min", type=float, default=20.0)
     ap.add_argument("--order-ttl-min", type=float, default=15.0)
+    ap.add_argument("--maker-chase-refresh-sec", type=float, default=30.0)
+    ap.add_argument("--maker-chase-window-min", type=float, default=3.0)
     ap.add_argument("--book-timeout-sec", type=float, default=5.0)
     ap.add_argument("--executor-timeout-sec", type=float, default=60.0)
     ap.add_argument("--market-proxy", default=None)

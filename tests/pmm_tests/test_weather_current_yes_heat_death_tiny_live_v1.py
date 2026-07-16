@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts.ops import weather_current_yes_heat_death_tiny_live_v1 as live
@@ -36,6 +37,29 @@ def _row(*, city: str = "Busan", ask: float = 0.84, ask_size: float = 20.0) -> d
         "fresh_current_yes_book_status": "ok",
         "fresh_current_yes_book_fetched_at_utc": "2026-07-14T04:08:05Z",
         "physical_support_count": 3,
+    }
+
+
+def _submitted_h1_maker(*, now: datetime, posted_price: float = 0.961, reprice_count: int = 0) -> dict:
+    plans = live.build_opportunity_plans(
+        _row(ask=0.97),
+        taker_shares=5,
+        maker_shares=5,
+        live_enabled=True,
+        ttl_min=15,
+        maker_chase_window_min=3,
+    )
+    maker = plans[1]
+    return {
+        **maker,
+        "status": "submitted",
+        "created_at_utc": (now - timedelta(seconds=60)).isoformat(),
+        "posted_price": posted_price,
+        "maker_price_cap": 0.97,
+        "maker_lifecycle_root_created_at_utc": (now - timedelta(seconds=60)).isoformat(),
+        "maker_lifecycle_deadline_utc": (now + timedelta(minutes=2)).isoformat(),
+        "maker_lifecycle_reprice_count": reprice_count,
+        "exchange_response": {"place": {"orderID": "maker-order-1"}},
     }
 
 
@@ -75,11 +99,160 @@ def test_h1_builds_five_taker_plus_five_post_only_maker() -> None:
     assert maker["limit_price"] == 0.961
     assert maker["maker_only"] is True
     assert maker["execution_policy"] == "current_yes_heat_death_maker_probe_v1"
+    assert maker["maker_price_cap"] == 0.97
+    assert maker["maker_lifecycle_reprice_count"] == 0
+    assert maker["maker_lifecycle_deadline_utc"]
     assert taker["signal_id"] == maker["signal_id"]
     assert taker["opportunity_id"] == maker["opportunity_id"]
     assert taker["plan_id"] != maker["plan_id"]
     assert taker["allow_duplicate_signal_id"] is True
     assert maker["allow_duplicate_signal_id"] is True
+
+
+def test_h1_maker_chase_has_no_reprice_count_limit_and_never_exceeds_initial_ask(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _select_h1()
+    now = datetime(2026, 7, 16, 6, 0, tzinfo=timezone.utc)
+    order = _submitted_h1_maker(now=now, reprice_count=99)
+    live_orders = tmp_path / "live.jsonl"
+    live_orders.write_text(json.dumps(order) + "\n", encoding="utf-8")
+    monkeypatch.setattr(live.shadow, "market_httpx_client", lambda *_args, **_kwargs: nullcontext(object()))
+    monkeypatch.setattr(
+        live.shadow,
+        "_fetch_token_book",
+        lambda *_args, **_kwargs: {
+            "book_status": "ok",
+            "bid": 0.975,
+            "ask": 0.98,
+            "ask_size": 20.0,
+            "tick_size": 0.001,
+        },
+    )
+
+    plans, decisions = live.h1_maker_lifecycle_plans(
+        live_orders=live_orders,
+        latest_rows={("Busan", "2026-07-14"): _row(ask=0.97)},
+        live_enabled=True,
+        refresh_sec=30,
+        proxy=None,
+        timeout_sec=5,
+        now=now,
+    )
+
+    assert decisions[0]["action"] == "h1_maker_reprice"
+    assert plans[0]["limit_price"] == 0.97
+    assert plans[0]["maker_lifecycle_reprice_count"] == 100
+    assert plans[0]["maker_price_cap"] == 0.97
+
+
+def test_h1_maker_chase_falls_back_to_taker_after_window_when_price_not_worse(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _select_h1()
+    now = datetime(2026, 7, 16, 6, 0, tzinfo=timezone.utc)
+    order = {
+        **_submitted_h1_maker(now=now),
+        "maker_lifecycle_deadline_utc": (now - timedelta(seconds=1)).isoformat(),
+    }
+    live_orders = tmp_path / "live.jsonl"
+    live_orders.write_text(json.dumps(order) + "\n", encoding="utf-8")
+    monkeypatch.setattr(live.shadow, "market_httpx_client", lambda *_args, **_kwargs: nullcontext(object()))
+    monkeypatch.setattr(
+        live.shadow,
+        "_fetch_token_book",
+        lambda *_args, **_kwargs: {
+            "book_status": "ok",
+            "bid": 0.96,
+            "ask": 0.965,
+            "ask_size": 10.0,
+            "tick_size": 0.001,
+        },
+    )
+
+    plans, decisions = live.h1_maker_lifecycle_plans(
+        live_orders=live_orders,
+        latest_rows={("Busan", "2026-07-14"): _row(ask=0.97)},
+        live_enabled=True,
+        refresh_sec=30,
+        proxy=None,
+        timeout_sec=5,
+        now=now,
+    )
+
+    assert decisions[0]["action"] == "h1_maker_taker_fallback"
+    assert plans[0]["maker_only"] is False
+    assert plans[0]["limit_price"] == 0.965
+    assert plans[0]["cancel_before_order_id"] == "maker-order-1"
+
+
+def test_h1_maker_chase_cancel_replace_blocks_dust_after_partial_fill(tmp_path: Path) -> None:
+    _select_h1()
+    now = datetime(2026, 7, 16, 6, 0, tzinfo=timezone.utc)
+    plan = live.build_h1_maker_lifecycle_plan(
+        _submitted_h1_maker(now=now),
+        action="h1_maker_taker_fallback",
+        limit_price=0.965,
+        maker_only=False,
+        source_order_id="maker-order-1",
+        live_enabled=True,
+        now=now,
+    )
+    plans_path = tmp_path / "plans.jsonl"
+    plans_path.write_text(json.dumps(plan) + "\n", encoding="utf-8")
+    placed: list[dict] = []
+
+    result = execute_trade_plans(
+        plan_path=plans_path,
+        paper_out=tmp_path / "paper.jsonl",
+        live_out=tmp_path / "live.jsonl",
+        config=ExecutorConfig(live=True, confirm_live=True),
+        live_place_fn=lambda child: placed.append(child) or {"order_id": "replacement-1"},
+        live_cancel_fn=lambda order_id: {
+            "cancel": {"canceled": [order_id], "not_canceled": {}},
+            "order_after_cancel": {"original_size": "5", "size_matched": "2"},
+        },
+    )
+
+    assert result["live_guard_blocks"] == 1
+    assert placed == []
+    row = json.loads((tmp_path / "live.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert row["exchange_response"]["error_classification"] == "replacement_remaining_below_minimum_after_cancel"
+    assert row["exchange_response"]["replacement_shares"] == 3.0
+
+
+def test_h1_maker_chase_cancel_replace_places_authoritative_remaining_five(tmp_path: Path) -> None:
+    _select_h1()
+    now = datetime(2026, 7, 16, 6, 0, tzinfo=timezone.utc)
+    plan = live.build_h1_maker_lifecycle_plan(
+        _submitted_h1_maker(now=now),
+        action="h1_maker_reprice",
+        limit_price=0.969,
+        maker_only=True,
+        source_order_id="maker-order-1",
+        live_enabled=True,
+        now=now,
+    )
+    plans_path = tmp_path / "plans.jsonl"
+    plans_path.write_text(json.dumps(plan) + "\n", encoding="utf-8")
+    placed: list[dict] = []
+
+    result = execute_trade_plans(
+        plan_path=plans_path,
+        paper_out=tmp_path / "paper.jsonl",
+        live_out=tmp_path / "live.jsonl",
+        config=ExecutorConfig(live=True, confirm_live=True),
+        live_place_fn=lambda child: placed.append(child) or {"order_id": "replacement-1"},
+        live_cancel_fn=lambda order_id: {
+            "cancel": {"canceled": [order_id], "not_canceled": {}},
+            "order_after_cancel": {"original_size": "5", "size_matched": "0"},
+        },
+    )
+
+    assert result["live_guard_blocks"] == 0
+    assert len(placed) == 1
+    assert placed[0]["size"] == 5.0
+    assert placed[0]["limit_price"] == 0.969
 
 
 def test_h1_two_children_both_pass_executor_signal_dedupe(tmp_path: Path) -> None:
@@ -116,6 +289,11 @@ def test_h1_two_children_both_pass_executor_signal_dedupe(tmp_path: Path) -> Non
     assert result["live_written"] == 2
     assert result["live_skipped_existing_signal"] == 0
     assert result["live_skipped_existing_opportunity"] == 0
+    live_rows = [json.loads(line) for line in (tmp_path / "live.jsonl").read_text(encoding="utf-8").splitlines()]
+    maker_row = next(row for row in live_rows if row["child_order_role"] == "maker")
+    assert maker_row["config_id"] == live.HEADS["h1_late_carry"]["config_id"]
+    assert maker_row["maker_price_cap"] == 0.97
+    assert maker_row["maker_lifecycle_deadline_utc"]
 
 
 def test_choose_plans_applies_depth_dedup_and_daily_cap(tmp_path: Path) -> None:

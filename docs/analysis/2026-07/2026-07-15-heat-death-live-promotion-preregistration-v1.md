@@ -67,13 +67,13 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
 
 | 实例 | ask 带 | 其余参数 |
 |---|---|---|
-| `current_yes_heat_death_tiny_live_h1_late_carry_v1` | [0.95, 0.99] | 每个 city-day 共 10 shares：5 taker + 5 post-only maker；<=3 个 city-day opportunity/UTC 日；taker depth>=5；TTL 15m |
+| `current_yes_heat_death_tiny_live_h1_late_carry_v1` | [0.95, 0.99] | 每个 city-day 共 10 shares：5 taker + 5 maker-first；maker 每 30s 按 fresh book 追到初始 ask 上限，3m 后满足价格/深度条件则 taker fallback；<=3 个 city-day opportunity/UTC 日；TTL 15m |
 | `current_yes_heat_death_tiny_live_h2_early_dislocation_v1` | [0.50, 0.93] | 每个 city-day 5 shares、直接 taker；<=3 个 city-day opportunity/UTC 日；depth>=5；TTL 15m |
 
 - 0.93-0.95 buffer band 两头都不交易(预注册第 0 节)。
 - H2 的 0.50 下限是无人值守 live probe 的资金安全边界:首确认后 ask 远低于信号隐含概率,
   大概率是 bracket/数据错配而非免费错价;此类行留给 shadow 记录,不用真钱验证。
-- H1 maker 只按首次 fresh book 在 best bid 上改善一 tick，post-only 挂一次，不追价；未成交由 TTL 撤单。
+- H1 maker 首次在 best bid 上改善一 tick，之后每 30s 读取 fresh book；只在可挂价格提高时撤单重挂，撤单重挂次数不设上限，边界是 3 分钟 chase window 和首次触发 ask price cap。3 分钟后仍未成交时，仅当 fresh ask 不高于首次 ask 且 ask depth>=5，才撤 maker 并对剩余 5 shares taker fallback；否则不为成交而付出比首次直接 taker 更差的价格，原 maker 最迟由 15m TTL 撤销。partial fill 后剩余不足 CLOB 5-share minimum 时只撤不补 dust order。
 - H1/H2 共享 family city-day 去重：任一 head 首先出现 submitted order 后，另一 head 不再为同一 city-day 下单。
   日上限按 opportunity 而不是 child order 计数，因此 H1 的 5 taker + 5 maker 合计只占 1 次。
 - 东亚快源盲窗(hko/jma/amos 未接入 running-high)会推迟首确认时点,对 H2 是入场价劣化;
