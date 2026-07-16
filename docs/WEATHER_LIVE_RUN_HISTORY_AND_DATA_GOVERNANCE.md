@@ -615,6 +615,32 @@ to `weather_hko_official_tminus1_no_live.py`, while its order execution still us
 executor. US Fahrenheit range markets and lowest-temperature strategies likewise stay out of
 the exact-C handler and use separate signal handlers rather than city conditionals in the runner.
 
+### 6.6 2026-07-16 Runtime/Analysis Freshness Separation
+
+Pollution window: `fact_signal_candidates.decision_snapshot_ts_utc` stopped at
+`2026-07-14T06:36:45Z` until the 2026-07-16 incremental repair. During the same
+window, the local orderbook mirror stopped at 2026-07-14 and
+`settlement_outcomes` stopped at target date 2026-07-14. Reports generated from
+the canonical DB in that window must be treated as stale analysis evidence.
+
+Repair evidence:
+
+- candidate facts: 54,054 rows before, 55,889 after; latest decision snapshot
+  `2026-07-16T13:58:38Z`; 2,429 rows in the replaced `event_date >= 2026-07-15`
+  partition;
+- settlement outcomes: 33,992 before, 34,509 after, adding 517 bracket outcomes
+  across 47 city-days for 2026-07-15;
+- orderbook mirror: restored through 2026-07-16;
+- obsolete static-CSV tmax loops: 1,541 replay events and 1,128 candidate cycles,
+  both zero-notional, stopped and marked `stale + paused`.
+
+Decision impact: no live order was created or suppressed by these warnings.
+Current live/shadow runners consume production raw snapshots and journals, not
+`fact_signal_candidates`; the stale window affected dashboard/research freshness
+only. Runtime health and analysis freshness now have separate read-only monitors,
+and recent fact repair uses an explicit event-date partition instead of a full DB
+rebuild.
+
 ## 7. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
