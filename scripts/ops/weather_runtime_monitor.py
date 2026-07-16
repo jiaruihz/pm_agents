@@ -665,6 +665,36 @@ def default_specs(root: Path) -> list[WatchSpec]:
             target_date_lag_warn_days=1,
             no_live_order_warn_hours=24,
         ),
+        WatchSpec(
+            instance="current_yes_heat_death_shadow_v1",
+            display_name="Current-YES heat-death signal producer",
+            runtime_dir=root / "current_yes_heat_death_shadow_v1",
+            mode="zero_notional_shadow",
+            expected_live=False,
+            stale_after_min=30,
+            bad_after_min=60,
+            history_window_min=120,
+        ),
+        WatchSpec(
+            instance="current_yes_heat_death_tiny_live_h1_late_carry_v1",
+            display_name="Current-YES heat-death h1 late-carry tiny-live",
+            runtime_dir=root / "current_yes_heat_death_tiny_live_h1_late_carry_v1",
+            mode="tiny_live_forward_probe",
+            expected_live=True,
+            stale_after_min=5,
+            bad_after_min=15,
+            history_window_min=120,
+        ),
+        WatchSpec(
+            instance="current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
+            display_name="Current-YES heat-death h2 early-dislocation tiny-live",
+            runtime_dir=root / "current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
+            mode="tiny_live_forward_probe",
+            expected_live=True,
+            stale_after_min=5,
+            bad_after_min=15,
+            history_window_min=120,
+        ),
     ]
 
 

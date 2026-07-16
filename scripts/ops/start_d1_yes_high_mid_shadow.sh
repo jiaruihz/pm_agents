@@ -8,18 +8,19 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 SESSION="d1_yes_high_mid_shadow_v1"
+TMUX_SOCKET="${WEATHER_DATA_FEED_TMUX_SOCKET:-weather-jrs}"
 PY="$PROJECT_DIR/.venv/bin/python"
 [[ -x "$PY" ]] || PY="python3"
 INTERVAL_SECONDS="${D1_YES_HIGH_MID_INTERVAL_SECONDS:-600}"
 
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-  echo "already running: tmux session $SESSION"
+if tmux -L "$TMUX_SOCKET" has-session -t "$SESSION" 2>/dev/null; then
+  echo "already running: tmux_socket=$TMUX_SOCKET session=$SESSION"
   exit 0
 fi
 
-tmux new-session -d -s "$SESSION" \
+tmux -L "$TMUX_SOCKET" new-session -d -s "$SESSION" \
   "cd '$PROJECT_DIR' && '$PY' -u scripts/ops/d1_yes_high_mid_shadow_v1.py loop \
      --interval-seconds $INTERVAL_SECONDS \
      2>&1 | tee -a '$PROJECT_DIR/runtime/weather_edge_v1/d1_yes_high_mid_shadow_v1/shadow_loop.log'"
 
-echo "started tmux session $SESSION interval=${INTERVAL_SECONDS}s"
+echo "started tmux_socket=$TMUX_SOCKET session=$SESSION interval=${INTERVAL_SECONDS}s"

@@ -47,10 +47,12 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def read_recent_orders(path: Path, *, cutoff: datetime) -> list[dict[str, Any]]:
-    if not path.exists():
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
         return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in content.splitlines():
         try:
             row = json.loads(line)
         except json.JSONDecodeError:

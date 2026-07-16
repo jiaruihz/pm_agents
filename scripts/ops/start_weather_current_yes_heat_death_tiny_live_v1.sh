@@ -7,6 +7,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
+TMUX_SOCKET="${WEATHER_DATA_FEED_TMUX_SOCKET:-weather-jrs}"
 
 start_head() {
   local head="$1"
@@ -24,7 +25,7 @@ start_head() {
     return 0
   fi
 
-  screen -dmS "$session" sh -c \
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$session" \
     "cd '$ROOT' && exec '$PY' -u scripts/ops/weather_current_yes_heat_death_tiny_live_v1.py loop \
       --head $head \
       --output-dir '$output_dir' \
@@ -39,7 +40,7 @@ start_head() {
       --interval-seconds 30 \
       --live --confirm-live >> '$log_file' 2>&1"
 
-  echo "started $session output=$output_dir log=$log_file"
+  echo "started tmux_socket=$TMUX_SOCKET session=$session output=$output_dir log=$log_file"
 }
 
 start_head h1_late_carry 10 5 5
