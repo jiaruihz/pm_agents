@@ -5,7 +5,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 LABEL="com.pm-agents.weather-canonical-refresh"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 RUNTIME_DIR="$PROJECT_DIR/runtime/weather_edge_v1/canonical_refresh"
-INTERVAL="${WEATHER_CANONICAL_REFRESH_INTERVAL_SECONDS:-900}"
+INTERVAL="${WEATHER_CANONICAL_REFRESH_INTERVAL_SECONDS:-300}"
 
 mkdir -p "$HOME/Library/LaunchAgents" "$RUNTIME_DIR"
 cat >"$PLIST" <<EOF
