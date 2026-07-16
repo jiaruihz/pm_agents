@@ -134,6 +134,54 @@
     - latest_candidates.json
   - - latest_blocked
     - latest_blocked.json
+- strategy_instance: d1_yes_high_mid_shadow_v1
+  display_name: d1 YES high-mid historical shadow
+  family: market_structure_edge.favorite_low_estimation
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  config_id: d1_yes_high_mid_shadow_v1_frozen_rule_v1
+  runtime_dir: runtime/weather_edge_v1/d1_yes_high_mid_shadow_v1
+  summary_file: latest_summary.json
+  primary_journal: shadow_events.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: shadow_events.jsonl
+  start_script: scripts/ops/start_d1_yes_high_mid_shadow.sh
+  tmux_session: d1_yes_high_mid_shadow_v1
+  notes: Historical zero-notional evidence retained; superseded-for-now by the split live instance.
+  default_health: unknown
+  expected_live: false
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
+  - - shadow_events
+    - shadow_events.jsonl
+- strategy_instance: d1_yes_high_mid_live_v1
+  display_name: d1 YES high-mid live (Taipei shadow)
+  family: market_structure_edge.favorite_low_estimation
+  lifecycle_status: live
+  execution_mode: live
+  source_layer: runtime_local
+  config_id: d1_yes_high_mid_live_v1_user_policy
+  runtime_dir: runtime/weather_edge_v1/d1_yes_high_mid_live_v1
+  summary_file: latest_summary.json
+  primary_journal: shadow_events.jsonl
+  live_order_file: live_orders.jsonl
+  paper_order_file: paper_orders.jsonl
+  telemetry_file: shadow_events.jsonl
+  start_script: scripts/ops/start_d1_yes_high_mid_live.sh
+  tmux_session: d1_yes_high_mid_live_v1
+  notes: Explicit user-authorized split policy; Taipei and non-exact/invalid ladder states remain zero-notional shadow.
+  default_health: unknown
+  expected_live: true
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
+  - - shadow_events
+    - shadow_events.jsonl
+  - - trade_plans
+    - trade_plans.jsonl
 - strategy_instance: tmax_distribution_edge_first_lock_no_current_yes_tiny_live_v1
   display_name: Tmax first-lock no-current-YES tiny-live
   family: reheat_risk.tmax_distribution_edge

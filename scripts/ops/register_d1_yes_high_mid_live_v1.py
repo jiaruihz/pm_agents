@@ -75,7 +75,7 @@ def main() -> int:
                 updated_at_utc=strftime('%Y-%m-%dT%H:%M:%SZ','now')""",
             (
                 INSTANCE_ID, STRATEGY_KEY, "d1 YES high-mid live (Taipei shadow)", FAMILY,
-                "live", "tiny_live_taker_5shares_taipei_shadow", "enabled", "runtime_local",
+                "live", "live", "enabled", "runtime_local",
                 RUNTIME_DIR, START_SCRIPT, INSTANCE_ID, 1,
                 "explicit user-authorized split policy; open-upper and invalid ladder states remain shadow",
                 CONFIG_ID,
