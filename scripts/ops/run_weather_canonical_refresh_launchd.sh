@@ -17,6 +17,16 @@ cd "$PROJECT_DIR"
 DB_PATH="$PROJECT_DIR/runtime/weather.db"
 D1_ORDERS="$PROJECT_DIR/runtime/weather_edge_v1/d1_yes_high_mid_live_v1/live_orders.jsonl"
 
+if [[ -f "$PROJECT_DIR/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$PROJECT_DIR/.env"
+  set +a
+fi
+MARKET_PROXY="${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7897}"
+export HTTP_PROXY="$MARKET_PROXY" HTTPS_PROXY="$MARKET_PROXY" ALL_PROXY="$MARKET_PROXY"
+export http_proxy="$MARKET_PROXY" https_proxy="$MARKET_PROXY" all_proxy="$MARKET_PROXY"
+
 # Keep this post-trade path deliberately small: order -> fill -> fact -> gate.
 # The full dashboard refresh also rebuilds every signal candidate and can take
 # many minutes, which is unnecessary for closing live execution lineage.
