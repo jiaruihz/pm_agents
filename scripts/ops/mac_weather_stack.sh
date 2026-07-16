@@ -235,15 +235,10 @@ EOF
   <key>Label</key><string>$LOW_PRICE_SHADOW_LABEL</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/env</string>
-    <string>LOW_PRICE_YES_LOTTERY_LOOP_CHILD=1</string>
-    <string>LOW_PRICE_YES_LOTTERY_SNAPSHOT_DIR=$DATA_FEED_SNAPSHOT_DIR</string>
-    <string>LOW_PRICE_YES_LOTTERY_MARKET_PROXY=${LOW_PRICE_YES_LOTTERY_MARKET_PROXY:-http://127.0.0.1:7890}</string>
-    <string>$PROJECT_DIR/scripts/ops/start_low_price_yes_lottery_tiny_live.sh</string>
-    <string>--shadow</string>
+    <string>$PROJECT_DIR/scripts/ops/start_low_price_yes_lottery_shadow_tmux.sh</string>
   </array>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <key>StartInterval</key><integer>60</integer>
   <key>StandardOutPath</key><string>$LOW_PRICE_RUNTIME/low_price_shadow_launchd.out.log</string>
   <key>StandardErrorPath</key><string>$LOW_PRICE_RUNTIME/low_price_shadow_launchd.err.log</string>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
