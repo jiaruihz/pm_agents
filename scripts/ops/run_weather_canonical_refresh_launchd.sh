@@ -26,8 +26,22 @@ D1_ORDERS="$PROJECT_DIR/runtime/weather_edge_v1/d1_yes_high_mid_live_v1/live_ord
   --db-path "$DB_PATH" \
   --root "$RUNTIME_DIR/explicit-order-files-only" \
   --order-file "$D1_ORDERS"
-"$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.ingest.clob_fill_sync \
-  --db-path "$DB_PATH"
+clob_synced=0
+for attempt in 1 2 3; do
+  if "$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.ingest.clob_fill_sync \
+    --db-path "$DB_PATH"; then
+    clob_synced=1
+    break
+  fi
+  echo "clob fill sync attempt $attempt failed" >&2
+  if [[ "$attempt" -lt 3 ]]; then
+    sleep 10
+  fi
+done
+if [[ "$clob_synced" != "1" ]]; then
+  echo "clob fill sync failed after 3 attempts" >&2
+  exit 1
+fi
 "$PROJECT_DIR/.venv/bin/python" scripts/etl/build_weather_fact_trades.py \
   --db-path "$DB_PATH" --no-parquet
 "$PROJECT_DIR/.venv/bin/python" scripts/analysis/execution_quality/weather_clob_fill_coverage_gate.py \
