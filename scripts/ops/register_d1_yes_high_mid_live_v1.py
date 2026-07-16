@@ -28,6 +28,8 @@ PARAMS = {
     "sizing": "fixed 5 shares",
     "max_orders_per_day": 10,
     "max_daily_cost_usd": 50,
+    "pathological_obs_age_gate_min": 120,
+    "backtest_obs_age_band_min": 61,
     "execution": "fresh CLOB quote/depth recheck, BUY_YES taker limit at top ask",
 }
 

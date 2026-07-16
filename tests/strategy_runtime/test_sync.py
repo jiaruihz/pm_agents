@@ -27,6 +27,21 @@ def test_sync_populates_instances(tmp_path):
     conn.close()
 
 
+def test_sync_preserves_explicit_strategy_identity_separate_from_family(tmp_path):
+    conn = _db(tmp_path)
+    sync_instance_specs(conn)
+    rows = conn.execute(
+        "SELECT instance_id, strategy_key, family FROM strategy_instance "
+        "WHERE instance_id LIKE 'd1_yes_high_mid_%' ORDER BY instance_id"
+    ).fetchall()
+    assert len(rows) == 2
+    assert {row["strategy_key"] for row in rows} == {"d1_yes_high_mid"}
+    assert {row["family"] for row in rows} == {
+        "market_structure_edge.favorite_low_estimation"
+    }
+    conn.close()
+
+
 def test_sync_pulls_file_manifests_into_strategy_def(tmp_path):
     conn = _db(tmp_path)
     result = sync_instance_specs(conn)

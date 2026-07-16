@@ -136,6 +136,7 @@ def sync_instance_specs(
     unregistered_instance_configs = 0
 
     for s in specs:
+        strategy_key = s.strategy_key or s.family
         config_id = s.config_id if s.config_id in registered_config_ids else None
         if s.config_id and config_id is None:
             unregistered_instance_configs += 1
@@ -164,7 +165,7 @@ def sync_instance_specs(
                 updated_at_utc=excluded.updated_at_utc
             """,
             (
-                s.strategy_instance, s.family, s.display_name, s.family,
+                s.strategy_instance, strategy_key, s.display_name, s.family,
                 s.lifecycle_status, s.execution_mode, config_id, s.source_layer, s.runtime_dir,
                 s.start_script, s.tmux_session,
                 int(s.expected_live) if s.expected_live is not None else None,

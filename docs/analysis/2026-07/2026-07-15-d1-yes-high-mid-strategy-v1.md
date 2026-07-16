@@ -24,7 +24,7 @@ Runtime dir: `runtime/weather_edge_v1/d1_yes_high_mid_live_v1/`
 1. 触发：`d1_yes_mid >= 0.80`，其中先按结算 half-up rounding 锚定 current bracket，再取 ladder 中紧邻的上一档 bounded exact bracket；缺 current / 缺中间档时 fail closed。
 2. 入场：taker，成交价 `d1_yes_ask = 1 - d1_no_bid`；fee = `0.05*p*(1-p)`。
 3. 去重：每个 `(city, target_date)` 只取**首个**满足条件的 poll（promotion 分母）；同 city-date 后续 poll 记为 telemetry 轨，不并入 promotion ROI。
-4. 新鲜度 parity gate：`obs_age <= 45min`（回测触发行 99% 满足，非新 filter，是防止用比回测更旧的观测交易）。
+4. 回测本身没有 obs-age filter；live 只将 `obs_age > 120min` 视为 feed stall 并 fail closed，同时记录 `obs_age_in_backtest_band <= 61min` 供 forward 分层。
 5. **无城市 / 时段 / 天气附加 filter**（刻意保持单条件；市场敢定价到 0.80 本身已完成物理筛选）。
 6. 持有到结算，无止盈止损。
 

@@ -136,6 +136,7 @@
     - latest_blocked.json
 - strategy_instance: d1_yes_high_mid_shadow_v1
   display_name: d1 YES high-mid historical shadow
+  strategy_key: d1_yes_high_mid
   family: market_structure_edge.favorite_low_estimation
   lifecycle_status: shadow
   execution_mode: zero_notional_shadow
@@ -159,6 +160,7 @@
     - shadow_events.jsonl
 - strategy_instance: d1_yes_high_mid_live_v1
   display_name: d1 YES high-mid live (Taipei shadow)
+  strategy_key: d1_yes_high_mid
   family: market_structure_edge.favorite_low_estimation
   lifecycle_status: live
   execution_mode: live

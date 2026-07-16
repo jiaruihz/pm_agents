@@ -486,6 +486,83 @@ def live_daily_usage(cycle_dt: datetime) -> tuple[int, float]:
     return count, cost
 
 
+def successful_live_orders(path: Path | None = None) -> list[dict[str, Any]]:
+    """Return durable successful submissions, including immediate matches."""
+    successful: list[dict[str, Any]] = []
+    for row in order_runtime.read_jsonl(path or LIVE_OUT):
+        if str(row.get("status") or "") != "submitted":
+            continue
+        response = row.get("exchange_response") or {}
+        place = response.get("place") if isinstance(response, dict) else {}
+        if not isinstance(place, dict) or place.get("success") is False:
+            continue
+        if not str(place.get("orderID") or ""):
+            continue
+        successful.append(row)
+    return successful
+
+
+def matching_live_order(
+    *, city: str, target_date: str, bracket: str, rows: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    matches = [
+        row
+        for row in rows
+        if str(row.get("city") or "") == city
+        and str(row.get("target_date") or "") == target_date
+        and str(row.get("bracket") or "") == bracket
+        and str(row.get("signal_side") or "").upper() == "BUY_YES"
+    ]
+    return max(matches, key=lambda row: str(row.get("created_at_utc") or ""), default=None)
+
+
+def apply_live_fill_basis(position: dict[str, Any], order: dict[str, Any]) -> None:
+    """Scale local settlement telemetry to the actual immediate-match response.
+
+    Canonical facts remain authoritative; the local fee is explicitly marked
+    as an estimate until clob_fill_sync records exact evidence.
+    """
+    response = order.get("exchange_response") or {}
+    place = response.get("place") if isinstance(response, dict) else {}
+    shares = to_float((place or {}).get("takingAmount"), to_float(order.get("size"), 0.0))
+    cost = to_float((place or {}).get("makingAmount"), to_float(order.get("posted_notional"), 0.0))
+    price = cost / shares if shares > 0 else to_float(order.get("posted_price"), 0.0)
+    estimated_fee = shares * fee(price) if shares > 0 else 0.0
+    position.update(
+        {
+            "position_shares": round(shares, 6),
+            "fill_price": round(price, 6),
+            "entry_cost_usd": round(cost, 6),
+            "estimated_fee_usd": round(estimated_fee, 6),
+            "entry_cost_with_fee": round(cost + estimated_fee, 6),
+            "fee_source": "weather_fee_curve_estimate_pending_canonical",
+            "clob_order_id": str((place or {}).get("orderID") or ""),
+            "pnl_basis": "actual_immediate_match_response",
+        }
+    )
+
+
+def reconcile_live_positions(
+    positions: dict[str, Any], rows: list[dict[str, Any]]
+) -> int:
+    updated = 0
+    for position in positions.values():
+        if position.get("execution_mode") != "tiny_live_taker_5shares":
+            continue
+        order = matching_live_order(
+            city=str(position.get("city") or ""),
+            target_date=str(position.get("target_date") or ""),
+            bracket=str(position.get("d1_bracket") or ""),
+            rows=rows,
+        )
+        if order is None:
+            continue
+        before = position.get("clob_order_id")
+        apply_live_fill_basis(position, order)
+        updated += int(position.get("clob_order_id") != before)
+    return updated
+
+
 def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: datetime) -> dict[str, Any]:
     ask = to_float(event.get("d1_yes_direct_ask"))
     bid = to_float(event.get("d1_yes_direct_bid"), 0.0)
@@ -588,6 +665,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     positions: dict[str, Any] = {}
     if POSITIONS_OUT.exists():
         positions = json.loads(POSITIONS_OUT.read_text())
+    live_rows = successful_live_orders()
+    reconciled_live_positions = reconcile_live_positions(positions, live_rows)
 
     triggers_this_cycle = 0
     new_positions = 0
@@ -597,6 +676,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     invalid_book_age_rows = 0
     events: list[dict[str, Any]] = []
     plans: list[dict[str, Any]] = []
+    pending_live_positions: dict[str, dict[str, Any]] = {}
     live_planned = 0
     shadow_first = 0
     daily_order_count, daily_cost = live_daily_usage(cycle_dt)
@@ -747,7 +827,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 live_planned += 1
         events.append(event)
         if is_first and not args.dry_run:
-            positions[pos_key] = {
+            candidate_position = {
                 "city": city,
                 "target_date": target_date,
                 "d1_bracket": d1_bracket,
@@ -761,7 +841,13 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 "live_blocker": event["live_blocker"],
                 "settled": False,
             }
-            new_positions += 1
+            if event["execution_mode"] == "tiny_live_taker_5shares":
+                # A failed submit must not consume the city-date.  Promote the
+                # position only after the durable live ledger proves success.
+                pending_live_positions[pos_key] = candidate_position
+            else:
+                positions[pos_key] = candidate_position
+                new_positions += 1
 
     # settlement backfill on open positions
     settled_now = 0
@@ -780,7 +866,10 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             pos["settled"] = True
             pos["settled_bracket"] = win_bracket
             pos["win"] = win
-            pos["pnl_at_settlement"] = round((1.0 if win else 0.0) - pos["entry_cost_with_fee"], 6)
+            shares = to_float(pos.get("position_shares"), 1.0)
+            pos["pnl_at_settlement"] = round(
+                (shares if win else 0.0) - pos["entry_cost_with_fee"], 6
+            )
             settled_now += 1
             if not args.dry_run:
                 append_jsonl(
@@ -816,6 +905,19 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 no_telegram=True,
                 timeout_sec=180.0,
             )
+            live_rows = successful_live_orders()
+            for pos_key, position in pending_live_positions.items():
+                order = matching_live_order(
+                    city=str(position.get("city") or ""),
+                    target_date=str(position.get("target_date") or ""),
+                    bracket=str(position.get("d1_bracket") or ""),
+                    rows=live_rows,
+                )
+                if order is None:
+                    continue
+                apply_live_fill_basis(position, order)
+                positions[pos_key] = position
+                new_positions += 1
         for event in events:
             append_jsonl(JOURNAL_OUT, event)
         write_json(POSITIONS_OUT, positions)
@@ -866,6 +968,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "live_orders_before_cycle_today": daily_order_count,
         "live_cost_before_cycle_today": round(daily_cost, 6),
         "live_plans_this_cycle": live_planned,
+        "live_positions_reconciled_this_cycle": reconciled_live_positions,
         "shadow_first_signals_this_cycle": shadow_first,
         "executor_result": executor_result,
         "open_positions_total": len(positions),

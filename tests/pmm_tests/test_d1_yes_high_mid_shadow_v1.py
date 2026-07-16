@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 import time
@@ -124,3 +125,38 @@ def test_exact_celsius_current_selects_immediate_higher_bracket() -> None:
     assert current == "37"
     assert d1 == "38"
     assert d1_yes == ladder["38"]["yes"]
+
+
+def test_successful_live_orders_excludes_failed_submission(tmp_path: Path) -> None:
+    path = tmp_path / "live_orders.jsonl"
+    rows = [
+        {"status": "submitted", "exchange_response": {"place": {"success": True, "orderID": "ok"}}},
+        {"status": "submitted", "exchange_response": {"place": {"success": False, "orderID": "bad"}}},
+        {"status": "failed", "exchange_response": {"place": {"success": True, "orderID": "no"}}},
+    ]
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+    order_ids = [
+        row["exchange_response"]["place"]["orderID"]
+        for row in runner.successful_live_orders(path)
+    ]
+    assert order_ids == ["ok"]
+
+
+def test_apply_live_fill_basis_scales_pnl_to_actual_shares() -> None:
+    position = {"execution_mode": "tiny_live_taker_5shares"}
+    order = {
+        "exchange_response": {
+            "place": {
+                "success": True,
+                "orderID": "clob-1",
+                "takingAmount": "5",
+                "makingAmount": "4.2",
+            }
+        }
+    }
+    runner.apply_live_fill_basis(position, order)
+    assert position["position_shares"] == 5.0
+    assert position["fill_price"] == 0.84
+    assert position["entry_cost_usd"] == 4.2
+    assert position["entry_cost_with_fee"] == 4.2336
+    assert round(5.0 - position["entry_cost_with_fee"], 6) == 0.7664

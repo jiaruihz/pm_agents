@@ -28,6 +28,9 @@ class StrategySpec:
     lifecycle_status: str
     execution_mode: str
     source_layer: str
+    # Canonical strategy identity can be narrower than the research family.
+    # Legacy specs may omit it and continue to fall back to ``family``.
+    strategy_key: str | None = None
     config_id: str | None = None
     runtime_dir: str | None = None
     summary_file: str | None = None
