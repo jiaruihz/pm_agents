@@ -813,7 +813,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 confirm_live=bool(args.confirm_live),
                 allow_taker=True,
                 cancel_expired=True,
-                no_telegram=False,
+                no_telegram=True,
                 timeout_sec=180.0,
             )
         for event in events:
