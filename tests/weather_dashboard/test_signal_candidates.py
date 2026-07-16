@@ -425,3 +425,40 @@ def test_write_db_roundtrip(tmp_path, canon_db):
     assert n == 1
     cid = conn.execute("SELECT candidate_id FROM fact_signal_candidates").fetchone()[0]
     assert cid == "0xCID1|BUY_NO|2026-05-09"
+
+
+def test_incremental_write_replaces_only_recent_partition(tmp_path, canon_db):
+    from datetime import date
+    from scripts.etl.build_weather_signal_candidates import write_db_incremental
+
+    conn = canon_db
+    snap = tmp_path / "snaps"
+    _write_snapshot(
+        snap,
+        "s1.json",
+        "2026-05-08T02:00:00Z",
+        [_rec(hours_to_settle=23.0)],
+    )
+    rows, _, _ = build(conn, snapshot_dir=snap, paper_orders_path=tmp_path / "none.jsonl")
+    write_db(conn, rows)
+    conn.execute(
+        "UPDATE fact_signal_candidates SET market_yes_price=0.1 WHERE event_date='2026-05-09'"
+    )
+    old = dict(rows[0])
+    old["candidate_id"] = "old|BUY_NO|2026-05-08"
+    old["condition_id"] = "old"
+    old["event_date"] = "2026-05-08"
+    conn.execute(
+        f"INSERT INTO fact_signal_candidates ({','.join(old)}) VALUES ({','.join('?' for _ in old)})",
+        list(old.values()),
+    )
+    conn.commit()
+
+    replacement = dict(rows[0])
+    replacement["market_yes_price"] = 0.9
+    write_db_incremental(conn, [replacement], event_date_start=date(2026, 5, 9))
+
+    values = dict(conn.execute(
+        "SELECT event_date, market_yes_price FROM fact_signal_candidates ORDER BY event_date"
+    ).fetchall())
+    assert values == {"2026-05-08": rows[0]["market_yes_price"], "2026-05-09": 0.9}

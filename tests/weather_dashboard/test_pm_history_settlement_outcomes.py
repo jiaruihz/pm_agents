@@ -110,3 +110,23 @@ def test_pm_history_ingest_writes_city_bracket_outcomes(canonical_conn, tmp_path
     stats_second = ingest(canonical_conn, str(pmh_dir))
     assert stats_second["settlement_outcomes_inserted"] == 0
     assert canonical_conn.execute("SELECT COUNT(*) FROM settlement_outcomes").fetchone()[0] == 2
+
+
+def test_pm_history_ingest_filters_target_date(canonical_conn, tmp_path):
+    pmh_dir = tmp_path / "pm_history"
+    pmh_dir.mkdir()
+    payload = {"unit": "C", "brackets": [{"label": "23", "final_price": 1.0}]}
+    for target_date in ("2026-07-14", "2026-07-15"):
+        (pmh_dir / f"Tokyo_{target_date}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    stats = ingest(
+        canonical_conn,
+        str(pmh_dir),
+        start_date="2026-07-15",
+        end_date="2026-07-15",
+    )
+
+    assert stats["files_seen"] == 1
+    assert canonical_conn.execute(
+        "SELECT DISTINCT target_date FROM settlement_outcomes"
+    ).fetchone()[0] == "2026-07-15"

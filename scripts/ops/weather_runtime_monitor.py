@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Monitor weather live/shadow runtime loops for silent data and execution failures.
+"""Monitor active weather live/shadow loops for data and execution failures.
 
 The monitor is intentionally read-only. It does not change strategy decisions,
 place orders, or mutate runner state. It watches the runtime pulse files that
 the runners already produce and turns "quietly did nothing" into an explicit
 status that the dashboard, logs, and optional Telegram alerts can consume.
+Canonical DB and analysis-mirror freshness are owned by the separate
+weather_analysis_freshness_monitor.py process.
 """
 
 from __future__ import annotations
@@ -24,8 +26,6 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUNTIME_DIR = ROOT / "runtime" / "weather_edge_v1" / "runtime_monitor"
-DEFAULT_DB_PATH = ROOT / "runtime" / "weather.db"
-DEFAULT_ORDERBOOK_DIR = ROOT / "runtime" / "weather_edge_v1" / "market_data" / "orderbook_snapshots"
 TOKEN_RESOLUTION_BLOCKERS = frozenset(
     {
         "missing_yes_token_id",
@@ -625,15 +625,15 @@ def default_specs(root: Path) -> list[WatchSpec]:
             target_date_lag_warn_days=1,
         ),
         WatchSpec(
-            instance="tmax_distribution_edge_shadow_v1",
-            display_name="Tmax distribution edge shadow",
-            runtime_dir=root / "tmax_distribution_edge_shadow_v1",
+            instance="tmax_distribution_edge_first_lock_no_current_yes_shadow_v1",
+            display_name="Tmax first-lock no-current-YES shadow",
+            runtime_dir=root / "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1",
             mode="zero_notional_shadow",
             expected_live=False,
-            stale_after_min=45,
-            bad_after_min=180,
-            history_window_min=360,
-            target_date_lag_warn_days=1,
+            stale_after_min=30,
+            bad_after_min=90,
+            history_window_min=180,
+            snapshot_bad_after_min=60,
         ),
         WatchSpec(
             instance="d1_yes_high_mid_shadow_v1",
@@ -692,167 +692,6 @@ def default_specs(root: Path) -> list[WatchSpec]:
     ]
 
 
-def db_freshness(db_path: Path, now: datetime) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "db_path": rel(db_path),
-        "status": "not_checked",
-        "alerts": [],
-    }
-    if not db_path.exists():
-        add_alert(
-            result["alerts"],
-            severity="warning",
-            instance="weather_runtime_monitor",
-            kind="db_missing",
-            message="runtime/weather.db is missing",
-            detail={"db_path": rel(db_path)},
-        )
-        result["status"] = "warning"
-        return result
-    try:
-        import sqlite3
-
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA query_only=ON")
-        row = conn.execute(
-            """
-            SELECT
-              COUNT(*) AS rows,
-              MIN(event_date) AS min_event_date,
-              MAX(event_date) AS max_event_date,
-              MAX(decision_snapshot_ts_utc) AS max_snapshot_ts_utc
-            FROM fact_signal_candidates
-            """
-        ).fetchone()
-        settlement_row = conn.execute(
-            """
-            SELECT
-              COUNT(*) AS rows,
-              MIN(target_date) AS min_target_date,
-              MAX(target_date) AS max_target_date,
-              COUNT(DISTINCT city || '|' || target_date) AS city_days
-            FROM settlement_outcomes
-            """
-        ).fetchone()
-    except Exception as exc:  # noqa: BLE001
-        add_alert(
-            result["alerts"],
-            severity="warning",
-            instance="weather_runtime_monitor",
-            kind="db_query_failed",
-            message=f"weather.db freshness query failed: {type(exc).__name__}",
-            detail={"error": str(exc)},
-        )
-        result["status"] = "warning"
-        return result
-
-    max_snapshot = parse_dt(row["max_snapshot_ts_utc"] if row else None)
-    age_min = (now - max_snapshot).total_seconds() / 60 if max_snapshot else None
-    settlement_max_date = parse_date(settlement_row["max_target_date"] if settlement_row else None)
-    settlement_lag_days = (now.date() - settlement_max_date).days if settlement_max_date else None
-    result.update(
-        {
-            "status": "healthy",
-            "fact_signal_candidates_rows": int(row["rows"] or 0) if row else 0,
-            "min_event_date": row["min_event_date"] if row else None,
-            "max_event_date": row["max_event_date"] if row else None,
-            "max_decision_snapshot_ts_utc": iso(max_snapshot),
-            "decision_snapshot_age_min": age_min,
-            "settlement_outcomes_rows": int(settlement_row["rows"] or 0) if settlement_row else 0,
-            "settlement_outcomes_city_days": int(settlement_row["city_days"] or 0) if settlement_row else 0,
-            "settlement_outcomes_min_target_date": settlement_row["min_target_date"] if settlement_row else None,
-            "settlement_outcomes_max_target_date": settlement_row["max_target_date"] if settlement_row else None,
-            "settlement_outcomes_lag_days": settlement_lag_days,
-        }
-    )
-    if age_min is None or age_min > 180:
-        add_alert(
-            result["alerts"],
-            severity="warning",
-            instance="weather_runtime_monitor",
-            kind="fact_signal_candidates_stale",
-            message="fact_signal_candidates decision snapshots are stale",
-            detail={"age_min": age_min, "max_snapshot_ts_utc": iso(max_snapshot)},
-        )
-        result["status"] = "warning"
-    if settlement_lag_days is None or settlement_lag_days > 1:
-        add_alert(
-            result["alerts"],
-            severity="warning",
-            instance="weather_runtime_monitor",
-            kind="settlement_outcomes_stale",
-            message="settlement_outcomes are stale",
-            detail={
-                "lag_days": settlement_lag_days,
-                "max_target_date": settlement_max_date.isoformat() if settlement_max_date else None,
-            },
-        )
-        result["status"] = "warning"
-    return result
-
-
-def orderbook_freshness(orderbook_dir: Path, now: datetime) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "orderbook_dir": rel(orderbook_dir),
-        "status": "healthy",
-        "alerts": [],
-    }
-    if not orderbook_dir.exists():
-        add_alert(
-            result["alerts"],
-            severity="warning",
-            instance="weather_runtime_monitor",
-            kind="orderbook_snapshot_dir_missing",
-            message="full orderbook snapshot directory is missing",
-            detail={"orderbook_dir": rel(orderbook_dir)},
-        )
-        result["status"] = "warning"
-        return result
-
-    latest_date: date | None = None
-    latest_count = 0
-    date_counts: dict[str, int] = {}
-    for day_dir in sorted(orderbook_dir.iterdir()):
-        if not day_dir.is_dir():
-            continue
-        day = parse_date(day_dir.name)
-        if day is None:
-            continue
-        count = sum(1 for _ in day_dir.glob("*.jsonl.gz"))
-        if count <= 0:
-            continue
-        date_counts[day.isoformat()] = count
-        if latest_date is None or day > latest_date:
-            latest_date = day
-            latest_count = count
-
-    lag_days = (now.date() - latest_date).days if latest_date else None
-    result.update(
-        {
-            "latest_date": latest_date.isoformat() if latest_date else None,
-            "latest_date_file_count": latest_count,
-            "lag_days": lag_days,
-            "recent_date_counts": dict(sorted(date_counts.items())[-7:]),
-        }
-    )
-    if lag_days is None or lag_days > 1:
-        add_alert(
-            result["alerts"],
-            severity="warning",
-            instance="weather_runtime_monitor",
-            kind="full_orderbook_snapshots_stale",
-            message="full orderbook snapshots are stale",
-            detail={
-                "lag_days": lag_days,
-                "latest_date": latest_date.isoformat() if latest_date else None,
-                "latest_date_file_count": latest_count,
-            },
-        )
-        result["status"] = "warning"
-    return result
-
-
 def load_state(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"active_alert_keys": {}}
@@ -888,11 +727,6 @@ def update_alert_journal(runtime_dir: Path, summary: dict[str, Any]) -> list[dic
         for probe in summary.get("probes", [])
         for alert in probe.get("alerts", [])
     }
-    for alert in summary.get("db", {}).get("alerts", []):
-        current_alerts[alert["alert_key"]] = alert
-    for alert in summary.get("orderbook", {}).get("alerts", []):
-        current_alerts[alert["alert_key"]] = alert
-
     transitions: list[dict[str, Any]] = []
     for key, alert in current_alerts.items():
         if key not in active_before:
@@ -943,9 +777,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         requested = set(args.instance)
         specs = [s for s in specs if s.instance in requested]
     probes = [evaluate_spec(spec, now) for spec in specs]
-    db = db_freshness(args.db_path, now) if args.check_db else {"status": "not_checked", "alerts": []}
-    orderbook = orderbook_freshness(args.orderbook_dir, now) if args.check_orderbook else {"status": "not_checked", "alerts": []}
-    all_alerts = [alert for probe in probes for alert in probe["alerts"]] + db.get("alerts", []) + orderbook.get("alerts", [])
+    all_alerts = [alert for probe in probes for alert in probe["alerts"]]
     critical = sum(1 for alert in all_alerts if alert.get("severity") == "critical")
     warning = sum(1 for alert in all_alerts if alert.get("severity") == "warning")
     status = "critical" if critical else "warning" if warning else "healthy"
@@ -959,8 +791,6 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "warning_alerts": warning,
         "alert_count": len(all_alerts),
         "probes": probes,
-        "db": db,
-        "orderbook": orderbook,
         "no_order_placed": True,
     }
     transitions = update_alert_journal(args.runtime_dir, summary)
@@ -977,15 +807,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-root", type=Path, default=ROOT / "runtime/weather_edge_v1")
     parser.add_argument("--runtime-dir", type=Path, default=DEFAULT_RUNTIME_DIR)
-    parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
-    parser.add_argument("--orderbook-dir", type=Path, default=DEFAULT_ORDERBOOK_DIR)
-    parser.add_argument("--no-db-check", dest="check_db", action="store_false")
-    parser.add_argument("--no-orderbook-check", dest="check_orderbook", action="store_false")
     parser.add_argument("--instance", action="append", help="Limit monitoring to one strategy_instance; repeatable.")
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-seconds", type=float, default=300.0)
     parser.add_argument("--exit-nonzero-on-alert", action="store_true")
-    parser.set_defaults(check_db=True, check_orderbook=True)
     return parser.parse_args()
 
 

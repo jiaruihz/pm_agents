@@ -1,11 +1,11 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-07-15 Mac production, forecast lineage, canonical fee adjustments
+Updated: 2026-07-16 runtime/analysis freshness separation and incremental materialization
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 
 > 2026-06-05 更新: 同步覆盖扩展（7 个 weather model cache 家族 + output/logs + pm_agent runtime/logs + N100 tar backups），删除两个 legacy DB（weather_v2.db / weather_edge_v1_weather.db），新增 `scripts/ops/sync_n100_backups.sh`。详见 §2.3、§7。
 >
@@ -18,6 +18,8 @@ Last updated: 2026-07-15
 > 2026-07-06 更新: Mac data-feed runtime 和本地 `runtime/weather_edge_v1/market_data` mirror 已迁到 APFS 外置盘 `/Volumes/jrs`。旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 和 `runtime/weather_edge_v1/market_data` 保留为 symlink。macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，所以 data-feed 当前由 `tmux -L weather-data-feed-jrs` session `weather_data_feed_jrs` 常驻；重启/拔插盘后用 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh` 恢复。
 >
 > 2026-07-11 更新: full snapshot producer now persists immutable decision-time hourly forecast curves as `targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl`, one row per city/target_date/snapshot. Corrected `forecast_hourly_curve_v3` rows separate source-response `forecast_detected_at_utc` from capture publication-boundary `available_at_utc`; a new exact hash first appears at detected time, or at available time only when no reliable detected time exists, and later captures preserve the earliest reliable first-seen. `available_at_utc` is sampled immediately before final serialization/fsync and atomic link, while file mtime is the external completion evidence. Rows also record explicit model fallback and an honest `forecast_run_lineage_status` when the upstream live API does not expose a run timestamp. `weather_data_feed_prod_health_check.py` fails when the latest curve capture is stale, misaligned with the latest snapshot, incomplete, missing lineage, or has impossible detected/first-seen/available ordering. `build_weather_signal_candidates.py` mirrors them into `runtime/weather.db.fact_forecast_hourly_curves`; `fact_signal_candidates.forecast_values_hash` is the join key.
+>
+> 2026-07-16 更新: 在线 runtime health 与分析派生层 freshness 已拆开。`weather_runtime_monitor.py` 只检查当前 live/shadow 进程及其 raw pulse；`weather_analysis_freshness_monitor.py` 只读检查 local mirror、`fact_signal_candidates` 和 `settlement_outcomes`。日常补数使用 `refresh_weather_analysis_incremental.sh`，按日期同步 settlement 并替换最近 event-date partition；它不会调用 `run_stack.sh --rebuild` 或 drop 全量 fact 表。
 
 Single source of truth for **where weather strategy data lives, who produces
 it, who consumes it, and how PnL is computed**. Read this before touching
@@ -31,7 +33,7 @@ For field-name contracts, [`WEATHER_SYSTEM_CONTRACT.md`](WEATHER_SYSTEM_CONTRACT
 
 ## 1. TL;DR
 
-There are **two active roles** during the 2026-07-04 incident handoff:
+There are **four explicit stages** during the 2026-07-04 incident handoff:
 
 ```
                               Mac (temporary production)
@@ -39,15 +41,39 @@ There are **two active roles** during the 2026-07-04 incident handoff:
                               │   ├── targeted_output/paper_snapshots
                               │   ├── targeted_output/orderbook_snapshots
                               │   └── targeted_output/forecast_hourly_curves
-                              └── pm_agents runtime
-                                  ├── live order logs
-                                  └── dashboard / fact rebuild
+                              └── pm_agents strategy runtime
+                                  ├── live/shadow raw journals
+                                  └── runtime monitor (read-only)
                                        │
                      sync_weather_remote.sh --market-source=mac-weather-data-feed
                                        ▼
                               pm_agents canonical mirror
-                              ├── runtime/weather_edge_v1/market_data
-                              └── runtime/weather.db (dashboard DB)
+                              ├── runtime/weather_edge_v1/market_data (immutable raw)
+                              ├── incremental materializer
+                              │   └── settlement + recent candidate partitions
+                              └── runtime/weather.db (derived analysis DB)
+                                  └── analysis freshness monitor (read-only)
+```
+
+Ownership is strict:
+
+- collector writes production raw only;
+- sync copies raw only;
+- materializer is the only analysis DB writer;
+- monitors never repair or mutate data;
+- `run_stack.sh --rebuild` remains an explicit full rebuild and is never a patrol action.
+
+Daily incremental refresh:
+
+```bash
+scripts/ops/refresh_weather_analysis_incremental.sh
+```
+
+Read-only checks:
+
+```bash
+.venv/bin/python scripts/ops/weather_runtime_monitor.py
+.venv/bin/python scripts/ops/weather_analysis_freshness_monitor.py
 ```
 
 N100 remains the historical source and recovery target, but after the 2026-07-01

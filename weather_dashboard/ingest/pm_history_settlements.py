@@ -118,17 +118,35 @@ def _signal_lookup_map(conn: sqlite3.Connection) -> dict[tuple, tuple[str, str]]
     return out
 
 
-def ingest(conn: sqlite3.Connection, pmh_dir: str, *, dry_run: bool = False) -> dict:
+def ingest(
+    conn: sqlite3.Connection,
+    pmh_dir: str,
+    *,
+    dry_run: bool = False,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict:
     conn.row_factory = sqlite3.Row
     ensure_settlement_outcomes_schema(conn)
     sig_lookup = _signal_lookup_map(conn)
-    files = sorted(Path(pmh_dir).glob("*_2026-*.json"))
+    files = []
+    for path in sorted(Path(pmh_dir).glob("*_2026-*.json")):
+        parsed = _parse_filename(path.name)
+        if parsed is None:
+            continue
+        _, target_date = parsed
+        if start_date and target_date < start_date:
+            continue
+        if end_date and target_date > end_date:
+            continue
+        files.append(path)
 
     stats = {
         "files_seen": 0, "files_skipped_null": 0,
         "brackets_seen": 0, "settlements_inserted": 0,
         "settlement_outcomes_inserted": 0,
         "no_signal_match": 0, "dry_run": dry_run,
+        "start_date": start_date, "end_date": end_date,
     }
 
     for f in files:
@@ -190,12 +208,20 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db-path", default="runtime/weather.db")
     ap.add_argument("--pmh-dir", default=DEFAULT_PMH_DIR)
+    ap.add_argument("--start-date")
+    ap.add_argument("--end-date")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     conn = sqlite3.connect(args.db_path)
     try:
-        out = ingest(conn, args.pmh_dir, dry_run=args.dry_run)
+        out = ingest(
+            conn,
+            args.pmh_dir,
+            dry_run=args.dry_run,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
         print(json.dumps(out, indent=2))
     finally:
         conn.close()

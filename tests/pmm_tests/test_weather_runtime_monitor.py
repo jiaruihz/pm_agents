@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts.ops import weather_runtime_monitor as monitor
+from weather_dashboard import analysis_freshness
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -119,7 +120,7 @@ def test_orderbook_stale_becomes_warning(tmp_path: Path) -> None:
     old_day.mkdir(parents=True)
     (old_day / "orderbook_snapshot_20260701_1200.jsonl.gz").write_bytes(b"")
 
-    result = monitor.orderbook_freshness(tmp_path / "orderbook_snapshots", now)
+    result = analysis_freshness.orderbook_freshness(tmp_path / "orderbook_snapshots", now)
 
     assert result["status"] == "warning"
     assert result["latest_date"] == "2026-07-01"
@@ -148,7 +149,7 @@ def test_settlement_stale_becomes_warning(tmp_path: Path) -> None:
     )
     conn.close()
 
-    result = monitor.db_freshness(db, now)
+    result = analysis_freshness.db_freshness(db, now)
 
     assert result["status"] == "warning"
     assert result["settlement_outcomes_max_target_date"] == "2026-06-30"

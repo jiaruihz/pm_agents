@@ -81,7 +81,7 @@
 - strategy_instance: tmax_distribution_edge_shadow_v1
   display_name: Tmax distribution edge shadow
   family: reheat_risk.tmax_distribution_edge
-  lifecycle_status: shadow
+  lifecycle_status: stale
   execution_mode: zero_notional_shadow
   source_layer: runtime_local
   runtime_dir: runtime/weather_edge_v1/tmax_distribution_edge_shadow_v1
@@ -92,9 +92,9 @@
   telemetry_file: shadow_events.jsonl
   start_script: null
   tmux_session: null
-  notes: Distribution-first Tmax expression selector. Estimates current/d1/d2/tail
-    bucket probabilities and records selected plus blocked zero-notional expression
-    decisions; no orders and no live sizing approval.
+  notes: Historical static-CSV shadow retained for reproducibility. Superseded-for-now
+    by tmax_distribution_edge_first_lock_no_current_yes_shadow_v1, which consumes
+    current snapshots; this instance must not run as a production monitor target.
   default_health: unknown
   expected_live: null
   artifact_files:
@@ -263,16 +263,38 @@
   live_order_file: null
   paper_order_file: null
   telemetry_file: summary_history.jsonl
-  start_script: null
+  start_script: scripts/ops/start_weather_runtime_monitor.sh
   tmux_session: null
-  notes: Read-only monitor for weather live/shadow runtime loops. Flags stale summary
-    files, stale snapshots, stale target dates, executor failures, plan-without-live-order
-    cases, empty snapshots, and long no-live-order periods.
+  notes: Read-only production runtime monitor. Flags stale pulse/snapshot files,
+    executor failures, plan-without-live-order cases, empty snapshots, and long
+    no-live-order periods. It does not inspect or repair the analysis DB.
   default_health: unknown
   expected_live: null
   artifact_files:
   - - alert_state
     - alert_state.json
+  - - summary_history
+    - summary_history.jsonl
+- strategy_instance: weather_analysis_freshness
+  display_name: Weather analysis freshness monitor
+  family: data_quality.analysis_freshness
+  lifecycle_status: monitor
+  execution_mode: monitor
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/analysis_freshness_monitor
+  summary_file: latest_summary.json
+  primary_journal: summary_history.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: summary_history.jsonl
+  start_script: scripts/ops/start_weather_analysis_freshness_monitor.sh
+  tmux_session: weather_analysis_freshness_monitor
+  notes: Read-only analysis monitor for local raw mirror, canonical candidate facts,
+    and settlement materialization. Remediation is the explicit incremental refresh;
+    this monitor never mutates data or triggers a full rebuild.
+  default_health: unknown
+  expected_live: false
+  artifact_files:
   - - summary_history
     - summary_history.jsonl
 - strategy_instance: theta_current_yes_fade_confirmed_tiny_live_v1

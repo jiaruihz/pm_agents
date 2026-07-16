@@ -25,7 +25,7 @@ import hashlib
 import json
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -655,12 +655,27 @@ def _load_universe(
     hts_min: float,
     hts_max: float,
     forecast_index: _ForecastPeakIndex | None = None,
+    snapshot_start_date: date | None = None,
+    event_date_start: date | None = None,
 ) -> tuple[dict[tuple, _Opportunity], int, int, int]:
     """Stream all snapshots into opportunity accumulators keyed by
     (condition_id, side, event_date). Records missing condition_id are dropped.
     Returns (opportunities, n_files, n_dropped_no_cid).
     """
     files = sorted(glob.glob(str(snapshot_dir / "*.json")))
+    if snapshot_start_date is not None:
+        prefix = "snapshot_"
+        selected: list[str] = []
+        for path_text in files:
+            name = Path(path_text).name
+            raw_date = name[len(prefix):len(prefix) + 8] if name.startswith(prefix) else ""
+            try:
+                file_date = datetime.strptime(raw_date, "%Y%m%d").date()
+            except ValueError:
+                continue
+            if file_date >= snapshot_start_date:
+                selected.append(path_text)
+        files = selected
     opps: dict[tuple, _Opportunity] = {}
     n_dropped = 0
     n_forecast_enriched = 0
@@ -683,6 +698,12 @@ def _load_universe(
                 continue
             if not side or not event_date:
                 continue
+            if event_date_start is not None:
+                try:
+                    if date.fromisoformat(str(event_date)[:10]) < event_date_start:
+                        continue
+                except ValueError:
+                    continue
             key = (cid, side, str(event_date))
             opp = opps.get(key)
             if opp is None:
@@ -692,7 +713,11 @@ def _load_universe(
     return opps, len(files), n_dropped, n_forecast_enriched
 
 
-def _load_paper_orders(path: Path) -> tuple[dict[tuple, dict], dict]:
+def _load_paper_orders(
+    path: Path,
+    *,
+    event_date_start: date | None = None,
+) -> tuple[dict[tuple, dict], dict]:
     """paper_orders.jsonl aggregated by (condition_id, side, event_date)."""
     out: dict[tuple, dict] = {}
     stats = {"raw_rows": 0, "dropped_no_key": 0, "duplicate_extra_rows": 0}
@@ -713,6 +738,12 @@ def _load_paper_orders(path: Path) -> tuple[dict[tuple, dict], dict]:
             if not cid or not side or not event_date:
                 stats["dropped_no_key"] += 1
                 continue
+            if event_date_start is not None:
+                try:
+                    if date.fromisoformat(str(event_date)[:10]) < event_date_start:
+                        continue
+                except ValueError:
+                    continue
             stats["raw_rows"] += 1
             key = (cid, side, str(event_date))
             entry = _safe_float(r.get("entry_price"))
@@ -761,10 +792,13 @@ def _load_paper_orders(path: Path) -> tuple[dict[tuple, dict], dict]:
     return out, stats
 
 
-def _load_live_fills(conn: sqlite3.Connection) -> dict[tuple, dict]:
+def _load_live_fills(
+    conn: sqlite3.Connection,
+    *,
+    event_date_start: date | None = None,
+) -> dict[tuple, dict]:
     """fact_trades live_real aggregated by (condition_id, side, target_date)."""
-    rows = conn.execute(
-        """
+    sql = """
         SELECT
           condition_id,
           side,
@@ -782,9 +816,15 @@ def _load_live_fills(conn: sqlite3.Connection) -> dict[tuple, dict]:
           COUNT(*) AS fill_count
         FROM fact_trades
         WHERE trade_class='live_real'
+    """
+    params: tuple[str, ...] = ()
+    if event_date_start is not None:
+        sql += " AND target_date >= ?"
+        params = (event_date_start.isoformat(),)
+    sql += """
         GROUP BY condition_id, side, target_date
-        """
-    ).fetchall()
+    """
+    rows = conn.execute(sql, params).fetchall()
     cols = ["condition_id", "side", "target_date", "fill_id", "fill_price",
             "fill_qty", "pnl_usd_at_fill", "fill_count"]
     out: dict[tuple, dict] = {}
@@ -853,6 +893,8 @@ def build(
     hts_min: float = 22.0,
     hts_max: float = 24.0,
     forecast_cache_root: Path = FORECAST_CACHE_ROOT,
+    snapshot_start_date: date | None = None,
+    event_date_start: date | None = None,
 ) -> tuple[list[dict], list[str], dict]:
     """Build candidate rows. Returns (rows, alerts, stats)."""
     target_hts = (hts_min + hts_max) / 2.0
@@ -865,9 +907,14 @@ def build(
         hts_min,
         hts_max,
         forecast_index=forecast_index,
+        snapshot_start_date=snapshot_start_date,
+        event_date_start=event_date_start,
     )
-    paper_orders, paper_stats = _load_paper_orders(paper_orders_path)
-    live_fills = _load_live_fills(conn)
+    paper_orders, paper_stats = _load_paper_orders(
+        paper_orders_path,
+        event_date_start=event_date_start,
+    )
+    live_fills = _load_live_fills(conn, event_date_start=event_date_start)
     settlements = _load_settlements(conn)
     settlement_outcomes = _load_settlement_outcomes(conn)
 
@@ -1088,6 +1135,26 @@ def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
     conn.commit()
 
 
+def write_db_incremental(
+    conn: sqlite3.Connection,
+    rows: list[dict],
+    *,
+    event_date_start: date,
+) -> None:
+    """Replace only the recent event-date partition in one transaction."""
+    conn.execute(CANDIDATE_DDL)
+    conn.execute("DELETE FROM fact_signal_candidates WHERE event_date >= ?", (event_date_start.isoformat(),))
+    if rows:
+        cols = list(rows[0].keys())
+        placeholders = ",".join("?" for _ in cols)
+        col_list = ",".join(cols)
+        conn.executemany(
+            f"INSERT INTO fact_signal_candidates ({col_list}) VALUES ({placeholders})",
+            [[row[col] for col in cols] for row in rows],
+        )
+    conn.commit()
+
+
 def _curve_id(row: dict, hourly_curve_json: str) -> str:
     raw = json.dumps(
         {
@@ -1253,6 +1320,16 @@ def main() -> None:
     ap.add_argument("--forecast-curve-dir", default=str(FORECAST_CURVE_DIR))
     ap.add_argument("--decision-hts-min", type=float, default=22.0)
     ap.add_argument("--decision-hts-max", type=float, default=24.0)
+    ap.add_argument(
+        "--incremental-start-date",
+        help="Replace fact rows on/after this event date instead of rebuilding the table.",
+    )
+    ap.add_argument(
+        "--snapshot-lookback-days",
+        type=int,
+        default=2,
+        help="In incremental mode, include this many snapshot days before the event partition.",
+    )
     ap.add_argument("--dry-run", action="store_true",
                     help="Compute rows but do not write to DB or parquet")
     args = ap.parse_args()
@@ -1263,6 +1340,12 @@ def main() -> None:
 
     conn = sqlite3.connect(db_path)
     try:
+        event_date_start = date.fromisoformat(args.incremental_start_date) if args.incremental_start_date else None
+        snapshot_start_date = (
+            event_date_start - timedelta(days=max(0, args.snapshot_lookback_days))
+            if event_date_start
+            else None
+        )
         rows, alerts, stats = build(
             conn,
             snapshot_dir=Path(args.snapshot_dir),
@@ -1270,18 +1353,27 @@ def main() -> None:
             hts_min=args.decision_hts_min,
             hts_max=args.decision_hts_max,
             forecast_cache_root=Path(args.forecast_cache_root),
+            snapshot_start_date=snapshot_start_date,
+            event_date_start=event_date_start,
         )
-        curve_rows = load_forecast_curve_rows(Path(args.forecast_curve_dir))
+        curve_rows = [] if event_date_start else load_forecast_curve_rows(Path(args.forecast_curve_dir))
         print_summary(rows, alerts, stats)
         print(f"forecast hourly curves: {len(curve_rows)} rows")
         if args.dry_run:
             print("\n[dry-run] skipping write")
             return
-        write_db(conn, rows)
-        write_forecast_curve_db(conn, curve_rows)
+        if event_date_start:
+            write_db_incremental(conn, rows, event_date_start=event_date_start)
+        else:
+            write_db(conn, rows)
+            write_forecast_curve_db(conn, curve_rows)
         print(f"\nfact_signal_candidates written to DB: {db_path}")
-        print(f"fact_forecast_hourly_curves written to DB: {len(curve_rows)} rows")
-        if args.no_parquet:
+        if event_date_start:
+            print(f"incremental event partition replaced from: {event_date_start.isoformat()}")
+            print("fact_forecast_hourly_curves unchanged in incremental mode")
+        else:
+            print(f"fact_forecast_hourly_curves written to DB: {len(curve_rows)} rows")
+        if args.no_parquet or event_date_start:
             print("fact_signal_candidates parquet export skipped (--no-parquet)")
         else:
             write_parquet(rows, Path(args.parquet_path))
