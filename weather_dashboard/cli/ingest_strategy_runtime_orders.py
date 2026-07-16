@@ -15,6 +15,24 @@ from weather_dashboard.legacy_migration.strategy_runtime_orders import (
 )
 
 
+def resolve_order_paths(
+    root_args: list[str] | None,
+    order_files: list[str] | None,
+) -> list[Path]:
+    # Explicit order files supplement normal runtime discovery.  Previously
+    # their presence silently disabled DEFAULT_ROOTS, so any local strategy not
+    # repeated in the shell wrapper vanished from canonical lineage.
+    roots = root_args if root_args is not None else DEFAULT_ROOTS
+    paths = iter_strategy_order_paths(roots)
+    seen = {str(path) for path in paths}
+    for raw_path in order_files or []:
+        path = Path(raw_path)
+        if str(path) not in seen:
+            paths.append(path)
+            seen.add(str(path))
+    return paths
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate strategy-local runtime order JSONL into canonical DB")
     parser.add_argument("--db-path", default="runtime/weather.db")
@@ -32,15 +50,7 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db_canonical(args.db_path)
-    roots = args.root if args.root is not None else ([] if args.order_file else DEFAULT_ROOTS)
-    paths = iter_strategy_order_paths(roots)
-    if args.order_file:
-        seen = {str(path) for path in paths}
-        for raw_path in args.order_file:
-            path = Path(raw_path)
-            if str(path) not in seen:
-                paths.append(path)
-                seen.add(str(path))
+    paths = resolve_order_paths(args.root, args.order_file)
     conn = get_conn(args.db_path)
     try:
         sync_instance_specs(conn)
