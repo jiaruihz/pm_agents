@@ -104,6 +104,27 @@
     - latest_events.json
   - - summary_history
     - summary_history.jsonl
+- strategy_instance: tmax_distribution_edge_candidate_shadow_v1
+  display_name: Tmax distribution candidate static shadow
+  family: reheat_risk.tmax_distribution_edge
+  lifecycle_status: stale
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: runtime/weather_edge_v1/tmax_distribution_edge_candidate_shadow_v1
+  summary_file: latest_summary.json
+  primary_journal: summary_history.jsonl
+  live_order_file: null
+  paper_order_file: null
+  telemetry_file: null
+  start_script: null
+  tmux_session: null
+  notes: Historical static-CSV candidate replay retained for reproducibility. It is
+    superseded-for-now by the current first-lock shadow and must remain paused.
+  default_health: stale
+  expected_live: false
+  artifact_files:
+  - - summary_history
+    - summary_history.jsonl
 - strategy_instance: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1
   display_name: Tmax first-lock no-current-YES shadow
   family: reheat_risk.tmax_distribution_edge
