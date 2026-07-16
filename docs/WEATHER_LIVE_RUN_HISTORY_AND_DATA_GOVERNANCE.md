@@ -291,6 +291,44 @@ affected_events = 3
 affected_orders = 0
 ```
 
+### Incident H: JRS External-Volume Runtime Host Permission Loss
+
+Incident date: `2026-07-16`
+
+Root cause:
+
+- JRS-consuming runners were split across `screen`, the default tmux server, LaunchAgent, and the
+  `weather-jrs` tmux server. macOS external-volume permission remained reliable only for processes
+  spawned by the `weather-jrs` server.
+- A live child could therefore remain present while its upstream summary stopped advancing or its
+  loop emitted `Operation not permitted` / `no_snapshot`.
+
+Measured impact (UTC):
+
+| Runtime | Contaminated window | Decision impact |
+|---|---|---|
+| `fast_source_prev_no_trial_v1` | `04:45:34..12:32:13` | Four counterfactual submission opportunities were not attempted: Tokyo 31 NO, Busan 33 NO, Singapore 32 NO, Tokyo 32 NO. These are not guaranteed fills. Two Busan attempts immediately before the outage were rejected because a post-only order crossed the book. |
+| `d1_yes_high_mid_live_v1` | `08:29:53..12:52:14` | The recovered Ankara 30 YES signal depended on a new `12:49:10` observation and matched 5 shares at `12:52:16` for `0.84`; permanent missed fills confirmed from this incident: `0`. |
+| `current_yes_heat_death_shadow_v1` | `04:39:14..12:52:31` | `8h13m` signal-production coverage gap. Do not treat missing decisions in this window as negative examples. Before the gap, four Wellington strong rows were non-executable at asks `0.997/0.999`; after recovery, one Jeddah strong row had no ask. |
+| `low_price_yes_lottery_shadow_v1` | `07:47:06..13:02:45` | Shadow-only coverage loss; live orders affected: `0`. |
+
+Correction:
+
+- Rehost all active JRS consumers and the fast-source patrol on `tmux -L weather-jrs`.
+- Monitor the current signal producer and both current-YES live heads, not only their child-process
+  heartbeats.
+- Keep dormant live instances out of expected-live monitoring and monitor their active shadows.
+
+Label:
+
+```text
+run_family = weather_jrs_runtime_host_permission_incident
+run_quality = coverage_gap_external_volume_permission
+affected_live_fills_confirmed_missed = 0
+current_yes_exclusion_window = 2026-07-16T04:39:14Z..2026-07-16T12:52:31Z
+fix_commits = e834311c,7182a13d,82d90bd
+```
+
 Resolution / restored probe:
 
 ```text
@@ -351,6 +389,44 @@ sizing_mode = notional
 max_order_notional = 5.00
 entry_price_window = 0.25-0.75
 ```
+
+### Incident H: ECMWF Cities Silently Fell Back To GFS
+
+Target dates: `2026-07-02` .. `2026-07-05` (fixed at ECMWF collection restore ~`2026-07-06`).
+
+What happened:
+
+- Mac cache was missing `ecmwf_v4_*` forecast files, so the per-city fixed-model pipeline
+  (`CITY_MODEL`, see `weather_data_feed_service/legacy_weather_predict/paper_snapshot.py`)
+  **silently fell back to GFS** for cities that should run ECMWF. First flagged as P0 in
+  [2026-07-05-heada-review-work-order-v1.md](analysis/2026-07/2026-07-05-heada-review-work-order-v1.md).
+- The fallback was not an alert; signals were built on the wrong forecast source for three days.
+- `signals.forecast_source` / `signals.model_version` faithfully record `open_meteo_live_gfs` / `gfs`.
+  **These rows are NOT corrupt — they are an accurate record of what actually traded.** Do not rewrite
+  `model_version` to `ecmwf`; that would falsify a real live record.
+
+Affected canonical rows (`runtime/weather.db` `fact_trades`, all `trade_class=live_real`, 16 rows):
+
+```text
+2026-07-03  Ankara(1)  Dallas(1)  London(3)
+2026-07-04  Busan(2)   Helsinki(2)
+2026-07-05  Helsinki(3) Lucknow(4)
+```
+
+How to label / handle:
+
+```text
+contamination = ecmwf_silent_gfs_fallback
+window = 2026-07-02..2026-07-05
+affected_cities = Ankara, Dallas, London, Busan, Helsinki, Lucknow  # ECMWF-designated per CITY_MODEL
+data_status = faithful_record   # do not rewrite model_version
+research_status = excluded_from_ecmwf_by_model_slices
+```
+
+- Any `by_model` ECMWF slice, forecast-source A/B, or forward evidence keyed on these city-days must
+  exclude or flag them — they are GFS forecasts, not ECMWF, despite these being ECMWF-designated cities.
+- Root cause (silent fallback) is fixed going forward: fallback must alert, per CLAUDE.md §2 and the
+  work-order P0. This window remains in the DB as an honest live record, tagged here, not deleted.
 
 ### Incident I: D1 High-Mid Shadow Consumed Growing Full-Ladder Files
 
