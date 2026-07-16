@@ -291,7 +291,7 @@ affected_events = 3
 affected_orders = 0
 ```
 
-### Incident H: JRS External-Volume Runtime Host Permission Loss
+### Incident J: JRS External-Volume Runtime Host Permission Loss
 
 Incident date: `2026-07-16`
 
