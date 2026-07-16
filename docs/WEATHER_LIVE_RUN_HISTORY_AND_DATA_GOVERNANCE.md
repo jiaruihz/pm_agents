@@ -641,6 +641,25 @@ only. Runtime health and analysis freshness now have separate read-only monitors
 and recent fact repair uses an explicit event-date partition instead of a full DB
 rebuild.
 
+### 6.7 2026-07-16 Fast-Source Post-Only Repricing Gap
+
+Pollution window: `2026-07-16T04:45:21Z..04:45:31Z`. One unique Busan `32 NO`
+signal generated two 10-share post-only submissions. Both were rejected with
+`invalid post-only order: order crosses book` after the observed ask moved from
+`0.67` to `0.64`; accepted orders and fills were both zero.
+
+The settlement-facing WU RKPK history later recorded `33 C` at 14:00 local and
+`35 C` at 15:00 local, while the AWC METAR mirror had no routine rows at those
+hours. The WU daily maximum was `35 C`, so `32 NO` was the correct expression.
+At the first observed ask, the missed 10-share fill had approximately `$3.30`
+gross settlement profit; this is counterfactual because no exchange fill exists.
+
+Correction: crossing rejects now trigger at most two immediate fresh-book maker
+reprices. Each retry remains exact-share, post-only, below the current ask, and
+stops when the ask exceeds the city cap or top-level depth is insufficient.
+Direct taker fallback remains disabled because the previous FOK BUY path did not
+provide a reliable hard share cap.
+
 ## 7. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:

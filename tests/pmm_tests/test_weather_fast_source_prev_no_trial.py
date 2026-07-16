@@ -495,6 +495,91 @@ def test_post_only_gtd_accepts_only_a_resting_order_and_reserves_exact_shares():
     assert calls[0]["size"] == 5.0
 
 
+def test_post_only_gtd_immediately_reprices_a_crossing_rejection():
+    calls = []
+
+    def place(row):
+        calls.append(dict(row))
+        if len(calls) == 1:
+            raise RuntimeError("invalid post-only order: order crosses book")
+        return {
+            "order_id": "repriced-maker-order",
+            "order_type": "GTD",
+            "order_mode": "post_only_gtd_buy_shares",
+            "post_only": True,
+            "place": {"success": True, "status": "live", "orderID": "repriced-maker-order"},
+        }
+
+    def fetch_book(*_args, **_kwargs):
+        return {
+            "status": "ok",
+            "summary": {"best_ask": 0.64, "ask_size": 20.0, "tick_size": 0.01},
+            "http_status": 200,
+            "proxy_used": "proxy",
+        }
+
+    result = submit_post_only_gtd(
+        {
+            "token_id": "token",
+            "best_ask": 0.67,
+            "ask_size": 20.0,
+            "tick_size": 0.01,
+            "limit_price": 0.66,
+            "size": 10.0,
+            "desired_shares": 10.0,
+            "max_shares_per_market": 10.0,
+            "effective_lifetime_sec": 45,
+            "share_cap_enforcement": "resting_post_only_signed_size_v1",
+        },
+        place=place,
+        fetch_book_fn=fetch_book,
+        market_proxy="proxy",
+        max_no_ask=0.94,
+        immediate_reprices=2,
+    )
+
+    assert result["live_submit_status"] == "submitted"
+    assert len(calls) == 2
+    assert calls[1]["best_ask"] == 0.64
+    assert calls[1]["limit_price"] == 0.63
+    assert calls[1]["size"] == 10.0
+    assert result["attempts"][0]["post_only_crossing"] is True
+
+
+def test_post_only_gtd_reprice_stops_when_new_ask_exceeds_cap():
+    calls = []
+
+    def place(row):
+        calls.append(dict(row))
+        raise RuntimeError("invalid post-only order: order crosses book")
+
+    def fetch_book(*_args, **_kwargs):
+        return {"status": "ok", "summary": {"best_ask": 0.95, "ask_size": 20.0, "tick_size": 0.01}}
+
+    result = submit_post_only_gtd(
+        {
+            "token_id": "token",
+            "best_ask": 0.67,
+            "ask_size": 20.0,
+            "tick_size": 0.01,
+            "limit_price": 0.66,
+            "size": 10.0,
+            "desired_shares": 10.0,
+            "max_shares_per_market": 10.0,
+            "effective_lifetime_sec": 45,
+        },
+        place=place,
+        fetch_book_fn=fetch_book,
+        max_no_ask=0.94,
+        immediate_reprices=2,
+    )
+
+    assert result["live_submit_status"] == "submit_failed"
+    assert len(calls) == 1
+    assert result["attempts"][-1]["status"] == "reprice_blocked"
+    assert result["attempts"][-1]["blockers"] == ["ask_above_max"]
+
+
 def test_post_fill_share_cap_violation_is_visible_and_pauses_post_fix_orders(tmp_path):
     path = tmp_path / "orders.jsonl"
     old = {

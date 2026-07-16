@@ -651,7 +651,15 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             }
             if "place" not in live_place_cache:
                 live_place_cache["place"] = build_live_post_only_gtd_place_fn(market_proxy)
-            result = submit_post_only_gtd(order_row, place=live_place_cache["place"])
+            result = submit_post_only_gtd(
+                order_row,
+                place=live_place_cache["place"],
+                fetch_book_fn=fetch_fresh_book,
+                market_proxy=market_proxy,
+                book_timeout_sec=args.book_timeout_sec,
+                max_no_ask=policy.max_no_ask,
+                immediate_reprices=args.post_only_immediate_reprices,
+            )
             order_row = result["order_row"]
             order_row.update(
                 {
@@ -668,6 +676,8 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
                 order_row["exchange_response"] = response
                 order_row["order_id"] = response.get("order_id")
                 live_order_keys.add(live_key)
+            if result.get("attempts"):
+                order_row["attempts"] = result["attempts"]
             if result["live_submit_status"] == "share_cap_violation":
                 share_cap_paused = True
                 share_cap_pause_reason = "post_fix_actual_fill_exceeded_desired_or_market_cap"
@@ -774,7 +784,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-source-observation-lag-min", type=float, default=15.0)
     parser.add_argument("--next-metar-window-min", type=float, default=20.0)
     parser.add_argument("--book-timeout-sec", type=float, default=5.0)
-    parser.add_argument("--fok-immediate-retries", type=int, default=2)
+    parser.add_argument(
+        "--post-only-immediate-reprices",
+        "--fok-immediate-retries",
+        dest="post_only_immediate_reprices",
+        type=int,
+        default=2,
+        help="Immediate fresh-book maker reprices after a post-only crossing rejection.",
+    )
     parser.add_argument("--maker-effective-lifetime-sec", type=float, default=45.0)
     parser.add_argument("--acknowledge-historical-share-cap-incidents", action="store_true")
     parser.add_argument("--market-proxy", default=market_proxy_url(None))

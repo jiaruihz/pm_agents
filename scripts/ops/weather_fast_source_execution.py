@@ -180,6 +180,11 @@ def is_definitive_fok_unfilled_error(exc: Exception) -> bool:
     return "couldn't be fully filled" in message and "fok" in message
 
 
+def is_post_only_crossing_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "invalid post-only order" in message or "order crosses book" in message
+
+
 def _build_live_limit_place_fn(
     proxy_url: str,
     *,
@@ -303,41 +308,155 @@ def response_is_live_post_only(response: dict[str, Any]) -> bool:
     )
 
 
-def submit_post_only_gtd(order_row: dict[str, Any], *, place: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
-    """Submit one exact-share maker intent, failing closed if it crosses."""
+def submit_post_only_gtd(
+    order_row: dict[str, Any],
+    *,
+    place: Callable[[dict[str, Any]], dict[str, Any]],
+    fetch_book_fn: Callable[..., dict[str, Any]] | None = None,
+    market_proxy: str = "",
+    book_timeout_sec: float = 5.0,
+    max_no_ask: float = 1.0,
+    immediate_reprices: int = 0,
+) -> dict[str, Any]:
+    """Submit an exact-share maker intent and immediately reprice crossing rejects."""
     working = dict(order_row)
     response: dict[str, Any] | None = None
-    try:
-        response = place(working)
-        if not response_is_live_post_only(response):
-            raise RuntimeError(f"post-only GTD response not live: {json.dumps(response.get('place'), sort_keys=True)}")
-    except Exception as exc:  # noqa: BLE001
-        actual_shares, actual_cost = matched_fill_amounts(response)
-        checked_row = {
-            **working,
-            "exchange_response": response,
-            "actual_fill_shares": actual_shares,
+    attempts: list[dict[str, Any]] = []
+    total_attempts = 1 + max(0, int(immediate_reprices))
+    last_error = ""
+
+    for attempt_number in range(1, total_attempts + 1):
+        attempt = {
+            "attempt": attempt_number,
+            "attempt_ts_utc": iso(),
+            "best_ask": working.get("best_ask"),
+            "ask_size": working.get("ask_size"),
+            "limit_price": working.get("limit_price"),
         }
-        cap_check = share_cap_check(checked_row)
+        try:
+            response = place(working)
+            if not response_is_live_post_only(response):
+                raise RuntimeError(f"post-only GTD response not live: {json.dumps(response.get('place'), sort_keys=True)}")
+        except Exception as exc:  # noqa: BLE001
+            last_error = f"{type(exc).__name__}: {exc}"
+            crossing = is_post_only_crossing_error(exc)
+            attempt.update({"status": "submit_failed", "error": last_error, "post_only_crossing": crossing})
+            attempts.append(attempt)
+            if not (crossing and attempt_number < total_attempts and fetch_book_fn is not None):
+                break
+
+            try:
+                book = fetch_book_fn(
+                    str(working["token_id"]),
+                    proxy=market_proxy,
+                    timeout_sec=float(book_timeout_sec),
+                    top_n=5,
+                )
+            except Exception as exc:  # noqa: BLE001
+                last_error = f"immediate_reprice_book_failed:{type(exc).__name__}:{exc}"
+                attempts.append(
+                    {
+                        "attempt": attempt_number + 1,
+                        "attempt_ts_utc": iso(),
+                        "status": "reprice_blocked",
+                        "blockers": ["fresh_book_fetch_failed"],
+                        "error": last_error,
+                    }
+                )
+                break
+            summary = book.get("summary") or {}
+            best_ask = safe_float(summary.get("best_ask"))
+            ask_size = safe_float(summary.get("ask_size"))
+            tick_size = safe_float(summary.get("tick_size")) or safe_float(working.get("tick_size"))
+            desired_shares = safe_float(working.get("desired_shares")) or safe_float(working.get("size"))
+            blockers: list[str] = []
+            if book.get("status") != "ok":
+                blockers.append("fresh_book_not_ok")
+            if best_ask is None:
+                blockers.append("missing_best_ask")
+            elif best_ask > float(max_no_ask):
+                blockers.append("ask_above_max")
+            if tick_size is None:
+                blockers.append("missing_tick_size")
+            if desired_shares is None or desired_shares <= 0:
+                blockers.append("invalid_desired_shares")
+            elif ask_size is None or ask_size < desired_shares:
+                blockers.append("insufficient_top_ask_size")
+            if blockers:
+                last_error = "immediate_reprice_blocked:" + ",".join(blockers)
+                attempts.append(
+                    {
+                        "attempt": attempt_number + 1,
+                        "attempt_ts_utc": iso(),
+                        "status": "reprice_blocked",
+                        "best_ask": best_ask,
+                        "ask_size": ask_size,
+                        "blockers": blockers,
+                    }
+                )
+                break
+            try:
+                maker_intent = exact_share_maker_intent(
+                    best_ask=float(best_ask),
+                    tick_size=float(tick_size),
+                    desired_shares=float(desired_shares),
+                    now=datetime.now(timezone.utc),
+                    effective_lifetime_sec=float(working.get("effective_lifetime_sec") or 45.0),
+                )
+            except ValueError as exc:
+                last_error = f"immediate_reprice_invalid:{exc}"
+                attempts.append(
+                    {
+                        "attempt": attempt_number + 1,
+                        "attempt_ts_utc": iso(),
+                        "status": "reprice_blocked",
+                        "best_ask": best_ask,
+                        "ask_size": ask_size,
+                        "blockers": ["exact_share_maker_intent_invalid"],
+                    }
+                )
+                break
+            working.update(
+                {
+                    "best_ask": best_ask,
+                    "ask_size": ask_size,
+                    "tick_size": tick_size,
+                    "planned_notional_usd": round(float(desired_shares) * float(best_ask), 6),
+                    "fresh_book_status": book.get("status"),
+                    "fresh_book_error": book.get("error", ""),
+                    "fresh_book_http_status": book.get("http_status"),
+                    "fresh_book_proxy_used": book.get("proxy_used", ""),
+                    **maker_intent,
+                }
+            )
+            continue
+
+        attempts.append({**attempt, "status": "submitted", "order_id": response.get("order_id")})
         return {
             "order_row": working,
+            "attempts": attempts,
             "exchange_response": response,
-            "live_submit_status": "share_cap_violation" if cap_check["share_cap_violation"] else "submit_failed",
-            "actual_fill_shares": actual_shares,
-            "actual_fill_cost_usd": actual_cost,
-            "share_cap_check": cap_check,
-            "error": f"{type(exc).__name__}: {exc}",
+            "live_submit_status": "submitted",
+            "live_order_posted": True,
+            "exchange_order_status": "live",
+            "actual_fill_shares": None,
+            "actual_fill_cost_usd": None,
+            "share_cap_check": share_cap_check(working),
+            "error": "",
         }
+
+    actual_shares, actual_cost = matched_fill_amounts(response)
+    checked_row = {**working, "exchange_response": response, "actual_fill_shares": actual_shares}
+    cap_check = share_cap_check(checked_row)
     return {
         "order_row": working,
+        "attempts": attempts,
         "exchange_response": response,
-        "live_submit_status": "submitted",
-        "live_order_posted": True,
-        "exchange_order_status": "live",
-        "actual_fill_shares": None,
-        "actual_fill_cost_usd": None,
-        "share_cap_check": share_cap_check(working),
-        "error": "",
+        "live_submit_status": "share_cap_violation" if cap_check["share_cap_violation"] else "submit_failed",
+        "actual_fill_shares": actual_shares,
+        "actual_fill_cost_usd": actual_cost,
+        "share_cap_check": cap_check,
+        "error": last_error,
     }
 
 
