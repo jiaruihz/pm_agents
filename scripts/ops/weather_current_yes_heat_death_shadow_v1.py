@@ -241,6 +241,7 @@ def _fetch_token_book(client: httpx.Client, token_id: str) -> dict[str, Any]:
             raise ValueError("book response is not an object")
         return {
             **_book_summary(payload),
+            "tick_size": finite(payload.get("tick_size")),
             "book_status": "ok",
             "book_fetched_at_utc": fetched_at,
         }

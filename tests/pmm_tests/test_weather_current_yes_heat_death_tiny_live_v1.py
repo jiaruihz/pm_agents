@@ -5,10 +5,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from scripts.ops import weather_current_yes_heat_death_tiny_live_v1 as live
+from src.strategies.weather_edge_v1.tools.execution_pipeline import ExecutorConfig, execute_trade_plans
 
 
 def _select_h2() -> None:
     live.ACTIVE_HEAD = "h2_early_dislocation"
+    live.STRATEGY_INSTANCE = live.HEADS[live.ACTIVE_HEAD]["instance"]
+
+
+def _select_h1() -> None:
+    live.ACTIVE_HEAD = "h1_late_carry"
     live.STRATEGY_INSTANCE = live.HEADS[live.ACTIVE_HEAD]["instance"]
 
 
@@ -26,6 +32,7 @@ def _row(*, city: str = "Busan", ask: float = 0.84, ask_size: float = 20.0) -> d
         "fresh_current_yes_ask": ask,
         "fresh_current_yes_ask_size": ask_size,
         "fresh_current_yes_bid": ask - 0.01,
+        "fresh_current_yes_tick_size": 0.001,
         "fresh_current_yes_book_status": "ok",
         "fresh_current_yes_book_fetched_at_utc": "2026-07-14T04:08:05Z",
         "physical_support_count": 3,
@@ -39,29 +46,92 @@ def test_signal_id_dedupes_snapshot_and_bracket() -> None:
     assert live.signal_id(left) == live.signal_id(right)
 
 
-def test_build_plan_is_fixed_ten_share_current_yes_probe() -> None:
+def test_build_plan_is_fixed_five_share_h2_taker_probe() -> None:
     _select_h2()
-    plan = live.build_plan(_row(), shares=10, live_enabled=True, ttl_min=15)
+    plan = live.build_plan(_row(), shares=5, child_order_role="single", live_enabled=True, ttl_min=15)
     assert plan["record_type"] == "weather_edge_trade_plan"
     assert plan["signal_side"] == "BUY_YES"
-    assert plan["size"] == 10
-    assert plan["notional"] == 8.4
+    assert plan["size"] == 5
+    assert plan["notional"] == 4.2
+    assert plan["maker_only"] is False
+    assert plan["execution_policy"] == "current_yes_heat_death_taker_probe_v1"
     assert plan["live_enabled"] is True
     assert plan["risk_status"] == "passed"
+
+
+def test_h1_builds_five_taker_plus_five_post_only_maker() -> None:
+    _select_h1()
+    plans = live.build_opportunity_plans(
+        _row(ask=0.97),
+        taker_shares=5,
+        maker_shares=5,
+        live_enabled=True,
+        ttl_min=15,
+    )
+    assert [(plan["child_order_role"], plan["size"]) for plan in plans] == [("taker", 5), ("maker", 5)]
+    taker, maker = plans
+    assert taker["limit_price"] == 0.97
+    assert taker["maker_only"] is False
+    assert maker["limit_price"] == 0.961
+    assert maker["maker_only"] is True
+    assert maker["execution_policy"] == "current_yes_heat_death_maker_probe_v1"
+    assert taker["signal_id"] == maker["signal_id"]
+    assert taker["opportunity_id"] == maker["opportunity_id"]
+    assert taker["plan_id"] != maker["plan_id"]
+    assert taker["allow_duplicate_signal_id"] is True
+    assert maker["allow_duplicate_signal_id"] is True
+
+
+def test_h1_two_children_both_pass_executor_signal_dedupe(tmp_path: Path) -> None:
+    _select_h1()
+    plans = live.build_opportunity_plans(
+        _row(ask=0.97),
+        taker_shares=5,
+        maker_shares=5,
+        live_enabled=True,
+        ttl_min=15,
+    )
+    plans_path = tmp_path / "plans.jsonl"
+    plans_path.write_text("".join(json.dumps(plan) + "\n" for plan in plans), encoding="utf-8")
+    placed_roles: list[str] = []
+
+    def _place(plan: dict) -> dict:
+        placed_roles.append(str(plan["child_order_role"]))
+        return {"place": {"status": "live"}, "maker_only": bool(plan["maker_only"])}
+
+    result = execute_trade_plans(
+        plan_path=plans_path,
+        paper_out=tmp_path / "paper.jsonl",
+        live_out=tmp_path / "live.jsonl",
+        config=ExecutorConfig(
+            live=True,
+            confirm_live=True,
+            max_live_order_notional_usd=5.0,
+            max_live_batch_notional_usd=10.0,
+        ),
+        live_place_fn=_place,
+    )
+
+    assert placed_roles == ["taker", "maker"]
+    assert result["live_written"] == 2
+    assert result["live_skipped_existing_signal"] == 0
+    assert result["live_skipped_existing_opportunity"] == 0
 
 
 def test_choose_plans_applies_depth_dedup_and_daily_cap(tmp_path: Path) -> None:
     _select_h2()
     live_orders = tmp_path / "live.jsonl"
     now = datetime(2026, 7, 14, 4, 10, tzinfo=timezone.utc)
-    submitted = live.build_plan(_row(city="Busan"), shares=10, live_enabled=True, ttl_min=15)
+    submitted = live.build_plan(
+        _row(city="Busan"), shares=5, child_order_role="single", live_enabled=True, ttl_min=15
+    )
     live_orders.write_text(
         json.dumps({**submitted, "status": "submitted", "created_at_utc": "2026-07-14T04:09:00Z"}) + "\n",
         encoding="utf-8",
     )
     rows = [
         _row(city="Busan"),
-        _row(city="Jeddah", ask=0.88, ask_size=8),
+        _row(city="Jeddah", ask=0.88, ask_size=4),
         _row(city="PanamaCity", ask=0.98, ask_size=30),
         _row(city="Ankara", ask=0.991, ask_size=100),
         _row(city="CapeTown", ask=0.95, ask_size=30),
@@ -70,10 +140,11 @@ def test_choose_plans_applies_depth_dedup_and_daily_cap(tmp_path: Path) -> None:
     plans, counts = live.choose_plans(
         rows,
         live_orders=live_orders,
-        shares=10,
+        taker_shares=5,
+        maker_shares=0,
         min_ask=0.50,
         max_ask=0.99,
-        min_top_ask_shares=10,
+        min_top_ask_shares=5,
         max_orders_per_utc_day=3,
         live_enabled=True,
         ttl_min=15,
@@ -110,11 +181,13 @@ def test_h2_legacy_order_counts_for_city_day_dedup_and_daily_cap(tmp_path: Path)
             {**_row(city="Busan", ask=0.85), "target_date": "2026-07-15"},
         ],
         live_orders=live_orders,
-        legacy_live_orders=[legacy_orders],
-        shares=10,
+        dedupe_live_orders=[legacy_orders],
+        daily_cap_live_orders=[legacy_orders],
+        taker_shares=5,
+        maker_shares=0,
         min_ask=0.50,
         max_ask=0.93,
-        min_top_ask_shares=10,
+        min_top_ask_shares=5,
         max_orders_per_utc_day=2,
         live_enabled=True,
         ttl_min=15,
@@ -124,6 +197,63 @@ def test_h2_legacy_order_counts_for_city_day_dedup_and_daily_cap(tmp_path: Path)
     assert [row["city"] for row in plans] == ["Busan"]
     assert counts["already_submitted_city_days"] == 1
     assert counts["daily_cap"] == 0
+
+
+def test_h1_pair_counts_as_one_daily_opportunity_and_h2_blocks_same_city_day(tmp_path: Path) -> None:
+    _select_h1()
+    h1_orders = tmp_path / "h1_live.jsonl"
+    h2_orders = tmp_path / "h2_live.jsonl"
+    existing_pair = live.build_opportunity_plans(
+        {**_row(city="Munich", ask=0.97), "target_date": "2026-07-15"},
+        taker_shares=5,
+        maker_shares=5,
+        live_enabled=True,
+        ttl_min=15,
+    )
+    h1_orders.write_text(
+        "".join(
+            json.dumps({**plan, "status": "submitted", "created_at_utc": "2026-07-15T15:01:00Z"}) + "\n"
+            for plan in existing_pair
+        ),
+        encoding="utf-8",
+    )
+    h2_orders.write_text(
+        json.dumps(
+            {
+                "status": "submitted",
+                "city": "Busan",
+                "target_date": "2026-07-15",
+                "created_at_utc": "2026-07-15T14:00:00Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    plans, counts = live.choose_plans(
+        [
+            {**_row(city="Busan", ask=0.97), "target_date": "2026-07-15"},
+            {**_row(city="CapeTown", ask=0.98), "target_date": "2026-07-15"},
+            {**_row(city="Atlanta", ask=0.98), "target_date": "2026-07-15"},
+            {**_row(city="Milan", ask=0.98), "target_date": "2026-07-15"},
+        ],
+        live_orders=h1_orders,
+        dedupe_live_orders=[h2_orders],
+        taker_shares=5,
+        maker_shares=5,
+        min_ask=0.95,
+        max_ask=0.99,
+        min_top_ask_shares=5,
+        max_orders_per_utc_day=3,
+        live_enabled=True,
+        ttl_min=15,
+        now=datetime(2026, 7, 15, 16, 0, tzinfo=timezone.utc),
+    )
+
+    assert sorted({plan["city"] for plan in plans}) == ["Atlanta", "CapeTown"]
+    assert len(plans) == 4
+    assert counts["already_submitted_city_days"] == 1
+    assert counts["daily_cap"] == 1
 
 
 def test_latest_strong_rows_keeps_latest_fresh_city_day(tmp_path: Path) -> None:

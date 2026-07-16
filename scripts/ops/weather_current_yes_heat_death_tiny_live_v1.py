@@ -3,7 +3,7 @@
 
 The signal remains owned by ``weather_current_yes_heat_death_shadow_v1.py``.
 This adapter only turns the latest fresh ``physical_confirmation_strong`` row
-into one fixed-share current-bracket BUY_YES order per city/target-date.  It is
+into one small current-bracket BUY_YES opportunity per city/target-date.  It is
 an explicitly small forward probe, not a claim that the strategy is confirmed.
 
 Per the preregistered promotion criteria
@@ -43,17 +43,25 @@ STRATEGY_ID = "current_yes_heat_death_physical_v1"
 HEADS: dict[str, dict[str, Any]] = {
     "h1_late_carry": {
         "instance": "current_yes_heat_death_tiny_live_h1_late_carry_v1",
+        "config_id": "current_yes_heat_death_tiny_live_h1_late_carry_v2_split5x5",
         "decision_mode": "late_carry_heat_death_strong_current_yes",
         "combo": "current_yes_heat_death_late_carry_v1",
         "min_ask": 0.95,
         "max_ask": 0.99,
+        "total_shares": 10.0,
+        "taker_shares": 5.0,
+        "maker_shares": 5.0,
     },
     "h2_early_dislocation": {
         "instance": "current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
+        "config_id": "current_yes_heat_death_tiny_live_h2_early_dislocation_v2_fixed5",
         "decision_mode": "early_dislocation_heat_death_strong_current_yes",
         "combo": "current_yes_heat_death_early_dislocation_v1",
         "min_ask": 0.50,
         "max_ask": 0.93,
+        "total_shares": 5.0,
+        "taker_shares": 5.0,
+        "maker_shares": 0.0,
     },
 }
 # Set from --head at startup; no default on purpose (explicit failure over
@@ -160,16 +168,19 @@ def submitted_city_days(live_order_paths: list[Path]) -> set[tuple[str, str]]:
     }
 
 
-def submitted_today_count(live_order_paths: list[Path], *, now: datetime) -> int:
-    count = 0
+def submitted_today_city_day_count(live_order_paths: list[Path], *, now: datetime) -> int:
+    city_days: set[tuple[str, str]] = set()
     for path in live_order_paths:
         for row in read_jsonl(path):
             if str(row.get("status") or "") != "submitted":
                 continue
             created = parse_utc(row.get("created_at_utc"))
             if created is not None and created.date() == now.astimezone(timezone.utc).date():
-                count += 1
-    return count
+                city = str(row.get("city") or "")
+                target_date = str(row.get("target_date") or "")
+                if city and target_date:
+                    city_days.add((city, target_date))
+    return len(city_days)
 
 
 def latest_strong_rows(
@@ -214,24 +225,47 @@ def refresh_current_yes_quotes(
             row["fresh_current_yes_ask_size"] = quote.get("ask_size")
             row["fresh_current_yes_bid"] = quote.get("bid")
             row["fresh_current_yes_bid_size"] = quote.get("bid_size")
+            row["fresh_current_yes_tick_size"] = quote.get("tick_size")
             row["fresh_current_yes_book_status"] = quote.get("book_status")
             row["fresh_current_yes_book_fetched_at_utc"] = quote.get("book_fetched_at_utc")
             refreshed.append(row)
     return refreshed
 
 
-def build_plan(row: Mapping[str, Any], *, shares: float, live_enabled: bool, ttl_min: float) -> dict[str, Any]:
+def build_plan(
+    row: Mapping[str, Any],
+    *,
+    shares: float,
+    child_order_role: str,
+    live_enabled: bool,
+    ttl_min: float,
+) -> dict[str, Any]:
     ask = float(row["fresh_current_yes_ask"])
     bid = finite(row.get("fresh_current_yes_bid")) or 0.0
+    tick_size = finite(row.get("fresh_current_yes_tick_size")) or 0.001
+    maker_only = child_order_role == "maker"
+    if maker_only:
+        if bid <= 0 or bid >= ask:
+            raise ValueError(f"maker child requires a valid resting book: bid={bid} ask={ask}")
+        limit_price = max(bid, min(bid + tick_size, ask - tick_size))
+        execution_policy = "current_yes_heat_death_maker_probe_v1"
+        quote_mode = "fresh_book_post_only_improve_one_tick"
+        quote_reason = "fresh_top_book_has_resting_maker_price"
+    else:
+        limit_price = ask
+        execution_policy = "current_yes_heat_death_taker_probe_v1"
+        quote_mode = "fresh_book_guarded_taker"
+        quote_reason = "fresh_top_ask_has_fixed_share_depth"
     sid = signal_id(row)
     now = datetime.now(timezone.utc)
     base = {
         "strategy": "weather_edge_v1",
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_INSTANCE,
+        "config_id": HEADS[ACTIVE_HEAD]["config_id"],
         "strategy_family": "reheat_risk",
         "decision_mode": HEADS[ACTIVE_HEAD]["decision_mode"],
-        "execution_mode": "tiny_live_taker_probe",
+        "execution_mode": "tiny_live_split_taker_maker_probe" if ACTIVE_HEAD == "h1_late_carry" else "tiny_live_taker_probe",
         "profile": "physical_confirmation_strong_forward_probe",
         "combo": HEADS[ACTIVE_HEAD]["combo"],
         "entry_regime_head": ACTIVE_HEAD,
@@ -244,24 +278,26 @@ def build_plan(row: Mapping[str, Any], *, shares: float, live_enabled: bool, ttl
         "token_id": str(row.get("current_yes_token_id") or ""),
         "signal_side": "BUY_YES",
         "order_side": "BUY",
+        "child_order_role": child_order_role,
         "market_price": round(ask, 6),
         "best_bid": round(bid, 6),
         "best_ask": round(ask, 6),
         "spread": round(max(0.0, ask - bid), 6) if bid > 0 else 0.0,
-        "limit_price": round(ask, 6),
+        "limit_price": round(limit_price, 6),
         "quote_status": "accepted",
-        "quote_reason": "fresh_top_ask_has_fixed_share_depth",
+        "quote_reason": quote_reason,
         "quote_best_bid": round(bid, 6),
         "quote_best_ask": round(ask, 6),
         "quote_spread": round(max(0.0, ask - bid), 6) if bid > 0 else 0.0,
-        "quote_tick_size": 0.001,
-        "quote_mode": "fresh_book_guarded_taker",
-        "maker_only": False,
-        "order_notional_cap": round(shares * ask, 6),
+        "quote_tick_size": round(tick_size, 6),
+        "quote_mode": quote_mode,
+        "maker_only": maker_only,
+        "allow_duplicate_signal_id": ACTIVE_HEAD == "h1_late_carry",
+        "order_notional_cap": round(shares * limit_price, 6),
         "size": round(shares, 6),
-        "notional": round(shares * ask, 6),
-        "execution_policy": "current_yes_heat_death_taker_probe_v1",
-        "tick_size": 0.001,
+        "notional": round(shares * limit_price, 6),
+        "execution_policy": execution_policy,
+        "tick_size": round(tick_size, 6),
         "sizing_mode": "fixed_shares",
         "fixed_order_shares": round(shares, 6),
         "max_order_shares": round(shares, 6),
@@ -280,7 +316,7 @@ def build_plan(row: Mapping[str, Any], *, shares: float, live_enabled: bool, ttl
     }
     return {
         "record_type": "weather_edge_trade_plan",
-        "plan_id": stable_hash({**base, "signal_id": sid}),
+        "plan_id": stable_hash({**base, "signal_id": sid, "child_order_role": child_order_role}),
         "signal_id": sid,
         "opportunity_id": sid,
         "created_at_utc": utc_now(),
@@ -291,12 +327,44 @@ def build_plan(row: Mapping[str, Any], *, shares: float, live_enabled: bool, ttl
     }
 
 
+def build_opportunity_plans(
+    row: Mapping[str, Any],
+    *,
+    taker_shares: float,
+    maker_shares: float,
+    live_enabled: bool,
+    ttl_min: float,
+) -> list[dict[str, Any]]:
+    plans = [
+        build_plan(
+            row,
+            shares=taker_shares,
+            child_order_role="taker" if maker_shares > 0 else "single",
+            live_enabled=live_enabled,
+            ttl_min=ttl_min,
+        )
+    ]
+    if maker_shares > 0:
+        plans.append(
+            build_plan(
+                row,
+                shares=maker_shares,
+                child_order_role="maker",
+                live_enabled=live_enabled,
+                ttl_min=ttl_min,
+            )
+        )
+    return plans
+
+
 def choose_plans(
     rows: list[dict[str, Any]],
     *,
     live_orders: Path,
-    legacy_live_orders: list[Path] | None = None,
-    shares: float,
+    dedupe_live_orders: list[Path] | None = None,
+    daily_cap_live_orders: list[Path] | None = None,
+    taker_shares: float,
+    maker_shares: float,
     min_ask: float,
     max_ask: float,
     min_top_ask_shares: float,
@@ -315,9 +383,13 @@ def choose_plans(
         "daily_cap": 0,
     }
     submitted = submitted_signal_ids(live_orders)
-    all_live_order_paths = [live_orders, *(legacy_live_orders or [])]
-    prior_city_days = submitted_city_days(all_live_order_paths)
-    remaining = max(0, int(max_orders_per_utc_day) - submitted_today_count(all_live_order_paths, now=now))
+    all_dedupe_paths = [live_orders, *(dedupe_live_orders or [])]
+    daily_cap_paths = [live_orders, *(daily_cap_live_orders or [])]
+    prior_city_days = submitted_city_days(all_dedupe_paths)
+    remaining = max(
+        0,
+        int(max_orders_per_utc_day) - submitted_today_city_day_count(daily_cap_paths, now=now),
+    )
     eligible: list[dict[str, Any]] = []
     for row in rows:
         city_day = (str(row.get("city") or ""), str(row.get("target_date") or ""))
@@ -326,7 +398,11 @@ def choose_plans(
             continue
         ask = finite(row.get("fresh_current_yes_ask"))
         ask_size = finite(row.get("fresh_current_yes_ask_size"))
+        bid = finite(row.get("fresh_current_yes_bid"))
         if ask is None or ask_size is None or str(row.get("fresh_current_yes_book_status") or "") != "ok":
+            counts["missing_or_bad_book"] += 1
+            continue
+        if maker_shares > 0 and (bid is None or bid <= 0 or bid >= ask):
             counts["missing_or_bad_book"] += 1
             continue
         if ask > max_ask:
@@ -342,11 +418,29 @@ def choose_plans(
     eligible.sort(key=lambda row: (float(row["fresh_current_yes_ask"]), str(row.get("city") or "")))
     if len(eligible) > remaining:
         counts["daily_cap"] = len(eligible) - remaining
-    plans = [build_plan(row, shares=shares, live_enabled=live_enabled, ttl_min=ttl_min) for row in eligible[:remaining]]
+    plans = [
+        plan
+        for row in eligible[:remaining]
+        for plan in build_opportunity_plans(
+            row,
+            taker_shares=taker_shares,
+            maker_shares=maker_shares,
+            live_enabled=live_enabled,
+            ttl_min=ttl_min,
+        )
+    ]
     return plans, counts
 
 
-def execute_plans(args: argparse.Namespace, plans_path: Path, output_dir: Path, *, max_ask: float) -> dict[str, Any]:
+def execute_plans(
+    args: argparse.Namespace,
+    plans_path: Path,
+    output_dir: Path,
+    *,
+    max_ask: float,
+    total_shares: float,
+    max_child_shares: float,
+) -> dict[str, Any]:
     command = [
         sys.executable,
         str(ROOT / "scripts/ops/weather_order_executor.py"),
@@ -363,9 +457,9 @@ def execute_plans(args: argparse.Namespace, plans_path: Path, output_dir: Path, 
     if args.live:
         command.extend(["--live", "--confirm-live", "--allow-taker", "--cancel-expired"])
     env = os.environ.copy()
-    env["WEATHER_EXECUTOR_MAX_LIVE_ORDER_NOTIONAL_USD"] = str(float(args.fixed_order_shares) * max_ask)
+    env["WEATHER_EXECUTOR_MAX_LIVE_ORDER_NOTIONAL_USD"] = str(max_child_shares * max_ask)
     env["WEATHER_EXECUTOR_MAX_LIVE_BATCH_NOTIONAL_USD"] = str(
-        float(args.fixed_order_shares) * max_ask * int(args.max_orders_per_utc_day)
+        total_shares * max_ask * int(args.max_orders_per_utc_day)
     )
     completed = subprocess.run(
         command,
@@ -396,8 +490,17 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     STRATEGY_INSTANCE = str(head["instance"])
     min_ask = float(args.min_ask) if args.min_ask is not None else float(head["min_ask"])
     max_ask = float(args.max_ask) if args.max_ask is not None else float(head["max_ask"])
+    total_shares = float(args.fixed_order_shares) if args.fixed_order_shares is not None else float(head["total_shares"])
+    taker_shares = float(args.taker_order_shares) if args.taker_order_shares is not None else float(head["taker_shares"])
+    maker_shares = float(args.maker_order_shares) if args.maker_order_shares is not None else float(head["maker_shares"])
     if not (0.0 < min_ask < max_ask < 1.0):
         raise RuntimeError(f"invalid ask band for {args.head}: [{min_ask}, {max_ask}]")
+    if taker_shares < 5.0 or (maker_shares != 0.0 and maker_shares < 5.0):
+        raise RuntimeError("each submitted child order must meet the 5-share CLOB minimum")
+    if abs(total_shares - taker_shares - maker_shares) > 1e-9:
+        raise RuntimeError(
+            f"share split mismatch for {args.head}: total={total_shares} taker={taker_shares} maker={maker_shares}"
+        )
     output_dir = Path(args.output_dir) if args.output_dir else ROOT / f"runtime/weather_edge_v1/{head['instance']}"
     output_dir.mkdir(parents=True, exist_ok=True)
     decisions_path = Path(args.shadow_decisions)
@@ -412,11 +515,18 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     plans, funnel = choose_plans(
         refreshed,
         live_orders=live_orders,
-        legacy_live_orders=[LEGACY_SINGLE_HEAD_LIVE_ORDERS] if ACTIVE_HEAD == "h2_early_dislocation" else [],
-        shares=float(args.fixed_order_shares),
+        dedupe_live_orders=[
+            ROOT / f"runtime/weather_edge_v1/{spec['instance']}/live_orders.jsonl"
+            for key, spec in HEADS.items()
+            if key != ACTIVE_HEAD
+        ]
+        + [LEGACY_SINGLE_HEAD_LIVE_ORDERS],
+        daily_cap_live_orders=[LEGACY_SINGLE_HEAD_LIVE_ORDERS] if ACTIVE_HEAD == "h2_early_dislocation" else [],
+        taker_shares=taker_shares,
+        maker_shares=maker_shares,
         min_ask=min_ask,
         max_ask=max_ask,
-        min_top_ask_shares=float(args.fixed_order_shares),
+        min_top_ask_shares=taker_shares,
         max_orders_per_utc_day=int(args.max_orders_per_utc_day),
         live_enabled=bool(args.live and args.confirm_live),
         ttl_min=float(args.order_ttl_min),
@@ -424,7 +534,15 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     )
     plans_path = output_dir / "current_plans.jsonl"
     write_jsonl(plans_path, plans)
-    execution = execute_plans(args, plans_path, output_dir, max_ask=max_ask)
+    execution = execute_plans(
+        args,
+        plans_path,
+        output_dir,
+        max_ask=max_ask,
+        total_shares=total_shares,
+        max_child_shares=max(taker_shares, maker_shares),
+    )
+    planned_city_days = sorted({f"{row['city']}:{row['target_date']}" for row in plans})
     summary = {
         "status": "ok" if execution["exit_code"] == 0 else "executor_error",
         "generated_at_utc": utc_now(),
@@ -434,13 +552,15 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "tiny_live_forward_probe" if args.live else "paper_would_order",
         "live_enabled": bool(args.live and args.confirm_live),
         "shadow_decisions": str(decisions_path),
-        "fixed_order_shares": float(args.fixed_order_shares),
+        "fixed_order_shares": total_shares,
+        "taker_order_shares": taker_shares,
+        "maker_order_shares": maker_shares,
         "max_orders_per_utc_day": int(args.max_orders_per_utc_day),
         "min_ask": min_ask,
         "max_ask": max_ask,
         "candidate_funnel": funnel,
         "plans": len(plans),
-        "planned_city_days": [f"{row['city']}:{row['target_date']}" for row in plans],
+        "planned_city_days": planned_city_days,
         "execution": execution,
     }
     write_json(output_dir / "latest_summary.json", summary)
@@ -454,7 +574,9 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--head", required=True, choices=sorted(HEADS))
     ap.add_argument("--shadow-decisions", default=str(DEFAULT_SHADOW_DECISIONS))
     ap.add_argument("--output-dir", default=None, help="defaults to runtime/weather_edge_v1/<head instance>")
-    ap.add_argument("--fixed-order-shares", type=float, default=10.0)
+    ap.add_argument("--fixed-order-shares", type=float, default=None, help="total shares; defaults by head")
+    ap.add_argument("--taker-order-shares", type=float, default=None, help="defaults by head")
+    ap.add_argument("--maker-order-shares", type=float, default=None, help="defaults by head; zero disables maker child")
     ap.add_argument("--max-orders-per-utc-day", type=int, default=3)
     ap.add_argument("--min-ask", type=float, default=None, help="defaults to the head's preregistered floor")
     ap.add_argument("--max-ask", type=float, default=None, help="defaults to the head's preregistered cap")

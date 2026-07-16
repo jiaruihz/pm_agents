@@ -10,6 +10,9 @@ PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
 
 start_head() {
   local head="$1"
+  local total_shares="$2"
+  local taker_shares="$3"
+  local maker_shares="$4"
   local instance="current_yes_heat_death_tiny_live_${head}_v1"
   local output_dir="$ROOT/runtime/weather_edge_v1/$instance"
   local session="weather_$instance"
@@ -25,7 +28,9 @@ start_head() {
     "cd '$ROOT' && exec '$PY' -u scripts/ops/weather_current_yes_heat_death_tiny_live_v1.py loop \
       --head $head \
       --output-dir '$output_dir' \
-      --fixed-order-shares 10 \
+      --fixed-order-shares '$total_shares' \
+      --taker-order-shares '$taker_shares' \
+      --maker-order-shares '$maker_shares' \
       --max-orders-per-utc-day 3 \
       --max-snapshot-age-min 20 \
       --order-ttl-min 15 \
@@ -35,5 +40,5 @@ start_head() {
   echo "started $session output=$output_dir log=$log_file"
 }
 
-start_head h1_late_carry
-start_head h2_early_dislocation
+start_head h1_late_carry 10 5 5
+start_head h2_early_dislocation 5 5 0

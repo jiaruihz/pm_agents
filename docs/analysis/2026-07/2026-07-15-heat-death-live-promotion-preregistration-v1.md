@@ -2,6 +2,7 @@
 
 Status: current-reference（判据冻结文档;改判据必须新开 v2,不许原地改）
 Date: 2026-07-15
+Operational update: 2026-07-16（只改 probe sizing/execution 与 family dedupe，不改晋升判据）
 Scope: `current_yes_heat_death_physical_v1` 家族的两个入场 regime。判据在读取任何新 forward
 结果之前冻结;之后的 forward 数据只做复核,不回来调这里的阈值。
 
@@ -59,23 +60,29 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
   显示 early 入场更优;否则 early 线并入 H1,不单独 live。
 - 通过后动作:同 H1 的 deploy 流程;T1 上限相同。
 
-## 4. Probe 部署形态(2026-07-15 用户确认后实施)
+## 4. Probe 部署形态(2026-07-16 用户确认调整)
 
 原单实例 probe(max-ask 0.99)在拆分前成交广州 `30 YES @ 0.89 x 10`,随后退役并拆分为两个独立归属的 head 实例
 (git-first:runner/start/register 脚本同 commit 变更):
 
 | 实例 | ask 带 | 其余参数 |
 |---|---|---|
-| `current_yes_heat_death_tiny_live_h1_late_carry_v1` | [0.95, 0.99] | 10 shares、<=3 单/UTC 日、depth>=10、TTL 15m |
-| `current_yes_heat_death_tiny_live_h2_early_dislocation_v1` | [0.50, 0.93] | 同上 |
+| `current_yes_heat_death_tiny_live_h1_late_carry_v1` | [0.95, 0.99] | 每个 city-day 共 10 shares：5 taker + 5 post-only maker；<=3 个 city-day opportunity/UTC 日；taker depth>=5；TTL 15m |
+| `current_yes_heat_death_tiny_live_h2_early_dislocation_v1` | [0.50, 0.93] | 每个 city-day 5 shares、直接 taker；<=3 个 city-day opportunity/UTC 日；depth>=5；TTL 15m |
 
 - 0.93-0.95 buffer band 两头都不交易(预注册第 0 节)。
 - H2 的 0.50 下限是无人值守 live probe 的资金安全边界:首确认后 ask 远低于信号隐含概率,
   大概率是 bracket/数据错配而非免费错价;此类行留给 shadow 记录,不用真钱验证。
-- 同一 city-day 两头可先后各成交一次(视 ask 路径穿越两个带),这是设计行为:两头是独立策略,
-  各自 per-city-day 去重,合计敞口上限 20 shares/city-day。
+- H1 maker 只按首次 fresh book 在 best bid 上改善一 tick，post-only 挂一次，不追价；未成交由 TTL 撤单。
+- H1/H2 共享 family city-day 去重：任一 head 首先出现 submitted order 后，另一 head 不再为同一 city-day 下单。
+  日上限按 opportunity 而不是 child order 计数，因此 H1 的 5 taker + 5 maker 合计只占 1 次。
 - 东亚快源盲窗(hko/jma/amos 未接入 running-high)会推迟首确认时点,对 H2 是入场价劣化;
   该修复属于数据层工作,不影响本判据。
+
+调整原因与影响半径：2026-07-15 Munich 同一 `27 YES` 先由 H1 `10 @0.95`、后由 H2 `10 @0.93`
+各成交一次。两单使用同一 14:55:50Z decision snapshot；根因是两个实例各自做 signal/city-day 去重，family 没有共享去重。
+双 head 拆分后截至调整时仅 Munich 重叠，造成 1 笔额外 order/fill、10 shares、$9.30 submitted notional（fee 未计）。
+修复后反事实为保留首次 H1 opportunity、阻止后续 H2 opportunity。
 
 ## 5. 失败与退出条件
 
@@ -83,9 +90,10 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
   `rejected_for_expression`,保留数据与代码,停止该表达的 probe。
 - 连续 30 个交易日样本门仍不满足(H2 可执行首信号行 < 25):结论是采集/市场结构问题,
   回数据层解决,不放宽判据。
-- probe 出现任何一次超出 10 shares/3 单约束的执行:立即暂停 probe,先审计执行链。
+- probe 出现任何一次超出 H1 10 shares、H2 5 shares或任一 head 每 UTC 日 3 个 city-day opportunity 的执行：
+  立即暂停 probe，先审计执行链。
 
-## 6. 当前状态快照(2026-07-15,写入时点)
+## 6. 当前状态快照(2026-07-16,写入时点)
 
 - shadow v1:运行中,zero-notional,per-snapshot 决策分母 + 候选 token 聚焦盘口刷新(今日 pair 1/1 成功)。
 - tiny-live probe:已拆为 H1/H2 双实例(见 §4);拆分前原实例有广州 `30 YES @ 0.89 x 10` 一笔成交。原始 instance 血缘不改写,绩效分析按成交价归入 H2 regime。
