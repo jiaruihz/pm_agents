@@ -158,6 +158,16 @@ scripts/ops/weather_order_executor.py \
 Current weather live execution rules:
 
 - `weather_trade_planner.py` defaults to `execution_policy=mid_price_core_v1`.
+- Strategy code may instead select an `execution_profile`. The profile owns the
+  quote policy plus order-lifecycle policy, while the shared executor continues
+  to own CLOB semantics, post-only enforcement, cancellation, and audit records.
+  Initial profiles are `taker_now_v1` and `single_side_maker_v1`.
+- `single_side_maker_v1` maps to `maker_queue_v2 + maker_until_data_update`;
+  the input signal must carry a data epoch and cancel deadline. `taker_now_v1`
+  maps to `taker_top_ask_v1 + taker_now`.
+- A/B comparisons must reuse the same signal/opportunity and keep strategy
+  selection fixed. Only `execution_profile` changes; comparison plans stay
+  paper-only until separately promoted through the live deployment process.
 - Accepted weather plans must satisfy `0.25 <= market_price < 0.75`.
 - `weather_order_executor.py` defaults to maker-only live placement.
 - Maker-only placement signs a limit order, posts it as `GTC` with `post_only=True`, and checks the current orderbook before sending.

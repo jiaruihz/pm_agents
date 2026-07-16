@@ -59,6 +59,11 @@ def _parser() -> argparse.ArgumentParser:
         default="mid_price_core_v1,maker_queue_v2,mid_price_core_v2",
         help="Comma-separated policies to compare.",
     )
+    parser.add_argument(
+        "--profiles",
+        default="taker_now_v1,single_side_maker_v1",
+        help="Comma-separated strategy-selectable execution profiles to compare on the same signals.",
+    )
     parser.add_argument("--max-order-notional", type=float, default=5.0)
     parser.add_argument("--sizing-mode", choices=("notional", "fixed_shares"), default="notional")
     parser.add_argument("--fixed-order-shares", type=float, default=10.0)
@@ -96,6 +101,7 @@ def main() -> int:
         "signals": len(signals),
         "signal_file": str(args.signals),
         "policies": {},
+        "profiles": {},
     }
     for policy in [item.strip() for item in str(args.policies).split(",") if item.strip()]:
         config = PlannerConfig(
@@ -140,6 +146,27 @@ def main() -> int:
             for row in rejected[: max(0, int(args.sample_rejections))]
         ]
         result["policies"][policy] = summary
+
+    for profile in [item.strip() for item in str(args.profiles).split(",") if item.strip()]:
+        config = PlannerConfig(
+            max_order_notional=float(args.max_order_notional),
+            sizing_mode=str(args.sizing_mode),
+            fixed_order_shares=float(args.fixed_order_shares),
+            max_order_shares=float(args.max_order_shares),
+            min_edge=float(args.min_edge),
+            min_entry_price=float(args.min_entry_price),
+            max_entry_price=float(args.max_entry_price),
+            live_enabled=False,
+            execution_profile=profile,
+            min_quote_edge=float(args.min_quote_edge),
+            max_quote_spread=float(args.max_quote_spread),
+            max_mid_drift=float(args.max_mid_drift),
+            quote_improvement_ticks=int(args.quote_improvement_ticks),
+            wide_spread_shade_ticks=int(args.wide_spread_shade_ticks),
+            adverse_selection_spread_fraction=float(args.adverse_selection_spread_fraction),
+        )
+        plans = [plan for signal in signals for plan in build_trade_plans_for_signal(signal, config)]
+        result["profiles"][profile] = _summarize(plans)
 
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0

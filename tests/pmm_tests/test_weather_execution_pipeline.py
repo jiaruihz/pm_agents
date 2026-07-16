@@ -4,11 +4,13 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from src.strategies.weather_edge_v1.execution.lifecycle import attach_data_update_lifecycle
 from src.strategies.weather_edge_v1.tools.execution_pipeline import (
     ExecutorConfig,
     PlannerConfig,
     build_trade_plan,
     build_trade_plans_for_signal,
+    build_execution_comparison_plans,
     cancel_expired_live_orders,
     execute_trade_plans,
     import_signals,
@@ -159,6 +161,68 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(plan["quote_mode"], "improve_bid")
         self.assertAlmostEqual(plan["limit_price"], 0.40)
         self.assertGreaterEqual(plan["quote_edge"], plan["required_quote_edge"])
+
+    def test_execution_profiles_build_comparable_taker_and_single_side_maker_plans(self):
+        now = datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc)
+        signal = normalize_signal(
+            attach_data_update_lifecycle(
+                self._paper_decision(),
+                data_source="metar",
+                data_epoch_ref="metar:LFPG:2026-07-16T12:00Z",
+                data_epoch_ts_utc=now,
+                next_data_update_due_utc=now + timedelta(minutes=30),
+                cancel_buffer_sec=90,
+                now=now,
+            )
+        )
+        assert signal is not None
+
+        plans = build_execution_comparison_plans(
+            signal,
+            PlannerConfig(
+                max_order_notional=2.0,
+                min_edge=0.10,
+                min_entry_price=0.25,
+                max_entry_price=0.75,
+                tick_size=0.01,
+                min_quote_edge=0.03,
+            ),
+        )
+
+        self.assertEqual(len(plans), 2)
+        by_profile = {plan["execution_profile"]: plan for plan in plans}
+        taker = by_profile["taker_now_v1"]
+        maker = by_profile["single_side_maker_v1"]
+        self.assertEqual(taker["execution_policy"], "taker_top_ask_v1")
+        self.assertEqual(taker["order_lifecycle_policy"], "taker_now")
+        self.assertFalse(taker["maker_only"])
+        self.assertEqual(taker["limit_price"], 0.41)
+        self.assertEqual(maker["execution_policy"], "maker_queue_v2")
+        self.assertEqual(maker["order_lifecycle_policy"], "maker_until_data_update")
+        self.assertTrue(maker["maker_only"])
+        self.assertEqual(maker["limit_price"], 0.40)
+        self.assertEqual(maker["cancel_buffer_sec"], 90)
+        self.assertEqual(maker["cancel_reason"], "pre_data_update")
+        self.assertEqual(taker["comparison_group_id"], maker["comparison_group_id"])
+        self.assertFalse(taker["live_enabled"])
+        self.assertFalse(maker["live_enabled"])
+
+    def test_single_side_maker_profile_allows_cancel_buffer_override(self):
+        signal = normalize_signal(self._paper_decision())
+        assert signal is not None
+        plan = build_trade_plan(
+            signal,
+            PlannerConfig(
+                max_order_notional=2.0,
+                min_edge=0.10,
+                execution_profile="single_side_maker_v1",
+                cancel_buffer_sec=180,
+            ),
+        )
+
+        self.assertEqual(plan["execution_policy"], "maker_queue_v2")
+        self.assertEqual(plan["order_lifecycle_policy"], "maker_until_data_update")
+        self.assertEqual(plan["cancel_buffer_sec"], 180)
 
     def test_maker_queue_v2_policy_rejects_wide_spread_when_edge_is_thin(self):
         signal = normalize_signal(

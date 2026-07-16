@@ -497,7 +497,11 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                 **(quote if isinstance(quote, dict) else {}),
             }
 
-        needs_live_policy_quote = execution_policy in {"mid_price_core_v2", "d1_yes_high_mid_taker_v1"}
+        needs_live_policy_quote = execution_policy in {
+            "mid_price_core_v2",
+            "d1_yes_high_mid_taker_v1",
+            "taker_top_ask_v1",
+        }
         if maker_only or needs_live_policy_quote:
             try:
                 book = client.get_order_book(str(plan["token_id"]))
@@ -617,11 +621,11 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                         reason="execution_policy_removed_from_active_strategies",
                     ),
                 )
-            elif execution_policy == "maker_queue_v2":
+            elif execution_policy in {"maker_queue_v2", "taker_top_ask_v1"}:
                 quote = build_execution_quote(
                     plan,
                     ExecutionPolicyConfig(
-                        policy_name="maker_queue_v2",
+                        policy_name=execution_policy,
                         price_floor=0.01,
                         price_ceiling=0.99,
                         tick_size=tick_size,
@@ -641,10 +645,11 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                     tick_size=tick_size,
                 )
                 order_price = _to_float(quote.get("limit_price"), 0.0)
+                maker_only = bool(quote.get("maker_only", maker_only))
                 if quote.get("quote_status") != "accepted" or order_price <= 0:
-                    reason = str(quote.get("quote_reason") or "maker_queue_quote_rejected")
+                    reason = str(quote.get("quote_reason") or "execution_policy_quote_rejected")
                     raise WeatherExecutionError(
-                        "maker_queue_quote_rejected "
+                        "execution_policy_quote_rejected "
                         f"reason={reason} "
                         f"best_bid={best_bid:.6f} best_ask={best_ask:.6f} "
                         f"quote_edge={_to_float(quote.get('quote_edge'), 0.0):.6f} "

@@ -246,6 +246,46 @@ def build_execution_quote(
             "size_multiplier": 1.0,
         }
 
+    if policy == "taker_top_ask_v1":
+        if bid <= 0 or ask <= 0 or ask <= bid:
+            placeholder = _round_up_to_tick(max(price_floor, min(price_ceiling, market_price)), tick)
+            return _deferred_quote(
+                policy=policy,
+                placeholder=placeholder,
+                token_prob=token_prob,
+                tick=tick,
+                required_edge=config.min_quote_edge,
+                maker_only=False,
+            )
+        limit_price = min(price_ceiling, max(price_floor, _round_up_to_tick(ask, tick)))
+        quote_edge = token_prob - limit_price
+        if quote_edge < config.min_quote_edge:
+            return _reject_quote(
+                policy=policy,
+                reason="taker_edge_below_required",
+                token_prob=token_prob,
+                bid=bid,
+                ask=ask,
+                spread=spread,
+                tick=tick,
+                quote_mode="taker_no_quote",
+                required_edge=config.min_quote_edge,
+                limit_price=limit_price,
+                maker_only=False,
+            )
+        return _accepted_quote(
+            policy=policy,
+            limit_price=limit_price,
+            token_prob=token_prob,
+            bid=bid,
+            ask=ask,
+            spread=spread,
+            tick=tick,
+            quote_mode="cross_top_ask",
+            required_edge=config.min_quote_edge,
+            maker_only=False,
+        )
+
     if policy not in ("maker_queue_v2",):
         return {
             "execution_policy": policy,

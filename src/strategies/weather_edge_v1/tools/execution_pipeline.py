@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from src.platform.quote_runtime.risk.safety_guard import RiskError, SafetyGuard, SecurityError
+from src.strategies.weather_edge_v1.execution.profiles import get_execution_profile
 from src.strategies.weather_edge_v1.tools.execution_policy import (
     ExecutionPolicyConfig,
     build_execution_quote,
@@ -139,6 +140,7 @@ def normalize_signal(row: Dict[str, Any], *, source_system: str = "weather-predi
         "cancel_before_data_update_utc": safe_str(row.get("cancel_before_data_update_utc")),
         "cancel_reason": safe_str(row.get("cancel_reason")),
         "post_update_reprice_required": bool(row.get("post_update_reprice_required", False)),
+        "data_update_source": safe_str(row.get("data_update_source")),
     }
     signal_id = safe_str(row.get("signal_id")) or stable_hash(base)
     return {
@@ -227,6 +229,19 @@ class PlannerConfig:
     high_band_size_mult: float = 0.60
     order_lifecycle_policy: str = ""
     cancel_buffer_sec: int = 0
+    execution_profile: str = ""
+
+
+def resolve_execution_profile(config: PlannerConfig) -> PlannerConfig:
+    if not safe_str(config.execution_profile):
+        return config
+    profile = get_execution_profile(config.execution_profile)
+    return replace(
+        config,
+        execution_policy=profile.execution_policy,
+        order_lifecycle_policy=profile.order_lifecycle_policy,
+        cancel_buffer_sec=(config.cancel_buffer_sec if config.cancel_buffer_sec > 0 else profile.cancel_buffer_sec),
+    )
 
 
 def _policy_config(config: PlannerConfig) -> ExecutionPolicyConfig:
@@ -280,6 +295,7 @@ def build_trade_plan(
     *,
     quote: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    config = resolve_execution_profile(config)
     token_id = safe_str(signal.get("token_id"))
     strategy_instance = (
         safe_str(config.strategy_instance)
@@ -365,7 +381,9 @@ def build_trade_plan(
         "entry_price_max": round(eff_max_entry, 6),
         "entry_price_window": f"{eff_min_entry:.2f}-{eff_max_entry:.2f}",
         "execution_policy": safe_str(config.execution_policy),
+        "execution_profile": safe_str(config.execution_profile),
         "order_lifecycle_policy": safe_str(config.order_lifecycle_policy),
+        "data_update_source": safe_str(signal.get("data_update_source")),
         "data_epoch_ref": safe_str(signal.get("data_epoch_ref")),
         "data_epoch_ts_utc": safe_str(signal.get("data_epoch_ts_utc")),
         "next_data_update_due_utc": safe_str(signal.get("next_data_update_due_utc")),
@@ -470,8 +488,36 @@ def build_trade_plan(
 
 
 def build_trade_plans_for_signal(signal: Dict[str, Any], config: PlannerConfig) -> List[Dict[str, Any]]:
+    config = resolve_execution_profile(config)
     quotes = build_execution_quotes(signal, _policy_config(config))
     return [build_trade_plan(signal, config, quote=quote) for quote in quotes]
+
+
+def build_execution_comparison_plans(
+    signal: Dict[str, Any],
+    config: PlannerConfig,
+    *,
+    profiles: Iterable[str] = ("taker_now_v1", "single_side_maker_v1"),
+) -> List[Dict[str, Any]]:
+    comparison_group_id = stable_hash(
+        {
+            "signal_id": safe_str(signal.get("signal_id")),
+            "opportunity_id": safe_str(signal.get("opportunity_id")),
+            "token_id": safe_str(signal.get("token_id")),
+        }
+    )
+    plans: List[Dict[str, Any]] = []
+    for profile_name in profiles:
+        profile_config = replace(config, execution_profile=safe_str(profile_name), live_enabled=False)
+        for plan in build_trade_plans_for_signal(signal, profile_config):
+            plans.append(
+                {
+                    **plan,
+                    "comparison_group_id": comparison_group_id,
+                    "comparison_mode": "execution_profile_ab_v1",
+                }
+            )
+    return plans
 
 
 def plan_trades(
@@ -788,7 +834,9 @@ def build_paper_order(plan: Dict[str, Any]) -> Dict[str, Any]:
         "size": to_float(plan.get("size"), 0.0),
         "notional": to_float(plan.get("notional"), 0.0),
         "execution_policy": safe_str(plan.get("execution_policy")),
+        "execution_profile": safe_str(plan.get("execution_profile")),
         "order_lifecycle_policy": safe_str(plan.get("order_lifecycle_policy")),
+        "data_update_source": safe_str(plan.get("data_update_source")),
         "data_epoch_ref": safe_str(plan.get("data_epoch_ref")),
         "data_epoch_ts_utc": safe_str(plan.get("data_epoch_ts_utc")),
         "next_data_update_due_utc": safe_str(plan.get("next_data_update_due_utc")),
@@ -928,7 +976,9 @@ def build_live_order_record(plan: Dict[str, Any], response: Dict[str, Any], *, s
         "notional": to_float(plan.get("notional"), 0.0),
         "posted_notional": round(to_float(response.get("posted_price"), 0.0) * to_float(plan.get("size"), 0.0), 6),
         "execution_policy": safe_str(plan.get("execution_policy")),
+        "execution_profile": safe_str(plan.get("execution_profile")),
         "order_lifecycle_policy": safe_str(plan.get("order_lifecycle_policy")),
+        "data_update_source": safe_str(plan.get("data_update_source")),
         "data_epoch_ref": safe_str(plan.get("data_epoch_ref")),
         "data_epoch_ts_utc": safe_str(plan.get("data_epoch_ts_utc")),
         "next_data_update_due_utc": safe_str(plan.get("next_data_update_due_utc")),

@@ -16,6 +16,7 @@ from src.strategies.weather_edge_v1.tools.execution_pipeline import (
     PlannerConfig,
     plan_trades,
 )
+from src.strategies.weather_edge_v1.execution.profiles import execution_profile_names
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -55,9 +56,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--price-offset", type=float, default=0.0)
     parser.add_argument(
         "--execution-policy",
-        choices=("mid_price_core_v1", "maker_queue_v2", "mid_price_core_v2"),
+        choices=("mid_price_core_v1", "maker_queue_v2", "mid_price_core_v2", "taker_top_ask_v1"),
         default="mid_price_core_v1",
     )
+    parser.add_argument(
+        "--execution-profile",
+        choices=execution_profile_names(),
+        default="",
+        help="Strategy-selectable execution profile. When set, it owns quote and lifecycle policy selection.",
+    )
+    parser.add_argument("--cancel-buffer-sec", type=int, default=0)
     parser.add_argument("--tick-size", type=float, default=0.01)
     parser.add_argument("--min-quote-edge", type=float, default=0.03)
     parser.add_argument("--max-quote-spread", type=float, default=0.12)
@@ -106,6 +114,8 @@ def main() -> int:
         price_offset=float(args.price_offset),
         live_enabled=bool(args.enable_live),
         execution_policy=str(args.execution_policy),
+        execution_profile=str(args.execution_profile),
+        cancel_buffer_sec=max(0, int(args.cancel_buffer_sec)),
         tick_size=float(args.tick_size),
         min_quote_edge=float(args.min_quote_edge),
         max_quote_spread=float(args.max_quote_spread),

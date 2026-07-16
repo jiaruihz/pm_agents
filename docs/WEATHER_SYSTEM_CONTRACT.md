@@ -85,6 +85,7 @@ N100 两个 repo 产出的文件格式 = 本文档约定的契约。pm_agent das
 | 成本USD | `cost_usd` | REAL | |
 | 名义价值 | `notional` | REAL | |
 | 限价 | `limit_price` | REAL 0-1 | |
+| 执行档案 | `execution_profile` | TEXT | 策略选择的 taker/maker 组合档案 |
 | 执行策略 | `execution_policy` | TEXT | mid_price_core_v1 等 |
 | token ID | `token_id` | TEXT | Polymarket CLOB token |
 | 交易所 | `venue` | TEXT | polymarket_clob |
@@ -117,8 +118,8 @@ sizing 和 execution policy。`plan` 是某个 `run/config` 对某个 `signal`
 
 ```text
 same signal_id
-  -> config/run A -> plan(execution_policy=mid_price_core_v1)   -> order/fill
-  -> config/run B -> plan(execution_policy=mid_price_core_v2)   -> order/fill
+  -> config/run A -> plan(execution_profile=taker_now_v1)          -> order/fill
+  -> config/run B -> plan(execution_profile=single_side_maker_v1)  -> order/fill
 ```
 
 参数分层:
@@ -127,7 +128,9 @@ same signal_id
 |---|---|---|
 | signal/model | `model_version`, `forecast_source`, `edge`, `city_pool` | 间接进入；signal 本身可共享 |
 | filter/sizing | `entry_price_window`, `min_edge`, `max_order_notional`, `sizing_mode` | 是 |
-| execution policy | `execution_policy`, `min_quote_edge`, `max_quote_spread`, `max_mid_drift` | 是 |
+| execution profile | `execution_profile`（策略选择 taker/maker） | 是 |
+| execution policy | `execution_policy`, `min_quote_edge`, `max_quote_spread`, `max_mid_drift` | profile 展开后的执行参数 |
+| order lifecycle | `order_lifecycle_policy`, `cancel_buffer_sec`, `data_update_source` | profile 展开后的执行参数 |
 
 ---
 
