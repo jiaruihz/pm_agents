@@ -1,9 +1,11 @@
 # Current Exact Favorite Maker v1
 
-- Status: `research_snapshot`
+- Status: `superseded_for_now_as_weather_strategy`
 - Verdict: `inconclusive_shadow_research_only`
 - Script: `scripts/analysis/market_structure_edge/research_current_exact_favorite_maker_v1.py`
 - Artifact: `docs/analysis/2026-07/generated/current_exact_favorite_maker_v1/summary.json`
+
+> Scope correction（2026-07-17）：本报告研究的是 high-favorite maker execution microstructure，不是“天气特征相对盘口”的 alpha。历史 queue-aware fill=0，不能作为第二条天气策略；当前 weather+book 宽分母结论见 [Current Exact Weather + Book Fixed-Offset Residual v1](2026-07-17-current-exact-weather-book-offset-v1.md)。本 artifact 保留作 dormant execution hypothesis，不删除、不推荐 live。
 
 ## 数据快照
 
