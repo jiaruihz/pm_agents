@@ -5,8 +5,11 @@ Strategy (frozen v1, see docs/analysis/2026-07/2026-07-15-market-calibration-cur
     When the market prices "final max lands exactly one bracket above the current
     running-max bracket" (the d1 YES) at mid >= 0.80, express the first signal
     as 5 shares taker plus a separate 5-share post-only maker child, then hold
-    fills to settlement.  One entry per city-date (first qualifying poll).  No
-    city / hour / weather filter in v1.
+    fills to settlement.  The maker follows fresh bid improvements during the
+    same observation epoch; after a newer observation it is canceled and its
+    authoritative unfilled remainder becomes a capped taker only if the same
+    d1 token still has fresh mid >= 0.80.  One entry per city-date (first
+    qualifying poll).  No city / hour / weather filter in v1.
 
 The default CLI remains zero-notional shadow.  With ``--live --confirm-live`` it
 routes Taipei to shadow and submits split BUY YES taker/maker plans for other
@@ -90,6 +93,7 @@ SUMMARY_HISTORY_OUT = RUNTIME_DIR / "summary_history.jsonl"
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
+MAKER_LIFECYCLE_OUT = RUNTIME_DIR / "maker_lifecycle_decisions.jsonl"
 
 MID_THRESHOLD = 0.80
 # Parity: the backtest applied NO obs-age filter (it included every trigger; the
@@ -181,9 +185,22 @@ def parse_args() -> argparse.Namespace:
                         help="taker child shares (legacy flag retained for compatibility)")
     parser.add_argument("--maker-shares", type=float, default=5.0,
                         help="post-only maker child shares; set 0 to disable the maker child")
-    parser.add_argument("--max-orders-per-day", type=int, default=10)
-    parser.add_argument("--max-daily-cost-usd", type=float, default=50.0)
+    parser.add_argument(
+        "--max-city-days-per-day",
+        "--max-orders-per-day",
+        dest="max_city_days_per_day",
+        type=int,
+        default=10,
+        help="maximum distinct live city-day entry opportunities per Beijing day",
+    )
+    parser.add_argument("--max-daily-cost-usd", type=float, default=100.0)
     parser.add_argument("--order-ttl-min", type=float, default=45.0)
+    parser.add_argument(
+        "--maker-reprice-refresh-sec",
+        type=float,
+        default=60.0,
+        help="minimum age before evaluating an unfilled maker child for cancel/reprice",
+    )
     parser.add_argument("--live", action="store_true", help="submit eligible non-Taipei plans")
     parser.add_argument("--confirm-live", action="store_true", help="required with --live")
     parser.add_argument("--dry-run", action="store_true", help="do not write journal/positions")
@@ -192,7 +209,7 @@ def parse_args() -> argparse.Namespace:
 
 def configure_runtime(args: argparse.Namespace) -> None:
     global STRATEGY_ID, RUNTIME_DIR, JOURNAL_OUT, POSITIONS_OUT, SUMMARY_OUT
-    global SUMMARY_HISTORY_OUT, PLAN_OUT, PAPER_OUT, LIVE_OUT
+    global SUMMARY_HISTORY_OUT, PLAN_OUT, PAPER_OUT, LIVE_OUT, MAKER_LIFECYCLE_OUT
     STRATEGY_ID = str(args.strategy_instance)
     RUNTIME_DIR = Path(args.runtime_dir)
     JOURNAL_OUT = RUNTIME_DIR / "shadow_events.jsonl"
@@ -202,6 +219,7 @@ def configure_runtime(args: argparse.Namespace) -> None:
     PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
     PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
     LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
+    MAKER_LIFECYCLE_OUT = RUNTIME_DIR / "maker_lifecycle_decisions.jsonl"
 
 
 # --------------------------------------------------------------------------- #
@@ -476,8 +494,13 @@ def live_guard_reason(event: dict[str, Any]) -> str:
 
 
 def live_daily_usage(cycle_dt: datetime) -> tuple[int, float]:
+    """Return distinct entry city-days and root-entry notional for the BJ day.
+
+    Maker cancel/reprice/fallback children replace existing exposure and must
+    not consume another daily city slot or double-count the same notional.
+    """
     bj_day = cycle_dt.astimezone(timezone(timedelta(hours=8))).date()
-    count = 0
+    city_days: set[tuple[str, str]] = set()
     cost = 0.0
     for row in order_runtime.read_jsonl(LIVE_OUT):
         if str(row.get("status") or "") != "submitted":
@@ -485,9 +508,14 @@ def live_daily_usage(cycle_dt: datetime) -> tuple[int, float]:
         created = parse_utc(row.get("created_at_utc"))
         if created is None or created.astimezone(timezone(timedelta(hours=8))).date() != bj_day:
             continue
-        count += 1
+        if str(row.get("execution_action") or "").startswith("d1_maker_"):
+            continue
+        city = str(row.get("city") or "")
+        target_date = str(row.get("target_date") or "")
+        if city and target_date:
+            city_days.add((city, target_date))
         cost += to_float(row.get("posted_notional"), to_float(row.get("notional"), 0.0))
-    return count, cost
+    return len(city_days), cost
 
 
 def successful_live_orders(path: Path | None = None) -> list[dict[str, Any]]:
@@ -504,6 +532,33 @@ def successful_live_orders(path: Path | None = None) -> list[dict[str, Any]]:
             continue
         successful.append(row)
     return successful
+
+
+def live_order_id(row: dict[str, Any]) -> str:
+    response = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+    place = response.get("place") if isinstance(response.get("place"), dict) else {}
+    for payload in (row, place, response):
+        for key in ("order_id", "orderID", "clob_order_id", "id"):
+            value = str(payload.get(key) or "").strip()
+            if value:
+                return value
+    return ""
+
+
+def handled_maker_source_order_ids(rows: list[dict[str, Any]]) -> set[str]:
+    handled: set[str] = set()
+    for row in rows:
+        source_order_id = str(row.get("source_order_id") or "")
+        if not source_order_id or not str(row.get("execution_action") or "").startswith("d1_maker_"):
+            continue
+        response = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
+        if str(response.get("error_classification") or "") in {
+            "pre_place_cancel_not_confirmed",
+            "cancel_only_not_confirmed",
+        }:
+            continue
+        handled.add(source_order_id)
+    return handled
 
 
 def matching_live_order(
@@ -613,9 +668,13 @@ def build_live_plan(
     shares = float(args.maker_shares if maker_only else args.shares)
     minutes_to_next_obs = to_float(event.get("minutes_to_next_obs"))
     if maker_only and math.isfinite(minutes_to_next_obs):
-        ttl_min = max(1.0, min(float(args.order_ttl_min), minutes_to_next_obs - 0.5))
+        # Keep the maker alive until the actual next observation can be
+        # detected and revalidated.  The extra ten minutes is only a safety
+        # TTL for a stalled observation feed; the lifecycle normally cancels
+        # or replaces it immediately after the new observation epoch.
+        ttl_min = max(float(args.order_ttl_min), minutes_to_next_obs + 10.0)
     elif maker_only:
-        ttl_min = max(1.0, min(float(args.order_ttl_min), 5.0))
+        ttl_min = float(args.order_ttl_min)
     else:
         ttl_min = float(args.order_ttl_min)
     expires_at = cycle_dt + timedelta(minutes=ttl_min)
@@ -685,8 +744,12 @@ def build_live_plan(
         "child_order_role": child_order_role,
         "maker_only": maker_only,
         "allow_duplicate_signal_id": True,
+        "data_epoch_ref": (
+            f"metar:{str(event.get('city') or '').lower()}:{str(event.get('last_obs_utc') or '')}"
+        ),
+        "data_epoch_ts_utc": str(event.get("last_obs_utc") or ""),
         "execution_policy": execution_policy,
-        "order_lifecycle_policy": "maker_until_data_update" if maker_only else "taker_now",
+        "order_lifecycle_policy": "d1_maker_reprice_until_observation_v1" if maker_only else "taker_now",
         "min_live_mid": float(args.mid_threshold),
         "tick_size": 0.001,
         "sizing_mode": "fixed_shares",
@@ -703,14 +766,19 @@ def build_live_plan(
         "expires_at_utc": expires_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "order_ttl_min": round(ttl_min, 6),
         **(
-            {"cancel_before_data_update_utc": expires_at.isoformat(timespec="seconds").replace("+00:00", "Z")}
+            {
+                "maker_price_cap": round(ask, 6),
+                "maker_lifecycle_root_observation_utc": str(event.get("last_obs_utc") or ""),
+                "maker_lifecycle_reprice_count": 0,
+            }
             if maker_only
             else {}
         ),
         "decision_snapshot_ts_utc": str(event.get("book_fetched_at_utc") or ""),
         "snapshot_ts_utc": str(event.get("book_fetched_at_utc") or ""),
         "source_snapshot_path": str(event.get("orderbook_file") or ""),
-        "running_max_obs_utc": str(event.get("obs_generated_at_utc") or ""),
+        "running_max_obs_utc": str(event.get("running_max_obs_utc") or ""),
+        "observation_epoch_utc": str(event.get("last_obs_utc") or ""),
         "obs_age_min": event.get("obs_age_min"),
         "minutes_since_running_max": event.get("minutes_since_running_max"),
     }
@@ -725,6 +793,249 @@ def build_live_plans(
     return plans
 
 
+def build_maker_lifecycle_plan(
+    order: dict[str, Any],
+    *,
+    action: str,
+    limit_price: float,
+    maker_only: bool,
+    cancel_only: bool,
+    state: dict[str, Any],
+    args: argparse.Namespace,
+    cycle_dt: datetime,
+) -> dict[str, Any]:
+    source_order_id = live_order_id(order)
+    shares = to_float(order.get("size"), float(args.maker_shares))
+    price_cap = to_float(order.get("maker_price_cap"), to_float(order.get("best_ask"), 0.0))
+    signal_id = str(order.get("signal_id") or "")
+    base = {
+        "strategy": "weather_edge_v1",
+        "strategy_id": STRATEGY_ID,
+        "strategy_instance": STRATEGY_ID,
+        "source_strategy_instance": STRATEGY_ID,
+        "strategy_family": str(order.get("strategy_family") or "market_structure_edge.favorite_low_estimation"),
+        "strategy_head": "d1_yes_high_mid",
+        "decision_mode": "first_qualifying_city_date_maker_lifecycle",
+        "execution_mode": "tiny_live_split_5_taker_5_maker_taipei_shadow",
+        "execution_profile": "d1_yes_split_5_taker_5_maker_v1",
+        "comparison_group_id": str(order.get("comparison_group_id") or ""),
+        "city": str(order.get("city") or ""),
+        "city_pool": "all_except_taipei_live",
+        "target_date": str(order.get("target_date") or ""),
+        "market_id": str(order.get("market_id") or ""),
+        "bracket": str(order.get("bracket") or ""),
+        "token_id": str(order.get("token_id") or ""),
+        "condition_id": str(order.get("condition_id") or ""),
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "child_order_role": action,
+        "limit_price": round(limit_price, 6),
+        "market_price": round(to_float(state.get("d1_yes_direct_ask"), limit_price), 6),
+        "best_bid": round(to_float(state.get("d1_yes_direct_bid"), 0.0), 6),
+        "best_ask": round(to_float(state.get("d1_yes_direct_ask"), 0.0), 6),
+        "quote_status": "cancel_requested" if cancel_only else "accepted",
+        "quote_reason": action,
+        "quote_mode": action,
+        "quote_best_bid": round(to_float(state.get("d1_yes_direct_bid"), 0.0), 6),
+        "quote_best_ask": round(to_float(state.get("d1_yes_direct_ask"), 0.0), 6),
+        "quote_tick_size": 0.001,
+        "maker_only": bool(maker_only),
+        "allow_duplicate_signal_id": True,
+        "execution_policy": "d1_yes_high_mid_maker_v1" if maker_only else "d1_yes_high_mid_taker_v1",
+        "order_lifecycle_policy": "d1_maker_reprice_until_observation_v1" if maker_only else "taker_now",
+        "execution_action": action,
+        "cancel_before_order_id": source_order_id,
+        "source_order_id": source_order_id,
+        "source_execution_id": str(order.get("execution_id") or ""),
+        "source_plan_id": str(order.get("plan_id") or ""),
+        "source_posted_price": round(to_float(order.get("posted_price"), 0.0), 6),
+        "source_remaining_shares": round(shares, 6),
+        "replacement_requires_order_state": not cancel_only,
+        "cancel_only": bool(cancel_only),
+        "min_order_shares": 5.0,
+        "min_live_mid": float(args.mid_threshold),
+        "max_live_price": round(price_cap, 6),
+        "maker_price_cap": round(price_cap, 6),
+        "tick_size": 0.001,
+        "sizing_mode": "fixed_shares",
+        "fixed_order_shares": round(shares, 6),
+        "max_order_shares": round(shares, 6),
+        "size": round(shares, 6),
+        "notional": round(shares * limit_price, 6),
+        "order_notional_cap": round(shares * max(0.0, limit_price), 6),
+        "paper_enabled": False,
+        "live_enabled": True,
+        "expires_at_utc": str(order.get("expires_at_utc") or ""),
+        "maker_lifecycle_root_observation_utc": str(
+            order.get("maker_lifecycle_root_observation_utc")
+            or order.get("data_epoch_ts_utc")
+            or order.get("observation_epoch_utc")
+            or ""
+        ),
+        "maker_lifecycle_reprice_count": int(to_float(order.get("maker_lifecycle_reprice_count"), 0.0)) + 1,
+        "observation_epoch_utc": str(state.get("observation_epoch_utc") or ""),
+        "data_epoch_ref": str(order.get("data_epoch_ref") or ""),
+        "data_epoch_ts_utc": str(
+            order.get("maker_lifecycle_root_observation_utc")
+            or order.get("data_epoch_ts_utc")
+            or order.get("observation_epoch_utc")
+            or ""
+        ),
+        "model_token_probability": round(to_float(state.get("d1_yes_mid"), 0.0), 6),
+    }
+    created_at = cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+    return {
+        "record_type": "weather_edge_trade_plan",
+        "plan_id": "plan-" + stable_hash(
+            {
+                "signal_id": signal_id,
+                "source_order_id": source_order_id,
+                "action": action,
+                "created_at_utc": created_at,
+            }
+        ),
+        "signal_id": signal_id,
+        "opportunity_id": signal_id,
+        "created_at_utc": created_at,
+        "status": "accepted",
+        "risk_status": "passed",
+        "risk_reason": "",
+        **base,
+    }
+
+
+def maker_lifecycle_plans(
+    *,
+    live_rows: list[dict[str, Any]],
+    latest_states: dict[str, dict[str, Any]],
+    args: argparse.Namespace,
+    cycle_dt: datetime,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Manage the unfilled maker half using the latest observation epoch.
+
+    Within the same observation epoch, improve a stale maker upward by one
+    tick, capped at the initial ask.  On the first newer observation, cancel
+    the old maker and either cross the remaining shares (same d1 signal still
+    valid) or stop without replacement.
+    """
+    handled = handled_maker_source_order_ids(live_rows)
+    refresh_sec = float(args.maker_reprice_refresh_sec)
+    plans: list[dict[str, Any]] = []
+    decisions: list[dict[str, Any]] = []
+    for order in live_rows:
+        if not bool(order.get("maker_only")) or str(order.get("strategy_instance") or "") != STRATEGY_ID:
+            continue
+        source_order_id = live_order_id(order)
+        if not source_order_id or source_order_id in handled:
+            continue
+        response = order.get("exchange_response") if isinstance(order.get("exchange_response"), dict) else {}
+        place = response.get("place") if isinstance(response.get("place"), dict) else {}
+        if str(place.get("status") or "").lower() in {"matched", "canceled", "cancelled", "expired"}:
+            continue
+        created = parse_utc(order.get("created_at_utc"))
+        if created is None or (cycle_dt - created).total_seconds() < refresh_sec:
+            continue
+        expires = parse_utc(order.get("expires_at_utc"))
+        if expires is not None and expires <= cycle_dt:
+            continue
+
+        key = f"{str(order.get('city') or '')}|{str(order.get('target_date') or '')}"
+        state = latest_states.get(key)
+        root_epoch = parse_utc(
+            order.get("maker_lifecycle_root_observation_utc")
+            or order.get("data_epoch_ts_utc")
+            or order.get("observation_epoch_utc")
+        )
+        current_epoch = parse_utc((state or {}).get("observation_epoch_utc"))
+        new_observation = bool(root_epoch and current_epoch and current_epoch > root_epoch)
+        same_token = bool(
+            state
+            and str(state.get("d1_yes_token_id") or "")
+            and str(state.get("d1_yes_token_id") or "") == str(order.get("token_id") or "")
+        )
+        signal_still_valid = bool(state and state.get("state_valid") and state.get("triggered") and same_token)
+        posted = to_float(order.get("posted_price"), to_float(order.get("limit_price"), 0.0))
+        cap = to_float(order.get("maker_price_cap"), to_float(order.get("best_ask"), 0.0))
+        best_bid = to_float((state or {}).get("d1_yes_direct_bid"), 0.0)
+        best_ask = to_float((state or {}).get("d1_yes_direct_ask"), 0.0)
+        ask_size = to_float((state or {}).get("d1_yes_ask_size"), 0.0)
+        next_price = 0.0
+        action = ""
+        blocker = ""
+        maker_only = True
+        cancel_only = False
+
+        if state is None or current_epoch is None or root_epoch is None:
+            blocker = "d1_maker_missing_current_or_root_observation_epoch"
+        elif new_observation:
+            if signal_still_valid and best_ask > 0 and best_ask <= cap + 1e-9 and ask_size + 1e-9 >= float(args.maker_shares):
+                action = "d1_maker_next_observation_taker_fallback"
+                next_price = best_ask
+                maker_only = False
+            else:
+                action = "d1_maker_cancel_after_observation"
+                cancel_only = True
+                blocker = (
+                    "signal_or_token_changed"
+                    if not signal_still_valid
+                    else "fallback_price_or_depth_not_allowed"
+                )
+        elif state.get("state_valid") and not signal_still_valid:
+            action = "d1_maker_cancel_stale_signal"
+            cancel_only = True
+            blocker = "same_epoch_signal_or_token_changed"
+        elif signal_still_valid and best_bid > 0 and best_ask > best_bid and cap > 0:
+            next_price = min(best_bid + 0.001, best_ask - 0.001, cap)
+            if next_price >= posted + 0.001 - 1e-9:
+                action = "d1_maker_reprice"
+            else:
+                blocker = "d1_maker_already_at_best_allowed_price"
+        elif not signal_still_valid:
+            blocker = "d1_maker_waiting_for_valid_state"
+        else:
+            blocker = "d1_maker_no_resting_reprice"
+
+        decision = {
+            "record_type": "d1_yes_high_mid_maker_lifecycle_decision",
+            "created_at_utc": cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "source_order_id": source_order_id,
+            "city": str(order.get("city") or ""),
+            "target_date": str(order.get("target_date") or ""),
+            "root_observation_epoch_utc": str(
+                order.get("maker_lifecycle_root_observation_utc")
+                or order.get("data_epoch_ts_utc")
+                or order.get("observation_epoch_utc")
+                or ""
+            ),
+            "current_observation_epoch_utc": str((state or {}).get("observation_epoch_utc") or ""),
+            "new_observation": new_observation,
+            "same_token": same_token,
+            "signal_still_valid": signal_still_valid,
+            "posted_price": round(posted, 6),
+            "maker_price_cap": round(cap, 6),
+            "best_bid": round(best_bid, 6),
+            "best_ask": round(best_ask, 6),
+            "action": action,
+            "blocker": blocker,
+            "next_price": round(next_price, 6),
+        }
+        decisions.append(decision)
+        if action:
+            plans.append(
+                build_maker_lifecycle_plan(
+                    order,
+                    action=action,
+                    limit_price=next_price,
+                    maker_only=maker_only,
+                    cancel_only=cancel_only,
+                    state=state or {},
+                    args=args,
+                    cycle_dt=cycle_dt,
+                )
+            )
+    return plans, decisions
+
+
 # --------------------------------------------------------------------------- #
 # main cycle
 # --------------------------------------------------------------------------- #
@@ -733,6 +1044,12 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError("--live requires --confirm-live")
     if float(args.shares) <= 0 or float(args.maker_shares) < 0:
         raise ValueError("--shares must be positive and --maker-shares must be non-negative")
+    if float(args.shares) < 5.0 or 0.0 < float(args.maker_shares) < 5.0:
+        raise ValueError("each live child must meet the 5-share CLOB minimum")
+    if int(args.max_city_days_per_day) <= 0 or float(args.max_daily_cost_usd) <= 0:
+        raise ValueError("daily city-day and cost caps must be positive")
+    if float(args.maker_reprice_refresh_sec) <= 0:
+        raise ValueError("--maker-reprice-refresh-sec must be positive")
     cycle_dt = now_utc_dt()
     cycle_ts = cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
     obs_path = Path(args.observation_cache)
@@ -744,6 +1061,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     positions: dict[str, Any] = {}
     if POSITIONS_OUT.exists():
         positions = json.loads(POSITIONS_OUT.read_text())
+    all_live_rows = order_runtime.read_jsonl(LIVE_OUT)
     live_rows = successful_live_orders()
     reconciled_live_positions = reconcile_live_positions(positions, live_rows)
 
@@ -755,15 +1073,25 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     invalid_book_age_rows = 0
     events: list[dict[str, Any]] = []
     plans: list[dict[str, Any]] = []
+    latest_states: dict[str, dict[str, Any]] = {}
     pending_live_positions: dict[str, dict[str, Any]] = {}
-    live_planned = 0
+    entry_plans_planned = 0
+    city_days_planned = 0
     shadow_first = 0
-    daily_order_count, daily_cost = live_daily_usage(cycle_dt)
+    daily_city_day_count, daily_cost = live_daily_usage(cycle_dt)
 
     for city, rec in observations.items():
         target_date = rec.get("target_date")
         if not target_date:
             continue
+        pos_key = f"{city}|{target_date}"
+        latest_states[pos_key] = {
+            "city": city,
+            "target_date": str(target_date),
+            "observation_epoch_utc": str(rec.get("last_obs_utc") or rec.get("running_max_obs_utc") or ""),
+            "state_valid": False,
+            "triggered": False,
+        }
         key = (city, str(target_date))
         if key not in ladder:
             continue
@@ -801,12 +1129,32 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             and obs_valid
             and book_valid
         )
+        lifecycle_state_valid = bool(
+            (parsed_d1 := parse_bracket(d1_bracket)) is not None
+            and parsed_d1.high is not None
+            and current_bracket != d1_bracket
+            and str(d1_yes.get("token_id") or "")
+            and math.isfinite(direct_yes_ask)
+            and math.isfinite(parity_gap)
+            and parity_gap <= MAX_YES_PARITY_GAP
+        )
+        latest_states[pos_key].update(
+            {
+                "state_valid": lifecycle_state_valid,
+                "triggered": bool(triggered),
+                "d1_yes_token_id": str(d1_yes.get("token_id") or ""),
+                "d1_bracket": d1_bracket,
+                "d1_yes_mid": d1_yes_mid,
+                "d1_yes_direct_bid": direct_yes_bid,
+                "d1_yes_direct_ask": direct_yes_ask,
+                "d1_yes_ask_size": d1_yes.get("ask_size"),
+            }
+        )
         if not triggered:
             continue
         obs_age_in_backtest_band = obs_age <= BACKTEST_OBS_AGE_BAND_MIN
         triggers_this_cycle += 1
 
-        pos_key = f"{city}|{target_date}"
         # The durable live ledger is also part of first-signal state.  This
         # prevents a crash between exchange submit and positions.json update
         # from replaying both split children on the next loop.
@@ -849,6 +1197,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             "book_age_min": round(book_age, 2) if math.isfinite(book_age) else None,
             "minutes_since_running_max": rec.get("minutes_since_running_max"),
             "minutes_to_next_obs": rec.get("minutes_to_next_obs"),
+            "last_obs_utc": rec.get("last_obs_utc") or rec.get("running_max_obs_utc"),
+            "running_max_obs_utc": rec.get("running_max_obs_utc"),
             "d_tmpf_1h": rec.get("d_tmpf_1h"),
             "d_tmpf_3h": rec.get("d_tmpf_3h"),
             "sky_code_now": rec.get("sky_code_now"),
@@ -900,8 +1250,11 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
 
             event_plans = build_live_plans(event, args, cycle_dt) if not blocker else []
             order_cost = sum(to_float(plan.get("order_notional_cap"), 0.0) for plan in event_plans)
-            if not blocker and daily_order_count + live_planned + len(event_plans) > int(args.max_orders_per_day):
-                blocker = "strategy_daily_order_cap"
+            if (
+                not blocker
+                and daily_city_day_count + city_days_planned + 1 > int(args.max_city_days_per_day)
+            ):
+                blocker = "strategy_daily_city_day_cap"
             if not blocker and daily_cost + sum(to_float(p.get("order_notional_cap"), 0.0) for p in plans) + order_cost > float(args.max_daily_cost_usd) + 1e-9:
                 blocker = "strategy_daily_cost_cap"
             if not blocker and not (args.live and args.confirm_live):
@@ -914,7 +1267,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             else:
                 event["execution_mode"] = "tiny_live_split_5_taker_5_maker"
                 plans.extend(event_plans)
-                live_planned += len(event_plans)
+                entry_plans_planned += len(event_plans)
+                city_days_planned += 1
         events.append(event)
         if is_first and not args.dry_run:
             candidate_position = {
@@ -942,6 +1296,21 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 positions[pos_key] = candidate_position
                 new_positions += 1
 
+    lifecycle_plans, lifecycle_decisions = maker_lifecycle_plans(
+        live_rows=all_live_rows,
+        latest_states=latest_states,
+        args=args,
+        cycle_dt=cycle_dt,
+    )
+    plans = [*lifecycle_plans, *plans]
+    for plan in lifecycle_plans:
+        pos_key = f"{str(plan.get('city') or '')}|{str(plan.get('target_date') or '')}"
+        if pos_key in positions:
+            positions[pos_key]["pnl_basis"] = "canonical_fill_reconcile_required_maker_lifecycle"
+    if not args.dry_run:
+        for decision in lifecycle_decisions:
+            append_jsonl(MAKER_LIFECYCLE_OUT, decision)
+
     # settlement backfill on open positions
     settled_now = 0
     try:
@@ -959,10 +1328,13 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             pos["settled"] = True
             pos["settled_bracket"] = win_bracket
             pos["win"] = win
-            shares = to_float(pos.get("position_shares"), 1.0)
-            pos["pnl_at_settlement"] = round(
-                (shares if win else 0.0) - pos["entry_cost_with_fee"], 6
-            )
+            if str(pos.get("pnl_basis") or "").startswith("canonical_fill_reconcile_required"):
+                pos["pnl_at_settlement"] = None
+            else:
+                shares = to_float(pos.get("position_shares"), 1.0)
+                pos["pnl_at_settlement"] = round(
+                    (shares if win else 0.0) - pos["entry_cost_with_fee"], 6
+                )
             settled_now += 1
             if not args.dry_run:
                 append_jsonl(
@@ -1039,8 +1411,11 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
 
     settled_positions = [p for p in positions.values() if p.get("settled")]
     settled_wins = sum(1 for p in settled_positions if p.get("win"))
-    settled_cost = sum(p["entry_cost_with_fee"] for p in settled_positions)
-    settled_pnl = sum(p.get("pnl_at_settlement") or 0.0 for p in settled_positions)
+    settled_positions_with_local_pnl = [
+        p for p in settled_positions if p.get("pnl_at_settlement") is not None
+    ]
+    settled_cost = sum(p["entry_cost_with_fee"] for p in settled_positions_with_local_pnl)
+    settled_pnl = sum(p.get("pnl_at_settlement") or 0.0 for p in settled_positions_with_local_pnl)
     snapshot_age_min = (
         max(0.0, (cycle_dt.timestamp() - ob_file.stat().st_mtime) / 60.0)
         if ob_file is not None
@@ -1080,16 +1455,23 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "taker_shares": float(args.shares),
         "maker_shares": float(args.maker_shares),
         "target_total_shares_per_signal": float(args.shares) + float(args.maker_shares),
-        "max_orders_per_day": int(args.max_orders_per_day),
+        "max_city_days_per_day": int(args.max_city_days_per_day),
         "max_daily_cost_usd": float(args.max_daily_cost_usd),
-        "live_orders_before_cycle_today": daily_order_count,
+        "live_city_days_before_cycle_today": daily_city_day_count,
         "live_cost_before_cycle_today": round(daily_cost, 6),
-        "live_plans_this_cycle": live_planned,
+        "live_plans_this_cycle": len(plans),
+        "entry_plans_this_cycle": entry_plans_planned,
+        "entry_city_days_this_cycle": city_days_planned,
+        "maker_lifecycle_plans_this_cycle": len(lifecycle_plans),
+        "maker_lifecycle_decisions_this_cycle": len(lifecycle_decisions),
         "live_positions_reconciled_this_cycle": reconciled_live_positions,
         "shadow_first_signals_this_cycle": shadow_first,
         "executor_result": executor_result,
         "open_positions_total": len(positions),
         "settled_positions_total": len(settled_positions),
+        "settled_positions_pending_canonical_fill_reconcile": (
+            len(settled_positions) - len(settled_positions_with_local_pnl)
+        ),
         "settled_wins": settled_wins,
         "settled_cost_with_fee": round(settled_cost, 6),
         "settled_pnl": round(settled_pnl, 6),

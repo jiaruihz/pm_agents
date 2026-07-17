@@ -523,6 +523,7 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
             tick_size = _get_tick_size(client, str(plan["token_id"]), _to_float(plan.get("quote_tick_size"), 0.01))
             if execution_policy == "d1_yes_high_mid_taker_v1":
                 min_mid = _to_float(plan.get("min_live_mid"), 0.80)
+                max_live_price = _to_float(plan.get("max_live_price"), 1.0)
                 top_ask_size = _best_ask_size_from_book(book, best_ask)
                 live_mid = (best_bid + best_ask) / 2.0 if best_bid > 0 and best_ask > 0 else 0.0
                 if best_bid <= 0 or best_ask <= 0:
@@ -534,6 +535,11 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                     raise WeatherExecutionError(
                         f"d1_yes_live_mid_below_trigger mid={live_mid:.6f} required={min_mid:.6f}",
                         response=_diagnostics(classification="d1_yes_live_mid_below_trigger", reason="fresh_mid_below_trigger"),
+                    )
+                if best_ask > max_live_price + 1e-9:
+                    raise WeatherExecutionError(
+                        f"d1_yes_live_price_above_cap ask={best_ask:.6f} cap={max_live_price:.6f}",
+                        response=_diagnostics(classification="d1_yes_live_price_above_cap", reason="fresh_ask_above_lifecycle_cap"),
                     )
                 if top_ask_size + 1e-9 < _to_float(plan.get("size"), 0.0):
                     raise WeatherExecutionError(
@@ -557,6 +563,7 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                 }
             elif execution_policy == "d1_yes_high_mid_maker_v1":
                 min_mid = _to_float(plan.get("min_live_mid"), 0.80)
+                max_live_price = _to_float(plan.get("max_live_price"), 1.0)
                 live_mid = (best_bid + best_ask) / 2.0 if best_bid > 0 and best_ask > 0 else 0.0
                 if best_bid <= 0 or best_ask <= 0:
                     raise WeatherExecutionError(
@@ -573,10 +580,15 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                     best_ask=best_ask,
                     tick_size=tick_size,
                 )
+                if order_price > max_live_price + 1e-9:
+                    if max_live_price + 1e-9 < best_bid:
+                        order_price = 0.0
+                    else:
+                        order_price = max_live_price
                 if order_price <= 0:
                     raise WeatherExecutionError(
                         "d1_yes_maker_no_resting_price",
-                        response=_diagnostics(classification="d1_yes_maker_no_resting_price", reason="no_post_only_price"),
+                        response=_diagnostics(classification="d1_yes_maker_no_resting_price", reason="no_post_only_price_within_cap"),
                     )
                 maker_only = True
                 quote = {

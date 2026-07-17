@@ -26,11 +26,11 @@ PARAMS = {
     "city_policy": {"Taipei": "zero_notional_shadow", "other_cities": "tiny_live"},
     "non_exact_policy": "open-upper X+ and invalid ladder states remain shadow",
     "sizing": "5-share taker child + 5-share post-only maker child; target total 10 shares",
-    "max_orders_per_day": 10,
-    "max_daily_cost_usd": 50,
+    "max_city_days_per_day": 10,
+    "max_daily_cost_usd": 100,
     "pathological_obs_age_gate_min": 120,
     "backtest_obs_age_band_min": 61,
-    "execution": "same signal split into BUY_YES 5-share taker at fresh top ask plus 5-share post-only maker improving fresh bid by one tick; maker cancels before next expected METAR",
+    "execution": "same signal split into BUY_YES 5-share taker plus 5-share post-only maker; maker reprices upward within the same observation epoch (capped at initial ask), then on a newer observation cancels and converts only the authoritative unfilled remainder to taker when the same token still has fresh mid >= 0.80 and allowed price/depth",
 }
 
 
