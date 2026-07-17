@@ -21,9 +21,12 @@ from scripts.ops.weather_fast_source_city_policy import FastSourceCityPolicy, co
 from scripts.ops.weather_fast_source_execution import (  # noqa: E402
     audit_order_share_caps,
     build_live_post_only_gtd_place_fn,
+    build_live_taker_gtc_place_fn,
     exact_share_maker_intent,
+    exact_share_taker_intent,
     resolve_share_cap_pause,
     spent_market_shares,
+    submit_marketable_gtc,
     submit_post_only_gtd,
 )
 from scripts.ops.weather_fast_source_stale_book_observer import (  # noqa: E402
@@ -576,7 +579,9 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
         best_ask = safe_float(summary.get("best_ask"))
         ask_size = safe_float(summary.get("ask_size"))
         tick_size = safe_float(summary.get("tick_size"))
-        desired_shares = float(policy.shares_per_trade)
+        taker_shares = float(args.taker_shares)
+        maker_shares = float(args.maker_shares)
+        desired_shares = taker_shares + maker_shares
         market_cap = float(policy.max_shares_per_market)
         market_spent = spent_market_shares(orders_path, target_date=target_date, token_id=token.no_token_id)
         live_blockers: list[str] = []
@@ -588,7 +593,7 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             live_blockers.append("ask_above_max")
         if tick_size is None:
             live_blockers.append("missing_tick_size")
-        if live_city and (ask_size is None or ask_size < desired_shares):
+        if live_city and (ask_size is None or ask_size < taker_shares):
             live_blockers.append("insufficient_top_ask_size")
         if live_city and market_spent + desired_shares > market_cap + 1e-9:
             live_blockers.append("market_share_cap")
@@ -596,13 +601,18 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             live_blockers.append("confirm_live_missing")
         if args.live and live_city and share_cap_paused:
             live_blockers.append("share_cap_paused")
+        taker_intent: dict[str, Any] | None = None
         maker_intent: dict[str, Any] | None = None
-        if best_ask is not None and tick_size is not None and desired_shares > 0:
+        if best_ask is not None and tick_size is not None and taker_shares > 0 and maker_shares > 0:
             try:
+                taker_intent = exact_share_taker_intent(
+                    best_ask=best_ask,
+                    desired_shares=taker_shares,
+                )
                 maker_intent = exact_share_maker_intent(
                     best_ask=best_ask,
                     tick_size=tick_size,
-                    desired_shares=desired_shares,
+                    desired_shares=maker_shares,
                     now=now,
                     effective_lifetime_sec=args.maker_effective_lifetime_sec,
                 )
@@ -627,13 +637,19 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "fresh_book_proxy_used": book.get("proxy_used", ""),
             "max_no_ask": policy.max_no_ask,
             "planned_shares": desired_shares,
+            "planned_taker_shares": taker_shares,
+            "planned_maker_shares": maker_shares,
             "market_spent_shares": market_spent,
             "max_shares_per_market": market_cap,
-            "planned_notional_usd": round(desired_shares * float(best_ask or 0.0), 6),
+            "planned_notional_usd": round(
+                taker_shares * float(best_ask or 0.0)
+                + maker_shares * float((maker_intent or {}).get("limit_price") or 0.0),
+                6,
+            ),
             "live_requested": bool(args.live and live_city),
             "live_enabled": bool(args.live and args.confirm_live and live_city),
             "live_blockers": live_blockers,
-            "share_cap_execution_mode": "post_only_gtd_buy_shares",
+            "share_cap_execution_mode": "split_marketable_gtc_10_plus_post_only_gtd_5_v1",
         }
         opportunity_rows.append(opportunity)
         if event_key not in seen:
@@ -641,50 +657,71 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             seen.add(event_key)
             event_rows.append(opportunity)
         live_key = "|".join([city, target_date, str(candidate), token.no_token_id, str(src.get("source_obs_ts_utc"))])
-        if args.live and args.confirm_live and live_city and not live_blockers and maker_intent is not None and live_key not in live_order_keys:
-            order_row = {
-                **opportunity,
-                "order_side": "BUY",
-                **maker_intent,
-                "live_attempted": True,
-                "live_attempt_ts_utc": iso(),
-            }
-            if "place" not in live_place_cache:
-                live_place_cache["place"] = build_live_post_only_gtd_place_fn(market_proxy)
-            result = submit_post_only_gtd(
-                order_row,
-                place=live_place_cache["place"],
-                fetch_book_fn=fetch_fresh_book,
-                market_proxy=market_proxy,
-                book_timeout_sec=args.book_timeout_sec,
-                max_no_ask=policy.max_no_ask,
-                immediate_reprices=args.post_only_immediate_reprices,
+        if (
+            args.live
+            and args.confirm_live
+            and live_city
+            and not live_blockers
+            and taker_intent is not None
+            and maker_intent is not None
+            and live_key not in live_order_keys
+        ):
+            if "taker_place" not in live_place_cache:
+                live_place_cache["taker_place"] = build_live_taker_gtc_place_fn(market_proxy)
+            if "maker_place" not in live_place_cache:
+                live_place_cache["maker_place"] = build_live_post_only_gtd_place_fn(market_proxy)
+            child_specs = (
+                ("taker", taker_intent, submit_marketable_gtc),
+                ("maker", maker_intent, submit_post_only_gtd),
             )
-            order_row = result["order_row"]
-            order_row.update(
-                {
-                    "live_submit_status": result["live_submit_status"],
-                    "actual_fill_shares": result.get("actual_fill_shares"),
-                    "actual_fill_cost_usd": result.get("actual_fill_cost_usd"),
-                    "live_order_posted": bool(result.get("live_order_posted")),
-                    "exchange_order_status": result.get("exchange_order_status"),
-                    "share_cap_check": result.get("share_cap_check"),
+            for child_role, child_intent, submit_fn in child_specs:
+                order_row = {
+                    **opportunity,
+                    "order_side": "BUY",
+                    "child_order_role": child_role,
+                    "execution_profile": "split_taker_maker_v1",
+                    "execution_policy": "fast_source_taker_10_maker_5_v1",
+                    **child_intent,
+                    "live_attempted": True,
+                    "live_attempt_ts_utc": iso(),
                 }
-            )
-            if result["exchange_response"] is not None:
-                response = result["exchange_response"]
-                order_row["exchange_response"] = response
-                order_row["order_id"] = response.get("order_id")
-                live_order_keys.add(live_key)
-            if result.get("attempts"):
-                order_row["attempts"] = result["attempts"]
-            if result["live_submit_status"] == "share_cap_violation":
-                share_cap_paused = True
-                share_cap_pause_reason = "post_fix_actual_fill_exceeded_desired_or_market_cap"
-            if result["error"]:
-                order_row["error"] = result["error"]
-            append_jsonl(out_dir / "orders.jsonl", order_row)
-            order_rows.append(order_row)
+                if child_role == "taker":
+                    result = submit_fn(order_row, place=live_place_cache["taker_place"])
+                else:
+                    result = submit_fn(
+                        order_row,
+                        place=live_place_cache["maker_place"],
+                        fetch_book_fn=fetch_fresh_book,
+                        market_proxy=market_proxy,
+                        book_timeout_sec=args.book_timeout_sec,
+                        max_no_ask=policy.max_no_ask,
+                        immediate_reprices=args.post_only_immediate_reprices,
+                    )
+                order_row = result["order_row"]
+                order_row.update(
+                    {
+                        "live_submit_status": result["live_submit_status"],
+                        "actual_fill_shares": result.get("actual_fill_shares"),
+                        "actual_fill_cost_usd": result.get("actual_fill_cost_usd"),
+                        "live_order_posted": bool(result.get("live_order_posted")),
+                        "exchange_order_status": result.get("exchange_order_status"),
+                        "share_cap_check": result.get("share_cap_check"),
+                    }
+                )
+                if result["exchange_response"] is not None:
+                    response = result["exchange_response"]
+                    order_row["exchange_response"] = response
+                    order_row["order_id"] = response.get("order_id")
+                    live_order_keys.add(live_key)
+                if result.get("attempts"):
+                    order_row["attempts"] = result["attempts"]
+                if result["live_submit_status"] == "share_cap_violation":
+                    share_cap_paused = True
+                    share_cap_pause_reason = "post_fix_actual_fill_exceeded_desired_or_market_cap"
+                if result["error"]:
+                    order_row["error"] = result["error"]
+                append_jsonl(out_dir / "orders.jsonl", order_row)
+                order_rows.append(order_row)
 
     for row in opportunity_rows:
         append_jsonl(out_dir / "opportunities.jsonl", row)
@@ -738,7 +775,10 @@ def run_once(args: argparse.Namespace, live_place_cache: dict[str, Any]) -> dict
             "max_source_observation_lag_min": args.max_source_observation_lag_min,
             "next_metar_window_min": args.next_metar_window_min,
             "maker_effective_lifetime_sec": args.maker_effective_lifetime_sec,
-            "share_cap_enforcement": "resting_post_only_signed_size_v1",
+            "taker_shares": args.taker_shares,
+            "maker_shares": args.maker_shares,
+            "total_shares_per_market": args.taker_shares + args.maker_shares,
+            "share_cap_enforcement": "split_exact_signed_shares_v1",
         },
         "share_cap_health": {
             **share_cap_audit,
@@ -793,6 +833,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Immediate fresh-book maker reprices after a post-only crossing rejection.",
     )
     parser.add_argument("--maker-effective-lifetime-sec", type=float, default=45.0)
+    parser.add_argument("--taker-shares", type=float, default=10.0)
+    parser.add_argument("--maker-shares", type=float, default=5.0)
     parser.add_argument("--acknowledge-historical-share-cap-incidents", action="store_true")
     parser.add_argument("--market-proxy", default=market_proxy_url(None))
     parser.add_argument("--live", action="store_true")
@@ -807,8 +849,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     live_place_cache: dict[str, Any] = {}
+    if args.taker_shares < 5.0 or args.maker_shares < 5.0:
+        raise RuntimeError("taker and maker children must each meet the 5-share CLOB minimum")
     if args.live and args.confirm_live and args.prebuild_live_client:
-        live_place_cache["place"] = build_live_post_only_gtd_place_fn(market_proxy_url(args.market_proxy or None))
+        proxy = market_proxy_url(args.market_proxy or None)
+        live_place_cache["taker_place"] = build_live_taker_gtc_place_fn(proxy)
+        live_place_cache["maker_place"] = build_live_post_only_gtd_place_fn(proxy)
     while True:
         started = time.monotonic()
         latest = run_once(args, live_place_cache)

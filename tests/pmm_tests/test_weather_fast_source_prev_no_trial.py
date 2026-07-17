@@ -17,8 +17,10 @@ from scripts.ops.weather_fast_source_city_policy import CITY_POLICIES
 from scripts.ops.weather_fast_source_execution import (
     GTD_SECURITY_THRESHOLD_SEC,
     audit_order_share_caps,
+    exact_share_taker_intent,
     spent_market_shares,
     submit_fok_with_immediate_retries,
+    submit_marketable_gtc,
     submit_post_only_gtd,
 )
 from scripts.ops.weather_fast_source_stale_book_observer import MarketToken
@@ -457,6 +459,102 @@ def test_low_ask_exact_share_intent_uses_post_only_gtd_not_fok_usdc_spend():
     assert intent["gtd_security_threshold_sec"] == 180
 
 
+def test_exact_share_taker_intent_uses_marketable_gtc_not_fok_usdc_spend():
+    intent = exact_share_taker_intent(best_ask=0.82, desired_shares=10.0)
+
+    assert intent == {
+        "limit_price": 0.82,
+        "size": 10.0,
+        "desired_shares": 10.0,
+        "submitted_notional_usd": 8.2,
+        "limit_price_policy": "fresh_best_ask_marketable_gtc_v1",
+        "order_type": "GTC",
+        "post_only": False,
+        "expiration": 0,
+        "share_cap_enforcement": "marketable_gtc_signed_size_v1",
+    }
+
+
+def test_marketable_gtc_accepts_exact_ten_share_immediate_match():
+    calls = []
+
+    def place(row):
+        calls.append(dict(row))
+        return {
+            "order_id": "taker-order",
+            "order_type": "GTC",
+            "order_mode": "marketable_gtc_buy_shares",
+            "post_only": False,
+            "place": {
+                "success": True,
+                "status": "matched",
+                "orderID": "taker-order",
+                "takingAmount": "10",
+                "makingAmount": "8.2",
+            },
+        }
+
+    result = submit_marketable_gtc(
+        {
+            "token_id": "token",
+            "best_ask": 0.82,
+            "ask_size": 20.0,
+            "limit_price": 0.82,
+            "size": 10.0,
+            "desired_shares": 10.0,
+            "max_shares_per_market": 15.0,
+            "share_cap_enforcement": "marketable_gtc_signed_size_v1",
+        },
+        place=place,
+    )
+
+    assert result["live_submit_status"] == "submitted"
+    assert result["exchange_order_status"] == "matched"
+    assert result["actual_fill_shares"] == 10.0
+    assert result["actual_fill_cost_usd"] == 8.2
+    assert result["share_cap_check"]["share_cap_violation"] is False
+    assert calls[0]["size"] == 10.0
+
+
+def test_marketable_gtc_partial_or_unfilled_remainder_stays_bounded_by_signed_shares():
+    def place(_row):
+        return {
+            "order_id": "resting-taker-remainder",
+            "order_type": "GTC",
+            "order_mode": "marketable_gtc_buy_shares",
+            "post_only": False,
+            "place": {
+                "success": True,
+                "status": "live",
+                "orderID": "resting-taker-remainder",
+            },
+        }
+
+    result = submit_marketable_gtc(
+        {
+            "token_id": "token",
+            "limit_price": 0.82,
+            "size": 10.0,
+            "desired_shares": 10.0,
+            "max_shares_per_market": 15.0,
+            "share_cap_enforcement": "marketable_gtc_signed_size_v1",
+        },
+        place=place,
+    )
+
+    assert result["live_submit_status"] == "submitted"
+    assert result["exchange_order_status"] == "live"
+    assert result["actual_fill_shares"] is None
+    assert result["share_cap_check"]["effective_share_cap"] == 10.0
+
+
+def test_all_live_fast_source_city_policies_use_fifteen_share_split_cap():
+    live_policies = [policy for policy in CITY_POLICIES.values() if policy.default_mode == "live_trial"]
+
+    assert live_policies
+    assert {(policy.shares_per_trade, policy.max_shares_per_market) for policy in live_policies} == {(15.0, 15.0)}
+
+
 def test_post_only_gtd_accepts_only_a_resting_order_and_reserves_exact_shares():
     calls = []
 
@@ -707,35 +805,56 @@ def test_generic_live_chain_uses_city_policy_and_records_matched_fill(tmp_path, 
             "--no-prebuild-live-client",
         ]
     )
-    place = lambda _row: {
-        "order_id": "order",
+    taker_place = lambda _row: {
+        "order_id": "taker-order",
+        "order_type": "GTC",
+        "order_mode": "marketable_gtc_buy_shares",
+        "post_only": False,
+        "place": {
+            "success": True,
+            "status": "matched",
+            "orderID": "taker-order",
+            "takingAmount": "10",
+            "makingAmount": "8",
+        },
+    }
+    maker_place = lambda _row: {
+        "order_id": "maker-order",
         "order_type": "GTD",
         "order_mode": "post_only_gtd_buy_shares",
         "post_only": True,
         "place": {
             "success": True,
             "status": "live",
-            "orderID": "order",
+            "orderID": "maker-order",
             "takingAmount": "5",
             "makingAmount": "3.95",
         },
     }
 
-    latest = runner.run_once(args, {"place": place})
-    order = json.loads((tmp_path / "out" / "orders.jsonl").read_text(encoding="utf-8"))
+    latest = runner.run_once(args, {"taker_place": taker_place, "maker_place": maker_place})
+    orders = [json.loads(line) for line in (tmp_path / "out" / "orders.jsonl").read_text(encoding="utf-8").splitlines()]
+    by_role = {order["child_order_role"]: order for order in orders}
 
-    assert latest["live_orders_submitted"] == 1
-    assert latest["city_policies"]["Tokyo"]["shares_per_trade"] == 10.0
-    assert order["limit_price"] == 0.79
-    assert order["source_runway"] == "15R/33L"
-    assert order["source_primary_runway"] == "15L"
-    assert order["source_is_preferred_temperature_runway"] is True
-    assert order["actual_fill_shares"] is None
-    assert order["live_submit_status"] == "submitted"
-    assert order["live_order_posted"] is True
-    assert order["post_only"] is True
-    assert order["order_type"] == "GTD"
-    assert order["t_minus_1_no_bracket"] == 21
+    assert latest["live_orders_submitted"] == 2
+    assert latest["city_policies"]["Tokyo"]["shares_per_trade"] == 15.0
+    assert latest["caps"]["taker_shares"] == 10.0
+    assert latest["caps"]["maker_shares"] == 5.0
+    assert by_role["taker"]["limit_price"] == 0.8
+    assert by_role["taker"]["actual_fill_shares"] == 10.0
+    assert by_role["taker"]["post_only"] is False
+    assert by_role["taker"]["order_type"] == "GTC"
+    assert by_role["maker"]["limit_price"] == 0.79
+    assert by_role["maker"]["actual_fill_shares"] is None
+    assert by_role["maker"]["post_only"] is True
+    assert by_role["maker"]["order_type"] == "GTD"
+    for order in orders:
+        assert order["source_runway"] == "15R/33L"
+        assert order["source_primary_runway"] == "15L"
+        assert order["source_is_preferred_temperature_runway"] is True
+        assert order["live_submit_status"] == "submitted"
+        assert order["live_order_posted"] is True
+        assert order["t_minus_1_no_bracket"] == 21
 
 
 def test_candidate_market_falls_back_to_gamma_when_snapshot_omits_bracket(monkeypatch):

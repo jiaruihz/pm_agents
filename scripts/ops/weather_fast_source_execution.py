@@ -60,6 +60,31 @@ def exact_share_maker_intent(
     }
 
 
+def exact_share_taker_intent(*, best_ask: float, desired_shares: float) -> dict[str, Any]:
+    """Build a marketable GTC BUY whose signed quantity is an exact share cap.
+
+    FOK/FAK BUY quantities are interpreted as USDC spend by the CLOB.  A
+    marketable GTC created with ``create_order`` preserves share-denominated
+    sizing; if the top ask moves, any remainder can rest without exceeding the
+    signed share cap.
+    """
+    if not (0 < best_ask < 1):
+        raise ValueError("best_ask must be between zero and one")
+    if desired_shares <= 0:
+        raise ValueError("desired_shares must be positive")
+    return {
+        "limit_price": round(float(best_ask), 6),
+        "size": float(desired_shares),
+        "desired_shares": float(desired_shares),
+        "submitted_notional_usd": round(float(desired_shares) * float(best_ask), 6),
+        "limit_price_policy": "fresh_best_ask_marketable_gtc_v1",
+        "order_type": "GTC",
+        "post_only": False,
+        "expiration": 0,
+        "share_cap_enforcement": "marketable_gtc_signed_size_v1",
+    }
+
+
 def extract_order_id(payload: Any) -> str:
     if not isinstance(payload, dict):
         return ""
@@ -131,7 +156,10 @@ def audit_order_share_caps(path: Path, *, tolerance: float = SHARE_CAP_TOLERANCE
                 **check,
             }
             anomalies.append(anomaly)
-            if row.get("share_cap_enforcement") == "resting_post_only_signed_size_v1":
+            if row.get("share_cap_enforcement") in {
+                "resting_post_only_signed_size_v1",
+                "marketable_gtc_signed_size_v1",
+            }:
                 enforced_anomalies.append(anomaly)
     return {
         "orders_with_actual_fill_checked": checked,
@@ -286,6 +314,16 @@ def build_live_fok_limit_place_fn(proxy_url: str):
     )
 
 
+def build_live_taker_gtc_place_fn(proxy_url: str):
+    """Build an exact-share marketable BUY path with no post-only flag."""
+    return _build_live_limit_place_fn(
+        proxy_url,
+        order_type_name="GTC",
+        post_only=False,
+        order_mode="marketable_gtc_buy_shares",
+    )
+
+
 def build_live_post_only_gtd_place_fn(proxy_url: str):
     """Build a share-denominated maker order that can never cross on entry."""
     return _build_live_limit_place_fn(
@@ -306,6 +344,79 @@ def response_is_live_post_only(response: dict[str, Any]) -> bool:
         and response.get("post_only") is True
         and str(response.get("order_type") or "").upper() in {"GTC", "GTD"}
     )
+
+
+def response_is_accepted_taker(response: dict[str, Any]) -> bool:
+    place = response.get("place") if isinstance(response, dict) else None
+    return bool(
+        isinstance(place, dict)
+        and place.get("success") is True
+        and str(place.get("status") or "").lower() in {"live", "matched"}
+        and extract_order_id(place)
+        and response.get("post_only") is False
+        and str(response.get("order_type") or "").upper() == "GTC"
+    )
+
+
+def submit_marketable_gtc(
+    order_row: dict[str, Any],
+    *,
+    place: Callable[[dict[str, Any]], dict[str, Any]],
+) -> dict[str, Any]:
+    """Submit one exact-share marketable GTC child order."""
+    working = dict(order_row)
+    attempt = {
+        "attempt": 1,
+        "attempt_ts_utc": iso(),
+        "best_ask": working.get("best_ask"),
+        "ask_size": working.get("ask_size"),
+        "limit_price": working.get("limit_price"),
+    }
+    try:
+        response = place(working)
+        if not response_is_accepted_taker(response):
+            raise RuntimeError(f"marketable GTC response not accepted: {json.dumps(response.get('place'), sort_keys=True)}")
+    except Exception as exc:  # noqa: BLE001
+        error = f"{type(exc).__name__}: {exc}"
+        attempt.update({"status": "submit_failed", "error": error})
+        return {
+            "order_row": working,
+            "attempts": [attempt],
+            "exchange_response": None,
+            "live_submit_status": "submit_failed",
+            "live_order_posted": False,
+            "exchange_order_status": None,
+            "actual_fill_shares": None,
+            "actual_fill_cost_usd": None,
+            "share_cap_check": share_cap_check(working),
+            "error": error,
+        }
+
+    actual_shares, actual_cost = matched_fill_amounts(response)
+    checked = {**working, "exchange_response": response, "actual_fill_shares": actual_shares}
+    cap_check = share_cap_check(checked)
+    place_status = str((response.get("place") or {}).get("status") or "").lower()
+    attempt.update(
+        {
+            "status": "share_cap_violation" if cap_check["share_cap_violation"] else "submitted",
+            "order_id": response.get("order_id"),
+            "actual_fill_shares": actual_shares,
+            "actual_fill_cost_usd": actual_cost,
+            "share_cap_check": cap_check,
+        }
+    )
+    return {
+        "order_row": working,
+        "attempts": [attempt],
+        "exchange_response": response,
+        "live_submit_status": "share_cap_violation" if cap_check["share_cap_violation"] else "submitted",
+        "live_order_posted": True,
+        "exchange_order_status": place_status,
+        "actual_fill_shares": actual_shares,
+        "actual_fill_cost_usd": actual_cost,
+        "share_cap_check": cap_check,
+        "error": "actual_fill_shares_exceeded_desired_or_market_cap" if cap_check["share_cap_violation"] else "",
+    }
 
 
 def submit_post_only_gtd(
