@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -43,6 +44,14 @@ def main() -> int:
         print(json.dumps(PARAMS, ensure_ascii=False, indent=2))
         return 0
 
+    spec_commit = subprocess.run(
+        ["git", "rev-parse", "--short=8", "HEAD"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+
     conn = sqlite3.connect(args.db, timeout=5.0)
     conn.execute("PRAGMA busy_timeout=3000")
     try:
@@ -66,21 +75,21 @@ def main() -> int:
             """INSERT INTO strategy_instance
                (instance_id, strategy_key, display_name, family, lifecycle_status, execution_mode,
                 desired_status, source_layer, runtime_dir, start_script, tmux_session,
-                expected_live, notes, config_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                expected_live, notes, config_id, spec_commit)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(instance_id) DO UPDATE SET
                 display_name=excluded.display_name, lifecycle_status=excluded.lifecycle_status,
                 execution_mode=excluded.execution_mode, desired_status=excluded.desired_status,
                 runtime_dir=excluded.runtime_dir, start_script=excluded.start_script,
                 tmux_session=excluded.tmux_session, expected_live=excluded.expected_live,
-                notes=excluded.notes, config_id=excluded.config_id,
+                notes=excluded.notes, config_id=excluded.config_id, spec_commit=excluded.spec_commit,
                 updated_at_utc=strftime('%Y-%m-%dT%H:%M:%SZ','now')""",
             (
                 INSTANCE_ID, STRATEGY_KEY, "d1 YES high-mid live (Taipei shadow)", FAMILY,
                 "live", "live", "enabled", "runtime_local",
                 RUNTIME_DIR, START_SCRIPT, INSTANCE_ID, 1,
                 "explicit user-authorized split policy; open-upper and invalid ladder states remain shadow",
-                CONFIG_ID,
+                CONFIG_ID, spec_commit,
             ),
         )
         conn.execute(
