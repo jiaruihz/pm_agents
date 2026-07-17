@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from typing import Iterable
 
 
+MAX_NO_ASK = 0.97
+
+
 @dataclass(frozen=True)
 class FastSourceCityPolicy:
     city: str
@@ -36,7 +39,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.7,
         shares_per_trade=15.0,
         max_shares_per_market=15.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
         max_source_age_min=30.0,
         max_source_observation_lag_min=30.0,
         source_profile_override_reason="user_approved_tiny_live_trial_low_sample_forward_probe",
@@ -52,7 +55,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.7,
         shares_per_trade=15.0,
         max_shares_per_market=15.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
         source_profile_override_reason="user_approved_tiny_live_trial_pending_source_alignment",
     ),
     ("Helsinki", "fmi"): FastSourceCityPolicy(
@@ -66,7 +69,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.7,
         shares_per_trade=15.0,
         max_shares_per_market=15.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
         source_profile_override_reason="user_approved_tiny_live_trial_pending_source_alignment",
     ),
     ("Miami", "noaa_madis_hfmetar"): FastSourceCityPolicy(
@@ -80,7 +83,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.7,
         shares_per_trade=15.0,
         max_shares_per_market=15.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
         max_source_age_min=30.0,
         max_source_observation_lag_min=30.0,
         source_profile_override_reason="user_approved_tiny_live_trial_low_sample_forward_probe",
@@ -96,7 +99,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.7,
         shares_per_trade=15.0,
         max_shares_per_market=15.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
         max_source_age_min=30.0,
         max_source_observation_lag_min=30.0,
         source_profile_override_reason="user_approved_tiny_live_trial_low_sample_forward_probe",
@@ -112,7 +115,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.7,
         shares_per_trade=15.0,
         max_shares_per_market=15.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
         source_profile_override_reason="user_approved_tiny_live_trial_cross_station_basis_pending",
     ),
     ("Tokyo", "jma_amedas"): FastSourceCityPolicy(
@@ -126,7 +129,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.5,
         shares_per_trade=15.0,
         max_shares_per_market=15.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
         source_profile_override_reason="user_approved_tiny_live_trial_pending_source_alignment",
     ),
     ("Seoul", "amos_runway"): FastSourceCityPolicy(
@@ -140,7 +143,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.7,
         shares_per_trade=0.0,
         max_shares_per_market=0.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
     ),
     ("Ankara", "mgm"): FastSourceCityPolicy(
         city="Ankara",
@@ -153,7 +156,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.5,
         shares_per_trade=0.0,
         max_shares_per_market=0.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
     ),
     ("Istanbul", "mgm"): FastSourceCityPolicy(
         city="Istanbul",
@@ -166,7 +169,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.5,
         shares_per_trade=0.0,
         max_shares_per_market=0.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
     ),
     ("TelAviv", "ims_lod"): FastSourceCityPolicy(
         city="TelAviv",
@@ -179,7 +182,7 @@ CITY_POLICIES: dict[tuple[str, str], FastSourceCityPolicy] = {
         strong_margin=0.5,
         shares_per_trade=0.0,
         max_shares_per_market=0.0,
-        max_no_ask=0.94,
+        max_no_ask=MAX_NO_ASK,
     ),
 }
 
