@@ -5,7 +5,12 @@ import json
 import os
 import sys
 import time
+from argparse import Namespace
+from datetime import datetime, timezone
 from pathlib import Path
+
+from scripts.ops import weather_order_executor as executor
+from src.strategies.weather_edge_v1.tools.execution_pipeline import lifecycle_guard_reason
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -148,6 +153,7 @@ def test_apply_live_fill_basis_scales_pnl_to_actual_shares() -> None:
         "exchange_response": {
             "place": {
                 "success": True,
+                "status": "matched",
                 "orderID": "clob-1",
                 "takingAmount": "5",
                 "makingAmount": "4.2",
@@ -160,3 +166,61 @@ def test_apply_live_fill_basis_scales_pnl_to_actual_shares() -> None:
     assert position["entry_cost_usd"] == 4.2
     assert position["entry_cost_with_fee"] == 4.2336
     assert round(5.0 - position["entry_cost_with_fee"], 6) == 0.7664
+
+
+def test_apply_live_fill_basis_does_not_invent_fill_for_resting_order() -> None:
+    position = {"execution_mode": "tiny_live_split_5_taker_5_maker"}
+    order = {
+        "size": 5.0,
+        "posted_notional": 4.5,
+        "exchange_response": {
+            "place": {
+                "success": True,
+                "status": "live",
+                "orderID": "clob-resting",
+            }
+        },
+    }
+
+    runner.apply_live_fill_basis(position, order)
+
+    assert position["position_shares"] == 0.0
+    assert position["entry_cost_usd"] == 0.0
+    assert position["pnl_basis"] == "canonical_fill_reconcile_required_non_immediate"
+
+
+def test_live_signal_expands_to_five_taker_plus_five_maker() -> None:
+    args = Namespace(shares=5.0, maker_shares=5.0, order_ttl_min=45.0, mid_threshold=0.80)
+    event = {
+        "city": "Amsterdam",
+        "target_date": "2026-07-16",
+        "d1_bracket": "25",
+        "d1_yes_token_id": "yes-25",
+        "d1_yes_direct_ask": 0.93,
+        "d1_yes_direct_bid": 0.90,
+        "d1_yes_mid": 0.915,
+        "minutes_to_next_obs": 12.0,
+    }
+    cycle = datetime.now(timezone.utc)
+
+    plans = runner.build_live_plans(event, args, cycle)
+
+    assert [(plan["child_order_role"], plan["size"]) for plan in plans] == [
+        ("taker", 5.0),
+        ("maker", 5.0),
+    ]
+    assert plans[0]["signal_id"] == plans[1]["signal_id"]
+    assert plans[0]["comparison_group_id"] == plans[1]["comparison_group_id"]
+    assert plans[0]["plan_id"] != plans[1]["plan_id"]
+    assert plans[0]["maker_only"] is False
+    assert plans[1]["maker_only"] is True
+    assert plans[1]["execution_policy"] == "d1_yes_high_mid_maker_v1"
+    assert plans[1]["limit_price"] == 0.901
+    assert plans[1]["order_ttl_min"] == 11.5
+    assert lifecycle_guard_reason(plans[1]) == ""
+
+
+def test_d1_maker_price_improves_bid_without_crossing() -> None:
+    assert executor._d1_yes_maker_price(best_bid=0.90, best_ask=0.93, tick_size=0.001) == 0.901
+    assert executor._d1_yes_maker_price(best_bid=0.90, best_ask=0.901, tick_size=0.001) == 0.90
+    assert executor._d1_yes_maker_price(best_bid=0.0, best_ask=0.93, tick_size=0.001) == 0.0

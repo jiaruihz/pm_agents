@@ -25,12 +25,12 @@ PARAMS = {
     "d1_definition": "immediate bounded bracket above rounded-running current bracket",
     "city_policy": {"Taipei": "zero_notional_shadow", "other_cities": "tiny_live"},
     "non_exact_policy": "open-upper X+ and invalid ladder states remain shadow",
-    "sizing": "fixed 5 shares",
+    "sizing": "5-share taker child + 5-share post-only maker child; target total 10 shares",
     "max_orders_per_day": 10,
     "max_daily_cost_usd": 50,
     "pathological_obs_age_gate_min": 120,
     "backtest_obs_age_band_min": 61,
-    "execution": "fresh CLOB quote/depth recheck, BUY_YES taker limit at top ask",
+    "execution": "same signal split into BUY_YES 5-share taker at fresh top ask plus 5-share post-only maker improving fresh bid by one tick; maker cancels before next expected METAR",
 }
 
 
@@ -51,7 +51,7 @@ def main() -> int:
                updated_at_utc=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE strategy_key=?""",
             (
                 "tiny_live_user_authorized",
-                "Taipei zero-notional shadow; other cities fixed 5-share live with exact-ladder and fresh-book execution checks",
+                "Taipei zero-notional shadow; other cities target 10 shares via 5 taker + 5 post-only maker with exact-ladder and fresh-book checks",
                 json.dumps({"source_doc": SOURCE_DOC, "research_verdict": "inconclusive_positive_signal", "live_authority": "explicit_user_policy_2026-07-16"}),
                 STRATEGY_KEY,
             ),

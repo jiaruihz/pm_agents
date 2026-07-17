@@ -177,6 +177,13 @@ def _maker_only_price(
     return 0.0
 
 
+def _d1_yes_maker_price(*, best_bid: float, best_ask: float, tick_size: float) -> float:
+    """Improve the fresh bid by one tick without crossing the fresh ask."""
+    if best_bid <= 0 or best_ask <= best_bid or tick_size <= 0:
+        return 0.0
+    return max(best_bid, min(best_bid + tick_size, best_ask - tick_size))
+
+
 def _get_tick_size(client: Any, token_id: str, fallback: float) -> float:
     for name in ("get_tick_size", "getTickSize"):
         fn = getattr(client, name, None)
@@ -500,6 +507,7 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
         needs_live_policy_quote = execution_policy in {
             "mid_price_core_v2",
             "d1_yes_high_mid_taker_v1",
+            "d1_yes_high_mid_maker_v1",
             "taker_top_ask_v1",
         }
         if maker_only or needs_live_policy_quote:
@@ -546,6 +554,42 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                     "quote_tick_size": tick_size,
                     "quote_mode": "fresh_top_ask_taker_recheck",
                     "fresh_top_ask_size": top_ask_size,
+                }
+            elif execution_policy == "d1_yes_high_mid_maker_v1":
+                min_mid = _to_float(plan.get("min_live_mid"), 0.80)
+                live_mid = (best_bid + best_ask) / 2.0 if best_bid > 0 and best_ask > 0 else 0.0
+                if best_bid <= 0 or best_ask <= 0:
+                    raise WeatherExecutionError(
+                        "d1_yes_live_quote_missing",
+                        response=_diagnostics(classification="d1_yes_live_quote_missing", reason="missing_bid_or_ask"),
+                    )
+                if live_mid + 1e-9 < min_mid:
+                    raise WeatherExecutionError(
+                        f"d1_yes_live_mid_below_trigger mid={live_mid:.6f} required={min_mid:.6f}",
+                        response=_diagnostics(classification="d1_yes_live_mid_below_trigger", reason="fresh_mid_below_trigger"),
+                    )
+                order_price = _d1_yes_maker_price(
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    tick_size=tick_size,
+                )
+                if order_price <= 0:
+                    raise WeatherExecutionError(
+                        "d1_yes_maker_no_resting_price",
+                        response=_diagnostics(classification="d1_yes_maker_no_resting_price", reason="no_post_only_price"),
+                    )
+                maker_only = True
+                quote = {
+                    "quote_status": "accepted",
+                    "quote_reason": "fresh_d1_yes_mid_revalidated_post_only",
+                    "quote_edge": 0.0,
+                    "required_quote_edge": 0.0,
+                    "model_token_probability": live_mid,
+                    "quote_best_bid": best_bid,
+                    "quote_best_ask": best_ask,
+                    "quote_spread": max(0.0, best_ask - best_bid),
+                    "quote_tick_size": tick_size,
+                    "quote_mode": "fresh_bid_improve_one_tick_post_only",
                 }
             elif execution_policy == "mid_price_core_v2":
                 quotes = build_execution_quotes(

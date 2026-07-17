@@ -3,15 +3,16 @@
 
 Strategy (frozen v1, see docs/analysis/2026-07/2026-07-15-market-calibration-curve-v1.md):
     When the market prices "final max lands exactly one bracket above the current
-    running-max bracket" (the d1 YES) at mid >= 0.80, buy d1 YES as taker at
-    1 - d1_no_bid, hold to settlement.  One entry per city-date (first qualifying
-    poll).  No city / hour / weather filter in v1.
+    running-max bracket" (the d1 YES) at mid >= 0.80, express the first signal
+    as 5 shares taker plus a separate 5-share post-only maker child, then hold
+    fills to settlement.  One entry per city-date (first qualifying poll).  No
+    city / hour / weather filter in v1.
 
 The default CLI remains zero-notional shadow.  With ``--live --confirm-live`` it
-routes Taipei to shadow and submits fixed-share BUY YES taker plans for other
+routes Taipei to shadow and submits split BUY YES taker/maker plans for other
 cities only when current -> d1 is an unambiguous adjacent bounded bracket and
-the directly observed YES ask has sufficient depth.  Open-upper ``X+`` and
-invalid/missing current-bracket cases always remain shadow.
+the directly observed YES ask has sufficient taker depth.  Open-upper ``X+``
+and invalid/missing current-bracket cases always remain shadow.
 
 Two accounting tracks are written per event:
   * promotion track: first qualifying poll per (city, target_date) -> promotion
@@ -176,7 +177,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interval-seconds", type=float, default=600.0)
     parser.add_argument("--strategy-instance", default=STRATEGY_ID)
     parser.add_argument("--runtime-dir", default=str(RUNTIME_DIR))
-    parser.add_argument("--shares", type=float, default=5.0)
+    parser.add_argument("--shares", type=float, default=5.0,
+                        help="taker child shares (legacy flag retained for compatibility)")
+    parser.add_argument("--maker-shares", type=float, default=5.0,
+                        help="post-only maker child shares; set 0 to disable the maker child")
     parser.add_argument("--max-orders-per-day", type=int, default=10)
     parser.add_argument("--max-daily-cost-usd", type=float, default=50.0)
     parser.add_argument("--order-ttl-min", type=float, default=45.0)
@@ -503,15 +507,24 @@ def successful_live_orders(path: Path | None = None) -> list[dict[str, Any]]:
 
 
 def matching_live_order(
-    *, city: str, target_date: str, bracket: str, rows: list[dict[str, Any]]
+    *,
+    city: str,
+    target_date: str,
+    bracket: str,
+    rows: list[dict[str, Any]],
+    child_roles: set[str] | None = None,
 ) -> dict[str, Any] | None:
     matches = [
         row
         for row in rows
         if str(row.get("city") or "") == city
         and str(row.get("target_date") or "") == target_date
-        and str(row.get("bracket") or "") == bracket
+        and (not bracket or str(row.get("bracket") or "") == bracket)
         and str(row.get("signal_side") or "").upper() == "BUY_YES"
+        and (
+            child_roles is None
+            or str(row.get("child_order_role") or "single") in child_roles
+        )
     ]
     return max(matches, key=lambda row: str(row.get("created_at_utc") or ""), default=None)
 
@@ -524,8 +537,20 @@ def apply_live_fill_basis(position: dict[str, Any], order: dict[str, Any]) -> No
     """
     response = order.get("exchange_response") or {}
     place = response.get("place") if isinstance(response, dict) else {}
-    shares = to_float((place or {}).get("takingAmount"), to_float(order.get("size"), 0.0))
-    cost = to_float((place or {}).get("makingAmount"), to_float(order.get("posted_notional"), 0.0))
+    place_status = str((place or {}).get("status") or "").lower()
+    shares = to_float((place or {}).get("takingAmount"), 0.0)
+    cost = to_float((place or {}).get("makingAmount"), 0.0)
+    if place_status != "matched" or shares <= 0.0 or cost <= 0.0:
+        position.update(
+            {
+                "position_shares": 0.0,
+                "entry_cost_usd": 0.0,
+                "entry_cost_with_fee": 0.0,
+                "clob_order_id": str((place or {}).get("orderID") or ""),
+                "pnl_basis": "canonical_fill_reconcile_required_non_immediate",
+            }
+        )
+        return
     price = cost / shares if shares > 0 else to_float(order.get("posted_price"), 0.0)
     estimated_fee = shares * fee(price) if shares > 0 else 0.0
     position.update(
@@ -547,13 +572,17 @@ def reconcile_live_positions(
 ) -> int:
     updated = 0
     for position in positions.values():
-        if position.get("execution_mode") != "tiny_live_taker_5shares":
+        if position.get("execution_mode") not in {
+            "tiny_live_taker_5shares",
+            "tiny_live_split_5_taker_5_maker",
+        }:
             continue
         order = matching_live_order(
             city=str(position.get("city") or ""),
             target_date=str(position.get("target_date") or ""),
             bracket=str(position.get("d1_bracket") or ""),
             rows=rows,
+            child_roles={"single", "taker"},
         )
         if order is None:
             continue
@@ -563,7 +592,13 @@ def reconcile_live_positions(
     return updated
 
 
-def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: datetime) -> dict[str, Any]:
+def build_live_plan(
+    event: dict[str, Any],
+    args: argparse.Namespace,
+    cycle_dt: datetime,
+    *,
+    child_order_role: str,
+) -> dict[str, Any]:
     ask = to_float(event.get("d1_yes_direct_ask"))
     bid = to_float(event.get("d1_yes_direct_bid"), 0.0)
     signal_base = {
@@ -574,14 +609,40 @@ def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: d
         "token_id": event.get("d1_yes_token_id"),
     }
     signal_id = "d1-yes-high-mid-" + stable_hash(signal_base)
-    expires_at = cycle_dt + timedelta(minutes=float(args.order_ttl_min))
-    shares = float(args.shares)
+    maker_only = child_order_role == "maker"
+    shares = float(args.maker_shares if maker_only else args.shares)
+    minutes_to_next_obs = to_float(event.get("minutes_to_next_obs"))
+    if maker_only and math.isfinite(minutes_to_next_obs):
+        ttl_min = max(1.0, min(float(args.order_ttl_min), minutes_to_next_obs - 0.5))
+    elif maker_only:
+        ttl_min = max(1.0, min(float(args.order_ttl_min), 5.0))
+    else:
+        ttl_min = float(args.order_ttl_min)
+    expires_at = cycle_dt + timedelta(minutes=ttl_min)
+    if maker_only:
+        tick = 0.001
+        limit_price = min(max(bid + tick, bid), max(bid, ask - tick)) if bid > 0 else 0.0
+        execution_policy = "d1_yes_high_mid_maker_v1"
+        quote_reason = "direct_yes_post_only_improve_bid_one_tick"
+        quote_mode = "fresh_d1_mid_post_only_recheck"
+    else:
+        limit_price = ask
+        execution_policy = "d1_yes_high_mid_taker_v1"
+        quote_reason = "direct_yes_top_ask_taker"
+        quote_mode = "top_ask_taker_live"
     spread = max(0.0, ask - bid) if bid > 0 else None
+    comparison_group_id = stable_hash(
+        {"signal_id": signal_id, "token_id": event.get("d1_yes_token_id")}
+    )
     return {
         "record_type": "weather_edge_trade_plan",
-        "plan_id": "plan-" + stable_hash({**signal_base, "signal_id": signal_id}),
+        "plan_id": "plan-" + stable_hash(
+            {**signal_base, "signal_id": signal_id, "child_order_role": child_order_role}
+        ),
         "signal_id": signal_id,
         "opportunity_id": signal_id,
+        "comparison_group_id": comparison_group_id,
+        "execution_profile": "d1_yes_split_5_taker_5_maker_v1",
         "created_at_utc": cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "status": "accepted",
         "risk_status": "passed",
@@ -593,7 +654,7 @@ def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: d
         "strategy_head": "d1_yes_high_mid",
         "probability_source": "market_d1_yes_mid_ge_0p80",
         "decision_mode": "first_qualifying_city_date",
-        "execution_mode": "tiny_live_taker_5shares_taipei_shadow",
+        "execution_mode": "tiny_live_split_5_taker_5_maker_taipei_shadow",
         "profile": "d1_yes_high_mid",
         "combo": RULE_ID,
         "city": str(event.get("city") or ""),
@@ -610,9 +671,9 @@ def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: d
         "best_bid": round(bid, 6) if bid > 0 else 0.0,
         "best_ask": round(ask, 6),
         "spread": round(spread, 6) if spread is not None else None,
-        "limit_price": round(ask, 6),
+        "limit_price": round(limit_price, 6),
         "quote_status": "accepted",
-        "quote_reason": "direct_yes_top_ask_taker",
+        "quote_reason": quote_reason,
         "quote_edge": 0.0,
         "required_quote_edge": 0.0,
         "model_token_probability": round(to_float(event.get("d1_yes_mid"), 0.0), 6),
@@ -620,17 +681,19 @@ def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: d
         "quote_best_ask": round(ask, 6),
         "quote_spread": round(spread, 6) if spread is not None else None,
         "quote_tick_size": 0.001,
-        "quote_mode": "top_ask_taker_live",
-        "child_order_role": "single",
-        "maker_only": False,
-        "execution_policy": "d1_yes_high_mid_taker_v1",
+        "quote_mode": quote_mode,
+        "child_order_role": child_order_role,
+        "maker_only": maker_only,
+        "allow_duplicate_signal_id": True,
+        "execution_policy": execution_policy,
+        "order_lifecycle_policy": "maker_until_data_update" if maker_only else "taker_now",
         "min_live_mid": float(args.mid_threshold),
         "tick_size": 0.001,
         "sizing_mode": "fixed_shares",
         "fixed_order_shares": round(shares, 6),
         "max_order_shares": round(shares, 6),
         "size": round(shares, 6),
-        "notional": round(shares * ask, 6),
+        "notional": round(shares * limit_price, 6),
         "order_notional_cap": round(shares * ask, 6),
         "paper_enabled": True,
         "live_enabled": True,
@@ -638,7 +701,12 @@ def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: d
         "shadow_reason": "Taipei remains zero-notional shadow",
         "model_version": "d1_yes_high_mid_v1",
         "expires_at_utc": expires_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "order_ttl_min": round(float(args.order_ttl_min), 6),
+        "order_ttl_min": round(ttl_min, 6),
+        **(
+            {"cancel_before_data_update_utc": expires_at.isoformat(timespec="seconds").replace("+00:00", "Z")}
+            if maker_only
+            else {}
+        ),
         "decision_snapshot_ts_utc": str(event.get("book_fetched_at_utc") or ""),
         "snapshot_ts_utc": str(event.get("book_fetched_at_utc") or ""),
         "source_snapshot_path": str(event.get("orderbook_file") or ""),
@@ -648,12 +716,23 @@ def build_live_plan(event: dict[str, Any], args: argparse.Namespace, cycle_dt: d
     }
 
 
+def build_live_plans(
+    event: dict[str, Any], args: argparse.Namespace, cycle_dt: datetime
+) -> list[dict[str, Any]]:
+    plans = [build_live_plan(event, args, cycle_dt, child_order_role="taker")]
+    if float(args.maker_shares) > 0:
+        plans.append(build_live_plan(event, args, cycle_dt, child_order_role="maker"))
+    return plans
+
+
 # --------------------------------------------------------------------------- #
 # main cycle
 # --------------------------------------------------------------------------- #
 def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     if args.live and not args.confirm_live:
         raise RuntimeError("--live requires --confirm-live")
+    if float(args.shares) <= 0 or float(args.maker_shares) < 0:
+        raise ValueError("--shares must be positive and --maker-shares must be non-negative")
     cycle_dt = now_utc_dt()
     cycle_ts = cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
     obs_path = Path(args.observation_cache)
@@ -728,7 +807,16 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         triggers_this_cycle += 1
 
         pos_key = f"{city}|{target_date}"
-        is_first = pos_key not in positions
+        # The durable live ledger is also part of first-signal state.  This
+        # prevents a crash between exchange submit and positions.json update
+        # from replaying both split children on the next loop.
+        prior_live_order = matching_live_order(
+            city=city,
+            target_date=target_date,
+            bracket="",
+            rows=live_rows,
+        )
+        is_first = pos_key not in positions and prior_live_order is None
         event = {
             "cycle_ts_utc": cycle_ts,
             "strategy_id": STRATEGY_ID,
@@ -760,6 +848,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             "obs_age_in_backtest_band": bool(obs_age_in_backtest_band),
             "book_age_min": round(book_age, 2) if math.isfinite(book_age) else None,
             "minutes_since_running_max": rec.get("minutes_since_running_max"),
+            "minutes_to_next_obs": rec.get("minutes_to_next_obs"),
             "d_tmpf_1h": rec.get("d_tmpf_1h"),
             "d_tmpf_3h": rec.get("d_tmpf_3h"),
             "sky_code_now": rec.get("sky_code_now"),
@@ -809,10 +898,11 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             else:
                 blocker = live_guard_reason(event)
 
-            order_cost = float(args.shares) * direct_yes_ask if math.isfinite(direct_yes_ask) else math.inf
-            if not blocker and daily_order_count + live_planned >= int(args.max_orders_per_day):
+            event_plans = build_live_plans(event, args, cycle_dt) if not blocker else []
+            order_cost = sum(to_float(plan.get("order_notional_cap"), 0.0) for plan in event_plans)
+            if not blocker and daily_order_count + live_planned + len(event_plans) > int(args.max_orders_per_day):
                 blocker = "strategy_daily_order_cap"
-            if not blocker and daily_cost + sum(to_float(p.get("notional"), 0.0) for p in plans) + order_cost > float(args.max_daily_cost_usd) + 1e-9:
+            if not blocker and daily_cost + sum(to_float(p.get("order_notional_cap"), 0.0) for p in plans) + order_cost > float(args.max_daily_cost_usd) + 1e-9:
                 blocker = "strategy_daily_cost_cap"
             if not blocker and not (args.live and args.confirm_live):
                 blocker = "live_not_requested"
@@ -822,9 +912,9 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 event["live_blocker"] = blocker
                 shadow_first += 1
             else:
-                event["execution_mode"] = "tiny_live_taker_5shares"
-                plans.append(build_live_plan(event, args, cycle_dt))
-                live_planned += 1
+                event["execution_mode"] = "tiny_live_split_5_taker_5_maker"
+                plans.extend(event_plans)
+                live_planned += len(event_plans)
         events.append(event)
         if is_first and not args.dry_run:
             candidate_position = {
@@ -839,9 +929,12 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 "orderbook_file": rel(ob_file) if ob_file else None,
                 "execution_mode": event["execution_mode"],
                 "live_blocker": event["live_blocker"],
+                "planned_taker_shares": float(args.shares),
+                "planned_maker_shares": float(args.maker_shares),
+                "planned_total_shares": float(args.shares) + float(args.maker_shares),
                 "settled": False,
             }
-            if event["execution_mode"] == "tiny_live_taker_5shares":
+            if event["execution_mode"] == "tiny_live_split_5_taker_5_maker":
                 # A failed submit must not consume the city-date.  Promote the
                 # position only after the durable live ledger proves success.
                 pending_live_positions[pos_key] = candidate_position
@@ -907,15 +1000,37 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
             )
             live_rows = successful_live_orders()
             for pos_key, position in pending_live_positions.items():
-                order = matching_live_order(
+                submitted_order = matching_live_order(
                     city=str(position.get("city") or ""),
                     target_date=str(position.get("target_date") or ""),
                     bracket=str(position.get("d1_bracket") or ""),
                     rows=live_rows,
+                    child_roles={"single", "taker", "maker"},
                 )
-                if order is None:
+                if submitted_order is None:
                     continue
-                apply_live_fill_basis(position, order)
+                taker_order = matching_live_order(
+                    city=str(position.get("city") or ""),
+                    target_date=str(position.get("target_date") or ""),
+                    bracket=str(position.get("d1_bracket") or ""),
+                    rows=live_rows,
+                    child_roles={"single", "taker"},
+                )
+                if taker_order is not None:
+                    apply_live_fill_basis(position, taker_order)
+                else:
+                    position.update(
+                        {
+                            "position_shares": 0.0,
+                            "entry_cost_usd": 0.0,
+                            "entry_cost_with_fee": 0.0,
+                            "clob_order_id": str(
+                                ((submitted_order.get("exchange_response") or {}).get("place") or {}).get("orderID")
+                                or ""
+                            ),
+                            "pnl_basis": "canonical_fill_reconcile_required_for_maker_child",
+                        }
+                    )
                 positions[pos_key] = position
                 new_positions += 1
         for event in events:
@@ -962,7 +1077,9 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "live_requested": bool(args.live),
         "live_enabled": bool(args.live and args.confirm_live),
         "live_policy": {"Taipei": "zero_notional_shadow", "other_cities": "live_if_exact_and_executable"},
-        "fixed_order_shares": float(args.shares),
+        "taker_shares": float(args.shares),
+        "maker_shares": float(args.maker_shares),
+        "target_total_shares_per_signal": float(args.shares) + float(args.maker_shares),
         "max_orders_per_day": int(args.max_orders_per_day),
         "max_daily_cost_usd": float(args.max_daily_cost_usd),
         "live_orders_before_cycle_today": daily_order_count,
