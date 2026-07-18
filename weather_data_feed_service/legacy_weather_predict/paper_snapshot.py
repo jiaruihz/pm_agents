@@ -776,6 +776,13 @@ def _cached_live_forecast(city, target_date, model):
     return dict(cached) if cached is not None else None
 
 
+def should_capture_forecast_curve(forecast_info):
+    """Cached PIT curves are references, not a new source observation."""
+    return bool(forecast_info.get("hourly_curve")) and not bool(
+        forecast_info.get("cache_fallback")
+    )
+
+
 def _fetch_live_forecast(client, model, city, cfg, target_date):
     global _FORECAST_LIVE_DISABLED_REASON
     url = f"https://api.open-meteo.com/v1/{model}"
@@ -1296,6 +1303,8 @@ def main():
     all_records = []
     forecast_curve_rows = []
     forecast_curve_seen = set()
+    cached_forecast_refs = []
+    cached_forecast_seen = set()
     forecast_city_target_expected = 0
 
     for city, cfg in CITIES.items():
@@ -1377,6 +1386,19 @@ def main():
                         forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
             if forecast_info.get("cache_fallback"):
                 fallback_reasons.append("forecast_live_fetch_unavailable_cached_curve")
+                cache_key = (city, target_date, str(forecast_info.get("source_model") or model))
+                if cache_key not in cached_forecast_seen:
+                    cached_forecast_seen.add(cache_key)
+                    cached_forecast_refs.append(
+                        {
+                            "city": city,
+                            "target_date": target_date,
+                            "forecast_model": cache_key[2],
+                            "forecast_source": forecast_info.get("source_api"),
+                            "forecast_detected_at_utc": forecast_info.get("detected_at_utc"),
+                            "cache_age_sec": forecast_info.get("cache_age_sec"),
+                        }
+                    )
             probability_status = (
                 "cached_forecast_market_snapshot_only"
                 if forecast_info.get("cache_fallback")
@@ -1417,7 +1439,10 @@ def main():
 
             actual_model = str(forecast_info.get("source_model") or model)
             curve_key = (city, target_date, actual_model, forecast_info.get("values_hash"))
-            if forecast_info.get("hourly_curve") and curve_key not in forecast_curve_seen:
+            if (
+                should_capture_forecast_curve(forecast_info)
+                and curve_key not in forecast_curve_seen
+            ):
                 forecast_curve_seen.add(curve_key)
                 forecast_curve_rows.append(
                     build_curve_row(
@@ -1724,6 +1749,15 @@ def main():
         forecast_curve_rows,
         expected_city_target_count=forecast_city_target_expected,
     )
+    source_model_summary["cached_curve_fallback_count"] = len(cached_forecast_refs)
+    source_model_summary["cached_curve_fallback_examples"] = cached_forecast_refs[:10]
+    source_model_summary["effective_city_target_count"] = (
+        source_model_summary["captured_city_target_count"] + len(cached_forecast_refs)
+    )
+    source_model_summary["missing_count"] = max(
+        0,
+        forecast_city_target_expected - source_model_summary["effective_city_target_count"],
+    )
     out_file = OUTPUT_DIR / fname if publish_quality["publishable"] else PARTIAL_OUTPUT_DIR / partial_fname
     output = {
         "ts_beijing": now_beijing.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1743,7 +1777,7 @@ def main():
     with open(out_file, "w") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
     forecast_curve_archive = None
-    if publish_quality["publishable"]:
+    if publish_quality["publishable"] and forecast_curve_rows:
         forecast_curve_archive = write_forecast_hourly_curve_capture(OUTPUT_ROOT, forecast_curve_rows)
 
     # Print summary

@@ -68,3 +68,12 @@ def test_forecast_429_disables_repeated_live_calls(monkeypatch) -> None:
     assert second["cache_fallback"] is True
     assert runner._FORECAST_LIVE_DISABLED_REASON == "open_meteo_http_429"
     assert len(calls) == 1
+
+
+def test_cached_curve_is_not_recaptured_as_new_forecast_evidence() -> None:
+    assert runner.should_capture_forecast_curve(
+        {"hourly_curve": [{"temperature_f": 70.0}], "cache_fallback": False}
+    )
+    assert not runner.should_capture_forecast_curve(
+        {"hourly_curve": [{"temperature_f": 70.0}], "cache_fallback": True}
+    )
