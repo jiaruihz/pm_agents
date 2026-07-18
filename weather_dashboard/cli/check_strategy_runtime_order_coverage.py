@@ -51,16 +51,31 @@ def check_file(conn: sqlite3.Connection, path: Path) -> dict[str, Any]:
     ]
     unique_ids = sorted(set(raw_execution_ids))
     found = _db_execution_ids(conn, unique_ids) if unique_ids else set()
-    missing = [execution_id for execution_id in unique_ids if execution_id not in found]
-    submitted = sum(1 for row in rows if str(row.get("status") or "").strip() == "submitted")
+    submitted_ids = sorted(
+        {
+            str(row.get("execution_id") or "").strip()
+            for row in rows
+            if str(row.get("execution_id") or "").strip()
+            and str(row.get("live_submit_status") or row.get("order_status") or row.get("status") or "").strip()
+            == "submitted"
+        }
+    )
+    missing = [execution_id for execution_id in submitted_ids if execution_id not in found]
+    missing_non_submitted = [
+        execution_id
+        for execution_id in unique_ids
+        if execution_id not in found and execution_id not in submitted_ids
+    ]
     return {
         "path": str(path),
         "raw_rows": len(rows),
         "raw_execution_ids": len(unique_ids),
-        "raw_submitted_rows": submitted,
+        "raw_submitted_rows": len(submitted_ids),
         "db_orders_found": len(found),
         "missing_orders": len(missing),
         "sample_missing_execution_ids": missing[:20],
+        "missing_non_submitted_attempts": len(missing_non_submitted),
+        "sample_missing_non_submitted_execution_ids": missing_non_submitted[:20],
     }
 
 
