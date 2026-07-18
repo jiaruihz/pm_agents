@@ -363,6 +363,72 @@ def test_live_order_check_separates_historical_duplicates_from_current_risk(tmp_
     assert report["current_yes_no_conflict_count"] == 0
 
 
+def test_live_order_check_excludes_blocked_attempts_from_current_risk(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
+    blocked = {
+        "strategy_instance": "d1_yes_high_mid_live_v1",
+        "city": "Madrid",
+        "target_date": "2026-07-18",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "status": "blocked",
+        "execution_policy": "d1_yes_high_mid_taker_v1",
+        "child_order_role": "d1_maker_next_observation_taker_fallback",
+    }
+    path.write_text(json.dumps(blocked) + "\n" + json.dumps(blocked) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 7, 18, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 0
+    assert report["duplicate_current_strategy_city_token_count"] == 0
+
+
+def test_live_order_check_allows_authorized_taker_maker_split(tmp_path):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    path = live_dir / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
+    base = {
+        "strategy_instance": "d1_yes_high_mid_live_v1",
+        "city": "Madrid",
+        "target_date": "2026-07-18",
+        "token_id": "yes-token",
+        "signal_side": "BUY_YES",
+        "order_side": "BUY",
+        "status": "submitted",
+    }
+    taker = {
+        **base,
+        "execution_policy": "d1_yes_high_mid_taker_v1",
+        "child_order_role": "taker",
+        "exchange_response": {"place": {"success": True, "status": "matched", "orderID": "taker-order"}},
+    }
+    maker = {
+        **base,
+        "execution_policy": "d1_yes_high_mid_maker_v1",
+        "child_order_role": "maker",
+        "exchange_response": {"place": {"success": True, "status": "matched", "orderID": "maker-order"}},
+    }
+    path.write_text(json.dumps(taker) + "\n" + json.dumps(maker) + "\n", encoding="utf-8")
+
+    report = check_live_orders(
+        live_dir,
+        tail_rows=10,
+        all_files=True,
+        now_utc=datetime(2026, 7, 18, tzinfo=timezone.utc),
+    )
+
+    assert report["effective_current_or_future_rows"] == 2
+    assert report["duplicate_current_strategy_city_token_count"] == 0
+
+
 def test_live_order_check_flags_current_duplicate_and_yes_no_conflict(tmp_path):
     live_dir = tmp_path / "live"
     live_dir.mkdir()

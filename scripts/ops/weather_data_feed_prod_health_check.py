@@ -44,6 +44,7 @@ DEFAULT_SUMMARY_FILES = (
     Path("low_price_yes_lottery_tiny_live_v1/latest_summary.json"),
     Path("regime_routed_no_shadow_v1/latest_summary.json"),
     Path("late_window_residual_split_v1/latest_summary.json"),
+    Path("d1_yes_high_mid_live_v1/latest_summary.json"),
 )
 DEFAULT_LIVE_DIR = ROOT / "runtime/weather_edge_v1/live"
 ACTIVE_LIVE_ORDER_PATTERNS: tuple[str, ...] = (
@@ -51,6 +52,7 @@ ACTIVE_LIVE_ORDER_PATTERNS: tuple[str, ...] = (
 )
 ACTIVE_RUNTIME_LIVE_ORDER_FILES = (
     Path("late_window_residual_split_v1/live_orders.jsonl"),
+    Path("d1_yes_high_mid_live_v1/live_orders.jsonl"),
 )
 SNAPSHOT_SCHEMA_VERSION = "weather_data_feed_snapshot_v1"
 
@@ -158,7 +160,7 @@ def is_effective_live_order(row: dict[str, Any], *, today_utc: str) -> bool:
     exchange = row.get("exchange_response") if isinstance(row.get("exchange_response"), dict) else {}
     place = exchange.get("place") if isinstance(exchange.get("place"), dict) else {}
     place_status = str(place.get("status") or "").lower()
-    if status in {"failed", "error", "rejected", "cancelled", "canceled"}:
+    if status in {"failed", "error", "rejected", "cancelled", "canceled", "blocked"}:
         return False
     if place_status in {"failed", "error", "rejected", "cancelled", "canceled"}:
         return False
@@ -625,7 +627,16 @@ def check_live_orders(
     ]
     duplicate_current_intents, current_intent_examples = duplicate_examples(
         effective_rows,
-        ("strategy_instance", "city", "target_date", "token_id", "signal_side", "order_side"),
+        (
+            "strategy_instance",
+            "city",
+            "target_date",
+            "token_id",
+            "signal_side",
+            "order_side",
+            "execution_policy",
+            "child_order_role",
+        ),
     )
     market_groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
     for row in effective_rows:
