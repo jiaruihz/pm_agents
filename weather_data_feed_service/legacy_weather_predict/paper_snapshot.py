@@ -90,6 +90,12 @@ ORDERBOOK_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_C
 ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_ORDERBOOK_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
 WEATHER_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_WEATHER_CURL_TIMEOUT_SEC", "5.0"))
 WEATHER_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_WEATHER_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
+FORECAST_CURVE_CACHE_MAX_AGE_SEC = float(
+    os.environ.get("WEATHER_DATA_FEED_FORECAST_CURVE_CACHE_MAX_AGE_SEC", "21600")
+)
+FORECAST_CURVE_CACHE_MAX_FILES = int(
+    os.environ.get("WEATHER_DATA_FEED_FORECAST_CURVE_CACHE_MAX_FILES", "8")
+)
 PM_CURL_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_PM_CURL_TIMEOUT_SEC", "5.0"))
 PM_CURL_CONNECT_TIMEOUT_SEC = float(os.environ.get("WEATHER_DATA_FEED_PM_CURL_CONNECT_TIMEOUT_SEC", "2.0"))
 ALLOW_EMPTY_SNAPSHOT = os.environ.get("WEATHER_DATA_FEED_ALLOW_EMPTY_SNAPSHOT", "0") == "1"
@@ -98,6 +104,7 @@ MIN_SNAPSHOT_CITIES = int(os.environ.get("WEATHER_DATA_FEED_MIN_SNAPSHOT_CITIES"
 MIN_SNAPSHOT_CITY_DATE_PAIRS = int(os.environ.get("WEATHER_DATA_FEED_MIN_SNAPSHOT_CITY_DATE_PAIRS", "35"))
 
 BASE_SHARES = 10
+_FORECAST_CURVE_CACHE: dict[tuple[str, str, str], dict] | None = None
 
 
 def snapshot_publish_quality(records):
@@ -684,6 +691,90 @@ def _forecast_details_from_open_meteo(payload, *, source_model):
     }
 
 
+def _forecast_details_from_curve_row(row, *, cache_age_sec):
+    hourly_curve = row.get("hourly_curve") if isinstance(row.get("hourly_curve"), list) else []
+    if not hourly_curve or row.get("forecast_max_f") is None:
+        return None
+    source_model = str(row.get("forecast_model") or "").lower()
+    source_api = str(row.get("forecast_source") or f"open_meteo_live_{source_model}")
+    return {
+        "max_f": float(row["forecast_max_f"]),
+        "peak_time_local": row.get("forecast_peak_time_local"),
+        "peak_hour_local": row.get("forecast_peak_hour_local"),
+        "peak_time_utc": row.get("forecast_peak_time_utc"),
+        "peak_hour_utc": row.get("forecast_peak_hour_utc"),
+        "hourly_count": int(row.get("forecast_hourly_count") or len(hourly_curve)),
+        "values_hash": str(row.get("forecast_values_hash") or _forecast_values_hash(hourly_curve)),
+        "hourly_curve": hourly_curve,
+        "source_model": source_model,
+        "source_api": f"{source_api}_cached_curve",
+        "timezone": row.get("forecast_timezone"),
+        "timezone_abbreviation": row.get("forecast_timezone_abbreviation"),
+        "utc_offset_seconds": int(row.get("forecast_utc_offset_seconds") or 0),
+        "generationtime_ms": row.get("forecast_generationtime_ms"),
+        "detected_at_utc": row.get("snapshot_ts_utc"),
+        "cache_fallback": True,
+        "cache_age_sec": round(float(cache_age_sec), 3),
+    }
+
+
+def _load_forecast_curve_cache():
+    global _FORECAST_CURVE_CACHE
+    if _FORECAST_CURVE_CACHE is not None:
+        return _FORECAST_CURVE_CACHE
+    cache = {}
+    root = OUTPUT_ROOT / "forecast_hourly_curves"
+    now_ts = time.time()
+    files = sorted(
+        root.rglob("forecast_hourly_curves*.jsonl") if root.exists() else [],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )[: max(1, FORECAST_CURVE_CACHE_MAX_FILES)]
+    for path in files:
+        age_sec = max(0.0, now_ts - path.stat().st_mtime)
+        if age_sec > FORECAST_CURVE_CACHE_MAX_AGE_SEC:
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                row = json.loads(line)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            key = (
+                str(row.get("city") or ""),
+                str(row.get("target_date") or ""),
+                str(row.get("forecast_model") or "").lower(),
+            )
+            if not all(key) or key in cache:
+                continue
+            row_age_sec = age_sec
+            try:
+                row_ts = datetime.fromisoformat(
+                    str(row.get("snapshot_ts_utc") or "").replace("Z", "+00:00")
+                )
+                row_age_sec = max(
+                    0.0,
+                    datetime.now(timezone.utc).timestamp() - row_ts.timestamp(),
+                )
+            except (TypeError, ValueError):
+                pass
+            if row_age_sec > FORECAST_CURVE_CACHE_MAX_AGE_SEC:
+                continue
+            details = _forecast_details_from_curve_row(row, cache_age_sec=row_age_sec)
+            if details is not None:
+                cache[key] = details
+    _FORECAST_CURVE_CACHE = cache
+    return cache
+
+
+def _cached_live_forecast(city, target_date, model):
+    cached = _load_forecast_curve_cache().get((str(city), str(target_date), str(model).lower()))
+    return dict(cached) if cached is not None else None
+
+
 def _fetch_live_forecast(client, model, city, cfg, target_date):
     url = f"https://api.open-meteo.com/v1/{model}"
     params = {
@@ -704,7 +795,7 @@ def _fetch_live_forecast(client, model, city, cfg, target_date):
             return _forecast_details_from_open_meteo(payload, source_model=model)
     except:
         pass
-    return None
+    return _cached_live_forecast(city, target_date, model)
 
 
 def fetch_live_gfs(client, city, cfg, target_date):
@@ -1279,7 +1370,13 @@ def main():
                         fallback_reasons.append("error_distribution_unavailable")
                         cycle_hour, model_run_age = estimate_model_cycle(now_utc_hour, model)
                         forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
-            probability_status = "ok" if errors is not None else "missing_error_distribution"
+            if forecast_info.get("cache_fallback"):
+                fallback_reasons.append("forecast_live_fetch_unavailable_cached_curve")
+            probability_status = (
+                "cached_forecast_market_snapshot_only"
+                if forecast_info.get("cache_fallback")
+                else ("ok" if errors is not None else "missing_error_distribution")
+            )
             # Fetch PM event
             city_slug = cfg.get("slug", city.lower())
             dt = datetime.strptime(target_date, "%Y-%m-%d")
