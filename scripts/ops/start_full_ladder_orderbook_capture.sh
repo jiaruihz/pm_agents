@@ -15,7 +15,7 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
-SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
+SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$PROJECT_DIR}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data_feed_service_runtime}"
 OUTPUT_ROOT="${WEATHER_FULL_LADDER_OUTPUT_ROOT:-$RUNTIME_ROOT/full_ladder_output}"
 CACHE_ROOT="${WEATHER_FULL_LADDER_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
