@@ -352,9 +352,9 @@ first_observed_permission_error_utc = 2026-07-10T15:49:55Z (intermittent)
 last_successful_fast_source_state_utc = 2026-07-17T21:19:59Z
 continuous_coverage_gap_start_utc = 2026-07-17T21:19:59Z
 affected_live_cities = Busan,Helsinki,Singapore,Tokyo
-observed_cross_events_in_bj_day = 0
-observed_orders_in_bj_day = 0
-observed_fills_in_bj_day = 0
+observed_cross_events_at_diagnosis = 0
+observed_orders_at_diagnosis = 0
+observed_fills_at_diagnosis = 0
 failed_child_cycles_seen_at_diagnosis = 4741
 counterfactual_missed_signals = unobservable_without_the_missing_source_prints
 ```
@@ -376,8 +376,35 @@ Correction:
 - Every core JRS launcher performs a write probe from inside the target tmux server before starting.
 - A non-zero runway/high-frequency child exit terminates the collector loop instead of being swallowed.
 - Production health and live patrol include high-frequency producer state freshness.
-- Production restore remains pending explicit approval because restoring the collector can re-enable
-  real order submission by live consumers.
+- Production was restored after explicit approval. The old `weather-jrs`, `weather-full-ladder`,
+  default-tmux, screen, and LaunchAgent JRS entries were stopped; all active JRS consumers were
+  recreated on the canonical server from the clean deploy checkout.
+
+Recovery and post-restore live-action audit:
+
+```text
+fast_observation_recovered_at_utc = 2026-07-18T05:32:10.937771Z
+fast_observation_continuous_gap = 2026-07-17T21:19:59.941052Z..2026-07-18T05:32:10.937771Z (8h12m11s)
+d1_live_cycle_recovered_at_utc = 2026-07-18T05:35:23Z
+d1_live_cycle_gap = 2026-07-17T21:19:50Z..2026-07-18T05:35:23Z (8h15m33s)
+canonical_tmux_sessions = 19 sessions / 20 panes, pane_dead=0
+legacy_jrs_process_contexts_remaining = 0
+post_restore_submit_failures = 0
+post_restore_live_actions = 6 submitted child orders across 3 signals: 5 matched, 1 canceled unfilled
+cross_busan_2026-07-18 = 10 NO matched @ 0.818 + 5 NO maker matched @ 0.817; cost $12.265
+heat_h1_tokyo_2026-07-18 = 5 YES matched @ 0.973 + 5 YES maker canceled @ 0.942 + 5 YES replacement matched @ 0.973; fill cost $9.73
+heat_h2_kualalumpur_2026-07-18 = 5 YES matched @ 0.92; cost $4.60
+post_restore_total_fills = 30 shares; cash cost $26.595
+full_ladder_first_complete_after_restore = snapshot_20260718_1332.json, rc=0
+focused_chain_tests = 134 passed
+fix_commits = fcc84094,1bda3832,74b1f98f,aae767bc
+```
+
+The Busan, Tokyo, and Kuala Lumpur orders were ordinary pre-existing live-policy signals after data
+recovery, not deployment test orders. Busan respected the `10 taker + 5 maker` per-market share cap;
+Tokyo respected H1's `5 taker + 5 maker` cap, with the initial maker canceled before replacement;
+Kuala Lumpur respected the H2 fixed `5 shares` cap. No order was submitted for Atlanta, Miami, or
+San Francisco after their downgrade to zero-notional shadow.
 
 Resolution / restored probe:
 
