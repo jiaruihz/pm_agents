@@ -692,28 +692,46 @@ def build_analysis(args: argparse.Namespace) -> dict[str, Any]:
             "ask_size": as_float(event.get(size_field)),
             "research_status": "post_hypothesis_interpretable_router_not_frozen",
         })
-    router_cost = sum(float(r["cost_with_fee_buffer"]) for r in physical_router_rows)
-    router_pnl = sum(float(r["realized_pnl_per_share"]) for r in physical_router_rows)
-    router_by_date: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
-    for row in physical_router_rows:
-        router_by_date[row["target_date"]][0] += float(row["realized_pnl_per_share"])
-        router_by_date[row["target_date"]][1] += float(row["cost_with_fee_buffer"])
-    router_best_date = max(router_by_date, key=lambda d: router_by_date[d][0]) if router_by_date else None
-    physical_router_summary = [{
-        "router": "ceiling_exhausted=currentYES; ceiling_0.25_to_1.25C=d1YES; ceiling_above_1.25C=currentNO",
-        "cities": "Helsinki,Tokyo", "rows": len(physical_router_rows),
-        "dates": len(router_by_date),
-        "expression_counts": json.dumps(Counter(r["expression"] for r in physical_router_rows), sort_keys=True),
-        "win_rate": mean(r["label"] for r in physical_router_rows),
-        "fee_buffer_roi": router_pnl / router_cost if router_cost else None,
-        "best_date": router_best_date,
-        "top_date_removed_roi": (
-            (router_pnl - router_by_date[router_best_date][0]) /
-            (router_cost - router_by_date[router_best_date][1])
-            if router_best_date and router_cost > router_by_date[router_best_date][1] else None
+    def summarize_physical_router(
+        rows: list[dict[str, Any]], router: str, verdict_boundary: str
+    ) -> dict[str, Any]:
+        cost = sum(float(row["cost_with_fee_buffer"]) for row in rows)
+        pnl = sum(float(row["realized_pnl_per_share"]) for row in rows)
+        by_date: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
+        for row in rows:
+            by_date[row["target_date"]][0] += float(row["realized_pnl_per_share"])
+            by_date[row["target_date"]][1] += float(row["cost_with_fee_buffer"])
+        best_date = max(by_date, key=lambda date: by_date[date][0]) if by_date else None
+        return {
+            "router": router,
+            "cities": "Helsinki,Tokyo", "rows": len(rows),
+            "dates": len(by_date),
+            "expression_counts": json.dumps(Counter(row["expression"] for row in rows), sort_keys=True),
+            "win_rate": mean(row["label"] for row in rows),
+            "fee_buffer_roi": pnl / cost if cost else None,
+            "best_date": best_date,
+            "top_date_removed_roi": (
+                (pnl - by_date[best_date][0]) / (cost - by_date[best_date][1])
+                if best_date and cost > by_date[best_date][1] else None
+            ),
+            "verdict_boundary": verdict_boundary,
+        }
+
+    physical_two_leg_rows = [
+        row for row in physical_router_rows if row["expression"] in {"current_yes", "current_no"}
+    ]
+    physical_router_summary = [
+        summarize_physical_router(
+            physical_router_rows,
+            "ceiling_exhausted=currentYES; ceiling_0.25_to_1.25C=d1YES; ceiling_above_1.25C=currentNO",
+            "post-hypothesis; only four dates; reported as mechanism diagnostic, not policy",
         ),
-        "verdict_boundary": "post-hypothesis; only four dates; reported as mechanism diagnostic, not policy",
-    }]
+        summarize_physical_router(
+            physical_two_leg_rows,
+            "ceiling_exhausted=currentYES; ceiling_0.25_to_1.25C=no_trade; ceiling_above_1.25C=currentNO",
+            "clean two-leg candidate; post-hypothesis and only four dates; do not freeze or live",
+        ),
+    ]
 
     scorecard: list[dict[str, Any]] = []
     source_prior = {

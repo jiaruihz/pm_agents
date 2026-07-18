@@ -10,11 +10,26 @@
 
 现在还回答不了“更新后固定交易哪条腿”。在 Helsinki/FMI、Tokyo/JMA 两个主城市和 Istanbul/MGM 负面对照上，canonical 已结算且 first-seen 后有 direct ask 的同一批事件只有 **4 个全局 target dates**：固定全买 `T YES` 扣官方 fee 和 1c buffer 后 ROI `-28.9%`，固定全买 `T NO` `-1.36%`，固定全买 `T+1 YES` `-9.27%`。也就是说，generic cross 后三条腿都不是策略。
 
-物理上目前最像样的候选路由是：更新到 `T` 后，forecast ceiling 已不高于 `T+0.25°C` 时偏 `T YES`；ceiling 仍高于 `T+1.25°C` 时偏 `T NO`；中间区间观察 `T+1 YES`。但这个**事后定义的**干净路由在 Helsinki+Tokyo 只有 `34` 行 / `4` 天，fee+buffer ROI `+2.61%`，去掉最好一天立刻变成 `-2.35%`。不能冻结成 shadow 策略。
+目前唯一值得继续验证的干净方向是 **current 档 stop-vs-overshoot 两腿路由**：更新到 `T` 后，forecast ceiling 已不高于 `T+0.25°C` 时研究买 `T YES`；ceiling 仍高于 `T+1.25°C` 时研究买 `T NO`；中间区间不交易。这个事后定义的两腿候选在 Helsinki+Tokyo 只有 `26` 行 / `4` 天，fee+buffer ROI `+7.15%`，去掉最好一天 `+1.43%`。它比包含 `T+1 YES` 的三腿版本更干净，但仍只有 4 天，不能冻结成 shadow 策略。
 
 模型层也给出同样答案：天气/path 单独没有打赢 market；加入 current/d1 sibling 几何后，current-stop Brier 从 market 的 `0.1047` 小幅降到 `0.0908`，overshoot 从 `0.1566` 降到 `0.1341`，但只有 4 天，而且把 OOF 概率实际转成 `T YES/T NO/T+1 YES` 三选一后 ROI 是 **-31.6%**，去掉最好一天 `-61.8%`。`T+1 YES` 尤其失败：market Brier `0.1054`，weather/path `0.1816`，weather+geometry `0.1636`，明显不如 market。
 
-所以当前动作是：继续采 `T/T+1` sibling direct book 和 PIT path；不启动 expression shadow。下一轮最值得复核的是少数城市的 **ceiling-vs-new-T current-leg router**，不是 cross-NO，也不是固定 d1 YES。
+所以当前动作是：继续采 `T/T+1` sibling direct book 和 PIT path；不启动 expression shadow。下一轮只复核少数城市的 **ceiling-vs-new-T current YES/NO 两腿路由**，不是 cross-NO，也不是固定 d1 YES。
+
+## 策略方向
+
+```text
+event: PIT source first-seen 把 running max 从 T-1 更新到 T
+
+if forecast_ceiling - newly_reached_T <= 0.25°C:
+    candidate = BUY T YES       # 当天更可能停在当前档
+elif forecast_ceiling - newly_reached_T > 1.25°C:
+    candidate = BUY T NO        # 当天更可能继续 overshoot
+else:
+    candidate = NO TRADE        # 不用 T+1 YES 填中间区间
+```
+
+这不是可上线阈值。`0.25/1.25°C` 是本轮事后机制切分，只用于冻结下一版连续概率模型；正式策略必须输出 `P(stop at T)-market` / `P(overshoot)-market` residual，并在新的日期上用 direct ask、fee 和 depth 决定是否交易。
 
 ## 研究对象与数据快照
 
@@ -97,9 +112,10 @@ OOF 是按全局 `target_date` 留一块，beta-smoothed empirical probability�
 
 分城只有 Tokyo `T NO` 是正点估 `+2.29%`，但仍是同 4 天中的单城切片；Helsinki `T NO` 为 `-7.74%`。这不能作为按城市 ROI 选 Tokyo 的依据。
 
-### 两个执行反证
+### 执行检验
 
-- 可解释的 ceiling router：Helsinki+Tokyo `34` 行 / `4` 天，ROI `+2.61%`；去最好日 `-2.35%`。点估不稳定。
+- 包含中间 `T+1 YES` 的三腿 ceiling router：Helsinki+Tokyo `34` 行 / `4` 天，ROI `+2.61%`；去最好日 `-2.35%`，不稳定。
+- 去掉已失败的 `T+1 YES`、中间区间不交易后，两腿 current YES/NO router：`26` 行 / `4` 天，ROI `+7.15%`；去最好日 `+1.43%`。这是唯一保留的机制候选，但仍是事后切分和极少日期。
 - date-block OOF 三腿最高正 edge router：`34` 个已结算选择 / `4` 天，ROI `-31.6%`；去最好日 `-61.8%`。其中 d1 YES 选择大量亏损，说明“概率切片看起来有结构”没有转化成可执行策略。
 
 因此 actual first-seen 时点不存在已经验证的 fee-adjusted residual。
@@ -131,7 +147,7 @@ OOF 是按全局 `target_date` 留一块，beta-smoothed empirical probability�
 
 - 不启动新 expression shadow；不改任何 live runner。
 - `T+1 YES` 当前按 `reject_expression` 处理：proper score 输 market、全 rows fee+buffer 为负。
-- `T YES/T NO` 保持 research：只保留 ceiling-vs-new-T 和 sibling geometry 的连续 residual，不能变成阈值 hard gate。
+- `T YES/T NO` 保持 research：冻结下一轮为两腿 stop-vs-overshoot 连续 residual，中间状态 no-trade；不能把本轮阈值直接变成 live hard gate。
 - collector 下一版若要真正回答 asynchronous ladder，需要补 event 前 snapshot、T+2、rich PIT path/weather、固定 30s cadence，并同时采 same-city/time non-cross panel。
 - 至少再积累 10 个新的 settled active dates 后，冻结 Helsinki/Tokyo 的 continuous probability model，再看 proper score 和 direct execution；不得把本轮 4 天重新用作 forward。
 
