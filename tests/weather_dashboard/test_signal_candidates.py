@@ -336,6 +336,42 @@ def test_full_linkage(tmp_path, canon_db):
     assert alerts == []
 
 
+def test_live_fill_gets_lineage_anchor_when_snapshot_model_side_differs(tmp_path, canon_db):
+    snap = tmp_path / "snaps"
+    _write_snapshot(
+        snap,
+        "s1.json",
+        "2026-05-08T02:00:00Z",
+        [
+            _rec(
+                side="BUY_NO",
+                hours_to_settle=23.0,
+                entry_price=0.45,
+                yes_best_ask=0.87,
+                no_best_ask=0.21,
+            )
+        ],
+    )
+    _seed_live_fill(canon_db, "0xCID1", "BUY_YES", "2026-05-09", "fill_yes", 0.86, 5, 0.7)
+
+    rows, alerts, _ = build(
+        canon_db,
+        snapshot_dir=snap,
+        paper_orders_path=tmp_path / "none.jsonl",
+        hts_min=22.0,
+        hts_max=24.0,
+        forecast_cache_root=tmp_path / "empty_cache",
+    )
+
+    by_side = {row["side"]: row for row in rows}
+    assert set(by_side) == {"BUY_NO", "BUY_YES"}
+    assert by_side["BUY_YES"]["live_filled"] == 1
+    assert by_side["BUY_YES"]["fill_id"] == "fill_yes"
+    assert by_side["BUY_YES"]["decision_entry_price"] == pytest.approx(0.87)
+    assert by_side["BUY_YES"]["eligible"] == 0
+    assert not any("ORPHAN_LIVE_FILL" in alert for alert in alerts)
+
+
 def test_multiple_orders_and_fills_are_aggregated(tmp_path, canon_db):
     conn = canon_db
     snap = tmp_path / "snaps"

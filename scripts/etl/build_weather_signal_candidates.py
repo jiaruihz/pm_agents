@@ -657,6 +657,7 @@ def _load_universe(
     forecast_index: _ForecastPeakIndex | None = None,
     snapshot_start_date: date | None = None,
     event_date_start: date | None = None,
+    required_lineage_keys: set[tuple[str, str, str]] | None = None,
 ) -> tuple[dict[tuple, _Opportunity], int, int, int]:
     """Stream all snapshots into opportunity accumulators keyed by
     (condition_id, side, event_date). Records missing condition_id are dropped.
@@ -691,12 +692,11 @@ def _load_universe(
                 rec, enriched = forecast_index.enrich(rec)
                 n_forecast_enriched += int(enriched)
             cid = rec.get("condition_id")
-            side = rec.get("side")
             event_date = rec.get("event_date")
             if not cid:
                 n_dropped += 1
                 continue
-            if not side or not event_date:
+            if not event_date:
                 continue
             if event_date_start is not None:
                 try:
@@ -704,12 +704,45 @@ def _load_universe(
                         continue
                 except ValueError:
                     continue
-            key = (cid, side, str(event_date))
-            opp = opps.get(key)
-            if opp is None:
-                opp = _Opportunity(cid, side, str(event_date))
-                opps[key] = opp
-            opp.observe(rec, target_hts, hts_min, hts_max)
+            event_date_text = str(event_date)
+            raw_side = str(rec.get("side") or "").strip()
+            sides = [raw_side] if raw_side else []
+            for expression_side in ("BUY_YES", "BUY_NO"):
+                if (
+                    required_lineage_keys
+                    and (str(cid), expression_side, event_date_text) in required_lineage_keys
+                    and expression_side not in sides
+                ):
+                    sides.append(expression_side)
+            for side in sides:
+                key = (cid, side, event_date_text)
+                opp = opps.get(key)
+                if opp is None:
+                    opp = _Opportunity(cid, side, event_date_text)
+                    opps[key] = opp
+                if side == raw_side:
+                    observation = rec
+                else:
+                    # The snapshot producer's `side` is its own model action,
+                    # not the complete opportunity universe.  Preserve that
+                    # row and add only the expression required by an actual
+                    # paper/live lineage key, using the executable ask for the
+                    # requested side.  This prevents fills from becoming
+                    # orphans without relabeling every no-signal row eligible.
+                    observation = dict(rec)
+                    observation["side"] = side
+                    observation["eligible_for_paper_order"] = False
+                    market_yes_price = _safe_float(rec.get("market_yes_price"))
+                    if side == "BUY_YES":
+                        observation["entry_price"] = _first_present(
+                            rec.get("yes_best_ask"), market_yes_price
+                        )
+                    else:
+                        observation["entry_price"] = _first_present(
+                            rec.get("no_best_ask"),
+                            1.0 - market_yes_price if market_yes_price is not None else None,
+                        )
+                opp.observe(observation, target_hts, hts_min, hts_max)
     return opps, len(files), n_dropped, n_forecast_enriched
 
 
@@ -901,6 +934,12 @@ def build(
     window_label = f"hts_{int(hts_min)}_{int(hts_max)}" if hts_min == int(hts_min) and hts_max == int(hts_max) else f"hts_{hts_min}_{hts_max}"
 
     forecast_index = _ForecastPeakIndex(forecast_cache_root)
+    paper_orders, paper_stats = _load_paper_orders(
+        paper_orders_path,
+        event_date_start=event_date_start,
+    )
+    live_fills = _load_live_fills(conn, event_date_start=event_date_start)
+    required_lineage_keys = set(paper_orders) | set(live_fills)
     opps, n_files, n_dropped, n_forecast_enriched = _load_universe(
         snapshot_dir,
         target_hts,
@@ -909,12 +948,8 @@ def build(
         forecast_index=forecast_index,
         snapshot_start_date=snapshot_start_date,
         event_date_start=event_date_start,
+        required_lineage_keys=required_lineage_keys,
     )
-    paper_orders, paper_stats = _load_paper_orders(
-        paper_orders_path,
-        event_date_start=event_date_start,
-    )
-    live_fills = _load_live_fills(conn, event_date_start=event_date_start)
     settlements = _load_settlements(conn)
     settlement_outcomes = _load_settlement_outcomes(conn)
 
