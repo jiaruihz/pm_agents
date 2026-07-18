@@ -70,17 +70,29 @@ def test_signal_id_dedupes_snapshot_and_bracket() -> None:
     assert live.signal_id(left) == live.signal_id(right)
 
 
-def test_build_plan_is_fixed_five_share_h2_taker_probe() -> None:
+def test_h2_builds_five_taker_plus_five_post_only_maker() -> None:
     _select_h2()
-    plan = live.build_plan(_row(), shares=5, child_order_role="single", live_enabled=True, ttl_min=15)
-    assert plan["record_type"] == "weather_edge_trade_plan"
-    assert plan["signal_side"] == "BUY_YES"
-    assert plan["size"] == 5
-    assert plan["notional"] == 4.2
-    assert plan["maker_only"] is False
-    assert plan["execution_policy"] == "current_yes_heat_death_taker_probe_v1"
-    assert plan["live_enabled"] is True
-    assert plan["risk_status"] == "passed"
+    plans = live.build_opportunity_plans(
+        _row(ask=0.92),
+        taker_shares=5,
+        maker_shares=5,
+        live_enabled=True,
+        ttl_min=15,
+    )
+
+    assert live.HEADS["h2_early_dislocation"]["total_shares"] == 10
+    assert [(plan["child_order_role"], plan["size"]) for plan in plans] == [("taker", 5), ("maker", 5)]
+    taker, maker = plans
+    assert taker["limit_price"] == 0.92
+    assert taker["maker_only"] is False
+    assert maker["limit_price"] == 0.911
+    assert maker["maker_only"] is True
+    assert taker["execution_policy"] == "current_yes_heat_death_taker_probe_v1"
+    assert maker["execution_policy"] == "current_yes_heat_death_maker_probe_v1"
+    assert maker["maker_price_cap"] == 0.92
+    assert taker["signal_id"] == maker["signal_id"]
+    assert taker["allow_duplicate_signal_id"] is True
+    assert maker["allow_duplicate_signal_id"] is True
 
 
 def test_h1_builds_five_taker_plus_five_post_only_maker() -> None:
@@ -184,6 +196,55 @@ def test_h1_maker_chase_falls_back_to_taker_after_window_when_price_not_worse(
     assert plans[0]["maker_only"] is False
     assert plans[0]["limit_price"] == 0.965
     assert plans[0]["cancel_before_order_id"] == "maker-order-1"
+
+
+def test_h2_maker_chase_does_not_fallback_above_initial_ask_cap(tmp_path: Path, monkeypatch) -> None:
+    _select_h2()
+    now = datetime(2026, 7, 18, 6, 0, tzinfo=timezone.utc)
+    maker = live.build_opportunity_plans(
+        _row(city="KualaLumpur", ask=0.92),
+        taker_shares=5,
+        maker_shares=5,
+        live_enabled=True,
+        ttl_min=15,
+        maker_chase_window_min=3,
+    )[1]
+    order = {
+        **maker,
+        "status": "submitted",
+        "created_at_utc": (now - timedelta(minutes=4)).isoformat(),
+        "posted_price": 0.911,
+        "maker_lifecycle_deadline_utc": (now - timedelta(minutes=1)).isoformat(),
+        "exchange_response": {"place": {"orderID": "h2-maker-order-1"}},
+    }
+    live_orders = tmp_path / "live.jsonl"
+    live_orders.write_text(json.dumps(order) + "\n", encoding="utf-8")
+    monkeypatch.setattr(live.shadow, "market_httpx_client", lambda *_args, **_kwargs: nullcontext(object()))
+    monkeypatch.setattr(
+        live.shadow,
+        "_fetch_token_book",
+        lambda *_args, **_kwargs: {
+            "book_status": "ok",
+            "bid": 0.93,
+            "ask": 0.94,
+            "ask_size": 20.0,
+            "tick_size": 0.001,
+        },
+    )
+
+    plans, decisions = live.h1_maker_lifecycle_plans(
+        live_orders=live_orders,
+        latest_rows={("KualaLumpur", "2026-07-14"): _row(city="KualaLumpur", ask=0.92)},
+        live_enabled=True,
+        refresh_sec=30,
+        proxy=None,
+        timeout_sec=5,
+        now=now,
+    )
+
+    assert plans == []
+    assert decisions[0]["action"] == ""
+    assert decisions[0]["blocker"] == "h2_maker_fallback_price_or_depth_not_allowed"
 
 
 def test_h1_maker_chase_cancel_replace_blocks_dust_after_partial_fill(tmp_path: Path) -> None:

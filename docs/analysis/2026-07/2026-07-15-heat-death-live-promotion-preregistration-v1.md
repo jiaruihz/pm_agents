@@ -2,7 +2,7 @@
 
 Status: current-reference（判据冻结文档;改判据必须新开 v2,不许原地改）
 Date: 2026-07-15
-Operational update: 2026-07-16（只改 probe sizing/execution 与 family dedupe，不改晋升判据）
+Operational update: 2026-07-18（用户授权 H2 增加 5-share maker；只改 probe sizing/execution，不改晋升判据）
 Scope: `current_yes_heat_death_physical_v1` 家族的两个入场 regime。判据在读取任何新 forward
 结果之前冻结;之后的 forward 数据只做复核,不回来调这里的阈值。
 
@@ -68,12 +68,13 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
 | 实例 | ask 带 | 其余参数 |
 |---|---|---|
 | `current_yes_heat_death_tiny_live_h1_late_carry_v1` | [0.95, 0.99] | 每个 city-day 共 10 shares：5 taker + 5 maker-first；maker 每 30s 按 fresh book 追到初始 ask 上限，3m 后满足价格/深度条件则 taker fallback；<=3 个 city-day opportunity/UTC 日；TTL 15m |
-| `current_yes_heat_death_tiny_live_h2_early_dislocation_v1` | [0.50, 0.93] | 每个 city-day 5 shares、直接 taker；<=3 个 city-day opportunity/UTC 日；depth>=5；TTL 15m |
+| `current_yes_heat_death_tiny_live_h2_early_dislocation_v1` | [0.50, 0.93] | 每个 city-day 共 10 shares：5 taker + 5 maker-first；maker 每 30s 按 fresh book 追价，3m 后仅在 ask<=首次 ask 且 depth>=5 时 taker fallback；<=3 个 city-day opportunity/UTC 日；taker depth>=5；TTL 15m |
 
 - 0.93-0.95 buffer band 两头都不交易(预注册第 0 节)。
 - H2 的 0.50 下限是无人值守 live probe 的资金安全边界:首确认后 ask 远低于信号隐含概率,
   大概率是 bracket/数据错配而非免费错价;此类行留给 shadow 记录,不用真钱验证。
-- H1 maker 首次在 best bid 上改善一 tick，之后每 30s 读取 fresh book；只在可挂价格提高时撤单重挂，撤单重挂次数不设上限，边界是 3 分钟 chase window 和首次触发 ask price cap。3 分钟后仍未成交时，仅当 fresh ask 不高于首次 ask 且 ask depth>=5，才撤 maker 并对剩余 5 shares taker fallback；否则不为成交而付出比首次直接 taker 更差的价格，原 maker 最迟由 15m TTL 撤销。partial fill 后剩余不足 CLOB 5-share minimum 时只撤不补 dust order。
+- H1/H2 maker 首次在 best bid 上改善一 tick，之后每 30s 读取 fresh book；只在可挂价格提高时撤单重挂，撤单重挂次数不设上限，边界是 3 分钟 chase window 和首次触发 ask price cap。3 分钟后仍未成交时，仅当 fresh ask 不高于首次 ask 且 ask depth>=5，才撤 maker 并对剩余 5 shares taker fallback；否则不为成交而付出比首次直接 taker 更差的价格，原 maker 最迟由 15m TTL 撤销。partial fill 后剩余不足 CLOB 5-share minimum 时只撤不补 dust order。
+- 2026-07-18 H2 maker 扩仓是用户授权的 execution probe 变更，不代表 H2 通过样本/显著性/机制/反事实晋升门；新增 maker fill 与 taker fill 必须保留同 signal 的 paired 血缘。
 - H1/H2 共享 family city-day 去重：任一 head 首先出现 submitted order 后，另一 head 不再为同一 city-day 下单。
   日上限按 opportunity 而不是 child order 计数，因此 H1 的 5 taker + 5 maker 合计只占 1 次。
 - 东亚快源盲窗(hko/jma/amos 未接入 running-high)会推迟首确认时点,对 H2 是入场价劣化;
@@ -90,7 +91,7 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
   `rejected_for_expression`,保留数据与代码,停止该表达的 probe。
 - 连续 30 个交易日样本门仍不满足(H2 可执行首信号行 < 25):结论是采集/市场结构问题,
   回数据层解决,不放宽判据。
-- probe 出现任何一次超出 H1 10 shares、H2 5 shares或任一 head 每 UTC 日 3 个 city-day opportunity 的执行：
+- probe 出现任何一次超出 H1 10 shares、H2 10 shares或任一 head 每 UTC 日 3 个 city-day opportunity 的执行：
   立即暂停 probe，先审计执行链。
 
 ## 6. 当前状态快照(2026-07-16,写入时点)
@@ -100,5 +101,5 @@ expression 行(settled)。probe 在该 regime 的真实 fill 优先计入。
 - H1 历史证据:干净 PIT 重跑后 holdout 只剩 7 行,carry 点估为正但低于样本地板;物理增量在干净数据上仍不存在;
   严格 H1 价格段 paired 只有 5 行/5 天，两边全赢，current YES 因平均入场更便宜而略优；旧 15 行证据作废。
 - canonical 注册:strategy definition、H1/H2 config 与两个 enabled instance 均已落库；H1 新实例当前 0 order/0 fill。
-- H2 历史证据:8 个结算日的 proxy current YES 只有 +0.31%，CI 跨 0；d1 NO 的额外 overshoot 胜率不足覆盖溢价。
+- H2 历史证据:8 个结算日的 proxy current YES 只有 +0.31%，CI 跨 0；d1 NO 的额外 overshoot 胜率不足覆盖溢价。2026-07-18 起用户授权 probe 改为 5 taker + 5 maker，研究 verdict 不变。
 - H2 forward:广州 2026-07-15 先在 14:17 PIT strong signal 显示 current 30 indicative 0.84，legacy probe 于 14:24 成交 `30 YES @0.89 x10`，用户确认最终获胜；fact row 已有 fill，但官方/canonical settlement 尚未写入，因此暂不计 realized PnL。原 instance 血缘不改写，分析归 H2 regime。

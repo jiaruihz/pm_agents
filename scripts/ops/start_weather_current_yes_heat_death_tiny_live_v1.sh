@@ -45,4 +45,4 @@ start_head() {
 }
 
 start_head h1_late_carry 10 5 5
-start_head h2_early_dislocation 5 5 0
+start_head h2_early_dislocation 10 5 5

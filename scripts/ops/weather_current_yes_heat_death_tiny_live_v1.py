@@ -54,14 +54,14 @@ HEADS: dict[str, dict[str, Any]] = {
     },
     "h2_early_dislocation": {
         "instance": "current_yes_heat_death_tiny_live_h2_early_dislocation_v1",
-        "config_id": "current_yes_heat_death_tiny_live_h2_early_dislocation_v2_fixed5",
+        "config_id": "current_yes_heat_death_tiny_live_h2_early_dislocation_v3_split_taker_maker",
         "decision_mode": "early_dislocation_heat_death_strong_current_yes",
         "combo": "current_yes_heat_death_early_dislocation_v1",
         "min_ask": 0.50,
         "max_ask": 0.93,
-        "total_shares": 5.0,
+        "total_shares": 10.0,
         "taker_shares": 5.0,
-        "maker_shares": 0.0,
+        "maker_shares": 5.0,
     },
 }
 # Set from --head at startup; no default on purpose (explicit failure over
@@ -246,7 +246,8 @@ def handled_maker_source_order_ids(live_orders: Path) -> set[str]:
     handled: set[str] = set()
     for row in read_jsonl(live_orders):
         source_order_id = str(row.get("source_order_id") or "")
-        if not source_order_id or not str(row.get("execution_action") or "").startswith("h1_maker_"):
+        action = str(row.get("execution_action") or "")
+        if not source_order_id or not action.startswith(("h1_maker_", "h2_maker_")):
             continue
         response = row.get("exchange_response") if isinstance(row.get("exchange_response"), Mapping) else {}
         if str(response.get("error_classification") or "") in {
@@ -317,7 +318,11 @@ def build_plan(
         "config_id": HEADS[ACTIVE_HEAD]["config_id"],
         "strategy_family": "reheat_risk",
         "decision_mode": HEADS[ACTIVE_HEAD]["decision_mode"],
-        "execution_mode": "tiny_live_split_taker_maker_probe" if ACTIVE_HEAD == "h1_late_carry" else "tiny_live_taker_probe",
+        "execution_mode": (
+            "tiny_live_split_taker_maker_probe"
+            if child_order_role in {"taker", "maker"}
+            else "tiny_live_taker_probe"
+        ),
         "profile": "physical_confirmation_strong_forward_probe",
         "combo": HEADS[ACTIVE_HEAD]["combo"],
         "entry_regime_head": ACTIVE_HEAD,
@@ -344,7 +349,7 @@ def build_plan(
         "quote_tick_size": round(tick_size, 6),
         "quote_mode": quote_mode,
         "maker_only": maker_only,
-        "allow_duplicate_signal_id": ACTIVE_HEAD == "h1_late_carry",
+        "allow_duplicate_signal_id": child_order_role in {"taker", "maker"},
         "order_notional_cap": round(shares * limit_price, 6),
         "size": round(shares, 6),
         "notional": round(shares * limit_price, 6),
@@ -455,7 +460,7 @@ def build_h1_maker_lifecycle_plan(
         "order_side": "BUY",
         "child_order_role": action,
         "limit_price": round(limit_price, 6),
-        "quote_status": "cancel_requested" if action == "h1_maker_cancel_stale_thesis" else "accepted",
+        "quote_status": "cancel_requested" if action.endswith("_cancel_stale_thesis") else "accepted",
         "quote_reason": action,
         "quote_best_bid": finite(order.get("lifecycle_best_bid")) or 0.0,
         "quote_best_ask": finite(order.get("lifecycle_best_ask")) or 0.0,
@@ -478,8 +483,8 @@ def build_h1_maker_lifecycle_plan(
         "source_plan_id": str(order.get("plan_id") or ""),
         "source_posted_price": round(finite(order.get("posted_price")) or 0.0, 6),
         "source_remaining_shares": round(shares, 6),
-        "replacement_requires_order_state": action != "h1_maker_cancel_stale_thesis",
-        "cancel_only": action == "h1_maker_cancel_stale_thesis",
+        "replacement_requires_order_state": not action.endswith("_cancel_stale_thesis"),
+        "cancel_only": action.endswith("_cancel_stale_thesis"),
         "min_order_shares": 5.0,
         "tick_size": round(tick_size, 6),
         "sizing_mode": "fixed_shares",
@@ -517,8 +522,9 @@ def h1_maker_lifecycle_plans(
     timeout_sec: float,
     now: datetime,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    if ACTIVE_HEAD != "h1_late_carry":
+    if ACTIVE_HEAD not in {"h1_late_carry", "h2_early_dislocation"}:
         return [], []
+    action_prefix = "h1_maker" if ACTIVE_HEAD == "h1_late_carry" else "h2_maker"
     handled = handled_maker_source_order_ids(live_orders)
     candidates: list[dict[str, Any]] = []
     for row in read_jsonl(live_orders):
@@ -551,7 +557,7 @@ def h1_maker_lifecycle_plans(
             next_price = 0.0
             maker_only = True
             if not thesis_ok:
-                action = "h1_maker_cancel_stale_thesis"
+                action = f"{action_prefix}_cancel_stale_thesis"
             else:
                 quote = shadow._fetch_token_book(client, str(order.get("token_id") or ""))
                 best_bid = finite(quote.get("bid")) or 0.0
@@ -562,28 +568,28 @@ def h1_maker_lifecycle_plans(
                 posted = finite(order.get("posted_price")) or finite(order.get("limit_price")) or 0.0
                 deadline = parse_utc(order.get("maker_lifecycle_deadline_utc"))
                 if str(quote.get("book_status") or "") != "ok" or best_ask <= 0 or cap <= 0 or deadline is None:
-                    blocker = "h1_maker_bad_fresh_book_or_state"
+                    blocker = f"{action_prefix}_bad_fresh_book_or_state"
                 elif now >= deadline and best_ask <= cap + 1e-9 and ask_size >= 5.0:
-                    action = "h1_maker_taker_fallback"
+                    action = f"{action_prefix}_taker_fallback"
                     next_price = best_ask
                     maker_only = False
                 elif now >= deadline:
-                    blocker = "h1_maker_fallback_price_or_depth_not_allowed"
+                    blocker = f"{action_prefix}_fallback_price_or_depth_not_allowed"
                 elif best_bid > 0 and best_bid < best_ask:
                     next_price = min(best_bid + tick_size, best_ask - tick_size, cap)
                     if next_price > posted + tick_size - 1e-9:
-                        action = "h1_maker_reprice"
+                        action = f"{action_prefix}_reprice"
                     else:
-                        blocker = "h1_maker_already_at_best_allowed_price"
+                        blocker = f"{action_prefix}_already_at_best_allowed_price"
                 else:
-                    blocker = "h1_maker_no_resting_price"
+                    blocker = f"{action_prefix}_no_resting_price"
             lifecycle_order = {
                 **order,
                 "lifecycle_best_bid": best_bid,
                 "lifecycle_best_ask": best_ask,
             }
             decision = {
-                "record_type": "current_yes_heat_death_h1_maker_lifecycle_decision",
+                "record_type": f"current_yes_heat_death_{action_prefix}_lifecycle_decision",
                 "created_at_utc": now.isoformat(timespec="seconds"),
                 "source_order_id": source_order_id,
                 "city": key[0],
@@ -835,7 +841,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "fixed_order_shares": total_shares,
         "taker_order_shares": taker_shares,
         "maker_order_shares": maker_shares,
-        "maker_chase_enabled": ACTIVE_HEAD == "h1_late_carry" and maker_shares > 0,
+        "maker_chase_enabled": maker_shares > 0,
         "maker_chase_refresh_sec": float(args.maker_chase_refresh_sec),
         "maker_chase_window_min": float(args.maker_chase_window_min),
         "maker_chase_reprice_limit": None,
