@@ -920,6 +920,13 @@ def sync_clob_fills(
     summary["checked"] = len(submitted)
     log.info("Found %d submitted polymarket_clob orders.", len(submitted))
 
+    if maker_address is None:
+        # CLOB TradeParams.maker_address is the proxy/funder recorded on the
+        # order, not the EOA signer. Using the signer returns an empty trade
+        # page for signature_type=1 accounts and incorrectly forces the lossy
+        # public-activity fallback.
+        maker_address = _discover_funder(conn)
+
     # --- Build auth CLOB client (optional) ---
     client = _build_clob_client()
 
