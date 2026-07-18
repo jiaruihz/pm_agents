@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${LOW_PRICE_YES_LOTTERY_TMUX_SOCKET:-}")"
 cd "$ROOT"
 
 RUN_MODE="${1:-live}"
@@ -9,6 +11,7 @@ if [[ "$RUN_MODE" != "live" && "$RUN_MODE" != "--shadow" ]]; then
   echo "usage: $0 [--shadow]" >&2
   exit 2
 fi
+TMUX_SESSION="${LOW_PRICE_YES_LOTTERY_TMUX_SESSION:-low_price_yes_lottery_${RUN_MODE#--}_v1}"
 
 RUNTIME_DIR="${LOW_PRICE_YES_LOTTERY_RUNTIME_DIR:-runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1}"
 PID_FILE="$RUNTIME_DIR/loop.pid"
@@ -17,7 +20,10 @@ mkdir -p "$RUNTIME_DIR" "runtime/weather_edge_v1/live"
 
 if [[ "${LOW_PRICE_YES_LOTTERY_LOOP_CHILD:-0}" != "1" && -s "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE")"
-  if kill -0 "$old_pid" 2>/dev/null; then
+  if [[ "$old_pid" == "tmux:$TMUX_SESSION" ]] && tmux -L "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "already_running session=$TMUX_SESSION socket=$TMUX_SOCKET log=$LOG_FILE"
+    exit 0
+  elif [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
     echo "already_running pid=$old_pid log=$LOG_FILE"
     exit 0
   fi
@@ -143,14 +149,18 @@ fi
 
 if [[ "${LOW_PRICE_YES_LOTTERY_LOOP_CHILD:-0}" != "1" ]]; then
   date -u +"[low_price_yes_lottery] loop_start_utc=%Y-%m-%dT%H:%M:%SZ sizing=$LOW_PRICE_YES_LOTTERY_SIZING_POLICY cash_ref=$LOW_PRICE_YES_LOTTERY_NOTIONAL live=$LOW_PRICE_YES_LOTTERY_LIVE proxy=$LOW_PRICE_YES_LOTTERY_MARKET_PROXY" >>"$LOG_FILE"
-  nohup env \
+  tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+  launch_cmd=(env \
+    LOW_PRICE_YES_LOTTERY_LOOP_CHILD=1 \
     LOW_PRICE_YES_LOTTERY_MARKET_PROXY="$LOW_PRICE_YES_LOTTERY_MARKET_PROXY" \
     POLYMARKET_GAMMA_TIMEOUT_SEC="$POLYMARKET_GAMMA_TIMEOUT_SEC" \
     POLYMARKET_GAMMA_RETRIES="$POLYMARKET_GAMMA_RETRIES" \
-    "$PYTHON_BIN" -u "${args[@]}" >>"$LOG_FILE" 2>&1 < /dev/null &
-  pid="$!"
-  echo "$pid" >"$PID_FILE"
-  echo "started low-price YES lottery tiny-live pid=$pid log=$LOG_FILE sizing=$LOW_PRICE_YES_LOTTERY_SIZING_POLICY cash_ref=$LOW_PRICE_YES_LOTTERY_NOTIONAL ask=${LOW_PRICE_YES_LOTTERY_MIN_ASK}-${LOW_PRICE_YES_LOTTERY_MAX_ASK} edge=$LOW_PRICE_YES_LOTTERY_MIN_EDGE live=$LOW_PRICE_YES_LOTTERY_LIVE"
+    "$PYTHON_BIN" -u "${args[@]}")
+  printf -v quoted_launch_cmd '%q ' "${launch_cmd[@]}"
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+    "cd $(printf '%q' "$ROOT") && exec $quoted_launch_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
+  echo "tmux:$TMUX_SESSION" >"$PID_FILE"
+  echo "started low-price YES lottery socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE sizing=$LOW_PRICE_YES_LOTTERY_SIZING_POLICY cash_ref=$LOW_PRICE_YES_LOTTERY_NOTIONAL ask=${LOW_PRICE_YES_LOTTERY_MIN_ASK}-${LOW_PRICE_YES_LOTTERY_MAX_ASK} edge=$LOW_PRICE_YES_LOTTERY_MIN_EDGE live=$LOW_PRICE_YES_LOTTERY_LIVE"
   exit 0
 fi
 

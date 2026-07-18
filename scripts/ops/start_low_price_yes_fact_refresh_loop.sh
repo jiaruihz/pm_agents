@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${LOW_PRICE_YES_FACT_REFRESH_TMUX_SOCKET:-}")"
+TMUX_SESSION="${LOW_PRICE_YES_FACT_REFRESH_TMUX_SESSION:-low_price_yes_fact_refresh}"
 cd "$ROOT"
 
 RUNTIME_DIR="${LOW_PRICE_YES_FACT_REFRESH_RUNTIME_DIR:-runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1}"
@@ -12,7 +15,7 @@ mkdir -p "$RUNTIME_DIR" runtime/weather_edge_v1/market_data/paper_snapshots runt
 
 if [[ "${LOW_PRICE_YES_FACT_REFRESH_CHILD:-0}" != "1" && -s "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE")"
-  if kill -0 "$old_pid" 2>/dev/null; then
+  if [[ "$old_pid" == tmux:* ]] && tmux -L "$TMUX_SOCKET" has-session -t "${old_pid#tmux:}" 2>/dev/null; then
     echo "already_running pid=$old_pid log=$LOG_FILE"
     exit 0
   fi
@@ -31,7 +34,7 @@ DB_PATH="${LOW_PRICE_YES_FACT_REFRESH_DB_PATH:-runtime/weather.db}"
 INTERVAL_SECONDS="${LOW_PRICE_YES_FACT_REFRESH_INTERVAL_SECONDS:-600}"
 
 if [[ "${LOW_PRICE_YES_FACT_REFRESH_CHILD:-0}" != "1" ]]; then
-  nohup env \
+  launch_cmd=(env \
     LOW_PRICE_YES_FACT_REFRESH_CHILD=1 \
     PYTHON_BIN="$PYTHON_BIN" \
     LOW_PRICE_YES_FACT_REFRESH_SNAPSHOT_SRC="$SNAPSHOT_SRC" \
@@ -40,10 +43,13 @@ if [[ "${LOW_PRICE_YES_FACT_REFRESH_CHILD:-0}" != "1" ]]; then
     LOW_PRICE_YES_FACT_REFRESH_CACHE_DST="$CACHE_DST" \
     LOW_PRICE_YES_FACT_REFRESH_DB_PATH="$DB_PATH" \
     LOW_PRICE_YES_FACT_REFRESH_INTERVAL_SECONDS="$INTERVAL_SECONDS" \
-    "$0" >>"$LOG_FILE" 2>&1 < /dev/null &
-  pid="$!"
-  echo "$pid" >"$PID_FILE"
-  echo "started low-price YES fact refresh pid=$pid log=$LOG_FILE interval=${INTERVAL_SECONDS}s"
+    "$0")
+  printf -v quoted_launch_cmd '%q ' "${launch_cmd[@]}"
+  tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+    "cd $(printf '%q' "$ROOT") && exec $quoted_launch_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
+  echo "tmux:$TMUX_SESSION" >"$PID_FILE"
+  echo "started low-price YES fact refresh socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE interval=${INTERVAL_SECONDS}s"
   exit 0
 fi
 

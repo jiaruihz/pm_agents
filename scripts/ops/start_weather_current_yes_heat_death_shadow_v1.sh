@@ -2,11 +2,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
 OUTPUT_DIR="${CURRENT_YES_HEAT_DEATH_OUTPUT_DIR:-$ROOT/runtime/weather_edge_v1/current_yes_heat_death_shadow_v1}"
 SESSION="${CURRENT_YES_HEAT_DEATH_TMUX_SESSION:-${CURRENT_YES_HEAT_DEATH_SCREEN_SESSION:-weather_current_yes_heat_death_shadow_v1}}"
-TMUX_SOCKET="${WEATHER_DATA_FEED_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_DATA_FEED_TMUX_SOCKET:-}")"
 LOG_FILE="$OUTPUT_DIR/runner.log"
 
 mkdir -p "$OUTPUT_DIR"

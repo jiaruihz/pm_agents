@@ -2,10 +2,11 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
 # Reuse the data-feed tmux server so child processes inherit the macOS permission
 # context that can read and write the external JRS runtime volume.
-TMUX_SOCKET="${WEATHER_FAST_PREV_NO_TMUX_SOCKET:-weather-data-feed-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_FAST_PREV_NO_TMUX_SOCKET:-}")"
 TMUX_SESSION="${WEATHER_FAST_PREV_NO_TMUX_SESSION:-weather_fast_source_prev_no_trial}"
 SCREEN_SESSION="${WEATHER_FAST_PREV_NO_SCREEN_SESSION:-weather_fast_source_prev_no_trial}"
 TARGET_DATE="${WEATHER_FAST_PREV_NO_TARGET_DATE:-}"
@@ -30,6 +31,13 @@ ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS="${WEATHER_FAST_PREV_NO_ACKNOWLEDGE_H
 LOG_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.log"
 PID_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.pid"
 START_MODE="${WEATHER_FAST_PREV_NO_START_MODE:-tmux}"
+
+if [[ "$START_MODE" != "tmux" ]]; then
+  echo "JRS fast-source runner must use canonical tmux; requested start mode: $START_MODE" >&2
+  exit 1
+fi
+
+weather_jrs_tmux_write_probe "$TMUX_SOCKET" "$RUNTIME_ROOT"
 
 mkdir -p "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
 
@@ -89,14 +97,9 @@ tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 screen -S "$SCREEN_SESSION" -X quit 2>/dev/null || true
 pkill -f "$PROJECT_DIR/scripts/ops/weather_fast_source_prev_no_trial.py --loop" 2>/dev/null || true
 printf -v quoted_cmd '%q ' "${cmd[@]}"
-if [[ "$START_MODE" == "tmux" ]]; then
-  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
-    "cd $(printf '%q' "$PROJECT_DIR") && set -a && [[ -f .env ]] && source .env || true && set +a && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
-  echo "tmux:$TMUX_SESSION" > "$PID_FILE"
-else
-  screen -dmS "$SCREEN_SESSION" sh -c "cd $(printf '%q' "$PROJECT_DIR") && set -a && { [ ! -f .env ] || . ./.env || true; } && set +a && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
-  echo "screen:$SCREEN_SESSION" > "$PID_FILE"
-fi
+tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+  "cd $(printf '%q' "$PROJECT_DIR") && set -a && [[ -f .env ]] && source .env || true && set +a && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
+echo "tmux:$TMUX_SESSION" > "$PID_FILE"
 
 echo "started fast_source_prev_no_trial mode=$START_MODE"
 echo "target_date=${TARGET_DATE:-auto_today}"

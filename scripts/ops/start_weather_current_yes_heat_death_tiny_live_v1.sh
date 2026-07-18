@@ -6,8 +6,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
-TMUX_SOCKET="${WEATHER_DATA_FEED_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_DATA_FEED_TMUX_SOCKET:-}")"
 
 start_head() {
   local head="$1"

@@ -89,9 +89,16 @@ def evaluate(
     pids: list[int],
     max_latest_age_sec: float,
     failure_threshold: int,
+    fast_source_state: dict[str, Any] | None = None,
+    max_fast_source_age_sec: float = 180.0,
 ) -> dict[str, Any]:
     generated = parse_utc(latest.get("generated_at_utc"))
     latest_age_sec = (now - generated).total_seconds() if generated else None
+    source_updated = parse_utc(
+        (fast_source_state or {}).get("updated_at_utc")
+        or (fast_source_state or {}).get("generated_at_utc")
+    )
+    fast_source_age_sec = (now - source_updated).total_seconds() if source_updated else None
     failures = [row for row in recent_orders if str(row.get("live_submit_status") or "") == "submit_failed"]
     deterministic = [row for row in failures if deterministic_error(row)]
     error_counts: dict[str, int] = {}
@@ -104,6 +111,10 @@ def evaluate(
         reasons.append("runner_process_missing")
     if latest_age_sec is None or latest_age_sec > max_latest_age_sec:
         reasons.append("runner_latest_stale")
+    if fast_source_state is not None and (
+        fast_source_age_sec is None or fast_source_age_sec > max_fast_source_age_sec
+    ):
+        reasons.append("fast_source_state_stale")
     repeated_error = next((key for key, count in error_counts.items() if count >= failure_threshold), "")
     if repeated_error:
         reasons.append(f"repeated_deterministic_submit_failure:{repeated_error}")
@@ -112,6 +123,7 @@ def evaluate(
         "checked_at_utc": now.isoformat(),
         "runner_pids": pids,
         "latest_age_sec": round(latest_age_sec, 3) if latest_age_sec is not None else None,
+        "fast_source_age_sec": round(fast_source_age_sec, 3) if fast_source_age_sec is not None else None,
         "recent_order_attempts": len(recent_orders),
         "recent_submit_failures": len(failures),
         "deterministic_submit_error_counts": error_counts,
@@ -181,6 +193,7 @@ def notify_telegram(health: dict[str, Any], *, state_path: Path) -> dict[str, An
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     latest = read_json(Path(args.runner_dir) / "latest.json")
+    fast_source_state = read_json(Path(args.fast_source_state))
     orders = read_recent_orders(Path(args.runner_dir) / "orders.jsonl", cutoff=now - timedelta(minutes=args.lookback_min))
     health = evaluate(
         now=now,
@@ -189,6 +202,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         pids=runner_pids(),
         max_latest_age_sec=args.max_latest_age_sec,
         failure_threshold=args.failure_threshold,
+        fast_source_state=fast_source_state,
+        max_fast_source_age_sec=args.max_fast_source_age_sec,
     )
     stopped: list[int] = []
     if args.stop_runner_on_submit_failure and health["stop_runner_required"]:
@@ -212,6 +227,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lookback-min", type=float, default=5.0)
     parser.add_argument("--max-latest-age-sec", type=float, default=180.0)
     parser.add_argument("--failure-threshold", type=int, default=3)
+    parser.add_argument(
+        "--fast-source-state",
+        default=str(DEFAULT_RUNTIME_ROOT / "output/high_frequency_observations/state.json"),
+    )
+    parser.add_argument("--max-fast-source-age-sec", type=float, default=180.0)
     parser.add_argument("--stop-runner-on-submit-failure", action="store_true")
     parser.add_argument("--telegram", action="store_true")
     parser.add_argument(

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from scripts.ops.weather_data_feed_prod_health_check import (
     check_forecast_hourly_curves,
+    check_fast_observation_state,
     check_live_orders,
     check_snapshot_city_state_coverage,
     check_snapshot_duplicates,
@@ -46,6 +47,28 @@ def test_prod_health_check_flags_snapshot_duplicates_and_staleness(tmp_path):
     assert report["duplicate_record_count"] == 1
     assert report["snapshot_stale"] is True
     assert report["snapshot_age_min"] == 60.0
+
+
+def test_prod_health_check_fails_stale_fast_observation_state(tmp_path):
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps({"updated_at_utc": "2026-07-18T03:30:00Z"}), encoding="utf-8")
+    report = check_fast_observation_state(
+        state,
+        now_utc=datetime(2026, 7, 18, 4, 0, tzinfo=timezone.utc),
+        max_age_min=3,
+    )
+    assert report["status"] == "stale"
+    assert report["age_min"] == 30.0
+
+    sections = {
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_duplicates": {"duplicate_record_count": 0, "snapshot_stale": False},
+        "fast_observation_state": report,
+        "telemetry": [],
+        "live_orders": {},
+        "summaries": [],
+    }
+    assert overall_status(sections) == "fail"
 
 
 def test_prod_health_check_flags_missing_same_day_weather_state(tmp_path):

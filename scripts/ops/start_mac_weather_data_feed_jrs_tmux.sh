@@ -2,9 +2,10 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 VOLUME="${WEATHER_JRS_VOLUME:-/Volumes/jrs}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$VOLUME/weather_data_feed_service_runtime}"
-TMUX_SOCKET="${WEATHER_DATA_FEED_TMUX_SOCKET:-weather-data-feed-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_DATA_FEED_TMUX_SOCKET:-}")"
 TMUX_SESSION="${WEATHER_DATA_FEED_TMUX_SESSION:-weather_data_feed_jrs}"
 LOG_FILE="$RUNTIME_ROOT/loop/data_feed_tmux.log"
 SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$PROJECT_DIR}"
@@ -28,6 +29,7 @@ if [[ ! -d "$VOLUME" ]]; then
 fi
 
 mkdir -p "$RUNTIME_ROOT/loop"
+weather_jrs_tmux_write_probe "$TMUX_SOCKET" "$RUNTIME_ROOT"
 probe="$RUNTIME_ROOT/loop/.tmux_write_probe"
 printf 'probe %s\n' "$(date -Iseconds)" > "$probe"
 rm -f "$probe"

@@ -38,6 +38,7 @@ DEFAULT_FORECAST_CURVE_DIRS = (
     ROOT.parent / "weather-predict/output/forecast_hourly_curves",
     ROOT / "runtime/weather_edge_v1/market_data/forecast_hourly_curves",
 )
+DEFAULT_FAST_OBSERVATION_STATE = MAC_DATA_FEED_RUNTIME / "output/high_frequency_observations/state.json"
 DEFAULT_TELEMETRY_FILES: tuple[Path, ...] = ()
 DEFAULT_SUMMARY_FILES = (
     Path("low_price_yes_lottery_tiny_live_v1/latest_summary.json"),
@@ -370,6 +371,35 @@ def check_orderbook_snapshots(orderbook_dir: Path, *, now_utc: datetime, max_age
     }
 
 
+def check_fast_observation_state(path: Path, *, now_utc: datetime, max_age_min: float) -> dict[str, Any]:
+    if not path.exists():
+        return {
+            "path": str(path),
+            "status": "missing",
+            "updated_at_utc": "",
+            "age_min": None,
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "path": str(path),
+            "status": "unreadable",
+            "error": f"{type(exc).__name__}: {exc}",
+            "updated_at_utc": "",
+            "age_min": None,
+        }
+    updated = parse_utc(payload.get("updated_at_utc") or payload.get("generated_at_utc"))
+    age_min = round((now_utc - updated).total_seconds() / 60.0, 3) if updated else None
+    status = "ok" if age_min is not None and age_min <= max_age_min else "stale"
+    return {
+        "path": str(path),
+        "status": status,
+        "updated_at_utc": updated.isoformat() if updated else "",
+        "age_min": age_min,
+    }
+
+
 def check_forecast_hourly_curves(
     curve_dir: Path,
     snapshot_path: Path,
@@ -681,6 +711,7 @@ def overall_status(sections: dict[str, Any]) -> str:
     city_state = sections.get("snapshot_city_state_coverage", {})
     orderbook = sections.get("orderbook_snapshots", {})
     forecast_curves = sections.get("forecast_hourly_curves", {})
+    fast_observations = sections.get("fast_observation_state", {})
     telemetry = sections["telemetry"]
     live_orders = sections["live_orders"]
     hard_fail = (
@@ -689,6 +720,7 @@ def overall_status(sections: dict[str, Any]) -> str:
         or city_state.get("status") == "missing_same_day_weather_state"
         or orderbook.get("missing")
         or (bool(forecast_curves) and forecast_curves.get("status") != "ok")
+        or (bool(fast_observations) and fast_observations.get("status") != "ok")
         or snapshot.get("duplicate_record_count", 0) > 0
         or any(item.get("parse_error_count", 0) > 0 for item in telemetry)
         or live_orders.get("parse_error_count", 0) > 0
@@ -716,10 +748,12 @@ def main() -> int:
     parser.add_argument("--snapshot-dir", default=str(latest_existing_snapshot_dir()))
     parser.add_argument("--orderbook-dir", default=str(latest_existing_orderbook_dir()))
     parser.add_argument("--forecast-curve-dir", default=str(latest_existing_forecast_curve_dir()))
+    parser.add_argument("--fast-observation-state", default=str(DEFAULT_FAST_OBSERVATION_STATE))
     parser.add_argument("--runtime-root", default=str(ROOT / "runtime/weather_edge_v1"))
     parser.add_argument("--max-snapshot-age-min", type=float, default=45.0)
     parser.add_argument("--max-orderbook-age-min", type=float, default=75.0)
     parser.add_argument("--max-forecast-curve-age-min", type=float, default=45.0)
+    parser.add_argument("--max-fast-observation-age-min", type=float, default=3.0)
     parser.add_argument("--tail-telemetry-rows", type=int, default=5000)
     parser.add_argument("--tail-live-order-rows", type=int, default=2000)
     parser.add_argument("--all-live-order-files", action="store_true")
@@ -749,6 +783,11 @@ def main() -> int:
             snapshot_path,
             now_utc=now_utc,
             max_age_min=args.max_forecast_curve_age_min,
+        ),
+        "fast_observation_state": check_fast_observation_state(
+            Path(args.fast_observation_state),
+            now_utc=now_utc,
+            max_age_min=args.max_fast_observation_age_min,
         ),
         "telemetry": [check_telemetry(path, tail_rows=args.tail_telemetry_rows) for path in telemetry_files],
         "live_orders": check_live_orders(

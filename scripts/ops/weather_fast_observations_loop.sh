@@ -74,6 +74,11 @@ while true; do
   set -e
   date -u +"[fast_obs] high_frequency_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$high_frequency_rc"
 
+  if (( runway_rc != 0 || high_frequency_rc != 0 )); then
+    date -u +"[fast_obs] fatal_child_failure_utc=%Y-%m-%dT%H:%M:%SZ runway_returncode=$runway_rc high_frequency_returncode=$high_frequency_rc"
+    exit 1
+  fi
+
   elapsed=$(( $(date +%s) - started_epoch ))
   sleep_for=$(( INTERVAL_SEC - elapsed ))
   if (( sleep_for < 5 )); then

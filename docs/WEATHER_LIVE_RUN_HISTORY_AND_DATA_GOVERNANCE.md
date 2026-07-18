@@ -312,7 +312,7 @@ Measured impact (UTC):
 | `current_yes_heat_death_shadow_v1` | `04:39:14..12:52:31` | `8h13m` signal-production coverage gap. Do not treat missing decisions in this window as negative examples. Before the gap, four Wellington strong rows were non-executable at asks `0.997/0.999`; after recovery, one Jeddah strong row had no ask. |
 | `low_price_yes_lottery_shadow_v1` | `07:47:06..13:02:45` | Shadow-only coverage loss; live orders affected: `0`. |
 
-Correction:
+Correction at the time (superseded by Incident K below):
 
 - Rehost all active JRS consumers and the fast-source patrol on `tmux -L weather-jrs`.
 - Monitor the current signal producer and both current-YES live heads, not only their child-process
@@ -328,6 +328,56 @@ affected_live_fills_confirmed_missed = 0
 current_yes_exclusion_window = 2026-07-16T04:39:14Z..2026-07-16T12:52:31Z
 fix_commits = e834311c,7182a13d,82d90bd
 ```
+
+### Incident K: Fast-observation collector left on superseded JRS tmux context
+
+Incident date: `2026-07-18`
+
+Root cause and launch lineage:
+
+- `start_mac_weather_fast_observations_jrs_tmux.sh` was introduced by commit `1fe52ea7`
+  (`Add scheduled fast observation polling`, 2026-07-10) with default socket `weather-jrs`.
+- The main data-feed moved to the working `weather-data-feed-jrs` socket in commit `aba685ef`
+  on 2026-07-11, but the independent fast-observation launcher was not migrated.
+- The currently failed `weather_fast_obs_jrs` session was recreated at
+  `2026-07-14T14:56:14Z` by the `2d7368b7` task (`fix(weather): isolate and capture lowest markets`)
+  on the old `weather-jrs` server. Its parent tmux server dated to `2026-07-08T15:58:29Z`.
+- Incident J's 2026-07-16 correction standardized several strategy/patrol entries on
+  `weather-jrs`, contradicting the 2026-07-11 data-feed correction and leaving two active standards.
+
+Measured impact:
+
+```text
+first_observed_permission_error_utc = 2026-07-10T15:49:55Z (intermittent)
+last_successful_fast_source_state_utc = 2026-07-17T21:19:59Z
+continuous_coverage_gap_start_utc = 2026-07-17T21:19:59Z
+affected_live_cities = Busan,Helsinki,Singapore,Tokyo
+observed_cross_events_in_bj_day = 0
+observed_orders_in_bj_day = 0
+observed_fills_in_bj_day = 0
+failed_child_cycles_seen_at_diagnosis = 4741
+counterfactual_missed_signals = unobservable_without_the_missing_source_prints
+```
+
+Patrol result:
+
+- `weather_live_runtime_patrol` sent Telegram CRITICAL message `8512` at
+  `2026-07-17T21:21:06Z`, but it only reported runner missing/latest stale.
+- The patrol did not inspect high-frequency producer state freshness or child return codes, so it
+  could not distinguish an upstream collector outage from an execution-runner outage or prevent a
+  false recovery when the runner returned while the source remained stale.
+- `weather_data_feed_prod_health_check.py` checked snapshot/orderbook/forecast products but did not
+  include the independent high-frequency observation state.
+
+Correction:
+
+- One canonical JRS process context: `tmux -L weather-data-feed-jrs`, resolved by
+  `scripts/ops/weather_jrs_tmux_env.sh`; all JRS startup entries must use it.
+- Every core JRS launcher performs a write probe from inside the target tmux server before starting.
+- A non-zero runway/high-frequency child exit terminates the collector loop instead of being swallowed.
+- Production health and live patrol include high-frequency producer state freshness.
+- Production restore remains pending explicit approval because restoring the collector can re-enable
+  real order submission by live consumers.
 
 Resolution / restored probe:
 

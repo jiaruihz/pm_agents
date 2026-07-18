@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Dedicated full-ladder (all cities x all brackets) orderbook snapshot loop.
 #
-# Runs ONLY the `snapshot-full` step of the data-feed service, in its own tmux
-# server (dedicated -L socket, same pattern as the working JRS data feed so it
-# inherits external-volume write permission), writing to a dedicated output-root
+# Runs ONLY the `snapshot-full` step of the data-feed service, as its own session
+# on the canonical permission-bearing JRS tmux server, writing to a dedicated output-root
 # on the JRS runtime volume.  It deliberately does NOT touch the running
 # data-feed loop, so the high-frequency observations the live fast-source / hko
 # heads depend on are unaffected.
@@ -15,6 +14,7 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data_feed_service_runtime}"
 OUTPUT_ROOT="${WEATHER_FULL_LADDER_OUTPUT_ROOT:-$RUNTIME_ROOT/full_ladder_output}"
@@ -22,11 +22,12 @@ CACHE_ROOT="${WEATHER_FULL_LADDER_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
 INTERVAL_SEC="${WEATHER_FULL_LADDER_INTERVAL_SEC:-1200}"
 ORDERBOOK_BUDGET_SEC="${WEATHER_FULL_LADDER_ORDERBOOK_BUDGET_SEC:-900}"
 ORDERBOOK_WORKERS="${WEATHER_FULL_LADDER_ORDERBOOK_WORKERS:-2}"
-TMUX_SOCKET="${WEATHER_FULL_LADDER_TMUX_SOCKET:-weather-full-ladder}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_FULL_LADDER_TMUX_SOCKET:-}")"
 TMUX_SESSION="${WEATHER_FULL_LADDER_TMUX_SESSION:-weather_full_ladder_capture}"
 LOG_FILE="$OUTPUT_ROOT/full_ladder_capture.log"
 
 mkdir -p "$OUTPUT_ROOT" "$CACHE_ROOT"
+weather_jrs_tmux_write_probe "$TMUX_SOCKET" "$RUNTIME_ROOT"
 
 if tmux -L "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
   echo "already running: tmux -L $TMUX_SOCKET session $TMUX_SESSION"

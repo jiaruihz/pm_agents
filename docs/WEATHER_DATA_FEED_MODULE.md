@@ -134,7 +134,7 @@ near-binary siblings。价格是否可交易属于 strategy/execution policy，�
   `~/projects/weather_data_feed_service_runtime` 是 symlink；本地 canonical mirror
   `runtime/weather_edge_v1/market_data` 也是指向 `/Volumes/jrs/pm_agents/runtime/weather_edge_v1/market_data`
   的 symlink。macOS LaunchAgent 写外置卷会触发 `Operation not permitted`，当前 data-feed 用
-  `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh` 在 `tmux -L weather-jrs` session
+  `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh` 在 `tmux -L weather-data-feed-jrs` session
   `weather_data_feed_jrs` 中常驻。
 - 多源 METAR fetcher 已从 timing monitor 迁入 `weather_data_feed/observation_sources/fetchers.py`。当前 timing monitor
   的实际 source fetch 路径已委托给数据模块；orderbook timing、价格反应和策略判断仍留在原脚本。

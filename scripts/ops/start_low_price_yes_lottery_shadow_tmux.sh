@@ -2,8 +2,9 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 TMUX_BIN="${TMUX_BIN:-/opt/homebrew/bin/tmux}"
-TMUX_SOCKET="${WEATHER_DATA_FEED_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_DATA_FEED_TMUX_SOCKET:-}")"
 SESSION="${LOW_PRICE_YES_LOTTERY_SHADOW_TMUX_SESSION:-low_price_yes_lottery_shadow_v1}"
 RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1"
 LOG_FILE="$RUNTIME/low_price_shadow_tmux.log"

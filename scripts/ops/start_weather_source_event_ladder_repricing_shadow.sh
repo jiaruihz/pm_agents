@@ -7,8 +7,9 @@ set -euo pipefail
 # observer routes every city through its own local market date.
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-TMUX_SOCKET="${WEATHER_EVENT_LADDER_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_EVENT_LADDER_TMUX_SOCKET:-}")"
 TMUX_SESSION="${WEATHER_EVENT_LADDER_TMUX_SESSION:-weather_source_event_ladder_repricing_shadow}"
 OUTPUT_DIR="${WEATHER_EVENT_LADDER_OUTPUT_DIR:-$RUNTIME_ROOT/output/source_event_ladder_repricing_shadow}"
 LOWEST_OUTPUT_DIR="${WEATHER_EVENT_LADDER_LOWEST_OUTPUT_DIR:-$OUTPUT_DIR/lowest_10m}"

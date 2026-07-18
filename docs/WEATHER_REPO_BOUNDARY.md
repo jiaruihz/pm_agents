@@ -48,7 +48,7 @@ scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --marke
 
 Because macOS LaunchAgent jobs currently hit `Operation not permitted` when
 writing the external APFS volume, the active data-feed collector is the tmux
-session `weather_data_feed_jrs` on socket `weather-jrs`, started with
+session `weather_data_feed_jrs` on socket `weather-data-feed-jrs`, started with
 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`.
 
 Before the N100 disk incident, `weather-predict` was the source for market-data truth:

@@ -2,11 +2,12 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_DIR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/tmax_distribution_edge_first_lock_no_current_yes_shadow_v1}"
 LOG_FILE="$RUNTIME_DIR/first_lock_no_current_yes_shadow_loop.log"
 PY="$PROJECT_DIR/.venv/bin/python"
 SESSION="${TMAX_FIRST_LOCK_NO_CURRENT_YES_SESSION:-tmax_distribution_edge_first_lock_no_current_yes_shadow_v1}"
-TMUX_SOCKET="${WEATHER_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_TMUX_SOCKET:-}")"
 
 INTERVAL_SEC="${TMAX_FIRST_LOCK_NO_CURRENT_YES_INTERVAL_SEC:-900}"
 ASK_FLOOR="${TMAX_FIRST_LOCK_NO_CURRENT_YES_ASK_FLOOR:-0.40}"

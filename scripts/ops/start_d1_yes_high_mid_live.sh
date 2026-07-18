@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 SESSION="${D1_YES_HIGH_MID_LIVE_SESSION:-d1_yes_high_mid_live_v1}"
-TMUX_SOCKET="${WEATHER_DATA_FEED_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_DATA_FEED_TMUX_SOCKET:-}")"
 RUNTIME_DIR="${D1_YES_HIGH_MID_LIVE_RUNTIME_DIR:-$ROOT/runtime/weather_edge_v1/d1_yes_high_mid_live_v1}"
 INTERVAL_SECONDS="${D1_YES_HIGH_MID_LIVE_INTERVAL_SECONDS:-60}"
 SHARES="${D1_YES_HIGH_MID_LIVE_SHARES:-5}"

@@ -21,7 +21,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 ps aux | rg 'weather|low_price|tmax|hko|source_event|regime' | rg -v 'rg '
 launchctl list | rg 'pm-agents|weather'
 tmux list-sessions
-tmux -L weather-jrs list-sessions
+tmux -L weather-data-feed-jrs list-sessions
 screen -ls
 ```
 

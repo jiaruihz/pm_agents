@@ -387,7 +387,11 @@ def active_tmux_sessions() -> set[str]:
     if not shutil.which("tmux"):
         return set()
     sessions: set[str] = set()
-    sockets = [""] + [s.strip() for s in os.environ.get("WEATHER_RUNTIME_TMUX_SOCKETS", "weather-jrs").split(",") if s.strip()]
+    sockets = [""] + [
+        s.strip()
+        for s in os.environ.get("WEATHER_RUNTIME_TMUX_SOCKETS", "weather-data-feed-jrs").split(",")
+        if s.strip()
+    ]
     for socket in sockets:
         cmd = ["tmux"]
         if socket:

@@ -7,8 +7,9 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 SESSION="d1_yes_high_mid_shadow_v1"
-TMUX_SOCKET="${WEATHER_DATA_FEED_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_DATA_FEED_TMUX_SOCKET:-}")"
 PY="$PROJECT_DIR/.venv/bin/python"
 [[ -x "$PY" ]] || PY="python3"
 INTERVAL_SECONDS="${D1_YES_HIGH_MID_INTERVAL_SECONDS:-600}"

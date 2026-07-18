@@ -2,6 +2,8 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${METAR_CROSS_TMUX_SOCKET:-}")"
 LOG_DIR="$PROJECT_DIR/runtime/weather_edge_v1/metar_cross_prev_no_shadow"
 PID_FILE="$LOG_DIR/loop.pid"
 OUT_FILE="$LOG_DIR/loop.out"
@@ -115,25 +117,17 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
 fi
 
 if command -v tmux >/dev/null 2>&1 && [[ "${METAR_CROSS_START_MODE:-tmux}" == "tmux" ]]; then
-  if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+  if tmux -L "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
     echo "already running tmux=$TMUX_SESSION log=$OUT_FILE"
     exit 0
   fi
   printf -v quoted_args '%q ' "${args[@]}"
   printf -v quoted_env '%q ' env "${env_args[@]}"
-  tmux new-session -d -s "$TMUX_SESSION" "cd $(printf '%q' "$PROJECT_DIR") && $env_prefix exec $quoted_env $(printf '%q' "$PY") -u $quoted_args >>$(printf '%q' "$OUT_FILE") 2>&1"
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" "cd $(printf '%q' "$PROJECT_DIR") && $env_prefix exec $quoted_env $(printf '%q' "$PY") -u $quoted_args >>$(printf '%q' "$OUT_FILE") 2>&1"
   echo "tmux:$TMUX_SESSION" > "$PID_FILE"
   echo "started metar-cross prev-NO shadow tmux=$TMUX_SESSION log=$OUT_FILE cities=$METAR_CROSS_CITIES"
   exit 0
 fi
 
-if [[ -f "$PROJECT_DIR/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$PROJECT_DIR/.env"
-  set +a
-fi
-env "${env_args[@]}" nohup "$PY" -u "${args[@]}" >"$OUT_FILE" 2>&1 < /dev/null &
-pid=$!
-echo "$pid" > "$PID_FILE"
-echo "started metar-cross prev-NO shadow pid=$pid log=$OUT_FILE cities=$METAR_CROSS_CITIES"
+echo "METAR_CROSS_START_MODE must be tmux for JRS consumers" >&2
+exit 1

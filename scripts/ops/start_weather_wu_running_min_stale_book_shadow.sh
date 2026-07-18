@@ -2,8 +2,9 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-TMUX_SOCKET="${WEATHER_WU_LOW_STALE_BOOK_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_WU_LOW_STALE_BOOK_TMUX_SOCKET:-}")"
 TMUX_SESSION="${WEATHER_WU_LOW_STALE_BOOK_TMUX_SESSION:-weather_wu_running_min_stale_book_shadow}"
 TARGET_DATE="${WEATHER_WU_LOW_STALE_BOOK_TARGET_DATE:-}"
 if [[ -n "$TARGET_DATE" ]]; then

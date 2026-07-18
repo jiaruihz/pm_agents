@@ -2,6 +2,9 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${REGIME_ROUTED_NO_TMUX_SOCKET:-}")"
+TMUX_SESSION="${REGIME_ROUTED_NO_SHADOW_TMUX_SESSION:-regime_routed_no_shadow_v1}"
 RUNTIME_DIR="${REGIME_ROUTED_NO_SHADOW_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_shadow_v1}"
 PID_FILE="$RUNTIME_DIR/shadow_loop.pid"
 LOG_FILE="$RUNTIME_DIR/shadow_loop.log"
@@ -21,7 +24,10 @@ mkdir -p "$RUNTIME_DIR"
 
 if [[ "${MAC_REGIME_ROUTED_NO_SHADOW_CHILD:-0}" != "1" && -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
-  if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+  if [[ "$old_pid" == "tmux:$TMUX_SESSION" ]] && tmux -L "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "already running session=$TMUX_SESSION socket=$TMUX_SOCKET log=$LOG_FILE"
+    exit 0
+  elif [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
     echo "already running pid=$old_pid log=$LOG_FILE"
     exit 0
   fi
@@ -32,10 +38,11 @@ if [[ ! -x "$PY" ]]; then
 fi
 
 if [[ "${MAC_REGIME_ROUTED_NO_SHADOW_CHILD:-0}" != "1" ]]; then
-  nohup env MAC_REGIME_ROUTED_NO_SHADOW_CHILD=1 "$0" >>"$LOG_FILE" 2>&1 < /dev/null &
-  pid=$!
-  echo "$pid" > "$PID_FILE"
-  echo "started regime-routed NO shadow loop pid=$pid log=$LOG_FILE snapshot_dir=$SNAPSHOT_DIR"
+  tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+    "cd $(printf '%q' "$PROJECT_DIR") && exec env MAC_REGIME_ROUTED_NO_SHADOW_CHILD=1 $(printf '%q' "$0") >> $(printf '%q' "$LOG_FILE") 2>&1"
+  echo "tmux:$TMUX_SESSION" > "$PID_FILE"
+  echo "started regime-routed NO shadow socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE snapshot_dir=$SNAPSHOT_DIR"
   exit 0
 fi
 

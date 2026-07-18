@@ -2,9 +2,10 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_DIR="${WEATHER_ANALYSIS_FRESHNESS_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/analysis_freshness_monitor}"
 SESSION="${WEATHER_ANALYSIS_FRESHNESS_SESSION:-weather_analysis_freshness_monitor}"
-TMUX_SOCKET="${WEATHER_TMUX_SOCKET:-weather-jrs}"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_TMUX_SOCKET:-}")"
 INTERVAL_SECONDS="${WEATHER_ANALYSIS_FRESHNESS_INTERVAL_SECONDS:-900}"
 PY="$PROJECT_DIR/.venv/bin/python"
 

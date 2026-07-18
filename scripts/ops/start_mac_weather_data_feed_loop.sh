@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-$HOME/projects/weather_data_feed_service_runtime}"
 OUTPUT_ROOT="${WEATHER_DATA_FEED_TARGETED_OUTPUT_ROOT:-$RUNTIME_ROOT/targeted_output}"
@@ -62,11 +64,7 @@ case "$SNAPSHOT_COMMAND" in
 esac
 
 if [[ "${MAC_WEATHER_DATA_FEED_LOOP_CHILD:-0}" != "1" ]]; then
-  nohup env MAC_WEATHER_DATA_FEED_LOOP_CHILD=1 "$0" >>"$LOG_FILE" 2>&1 < /dev/null &
-  pid=$!
-  echo "$pid" > "$PID_FILE"
-  echo "started mac weather data-feed loop pid=$pid log=$LOG_FILE output_root=$OUTPUT_ROOT obs=$OBS_OUTPUT cache=$CACHE_ROOT"
-  exit 0
+  exec "$PROJECT_DIR/scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh"
 fi
 
 echo "$$" > "$PID_FILE"

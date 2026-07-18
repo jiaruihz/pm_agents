@@ -2,6 +2,9 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${REGIME_ROUTED_NO_TMUX_SOCKET:-}")"
+TMUX_SESSION="${REGIME_ROUTED_NO_TMUX_SESSION:-regime_routed_no_tiny_live_v1}"
 RUNTIME_DIR="$PROJECT_DIR/runtime/weather_edge_v1/regime_routed_no_tiny_live_v1"
 PID_FILE="$RUNTIME_DIR/loop.pid"
 OUT_FILE="$RUNTIME_DIR/loop.out"
@@ -10,7 +13,10 @@ PY="$PROJECT_DIR/.venv/bin/python"
 mkdir -p "$RUNTIME_DIR"
 if [[ "${REGIME_ROUTED_NO_LOOP_CHILD:-0}" != "1" && -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
-  if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+  if [[ "$old_pid" == "tmux:$TMUX_SESSION" ]] && tmux -L "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "already running session=$TMUX_SESSION socket=$TMUX_SOCKET log=$OUT_FILE"
+    exit 0
+  elif [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
     echo "already running pid=$old_pid log=$OUT_FILE"
     exit 0
   fi
@@ -89,10 +95,11 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
 fi
 
 if [[ "${REGIME_ROUTED_NO_LOOP_CHILD:-0}" != "1" ]]; then
-  nohup env REGIME_ROUTED_NO_LOOP_CHILD=1 "$0" >>"$OUT_FILE" 2>&1 < /dev/null &
-  pid=$!
-  echo "$pid" > "$PID_FILE"
-  echo "started regime-routed NO tiny-live pid=$pid log=$OUT_FILE base_N=$REGIME_ROUTED_NO_BASE_NOTIONAL daily_cap=$REGIME_ROUTED_NO_DAILY_GROSS_CAP min_soft_weight_to_ask_ratio=$REGIME_ROUTED_NO_MIN_SOFT_WEIGHT_TO_ASK_RATIO current_escape_margin_gt=$REGIME_ROUTED_NO_MIN_CURRENT_ESCAPE_MARGIN_NATIVE"
+  tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+    "cd $(printf '%q' "$PROJECT_DIR") && exec env REGIME_ROUTED_NO_LOOP_CHILD=1 $(printf '%q' "$0") >> $(printf '%q' "$OUT_FILE") 2>&1"
+  echo "tmux:$TMUX_SESSION" > "$PID_FILE"
+  echo "started regime-routed NO tiny-live socket=$TMUX_SOCKET session=$TMUX_SESSION log=$OUT_FILE base_N=$REGIME_ROUTED_NO_BASE_NOTIONAL daily_cap=$REGIME_ROUTED_NO_DAILY_GROSS_CAP min_soft_weight_to_ask_ratio=$REGIME_ROUTED_NO_MIN_SOFT_WEIGHT_TO_ASK_RATIO current_escape_margin_gt=$REGIME_ROUTED_NO_MIN_CURRENT_ESCAPE_MARGIN_NATIVE"
   exit 0
 fi
 

@@ -38,6 +38,22 @@ def test_fresh_runner_without_submit_failures_is_ok():
     assert health["stop_runner_required"] is False
 
 
+def test_stale_fast_source_is_critical_even_when_runner_latest_is_fresh():
+    now = datetime(2026, 7, 18, 4, 0, tzinfo=timezone.utc)
+    health = evaluate(
+        now=now,
+        latest={"generated_at_utc": (now - timedelta(seconds=10)).isoformat()},
+        recent_orders=[],
+        pids=[123],
+        max_latest_age_sec=180,
+        failure_threshold=3,
+        fast_source_state={"updated_at_utc": (now - timedelta(minutes=15)).isoformat()},
+        max_fast_source_age_sec=180,
+    )
+    assert health["status"] == "critical"
+    assert health["reasons"] == ["fast_source_state_stale"]
+
+
 def test_telegram_notifications_fire_once_per_incident_and_on_recovery():
     critical = {"status": "critical", "reasons": ["runner_latest_stale"]}
     assert notification_kind(critical, {}) == "critical"
