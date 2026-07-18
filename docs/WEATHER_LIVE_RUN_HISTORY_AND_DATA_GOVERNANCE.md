@@ -397,7 +397,9 @@ heat_h2_kualalumpur_2026-07-18 = 5 YES matched @ 0.92; cost $4.60
 post_restore_total_fills = 30 shares; cash cost $26.595
 full_ladder_first_complete_after_restore = snapshot_20260718_1332.json, rc=0
 focused_chain_tests = 134 passed
-fix_commits = fcc84094,1bda3832,74b1f98f,aae767bc
+canonical_fill_reconciled = 30 shares / $26.595 across 5 fills
+canonical_fill_gate = pass; missing_order_rows=0; over_order_keys=0; db_vs_cache_delta=0
+fix_commits = fcc84094,1bda3832,74b1f98f,aae767bc,271aac9,32d474c,9a88e7c
 ```
 
 The Busan, Tokyo, and Kuala Lumpur orders were ordinary pre-existing live-policy signals after data
