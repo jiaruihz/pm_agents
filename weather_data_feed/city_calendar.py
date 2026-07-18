@@ -125,6 +125,29 @@ def city_local_datetime(city: str, now_utc: str | datetime | None = None, timezo
     return parse_now_utc(now_utc).astimezone(ZoneInfo(tz_name))
 
 
+def city_local_hour(city: str, now_utc: str | datetime | None = None, timezone_name: str | None = None) -> float:
+    local = city_local_datetime(city, now_utc, timezone_name)
+    return local.hour + local.minute / 60.0 + local.second / 3600.0
+
+
+def city_in_local_hour_window(
+    city: str,
+    now_utc: str | datetime | None = None,
+    *,
+    start_hour: float,
+    end_hour: float,
+    timezone_name: str | None = None,
+) -> bool:
+    start = float(start_hour) % 24.0
+    end = float(end_hour) % 24.0
+    if abs(start - end) < 1e-9:
+        return True
+    hour = city_local_hour(city, now_utc, timezone_name)
+    if start < end:
+        return start <= hour < end
+    return hour >= start or hour < end
+
+
 def local_settle_utc(
     city: str,
     target_date: str | date,

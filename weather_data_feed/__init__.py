@@ -2,8 +2,10 @@
 
 from weather_data_feed.city_calendar import (
     CITY_TIMEZONE,
+    city_in_local_hour_window,
     city_local_datetime,
     city_local_date,
+    city_local_hour,
     city_scan_dates,
     city_timezone_name,
     local_settle_utc,
@@ -123,8 +125,10 @@ __all__ = [
     "build_observation_cache",
     "build_taf_signal",
     "build_vertical_profile_signal",
+    "city_in_local_hour_window",
     "city_local_datetime",
     "city_local_date",
+    "city_local_hour",
     "city_scan_dates",
     "city_timezone_name",
     "fetch_aviationweather_taf",
