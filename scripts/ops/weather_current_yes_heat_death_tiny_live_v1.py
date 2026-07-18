@@ -46,6 +46,7 @@ HEADS: dict[str, dict[str, Any]] = {
         "config_id": "current_yes_heat_death_tiny_live_h1_late_carry_v3_maker_first_chase",
         "decision_mode": "late_carry_heat_death_strong_current_yes",
         "combo": "current_yes_heat_death_late_carry_v1",
+        "execution_profile": "split_taker_maker_chase_v1",
         "min_ask": 0.95,
         "max_ask": 0.99,
         "total_shares": 10.0,
@@ -57,6 +58,7 @@ HEADS: dict[str, dict[str, Any]] = {
         "config_id": "current_yes_heat_death_tiny_live_h2_early_dislocation_v3_split_taker_maker",
         "decision_mode": "early_dislocation_heat_death_strong_current_yes",
         "combo": "current_yes_heat_death_early_dislocation_v1",
+        "execution_profile": "split_taker_maker_chase_v1",
         "min_ask": 0.50,
         "max_ask": 0.93,
         "total_shares": 10.0,
@@ -309,6 +311,12 @@ def build_plan(
         quote_mode = "fresh_book_guarded_taker"
         quote_reason = "fresh_top_ask_has_fixed_share_depth"
     sid = signal_id(row)
+    comparison_group_id = stable_hash(
+        {
+            "signal_id": sid,
+            "token_id": str(row.get("current_yes_token_id") or ""),
+        }
+    )
     now = datetime.now(timezone.utc)
     maker_deadline = now + timedelta(minutes=maker_chase_window_min)
     base = {
@@ -326,6 +334,8 @@ def build_plan(
         "profile": "physical_confirmation_strong_forward_probe",
         "combo": HEADS[ACTIVE_HEAD]["combo"],
         "entry_regime_head": ACTIVE_HEAD,
+        "execution_profile": HEADS[ACTIVE_HEAD]["execution_profile"],
+        "comparison_group_id": comparison_group_id,
         "city": str(row.get("city") or ""),
         "city_pool": "all_canonical_weather_state_v2",
         "target_date": str(row.get("target_date") or ""),
@@ -354,6 +364,9 @@ def build_plan(
         "size": round(shares, 6),
         "notional": round(shares * limit_price, 6),
         "execution_policy": execution_policy,
+        "order_lifecycle_policy": (
+            "maker_chase_then_taker_fallback_v1" if maker_only else "taker_now"
+        ),
         "tick_size": round(tick_size, 6),
         "sizing_mode": "fixed_shares",
         "fixed_order_shares": round(shares, 6),
@@ -450,6 +463,13 @@ def build_h1_maker_lifecycle_plan(
         "profile": "physical_confirmation_strong_maker_first_lifecycle",
         "combo": HEADS[ACTIVE_HEAD]["combo"],
         "entry_regime_head": ACTIVE_HEAD,
+        "execution_profile": HEADS[ACTIVE_HEAD]["execution_profile"],
+        "comparison_group_id": stable_hash(
+            {
+                "signal_id": signal,
+                "token_id": str(order.get("token_id") or ""),
+            }
+        ),
         "city": str(order.get("city") or ""),
         "city_pool": str(order.get("city_pool") or "all_canonical_weather_state_v2"),
         "target_date": str(order.get("target_date") or ""),
@@ -476,6 +496,7 @@ def build_h1_maker_lifecycle_plan(
             if maker_only
             else "current_yes_heat_death_maker_fallback_taker_v1"
         ),
+        "order_lifecycle_policy": "maker_chase_then_taker_fallback_v1",
         "execution_action": action,
         "cancel_before_order_id": source_order_id,
         "source_order_id": source_order_id,

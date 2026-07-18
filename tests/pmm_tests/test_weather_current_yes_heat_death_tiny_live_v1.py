@@ -89,6 +89,11 @@ def test_h2_builds_five_taker_plus_five_post_only_maker() -> None:
     assert maker["maker_only"] is True
     assert taker["execution_policy"] == "current_yes_heat_death_taker_probe_v1"
     assert maker["execution_policy"] == "current_yes_heat_death_maker_probe_v1"
+    assert taker["execution_profile"] == "split_taker_maker_chase_v1"
+    assert maker["execution_profile"] == "split_taker_maker_chase_v1"
+    assert taker["comparison_group_id"] == maker["comparison_group_id"]
+    assert taker["order_lifecycle_policy"] == "taker_now"
+    assert maker["order_lifecycle_policy"] == "maker_chase_then_taker_fallback_v1"
     assert maker["maker_price_cap"] == 0.92
     assert taker["signal_id"] == maker["signal_id"]
     assert taker["allow_duplicate_signal_id"] is True
@@ -110,7 +115,11 @@ def test_h1_builds_five_taker_plus_five_post_only_maker() -> None:
     assert taker["maker_only"] is False
     assert maker["limit_price"] == 0.961
     assert maker["maker_only"] is True
+    assert taker["execution_profile"] == "split_taker_maker_chase_v1"
+    assert maker["execution_profile"] == "split_taker_maker_chase_v1"
+    assert taker["comparison_group_id"] == maker["comparison_group_id"]
     assert maker["execution_policy"] == "current_yes_heat_death_maker_probe_v1"
+    assert maker["order_lifecycle_policy"] == "maker_chase_then_taker_fallback_v1"
     assert maker["maker_price_cap"] == 0.97
     assert maker["maker_lifecycle_reprice_count"] == 0
     assert maker["maker_lifecycle_deadline_utc"]
