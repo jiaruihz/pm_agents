@@ -43,3 +43,28 @@ def test_forecast_curve_cache_is_explicit_and_preserves_pit_timestamp() -> None:
     assert details["detected_at_utc"] == "2026-07-18T16:58:20Z"
     assert details["cache_fallback"] is True
     assert details["cache_age_sec"] == 1800.0
+
+
+def test_forecast_429_disables_repeated_live_calls(monkeypatch) -> None:
+    calls = []
+
+    def fake_curl(*args, **kwargs):
+        calls.append((args, kwargs))
+        return 429, None, "rate limited"
+
+    monkeypatch.setattr(runner, "curl_json_get", fake_curl)
+    monkeypatch.setattr(
+        runner,
+        "_cached_live_forecast",
+        lambda city, target_date, model: {"source_model": model, "cache_fallback": True},
+    )
+    monkeypatch.setattr(runner, "_FORECAST_LIVE_DISABLED_REASON", None)
+    cfg = {"lat": 1.0, "lon": 2.0}
+
+    first = runner._fetch_live_forecast(None, "ecmwf", "Amsterdam", cfg, "2026-07-19")
+    second = runner._fetch_live_forecast(None, "gfs", "Taipei", cfg, "2026-07-19")
+
+    assert first["cache_fallback"] is True
+    assert second["cache_fallback"] is True
+    assert runner._FORECAST_LIVE_DISABLED_REASON == "open_meteo_http_429"
+    assert len(calls) == 1

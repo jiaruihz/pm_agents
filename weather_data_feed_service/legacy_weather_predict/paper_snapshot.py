@@ -105,6 +105,7 @@ MIN_SNAPSHOT_CITY_DATE_PAIRS = int(os.environ.get("WEATHER_DATA_FEED_MIN_SNAPSHO
 
 BASE_SHARES = 10
 _FORECAST_CURVE_CACHE: dict[tuple[str, str, str], dict] | None = None
+_FORECAST_LIVE_DISABLED_REASON: str | None = None
 
 
 def snapshot_publish_quality(records):
@@ -776,6 +777,7 @@ def _cached_live_forecast(city, target_date, model):
 
 
 def _fetch_live_forecast(client, model, city, cfg, target_date):
+    global _FORECAST_LIVE_DISABLED_REASON
     url = f"https://api.open-meteo.com/v1/{model}"
     params = {
         "latitude": cfg["lat"], "longitude": cfg["lon"],
@@ -784,17 +786,20 @@ def _fetch_live_forecast(client, model, city, cfg, target_date):
         "timezone": "auto",
         "start_date": target_date, "end_date": target_date,
     }
-    try:
-        status_code, payload, _error = curl_json_get(
-            url,
-            params=params,
-            timeout_sec=WEATHER_CURL_TIMEOUT_SEC,
-            connect_timeout_sec=WEATHER_CURL_CONNECT_TIMEOUT_SEC,
-        )
-        if status_code == 200 and payload is not None:
-            return _forecast_details_from_open_meteo(payload, source_model=model)
-    except:
-        pass
+    if _FORECAST_LIVE_DISABLED_REASON is None:
+        try:
+            status_code, payload, _error = curl_json_get(
+                url,
+                params=params,
+                timeout_sec=WEATHER_CURL_TIMEOUT_SEC,
+                connect_timeout_sec=WEATHER_CURL_CONNECT_TIMEOUT_SEC,
+            )
+            if status_code == 200 and payload is not None:
+                return _forecast_details_from_open_meteo(payload, source_model=model)
+            if status_code == 429:
+                _FORECAST_LIVE_DISABLED_REASON = "open_meteo_http_429"
+        except Exception:
+            pass
     return _cached_live_forecast(city, target_date, model)
 
 
