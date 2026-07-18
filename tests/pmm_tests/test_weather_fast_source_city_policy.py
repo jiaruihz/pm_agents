@@ -5,11 +5,8 @@ def test_default_policy_separates_live_trials_from_shadow_cities():
     policies = configured_city_policies()
 
     assert {city for city, policy in policies.items() if policy.default_mode == "live_trial"} == {
-        "Atlanta",
         "Busan",
         "Helsinki",
-        "Miami",
-        "SanFrancisco",
         "Singapore",
         "Tokyo",
     }
@@ -19,11 +16,13 @@ def test_default_policy_separates_live_trials_from_shadow_cities():
     assert policies["Singapore"].source_profile_override_reason
     for city in ("Atlanta", "Miami", "SanFrancisco"):
         policy = policies[city]
+        assert policy.default_mode == "shadow"
         assert policy.signal_handler == "metar_prev_no_range_2f"
-        assert policy.shares_per_trade == 15.0
-        assert policy.max_shares_per_market == 15.0
+        assert policy.shares_per_trade == 0.0
+        assert policy.max_shares_per_market == 0.0
         assert policy.max_source_age_min == 30.0
         assert policy.max_source_observation_lag_min == 30.0
+        assert not policy.source_profile_override_reason
 
 
 def test_all_fast_source_city_policies_share_the_live_ask_cap():
