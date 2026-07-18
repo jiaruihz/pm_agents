@@ -1,11 +1,11 @@
 # Weather Data Pipeline
 
 Status: current-source
-Updated: 2026-07-16 runtime/analysis freshness separation and incremental materialization
+Updated: 2026-07-18 exchange market end-time lineage
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 
 > 2026-06-05 更新: 同步覆盖扩展（7 个 weather model cache 家族 + output/logs + pm_agent runtime/logs + N100 tar backups），删除两个 legacy DB（weather_v2.db / weather_edge_v1_weather.db），新增 `scripts/ops/sync_n100_backups.sh`。详见 §2.3、§7。
 >
@@ -20,6 +20,8 @@ Last updated: 2026-07-16
 > 2026-07-11 更新: full snapshot producer now persists immutable decision-time hourly forecast curves as `targeted_output/forecast_hourly_curves/YYYY-MM-DD/forecast_hourly_curves_*.jsonl`, one row per city/target_date/snapshot. Corrected `forecast_hourly_curve_v3` rows separate source-response `forecast_detected_at_utc` from capture publication-boundary `available_at_utc`; a new exact hash first appears at detected time, or at available time only when no reliable detected time exists, and later captures preserve the earliest reliable first-seen. `available_at_utc` is sampled immediately before final serialization/fsync and atomic link, while file mtime is the external completion evidence. Rows also record explicit model fallback and an honest `forecast_run_lineage_status` when the upstream live API does not expose a run timestamp. `weather_data_feed_prod_health_check.py` fails when the latest curve capture is stale, misaligned with the latest snapshot, incomplete, missing lineage, or has impossible detected/first-seen/available ordering. `build_weather_signal_candidates.py` mirrors them into `runtime/weather.db.fact_forecast_hourly_curves`; `fact_signal_candidates.forecast_values_hash` is the join key.
 >
 > 2026-07-16 更新: 在线 runtime health 与分析派生层 freshness 已拆开。`weather_runtime_monitor.py` 只检查当前 live/shadow 进程及其 raw pulse；`weather_analysis_freshness_monitor.py` 只读检查 local mirror、`fact_signal_candidates` 和 `settlement_outcomes`。日常补数使用 `refresh_weather_analysis_incremental.sh`，按日期同步 settlement 并替换最近 event-date partition；它不会调用 `run_stack.sh --rebuild` 或 drop 全量 fact 表。
+>
+> 2026-07-18 更新: market snapshot 的交易截止时间以 Gamma event `endDate` 为第一权威口径，event 缺失时取最早的 child-market `endDate`；只有两者都不提供时才显式标记并使用城市当地 22:00 近似值。`settle_utc`、`settle_local`、`hours_to_settle`、window/time bucket 和 forecast lead 必须共用该时间，已过真实 `endDate` 的 event 不再发布可交易 snapshot rows。观察缓存仍可保留当天记录，因此“有 observation 但没有同 city/date book”在日内 roll 后属于市场日历差，不得解释成 collector 漏城。
 
 Single source of truth for **where weather strategy data lives, who produces
 it, who consumes it, and how PnL is computed**. Read this before touching

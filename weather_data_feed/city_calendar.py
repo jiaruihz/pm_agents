@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
 
@@ -169,6 +169,46 @@ def local_settle_utc(
         tzinfo=ZoneInfo(tz_name),
     )
     return local_dt.astimezone(timezone.utc)
+
+
+def resolve_market_end_utc(
+    event: Mapping[str, Any] | None,
+    *,
+    fallback: datetime,
+) -> tuple[datetime, str]:
+    """Resolve the tradable event cutoff, preferring exchange metadata.
+
+    Gamma weather events normally expose one event-level ``endDate``. Some
+    responses only expose it on the child markets, so use the earliest child
+    cutoff as the conservative event cutoff. The city-local 22:00 calendar is
+    only an explicit approximation when neither level exposes a cutoff.
+
+    A present but malformed exchange cutoff is an upstream contract failure;
+    do not silently replace it with the calendar approximation.
+    """
+    payload = event if isinstance(event, Mapping) else {}
+    event_end = payload.get("endDate") or payload.get("end_date")
+    if event_end:
+        try:
+            return parse_now_utc(str(event_end)), "gamma_event_endDate"
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid Gamma event endDate={event_end!r}") from exc
+
+    market_ends: list[datetime] = []
+    for market in payload.get("markets") or []:
+        if not isinstance(market, Mapping):
+            continue
+        market_end = market.get("endDate") or market.get("end_date")
+        if not market_end:
+            continue
+        try:
+            market_ends.append(parse_now_utc(str(market_end)))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid Gamma market endDate={market_end!r}") from exc
+    if market_ends:
+        return min(market_ends), "gamma_market_endDate"
+
+    return parse_now_utc(fallback), "city_local_22h_approximation"
 
 
 def city_scan_dates(

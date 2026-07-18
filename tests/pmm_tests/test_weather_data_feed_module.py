@@ -18,6 +18,7 @@ from weather_data_feed import (
     load_city_configs,
     load_source_profiles,
     local_settle_utc,
+    resolve_market_end_utc,
     market_snapshot_record,
     normalize_snapshot_record,
     parse_market_event_date,
@@ -49,6 +50,47 @@ def test_city_calendar_uses_iana_timezone_and_dst():
 def test_local_settle_utc_uses_dst_not_static_offset():
     assert local_settle_utc("Helsinki", "2026-06-16").isoformat() == "2026-06-16T19:00:00+00:00"
     assert local_settle_utc("NYC", "2026-06-19").isoformat() == "2026-06-20T02:00:00+00:00"
+
+
+def test_market_end_prefers_gamma_event_over_calendar_approximation():
+    fallback = local_settle_utc("Beijing", "2026-07-18")
+
+    resolved, source = resolve_market_end_utc(
+        {
+            "endDate": "2026-07-18T12:00:00Z",
+            "markets": [{"endDate": "2026-07-18T13:00:00Z"}],
+        },
+        fallback=fallback,
+    )
+
+    assert resolved.isoformat() == "2026-07-18T12:00:00+00:00"
+    assert source == "gamma_event_endDate"
+
+
+def test_market_end_uses_earliest_child_market_then_explicit_fallback():
+    fallback = local_settle_utc("Tokyo", "2026-07-18")
+
+    resolved, source = resolve_market_end_utc(
+        {"markets": [{"endDate": "2026-07-18T14:00:00Z"}, {"endDate": "2026-07-18T13:00:00Z"}]},
+        fallback=fallback,
+    )
+    fallback_resolved, fallback_source = resolve_market_end_utc({}, fallback=fallback)
+
+    assert resolved.isoformat() == "2026-07-18T13:00:00+00:00"
+    assert source == "gamma_market_endDate"
+    assert fallback_resolved == fallback
+    assert fallback_source == "city_local_22h_approximation"
+
+
+def test_market_end_rejects_malformed_exchange_timestamp():
+    fallback = local_settle_utc("Singapore", "2026-07-18")
+
+    try:
+        resolve_market_end_utc({"endDate": "not-a-timestamp"}, fallback=fallback)
+    except ValueError as exc:
+        assert "invalid Gamma event endDate" in str(exc)
+    else:
+        raise AssertionError("malformed Gamma cutoff must fail explicitly")
 
 
 def test_city_scan_dates_are_per_city_not_machine_date():

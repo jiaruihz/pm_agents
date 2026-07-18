@@ -48,6 +48,7 @@ from weather_data_feed import (
     local_settle_utc,
     load_city_configs,
     parse_now_utc,
+    resolve_market_end_utc,
     unique_city_scan_dates as data_feed_unique_city_scan_dates,
 )
 from weather_data_feed.forecast_hourly_curves import (
@@ -1206,7 +1207,9 @@ def main():
             tz = cfg["tz_offset"]
             market_local_date = target_date
             city_local_date_at_snapshot = data_feed_city_local_date(city, now_utc).isoformat()
-            settle_utc = local_settle_utc(city, target_date)
+            approximate_settle_utc = local_settle_utc(city, target_date)
+            settle_utc = approximate_settle_utc
+            market_end_source = "city_local_22h_approximation"
             hours_to_settle = (settle_utc - now_utc).total_seconds() / 3600
 
             if hours_to_settle < 0 or hours_to_settle > 50:
@@ -1277,6 +1280,39 @@ def main():
                         cycle_hour, model_run_age = estimate_model_cycle(now_utc_hour, model)
                         forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
             probability_status = "ok" if errors is not None else "missing_error_distribution"
+            # Fetch PM event
+            city_slug = cfg.get("slug", city.lower())
+            dt = datetime.strptime(target_date, "%Y-%m-%d")
+            date_slug = dt.strftime("%B-%-d-%Y").lower()
+            slug = f"highest-temperature-in-{city_slug}-on-{date_slug}"
+
+            try:
+                status_code, ev_raw, _error = curl_json_get(
+                    f"{PM_GAMMA_URL}/events",
+                    params={"slug": slug},
+                    proxy=PROXY,
+                    timeout_sec=PM_CURL_TIMEOUT_SEC,
+                    connect_timeout_sec=PM_CURL_CONNECT_TIMEOUT_SEC,
+                )
+                if status_code != 200 or ev_raw is None:
+                    ev_raw = {}
+                if isinstance(ev_raw, list) and len(ev_raw) > 0:
+                    ev_raw = ev_raw[0]
+                markets = ev_raw.get("markets", []) if isinstance(ev_raw, dict) else []
+            except Exception:
+                ev_raw = {}
+                markets = []
+
+            settle_utc, market_end_source = resolve_market_end_utc(
+                ev_raw if isinstance(ev_raw, dict) else None,
+                fallback=approximate_settle_utc,
+            )
+            hours_to_settle = (settle_utc - now_utc).total_seconds() / 3600
+            window = classify_window(hours_to_settle)
+            time_bucket = classify_time_bucket(hours_to_settle)
+            settle_utc_hour = settle_utc.hour
+            forecast_lead = estimate_forecast_lead_hours(cycle_hour, settle_utc_hour)
+
             actual_model = str(forecast_info.get("source_model") or model)
             curve_key = (city, target_date, actual_model, forecast_info.get("values_hash"))
             if forecast_info.get("hourly_curve") and curve_key not in forecast_curve_seen:
@@ -1307,29 +1343,7 @@ def main():
                     )
                 )
 
-            # Fetch PM event
-            city_slug = cfg.get("slug", city.lower())
-            dt = datetime.strptime(target_date, "%Y-%m-%d")
-            date_slug = dt.strftime("%B-%-d-%Y").lower()
-            slug = f"highest-temperature-in-{city_slug}-on-{date_slug}"
-
-            try:
-                status_code, ev_raw, _error = curl_json_get(
-                    f"{PM_GAMMA_URL}/events",
-                    params={"slug": slug},
-                    proxy=PROXY,
-                    timeout_sec=PM_CURL_TIMEOUT_SEC,
-                    connect_timeout_sec=PM_CURL_CONNECT_TIMEOUT_SEC,
-                )
-                if status_code != 200 or ev_raw is None:
-                    continue
-                if isinstance(ev_raw, list) and len(ev_raw) > 0:
-                    ev_raw = ev_raw[0]
-                markets = ev_raw.get("markets", []) if isinstance(ev_raw, dict) else []
-            except:
-                continue
-
-            if not markets:
+            if hours_to_settle < 0 or hours_to_settle > 50 or not markets:
                 continue
 
             now_local = city_local_datetime(city, now_utc)
@@ -1573,7 +1587,8 @@ def main():
                     "model_run_age_hours_estimated": round(model_run_age, 1),
                     "forecast_target_lead_hours_estimated": forecast_lead,
                     "settle_utc": settle_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "settle_local": f"{target_date}T22:00:00",
+                    "settle_local": city_local_datetime(city, settle_utc).isoformat(),
+                    "market_end_source": market_end_source,
                     "metar_current_max_f": metar_state["metar_current_max_f"],
                     "metar_latest_temp_f": metar_state["metar_latest_temp_f"],
                     "metar_latest_ts_utc": metar_state["metar_latest_ts_utc"],
