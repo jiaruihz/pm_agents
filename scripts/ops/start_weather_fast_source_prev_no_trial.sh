@@ -3,7 +3,9 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-TMUX_SOCKET="${WEATHER_FAST_PREV_NO_TMUX_SOCKET:-weather-jrs}"
+# Reuse the data-feed tmux server so child processes inherit the macOS permission
+# context that can read and write the external JRS runtime volume.
+TMUX_SOCKET="${WEATHER_FAST_PREV_NO_TMUX_SOCKET:-weather-data-feed-jrs}"
 TMUX_SESSION="${WEATHER_FAST_PREV_NO_TMUX_SESSION:-weather_fast_source_prev_no_trial}"
 SCREEN_SESSION="${WEATHER_FAST_PREV_NO_SCREEN_SESSION:-weather_fast_source_prev_no_trial}"
 TARGET_DATE="${WEATHER_FAST_PREV_NO_TARGET_DATE:-}"
