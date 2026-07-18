@@ -2,6 +2,8 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_socket)"
 PID_FILE="$PROJECT_DIR/runtime/weather_edge_v1/source_orderbook_timing/loop.pid"
 
 if [[ ! -f "$PID_FILE" ]]; then
@@ -18,8 +20,8 @@ fi
 
 if [[ "$pid" == tmux:* ]]; then
   session="${pid#tmux:}"
-  if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$session" 2>/dev/null; then
-    tmux kill-session -t "$session"
+  if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$session" 2>/dev/null; then
+    weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$session"
     echo "stopped timing monitor tmux=$session"
   else
     echo "not running: stale tmux session=$session"

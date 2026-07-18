@@ -22,19 +22,18 @@ CACHE_ROOT="${WEATHER_FULL_LADDER_CACHE_ROOT:-$RUNTIME_ROOT/cache}"
 INTERVAL_SEC="${WEATHER_FULL_LADDER_INTERVAL_SEC:-1200}"
 ORDERBOOK_BUDGET_SEC="${WEATHER_FULL_LADDER_ORDERBOOK_BUDGET_SEC:-900}"
 ORDERBOOK_WORKERS="${WEATHER_FULL_LADDER_ORDERBOOK_WORKERS:-2}"
-TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_FULL_LADDER_TMUX_SOCKET:-}")"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 TMUX_SESSION="${WEATHER_FULL_LADDER_TMUX_SESSION:-weather_full_ladder_capture}"
 LOG_FILE="$OUTPUT_ROOT/full_ladder_capture.log"
 
 mkdir -p "$OUTPUT_ROOT" "$CACHE_ROOT"
-weather_jrs_tmux_write_probe "$TMUX_SOCKET" "$RUNTIME_ROOT"
 
-if tmux -L "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
-  echo "already running: tmux -L $TMUX_SOCKET session $TMUX_SESSION"
+if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+  echo "already running: tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
   exit 0
 fi
 
-tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
   "export WEATHER_DATA_FEED_SERVICE_DIR='$SERVICE_DIR' \
      WEATHER_FULL_LADDER_OUTPUT_ROOT='$OUTPUT_ROOT' \
      WEATHER_FULL_LADDER_CACHE_ROOT='$CACHE_ROOT' \
@@ -45,8 +44,8 @@ tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
    && exec bash '$PROJECT_DIR/scripts/ops/_full_ladder_capture_loop_body.sh'"
 
 sleep 1
-if tmux -L "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
-  echo "started tmux -L $TMUX_SOCKET session $TMUX_SESSION"
+if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+  echo "started tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
   echo "  output_root=$OUTPUT_ROOT interval=${INTERVAL_SEC}s budget=${ORDERBOOK_BUDGET_SEC}s workers=$ORDERBOOK_WORKERS"
   echo "  log=$LOG_FILE"
 else

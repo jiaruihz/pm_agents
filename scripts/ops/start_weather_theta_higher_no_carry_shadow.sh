@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
+TMUX_SESSION="${THETA_HIGHER_NO_CARRY_TMUX_SESSION:-weather_theta_higher_no_carry_shadow_v1}"
 cd "$ROOT"
 
 RUNTIME_DIR="runtime/weather_edge_v1/theta_higher_no_carry_shadow_v1"
@@ -11,7 +14,10 @@ mkdir -p "$RUNTIME_DIR"
 
 if [[ -s "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE")"
-  if kill -0 "$old_pid" 2>/dev/null; then
+  if [[ "$old_pid" == "tmux:$TMUX_SESSION" ]] && weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "already_running tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
+    exit 0
+  elif [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
     echo "already_running pid=$old_pid"
     exit 0
   fi
@@ -51,7 +57,9 @@ if [[ -n "${MAX_CURRENT_YES_ASK:-}" ]]; then
   args+=(--max-current-yes-ask "$MAX_CURRENT_YES_ASK")
 fi
 
-nohup "$PYTHON_BIN" "${args[@]}" >>"$LOG_FILE" 2>&1 &
-pid="$!"
-echo "$pid" >"$PID_FILE"
-echo "started pid=$pid log=$LOG_FILE"
+printf -v quoted_args '%q ' "$PYTHON_BIN" "${args[@]}"
+weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+  "cd $(printf '%q' "$ROOT") && exec $quoted_args >> $(printf '%q' "$LOG_FILE") 2>&1"
+echo "tmux:$TMUX_SESSION" >"$PID_FILE"
+echo "started tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE"

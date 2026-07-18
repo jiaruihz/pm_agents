@@ -9,7 +9,7 @@ set -euo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_EVENT_LADDER_TMUX_SOCKET:-}")"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 TMUX_SESSION="${WEATHER_EVENT_LADDER_TMUX_SESSION:-weather_source_event_ladder_repricing_shadow}"
 OUTPUT_DIR="${WEATHER_EVENT_LADDER_OUTPUT_DIR:-$RUNTIME_ROOT/output/source_event_ladder_repricing_shadow}"
 LOWEST_OUTPUT_DIR="${WEATHER_EVENT_LADDER_LOWEST_OUTPUT_DIR:-$OUTPUT_DIR/lowest_10m}"
@@ -62,10 +62,10 @@ if [[ -n "$MARKET_PROXY" ]]; then
   lowest_cmd+=(--market-proxy "$MARKET_PROXY")
 fi
 
-tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
-tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
   "cd '$PROJECT_DIR' && exec $(printf '%q ' "${cmd[@]}") >> '$LOG_FILE' 2>&1"
-tmux -L "$TMUX_SOCKET" new-window -d -t "$TMUX_SESSION" -n lowest \
+weather_jrs_tmux "$TMUX_SOCKET" new-window -d -t "$TMUX_SESSION" -n lowest \
   "cd '$PROJECT_DIR' && exec $(printf '%q ' "${lowest_cmd[@]}") >> '$LOWEST_LOG_FILE' 2>&1"
 
 echo "started $TMUX_SESSION on tmux socket $TMUX_SOCKET"

@@ -2,6 +2,8 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 RUNTIME_DIR="${TMAX_DISTRIBUTION_EDGE_CANDIDATE_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/tmax_distribution_edge_candidate_shadow_v1}"
 LOG_FILE="$RUNTIME_DIR/candidate_shadow_loop.log"
 PY="$PROJECT_DIR/.venv/bin/python"
@@ -31,8 +33,7 @@ if [[ "$EXCLUDE_TREND3H_FLAT" == "1" ]]; then
   args+=(--exclude-trend3h-flat)
 fi
 
-cmd=(
-  "cd" "$PROJECT_DIR" "&&"
+runner_cmd=(
   "$PY" "-u" "scripts/ops/tmax_distribution_edge_candidate_shadow_v1.py" "loop"
   "--runtime-dir" "$RUNTIME_DIR"
   "--source" "$SOURCE"
@@ -40,18 +41,13 @@ cmd=(
   "--default-ask-floor" "$DEFAULT_ASK_FLOOR"
   "--interval-seconds" "$INTERVAL_SEC"
   "${args[@]}"
-  ">>" "$LOG_FILE" "2>&1"
 )
+printf -v quoted_runner_cmd '%q ' "${runner_cmd[@]}"
+bootstrap="cd $(printf '%q' "$PROJECT_DIR") && exec $quoted_runner_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
 
-if command -v tmux >/dev/null 2>&1; then
-  if tmux has-session -t "$SESSION" 2>/dev/null; then
-    echo "already running tmux session=$SESSION log=$LOG_FILE"
-    exit 0
-  fi
-  tmux new-session -d -s "$SESSION" "${cmd[*]}"
-  echo "started tmux session=$SESSION log=$LOG_FILE"
+if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$SESSION" 2>/dev/null; then
+  echo "already running tmux_socket=$TMUX_SOCKET session=$SESSION log=$LOG_FILE"
   exit 0
 fi
-
-nohup bash -lc "${cmd[*]}" >/dev/null 2>&1 < /dev/null &
-echo "started pid=$! log=$LOG_FILE"
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
+echo "started tmux_socket=$TMUX_SOCKET session=$SESSION log=$LOG_FILE"

@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
-TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_HKO_STALE_BOOK_TMUX_SOCKET:-}")"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 TMUX_SESSION="${WEATHER_HKO_STALE_BOOK_TMUX_SESSION:-weather_hko_running_max_stale_book_shadow}"
 TARGET_DATE="${WEATHER_HKO_STALE_BOOK_TARGET_DATE:-}"
 MARKET_DATE="${TARGET_DATE:-$("$PROJECT_DIR/.venv/bin/python" - <<'PY'
@@ -57,8 +57,8 @@ if [[ -n "$MARKET_PROXY" ]]; then
   cmd+=(--market-proxy "$MARKET_PROXY")
 fi
 
-tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
-tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
   "cd '$PROJECT_DIR' && exec $(printf '%q ' "${cmd[@]}") >> '$LOG_FILE' 2>&1"
 
 echo "started $TMUX_SESSION on tmux socket $TMUX_SOCKET"

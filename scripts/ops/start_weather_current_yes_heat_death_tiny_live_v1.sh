@@ -8,7 +8,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
-TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_DATA_FEED_TMUX_SOCKET:-}")"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 
 start_head() {
   local head="$1"
@@ -26,7 +26,7 @@ start_head() {
     return 0
   fi
 
-  tmux -L "$TMUX_SOCKET" new-session -d -s "$session" \
+  weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$session" \
     "cd '$ROOT' && exec '$PY' -u scripts/ops/weather_current_yes_heat_death_tiny_live_v1.py loop \
       --head $head \
       --output-dir '$output_dir' \

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
-TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${LOW_PRICE_YES_FACT_REFRESH_TMUX_SOCKET:-}")"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 TMUX_SESSION="${LOW_PRICE_YES_FACT_REFRESH_TMUX_SESSION:-low_price_yes_fact_refresh}"
 cd "$ROOT"
 
@@ -15,7 +15,7 @@ mkdir -p "$RUNTIME_DIR" runtime/weather_edge_v1/market_data/paper_snapshots runt
 
 if [[ "${LOW_PRICE_YES_FACT_REFRESH_CHILD:-0}" != "1" && -s "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE")"
-  if [[ "$old_pid" == tmux:* ]] && tmux -L "$TMUX_SOCKET" has-session -t "${old_pid#tmux:}" 2>/dev/null; then
+  if [[ "$old_pid" == tmux:* ]] && weather_jrs_tmux "$TMUX_SOCKET" has-session -t "${old_pid#tmux:}" 2>/dev/null; then
     echo "already_running pid=$old_pid log=$LOG_FILE"
     exit 0
   fi
@@ -45,8 +45,8 @@ if [[ "${LOW_PRICE_YES_FACT_REFRESH_CHILD:-0}" != "1" ]]; then
     LOW_PRICE_YES_FACT_REFRESH_INTERVAL_SECONDS="$INTERVAL_SECONDS" \
     "$0")
   printf -v quoted_launch_cmd '%q ' "${launch_cmd[@]}"
-  tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
-  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+  weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+  weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
     "cd $(printf '%q' "$ROOT") && exec $quoted_launch_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
   echo "tmux:$TMUX_SESSION" >"$PID_FILE"
   echo "started low-price YES fact refresh socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE interval=${INTERVAL_SECONDS}s"

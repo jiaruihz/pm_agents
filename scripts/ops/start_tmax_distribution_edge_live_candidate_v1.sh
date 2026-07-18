@@ -2,6 +2,8 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 RUNTIME_DIR="${TMAX_DISTRIBUTION_EDGE_LIVE_CANDIDATE_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/tmax_distribution_edge_live_candidate_v1}"
 LOG_FILE="$RUNTIME_DIR/live_candidate_loop.log"
 PY="$PROJECT_DIR/.venv/bin/python"
@@ -83,15 +85,9 @@ proxy_norm=". $proxy_helper_q; weather_export_market_proxy_env;"
 env_check="printf '[%s] env_check http_proxy=%s https_proxy=%s all_proxy=%s wallet=%s pm_addr=%s clob_base=%s\\n' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" \"\$([[ -n \${HTTP_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${HTTPS_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${ALL_PROXY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${PM:-}\${POLYGON_WALLET_PRIVATE_KEY:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${PM_ADDRESS:-} ]] && echo 1 || echo 0)\" \"\$([[ -n \${CLOB_BASE_URL:-} ]] && echo 1 || echo 0)\" >> $log_q"
 bootstrap="cd $project_q && $env_load $proxy_norm $env_check && exec $runner_cmd_q >> $log_q 2>&1"
 
-if command -v tmux >/dev/null 2>&1; then
-  if tmux has-session -t "$SESSION" 2>/dev/null; then
-    echo "already running tmux session=$SESSION log=$LOG_FILE"
-    exit 0
-  fi
-  tmux new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
-  echo "started tmux session=$SESSION log=$LOG_FILE"
+if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$SESSION" 2>/dev/null; then
+  echo "already running tmux_socket=$TMUX_SOCKET session=$SESSION log=$LOG_FILE"
   exit 0
 fi
-
-nohup bash -lc "$bootstrap" >/dev/null 2>&1 < /dev/null &
-echo "started pid=$! log=$LOG_FILE"
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
+echo "started tmux_socket=$TMUX_SOCKET session=$SESSION log=$LOG_FILE"

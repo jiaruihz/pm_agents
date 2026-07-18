@@ -6,9 +6,8 @@ source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
 # Reuse the data-feed tmux server so child processes inherit the macOS permission
 # context that can read and write the external JRS runtime volume.
-TMUX_SOCKET="$(weather_jrs_tmux_start_socket "${WEATHER_FAST_PREV_NO_TMUX_SOCKET:-}")"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 TMUX_SESSION="${WEATHER_FAST_PREV_NO_TMUX_SESSION:-weather_fast_source_prev_no_trial}"
-SCREEN_SESSION="${WEATHER_FAST_PREV_NO_SCREEN_SESSION:-weather_fast_source_prev_no_trial}"
 TARGET_DATE="${WEATHER_FAST_PREV_NO_TARGET_DATE:-}"
 INTERVAL_SEC="${WEATHER_FAST_PREV_NO_INTERVAL_SEC:-30}"
 BURST_INTERVAL_SEC="${WEATHER_FAST_PREV_NO_BURST_INTERVAL_SEC:-10}"
@@ -30,14 +29,6 @@ CONFIRM_LIVE="${WEATHER_FAST_PREV_NO_CONFIRM_LIVE:-1}"
 ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS="${WEATHER_FAST_PREV_NO_ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS:-1}"
 LOG_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.log"
 PID_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.pid"
-START_MODE="${WEATHER_FAST_PREV_NO_START_MODE:-tmux}"
-
-if [[ "$START_MODE" != "tmux" ]]; then
-  echo "JRS fast-source runner must use canonical tmux; requested start mode: $START_MODE" >&2
-  exit 1
-fi
-
-weather_jrs_tmux_write_probe "$TMUX_SOCKET" "$RUNTIME_ROOT"
 
 mkdir -p "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
 
@@ -84,24 +75,21 @@ fi
 
 if [[ -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
-  if [[ "$old_pid" == screen:* ]]; then
-    screen -S "${old_pid#screen:}" -X quit 2>/dev/null || true
-  elif [[ "$old_pid" == tmux:* ]]; then
-    tmux -L "$TMUX_SOCKET" kill-session -t "${old_pid#tmux:}" 2>/dev/null || true
+  if [[ "$old_pid" == tmux:* ]]; then
+    weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "${old_pid#tmux:}" 2>/dev/null || true
   elif [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
     kill "$old_pid" 2>/dev/null || true
     sleep 1
   fi
 fi
-tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
-screen -S "$SCREEN_SESSION" -X quit 2>/dev/null || true
+weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 pkill -f "$PROJECT_DIR/scripts/ops/weather_fast_source_prev_no_trial.py --loop" 2>/dev/null || true
 printf -v quoted_cmd '%q ' "${cmd[@]}"
-tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
   "cd $(printf '%q' "$PROJECT_DIR") && set -a && [[ -f .env ]] && source .env || true && set +a && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
 echo "tmux:$TMUX_SESSION" > "$PID_FILE"
 
-echo "started fast_source_prev_no_trial mode=$START_MODE"
+echo "started fast_source_prev_no_trial tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
 echo "target_date=${TARGET_DATE:-auto_today}"
 echo "interval_sec=$INTERVAL_SEC"
 echo "burst_interval_sec=$BURST_INTERVAL_SEC"

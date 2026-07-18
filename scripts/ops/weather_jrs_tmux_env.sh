@@ -6,8 +6,24 @@
 # equivalent.
 WEATHER_JRS_TMUX_SOCKET_CANONICAL="weather-data-feed-jrs"
 
+weather_jrs_tmux_bin() {
+  if [[ -n "${WEATHER_JRS_TMUX_BIN:-}" ]]; then
+    if [[ ! -x "$WEATHER_JRS_TMUX_BIN" ]]; then
+      echo "configured WEATHER_JRS_TMUX_BIN is not executable: $WEATHER_JRS_TMUX_BIN" >&2
+      return 1
+    fi
+    printf '%s\n' "$WEATHER_JRS_TMUX_BIN"
+    return 0
+  fi
+  if [[ -x /opt/homebrew/bin/tmux ]]; then
+    printf '%s\n' /opt/homebrew/bin/tmux
+    return 0
+  fi
+  command -v tmux
+}
+
 weather_jrs_tmux_socket() {
-  local requested="${1:-${WEATHER_JRS_TMUX_SOCKET:-$WEATHER_JRS_TMUX_SOCKET_CANONICAL}}"
+  local requested="${1:-$WEATHER_JRS_TMUX_SOCKET_CANONICAL}"
   if [[ "$requested" != "$WEATHER_JRS_TMUX_SOCKET_CANONICAL" ]]; then
     echo "refusing non-canonical JRS tmux socket: $requested (required: $WEATHER_JRS_TMUX_SOCKET_CANONICAL)" >&2
     return 1
@@ -15,42 +31,39 @@ weather_jrs_tmux_socket() {
   printf '%s\n' "$requested"
 }
 
+weather_jrs_tmux() {
+  local socket
+  local tmux_bin
+
+  socket="$(weather_jrs_tmux_socket "${1:-}")" || return 1
+  shift
+  tmux_bin="$(weather_jrs_tmux_bin)" || return 1
+  "$tmux_bin" -L "$socket" "$@"
+}
+
 weather_jrs_tmux_write_probe() {
   local socket="$1"
   local runtime_root="$2"
-  local tmux_bin="${3:-tmux}"
   local probe_dir="$runtime_root/loop"
   local probe_path="$probe_dir/.jrs_tmux_context_probe_$$"
-  local probe_session="weather_jrs_context_probe_$$"
+  local quoted_dir
   local quoted_probe
 
-  mkdir -p "$probe_dir"
+  socket="$(weather_jrs_tmux_socket "$socket")" || return 1
+  quoted_dir="$(printf '%q' "$probe_dir")"
   quoted_probe="$(printf '%q' "$probe_path")"
-  "$tmux_bin" -L "$socket" kill-session -t "$probe_session" 2>/dev/null || true
-  "$tmux_bin" -L "$socket" new-session -d -s "$probe_session" \
-    "umask 077; printf 'probe\\n' > $quoted_probe"
-
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    if [[ -f "$probe_path" ]]; then
-      rm -f "$probe_path"
-      "$tmux_bin" -L "$socket" kill-session -t "$probe_session" 2>/dev/null || true
-      return 0
-    fi
-    sleep 0.1
-  done
-
-  "$tmux_bin" -L "$socket" kill-session -t "$probe_session" 2>/dev/null || true
-  echo "JRS tmux context cannot write $runtime_root: socket=$socket" >&2
-  return 1
+  if ! weather_jrs_tmux "$socket" run-shell \
+    "set -eu; umask 077; mkdir -p $quoted_dir; printf 'probe\\n' > $quoted_probe; rm -f $quoted_probe"; then
+    echo "JRS tmux context cannot write $runtime_root: socket=$socket" >&2
+    return 1
+  fi
 }
 
 weather_jrs_tmux_start_socket() {
-  local requested="${1:-}"
-  local runtime_root="${2:-${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}}"
-  local tmux_bin="${3:-tmux}"
+  local runtime_root="${1:-${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}}"
   local socket
 
-  socket="$(weather_jrs_tmux_socket "$requested")" || return 1
-  weather_jrs_tmux_write_probe "$socket" "$runtime_root" "$tmux_bin" || return 1
+  socket="$(weather_jrs_tmux_socket)" || return 1
+  weather_jrs_tmux_write_probe "$socket" "$runtime_root" || return 1
   printf '%s\n' "$socket"
 }

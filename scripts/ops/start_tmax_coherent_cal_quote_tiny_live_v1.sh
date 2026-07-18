@@ -2,6 +2,8 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 RUNTIME_DIR="${TMAX_COHERENT_CAL_QUOTE_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/tmax_coherent_cal_quote_tiny_live_v1}"
 LOG_FILE="$RUNTIME_DIR/tmax_coherent_cal_quote_tiny_live_loop.log"
 PY="$PROJECT_DIR/.venv/bin/python"
@@ -59,14 +61,9 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
 fi
 bootstrap="cd $project_q && $env_load . $proxy_helper_q; weather_export_market_proxy_env; exec $runner_cmd_q >> $log_q 2>&1"
 
-if command -v tmux >/dev/null 2>&1; then
-  if tmux has-session -t "$SESSION" 2>/dev/null; then
-    echo "already running tmux session=$SESSION log=$LOG_FILE"
-    exit 0
-  fi
-  tmux new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
-  echo "started tmux session=$SESSION log=$LOG_FILE"
-else
-  nohup bash -lc "$bootstrap" >/dev/null 2>&1 < /dev/null &
-  echo "started pid=$! log=$LOG_FILE"
+if weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$SESSION" 2>/dev/null; then
+  echo "already running tmux_socket=$TMUX_SOCKET session=$SESSION log=$LOG_FILE"
+  exit 0
 fi
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" "bash -lc $(printf '%q' "$bootstrap")"
+echo "started tmux_socket=$TMUX_SOCKET session=$SESSION log=$LOG_FILE"

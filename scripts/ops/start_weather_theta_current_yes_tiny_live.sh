@@ -2,6 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
+STRATEGY_INSTANCE="${THETA_CURRENT_YES_STRATEGY_INSTANCE:-theta_current_yes_tiny_live_v1}"
+TMUX_SESSION="${THETA_CURRENT_YES_TMUX_SESSION:-$STRATEGY_INSTANCE}"
 cd "$ROOT"
 
 RUNTIME_DIR="${THETA_CURRENT_YES_RUNTIME_DIR:-runtime/weather_edge_v1/theta_current_yes_tiny_live_v1}"
@@ -11,7 +15,10 @@ mkdir -p "$RUNTIME_DIR" "runtime/weather_edge_v1/live"
 
 if [[ -s "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE")"
-  if kill -0 "$old_pid" 2>/dev/null; then
+  if [[ "$old_pid" == "tmux:$TMUX_SESSION" ]] && weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "already_running tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"
+    exit 0
+  elif [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
     echo "already_running pid=$old_pid"
     exit 0
   fi
@@ -64,7 +71,7 @@ if [[ "$THETA_CURRENT_YES_MODE" != "live" && "$THETA_CURRENT_YES_MODE" != "telem
 fi
 
 if [[ "$THETA_CURRENT_YES_MODE" == "live" \
-  && "${THETA_CURRENT_YES_STRATEGY_INSTANCE:-theta_current_yes_tiny_live_v1}" == "theta_current_yes_tiny_live_v1" \
+  && "$STRATEGY_INSTANCE" == "theta_current_yes_tiny_live_v1" \
   && "$THETA_CURRENT_YES_ENTRY_PROFILE_MODE" == "both" \
   && "$ALLOW_SHARED_CURRENT_YES_LIVE" != "1" ]]; then
   echo "refusing legacy shared current-YES live instance; use start_weather_theta_current_yes_split_live.sh or set ALLOW_SHARED_CURRENT_YES_LIVE=1" >&2
@@ -135,8 +142,9 @@ if [[ "$NO_TELEGRAM" == "1" ]]; then
   args+=(--no-telegram)
 fi
 
-nohup "$PYTHON_BIN" "${args[@]}" >>"$LOG_FILE" 2>&1 &
-
-pid="$!"
-echo "$pid" >"$PID_FILE"
-echo "started mode=$THETA_CURRENT_YES_MODE instance=${THETA_CURRENT_YES_STRATEGY_INSTANCE:-theta_current_yes_tiny_live_v1} entry_profile_mode=$THETA_CURRENT_YES_ENTRY_PROFILE_MODE local_hours=${MIN_LOCAL_HOUR}-${MAX_LOCAL_HOUR} fade_confirmed_model_mode=$FADE_CONFIRMED_MODEL_MODE pid=$pid log=$LOG_FILE"
+printf -v quoted_args '%q ' "$PYTHON_BIN" "${args[@]}"
+weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+  "cd $(printf '%q' "$ROOT") && exec $quoted_args >> $(printf '%q' "$LOG_FILE") 2>&1"
+echo "tmux:$TMUX_SESSION" >"$PID_FILE"
+echo "started mode=$THETA_CURRENT_YES_MODE instance=$STRATEGY_INSTANCE entry_profile_mode=$THETA_CURRENT_YES_ENTRY_PROFILE_MODE local_hours=${MIN_LOCAL_HOUR}-${MAX_LOCAL_HOUR} fade_confirmed_model_mode=$FADE_CONFIRMED_MODEL_MODE tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE"

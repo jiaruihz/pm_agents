@@ -2,6 +2,9 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
+TMUX_SESSION="${TMAX_DISTRIBUTION_EDGE_SHADOW_TMUX_SESSION:-tmax_distribution_edge_shadow_v1}"
 RUNTIME_DIR="${TMAX_DISTRIBUTION_EDGE_SHADOW_RUNTIME_DIR:-$PROJECT_DIR/runtime/weather_edge_v1/tmax_distribution_edge_shadow_v1}"
 PID_FILE="$RUNTIME_DIR/shadow_loop.pid"
 LOG_FILE="$RUNTIME_DIR/shadow_loop.log"
@@ -15,7 +18,10 @@ mkdir -p "$RUNTIME_DIR"
 
 if [[ "${TMAX_DISTRIBUTION_EDGE_SHADOW_CHILD:-0}" != "1" && -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
-  if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+  if [[ "$old_pid" == "tmux:$TMUX_SESSION" ]] && weather_jrs_tmux "$TMUX_SOCKET" has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "already running tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE"
+    exit 0
+  elif [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
     echo "already running pid=$old_pid log=$LOG_FILE"
     exit 0
   fi
@@ -26,10 +32,11 @@ if [[ ! -x "$PY" ]]; then
 fi
 
 if [[ "${TMAX_DISTRIBUTION_EDGE_SHADOW_CHILD:-0}" != "1" ]]; then
-  nohup env TMAX_DISTRIBUTION_EDGE_SHADOW_CHILD=1 "$0" >>"$LOG_FILE" 2>&1 < /dev/null &
-  pid=$!
-  echo "$pid" > "$PID_FILE"
-  echo "started tmax distribution edge shadow loop pid=$pid log=$LOG_FILE source=$SOURCE refresh_source=$REFRESH_SOURCE"
+  weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+  weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
+    "cd $(printf '%q' "$PROJECT_DIR") && exec env TMAX_DISTRIBUTION_EDGE_SHADOW_CHILD=1 $(printf '%q' "$0") >> $(printf '%q' "$LOG_FILE") 2>&1"
+  echo "tmux:$TMUX_SESSION" > "$PID_FILE"
+  echo "started tmax distribution edge shadow loop tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION log=$LOG_FILE source=$SOURCE refresh_source=$REFRESH_SOURCE"
   exit 0
 fi
 

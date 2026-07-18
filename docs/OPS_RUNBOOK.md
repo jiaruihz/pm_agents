@@ -11,6 +11,21 @@
 
 ## 1. 统一查看入口
 
+### Mac JRS 常驻进程
+
+Mac 上所有 weather/tmax/range 常驻进程统一由
+`scripts/ops/weather_jrs_tmux_env.sh` 管理，唯一 socket 是
+`weather-data-feed-jrs`。各业务 `start_*.sh` 只保留 session 名和业务参数，
+不再支持默认 tmux、独立 socket、screen、nohup 或 start-mode fallback；启动前的
+JRS write probe 由 helper 在 tmux server 内执行。
+
+```bash
+tmux -L weather-data-feed-jrs list-sessions
+```
+
+如果发现进程仍在其他 socket，只记录并按生产变更流程迁移；涉及 live 的 session
+不得在巡检中自动重启或跨 socket 搬迁。
+
 先用这个脚本看当前状态：
 
 ```bash
