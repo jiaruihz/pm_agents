@@ -27,6 +27,7 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
 fi
 
 SNAPSHOT_SRC="${LOW_PRICE_YES_FACT_REFRESH_SNAPSHOT_SRC:-$HOME/projects/weather_data_feed_service_runtime/targeted_output/paper_snapshots}"
+FULL_LADDER_SNAPSHOT_SRC="${LOW_PRICE_YES_FACT_REFRESH_FULL_LADDER_SNAPSHOT_SRC:-$HOME/projects/weather_data_feed_service_runtime/full_ladder_output/paper_snapshots}"
 CACHE_SRC="${LOW_PRICE_YES_FACT_REFRESH_CACHE_SRC:-$HOME/projects/weather_data_feed_service_runtime/cache}"
 SNAPSHOT_DST="${LOW_PRICE_YES_FACT_REFRESH_SNAPSHOT_DST:-runtime/weather_edge_v1/market_data/paper_snapshots}"
 CACHE_DST="${LOW_PRICE_YES_FACT_REFRESH_CACHE_DST:-runtime/weather_edge_v1/market_data/cache}"
@@ -38,6 +39,7 @@ if [[ "${LOW_PRICE_YES_FACT_REFRESH_CHILD:-0}" != "1" ]]; then
     LOW_PRICE_YES_FACT_REFRESH_CHILD=1 \
     PYTHON_BIN="$PYTHON_BIN" \
     LOW_PRICE_YES_FACT_REFRESH_SNAPSHOT_SRC="$SNAPSHOT_SRC" \
+    LOW_PRICE_YES_FACT_REFRESH_FULL_LADDER_SNAPSHOT_SRC="$FULL_LADDER_SNAPSHOT_SRC" \
     LOW_PRICE_YES_FACT_REFRESH_CACHE_SRC="$CACHE_SRC" \
     LOW_PRICE_YES_FACT_REFRESH_SNAPSHOT_DST="$SNAPSHOT_DST" \
     LOW_PRICE_YES_FACT_REFRESH_CACHE_DST="$CACHE_DST" \
@@ -65,6 +67,11 @@ while true; do
         echo "[low_price_yes_fact_refresh] missing_snapshot_src=$SNAPSHOT_SRC"
       else
         rsync -a "$SNAPSHOT_SRC/" "$SNAPSHOT_DST/"
+      fi
+      if [[ -d "$FULL_LADDER_SNAPSHOT_SRC" ]]; then
+        rsync -a "$FULL_LADDER_SNAPSHOT_SRC/" "$SNAPSHOT_DST/"
+      else
+        echo "[low_price_yes_fact_refresh] missing_full_ladder_snapshot_src=$FULL_LADDER_SNAPSHOT_SRC"
       fi
       if [[ -d "$CACHE_SRC" ]]; then
         rsync -a "$CACHE_SRC/" "$CACHE_DST/"
