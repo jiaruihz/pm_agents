@@ -29,3 +29,17 @@ def test_default_authenticated_trade_lookup_uses_funder(monkeypatch: pytest.Monk
         clob_fill_sync.sync_clob_fills(conn, dry_run=True)
 
     assert seen == ["0xfunder"]
+
+
+def test_v2_clob_share_units_are_not_divided_by_one_million() -> None:
+    order = clob_fill_sync._parse_clob_order_response(
+        {"status": "MATCHED", "size_matched": "5", "price": "0.973"}
+    )
+    trade = clob_fill_sync._extract_trade_fill(
+        [{"size": "5", "price": "0.973"}],
+        row_shares=5.0,
+        row_limit_price=0.973,
+    )
+
+    assert order["size_matched"] == 5.0
+    assert trade["size_matched"] == 5.0

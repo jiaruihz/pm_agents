@@ -660,9 +660,11 @@ def _parse_clob_order_response(data: dict[str, Any]) -> dict[str, Any]:
     """
     status = (data.get("status") or "").upper()
 
-    size_matched_raw = data.get("sizeMatched") or data.get("size_matched") or "0"
+    size_matched_raw = data.get("size_matched") or data.get("sizeMatched") or "0"
     try:
-        size_matched = float(size_matched_raw) / 1_000_000
+        size_matched = float(size_matched_raw)
+        if "size_matched" not in data:
+            size_matched /= 1_000_000
     except (ValueError, TypeError):
         size_matched = 0.0
 
@@ -707,7 +709,9 @@ def _extract_trade_fill(
     for t in trades:
         sz_raw = t.get("size") or t.get("matched_amount") or t.get("makerAmount") or "0"
         try:
-            sz = float(sz_raw) / 1_000_000
+            sz = float(sz_raw)
+            if "size" not in t and "matched_amount" not in t:
+                sz /= 1_000_000
         except (ValueError, TypeError):
             sz = 0.0
 
