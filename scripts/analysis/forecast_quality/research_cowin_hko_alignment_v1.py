@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -172,7 +173,15 @@ def main() -> int:
     deltas = [row["cowin_minus_hko_c"] for row in matched]
     median_bias = statistics.median(deltas) if deltas else 0.0
 
-    dates = sorted({date for source, date in by_source_date if source == "cowin_obs"} & {date for source, date in by_source_date if source == "hko_obs"})
+    current_hk_date = datetime.now(timezone.utc).astimezone(ZoneInfo("Asia/Hong_Kong")).date().isoformat()
+    dates = sorted(
+        date
+        for date in (
+            {date for source, date in by_source_date if source == "cowin_obs"}
+            & {date for source, date in by_source_date if source == "hko_obs"}
+        )
+        if date < current_hk_date
+    )
     daily: list[dict[str, Any]] = []
     crossings: list[dict[str, Any]] = []
     for target_date in dates:
@@ -254,6 +263,7 @@ def main() -> int:
 
     true_crosses = [row for row in crossings if row["cowin_reached"] and row["hko_reached"]]
     cowin_crosses = [row for row in crossings if row["cowin_reached"]]
+    daily_max_deltas = [float(row["max_delta_c"]) for row in daily]
     summary = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "coverage_dates": dates,
@@ -311,12 +321,15 @@ def main() -> int:
             "significance=NA; baseline=NA; forward=NA; conclusion=inconclusive",
             "",
             "- The HKO official-lock runner has no demonstrated entry edge: by the time HKO confirms the floor, the NO book is usually absent or already above the configured price cap.",
-            "- CoWIN is useful as an earlier predictor, not as a substitute settlement observation. Its same-minute correlation with HKO is strong, but the daily maximum basis ranges from 0.0 C to +2.9 C in this sample.",
-            "- The 138.9-minute median shared-cross lead mixes publication latency with station-temperature basis. It must not be interpreted as pure feed-speed advantage.",
-            "- Even after a fixed median-bias adjustment, the persistent rule has 4 false triggers in 14 opportunities. That is not sufficient for live exact-bracket NO orders.",
+            f"- CoWIN is useful as an earlier predictor, not as a substitute settlement observation. Its same-minute correlation with HKO is strong, but the daily maximum basis ranges from "
+            f"{min(daily_max_deltas):+.1f} C to {max(daily_max_deltas):+.1f} C in this sample.",
+            f"- The {summary['median_cowin_detect_lead_min']}-minute median shared-cross lead mixes publication latency with station-temperature basis. It must not be interpreted as pure feed-speed advantage.",
+            f"- Even after a fixed median-bias adjustment, the persistent rule has "
+            f"{trigger_summary['median_bias_adjusted']['triggers'] - trigger_summary['median_bias_adjusted']['hits']} false triggers in "
+            f"{trigger_summary['median_bias_adjusted']['triggers']} opportunities. That is not sufficient for live exact-bracket NO orders.",
             "- Recommended next state: keep HKO official-lock as telemetry and run a separate CoWIN-to-HKO probabilistic shadow with dynamic intraday bias and trigger-time book capture.",
             "",
-            "This report uses four overlapping dates, PIT local detection timestamps, and no execution/PnL denominator. It does not authorize CoWIN-based live orders.",
+            f"This report uses {len(dates)} overlapping dates, PIT local detection timestamps, and no execution/PnL denominator. It does not authorize CoWIN-based live orders.",
             "",
         ]
     )
