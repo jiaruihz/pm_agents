@@ -45,10 +45,12 @@ significance=FAIL_LOW_SAMPLE; baseline=NA_LIVE_PAIRED_BASELINE; forward=FAIL_TOO
 
 | 层 | grain | rows | dates | 说明 |
 |---|---|---:|---:|---|
-| raw universe | runner cycle | 3,211 | 4 calendar days | 每 cycle 平均 24.2 城同时有 observation+book，13.0 城有 usable d1 quote |
+| raw universe | runner cycle | 3,266 | 4 calendar days | 每 cycle 平均 24.3 城同时有 observation+book，13.1 城有 usable d1 quote |
 | mechanism candidate | trigger telemetry | 78 | 3 settled target dates | 同一信号会按分钟重复记录；另有启动边界前 4 rows，raw 文件总计 82 |
 | first city-day signal | city-day | 4 | 3 settled dates | Ankara、Warsaw、Wellington、Madrid |
 | policy selected | city-day | 4 | 3 settled dates | 4/4 live；0 blockers；7 月 19 日截至快照为 0 |
+
+后续覆盖复核（截至 `2026-07-19T03:59Z`）显示 3,266 个 live-window cycles 中有 493 个 cycle（15.1%）完全没有可用 book，集中为三个连续窗口：`2026-07-16T19:45Z..2026-07-17T00:10Z`、`2026-07-17T18:21Z..21:19Z`、`2026-07-18T17:48Z..18:36Z`，合计约 8.2 小时。数据可用 cycle 的中位 funnel 是 47 个 book cities → 28 个 observation/book 同日交集 → 15 个可构造相邻 bounded d1 且有双边报价的城市。78 个 trigger cycles 最终折叠为 4 个首个 city-day signal，且 4/4 均进入 live；因此没有证据表明 daily cap/depth/parity 在触发后压缩了 live 数，主要收缩来自 `mid>=0.80` 之前的语义/报价可用性和阈值本身。但由于 15.1% book blind cycles，4 个只能称 observed first signals，不能称完整自然机会总数。
 
 ## Evidence funnel
 
@@ -98,6 +100,7 @@ Madrid 同信号 paired delta（maker minus taker）为 `+$0.088475/5 shares`。
 | maker terminal reconciliation | Madrid maker 已在 13:39Z matched，但 14:00Z 新 observation 后 runner 仍连续写 39 个 cancel-only blocked attempts；无重复资金订单，但属于 lifecycle state bug |
 | risk config parity | 当前进程与 summary 为 `10 city-days / $100`，strategy living report 仍写 `10 / $50`；本窗口实际最多 2 city-days/日，未触发影响 |
 | opportunity selection bias | strategy-specific canonical opportunity denominator 缺失，不能计算 missed winners / avoided losers |
+| runner book coverage | 493/3,266 cycles（15.1%）无可用 book，三段连续 blind window 共约 8.2h；可能漏掉短暂 threshold cross |
 
 maker cancel 重试的根因不是交易所重复成交，而是原始 maker place response 仍为 `live`；后续 `order_after_cancel.status=MATCHED` 已证明终态，但 `maker_lifecycle_plans()` 只检查初始 place status 和成功 handled action，没有把该 authenticated matched state当 terminal。结果没有重复 fill，但制造了 39 条无效 cancel attempts，并可能掩盖真正的 open-order 状态。
 
