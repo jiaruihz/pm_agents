@@ -105,6 +105,13 @@ hard filter 只用于机制边界、资金安全、执行质量或已知无效�
 如果后面继续升到 `X+1` 或更高，`X YES` 输、`X NO` 赢。持仓判断时必须先按这个语义重估：已经“到过 X”
 不等于 `X YES` 安全，反而要重点评估 overshoot 到下一档的风险；不要把“触到当前档”误说成“当前档 YES 锁定”。
 
+美国机场快源必须记住 **Atlanta 2026-07-17 terminal false cross**：MADISHF/OMO 连续打印 `91.4F`，但 WU
+native-F 最终最高仍为 `89F`、winning bracket 仍是 `88-89`；NOAA direct MADIS 同一观测也存在且
+`temperatureQCR=0`。因此 OMO/MADISHF/Synoptic 1-minute 等快源只可作概率特征，不是 WU 结算事实。
+任何相关的 previous-bracket NO、跨档、机场快源或 source-event 策略研究，都必须单列：① Atlanta-type
+`terminal_false_cross`；②同 timestamp 的 source→routine METAR→WU native-F basis；③正确事件不可成交、错误事件
+反而成交的 adverse-selection 分母。只报 persistent-cross 命中率或 QC pass 不算完成排查。
+
 ## 5. 分析必走的 skill + 硬口径（细则见 [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)）
 
 weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚本：

@@ -65,6 +65,10 @@ evidence funnel: PIT source -> PIT book -> settlement -> executable expression -
 - forecast 用 issue/run/first-seen/hash/age lineage，不用粗 local-hour 标签冒充信息状态。
 - source event grain 默认 first-seen `(city, local_date, source, observation_ts, prior official state)`。
 - 快源温度不是 settlement truth；校准 source→official/settlement 的 basis、boundary、age、path state。
+- 机场快源必须用 Atlanta `2026-07-17` terminal false cross 作 negative control：OMO/MADISHF `91.4F`、
+  direct MADIS `temperatureQCR=0`，但 routine METAR/WU final `89F`、旧 `88-89` bracket 未离开。
+  相关报告必须单列 terminal false、同 timestamp source→routine→WU basis，以及 correct/false 各自的
+  fresh executable/fill 分母；persistent 命中率或 QC pass 不能替代这三项。
 - 后到的 METAR/WU 只能作 label，不能回填成事前特征。
 - 多源 fallback 必须显式；模型/source 缺失不得静默替换。
 
