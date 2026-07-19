@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import json
 import math
 import random
 import sqlite3
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -25,6 +26,9 @@ from weather_execution_module_compare import build_report
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_INSTANCE = "current_yes_heat_death_tiny_live_h1_late_carry_v1"
+DEFAULT_FULL_LADDER_DIR = Path(
+    "/Volumes/jrs/weather_data_feed_service_runtime/full_ladder_output/orderbook_snapshots"
+)
 
 
 def finite(value: Any) -> float | None:
@@ -289,6 +293,253 @@ def paired_live_rows(conn: sqlite3.Connection, execution_report: dict[str, Any],
     return output
 
 
+def h1_fill_opportunities(conn: sqlite3.Connection, instance: str) -> list[dict[str, Any]]:
+    fact_rows = conn.execute(
+        """
+        SELECT f.target_date, f.city, f.bracket, s.token_id,
+               MIN(f.fill_ts_utc) AS first_fill_ts_utc,
+               MIN(f.fill_price) AS min_fill_price,
+               MAX(f.fill_price) AS max_fill_price,
+               COUNT(DISTINCT f.fill_id) AS fill_rows
+        FROM fact_trades f
+        JOIN signals s USING(signal_id)
+        WHERE f.instance_id=?
+        GROUP BY f.target_date, f.city, f.bracket, s.token_id
+        ORDER BY f.target_date, f.city
+        """,
+        (instance,),
+    ).fetchall()
+    order_rows = conn.execute(
+        """
+        SELECT s.target_date, s.city, s.bracket, s.token_id,
+               o.placed_at_utc, o.child_order_role, o.status, o.clob_status,
+               o.best_bid, o.best_ask, o.posted_price, o.maker_only
+        FROM orders o
+        JOIN plans p USING(plan_id)
+        JOIN signals s USING(signal_id)
+        WHERE o.instance_id=?
+        ORDER BY o.placed_at_utc
+        """,
+        (instance,),
+    ).fetchall()
+    orders_by_key: dict[tuple[str, str, str, str], list[sqlite3.Row]] = defaultdict(list)
+    for row in order_rows:
+        key = (str(row["target_date"]), str(row["city"]), str(row["bracket"]), str(row["token_id"] or ""))
+        orders_by_key[key].append(row)
+
+    output: list[dict[str, Any]] = []
+    for fact in fact_rows:
+        key = (
+            str(fact["target_date"]),
+            str(fact["city"]),
+            str(fact["bracket"]),
+            str(fact["token_id"] or ""),
+        )
+        orders = orders_by_key.get(key, [])
+        submitted = [row for row in orders if str(row["status"] or "") == "submitted"]
+        quoted = [
+            row
+            for row in orders
+            if finite(row["best_ask"]) is not None and float(row["best_ask"]) > 0
+            and finite(row["best_bid"]) is not None and float(row["best_bid"]) > 0
+        ]
+        maker_orders = [
+            row
+            for row in submitted
+            if bool(row["maker_only"])
+            or str(row["child_order_role"] or "") in {"maker", "h1_maker_reprice"}
+        ]
+        maker_quoted = [
+            row
+            for row in maker_orders
+            if finite(row["best_ask"]) is not None and float(row["best_ask"]) > 0
+            and finite(row["best_bid"]) is not None and float(row["best_bid"]) > 0
+        ]
+        entry_quote = maker_quoted[0] if maker_quoted else (quoted[0] if quoted else None)
+        maker_prices = [float(row["posted_price"]) for row in maker_orders if finite(row["posted_price"]) is not None]
+        maker_lifecycle_quotes = [
+            row for row in maker_orders
+            if finite(row["best_bid"]) is not None and float(row["best_bid"]) > 0
+            and finite(row["best_ask"]) is not None and float(row["best_ask"]) > 0
+        ]
+        entry_bid = finite(entry_quote["best_bid"]) if entry_quote else None
+        entry_ask = finite(entry_quote["best_ask"]) if entry_quote else None
+        first_maker = maker_prices[0] if maker_prices else None
+        output.append(
+            {
+                "target_date": key[0],
+                "city": key[1],
+                "bracket": key[2],
+                "token_id": key[3],
+                "first_order_ts_utc": str(submitted[0]["placed_at_utc"] or "") if submitted else "",
+                "entry_best_bid": entry_bid,
+                "entry_best_ask": entry_ask,
+                "entry_spread": entry_ask - entry_bid if entry_ask is not None and entry_bid is not None else None,
+                "initial_maker_price": first_maker,
+                "maker_headroom_to_ask": entry_ask - first_maker
+                if entry_ask is not None and first_maker is not None else None,
+                "initial_maker_minus_best_bid": first_maker - entry_bid
+                if entry_bid is not None and first_maker is not None else None,
+                "max_maker_price": max(maker_prices) if maker_prices else None,
+                "maker_attempts": len(maker_prices),
+                "maker_lifecycle_quotes_with_ask": len(maker_lifecycle_quotes),
+                "maker_lifecycle_rows_missing_book_fields": len(maker_orders) - len(maker_lifecycle_quotes),
+                "min_fill_price": float(fact["min_fill_price"]),
+                "max_fill_price": float(fact["max_fill_price"]),
+                "fill_rows": int(fact["fill_rows"]),
+                "first_fill_ts_utc": str(fact["first_fill_ts_utc"] or ""),
+            }
+        )
+    return output
+
+
+def snapshot_files_for_dates(base: Path, target_dates: set[str]) -> list[Path]:
+    folder_dates: set[str] = set()
+    for value in target_dates:
+        parsed = date.fromisoformat(value)
+        folder_dates.add(parsed.isoformat())
+        folder_dates.add((parsed + timedelta(days=1)).isoformat())
+    return sorted(
+        path
+        for folder_date in folder_dates
+        for path in (base / folder_date).glob("*.jsonl.gz")
+    )
+
+
+def load_full_ladder_rows(base: Path, opportunities: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    tokens = {str(row["token_id"]) for row in opportunities if row.get("token_id")}
+    rows_by_token: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for path in snapshot_files_for_dates(base, {str(row["target_date"]) for row in opportunities}):
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                token = str(row.get("token_id") or "")
+                if token not in tokens:
+                    continue
+                status = str(row.get("status") or "")
+                raw = row.get("raw") if isinstance(row.get("raw"), dict) else {}
+                asks = raw.get("asks") if isinstance(raw.get("asks"), list) else None
+                bids = raw.get("bids") if isinstance(raw.get("bids"), list) else None
+                summary = row.get("summary") if isinstance(row.get("summary"), dict) else {}
+                rows_by_token[token].append(
+                    {
+                        "snapshot_ts_utc": str(row.get("snapshot_ts_utc") or ""),
+                        "status": status,
+                        "best_bid": finite(summary.get("best_bid")),
+                        "best_ask": finite(summary.get("best_ask")),
+                        "bid_levels": len(bids) if bids is not None else None,
+                        "ask_levels": len(asks) if asks is not None else None,
+                        "explicit_empty_ask": bool(status == "ok" and asks is not None and len(asks) == 0),
+                        "source_file": str(path),
+                    }
+                )
+    for token, rows in rows_by_token.items():
+        deduped = {str(row["snapshot_ts_utc"]): row for row in rows}
+        rows_by_token[token] = sorted(deduped.values(), key=lambda row: str(row["snapshot_ts_utc"]))
+    return rows_by_token
+
+
+def empty_ask_runs(rows: list[dict[str, Any]], entry_ts: datetime | None) -> list[dict[str, Any]]:
+    valid = [row for row in rows if parse_utc(row.get("snapshot_ts_utc")) is not None]
+    runs: list[dict[str, Any]] = []
+    index = 0
+    while index < len(valid):
+        if not valid[index]["explicit_empty_ask"]:
+            index += 1
+            continue
+        start = index
+        while index + 1 < len(valid) and valid[index + 1]["explicit_empty_ask"]:
+            index += 1
+        end = index
+        first_ts = parse_utc(valid[start]["snapshot_ts_utc"])
+        last_ts = parse_utc(valid[end]["snapshot_ts_utc"])
+        previous_ts = parse_utc(valid[start - 1]["snapshot_ts_utc"]) if start > 0 else None
+        next_ts = parse_utc(valid[end + 1]["snapshot_ts_utc"]) if end + 1 < len(valid) else None
+        assert first_ts is not None and last_ts is not None
+        runs.append(
+            {
+                "first_empty_snapshot_ts_utc": first_ts.isoformat(),
+                "last_empty_snapshot_ts_utc": last_ts.isoformat(),
+                "previous_non_empty_snapshot_ts_utc": previous_ts.isoformat() if previous_ts else None,
+                "previous_best_ask": valid[start - 1]["best_ask"] if start > 0 else None,
+                "next_non_empty_snapshot_ts_utc": next_ts.isoformat() if next_ts else None,
+                "next_best_ask": valid[end + 1]["best_ask"] if end + 1 < len(valid) else None,
+                "empty_snapshot_count": end - start + 1,
+                "observed_lower_bound_min": (last_ts - first_ts).total_seconds() / 60.0,
+                "transition_interval_upper_bound_min": (
+                    (next_ts - previous_ts).total_seconds() / 60.0
+                    if previous_ts is not None and next_ts is not None else None
+                ),
+                "left_censored": previous_ts is None,
+                "right_censored": next_ts is None,
+                "starts_after_entry": bool(entry_ts is not None and first_ts >= entry_ts),
+                "minutes_from_entry_to_first_empty": (
+                    (first_ts - entry_ts).total_seconds() / 60.0 if entry_ts is not None else None
+                ),
+            }
+        )
+        index += 1
+    return runs
+
+
+def enrich_book_structure(
+    opportunities: list[dict[str, Any]], rows_by_token: dict[str, list[dict[str, Any]]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    output: list[dict[str, Any]] = []
+    all_runs: list[dict[str, Any]] = []
+    for opportunity in opportunities:
+        rows = rows_by_token.get(str(opportunity["token_id"]), [])
+        entry_ts = parse_utc(opportunity.get("first_order_ts_utc"))
+        before = [row for row in rows if parse_utc(row["snapshot_ts_utc"]) <= entry_ts] if entry_ts else []
+        after = [row for row in rows if parse_utc(row["snapshot_ts_utc"]) >= entry_ts] if entry_ts else []
+        prior = before[-1] if before else None
+        following = after[0] if after else None
+        runs = empty_ask_runs(rows, entry_ts)
+        post_entry_runs = [row for row in runs if row["starts_after_entry"]]
+        for run in runs:
+            all_runs.append(
+                {
+                    "target_date": opportunity["target_date"],
+                    "city": opportunity["city"],
+                    "bracket": opportunity["bracket"],
+                    **run,
+                }
+            )
+        output.append(
+            {
+                **opportunity,
+                "archive_snapshot_rows": len(rows),
+                "archive_ok_rows": sum(1 for row in rows if row["status"] == "ok"),
+                "archive_non_ok_rows": sum(1 for row in rows if row["status"] != "ok"),
+                "prior_snapshot_ts_utc": prior["snapshot_ts_utc"] if prior else None,
+                "prior_snapshot_best_bid": prior["best_bid"] if prior else None,
+                "prior_snapshot_best_ask": prior["best_ask"] if prior else None,
+                "prior_snapshot_empty_ask": prior["explicit_empty_ask"] if prior else None,
+                "next_snapshot_ts_utc": following["snapshot_ts_utc"] if following else None,
+                "next_snapshot_best_bid": following["best_bid"] if following else None,
+                "next_snapshot_best_ask": following["best_ask"] if following else None,
+                "next_snapshot_empty_ask": following["explicit_empty_ask"] if following else None,
+                "empty_ask_snapshot_rows": sum(1 for row in rows if row["explicit_empty_ask"]),
+                "empty_ask_runs": len(runs),
+                "post_entry_empty_ask_runs": len(post_entry_runs),
+                "first_post_entry_empty_ts_utc": (
+                    post_entry_runs[0]["first_empty_snapshot_ts_utc"] if post_entry_runs else None
+                ),
+                "minutes_entry_to_first_empty": (
+                    post_entry_runs[0]["minutes_from_entry_to_first_empty"] if post_entry_runs else None
+                ),
+                "max_post_entry_empty_observed_lower_bound_min": max(
+                    (float(row["observed_lower_bound_min"]) for row in post_entry_runs), default=None
+                ),
+                "post_entry_empty_right_censored": any(bool(row["right_censored"]) for row in post_entry_runs),
+            }
+        )
+    return output, all_runs
+
+
 def write_csv(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     materialized = list(rows)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -310,6 +561,11 @@ def main() -> int:
     )
     parser.add_argument("--instance", default=DEFAULT_INSTANCE)
     parser.add_argument(
+        "--full-ladder-dir",
+        default=str(DEFAULT_FULL_LADDER_DIR),
+        help="Full-ladder snapshot root; explicit empty ask lists are treated as book evidence.",
+    )
+    parser.add_argument(
         "--output-dir",
         default="docs/analysis/2026-07/generated/h1_late_carry_maker_v1",
     )
@@ -317,7 +573,10 @@ def main() -> int:
 
     db_path = Path(args.db).resolve()
     shadow_path = Path(args.shadow_decisions).resolve()
+    full_ladder_dir = Path(args.full_ladder_dir).resolve()
     output_dir = Path(args.output_dir).resolve()
+    if not full_ladder_dir.is_dir():
+        parser.error(f"full-ladder directory does not exist: {full_ladder_dir}")
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA query_only=ON")
@@ -327,6 +586,7 @@ def main() -> int:
         shadow_rows = enrich_shadow(first_h1, settlement_map(conn))
         execution_report = build_report(conn, instances=[args.instance])
         live_pairs = paired_live_rows(conn, execution_report, args.instance)
+        fill_opportunities = h1_fill_opportunities(conn, args.instance)
         self_check = {
             "fact_built_at_utc": conn.execute("SELECT MAX(fact_built_at_utc) FROM fact_trades").fetchone()[0],
             "latest_fill_ts_utc": conn.execute("SELECT MAX(fill_ts_utc) FROM fact_trades").fetchone()[0],
@@ -337,6 +597,21 @@ def main() -> int:
         }
     finally:
         conn.close()
+
+    ladder_rows = load_full_ladder_rows(full_ladder_dir, fill_opportunities)
+    book_structure, empty_runs = enrich_book_structure(fill_opportunities, ladder_rows)
+    opportunity_by_token = {str(row["token_id"]): row for row in fill_opportunities}
+    book_timeline = [
+        {
+            "target_date": opportunity_by_token[token]["target_date"],
+            "city": opportunity_by_token[token]["city"],
+            "bracket": opportunity_by_token[token]["bracket"],
+            **row,
+        }
+        for token, rows in ladder_rows.items()
+        for row in rows
+    ]
+    book_timeline.sort(key=lambda row: (str(row["target_date"]), str(row["city"]), str(row["snapshot_ts_utc"])))
 
     settled_shadow = [row for row in shadow_rows if row["settled"]]
     shadow_cost = sum(float(row["effective_cost_per_share"]) for row in settled_shadow)
@@ -364,6 +639,7 @@ def main() -> int:
             "db_mtime_utc": datetime.fromtimestamp(db_path.stat().st_mtime, timezone.utc).isoformat(),
             "shadow_decisions": str(shadow_path),
             "shadow_mtime_utc": datetime.fromtimestamp(shadow_path.stat().st_mtime, timezone.utc).isoformat(),
+            "full_ladder_dir": str(full_ladder_dir),
             "instance": args.instance,
         },
         "self_check": self_check,
@@ -420,12 +696,38 @@ def main() -> int:
                 "clob_fills filled_at may be cache-reconciliation time; do not use first_fill_latency as exchange event time"
             ),
         },
+        "historical_fill_book_structure": {
+            "opportunities": len(book_structure),
+            "entry_ask_at_099": sum(
+                1 for row in book_structure if row["entry_best_ask"] is not None
+                and math.isclose(float(row["entry_best_ask"]), 0.99, abs_tol=1e-9)
+            ),
+            "entry_ask_below_099": sum(
+                1 for row in book_structure if row["entry_best_ask"] is not None
+                and float(row["entry_best_ask"]) < 0.99
+            ),
+            "entry_ask_above_099": sum(
+                1 for row in book_structure if row["entry_best_ask"] is not None
+                and float(row["entry_best_ask"]) > 0.99
+            ),
+            "entry_quotes_with_ask": sum(1 for row in book_structure if row["entry_best_ask"] is not None),
+            "opportunities_with_post_entry_empty_ask": sum(
+                1 for row in book_structure if int(row["post_entry_empty_ask_runs"]) > 0
+            ),
+            "full_ladder_empty_duration_note": (
+                "Snapshots are interval-censored. observed_lower_bound is first-to-last empty snapshot; "
+                "transition_interval_upper_bound spans the surrounding non-empty snapshots when both exist."
+            ),
+        },
         "execution_report_freshness": execution_report["freshness"],
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     write_csv(output_dir / "recent_h1_shadow_signals.csv", shadow_rows)
     write_csv(output_dir / "recent_h1_shadow_slices.csv", shadow_slices)
     write_csv(output_dir / "live_paired_execution.csv", live_pairs)
+    write_csv(output_dir / "historical_fill_book_structure.csv", book_structure)
+    write_csv(output_dir / "historical_empty_ask_runs.csv", empty_runs)
+    write_csv(output_dir / "historical_fill_book_timeline.csv", book_timeline)
     (output_dir / "summary.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

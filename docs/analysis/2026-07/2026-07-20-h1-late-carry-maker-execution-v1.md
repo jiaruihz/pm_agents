@@ -37,8 +37,9 @@ challenger，盘口侧先补 queue/depth/markout 和准确 fill event time，再
 
 | 项目 | 值 |
 |---|---|
-| canonical DB | `runtime/weather.db`，fact build `2026-07-19T17:53:14Z` |
-| shadow raw | `state_decisions.jsonl`，11,519 行，覆盖到 `2026-07-19T17:51:15Z` |
+| canonical DB | `runtime/weather.db`，fact build `2026-07-19T21:29:59Z` |
+| shadow raw | `state_decisions.jsonl`，11,769 行，mtime `2026-07-19T21:31:27Z` |
+| full ladder raw | JRS `full_ladder_output/orderbook_snapshots`；H1 fill token 421 个 `status=ok` snapshots |
 | H1 actual fill window | target date `2026-07-15..18`；9 city-days、13 fill rows、3 独立日期 |
 | H1 actual settled | 13/13；unsettled=0；missing_bracket=0 |
 | 全库 settlement | settled 4,596；missing_bracket 38 |
@@ -54,7 +55,7 @@ Signal funnel：
 
 | 层 | unit | rows | dates | cities |
 |---|---|---:|---:|---:|
-| raw shadow decisions | state row | 11,519 | 6 | 29 |
+| raw shadow decisions | state row | 11,769 | 6 | 29 |
 | 首次有效 strong | city-day signal | 68 | 6 | 29 |
 | 首次 direct H1 quote `0.95-0.99` | city-day expression | 26 | 5 | 21 |
 | live submitted H1 | city-day opportunity | 9 | 3 | 9 |
@@ -87,6 +88,39 @@ Evidence funnel：
 `0.15c/share`：5 shares `$0.0075`，当前 10-share maker `$0.015`。可承受亏损率只从约
 `0.95%` 提到 `1.10%`，不改变 H1 的尾部本质。真正有意义的是像 Jeddah/Chongqing 那样取得
 `0.6-1.0c/share`，但这取决于 queue fill，不是看到大 spread 就能计入收益。
+
+### 入场时并非“只剩 0.99”
+
+9 个历史 fill opportunity 的 submit-time fresh book 全部有 ask：只有 Kuala Lumpur 和 Chongqing 两个
+ask 是 `0.990`，其余 7 个 ask 在 `0.950-0.988`。真正成交在 `0.990` 的只有 Kuala Lumpur；Chongqing
+taker 成交 `0.989`，maker 则在 `0.979` 成交。
+
+6 个 paired maker 的初始 ask 与首挂之间仍有 `1.6-5.8c`，中位数 `2.8c`：
+
+| city/date | submit book | initial maker | highest maker | maker outcome |
+|---|---:|---:|---:|---|
+| KualaLumpur 7/17 | `0.973 / 0.990` | 0.974 | 0.980 | 未被动成交，最终 fallback 0.990 |
+| Jeddah 7/17 | `0.965 / 0.988` | 0.971 | 0.982 | 0.982 passive fill |
+| Guangzhou 7/17 | `0.918 / 0.963` | 0.905 | 0.930 | unfilled |
+| Tokyo 7/18 | `0.973 / 0.975` | 0.942 | 0.973 | 0.973 passive fill |
+| Chongqing 7/18 | `0.969 / 0.990` | 0.958 | 0.979 | 0.979 passive fill |
+| Taipei 7/18 | `0.962 / 0.987` | 0.963 | 0.987 | unfilled |
+
+Guangzhou、Tokyo、Chongqing 的 initial maker 分别比 submit-time best bid 低 `1.3c / 3.1c / 1.1c`；
+约 30-38 秒后的首次 reprice 才回到 fresh book。根因不是盘口没有空间，而是 split child 沿用了前一份
+plan/root quote，maker submit 时虽然已经读到新 book，却没有据此重算首挂。下一轮 shadow 应优先比较
+`stale-root initial` 与 `submit-time fresh post-only`，仍受同一 EV ceiling 约束。
+
+### ask 为空的持续时间
+
+maker 活跃生命周期共 30 次 fresh quote（每个 attempt 的 book），30/30 都存在 best ask；所以这些挂单
+等待的 2-4 分钟内没有出现 ask-side vacuum。
+
+full-ladder 对 9 个 token 共 421 个 `status=ok` snapshots（每 token 20-65 个）。8/9 从未出现
+`raw.asks=[]`。唯一一次是 Chongqing：入场后 `192.6min`，`2026-07-18T09:39:55Z` 首次看到 ask 为空；
+前一份 `09:08:55Z` 仍有 `ask=0.999`。该空 ask 是 archive 最后一份 snapshot，属于 right-censored：只能说
+transition 发生在这 31 分钟区间内，不能声称它持续了 31 分钟，也无法从现有 archive 给出结束时间。
+这次盘口真空发生在成交三个多小时后，不解释入场 maker fill/unfill。
 
 ## Paired maker vs taker
 
@@ -187,3 +221,6 @@ conclusion=inconclusive; continue shadow/collector, do not expand live maker or 
 - Recent signal rows: `docs/analysis/2026-07/generated/h1_late_carry_maker_v1/recent_h1_shadow_signals.csv`
 - Descriptive slices: `docs/analysis/2026-07/generated/h1_late_carry_maker_v1/recent_h1_shadow_slices.csv`
 - Paired live execution: `docs/analysis/2026-07/generated/h1_late_carry_maker_v1/live_paired_execution.csv`
+- Historical fill book structure: `docs/analysis/2026-07/generated/h1_late_carry_maker_v1/historical_fill_book_structure.csv`
+- Historical full-ladder timeline: `docs/analysis/2026-07/generated/h1_late_carry_maker_v1/historical_fill_book_timeline.csv`
+- Explicit empty-ask runs: `docs/analysis/2026-07/generated/h1_late_carry_maker_v1/historical_empty_ask_runs.csv`
