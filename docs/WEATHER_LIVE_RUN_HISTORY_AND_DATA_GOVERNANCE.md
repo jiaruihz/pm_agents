@@ -759,6 +759,32 @@ report index is persisted in collector state, preventing repeated journal scans
 or duplicate backfills. This was an incremental journal repair; no canonical DB
 or existing raw file was rebuilt.
 
+### 6.10 2026-07-17 Atlanta MADISHF/OMO Terminal False Cross
+
+Pollution window: the Atlanta `2026-07-17` previous-bracket-NO decision initiated
+from the `17:30Z` MADISHF/OMO observation through settlement. The fast source
+reported `91.4F` across distinct observations while the prior market bracket was
+`88-89`; the routine METAR and native-F WU final maximum were `89F`, so the
+winning bracket remained `88-89`. Direct NOAA MADIS contains the identical
+observation, received about 134 seconds after observation time, with
+`temperatureQCR=0`; neither faster delivery nor the exposed QC flag removes the
+source-to-settlement basis failure.
+
+Decision impact: the runner filled `10` shares of `88-89 NO` for `$8.70`; the
+expression lost at settlement. Across the fixed US runner denominator there
+were `22` correct settled candidates and `1` false candidate: `0/22` correct
+candidates became executable under the active policy within ten minutes, while
+the false Atlanta candidate became executable and filled. This is both a basis
+failure and an adverse-selection failure, not merely one bad temperature row.
+
+Governance consequence: every OMO/MADISHF/Synoptic-1m, airport-fast,
+source-event cross, and previous-bracket-NO analysis must report (a)
+`terminal_false_cross`, (b) same-timestamp source→routine METAR→WU native-F
+basis, and (c) correct-versus-false fresh executable/fill denominators. Raw
+crosses remain probabilistic features; persistence and `temperatureQCR=0` do
+not authorize a deterministic live expression. The affected US cities remain
+shadow; the underlying collectors and evidence are retained.
+
 ## 7. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
