@@ -1,21 +1,21 @@
 # US MADISHF execution / competition v1
 
-Generated: `2026-07-18T15:23:14.283210+00:00`
+Generated: `2026-07-19T02:35:46.282067+00:00`
 Status: `research_snapshot`; no live authorization
 
 ## Conclusion
 
-The present IEM-MADISHF route has no demonstrated executable US edge. It is both too late and adversely selected: among `23` settled production-runner candidates, `22` were directionally correct, but `0` correct candidates became executable under the policy active at the time during the next 10 minutes. The sole false Atlanta signal became executable on the next cycle and filled.
+The present IEM-MADISHF route has no demonstrated executable US edge. It is both too late and adversely selected: among `23` settled production-runner candidates, `22` were directionally correct, but `0` correct candidates became executable under the policy active at the time during the next 10 minutes. The sole false Atlanta signal became executable on the next cycle and filled `15` shares: `10` taker plus a later `5`-share maker fill.
 
 This does **not** prove that raw one-minute ASOS has no information. It proves that the current route -- IEM archive family split, 5-minute polling, then persistent confirmation -- reaches the book after useful liquidity has normally disappeared. A lower-latency direct MADIS/OMO experiment is still testable, but only as zero-notional telemetry.
 
 ## Fixed denominator
 
-- signal: every unique `noaa_madis_hfmetar` `cross_candidate` written by `fast_source_prev_no_trial_v2` (`24` rows, `23` settled)
+- signal: every unique `noaa_madis_hfmetar` `cross_candidate` written by `fast_source_prev_no_trial_v2` (`27` rows, `23` settled)
 - expression: BUY NO on the runner-resolved previous Fahrenheit bracket
 - label: native-F WU-aligned settled market winner
 - execution: direct CLOB best ask and top size at runner decision; 10-share taker requirement; fee `0.05*p*(1-p)`
-- duplicate diagnostic: `18` first candidates by market token
+- duplicate diagnostic: `20` first candidates by market token
 
 ## Adverse selection
 
@@ -26,6 +26,7 @@ This does **not** prove that raw one-minute ASOS has no information. It proves t
 - false signals executable on the first book read: `0/1 (0.0%)`
 - false signals becoming executable within 10 minutes: `1/1 (100.0%)`
 - false signals actually filled: `1/1 (100.0%)`
+- false-signal fill impact: `15` shares, `$13.00` principal + `$0.05655` verified fees = `$13.05655` realized loss
 - median observation → our first-seen lag: `23.9` minutes
 - median first-seen → runner direct-book read: `10.1` seconds
 
@@ -33,11 +34,11 @@ The 0.94→0.97 threshold change does not recover these trades. One correct Atla
 
 ## City execution record
 
-| city | settled candidates | correct | executable within 10m | filled | median source lag |
+| city | settled candidates | correct | executable within 10m | filled events / shares | median source lag |
 |---|---:|---:|---:|---:|---:|
-| `Atlanta` | 12 | 11 | 1 | 1 | 23.9m |
-| `Miami` | 5 | 5 | 0 | 0 | 23.2m |
-| `SanFrancisco` | 6 | 6 | 0 | 0 | 23.4m |
+| `Atlanta` | 12 | 11 | 1 | 1 / 15sh | 23.9m |
+| `Miami` | 5 | 5 | 0 | 0 / 0sh | 23.2m |
+| `SanFrancisco` | 6 | 6 | 0 | 0 / 0sh | 23.4m |
 
 ## Was the market already gone before our source arrived?
 
@@ -56,7 +57,7 @@ The last pre-observation snapshot was executable for `3` first-market events: `2
 
 1. **Execution chain after first-seen is not the bottleneck.** The runner reads the direct book a median `10.1` seconds after source first-seen.
 2. **The data route is late.** Observation-to-first-seen is a median `23.9` minutes. This route reads IEM's ASOS archive, not a direct real-time OMO stream.
-3. **US books are competitive/adversely selective at this latency.** Correct signals are priced to ~1/no-ask; the sole bad source print retained a cheap 0.87 NO ask and filled.
+3. **US books are competitive/adversely selective at this latency.** Correct signals are priced to ~1/no-ask; the sole bad source print retained a cheap 0.87 taker ask and then filled a resting 0.86 maker child 45 seconds later.
 4. **Source correctness alone is insufficient.** `22/23` directional correctness looks strong, but executable correctness is `0/22`. Backtests that mark at a stale or synthetic price would invert this conclusion.
 
 ## Upstream latency reality

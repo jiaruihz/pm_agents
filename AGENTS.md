@@ -107,6 +107,9 @@ hard filter 只用于机制边界、资金安全、执行质量或已知无效�
 美国机场快源必须记住 **Atlanta 2026-07-17 terminal false cross**：MADISHF/OMO 连续打印 `91.4F`，但 WU
 native-F 最终最高仍为 `89F`、winning bracket 仍是 `88-89`；NOAA direct MADIS 同一观测也存在且
 `temperatureQCR=0`。因此 OMO/MADISHF/Synoptic 1-minute 等快源只可作概率特征，不是 WU 结算事实。
+事故真实成交是 `15 shares`（`10 @0.87` taker + `5 @0.86` maker），principal `$13.00`、verified fee
+`$0.05655`；maker 在 submission journal 写入 45 秒后才 fill，所以成交统计必须按 order id 回连 canonical `fills`，
+禁止只累加 raw `actual_fill_*`。
 任何相关的 previous-bracket NO、跨档、机场快源或 source-event 策略研究，都必须单列：① Atlanta-type
 `terminal_false_cross`；②同 timestamp 的 source→routine METAR→WU native-F basis；③正确事件不可成交、错误事件
 反而成交的 adverse-selection 分母。只报 persistent-cross 命中率或 QC pass 不算完成排查。

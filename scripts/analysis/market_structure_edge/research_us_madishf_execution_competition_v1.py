@@ -13,6 +13,7 @@ import csv
 import gzip
 import json
 import math
+import sqlite3
 import statistics
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,7 @@ LADDER = RUNTIME / "output/source_event_ladder_repricing_shadow"
 ALIGNMENT = ROOT / "docs/analysis/2026-07/generated/us_madishf_metar_wu_alignment_v1/daily_alignment.csv"
 OUT = ROOT / "docs/analysis/2026-07/generated/us_madishf_execution_competition_v1"
 REPORT = ROOT / "docs/analysis/2026-07/2026-07-18-us-madishf-execution-competition-v1.md"
+DB = ROOT / "runtime/weather.db"
 HORIZONS = (0, 30, 60, 120, 300)
 TOLERANCE = {0: 90, 30: 20, 60: 20, 120: 30, 300: 60}
 
@@ -127,16 +129,80 @@ def load_runner_events(winners: dict[tuple[str, str], str]) -> list[dict[str, An
     return sorted(rows, key=lambda r: str(r["runner_book_ts_utc"]))
 
 
+def load_canonical_fills(order_ids: set[str]) -> dict[str, list[dict[str, Any]]]:
+    """Return authoritative fills keyed by exchange order id.
+
+    The runner journal is written at submission time, so a resting maker child
+    can still have null ``actual_fill_*`` fields there and fill seconds later.
+    Canonical fills therefore replace submission-time values whenever present.
+    """
+    out: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    if not order_ids:
+        return out
+    conn = sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=1.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only=ON")
+    conn.execute("PRAGMA busy_timeout=1000")
+    ids = sorted(order_ids)
+    for start in range(0, len(ids), 500):
+        batch = ids[start:start + 500]
+        placeholders = ",".join("?" for _ in batch)
+        for row in conn.execute(
+            f"""
+            SELECT order_id, fill_id, filled_shares, filled_price,
+                   COALESCE(fees_usd, 0) AS fees_usd, filled_at_utc
+            FROM fills
+            WHERE order_id IN ({placeholders})
+            """,
+            batch,
+        ):
+            out[str(row["order_id"])].append(dict(row))
+    conn.close()
+    return out
+
+
 def load_orders() -> dict[str, dict[str, Any]]:
-    out: dict[str, dict[str, Any]] = defaultdict(lambda: {"order_children": 0, "filled_shares": 0.0, "filled_cost": 0.0})
+    out: dict[str, dict[str, Any]] = defaultdict(lambda: {
+        "order_children": 0, "filled_shares": 0.0, "filled_cost": 0.0,
+        "filled_fees": 0.0, "taker_filled_shares": 0.0, "maker_filled_shares": 0.0,
+    })
+    children: list[dict[str, Any]] = []
     for raw in iter_jsonl(RUNNER / "orders.jsonl"):
         if raw.get("source") != "noaa_madis_hfmetar":
             continue
         row = out[str(raw.get("event_key"))]
         row["order_children"] += 1
-        row["filled_shares"] += num(raw.get("actual_fill_shares")) or 0.0
-        row["filled_cost"] += num(raw.get("actual_fill_cost_usd")) or 0.0
         row["order_statuses"] = "|".join(sorted(set(filter(None, [row.get("order_statuses"), str(raw.get("live_submit_status") or "")]))))
+        children.append({
+            "event_key": str(raw.get("event_key")),
+            "order_id": str(raw.get("order_id") or ""),
+            "role": str(raw.get("child_order_role") or raw.get("execution_role") or raw.get("order_role") or "unknown").lower(),
+            "raw_filled_shares": num(raw.get("actual_fill_shares")) or 0.0,
+            "raw_filled_cost": num(raw.get("actual_fill_cost_usd")) or 0.0,
+        })
+
+    canonical = load_canonical_fills({child["order_id"] for child in children if child["order_id"]})
+    for child in children:
+        row = out[child["event_key"]]
+        fills = canonical.get(child["order_id"], [])
+        if fills:
+            shares = sum(float(fill["filled_shares"]) for fill in fills)
+            cost = sum(float(fill["filled_shares"]) * float(fill["filled_price"]) for fill in fills)
+            fees = sum(float(fill["fees_usd"]) for fill in fills)
+            evidence = "canonical_fills"
+        else:
+            shares = float(child["raw_filled_shares"])
+            cost = float(child["raw_filled_cost"])
+            fees = 0.0
+            evidence = "runner_submission_snapshot"
+        row["filled_shares"] += shares
+        row["filled_cost"] += cost
+        row["filled_fees"] += fees
+        role_key = f"{child['role']}_filled_shares"
+        if role_key in row:
+            row[role_key] += shares
+        row["fill_evidence"] = "|".join(sorted(set(filter(None, [row.get("fill_evidence"), evidence]))))
+        row["fill_ids"] = "|".join(sorted(set(filter(None, [row.get("fill_ids"), *(str(fill["fill_id"]) for fill in fills)]))))
     return out
 
 
@@ -292,7 +358,10 @@ def main() -> None:
     events = load_runner_events(winners)
     orders = load_orders()
     for row in events:
-        row.update(orders.get(str(row["event_key"]), {"order_children": 0, "filled_shares": 0.0, "filled_cost": 0.0}))
+        row.update(orders.get(str(row["event_key"]), {
+            "order_children": 0, "filled_shares": 0.0, "filled_cost": 0.0,
+            "filled_fees": 0.0, "taker_filled_shares": 0.0, "maker_filled_shares": 0.0,
+        }))
     settled = [row for row in events if row["settlement_left_old_bracket"] is not None]
     token_ids = {str(row["token_id"]) for row in events if row["token_id"]}
     requotes = load_runner_requotes({str(row["event_key"]) for row in events})
@@ -320,6 +389,9 @@ def main() -> None:
     correct_eventual_97 = sum(r["eventually_executable_max97_within_10m"] for r in correct)
     false_eventual_actual = sum(r["eventually_executable_actual_within_10m"] for r in false)
     false_filled = sum((r.get("filled_shares") or 0) > 0 for r in false)
+    false_filled_shares = sum(float(r.get("filled_shares") or 0) for r in false)
+    false_filled_cost = sum(float(r.get("filled_cost") or 0) for r in false)
+    false_filled_fees = sum(float(r.get("filled_fees") or 0) for r in false)
     settled_first = [r for r in first_market if r["settlement_left_old_bracket"] is not None]
     absorption_counts = Counter(r["absorption_class"] for r in settled_first)
     obs_proxy = [r for r in settled_first if r["pre_obs_book_class"] == "executable"]
@@ -340,7 +412,8 @@ def main() -> None:
         city_lines.append(
             f"| `{city}` | {len(rr)} | {sum(r['settlement_left_old_bracket']==1 for r in rr)} | "
             f"{sum(r['eventually_executable_actual_within_10m'] for r in rr)} | "
-            f"{sum((r.get('filled_shares') or 0)>0 for r in rr)} | {med(r['obs_to_first_seen_sec']/60 for r in rr):.1f}m |"
+            f"{sum((r.get('filled_shares') or 0)>0 for r in rr)} / {sum(float(r.get('filled_shares') or 0) for r in rr):g}sh | "
+            f"{med(r['obs_to_first_seen_sec']/60 for r in rr):.1f}m |"
         )
 
     generated = datetime.now(timezone.utc).isoformat()
@@ -351,7 +424,7 @@ Status: `research_snapshot`; no live authorization
 
 ## Conclusion
 
-The present IEM-MADISHF route has no demonstrated executable US edge. It is both too late and adversely selected: among `{len(settled)}` settled production-runner candidates, `{len(correct)}` were directionally correct, but `0` correct candidates became executable under the policy active at the time during the next 10 minutes. The sole false Atlanta signal became executable on the next cycle and filled.
+The present IEM-MADISHF route has no demonstrated executable US edge. It is both too late and adversely selected: among `{len(settled)}` settled production-runner candidates, `{len(correct)}` were directionally correct, but `0` correct candidates became executable under the policy active at the time during the next 10 minutes. The sole false Atlanta signal became executable on the next cycle and filled `15` shares: `10` taker plus a later `5`-share maker fill.
 
 This does **not** prove that raw one-minute ASOS has no information. It proves that the current route -- IEM archive family split, 5-minute polling, then persistent confirmation -- reaches the book after useful liquidity has normally disappeared. A lower-latency direct MADIS/OMO experiment is still testable, but only as zero-notional telemetry.
 
@@ -372,6 +445,7 @@ This does **not** prove that raw one-minute ASOS has no information. It proves t
 - false signals executable on the first book read: `{pct(false_exec_actual, len(false))}`
 - false signals becoming executable within 10 minutes: `{pct(false_eventual_actual, len(false))}`
 - false signals actually filled: `{pct(false_filled, len(false))}`
+- false-signal fill impact: `{false_filled_shares:g}` shares, `${false_filled_cost:.2f}` principal + `${false_filled_fees:.5f}` verified fees = `${false_filled_cost + false_filled_fees:.5f}` realized loss
 - median observation → our first-seen lag: `{med(r['obs_to_first_seen_sec']/60 for r in settled):.1f}` minutes
 - median first-seen → runner direct-book read: `{med(r['first_seen_to_runner_book_sec'] for r in settled):.1f}` seconds
 
@@ -379,7 +453,7 @@ The 0.94→0.97 threshold change does not recover these trades. One correct Atla
 
 ## City execution record
 
-| city | settled candidates | correct | executable within 10m | filled | median source lag |
+| city | settled candidates | correct | executable within 10m | filled events / shares | median source lag |
 |---|---:|---:|---:|---:|---:|
 {chr(10).join(city_lines)}
 
@@ -400,7 +474,7 @@ The last pre-observation snapshot was executable for `{len(obs_proxy)}` first-ma
 
 1. **Execution chain after first-seen is not the bottleneck.** The runner reads the direct book a median `{med(r['first_seen_to_runner_book_sec'] for r in settled):.1f}` seconds after source first-seen.
 2. **The data route is late.** Observation-to-first-seen is a median `{med(r['obs_to_first_seen_sec']/60 for r in settled):.1f}` minutes. This route reads IEM's ASOS archive, not a direct real-time OMO stream.
-3. **US books are competitive/adversely selective at this latency.** Correct signals are priced to ~1/no-ask; the sole bad source print retained a cheap 0.87 NO ask and filled.
+3. **US books are competitive/adversely selective at this latency.** Correct signals are priced to ~1/no-ask; the sole bad source print retained a cheap 0.87 taker ask and then filled a resting 0.86 maker child 45 seconds later.
 4. **Source correctness alone is insufficient.** `{len(correct)}/{len(settled)}` directional correctness looks strong, but executable correctness is `0/{len(correct)}`. Backtests that mark at a stale or synthetic price would invert this conclusion.
 
 ## Upstream latency reality
@@ -438,7 +512,9 @@ significance=NA; baseline=direct market; forward=FAIL for current route; conclus
         "correct_exec_max97": correct_exec_97, "false_exec_actual": false_exec_actual,
         "correct_eventual_actual": correct_eventual_actual, "correct_eventual_max97": correct_eventual_97,
         "false_eventual_actual": false_eventual_actual,
-        "false_filled": false_filled, "first_markets": len(first_market),
+        "false_filled": false_filled, "false_filled_shares": false_filled_shares,
+        "false_filled_cost": false_filled_cost, "false_filled_fees": false_filled_fees,
+        "first_markets": len(first_market),
         "absorption_counts": dict(absorption_counts),
         "pre_obs_proxy_rows": len(obs_proxy), "pre_obs_proxy_pnl": obs_proxy_pnl,
     }, ensure_ascii=False, indent=2))

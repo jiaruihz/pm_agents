@@ -770,8 +770,12 @@ observation, received about 134 seconds after observation time, with
 `temperatureQCR=0`; neither faster delivery nor the exposed QC flag removes the
 source-to-settlement basis failure.
 
-Decision impact: the runner filled `10` shares of `88-89 NO` for `$8.70`; the
-expression lost at settlement. Across the fixed US runner denominator there
+Decision impact: the runner filled `15` shares of `88-89 NO`: `10 @0.87` taker
+plus a `5 @0.86` maker child that filled 45 seconds later. Principal was
+`$13.00`, verified fee was `$0.05655`, and realized loss was `$13.05655`; the
+expression lost at settlement. The earlier `10 shares / $8.70` figure was a
+submission-journal undercount because the maker child was still live when that
+row was written. Across the fixed US runner denominator there
 were `22` correct settled candidates and `1` false candidate: `0/22` correct
 candidates became executable under the active policy within ten minutes, while
 the false Atlanta candidate became executable and filled. This is both a basis
