@@ -766,6 +766,66 @@ def test_observations_cache_reuses_previous_ok_row_on_fetch_failure(monkeypatch,
     assert row["cache_reused_after_fetch_error"] == "HTTP 429"
 
 
+def test_observations_cache_keeps_running_max_monotone_across_truncated_fallback(monkeypatch, tmp_path) -> None:
+    import argparse
+    from weather_data_feed import build_observation_cache, write_observation_cache
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import observations
+
+    cfg = load_city_configs(include_station_diff=False, only_cities={"Wuhan"})[0]
+    output = tmp_path / "latest.json"
+    previous = {
+        "city": "Wuhan",
+        "target_date": "2026-07-19",
+        "status": "ok",
+        "source": "aviationweather_metar",
+        "station": "ZHHH",
+        "running_max_c": 33.0,
+        "running_max_obs_utc": "2026-07-19T09:00:00+00:00",
+    }
+    write_observation_cache(build_observation_cache([previous]), output)
+
+    monkeypatch.setattr(observations, "load_city_configs", lambda **_kwargs: [cfg])
+    monkeypatch.setattr(
+        observations,
+        "observation_cache_row",
+        lambda *_args, **_kwargs: {
+            "city": "Wuhan",
+            "target_date": "2026-07-19",
+            "status": "ok",
+            "source": "aviationweather_cache_csv",
+            "station": "ZHHH",
+            "fetched_at_utc": "2026-07-19T10:17:30+00:00",
+            "current_temp_c": 32.0,
+            "running_max_c": 32.0,
+            "running_max_obs_utc": "2026-07-19T10:00:00+00:00",
+            "n_obs": 1,
+        },
+    )
+    args = argparse.Namespace(
+        output=str(output),
+        now_utc="2026-07-19T10:17:30+00:00",
+        include_station_diff=False,
+        cities=["Wuhan"],
+        timeout_sec=3.0,
+        max_workers=1,
+        include_fallback_sources=True,
+    )
+
+    cache = observations.build_cache(args)
+    row = cache["records"][0]
+
+    assert row["source"] == "aviationweather_cache_csv"
+    assert row["current_temp_c"] == 32.0
+    assert row["running_max_c"] == 33.0
+    assert row["decline_c"] == 1.0
+    assert row["running_max_obs_utc"] == "2026-07-19T09:00:00+00:00"
+    assert row["minutes_since_running_max"] == 77.5
+    assert row["history_continuity_status"] == "merged_previous_running_max"
+    assert row["history_continuity_raw_running_max_c"] == 32.0
+    assert cache["summary"]["running_max_continuity_merges"] == 1
+
+
 def test_daily_parity_check_flags_missing_new_tree(tmp_path) -> None:
     old_root = tmp_path / "old"
     new_root = tmp_path / "new"

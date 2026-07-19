@@ -229,6 +229,49 @@ def observation_cache_row(
     }
 
 
+def merge_previous_running_max(
+    row: dict[str, Any],
+    previous: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Keep one station-day's running maximum monotone across source failover.
+
+    ``aviationweather_cache_csv`` can contain only the latest METAR.  It is
+    valid for the current observation but cannot reconstruct the day-to-date
+    maximum, so retain a higher maximum already observed for the same station
+    and local date.
+    """
+
+    if not previous or row.get("status") != "ok" or previous.get("status") != "ok":
+        return row
+    if str(row.get("target_date") or "") != str(previous.get("target_date") or ""):
+        return row
+    if str(row.get("station") or "") != str(previous.get("station") or ""):
+        return row
+    current_max = _float_or_none(row.get("running_max_c"))
+    previous_max = _float_or_none(previous.get("running_max_c"))
+    if current_max is None or previous_max is None or current_max >= previous_max:
+        return row
+
+    out = dict(row)
+    out["running_max_c"] = previous_max
+    current_temp = _float_or_none(out.get("current_temp_c"))
+    out["decline_c"] = None if current_temp is None else previous_max - current_temp
+    for field in ("running_max_obs_utc",):
+        if previous.get(field) not in (None, ""):
+            out[field] = previous[field]
+
+    fetched_at = parse_dt(str(out.get("fetched_at_utc") or ""))
+    running_max_at = parse_dt(str(out.get("running_max_obs_utc") or ""))
+    if fetched_at is not None and running_max_at is not None:
+        out["minutes_since_running_max"] = round((fetched_at - running_max_at).total_seconds() / 60.0, 3)
+
+    out["history_continuity_status"] = "merged_previous_running_max"
+    out["history_continuity_previous_source"] = str(previous.get("source") or "")
+    out["history_continuity_previous_running_max_c"] = previous_max
+    out["history_continuity_raw_running_max_c"] = current_max
+    return out
+
+
 def build_cache(args: argparse.Namespace) -> dict[str, Any]:
     now_utc = parse_now_utc(args.now_utc) if args.now_utc else datetime.now(timezone.utc)
     output = Path(args.output)
@@ -265,7 +308,7 @@ def build_cache(args: argparse.Namespace) -> dict[str, Any]:
                 reused["cache_reused_at_utc"] = datetime.now(timezone.utc).isoformat()
                 rows.append(reused)
             else:
-                rows.append(row)
+                rows.append(merge_previous_running_max(row, previous))
     cache = build_observation_cache(
         sorted(rows, key=lambda row: str(row.get("city"))),
         generated_at_utc=datetime.now(timezone.utc).isoformat(),
@@ -276,6 +319,9 @@ def build_cache(args: argparse.Namespace) -> dict[str, Any]:
         "ok": ok,
         "non_ok": len(rows) - ok,
         "include_fallback_sources": bool(args.include_fallback_sources),
+        "running_max_continuity_merges": sum(
+            1 for row in rows if row.get("history_continuity_status") == "merged_previous_running_max"
+        ),
     }
     return cache
 
