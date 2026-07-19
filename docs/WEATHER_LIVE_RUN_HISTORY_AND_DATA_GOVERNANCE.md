@@ -789,6 +789,33 @@ crosses remain probabilistic features; persistence and `temperatureQCR=0` do
 not authorize a deterministic live expression. The affected US cities remain
 shadow; the underlying collectors and evidence are retained.
 
+### 6.11 2026-07-18/19 Observation Running-Max Continuity Failure
+
+Pollution window: `2026-07-18T19:33:45Z..2026-07-19T10:17:30Z`. When a primary
+observation fetch failed, `aviationweather_cache_csv` often supplied only the
+latest METAR. The cache builder recomputed the day-to-date running maximum from
+that truncated payload, so a temperature already observed earlier in the same
+station-day could disappear. The same invariant also applies to rolling-window
+sources whose returned history later drops an older high.
+
+Impact replay over the retained observation journal found 179 polluted cache
+rows across 57 city-days / 40 cities. Five `d1_yes_high_mid` promotion signals
+consumed a regressed maximum: Taipei was zero-notional; Singapore, Beijing,
+Busan, and Chongqing produced 25 filled YES shares with `$24.97` principal.
+Their correct d1 mids at the same book snapshots were respectively `0.0070`,
+`0.0065`, `0.0015`, and `0.0040`, all below the frozen `0.80` threshold, so the
+four live counterfactual decisions are all **no order**. These fills must remain
+tagged as incident positions and excluded from d1 promotion PnL.
+
+Correction: commit `88767fdc` (production equivalent `f81a3efb`) makes
+`running_max_c` monotone within the same station and local date across source
+failover, carries forward the prior high timestamp, and emits
+`history_continuity_status=merged_previous_running_max`. Five focused observation
+cache tests pass. The first post-fix production cache at
+`2026-07-19T10:33:32Z` reported four actual continuity merges; the d1 loop then
+returned to zero triggers. Detailed order-level replay is retained in the d1
+strategy living report.
+
 ## 7. Immediate Follow-Up Work
 
 1. Implement a repeatable live reconciliation report:
