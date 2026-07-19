@@ -32,7 +32,10 @@ Runtime dir: `runtime/weather_edge_v1/d1_yes_high_mid_live_v1/`
 
 来自 v1 触发行的事后诊断（见 source research 补节），只作并行记录：
 - `d1_yes_ask <= 0.95`：edge 集中在 0.85–0.95（+3~6%），>0.95 转负（-0.9%，残差 < 摩擦）。
-- `remaining_heat_native <= 1.3`：12 次亏损 11 次是 overshoot 跳过 d1，亏损日预报剩余热量中位 1.67 vs 盈利日 1.11。（需 forecast_enrichment join，runner 当前记 `v11_remaining_heat_ok=null` 待接入。）
+- 旧草案写过 `remaining_heat_native <= 1.3`，现已撤回：该字段实际是
+  `final_max_native - running_native`，使用结算后的最终高温，属于 label leakage，不能作为 live 特征。
+  合法替代量是 PIT `forecast_gap_to_running_native`、forecast peak clock 和模型尾部分布；当前历史同分母上
+  这些字段对 overshoot 的区分度很弱，继续只做 telemetry，不加 v1.1 hard gate。
 
 ## 证据（回测，同分母，fee-adjusted）
 
@@ -75,8 +78,48 @@ Contract: significance=MARGINAL(all-rows CI>0, dedup CI 跨 0); baseline=同价 
 ## 已知限制
 
 - 2026-07-16 已修复旧 runner 先按 raw running 算 tail distance 的错误：例如 93.92°F 会结算 round 到 94，`94-95` 必须是 current 而不是 d1。旧 shadow 污染窗口和逐条影响另做重放记录；无真实资金影响。
-- forecast remaining-heat 尚未 join（v1.1 guard 半开）。
+- forecast remaining-heat v1.1 已撤回；runner 中旧名 `v11_remaining_heat_ok` 仅为未启用的 telemetry 占位，不得接入
+  `remaining_heat_native`；后续若实现必须改成明确的 PIT forecast ceiling/tail 字段。
 - 发现路径含 ~50 格校准扫描的事后选择，需 fresh-forward 洗清。
+
+## 2026-07-19 Wuhan overshoot 事前特征复盘
+
+Wuhan 在 13:39 local 入场：running max 30°C，买 31°C YES；最终最高 33°C。入场可见的常规
+forecast/TAF 没有报出 33°C：固定 ECMWF ceiling 31.22°C，九模型最高同为 31.22°C，TAF TX30；
+因此这次不是已有 forecast threshold 本可挡住而 runner 漏用了，而是预报尾部整体低估。
+
+真正可见的软风险只有 peak clock：入场距预报 15:00 peak-window 结束仍约 81 分钟，属于 active
+heating window，不是 post-peak fade。历史同分母 218 个 first signals（11 次 overshoot）上，PIT
+特征没有形成可上线分离：`forecast_gap_to_running_native` AUC 0.514，peak delta AUC 0.465，
+decision hour AUC 0.506；peak-ahead overshoot 6/93（6.45%）对 peak-passed 3/68（4.41%），差异不足以
+支持 hard filter。市场在约 14:27 把 31 YES 快速压低、同时抬高 32 YES，早于 15:00 的 32°C
+official print，属于更强的**入场后** warning candidate；需用历史 book replay 做同分母 exit shadow，不能据单例改 live。
+
+## 2026-07-19 observation fallback running-max 事故
+
+影响窗口：`2026-07-18T19:33:45Z`–`2026-07-19T10:17:30Z`。主 observation source
+偶发失败时，`aviationweather_cache_csv` 往往只有最新一条 METAR；旧 cache builder 却用这一个点重新计算
+当日 running max，导致已经打印过的最高温向下倒退。历史 jsonl 回放发现 179 个污染 cache rows、57 个
+city-days、40 城；这是 source history continuity bug，不是天气特征或市场 alpha。
+
+d1 promotion 受影响 5 个 city-days，其中 Taipei 仍为零资金 shadow；其余 4 个产生真实订单：
+
+| city | 错误记录 current→d1 | 正确 current→d1 | 正确 d1 mid | 实际成交 |
+|---|---:|---:|---:|---:|
+| Singapore | 31→32 | 32→33 | 0.0070 | 5 @ 0.999 |
+| Beijing | 32→33 | 33→34 | 0.0065 | 10 @ avg 0.9985 |
+| Busan | 28→29 | 29→30 | 0.0015 | 5 @ 0.999 |
+| Chongqing | 34→35 | 35→36 | 0.0040 | 5 @ 0.999 |
+| Taipei | 34→35 | 35→36 | — | zero-notional shadow |
+
+正确口径下四个 live city-days 的 d1 mid 均远低于 0.80，反事实为**全部不下单**；污染造成 25 filled
+shares / `$24.97` fill cost。Singapore、Busan、Chongqing maker 均 0 fill 后取消；Beijing maker 5 shares
+成交。已提交生产修复 `f81a3efb`：同 station + local-date 的 running max 在 source failover/截断历史间保持
+单调，保留此前最高点和时间戳，并记录 `history_continuity_status=merged_previous_running_max`；定向测试 5 passed。
+修复后首轮生产 cache `2026-07-19T10:33:32Z` 已实际触发 4 次 continuity merge，证明生效。
+
+这 25 shares 是事故持仓，不得计入 d1 策略 promotion PnL；结算/退出后 canonical rebuild 必须按该污染窗口
+和四个 opportunity IDs 分层。未获单独资金指令前不自动平仓。
 
 ## 2026-07-16 current→d1 语义修复影响账
 

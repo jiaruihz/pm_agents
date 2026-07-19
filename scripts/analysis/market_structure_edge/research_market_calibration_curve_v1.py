@@ -214,6 +214,90 @@ def accuracy_summary(rows: pd.DataFrame, label: str, draws: int = 4000, seed: in
     }
 
 
+def higher_value_auc(values: pd.Series, labels: pd.Series) -> float:
+    """Pairwise AUC where a larger feature value predicts overshoot."""
+
+    positive = pd.to_numeric(values[labels.eq(1)], errors="coerce").dropna().to_numpy()
+    negative = pd.to_numeric(values[labels.eq(0)], errors="coerce").dropna().to_numpy()
+    if len(positive) == 0 or len(negative) == 0:
+        return float("nan")
+    comparisons = positive[:, None] - negative[None, :]
+    return float((comparisons > 0).mean() + 0.5 * (comparisons == 0).mean())
+
+
+def d1_overshoot_feature_probe(rows: pd.DataFrame) -> dict:
+    """Describe PIT feature separation without promoting post-hoc hard gates."""
+
+    work = rows.copy()
+    work["overshoot"] = pd.to_numeric(work["skip_over_d1"], errors="coerce").fillna(0).astype(int)
+    features = [
+        "decision_hour_local",
+        "forecast_gap_to_running_native",
+        "forecast_peak_delta_hours_local",
+        "forecast_peak_hour_spread",
+        "gfs_gap_to_running_native",
+        "ecmwf_gap_to_running_native",
+        "temp_trend_1h_f",
+        "temp_trend_3h_f",
+        "minutes_since_running_max",
+        "relative_humidity_pct",
+        "wind_speed_kt",
+    ]
+    continuous = {}
+    for feature in features:
+        values = pd.to_numeric(work.get(feature), errors="coerce")
+        covered = values.notna()
+        positive = values[covered & work["overshoot"].eq(1)]
+        negative = values[covered & work["overshoot"].eq(0)]
+        continuous[feature] = {
+            "covered_rows": int(covered.sum()),
+            "overshoot_rows": int(len(positive)),
+            "overshoot_median": None if positive.empty else round(float(positive.median()), 4),
+            "non_overshoot_median": None if negative.empty else round(float(negative.median()), 4),
+            "auc_higher_predicts_overshoot": round(higher_value_auc(values, work["overshoot"]), 4),
+        }
+
+    peak_delta = pd.to_numeric(work["forecast_peak_delta_hours_local"], errors="coerce")
+    work["peak_clock_state"] = pd.cut(
+        peak_delta,
+        [-np.inf, -0.25, 0.25, np.inf],
+        labels=["peak_ahead", "near_peak", "peak_passed"],
+    )
+    gap = pd.to_numeric(work["forecast_gap_to_running_native"], errors="coerce")
+    work["forecast_gap_bin"] = pd.cut(gap, [-np.inf, 0.49, 0.99, 1.49, 1.99, np.inf])
+
+    def categorical(column: str) -> list[dict]:
+        output = []
+        for value, group in work.dropna(subset=[column]).groupby(column, observed=True):
+            output.append(
+                {
+                    "value": str(value),
+                    "rows": int(len(group)),
+                    "overshoots": int(group["overshoot"].sum()),
+                    "overshoot_rate": round(float(group["overshoot"].mean()), 4),
+                }
+            )
+        return output
+
+    return {
+        "contract": {
+            "denominator": "first d1 YES mid>=0.80 row per city x target_date",
+            "label": "final exact bracket skips over d1",
+            "feature_timing": "PIT at entry; final/remaining_heat fields excluded",
+            "use": "diagnostic only; no post-hoc hard gate",
+        },
+        "rows": int(len(work)),
+        "overshoots": int(work["overshoot"].sum()),
+        "continuous": continuous,
+        "slices": {
+            "peak_clock_state": categorical("peak_clock_state"),
+            "forecast_gap_bin": categorical("forecast_gap_bin"),
+            "solar_window": categorical("solar_window"),
+            "running_max_state": categorical("running_max_state"),
+        },
+    }
+
+
 def d1_first_rows(frame: pd.DataFrame, threshold: float) -> pd.DataFrame:
     f = frame.copy()
     f["d1_yes_mid"] = 1.0 - (f["d1_no_ask"] + f["d1_no_bid"]) / 2.0
@@ -278,6 +362,7 @@ def d1_accuracy_probe(frame: pd.DataFrame) -> dict:
         },
         "primary_entry_ask_bands": entry_bands,
         "primary_loss_modes": loss_modes,
+        "overshoot_entry_feature_diagnostics": d1_overshoot_feature_probe(primary),
     }
 
 
