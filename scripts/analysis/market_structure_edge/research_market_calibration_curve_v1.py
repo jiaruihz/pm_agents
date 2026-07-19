@@ -17,6 +17,7 @@ qualifying hour per city-date.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +32,7 @@ DEFAULT_INPUT = (
 DEFAULT_JSON = ROOT / "docs/analysis/2026-07/generated/market_calibration_curve_v1/summary.json"
 FORWARD_START = "2026-06-21"
 BUCKET_EDGES = [0, 0.02, 0.05, 0.10, 0.20, 0.35, 0.50, 0.65, 0.80, 0.90, 0.95, 0.98, 1.0]
+D1_ENTRY_BANDS = [0.0, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.01]
 
 
 def fee(p):
@@ -171,6 +173,114 @@ def roi_summary(rows: pd.DataFrame, label: str, draws: int = 4000, seed: int = 3
     }
 
 
+def wilson_ci(wins: int, rows: int, z: float = 1.959963984540054) -> tuple[float, float]:
+    if rows <= 0:
+        return (float("nan"), float("nan"))
+    p = wins / rows
+    denom = 1.0 + z * z / rows
+    center = (p + z * z / (2.0 * rows)) / denom
+    half = z * math.sqrt(p * (1.0 - p) / rows + z * z / (4.0 * rows * rows)) / denom
+    return (center - half, center + half)
+
+
+def accuracy_summary(rows: pd.DataFrame, label: str, draws: int = 4000, seed: int = 19) -> dict:
+    if rows.empty:
+        return {"slice": label, "rows": 0}
+    wins = int(rows["win"].sum())
+    row_lo, row_hi = wilson_ci(wins, len(rows))
+    dates = sorted(rows["target_date"].unique())
+    block_lo = block_hi = float("nan")
+    if len(dates) >= 3:
+        daily = rows.groupby("target_date").agg(wins=("win", "sum"), rows=("win", "size"))
+        rng = np.random.default_rng(seed)
+        values = []
+        for _ in range(draws):
+            sampled = daily.loc[rng.choice(dates, size=len(dates), replace=True)].sum()
+            values.append(float(sampled["wins"] / sampled["rows"]))
+        block_lo, block_hi = (float(x) for x in np.quantile(values, [0.025, 0.975]))
+    avg_mid = float(rows["d1_yes_mid"].mean())
+    return {
+        "slice": label,
+        "rows": int(len(rows)),
+        "dates": int(len(dates)),
+        "cities": int(rows["city"].nunique()),
+        "wins": wins,
+        "losses": int(len(rows) - wins),
+        "accuracy": round(float(wins / len(rows)), 4),
+        "accuracy_wilson_ci": [round(row_lo, 4), round(row_hi, 4)],
+        "accuracy_target_date_block_ci": [round(block_lo, 4), round(block_hi, 4)],
+        "avg_market_mid": round(avg_mid, 4),
+        "realized_minus_market_mid": round(float(wins / len(rows) - avg_mid), 4),
+    }
+
+
+def d1_first_rows(frame: pd.DataFrame, threshold: float) -> pd.DataFrame:
+    f = frame.copy()
+    f["d1_yes_mid"] = 1.0 - (f["d1_no_ask"] + f["d1_no_bid"]) / 2.0
+    f["d1_yes_ask"] = 1.0 - f["d1_no_bid"]
+    selected = f[
+        (f["d1_yes_mid"] >= threshold)
+        & f["d1_no_bid"].notna()
+        & f["d1_hit"].notna()
+    ].copy()
+    selected["win"] = selected["d1_hit"].astype(float)
+    selected["cost"] = selected["d1_yes_ask"] + fee(selected["d1_yes_ask"])
+    selected["pnl"] = selected["win"] - selected["cost"]
+    return (
+        selected.sort_values("decision_hour_local")
+        .groupby(["city", "target_date"], as_index=False)
+        .first()
+    )
+
+
+def d1_accuracy_probe(frame: pd.DataFrame) -> dict:
+    thresholds = {}
+    for threshold in (0.70, 0.75, 0.80, 0.85, 0.90, 0.95):
+        first = d1_first_rows(frame, threshold)
+        thresholds[f"{threshold:.2f}"] = {
+            **accuracy_summary(first, f"mid>={threshold:.2f}"),
+            "trade": roi_summary(first, f"mid>={threshold:.2f}"),
+        }
+
+    primary = d1_first_rows(frame, 0.80)
+    primary["entry_band"] = pd.cut(
+        primary["d1_yes_ask"], D1_ENTRY_BANDS, right=False, include_lowest=True
+    )
+    entry_bands = []
+    for band, group in primary.groupby("entry_band", observed=True):
+        row = accuracy_summary(group, str(band))
+        row["avg_entry_ask"] = round(float(group["d1_yes_ask"].mean()), 4)
+        row["trade"] = roi_summary(group, str(band))
+        entry_bands.append(row)
+
+    losses = primary[primary["win"] == 0].copy()
+    loss_modes = {
+        "overshoot_d2_or_higher": int(losses["skip_over_d1"].fillna(False).astype(bool).sum()),
+        "current_bracket_held": int(losses["current_bracket_held"].fillna(False).astype(bool).sum()),
+    }
+    loss_modes["other"] = int(len(losses) - sum(loss_modes.values()))
+
+    return {
+        "contract": {
+            "grain": "first qualifying hour per city x target_date",
+            "label": "exact final bracket equals d1",
+            "primary_threshold": 0.80,
+            "accuracy_ci": "row Wilson and target_date block bootstrap, 95%",
+        },
+        "threshold_sensitivity": thresholds,
+        "primary_time_split": {
+            "train": accuracy_summary(
+                primary[primary["target_date"] < FORWARD_START], "train"
+            ),
+            "forward": accuracy_summary(
+                primary[primary["target_date"] >= FORWARD_START], "forward"
+            ),
+        },
+        "primary_entry_ask_bands": entry_bands,
+        "primary_loss_modes": loss_modes,
+    }
+
+
 def d1_yes_probe(frame: pd.DataFrame, thresh: float) -> dict:
     f = frame.copy()
     f["d1_yes_mid"] = 1.0 - (f["d1_no_ask"] + f["d1_no_bid"]) / 2.0
@@ -223,6 +333,7 @@ def main() -> None:
         ),
         "taker_edge_at_ask": taker_edge_rows(long),
         "d1_yes_high_mid_probe": {str(t): d1_yes_probe(frame, t) for t in (0.80, 0.85)},
+        "d1_yes_signal_accuracy": d1_accuracy_probe(frame),
     }
     DEFAULT_JSON.parent.mkdir(parents=True, exist_ok=True)
     DEFAULT_JSON.write_text(json.dumps(summary, indent=2))

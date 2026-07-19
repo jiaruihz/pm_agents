@@ -46,6 +46,44 @@ Generated: 2026-07-15 · script `scripts/analysis/market_structure_edge/research
 | train < 6/21 | 162 | 33 | 0.932 | +0.73% | [-2.97%, +4.33%] |
 | forward ≥ 6/21 | 56 | 15 | 0.982 | +6.62% | [+3.47%, +9.89%] |
 
+### 信号准确率与阈值敏感性（2026-07-19 复算）
+
+这里的“准确”严格指最终 exact bracket 正好结算为 d1，不是温度曾经触到 d1。固定 grain 为每个
+`(city,target_date)` 首个满足阈值的小时；数据仍是 `2026-05-19..2026-07-08` 的 PIT atlas/book 回放，
+不把 7 月 16 日后的 live fills 混入历史回测。
+
+signal funnel：14,368 个 city-date-hour state rows（50 dates / 36 cities）→ 11,549 个有可用 d1 双边报价和
+settlement 的机制行（49 dates）→ 296 个 `mid>=0.80` 小时触发行 → 218 个 first city-day signals。
+
+evidence funnel：218/218 有 PIT quote 和 exact-bracket settlement；执行价按镜像 book 的
+`YES ask = 1 - NO bid` 回放并扣 Weather taker fee。历史 CSV 没有完整 queue/depth，所以这是 executable-price
+replay，不是 actual fill，也不能据此估 maker fill rate。
+
+主规则 `mid>=0.80`：`206 win / 12 loss = 94.50%`；row-level Wilson 95% CI
+`[90.63%,96.82%]`，target-date block bootstrap 95% CI `[91.71%,97.18%]`。入选行平均 market mid
+为 `90.41%`，实际兑现率高 `4.08pp`；但按可执行 ask 和 fee 后 ROI 仍只有 `+2.24%`，ROI CI
+`[-0.64%,+5.19%]` 跨 0。
+
+| d1 YES mid 阈值 | first city-days | win / loss | exact 命中率 | 平均 market mid | fee ROI | ROI 95% CI |
+|---:|---:|---:|---:|---:|---:|---:|
+| ≥0.70 | 361 | 303 / 58 | 83.93% | 83.30% | -2.72% | [-6.66%,+1.38%] |
+| ≥0.75 | 291 | 256 / 35 | 87.97% | 86.65% | -1.32% | [-5.02%,+2.33%] |
+| **≥0.80（当前）** | **218** | **206 / 12** | **94.50%** | **90.41%** | **+2.24%** | **[-0.64%,+5.19%]** |
+| ≥0.85 | 168 | 163 / 5 | 97.02% | 93.01% | +2.43% | [-0.30%,+4.82%] |
+| ≥0.90 | 124 | 121 / 3 | 97.58% | 95.23% | +0.93% | [-1.88%,+3.31%] |
+| ≥0.95 | 73 | 71 / 2 | 97.26% | 97.72% | -1.39% | [-5.50%,+1.45%] |
+
+阈值曲线说明两件事：降到 `0.75` 确实会把信号从 218 增到 291（+33%），但新增分母质量不足以覆盖
+ask/fee，整体 ROI 转负；升到 `0.95` 虽仍有 97.3% 命中率，但买得太贵，市场隐含概率反而高于实际兑现率，
+同样亏钱。当前 `0.80` 是准确率、信号数和入场成本之间的局部平衡点，不应仅为了增加每日触发数降低 live 阈值。
+
+时间外推方面，train 为 `151/162 = 93.21%`，forward（≥2026-06-21）为 `55/56 = 98.21%`；forward
+只有 15 个独立日期，仍不足以把策略升级为 confirmed。12 次失败中 11 次是 overshoot 到 d2 或更高，1 次是
+最终停在 current，失败机制与此前诊断一致。
+
+以上阈值比较属于同一数据上的 sensitivity，未作新增多重检验校正，不作为改 live 参数的 promotion 证据。
+动作维持：live 阈值不改；如需增加机制样本，只把 `0.75<=mid<0.80` 作为独立 shadow challenger 采集。
+
 - 广度好：33 城，24/27 个 n≥3 城市为正；亏损集中在 plateau/overshoot 型城市（Taipei -38%、Madrid、Lucknow、Wellington、Amsterdam、Jeddah）——失败模式是 overshoot 到 d2 或 current 顶住，物理上可解释，但**不预注册城市剔除**。
 - 诚实读法：去重分母 CI 跨 0；train 弱、forward 强的组合既可能是"6/21 后盘口血缘更干净/盛夏 heating 更可预测"，也可能是运气。发现路径是先扫 ~50 个校准格子再聚焦（d1 (0.8,0.9] bias z≈3.5，粗略 Bonferroni 下仍显著，但仍属事后选择）。
 - **该格子与 residual_high_price_no（d1 NO 95-99c）不冲突**：那是市场几乎确定不会再打穿时收 NO 残值，本格子是市场几乎确定正好打穿一档时跟 YES，两者分母不重叠。
