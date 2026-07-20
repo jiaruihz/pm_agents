@@ -29,6 +29,19 @@ fastest, while current/new-high and tail brackets move unevenly. Keep it
 forward-date validation. Living entry: `docs/analysis/post_cross_repricing.md`;
 tool: `scripts/analysis/market_structure_edge/research_post_cross_repricing_v0.py`.
 
+The 2026-07-21 scheduled-report liquidity study validates a separate execution
+overlay. Across 41 cities / 13 target dates, active exact-bracket books widened
+by 0.237 cents in the eight minutes before nominal observation report time
+versus the preceding window (date-block 95% CI +0.110 to +0.373 cents), with
+lower top depth and a small decline in two-sided quoting; spreads then narrowed
+by 0.522 cents in minutes +8 to +15. Ankara's :20/:50 cadence shows the same
+shape, especially depth withdrawal, but its city-only spread CI crosses zero.
+The trade expression is not taker entry: fee-adjusted taker markout was -1.56
+cents/share, while bid+one-tick maker markout was only a +4.05 cents/share
+no-fill upper bound. Keep this as `execution_shadow_candidate`; collect trade
+tape and queue-ahead against frozen existing direction signals before any live
+claim.
+
 Important distinction: if BUY_NO or a price bucket works because of market structure, that is not evidence that the weather probability model is good. It belongs here, not in `model_vs_market.md`.
 
 ## Absorbed Historical Claims
@@ -63,6 +76,7 @@ Important distinction: if BUY_NO or a price bucket works because of market struc
 | `docs/analysis/post_cross_repricing.md` | 2026-06 METAR-cross microstructure fork | Defines the new post-cross repricing research task: crossed bracket collapse vs current/new-high and tail bracket probability redistribution after a fresh running-max update | current-reference |
 | `docs/analysis/2026-06/2026-06-26-forecast-update-time-repricing-v0.md` | 2026-06-24 onward N100 source/book timing + paper snapshots | First forecast/update-time "hourly trade" denominator: 154,518 book rows, 1,373 observation events, 421 reconstructed forecast-state events; book changes cluster around local :00/:30, observation/update-window evidence dominates forecast/hash evidence; shadow/research only | snapshot |
 | `docs/analysis/2026-06/2026-06-26-metar-cf-boundary-trap-v0.md` | 2026-06-24 onward N100 METAR/source/book timing + WU/IEM follow-up | METAR main integer-C vs RMK tenth-C boundary mismatch research: 5 true F-market boundary events, led by SFO 68-69F where 5-minute MADIS/HFMETAR looked like 70F but routine METAR/WU hourly stayed 69F and market later repriced to YES; research-only source-basis branch | snapshot |
+| `docs/analysis/2026-07/2026-07-21-scheduled-report-liquidity-gap-v1.md` | 2026-06 dense timing journal + 2026-07 JRS sanity | Nominal report windows show statistically significant pre-report spread widening/depth withdrawal and post-report recovery; taker markout is negative, passive maker remains a no-fill upper bound pending queue/trade-tape forward | execution-shadow-candidate |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-source-aware-v0.md` | 2026-06 source-aware forecast-bounded Range RV | Reuses forecast-quality/source base at source/model decision-set grain; proxy default-WU width-3 looks positive but generic orderbook gates fail, so verdict remains inconclusive/no live action | active-evidence |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-live-standard-v1.md` | 2026-06 orderbook-native live-standard hardening | Uses time-aligned orderbook costs for the entry decision itself; closest default-WU width-3 cheaper rule passes basic replay gates but fails live-standard support, top5, and 5-share capacity checks | active-evidence |
 | `docs/analysis/2026-06/2026-06-16-range-rv-shadow-handoff-v0.md` | 2026-06 Range RV shadow handoff | Single entrypoint for current forecast-bounded Range RV shadow: strategy id, file inventory, runtime data paths, commands, gates, and do-not-do rules | current-handoff |
