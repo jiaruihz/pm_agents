@@ -7,6 +7,7 @@ import argparse
 import csv
 import json
 import math
+import random
 import statistics
 import sys
 from collections import Counter, defaultdict
@@ -62,6 +63,41 @@ def wilson_low(hits: int, total: int, z: float = 1.96) -> float | None:
 
 def weather_fee_per_share(price: float) -> float:
     return 0.05 * price * (1.0 - price)
+
+
+def target_date_block_bootstrap_roi(
+    rows: list[dict[str, Any]], *, iterations: int = 10_000, seed: int = 20260722
+) -> tuple[float | None, float | None]:
+    by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_date[str(row["target_date"])].append(row)
+    dates = sorted(by_date)
+    if not dates:
+        return None, None
+    rng = random.Random(seed)
+    samples: list[float] = []
+    for _ in range(iterations):
+        selected = [rng.choice(dates) for _ in dates]
+        principal = sum(
+            float(row["hypothetical_principal_usd"])
+            for date in selected for row in by_date[date]
+        )
+        fees = sum(
+            float(row["hypothetical_fee_usd"])
+            for date in selected for row in by_date[date]
+        )
+        pnl = sum(
+            float(row["hypothetical_pnl_usd"])
+            for date in selected for row in by_date[date]
+        )
+        if principal + fees > 0:
+            samples.append(pnl / (principal + fees))
+    if not samples:
+        return None, None
+    samples.sort()
+    low = samples[math.floor((len(samples) - 1) * 0.025)]
+    high = samples[math.ceil((len(samples) - 1) * 0.975)]
+    return low, high
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -263,17 +299,23 @@ def main() -> int:
                 executable_quote_delay is not None
                 and executable_quote_delay <= args.collector_cycle_sec + 1e-9
             )
+            direct_first_quote_executable = bool(
+                ask is not None
+                and ask <= args.max_no_ask + 1e-9
+                and ask_size is not None
+                and ask_size >= args.shares - 1e-9
+            )
             settled_label = row.get("settlement_left_previous_bracket")
             fee = (
-                weather_fee_per_share(execution_ask) * args.shares
-                if collector_cycle_executable and execution_ask is not None else None
+                weather_fee_per_share(ask) * args.shares
+                if direct_first_quote_executable and ask is not None else None
             )
             principal = (
-                execution_ask * args.shares
-                if collector_cycle_executable and execution_ask is not None else None
+                ask * args.shares
+                if direct_first_quote_executable and ask is not None else None
             )
             pnl = None
-            if collector_cycle_executable and settled_label in (True, False):
+            if direct_first_quote_executable and settled_label in (True, False):
                 pnl = (args.shares if settled_label is True else 0.0) - float(principal) - float(fee)
             ledger.append(
                 {
@@ -313,6 +355,7 @@ def main() -> int:
                     if executable_quote_delay is not None else "",
                     "execution_no_ask": execution_ask,
                     "execution_top_ask_size": execution_ask_size,
+                    "direct_first_quote_executable_10_share_at_0p97": direct_first_quote_executable,
                     "executable_10_share_at_0p97": executable,
                     "collector_cycle_executable_10_share_at_0p97": collector_cycle_executable,
                     "hypothetical_principal_usd": round(principal, 6) if principal is not None else "",
@@ -330,20 +373,20 @@ def main() -> int:
         delays = [float(row["delay_vs_0p5_min"]) for row in threshold_ledger if row["delay_vs_0p5_min"] != ""]
         positive_delays = [value for value in delays if value > 1e-9]
         leads = [float(row["lead_to_next_metar_min"]) for row in threshold_ledger]
-        supported = [row for row in threshold_ledger if row["quote_supported_within_sec"]]
-        priced = [row for row in threshold_ledger if row["priced_quote_supported_within_sec"]]
-        executable = [row for row in threshold_ledger if row["executable_10_share_at_0p97"]]
-        cycle_supported = [row for row in threshold_ledger if row["quote_supported_within_collector_cycle"]]
-        cycle_priced = [
-            row for row in threshold_ledger if row["priced_quote_supported_within_collector_cycle"]
+        priced = [row for row in threshold_ledger if row["direct_no_ask"] is not None]
+        direct_executable = [
+            row for row in threshold_ledger
+            if row["direct_first_quote_executable_10_share_at_0p97"]
         ]
-        cycle_executable = [
-            row for row in threshold_ledger if row["collector_cycle_executable_10_share_at_0p97"]
-        ]
-        pnl_rows = [row for row in cycle_executable if row["hypothetical_pnl_usd"] != ""]
+        pnl_rows = [row for row in direct_executable if row["hypothetical_pnl_usd"] != ""]
+        direct_hits = sum(row["settlement_left_previous_bracket"] is True for row in pnl_rows)
+        priced_delays = [float(row["first_priced_quote_delay_sec"]) for row in priced]
         principal = sum(float(row["hypothetical_principal_usd"]) for row in pnl_rows)
         fees = sum(float(row["hypothetical_fee_usd"]) for row in pnl_rows)
         pnl = sum(float(row["hypothetical_pnl_usd"]) for row in pnl_rows)
+        roi_ci_low, roi_ci_high = target_date_block_bootstrap_roi(
+            pnl_rows, seed=20260722 + int(threshold * 10)
+        )
         summaries.append(
             {
                 "margin_threshold": threshold,
@@ -369,20 +412,32 @@ def main() -> int:
                 "median_positive_delay_vs_0p5_min": round(statistics.median(positive_delays), 3)
                 if positive_delays else "",
                 "median_lead_to_next_metar_min": round(statistics.median(leads), 3) if leads else "",
-                "book_supported_within_120s": len(supported),
-                "book_priced_within_120s": len(priced),
-                "executable_10_share_at_0p97": len(executable),
                 "collector_active_signal_dates": len(
                     {row["target_date"] for row in threshold_ledger if row["collector_active_on_target_date"]}
                 ),
-                "book_supported_within_collector_cycle": len(cycle_supported),
-                "book_priced_within_collector_cycle": len(cycle_priced),
-                "collector_cycle_executable_10_share_at_0p97": len(cycle_executable),
+                "direct_priced_quote_coverage": len(priced),
+                "direct_priced_quote_dates": len({row["target_date"] for row in priced}),
+                "direct_quote_delay_median_sec": round(statistics.median(priced_delays), 3)
+                if priced_delays else "",
+                "direct_quote_delay_p90_sec": round(
+                    sorted(priced_delays)[math.ceil(len(priced_delays) * 0.9) - 1], 3
+                ) if priced_delays else "",
+                "direct_quote_delay_max_sec": round(max(priced_delays), 3) if priced_delays else "",
+                "direct_executable_10_share_at_0p97": len(direct_executable),
+                "direct_executable_dates": len({row["target_date"] for row in direct_executable}),
+                "direct_trade_hits": direct_hits,
+                "direct_trade_accuracy": round(direct_hits / len(pnl_rows), 4) if pnl_rows else "",
+                "direct_trade_wilson_low": round(wilson_low(direct_hits, len(pnl_rows)), 4)
+                if pnl_rows else "",
                 "hypothetical_settled_fills": len(pnl_rows),
                 "hypothetical_principal_usd": round(principal, 4),
                 "hypothetical_fees_usd": round(fees, 4),
                 "hypothetical_pnl_usd": round(pnl, 4),
                 "hypothetical_roi": round(pnl / (principal + fees), 4) if principal + fees > 0 else "",
+                "hypothetical_roi_block_bootstrap_low": round(roi_ci_low, 4)
+                if roi_ci_low is not None else "",
+                "hypothetical_roi_block_bootstrap_high": round(roi_ci_high, 4)
+                if roi_ci_high is not None else "",
             }
         )
 
@@ -400,17 +455,12 @@ def main() -> int:
                     "target_date": target_date,
                     "signals": len(date_rows),
                     "collector_active_on_target_date": target_date in collector_active_dates,
-                    "book_priced_within_120s": sum(
-                        bool(row["priced_quote_supported_within_sec"]) for row in date_rows
+                    "direct_priced_quote_coverage": sum(
+                        row["direct_no_ask"] is not None for row in date_rows
                     ),
-                    "executable_10_share_within_120s": sum(
-                        bool(row["executable_10_share_at_0p97"]) for row in date_rows
-                    ),
-                    "book_priced_within_collector_cycle": sum(
-                        bool(row["priced_quote_supported_within_collector_cycle"]) for row in date_rows
-                    ),
-                    "executable_10_share_within_collector_cycle": sum(
-                        bool(row["collector_cycle_executable_10_share_at_0p97"]) for row in date_rows
+                    "direct_executable_10_share_at_0p97": sum(
+                        bool(row["direct_first_quote_executable_10_share_at_0p97"])
+                        for row in date_rows
                     ),
                 }
             )
@@ -437,41 +487,49 @@ def main() -> int:
     }
     (out_dir / "summary.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    table_lines = [
-        "| 单次 margin | 采集后信号/日期 | final 正确率 | 有archive日期 | ≤120s priced/executable | ≤10m priced/executable | 10m口径PnL/ROI |",
-        "|---:|---:|---:|---:|---:|---:|---:|",
+    signal_table_lines = [
+        "| 单次 margin | 采集后信号/日期 | final 正确率 | Wilson 95% 下界 | next METAR 正确率 |",
+        "|---:|---:|---:|---:|---:|",
+    ]
+    trade_table_lines = [
+        "| 单次 margin | first-priced coverage | 当场可执行/日期 | 成交正确率（Wilson low） | principal | fee | PnL | ROI（date-block 95% CI） | quote延迟中位/最大 |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in summaries:
-        table_lines.append(
+        signal_table_lines.append(
             f"| +{row['margin_threshold']:.1f} | {row['signals']}/{row['dates']} | "
             f"{row['final_hits']}/{row['settled_signals']} ({row['final_precision']}) | "
-            f"{row['collector_active_signal_dates']}/{row['dates']} | "
-            f"{row['book_priced_within_120s']}/{row['executable_10_share_at_0p97']} | "
-            f"{row['book_priced_within_collector_cycle']}/{row['collector_cycle_executable_10_share_at_0p97']} | "
-            f"${row['hypothetical_pnl_usd']} / {row['hypothetical_roi']} |"
+            f"{row['final_wilson_low']} | "
+            f"{row['next_metar_hits']}/{row['next_metar_signals']} ({row['next_metar_precision']}) |"
+        )
+        trade_table_lines.append(
+            f"| +{row['margin_threshold']:.1f} | {row['direct_priced_quote_coverage']}/{row['signals']} | "
+            f"{row['direct_executable_10_share_at_0p97']}/{row['direct_executable_dates']} | "
+            f"{row['direct_trade_hits']}/{row['hypothetical_settled_fills']} "
+            f"({row['direct_trade_accuracy']}; {row['direct_trade_wilson_low']}) | "
+            f"${row['hypothetical_principal_usd']} | ${row['hypothetical_fees_usd']} | "
+            f"${row['hypothetical_pnl_usd']} | {row['hypothetical_roi']} "
+            f"[{row['hypothetical_roi_block_bootstrap_low']}, {row['hypothetical_roi_block_bootstrap_high']}] | "
+            f"{row['direct_quote_delay_median_sec']}s/{row['direct_quote_delay_max_sec']}s |"
         )
     execution_date_lines = [
-        "| margin | ≤120s executable 日期（行数） | ≤10m executable 日期（行数） |",
-        "|---:|---|---|",
+        "| margin | 第一张 priced quote 当场可执行日期（行数） |",
+        "|---:|---|",
     ]
     for threshold in THRESHOLDS:
         threshold_rows = [
             row for row in ledger
             if row["margin_threshold"] == threshold and row["decision_after_collector_start"]
         ]
-        fast_counts = Counter(
+        direct_counts = Counter(
             str(row["target_date"])
-            for row in threshold_rows if row["executable_10_share_at_0p97"]
-        )
-        cycle_counts = Counter(
-            str(row["target_date"])
-            for row in threshold_rows if row["collector_cycle_executable_10_share_at_0p97"]
+            for row in threshold_rows if row["direct_first_quote_executable_10_share_at_0p97"]
         )
         format_counts = lambda counts: ", ".join(  # noqa: E731
             f"{date}{f'×{count}' if count > 1 else ''}" for date, count in sorted(counts.items())
         ) or "—"
         execution_date_lines.append(
-            f"| +{threshold:.1f} | {format_counts(fast_counts)} | {format_counts(cycle_counts)} |"
+            f"| +{threshold:.1f} | {format_counts(direct_counts)} |"
         )
     report = f"""# Helsinki FMI 单次 Cross Margin 回放 v1
 
@@ -482,12 +540,18 @@ def main() -> int:
 - 共同 gate：距离下一 routine METAR report clock 不超过 `{args.execution_window_min}` 分钟；只改变 margin，不叠加连续确认。
 - final label：最终 winning bracket 是否离开旧档；next label：下一份 routine METAR 是否立即离开旧档。
 - book：合并 `fast_source_stale_book` 与 `source_event_ladder_repricing_shadow`；collector 首次 Helsinki/FMI detect 为 `{collector_started_at.isoformat()}`。采集后没有 archive 的日期记 coverage gap。
-- 同时报 decision 后 `{args.quote_support_sec}` 秒 fast SLA，以及旧 collector 一轮 `{args.collector_cycle_sec}` 秒内真正出现过的首个 priced/executable quote。
-- 假设交易：top ask `≤{args.max_no_ask}` 且深度 `≥{args.shares}` 的 `{args.shares}` 股 taker，扣 Weather fee；不是 actual fill。
+- 执行：signal 后第一张可见 fresh priced quote 立即判断；top ask `≤{args.max_no_ask}` 且 top depth `≥{args.shares}` 就买 `{args.shares}` 股，否则不交易。不等待后续价格或深度改善，不使用 120 秒 eligibility gate。
+- fee/PnL：按第一张 quote 的 ask、官方 Weather taker fee 和 final settlement 计算；这是 research replay，不是 actual fill。
 
 ## 结果
 
-{chr(10).join(table_lines)}
+### Signal 正确率
+
+{chr(10).join(signal_table_lines)}
+
+### 第一张 fresh quote 直接执行
+
+{chr(10).join(trade_table_lines)}
 
 完整逐事件见 `threshold_event_ledger.csv`；逐日 coverage 见 `collector_date_summary.csv`；汇总见 `threshold_summary.csv`。
 
@@ -497,15 +561,15 @@ def main() -> int:
 
 ## 直接结论
 
-- 上一版的 `1/2` 只代表 120 秒内、且只读取后一套 archive 的结果，不是采集后总可执行数；该口径已纠正。
-- `≤120s` 是新架构应追求的反应口径；`≤10m` 是旧 collector 实际完整一轮口径。后者能说明历史上盘口曾经可买，但不能假装成 source first-seen 时即可成交。
+- `120s` 已从交易 eligibility 中删除。runner 应当立即抓 book；历史 replay 只用第一张实际归档 quote，quote 延迟单列为执行质量，不据此筛交易。
+- 不允许等待后续盘口改善：例如 `+0.5` 的唯一 final 错误（7/17 previous 24 NO）第一张 ask `0.16` 但 top depth 只有 `6.75`，严格 10 股口径不成交；不能等 389 秒后深度变成 `14.43` 再假装直接成交。
 - 阈值结论只使用采集启动后的同分母行；没有 archive 的 signal 日期保留为 coverage gap，不从策略分母删除。
-- 修正后 `+0.6` 在 120 秒内有 5 个可执行 expression、旧 collector 10 分钟内有 6 个；对应 final `33/33`，10 分钟口径假设 PnL `+$8.2037`。它仍是本轮 shadow challenger，但不因这次修正直接改 live。
+- signal 层 `+0.6/+0.7/+0.8` 都是 100%，但直接可执行层四档目前也全胜，样本只有 `6/4/3/2` 笔。`+0.5` 的已覆盖直接执行 PnL/ROI 最高，`+0.6` 的 signal 误判更少；现有 book coverage 不足以证明哪个 live 更优。
 
 ## 双漏斗
 
 - signal funnel：Helsinki/FMI causal comparisons `{len(helsinki)}` → collector 启动后首信号 → threshold 子集。
-- evidence funnel：collector 后 signal → 当日 archive coverage → priced quote → `ask≤0.97 & depth≥10` hypothetical fill；120 秒和 10 分钟分别列示。
+- evidence funnel：collector 后 signal → first-priced archive coverage → 第一张 quote 当场满足 `ask≤0.97 & depth≥10` → hypothetical direct fill。
 - collector active target dates：`{', '.join(sorted(collector_active_dates))}`。信号存在但 archive 不工作的日期是 coverage gap，不算策略筛除。
 
 ## 结论边界
