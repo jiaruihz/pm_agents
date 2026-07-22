@@ -58,6 +58,15 @@ Seoul 的 weather-direction 表面正确率很高：当前 policy 已结算 `17/
 - 当 source 到 `26.8C`、信号更强时，盘口已到 `0.997 x 240.48`；随后基本 `0.999`。
 - 所以今天不是 runner 慢导致漏单：新链路 source→runner 已是秒级，真正限制是首个便宜盘口深度不足，随后市场立即完成定价。
 
+### Seoul METAR clock 与严格 T-20 反事实（2026-07-23 补充）
+
+- RKSI routine METAR 基本为半小时一份，常规 report timestamp 在每小时 `:00/:30`。当前样本的 distinct reports 中，minute 为 `:00` 221 份、`:30` 225 份；相邻可观察 report gap 为 30 分钟的有 422 段，少量 60 分钟以上 gap 属缺报/采集覆盖，不应把 Seoul 配成 hourly。
+- 当前生产并非严格 pre-report：`next_metar_window_status()` 使用 `abs(minutes_to_next)<=20`，所以 scheduled report timestamp 已过去 0--20 分钟仍 eligible。7/22 的 `06:10Z` Seoul event 就被记为相对 `06:00Z` 的 `-10.363m` 且 eligible。
+- 改成严格 `0<=minutes_to_next<=20` 后，Seoul 当前 policy first signals 从 `21` 降到 `19`，settled 从 `18` 降到 `16`，正确从 `17/18` 变为 `15/16`；两条被删的是正确但不可执行信号。
+- 更重要的是，adaptive 可执行集合完全不变：仍为 `4` 笔、`3` 胜、55 shares、PnL `-$6.9879`、ROI `-14.87%`、95% CI `[-65.49%,+8.35%]`。7/16 的错误 `28 NO @0.64` 发生在 T-15.472，仍会被严格 T-20 放进来。
+- 所以 strict pre-20 是正确的 clock/label 语义修复，但不是 Seoul alpha 修复。因为 METAR 每30分钟一次，20分钟窗口覆盖每个周期的三分之二，本身并不窄。
+- exploratory 的 T-10 会同时剔除 T-15.472 的错误单和两笔 T-19.x winner；当前 first-signal replay 只剩 1 个 adaptive settled fill（winner），样本不足且属于本轮看结果后切窗，不能据此上线。report clock 应保留为连续特征，主确认仍应依赖 source path retention / terminal-basis probability。
+
 ## 双漏斗
 
 ```text
@@ -87,4 +96,3 @@ evidence funnel:
 - `generated/cross_no_shadow_city_replay_v1/summary.json`
 - `generated/active_realtime_source_alignment_v1/summary_by_city_source.csv`
 - `generated/high_frequency_strategy_eligibility_v2_20260722/summary_by_city_source.csv`
-
