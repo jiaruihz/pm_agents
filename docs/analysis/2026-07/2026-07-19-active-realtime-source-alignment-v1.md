@@ -1,7 +1,7 @@
 # Active realtime source alignment v1
 
-Generated: `2026-07-19T02:53:47.009428+00:00`
-Window: `2026-07-08..2026-07-17` settled city-days
+Generated: `2026-07-22T15:27:55.270650+00:00`
+Window: `2026-07-08..2026-07-21` settled city-days
 Status: `research/shadow_only`; no live authorization
 
 ## 结论
@@ -12,11 +12,11 @@ Status: `research/shadow_only`; no live authorization
 
 | city/source | first-seen p50/p90 | next METAR exact / within1 | source daily max in WU winner | terminal false-cross days | persistent event correct | correct executable | false executable | action |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
-| `Helsinki/fmi` | 3.2/6.8m | 650/910 (71.4%) / 893/910 (98.1%) | 7/8 (87.5%) | 1 | 11/11 (100.0%) | 2/11 (18.2%) | NA | `P1_research_feature_shadow` |
-| `Seoul/amos_runway` | 0.5/0.7m | 8135/11471 (70.9%) / 11394/11471 (99.3%) | 6/9 (66.7%) | 3 | 26/28 (92.9%) | 7/26 (26.9%) | 2/2 (100.0%) | `feature_only_not_cross_trigger` |
-| `Busan/amos_runway` | 1.4/1.9m | 3208/4600 (69.7%) / 4508/4600 (98.0%) | 5/9 (55.6%) | 4 | 23/25 (92.0%) | 2/23 (8.7%) | 1/2 (50.0%) | `feature_only_not_cross_trigger` |
-| `Singapore/singapore_mss` | 2.5/3.5m | 1203/1703 (70.6%) / 1691/1703 (99.3%) | 7/10 (70.0%) | 3 | 12/13 (92.3%) | 0/12 (0.0%) | 1/1 (100.0%) | `feature_only_not_cross_trigger` |
-| `Tokyo/jma_amedas` | 7.5/8.5m | 831/1023 (81.2%) / 1020/1023 (99.7%) | 8/9 (88.9%) | 1 | 24/25 (96.0%) | 7/24 (29.2%) | 0/1 (0.0%) | `benchmark_shadow` |
+| `Helsinki/fmi` | 2.9/6.5m | 952/1282 (74.3%) / 1262/1282 (98.4%) | 9/10 (90.0%) | 1 | 15/15 (100.0%) | 2/15 (13.3%) | NA | `P1_research_feature_shadow` |
+| `Seoul/amos_runway` | 0.4/0.6m | 12562/16626 (75.6%) / 16541/16626 (99.5%) | 9/13 (69.2%) | 4 | 33/35 (94.3%) | 9/33 (27.3%) | 2/2 (100.0%) | `feature_only_not_cross_trigger` |
+| `Busan/amos_runway` | 1.4/1.8m | 5280/7311 (72.2%) / 7196/7311 (98.4%) | 8/13 (61.5%) | 5 | 35/37 (94.6%) | 5/35 (14.3%) | 1/2 (50.0%) | `feature_only_not_cross_trigger` |
+| `Singapore/singapore_mss` | 2.4/3.5m | 1651/2384 (69.3%) / 2371/2384 (99.5%) | 9/14 (64.3%) | 5 | 14/15 (93.3%) | 1/14 (7.1%) | 1/1 (100.0%) | `feature_only_not_cross_trigger` |
+| `Tokyo/jma_amedas` | 7.4/8.0m | 1235/1537 (80.4%) / 1530/1537 (99.5%) | 11/13 (84.6%) | 2 | 41/43 (95.3%) | 10/41 (24.4%) | 1/2 (50.0%) | `benchmark_shadow` |
 
 这里的 daily denominator 只保留快源时间覆盖 WU peak 的 city-day。WU 用 market native `units=m` 直接取摄氏度日高，**没有 C→F→C 或 double rounding**；canonical winning bracket 是 label。routine METAR、WU native 和快源日高分开列，不能相互替代。
 
@@ -30,14 +30,19 @@ Status: `research/shadow_only`; no live authorization
 | `Busan` | `2026-07-11` | 34.5→35°C | 34°C | `34` |
 | `Busan` | `2026-07-13` | 31.7→32°C | 31°C | `31` |
 | `Busan` | `2026-07-14` | 30.6→31°C | 30°C | `30` |
+| `Busan` | `2026-07-19` | 30.0→30°C | 29°C | `29` |
 | `Helsinki` | `2026-07-17` | 24.5→25°C | 24°C | `24` |
 | `Seoul` | `2026-07-09` | 27.6→28°C | 27°C | `27` |
 | `Seoul` | `2026-07-11` | 32.8→33°C | 32°C | `32` |
 | `Seoul` | `2026-07-16` | 28.9→29°C | 28°C | `28` |
+| `Seoul` | `2026-07-19` | 26.6→27°C | 26°C | `26` |
 | `Singapore` | `2026-07-08` | 31.9→32°C | 31°C | `31` |
 | `Singapore` | `2026-07-15` | 33.0→33°C | 32°C | `32` |
 | `Singapore` | `2026-07-16` | 32.9→33°C | 32°C | `32` |
+| `Singapore` | `2026-07-18` | 32.6→33°C | 32°C | `32` |
+| `Singapore` | `2026-07-19` | 32.8→33°C | 32°C | `32` |
 | `Tokyo` | `2026-07-15` | 33.5→34°C | 33°C | `33` |
+| `Tokyo` | `2026-07-21` | 34.6→35°C | 34°C | `34` |
 
 ## Atlanta negative control
 
