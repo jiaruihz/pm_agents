@@ -1,0 +1,140 @@
+{
+  "generated_at_utc": "2026-07-23T16:31:44+00:00",
+  "status": "frozen_zero_notional_pre_live_no_real_live_activation",
+  "frozen_policy_result": {
+    "selector": "frozen_v2",
+    "city_days": 136,
+    "dates": 30,
+    "cities": 29,
+    "wins": 130,
+    "losses": 6,
+    "win_rate": 0.9558823529411765,
+    "avg_effective_cost": 0.9132670867647059,
+    "avg_edge": 0.022506836186773294,
+    "roi": 0.046662435112423996,
+    "target_date_block_ci95": [
+      0.009084296353999946,
+      0.0802128603420579
+    ],
+    "signals_per_covered_date": 4.533333333333333,
+    "signals_p90_active_date": 7.200000000000003,
+    "signals_max_active_date": 10,
+    "worst_day_pnl_per_share": -0.6967799999999998
+  },
+  "cost_audit": {
+    "oof_rows": 2758,
+    "full_five_share_executable_rate": 1.0,
+    "rows_requiring_full_ladder_beyond_top": 81,
+    "selected_avg_slippage_cents_per_share": 0.00014250000000164866
+  },
+  "checkpoint_audit": {
+    "minute_30_share": 0.7657722987672226,
+    "minute_28_35_share": 0.8687454677302393,
+    "contract": "first successfully scored fresh book at or after local minute 30 in each local hour"
+  },
+  "selection_review": {
+    "chosen_model": "core_no_obs_age",
+    "not_added": [
+      "legacy faded/path features: historical strict-high clock semantics were wrong and path-added did not improve core",
+      "clean exhaustion hard gates: semantically correct but no same-denominator proper-score improvement",
+      "CC ceiling/route merge: no incremental historical benefit",
+      "maker: no execution alpha credited in v1"
+    ],
+    "sensitivity_is_diagnostic_not_threshold_optimization": true
+  },
+  "artifact": {
+    "path": "src/strategies/weather_edge_v1/config/current_yes_core_carry_model_v2.json",
+    "hash": "9e3a8bc3daeabebee8a91a6d56fe70fae66035580a62e8040f947446809db665",
+    "golden_rows": 12
+  },
+  "outputs": {
+    "script": "scripts/analysis/reheat_risk/research_current_yes_core_carry_freeze_pre_live_v4.py",
+    "json": "docs/analysis/2026-07/2026-07-24-current-yes-core-carry-no-obs-age-freeze-pre-live-v5.json",
+    "report": "docs/analysis/2026-07/2026-07-24-current-yes-core-carry-no-obs-age-freeze-pre-live-v5.md",
+    "oof_costed": "docs/analysis/2026-07/generated/current_yes_core_carry_no_obs_age_freeze_pre_live_v5/oof_states_five_share_cost.csv",
+    "entries": "docs/analysis/2026-07/generated/current_yes_core_carry_no_obs_age_freeze_pre_live_v5/frozen_policy_entries.csv",
+    "sensitivity": "docs/analysis/2026-07/generated/current_yes_core_carry_no_obs_age_freeze_pre_live_v5/threshold_sensitivity.csv",
+    "golden": "docs/analysis/2026-07/generated/current_yes_core_carry_no_obs_age_freeze_pre_live_v5/model_golden_rows.json"
+  },
+  "real_live_action": "none",
+  "v1_vs_v2": {
+    "grain": {
+      "probability": "same 1,350 carry PIT states / 773 city-days / 31 target dates",
+      "trade": "first positive-EV city-day with full five-share ask-ladder and official fee"
+    },
+    "probability_v2_minus_v1": {
+      "candidate_minus_baseline_brier": -7.977919534752656e-05,
+      "brier_delta_ci95": [
+        -0.0003719306845833693,
+        0.00018539845611522228
+      ],
+      "candidate_minus_baseline_logloss": 0.00019770829966267187,
+      "logloss_delta_ci95": [
+        -0.0010223905431678314,
+        0.001451549895680946
+      ],
+      "city_days": 773,
+      "interpretation": "negative delta means candidate improves; city-days equal-weighted and target dates block-bootstrapped"
+    },
+    "trade_metrics": {
+      "v1": {
+        "selector": "frozen_v1",
+        "city_days": 144,
+        "dates": 30,
+        "cities": 29,
+        "wins": 137,
+        "losses": 7,
+        "win_rate": 0.9513888888888888,
+        "avg_effective_cost": 0.9125769708333331,
+        "avg_edge": 0.022732908588199135,
+        "roi": 0.042530021352734634,
+        "target_date_block_ci95": [
+          0.002959858728878825,
+          0.07737976985974532
+        ],
+        "signals_per_covered_date": 4.8,
+        "signals_p90_active_date": 8.100000000000001,
+        "signals_max_active_date": 10,
+        "worst_day_pnl_per_share": -0.7128200000000005
+      },
+      "v2_no_obs_age": {
+        "selector": "frozen_v2",
+        "city_days": 136,
+        "dates": 30,
+        "cities": 29,
+        "wins": 130,
+        "losses": 6,
+        "win_rate": 0.9558823529411765,
+        "avg_effective_cost": 0.9132670867647059,
+        "avg_edge": 0.022506836186773294,
+        "roi": 0.046662435112423996,
+        "target_date_block_ci95": [
+          0.009084296353999946,
+          0.0802128603420579
+        ],
+        "signals_per_covered_date": 4.533333333333333,
+        "signals_p90_active_date": 7.200000000000003,
+        "signals_max_active_date": 10,
+        "worst_day_pnl_per_share": -0.6967799999999998
+      },
+      "roi_delta_v2_minus_v1": 0.0041324137596893615,
+      "win_rate_delta_v2_minus_v1": 0.004493464052287677,
+      "signals_per_covered_date_delta": -0.2666666666666666
+    },
+    "selection_overlap": {
+      "shared_city_days": 133,
+      "v1_only_city_days": 11,
+      "v2_only_city_days": 3,
+      "shared_exact_entry_rows": 128,
+      "v1_only_exact_entry_rows": 16,
+      "v2_only_exact_entry_rows": 8
+    },
+    "frozen_version_decision": {
+      "future_pre_live_default": "current_yes_core_carry_model_v2",
+      "v1_status": "superseded_for_now_retained_for_historical_lineage",
+      "v2_status": "frozen_zero_notional_pre_live",
+      "real_live_action": "none",
+      "reason": "v2 removes a known train/serve cadence skew without material probability-score degradation and retains the full-ladder historical result"
+    }
+  }
+}

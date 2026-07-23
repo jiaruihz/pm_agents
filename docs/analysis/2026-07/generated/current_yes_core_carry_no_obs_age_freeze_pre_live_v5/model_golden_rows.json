@@ -1,0 +1,158 @@
+[
+  {
+    "source_row": 0,
+    "city": "LA",
+    "target_date": "2026-05-19",
+    "features": {
+      "market_logit": 3.6635616461296454,
+      "decision_hour_local": 16.0,
+      "forecast_peak_delta_hours_local": 5.0,
+      "dewpoint_depression_f": 16.0,
+      "wind_speed_kt": 15.0
+    },
+    "expected_probability": 0.988695139978114
+  },
+  {
+    "source_row": 369,
+    "city": "Beijing",
+    "target_date": "2026-05-23",
+    "features": {
+      "market_logit": 2.1972245773362196,
+      "decision_hour_local": 15.0,
+      "forecast_peak_delta_hours_local": -1.0,
+      "dewpoint_depression_f": 14.399999999999991,
+      "wind_speed_kt": 7.78
+    },
+    "expected_probability": 0.8732867363774016
+  },
+  {
+    "source_row": 738,
+    "city": "Houston",
+    "target_date": "2026-05-27",
+    "features": {
+      "market_logit": 2.0406555166446796,
+      "decision_hour_local": 13.0,
+      "forecast_peak_delta_hours_local": -4.0,
+      "dewpoint_depression_f": 5.0,
+      "wind_speed_kt": 3.0
+    },
+    "expected_probability": 0.7626892018932805
+  },
+  {
+    "source_row": 1107,
+    "city": "Madrid",
+    "target_date": "2026-05-31",
+    "features": {
+      "market_logit": -1.2656663733312759,
+      "decision_hour_local": 15.0,
+      "forecast_peak_delta_hours_local": -2.0,
+      "dewpoint_depression_f": 61.2,
+      "wind_speed_kt": 10.0
+    },
+    "expected_probability": 0.1408906721711821
+  },
+  {
+    "source_row": 1476,
+    "city": "Chengdu",
+    "target_date": "2026-06-03",
+    "features": {
+      "market_logit": 0.8712224464724492,
+      "decision_hour_local": 16.0,
+      "forecast_peak_delta_hours_local": 0.0,
+      "dewpoint_depression_f": 32.400000000000006,
+      "wind_speed_kt": 1.94
+    },
+    "expected_probability": 0.5712418594204709
+  },
+  {
+    "source_row": 1845,
+    "city": "Atlanta",
+    "target_date": "2026-06-07",
+    "features": {
+      "market_logit": 4.369447852467025,
+      "decision_hour_local": 16.0,
+      "forecast_peak_delta_hours_local": 0.0,
+      "dewpoint_depression_f": 15.0,
+      "wind_speed_kt": 7.0
+    },
+    "expected_probability": 0.9815293426843198
+  },
+  {
+    "source_row": 2214,
+    "city": "Beijing",
+    "target_date": "2026-06-10",
+    "features": {
+      "market_logit": 1.3249254147435987,
+      "decision_hour_local": 13.0,
+      "forecast_peak_delta_hours_local": 1.0,
+      "dewpoint_depression_f": 21.6,
+      "wind_speed_kt": 5.83
+    },
+    "expected_probability": 0.7518893578178426
+  },
+  {
+    "source_row": 2583,
+    "city": "Ankara",
+    "target_date": "2026-06-14",
+    "features": {
+      "market_logit": 4.151293874153975,
+      "decision_hour_local": 16.0,
+      "forecast_peak_delta_hours_local": 4.0,
+      "dewpoint_depression_f": 16.200000000000003,
+      "wind_speed_kt": 6.0
+    },
+    "expected_probability": 0.9853253778934157
+  },
+  {
+    "source_row": 2952,
+    "city": "Istanbul",
+    "target_date": "2026-06-17",
+    "features": {
+      "market_logit": 1.815289966638249,
+      "decision_hour_local": 15.0,
+      "forecast_peak_delta_hours_local": 3.0,
+      "dewpoint_depression_f": 8.999999999999993,
+      "wind_speed_kt": 15.0
+    },
+    "expected_probability": 0.9328728958975967
+  },
+  {
+    "source_row": 3321,
+    "city": "Helsinki",
+    "target_date": "2026-06-21",
+    "features": {
+      "market_logit": 0.8472978603872034,
+      "decision_hour_local": 15.0,
+      "forecast_peak_delta_hours_local": 0.0,
+      "dewpoint_depression_f": 19.799999999999997,
+      "wind_speed_kt": 10.0
+    },
+    "expected_probability": 0.7145629843737422
+  },
+  {
+    "source_row": 3690,
+    "city": "Lucknow",
+    "target_date": "2026-06-26",
+    "features": {
+      "market_logit": -0.7331676212561088,
+      "decision_hour_local": 13.0,
+      "forecast_peak_delta_hours_local": -2.0,
+      "dewpoint_depression_f": 32.400000000000006,
+      "wind_speed_kt": 2.0
+    },
+    "expected_probability": 0.18193062167676038
+  },
+  {
+    "source_row": 4060,
+    "city": "Busan",
+    "target_date": "2026-07-08",
+    "features": {
+      "market_logit": 0.5753641449035619,
+      "decision_hour_local": 14.0,
+      "forecast_peak_delta_hours_local": 0.0,
+      "dewpoint_depression_f": 5.400000000000006,
+      "wind_speed_kt": 10.0
+    },
+    "expected_probability": 0.6991046015928987
+  }
+]
