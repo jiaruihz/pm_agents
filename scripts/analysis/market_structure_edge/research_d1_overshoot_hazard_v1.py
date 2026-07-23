@@ -440,11 +440,16 @@ def build_historical_states(atlas_path: Path, factory_path: Path) -> tuple[pd.Da
             usecols=KEY + source_feature_columns,
             low_memory=False,
         )
-        grouped = dual.groupby(KEY, dropna=False)[source_feature_columns]
-        conflicts = grouped[fixed_forecast_columns].nunique(dropna=True).gt(1).any(axis=1)
+        grouped_all = dual.groupby(KEY, dropna=False)
+        conflicts = (
+            grouped_all[fixed_forecast_columns]
+            .nunique(dropna=True)
+            .gt(1)
+            .any(axis=1)
+        )
         source_forecast_state_groups += len(conflicts)
         source_forecast_conflict_groups += int(conflicts.sum())
-        dual = grouped.first().reset_index()
+        dual = grouped_all[source_feature_columns].first().reset_index()
         dual["source_files"] = source_file
         dual_frames.append(dual)
     if not dual_frames:
