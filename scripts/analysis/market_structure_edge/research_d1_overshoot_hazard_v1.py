@@ -39,6 +39,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from scipy.stats import fisher_exact
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -46,6 +47,9 @@ if str(ROOT) not in sys.path:
 
 from weather_data_feed.city_calendar import CITY_TIMEZONE  # noqa: E402
 from weather_data_feed.market_brackets import parse_market_bracket  # noqa: E402
+from weather_data_feed_service.legacy_weather_predict.paper_snapshot import (  # noqa: E402
+    CITY_MODEL,
+)
 
 
 ATLAS = (
@@ -170,6 +174,19 @@ def _bracket_low(label: str | None) -> float | None:
         return None
     parsed = parse_market_bracket(label)
     return None if parsed is None or parsed.low is None else float(parsed.low)
+
+
+def _settlement_threshold(label: str | None, unit: Any) -> float | None:
+    """Lowest continuous native value that rounds into a displayed bracket."""
+    low = _bracket_low(label)
+    if low is None:
+        return None
+    # Celsius exact/top brackets are labels on the rounded settlement lattice.
+    # Converted station values such as 27.78C therefore settle in the 28
+    # bracket; using 28.0 as the reach threshold overstates the required heat.
+    if str(unit or "").upper() == "C":
+        return low - 0.5
+    return low
 
 
 def _logit(value: pd.Series | np.ndarray | float) -> Any:
@@ -354,6 +371,21 @@ def _market_from_rungs(
 
 def build_historical_states(atlas_path: Path, factory_path: Path) -> tuple[pd.DataFrame, dict[str, Any]]:
     atlas = pd.read_csv(atlas_path, low_memory=False)
+    fixed_forecast_columns = [
+        f"{model}_{field}"
+        for model in ["gfs", "ecmwf"]
+        for field in [
+            "forecast_max_native",
+            "forecast_peak_hour_local",
+            "forecast_peak_time_local",
+            "forecast_values_hash",
+            "forecast_run_time_utc",
+            "forecast_run_policy",
+        ]
+    ]
+    atlas = atlas.drop(
+        columns=[column for column in fixed_forecast_columns if column in atlas.columns]
+    )
     factory_columns = [
         *KEY,
         "bracket",
@@ -375,13 +407,6 @@ def build_historical_states(atlas_path: Path, factory_path: Path) -> tuple[pd.Da
     rung_rows = factory.drop_duplicates(KEY + ["bracket"], keep="first").copy()
     rung_rows["yes_bid"] = pd.to_numeric(rung_rows["target_yes_bid"], errors="coerce")
     rung_rows["yes_ask"] = pd.to_numeric(rung_rows["target_yes_ask"], errors="coerce")
-    extras = (
-        factory.sort_values(KEY + ["outcome"])
-        .drop_duplicates(KEY, keep="first")[
-            KEY + ["decision_last_obs_utc", "obs_count_day", "obs_count_to_decision"]
-        ]
-        .copy()
-    )
     market_rows: list[dict[str, Any]] = []
     for key, group in rung_rows.groupby(KEY, sort=False, dropna=False):
         base = group.iloc[0]
@@ -395,7 +420,68 @@ def build_historical_states(atlas_path: Path, factory_path: Path) -> tuple[pd.Da
             market_rows.append(result)
     market = pd.DataFrame(market_rows)
     states = atlas.merge(market, on=KEY, how="left", validate="one_to_one")
-    states = states.merge(extras, on=KEY, how="left", validate="one_to_one")
+    source_feature_columns = [
+        "decision_last_obs_utc",
+        "obs_count_day",
+        "obs_count_to_decision",
+        *fixed_forecast_columns,
+    ]
+    dual_frames = []
+    source_forecast_file_hashes: dict[str, str] = {}
+    source_forecast_state_groups = 0
+    source_forecast_conflict_groups = 0
+    for source_file in sorted(atlas["source_files"].dropna().astype(str).unique()):
+        source_path = ROOT / source_file
+        if not source_path.exists():
+            continue
+        source_forecast_file_hashes[source_file] = _sha256(source_path)
+        dual = pd.read_csv(
+            source_path,
+            usecols=KEY + source_feature_columns,
+            low_memory=False,
+        )
+        grouped = dual.groupby(KEY, dropna=False)[source_feature_columns]
+        conflicts = grouped[fixed_forecast_columns].nunique(dropna=True).gt(1).any(axis=1)
+        source_forecast_state_groups += len(conflicts)
+        source_forecast_conflict_groups += int(conflicts.sum())
+        dual = grouped.first().reset_index()
+        dual["source_files"] = source_file
+        dual_frames.append(dual)
+    if not dual_frames:
+        raise ValueError("no source-aligned fixed-model forecast rows found")
+    source_aligned_forecasts = pd.concat(dual_frames, ignore_index=True)
+    states = states.merge(
+        source_aligned_forecasts,
+        on=KEY + ["source_files"],
+        how="left",
+        validate="one_to_one",
+    )
+    states["forecast_source_raw_mixed"] = states["forecast_source"]
+    states["forecast_max_native_raw_mixed"] = states["forecast_max_native"]
+    states["forecast_peak_hour_local_raw_mixed"] = states["forecast_peak_hour_local"]
+    states["forecast_peak_delta_hours_local_raw_mixed"] = states[
+        "forecast_peak_delta_hours_local"
+    ]
+    states["forecast_assigned_model"] = states["city"].map(CITY_MODEL).fillna("gfs")
+    assigned_ecmwf = states["forecast_assigned_model"].eq("ecmwf")
+    for field in [
+        "forecast_max_native",
+        "forecast_peak_hour_local",
+        "forecast_peak_time_local",
+        "forecast_values_hash",
+        "forecast_run_time_utc",
+        "forecast_run_policy",
+    ]:
+        states[field] = np.where(
+            assigned_ecmwf,
+            states[f"ecmwf_{field}"],
+            states[f"gfs_{field}"],
+        )
+    states["forecast_source"] = np.where(
+        pd.to_numeric(states["forecast_max_native"], errors="coerce").notna(),
+        "fixed_city_model_" + states["forecast_assigned_model"].astype(str),
+        "fixed_city_model_missing",
+    )
     states["label"] = np.select(
         [
             pd.to_numeric(states["current_bracket_held"], errors="coerce").eq(1),
@@ -423,17 +509,50 @@ def build_historical_states(atlas_path: Path, factory_path: Path) -> tuple[pd.Da
     decision = pd.to_datetime(states["decision_snapshot_ts_utc"], utc=True, errors="coerce")
     last_obs = pd.to_datetime(states["decision_last_obs_utc"], utc=True, errors="coerce")
     states["obs_age_min"] = (decision - last_obs).dt.total_seconds() / 60.0
+    states["forecast_peak_delta_hours_local_raw"] = pd.to_numeric(
+        states["forecast_peak_delta_hours_local_raw_mixed"], errors="coerce"
+    )
+    states["forecast_peak_delta_hours_local"] = math.nan
+    expected_peak_delta = (
+        pd.to_numeric(states["decision_hour_local"], errors="coerce")
+        - pd.to_numeric(states["forecast_peak_hour_local"], errors="coerce")
+    )
+    states["forecast_peak_delta_inconsistent"] = (
+        states["forecast_peak_delta_hours_local_raw"].notna()
+        & expected_peak_delta.notna()
+        & states["forecast_peak_delta_hours_local_raw"].sub(expected_peak_delta).abs().gt(1.01)
+    )
+    states.loc[expected_peak_delta.notna(), "forecast_peak_delta_hours_local"] = (
+        expected_peak_delta[expected_peak_delta.notna()]
+    )
+    states["forecast_clock_source"] = np.where(
+        expected_peak_delta.notna(),
+        "fixed_city_model_single_runs",
+        "fixed_city_model_missing",
+    )
+    states["forecast_gap_to_running_native"] = (
+        pd.to_numeric(states["forecast_max_native"], errors="coerce")
+        - pd.to_numeric(states["running_native"], errors="coerce")
+    )
+    states["d1_settlement_threshold_native"] = [
+        _settlement_threshold(label, unit)
+        for label, unit in zip(states["d1_no_bracket"], states["unit"])
+    ]
+    states["d2_settlement_threshold_native"] = [
+        _settlement_threshold(label, unit)
+        for label, unit in zip(states["d2_no_bracket"], states["unit"])
+    ]
     states["d1_required_gap_native"] = (
-        pd.to_numeric(states["d1_bracket_low"], errors="coerce")
+        pd.to_numeric(states["d1_settlement_threshold_native"], errors="coerce")
         - pd.to_numeric(states["running_native"], errors="coerce")
     )
     states["d2_required_gap_native"] = (
-        pd.to_numeric(states["d2_bracket_low"], errors="coerce")
+        pd.to_numeric(states["d2_settlement_threshold_native"], errors="coerce")
         - pd.to_numeric(states["running_native"], errors="coerce")
     )
     states["forecast_ceiling_margin_to_d2"] = (
         pd.to_numeric(states["forecast_max_native"], errors="coerce")
-        - pd.to_numeric(states["d2_bracket_low"], errors="coerce")
+        - pd.to_numeric(states["d2_settlement_threshold_native"], errors="coerce")
     )
     states["market_h0_logit"] = _logit(pd.to_numeric(states["market_h0"], errors="coerce"))
     states["market_h1_logit"] = _logit(pd.to_numeric(states["market_h1"], errors="coerce"))
@@ -459,6 +578,25 @@ def build_historical_states(atlas_path: Path, factory_path: Path) -> tuple[pd.Da
             (
                 states["mechanism_available"]
                 & states["target_date"].isin(KNOWN_FORECAST_POLLUTION)
+            ).sum()
+        ),
+        "forecast_peak_delta_inconsistent_mechanism_rows": int(
+            (states["mechanism_available"] & states["forecast_peak_delta_inconsistent"]).sum()
+        ),
+        "fixed_city_model_forecast_mechanism_rows": int(
+            (
+                states["mechanism_available"]
+                & pd.to_numeric(states["forecast_max_native"], errors="coerce").notna()
+            ).sum()
+        ),
+        "source_forecast_file_hashes": source_forecast_file_hashes,
+        "source_forecast_state_groups": source_forecast_state_groups,
+        "source_forecast_conflict_groups": source_forecast_conflict_groups,
+        "celsius_d2_threshold_half_step_rows": int(
+            (
+                states["mechanism_available"]
+                & states["unit"].eq("C")
+                & states["d2_settlement_threshold_native"].notna()
             ).sum()
         ),
         "label_counts_all": states["label"].value_counts().to_dict(),
@@ -846,14 +984,16 @@ def build_live_rows(
             continue
         timestamp = pd.Timestamp(event["cycle_ts_utc"])
         local = timestamp.tz_convert(ZoneInfo(CITY_TIMEZONE.get(city, "UTC")))
-        d1_low, d2_low = _bracket_low(d1), _bracket_low(str(market["d2_bracket_market"]))
+        unit = event.get("unit")
+        d1_threshold = _settlement_threshold(d1, unit)
+        d2_threshold = _settlement_threshold(str(market["d2_bracket_market"]), unit)
         forecast = _live_forecast_asof(conn, city, target_date, str(event["cycle_ts_utc"]))
         forecast_max = _finite(forecast.get("forecast_max_native"))
         peak_delta = math.nan
         if forecast.get("forecast_peak_time_local"):
             peak_local = pd.Timestamp(str(forecast["forecast_peak_time_local"]))
             peak_delta = (
-                peak_local - local.tz_localize(None)
+                local.tz_localize(None) - peak_local
             ).total_seconds() / 3600.0
         forecast_asof = pd.to_datetime(
             forecast.get("forecast_asof_ts_utc"), utc=True, errors="coerce"
@@ -871,7 +1011,8 @@ def build_live_rows(
             "label": label,
             "reach_d1": int(label != CLASSES[0]),
             "reach_d2": int(label == CLASSES[2]),
-            "unit": event.get("unit"),
+            "unit": unit,
+            "running_max_native": event.get("running_max_native"),
             "city_family": city_family.get(city, "unknown"),
             "solar_window": (
                 "late_morning"
@@ -904,8 +1045,8 @@ def build_live_rows(
             "forecast_peak_hour_spread": math.nan,
             "forecast_ceiling_margin_to_d2": (
                 math.nan
-                if forecast_max is None or d2_low is None
-                else forecast_max - d2_low
+                if forecast_max is None or d2_threshold is None
+                else forecast_max - d2_threshold
             ),
             "temp_trend_1h_f": event.get("d_tmpf_1h"),
             "temp_trend_3h_f": event.get("d_tmpf_3h"),
@@ -917,8 +1058,18 @@ def build_live_rows(
             "sky_cover_code": _sky_cover_code(event.get("sky_code_now")),
             "obs_age_min": event.get("obs_age_min"),
             "obs_count_to_decision": math.nan,
-            "d1_required_gap_native": None if d1_low is None else d1_low - float(event["running_max_native"]),
-            "d2_required_gap_native": None if d2_low is None else d2_low - float(event["running_max_native"]),
+            "d1_settlement_threshold_native": d1_threshold,
+            "d2_settlement_threshold_native": d2_threshold,
+            "d1_required_gap_native": (
+                None
+                if d1_threshold is None
+                else d1_threshold - float(event["running_max_native"])
+            ),
+            "d2_required_gap_native": (
+                None
+                if d2_threshold is None
+                else d2_threshold - float(event["running_max_native"])
+            ),
             "rungs_above_d1": market["rungs_above_d1"],
             "market_current_plus_overround": market["market_current_plus_overround"],
             "d1_yes_mid_trigger": event.get("d1_yes_mid"),
@@ -1001,6 +1152,150 @@ def summarize_live_policy(rows: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(output).sort_values("retained_roi", ascending=False)
 
 
+def build_miss_mechanism_audit(
+    states: pd.DataFrame,
+    first: pd.DataFrame,
+    first_scored: pd.DataFrame,
+    live: pd.DataFrame,
+    live_scored: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    feature_columns = [
+        "forecast_gap_to_running_native",
+        "forecast_peak_delta_hours_local",
+        "forecast_ceiling_margin_to_d2",
+        "temp_trend_1h_f",
+        "temp_trend_3h_f",
+        "decline_native",
+        "minutes_since_running_max",
+        "obs_age_min",
+        "intraday_state",
+        "running_max_state",
+        "forecast_assigned_model",
+        "forecast_source",
+    ]
+    historical = first[KEY + ["label", "cost", "pnl"]].merge(
+        states[KEY + feature_columns],
+        on=KEY,
+        how="left",
+        validate="one_to_one",
+    )
+    historical["cohort"] = "historical_frozen"
+    live_rows = live[
+        KEY + ["label", "cost", "pnl"] + [
+            column for column in feature_columns if column in live.columns
+        ]
+    ].copy()
+    for column in feature_columns:
+        if column not in live_rows:
+            live_rows[column] = math.nan
+    live_rows["cohort"] = "clean_live"
+
+    for frame in [historical, live_rows]:
+        frame["forecast_busted_active"] = (
+            pd.to_numeric(frame["forecast_gap_to_running_native"], errors="coerce").lt(0)
+            & pd.to_numeric(frame["temp_trend_3h_f"], errors="coerce").gt(0)
+            & pd.to_numeric(frame["decline_native"], errors="coerce").le(0)
+        )
+        frame["high_clock_censored_by_obs_age"] = (
+            pd.to_numeric(frame["decline_native"], errors="coerce").le(0)
+            & (
+                pd.to_numeric(frame["minutes_since_running_max"], errors="coerce")
+                - pd.to_numeric(frame["obs_age_min"], errors="coerce")
+            )
+            .abs()
+            .le(2)
+        )
+        frame["taipei_recurrent"] = frame["city"].eq("Taipei")
+
+    def add_scores(
+        frame: pd.DataFrame, predictions: pd.DataFrame
+    ) -> pd.DataFrame:
+        physical = predictions[predictions["model"].isin(["physics_path", "physics_only"])]
+        pivot = physical.pivot_table(
+            index=KEY,
+            columns="model",
+            values="p_overshoot",
+            aggfunc="first",
+        ).reset_index()
+        pivot = pivot.rename(
+            columns={
+                "physics_path": "physics_path_p_overshoot",
+                "physics_only": "physics_regime_p_overshoot",
+            }
+        )
+        return frame.merge(pivot, on=KEY, how="left", validate="one_to_one")
+
+    historical = add_scores(historical, first_scored)
+    live_rows = add_scores(live_rows, live_scored)
+    combined = pd.concat([historical, live_rows], ignore_index=True, sort=False)
+    failures = combined[combined["label"].ne(CLASSES[1])].copy()
+
+    def cohort_stats(frame: pd.DataFrame) -> dict[str, Any]:
+        busted = frame[frame["forecast_busted_active"]]
+        censored = frame[frame["high_clock_censored_by_obs_age"]]
+        return {
+            "rows": len(frame),
+            "overshoots": int(frame["label"].eq(CLASSES[2]).sum()),
+            "stalls": int(frame["label"].eq(CLASSES[0]).sum()),
+            "forecast_busted_active_rows": len(busted),
+            "forecast_busted_active_overshoots": int(
+                busted["label"].eq(CLASSES[2]).sum()
+            ),
+            "forecast_busted_active_winners": int(
+                busted["label"].eq(CLASSES[1]).sum()
+            ),
+            "high_clock_censored_rows": len(censored),
+            "high_clock_censored_overshoots": int(
+                censored["label"].eq(CLASSES[2]).sum()
+            ),
+        }
+
+    taipei = historical[historical["city"].eq("Taipei")]
+    other = historical[~historical["city"].eq("Taipei")]
+    taipei_table = [
+        [
+            int(taipei["label"].eq(CLASSES[2]).sum()),
+            int(taipei["label"].ne(CLASSES[2]).sum()),
+        ],
+        [
+            int(other["label"].eq(CLASSES[2]).sum()),
+            int(other["label"].ne(CLASSES[2]).sum()),
+        ],
+    ]
+    forward_keys = first_scored.loc[
+        first_scored["model"].eq("physics_path")
+        & first_scored["target_date"].ge(FORWARD_START),
+        KEY,
+    ].drop_duplicates()
+    historical_forward = historical.merge(
+        forward_keys, on=KEY, how="inner", validate="one_to_one"
+    )
+    summary = {
+        "historical_frozen": cohort_stats(historical),
+        "historical_physics_oof_forward": cohort_stats(historical_forward),
+        "clean_live": cohort_stats(live_rows),
+        "failure_cases": {
+            "rows": len(failures),
+            "forecast_busted_active": int(failures["forecast_busted_active"].sum()),
+            "taipei": int(failures["taipei_recurrent"].sum()),
+            "union_busted_or_taipei": int(
+                (
+                    failures["forecast_busted_active"]
+                    | failures["taipei_recurrent"]
+                ).sum()
+            ),
+        },
+        "taipei_vs_other_historical": {
+            "table": taipei_table,
+            "odds_ratio": float(fisher_exact(taipei_table, alternative="greater").statistic),
+            "one_sided_pvalue_unadjusted": float(
+                fisher_exact(taipei_table, alternative="greater").pvalue
+            ),
+        },
+    }
+    return failures, summary
+
+
 def db_snapshot(db_path: Path) -> dict[str, Any]:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
     conn.execute("PRAGMA query_only=ON")
@@ -1047,6 +1342,9 @@ def main() -> None:
     live = build_live_rows(args.live_raw, family, args.db_path)
     live_scored = score_live(states, live, first_scored)
     live_policy = summarize_live_policy(live_scored)
+    miss_cases, miss_summary = build_miss_mechanism_audit(
+        states, first, first_scored, live, live_scored
+    )
 
     summary = {
         "contract": {
@@ -1058,6 +1356,9 @@ def main() -> None:
             "min_train_dates": MIN_TRAIN_DATES,
             "known_forecast_pollution_excluded": sorted(KNOWN_FORECAST_POLLUTION),
             "historical_end": HISTORICAL_END,
+            "forecast_lineage": "source-file-aligned per-city fixed CITY_MODEL Single Runs",
+            "peak_clock": "decision local hour minus forecast peak local hour; positive means passed",
+            "celsius_settlement_threshold": "displayed bracket low minus 0.5C (half-up lattice)",
             "first_signal_trigger": "first city-day d1 YES mid >= 0.80",
             "forward_start": FORWARD_START,
             "fee": "0.05 * price * (1-price)",
@@ -1118,6 +1419,7 @@ def main() -> None:
             else []
         ),
         "live_policy_summary": live_policy.to_dict("records"),
+        "miss_mechanism_audit": miss_summary,
     }
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -1132,6 +1434,7 @@ def main() -> None:
     live.to_csv(args.output_dir / "clean_live_input_rows.csv", index=False)
     live_scored.to_csv(args.output_dir / "clean_live_predictions.csv", index=False)
     live_policy.to_csv(args.output_dir / "clean_live_policy_summary.csv", index=False)
+    miss_cases.to_csv(args.output_dir / "failure_mechanism_cases.csv", index=False)
     (args.output_dir / "summary.json").write_text(
         json.dumps(_json_ready(summary), indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",

@@ -10,17 +10,16 @@
 
 - 在完整 ladder、同分母、date-expanding OOF 的 3,938 个 state rows / 18 dates 上，
   raw market 的 date-equal multiclass logloss / Brier 为 `0.4671 / 0.2781`。
-- `market + path` 的 logloss 比 market 差 `+0.0079`
-  （date-block 95% CI `[-0.0036,+0.0200]`）；再加 regime 后差 `+0.0133`
-  （`[+0.0020,+0.0251]`），即 regime 版本在 logloss 上显著更差。
-- physics-only 即使在更宽的机制分母训练，完整 ladder 同分母 logloss 仍为 `0.6179`，
+- `market + path` 的 logloss 比 market 差 `+0.0104`
+  （date-block 95% CI `[-0.0009,+0.0217]`）；再加 regime 后差 `+0.0177`
+  （`[+0.0062,+0.0284]`），即 regime 版本在 logloss 上显著更差。
+- physics-only 即使在更宽的机制分母训练，完整 ladder 同分母 logloss 仍为 `0.6126`，
   明显差于 market `0.4671`。
 - 冻结 historical forward 的 43 个可做 physics OOF first signals 中，p75 risk filter
-  没抓到唯一 overshoot，反而删掉 9 个赢家；ROI 从 `+7.03%` 降到
-  path `+5.89%` / path+regime `+6.09%`。
-- 9 个 clean live rows 上，path+regime filter 删掉 2 个 overshoot、1 个 stall，
-  仍漏掉 1 个 overshoot；保留 6 行 ROI `-7.69%`
-  （95% CI `[-55.11%,+13.71%]`）。这是小样本负结果，不是可上线证据。
+  没抓到唯一 overshoot；path 删掉 18 个赢家、path+regime 删掉 11 个赢家。
+- 9 个 clean live rows 上，修正后的 path/regime filter 都删掉 2 个 overshoot、
+  1 个 stall和2个赢家，仍漏掉 1 个 overshoot；保留 4 行 ROI `-17.06%`
+  （95% CI `[-100%,+7.72%]`）。这是小样本负结果，不是可上线证据。
 
 因此动作是：不加 hard regime gate、不改 live、不用本模型 size；保留三态 hazard
 作为正确的统一研究框架，先补完整 ladder 与 live feature parity，再收 fresh forward。
@@ -52,6 +51,18 @@ p_overshoot = h0 * h1
 
 所有 logistic heads 固定 `C=0.1`，先积累 12 个 train dates，再逐日 expanding OOF；
 没有用 live rows 训练或调阈值。2026-07-02..05 的已知 forecast fallback 污染日期不进模型。
+
+### Forecast / lattice 口径修正
+
+漏判复核发现 atlas 的混合 forecast 可能来自同 state 的另一条 expression。最终模型不再
+使用该字段，而是按每城固定 `CITY_MODEL` 回连 source factory 的 GFS/ECMWF Single Runs
+列，并统一令 peak clock=`decision - peak`。11,554 个机制 rows 中有 3,684 行旧 peak
+clock 与固定模型口径相差超过 1 小时。
+
+Celsius exact bracket 采用 half-up settlement lattice，进入 `X` 档的连续阈值是
+`X-0.5°C`，不是 `X.0°C`。7,676 个有 forecast 的 Celsius 机制 rows 中，这项修正使
+356 行的 d2 forecast-ceiling 从负翻到非负。详见
+[漏判机制审计](2026-07-23-research-d1-overshoot-miss-mechanism-audit-v1.md)。
 
 ## 数据与分母
 
@@ -93,17 +104,17 @@ p_overshoot = h0 * h1
 |---|---:|---:|---:|---:|
 | market raw | 3,938 / 18 | **0.4671** | **0.2781** | baseline |
 | market calibrated | 3,938 / 18 | 0.4696 | 0.2787 | `+0.0025 [-0.0012,+0.0063]` |
-| market + path | 3,938 / 18 | 0.4751 | 0.2815 | `+0.0079 [-0.0036,+0.0200]` |
-| market + path + regime | 3,938 / 18 | 0.4804 | 0.2837 | `+0.0133 [+0.0020,+0.0251]` |
-| physics path + regime | 3,938 / 18 | 0.6179 | 0.3612 | `+0.1508 [+0.1277,+0.1755]` |
-| physics path | 3,938 / 18 | 0.6275 | 0.3654 | `+0.1604 [+0.1378,+0.1855]` |
+| market + path | 3,938 / 18 | 0.4775 | 0.2831 | `+0.0104 [-0.0009,+0.0217]` |
+| market + path + regime | 3,938 / 18 | 0.4848 | 0.2862 | `+0.0177 [+0.0062,+0.0284]` |
+| physics path + regime | 3,938 / 18 | 0.6126 | 0.3582 | `+0.1454 [+0.1281,+0.1628]` |
+| physics path | 3,938 / 18 | 0.6211 | 0.3624 | `+0.1540 [+0.1358,+0.1722]` |
 
 regime 对 pure physics 比不带 regime 略有帮助，但仍远逊于 market；把 regime 加到
 market residual 后反而恶化。这说明 regime 能解释部分天气状态，却没有证明能解释
 market 尚未计价、可交易的 residual。
 
 在 first-signal 的 53 行完整-ladder OOF 公共分母上，market logloss `0.2616`；
-`market+path` 为 `0.2986`，`market+path+regime` 为 `0.2986`，仍未改善。
+`market+path` 为 `0.3012`，`market+path+regime` 为 `0.3048`，仍未改善。
 
 ## 过滤与 fee-adjusted ROI
 
@@ -112,8 +123,8 @@ market 尚未计价、可交易的 residual。
 
 | filter | forward rows | removed | failure caught | winners removed | all ROI | retained ROI | Δ |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| physics path | 43 | 9 | 0/1 overshoot | 9 | +7.03% | +5.89% | -1.13pp |
-| physics path + regime | 43 | 9 | 0/1 overshoot | 9 | +7.03% | +6.09% | -0.94pp |
+| physics path | 43 | 18 | 0/1 overshoot | 18 | +7.03% | +3.44% | -3.59pp |
+| physics path + regime | 43 | 11 | 0/1 overshoot | 11 | +7.03% | +6.17% | -0.85pp |
 
 过滤后的正 ROI 来自原始 cohort 本身为正，不能归功于 filter；filter 的增量为负。
 完整-ladder market filters 在 historical forward 为 0 行，只能记 coverage gap。
@@ -124,8 +135,8 @@ market 尚未计价、可交易的 residual。
 |---|---|---:|---:|---:|
 | market raw p75 | 1 winner | 8 | -43.28% | `[-85.30%,-4.14%]` |
 | market calibrated p75 | 1 overshoot | 8 | -28.51% | `[-66.41%,-0.53%]` |
-| physics path p75 | 2 overshoot + 1 stall + 1 winner | 5 | -12.66% | `[-72.06%,+10.10%]` |
-| physics path + regime p75 | 2 overshoot + 1 stall | 6 | -7.69% | `[-55.11%,+13.71%]` |
+| physics path p75 | 2 overshoot + 1 stall + 2 winners | 4 | -17.06% | `[-100%,+7.72%]` |
+| physics path + regime p75 | 2 overshoot + 1 stall + 2 winners | 4 | -17.06% | `[-100%,+7.72%]` |
 
 最后一行只是 9 行上的小样本改善，而且 historical forward 同一规则方向相反；
 regime 字段在 live 仍为 unknown，不能把它晋升为 filter。
