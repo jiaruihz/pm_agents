@@ -21,7 +21,6 @@ weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" \
     --snapshot-dir '$RUNTIME_ROOT/targeted_output/paper_snapshots' \
     --observation-cache '$RUNTIME_ROOT/output/observations/latest.json' \
     --forecast-curve-dir '$RUNTIME_ROOT/targeted_output/forecast_hourly_curves' \
-    --forecast-enrichment-dir '$RUNTIME_ROOT/output/forecast_enrichment' \
     --output-dir '$OUTPUT_DIR' \
     --taker-shares 5 \
     --maker-shares 5 \
