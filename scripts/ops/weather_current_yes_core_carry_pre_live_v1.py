@@ -271,6 +271,7 @@ def score_snapshot(args: argparse.Namespace, collector_summary: Mapping[str, Any
                 "current_yes_ask": book.get("ask"),
                 "current_yes_bid_size": book.get("bid_size"),
                 "current_yes_ask_size": book.get("ask_size"),
+                "current_yes_tick_size": book.get("tick_size"),
                 "current_yes_book_status": book.get("status"),
                 "current_yes_book_fetched_at_utc": book.get("fetched_at_utc"),
                 "checkpoint_hour_local": hour,

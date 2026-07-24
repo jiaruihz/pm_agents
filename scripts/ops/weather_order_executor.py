@@ -23,6 +23,7 @@ from src.strategies.weather_edge_v1.tools.execution_policy import (
     build_execution_quote,
     build_execution_quotes,
 )
+from src.strategies.weather_edge_v1.tools.current_yes_core_carry import walk_ask_ladder
 
 PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
 MARKET_PROXY_ENV_KEYS = (
@@ -182,6 +183,60 @@ def _d1_yes_maker_price(*, best_bid: float, best_ask: float, tick_size: float) -
     if best_bid <= 0 or best_ask <= best_bid or tick_size <= 0:
         return 0.0
     return max(best_bid, min(best_bid + tick_size, best_ask - tick_size))
+
+
+def _current_yes_residual_taker_quote(
+    plan: Dict[str, Any],
+    book: Any,
+    *,
+    best_bid: float,
+    best_ask: float,
+    tick_size: float,
+) -> Dict[str, Any]:
+    """Revalidate the frozen five-share ladder EV against the submission book."""
+
+    size = _to_float(plan.get("size"), 0.0)
+    model_probability = _to_float(plan.get("model_token_probability"), 0.0)
+    min_edge = _to_float(plan.get("required_quote_edge"), 0.0)
+    asks = (book.get("asks") or []) if isinstance(book, dict) else (getattr(book, "asks", None) or [])
+    if best_bid <= 0 or best_ask <= 0:
+        return {"accepted": False, "reason": "missing_bid_or_ask"}
+    ladder = walk_ask_ladder(asks, size)
+    effective_cost = _to_float(ladder.get("effective_cost_per_share"), 0.0)
+    edge = model_probability - effective_cost
+    if not bool(ladder.get("executable")):
+        return {"accepted": False, "reason": "insufficient_five_share_ask_ladder"}
+    if edge <= min_edge + 1e-12:
+        return {
+            "accepted": False,
+            "reason": "fresh_ladder_non_positive_model_ev",
+            "edge": edge,
+            "effective_cost_per_share": effective_cost,
+        }
+    return {
+        "accepted": True,
+        "reason": "fresh_five_share_ladder_ev_revalidated",
+        "order_price": _to_float(ladder.get("max_ask_price"), 0.0),
+        "edge": edge,
+        "effective_cost_per_share": effective_cost,
+        "principal_vwap": _to_float(ladder.get("principal_vwap"), 0.0),
+        "tick_size": tick_size,
+    }
+
+
+def _current_yes_residual_maker_price(
+    *,
+    best_bid: float,
+    best_ask: float,
+    tick_size: float,
+    price_cap: float,
+) -> float:
+    """Improve best bid by one tick, capped below both ask and trigger-time mid."""
+
+    if best_bid <= 0 or best_ask <= best_bid or tick_size <= 0 or price_cap <= 0:
+        return 0.0
+    candidate = min(best_bid + tick_size, best_ask - tick_size, price_cap)
+    return candidate if candidate > best_bid + 1e-12 else 0.0
 
 
 def _get_tick_size(client: Any, token_id: str, fallback: float) -> float:
@@ -508,6 +563,8 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
             "mid_price_core_v2",
             "d1_yes_high_mid_taker_v1",
             "d1_yes_high_mid_maker_v1",
+            "current_yes_residual_carry_taker_v1",
+            "current_yes_residual_carry_maker_v1",
             "taker_top_ask_v1",
         }
         if maker_only or needs_live_policy_quote:
@@ -521,7 +578,72 @@ def _build_live_place_fn(*, cancel_after: bool, default_maker_only: bool):
                 ) from exc
             best_bid, best_ask = _best_bid_ask_from_book(book)
             tick_size = _get_tick_size(client, str(plan["token_id"]), _to_float(plan.get("quote_tick_size"), 0.01))
-            if execution_policy == "d1_yes_high_mid_taker_v1":
+            if execution_policy == "current_yes_residual_carry_taker_v1":
+                residual = _current_yes_residual_taker_quote(
+                    plan,
+                    book,
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    tick_size=tick_size,
+                )
+                if not bool(residual.get("accepted")):
+                    reason = str(residual.get("reason") or "current_yes_residual_taker_rejected")
+                    raise WeatherExecutionError(
+                        reason,
+                        response=_diagnostics(
+                            classification="current_yes_residual_taker_rejected",
+                            reason=reason,
+                        ),
+                    )
+                order_price = _to_float(residual.get("order_price"), 0.0)
+                maker_only = False
+                quote = {
+                    "quote_status": "accepted",
+                    "quote_reason": residual["reason"],
+                    "quote_edge": _to_float(residual.get("edge"), 0.0),
+                    "required_quote_edge": _to_float(plan.get("required_quote_edge"), 0.0),
+                    "model_token_probability": _to_float(plan.get("model_token_probability"), 0.0),
+                    "quote_best_bid": best_bid,
+                    "quote_best_ask": best_ask,
+                    "quote_spread": max(0.0, best_ask - best_bid),
+                    "quote_tick_size": tick_size,
+                    "quote_mode": "fresh_full_ladder_taker_ev_recheck",
+                    "fresh_effective_cost_per_share": residual["effective_cost_per_share"],
+                    "fresh_principal_vwap": residual["principal_vwap"],
+                }
+            elif execution_policy == "current_yes_residual_carry_maker_v1":
+                price_cap = min(
+                    _to_float(plan.get("maker_price_cap"), 0.0),
+                    _to_float(plan.get("model_token_probability"), 0.0),
+                )
+                order_price = _current_yes_residual_maker_price(
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    tick_size=tick_size,
+                    price_cap=price_cap,
+                )
+                if order_price <= 0:
+                    raise WeatherExecutionError(
+                        "current_yes_residual_maker_no_improving_resting_price",
+                        response=_diagnostics(
+                            classification="current_yes_residual_maker_no_resting_price",
+                            reason="best_bid_plus_tick_exceeds_trigger_mid_or_fresh_ask_cap",
+                        ),
+                    )
+                maker_only = True
+                quote = {
+                    "quote_status": "accepted",
+                    "quote_reason": "fresh_bid_improved_one_tick_with_trigger_mid_cap",
+                    "quote_edge": _to_float(plan.get("model_token_probability"), 0.0) - order_price,
+                    "required_quote_edge": 0.0,
+                    "model_token_probability": _to_float(plan.get("model_token_probability"), 0.0),
+                    "quote_best_bid": best_bid,
+                    "quote_best_ask": best_ask,
+                    "quote_spread": max(0.0, best_ask - best_bid),
+                    "quote_tick_size": tick_size,
+                    "quote_mode": "fresh_bid_improve_one_tick_post_only_mid_capped",
+                }
+            elif execution_policy == "d1_yes_high_mid_taker_v1":
                 min_mid = _to_float(plan.get("min_live_mid"), 0.80)
                 max_live_price = _to_float(plan.get("max_live_price"), 1.0)
                 top_ask_size = _best_ask_size_from_book(book, best_ask)
