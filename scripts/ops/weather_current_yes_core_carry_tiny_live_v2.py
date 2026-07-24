@@ -23,6 +23,7 @@ import hashlib
 import json
 import math
 import os
+import sqlite3
 import subprocess
 import sys
 import time
@@ -38,6 +39,7 @@ if str(ROOT) not in sys.path:
 from scripts.ops import weather_current_yes_core_carry_pre_live_v1 as signal_runner  # noqa: E402
 from scripts.ops import weather_current_yes_heat_death_shadow_v1 as weather_state  # noqa: E402
 from scripts.ops.weather_market_proxy import market_httpx_client  # noqa: E402
+from src.strategies.runtime import runtime_state  # noqa: E402
 from src.strategies.weather_edge_v1.tools.current_yes_core_carry import (  # noqa: E402
     load_artifact,
 )
@@ -124,6 +126,65 @@ def append_jsonl(path: Path, row: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def line_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    with path.open("rb") as handle:
+        return sum(1 for _ in handle)
+
+
+def repo_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def publish_runtime_state(
+    args: argparse.Namespace,
+    output_dir: Path,
+    summary: Mapping[str, Any],
+    signal_summary: Mapping[str, Any],
+) -> None:
+    db_path = Path(args.runtime_db)
+    now = str(summary.get("generated_at_utc") or utc_now())
+    candidate_rows = int(
+        signal_summary.get("checkpoint_candidates")
+        or signal_summary.get("scores_written")
+        or 0
+    )
+    plan_rows = int(summary.get("entry_plans") or 0) + int(
+        summary.get("maker_lifecycle_plans") or 0
+    )
+    with sqlite3.connect(db_path, timeout=5.0) as conn:
+        runtime_state.push_runtime_state(
+            conn,
+            instance_id=STRATEGY_INSTANCE,
+            process_status="running",
+            health_status="healthy" if summary.get("status") == "ok" else "error",
+            pid=os.getpid(),
+            heartbeat_at_utc=now,
+            last_tick_ts_utc=now,
+            last_data_ts_utc=str(signal_summary.get("generated_at_utc") or now),
+            latest_summary_ts_utc=now,
+            latest_artifact_mtime_utc=now,
+            heartbeat_age_min=0.0,
+            candidate_rows=candidate_rows,
+            plan_rows=plan_rows,
+            live_order_rows=line_count(output_dir / "live_orders.jsonl"),
+            paper_order_rows=line_count(output_dir / "paper_orders.jsonl"),
+            telemetry_rows=line_count(output_dir / "summary_history.jsonl") + 1,
+            live_enabled=int(bool(summary.get("live_enabled"))),
+            summary_path=repo_path(output_dir / "latest_summary.json"),
+            primary_journal_path=repo_path(output_dir / "live_orders.jsonl"),
+            blocker_count=0,
+            blockers_json=[],
+            summary_json=dict(summary),
+            refreshed_at_utc=now,
+        )
+        conn.commit()
 
 
 def live_order_id(row: Mapping[str, Any]) -> str:
@@ -656,6 +717,11 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "max_daily_cost_usd": float(args.max_daily_cost_usd),
         "execution": execution,
     }
+    try:
+        publish_runtime_state(args, output_dir, summary, signal_summary)
+    except Exception as exc:  # noqa: BLE001
+        summary["status"] = "runtime_state_error"
+        summary["runtime_state_error"] = f"{type(exc).__name__}: {exc}"
     write_json(output_dir / "latest_summary.json", summary)
     append_jsonl(output_dir / "summary_history.jsonl", summary)
     return summary
@@ -673,6 +739,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-daily-cost-usd", type=float, default=100.0)
     ap.add_argument("--executor-timeout-sec", type=float, default=60.0)
     ap.add_argument("--market-proxy", default=None)
+    ap.add_argument("--runtime-db", default=str(ROOT / "runtime/weather.db"))
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--confirm-live", action="store_true")
     return ap
