@@ -2,6 +2,13 @@
 
 Generated: 2026-07-24
 
+> Correction: this report evaluates every captured `would_live_entry`, but the
+> runtime had not materialized `forecast_to_bracket_low_native` from its live
+> snapshot. The configured `dist>0` boundary therefore did not actually run
+> for this window. Treat the metrics below as the captured, polluted cohort;
+> the corrected intended-policy audit is
+> [2026-07-24-heada-shadow-distance-enforcement-audit-v1.md](2026-07-24-heada-shadow-distance-enforcement-audit-v1.md).
+
 ## Verdict
 
 The first true HeadA zero-notional window is directionally positive but far too short to validate the strategy. It remains shadow-only.

@@ -41,6 +41,7 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
 )
 from src.strategies.weather_edge_v1.runtime import order_runtime
 from weather_data_feed.source_policy import city_slug
+from weather_feature_layer.market import bracket_distance_features
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
@@ -308,6 +309,10 @@ def normalize_snapshot_candidate(row: dict[str, Any], *, source_path: Path) -> d
             "fact_built_at_utc": "",
         }
     )
+    # The data-feed snapshot does not materialize geometry fields.  The
+    # approved dist>0 boundary must be computed before validation, otherwise
+    # live/shadow selection silently admits cold or inside-forecast tickets.
+    out.update(bracket_distance_features(out))
     return out
 
 
@@ -382,12 +387,15 @@ def signal_id_for_row(row: dict[str, Any]) -> str:
 
 
 def submitted_natural_key(row: dict[str, Any]) -> str:
+    """Allow at most one HeadA entry per city and target date.
+
+    A later snapshot may switch the eligible exact bracket.  That is a revised
+    expression of the same city-day thesis, not a second independent lottery.
+    """
     return "|".join(
         [
             safe_str(row.get("target_date") or row.get("event_date")),
             safe_str(row.get("city")),
-            safe_str(row.get("bracket")),
-            safe_str(row.get("condition_id") or row.get("market_id")),
             "BUY_YES",
         ]
     )
@@ -1459,6 +1467,12 @@ def validate_candidate(
         "forecast_max_in_bracket": row.get("forecast_max_in_bracket"),
         "forecast_max_above_bracket_f": row.get("forecast_max_above_bracket_f"),
         "forecast_max_below_bracket_f": row.get("forecast_max_below_bracket_f"),
+        "bracket_low_native": row.get("bracket_low_native"),
+        "bracket_high_native": row.get("bracket_high_native"),
+        "bracket_distance_available": bool(row.get("bracket_distance_available")),
+        "forecast_to_bracket_low_native": row.get("forecast_to_bracket_low_native"),
+        "forecast_above_bracket_high_native": row.get("forecast_above_bracket_high_native"),
+        "forecast_inside_bracket_bounds": row.get("forecast_inside_bracket_bounds"),
         "model_version": safe_str(row.get("model_version")),
         "time_bucket": safe_str(row.get("time_bucket")),
         "window": safe_str(row.get("window")),
@@ -1482,7 +1496,7 @@ def validate_candidate(
             "max_decision_snapshot_age_hours": args.max_decision_snapshot_age_hours,
             "min_decision_hours_to_settle": args.min_decision_hours_to_settle,
             "max_decision_hours_to_settle": args.max_decision_hours_to_settle,
-            "dedupe": "one_live_order_per_city_date_bracket_condition_signal_id",
+            "dedupe": "one_live_order_per_city_date",
             "daily_cap": None,
             "block_dist_le0_v1": not bool(args.allow_dist_le0 or args.allow_dist_lt0),
         },
@@ -1516,7 +1530,7 @@ def validate_candidate(
         return {
             **base,
             "decision_status": "blocked",
-            "blocker": "duplicate_submitted_city_date_bracket",
+            "blocker": "duplicate_submitted_city_date",
             "duplicate_natural_key": natural_key,
         }
     if snapshot_ts is None:

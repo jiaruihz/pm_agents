@@ -13,6 +13,7 @@ import argparse
 import csv
 import json
 import sqlite3
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,12 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_feature_layer.market import bracket_distance_features
+
+
 JOURNAL_DEFAULT = ROOT / "runtime/weather_edge_v1/low_price_yes_lottery_tiny_live_v1/would_live_entries.jsonl"
 DB_DEFAULT = ROOT / "runtime/weather.db"
 OUT_DIR_DEFAULT = ROOT / "docs/analysis/2026-07/generated/heada_would_live_shadow_v1"
@@ -244,6 +251,13 @@ def main() -> int:
         best_ask = float(row["would_live_best_ask"])
         shares = float(row["would_live_shares"])
         maker_limit = float(row["would_live_maker_limit_price"])
+        geometry = bracket_distance_features(
+            {
+                "bracket": bracket,
+                "forecast_max_native": row.get("forecast_max_native"),
+            }
+        )
+        dist = geometry["forecast_to_bracket_low_native"]
         fee = weather_taker_fee_per_share(best_ask) * shares
         taker_cost = best_ask * shares + fee
         maker_cost = maker_limit * shares
@@ -260,6 +274,14 @@ def main() -> int:
                 "condition_id": row.get("condition_id"),
                 "signal_id": row.get("signal_id"),
                 "forecast_source": row.get("forecast_source"),
+                "forecast_max_native": row.get("forecast_max_native"),
+                "bracket_low_native": geometry["bracket_low_native"],
+                "bracket_high_native": geometry["bracket_high_native"],
+                "bracket_distance_available": geometry["bracket_distance_available"],
+                "forecast_to_bracket_low_native": dist,
+                "intended_hot_tail_dist_gt0": bool(
+                    geometry["bracket_distance_available"] and dist is not None and float(dist) > 0.0
+                ),
                 "model_p_yes": row.get("model_p_yes"),
                 "best_ask": best_ask,
                 "best_ask_size": row.get("would_live_best_ask_size"),
@@ -278,10 +300,13 @@ def main() -> int:
             }
         )
 
-    summary = summarize(evaluated, samples=args.bootstrap_samples)
+    captured_summary = summarize(evaluated, samples=args.bootstrap_samples)
+    intended_hot_tail_rows = [row for row in evaluated if row["intended_hot_tail_dist_gt0"]]
+    intended_hot_tail_summary = summarize(intended_hot_tail_rows, samples=args.bootstrap_samples)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     write_csv(args.out_dir / "entries.csv", evaluated)
-    write_csv(args.out_dir / "daily.csv", summary["daily"])
+    write_csv(args.out_dir / "daily.csv", captured_summary["daily"])
+    write_csv(args.out_dir / "intended_hot_tail_daily.csv", intended_hot_tail_summary["daily"])
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "strategy_instance": "low_price_yes_lottery_tiny_live_v1",
@@ -292,7 +317,8 @@ def main() -> int:
         "db": str(args.db.relative_to(ROOT)),
         "source_rows": len(source),
         "deduped_rows": len(deduped),
-        "summary": summary,
+        "captured_summary_before_distance_enforcement": captured_summary,
+        "intended_hot_tail_dist_gt0_summary": intended_hot_tail_summary,
     }
     (args.out_dir / "summary.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(payload, indent=2))

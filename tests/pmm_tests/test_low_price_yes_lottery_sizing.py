@@ -7,10 +7,13 @@ from scripts.ops.low_price_yes_lottery_tiny_live import (
     choose_lifecycle_action,
     enforce_live_safety_args,
     load_fresh_snapshot_candidates,
+    normalize_snapshot_candidate,
     refresh_lifecycle_thesis,
     shares_for_price_tier_6_8_10,
     shares_for_sizing_policy,
     sizing_shadow,
+    submitted_natural_key,
+    validate_candidate,
 )
 
 
@@ -158,6 +161,85 @@ def test_fresh_snapshot_candidates_do_not_drop_d0_forecast_rows():
     rows = load_fresh_snapshot_candidates(snapshot, args)
 
     assert [row["condition_id"] for row in rows] == ["d0", "d1"]
+
+
+def test_snapshot_normalization_materializes_hot_tail_distance():
+    cold = normalize_snapshot_candidate(
+        {
+            "city": "Atlanta",
+            "event_date": "2026-07-14",
+            "bracket": "90-91",
+            "unit": "F",
+            "forecast_max_native": 91.2,
+        },
+        source_path=__import__("pathlib").Path("snapshot.json"),
+    )
+    hot = normalize_snapshot_candidate(
+        {
+            "city": "Atlanta",
+            "event_date": "2026-07-14",
+            "bracket": "92-93",
+            "unit": "F",
+            "forecast_max_native": 91.2,
+        },
+        source_path=__import__("pathlib").Path("snapshot.json"),
+    )
+
+    assert cold["bracket_distance_available"] is True
+    assert cold["forecast_to_bracket_low_native"] == -1.2
+    assert hot["forecast_to_bracket_low_native"] == 0.8
+
+
+def test_cold_snapshot_candidate_is_blocked_before_token_or_book_fetch():
+    args = Namespace(
+        min_ask=0.05,
+        max_ask=0.20,
+        min_edge=0.20,
+        max_taker_cushion=0.01,
+        min_fee_adjusted_edge=0.15,
+        order_notional_usd=0.8,
+        sizing_policy="fixed_5_shares",
+        min_order_shares=5.0,
+        max_decision_snapshot_age_hours=0.5,
+        min_decision_hours_to_settle=22.0,
+        max_decision_hours_to_settle=24.0,
+        allow_dist_le0=False,
+        allow_dist_lt0=False,
+    )
+    row = normalize_snapshot_candidate(
+        {
+            "probability_status": "ok",
+            "side": "BUY_YES",
+            "city": "Atlanta",
+            "event_date": "2026-07-14",
+            "bracket": "90-91",
+            "unit": "F",
+            "forecast_max_native": 91.2,
+            "snapshot_ts_utc": "2026-07-14T15:15:00Z",
+            "hours_to_settle": 23.0,
+            "entry_price": 0.08,
+            "model_prob": 0.40,
+            "edge": 0.32,
+            "condition_id": "cold",
+        },
+        source_path=__import__("pathlib").Path("snapshot.json"),
+    )
+
+    decision = validate_candidate(row, args, cache={}, submitted_signal_ids=set(), submitted_natural_keys=set(), tail_telemetry_resources=None)
+
+    assert decision["decision_status"] == "blocked"
+    assert decision["blocker"] == "dist_lt0_cold_or_inside_forecast_tail_v1"
+
+
+def test_head_a_dedupe_key_is_city_date_not_exact_bracket():
+    first = submitted_natural_key(
+        {"target_date": "2026-07-14", "city": "Atlanta", "bracket": "90-91", "condition_id": "a"}
+    )
+    revised = submitted_natural_key(
+        {"target_date": "2026-07-14", "city": "Atlanta", "bracket": "92-93", "condition_id": "b"}
+    )
+
+    assert first == revised == "2026-07-14|Atlanta|BUY_YES"
 
 
 def test_lifecycle_refresh_rejects_stale_probability_when_fresh_edge_is_gone():
