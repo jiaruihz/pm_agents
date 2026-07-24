@@ -1,6 +1,6 @@
 # Current-YES Residual Carry v2（no obs-age）冻结与 pre-live 准备
 
-Status: `frozen / zero-notional pre-live / no real-live activation`
+Status: `frozen / user-authorized tiny-live on Mac`
 
 ## 冻结结论
 
@@ -16,7 +16,20 @@ Status: `frozen / zero-notional pre-live / no real-live activation`
 
 ## 上线状态
 
-模型参数、特征顺序、imputation、5-share 成本和 checkpoint contract 已冻结。当前仅用于 zero-notional pre-live：记录全部正/负评分与 would-order，不包含签名、私钥或真实下单代码。would-order 会同时读取 H1/H2 submitted city-day 并标记 family conflict，避免未来 canary 重复暴露。真实下单不由本冻结报告自动授权。
+模型参数、特征顺序、imputation、5-share 成本和 checkpoint contract 已冻结。2026-07-24 用户明确授权 tiny-live 后，Mac 生产启用独立实例 `current_yes_core_carry_tiny_live_v2`，旧 H1/H2 live 与 v1 pre-live 已停止。
+
+- signal：保持当地 13–17 点、每小时首个 `minute>=30` checkpoint、首次正 EV 锁 city-day；
+- sizing：每个信号 `5 taker + 5 maker`，每天最多 10 city-days / `$100` posted cost；
+- taker：真正提交前重新读取完整 5-share ask ladder，并重验官方 fee 后 EV；
+- maker：`best bid + 1 tick`，每 15 秒只向上追，cap 为首次 mid（向下取 tick）与模型概率的较低者；不穿 ask、不转 taker、不设重挂次数上限，15 分钟 TTL 或新 observation epoch 时撤单；
+- family：沿用 H1/H2 submitted city-day 去重，避免换代时重复暴露；
+- 证据边界：历史 ROI 仍只属于 5-share taker 定义，maker 是 execution probe，不能并入历史 alpha。
+
+生产 checkout：`/Users/deepsleep/projects/pm_agents_prod`，部署分支
+`codex/tokyo-jma-hot-wake-20260721`。启动后首轮读取
+`snapshot_20260724_1507.json`，artifact hash
+`9e3a8bc3daeabebee8a91a6d56fe70fae66035580a62e8040f947446809db665`，
+`live_enabled=true`，当轮无符合信号，0 order / 0 fill。runtime monitor 已切换到新实例并健康。
 
 ## 与 v1 的同分母结论
 
