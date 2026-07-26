@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
+MAX_COUNTED_JOURNAL_BYTES = 32 * 1024 * 1024
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -62,6 +63,15 @@ def _iso(dt: datetime | None) -> str | None:
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z") if dt else None
 
 
+def _journal_rows(path: Path | None, fallback: object) -> int:
+    """Count small journals exactly without stalling the supervisor on history."""
+    if path is None or not path.exists():
+        return 0
+    if path.stat().st_size > MAX_COUNTED_JOURNAL_BYTES:
+        return int(fallback or 0)
+    return registry.count_lines(path) or 0
+
+
 def _runtime_snapshot(
     spec: registry.StrategySpec,
     *,
@@ -84,10 +94,10 @@ def _runtime_snapshot(
         data_ts = registry.latest_record_ts(primary_path)
     latest_ts = max((dt for dt in (summary_ts, data_ts, latest_mtime) if dt), default=None)
 
-    live_order_rows = registry.count_lines(live_order_path) or 0
-    paper_order_rows = registry.count_lines(paper_order_path) or 0
-    primary_rows = registry.count_lines(primary_path) or 0
-    telemetry_rows = registry.count_lines(telemetry_path) or 0
+    live_order_rows = _journal_rows(live_order_path, existing.get("live_order_rows"))
+    paper_order_rows = _journal_rows(paper_order_path, existing.get("paper_order_rows"))
+    primary_rows = _journal_rows(primary_path, existing.get("shadow_rows"))
+    telemetry_rows = _journal_rows(telemetry_path, existing.get("telemetry_rows"))
     shadow_rows = primary_rows if primary_path and primary_path.name in {"opportunities.jsonl", "sources.jsonl", "books.jsonl"} else 0
     row_counts = {
         "live_order_rows": live_order_rows,
@@ -350,7 +360,8 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         rows = instance_rows(conn)
         existing_rows = conn.execute(
             """SELECT instance_id, fact_trade_rows, fact_live_real_rows, fact_cost_usd,
-                      first_target_date, last_target_date, latest_fill_ts_utc
+                      first_target_date, last_target_date, latest_fill_ts_utc,
+                      live_order_rows, paper_order_rows, shadow_rows, telemetry_rows
                FROM strategy_instance_runtime"""
         ).fetchall()
         existing_by_instance = {str(row["instance_id"]): dict(row) for row in existing_rows}

@@ -80,3 +80,11 @@ def test_runtime_snapshot_reads_current_summary_and_jrs_tmux(tmp_path):
     assert snapshot["candidate_rows"] == 4
     assert snapshot["plan_rows"] == 2
     assert snapshot["live_order_rows"] == 1
+
+
+def test_journal_rows_keeps_previous_count_for_large_history(tmp_path):
+    path = tmp_path / "history.jsonl"
+    path.write_bytes(b"x" * 32)
+    assert launcher._journal_rows(path, 7) == 1
+    path.write_bytes(b"x" * (launcher.MAX_COUNTED_JOURNAL_BYTES + 1))
+    assert launcher._journal_rows(path, 7) == 7
