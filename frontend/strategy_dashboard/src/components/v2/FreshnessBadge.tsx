@@ -1,10 +1,6 @@
-import { useState } from "react";
 import { HealthDot } from "./HealthDot";
 import { GlossaryTerm } from "./GlossaryTerm";
 import type { Freshness } from "../../data/v2-types";
-
-const DOCTOR_CMD =
-  "ssh jiarui@192.168.0.200 'cd ~/projects/weather-predict && scripts/ops/doctor_restart.sh'";
 
 function band(ageMin: number | null, warn: number, bad: number): Freshness {
   if (ageMin == null) return "unknown";
@@ -21,9 +17,8 @@ function ageText(ageMin: number | null): string {
 }
 
 /**
- * Two distinct freshness layers, never conflated:
- *  1) mirror sync pulse (heartbeat_age_min / snapshot_age_min) — local mirror lag
- *  2) production liveness — NOT inferred from mirror age; links to N100 doctor.
+ * Runtime state has separate data and supervisor heartbeat timestamps.  Both are
+ * sourced from the current Mac control plane, never from a historical mirror.
  */
 export function FreshnessBadge({
   heartbeatAgeMin,
@@ -34,7 +29,6 @@ export function FreshnessBadge({
   snapshotAgeMin: number | null;
   snapshotTsUtc: string | null;
 }) {
-  const [copied, setCopied] = useState(false);
   const snapBand = band(snapshotAgeMin, 20, 120);
 
   return (
@@ -52,27 +46,16 @@ export function FreshnessBadge({
 
       <div className="freshness-row">
         <span className="freshness-label">
-          <GlossaryTerm field="heartbeat_age_min">镜像心跳</GlossaryTerm>
+          <GlossaryTerm field="heartbeat_age_min">Supervisor 心跳</GlossaryTerm>
         </span>
         <HealthDot level={band(heartbeatAgeMin, 30, 240)} label />
         <span className="freshness-meta">{ageText(heartbeatAgeMin)}</span>
       </div>
 
       <div className="freshness-row prod">
-        <span className="freshness-label">生产是否断流</span>
+        <span className="freshness-label">运行判定</span>
         <span className="freshness-note">
-          镜像旧 ≠ 生产死。判断断流请跑 N100 doctor：
-          <button
-            className="copy-cmd"
-            onClick={() => {
-              navigator.clipboard?.writeText(DOCTOR_CMD);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            }}
-            title={DOCTOR_CMD}
-          >
-            {copied ? "已复制 ✓" : "复制 doctor 命令"}
-          </button>
+          只有 supervisor 心跳在 20 分钟内且进程为 running，才会计入“在跑”。
         </span>
       </div>
     </div>

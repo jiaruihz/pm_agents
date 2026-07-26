@@ -11,14 +11,18 @@ import { auditZh, lifecycleZh, num } from "./format";
 
 const POLL_MS = 30_000;
 
+function isCurrentRunner(p: ProbeHealthRow): boolean {
+  return p.process_status === "running" && p.heartbeat_age_min != null && p.heartbeat_age_min <= 20;
+}
+
 function verdict(p: ProbeHealthRow): { tone: "good" | "warn" | "bad" | "neutral"; text: string } {
-  if (p.status === "no_pulse_file")
-    return { tone: "bad", text: "本机镜像没有脉搏文件 —— 可能未同步，按 N100 doctor 判断生产，不要据此判定策略已死。" };
+  if (!isCurrentRunner(p))
+    return { tone: "bad", text: `Supervisor 未在 20 分钟内确认心跳（当前 ${p.process_status}）；不计为在跑。` };
   if (p.freshness === "stale")
     return { tone: "warn", text: "行情快照偏旧，本轮决策可信度低；先确认采集是否断流再看候选。" };
   if ((p.candidate_rows ?? 0) === 0)
     return { tone: "neutral", text: `${lifecycleZh(p.lifecycle_status)}在跑，本轮未产候选（在等盘口/新鲜观测）。按执行质量评估，不看早期 PnL。` };
-  return { tone: "good", text: `${lifecycleZh(p.lifecycle_status)}在跑，本轮 ${p.candidate_rows} 个候选、${num(p.execution_eligible)} 个可执行。` };
+  return { tone: "good", text: `${lifecycleZh(p.lifecycle_status)}在跑，本轮 ${p.candidate_rows} 个候选、${num(p.execution_eligible)} 个计划。` };
 }
 
 function fmtParam(v: unknown): string {
@@ -36,6 +40,7 @@ function ProbeParams({ p }: { p: ProbeHealthRow }) {
   const capEntries = Object.entries(caps).filter(([k]) => !k.endsWith("_artifact") && !k.endsWith("_model_artifact"));
   const runtime: [string, unknown][] = [
     ["status", p.status],
+    ["process_status", p.process_status],
     ["snapshot_age_min", p.snapshot_age_min],
     ["heartbeat_age_min", p.heartbeat_age_min],
     ["health_status", p.health_status],
@@ -73,7 +78,7 @@ function ProbeCard({ p }: { p: ProbeHealthRow }) {
     <div className="card probe-card">
       <div className="probe-card-head">
         <Link to={`/probes/${encodeURIComponent(p.strategy_instance)}`} className="probe-name">
-          {p.strategy_instance}
+          {p.display_name || p.strategy_instance}
         </Link>
         <span className="badge" data-tone={statusToFreshness(p.lifecycle_status)}>
           {lifecycleZh(p.lifecycle_status)}
@@ -115,9 +120,9 @@ function ProbeCard({ p }: { p: ProbeHealthRow }) {
 }
 
 const GROUPS: { key: string; title: string; sub: string; match: (s: string | null) => boolean }[] = [
-  { key: "live", title: "实盘 live", sub: "真实下单（tiny-live 微仓）", match: (s) => s === "live" },
-  { key: "shadow", title: "影子 / 遥测 shadow", sub: "零 notional，不下单，只采前向证据", match: (s) => ["shadow", "telemetry", "monitor"].includes(s ?? "") },
-  { key: "other", title: "受阻 / 陈旧", sub: "blocked / stale，暂不产单，需排查", match: (s) => ["blocked", "stale", "shelved"].includes(s ?? "") },
+  { key: "running-live", title: "正在执行", sub: "Supervisor 已确认 running 的 tiny-live / live 实例", match: (s) => s === "__running_live__" },
+  { key: "running-shadow", title: "正在观察", sub: "Supervisor 已确认 running 的 zero-notional shadow / monitor", match: (s) => s === "__running_shadow__" },
+  { key: "attention", title: "未在跑 / 待处理", sub: "仍启用但 supervisor 未确认运行；不计入今日在跑", match: (s) => s === "__attention__" },
 ];
 
 export function ProbesPage() {
@@ -141,7 +146,12 @@ export function ProbesPage() {
 
   const assigned = new Set<string>();
   const grouped = GROUPS.map((g) => {
-    const items = (probes ?? []).filter((p) => g.match(p.lifecycle_status));
+    const items = (probes ?? []).filter((p) => {
+      const isRunning = isCurrentRunner(p);
+      const isLive = ["live", "tiny_live_probe"].includes(p.lifecycle_status ?? "");
+      const group = isRunning ? (isLive ? "__running_live__" : "__running_shadow__") : "__attention__";
+      return g.match(group);
+    });
     items.forEach((p) => assigned.add(p.strategy_instance));
     return { ...g, items };
   });
@@ -153,26 +163,38 @@ export function ProbesPage() {
       <header className="page-head">
         <h1>探针在跑</h1>
         <p className="page-sub">
-          前向取证探针的健康与执行质量。<strong>按执行质量评估，不按早期 PnL。</strong> 每 30 秒刷新。
+          当前部署实例的健康与执行质量。<strong>状态来自 supervisor，不从历史镜像推断。</strong> 每 30 秒刷新。
         </p>
       </header>
 
       {error && <div className="error-banner">加载失败：{error}</div>}
       {probes == null && !error && <EmptyState message="加载中…" />}
       {probes != null && probes.length === 0 && (
-        <EmptyState message="注册表里没有探针" hint="weather_strategy_runtime_registry 为空，或数据库未同步。" />
+        <EmptyState message="没有当前启用的探针实例" hint="请检查 strategy_instance 的部署状态。" />
       )}
 
       {grouped.map((g) => g.items.length > 0 && (
-        <section key={g.key} className="probe-group">
-          <div className="probe-group-head">
-            <h2>{g.title} <span className="probe-group-count">{g.items.length}</span></h2>
-            {g.sub && <span className="probe-group-sub">{g.sub}</span>}
-          </div>
-          <div className="probe-grid">
-            {g.items.map((p) => <ProbeCard key={p.strategy_instance} p={p} />)}
-          </div>
-        </section>
+        g.key === "attention" ? (
+          <details key={g.key} className="probe-group">
+            <summary className="probe-group-head">
+              <h2>{g.title} <span className="probe-group-count">{g.items.length}</span></h2>
+              {g.sub && <span className="probe-group-sub">{g.sub}</span>}
+            </summary>
+            <div className="probe-grid">
+              {g.items.map((p) => <ProbeCard key={p.strategy_instance} p={p} />)}
+            </div>
+          </details>
+        ) : (
+          <section key={g.key} className="probe-group">
+            <div className="probe-group-head">
+              <h2>{g.title} <span className="probe-group-count">{g.items.length}</span></h2>
+              {g.sub && <span className="probe-group-sub">{g.sub}</span>}
+            </div>
+            <div className="probe-grid">
+              {g.items.map((p) => <ProbeCard key={p.strategy_instance} p={p} />)}
+            </div>
+          </section>
+        )
       ))}
     </div>
   );

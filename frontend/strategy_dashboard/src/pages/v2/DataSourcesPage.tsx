@@ -179,7 +179,7 @@ export function DataSourcesPage() {
             <p className="stat-caption">
               更新周期约 <strong>{data.market_snapshot_cadence_min ?? "—"} 分钟/次</strong>。
               注意：这里读的是<strong>本机镜像</strong>，时间显示十几小时前 = 镜像未同步，<strong>不代表生产断流</strong>。
-              刷新镜像跑 <code>scripts/ops/sync_weather_remote.sh</code>；确认生产是否在产快照看 N100 doctor。
+              刷新当前 Mac market raw：<code>scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --market-only</code>。
             </p>
             {data.market_snapshots.length === 0 ? (
               <EmptyState message="没有盘口快照文件" hint="检查 runtime/.../paper_snapshots 是否已同步。" />

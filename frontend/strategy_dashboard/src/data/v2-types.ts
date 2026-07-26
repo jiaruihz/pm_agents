@@ -4,7 +4,11 @@ export type Freshness = "fresh" | "aging" | "stale" | "unknown";
 
 export interface ProbeHealthRow {
   strategy_instance: string;
+  display_name: string | null;
   lifecycle_status: string | null;
+  execution_mode: string | null;
+  desired_status: string | null;
+  process_status: string;
   health_status: string | null;
   heartbeat_age_min: number | null;
   status: string;

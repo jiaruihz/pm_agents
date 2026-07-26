@@ -1,8 +1,9 @@
 """Tests for probe pulse helpers and /api/probes endpoints."""
 
-import json
+from datetime import datetime, timezone
 
 from weather_dashboard.api.probe_pulse import classify_freshness, normalize_probe_row
+from weather_dashboard.api.routers.probes import _probe_row
 
 
 # ── pure helpers ────────────────────────────────────────────────────────────
@@ -34,47 +35,51 @@ def test_normalize_probe_row_reads_nested_meta_snapshot_age():
 
 # ── endpoints ───────────────────────────────────────────────────────────────
 
-def _seed_registry(api_db, instance="theta_x", lifecycle="live"):
-    # Table is created by the canonical schema with many NOT NULL columns;
-    # supply sensible defaults for the required ones plus the fields we read.
+def _seed_instance(api_db, instance="theta_x", lifecycle="tiny_live_probe", process_status="running"):
     api_db.execute(
-        """INSERT INTO weather_strategy_runtime_registry (
-               strategy_instance, display_name, family, lifecycle_status,
-               execution_mode, health_status, source_layer,
-               candidate_rows, plan_rows, live_order_rows, paper_order_rows,
-               shadow_rows, telemetry_rows, fact_trade_rows, fact_live_real_rows,
-               process_status, blocker_count, blockers_json, summary_json,
-               refreshed_at_utc, heartbeat_age_min
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?, 0, '[]', '{}', ?, ?)""",
-        (instance, instance, "reheat_risk", lifecycle, "live", "healthy",
-         "runtime_remote_mirror", "running", "2026-06-26T00:00:00+00:00", 7.0),
+        """INSERT INTO strategy_instance (
+               instance_id, strategy_key, display_name, family, lifecycle_status,
+               execution_mode, desired_status, source_layer, runtime_dir, expected_live,
+               notes, updated_at_utc
+           ) VALUES (?, 'reheat_risk.theta', ?, 'reheat_risk', ?, 'tiny_live', 'enabled',
+               'runtime_local', ?, 1, '', '2026-07-26T00:00:00Z')""",
+        (instance, instance, lifecycle, f"runtime/{instance}"),
+    )
+    api_db.execute(
+        """INSERT INTO strategy_instance_runtime (
+               instance_id, process_status, health_status, heartbeat_at_utc, last_tick_ts_utc,
+               last_data_ts_utc, candidate_rows, plan_rows, live_order_rows, blocker_count,
+               summary_json, refreshed_at_utc
+           ) VALUES (?, ?, 'healthy', '2026-07-26T00:00:00Z', '2026-07-26T00:00:00Z',
+               '2026-07-26T00:00:00Z', 2, 1, 0, 0, '{\"status\": \"ok\"}', '2026-07-26T00:00:00Z')""",
+        (instance, process_status),
     )
     api_db.commit()
 
 
-def test_probes_health_lists_registry_with_pulse(client, api_db, tmp_path, monkeypatch):
-    _seed_registry(api_db, "theta_x")
-    d = tmp_path / "theta_x"; d.mkdir()
-    (d / "latest_summary.json").write_text(json.dumps({
-        "status": "planned", "candidate_rows": 0,
-        "meta": {"snapshot_age_min": 5.0, "snapshot_ts_utc": "2026-06-26T05:30:29Z"}}))
-    monkeypatch.setenv("WEATHER_RUNTIME_ROOT", str(tmp_path))
+def test_probes_health_lists_current_instance_control_plane(client, api_db, tmp_path, monkeypatch):
+    _seed_instance(api_db, "theta_x")
     r = client.get("/api/probes/health")
     assert r.status_code == 200
     probes = r.json()["probes"]
-    assert any(p["strategy_instance"] == "theta_x" and p["freshness"] == "fresh" for p in probes)
+    row = next(p for p in probes if p["strategy_instance"] == "theta_x")
+    assert row["process_status"] == "running"
+    assert row["candidate_rows"] == 2
 
 
-def test_probes_health_missing_file_does_not_crash(client, api_db, tmp_path, monkeypatch):
-    _seed_registry(api_db, "ghost")
-    monkeypatch.setenv("WEATHER_RUNTIME_ROOT", str(tmp_path))
-    r = client.get("/api/probes/health")
-    assert r.status_code == 200
-    assert r.json()["probes"][0]["status"] == "no_pulse_file"
+def test_probe_freshness_is_calculated_from_runtime_timestamp_not_summary_age(tmp_path):
+    now = datetime(2026, 7, 26, 1, 0, tzinfo=timezone.utc)
+    row = _probe_row({
+        "strategy_instance": "old", "process_status": "running", "health_status": "healthy",
+        "heartbeat_at_utc": "2026-07-26T00:00:00Z", "last_tick_ts_utc": "2026-07-26T00:00:00Z",
+        "last_data_ts_utc": "2026-07-25T20:00:00Z", "summary_json": '{"snapshot_age_min": 1}',
+    }, now=now, root=tmp_path)
+    assert row["snapshot_age_min"] == 300.0
+    assert row["freshness"] == "stale"
 
 
 def test_probe_detail_404_for_unknown(client, api_db, tmp_path, monkeypatch):
-    _seed_registry(api_db, "known")
+    _seed_instance(api_db, "known")
     monkeypatch.setenv("WEATHER_RUNTIME_ROOT", str(tmp_path))
     r = client.get("/api/probes/does_not_exist")
     assert r.status_code == 404

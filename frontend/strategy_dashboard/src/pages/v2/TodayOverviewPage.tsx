@@ -7,6 +7,10 @@ import { HealthDot } from "../../components/v2/HealthDot";
 import { GlossaryTerm } from "../../components/v2/GlossaryTerm";
 import { usd, pct } from "./format";
 
+function isCurrentRunner(p: ProbeHealthRow): boolean {
+  return p.process_status === "running" && p.heartbeat_age_min != null && p.heartbeat_age_min <= 20;
+}
+
 export function TodayOverviewPage() {
   const [probes, setProbes] = useState<ProbeHealthRow[] | null>(null);
   const [live, setLive] = useState<LiveSummary | null>(null);
@@ -18,9 +22,9 @@ export function TodayOverviewPage() {
     weatherApi.getResearchLines().then((r) => setLines(r.lines)).catch(() => setLines([]));
   }, []);
 
-  const running = probes?.filter((p) => ["live", "shadow", "telemetry", "monitor"].includes(p.lifecycle_status ?? "")).length ?? 0;
+  const running = probes?.filter(isCurrentRunner).length ?? 0;
   const aging = probes?.filter((p) => p.freshness === "aging").length ?? 0;
-  const needAttn = probes?.filter((p) => p.freshness === "stale" || p.status === "no_pulse_file").length ?? 0;
+  const needAttn = probes?.filter((p) => !isCurrentRunner(p)).length ?? 0;
 
   const recentLines = (lines ?? [])
     .slice()
@@ -31,7 +35,7 @@ export function TodayOverviewPage() {
     <div className="page">
       <header className="page-head">
         <h1>今日总览</h1>
-        <p className="page-sub">当前没有已确认的稳定 live alpha；在跑的都是 tiny-live 前向取证（$5–$10 微仓）。</p>
+        <p className="page-sub">当前没有已确认的稳定 live alpha；运行状态来自 strategy_instance_runtime 的 supervisor 心跳。</p>
       </header>
 
       <div className="pulse-grid">
@@ -40,8 +44,8 @@ export function TodayOverviewPage() {
           <div className="pulse-title">探针健康</div>
           <div className="pulse-big">{running}<span className="pulse-unit"> 在跑</span></div>
           <div className="pulse-detail">
-            <span><HealthDot level="aging" /> {aging} 偏旧</span>
-            <span><HealthDot level="stale" /> {needAttn} 待查</span>
+            <span><HealthDot level="aging" /> {aging} 数据偏旧</span>
+            <span><HealthDot level="stale" /> {needAttn} 未在跑 / 待查</span>
           </div>
         </Link>
 
