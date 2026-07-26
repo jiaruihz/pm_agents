@@ -17,6 +17,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,96 @@ def tmux_running(session: str | None) -> bool | None:
     if not session:
         return None
     return session in registry.active_tmux_sessions()
+
+
+def _iso(dt: datetime | None) -> str | None:
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z") if dt else None
+
+
+def _runtime_snapshot(
+    conn: sqlite3.Connection,
+    spec: registry.StrategySpec,
+    *,
+    tmux_sessions: set[str],
+    screen_sessions: set[str],
+) -> dict[str, Any]:
+    """Materialize a runner's current raw summary into the control-plane table."""
+    summary_path = registry.path_for(spec, spec.summary_file)
+    primary_path = registry.path_for(spec, spec.primary_journal)
+    live_order_path = registry.path_for(spec, spec.live_order_file)
+    paper_order_path = registry.path_for(spec, spec.paper_order_file)
+    telemetry_path = registry.path_for(spec, spec.telemetry_file)
+    summary = registry.read_json(summary_path) if summary_path else {}
+    paths = [path for path in (summary_path, primary_path, live_order_path, paper_order_path, telemetry_path) if path]
+    latest_mtime = max((registry.file_mtime(path) for path in paths if path.exists()), default=None)
+    summary_ts = registry.parse_dt(summary.get("generated_at_utc") or summary.get("refreshed_at_utc"))
+    data_ts = registry.parse_dt(summary.get("snapshot_ts_utc"))
+    if data_ts is None and primary_path:
+        data_ts = registry.latest_record_ts(primary_path)
+    latest_ts = max((dt for dt in (summary_ts, data_ts, latest_mtime) if dt), default=None)
+
+    live_order_rows = registry.count_lines(live_order_path) or 0
+    paper_order_rows = registry.count_lines(paper_order_path) or 0
+    primary_rows = registry.count_lines(primary_path) or 0
+    telemetry_rows = registry.count_lines(telemetry_path) or 0
+    shadow_rows = primary_rows if primary_path and primary_path.name in {"opportunities.jsonl", "sources.jsonl", "books.jsonl"} else 0
+    row_counts = {
+        "live_order_rows": live_order_rows,
+        "shadow_rows": shadow_rows,
+        "telemetry_rows": telemetry_rows,
+    }
+    blockers = summary.get("blockers") or []
+    if not isinstance(blockers, list):
+        blockers = [blockers]
+    running = bool(
+        (spec.tmux_session and spec.tmux_session in tmux_sessions)
+        or (spec.screen_session and spec.screen_session in screen_sessions)
+    )
+    process_status = "running" if running else "stopped" if (spec.tmux_session or spec.screen_session) else "unknown"
+    health = registry.health_from(spec, summary, latest_ts, row_counts)
+    if process_status == "stopped" and health == "healthy":
+        health = "stale"
+    live_enabled = summary.get("live_enabled")
+    if live_enabled is None:
+        live_enabled = spec.expected_live
+    existing = conn.execute(
+        """SELECT fact_trade_rows, fact_live_real_rows, fact_cost_usd,
+                  first_target_date, last_target_date, latest_fill_ts_utc
+           FROM strategy_instance_runtime WHERE instance_id=?""",
+        (spec.strategy_instance,),
+    ).fetchone()
+    fact = dict(existing) if existing else {}
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {
+        "instance_id": spec.strategy_instance,
+        "process_status": process_status,
+        "health_status": health,
+        "heartbeat_at_utc": _iso(latest_ts),
+        "last_tick_ts_utc": _iso(summary_ts or latest_ts),
+        "last_data_ts_utc": _iso(data_ts or summary_ts or latest_ts),
+        "latest_summary_ts_utc": _iso(summary_ts),
+        "latest_artifact_mtime_utc": _iso(latest_mtime),
+        "heartbeat_age_min": max(0.0, (datetime.now(timezone.utc) - latest_ts).total_seconds() / 60.0) if latest_ts else None,
+        "candidate_rows": registry.summary_int(summary, ["candidate_rows", "pre_fresh_candidates", "accepted_candidates", "routed_candidates", "selected_rows_before_dedupe", "opportunities"]),
+        "plan_rows": registry.summary_int(summary, ["plans", "plans_written", "execution_eligible", "paper_orders"]),
+        "live_order_rows": live_order_rows,
+        "paper_order_rows": paper_order_rows,
+        "shadow_rows": shadow_rows,
+        "telemetry_rows": telemetry_rows,
+        "fact_trade_rows": fact.get("fact_trade_rows") or 0,
+        "fact_live_real_rows": fact.get("fact_live_real_rows") or 0,
+        "fact_cost_usd": fact.get("fact_cost_usd"),
+        "first_target_date": fact.get("first_target_date"),
+        "last_target_date": fact.get("last_target_date"),
+        "latest_fill_ts_utc": fact.get("latest_fill_ts_utc"),
+        "live_enabled": None if live_enabled is None else int(bool(live_enabled)),
+        "summary_path": str(summary_path) if summary_path else None,
+        "primary_journal_path": str(live_order_path or primary_path) if (live_order_path or primary_path) else None,
+        "blocker_count": len(blockers),
+        "blockers_json": blockers,
+        "summary_json": summary,
+        "refreshed_at_utc": now,
+    }
 
 
 def refresh_db(db_path: Path) -> dict[str, Any]:
@@ -99,11 +190,10 @@ def cmd_sync(args: argparse.Namespace) -> int:
     try:
         apply_schema_canonical(conn)
         result = sync_instance_specs(conn)
-        seeded_runtime_rows = runtime_state.seed_runtime_from_legacy_registry(conn)
         conn.commit()
     finally:
         conn.close()
-    print_payload({"action": "sync", **result, "seeded_runtime_rows": seeded_runtime_rows})
+    print_payload({"action": "sync", **result})
     return 0
 
 
@@ -258,8 +348,8 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     try:
         apply_schema_canonical(conn)
         sync_instance_specs(conn)
-        runtime_state.seed_runtime_from_legacy_registry(conn)
         tmux = registry.active_tmux_sessions()
+        screen = registry.active_screen_sessions()
         rows = instance_rows(conn)
         specs = specs_by_instance()
         for row in rows:
@@ -329,12 +419,18 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
                         params_hash=None,
                     )
 
-            runtime_state.mark_process_state(
-                conn,
-                instance_id=iid,
-                process_status=observed_status,
-                supervisor_id=socket_id(),
-            )
+            spec = specs.get(iid)
+            if spec:
+                snapshot = _runtime_snapshot(conn, spec, tmux_sessions=tmux, screen_sessions=screen)
+                runtime_state.push_runtime_state(conn, supervisor_id=socket_id(), **snapshot)
+                observed_status = str(snapshot["process_status"])
+            else:
+                runtime_state.mark_process_state(
+                    conn,
+                    instance_id=iid,
+                    process_status=observed_status,
+                    supervisor_id=socket_id(),
+                )
             actions.append({
                 "strategy_instance": iid,
                 "desired_status": desired,

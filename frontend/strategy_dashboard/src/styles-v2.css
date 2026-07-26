@@ -124,7 +124,7 @@ body {
 }
 
 /* ── probes ──────────────────────────────────────────────────────── */
-.probe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; }
+.probe-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .probe-card-head { display: flex; justify-content: space-between; align-items: center; }
 .probe-name { font-weight: 700; font-size: 14px; color: var(--v2-ink); text-decoration: none; font-family: ui-monospace, monospace; word-break: break-all; min-width: 0; }
 .probe-card { min-width: 0; overflow: hidden; }

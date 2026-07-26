@@ -3,6 +3,7 @@ from argparse import Namespace
 
 from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
 from src.strategies.runtime.sync import sync_instance_specs
+from src.strategies.runtime.specs import StrategySpec
 from scripts.ops import weather_strategy_launcher as launcher
 
 
@@ -20,13 +21,15 @@ def test_instance_rows_reads_from_db(tmp_path):
     conn.close()
 
 
-def test_reconcile_observe_populates_runtime_rows(tmp_path):
+def test_reconcile_observe_populates_runtime_rows(tmp_path, monkeypatch):
     db_path = tmp_path / "weather.db"
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     apply_schema_canonical(conn)
     sync_instance_specs(conn)
     conn.close()
+    # Reconcile unit coverage should not scan the real production journals.
+    monkeypatch.setattr(launcher, "specs_by_instance", lambda: {})
 
     rc = launcher.cmd_reconcile(
         Namespace(
@@ -47,3 +50,28 @@ def test_reconcile_observe_populates_runtime_rows(tmp_path):
     assert row["process_status"] in {"stopped", "unknown", "running"}
     assert row["health_status"] in {"unknown", "healthy", "idle", "stale", "blocked", "shelved"}
     conn.close()
+
+
+def test_runtime_snapshot_reads_current_summary_and_jrs_tmux(tmp_path):
+    runtime_dir = tmp_path / "fast"
+    runtime_dir.mkdir()
+    (runtime_dir / "latest_summary.json").write_text(
+        '{"generated_at_utc":"2026-07-26T06:30:00Z","status":"ok","opportunities":4,"execution_eligible":2,"live_enabled":true}',
+        encoding="utf-8",
+    )
+    (runtime_dir / "orders.jsonl").write_text('{"ts_utc":"2026-07-26T06:30:00Z"}\n', encoding="utf-8")
+    spec = StrategySpec(
+        strategy_instance="fast", display_name="Fast", family="latency", strategy_key="latency.fast",
+        lifecycle_status="live", execution_mode="live", source_layer="runtime_local",
+        runtime_dir=str(runtime_dir), summary_file="latest_summary.json", live_order_file="orders.jsonl",
+        tmux_session="weather_fast_source_prev_no_trial", expected_live=True,
+    )
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    apply_schema_canonical(conn)
+    conn.execute("INSERT INTO strategy_instance (instance_id,strategy_key,display_name,family,lifecycle_status,execution_mode,desired_status,source_layer,updated_at_utc) VALUES ('fast','latency.fast','Fast','latency','live','live','enabled','runtime_local','2026-07-26T00:00:00Z')")
+    snapshot = launcher._runtime_snapshot(conn, spec, tmux_sessions={"weather_fast_source_prev_no_trial"}, screen_sessions=set())
+    assert snapshot["process_status"] == "running"
+    assert snapshot["candidate_rows"] == 4
+    assert snapshot["plan_rows"] == 2
+    assert snapshot["live_order_rows"] == 1
