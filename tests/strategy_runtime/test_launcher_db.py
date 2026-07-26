@@ -70,7 +70,12 @@ def test_runtime_snapshot_reads_current_summary_and_jrs_tmux(tmp_path):
     conn.row_factory = sqlite3.Row
     apply_schema_canonical(conn)
     conn.execute("INSERT INTO strategy_instance (instance_id,strategy_key,display_name,family,lifecycle_status,execution_mode,desired_status,source_layer,updated_at_utc) VALUES ('fast','latency.fast','Fast','latency','live','live','enabled','runtime_local','2026-07-26T00:00:00Z')")
-    snapshot = launcher._runtime_snapshot(conn, spec, tmux_sessions={"weather_fast_source_prev_no_trial"}, screen_sessions=set())
+    snapshot = launcher._runtime_snapshot(
+        spec,
+        tmux_sessions={"weather_fast_source_prev_no_trial"},
+        screen_sessions=set(),
+        existing={},
+    )
     assert snapshot["process_status"] == "running"
     assert snapshot["candidate_rows"] == 4
     assert snapshot["plan_rows"] == 2

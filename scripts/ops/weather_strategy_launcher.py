@@ -63,11 +63,11 @@ def _iso(dt: datetime | None) -> str | None:
 
 
 def _runtime_snapshot(
-    conn: sqlite3.Connection,
     spec: registry.StrategySpec,
     *,
     tmux_sessions: set[str],
     screen_sessions: set[str],
+    existing: dict[str, Any],
 ) -> dict[str, Any]:
     """Materialize a runner's current raw summary into the control-plane table."""
     summary_path = registry.path_for(spec, spec.summary_file)
@@ -108,13 +108,7 @@ def _runtime_snapshot(
     live_enabled = summary.get("live_enabled")
     if live_enabled is None:
         live_enabled = spec.expected_live
-    existing = conn.execute(
-        """SELECT fact_trade_rows, fact_live_real_rows, fact_cost_usd,
-                  first_target_date, last_target_date, latest_fill_ts_utc
-           FROM strategy_instance_runtime WHERE instance_id=?""",
-        (spec.strategy_instance,),
-    ).fetchone()
-    fact = dict(existing) if existing else {}
+    fact = existing
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "instance_id": spec.strategy_instance,
@@ -348,10 +342,20 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     try:
         apply_schema_canonical(conn)
         sync_instance_specs(conn)
+        # Summary/journal scans can be slow. Release the schema write lock
+        # before inspecting raw runtime files, then publish snapshots together.
+        conn.commit()
         tmux = registry.active_tmux_sessions()
         screen = registry.active_screen_sessions()
         rows = instance_rows(conn)
+        existing_rows = conn.execute(
+            """SELECT instance_id, fact_trade_rows, fact_live_real_rows, fact_cost_usd,
+                      first_target_date, last_target_date, latest_fill_ts_utc
+               FROM strategy_instance_runtime"""
+        ).fetchall()
+        existing_by_instance = {str(row["instance_id"]): dict(row) for row in existing_rows}
         specs = specs_by_instance()
+        snapshots: list[dict[str, Any]] = []
         for row in rows:
             iid = str(row["instance_id"])
             desired = str(row["desired_status"])
@@ -421,8 +425,13 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
 
             spec = specs.get(iid)
             if spec:
-                snapshot = _runtime_snapshot(conn, spec, tmux_sessions=tmux, screen_sessions=screen)
-                runtime_state.push_runtime_state(conn, supervisor_id=socket_id(), **snapshot)
+                snapshot = _runtime_snapshot(
+                    spec,
+                    tmux_sessions=tmux,
+                    screen_sessions=screen,
+                    existing=existing_by_instance.get(iid, {}),
+                )
+                snapshots.append(snapshot)
                 observed_status = str(snapshot["process_status"])
             else:
                 runtime_state.mark_process_state(
@@ -440,6 +449,8 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
                 "returncode": rc,
                 "output": output[-500:] if output else "",
             })
+        for snapshot in snapshots:
+            runtime_state.push_runtime_state(conn, supervisor_id=socket_id(), **snapshot)
         conn.commit()
     finally:
         conn.close()
