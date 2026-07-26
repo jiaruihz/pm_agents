@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { weatherApi } from "../../data/weather-http";
 import type { LiveSummary } from "../../data/weather-types";
@@ -13,6 +13,13 @@ function sideTag(side: string | null) {
   return <span style={{ color: no ? "var(--accent)" : "var(--ok)", fontWeight: 700 }}>{no ? "NO" : "YES"}</span>;
 }
 
+function mtmCell(row: LiveBookRow) {
+  if (row.unrealized_pnl_mid == null) {
+    return <span className="muted" title="当前快照没有该 token 的可交易报价；未把它按 $0 估值。">无可估值盘口</span>;
+  }
+  return <span style={{ color: row.unrealized_pnl_mid >= 0 ? "var(--ok)" : "var(--bad)" }}>{usd(row.unrealized_pnl_mid, true)}</span>;
+}
+
 function BookTable({ rows, showPnl }: { rows: LiveBookRow[]; showPnl: "realized" | "mtm" }) {
   return (
     <div className="table-scroll">
@@ -23,6 +30,7 @@ function BookTable({ rows, showPnl }: { rows: LiveBookRow[]; showPnl: "realized"
             <th><GlossaryTerm field="bracket">档</GlossaryTerm></th>
             <th><GlossaryTerm field="side">方向</GlossaryTerm></th>
             <th><GlossaryTerm field="fill_price">成交价</GlossaryTerm></th>
+            <th>当前价</th>
             <th><GlossaryTerm field="cost_usd">成本</GlossaryTerm></th>
             <th><GlossaryTerm field="forecast_source">数据源</GlossaryTerm></th>
             <th>{showPnl === "realized" ? <GlossaryTerm field="pnl_usd_at_fill">已实现</GlossaryTerm> : <GlossaryTerm field="unrealized_pnl_mid">浮动(MTM)</GlossaryTerm>}</th>
@@ -39,9 +47,12 @@ function BookTable({ rows, showPnl }: { rows: LiveBookRow[]; showPnl: "realized"
                 <td>{r.bracket ?? "—"}</td>
                 <td>{sideTag(r.side)}</td>
                 <td>{r.fill_price ?? "—"}</td>
+                <td>{r.val_mid == null ? <span className="muted">—</span> : r.val_mid.toFixed(4)}</td>
                 <td>{usd(r.cost_usd)}</td>
                 <td className="muted" style={{ fontSize: 11 }}>{(r.forecast_source ?? "").replace("open_meteo_live_", "") || "—"}</td>
-                <td style={{ color: (pnl ?? 0) >= 0 ? "var(--ok)" : "var(--bad)" }}>{usd(pnl, true)}</td>
+                <td style={{ color: showPnl === "mtm" && pnl == null ? "var(--muted)" : (pnl ?? 0) >= 0 ? "var(--ok)" : "var(--bad)" }}>
+                  {showPnl === "mtm" ? mtmCell(r) : usd(pnl, true)}
+                </td>
                 <td>{r.poly_url ? <a href={r.poly_url} target="_blank" rel="noreferrer" className="poly-link">↗</a> : <span className="muted">—</span>}</td>
               </tr>
             );
@@ -52,23 +63,83 @@ function BookTable({ rows, showPnl }: { rows: LiveBookRow[]; showPnl: "realized"
   );
 }
 
+type DailyBook = {
+  targetDate: string;
+  rows: LiveBookRow[];
+  costUsd: number;
+  realizedPnlUsd: number;
+  openCount: number;
+  settledCount: number;
+  mtmUsd: number;
+  mtmCoveredCount: number;
+};
+
+function DailyLedger({ rows }: { rows: LiveBookRow[] }) {
+  const days = useMemo(() => {
+    const byDate = new Map<string, LiveBookRow[]>();
+    for (const row of rows) {
+      const date = row.target_date ?? "日期缺失";
+      byDate.set(date, [...(byDate.get(date) ?? []), row]);
+    }
+    return [...byDate.entries()].map(([targetDate, dayRows]): DailyBook => {
+      const openRows = dayRows.filter((row) => !row.settled);
+      const settledRows = dayRows.filter((row) => row.settled);
+      const marked = openRows.filter((row) => row.unrealized_pnl_mid != null);
+      return {
+        targetDate,
+        rows: dayRows,
+        costUsd: dayRows.reduce((sum, row) => sum + (row.cost_usd ?? 0), 0),
+        realizedPnlUsd: settledRows.reduce((sum, row) => sum + (row.pnl_usd_at_fill ?? 0), 0),
+        openCount: openRows.length,
+        settledCount: settledRows.length,
+        mtmUsd: marked.reduce((sum, row) => sum + (row.unrealized_pnl_mid ?? 0), 0),
+        mtmCoveredCount: marked.length,
+      };
+    }).sort((a, b) => b.targetDate.localeCompare(a.targetDate));
+  }, [rows]);
+
+  return (
+    <div className="table-scroll">
+      <table className="data-table">
+        <thead><tr><th>Target date</th><th>成交</th><th>已结算</th><th>未结算</th><th>成本</th><th>已实现</th><th>浮动(MTM)</th><th>订单明细</th></tr></thead>
+        <tbody>
+          {days.map((day) => (
+            <tr key={day.targetDate}>
+              <td>{day.targetDate === "日期缺失" ? "—" : <Link to={`/lineage/${day.targetDate}`}>{day.targetDate}</Link>}</td>
+              <td>{day.rows.length}</td>
+              <td>{day.settledCount}</td>
+              <td>{day.openCount}</td>
+              <td>{usd(day.costUsd)}</td>
+              <td style={{ color: day.realizedPnlUsd >= 0 ? "var(--ok)" : "var(--bad)" }}>{usd(day.realizedPnlUsd, true)}</td>
+              <td style={{ color: day.mtmCoveredCount === 0 && day.openCount > 0 ? "var(--muted)" : day.mtmUsd >= 0 ? "var(--ok)" : "var(--bad)" }}>
+                {day.openCount === 0 ? "—" : `${usd(day.mtmUsd, true)} (${day.mtmCoveredCount}/${day.openCount} 已估值)`}
+              </td>
+              <td>{day.targetDate === "日期缺失" ? "—" : <Link to={`/weather/orders?trade_class=live_real&target_date=${encodeURIComponent(day.targetDate)}`}>查看</Link>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function PerformancePage() {
   const [summary, setSummary] = useState<LiveSummary | null>(null);
-  const [open, setOpen] = useState<LiveBookRow[] | null>(null);
-  const [settled, setSettled] = useState<LiveBookRow[] | null>(null);
+  const [book, setBook] = useState<LiveBookRow[] | null>(null);
   const [strategies, setStrategies] = useState<LiveBookStrategy[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     weatherApi.getLiveSummary().then(setSummary).catch((e) => setError(String(e)));
-    weatherApi.getLiveBook({ status: "open", limit: 300 }).then((r) => setOpen(r.rows)).catch(() => setOpen([]));
-    weatherApi.getLiveBook({ status: "settled", limit: 60 }).then((r) => setSettled(r.rows)).catch(() => setSettled([]));
+    weatherApi.getLiveBook({ status: "all", limit: 2000 }).then((r) => setBook(r.rows)).catch(() => setBook([]));
     weatherApi.getLiveBookStrategies().then((r) => setStrategies(r.strategies)).catch(() => setStrategies([]));
   }, []);
 
   const c = summary?.clob;
-  const recentOpen = (open ?? []).filter((r) => !r.stale_unsettled);
-  const staleOpen = (open ?? []).filter((r) => r.stale_unsettled);
+  const open = (book ?? []).filter((r) => !r.settled);
+  const settled = (book ?? []).filter((r) => r.settled);
+  const recentOpen = open.filter((r) => !r.stale_unsettled);
+  const staleOpen = open.filter((r) => r.stale_unsettled);
 
   return (
     <div className="page">
@@ -103,10 +174,18 @@ export function PerformancePage() {
       </div>
 
       <section className="card">
-        <h2>当前未结算持仓 <span className="muted">({recentOpen.length})</span></h2>
-        {open == null && <EmptyState message="加载中…" />}
-        {open != null && recentOpen.length === 0 && <EmptyState message="当前没有近期未结算的 live 持仓" />}
+        <h2>当前未结算持仓（按 Target date） <span className="muted">({recentOpen.length})</span></h2>
+        {book == null && <EmptyState message="加载中…" />}
+        {book != null && recentOpen.length === 0 && <EmptyState message="当前没有近期未结算的 live 持仓" />}
         {recentOpen.length > 0 && <BookTable rows={recentOpen} showPnl="mtm" />}
+      </section>
+
+      <section className="card">
+        <h2>实盘成交账本（按 Target date） <span className="muted">({book?.length ?? 0})</span></h2>
+        <p className="page-sub">每个交易日汇总全部 live 成交；已结算看实际盈亏，未结算只汇总已有可交易报价的 MTM。点击“查看”进入该日完整订单与成交明细。</p>
+        {book == null && <EmptyState message="加载中…" />}
+        {book != null && book.length === 0 && <EmptyState message="暂无 live 成交" />}
+        {book != null && book.length > 0 && <DailyLedger rows={book} />}
       </section>
 
       {staleOpen.length > 0 && (
