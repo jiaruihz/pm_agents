@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -26,7 +26,11 @@ from weather_data_feed.forecast_sources import (
 )
 from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
 from weather_data_feed_service.legacy_weather_predict.city_pools import FULL_CITY_CONFIGS
-from weather_data_feed_service.io_utils import write_latest_and_daily_jsonl
+from weather_data_feed_service.io_utils import (
+    append_jsonl,
+    write_json,
+    write_latest_and_daily_jsonl,
+)
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "forecast_enrichment"
@@ -82,6 +86,118 @@ def _compact_multi_model_payload(
             "hourly_values_hash_by_model", {}
         ),
     }
+
+
+def multi_model_forecast_versions(row: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten one capture into immutable city-target-model version rows."""
+    multi = row.get("open_meteo_multi_model")
+    if not isinstance(multi, dict):
+        return []
+    result = multi.get("result")
+    if not isinstance(result, dict) or result.get("status") != "ok":
+        return []
+    daily = multi.get("daily")
+    if not isinstance(daily, dict):
+        return []
+    metadata = (
+        multi.get("model_metadata")
+        if isinstance(multi.get("model_metadata"), dict)
+        else {}
+    )
+    result_metadata = (
+        result.get("metadata")
+        if isinstance(result.get("metadata"), dict)
+        else {}
+    )
+    captured_at = str(row.get("snapshot_ts_utc") or "")
+    available_at = str(
+        result_metadata.get("source_fetch_end_utc")
+        or result.get("fetched_at_utc")
+        or captured_at
+    )
+    local_date_text = str(row.get("target_date") or "")
+    try:
+        local_date = date.fromisoformat(local_date_text)
+    except ValueError:
+        local_date = None
+    versions: list[dict[str, Any]] = []
+    for forecast_target_date, target_payload in sorted(daily.items()):
+        if not isinstance(target_payload, dict):
+            continue
+        models = target_payload.get("models")
+        if not isinstance(models, dict):
+            continue
+        try:
+            target_day = date.fromisoformat(str(forecast_target_date))
+        except ValueError:
+            target_day = None
+        horizon_days = (
+            (target_day - local_date).days
+            if target_day is not None and local_date is not None
+            else None
+        )
+        for model_label, raw_value in sorted(models.items()):
+            try:
+                forecast_max_f = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            model_meta = (
+                metadata.get(model_label)
+                if isinstance(metadata.get(model_label), dict)
+                else {}
+            )
+            version_hash = stable_hash(
+                {
+                    "city": row.get("city"),
+                    "forecast_target_date": forecast_target_date,
+                    "model_label": model_label,
+                    "forecast_max_f": forecast_max_f,
+                }
+            )
+            versions.append(
+                {
+                    "schema_version": "weather_forecast_model_version_v1",
+                    "producer": "weather_data_feed_service.forecast_enrichment",
+                    "capture_id": stable_hash(
+                        {
+                            "city": row.get("city"),
+                            "captured_at_utc": captured_at,
+                            "available_at_utc": available_at,
+                            "forecast_target_date": forecast_target_date,
+                            "model_label": model_label,
+                        }
+                    ),
+                    "forecast_version_hash": version_hash,
+                    "city": row.get("city"),
+                    "station": row.get("station"),
+                    "timezone_name": row.get("timezone_name"),
+                    "market_unit": row.get("unit"),
+                    "forecast_target_date": str(forecast_target_date),
+                    "forecast_horizon_days_local": horizon_days,
+                    "model_label": str(model_label),
+                    "model_key": model_meta.get("open_meteo_model"),
+                    "provider": model_meta.get("provider"),
+                    "tier": model_meta.get("tier"),
+                    "resolution_km": model_meta.get("resolution_km"),
+                    "forecast_max_f": forecast_max_f,
+                    "captured_at_utc": captured_at,
+                    "available_at_utc": available_at,
+                    "source_fetch_start_utc": result_metadata.get(
+                        "source_fetch_start_utc"
+                    ),
+                    "source_fetch_end_utc": result_metadata.get(
+                        "source_fetch_end_utc"
+                    ),
+                    "source_raw_payload_hash": result_metadata.get(
+                        "raw_payload_hash"
+                    ),
+                    "forecast_run_at_utc": None,
+                    "forecast_run_lineage_status": (
+                        "provider_run_unavailable_collector_versioned"
+                    ),
+                }
+            )
+    return versions
 
 
 def fetch_city_forecast_enrichment(
@@ -269,6 +385,49 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
         latest_payload=payload,
         rows=rows,
         jsonl_name="forecast_enrichment.jsonl",
+    )
+    versions = [
+        version
+        for row in rows
+        if isinstance(row, dict)
+        for version in multi_model_forecast_versions(row)
+    ]
+    capture_day = (
+        str(versions[0].get("available_at_utc") or "")[:10]
+        if versions
+        else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    )
+    append_jsonl(output_dir / "forecast_versions.jsonl", versions)
+    append_jsonl(
+        output_dir / capture_day / "forecast_versions.jsonl", versions
+    )
+    target_dates = sorted(
+        {
+            str(row.get("forecast_target_date"))
+            for row in versions
+            if row.get("forecast_target_date")
+        }
+    )
+    write_json(
+        output_dir / "latest_versions.json",
+        {
+            "schema_version": "weather_forecast_model_version_batch_v1",
+            "producer": "weather_data_feed_service.forecast_enrichment",
+            "generated_at_utc": payload.get("generated_at_utc"),
+            "capture_rows": len(versions),
+            "cities": len(
+                {str(row.get("city")) for row in versions if row.get("city")}
+            ),
+            "forecast_target_dates": target_dates,
+            "models": sorted(
+                {
+                    str(row.get("model_label"))
+                    for row in versions
+                    if row.get("model_label")
+                }
+            ),
+            "records": versions,
+        },
     )
 
 
