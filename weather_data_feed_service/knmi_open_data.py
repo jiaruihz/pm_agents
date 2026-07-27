@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,25 @@ from weather_data_feed_service.io_utils import append_jsonl, read_json, write_js
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "knmi_open_data"
 
 
+def _previous_records(output_dir: Path) -> list[dict[str, Any]]:
+    latest = read_json(output_dir / "latest.json", {})
+    records = latest.get("records") if isinstance(latest, dict) else None
+    if isinstance(records, list) and records:
+        return [dict(row) for row in records if isinstance(row, dict)]
+    history_path = output_dir / "knmi_observations.jsonl"
+    if not history_path.exists():
+        return []
+    with history_path.open("r", encoding="utf-8", errors="ignore") as handle:
+        last_lines = deque(handle, maxlen=1)
+    if not last_lines:
+        return []
+    try:
+        row = json.loads(last_lines[0])
+    except json.JSONDecodeError:
+        return []
+    return [row] if isinstance(row, dict) else []
+
+
 def collect_once(
     *,
     output_dir: Path,
@@ -33,14 +53,15 @@ def collect_once(
         settings=HighFrequencyFetchSettings(timeout_sec=timeout_sec),
         last_filename=last_filename,
     )
-    rows = [dict(row) for row in result.records]
+    new_rows = [dict(row) for row in result.records]
+    rows = new_rows or (_previous_records(output_dir) if result.status == "no_new_file" else [])
     now = datetime.now(timezone.utc).isoformat()
     filename = str(result.metadata.get("filename") or last_filename)
 
-    if rows:
-        append_jsonl(output_dir / "knmi_observations.jsonl", rows)
-        day = str(rows[0].get("target_date") or now[:10])
-        append_jsonl(output_dir / day / "knmi_observations.jsonl", rows)
+    if new_rows:
+        append_jsonl(output_dir / "knmi_observations.jsonl", new_rows)
+        day = str(new_rows[0].get("target_date") or now[:10])
+        append_jsonl(output_dir / day / "knmi_observations.jsonl", new_rows)
 
     payload = {
         "schema_version": "weather_knmi_open_data_payload_v1",
@@ -50,6 +71,7 @@ def collect_once(
         "error": result.error,
         "filename": filename,
         "rows": len(rows),
+        "append_rows": len(new_rows),
         "records": rows,
         "metadata": result.metadata,
     }
@@ -62,11 +84,11 @@ def collect_once(
             "last_attempt_status": result.status,
             "last_attempt_filename": filename,
             "last_success_filename": (
-                filename if result.status == "ok" and rows else last_filename
+                filename if result.status == "ok" and new_rows else last_filename
             ),
             "last_success_at_utc": (
                 now
-                if result.status == "ok" and rows
+                if result.status == "ok" and new_rows
                 else state.get("last_success_at_utc")
             ),
         },

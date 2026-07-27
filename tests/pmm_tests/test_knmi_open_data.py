@@ -70,6 +70,8 @@ def test_collect_once_does_not_append_when_file_is_unchanged(
         "last_success_at_utc": "2026-07-27T15:34:00+00:00",
     }
     (tmp_path / "state.json").write_text(__import__("json").dumps(state))
+    previous = {"records": [{"observation_time_utc": "2026-07-27T15:30:00+00:00", "temp_c": 20.6}]}
+    (tmp_path / "latest.json").write_text(__import__("json").dumps(previous))
 
     def fake_fetch(*, settings, last_filename):
         assert last_filename == "same.nc"
@@ -86,5 +88,7 @@ def test_collect_once_does_not_append_when_file_is_unchanged(
     payload = collect_once(output_dir=tmp_path)
 
     assert payload["status"] == "no_new_file"
-    assert payload["rows"] == 0
+    assert payload["rows"] == 1
+    assert payload["append_rows"] == 0
+    assert payload["records"][0]["temp_c"] == 20.6
     assert not (tmp_path / "knmi_observations.jsonl").exists()
