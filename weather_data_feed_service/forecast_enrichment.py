@@ -65,6 +65,25 @@ def _failed_result(source_key: str, exc: BaseException) -> ForecastFetchResult:
     )
 
 
+def _compact_multi_model_payload(
+    result: ForecastFetchResult, target_date: str
+) -> dict[str, Any]:
+    payload = result.payload if isinstance(result.payload, dict) else {}
+    daily = payload.get("daily") or {}
+    return {
+        "result": _compact_result(result),
+        "target_date": daily.get(target_date) or {},
+        # Keep every requested date. D-1 research must recover exactly what was
+        # visible before the target day, without refetching revised history.
+        "daily": daily,
+        "daily_dates": payload.get("daily_dates", []),
+        "model_metadata": payload.get("model_metadata", {}),
+        "hourly_values_hash_by_model": payload.get(
+            "hourly_values_hash_by_model", {}
+        ),
+    }
+
+
 def fetch_city_forecast_enrichment(
     cfg: CityConfig,
     now_utc: datetime,
@@ -156,10 +175,6 @@ def fetch_city_forecast_enrichment(
             taf_result = _failed_result("aviationweather_taf", exc)
             taf_signal = {"available": False, "status": "fetch_failed", "error": taf_result.error}
 
-    target_multi_model = {}
-    if isinstance(multi_model.payload, dict):
-        target_multi_model = (multi_model.payload.get("daily") or {}).get(target_date) or {}
-
     source_statuses = {
         "open_meteo_multi_model": multi_model.status,
         "open_meteo_weather_context": context.status,
@@ -171,13 +186,9 @@ def fetch_city_forecast_enrichment(
         **base,
         "status": status,
         "source_statuses": source_statuses,
-        "open_meteo_multi_model": {
-            "result": _compact_result(multi_model),
-            "target_date": target_multi_model,
-            "daily_dates": multi_model.payload.get("daily_dates", []) if isinstance(multi_model.payload, dict) else [],
-            "model_metadata": multi_model.payload.get("model_metadata", {}) if isinstance(multi_model.payload, dict) else {},
-            "hourly_values_hash_by_model": multi_model.payload.get("hourly_values_hash_by_model", {}) if isinstance(multi_model.payload, dict) else {},
-        },
+        "open_meteo_multi_model": _compact_multi_model_payload(
+            multi_model, target_date
+        ),
         "open_meteo_weather_context": {
             "result": _compact_result(context),
             "target_day_hourly": hourly_summary,
