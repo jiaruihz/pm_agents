@@ -84,7 +84,7 @@ def test_fetch_knmi_downloads_same_filename_when_revision_changes(
     def fake_get(url, **kwargs):
         if url.endswith("/files"):
             assert kwargs["params"]["maxKeys"] == 8
-            assert kwargs["params"]["orderBy"] == "lastModified"
+            assert kwargs["params"]["orderBy"] == "filename"
             return Response(listing)
         if url.endswith("/url"):
             return Response({"temporaryDownloadUrl": f"https://download/{url.split('/')[-2]}"})

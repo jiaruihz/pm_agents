@@ -158,7 +158,7 @@ def fetch_knmi_open_data(
         files_url,
         params={
             "maxKeys": max(1, min(32, int(list_limit))),
-            "orderBy": "lastModified",
+            "orderBy": "filename",
             "sorting": "desc",
         },
         headers=headers,
