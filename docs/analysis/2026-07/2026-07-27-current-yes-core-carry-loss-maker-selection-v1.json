@@ -1,0 +1,348 @@
+{
+  "data_snapshot": {
+    "frozen_entries": "docs/analysis/2026-07/generated/current_yes_core_carry_no_obs_age_freeze_pre_live_v5/frozen_policy_entries.csv",
+    "city_days": 136,
+    "target_dates": 30,
+    "wins": 130,
+    "losses": 6,
+    "grain": "first positive-EV city-day taker expression"
+  },
+  "loss_direction": {
+    "upward_overshoot": 6
+  },
+  "loss_cases": [
+    {
+      "city": "Busan",
+      "target_date": "2026-06-04",
+      "decision_hour_local": 15,
+      "current_bracket": "24",
+      "final_native": 25.0,
+      "loss_direction": "upward_overshoot",
+      "market_mid": 0.8,
+      "five_share_cost_per_share": 0.8176900000000001,
+      "model_probability": 0.845435220530761,
+      "model_edge_after_fee_and_depth": 0.0277452205307608,
+      "forecast_peak_delta_hours_local": 2,
+      "minutes_since_running_max": 30.883333333333333,
+      "decline_native": 0.0,
+      "path_faded": false,
+      "temp_trend_1h_f": 0.0,
+      "temp_trend_3h_f": 0.0,
+      "forecast_gap_to_running_native": 1.8888888888888964
+    },
+    {
+      "city": "LA",
+      "target_date": "2026-06-05",
+      "decision_hour_local": 15,
+      "current_bracket": "68-69",
+      "final_native": 70.0,
+      "loss_direction": "upward_overshoot",
+      "market_mid": 0.835,
+      "five_share_cost_per_share": 0.85638,
+      "model_probability": 0.8913241257417501,
+      "model_edge_after_fee_and_depth": 0.0349441257417501,
+      "forecast_peak_delta_hours_local": 2,
+      "minutes_since_running_max": 37.88333333333333,
+      "decline_native": 0.0,
+      "path_faded": false,
+      "temp_trend_1h_f": 1.0,
+      "temp_trend_3h_f": 2.0,
+      "forecast_gap_to_running_native": 3.0999999999999943
+    },
+    {
+      "city": "Seattle",
+      "target_date": "2026-06-06",
+      "decision_hour_local": 14,
+      "current_bracket": "60-61",
+      "final_native": 62.0,
+      "loss_direction": "upward_overshoot",
+      "market_mid": 0.852,
+      "five_share_cost_per_share": 0.87277,
+      "model_probability": 0.8731156960476337,
+      "model_edge_after_fee_and_depth": 0.0003456960476336,
+      "forecast_peak_delta_hours_local": 1,
+      "minutes_since_running_max": 37.88333333333333,
+      "decline_native": 0.0,
+      "path_faded": false,
+      "temp_trend_1h_f": 1.0,
+      "temp_trend_3h_f": 6.0,
+      "forecast_gap_to_running_native": -4.0
+    },
+    {
+      "city": "Istanbul",
+      "target_date": "2026-06-16",
+      "decision_hour_local": 14,
+      "current_bracket": "23",
+      "final_native": 23.88888888888889,
+      "loss_direction": "upward_overshoot",
+      "market_mid": 0.8205,
+      "five_share_cost_per_share": 0.8399599999999999,
+      "model_probability": 0.9131144126464352,
+      "model_edge_after_fee_and_depth": 0.0731544126464351,
+      "forecast_peak_delta_hours_local": 2,
+      "minutes_since_running_max": 10.883333333333333,
+      "decline_native": 0.0,
+      "path_faded": false,
+      "temp_trend_1h_f": 0.0,
+      "temp_trend_3h_f": 0.0,
+      "forecast_gap_to_running_native": 1.0
+    },
+    {
+      "city": "Karachi",
+      "target_date": "2026-06-20",
+      "decision_hour_local": 13,
+      "current_bracket": "34",
+      "final_native": 35.0,
+      "loss_direction": "upward_overshoot",
+      "market_mid": 0.825,
+      "five_share_cost_per_share": 0.8756599999999999,
+      "model_probability": 0.8786526327660747,
+      "model_edge_after_fee_and_depth": 0.0029926327660748,
+      "forecast_peak_delta_hours_local": 1,
+      "minutes_since_running_max": 1.5833333333333333,
+      "decline_native": 1.1111111111111072,
+      "path_faded": true,
+      "temp_trend_1h_f": 0.0,
+      "temp_trend_3h_f": 1.7999999999999972,
+      "forecast_gap_to_running_native": 1.7222222222222285
+    },
+    {
+      "city": "Istanbul",
+      "target_date": "2026-06-26",
+      "decision_hour_local": 16,
+      "current_bracket": "27",
+      "final_native": 27.77777777777778,
+      "loss_direction": "upward_overshoot",
+      "market_mid": 0.8,
+      "five_share_cost_per_share": 0.84672,
+      "model_probability": 0.8700175789886493,
+      "model_edge_after_fee_and_depth": 0.0232975789886492,
+      "forecast_peak_delta_hours_local": 2,
+      "minutes_since_running_max": 40.95,
+      "decline_native": 0.0,
+      "path_faded": false,
+      "temp_trend_1h_f": 0.0,
+      "temp_trend_3h_f": 0.0,
+      "forecast_gap_to_running_native": -0.05555555555555003
+    }
+  ],
+  "post_hoc_slices": [
+    {
+      "slice": "market_mid_lt_0.85",
+      "selected_n": 37,
+      "selected_losses": 5,
+      "selected_loss_rate": 0.13513513513513514,
+      "other_n": 99,
+      "other_losses": 1,
+      "other_loss_rate": 0.010101010101010102,
+      "post_hoc": true
+    },
+    {
+      "slice": "minutes_since_running_max_lt_60",
+      "selected_n": 74,
+      "selected_losses": 6,
+      "selected_loss_rate": 0.08108108108108109,
+      "other_n": 62,
+      "other_losses": 0,
+      "other_loss_rate": 0.0,
+      "post_hoc": true
+    },
+    {
+      "slice": "forecast_peak_passed_1.5_to_2.5h",
+      "selected_n": 30,
+      "selected_losses": 4,
+      "selected_loss_rate": 0.13333333333333333,
+      "other_n": 106,
+      "other_losses": 2,
+      "other_loss_rate": 0.018867924528301886,
+      "post_hoc": true
+    },
+    {
+      "slice": "path_faded",
+      "selected_n": 49,
+      "selected_losses": 1,
+      "selected_loss_rate": 0.02040816326530612,
+      "other_n": 87,
+      "other_losses": 5,
+      "other_loss_rate": 0.05747126436781609,
+      "post_hoc": true
+    }
+  ],
+  "live_maker_evidence": {
+    "instance_id": "current_yes_core_carry_tiny_live_v2",
+    "by_leg": {
+      "taker": {
+        "maker_only": 0,
+        "fills": 12,
+        "city_days": 12,
+        "shares": 60.0,
+        "cost_usd": 55.39,
+        "settled_fills": 0
+      },
+      "maker": {
+        "maker_only": 1,
+        "fills": 5,
+        "city_days": 5,
+        "shares": 25.0,
+        "cost_usd": 22.8,
+        "settled_fills": 0
+      }
+    },
+    "maker_fill_rate_per_taker_city_day": 0.4166666666666667,
+    "settlement_warning": "No live maker fill is settled in canonical fact_trades; maker win/loss selection is not estimable yet."
+  },
+  "maker_stress": {
+    "price_assumption": "maker fills at trigger midpoint cap; no taker fee",
+    "fill_assumption": "stress expectation only; historical quote touch is not treated as a fill",
+    "taker_only": {
+      "cost_usd": 621.0216190000001,
+      "pnl_usd": 28.978381,
+      "roi": 0.04666243511242399
+    },
+    "scenarios": [
+      {
+        "scenario": "all_maker_fills",
+        "maker_fill_probability_win": 1.0,
+        "maker_fill_probability_loss": 1.0,
+        "expected_maker_fills": 136.0,
+        "maker_cost_usd": 606.9975,
+        "maker_pnl_usd": 43.0025,
+        "combined_cost_usd": 1228.019119,
+        "combined_pnl_usd": 71.980881,
+        "combined_roi": 0.05861544000928539
+      },
+      {
+        "scenario": "outcome_neutral_at_observed_fill_rate",
+        "maker_fill_probability_win": 0.4166666666666667,
+        "maker_fill_probability_loss": 0.4166666666666667,
+        "expected_maker_fills": 56.66666666666666,
+        "maker_cost_usd": 252.915625,
+        "maker_pnl_usd": 17.917708333333337,
+        "combined_cost_usd": 873.9372440000001,
+        "combined_pnl_usd": 46.896089333333336,
+        "combined_roi": 0.053660705794721035
+      },
+      {
+        "scenario": "max_loss_selected_at_same_overall_fill_rate",
+        "maker_fill_probability_win": 0.3897435897435898,
+        "maker_fill_probability_loss": 1.0,
+        "expected_maker_fills": 56.66666666666667,
+        "maker_cost_usd": 251.62383333333338,
+        "maker_pnl_usd": 1.7095000000000038,
+        "combined_cost_usd": 872.6454523333334,
+        "combined_pnl_usd": 30.687881000000004,
+        "combined_roi": 0.035166493927109625
+      },
+      {
+        "scenario": "losses_only_fill",
+        "maker_fill_probability_win": 0.0,
+        "maker_fill_probability_loss": 1.0,
+        "expected_maker_fills": 6.0,
+        "maker_cost_usd": 24.662499999999998,
+        "maker_pnl_usd": -24.662499999999998,
+        "combined_cost_usd": 645.6841190000001,
+        "combined_pnl_usd": 4.315881000000001,
+        "combined_roi": 0.006684198779248588
+      }
+    ]
+  },
+  "verdict": {
+    "maker_adverse_selection": "plausible_but_not_yet_estimable",
+    "reason": "all six taker losses were upward overshoots, exactly the path in which current-YES bids can be hit while the thesis deteriorates; live maker settlements are still zero",
+    "live_action": "do_not_size_up; keep maker and taker performance separate",
+    "hard_filter_action": "none; six post-hoc losses are insufficient",
+    "conclusion": "inconclusive"
+  },
+  "coverage_gate": {
+    "cache_checks": {
+      "/Users/deepsleep/projects/pm_agents/runtime/weather_edge_v1/clob_fills.jsonl": {
+        "cost_usd": 3993.14267,
+        "distinct_executions": 896,
+        "distinct_fill_ids": 1329,
+        "duplicate_physical_keys": 0,
+        "missing_order_cost_usd": 0.0,
+        "missing_order_rows": 0,
+        "multi_fill_executions": 269,
+        "over_order_cost_usd": 0.0,
+        "over_order_excess_cost_usd": 0.0,
+        "over_order_keys": 0,
+        "rows": 1329,
+        "sample_duplicate_physical_keys": [],
+        "sample_synthetic_fill_ids": [],
+        "synthetic_fill_rows": 0,
+        "top_over_order": []
+      }
+    },
+    "db": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+    "db_fill_cost_minus_fact_cost": 0.0,
+    "db_fills": {
+      "cost_usd": 3993.73267,
+      "distinct_executions": 896,
+      "distinct_fill_ids": 1329,
+      "duplicate_physical_keys": 0,
+      "missing_order_cost_usd": 0.0,
+      "missing_order_rows": 0,
+      "multi_fill_executions": 269,
+      "over_order_cost_usd": 0.0,
+      "over_order_excess_cost_usd": 0.0,
+      "over_order_keys": 0,
+      "rows": 1329,
+      "sample_duplicate_physical_keys": [],
+      "sample_synthetic_fill_ids": [],
+      "synthetic_fill_rows": 0,
+      "top_over_order": []
+    },
+    "db_vs_primary_cache": {
+      "cache_not_in_db": 0,
+      "db_cost_minus_cache_cost": 0.0,
+      "db_not_in_cache": 0,
+      "sample_cache_not_in_db": [],
+      "sample_db_not_in_cache": []
+    },
+    "fact_trades_live_real": {
+      "cost_usd": 3993.73267,
+      "executions": 896,
+      "fill_ids": 1329,
+      "rows": 1329
+    },
+    "fail_reasons": [
+      "clob_fills_have_unknown_fee_lineage"
+    ],
+    "fee_lineage": {
+      "invalid_maker_taker_lineage_rows": 0,
+      "known_matched_taker_zero_fee_without_adjustment": 0,
+      "lineage_counts": {
+        "estimate": 27,
+        "exact": 879,
+        "maker_zero": 422,
+        "unknown": 1
+      },
+      "rows": 1329,
+      "sample_invalid_maker_taker_lineage_rows": [],
+      "sample_unknown_fee_lineage_rows": [
+        {
+          "adjustment_rows": 0,
+          "base_fee_usd": 0.0,
+          "city": "Busan",
+          "effective_fee_source": "legacy_unknown",
+          "effective_fee_usd": 0.0,
+          "execution_id": "75e23c836de3e2f4ab51662f3b68c7b5fb738af90a8c0179ca9718a0478acefb",
+          "fee_adjustment_usd": 0.0,
+          "fee_evidence_class": null,
+          "fill_id": "7ab21f4e40a9f4c3fc4d76b19949f5c8223790a91c7d63c9d52c8ec957886789",
+          "filled_price": 0.15,
+          "filled_shares": 5.0,
+          "maker_only": 0,
+          "order_id": "0xd9edc94f8eae8f042d774c0a8d0a4df83028e7c0790db351a0e7655db26e6d28",
+          "order_side": "BUY_NO",
+          "place_status": "live",
+          "target_date": "2026-07-20"
+        }
+      ],
+      "unknown_fee_lineage_rows": 1
+    },
+    "gate_pass": false,
+    "order_caps": 1150,
+    "exit_code": 1
+  }
+}

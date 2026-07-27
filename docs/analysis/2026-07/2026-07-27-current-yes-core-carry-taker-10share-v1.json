@@ -1,0 +1,68 @@
+{
+  "target": "same OOF state universe and frozen probability model; compare five-share versus ten-share taker full-ladder execution",
+  "five_share_frozen": {
+    "city_days": 136,
+    "dates": 30,
+    "cities": 29,
+    "wins": 130,
+    "losses": 6,
+    "win_rate": 0.9558823529411765,
+    "avg_effective_cost": 0.9132670867647059,
+    "roi": 0.046662435112424,
+    "target_date_block_ci95": [
+      0.008923537424055182,
+      0.08053476367043308
+    ],
+    "signals_per_date": 4.533333333333333,
+    "signals_p90_date": 7.200000000000003,
+    "signals_max_date": 10
+  },
+  "ten_share_replay": {
+    "city_days": 134,
+    "dates": 30,
+    "cities": 29,
+    "wins": 128,
+    "losses": 6,
+    "win_rate": 0.9552238805970149,
+    "avg_effective_cost": 0.9142729332835822,
+    "roi": 0.04479072476351105,
+    "target_date_block_ci95": [
+      0.006348472724136629,
+      0.07927248081287622
+    ],
+    "signals_per_date": 4.466666666666667,
+    "signals_p90_date": 7.100000000000001,
+    "signals_max_date": 10
+  },
+  "same_entry_capacity": {
+    "five_share_entries": 136,
+    "ten_share_executable": 136,
+    "ten_share_positive_ev": 133,
+    "avg_extra_cost_per_share_where_executable": 0.0004441627205882382
+  },
+  "selection_overlap": {
+    "same_exact_entry": 133,
+    "five_only_exact_entry": 3,
+    "ten_only_exact_entry": 1
+  },
+  "risk_with_existing_additive_maker": {
+    "preliminary_live_maker_fill_rate": 0.4166666666666667,
+    "avg_loss_current_5_taker_plus_5_maker_if_both_fill": 8.37452333333333,
+    "avg_loss_proposed_10_taker_plus_5_maker_if_both_fill": 12.63863,
+    "loss_dollar_increase": 4.2641066666666685,
+    "loss_multiplier": 1.5091760446465217,
+    "expected_daily_cost_current": 29.13124146666667,
+    "expected_daily_cost_proposed": 49.152420186666674
+  },
+  "verdict": {
+    "conclusion": "inconclusive_for_live_size_up",
+    "significance": "PASS for historical absolute ROI",
+    "baseline": "unchanged_from_frozen_report",
+    "forward": "FAIL; current live settlements and maker selection are insufficient",
+    "deployment_blockers": [
+      "runtime contract currently requires exactly 5 taker + 5 maker",
+      "daily cost precheck is hard-coded to 10 shares and would undercount a 10+5 configuration"
+    ],
+    "action": "keep 5 taker + 5 maker; do not deploy 10 taker yet"
+  }
+}
