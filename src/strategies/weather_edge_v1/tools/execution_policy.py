@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
+
+from src.strategies.weather_edge_v1.execution.quote_engine import round_price_to_tick
 
 
 def _safe_str(value: Any) -> str:
@@ -743,5 +746,9 @@ def build_execution_quotes(
 
 def price_to_tick(price: float, tick_size: float, *, side: str = "BUY") -> float:
     if side.upper().strip() == "SELL":
-        return round(_round_up_to_tick(price, tick_size), 6)
-    return round(_round_down_to_tick(price, tick_size), 6)
+        if tick_size <= 0:
+            return round(price, 6)
+        return round(float(round_price_to_tick(Decimal(str(price)), Decimal(str(tick_size)), venue_side="SELL")), 6)
+    if tick_size <= 0:
+        return round(price, 6)
+    return round(float(round_price_to_tick(Decimal(str(price)), Decimal(str(tick_size)), venue_side="BUY")), 6)

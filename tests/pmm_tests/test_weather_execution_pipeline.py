@@ -224,6 +224,19 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
         self.assertEqual(plan["order_lifecycle_policy"], "maker_until_data_update")
         self.assertEqual(plan["cancel_buffer_sec"], 180)
 
+    def test_strategy_specific_multi_leg_profile_is_not_silently_flattened(self):
+        signal = normalize_signal(self._paper_decision())
+        assert signal is not None
+        with self.assertRaisesRegex(ValueError, "multi-leg orchestrator"):
+            build_trade_plan(
+                signal,
+                PlannerConfig(
+                    max_order_notional=2.0,
+                    min_edge=0.10,
+                    execution_profile="split_taker_maker_chase_v1",
+                ),
+            )
+
     def test_maker_queue_v2_policy_rejects_wide_spread_when_edge_is_thin(self):
         signal = normalize_signal(
             {
@@ -780,6 +793,46 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             self.assertEqual(row["status"], "cancelled")
             self.assertEqual(row["execution_action"], "maker_lifecycle_cancel_stale_thesis")
 
+    def test_cancel_only_terminal_unknown_is_not_retried_as_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "allow_duplicate_signal_id": True,
+                "execution_action": "maker_lifecycle_cancel_stale_thesis",
+                "cancel_only": True,
+                "cancel_before_order_id": "old-order-1",
+                "source_order_id": "old-order-1",
+                "paper_enabled": False,
+            }
+            plans = Path(tmp) / "plans.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=Path(tmp) / "paper.jsonl",
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=None,
+                live_cancel_fn=lambda order_id: {
+                    "cancel": {
+                        "canceled": [],
+                        "not_canceled": {order_id: "order can't be found - already canceled or matched"},
+                    }
+                },
+            )
+
+            self.assertEqual(result["live_guard_blocks"], 0)
+            row = json.loads(live.read_text().splitlines()[-1])
+            self.assertEqual(row["status"], "cancelled")
+            self.assertEqual(
+                row["exchange_response"]["error_classification"],
+                "source_order_terminal_no_cancel_needed",
+            )
+
     def test_live_order_persists_decision_snapshot_timestamp(self):
         with tempfile.TemporaryDirectory() as tmp:
             signal = normalize_signal(self._paper_decision())
@@ -830,7 +883,7 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
                 live_cancel_fn=lambda order_id: {
                     "cancel": {
                         "canceled": [],
-                        "not_canceled": {order_id: "order can't be found - already canceled or matched"},
+                        "not_canceled": {order_id: "temporary cancel failure"},
                     }
                 },
             )
@@ -841,7 +894,48 @@ class TestWeatherExecutionPipeline(unittest.TestCase):
             rows = [json.loads(line) for line in live.read_text().splitlines()]
             self.assertEqual(rows[-1]["status"], "blocked")
             self.assertEqual(rows[-1]["exchange_response"]["error_classification"], "pre_place_cancel_not_confirmed")
-            self.assertIn("already canceled or matched", rows[-1]["exchange_response"]["error_reason"])
+            self.assertIn("temporary cancel failure", rows[-1]["exchange_response"]["error_reason"])
+
+    def test_terminal_unknown_source_order_never_places_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            signal = normalize_signal(self._paper_decision())
+            assert signal is not None
+            plan = build_trade_plan(signal, PlannerConfig(max_order_notional=2.0, min_edge=0.10, live_enabled=True))
+            plan = {
+                **plan,
+                "allow_duplicate_signal_id": True,
+                "execution_action": "maker_lifecycle_reprice_maker",
+                "cancel_before_order_id": "old-order-1",
+                "source_order_id": "old-order-1",
+                "replacement_requires_order_state": True,
+            }
+            plans = Path(tmp) / "plans.jsonl"
+            live = Path(tmp) / "live.jsonl"
+            plans.write_text(json.dumps(plan) + "\n")
+            placed = []
+
+            result = execute_trade_plans(
+                plan_path=plans,
+                paper_out=Path(tmp) / "paper.jsonl",
+                live_out=live,
+                config=ExecutorConfig(live=True, confirm_live=True),
+                live_place_fn=lambda child: placed.append(child) or {"order_id": "replacement"},
+                live_cancel_fn=lambda order_id: {
+                    "cancel": {
+                        "canceled": [],
+                        "not_canceled": {order_id: "order can't be found - already canceled or matched"},
+                    }
+                },
+            )
+
+            self.assertEqual(placed, [])
+            self.assertEqual(result["live_guard_blocks"], 1)
+            row = json.loads(live.read_text().splitlines()[-1])
+            self.assertEqual(row["status"], "cancelled")
+            self.assertEqual(
+                row["exchange_response"]["error_classification"],
+                "source_order_terminal_no_replacement",
+            )
 
     def test_execute_trade_plans_blocks_partial_fill_replacement_below_exchange_minimum(self):
         with tempfile.TemporaryDirectory() as tmp:

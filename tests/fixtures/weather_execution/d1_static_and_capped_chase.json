@@ -1,0 +1,31 @@
+{
+  "fixture_version": "weather_execution_phase0_v1",
+  "source": "deterministic old-runner inputs from test_d1_yes_high_mid_shadow_v1.py",
+  "case": "d1 static versus capped maker chase",
+  "input": {
+    "city": "Amsterdam",
+    "target_date": "2026-07-16",
+    "maker_size": 5.0,
+    "posted_price": 0.901,
+    "initial_mid_cap": 0.915,
+    "fresh_bid": 0.92,
+    "fresh_ask": 0.93
+  },
+  "expected": {
+    "chase": {
+      "execution_profile": "d1_taker_plus_maker_chase_to_mid_v1",
+      "action": "d1_maker_reprice",
+      "maker_reprice_policy": "follow_best_bid",
+      "next_price": 0.915,
+      "maker_only": true,
+      "replacement_requires_order_state": true
+    },
+    "static": {
+      "execution_profile": "d1_taker_plus_maker_static_v1",
+      "action": "",
+      "maker_reprice_policy": "none",
+      "blocker": "d1_maker_resting_until_pre_data_update_deadline",
+      "replacement_plan_count": 0
+    }
+  }
+}

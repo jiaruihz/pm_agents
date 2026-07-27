@@ -1,0 +1,37 @@
+{
+  "fixture_version": "weather_execution_phase0_v1",
+  "source": "deterministic fake-place/fresh-book inputs from test_weather_fast_source_prev_no_trial.py",
+  "case": "fast-source short post-only GTD crossing retry",
+  "input": {
+    "token_id": "fixture-no-token",
+    "requested_shares": 10.0,
+    "initial_best_ask": 0.67,
+    "initial_limit_price": 0.66,
+    "tick_size": 0.01,
+    "fresh_retry_best_ask": 0.64,
+    "max_no_ask": 0.94,
+    "immediate_reprices": 2
+  },
+  "expected": {
+    "order_type": "GTD",
+    "order_mode": "post_only_gtd_buy_shares",
+    "attempts": [
+      {
+        "status": "submit_failed",
+        "post_only_crossing": true,
+        "limit_price": 0.66
+      },
+      {
+        "status": "submitted",
+        "best_ask": 0.64,
+        "limit_price": 0.63,
+        "shares": 10.0
+      }
+    ],
+    "result": {
+      "live_order_posted": true,
+      "actual_fill_shares": null,
+      "exchange_order_status": "live"
+    }
+  }
+}

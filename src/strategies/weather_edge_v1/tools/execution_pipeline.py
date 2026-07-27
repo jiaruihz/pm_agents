@@ -236,6 +236,10 @@ def resolve_execution_profile(config: PlannerConfig) -> PlannerConfig:
     if not safe_str(config.execution_profile):
         return config
     profile = get_execution_profile(config.execution_profile)
+    if not profile.planner_supported or len(profile.legs) != 1:
+        raise ValueError(
+            f"execution profile {profile.name!r} requires its strategy-specific multi-leg orchestrator"
+        )
     return replace(
         config,
         execution_policy=profile.execution_policy,
@@ -635,6 +639,37 @@ def _terminal_order_status_from_cancel_response(response: Dict[str, Any]) -> str
         status = safe_str(state.get("status")).upper()
         if status in {"MATCHED", "CANCELED", "CANCELLED", "EXPIRED"}:
             return status
+    return ""
+
+
+def terminal_order_resolution_from_cancel_response(
+    response: Dict[str, Any],
+    order_id: str,
+) -> str:
+    """Return terminal evidence that is safe for *no replacement*.
+
+    CLOB sometimes drops a completed order from ``get_order`` and answers a
+    later cancel with "already canceled or matched".  That is deliberately
+    not enough evidence to place a replacement because matched and canceled
+    imply different remaining sizes.  It is, however, enough to stop retrying
+    a cancel-only action: either outcome is terminal for the source order.
+    """
+
+    status = _terminal_order_status_from_cancel_response(response)
+    if status:
+        return f"order_terminal_{status.lower()}"
+    if not isinstance(response, dict):
+        return ""
+    payload = response.get("cancel") if isinstance(response.get("cancel"), dict) else response
+    not_canceled = payload.get("not_canceled") if isinstance(payload, dict) else None
+    reason = ""
+    if isinstance(not_canceled, dict):
+        reason = safe_str(not_canceled.get(safe_str(order_id)))
+    elif isinstance(not_canceled, list) and safe_str(order_id) in {safe_str(x) for x in not_canceled}:
+        reason = "not_canceled"
+    normalized = reason.lower().replace("cancelled", "canceled")
+    if "already canceled or matched" in normalized:
+        return "exchange_reports_already_canceled_or_matched"
     return ""
 
 
@@ -1332,26 +1367,47 @@ def execute_trade_plans(
             try:
                 cancel_response = live_cancel_fn(cancel_order_id)
                 cancel_ok, cancel_reason = cancel_response_allows_replacement(cancel_response, cancel_order_id)
+                terminal_reason = (
+                    "" if cancel_ok else terminal_order_resolution_from_cancel_response(cancel_response, cancel_order_id)
+                )
             except Exception as exc:
                 cancel_response = {"error": f"{type(exc).__name__}: {exc}"}
                 cancel_ok, cancel_reason = False, "cancel_only_request_failed"
+                terminal_reason = ""
+            terminal_no_cancel_needed = bool(terminal_reason)
             response = {
                 "pre_place_cancel_order_id": cancel_order_id,
                 "pre_place_cancel_response": cancel_response,
-                "pre_place_cancel_status": "cancel_confirmed" if cancel_ok else "not_confirmed",
+                "pre_place_cancel_status": (
+                    "cancel_confirmed"
+                    if cancel_ok
+                    else "terminal_no_cancel_needed"
+                    if terminal_no_cancel_needed
+                    else "not_confirmed"
+                ),
                 "requested_price": 0.0,
                 "posted_price": 0.0,
-                "quote_status": "cancelled" if cancel_ok else "rejected",
-                "quote_reason": safe_str(plan.get("quote_reason")) or cancel_reason,
-                "error_classification": "" if cancel_ok else "cancel_only_not_confirmed",
-                "error_reason": "" if cancel_ok else cancel_reason,
+                "quote_status": "cancelled" if cancel_ok or terminal_no_cancel_needed else "rejected",
+                "quote_reason": terminal_reason or safe_str(plan.get("quote_reason")) or cancel_reason,
+                "error_classification": (
+                    ""
+                    if cancel_ok
+                    else "source_order_terminal_no_cancel_needed"
+                    if terminal_no_cancel_needed
+                    else "cancel_only_not_confirmed"
+                ),
+                "error_reason": "" if cancel_ok or terminal_no_cancel_needed else cancel_reason,
             }
-            record = build_live_order_record(plan, response, status="cancelled" if cancel_ok else "blocked")
+            record = build_live_order_record(
+                plan,
+                response,
+                status="cancelled" if cancel_ok or terminal_no_cancel_needed else "blocked",
+            )
             live_orders.append(record)
             result = append_jsonl_dedup(live_out, [record], key_field="execution_id")
             live_result["written"] += result["written"]
             live_result["skipped_existing"] += result["skipped_existing"]
-            if not cancel_ok:
+            if not cancel_ok and not terminal_no_cancel_needed:
                 live_guard_blocks += 1
             continue
         lifecycle_reason = lifecycle_guard_reason(plan)
@@ -1417,22 +1473,36 @@ def execute_trade_plans(
                     cancel_before_order_id,
                 )
                 if not cancel_ok:
+                    terminal_reason = terminal_order_resolution_from_cancel_response(
+                        pre_place_cancel_response,
+                        cancel_before_order_id,
+                    )
                     live_guard_blocks += 1
                     record = build_live_order_record(
                         plan,
                         {
-                            "error_classification": "pre_place_cancel_not_confirmed",
-                            "error_reason": cancel_reason,
-                            "error": f"pre_place_cancel_not_confirmed: {cancel_reason}",
+                            "error_classification": (
+                                "source_order_terminal_no_replacement"
+                                if terminal_reason
+                                else "pre_place_cancel_not_confirmed"
+                            ),
+                            "error_reason": "" if terminal_reason else cancel_reason,
+                            "error": (
+                                terminal_reason
+                                if terminal_reason
+                                else f"pre_place_cancel_not_confirmed: {cancel_reason}"
+                            ),
                             "pre_place_cancel_order_id": cancel_before_order_id,
                             "pre_place_cancel_response": pre_place_cancel_response,
-                            "pre_place_cancel_status": "not_confirmed",
+                            "pre_place_cancel_status": (
+                                "terminal_no_replacement" if terminal_reason else "not_confirmed"
+                            ),
                             "requested_price": to_float(plan.get("limit_price"), 0.0),
                             "posted_price": 0.0,
-                            "quote_status": "rejected",
-                            "quote_reason": "pre_place_cancel_not_confirmed",
+                            "quote_status": "cancelled" if terminal_reason else "rejected",
+                            "quote_reason": terminal_reason or "pre_place_cancel_not_confirmed",
                         },
-                        status="blocked",
+                        status="cancelled" if terminal_reason else "blocked",
                     )
                     live_orders.append(record)
                     result = append_jsonl_dedup(live_out, [record], key_field="execution_id")

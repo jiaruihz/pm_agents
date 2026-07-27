@@ -1,0 +1,116 @@
+{
+  "schema_version": "weather_execution_phase0_baseline_v1",
+  "captured_at_utc": "2026-07-26T08:57:16Z",
+  "fixture_window": {
+    "target_date_start": "2026-07-11",
+    "target_date_end": "2026-07-24",
+    "basis": "canonical target_date joins; fixtures themselves use deterministic unit inputs only"
+  },
+  "git": {
+    "workspace_commit": "67add54e99e89f87871c2bcdcd2f05a91e5f45ff",
+    "production_commit": "ca22b1f712f0f317c872bcd64c71fbdfc75497af",
+    "workspace_production_drift": "different commits; both worktrees were already dirty at capture time",
+    "production_checkout_modified": false
+  },
+  "client_protocol": {
+    "observed_client": "py_clob_client_v2",
+    "observed_protocol": "post_only_gtd_buy_shares / GTD",
+    "evidence": "sanitized fast-source runtime order fields",
+    "installed_distribution_version": null,
+    "version_evidence_gap": "production venv importlib metadata did not expose py-clob-client distributions; do not infer a package version"
+  },
+  "id_authority": {
+    "source": "src/strategies/weather_edge_v1/ids.py plus canonical migration tests",
+    "canonical_plan_id": "make_plan_id(run_id, signal_id, canonical_order_side, execution_policy, optional execution_profile, optional child_order_role)",
+    "canonical_execution_id": "preserve raw execution_id when present; otherwise make_execution_id(run_id, canonical_plan_id, venue, stable_attempt_key)",
+    "legacy_raw_plan_id": "source mapping only; not canonical authority"
+  },
+  "side_authority": {
+    "canonical_field": "order_side",
+    "canonical_values": ["BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO"],
+    "legacy_mapping": "BUY or empty plus signal outcome maps to BUY_<outcome>; SELL plus signal outcome maps to SELL_<outcome>; canonical four-value input passes through",
+    "venue_outcome_projection": "BUY_YES -> venue_side=BUY,outcome_side=YES; BUY_NO -> BUY,NO; SELL_YES -> SELL,YES; SELL_NO -> SELL,NO",
+    "source": "weather_dashboard/legacy_migration/live_cycle.py and strategy_runtime_orders.py"
+  },
+  "profile_inventory": {
+    "all_registered_names": [
+      "taker_now_v1",
+      "single_side_maker_v1",
+      "d1_taker_only_v1",
+      "d1_taker_plus_maker_static_v1",
+      "d1_taker_plus_maker_chase_to_mid_v1",
+      "split_taker_maker_chase_v1"
+    ],
+    "planner_supported_names": ["taker_now_v1", "single_side_maker_v1"]
+  },
+  "runner_inventory": [
+    {
+      "runner": "current_yes_core_carry_tiny_live_v2",
+      "classification": "live",
+      "evidence": "running process used --live --confirm-live; sanitized summary live_enabled=true; registry expected_live=1",
+      "launcher": "scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh",
+      "journals": ["current_plans.jsonl", "live_orders.jsonl", "live_orders_cancels.jsonl", "maker_lifecycle_decisions.jsonl"]
+    },
+    {
+      "runner": "fast_source_prev_no_trial_v1",
+      "classification": "live_with_shadow_routing",
+      "evidence": "running process used --live --confirm-live; sanitized journal shows py_clob_client_v2 GTD post-only evidence; registry expected_live=1",
+      "launcher": null,
+      "journals": ["events.jsonl", "opportunities.jsonl", "orders.jsonl", "latest_summary.json"]
+    },
+    {
+      "runner": "low_price_yes_lottery_tiny_live_v1",
+      "classification": "shadow_with_registry_conflict",
+      "evidence": "running process was started with --shadow; registry labels instance live/expected_live=1",
+      "launcher": "scripts/ops/start_low_price_yes_lottery_tiny_live.sh --shadow",
+      "journals": "not captured; no production file was read for fixture content"
+    },
+    {
+      "runner": "current_yes_heat_death_shadow_v1",
+      "classification": "shadow_with_runtime_status_conflict",
+      "evidence": "running zero-notional shadow process and sanitized summary status=ok; canonical runtime table still reported stopped/stale",
+      "launcher": "scripts/ops/start_weather_current_yes_heat_death_shadow_v1.sh",
+      "journals": ["state_decisions.jsonl", "latest_summary.json"]
+    },
+    {
+      "runner": "d1_yes_high_mid_live_v1",
+      "classification": "disabled_paused",
+      "evidence": "registry desired_status=paused and no matching runner process at capture time",
+      "launcher": "scripts/ops/start_d1_yes_high_mid_live.sh",
+      "journals": "not read; no active process evidence"
+    }
+  ],
+  "canonical_baseline_counts": {
+    "signals": 496,
+    "plans": 796,
+    "orders": 1613,
+    "fills": 161,
+    "settled_fills": 161,
+    "settled_pnl_usd": -23.158755
+  },
+  "fixtures": [
+    "core_carry_capped_chase.json",
+    "d1_static_and_capped_chase.json",
+    "fast_source_gtd_and_retry.json",
+    "heat_death_chase_and_fallback.json",
+    "low_price_repost_and_fallback.json"
+  ],
+  "tests": {
+    "status": "passed",
+    "focused_execution_runner_reporting": {
+      "command_scope": "fixture contract, profile inventory, IDs, shared execution pipeline/proxy/tick, five runner parity suites, coverage/report chain",
+      "result": "170 passed in 0.89s"
+    },
+    "canonical_authority": {
+      "command_scope": "weather IDs, strategy runtime order migration, canonical ingest, canonical contract",
+      "result": "26 passed in 6.23s",
+      "note": "test_weather_ids.py was intentionally rerun in this authority-specific group"
+    },
+    "static_checks": {
+      "git_diff_check": "passed",
+      "fixture_json_parse": "6 files parsed",
+      "weather_docs_check": "passed"
+    }
+  },
+  "secrets": "none; no wallet, credential, token identifier, raw live payload, exchange response payload, or order identifier is included"
+}

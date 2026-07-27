@@ -1,37 +1,144 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Mapping
+
+from .contracts import (
+    ExecutionContractError,
+    ExecutionLegProfile,
+    ExecutionProfile,
+    JsonContract,
+    make_execution_config_id,
+)
 
 
 @dataclass(frozen=True)
-class ExecutionProfile:
-    name: str
-    execution_policy: str
-    order_lifecycle_policy: str
-    cancel_buffer_sec: int
-    maker_only: bool
+class ProfileResolution(JsonContract):
+    execution_profile: str
+    resolved_execution_profile: str
+    profile: ExecutionProfile
 
 
 _PROFILES = {
     "taker_now_v1": ExecutionProfile(
         name="taker_now_v1",
-        execution_policy="taker_top_ask_v1",
-        order_lifecycle_policy="taker_now",
+        legs=(
+            ExecutionLegProfile(
+                role="single",
+                execution_policy="taker_top_ask_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+            ),
+        ),
         cancel_buffer_sec=0,
-        maker_only=False,
+        allocation_policy="all_taker",
     ),
     "single_side_maker_v1": ExecutionProfile(
         name="single_side_maker_v1",
-        execution_policy="maker_queue_v2",
-        order_lifecycle_policy="maker_until_data_update",
+        legs=(
+            ExecutionLegProfile(
+                role="single",
+                execution_policy="maker_queue_v2",
+                order_lifecycle_policy="maker_until_data_update",
+                maker_only=True,
+            ),
+        ),
         cancel_buffer_sec=90,
-        maker_only=True,
+        allocation_policy="all_maker",
+    ),
+    "d1_taker_only_v1": ExecutionProfile(
+        name="d1_taker_only_v1",
+        legs=(
+            ExecutionLegProfile(
+                role="taker",
+                execution_policy="d1_yes_high_mid_taker_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+            ),
+        ),
+        cancel_buffer_sec=0,
+        planner_supported=False,
+        allocation_policy="all_taker",
+    ),
+    "d1_taker_plus_maker_static_v1": ExecutionProfile(
+        name="d1_taker_plus_maker_static_v1",
+        legs=(
+            ExecutionLegProfile(
+                role="taker",
+                execution_policy="d1_yes_high_mid_taker_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+                share_fraction=0.5,
+            ),
+            ExecutionLegProfile(
+                role="maker",
+                execution_policy="d1_yes_high_mid_maker_v1",
+                order_lifecycle_policy="maker_until_data_update",
+                maker_only=True,
+                share_fraction=0.5,
+                price_cap_policy="initial_mid",
+            ),
+        ),
+        cancel_buffer_sec=90,
+        planner_supported=False,
+        allocation_policy="fixed_weight_split",
+    ),
+    "d1_taker_plus_maker_chase_to_mid_v1": ExecutionProfile(
+        name="d1_taker_plus_maker_chase_to_mid_v1",
+        legs=(
+            ExecutionLegProfile(
+                role="taker",
+                execution_policy="d1_yes_high_mid_taker_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+                share_fraction=0.5,
+            ),
+            ExecutionLegProfile(
+                role="maker",
+                execution_policy="d1_yes_high_mid_maker_v1",
+                order_lifecycle_policy="maker_until_data_update",
+                maker_only=True,
+                share_fraction=0.5,
+                reprice_policy="follow_best_bid",
+                price_cap_policy="initial_mid",
+                max_reprices=3,
+            ),
+        ),
+        cancel_buffer_sec=90,
+        planner_supported=False,
+        allocation_policy="fixed_weight_split",
+    ),
+    "split_taker_maker_chase_v1": ExecutionProfile(
+        name="split_taker_maker_chase_v1",
+        legs=(
+            ExecutionLegProfile(
+                role="taker",
+                execution_policy="current_yes_heat_death_taker_probe_v1",
+                order_lifecycle_policy="taker_now",
+                maker_only=False,
+                share_fraction=0.5,
+            ),
+            ExecutionLegProfile(
+                role="maker",
+                execution_policy="current_yes_heat_death_maker_probe_v1",
+                order_lifecycle_policy="maker_chase_then_taker_fallback_v1",
+                maker_only=True,
+                share_fraction=0.5,
+            ),
+        ),
+        cancel_buffer_sec=0,
+        planner_supported=False,
+        allocation_policy="fixed_weight_split",
     ),
 }
 
+# Alias values are (resolved profile name, fixture identity). Keep this empty
+# until a historical name is proven fixture-identical to a registered bundle.
+_PROFILE_ALIASES: dict[str, tuple[str, str]] = {}
+
 
 def execution_profile_names() -> tuple[str, ...]:
-    return tuple(_PROFILES)
+    return tuple(name for name, profile in _PROFILES.items() if profile.planner_supported)
 
 
 def get_execution_profile(name: str) -> ExecutionProfile:
@@ -40,3 +147,48 @@ def get_execution_profile(name: str) -> ExecutionProfile:
         return _PROFILES[key]
     except KeyError as exc:
         raise ValueError(f"unknown execution profile: {name!r}") from exc
+
+
+def profile_fixture_identity(profile: ExecutionProfile) -> str:
+    """Return the immutable behavior fingerprint used to guard aliases."""
+    return make_execution_config_id(
+        resolved_execution_profile=profile.name,
+        fixed_behavior=profile.fixed_behavior(),
+    )
+
+
+def resolve_execution_profile(name: str) -> ProfileResolution:
+    configured_name = str(name or "").strip()
+    key = configured_name.lower()
+    if not key:
+        raise ValueError("unknown execution profile: ''")
+    alias = _PROFILE_ALIASES.get(key)
+    if alias is None:
+        profile = get_execution_profile(key)
+        return ProfileResolution(
+            execution_profile=configured_name,
+            resolved_execution_profile=profile.name,
+            profile=profile,
+        )
+
+    resolved_name, expected_fixture_identity = alias
+    profile = get_execution_profile(resolved_name)
+    if profile_fixture_identity(profile) != expected_fixture_identity:
+        raise ExecutionContractError(f"profile alias {configured_name!r} is not fixture-identical to {resolved_name!r}")
+    return ProfileResolution(
+        execution_profile=configured_name,
+        resolved_execution_profile=profile.name,
+        profile=profile,
+    )
+
+
+def execution_config_id_for_profile(
+    name: str,
+    *,
+    profile_parameters: Mapping[str, Any] | None = None,
+) -> str:
+    resolution = resolve_execution_profile(name)
+    return make_execution_config_id(
+        resolved_execution_profile=resolution.resolved_execution_profile,
+        fixed_behavior=resolution.profile.fixed_behavior(profile_parameters),
+    )

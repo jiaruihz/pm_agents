@@ -75,17 +75,27 @@ def make_plan_id(
     signal_id: Any,
     order_side: Any,
     execution_policy: Any,
+    execution_profile: Any = "",
+    child_order_role: Any = "",
 ) -> str:
     side = _clean(order_side, "order_side").upper()
     if side not in {"BUY_YES", "BUY_NO", "SELL_YES", "SELL_NO"}:
         raise WeatherIdError("order_side must be BUY_YES, BUY_NO, SELL_YES, or SELL_NO")
 
-    return _sha256_joined([
+    identity = [
         _clean(run_id, "run_id"),
         _clean(signal_id, "signal_id").lower(),
         side,
         _clean(execution_policy, "execution_policy"),
-    ])
+    ]
+    # Legacy single-leg plans keep their historical IDs.  Profile-aware or
+    # split plans add their stable module/leg identity so two child plans from
+    # one signal cannot collapse onto the same canonical row.
+    profile = str(execution_profile or "").strip()
+    role = str(child_order_role or "").strip()
+    if profile or role:
+        identity.extend([profile or "legacy_unprofiled", role or "single"])
+    return _sha256_joined(identity)
 
 
 def make_plan_id_from_row(row: Mapping[str, Any]) -> str:
@@ -94,6 +104,8 @@ def make_plan_id_from_row(row: Mapping[str, Any]) -> str:
         signal_id=row.get("signal_id"),
         order_side=row.get("order_side"),
         execution_policy=row.get("execution_policy"),
+        execution_profile=row.get("execution_profile"),
+        child_order_role=row.get("child_order_role"),
     )
 
 
