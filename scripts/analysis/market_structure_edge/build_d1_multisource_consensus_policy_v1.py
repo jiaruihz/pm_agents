@@ -5,12 +5,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from weather_data_feed_service.legacy_weather_predict.city_pools import (  # noqa: E402
+    FULL_CITY_CONFIGS,
+)
 DEFAULT_INPUT = (
     ROOT
     / "docs/analysis/2026-07/generated/"
@@ -21,6 +29,27 @@ DEFAULT_OUTPUT = (
 )
 DEFAULT_CUTOFF = "2026-07-07"
 MIN_DATES = 20
+
+
+def model_geography_is_valid(city: str, model_key: str) -> bool:
+    cfg = FULL_CITY_CONFIGS.get(city) or {}
+    lat = float(cfg.get("lat", math.nan))
+    lon = float(cfg.get("lon", math.nan))
+    if not math.isfinite(lat) or not math.isfinite(lon):
+        return False
+    if model_key in {
+        "ncep_hrrr_conus",
+        "ncep_nbm_conus",
+        "ncep_nam_conus",
+        "gem_regional",
+        "gem_hrdps_continental",
+    }:
+        return 15.0 <= lat <= 75.0 and -170.0 <= lon <= -45.0
+    if model_key in {"icon_eu", "icon_d2"}:
+        return 25.0 <= lat <= 72.0 and -25.0 <= lon <= 45.0
+    if model_key == "meteofrance_arome_france_hd":
+        return 38.0 <= lat <= 56.0 and -12.0 <= lon <= 16.0
+    return True
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,6 +65,12 @@ def main() -> None:
     rows = pd.read_csv(args.input)
     rows["target_date"] = rows["target_date"].astype(str)
     rows = rows[rows["target_date"].le(args.cutoff)].copy()
+    rows = rows[
+        [
+            model_geography_is_valid(str(row.city), str(row.model_key))
+            for row in rows.itertuples(index=False)
+        ]
+    ].copy()
     summary = (
         rows.groupby(
             ["city", "model_key", "model_label", "provider", "tier"],
@@ -61,6 +96,7 @@ def main() -> None:
         "correction_formula": "corrected_forecast_f = forecast_max_f + bias_correction_f",
         "consensus_formula": "median(corrected_forecast_f across eligible models)",
         "spread_formula": "q75(corrected_forecast_f) - q25(corrected_forecast_f)",
+        "regional_model_policy": "geographic_domain_filter_v1",
         "records": records,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

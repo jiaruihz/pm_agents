@@ -7,6 +7,7 @@
   "correction_formula": "corrected_forecast_f = forecast_max_f + bias_correction_f",
   "consensus_formula": "median(corrected_forecast_f across eligible models)",
   "spread_formula": "q75(corrected_forecast_f) - q25(corrected_forecast_f)",
+  "regional_model_policy": "geographic_domain_filter_v1",
   "records": [
     {
       "city": "Amsterdam",
@@ -43,18 +44,6 @@
       "median_bias_correction_f": 0.4,
       "mae_f": 1.6745454545,
       "residual_std_f": 2.0385807435
-    },
-    {
-      "city": "Amsterdam",
-      "model_key": "gem_regional",
-      "model_label": "RDPS",
-      "provider": "ECCC",
-      "tier": "regional_north_america",
-      "dates": 41,
-      "bias_correction_f": -0.0634146341,
-      "median_bias_correction_f": 0.2,
-      "mae_f": 1.6243902439,
-      "residual_std_f": 1.996842019
     },
     {
       "city": "Amsterdam",
@@ -1870,18 +1859,6 @@
     },
     {
       "city": "Helsinki",
-      "model_key": "gem_regional",
-      "model_label": "RDPS",
-      "provider": "ECCC",
-      "tier": "regional_north_america",
-      "dates": 41,
-      "bias_correction_f": 0.3902439024,
-      "median_bias_correction_f": 0.4,
-      "mae_f": 1.243902439,
-      "residual_std_f": 1.5856867405
-    },
-    {
-      "city": "Helsinki",
       "model_key": "gem_seamless",
       "model_label": "GEM",
       "provider": "ECCC",
@@ -2755,18 +2732,6 @@
       "median_bias_correction_f": 0.9,
       "mae_f": 1.6507936508,
       "residual_std_f": 1.9713968474
-    },
-    {
-      "city": "London",
-      "model_key": "gem_regional",
-      "model_label": "RDPS",
-      "provider": "ECCC",
-      "tier": "regional_north_america",
-      "dates": 41,
-      "bias_correction_f": 1.243902439,
-      "median_bias_correction_f": 1.3,
-      "mae_f": 1.5609756098,
-      "residual_std_f": 1.3872722841
     },
     {
       "city": "London",
@@ -3994,18 +3959,6 @@
     },
     {
       "city": "PanamaCity",
-      "model_key": "gem_regional",
-      "model_label": "RDPS",
-      "provider": "ECCC",
-      "tier": "regional_north_america",
-      "dates": 40,
-      "bias_correction_f": 0.0625,
-      "median_bias_correction_f": -0.15,
-      "mae_f": 1.7525,
-      "residual_std_f": 2.2215364861
-    },
-    {
-      "city": "PanamaCity",
       "model_key": "gem_seamless",
       "model_label": "GEM",
       "provider": "ECCC",
@@ -4111,18 +4064,6 @@
       "median_bias_correction_f": 1.2,
       "mae_f": 1.4333333333,
       "residual_std_f": 1.3653791095
-    },
-    {
-      "city": "Paris",
-      "model_key": "gem_regional",
-      "model_label": "RDPS",
-      "provider": "ECCC",
-      "tier": "regional_north_america",
-      "dates": 41,
-      "bias_correction_f": 1.3731707317,
-      "median_bias_correction_f": 1.6,
-      "mae_f": 1.587804878,
-      "residual_std_f": 1.3382870376
     },
     {
       "city": "Paris",
@@ -5251,18 +5192,6 @@
       "median_bias_correction_f": 0.8,
       "mae_f": 1.4603174603,
       "residual_std_f": 1.529140062
-    },
-    {
-      "city": "Warsaw",
-      "model_key": "gem_regional",
-      "model_label": "RDPS",
-      "provider": "ECCC",
-      "tier": "regional_north_america",
-      "dates": 41,
-      "bias_correction_f": -1.4609756098,
-      "median_bias_correction_f": -1.1,
-      "mae_f": 1.5682926829,
-      "residual_std_f": 1.2887742333
     },
     {
       "city": "Warsaw",
