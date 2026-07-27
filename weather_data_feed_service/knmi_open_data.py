@@ -19,6 +19,7 @@ from weather_data_feed_service.io_utils import append_jsonl, read_json, write_js
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "knmi_open_data"
+TEN_MINUTE_SECONDS = 600.0
 
 
 def _previous_records(output_dir: Path) -> list[dict[str, Any]]:
@@ -40,6 +41,31 @@ def _previous_records(output_dir: Path) -> list[dict[str, Any]]:
     return [row] if isinstance(row, dict) else []
 
 
+def adaptive_poll_delay(
+    now: datetime,
+    *,
+    hot_window_start_sec: float = 205.0,
+    hot_window_end_sec: float = 260.0,
+    hot_interval_sec: float = 10.0,
+    cold_interval_sec: float = 300.0,
+) -> float:
+    """Return a delay aligned to KNMI's observed +03:25..+04:20 release window."""
+    phase = (
+        (now.minute % 10) * 60
+        + now.second
+        + now.microsecond / 1_000_000
+    )
+    if hot_window_start_sec <= phase <= hot_window_end_sec:
+        return max(1.0, hot_interval_sec)
+    until_hot = (hot_window_start_sec - phase) % TEN_MINUTE_SECONDS
+    return max(1.0, min(cold_interval_sec, until_hot or TEN_MINUTE_SECONDS))
+
+
+def _trim_revisions(revisions: dict[str, str], limit: int = 1100) -> dict[str, str]:
+    """Keep enough filename revisions for KNMI's documented seven-day repair window."""
+    return dict(sorted(revisions.items())[-limit:])
+
+
 def collect_once(
     *,
     output_dir: Path,
@@ -49,19 +75,40 @@ def collect_once(
     state_path = output_dir / "state.json"
     state = read_json(state_path, {})
     last_filename = str(state.get("last_success_filename") or "")
+    seen_revisions = {
+        str(key): str(value)
+        for key, value in dict(state.get("seen_revisions") or {}).items()
+    }
     result = fetch_knmi_open_data(
         settings=HighFrequencyFetchSettings(timeout_sec=timeout_sec),
         last_filename=last_filename,
+        seen_revisions=seen_revisions,
     )
     new_rows = [dict(row) for row in result.records]
-    rows = new_rows or (_previous_records(output_dir) if result.status == "no_new_file" else [])
+    previous_rows = _previous_records(output_dir)
+    rows = new_rows or (
+        previous_rows if result.status == "no_new_revision" else []
+    )
+    if new_rows:
+        newest_obs = max(
+            str(row.get("observation_time_utc") or "") for row in new_rows
+        )
+        rows = [
+            row
+            for row in new_rows
+            if str(row.get("observation_time_utc") or "") == newest_obs
+        ]
     now = datetime.now(timezone.utc).isoformat()
     filename = str(result.metadata.get("filename") or last_filename)
 
     if new_rows:
         append_jsonl(output_dir / "knmi_observations.jsonl", new_rows)
-        day = str(new_rows[0].get("target_date") or now[:10])
-        append_jsonl(output_dir / day / "knmi_observations.jsonl", new_rows)
+        by_day: dict[str, list[dict[str, Any]]] = {}
+        for row in new_rows:
+            day = str(row.get("target_date") or now[:10])
+            by_day.setdefault(day, []).append(row)
+        for day, day_rows in by_day.items():
+            append_jsonl(output_dir / day / "knmi_observations.jsonl", day_rows)
 
     payload = {
         "schema_version": "weather_knmi_open_data_payload_v1",
@@ -76,16 +123,35 @@ def collect_once(
         "metadata": result.metadata,
     }
     write_json(output_dir / "latest.json", payload)
+    updated_revisions = _trim_revisions(
+        {
+            **seen_revisions,
+            **{
+                str(key): str(value)
+                for key, value in dict(
+                    result.metadata.get("seen_revisions") or {}
+                ).items()
+            },
+        }
+    )
+    success_filenames = [
+        str(item.get("filename") or "")
+        for item in result.metadata.get("changed_files", [])
+        if isinstance(item, dict)
+    ]
+    newest_success = max(
+        [last_filename, *success_filenames],
+        default=last_filename,
+    )
     write_json(
         state_path,
         {
-            "schema_version": "weather_knmi_open_data_state_v1",
+            "schema_version": "weather_knmi_open_data_state_v2",
             "updated_at_utc": now,
             "last_attempt_status": result.status,
             "last_attempt_filename": filename,
-            "last_success_filename": (
-                filename if result.status == "ok" and new_rows else last_filename
-            ),
+            "last_success_filename": newest_success,
+            "seen_revisions": updated_revisions,
             "last_success_at_utc": (
                 now
                 if result.status == "ok" and new_rows
@@ -99,7 +165,10 @@ def collect_once(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--interval-sec", type=float, default=300.0)
+    parser.add_argument("--hot-interval-sec", type=float, default=10.0)
+    parser.add_argument("--cold-interval-sec", type=float, default=300.0)
+    parser.add_argument("--hot-window-start-sec", type=float, default=205.0)
+    parser.add_argument("--hot-window-end-sec", type=float, default=260.0)
     parser.add_argument("--timeout-sec", type=float, default=15.0)
     parser.add_argument("--once", action="store_true")
     return parser
@@ -139,7 +208,14 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         if args.once:
             return 0
-        time.sleep(max(60.0, args.interval_sec))
+        delay = adaptive_poll_delay(
+            datetime.now(timezone.utc),
+            hot_window_start_sec=args.hot_window_start_sec,
+            hot_window_end_sec=args.hot_window_end_sec,
+            hot_interval_sec=args.hot_interval_sec,
+            cold_interval_sec=args.cold_interval_sec,
+        )
+        time.sleep(delay)
 
 
 if __name__ == "__main__":

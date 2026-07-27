@@ -54,6 +54,11 @@ def parse_knmi_netcdf(
     meta = HIGH_FREQUENCY_CITY_SOURCES["knmi"][city]
     fetched = fetched_at or datetime.now(timezone.utc)
     file_meta = dict(file_metadata or {})
+    revision = str(
+        file_meta.get("lastModified")
+        or file_meta.get("created")
+        or stable_hash(file_meta)
+    )
     with Dataset("knmi_open_data.nc", mode="r", memory=content) as dataset:
         wsi_values = [str(_scalar(value)) for value in dataset.variables["wsi"][:]]
         try:
@@ -112,6 +117,7 @@ def parse_knmi_netcdf(
                 "knmi_filename": file_meta.get("filename"),
                 "knmi_file_created_at_utc": file_meta.get("created"),
                 "knmi_file_last_modified_at_utc": file_meta.get("lastModified"),
+                "knmi_revision": revision,
                 "knmi_first_seen_at_utc": fetched.isoformat(),
             },
         )
@@ -123,8 +129,14 @@ def fetch_knmi_open_data(
     *,
     settings: HighFrequencyFetchSettings | None = None,
     last_filename: str = "",
+    seen_revisions: dict[str, str] | None = None,
+    list_limit: int = 8,
 ) -> HighFrequencyFetchResult:
-    """Check the newest KNMI file and download it only when it is new."""
+    """Download new or revised recent KNMI files.
+
+    KNMI may revise a file after its initial publication, so filename-only
+    deduplication is insufficient. ``lastModified`` is the revision identity.
+    """
     start = datetime.now(timezone.utc)
     token = os.environ.get("KNMI_OPEN_DATA_API_KEY", "").strip()
     if not token:
@@ -144,7 +156,11 @@ def fetch_knmi_open_data(
     headers = {"Authorization": token, "Accept": "application/json"}
     listing = _http_get(
         files_url,
-        params={"maxKeys": 1, "sorting": "desc"},
+        params={
+            "maxKeys": max(1, min(32, int(list_limit))),
+            "orderBy": "lastModified",
+            "sorting": "desc",
+        },
         headers=headers,
         settings=settings,
     ).json()
@@ -153,39 +169,88 @@ def fetch_knmi_open_data(
         end = datetime.now(timezone.utc)
         return _result("knmi", city, "empty", [], start, end)
 
-    file_meta = dict(files[0])
-    filename = str(file_meta.get("filename") or "")
-    if not filename:
+    revisions = dict(seen_revisions or {})
+    legacy_bootstrap = bool(last_filename and not revisions)
+    candidates: list[tuple[dict[str, Any], str, str]] = []
+    for raw_meta in files:
+        file_meta = dict(raw_meta)
+        filename = str(file_meta.get("filename") or "")
+        if not filename or (
+            legacy_bootstrap
+            and filename < last_filename
+        ):
+            continue
+        revision = str(
+            file_meta.get("lastModified")
+            or file_meta.get("created")
+            or stable_hash(file_meta)
+        )
+        if revisions.get(filename) != revision:
+            candidates.append((file_meta, filename, revision))
+
+    newest_filename = max(
+        (str(item.get("filename") or "") for item in files),
+        default=last_filename,
+    )
+    if not newest_filename:
         end = datetime.now(timezone.utc)
         return _result("knmi", city, "empty", [], start, end)
-    if filename == last_filename:
+    if not candidates:
         end = datetime.now(timezone.utc)
         return _result(
             "knmi",
             city,
-            "no_new_file",
+            "no_new_revision",
             [],
             start,
             end,
-            metadata={"filename": filename, "api_requests": 1},
+            metadata={
+                "filename": newest_filename,
+                "api_requests": 1,
+                "listed_files": len(files),
+                "seen_revisions": revisions,
+            },
         )
 
-    url_payload = _http_get(
-        f"{files_url}/{filename}/url",
-        headers=headers,
-        settings=settings,
-    ).json()
-    download_url = str(url_payload.get("temporaryDownloadUrl") or "")
-    if not download_url:
-        raise RuntimeError(f"KNMI did not return a download URL for {filename}")
-    content = _http_get(download_url, settings=settings).content
+    records: list[dict[str, Any]] = []
+    changed: list[dict[str, str]] = []
+    for file_meta, filename, revision in sorted(
+        candidates, key=lambda item: item[1]
+    ):
+        url_payload = _http_get(
+            f"{files_url}/{filename}/url",
+            headers=headers,
+            settings=settings,
+        ).json()
+        download_url = str(url_payload.get("temporaryDownloadUrl") or "")
+        if not download_url:
+            raise RuntimeError(f"KNMI did not return a download URL for {filename}")
+        content = _http_get(download_url, settings=settings).content
+        fetched_at = datetime.now(timezone.utc)
+        parsed = parse_knmi_netcdf(
+            content,
+            city=city,
+            fetched_at=fetched_at,
+            file_metadata=file_meta,
+        )
+        revision_kind = (
+            "update"
+            if filename in revisions or (last_filename and filename < last_filename)
+            else "initial"
+        )
+        for row in parsed:
+            row["knmi_revision_kind"] = revision_kind
+        records.extend(parsed)
+        revisions[filename] = revision
+        changed.append(
+            {
+                "filename": filename,
+                "revision": revision,
+                "revision_kind": revision_kind,
+            }
+        )
+
     end = datetime.now(timezone.utc)
-    records = parse_knmi_netcdf(
-        content,
-        city=city,
-        fetched_at=end,
-        file_metadata=file_meta,
-    )
     return _result(
         "knmi",
         city,
@@ -194,11 +259,12 @@ def fetch_knmi_open_data(
         start,
         end,
         metadata={
-            "filename": filename,
-            "file_created_at_utc": file_meta.get("created"),
-            "file_last_modified_at_utc": file_meta.get("lastModified"),
-            "api_requests": 2,
-            "download_requests": 1,
-            "raw_payload_hash": stable_hash(file_meta),
+            "filename": max((item["filename"] for item in changed), default=newest_filename),
+            "changed_files": changed,
+            "seen_revisions": revisions,
+            "api_requests": 1 + len(changed),
+            "download_requests": len(changed),
+            "listed_files": len(files),
+            "raw_payload_hash": stable_hash(changed),
         },
     )

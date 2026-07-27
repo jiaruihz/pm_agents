@@ -17,6 +17,20 @@
 - `tx > WU` terminal-false-cross days：`1/5`。
 - 结论等级：`inconclusive`。该窗口只校准 source basis；forward collector 从 2026-07-28 起才具备真实 first-seen clock，不授权 live。
 
+## 发布节奏与采集策略
+
+- 历史文件 metadata `720` 个：`created - interval_end` min/p50/p95/p99/max = `217/221/225/230/251s`；超过 5 分钟 `0` 个。
+- 这批样本的初次创建窗口为约 `+03:37..+04:11`。生产采集采用保守 hot window `+03:25..+04:20` 每 `10s` list；窗口外每 `300s`，并会提前唤醒到下一个 hot window。约 `48` 次 list/hour，低于 Open Data registered key 的 `1000/hour`。
+- `lastModified - interval_end` p50/p95/max = `819/824/4424s`；`lastModified-created` p50/max = `598/4203s`。因此同一 filename 必须按 revision 重采，不能 filename-only dedupe。
+- KNMI 官方只承诺 10 分钟文件在几分钟后可用，不把上述 5 日经验窗口当 SLA；cold polling 用来捕捉异常延迟，forward first-seen 会继续校准窗口。
+
+## Cross-NO 事件检验
+
+- 事件定义：在下一份 EHAM METAR 之前，KNMI arithmetic-round 首次高于当日已见 METAR running max；每个 `date × source_field × prior_max` 只保留首个事件。
+- `ta`：events `24` / independent dates `5`；下一 KNMI 仍 cross `18/24 (75.0%)`；下一 METAR confirm `22/24 (91.7%)`；WU final confirm `24/24 (100.0%)`；terminal false `0/24 (0.0%)`。
+- `tx`：events `25` / independent dates `5`；下一 KNMI 仍 cross `22/25 (88.0%)`；下一 METAR confirm `18/25 (72.0%)`；WU final confirm `24/25 (96.0%)`；terminal false `1/25 (4.0%)`。
+- action：只进入 `collector + zero-notional shadow`。5 个 independent city-days、无 PIT book/成交分母，且已有 terminal false cross，不能升 live。
+
 ## 每日对照
 
 | Date | KNMI ta max raw→round | KNMI tx max raw→round | EHAM METAR max | WU max | canonical winner | tx false cross |

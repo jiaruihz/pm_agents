@@ -63,6 +63,19 @@ def half_up(value: float) -> int:
     return math.floor(float(value) + 0.5)
 
 
+def percentile(values: list[float], probability: float) -> float:
+    ordered = sorted(values)
+    if not ordered:
+        return math.nan
+    position = (len(ordered) - 1) * probability
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1 - weight) + ordered[upper] * weight
+
+
 def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
     if not path.exists():
         return
@@ -337,6 +350,150 @@ def build_daily(
     return output
 
 
+def build_publication_timing(knmi: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, float]]:
+    rows: list[dict[str, Any]] = []
+    for row in knmi:
+        interval_end = parse_dt(row.get("measurement_interval_end_utc") or row.get("observation_time_utc"))
+        created = parse_dt(row.get("knmi_file_created_at_utc"))
+        modified = parse_dt(row.get("knmi_file_last_modified_at_utc"))
+        if interval_end is None or created is None:
+            continue
+        created_delay = (created - interval_end).total_seconds()
+        modified_delay = (
+            (modified - interval_end).total_seconds()
+            if modified is not None
+            else math.nan
+        )
+        rows.append(
+            {
+                "target_date": row.get("target_date"),
+                "knmi_filename": row.get("knmi_filename"),
+                "interval_end_utc": interval_end.isoformat(),
+                "created_at_utc": created.isoformat(),
+                "last_modified_at_utc": modified.isoformat() if modified else "",
+                "created_delay_sec": created_delay,
+                "last_modified_delay_sec": "" if math.isnan(modified_delay) else modified_delay,
+                "revision_lag_after_created_sec": (
+                    ""
+                    if math.isnan(modified_delay)
+                    else modified_delay - created_delay
+                ),
+            }
+        )
+    delays = [float(row["created_delay_sec"]) for row in rows]
+    modified_delays = [
+        float(row["last_modified_delay_sec"])
+        for row in rows
+        if row["last_modified_delay_sec"] != ""
+    ]
+    revision_lags = [
+        float(row["revision_lag_after_created_sec"])
+        for row in rows
+        if row["revision_lag_after_created_sec"] != ""
+    ]
+    summary = {
+        "files": float(len(rows)),
+        "created_min_sec": min(delays),
+        "created_p50_sec": percentile(delays, 0.50),
+        "created_p90_sec": percentile(delays, 0.90),
+        "created_p95_sec": percentile(delays, 0.95),
+        "created_p99_sec": percentile(delays, 0.99),
+        "created_max_sec": max(delays),
+        "created_after_5m_count": float(sum(value > 300 for value in delays)),
+        "modified_p50_sec": percentile(modified_delays, 0.50),
+        "modified_p95_sec": percentile(modified_delays, 0.95),
+        "modified_max_sec": max(modified_delays),
+        "revision_lag_p50_sec": percentile(revision_lags, 0.50),
+        "revision_lag_max_sec": max(revision_lags),
+    }
+    return rows, summary
+
+
+def build_cross_events(
+    knmi: list[dict[str, Any]],
+    metar: list[dict[str, Any]],
+    wu: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    knmi_by_day: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    metar_by_day: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in knmi:
+        if parse_dt(row.get("observation_time_utc")) is not None:
+            knmi_by_day[str(row["target_date"])].append(row)
+    for row in metar:
+        metar_by_day[str(row["target_date"])].append(row)
+    wu_by_day = {
+        str(row["target_date"]): (
+            None
+            if row.get("wu_native_daily_max_c") in (None, "")
+            else int(row["wu_native_daily_max_c"])
+        )
+        for row in wu
+    }
+
+    output: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int]] = set()
+    for target_date, source_rows in sorted(knmi_by_day.items()):
+        source_rows.sort(key=lambda row: parse_dt(row.get("observation_time_utc")) or datetime.min.replace(tzinfo=timezone.utc))
+        reports = sorted(metar_by_day.get(target_date, []), key=lambda row: row["report_ts"])
+        for source_index, row in enumerate(source_rows):
+            obs = parse_dt(row.get("observation_time_utc"))
+            if obs is None:
+                continue
+            prior_reports = [item for item in reports if item["report_ts"] <= obs]
+            later_reports = [item for item in reports if item["report_ts"] > obs]
+            if not prior_reports or not later_reports:
+                continue
+            prior_max = max(int(item["temp_round_c"]) for item in prior_reports)
+            following = later_reports[0]
+            if (following["report_ts"] - obs).total_seconds() > 45 * 60:
+                continue
+            next_source = source_rows[source_index + 1] if source_index + 1 < len(source_rows) else None
+            for field, value_key in (("ta", "temp_c"), ("tx", "max_temp_c_past_10m")):
+                raw_value = row.get(value_key)
+                if raw_value in (None, ""):
+                    continue
+                source_round = half_up(float(raw_value))
+                if source_round <= prior_max:
+                    continue
+                event_key = (target_date, field, prior_max)
+                if event_key in seen:
+                    continue
+                seen.add(event_key)
+                next_source_value = (
+                    None
+                    if next_source is None or next_source.get(value_key) in (None, "")
+                    else half_up(float(next_source[value_key]))
+                )
+                wu_max = wu_by_day.get(target_date)
+                output.append(
+                    {
+                        "target_date": target_date,
+                        "source_field": field,
+                        "prior_metar_running_max_c": prior_max,
+                        "knmi_obs_ts_utc": obs.isoformat(),
+                        "knmi_value_c": float(raw_value),
+                        "knmi_round_c": source_round,
+                        "cross_increment_c": source_round - prior_max,
+                        "next_knmi_round_c": "" if next_source_value is None else next_source_value,
+                        "persistent_next_knmi": int(
+                            next_source_value is not None and next_source_value > prior_max
+                        ),
+                        "next_metar_report_ts_utc": following["report_ts"].isoformat(),
+                        "next_metar_temp_round_c": int(following["temp_round_c"]),
+                        "next_metar_confirmed_cross": int(int(following["temp_round_c"]) > prior_max),
+                        "wu_native_daily_max_c": "" if wu_max is None else wu_max,
+                        "wu_final_confirmed_cross": (
+                            "" if wu_max is None else int(wu_max > prior_max)
+                        ),
+                        "terminal_false_cross": (
+                            "" if wu_max is None else int(wu_max <= prior_max)
+                        ),
+                        "file_created_at_utc": row.get("knmi_file_created_at_utc", ""),
+                    }
+                )
+    return output
+
+
 def ratio(rows: list[dict[str, Any]], key: str) -> str:
     return "NA" if not rows else f"{sum(int(row[key]) for row in rows)}/{len(rows)} ({100*sum(int(row[key]) for row in rows)/len(rows):.1f}%)"
 
@@ -361,16 +518,22 @@ def main() -> int:
     wu = [fetch_wu_day(day.isoformat(), args.timeout_sec) for day in date_range(args.start_date, args.end_date)]
     winners = load_winners(args.start_date, args.end_date)
     daily = build_daily(knmi, metar, wu, winners)
+    timing_rows, timing = build_publication_timing(knmi)
+    cross_events = build_cross_events(knmi, metar, wu)
 
     write_csv(OUT / "next_eham_metar_alignment.csv", next_rows)
     write_csv(OUT / "daily_knmi_eham_wu.csv", daily)
     write_csv(OUT / "wu_fetch_status.csv", wu)
+    write_csv(OUT / "publication_timing.csv", timing_rows)
+    write_csv(OUT / "cross_events.csv", cross_events)
 
     ta_bias = [int(row["ta_minus_wu_c"]) for row in daily if row["ta_minus_wu_c"] != ""]
     tx_bias = [int(row["tx_minus_wu_c"]) for row in daily if row["tx_minus_wu_c"] != ""]
     ta_next_bias = [int(row["ta_minus_next_metar_c"]) for row in next_rows]
     tx_next_bias = [int(row["tx_minus_next_metar_c"]) for row in next_rows]
     canonical_days = [row for row in daily if row["winning_bracket"]]
+    ta_cross = [row for row in cross_events if row["source_field"] == "ta"]
+    tx_cross = [row for row in cross_events if row["source_field"] == "tx"]
     daily_table = "\n".join(
         f"| `{row['target_date']}` | {row['knmi_ta_daily_max_raw_c']}→{row['knmi_ta_daily_max_round_c']} | "
         f"{row['knmi_tx_daily_max_raw_c']}→{row['knmi_tx_daily_max_round_c']} | "
@@ -397,6 +560,20 @@ def main() -> int:
 - `tx > WU` terminal-false-cross days：`{sum(int(row['tx_terminal_false_cross']) for row in daily if row['tx_terminal_false_cross'] != '')}/{sum(row['tx_terminal_false_cross'] != '' for row in daily)}`。
 - 结论等级：`inconclusive`。该窗口只校准 source basis；forward collector 从 2026-07-28 起才具备真实 first-seen clock，不授权 live。
 
+## 发布节奏与采集策略
+
+- 历史文件 metadata `{int(timing['files'])}` 个：`created - interval_end` min/p50/p95/p99/max = `{timing['created_min_sec']:.0f}/{timing['created_p50_sec']:.0f}/{timing['created_p95_sec']:.0f}/{timing['created_p99_sec']:.0f}/{timing['created_max_sec']:.0f}s`；超过 5 分钟 `{int(timing['created_after_5m_count'])}` 个。
+- 这批样本的初次创建窗口为约 `+03:37..+04:11`。生产采集采用保守 hot window `+03:25..+04:20` 每 `10s` list；窗口外每 `300s`，并会提前唤醒到下一个 hot window。约 `48` 次 list/hour，低于 Open Data registered key 的 `1000/hour`。
+- `lastModified - interval_end` p50/p95/max = `{timing['modified_p50_sec']:.0f}/{timing['modified_p95_sec']:.0f}/{timing['modified_max_sec']:.0f}s`；`lastModified-created` p50/max = `{timing['revision_lag_p50_sec']:.0f}/{timing['revision_lag_max_sec']:.0f}s`。因此同一 filename 必须按 revision 重采，不能 filename-only dedupe。
+- KNMI 官方只承诺 10 分钟文件在几分钟后可用，不把上述 5 日经验窗口当 SLA；cold polling 用来捕捉异常延迟，forward first-seen 会继续校准窗口。
+
+## Cross-NO 事件检验
+
+- 事件定义：在下一份 EHAM METAR 之前，KNMI arithmetic-round 首次高于当日已见 METAR running max；每个 `date × source_field × prior_max` 只保留首个事件。
+- `ta`：events `{len(ta_cross)}` / independent dates `{len(set(row['target_date'] for row in ta_cross))}`；下一 KNMI 仍 cross `{ratio(ta_cross, 'persistent_next_knmi')}`；下一 METAR confirm `{ratio(ta_cross, 'next_metar_confirmed_cross')}`；WU final confirm `{ratio(ta_cross, 'wu_final_confirmed_cross')}`；terminal false `{ratio(ta_cross, 'terminal_false_cross')}`。
+- `tx`：events `{len(tx_cross)}` / independent dates `{len(set(row['target_date'] for row in tx_cross))}`；下一 KNMI 仍 cross `{ratio(tx_cross, 'persistent_next_knmi')}`；下一 METAR confirm `{ratio(tx_cross, 'next_metar_confirmed_cross')}`；WU final confirm `{ratio(tx_cross, 'wu_final_confirmed_cross')}`；terminal false `{ratio(tx_cross, 'terminal_false_cross')}`。
+- action：只进入 `collector + zero-notional shadow`。5 个 independent city-days、无 PIT book/成交分母，且已有 terminal false cross，不能升 live。
+
 ## 每日对照
 
 | Date | KNMI ta max raw→round | KNMI tx max raw→round | EHAM METAR max | WU max | canonical winner | tx false cross |
@@ -413,7 +590,7 @@ def main() -> int:
 覆盖 source/reference/settlement basis；缺 PIT book、执行、容量、PnL、显著性 forward。`significance=NA baseline=NA forward=FAIL conclusion=inconclusive`。
 """
     REPORT.write_text(report, encoding="utf-8")
-    print(json.dumps({"knmi_rows": len(knmi), "next_metar_rows": len(next_rows), "daily_rows": len(daily), "report": str(REPORT)}, ensure_ascii=False))
+    print(json.dumps({"knmi_rows": len(knmi), "next_metar_rows": len(next_rows), "daily_rows": len(daily), "cross_events": len(cross_events), "report": str(REPORT)}, ensure_ascii=False))
     return 0
 
 
