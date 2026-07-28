@@ -302,6 +302,26 @@ CANDIDATE_DDL = """
 CREATE TABLE IF NOT EXISTS fact_signal_candidates (
   -- grain / 关联键
   candidate_id        TEXT PRIMARY KEY,
+  candidate_grain_version TEXT NOT NULL DEFAULT 'v1_legacy_daily',
+  strategy_key        TEXT,
+  model_artifact_id   TEXT,
+  trigger_event_id    TEXT,
+  state_checkpoint_id TEXT,
+  feature_store_frame_id TEXT,
+  feature_row_id      TEXT,
+  decision_ts_utc     TEXT,
+  book_snapshot_id    TEXT,
+  book_snapshot_ts_utc TEXT,
+  book_available_at_utc TEXT,
+  market_evidence_status TEXT,
+  model_probability_before REAL,
+  model_probability_after REAL,
+  market_probability  REAL,
+  probability_residual REAL,
+  candidate_status    TEXT,
+  candidate_blocker   TEXT,
+  policy_selected     INTEGER,
+  first_city_day_selected INTEGER,
   condition_id        TEXT,
   market_id           TEXT,
   side                TEXT,
@@ -1155,18 +1175,29 @@ def build(
 
 
 def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
+    # The legacy builder historically recreated this table. Preserve additive
+    # event-checkpoint candidates across that v1 rebuild until the two builders
+    # share one materialization pass.
+    existing = {str(row[1]) for row in conn.execute("PRAGMA table_info(fact_signal_candidates)")}
+    prior_v2: list[dict] = []
+    if "candidate_grain_version" in existing:
+        cursor = conn.execute(
+            "SELECT * FROM fact_signal_candidates WHERE candidate_grain_version = 'v2_event_checkpoint'"
+        )
+        columns = [str(column[0]) for column in cursor.description]
+        prior_v2 = [dict(zip(columns, value, strict=True)) for value in cursor.fetchall()]
     conn.execute("DROP TABLE IF EXISTS fact_signal_candidates")
     conn.execute(CANDIDATE_DDL)
-    if not rows:
-        conn.commit()
-        return
-    cols = list(rows[0].keys())
-    placeholders = ",".join("?" for _ in cols)
-    col_list = ",".join(cols)
-    conn.executemany(
-        f"INSERT INTO fact_signal_candidates ({col_list}) VALUES ({placeholders})",
-        [[r[c] for c in cols] for r in rows],
-    )
+    for batch in (rows, prior_v2):
+        if not batch:
+            continue
+        cols = list(batch[0].keys())
+        placeholders = ",".join("?" for _ in cols)
+        col_list = ",".join(cols)
+        conn.executemany(
+            f"INSERT INTO fact_signal_candidates ({col_list}) VALUES ({placeholders})",
+            [[r.get(c) for c in cols] for r in batch],
+        )
     conn.commit()
 
 

@@ -355,6 +355,18 @@ if [[ $REBUILD -eq 1 ]]; then
   }
 
   # ---- 1c. Build fact_signal_candidates (机会粒度，对齐 universe→paper→live) ----
+  FIRST_SEEN_RAW_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
+  log "  Materializing first-seen information events (data/signal lineage only)..."
+  "$VENV/python" scripts/etl/materialize_weather_information_events.py \
+    --db "$DB_PATH" \
+    --source-events "$FIRST_SEEN_RAW_ROOT/output/source_events/sources.jsonl" \
+    --forecast-curves "$FIRST_SEEN_RAW_ROOT/forecast_hourly_curves" \
+    --forecast-enrichment "$FIRST_SEEN_RAW_ROOT/output/forecast_enrichment/forecast_enrichment.jsonl" \
+    >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    err "first-seen information event materialization failed"
+    exit 1
+  }
+
   log "  Building fact_signal_candidates (机会粒度候选表)..."
   "$VENV/python" scripts/etl/build_weather_signal_candidates.py \
     --db-path "$DB_PATH" \

@@ -66,6 +66,9 @@ def test_curve_capture_is_immutable_and_preserves_exact_hash_first_seen(tmp_path
     assert row["forecast_detected_at_utc"] == "2026-07-11T02:00:03Z"
     assert row["snapshot_ts_utc"] <= row["forecast_detected_at_utc"]
     assert row["forecast_first_seen_utc"] <= row["available_at_utc"]
+    assert row["event_kind"] == "forecast_curve"
+    assert row["pit_lineage_class"] == "collector_exact"
+    assert len(row["information_event_id"]) == 64
     assert row["forecast_run_ts_utc"] is None
     assert row["forecast_run_lineage_status"] == "source_response_does_not_expose_run_timestamp"
     assert row["forecast_model_fallback"] is False

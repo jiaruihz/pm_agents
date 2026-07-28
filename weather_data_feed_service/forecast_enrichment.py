@@ -12,6 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from weather_data_feed import city_local_date, load_city_configs, parse_now_utc
+from weather_data_feed.information_events import build_information_event
 from weather_data_feed.models import CityConfig
 from weather_data_feed.forecast_sources import (
     ForecastFetchResult,
@@ -28,12 +29,38 @@ from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
 from weather_data_feed_service.legacy_weather_predict.city_pools import FULL_CITY_CONFIGS
 from weather_data_feed_service.io_utils import (
     append_jsonl,
+    read_json,
     write_json,
     write_latest_and_daily_jsonl,
 )
 
 
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "forecast_enrichment"
+
+
+def _annotate_taf_information_events(rows: list[dict[str, Any]], output_dir: Path) -> list[dict[str, Any]]:
+    state_path = output_dir / "taf_information_event_state.json"
+    state = read_json(state_path, {})
+    first_seen = dict(state.get("first_seen_by_id") or {})
+    available = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    out: list[dict[str, Any]] = []
+    for raw in rows:
+        row, taf = dict(raw), dict(raw.get("taf") or {})
+        result, source_payload = dict(taf.get("result") or {}), dict(taf.get("payload") or {})
+        if result.get("status") != "ok" or not source_payload.get("raw_taf"):
+            taf["information_event_status"] = "not_material_missing_or_failed_taf"
+        else:
+            issued = source_payload.get("issue_time") or source_payload.get("issue_time_utc")
+            content_key = "|".join(str(v or "") for v in (row.get("city"), row.get("station"), issued))
+            detected = str(result.get("fetched_at_utc") or available)
+            base = dict(event_kind="taf", event_role="new_content", source="aviationweather_taf", city=str(row.get("city") or ""), station_id=str(row.get("station") or "") or None, provider_item_id=str(issued or "") or None, content_key=content_key, normalized_payload={"raw_taf": source_payload["raw_taf"]}, issued_at_utc=issued, detected_at_utc=detected, available_at_utc=available, pit_lineage_class="collector_exact", raw_source_path=str(output_dir / "forecast_enrichment.jsonl"))
+            provisional = build_information_event(**base, first_seen_at_utc=detected)
+            taf["information_event"] = build_information_event(**base, first_seen_at_utc=first_seen.setdefault(provisional["information_event_id"], detected))
+            taf["information_event_status"] = "material"
+        row["taf"] = taf
+        out.append(row)
+    write_json(state_path, {"first_seen_by_id": first_seen})
+    return out
 
 
 def city_coordinates(city: str) -> dict[str, Any]:
@@ -379,7 +406,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
-    rows = list(payload.get("records") or [])
+    rows = _annotate_taf_information_events(list(payload.get("records") or []), output_dir)
     write_latest_and_daily_jsonl(
         output_dir=output_dir,
         latest_payload=payload,

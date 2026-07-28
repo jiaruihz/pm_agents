@@ -16,6 +16,9 @@ from weather_feature_layer.frame import validate_feature_metadata
 
 
 DEFAULT_KEY_COLUMNS = ("city", "target_date", "decision_snapshot_ts_utc")
+# Event-driven frames are additive. Existing v1 daily/snapshot consumers retain
+# DEFAULT_KEY_COLUMNS while checkpoint builders opt into this trigger-aware key.
+EVENT_CHECKPOINT_KEY_COLUMNS = ("city", "target_date", "trigger_event_id", "as_of_ts_utc")
 
 
 @dataclass(frozen=True)

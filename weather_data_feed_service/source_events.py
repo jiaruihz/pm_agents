@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from weather_data_feed import load_city_configs, parse_now_utc
 from weather_data_feed.models import CityConfig
+from weather_data_feed.information_events import build_information_event
 from weather_data_feed.observation_sources import (
     FetchSettings,
     expand_source_names,
@@ -32,6 +33,33 @@ from weather_data_feed_service.io_utils import append_jsonl, read_json, write_js
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "source_events"
 AWC_RECONCILE_SOURCES = {"aviationweather_metar"}
 AWC_INDEX_STATE_KEY = "__awc_report_index_v1"
+INFORMATION_EVENT_STATE_KEY = "__information_event_state_v1"
+
+_DELIVERY_METADATA_FIELDS = {
+    "producer",
+    "status",
+    "error",
+    "ts_utc",
+    "local_detect_ts_utc",
+    "fetched_at_utc",
+    "payload_hash",
+    "changed_since_last",
+    "first_seen_type",
+    "original_first_seen_unknown",
+    "recovered_from_multi_record_payload",
+    "information_event_id",
+    "event_kind",
+    "event_role",
+    "content_key",
+    "revision_of_event_id",
+    "detected_at_utc",
+    "first_seen_at_utc",
+    "available_at_utc",
+    "pit_lineage_class",
+    "raw_source_path",
+    "raw_row_hash",
+    "information_event_status",
+}
 
 
 def requested_sources(
@@ -196,6 +224,97 @@ def late_awc_backfills(
     return sorted(backfills, key=lambda row: (str(row.get("city")), str(row.get("source_report_ts_utc"))))
 
 
+def _observation_payload(row: dict[str, Any]) -> dict[str, Any]:
+    """Keep provider content while excluding poll/publication metadata."""
+    return {key: value for key, value in row.items() if key not in _DELIVERY_METADATA_FIELDS and not key.startswith("_")}
+
+
+def _event_content_key(row: dict[str, Any]) -> str:
+    return "|".join(
+        str(row.get(key) or "")
+        for key in ("city", "source", "station", "source_report_ts_utc", "target_date")
+    )
+
+
+def annotate_information_events(
+    rows: list[dict[str, Any]],
+    state: dict[str, Any],
+    *,
+    raw_source_path: str,
+    available_at_utc: str,
+) -> list[dict[str, Any]]:
+    """Attach immutable event headers at the raw publication boundary.
+
+    Fetch failures remain raw coverage records. They do not acquire an event ID
+    and therefore cannot create a checkpoint or a candidate downstream.
+    """
+    event_state = state.setdefault(INFORMATION_EVENT_STATE_KEY, {})
+    first_seen_by_id = dict(event_state.get("first_seen_by_id") or {})
+    latest_by_content = dict(event_state.get("latest_by_content") or {})
+    annotated: list[dict[str, Any]] = []
+    for source_row in rows:
+        row = dict(source_row)
+        if row.get("status") != "ok":
+            row["information_event_status"] = "not_material_fetch_failure"
+            annotated.append(row)
+            continue
+        content_key = _event_content_key(row)
+        detected_at = str(row.get("local_detect_ts_utc") or row.get("ts_utc") or available_at_utc)
+        is_late = bool(row.get("original_first_seen_unknown")) or row.get("first_seen_type") == "late_backfill"
+        provisional_payload = _observation_payload(row)
+        # Build once to obtain the immutable ID. A changed source payload for
+        # the same report/content key becomes a linked revision; an identical
+        # post-restart poll retains the original first-seen value.
+        provisional = build_information_event(
+            event_kind="observation",
+            event_role="new_content",
+            source=str(row.get("source") or ""),
+            city=str(row.get("city") or ""),
+            station_id=str(row.get("station") or "") or None,
+            provider_item_id=str(row.get("provider_item_id") or row.get("source_report_ts_utc") or "") or None,
+            content_key=content_key,
+            normalized_payload=provisional_payload,
+            source_event_ts_utc=row.get("source_report_ts_utc"),
+            detected_at_utc=detected_at,
+            first_seen_at_utc=None if is_late else first_seen_by_id.get("pending") or detected_at,
+            available_at_utc=available_at_utc,
+            pit_lineage_class="late_backfill_first_seen_unknown" if is_late else "collector_exact",
+            original_first_seen_unknown=is_late,
+            raw_source_path=raw_source_path,
+            raw_row_hash=str(row.get("payload_hash") or "") or None,
+        )
+        event_id = str(provisional["information_event_id"])
+        first_seen = None if is_late else str(first_seen_by_id.get(event_id) or detected_at)
+        previous_event_id = latest_by_content.get(content_key)
+        event_role = "revision" if previous_event_id and previous_event_id != event_id else "new_content"
+        event = build_information_event(
+            event_kind="observation",
+            event_role=event_role,
+            source=str(row.get("source") or ""),
+            city=str(row.get("city") or ""),
+            station_id=str(row.get("station") or "") or None,
+            provider_item_id=str(row.get("provider_item_id") or row.get("source_report_ts_utc") or "") or None,
+            content_key=content_key,
+            normalized_payload=provisional_payload,
+            revision_of_event_id=previous_event_id if event_role == "revision" else None,
+            source_event_ts_utc=row.get("source_report_ts_utc"),
+            detected_at_utc=detected_at,
+            first_seen_at_utc=first_seen,
+            available_at_utc=available_at_utc,
+            pit_lineage_class="late_backfill_first_seen_unknown" if is_late else "collector_exact",
+            original_first_seen_unknown=is_late,
+            raw_source_path=raw_source_path,
+            raw_row_hash=str(row.get("payload_hash") or "") or None,
+        )
+        if not is_late:
+            first_seen_by_id.setdefault(event_id, first_seen)
+        latest_by_content[content_key] = event_id
+        annotated.append({**row, **event, "information_event_status": "material"})
+    event_state["first_seen_by_id"] = first_seen_by_id
+    event_state["latest_by_content"] = latest_by_content
+    return annotated
+
+
 def build_events(args: argparse.Namespace) -> dict[str, Any]:
     now_utc = parse_now_utc(args.now_utc) if args.now_utc else datetime.now(timezone.utc)
     configs = load_city_configs(
@@ -249,8 +368,6 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
     )
     rows, changed = annotate_changed(rows, state)
     rows = sorted(rows, key=lambda row: (str(row.get("city")), str(row.get("source")), str(row.get("station"))))
-    write_json(state_path, state)
-
     summary = {
         "status": "ok",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -273,6 +390,8 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
         **summary,
         "records": [] if args.history_reconcile_only else rows,
         "append_records": backfill_rows,
+        "_state": state,
+        "_state_path": str(state_path),
     }
     return payload
 
@@ -280,11 +399,32 @@ def build_events(args: argparse.Namespace) -> dict[str, Any]:
 def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
     rows = list(payload.get("records") or [])
     append_rows = list(payload.get("append_records") or [])
-    latest_payload = {key: value for key, value in payload.items() if key != "append_records"}
+    state = dict(payload.get("_state") or {})
+    available_at_utc = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    raw_source_path = str(output_dir / "sources.jsonl")
+    rows = annotate_information_events(
+        rows,
+        state,
+        raw_source_path=raw_source_path,
+        available_at_utc=available_at_utc,
+    )
+    append_rows = annotate_information_events(
+        append_rows,
+        state,
+        raw_source_path=raw_source_path,
+        available_at_utc=available_at_utc,
+    )
+    latest_payload = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"append_records", "_state", "_state_path"}
+    }
+    latest_payload["records"] = rows
     if payload.get("history_reconcile_only"):
         day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         append_jsonl(output_dir / "sources.jsonl", append_rows)
         append_jsonl(output_dir / day / "sources.jsonl", append_rows)
+        write_json(Path(str(payload["_state_path"])), state)
         return
     write_latest_and_daily_jsonl(
         output_dir=output_dir,
@@ -292,6 +432,7 @@ def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
         rows=rows + append_rows,
         jsonl_name="sources.jsonl",
     )
+    write_json(Path(str(payload["_state_path"])), state)
 
 
 def build_parser() -> argparse.ArgumentParser:

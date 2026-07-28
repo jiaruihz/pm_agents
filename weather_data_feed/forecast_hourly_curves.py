@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from weather_data_feed.information_events import build_information_event
+
 
 FORECAST_HOURLY_CURVE_SCHEMA_VERSION = "forecast_hourly_curve_v4"
 _BEIJING = timezone(timedelta(hours=8))
@@ -253,6 +255,9 @@ def write_forecast_hourly_curve_capture(
     curve_root.mkdir(parents=True, exist_ok=True)
     first_seen = _load_first_seen(curve_root)
     capture_id = f"forecast_hourly_curves_{snapshot_at.astimezone(_BEIJING).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:10]}"
+    output_dir = curve_root / snapshot_at.astimezone(_BEIJING).strftime("%Y-%m-%d")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    destination = output_dir / f"{capture_id}.jsonl"
 
     lineage_rows: list[tuple[dict[str, Any], datetime | None, tuple[datetime, str] | None]] = []
     for row in source_rows:
@@ -280,9 +285,29 @@ def write_forecast_hourly_curve_capture(
         if observed_first_seen > available_at:
             raise ValueError("forecast_first_seen_utc cannot be after available_at_utc")
         first_seen[key] = (observed_first_seen, first_seen_source)
+        information_event = build_information_event(
+            event_kind="forecast_curve",
+            event_role="new_content",
+            source=str(row["forecast_source"]),
+            city=str(row["city"]),
+            station_id=None,
+            provider_item_id=row.get("forecast_run_ts_utc") or None,
+            content_key="|".join(
+                str(row.get(field) or "")
+                for field in ("city", "target_date", "forecast_source", "forecast_model", "forecast_values_hash")
+            ),
+            normalized_payload={"forecast_values_hash": row["forecast_values_hash"], "hourly_curve": row["hourly_curve"]},
+            source_event_ts_utc=row.get("forecast_run_ts_utc"),
+            detected_at_utc=_utc_string(detected_at or observed_first_seen),
+            first_seen_at_utc=_utc_string(observed_first_seen),
+            available_at_utc=_utc_string(available_at),
+            pit_lineage_class="collector_exact",
+            raw_source_path=str(destination),
+        )
         payload_rows.append(
             {
                 **row,
+                **information_event,
                 "schema_version": FORECAST_HOURLY_CURVE_SCHEMA_VERSION,
                 "capture_id": capture_id,
                 "available_at_utc": _utc_string(available_at),
@@ -296,9 +321,6 @@ def write_forecast_hourly_curve_capture(
             }
         )
 
-    output_dir = curve_root / snapshot_at.astimezone(_BEIJING).strftime("%Y-%m-%d")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    destination = output_dir / f"{capture_id}.jsonl"
     temporary = output_dir / f".{capture_id}.{os.getpid()}.tmp"
     try:
         with temporary.open("x", encoding="utf-8") as handle:
