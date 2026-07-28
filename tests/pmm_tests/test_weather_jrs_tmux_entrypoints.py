@@ -151,6 +151,8 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "weather_jrs_tmux_start_socket" in starter
     assert 'SESSION="weather_canonical_refresh"' in starter
     assert "run_weather_canonical_refresh_launchd.sh" in starter
+    assert 'STATUS_FILE="$LOG_DIR/last_exit_status"' in starter
+    assert "canonical refresh failed: returncode=$rc" in starter
 
 
 def test_legacy_direct_launchagent_stack_cannot_start_jrs_workloads():
