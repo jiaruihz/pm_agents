@@ -1,13 +1,13 @@
 # HeadA 后采数据入训 learning curve v1
 
-Generated: 2026-07-28T13:56:30+00:00
+Generated: 2026-07-28T14:25:05+00:00
 
 ## 数据快照
 
 | 字段 | 值 |
 | --- | --- |
 | 数据源 | canonical checkpoint CSV + HeadA historical/current fixed denominators |
-| DB mtime UTC | 2026-07-28T13:52:22+00:00 |
+| DB mtime UTC | 2026-07-28T14:17:48+00:00 |
 | canonical Tmax rows / dates | 281269 / 2026-07-04..2026-07-28 |
 | settlement max target_date | 2026-07-27 |
 | HeadA historical | 333 rows / 53 dates |
@@ -38,9 +38,10 @@ HeadA 需要的是完整 ladder 上的尾部质量、overshoot 和 exact landing
 
 所以动作是：weather center 继续 expanding shadow；HeadA 概率头改成
 **market-anchored、跨整条 ladder 归一化的分布模型**。截至 2026-07-27 的结果已经被
-查看，只能作为 development/train candidate；其后首 15 个 eligible settled HeadA
-target dates 立即作为 untouched frozen，不参与拟合、选特征、选阈值或中途看 ROI。
-完整 15-date 报告后它们才能进入下一轮 train，同时再冻结新的 15 dates。
+查看，只能作为 development/train candidate；2026-07-28..2026-08-11（含首尾）的
+连续 15 个日历 target dates 立即作为 untouched frozen，不参与拟合、选特征、选阈值
+或中途看 ROI。无信号日仍作为 zero-signal coverage 保留，不顺延窗口。8 月 11 日所需
+结算全部可用后才一次性开封；之后才能进入下一轮 train，并冻结 8/12..8/26。
 协议已冻结在 `configs/weather/heada_training_data_protocol_v1.json`。
 
 本报告专门回答“后采、已结算数据加入训练，是否比最早模型更好”。所有预测都只使用

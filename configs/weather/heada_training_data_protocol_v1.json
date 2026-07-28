@@ -13,13 +13,16 @@
   "cycle": {
     "development_train_through_target_date": "2026-07-27",
     "adaptation_target_dates_before_first_freeze": 0,
-    "frozen_target_dates": 15,
-    "assignment": "all evidence through 2026-07-27 is development; the first 15 eligible settled HeadA target dates after cutoff are untouched frozen validation and may not be used for fitting, feature selection, threshold selection, or early reporting",
-    "reuse": "only after the complete 15-date frozen report may that block enter the next cycle training set; at that moment the next 15 eligible settled HeadA target dates become the new untouched frozen block",
+    "frozen_calendar_days": 15,
+    "frozen_target_date_start": "2026-07-28",
+    "frozen_target_date_end": "2026-08-11",
+    "assignment": "all HeadA candidates with target_date from 2026-07-28 through 2026-08-11 inclusive are untouched frozen validation; calendar days with zero candidates remain zero-signal coverage days and do not extend the window",
+    "reuse": "only after every target date in the 2026-07-28..2026-08-11 calendar window has completed and the one-shot frozen report is opened may this block enter the next cycle training set; the next frozen calendar block is 2026-08-12..2026-08-26",
     "no_peeking": [
       "do not publish interim frozen ROI or proper-score comparisons",
       "operational coverage and data-quality monitoring is allowed without labels or model comparisons",
-      "a date enters the frozen count only when HeadA has at least one PIT candidate and all labels required by the report are settled"
+      "preserve every calendar date in the frozen window, including zero-signal and missing-book coverage states",
+      "run the one-shot score only after all required settlements for target_date 2026-08-11 are available"
     ]
   },
   "model_challengers": [
