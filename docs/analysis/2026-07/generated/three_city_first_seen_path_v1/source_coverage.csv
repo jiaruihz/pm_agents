@@ -1,0 +1,4 @@
+city,source,collector_exact_dates,raw_matching_rows,missing_exact_first_seen,distinct_collector_exact_events
+Amsterdam,knmi,0,,,
+Helsinki,fmi,7,33466,32869,591
+Tokyo,jma_amedas,1,41959,41958,1

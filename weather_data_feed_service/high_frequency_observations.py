@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from weather_data_feed import parse_now_utc
+from weather_data_feed.information_events import (
+    build_information_event,
+    normalized_observation_payload,
+)
 from weather_data_feed.high_frequency_observation_sources import (
     HighFrequencyFetchResult,
     HighFrequencyFetchSettings,
@@ -41,6 +45,7 @@ DEFAULT_SOURCE_MIN_INTERVAL_SEC = {
     "mgm": 300.0,
     "ims_lod": 300.0,
 }
+INFORMATION_EVENT_STATE_KEY = "__information_event_state_v1"
 
 
 def _parse_minute_window(raw: str) -> tuple[float, float] | None:
@@ -215,6 +220,113 @@ def _row_with_hash(row: dict[str, Any], result: HighFrequencyFetchResult) -> dic
     return out
 
 
+def annotate_information_events(
+    rows: list[dict[str, Any]],
+    state: dict[str, Any],
+    *,
+    raw_source_path: str,
+    available_at_utc: str,
+) -> list[dict[str, Any]]:
+    """Attach immutable first-seen headers to high-frequency observations."""
+
+    event_state = state.setdefault(INFORMATION_EVENT_STATE_KEY, {})
+    first_seen_by_id = dict(event_state.get("first_seen_by_id") or {})
+    latest_by_content = dict(event_state.get("latest_by_content") or {})
+    annotated: list[dict[str, Any]] = []
+    for source_row in rows:
+        row = dict(source_row)
+        if row.get("source_status") not in {"ok", "cadence_preserved"}:
+            row["information_event_status"] = "not_material_fetch_failure"
+            annotated.append(row)
+            continue
+        city = str(row.get("city") or "")
+        station = str(row.get("station") or "")
+        observation_time = str(row.get("observation_time_utc") or "")
+        if not city or not station or not observation_time:
+            row["information_event_status"] = "not_material_missing_identity"
+            annotated.append(row)
+            continue
+        content_key = "|".join((city, station, observation_time))
+        exact_first_seen = str(row.get("source_first_seen_at_utc") or "")
+        is_late = not bool(exact_first_seen)
+        detected_at = exact_first_seen or str(
+            row.get("local_detect_ts_utc")
+            or row.get("fetched_at_utc")
+            or available_at_utc
+        )
+        normalized_payload = normalized_observation_payload(row)
+        provisional = build_information_event(
+            event_kind="observation",
+            event_role="new_content",
+            source=str(row.get("source") or ""),
+            city=city,
+            station_id=station,
+            provider_item_id=observation_time,
+            content_key=content_key,
+            normalized_payload=normalized_payload,
+            source_event_ts_utc=observation_time,
+            detected_at_utc=detected_at,
+            first_seen_at_utc=None if is_late else exact_first_seen,
+            available_at_utc=available_at_utc,
+            pit_lineage_class=(
+                "late_backfill_first_seen_unknown" if is_late else "collector_exact"
+            ),
+            original_first_seen_unknown=is_late,
+            raw_source_path=raw_source_path,
+            raw_row_hash=str(row.get("payload_hash") or "") or None,
+        )
+        event_id = str(provisional["information_event_id"])
+        first_seen = (
+            None
+            if is_late
+            else str(first_seen_by_id.get(event_id) or exact_first_seen)
+        )
+        previous_event_id = latest_by_content.get(content_key)
+        event_role = (
+            "revision"
+            if previous_event_id and previous_event_id != event_id
+            else "new_content"
+        )
+        material = previous_event_id != event_id
+        event = build_information_event(
+            event_kind="observation",
+            event_role=event_role,
+            source=str(row.get("source") or ""),
+            city=city,
+            station_id=station,
+            provider_item_id=observation_time,
+            content_key=content_key,
+            normalized_payload=normalized_payload,
+            revision_of_event_id=(
+                previous_event_id if event_role == "revision" else None
+            ),
+            source_event_ts_utc=observation_time,
+            detected_at_utc=detected_at,
+            first_seen_at_utc=first_seen,
+            available_at_utc=available_at_utc,
+            pit_lineage_class=(
+                "late_backfill_first_seen_unknown" if is_late else "collector_exact"
+            ),
+            original_first_seen_unknown=is_late,
+            material_state_change=material,
+            raw_source_path=raw_source_path,
+            raw_row_hash=str(row.get("payload_hash") or "") or None,
+        )
+        if not is_late:
+            first_seen_by_id.setdefault(event_id, first_seen)
+        latest_by_content[content_key] = event_id
+        annotated.append(
+            {
+                **row,
+                **event,
+                "information_event_status": "material" if material else "duplicate",
+            }
+        )
+    event_state["first_seen_by_id"] = first_seen_by_id
+    event_state["latest_by_content"] = latest_by_content
+    return annotated
+
+
 def append_history_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     latest_by_key: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
     for row in rows:
@@ -281,12 +393,21 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
             str(row.get("observation_time_utc") or ""),
         ),
     )
+    generated_at = datetime.now(timezone.utc).isoformat()
+    rows = annotate_information_events(
+        rows,
+        state,
+        raw_source_path=str(
+            Path(args.output_dir) / "high_frequency_observations.jsonl"
+        ),
+        available_at_utc=generated_at,
+    )
     source_statuses = {f"{result.source_key}:{result.city}": result.status for result in results}
     source_errors = {f"{result.source_key}:{result.city}": result.error for result in results if result.error}
     summary = {
         "status": "ok",
         "schema_version": "weather_high_frequency_observations_payload_v1",
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "generated_at_utc": generated_at,
         "producer": "weather_data_feed_service.high_frequency_observations",
         "rows": len(rows),
         "ok_sources": sum(1 for result in results if result.status == "ok"),
@@ -311,7 +432,11 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "source_statuses": source_statuses,
         "source_errors": source_errors,
     }
-    return {**summary, "records": rows}
+    return {
+        **summary,
+        "records": rows,
+        "_information_event_state": state.get(INFORMATION_EVENT_STATE_KEY, {}),
+    }
 
 
 def update_state(payload: dict[str, Any], state_path: Path) -> None:
@@ -326,6 +451,9 @@ def update_state(payload: dict[str, Any], state_path: Path) -> None:
             "schema_version": "weather_high_frequency_observations_state_v1",
             "updated_at_utc": now,
             "last_attempt_by_job": last,
+            INFORMATION_EVENT_STATE_KEY: dict(
+                payload.get("_information_event_state") or {}
+            ),
         },
     )
 
@@ -333,7 +461,12 @@ def update_state(payload: dict[str, Any], state_path: Path) -> None:
 def write_outputs(payload: dict[str, Any], output_dir: Path) -> None:
     rows = list(payload.get("records") or [])
     append_rows = append_history_rows(rows)
-    latest_payload = {**payload, "append_rows": len(append_rows)}
+    latest_payload = {
+        key: value
+        for key, value in payload.items()
+        if not str(key).startswith("_")
+    }
+    latest_payload["append_rows"] = len(append_rows)
     write_latest_and_daily_jsonl(
         output_dir=output_dir,
         latest_payload=latest_payload,

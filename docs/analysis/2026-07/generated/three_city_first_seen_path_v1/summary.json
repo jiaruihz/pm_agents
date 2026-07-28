@@ -1,0 +1,40 @@
+{
+  "canonical_fast_event_counts": {},
+  "cities": [
+    "Helsinki",
+    "Amsterdam",
+    "Tokyo"
+  ],
+  "end_date": "2026-07-27",
+  "generated_at_utc": "2026-07-28T18:10:40.048003+00:00",
+  "market_baseline_rows": 0,
+  "oof_predictions": 1617,
+  "policy_selected": 0,
+  "schema_version": "three_city_first_seen_path_probability_research_v1",
+  "scope": "research_zero_notional_no_execution",
+  "source_coverage": [
+    {
+      "city": "Amsterdam",
+      "collector_exact_dates": 0,
+      "source": "knmi"
+    },
+    {
+      "city": "Helsinki",
+      "collector_exact_dates": 7,
+      "distinct_collector_exact_events": 591,
+      "missing_exact_first_seen": 32869,
+      "raw_matching_rows": 33466,
+      "source": "fmi"
+    },
+    {
+      "city": "Tokyo",
+      "collector_exact_dates": 1,
+      "distinct_collector_exact_events": 1,
+      "missing_exact_first_seen": 41958,
+      "raw_matching_rows": 41959,
+      "source": "jma_amedas"
+    }
+  ],
+  "start_date": "2026-07-08",
+  "states": 592
+}

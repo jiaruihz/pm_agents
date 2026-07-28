@@ -168,6 +168,7 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
         Path(value)
         for value in [
             *args.source_events,
+            *args.high_frequency_observations,
             *args.forecast_curves,
             *args.forecast_enrichment,
         ]
@@ -222,6 +223,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", required=True)
     parser.add_argument("--state", required=True)
     parser.add_argument("--source-events", action="append", default=[])
+    parser.add_argument("--high-frequency-observations", action="append", default=[])
     parser.add_argument("--forecast-curves", action="append", default=[])
     parser.add_argument("--forecast-enrichment", action="append", default=[])
     parser.add_argument("--paper-snapshots", action="append", required=True)

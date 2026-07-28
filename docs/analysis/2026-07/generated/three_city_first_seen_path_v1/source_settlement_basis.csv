@@ -1,0 +1,9 @@
+city,source,target_date,source_distinct_events,source_first_seen_span_hours,basis_coverage_complete,source_daily_max_c,source_daily_max_lattice,winner_bracket,source_lattice_in_winner_bracket,terminal_false_basis
+Helsinki,fmi,2026-07-21,28,4.504064930555556,0,12.9,13,14,,
+Helsinki,fmi,2026-07-22,97,15.859581568333335,1,19.1,19,19,1,0
+Helsinki,fmi,2026-07-23,97,15.875025572222222,1,20.6,21,20,0,1
+Helsinki,fmi,2026-07-24,97,15.855188737777777,1,20.7,21,21,1,0
+Helsinki,fmi,2026-07-25,78,15.8659185425,1,20.2,20,20,1,0
+Helsinki,fmi,2026-07-26,97,15.878718702499999,1,19.0,19,19,1,0
+Helsinki,fmi,2026-07-27,97,15.886174978055555,1,20.9,21,21,1,0
+Tokyo,jma_amedas,2026-07-21,1,0.0,0,28.2,28,34,,

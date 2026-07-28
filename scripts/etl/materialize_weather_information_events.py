@@ -130,13 +130,66 @@ def _legacy_forecast_event(row: Mapping[str, Any], path: Path) -> dict[str, Any]
     )
 
 
+def _legacy_high_frequency_event(
+    row: Mapping[str, Any], path: Path
+) -> dict[str, Any] | None:
+    if row.get("source_status") not in {"ok", "cadence_preserved"}:
+        return None
+    observation_time = str(row.get("observation_time_utc") or "")
+    city = str(row.get("city") or "")
+    station = str(row.get("station") or "")
+    if not observation_time or not city or not station:
+        return None
+    exact_first_seen = str(row.get("source_first_seen_at_utc") or "")
+    detected = str(
+        exact_first_seen
+        or row.get("local_detect_ts_utc")
+        or row.get("fetched_at_utc")
+        or ""
+    )
+    available = str(
+        row.get("source_published_at_utc")
+        or row.get("fetched_at_utc")
+        or detected
+        or ""
+    )
+    if not available:
+        return None
+    is_late = not bool(exact_first_seen)
+    content_key = "|".join((city, station, observation_time))
+    return build_information_event(
+        event_kind="observation",
+        event_role="new_content",
+        source=str(row.get("source") or ""),
+        city=city,
+        station_id=station,
+        provider_item_id=observation_time,
+        content_key=content_key,
+        normalized_payload=normalized_observation_payload(row),
+        source_event_ts_utc=observation_time,
+        detected_at_utc=detected or available,
+        first_seen_at_utc=None if is_late else exact_first_seen,
+        available_at_utc=available,
+        pit_lineage_class=(
+            "late_backfill_first_seen_unknown" if is_late else "collector_exact"
+        ),
+        original_first_seen_unknown=is_late,
+        raw_source_path=str(path),
+        raw_row_hash=str(row.get("payload_hash") or canonical_json_hash(row)),
+    )
+
+
 def _events_from_row(row: Mapping[str, Any], path: Path) -> Iterator[tuple[dict[str, Any], Mapping[str, Any]]]:
     if row.get("information_event_id"):
         event = dict(row)
         event.setdefault("material_state_change", row.get("information_event_status") == "material")
         yield event, row
     else:
-        legacy = _legacy_forecast_event(row, path) or _legacy_observation_event(row, path)
+        legacy = (
+            _legacy_forecast_event(row, path)
+            or _legacy_observation_event(row, path)
+            or _legacy_high_frequency_event(row, path)
+        )
         if legacy is not None:
             yield legacy, row
 
@@ -190,6 +243,8 @@ def _insert_observation_payload(
     if temp_f is None:
         temp_f = _c_to_f(temp_c)
     dewpoint_f = _float(raw.get("dewpoint_f") or raw.get("dwpf"))
+    if dewpoint_f is None:
+        dewpoint_f = _c_to_f(_float(raw.get("dewpoint_c")))
     row_hash = str(event.get("raw_row_hash") or event["payload_hash"])
     observation_id = canonical_json_hash(
         {"table": "weather_observation_events", "information_event_id": event["information_event_id"]}
@@ -342,6 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", default=str(ROOT / "runtime/weather.db"))
     parser.add_argument("--source-events", action="append", default=[])
+    parser.add_argument("--high-frequency-observations", action="append", default=[])
     parser.add_argument("--forecast-curves", action="append", default=[])
     parser.add_argument("--forecast-enrichment", action="append", default=[])
     parser.add_argument("--allow-missing", action="store_true")
@@ -355,6 +411,7 @@ def main(argv: list[str] | None = None) -> int:
         Path(value)
         for value in [
             *args.source_events,
+            *args.high_frequency_observations,
             *args.forecast_curves,
             *args.forecast_enrichment,
         ]
