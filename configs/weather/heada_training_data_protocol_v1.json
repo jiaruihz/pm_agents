@@ -11,10 +11,16 @@
     "preserve_all_selected_and_blocked_rows": true
   },
   "cycle": {
-    "adaptation_target_dates": 15,
+    "development_train_through_target_date": "2026-07-27",
+    "adaptation_target_dates_before_first_freeze": 0,
     "frozen_target_dates": 15,
-    "assignment": "first 15 eligible dates after cutoff are adaptation; next 15 are frozen",
-    "reuse": "after the frozen report, both blocks may enter the next cycle train set, but the next 15-date frozen block must be new"
+    "assignment": "all evidence through 2026-07-27 is development; the first 15 eligible settled HeadA target dates after cutoff are untouched frozen validation and may not be used for fitting, feature selection, threshold selection, or early reporting",
+    "reuse": "only after the complete 15-date frozen report may that block enter the next cycle training set; at that moment the next 15 eligible settled HeadA target dates become the new untouched frozen block",
+    "no_peeking": [
+      "do not publish interim frozen ROI or proper-score comparisons",
+      "operational coverage and data-quality monitoring is allowed without labels or model comparisons",
+      "a date enters the frozen count only when HeadA has at least one PIT candidate and all labels required by the report are settled"
+    ]
   },
   "model_challengers": [
     {

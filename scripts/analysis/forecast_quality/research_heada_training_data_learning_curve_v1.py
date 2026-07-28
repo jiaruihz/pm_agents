@@ -1166,8 +1166,10 @@ HeadA 需要的是完整 ladder 上的尾部质量、overshoot 和 exact landing
 `+0.02656/+0.03184`。这正是 center 准确度提升但 tail probability 变差的选择分布错位。
 
 所以动作是：weather center 继续 expanding shadow；HeadA 概率头改成
-**market-anchored、跨整条 ladder 归一化的分布模型**，后采数据按 15 个 adaptation
-target dates + 15 个 untouched frozen target dates 批量更新，不做每日看完 ROI 就重训。
+**market-anchored、跨整条 ladder 归一化的分布模型**。截至 2026-07-27 的结果已经被
+查看，只能作为 development/train candidate；其后首 15 个 eligible settled HeadA
+target dates 立即作为 untouched frozen，不参与拟合、选特征、选阈值或中途看 ROI。
+完整 15-date 报告后它们才能进入下一轮 train，同时再冻结新的 15 dates。
 协议已冻结在 `configs/weather/heada_training_data_protocol_v1.json`。
 
 本报告专门回答“后采、已结算数据加入训练，是否比最早模型更好”。所有预测都只使用
