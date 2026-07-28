@@ -13,7 +13,7 @@ TMUX_SESSION="${TIMING_MONITOR_TMUX_SESSION:-weather_source_orderbook_timing_mon
 mkdir -p "$LOG_DIR"
 if [[ -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" || true)"
-  if [[ "$old_pid" == tmux:* ]] && command -v tmux >/dev/null 2>&1 && weather_jrs_tmux "$TMUX_SOCKET" has-session -t "${old_pid#tmux:}" 2>/dev/null; then
+  if [[ "$old_pid" == tmux:* ]] && weather_jrs_tmux "$TMUX_SOCKET" has-session -t "${old_pid#tmux:}" 2>/dev/null; then
     echo "already running tmux=${old_pid#tmux:} log=$OUT_FILE"
     exit 0
   fi
@@ -30,7 +30,7 @@ fi
 TIMING_MONITOR_CITIES="${TIMING_MONITOR_CITIES:-Shanghai Tokyo}"
 TIMING_MONITOR_SOURCES="${TIMING_MONITOR_SOURCES:-profile_primary aviationweather_cache_csv}"
 TIMING_MONITOR_SOURCE_INPUT="${TIMING_MONITOR_SOURCE_INPUT:-source-events}"
-TIMING_MONITOR_SOURCE_EVENTS_PATH="${TIMING_MONITOR_SOURCE_EVENTS_PATH:-$HOME/projects/weather_data_feed_service_runtime/output/source_events/latest.json}"
+TIMING_MONITOR_SOURCE_EVENTS_PATH="${TIMING_MONITOR_SOURCE_EVENTS_PATH:-/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/latest.json}"
 TIMING_MONITOR_BASE_INTERVAL_SEC="${TIMING_MONITOR_BASE_INTERVAL_SEC:-20}"
 TIMING_MONITOR_BURST_INTERVAL_SEC="${TIMING_MONITOR_BURST_INTERVAL_SEC:-2}"
 TIMING_MONITOR_BURST_WINDOW_MIN="${TIMING_MONITOR_BURST_WINDOW_MIN:-10}"

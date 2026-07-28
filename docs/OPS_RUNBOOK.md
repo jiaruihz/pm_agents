@@ -19,6 +19,12 @@ Mac 上所有 weather/tmax/range 常驻进程统一由
 不再支持默认 tmux、独立 socket、screen、nohup 或 start-mode fallback；启动前的
 JRS write probe 由 helper 在 tmux server 内执行。
 
+该 tmux server 的权限宿主固定为已在 macOS「完全磁盘访问权限」中授权的
+`/opt/homebrew/Cellar/tmux/3.6b/bin/tmux`，helper 同时固定其 SHA-256。
+禁止让 Homebrew symlink 静默切换生产 binary。升级 tmux 时必须先把新 binary
+加入完全磁盘访问权限，再更新 helper 的 path/hash、运行入口契约测试，并在维护
+窗口重建 canonical server；任一步未完成都继续使用旧的已授权 binary。
+
 ```bash
 tmux -L weather-data-feed-jrs list-sessions
 ```

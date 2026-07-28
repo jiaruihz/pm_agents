@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
-TMUX_SOCKET="$(weather_jrs_tmux_socket "${WEATHER_DATA_FEED_TMUX_SOCKET:-}")"
+TMUX_SOCKET="$(weather_jrs_tmux_socket)"
 LABEL="com.pm-agents.weather-live-runtime-patrol"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/live_runtime_patrol"
@@ -29,7 +29,7 @@ cat >"$PLIST" <<EOF
 </plist>
 EOF
 
-tmux -L "$TMUX_SOCKET" kill-session -t weather_live_runtime_patrol 2>/dev/null || true
+weather_jrs_tmux "$TMUX_SOCKET" kill-session -t weather_live_runtime_patrol 2>/dev/null || true
 launchctl bootout "gui/$UID_NUM/$LABEL" >/dev/null 2>&1 || true
 launchctl bootstrap "gui/$UID_NUM" "$PLIST"
 launchctl kickstart -k "gui/$UID_NUM/$LABEL"

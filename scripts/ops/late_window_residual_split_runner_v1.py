@@ -73,18 +73,15 @@ RUNTIME_DIR = Path(
 )
 DEFAULT_SNAPSHOT_DIRS = [
     Path("/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots"),
-    Path("/Users/deepsleep/projects/weather_data_feed_service_runtime/targeted_output/paper_snapshots"),
     ROOT / "runtime/weather_edge_v1/market_data/paper_snapshots",
 ]
 DEFAULT_OBSERVATION_CACHE_PATHS = [
     Path("/Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json"),
-    Path("/Users/deepsleep/projects/weather_data_feed_service_runtime/output/observations/latest.json"),
     ROOT / "runtime/weather_edge_v1/market_data/observations/latest.json",
     ROOT / "runtime/weather_edge_v1/observations/latest.json",
 ]
 DEFAULT_FORECAST_ENRICHMENT_PATHS = [
     Path("/Volumes/jrs/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json"),
-    Path("/Users/deepsleep/projects/weather_data_feed_service_runtime/output/forecast_enrichment/latest.json"),
     ROOT / "runtime/weather_edge_v1/market_data/forecast_enrichment/latest.json",
 ]
 FEATURE_STORE_DEFAULT = ROOT / os.environ.get("WEATHER_FEATURE_STORE_DIR", "runtime/weather_feature_store")

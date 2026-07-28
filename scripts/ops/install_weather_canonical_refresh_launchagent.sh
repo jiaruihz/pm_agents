@@ -14,7 +14,7 @@ cat >"$PLIST" <<EOF
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array>
-    <string>$PROJECT_DIR/scripts/ops/run_weather_canonical_refresh_launchd.sh</string>
+    <string>$PROJECT_DIR/scripts/ops/start_weather_canonical_refresh_tmux.sh</string>
   </array>
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
   <key>RunAtLoad</key><true/>

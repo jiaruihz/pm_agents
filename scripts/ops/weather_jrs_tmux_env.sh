@@ -5,9 +5,15 @@
 # the tmux server process context, so the same session name elsewhere is not
 # equivalent.
 WEATHER_JRS_TMUX_SOCKET_CANONICAL="weather-data-feed-jrs"
+WEATHER_JRS_TMUX_BIN_CANONICAL="/opt/homebrew/Cellar/tmux/3.6b/bin/tmux"
+WEATHER_JRS_TMUX_BIN_CANONICAL_SHA256="74e47d00267734a47daffd0c6d92e6841c671ee88b54aab6c13d239ba8741584"
 
 weather_jrs_tmux_bin() {
   if [[ -n "${WEATHER_JRS_TMUX_BIN:-}" ]]; then
+    if [[ "${WEATHER_JRS_TMUX_TEST_OVERRIDE:-0}" != "1" ]]; then
+      echo "refusing JRS tmux binary override outside tests: $WEATHER_JRS_TMUX_BIN" >&2
+      return 1
+    fi
     if [[ ! -x "$WEATHER_JRS_TMUX_BIN" ]]; then
       echo "configured WEATHER_JRS_TMUX_BIN is not executable: $WEATHER_JRS_TMUX_BIN" >&2
       return 1
@@ -15,11 +21,19 @@ weather_jrs_tmux_bin() {
     printf '%s\n' "$WEATHER_JRS_TMUX_BIN"
     return 0
   fi
-  if [[ -x /opt/homebrew/bin/tmux ]]; then
-    printf '%s\n' /opt/homebrew/bin/tmux
-    return 0
+  if [[ ! -x "$WEATHER_JRS_TMUX_BIN_CANONICAL" ]]; then
+    echo "pinned Full-Disk-Access JRS tmux binary is missing: $WEATHER_JRS_TMUX_BIN_CANONICAL" >&2
+    return 1
   fi
-  command -v tmux
+  local actual_sha256
+  actual_sha256="$(
+    shasum -a 256 "$WEATHER_JRS_TMUX_BIN_CANONICAL" | awk '{print $1}'
+  )"
+  if [[ "$actual_sha256" != "$WEATHER_JRS_TMUX_BIN_CANONICAL_SHA256" ]]; then
+    echo "pinned JRS tmux binary changed; grant Full Disk Access and update the reviewed pin before use: path=$WEATHER_JRS_TMUX_BIN_CANONICAL expected_sha256=$WEATHER_JRS_TMUX_BIN_CANONICAL_SHA256 actual_sha256=$actual_sha256" >&2
+    return 1
+  fi
+  printf '%s\n' "$WEATHER_JRS_TMUX_BIN_CANONICAL"
 }
 
 weather_jrs_tmux_socket() {

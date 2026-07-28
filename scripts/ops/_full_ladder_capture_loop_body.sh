@@ -37,13 +37,15 @@ export WEATHER_DATA_FEED_MARKET_PROXY="${WEATHER_DATA_FEED_MARKET_PROXY:-http://
 export WEATHER_DATA_FEED_MARKET_PROXY
 PROJECT_DIR="${PROJECT_DIR:-$HOME/projects/pm_agents}"
 FAILOVER="$PROJECT_DIR/scripts/ops/weather_market_proxy_failover.py"
+FAILOVER_LOG="${WEATHER_MARKET_PROXY_FAILOVER_LOG:-$OUTPUT_ROOT/market_proxy_failover.jsonl}"
 
 while true; do
   date -u +"[full_ladder] snapshot_start_utc=%Y-%m-%dT%H:%M:%SZ" >> "$LOG_FILE"
   # Ensure the shared proxy controller has a healthy node before snapshotting
   # (best-effort; the main feed also does this, we piggyback on its selection).
   if [[ -x "$PROJECT_DIR/.venv/bin/python" && -f "$FAILOVER" ]]; then
-    "$PROJECT_DIR/.venv/bin/python" "$FAILOVER" >> "$LOG_FILE" 2>&1 || true
+    "$PROJECT_DIR/.venv/bin/python" "$FAILOVER" \
+      --log "$FAILOVER_LOG" >> "$LOG_FILE" 2>&1 || true
   fi
   "$PY" -u -m weather_data_feed_service \
     --output-root "$OUTPUT_ROOT" --cache-root "$CACHE_ROOT" \

@@ -32,6 +32,13 @@ LOW_PRICE_TP_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/low_price_yes_take_pr
 LOW_PRICE_INTEGRATED_SHADOW_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/low_price_yes_integrated_tail_shadow_v2"
 RUNTIME_MONITOR_RUNTIME="$PROJECT_DIR/runtime/weather_edge_v1/runtime_monitor"
 
+case "${1:-}" in
+  install-launchagents|start|restart|start-live|start-low-price-live|start-low-price-shadow|start-low-price-take-profit|start-low-price-integrated-shadow|start-runtime-monitor)
+    echo "refusing dormant direct-LaunchAgent weather stack; use the strategy's canonical JRS tmux start entrypoint" >&2
+    exit 2
+    ;;
+esac
+
 usage() {
   cat <<'EOF'
 Usage: scripts/ops/mac_weather_stack.sh <command>

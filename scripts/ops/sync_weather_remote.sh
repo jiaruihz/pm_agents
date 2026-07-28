@@ -68,7 +68,7 @@ case "$WEATHER_MARKET_SOURCE" in
     if [[ "$WEATHER_REMOTE_WAS_SET" != "1" ]]; then
       WEATHER_REMOTE="local"
     fi
-    WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-$HOME/projects/weather_data_feed_service_runtime}"
+    WEATHER_REMOTE_DIR="${WEATHER_REMOTE_DIR:-/Volumes/jrs/weather_data_feed_service_runtime}"
     MARKET_OUTPUT_PREFIX="${WEATHER_DATA_FEED_OUTPUT_PREFIX:-targeted_output}"
     MARKET_OPTIONAL_OUTPUTS=1
     ;;

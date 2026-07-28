@@ -26,9 +26,9 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   PYTHON_BIN="python3"
 fi
 
-SNAPSHOT_SRC="${LOW_PRICE_YES_FACT_REFRESH_SNAPSHOT_SRC:-$HOME/projects/weather_data_feed_service_runtime/targeted_output/paper_snapshots}"
-FULL_LADDER_SNAPSHOT_SRC="${LOW_PRICE_YES_FACT_REFRESH_FULL_LADDER_SNAPSHOT_SRC:-$HOME/projects/weather_data_feed_service_runtime/full_ladder_output/paper_snapshots}"
-CACHE_SRC="${LOW_PRICE_YES_FACT_REFRESH_CACHE_SRC:-$HOME/projects/weather_data_feed_service_runtime/cache}"
+SNAPSHOT_SRC="${LOW_PRICE_YES_FACT_REFRESH_SNAPSHOT_SRC:-/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots}"
+FULL_LADDER_SNAPSHOT_SRC="${LOW_PRICE_YES_FACT_REFRESH_FULL_LADDER_SNAPSHOT_SRC:-/Volumes/jrs/weather_data_feed_service_runtime/full_ladder_output/paper_snapshots}"
+CACHE_SRC="${LOW_PRICE_YES_FACT_REFRESH_CACHE_SRC:-/Volumes/jrs/weather_data_feed_service_runtime/cache}"
 SNAPSHOT_DST="${LOW_PRICE_YES_FACT_REFRESH_SNAPSHOT_DST:-runtime/weather_edge_v1/market_data/paper_snapshots}"
 CACHE_DST="${LOW_PRICE_YES_FACT_REFRESH_CACHE_DST:-runtime/weather_edge_v1/market_data/cache}"
 DB_PATH="${LOW_PRICE_YES_FACT_REFRESH_DB_PATH:-runtime/weather.db}"
