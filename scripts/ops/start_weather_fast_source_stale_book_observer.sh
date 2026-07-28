@@ -17,7 +17,7 @@ MARKET_PROXY="${WEATHER_STALE_BOOK_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROX
 FRESH_SCOPE="${WEATHER_STALE_BOOK_FRESH_SCOPE:-t_minus_1_no}"
 LOG_FILE="$RUNTIME_ROOT/loop/fast_source_stale_book_observer.log"
 
-mkdir -p "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
 
 cmd=(
   "$PROJECT_DIR/.venv/bin/python"
