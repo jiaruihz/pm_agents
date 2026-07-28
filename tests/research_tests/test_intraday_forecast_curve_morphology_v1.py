@@ -123,3 +123,55 @@ def test_decision_relative_alias_uses_future_exit_boundary() -> None:
     assert result["peak_clock_alias"] is True
     assert result["current_exit_threshold_native"] == 29.5
     assert result["future_curve_max_native"] > 29.5
+
+
+def test_decision_relative_alias_excludes_past_current_hour_point() -> None:
+    values = [
+        70.0,
+        69.0,
+        68.0,
+        67.0,
+        66.0,
+        65.0,
+        66.0,
+        68.0,
+        72.0,
+        76.0,
+        80.0,
+        84.0,
+        88.0,
+        86.0,
+        84.0,
+        83.5,
+        80.0,
+        78.0,
+        76.0,
+        74.0,
+        73.0,
+        72.0,
+        71.0,
+        70.0,
+    ]
+    record = {
+        "city": "Example",
+        "target_date": "2026-07-27",
+        "checkpoint_key": "Example|2026-07-27|15",
+        "decision_snapshot_ts_utc": "2026-07-27T07:44:00Z",
+        "decision_hour_local_float": 15.73,
+        "current_bracket": "29",
+        "d1_bracket": "30",
+        "unit": "C",
+        "hourly_curve": [
+            {
+                "time_local": f"2026-07-27T{hour:02d}:00",
+                "temperature_f": temperature,
+            }
+            for hour, temperature in enumerate(values)
+        ],
+    }
+
+    result = study.add_live_curve_fields(record)
+
+    assert result["future_curve_start_hour_local"] == 16
+    assert result["future_curve_max_native"] < 29.5
+    assert result["peak_clock_alias"] is False

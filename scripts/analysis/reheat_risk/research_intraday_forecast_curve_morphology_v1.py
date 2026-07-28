@@ -598,6 +598,36 @@ def settlement_rows() -> pd.DataFrame:
     return frame
 
 
+def winning_settlement_rows() -> pd.DataFrame:
+    connection = sqlite3.connect(
+        f"file:{DB}?mode=ro", uri=True, timeout=1.0
+    )
+    connection.execute("PRAGMA query_only=ON")
+    connection.execute("PRAGMA busy_timeout=1000")
+    query = """
+        SELECT
+            city,
+            event_date AS target_date,
+            bracket AS winning_bracket
+        FROM fact_signal_candidates
+        WHERE settlement_status='settled'
+          AND final_yes=1
+        GROUP BY city, event_date, bracket
+    """
+    frame = pd.read_sql_query(query, connection)
+    connection.close()
+    frame["target_date"] = frame["target_date"].astype(str)
+    frame["winning_bracket"] = frame["winning_bracket"].astype(str)
+    return frame
+
+
+def bracket_level(bracket: Any) -> float | None:
+    parsed = parse_market_bracket(str(bracket))
+    if parsed is None or parsed.low is None:
+        return None
+    return float(parsed.low)
+
+
 def live_exit_threshold(bracket: Any, unit: str) -> float | None:
     parsed = parse_market_bracket(str(bracket))
     if parsed is None:
@@ -625,10 +655,11 @@ def add_live_curve_fields(record: dict[str, Any]) -> dict[str, Any]:
         (hour, (temperature - 32.0) * 5.0 / 9.0 if unit == "C" else temperature)
         for hour, temperature in points_f
     ]
+    future_start_hour = int(math.ceil(decision_hour))
     future = [
         value
         for hour, value in points_native
-        if hour >= math.floor(decision_hour)
+        if hour >= future_start_hour
     ]
     future_max = max(future) if future else math.nan
     global_peak_hour = morphology.get("global_peak_hour")
@@ -654,8 +685,14 @@ def add_live_curve_fields(record: dict[str, Any]) -> dict[str, Any]:
         "d1_bracket": str(record.get("d1_bracket")),
         "current_yes_bid": record.get("current_yes_bid"),
         "current_yes_ask": record.get("current_yes_ask"),
+        "current_yes_bid_size": record.get("current_yes_bid_size"),
+        "current_yes_ask_size": record.get("current_yes_ask_size"),
+        "current_yes_book_status": record.get("current_yes_book_status"),
         "d1_no_bid": record.get("d1_no_bid"),
         "d1_no_ask": record.get("d1_no_ask"),
+        "d1_no_bid_size": record.get("d1_no_bid_size"),
+        "d1_no_ask_size": record.get("d1_no_ask_size"),
+        "d1_no_book_status": record.get("d1_no_book_status"),
         "model_probability_hold": record.get("model_probability_hold"),
         "model_edge_after_fee_and_depth": record.get(
             "model_edge_after_fee_and_depth"
@@ -666,6 +703,7 @@ def add_live_curve_fields(record: dict[str, Any]) -> dict[str, Any]:
         "forecast_peak_delta_hours_local": record.get(
             "forecast_peak_delta_hours_local"
         ),
+        "future_curve_start_hour_local": future_start_hour,
         "future_curve_max_native": future_max,
         "current_exit_threshold_native": threshold,
         "global_peak_past_hours": peak_past_hours,
@@ -709,6 +747,27 @@ def load_forward_scores() -> pd.DataFrame:
         how="left",
         validate="many_to_one",
     )
+    frame = frame.merge(
+        winning_settlement_rows(),
+        on=["city", "target_date"],
+        how="left",
+        validate="many_to_one",
+    )
+    frame["current_bracket_level"] = frame["current_bracket"].map(
+        bracket_level
+    )
+    frame["winning_bracket_level"] = frame["winning_bracket"].map(
+        bracket_level
+    )
+    frame["settlement_move_brackets"] = (
+        frame["winning_bracket_level"] - frame["current_bracket_level"]
+    )
+    frame["settled_upward_exit"] = (
+        frame["settlement_move_brackets"].gt(0).astype("boolean")
+    )
+    frame.loc[
+        frame["winning_bracket"].isna(), "settled_upward_exit"
+    ] = pd.NA
     frame = frame.merge(
         settlements.rename(
             columns={
@@ -870,9 +929,59 @@ def build_payload() -> dict[str, Any]:
         .sort_values("decision_snapshot_dt")
         .drop_duplicates(["city", "target_date"], keep="first")
     )
+    forward_alias_first.to_csv(
+        OUT_DIR / "forward_first_alias_city_days.csv", index=False
+    )
     settled_forward_alias = forward_alias_first[
         forward_alias_first["current_final_yes"].notna()
     ]
+    settled_forward_alias.to_csv(
+        OUT_DIR / "forward_settled_first_alias_city_days.csv", index=False
+    )
+    forward_alias_by_date = (
+        forward_alias_first.groupby("target_date", as_index=False)
+        .agg(
+            signal_city_days=("city", "size"),
+            settled_city_days=("current_final_yes", "count"),
+            upward_exits=(
+                "settled_upward_exit",
+                lambda values: int(
+                    pd.Series(values, dtype="boolean").fillna(False).sum()
+                ),
+            ),
+            current_no_quote_city_days=("current_no_ask_proxy", "count"),
+            d1_yes_quote_city_days=("d1_yes_ask_proxy", "count"),
+            current_yes_ask_001_city_days=(
+                "current_yes_ask",
+                lambda values: int(
+                    pd.to_numeric(values, errors="coerce").le(0.001).sum()
+                ),
+            ),
+        )
+    )
+    forward_alias_by_city = (
+        forward_alias_first.groupby("city", as_index=False)
+        .agg(
+            signal_city_days=("target_date", "size"),
+            dates=("target_date", "nunique"),
+            settled_city_days=("current_final_yes", "count"),
+            upward_exits=(
+                "settled_upward_exit",
+                lambda values: int(
+                    pd.Series(values, dtype="boolean").fillna(False).sum()
+                ),
+            ),
+            current_no_quote_city_days=("current_no_ask_proxy", "count"),
+            d1_yes_quote_city_days=("d1_yes_ask_proxy", "count"),
+        )
+        .sort_values(["signal_city_days", "city"], ascending=[False, True])
+    )
+    forward_alias_by_date.to_csv(
+        OUT_DIR / "forward_alias_by_date.csv", index=False
+    )
+    forward_alias_by_city.to_csv(
+        OUT_DIR / "forward_alias_by_city.csv", index=False
+    )
     latest_forward = str(forward["target_date"].max()) if len(forward) else None
     preregistration = {
         "research_id": RESEARCH_ID,
@@ -949,6 +1058,22 @@ def build_payload() -> dict[str, Any]:
             "current_exact_losses": int(
                 settled_forward_alias["current_final_yes"].eq(0).sum()
             ),
+            "settled_upward_exits": int(
+                settled_forward_alias["settled_upward_exit"].sum()
+            ),
+            "settled_current_yes_ask_001_city_days": int(
+                pd.to_numeric(
+                    settled_forward_alias["current_yes_ask"], errors="coerce"
+                )
+                .le(0.001)
+                .sum()
+            ),
+            "settled_current_no_quote_city_days": int(
+                settled_forward_alias["current_no_ask_proxy"].notna().sum()
+            ),
+            "settlement_move_median_brackets": float(
+                settled_forward_alias["settlement_move_brackets"].median()
+            ),
             "current_exact_loss_rate": (
                 float(
                     settled_forward_alias["current_final_yes"].eq(0).mean()
@@ -969,6 +1094,8 @@ def build_payload() -> dict[str, Any]:
         "historical_expression_summary": expression_summary.to_dict("records"),
         "forward_funnel": forward_summary.to_dict("records"),
         "forward_expression_summary": forward_expression.to_dict("records"),
+        "forward_alias_by_date": forward_alias_by_date.to_dict("records"),
+        "forward_alias_by_city": forward_alias_by_city.to_dict("records"),
         "chengdu_timeline": chengdu.to_dict("records"),
         "preregistration": {
             **preregistration,
@@ -1026,6 +1153,12 @@ def write_report(payload: dict[str, Any]) -> None:
     forward_funnel = pd.DataFrame(payload["forward_funnel"])
     forward_expression = pd.DataFrame(
         payload["forward_expression_summary"]
+    )
+    forward_alias_by_date = pd.DataFrame(
+        payload["forward_alias_by_date"]
+    )
+    forward_alias_by_city = pd.DataFrame(
+        payload["forward_alias_by_city"]
     )
     chengdu = pd.DataFrame(payload["chengdu_timeline"]).sort_values(
         "decision_snapshot_dt"
@@ -1111,12 +1244,10 @@ def write_report(payload: dict[str, Any]) -> None:
         "vs_core_candidate_minus_baseline_logloss"
     ]
     logloss_ci = primary["vs_core_logloss_delta_ci95"]
-    chengdu_17 = chengdu[
-        chengdu["checkpoint_key"].astype(str).str.endswith("|17")
-    ]
-    if chengdu_17.empty:
-        chengdu_17 = chengdu.tail(1)
-    case = chengdu_17.iloc[-1] if not chengdu_17.empty else {}
+    chengdu_alias = chengdu[chengdu["peak_clock_alias"].fillna(False)]
+    if chengdu_alias.empty:
+        chengdu_alias = chengdu.tail(1)
+    case = chengdu_alias.iloc[0] if not chengdu_alias.empty else {}
 
     lines = [
         "# Weather 研究：日内 forecast 曲线形态与 peak-clock alias v1",
@@ -1137,11 +1268,11 @@ def write_report(payload: dict[str, Any]) -> None:
         "",
         "**动作：把 `peak-clock alias / future local heat lobe` 作为共享连续风险特征和 zero-notional collector；不改 live，不把“双峰”直接做成交易 gate。**",
         "",
-        "成都 7/27 证明这个状态可在事前识别：17:30 当地时间，旧模型只看 00:00 global argmax，得到 `peak passed 17.5h` 和 `p_hold=98.85%`；但同一条 PIT 曲线的未来热峰仍到达 current 29 档的 upward-exit boundary。盘口同时给出 29 NO 和 30 YES 约 `9c` 的互补价格，最终 canonical settlement 为 30。",
+        "成都 7/27 证明这个状态可在事前识别：16:44 当地时间，forecast vintage 把 global argmax 切到 00:00，旧模型得到 `p_hold=96.28%`；但下一小时 17:00 的局部热峰仍到达 current 29 档的 upward-exit boundary。盘口给出 29 NO `27c`、30 YES `31c` 的互补 ask proxy，最终 canonical settlement 为 30。",
         "",
         f"历史 31 日同分母上，新增 boundary-relative morphology 相对 frozen core 的 Brier Δ `{number(brier_delta, 6)}`（95% CI `{brier_ci}`），logloss Δ `{number(logloss_delta, 6)}`（95% CI `{logloss_ci}`）；负值才是改善。当前没有通过 proper-score baseline，因此它还不是独立 alpha。",
         "",
-        f"但 forward raw 的风险标签很清楚：首个 alias 共 {forward_alias['city_days']} city-days / {forward_alias['dates']} dates，其中 settled {forward_alias['settled_city_days']} city-days / {forward_alias['settled_dates']} dates，current exact loss {forward_alias['current_exact_losses']}，loss rate {pct(forward_alias['current_exact_loss_rate'])}。fresh complementary quote 只有 current NO {forward_alias['current_no_direct_quote_city_days']} city-days、d1 YES {forward_alias['d1_yes_direct_quote_city_days']} city-days，无法把风险识别包装成可执行策略。",
+        f"修正“未来小时”边界后，首个 alias 共 {forward_alias['city_days']} city-days / {forward_alias['dates']} dates，其中 settled {forward_alias['settled_city_days']} city-days / {forward_alias['settled_dates']} dates，向上离开 current exact {forward_alias['settled_upward_exits']}，中位跨越 {number(forward_alias['settlement_move_median_brackets'], 1)} 档。但 {forward_alias['settled_current_yes_ask_001_city_days']} 个 settled signal 的 current YES ask 已到 `0.001`、且没有 current NO 可买 ask，市场早已定价；settled 且有 current NO 价格的只有 {forward_alias['settled_current_no_quote_city_days']} 个。高命中率不是可执行 alpha。",
         "",
         "结论等级：`inconclusive_feature_value / zero_notional_collector_candidate`；significance=`FAIL`，baseline=`FAIL`，forward=`NA`（规则由 7/27 案例提出，7/29 起才是真 frozen forward）。",
         "",
@@ -1174,6 +1305,8 @@ def write_report(payload: dict[str, Any]) -> None:
         "| `multi_peak_other` | 两个相隔≥4h 的近峰 |",
         "| `peak-clock alias` | global peak 已过>2h，但未来 lobe 仍达 current upward-exit boundary |",
         "",
+        "`未来`严格从 `ceil(decision_hour_local)` 开始。旧版从 `floor(...)` 开始，会在 15:44 错把已经过去的 15:00 forecast 点算成未来；该实现错误把 settled 分母从修正后的样本扩大为原来的 33 个。",
+        "",
         "## 成都 2026-07-27 PIT 时间线",
         "",
         table(
@@ -1196,7 +1329,7 @@ def write_report(payload: dict[str, Any]) -> None:
             ],
         ),
         "",
-        f"17 点 checkpoint：shape=`{case.get('curve_shape')}`，global peak={case.get('global_peak_hour')}h，future max={number(case.get('future_curve_max_native'), 2)}，29 档 exit threshold={number(case.get('current_exit_threshold_native'), 2)}；current NO / 30 YES 的互补 ask proxy 均约 `{number(case.get('current_no_ask_proxy'), 2)}` / `{number(case.get('d1_yes_ask_proxy'), 2)}`。这是事前可见 residual；后到的 18:00 METAR 和 settlement 只作 label。",
+        f"首个 alias checkpoint：shape=`{case.get('curve_shape')}`，global peak={case.get('global_peak_hour')}h，future max={number(case.get('future_curve_max_native'), 2)}，29 档 exit threshold={number(case.get('current_exit_threshold_native'), 2)}；current NO / 30 YES 的互补 ask proxy 约 `{number(case.get('current_no_ask_proxy'), 2)}` / `{number(case.get('d1_yes_ask_proxy'), 2)}`。这是事前可见 residual；后到的观测和 settlement 只作 label。",
         "",
         "异常形态其实在 13:42 已出现：当时 00:00 与 17:00 是两个相隔 17h 的近峰，分类为 `multi_peak_other`；16:44 forecast vintage 把 global argmax 从 17:00 切到 00:00，但未来 17:00 lobe 仍越过 29 档上沿。真正的危险是旧模型概率从 15:42 的 22.9% 反跳到 16:44 的 96.3%，不是形态突然消失。",
         "",
@@ -1220,7 +1353,7 @@ def write_report(payload: dict[str, Any]) -> None:
         "命名形态没有一个可凭历史点估直接成为 gate。尤其 D-1 historical alias 只有 "
         f"{historical_alias['city_days']} city-days / {historical_alias['dates']} dates，upward exit {historical_alias['overshoots']}；这和短 forward 的 {pct(forward_alias['current_exact_loss_rate'])} loss 形成强烈 vintage/denominator 差异，说明必须校准 curve issue/run、source basis 和 decision-relative boundary，不能用一个布尔“双峰”外推。",
         "",
-        "Forward negative control 是 Karachi 7/27：future curve 只刚好到 34 档 exit boundary `34.5°C`，current 34 最终仍 hold。它是 33 个 settled first-alias city-day 里唯一 false positive，说明 `forecast reaches boundary` 不能当确定性标签，也不能事后把 `>=` 改成 `>` 来追样本。",
+        "旧版 negative control Karachi 7/27 实际是时钟边界错误：15:31 决策时被计入的是已经过去的 15:00 forecast 点 `34.5°C`；严格从 16:00 开始后 future max 只有 `33.33°C`，不再是 alias。它被从信号分母移除，不再算策略亏损。",
         "",
         "Frozen selector 的形态分布：",
         "",
@@ -1288,7 +1421,37 @@ def write_report(payload: dict[str, Any]) -> None:
             ],
         ),
         "",
-        "成都的单笔价格很漂亮，但 d1 YES evidence funnel 只有 1 个 quoted settled city-day；current NO 也只有 2 个，其中 Karachi false positive 亏损。历史 D-1 early-peak/double-lobe 同样没有稳定收益。因此独立策略只保留为 expression hypothesis：先估 `p_upward_exit`，再在 current NO / d1 YES / higher YES 中按 fresh full-ladder EV 选表达。",
+        "成都的单笔价格很漂亮，但 settled evidence funnel 中 current NO 与 d1 YES 都只有 1 个 quoted city-day，且没有保存足以声明 executable fill 的完整 side depth。其余 settled signals 基本都在 current YES `0.001` 时才出现，已无赔率空间。因此独立策略只保留为 expression hypothesis。",
+        "",
+        "### Forward 日期分布",
+        "",
+        table(
+            forward_alias_by_date,
+            [
+                "target_date",
+                "signal_city_days",
+                "settled_city_days",
+                "upward_exits",
+                "current_yes_ask_001_city_days",
+                "current_no_quote_city_days",
+                "d1_yes_quote_city_days",
+            ],
+        ),
+        "",
+        "### Forward 城市分布",
+        "",
+        table(
+            forward_alias_by_city,
+            [
+                "city",
+                "signal_city_days",
+                "dates",
+                "settled_city_days",
+                "upward_exits",
+                "current_no_quote_city_days",
+                "d1_yes_quote_city_days",
+            ],
+        ),
         "",
         "## Signal funnel",
         "",

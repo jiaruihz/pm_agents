@@ -7,8 +7,8 @@
 | historical source | `docs/analysis/2026-07/generated/current_yes_core_carry_overshoot_missing_mechanisms_v2/feature_ledger.csv` |
 | historical coverage | 2026-06-02..2026-07-08；1349 state rows / 772 city-days / 31 target dates |
 | forward raw source | `runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/pre_live_scores.jsonl` |
-| forward coverage | 2026-07-24..2026-07-28；591 checkpoints / 5 target dates |
-| DB snapshot mtime UTC | 2026-07-28T13:02:49.181237+00:00 |
+| forward coverage | 2026-07-24..2026-07-28；602 checkpoints / 5 target dates |
+| DB snapshot mtime UTC | 2026-07-28T14:09:06.944327+00:00 |
 | sync / rebuild | 未执行；历史 parent 已覆盖目标窗，7/27 案例直接读 Mac raw，settlement 只读 canonical DB |
 | unsettled / missing bracket | 历史 parent 0 / 0；forward 按 settled 子集单列，不把未结算当策略筛除 |
 
@@ -16,11 +16,11 @@
 
 **动作：把 `peak-clock alias / future local heat lobe` 作为共享连续风险特征和 zero-notional collector；不改 live，不把“双峰”直接做成交易 gate。**
 
-成都 7/27 证明这个状态可在事前识别：17:30 当地时间，旧模型只看 00:00 global argmax，得到 `peak passed 17.5h` 和 `p_hold=98.85%`；但同一条 PIT 曲线的未来热峰仍到达 current 29 档的 upward-exit boundary。盘口同时给出 29 NO 和 30 YES 约 `9c` 的互补价格，最终 canonical settlement 为 30。
+成都 7/27 证明这个状态可在事前识别：16:44 当地时间，forecast vintage 把 global argmax 切到 00:00，旧模型得到 `p_hold=96.28%`；但下一小时 17:00 的局部热峰仍到达 current 29 档的 upward-exit boundary。盘口给出 29 NO `27c`、30 YES `31c` 的互补 ask proxy，最终 canonical settlement 为 30。
 
 历史 31 日同分母上，新增 boundary-relative morphology 相对 frozen core 的 Brier Δ `0.000127`（95% CI `[-0.0013376749786077305, 0.001689888654552386]`），logloss Δ `0.001209`（95% CI `[-0.004379557696800124, 0.0073559472543067595]`）；负值才是改善。当前没有通过 proper-score baseline，因此它还不是独立 alpha。
 
-但 forward raw 的风险标签很清楚：首个 alias 共 35 city-days / 5 dates，其中 settled 33 city-days / 4 dates，current exact loss 32，loss rate 97.0%。fresh complementary quote 只有 current NO 4 city-days、d1 YES 1 city-days，无法把风险识别包装成可执行策略。
+修正“未来小时”边界后，首个 alias 共 28 city-days / 5 dates，其中 settled 26 city-days / 4 dates，向上离开 current exact 26，中位跨越 5.0 档。但 25 个 settled signal 的 current YES ask 已到 `0.001`、且没有 current NO 可买 ask，市场早已定价；settled 且有 current NO 价格的只有 1 个。高命中率不是可执行 alpha。
 
 结论等级：`inconclusive_feature_value / zero_notional_collector_candidate`；significance=`FAIL`，baseline=`FAIL`，forward=`NA`（规则由 7/27 案例提出，7/29 起才是真 frozen forward）。
 
@@ -53,6 +53,8 @@
 | `multi_peak_other` | 两个相隔≥4h 的近峰 |
 | `peak-clock alias` | global peak 已过>2h，但未来 lobe 仍达 current upward-exit boundary |
 
+`未来`严格从 `ceil(decision_hour_local)` 开始。旧版从 `floor(...)` 开始，会在 15:44 错把已经过去的 15:00 forecast 点算成未来；该实现错误把 settled 分母从修正后的样本扩大为原来的 33 个。
+
 ## 成都 2026-07-27 PIT 时间线
 
 | local_time | checkpoint_key | curve_shape | global_peak_hour | future_curve_max_native | current_exit_threshold_native | peak_clock_alias | current_bracket | current_no_ask_proxy | d1_bracket | d1_yes_ask_proxy | model_probability_hold | current_final_yes | d1_final_yes |
@@ -61,9 +63,9 @@
 | 2026-07-27 14:41 | Chengdu\|2026-07-27\|14 | multi_peak_other | 17 | 30.666666666666668 | 29.5 | False | 29 | 0.36 | 30 | 0.26 | 0.6128299577165406 | 0.0 | 1.0 |
 | 2026-07-27 15:42 | Chengdu\|2026-07-27\|15 | multi_peak_other | 17 | 30.666666666666668 | 29.5 | False | 29 | 0.83 | 30 | 0.64 | 0.22924279971239817 | 0.0 | 1.0 |
 | 2026-07-27 16:44 | Chengdu\|2026-07-27\|16 | overnight_peak_afternoon_lobe | 0 | 29.77777777777778 | 29.5 | True | 29 | 0.27 | 30 | 0.31 | 0.9627708987953272 | 0.0 | 1.0 |
-| 2026-07-27 17:30 | Chengdu\|2026-07-27\|17 | overnight_peak_afternoon_lobe | 0 | 29.77777777777778 | 29.5 | True | 29 | 0.09 | 30 | 0.09 | 0.9885015083661685 | 0.0 | 1.0 |
+| 2026-07-27 17:30 | Chengdu\|2026-07-27\|17 | overnight_peak_afternoon_lobe | 0 | 28.77777777777778 | 29.5 | False | 29 | 0.09 | 30 | 0.09 | 0.9885015083661685 | 0.0 | 1.0 |
 
-17 点 checkpoint：shape=`overnight_peak_afternoon_lobe`，global peak=0h，future max=29.78，29 档 exit threshold=29.50；current NO / 30 YES 的互补 ask proxy 均约 `0.09` / `0.09`。这是事前可见 residual；后到的 18:00 METAR 和 settlement 只作 label。
+首个 alias checkpoint：shape=`overnight_peak_afternoon_lobe`，global peak=0h，future max=29.78，29 档 exit threshold=29.50；current NO / 30 YES 的互补 ask proxy 约 `0.27` / `0.31`。这是事前可见 residual；后到的观测和 settlement 只作 label。
 
 异常形态其实在 13:42 已出现：当时 00:00 与 17:00 是两个相隔 17h 的近峰，分类为 `multi_peak_other`；16:44 forecast vintage 把 global argmax 从 17:00 切到 00:00，但未来 17:00 lobe 仍越过 29 档上沿。真正的危险是旧模型概率从 15:42 的 22.9% 反跳到 16:44 的 96.3%，不是形态突然消失。
 
@@ -79,9 +81,9 @@
 | morning_peak_afternoon_reheat | 7 | 6 | 0 | 0.0% | 0.05230851602513297 | 0.07721428571428565 | -9.2% | [-0.125, -0.0635054611747099] |
 | overnight_peak_afternoon_lobe | 2 | 1 | 0 | 0.0% | 0.015085126126333951 | 0.14 | -9.2% | [-0.12311557788944724, -0.06390988372093025] |
 
-命名形态没有一个可凭历史点估直接成为 gate。尤其 D-1 historical alias 只有 8 city-days / 7 dates，upward exit 0；这和短 forward 的 97.0% loss 形成强烈 vintage/denominator 差异，说明必须校准 curve issue/run、source basis 和 decision-relative boundary，不能用一个布尔“双峰”外推。
+命名形态没有一个可凭历史点估直接成为 gate。尤其 D-1 historical alias 只有 8 city-days / 7 dates，upward exit 0；这和短 forward 的 100.0% loss 形成强烈 vintage/denominator 差异，说明必须校准 curve issue/run、source basis 和 decision-relative boundary，不能用一个布尔“双峰”外推。
 
-Forward negative control 是 Karachi 7/27：future curve 只刚好到 34 档 exit boundary `34.5°C`，current 34 最终仍 hold。它是 33 个 settled first-alias city-day 里唯一 false positive，说明 `forecast reaches boundary` 不能当确定性标签，也不能事后把 `>=` 改成 `>` 来追样本。
+旧版 negative control Karachi 7/27 实际是时钟边界错误：15:31 决策时被计入的是已经过去的 15:00 forecast 点 `34.5°C`；严格从 16:00 开始后 future max 只有 `33.33°C`，不再是 alias。它被从信号分母移除，不再算策略亏损。
 
 Frozen selector 的形态分布：
 
@@ -124,10 +126,39 @@ Forward alias first-city-day expression：
 
 | expression | quoted_settled_city_days | dates | wins | mean_ask_proxy | fee_adjusted_roi | depth_status |
 |---|---|---|---|---|---|---|
-| current_no | 2 | 1 | 1 | 0.15000000000000002 | 221.2% | bid_depth_not_stored_in_pre_live_score |
+| current_no | 1 | 1 | 1 | 0.27 | 257.3% | bid_depth_not_stored_in_pre_live_score |
 | d1_yes | 1 | 1 | 1 | 0.31000000000000005 | 211.8% | bid_depth_not_stored_in_pre_live_score |
 
-成都的单笔价格很漂亮，但 d1 YES evidence funnel 只有 1 个 quoted settled city-day；current NO 也只有 2 个，其中 Karachi false positive 亏损。历史 D-1 early-peak/double-lobe 同样没有稳定收益。因此独立策略只保留为 expression hypothesis：先估 `p_upward_exit`，再在 current NO / d1 YES / higher YES 中按 fresh full-ladder EV 选表达。
+成都的单笔价格很漂亮，但 settled evidence funnel 中 current NO 与 d1 YES 都只有 1 个 quoted city-day，且没有保存足以声明 executable fill 的完整 side depth。其余 settled signals 基本都在 current YES `0.001` 时才出现，已无赔率空间。因此独立策略只保留为 expression hypothesis。
+
+### Forward 日期分布
+
+| target_date | signal_city_days | settled_city_days | upward_exits | current_yes_ask_001_city_days | current_no_quote_city_days | d1_yes_quote_city_days |
+|---|---|---|---|---|---|---|
+| 2026-07-24 | 8 | 8 | 8 | 8 | 0 | 0 |
+| 2026-07-25 | 8 | 8 | 8 | 8 | 0 | 0 |
+| 2026-07-26 | 9 | 9 | 9 | 9 | 0 | 0 |
+| 2026-07-27 | 1 | 1 | 1 | 0 | 1 | 1 |
+| 2026-07-28 | 2 | 0 | 0 | 0 | 2 | 1 |
+
+### Forward 城市分布
+
+| city | signal_city_days | dates | settled_city_days | upward_exits | current_no_quote_city_days | d1_yes_quote_city_days |
+|---|---|---|---|---|---|---|
+| Busan | 4 | 4 | 3 | 3 | 1 | 0 |
+| Karachi | 3 | 3 | 3 | 3 | 0 | 0 |
+| Lucknow | 3 | 3 | 3 | 3 | 0 | 0 |
+| Taipei | 3 | 3 | 3 | 3 | 0 | 0 |
+| Chengdu | 2 | 2 | 2 | 2 | 1 | 1 |
+| Jeddah | 2 | 2 | 1 | 1 | 1 | 1 |
+| Shanghai | 2 | 2 | 2 | 2 | 0 | 0 |
+| Singapore | 2 | 2 | 2 | 2 | 0 | 0 |
+| Tokyo | 2 | 2 | 2 | 2 | 0 | 0 |
+| Beijing | 1 | 1 | 1 | 1 | 0 | 0 |
+| CapeTown | 1 | 1 | 1 | 1 | 0 | 0 |
+| Chongqing | 1 | 1 | 1 | 1 | 0 | 0 |
+| Manila | 1 | 1 | 1 | 1 | 0 | 0 |
+| Wuhan | 1 | 1 | 1 | 1 | 0 | 0 |
 
 ## Signal funnel
 
@@ -136,16 +167,16 @@ Forward alias first-city-day expression：
 | historical raw carry parent | checkpoint state | 1349 | 31 |
 | historical first city-day shape | city-day | 772 | 31 |
 | historical peak-clock alias | city-day | 8 | 7 |
-| forward raw checkpoints | checkpoint | 591 | 5 |
-| forward first alias | city-day | 35 | 5 |
+| forward raw checkpoints | checkpoint | 602 | 5 |
+| forward first alias | city-day | 28 | 5 |
 
 ## Evidence funnel
 
 | stage | rows | city_days | dates | settled_rows | settled_city_days | current_exact_losses | current_no_quote_rows | d1_yes_quote_rows |
 |---|---|---|---|---|---|---|---|---|
-| all_forward_checkpoints | 591 | 162 | 5 | 527 | 137 | 319 | 355 | 125 |
-| alias_checkpoints | 67 | 35 | 5 | 64 | 33 | 63 | 6 | 3 |
-| first_alias_city_day | 35 | 35 | 5 | 33 | 33 | 32 | 4 | 1 |
+| all_forward_checkpoints | 602 | 162 | 5 | 527 | 137 | 319 | 365 | 130 |
+| alias_checkpoints | 52 | 28 | 5 | 49 | 26 | 49 | 4 | 3 |
+| first_alias_city_day | 28 | 28 | 5 | 26 | 26 | 26 | 3 | 2 |
 
 - PIT curve：historical 用固定 previous-run Single Runs cache；forward 用 raw checkpoint hourly curve。两者不能混成一个 vintage。
 - source first-seen / settlement basis：historical parent 没有完整 first-seen source，属 coverage gap；forward observation/source 字段存在但本轮未把后到 source 当特征。
