@@ -1,0 +1,65 @@
+{
+  "protocol_id": "heada_training_data_protocol_v1",
+  "strategy_id": "low_price_yes_lottery_tiny_live_v1",
+  "status": "research_preregistered_zero_notional",
+  "evidence_cutoff_target_date": "2026-07-27",
+  "grain": "target_date_block",
+  "eligibility": {
+    "headA_date_requires_candidate": true,
+    "labels_must_be_settled_before_fit": true,
+    "pit_features_only": true,
+    "preserve_all_selected_and_blocked_rows": true
+  },
+  "cycle": {
+    "adaptation_target_dates": 15,
+    "frozen_target_dates": 15,
+    "assignment": "first 15 eligible dates after cutoff are adaptation; next 15 are frozen",
+    "reuse": "after the frozen report, both blocks may enter the next cycle train set, but the next 15-date frozen block must be new"
+  },
+  "model_challengers": [
+    {
+      "name": "market_anchored_exact_ladder_distribution",
+      "target": "all exact-bracket outcomes on the complete ladder",
+      "loss": [
+        "multiclass_logloss",
+        "per-rung_brier"
+      ],
+      "features": [
+        "assigned_source_forecast",
+        "multi_source_consensus_and_spread",
+        "strict_prior_city_source_bias",
+        "settlement_native_lattice_distance",
+        "forecast_peak_clock",
+        "warming_path_innovation",
+        "cloud_rain_wind_regime"
+      ],
+      "constraints": [
+        "probabilities_sum_to_one_across_ladder",
+        "market_probability_is_same-time_anchor",
+        "city_and_source_effects_use_shrinkage",
+        "no hard weather_or_source_filter"
+      ]
+    },
+    {
+      "name": "weather_center_expanding",
+      "target": "settled_tmax_lattice_midpoint",
+      "loss": [
+        "mae_f",
+        "rmse_f"
+      ],
+      "role": "continuous weather state feature only; not an entry selector by itself"
+    }
+  ],
+  "baselines": [
+    "same_time_market_probability",
+    "original_frozen_entry_model_through_2026_06_20",
+    "frozen_first5_weather_model"
+  ],
+  "promotion": {
+    "probability": "paired target-date block 95% CI for Brier and logloss delta vs market is below zero",
+    "execution": "fee-adjusted selected-trade ROI and uplift CI are above zero on fresh executable books",
+    "forward": "same sign on the untouched 15-date frozen block",
+    "minimum_fresh_book_coverage": 0.9,
+    "live_action": "none_without_weather_strategy_deploy"
+  }
+}
