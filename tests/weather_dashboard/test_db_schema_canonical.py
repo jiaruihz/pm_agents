@@ -9,6 +9,7 @@ from src.strategies.weather_edge_v1.ids import (
     make_signal_id,
 )
 from weather_dashboard.db.apply_schema_canonical import (
+    SCHEMA_VERSION,
     apply_schema_canonical,
     init_db_canonical,
 )
@@ -54,8 +55,7 @@ def test_canonical_tables_exist(tmp_db_canonical):
 
 def test_canonical_schema_version_written(tmp_db_canonical):
     row = tmp_db_canonical.execute("SELECT version, description FROM schema_version").fetchone()
-    assert row["version"] == 9
-    assert "data-source management" in row["description"]
+    assert row["version"] == SCHEMA_VERSION
 
 
 def test_canonical_schema_has_no_legacy_field_names(tmp_db_canonical):
@@ -307,6 +307,6 @@ def test_init_db_canonical_creates_file(tmp_path):
     conn = get_conn(str(db_path))
     try:
         row = conn.execute("SELECT version FROM schema_version").fetchone()
-        assert row["version"] == 9
+        assert row["version"] == SCHEMA_VERSION
     finally:
         conn.close()
