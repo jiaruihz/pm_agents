@@ -489,6 +489,9 @@ def build_shadow_row(
     source_ok, source_reason = source_aware_v3(row_dict)
     station_bias_p90_high = to_float(telemetry.get("bias_p90_asof")) >= 3.9
     station_hot_tail_high = to_float(telemetry.get("hot_tail_pct_asof")) >= 0.621
+    rain_convective_candidate = (
+        safe_str(telemetry.get("weather_regime")) == "rain_convective"
+    )
     pcal_no_city_ev = to_float(telemetry.get("p_cal_no_city_ev"))
     pcal_city_diag_ev = to_float(telemetry.get("p_cal_city_diag_ev"))
     live_score = int(to_float(live_metar.get("live_metar_regime_score"), 0.0))
@@ -550,6 +553,8 @@ def build_shadow_row(
         "integrated_tail_shadow_score_v2": integrated_score,
         "integrated_tail_shadow_policy": "diagnostic_only_not_live_selector",
         "integrated_tail_shadow_candidate": integrated_score >= 3 or source_ok,
+        "heada_rain_convective_shadow_v1": rain_convective_candidate,
+        "heada_rain_convective_shadow_policy": "diagnostic_only_not_live_selector",
         **telemetry,
         **live_metar,
         **pcal_v2,
@@ -622,6 +627,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "source_aware_v3_count": sum(1 for row in rows if row.get("source_aware_v3_shadow")),
         "pcal_v2_selected_count": sum(1 for row in rows if row.get("pcal_v2_selected_shadow")),
         "integrated_tail_shadow_candidate_count": sum(1 for row in rows if row.get("integrated_tail_shadow_candidate")),
+        "heada_rain_convective_shadow_v1_count": sum(
+            1 for row in rows if row.get("heada_rain_convective_shadow_v1")
+        ),
         "tail_telemetry_status_counts": {
             status: sum(1 for row in rows if safe_str(row.get("tail_telemetry_status")) == status)
             for status in sorted({safe_str(row.get("tail_telemetry_status")) for row in rows})

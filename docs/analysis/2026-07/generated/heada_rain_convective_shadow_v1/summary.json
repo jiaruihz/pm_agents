@@ -1,0 +1,44 @@
+{
+  "generated_at_utc": "2026-07-28T12:43:29.685771+00:00",
+  "selector": {
+    "name": "heada_rain_convective_shadow_v1",
+    "rule": "weather_regime == rain_convective",
+    "weather_definition": "decision-time D-1 peak-window precipitation probability >= 50%",
+    "execution": "fee-adjusted taker evaluation; zero-notional shadow only"
+  },
+  "denominator": {
+    "historical_discovery_non_pit": {
+      "rows": 146,
+      "dates": 26,
+      "start": "2026-05-06",
+      "end": "2026-06-02",
+      "weather_vintage": "posthoc_archive_non_pit"
+    },
+    "historical_replication_non_pit": {
+      "rows": 187,
+      "dates": 27,
+      "start": "2026-06-03",
+      "end": "2026-06-30",
+      "weather_vintage": "posthoc_archive_non_pit"
+    },
+    "current_frozen_pit": {
+      "rows": 84,
+      "dates": 8,
+      "start": "2026-07-16",
+      "end": "2026-07-25",
+      "weather_vintage": "decision_time_pit"
+    }
+  },
+  "current_capacity": {
+    "rows": 19,
+    "direct_best_ask_rows": 19,
+    "median_best_ask_size_shares": 32.89,
+    "median_fresh_spread": 0.01,
+    "max_rows_on_one_date": 8
+  },
+  "verdict": {
+    "status": "forward_shadow_candidate",
+    "live_action": "none",
+    "reason": "Temporal direction replicates, but historical weather vintages are non-PIT and the current PIT target-date bootstrap CI crosses zero."
+  }
+}

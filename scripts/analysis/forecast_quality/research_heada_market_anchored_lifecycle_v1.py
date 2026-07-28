@@ -583,10 +583,12 @@ Generated: {now_utc()}
 
 {md_table(primary_lifecycle, ["action", "checkpoint_hour_local", "opportunity_rows", "dates", "wins", "action_rows", "unconditional_exit_all_pnl", "policy_pnl", "pnl_delta_vs_hold", "pnl_delta_vs_exit_all", "date_mean_delta_ci_low", "date_mean_delta_ci_high", "policy_roi_on_entry_cost"])}
 
-**当前裁决：没有可执行升级。** 12:00 的 market-anchored terminal Brier 点估继续改善，但
-target-date CI 跨 0；09:00 的 weather delta 对未来 60 分钟 repricing 反而显著反向。
-direct-bid 子集恰好 0 winner，因此“退出比持有少亏”不能归因于 weather selector，必须同时看
-`unconditional_exit_all_pnl`。12:00 唯一 add 信号最终输掉。price-history 是 midpoint-like public
+**当前裁决：没有可执行升级。** 09:00/12:00 的 market-anchored terminal Brier 点估均改善，但
+主 gamma=1 的 target-date CI 都跨 0；12:00 的 weather delta 对未来 180 分钟 repricing
+显著反向，提示市场可能先过冲再均值回归，不能把 terminal-score 点估直接当短线加仓信号。
+direct-bid 子集只有 09:00 的 1 个 winner、12:00 仍为 0，因此“退出比持有少亏”不能归因于
+weather selector，必须同时看
+`unconditional_exit_all_pnl`。12:00 的 add 信号最终都输掉。price-history 是 midpoint-like public
 proxy，不含 bid/ask/depth，不能包装成 guaranteed fill ROI。
 
 ## 研究对象与时钟

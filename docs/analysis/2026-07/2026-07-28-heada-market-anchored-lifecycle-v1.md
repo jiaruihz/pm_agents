@@ -1,6 +1,6 @@
 # HeadA market-anchored lifecycle v1
 
-Generated: 2026-07-28T12:22:19+00:00
+Generated: 2026-07-28T12:41:36+00:00
 
 ## 结论与交易动作
 
@@ -10,20 +10,22 @@ Generated: 2026-07-28T12:22:19+00:00
 
 | checkpoint_hour_local | rows | dates | market_brier | candidate_brier | brier_delta | brier_delta_ci_low | brier_delta_ci_high |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 9.00000 | 31.00000 | 6.00000 | 0.07176 | 0.06991 | -0.00185 | -0.01871 | 0.00842 |
-| 12.00000 | 32.00000 | 6.00000 | 0.05761 | 0.05154 | -0.00606 | -0.01579 | 0.00117 |
+| 9.00000 | 41.00000 | 8.00000 | 0.07470 | 0.07096 | -0.00374 | -0.01608 | 0.00550 |
+| 12.00000 | 40.00000 | 8.00000 | 0.04757 | 0.04444 | -0.00313 | -0.00836 | 0.00114 |
 
 | action | checkpoint_hour_local | opportunity_rows | dates | wins | action_rows | unconditional_exit_all_pnl | policy_pnl | pnl_delta_vs_hold | pnl_delta_vs_exit_all | date_mean_delta_ci_low | date_mean_delta_ci_high | policy_roi_on_entry_cost |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sell_or_hold_direct_bid | 9 | 11 | 4 | 0 | 3 | -0.20752 | -1.22686 | 0.13624 | -1.01934 | 0.00000 | 0.06812 | -0.90005 |
-| add_one_share_direct_ask | 9 | 12 | 4 | 0 | 0 | NA | 0.00000 | 0.00000 | NA | NA | NA | NA |
-| sell_or_hold_direct_bid | 12 | 5 | 3 | 0 | 0 | -0.29110 | -0.66598 | 0.00000 | -0.37488 | 0.00000 | 0.00000 | -1.00000 |
-| add_one_share_direct_ask | 12 | 5 | 3 | 0 | 1 | NA | -0.03983 | -0.03983 | NA | NA | NA | -1.00000 |
+| sell_or_hold_direct_bid | 9 | 16 | 5 | 1 | 5 | -0.52519 | -0.79315 | 0.22207 | -0.26796 | 0.00914 | 0.07874 | -0.39358 |
+| add_one_share_direct_ask | 9 | 17 | 5 | 1 | 0 | NA | 0.00000 | 0.00000 | NA | NA | NA | NA |
+| sell_or_hold_direct_bid | 12 | 7 | 4 | 0 | 1 | -0.18598 | -0.83664 | 0.00190 | -0.65067 | 0.00000 | 0.00143 | -0.99773 |
+| add_one_share_direct_ask | 12 | 9 | 5 | 0 | 2 | NA | -0.20655 | -0.20655 | NA | NA | NA | -1.00000 |
 
-**当前裁决：没有可执行升级。** 12:00 的 market-anchored terminal Brier 点估继续改善，但
-target-date CI 跨 0；09:00 的 weather delta 对未来 60 分钟 repricing 反而显著反向。
-direct-bid 子集恰好 0 winner，因此“退出比持有少亏”不能归因于 weather selector，必须同时看
-`unconditional_exit_all_pnl`。12:00 唯一 add 信号最终输掉。price-history 是 midpoint-like public
+**当前裁决：没有可执行升级。** 09:00/12:00 的 market-anchored terminal Brier 点估均改善，但
+主 gamma=1 的 target-date CI 都跨 0；12:00 的 weather delta 对未来 180 分钟 repricing
+显著反向，提示市场可能先过冲再均值回归，不能把 terminal-score 点估直接当短线加仓信号。
+direct-bid 子集只有 09:00 的 1 个 winner、12:00 仍为 0，因此“退出比持有少亏”不能归因于
+weather selector，必须同时看
+`unconditional_exit_all_pnl`。12:00 的 add 信号最终都输掉。price-history 是 midpoint-like public
 proxy，不含 bid/ask/depth，不能包装成 guaranteed fill ROI。
 
 ## 研究对象与时钟
@@ -45,8 +47,8 @@ proxy，不含 bid/ask/depth，不能包装成 guaranteed fill ROI。
 
 | checkpoint_hour_local | overlap_rows | dates | proxy_price_rows | direct_bid_rows | direct_ask_rows |
 | --- | --- | --- | --- | --- | --- |
-| 9 | 31 | 6 | 31 | 11 | 12 |
-| 12 | 32 | 6 | 32 | 5 | 5 |
+| 9 | 41 | 8 | 41 | 16 | 17 |
+| 12 | 40 | 8 | 40 | 7 | 9 |
 
 ### Evidence funnel
 
@@ -91,10 +93,10 @@ proxy，不含 bid/ask/depth，不能包装成 guaranteed fill ROI。
 
 | checkpoint_hour_local | horizon_min | rows | dates | correlation | slope_price_move_per_1p_weather_delta | mean_signed_move | signed_move_ci_low | signed_move_ci_high | directional_accuracy |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 9.00000 | 60.00000 | 31.00000 | 6.00000 | 0.01188 | 0.01523 | -0.01181 | -0.01750 | -0.00254 | 0.41935 |
-| 9.00000 | 180.00000 | 29.00000 | 6.00000 | 0.08872 | 0.17116 | -0.00384 | -0.02928 | 0.03924 | 0.51724 |
-| 12.00000 | 60.00000 | 32.00000 | 6.00000 | 0.25068 | 0.31238 | 0.01653 | -0.01643 | 0.03435 | 0.46875 |
-| 12.00000 | 180.00000 | 32.00000 | 6.00000 | -0.14660 | -0.42437 | -0.02617 | -0.05174 | 0.00593 | 0.50000 |
+| 9.00000 | 60.00000 | 41.00000 | 8.00000 | 0.17908 | 0.32742 | 0.00588 | -0.01065 | 0.02781 | 0.48780 |
+| 9.00000 | 180.00000 | 39.00000 | 8.00000 | 0.15822 | 0.53606 | 0.01647 | -0.01487 | 0.05468 | 0.58974 |
+| 12.00000 | 60.00000 | 40.00000 | 8.00000 | 0.25489 | 0.30001 | 0.01534 | -0.01672 | 0.02794 | 0.45000 |
+| 12.00000 | 180.00000 | 40.00000 | 8.00000 | -0.20629 | -0.51280 | -0.02698 | -0.04650 | -0.00326 | 0.50000 |
 
 ## Market-anchored probability sensitivity
 
@@ -102,31 +104,31 @@ gamma=0 是同 rows market proxy；负 delta 才是改善：
 
 | checkpoint_hour_local | gamma | rows | dates | brier_delta | brier_delta_ci_low | brier_delta_ci_high | logloss_delta | logloss_delta_ci_low | logloss_delta_ci_high |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 9.00000 | 0.00000 | 31.00000 | 6.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 |
-| 9.00000 | 0.25000 | 31.00000 | 6.00000 | -0.00074 | -0.00518 | 0.00190 | -0.00473 | -0.01780 | 0.00301 |
-| 9.00000 | 0.50000 | 31.00000 | 6.00000 | -0.00128 | -0.01003 | 0.00394 | -0.00725 | -0.03222 | 0.00717 |
-| 9.00000 | 1.00000 | 31.00000 | 6.00000 | -0.00185 | -0.01871 | 0.00842 | -0.00960 | -0.05373 | 0.01621 |
-| 12.00000 | 0.00000 | 32.00000 | 6.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 |
-| 12.00000 | 0.25000 | 32.00000 | 6.00000 | -0.00175 | -0.00437 | 0.00025 | -0.00464 | -0.01130 | 0.00085 |
-| 12.00000 | 0.50000 | 32.00000 | 6.00000 | -0.00334 | -0.00846 | 0.00053 | -0.00813 | -0.02031 | 0.00201 |
-| 12.00000 | 1.00000 | 32.00000 | 6.00000 | -0.00606 | -0.01579 | 0.00117 | -0.01407 | -0.03600 | 0.00443 |
+| 9.00000 | 0.00000 | 41.00000 | 8.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 |
+| 9.00000 | 0.25000 | 41.00000 | 8.00000 | -0.00123 | -0.00453 | 0.00119 | -0.00785 | -0.01808 | 0.00056 |
+| 9.00000 | 0.50000 | 41.00000 | 8.00000 | -0.00223 | -0.00869 | 0.00253 | -0.01318 | -0.03264 | 0.00248 |
+| 9.00000 | 1.00000 | 41.00000 | 8.00000 | -0.00374 | -0.01608 | 0.00550 | -0.01938 | -0.05386 | 0.00804 |
+| 12.00000 | 0.00000 | 40.00000 | 8.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 | 0.00000 |
+| 12.00000 | 0.25000 | 40.00000 | 8.00000 | -0.00110 | -0.00268 | 0.00019 | -0.00379 | -0.00802 | -0.00023 |
+| 12.00000 | 0.50000 | 40.00000 | 8.00000 | -0.00197 | -0.00495 | 0.00046 | -0.00613 | -0.01393 | 0.00005 |
+| 12.00000 | 1.00000 | 40.00000 | 8.00000 | -0.00313 | -0.00836 | 0.00114 | -0.00859 | -0.02186 | 0.00185 |
 
 ## Fee-adjusted lifecycle sensitivity
 
 | action | checkpoint_hour_local | threshold | opportunity_rows | dates | wins | action_rows | baseline_hold_pnl | unconditional_exit_all_pnl | policy_pnl | pnl_delta_vs_hold | pnl_delta_vs_exit_all | date_mean_delta_ci_low | date_mean_delta_ci_high | policy_roi_on_entry_cost |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| sell_or_hold_direct_bid | 9 | 0.01000 | 11 | 4 | 0 | 4 | -1.36311 | -0.20752 | -1.16968 | 0.19342 | -0.96216 | 0.00000 | 0.11078 | -0.85810 |
-| sell_or_hold_direct_bid | 9 | 0.02000 | 11 | 4 | 0 | 3 | -1.36311 | -0.20752 | -1.22686 | 0.13624 | -1.01934 | 0.00000 | 0.06812 | -0.90005 |
-| sell_or_hold_direct_bid | 9 | 0.05000 | 11 | 4 | 0 | 2 | -1.36311 | -0.20752 | -1.29361 | 0.06950 | -1.08608 | 0.00000 | 0.03475 | -0.94902 |
-| add_one_share_direct_ask | 9 | 0.01000 | 12 | 4 | 0 | 0 | 0.00000 | NA | 0.00000 | 0.00000 | NA | NA | NA | NA |
-| add_one_share_direct_ask | 9 | 0.02000 | 12 | 4 | 0 | 0 | 0.00000 | NA | 0.00000 | 0.00000 | NA | NA | NA | NA |
-| add_one_share_direct_ask | 9 | 0.05000 | 12 | 4 | 0 | 0 | 0.00000 | NA | 0.00000 | 0.00000 | NA | NA | NA | NA |
-| sell_or_hold_direct_bid | 12 | 0.01000 | 5 | 3 | 0 | 0 | -0.66598 | -0.29110 | -0.66598 | 0.00000 | -0.37488 | 0.00000 | 0.00000 | -1.00000 |
-| sell_or_hold_direct_bid | 12 | 0.02000 | 5 | 3 | 0 | 0 | -0.66598 | -0.29110 | -0.66598 | 0.00000 | -0.37488 | 0.00000 | 0.00000 | -1.00000 |
-| sell_or_hold_direct_bid | 12 | 0.05000 | 5 | 3 | 0 | 0 | -0.66598 | -0.29110 | -0.66598 | 0.00000 | -0.37488 | 0.00000 | 0.00000 | -1.00000 |
-| add_one_share_direct_ask | 12 | 0.01000 | 5 | 3 | 0 | 1 | 0.00000 | NA | -0.03983 | -0.03983 | NA | NA | NA | -1.00000 |
-| add_one_share_direct_ask | 12 | 0.02000 | 5 | 3 | 0 | 1 | 0.00000 | NA | -0.03983 | -0.03983 | NA | NA | NA | -1.00000 |
-| add_one_share_direct_ask | 12 | 0.05000 | 5 | 3 | 0 | 1 | 0.00000 | NA | -0.03983 | -0.03983 | NA | NA | NA | -1.00000 |
+| sell_or_hold_direct_bid | 9 | 0.01000 | 16 | 5 | 1 | 6 | -1.01522 | -0.52519 | -0.73597 | 0.27925 | -0.21078 | 0.00914 | 0.10579 | -0.36521 |
+| sell_or_hold_direct_bid | 9 | 0.02000 | 16 | 5 | 1 | 5 | -1.01522 | -0.52519 | -0.79315 | 0.22207 | -0.26796 | 0.00914 | 0.07874 | -0.39358 |
+| sell_or_hold_direct_bid | 9 | 0.05000 | 16 | 5 | 1 | 3 | -1.01522 | -0.52519 | -0.93622 | 0.07900 | -0.41102 | 0.00190 | 0.03219 | -0.46457 |
+| add_one_share_direct_ask | 9 | 0.01000 | 17 | 5 | 1 | 0 | 0.00000 | NA | 0.00000 | 0.00000 | NA | NA | NA | NA |
+| add_one_share_direct_ask | 9 | 0.02000 | 17 | 5 | 1 | 0 | 0.00000 | NA | 0.00000 | 0.00000 | NA | NA | NA | NA |
+| add_one_share_direct_ask | 9 | 0.05000 | 17 | 5 | 1 | 0 | 0.00000 | NA | 0.00000 | 0.00000 | NA | NA | NA | NA |
+| sell_or_hold_direct_bid | 12 | 0.01000 | 7 | 4 | 0 | 1 | -0.83854 | -0.18598 | -0.83664 | 0.00190 | -0.65067 | 0.00000 | 0.00143 | -0.99773 |
+| sell_or_hold_direct_bid | 12 | 0.02000 | 7 | 4 | 0 | 1 | -0.83854 | -0.18598 | -0.83664 | 0.00190 | -0.65067 | 0.00000 | 0.00143 | -0.99773 |
+| sell_or_hold_direct_bid | 12 | 0.05000 | 7 | 4 | 0 | 0 | -0.83854 | -0.18598 | -0.83854 | 0.00000 | -0.65257 | 0.00000 | 0.00000 | -1.00000 |
+| add_one_share_direct_ask | 12 | 0.01000 | 9 | 5 | 0 | 2 | 0.00000 | NA | -0.20655 | -0.20655 | NA | NA | NA | -1.00000 |
+| add_one_share_direct_ask | 12 | 0.02000 | 9 | 5 | 0 | 2 | 0.00000 | NA | -0.20655 | -0.20655 | NA | NA | NA | -1.00000 |
+| add_one_share_direct_ask | 12 | 0.05000 | 9 | 5 | 0 | 2 | 0.00000 | NA | -0.20655 | -0.20655 | NA | NA | NA | -1.00000 |
 
 ## 八环复核
 
@@ -145,15 +147,15 @@ gamma=0 是同 rows market proxy；负 delta 才是改善：
 {
   "db": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
   "tmax_state_target_date_min": "2026-07-04",
-  "tmax_state_target_date_max": "2026-07-26",
-  "tmax_state_rows": 244594,
+  "tmax_state_target_date_max": "2026-07-28",
+  "tmax_state_rows": 281269,
   "settlement_target_date_max": "2026-07-27",
   "current_input": "docs/analysis/2026-07/generated/heada_multisource_city_regime_v1/current_enriched.csv",
   "checkpoint_input": "docs/analysis/2026-07/generated/forecast_innovation_morning_v1/checkpoint_rows.csv",
   "oof_input": "docs/analysis/2026-07/generated/forecast_innovation_morning_v1/oof_predictions.csv",
   "price_history_endpoint": "https://clob.polymarket.com/prices-history",
-  "price_history_tokens": 32,
-  "price_history_rows": 11823
+  "price_history_tokens": 44,
+  "price_history_rows": 16279
 }
 ```
 
