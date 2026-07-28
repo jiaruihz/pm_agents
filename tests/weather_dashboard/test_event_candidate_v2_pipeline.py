@@ -19,3 +19,7 @@ def test_checkpoint_candidate_v2_zero_notional_pipeline(tmp_path):
     assert telemetry.export_new_candidates(conn,out,{})==1
     conn.close()
     row=json.loads(out.read_text()); assert row['candidate_grain_version']=='v2_event_checkpoint'; assert row['zero_notional'] is True; assert row['no_order_placed'] is True; assert row['candidate_status']=='blocked'
+    assert row['trigger_event_kind']=='observation'
+    assert row['trigger_event_source']=='aviationweather_metar'
+    assert row['pit_lineage_class']=='collector_exact'
+    assert row['trigger_first_seen_at_utc']=='2026-07-28T12:00:03Z'

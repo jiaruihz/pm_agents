@@ -127,10 +127,19 @@ def export_new_candidates(
     exported = set(state.get("exported_candidates") or [])
     rows = conn.execute(
         """
-        SELECT *
-        FROM fact_signal_candidates
-        WHERE candidate_grain_version = 'v2_event_checkpoint'
-        ORDER BY decision_ts_utc, candidate_id
+        SELECT
+          candidate.*,
+          event.event_kind AS trigger_event_kind,
+          event.event_role AS trigger_event_role,
+          event.source AS trigger_event_source,
+          event.pit_lineage_class AS pit_lineage_class,
+          event.first_seen_at_utc AS trigger_first_seen_at_utc,
+          event.available_at_utc AS trigger_available_at_utc
+        FROM fact_signal_candidates AS candidate
+        LEFT JOIN weather_information_events AS event
+          ON event.information_event_id = candidate.trigger_event_id
+        WHERE candidate.candidate_grain_version = 'v2_event_checkpoint'
+        ORDER BY candidate.decision_ts_utc, candidate.candidate_id
         """
     ).fetchall()
     new_rows = [dict(row) for row in rows if str(row["candidate_id"]) not in exported]

@@ -1,0 +1,64 @@
+{
+  "candidate_blockers": {
+    "missing_executable_ask": 23895,
+    "missing_feature_frame": 2354,
+    "missing_model_probability": 12232,
+    "missing_post_event_book": 20096
+  },
+  "evidence_funnel": {
+    "actual_fills": 0,
+    "any_scored_expression_checkpoints": 196,
+    "feature_frame_available_checkpoints": 1394,
+    "full_market_distribution_checkpoints": 1501,
+    "full_model_distribution_checkpoints": 945,
+    "full_two_sided_executable_ladder_checkpoints": 0,
+    "lineage_class_exported": 0,
+    "market_simplex_checkpoints": 786,
+    "model_simplex_checkpoints": 900,
+    "proper_score_rows": 0,
+    "settled_checkpoints": 0,
+    "settled_target_dates": 0
+  },
+  "gates": {
+    "baseline": "NA",
+    "conclusion": "inconclusive",
+    "execution_test_ready": false,
+    "forward": "FAIL",
+    "probability_test_ready": false,
+    "significance": "NA"
+  },
+  "generated_at_utc": "2026-07-28T16:30:04Z",
+  "inputs": {
+    "candidate_jsonl": "/Volumes/jrs/weather_data_feed_service_runtime/output/first_seen_zero_notional/candidates.jsonl",
+    "candidate_mtime_utc": "2026-07-28T16:09:05.003707+00:00",
+    "settlement_db": "/Users/deepsleep/projects/pm_agents/runtime/weather.db",
+    "settlement_db_mtime_utc": "2026-07-28T16:26:01.924612+00:00"
+  },
+  "measurement_audit": {
+    "candidate_model_is_trained_first_seen_update_head": false,
+    "candidate_model_role": "paper_snapshot probability telemetry baseline; it does not consume trigger-event feature_frame_ref as a fitted residual update",
+    "market_before_after_available_checkpoints": 556,
+    "market_changed_after_event_checkpoints": 506,
+    "model_before_after_available_checkpoints": 944,
+    "model_changed_after_event_checkpoints": 55,
+    "model_update_rate": 0.03664223850766156
+  },
+  "safety": {
+    "live_behavior_changes": 0,
+    "plan_order_fill_exit_changes": 0,
+    "zero_notional_rows_only": true
+  },
+  "signal_funnel": {
+    "candidate_rows": 33022,
+    "cities": 47,
+    "edge_gt_1c_diagnostic_expressions": 185,
+    "information_events": 1501,
+    "mapped_expressions": 33022,
+    "policy_selected": 0,
+    "positive_diagnostic_edge_expressions": 332,
+    "scored_expressions": 472,
+    "state_checkpoints": 1501,
+    "target_dates": 3
+  },
+  "status": "inconclusive_measurement_head_not_ready"
+}
