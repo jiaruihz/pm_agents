@@ -74,6 +74,22 @@ conclusion=inconclusive
 - 定向验证：shell syntax 通过；proxy/sizing tests **21 passed**；canonical-only 环境实取
   CLOB book 成功（38 asks）。
 
+### shadow 部署验证
+
+| 项目 | 结果 |
+|---|---|
+| develop commit | `bac46d01` |
+| Mac shadow checkout commit | `f9e418be`（scoped cherry-pick） |
+| tmux context | `weather-data-feed-jrs / low_price_yes_lottery_shadow_v1` |
+| wrapper / runner PID | `53533 / 53551` |
+| 进程代理环境 | `LOW_PRICE_YES_LOTTERY_MARKET_PROXY=7890` 且 canonical proxy=7890 |
+| 最新 cycle | `2026-07-28T08:37:12Z`，planned=0 / blocked=0 / live=false |
+| 真实下单变化 | 0；live journal 最后一行仍为 2026-07-15 |
+
+重启时只停止并恢复 zero-notional HeadA shadow，没有启用 live、没有改变 sizing 或资金参数。
+当前 cycle 没有 eligible candidate，因此 runtime 还没有产生一条新的 fresh-book decision row；
+链路验证由同 checkout、同 resolver、同 7890 对 CLOB `/book` 的成功实取完成。
+
 ## Taker / maker 口径
 
 | 层 | 实际含义 |
