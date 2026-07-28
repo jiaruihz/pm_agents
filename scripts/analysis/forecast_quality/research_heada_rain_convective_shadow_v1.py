@@ -221,12 +221,37 @@ def main() -> None:
     current_selected = blocks["current_frozen_pit"][
         blocks["current_frozen_pit"]["weather_regime"].eq("rain_convective")
     ]
+    daily_rows: list[dict] = []
+    for target_date, daily in blocks["current_frozen_pit"].groupby("target_date"):
+        rain = daily[daily["weather_regime"].eq("rain_convective")]
+        daily_rows.append(
+            {
+                "target_date": target_date,
+                "all_rows": int(len(daily)),
+                "all_wins": int(daily["win"].sum()),
+                "all_win_rate": float(daily["win"].mean()),
+                "all_roi": roi(daily),
+                "rain_rows": int(len(rain)),
+                "rain_wins": int(rain["win"].sum()),
+                "rain_win_rate": float(rain["win"].mean()) if len(rain) else float("nan"),
+                "rain_roi": roi(rain),
+            }
+        )
+    current_daily = pd.DataFrame(daily_rows)
+    largest_rain_day = (
+        current_selected.groupby("target_date").size().sort_values(ascending=False).index[0]
+    )
+    leave_largest_day_out = current_selected[
+        current_selected["target_date"].ne(largest_rain_day)
+    ]
     capacity = {
         "rows": int(len(current_selected)),
         "direct_best_ask_rows": int(current_selected["best_ask"].notna().sum()),
         "median_best_ask_size_shares": float(current_selected["best_ask_size"].median()),
         "median_fresh_spread": float(current_selected["fresh_spread"].median()),
         "max_rows_on_one_date": int(current_selected.groupby("target_date").size().max()),
+        "largest_rain_day": str(largest_rain_day),
+        "leave_largest_rain_day_out_roi": roi(leave_largest_day_out),
     }
     summary = {
         "generated_at_utc": pd.Timestamp.now(tz="UTC").isoformat(),
@@ -266,6 +291,7 @@ def main() -> None:
     source_scorecard.to_csv(OUTPUT_DIR / "source_scorecard.csv", index=False)
     bootstrap.to_csv(OUTPUT_DIR / "target_date_bootstrap.csv", index=False)
     market_anchor.to_csv(OUTPUT_DIR / "market_anchor_scorecard.csv", index=False)
+    current_daily.to_csv(OUTPUT_DIR / "current_daily_scorecard.csv", index=False)
     (OUTPUT_DIR / "summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",

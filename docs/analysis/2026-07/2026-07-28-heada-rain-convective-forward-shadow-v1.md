@@ -39,6 +39,23 @@
 19/19 都有 direct best ask，median best-ask size `32.89 shares`，median spread `1c`。
 这是容量描述，不是 fill 保证。
 
+最近 8 天逐日结果如下；彩票收益明显不平滑：
+
+| target date | all rows / wins / ROI | rain rows / wins / ROI |
+|---|---:|---:|
+| 07-16 | 8 / 2 / +87.8% | 1 / 1 / +464.8% |
+| 07-19 | 5 / 1 / +99.4% | 1 / 0 / -100.0% |
+| 07-20 | 11 / 3 / +91.3% | 1 / 0 / -100.0% |
+| 07-21 | 9 / 0 / -100.0% | 3 / 0 / -100.0% |
+| 07-22 | 15 / 2 / +6.5% | 2 / 0 / -100.0% |
+| 07-23 | 11 / 0 / -100.0% | 0 / 0 / NA |
+| 07-24 | 9 / 0 / -100.0% | 3 / 0 / -100.0% |
+| 07-25 | 16 / 4 / +93.7% | 8 / 3 / +189.0% |
+
+rain 的 +57.5% 主要由 07-16 与 07-25 两天贡献；去掉最大 cohort 日 07-25 后，
+其余 11 tickets 仅 1 win、ROI `-33.4%`。这正是当前 block CI 跨 0、只能继续
+forward shadow 的原因；不能把三段正点估写成稳定日收益。
+
 ## 为什么它比“禁 GFS”合理
 
 GFS 在最近 8 天是 1/30、ROI `-73.2%`，但历史 GFS 是 16/111、ROI
@@ -126,6 +143,7 @@ rain 二元 selector 当独立策略；不会再从少量失败票上追加新 h
 - `generated/heada_rain_convective_shadow_v1/source_scorecard.csv`
 - `generated/heada_rain_convective_shadow_v1/target_date_bootstrap.csv`
 - `generated/heada_rain_convective_shadow_v1/market_anchor_scorecard.csv`
+- `generated/heada_rain_convective_shadow_v1/current_daily_scorecard.csv`
 - `generated/heada_rain_convective_shadow_v1/summary.json`
 - market-anchored lifecycle 见
   [heada-market-anchored-lifecycle-v1](2026-07-28-heada-market-anchored-lifecycle-v1.md)

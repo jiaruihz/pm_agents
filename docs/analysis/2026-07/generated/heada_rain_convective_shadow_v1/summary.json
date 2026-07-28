@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-07-28T12:43:29.685771+00:00",
+  "generated_at_utc": "2026-07-28T12:53:42.002896+00:00",
   "selector": {
     "name": "heada_rain_convective_shadow_v1",
     "rule": "weather_regime == rain_convective",
@@ -34,7 +34,9 @@
     "direct_best_ask_rows": 19,
     "median_best_ask_size_shares": 32.89,
     "median_fresh_spread": 0.01,
-    "max_rows_on_one_date": 8
+    "max_rows_on_one_date": 8,
+    "largest_rain_day": "2026-07-25",
+    "leave_largest_rain_day_out_roi": -0.3341767095012983
   },
   "verdict": {
     "status": "forward_shadow_candidate",
