@@ -11,7 +11,7 @@ OUTPUT_DIR="$RUNTIME_ROOT/output/europe_d1_distance2_dual_no_shadow_v1"
 LOG_FILE="$OUTPUT_DIR/runner.log"
 REPO_SHA="$(git -C "$PROJECT_DIR" rev-parse HEAD)"
 
-mkdir -p "$OUTPUT_DIR"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR"
 weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
   "cd '$PROJECT_DIR' && exec '$PROJECT_DIR/.venv/bin/python' -u \

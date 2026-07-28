@@ -137,6 +137,20 @@ def test_mac_start_entries_do_not_default_to_legacy_jrs_symlink():
     assert offenders == []
 
 
+def test_jrs_start_entries_do_not_create_jrs_directories_outside_tmux():
+    offenders = []
+    for path in sorted(OPS.glob("start_*.sh")):
+        text = path.read_text(encoding="utf-8")
+        if "/Volumes/jrs" not in text:
+            continue
+        if re.search(r'(?m)^\s*mkdir -p [^\n]*"\$RUNTIME_ROOT', text):
+            offenders.append(f"{path.name}:runtime_root")
+        output_is_jrs = re.search(r'(?m)^OUTPUT_DIR=.*\$RUNTIME_ROOT', text) is not None
+        if output_is_jrs and re.search(r'(?m)^\s*mkdir -p [^\n]*"\$OUTPUT_DIR"', text):
+            offenders.append(f"{path.name}:output_dir")
+    assert offenders == []
+
+
 def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     installer = (OPS / "install_weather_canonical_refresh_launchagent.sh").read_text(
         encoding="utf-8"

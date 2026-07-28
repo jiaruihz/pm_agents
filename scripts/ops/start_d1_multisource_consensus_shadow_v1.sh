@@ -10,7 +10,7 @@ TMUX_SESSION="${D1_MULTISOURCE_CONSENSUS_TMUX_SESSION:-d1_multisource_consensus_
 OUTPUT_DIR="$RUNTIME_ROOT/output/d1_multisource_consensus_shadow_v1"
 LOG_FILE="$OUTPUT_DIR/runner.log"
 
-mkdir -p "$OUTPUT_DIR"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR"
 weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
   "cd '$PROJECT_DIR' && exec '$PROJECT_DIR/.venv/bin/python' -u \

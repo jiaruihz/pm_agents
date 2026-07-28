@@ -30,7 +30,7 @@ ACKNOWLEDGE_HISTORICAL_SHARE_CAP_INCIDENTS="${WEATHER_FAST_PREV_NO_ACKNOWLEDGE_H
 LOG_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.log"
 PID_FILE="$RUNTIME_ROOT/loop/fast_source_prev_no_trial.pid"
 
-mkdir -p "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
 
 cmd=(
   "$PROJECT_DIR/.venv/bin/python"

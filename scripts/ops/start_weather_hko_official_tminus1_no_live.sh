@@ -20,7 +20,7 @@ OUTPUT_DIR="${WEATHER_HKO_LOCK_OUTPUT_DIR:-$RUNTIME_ROOT/output/hko_official_tmi
 LOG_FILE="$RUNTIME_ROOT/loop/hko_official_tminus1_no_live.log"
 PID_FILE="$RUNTIME_ROOT/loop/hko_official_tminus1_no_live.pid"
 
-mkdir -p "$OUTPUT_DIR" "$RUNTIME_ROOT/loop"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR" "$RUNTIME_ROOT/loop"
 cmd=(
   "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/scripts/ops/weather_hko_official_tminus1_no_live.py"
   --loop --output-dir "$OUTPUT_DIR" --interval-sec "$INTERVAL_SEC" --shares "$SHARES"

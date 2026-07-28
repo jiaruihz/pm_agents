@@ -23,7 +23,7 @@ MARKET_PROXY="${WEATHER_EVENT_LADDER_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PR
 LOG_FILE="$RUNTIME_ROOT/loop/source_event_ladder_repricing_shadow.log"
 LOWEST_LOG_FILE="$RUNTIME_ROOT/loop/source_event_ladder_repricing_lowest_shadow.log"
 
-mkdir -p "$RUNTIME_ROOT/loop" "$OUTPUT_DIR" "$LOWEST_OUTPUT_DIR"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$RUNTIME_ROOT/loop" "$OUTPUT_DIR" "$LOWEST_OUTPUT_DIR"
 
 cmd=(
   "$PROJECT_DIR/.venv/bin/python"

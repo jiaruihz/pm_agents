@@ -81,3 +81,20 @@ weather_jrs_tmux_start_socket() {
   weather_jrs_tmux_write_probe "$socket" "$runtime_root" || return 1
   printf '%s\n' "$socket"
 }
+
+weather_jrs_tmux_mkdir() {
+  local socket="$1"
+  shift
+  local command="set -eu; mkdir -p"
+  local path
+
+  socket="$(weather_jrs_tmux_socket "$socket")" || return 1
+  if [[ "$#" -eq 0 ]]; then
+    echo "weather_jrs_tmux_mkdir requires at least one path" >&2
+    return 1
+  fi
+  for path in "$@"; do
+    command+=" $(printf '%q' "$path")"
+  done
+  weather_jrs_tmux "$socket" run-shell "$command"
+}

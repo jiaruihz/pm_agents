@@ -25,7 +25,7 @@ if [[ ! -d "$VOLUME" ]]; then
   exit 1
 fi
 
-mkdir -p "$RUNTIME_ROOT/loop"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$RUNTIME_ROOT/loop"
 
 weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \

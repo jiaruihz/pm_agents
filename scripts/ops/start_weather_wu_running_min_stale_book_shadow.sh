@@ -46,7 +46,7 @@ LOCK_YES_ASK_MAX="${WEATHER_WU_LOW_STALE_BOOK_LOCK_YES_ASK_MAX:-0.93}"
 LOCK_NEXT_NO_ASK_MAX="${WEATHER_WU_LOW_STALE_BOOK_LOCK_NEXT_NO_ASK_MAX:-0.93}"
 LOG_FILE="$RUNTIME_ROOT/loop/wu_running_min_stale_book_shadow.log"
 
-mkdir -p "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
 
 cmd=(
   "$PROJECT_DIR/.venv/bin/python"
