@@ -164,8 +164,9 @@ gamma=0 是同 rows market proxy；负 delta 才是改善：
 - HeadA tail telemetry 在 clean production checkout 依赖未跟踪的 generated CSV，导致整批
   `tail_telemetry_status=error`；本轮已改为 versioned deployable calibration bundle，并加 contract test。
 - canonical direct book 在 12:00 严重缺失，根因是 snapshot orderbook 全局 budget/scoping。
-  正确补采不是把缺失行筛掉，而是在固定 08:45–12:15 本地 checkpoint 对 HeadA exact token +
-  相邻两档优先抓 direct bid/ask/top size/depth，保持所有 candidate/blocked rows。
+  2026-07-28 已在 integrated-tail zero-notional runner 内按当轮 HeadA exact token 每 5 分钟优先抓
+  direct/proxy bid/ask/top size/5c depth，保持所有 candidate/missing/failure rows；相邻两档仍由
+  canonical full-ladder collector 补充。
 
 ## 三门
 

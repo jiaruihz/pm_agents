@@ -99,6 +99,10 @@ target-day 12:00 source-bias-adjusted warming innovation
 
 - integrated-tail zero-notional shadow 已持续记录每张 ticket 的多源 calibration、source/city bias、
   D-1 cloud/POP/wind regime、target-day actual warming path、fresh book 和 feature-frame lineage；
+- 2026-07-28 起 integrated-tail 每 5 分钟按 HeadA exact `condition_id` 从最新 snapshot 解析
+  YES token，只抓当轮候选的 direct/proxy fresh bid/ask/top size/5c depth；首轮历史日 smoke
+  6 rows 中 4 个 `ok`、1 个 closed-day token missing、1 个暂时 fetch failed，后续循环保留
+  missing/failure 行而不把它们伪装成策略筛除；
 - 2026-07-28 clean-checkout 缺 calibration CSV 导致 telemetry 全部 error 已修复，重启后
   6/6 rows `tail_telemetry_status=ok`、`pcal_v2_status=ok`、
   `forecast_source_calibration_status=ok`；

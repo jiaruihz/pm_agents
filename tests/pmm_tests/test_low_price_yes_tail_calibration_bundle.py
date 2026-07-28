@@ -3,6 +3,7 @@ from __future__ import annotations
 from scripts.ops.low_price_yes_integrated_tail_shadow_v2 import (
     build_shadow_row,
     load_pcal_v2_resources,
+    summarize_checkpoint_book,
 )
 from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     build_low_price_yes_tail_telemetry,
@@ -117,3 +118,26 @@ def test_integrated_shadow_tags_rain_convective_candidate(monkeypatch) -> None:
 
     assert tagged["heada_rain_convective_shadow_v1"] is True
     assert tagged["heada_rain_convective_shadow_policy"] == "diagnostic_only_not_live_selector"
+
+
+def test_checkpoint_book_summary_uses_executable_top_and_five_cent_depth() -> None:
+    summary = summarize_checkpoint_book(
+        {
+            "bids": [
+                {"price": "0.10", "size": "7"},
+                {"price": "0.08", "size": "11"},
+                {"price": "0.04", "size": "100"},
+            ],
+            "asks": [
+                {"price": "0.13", "size": "5"},
+                {"price": "0.15", "size": "13"},
+                {"price": "0.20", "size": "100"},
+            ],
+        }
+    )
+
+    assert summary["checkpoint_yes_best_bid"] == 0.10
+    assert summary["checkpoint_yes_best_ask"] == 0.13
+    assert summary["checkpoint_yes_spread"] == 0.03
+    assert summary["checkpoint_yes_depth_bid_5c"] == 18.0
+    assert summary["checkpoint_yes_depth_ask_5c"] == 18.0

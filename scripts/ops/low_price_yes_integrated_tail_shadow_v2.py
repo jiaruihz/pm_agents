@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -36,6 +38,12 @@ from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
 
 DB_DEFAULT = ROOT / "runtime/weather.db"
 OBS_DEFAULT = Path.home() / "projects/weather_data_feed_service_runtime/output/observations/latest.json"
+SNAPSHOT_DIR_DEFAULT = Path(
+    os.environ.get(
+        "LOW_PRICE_YES_INTEGRATED_TAIL_SNAPSHOT_DIR",
+        "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/paper_snapshots",
+    )
+)
 RUNTIME_DIR = ROOT / os.environ.get(
     "LOW_PRICE_YES_INTEGRATED_TAIL_SHADOW_RUNTIME_DIR",
     "runtime/weather_edge_v1/low_price_yes_integrated_tail_shadow_v2",
@@ -56,6 +64,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("command", choices=["run", "loop"], nargs="?", default="run")
     parser.add_argument("--db", default=str(DB_DEFAULT))
     parser.add_argument("--observation-cache", default=str(OBS_DEFAULT))
+    parser.add_argument("--snapshot-dir", default=str(SNAPSHOT_DIR_DEFAULT))
     parser.add_argument("--min-event-date", default=None)
     parser.add_argument("--max-event-date", default=None)
     parser.add_argument("--min-ask", type=float, default=0.05)
@@ -63,6 +72,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-edge", type=float, default=0.20)
     parser.add_argument("--max-candidates-per-run", type=int, default=80)
     parser.add_argument("--max-obs-age-min", type=float, default=120.0)
+    parser.add_argument(
+        "--book-timeout-sec",
+        type=float,
+        default=float(os.environ.get("LOW_PRICE_YES_INTEGRATED_TAIL_BOOK_TIMEOUT_SEC", "5")),
+    )
+    parser.add_argument(
+        "--book-proxy",
+        default=os.environ.get(
+            "LOW_PRICE_YES_INTEGRATED_TAIL_MARKET_PROXY",
+            "http://127.0.0.1:7890",
+        ),
+    )
     parser.add_argument("--interval-seconds", type=float, default=300.0)
     parser.add_argument("--allow-settled", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -89,6 +110,131 @@ def to_float(value: Any, default: float = math.nan) -> float:
         return out if math.isfinite(out) else default
     except Exception:
         return default
+
+
+def summarize_checkpoint_book(book: dict[str, Any]) -> dict[str, Any]:
+    def levels(side: str) -> list[tuple[float, float]]:
+        parsed: list[tuple[float, float]] = []
+        for level in book.get(side) or []:
+            if not isinstance(level, dict):
+                continue
+            price = to_float(level.get("price"))
+            size = to_float(level.get("size"))
+            if math.isfinite(price) and math.isfinite(size) and price > 0 and size >= 0:
+                parsed.append((price, size))
+        return parsed
+
+    bids = levels("bids")
+    asks = levels("asks")
+    best_bid = max((price for price, _ in bids), default=math.nan)
+    best_ask = min((price for price, _ in asks), default=math.nan)
+    bid_size = next((size for price, size in bids if price == best_bid), math.nan)
+    ask_size = next((size for price, size in asks if price == best_ask), math.nan)
+    depth_bid_5c = (
+        sum(size for price, size in bids if price >= best_bid - 0.05)
+        if math.isfinite(best_bid)
+        else math.nan
+    )
+    depth_ask_5c = (
+        sum(size for price, size in asks if price <= best_ask + 0.05)
+        if math.isfinite(best_ask)
+        else math.nan
+    )
+    spread = (
+        best_ask - best_bid
+        if math.isfinite(best_bid) and math.isfinite(best_ask)
+        else math.nan
+    )
+    return {
+        "checkpoint_yes_best_bid": round(best_bid, 6) if math.isfinite(best_bid) else None,
+        "checkpoint_yes_best_ask": round(best_ask, 6) if math.isfinite(best_ask) else None,
+        "checkpoint_yes_bid_size": round(bid_size, 4) if math.isfinite(bid_size) else None,
+        "checkpoint_yes_ask_size": round(ask_size, 4) if math.isfinite(ask_size) else None,
+        "checkpoint_yes_depth_bid_5c": round(depth_bid_5c, 4) if math.isfinite(depth_bid_5c) else None,
+        "checkpoint_yes_depth_ask_5c": round(depth_ask_5c, 4) if math.isfinite(depth_ask_5c) else None,
+        "checkpoint_yes_spread": round(spread, 6) if math.isfinite(spread) else None,
+    }
+
+
+def fetch_checkpoint_book(
+    token_id: str,
+    *,
+    timeout_sec: float,
+    proxy: str,
+) -> dict[str, Any]:
+    if not token_id:
+        return {"checkpoint_book_status": "missing_token"}
+    routes: list[tuple[str, str | None]] = []
+    if proxy:
+        routes.append(("proxy", proxy))
+    routes.append(("direct", None))
+    last_error = ""
+    for route, route_proxy in routes:
+        try:
+            with httpx.Client(
+                proxy=route_proxy,
+                timeout=timeout_sec,
+                trust_env=False,
+            ) as client:
+                response = client.get(
+                    "https://clob.polymarket.com/book",
+                    params={"token_id": token_id},
+                    headers={"Accept": "application/json"},
+                )
+            if response.status_code != 200:
+                return {
+                    "checkpoint_book_status": f"http_{response.status_code}",
+                    "checkpoint_book_route": route,
+                    "checkpoint_book_fetched_at_utc": now_utc(),
+                }
+            payload = response.json()
+            if not isinstance(payload, dict):
+                return {
+                    "checkpoint_book_status": "invalid_payload",
+                    "checkpoint_book_route": route,
+                    "checkpoint_book_fetched_at_utc": now_utc(),
+                }
+            return {
+                "checkpoint_book_status": "ok",
+                "checkpoint_book_route": route,
+                "checkpoint_book_fetched_at_utc": now_utc(),
+                **summarize_checkpoint_book(payload),
+            }
+        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+    return {
+        "checkpoint_book_status": "fetch_failed",
+        "checkpoint_book_error": last_error,
+        "checkpoint_book_fetched_at_utc": now_utc(),
+    }
+
+
+def load_latest_snapshot_token_index(
+    snapshot_dir: Path,
+) -> tuple[dict[str, str], dict[str, Any]]:
+    paths = sorted(snapshot_dir.glob("snapshot_*.json"), reverse=True)
+    for path in paths:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        records = payload.get("records") if isinstance(payload, dict) else None
+        if not isinstance(records, list):
+            continue
+        token_index = {
+            safe_str(row.get("condition_id")): safe_str(row.get("yes_token_id"))
+            for row in records
+            if isinstance(row, dict)
+            and safe_str(row.get("condition_id"))
+            and safe_str(row.get("yes_token_id"))
+        }
+        return token_index, {
+            "status": "ok",
+            "path": str(path),
+            "snapshot_ts_utc": safe_str(payload.get("ts_utc")),
+            "condition_tokens": len(token_index),
+        }
+    return {}, {"status": "missing", "path": str(snapshot_dir)}
 
 
 def json_ready(value: Any) -> Any:
@@ -480,6 +626,8 @@ def build_shadow_row(
     obs_index: dict[tuple[str, str], dict[str, Any]],
     obs_meta: dict[str, Any],
     pcal_v2_resources: dict[str, Any] | None = None,
+    checkpoint_book: dict[str, Any] | None = None,
+    checkpoint_yes_token_id: str = "",
 ) -> dict[str, Any]:
     row_dict = dict(row)
     telemetry = build_low_price_yes_tail_telemetry(row_dict, tail_resources)
@@ -524,6 +672,16 @@ def build_shadow_row(
         "candidate_id": row["candidate_id"],
         "condition_id": row["condition_id"],
         "market_id": row["market_id"],
+        "yes_token_id": checkpoint_yes_token_id or safe_str(row_dict.get("yes_token_id")),
+        "checkpoint_token_source": (
+            "latest_paper_snapshot"
+            if checkpoint_yes_token_id and not safe_str(row_dict.get("yes_token_id"))
+            else (
+                "fact_signal_candidates"
+                if safe_str(row_dict.get("yes_token_id"))
+                else "missing"
+            )
+        ),
         "unit": row["unit"],
         "decision_snapshot_ts_utc": row["decision_snapshot_ts_utc"],
         "first_seen_ts_utc": row["first_seen_ts_utc"],
@@ -555,6 +713,7 @@ def build_shadow_row(
         "integrated_tail_shadow_candidate": integrated_score >= 3 or source_ok,
         "heada_rain_convective_shadow_v1": rain_convective_candidate,
         "heada_rain_convective_shadow_policy": "diagnostic_only_not_live_selector",
+        **(checkpoint_book or {"checkpoint_book_status": "not_requested"}),
         **telemetry,
         **live_metar,
         **pcal_v2,
@@ -595,6 +754,22 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         candidates = load_candidates(conn, args, min_event_date)
 
     pcal_v2_resources = load_pcal_v2_resources(tail_resources)
+    token_index, token_meta = load_latest_snapshot_token_index(
+        Path(args.snapshot_dir).expanduser()
+    )
+    checkpoint_books: dict[str, dict[str, Any]] = {}
+    for candidate in candidates:
+        candidate_dict = dict(candidate)
+        token_id = safe_str(candidate_dict.get("yes_token_id")) or token_index.get(
+            safe_str(candidate_dict.get("condition_id")),
+            "",
+        )
+        if token_id and token_id not in checkpoint_books:
+            checkpoint_books[token_id] = fetch_checkpoint_book(
+                token_id,
+                timeout_sec=float(args.book_timeout_sec),
+                proxy=safe_str(args.book_proxy),
+            )
     rows = [
         build_shadow_row(
             row,
@@ -604,6 +779,15 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             obs_index=obs_index,
             obs_meta=obs_meta,
             pcal_v2_resources=pcal_v2_resources,
+            checkpoint_book=checkpoint_books.get(
+                safe_str(dict(row).get("yes_token_id"))
+                or token_index.get(safe_str(dict(row).get("condition_id")), ""),
+                {"checkpoint_book_status": "missing_token"},
+            ),
+            checkpoint_yes_token_id=(
+                safe_str(dict(row).get("yes_token_id"))
+                or token_index.get(safe_str(dict(row).get("condition_id")), "")
+            ),
         )
         for row in candidates
     ]
@@ -630,6 +814,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "heada_rain_convective_shadow_v1_count": sum(
             1 for row in rows if row.get("heada_rain_convective_shadow_v1")
         ),
+        "checkpoint_book_status_counts": {
+            status: sum(1 for row in rows if safe_str(row.get("checkpoint_book_status")) == status)
+            for status in sorted({safe_str(row.get("checkpoint_book_status")) for row in rows})
+        },
         "tail_telemetry_status_counts": {
             status: sum(1 for row in rows if safe_str(row.get("tail_telemetry_status")) == status)
             for status in sorted({safe_str(row.get("tail_telemetry_status")) for row in rows})
@@ -643,6 +831,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             for status in sorted({safe_str(row.get("live_day_regime")) for row in rows})
         },
         "observation_cache": obs_meta,
+        "checkpoint_token_snapshot": token_meta,
         "files": {
             "journal": rel(JOURNAL_OUT),
             "latest": rel(LATEST_OUT),
@@ -655,6 +844,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "min_edge": float(args.min_edge),
             "max_candidates_per_run": int(args.max_candidates_per_run),
             "max_obs_age_min": float(args.max_obs_age_min),
+            "snapshot_dir": str(Path(args.snapshot_dir).expanduser()),
+            "book_timeout_sec": float(args.book_timeout_sec),
+            "book_proxy_configured": bool(safe_str(args.book_proxy)),
             "allow_settled": bool(args.allow_settled),
         },
     }
