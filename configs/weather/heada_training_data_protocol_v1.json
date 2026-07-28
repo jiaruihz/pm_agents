@@ -21,7 +21,7 @@
     "frozen_calendar_days": 15,
     "frozen_target_date_start": "2026-07-28",
     "frozen_target_date_end": "2026-08-11",
-    "assignment": "fit the expanded p_cal only on target_date <= 2026-07-12; use 2026-07-13..2026-07-27 only as retrospective forward; all HeadA candidates with target_date from 2026-07-28 through 2026-08-11 inclusive are untouched fresh frozen validation; calendar days with zero candidates remain zero-signal coverage days and do not extend the window",
+    "assignment": "fit the expanded p_cal only on target_date <= 2026-07-12; use 2026-07-13..2026-07-27 only as retrospective forward; the p_cal artifact frozen universe is no-edge BUY_YES ask 0.05..0.20 with the first ticket per city-target_date from 2026-07-28 through 2026-08-11 inclusive; raw edge, dist and 22..24h are not p_cal artifact gates; calendar days with zero candidates remain zero-signal coverage days and do not extend the window",
     "reuse": "only after every target date in the 2026-07-28..2026-08-11 calendar window has completed and the one-shot frozen report is opened may this block enter the next cycle training set; the next frozen calendar block is 2026-08-12..2026-08-26",
     "no_peeking": [
       "do not publish interim frozen ROI or proper-score comparisons",
@@ -29,6 +29,14 @@
       "preserve every calendar date in the frozen window, including zero-signal and missing-book coverage states",
       "run the one-shot score only after all required settlements for target_date 2026-08-11 are available"
     ]
+  },
+  "parallel_profile_freeze": {
+    "profile_config": "configs/weather/low_price_yes_parallel_frozen_profiles_v1.json",
+    "target_date_start": "2026-07-29",
+    "target_date_end": "2026-08-12",
+    "purpose": "score broad, edge20, mechanism, legacy HeadA, p_cal v3 and mechanism+p_cal v3 in parallel on the same first cheap-YES city-target_date denominator",
+    "execution_mode": "zero_notional_shadow",
+    "live_action": "none"
   },
   "model_challengers": [
     {

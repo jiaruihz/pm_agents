@@ -1,0 +1,82 @@
+{
+  "schema_version": "low_price_yes_tail_pcal_expanded_v3",
+  "generated_at_utc": "2026-07-28T14:37:54+00:00",
+  "train_end": "2026-07-12",
+  "train_rows": 2102,
+  "train_dates": 67,
+  "train_wins": 216,
+  "num_features": [
+    "logit_model_p",
+    "logit_ask",
+    "bias_mean",
+    "bias_p90",
+    "hot_tail_pct",
+    "cold_tail_pct"
+  ],
+  "cat_columns": [
+    "forecast_model_ecmwf",
+    "forecast_model_gfs",
+    "dec_hour_bucket_h00_05",
+    "dec_hour_bucket_h06_11",
+    "dec_hour_bucket_h12_17",
+    "dec_hour_bucket_h18_23"
+  ],
+  "scaler_mu": [
+    -1.3110232142742777,
+    -2.236146194736972,
+    0.9653181629998238,
+    3.3864129400570886,
+    0.5009599867866502,
+    0.1674567809494429
+  ],
+  "scaler_sd": [
+    0.7944314634865993,
+    0.44317602760097696,
+    0.9769411525376839,
+    1.2770566244528885,
+    0.18936189253394423,
+    0.1340645458492421
+  ],
+  "coef": [
+    0.14727006067191734,
+    0.4351878334890444,
+    -0.07149056308942946,
+    -0.1605140237312163,
+    0.29346149178569403,
+    0.13419670379272494,
+    -0.6102456678699893,
+    -0.6910296322673609,
+    -0.28161054047255857,
+    -0.41648974522988325,
+    -0.08586169432841498,
+    -0.5173133201064801
+  ],
+  "intercept": -1.3012753001373272,
+  "theta_rule": "max 5.0 tickets/day on train",
+  "fresh_frozen_target_date_start": "2026-07-28",
+  "fresh_frozen_target_date_end": "2026-08-11",
+  "deployment_status": "research_only_not_deployed",
+  "theta": 0.024123665721333704,
+  "retrospective_forward": {
+    "start": "2026-07-13",
+    "end": "2026-07-27",
+    "rows": 510,
+    "dates": 15,
+    "model_delta": {
+      "rows": 510,
+      "dates": 15,
+      "brier_delta_expanded_vs_old": 0.0007352805892296332,
+      "brier_delta_expanded_vs_old_ci_low": -0.0005789915578879563,
+      "brier_delta_expanded_vs_old_ci_high": 0.0022396536785036143,
+      "logloss_delta_expanded_vs_old": 0.0030838976425798296,
+      "logloss_delta_expanded_vs_old_ci_low": -0.0024566366670919194,
+      "logloss_delta_expanded_vs_old_ci_high": 0.010584236862518808
+    },
+    "trade_delta": {
+      "dates": 15,
+      "roi_delta_expanded_vs_old": -0.0028326370974094683,
+      "roi_delta_ci_low": -0.26878501702186963,
+      "roi_delta_ci_high": 0.2809534808095025
+    }
+  }
+}

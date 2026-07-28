@@ -621,10 +621,10 @@ Generated: {summary["generated_at_utc"]}
 | trade class | research replay / zero-notional |
 | fee | Weather official taker curve, rate={WEATHER_FEE_RATE:.2f} |
 
-> Scope correction：本报告检验的是“p_cal 单独替代原 HeadA gates”——在 no-edge
-> cheap-YES city-date 宽分母上直接选票；它不是当前 HeadA
-> `edge/time/dist/fresh-book → p_cal overlay` 的同分母绩效。正确 overlay 评估见
-> `2026-07-28-heada-gate-pcal-stability-v1.md`。
+> Scope：本报告及 frozen artifact 只定义 `P4_pcal_v3`——在 no-edge cheap-YES
+> first city-target_date 宽分母上直接选票，不包含 raw edge、dist 或 22–24h gate。
+> 从 2026-07-29 起，`low_price_yes_parallel_frozen_profiles_v1.json` 在同一宽分母并行记录
+> broad / edge20 / mechanism / legacy HeadA / p_cal / mechanism+p_cal 六个 profiles。
 
 ## 目标与固定改动
 

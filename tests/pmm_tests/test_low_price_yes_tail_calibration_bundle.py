@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from scripts.ops.low_price_yes_integrated_tail_shadow_v2 import (
     build_shadow_row,
+    load_parallel_profile_resources,
     load_pcal_v2_resources,
+    parallel_profile_tags,
     summarize_checkpoint_book,
 )
 from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
@@ -49,6 +51,36 @@ def test_pcal_v2_uses_the_same_deployable_bias_index() -> None:
     assert pcal is not None
     assert pcal["bias_index"] is resources.bias_index
     assert pcal["frozen"]["train_end"] == "2026-06-20"
+
+
+def test_parallel_profiles_are_fixed_and_do_not_require_raw_edge() -> None:
+    resources = load_tail_telemetry_resources()
+    parallel = load_parallel_profile_resources(resources)
+
+    assert parallel is not None
+    assert parallel["pcal_v3"]["train_end"] == "2026-07-12"
+    assert parallel["profile_set"]["frozen_target_date_start"] == "2026-07-29"
+    assert parallel["profile_set"]["frozen_target_date_end"] == "2026-08-12"
+
+    row = {
+        "decision_hours_to_settle": 23.0,
+        "edge": 0.10,
+    }
+    tags = parallel_profile_tags(
+        row,
+        profile_resources=parallel,
+        pcal_v3={"pcal_v3_selected_shadow": True},
+        distance={"hot_tail_boundary_v1": True},
+    )
+
+    assert tags["parallel_profile_memberships"] == [
+        "P0_broad",
+        "P2_mechanism",
+        "P4_pcal_v3",
+        "P5_mechanism_pcal_v3",
+    ]
+    assert "P1_edge20" not in tags["parallel_profile_memberships"]
+    assert "P3_legacy_headA" not in tags["parallel_profile_memberships"]
 
 
 def test_integrated_shadow_tags_rain_convective_candidate(monkeypatch) -> None:

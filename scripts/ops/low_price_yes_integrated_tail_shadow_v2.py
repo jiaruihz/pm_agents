@@ -69,7 +69,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-event-date", default=None)
     parser.add_argument("--min-ask", type=float, default=0.05)
     parser.add_argument("--max-ask", type=float, default=0.20)
-    parser.add_argument("--min-edge", type=float, default=0.20)
+    parser.add_argument(
+        "--min-edge",
+        type=float,
+        default=-1.0,
+        help="Collector universe floor only; profile edge gates are recorded as tags.",
+    )
     parser.add_argument("--max-candidates-per-run", type=int, default=80)
     parser.add_argument("--max-obs-age-min", type=float, default=120.0)
     parser.add_argument(
@@ -490,6 +495,7 @@ def classify_live_metar(row: dict[str, Any], obs: dict[str, Any] | None, args: a
 
 
 PCAL_V2_JSON = ROOT / "src/strategies/weather_edge_v1/config/low_price_yes_tail_pcal_v2.json"
+PARALLEL_PROFILES_JSON = ROOT / "configs/weather/low_price_yes_parallel_frozen_profiles_v1.json"
 
 
 def load_pcal_v2_resources(tail_resources: TailTelemetryResources | None) -> dict[str, Any] | None:
@@ -547,6 +553,138 @@ def pcal_v2_tags(row: dict[str, Any], res: dict[str, Any] | None) -> dict[str, A
         "pcal_v2_theta": theta,
         "pcal_v2_selected_shadow": bool(p_cal - ask >= theta),
         "pcal_v2_policy": "frozen_selector_shadow_only_acceptance_failed_vs_v1",
+    }
+
+
+def load_parallel_profile_resources(
+    tail_resources: TailTelemetryResources | None,
+    profile_path: Path = PARALLEL_PROFILES_JSON,
+) -> dict[str, Any]:
+    profile_set = json.loads(profile_path.read_text(encoding="utf-8"))
+    artifact_path = ROOT / safe_str(profile_set["pcal_v3_artifact"])
+    artifact_bytes = artifact_path.read_bytes()
+    actual_sha = hashlib.sha256(artifact_bytes).hexdigest()
+    expected_sha = safe_str(profile_set["pcal_v3_artifact_sha256"])
+    if actual_sha != expected_sha:
+        raise RuntimeError(
+            f"pcal_v3 artifact sha mismatch expected={expected_sha} actual={actual_sha}"
+        )
+    load_error = (
+        "tail_resources_missing"
+        if tail_resources is None
+        else safe_str(tail_resources.load_error)
+    )
+    return {
+        "profile_set": profile_set,
+        "pcal_v3": json.loads(artifact_bytes),
+        "bias_index": tail_resources.bias_index if tail_resources is not None else {},
+        "load_error": load_error,
+    }
+
+
+def pcal_v3_tags(row: dict[str, Any], res: dict[str, Any] | None) -> dict[str, Any]:
+    if not res:
+        return {"pcal_v3_status": "resources_missing"}
+    frozen = res["pcal_v3"]
+    source = safe_str(row.get("forecast_source")).lower()
+    model_name = "ecmwf" if "ecmwf" in source else ("gfs" if "gfs" in source else "other")
+    errors = res["bias_index"].get((safe_str(row.get("city")), model_name)) or res[
+        "bias_index"
+    ].get((safe_str(row.get("city")), "gfs"))
+    target = safe_str(row.get("event_date"))
+    xs = [error for date, error in errors if date < target] if errors else []
+    if not xs:
+        return {"pcal_v3_status": "no_bias_history"}
+    xs_sorted = sorted(xs)
+    p90 = xs_sorted[min(len(xs_sorted) - 1, int(round(0.90 * (len(xs_sorted) - 1))))]
+    model_p = to_float(row.get("model_p_yes"))
+    ask = to_float(row.get("decision_entry_price"))
+    if not (math.isfinite(model_p) and math.isfinite(ask)):
+        return {"pcal_v3_status": "missing_inputs"}
+    clip = lambda probability: min(max(probability, 0.001), 0.999)
+    features = {
+        "logit_model_p": math.log(clip(model_p) / (1 - clip(model_p))),
+        "logit_ask": math.log(clip(ask) / (1 - clip(ask))),
+        "bias_mean": sum(xs) / len(xs),
+        "bias_p90": p90,
+        "hot_tail_pct": sum(1 for error in xs if error >= 1.0) / len(xs),
+        "cold_tail_pct": sum(1 for error in xs if error <= -1.0) / len(xs),
+    }
+    timestamp = safe_str(row.get("decision_snapshot_ts_utc"))
+    hour = int(timestamp[11:13]) if len(timestamp) >= 13 and timestamp[11:13].isdigit() else -1
+    bucket = (
+        "h00_05"
+        if 0 <= hour <= 5
+        else "h06_11"
+        if hour <= 11
+        else "h12_17"
+        if hour <= 17
+        else "h18_23"
+        if hour <= 23
+        else "nan"
+    )
+    score = float(frozen["intercept"])
+    for name, mu, sd, coef in zip(
+        frozen["num_features"],
+        frozen["scaler_mu"],
+        frozen["scaler_sd"],
+        frozen["coef"][: len(frozen["num_features"])],
+        strict=True,
+    ):
+        score += float(coef) * (features[name] - float(mu)) / float(sd)
+    for category, coef in zip(
+        frozen["cat_columns"],
+        frozen["coef"][len(frozen["num_features"]) :],
+        strict=True,
+    ):
+        active = category == f"forecast_model_{model_name}" or category == f"dec_hour_bucket_{bucket}"
+        score += float(coef) * float(active)
+    p_cal = 1.0 / (1.0 + math.exp(-score))
+    theta = float(frozen["theta"])
+    return {
+        "pcal_v3_status": "ok",
+        "pcal_v3_p": round(p_cal, 6),
+        "pcal_v3_ev": round(p_cal - ask, 6),
+        "pcal_v3_theta": theta,
+        "pcal_v3_selected_shadow": bool(p_cal - ask >= theta),
+        "pcal_v3_train_end": safe_str(frozen.get("train_end")),
+    }
+
+
+def parallel_profile_tags(
+    row: dict[str, Any],
+    *,
+    profile_resources: dict[str, Any] | None,
+    pcal_v3: dict[str, Any],
+    distance: dict[str, Any],
+) -> dict[str, Any]:
+    if not profile_resources:
+        return {
+            "parallel_profile_status": "resources_missing",
+            "parallel_profile_memberships": [],
+        }
+    profile_set = profile_resources["profile_set"]
+    hours = to_float(row.get("decision_hours_to_settle"))
+    raw_edge = to_float(row.get("edge"))
+    flags = {
+        "universe": True,
+        "raw_edge_ge_0p20": math.isfinite(raw_edge) and raw_edge >= 0.20,
+        "hours_to_settle_22_24": math.isfinite(hours) and 22.0 <= hours <= 24.0,
+        "dist_gt_0": distance.get("hot_tail_boundary_v1") is True,
+        "pcal_v3_minus_ask_ge_theta": pcal_v3.get("pcal_v3_selected_shadow") is True,
+    }
+    memberships = [
+        safe_str(profile["profile_id"])
+        for profile in profile_set["profiles"]
+        if all(flags.get(safe_str(condition), False) for condition in profile["conditions"])
+    ]
+    return {
+        "parallel_profile_status": "ok",
+        "parallel_profile_set_id": safe_str(profile_set["profile_set_id"]),
+        "parallel_profile_frozen_start": safe_str(profile_set["frozen_target_date_start"]),
+        "parallel_profile_frozen_end": safe_str(profile_set["frozen_target_date_end"]),
+        "parallel_profile_flags": flags,
+        "parallel_profile_memberships": memberships,
     }
 
 
@@ -626,12 +764,21 @@ def build_shadow_row(
     obs_index: dict[tuple[str, str], dict[str, Any]],
     obs_meta: dict[str, Any],
     pcal_v2_resources: dict[str, Any] | None = None,
+    parallel_profile_resources: dict[str, Any] | None = None,
     checkpoint_book: dict[str, Any] | None = None,
     checkpoint_yes_token_id: str = "",
 ) -> dict[str, Any]:
     row_dict = dict(row)
     telemetry = build_low_price_yes_tail_telemetry(row_dict, tail_resources)
     pcal_v2 = pcal_v2_tags(row_dict, pcal_v2_resources)
+    pcal_v3 = pcal_v3_tags(row_dict, parallel_profile_resources)
+    distance = hot_tail_boundary_tags(row_dict)
+    parallel_profiles = parallel_profile_tags(
+        row_dict,
+        profile_resources=parallel_profile_resources,
+        pcal_v3=pcal_v3,
+        distance=distance,
+    )
     obs = obs_index.get((safe_str(row["city"]), safe_str(row["event_date"])))
     live_metar = classify_live_metar(row_dict, obs, args)
     source_ok, source_reason = source_aware_v3(row_dict)
@@ -701,7 +848,7 @@ def build_shadow_row(
         "forecast_max_in_bracket": row["forecast_max_in_bracket"],
         "forecast_max_above_bracket_f": row["forecast_max_above_bracket_f"],
         "forecast_max_below_bracket_f": row["forecast_max_below_bracket_f"],
-        **hot_tail_boundary_tags(row_dict),
+        **distance,
         "source_aware_v3_shadow": source_ok,
         "source_aware_v3_shadow_reason": source_reason,
         "station_bias_p90_high_shadow": station_bias_p90_high,
@@ -717,6 +864,8 @@ def build_shadow_row(
         **telemetry,
         **live_metar,
         **pcal_v2,
+        **pcal_v3,
+        **parallel_profiles,
         "observation_cache_status": obs_meta.get("status"),
         "observation_cache_path": obs_meta.get("path"),
         "observation_cache_generated_at_utc": obs_meta.get("generated_at_utc"),
@@ -754,6 +903,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         candidates = load_candidates(conn, args, min_event_date)
 
     pcal_v2_resources = load_pcal_v2_resources(tail_resources)
+    parallel_profile_resources = load_parallel_profile_resources(tail_resources)
     token_index, token_meta = load_latest_snapshot_token_index(
         Path(args.snapshot_dir).expanduser()
     )
@@ -779,6 +929,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             obs_index=obs_index,
             obs_meta=obs_meta,
             pcal_v2_resources=pcal_v2_resources,
+            parallel_profile_resources=parallel_profile_resources,
             checkpoint_book=checkpoint_books.get(
                 safe_str(dict(row).get("yes_token_id"))
                 or token_index.get(safe_str(dict(row).get("condition_id")), ""),
@@ -810,6 +961,21 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "shadow_rows_written": 0 if args.dry_run else len(rows),
         "source_aware_v3_count": sum(1 for row in rows if row.get("source_aware_v3_shadow")),
         "pcal_v2_selected_count": sum(1 for row in rows if row.get("pcal_v2_selected_shadow")),
+        "parallel_profile_counts": {
+            profile_id: sum(
+                1
+                for row in rows
+                if profile_id in (row.get("parallel_profile_memberships") or [])
+            )
+            for profile_id in (
+                [
+                    safe_str(profile.get("profile_id"))
+                    for profile in parallel_profile_resources["profile_set"]["profiles"]
+                ]
+                if parallel_profile_resources
+                else []
+            )
+        },
         "integrated_tail_shadow_candidate_count": sum(1 for row in rows if row.get("integrated_tail_shadow_candidate")),
         "heada_rain_convective_shadow_v1_count": sum(
             1 for row in rows if row.get("heada_rain_convective_shadow_v1")

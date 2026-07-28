@@ -704,8 +704,8 @@ Generated: {generated}
 5. **fresh-book 是证据有效性 gate，不是天气 alpha。** 历史 missing/thin book
    反而贡献高 ROI，说明晚/缺盘口会制造 archive bias；只有拿到 fresh executable ask
    才能谈真实策略。
-6. 正确架构是 `HeadA mechanism → p_cal overlay`。expanded p_cal 单独替换
-   HeadA gates 失败，但在当前 84 张 HeadA 上二次筛到 63 张、12 中、ROI +44.3%；
+6. `HeadA mechanism → p_cal overlay` 是值得并行验证的一个 profile，不是唯一正确架构。
+   expanded p_cal 单独替换 HeadA gates 失败，但在当前 84 张 HeadA 上二次筛到 63 张、12 中、ROI +44.3%；
    这是 8 日 retrospective 结果；而且去掉最高5个赢家后仍为负，不能当 fresh confirmed。
 
 ## 新 p_cal 到底升级了什么
@@ -778,7 +778,7 @@ expanded 点估优于 market，但 proper-score CI 跨0；selected ROI 仍高度
 
 {md_table(pcal_overlay_delta, ["model", "comparison", "roi_delta", "ci_low", "ci_high"])}
 
-所以这只能定义 7/28..8/11 的固定 frozen overlay，不能回头改 gate。
+所以 overlay 只作为并行 frozen profile，不能用这 8 日结果回头改 gate。
 
 ## 其余原条件怎么理解
 
