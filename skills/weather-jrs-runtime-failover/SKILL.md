@@ -12,6 +12,9 @@ description: 在 weather 生产 runtime 因 JRS 外置卷写入失败时安全�
 - 同一实例任一时刻只有一个可写 runtime 正本；不双写。
 - JRS 常驻进程只用 `tmux -L weather-data-feed-jrs`，并通过
   `scripts/ops/weather_jrs_tmux_env.sh` 在该 tmux server 内执行 write probe。
+- canonical helper 必须使用 macOS「完全磁盘访问权限」已授权且 path/SHA-256
+  固定的 tmux binary。若 pin 缺失或 hash 漂移，先修权限宿主；不要把它误判成
+  数据盘故障或直接进入本机接管。
 - 普通 shell 写不进 JRS，不等于 canonical tmux context 写不进。只有后者失败才进入本机接管。
 - live 恢复前必须迁移完整 runtime state，包括 dedupe、plan、order、fill、maker lifecycle 和 pause/state；JRS 不可读或所需校验 profile 失败时不得恢复 live。
 - 只改 storage location 时保持 repo SHA、参数、caps、source/signal/execution policy 完全不变。
@@ -72,6 +75,8 @@ weather_jrs_tmux_write_probe weather-data-feed-jrs "$JRS_RUNTIME_ROOT"
 ```
 
 - probe 成功：不迁移；修正 runner 的 process context。
+- helper 报 tmux path/hash 漂移：不迁移；先按 `OPS_RUNBOOK.md` 给新 binary
+  授权 Full Disk Access、更新 pin 并重建 canonical host。
 - probe 失败：记录原始错误，进入临时接管。
 - JRS 能读不能写：允许复制完整 state 到本机。
 - JRS 读也失败：不得凭空启动 live；可暂停或只启 zero-notional shadow，并明确 lineage gap。
