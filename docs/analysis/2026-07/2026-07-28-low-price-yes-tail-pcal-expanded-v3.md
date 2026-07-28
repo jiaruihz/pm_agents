@@ -14,6 +14,11 @@ Generated: 2026-07-28T14:37:54+00:00
 | trade class | research replay / zero-notional |
 | fee | Weather official taker curve, rate=0.05 |
 
+> Scope correction：本报告检验的是“p_cal 单独替代原 HeadA gates”——在 no-edge
+> cheap-YES city-date 宽分母上直接选票；它不是当前 HeadA
+> `edge/time/dist/fresh-book → p_cal overlay` 的同分母绩效。正确 overlay 评估见
+> `2026-07-28-heada-gate-pcal-stability-v1.md`。
+
 ## 目标与固定改动
 
 只改变训练截止：旧 active p_cal 训练截止 2026-06-20；candidate 扩到
