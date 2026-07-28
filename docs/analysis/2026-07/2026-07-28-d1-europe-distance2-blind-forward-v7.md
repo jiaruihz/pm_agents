@@ -95,3 +95,21 @@ London/Paris/Milan 的点估计较好，但这是看完 forward 后才观察到�
 - frozen-forward gate：INCOMPLETE（8/15 个新日期）。
 - action：Europe-all 保留 frozen collector/shadow；固定五城不再作为主假设；满 15 个
   新日期后按同一代码、同一城市集合、同一分母重跑，期间不换城市、不调阈值。
+
+## Zero-notional shadow contract
+
+用户于 2026-07-28 授权启动独立 zero-notional shadow：
+
+- instance：`europe_d1_distance2_dual_no_shadow_v1`
+- universe：冻结的 10 个 `Europe-all` 城市。
+- signal：当地 D-1 12:00–24:00 内首次看到的完整 ladder；锁定
+  `distance_from_nearest_endpoint=2` 的低侧与高侧 NO，各 50%。
+- coverage：首个 ladder 即锁定；任一腿不可执行仍保留
+  `paired_book_unexecutable`，不等待更晚、更好看的盘口替换。
+- weather：五模型 bias-corrected exact-mass、spread 等只写 telemetry，
+  `weather_features_used_for_eligibility=false`。
+- execution：`orders_submitted=0`、`actual_notional_usd=0`；runner 不包含
+  CLOB 下单入口。
+- forward：collector 首轮因当日窗口已开始，标记
+  `collector_bootstrap_partial_window=true`，不计入完整 frozen-forward 日期；
+  后续城市集、距离和天气 eligibility 均冻结。

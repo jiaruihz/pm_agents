@@ -1,0 +1,73 @@
+{
+  "schema_version": "europe_d1_distance2_dual_no_shadow_policy_v1",
+  "strategy_instance": "europe_d1_distance2_dual_no_shadow_v1",
+  "status": "frozen_zero_notional_shadow",
+  "execution_mode": "zero_notional_shadow",
+  "orders_submitted": 0,
+  "target_lead_days": 1,
+  "local_entry_hour_start": 12,
+  "local_entry_hour_end": 24,
+  "distance_from_nearest_endpoint": 2,
+  "allocation": {
+    "low_distance2_no": 0.5,
+    "high_distance2_no": 0.5
+  },
+  "eligibility_policy": "fixed_europe_all_only",
+  "weather_feature_policy": "telemetry_only_never_filters",
+  "feature_model_labels": [
+    "ECMWF",
+    "ECMWF AIFS",
+    "GFS Global",
+    "ICON",
+    "JMA"
+  ],
+  "cities": {
+    "Amsterdam": {
+      "timezone": "Europe/Amsterdam",
+      "market_unit": "C"
+    },
+    "Ankara": {
+      "timezone": "Europe/Istanbul",
+      "market_unit": "C"
+    },
+    "Helsinki": {
+      "timezone": "Europe/Helsinki",
+      "market_unit": "C"
+    },
+    "Istanbul": {
+      "timezone": "Europe/Istanbul",
+      "market_unit": "C"
+    },
+    "London": {
+      "timezone": "Europe/London",
+      "market_unit": "C"
+    },
+    "Madrid": {
+      "timezone": "Europe/Madrid",
+      "market_unit": "C"
+    },
+    "Milan": {
+      "timezone": "Europe/Rome",
+      "market_unit": "C"
+    },
+    "Munich": {
+      "timezone": "Europe/Berlin",
+      "market_unit": "C"
+    },
+    "Paris": {
+      "timezone": "Europe/Paris",
+      "market_unit": "C"
+    },
+    "Warsaw": {
+      "timezone": "Europe/Warsaw",
+      "market_unit": "C"
+    }
+  },
+  "frozen_forward": {
+    "historical_blind_dates": 8,
+    "minimum_new_target_dates": 15,
+    "remaining_at_registration": 7,
+    "city_set_may_change": false,
+    "weather_features_may_filter": false
+  }
+}
