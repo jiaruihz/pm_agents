@@ -72,6 +72,48 @@ N100 两个 repo 产出的文件格式 = 本文档约定的契约。pm_agent das
 | 市场ID | `market_id` | TEXT | |
 | 距结算小时数 | `hours_to_settle` | REAL | |
 
+### 1.1.1 First-seen information event（target contract）
+
+本节定义已落地并通过 archive-known raw replay 的上游契约。只有新 collector
+保存的 `collector_exact` 可用于精确到达时延研究；历史 source-event
+`changed_since_last`、TAF capture time 或 provider issue time 不得补造成
+canonical exact first-seen。
+
+统一上游血缘：
+
+```text
+raw capture
+  -> weather_information_event
+  -> weather_state_checkpoint + feature_frame_ref
+  -> fact_signal_candidates
+```
+
+最小规范 ID/时间字段：
+
+```text
+information_event_id, content_key, payload_hash, revision_of_event_id,
+source_event_ts_utc, issued_at_utc, detected_at_utc, first_seen_at_utc,
+available_at_utc, ingested_at_utc, trigger_event_id, state_checkpoint_id,
+as_of_ts_utc, candidate_grain_version
+```
+
+时钟不得混用。`source_event_ts_utc` 是天气发生/适用时间，
+`issued_at_utc` 是 provider 声称的发布时间，`first_seen_at_utc` 是 collector
+对同一 immutable event identity 的最早发现时间，`available_at_utc` 是下游可读
+边界。PIT state 只能读取 `available_at_utc <= as_of_ts_utc` 的输入。
+
+初始 PIT lineage 枚举：
+
+```text
+collector_exact
+archive_known_available
+late_backfill_first_seen_unknown
+```
+
+只有 `collector_exact` 可用于 first-seen latency 研究；后两类不得由 provider
+时间戳升级。完整 grain、ID、source-specific 规则、candidate v1/v2 共存方式和
+验收标准见
+[WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md)。
 ### 1.2 Order / 订单
 
 | 概念 | 规范字段名 | 类型 | 说明 |

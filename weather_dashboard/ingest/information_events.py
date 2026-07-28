@@ -31,6 +31,7 @@ _EVENT_COLUMNS = (
     "ingested_at_utc",
     "pit_lineage_class",
     "original_first_seen_unknown",
+    "material_state_change",
     "raw_source_path",
     "raw_row_hash",
 )
@@ -44,6 +45,7 @@ def _canonical_event(raw: Mapping[str, Any], *, ingested_at_utc: str) -> dict[st
     event = {column: raw.get(column) for column in _EVENT_COLUMNS}
     event["ingested_at_utc"] = str(event.get("ingested_at_utc") or ingested_at_utc)
     event["original_first_seen_unknown"] = int(bool(event.get("original_first_seen_unknown")))
+    event["material_state_change"] = int(event.get("material_state_change") is not False)
     expected_id = information_event_id(
         event_kind=str(event.get("event_kind") or ""),
         source=str(event.get("source") or ""),

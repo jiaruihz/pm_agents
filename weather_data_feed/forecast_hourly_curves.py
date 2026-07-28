@@ -185,7 +185,12 @@ def _utc_string(value: datetime) -> str:
 
 
 def _first_seen_key(row: Mapping[str, Any]) -> tuple[str, ...]:
-    return tuple(str(row.get(field) or "") for field in _FIRST_SEEN_KEY_FIELDS)
+    base = tuple(str(row.get(field) or "") for field in _FIRST_SEEN_KEY_FIELDS)
+    run_ts = str(row.get("forecast_run_ts_utc") or "")
+    # A provider run is its own publication identity when the source exposes
+    # one.  Sources without run metadata retain the existing values-hash
+    # identity so an unchanged poll remains non-material.
+    return (*base, f"run:{run_ts}" if run_ts else "run:unknown")
 
 
 def _load_first_seen(curve_root: Path) -> dict[tuple[str, ...], tuple[datetime, str]]:
@@ -285,6 +290,7 @@ def write_forecast_hourly_curve_capture(
         if observed_first_seen > available_at:
             raise ValueError("forecast_first_seen_utc cannot be after available_at_utc")
         first_seen[key] = (observed_first_seen, first_seen_source)
+        material_state_change = historical_first_seen is None
         information_event = build_information_event(
             event_kind="forecast_curve",
             event_role="new_content",
@@ -302,12 +308,16 @@ def write_forecast_hourly_curve_capture(
             first_seen_at_utc=_utc_string(observed_first_seen),
             available_at_utc=_utc_string(available_at),
             pit_lineage_class="collector_exact",
+            material_state_change=material_state_change,
             raw_source_path=str(destination),
         )
         payload_rows.append(
             {
                 **row,
                 **information_event,
+                "information_event_status": (
+                    "material" if material_state_change else "non_material_duplicate_state"
+                ),
                 "schema_version": FORECAST_HOURLY_CURVE_SCHEMA_VERSION,
                 "capture_id": capture_id,
                 "available_at_utc": _utc_string(available_at),

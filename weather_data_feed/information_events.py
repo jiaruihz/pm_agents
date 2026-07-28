@@ -24,6 +24,61 @@ PIT_LINEAGE_CLASSES = frozenset(
     }
 )
 
+OBSERVATION_DELIVERY_METADATA_FIELDS = frozenset(
+    {
+        "producer",
+        "status",
+        "error",
+        "ts_utc",
+        "local_detect_ts_utc",
+        "fetched_at_utc",
+        "payload_hash",
+        "raw_payload_hash",
+        "changed_since_last",
+        "first_seen_type",
+        "original_first_seen_unknown",
+        "recovered_from_multi_record_payload",
+        "information_event_id",
+        "event_kind",
+        "event_role",
+        "content_key",
+        "revision_of_event_id",
+        "detected_at_utc",
+        "first_seen_at_utc",
+        "available_at_utc",
+        "pit_lineage_class",
+        "material_state_change",
+        "raw_source_path",
+        "raw_row_hash",
+        "information_event_status",
+        "source_fetch_start_utc",
+        "source_fetch_end_utc",
+        "source_fetch_latency_sec",
+        "source_age_sec",
+        "detected_after_report_sec",
+        "estimated_cadence_min",
+        "record_count",
+        "target_date",
+        "city",
+        "source",
+        "station",
+        "live_observation_source",
+        "mapping_rule",
+        "registry_class",
+        "settlement_source",
+        "settlement_source_class",
+    }
+)
+
+
+def normalized_observation_payload(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Return provider/weather content without collector delivery metadata."""
+    return {
+        str(key): value
+        for key, value in row.items()
+        if key not in OBSERVATION_DELIVERY_METADATA_FIELDS and not str(key).startswith("_")
+    }
+
 
 def canonical_json_hash(payload: Any) -> str:
     """Return the full SHA256 of canonical JSON, preserving explicit nulls."""
@@ -112,6 +167,7 @@ def build_information_event(
     available_at_utc: str | None = None,
     pit_lineage_class: str,
     original_first_seen_unknown: bool = False,
+    material_state_change: bool = True,
     raw_source_path: str | None = None,
     raw_row_hash: str | None = None,
 ) -> dict[str, Any]:
@@ -140,6 +196,7 @@ def build_information_event(
         "available_at_utc": available_at_utc,
         "pit_lineage_class": pit_lineage_class,
         "original_first_seen_unknown": bool(original_first_seen_unknown),
+        "material_state_change": bool(material_state_change),
         "raw_source_path": raw_source_path,
         "raw_row_hash": raw_row_hash,
     }

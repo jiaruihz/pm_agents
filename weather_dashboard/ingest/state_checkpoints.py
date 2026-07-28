@@ -26,8 +26,15 @@ def build_state_checkpoint(
     trigger_id = str(trigger_event.get("information_event_id") or "")
     if not trigger_id:
         raise ValueError("trigger_event must have information_event_id")
+    trigger_available = trigger_event.get("available_at_utc")
+    if trigger_available and str(trigger_available) > as_of_ts_utc:
+        raise ValueError("trigger_event is available after as_of_ts_utc")
     if str(trigger_event.get("pit_lineage_class") or "") == "late_backfill_first_seen_unknown":
         status, blocker = "blocked_missing_required_identity", "late_backfill_first_seen_unknown"
+    elif trigger_event.get("material_state_change") in (False, 0):
+        status, blocker = "build_error", "non_material_duplicate_state"
+    elif not feature_frame_ref:
+        status, blocker = "build_error", "missing_feature_frame"
     else:
         status, blocker = "built", None
     eligible_ids = []
@@ -78,9 +85,12 @@ def ingest_state_checkpoints(conn: sqlite3.Connection, checkpoints: Iterable[Map
         return 0
     columns = list(rows[0])
     placeholders = ", ".join("?" for _ in columns)
-    conn.executemany(
-        f"INSERT OR IGNORE INTO weather_state_checkpoints ({', '.join(columns)}) VALUES ({placeholders})",
-        [[row.get(column) for column in columns] for row in rows],
-    )
+    inserted = 0
+    for row in rows:
+        cursor = conn.execute(
+            f"INSERT OR IGNORE INTO weather_state_checkpoints ({', '.join(columns)}) VALUES ({placeholders})",
+            [row.get(column) for column in columns],
+        )
+        inserted += int(cursor.rowcount or 0)
     conn.commit()
-    return conn.total_changes
+    return inserted

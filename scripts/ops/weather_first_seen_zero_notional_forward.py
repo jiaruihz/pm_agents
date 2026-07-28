@@ -1,19 +1,243 @@
 #!/usr/bin/env python3
-"""Export the full v2 candidate denominator as zero-notional forward telemetry."""
-from __future__ import annotations
-import argparse, json, sqlite3
-from datetime import datetime, timezone
-from pathlib import Path
+"""Run the first-seen data/signal pipeline with permanently zero notional."""
 
-def main(argv=None):
-    p=argparse.ArgumentParser(description=__doc__); p.add_argument('--db',required=True); p.add_argument('--out',required=True); a=p.parse_args(argv)
-    conn=sqlite3.connect(a.db); conn.row_factory=sqlite3.Row
-    rows=conn.execute("SELECT * FROM fact_signal_candidates WHERE candidate_grain_version='v2_event_checkpoint' ORDER BY decision_ts_utc,candidate_id").fetchall()
-    out=Path(a.out); out.parent.mkdir(parents=True,exist_ok=True)
-    generated=datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
-    with out.open('w',encoding='utf-8') as fh:
-        for source in rows:
-            row=dict(source); row.update({'record_type':'weather_first_seen_candidate_v2','telemetry_version':'weather_first_seen_zero_notional_v1','generated_at_utc':generated,'zero_notional':True,'no_order_placed':True,'notional_usd':0.0})
-            fh.write(json.dumps(row,ensure_ascii=False,sort_keys=True)+'\n')
-    print(json.dumps({'rows':len(rows),'out':str(out),'zero_notional':True},sort_keys=True)); return 0
-if __name__=='__main__': raise SystemExit(main())
+from __future__ import annotations
+
+import argparse
+from collections.abc import Iterator
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import sqlite3
+import sys
+import time
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.etl.build_weather_signal_candidates import FORECAST_CURVE_DDL
+from scripts.etl.materialize_weather_first_seen_pipeline import (
+    load_snapshots,
+    materialize_pipeline,
+)
+from scripts.etl.materialize_weather_information_events import materialize_rows
+from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
+from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
+
+
+TELEMETRY_VERSION = "weather_first_seen_zero_notional_v1"
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _read_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"version": 1, "offsets": {}, "seen_files": [], "exported_candidates": []}
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"invalid forward state: {path}")
+    return value
+
+
+def _write_state(path: Path, state: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def _raw_files(paths: list[Path]) -> list[Path]:
+    files = []
+    for path in paths:
+        if path.is_file():
+            files.append(path)
+        elif path.is_dir():
+            files.extend(path.rglob("*.jsonl"))
+        else:
+            raise FileNotFoundError(f"required forward raw path does not exist: {path}")
+    return sorted(set(files))
+
+
+def _incremental_rows(
+    paths: list[Path],
+    state: dict[str, Any],
+    *,
+    bootstrap_at_end: bool,
+) -> Iterator[tuple[dict[str, Any], Path]]:
+    offsets = dict(state.get("offsets") or {})
+    seen_files = set(state.get("seen_files") or [])
+    for path in _raw_files(paths):
+        key = str(path.resolve())
+        immutable_file = path.parent.name[:4].isdigit() or path.name.startswith("forecast_hourly_curves_")
+        if immutable_file and key in seen_files:
+            continue
+        size = path.stat().st_size
+        if key not in offsets and bootstrap_at_end and not immutable_file:
+            offsets[key] = size
+            continue
+        if immutable_file and bootstrap_at_end and key not in seen_files:
+            seen_files.add(key)
+            continue
+        offset = int(offsets.get(key) or 0)
+        if size < offset:
+            offset = 0
+        with path.open("rb") as handle:
+            handle.seek(offset)
+            while True:
+                line_start = handle.tell()
+                line = handle.readline()
+                if not line:
+                    break
+                if not line.endswith(b"\n"):
+                    handle.seek(line_start)
+                    break
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"invalid forward JSONL at {path}:{line_start}") from exc
+                if isinstance(value, dict):
+                    yield value, path
+            offsets[key] = handle.tell()
+        if immutable_file:
+            seen_files.add(key)
+    state["offsets"] = offsets
+    state["seen_files"] = sorted(seen_files)
+
+
+def _recent_snapshot_files(path: Path, limit: int) -> list[Path]:
+    if path.is_file():
+        return [path]
+    if not path.is_dir():
+        raise FileNotFoundError(f"paper snapshot path does not exist: {path}")
+    return sorted(path.rglob("snapshot_*.json"))[-max(1, limit) :]
+
+
+def export_new_candidates(
+    conn: sqlite3.Connection,
+    out: Path,
+    state: dict[str, Any],
+) -> int:
+    exported = set(state.get("exported_candidates") or [])
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM fact_signal_candidates
+        WHERE candidate_grain_version = 'v2_event_checkpoint'
+        ORDER BY decision_ts_utc, candidate_id
+        """
+    ).fetchall()
+    new_rows = [dict(row) for row in rows if str(row["candidate_id"]) not in exported]
+    if new_rows:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        generated = _utc_now()
+        with out.open("a", encoding="utf-8") as handle:
+            for source in new_rows:
+                row = {
+                    **source,
+                    "record_type": "weather_first_seen_candidate_v2",
+                    "telemetry_version": TELEMETRY_VERSION,
+                    "generated_at_utc": generated,
+                    "zero_notional": True,
+                    "no_order_placed": True,
+                    "notional_usd": 0.0,
+                }
+                handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+                exported.add(str(source["candidate_id"]))
+    state["exported_candidates"] = sorted(exported)
+    return len(new_rows)
+
+
+def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    raw_paths = [
+        Path(value)
+        for value in [
+            *args.source_events,
+            *args.forecast_curves,
+            *args.forecast_enrichment,
+        ]
+    ]
+    if not raw_paths:
+        raise ValueError("forward runner requires raw information-event inputs")
+    conn = sqlite3.connect(args.db)
+    conn.row_factory = sqlite3.Row
+    try:
+        apply_schema_canonical(conn)
+        conn.execute(FORECAST_CURVE_DDL)
+        apply_first_seen_schema(conn)
+        initial_bootstrap = bool(args.bootstrap_at_end) and not bool(state.get("raw_bootstrapped"))
+        information = materialize_rows(
+            conn,
+            _incremental_rows(
+                raw_paths,
+                state,
+                bootstrap_at_end=initial_bootstrap,
+            ),
+        )
+        state["raw_bootstrapped"] = True
+        snapshot_files = []
+        for value in args.paper_snapshots:
+            snapshot_files.extend(
+                _recent_snapshot_files(Path(value), int(args.snapshot_lookback_files))
+            )
+        snapshots = load_snapshots(snapshot_files)
+        pipeline = materialize_pipeline(
+            conn,
+            snapshots,
+            feature_store=Path(args.feature_store),
+            max_snapshot_lag_minutes=float(args.max_snapshot_lag_minutes),
+            event_limit=args.event_limit,
+        )
+        exported = export_new_candidates(conn, Path(args.out), state)
+    finally:
+        conn.close()
+    state["last_cycle_at_utc"] = _utc_now()
+    return {
+        "information": information,
+        "pipeline": pipeline,
+        "telemetry_rows_exported": exported,
+        "zero_notional": True,
+        "no_order_placed": True,
+    }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", required=True)
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--state", required=True)
+    parser.add_argument("--source-events", action="append", default=[])
+    parser.add_argument("--forecast-curves", action="append", default=[])
+    parser.add_argument("--forecast-enrichment", action="append", default=[])
+    parser.add_argument("--paper-snapshots", action="append", required=True)
+    parser.add_argument("--feature-store", required=True)
+    parser.add_argument("--max-snapshot-lag-minutes", type=float, default=20.0)
+    parser.add_argument("--snapshot-lookback-files", type=int, default=48)
+    parser.add_argument("--event-limit", type=int, default=500)
+    parser.add_argument("--bootstrap-at-end", action="store_true")
+    parser.add_argument("--loop", action="store_true")
+    parser.add_argument("--interval-seconds", type=float, default=60.0)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    state_path = Path(args.state)
+    state = _read_state(state_path)
+    while True:
+        result = run_cycle(args, state)
+        _write_state(state_path, state)
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True), flush=True)
+        if not args.loop:
+            return 0
+        time.sleep(max(1.0, float(args.interval_seconds)))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

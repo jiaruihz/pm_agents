@@ -40,6 +40,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed import city_timezone_name
+from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
 DB_PATH = ROOT / "runtime" / "weather.db"
 PARQUET_PATH = (
     ROOT / "runtime" / "weather_edge_v1" / "market_data" / "research"
@@ -313,10 +314,14 @@ CREATE TABLE IF NOT EXISTS fact_signal_candidates (
   book_snapshot_id    TEXT,
   book_snapshot_ts_utc TEXT,
   book_available_at_utc TEXT,
+  pre_event_book_snapshot_id TEXT,
+  pre_event_book_available_at_utc TEXT,
   market_evidence_status TEXT,
   model_probability_before REAL,
   model_probability_after REAL,
   market_probability  REAL,
+  market_probability_before REAL,
+  market_probability_change REAL,
   probability_residual REAL,
   candidate_status    TEXT,
   candidate_blocker   TEXT,
@@ -1188,6 +1193,7 @@ def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
         prior_v2 = [dict(zip(columns, value, strict=True)) for value in cursor.fetchall()]
     conn.execute("DROP TABLE IF EXISTS fact_signal_candidates")
     conn.execute(CANDIDATE_DDL)
+    apply_first_seen_schema(conn)
     for batch in (rows, prior_v2):
         if not batch:
             continue
@@ -1209,7 +1215,15 @@ def write_db_incremental(
 ) -> None:
     """Replace only the recent event-date partition in one transaction."""
     conn.execute(CANDIDATE_DDL)
-    conn.execute("DELETE FROM fact_signal_candidates WHERE event_date >= ?", (event_date_start.isoformat(),))
+    apply_first_seen_schema(conn)
+    conn.execute(
+        """
+        DELETE FROM fact_signal_candidates
+        WHERE event_date >= ?
+          AND candidate_grain_version = 'v1_legacy_daily'
+        """,
+        (event_date_start.isoformat(),),
+    )
     if rows:
         cols = list(rows[0].keys())
         placeholders = ",".join("?" for _ in cols)

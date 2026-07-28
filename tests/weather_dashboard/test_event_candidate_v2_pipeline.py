@@ -14,5 +14,8 @@ def test_checkpoint_candidate_v2_zero_notional_pipeline(tmp_path):
     ingest_information_events(conn,[event]); cp=build_state_checkpoint(city='Atlanta',target_date='2026-07-28',trigger_event=event,as_of_ts_utc='2026-07-28T12:00:04Z',feature_frame_ref=None,input_events=[event],pit_provenance='live_capture'); ingest_state_checkpoints(conn,[cp]); conn.close()
     inputs=tmp_path/'inputs.jsonl'; inputs.write_text(json.dumps({'state_checkpoint_id':cp['state_checkpoint_id'],'strategy_key':'first_seen_residual_v1','model_artifact_id':'zero_model_v1','condition_id':'condition','market_id':'market','bracket':'90-91','side':'YES','candidate_status':'blocked','candidate_blocker':'missing_post_event_book','market_evidence_status':'missing_post_event_book'})+'\n')
     assert candidates.main(['--db',str(db),'--inputs',str(inputs)])==0
-    out=tmp_path/'telemetry.jsonl'; assert telemetry.main(['--db',str(db),'--out',str(out)])==0
+    out=tmp_path/'telemetry.jsonl'
+    conn=sqlite3.connect(db); conn.row_factory=sqlite3.Row
+    assert telemetry.export_new_candidates(conn,out,{})==1
+    conn.close()
     row=json.loads(out.read_text()); assert row['candidate_grain_version']=='v2_event_checkpoint'; assert row['zero_notional'] is True; assert row['no_order_placed'] is True; assert row['candidate_status']=='blocked'

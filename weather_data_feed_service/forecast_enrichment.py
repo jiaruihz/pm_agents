@@ -38,10 +38,20 @@ from weather_data_feed_service.io_utils import (
 DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "forecast_enrichment"
 
 
+def _taf_valid_time(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    try:
+        return datetime.fromtimestamp(float(value), tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    except (TypeError, ValueError, OSError):
+        return str(value)
+
+
 def _annotate_taf_information_events(rows: list[dict[str, Any]], output_dir: Path) -> list[dict[str, Any]]:
     state_path = output_dir / "taf_information_event_state.json"
     state = read_json(state_path, {})
     first_seen = dict(state.get("first_seen_by_id") or {})
+    latest_by_content = dict(state.get("latest_by_content") or {})
     available = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
     out: list[dict[str, Any]] = []
     for raw in rows:
@@ -51,15 +61,57 @@ def _annotate_taf_information_events(rows: list[dict[str, Any]], output_dir: Pat
             taf["information_event_status"] = "not_material_missing_or_failed_taf"
         else:
             issued = source_payload.get("issue_time") or source_payload.get("issue_time_utc")
-            content_key = "|".join(str(v or "") for v in (row.get("city"), row.get("station"), issued))
+            valid_from = source_payload.get("valid_time_from")
+            valid_to = source_payload.get("valid_time_to")
+            # A bulletin correction may keep the same issue time, or issue a
+            # nearby AMD/COR timestamp while retaining the validity window.
+            # Group revisions by station and validity, not by the raw payload.
+            content_key = "|".join(
+                str(v or "")
+                for v in (row.get("city"), row.get("station"), valid_from, valid_to)
+            )
             detected = str(result.get("fetched_at_utc") or available)
-            base = dict(event_kind="taf", event_role="new_content", source="aviationweather_taf", city=str(row.get("city") or ""), station_id=str(row.get("station") or "") or None, provider_item_id=str(issued or "") or None, content_key=content_key, normalized_payload={"raw_taf": source_payload["raw_taf"]}, issued_at_utc=issued, detected_at_utc=detected, available_at_utc=available, pit_lineage_class="collector_exact", raw_source_path=str(output_dir / "forecast_enrichment.jsonl"))
-            provisional = build_information_event(**base, first_seen_at_utc=detected)
-            taf["information_event"] = build_information_event(**base, first_seen_at_utc=first_seen.setdefault(provisional["information_event_id"], detected))
+            common = dict(
+                event_kind="taf",
+                source="aviationweather_taf",
+                city=str(row.get("city") or ""),
+                station_id=str(row.get("station") or "") or None,
+                provider_item_id=str(issued or "") or None,
+                content_key=content_key,
+                normalized_payload={"raw_taf": source_payload["raw_taf"]},
+                issued_at_utc=issued,
+                valid_from_utc=_taf_valid_time(valid_from),
+                valid_to_utc=_taf_valid_time(valid_to),
+                detected_at_utc=detected,
+                available_at_utc=available,
+                pit_lineage_class="collector_exact",
+                raw_source_path=str(output_dir / "forecast_enrichment.jsonl"),
+            )
+            provisional = build_information_event(
+                **common,
+                event_role="new_content",
+                first_seen_at_utc=detected,
+            )
+            event_id = str(provisional["information_event_id"])
+            previous_event_id = latest_by_content.get(content_key)
+            event_role = "revision" if previous_event_id and previous_event_id != event_id else "new_content"
+            taf["information_event"] = build_information_event(
+                **common,
+                event_role=event_role,
+                revision_of_event_id=previous_event_id if event_role == "revision" else None,
+                first_seen_at_utc=first_seen.setdefault(event_id, detected),
+            )
             taf["information_event_status"] = "material"
+            latest_by_content[content_key] = event_id
         row["taf"] = taf
         out.append(row)
-    write_json(state_path, {"first_seen_by_id": first_seen})
+    write_json(
+        state_path,
+        {
+            "first_seen_by_id": first_seen,
+            "latest_by_content": latest_by_content,
+        },
+    )
     return out
 
 

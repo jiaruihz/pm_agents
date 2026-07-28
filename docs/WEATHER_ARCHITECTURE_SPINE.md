@@ -1,7 +1,7 @@
 # 天气策略主线骨架
 
 Status: current-reference
-Updated: 2026-07-07 feature-layer Phase 1-6C landing and live-boundary clarification
+Updated: 2026-07-28 first-seen pre-signal extension pointer
 Source of truth: yes for architecture orientation; field/schema contracts still defer to WEATHER_SYSTEM_CONTRACT
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; WEATHER_STRATEGY_QUANT_DESIGN.md; WEATHER_DATA_CANONICAL_SOURCES.md; WEATHER_SYSTEM_CONTRACT.md; WEATHER_FEATURE_LAYERING_PLAN.md
 
@@ -12,6 +12,23 @@ signal candidate -> plan -> order -> fill -> settlement
 ```
 
 这条主血缘由 `fact_signal_candidates`、trade plan、live/paper order JSONL、`fact_trades`、settlements 和 dashboard rebuild 支撑。换策略方向只动上层特征和策略头，不重做 order/fill/PnL/看板血缘。
+
+first-seen 的目标形态是这条主血缘的上游扩展，不是另一套策略系统：
+
+```text
+immutable raw capture
+  -> weather_information_event
+  -> weather_state_checkpoint + feature_frame_ref
+  -> fact_signal_candidates
+  -> plan -> order -> fill -> settlement
+```
+
+事件、checkpoint 和 event-grain candidate 已完成 canonical 数据/信号落地及
+archive-known 历史回放；准确字段、grain、PIT 时钟和实施边界见
+[WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md)。
+只有新 collector 保存的 `collector_exact` 可用于精确到达时延研究；历史
+`changed_since_last`、TAF capture time 或 provider issue time 不能补造成
+canonical exact first-seen。
 
 ## 当前总图
 
@@ -129,6 +146,7 @@ flowchart TB
 | factory 全量迁到 `runtime/weather_feature_store/` | 部分落地：offline feature store helper 已有，runner telemetry refs 已有；canonical fact rebuild / generated artifact 搬迁未做 |
 | live decision-input 统一迁到 feature layer | 未落地；当前只完成 research/zero-notional/tiny-live telemetry ref，真实 selector/size/quote/order 输入仍在各策略私有实现 |
 | stable adapter 全面替代 research import | 部分落地：`regime_routed_no_stable.py` 已自包含；tmax live bridge 仍直接 import P0-P4 research modules，后续只能逐 parity 迁 |
+| first-seen information-event lineage | 数据/信号实现与历史 raw replay 已完成：统一 event header → PIT checkpoint → `fact_signal_candidates` v2；zero-notional forward 入口已具备，但当前被 canonical JRS tmux write probe 权限错误阻塞；不新增并行 feature/opportunity fact，不接执行 |
 
 ## 七层边界
 

@@ -17,7 +17,10 @@ from zoneinfo import ZoneInfo
 
 from weather_data_feed import load_city_configs, parse_now_utc
 from weather_data_feed.models import CityConfig
-from weather_data_feed.information_events import build_information_event
+from weather_data_feed.information_events import (
+    build_information_event,
+    normalized_observation_payload,
+)
 from weather_data_feed.observation_sources import (
     FetchSettings,
     expand_source_names,
@@ -34,33 +37,6 @@ DEFAULT_OUTPUT_DIR = DEFAULT_RUNTIME_ROOT / "output" / "source_events"
 AWC_RECONCILE_SOURCES = {"aviationweather_metar"}
 AWC_INDEX_STATE_KEY = "__awc_report_index_v1"
 INFORMATION_EVENT_STATE_KEY = "__information_event_state_v1"
-
-_DELIVERY_METADATA_FIELDS = {
-    "producer",
-    "status",
-    "error",
-    "ts_utc",
-    "local_detect_ts_utc",
-    "fetched_at_utc",
-    "payload_hash",
-    "changed_since_last",
-    "first_seen_type",
-    "original_first_seen_unknown",
-    "recovered_from_multi_record_payload",
-    "information_event_id",
-    "event_kind",
-    "event_role",
-    "content_key",
-    "revision_of_event_id",
-    "detected_at_utc",
-    "first_seen_at_utc",
-    "available_at_utc",
-    "pit_lineage_class",
-    "raw_source_path",
-    "raw_row_hash",
-    "information_event_status",
-}
-
 
 def requested_sources(
     cfg: CityConfig,
@@ -224,15 +200,13 @@ def late_awc_backfills(
     return sorted(backfills, key=lambda row: (str(row.get("city")), str(row.get("source_report_ts_utc"))))
 
 
-def _observation_payload(row: dict[str, Any]) -> dict[str, Any]:
-    """Keep provider content while excluding poll/publication metadata."""
-    return {key: value for key, value in row.items() if key not in _DELIVERY_METADATA_FIELDS and not key.startswith("_")}
-
-
 def _event_content_key(row: dict[str, Any]) -> str:
+    # ``source`` and ``target_date`` are deliberately excluded.  Source is
+    # already part of information_event_id, while content_key is the
+    # cross-source meteorological identity and must survive local midnight.
     return "|".join(
         str(row.get(key) or "")
-        for key in ("city", "source", "station", "source_report_ts_utc", "target_date")
+        for key in ("city", "station", "source_report_ts_utc")
     )
 
 
@@ -261,7 +235,7 @@ def annotate_information_events(
         content_key = _event_content_key(row)
         detected_at = str(row.get("local_detect_ts_utc") or row.get("ts_utc") or available_at_utc)
         is_late = bool(row.get("original_first_seen_unknown")) or row.get("first_seen_type") == "late_backfill"
-        provisional_payload = _observation_payload(row)
+        provisional_payload = normalized_observation_payload(row)
         # Build once to obtain the immutable ID. A changed source payload for
         # the same report/content key becomes a linked revision; an identical
         # post-restart poll retains the original first-seen value.

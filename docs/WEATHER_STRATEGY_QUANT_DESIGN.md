@@ -1,7 +1,7 @@
 # Weather Strategy — Quant System Design
 
 Status: current-reference
-Updated: 2026-06-09 metadata pass; preserve content dates below
+Updated: 2026-07-28 first-seen pre-signal lineage addendum; preserve content dates below
 Source of truth: no
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; reference only, not production source of truth
 
@@ -163,6 +163,31 @@ Signal 和 Plan 是「策略意图」，和执行模式无关。**同一个 plan
 6. 时间一律 **UTC** 入库，渲染时再转
 
 当前 signal JSONL + ledger CSV 已基本满足这些不变量，血缘链是好底子。
+
+#### Event-driven pre-signal addendum（2026-07-28）
+
+原图从 market snapshot/signal 开始，适用于固定决策窗策略；它没有表达“新天气
+信息什么时候第一次可知”。first-seen 研究使用同一条主血缘的 additive upstream：
+
+```text
+immutable raw capture
+  -> weather_information_event
+  -> weather_state_checkpoint + feature_frame_ref
+  -> fact_signal_candidates
+  -> plan -> order -> fill -> settlement
+```
+
+这不是新增平行 fact。统一事件头只保存 identity、revision、PIT 时钟和 raw
+reference；温度/风/云/forecast curve 继续留在现有 typed payload。checkpoint
+只索引现有 feature frame；event-grain opportunity 继续进入
+`fact_signal_candidates`，通过 `candidate_grain_version` 与旧 T-24 daily grain
+并存。
+
+完整冻结设计见
+[WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md](WEATHER_FIRST_SEEN_INFORMATION_LINEAGE.md)。
+canonical schema、增量/full rebuild、fixture 与 archive-known raw replay 已
+完成；它现在是已落地的数据/信号能力。`collector_exact` forward 仍需生产
+采集积累，且本阶段明确不生成 plan/order/fill。
 
 ### 1.2 策略身份：四元组而不是单一 ID
 

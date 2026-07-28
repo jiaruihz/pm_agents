@@ -356,12 +356,17 @@ if [[ $REBUILD -eq 1 ]]; then
 
   # ---- 1c. Build fact_signal_candidates (机会粒度，对齐 universe→paper→live) ----
   FIRST_SEEN_RAW_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
+  FIRST_SEEN_SOURCE_EVENTS="${WEATHER_FIRST_SEEN_SOURCE_EVENTS_PATH:-$FIRST_SEEN_RAW_ROOT/output/source_events/sources.jsonl}"
+  FIRST_SEEN_FORECAST_CURVES="${WEATHER_FIRST_SEEN_FORECAST_CURVES_PATH:-$FIRST_SEEN_RAW_ROOT/targeted_output/forecast_hourly_curves}"
+  FIRST_SEEN_FORECAST_ENRICHMENT="${WEATHER_FIRST_SEEN_FORECAST_ENRICHMENT_PATH:-$FIRST_SEEN_RAW_ROOT/output/forecast_enrichment/forecast_enrichment.jsonl}"
+  FIRST_SEEN_PAPER_SNAPSHOTS="${WEATHER_FIRST_SEEN_PAPER_SNAPSHOTS_PATH:-$FIRST_SEEN_RAW_ROOT/targeted_output/paper_snapshots}"
+  FIRST_SEEN_FEATURE_STORE="${WEATHER_FIRST_SEEN_FEATURE_STORE_PATH:-$REPO_ROOT/runtime/weather_edge_v1/feature_store}"
   log "  Materializing first-seen information events (data/signal lineage only)..."
   "$VENV/python" scripts/etl/materialize_weather_information_events.py \
     --db "$DB_PATH" \
-    --source-events "$FIRST_SEEN_RAW_ROOT/output/source_events/sources.jsonl" \
-    --forecast-curves "$FIRST_SEEN_RAW_ROOT/forecast_hourly_curves" \
-    --forecast-enrichment "$FIRST_SEEN_RAW_ROOT/output/forecast_enrichment/forecast_enrichment.jsonl" \
+    --source-events "$FIRST_SEEN_SOURCE_EVENTS" \
+    --forecast-curves "$FIRST_SEEN_FORECAST_CURVES" \
+    --forecast-enrichment "$FIRST_SEEN_FORECAST_ENRICHMENT" \
     >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
     err "first-seen information event materialization failed"
     exit 1
@@ -374,6 +379,16 @@ if [[ $REBUILD -eq 1 ]]; then
     --decision-hts-min 22 --decision-hts-max 24 \
     >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
     err "fact_signal_candidates build failed — see $LOG_DIR/migrate_live_cycle.log"
+    exit 1
+  }
+
+  log "  Building first-seen PIT checkpoints and candidate v2 denominator..."
+  "$VENV/python" scripts/etl/materialize_weather_first_seen_pipeline.py \
+    --db "$DB_PATH" \
+    --paper-snapshots "$FIRST_SEEN_PAPER_SNAPSHOTS" \
+    --feature-store "$FIRST_SEEN_FEATURE_STORE" \
+    >>"$LOG_DIR/migrate_live_cycle.log" 2>&1 || {
+    err "first-seen checkpoint/candidate build failed — see $LOG_DIR/migrate_live_cycle.log"
     exit 1
   }
 

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from weather_dashboard.db.connection import get_conn
+from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
 
 
 SCHEMA_VERSION = 13
@@ -112,6 +113,7 @@ def apply_schema_canonical(conn: sqlite3.Connection) -> None:
     _ensure_strategy_def_columns(conn)
     _ensure_strategy_instance_columns(conn)
     _ensure_strategy_instance_runtime_columns(conn)
+    apply_first_seen_schema(conn)
 
     row = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()
     if row[0] is None or int(row[0]) < SCHEMA_VERSION:

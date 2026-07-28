@@ -1,6 +1,6 @@
 # First-seen information lineage — implementation log
 
-Status: implementation complete; forward evidence collection pending by design
+Status: implementation and local replay complete; production forward collection blocked by JRS write permission
 
 Started: 2026-07-28
 
@@ -62,18 +62,17 @@ Verification on 2026-07-28:
 33 passed in 0.36s
 ```
 
-### Next implementation order
+### Implemented scope
 
-1. Apply the shared identity contract to source-event and TAF raw publication;
-   preserve duplicate delivery evidence and revisions without emitting duplicate
-   material events.
-2. Add canonical information-event/checkpoint tables and build parity tests for
-   incremental and full rebuilds.
-3. Add trigger-aware feature-frame identity and PIT checkpoint build rules.
-4. Materialize additive `fact_signal_candidates` v2 while preserving every
-   `v1_legacy_daily` row and primary key.
-5. Record the full zero-notional event/checkpoint/candidate denominator and
-   evidence funnel; do not introduce plans, orders, fills or live promotion.
+1. Source-event and TAF publishers now preserve duplicate deliveries and create
+   revisions only for changed normalized weather content.
+2. Canonical information-event/checkpoint tables and additive migrations work
+   for incremental and full rebuilds.
+3. Trigger-aware feature frames enforce the PIT availability boundary.
+4. `fact_signal_candidates` v2 preserves every `v1_legacy_daily` row and emits
+   both YES and NO expressions, including coverage blockers.
+5. The zero-notional forward runner keeps incremental cursors and exports
+   append-only telemetry without importing or creating plans, orders or fills.
 
 ## Phase B/C progress — producer and canonical boundary
 
@@ -104,11 +103,11 @@ Verification after this increment:
 
 ## Research / action status
 
-significance=NA
+significance=NA: only two independent target dates in the refreshed archive replay
 
-baseline=NA
+baseline=market proper score is materially better than the current paper-snapshot model
 
-forward=NA
+forward=0 collector-exact target dates; production collector has not started
 conclusion=inconclusive
 
 This is infrastructure work. It produces no alpha, no trade recommendation and
@@ -137,14 +136,31 @@ observation / TAF / forecast immutable raw capture
 - Forward export is hard-coded zero-notional (`notional_usd=0`,
   `no_order_placed=true`) and has no plan/order/fill imports or side effects.
 
-Final regression command covered identity, duplicate/restart/revision,
+Final regression covers identity, duplicate/restart/revision,
 late-backfill rejection, schema constraints, incremental idempotency, feature
 checkpoint PIT exclusion, v1 candidate compatibility, candidate v2 and
-zero-notional telemetry:
+zero-notional telemetry.
 
-```text
-92 passed in 1.78s
-```
+Historical raw replay found and fixed one material identity bug: 68,730 raw
+observation deliveries originally expanded into 39,238 pseudo-events because
+delivery metadata entered the payload hash. With normalized weather content,
+the same deliveries collapse to 4,934 semantic events and 63,796 duplicate
+deliveries.
 
-No current runtime DB rebuild, process restart, deployment or live action was
-performed as part of this implementation.
+The refreshed archive replay materialized 3,200 event checkpoints, including
+1,357 built checkpoints and 20,074 two-sided candidate expressions. It found
+one malformed historical snapshot; that row is counted as a coverage gap in
+research replay and still fails closed in the production default.
+
+This archive has only two independent target dates with candidate labels.
+Across 10,037 YES condition-event rows, market Brier is 0.055489 while the
+current paper-snapshot model is 0.091024. On the 9,803 rows with both pre/post
+evidence, the market moves 1.606 percentage points on average and improves
+Brier from 0.058831 to 0.056306; the model moves only 0.723 percentage points
+and its Brier is effectively unchanged (0.091979 to 0.091963). This is evidence
+that the existing model is not yet a useful event-update head.
+
+The canonical JRS tmux write probe currently returns `Operation not permitted`.
+Per the production ownership contract, the forward runner was not bypassed via
+another tmux socket, `nohup`, `screen` or LaunchAgent. No current runtime DB
+rebuild, process restart, plan, order, fill or real live action was performed.
