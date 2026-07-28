@@ -31,6 +31,7 @@ Tmax_hat = model_Tmax + rolling_city/source_bias + beta(checkpoint, regime) * in
 ## Data integrity / PIT
 
 - 每行 `pit_status=pit_verified`；observation 与 forecast capture 的 available_at 均不晚于 decision timestamp。
+- checkpoint 由每个 market 的 IANA `market_timezone` 从 UTC 独立换算；timezone missing=0、IANA/metadata offset mismatch=0、local target-date mismatch=0。
 - 模型当前温度用 curve 对真实 decision local minute 线性插值；没有使用旧 `tracking_residual_f` 的整点向下取整。
 - 同一 checkpoint 的四个模型共用完全相同的 city-day rows。
 - 这是 retrospective expanding OOF，不是从未查看过的 fresh frozen forward；forward gate 仍为 NA。

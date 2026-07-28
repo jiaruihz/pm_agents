@@ -23,6 +23,7 @@ import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -77,6 +78,7 @@ def load_pit_states(conn: sqlite3.Connection) -> tuple[pd.DataFrame, dict[str, i
             s.ladder_snapshot_id,
             s.forecast_capture_id,
             l.market_unit,
+            l.market_timezone,
             l.market_utc_offset_seconds,
             o.obs_ts_utc,
             o.available_at_utc AS observation_available_at_utc,
@@ -97,19 +99,53 @@ def load_pit_states(conn: sqlite3.Connection) -> tuple[pd.DataFrame, dict[str, i
         conn,
     )
     states["decision_ts"] = pd.to_datetime(states["decision_ts_utc"], utc=True)
-    states["local_ts"] = states["decision_ts"] + pd.to_timedelta(
-        states["market_utc_offset_seconds"], unit="s"
+    if states["market_timezone"].isna().any():
+        missing = states.loc[states["market_timezone"].isna(), "city"].drop_duplicates()
+        raise ValueError(f"missing market timezone for cities: {missing.tolist()}")
+    local_clock = []
+    for row in states.itertuples(index=False):
+        local = row.decision_ts.to_pydatetime().astimezone(
+            ZoneInfo(str(row.market_timezone))
+        )
+        actual_offset = int(local.utcoffset().total_seconds())
+        declared_offset = int(row.market_utc_offset_seconds)
+        local_clock.append(
+            {
+                "local_ts": local.isoformat(),
+                "local_date": local.date().isoformat(),
+                "local_minute": (
+                    local.hour * 60 + local.minute + local.second / 60.0
+                ),
+                "iana_utc_offset_seconds": actual_offset,
+                "timezone_offset_match": actual_offset == declared_offset,
+            }
+        )
+    states = pd.concat(
+        [states.reset_index(drop=True), pd.DataFrame(local_clock)],
+        axis=1,
     )
-    states["local_minute"] = (
-        states["local_ts"].dt.hour * 60
-        + states["local_ts"].dt.minute
-        + states["local_ts"].dt.second / 60.0
-    )
+    timezone_offset_mismatches = int((~states["timezone_offset_match"]).sum())
+    if timezone_offset_mismatches:
+        examples = states.loc[
+            ~states["timezone_offset_match"],
+            [
+                "city",
+                "target_date",
+                "decision_ts_utc",
+                "market_timezone",
+                "market_utc_offset_seconds",
+                "iana_utc_offset_seconds",
+            ],
+        ].head(10)
+        raise ValueError(
+            "market UTC offset disagrees with IANA timezone:\n"
+            + examples.to_string(index=False)
+        )
     checkpoint_rows: list[pd.DataFrame] = []
     for checkpoint in CHECKPOINTS:
         start = checkpoint * 60
         eligible = states[
-            states["local_ts"].dt.strftime("%Y-%m-%d").eq(states["target_date"])
+            states["local_date"].eq(states["target_date"])
             & states["local_minute"].between(
                 start, start + CHECKPOINT_TOLERANCE_MIN, inclusive="both"
             )
@@ -128,6 +164,11 @@ def load_pit_states(conn: sqlite3.Connection) -> tuple[pd.DataFrame, dict[str, i
         ),
         "pit_verified_curve_states": len(states),
         "checkpoint_rows_pre_settlement": len(selected),
+        "timezone_missing_rows": 0,
+        "timezone_offset_mismatch_rows": timezone_offset_mismatches,
+        "checkpoint_local_date_mismatch_rows": int(
+            (selected["local_date"] != selected["target_date"]).sum()
+        ),
     }
     return selected, counts
 
@@ -854,6 +895,10 @@ def write_report(
         "",
         "- 每行 `pit_status=pit_verified`；observation 与 forecast capture 的 available_at "
         "均不晚于 decision timestamp。",
+        "- checkpoint 由每个 market 的 IANA `market_timezone` 从 UTC 独立换算；"
+        f"timezone missing={counts['timezone_missing_rows']}、"
+        f"IANA/metadata offset mismatch={counts['timezone_offset_mismatch_rows']}、"
+        f"local target-date mismatch={counts['checkpoint_local_date_mismatch_rows']}。",
         "- 模型当前温度用 curve 对真实 decision local minute 线性插值；没有使用旧 "
         "`tracking_residual_f` 的整点向下取整。",
         "- 同一 checkpoint 的四个模型共用完全相同的 city-day rows。",
