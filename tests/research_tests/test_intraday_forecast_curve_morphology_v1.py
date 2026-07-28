@@ -106,6 +106,9 @@ def test_decision_relative_alias_uses_future_exit_boundary() -> None:
         "checkpoint_key": "Chengdu|2026-07-27|16",
         "decision_snapshot_ts_utc": "2026-07-27T08:44:37Z",
         "decision_hour_local_float": 16.73,
+        "source_report_ts_utc": "2026-07-27T08:00:00Z",
+        "expected_report_cadence": 60.0,
+        "obs_status": "ok",
         "current_bracket": "29",
         "d1_bracket": "30",
         "unit": "C",
@@ -158,6 +161,9 @@ def test_decision_relative_alias_excludes_past_current_hour_point() -> None:
         "checkpoint_key": "Example|2026-07-27|15",
         "decision_snapshot_ts_utc": "2026-07-27T07:44:00Z",
         "decision_hour_local_float": 15.73,
+        "source_report_ts_utc": "2026-07-27T07:00:00Z",
+        "expected_report_cadence": 60.0,
+        "obs_status": "ok",
         "current_bracket": "29",
         "d1_bracket": "30",
         "unit": "C",
@@ -174,4 +180,60 @@ def test_decision_relative_alias_excludes_past_current_hour_point() -> None:
 
     assert result["future_curve_start_hour_local"] == 16
     assert result["future_curve_max_native"] < 29.5
+    assert result["peak_clock_alias"] is False
+
+
+def test_alias_quarantines_stale_observation_lineage() -> None:
+    values = [
+        86.0,
+        82.9,
+        80.2,
+        78.4,
+        76.9,
+        75.8,
+        75.1,
+        74.7,
+        74.5,
+        74.4,
+        74.6,
+        75.4,
+        77.5,
+        80.2,
+        82.6,
+        84.7,
+        85.2,
+        85.6,
+        84.7,
+        82.8,
+        80.4,
+        77.8,
+        76.5,
+        75.7,
+    ]
+    record = {
+        "city": "Example",
+        "target_date": "2026-07-27",
+        "checkpoint_key": "Example|2026-07-27|16",
+        "decision_snapshot_ts_utc": "2026-07-27T08:44:37Z",
+        "decision_hour_local_float": 16.73,
+        "source_report_ts_utc": "2026-07-26T23:00:00Z",
+        "expected_report_cadence": 60.0,
+        "obs_status": "ok",
+        "current_bracket": "29",
+        "d1_bracket": "30",
+        "unit": "C",
+        "hourly_curve": [
+            {
+                "time_local": f"2026-07-27T{hour:02d}:00",
+                "temperature_f": temperature,
+            }
+            for hour, temperature in enumerate(values)
+        ],
+    }
+
+    result = study.add_live_curve_fields(record)
+
+    assert result["peak_clock_alias_physics"] is True
+    assert result["source_age_recomputed_min"] > 500
+    assert result["observation_lineage_valid"] is False
     assert result["peak_clock_alias"] is False

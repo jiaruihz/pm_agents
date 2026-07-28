@@ -108,6 +108,19 @@ def json_ready(value: Any) -> Any:
     return value
 
 
+def parse_utc_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -668,19 +681,51 @@ def add_live_curve_fields(record: dict[str, Any]) -> dict[str, Any]:
         if global_peak_hour is not None
         else math.nan
     )
-    alias = bool(
+    alias_physics = bool(
         threshold is not None
         and math.isfinite(future_max)
         and math.isfinite(peak_past_hours)
         and peak_past_hours > 2.0
         and future_max >= threshold
     )
+    decision_dt = parse_utc_datetime(record.get("decision_snapshot_ts_utc"))
+    source_report_dt = parse_utc_datetime(record.get("source_report_ts_utc"))
+    source_age_minutes = (
+        (decision_dt - source_report_dt).total_seconds() / 60.0
+        if decision_dt is not None and source_report_dt is not None
+        else math.nan
+    )
+    cadence_minutes = record.get(
+        "expected_report_cadence",
+        record.get("observation_cadence_min"),
+    )
+    try:
+        cadence_minutes = float(cadence_minutes)
+    except (TypeError, ValueError):
+        cadence_minutes = math.nan
+    observation_lineage_valid = bool(
+        str(record.get("obs_status") or "").strip().lower() == "ok"
+        and math.isfinite(source_age_minutes)
+        and source_age_minutes >= 0
+        and math.isfinite(cadence_minutes)
+        and cadence_minutes > 0
+        and source_age_minutes <= cadence_minutes + 10.0
+    )
+    alias = alias_physics and observation_lineage_valid
     output = {
         "city": record.get("city"),
         "target_date": str(record.get("target_date")),
         "checkpoint_key": record.get("checkpoint_key"),
         "decision_snapshot_ts_utc": record.get("decision_snapshot_ts_utc"),
         "decision_hour_local": decision_hour,
+        "source_report_ts_utc": record.get("source_report_ts_utc"),
+        "source_fetched_at_utc": record.get("fetched_at_utc"),
+        "stored_obs_age_min": record.get(
+            "obs_age_min", record.get("obs_age_minutes")
+        ),
+        "source_age_recomputed_min": source_age_minutes,
+        "expected_report_cadence_min": cadence_minutes,
+        "observation_lineage_valid": observation_lineage_valid,
         "current_bracket": str(record.get("current_bracket")),
         "d1_bracket": str(record.get("d1_bracket")),
         "current_yes_bid": record.get("current_yes_bid"),
@@ -707,6 +752,7 @@ def add_live_curve_fields(record: dict[str, Any]) -> dict[str, Any]:
         "future_curve_max_native": future_max,
         "current_exit_threshold_native": threshold,
         "global_peak_past_hours": peak_past_hours,
+        "peak_clock_alias_physics": alias_physics,
         "peak_clock_alias": alias,
         **morphology,
     }
@@ -929,6 +975,18 @@ def build_payload() -> dict[str, Any]:
         .sort_values("decision_snapshot_dt")
         .drop_duplicates(["city", "target_date"], keep="first")
     )
+    forward_quarantined_first = (
+        forward[
+            forward["peak_clock_alias_physics"]
+            & ~forward["observation_lineage_valid"]
+        ]
+        .sort_values("decision_snapshot_dt")
+        .drop_duplicates(["city", "target_date"], keep="first")
+    )
+    forward_quarantined_first.to_csv(
+        OUT_DIR / "forward_alias_quarantined_observation_lineage.csv",
+        index=False,
+    )
     forward_alias_first.to_csv(
         OUT_DIR / "forward_first_alias_city_days.csv", index=False
     )
@@ -1088,6 +1146,28 @@ def build_payload() -> dict[str, Any]:
                 "d1_yes_ask_proxy"
             ].notna().sum(),
         },
+        "forward_lineage_quarantine": {
+            "city_days": len(forward_quarantined_first),
+            "dates": forward_quarantined_first["target_date"].nunique(),
+            "settled_city_days": int(
+                forward_quarantined_first["current_final_yes"].notna().sum()
+            ),
+            "source_age_median_min": float(
+                forward_quarantined_first[
+                    "source_age_recomputed_min"
+                ].median()
+            ),
+            "source_age_min_min": float(
+                forward_quarantined_first[
+                    "source_age_recomputed_min"
+                ].min()
+            ),
+            "source_age_max_min": float(
+                forward_quarantined_first[
+                    "source_age_recomputed_min"
+                ].max()
+            ),
+        },
         "shape_summary": shape_summary.to_dict("records"),
         "selected_shape_summary": selected_shape_summary.to_dict("records"),
         "model_scores": model_scores.to_dict("records"),
@@ -1160,12 +1240,20 @@ def write_report(payload: dict[str, Any]) -> None:
     forward_alias_by_city = pd.DataFrame(
         payload["forward_alias_by_city"]
     )
+    for display in (forward_alias_by_date, forward_alias_by_city):
+        if "upward_exits" in display:
+            display["upward_exits"] = (
+                pd.to_numeric(display["upward_exits"], errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
     chengdu = pd.DataFrame(payload["chengdu_timeline"]).sort_values(
         "decision_snapshot_dt"
     )
     data = payload["data"]
     historical_alias = payload["historical_alias"]
     forward_alias = payload["forward_alias"]
+    forward_lineage_quarantine = payload["forward_lineage_quarantine"]
 
     score_rows = []
     for _, row in scores.iterrows():
@@ -1272,7 +1360,9 @@ def write_report(payload: dict[str, Any]) -> None:
         "",
         f"历史 31 日同分母上，新增 boundary-relative morphology 相对 frozen core 的 Brier Δ `{number(brier_delta, 6)}`（95% CI `{brier_ci}`），logloss Δ `{number(logloss_delta, 6)}`（95% CI `{logloss_ci}`）；负值才是改善。当前没有通过 proper-score baseline，因此它还不是独立 alpha。",
         "",
-        f"修正“未来小时”边界后，首个 alias 共 {forward_alias['city_days']} city-days / {forward_alias['dates']} dates，其中 settled {forward_alias['settled_city_days']} city-days / {forward_alias['settled_dates']} dates，向上离开 current exact {forward_alias['settled_upward_exits']}，中位跨越 {number(forward_alias['settlement_move_median_brackets'], 1)} 档。但 {forward_alias['settled_current_yes_ask_001_city_days']} 个 settled signal 的 current YES ask 已到 `0.001`、且没有 current NO 可买 ask，市场早已定价；settled 且有 current NO 价格的只有 {forward_alias['settled_current_no_quote_city_days']} 个。高命中率不是可执行 alpha。",
+        f"完整 lineage 复核后，旧 `32/33` 必须全部撤回：7 个 city-day 是“当前小时被误算成未来”的时钟边界错误；其余 26 个中又有 {forward_lineage_quarantine['city_days']} 个来自 7/24–7/26 已知 PIT observation selection 事故。污染行真实 source age 中位 {number(forward_lineage_quarantine['source_age_median_min'], 1)} 分钟（范围 {number(forward_lineage_quarantine['source_age_min_min'], 1)}–{number(forward_lineage_quarantine['source_age_max_min'], 1)}），却沿用了 fetch 时的 26–59 分钟 cached age，导致旧 running max 选错 current bracket。最终 clean settled evidence 只有成都 7/27 这 1 个 city-day。",
+        "",
+        "该 observation 事故已在 7/26 的生产事故修复 `8d61f685` 中定位：旧 index 按输入顺序 last-write-wins，使上一 UTC 日的 capture 覆盖同一 local target_date 的新 capture；修复后改为按 availability/report clock 选择并重算 decision-time age。本研究的问题是错误复用了事故窗口 raw，而不是盘口 archive 丢失。",
         "",
         "结论等级：`inconclusive_feature_value / zero_notional_collector_candidate`；significance=`FAIL`，baseline=`FAIL`，forward=`NA`（规则由 7/27 案例提出，7/29 起才是真 frozen forward）。",
         "",
@@ -1305,7 +1395,7 @@ def write_report(payload: dict[str, Any]) -> None:
         "| `multi_peak_other` | 两个相隔≥4h 的近峰 |",
         "| `peak-clock alias` | global peak 已过>2h，但未来 lobe 仍达 current upward-exit boundary |",
         "",
-        "`未来`严格从 `ceil(decision_hour_local)` 开始。旧版从 `floor(...)` 开始，会在 15:44 错把已经过去的 15:00 forecast 点算成未来；该实现错误把 settled 分母从修正后的样本扩大为原来的 33 个。",
+        "`未来`严格从 `ceil(decision_hour_local)` 开始；同时 observation 必须满足 `decision_snapshot - source_report <= expected cadence + 10m`。旧版不仅从 `floor(...)` 开始，还复用了 7/24–7/26 被上一 UTC 日旧观测覆盖的 runtime raw，因此原 33 个 settled 分母中只有成都 7/27 是 clean。",
         "",
         "## 成都 2026-07-27 PIT 时间线",
         "",
@@ -1351,7 +1441,7 @@ def write_report(payload: dict[str, Any]) -> None:
         ),
         "",
         "命名形态没有一个可凭历史点估直接成为 gate。尤其 D-1 historical alias 只有 "
-        f"{historical_alias['city_days']} city-days / {historical_alias['dates']} dates，upward exit {historical_alias['overshoots']}；这和短 forward 的 {pct(forward_alias['current_exact_loss_rate'])} loss 形成强烈 vintage/denominator 差异，说明必须校准 curve issue/run、source basis 和 decision-relative boundary，不能用一个布尔“双峰”外推。",
+        f"{historical_alias['city_days']} city-days / {historical_alias['dates']} dates，upward exit {historical_alias['overshoots']}；clean forward settled 只有 {forward_alias['settled_city_days']} 个，不能再报告 forward 命中率或与历史作强比较。",
         "",
         "旧版 negative control Karachi 7/27 实际是时钟边界错误：15:31 决策时被计入的是已经过去的 15:00 forecast 点 `34.5°C`；严格从 16:00 开始后 future max 只有 `33.33°C`，不再是 alias。它被从信号分母移除，不再算策略亏损。",
         "",
@@ -1421,7 +1511,7 @@ def write_report(payload: dict[str, Any]) -> None:
             ],
         ),
         "",
-        "成都的单笔价格很漂亮，但 settled evidence funnel 中 current NO 与 d1 YES 都只有 1 个 quoted city-day，且没有保存足以声明 executable fill 的完整 side depth。其余 settled signals 基本都在 current YES `0.001` 时才出现，已无赔率空间。因此独立策略只保留为 expression hypothesis。",
+        "成都的单笔价格很漂亮，但 settled evidence funnel 中 current NO 与 d1 YES 都只有 1 个 clean quoted city-day，且没有保存足以声明 executable fill 的完整 side depth。7/24–7/26 那 25 个 `0.001` 不是正常策略样本：盘口价格本身正确，错的是 stale observation 导致研究选择了已经失败的旧 bracket。因此独立策略仍只有一个 clean case。",
         "",
         "### Forward 日期分布",
         "",
@@ -1461,6 +1551,7 @@ def write_report(payload: dict[str, Any]) -> None:
         f"| historical first city-day shape | city-day | {data['historical_city_days']} | {data['historical_dates']} |",
         f"| historical peak-clock alias | city-day | {historical_alias['city_days']} | {historical_alias['dates']} |",
         f"| forward raw checkpoints | checkpoint | {data['forward_rows']} | {data['forward_dates']} |",
+        f"| quarantined stale-observation alias | city-day | {forward_lineage_quarantine['city_days']} | {forward_lineage_quarantine['dates']} |",
         f"| forward first alias | city-day | {forward_alias['city_days']} | {forward_alias['dates']} |",
         "",
         "## Evidence funnel",
@@ -1481,7 +1572,7 @@ def write_report(payload: dict[str, Any]) -> None:
         ),
         "",
         "- PIT curve：historical 用固定 previous-run Single Runs cache；forward 用 raw checkpoint hourly curve。两者不能混成一个 vintage。",
-        "- source first-seen / settlement basis：historical parent 没有完整 first-seen source，属 coverage gap；forward observation/source 字段存在但本轮未把后到 source 当特征。",
+        "- source first-seen / settlement basis：forward 已按 decision-source report age 重算；7/24–7/26 stale observation rows 已 quarantine，不再进入 signal/evidence 分母。",
         "- book：forward alias 大多缺 direct complementary quote/depth，coverage gap 不能当策略筛选。",
         "- settlement：canonical DB 已确认成都 final bracket 30；未结算 7/28 rows 不进入命中率。",
         "- fill：0；本轮不声称真实 fill 或 realized PnL。",
