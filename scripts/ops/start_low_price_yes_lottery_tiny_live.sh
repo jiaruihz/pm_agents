@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
+source "$ROOT/scripts/ops/weather_market_proxy_env.sh"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket)"
 cd "$ROOT"
 
@@ -87,6 +88,8 @@ if [[ "$RUN_MODE" == "--shadow" ]]; then
 fi
 
 LOW_PRICE_YES_LOTTERY_MARKET_PROXY="${LOW_PRICE_YES_LOTTERY_MARKET_PROXY:-${WEATHER_DATA_FEED_MARKET_PROXY:-http://127.0.0.1:7890}}"
+export LOW_PRICE_YES_LOTTERY_MARKET_PROXY
+weather_export_market_proxy_env "$LOW_PRICE_YES_LOTTERY_MARKET_PROXY"
 
 args=(
   scripts/ops/low_price_yes_lottery_tiny_live.py

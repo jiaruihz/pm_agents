@@ -40,6 +40,7 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     parse_bracket_bounds,
 )
 from src.strategies.weather_edge_v1.runtime import order_runtime
+from scripts.ops.weather_market_proxy import market_proxy_url as shared_market_proxy_url
 from weather_data_feed.source_policy import city_slug
 from weather_feature_layer.market import bracket_distance_features
 from weather_feature_layer.runtime_refs import attach_runtime_feature_frame_ref
@@ -156,10 +157,8 @@ CLOB_BASE_URL = os.getenv("CLOB_BASE_URL", "").strip() or os.getenv("PM_API_BASE
 
 
 def market_proxy_url() -> str:
-    proxy = os.getenv("LOW_PRICE_YES_LOTTERY_MARKET_PROXY", "").strip()
-    if proxy.lower() in {"", "direct", "none", "off", "0"}:
-        return ""
-    return proxy
+    explicit = os.getenv("LOW_PRICE_YES_LOTTERY_MARKET_PROXY")
+    return shared_market_proxy_url(explicit if explicit is not None else None)
 
 
 def now_utc_dt() -> datetime:
@@ -1080,7 +1079,11 @@ def fetch_book_with_retry(
                     failover = maybe_failover_market_proxy(timeout_sec=timeout_sec)
                     print(
                         "[low_price_yes_lottery] book_fetch_failover "
-                        f"attempt={attempt} status={failover.get('status')} token_id={token_id}",
+                        f"attempt={attempt} status={failover.get('status')} "
+                        f"reason={failover.get('reason') or ''} "
+                        f"returncode={failover.get('returncode')} "
+                        f"stderr={failover.get('stderr') or ''} "
+                        f"token_id={token_id}",
                         flush=True,
                     )
                 except Exception as failover_exc:  # noqa: BLE001
@@ -1585,6 +1588,7 @@ def validate_candidate(
             "decision_status": "blocked",
             "blocker": "fresh_book_fetch_failed",
             "token_id": token_id,
+            "book_proxy_url": market_proxy_url() or "direct",
             "book_error": f"{type(exc).__name__}: {exc}",
         }
     asks = book_levels(book, "ask")
