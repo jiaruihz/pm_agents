@@ -1,0 +1,86 @@
+{
+  "frozen_selector": {
+    "acceptance": {
+      "all_pass": false,
+      "decile_spearman": 0.9451395216446113,
+      "decile_spearman_pass": true,
+      "excess_vs_v1": [
+        0.3176992117144979,
+        -0.3075809456881841,
+        0.9683979297976143
+      ],
+      "excess_vs_v1_pass": false,
+      "train_selected_ci": [
+        0.003317931436270611,
+        0.8887297989335126
+      ],
+      "train_selected_ci_pass": true
+    },
+    "bias_layer": {
+      "note": "fully pre-period, PIT safe, not updating in-period",
+      "path": "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/daily_error_rows.csv",
+      "window_end": "2026-05-07"
+    },
+    "cat_columns": [
+      "forecast_model_ecmwf",
+      "forecast_model_gfs",
+      "dec_hour_bucket_h00_05",
+      "dec_hour_bucket_h06_11",
+      "dec_hour_bucket_h12_17",
+      "dec_hour_bucket_h18_23"
+    ],
+    "coef": [
+      0.08212604895877813,
+      0.40740220705646885,
+      0.10166923318648445,
+      -0.2251823462003256,
+      0.07631035480997815,
+      0.02522453673044999,
+      -0.4823739357926493,
+      -0.8402329541227367,
+      -0.4033474200051346,
+      -0.38304828394803614,
+      -0.016439176739957057,
+      -0.5197720092222547
+    ],
+    "fallback_rule": "edge>=0.20 AND hot_tail_pct_asof>=0.5",
+    "forward_pool_rows_pending_settlement": 47,
+    "forward_start": "2026-07-01",
+    "generated_at_utc": "2026-07-03T01:35:56.993867+00:00",
+    "intercept": -1.3226068899153614,
+    "num_features": [
+      "logit_model_p",
+      "logit_ask",
+      "bias_mean",
+      "bias_p90",
+      "hot_tail_pct",
+      "cold_tail_pct"
+    ],
+    "scaler_mu": [
+      -1.2617711634850008,
+      -2.2279604734898752,
+      0.994014421313628,
+      3.4024161585365857,
+      0.5067607663203727,
+      0.1619027341148172
+    ],
+    "scaler_sd": [
+      0.7134837828230326,
+      0.4425754163354131,
+      0.9295700179015252,
+      1.2068856819819547,
+      0.18463163468945384,
+      0.1281524220391892
+    ],
+    "settlement_coverage_at_build": "2026-06-28",
+    "theta": 0.01881144696553219,
+    "theta_rule": "max 5.0 tickets/day on train",
+    "train_end": "2026-06-20",
+    "universe": "BUY_YES, decision_entry_price 0.05..0.20, one ticket per city-date (earliest snapshot, low-ask tiebreak), no edge condition",
+    "variants_declared_K": 2
+  },
+  "packaged_at_utc": "2026-07-28T12:02:36+00:00",
+  "schema_version": "low_price_yes_tail_pcal_v2",
+  "source_path": "docs/analysis/2026-07/2026-07-03-low-price-yes-tail-pcal-v2.json",
+  "source_sha256": "c9754b24bc6b6d0f919d5328cb4af1e467f77e034e65c240ff60ba750dd13920"
+}

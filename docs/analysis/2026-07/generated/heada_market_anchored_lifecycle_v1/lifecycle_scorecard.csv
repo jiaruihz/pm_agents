@@ -1,0 +1,13 @@
+action,checkpoint_hour_local,threshold,opportunity_rows,dates,wins,action_rows,baseline_hold_pnl,unconditional_exit_all_pnl,policy_pnl,pnl_delta_vs_hold,pnl_delta_vs_exit_all,date_mean_pnl_delta,date_mean_delta_ci_low,date_mean_delta_ci_high,policy_roi_on_entry_cost,price_layer
+sell_or_hold_direct_bid,9,0.01,11,4,0,4,-1.3631057,-0.20752425000000002,-1.16968425,0.19342145,-0.96216,0.0483553625,0.0,0.1107796875,-0.8581023834028425,direct_executable_bid
+sell_or_hold_direct_bid,9,0.02,11,4,0,3,-1.3631057,-0.20752425000000002,-1.22686425,0.13624145000000001,-1.01934,0.034060362500000003,0.0,0.06812072500000001,-0.9000507077330834,direct_executable_bid
+sell_or_hold_direct_bid,9,0.05,11,4,0,2,-1.3631057,-0.20752425000000002,-1.29360925,0.06949645,-1.0860849999999997,0.0173741125,0.0,0.034748225,-0.9490160961105217,direct_executable_bid
+add_one_share_direct_ask,9,0.01,12,4,0,0,0.0,,0.0,0.0,,0.0,,,,direct_executable_ask
+add_one_share_direct_ask,9,0.02,12,4,0,0,0.0,,0.0,0.0,,0.0,,,,direct_executable_ask
+add_one_share_direct_ask,9,0.05,12,4,0,0,0.0,,0.0,0.0,,0.0,,,,direct_executable_ask
+sell_or_hold_direct_bid,12,0.01,5,3,0,0,-0.66597995,-0.2911035,-0.66597995,0.0,-0.37487645,0.0,0.0,0.0,-1.0,direct_executable_bid
+sell_or_hold_direct_bid,12,0.02,5,3,0,0,-0.66597995,-0.2911035,-0.66597995,0.0,-0.37487645,0.0,0.0,0.0,-1.0,direct_executable_bid
+sell_or_hold_direct_bid,12,0.05,5,3,0,0,-0.66597995,-0.2911035,-0.66597995,0.0,-0.37487645,0.0,0.0,0.0,-1.0,direct_executable_bid
+add_one_share_direct_ask,12,0.01,5,3,0,1,0.0,,-0.0398278,-0.0398278,,-0.0398278,,,-1.0,direct_executable_ask
+add_one_share_direct_ask,12,0.02,5,3,0,1,0.0,,-0.0398278,-0.0398278,,-0.0398278,,,-1.0,direct_executable_ask
+add_one_share_direct_ask,12,0.05,5,3,0,1,0.0,,-0.0398278,-0.0398278,,-0.0398278,,,-1.0,direct_executable_ask

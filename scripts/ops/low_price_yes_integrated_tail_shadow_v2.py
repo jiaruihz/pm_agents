@@ -343,27 +343,16 @@ def classify_live_metar(row: dict[str, Any], obs: dict[str, Any] | None, args: a
     }
 
 
-PCAL_V2_JSON = ROOT / "docs/analysis/2026-07/2026-07-03-low-price-yes-tail-pcal-v2.json"
-BIAS_ROWS_CSV = ROOT / "docs/analysis/2026-06/generated/historical_forecast_station_bias_v1/daily_error_rows.csv"
+PCAL_V2_JSON = ROOT / "src/strategies/weather_edge_v1/config/low_price_yes_tail_pcal_v2.json"
 
 
-def load_pcal_v2_resources() -> dict[str, Any] | None:
+def load_pcal_v2_resources(tail_resources: TailTelemetryResources | None) -> dict[str, Any] | None:
     """frozen pcal_v2 selector (research_low_price_yes_tail_pcal_v2.py); soft-fail."""
     try:
         frozen = json.loads(PCAL_V2_JSON.read_text(encoding="utf-8"))["frozen_selector"]
-        import csv as _csv
-
-        index: dict[tuple[str, str], list[tuple[str, float]]] = {}
-        with BIAS_ROWS_CSV.open(encoding="utf-8") as f:
-            for rec in _csv.DictReader(f):
-                try:
-                    err = float(rec["error_f_actual_minus_forecast"])
-                except (TypeError, ValueError):
-                    continue
-                index.setdefault((rec["city"], rec["model"]), []).append((rec["date"], err))
-        for key in index:
-            index[key].sort()
-        return {"frozen": frozen, "bias_index": index}
+        if tail_resources is None or tail_resources.load_error:
+            return None
+        return {"frozen": frozen, "bias_index": tail_resources.bias_index}
     except Exception:
         return None
 
@@ -600,7 +589,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         raw_counts = count_raw(conn, args, min_event_date)
         candidates = load_candidates(conn, args, min_event_date)
 
-    pcal_v2_resources = load_pcal_v2_resources()
+    pcal_v2_resources = load_pcal_v2_resources(tail_resources)
     rows = [
         build_shadow_row(
             row,
