@@ -478,6 +478,20 @@ def orderbook_budget_book(token_id, reason="orderbook_budget_exhausted"):
     }
 
 
+def orderbook_budget_expired(started_at, budget_sec, *, now_monotonic=None):
+    """Return whether actual orderbook work has exhausted its wall-clock budget.
+
+    ``started_at=None`` means no token book has been requested yet.  Forecast,
+    Gamma and historical-error preparation before the first book must not
+    consume the orderbook budget.
+    """
+
+    if started_at is None or budget_sec < 0:
+        return False
+    now = time.monotonic() if now_monotonic is None else float(now_monotonic)
+    return now - float(started_at) > float(budget_sec)
+
+
 def fetch_token_orderbook_batch(
     client,
     token_archive_rows,
@@ -1264,7 +1278,11 @@ def main():
         trust_env=False,
     )
     orderbook_cache = {}
-    orderbook_started_at = time.monotonic()
+    # Start this clock only when the first token book is actually requested.
+    # Starting it here consumed the full 60s budget during forecast/Gamma
+    # preparation and produced snapshots with every row marked
+    # orderbook_budget_exhausted before a single CLOB request was attempted.
+    orderbook_started_at = None
     orderbook_disabled_reason = "disabled" if args.no_orderbook else None
 
     print(f"{'='*90}")
@@ -1505,8 +1523,10 @@ def main():
             if not args.no_orderbook:
                 if (
                     orderbook_disabled_reason is None
-                    and args.orderbook_budget_sec >= 0
-                    and time.monotonic() - orderbook_started_at > args.orderbook_budget_sec
+                    and orderbook_budget_expired(
+                        orderbook_started_at,
+                        args.orderbook_budget_sec,
+                    )
                 ):
                     orderbook_disabled_reason = "orderbook_budget_exhausted"
 
@@ -1537,13 +1557,15 @@ def main():
                                 "token_id": token_id,
                                 "top_n": args.orderbook_top_n,
                             }
+                    if token_archive_rows and orderbook_started_at is None:
+                        orderbook_started_at = time.monotonic()
                     fetched_books = fetch_token_orderbook_batch(
                         pm_client,
                         token_archive_rows,
                         top_n=args.orderbook_top_n,
                         max_workers=args.orderbook_workers,
                         deadline_monotonic=orderbook_started_at + args.orderbook_budget_sec
-                        if args.orderbook_budget_sec >= 0
+                        if orderbook_started_at is not None and args.orderbook_budget_sec >= 0
                         else None,
                     )
                     for token_id, (archive_row, book) in fetched_books.items():
