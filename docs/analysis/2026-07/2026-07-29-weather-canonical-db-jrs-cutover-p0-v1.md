@@ -236,3 +236,72 @@ not a first-class historical availability event; the new explicit availability
 fields remove that ambiguity prospectively.
 
 Production commit: `6edba326`. Mainline commit: `0d052420`.
+
+## Order-state and crash-consistency remediation
+
+The core-carry maker lifecycle treated the latest legacy `live_orders.jsonl`
+row as authoritative. A Wellington replacement order
+`0x890457…ba9639` had actually been cancelled at
+`2026-07-29T04:50:15Z`, but that side effect existed only in
+`execution_journal.jsonl`; the replacement/projection step did not finish.
+Every later loop therefore treated the stale `submitted` row as active, tried
+to cancel it again, and published `executor_error`.
+
+The runner now replays venue-order state from the side-effect journal before
+lifecycle evaluation and writes one deterministic terminal projection. The
+production recovery added exactly one row, changed that order to `cancelled`,
+and reduced each subsequent cycle from one failing lifecycle plan to zero.
+Authenticated CLOB open orders were zero before and after that recovery.
+
+The wider signal→plan→exchange handoff also had two crash windows:
+
+- `entry_attempts.jsonl` recorded `planned` before invoking the executor, so a
+  crash before execution permanently consumed the signal;
+- an exchange outcome could be journaled before its legacy live-order
+  projection, leaving the venue action real but invisible to downstream
+  consumers.
+
+Corrections:
+
+- business-blocked attempts remain terminal, but `planned` without durable
+  execution evidence is retryable;
+- planned attempts are appended only after the executor returns;
+- a stale claim with no side-effect attempt can be reclaimed after a 60-second
+  concurrency grace;
+- a journaled submit outcome missing its live projection is projected without
+  another venue submit;
+- an attempt with no outcome is fail-closed as
+  `reconciliation_required`, never automatically resubmitted.
+
+Historical core-carry audit after remediation:
+
+| Check | Result |
+|---|---:|
+| planned entry signals | 22 |
+| planned signal without any live projection | 0 |
+| submit identities | 11 |
+| attempt without outcome | 0 |
+| submitted venue order IDs | 10 |
+| submitted outcome missing live projection | 0 |
+| recovered terminal maker rows | 1 |
+
+The fast-source live runner had the same class of gap: its dedupe key was
+persisted only in the end-of-cycle `state.json`, after the CLOB call and
+`orders.jsonl` append. It now fsyncs an execution-side-effect row immediately
+before and after each live child, reconstructs dedupe keys from the journal and
+durable order stream, and blocks ambiguous dispatches as
+`execution_reconciliation_required`. A confirmed submit can no longer be
+repeated merely because the process died before the state-file replace.
+
+Production verification:
+
+- core-carry SHA `79e15231`: 47 tests passed; runtime `ok`,
+  `live_errors=0`, `reconciliation_required=0`;
+- fast-source SHA `f0074e2f`: 83 tests passed; runtime `ok`,
+  `execution_reconciliation_required=0`;
+- the fast-source restart wrote no order rows and submitted no order;
+- the one authenticated open order seen during the fast-source restart was an
+  independently running, correctly journaled Guangzhou core-carry maker, so it
+  was left untouched.
+
+Production commits: `d8d23b65`, `79e15231`, `f0074e2f`.
