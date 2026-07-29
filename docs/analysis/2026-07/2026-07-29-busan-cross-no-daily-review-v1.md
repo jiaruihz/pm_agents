@@ -86,6 +86,34 @@ v5 后历史成交多集中在高价 NO，Busan 7 月 18—27 日 14 个已结�
 3. hot retry 与 exact signed share cap 配合：38 NO 首轮深度消失后仍恢复了 5.81395 @ 0.14，
    下一轮只补剩余份额，没有因为重试重复超买。
 
+### 4. 原因拆分：不是采集加速，确有执行升级，也有一次性盘口运气
+
+- **采集速度基本没变**：Busan 历史 AMOS first-seen lag p50/p90 约为 `1.4/1.8min`；
+  今天三档从 source observation 到 runner 确认约 `1.4--2.0min`，没有证据表明今天因 collector
+  突然加速而多赚。
+- **确认规则是近期但非当天升级**：`persistent_candidate_margin_v5` 于 7 月 15 日落地；
+  它解释了为什么今天敢连续做三档且没有退回旧版单点 false-cross 逻辑，但不能解释今天相对
+  7 月 18--27 日突然多赚。
+- **执行能力确实近期增强**：visible-depth adaptive execution 于 7 月 22 日落地，zero-fill
+  fresh-book hot retry 于 7 月 24 日落地。38 NO 的 5.81395 @ 0.14 是 hot retry 直接恢复的成交，
+  按当前 0.9995 mark 贡献约 `+$4.997`，占全天 MTM 的约 `38.7%`。
+- **其余超额来自天气路径与盘口**：38 NO 的 8 @ 0.44 贡献约 `+$4.476`；36、37 NO 合计约
+  `+$3.438`。也就是说，即使没有 0.14 maker fill，今天仍约有 `+$7.91` MTM，仍是好日子；
+  hot retry 则把好日子放大成了异常大日。
+- **0.14 maker fill 含偶然微结构因素**：当时 0.15 可见 ask 在提交前消失，随后短暂出现可成交的
+  0.14 maker 对手盘。这个 queue/fill 不能假定每天重复；可复用的是 fresh-book 重试和 cap，
+  不是 0.14 这个价格本身。
+
+更准确的因果顺序是：
+
+```text
+持续快速升温、三档连续 cross
+  → AMOS 在 routine METAR 前看到新档
+  → 市场对 37/38 cross 反应偏慢，给出低价 NO
+  → v5 保证信号不是单点边界打印
+  → depth-adaptive + hot retry 把短暂盘口真正转成 fill
+```
+
 ## 历史对照与研究状态
 
 - 旧规则 7 月 11—14 日实际 live：总成本约 `$27.40`、PnL 约 `-$15.53`、ROI 约 `-56.7%`；
