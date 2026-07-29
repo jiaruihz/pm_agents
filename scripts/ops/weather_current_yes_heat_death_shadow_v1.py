@@ -129,6 +129,15 @@ def recent_curve_rows(curve_dir: Path, *, limit: int = 16) -> list[dict[str, Any
     return rows
 
 
+def snapshot_decision_asof(snapshot: Mapping[str, Any]) -> str:
+    return str(
+        snapshot.get("available_at_utc")
+        or snapshot.get("published_at_utc")
+        or snapshot.get("ts_utc")
+        or ""
+    )
+
+
 def pit_observation_cache(payload: Mapping[str, Any], as_of_utc: str) -> tuple[dict[str, Any], Counter[str]]:
     """Keep only cache rows whose fetch completion is provably PIT."""
 
@@ -496,7 +505,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         }
 
     snapshot = read_json(snapshot_path)
-    as_of_utc = str(snapshot.get("ts_utc") or "")
+    collection_started_at_utc = str(
+        snapshot.get("collection_started_at_utc") or snapshot.get("ts_utc") or ""
+    )
+    as_of_utc = snapshot_decision_asof(snapshot)
     observation_path = Path(args.observation_cache)
     observations, pit_counts = pit_observation_cache(read_json(observation_path), as_of_utc)
     curve_rows = recent_curve_rows(Path(args.forecast_curve_dir), limit=int(args.curve_file_limit))
@@ -549,6 +561,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "zero_notional_shadow",
         "snapshot_file": snapshot_path.name,
         "snapshot_ts_utc": as_of_utc,
+        "snapshot_collection_started_at_utc": collection_started_at_utc,
+        "snapshot_available_at_utc": as_of_utc,
+        "decision_as_of_utc": as_of_utc,
         "observation_cache": str(observation_path),
         "feature_store_frame_id": store_frame_id,
         "feature_rows": len(feature_rows),

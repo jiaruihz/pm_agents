@@ -164,7 +164,7 @@ def publish_runtime_state(
             conn,
             instance_id=STRATEGY_INSTANCE,
             process_status="running",
-            health_status="healthy" if summary.get("status") == "ok" else "error",
+            health_status="healthy" if summary.get("status") == "ok" else "blocked",
             pid=os.getpid(),
             heartbeat_at_utc=now,
             last_tick_ts_utc=now,

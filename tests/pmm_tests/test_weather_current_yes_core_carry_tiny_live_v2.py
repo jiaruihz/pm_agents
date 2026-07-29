@@ -134,6 +134,34 @@ def test_publish_runtime_state_exposes_live_heartbeat(tmp_path) -> None:
     )
 
 
+def test_publish_runtime_state_maps_executor_error_to_blocked(tmp_path) -> None:
+    db_path = tmp_path / "weather.db"
+    with sqlite3.connect(db_path) as conn:
+        apply_schema_canonical(conn)
+        sync_instance_specs(conn)
+    output_dir = tmp_path / "runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2"
+    output_dir.mkdir(parents=True)
+    args = runner.parser().parse_args(["run", "--runtime-db", str(db_path)])
+
+    runner.publish_runtime_state(
+        args,
+        output_dir,
+        {
+            "status": "executor_error",
+            "generated_at_utc": "2026-07-24T08:45:00+00:00",
+            "live_enabled": True,
+        },
+        {},
+    )
+
+    with sqlite3.connect(db_path) as conn:
+        value = conn.execute(
+            "SELECT health_status FROM strategy_instance_runtime WHERE instance_id=?",
+            (runner.STRATEGY_INSTANCE,),
+        ).fetchone()[0]
+    assert value == "blocked"
+
+
 def test_runtime_state_db_busy_is_deferred_without_failing_trading_loop(
     tmp_path,
     monkeypatch,

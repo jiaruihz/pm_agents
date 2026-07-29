@@ -153,7 +153,9 @@ def _build_state_row(
     source_profile_id: str,
 ) -> dict[str, Any]:
     unit = str(snapshot.get("unit") or obs.get("unit") or "F").upper()
-    decision_snapshot_ts = _iso_utc(snapshot.get("snapshot_ts_utc") or as_of_ts_utc)
+    # An explicit as-of is the caller's availability clock and must take
+    # precedence over the producer's collection-start timestamp.
+    decision_snapshot_ts = _iso_utc(as_of_ts_utc or snapshot.get("snapshot_ts_utc"))
     last_obs_iso = _iso_utc(_first_value(obs, "source_report_ts_utc", "last_obs_utc", "report_time_utc", "obs_time_utc"))
     running_obs_iso = _iso_utc(_first_value(obs, "running_max_obs_utc", "running_max_time_utc"))
     age_minutes = _first_float(obs, "obs_age_minutes", "obs_age_min", "age_min")

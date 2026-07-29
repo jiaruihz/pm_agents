@@ -622,7 +622,7 @@ def test_weather_state_frame_builder_carries_metadata_and_unit_contract() -> Non
     assert math.isclose(london["running_native"], 21.0)
     assert math.isclose(london["forecast_gap_to_running_native"], 1.5)
     assert math.isclose(london["forecast_max_f"], 72.4)
-    assert london["station_gap_state"] == "within_expected_cadence"
+    assert london["station_gap_state"] == "beyond_expected_cadence"
     assert london["moisture_cloud_regime"] == "humid_overcast_suppression"
 
 
@@ -775,6 +775,41 @@ def test_weather_state_frame_builder_does_not_use_utc_hour_as_local_fallback() -
     row = frame.iloc[0]
     assert pd.isna(row["decision_hour_local"])
     assert row["solar_window"] == "hour_missing"
+
+
+def test_weather_state_frame_explicit_asof_overrides_collection_start() -> None:
+    snapshot = [
+        {
+            "city": "Warsaw",
+            "target_date": "2026-07-18",
+            "snapshot_ts_utc": "2026-07-18T11:10:00Z",
+            "unit": "C",
+        }
+    ]
+    observations = {
+        "records": [
+            {
+                "city": "Warsaw",
+                "target_date": "2026-07-18",
+                "status": "ok",
+                "source": "aviationweather_metar",
+                "station": "EPWA",
+                "fetched_at_utc": "2026-07-18T11:09:00Z",
+                "source_report_ts_utc": "2026-07-18T11:00:00Z",
+                "current_temp_c": 25,
+                "running_max_c": 26,
+            }
+        ]
+    }
+
+    frame = build_weather_state_frame(
+        snapshot,
+        observations,
+        as_of_ts_utc="2026-07-18T11:16:00Z",
+    )
+
+    assert frame.iloc[0]["decision_snapshot_ts_utc"] == "2026-07-18T11:16:00Z"
+    assert frame.iloc[0]["obs_age_min"] == 16.0
 
 
 def test_weather_state_frame_builder_chooses_representative_row_deterministically() -> None:

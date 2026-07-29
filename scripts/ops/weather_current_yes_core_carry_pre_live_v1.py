@@ -222,7 +222,11 @@ def score_snapshot(args: argparse.Namespace, collector_summary: Mapping[str, Any
     would_orders: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     family_city_days: set[str] | None = None
-    snapshot_ts = parse_utc(collector_summary.get("snapshot_ts_utc"))
+    snapshot_ts = parse_utc(
+        collector_summary.get("snapshot_available_at_utc")
+        or collector_summary.get("decision_as_of_utc")
+        or collector_summary.get("snapshot_ts_utc")
+    )
     snapshot_age_min = (
         None
         if snapshot_ts is None

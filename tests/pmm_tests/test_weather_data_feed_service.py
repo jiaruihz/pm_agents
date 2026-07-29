@@ -312,6 +312,29 @@ def test_paper_snapshot_json_publish_is_atomic(monkeypatch, tmp_path) -> None:
     assert not list(tmp_path.glob(".*.tmp"))
 
 
+def test_paper_snapshot_availability_clock_follows_batch_completion(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+    payload = {
+        "ts_utc": "2026-07-29T05:51:32Z",
+        "records": [{"snapshot_ts_utc": "2026-07-29T05:51:32Z"}],
+    }
+
+    paper_snapshot.stamp_snapshot_availability(
+        payload,
+        "2026-07-29T05:55:16Z",
+    )
+
+    assert payload["collection_started_at_utc"] == "2026-07-29T05:51:32Z"
+    assert payload["available_at_utc"] == "2026-07-29T05:55:16Z"
+    assert payload["records"][0]["available_at_utc"] == "2026-07-29T05:55:16Z"
+
+
 def test_paper_snapshot_preserves_near_binary_ladder_siblings(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
     monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))

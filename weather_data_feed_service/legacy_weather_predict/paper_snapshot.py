@@ -510,6 +510,28 @@ def publish_json_atomic(path, payload):
         temporary.unlink(missing_ok=True)
 
 
+def stamp_snapshot_availability(payload, available_at_utc=None):
+    available = available_at_utc or datetime.now(timezone.utc).isoformat(
+        timespec="milliseconds"
+    ).replace("+00:00", "Z")
+    collection_started = str(
+        payload.get("collection_started_at_utc") or payload.get("ts_utc") or ""
+    )
+    payload["collection_started_at_utc"] = collection_started
+    payload["available_at_utc"] = available
+    payload["published_at_utc"] = available
+    for record in payload.get("records") or []:
+        if not isinstance(record, dict):
+            continue
+        record["collection_started_at_utc"] = str(
+            record.get("collection_started_at_utc")
+            or record.get("snapshot_ts_utc")
+            or collection_started
+        )
+        record["available_at_utc"] = available
+    return available
+
+
 def orderbook_budget_book(token_id, reason="orderbook_budget_exhausted"):
     return {
         "status": reason,
@@ -1861,6 +1883,7 @@ def main():
         raise RuntimeError("refusing to publish snapshot without matching forecast curve rows")
     if publish_quality["publishable"]:
         forecast_curve_archive = write_forecast_hourly_curve_capture(OUTPUT_ROOT, forecast_curve_rows)
+    stamp_snapshot_availability(output)
     # The final snapshot path is the batch commit marker. Orderbook archive and
     # forecast curves must be durable before live consumers can discover it.
     publish_json_atomic(out_file, output)
