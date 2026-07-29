@@ -420,3 +420,68 @@ is `0a5ff70546e36af20e03ba588f5b3a10a042ad5d44a7fb8c304d1d8379f472d0`.
 
 Production commits: `b9feb50a`, `39b9b8c1`, `59bfe74a`, `e99a7c07`,
 `4683a7be`.
+
+### P1 refresh latency closure
+
+The remaining 111.77-second routine refresh was not one isolated network
+delay. Cold-cache replay exposed four sequential costs:
+
+1. authenticated CLOB order status was fetched one order at a time;
+2. order discovery parsed large `exchange_response` values and joined
+   `plans/signals` even though the authenticated path did not need signal
+   identity;
+3. alias reconciliation ran a full SQL window plus lineage joins over every
+   CLOB order on every refresh;
+4. the incremental fact builder replayed every historical alias and adjustment
+   row even when no correction had changed.
+
+The P1 implementation:
+
+- fetches immutable CLOB status snapshots with bounded concurrency
+  (`status_workers=8`) while keeping all SQLite writes single-threaded and in
+  deterministic order;
+- records progress at roughly 25% intervals and publishes
+  `status_requested/status_fetch_seconds` in the sync result;
+- uses a compact expression covering index for CLOB discovery, including exact
+  immediate-match amounts, without reading payload overflow pages;
+- loads condition/token identity only for the unauthenticated public fallback;
+- linearizes alias discovery on a compact covering index, and performs
+  `plans/signals` lineage joins only for newly discovered duplicate
+  executions;
+- adds rowid watermarks for alias, validity, fee, price and timestamp
+  corrections, so unchanged historical corrections are not replayed;
+- fixes `weather_jrs_tmux_mkdir` using zsh's special `path` variable as a local
+  loop name, which had temporarily removed `shasum/awk` from command lookup.
+
+The two covering indexes took 46.96 and 93.17 seconds to create once on the
+11GB physical DB. They are persistent DDL and are not routine refresh costs.
+During validation, one run was terminated while the old alias query exceeded
+the per-stage threshold, and one was terminated while the old correction
+replay exceeded it. Neither reached fact publication. The correction cursor
+cutover was then seeded only after proving every existing correction predates
+the successful `2026-07-29T08:04:34Z` fact build:
+
+| Correction source | Seeded rowid |
+|---|---:|
+| `order_execution_aliases` | 50 |
+| `fill_validity_adjustments` | 1 |
+| `fill_fee_adjustments` | 1,014 |
+| `fill_price_adjustments` | 2 |
+| `fill_timestamp_adjustments` | 1 |
+
+Final production measurements:
+
+- authenticated status dry-run: 104 submitted orders, 25 exact local matches,
+  79 external status requests, 3.51 seconds for the request batch and 9.34
+  seconds total; zero external errors;
+- alias no-op reconciliation: 62.59 seconds before lazy lineage, 1.90 seconds
+  after;
+- fact no-op materialization: scope zero, 5.14 seconds;
+- complete canonical refresh: 23.36 seconds versus the prior 111.77 seconds,
+  a 79.1% reduction / 4.8x speed-up;
+- final live state remains 4,865 facts / 1,320 `live_real`,
+  `alias_fact_rows=0`, `excluded_fact_rows=0`, and strict CLOB
+  `gate_pass=true`.
+
+P1 production commits: `2cc6f561`, `af0083cb`, `fd9273cf`, `717ba5cd`,
+`0d0507b2`, `b84d6850`.
