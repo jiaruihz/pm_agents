@@ -86,15 +86,75 @@ weather_jrs_tmux_mkdir() {
   local socket="$1"
   shift
   local command="set -eu; mkdir -p"
-  local path
+  local target_path
 
   socket="$(weather_jrs_tmux_socket "$socket")" || return 1
   if [[ "$#" -eq 0 ]]; then
     echo "weather_jrs_tmux_mkdir requires at least one path" >&2
     return 1
   fi
-  for path in "$@"; do
-    command+=" $(printf '%q' "$path")"
+  for target_path in "$@"; do
+    command+=" $(printf '%q' "$target_path")"
   done
   weather_jrs_tmux "$socket" run-shell "$command"
 }
+
+weather_jrs_tmux_run_oneshot() (
+  local runtime_root="$1"
+  local session="$2"
+  local job_dir="$3"
+  local job_command="$4"
+  local socket
+  local log_file="$job_dir/tmux.log"
+  local status_file="$job_dir/last_exit_status"
+  local status_bridge
+  local session_command
+  local status_bridge_command
+  local rc
+
+  if [[ -z "$session" || ! "$session" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    echo "invalid JRS tmux session name: $session" >&2
+    return 1
+  fi
+
+  socket="$(weather_jrs_tmux_start_socket "$runtime_root")" || return 1
+  weather_jrs_tmux_mkdir "$socket" "$job_dir" || return 1
+  if weather_jrs_tmux "$socket" has-session -t "=$session" 2>/dev/null; then
+    echo "JRS tmux one-shot already running; skipping: session=$session"
+    return 0
+  fi
+
+  status_bridge="$(
+    mktemp "${TMPDIR:-/tmp}/weather-external-${session}-status.XXXXXX"
+  )" || return 1
+  trap 'rm -f "$status_bridge"' EXIT INT TERM
+
+  printf -v session_command \
+    'set +e; mkdir -p %q; rm -f %q; %s >> %q 2>&1; rc=$?; printf "%%s\n" "$rc" > %q; exit "$rc"' \
+    "$job_dir" "$status_file" "$job_command" "$log_file" "$status_file"
+  weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"
+  echo "started JRS tmux one-shot: socket=$socket session=$session log=$log_file"
+
+  while weather_jrs_tmux "$socket" has-session -t "=$session" 2>/dev/null; do
+    sleep 1
+  done
+
+  printf -v status_bridge_command \
+    'set -eu; test -s %q; tr -d "[:space:]" < %q > %q' \
+    "$status_file" "$status_file" "$status_bridge"
+  if ! weather_jrs_tmux "$socket" run-shell "$status_bridge_command"; then
+    echo "JRS tmux one-shot exited without status: session=$session" >&2
+    return 1
+  fi
+
+  rc="$(<"$status_bridge")"
+  if [[ ! "$rc" =~ ^[0-9]+$ || "$rc" -gt 255 ]]; then
+    echo "invalid JRS tmux one-shot exit status: session=$session status=$rc" >&2
+    return 1
+  fi
+  if [[ "$rc" != "0" ]]; then
+    echo "JRS tmux one-shot failed: session=$session returncode=$rc log=$log_file" >&2
+    return "$rc"
+  fi
+  echo "completed JRS tmux one-shot: session=$session returncode=0"
+)

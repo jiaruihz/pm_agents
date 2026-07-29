@@ -162,18 +162,101 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "start_weather_canonical_refresh_tmux.sh" in installer
     assert "run_weather_canonical_refresh_launchd.sh" not in installer
     assert "weather_jrs_tmux_env.sh" in starter
-    assert "weather_jrs_tmux_start_socket" in starter
-    assert "weather_jrs_tmux_mkdir" in starter
+    assert "weather_jrs_tmux_run_oneshot" in starter
     assert 'SESSION="weather_canonical_refresh"' in starter
     assert "run_weather_canonical_refresh_launchd.sh" in starter
-    assert 'STATUS_FILE="$LOG_DIR/last_exit_status"' in starter
-    assert 'mkdir -p "$LOG_DIR"' not in starter
-    assert 'rm -f "$STATUS_FILE"' not in starter
-    assert '[[ ! -s "$STATUS_FILE" ]]' not in starter
-    assert '<"$STATUS_FILE"' not in starter
+    assert "weather_jrs_tmux_start_socket" not in starter
+    assert "weather_jrs_tmux_mkdir" not in starter
+    assert "new-session" not in starter
+    assert "has-session" not in starter
+    assert "last_exit_status" not in starter
+    assert "STATUS_BRIDGE" not in starter
     assert 'LAUNCHD_LOG_DIR="$HOME/Library/Logs/' in installer
     assert "RUNTIME_DIR=" not in installer
-    assert "canonical refresh failed: returncode=$rc" in starter
+
+
+def test_shared_helper_owns_jrs_oneshot_lifecycle():
+    helper = (OPS / "weather_jrs_tmux_env.sh").read_text(encoding="utf-8")
+
+    assert "weather_jrs_tmux_run_oneshot()" in helper
+    assert "weather_jrs_tmux_start_socket" in helper
+    assert "weather_jrs_tmux_mkdir" in helper
+    assert 'new-session -d -s "$session"' in helper
+    assert 'has-session -t "=$session"' in helper
+    assert 'local status_file="$job_dir/last_exit_status"' in helper
+    assert "JRS tmux one-shot exited without status" in helper
+
+
+def test_shared_helper_runs_jrs_oneshot_and_propagates_status(tmp_path):
+    fake_tmux = tmp_path / "tmux"
+    fake_tmux.write_text(
+        """#!/bin/sh
+case "$3" in
+  run-shell)
+    /bin/sh -c "$4"
+    ;;
+  has-session)
+    exit 1
+    ;;
+  new-session)
+    /bin/sh -c "$7"
+    exit 0
+    ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_tmux.chmod(0o755)
+    helper = OPS / "weather_jrs_tmux_env.sh"
+    runtime_root = tmp_path / "runtime"
+    job_dir = tmp_path / "jobs" / "refresh"
+    env = {
+        **os.environ,
+        "WEATHER_JRS_TMUX_BIN": str(fake_tmux),
+        "WEATHER_JRS_TMUX_TEST_OVERRIDE": "1",
+    }
+
+    success = subprocess.run(
+        [
+            "bash",
+            "-c",
+            (
+                'source "$1"; '
+                'weather_jrs_tmux_run_oneshot "$2" test_job "$3" '
+                '"printf success"'
+            ),
+            "_",
+            str(helper),
+            str(runtime_root),
+            str(job_dir),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert success.returncode == 0, success.stderr
+    assert (job_dir / "tmux.log").read_text(encoding="utf-8") == "success"
+    assert (job_dir / "last_exit_status").read_text(encoding="utf-8") == "0\n"
+
+    failure = subprocess.run(
+        [
+            "bash",
+            "-c",
+            (
+                'source "$1"; '
+                'weather_jrs_tmux_run_oneshot "$2" failing_job "$3" false'
+            ),
+            "_",
+            str(helper),
+            str(runtime_root),
+            str(job_dir),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert failure.returncode == 1
+    assert "JRS tmux one-shot failed" in failure.stderr
 
 
 def test_legacy_direct_launchagent_stack_cannot_start_jrs_workloads():
