@@ -85,10 +85,16 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
-def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+def append_jsonl_batch(path: Path, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
+    payload = "".join(
+        json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+        for row in rows
+    )
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.write(payload)
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -470,6 +476,46 @@ def compact_history_row(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def recover_checkpoint_state(
+    output_dir: Path,
+) -> tuple[set[str], dict[str, list[dict[str, Any]]]]:
+    """Recover a partially completed initial materialization without deletion."""
+
+    seen: set[str] = set()
+    history_by_key: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for path in sorted((output_dir / "checkpoints").glob("*.jsonl")):
+        try:
+            handle = path.open(encoding="utf-8")
+        except OSError:
+            continue
+        with handle:
+            for line in handle:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                event_key = str(row.get("source_event_key") or "")
+                city = str(row.get("city") or "")
+                target_date = str(row.get("target_date") or "")
+                if event_key:
+                    seen.add(event_key)
+                if city and target_date:
+                    history_by_key[f"{city}|{target_date}"].append(
+                        compact_history_row(row)
+                    )
+    for key, rows in history_by_key.items():
+        dedup = {
+            str(row.get("source_event_key") or ""): row
+            for row in rows
+            if row.get("source_event_key")
+        }
+        history_by_key[key] = sorted(
+            dedup.values(),
+            key=lambda row: str(row.get("source_observation_ts_utc") or ""),
+        )
+    return seen, dict(history_by_key)
+
+
 def run_once(args: argparse.Namespace) -> dict[str, Any]:
     config = load_config(Path(args.config))
     output_dir = Path(args.output_dir)
@@ -477,11 +523,17 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     persisted = read_json(state_path)
     if persisted.get("schema_version") != STATE_SCHEMA_VERSION:
         persisted = {}
+    recovered_seen: set[str] = set()
+    recovered_history: dict[str, list[dict[str, Any]]] = {}
+    if not persisted:
+        recovered_seen, recovered_history = recover_checkpoint_state(output_dir)
     rows, cursor, cursor_audit = read_appended_rows(
         Path(args.source_jsonl),
         dict(persisted.get("cursor") or {}),
     )
-    seen = set(str(value) for value in persisted.get("seen_event_keys") or [])
+    seen = {
+        str(value) for value in persisted.get("seen_event_keys") or []
+    } | recovered_seen
     groups = distinct_amos_groups(
         rows,
         cities={str(value) for value in config["cities"]},
@@ -492,6 +544,17 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         str(key): list(value)
         for key, value in dict(persisted.get("history_by_city_date") or {}).items()
     }
+    for key, recovered_rows in recovered_history.items():
+        existing = {
+            str(row.get("source_event_key") or ""): row
+            for row in history_by_key.get(key) or []
+        }
+        for row in recovered_rows:
+            existing.setdefault(str(row.get("source_event_key") or ""), row)
+        history_by_key[key] = sorted(
+            existing.values(),
+            key=lambda row: str(row.get("source_observation_ts_utc") or ""),
+        )
     last_capture_by_city = {
         str(key): str(value)
         for key, value in dict(persisted.get("last_market_capture_by_city") or {}).items()
@@ -539,14 +602,19 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "collector_emitted_at_utc": iso_now(),
             **state,
         }
-        append_jsonl(
-            output_dir / "checkpoints" / f"{aggregate['target_date']}.jsonl",
-            checkpoint,
-        )
         emitted.append(checkpoint)
         seen.add(event_key)
         history.append(compact_history_row(state))
         history_by_key[history_key] = history[-1800:]
+
+    emitted_by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for checkpoint in emitted:
+        emitted_by_date[str(checkpoint["target_date"])].append(checkpoint)
+    for target_date, date_rows in sorted(emitted_by_date.items()):
+        append_jsonl_batch(
+            output_dir / "checkpoints" / f"{target_date}.jsonl",
+            date_rows,
+        )
 
     retained_dates = sorted(
         {
@@ -579,6 +647,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "market_capture_policy": config["market_capture"],
         "source_cursor_audit": cursor_audit,
         "new_distinct_observations": len(emitted),
+        "recovered_checkpoint_observations": len(recovered_seen),
         "market_capture_ok": sum(
             1
             for row in emitted
