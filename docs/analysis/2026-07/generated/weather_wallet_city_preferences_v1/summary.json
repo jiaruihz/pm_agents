@@ -1,0 +1,1610 @@
+{
+  "grain": "latest public wallet activity, temperature BUY usdcSize weighted by city",
+  "snapshot_utc": "2026-07-29T03:41:17.183913+00:00",
+  "wallets": [
+    {
+      "concentration": {
+        "cities": [
+          {
+            "buy_cost": 681.305506,
+            "buy_cost_share": 0.063406,
+            "buy_rows": 132,
+            "city": "tokyo",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 665.650248,
+            "buy_cost_share": 0.061949,
+            "buy_rows": 143,
+            "city": "nyc",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 661.407656,
+            "buy_cost_share": 0.061555,
+            "buy_rows": 146,
+            "city": "chengdu",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 601.057139,
+            "buy_cost_share": 0.055938,
+            "buy_rows": 161,
+            "city": "sao-paulo",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 440.452688,
+            "buy_cost_share": 0.040991,
+            "buy_rows": 65,
+            "city": "panama-city",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 418.003914,
+            "buy_cost_share": 0.038902,
+            "buy_rows": 101,
+            "city": "shenzhen",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 408.369969,
+            "buy_cost_share": 0.038005,
+            "buy_rows": 77,
+            "city": "kuala-lumpur",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 407.381202,
+            "buy_cost_share": 0.037913,
+            "buy_rows": 76,
+            "city": "busan",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 396.820837,
+            "buy_cost_share": 0.036931,
+            "buy_rows": 99,
+            "city": "manila",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 351.362348,
+            "buy_cost_share": 0.0327,
+            "buy_rows": 56,
+            "city": "wuhan",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 337.135009,
+            "buy_cost_share": 0.031376,
+            "buy_rows": 72,
+            "city": "san-francisco",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 300.284345,
+            "buy_cost_share": 0.027946,
+            "buy_rows": 59,
+            "city": "seoul",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 294.071358,
+            "buy_cost_share": 0.027368,
+            "buy_rows": 63,
+            "city": "guangzhou",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 282.127382,
+            "buy_cost_share": 0.026256,
+            "buy_rows": 63,
+            "city": "munich",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 276.711278,
+            "buy_cost_share": 0.025752,
+            "buy_rows": 51,
+            "city": "shanghai",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 261.136281,
+            "buy_cost_share": 0.024303,
+            "buy_rows": 86,
+            "city": "denver",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 219.344411,
+            "buy_cost_share": 0.020414,
+            "buy_rows": 53,
+            "city": "atlanta",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 202.128792,
+            "buy_cost_share": 0.018811,
+            "buy_rows": 52,
+            "city": "hong-kong",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 200.228769,
+            "buy_cost_share": 0.018634,
+            "buy_rows": 44,
+            "city": "toronto",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 194.181742,
+            "buy_cost_share": 0.018072,
+            "buy_rows": 35,
+            "city": "helsinki",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 187.73069,
+            "buy_cost_share": 0.017471,
+            "buy_rows": 44,
+            "city": "london",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 183.620595,
+            "buy_cost_share": 0.017089,
+            "buy_rows": 37,
+            "city": "miami",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 169.079622,
+            "buy_cost_share": 0.015736,
+            "buy_rows": 38,
+            "city": "tel-aviv",
+            "events": 1,
+            "target_dates": 1
+          },
+          {
+            "buy_cost": 158.974187,
+            "buy_cost_share": 0.014795,
+            "buy_rows": 34,
+            "city": "taipei",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 155.938432,
+            "buy_cost_share": 0.014513,
+            "buy_rows": 49,
+            "city": "amsterdam",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 155.92421,
+            "buy_cost_share": 0.014511,
+            "buy_rows": 31,
+            "city": "qingdao",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 152.76189,
+            "buy_cost_share": 0.014217,
+            "buy_rows": 32,
+            "city": "karachi",
+            "events": 1,
+            "target_dates": 1
+          },
+          {
+            "buy_cost": 148.554318,
+            "buy_cost_share": 0.013825,
+            "buy_rows": 42,
+            "city": "paris",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 147.313635,
+            "buy_cost_share": 0.01371,
+            "buy_rows": 37,
+            "city": "lucknow",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 146.57935,
+            "buy_cost_share": 0.013642,
+            "buy_rows": 31,
+            "city": "moscow",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 139.312352,
+            "buy_cost_share": 0.012965,
+            "buy_rows": 22,
+            "city": "dallas",
+            "events": 1,
+            "target_dates": 1
+          },
+          {
+            "buy_cost": 138.937736,
+            "buy_cost_share": 0.01293,
+            "buy_rows": 44,
+            "city": "jeddah",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 135.943247,
+            "buy_cost_share": 0.012652,
+            "buy_rows": 42,
+            "city": "austin",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 131.974517,
+            "buy_cost_share": 0.012282,
+            "buy_rows": 36,
+            "city": "beijing",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 131.658349,
+            "buy_cost_share": 0.012253,
+            "buy_rows": 25,
+            "city": "chongqing",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 125.548364,
+            "buy_cost_share": 0.011684,
+            "buy_rows": 28,
+            "city": "mexico-city",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 105.805336,
+            "buy_cost_share": 0.009847,
+            "buy_rows": 21,
+            "city": "seattle",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 95.369861,
+            "buy_cost_share": 0.008876,
+            "buy_rows": 24,
+            "city": "cape-town",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 83.08336,
+            "buy_cost_share": 0.007732,
+            "buy_rows": 20,
+            "city": "buenos-aires",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 82.87946,
+            "buy_cost_share": 0.007713,
+            "buy_rows": 13,
+            "city": "wellington",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 71.36502,
+            "buy_cost_share": 0.006642,
+            "buy_rows": 22,
+            "city": "milan",
+            "events": 1,
+            "target_dates": 1
+          },
+          {
+            "buy_cost": 62.274621,
+            "buy_cost_share": 0.005796,
+            "buy_rows": 24,
+            "city": "chicago",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 58.772352,
+            "buy_cost_share": 0.00547,
+            "buy_rows": 35,
+            "city": "ankara",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 46.034584,
+            "buy_cost_share": 0.004284,
+            "buy_rows": 20,
+            "city": "los-angeles",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 41.143896,
+            "buy_cost_share": 0.003829,
+            "buy_rows": 18,
+            "city": "istanbul",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 27.236242,
+            "buy_cost_share": 0.002535,
+            "buy_rows": 9,
+            "city": "singapore",
+            "events": 1,
+            "target_dates": 1
+          },
+          {
+            "buy_cost": 23.634877,
+            "buy_cost_share": 0.0022,
+            "buy_rows": 8,
+            "city": "warsaw",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 20.34288,
+            "buy_cost_share": 0.001893,
+            "buy_rows": 7,
+            "city": "madrid",
+            "events": 1,
+            "target_dates": 1
+          },
+          {
+            "buy_cost": 18.1065,
+            "buy_cost_share": 0.001685,
+            "buy_rows": 2,
+            "city": "houston",
+            "events": 1,
+            "target_dates": 1
+          }
+        ],
+        "city_hhi": 0.032825,
+        "effective_city_count": 30.464398,
+        "region_cost_share": {
+          "china_mainland": 0.225323,
+          "hong_kong": 0.018811,
+          "korea": 0.06586,
+          "other": 0.487646,
+          "united_states": 0.202359
+        },
+        "top_1_city_cost_share": 0.063406,
+        "top_3_city_cost_share": 0.18691
+      },
+      "coverage": {
+        "events": 370,
+        "raw_wallet_rows": 5500,
+        "sample_truncated": true,
+        "target_dates": 12,
+        "weather_buy_rows": 2429,
+        "weather_rows": 5498,
+        "weather_trade_rows": 4860
+      },
+      "market_preference": {
+        "outcome_cost_share": {
+          "No": 0.945811,
+          "Yes": 0.054189
+        },
+        "price_cost_share": {
+          "1-5c": 0.001037,
+          "20-80c": 0.464889,
+          "5-20c": 0.012872,
+          "80-95c": 0.4748,
+          "<=1c": 3.1e-05,
+          ">=95c": 0.046371
+        },
+        "sell_trade_share": 0.500206,
+        "target_day_local_hour_cost_share": {
+          "00-06": 0.341785,
+          "06-10": 0.491731,
+          "10-14": 0.148507,
+          "14-18": 0.017977
+        },
+        "target_relation_cost_share": {
+          "pre_target": 0.744882,
+          "target_day": 0.255118
+        }
+      },
+      "source_examples": [
+        {
+          "city": "tokyo",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Tokyo Haneda Airport Station in degrees Celsius on 30 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Tokyo Haneda Airport Station, available here: https://www.wunderground.com/history/daily/jp/tokyo/RJTT.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-tokyo-on-july-30-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/jp/tokyo/RJTT"
+        },
+        {
+          "city": "nyc",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the LaGuardia Airport Station in degrees Fahrenheit on 30 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the LaGuardia Airport Station, available here: https://www.wunderground.com/history/daily/us/ny/new-york-city/KLGA.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Fahrenheit (eg, 21°F). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-nyc-on-july-30-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/us/ny/new-york-city/KLGA"
+        },
+        {
+          "city": "chengdu",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Chengdu Shuangliu International Airport Station in degrees Celsius on 30 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Chengdu Shuangliu International Airport Station, available here: https://www.wunderground.com/history/daily/cn/chengdu/ZUUU.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-chengdu-on-july-30-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/chengdu/ZUUU"
+        },
+        {
+          "city": "sao-paulo",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Sao Paulo-Guarulhos International Airport Station in degrees Celsius on 29 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Sao Paulo-Guarulhos International Airport Station, available here: https://www.wunderground.com/history/daily/br/guarulhos/SBGR.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-sao-paulo-on-july-29-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/br/guarulhos/SBGR"
+        },
+        {
+          "city": "panama-city",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Marcos A. Gelabert Intl Airport Station in degrees Celsius on 30 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Marcos A. Gelabert Intl Airport Station, available here: https://www.wunderground.com/history/daily/pa/panama-city/MPMG.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-panama-city-on-july-30-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/pa/panama-city/MPMG"
+        }
+      ],
+      "wallet": "0x496f76bd5cf4c2819c710ae90ed1c84b2dc6fa5d"
+    },
+    {
+      "concentration": {
+        "cities": [
+          {
+            "buy_cost": 1047.522732,
+            "buy_cost_share": 0.05095,
+            "buy_rows": 241,
+            "city": "sao-paulo",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 1030.330692,
+            "buy_cost_share": 0.050114,
+            "buy_rows": 235,
+            "city": "chengdu",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 980.259366,
+            "buy_cost_share": 0.047679,
+            "buy_rows": 298,
+            "city": "san-francisco",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 921.246539,
+            "buy_cost_share": 0.044808,
+            "buy_rows": 186,
+            "city": "toronto",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 855.183587,
+            "buy_cost_share": 0.041595,
+            "buy_rows": 137,
+            "city": "panama-city",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 804.696377,
+            "buy_cost_share": 0.03914,
+            "buy_rows": 107,
+            "city": "dallas",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 803.515261,
+            "buy_cost_share": 0.039082,
+            "buy_rows": 262,
+            "city": "nyc",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 793.09108,
+            "buy_cost_share": 0.038575,
+            "buy_rows": 191,
+            "city": "mexico-city",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 733.934065,
+            "buy_cost_share": 0.035698,
+            "buy_rows": 97,
+            "city": "london",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 724.308951,
+            "buy_cost_share": 0.03523,
+            "buy_rows": 111,
+            "city": "austin",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 715.290347,
+            "buy_cost_share": 0.034791,
+            "buy_rows": 151,
+            "city": "kuala-lumpur",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 699.559338,
+            "buy_cost_share": 0.034026,
+            "buy_rows": 152,
+            "city": "shanghai",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 666.131613,
+            "buy_cost_share": 0.0324,
+            "buy_rows": 145,
+            "city": "los-angeles",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 662.949666,
+            "buy_cost_share": 0.032245,
+            "buy_rows": 219,
+            "city": "tokyo",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 644.908786,
+            "buy_cost_share": 0.031368,
+            "buy_rows": 174,
+            "city": "seoul",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 641.726425,
+            "buy_cost_share": 0.031213,
+            "buy_rows": 208,
+            "city": "wellington",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 594.118976,
+            "buy_cost_share": 0.028897,
+            "buy_rows": 151,
+            "city": "busan",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 587.939796,
+            "buy_cost_share": 0.028597,
+            "buy_rows": 127,
+            "city": "munich",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 513.001231,
+            "buy_cost_share": 0.024952,
+            "buy_rows": 119,
+            "city": "cape-town",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 481.366298,
+            "buy_cost_share": 0.023413,
+            "buy_rows": 187,
+            "city": "denver",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 439.140218,
+            "buy_cost_share": 0.021359,
+            "buy_rows": 108,
+            "city": "chongqing",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 408.601481,
+            "buy_cost_share": 0.019874,
+            "buy_rows": 163,
+            "city": "shenzhen",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 373.984502,
+            "buy_cost_share": 0.01819,
+            "buy_rows": 74,
+            "city": "helsinki",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 372.654584,
+            "buy_cost_share": 0.018126,
+            "buy_rows": 122,
+            "city": "milan",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 370.014501,
+            "buy_cost_share": 0.017997,
+            "buy_rows": 81,
+            "city": "singapore",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 346.430498,
+            "buy_cost_share": 0.01685,
+            "buy_rows": 82,
+            "city": "amsterdam",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 329.84439,
+            "buy_cost_share": 0.016043,
+            "buy_rows": 56,
+            "city": "atlanta",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 324.487578,
+            "buy_cost_share": 0.015783,
+            "buy_rows": 124,
+            "city": "lucknow",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 322.688039,
+            "buy_cost_share": 0.015695,
+            "buy_rows": 79,
+            "city": "beijing",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 321.771259,
+            "buy_cost_share": 0.015651,
+            "buy_rows": 121,
+            "city": "taipei",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 319.613732,
+            "buy_cost_share": 0.015546,
+            "buy_rows": 163,
+            "city": "chicago",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 306.876528,
+            "buy_cost_share": 0.014926,
+            "buy_rows": 83,
+            "city": "miami",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 250.680774,
+            "buy_cost_share": 0.012193,
+            "buy_rows": 53,
+            "city": "seattle",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 205.927594,
+            "buy_cost_share": 0.010016,
+            "buy_rows": 71,
+            "city": "jeddah",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 156.011415,
+            "buy_cost_share": 0.007588,
+            "buy_rows": 75,
+            "city": "warsaw",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 139.782533,
+            "buy_cost_share": 0.006799,
+            "buy_rows": 32,
+            "city": "houston",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 132.071229,
+            "buy_cost_share": 0.006424,
+            "buy_rows": 29,
+            "city": "ankara",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 104.235059,
+            "buy_cost_share": 0.00507,
+            "buy_rows": 34,
+            "city": "qingdao",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 91.726989,
+            "buy_cost_share": 0.004462,
+            "buy_rows": 86,
+            "city": "manila",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 82.83039,
+            "buy_cost_share": 0.004029,
+            "buy_rows": 55,
+            "city": "buenos-aires",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 73.524713,
+            "buy_cost_share": 0.003576,
+            "buy_rows": 31,
+            "city": "wuhan",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 71.931569,
+            "buy_cost_share": 0.003499,
+            "buy_rows": 33,
+            "city": "karachi",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 47.695738,
+            "buy_cost_share": 0.00232,
+            "buy_rows": 39,
+            "city": "guangzhou",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 44.6688,
+            "buy_cost_share": 0.002173,
+            "buy_rows": 7,
+            "city": "paris",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 21.3782,
+            "buy_cost_share": 0.00104,
+            "buy_rows": 6,
+            "city": "madrid",
+            "events": 3,
+            "target_dates": 3
+          }
+        ],
+        "city_hhi": 0.031494,
+        "effective_city_count": 31.752443,
+        "region_cost_share": {
+          "china_mainland": 0.152034,
+          "korea": 0.060265,
+          "other": 0.50525,
+          "united_states": 0.28245
+        },
+        "top_1_city_cost_share": 0.05095,
+        "top_3_city_cost_share": 0.148743
+      },
+      "coverage": {
+        "events": 180,
+        "raw_wallet_rows": 5500,
+        "sample_truncated": true,
+        "target_dates": 5,
+        "weather_buy_rows": 5305,
+        "weather_rows": 5494,
+        "weather_trade_rows": 5435
+      },
+      "market_preference": {
+        "outcome_cost_share": {
+          "No": 0.052052,
+          "Yes": 0.947948
+        },
+        "price_cost_share": {
+          "1-5c": 0.016942,
+          "20-80c": 0.539759,
+          "5-20c": 0.440538,
+          "80-95c": 0.002678,
+          "<=1c": 8.2e-05
+        },
+        "sell_trade_share": 0.023919,
+        "target_day_local_hour_cost_share": {
+          "00-06": 0.286093,
+          "06-10": 0.203822,
+          "10-14": 0.480798,
+          "14-18": 0.022523,
+          "18-24": 0.006764
+        },
+        "target_relation_cost_share": {
+          "pre_target": 0.816787,
+          "target_day": 0.183213
+        }
+      },
+      "source_examples": [
+        {
+          "city": "sao-paulo",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Sao Paulo-Guarulhos International Airport Station in degrees Celsius on 29 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Sao Paulo-Guarulhos International Airport Station, available here: https://www.wunderground.com/history/daily/br/guarulhos/SBGR.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-sao-paulo-on-july-29-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/br/guarulhos/SBGR"
+        },
+        {
+          "city": "chengdu",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Chengdu Shuangliu International Airport Station in degrees Celsius on 30 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Chengdu Shuangliu International Airport Station, available here: https://www.wunderground.com/history/daily/cn/chengdu/ZUUU.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-chengdu-on-july-30-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/chengdu/ZUUU"
+        },
+        {
+          "city": "san-francisco",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the San Francisco International Airport Station in degrees Fahrenheit on 29 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the San Francisco International Airport Station, available here: https://www.wunderground.com/history/daily/us/ca/san-francisco/KSFO.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Fahrenheit (eg, 21°F). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-san-francisco-on-july-29-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/us/ca/san-francisco/KSFO"
+        },
+        {
+          "city": "toronto",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Toronto Pearson Intl Airport Station in degrees Celsius on 30 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Toronto Pearson Intl Airport Station, available here: https://www.wunderground.com/history/daily/ca/mississauga/CYYZ.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-toronto-on-july-30-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/ca/mississauga/CYYZ"
+        },
+        {
+          "city": "panama-city",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Marcos A. Gelabert Intl Airport Station in degrees Celsius on 30 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Marcos A. Gelabert Intl Airport Station, available here: https://www.wunderground.com/history/daily/pa/panama-city/MPMG.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-panama-city-on-july-30-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/pa/panama-city/MPMG"
+        }
+      ],
+      "wallet": "0x8fbd7cf5f806f563080864694415829f7229a959"
+    },
+    {
+      "concentration": {
+        "cities": [
+          {
+            "buy_cost": 10069.055091,
+            "buy_cost_share": 0.854285,
+            "buy_rows": 438,
+            "city": "chengdu",
+            "events": 18,
+            "target_dates": 18
+          },
+          {
+            "buy_cost": 922.773614,
+            "buy_cost_share": 0.078291,
+            "buy_rows": 5,
+            "city": "guangzhou",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 314.217307,
+            "buy_cost_share": 0.026659,
+            "buy_rows": 5,
+            "city": "chongqing",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 226.993782,
+            "buy_cost_share": 0.019259,
+            "buy_rows": 6,
+            "city": "qingdao",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 212.507776,
+            "buy_cost_share": 0.01803,
+            "buy_rows": 5,
+            "city": "wuhan",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 16.321697,
+            "buy_cost_share": 0.001385,
+            "buy_rows": 3,
+            "city": "shanghai",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 14.505607,
+            "buy_cost_share": 0.001231,
+            "buy_rows": 8,
+            "city": "beijing",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 9.149624,
+            "buy_cost_share": 0.000776,
+            "buy_rows": 5,
+            "city": "shenzhen",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 1.002479,
+            "buy_cost_share": 8.5e-05,
+            "buy_rows": 1,
+            "city": "taipei",
+            "events": 1,
+            "target_dates": 1
+          }
+        ],
+        "city_hhi": 0.737343,
+        "effective_city_count": 1.356221,
+        "region_cost_share": {
+          "china_mainland": 0.999915,
+          "other": 8.5e-05
+        },
+        "top_1_city_cost_share": 0.854285,
+        "top_3_city_cost_share": 0.959235
+      },
+      "coverage": {
+        "events": 41,
+        "raw_wallet_rows": 572,
+        "sample_truncated": false,
+        "target_dates": 18,
+        "weather_buy_rows": 476,
+        "weather_rows": 541,
+        "weather_trade_rows": 514
+      },
+      "market_preference": {
+        "outcome_cost_share": {
+          "No": 0.654633,
+          "Yes": 0.345367
+        },
+        "price_cost_share": {
+          "1-5c": 0.004433,
+          "20-80c": 0.78358,
+          "5-20c": 0.055202,
+          "80-95c": 0.115693,
+          "<=1c": 0.003642,
+          ">=95c": 0.03745
+        },
+        "sell_trade_share": 0.07393,
+        "target_day_local_hour_cost_share": {
+          "00-06": 0.143164,
+          "06-10": 0.138548,
+          "10-14": 0.089038,
+          "14-18": 0.620211,
+          "18-24": 0.009038
+        },
+        "target_relation_cost_share": {
+          "pre_target": 0.302992,
+          "target_day": 0.697008
+        }
+      },
+      "source_examples": [
+        {
+          "city": "chengdu",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Chengdu Shuangliu International Airport Station in degrees Celsius on 29 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Chengdu Shuangliu International Airport Station, available here: https://www.wunderground.com/history/daily/cn/chengdu/ZUUU.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-chengdu-on-july-29-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/chengdu/ZUUU"
+        },
+        {
+          "city": "guangzhou",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Guangzhou Baiyun International Airport Station in degrees Celsius on 15 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Guangzhou Baiyun International Airport Station, available here: https://www.wunderground.com/history/daily/cn/guangzhou/ZGGG.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-guangzhou-on-july-15-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/guangzhou/ZGGG"
+        },
+        {
+          "city": "chongqing",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Chongqing Jiangbei International Airport Station in degrees Celsius on 27 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Chongqing Jiangbei International Airport Station, available here: https://www.wunderground.com/history/daily/cn/chongqing/ZUCK.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-chongqing-on-july-27-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/chongqing/ZUCK"
+        },
+        {
+          "city": "qingdao",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Qingdao Jiaodong International Airport Station in degrees Celsius on 11 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Qingdao Jiaodong International Airport Station, available here: https://www.wunderground.com/history/daily/cn/qingdao/ZSQD.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-qingdao-on-july-11-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/qingdao/ZSQD"
+        },
+        {
+          "city": "wuhan",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Wuhan Tianhe International Airport Station in degrees Celsius on 23 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Wuhan Tianhe International Airport Station, available here: https://www.wunderground.com/history/daily/cn/wuhan/ZHHH.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-wuhan-on-july-23-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/wuhan/ZHHH"
+        }
+      ],
+      "wallet": "0xcac70909a505ed6f28b1b59a79bcc99ff22937d8"
+    },
+    {
+      "concentration": {
+        "cities": [
+          {
+            "buy_cost": 62222.291851,
+            "buy_cost_share": 1.0,
+            "buy_rows": 1025,
+            "city": "seoul",
+            "events": 29,
+            "target_dates": 29
+          }
+        ],
+        "city_hhi": 1.0,
+        "effective_city_count": 1.0,
+        "region_cost_share": {
+          "korea": 1.0
+        },
+        "top_1_city_cost_share": 1.0,
+        "top_3_city_cost_share": 1.0
+      },
+      "coverage": {
+        "events": 29,
+        "raw_wallet_rows": 1907,
+        "sample_truncated": false,
+        "target_dates": 29,
+        "weather_buy_rows": 1025,
+        "weather_rows": 1780,
+        "weather_trade_rows": 1554
+      },
+      "market_preference": {
+        "outcome_cost_share": {
+          "No": 0.682532,
+          "Yes": 0.317468
+        },
+        "price_cost_share": {
+          "1-5c": 0.000912,
+          "20-80c": 0.252506,
+          "5-20c": 0.01739,
+          "80-95c": 0.50178,
+          "<=1c": 0.000144,
+          ">=95c": 0.227268
+        },
+        "sell_trade_share": 0.340412,
+        "target_day_local_hour_cost_share": {
+          "00-06": 0.074782,
+          "06-10": 0.049213,
+          "10-14": 0.586144,
+          "14-18": 0.289861
+        },
+        "target_relation_cost_share": {
+          "pre_target": 0.082227,
+          "target_day": 0.917773
+        }
+      },
+      "source_examples": [
+        {
+          "city": "seoul",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Incheon Intl Airport Station in degrees Celsius on 28 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Incheon Intl Airport Station, available here: https://www.wunderground.com/history/daily/kr/incheon/RKSI.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-seoul-on-july-28-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/kr/incheon/RKSI"
+        }
+      ],
+      "wallet": "0x4f1164d1531b8fb77919df285c576628318553b0"
+    },
+    {
+      "concentration": {
+        "cities": [
+          {
+            "buy_cost": 1055.945874,
+            "buy_cost_share": 0.071704,
+            "buy_rows": 149,
+            "city": "wellington",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 895.57907,
+            "buy_cost_share": 0.060815,
+            "buy_rows": 136,
+            "city": "london",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 821.311231,
+            "buy_cost_share": 0.055771,
+            "buy_rows": 174,
+            "city": "shanghai",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 723.135372,
+            "buy_cost_share": 0.049105,
+            "buy_rows": 258,
+            "city": "chengdu",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 711.055173,
+            "buy_cost_share": 0.048284,
+            "buy_rows": 105,
+            "city": "los-angeles",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 695.368209,
+            "buy_cost_share": 0.047219,
+            "buy_rows": 128,
+            "city": "wuhan",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 597.733442,
+            "buy_cost_share": 0.040589,
+            "buy_rows": 95,
+            "city": "tokyo",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 593.211794,
+            "buy_cost_share": 0.040282,
+            "buy_rows": 129,
+            "city": "paris",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 523.632207,
+            "buy_cost_share": 0.035557,
+            "buy_rows": 69,
+            "city": "miami",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 470.60108,
+            "buy_cost_share": 0.031956,
+            "buy_rows": 156,
+            "city": "hong-kong",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 462.914229,
+            "buy_cost_share": 0.031434,
+            "buy_rows": 105,
+            "city": "munich",
+            "events": 4,
+            "target_dates": 4
+          },
+          {
+            "buy_cost": 427.48224,
+            "buy_cost_share": 0.029028,
+            "buy_rows": 102,
+            "city": "taipei",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 409.514149,
+            "buy_cost_share": 0.027808,
+            "buy_rows": 87,
+            "city": "mexico-city",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 402.259141,
+            "buy_cost_share": 0.027316,
+            "buy_rows": 87,
+            "city": "helsinki",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 392.134322,
+            "buy_cost_share": 0.026628,
+            "buy_rows": 84,
+            "city": "cape-town",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 355.652556,
+            "buy_cost_share": 0.024151,
+            "buy_rows": 106,
+            "city": "amsterdam",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 325.895803,
+            "buy_cost_share": 0.02213,
+            "buy_rows": 94,
+            "city": "nyc",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 325.29714,
+            "buy_cost_share": 0.022089,
+            "buy_rows": 55,
+            "city": "chongqing",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 306.977442,
+            "buy_cost_share": 0.020845,
+            "buy_rows": 74,
+            "city": "shenzhen",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 299.216417,
+            "buy_cost_share": 0.020318,
+            "buy_rows": 49,
+            "city": "madrid",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 270.379713,
+            "buy_cost_share": 0.01836,
+            "buy_rows": 24,
+            "city": "moscow",
+            "events": 1,
+            "target_dates": 1
+          },
+          {
+            "buy_cost": 239.505808,
+            "buy_cost_share": 0.016264,
+            "buy_rows": 46,
+            "city": "seoul",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 237.888483,
+            "buy_cost_share": 0.016154,
+            "buy_rows": 57,
+            "city": "singapore",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 231.48582,
+            "buy_cost_share": 0.015719,
+            "buy_rows": 52,
+            "city": "manila",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 201.695587,
+            "buy_cost_share": 0.013696,
+            "buy_rows": 32,
+            "city": "kuala-lumpur",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 192.577882,
+            "buy_cost_share": 0.013077,
+            "buy_rows": 52,
+            "city": "milan",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 178.587264,
+            "buy_cost_share": 0.012127,
+            "buy_rows": 57,
+            "city": "chicago",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 171.20479,
+            "buy_cost_share": 0.011626,
+            "buy_rows": 60,
+            "city": "guangzhou",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 169.707993,
+            "buy_cost_share": 0.011524,
+            "buy_rows": 34,
+            "city": "seattle",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 163.925916,
+            "buy_cost_share": 0.011131,
+            "buy_rows": 39,
+            "city": "istanbul",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 161.836852,
+            "buy_cost_share": 0.01099,
+            "buy_rows": 84,
+            "city": "busan",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 148.464323,
+            "buy_cost_share": 0.010082,
+            "buy_rows": 52,
+            "city": "ankara",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 148.437345,
+            "buy_cost_share": 0.01008,
+            "buy_rows": 24,
+            "city": "sao-paulo",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 145.686591,
+            "buy_cost_share": 0.009893,
+            "buy_rows": 20,
+            "city": "panama-city",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 144.507591,
+            "buy_cost_share": 0.009813,
+            "buy_rows": 27,
+            "city": "jeddah",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 135.72448,
+            "buy_cost_share": 0.009216,
+            "buy_rows": 46,
+            "city": "buenos-aires",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 118.55356,
+            "buy_cost_share": 0.00805,
+            "buy_rows": 10,
+            "city": "lucknow",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 115.548884,
+            "buy_cost_share": 0.007846,
+            "buy_rows": 16,
+            "city": "san-francisco",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 110.652966,
+            "buy_cost_share": 0.007514,
+            "buy_rows": 32,
+            "city": "beijing",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 99.32593,
+            "buy_cost_share": 0.006745,
+            "buy_rows": 24,
+            "city": "tel-aviv",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 95.11675,
+            "buy_cost_share": 0.006459,
+            "buy_rows": 30,
+            "city": "karachi",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 85.333864,
+            "buy_cost_share": 0.005795,
+            "buy_rows": 39,
+            "city": "toronto",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 84.26187,
+            "buy_cost_share": 0.005722,
+            "buy_rows": 26,
+            "city": "dallas",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 75.67995,
+            "buy_cost_share": 0.005139,
+            "buy_rows": 34,
+            "city": "atlanta",
+            "events": 3,
+            "target_dates": 3
+          },
+          {
+            "buy_cost": 73.421993,
+            "buy_cost_share": 0.004986,
+            "buy_rows": 38,
+            "city": "qingdao",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 64.82705,
+            "buy_cost_share": 0.004402,
+            "buy_rows": 11,
+            "city": "warsaw",
+            "events": 1,
+            "target_dates": 1
+          },
+          {
+            "buy_cost": 64.09473,
+            "buy_cost_share": 0.004352,
+            "buy_rows": 23,
+            "city": "austin",
+            "events": 2,
+            "target_dates": 2
+          },
+          {
+            "buy_cost": 3.035073,
+            "buy_cost_share": 0.000206,
+            "buy_rows": 4,
+            "city": "houston",
+            "events": 2,
+            "target_dates": 2
+          }
+        ],
+        "city_hhi": 0.033982,
+        "effective_city_count": 29.427362,
+        "region_cost_share": {
+          "china_mainland": 0.219156,
+          "hong_kong": 0.031956,
+          "korea": 0.027253,
+          "other": 0.568746,
+          "united_states": 0.152889
+        },
+        "top_1_city_cost_share": 0.071704,
+        "top_3_city_cost_share": 0.18829
+      },
+      "coverage": {
+        "events": 145,
+        "raw_wallet_rows": 5500,
+        "sample_truncated": true,
+        "target_dates": 6,
+        "weather_buy_rows": 3235,
+        "weather_rows": 3373,
+        "weather_trade_rows": 3256
+      },
+      "market_preference": {
+        "outcome_cost_share": {
+          "Yes": 1.0
+        },
+        "price_cost_share": {
+          "1-5c": 0.024513,
+          "20-80c": 0.488629,
+          "5-20c": 0.080889,
+          "80-95c": 0.351724,
+          "<=1c": 0.008019,
+          ">=95c": 0.046226
+        },
+        "sell_trade_share": 0.00645,
+        "target_day_local_hour_cost_share": {
+          "00-06": 0.004053,
+          "06-10": 0.036276,
+          "10-14": 0.393765,
+          "14-18": 0.473114,
+          "18-24": 0.092791
+        },
+        "target_relation_cost_share": {
+          "target_day": 1.0
+        }
+      },
+      "source_examples": [
+        {
+          "city": "wellington",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Wellington Intl Airport Station in degrees Celsius on 29 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Wellington Intl Airport Station, available here: https://www.wunderground.com/history/daily/nz/wellington/NZWN.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-wellington-on-july-29-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/nz/wellington/NZWN"
+        },
+        {
+          "city": "london",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the London City Airport Station in degrees Celsius on 28 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the London City Airport Station, available here: https://www.wunderground.com/history/daily/gb/london/EGLC.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-london-on-july-28-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/gb/london/EGLC"
+        },
+        {
+          "city": "shanghai",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Shanghai Pudong International Airport Station in degrees Celsius on 28 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Shanghai Pudong International Airport Station, available here: https://www.wunderground.com/history/daily/cn/shanghai/ZSPD.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-shanghai-on-july-28-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/shanghai/ZSPD"
+        },
+        {
+          "city": "chengdu",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Chengdu Shuangliu International Airport Station in degrees Celsius on 29 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Chengdu Shuangliu International Airport Station, available here: https://www.wunderground.com/history/daily/cn/chengdu/ZUUU.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Celsius (eg, 9°C). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-chengdu-on-july-29-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/cn/chengdu/ZUUU"
+        },
+        {
+          "city": "los-angeles",
+          "description": "This market will resolve to the temperature range that contains the highest temperature recorded at the Los Angeles International Airport Station in degrees Fahrenheit on 28 Jul '26.\n\nThe resolution source for this market will be information from Wunderground, specifically the highest temperature recorded for all times on this day for the Los Angeles International Airport Station, available here: https://www.wunderground.com/history/daily/us/ca/los-angeles/KLAX.\n\nTo toggle between Fahrenheit and Celsius, click the gear icon next to the search bar and switch the Temperature setting between °F and °C.\n\nThis market can not resolve until the first data point for the following date has been published on the resolution source.\n\nThe resolution source for this market measures temperatures to whole degrees Fahrenheit (eg, 21°F). Thus, this is the level of precision that will be used when resolving the market.\n\nRevisions to temperatures recorded within this market's timeframe will be considered until the first datapoint for the following date has been published, after which any alterations will not be considered.",
+          "event_slug": "highest-temperature-in-los-angeles-on-july-28-2026",
+          "resolution_source": "https://www.wunderground.com/history/daily/us/ca/los-angeles/KLAX"
+        }
+      ],
+      "wallet": "0x43cb4ae1f4ddc9e671486c79c9f40a6fd98b84df"
+    }
+  ]
+}
