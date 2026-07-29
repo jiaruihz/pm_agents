@@ -3,6 +3,7 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "$PROJECT_DIR/scripts/ops/weather_jrs_tmux_env.sh"
+source "$PROJECT_DIR/scripts/ops/weather_process_supervision.sh"
 SERVICE_DIR="${WEATHER_DATA_FEED_SERVICE_DIR:-$HOME/projects/weather_data_feed_service}"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
 OUTPUT_ROOT="${WEATHER_DATA_FEED_TARGETED_OUTPUT_ROOT:-$RUNTIME_ROOT/targeted_output}"
@@ -39,6 +40,10 @@ SNAPSHOT_ORDERBOOK_WORKERS="${WEATHER_DATA_FEED_ORDERBOOK_WORKERS:-1}"
 MARKET_PROXY_PROBE_TIMEOUT_SEC="${WEATHER_MARKET_PROXY_PROBE_TIMEOUT_SEC:-5}"
 MARKET_PROXY_1X_CANDIDATES="${WEATHER_MARKET_PROXY_1X_CANDIDATES:-🇭🇰 香港 01丨1x HK,🇭🇰 香港 02丨1x HK,🇭🇰 香港 03丨1x HK,🇭🇰 香港家宽 01丨1x HK,🇭🇰 香港家宽 02丨1x HK,🇭🇰 香港家宽 03丨1x HK,🇭🇰 香港家宽 04丨1x HK,🇯🇵 日本 01丨1x JP,🇯🇵 日本 02丨1x JP,🇯🇵 日本 03丨1x JP}"
 MARKET_PROXY_FAILOVER_SCRIPT="${WEATHER_MARKET_PROXY_FAILOVER_SCRIPT:-$HOME/projects/pm_agents/scripts/ops/weather_market_proxy_failover.py}"
+OBS_TIMEOUT_SEC="${WEATHER_DATA_FEED_OBS_TIMEOUT_SEC:-90}"
+SOURCE_EVENTS_TIMEOUT_SEC="${WEATHER_DATA_FEED_SOURCE_EVENTS_TIMEOUT_SEC:-120}"
+FORECAST_ENRICHMENT_TIMEOUT_SEC="${WEATHER_DATA_FEED_FORECAST_ENRICHMENT_TIMEOUT_SEC:-120}"
+SNAPSHOT_TIMEOUT_SEC="${WEATHER_DATA_FEED_SNAPSHOT_TIMEOUT_SEC:-600}"
 
 mkdir -p "$LOOP_DIR" "$(dirname "$OBS_OUTPUT")" "$SOURCE_EVENTS_OUTPUT" "$FORECAST_ENRICHMENT_OUTPUT" "$RUNWAY_OBSERVATIONS_OUTPUT" "$HIGH_FREQUENCY_OBSERVATIONS_OUTPUT" "$OUTPUT_ROOT" "$CACHE_ROOT"
 
@@ -109,12 +114,24 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
   next_runway_observations=0
   next_high_frequency_observations=0
   next_snapshot=0
+  snapshot_supervisor_pid=""
   while true; do
+    if [[ -n "$snapshot_supervisor_pid" ]] && ! kill -0 "$snapshot_supervisor_pid" 2>/dev/null; then
+      set +e
+      wait "$snapshot_supervisor_pid"
+      rc=$?
+      set -e
+      date -u +"[mac_data_feed] snapshot_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
+      snapshot_supervisor_pid=""
+      next_snapshot=$(( $(date +%s) + SNAPSHOT_INTERVAL_SEC ))
+    fi
+
     now="$(date +%s)"
     if (( now >= next_obs )); then
       date -u +"[mac_data_feed] observations_start_utc=%Y-%m-%dT%H:%M:%SZ"
       set +e
-      "$PY" -u -m weather_data_feed_service \
+      weather_run_with_timeout "$OBS_TIMEOUT_SEC" \
+        "$PY" -u -m weather_data_feed_service \
         observations \
         --output "$OBS_OUTPUT" \
         --include-station-diff \
@@ -140,7 +157,8 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
       if [[ -n "$SOURCE_EVENTS_RESEARCH_CITIES" ]]; then
         source_events_args+=(--include-research-cities --research-cities "${SOURCE_EVENTS_RESEARCH_CITY_ARGS[@]}")
       fi
-      WEATHER_DATA_FEED_SOURCE_EVENTS_OUTPUT_DIR="$SOURCE_EVENTS_OUTPUT" \
+      weather_run_with_timeout "$SOURCE_EVENTS_TIMEOUT_SEC" \
+        env WEATHER_DATA_FEED_SOURCE_EVENTS_OUTPUT_DIR="$SOURCE_EVENTS_OUTPUT" \
         "$PY" -u -m weather_data_feed_service \
           source-events -- \
           "${source_events_args[@]}"
@@ -154,7 +172,8 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
     if [[ "$FORECAST_ENRICHMENT_ENABLED" == "1" ]] && (( now >= next_forecast_enrichment )); then
       date -u +"[mac_data_feed] forecast_enrichment_start_utc=%Y-%m-%dT%H:%M:%SZ"
       set +e
-      "$PY" -u -m weather_data_feed_service \
+      weather_run_with_timeout "$FORECAST_ENRICHMENT_TIMEOUT_SEC" \
+        "$PY" -u -m weather_data_feed_service \
         forecast-enrichment -- \
         --output-dir "$FORECAST_ENRICHMENT_OUTPUT" \
         --include-station-diff \
@@ -229,7 +248,7 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
     fi
 
     now="$(date +%s)"
-    if (( now >= next_snapshot )); then
+    if [[ -z "$snapshot_supervisor_pid" ]] && (( now >= next_snapshot )); then
       date -u +"[mac_data_feed] snapshot_start_utc=%Y-%m-%dT%H:%M:%SZ"
       if [[ -x "$MARKET_PROXY_FAILOVER_SCRIPT" ]]; then
         date -u +"[mac_data_feed] market_proxy_check_start_utc=%Y-%m-%dT%H:%M:%SZ"
@@ -248,17 +267,14 @@ date -u +"[mac_data_feed] loop_start_utc=%Y-%m-%dT%H:%M:%SZ pid=$$ output_root=$
           continue
         fi
       fi
-      set +e
-      "$PY" -u -m weather_data_feed_service \
+      weather_start_with_timeout_async "$SNAPSHOT_TIMEOUT_SEC" \
+        "$PY" -u -m weather_data_feed_service \
         --output-root "$OUTPUT_ROOT" \
         --cache-root "$CACHE_ROOT" \
         "$SNAPSHOT_COMMAND" -- \
         --orderbook-budget-sec "$SNAPSHOT_ORDERBOOK_BUDGET_SEC" \
         --orderbook-workers "$SNAPSHOT_ORDERBOOK_WORKERS"
-      rc=$?
-      set -e
-      date -u +"[mac_data_feed] snapshot_done_utc=%Y-%m-%dT%H:%M:%SZ returncode=$rc"
-      next_snapshot=$(( $(date +%s) + SNAPSHOT_INTERVAL_SEC ))
+      snapshot_supervisor_pid="$WEATHER_ASYNC_PID"
     fi
 
     sleep 10
