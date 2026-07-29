@@ -14,6 +14,10 @@
 再讨论 fee-adjusted 表达。快源只按 source→official/settlement→book 的 first-seen 链积累 collector/shadow
 证据；少量事件、运行中的 probe、历史正 ROI 都不自动升级为 live 结论。
 
+**研究状态与生产状态分开**：registry/freeze 只回答 alpha 是否确认，不能证明当前进程是否真实下单；
+任何 `live/shadow/zero-notional` 判断以 production manifest、进程参数、raw order 与 exchange response 为准，
+不得在系统提示词里硬编码某实例“当前未授权/当前 live”。
+
 ## 1. 系统主轴：一条量化血缘，所有工作都挂上去
 
 本项目不是一堆独立脚本，是一个有完整血缘的量化系统：
@@ -49,6 +53,7 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
 
 机器：
 - **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）：Mac 目前跑 data-feed snapshot/orderbook、dashboard，以及若干 live probe / paper executor / zero-notional shadow；具体清单每次用 `ps` + LaunchAgent/tmux/screen + raw order files 动态盘点，不在本文件硬编码。data-feed 因 macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，短期用 tmux 常驻；启动脚本是 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`。默认 `zsh`/Darwin，**不要套 `wsl`**。分析“最新/今天”先读取对应 Mac runtime raw；只有 canonical DB 缺目标窗口时才增量同步。全量重算必须显式同意并使用 `run_stack.sh --rebuild`。
+- **生产 identity 先跑 manifest**：`src/strategies/runtime/production.yaml` 只声明期望拓扑；`scripts/ops/weather_production_manifest.py --strict` 用 `ps/lsof/tmux/launchctl/runtime summary` 生成当前事实。物理 canonical DB 期望在 `/Volumes/jrs/pm_agents/runtime/weather.db`；仓库 `runtime/weather.db` 只是兼容入口，健康时必须与前者解析为同一 device/inode。出现 split、非 canonical DB consumer、异常生产 checkout 或失败的 LaunchAgent 时，先处理 P0，不得根据旧文档继续分析、部署或重建。
 - **JRS 常驻进程只有一个许可上下文**：凡是读取或写入 `/Volumes/jrs` 的 collector、strategy、shadow、monitor、patrol，一律通过 `scripts/ops/weather_jrs_tmux_env.sh` 解析并复用 `tmux -L weather-data-feed-jrs`；不使用默认 tmux、`weather-jrs`、独立 socket、screen、nohup 或让 LaunchAgent 直接承载 JRS 子进程。启动器必须先在目标 tmux server **内部**完成 JRS write probe；“进程/session 存在”不算健康，巡检必须同时检查上游 producer state freshness、子循环 returncode、下游 runner latest。公共 start/stop 脚本不暴露 socket 或 process-manager/start-mode 开关，只允许调整 session 名与业务参数；新增或修改任何入口时先改共享 helper 和一致性测试，禁止再逐脚本发明启动上下文。
   权限宿主固定为已授予 macOS「完全磁盘访问权限」且由 helper 校验 path/hash 的 Homebrew Cellar tmux binary；升级 tmux 时必须先授权新 binary、更新 pin 并在维护窗口重建 canonical server，禁止跟随 symlink 静默切换。
 - **N100** `ssh jiarui@192.168.0.200 '<command>'`：7/1 发生 ext4 emergency read-only / IO error 事故后，不再当作当前生产 truth；修复前只作为历史正本和备份抢救对象。恢复 N100 生产前先确认 `smartctl`/备份完整性/服务链路，而不是直接重启 timers。
@@ -153,8 +158,9 @@ scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --marke
 scripts/ops/sync_weather_remote.sh [--dry-run]
 ```
 
-读 `runtime/weather.db`（WAL，只读）：不要用无界交互式 sqlite，不在只读连接里跑 checkpoint/WAL 修复 PRAGMA。
+先跑 production manifest；只有 `status=healthy` 时才通过兼容入口读 `runtime/weather.db`（WAL，只读）。不要用无界交互式 sqlite，不在只读连接里跑 checkpoint/WAL 修复 PRAGMA。
 ```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
 sqlite3 -batch -cmd ".timeout 1000" runtime/weather.db "SELECT COUNT(*) FROM fact_signal_candidates;"
 ```
 ```python

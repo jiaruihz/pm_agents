@@ -1,7 +1,7 @@
 # Weather Analysis Contract
 
 Status: current-source
-Updated: 2026-06-16 settlement_outcomes source-grain layer; preserve content dates below
+Updated: 2026-07-29 production identity and canonical DB route preflight
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -16,6 +16,9 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 **禁止为了查询单笔订单、当前 runner 状态或少量 raw lineage，执行全库同步或重建。**
 
+0. 先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。物理 canonical DB 应为
+   `/Volumes/jrs/pm_agents/runtime/weather.db`，仓库 `runtime/weather.db` 必须是同一 device/inode 的兼容入口；
+   split 或存在非 canonical consumer 时停止 canonical 分析和 rebuild。
 1. 当前订单 / runner / 触发原因：先按 city、date、order_id 读取对应实例的 raw
    `orders.jsonl`、`events.jsonl`、`opportunities.jsonl`，并报告文件覆盖时间。
 2. 已有 canonical 分析：只读检查 `runtime/weather.db` 的 mtime、目标窗口覆盖和
@@ -46,7 +49,7 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 ### SQLite 查询可靠性（硬规定）
 
-`runtime/weather.db` 是 WAL 模式 SQLite。普通分析只读查询必须有明确 timeout，避免无界交互式 sqlite 卡住；不要在只读连接里运行 checkpoint / WAL 修复类 PRAGMA。
+manifest healthy 后，`runtime/weather.db` 是 JRS physical canonical 的兼容入口，也是 WAL 模式 SQLite。普通分析只读查询必须有明确 timeout，避免无界交互式 sqlite 卡住；不要在只读连接里运行 checkpoint / WAL 修复类 PRAGMA。
 
 CLI 推荐：
 

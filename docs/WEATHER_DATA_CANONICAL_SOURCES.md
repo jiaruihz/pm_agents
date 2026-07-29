@@ -1,7 +1,7 @@
 # Weather Data Canonical Sources
 
 Status: current-source
-Updated: 2026-07-15 Mac-first raw/canonical evidence routing
+Updated: 2026-07-29 JRS physical canonical DB identity
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -16,7 +16,8 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 >
 > **历史前提（2026-06-05 核实）**：
 > - **N100 上没有活跃的 SQLite DB**。所有生产数据以 JSONL/JSON 文件形态存在 `output/`（weather-predict）和 `runtime/weather_edge_v1/`（pm_agent）下。
-> - **本机 `runtime/weather.db` 是唯一的 weather SQLite DB**，由本机 ingest 脚本从两个 N100 镜像独立重建，**不是** N100 任何 DB 的拷贝。
+> - **Mac physical canonical 是 `/Volumes/jrs/pm_agents/runtime/weather.db`**；仓库 `runtime/weather.db`
+>   只允许作为指向同一 device/inode 的兼容入口。它由本机 ingest 独立重建，**不是** N100 DB 的拷贝。
 > - 如果你在 N100 上看到 `*.db` 文件，要么是 0 字节残留（已清理），要么是非 weather 用途（chatgpt-web-bot 之类）。任何分析都不要去 N100 上抓 SQLite。
 >
 > **2026-06-06 口径勘误**：`pm_history` 已结算价格可能是 `0.9995 / 0.0005`，不是精确 `1.0 / 0.0`。本机 ingest/builder 必须按 near-binary 规则归一化结算；旧口径生成的大量 `missing_bracket` 报告需要重算。
@@ -40,7 +41,9 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 | 概率模型 / 错误分布 cache | 当前 Mac data-feed cache + 本机 canonical mirror；N100 `gfs_365d_*` 只作历史输入 | 静默 model/source fallback |
 | 结算（pm_history） | `settlements` 表用于 condition_id trade join；`settlement_outcomes` 表用于 city/date/bracket basket 或 source-grain research | 旧 `t24_paper_ledger_summary.json` 的 "by_date" 块；策略脚本临时直读 raw pm_history |
 
-**唯一 DB**：`runtime/weather.db`。其他 `.db` 文件已搬到 `runtime/_legacy/`（见 §3）。
+**唯一 DB identity**：`/Volumes/jrs/pm_agents/runtime/weather.db`。`runtime/weather.db` 不是第二份 DB，而是同一
+文件的兼容入口。查询前运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`；若两者不是同一
+device/inode，属于 DB split P0，不得任选一份继续分析或重建。其他历史 `.db` 文件见 `runtime/_legacy/`（§3）。
 
 ---
 
