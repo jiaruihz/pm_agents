@@ -8,8 +8,8 @@
   "source_event_grain": "distinct_observation_timestamp_first_seen",
   "source_poll_interval_seconds": 5,
   "source_capture_local_window": {
-    "start_hour": 0,
-    "end_hour": 24
+    "start_hour": 6,
+    "end_hour": 22
   },
   "path_window_minutes": [
     5,
