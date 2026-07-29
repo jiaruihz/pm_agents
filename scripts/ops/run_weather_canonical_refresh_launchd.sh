@@ -45,10 +45,16 @@ export http_proxy="$MARKET_PROXY" https_proxy="$MARKET_PROXY" all_proxy="$MARKET
   --db-path "$DB_PATH" \
   --active-live-only \
   --project-root "$PROJECT_DIR"
+"$PROJECT_DIR/.venv/bin/python" scripts/ops/reconcile_weather_order_execution_aliases.py \
+  --db-path "$DB_PATH" \
+  --apply \
+  --json-out "$PROJECT_DIR/runtime/_dashboard_logs/order_execution_aliases.json"
 clob_synced=0
 for attempt in 1 2 3; do
   if "$PROJECT_DIR/.venv/bin/python" -m weather_dashboard.ingest.clob_fill_sync \
-    --db-path "$DB_PATH"; then
+    --db-path "$DB_PATH" \
+    --require-authenticated \
+    --lookback-hours 72; then
     clob_synced=1
     break
   fi
