@@ -667,18 +667,43 @@ def build(conn: sqlite3.Connection) -> tuple[list[dict], list[str]]:
     return fact_rows, alerts
 
 
-def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
-    conn.execute("DROP TABLE IF EXISTS fact_trades")
-    conn.execute(FACT_DDL)
-    if not rows:
-        return
-    cols = list(rows[0].keys())
-    placeholders = ",".join("?" for _ in cols)
-    col_list = ",".join(cols)
-    conn.executemany(
-        f"INSERT INTO fact_trades ({col_list}) VALUES ({placeholders})",
-        [[r[c] for c in cols] for r in rows],
+def _fact_ddl(table_name: str) -> str:
+    if not table_name.replace("_", "").isalnum():
+        raise ValueError(f"invalid fact table name: {table_name}")
+    return FACT_DDL.replace(
+        "CREATE TABLE IF NOT EXISTS fact_trades",
+        f"CREATE TABLE IF NOT EXISTS {table_name}",
+        1,
     )
+
+
+def write_db(conn: sqlite3.Connection, rows: list[dict]) -> None:
+    """Build beside the published fact, then atomically replace it.
+
+    The old implementation dropped ``fact_trades`` before inserting every row,
+    holding a schema-changing write transaction for the whole rebuild.  On the
+    shared production DB that blocked live runtime-state heartbeats.  Readers
+    now keep seeing the prior complete table until the short final rename.
+    """
+    staging_table = "fact_trades_next"
+    conn.execute(f"DROP TABLE IF EXISTS {staging_table}")
+    conn.execute(_fact_ddl(staging_table))
+    conn.commit()
+    if not rows:
+        conn.commit()
+    else:
+        cols = list(rows[0].keys())
+        placeholders = ",".join("?" for _ in cols)
+        col_list = ",".join(cols)
+        conn.executemany(
+            f"INSERT INTO {staging_table} ({col_list}) VALUES ({placeholders})",
+            [[r[c] for c in cols] for r in rows],
+        )
+        conn.commit()
+
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute("DROP TABLE IF EXISTS fact_trades")
+    conn.execute(f"ALTER TABLE {staging_table} RENAME TO fact_trades")
     conn.commit()
 
 

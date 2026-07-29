@@ -17,7 +17,7 @@ if pgrep -f "weather_current_yes_core_carry_tiny_live_v2.py loop" >/dev/null 2>&
 fi
 
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" \
-  "cd '$ROOT' && exec '$PY' -u scripts/ops/weather_current_yes_core_carry_tiny_live_v2.py loop \
+  "cd '$ROOT' && export PYTHONPATH='$ROOT' && exec '$PY' -u scripts/ops/weather_current_yes_core_carry_tiny_live_v2.py loop \
     --snapshot-dir '$RUNTIME_ROOT/targeted_output/paper_snapshots' \
     --observation-cache '$RUNTIME_ROOT/output/observations/latest.json' \
     --forecast-curve-dir '$RUNTIME_ROOT/targeted_output/forecast_hourly_curves' \

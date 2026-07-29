@@ -86,7 +86,7 @@ weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || t
 pkill -f "$PROJECT_DIR/scripts/ops/weather_fast_source_prev_no_trial.py --loop" 2>/dev/null || true
 printf -v quoted_cmd '%q ' "${cmd[@]}"
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \
-  "cd $(printf '%q' "$PROJECT_DIR") && set -a && [[ -f .env ]] && source .env || true && set +a && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
+  "cd $(printf '%q' "$PROJECT_DIR") && set -a && [[ -f .env ]] && source .env || true && set +a && export PYTHONPATH=$(printf '%q' "$PROJECT_DIR") && exec $quoted_cmd >> $(printf '%q' "$LOG_FILE") 2>&1"
 echo "tmux:$TMUX_SESSION" > "$PID_FILE"
 
 echo "started fast_source_prev_no_trial tmux_socket=$TMUX_SOCKET session=$TMUX_SESSION"

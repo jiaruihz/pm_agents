@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Iterator
+from copy import deepcopy
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -175,8 +176,11 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
     ]
     if not raw_paths:
         raise ValueError("forward runner requires raw information-event inputs")
-    conn = sqlite3.connect(args.db)
+    conn = sqlite3.connect(args.db, timeout=float(args.db_lock_timeout_seconds))
     conn.row_factory = sqlite3.Row
+    conn.execute(
+        f"PRAGMA busy_timeout={max(1, int(float(args.db_lock_timeout_seconds) * 1000))}"
+    )
     try:
         apply_schema_canonical(conn)
         conn.execute(FORECAST_CURVE_DDL)
@@ -231,10 +235,47 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-snapshot-lag-minutes", type=float, default=20.0)
     parser.add_argument("--snapshot-lookback-files", type=int, default=48)
     parser.add_argument("--event-limit", type=int, default=500)
+    parser.add_argument("--db-lock-timeout-seconds", type=float, default=60.0)
+    parser.add_argument("--db-lock-retries", type=int, default=5)
+    parser.add_argument("--db-lock-retry-delay-seconds", type=float, default=5.0)
     parser.add_argument("--bootstrap-at-end", action="store_true")
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-seconds", type=float, default=60.0)
     return parser
+
+
+def run_cycle_with_lock_retry(
+    args: argparse.Namespace,
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    for attempt in range(max(0, int(args.db_lock_retries)) + 1):
+        working_state = deepcopy(state)
+        try:
+            result = run_cycle(args, working_state)
+            state.clear()
+            state.update(working_state)
+            return result
+        except sqlite3.OperationalError as exc:
+            lock_error = "locked" in str(exc).lower() or "busy" in str(exc).lower()
+            if not lock_error or attempt >= int(args.db_lock_retries):
+                raise
+            delay = max(0.0, float(args.db_lock_retry_delay_seconds)) * (attempt + 1)
+            print(
+                json.dumps(
+                    {
+                        "status": "db_lock_retry",
+                        "attempt": attempt + 1,
+                        "max_retries": int(args.db_lock_retries),
+                        "delay_seconds": delay,
+                        "error": str(exc),
+                        "state_offsets_advanced": False,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+            time.sleep(delay)
+    raise AssertionError("unreachable lock retry loop")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -242,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     state_path = Path(args.state)
     state = _read_state(state_path)
     while True:
-        result = run_cycle(args, state)
+        result = run_cycle_with_lock_retry(args, state)
         _write_state(state_path, state)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True), flush=True)
         if not args.loop:

@@ -27,8 +27,8 @@ if weather_jrs_tmux "$SOCKET" has-session -t "$SESSION" 2>/dev/null; then
 fi
 
 command_string="$(
-  printf "cd %q && exec %q -u scripts/ops/weather_first_seen_zero_notional_forward.py" \
-    "$REPO_ROOT" "$PY"
+  printf "cd %q && export PYTHONPATH=%q && exec %q -u scripts/ops/weather_first_seen_zero_notional_forward.py" \
+    "$REPO_ROOT" "$REPO_ROOT" "$PY"
   printf " --db %q" "$DB_PATH"
   printf " --out %q" "$OUTPUT_DIR/candidates.jsonl"
   printf " --state %q" "$OUTPUT_DIR/state.json"
@@ -43,6 +43,9 @@ command_string="$(
   printf " --max-snapshot-lag-minutes 20"
   printf " --snapshot-lookback-files 48"
   printf " --event-limit 500"
+  printf " --db-lock-timeout-seconds 60"
+  printf " --db-lock-retries 5"
+  printf " --db-lock-retry-delay-seconds 5"
   printf " --bootstrap-at-end --loop --interval-seconds 60"
   printf " >> %q 2>&1" "$OUTPUT_DIR/forward.log"
 )"
