@@ -131,3 +131,46 @@ the log by about 1KB instead of serializing the full state.
 
 Production commits: `4f5e1b94`, `e457f011`, `dbff6e9e`, `e5342069`.
 Mainline commits: `1ce084f9`, `937a8dba`, `7e1cdbcb`.
+
+## Targeted orderbook coverage and batch alignment
+
+The snapshot collector's nominal 60-second orderbook budget started before
+sequential forecast/Gamma work. Time spent outside CLOB requests therefore
+consumed the budget, and most later target rows were mislabeled
+`orderbook_budget_exhausted`; non-target rows could receive the same misleading
+label. The completed 13:25 Beijing snapshot had 968 records but only 33
+successful books in its archive, versus 1,386 side rows marked budget-exhausted.
+The last 20 pre-fix snapshots all had only 23–41 successful books and roughly
+1,300–1,560 exhausted side rows. The earliest directly verified affected
+capture is `2026-07-01T18:01Z`; 2,314 published snapshot files existed at fix
+time, so this is a long-lived coverage defect, but a full 9GB historical
+rescan was not performed and the exact affected-file count is not asserted.
+
+Corrections:
+
+- budget accounting now measures only CLOB batch work;
+- four workers and a 120-second targeted budget are explicit production
+  parameters;
+- scope-skipped and genuinely incomplete targets are separate states;
+- every snapshot publishes an aggregate target-coverage contract;
+- production health fails incomplete targeted coverage;
+- forecast curves and the compressed orderbook archive become durable before
+  the final snapshot path is atomically published;
+- forecast first-seen lookup scans only capture-date directories capable of
+  containing the current target dates instead of all 2,314 historical
+  captures.
+
+The first fully validated production batch used snapshot timestamp
+`2026-07-29T05:51:32Z`:
+
+| Artifact | Evidence |
+|---|---|
+| snapshot | 979 records, atomically visible at 05:55:16Z |
+| targeted orderbooks | 130/130 `ok`, 0 incomplete, 18.263 seconds of CLOB work |
+| orderbook archive | 130 rows, all `ok`, same snapshot timestamp |
+| forecast curves | 98 rows, same snapshot timestamp, durable before snapshot |
+| full snapshot cycle | 05:51:32Z–05:55:31Z, 3m59s, `returncode=0` |
+| production health | `snapshot_orderbook_coverage=ok`, overall `warn` only for non-trading weather-state coverage |
+
+Production commits: `d534fa9c`, `85b7f112`, `d40fb26a`.
+Mainline commits: `cf40b586`, `bac065e9`.
