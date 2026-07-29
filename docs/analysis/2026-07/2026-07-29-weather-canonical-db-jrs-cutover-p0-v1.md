@@ -96,3 +96,38 @@ fills. The final code-loading restart added zero live-order rows (`125 -> 125`).
 - canonical-refresh: stopped intentionally
 - first-seen zero-notional: stopped intentionally
 - rollback DBs: retained; nothing deleted
+
+## Data-feed starvation follow-up
+
+The production feed loop was sequential: one slow `snapshot-targeted` cycle
+blocked observations and source-events for more than four minutes. Initial
+child deadlines exposed the failure but a 240-second snapshot deadline also
+terminated a legitimate long snapshot, leaving forecast-curve capture out of
+sync with the newest partial snapshot.
+
+The snapshot producer now runs as one supervised, non-overlapping asynchronous
+child in the same canonical JRS tmux context. Observations, source-events and
+forecast enrichment retain bounded synchronous deadlines; snapshot retains a
+600-second hard deadline without starving those producers. Production evidence:
+
+- snapshot ran `05:25:34Z..05:31:18Z` and completed `returncode=0`;
+- while it was still running, source-events completed at `05:29:33Z` and
+  observations completed at `05:29:48Z`;
+- final health was `warn`, not `fail`: snapshot parity/source model/forecast
+  curves/orderbook/live-cross were healthy, with only the explicit Chicago
+  `awaiting_first_observation` local-midnight window and a non-trading
+  TelAviv weather-state gap remaining.
+
+Chicago's three-source chain was not broken. At 05:17Z Chicago local time was
+00:17 and the newest KORD report was the prior local day at 23:51. This normal
+pre-first-report interval is now emitted as `awaiting_first_observation` for a
+bounded 90-minute grace, never as `fetch_failed`, and does not reuse the prior
+day's running maximum.
+
+`source-events` also printed its complete cumulative private `_state` every two
+minutes; the tmux log had reached about 400MB. CLI logging now excludes private
+state and records only the bounded summary. The first deployed cycle increased
+the log by about 1KB instead of serializing the full state.
+
+Production commits: `4f5e1b94`, `e457f011`, `dbff6e9e`, `e5342069`.
+Mainline commits: `1ce084f9`, `937a8dba`, `7e1cdbcb`.
