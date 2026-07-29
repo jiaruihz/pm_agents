@@ -1,0 +1,4 @@
+city,source,training_clock_class,distinct_observations,dates,first_date,last_date
+Helsinki,fmi,observation_clock_archive_not_pit,1194,13,2026-07-08,2026-07-20
+Amsterdam,knmi,observation_clock_archive_not_pit,1667,15,2026-06-18,2026-07-26
+Tokyo,jma_amedas,observation_clock_archive_not_pit,1424,13,2026-07-08,2026-07-20
