@@ -1,0 +1,53 @@
+{
+  "schema_version": "korea_first_seen_collector_config_v1",
+  "cities": [
+    "Seoul",
+    "Busan"
+  ],
+  "source": "amos_runway",
+  "source_event_grain": "distinct_observation_timestamp_first_seen",
+  "source_poll_interval_seconds": 5,
+  "source_capture_local_window": {
+    "start_hour": 0,
+    "end_hour": 24
+  },
+  "path_window_minutes": [
+    5,
+    15,
+    30,
+    60
+  ],
+  "market_capture": {
+    "enabled": true,
+    "local_window_start_hour": 6,
+    "local_window_end_hour": 22,
+    "minimum_interval_seconds_per_city": 55,
+    "fresh_event_max_age_seconds": 180,
+    "relative_bracket_offsets": [
+      -1,
+      0,
+      1,
+      2,
+      3
+    ],
+    "outcomes": [
+      "yes",
+      "no"
+    ],
+    "book_depth_levels": 20,
+    "markout_horizon_seconds": [
+      60,
+      120,
+      300
+    ]
+  },
+  "forecast_context": {
+    "enabled": true,
+    "windows": [
+      "to_peak",
+      "remaining_3h",
+      "future_3h"
+    ]
+  },
+  "mode": "zero_notional_research_collector"
+}
