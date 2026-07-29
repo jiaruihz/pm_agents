@@ -434,7 +434,11 @@ def main(argv: list[str] | None = None) -> int:
     write_outputs(payload, Path(args.output_dir))
     print(
         json.dumps(
-            {k: v for k, v in payload.items() if k not in {"records", "append_records"}},
+            {
+                k: v
+                for k, v in payload.items()
+                if k not in {"records", "append_records"} and not k.startswith("_")
+            },
             ensure_ascii=False,
             sort_keys=True,
         )

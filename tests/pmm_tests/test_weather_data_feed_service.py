@@ -357,6 +357,29 @@ def test_source_events_builds_append_only_rows_without_proxy(monkeypatch, tmp_pa
     assert (tmp_path / "source_events" / "latest.json").exists()
 
 
+def test_source_events_cli_summary_excludes_private_state(monkeypatch, capsys, tmp_path) -> None:
+    from weather_data_feed_service import source_events
+
+    monkeypatch.setattr(
+        source_events,
+        "build_events",
+        lambda _args: {
+            "status": "ok",
+            "rows": 1,
+            "records": [{"city": "Chicago"}],
+            "append_records": [{"city": "Chicago"}],
+            "_state": {"large": "private"},
+            "_state_path": str(tmp_path / "state.json"),
+        },
+    )
+    monkeypatch.setattr(source_events, "write_outputs", lambda *_args: None)
+
+    assert source_events.main(["--output-dir", str(tmp_path)]) == 0
+    summary = json.loads(capsys.readouterr().out)
+
+    assert summary == {"rows": 1, "status": "ok"}
+
+
 def test_source_events_recovers_missing_awc_report_as_late_backfill(tmp_path) -> None:
     from weather_data_feed_service import source_events
 
