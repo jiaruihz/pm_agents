@@ -193,6 +193,7 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
                 state,
                 bootstrap_at_end=initial_bootstrap,
             ),
+            batch_size=max(1, int(args.db_write_batch_size)),
         )
         state["raw_bootstrapped"] = True
         snapshot_files = []
@@ -207,6 +208,8 @@ def run_cycle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]
             feature_store=Path(args.feature_store),
             max_snapshot_lag_minutes=float(args.max_snapshot_lag_minutes),
             event_limit=args.event_limit,
+            candidate_batch_size=max(1, int(args.db_write_batch_size)),
+            attach_candidate_settlements=False,
         )
         exported = export_new_candidates(conn, Path(args.out), state)
     finally:
@@ -238,6 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db-lock-timeout-seconds", type=float, default=60.0)
     parser.add_argument("--db-lock-retries", type=int, default=5)
     parser.add_argument("--db-lock-retry-delay-seconds", type=float, default=5.0)
+    parser.add_argument("--db-write-batch-size", type=int, default=25)
     parser.add_argument("--bootstrap-at-end", action="store_true")
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--interval-seconds", type=float, default=60.0)

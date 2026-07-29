@@ -46,6 +46,7 @@ command_string="$(
   printf " --db-lock-timeout-seconds 60"
   printf " --db-lock-retries 5"
   printf " --db-lock-retry-delay-seconds 5"
+  printf " --db-write-batch-size 25"
   printf " --bootstrap-at-end --loop --interval-seconds 60"
   printf " >> %q 2>&1" "$OUTPUT_DIR/forward.log"
 )"

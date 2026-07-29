@@ -546,6 +546,8 @@ def materialize_pipeline(
     feature_store: Path,
     max_snapshot_lag_minutes: float,
     event_limit: int | None = None,
+    candidate_batch_size: int | None = None,
+    attach_candidate_settlements: bool = True,
 ) -> dict[str, int]:
     apply_first_seen_schema(conn)
     events = load_material_events(conn, limit=event_limit)
@@ -584,9 +586,17 @@ def materialize_pipeline(
             counters["missing_post_snapshot"] += 1
             continue
         candidate_inputs.extend(_candidate_inputs(event, checkpoint, previous, post))
-    candidate_result = materialize_candidate_rows(conn, candidate_inputs)
+    candidate_result = materialize_candidate_rows(
+        conn,
+        candidate_inputs,
+        batch_size=candidate_batch_size,
+    )
     counters.update({f"candidates_{key}": value for key, value in candidate_result.items()})
-    counters["settlements_attached"] = attach_settlements(conn)
+    if attach_candidate_settlements:
+        counters["settlements_attached"] = attach_settlements(conn)
+    else:
+        counters["settlements_attached"] = 0
+        counters["settlements_deferred"] = 1
     return dict(counters)
 
 

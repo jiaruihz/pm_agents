@@ -91,6 +91,8 @@ def candidate_row(
 def materialize_candidate_rows(
     conn: sqlite3.Connection,
     rows: Iterable[Mapping[str, Any]],
+    *,
+    batch_size: int | None = None,
 ) -> dict[str, int]:
     conn.execute(CANDIDATE_DDL)
     apply_first_seen_schema(conn)
@@ -100,6 +102,7 @@ def materialize_candidate_rows(
     inserted = 0
     duplicates = 0
     blocked = 0
+    pending = 0
     for raw in rows:
         checkpoint = conn.execute(
             """
@@ -127,6 +130,10 @@ def materialize_candidate_rows(
         else:
             duplicates += 1
         blocked += int(row.get("candidate_status") == "blocked")
+        pending += 1
+        if batch_size is not None and pending >= max(1, int(batch_size)):
+            conn.commit()
+            pending = 0
     conn.commit()
     return {
         "inserted": inserted,

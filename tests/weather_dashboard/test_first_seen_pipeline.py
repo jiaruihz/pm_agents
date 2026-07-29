@@ -6,6 +6,7 @@ import sqlite3
 
 from scripts.etl.build_weather_signal_candidates import (
     CANDIDATE_DDL,
+    FORECAST_CURVE_DDL,
     write_db_incremental,
 )
 from scripts.etl.materialize_weather_first_seen_pipeline import (
@@ -132,6 +133,7 @@ def test_real_raw_event_builds_feature_checkpoint_and_two_sided_candidates(tmp_p
     conn = sqlite3.connect(db)
     conn.row_factory = sqlite3.Row
     conn.execute(CANDIDATE_DDL)
+    conn.execute(FORECAST_CURVE_DDL)
     apply_schema_canonical(conn)
     result = materialize_pipeline(
         conn,
@@ -170,3 +172,24 @@ def test_forward_bootstrap_skips_history_then_reads_only_new_complete_lines(tmp_
     rows = list(_incremental_rows([raw], state, bootstrap_at_end=False))
 
     assert [row["sequence"] for row, _path in rows] == [2]
+
+
+def test_forward_pipeline_can_defer_bulk_settlement_updates(tmp_path) -> None:
+    conn = sqlite3.connect(tmp_path / "weather.db")
+    conn.row_factory = sqlite3.Row
+    conn.execute(CANDIDATE_DDL)
+    conn.execute(FORECAST_CURVE_DDL)
+    apply_schema_canonical(conn)
+
+    result = materialize_pipeline(
+        conn,
+        [],
+        feature_store=tmp_path / "feature_store",
+        max_snapshot_lag_minutes=20.0,
+        candidate_batch_size=1,
+        attach_candidate_settlements=False,
+    )
+
+    assert result["settlements_attached"] == 0
+    assert result["settlements_deferred"] == 1
+    conn.close()
