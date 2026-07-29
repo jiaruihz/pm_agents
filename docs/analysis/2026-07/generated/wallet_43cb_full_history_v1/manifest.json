@@ -1,0 +1,105 @@
+{
+  "artifact_row_stats": {
+    "event_metadata": {
+      "compressed_bytes": 13621264,
+      "rows": 2989,
+      "uncompressed_sha256": "b1286660919ffa0a5e48aa67f4afe29896d686ab21cc193d01512ce71a2f06de"
+    },
+    "weather_activity": {
+      "compressed_bytes": 18737058,
+      "rows": 212340,
+      "uncompressed_sha256": "f8bba590b083349e6b33d4839dea52df54eaa43908d9138bb363976cc6b50c49"
+    },
+    "weather_closed_positions": {
+      "compressed_bytes": 557855,
+      "rows": 2931,
+      "uncompressed_sha256": "8e167120ce72e0cad4bc603ce82f8c0da66d73d9771408e42044dc8ffa976fb6"
+    },
+    "weather_open_positions": {
+      "compressed_bytes": 3120372,
+      "rows": 15461,
+      "uncompressed_sha256": "342f06bff78da2cb254e4b5eff787594ccb0ea1afacaf5fbfcac76eeda245a89"
+    }
+  },
+  "artifacts": [
+    {
+      "bytes": 18737058,
+      "path": "weather_activity.jsonl.gz",
+      "sha256": "17f23ae2f165db627a5938e5cd1cc92643242c577bb04a6e1e5339ec57845b4c"
+    },
+    {
+      "bytes": 3120372,
+      "path": "weather_open_positions.jsonl.gz",
+      "sha256": "c270f4de44db549b00cb3069d98c711cdbe97432b45f141aa08a28feb36c51f0"
+    },
+    {
+      "bytes": 557855,
+      "path": "weather_closed_positions.jsonl.gz",
+      "sha256": "378a70c3716b2fb1539834e181ca34f027f8308645748a40a9f6fe0c08b9242b"
+    },
+    {
+      "bytes": 13621264,
+      "path": "event_metadata.jsonl.gz",
+      "sha256": "1bf3f98d37baa3b63854f62544d6ed88243d4402f720722c536b6d57da751c32"
+    },
+    {
+      "bytes": 1436,
+      "path": "leaderboard.json",
+      "sha256": "e9a628ffd7ded49f33908733bac39266d6a79ebbd86479964955e6b920a483ff"
+    }
+  ],
+  "completeness_notes": [
+    "Every activity leaf window returned fewer than 5,500 rows; saturated windows were recursively split.",
+    "Daily raw checkpoints retain all public activity rows, including non-weather activity; weather_activity is the client-side title-filtered derivative.",
+    "Adjacent API windows may share boundary rows; activity identity deduplication is applied per day and globally.",
+    "Closed positions are supporting discovery evidence only and are not used as a PnL source.",
+    "Public APIs do not expose private signals, unfilled/cancelled orders, maker intent, or original order-post timestamps."
+  ],
+  "coverage": {
+    "api_requests": 1118,
+    "complete_day_windows": 275,
+    "earliest_public_wallet_activity_utc": "2025-10-28T13:31:03+00:00",
+    "maximum_split_depth": 2,
+    "query_end_utc": "2026-07-29T12:12:49.663501+00:00",
+    "query_start_utc": "2025-10-28T00:00:00+00:00",
+    "raw_activity_rows_after_cross_day_dedupe": 353096,
+    "raw_activity_rows_before_cross_day_dedupe": 353104,
+    "recursive_split_nodes": 18,
+    "resumed_day_windows": 274,
+    "utc_day_windows": 275,
+    "weather_activity_rows": 212340,
+    "weather_activity_sides": {
+      "BUY": 208764,
+      "NONE": 2931,
+      "SELL": 645
+    },
+    "weather_activity_types": {
+      "MERGE": 15,
+      "REDEEM": 2907,
+      "SPLIT": 9,
+      "TRADE": 209409
+    },
+    "weather_conditions": 18392,
+    "weather_events": 2989,
+    "weather_transactions": 209591
+  },
+  "daily_checkpoint_directory": "daily_activity",
+  "event_metadata_checkpoint_directory": "event_metadata_by_slug",
+  "schema_version": "external_wallet_weather_history_v1",
+  "snapshot_completed_utc": "2026-07-29T12:17:55.311653+00:00",
+  "snapshot_started_utc": "2026-07-29T12:17:13.545082+00:00",
+  "supporting_endpoints": {
+    "closed_weather_position_rows": 2931,
+    "event_metadata_missing": 2,
+    "event_metadata_missing_slugs": [
+      "highest-temperature-in-austin-on-july-9-2026",
+      "highest-temperature-in-dallas-on-july-9-2026"
+    ],
+    "event_metadata_rows": 2989,
+    "event_slugs_union": 2989,
+    "gamma_market_rows": 32545,
+    "open_positions_market_batches": 307,
+    "open_weather_position_rows": 15461
+  },
+  "wallet": "0x43cb4ae1f4ddc9e671486c79c9f40a6fd98b84df"
+}

@@ -4,7 +4,8 @@
 
 - wallet：`0x43cb4ae1f4ddc9e671486c79c9f40a6fd98b84df`
 - snapshot：2026-07-29 11:16:12 UTC；leaderboard 11:10:40 UTC
-- public wallet：Polymarket Data API activity / trades；最新 5,500 rows
+- public wallet：Polymarket Data API activity / positions / closed-positions；
+  最新层分析最初使用 5,500 rows，现已另行补齐全公开历史
 - complete ladder / settlement：Gamma event markets；所有 bracket 按
   `city × target_date` 合并为一个互斥 event
 - PIT weather：本地 global observation archive，2026-07-28..29 共
@@ -15,8 +16,16 @@
   均匀抽 30 个独立 target dates（2025-12-29..2026-07-28），每个 event 重新按
   condition 拉取完整 activity；missing bracket = 0
 - unsettled：最新 50 events 中 11 个在快照时未结算，占 22%；只作结构描述
-- 最新 activity 达 API 5,500 rows 上限；完整账户 activity 递归抓取运行 16 分钟后
-  仍在遍历大量非 weather history，本轮明确中止，不把不完整结果伪装成全历史
+- 全历史补采：从账户最早公开记录 2025-10-28 13:31:03 UTC 至
+  2026-07-29 12:12:49 UTC，共 275 个 UTC 日窗口；饱和窗口递归拆分，
+  1,118 次 activity 请求、18 个 split nodes、最大深度 2
+- 全账户公开 activity 去重后 353,096 rows；其中 weather 212,340 rows、
+  TRADE 209,409 rows、REDEEM 2,907 rows；覆盖 2,989 个 weather events、
+  18,392 个 conditions、209,591 个 transactions
+- supporting snapshot：15,461 条逐 market position、2,931 条 closed-position；
+  Gamma 取回 2,987/2,989 个完整 events、32,545 个 bracket markets
+- Gamma 唯一缺口是 Austin / Dallas 2026-07-09 两个已下架 event；其 56 条 activity
+  和 14 个已交易 conditions 已保留，但不能把已交易档位误写成完整 ladder
 - 官方 leaderboard 用于长周期账户 PnL；不是账户本金 ROI，也不能替代
   opportunity denominator
 
@@ -27,6 +36,18 @@
 - [完整 event portfolios](generated/wallet_43cb_strategy_v1/event_portfolios.json)
 - [城市集中度](generated/wallet_43cb_strategy_v1/city_preferences.json)
 - [leaderboard 快照](generated/wallet_43cb_strategy_v1/leaderboard.json)
+- [全历史 manifest](generated/wallet_43cb_full_history_v1/manifest.json)
+- [全历史 weather activity](generated/wallet_43cb_full_history_v1/weather_activity.jsonl.gz)
+- [全 event metadata](generated/wallet_43cb_full_history_v1/event_metadata.jsonl.gz)
+- [可续跑采集脚本](../../../scripts/analysis/wallet_weather/collect_external_wallet_weather_history_v1.py)
+
+全历史采集完整性验收：
+
+- 275/275 日窗口 `complete=true`，逐文件解压、row count 和未压缩 SHA256 均通过；
+- 5 个汇总 artifacts 的文件大小与压缩文件 SHA256 全通过；
+- 跨日边界去重 8 rows：353,104 → 353,096；
+- 公开 API 不提供 unfilled/cancelled orders、私有信号、maker 意图或原始挂单时间，
+  因此“全历史”严格指公开 activity 与可查询的 supporting endpoints。
 
 ## 结论
 

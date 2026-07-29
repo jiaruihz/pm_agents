@@ -76,6 +76,10 @@ Source of truth: external-wallet research register, not production strategy trut
 ### 0x43cb：全球 YES-strip / bounded-range accumulator
 
 - address：`0x43cb4ae1f4ddc9e671486c79c9f40a6fd98b84df`
+- 全历史证据层：已绕过 activity 5,500-row 上限，覆盖账户最早公开记录
+  2025-10-28 至 2026-07-29；全账户 353,096 rows、weather 212,340 rows、
+  2,989 events、18,392 conditions。Gamma 完整 ladder 2,987/2,989；
+  唯一缺口为已下架的 Austin / Dallas 2026-07-09，已单列，未伪装完整。
 - 核心市场：没有单城集中；最新样本 effective city count 23.73，第一城市 Busan
   仅 8.96%，覆盖全球 WU 机场站。
 - 完整策略判断：target day 根据观测下限、forecast support 和市场分布，买一段
