@@ -1,4 +1,4 @@
-city,source,training_clock_class,distinct_observations,dates,first_date,last_date
-Helsinki,fmi,observation_clock_archive_not_pit,1194,13,2026-07-08,2026-07-20
-Amsterdam,knmi,observation_clock_archive_not_pit,1667,15,2026-06-18,2026-07-26
-Tokyo,jma_amedas,observation_clock_archive_not_pit,1424,13,2026-07-08,2026-07-20
+city,source,training_clock_class,distinct_observations,dates,first_date,last_date,cadence_minutes
+Helsinki,fmi,observation_clock_archive_not_pit,9054,63,2026-05-19,2026-07-20,10
+Amsterdam,knmi,observation_clock_archive_not_pit,2960,69,2026-05-19,2026-07-26,10/60
+Tokyo,jma_amedas,observation_clock_archive_not_pit,9071,63,2026-05-19,2026-07-20,10

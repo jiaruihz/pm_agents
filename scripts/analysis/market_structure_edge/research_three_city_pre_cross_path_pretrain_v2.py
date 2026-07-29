@@ -58,6 +58,7 @@ KNMI_HISTORY_GLOBS = (
     / "docs/analysis/2026-07/generated/knmi_cross_no_threshold_v1"
     / "batch_2026-06-23_2026-06-27/knmi_2026-06-23_2026-06-27.csv",
 )
+OFFICIAL_PATH_HISTORY = DEFAULT_OUT / "official_path_history.csv"
 HORIZONS = (30, 60, 120)
 MIN_CALIBRATION_DATES = 3
 MAX_GAP_MIN = 25.0
@@ -124,6 +125,17 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def read_csv_rows(path: Path, *, normalize_empty: bool = False) -> list[dict[str, Any]]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        rows: list[dict[str, Any]] = list(csv.DictReader(handle))
+    if normalize_empty:
+        for row in rows:
+            for key, value in list(row.items()):
+                if value == "":
+                    row[key] = None
+    return rows
+
+
 def _date_paths(runtime: Path, start: date, end: date) -> Iterable[Path]:
     current = start
     while current <= end:
@@ -145,8 +157,63 @@ def load_archive_history(
 
     temperature_votes: dict[tuple[str, str, str], Counter[float]] = defaultdict(Counter)
     row_samples: dict[tuple[str, str, str, float], dict[str, Any]] = {}
+    knmi_native_rows: list[dict[str, Any]] = []
+    knmi_native_days: set[str] = set()
+    for path in KNMI_HISTORY_GLOBS:
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8", newline="") as handle:
+            for raw in csv.DictReader(handle):
+                obs_ts = parse_dt(raw.get("observation_time_utc"))
+                temp_c = number(raw.get("temp_c"))
+                if obs_ts is None or temp_c is None:
+                    continue
+                target = local_date(obs_ts, "Amsterdam")
+                if start.isoformat() <= target < exact_start_by_city["Amsterdam"].isoformat():
+                    knmi_native_rows.append(raw)
+                    knmi_native_days.add(target)
+
+    official_days: set[tuple[str, str]] = set()
+    if OFFICIAL_PATH_HISTORY.exists():
+        with OFFICIAL_PATH_HISTORY.open(encoding="utf-8", newline="") as handle:
+            for raw in csv.DictReader(handle):
+                city = str(raw.get("city") or "")
+                source = str(raw.get("source") or "")
+                obs_ts = parse_dt(raw.get("observation_time_utc"))
+                temp_c = number(raw.get("temp_c"))
+                if (
+                    city not in V1.CITY_CONFIG
+                    or source != V1.CITY_CONFIG[city]["source"]
+                    or obs_ts is None
+                    or temp_c is None
+                ):
+                    continue
+                target = local_date(obs_ts, city)
+                if (
+                    target < start.isoformat()
+                    or target >= exact_start_by_city[city].isoformat()
+                    or (city == "Amsterdam" and target in knmi_native_days)
+                ):
+                    continue
+                identity = (city, source, obs_ts.isoformat())
+                temperature_votes[identity][float(temp_c)] += 1
+                row_samples[(city, source, obs_ts.isoformat(), float(temp_c))] = raw
+                official_days.add((city, target))
+
+    covered_days = official_days | {("Amsterdam", day) for day in knmi_native_days}
+    expected_days = {
+        (city, day.isoformat())
+        for city in V1.CITY_CONFIG
+        for day in (
+            start + timedelta(days=offset)
+            for offset in range((exact_start_by_city[city] - start).days)
+        )
+    }
     max_end = max(exact_start_by_city.values()) - timedelta(days=1)
-    for path in _date_paths(runtime, start, max_end):
+    runtime_paths = (
+        [] if expected_days <= covered_days else _date_paths(runtime, start, max_end)
+    )
+    for path in runtime_paths:
         for raw in iter_jsonl(path):
             city = str(raw.get("city") or "")
             source = str(raw.get("source") or "")
@@ -161,27 +228,24 @@ def load_archive_history(
             target = local_date(obs_ts, city)
             if target >= exact_start_by_city[city].isoformat():
                 continue
+            if (city, target) in official_days or (
+                city == "Amsterdam" and target in knmi_native_days
+            ):
+                continue
             identity = (city, source, obs_ts.isoformat())
             temperature_votes[identity][float(temp_c)] += 1
             row_samples[(city, source, obs_ts.isoformat(), float(temp_c))] = raw
 
     # KNMI archive backfills are explicitly path-training-only.
-    for path in KNMI_HISTORY_GLOBS:
-        if not path.exists():
-            continue
-        with path.open(encoding="utf-8", newline="") as handle:
-            for raw in csv.DictReader(handle):
-                obs_ts = parse_dt(raw.get("observation_time_utc"))
-                temp_c = number(raw.get("temp_c"))
-                if obs_ts is None or temp_c is None:
-                    continue
-                city, source = "Amsterdam", "knmi"
-                target = local_date(obs_ts, city)
-                if target < start.isoformat() or target >= exact_start_by_city[city].isoformat():
-                    continue
-                identity = (city, source, obs_ts.isoformat())
-                temperature_votes[identity][float(temp_c)] += 1
-                row_samples[(city, source, obs_ts.isoformat(), float(temp_c))] = raw
+    for raw in knmi_native_rows:
+        obs_ts = parse_dt(raw.get("observation_time_utc"))
+        temp_c = number(raw.get("temp_c"))
+        assert obs_ts is not None and temp_c is not None
+        city, source = "Amsterdam", "knmi"
+        identity = (city, source, obs_ts.isoformat())
+        temperature_votes[identity][float(temp_c)] += 1
+        raw["cadence_minutes"] = 10
+        row_samples[(city, source, obs_ts.isoformat(), float(temp_c))] = raw
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     audit: dict[str, Counter[str]] = {city: Counter() for city in V1.CITY_CONFIG}
@@ -207,6 +271,8 @@ def load_archive_history(
                 "wind_speed_kt": number(raw.get("wind_speed_kt")),
                 "pressure_hpa": number(raw.get("pressure_hpa")),
                 "training_clock_class": "observation_clock_archive_not_pit",
+                "cadence_minutes": number(raw.get("cadence_minutes")) or 10.0,
+                "archive_source": str(raw.get("archive_source") or "collector_archive"),
                 "repeat_count": repeated,
             }
         )
@@ -225,6 +291,17 @@ def load_archive_history(
                 "dates": len(dates),
                 "first_date": min(dates) if dates else "",
                 "last_date": max(dates) if dates else "",
+                "cadence_minutes": "/".join(
+                    str(int(value))
+                    for value in sorted(
+                        {
+                            float(row.get("cadence_minutes") or 10)
+                            for (row_city, _target), rows in grouped.items()
+                            if row_city == city
+                            for row in rows
+                        }
+                    )
+                ),
             }
         )
     return grouped, audit_rows
@@ -296,6 +373,8 @@ def build_states(
                     "source": event["source"],
                     "target_date": target_date,
                     "training_clock_class": event["training_clock_class"],
+                    "cadence_minutes": event.get("cadence_minutes", 10),
+                    "archive_source": event.get("archive_source", ""),
                     "source_observation_ts_utc": event["obs_ts"].isoformat(),
                     "decision_clock_ts_utc": event["clock_ts"].isoformat(),
                     "source_first_seen_age_min": event.get("first_seen_age_min"),
@@ -375,7 +454,15 @@ def build_states(
                     boundary_ts
                     and boundary_ts <= deadline + timedelta(minutes=BOUNDARY_GRACE_MIN)
                     and gaps
-                    and max(gaps) <= MAX_GAP_MIN
+                    and max(gaps)
+                    <= max(
+                        MAX_GAP_MIN,
+                        1.25
+                        * max(
+                            float(candidate.get("cadence_minutes") or 10)
+                            for candidate in rows
+                        ),
+                    )
                 )
                 threshold = float(row["next_lattice_threshold_c"])
                 crossing = next(
@@ -488,9 +575,7 @@ def evaluate(
             if base_fit is None:
                 continue
             base_prior = float(np.mean([int(row[label]) for row in base_train]))
-            for date_index, test_date in enumerate(exact_dates):
-                if date_index < min_calibration_dates:
-                    continue
+            for test_date in exact_dates:
                 prior_exact = [
                     row
                     for row in exact
@@ -506,28 +591,31 @@ def evaluate(
                 exact_dates_before = {
                     str(row["target_date"]) for row in prior_exact
                 }
-                if len(exact_dates_before) < min_calibration_dates:
-                    continue
-                exact_fit = fit_logistic(prior_exact, label, BASE_FEATURES)
                 base_test = predict(base_fit, test)
-                base_calibration = predict(base_fit, prior_exact)
-                calibration_rows = []
-                for row, probability in zip(prior_exact, base_calibration):
-                    calibration_rows.append({**row, "base_logit": logit(float(probability))})
-                calibration_fit = fit_logistic(
-                    calibration_rows, label, CALIBRATION_FEATURES
-                )
-                calibrated_test = [{**row, "base_logit": logit(float(p))} for row, p in zip(test, base_test)]
                 values_by_model: dict[str, np.ndarray] = {
                     "m0_history_prior": np.repeat(base_prior, len(test)),
                     "m2_history_pretrain": base_test,
                 }
-                if exact_fit is not None:
-                    values_by_model["m1_exact_only"] = predict(exact_fit, test)
-                if calibration_fit is not None:
-                    values_by_model["m3_history_plus_exact_calibration"] = predict(
-                        calibration_fit, calibrated_test
+                if len(exact_dates_before) >= min_calibration_dates:
+                    exact_fit = fit_logistic(prior_exact, label, BASE_FEATURES)
+                    base_calibration = predict(base_fit, prior_exact)
+                    calibration_rows = [
+                        {**row, "base_logit": logit(float(probability))}
+                        for row, probability in zip(prior_exact, base_calibration)
+                    ]
+                    calibration_fit = fit_logistic(
+                        calibration_rows, label, CALIBRATION_FEATURES
                     )
+                    calibrated_test = [
+                        {**row, "base_logit": logit(float(probability))}
+                        for row, probability in zip(test, base_test)
+                    ]
+                    if exact_fit is not None:
+                        values_by_model["m1_exact_only"] = predict(exact_fit, test)
+                    if calibration_fit is not None:
+                        values_by_model[
+                            "m3_history_plus_exact_calibration"
+                        ] = predict(calibration_fit, calibrated_test)
                 for model_name, probabilities in values_by_model.items():
                     for row, probability in zip(test, probabilities):
                         output.append(
@@ -805,27 +893,34 @@ def render_report(
         "健康，但 refresh LaunchAgent strict check 失败；且同 checkpoint settled/full-depth "
         "market evidence 不足，所以本报告不声称 market residual 或可交易 alpha。",
         "",
-        "在当前 5–6 个 OOF 日期上，历史 path pretrain 是主结果；再用仅 3 个起始 "
-        "exact 日期拟合 calibration layer 反而一致变差，因此 exact timing 暂时只作为 "
-        "forward calibration telemetry，不覆盖基础 path probability。",
+        "冻结的历史 path pretrain 在 exact collector 的全部日期上直接 forward 评分；"
+        "exact-only 与 calibration layer 只有积累满 3 个先前日期后才开始评分。后者当前"
+        "没有稳定优于历史 path，因此 exact timing 暂时只作为 calibration telemetry，"
+        "不覆盖基础 path probability。",
         "",
         "## Data separation",
         "",
-        "| city | archive path observations/dates | archive range | exact events/dates |",
-        "|---|---:|---|---:|",
+        "| city | archive path observations/dates | cadence | archive range | exact events/dates |",
+        "|---|---:|---:|---|---:|",
     ]
     for city in V1.CITY_CONFIG:
         archive = archive_map.get(city, {})
         exact = exact_map.get(city, {})
         lines.append(
             f"| {city} | {archive.get('distinct_observations', 0)} / "
-            f"{archive.get('dates', 0)} | {archive.get('first_date', 'NA')}.."
+            f"{archive.get('dates', 0)} | {archive.get('cadence_minutes', 'NA')}m | "
+            f"{archive.get('first_date', 'NA')}.."
             f"{archive.get('last_date', 'NA')} | "
             f"{exact.get('distinct_collector_exact_events', 0)} / "
             f"{exact.get('collector_exact_dates', 0)} |"
         )
     lines.extend(
         [
+            "",
+            "这里的“历史全量”固定为 canonical strategy-era 可比窗口：从 "
+            "`2026-05-19` 到各城 exact collector 首日之前，期间不抽样、不挑天气日。"
+            "Tokyo/Helsinki 使用官方原生 10m；Amsterdam 使用完整 KNMI hourly archive，"
+            "有原生 10m archive 的日期整日替换为 10m，避免同日混频。",
             "",
             "Archive clock is observation time, never first-seen. It can teach path transitions but "
             "cannot measure source latency, book reaction, or execution.",
@@ -835,13 +930,18 @@ def render_report(
             "主 label 是跨下一档，不是任意 +0.1°C strict high。括号为相对历史 base-rate "
             "Brier delta；负数更好。",
             "",
+            "`Brier = mean((p-y)^2)`，其中结果发生 `y=1`，未发生 `y=0`；它衡量概率"
+            "预测离真实结果有多远，`0` 最好。例如报 70% 后事件发生，该次误差为 "
+            "`(0.7-1)^2=0.09`。",
+            "",
             "| city | horizon | OOF dates | events | history prior | exact-only | history path | + exact calibration |",
             "|---|---:|---:|---:|---:|---:|---:|---:|",
             *score_lines,
             "",
-            f"历史 path head 六个 Helsinki/Tokyo horizon 的 date-block bootstrap "
+            f"历史 path head 三城九个 horizon 的 date-block bootstrap "
             f"Brier-delta CI 上界最大为 `{worst_history_ci_high:+.4f}`，均低于 0；"
-            "但独立日期仍只有 5–6 个，结论只限 weather-path probability。",
+            "Amsterdam 独立 exact 日期仍只有 3 个，其显著性远弱于另外两城；结论只限 "
+            "weather-path probability。",
             "",
             "## Report-update interpretation",
             "",
@@ -900,10 +1000,15 @@ def render_report(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-root", default=str(DEFAULT_RUNTIME))
-    parser.add_argument("--history-start", default="2026-06-18")
+    parser.add_argument("--history-start", default="2026-05-19")
     parser.add_argument("--exact-start", default="2026-07-08")
     parser.add_argument("--end-date", default="2026-07-29")
     parser.add_argument("--min-calibration-dates", type=int, default=MIN_CALIBRATION_DATES)
+    parser.add_argument(
+        "--reuse-exact-states",
+        action="store_true",
+        help="Reuse previously materialized exact states; history-only reruns remain deterministic.",
+    )
     parser.add_argument("--out-dir", default=str(DEFAULT_OUT))
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     args = parser.parse_args()
@@ -912,21 +1017,36 @@ def main() -> int:
     history_start = date.fromisoformat(args.history_start)
     exact_start = date.fromisoformat(args.exact_start)
     end = date.fromisoformat(args.end_date)
-    exact, exact_audit = V1.load_fast_events(runtime, exact_start, end)
-    exact_common = exact_to_common(exact)
-    exact_start_by_city = {
-        city: min(
-            date.fromisoformat(target)
-            for row_city, target in exact_common
-            if row_city == city
+    out = Path(args.out_dir)
+    if args.reuse_exact_states:
+        exact_states = read_csv_rows(
+            out / "exact_path_states.csv", normalize_empty=True
         )
-        for city in V1.CITY_CONFIG
-    }
+        exact_audit = read_csv_rows(out / "exact_coverage.csv")
+        exact_start_by_city = {
+            city: min(
+                date.fromisoformat(str(row["target_date"]))
+                for row in exact_states
+                if row["city"] == city
+            )
+            for city in V1.CITY_CONFIG
+        }
+    else:
+        exact, exact_audit = V1.load_fast_events(runtime, exact_start, end)
+        exact_common = exact_to_common(exact)
+        exact_start_by_city = {
+            city: min(
+                date.fromisoformat(target)
+                for row_city, target in exact_common
+                if row_city == city
+            )
+            for city in V1.CITY_CONFIG
+        }
+        exact_states = build_states(exact_common)
     archive, archive_audit = load_archive_history(
         runtime, history_start, exact_start_by_city
     )
     archive_states = build_states(archive)
-    exact_states = build_states(exact_common)
     prediction_rows = evaluate(
         archive_states,
         exact_states,
@@ -934,7 +1054,6 @@ def main() -> int:
     )
     score_rows = scores(prediction_rows)
     updates = update_rows(prediction_rows)
-    out = Path(args.out_dir)
     write_csv(out / "archive_coverage.csv", archive_audit)
     write_csv(out / "exact_coverage.csv", exact_audit)
     write_csv(out / "archive_path_states.csv", archive_states)

@@ -63,3 +63,31 @@ def test_archive_clock_is_not_promoted_to_first_seen() -> None:
         for row in states
     )
     assert all(row["source_first_seen_age_min"] is None for row in states)
+
+
+def test_hourly_archive_uses_declared_cadence_for_coverage() -> None:
+    base = datetime(2026, 7, 20, 6, 0, tzinfo=timezone.utc)
+    rows = []
+    for index, temp in enumerate((18.0, 18.2, 18.7, 19.0)):
+        obs = base + timedelta(hours=index)
+        rows.append(
+            {
+                "city": "Amsterdam",
+                "source": "knmi",
+                "station": "240",
+                "target_date": "2026-07-20",
+                "obs_ts": obs,
+                "clock_ts": obs,
+                "first_seen_ts": None,
+                "first_seen_age_min": None,
+                "temp_c": temp,
+                "wind_speed_kt": None,
+                "pressure_hpa": None,
+                "cadence_minutes": 60,
+                "archive_source": "knmi_hourly_climate_station_240",
+                "training_clock_class": "observation_clock_archive_not_pit",
+            }
+        )
+    states = MODULE.build_states({("Amsterdam", "2026-07-20"): rows})
+    assert states[0]["coverage_complete_60m"] == 1
+    assert states[0]["cross_next_lattice_within_60m"] == 0
