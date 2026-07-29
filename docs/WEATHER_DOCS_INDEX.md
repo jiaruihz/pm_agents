@@ -64,6 +64,8 @@ Status 口径：
 | [WEATHER_STRATEGY_REVIEW_PIPELINE.md](WEATHER_STRATEGY_REVIEW_PIPELINE.md) | `current-reference` | 一条策略跑完后怎么一步步复盘：preflight→成交质量→绩效→对账→关联参数→结论；每阶段的 canonical 源/gate/skill/living doc 与 live-vs-shadow 比法 |
 | [WEATHER_CITY_POOL_DECISIONS.md](WEATHER_CITY_POOL_DECISIONS.md) | `snapshot` | 2026-05/06 T1/T2 与 mid_price allowlist 决策账；城市/来源能力保留，但不定义当前 Mac 实例 live eligibility |
 | [WEATHER_ANALYSIS_CONTRACT.md](WEATHER_ANALYSIS_CONTRACT.md) | `current-source` | weather 分析、PnL、切片、账户对账必须用什么口径 |
+| [WEATHER_EXTERNAL_WALLET_RESEARCH_PIPELINE.md](WEATHER_EXTERNAL_WALLET_RESEARCH_PIPELINE.md) | `current-source` | 外部 weather 钱包如何绕过 activity 上限、直接写 JRS immutable snapshot、按 city×target_date 合并完整 ladder 并复盘生命周期；明确不写 canonical facts |
+| [WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md](WEATHER_EXTERNAL_WALLET_STRATEGY_INDEX.md) | `current-reference` | 已研究外部钱包的地址、完整策略判断、证据边界、可复制性和后续研究方向 |
 | [WEATHER_HANDOFF_EXECUTION.md](WEATHER_HANDOFF_EXECUTION.md) | `snapshot` | 2026-06-08 方法论/结构重整交接的历史记录；方法已吸收进 ANALYSIS_CONTRACT §0 + performance skill。当前复盘入口改用 STRATEGY_REVIEW_PIPELINE / ARCHITECTURE_SPINE |
 | [WEATHER_ARCHITECTURE_SPINE.md](WEATHER_ARCHITECTURE_SPINE.md) | `current-reference` | 天气策略当前真实架构：[0]–[6] 分层、主血缘、共享/派生/新增节点、执行层已落地与未落地边界；2026-07-07 同步 feature-layer Phase 1-6C 实际落地状态与 live decision-input 未迁移边界 |
 | [WEATHER_STRATEGY_RUNTIME_PLATFORM_DESIGN.md](WEATHER_STRATEGY_RUNTIME_PLATFORM_DESIGN.md) | `design-draft` | 运行时平台产品化目标草案：统一 StrategyHead 接口 + BaseRunner harness、单一 supervisor 启动器、DB 优先控制面（strategy_def/instance/runtime/control_log）、数据源一等公民领域模型（feed_source_profile/subscription/health）、看板控制动作、五期落地。取代 archive 旧 PMM/ARB 版 Unified Platform 的目标定位 |

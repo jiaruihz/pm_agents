@@ -1,5 +1,9 @@
 # 0x43cb：全球 YES-strip 完整策略复盘
 
+> 生命周期、长期入场/分批/持有/SELL/结算指标已由
+> [全历史 ladder v2](2026-07-29-research-43cb-full-history-ladder-lifecycle-v2.md)
+> 覆盖；本报告保留最新 PIT weather 对齐和典型事件证据。
+
 ## 数据快照
 
 - wallet：`0x43cb4ae1f4ddc9e671486c79c9f40a6fd98b84df`
