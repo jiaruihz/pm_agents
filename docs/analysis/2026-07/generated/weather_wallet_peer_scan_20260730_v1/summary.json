@@ -1,0 +1,526 @@
+{
+  "notes": [
+    "Leaderboard PnL and volume are Polymarket WEATHER-category fields.",
+    "PnL/volume is a comparison ratio, not return on capital.",
+    "Recent activity is used only to classify execution style and 99-cent dependence."
+  ],
+  "snapshot_utc": "2026-07-29T16:44:01.401899+00:00",
+  "wallets": [
+    {
+      "leaderboard": {
+        "all": {
+          "name": "badatmath.",
+          "pnl": 49153.985143,
+          "pnl_over_volume": 0.00636,
+          "rank": 24,
+          "volume": 7728292.225315
+        },
+        "month": {
+          "name": "badatmath.",
+          "pnl": 19103.0951,
+          "pnl_over_volume": 0.007153,
+          "rank": 4,
+          "volume": 2670714.258949
+        },
+        "week": {
+          "name": "badatmath.",
+          "pnl": 10751.498809,
+          "pnl_over_volume": 0.04552,
+          "rank": 1,
+          "volume": 236190.851422
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 22712.513019,
+        "buy_cost_share_by_outcome": {
+          "No": 0.113137,
+          "Yes": 0.886863
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 0.013405,
+          "20-80c": 0.564928,
+          "5-20c": 0.415759,
+          "80-95c": 0.005871,
+          "<=1c": 3.7e-05
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": 0.028967,
+        "weather_events": 180,
+        "weather_rows": 5494,
+        "weather_trade_rows": 5420
+      },
+      "wallet": "0x8fbd7cf5f806f563080864694415829f7229a959"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "0x496f76BD5Cf4c2819C710aE90Ed1C84B2dc6FA5D-1773782287927",
+          "pnl": 15361.13356,
+          "pnl_over_volume": 0.016665,
+          "rank": 117,
+          "volume": 921749.629199
+        },
+        "month": {
+          "name": "0x496f76BD5Cf4c2819C710aE90Ed1C84B2dc6FA5D-1773782287927",
+          "pnl": 9358.090475,
+          "pnl_over_volume": 0.014054,
+          "rank": 14,
+          "volume": 665872.883415
+        },
+        "week": {
+          "name": "0x496f76BD5Cf4c2819C710aE90Ed1C84B2dc6FA5D-1773782287927",
+          "pnl": 817.180191,
+          "pnl_over_volume": 0.00606,
+          "rank": 32,
+          "volume": 134859.283556
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 11975.622648,
+        "buy_cost_share_by_outcome": {
+          "No": 0.959129,
+          "Yes": 0.040871
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 0.00102,
+          "20-80c": 0.492299,
+          "5-20c": 0.01042,
+          "80-95c": 0.443161,
+          "<=1c": 3.6e-05,
+          ">=95c": 0.053065
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": 0.471523,
+        "weather_events": 201,
+        "weather_rows": 5498,
+        "weather_trade_rows": 5162
+      },
+      "wallet": "0x496f76bd5cf4c2819c710ae90ed1c84b2dc6fa5d"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "meteoblue",
+          "pnl": 2072.474789,
+          "pnl_over_volume": 0.001132,
+          "rank": 909,
+          "volume": 1830386.182291
+        },
+        "month": {
+          "name": "meteoblue",
+          "pnl": 291.857537,
+          "pnl_over_volume": 0.000686,
+          "rank": 712,
+          "volume": 425188.658389
+        },
+        "week": {
+          "name": "meteoblue",
+          "pnl": 1362.954298,
+          "pnl_over_volume": 0.020973,
+          "rank": 17,
+          "volume": 64986.103848
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 36738.782844,
+        "buy_cost_share_by_outcome": {
+          "No": 0.515181,
+          "Yes": 0.484819
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 0.036964,
+          "20-80c": 0.663363,
+          "5-20c": 0.142833,
+          "80-95c": 0.134331,
+          "<=1c": 0.005158,
+          ">=95c": 0.01735
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": 0.017887,
+        "weather_events": 697,
+        "weather_rows": 5404,
+        "weather_trade_rows": 4864
+      },
+      "wallet": "0xf73f7e9c6bd1f40dc045d2a93bec3dd4248aee53"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "HighTempTation",
+          "pnl": 54302.886961,
+          "pnl_over_volume": 0.04462,
+          "rank": 18,
+          "volume": 1217017.059963
+        },
+        "month": {
+          "name": "HighTempTation",
+          "pnl": 25956.621324,
+          "pnl_over_volume": 0.047067,
+          "rank": 2,
+          "volume": 551477.136162
+        },
+        "week": {
+          "name": "HighTempTation",
+          "pnl": 1259.914775,
+          "pnl_over_volume": 0.027412,
+          "rank": 18,
+          "volume": 45962.493238
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 513855.945803,
+        "buy_cost_share_by_outcome": {
+          "No": 0.958941,
+          "Yes": 0.041059
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 3.7e-05,
+          "20-80c": 0.110802,
+          "5-20c": 0.00076,
+          "80-95c": 0.467531,
+          "<=1c": 1.1e-05,
+          ">=95c": 0.420859
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 4897,
+        "sell_trade_share": 0.631446,
+        "weather_events": 992,
+        "weather_rows": 4350,
+        "weather_trade_rows": 4344
+      },
+      "wallet": "0x6011655c4afb76f36dd1b08a137a1ba73466b31e"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "WeatherHK2",
+          "pnl": 28706.549056,
+          "pnl_over_volume": 0.026432,
+          "rank": 52,
+          "volume": 1086052.098496
+        },
+        "month": {
+          "name": "WeatherHK2",
+          "pnl": 15430.504366,
+          "pnl_over_volume": 0.023673,
+          "rank": 6,
+          "volume": 651820.437951
+        },
+        "week": {
+          "name": "WeatherHK2",
+          "pnl": 454.841887,
+          "pnl_over_volume": 0.008555,
+          "rank": 76,
+          "volume": 53164.906423
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 57422.266294,
+        "buy_cost_share_by_outcome": {
+          "No": 0.61973,
+          "Yes": 0.38027
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 0.050646,
+          "20-80c": 0.197109,
+          "5-20c": 0.138839,
+          "80-95c": 0.100947,
+          "<=1c": 0.005242,
+          ">=95c": 0.507216
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": 0.39612,
+        "weather_events": 102,
+        "weather_rows": 3794,
+        "weather_trade_rows": 3557
+      },
+      "wallet": "0xdadbf9e1df1b8d7a184a0d6ab9c83b2337b61870"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "jjavi",
+          "pnl": 47719.766506,
+          "pnl_over_volume": 0.026079,
+          "rank": 25,
+          "volume": 1829834.988019
+        },
+        "month": {
+          "name": "jjavi",
+          "pnl": 27908.332726,
+          "pnl_over_volume": 0.030679,
+          "rank": 1,
+          "volume": 909681.047397
+        },
+        "week": {
+          "name": "jjavi",
+          "pnl": 4083.916338,
+          "pnl_over_volume": 0.0314,
+          "rank": 3,
+          "volume": 130060.641748
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 65182.319829,
+        "buy_cost_share_by_outcome": {
+          "No": 0.115677,
+          "Yes": 0.884323
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 0.036924,
+          "20-80c": 0.78011,
+          "5-20c": 0.156083,
+          "80-95c": 0.016018,
+          "<=1c": 0.008543,
+          ">=95c": 0.002322
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": 0.14198,
+        "weather_events": 164,
+        "weather_rows": 5124,
+        "weather_trade_rows": 5050
+      },
+      "wallet": "0x6ff2cb14da8be7eb57541d250a0196c5f295f140"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "0x56b381017b589FB0AFB049137c8D4Af2E7233fA2-1769535581188",
+          "pnl": 16608.865219,
+          "pnl_over_volume": 0.025361,
+          "rank": 107,
+          "volume": 654901.935902
+        },
+        "month": {
+          "name": "0x56b381017b589FB0AFB049137c8D4Af2E7233fA2-1769535581188",
+          "pnl": 7112.246047,
+          "pnl_over_volume": 0.036405,
+          "rank": 19,
+          "volume": 195365.038863
+        },
+        "week": {
+          "name": "0x56b381017b589FB0AFB049137c8D4Af2E7233fA2-1769535581188",
+          "pnl": 3056.775634,
+          "pnl_over_volume": 0.044758,
+          "rank": 5,
+          "volume": 68295.431539
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 95276.753711,
+        "buy_cost_share_by_outcome": {
+          "No": 0.098289,
+          "Yes": 0.901711
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 0.009037,
+          "20-80c": 0.767314,
+          "5-20c": 0.066795,
+          "80-95c": 0.142526,
+          "<=1c": 0.000989,
+          ">=95c": 0.013339
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": 0.113338,
+        "weather_events": 253,
+        "weather_rows": 5412,
+        "weather_trade_rows": 5188
+      },
+      "wallet": "0x56b381017b589fb0afb049137c8d4af2e7233fa2"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "tenkiyoho",
+          "pnl": 23928.007245,
+          "pnl_over_volume": 0.019411,
+          "rank": 62,
+          "volume": 1232711.520135
+        },
+        "month": {
+          "name": "tenkiyoho",
+          "pnl": 6434.191466,
+          "pnl_over_volume": 0.02471,
+          "rank": 23,
+          "volume": 260384.943127
+        },
+        "week": {
+          "name": "tenkiyoho",
+          "pnl": -4627.612557,
+          "pnl_over_volume": -0.190662,
+          "rank": 150659,
+          "volume": 24271.320784
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 458161.699153,
+        "buy_cost_share_by_outcome": {
+          "No": 0.725713,
+          "Yes": 0.274287
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 0.000991,
+          "20-80c": 0.149054,
+          "5-20c": 0.005314,
+          "80-95c": 0.155653,
+          "<=1c": 0.000211,
+          ">=95c": 0.688776
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": 0.244603,
+        "weather_events": 234,
+        "weather_rows": 4922,
+        "weather_trade_rows": 4354
+      },
+      "wallet": "0x09a85cfe4d51e0cde12daa4d255b3f789fb447c1"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "russell110320",
+          "pnl": 65290.933436,
+          "pnl_over_volume": 0.041773,
+          "rank": 12,
+          "volume": 1562975.86987
+        },
+        "month": {
+          "name": "russell110320",
+          "pnl": 7175.579469,
+          "pnl_over_volume": 0.121498,
+          "rank": 18,
+          "volume": 59059.34
+        },
+        "week": {
+          "name": "russell110320",
+          "pnl": -6212.470486,
+          "pnl_over_volume": -0.736718,
+          "rank": 150661,
+          "volume": 8432.63
+        }
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 2836.044075,
+        "buy_cost_share_by_outcome": {
+          "No": 0.651885,
+          "Yes": 0.348115
+        },
+        "buy_cost_share_by_price": {
+          "20-80c": 0.481372,
+          "5-20c": 0.006482,
+          "80-95c": 0.512147
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 4059,
+        "sell_trade_share": 0.052632,
+        "weather_events": 4,
+        "weather_rows": 24,
+        "weather_trade_rows": 19
+      },
+      "wallet": "0x118689b24aead1d6e9507b8068d056b2ec4f051b"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "Dellabc1",
+          "pnl": 7077.449923,
+          "pnl_over_volume": 0.31694,
+          "rank": 267,
+          "volume": 22330.601185
+        },
+        "month": {
+          "name": "Dellabc1",
+          "pnl": 7077.449923,
+          "pnl_over_volume": 0.31694,
+          "rank": 20,
+          "volume": 22330.601185
+        },
+        "week": null
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 0,
+        "buy_cost_share_by_outcome": {},
+        "buy_cost_share_by_price": {},
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 3041,
+        "sell_trade_share": null,
+        "weather_events": 0,
+        "weather_rows": 0,
+        "weather_trade_rows": 0
+      },
+      "wallet": "0x97cb3a7cef8eb9f7e5c1b549be4bdcb77e4bc910"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "Kawabanga25",
+          "pnl": 6261.984796,
+          "pnl_over_volume": 0.33728,
+          "rank": 306,
+          "volume": 18566.149274
+        },
+        "month": {
+          "name": "Kawabanga25",
+          "pnl": 6261.984796,
+          "pnl_over_volume": 0.33728,
+          "rank": 27,
+          "volume": 18566.149274
+        },
+        "week": null
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 0,
+        "buy_cost_share_by_outcome": {},
+        "buy_cost_share_by_price": {},
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": null,
+        "weather_events": 0,
+        "weather_rows": 0,
+        "weather_trade_rows": 0
+      },
+      "wallet": "0x571581ccb605f35f0af032723cbfc5b3f4a41616"
+    },
+    {
+      "leaderboard": {
+        "all": {
+          "name": "WeatherTraderBot",
+          "pnl": 57179.715466,
+          "pnl_over_volume": 0.031742,
+          "rank": 16,
+          "volume": 1801364.4177
+        },
+        "month": null,
+        "week": null
+      },
+      "recent_activity": {
+        "buy_cost_in_sample": 34242.561647,
+        "buy_cost_share_by_outcome": {
+          "No": 0.537384,
+          "Yes": 0.462616
+        },
+        "buy_cost_share_by_price": {
+          "1-5c": 0.082463,
+          "20-80c": 0.393618,
+          "5-20c": 0.175532,
+          "80-95c": 0.158008,
+          "<=1c": 0.023813,
+          ">=95c": 0.166566
+        },
+        "caveat": "latest-wallet-activity sample is truncated at 5,500 rows and filtered client-side because the API title parameter is not reliable",
+        "raw_wallet_rows_examined": 5500,
+        "sell_trade_share": 0.075766,
+        "weather_events": 87,
+        "weather_rows": 1937,
+        "weather_trade_rows": 1729
+      },
+      "wallet": "0xacc8e9dcabf9d65a5c78e3bec6941ed53a2b7d08"
+    }
+  ]
+}
