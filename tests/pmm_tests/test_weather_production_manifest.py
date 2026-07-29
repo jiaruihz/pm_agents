@@ -6,6 +6,8 @@ from src.strategies.runtime.production import (
     load_production_spec,
 )
 
+ROOT = Path(__file__).resolve().parents[2]
+
 
 def production_spec(tmp_path: Path) -> WeatherProductionSpec:
     return WeatherProductionSpec(
@@ -151,3 +153,21 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
     findings = {item["kind"]: item for item in payload["findings"]}
     assert findings["tmux_sessions_missing_from_instance_registry"]["severity"] == "warning"
     assert findings["launch_agent_last_exit_nonzero"]["severity"] == "critical"
+
+
+def test_weather_prompts_and_analysis_skills_require_manifest_preflight():
+    paths = [
+        ROOT / "AGENTS.md",
+        ROOT / "CLAUDE.md",
+        ROOT / "skills/weather-fact-rebuild/SKILL.md",
+        ROOT / "skills/weather-live-account-reconcile/SKILL.md",
+        ROOT / "skills/weather-strategy-deploy/SKILL.md",
+        ROOT / "skills/weather-strategy-exposure/SKILL.md",
+        ROOT / "skills/weather-strategy-lineage/SKILL.md",
+        ROOT / "skills/weather-strategy-performance/SKILL.md",
+        ROOT / "skills/weather-strategy-research/SKILL.md",
+    ]
+
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        assert "weather_production_manifest.py --strict" in text, path

@@ -9,7 +9,7 @@ description: 部署、启停或变更 weather 生产行为，包括 Mac 当前�
 
 ## 当前边界
 
-- 当前短期生产主机：Mac `/Users/deepsleep/projects/pm_agents`。
+- 当前短期生产主机是 Mac；`/Users/deepsleep/projects/pm_agents` 是控制/开发仓库，不证明 live 进程从该 checkout 运行。实际 checkout、HEAD、loaded SHA 必须由 manifest 和进程核对。
 - 当前 data-feed runtime：`/Volumes/jrs/weather_data_feed_service_runtime`。
 - N100 在磁盘/备份/服务链恢复验证前只作历史/恢复对象，不是默认部署目标。
 - 策略状态以进程 + raw runtime + authenticated exchange evidence 为准；registry 是路由，不是 present-state proof。
@@ -31,6 +31,7 @@ expected raw output / stop-pause mechanism / rollback
 ## 变更前动态盘点
 
 ```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
 git status --short
 git rev-parse HEAD
 ps aux | rg 'weather|low_price|tmax|hko|source_event|regime' | rg -v 'rg '
@@ -40,6 +41,8 @@ tmux -L weather-jrs list-sessions
 ```
 
 若策略使用 screen，再查 `screen -ls`。随后读目标实例的 latest/events/opportunities/orders 与 pause/state 文件。不要根据脚本名、文档 `live` 标签或一个 PID 推断真实下单能力。
+
+manifest 是部署 preflight：必须核对 physical DB route、每个 live PID 的 checkout/head/loaded SHA、canonical JRS tmux session、LaunchAgent 退出状态和 DB open handles。`critical` 时不得重启或切 live；先修 identity 根因。manifest 不替代 exchange/order pre-state。
 
 ## Git-first
 

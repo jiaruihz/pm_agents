@@ -25,7 +25,7 @@ description: 对账 weather 实盘账户现金变化、真实 CLOB fills、submi
 ## 流程
 
 1. 读 `AGENTS.md` 与 `docs/WEATHER_ANALYSIS_CONTRACT.md`。
-2. 用 `ps`、LaunchAgent/tmux/screen 与 raw runtime 动态发现实例；不从旧文档复制实例清单。
+2. 运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`，再用 raw runtime 与 authenticated exchange 动态发现实例；不从旧文档复制实例清单。
 3. 比较 raw 最新 order/fill 与 DB `fact_built_at_utc` / `fill_ts_utc`。
 4. DB 缺最新 fill 时先走 `weather-fact-rebuild` 的最小刷新路径。
 5. 运行固定对账脚本。
@@ -63,6 +63,7 @@ description: 对账 weather 实盘账户现金变化、真实 CLOB fills、submi
 - fee evidence class 分布与 adjustment 总额
 
 `gate_pass=false` 时只给链路诊断，不发布 live_real PnL/ROI。
+production manifest 为 critical（尤其 DB split/非 canonical consumer）时同样只做 raw/exchange 现金与订单诊断，不发布 DB live_real 桥接。
 
 ## 最终输出
 

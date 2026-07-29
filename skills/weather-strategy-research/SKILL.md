@@ -20,6 +20,9 @@ source/raw -> canonical state/feature -> fact_signal_candidates opportunity
 
 共享数据逻辑进 `weather_data_feed/`；共享机制特征按 feature-layer contract；策略私有 selector 不塞回数据层。
 
+研究若读取 canonical facts/features，先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`；
+DB split 或存在非 canonical consumer 时只允许继续 raw coverage/机制诊断，不得产出 canonical 同分母结论。
+
 ## 研究问题模板
 
 先写一句 target：

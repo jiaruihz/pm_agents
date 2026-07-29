@@ -1,7 +1,7 @@
 # Weather Repo Boundary
 
 Status: current-source
-Updated: 2026-07-15 Mac-first dynamic runtime and deploy boundary
+Updated: 2026-07-29 production identity manifest and JRS canonical DB boundary
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -80,6 +80,14 @@ The local dashboard DB is derived from these mirrors plus Mac live order files.
 During the handoff, Mac is a production writer for data-feed and selected live
 strategy order logs; N100 is not production truth until disk health and backups
 are verified.
+
+The desired physical canonical DB lives at
+`/Volumes/jrs/pm_agents/runtime/weather.db`. The repo path `runtime/weather.db`
+is compatibility-only and must resolve to the same device/inode. Desired
+topology is committed in `src/strategies/runtime/production.yaml`; observed
+processes, checkouts, tmux sessions, LaunchAgents, and SQLite handles are
+reported by `scripts/ops/weather_production_manifest.py --strict`. A split
+identity blocks canonical analysis, rebuild, and production deployment.
 
 ## Code Boundary
 

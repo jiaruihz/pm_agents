@@ -1,7 +1,7 @@
 # Weather Strategy Entrypoint
 
 Status: current-source
-Updated: 2026-07-15 Mac-first runtime discovery and strategy-search reset
+Updated: 2026-07-29 production identity manifest and JRS canonical DB contract
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -11,19 +11,25 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
    `/Volumes/jrs/weather_data_feed_service_runtime`，执行 raw 在本仓库 `runtime/weather_edge_v1/` 及各实例目录。
 2. **当前没有 confirmed、可扩 live 的 alpha。** 2026-07-14 strategy-search reset 后，任何运行中的
    `--live` / `--execute` 进程只按 tiny forward probe、paper executor 或 shadow 的真实参数分类，不能由进程名升格。
-3. **实例清单动态发现。** 先用 `ps`、LaunchAgent、tmux/screen，再读 pause/state、latest、events、orders 和
-   exchange response。本文和 registry 只负责路由，不替代 present-state proof。
+3. **实例清单动态发现。** 先运行 `scripts/ops/weather_production_manifest.py --strict`，再读 pause/state、
+   latest、events、orders 和 exchange response。本文和 registry 只负责路由，不替代 present-state proof。
 4. **N100 只作历史/恢复对象。** 在磁盘健康、备份完整性和服务链验证前，不重启 timers、不把 N100 raw 当当前真相。
 
 运行态盘点：
 
 ```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
 ps aux | rg 'weather|low_price|tmax|hko|source_event|regime' | rg -v 'rg '
 launchctl list | rg 'pm-agents|weather'
 tmux list-sessions
 tmux -L weather-data-feed-jrs list-sessions
 screen -ls
 ```
+
+期望拓扑由 `src/strategies/runtime/production.yaml` 声明。物理 canonical DB 是
+`/Volumes/jrs/pm_agents/runtime/weather.db`；仓库 `runtime/weather.db` 仅是兼容入口，健康时必须解析为同一
+device/inode。manifest 报 DB split、非 canonical consumer、异常 checkout 或失败 LaunchAgent 时，当前运行态为 P0，
+不要从本文的历史清单推断可继续操作。
 
 当前研究/执行动作：
 

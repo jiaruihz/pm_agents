@@ -64,6 +64,12 @@ PIT weather coverage -> PIT quote coverage -> settlement coverage -> executable 
 
 先确认 DB 目标窗口与 raw 覆盖；需要刷新时走 `weather-fact-rebuild`。普通历史查询不为形式重建。
 
+```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
+```
+
+manifest 必须 `status=healthy`，并确认 `runtime/weather.db` 与 JRS physical canonical 是同一 device/inode；split 或存在非 canonical consumer 时停止绩效计算，不能挑行数较多的一份继续。
+
 ```sql
 SELECT MAX(fact_built_at_utc) FROM fact_trades;
 SELECT trade_class, COUNT(*) FROM fact_trades GROUP BY trade_class;

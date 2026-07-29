@@ -1,6 +1,6 @@
 ---
 name: weather-fact-rebuild
-description: 同步、补全或重建 weather canonical 数据层与 runtime/weather.db。用于数据陈旧、目标日期缺失、settlement 或 fill 未进入 fact_trades/fact_signal_candidates、fee/fill 修复后重放、重新结算、sync/rebuild/resync。先按 Mac 当前生产、N100 历史恢复和本地 canonical 三层判断；禁止把 N100 或 WSL 当默认当前真相，也禁止为单笔 raw lineage 无条件全量重建。
+description: 同步、补全或重建 weather canonical 数据层与 JRS physical canonical weather.db。用于数据陈旧、目标日期缺失、settlement 或 fill 未进入 fact_trades/fact_signal_candidates、fee/fill 修复后重放、重新结算、sync/rebuild/resync。先验证 production manifest 与 DB identity，再按 Mac 当前生产、N100 历史恢复和 canonical 三层判断；禁止把 split DB、N100 或 WSL 当默认当前真相，也禁止为单笔 raw lineage 无条件全量重建。
 ---
 
 # Weather fact refresh and rebuild
@@ -23,10 +23,11 @@ description: 同步、补全或重建 weather canonical 数据层与 runtime/wea
 | current raw market | `/Volumes/jrs/weather_data_feed_service_runtime`（旧 `~/projects/weather_data_feed_service_runtime` 为 symlink） | 最新 snapshot、orderbook、forecast、observation/source event |
 | current raw execution | 本仓库 `runtime/weather_edge_v1/` 与各 active strategy runtime | 当前 Mac signal/plan/order/fill 证据 |
 | historical remote | N100 `weather-predict` / `pm_agent` 镜像 | 事故前历史、备份抢救；不可冒充当前运行态 |
-| canonical analysis | `runtime/weather.db` | `fact_signal_candidates` 机会粒度、`fact_trades` fill 粒度 |
+| canonical analysis | `/Volumes/jrs/pm_agents/runtime/weather.db`（`runtime/weather.db` 仅为同 inode 兼容入口） | `fact_signal_candidates` 机会粒度、`fact_trades` fill 粒度 |
 
 ## 决策顺序
 
+0. 先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`。若 DB route 为 split、存在非 canonical consumer 或 manifest critical，停止 sync/rebuild；先完成 production identity/DB cutover，禁止挑一份 DB 当真相继续写。
 1. 单笔订单、当前 runner、某次触发：直接读精确 raw 文件，不 sync、不 rebuild。
 2. 历史分析且 DB 已覆盖目标窗：只读查询现有 DB。
 3. 问“最新/今天”且 Mac market mirror 落后：先增量同步当前 Mac market raw。
@@ -60,6 +61,7 @@ scripts/weather_dashboard/run_stack.sh --rebuild
 ## 重建前检查
 
 ```bash
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict
 sqlite3 -batch -cmd ".timeout 1000" runtime/weather.db "
 SELECT 'fact_trades', MAX(fact_built_at_utc), COUNT(*) FROM fact_trades;
 SELECT 'fact_signal_candidates', MAX(fact_built_at_utc), COUNT(*) FROM fact_signal_candidates;
