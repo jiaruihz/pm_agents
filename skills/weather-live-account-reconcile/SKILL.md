@@ -39,6 +39,11 @@ description: 对账 weather 实盘账户现金变化、真实 CLOB fills、submi
   --group-by instance,selected_date
 ```
 
+固定对账脚本与 standalone coverage gate 必须共享同一套 effective fill
+过滤（execution alias、fill validity、price/fee adjustment）和 fee lineage
+判定。修改 gate 的公共 helper 或函数签名时，必须保留兼容默认值，并同时跑
+固定对账脚本 smoke；禁止让下游报告复制一份过滤逻辑或依赖未声明的内部参数。
+
 日期口径：
 
 - `fill_date_bj`：钱包现金流默认口径。

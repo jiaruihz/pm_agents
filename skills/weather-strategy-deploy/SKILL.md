@@ -48,6 +48,11 @@ manifest 是部署 preflight：必须核对 physical DB route、每个 live PID 
 
 1. 在本机源码修改。
 2. 运行 focused tests、静态检查和 dry-run/shadow smoke。
+
+共享分析/运维入口（coverage gate、manifest、canonical helper）发生接口或
+过滤语义变更时，除 focused unit test 外，还要运行所有固定下游入口的真实
+CLI smoke（至少 account reconcile 与 canonical refresh dry-run/status）。
+公共参数新增应提供兼容默认值；不能只验证被改模块自身能启动。
 3. 复核 diff，只纳入本次范围。
 4. 创建 scoped commit，记录 SHA。
 5. Mac 当前生产从这个已提交 checkout 重载；不得让未提交代码直接成为生产版本。

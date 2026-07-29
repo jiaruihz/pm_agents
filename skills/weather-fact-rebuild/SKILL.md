@@ -93,6 +93,8 @@ SELECT settlement_status, COUNT(*) FROM fact_trades GROUP BY settlement_status;
 - fill 数量优先 matched response / authenticated order-trade；public activity 只能作受 cap 约束的 fallback。
 - fee 证据链与 fill 数量证据链分开；即时 matched 不能把 fee 默认为 0。
 - `fills` append-only。历史 fee 修正写 `clob_fill_fee_adjustments.jsonl` 并物化到 `fill_fee_adjustments`，不 UPDATE/DELETE 原 fill。
+- fee 修复先在 canonical JRS 上运行 `scripts/ops/reconcile_clob_fill_fees.py` dry-run，核对 alias/excluded fill 已从分母剔除；再按证据写 append-only journal。优先 tx-exact，其次 maker-zero，无法取得精确证据时才单列 estimate，不能把 estimate 说成实际 fee。
+- journal 写入后必须重新 import/materialize facts，并核对 journal 行数、DB adjustment 行数、effective fee delta 和受影响 settled PnL delta；只生成 journal 不算完成重放。
 - 重建后检查 `fact_trades.base_fees_usd`、`fee_adjustment_usd`、`fees_usd`、`fee_source`、`fee_evidence_class`。
 - maker zero、tx-exact public activity、Weather fee curve estimate 分层报告。
 

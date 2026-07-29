@@ -406,16 +406,25 @@ def clob_coverage_gate(db: Path, cache: Path) -> dict[str, Any]:
     conn = sqlite3.connect(str(db))
     try:
         order_caps = module.load_order_caps(conn)
-        db_rows = module.load_db_fill_rows(conn)
+        # Keep the account report on the same effective-price basis as the
+        # standalone coverage gate and fact_trades.  The raw fills table can
+        # have an append-only price correction; using it here produced a
+        # false coverage failure even though the canonical gate passed.
+        raw_db_rows = module.load_db_fill_rows(conn)
+        db_rows = module.load_effective_db_fill_rows(conn)
         db_fills = module.summarize_rows(db_rows, order_caps=order_caps)
         facts = module.fact_summary(conn)
-        cache_rows = module.load_cache_rows(cache)
+        cache_filters = module.load_cache_filters(conn)
+        cache_rows = module.load_cache_rows(cache, **cache_filters)
         cache_fills = module.summarize_rows(cache_rows, order_caps=order_caps)
-        db_fill_ids = module._fill_id_set(db_rows)
+        fee_lineage = module.fee_lineage_summary(conn)
+        db_fill_ids = module._fill_id_set(raw_db_rows)
         cache_fill_ids = module._fill_id_set(cache_rows)
         db_not_in_cache = sorted(db_fill_ids - cache_fill_ids)
         cache_not_in_db = sorted(cache_fill_ids - db_fill_ids)
-        db_cost_minus_cache_cost = module._round(module._cost(db_rows) - module._cost(cache_rows))
+        # Cache is raw exchange evidence, so compare it to raw DB fills.  The
+        # effective-price series above is instead compared to fact_trades.
+        db_cost_minus_cache_cost = module._round(module._cost(raw_db_rows) - module._cost(cache_rows))
         db_fill_cost_minus_fact_cost = module._round(db_fills["cost_usd"] - facts["cost_usd"])
 
         fail_reasons: list[str] = []
@@ -433,6 +442,14 @@ def clob_coverage_gate(db: Path, cache: Path) -> dict[str, Any]:
             fail_reasons.append("db_cache_cost_mismatch")
         if abs(db_fill_cost_minus_fact_cost) > 0.01:
             fail_reasons.append("fact_trades_cost_not_equal_fills_cost")
+        if fee_lineage["known_matched_taker_zero_fee_without_adjustment"]:
+            fail_reasons.append(
+                "known_matched_taker_fills_have_zero_fee_without_adjustment"
+            )
+        if fee_lineage["unknown_fee_lineage_rows"]:
+            fail_reasons.append("clob_fills_have_unknown_fee_lineage")
+        if fee_lineage["invalid_maker_taker_lineage_rows"]:
+            fail_reasons.append("clob_fills_have_invalid_maker_taker_fee_lineage")
 
         return {
             "gate_pass": not fail_reasons,
@@ -453,6 +470,7 @@ def clob_coverage_gate(db: Path, cache: Path) -> dict[str, Any]:
                 "over_order_keys": cache_fills["over_order_keys"],
             },
             "fact_trades_live_real": facts,
+            "fee_lineage": fee_lineage,
             "db_vs_primary_cache": {
                 "db_not_in_cache": len(db_not_in_cache),
                 "cache_not_in_db": len(cache_not_in_db),
@@ -532,6 +550,20 @@ def render_markdown(result: dict[str, Any]) -> str:
 
 def run(args: Args) -> dict[str, Any]:
     conn = connect(args.db)
+    coverage = clob_coverage_gate(args.db, args.clob_fills)
+    db_vs_cache = coverage.get("db_vs_primary_cache") or {}
+    fill_id_reconciliation = {
+        "db_live_real_distinct_fills": coverage.get("db_fills", {}).get(
+            "distinct_fill_ids", 0
+        ),
+        "raw_clob_distinct_fills": coverage.get("cache_fills", {}).get(
+            "distinct_fill_ids", 0
+        ),
+        "db_not_in_raw": db_vs_cache.get("db_not_in_cache", 0),
+        "raw_not_in_db": db_vs_cache.get("cache_not_in_db", 0),
+        "sample_db_not_in_raw": db_vs_cache.get("sample_db_not_in_cache", []),
+        "sample_raw_not_in_db": db_vs_cache.get("sample_cache_not_in_db", []),
+    }
     return {
         "scope": {
             "db": str(args.db.relative_to(ROOT) if args.db.is_relative_to(ROOT) else args.db),
@@ -546,8 +578,8 @@ def run(args: Args) -> dict[str, Any]:
         "order_reconcile": aggregate_orders(conn, args),
         "raw_clob_summary": raw_clob_summary(args.clob_fills, args.start, args.end),
         "raw_order_summary": raw_order_summary(args.raw_live_dir, args.start, args.end),
-        "fill_id_reconciliation": unmatched_summary(conn, args.clob_fills),
-        "clob_fill_coverage_gate": clob_coverage_gate(args.db, args.clob_fills),
+        "fill_id_reconciliation": fill_id_reconciliation,
+        "clob_fill_coverage_gate": coverage,
     }
 
 
