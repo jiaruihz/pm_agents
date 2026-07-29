@@ -305,3 +305,118 @@ Production verification:
   was left untouched.
 
 Production commits: `d8d23b65`, `79e15231`, `f0074e2f`.
+
+## Canonical trade-fact duplication, false fill, and stalled refresh
+
+The post-trade refresh had three independent correctness defects and one
+performance defect:
+
+1. A physical CLOB `order_id` could be imported again under a new,
+   plan-dependent `execution_id` after migration enrichment changed. Fifty
+   later executions were aliases of an earlier canonical execution.
+2. The old public-activity fallback assigned account-level activity to a local
+   order even when authenticated order evidence said `CANCELED` with
+   `size_matched=0`.
+3. The routine refresh only named the D1 order journal; current core-carry and
+   fast-source journals were not part of its explicit input set.
+4. Every routine fact build scanned and randomly joined the full physical
+   tables in the 11GB JRS DB. The strict gate repeated the same scans and read
+   large `orders.exchange_response` payloads. Both could spend more than a
+   minute in filesystem I/O with no progress output.
+
+Corrections are append-only at the canonical layer:
+
+- `order_execution_aliases` maps the later execution to the earliest physical
+  order execution; raw orders and fills are retained.
+- `fill_validity_adjustments` excludes disproved fills without updating or
+  deleting `fills`.
+- the refresh explicitly ingests D1, core-carry and fast-source order journals;
+- `fact_materialization_watermarks` advances `fills`, `settlements` and
+  `settlement_outcomes` rowid cursors in the same transaction as the scoped
+  fact publication;
+- routine refresh materializes only new or invalidated `fill_id` /
+  `target_date` rows; explicit rebuild retains the full builder;
+- compact covering indexes keep the CLOB gate away from large order payload
+  pages; matched response amounts are loaded lazily only for preliminary
+  over-cap orders.
+
+### Impact radius
+
+The duplicate lineage affected 39 fill rows: one fill on 2026-07-20 and 38 on
+2026-07-26. It duplicated 341.5 shares and $279.677 of fill cost in
+`fact_trades`. Settled realized PnL was overstated by $0.30149; the much larger
+damage was polluted volume, win-rate and ROI denominators. The raw rows remain
+available for audit, but all 39 are now absent from the derived fact table.
+
+The exact affected physical order IDs are:
+
+```text
+0xd9edc94f8eae8f042d774c0a8d0a4df83028e7c0790db351a0e7655db26e6d28
+0xabf6fec7bec9e792d51c8fdb1d956d3e0611eb873779e3b91cddaca8f6ba7dd2
+0x4cceacfa3a3e08188873f94e3a0bc2e923efb359633e96beceef27ceb4943d21
+0x4aa3b77904edd0f82ba794bffcd0893e678c702d7e594b863f988d96c274fb6e
+0x9f64f6930a8284e2912f57e16d16195036cc76e60d0bdfe49e7172a8b7d485e7
+0xc6599365ebc64e2b2ba9b365fa37eef35178e8891c98354c7d4227edc55fecb1
+0xfb3e14f81264a851f049d7d9b131afc5c7d7690d848b3ee74426f36da05aa528
+0x4da9b43cdc124ac42701b655788ee684616de26d042e659b569bbcbda981ce56
+0x4717089ddf3df06033fbde7c228836ef0b1c47cf083ed705d554941a3adaf8ff
+0xc92c6caab73a12d24f6fa92aa6a8090a9449971b0a465de9e761d43c57d21898
+0xa9c2b041db74e2645fd5bd243dadb1ec6a65a7a373d892272bd3a1f6abc29985
+0x98ce03c035a276e4df2cbceef4f13ee8b4c32f25352dbf396298d84df2c8428f
+0xda80f76d8fda4b8bc99362fbf7a88c6327c9ca765aa6b7490e054a9f20f9c416
+0xe257ebb0d24eec5746ec4c1d4c7475182e86c16832c7b9fcea2c6a37b6616646
+0x9820f2c92538c0e53cb0739cbeac9683d295f44191439465f33e58b21df0e268
+0x26bcc3cd70e5c3543bf0937101a684751f3e17cdea386921004d19c10226e1a5
+0x48643866187e2e6c0d4584582bb2fbd180b592b61db14f15e64fcab19fde173f
+0x19eae1e11a5fb7c49e669badb0df011d9f66efd0d30fc94788cbce19e87f2422
+0x25b3d6b436f241663ed30cf280a13ded15bb07ae52c8b4ed45a9b36ddccd7c36
+0x482eb0442af75e409e7aa4f5519ad93dde8506d9cf3fcd9e0c0990a88bbe6638
+0x289c14526d6264c730774660716e3158a10b53a58acfb6d5c0176f9685937b7a
+0xa58bf79dd319d66e0294005494b3f5014a0f5141213e7ab23ba611833382be8f
+0xb40fefb9826715875b4f207f0fec170cf5a9a8d84ccd85e1a037a27e54c52080
+0xaa899b7f2974ef6bbab46ca8a567eed045faca2c0e337e4bd51be78849c6fe3a
+0xbff148008c7f199ffaa0d2e8b0363257597c96479da215f6538ec2518b7c03a1
+0x5eb1c4fbbf6910c235ee68ebfc2bcbfc0ddbc52d56c4094fd298f7d783b8a749
+0x6e3fe5b6a78f414d2e994f6613741224990a2bc3ee19510f798dee2f7062e162
+0x2466c429d31047f7f8a96420f10f61ef6d1c744e41a9065ee9635106134666fe
+0x78a828d2cd434382712541adeca5a08d0b882d4170272bc52b497131beddb5c1
+0x86ee7b20432ed9a1469d261339e8995c82fca541e82342fdef17acffcb6a1565
+0x26bd458162d582d15a9720da9a9359d6e6cf1a767adfe4b8923682576c501d2c
+0x87395674a0e71a300bf00aa0a2de629093b603a7ca8a0a9685e1d94807964c9b
+0xbe9dcb8afd306543cf7c46a55ebed7565c33602cf43edb6d034806a4e437cfb9
+0x711895d24ea9bbb8f5cc381fe5fdee961e50f8b3d915e86a03bd9782b42f2d42
+0xe13e3559cc4246ab1fb5e335a147de56ab66da7b7dc522fa09762c3cb43c5ac3
+0x32e637b5299009195975fa782f47a321ef2470f76918f656e0f2026072be2455
+0xfbdd998a4c66fe6f21d4e2eeb0849de049dd09fa44df0168c8f1fe4148e17179
+0x224a1e4de692aea7dfefcb2f1f15a065027d87ae4888470f5c31d1d99df03fb4
+0xd044e5f45950bf790db517f2adf32253f11f81cadd10c2fccf064f677e43385a
+```
+
+The disproved fill was
+`7acaee34a061a828ef79c57f3826529127d3c4efd41d1168a22ebdde2c2d9f6a`
+for physical order
+`0x53c34b1f8058babbd938d49766fabaa6f77b43096aabbdfba3629bf575eb9839`.
+The raw fast-source journal line records immediate cancellation,
+`order_after_cancel.status=CANCELED`, `size_matched=0`; its validity adjustment
+is `0a5ff70546e36af20e03ba588f5b3a10a042ad5d44a7fb8c304d1d8379f472d0`.
+
+### Final validation
+
+- first scoped cutover: 46 fill IDs, four inserted/changed facts, 39 removed
+  alias facts, 9.44 seconds;
+- post-index no-op refresh: 42 fill IDs, zero fact changes, 13.54 seconds;
+- strict CLOB gate: 11.59 seconds before warm-cache follow-up, then 3–5
+  seconds inside the full refresh; `gate_pass=true`;
+- final `fact_trades`: 4,865 rows, including 1,320 `live_real`; newest fact
+  fill is through `2026-07-29T07:57:07.580865Z`, and the refresh published it
+  at `2026-07-29T08:04:34.051877Z`;
+- `alias_fact_rows=0`, `excluded_fact_rows=0`;
+- DB/cache fill IDs match, over-order keys are zero, missing-order rows are
+  zero, and effective fill cost equals fact cost;
+- actual canonical refresh completed successfully in 111.77 seconds. Of that,
+  the remaining dominant cost is authenticated serial status lookup for 104
+  recent CLOB orders; it confirmed one new fill, one cancellation and 102 open
+  orders. This is bounded and observable, but remains a P1 latency target.
+
+Production commits: `b9feb50a`, `39b9b8c1`, `59bfe74a`, `e99a7c07`,
+`4683a7be`.
