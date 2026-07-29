@@ -349,17 +349,46 @@ def _jma_obs_time_from_key(value: Any) -> datetime | None:
         return None
 
 
+def _jma_pair_value(row: dict[str, Any], key: str) -> float | None:
+    pair = row.get(key) or []
+    return safe_float(pair[0] if isinstance(pair, list) and pair else None)
+
+
+def _jma_pair_quality(row: dict[str, Any], key: str) -> int | None:
+    pair = row.get(key) or []
+    if not isinstance(pair, list) or len(pair) < 2 or pair[1] is None:
+        return None
+    try:
+        return int(pair[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _jma_direction_deg(value: float | None) -> float | None:
+    """Convert JMA's 16-point direction code to meteorological degrees."""
+
+    if value is None:
+        return None
+    code = int(value)
+    if code < 1 or code > 16:
+        return None
+    return float((code % 16) * 22.5)
+
+
 def parse_jma_amedas_payload(payload: dict[str, Any], *, city: str = "Tokyo", target_date: str = "", fetched_at: datetime | None = None) -> list[dict[str, Any]]:
     meta = HIGH_FREQUENCY_CITY_SOURCES["jma_amedas"][city]
     fetched = fetched_at or datetime.now(timezone.utc)
     rows: list[dict[str, Any]] = []
     for key in sorted(payload):
         row = payload.get(key) or {}
-        temp_pair = row.get("temp") or []
-        temp = safe_float(temp_pair[0] if isinstance(temp_pair, list) and temp_pair else None)
+        temp = _jma_pair_value(row, "temp")
         obs_dt = _jma_obs_time_from_key(key)
         if temp is None or obs_dt is None:
             continue
+        wind_ms = _jma_pair_value(row, "wind")
+        wind_direction_code = _jma_pair_value(row, "windDirection")
+        gust_ms = _jma_pair_value(row, "gust")
+        gust_direction_code = _jma_pair_value(row, "gustDirection")
         rows.append(
             _base_record(
                 source="jma_amedas",
@@ -372,7 +401,54 @@ def parse_jma_amedas_payload(payload: dict[str, Any], *, city: str = "Tokyo", ta
                 raw={key: row},
                 source_kind="official_airport_station",
                 source_note="JMA AMeDAS Haneda airport station; not runway sensor",
-                extra={"station_code": meta["station"]},
+                extra={
+                    "station_code": meta["station"],
+                    "wind_speed_ms": wind_ms,
+                    "wind_speed_kt": (
+                        round(wind_ms * 1.94384, 3)
+                        if wind_ms is not None
+                        else None
+                    ),
+                    "wind_direction_code": (
+                        int(wind_direction_code)
+                        if wind_direction_code is not None
+                        else None
+                    ),
+                    "wind_dir_deg": _jma_direction_deg(wind_direction_code),
+                    "wind_gust_ms": gust_ms,
+                    "wind_gust_kt": (
+                        round(gust_ms * 1.94384, 3)
+                        if gust_ms is not None
+                        else None
+                    ),
+                    "wind_gust_direction_code": (
+                        int(gust_direction_code)
+                        if gust_direction_code is not None
+                        else None
+                    ),
+                    "wind_gust_dir_deg": _jma_direction_deg(
+                        gust_direction_code
+                    ),
+                    "precipitation_10m_mm": _jma_pair_value(
+                        row, "precipitation10m"
+                    ),
+                    "precipitation_1h_mm": _jma_pair_value(
+                        row, "precipitation1h"
+                    ),
+                    "precipitation_3h_mm": _jma_pair_value(
+                        row, "precipitation3h"
+                    ),
+                    "precipitation_24h_mm": _jma_pair_value(
+                        row, "precipitation24h"
+                    ),
+                    "relative_humidity_pct": _jma_pair_value(row, "humidity"),
+                    "jma_temp_quality_code": _jma_pair_quality(row, "temp"),
+                    "jma_wind_quality_code": _jma_pair_quality(row, "wind"),
+                    "jma_precipitation_10m_quality_code": _jma_pair_quality(
+                        row, "precipitation10m"
+                    ),
+                    "jma_observation_number": row.get("observationNumber"),
+                },
             )
         )
     return rows

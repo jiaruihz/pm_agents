@@ -217,6 +217,7 @@ def observation_cache_row(
         "relative_humidity_pct": relh_now,
         "sknt_now": wind_kt,
         "wind_speed_kt": wind_kt,
+        "pressure_hpa": physical["pressure_hpa"],
         "drct_now": wind_dir_deg,
         "wind_dir_deg": wind_dir_deg,
         "sky_code_now": latest.sky_code,

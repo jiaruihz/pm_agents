@@ -28,6 +28,12 @@ def test_metar_physical_parser_has_one_precip_cloud_wind_contract() -> None:
     assert parsed["ceiling_ft_agl"] == 1800
     assert parsed["metar_wind_dir_deg"] == 240
     assert parsed["metar_wind_speed_kt"] == 12
+    assert abs(parsed["pressure_hpa"] - 1013.207) < 0.001
+
+    tokyo = metar_physical_features(
+        "METAR RJTT 291600Z 28004KT CAVOK 30/19 Q1004 NOSIG"
+    )
+    assert tokyo["pressure_hpa"] == 1004.0
 
 
 def test_solar_geometry_is_continuous_and_explicit_when_coordinates_missing() -> None:

@@ -79,7 +79,22 @@ def test_singapore_mss_parser_accepts_v2_open_data_shape() -> None:
 def test_jma_amedas_parser_extracts_haneda_ten_minute_temp() -> None:
     payload = {
         "20260707050000": {"temp": [28.8, 0]},
-        "20260707051000": {"temp": [29.1, 0]},
+        "20260707051000": {
+            "temp": [29.1, 0],
+            "wind": [4.0, 0],
+            "windDirection": [12, 0],
+            "gust": [6.5, 0],
+            "gustDirection": [15, 0],
+            "precipitation10m": [0.5, 0],
+            "precipitation1h": [1.0, 0],
+            "precipitation3h": [2.0, 0],
+            "precipitation24h": [3.0, 0],
+            "observationNumber": 42,
+            # JMA daily max/min fields deliberately remain raw-only because
+            # their day/time semantics are unsafe as PIT model features.
+            "maxTemp": [31.0, 0],
+            "maxTempTime": {"hour": 15, "minute": 20},
+        },
     }
 
     rows = parse_jma_amedas_payload(payload, target_date="2026-07-07")
@@ -90,6 +105,16 @@ def test_jma_amedas_parser_extracts_haneda_ten_minute_temp() -> None:
     assert rows[-1]["icao"] == "RJTT"
     assert rows[-1]["observation_time_utc"] == "2026-07-06T20:10:00+00:00"
     assert rows[-1]["temp_c"] == 29.1
+    assert rows[-1]["wind_speed_ms"] == 4.0
+    assert abs(rows[-1]["wind_speed_kt"] - 7.775) < 0.001
+    assert rows[-1]["wind_dir_deg"] == 270.0
+    assert abs(rows[-1]["wind_gust_kt"] - 12.635) < 0.001
+    assert rows[-1]["wind_gust_dir_deg"] == 337.5
+    assert rows[-1]["precipitation_10m_mm"] == 0.5
+    assert rows[-1]["precipitation_24h_mm"] == 3.0
+    assert rows[-1]["jma_temp_quality_code"] == 0
+    assert rows[-1]["jma_observation_number"] == 42
+    assert "max_temp_c" not in rows[-1]
 
 
 def test_hko_csv_parser_extracts_named_station() -> None:

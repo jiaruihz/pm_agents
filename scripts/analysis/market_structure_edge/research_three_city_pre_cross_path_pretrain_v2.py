@@ -269,7 +269,20 @@ def load_archive_history(
                 "first_seen_age_min": None,
                 "temp_c": temp_c,
                 "wind_speed_kt": number(raw.get("wind_speed_kt")),
+                "wind_dir_deg": number(raw.get("wind_dir_deg")),
+                "wind_gust_kt": number(raw.get("wind_gust_kt")),
                 "pressure_hpa": number(raw.get("pressure_hpa")),
+                "relative_humidity_pct": (
+                    number(raw.get("relative_humidity_pct"))
+                    if raw.get("relative_humidity_pct") is not None
+                    else number(raw.get("humidity"))
+                ),
+                "precipitation_10m_mm": number(
+                    raw.get("precipitation_10m_mm")
+                ),
+                "sunshine_duration_min": number(
+                    raw.get("sunshine_duration_min")
+                ),
                 "training_clock_class": "observation_clock_archive_not_pit",
                 "cadence_minutes": number(raw.get("cadence_minutes")) or 10.0,
                 "archive_source": str(raw.get("archive_source") or "collector_archive"),
@@ -405,7 +418,28 @@ def build_states(
                     "local_hour_sin": math.sin(2 * math.pi * hour / 24),
                     "local_hour_cos": math.cos(2 * math.pi * hour / 24),
                     "source_wind_speed_kt": event.get("wind_speed_kt"),
+                    "source_wind_dir_deg": event.get("wind_dir_deg"),
+                    "source_wind_dir_sin": (
+                        None
+                        if event.get("wind_dir_deg") is None
+                        else math.sin(math.radians(float(event["wind_dir_deg"])))
+                    ),
+                    "source_wind_dir_cos": (
+                        None
+                        if event.get("wind_dir_deg") is None
+                        else math.cos(math.radians(float(event["wind_dir_deg"])))
+                    ),
+                    "source_wind_gust_kt": event.get("wind_gust_kt"),
                     "source_pressure_hpa": event.get("pressure_hpa"),
+                    "source_relative_humidity_pct": event.get(
+                        "relative_humidity_pct"
+                    ),
+                    "source_precipitation_10m_mm": event.get(
+                        "precipitation_10m_mm"
+                    ),
+                    "source_sunshine_duration_min": event.get(
+                        "sunshine_duration_min"
+                    ),
                 }
             )
             history.append(event)

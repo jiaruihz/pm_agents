@@ -31,6 +31,24 @@ JMA_URL = "https://www.data.jma.go.jp/stats/etrn/view/10min_a1.php"
 FMI_URL = "https://opendata.fmi.fi/wfs"
 KNMI_URL = "https://www.daggegevens.knmi.nl/klimatologie/uurgegevens"
 UTC = timezone.utc
+JMA_DIRECTION_DEG = {
+    "北": 0.0,
+    "北北東": 22.5,
+    "北東": 45.0,
+    "東北東": 67.5,
+    "東": 90.0,
+    "東南東": 112.5,
+    "南東": 135.0,
+    "南南東": 157.5,
+    "南": 180.0,
+    "南南西": 202.5,
+    "南西": 225.0,
+    "西南西": 247.5,
+    "西": 270.0,
+    "西北西": 292.5,
+    "北西": 315.0,
+    "北北西": 337.5,
+}
 
 
 def days(start: date, end: date) -> Iterable[date]:
@@ -55,7 +73,13 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "observation_time_utc",
         "temp_c",
         "wind_speed_kt",
+        "wind_dir_deg",
+        "wind_gust_kt",
+        "wind_gust_dir_deg",
         "pressure_hpa",
+        "relative_humidity_pct",
+        "precipitation_10m_mm",
+        "sunshine_duration_min",
         "cadence_minutes",
         "archive_source",
         "collection_mode",
@@ -106,6 +130,9 @@ def fetch_jma(start: date, end: date, client: httpx.Client) -> list[dict[str, An
                 obs_day.year, obs_day.month, obs_day.day, hour, minute, tzinfo=local_zone
             ).astimezone(UTC)
             wind_ms = finite(cells[4])
+            gust_ms = finite(cells[6])
+            humidity = finite(cells[3])
+            sunshine = finite(cells[8])
             output.append(
                 {
                     "city": "Tokyo",
@@ -116,7 +143,19 @@ def fetch_jma(start: date, end: date, client: httpx.Client) -> list[dict[str, An
                     "wind_speed_kt": (
                         round(wind_ms * 1.94384, 3) if wind_ms is not None else ""
                     ),
+                    "wind_dir_deg": JMA_DIRECTION_DEG.get(cells[5], ""),
+                    "wind_gust_kt": (
+                        round(gust_ms * 1.94384, 3) if gust_ms is not None else ""
+                    ),
+                    "wind_gust_dir_deg": JMA_DIRECTION_DEG.get(cells[7], ""),
                     "pressure_hpa": "",
+                    "relative_humidity_pct": (
+                        humidity if humidity is not None else ""
+                    ),
+                    "precipitation_10m_mm": finite(cells[1]),
+                    "sunshine_duration_min": (
+                        sunshine if sunshine is not None else ""
+                    ),
                     "cadence_minutes": 10,
                     "archive_source": "jma_etrn_10min_block_0371",
                     "collection_mode": "historical_observation_clock_not_first_seen",
@@ -178,7 +217,13 @@ def fetch_fmi(start: date, end: date, client: httpx.Client) -> list[dict[str, An
                     "wind_speed_kt": (
                         round(wind_ms * 1.94384, 3) if wind_ms is not None else ""
                     ),
+                    "wind_dir_deg": "",
+                    "wind_gust_kt": "",
+                    "wind_gust_dir_deg": "",
                     "pressure_hpa": values.get("p_sea", {}).get(obs_ts, ""),
+                    "relative_humidity_pct": "",
+                    "precipitation_10m_mm": "",
+                    "sunshine_duration_min": "",
                     "cadence_minutes": 10,
                     "archive_source": "fmi_wfs_timevaluepair",
                     "collection_mode": "historical_observation_clock_not_first_seen",
@@ -230,9 +275,15 @@ def fetch_knmi(start: date, end: date, client: httpx.Client) -> list[dict[str, A
                     if wind_tenths_ms is not None
                     else ""
                 ),
+                "wind_dir_deg": "",
+                "wind_gust_kt": "",
+                "wind_gust_dir_deg": "",
                 "pressure_hpa": (
                     pressure_tenths / 10.0 if pressure_tenths is not None else ""
                 ),
+                "relative_humidity_pct": "",
+                "precipitation_10m_mm": "",
+                "sunshine_duration_min": "",
                 "cadence_minutes": 60,
                 "archive_source": "knmi_hourly_climate_station_240",
                 "collection_mode": "historical_observation_clock_not_first_seen",

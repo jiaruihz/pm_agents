@@ -16,6 +16,8 @@ from typing import Any
 
 _CLOUD_RE = re.compile(r"\b(FEW|SCT|BKN|OVC|VV)(\d{3}|///)?\b")
 _WIND_RE = re.compile(r"\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b")
+_QNH_HPA_RE = re.compile(r"\bQ(\d{4})\b")
+_ALTIMETER_INHG_RE = re.compile(r"\bA(\d{4})\b")
 _WX_RE = re.compile(
     r"^(?:\+|-|VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?"
     r"(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP)(?:(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP))?$"
@@ -104,6 +106,17 @@ def metar_physical_features(raw_metar: Any, present_weather: Any = None) -> dict
     wind_match = _WIND_RE.search(raw)
     wind_dir = None if wind_match is None or wind_match.group(1) == "VRB" else float(wind_match.group(1))
     wind_speed = None if wind_match is None else float(wind_match.group(2))
+    qnh_match = _QNH_HPA_RE.search(raw)
+    altimeter_match = _ALTIMETER_INHG_RE.search(raw)
+    pressure_hpa = (
+        float(qnh_match.group(1))
+        if qnh_match is not None
+        else (
+            round(float(altimeter_match.group(1)) / 100.0 * 33.8638866667, 3)
+            if altimeter_match is not None
+            else None
+        )
+    )
     return {
         "present_weather_codes": "|".join(wx_tokens),
         "precip_state": precip_state,
@@ -116,6 +129,7 @@ def metar_physical_features(raw_metar: Any, present_weather: Any = None) -> dict
         "ceiling_ft_agl": min(ceilings) if ceilings else None,
         "metar_wind_dir_deg": wind_dir,
         "metar_wind_speed_kt": wind_speed,
+        "pressure_hpa": pressure_hpa,
     }
 
 
