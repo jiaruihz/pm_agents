@@ -73,6 +73,40 @@ Source of truth: external-wallet research register, not production strategy trut
 - 完整报告：
   - [Gptball 成都完整策略复盘](analysis/2026-07/2026-07-29-research-gptball-chengdu-complete-strategy-v1.md)
 
+### 0x43cb：全球 YES-strip / bounded-range accumulator
+
+- address：`0x43cb4ae1f4ddc9e671486c79c9f40a6fd98b84df`
+- 核心市场：没有单城集中；最新样本 effective city count 23.73，第一城市 Busan
+  仅 8.96%，覆盖全球 WU 机场站。
+- 完整策略判断：target day 根据观测下限、forecast support 和市场分布，买一段
+  连续 exact-bracket YES strip。常先铺接近等 shares 的 bounded-range 底仓，再
+  对中心档加权；主要持有到 settlement。不是多个独立 YES 信号，也不是纯
+  observed-floor threshold、纯 underround 或传统双边做市。
+- 入场证据：最新 50 个完整 events 中 49 个为连续 YES strip，平均 4.52 档、
+  覆盖 ladder 41.09%；最新资金 100% target day，89.76% 在当地 10–18 时。
+  历史精确抽样 30 个 target dates 中 27 个为 YES strip，结构长期稳定。
+- PIT 证据：可对齐 BUY cost 中 44.46% 的所买 bracket 在当时 running max 上方，
+  32.67% 包含 current，只有 6.13% 在下方；source age 中位数 33.78 分钟，
+  `<=10m` 仅 6.14%。更像 forecast/market distribution，而非抢单一快源。
+- 执行证据：最新样本 1,303 个独立 transactions，中位秒级间隔为 0 秒，
+  69.35% `<=2s`，峰值 43 tx/min；同时间覆盖的 public trades 推断约 27.48%
+  maker。执行 bot 高可信，可能采用 maker-assisted accumulation，但几乎不 SELL，
+  因此不是双边 MM。
+- 盈利证据：官方 WEATHER leaderboard 截至 2026-07-29 为
+  ALL `+$31,581.99 / $3.076m volume`（PnL/volume 1.03%），MONTH 0.94%，
+  WEEK 1.05%。最新两日 39 个已结算 exact events 重建 ROI +7.11%，但只有
+  2 个 target dates，不能作显著性或 forward 证据。
+- 可复制性：机制比单城快源更可迁移，但必须同时取得完整 ladder 的 ask/depth、
+  official fee 和逐腿 fill；复制单腿会把 bounded-range 变成裸 exact risk。
+- 研究方向：
+  1. `feasible-support YES strip / bounded-range residual` 全 ladder 头；
+  2. 比较 observed-floor、forecast-support、market-only 和 wallet-overlay 四臂；
+  3. 底仓与中心加权分开评估，报告 min-band payout / basket cost；
+  4. maker fill/queue 与未原子成交风险单列；
+  5. 至少 15 个 frozen-forward target dates，按 target_date bootstrap。
+- 完整报告：
+  - [0x43cb 全球 YES-strip 完整策略复盘](analysis/2026-07/2026-07-29-research-43cb-global-yes-strip-complete-strategy-v1.md)
+
 ## 使用边界
 
 - 外部钱包公开 activity 是成交后公开数据，不能证明其私有信号或下单时可见盘口。
