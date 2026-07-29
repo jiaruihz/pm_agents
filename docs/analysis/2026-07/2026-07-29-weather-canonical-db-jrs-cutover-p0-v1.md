@@ -174,3 +174,65 @@ The first fully validated production batch used snapshot timestamp
 
 Production commits: `d534fa9c`, `85b7f112`, `d40fb26a`.
 Mainline commits: `cf40b586`, `bac065e9`.
+
+## Signal PIT availability alignment
+
+The published snapshot timestamp previously meant collection **start**, while a
+complete batch did not become visible until 83–300 seconds later. The signal
+runner nevertheless used the start timestamp as its PIT cutoff. It could
+therefore exclude observations/forecast curves that were already part of the
+published batch, mix the new snapshot with older enrichment, and evaluate a
+state that never existed as one atomic decision input. The feature builder also
+allowed a record-level snapshot timestamp to override the caller's explicit
+as-of time.
+
+Corrections:
+
+- snapshots now carry separate `collection_started_at_utc`,
+  `available_at_utc`, and `published_at_utc`;
+- signal decisions and freshness checks use batch availability;
+- an explicit feature-layer as-of timestamp takes precedence over embedded
+  record metadata;
+- old snapshots remain readable through the legacy `ts_utc` fallback;
+- runtime-state publication uses the schema-valid `blocked` health state, so an
+  executor error is no longer hidden by a telemetry CHECK failure.
+
+The first validated production batch after deployment was collected at
+`2026-07-29T06:03:41Z` and became available at
+`2026-07-29T06:07:28.394Z`. It contained 128/128 complete targeted books and 99
+matching forecast curves. All 35 decisions used `06:07:28Z`; no selected
+observation was newer than its decision time, no decision had an empty curve,
+and pre-live freshness measured about 0.30 minutes from availability rather
+than about four minutes from collection start.
+
+### Live-decision impact
+
+All 22 unique core-carry live entry signals from 2026-07-25 through 2026-07-29
+were replayed at the historical snapshot file modification time, used as the
+best retained proxy for batch availability. Thirteen would still have entered;
+nine would not. This is an eligibility/data-alignment impact, independent of
+whether the strategy itself was accurate.
+
+| Target date | City | Signal suffix | Old p | Corrected p | Corrected edge | Counterfactual |
+|---|---|---|---:|---:|---:|---|
+| 2026-07-25 | PanamaCity | `c8a602` | 0.942186 | 0.926225 | -0.015635 | would not order |
+| 2026-07-25 | Chicago | `47a952` | 0.960774 | 0.938906 | -0.003914 | would not order |
+| 2026-07-26 | Guangzhou | `24cfdd` | 0.997422 | 0.988412 | -0.002088 | would not order |
+| 2026-07-27 | Wellington | `163596` | 0.981631 | 0.975073 | -0.005907 | would not order |
+| 2026-07-27 | Taipei | `b8d4e0` | 0.925074 | 0.897207 | -0.026473 | would not order |
+| 2026-07-27 | Singapore | `cf8eda` | 0.875516 | 0.852079 | -0.004301 | would not order |
+| 2026-07-27 | Beijing | `8b3814` | 0.906142 | 0.904088 | -0.000412 | would not order |
+| 2026-07-27 | Wuhan | `8dc86f` | 0.950203 | 0.936739 | -0.006081 | would not order |
+| 2026-07-27 | Chengdu | `f6a5e2` | 0.988502 | 0.914653 | -0.015132 | would not order |
+
+The other 13 signals remained eligible; their corrected probability deltas
+ranged from -0.003313 to +0.007892 or were zero. Three historical snapshots
+lacked an exact retained curve capture (Chicago 07-25, San Francisco 07-26,
+Cape Town 07-27), but the frozen model did not consume the hourly curve
+directly, so their probability replay is complete. The replay keeps each
+signal's direct CLOB book/effective cost unchanged because the runner fetches
+that book after snapshot publication. File modification time is still a proxy,
+not a first-class historical availability event; the new explicit availability
+fields remove that ambiguity prospectively.
+
+Production commit: `6edba326`. Mainline commit: `0d052420`.
