@@ -4,10 +4,10 @@ set -euo pipefail
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 LABEL="com.pm-agents.weather-canonical-refresh"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-RUNTIME_DIR="$PROJECT_DIR/runtime/weather_edge_v1/canonical_refresh"
+LAUNCHD_LOG_DIR="$HOME/Library/Logs/pm-agents/weather-canonical-refresh"
 INTERVAL="${WEATHER_CANONICAL_REFRESH_INTERVAL_SECONDS:-300}"
 
-mkdir -p "$HOME/Library/LaunchAgents" "$RUNTIME_DIR"
+mkdir -p "$HOME/Library/LaunchAgents" "$LAUNCHD_LOG_DIR"
 cat >"$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -19,8 +19,8 @@ cat >"$PLIST" <<EOF
   <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
   <key>RunAtLoad</key><true/>
   <key>StartInterval</key><integer>$INTERVAL</integer>
-  <key>StandardOutPath</key><string>$RUNTIME_DIR/launchd.out.log</string>
-  <key>StandardErrorPath</key><string>$RUNTIME_DIR/launchd.err.log</string>
+  <key>StandardOutPath</key><string>$LAUNCHD_LOG_DIR/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>$LAUNCHD_LOG_DIR/launchd.err.log</string>
 </dict></plist>
 EOF
 

@@ -163,9 +163,16 @@ def test_canonical_refresh_launchagent_delegates_to_canonical_tmux():
     assert "run_weather_canonical_refresh_launchd.sh" not in installer
     assert "weather_jrs_tmux_env.sh" in starter
     assert "weather_jrs_tmux_start_socket" in starter
+    assert "weather_jrs_tmux_mkdir" in starter
     assert 'SESSION="weather_canonical_refresh"' in starter
     assert "run_weather_canonical_refresh_launchd.sh" in starter
     assert 'STATUS_FILE="$LOG_DIR/last_exit_status"' in starter
+    assert 'mkdir -p "$LOG_DIR"' not in starter
+    assert 'rm -f "$STATUS_FILE"' not in starter
+    assert '[[ ! -s "$STATUS_FILE" ]]' not in starter
+    assert '<"$STATUS_FILE"' not in starter
+    assert 'LAUNCHD_LOG_DIR="$HOME/Library/Logs/' in installer
+    assert "RUNTIME_DIR=" not in installer
     assert "canonical refresh failed: returncode=$rc" in starter
 
 
