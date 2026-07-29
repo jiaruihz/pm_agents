@@ -1,6 +1,6 @@
 # Weather Canonical DB JRS Cutover — P0 Record
 
-Status: P0 closed with two auxiliary canonical writers intentionally paused
+Status: P0 closed; canonical refresh restored after P1, first-seen writer remains paused
 Generated: 2026-07-29
 
 ## Incident and pollution window
@@ -485,3 +485,38 @@ Final production measurements:
 
 P1 production commits: `2cc6f561`, `af0083cb`, `fd9273cf`, `717ba5cd`,
 `0d0507b2`, `b84d6850`.
+
+### P1 scheduled refresh restoration
+
+The canonical refresh LaunchAgent had remained stopped after P0. Its wrapper
+delegated the refresh process to the canonical tmux server, but still created,
+removed and read the JRS-backed log/status files from the LaunchAgent context.
+The plist also pointed launchd stdout/stderr directly at the JRS-backed runtime.
+That violated the single permission-bearing context even though the tmux server
+itself was healthy.
+
+The wrapper now performs every JRS log/status operation through the pinned
+`weather-data-feed-jrs` tmux server. Exit status is copied from JRS to a
+per-invocation local temporary bridge before the LaunchAgent reads it, and
+launchd stdout/stderr live under
+`~/Library/Logs/pm-agents/weather-canonical-refresh`. Entrypoint tests reject
+direct JRS mkdir/remove/read regressions.
+
+Production was restored at a 300-second interval from committed checkout
+`0bcbd9cd`:
+
+- first cycle completed with exit 0 and imported one previously missing
+  Busan `BUY_NO` fill (`5.81395` shares at `0.14`), moving canonical facts
+  from `4,865 / 1,320 live_real` to `4,866 / 1,321 live_real`;
+- that cold cycle spent about 110 seconds materializing the one-fill scope,
+  but core-carry continued publishing `status=ok` throughout;
+- the next two automatically scheduled no-op cycles completed in about 22 and
+  58 seconds, both with `scope=0`, zero fact changes and `gate_pass=true`;
+- LaunchAgent stderr remained empty and all three observed cycles returned 0.
+
+The production live runner was not restarted and no execution parameters,
+orders or funds behavior changed. `weather_first_seen_zero_notional` remains
+intentionally stopped; its separately unbounded writer path is not covered by
+this restoration.
+
+Production commit: `0bcbd9cd`. Mainline commit: `4439365f`.
