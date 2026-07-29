@@ -134,6 +134,25 @@ def test_publish_runtime_state_exposes_live_heartbeat(tmp_path) -> None:
     )
 
 
+def test_runtime_state_db_busy_is_deferred_without_failing_trading_loop(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    args = runner.parser().parse_args(["run"])
+    summary = {"status": "ok"}
+
+    def locked(*_args, **_kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(runner, "publish_runtime_state", locked)
+    runner.publish_runtime_state_best_effort(args, tmp_path, summary, {})
+
+    assert summary["status"] == "ok"
+    assert summary["runtime_state_publish_status"] == "deferred_db_busy"
+    assert "database is locked" in summary["runtime_state_publish_error"]
+    assert "runtime_state_error" not in summary
+
+
 def test_executor_rechecks_full_taker_ladder_and_fee() -> None:
     quote = _current_yes_residual_taker_quote(
         {

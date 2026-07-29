@@ -158,7 +158,8 @@ def publish_runtime_state(
     plan_rows = int(summary.get("entry_plans") or 0) + int(
         summary.get("maker_lifecycle_plans") or 0
     )
-    with sqlite3.connect(db_path, timeout=5.0) as conn:
+    with sqlite3.connect(db_path, timeout=0.25) as conn:
+        conn.execute("PRAGMA busy_timeout=250")
         runtime_state.push_runtime_state(
             conn,
             instance_id=STRATEGY_INSTANCE,
@@ -185,6 +186,30 @@ def publish_runtime_state(
             refreshed_at_utc=now,
         )
         conn.commit()
+
+
+def publish_runtime_state_best_effort(
+    args: argparse.Namespace,
+    output_dir: Path,
+    summary: dict[str, Any],
+    signal_summary: Mapping[str, Any],
+) -> None:
+    """Keep telemetry contention from changing the trading-loop result."""
+
+    try:
+        publish_runtime_state(args, output_dir, summary, signal_summary)
+    except sqlite3.OperationalError as exc:
+        if "locked" not in str(exc).lower() and "busy" not in str(exc).lower():
+            summary["status"] = "runtime_state_error"
+            summary["runtime_state_error"] = f"{type(exc).__name__}: {exc}"
+            return
+        summary["runtime_state_publish_status"] = "deferred_db_busy"
+        summary["runtime_state_publish_error"] = f"{type(exc).__name__}: {exc}"
+    except Exception as exc:  # noqa: BLE001
+        summary["status"] = "runtime_state_error"
+        summary["runtime_state_error"] = f"{type(exc).__name__}: {exc}"
+    else:
+        summary["runtime_state_publish_status"] = "published"
 
 
 def live_order_id(row: Mapping[str, Any]) -> str:
@@ -717,11 +742,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "max_daily_cost_usd": float(args.max_daily_cost_usd),
         "execution": execution,
     }
-    try:
-        publish_runtime_state(args, output_dir, summary, signal_summary)
-    except Exception as exc:  # noqa: BLE001
-        summary["status"] = "runtime_state_error"
-        summary["runtime_state_error"] = f"{type(exc).__name__}: {exc}"
+    publish_runtime_state_best_effort(args, output_dir, summary, signal_summary)
     write_json(output_dir / "latest_summary.json", summary)
     append_jsonl(output_dir / "summary_history.jsonl", summary)
     return summary
