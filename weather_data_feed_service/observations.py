@@ -36,6 +36,7 @@ from weather_data_feed_service.cli import DEFAULT_RUNTIME_ROOT
 
 
 DEFAULT_OUTPUT_PATH = DEFAULT_RUNTIME_ROOT / "output" / "observations" / "latest.json"
+FIRST_OBSERVATION_GRACE_MIN = 90
 
 
 def _float_or_none(value: Any) -> float | None:
@@ -99,6 +100,12 @@ def _fetch_result(cfg: CityConfig, target_date: str, settings: FetchSettings, so
     raise RuntimeError(last_error or "no observation records")
 
 
+def _local_day_elapsed_min(cfg: CityConfig, now_utc: datetime) -> int:
+    local_now = now_utc.astimezone(ZoneInfo(cfg.timezone_name))
+    local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(0, int((local_now - local_midnight).total_seconds() / 60.0))
+
+
 def observation_cache_row(
     cfg: CityConfig,
     now_utc: datetime,
@@ -114,6 +121,11 @@ def observation_cache_row(
         fetched_at = parse_dt(result.fetched_at_utc) or datetime.now(timezone.utc)
         records = list(result.records)
     except Exception as exc:  # noqa: BLE001
+        local_day_elapsed_min = _local_day_elapsed_min(cfg, now_utc)
+        awaiting_first_observation = (
+            str(exc) in {"empty", "no observation records"}
+            and local_day_elapsed_min <= FIRST_OBSERVATION_GRACE_MIN
+        )
         return {
             "city": cfg.city,
             "target_date": target_date,
@@ -121,11 +133,13 @@ def observation_cache_row(
             "unit": cfg.unit,
             "station": cfg.official_icao,
             "source": sources[0] if sources else "",
-            "status": "fetch_failed",
+            "status": "awaiting_first_observation" if awaiting_first_observation else "fetch_failed",
             "error": f"{type(exc).__name__}: {exc}",
             "fetched_at_utc": fetched_at.isoformat(),
             "n_obs": 0,
             "source_chain": sources,
+            "local_day_elapsed_min": local_day_elapsed_min,
+            "first_observation_grace_min": FIRST_OBSERVATION_GRACE_MIN,
         }
 
     latest = records[-1] if records else None

@@ -702,6 +702,50 @@ def test_observations_source_chain_uses_awc_cache_before_iem() -> None:
     ]
 
 
+def test_observations_marks_expected_local_midnight_gap(monkeypatch) -> None:
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import observations
+
+    cfg = load_city_configs(include_station_diff=True, only_cities={"Chicago"})[0]
+    monkeypatch.setattr(
+        observations,
+        "_fetch_result",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("empty")),
+    )
+
+    row = observations.observation_cache_row(
+        cfg,
+        datetime(2026, 7, 29, 5, 17, tzinfo=timezone.utc),
+        settings=observations.FetchSettings(),
+        include_fallback_sources=True,
+    )
+
+    assert row["status"] == "awaiting_first_observation"
+    assert row["local_day_elapsed_min"] == 17
+    assert row["first_observation_grace_min"] == 90
+
+
+def test_observations_empty_after_local_midnight_grace_is_failure(monkeypatch) -> None:
+    from weather_data_feed.source_policy import load_city_configs
+    from weather_data_feed_service import observations
+
+    cfg = load_city_configs(include_station_diff=True, only_cities={"Chicago"})[0]
+    monkeypatch.setattr(
+        observations,
+        "_fetch_result",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("empty")),
+    )
+
+    row = observations.observation_cache_row(
+        cfg,
+        datetime(2026, 7, 29, 7, 0, tzinfo=timezone.utc),
+        settings=observations.FetchSettings(),
+        include_fallback_sources=True,
+    )
+
+    assert row["status"] == "fetch_failed"
+
+
 def test_observations_source_chain_uses_synoptic_primary_for_verified_us_city() -> None:
     from weather_data_feed.source_policy import load_city_configs
     from weather_data_feed_service import observations
