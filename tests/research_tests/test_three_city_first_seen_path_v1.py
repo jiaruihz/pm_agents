@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import importlib.util
+import json
 from pathlib import Path
 
 
@@ -108,3 +109,82 @@ def test_exact_bracket_bounds_and_overshoot_label() -> None:
     assert MODULE.binary_final_above("26", 25) == 1
     assert MODULE.binary_final_above("25", 25) == 0
     assert MODULE.binary_final_above("24-26", 25) is None
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
+def test_loader_routes_dedicated_tokyo_and_knmi_exact_journals(tmp_path: Path) -> None:
+    _write_jsonl(
+        tmp_path
+        / "output/live_cross_observations/2026-07-20/high_frequency_observations.jsonl",
+        [
+            {
+                "city": "Tokyo",
+                "source": "jma_amedas",
+                "source_status": "ok",
+                "station": "44166",
+                "observation_time_utc": "2026-07-20T01:00:00+00:00",
+                "source_first_seen_at_utc": "2026-07-20T01:06:00+00:00",
+                "temp_c": 29.1,
+            }
+        ],
+    )
+    _write_jsonl(
+        tmp_path / "output/knmi_open_data/2026-07-20/knmi_observations.jsonl",
+        [
+            {
+                "city": "Amsterdam",
+                "source": "knmi",
+                "station": "0-20000-0-06240",
+                "observation_time_utc": "2026-07-20T10:00:00+00:00",
+                "knmi_first_seen_at_utc": "2026-07-20T10:13:00+00:00",
+                "local_detect_ts_utc": "2026-07-20T10:13:00+00:00",
+                "temp_c": 21.2,
+            }
+        ],
+    )
+    grouped, audit = MODULE.load_fast_events(
+        tmp_path,
+        MODULE.date.fromisoformat("2026-07-20"),
+        MODULE.date.fromisoformat("2026-07-20"),
+    )
+    assert grouped[("Tokyo", "2026-07-20")][0]["collector_journal"] == (
+        "live_cross_observations"
+    )
+    amsterdam = grouped[("Amsterdam", "2026-07-20")][0]
+    assert amsterdam["collector_journal"] == "knmi_open_data"
+    assert amsterdam["first_seen_field"] == "knmi_first_seen_at_utc"
+    coverage = {row["city"]: row for row in audit}
+    assert coverage["Tokyo"]["distinct_collector_exact_events"] == 1
+    assert coverage["Amsterdam"]["distinct_collector_exact_events"] == 1
+
+
+def test_loader_does_not_promote_local_detect_to_exact(tmp_path: Path) -> None:
+    _write_jsonl(
+        tmp_path
+        / "output/jma_hot_observations/2026-07-20/high_frequency_observations.jsonl",
+        [
+            {
+                "city": "Tokyo",
+                "source": "jma_amedas",
+                "source_status": "ok",
+                "observation_time_utc": "2026-07-20T01:00:00+00:00",
+                "local_detect_ts_utc": "2026-07-20T01:06:00+00:00",
+                "temp_c": 29.1,
+            }
+        ],
+    )
+    grouped, audit = MODULE.load_fast_events(
+        tmp_path,
+        MODULE.date.fromisoformat("2026-07-20"),
+        MODULE.date.fromisoformat("2026-07-20"),
+    )
+    assert not grouped
+    coverage = {row["city"]: row for row in audit}
+    assert coverage["Tokyo"]["missing_exact_first_seen"] == 1

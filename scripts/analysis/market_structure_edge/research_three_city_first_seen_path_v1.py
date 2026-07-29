@@ -67,6 +67,53 @@ CITY_CONFIG = {
         "timezone": ZoneInfo("Asia/Tokyo"),
     },
 }
+FAST_JOURNALS = (
+    {
+        "name": "high_frequency_observations",
+        "relative_dir": "high_frequency_observations",
+        "filename": "high_frequency_observations.jsonl",
+        "first_seen_field": "source_first_seen_at_utc",
+        "allow_missing_status": False,
+    },
+    {
+        "name": "live_cross_observations",
+        "relative_dir": "live_cross_observations",
+        "filename": "high_frequency_observations.jsonl",
+        "first_seen_field": "source_first_seen_at_utc",
+        "allow_missing_status": False,
+    },
+    {
+        "name": "jma_hot_observations",
+        "relative_dir": "jma_hot_observations",
+        "filename": "high_frequency_observations.jsonl",
+        "first_seen_field": "source_first_seen_at_utc",
+        "allow_missing_status": False,
+    },
+    {
+        "name": "knmi_open_data",
+        "relative_dir": "knmi_open_data",
+        "filename": "knmi_observations.jsonl",
+        "first_seen_field": "knmi_first_seen_at_utc",
+        "allow_missing_status": True,
+    },
+)
+CURRENT_CAPTURE_JOURNALS = {
+    "Helsinki": {
+        "relative_dir": "live_cross_observations",
+        "filename": "high_frequency_observations.jsonl",
+        "first_seen_field": "source_first_seen_at_utc",
+    },
+    "Amsterdam": {
+        "relative_dir": "knmi_open_data",
+        "filename": "knmi_observations.jsonl",
+        "first_seen_field": "knmi_first_seen_at_utc",
+    },
+    "Tokyo": {
+        "relative_dir": "live_cross_observations",
+        "filename": "high_frequency_observations.jsonl",
+        "first_seen_field": "source_first_seen_at_utc",
+    },
+}
 HORIZONS_MIN = (30, 60, 120)
 MAX_FIRST_SEEN_AGE_MIN = 30.0
 MAX_CADENCE_GAP_MIN = 25.0
@@ -161,9 +208,13 @@ def load_fast_events(
 ) -> tuple[dict[tuple[str, str], list[dict[str, Any]]], list[dict[str, Any]]]:
     """Load only genuinely collector-timestamped temperature events.
 
-    ``fetched_at_utc`` is deliberately not a fallback for first-seen.  Rows
-    without ``source_first_seen_at_utc`` remain visible in the coverage audit
-    but cannot enter the PIT research denominator.
+    ``fetched_at_utc`` and ``local_detect_ts_utc`` are deliberately not
+    fallbacks for first-seen.  Generic/JMA journals must carry
+    ``source_first_seen_at_utc``.  The dedicated KNMI Open Data collector has
+    an equivalent immutable collector timestamp,
+    ``knmi_first_seen_at_utc``.  Rows without the journal's explicit exact
+    field remain visible in the coverage audit but cannot enter the PIT
+    research denominator.
     """
 
     earliest: dict[tuple[str, str, str, float], dict[str, Any]] = {}
@@ -174,59 +225,69 @@ def load_fast_events(
     wanted_pairs = {
         (city, str(config["source"])) for city, config in CITY_CONFIG.items()
     }
-    for shard in date_range(start - timedelta(days=1), end + timedelta(days=1)):
-        path = (
-            runtime
-            / "output"
-            / "high_frequency_observations"
-            / shard.isoformat()
-            / "high_frequency_observations.jsonl"
-        )
-        for raw in iter_jsonl(path):
-            city = str(raw.get("city") or "")
-            source = str(raw.get("source") or "")
-            if (city, source) not in wanted_pairs:
-                continue
-            counts = audit[(city, source)]
-            counts["raw_matching_rows"] += 1
-            if raw.get("source_status") != "ok":
-                counts["non_ok_rows"] += 1
-                continue
-            obs_ts = parse_dt(raw.get("observation_time_utc"))
-            first_seen = parse_dt(raw.get("source_first_seen_at_utc"))
-            temp_c = number(raw.get("temp_c"))
-            if first_seen is None:
-                counts["missing_exact_first_seen"] += 1
-                continue
-            if obs_ts is None or temp_c is None:
-                counts["invalid_identity_or_temperature"] += 1
-                continue
-            age_min = (first_seen - obs_ts).total_seconds() / 60.0
-            if age_min < -2.0 or age_min > max_first_seen_age_min:
-                counts["outside_first_seen_age_contract"] += 1
-                continue
-            target_date = local_date(obs_ts, city)
-            if target_date < start.isoformat() or target_date > end.isoformat():
-                counts["outside_target_window"] += 1
-                continue
-            key = (city, source, obs_ts.isoformat(), float(temp_c))
-            row = {
-                "city": city,
-                "source": source,
-                "station": str(raw.get("station") or CITY_CONFIG[city]["station"]),
-                "target_date": target_date,
-                "obs_ts": obs_ts,
-                "first_seen_ts": first_seen,
-                "first_seen_age_min": age_min,
-                "temp_c": float(temp_c),
-                "wind_speed_kt": number(raw.get("wind_speed_kt")),
-                "pressure_hpa": number(raw.get("pressure_hpa")),
-                "payload_hash": str(raw.get("payload_hash") or ""),
-                "pit_lineage_class": "collector_exact",
-            }
-            old = earliest.get(key)
-            if old is None or first_seen < old["first_seen_ts"]:
-                earliest[key] = row
+    for journal in FAST_JOURNALS:
+        journal_name = str(journal["name"])
+        for shard in date_range(start - timedelta(days=1), end + timedelta(days=1)):
+            path = (
+                runtime
+                / "output"
+                / str(journal["relative_dir"])
+                / shard.isoformat()
+                / str(journal["filename"])
+            )
+            for raw in iter_jsonl(path):
+                city = str(raw.get("city") or "")
+                source = str(raw.get("source") or "")
+                if (city, source) not in wanted_pairs:
+                    continue
+                counts = audit[(city, source)]
+                counts["raw_matching_rows"] += 1
+                counts[f"raw_rows__{journal_name}"] += 1
+                status = raw.get("source_status")
+                if status != "ok" and not (
+                    journal["allow_missing_status"] and status in (None, "")
+                ):
+                    counts["non_ok_rows"] += 1
+                    continue
+                obs_ts = parse_dt(raw.get("observation_time_utc"))
+                first_seen = parse_dt(raw.get(str(journal["first_seen_field"])))
+                temp_c = number(raw.get("temp_c"))
+                if first_seen is None:
+                    counts["missing_exact_first_seen"] += 1
+                    counts[f"missing_exact__{journal_name}"] += 1
+                    continue
+                counts[f"exact_rows__{journal_name}"] += 1
+                if obs_ts is None or temp_c is None:
+                    counts["invalid_identity_or_temperature"] += 1
+                    continue
+                age_min = (first_seen - obs_ts).total_seconds() / 60.0
+                if age_min < -2.0 or age_min > max_first_seen_age_min:
+                    counts["outside_first_seen_age_contract"] += 1
+                    continue
+                target_date = local_date(obs_ts, city)
+                if target_date < start.isoformat() or target_date > end.isoformat():
+                    counts["outside_target_window"] += 1
+                    continue
+                key = (city, source, obs_ts.isoformat(), float(temp_c))
+                row = {
+                    "city": city,
+                    "source": source,
+                    "station": str(raw.get("station") or CITY_CONFIG[city]["station"]),
+                    "target_date": target_date,
+                    "obs_ts": obs_ts,
+                    "first_seen_ts": first_seen,
+                    "first_seen_field": str(journal["first_seen_field"]),
+                    "collector_journal": journal_name,
+                    "first_seen_age_min": age_min,
+                    "temp_c": float(temp_c),
+                    "wind_speed_kt": number(raw.get("wind_speed_kt")),
+                    "pressure_hpa": number(raw.get("pressure_hpa")),
+                    "payload_hash": str(raw.get("payload_hash") or ""),
+                    "pit_lineage_class": "collector_exact",
+                }
+                old = earliest.get(key)
+                if old is None or first_seen < old["first_seen_ts"]:
+                    earliest[key] = row
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in earliest.values():
@@ -250,6 +311,55 @@ def load_fast_events(
             }
         )
     return grouped, audit_rows
+
+
+def current_capture_audit(runtime: Path) -> list[dict[str, Any]]:
+    """Describe raw exact capture separately from the frozen study denominator."""
+
+    output = []
+    feature_fields = (
+        "temp_c",
+        "max_temp_c_past_10m",
+        "wind_speed_kt",
+        "pressure_hpa",
+    )
+    for city, config in CURRENT_CAPTURE_JOURNALS.items():
+        source = str(CITY_CONFIG[city]["source"])
+        root = runtime / "output" / str(config["relative_dir"])
+        rows = 0
+        dates: set[str] = set()
+        latest: datetime | None = None
+        fields: set[str] = set()
+        for path in sorted(root.glob(f"20??-??-??/{config['filename']}")):
+            for raw in iter_jsonl(path):
+                if raw.get("city") != city or raw.get("source") != source:
+                    continue
+                first_seen = parse_dt(raw.get(str(config["first_seen_field"])))
+                if first_seen is None:
+                    continue
+                rows += 1
+                target_date = str(raw.get("target_date") or "")
+                if target_date:
+                    dates.add(target_date)
+                if latest is None or first_seen > latest:
+                    latest = first_seen
+                fields.update(
+                    field for field in feature_fields if number(raw.get(field)) is not None
+                )
+        output.append(
+            {
+                "city": city,
+                "source": source,
+                "journal": str(config["relative_dir"]),
+                "exact_rows": rows,
+                "exact_dates": len(dates),
+                "first_target_date": min(dates) if dates else "",
+                "last_target_date": max(dates) if dates else "",
+                "latest_exact_first_seen_at_utc": latest.isoformat() if latest else "",
+                "captured_fields": ",".join(sorted(fields)),
+            }
+        )
+    return output
 
 
 def load_metar_context(
@@ -453,6 +563,8 @@ def build_states(
                 "city": city,
                 "source": event["source"],
                 "station": event["station"],
+                "collector_journal": event.get("collector_journal", ""),
+                "first_seen_field": event.get("first_seen_field", ""),
                 "target_date": target_date,
                 "source_observation_ts_utc": event["obs_ts"].isoformat(),
                 "source_first_seen_ts_utc": event["first_seen_ts"].isoformat(),
@@ -884,6 +996,7 @@ def render_report(
     scores: list[dict[str, Any]],
     basis: list[dict[str, Any]],
     canonical_counts: dict[str, int],
+    current_capture: list[dict[str, Any]],
 ) -> None:
     score_lookup = {
         (row["city"], row["horizon_min"], row["model"]): row for row in scores
@@ -935,8 +1048,10 @@ def render_report(
         "## 结论",
         "",
         "第一版已实现为温度主导、PIT METAR context 辅助的 expanding-date OOF "
-        "`P(new strict high within 30/60/120m)`。所有 fast rows 必须有显式 "
-        "`source_first_seen_at_utc`；脚本不使用 fetched/issue time 冒充 first-seen。",
+        "`P(new strict high within 30/60/120m)`。所有 fast rows 必须有 collector "
+        "显式 exact timestamp（通用/JMA 为 `source_first_seen_at_utc`，KNMI Open "
+        "Data 为 `knmi_first_seen_at_utc`）；脚本不使用 fetched/local-detect/issue time "
+        "冒充 first-seen。",
         "",
         "本轮仍是 probability-layer research，不是 residual trading policy：当前 DB 中三城 "
         "fast-source 事件尚未进入 canonical `weather_information_events → "
@@ -953,11 +1068,34 @@ def render_report(
         "only for source-basis audit, never backfilled as a feature",
         "- validation: expanding OOF by whole target_date; every training date receives equal weight",
         "",
-        "## Source coverage",
+        "## Current raw capture snapshot",
         "",
-        "| city | source | exact events | exact dates | missing exact first-seen | canonical fast events | settlement basis aligned/evaluable days | terminal false days |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "这一层只回答 authoritative raw journal 中是否已有 exact capture；不等于 frozen "
+        "window 的研究分母，也不等于 canonical ingest 已完成。",
+        "",
+        "| city | journal | exact rows | target-date range | latest exact first-seen UTC | captured fields |",
+        "|---|---|---:|---|---|---|",
     ]
+    for row in current_capture:
+        target_range = (
+            f"{row['first_target_date']}..{row['last_target_date']}"
+            if row["first_target_date"]
+            else "NA"
+        )
+        lines.append(
+            f"| {row['city']} | `{row['journal']}` | {row['exact_rows']} | "
+            f"{target_range} | {row['latest_exact_first_seen_at_utc'] or 'NA'} | "
+            f"`{row['captured_fields'] or 'none'}` |"
+        )
+    lines.extend(
+        [
+        "",
+        "## Frozen-window research coverage",
+        "",
+        "| city | source | exact events | exact dates | legacy/non-exact raw rows (not unique) | canonical fast events | settlement basis aligned/evaluable days | terminal false days |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
     for city, config in CITY_CONFIG.items():
         audit = audit_map.get(city, {})
         city_basis = basis_by_city.get(city, [])
@@ -1003,8 +1141,10 @@ def render_report(
             "- fast-source future-high label measures path information; it is not settlement truth.",
             "- a lower OOF Brier is evidence that the first-seen print changes path probability, "
             "not evidence of fee-adjusted alpha.",
-            "- Amsterdam remains in the frozen universe even if KNMI key/collector coverage is zero; "
-            "that is a coverage gap, not a strategy filter.",
+            "- source coverage means exact rows admitted from all authoritative collector journals; "
+            "it must not be described as whether a city is currently configured or running.",
+            "- legacy/non-exact raw rows are repeated historical poll outputs, not a count of unique "
+            "observations or failed current captures; they stay outside the PIT denominator.",
             "- canonical ingest/rebuild support is implemented, but the current canonical DB/zero-notional "
             "process has not been rebuilt or restarted in this research run.",
             "- next evidence step is to accumulate/rebuild these fast events and attach pre/post event "
@@ -1037,6 +1177,7 @@ def main() -> int:
     runtime = Path(args.runtime_root)
     db_path = Path(args.db_path)
     fast, source_audit = load_fast_events(runtime, start, end)
+    current_capture = current_capture_audit(runtime)
     metar = load_metar_context(db_path, start, end)
     winners = load_settlement_winners(db_path, start, end)
     states = build_states(fast, metar, winners)
@@ -1060,6 +1201,7 @@ def main() -> int:
         "states": len(states),
         "oof_predictions": len(predictions),
         "source_coverage": source_audit,
+        "current_capture": current_capture,
         "canonical_fast_event_counts": canonical_counts,
         "market_baseline_rows": 0,
         "policy_selected": 0,
@@ -1080,6 +1222,7 @@ def main() -> int:
         scores=scores,
         basis=basis,
         canonical_counts=canonical_counts,
+        current_capture=current_capture,
     )
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0

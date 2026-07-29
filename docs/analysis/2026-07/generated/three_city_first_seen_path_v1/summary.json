@@ -5,36 +5,92 @@
     "Amsterdam",
     "Tokyo"
   ],
+  "current_capture": [
+    {
+      "captured_fields": "pressure_hpa,temp_c,wind_speed_kt",
+      "city": "Helsinki",
+      "exact_dates": 8,
+      "exact_rows": 630,
+      "first_target_date": "2026-07-21",
+      "journal": "live_cross_observations",
+      "last_target_date": "2026-07-28",
+      "latest_exact_first_seen_at_utc": "2026-07-28T18:51:29.566192+00:00",
+      "source": "fmi"
+    },
+    {
+      "captured_fields": "max_temp_c_past_10m,temp_c",
+      "city": "Amsterdam",
+      "exact_dates": 3,
+      "exact_rows": 499,
+      "first_target_date": "2026-07-27",
+      "journal": "knmi_open_data",
+      "last_target_date": "2026-07-29",
+      "latest_exact_first_seen_at_utc": "2026-07-29T02:14:24.899942+00:00",
+      "source": "knmi"
+    },
+    {
+      "captured_fields": "temp_c",
+      "city": "Tokyo",
+      "exact_dates": 8,
+      "exact_rows": 621,
+      "first_target_date": "2026-07-22",
+      "journal": "live_cross_observations",
+      "last_target_date": "2026-07-29",
+      "latest_exact_first_seen_at_utc": "2026-07-29T02:06:37.846956+00:00",
+      "source": "jma_amedas"
+    }
+  ],
   "end_date": "2026-07-27",
-  "generated_at_utc": "2026-07-28T18:10:40.048003+00:00",
+  "generated_at_utc": "2026-07-29T02:17:22.257791+00:00",
   "market_baseline_rows": 0,
-  "oof_predictions": 1617,
+  "oof_predictions": 2697,
   "policy_selected": 0,
   "schema_version": "three_city_first_seen_path_probability_research_v1",
   "scope": "research_zero_notional_no_execution",
   "source_coverage": [
     {
       "city": "Amsterdam",
-      "collector_exact_dates": 0,
+      "collector_exact_dates": 1,
+      "distinct_collector_exact_events": 37,
+      "exact_rows__knmi_open_data": 422,
+      "outside_first_seen_age_contract": 11,
+      "outside_target_window": 306,
+      "raw_matching_rows": 422,
+      "raw_rows__knmi_open_data": 422,
       "source": "knmi"
     },
     {
       "city": "Helsinki",
       "collector_exact_dates": 7,
       "distinct_collector_exact_events": 591,
+      "exact_rows__high_frequency_observations": 597,
+      "exact_rows__live_cross_observations": 630,
+      "missing_exact__high_frequency_observations": 32869,
       "missing_exact_first_seen": 32869,
-      "raw_matching_rows": 33466,
+      "outside_target_window": 33,
+      "raw_matching_rows": 34096,
+      "raw_rows__high_frequency_observations": 33466,
+      "raw_rows__live_cross_observations": 630,
       "source": "fmi"
     },
     {
       "city": "Tokyo",
-      "collector_exact_dates": 1,
-      "distinct_collector_exact_events": 1,
-      "missing_exact_first_seen": 41958,
-      "raw_matching_rows": 41959,
+      "collector_exact_dates": 7,
+      "distinct_collector_exact_events": 579,
+      "exact_rows__high_frequency_observations": 1,
+      "exact_rows__jma_hot_observations": 16,
+      "exact_rows__live_cross_observations": 608,
+      "missing_exact__high_frequency_observations": 41958,
+      "missing_exact__jma_hot_observations": 2,
+      "missing_exact_first_seen": 41960,
+      "outside_target_window": 40,
+      "raw_matching_rows": 42585,
+      "raw_rows__high_frequency_observations": 41959,
+      "raw_rows__jma_hot_observations": 18,
+      "raw_rows__live_cross_observations": 608,
       "source": "jma_amedas"
     }
   ],
   "start_date": "2026-07-08",
-  "states": 592
+  "states": 1207
 }
