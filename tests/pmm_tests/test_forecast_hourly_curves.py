@@ -114,6 +114,25 @@ def test_legacy_snapshot_time_is_not_reused_as_first_seen(tmp_path) -> None:
     assert row["forecast_first_seen_utc"] != legacy["snapshot_ts_utc"]
 
 
+def test_first_seen_scan_is_bounded_by_target_date(tmp_path) -> None:
+    from weather_data_feed.forecast_hourly_curves import _load_first_seen
+
+    old_dir = tmp_path / "forecast_hourly_curves" / "2026-01-01"
+    old_dir.mkdir(parents=True)
+    (old_dir / "forecast_hourly_curves_old.jsonl").write_text(
+        '{"target_date":"2026-07-11","city":"Old","forecast_source":"x",'
+        '"forecast_model":"gfs","forecast_values_hash":"old","available_at_utc":"2026-01-01T00:00:00Z"}\n',
+        encoding="utf-8",
+    )
+
+    first_seen = _load_first_seen(
+        tmp_path / "forecast_hourly_curves",
+        target_dates={"2026-07-11"},
+    )
+
+    assert first_seen == {}
+
+
 def test_curve_row_marks_model_fallback_explicitly() -> None:
     curve = build_hourly_curve(["2026-07-11T00:00"], [70.0])
     fallback = build_curve_row(

@@ -497,6 +497,19 @@ def append_orderbook_archive(path, row):
         f.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def publish_json_atomic(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("x", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def orderbook_budget_book(token_id, reason="orderbook_budget_exhausted"):
     return {
         "status": reason,
@@ -1843,11 +1856,14 @@ def main():
         "snapshot_publish_quality": publish_quality,
         "orderbook_enrichment_summary": orderbook_enrichment_summary,
     }
-    with open(out_file, "w") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
     forecast_curve_archive = None
-    if publish_quality["publishable"] and forecast_curve_rows:
+    if publish_quality["publishable"] and not forecast_curve_rows:
+        raise RuntimeError("refusing to publish snapshot without matching forecast curve rows")
+    if publish_quality["publishable"]:
         forecast_curve_archive = write_forecast_hourly_curve_capture(OUTPUT_ROOT, forecast_curve_rows)
+    # The final snapshot path is the batch commit marker. Orderbook archive and
+    # forecast curves must be durable before live consumers can discover it.
+    publish_json_atomic(out_file, output)
 
     # Print summary
     edge_trades = [r for r in all_records if r["abs_edge"] >= 0.05]

@@ -296,6 +296,22 @@ def test_orderbook_enrichment_summary_separates_scope_from_missing_targets(monke
     assert summary["target_status_counts"] == {"ok": 1, "orderbook_budget_exhausted": 1}
 
 
+def test_paper_snapshot_json_publish_is_atomic(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+
+    destination = tmp_path / "snapshot.json"
+    paper_snapshot.publish_json_atomic(destination, {"batch": "complete"})
+
+    assert json.loads(destination.read_text(encoding="utf-8")) == {"batch": "complete"}
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
 def test_paper_snapshot_preserves_near_binary_ladder_siblings(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
     monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))

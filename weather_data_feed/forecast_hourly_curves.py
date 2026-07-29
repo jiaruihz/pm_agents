@@ -193,9 +193,24 @@ def _first_seen_key(row: Mapping[str, Any]) -> tuple[str, ...]:
     return (*base, f"run:{run_ts}" if run_ts else "run:unknown")
 
 
-def _load_first_seen(curve_root: Path) -> dict[tuple[str, ...], tuple[datetime, str]]:
+def _load_first_seen(
+    curve_root: Path,
+    *,
+    target_dates: set[str] | None = None,
+) -> dict[tuple[str, ...], tuple[datetime, str]]:
     first_seen: dict[tuple[str, ...], tuple[datetime, str]] = {}
-    for path in curve_root.glob("*/forecast_hourly_curves_*.jsonl"):
+    paths: list[Path] = []
+    if target_dates:
+        capture_dates: set[str] = set()
+        for value in target_dates:
+            target = datetime.fromisoformat(value).date()
+            for offset in range(-3, 2):
+                capture_dates.add((target + timedelta(days=offset)).isoformat())
+        for capture_date in sorted(capture_dates):
+            paths.extend((curve_root / capture_date).glob("forecast_hourly_curves_*.jsonl"))
+    else:
+        paths = list(curve_root.glob("*/forecast_hourly_curves_*.jsonl"))
+    for path in paths:
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except OSError:
@@ -258,7 +273,10 @@ def write_forecast_hourly_curve_capture(
 
     curve_root = Path(output_root) / "forecast_hourly_curves"
     curve_root.mkdir(parents=True, exist_ok=True)
-    first_seen = _load_first_seen(curve_root)
+    first_seen = _load_first_seen(
+        curve_root,
+        target_dates={str(row.get("target_date") or "") for row in source_rows},
+    )
     capture_id = f"forecast_hourly_curves_{snapshot_at.astimezone(_BEIJING).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:10]}"
     output_dir = curve_root / snapshot_at.astimezone(_BEIJING).strftime("%Y-%m-%d")
     output_dir.mkdir(parents=True, exist_ok=True)
