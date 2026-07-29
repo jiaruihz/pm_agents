@@ -145,6 +145,35 @@ def snapshot_publish_quality(records):
     }
 
 
+def summarize_orderbook_enrichment(records, *, scope, budget_sec, spent_sec):
+    status_counts = {}
+    target_status_counts = {}
+    for side in ("yes", "no"):
+        counts = {}
+        for row in records:
+            status = str(row.get(f"{side}_book_status") or "missing")
+            counts[status] = counts.get(status, 0) + 1
+            if status != "orderbook_scope_skipped":
+                target_status_counts[status] = target_status_counts.get(status, 0) + 1
+        status_counts[side] = counts
+    incomplete = sum(
+        count
+        for status, count in target_status_counts.items()
+        if status != "ok"
+    )
+    return {
+        "status": "ok" if not incomplete else "incomplete",
+        "scope": scope,
+        "budget_sec": budget_sec,
+        "spent_sec": round(float(spent_sec), 3),
+        "target_count": sum(target_status_counts.values()),
+        "target_ok_count": int(target_status_counts.get("ok", 0)),
+        "target_incomplete_count": incomplete,
+        "target_status_counts": dict(sorted(target_status_counts.items())),
+        "side_status_counts": status_counts,
+    }
+
+
 def curl_json_get(url, params=None, *, proxy=None, timeout_sec=5.0, connect_timeout_sec=2.0):
     """Fetch JSON with curl so flaky network paths cannot pin the Python process."""
     if params:
@@ -1278,11 +1307,9 @@ def main():
         trust_env=False,
     )
     orderbook_cache = {}
-    # Start this clock only when the first token book is actually requested.
-    # Starting it here consumed the full 60s budget during forecast/Gamma
-    # preparation and produced snapshots with every row marked
-    # orderbook_budget_exhausted before a single CLOB request was attempted.
-    orderbook_started_at = None
+    # Count only time spent inside CLOB batches. Forecast/Gamma work between
+    # cities must not consume the orderbook enrichment budget.
+    orderbook_spent_sec = 0.0
     orderbook_disabled_reason = "disabled" if args.no_orderbook else None
 
     print(f"{'='*90}")
@@ -1523,10 +1550,8 @@ def main():
             if not args.no_orderbook:
                 if (
                     orderbook_disabled_reason is None
-                    and orderbook_budget_expired(
-                        orderbook_started_at,
-                        args.orderbook_budget_sec,
-                    )
+                    and args.orderbook_budget_sec >= 0
+                    and orderbook_spent_sec >= args.orderbook_budget_sec
                 ):
                     orderbook_disabled_reason = "orderbook_budget_exhausted"
 
@@ -1557,17 +1582,22 @@ def main():
                                 "token_id": token_id,
                                 "top_n": args.orderbook_top_n,
                             }
-                    if token_archive_rows and orderbook_started_at is None:
-                        orderbook_started_at = time.monotonic()
+                    batch_started_at = time.monotonic()
+                    remaining_budget_sec = (
+                        max(0.0, args.orderbook_budget_sec - orderbook_spent_sec)
+                        if args.orderbook_budget_sec >= 0
+                        else None
+                    )
                     fetched_books = fetch_token_orderbook_batch(
                         pm_client,
                         token_archive_rows,
                         top_n=args.orderbook_top_n,
                         max_workers=args.orderbook_workers,
-                        deadline_monotonic=orderbook_started_at + args.orderbook_budget_sec
-                        if orderbook_started_at is not None and args.orderbook_budget_sec >= 0
+                        deadline_monotonic=batch_started_at + remaining_budget_sec
+                        if remaining_budget_sec is not None
                         else None,
                     )
+                    orderbook_spent_sec += time.monotonic() - batch_started_at
                     for token_id, (archive_row, book) in fetched_books.items():
                         orderbook_cache[token_id] = book
                         append_orderbook_archive(orderbook_archive, {**archive_row, **book})
@@ -1579,9 +1609,19 @@ def main():
                     yes_book = orderbook_cache.get(entry["yes_token_id"], yes_book)
                     no_book = orderbook_cache.get(entry["no_token_id"], no_book)
                     if yes_book.get("status") == "disabled":
-                        yes_book = orderbook_disabled_book(orderbook_disabled_reason or "orderbook_scope_skipped")
+                        yes_targeted = orderbook_targets is None or (label, "yes") in orderbook_targets
+                        yes_book = orderbook_disabled_book(
+                            (orderbook_disabled_reason or "orderbook_missing")
+                            if yes_targeted
+                            else "orderbook_scope_skipped"
+                        )
                     if no_book.get("status") == "disabled":
-                        no_book = orderbook_disabled_book(orderbook_disabled_reason or "orderbook_scope_skipped")
+                        no_targeted = orderbook_targets is None or (label, "no") in orderbook_targets
+                        no_book = orderbook_disabled_book(
+                            (orderbook_disabled_reason or "orderbook_missing")
+                            if no_targeted
+                            else "orderbook_scope_skipped"
+                        )
                 market_map[entry["label"]] = {
                     **entry,
                     "yes_book": yes_book,
@@ -1767,6 +1807,12 @@ def main():
     fname = f"snapshot_{stamp}.json"
     partial_fname = f"partial_snapshot_{stamp}.json"
     publish_quality = snapshot_publish_quality(all_records)
+    orderbook_enrichment_summary = summarize_orderbook_enrichment(
+        all_records,
+        scope=args.orderbook_scope,
+        budget_sec=args.orderbook_budget_sec,
+        spent_sec=orderbook_spent_sec,
+    )
     source_model_summary = summarize_source_models(
         forecast_curve_rows,
         expected_city_target_count=forecast_city_target_expected,
@@ -1795,6 +1841,7 @@ def main():
         "schema_version": "v3_cross_section_forecast_peak_clock",
         "data_feed_schema_version": SNAPSHOT_SCHEMA_VERSION,
         "snapshot_publish_quality": publish_quality,
+        "orderbook_enrichment_summary": orderbook_enrichment_summary,
     }
     with open(out_file, "w") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)

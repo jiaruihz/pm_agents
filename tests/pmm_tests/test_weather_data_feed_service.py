@@ -270,6 +270,32 @@ def test_paper_snapshot_strategy_live_orderbook_scope_covers_active_strategy_leg
     }
 
 
+def test_orderbook_enrichment_summary_separates_scope_from_missing_targets(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
+    monkeypatch.setenv("WEATHER_DATA_FEED_ROOT", str(ROOT))
+    monkeypatch.syspath_prepend(str(LEGACY_DIR))
+    monkeypatch.syspath_prepend(str(ROOT))
+    _drop_legacy_modules()
+    paper_snapshot = importlib.import_module("paper_snapshot")
+
+    summary = paper_snapshot.summarize_orderbook_enrichment(
+        [
+            {"yes_book_status": "ok", "no_book_status": "orderbook_scope_skipped"},
+            {"yes_book_status": "orderbook_scope_skipped", "no_book_status": "orderbook_budget_exhausted"},
+        ],
+        scope="strategy_live",
+        budget_sec=120,
+        spent_sec=120.25,
+    )
+
+    assert summary["status"] == "incomplete"
+    assert summary["target_count"] == 2
+    assert summary["target_ok_count"] == 1
+    assert summary["target_incomplete_count"] == 1
+    assert summary["target_status_counts"] == {"ok": 1, "orderbook_budget_exhausted": 1}
+
+
 def test_paper_snapshot_preserves_near_binary_ladder_siblings(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("WEATHER_DATA_FEED_OUTPUT_ROOT", str(tmp_path / "out"))
     monkeypatch.setenv("WEATHER_DATA_FEED_CACHE_ROOT", str(tmp_path / "cache"))
