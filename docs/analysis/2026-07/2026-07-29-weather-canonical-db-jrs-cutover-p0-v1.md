@@ -520,3 +520,39 @@ intentionally stopped; its separately unbounded writer path is not covered by
 this restoration.
 
 Production commit: `0bcbd9cd`. Mainline commit: `4439365f`.
+
+### Unified one-shot entry and authenticated fail-closed correction
+
+The first restoration still left the one-shot tmux lifecycle implemented in
+the canonical-refresh wrapper. It is now centralized as
+`weather_jrs_tmux_run_oneshot` in `weather_jrs_tmux_env.sh`: socket selection,
+write probe, JRS directory creation, session dedupe, log/status paths, waiting
+and exit-code bridging have one implementation. The canonical-refresh entry
+now declares only its session, job directory and business command.
+
+Production observation then exposed a separate fill-integrity P0. At
+`2026-07-29T10:43:43Z`, authenticated CLOB setup failed on an SSL handshake.
+The refresh correctly marked `data_incomplete=true`, but the old fallback still
+allocated account-level public activity to submitted orders and inserted two
+false Wellington maker fills even though the execution journal had durably
+cancelled both orders:
+
+| Order | False fill | Shares | Price | False cost |
+|---|---|---:|---:|---:|
+| `0xe5de…b1da` | `6fb914…17d86b` | 5 | 0.890 | $4.450 |
+| `0x890457…9639` | `78e7ba…95a7` | 5 | 0.885 | $4.425 |
+
+Impact was exactly two derived facts, 10 shares and $8.875 of false open cost
+from `2026-07-29T10:44:01Z` until append-only validity adjustments were written
+at `2026-07-29T11:10:31Z`. Raw fills remain retained for audit. The scoped
+incremental rebuild removed both from `fact_trades`; effective canonical counts
+returned to 4,866 facts / 1,321 `live_real`, and the strict gate passed with
+1,321 effective DB fills and zero fail reasons.
+
+Production canonical refresh now invokes fill sync with
+`--require-authenticated`. If authenticated setup is unavailable it returns
+incomplete and performs no public order allocation; the existing retry loop
+fails the refresh rather than publishing approximate fills.
+
+Production commits: `5c10ef22`, `73e0ef69`. Mainline commits:
+`1d661aff`, `8d6abdc8`.
