@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import brier_score_loss, log_loss
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -484,7 +485,7 @@ def paired_bootstrap(
     }
 
 
-def event_domain_diagnostic(
+def event_below_gate_diagnostic(
     candidates: pd.DataFrame, winners: Mapping[tuple[str, str], str], artifact: Mapping[str, Any]
 ) -> dict[str, Any]:
     events = candidates[candidates["candidate_event"]].copy()
@@ -516,7 +517,7 @@ def event_domain_diagnostic(
         "positive_taker_ev_before_frozen_domain": int(len(positive)),
         "positive_ev_below_mid_floor": int((positive["market_mid"] < floor).sum()),
         "positive_ev_above_mid_ceiling": int((positive["market_mid"] > ceiling).sum()),
-        "all_positive_ev_out_of_domain_settled": summarize(settled),
+        "all_positive_ev_below_live_gate_settled": summarize(settled),
         "mid_0p50_to_0p80_exploratory": summarize(low_mid),
         "cases": settled[
             [
@@ -533,7 +534,69 @@ def event_domain_diagnostic(
                 "pnl_5",
             ]
         ].to_dict(orient="records"),
-        "status": "diagnostic_only_model_extrapolation_not_an_eligible_policy",
+        "status": "below_frozen_live_gate_but_within_probability_model_training_support",
+    }
+
+
+def historical_probability_band_validation() -> dict[str, Any]:
+    from scripts.analysis.reheat_risk import (  # noqa: PLC0415
+        research_current_yes_core_carry_residual_taker_ab_v1 as residual,
+    )
+
+    frame = residual.load_costed_oof()
+    frame = frame[
+        frame["five_share_executable"] & residual.exact_bounded(frame)
+    ].copy()
+    definitions = [
+        ("0.01_to_0.20", 0.01, 0.20),
+        ("0.20_to_0.50", 0.20, 0.50),
+        ("0.50_to_0.80", 0.50, 0.80),
+        ("0.80_to_0.90", 0.80, 0.90),
+        ("0.90_to_0.9895", 0.90, 0.9895001),
+    ]
+    bands: list[dict[str, Any]] = []
+    for name, low, high in definitions:
+        rows = frame[
+            frame["market_mid"].ge(low) & frame["market_mid"].lt(high)
+        ].copy()
+        labels = rows["label"].astype(int)
+        model = rows["p_v3_no_peak_clock"].clip(1e-6, 1 - 1e-6)
+        market = rows["market_mid"].clip(1e-6, 1 - 1e-6)
+        positive = residual.first_city_day(
+            rows[
+                rows["p_v3_no_peak_clock"].gt(
+                    rows["five_share_cost_per_share"]
+                )
+            ]
+        )
+        bands.append(
+            {
+                "band": name,
+                "states": int(len(rows)),
+                "dates": int(rows["target_date"].nunique()),
+                "observed_hold_rate": float(labels.mean()),
+                "avg_market_mid": float(market.mean()),
+                "avg_model_probability": float(model.mean()),
+                "model_minus_market_brier": float(
+                    brier_score_loss(labels, model)
+                    - brier_score_loss(labels, market)
+                ),
+                "model_minus_market_logloss": float(
+                    log_loss(labels, model, labels=[0, 1])
+                    - log_loss(labels, market, labels=[0, 1])
+                ),
+                "first_positive_taker_ev": residual.metrics(positive),
+            }
+        )
+    return {
+        "model_training_mid_support": [0.011, 0.9895],
+        "oof_rows": int(len(frame)),
+        "oof_dates": int(frame["target_date"].nunique()),
+        "bands": bands,
+        "interpretation": (
+            "negative proper-score delta means the frozen v3 probability is "
+            "better than raw market midpoint on the same rows"
+        ),
     }
 
 
@@ -590,14 +653,24 @@ def write_report(payload: Mapping[str, Any]) -> None:
         json.dumps(payload["paired_date_bootstrap"], ensure_ascii=False, indent=2),
         "```",
         "",
-        "## Event 域外诊断（不计入 A/B policy）",
+        "## Event 低于当前 live gate 的诊断（不计入现行 A/B policy）",
         "",
         "```json",
-        json.dumps(payload["event_domain_diagnostic"], ensure_ascii=False, indent=2),
+        json.dumps(payload["event_below_gate_diagnostic"], ensure_ascii=False, indent=2),
         "```",
         "",
-        "这些行的正 EV 全部位于 frozen Core Carry mid domain 之外；其结算只说明值得建独立"
-        " `post-cross low/mid` forward shadow，不构成删除现有 0.80 floor 的证据。",
+        "这些行全部低于 frozen Core Carry 的 0.80 **入场 gate**，但仍在概率模型训练支持内。"
+        "短窗口结算支持建立 `post-cross low/mid` forward shadow；不能单凭 6 单直接修改 live gate。",
+        "",
+        "## 概率模型历史 OOF：按 market-mid 价格带",
+        "",
+        "```json",
+        json.dumps(payload["historical_probability_band_validation"], ensure_ascii=False, indent=2),
+        "```",
+        "",
+        "`0.80` 是执行策略冻结线，不是模型训练边界。`0.50–0.80` 的历史 proper score 优于"
+        " raw market，正 taker-EV 表达点估也为正，但 date-block CI 跨 0，因此状态是"
+        " `shadow_candidate`，不是可以直接并入现有 live 的 confirmed 扩展。",
         "",
         "## 口径边界",
         "",
@@ -675,7 +748,8 @@ def main() -> int:
         perfs["fixed_only"].get("_rows", pd.DataFrame()),
         perfs["hybrid"].get("_rows", pd.DataFrame()),
     )
-    domain_diagnostic = event_domain_diagnostic(candidates, winners, artifact)
+    below_gate_diagnostic = event_below_gate_diagnostic(candidates, winners, artifact)
+    band_validation = historical_probability_band_validation()
     fixed_keys = set(zip(fixed["city"], fixed["target_date"])) if not fixed.empty else set()
     event_keys = set(zip(event["city"], event["target_date"])) if not event.empty else set()
     hybrid_keys = set(zip(hybrid["city"], hybrid["target_date"])) if not hybrid.empty else set()
@@ -684,12 +758,14 @@ def main() -> int:
     delta = float(bootstrap.get("pnl_delta_hybrid_minus_fixed", 0.0))
     ci = bootstrap.get("ci95", [None, None])
     if not additional and not replaced:
-        exploratory = domain_diagnostic["mid_0p50_to_0p80_exploratory"]
+        exploratory = below_gate_diagnostic["mid_0p50_to_0p80_exploratory"]
         conclusion = (
-            "按冻结 Core Carry 适用域，event checkpoint 没有改变任何首单，不能扩大现有策略。"
-            f"但域外 mid 0.50–0.80 诊断有 {exploratory['settled']} 单、"
+            "按现行 frozen Core Carry entry policy，event checkpoint 没有改变任何首单，"
+            "不能直接扩大现有 live 策略。"
+            f"但低于当前 live gate 的 mid 0.50–0.80 诊断有 {exploratory['settled']} 单、"
             f"{exploratory['wins']} 胜、ROI {100 * exploratory['roi']:.2f}%；"
-            "应另建 post-cross low/mid zero-notional forward，而不是直接放宽当前 live floor。"
+            "该区间仍在模型训练支持内，应另建 post-cross low/mid zero-notional forward，"
+            "再决定是否放宽当前 live floor。"
         )
     elif ci[0] is not None and ci[0] > 0:
         conclusion = (
@@ -723,7 +799,8 @@ def main() -> int:
         },
         "policies": {name: clean_perf(value) for name, value in perfs.items()},
         "paired_date_bootstrap": bootstrap,
-        "event_domain_diagnostic": domain_diagnostic,
+        "event_below_gate_diagnostic": below_gate_diagnostic,
+        "historical_probability_band_validation": band_validation,
         "conclusion": conclusion,
         "real_live_action": "none",
     }
