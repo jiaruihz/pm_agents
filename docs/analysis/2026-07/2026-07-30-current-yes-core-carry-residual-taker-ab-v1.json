@@ -1,0 +1,209 @@
+{
+  "research_id": "current_yes_core_carry_residual_taker_ab_v1",
+  "data": {
+    "universe_rows": 4061,
+    "oof_rows": 2758,
+    "oof_dates": 32,
+    "oof_city_days": 895,
+    "executable_exact_in_domain_rows": 1349,
+    "positive_mid_residual_rows": 482,
+    "positive_taker_ev_rows": 164,
+    "friction_filtered_rows": 318,
+    "forward_dates": [
+      "2026-06-27",
+      "2026-06-28",
+      "2026-06-29",
+      "2026-06-30",
+      "2026-07-01",
+      "2026-07-06",
+      "2026-07-07",
+      "2026-07-08"
+    ],
+    "cost_basis": "full five-share historical ask ladder plus official Weather fee",
+    "label": "final exact current bracket held"
+  },
+  "overall": {
+    "current_first_positive_taker_ev": {
+      "entries": 104,
+      "city_days": 104,
+      "dates": 29,
+      "cities": 26,
+      "wins": 99,
+      "losses": 5,
+      "win_rate": 0.9519230769230769,
+      "avg_effective_cost_per_share": 0.9119760482692307,
+      "cost_usd_at_5_shares": 474.2275451,
+      "pnl_usd_at_5_shares": 20.7724549,
+      "fee_adjusted_roi": 0.04380271689114923,
+      "target_date_block_ci95": [
+        0.006728377547607359,
+        0.07880687472928653
+      ],
+      "entries_per_covered_date": 3.586206896551724
+    },
+    "relaxed_first_positive_mid_residual": {
+      "entries": 285,
+      "city_days": 285,
+      "dates": 31,
+      "cities": 34,
+      "wins": 265,
+      "losses": 20,
+      "win_rate": 0.9298245614035088,
+      "avg_effective_cost_per_share": 0.927121332491228,
+      "cost_usd_at_5_shares": 1321.1478988,
+      "pnl_usd_at_5_shares": 3.8521011999999955,
+      "fee_adjusted_roi": 0.0029157229130053215,
+      "target_date_block_ci95": [
+        -0.02802350242834786,
+        0.032752086362132934
+      ],
+      "entries_per_covered_date": 9.193548387096774
+    },
+    "all_positive_mid_residual_checkpoints": {
+      "entries": 482,
+      "city_days": 285,
+      "dates": 31,
+      "cities": 34,
+      "wins": 449,
+      "losses": 33,
+      "win_rate": 0.9315352697095436,
+      "avg_effective_cost_per_share": 0.9420037954771784,
+      "cost_usd_at_5_shares": 2270.2291471,
+      "pnl_usd_at_5_shares": -25.22914710000002,
+      "fee_adjusted_roi": -0.011113039902702262,
+      "target_date_block_ci95": [
+        -0.041832105131901394,
+        0.018889053247937906
+      ],
+      "entries_per_covered_date": 15.548387096774194
+    },
+    "all_friction_filtered_checkpoints": {
+      "entries": 318,
+      "city_days": 236,
+      "dates": 31,
+      "cities": 34,
+      "wins": 295,
+      "losses": 23,
+      "win_rate": 0.9276729559748428,
+      "avg_effective_cost_per_share": 0.9506833974842768,
+      "cost_usd_at_5_shares": 1511.586602,
+      "pnl_usd_at_5_shares": -36.58660200000001,
+      "fee_adjusted_roi": -0.02420410577309418,
+      "target_date_block_ci95": [
+        -0.060222261265917246,
+        0.00925251050254478
+      ],
+      "entries_per_covered_date": 10.258064516129032
+    },
+    "first_friction_filtered_city_day": {
+      "entries": 236,
+      "city_days": 236,
+      "dates": 31,
+      "cities": 34,
+      "wins": 219,
+      "losses": 17,
+      "win_rate": 0.9279661016949152,
+      "avg_effective_cost_per_share": 0.9429811357627119,
+      "cost_usd_at_5_shares": 1112.7177402000002,
+      "pnl_usd_at_5_shares": -17.7177402,
+      "fee_adjusted_roi": -0.01592294214417343,
+      "target_date_block_ci95": [
+        -0.05176311434307139,
+        0.01754560148283944
+      ],
+      "entries_per_covered_date": 7.612903225806452
+    }
+  },
+  "frozen_last_8_dates": {
+    "current_first_positive_taker_ev": {
+      "entries": 11,
+      "city_days": 11,
+      "dates": 6,
+      "cities": 9,
+      "wins": 11,
+      "losses": 0,
+      "win_rate": 1.0,
+      "avg_effective_cost_per_share": 0.9149954545454545,
+      "cost_usd_at_5_shares": 50.324749999999995,
+      "pnl_usd_at_5_shares": 4.67525,
+      "fee_adjusted_roi": 0.09290160408149072,
+      "target_date_block_ci95": [
+        0.06502057087232643,
+        0.13084567542904618
+      ],
+      "entries_per_covered_date": 1.8333333333333333
+    },
+    "relaxed_first_positive_mid_residual": {
+      "entries": 45,
+      "city_days": 45,
+      "dates": 7,
+      "cities": 25,
+      "wins": 42,
+      "losses": 3,
+      "win_rate": 0.9333333333333333,
+      "avg_effective_cost_per_share": 0.9418645066666667,
+      "cost_usd_at_5_shares": 211.919514,
+      "pnl_usd_at_5_shares": -1.9195140000000004,
+      "fee_adjusted_roi": -0.009057750104126797,
+      "target_date_block_ci95": [
+        -0.07059637654085137,
+        0.06888225213300497
+      ],
+      "entries_per_covered_date": 6.428571428571429
+    },
+    "all_positive_mid_residual_checkpoints": {
+      "entries": 75,
+      "city_days": 45,
+      "dates": 7,
+      "cities": 25,
+      "wins": 71,
+      "losses": 4,
+      "win_rate": 0.9466666666666667,
+      "avg_effective_cost_per_share": 0.9510848373333335,
+      "cost_usd_at_5_shares": 356.65681400000005,
+      "pnl_usd_at_5_shares": -1.6568139999999998,
+      "fee_adjusted_roi": -0.004645401223148928,
+      "target_date_block_ci95": [
+        -0.05622315128719041,
+        0.05128948280680084
+      ],
+      "entries_per_covered_date": 10.714285714285714
+    },
+    "all_friction_filtered_checkpoints": {
+      "entries": 55,
+      "city_days": 40,
+      "dates": 7,
+      "cities": 22,
+      "wins": 51,
+      "losses": 4,
+      "win_rate": 0.9272727272727272,
+      "avg_effective_cost_per_share": 0.96097496,
+      "cost_usd_at_5_shares": 264.268114,
+      "pnl_usd_at_5_shares": -9.268113999999997,
+      "fee_adjusted_roi": -0.03507087502807847,
+      "target_date_block_ci95": [
+        -0.11049792244488163,
+        0.041974710777590976
+      ],
+      "entries_per_covered_date": 7.857142857142857
+    },
+    "first_friction_filtered_city_day": {
+      "entries": 40,
+      "city_days": 40,
+      "dates": 7,
+      "cities": 22,
+      "wins": 37,
+      "losses": 3,
+      "win_rate": 0.925,
+      "avg_effective_cost_per_share": 0.9558343199999999,
+      "cost_usd_at_5_shares": 191.16686399999998,
+      "pnl_usd_at_5_shares": -6.1668639999999995,
+      "fee_adjusted_roi": -0.032259063474515126,
+      "target_date_block_ci95": [
+        -0.10114501582820916,
+        0.05135874067256028
+      ],
+      "entries_per_covered_date": 5.714285714285714
+    }
+  }
+}
