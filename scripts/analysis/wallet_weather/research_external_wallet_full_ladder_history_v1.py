@@ -236,13 +236,24 @@ def event_portfolio(
     redeems = [row for row in rows if str(row.get("type") or "").upper() == "REDEEM"]
     merges = [row for row in rows if str(row.get("type") or "").upper() == "MERGE"]
     splits = [row for row in rows if str(row.get("type") or "").upper() == "SPLIT"]
+    conversions = [
+        row for row in rows if str(row.get("type") or "").upper() == "CONVERSION"
+    ]
 
     buy_cost = sum(float(row.get("usdcSize") or 0) for row in buys)
     sell_proceeds = sum(float(row.get("usdcSize") or 0) for row in sells)
     redeem_cash = sum(float(row.get("usdcSize") or 0) for row in redeems)
     merge_cash = sum(float(row.get("usdcSize") or 0) for row in merges)
     split_cash = sum(float(row.get("usdcSize") or 0) for row in splits)
-    public_cashflow = sell_proceeds + redeem_cash + merge_cash - buy_cost - split_cash
+    conversion_cash = sum(float(row.get("usdcSize") or 0) for row in conversions)
+    public_cashflow = (
+        sell_proceeds
+        + redeem_cash
+        + merge_cash
+        + conversion_cash
+        - buy_cost
+        - split_cash
+    )
     position_current_value = sum(
         float(row.get("currentValue") or 0) for row in position_rows
     )
@@ -292,6 +303,10 @@ def event_portfolio(
         net_no[condition] -= size
 
     markets = metadata_markets(event_slugs, metadata_by_slug)
+    for row in conversions:
+        size = float(row.get("size") or 0)
+        for market in markets:
+            net_no[str(market["conditionId"])] -= size
     condition_index = {
         str(market["conditionId"]): index for index, market in enumerate(markets)
     }
@@ -370,7 +385,14 @@ def event_portfolio(
         token_payout = net_yes.get(winner, 0.0) + sum(
             shares for condition, shares in net_no.items() if condition != winner
         )
-        economic_pnl = sell_proceeds + merge_cash - buy_cost - split_cash + token_payout
+        economic_pnl = (
+            sell_proceeds
+            + merge_cash
+            + conversion_cash
+            - buy_cost
+            - split_cash
+            + token_payout
+        )
 
     first_local = local_datetime(first_buy_ts, city)
     last_local = local_datetime(last_buy_ts, city)
@@ -445,6 +467,7 @@ def event_portfolio(
         "redeem_cash": redeem_cash,
         "merge_cash": merge_cash,
         "split_cash": split_cash,
+        "conversion_cash": conversion_cash,
         "public_cashflow": public_cashflow,
         "position_current_value_at_snapshot": position_current_value,
         "cashflow_complete": cashflow_complete,
@@ -552,6 +575,7 @@ def event_portfolio(
         "has_redeem": bool(redeems),
         "has_merge": bool(merges),
         "has_split": bool(splits),
+        "has_conversion": bool(conversions),
     }
 
 
@@ -869,6 +893,12 @@ def analyze(
         "redeem_events": sum(bool(row["has_redeem"]) for row in portfolios),
         "merge_events": sum(bool(row["has_merge"]) for row in portfolios),
         "split_events": sum(bool(row["has_split"]) for row in portfolios),
+        "conversion_events": sum(
+            bool(row["has_conversion"]) for row in portfolios
+        ),
+        "conversion_cash": sum(
+            float(row["conversion_cash"]) for row in portfolios
+        ),
         "settlement_without_active_sell_events": sum(
             not row["has_sell"]
             and (row["has_redeem"] or row["has_merge"] or row["resolved"])
@@ -963,15 +993,20 @@ def analyze(
             "burst_definition": "new burst after >60 seconds between unique BUY transactions",
             "session_definition": "new session after >5 minutes between unique BUY transactions",
             "holding_proxy": "first BUY fill to first public REDEEM; active SELL reported separately",
-            "width": "positive net YES brackets after BUY/SELL/SPLIT/MERGE, ordered on complete Gamma ladder",
+            "width": (
+                "positive net YES brackets after BUY/SELL/SPLIT/MERGE/"
+                "NegRisk CONVERSION, ordered on complete Gamma ladder"
+            ),
             "center_weighting": (
                 "base_share_fraction = min positive YES shares * bracket_count / "
                 "total positive YES shares; modal_overweight = 1-base_share_fraction"
             ),
             "settled_pnl": (
                 "actual public activity cashflow on Gamma-resolved portfolios whose "
-                "positions snapshot has <1c currentValue; winner-token reconstruction "
-                "is diagnostic only because NegRisk conversion can change redeemable shares"
+                "positions snapshot has <1c currentValue; CONVERSION usdcSize is "
+                "realized full-set NO collateral and is included as an inflow; "
+                "winner-token reconstruction is diagnostic only because NegRisk "
+                "conversion changes redeemable shares"
             ),
             "public_data_limit": (
                 "unfilled/cancelled orders, private signals, maker intent and original "

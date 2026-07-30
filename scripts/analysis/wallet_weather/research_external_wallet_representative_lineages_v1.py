@@ -143,10 +143,12 @@ def select_cases(
 
     for row in eligible:
         row["_pnl"] = as_float(row.get("public_cashflow"))  # type: ignore[assignment]
-        row["_roi"] = as_float(  # type: ignore[assignment]
-            row.get("turnover_roi_reconstructed")
-        )
         row["_cost"] = as_float(row.get("buy_cost"))  # type: ignore[assignment]
+        row["_roi"] = (  # type: ignore[assignment]
+            as_float(row["_pnl"]) / as_float(row["_cost"])
+            if as_float(row["_cost"])
+            else 0.0
+        )
 
     positives = [row for row in eligible if as_float(row["_pnl"]) > 0]
     negatives = [row for row in eligible if as_float(row["_pnl"]) < 0]
@@ -363,8 +365,17 @@ def main() -> None:
                     "merge_cash": as_float(portfolio["merge_cash"]),
                     "redeem_cash": as_float(portfolio["redeem_cash"]),
                     "split_cash": as_float(portfolio["split_cash"]),
+                    "conversion_cash": as_float(
+                        portfolio.get("conversion_cash")
+                    ),
                     "public_cashflow_pnl": as_float(portfolio["public_cashflow"]),
-                    "turnover_roi": as_float(
+                    "turnover_roi": (
+                        as_float(portfolio["public_cashflow"])
+                        / as_float(portfolio["buy_cost"])
+                        if as_float(portfolio["buy_cost"])
+                        else None
+                    ),
+                    "turnover_roi_reconstructed": as_float(
                         portfolio["turnover_roi_reconstructed"]
                     ),
                     "token_payout_reconstructed": as_float(
