@@ -558,6 +558,15 @@ def build_feature_rows(
             continue
         metar_times = [row["observation_time_utc"] for row in metars]
         routine = [row for row in metars if row["routine"]]
+        if not routine:
+            continue
+        # Settlement-facing daily maximum uses every RJTT report, including
+        # SPECI/special observations.  Restricting the terminal label to
+        # routine rows can put a previously observed special-report maximum
+        # above the alleged "final" maximum and create an impossible negative
+        # remaining-rise label.
+        final_metar_max_c = max(float(row["temp_c"]) for row in metars)
+        final_metar_rounded_c = round_native_c(final_metar_max_c)
         routine_times = [row["observation_time_utc"] for row in routine]
         metar_running: list[float] = []
         running = -math.inf
@@ -607,6 +616,8 @@ def build_feature_rows(
                 "target_date": target_date,
                 "decision_ts_utc": timestamp.isoformat(),
                 "pit_provenance": "historical_non_pit_observation_clock",
+                "final_metar_max_c": final_metar_max_c,
+                "final_metar_rounded_c": final_metar_rounded_c,
                 "jma_temp_c": temp,
                 "jma_rounded_c": rounded,
                 "jma_temp_delta_10m": delta,

@@ -130,4 +130,7 @@ def test_equal_timestamp_metar_is_not_a_feature_or_label() -> None:
 
     assert len(rows) == 1
     assert rows[0]["prior_metar_temp_c"] == 29.0
+    assert rows[0]["prior_metar_running_max_c"] == 29.0
+    assert rows[0]["final_metar_max_c"] == 99.0
+    assert rows[0]["final_metar_rounded_c"] == 99
     assert rows[0]["confirm_jma_lattice_within_30m"] == 1
