@@ -1,0 +1,125 @@
+{
+  "data_snapshot": {
+    "activity_rows": 8099,
+    "cashflow_complete_portfolios": 221,
+    "date_max": "2026-07-29",
+    "date_min": "2026-04-25",
+    "metadata_incomplete_portfolios": 0,
+    "missing_bracket_metadata_portfolios": 0,
+    "portfolio_rows": 227,
+    "target_dates": 69,
+    "unsettled_or_incomplete_portfolios": 6,
+    "unsettled_or_incomplete_share": 0.02643171806167401
+  },
+  "execution_and_lifecycle": {
+    "conditions": 658,
+    "diagnostic_matched_pair_shares": 23637.458606000004,
+    "diagnostic_matched_pair_vwap_cost": 19896.791068481736,
+    "dual_outcome_buy_events": 71,
+    "dual_outcome_conditions": 114,
+    "merge_cash": 10540.841231000002,
+    "merge_rows": 107.0,
+    "peak_transactions_per_minute": 49,
+    "redeem_cash": 45301.271700000005,
+    "redeem_rows": 405.0,
+    "roundtrip_events": 146,
+    "share_gaps_le_10s": 0.4233693477390956,
+    "share_gaps_le_2s": 0.2954515139389089,
+    "share_gaps_le_60s": 0.5838335334133653,
+    "transaction_gap_seconds": {
+      "mean": 1097.9354408430038,
+      "median": 27.0,
+      "n": 7497,
+      "p10": 0.0,
+      "p90": 1092.2000000000016
+    },
+    "underround_conditions_diagnostic": 54,
+    "unique_trade_transactions": 7498
+  },
+  "generated_at_utc": "2026-07-30T14:38:56.761910+00:00",
+  "limitations": [
+    "Public activity timestamps are fills, not original order-post times.",
+    "Public data does not identify maker/taker, cancelled orders, queue position, private signals, or contemporaneous executable book state.",
+    "Condition-level paired VWAP sums are lifetime diagnostics and are not evidence that a synchronous arbitrage was executable.",
+    "Public cashflow is used only on cashflow-complete resolved portfolios; fee attribution is not independently observable per fill."
+  ],
+  "performance": {
+    "buy_cost": 90284.062083,
+    "chronological_halves": {
+      "early": {
+        "buy_cost": 17281.401912,
+        "date_max": "2026-06-24",
+        "date_min": "2026-04-25",
+        "pnl": 4194.563667,
+        "portfolios": 86,
+        "roi": 0.24272126117773726,
+        "target_dates": 34
+      },
+      "late": {
+        "buy_cost": 73002.660171,
+        "date_max": "2026-07-29",
+        "date_min": "2026-06-25",
+        "pnl": 11188.31696,
+        "portfolios": 135,
+        "roi": 0.15325903102424906,
+        "target_dates": 35
+      },
+      "latest_30_target_dates": {
+        "buy_cost": 60542.606692,
+        "date_max": "2026-07-29",
+        "date_min": "2026-06-30",
+        "pnl": 9107.684877,
+        "portfolios": 101,
+        "roi": 0.15043430361916468,
+        "target_dates": 30
+      }
+    },
+    "mean_target_date_roi": 0.3128027207701736,
+    "median_target_date_roi": 0.04534298826521594,
+    "positive_target_date_share": 0.6376811594202898,
+    "public_cashflow_components": {
+      "buy_cost": 90284.062083,
+      "merge_cash": 10540.841231,
+      "redeem_cash": 45301.2717,
+      "sell_proceeds": 49824.829779,
+      "sell_proceeds_over_buy_cost": 0.551867390871215
+    },
+    "public_cashflow_pnl": 15382.880627,
+    "target_date_bootstrap": {
+      "block": "target_date",
+      "dates": 69,
+      "iterations": 10000,
+      "roi_median": 0.1604394847631547,
+      "roi_p025": 0.05612141610509558,
+      "roi_p975": 0.3608694604616455
+    },
+    "turnover_roi": 0.17038312490700963
+  },
+  "profit_concentration": {
+    "roi_excluding_top5_target_dates": 0.06118154785522295,
+    "roi_excluding_top_event": 0.09870667185863725,
+    "top5_event_pnl_share": 0.6803015676161368,
+    "top5_target_date_pnl_share": 0.6694804156462105,
+    "top_event": {
+      "city": "hong-kong",
+      "pnl": 6605.932510000001,
+      "share_of_total_pnl": 0.429434035807655,
+      "target_date": "2026-07-14"
+    }
+  },
+  "regional_concentration": {
+    "buy_cost": 80576.839958,
+    "buy_cost_share": 0.8924813316875801,
+    "pnl": 14453.640575,
+    "pnl_share": 0.9395925851255063,
+    "roi": 0.17937710863982553,
+    "top3_cities": [
+      "guangzhou",
+      "hong-kong",
+      "shenzhen"
+    ]
+  },
+  "schema_version": "weatherhk2_strategy_v1",
+  "snapshot": "/Volumes/jrs/pm_agents/research/external_wallet_weather/raw/wallet=0xdadbf9e1df1b8d7a184a0d6ab9c83b2337b61870/snapshot=20260730T135201Z",
+  "wallet": "0xdadbf9e1df1b8d7a184a0d6ab9c83b2337b61870"
+}

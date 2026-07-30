@@ -1,0 +1,1561 @@
+[
+  {
+    "buy_cost": 1244.928974,
+    "city": "hong-kong",
+    "exit_style": "active_sell_then_settlement",
+    "expression": "mixed_yes_no",
+    "phase_count_gap_gt_10m": 24,
+    "phases": [
+      {
+        "buy_cost": 219.28846099999998,
+        "first_ts": 1784122246,
+        "first_utc": "2026-07-15T13:30:46+00:00",
+        "last_ts": 1784122939,
+        "last_utc": "2026-07-15T13:42:19+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 26°C on July 16?",
+            "shares": 212.75
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 31°C on July 16?",
+            "shares": 112.34318299999998
+          }
+        ],
+        "trade_rows": 9
+      },
+      {
+        "buy_cost": 29.022,
+        "first_ts": 1784128579,
+        "first_utc": "2026-07-15T15:16:19+00:00",
+        "last_ts": 1784128579,
+        "last_utc": "2026-07-15T15:16:19+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 31°C on July 16?",
+            "shares": 483.7
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.3,
+        "first_ts": 1784139773,
+        "first_utc": "2026-07-15T18:22:53+00:00",
+        "last_ts": 1784139773,
+        "last_utc": "2026-07-15T18:22:53+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 31°C on July 16?",
+            "shares": 5.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.127658,
+        "first_ts": 1784141800,
+        "first_utc": "2026-07-15T18:56:40+00:00",
+        "last_ts": 1784142058,
+        "last_utc": "2026-07-15T19:00:58+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 31°C on July 16?",
+            "shares": 2.127632
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.404885,
+        "first_ts": 1784150600,
+        "first_utc": "2026-07-15T21:23:20+00:00",
+        "last_ts": 1784150600,
+        "last_utc": "2026-07-15T21:23:20+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 31°C on July 16?",
+            "shares": 6.748083
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 40.15425,
+        "first_ts": 1784153720,
+        "first_utc": "2026-07-15T22:15:20+00:00",
+        "last_ts": 1784153720,
+        "last_utc": "2026-07-15T22:15:20+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 485.1
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784157974,
+        "first_utc": "2026-07-15T23:26:14+00:00",
+        "last_ts": 1784157982,
+        "last_utc": "2026-07-15T23:26:22+00:00",
+        "sell_proceeds": 13.48951,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 31°C on July 16?",
+            "shares": 609.9100000000001
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 2.06565,
+        "first_ts": 1784163803,
+        "first_utc": "2026-07-16T01:03:23+00:00",
+        "last_ts": 1784163803,
+        "last_utc": "2026-07-16T01:03:23+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 5.56
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 6.8998099999999996,
+        "first_ts": 1784166595,
+        "first_utc": "2026-07-16T01:49:55+00:00",
+        "last_ts": 1784166838,
+        "last_utc": "2026-07-16T01:53:58+00:00",
+        "sell_proceeds": 135.96838700000004,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 485.60140999999993
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 23.87
+          }
+        ],
+        "trade_rows": 59
+      },
+      {
+        "buy_cost": 233.28586,
+        "first_ts": 1784167966,
+        "first_utc": "2026-07-16T02:12:46+00:00",
+        "last_ts": 1784168428,
+        "last_utc": "2026-07-16T02:20:28+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 304.69
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 30°C on July 16?",
+            "shares": 81.15
+          }
+        ],
+        "trade_rows": 3
+      },
+      {
+        "buy_cost": 23.874789999999997,
+        "first_ts": 1784171285,
+        "first_utc": "2026-07-16T03:08:05+00:00",
+        "last_ts": 1784172514,
+        "last_utc": "2026-07-16T03:28:34+00:00",
+        "sell_proceeds": 139.440346,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 30°C on July 16?",
+            "shares": 391.39
+          },
+          {
+            "action": "SELL NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 179.370861
+          }
+        ],
+        "trade_rows": 16
+      },
+      {
+        "buy_cost": 90.91293,
+        "first_ts": 1784173160,
+        "first_utc": "2026-07-16T03:39:20+00:00",
+        "last_ts": 1784173657,
+        "last_utc": "2026-07-16T03:47:37+00:00",
+        "sell_proceeds": 168.9607,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 209.64999999999998
+          },
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 113.26
+          }
+        ],
+        "trade_rows": 3
+      },
+      {
+        "buy_cost": 21.947270000000003,
+        "first_ts": 1784174572,
+        "first_utc": "2026-07-16T04:02:52+00:00",
+        "last_ts": 1784175271,
+        "last_utc": "2026-07-16T04:14:31+00:00",
+        "sell_proceeds": 70.30353000000001,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 30°C on July 16?",
+            "shares": 325.08
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 125.07
+          },
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 125.07
+          }
+        ],
+        "trade_rows": 7
+      },
+      {
+        "buy_cost": 350.27347000000003,
+        "first_ts": 1784178275,
+        "first_utc": "2026-07-16T05:04:35+00:00",
+        "last_ts": 1784178920,
+        "last_utc": "2026-07-16T05:15:20+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 1225.39
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 16?",
+            "shares": 266.09999999999997
+          }
+        ],
+        "trade_rows": 6
+      },
+      {
+        "buy_cost": 11.10252,
+        "first_ts": 1784181691,
+        "first_utc": "2026-07-16T06:01:31+00:00",
+        "last_ts": 1784182298,
+        "last_utc": "2026-07-16T06:11:38+00:00",
+        "sell_proceeds": 0.28021,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 30°C on July 16?",
+            "shares": 147.46
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 16?",
+            "shares": 79.96999999999998
+          }
+        ],
+        "trade_rows": 7
+      },
+      {
+        "buy_cost": 66.019442,
+        "first_ts": 1784183543,
+        "first_utc": "2026-07-16T06:32:23+00:00",
+        "last_ts": 1784184073,
+        "last_utc": "2026-07-16T06:41:13+00:00",
+        "sell_proceeds": 1.45556,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 437.214847
+          },
+          {
+            "action": "SELL NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 10.0
+          }
+        ],
+        "trade_rows": 5
+      },
+      {
+        "buy_cost": 82.99392,
+        "first_ts": 1784185205,
+        "first_utc": "2026-07-16T07:00:05+00:00",
+        "last_ts": 1784185549,
+        "last_utc": "2026-07-16T07:05:49+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 350.81
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 16?",
+            "shares": 202.09
+          }
+        ],
+        "trade_rows": 5
+      },
+      {
+        "buy_cost": 33.183758,
+        "first_ts": 1784186708,
+        "first_utc": "2026-07-16T07:25:08+00:00",
+        "last_ts": 1784186828,
+        "last_utc": "2026-07-16T07:27:08+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 339.67386700000003
+          }
+        ],
+        "trade_rows": 6
+      },
+      {
+        "buy_cost": 5.346,
+        "first_ts": 1784187731,
+        "first_utc": "2026-07-16T07:42:11+00:00",
+        "last_ts": 1784187731,
+        "last_utc": "2026-07-16T07:42:11+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 16?",
+            "shares": 66.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 7.23417,
+        "first_ts": 1784188867,
+        "first_utc": "2026-07-16T08:01:07+00:00",
+        "last_ts": 1784188943,
+        "last_utc": "2026-07-16T08:02:23+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 55.45
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 16?",
+            "shares": 16.0
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.88,
+        "first_ts": 1784191366,
+        "first_utc": "2026-07-16T08:42:46+00:00",
+        "last_ts": 1784191366,
+        "last_utc": "2026-07-16T08:42:46+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 16?",
+            "shares": 16.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 19.61213,
+        "first_ts": 1784192675,
+        "first_utc": "2026-07-16T09:04:35+00:00",
+        "last_ts": 1784192689,
+        "last_utc": "2026-07-16T09:04:49+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 208.46
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 16?",
+            "shares": 114.0
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784207251,
+        "first_utc": "2026-07-16T13:07:31+00:00",
+        "last_ts": 1784207251,
+        "last_utc": "2026-07-16T13:07:31+00:00",
+        "sell_proceeds": 2.34773,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 16?",
+            "shares": 760.16
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784211407,
+        "first_utc": "2026-07-16T14:16:47+00:00",
+        "last_ts": 1784211407,
+        "last_utc": "2026-07-16T14:16:47+00:00",
+        "sell_proceeds": 4.56673,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL NO Will the highest temperature in Hong Kong be 27°C on July 16?",
+            "shares": 2606.99
+          }
+        ],
+        "trade_rows": 1
+      }
+    ],
+    "pnl": -466.4377709999999,
+    "roi": -0.3746701866061637,
+    "target_date": "2026-07-16",
+    "winner_label": "27°C"
+  },
+  {
+    "buy_cost": 1364.5599690000001,
+    "city": "hong-kong",
+    "exit_style": "active_sell_then_settlement",
+    "expression": "mixed_yes_no",
+    "phase_count_gap_gt_10m": 34,
+    "phases": [
+      {
+        "buy_cost": 18.61775,
+        "first_ts": 1783922680,
+        "first_utc": "2026-07-13T06:04:40+00:00",
+        "last_ts": 1783922680,
+        "last_utc": "2026-07-13T06:04:40+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 254.15
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 64.42329,
+        "first_ts": 1783935970,
+        "first_utc": "2026-07-13T09:46:10+00:00",
+        "last_ts": 1783935970,
+        "last_utc": "2026-07-13T09:46:10+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 563.47
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 7.96043,
+        "first_ts": 1783937581,
+        "first_utc": "2026-07-13T10:13:01+00:00",
+        "last_ts": 1783937581,
+        "last_utc": "2026-07-13T10:13:01+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 84.6
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 351.38861,
+        "first_ts": 1783956032,
+        "first_utc": "2026-07-13T15:20:32+00:00",
+        "last_ts": 1783956032,
+        "last_utc": "2026-07-13T15:20:32+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 358.28
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 78.95886300000002,
+        "first_ts": 1783957672,
+        "first_utc": "2026-07-13T15:47:52+00:00",
+        "last_ts": 1783958260,
+        "last_utc": "2026-07-13T15:57:40+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 14014.120202000006
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 71.05
+          }
+        ],
+        "trade_rows": 74
+      },
+      {
+        "buy_cost": 526.40168,
+        "first_ts": 1783960687,
+        "first_utc": "2026-07-13T16:38:07+00:00",
+        "last_ts": 1783960699,
+        "last_utc": "2026-07-13T16:38:19+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 561.13
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783983785,
+        "first_utc": "2026-07-13T23:03:05+00:00",
+        "last_ts": 1783983785,
+        "last_utc": "2026-07-13T23:03:05+00:00",
+        "sell_proceeds": 114.17755,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 700.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783986794,
+        "first_utc": "2026-07-13T23:53:14+00:00",
+        "last_ts": 1783986794,
+        "last_utc": "2026-07-13T23:53:14+00:00",
+        "sell_proceeds": 52.30095,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 268.21
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 135.7818,
+        "first_ts": 1783988281,
+        "first_utc": "2026-07-14T00:18:01+00:00",
+        "last_ts": 1783988281,
+        "last_utc": "2026-07-14T00:18:01+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 150.45
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783993066,
+        "first_utc": "2026-07-14T01:37:46+00:00",
+        "last_ts": 1783996237,
+        "last_utc": "2026-07-14T02:30:37+00:00",
+        "sell_proceeds": 595.885304,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 2152.0830790000005
+          }
+        ],
+        "trade_rows": 28
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783999135,
+        "first_utc": "2026-07-14T03:18:55+00:00",
+        "last_ts": 1783999645,
+        "last_utc": "2026-07-14T03:27:25+00:00",
+        "sell_proceeds": 268.16839,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 922.74
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 15.500169999999999,
+        "first_ts": 1784000279,
+        "first_utc": "2026-07-14T03:37:59+00:00",
+        "last_ts": 1784000962,
+        "last_utc": "2026-07-14T03:49:22+00:00",
+        "sell_proceeds": 66.66185,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 405.88
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 78.0
+          }
+        ],
+        "trade_rows": 5
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784002414,
+        "first_utc": "2026-07-14T04:13:34+00:00",
+        "last_ts": 1784002634,
+        "last_utc": "2026-07-14T04:17:14+00:00",
+        "sell_proceeds": 186.554849,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 970.991051
+          }
+        ],
+        "trade_rows": 4
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784004080,
+        "first_utc": "2026-07-14T04:41:20+00:00",
+        "last_ts": 1784004547,
+        "last_utc": "2026-07-14T04:49:07+00:00",
+        "sell_proceeds": 34.168309,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 169.991592
+          }
+        ],
+        "trade_rows": 3
+      },
+      {
+        "buy_cost": 3.5328,
+        "first_ts": 1784006254,
+        "first_utc": "2026-07-14T05:17:34+00:00",
+        "last_ts": 1784006542,
+        "last_utc": "2026-07-14T05:22:22+00:00",
+        "sell_proceeds": 38.46876,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 132.88
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 14.72
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784007268,
+        "first_utc": "2026-07-14T05:34:28+00:00",
+        "last_ts": 1784007785,
+        "last_utc": "2026-07-14T05:43:05+00:00",
+        "sell_proceeds": 469.57,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 1217.0
+          }
+        ],
+        "trade_rows": 3
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784008390,
+        "first_utc": "2026-07-14T05:53:10+00:00",
+        "last_ts": 1784009611,
+        "last_utc": "2026-07-14T06:13:31+00:00",
+        "sell_proceeds": 2340.2496799999994,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 4279.773834999999
+          }
+        ],
+        "trade_rows": 38
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784010916,
+        "first_utc": "2026-07-14T06:35:16+00:00",
+        "last_ts": 1784010916,
+        "last_utc": "2026-07-14T06:35:16+00:00",
+        "sell_proceeds": 4.5,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 6.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 4.99524,
+        "first_ts": 1784011763,
+        "first_utc": "2026-07-14T06:49:23+00:00",
+        "last_ts": 1784011763,
+        "last_utc": "2026-07-14T06:49:23+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 32°C on July 14?",
+            "shares": 5.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 6.420116999999999,
+        "first_ts": 1784015576,
+        "first_utc": "2026-07-14T07:52:56+00:00",
+        "last_ts": 1784015845,
+        "last_utc": "2026-07-14T07:57:25+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 41.420109
+          }
+        ],
+        "trade_rows": 3
+      },
+      {
+        "buy_cost": 69.70976999999999,
+        "first_ts": 1784016659,
+        "first_utc": "2026-07-14T08:10:59+00:00",
+        "last_ts": 1784016814,
+        "last_utc": "2026-07-14T08:13:34+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 595.9
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 2.236047,
+        "first_ts": 1784019272,
+        "first_utc": "2026-07-14T08:54:32+00:00",
+        "last_ts": 1784019934,
+        "last_utc": "2026-07-14T09:05:34+00:00",
+        "sell_proceeds": 3.079996,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 319.7454
+          },
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 3.101709
+          }
+        ],
+        "trade_rows": 7
+      },
+      {
+        "buy_cost": 36.407458000000005,
+        "first_ts": 1784022866,
+        "first_utc": "2026-07-14T09:54:26+00:00",
+        "last_ts": 1784024044,
+        "last_utc": "2026-07-14T10:14:04+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 911.5799999999999
+          },
+          {
+            "action": "BUY NO Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 674.59
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 28°C on July 14?",
+            "shares": 1.019315
+          }
+        ],
+        "trade_rows": 9
+      },
+      {
+        "buy_cost": 19.4278,
+        "first_ts": 1784024861,
+        "first_utc": "2026-07-14T10:27:41+00:00",
+        "last_ts": 1784024861,
+        "last_utc": "2026-07-14T10:27:41+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 581.85
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 22.798143999999997,
+        "first_ts": 1784025479,
+        "first_utc": "2026-07-14T10:37:59+00:00",
+        "last_ts": 1784026963,
+        "last_utc": "2026-07-14T11:02:43+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 1049.782095
+          }
+        ],
+        "trade_rows": 11
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784028124,
+        "first_utc": "2026-07-14T11:22:04+00:00",
+        "last_ts": 1784028701,
+        "last_utc": "2026-07-14T11:31:41+00:00",
+        "sell_proceeds": 7.80928,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 418.13
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784038703,
+        "first_utc": "2026-07-14T14:18:23+00:00",
+        "last_ts": 1784038703,
+        "last_utc": "2026-07-14T14:18:23+00:00",
+        "sell_proceeds": 0.88558,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 932.14
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784045129,
+        "first_utc": "2026-07-14T16:05:29+00:00",
+        "last_ts": 1784045606,
+        "last_utc": "2026-07-14T16:13:26+00:00",
+        "sell_proceeds": 0.43766000000000005,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 437.65999999999997
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784047009,
+        "first_utc": "2026-07-14T16:36:49+00:00",
+        "last_ts": 1784047009,
+        "last_utc": "2026-07-14T16:36:49+00:00",
+        "sell_proceeds": 0.1,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 100.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784049971,
+        "first_utc": "2026-07-14T17:26:11+00:00",
+        "last_ts": 1784049971,
+        "last_utc": "2026-07-14T17:26:11+00:00",
+        "sell_proceeds": 0.00499,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 4.99
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784052658,
+        "first_utc": "2026-07-14T18:10:58+00:00",
+        "last_ts": 1784052658,
+        "last_utc": "2026-07-14T18:10:58+00:00",
+        "sell_proceeds": 0.28694,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 286.94
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784055826,
+        "first_utc": "2026-07-14T19:03:46+00:00",
+        "last_ts": 1784055826,
+        "last_utc": "2026-07-14T19:03:46+00:00",
+        "sell_proceeds": 0.04255,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 42.55
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784058406,
+        "first_utc": "2026-07-14T19:46:46+00:00",
+        "last_ts": 1784058406,
+        "last_utc": "2026-07-14T19:46:46+00:00",
+        "sell_proceeds": 0.00161,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 1.61
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1784062790,
+        "first_utc": "2026-07-14T20:59:50+00:00",
+        "last_ts": 1784062790,
+        "last_utc": "2026-07-14T20:59:50+00:00",
+        "sell_proceeds": 0.70998,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Hong Kong be 29°C on July 14?",
+            "shares": 709.98
+          }
+        ],
+        "trade_rows": 1
+      }
+    ],
+    "pnl": 6605.932510000001,
+    "roi": 4.841071598224497,
+    "target_date": "2026-07-14",
+    "winner_label": "28°C"
+  },
+  {
+    "buy_cost": 939.604413,
+    "city": "shenzhen",
+    "exit_style": "active_sell_then_settlement",
+    "expression": "mixed_yes_no",
+    "phase_count_gap_gt_10m": 20,
+    "phases": [
+      {
+        "buy_cost": 1.48106,
+        "first_ts": 1783500970,
+        "first_utc": "2026-07-08T08:56:10+00:00",
+        "last_ts": 1783501048,
+        "last_utc": "2026-07-08T08:57:28+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Shenzhen be 34°C on July 9?",
+            "shares": 40.028648
+          }
+        ],
+        "trade_rows": 5
+      },
+      {
+        "buy_cost": 0.192107,
+        "first_ts": 1783502245,
+        "first_utc": "2026-07-08T09:17:25+00:00",
+        "last_ts": 1783502245,
+        "last_utc": "2026-07-08T09:17:25+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Shenzhen be 34°C on July 9?",
+            "shares": 5.192081
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 1.575093,
+        "first_ts": 1783509769,
+        "first_utc": "2026-07-08T11:22:49+00:00",
+        "last_ts": 1783509769,
+        "last_utc": "2026-07-08T11:22:49+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Shenzhen be 34°C on July 9?",
+            "shares": 42.570081
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.777,
+        "first_ts": 1783512476,
+        "first_utc": "2026-07-08T12:07:56+00:00",
+        "last_ts": 1783512476,
+        "last_utc": "2026-07-08T12:07:56+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Shenzhen be 34°C on July 9?",
+            "shares": 21.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 25.20724,
+        "first_ts": 1783520203,
+        "first_utc": "2026-07-08T14:16:43+00:00",
+        "last_ts": 1783520203,
+        "last_utc": "2026-07-08T14:16:43+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Shenzhen be 34°C on July 9?",
+            "shares": 404.21
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 466.11757,
+        "first_ts": 1783551998,
+        "first_utc": "2026-07-08T23:06:38+00:00",
+        "last_ts": 1783551998,
+        "last_utc": "2026-07-08T23:06:38+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 2500.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783563134,
+        "first_utc": "2026-07-09T02:12:14+00:00",
+        "last_ts": 1783563508,
+        "last_utc": "2026-07-09T02:18:28+00:00",
+        "sell_proceeds": 87.77720000000001,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 478.6
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 140.13763,
+        "first_ts": 1783564253,
+        "first_utc": "2026-07-09T02:30:53+00:00",
+        "last_ts": 1783564505,
+        "last_utc": "2026-07-09T02:35:05+00:00",
+        "sell_proceeds": 0.06894,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Shenzhen be 29°C on July 9?",
+            "shares": 147.32
+          },
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 0.48
+          }
+        ],
+        "trade_rows": 3
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783565596,
+        "first_utc": "2026-07-09T02:53:16+00:00",
+        "last_ts": 1783565686,
+        "last_utc": "2026-07-09T02:54:46+00:00",
+        "sell_proceeds": 3.248799,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 19.110587000000002
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783567459,
+        "first_utc": "2026-07-09T03:24:19+00:00",
+        "last_ts": 1783567459,
+        "last_utc": "2026-07-09T03:24:19+00:00",
+        "sell_proceeds": 0.999999,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 5.555554
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783569452,
+        "first_utc": "2026-07-09T03:57:32+00:00",
+        "last_ts": 1783569452,
+        "last_utc": "2026-07-09T03:57:32+00:00",
+        "sell_proceeds": 12.48854,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 130.77
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 29.05857,
+        "first_ts": 1783574890,
+        "first_utc": "2026-07-09T05:28:10+00:00",
+        "last_ts": 1783575562,
+        "last_utc": "2026-07-09T05:39:22+00:00",
+        "sell_proceeds": 2.15617,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 34°C on July 9?",
+            "shares": 513.0
+          },
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 200.23999999999998
+          },
+          {
+            "action": "BUY NO Will the highest temperature in Shenzhen be 29°C on July 9?",
+            "shares": 39.47
+          }
+        ],
+        "trade_rows": 14
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783576417,
+        "first_utc": "2026-07-09T05:53:37+00:00",
+        "last_ts": 1783576417,
+        "last_utc": "2026-07-09T05:53:37+00:00",
+        "sell_proceeds": 0.825,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 103.125
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783577113,
+        "first_utc": "2026-07-09T06:05:13+00:00",
+        "last_ts": 1783577113,
+        "last_utc": "2026-07-09T06:05:13+00:00",
+        "sell_proceeds": 0.1212,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 15.15
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783577891,
+        "first_utc": "2026-07-09T06:18:11+00:00",
+        "last_ts": 1783578089,
+        "last_utc": "2026-07-09T06:21:29+00:00",
+        "sell_proceeds": 1.0140799999999999,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 126.76
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783580642,
+        "first_utc": "2026-07-09T07:04:02+00:00",
+        "last_ts": 1783581338,
+        "last_utc": "2026-07-09T07:15:38+00:00",
+        "sell_proceeds": 0.43446999999999997,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 444.0799999999999
+          }
+        ],
+        "trade_rows": 5
+      },
+      {
+        "buy_cost": 76.834475,
+        "first_ts": 1783582295,
+        "first_utc": "2026-07-09T07:31:35+00:00",
+        "last_ts": 1783582651,
+        "last_utc": "2026-07-09T07:37:31+00:00",
+        "sell_proceeds": 0.01186,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Shenzhen be 29°C on July 9?",
+            "shares": 797.617688
+          },
+          {
+            "action": "BUY YES Will the highest temperature in Shenzhen be 30°C on July 9?",
+            "shares": 73.83
+          },
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 11.86
+          }
+        ],
+        "trade_rows": 8
+      },
+      {
+        "buy_cost": 136.78209,
+        "first_ts": 1783583873,
+        "first_utc": "2026-07-09T07:57:53+00:00",
+        "last_ts": 1783585082,
+        "last_utc": "2026-07-09T08:18:02+00:00",
+        "sell_proceeds": 0.025,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Shenzhen be 29°C on July 9?",
+            "shares": 144.44000000000003
+          },
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 25.0
+          }
+        ],
+        "trade_rows": 8
+      },
+      {
+        "buy_cost": 61.441578,
+        "first_ts": 1783585703,
+        "first_utc": "2026-07-09T08:28:23+00:00",
+        "last_ts": 1783585849,
+        "last_utc": "2026-07-09T08:30:49+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Shenzhen be 29°C on July 9?",
+            "shares": 62.631577
+          }
+        ],
+        "trade_rows": 2
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1783596727,
+        "first_utc": "2026-07-09T11:32:07+00:00",
+        "last_ts": 1783596727,
+        "last_utc": "2026-07-09T11:32:07+00:00",
+        "sell_proceeds": 0.002,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Shenzhen be 33°C on July 9?",
+            "shares": 2.0
+          }
+        ],
+        "trade_rows": 1
+      }
+    ],
+    "pnl": 434.8781099999999,
+    "roi": 0.46283106377875205,
+    "target_date": "2026-07-09",
+    "winner_label": "30°C"
+  },
+  {
+    "buy_cost": 213.140814,
+    "city": "guangzhou",
+    "exit_style": "active_sell_then_settlement",
+    "expression": "mixed_yes_no",
+    "phase_count_gap_gt_10m": 15,
+    "phases": [
+      {
+        "buy_cost": 0.040582,
+        "first_ts": 1782435607,
+        "first_utc": "2026-06-26T01:00:07+00:00",
+        "last_ts": 1782435607,
+        "last_utc": "2026-06-26T01:00:07+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 1.040564
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 5.230582,
+        "first_ts": 1782437405,
+        "first_utc": "2026-06-26T01:30:05+00:00",
+        "last_ts": 1782437410,
+        "last_utc": "2026-06-26T01:30:10+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 11.040564
+          },
+          {
+            "action": "BUY NO Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 5.0
+          }
+        ],
+        "trade_rows": 4
+      },
+      {
+        "buy_cost": 5.260000000000001,
+        "first_ts": 1782444965,
+        "first_utc": "2026-06-26T03:36:05+00:00",
+        "last_ts": 1782444970,
+        "last_utc": "2026-06-26T03:36:10+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 10.0
+          },
+          {
+            "action": "BUY NO Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 5.0
+          }
+        ],
+        "trade_rows": 3
+      },
+      {
+        "buy_cost": 8.203759000000002,
+        "first_ts": 1782455798,
+        "first_utc": "2026-06-26T06:36:38+00:00",
+        "last_ts": 1782455800,
+        "last_utc": "2026-06-26T06:36:40+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 51.503753
+          },
+          {
+            "action": "BUY NO Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 5.0
+          }
+        ],
+        "trade_rows": 4
+      },
+      {
+        "buy_cost": 6.383176000000001,
+        "first_ts": 1782458128,
+        "first_utc": "2026-06-26T07:15:28+00:00",
+        "last_ts": 1782458266,
+        "last_utc": "2026-06-26T07:17:46+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 92.50979500000001
+          }
+        ],
+        "trade_rows": 7
+      },
+      {
+        "buy_cost": 0.4028,
+        "first_ts": 1782460865,
+        "first_utc": "2026-06-26T08:01:05+00:00",
+        "last_ts": 1782460865,
+        "last_utc": "2026-06-26T08:01:05+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 10.6
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 7.523762,
+        "first_ts": 1782462206,
+        "first_utc": "2026-06-26T08:23:26+00:00",
+        "last_ts": 1782462206,
+        "last_utc": "2026-06-26T08:23:26+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 197.993736
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.49917,
+        "first_ts": 1782467051,
+        "first_utc": "2026-06-26T09:44:11+00:00",
+        "last_ts": 1782467051,
+        "last_utc": "2026-06-26T09:44:11+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 29°C on June 27?",
+            "shares": 21.24
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.11408,
+        "first_ts": 1782468178,
+        "first_utc": "2026-06-26T10:02:58+00:00",
+        "last_ts": 1782468178,
+        "last_utc": "2026-06-26T10:02:58+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 29°C on June 27?",
+            "shares": 4.96
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.2392,
+        "first_ts": 1782474032,
+        "first_utc": "2026-06-26T11:40:32+00:00",
+        "last_ts": 1782474032,
+        "last_utc": "2026-06-26T11:40:32+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 29°C on June 27?",
+            "shares": 10.4
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.023541,
+        "first_ts": 1782478982,
+        "first_utc": "2026-06-26T13:03:02+00:00",
+        "last_ts": 1782478982,
+        "last_utc": "2026-06-26T13:03:02+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 29°C on June 27?",
+            "shares": 1.023521
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 3.734392,
+        "first_ts": 1782481552,
+        "first_utc": "2026-06-26T13:45:52+00:00",
+        "last_ts": 1782482244,
+        "last_utc": "2026-06-26T13:57:24+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 29°C on June 27?",
+            "shares": 162.364869
+          }
+        ],
+        "trade_rows": 8
+      },
+      {
+        "buy_cost": 26.26414,
+        "first_ts": 1782513209,
+        "first_utc": "2026-06-26T22:33:29+00:00",
+        "last_ts": 1782513209,
+        "last_utc": "2026-06-26T22:33:29+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY YES Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 559.0
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 0.0,
+        "first_ts": 1782520948,
+        "first_utc": "2026-06-27T00:42:28+00:00",
+        "last_ts": 1782520948,
+        "last_utc": "2026-06-27T00:42:28+00:00",
+        "sell_proceeds": 0.19,
+        "top_actions_by_shares": [
+          {
+            "action": "SELL YES Will the highest temperature in Guangzhou be 29°C on June 27?",
+            "shares": 199.98
+          }
+        ],
+        "trade_rows": 1
+      },
+      {
+        "buy_cost": 149.22163,
+        "first_ts": 1782541811,
+        "first_utc": "2026-06-27T06:30:11+00:00",
+        "last_ts": 1782541811,
+        "last_utc": "2026-06-27T06:30:11+00:00",
+        "sell_proceeds": 0.0,
+        "top_actions_by_shares": [
+          {
+            "action": "BUY NO Will the highest temperature in Guangzhou be 35°C or higher on June 27?",
+            "shares": 172.65
+          }
+        ],
+        "trade_rows": 1
+      }
+    ],
+    "pnl": 720.737598,
+    "roi": 3.3815090806587613,
+    "target_date": "2026-06-27",
+    "winner_label": "35°C or higher"
+  }
+]
