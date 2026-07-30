@@ -80,6 +80,14 @@ D-1 只用 24.2% cost，却贡献 61.7% PnL；D-2-or-earlier 用掉 56.4% cost�
 
 这一 event 独自贡献全钱包 42.94% PnL。现在可以确定的是：这些 fill 来自两个 passive maker order 被反复部分成交，不是 taker 扫单。仍然不能确定的是：订单提前多久挂出、当时前面有多少 queue、未成交/取消了多少，以及对手为什么愿意在 0.2–0.3¢ 卖出。因此“异常流动性”或“提前很久排队”都不应作为事实。
 
+成交时也不是完全没有公开天气依据：
+
+- first fill 是 `2026-07-13 15:54:05Z`，即香港时间 7/13 23:54，距离目标日开始约 6 分钟。
+- 成交前可用的 PIT forecast capture `forecast_hourly_curves_20260713_233904_48e7fc003c` 在 `15:44:02Z` 已发布；其 Hong Kong 7/14 assigned ECMWF curve 预测最高 `80.9°F = 27.17°C`，峰值时钟为 19:00 HKT。
+- 因此 28°C 比 point forecast 高约 0.83°C。模型没有“预测 28 会赢”，但 0.002–0.003 的价格只要求校准后的 28°C exact 概率高于约 0.2%–0.3% 才有正的结算 EV；一个合理的 forecast-error tail 就可能满足。
+
+这支持“低价 convex tail + passive maker fill”作为机制解释；不能证明钱包实际读取了 ECMWF，也不能排除它使用 HKO 专属 bias、其他 forecast/source 或单纯铺低价尾部库存。
+
 ### Hong Kong 2026-07-16：错误的 overshoot 换档会快速吞掉利润
 
 - winner：27°C；buy cost $1,244.93；PnL -$466.44。
