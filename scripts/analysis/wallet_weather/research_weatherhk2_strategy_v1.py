@@ -21,6 +21,9 @@ from typing import Any, Iterable
 
 
 WALLET = "0xdadbf9e1df1b8d7a184a0d6ab9c83b2337b61870"
+ORDER_FILLED_V2_TOPIC = (
+    "0xd543adfd945773f1a62f74f0ee55a5e3b9b1a28262980ba90b1a89f2ea84d8ee"
+)
 
 
 def as_float(value: Any) -> float:
@@ -398,10 +401,141 @@ def build_cases(
     return output
 
 
+def audit_hk_20260714_maker_fills(
+    activities: list[dict[str, Any]], rpc_url: str
+) -> dict[str, Any]:
+    """Decode public Polygon OrderFilled logs for the extreme 28 YES fills."""
+    import requests
+
+    rows = [
+        row
+        for row in activities
+        if row.get("eventSlug")
+        == "highest-temperature-in-hong-kong-on-july-14-2026"
+        and str(row.get("type") or "").upper() == "TRADE"
+        and str(row.get("side") or "").upper() == "BUY"
+        and str(row.get("outcome") or "").lower() == "yes"
+        and "28°C" in str(row.get("title") or "")
+        and as_float(row.get("price")) <= 0.003
+    ]
+    transaction_timestamps: dict[str, int] = {}
+    for row in rows:
+        transaction_timestamps[str(row["transactionHash"]).lower()] = as_int(
+            row["timestamp"]
+        )
+    transaction_hashes = sorted(transaction_timestamps)
+    payload = [
+        {
+            "jsonrpc": "2.0",
+            "method": "eth_getTransactionReceipt",
+            "params": [transaction_hash],
+            "id": index,
+        }
+        for index, transaction_hash in enumerate(transaction_hashes)
+    ]
+    response = requests.post(rpc_url, json=payload, timeout=30)
+    response.raise_for_status()
+    receipts = {int(item["id"]): item.get("result") for item in response.json()}
+
+    roles = defaultdict(int)
+    orders: dict[str, dict[str, Any]] = {}
+    receipt_count = 0
+    for index, transaction_hash in enumerate(transaction_hashes):
+        receipt = receipts.get(index)
+        if not receipt:
+            continue
+        receipt_count += 1
+        for log in receipt.get("logs") or []:
+            topics = [str(value).lower() for value in log.get("topics") or []]
+            if not topics or topics[0] != ORDER_FILLED_V2_TOPIC:
+                continue
+            maker = "0x" + topics[2][-40:]
+            taker = "0x" + topics[3][-40:]
+            role = None
+            if maker == WALLET:
+                role = "maker"
+            elif taker == WALLET:
+                role = "taker"
+            if role is None:
+                continue
+            roles[role] += 1
+            data = str(log.get("data") or "")[2:]
+            words = [int(data[offset : offset + 64], 16) for offset in range(0, len(data), 64)]
+            side, token_id, maker_amount, taker_amount, fee = words[:5]
+            order_hash = topics[1]
+            item = orders.setdefault(
+                order_hash,
+                {
+                    "order_hash": order_hash,
+                    "role": role,
+                    "side": "BUY" if side == 0 else "SELL",
+                    "token_id": str(token_id),
+                    "fill_events": 0,
+                    "maker_amount_raw": 0,
+                    "taker_amount_raw": 0,
+                    "fee_raw": 0,
+                    "first_fill_ts": transaction_timestamps[transaction_hash],
+                    "last_fill_ts": transaction_timestamps[transaction_hash],
+                },
+            )
+            item["fill_events"] += 1
+            item["maker_amount_raw"] += maker_amount
+            item["taker_amount_raw"] += taker_amount
+            item["fee_raw"] += fee
+            item["first_fill_ts"] = min(
+                item["first_fill_ts"], transaction_timestamps[transaction_hash]
+            )
+            item["last_fill_ts"] = max(
+                item["last_fill_ts"], transaction_timestamps[transaction_hash]
+            )
+
+    order_rows = []
+    for item in orders.values():
+        cash = item["maker_amount_raw"] / 1_000_000
+        shares = item["taker_amount_raw"] / 1_000_000
+        order_rows.append(
+            {
+                **item,
+                "cash": cash,
+                "shares": shares,
+                "average_price": ratio(cash, shares),
+                "fee": item["fee_raw"] / 1_000_000,
+                "fill_span_seconds": item["last_fill_ts"] - item["first_fill_ts"],
+            }
+        )
+    order_rows.sort(key=lambda item: item["average_price"], reverse=True)
+    return {
+        "case": "hong-kong_2026-07-14_28C_YES_price_le_0.003",
+        "rpc_url": rpc_url,
+        "activity_rows": len(rows),
+        "distinct_transactions": len(transaction_hashes),
+        "receipts_found": receipt_count,
+        "wallet_order_filled_roles": dict(roles),
+        "distinct_wallet_order_hashes": len(order_rows),
+        "orders": order_rows,
+        "activity_total_shares": sum(as_float(row["size"]) for row in rows),
+        "activity_total_cash": sum(as_float(row["usdcSize"]) for row in rows),
+        "first_fill_ts": min(transaction_timestamps.values()),
+        "last_fill_ts": max(transaction_timestamps.values()),
+        "fill_span_seconds": max(transaction_timestamps.values())
+        - min(transaction_timestamps.values()),
+        "interpretation_boundary": (
+            "OrderFilled proves wallet role and order reuse at fill time. It does not "
+            "reveal offchain order-post time, queue rank, cancelled quantity, or the "
+            "contemporaneous full order book."
+        ),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--snapshot", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--rpc-url",
+        default="",
+        help="Optional Polygon JSON-RPC URL for the HK 2026-07-14 maker audit.",
+    )
     args = parser.parse_args()
 
     full_ladder = args.snapshot / "analysis" / "full_ladder_history_v1"
@@ -435,6 +569,11 @@ def main() -> None:
         activities, slug_to_key, complete_keys
     )
     cases = build_cases(portfolios, event_rows)
+    maker_audit = (
+        audit_hk_20260714_maker_fills(activities, args.rpc_url)
+        if args.rpc_url
+        else None
+    )
 
     total_cost = sum(as_float(row["buy_cost"]) for row in portfolios)
     total_pnl = sum(as_float(row["public_cashflow"]) for row in portfolios)
@@ -551,9 +690,10 @@ def main() -> None:
             ),
         },
         "execution_and_lifecycle": execution,
+        "onchain_case_audit": maker_audit,
         "limitations": [
             "Public activity timestamps are fills, not original order-post times.",
-            "Public data does not identify maker/taker, cancelled orders, queue position, private signals, or contemporaneous executable book state.",
+            "The Data API activity rows do not identify maker/taker. Public OrderFilled receipts can recover that role, but not order-post time, cancelled orders, queue position, private signals, or contemporaneous executable book state.",
             "Condition-level paired VWAP sums are lifetime diagnostics and are not evidence that a synchronous arbitrage was executable.",
             "Public cashflow is used only on cashflow-complete resolved portfolios; fee attribution is not independently observable per fill.",
         ],
@@ -564,6 +704,8 @@ def main() -> None:
     write_csv(args.output / "condition_lifecycle.csv", lifecycle_rows)
     write_csv(args.output / "target_date_performance.csv", by_date_rows)
     write_json(args.output / "case_timelines.json", cases)
+    if maker_audit:
+        write_json(args.output / "hk_20260714_maker_audit.json", maker_audit)
     write_json(args.output / "summary.json", summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
 

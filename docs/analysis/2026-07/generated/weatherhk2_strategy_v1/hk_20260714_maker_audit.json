@@ -1,0 +1,53 @@
+{
+  "activity_rows": 61,
+  "activity_total_cash": 35.497794,
+  "activity_total_shares": 12749.129302000001,
+  "case": "hong-kong_2026-07-14_28C_YES_price_le_0.003",
+  "distinct_transactions": 60,
+  "distinct_wallet_order_hashes": 2,
+  "fill_span_seconds": 215,
+  "first_fill_ts": 1783958045,
+  "interpretation_boundary": "OrderFilled proves wallet role and order reuse at fill time. It does not reveal offchain order-post time, queue rank, cancelled quantity, or the contemporaneous full order book.",
+  "last_fill_ts": 1783958260,
+  "orders": [
+    {
+      "average_price": 0.0030000000094004367,
+      "cash": 29.998606,
+      "fee": 0.0,
+      "fee_raw": 0,
+      "fill_events": 54,
+      "fill_span_seconds": 171,
+      "first_fill_ts": 1783958045,
+      "last_fill_ts": 1783958216,
+      "maker_amount_raw": 29998606,
+      "order_hash": "0x5ff40837137bed2e63a6c465dbe186a1c96e9c2c0e12c1778a398fb6ff9330f5",
+      "role": "maker",
+      "shares": 9999.535302,
+      "side": "BUY",
+      "taker_amount_raw": 9999535302,
+      "token_id": "112811270123909058128388564316112365223404956068228201113475262755116373337166"
+    },
+    {
+      "average_price": 0.002,
+      "cash": 5.499188,
+      "fee": 0.0,
+      "fee_raw": 0,
+      "fill_events": 7,
+      "fill_span_seconds": 44,
+      "first_fill_ts": 1783958216,
+      "last_fill_ts": 1783958260,
+      "maker_amount_raw": 5499188,
+      "order_hash": "0x6d118c0ea599b6ad224d1b578ce25320754fed58e45ab0d9ae8c05444dd15a9d",
+      "role": "maker",
+      "shares": 2749.594,
+      "side": "BUY",
+      "taker_amount_raw": 2749594000,
+      "token_id": "112811270123909058128388564316112365223404956068228201113475262755116373337166"
+    }
+  ],
+  "receipts_found": 60,
+  "rpc_url": "https://polygon-bor-rpc.publicnode.com",
+  "wallet_order_filled_roles": {
+    "maker": 61
+  }
+}

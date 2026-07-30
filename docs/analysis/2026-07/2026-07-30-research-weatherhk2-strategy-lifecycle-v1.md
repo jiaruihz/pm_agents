@@ -9,7 +9,7 @@
 - coverage：69 个独立 target_date，`2026-04-25` 至 `2026-07-29`
 - unsettled / incomplete：6/227 = 2.64%，不进入 PnL；metadata incomplete = 0，missing bracket metadata = 0
 - 生产 preflight：`weather_production_manifest.py --strict` 通过，canonical DB 路由为同一 inode；本报告没有改写 canonical facts
-- 产物：[summary.json](generated/weatherhk2_strategy_v1/summary.json)、[slice_performance.csv](generated/weatherhk2_strategy_v1/slice_performance.csv)、[condition_lifecycle.csv](generated/weatherhk2_strategy_v1/condition_lifecycle.csv)、[case_timelines.json](generated/weatherhk2_strategy_v1/case_timelines.json)
+- 产物：[summary.json](generated/weatherhk2_strategy_v1/summary.json)、[slice_performance.csv](generated/weatherhk2_strategy_v1/slice_performance.csv)、[condition_lifecycle.csv](generated/weatherhk2_strategy_v1/condition_lifecycle.csv)、[case_timelines.json](generated/weatherhk2_strategy_v1/case_timelines.json)、[HK 7/14 onchain maker audit](generated/weatherhk2_strategy_v1/hk_20260714_maker_audit.json)
 
 ## 结论与动作
 
@@ -22,7 +22,7 @@
 
 暂不复制它的 size、低价挂单成交率或 lifetime underround。先做一个 **zero-notional shadow router**，同时记录 signal、PIT book、source first-seen、理论 taker fill 和 passive maker fill；至少积累 30 个新 target_date 后再判断。
 
-当前状态：`inconclusive / research-only`。它的 public wallet 赚钱真实且跨时间仍为正，但最赚钱的成交高度集中，并且公开数据看不到 maker/taker、原始挂单时间和当时盘口，尚不能证明我们能以相同价格复制。
+当前状态：`inconclusive / research-only`。它的 public wallet 赚钱真实且跨时间仍为正，链上 `OrderFilled` 也能确认香港 7/14 的极低价成交属于 maker；但最赚钱的成交高度集中，并且看不到原始挂单时间、队列位置和当时完整盘口，尚不能证明我们能以相同价格复制。
 
 ## 它到底在做什么
 
@@ -54,7 +54,7 @@
 - 71/221 = 32.1% portfolio 在同一 condition 买过 YES 和 NO；114/658 个 traded condition 出现双边买入。
 - 7,498 个独立 public trade transaction 的相邻时间中位数只有 27 秒，29.5% 相隔不超过 2 秒；峰值 49 transaction/min。执行明显是自动化的。
 
-这些数字支持“库存管理 + 路径换档”，但不能单凭双边交易就称为 market making：public API 不给 maker/taker 和原始 order-post time。
+这些数字支持“库存管理 + 路径换档”，但不能单凭双边交易就称为 market making。Data API activity 不给 maker/taker；香港 7/14 的特定成交已通过公开 Polygon `OrderFilled` 单独核实为 maker，不能无条件外推到钱包全部交易。
 
 ### 4. 时间结构：D-1 质量最高，D-2 资金效率最低
 
@@ -74,9 +74,11 @@ D-1 只用 24.2% cost，却贡献 61.7% PnL；D-2-or-earlier 用掉 56.4% cost�
 
 - winner：28°C；buy cost $1,364.56；PnL +$6,605.93，ROI 484.11%。
 - D-1 已买 28 YES 和 28 NO；随后在 215 秒内通过 60 个 transaction，以 0.002–0.003 买入 12,749.13 股 28 YES，现金成本仅 $35.50。
+- 60/60 个 transaction receipt 均已找到；其中有 61 个属于该钱包的 `OrderFilled`，钱包在 61/61 个 event 中都是 `maker`，`taker=0`。
+- 不是 60 次独立主动买：只有两个 maker order hash。0.003 的订单被拆成 54 个 fill（9,999.54 股），0.002 的订单被拆成 7 个 fill（2,749.59 股）；链上汇总与 Data API 的股数和现金完全一致。
 - D0 随 28 YES 上涨分批 SELL，仍保留部分 winner token 结算。
 
-这一 event 独自贡献全钱包 42.94% PnL。它证明低价库存可能有巨大 convexity，却不能证明我们可以用 taker order 获得同样 0.2–0.3¢ 的数量；更可能包含提前挂出的 passive liquidity 和队列优势。
+这一 event 独自贡献全钱包 42.94% PnL。现在可以确定的是：这些 fill 来自两个 passive maker order 被反复部分成交，不是 taker 扫单。仍然不能确定的是：订单提前多久挂出、当时前面有多少 queue、未成交/取消了多少，以及对手为什么愿意在 0.2–0.3¢ 卖出。因此“异常流动性”或“提前很久排队”都不应作为事实。
 
 ### Hong Kong 2026-07-16：错误的 overshoot 换档会快速吞掉利润
 
@@ -139,7 +141,7 @@ D-1 只用 24.2% cost，却贡献 61.7% PnL；D-2-or-earlier 用掉 56.4% cost�
 1. **public cashflow coverage**：221/227 portfolio complete；
 2. **settlement / bracket coverage**：221 个主样本均有完整 ladder metadata 和 winner；
 3. **PIT source coverage**：不足。完整钱包从 4/25 开始，而本地高频 source first-seen 档案只覆盖后段，不能给全历史做同口径 source-latency 对齐；
-4. **PIT executable book coverage**：不足。快照没有钱包原始挂单、maker/taker、队列和每个 fill 前一刻完整盘口；
+4. **PIT executable book coverage**：不足。HK 7/14 的链上 receipt 能确认 maker 角色和两个 order hash，但没有钱包原始挂单时间、队列和每个 fill 前一刻完整盘口；
 5. **actual public fills**：8,099 activity rows，可证明成交和现金流，不能证明别人可获得同样 fill。
 
 coverage gap 只记为 evidence gap，不当成策略过滤。
@@ -152,7 +154,7 @@ coverage gap 只记为 evidence gap，不当成策略过滤。
 4. **同分母 baseline**：未通过。不能在相同 city-day/PIT row 上比较 market、static hold、taker-only 和 passive-maker。
 5. **统计显著性**：描述性总体 bootstrap 为正，但切片为事后多重探索；最大 event 贡献 42.9%。
 6. **forward**：钱包自身早/后半均为正，只是 temporal persistence，不是 frozen policy forward。
-7. **执行经济性**：真实 public cashflow 为正，主动 SELL 和 MERGE 是重要组成；我们自己的 queue、fee、slippage、missed-fill 尚未重放。
+7. **执行经济性**：真实 public cashflow 为正，主动 SELL 和 MERGE 是重要组成；HK 7/14 的低价 fill 已确认来自 maker order，但我们自己的 queue、fee、slippage、missed-fill 尚未重放。
 8. **上线边界**：只允许 zero-notional shadow；不改 live，不用钱包 ROI 直接做 sizing。
 
 建议的 shadow schema：
@@ -196,6 +198,7 @@ rotation_from, rotation_to, sell_or_merge_action
 
 - public timestamp 是 fill time，不是 signal time 或 order-post time。
 - condition lifetime YES VWAP + NO VWAP 小于 1 的 54 条记录只是跨时段诊断，不能当同步可成交 arbitrage。
-- public API 不暴露 maker/taker、取消单、队列位置、私有 forecast 或未成交机会。
+- Data API activity 本身不暴露 maker/taker；公开链上 `OrderFilled` 可以还原角色。本报告已还原 HK 7/14 特定低价 fills，但没有对全部 7,498 笔 transaction 做同样审计。
+- `OrderFilled` 不提供 offchain order-post time、取消单、队列位置、私有 forecast 或未成交机会。
 - PnL 使用 cashflow-complete resolved portfolio 的 public activity cashflow；单 fill fee 归因无法独立审计，因此不把该 ROI 称为我们可复制的 fee-adjusted alpha。
 - 本报告研究外部公开钱包，不写入 `fact_signal_candidates` / `fact_trades`，也不改变任何生产行为。
