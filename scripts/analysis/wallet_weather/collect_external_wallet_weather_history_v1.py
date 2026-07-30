@@ -355,7 +355,7 @@ def collect_positions_by_market(
     return list(deduplicated.values()), len(batches)
 
 
-def collect_closed_positions(wallet: str) -> list[dict[str, Any]]:
+def collect_closed_positions(wallet: str) -> tuple[list[dict[str, Any]], bool]:
     """Fetch weather closed positions; this endpoint is discovery evidence only."""
     rows: list[dict[str, Any]] = []
     for offset in range(0, 10_000, 50):
@@ -371,8 +371,8 @@ def collect_closed_positions(wallet: str) -> list[dict[str, Any]]:
         )
         rows.extend(page)
         if len(page) < 50:
-            return [row for row in rows if _is_weather(row)]
-    raise RuntimeError("closed-positions reached local 10,000-row safety limit")
+            return [row for row in rows if _is_weather(row)], False
+    return [row for row in rows if _is_weather(row)], True
 
 
 def safe_slug(slug: str) -> str:
@@ -542,7 +542,7 @@ def main() -> int:
     positions_path = output / "weather_open_positions.jsonl.gz"
     positions_stats = atomic_write_jsonl_gz(positions_path, positions_weather)
 
-    closed_positions = collect_closed_positions(wallet)
+    closed_positions, closed_positions_truncated = collect_closed_positions(wallet)
     closed_path = output / "weather_closed_positions.jsonl.gz"
     closed_stats = atomic_write_jsonl_gz(closed_path, closed_positions)
     print(
@@ -628,6 +628,7 @@ def main() -> int:
             "open_positions_market_batches": position_batches,
             "open_weather_position_rows": len(positions_weather),
             "closed_weather_position_rows": len(closed_positions),
+            "closed_weather_positions_truncated_at_10000": closed_positions_truncated,
             "event_slugs_union": len(slugs),
             "event_metadata_rows": len(metadata_wrappers),
             "event_metadata_missing": len(missing_slugs),
@@ -648,6 +649,13 @@ def main() -> int:
             "Daily raw checkpoints retain all public activity rows, including non-weather activity; weather_activity is the client-side title-filtered derivative.",
             "Adjacent API windows may share boundary rows; activity identity deduplication is applied per day and globally.",
             "Closed positions are supporting discovery evidence only and are not used as a PnL source.",
+            (
+                "Closed positions reached the 10,000-row endpoint safety cap; this "
+                "supporting discovery layer is explicitly truncated. Complete "
+                "weather activity remains the PnL source."
+                if closed_positions_truncated
+                else "Closed positions did not reach the 10,000-row safety cap."
+            ),
             "Public APIs do not expose private signals, unfilled/cancelled orders, maker intent, or original order-post timestamps.",
         ],
     }

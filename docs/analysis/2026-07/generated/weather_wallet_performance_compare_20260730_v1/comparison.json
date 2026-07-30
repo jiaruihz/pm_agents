@@ -1,0 +1,3556 @@
+{
+  "fee_basis": "public activity usdcSize cashflow; actual fills include observed transaction cash effects",
+  "grain": "cashflow_complete_city_x_target_date_ladder",
+  "schema_version": "external_wallet_performance_compare_v1",
+  "wallets": [
+    {
+      "average_roi": {
+        "mean_active_month_roi": 0.07975602436467089,
+        "mean_event_roi": 0.41001666107269785,
+        "mean_target_date_roi": 0.3128027207701737,
+        "median_active_month_roi": 0.09008758105494047,
+        "median_event_roi": 0.001903949837386502,
+        "median_target_date_roi": 0.045342988265215975
+      },
+      "coverage": {
+        "activity_rows": 8099,
+        "cashflow_complete_event_share": 0.973568281938326,
+        "cashflow_complete_events": 221,
+        "cities": 26,
+        "events_total": 227,
+        "independent_target_dates": 69,
+        "metadata_incomplete_portfolios": 0,
+        "target_date_max": "2026-07-29",
+        "target_date_min": "2026-04-25"
+      },
+      "date_rows": [
+        {
+          "buy_cost": 9.57573,
+          "events": 1,
+          "pnl": -9.49306,
+          "target_date": "2026-04-25",
+          "turnover_roi": -0.9913667156446558
+        },
+        {
+          "buy_cost": 60.905699999999996,
+          "events": 2,
+          "pnl": -60.905699999999996,
+          "target_date": "2026-04-26",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 9.02,
+          "events": 1,
+          "pnl": -4.0225,
+          "target_date": "2026-04-27",
+          "turnover_roi": -0.44595343680709537
+        },
+        {
+          "buy_cost": 7.499647,
+          "events": 1,
+          "pnl": -7.499647,
+          "target_date": "2026-04-28",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 430.440047,
+          "events": 2,
+          "pnl": 19.517438000000013,
+          "target_date": "2026-04-29",
+          "turnover_roi": 0.045342988265215975
+        },
+        {
+          "buy_cost": 36.80917,
+          "events": 1,
+          "pnl": 18.920829999999995,
+          "target_date": "2026-04-30",
+          "turnover_roi": 0.5140249019469875
+        },
+        {
+          "buy_cost": 315.3098,
+          "events": 2,
+          "pnl": 53.3727,
+          "target_date": "2026-05-07",
+          "turnover_roi": 0.16927066650005804
+        },
+        {
+          "buy_cost": 393.52087,
+          "events": 2,
+          "pnl": 48.232250000000036,
+          "target_date": "2026-05-08",
+          "turnover_roi": 0.12256592642723126
+        },
+        {
+          "buy_cost": 662.2276599999999,
+          "events": 2,
+          "pnl": -24.326779999999907,
+          "target_date": "2026-05-09",
+          "turnover_roi": -0.03673476882557263
+        },
+        {
+          "buy_cost": 1003.17268,
+          "events": 2,
+          "pnl": -3.172679999999959,
+          "target_date": "2026-05-12",
+          "turnover_roi": -0.0031626459364901753
+        },
+        {
+          "buy_cost": 46.74928,
+          "events": 1,
+          "pnl": 3.249949000000001,
+          "target_date": "2026-05-18",
+          "turnover_roi": 0.06951869633072426
+        },
+        {
+          "buy_cost": 881.24835,
+          "events": 1,
+          "pnl": 6.751650000000041,
+          "target_date": "2026-05-19",
+          "turnover_roi": 0.007661461153374121
+        },
+        {
+          "buy_cost": 562.18969,
+          "events": 2,
+          "pnl": 1.1203100000000035,
+          "target_date": "2026-05-26",
+          "turnover_roi": 0.001992761553489185
+        },
+        {
+          "buy_cost": 9.449862,
+          "events": 1,
+          "pnl": -9.449862,
+          "target_date": "2026-05-27",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 0.224996,
+          "events": 2,
+          "pnl": -0.224996,
+          "target_date": "2026-05-28",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 399.060123,
+          "events": 7,
+          "pnl": 671.3472039999999,
+          "target_date": "2026-06-02",
+          "turnover_roi": 1.6823209469115508
+        },
+        {
+          "buy_cost": 302.765539,
+          "events": 7,
+          "pnl": 195.65504099999998,
+          "target_date": "2026-06-03",
+          "turnover_roi": 0.6462262569453123
+        },
+        {
+          "buy_cost": 472.64718,
+          "events": 5,
+          "pnl": 652.9164850000001,
+          "target_date": "2026-06-04",
+          "turnover_roi": 1.3814035344503697
+        },
+        {
+          "buy_cost": 545.74211,
+          "events": 5,
+          "pnl": 33.54038400000004,
+          "target_date": "2026-06-05",
+          "turnover_roi": 0.06145830308018569
+        },
+        {
+          "buy_cost": 5.109278,
+          "events": 1,
+          "pnl": -5.109278,
+          "target_date": "2026-06-06",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 18.078969999999998,
+          "events": 1,
+          "pnl": 48.272580000000005,
+          "target_date": "2026-06-07",
+          "turnover_roi": 2.6700956968234366
+        },
+        {
+          "buy_cost": 235.077447,
+          "events": 3,
+          "pnl": 21.680638000000002,
+          "target_date": "2026-06-08",
+          "turnover_roi": 0.09222763934474752
+        },
+        {
+          "buy_cost": 24.85456,
+          "events": 2,
+          "pnl": -24.85456,
+          "target_date": "2026-06-09",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 15.983915,
+          "events": 2,
+          "pnl": -15.983915,
+          "target_date": "2026-06-10",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 256.2189,
+          "events": 1,
+          "pnl": 166.39137999999997,
+          "target_date": "2026-06-14",
+          "turnover_roi": 0.6494110309582937
+        },
+        {
+          "buy_cost": 14.90748,
+          "events": 1,
+          "pnl": -14.90748,
+          "target_date": "2026-06-15",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 53.147988999999995,
+          "events": 2,
+          "pnl": 607.988186,
+          "target_date": "2026-06-16",
+          "turnover_roi": 11.439533224860119
+        },
+        {
+          "buy_cost": 438.73452,
+          "events": 2,
+          "pnl": -60.90751999999999,
+          "target_date": "2026-06-17",
+          "turnover_roi": -0.13882545645143216
+        },
+        {
+          "buy_cost": 1073.7340000000002,
+          "events": 1,
+          "pnl": 178.7085159999997,
+          "target_date": "2026-06-18",
+          "turnover_roi": 0.16643648799423288
+        },
+        {
+          "buy_cost": 302.088,
+          "events": 1,
+          "pnl": 798.7209989999999,
+          "target_date": "2026-06-20",
+          "turnover_roi": 2.644001082466036
+        },
+        {
+          "buy_cost": 634.57934,
+          "events": 2,
+          "pnl": 128.52397000000005,
+          "target_date": "2026-06-21",
+          "turnover_roi": 0.20253412284112504
+        },
+        {
+          "buy_cost": 2309.800637,
+          "events": 5,
+          "pnl": 246.3274930000002,
+          "target_date": "2026-06-22",
+          "turnover_roi": 0.1066444822354598
+        },
+        {
+          "buy_cost": 2997.32438,
+          "events": 4,
+          "pnl": 703.583709,
+          "target_date": "2026-06-23",
+          "turnover_roi": 0.23473725890155406
+        },
+        {
+          "buy_cost": 2753.204062,
+          "events": 11,
+          "pnl": -169.400067,
+          "target_date": "2026-06-24",
+          "turnover_roi": -0.061528336870512734
+        },
+        {
+          "buy_cost": 3389.318287,
+          "events": 14,
+          "pnl": 378.3324730000001,
+          "target_date": "2026-06-25",
+          "turnover_roi": 0.11162494665995944
+        },
+        {
+          "buy_cost": 3350.851719,
+          "events": 7,
+          "pnl": 195.51013100000014,
+          "target_date": "2026-06-26",
+          "turnover_roi": 0.058346398884623445
+        },
+        {
+          "buy_cost": 698.521163,
+          "events": 6,
+          "pnl": 473.589261,
+          "target_date": "2026-06-27",
+          "turnover_roi": 0.6779884219484986
+        },
+        {
+          "buy_cost": 2656.121827,
+          "events": 3,
+          "pnl": 626.5406030000001,
+          "target_date": "2026-06-28",
+          "turnover_roi": 0.23588549163336256
+        },
+        {
+          "buy_cost": 2365.240483,
+          "events": 4,
+          "pnl": 406.6596149999999,
+          "target_date": "2026-06-29",
+          "turnover_roi": 0.17193161453257602
+        },
+        {
+          "buy_cost": 2165.826078,
+          "events": 7,
+          "pnl": -271.89742499999994,
+          "target_date": "2026-06-30",
+          "turnover_roi": -0.12553982416311082
+        },
+        {
+          "buy_cost": 2472.338233,
+          "events": 3,
+          "pnl": 135.2679189999997,
+          "target_date": "2026-07-01",
+          "turnover_roi": 0.054712545878426215
+        },
+        {
+          "buy_cost": 2732.665314,
+          "events": 4,
+          "pnl": 466.7526929999998,
+          "target_date": "2026-07-02",
+          "turnover_roi": 0.17080492463117633
+        },
+        {
+          "buy_cost": 3492.9140039999997,
+          "events": 5,
+          "pnl": -362.2532590000002,
+          "target_date": "2026-07-03",
+          "turnover_roi": -0.10371090115163345
+        },
+        {
+          "buy_cost": 510.24913499999997,
+          "events": 3,
+          "pnl": 1122.550685,
+          "target_date": "2026-07-04",
+          "turnover_roi": 2.2000050720321163
+        },
+        {
+          "buy_cost": 664.600488,
+          "events": 3,
+          "pnl": 65.02090199999986,
+          "target_date": "2026-07-05",
+          "turnover_roi": 0.09783456854759315
+        },
+        {
+          "buy_cost": 1073.891846,
+          "events": 4,
+          "pnl": 0.1510160000000269,
+          "target_date": "2026-07-06",
+          "turnover_roi": 0.00014062496196663263
+        },
+        {
+          "buy_cost": 2525.655209,
+          "events": 3,
+          "pnl": 351.917098,
+          "target_date": "2026-07-07",
+          "turnover_roi": 0.1393369517525462
+        },
+        {
+          "buy_cost": 955.751832,
+          "events": 4,
+          "pnl": -167.26821199999995,
+          "target_date": "2026-07-08",
+          "turnover_roi": -0.17501218035855143
+        },
+        {
+          "buy_cost": 2367.152624,
+          "events": 5,
+          "pnl": 159.01606199999992,
+          "target_date": "2026-07-09",
+          "turnover_roi": 0.06717609181079992
+        },
+        {
+          "buy_cost": 2764.462894,
+          "events": 3,
+          "pnl": 74.31202199999984,
+          "target_date": "2026-07-10",
+          "turnover_roi": 0.02688117903889646
+        },
+        {
+          "buy_cost": 1717.2121149999998,
+          "events": 3,
+          "pnl": -249.20125499999995,
+          "target_date": "2026-07-11",
+          "turnover_roi": -0.14511966973864493
+        },
+        {
+          "buy_cost": 5.0452,
+          "events": 1,
+          "pnl": 0.004799999999999471,
+          "target_date": "2026-07-12",
+          "turnover_roi": 0.0009513993498770061
+        },
+        {
+          "buy_cost": 1329.47866,
+          "events": 3,
+          "pnl": -25.14434000000012,
+          "target_date": "2026-07-13",
+          "turnover_roi": -0.01891293238208135
+        },
+        {
+          "buy_cost": 1870.2100260000002,
+          "events": 3,
+          "pnl": 6633.612453000001,
+          "target_date": "2026-07-14",
+          "turnover_roi": 3.5469879643346536
+        },
+        {
+          "buy_cost": 1589.287362,
+          "events": 3,
+          "pnl": -63.88238199999995,
+          "target_date": "2026-07-15",
+          "turnover_roi": -0.040195614416519816
+        },
+        {
+          "buy_cost": 2412.882933,
+          "events": 3,
+          "pnl": -493.70902,
+          "target_date": "2026-07-16",
+          "turnover_roi": -0.20461374783158617
+        },
+        {
+          "buy_cost": 1501.62957,
+          "events": 3,
+          "pnl": 1040.0694700000001,
+          "target_date": "2026-07-17",
+          "turnover_roi": 0.6926271903396256
+        },
+        {
+          "buy_cost": 618.28695,
+          "events": 4,
+          "pnl": -143.83299999999997,
+          "target_date": "2026-07-18",
+          "turnover_roi": -0.2326314666677017
+        },
+        {
+          "buy_cost": 3894.454906,
+          "events": 3,
+          "pnl": -218.7264060000001,
+          "target_date": "2026-07-19",
+          "turnover_roi": -0.05616354824471554
+        },
+        {
+          "buy_cost": 2921.759513,
+          "events": 3,
+          "pnl": 12.475960000000015,
+          "target_date": "2026-07-20",
+          "turnover_roi": 0.004270016044951614
+        },
+        {
+          "buy_cost": 1374.2615799999999,
+          "events": 3,
+          "pnl": -99.11391199999991,
+          "target_date": "2026-07-21",
+          "turnover_roi": -0.07212157673795982
+        },
+        {
+          "buy_cost": 3016.423234,
+          "events": 4,
+          "pnl": 508.89838400000014,
+          "target_date": "2026-07-22",
+          "turnover_roi": 0.16870921104965875
+        },
+        {
+          "buy_cost": 7516.068383,
+          "events": 4,
+          "pnl": 14.043760999999677,
+          "target_date": "2026-07-23",
+          "turnover_roi": 0.0018684983004896747
+        },
+        {
+          "buy_cost": 2098.390334,
+          "events": 3,
+          "pnl": 17.682015000000064,
+          "target_date": "2026-07-24",
+          "turnover_roi": 0.008426466093319348
+        },
+        {
+          "buy_cost": 444.146225,
+          "events": 2,
+          "pnl": 363.90499500000004,
+          "target_date": "2026-07-25",
+          "turnover_roi": 0.8193360080905788
+        },
+        {
+          "buy_cost": 1038.895723,
+          "events": 2,
+          "pnl": 146.69970899999987,
+          "target_date": "2026-07-26",
+          "turnover_roi": 0.14120734714007468
+        },
+        {
+          "buy_cost": 2698.048259,
+          "events": 3,
+          "pnl": -218.88571899999994,
+          "target_date": "2026-07-27",
+          "turnover_roi": -0.0811274291591535
+        },
+        {
+          "buy_cost": 1498.558913,
+          "events": 3,
+          "pnl": 264.5910020000001,
+          "target_date": "2026-07-28",
+          "turnover_roi": 0.17656363036826442
+        },
+        {
+          "buy_cost": 1272.059149,
+          "events": 4,
+          "pnl": 44.628861,
+          "target_date": "2026-07-29",
+          "turnover_roi": 0.035083951115861205
+        }
+      ],
+      "label": "WeatherHK2",
+      "lifetime": {
+        "buy_cost": 90284.062083,
+        "pnl": 15382.880627,
+        "target_dates": 69,
+        "turnover_roi": 0.17038312490700963
+      },
+      "month_rows": [
+        {
+          "buy_cost": 554.2502939999999,
+          "events": 8,
+          "month": "2026-04",
+          "pnl": -43.48263899999999,
+          "turnover_roi": -0.07845307340513562
+        },
+        {
+          "buy_cost": 3874.093188,
+          "events": 15,
+          "month": "2026-05",
+          "pnl": 75.55254100000022,
+          "turnover_roi": 0.019501993714044916
+        },
+        {
+          "buy_cost": 27478.937987,
+          "events": 104,
+          "month": "2026-06",
+          "pnl": 5971.2284230000005,
+          "turnover_roi": 0.21730200875393824
+        },
+        {
+          "buy_cost": 58376.780614,
+          "events": 94,
+          "month": "2026-07",
+          "pnl": 9379.582301999999,
+          "turnover_roi": 0.16067316839583604
+        }
+      ],
+      "replication_inputs": {
+        "expression_counts": {
+          "mixed_yes_no": 122,
+          "no_only": 22,
+          "single_yes": 61,
+          "yes_strip": 22
+        },
+        "median_buy_sessions_gap_gt_5m": 4.0,
+        "median_buy_span_minutes": 476.3666666666667,
+        "median_first_buy_to_first_sell_hours": 9.248333333333333,
+        "median_positive_yes_brackets": 1.0,
+        "median_unique_buy_transactions": 8.0,
+        "sell_event_share": 0.6563876651982379,
+        "sell_proceeds_share_ge_95c": 0.24032917615980487,
+        "sell_proceeds_share_ge_99c": 0.2281383209948062,
+        "settlement_without_sell_share": 0.33480176211453744,
+        "target_day_buy_cost_share": 0.6919146422783495,
+        "yes_buy_cost_share": 0.4531389032983536
+      },
+      "snapshot_id": "20260730T135201Z",
+      "source": "/Volumes/jrs/pm_agents/research/external_wallet_weather/raw/wallet=0xdadbf9e1df1b8d7a184a0d6ab9c83b2337b61870/snapshot=20260730T135201Z/analysis/full_ladder_history_v1",
+      "stability": {
+        "early_half": {
+          "buy_cost": 17281.401912,
+          "pnl": 4194.563667,
+          "target_dates": 34,
+          "turnover_roi": 0.24272126117773726
+        },
+        "late_half": {
+          "buy_cost": 73002.660171,
+          "pnl": 11188.31696,
+          "target_dates": 35,
+          "turnover_roi": 0.15325903102424906
+        },
+        "latest_30_target_dates": {
+          "buy_cost": 60542.606692,
+          "pnl": 9107.684877,
+          "target_dates": 30,
+          "turnover_roi": 0.15043430361916468
+        },
+        "max_drawdown_by_target_date": -557.591402,
+        "positive_event_share": 0.5294117647058824,
+        "positive_target_date_share": 0.6376811594202898,
+        "target_date_block_ci95": [
+          0.05663524048775204,
+          0.35613131629457045
+        ],
+        "without_top_five_pnl_dates": {
+          "buy_cost": 83102.56097199999,
+          "pnl": 5084.343311,
+          "target_dates": 64,
+          "turnover_roi": 0.06118154785522294
+        }
+      },
+      "wallet": "0xdadbf9e1df1b8d7a184a0d6ab9c83b2337b61870"
+    },
+    {
+      "average_roi": {
+        "mean_active_month_roi": -0.00013015161242613607,
+        "mean_event_roi": 0.09414460884347109,
+        "mean_target_date_roi": 0.09351358738169173,
+        "median_active_month_roi": 0.094256544579983,
+        "median_event_roi": 0.040437695071975366,
+        "median_target_date_roi": 0.09146268033800911
+      },
+      "coverage": {
+        "activity_rows": 4398,
+        "cashflow_complete_event_share": 0.99800796812749,
+        "cashflow_complete_events": 1002,
+        "cities": 44,
+        "events_total": 1004,
+        "independent_target_dates": 73,
+        "metadata_incomplete_portfolios": 0,
+        "target_date_max": "2026-07-30",
+        "target_date_min": "2026-04-03"
+      },
+      "date_rows": [
+        {
+          "buy_cost": 9.999998,
+          "events": 1,
+          "pnl": 2.384202,
+          "target_date": "2026-04-03",
+          "turnover_roi": 0.23842024768404957
+        },
+        {
+          "buy_cost": 36.84478,
+          "events": 1,
+          "pnl": -17.55187,
+          "target_date": "2026-04-04",
+          "turnover_roi": -0.4763733152973094
+        },
+        {
+          "buy_cost": 1.000508,
+          "events": 1,
+          "pnl": -0.053947999999999996,
+          "target_date": "2026-05-20",
+          "turnover_roi": -0.053920608330967866
+        },
+        {
+          "buy_cost": 571.5140269999999,
+          "events": 10,
+          "pnl": 286.65145300000006,
+          "target_date": "2026-05-22",
+          "turnover_roi": 0.5015650350783081
+        },
+        {
+          "buy_cost": 1939.515167,
+          "events": 15,
+          "pnl": 238.6279630000001,
+          "target_date": "2026-05-23",
+          "turnover_roi": 0.12303485276122107
+        },
+        {
+          "buy_cost": 2769.05648,
+          "events": 11,
+          "pnl": 330.03349599999996,
+          "target_date": "2026-05-24",
+          "turnover_roi": 0.1191862637630273
+        },
+        {
+          "buy_cost": 2912.277509,
+          "events": 11,
+          "pnl": 335.361851,
+          "target_date": "2026-05-25",
+          "turnover_roi": 0.11515449676880364
+        },
+        {
+          "buy_cost": 4529.763832,
+          "events": 14,
+          "pnl": 883.5170380000002,
+          "target_date": "2026-05-26",
+          "turnover_roi": 0.19504704235538614
+        },
+        {
+          "buy_cost": 3611.613587,
+          "events": 10,
+          "pnl": 539.961123,
+          "target_date": "2026-05-27",
+          "turnover_roi": 0.14950689213917837
+        },
+        {
+          "buy_cost": 5990.818952,
+          "events": 14,
+          "pnl": 991.2505190000003,
+          "target_date": "2026-05-28",
+          "turnover_roi": 0.16546160498959447
+        },
+        {
+          "buy_cost": 2787.201983,
+          "events": 8,
+          "pnl": 151.70672099999985,
+          "target_date": "2026-05-29",
+          "turnover_roi": 0.0544297549748119
+        },
+        {
+          "buy_cost": 5141.039546,
+          "events": 16,
+          "pnl": 505.785567,
+          "target_date": "2026-05-30",
+          "turnover_roi": 0.09838196389551757
+        },
+        {
+          "buy_cost": 3081.567244,
+          "events": 10,
+          "pnl": 229.16510499999993,
+          "target_date": "2026-05-31",
+          "turnover_roi": 0.07436641385846712
+        },
+        {
+          "buy_cost": 5426.135372,
+          "events": 13,
+          "pnl": 496.2888850000001,
+          "target_date": "2026-06-01",
+          "turnover_roi": 0.09146268033800911
+        },
+        {
+          "buy_cost": 11512.149943,
+          "events": 16,
+          "pnl": 1883.2858840000001,
+          "target_date": "2026-06-02",
+          "turnover_roi": 0.16359115311429193
+        },
+        {
+          "buy_cost": 6689.419368000001,
+          "events": 12,
+          "pnl": 405.8762499999994,
+          "target_date": "2026-06-03",
+          "turnover_roi": 0.06067436165559883
+        },
+        {
+          "buy_cost": 10623.603357,
+          "events": 11,
+          "pnl": 1138.5377890000002,
+          "target_date": "2026-06-04",
+          "turnover_roi": 0.10717058522801551
+        },
+        {
+          "buy_cost": 5775.30498,
+          "events": 12,
+          "pnl": 494.28882999999996,
+          "target_date": "2026-06-05",
+          "turnover_roi": 0.0855866195312165
+        },
+        {
+          "buy_cost": 8546.663638,
+          "events": 23,
+          "pnl": 825.070972,
+          "target_date": "2026-06-06",
+          "turnover_roi": 0.09653719942031957
+        },
+        {
+          "buy_cost": 9346.18954,
+          "events": 18,
+          "pnl": 527.103338,
+          "target_date": "2026-06-07",
+          "turnover_roi": 0.05639767262841109
+        },
+        {
+          "buy_cost": 5562.366846999999,
+          "events": 13,
+          "pnl": 275.3099030000002,
+          "target_date": "2026-06-08",
+          "turnover_roi": 0.0494950999408616
+        },
+        {
+          "buy_cost": 6288.4813699999995,
+          "events": 14,
+          "pnl": 294.3944470000001,
+          "target_date": "2026-06-09",
+          "turnover_roi": 0.04681487145759011
+        },
+        {
+          "buy_cost": 4515.865623,
+          "events": 12,
+          "pnl": 302.70568699999995,
+          "target_date": "2026-06-10",
+          "turnover_roi": 0.06703159754317604
+        },
+        {
+          "buy_cost": 9518.857308,
+          "events": 15,
+          "pnl": 266.250608,
+          "target_date": "2026-06-11",
+          "turnover_roi": 0.027970858201249966
+        },
+        {
+          "buy_cost": 6987.006804,
+          "events": 14,
+          "pnl": 994.0543230000002,
+          "target_date": "2026-06-12",
+          "turnover_roi": 0.14227184127413656
+        },
+        {
+          "buy_cost": 8836.003442,
+          "events": 15,
+          "pnl": 509.621886,
+          "target_date": "2026-06-13",
+          "turnover_roi": 0.057675609719392416
+        },
+        {
+          "buy_cost": 6499.197225,
+          "events": 14,
+          "pnl": 420.40050200000013,
+          "target_date": "2026-06-14",
+          "turnover_roi": 0.0646849891526411
+        },
+        {
+          "buy_cost": 8470.804611,
+          "events": 12,
+          "pnl": 1405.8013130000004,
+          "target_date": "2026-06-15",
+          "turnover_roi": 0.16595841570639674
+        },
+        {
+          "buy_cost": 8809.151503,
+          "events": 14,
+          "pnl": 767.0576689999999,
+          "target_date": "2026-06-16",
+          "turnover_roi": 0.08707509102764037
+        },
+        {
+          "buy_cost": 9480.1376,
+          "events": 11,
+          "pnl": -464.8011190000005,
+          "target_date": "2026-06-17",
+          "turnover_roi": -0.04902894225923477
+        },
+        {
+          "buy_cost": 3097.0737200000003,
+          "events": 8,
+          "pnl": 151.07515599999974,
+          "target_date": "2026-06-18",
+          "turnover_roi": 0.04877996769156651
+        },
+        {
+          "buy_cost": 8592.156947,
+          "events": 17,
+          "pnl": -1025.707963,
+          "target_date": "2026-06-19",
+          "turnover_roi": -0.11937723779104523
+        },
+        {
+          "buy_cost": 8407.54367,
+          "events": 16,
+          "pnl": 1154.5218360000001,
+          "target_date": "2026-06-20",
+          "turnover_roi": 0.13731975489102635
+        },
+        {
+          "buy_cost": 12186.984543,
+          "events": 17,
+          "pnl": 1540.5618089999998,
+          "target_date": "2026-06-21",
+          "turnover_roi": 0.12641041789823823
+        },
+        {
+          "buy_cost": 3696.44998,
+          "events": 6,
+          "pnl": 195.95021799999984,
+          "target_date": "2026-06-22",
+          "turnover_roi": 0.05301037997543791
+        },
+        {
+          "buy_cost": 9929.074508,
+          "events": 14,
+          "pnl": 1363.601076,
+          "target_date": "2026-06-23",
+          "turnover_roi": 0.13733415686440129
+        },
+        {
+          "buy_cost": 8797.906776,
+          "events": 17,
+          "pnl": 1367.1655580000004,
+          "target_date": "2026-06-24",
+          "turnover_roi": 0.1553966861446544
+        },
+        {
+          "buy_cost": 7532.509854,
+          "events": 13,
+          "pnl": 1806.555588,
+          "target_date": "2026-06-25",
+          "turnover_roi": 0.23983448054046183
+        },
+        {
+          "buy_cost": 8005.526807,
+          "events": 11,
+          "pnl": 390.60055099999994,
+          "target_date": "2026-06-26",
+          "turnover_roi": 0.04879136132033939
+        },
+        {
+          "buy_cost": 11354.676941,
+          "events": 18,
+          "pnl": 841.474031,
+          "target_date": "2026-06-27",
+          "turnover_roi": 0.07410814375189893
+        },
+        {
+          "buy_cost": 16345.995981,
+          "events": 18,
+          "pnl": 1820.430457,
+          "target_date": "2026-06-28",
+          "turnover_roi": 0.11136858586751172
+        },
+        {
+          "buy_cost": 5674.30575,
+          "events": 16,
+          "pnl": 553.1441379999998,
+          "target_date": "2026-06-29",
+          "turnover_roi": 0.09748225815995194
+        },
+        {
+          "buy_cost": 9340.81941,
+          "events": 15,
+          "pnl": 741.5154739999997,
+          "target_date": "2026-06-30",
+          "turnover_roi": 0.07938441387766855
+        },
+        {
+          "buy_cost": 10818.031379,
+          "events": 18,
+          "pnl": 424.6710079999997,
+          "target_date": "2026-07-01",
+          "turnover_roi": 0.039255849157950544
+        },
+        {
+          "buy_cost": 10189.357314,
+          "events": 15,
+          "pnl": 1113.456274,
+          "target_date": "2026-07-02",
+          "turnover_roi": 0.10927639886277521
+        },
+        {
+          "buy_cost": 5972.72915,
+          "events": 15,
+          "pnl": 559.178034,
+          "target_date": "2026-07-03",
+          "turnover_roi": 0.09362186363331075
+        },
+        {
+          "buy_cost": 7583.128033,
+          "events": 18,
+          "pnl": 929.1016390000001,
+          "target_date": "2026-07-04",
+          "turnover_roi": 0.12252221444195154
+        },
+        {
+          "buy_cost": 6098.109313,
+          "events": 13,
+          "pnl": 674.8814669999999,
+          "target_date": "2026-07-05",
+          "turnover_roi": 0.11067060827546696
+        },
+        {
+          "buy_cost": 10512.507866,
+          "events": 17,
+          "pnl": 514.0745040000002,
+          "target_date": "2026-07-06",
+          "turnover_roi": 0.04890122419433728
+        },
+        {
+          "buy_cost": 5723.03642,
+          "events": 12,
+          "pnl": 374.14075400000013,
+          "target_date": "2026-07-07",
+          "turnover_roi": 0.06537451914380794
+        },
+        {
+          "buy_cost": 12279.694194,
+          "events": 18,
+          "pnl": 1739.3188699999992,
+          "target_date": "2026-07-08",
+          "turnover_roi": 0.14164187173731496
+        },
+        {
+          "buy_cost": 15080.656799,
+          "events": 14,
+          "pnl": 2459.4476529999993,
+          "target_date": "2026-07-09",
+          "turnover_roi": 0.1630862425808328
+        },
+        {
+          "buy_cost": 9691.760323,
+          "events": 19,
+          "pnl": 653.765967,
+          "target_date": "2026-07-10",
+          "turnover_roi": 0.06745585375739384
+        },
+        {
+          "buy_cost": 6176.666096,
+          "events": 13,
+          "pnl": 498.614923,
+          "target_date": "2026-07-11",
+          "turnover_roi": 0.08072557513233591
+        },
+        {
+          "buy_cost": 10072.006786,
+          "events": 15,
+          "pnl": 1262.2777030000002,
+          "target_date": "2026-07-12",
+          "turnover_roi": 0.12532534278616203
+        },
+        {
+          "buy_cost": 5238.31827,
+          "events": 16,
+          "pnl": 334.4616099999999,
+          "target_date": "2026-07-13",
+          "turnover_roi": 0.06384904329228547
+        },
+        {
+          "buy_cost": 8457.615081,
+          "events": 16,
+          "pnl": 653.9550630000003,
+          "target_date": "2026-07-14",
+          "turnover_roi": 0.07732145016496529
+        },
+        {
+          "buy_cost": 8746.804470000001,
+          "events": 16,
+          "pnl": 355.58550999999966,
+          "target_date": "2026-07-15",
+          "turnover_roi": 0.040653190684620345
+        },
+        {
+          "buy_cost": 12246.103681,
+          "events": 19,
+          "pnl": 726.0325369999998,
+          "target_date": "2026-07-16",
+          "turnover_roi": 0.05928681937639066
+        },
+        {
+          "buy_cost": 7956.922127,
+          "events": 14,
+          "pnl": 72.01559300000037,
+          "target_date": "2026-07-17",
+          "turnover_roi": 0.009050684655519234
+        },
+        {
+          "buy_cost": 4241.75546,
+          "events": 15,
+          "pnl": 367.57776000000007,
+          "target_date": "2026-07-18",
+          "turnover_roi": 0.0866569898869182
+        },
+        {
+          "buy_cost": 6637.957972,
+          "events": 13,
+          "pnl": 1673.8469380000004,
+          "target_date": "2026-07-19",
+          "turnover_roi": 0.25216293098880144
+        },
+        {
+          "buy_cost": 5006.216857,
+          "events": 12,
+          "pnl": 231.896743,
+          "target_date": "2026-07-20",
+          "turnover_roi": 0.04632175345655427
+        },
+        {
+          "buy_cost": 9439.236251,
+          "events": 17,
+          "pnl": 714.0961249999998,
+          "target_date": "2026-07-21",
+          "turnover_roi": 0.07565189661656661
+        },
+        {
+          "buy_cost": 17035.016249,
+          "events": 16,
+          "pnl": 3156.165412,
+          "target_date": "2026-07-22",
+          "turnover_roi": 0.1852751629858454
+        },
+        {
+          "buy_cost": 6246.8619149999995,
+          "events": 14,
+          "pnl": 1000.201865,
+          "target_date": "2026-07-23",
+          "turnover_roi": 0.16011268995690617
+        },
+        {
+          "buy_cost": 5187.15481,
+          "events": 17,
+          "pnl": 549.5929440000001,
+          "target_date": "2026-07-24",
+          "turnover_roi": 0.10595267813107744
+        },
+        {
+          "buy_cost": 7342.240293,
+          "events": 15,
+          "pnl": 829.2755969999998,
+          "target_date": "2026-07-25",
+          "turnover_roi": 0.11294585356878348
+        },
+        {
+          "buy_cost": 6208.14088,
+          "events": 17,
+          "pnl": 473.4084040000001,
+          "target_date": "2026-07-26",
+          "turnover_roi": 0.07625606653436642
+        },
+        {
+          "buy_cost": 8602.560593,
+          "events": 18,
+          "pnl": 555.9755309999998,
+          "target_date": "2026-07-27",
+          "turnover_roi": 0.06462907467950918
+        },
+        {
+          "buy_cost": 2204.59199,
+          "events": 12,
+          "pnl": 385.1637600000001,
+          "target_date": "2026-07-28",
+          "turnover_roi": 0.17470977021920508
+        },
+        {
+          "buy_cost": 4525.09163,
+          "events": 18,
+          "pnl": 522.9065899999999,
+          "target_date": "2026-07-29",
+          "turnover_roi": 0.11555712740340685
+        },
+        {
+          "buy_cost": 1472.077804,
+          "events": 3,
+          "pnl": 201.33227599999998,
+          "target_date": "2026-07-30",
+          "turnover_roi": 0.13676741504622264
+        }
+      ],
+      "label": "HighTempTation",
+      "lifetime": {
+        "buy_cost": 516222.927037,
+        "pnl": 49925.39337,
+        "target_dates": 73,
+        "turnover_roi": 0.09671285554200428
+      },
+      "month_rows": [
+        {
+          "buy_cost": 46.844778,
+          "events": 2,
+          "month": "2026-04",
+          "pnl": -15.167668,
+          "turnover_roi": -0.32378567361339616
+        },
+        {
+          "buy_cost": 33335.368835,
+          "events": 120,
+          "month": "2026-05",
+          "pnl": 4492.006888000001,
+          "turnover_roi": 0.13475197800372563
+        },
+        {
+          "buy_cost": 245848.363418,
+          "events": 425,
+          "month": "2026-06",
+          "pnl": 21442.135095999998,
+          "turnover_roi": 0.08721691207495788
+        },
+        {
+          "buy_cost": 236992.350006,
+          "events": 455,
+          "month": "2026-07",
+          "pnl": 24006.419053999998,
+          "turnover_roi": 0.10129617708500811
+        }
+      ],
+      "replication_inputs": {
+        "expression_counts": {
+          "mixed_yes_no": 89,
+          "no_only": 896,
+          "single_yes": 19
+        },
+        "median_buy_sessions_gap_gt_5m": 1.0,
+        "median_buy_span_minutes": 0.0,
+        "median_first_buy_to_first_sell_hours": 0.0030555555555555557,
+        "median_positive_yes_brackets": 0.0,
+        "median_unique_buy_transactions": 1.0,
+        "sell_event_share": 0.999003984063745,
+        "sell_proceeds_share_ge_95c": 0.9972661868586057,
+        "sell_proceeds_share_ge_99c": 0.9601693897046018,
+        "settlement_without_sell_share": 0.00099601593625498,
+        "target_day_buy_cost_share": 0.9881521673545836,
+        "yes_buy_cost_share": 0.04110001497259991
+      },
+      "snapshot_id": "20260730T135339Z",
+      "source": "/Volumes/jrs/pm_agents/research/external_wallet_weather/raw/wallet=0x6011655c4afb76f36dd1b08a137a1ba73466b31e/snapshot=20260730T135339Z/analysis/full_ladder_history_v1",
+      "stability": {
+        "early_half": {
+          "buy_cost": 212178.835512,
+          "pnl": 18398.088519,
+          "target_dates": 36,
+          "turnover_roi": 0.08671029075357273
+        },
+        "late_half": {
+          "buy_cost": 304044.091525,
+          "pnl": 31527.304850999997,
+          "target_dates": 37,
+          "turnover_roi": 0.10369320019628689
+        },
+        "latest_30_target_dates": {
+          "buy_cost": 236992.350006,
+          "pnl": 24006.419053999998,
+          "target_dates": 30,
+          "turnover_roi": 0.10129617708500811
+        },
+        "max_drawdown_by_target_date": -1339.4339260000015,
+        "positive_event_share": 0.9930139720558883,
+        "positive_target_date_share": 0.9452054794520548,
+        "target_date_block_ci95": [
+          0.08095372178964642,
+          0.11185049843829539
+        ],
+        "without_top_five_pnl_dates": {
+          "buy_cost": 448716.598211,
+          "pnl": 38799.508376,
+          "target_dates": 68,
+          "turnover_roi": 0.08646773605142039
+        }
+      },
+      "wallet": "0x6011655c4afb76f36dd1b08a137a1ba73466b31e"
+    },
+    {
+      "average_roi": {
+        "mean_active_month_roi": 0.05152401834075399,
+        "mean_event_roi": 0.08133393562988307,
+        "mean_target_date_roi": 0.08868589442809814,
+        "median_active_month_roi": 0.061261183443098485,
+        "median_event_roi": -0.06957595085908458,
+        "median_target_date_roi": 0.07154364467651161
+      },
+      "coverage": {
+        "activity_rows": 256659,
+        "cashflow_complete_event_share": 0.9770817417876242,
+        "cashflow_complete_events": 3837,
+        "cities": 48,
+        "events_total": 3927,
+        "independent_target_dates": 90,
+        "metadata_incomplete_portfolios": 4,
+        "target_date_max": "2026-07-30",
+        "target_date_min": "2026-04-27"
+      },
+      "date_rows": [
+        {
+          "buy_cost": 292.243623,
+          "events": 38,
+          "pnl": -2.9222359999999896,
+          "target_date": "2026-04-27",
+          "turnover_roi": -0.00999931485245784
+        },
+        {
+          "buy_cost": 491.582065,
+          "events": 46,
+          "pnl": 21.231586000000007,
+          "target_date": "2026-04-28",
+          "turnover_roi": 0.0431903185890234
+        },
+        {
+          "buy_cost": 537.380385,
+          "events": 46,
+          "pnl": -26.002536999999972,
+          "target_date": "2026-04-29",
+          "turnover_roi": -0.04838758117306416
+        },
+        {
+          "buy_cost": 755.134968,
+          "events": 46,
+          "pnl": -27.484208000000013,
+          "target_date": "2026-04-30",
+          "turnover_roi": -0.036396418077145665
+        },
+        {
+          "buy_cost": 459.128424,
+          "events": 45,
+          "pnl": -29.090328999999997,
+          "target_date": "2026-05-01",
+          "turnover_roi": -0.06335989557466387
+        },
+        {
+          "buy_cost": 333.668916,
+          "events": 37,
+          "pnl": -43.372408,
+          "target_date": "2026-05-02",
+          "turnover_roi": -0.12998636049154785
+        },
+        {
+          "buy_cost": 500.75833,
+          "events": 43,
+          "pnl": -13.330313000000007,
+          "target_date": "2026-05-06",
+          "turnover_roi": -0.026620252128406945
+        },
+        {
+          "buy_cost": 735.403601,
+          "events": 44,
+          "pnl": 57.04599700000003,
+          "target_date": "2026-05-07",
+          "turnover_roi": 0.07757100580202357
+        },
+        {
+          "buy_cost": 850.690684,
+          "events": 46,
+          "pnl": 110.475227,
+          "target_date": "2026-05-08",
+          "turnover_roi": 0.12986533069874315
+        },
+        {
+          "buy_cost": 842.553291,
+          "events": 46,
+          "pnl": 103.06745000000002,
+          "target_date": "2026-05-09",
+          "turnover_roi": 0.12232751459278322
+        },
+        {
+          "buy_cost": 1203.23904,
+          "events": 47,
+          "pnl": 97.30756099999998,
+          "target_date": "2026-05-10",
+          "turnover_roi": 0.08087134622892554
+        },
+        {
+          "buy_cost": 946.82029,
+          "events": 45,
+          "pnl": 104.339361,
+          "target_date": "2026-05-11",
+          "turnover_roi": 0.11019975184519969
+        },
+        {
+          "buy_cost": 1329.783435,
+          "events": 46,
+          "pnl": 103.33928499999999,
+          "target_date": "2026-05-12",
+          "turnover_roi": 0.07771136433204252
+        },
+        {
+          "buy_cost": 1598.0401219999999,
+          "events": 45,
+          "pnl": 171.28704999999997,
+          "target_date": "2026-05-13",
+          "turnover_roi": 0.10718570056027665
+        },
+        {
+          "buy_cost": 834.756878,
+          "events": 45,
+          "pnl": 6.166672999999999,
+          "target_date": "2026-05-14",
+          "turnover_roi": 0.007387388067738687
+        },
+        {
+          "buy_cost": 1153.648367,
+          "events": 37,
+          "pnl": 639.143998,
+          "target_date": "2026-05-15",
+          "turnover_roi": 0.5540197657125449
+        },
+        {
+          "buy_cost": 2229.177131,
+          "events": 43,
+          "pnl": 146.04740099999992,
+          "target_date": "2026-05-16",
+          "turnover_roi": 0.06551628355099967
+        },
+        {
+          "buy_cost": 13.312596000000001,
+          "events": 2,
+          "pnl": -0.8862220000000014,
+          "target_date": "2026-05-19",
+          "turnover_roi": -0.06657018661123655
+        },
+        {
+          "buy_cost": 1510.8434459999999,
+          "events": 39,
+          "pnl": 256.488895,
+          "target_date": "2026-05-20",
+          "turnover_roi": 0.1697653689262521
+        },
+        {
+          "buy_cost": 1082.183339,
+          "events": 34,
+          "pnl": 109.632499,
+          "target_date": "2026-05-21",
+          "turnover_roi": 0.10130677034938163
+        },
+        {
+          "buy_cost": 2000.08643,
+          "events": 41,
+          "pnl": 122.67354299999997,
+          "target_date": "2026-05-22",
+          "turnover_roi": 0.0613341209459633
+        },
+        {
+          "buy_cost": 1891.128876,
+          "events": 43,
+          "pnl": 171.42611400000007,
+          "target_date": "2026-05-23",
+          "turnover_roi": 0.09064750487158235
+        },
+        {
+          "buy_cost": 2198.221044,
+          "events": 38,
+          "pnl": 1047.398841,
+          "target_date": "2026-05-24",
+          "turnover_roi": 0.47647566829498517
+        },
+        {
+          "buy_cost": 2278.910826,
+          "events": 40,
+          "pnl": 314.551966,
+          "target_date": "2026-05-25",
+          "turnover_roi": 0.13802732533949533
+        },
+        {
+          "buy_cost": 2043.659266,
+          "events": 39,
+          "pnl": -80.56986999999998,
+          "target_date": "2026-05-26",
+          "turnover_roi": -0.03942431663654835
+        },
+        {
+          "buy_cost": 2467.812583,
+          "events": 43,
+          "pnl": 241.40230800000006,
+          "target_date": "2026-05-27",
+          "turnover_roi": 0.09782035704937488
+        },
+        {
+          "buy_cost": 2684.388619,
+          "events": 39,
+          "pnl": -8.364303000000012,
+          "target_date": "2026-05-28",
+          "turnover_roi": -0.0031159061474176266
+        },
+        {
+          "buy_cost": 2348.086621,
+          "events": 40,
+          "pnl": -161.017004,
+          "target_date": "2026-05-29",
+          "turnover_roi": -0.06857370701742949
+        },
+        {
+          "buy_cost": 629.249775,
+          "events": 34,
+          "pnl": 12.310377999999993,
+          "target_date": "2026-05-30",
+          "turnover_roi": 0.01956357950227315
+        },
+        {
+          "buy_cost": 1093.695269,
+          "events": 38,
+          "pnl": 66.63446999999996,
+          "target_date": "2026-05-31",
+          "turnover_roi": 0.06092599272274987
+        },
+        {
+          "buy_cost": 1438.595835,
+          "events": 42,
+          "pnl": -44.11696000000002,
+          "target_date": "2026-06-01",
+          "turnover_roi": -0.030666681305941648
+        },
+        {
+          "buy_cost": 2957.695592,
+          "events": 43,
+          "pnl": 53.86045699999997,
+          "target_date": "2026-06-02",
+          "turnover_roi": 0.018210277334044175
+        },
+        {
+          "buy_cost": 1911.596368,
+          "events": 45,
+          "pnl": -166.52511000000007,
+          "target_date": "2026-06-03",
+          "turnover_roi": -0.0871131127823947
+        },
+        {
+          "buy_cost": 2138.275785,
+          "events": 43,
+          "pnl": 1522.518345,
+          "target_date": "2026-06-04",
+          "turnover_roi": 0.7120308594805511
+        },
+        {
+          "buy_cost": 2742.425145,
+          "events": 45,
+          "pnl": 1037.734054,
+          "target_date": "2026-06-05",
+          "turnover_roi": 0.3784001382469821
+        },
+        {
+          "buy_cost": 3414.298119,
+          "events": 45,
+          "pnl": 848.9501369999999,
+          "target_date": "2026-06-06",
+          "turnover_roi": 0.24864558026603883
+        },
+        {
+          "buy_cost": 6316.168205,
+          "events": 45,
+          "pnl": 549.825452,
+          "target_date": "2026-06-07",
+          "turnover_roi": 0.08705047651592744
+        },
+        {
+          "buy_cost": 4206.343837,
+          "events": 45,
+          "pnl": 632.5911159999999,
+          "target_date": "2026-06-08",
+          "turnover_roi": 0.15038977803848988
+        },
+        {
+          "buy_cost": 4598.507058,
+          "events": 44,
+          "pnl": 586.6303980000001,
+          "target_date": "2026-06-09",
+          "turnover_roi": 0.12756975048661545
+        },
+        {
+          "buy_cost": 6145.322213,
+          "events": 45,
+          "pnl": 688.373984,
+          "target_date": "2026-06-10",
+          "turnover_roi": 0.11201593018894808
+        },
+        {
+          "buy_cost": 7356.262117,
+          "events": 45,
+          "pnl": 674.3712749999999,
+          "target_date": "2026-06-11",
+          "turnover_roi": 0.09167308944056755
+        },
+        {
+          "buy_cost": 7546.134431,
+          "events": 45,
+          "pnl": 1548.317952,
+          "target_date": "2026-06-12",
+          "turnover_roi": 0.2051802768897691
+        },
+        {
+          "buy_cost": 10673.5561,
+          "events": 45,
+          "pnl": 1820.465596,
+          "target_date": "2026-06-13",
+          "turnover_roi": 0.17055848856221406
+        },
+        {
+          "buy_cost": 11477.492799,
+          "events": 45,
+          "pnl": 705.7539079999998,
+          "target_date": "2026-06-14",
+          "turnover_roi": 0.06149025055903238
+        },
+        {
+          "buy_cost": 10991.793725,
+          "events": 45,
+          "pnl": -538.920885,
+          "target_date": "2026-06-15",
+          "turnover_roi": -0.04902938487412345
+        },
+        {
+          "buy_cost": 10699.640525,
+          "events": 45,
+          "pnl": -557.290528,
+          "target_date": "2026-06-16",
+          "turnover_roi": -0.05208497675205775
+        },
+        {
+          "buy_cost": 5163.351765,
+          "events": 45,
+          "pnl": 5479.7964090000005,
+          "target_date": "2026-06-17",
+          "turnover_roi": 1.0612866716044864
+        },
+        {
+          "buy_cost": 2876.311498,
+          "events": 29,
+          "pnl": -92.17405100000002,
+          "target_date": "2026-06-18",
+          "turnover_roi": -0.032045920987379795
+        },
+        {
+          "buy_cost": 10686.815178,
+          "events": 45,
+          "pnl": -384.1091260000002,
+          "target_date": "2026-06-19",
+          "turnover_roi": -0.03594233825534211
+        },
+        {
+          "buy_cost": 12085.021369,
+          "events": 45,
+          "pnl": 2395.239595,
+          "target_date": "2026-06-20",
+          "turnover_roi": 0.1981990367964239
+        },
+        {
+          "buy_cost": 21472.877747,
+          "events": 45,
+          "pnl": 3923.9019389999994,
+          "target_date": "2026-06-21",
+          "turnover_roi": 0.18273759042605328
+        },
+        {
+          "buy_cost": 11860.636809,
+          "events": 39,
+          "pnl": 647.0134479999998,
+          "target_date": "2026-06-22",
+          "turnover_roi": 0.05455132455527497
+        },
+        {
+          "buy_cost": 10554.556584,
+          "events": 45,
+          "pnl": 1796.486904,
+          "target_date": "2026-06-23",
+          "turnover_roi": 0.17020960470507626
+        },
+        {
+          "buy_cost": 23179.936436,
+          "events": 45,
+          "pnl": -2587.490161,
+          "target_date": "2026-06-24",
+          "turnover_roi": -0.11162628371065997
+        },
+        {
+          "buy_cost": 22225.177801,
+          "events": 45,
+          "pnl": 898.5747589999999,
+          "target_date": "2026-06-25",
+          "turnover_roi": 0.04043048685799802
+        },
+        {
+          "buy_cost": 26473.411258,
+          "events": 45,
+          "pnl": -269.5562100000002,
+          "target_date": "2026-06-26",
+          "turnover_roi": -0.010182148699047728
+        },
+        {
+          "buy_cost": 19934.328652,
+          "events": 45,
+          "pnl": 1919.3350920000003,
+          "target_date": "2026-06-27",
+          "turnover_roi": 0.09628290601135617
+        },
+        {
+          "buy_cost": 17828.082153,
+          "events": 45,
+          "pnl": 2712.653455,
+          "target_date": "2026-06-28",
+          "turnover_roi": 0.15215621241365726
+        },
+        {
+          "buy_cost": 20497.9708,
+          "events": 45,
+          "pnl": -2254.1117759999997,
+          "target_date": "2026-06-29",
+          "turnover_roi": -0.10996755717887938
+        },
+        {
+          "buy_cost": 34023.790295,
+          "events": 45,
+          "pnl": 3055.01883,
+          "target_date": "2026-06-30",
+          "turnover_roi": 0.08979066716293961
+        },
+        {
+          "buy_cost": 38147.356224,
+          "events": 45,
+          "pnl": -5888.864284000001,
+          "target_date": "2026-07-01",
+          "turnover_roi": -0.1543714916813838
+        },
+        {
+          "buy_cost": 41560.382479,
+          "events": 45,
+          "pnl": -2826.247131,
+          "target_date": "2026-07-02",
+          "turnover_roi": -0.06800339559983769
+        },
+        {
+          "buy_cost": 8994.066361,
+          "events": 45,
+          "pnl": -2104.5739790000002,
+          "target_date": "2026-07-03",
+          "turnover_roi": -0.23399582508372826
+        },
+        {
+          "buy_cost": 5489.943585,
+          "events": 45,
+          "pnl": -507.369655,
+          "target_date": "2026-07-04",
+          "turnover_roi": -0.09241800888196194
+        },
+        {
+          "buy_cost": 5993.025159,
+          "events": 45,
+          "pnl": -228.66587899999982,
+          "target_date": "2026-07-05",
+          "turnover_roi": -0.03815533439845515
+        },
+        {
+          "buy_cost": 5573.998028,
+          "events": 45,
+          "pnl": -1876.4779879999999,
+          "target_date": "2026-07-06",
+          "turnover_roi": -0.3366484843686421
+        },
+        {
+          "buy_cost": 8896.024837,
+          "events": 45,
+          "pnl": -2667.886853,
+          "target_date": "2026-07-07",
+          "turnover_roi": -0.29989651579026944
+        },
+        {
+          "buy_cost": 22756.366034,
+          "events": 45,
+          "pnl": -2210.7996230000003,
+          "target_date": "2026-07-08",
+          "turnover_roi": -0.09715082011323216
+        },
+        {
+          "buy_cost": 11040.078126,
+          "events": 42,
+          "pnl": 1471.4686140000001,
+          "target_date": "2026-07-09",
+          "turnover_roi": 0.13328425734004629
+        },
+        {
+          "buy_cost": 6494.220243,
+          "events": 45,
+          "pnl": 545.0119709999998,
+          "target_date": "2026-07-10",
+          "turnover_roi": 0.08392261897607463
+        },
+        {
+          "buy_cost": 7296.138843,
+          "events": 45,
+          "pnl": 957.8886799999999,
+          "target_date": "2026-07-11",
+          "turnover_roi": 0.1312870684908922
+        },
+        {
+          "buy_cost": 8424.247849,
+          "events": 45,
+          "pnl": -63.50137099999989,
+          "target_date": "2026-07-12",
+          "turnover_roi": -0.0075379276747582664
+        },
+        {
+          "buy_cost": 9593.317308,
+          "events": 45,
+          "pnl": -1018.4431479999998,
+          "target_date": "2026-07-13",
+          "turnover_roi": -0.106161728555638
+        },
+        {
+          "buy_cost": 9569.307383,
+          "events": 45,
+          "pnl": 2708.4521270000005,
+          "target_date": "2026-07-14",
+          "turnover_roi": 0.28303533564107275
+        },
+        {
+          "buy_cost": 13558.422882,
+          "events": 45,
+          "pnl": -175.2819160000002,
+          "target_date": "2026-07-15",
+          "turnover_roi": -0.0129278985856609
+        },
+        {
+          "buy_cost": 13836.113082,
+          "events": 45,
+          "pnl": 1657.147692,
+          "target_date": "2026-07-16",
+          "turnover_roi": 0.11976974184721396
+        },
+        {
+          "buy_cost": 10896.234059,
+          "events": 45,
+          "pnl": 6883.619208,
+          "target_date": "2026-07-17",
+          "turnover_roi": 0.6317429646543168
+        },
+        {
+          "buy_cost": 11434.934468,
+          "events": 45,
+          "pnl": -896.7589919999999,
+          "target_date": "2026-07-18",
+          "turnover_roi": -0.07842274868382744
+        },
+        {
+          "buy_cost": 10430.459522000001,
+          "events": 45,
+          "pnl": 3148.438893,
+          "target_date": "2026-07-19",
+          "turnover_roi": 0.30185044928838367
+        },
+        {
+          "buy_cost": 12114.695747,
+          "events": 45,
+          "pnl": -530.726337,
+          "target_date": "2026-07-20",
+          "turnover_roi": -0.04380847427649393
+        },
+        {
+          "buy_cost": 14823.843383,
+          "events": 45,
+          "pnl": 2024.0734630000002,
+          "target_date": "2026-07-21",
+          "turnover_roi": 0.13654174634097996
+        },
+        {
+          "buy_cost": 15584.721965,
+          "events": 45,
+          "pnl": 2849.717386,
+          "target_date": "2026-07-22",
+          "turnover_roi": 0.182853270812265
+        },
+        {
+          "buy_cost": 14287.368252,
+          "events": 45,
+          "pnl": -1215.9477,
+          "target_date": "2026-07-23",
+          "turnover_roi": -0.08510648557195177
+        },
+        {
+          "buy_cost": 12149.158995,
+          "events": 45,
+          "pnl": 4551.148556,
+          "target_date": "2026-07-24",
+          "turnover_roi": 0.37460605774218864
+        },
+        {
+          "buy_cost": 11991.346565,
+          "events": 45,
+          "pnl": 2445.211617,
+          "target_date": "2026-07-25",
+          "turnover_roi": 0.20391468162024554
+        },
+        {
+          "buy_cost": 11292.467305,
+          "events": 45,
+          "pnl": -117.3666260000001,
+          "target_date": "2026-07-26",
+          "turnover_roi": -0.01039335539612617
+        },
+        {
+          "buy_cost": 10652.576661,
+          "events": 45,
+          "pnl": 2087.5318589999997,
+          "target_date": "2026-07-27",
+          "turnover_roi": 0.19596496936207308
+        },
+        {
+          "buy_cost": 12070.264457,
+          "events": 45,
+          "pnl": 7804.893763,
+          "target_date": "2026-07-28",
+          "turnover_roi": 0.6466216039263042
+        },
+        {
+          "buy_cost": 10762.11796,
+          "events": 44,
+          "pnl": -793.102079,
+          "target_date": "2026-07-29",
+          "turnover_roi": -0.07369386601668507
+        },
+        {
+          "buy_cost": 183.081789,
+          "events": 1,
+          "pnl": 55.940381,
+          "target_date": "2026-07-30",
+          "turnover_roi": 0.3055485818963677
+        }
+      ],
+      "label": "badatmath",
+      "lifetime": {
+        "buy_cost": 746708.24399,
+        "pnl": 46180.58012,
+        "target_dates": 90,
+        "turnover_roi": 0.061845547429925596
+      },
+      "month_rows": [
+        {
+          "buy_cost": 2076.341041,
+          "events": 176,
+          "month": "2026-04",
+          "pnl": -35.17739499999997,
+          "turnover_roi": -0.016942012080567437
+        },
+        {
+          "buy_cost": 35259.247199,
+          "events": 1039,
+          "month": "2026-05",
+          "pnl": 3544.108568,
+          "turnover_roi": 0.10051571855738645
+        },
+        {
+          "buy_cost": 333476.376199,
+          "events": 1320,
+          "month": "2026-06",
+          "pnl": 26603.118297999998,
+          "turnover_roi": 0.07977512110820333
+        },
+        {
+          "buy_cost": 375896.279551,
+          "events": 1302,
+          "month": "2026-07",
+          "pnl": 16068.530649,
+          "turnover_roi": 0.04274724577799364
+        }
+      ],
+      "replication_inputs": {
+        "expression_counts": {
+          "mixed_yes_no": 2980,
+          "no_only": 298,
+          "single_yes": 66,
+          "yes_strip": 583
+        },
+        "median_buy_sessions_gap_gt_5m": 21.0,
+        "median_buy_span_minutes": 2453.7,
+        "median_first_buy_to_first_sell_hours": 48.69611111111111,
+        "median_positive_yes_brackets": 3.0,
+        "median_unique_buy_transactions": 40.0,
+        "sell_event_share": 0.25210084033613445,
+        "sell_proceeds_share_ge_95c": 0.9954590978486335,
+        "sell_proceeds_share_ge_99c": 0.9954590978486335,
+        "settlement_without_sell_share": 0.7318563789152025,
+        "target_day_buy_cost_share": 0.43862024445807624,
+        "yes_buy_cost_share": 0.7206748051087446
+      },
+      "snapshot_id": "20260730T135339Z",
+      "source": "/Volumes/jrs/pm_agents/research/external_wallet_weather/raw/wallet=0x8fbd7cf5f806f563080864694415829f7229a959/snapshot=20260730T135339Z/analysis/full_ladder_history_v1",
+      "stability": {
+        "early_half": {
+          "buy_cost": 121250.055569,
+          "pnl": 13428.760892,
+          "target_dates": 45,
+          "turnover_roi": 0.11075261639247719
+        },
+        "late_half": {
+          "buy_cost": 625458.188421,
+          "pnl": 32751.819228,
+          "target_dates": 45,
+          "turnover_roi": 0.05236452225636949
+        },
+        "latest_30_target_dates": {
+          "buy_cost": 375896.279551,
+          "pnl": 16068.530648999998,
+          "target_dates": 30,
+          "turnover_roi": 0.04274724577799363
+        },
+        "max_drawdown_by_target_date": -18310.885392000004,
+        "positive_event_share": 0.4599947875944749,
+        "positive_target_date_share": 0.6111111111111112,
+        "target_date_block_ci95": [
+          0.01582934085219477,
+          0.11460377484076716
+        ],
+        "without_top_five_pnl_dates": {
+          "buy_cost": 684956.3569669999,
+          "pnl": 17537.220244999997,
+          "target_dates": 85,
+          "turnover_roi": 0.025603412635886977
+        }
+      },
+      "wallet": "0x8fbd7cf5f806f563080864694415829f7229a959"
+    },
+    {
+      "average_roi": {
+        "mean_active_month_roi": 0.08329831386270876,
+        "mean_event_roi": 0.07879477538267528,
+        "mean_target_date_roi": 0.05943265577305839,
+        "median_active_month_roi": 0.1058115133318025,
+        "median_event_roi": 0.09351583485444442,
+        "median_target_date_roi": 0.05782348579660301
+      },
+      "coverage": {
+        "activity_rows": 14508,
+        "cashflow_complete_event_share": 0.9731182795698925,
+        "cashflow_complete_events": 543,
+        "cities": 37,
+        "events_total": 558,
+        "independent_target_dates": 121,
+        "metadata_incomplete_portfolios": 3,
+        "target_date_max": "2026-07-29",
+        "target_date_min": "2026-02-12"
+      },
+      "date_rows": [
+        {
+          "buy_cost": 14.149996,
+          "events": 1,
+          "pnl": 2.1013029999999997,
+          "target_date": "2026-02-12",
+          "turnover_roi": 0.14850202077795638
+        },
+        {
+          "buy_cost": 11.909909,
+          "events": 1,
+          "pnl": 1.6779799999999998,
+          "target_date": "2026-02-23",
+          "turnover_roi": 0.14088940562014368
+        },
+        {
+          "buy_cost": 8.315498,
+          "events": 1,
+          "pnl": -0.5175979999999996,
+          "target_date": "2026-02-24",
+          "turnover_roi": -0.062244979194270696
+        },
+        {
+          "buy_cost": 9.35,
+          "events": 1,
+          "pnl": 0.6400000000000006,
+          "target_date": "2026-03-06",
+          "turnover_roi": 0.06844919786096262
+        },
+        {
+          "buy_cost": 6.376451,
+          "events": 1,
+          "pnl": 0.6865490000000003,
+          "target_date": "2026-03-07",
+          "turnover_roi": 0.10766945437203239
+        },
+        {
+          "buy_cost": 13.334688,
+          "events": 1,
+          "pnl": 3.9405520000000003,
+          "target_date": "2026-03-08",
+          "turnover_roi": 0.2955113760441939
+        },
+        {
+          "buy_cost": 48.114086,
+          "events": 2,
+          "pnl": 2.7025439999999996,
+          "target_date": "2026-03-09",
+          "turnover_roi": 0.05616949680806572
+        },
+        {
+          "buy_cost": 20.806317,
+          "events": 1,
+          "pnl": 0.660582999999999,
+          "target_date": "2026-03-10",
+          "turnover_roi": 0.031749155797251336
+        },
+        {
+          "buy_cost": 42.033997,
+          "events": 2,
+          "pnl": 11.833822999999999,
+          "target_date": "2026-03-11",
+          "turnover_roi": 0.28152980550481554
+        },
+        {
+          "buy_cost": 64.427457,
+          "events": 1,
+          "pnl": -38.027457000000005,
+          "target_date": "2026-03-12",
+          "turnover_roi": -0.5902368147170546
+        },
+        {
+          "buy_cost": 22.950584,
+          "events": 3,
+          "pnl": -6.324233999999999,
+          "target_date": "2026-03-13",
+          "turnover_roi": -0.27555873959460025
+        },
+        {
+          "buy_cost": 15.876275,
+          "events": 4,
+          "pnl": -3.240546,
+          "target_date": "2026-03-14",
+          "turnover_roi": -0.20411248860327755
+        },
+        {
+          "buy_cost": 31.004342,
+          "events": 6,
+          "pnl": 21.89554,
+          "target_date": "2026-03-15",
+          "turnover_roi": 0.7062088271378247
+        },
+        {
+          "buy_cost": 59.569506000000004,
+          "events": 3,
+          "pnl": -35.199506,
+          "target_date": "2026-03-16",
+          "turnover_roi": -0.5908980678805695
+        },
+        {
+          "buy_cost": 49.419425999999994,
+          "events": 5,
+          "pnl": 24.308174000000005,
+          "target_date": "2026-03-17",
+          "turnover_roi": 0.491874875276779
+        },
+        {
+          "buy_cost": 31.813637,
+          "events": 4,
+          "pnl": -2.504828999999999,
+          "target_date": "2026-03-18",
+          "turnover_roi": -0.07873444334578908
+        },
+        {
+          "buy_cost": 52.591229,
+          "events": 3,
+          "pnl": 22.768610999999996,
+          "target_date": "2026-03-19",
+          "turnover_roi": 0.4329355185823856
+        },
+        {
+          "buy_cost": 41.109611,
+          "events": 2,
+          "pnl": 14.320688999999998,
+          "target_date": "2026-03-20",
+          "turnover_roi": 0.34835379493131174
+        },
+        {
+          "buy_cost": 296.68269399999997,
+          "events": 3,
+          "pnl": 182.095516,
+          "target_date": "2026-03-21",
+          "turnover_roi": 0.6137719512551009
+        },
+        {
+          "buy_cost": 510.588637,
+          "events": 5,
+          "pnl": 24.482312000000018,
+          "target_date": "2026-03-22",
+          "turnover_roi": 0.047949190847347466
+        },
+        {
+          "buy_cost": 315.764101,
+          "events": 4,
+          "pnl": -137.43360099999998,
+          "target_date": "2026-03-24",
+          "turnover_roi": -0.4352413734327576
+        },
+        {
+          "buy_cost": 134.932219,
+          "events": 4,
+          "pnl": 99.60098099999999,
+          "target_date": "2026-03-25",
+          "turnover_roi": 0.738155658731144
+        },
+        {
+          "buy_cost": 408.305753,
+          "events": 3,
+          "pnl": 329.677897,
+          "target_date": "2026-03-26",
+          "turnover_roi": 0.8074289783519165
+        },
+        {
+          "buy_cost": 1440.036518,
+          "events": 7,
+          "pnl": 4.670454000000092,
+          "target_date": "2026-03-27",
+          "turnover_roi": 0.0032432885844358096
+        },
+        {
+          "buy_cost": 1717.677907,
+          "events": 8,
+          "pnl": 4.820097000000071,
+          "target_date": "2026-03-28",
+          "turnover_roi": 0.002806170458592311
+        },
+        {
+          "buy_cost": 697.970773,
+          "events": 5,
+          "pnl": 126.74557299999998,
+          "target_date": "2026-03-29",
+          "turnover_roi": 0.18159151916236466
+        },
+        {
+          "buy_cost": 305.685078,
+          "events": 2,
+          "pnl": 16.785511999999983,
+          "target_date": "2026-03-30",
+          "turnover_roi": 0.05491112654180648
+        },
+        {
+          "buy_cost": 1164.667093,
+          "events": 3,
+          "pnl": 799.7007740000001,
+          "target_date": "2026-04-01",
+          "turnover_roi": 0.6866346433297915
+        },
+        {
+          "buy_cost": 75.603706,
+          "events": 2,
+          "pnl": -75.603706,
+          "target_date": "2026-04-09",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 1635.234732,
+          "events": 5,
+          "pnl": 517.538357,
+          "target_date": "2026-04-10",
+          "turnover_roi": 0.31649178363953684
+        },
+        {
+          "buy_cost": 1627.6294440000001,
+          "events": 5,
+          "pnl": -109.0126980000001,
+          "target_date": "2026-04-11",
+          "turnover_roi": -0.06697636148194434
+        },
+        {
+          "buy_cost": 2418.77662,
+          "events": 5,
+          "pnl": 456.44836200000003,
+          "target_date": "2026-04-12",
+          "turnover_roi": 0.1887104241978327
+        },
+        {
+          "buy_cost": 1048.255057,
+          "events": 2,
+          "pnl": -968.236657,
+          "target_date": "2026-04-13",
+          "turnover_roi": -0.9236651428813474
+        },
+        {
+          "buy_cost": 1192.580088,
+          "events": 2,
+          "pnl": 259.97478200000006,
+          "target_date": "2026-04-14",
+          "turnover_roi": 0.21799356254219135
+        },
+        {
+          "buy_cost": 1840.413995,
+          "events": 5,
+          "pnl": 122.99373500000011,
+          "target_date": "2026-04-15",
+          "turnover_roi": 0.06682938476568154
+        },
+        {
+          "buy_cost": 1644.9342199999999,
+          "events": 8,
+          "pnl": 54.60877500000013,
+          "target_date": "2026-04-16",
+          "turnover_roi": 0.03319815123063105
+        },
+        {
+          "buy_cost": 1382.079031,
+          "events": 7,
+          "pnl": 327.47370200000006,
+          "target_date": "2026-04-17",
+          "turnover_roi": 0.2369428192272458
+        },
+        {
+          "buy_cost": 1591.635581,
+          "events": 6,
+          "pnl": -49.63734399999994,
+          "target_date": "2026-04-18",
+          "turnover_roi": -0.031186374941940896
+        },
+        {
+          "buy_cost": 1146.000632,
+          "events": 5,
+          "pnl": 87.70821599999991,
+          "target_date": "2026-04-19",
+          "turnover_roi": 0.07653417768795777
+        },
+        {
+          "buy_cost": 599.6933,
+          "events": 4,
+          "pnl": 129.69424999999998,
+          "target_date": "2026-04-20",
+          "turnover_roi": 0.21626763213796116
+        },
+        {
+          "buy_cost": 493.59974,
+          "events": 3,
+          "pnl": 106.08495799999999,
+          "target_date": "2026-04-21",
+          "turnover_roi": 0.21492101677363118
+        },
+        {
+          "buy_cost": 274.491,
+          "events": 3,
+          "pnl": 100.47431800000001,
+          "target_date": "2026-04-22",
+          "turnover_roi": 0.36603866064825447
+        },
+        {
+          "buy_cost": 0.8,
+          "events": 1,
+          "pnl": -0.8,
+          "target_date": "2026-04-28",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 2854.193311,
+          "events": 4,
+          "pnl": 462.7209850000003,
+          "target_date": "2026-04-29",
+          "turnover_roi": 0.16211970759537678
+        },
+        {
+          "buy_cost": 7.3788800000000005,
+          "events": 3,
+          "pnl": 1.5551699999999995,
+          "target_date": "2026-04-30",
+          "turnover_roi": 0.21075962747734064
+        },
+        {
+          "buy_cost": 43.208220000000004,
+          "events": 1,
+          "pnl": -42.54402,
+          "target_date": "2026-05-01",
+          "turnover_roi": -0.9846279249642776
+        },
+        {
+          "buy_cost": 2601.3795849999997,
+          "events": 5,
+          "pnl": 1124.524905,
+          "target_date": "2026-05-02",
+          "turnover_roi": 0.43228020681187906
+        },
+        {
+          "buy_cost": 0.4666,
+          "events": 1,
+          "pnl": -0.4666,
+          "target_date": "2026-05-03",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 136.20131,
+          "events": 2,
+          "pnl": 13.191487999999987,
+          "target_date": "2026-05-05",
+          "turnover_roi": 0.09685287167942795
+        },
+        {
+          "buy_cost": 572.05776,
+          "events": 5,
+          "pnl": 242.459966,
+          "target_date": "2026-05-06",
+          "turnover_roi": 0.4238382606679437
+        },
+        {
+          "buy_cost": 1857.3808869999998,
+          "events": 3,
+          "pnl": -419.2708089999999,
+          "target_date": "2026-05-07",
+          "turnover_roi": -0.2257322727581184
+        },
+        {
+          "buy_cost": 2007.979166,
+          "events": 5,
+          "pnl": 682.6827569999998,
+          "target_date": "2026-05-08",
+          "turnover_roi": 0.33998498020272777
+        },
+        {
+          "buy_cost": 875.13046,
+          "events": 4,
+          "pnl": -301.3600399999999,
+          "target_date": "2026-05-09",
+          "turnover_roi": -0.34436013117404224
+        },
+        {
+          "buy_cost": 347.26476,
+          "events": 4,
+          "pnl": 30.70697900000002,
+          "target_date": "2026-05-10",
+          "turnover_roi": 0.08842526664669348
+        },
+        {
+          "buy_cost": 939.036554,
+          "events": 1,
+          "pnl": -480.1713440000001,
+          "target_date": "2026-05-11",
+          "turnover_roi": -0.5113446776428685
+        },
+        {
+          "buy_cost": 2237.098136,
+          "events": 5,
+          "pnl": -267.28477699999996,
+          "target_date": "2026-05-12",
+          "turnover_roi": -0.11947834236629123
+        },
+        {
+          "buy_cost": 1774.596622,
+          "events": 5,
+          "pnl": 644.9844380000001,
+          "target_date": "2026-05-13",
+          "turnover_roi": 0.36345411120702564
+        },
+        {
+          "buy_cost": 109.99616,
+          "events": 1,
+          "pnl": 1.6938399999999945,
+          "target_date": "2026-05-14",
+          "turnover_roi": 0.015399083022534553
+        },
+        {
+          "buy_cost": 2605.7446099999997,
+          "events": 5,
+          "pnl": 453.133276,
+          "target_date": "2026-05-15",
+          "turnover_roi": 0.1738978080434368
+        },
+        {
+          "buy_cost": 5777.608382,
+          "events": 12,
+          "pnl": -96.73388299999986,
+          "target_date": "2026-05-16",
+          "turnover_roi": -0.016742893703452097
+        },
+        {
+          "buy_cost": 2690.8077359999997,
+          "events": 6,
+          "pnl": 396.91532800000004,
+          "target_date": "2026-05-20",
+          "turnover_roi": 0.14750787382157285
+        },
+        {
+          "buy_cost": 3634.074911,
+          "events": 5,
+          "pnl": 210.13487899999984,
+          "target_date": "2026-05-21",
+          "turnover_roi": 0.05782348579660301
+        },
+        {
+          "buy_cost": 635.104469,
+          "events": 2,
+          "pnl": -90.59759899999997,
+          "target_date": "2026-05-22",
+          "turnover_roi": -0.1426499157574027
+        },
+        {
+          "buy_cost": 3536.25903,
+          "events": 5,
+          "pnl": 510.94645700000024,
+          "target_date": "2026-05-23",
+          "turnover_roi": 0.14448784793912572
+        },
+        {
+          "buy_cost": 185.89158999999998,
+          "events": 1,
+          "pnl": 185.02841000000004,
+          "target_date": "2026-05-24",
+          "turnover_roi": 0.9953565408741732
+        },
+        {
+          "buy_cost": 1516.08045,
+          "events": 4,
+          "pnl": 308.15688,
+          "target_date": "2026-05-25",
+          "turnover_roi": 0.2032589233638624
+        },
+        {
+          "buy_cost": 3235.472191,
+          "events": 6,
+          "pnl": 697.9010280000001,
+          "target_date": "2026-05-26",
+          "turnover_roi": 0.21570299072306265
+        },
+        {
+          "buy_cost": 1.29687,
+          "events": 1,
+          "pnl": 3.70313,
+          "target_date": "2026-05-27",
+          "turnover_roi": 2.855436551080679
+        },
+        {
+          "buy_cost": 3666.59739,
+          "events": 3,
+          "pnl": 537.49565,
+          "target_date": "2026-05-28",
+          "turnover_roi": 0.14659249239251762
+        },
+        {
+          "buy_cost": 3661.279941,
+          "events": 9,
+          "pnl": 391.0249100000002,
+          "target_date": "2026-05-29",
+          "turnover_roi": 0.10680005798551426
+        },
+        {
+          "buy_cost": 7270.235305,
+          "events": 9,
+          "pnl": 1050.727498,
+          "target_date": "2026-05-30",
+          "turnover_roi": 0.14452455167130246
+        },
+        {
+          "buy_cost": 3503.238296,
+          "events": 5,
+          "pnl": 210.0087980000002,
+          "target_date": "2026-05-31",
+          "turnover_roi": 0.05994704906023333
+        },
+        {
+          "buy_cost": 5865.435216,
+          "events": 9,
+          "pnl": -512.1749100000001,
+          "target_date": "2026-06-02",
+          "turnover_roi": -0.08732087068370752
+        },
+        {
+          "buy_cost": 3231.030471,
+          "events": 6,
+          "pnl": 1082.019739,
+          "target_date": "2026-06-03",
+          "turnover_roi": 0.33488379286782655
+        },
+        {
+          "buy_cost": 4988.608553,
+          "events": 6,
+          "pnl": -1405.8484280000002,
+          "target_date": "2026-06-04",
+          "turnover_roi": -0.2818117342870218
+        },
+        {
+          "buy_cost": 3604.862724,
+          "events": 7,
+          "pnl": 87.71028400000006,
+          "target_date": "2026-06-05",
+          "turnover_roi": 0.024331102379031966
+        },
+        {
+          "buy_cost": 8040.128536,
+          "events": 9,
+          "pnl": -1512.975115,
+          "target_date": "2026-06-06",
+          "turnover_roi": -0.18817797603926265
+        },
+        {
+          "buy_cost": 7553.927739000001,
+          "events": 8,
+          "pnl": -126.91827900000062,
+          "target_date": "2026-06-07",
+          "turnover_roi": -0.016801627363303616
+        },
+        {
+          "buy_cost": 2407.81251,
+          "events": 7,
+          "pnl": 287.26985799999994,
+          "target_date": "2026-06-08",
+          "turnover_roi": 0.11930740321637415
+        },
+        {
+          "buy_cost": 3739.459284,
+          "events": 6,
+          "pnl": -4.968954999999696,
+          "target_date": "2026-06-09",
+          "turnover_roi": -0.0013287897053085539
+        },
+        {
+          "buy_cost": 392.20158000000004,
+          "events": 7,
+          "pnl": -1.965663000000025,
+          "target_date": "2026-06-10",
+          "turnover_roi": -0.005011869151572579
+        },
+        {
+          "buy_cost": 774.938722,
+          "events": 4,
+          "pnl": 11.12307800000005,
+          "target_date": "2026-06-11",
+          "turnover_roi": 0.014353493617267005
+        },
+        {
+          "buy_cost": 1407.2184610000002,
+          "events": 4,
+          "pnl": -22.390511000000053,
+          "target_date": "2026-06-17",
+          "turnover_roi": -0.015911183388035478
+        },
+        {
+          "buy_cost": 1009.731051,
+          "events": 3,
+          "pnl": -673.277481,
+          "target_date": "2026-06-18",
+          "turnover_roi": -0.6667889239745683
+        },
+        {
+          "buy_cost": 2669.29146,
+          "events": 7,
+          "pnl": -48.48815100000016,
+          "target_date": "2026-06-19",
+          "turnover_roi": -0.018165176686999986
+        },
+        {
+          "buy_cost": 1021.092445,
+          "events": 3,
+          "pnl": -4.754421999999975,
+          "target_date": "2026-06-21",
+          "turnover_roi": -0.004656211122980128
+        },
+        {
+          "buy_cost": 528.318113,
+          "events": 5,
+          "pnl": -159.06811300000004,
+          "target_date": "2026-06-22",
+          "turnover_roi": -0.30108396643217117
+        },
+        {
+          "buy_cost": 1142.8139,
+          "events": 6,
+          "pnl": -169.78877200000005,
+          "target_date": "2026-06-23",
+          "turnover_roi": -0.14857079704753332
+        },
+        {
+          "buy_cost": 736.408805,
+          "events": 2,
+          "pnl": 112.68390499999992,
+          "target_date": "2026-06-24",
+          "turnover_roi": 0.15301813915709483
+        },
+        {
+          "buy_cost": 1997.01317,
+          "events": 2,
+          "pnl": -11.028874999999971,
+          "target_date": "2026-06-25",
+          "turnover_roi": -0.005522685160859491
+        },
+        {
+          "buy_cost": 374.52110200000004,
+          "events": 3,
+          "pnl": 154.89889799999995,
+          "target_date": "2026-06-26",
+          "turnover_roi": 0.4135919102363421
+        },
+        {
+          "buy_cost": 784.845549,
+          "events": 3,
+          "pnl": -602.565549,
+          "target_date": "2026-06-28",
+          "turnover_roi": -0.7677504825857145
+        },
+        {
+          "buy_cost": 2087.4294,
+          "events": 4,
+          "pnl": 878.419474,
+          "target_date": "2026-06-29",
+          "turnover_roi": 0.4208139801039499
+        },
+        {
+          "buy_cost": 1557.23631,
+          "events": 6,
+          "pnl": 558.38913,
+          "target_date": "2026-06-30",
+          "turnover_roi": 0.3585770036405072
+        },
+        {
+          "buy_cost": 3739.2407479999997,
+          "events": 8,
+          "pnl": 261.803518,
+          "target_date": "2026-07-01",
+          "turnover_roi": 0.07001515431709775
+        },
+        {
+          "buy_cost": 1939.100657,
+          "events": 9,
+          "pnl": -749.311967,
+          "target_date": "2026-07-02",
+          "turnover_roi": -0.3864224192256565
+        },
+        {
+          "buy_cost": 2231.625401,
+          "events": 7,
+          "pnl": -1234.165113,
+          "target_date": "2026-07-03",
+          "turnover_roi": -0.5530341752011633
+        },
+        {
+          "buy_cost": 1315.47523,
+          "events": 4,
+          "pnl": -712.32523,
+          "target_date": "2026-07-04",
+          "turnover_roi": -0.5414964978093887
+        },
+        {
+          "buy_cost": 2923.16633,
+          "events": 8,
+          "pnl": -216.0131900000001,
+          "target_date": "2026-07-05",
+          "turnover_roi": -0.07389698895443972
+        },
+        {
+          "buy_cost": 2624.269533,
+          "events": 8,
+          "pnl": 924.965499,
+          "target_date": "2026-07-06",
+          "turnover_roi": 0.3524658909340773
+        },
+        {
+          "buy_cost": 1728.617353,
+          "events": 6,
+          "pnl": -172.99089299999991,
+          "target_date": "2026-07-07",
+          "turnover_roi": -0.10007471734549914
+        },
+        {
+          "buy_cost": 2270.825113,
+          "events": 6,
+          "pnl": 514.6148870000001,
+          "target_date": "2026-07-08",
+          "turnover_roi": 0.2266202201366971
+        },
+        {
+          "buy_cost": 2712.419116,
+          "events": 5,
+          "pnl": -774.7751650000001,
+          "target_date": "2026-07-09",
+          "turnover_roi": -0.2856399147276914
+        },
+        {
+          "buy_cost": 1090.353525,
+          "events": 1,
+          "pnl": 628.7777369999999,
+          "target_date": "2026-07-10",
+          "turnover_roi": 0.5766732739273713
+        },
+        {
+          "buy_cost": 363.06093400000003,
+          "events": 2,
+          "pnl": -357.56293500000004,
+          "target_date": "2026-07-11",
+          "turnover_roi": -0.9848565392607072
+        },
+        {
+          "buy_cost": 5.08239,
+          "events": 1,
+          "pnl": -5.08239,
+          "target_date": "2026-07-12",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 33.220892,
+          "events": 2,
+          "pnl": -14.815891999999996,
+          "target_date": "2026-07-13",
+          "turnover_roi": -0.4459811614931952
+        },
+        {
+          "buy_cost": 19.44889,
+          "events": 1,
+          "pnl": 13.251110000000004,
+          "target_date": "2026-07-14",
+          "turnover_roi": 0.6813298856644263
+        },
+        {
+          "buy_cost": 3421.3466630000003,
+          "events": 7,
+          "pnl": 2206.3225669999997,
+          "target_date": "2026-07-15",
+          "turnover_roi": 0.6448696330191196
+        },
+        {
+          "buy_cost": 1754.440976,
+          "events": 8,
+          "pnl": -890.8837560000001,
+          "target_date": "2026-07-16",
+          "turnover_roi": -0.5077878185626691
+        },
+        {
+          "buy_cost": 2356.855712,
+          "events": 7,
+          "pnl": -639.6841820000001,
+          "target_date": "2026-07-19",
+          "turnover_roi": -0.27141423157261146
+        },
+        {
+          "buy_cost": 441.943006,
+          "events": 6,
+          "pnl": -221.01753100000002,
+          "target_date": "2026-07-20",
+          "turnover_roi": -0.500104149176195
+        },
+        {
+          "buy_cost": 2314.9107910000002,
+          "events": 9,
+          "pnl": -8.832323000000077,
+          "target_date": "2026-07-21",
+          "turnover_roi": -0.003815405342762548
+        },
+        {
+          "buy_cost": 2476.1332039999998,
+          "events": 5,
+          "pnl": -360.92556800000006,
+          "target_date": "2026-07-22",
+          "turnover_roi": -0.1457617738080298
+        },
+        {
+          "buy_cost": 450.94468,
+          "events": 4,
+          "pnl": 70.81532,
+          "target_date": "2026-07-23",
+          "turnover_roi": 0.15703771025749766
+        },
+        {
+          "buy_cost": 318.01272,
+          "events": 5,
+          "pnl": 559.48728,
+          "target_date": "2026-07-24",
+          "turnover_roi": 1.7593235893205783
+        },
+        {
+          "buy_cost": 818.4875089999999,
+          "events": 5,
+          "pnl": 732.295127,
+          "target_date": "2026-07-25",
+          "turnover_roi": 0.8946931003195066
+        },
+        {
+          "buy_cost": 5720.461403,
+          "events": 10,
+          "pnl": 4115.498512,
+          "target_date": "2026-07-26",
+          "turnover_roi": 0.7194347137525823
+        },
+        {
+          "buy_cost": 2856.789304,
+          "events": 9,
+          "pnl": 34.779720000000054,
+          "target_date": "2026-07-27",
+          "turnover_roi": 0.012174408505136316
+        },
+        {
+          "buy_cost": 4483.74859,
+          "events": 8,
+          "pnl": 2768.4901469999995,
+          "target_date": "2026-07-28",
+          "turnover_roi": 0.617449906351685
+        },
+        {
+          "buy_cost": 2285.015108,
+          "events": 4,
+          "pnl": -25.92872800000007,
+          "target_date": "2026-07-29",
+          "turnover_roi": -0.011347289525229726
+        }
+      ],
+      "label": "MidYes56b",
+      "lifetime": {
+        "buy_cost": 191399.571389,
+        "pnl": 13256.932146,
+        "target_dates": 121,
+        "turnover_roi": 0.069263123474068
+      },
+      "month_rows": [
+        {
+          "buy_cost": 34.375403,
+          "events": 3,
+          "month": "2026-02",
+          "pnl": 3.261685,
+          "turnover_roi": 0.09488426942951039
+        },
+        {
+          "buy_cost": 6336.421286,
+          "events": 80,
+          "month": "2026-03",
+          "pnl": 669.9052340000001,
+          "turnover_roi": 0.1057229631306431
+        },
+        {
+          "buy_cost": 20997.96643,
+          "events": 73,
+          "month": "2026-04",
+          "pnl": 2223.6859790000008,
+          "turnover_roi": 0.10590006353296189
+        },
+        {
+          "buy_cost": 55421.487391,
+          "events": 115,
+          "month": "2026-05",
+          "pnl": 5996.991545000001,
+          "turnover_roi": 0.10820697580148063
+        },
+        {
+          "buy_cost": 55914.325101,
+          "events": 117,
+          "month": "2026-06",
+          "pnl": -2083.6988580000007,
+          "turnover_roi": -0.03726592164416082
+        },
+        {
+          "buy_cost": 52694.995778000004,
+          "events": 155,
+          "month": "2026-07",
+          "pnl": 6446.786560999999,
+          "turnover_roi": 0.12234153292581745
+        }
+      ],
+      "replication_inputs": {
+        "expression_counts": {
+          "mixed_yes_no": 228,
+          "no_only": 10,
+          "single_yes": 138,
+          "yes_strip": 182
+        },
+        "median_buy_sessions_gap_gt_5m": 4.0,
+        "median_buy_span_minutes": 116.39166666666667,
+        "median_first_buy_to_first_sell_hours": 1.3658333333333332,
+        "median_positive_yes_brackets": 2.0,
+        "median_unique_buy_transactions": 9.0,
+        "sell_event_share": 0.6129032258064516,
+        "sell_proceeds_share_ge_95c": 0.8554990023053289,
+        "sell_proceeds_share_ge_99c": 0.7929917663307431,
+        "settlement_without_sell_share": 0.3727598566308244,
+        "target_day_buy_cost_share": 0.9390320587481733,
+        "yes_buy_cost_share": 0.8255308022621456
+      },
+      "snapshot_id": "20260730T135339Z",
+      "source": "/Volumes/jrs/pm_agents/research/external_wallet_weather/raw/wallet=0x56b381017b589fb0afb049137c8d4af2e7233fa2/snapshot=20260730T135339Z/analysis/full_ladder_history_v1",
+      "stability": {
+        "early_half": {
+          "buy_cost": 49253.912331,
+          "pnl": 4482.399074000001,
+          "target_dates": 60,
+          "turnover_roi": 0.09100594981931652
+        },
+        "late_half": {
+          "buy_cost": 142145.659058,
+          "pnl": 8774.533071999998,
+          "target_dates": 61,
+          "turnover_roi": 0.06172916661788249
+        },
+        "latest_30_target_dates": {
+          "buy_cost": 57124.507037,
+          "pnl": 7281.029615999999,
+          "target_dates": 30,
+          "turnover_roi": 0.12745894877104177
+        },
+        "max_drawdown_by_target_date": -5303.555669000001,
+        "positive_event_share": 0.6022099447513812,
+        "positive_target_date_share": 0.5950413223140496,
+        "target_date_block_ci95": [
+          -0.00010257452043808615,
+          0.1445338227027423
+        ],
+        "without_top_five_pnl_dates": {
+          "buy_cost": 171941.604677,
+          "pnl": 1960.0762760000002,
+          "target_dates": 116,
+          "turnover_roi": 0.011399662575454564
+        }
+      },
+      "wallet": "0x56b381017b589fb0afb049137c8d4af2e7233fa2"
+    },
+    {
+      "average_roi": {
+        "mean_active_month_roi": 0.25275736022361894,
+        "mean_event_roi": 0.024646434967872766,
+        "mean_target_date_roi": 0.2564268007970269,
+        "median_active_month_roi": 0.1972528597289757,
+        "median_event_roi": -0.3426763022789081,
+        "median_target_date_roi": 0.12064872778840921
+      },
+      "coverage": {
+        "activity_rows": 23743,
+        "cashflow_complete_event_share": 0.9698375870069605,
+        "cashflow_complete_events": 418,
+        "cities": 32,
+        "events_total": 431,
+        "independent_target_dates": 71,
+        "metadata_incomplete_portfolios": 0,
+        "target_date_max": "2026-07-29",
+        "target_date_min": "2026-05-19"
+      },
+      "date_rows": [
+        {
+          "buy_cost": 11.24,
+          "events": 3,
+          "pnl": 8.76,
+          "target_date": "2026-05-19",
+          "turnover_roi": 0.7793594306049821
+        },
+        {
+          "buy_cost": 660.212676,
+          "events": 5,
+          "pnl": -131.81536400000002,
+          "target_date": "2026-05-20",
+          "turnover_roi": -0.19965591208975822
+        },
+        {
+          "buy_cost": 1575.454154,
+          "events": 8,
+          "pnl": -15.64334299999972,
+          "target_date": "2026-05-21",
+          "turnover_roi": -0.009929418104793496
+        },
+        {
+          "buy_cost": 1699.471704,
+          "events": 9,
+          "pnl": 205.03909899999996,
+          "target_date": "2026-05-22",
+          "turnover_roi": 0.12064872778840921
+        },
+        {
+          "buy_cost": 1528.106306,
+          "events": 6,
+          "pnl": -380.06733999999994,
+          "target_date": "2026-05-23",
+          "turnover_roi": -0.248717866360274
+        },
+        {
+          "buy_cost": 1646.574108,
+          "events": 9,
+          "pnl": -152.72486299999997,
+          "target_date": "2026-05-24",
+          "turnover_roi": -0.09275310613593103
+        },
+        {
+          "buy_cost": 781.992719,
+          "events": 7,
+          "pnl": 1522.693705,
+          "target_date": "2026-05-25",
+          "turnover_roi": 1.9471967807413817
+        },
+        {
+          "buy_cost": 1408.530705,
+          "events": 5,
+          "pnl": -192.5164379999999,
+          "target_date": "2026-05-26",
+          "turnover_roi": -0.13667890754287812
+        },
+        {
+          "buy_cost": 2457.617425,
+          "events": 8,
+          "pnl": 691.4177510000001,
+          "target_date": "2026-05-27",
+          "turnover_roi": 0.2813366083616534
+        },
+        {
+          "buy_cost": 197.604633,
+          "events": 5,
+          "pnl": 602.828891,
+          "target_date": "2026-05-28",
+          "turnover_roi": 3.050681969587221
+        },
+        {
+          "buy_cost": 608.642338,
+          "events": 7,
+          "pnl": 2347.70207,
+          "target_date": "2026-05-29",
+          "turnover_roi": 3.8572769645216494
+        },
+        {
+          "buy_cost": 1229.624422,
+          "events": 6,
+          "pnl": 583.775496,
+          "target_date": "2026-05-30",
+          "turnover_roi": 0.47475919114430204
+        },
+        {
+          "buy_cost": 924.034887,
+          "events": 5,
+          "pnl": 694.5086829999999,
+          "target_date": "2026-05-31",
+          "turnover_roi": 0.7516043958630318
+        },
+        {
+          "buy_cost": 995.846591,
+          "events": 9,
+          "pnl": 497.9722529999999,
+          "target_date": "2026-06-01",
+          "turnover_roi": 0.5000491616885998
+        },
+        {
+          "buy_cost": 1874.979558,
+          "events": 7,
+          "pnl": -879.63611,
+          "target_date": "2026-06-02",
+          "turnover_roi": -0.46914437346628396
+        },
+        {
+          "buy_cost": 372.757291,
+          "events": 7,
+          "pnl": -372.757291,
+          "target_date": "2026-06-03",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 1039.1762840000001,
+          "events": 6,
+          "pnl": 1110.1803899999998,
+          "target_date": "2026-06-04",
+          "turnover_roi": 1.0683272964301018
+        },
+        {
+          "buy_cost": 578.807125,
+          "events": 5,
+          "pnl": 1071.9066010000001,
+          "target_date": "2026-06-05",
+          "turnover_roi": 1.8519236455494568
+        },
+        {
+          "buy_cost": 1529.290742,
+          "events": 4,
+          "pnl": -86.88867199999991,
+          "target_date": "2026-06-06",
+          "turnover_roi": -0.056816319888504184
+        },
+        {
+          "buy_cost": 2382.222889,
+          "events": 5,
+          "pnl": 831.7582899999996,
+          "target_date": "2026-06-07",
+          "turnover_roi": 0.34915216953068223
+        },
+        {
+          "buy_cost": 1514.856133,
+          "events": 6,
+          "pnl": -937.6146440000001,
+          "target_date": "2026-06-08",
+          "turnover_roi": -0.6189463300010947
+        },
+        {
+          "buy_cost": 42.505053000000004,
+          "events": 1,
+          "pnl": -42.505053000000004,
+          "target_date": "2026-06-09",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 104.81287499999999,
+          "events": 2,
+          "pnl": 57.678602000000005,
+          "target_date": "2026-06-11",
+          "turnover_roi": 0.55030073356923
+        },
+        {
+          "buy_cost": 58.20808,
+          "events": 2,
+          "pnl": 119.61835,
+          "target_date": "2026-06-12",
+          "turnover_roi": 2.055012809218239
+        },
+        {
+          "buy_cost": 102.55279999999999,
+          "events": 2,
+          "pnl": -102.55279999999999,
+          "target_date": "2026-06-13",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 531.40989,
+          "events": 6,
+          "pnl": -104.41053600000002,
+          "target_date": "2026-06-14",
+          "turnover_roi": -0.1964783455573249
+        },
+        {
+          "buy_cost": 172.00638,
+          "events": 3,
+          "pnl": 650.63816,
+          "target_date": "2026-06-15",
+          "turnover_roi": 3.782639690457993
+        },
+        {
+          "buy_cost": 472.410999,
+          "events": 5,
+          "pnl": 107.13871099999997,
+          "target_date": "2026-06-16",
+          "turnover_roi": 0.2267913135527989
+        },
+        {
+          "buy_cost": 720.0577539999999,
+          "events": 4,
+          "pnl": -413.56003599999997,
+          "target_date": "2026-06-17",
+          "turnover_roi": -0.5743428686138418
+        },
+        {
+          "buy_cost": 653.810865,
+          "events": 2,
+          "pnl": -604.954875,
+          "target_date": "2026-06-18",
+          "turnover_roi": -0.9252750411237047
+        },
+        {
+          "buy_cost": 312.242043,
+          "events": 3,
+          "pnl": -246.59829299999998,
+          "target_date": "2026-06-19",
+          "turnover_roi": -0.7897664601176081
+        },
+        {
+          "buy_cost": 221.29953,
+          "events": 1,
+          "pnl": -148.63628,
+          "target_date": "2026-06-20",
+          "turnover_roi": -0.6716520364955135
+        },
+        {
+          "buy_cost": 1229.081406,
+          "events": 2,
+          "pnl": 1106.6477739999998,
+          "target_date": "2026-06-21",
+          "turnover_roi": 0.9003860676743488
+        },
+        {
+          "buy_cost": 1458.4413749999999,
+          "events": 4,
+          "pnl": -709.845564,
+          "target_date": "2026-06-22",
+          "turnover_roi": -0.48671518524356183
+        },
+        {
+          "buy_cost": 3125.1852959999997,
+          "events": 5,
+          "pnl": 4950.923607,
+          "target_date": "2026-06-23",
+          "turnover_roi": 1.5842016194485513
+        },
+        {
+          "buy_cost": 2982.537383,
+          "events": 7,
+          "pnl": 274.7564300000001,
+          "target_date": "2026-06-24",
+          "turnover_roi": 0.09212170535265345
+        },
+        {
+          "buy_cost": 3452.1852879999997,
+          "events": 6,
+          "pnl": 1031.976263,
+          "target_date": "2026-06-25",
+          "turnover_roi": 0.2989342045420362
+        },
+        {
+          "buy_cost": 3207.5288769999997,
+          "events": 7,
+          "pnl": 796.385622,
+          "target_date": "2026-06-26",
+          "turnover_roi": 0.248286345201936
+        },
+        {
+          "buy_cost": 1001.0949979999999,
+          "events": 5,
+          "pnl": -397.69986399999993,
+          "target_date": "2026-06-27",
+          "turnover_roi": -0.3972648597730782
+        },
+        {
+          "buy_cost": 971.960074,
+          "events": 5,
+          "pnl": -349.76398599999993,
+          "target_date": "2026-06-28",
+          "turnover_roi": -0.35985427319106106
+        },
+        {
+          "buy_cost": 2655.449299,
+          "events": 7,
+          "pnl": -300.6568870000001,
+          "target_date": "2026-06-29",
+          "turnover_roi": -0.1132226049705497
+        },
+        {
+          "buy_cost": 3970.491904,
+          "events": 5,
+          "pnl": 533.4831770000002,
+          "target_date": "2026-06-30",
+          "turnover_roi": 0.13436198584426082
+        },
+        {
+          "buy_cost": 3675.755985,
+          "events": 7,
+          "pnl": 147.86365400000017,
+          "target_date": "2026-07-01",
+          "turnover_roi": 0.0402267328417341
+        },
+        {
+          "buy_cost": 3965.529681,
+          "events": 6,
+          "pnl": -131.44969600000005,
+          "target_date": "2026-07-02",
+          "turnover_roi": -0.033148080224897465
+        },
+        {
+          "buy_cost": 1648.021392,
+          "events": 5,
+          "pnl": 317.0269979999998,
+          "target_date": "2026-07-03",
+          "turnover_roi": 0.19236825416159392
+        },
+        {
+          "buy_cost": 1238.711007,
+          "events": 5,
+          "pnl": -10.513866999999962,
+          "target_date": "2026-07-04",
+          "turnover_roi": -0.008487748103137635
+        },
+        {
+          "buy_cost": 2474.424035,
+          "events": 7,
+          "pnl": 875.028296,
+          "target_date": "2026-07-05",
+          "turnover_roi": 0.3536290803932479
+        },
+        {
+          "buy_cost": 2432.4732240000003,
+          "events": 7,
+          "pnl": -370.8992520000001,
+          "target_date": "2026-07-06",
+          "turnover_roi": -0.15247824656013564
+        },
+        {
+          "buy_cost": 3326.53844,
+          "events": 9,
+          "pnl": 284.30475200000006,
+          "target_date": "2026-07-07",
+          "turnover_roi": 0.08546564458157895
+        },
+        {
+          "buy_cost": 3098.822798,
+          "events": 7,
+          "pnl": 2226.4421549999997,
+          "target_date": "2026-07-08",
+          "turnover_roi": 0.7184799842175421
+        },
+        {
+          "buy_cost": 4076.656044,
+          "events": 9,
+          "pnl": -312.19942899999995,
+          "target_date": "2026-07-09",
+          "turnover_roi": -0.07658223446628355
+        },
+        {
+          "buy_cost": 4318.095062,
+          "events": 8,
+          "pnl": 511.335637,
+          "target_date": "2026-07-10",
+          "turnover_roi": 0.11841694767209827
+        },
+        {
+          "buy_cost": 2177.997271,
+          "events": 6,
+          "pnl": 2023.556212,
+          "target_date": "2026-07-11",
+          "turnover_roi": 0.9290903340163091
+        },
+        {
+          "buy_cost": 415.47470799999996,
+          "events": 6,
+          "pnl": -356.51824799999997,
+          "target_date": "2026-07-12",
+          "turnover_roi": -0.858098558432587
+        },
+        {
+          "buy_cost": 9.81354,
+          "events": 1,
+          "pnl": -9.81354,
+          "target_date": "2026-07-13",
+          "turnover_roi": -1.0
+        },
+        {
+          "buy_cost": 843.964895,
+          "events": 6,
+          "pnl": -169.89902899999998,
+          "target_date": "2026-07-14",
+          "turnover_roi": -0.2013105402920817
+        },
+        {
+          "buy_cost": 1335.47774,
+          "events": 3,
+          "pnl": 55.81384899999996,
+          "target_date": "2026-07-15",
+          "turnover_roi": 0.04179317058478261
+        },
+        {
+          "buy_cost": 2693.798993,
+          "events": 8,
+          "pnl": 732.8209489999998,
+          "target_date": "2026-07-16",
+          "turnover_roi": 0.2720399520915553
+        },
+        {
+          "buy_cost": 3650.240287,
+          "events": 8,
+          "pnl": 2288.005701,
+          "target_date": "2026-07-17",
+          "turnover_roi": 0.6268096128215244
+        },
+        {
+          "buy_cost": 4220.943708,
+          "events": 8,
+          "pnl": 750.4938390000002,
+          "target_date": "2026-07-18",
+          "turnover_roi": 0.17780238044340207
+        },
+        {
+          "buy_cost": 1977.370375,
+          "events": 6,
+          "pnl": 446.0617520000001,
+          "target_date": "2026-07-19",
+          "turnover_roi": 0.22558330884268463
+        },
+        {
+          "buy_cost": 1940.687525,
+          "events": 8,
+          "pnl": 497.318871,
+          "target_date": "2026-07-20",
+          "turnover_roi": 0.25625911672720214
+        },
+        {
+          "buy_cost": 5048.432187,
+          "events": 8,
+          "pnl": 1586.1381390000001,
+          "target_date": "2026-07-21",
+          "turnover_roi": 0.3141843012340338
+        },
+        {
+          "buy_cost": 5551.63179,
+          "events": 9,
+          "pnl": 1214.8760879999998,
+          "target_date": "2026-07-22",
+          "turnover_roi": 0.21883225220165398
+        },
+        {
+          "buy_cost": 4304.636163,
+          "events": 9,
+          "pnl": 589.9948160000002,
+          "target_date": "2026-07-23",
+          "turnover_roi": 0.1370603213974812
+        },
+        {
+          "buy_cost": 4494.356885,
+          "events": 7,
+          "pnl": -348.27663400000023,
+          "target_date": "2026-07-24",
+          "turnover_roi": -0.07749198448444981
+        },
+        {
+          "buy_cost": 4480.512797,
+          "events": 6,
+          "pnl": 1032.4694019999997,
+          "target_date": "2026-07-25",
+          "turnover_roi": 0.23043554360369337
+        },
+        {
+          "buy_cost": 2757.474487,
+          "events": 5,
+          "pnl": -1036.148329,
+          "target_date": "2026-07-26",
+          "turnover_roi": -0.3757598969219403
+        },
+        {
+          "buy_cost": 3035.4192980000003,
+          "events": 12,
+          "pnl": 410.2260149999999,
+          "target_date": "2026-07-27",
+          "turnover_roi": 0.13514640803341163
+        },
+        {
+          "buy_cost": 5251.403946,
+          "events": 8,
+          "pnl": 625.4444080000001,
+          "target_date": "2026-07-28",
+          "turnover_roi": 0.11910041856071683
+        },
+        {
+          "buy_cost": 4897.06891,
+          "events": 8,
+          "pnl": 1169.4076840000002,
+          "target_date": "2026-07-29",
+          "turnover_roi": 0.23879747365041679
+        }
+      ],
+      "label": "jjavi",
+      "lifetime": {
+        "buy_cost": 141804.048032,
+        "pnl": 28265.852879,
+        "target_dates": 71,
+        "turnover_roi": 0.19933036659589173
+      },
+      "month_rows": [
+        {
+          "buy_cost": 14729.106077,
+          "events": 83,
+          "month": "2026-05",
+          "pnl": 5783.958347,
+          "turnover_roi": 0.39268902788553117
+        },
+        {
+          "buy_cost": 37733.208782,
+          "events": 133,
+          "month": "2026-06",
+          "pnl": 7442.983338999999,
+          "turnover_roi": 0.1972528597289757
+        },
+        {
+          "buy_cost": 89341.733173,
+          "events": 202,
+          "month": "2026-07",
+          "pnl": 15038.911193,
+          "turnover_roi": 0.16833019305635
+        }
+      ],
+      "replication_inputs": {
+        "expression_counts": {
+          "mixed_yes_no": 167,
+          "no_only": 9,
+          "single_yes": 86,
+          "yes_strip": 169
+        },
+        "median_buy_sessions_gap_gt_5m": 7.0,
+        "median_buy_span_minutes": 790.75,
+        "median_first_buy_to_first_sell_hours": 13.649444444444445,
+        "median_positive_yes_brackets": 3.0,
+        "median_unique_buy_transactions": 20.0,
+        "sell_event_share": 0.5754060324825986,
+        "sell_proceeds_share_ge_95c": 0.40232865157143805,
+        "sell_proceeds_share_ge_99c": 0.2598605480058398,
+        "settlement_without_sell_share": 0.41067285382830626,
+        "target_day_buy_cost_share": 0.5503669751013809,
+        "yes_buy_cost_share": 0.8449744122444586
+      },
+      "snapshot_id": "20260730T135339Z",
+      "source": "/Volumes/jrs/pm_agents/research/external_wallet_weather/raw/wallet=0x6ff2cb14da8be7eb57541d250a0196c5f295f140/snapshot=20260730T135339Z/analysis/full_ladder_history_v1",
+      "stability": {
+        "early_half": {
+          "buy_cost": 34221.067036,
+          "pnl": 11638.460931,
+          "target_dates": 35,
+          "turnover_roi": 0.3400963774378084
+        },
+        "late_half": {
+          "buy_cost": 107582.980996,
+          "pnl": 16627.391948,
+          "target_dates": 36,
+          "turnover_roi": 0.15455411064151697
+        },
+        "latest_30_target_dates": {
+          "buy_cost": 93312.225077,
+          "pnl": 15572.39437,
+          "target_dates": 30,
+          "turnover_roi": 0.16688482518930256
+        },
+        "max_drawdown_by_target_date": -1665.758694000001,
+        "positive_event_share": 0.37559808612440193,
+        "positive_target_date_share": 0.5915492957746479,
+        "target_date_block_ci95": [
+          0.10518939620697083,
+          0.30854217822619184
+        ],
+        "without_top_five_pnl_dates": {
+          "buy_cost": 129143.160042,
+          "pnl": 14429.223134,
+          "target_dates": 66,
+          "turnover_roi": 0.11173044804933781
+        }
+      },
+      "wallet": "0x6ff2cb14da8be7eb57541d250a0196c5f295f140"
+    }
+  ]
+}
