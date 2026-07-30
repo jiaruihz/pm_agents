@@ -1,8 +1,8 @@
 # Market Structure Edge
 
 > Living doc for module [2]: whether weather markets contain model-free structural edge such as favorite-longshot bias, side base-rate, or price-bucket mispricing.
-> Current status: `mixed`: broad structure inconclusive; all-YES underround is offline-confirmed but retail-live blocked; forecast-bounded Range RV remains below live standard after orderbook-native hardening and is limited to zero-notional shadow telemetry; Range RV timing research must now use measured forecast-state cadence, not local-hour labels; forecast/update-time "hourly repricing" has only shadow-research evidence; METAR C->F boundary traps are real source-basis risks but remain research-only.
-> Last updated: 2026-06-26 METAR C->F boundary trap v0.
+> Current status: `mixed`: broad structure inconclusive; all-YES underround is offline-confirmed but retail-live blocked; forecast-bounded Range RV remains below live standard after orderbook-native hardening and is limited to zero-notional shadow telemetry; forecast/update-time "hourly repricing" has only shadow-research evidence; METAR C->F and AMOS half-degree boundary traps are real source-basis risks; five-city full-ladder microstructure supports city/time-aware execution routing but not a maker EV claim.
+> Last updated: 2026-07-30 five-city full-ladder microstructure v1.
 
 ## Current Conclusion
 
@@ -42,6 +42,26 @@ no-fill upper bound. Keep this as `execution_shadow_candidate`; collect trade
 tape and queue-ahead against frozen existing direction signals before any live
 claim.
 
+The 2026-07-30 full-ladder microstructure atlas and five-city deep dive now
+provide the canonical descriptive execution layer. The broad atlas standardizes
+47,508 `event × archived snapshot` states across 47 cities; the focused Tokyo,
+Busan, Seoul, Amsterdam, and Helsinki replay uses 1,024 target-day 06-18
+complete-ladder states after excluding 324 incomplete snapshots. Asian active
+repricing concentrates around local 10-14, while Amsterdam/Helsinki shift later
+to 12-16. Visible maker price improvement is about 1.9-2.9 cents, but quotes
+whose next archived ask moves through the hypothetical maker price have
+conditional median markout of -3.1 to -7.6 cents; this is a toxicity proxy, not
+a fill-rate estimate. Complete-ladder static all-YES underround appears in only
+1.4%-2.9% of snapshots and remains non-atomic.
+
+The same replay adds an important source-basis negative control. Busan
+2026-07-27 reached AMOS 35.7C while the market ultimately concentrated on the
+35 bracket; Seoul 2026-07-29 similarly showed AMOS 30.5C versus the market's 30
+bracket. A fast-source-implied feasible strip below 1 is therefore not an
+arbitrage label unless the source has been proven equivalent to settlement.
+Use AMOS/JMA/FMI/KNMI as path and cancel/reprice evidence; do not delete legs
+from their raw rounded maximum alone.
+
 Important distinction: if BUY_NO or a price bucket works because of market structure, that is not evidence that the weather probability model is good. It belongs here, not in `model_vs_market.md`.
 
 ## Absorbed Historical Claims
@@ -77,6 +97,8 @@ Important distinction: if BUY_NO or a price bucket works because of market struc
 | `docs/analysis/2026-06/2026-06-26-forecast-update-time-repricing-v0.md` | 2026-06-24 onward N100 source/book timing + paper snapshots | First forecast/update-time "hourly trade" denominator: 154,518 book rows, 1,373 observation events, 421 reconstructed forecast-state events; book changes cluster around local :00/:30, observation/update-window evidence dominates forecast/hash evidence; shadow/research only | snapshot |
 | `docs/analysis/2026-06/2026-06-26-metar-cf-boundary-trap-v0.md` | 2026-06-24 onward N100 METAR/source/book timing + WU/IEM follow-up | METAR main integer-C vs RMK tenth-C boundary mismatch research: 5 true F-market boundary events, led by SFO 68-69F where 5-minute MADIS/HFMETAR looked like 70F but routine METAR/WU hourly stayed 69F and market later repriced to YES; research-only source-basis branch | snapshot |
 | `docs/analysis/2026-07/2026-07-21-scheduled-report-liquidity-gap-v1.md` | 2026-06 dense timing journal + 2026-07 JRS sanity | Nominal report windows show statistically significant pre-report spread widening/depth withdrawal and post-report recovery; taker markout is negative, passive maker remains a no-fill upper bound pending queue/trade-tape forward | execution-shadow-candidate |
+| `docs/analysis/2026-07/2026-07-30-weather-book-microstructure-atlas-v1.md` | 2026-07-15..29, 47 cities / 17 target dates | Canonical event-snapshot spread/depth/favorite-repricing atlas; warming/plateau is wider, thinner, and faster, but market-wide trades and queue are absent | current-execution-reference |
+| `docs/analysis/2026-07/2026-07-30-five-city-weather-microstructure-v1.md` | 2026-07-15..29, Tokyo/Busan/Seoul/Amsterdam/Helsinki | Complete-ladder city/time routing, maker quote-cross toxicity, rare static underround, and AMOS settlement-basis negative controls; no live change | current-execution-reference |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-source-aware-v0.md` | 2026-06 source-aware forecast-bounded Range RV | Reuses forecast-quality/source base at source/model decision-set grain; proxy default-WU width-3 looks positive but generic orderbook gates fail, so verdict remains inconclusive/no live action | active-evidence |
 | `docs/analysis/2026-06/2026-06-15-forecast-bounded-range-rv-live-standard-v1.md` | 2026-06 orderbook-native live-standard hardening | Uses time-aligned orderbook costs for the entry decision itself; closest default-WU width-3 cheaper rule passes basic replay gates but fails live-standard support, top5, and 5-share capacity checks | active-evidence |
 | `docs/analysis/2026-06/2026-06-16-range-rv-shadow-handoff-v0.md` | 2026-06 Range RV shadow handoff | Single entrypoint for current forecast-bounded Range RV shadow: strategy id, file inventory, runtime data paths, commands, gates, and do-not-do rules | current-handoff |
@@ -111,3 +133,7 @@ Important distinction: if BUY_NO or a price bucket works because of market struc
 3. Keep `all-YES underround` as research/engineering sandbox unless a later run proves low-latency all-leg retail execution; all future all-YES research should read the basket fact output or extend its builder instead of creating a new denominator.
 4. Promote only `confirmed`, `confirmed_offline`, or `shadow_candidate` labels; otherwise leave as `inconclusive`.
 5. If Range RV continues, do not broaden threshold search or fit city-specific filters. Keep the default-WU shadow runner on, but evaluate timing with forecast-state fields (`model_init`, run age, hash change, first-seen age) instead of `latest_before_local_18`. Do not promote to paper/live until the rule has more settled forward dates, explicit baseline/excess checks, measured repricing-lag evidence, and executable capacity proof.
+6. For maker/taker/skip research, collect market-wide trade prints and complete
+   order lifecycle on the same `signal_id × target shares` denominator. Future
+   quote touch/cross must not be counted as a maker fill, and incomplete baskets
+   must remain in the denominator.
