@@ -305,12 +305,48 @@ def metrics(entries: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def metrics_at_price(entries: pd.DataFrame, price_column: str) -> dict[str, Any]:
+    """Diagnostic all-fill economics at a supplied per-share price."""
+
+    if entries.empty:
+        return {"entries": 0}
+    price = entries[price_column].astype(float)
+    pnl = entries["label"].astype(float) - price
+    return {
+        "entries": int(len(entries)),
+        "city_days": int(entries.groupby(["city", "target_date"]).ngroups),
+        "dates": int(entries["target_date"].nunique()),
+        "wins": int(entries["label"].sum()),
+        "losses": int(entries["label"].eq(0).sum()),
+        "win_rate": float(entries["label"].mean()),
+        "avg_price_per_share": float(price.mean()),
+        "cost_usd_at_5_shares": float(QUANTITY * price.sum()),
+        "pnl_usd_at_5_shares": float(QUANTITY * pnl.sum()),
+        "roi": float(pnl.sum() / price.sum()),
+        "warning": (
+            "all rows hypothetically fill at market midpoint with zero fee; "
+            "not an executable maker backtest"
+        ),
+    }
+
+
 def first_city_day(frame: pd.DataFrame) -> pd.DataFrame:
     return (
         frame.sort_values(["target_date", "city", "decision_snapshot_dt"])
         .drop_duplicates(["city", "target_date"], keep="first")
         .reset_index(drop=True)
     )
+
+
+def slice_rows(
+    frame: pd.DataFrame,
+    definitions: list[tuple[str, pd.Series]],
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for name, mask in definitions:
+        row = {"slice": name, **metrics(frame[mask.fillna(False)])}
+        output.append(row)
+    return output
 
 
 def main() -> int:
@@ -335,6 +371,30 @@ def main() -> int:
     friction_filtered = mid_positive[
         mid_positive["model_minus_taker_cost"].le(0)
     ].copy()
+    current_city_days = {
+        (str(row.city), str(row.target_date))
+        for row in cost_positive.itertuples(index=False)
+    }
+    friction_filtered["is_incremental_city_day"] = [
+        (str(row.city), str(row.target_date)) not in current_city_days
+        for row in friction_filtered.itertuples(index=False)
+    ]
+    friction_filtered["taker_shortfall"] = (
+        friction_filtered["five_share_cost_per_share"]
+        - friction_filtered["p_v3_no_peak_clock"]
+    )
+    friction_filtered["cost_minus_mid"] = (
+        friction_filtered["five_share_cost_per_share"]
+        - friction_filtered["market_mid"]
+    )
+    incremental = friction_filtered[
+        friction_filtered["is_incremental_city_day"]
+    ].copy()
+    overlap = friction_filtered[
+        ~friction_filtered["is_incremental_city_day"]
+    ].copy()
+    first_incremental = first_city_day(incremental)
+    first_overlap = first_city_day(overlap)
 
     policies = {
         "current_first_positive_taker_ev": first_city_day(cost_positive),
@@ -344,6 +404,60 @@ def main() -> int:
         "first_friction_filtered_city_day": first_city_day(friction_filtered),
     }
     forward_dates = sorted(frame["target_date"].unique())[-8:]
+    shortfall_slices = slice_rows(
+        friction_filtered,
+        [
+            ("0_to_0.5c", friction_filtered["taker_shortfall"].le(0.005)),
+            (
+                "0.5_to_1c",
+                friction_filtered["taker_shortfall"].gt(0.005)
+                & friction_filtered["taker_shortfall"].le(0.01),
+            ),
+            (
+                "1_to_2c",
+                friction_filtered["taker_shortfall"].gt(0.01)
+                & friction_filtered["taker_shortfall"].le(0.02),
+            ),
+            (
+                "2_to_5c",
+                friction_filtered["taker_shortfall"].gt(0.02)
+                & friction_filtered["taker_shortfall"].le(0.05),
+            ),
+            ("above_5c", friction_filtered["taker_shortfall"].gt(0.05)),
+        ],
+    )
+    mid_slices = slice_rows(
+        friction_filtered,
+        [
+            ("0.80_to_0.85", friction_filtered["market_mid"].le(0.85)),
+            (
+                "0.85_to_0.90",
+                friction_filtered["market_mid"].gt(0.85)
+                & friction_filtered["market_mid"].le(0.90),
+            ),
+            (
+                "0.90_to_0.95",
+                friction_filtered["market_mid"].gt(0.90)
+                & friction_filtered["market_mid"].le(0.95),
+            ),
+            ("above_0.95", friction_filtered["market_mid"].gt(0.95)),
+        ],
+    )
+    hour_slices = [
+        {
+            "slice": f"hour_{hour}",
+            **metrics(
+                friction_filtered[
+                    friction_filtered["decision_hour_local"].eq(hour)
+                ]
+            ),
+        }
+        for hour in range(13, 18)
+    ]
+    city_slices = [
+        {"city": str(city), **metrics(group)}
+        for city, group in friction_filtered.groupby("city", sort=True)
+    ]
     result = {
         "research_id": RESEARCH_ID,
         "data": {
@@ -368,11 +482,53 @@ def main() -> int:
             name: metrics(rows[rows["target_date"].isin(forward_dates)])
             for name, rows in policies.items()
         },
+        "filtered_delta_only": {
+            "all_filtered_checkpoints": metrics(friction_filtered),
+            "incremental_city_day_checkpoints": metrics(incremental),
+            "first_incremental_city_day": metrics(first_incremental),
+            "overlap_with_current_policy_checkpoints": metrics(overlap),
+            "first_overlap_city_day": metrics(first_overlap),
+            "hypothetical_all_fill_at_mid": {
+                "all_filtered_checkpoints": metrics_at_price(
+                    friction_filtered,
+                    "market_mid",
+                ),
+                "first_incremental_city_day": metrics_at_price(
+                    first_incremental,
+                    "market_mid",
+                ),
+            },
+            "shortfall_slices": shortfall_slices,
+            "market_mid_slices": mid_slices,
+            "hour_slices": hour_slices,
+            "city_slices": city_slices,
+        },
     }
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     base.to_csv(OUT_DIR / "oof_policy_parent.csv", index=False)
     for name, rows in policies.items():
         rows.to_csv(OUT_DIR / f"{name}.csv", index=False)
+    friction_filtered.to_csv(OUT_DIR / "filtered_delta_only.csv", index=False)
+    first_incremental.to_csv(
+        OUT_DIR / "filtered_delta_first_incremental_city_day.csv",
+        index=False,
+    )
+    pd.DataFrame(shortfall_slices).to_csv(
+        OUT_DIR / "filtered_by_taker_shortfall.csv",
+        index=False,
+    )
+    pd.DataFrame(mid_slices).to_csv(
+        OUT_DIR / "filtered_by_market_mid.csv",
+        index=False,
+    )
+    pd.DataFrame(hour_slices).to_csv(
+        OUT_DIR / "filtered_by_hour.csv",
+        index=False,
+    )
+    pd.DataFrame(city_slices).to_csv(
+        OUT_DIR / "filtered_by_city.csv",
+        index=False,
+    )
     OUT_JSON.write_text(
         json.dumps(json_ready(result), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
