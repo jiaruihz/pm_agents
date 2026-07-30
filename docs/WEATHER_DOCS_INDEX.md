@@ -570,6 +570,7 @@ Status 口径：
 | [2026-05-27-performance-live-full-research.md](archive/analysis/2026-05/2026-05-27-performance-live-full-research.md) | `snapshot` | yes | 早期 live 全量绩效归因 |
 | [WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md](WEATHER_LIVE_STRATEGY_ANALYSIS_2026-05-23.md) | `snapshot` | no | 2026-05-23 早期实盘血缘分析 |
 | [WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md](WEATHER_LOW_PRICE_LOTTERY_RESEARCH_2026-05-19.md) | `snapshot` | no | 低价 YES 彩票仓研究 |
+| [2026-07-31-tokyo-jma-metar-history-alignment-v1.md](analysis/2026-07/2026-07-31-tokyo-jma-metar-history-alignment-v1.md) | `snapshot` | yes | Tokyo 独立 source→METAR probability head 的长历史基础：772 日期、111,144 条 JMA 10m、38,558 条 RJTT METAR；严格排除 equal-timestamp source ordering，60m unique lattice 确认 90.7%，并保留 163 个 terminal false cross 负例；仅 historical pretrain/research，不代表 PIT market alpha |
 
 ## 开发日志
 
