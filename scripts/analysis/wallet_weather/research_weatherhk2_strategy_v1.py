@@ -453,9 +453,13 @@ def audit_hk_20260714_maker_fills(
             taker = "0x" + topics[3][-40:]
             role = None
             if maker == WALLET:
-                role = "maker"
+                role = (
+                    "taker_order"
+                    if taker == str(log.get("address") or "").lower()
+                    else "passive_maker_order"
+                )
             elif taker == WALLET:
-                role = "taker"
+                role = "direct_fill_counterparty"
             if role is None:
                 continue
             roles[role] += 1

@@ -74,7 +74,7 @@ D-1 只用 24.2% cost，却贡献 61.7% PnL；D-2-or-earlier 用掉 56.4% cost�
 
 - winner：28°C；buy cost $1,364.56；PnL +$6,605.93，ROI 484.11%。
 - D-1 已买 28 YES 和 28 NO；随后在 215 秒内通过 60 个 transaction，以 0.002–0.003 买入 12,749.13 股 28 YES，现金成本仅 $35.50。
-- 60/60 个 transaction receipt 均已找到；其中有 61 个属于该钱包的 `OrderFilled`，钱包在 61/61 个 event 中都是 `maker`，`taker=0`。
+- 60/60 个 transaction receipt 均已找到；其中有 61 个属于该钱包的 `OrderFilled`。钱包在 61/61 个 event 中都是 order signer，且 event 的 `taker` 都不是 exchange contract；按 CLOB V2 合约事件路径，这 61 个都是 passive maker order fill，taker-order fill = 0。
 - 不是 60 次独立主动买：只有两个 maker order hash。0.003 的订单被拆成 54 个 fill（9,999.54 股），0.002 的订单被拆成 7 个 fill（2,749.59 股）；链上汇总与 Data API 的股数和现金完全一致。
 - D0 随 28 YES 上涨分批 SELL，仍保留部分 winner token 结算。
 
