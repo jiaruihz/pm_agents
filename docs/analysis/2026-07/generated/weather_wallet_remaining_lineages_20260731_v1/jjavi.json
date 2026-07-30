@@ -1,0 +1,4280 @@
+{
+  "case_selection": {
+    "grain": "cashflow-complete resolved city x target_date ladder",
+    "minimum_buy_cost": 50.0,
+    "rules": {
+      "extreme_win": "largest positive public cashflow PnL",
+      "flat": "smallest absolute PnL among abs(ROI)<=5%",
+      "loss": "largest negative public cashflow PnL",
+      "typical_win": "positive case nearest wallet median positive ROI, restricted to above-median buy cost"
+    },
+    "selected_cases": [
+      {
+        "case_class": "extreme_win",
+        "city": "london",
+        "target_date": "2026-06-23"
+      },
+      {
+        "case_class": "loss",
+        "city": "milan",
+        "target_date": "2026-07-26"
+      },
+      {
+        "case_class": "flat",
+        "city": "paris",
+        "target_date": "2026-07-07"
+      },
+      {
+        "case_class": "typical_win",
+        "city": "milan",
+        "target_date": "2026-07-25"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "activity": {
+        "conversion_types": {},
+        "first_trade_utc": "2026-06-21T17:00:47+00:00",
+        "last_trade_utc": "2026-06-23T19:00:22+00:00",
+        "rows": 186,
+        "trade_rows": 186,
+        "transactions": 186
+      },
+      "case_class": "extreme_win",
+      "city": "london",
+      "condition_flows": [
+        {
+          "buy_cost": 74.916619,
+          "buy_shares": 4710.299468,
+          "condition_id": "0x2e987e89d6d0c7c5e2cbbbec8488d0cb25957d09d3a6ea503811564b2c014d49",
+          "label": "32°C or below",
+          "net_trade_shares": 0.011994999999842548,
+          "outcome": "YES",
+          "sell_proceeds": 3657.7033450000004,
+          "sell_shares": 4710.287473,
+          "trade_cashflow": 3582.7867260000003
+        },
+        {
+          "buy_cost": 718.2994090000001,
+          "buy_shares": 2498.70515,
+          "condition_id": "0x37cb76f1e9f5a75484d112c7a1c20c157064850f53f281adcf2f4b5ac8dae37b",
+          "label": "35°C",
+          "net_trade_shares": 1208.3551499999999,
+          "outcome": "YES",
+          "sell_proceeds": 401.76876,
+          "sell_shares": 1290.35,
+          "trade_cashflow": -316.5306490000001
+        },
+        {
+          "buy_cost": 395.2509549999999,
+          "buy_shares": 1626.648664,
+          "condition_id": "0x9abb585b59a1ffc38089ca0abb1e0253ddd0ecf52c89f6f09f9be4c17e3fedaf",
+          "label": "34°C",
+          "net_trade_shares": 1112.038669,
+          "outcome": "YES",
+          "sell_proceeds": 132.80158699999998,
+          "sell_shares": 514.609995,
+          "trade_cashflow": -262.44936799999994
+        },
+        {
+          "buy_cost": 165.306735,
+          "buy_shares": 1236.259923,
+          "condition_id": "0x6f239cc42459b796bdc3cb1954c7f9a3134f5b6ca005c180358668373352afe0",
+          "label": "33°C",
+          "net_trade_shares": 1236.259923,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -165.306735
+        },
+        {
+          "buy_cost": 23.326619,
+          "buy_shares": 1129.464284,
+          "condition_id": "0x4af17de663ed260e86129546cf7150574de2b8f6648a1f304132d2e2db6de33e",
+          "label": "36°C",
+          "net_trade_shares": 1129.464284,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -23.326619
+        },
+        {
+          "buy_cost": 10.818763999999996,
+          "buy_shares": 2188.34811,
+          "condition_id": "0x3844e9048e854a7c9f10338c8995792daf3c67c9b56130f9d830a1c7357ce089",
+          "label": "37°C",
+          "net_trade_shares": 2188.34811,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -10.818763999999996
+        }
+      ],
+      "decision_points": {
+        "first_buy": {
+          "latest_pit_forecast": null,
+          "local": "2026-06-21T18:00:47+01:00",
+          "timestamp": 1782061247,
+          "utc": "2026-06-21T17:00:47+00:00"
+        },
+        "first_sell": {
+          "latest_pit_forecast": null,
+          "local": "2026-06-22T11:00:26+01:00",
+          "timestamp": 1782122426,
+          "utc": "2026-06-22T10:00:26+00:00"
+        },
+        "largest_buy_transaction": {
+          "latest_pit_forecast": null,
+          "local": "2026-06-22T07:44:07+01:00",
+          "timestamp": 1782110647,
+          "utc": "2026-06-22T06:44:07+00:00"
+        }
+      },
+      "event_slugs": [
+        "highest-temperature-in-london-on-june-23-2026"
+      ],
+      "evidence_boundary": {
+        "order": "role/order_hash/fills_onchain; post/cancel/queue_unobserved",
+        "plan": "inferred_only_from_public_fills",
+        "settlement_pnl": "cashflow_complete_public_activity",
+        "signal": "unobserved_private_state"
+      },
+      "exit_style": "active_sell_then_settlement",
+      "expression": "yes_strip",
+      "onchain_order_roles": {
+        "passive_maker_order": {
+          "cash": 2987.5514450000005,
+          "fee": 2.91234,
+          "fill_events": 155,
+          "orders": 16,
+          "shares": 7420.600530999999
+        },
+        "taker_order": {
+          "cash": 2570.683668,
+          "fee": 53.18710000000001,
+          "fill_events": 31,
+          "orders": 19,
+          "shares": 12484.372536000003
+        }
+      },
+      "orders": [
+        {
+          "average_price": 0.28,
+          "cash": 140.89600000000002,
+          "fee": 0.91556,
+          "fill_events": 2,
+          "order_hash": "0x77a9e2656cd6f75dfdfebaf150f4a06efd54ba0f3c44f0c337369e0b1e186b51",
+          "role": "passive_maker_order",
+          "shares": 503.2,
+          "side": "BUY",
+          "token_id": "72460776438831029197661623186768245921235500156515350188322251141781596812691",
+          "transaction_count": 2,
+          "transactions": [
+            "0x5245a572bc479adb72dd69533be75acaaeb8ed3eded5bc433c0e1d72c6e775b3",
+            "0xed35f0dffaa7d55849b41270346eec2240d49523c79c8df8ce4f3001dd40d895"
+          ]
+        },
+        {
+          "average_price": 0.15944381440416422,
+          "cash": 32.652117999999994,
+          "fee": 0.7335,
+          "fill_events": 7,
+          "order_hash": "0x92cc52c240cbf8a610d3c1d23d676d66e9b614236201badc8d66d3d92be691a6",
+          "role": "passive_maker_order",
+          "shares": 204.787612,
+          "side": "BUY",
+          "token_id": "80917936840074550831742163978351836133515190833673648387011154453574030845745",
+          "transaction_count": 7,
+          "transactions": [
+            "0x017e1c4f82256e21676e257d73f1a9bcdfa5205d6b7e28ef6f1ec632f54a7570",
+            "0x3d49e9426966eae54a1c93021299dfec106e0b38aecd9d4b87db9c7ed47e663b",
+            "0x766b38b24ec5458463ae18aee4a3a493f1bc53edcf53faaa38ee83cbf1f04616",
+            "0x912af7caaded61d1ca398647323d67fb73b72a4f2b75c680da115789991c5eb4",
+            "0xb1bd93c4ad20ad6f482a83d4497c510036ba9b37b181ea8e833462c20ab3bf2e",
+            "0xd592307db71a696952bfd9a2ff53af3ab3775b0c85c2f4188f7993172fd2612c",
+            "0xee486613b74478c15b6bd7e0574b926c8715589171c22c1755fe0558498bdc05"
+          ]
+        },
+        {
+          "average_price": 0.09,
+          "cash": 18.085302,
+          "fee": 0.0819,
+          "fill_events": 14,
+          "order_hash": "0xe693e1fa27059656964cd44a6ed53979f0bd47d066fc67516df891135abe5ff6",
+          "role": "passive_maker_order",
+          "shares": 200.9478,
+          "side": "BUY",
+          "token_id": "33944948007846015593766856313443426738587764071968692775008194880723927870686",
+          "transaction_count": 14,
+          "transactions": [
+            "0x1a5632131b3b30f2f5b2bcfab30e17eb5d3c139fcdba5e5d87ed536d813c4af7",
+            "0x3d70955f85b6e01da735ad4c09155109770646e726f736308a22dec2745da17b",
+            "0x5746e3b2c5951072f1d88e966ad132eb7603b085eb90826c7acc990e430bfdd9",
+            "0x5938f7389a50f683aebcdddf4d83c7eed56475a112ead27a92aa9532c9bd749f",
+            "0x7dcd38fb625374696070fa7c1f76eeaf7166d2f085d3549793779458a677adfd",
+            "0x90082d35de5dae01e114def0a6de6213ef6c03b2bac27e51f4df7c93887c2611",
+            "0x9873f932453dfd5d7ffddde0294ea87550fc4883da68eed7c42b0af7f29c3931",
+            "0x9e5072b5b8e85161e976c4f826ee4c33ab433e4c6b9a48314c8fa061cf4ce389",
+            "0xc1aa8cd221abc875ecaaef2ba87f5c12120c898be19d93b427f807fdfda4c0c9",
+            "0xd0666bb88d2fd8125b0b04ee12a786de43449c58d06773818b387d73e75b01cc",
+            "0xe0d796f6b6ea47e87e492d15129c10526be45cc37f46584e8dfddcd8a5e9a7ec",
+            "0xe8b9f48825d20cd052ca9a1ee49c529a17fe7a711186a8f7bdecccedbc48e8a8",
+            "0xeb2f9562dd53520cb85082d1d51362546ce4840b7d250ce4e92719acb1a7822e",
+            "0xfa99f7d0592bcc4833039331113a78ab0731467f3c2def2f704b58f4703a52d6"
+          ]
+        },
+        {
+          "average_price": 0.021,
+          "cash": 8.4,
+          "fee": 0.0,
+          "fill_events": 10,
+          "order_hash": "0x87a338757b7401a3446d79187b99141b35c46e82c1afd350618a2f73c609ac72",
+          "role": "passive_maker_order",
+          "shares": 400.0,
+          "side": "BUY",
+          "token_id": "18976467526417134116634318355479976671470097288185121878724933797798306507748",
+          "transaction_count": 10,
+          "transactions": [
+            "0x2089a75d5c9cefd6235c9bb3e829ee99e9344fb489e9d4736e1e3bcdf638c55e",
+            "0x3647ad894e2d8e693e92775547146105293d54ad97843be24cf1e3abb51c7702",
+            "0x5a562748f5fdd824ec814336be2a43865578de0bb963a624f442d6d98ceb548a",
+            "0x7c3f8013accbbdea5dacf6f6e6ef06fdaefb8fc93255803d4d7ec37f354357c9",
+            "0x8660dde154c2e64c524c085c11db92db5f5a14aab124c64cbd81bfa8a560ed60",
+            "0x921919ed28e3bbb9141a46db1187d51533b73ecab1cebbd5b3ea3343138bd318",
+            "0x943cec527d725cd27f895b9c0e4f7cd08442b790f741f41ab2638052e144ee47",
+            "0xc918a6d35b71f1488a3f59ca7afddc48935065d6b477294df198ced1be85c22a",
+            "0xcf48429677fac2fe24234fded59056dad890daf216cc5304ec4e98650770bae3",
+            "0xe0768ef8c858b7b0e64bc368f2f5ae91a127a2d0b2b9c520800e125938140459"
+          ]
+        },
+        {
+          "average_price": 0.07000000065683441,
+          "cash": 5.328588,
+          "fee": 0.05878,
+          "fill_events": 7,
+          "order_hash": "0xcb6992c64468e83a5e791bcc4289f4a58b7d4ae515a8c71094e46b4133975e63",
+          "role": "passive_maker_order",
+          "shares": 76.122685,
+          "side": "BUY",
+          "token_id": "33944948007846015593766856313443426738587764071968692775008194880723927870686",
+          "transaction_count": 7,
+          "transactions": [
+            "0x1f6584b897e011ff75b08960e913b906c7bfefb0b31459e7a1396090d1eecedc",
+            "0x2e355a0606efbe177d0688cb75ff35b35631eb53ca53ed36a02bab9a8e3274df",
+            "0x2eee76c6e686364042f7473d985694235f9b1dc2463e9e5a9dc07b9162a440fd",
+            "0x3c7228412d94a04ddddeb2f705e4c27a794557633a32da960ac42a073a47fb1e",
+            "0x8a98f8ba46b58f2868cf0aa40042618e6fa6b2199b2f7012a01b04bad1857ca9",
+            "0x9be0ad9998b433492dbefe7e1da6608f7776472790a6bb0488f5ed8fad16c104",
+            "0xa00e2713b71a24c545b33e390fcb50eb1140ddc5419db786913460c3700dd7d5"
+          ]
+        },
+        {
+          "average_price": 0.005000000000000001,
+          "cash": 5.108950000000001,
+          "fee": 0.10355,
+          "fill_events": 29,
+          "order_hash": "0x6ee780c559c2b5586f029cd9ba7f159b3f9d1b9ba7125453b96b49b0e7f65997",
+          "role": "passive_maker_order",
+          "shares": 1021.79,
+          "side": "BUY",
+          "token_id": "79721410972971790973039911698747176423018207620536542149205813771505957316099",
+          "transaction_count": 29,
+          "transactions": [
+            "0x0000d0da59dbd4b080cec3245bfdb4add8506269c65e44b4cd93f4a199d06f41",
+            "0x1b22df19a7c0c8fc8f15aa6670e6310b69ba308e6fead548d7337d73563a354d",
+            "0x1f42a36a1ad49f896d6e33f1de1c4a8feb65ec955de3c5a8a8fd9ab483e42180",
+            "0x277ff0fccd906dfe2fd02ac6b545fee2360fba450a31ae88c348f609d3d99d61",
+            "0x292715038eaaa0481698c589ab5876bb4cf8df8a29ab76d00fb3620017357fbe",
+            "0x2ab8d45acf6c11e3a919478210278fbf1950fb026913a17f44f2904328b791e0",
+            "0x35030ee384cd7ca5008f74d4104e53d9a2ae120b52469671f29653cfb97a54ce",
+            "0x39622c0f56c39626fd0b76341044101ba9bd0656e7276dc4b1b3dd59c326a185",
+            "0x3c2fc30b4955f40f8542738a1349a38e5cc3aba86990296dae450aec1b070dc5",
+            "0x5568676371c5b9a8ae4038299924d4cfe89730cee22de23138769e2d1f1bdfaa",
+            "0x5ce501d0d372f1735d0111c76a916dae8c2df8986c14592ace69858156daea37",
+            "0x75111ab6ce43cfa2f52a9fc77e79a4633e50849eeb70a9459f6f83b66b873cb4",
+            "0x77c0ba3dfb7bbce6717cace64aac308e0b8be8c336917cdf67cecb0f0110f7e5",
+            "0x8baf1e4fdb30351d6bbc2822ab7135c816e6cffc369863234a5b0b7c88b74825",
+            "0x8bd68de7278a12dcf46409f4dc4ddb9bb440119426e4b000c00529cdaf8220dd",
+            "0x94ad5122648e86f939cebeef924b1e383ea5d27092f0f16338be08db90faafa1",
+            "0x99a7baf29bbdd06173f4a352dc22eafb92b66f013ffe9b26bb7b5eb3c7a297a2",
+            "0xb1167812fb5f2fec7a5326f1b76e4b57b958efa0cd3d43c8e16f45634eb63d47",
+            "0xb601d29bcf0e8c222a2bf424c49102a888dd7427433e05fcdd171cd49333d271",
+            "0xba5649af9eeada58bb4aa4095baac7c2147514c9f7c46169550d708c86fa82de",
+            "0xbed0398cfa12d99a137ba874ec01636a781ac0089638406a09a92b52e935e2a2",
+            "0xc821eb3b44e8c5be8e86bb7d9b9406c271121986f84059a933a0402b3ee1e11e",
+            "0xd1fb2c3d1f789b9d8cea528f9642328d54240dbffd4137c089f419cddb523494",
+            "0xdb718133dac95ff79d4c26e6a473b202ae56c43ab7abaa4019c23e9584a33aa8",
+            "0xdc635a0d1203ca4151b1d3d5097f6bf78140ab9dd63ea47aead400dc34247a12",
+            "0xdf1921a6d3d1c8c82f41e893dfe1c1a97f3903d6f75bf16e119000a9544f90af",
+            "0xe31feafb7f30b8ebdbb263b5e2fd0bd320126ebdccfb21f61051c60eb0faad7a",
+            "0xeea9228270c2ef3054e9da14c97715805e4f3024751459aaa018b2649af07759",
+            "0xeef9d0a3e0d8d54f005bfb7dca24b2241e075c619ae2925930cb15d35a9c0cd2"
+          ]
+        },
+        {
+          "average_price": 0.014,
+          "cash": 1.75196,
+          "fee": 0.01035,
+          "fill_events": 3,
+          "order_hash": "0xb7550bd5476deb57a82a18ae516a3e5b35f371f5d00546d96b335c11f494caab",
+          "role": "passive_maker_order",
+          "shares": 125.14,
+          "side": "BUY",
+          "token_id": "18976467526417134116634318355479976671470097288185121878724933797798306507748",
+          "transaction_count": 3,
+          "transactions": [
+            "0x172a9e0f02581a0f7cf60c12554f7fb52c5ade5955fafa237f718ac8669f33fd",
+            "0x3cc26b7ce91f2d3a93d397902b415a2e70638531407f624628468516556fff3b",
+            "0x578b16661ac6ee0f924eeb215bf9bc4ab56911ce6e8989092445265e6c2a48f3"
+          ]
+        },
+        {
+          "average_price": 0.002000000000000001,
+          "cash": 1.4079940000000004,
+          "fee": 0.0,
+          "fill_events": 41,
+          "order_hash": "0x24a759a31c67e4386553f66bb44a32993a9f55d2ebf5c8035e0bb471b6e7997c",
+          "role": "passive_maker_order",
+          "shares": 703.997,
+          "side": "BUY",
+          "token_id": "79721410972971790973039911698747176423018207620536542149205813771505957316099",
+          "transaction_count": 41,
+          "transactions": [
+            "0x0429f1cd1d8ef6ef4797b01093c1916517747f49b2664d712b80b893179a4c76",
+            "0x087202b2f3efed5a5b5203c74f942c9fd3a358c105a95b176ef54eac704b1fab",
+            "0x1228c00ee87e9027d119205dd245f65c1b56df99083dd2e5a2a287fbd64dc393",
+            "0x19948f8fe23d603e66706f20648baba9a149c03a3eb6df6144daf3ca7a0c1563",
+            "0x1a5b84132b0c1cf73419ce298c2b2784b05fe0eea7fda790d36ca9dc2eb4f4e2",
+            "0x1aae6ebbe18ecae9c2bdc48e8bcd77ab9e6eddc3ce96b2ca815fd0566167374e",
+            "0x24f034fa074d94835bf7c6c9b3aa0ba06964a4db93fd1848962bd4f7ef12bf33",
+            "0x255f6c47bd74aaaa9552c06065ca2b8c86e062357ef0c4910fe94275f487bcf1",
+            "0x26a190c768c5ba465fc523d8b79fde6e5b71a3fd845a3956adfa35b82ca83966",
+            "0x275ee59150e5350254f21a4bcbdbb06c813cb44e8f3df00e2f2e037dedd68ade",
+            "0x4805c017a686f59728dbc10440f67af5ffb2e7139aef50986d6b3cf305b273aa",
+            "0x4ada779e5fe6e70a01889da5dc7181fa928e7c3e28b870841340f01ae9159603",
+            "0x4cc4d438ad9e7e83048379c2f67b49d8194aef21ded32a3228cdec8d795fe40c",
+            "0x4ec4a8eb1ade42dfbbefae78fb0b27d06a1b4bdb5dfd95df635f6eecb5cac9c5",
+            "0x53683ff82604252eb48113d63d9acdefcb62f9ed7bdb3142b4e96eb5f2a66099",
+            "0x5d3c997f41fcfeb9613d719f3aa0bc0d7b7be92e7bd36d2211328b2e6368a04c",
+            "0x670d05a8c8e38f31df6082a378f54283444759c26a169b10ce003e8f834bc301",
+            "0x68176d3804c1ffeaeb709f77cb4fbfe61b4145576c937f2ad891995fe3f3fee0",
+            "0x6992506e9d4ed7fb6a0083ccea82e9b4f6d803eadad52ace57eb3d906494bbc1",
+            "0x7d759fe8c011d773862b24504a4231911dc4cbfe8a2890431f1b0ab80b6b7102",
+            "0x87f3ff373628fe523e0fb81b140c644b347ba22252182ec29f13f71e3b91b5c4",
+            "0x8aff10d65cb150995d6f4a3d3308b475e711731e5b4cdcd420d919905b4b0b13",
+            "0x94c47c3ae6cbad6589b77f0bdb89632f2bdaf13c72f1d708e5e048db02659c5c",
+            "0x975a212869ecb87f4cfb6c316b776752f0e5e1fea5a142f5c2c665fc7ef4c266",
+            "0x9b571bc9a8f276e9a060d5a4a30181f42bf5bc25293ee83a0052939138b7799e",
+            "0x9d04a6ee1ee7bfc7aff001ea12de4031843046dc7046d25beba92926cb25d49c",
+            "0xa086bc9177f10f073d2c87756fb518a0b5a64ff628fde900e33fe62ea8f165b0",
+            "0xa654746deabcc94a9a441aaf965b4307244ba1b91bbb799f5952e5d29574a40e",
+            "0xae05fb4e1746964cf7881d0ba5405b4a0e0cfc0a540170e8d117948fb417e614",
+            "0xb3c72f4b35f421a174a82c6fdb263fc7b316d804829e2eba02e987576775b05f",
+            "0xc1ef84bf41c12712607c60c0ed6a2ac950c94da7523e4c8865e9c2876d632ee3",
+            "0xc40cb32afeeed04b905a5331a41230e6d78edd626bb17f6adcfe66d8ff2c8c6f",
+            "0xd2bf4238e5a57a4b1bb7122da11207844e37481213fd6042bd65801fbdd11642",
+            "0xdb4f26244a85f0f39d0a1838b6d0fb59b0ee06f060f9f8e177f29ace94c6ee79",
+            "0xddff306957031059fe4c7a5cad375324b4e87fe231a5efdbb45764412609cfc5",
+            "0xea8117064523ec7fa6bc4a7c4058d174f58e4579f4ecfbfa995a78f6e3770812",
+            "0xed78db839088304a000f1214afb9721805db32dc99f4459c64f0caab66ee3fa1",
+            "0xf2784e68af8a3d27a21ad72330047825501600913a1d94a2b015477ea05be4f5",
+            "0xfbe8d86d8172c2252065820f4bc022b9be37b19608f07f72c73ce23a37458ccc",
+            "0xfd912663abc97519343a8f4173847877eeecc529688544da8053f3c0a6f27d4d",
+            "0xff55bb19a9184c790908954003e495a40f447a08e7774cb4a2f16178468e6ef0"
+          ]
+        },
+        {
+          "average_price": 0.006610385064177364,
+          "cash": 0.5665100000000001,
+          "fee": 0.01169,
+          "fill_events": 6,
+          "order_hash": "0x9651c4ae8ba318224d9299b73fd77b5abe42caaf30e02e1bce2a03de96abfdf5",
+          "role": "passive_maker_order",
+          "shares": 85.7,
+          "side": "BUY",
+          "token_id": "18976467526417134116634318355479976671470097288185121878724933797798306507748",
+          "transaction_count": 6,
+          "transactions": [
+            "0x1a6f31ecc872eb5229ab504329307264472b250b75460aa954e7d6710453fc43",
+            "0x45d3a12d780efc2c7a7905376c10619e9d3981d2e56fe9465bd7c09997bf5fe4",
+            "0x577712841df0bec520af4bf59b340bb405eec4651f4bfb7d08755068815ee021",
+            "0x6f8b9d0bceae3e05946a0435122fb92493caf245c71cef8008368090365049f1",
+            "0x7a84afc3bdd649eccb30c4c67ba57a1fdc2c18d662baebf39f85a9b4c5ac4c3f",
+            "0xbbea121c3782663121bc5f8b74019e2f6fc0a58452239de3e4a4cf007be0b618"
+          ]
+        },
+        {
+          "average_price": 0.04500001492191362,
+          "cash": 0.090471,
+          "fee": 0.0,
+          "fill_events": 1,
+          "order_hash": "0xcf410634ff6eaf8c49979aaff6d892a5066425ba468689454c6367e986348798",
+          "role": "passive_maker_order",
+          "shares": 2.010466,
+          "side": "BUY",
+          "token_id": "80917936840074550831742163978351836133515190833673648387011154453574030845745",
+          "transaction_count": 1,
+          "transactions": [
+            "0x265097e6afe857ab1f3cee5ca9c2534cd09378e4882cd386c421dbf78e5dd452"
+          ]
+        },
+        {
+          "average_price": 0.9979999999513952,
+          "cash": 1601.571898,
+          "fee": 0.0,
+          "fill_events": 11,
+          "order_hash": "0x36d5923211d83c3aee57c6bd6a31b2b5f175c7d9ab1ac5d1c977da5a60e9d8ad",
+          "role": "passive_maker_order",
+          "shares": 1604.781461,
+          "side": "SELL",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 11,
+          "transactions": [
+            "0x1075fe9a791c183124a81f50bfb9be443b3eef48ff977ff29f4f4d678b1722a8",
+            "0x145e9cca883de1b8bc91f959d428635ef8f7d6a77e3794d54c2b0f57c4306b47",
+            "0x1fec129c6d01f963bac1de2c0530da56fa4ce2c9cb07737b94cc8e140431a1e2",
+            "0x4d7b6cc3662894bfc47c336bcb8d71648b6c80ca2df0c5ae4fdea18760a5678b",
+            "0x56218b1b9614a118f9e97ab50785efafde14267874a1e77a50ba3283c0428e67",
+            "0x69582bc3f5d83a91f398a348802c6c222160fe0e9c8e1203aeaae21f74a9187c",
+            "0x73d2b0777f015d9ebf678adf6c5c5c88fe10e756d230321954ce181ed01adfb1",
+            "0x7aab1f1f6503e0850181c17d4ea427bb235fd9736412dd039bb9666d5bff4fff",
+            "0x9f7362b69fdd54d0dd3f9fb2a007d7f555fa85ef138a7c6d8dc1813421e6367b",
+            "0xa9fbfd4616c3b2663c1d45b1efb49bf00a5e27e96c3cfb9610ae9462b302e08b",
+            "0xc9e1e3849529b2d5ed4de54744379f9eeea2f6290df0380fb897a3451a9049b0"
+          ]
+        },
+        {
+          "average_price": 0.8999999982499814,
+          "cash": 359.996168,
+          "fee": 0.0,
+          "fill_events": 2,
+          "order_hash": "0x5e9e155c43e4da98a9dcd69a8427642d70b9a98e6be8f005987bc825e580b783",
+          "role": "passive_maker_order",
+          "shares": 399.995743,
+          "side": "SELL",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 2,
+          "transactions": [
+            "0x7e2a2b5d7c39a6d06cc10bb01e0b4ad6a19475120b1a8592a9ee10da761254af",
+            "0xbbee48a5a8f3417320de684be1afdaabad80d32421f5a0d122e67c20bbb56f2b"
+          ]
+        },
+        {
+          "average_price": 0.8999999922489882,
+          "cash": 359.952989,
+          "fee": 0.0,
+          "fill_events": 13,
+          "order_hash": "0x887bc34e1a7d1b6e4a26fd20f2cd22a56a6cd0853882f0ccfe2237a045da018a",
+          "role": "passive_maker_order",
+          "shares": 399.9477689999999,
+          "side": "SELL",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 13,
+          "transactions": [
+            "0x0e076556b782a3ca599d11d0c2c1ccb9f5a156fa5b70165c2658ef3213e5a801",
+            "0x191cf3864940446d78f9d9ad2a04b0ccbe6818ab7a06e62029d3e9cd448f3831",
+            "0x23011b293021d66a816b86879138464768e7bd3dbffa1517421eea2f03b13b5f",
+            "0x243120f832f5c7517e57a6db47e713e81f68f5f598b07823e400be15c1d06931",
+            "0x36f80c34a1719974657538a00ca2960ca83a95787fed476831881f7d67fc4df7",
+            "0x586c4343911684c7aa2bc5fa282b64ff2fa36c0493d5551b8d24fa589ab286e2",
+            "0x7a15a42c1e33d05cd6989af6473425d04c8c777eef5c7ac7d236711bc6d7c88d",
+            "0xab0df80058bfc969da4f58ad7467319b92e9668b61bf5157c3a56d6c98aa3064",
+            "0xac2e1050f647ffffeb69ecbde14f46720ab37714895cd06a93bb64a04f926bbe",
+            "0xb2db1b501306eab151637afa74a657b614a82d390c1fcf4118a01f3f18e295ad",
+            "0xb545bb95c38664a020c9a7904dfb7503281a0a0edec68bd0ade679fc831b7816",
+            "0xb81737af30abee4ab6024e60e19169b3b12e9d0d5c2ebba45676bb35b9793682",
+            "0xcb609d0328ee44d6c71e1cfbe5f31add67d62cc9290468fcae5f54dd721b1d19"
+          ]
+        },
+        {
+          "average_price": 0.27,
+          "cash": 317.9439,
+          "fee": 0.0,
+          "fill_events": 2,
+          "order_hash": "0xa58a80b4da84e3627e79dcbbf70eb70318be086e7f8b5ad8a612cffdf899bde0",
+          "role": "passive_maker_order",
+          "shares": 1177.57,
+          "side": "SELL",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 2,
+          "transactions": [
+            "0x1bf4df79182877016125ea7c22ac74b21434c7ad5ccbd2b6b051a17304b18c88",
+            "0x6db2a96663fe7f28ac2218b980274664281c0b46d86acc4dbba01103fef087f8"
+          ]
+        },
+        {
+          "average_price": 0.26,
+          "cash": 104.0,
+          "fee": 0.99701,
+          "fill_events": 2,
+          "order_hash": "0xeed765a9c17cc5d54f92446d3c96cece49aa9cc8ab32db3d77b2fce0a9fbf308",
+          "role": "passive_maker_order",
+          "shares": 400.0,
+          "side": "SELL",
+          "token_id": "72460776438831029197661623186768245921235500156515350188322251141781596812691",
+          "transaction_count": 2,
+          "transactions": [
+            "0x67156785f979c4e8c0ec45db632d147dbc2114465f7389831ac91fe8c7636614",
+            "0x6828105f8bc8d2fa9d09fb9c1542c960506c6a5106abe3d026aa320cb2b698a9"
+          ]
+        },
+        {
+          "average_price": 0.2599999851670878,
+          "cash": 29.798597,
+          "fee": 0.0,
+          "fill_events": 5,
+          "order_hash": "0x2f03aefaf798b3f07c81572160f275ecb8e6d9db5f10ddb883aed4f58ae70b2a",
+          "role": "passive_maker_order",
+          "shares": 114.609995,
+          "side": "SELL",
+          "token_id": "72460776438831029197661623186768245921235500156515350188322251141781596812691",
+          "transaction_count": 5,
+          "transactions": [
+            "0x19548225fa69c009cc3eb4c53341fde3c8efa9c8c2436588d7db8d8db7d9406d",
+            "0x9f6a20bb029ffd5d42d918ced2cdf2a3e9c60ffd084aeae81ff76b4f77d109b1",
+            "0xc271fe0188bfce1e77afd973d1d96e95388182978226e25c61e85787dde47df4",
+            "0xed42505984d8ffc60b7444c399f5a972f938655cedbec2de743ff7f5c7670d95",
+            "0xf07d91fe26cc2578f6ef4071d403cdac22581079dc9a7d45eea6b31d02f6b09b"
+          ]
+        },
+        {
+          "average_price": 0.30982322762639886,
+          "cash": 399.7835,
+          "fee": 13.79606,
+          "fill_events": 1,
+          "order_hash": "0x59d79fba6240f64ed5694e61f51b96e2b59035f3c419c0e01b68f1f347e15946",
+          "role": "taker_order",
+          "shares": 1290.36,
+          "side": "BUY",
+          "token_id": "33944948007846015593766856313443426738587764071968692775008194880723927870686",
+          "transaction_count": 1,
+          "transactions": [
+            "0x41a09941100265054cba6fbd735f1bc2776f88d44f014bb66ae2829646e90b10"
+          ]
+        },
+        {
+          "average_price": 0.2985818462579619,
+          "cash": 269.999999,
+          "fee": 9.46914,
+          "fill_events": 1,
+          "order_hash": "0x976e7d17ff64243b886c9742c13c9a199ebd0918fb89796d57b9230a1537478b",
+          "role": "taker_order",
+          "shares": 904.274665,
+          "side": "BUY",
+          "token_id": "33944948007846015593766856313443426738587764071968692775008194880723927870686",
+          "transaction_count": 1,
+          "transactions": [
+            "0x5e4064066809290b55ad28a56651c5c83798e3f0c23b0329fd79acd49f65bebd"
+          ]
+        },
+        {
+          "average_price": 0.30128585411427583,
+          "cash": 150.999999,
+          "fee": 5.27529,
+          "fill_events": 1,
+          "order_hash": "0x3df5205934bb44b537018fb4c6aee5653654face77e16079b2635b8d6a794ad0",
+          "role": "taker_order",
+          "shares": 501.18516,
+          "side": "BUY",
+          "token_id": "72460776438831029197661623186768245921235500156515350188322251141781596812691",
+          "transaction_count": 1,
+          "transactions": [
+            "0xf1ecd361de8b8f4d8c9b7f0bced17fe9d3264fef3445f617b3bfc6da39798fe1"
+          ]
+        },
+        {
+          "average_price": 0.20659542572608836,
+          "cash": 82.67276799999999,
+          "fee": 3.24814,
+          "fill_events": 2,
+          "order_hash": "0xa47e0828881923d8cd03a9fbc0553d220842499970292859f96e960f3f6e2713",
+          "role": "taker_order",
+          "shares": 400.167466,
+          "side": "BUY",
+          "token_id": "80917936840074550831742163978351836133515190833673648387011154453574030845745",
+          "transaction_count": 2,
+          "transactions": [
+            "0x3d70dfc8142089e59bbc6d5fef1e4ca2373157290b429f4897862b5147573cec",
+            "0x77716bd73ccb01e773312b2d8c9b5d57af57f66e44460c20f59ff5a895b8d8f1"
+          ]
+        },
+        {
+          "average_price": 0.23000000025990602,
+          "cash": 70.794806,
+          "fee": 0.2637,
+          "fill_events": 4,
+          "order_hash": "0x53cdef29f47f8c59388a8a0ce2034c70793f7065e5dbd6a7df01aa11078d5b0a",
+          "role": "taker_order",
+          "shares": 307.80350400000003,
+          "side": "BUY",
+          "token_id": "72460776438831029197661623186768245921235500156515350188322251141781596812691",
+          "transaction_count": 4,
+          "transactions": [
+            "0x61f2abac05eca621296522b7a4734723f3d0930b8e52e03b602d8f0b68e03d40",
+            "0xa8899f62644461b087a13e8272da1d2fe7eaff9735cc2f4d76ca22c97aa67d99",
+            "0xda0311fd4d2fc38538de271749e967ff1412eee2fb41ba491581d03e39b53a0e",
+            "0xdfb2f235f2f26c55af2680dfc1e117b23363a82902e722bee318ba1d57a0e73d"
+          ]
+        },
+        {
+          "average_price": 0.0099714823432966,
+          "cash": 39.89619999999999,
+          "fee": 0.03013,
+          "fill_events": 4,
+          "order_hash": "0x0e37b9dde8d3797ec1c86f2f8fe0f4e6819a38e08d28e018f569ab1cce6df6b0",
+          "role": "taker_order",
+          "shares": 4001.03,
+          "side": "BUY",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 4,
+          "transactions": [
+            "0x21896c27450143cbaf1cc7fdae2def8bdfe2a083ce9280e0bc93ac21ce115c4b",
+            "0x517d3e4bd732350c5e1bb88c2082a0a8eea418d67b6e89178a84b56470f01b01",
+            "0x9c44fea3bd7c9621e88d008257464996f7d0ea7020d3fa5aae61fe46948f7e88",
+            "0xac7de2b3ea40a6b9f11f3f3edf1f7a6f1a9696c48d5b8bb73b02d3dc06643e1c"
+          ]
+        },
+        {
+          "average_price": 0.07936398906061184,
+          "cash": 24.9568,
+          "fee": 1.1488,
+          "fill_events": 1,
+          "order_hash": "0x0e74e1c3932e9b37042c7d3fdb55afa95e2df7abd1cb132668abbd4cd54d7a5a",
+          "role": "taker_order",
+          "shares": 314.46,
+          "side": "BUY",
+          "token_id": "72460776438831029197661623186768245921235500156515350188322251141781596812691",
+          "transaction_count": 1,
+          "transactions": [
+            "0x8538a1c0bfda110de13ad7f2faeed8ca21a88905d1dd677364468c9100c1ac23"
+          ]
+        },
+        {
+          "average_price": 0.04682802803099468,
+          "cash": 18.878580000000003,
+          "fee": 0.39847,
+          "fill_events": 4,
+          "order_hash": "0xbd9f732af8f7be269a84e97df3c9e8601db0a333af16ed15e6e3200a772fcb4a",
+          "role": "taker_order",
+          "shares": 403.14702100000005,
+          "side": "BUY",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 4,
+          "transactions": [
+            "0x6f5910750f5c9a5134b3d754a86bca4822dda0811ab0cdcabdef956939c50344",
+            "0x7623e93dcd7d7a1fc19d26ae0984e126602afe7147444f23900b485bf5be9f49",
+            "0xa2c01a35f608cb79afca8802d2402b9852bbc3e569d1b7f254f5214e67337032",
+            "0xb50fda772ca3920e91e96b8f5dd66f56f0a9487c3a74458f4c13c7bd7bc709f0"
+          ]
+        },
+        {
+          "average_price": 0.03990699557308177,
+          "cash": 17.0,
+          "fee": 0.81607,
+          "fill_events": 1,
+          "order_hash": "0xac802bde511879d3e8fc7c69ed3b0750ded37e5ca2581f8ca27a977bc2948883",
+          "role": "taker_order",
+          "shares": 425.990475,
+          "side": "BUY",
+          "token_id": "80917936840074550831742163978351836133515190833673648387011154453574030845745",
+          "transaction_count": 1,
+          "transactions": [
+            "0x1b1b620383ee1e473b2e4000d5ade735a1316e2195fc9f03fd91acc4adfc5d00"
+          ]
+        },
+        {
+          "average_price": 0.04899999705019998,
+          "cash": 14.999999,
+          "fee": 0.71324,
+          "fill_events": 1,
+          "order_hash": "0xb40939110003fe1d38ea69bfa532b3be3953201b14065398fd91abfbe3c22acb",
+          "role": "taker_order",
+          "shares": 306.122447,
+          "side": "BUY",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 1,
+          "transactions": [
+            "0x16153fd5874aa09cc8b1c4448ee1e3ca8dae8c2e7051dfe5a0be1735ca167b2c"
+          ]
+        },
+        {
+          "average_price": 0.09088849887890847,
+          "cash": 14.999999,
+          "fee": 0.68183,
+          "fill_events": 1,
+          "order_hash": "0xc2efbc1df5ec16f385c38f490b9e04aef0828a9e2b7da3ffa0d5d5d14dda447a",
+          "role": "taker_order",
+          "shares": 165.037372,
+          "side": "BUY",
+          "token_id": "80917936840074550831742163978351836133515190833673648387011154453574030845745",
+          "transaction_count": 1,
+          "transactions": [
+            "0x6f265e6835e8db35fc42e15be73d1212df70f08c89efe013768ac82eb2bbf56a"
+          ]
+        },
+        {
+          "average_price": 0.3135899276161216,
+          "cash": 11.999999,
+          "fee": 0.41184,
+          "fill_events": 1,
+          "order_hash": "0xa85bdd49ed6358c5d614239f498d332740526a0bc0b82d2f6091746124bce7d5",
+          "role": "taker_order",
+          "shares": 38.266532,
+          "side": "BUY",
+          "token_id": "80917936840074550831742163978351836133515190833673648387011154453574030845745",
+          "transaction_count": 1,
+          "transactions": [
+            "0x158b353d295d35e96b495129d71e71c61033611283066937e1a4336faba3e137"
+          ]
+        },
+        {
+          "average_price": 0.023138135583331075,
+          "cash": 11.999999,
+          "fee": 0.58611,
+          "fill_events": 1,
+          "order_hash": "0x6372b073f064594c3079e9fee67719c2b8c8f4c6ebd442a14f1a351409c18111",
+          "role": "taker_order",
+          "shares": 518.624284,
+          "side": "BUY",
+          "token_id": "18976467526417134116634318355479976671470097288185121878724933797798306507748",
+          "transaction_count": 1,
+          "transactions": [
+            "0x42c4f2d170fd7883058944eeb20c7333a7aea8e3ce69eb941e7692ec00c1f689"
+          ]
+        },
+        {
+          "average_price": 0.008647506056010633,
+          "cash": 4.0,
+          "fee": 0.19827,
+          "fill_events": 1,
+          "order_hash": "0xece78eb5723191d1cf2402e3038ed45adcd0d1a5d71d50ee998beeb0164336c1",
+          "role": "taker_order",
+          "shares": 462.56111,
+          "side": "BUY",
+          "token_id": "79721410972971790973039911698747176423018207620536542149205813771505957316099",
+          "transaction_count": 1,
+          "transactions": [
+            "0xda2b11b35515dfadbea9154af3d5b3fb82f03deead2ed24c5de2b79f48ca5cb2"
+          ]
+        },
+        {
+          "average_price": 0.060000000000000005,
+          "cash": 1.62,
+          "fee": 0.07614,
+          "fill_events": 1,
+          "order_hash": "0x2c89651adbb483bfef8a17382e334494a81a150a280bafb25ff9185b8617e0c4",
+          "role": "taker_order",
+          "shares": 27.0,
+          "side": "BUY",
+          "token_id": "33944948007846015593766856313443426738587764071968692775008194880723927870686",
+          "transaction_count": 1,
+          "transactions": [
+            "0xe3220ab668616bd2f42dd28873e81cb6f7bfda89e3415b6ae4f1217b24b74680"
+          ]
+        },
+        {
+          "average_price": 0.9759286500000001,
+          "cash": 780.74292,
+          "fee": 0.93967,
+          "fill_events": 1,
+          "order_hash": "0xc594068b123cc4f360a3daf65abaf3757ad770faff35fb89ed1b3713d04fc4fb",
+          "role": "taker_order",
+          "shares": 800.0,
+          "side": "SELL",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 1,
+          "transactions": [
+            "0xd63c8905f5a0416d2afe054e5b5f3ee0467bf5c3663a29409669dd576c76b832"
+          ]
+        },
+        {
+          "average_price": 0.3222850389429225,
+          "cash": 415.8605,
+          "fee": 14.09174,
+          "fill_events": 1,
+          "order_hash": "0x65adfac1d550abc99071110cd2b8b3aafb928d47a4c4edbe99d11853bcd15b60",
+          "role": "taker_order",
+          "shares": 1290.35,
+          "side": "SELL",
+          "token_id": "33944948007846015593766856313443426738587764071968692775008194880723927870686",
+          "transaction_count": 1,
+          "transactions": [
+            "0xba6d9fa6378c79aeb782a70d4868494f4ea2573a360b19404143d98070f3198d"
+          ]
+        },
+        {
+          "average_price": 0.9099999999999999,
+          "cash": 207.48,
+          "fee": 0.93366,
+          "fill_events": 1,
+          "order_hash": "0x8b011b7e39e8fc20615a7f6d884cdf805e580af92795cab29a57a16a02bfb478",
+          "role": "taker_order",
+          "shares": 228.0,
+          "side": "SELL",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 1,
+          "transactions": [
+            "0xc7032c022f39ac311e4a48bdf23f00a1a216bd9cac57b94b7e4df55764490d32"
+          ]
+        },
+        {
+          "average_price": 0.31999999999999995,
+          "cash": 31.9976,
+          "fee": 0.1088,
+          "fill_events": 3,
+          "order_hash": "0xed8a7adfb6dabb419caeae92b46f8de26254536ff92e2b3bfe78607436757092",
+          "role": "taker_order",
+          "shares": 99.9925,
+          "side": "SELL",
+          "token_id": "106212798612841185827586949871610678257212929145257532795694568505091692920823",
+          "transaction_count": 3,
+          "transactions": [
+            "0x278e32a7e3d07bd58b729190c979c8a2fdb90a8c9c16928a8d98e8bb65ddb412",
+            "0x49d10269407aa579cd32a193f79d9e5002d25b30a1fdba3afa8884279a029a1a",
+            "0x57b92ce3640d22f4964db90855023105cb9ba20be79cac7c067127b66a6e7efa"
+          ]
+        }
+      ],
+      "performance": {
+        "buy_cost": 1387.919101,
+        "merge_cash": 0.0,
+        "public_cashflow_pnl": 2804.354591,
+        "redeem_cash": 0.0,
+        "sell_proceeds": 4192.273692,
+        "split_cash": 0.0,
+        "token_payout_reconstructed": 0.011995000000439404,
+        "turnover_roi": 2.0205547888053745
+      },
+      "phases_gap_gt_10m": [
+        {
+          "buy_cost": 18.804000000000002,
+          "first_local": "2026-06-21T18:00:47+01:00",
+          "first_ts": 1782061247,
+          "first_utc": "2026-06-21T17:00:47+00:00",
+          "last_local": "2026-06-21T18:01:02+01:00",
+          "last_ts": 1782061262,
+          "last_utc": "2026-06-21T17:01:02+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 2,
+            "taker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 33°C",
+              "cash": 17.81607,
+              "rows": 1,
+              "shares": 425.990475
+            },
+            {
+              "action": "BUY YES 32°C or below",
+              "cash": 0.98793,
+              "rows": 3,
+              "shares": 107.19
+            }
+          ],
+          "trade_rows": 4,
+          "unique_transactions": 4
+        },
+        {
+          "buy_cost": 0.090471,
+          "first_local": "2026-06-22T01:23:10+01:00",
+          "first_ts": 1782087790,
+          "first_utc": "2026-06-22T00:23:10+00:00",
+          "last_local": "2026-06-22T01:23:10+01:00",
+          "last_ts": 1782087790,
+          "last_utc": "2026-06-22T00:23:10+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 33°C",
+              "cash": 0.090471,
+              "rows": 1,
+              "shares": 2.010466
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 38.9384,
+          "first_local": "2026-06-22T02:34:37+01:00",
+          "first_ts": 1782092077,
+          "first_utc": "2026-06-22T01:34:37+00:00",
+          "last_local": "2026-06-22T02:34:37+01:00",
+          "last_ts": 1782092077,
+          "last_utc": "2026-06-22T01:34:37+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 32°C or below",
+              "cash": 38.9384,
+              "rows": 1,
+              "shares": 3893.84
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 413.57956,
+          "first_local": "2026-06-22T07:44:07+01:00",
+          "first_ts": 1782110647,
+          "first_utc": "2026-06-22T06:44:07+00:00",
+          "last_local": "2026-06-22T07:44:07+01:00",
+          "last_ts": 1782110647,
+          "last_utc": "2026-06-22T06:44:07+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 35°C",
+              "cash": 413.57956,
+              "rows": 1,
+              "shares": 1290.36
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 156.275289,
+          "first_local": "2026-06-22T10:05:46+01:00",
+          "first_ts": 1782119146,
+          "first_utc": "2026-06-22T09:05:46+00:00",
+          "last_local": "2026-06-22T10:05:46+01:00",
+          "last_ts": 1782119146,
+          "last_utc": "2026-06-22T09:05:46+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 34°C",
+              "cash": 156.275289,
+              "rows": 1,
+              "shares": 501.18516
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 26.34796,
+          "first_local": "2026-06-22T10:59:35+01:00",
+          "first_ts": 1782122375,
+          "first_utc": "2026-06-22T09:59:35+00:00",
+          "last_local": "2026-06-22T11:00:26+01:00",
+          "last_ts": 1782122426,
+          "last_utc": "2026-06-22T10:00:26+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 2
+          },
+          "sell_proceeds": 401.76876,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 35°C",
+              "cash": 401.76876,
+              "rows": 1,
+              "shares": 1290.35
+            },
+            {
+              "action": "BUY YES 34°C",
+              "cash": 26.34796,
+              "rows": 1,
+              "shares": 90.83
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 21.144018000000003,
+          "first_local": "2026-06-22T11:46:31+01:00",
+          "first_ts": 1782125191,
+          "first_utc": "2026-06-22T10:46:31+00:00",
+          "last_local": "2026-06-22T11:46:40+01:00",
+          "last_ts": 1782125200,
+          "last_utc": "2026-06-22T10:46:40+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 5,
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 33°C",
+              "cash": 21.144018000000003,
+              "rows": 6,
+              "shares": 128.277612
+            }
+          ],
+          "trade_rows": 6,
+          "unique_transactions": 6
+        },
+        {
+          "buy_cost": 12.2416,
+          "first_local": "2026-06-22T12:36:32+01:00",
+          "first_ts": 1782128192,
+          "first_utc": "2026-06-22T11:36:32+00:00",
+          "last_local": "2026-06-22T12:36:32+01:00",
+          "last_ts": 1782128192,
+          "last_utc": "2026-06-22T11:36:32+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 33°C",
+              "cash": 12.2416,
+              "rows": 1,
+              "shares": 76.51
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 115.4636,
+          "first_local": "2026-06-22T14:19:10+01:00",
+          "first_ts": 1782134350,
+          "first_utc": "2026-06-22T13:19:10+00:00",
+          "last_local": "2026-06-22T14:19:10+01:00",
+          "last_ts": 1782134350,
+          "last_utc": "2026-06-22T13:19:10+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 34°C",
+              "cash": 115.4636,
+              "rows": 1,
+              "shares": 412.37
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-22T16:42:08+01:00",
+          "first_ts": 1782142928,
+          "first_utc": "2026-06-22T15:42:08+00:00",
+          "last_local": "2026-06-22T16:42:08+01:00",
+          "last_ts": 1782142928,
+          "last_utc": "2026-06-22T15:42:08+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 2.4986,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 34°C",
+              "cash": 2.4986,
+              "rows": 1,
+              "shares": 9.61
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-22T17:22:16+01:00",
+          "first_ts": 1782145336,
+          "first_utc": "2026-06-22T16:22:16+00:00",
+          "last_local": "2026-06-22T17:30:22+01:00",
+          "last_ts": 1782145822,
+          "last_utc": "2026-06-22T16:30:22+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 2
+          },
+          "sell_proceeds": 20.999997999999998,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 34°C",
+              "cash": 20.999997999999998,
+              "rows": 2,
+              "shares": 80.769227
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-22T18:03:53+01:00",
+          "first_ts": 1782147833,
+          "first_utc": "2026-06-22T17:03:53+00:00",
+          "last_local": "2026-06-22T18:03:53+01:00",
+          "last_ts": 1782147833,
+          "last_utc": "2026-06-22T17:03:53+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 1.3,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 34°C",
+              "cash": 1.3,
+              "rows": 1,
+              "shares": 5.0
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-22T18:17:26+01:00",
+          "first_ts": 1782148646,
+          "first_utc": "2026-06-22T17:17:26+00:00",
+          "last_local": "2026-06-22T18:17:26+01:00",
+          "last_ts": 1782148646,
+          "last_utc": "2026-06-22T17:17:26+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 4.999999,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 34°C",
+              "cash": 4.999999,
+              "rows": 1,
+              "shares": 19.230768
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 279.469139,
+          "first_local": "2026-06-22T19:46:56+01:00",
+          "first_ts": 1782154016,
+          "first_utc": "2026-06-22T18:46:56+00:00",
+          "last_local": "2026-06-22T19:46:56+01:00",
+          "last_ts": 1782154016,
+          "last_utc": "2026-06-22T18:46:56+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 35°C",
+              "cash": 279.469139,
+              "rows": 1,
+              "shares": 904.274665
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 120.911197,
+          "first_local": "2026-06-22T23:05:07+01:00",
+          "first_ts": 1782165907,
+          "first_utc": "2026-06-22T22:05:07+00:00",
+          "last_local": "2026-06-22T23:22:56+01:00",
+          "last_ts": 1782166976,
+          "last_utc": "2026-06-22T22:22:56+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 4,
+            "taker_order": 3
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 33°C",
+              "cash": 85.920908,
+              "rows": 2,
+              "shares": 400.167466
+            },
+            {
+              "action": "BUY YES 32°C or below",
+              "cash": 34.990289,
+              "rows": 5,
+              "shares": 709.269468
+            }
+          ],
+          "trade_rows": 7,
+          "unique_transactions": 7
+        },
+        {
+          "buy_cost": 4.19827,
+          "first_local": "2026-06-23T02:38:52+01:00",
+          "first_ts": 1782178732,
+          "first_utc": "2026-06-23T01:38:52+00:00",
+          "last_local": "2026-06-23T02:38:52+01:00",
+          "last_ts": 1782178732,
+          "last_utc": "2026-06-23T01:38:52+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 37°C",
+              "cash": 4.19827,
+              "rows": 1,
+              "shares": 462.56111
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 11.178068000000003,
+          "first_local": "2026-06-23T09:22:40+01:00",
+          "first_ts": 1782202960,
+          "first_utc": "2026-06-23T08:22:40+00:00",
+          "last_local": "2026-06-23T09:37:22+01:00",
+          "last_ts": 1782203842,
+          "last_utc": "2026-06-23T08:37:22+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 41,
+            "taker_order": 3
+          },
+          "sell_proceeds": 317.9439,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 32°C or below",
+              "cash": 317.9439,
+              "rows": 2,
+              "shares": 1177.57
+            },
+            {
+              "action": "BUY YES 35°C",
+              "cash": 5.387368,
+              "rows": 7,
+              "shares": 76.122685
+            },
+            {
+              "action": "BUY YES 37°C",
+              "cash": 5.2124999999999995,
+              "rows": 29,
+              "shares": 1021.7899999999998
+            },
+            {
+              "action": "BUY YES 36°C",
+              "cash": 0.5782,
+              "rows": 6,
+              "shares": 85.7
+            }
+          ],
+          "trade_rows": 44,
+          "unique_transactions": 44
+        },
+        {
+          "buy_cost": 79.33040600000001,
+          "first_local": "2026-06-23T09:51:40+01:00",
+          "first_ts": 1782204700,
+          "first_utc": "2026-06-23T08:51:40+00:00",
+          "last_local": "2026-06-23T10:00:40+01:00",
+          "last_ts": 1782205240,
+          "last_utc": "2026-06-23T09:00:40+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 11,
+            "taker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 34°C",
+              "cash": 71.058506,
+              "rows": 4,
+              "shares": 307.80350400000003
+            },
+            {
+              "action": "BUY YES 35°C",
+              "cash": 8.2719,
+              "rows": 9,
+              "shares": 91.0
+            }
+          ],
+          "trade_rows": 13,
+          "unique_transactions": 13
+        },
+        {
+          "buy_cost": 21.465606,
+          "first_local": "2026-06-23T10:26:22+01:00",
+          "first_ts": 1782206782,
+          "first_utc": "2026-06-23T09:26:22+00:00",
+          "last_local": "2026-06-23T11:05:59+01:00",
+          "last_ts": 1782209159,
+          "last_utc": "2026-06-23T10:05:59+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 58,
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 36°C",
+              "cash": 10.16231,
+              "rows": 13,
+              "shares": 525.14
+            },
+            {
+              "action": "BUY YES 35°C",
+              "cash": 9.895302000000001,
+              "rows": 5,
+              "shares": 109.9478
+            },
+            {
+              "action": "BUY YES 37°C",
+              "cash": 1.4079940000000002,
+              "rows": 41,
+              "shares": 703.997
+            }
+          ],
+          "trade_rows": 59,
+          "unique_transactions": 59
+        },
+        {
+          "buy_cost": 1.69614,
+          "first_local": "2026-06-23T11:20:59+01:00",
+          "first_ts": 1782210059,
+          "first_utc": "2026-06-23T10:20:59+00:00",
+          "last_local": "2026-06-23T11:20:59+01:00",
+          "last_ts": 1782210059,
+          "last_utc": "2026-06-23T10:20:59+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 35°C",
+              "cash": 1.69614,
+              "rows": 1,
+              "shares": 27.0
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 24.997948,
+          "first_local": "2026-06-23T11:36:05+01:00",
+          "first_ts": 1782210965,
+          "first_utc": "2026-06-23T10:36:05+00:00",
+          "last_local": "2026-06-23T11:36:26+01:00",
+          "last_ts": 1782210986,
+          "last_utc": "2026-06-23T10:36:26+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 36°C",
+              "cash": 12.586109,
+              "rows": 1,
+              "shares": 518.624284
+            },
+            {
+              "action": "BUY YES 33°C",
+              "cash": 12.411839,
+              "rows": 1,
+              "shares": 38.266532
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-23T13:18:32+01:00",
+          "first_ts": 1782217112,
+          "first_utc": "2026-06-23T12:18:32+00:00",
+          "last_local": "2026-06-23T13:21:34+01:00",
+          "last_ts": 1782217294,
+          "last_utc": "2026-06-23T12:21:34+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1,
+            "taker_order": 1
+          },
+          "sell_proceeds": 103.00299000000001,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 34°C",
+              "cash": 103.00299000000001,
+              "rows": 2,
+              "shares": 400.0
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 26.1056,
+          "first_local": "2026-06-23T14:25:04+01:00",
+          "first_ts": 1782221104,
+          "first_utc": "2026-06-23T13:25:04+00:00",
+          "last_local": "2026-06-23T14:29:07+01:00",
+          "last_ts": 1782221347,
+          "last_utc": "2026-06-23T13:29:07+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1,
+            "taker_order": 2
+          },
+          "sell_proceeds": 5.4312000000000005,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 34°C",
+              "cash": 26.1056,
+              "rows": 1,
+              "shares": 314.46
+            },
+            {
+              "action": "SELL YES 32°C or below",
+              "cash": 5.4312000000000005,
+              "rows": 2,
+              "shares": 17.3125
+            }
+          ],
+          "trade_rows": 3,
+          "unique_transactions": 3
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-23T14:44:16+01:00",
+          "first_ts": 1782222256,
+          "first_utc": "2026-06-23T13:44:16+00:00",
+          "last_local": "2026-06-23T14:44:16+01:00",
+          "last_ts": 1782222256,
+          "last_utc": "2026-06-23T13:44:16+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 26.4576,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 32°C or below",
+              "cash": 26.4576,
+              "rows": 1,
+              "shares": 82.68
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-23T15:45:49+01:00",
+          "first_ts": 1782225949,
+          "first_utc": "2026-06-23T14:45:49+00:00",
+          "last_local": "2026-06-23T15:55:44+01:00",
+          "last_ts": 1782226544,
+          "last_utc": "2026-06-23T14:55:44+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 2,
+            "taker_order": 1
+          },
+          "sell_proceeds": 566.542508,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 32°C or below",
+              "cash": 566.542508,
+              "rows": 3,
+              "shares": 627.995743
+            }
+          ],
+          "trade_rows": 3,
+          "unique_transactions": 3
+        },
+        {
+          "buy_cost": 15.681829,
+          "first_local": "2026-06-23T16:07:52+01:00",
+          "first_ts": 1782227272,
+          "first_utc": "2026-06-23T15:07:52+00:00",
+          "last_local": "2026-06-23T16:21:37+01:00",
+          "last_ts": 1782228097,
+          "last_utc": "2026-06-23T15:21:37+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 13,
+            "taker_order": 1
+          },
+          "sell_proceeds": 359.952989,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 32°C or below",
+              "cash": 359.952989,
+              "rows": 13,
+              "shares": 399.94776900000005
+            },
+            {
+              "action": "BUY YES 33°C",
+              "cash": 15.681829,
+              "rows": 1,
+              "shares": 165.037372
+            }
+          ],
+          "trade_rows": 14,
+          "unique_transactions": 14
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-23T16:48:01+01:00",
+          "first_ts": 1782229681,
+          "first_utc": "2026-06-23T15:48:01+00:00",
+          "last_local": "2026-06-23T16:48:01+01:00",
+          "last_ts": 1782229681,
+          "last_utc": "2026-06-23T15:48:01+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 779.80325,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 32°C or below",
+              "cash": 779.80325,
+              "rows": 1,
+              "shares": 800.0
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-23T19:13:53+01:00",
+          "first_ts": 1782238433,
+          "first_utc": "2026-06-23T18:13:53+00:00",
+          "last_local": "2026-06-23T19:34:02+01:00",
+          "last_ts": 1782239642,
+          "last_utc": "2026-06-23T18:34:02+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 8
+          },
+          "sell_proceeds": 664.2303380000001,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 32°C or below",
+              "cash": 664.2303380000001,
+              "rows": 8,
+              "shares": 665.5614609999999
+            }
+          ],
+          "trade_rows": 8,
+          "unique_transactions": 8
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-06-23T19:51:40+01:00",
+          "first_ts": 1782240700,
+          "first_utc": "2026-06-23T18:51:40+00:00",
+          "last_local": "2026-06-23T20:00:22+01:00",
+          "last_ts": 1782241222,
+          "last_utc": "2026-06-23T19:00:22+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 3
+          },
+          "sell_proceeds": 937.3415599999998,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 32°C or below",
+              "cash": 937.3415599999998,
+              "rows": 3,
+              "shares": 939.22
+            }
+          ],
+          "trade_rows": 3,
+          "unique_transactions": 3
+        }
+      ],
+      "receipt_coverage": {
+        "receipts_found": 186,
+        "transactions": 186
+      },
+      "source_path": null,
+      "target_date": "2026-06-23",
+      "winner_condition": "0x2e987e89d6d0c7c5e2cbbbec8488d0cb25957d09d3a6ea503811564b2c014d49",
+      "winner_label": "32°C or below"
+    },
+    {
+      "activity": {
+        "conversion_types": {},
+        "first_trade_utc": "2026-07-25T15:56:40+00:00",
+        "last_trade_utc": "2026-07-26T06:35:34+00:00",
+        "rows": 33,
+        "trade_rows": 33,
+        "transactions": 33
+      },
+      "case_class": "loss",
+      "city": "milan",
+      "condition_flows": [
+        {
+          "buy_cost": 410.02561,
+          "buy_shares": 1341.56475,
+          "condition_id": "0xd7f1a712786829c73d9a38b5561890ea0f120e0dcf8f00d32769a00487ef9fb8",
+          "label": "27°C",
+          "net_trade_shares": 1341.56475,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -410.02561
+        },
+        {
+          "buy_cost": 206.650735,
+          "buy_shares": 1314.174862,
+          "condition_id": "0x4773871ee24274897839124338aa9229f332f8c9ef86c8902fcf5700351d661d",
+          "label": "26°C",
+          "net_trade_shares": 1314.174862,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -206.650735
+        },
+        {
+          "buy_cost": 197.541959,
+          "buy_shares": 2794.893332,
+          "condition_id": "0x8fe04be638d8d8eb804a2c78b74ee168974c9ddf8b5353f132c00d965e20f3c4",
+          "label": "25°C or below",
+          "net_trade_shares": 2794.893332,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -197.541959
+        },
+        {
+          "buy_cost": 170.20775,
+          "buy_shares": 675.018,
+          "condition_id": "0x9df397782c10015090ee03ef8ba1f08319e73e9e517828a9ee7647473cddf7f1",
+          "label": "28°C",
+          "net_trade_shares": 675.018,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -170.20775
+        }
+      ],
+      "decision_points": {
+        "first_buy": {
+          "latest_pit_forecast": {
+            "assigned_model": "ecmwf",
+            "available_at_utc": "2026-07-25T15:45:01.666868Z",
+            "capture_id": "forecast_hourly_curves_20260725_234001_4e2b02678c",
+            "fallback": false,
+            "first_seen_utc": "2026-07-25T14:40:50.008376Z",
+            "forecast_max_c": 27.722222222222225,
+            "forecast_max_f": 81.9,
+            "forecast_peak_time_local": "2026-07-26T17:00",
+            "path": "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/2026-07-25/forecast_hourly_curves_20260725_234001_4e2b02678c.jsonl",
+            "source": "open_meteo_live_ecmwf",
+            "values_hash": "36039fd4329c28cb"
+          },
+          "local": "2026-07-25T17:56:40+02:00",
+          "timestamp": 1784995000,
+          "utc": "2026-07-25T15:56:40+00:00"
+        },
+        "first_sell": {
+          "latest_pit_forecast": null,
+          "local": null,
+          "timestamp": 0,
+          "utc": null
+        },
+        "largest_buy_transaction": {
+          "latest_pit_forecast": {
+            "assigned_model": "ecmwf",
+            "available_at_utc": "2026-07-25T19:07:27.605865Z",
+            "capture_id": "forecast_hourly_curves_20260726_030036_c7ce064f9b",
+            "fallback": false,
+            "first_seen_utc": "2026-07-25T14:40:50.008376Z",
+            "forecast_max_c": 27.722222222222225,
+            "forecast_max_f": 81.9,
+            "forecast_peak_time_local": "2026-07-26T17:00",
+            "path": "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/2026-07-26/forecast_hourly_curves_20260726_030036_c7ce064f9b.jsonl",
+            "source": "open_meteo_live_ecmwf",
+            "values_hash": "36039fd4329c28cb"
+          },
+          "local": "2026-07-25T21:07:54+02:00",
+          "timestamp": 1785006474,
+          "utc": "2026-07-25T19:07:54+00:00"
+        }
+      },
+      "event_slugs": [
+        "highest-temperature-in-milan-on-july-26-2026"
+      ],
+      "evidence_boundary": {
+        "order": "role/order_hash/fills_onchain; post/cancel/queue_unobserved",
+        "plan": "inferred_only_from_public_fills",
+        "settlement_pnl": "cashflow_complete_public_activity",
+        "signal": "unobserved_private_state"
+      },
+      "exit_style": "resolved_without_public_cash_exit",
+      "expression": "yes_strip",
+      "onchain_order_roles": {
+        "passive_maker_order": {
+          "cash": 74.514275,
+          "fee": 0.89249,
+          "fill_events": 21,
+          "orders": 5,
+          "shares": 1534.9953620000001
+        },
+        "taker_order": {
+          "cash": 876.1776990000001,
+          "fee": 32.84159,
+          "fill_events": 12,
+          "orders": 10,
+          "shares": 4590.655582
+        }
+      },
+      "orders": [
+        {
+          "average_price": 0.04,
+          "cash": 40.0,
+          "fee": 0.0,
+          "fill_events": 1,
+          "order_hash": "0x106d07442018b07f8f09050dc7f08f6117db5bc13edb4f50f10ab1009ca707b5",
+          "role": "passive_maker_order",
+          "shares": 1000.0,
+          "side": "BUY",
+          "token_id": "85171829135160444095948063014816158902128786606398765478347129515827408398339",
+          "transaction_count": 1,
+          "transactions": [
+            "0x369c3a39bf7f54537428f6a5a1afcbc852a16eaa5d27635267ea1d497753428d"
+          ]
+        },
+        {
+          "average_price": 0.06,
+          "cash": 20.1528,
+          "fee": 0.78762,
+          "fill_events": 6,
+          "order_hash": "0x4ca5b1ee0910cb3f054882e3a9640d4d29901f3613aca2381806f3232c22fb9b",
+          "role": "passive_maker_order",
+          "shares": 335.88,
+          "side": "BUY",
+          "token_id": "85171829135160444095948063014816158902128786606398765478347129515827408398339",
+          "transaction_count": 6,
+          "transactions": [
+            "0x13bb94b80fb86433f18b2673badcd95edbc116eb20fa43c0bc643eba60601436",
+            "0x38c53618aa2c124427076744a57dfe7b620caeac1beb61e4f9a5a94790d8bd8d",
+            "0x3c24cf37e430517a6021048ac718c177c4096f4947608a3dc555e352c791e109",
+            "0x8ce264c691152a44ee0f5757f748acf1ce8536fd98799a99eaa7b91ba0cdfae1",
+            "0xc3a485912a2cf46a0f2eaa92f51abcb80cffed3a7a31722d6baa311cb39bd4d3",
+            "0xf76102975677d6c022c16adea001e376a52cb98afb99505f4c92ca5e6beaee18"
+          ]
+        },
+        {
+          "average_price": 0.13000000291145786,
+          "cash": 7.590698999999999,
+          "fee": 0.0,
+          "fill_events": 8,
+          "order_hash": "0x816a6a465894aae6b16241ee168328f302050c919af6f015a16d46efbc1f60d7",
+          "role": "passive_maker_order",
+          "shares": 58.389991,
+          "side": "BUY",
+          "token_id": "28297520696199153383727300620083898013346315168038377372883169723372091050757",
+          "transaction_count": 8,
+          "transactions": [
+            "0x2476811e649b7c0a5dd31257e4e753aec71372d4dfffb6129562481d5b42321c",
+            "0x259231060c178c13ed5685c70cc63a1c7f3774ad72a9c1b56261a45e1eaf22cc",
+            "0x2a9eeadc1df779cd2ff62506084e6276876c08d9e1a0dd8816a3315763f32522",
+            "0x4846b0a207a2aacccc7c10b6a4ee0dfd374dc5e045f844427e492f780e6e673f",
+            "0x7f6e17f16df7786bae028937670e2683aab250eb46b4bf38658195f7cd6b484b",
+            "0x83af8c85555787fc55abfaf505a0f899cdc572153b996165fafd9415ed87be28",
+            "0xc50fcb5a17f71817c703aca21fbf8e1ef1d19d8d752bea78b3aa1d05c5f3f7a6",
+            "0xc804b75c45a32e8c9cf0846838b3df427093f6f1e69282e4e0580b1274303bb9"
+          ]
+        },
+        {
+          "average_price": 0.07000000047077012,
+          "cash": 4.460776,
+          "fee": 0.10487,
+          "fill_events": 3,
+          "order_hash": "0xe1835ae94032538a4dc10afea6ae9730cdd1e6c9643e4d129ed617ed58d3d227",
+          "role": "passive_maker_order",
+          "shares": 63.725370999999996,
+          "side": "BUY",
+          "token_id": "28297520696199153383727300620083898013346315168038377372883169723372091050757",
+          "transaction_count": 3,
+          "transactions": [
+            "0x2b3b5bee22d2c3a806d829dd873661a1b91bb8bf8b57ca9f6fec59e8c5a2cc9e",
+            "0x9c00bbaa72abcde69d671efea837b07978fae53dc49faa631e1d205d539e49c0",
+            "0xe7a5dc40605c1379a7953ba9f97608ce7dc4fc4c12d5d9a281f6e2796c2c703a"
+          ]
+        },
+        {
+          "average_price": 0.030000000000000002,
+          "cash": 2.31,
+          "fee": 0.0,
+          "fill_events": 3,
+          "order_hash": "0xd228651153110f60ffffda85a96d022e67ae5f8f25047929b7c4de341a11abca",
+          "role": "passive_maker_order",
+          "shares": 77.0,
+          "side": "BUY",
+          "token_id": "85171829135160444095948063014816158902128786606398765478347129515827408398339",
+          "transaction_count": 3,
+          "transactions": [
+            "0x5f771c6e42eaa5cf02485b8b193314c52468e005fc104598425e7ad64e10578c",
+            "0x8f1a15c429f80c990bf0e2e9a38294d7eefa25a74d9db35c79ce4629e56d7022",
+            "0xc5ae549a32f51f2dddd192efbed582bb1db13a4e1a5d4eaad10b317fd3a3e0ad"
+          ]
+        },
+        {
+          "average_price": 0.3806193806193806,
+          "cash": 190.5,
+          "fee": 5.8996,
+          "fill_events": 1,
+          "order_hash": "0xdf047f270950436e641176fe2e14d8373dadfbf4b907aaf8cf6fdbe5f57ab3df",
+          "role": "taker_order",
+          "shares": 500.5,
+          "side": "BUY",
+          "token_id": "44976530378517765462583384862196679401555680507049498576035688770520827952748",
+          "transaction_count": 1,
+          "transactions": [
+            "0x624e0836ceb6794ad38846aad70caece6a3ed07b2bb6f0e744b5cc20d3559b86"
+          ]
+        },
+        {
+          "average_price": 0.28281672145547465,
+          "cash": 170.0,
+          "fee": 6.09605,
+          "fill_events": 1,
+          "order_hash": "0x08c294aa2fe497d77ca77cea5a2f6f698cd6e52f19479ea411df9bcb2535a8af",
+          "role": "taker_order",
+          "shares": 601.096,
+          "side": "BUY",
+          "token_id": "44976530378517765462583384862196679401555680507049498576035688770520827952748",
+          "transaction_count": 1,
+          "transactions": [
+            "0x0c9780e1e1f43f12f1b6590119b76747227257a9632cb49ec98403e43ca8993c"
+          ]
+        },
+        {
+          "average_price": 0.24295648412338633,
+          "cash": 164.0,
+          "fee": 6.20775,
+          "fill_events": 1,
+          "order_hash": "0x16a6c3226a0bfdc283f527a17c88ca9b2284aca62c9fbb8d9fb7a3004b0b0c18",
+          "role": "taker_order",
+          "shares": 675.018,
+          "side": "BUY",
+          "token_id": "38676040120905456751435439708868655868558342532559349879638648119971633815095",
+          "transaction_count": 1,
+          "transactions": [
+            "0xde34681f178585a026971b46fd8ff2445c2dfe2c226dadb782b8ebaf65406472"
+          ]
+        },
+        {
+          "average_price": 0.18899078291951701,
+          "cash": 150.0,
+          "fee": 6.08256,
+          "fill_events": 1,
+          "order_hash": "0xbabb73af93a5e5fb600305a850c0a565e5eb4c5f6989dfa3e125f592ac308812",
+          "role": "taker_order",
+          "shares": 793.6895,
+          "side": "BUY",
+          "token_id": "28297520696199153383727300620083898013346315168038377372883169723372091050757",
+          "transaction_count": 1,
+          "transactions": [
+            "0xbd32ac86e062a76873dcf3ac2307428e60d88ad70b647dbfbb352060fdb31d56"
+          ]
+        },
+        {
+          "average_price": 0.19498607242339833,
+          "cash": 70.0,
+          "fee": 2.81754,
+          "fill_events": 1,
+          "order_hash": "0xcb2e389e0a93f47e7636ce7d2c4cb187ca1e7675375eee0b7652ea3743bfb914",
+          "role": "taker_order",
+          "shares": 359.0,
+          "side": "BUY",
+          "token_id": "85171829135160444095948063014816158902128786606398765478347129515827408398339",
+          "transaction_count": 1,
+          "transactions": [
+            "0xf3eb1ff79e0ec2634b45524172528596de9f45b1734c9b687fe3ee0dd37b5d96"
+          ]
+        },
+        {
+          "average_price": 0.09267439817255316,
+          "cash": 36.9187,
+          "fee": 1.49313,
+          "fill_events": 3,
+          "order_hash": "0x7c3255641a32a000e1d0d4c05e1bbe2bc8bcaafc196eddbeef485f61db1bdef0",
+          "role": "taker_order",
+          "shares": 398.37,
+          "side": "BUY",
+          "token_id": "28297520696199153383727300620083898013346315168038377372883169723372091050757",
+          "transaction_count": 3,
+          "transactions": [
+            "0x2f7687d03df92120947260684025054cc8c52715ba69e4805804c1d8a8ba9ab9",
+            "0x4af204da6900233064647f531ae2a1423011ef80a1cda4cd1375943252b8e781",
+            "0xf536cfdf4abd8de851319d3b6b3be9db16d1b74be7f6a4c44fa8760abe5a13cf"
+          ]
+        },
+        {
+          "average_price": 0.1500195337934627,
+          "cash": 36.0,
+          "fee": 1.52996,
+          "fill_events": 1,
+          "order_hash": "0x5883c5fded5d82d54ceab7d00b7d1bf8975006b5e53ca4144faf5f2990d82587",
+          "role": "taker_order",
+          "shares": 239.96875,
+          "side": "BUY",
+          "token_id": "44976530378517765462583384862196679401555680507049498576035688770520827952748",
+          "transaction_count": 1,
+          "transactions": [
+            "0x704aa639092370e5a2120660aee0e0db9b3f0952f49cb464bd44ad74bfe99ff9"
+          ]
+        },
+        {
+          "average_price": 0.09034356366639994,
+          "cash": 35.0,
+          "fee": 1.59189,
+          "fill_events": 1,
+          "order_hash": "0xba553ef507a2f1816dce1a8f9f24dcadc79ebeaef661d4e0d33dd846cdf6aeee",
+          "role": "taker_order",
+          "shares": 387.41,
+          "side": "BUY",
+          "token_id": "85171829135160444095948063014816158902128786606398765478347129515827408398339",
+          "transaction_count": 1,
+          "transactions": [
+            "0x06ac04d2ed4593a11ced1314c3634177f1998592e54b724afc24eed2187a4c89"
+          ]
+        },
+        {
+          "average_price": 0.03044122707564922,
+          "cash": 17.999999,
+          "fee": 0.8726,
+          "fill_events": 1,
+          "order_hash": "0xc7a0fbd4e2021a9367bf4bca599cda98e4d707a12e368e9b15650941554d389b",
+          "role": "taker_order",
+          "shares": 591.303332,
+          "side": "BUY",
+          "token_id": "85171829135160444095948063014816158902128786606398765478347129515827408398339",
+          "transaction_count": 1,
+          "transactions": [
+            "0x30b0a9c99eabbf2ae751823dd752581db3f810be942786fc13aa360b120a08e5"
+          ]
+        },
+        {
+          "average_price": 0.13,
+          "cash": 5.759,
+          "fee": 0.25051,
+          "fill_events": 1,
+          "order_hash": "0x1b0d1a5b9aaff9947a16aedab9c4df530e0465323c115258f278c9b2b4fe9841",
+          "role": "taker_order",
+          "shares": 44.3,
+          "side": "BUY",
+          "token_id": "85171829135160444095948063014816158902128786606398765478347129515827408398339",
+          "transaction_count": 1,
+          "transactions": [
+            "0xc7d0045acf38d3e01ad9f7423f9beb36897e2681d240c9d67c3505f94f2eaa84"
+          ]
+        }
+      ],
+      "performance": {
+        "buy_cost": 984.426054,
+        "merge_cash": 0.0,
+        "public_cashflow_pnl": -984.426054,
+        "redeem_cash": 0.0,
+        "sell_proceeds": 0.0,
+        "split_cash": 0.0,
+        "token_payout_reconstructed": 0.0,
+        "turnover_roi": -1.0
+      },
+      "phases_gap_gt_10m": [
+        {
+          "buy_cost": 176.09605,
+          "first_local": "2026-07-25T17:56:40+02:00",
+          "first_ts": 1784995000,
+          "first_utc": "2026-07-25T15:56:40+00:00",
+          "last_local": "2026-07-25T17:56:40+02:00",
+          "last_ts": 1784995000,
+          "last_utc": "2026-07-25T15:56:40+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 27°C",
+              "cash": 176.09605,
+              "rows": 1,
+              "shares": 601.096
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 58.267450000000004,
+          "first_local": "2026-07-25T19:30:57+02:00",
+          "first_ts": 1785000657,
+          "first_utc": "2026-07-25T17:30:57+00:00",
+          "last_local": "2026-07-25T19:31:09+02:00",
+          "last_ts": 1785000669,
+          "last_utc": "2026-07-25T17:31:09+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 5,
+            "taker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 26°C",
+              "cash": 38.41183,
+              "rows": 3,
+              "shares": 398.37
+            },
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 19.85562,
+              "rows": 4,
+              "shares": 356.3
+            }
+          ],
+          "trade_rows": 7,
+          "unique_transactions": 7
+        },
+        {
+          "buy_cost": 0.6,
+          "first_local": "2026-07-25T19:42:30+02:00",
+          "first_ts": 1785001350,
+          "first_utc": "2026-07-25T17:42:30+00:00",
+          "last_local": "2026-07-25T19:42:30+02:00",
+          "last_ts": 1785001350,
+          "last_utc": "2026-07-25T17:42:30+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 0.6,
+              "rows": 1,
+              "shares": 10.0
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 2.4505000000000003,
+          "first_local": "2026-07-25T19:56:27+02:00",
+          "first_ts": 1785002187,
+          "first_utc": "2026-07-25T17:56:27+00:00",
+          "last_local": "2026-07-25T20:02:42+02:00",
+          "last_ts": 1785002562,
+          "last_utc": "2026-07-25T18:02:42+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 26°C",
+              "cash": 2.4505000000000003,
+              "rows": 2,
+              "shares": 18.85
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 5.140199,
+          "first_local": "2026-07-25T20:15:51+02:00",
+          "first_ts": 1785003351,
+          "first_utc": "2026-07-25T18:15:51+00:00",
+          "last_local": "2026-07-25T20:26:45+02:00",
+          "last_ts": 1785004005,
+          "last_utc": "2026-07-25T18:26:45+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 6
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 26°C",
+              "cash": 5.140199,
+              "rows": 6,
+              "shares": 39.539991
+            }
+          ],
+          "trade_rows": 6,
+          "unique_transactions": 6
+        },
+        {
+          "buy_cost": 354.67396,
+          "first_local": "2026-07-25T21:07:22+02:00",
+          "first_ts": 1785006442,
+          "first_utc": "2026-07-25T19:07:22+00:00",
+          "last_local": "2026-07-25T21:08:12+02:00",
+          "last_ts": 1785006492,
+          "last_utc": "2026-07-25T19:08:12+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 3,
+            "taker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 27°C",
+              "cash": 196.3996,
+              "rows": 1,
+              "shares": 500.5
+            },
+            {
+              "action": "BUY YES 26°C",
+              "cash": 156.08256,
+              "rows": 1,
+              "shares": 793.6895
+            },
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 2.1918,
+              "rows": 3,
+              "shares": 36.53
+            }
+          ],
+          "trade_rows": 5,
+          "unique_transactions": 5
+        },
+        {
+          "buy_cost": 0.603,
+          "first_local": "2026-07-25T21:23:18+02:00",
+          "first_ts": 1785007398,
+          "first_utc": "2026-07-25T19:23:18+00:00",
+          "last_local": "2026-07-25T21:23:18+02:00",
+          "last_ts": 1785007398,
+          "last_utc": "2026-07-25T19:23:18+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 0.603,
+              "rows": 1,
+              "shares": 10.05
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 36.59189,
+          "first_local": "2026-07-25T22:57:03+02:00",
+          "first_ts": 1785013023,
+          "first_utc": "2026-07-25T20:57:03+00:00",
+          "last_local": "2026-07-25T22:57:03+02:00",
+          "last_ts": 1785013023,
+          "last_utc": "2026-07-25T20:57:03+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 36.59189,
+              "rows": 1,
+              "shares": 387.41
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 6.00951,
+          "first_local": "2026-07-26T01:22:28+02:00",
+          "first_ts": 1785021748,
+          "first_utc": "2026-07-25T23:22:28+00:00",
+          "last_local": "2026-07-26T01:22:28+02:00",
+          "last_ts": 1785021748,
+          "last_utc": "2026-07-25T23:22:28+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 6.00951,
+              "rows": 1,
+              "shares": 44.3
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 72.81754,
+          "first_local": "2026-07-26T01:37:25+02:00",
+          "first_ts": 1785022645,
+          "first_utc": "2026-07-25T23:37:25+00:00",
+          "last_local": "2026-07-26T01:37:25+02:00",
+          "last_ts": 1785022645,
+          "last_utc": "2026-07-25T23:37:25+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 72.81754,
+              "rows": 1,
+              "shares": 359.0
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 250.09798,
+          "first_local": "2026-07-26T07:46:16+02:00",
+          "first_ts": 1785044776,
+          "first_utc": "2026-07-26T05:46:16+00:00",
+          "last_local": "2026-07-26T07:53:27+02:00",
+          "last_ts": 1785045207,
+          "last_utc": "2026-07-26T05:53:27+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1,
+            "taker_order": 3
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 28°C",
+              "cash": 170.20775,
+              "rows": 1,
+              "shares": 675.018
+            },
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 40.0,
+              "rows": 1,
+              "shares": 1000.0
+            },
+            {
+              "action": "BUY YES 27°C",
+              "cash": 37.52996,
+              "rows": 1,
+              "shares": 239.96875
+            },
+            {
+              "action": "BUY YES 26°C",
+              "cash": 2.36027,
+              "rows": 1,
+              "shares": 32.22
+            }
+          ],
+          "trade_rows": 4,
+          "unique_transactions": 4
+        },
+        {
+          "buy_cost": 2.2053760000000002,
+          "first_local": "2026-07-26T08:10:34+02:00",
+          "first_ts": 1785046234,
+          "first_utc": "2026-07-26T06:10:34+00:00",
+          "last_local": "2026-07-26T08:14:48+02:00",
+          "last_ts": 1785046488,
+          "last_utc": "2026-07-26T06:14:48+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 26°C",
+              "cash": 2.2053760000000002,
+              "rows": 2,
+              "shares": 31.505371
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 18.872599,
+          "first_local": "2026-07-26T08:35:34+02:00",
+          "first_ts": 1785047734,
+          "first_utc": "2026-07-26T06:35:34+00:00",
+          "last_local": "2026-07-26T08:35:34+02:00",
+          "last_ts": 1785047734,
+          "last_utc": "2026-07-26T06:35:34+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 25°C or below",
+              "cash": 18.872599,
+              "rows": 1,
+              "shares": 591.303332
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        }
+      ],
+      "receipt_coverage": {
+        "receipts_found": 33,
+        "transactions": 33
+      },
+      "source_path": {
+        "basis_warning": "Live source observations are probability features, not settlement truth.",
+        "first_seen_rows": 87,
+        "mapping_rule": "whole-degree official station max",
+        "observed_max_c": 31.0,
+        "observed_min_c": 20.0,
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/2026-07-26/sources.jsonl",
+        "running_max_changes": [
+          {
+            "detected_at_utc": "2026-07-26T00:01:25.317250+00:00",
+            "raw_metar": "METAR LIMC 252350Z 01006KT 9999 BKN080 21/19 Q1011 NOSIG",
+            "report_ts_utc": "2026-07-25T23:50:00+00:00",
+            "running_max_c": 21.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 21.0
+          },
+          {
+            "detected_at_utc": "2026-07-26T07:06:57.218111+00:00",
+            "raw_metar": "METAR LIMC 260650Z 35003KT 290V060 9999 FEW050 22/17 Q1010 NOSIG",
+            "report_ts_utc": "2026-07-26T06:50:00+00:00",
+            "running_max_c": 22.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 22.0
+          },
+          {
+            "detected_at_utc": "2026-07-26T07:27:49.157551+00:00",
+            "raw_metar": "METAR LIMC 260720Z 32005KT 300V010 9999 SCT050 23/17 Q1010 NOSIG",
+            "report_ts_utc": "2026-07-26T07:20:00+00:00",
+            "running_max_c": 23.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 23.0
+          },
+          {
+            "detected_at_utc": "2026-07-26T08:27:48.087010+00:00",
+            "raw_metar": "METAR LIMC 260820Z VRB02KT CAVOK 25/17 Q1010 NOSIG",
+            "report_ts_utc": "2026-07-26T08:20:00+00:00",
+            "running_max_c": 25.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 25.0
+          },
+          {
+            "detected_at_utc": "2026-07-26T09:27:37.222422+00:00",
+            "raw_metar": "METAR LIMC 260920Z VRB03KT 9999 FEW050 26/15 Q1010 NOSIG",
+            "report_ts_utc": "2026-07-26T09:20:00+00:00",
+            "running_max_c": 26.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 26.0
+          },
+          {
+            "detected_at_utc": "2026-07-26T10:56:10.141055+00:00",
+            "raw_metar": "METAR LIMC 261050Z VRB02KT 9999 SCT050 27/14 Q1010 NOSIG",
+            "report_ts_utc": "2026-07-26T10:50:00+00:00",
+            "running_max_c": 27.0,
+            "source": "aviationweather_metar",
+            "station": "LIMC",
+            "temp_c": 27.0
+          },
+          {
+            "detected_at_utc": "2026-07-26T12:28:26.386771+00:00",
+            "raw_metar": "METAR LIMC 261220Z VRB03KT 9999 FEW050 29/16 Q1009 NOSIG",
+            "report_ts_utc": "2026-07-26T12:20:00+00:00",
+            "running_max_c": 29.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 29.0
+          },
+          {
+            "detected_at_utc": "2026-07-26T13:56:09.187742+00:00",
+            "raw_metar": "METAR LIMC 261350Z VRB02KT 9999 FEW055 31/13 Q1008 NOSIG",
+            "report_ts_utc": "2026-07-26T13:50:00+00:00",
+            "running_max_c": 31.0,
+            "source": "aviationweather_metar",
+            "station": "LIMC",
+            "temp_c": 31.0
+          }
+        ],
+        "settlement_source": "WU official station from market rules",
+        "sources": [
+          "aviationweather_cache_csv",
+          "aviationweather_metar"
+        ]
+      },
+      "target_date": "2026-07-26",
+      "winner_condition": "0xe88e37cd29cd9417799d4d562fce09350a843337d35b74bfdd6db09aff6ffc26",
+      "winner_label": "31°C"
+    },
+    {
+      "activity": {
+        "conversion_types": {
+          "REDEEM": 1
+        },
+        "first_trade_utc": "2026-07-06T22:22:28+00:00",
+        "last_trade_utc": "2026-07-07T15:57:02+00:00",
+        "rows": 77,
+        "trade_rows": 76,
+        "transactions": 76
+      },
+      "case_class": "flat",
+      "city": "paris",
+      "condition_flows": [
+        {
+          "buy_cost": 220.805398,
+          "buy_shares": 467.61805000000004,
+          "condition_id": "0xa6bd54a94a3beeb20bf81818870931b34a994aa982f58044ced79d085b1a937f",
+          "label": "34°C",
+          "net_trade_shares": 467.61805000000004,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -220.805398
+        },
+        {
+          "buy_cost": 102.51431,
+          "buy_shares": 425.5792,
+          "condition_id": "0xf2e6fc1e41c24e2be4a357c9e1d88548c3f5f89625dcc58a94b11a5b78907969",
+          "label": "33°C",
+          "net_trade_shares": 322.344156,
+          "outcome": "YES",
+          "sell_proceeds": 101.067108,
+          "sell_shares": 103.235044,
+          "trade_cashflow": -1.44720199999999
+        },
+        {
+          "buy_cost": 103.0,
+          "buy_shares": 250.0,
+          "condition_id": "0x41d85a4cac358e48224e3696e4cc72f399c93c21e51b9a6da3de5eaefbd1d801",
+          "label": "35°C",
+          "net_trade_shares": 0.0,
+          "outcome": "YES",
+          "sell_proceeds": 85.41423,
+          "sell_shares": 250.0,
+          "trade_cashflow": -17.585769999999997
+        },
+        {
+          "buy_cost": 45.088504000000015,
+          "buy_shares": 1203.550993,
+          "condition_id": "0x2fd565dd7b4ab00dcd4ff4ddb974dd72d81acafbc09851555d3222a5ca01626f",
+          "label": "32°C",
+          "net_trade_shares": 1203.550993,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -45.088504000000015
+        },
+        {
+          "buy_cost": 19.21061,
+          "buy_shares": 305.03999999999996,
+          "condition_id": "0x3655dcf42a988cdcca798dc70ee42cc0db937a7f4aae01d2ba1f01ad5b4484c1",
+          "label": "36°C",
+          "net_trade_shares": 305.03999999999996,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -19.21061
+        },
+        {
+          "buy_cost": 15.557379000000012,
+          "buy_shares": 1657.6859,
+          "condition_id": "0x112b2d6d3147e82ed1c75567f1aead2f3fb35258718d444a285f5c629d35511d",
+          "label": "31°C or below",
+          "net_trade_shares": 1657.6859,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -15.557379000000012
+        }
+      ],
+      "decision_points": {
+        "first_buy": {
+          "latest_pit_forecast": null,
+          "local": "2026-07-07T00:22:28+02:00",
+          "timestamp": 1783376548,
+          "utc": "2026-07-06T22:22:28+00:00"
+        },
+        "first_sell": {
+          "latest_pit_forecast": null,
+          "local": "2026-07-07T09:22:44+02:00",
+          "timestamp": 1783408964,
+          "utc": "2026-07-07T07:22:44+00:00"
+        },
+        "largest_buy_transaction": {
+          "latest_pit_forecast": null,
+          "local": "2026-07-07T09:25:05+02:00",
+          "timestamp": 1783409105,
+          "utc": "2026-07-07T07:25:05+00:00"
+        }
+      },
+      "event_slugs": [
+        "highest-temperature-in-paris-on-july-7-2026"
+      ],
+      "evidence_boundary": {
+        "order": "role/order_hash/fills_onchain; post/cancel/queue_unobserved",
+        "plan": "inferred_only_from_public_fills",
+        "settlement_pnl": "cashflow_complete_public_activity",
+        "signal": "unobserved_private_state"
+      },
+      "exit_style": "active_sell_then_settlement",
+      "expression": "yes_strip",
+      "onchain_order_roles": {
+        "passive_maker_order": {
+          "cash": 151.44802400000003,
+          "fee": 0.37027,
+          "fill_events": 59,
+          "orders": 7,
+          "shares": 1417.224084
+        },
+        "taker_order": {
+          "cash": 530.378645,
+          "fee": 16.170939999999998,
+          "fill_events": 17,
+          "orders": 13,
+          "shares": 3245.485103
+        }
+      },
+      "orders": [
+        {
+          "average_price": 0.22,
+          "cash": 33.279399999999995,
+          "fee": 0.26855,
+          "fill_events": 4,
+          "order_hash": "0x73723354e498d609473e3b2635b97602bfc576aac1c3791d166ebc89a9a5072b",
+          "role": "passive_maker_order",
+          "shares": 151.26999999999998,
+          "side": "BUY",
+          "token_id": "4098307739642386849110116877441263286074483923159741135947763402840953298069",
+          "transaction_count": 4,
+          "transactions": [
+            "0x0e88059e8b65cb289b0cf5f0dcf5049d83eae4ade9f3738916fe8b7818fa0b9b",
+            "0x4ade806020ee036c50c28fc4373110733d8f8cfce97f337e1b7dac3370569b21",
+            "0x845e9f8a397b691f6810110064c267133d38141a44f999bd089debb33331aa01",
+            "0xb3a6ee22a6098a3ed3fa527c2feb16cad2f25650fa5460750d2f8d740da6097d"
+          ]
+        },
+        {
+          "average_price": 0.010000000000000009,
+          "cash": 10.106959000000009,
+          "fee": 0.10172,
+          "fill_events": 38,
+          "order_hash": "0xea71ee4ed1a8089b3ebed6b80588319b29ee07ff435621388d50dea805f678a3",
+          "role": "passive_maker_order",
+          "shares": 1010.6958999999999,
+          "side": "BUY",
+          "token_id": "49883416558794738989188740812563309315107544199548441845349778945552999181487",
+          "transaction_count": 38,
+          "transactions": [
+            "0x036033628f17345c93df3b41534eb99ebffca8cd5f153ad0f51f4338dda2ed75",
+            "0x0638932337cc701498447605aaea8a16698f37a0e5641a541f8619883ea2d96a",
+            "0x0da56727fbb4f7b2cb39ca00847f7fc27d4d56766289384530fefaebeb9d9d57",
+            "0x2e8a9a11b085e55af73f2a2bfce8e61d4528e41ef9ce3a19e1131e7c4f24ae38",
+            "0x2f1643a25098460636d9d96fb86d7c7fc95b2eeefc160ee2ccb695df14512250",
+            "0x2f1fff69abae5f3338d5fa6caa75361f69bda1de293a2e37f7224538fae6f5af",
+            "0x30bcdd9080dd1f0b3523127133ae1f78ebaf1940b3448984b2d54667d97b0831",
+            "0x32cb867cb16fbe6833720c0382bf60c1bbface528621c7e8e3ff55cb2653f852",
+            "0x3b7a0acaa034d752825a724fce3a6f515e26bf579efcf43a86e84f9fa614cba1",
+            "0x3b93aa20b353699aef3c7c445f50440afc23f3a1c690872674e312711b82cce5",
+            "0x4071042b441873d235c6903224c53f0847ef04bf332ef2ec05488665c9a18c19",
+            "0x42f71f0132bfd9e202aa8408587be328af98c944b4648b9e7a985a7864e759b4",
+            "0x43ecb7d4ae533022de3fd9a5f1347e3783aef9585fe3daf8e829f806e4ca5a34",
+            "0x4a2231d4772adb45b6967f708678614862375053cba572d7b6dea32e8e02aa6e",
+            "0x5e854021f4d6fa138d39b77c4503c33e6eedbf3a337ed925497e0e289f559ee5",
+            "0x66d2f1dbbd9eb2723e949dca54e0b7501e2484e07c5a9202773852514a5e57f3",
+            "0x6960c9eeafb705e29f4cf7d7df9c356c3f611ce2eb61e7a2dd27bfc6d75665bb",
+            "0x69c617c4e51234b99a441bfb993a317da03985d8d2506b7fc05ce4e0059db7f7",
+            "0x6a2f90806ee3174093049ec09188ff9c3085ee3c443620d1dffbff51aa273f8a",
+            "0x6d1679646f44b68a5a66ad71c23dad80be65d6c0960fb46b594b02c0329756d5",
+            "0x7378a32af38aa7c96e692f576a125fb98ec41c8564fe8b1d848ad0dfb9a38951",
+            "0x96cb1ae55c8e69af9679eb0e14d6f7151a7eb27766e770382aa4d118686d4ed1",
+            "0xa6f0cc33d6ab8b5cb496657e490f9bc2118cdca109fcc70b8ca54c72bee784a3",
+            "0xa70bfb9c47a3976ff97abd924e014f48f297f715869bfd11cf7541cfe4e98875",
+            "0xab30114e8cff38a18c5d41707619697238171d9a7943fa3e73a5957f828f000d",
+            "0xaea6095c5cff2bb6f54ed2ee086bd8e11cc125bb7d193c43d36bd74b2cc5e293",
+            "0xafe43a61f693622a7599e05c395b876ea89c5ad866a3e602bd6eae8379704676",
+            "0xbad9b8c67d487eebb12d2e230e25b7a3688d9bacb7d5813e6711249076a6a523",
+            "0xc704c4573c943d2a3600b6392ed9caea809022a786c759b2a5416eebc47b4595",
+            "0xcc7b5fa625f52a23b4917507f8e019eeddfd50a59d6706f2d6837164cd50acbb",
+            "0xd6cb68dc49acfee6ccffc443ec4ae3b71ad1e2540fb7249654b419f853e308d2",
+            "0xe2b06c7b443f6fbeeef339549e7555ec5bafeaa70bb8e6af0c1e5a681b460fbb",
+            "0xe7f215769e4fa9bd45dcec5b31c2729b114edf982d92c01dbd645a165dee005d",
+            "0xea0997a4242b8ec6f1ebb2acea75b095c6dcc03d2ecd1f8bbed193a26f2261fe",
+            "0xf0179ff3e0050e32e20e2fb87b533bbbd2b1b133d402fd750af1c01633ad5549",
+            "0xf77d245f95a04e71dfb3c631167049ae14fb21557fa2693651da0943a47e2bb7",
+            "0xf831e6cdef2a82c7f2acfacca1f5a498fc5e724c5e7856c05d8e7dfee4654cdf",
+            "0xf8800ad89a89941430880e304ed42c2032da0fa81a27d222ddc4dc29ae64c8ae"
+          ]
+        },
+        {
+          "average_price": 0.049999999999999996,
+          "cash": 5.884657,
+          "fee": 0.0,
+          "fill_events": 11,
+          "order_hash": "0xfade6be212140dfb33f8a5446e7819c20f82bad7c48deb657dd6e4453dd6a458",
+          "role": "passive_maker_order",
+          "shares": 117.69314,
+          "side": "BUY",
+          "token_id": "58140557294603153671514743146991396260103145911735968171121475756265329862191",
+          "transaction_count": 11,
+          "transactions": [
+            "0x407a9062b6ea49f8c592cbd3948840085ba05624caa6f85830b93ceb12c0dcf4",
+            "0x54a94e8b5cb38fab68f829515c8cafcfef39d7c86f427b0968e630c3b40e1c33",
+            "0x66ae820eafa9ce9406f119fec6ec26ab86566088750697ff2972a8d562185d6c",
+            "0x7e74419678e75cc75d6a07cf883584620b3e16818ab60fcc526a5565596c41c1",
+            "0x9272899f708f3a3b25999e6dbc7c6ea587f3dd0c7939741e8fe02d9df2879321",
+            "0x96d39cdaeb54a9c86210ae745c4b23c8299183a1b8a0cf0c5984b11801aead3f",
+            "0xaaa38101210f15ed914f89632b92dfac9982338c305c4ca2fda10f36b28dd41c",
+            "0xbc4bbeb848bae43acb491596a16dd8787298cf74d83392f16edeabffe281731d",
+            "0xbc5673eae272d2fbf76be9f7dce4bd602985c97025e3e31d8f7812faa42fd117",
+            "0xd79b397539611aecb5340245a7f9f55bd8978397173fd0d89168858289fa18df",
+            "0xf5ad41bd21bed2cc69b464a47d46feba81ea716cd526e64a3e33c2e3117702bd"
+          ]
+        },
+        {
+          "average_price": 0.030000000000000002,
+          "cash": 0.5799,
+          "fee": 0.0,
+          "fill_events": 1,
+          "order_hash": "0x6dd14eb4171b8304018d1ef713fcd0a0a1f0875dc54a11749f3378e680cc2536",
+          "role": "passive_maker_order",
+          "shares": 19.33,
+          "side": "BUY",
+          "token_id": "58140557294603153671514743146991396260103145911735968171121475756265329862191",
+          "transaction_count": 1,
+          "transactions": [
+            "0xc22aab8db2d0f1e2f3817dd0120abee9745525e963e87ce04d37c1df978b2f99"
+          ]
+        },
+        {
+          "average_price": 0.038,
+          "cash": 0.38,
+          "fee": 0.0,
+          "fill_events": 2,
+          "order_hash": "0xb9d9d9baf4e032ce46363742de9d1d98729924080224897a8d2e6075513dcc74",
+          "role": "passive_maker_order",
+          "shares": 10.0,
+          "side": "BUY",
+          "token_id": "58140557294603153671514743146991396260103145911735968171121475756265329862191",
+          "transaction_count": 2,
+          "transactions": [
+            "0x843bef2ff14ce0862c6880fbf81f1022611d6258a832fb60fb16543a8faf8ea3",
+            "0xcb26a7f0c6518bca3b7b9ab971bbe351ce5718909c09a0875a589150b13785f3"
+          ]
+        },
+        {
+          "average_price": 0.03,
+          "cash": 0.15,
+          "fee": 0.0,
+          "fill_events": 1,
+          "order_hash": "0x51a635e81256bd3e89f3ff8f04102821f88d197dfd453c0d721032873488da19",
+          "role": "passive_maker_order",
+          "shares": 5.0,
+          "side": "BUY",
+          "token_id": "58140557294603153671514743146991396260103145911735968171121475756265329862191",
+          "transaction_count": 1,
+          "transactions": [
+            "0x96ffe158d2fc9484ab823f618272a9b93150b5c4cdd47a6d553b3c1b64b91f60"
+          ]
+        },
+        {
+          "average_price": 0.9789999992638159,
+          "cash": 101.067108,
+          "fee": 0.0,
+          "fill_events": 2,
+          "order_hash": "0x08745bfec223e1e98f0405eb87dd4414786d3a31740963a33a131162c3ded39f",
+          "role": "passive_maker_order",
+          "shares": 103.235044,
+          "side": "SELL",
+          "token_id": "4098307739642386849110116877441263286074483923159741135947763402840953298069",
+          "transaction_count": 2,
+          "transactions": [
+            "0x25ba2a4693cd18500c28dc7ed433e611365adf1b2fb17e36c5c747b153b43861",
+            "0x54400581a2e29c1c2dca921b02f0900f0846ddd661292cc864626ad6336fd039"
+          ]
+        },
+        {
+          "average_price": 0.4685375332505812,
+          "cash": 114.999999,
+          "fee": 3.0559,
+          "fill_events": 1,
+          "order_hash": "0x91d8a2d7ca4168eb93f3ba41b38426c2a6b878697e7e1e6d8289379de6bfbc9b",
+          "role": "taker_order",
+          "shares": 245.444582,
+          "side": "BUY",
+          "token_id": "78083085018804379032862036754752452773720983140482172416886644914783597432356",
+          "transaction_count": 1,
+          "transactions": [
+            "0x7e39fbb2e2ff4b412c8461da59c2b3a9acef34978fbc25986d42baf5dfa3ea68"
+          ]
+        },
+        {
+          "average_price": 0.4,
+          "cash": 100.0,
+          "fee": 3.0,
+          "fill_events": 1,
+          "order_hash": "0x5068ff90b28e66a59a999b58e8190a3a5afbdaa7a66d3c1bd0489d93a4adade8",
+          "role": "taker_order",
+          "shares": 250.0,
+          "side": "BUY",
+          "token_id": "21040477171998422445332412891363136126551070109206529011619548359157766340147",
+          "transaction_count": 1,
+          "transactions": [
+            "0x4bbb0c0f8810eb3a3a3065a1caddc0d4247e8e767ec4e998de6b66bf9f0bd51a"
+          ]
+        },
+        {
+          "average_price": 0.4500987444639429,
+          "cash": 99.999999,
+          "fee": 2.7495,
+          "fill_events": 1,
+          "order_hash": "0x0bc9f105211ab7cf5bc7cc8e9c48afb41699c265e62703d32f6c3671cd2cd021",
+          "role": "taker_order",
+          "shares": 222.173468,
+          "side": "BUY",
+          "token_id": "78083085018804379032862036754752452773720983140482172416886644914783597432356",
+          "transaction_count": 1,
+          "transactions": [
+            "0x0a75db6d41588609e3fa2f1e88f4253566896c88da6dea651c3a85f6bbd04f10"
+          ]
+        },
+        {
+          "average_price": 0.23409423322902093,
+          "cash": 50.0,
+          "fee": 1.91476,
+          "fill_events": 1,
+          "order_hash": "0x7cec03984cc8db11cbd81c01b38fdd5eeacbb368c7dc66e17c4ffe394060d411",
+          "role": "taker_order",
+          "shares": 213.5892,
+          "side": "BUY",
+          "token_id": "4098307739642386849110116877441263286074483923159741135947763402840953298069",
+          "transaction_count": 1,
+          "transactions": [
+            "0x4553fd01cf3a136fc7d3f409ce92046567575528c2afb63433ee3c44f3db2bac"
+          ]
+        },
+        {
+          "average_price": 0.062,
+          "cash": 18.91248,
+          "fee": 0.29813,
+          "fill_events": 2,
+          "order_hash": "0xcf47868e1e7507ad08ab393bc399e985894b0ff785cba6657a7e9b046b697d34",
+          "role": "taker_order",
+          "shares": 305.03999999999996,
+          "side": "BUY",
+          "token_id": "12944807763970379646049680793603254638821061307975087267473820994080467592688",
+          "transaction_count": 2,
+          "transactions": [
+            "0x1c0a6489e3cb6f4807096cd0c5561e68953abff8ae33c6449b60cf8d88343273",
+            "0xf65abb4e9246ea4b84ac66bc47f166470dc8bf2bccabf6f635cbaa1c344cc9b8"
+          ]
+        },
+        {
+          "average_price": 0.043630591589005105,
+          "cash": 14.999999,
+          "fee": 0.71727,
+          "fill_events": 1,
+          "order_hash": "0xfd6154d6b7878a9e348ae5df10243d5884d31756ee92a832a50a84e9ee00e81e",
+          "role": "taker_order",
+          "shares": 343.795453,
+          "side": "BUY",
+          "token_id": "58140557294603153671514743146991396260103145911735968171121475756265329862191",
+          "transaction_count": 1,
+          "transactions": [
+            "0xe945a023031c7ec7fa5e4c05bab7582171038366007c60a84b0b58cd296af633"
+          ]
+        },
+        {
+          "average_price": 0.044301694539816146,
+          "cash": 12.0,
+          "fee": 0.57341,
+          "fill_events": 1,
+          "order_hash": "0xb9a8b457f53c7041b597d70b4260354839a8eeeedc273b9a4c8e7b33daac17a3",
+          "role": "taker_order",
+          "shares": 270.87,
+          "side": "BUY",
+          "token_id": "58140557294603153671514743146991396260103145911735968171121475756265329862191",
+          "transaction_count": 1,
+          "transactions": [
+            "0xe54ea996329f9a4d8eadc69572d80a02b14a55809b1a53d5603aaa7fedddc6ec"
+          ]
+        },
+        {
+          "average_price": 0.32242424242424245,
+          "cash": 10.64,
+          "fee": 0.36047,
+          "fill_events": 1,
+          "order_hash": "0xd49cafb3e6bd0345394a2b71d03891a0fa00e32af49e3f3bd92c8e7a9ea1c046",
+          "role": "taker_order",
+          "shares": 33.0,
+          "side": "BUY",
+          "token_id": "4098307739642386849110116877441263286074483923159741135947763402840953298069",
+          "transaction_count": 1,
+          "transactions": [
+            "0x7409851ba073097c08396c14ed87caef558cd874cf18825247a48a555d6137b1"
+          ]
+        },
+        {
+          "average_price": 0.02,
+          "cash": 8.035248000000001,
+          "fee": 0.08707,
+          "fill_events": 4,
+          "order_hash": "0xf878e32ed946f063ce6460166b509cbe34ab6e661844f142994599e97d8a38f9",
+          "role": "taker_order",
+          "shares": 401.7624,
+          "side": "BUY",
+          "token_id": "58140557294603153671514743146991396260103145911735968171121475756265329862191",
+          "transaction_count": 4,
+          "transactions": [
+            "0x20e4f76eaf8a258a3c4f9b0b36393aaad1d30d8daa3c407a3546baf157eeef55",
+            "0x80fb991f02b8948e0214e32a4891577c252cab7a628bfd2c1724250e476be7c1",
+            "0x86eb10c692f770768616e48dcc7e80c7c67569b91a61cb8b6f6bdbb89ccf59e6",
+            "0xe332511392e52e864d1bb965d82af799bfd530b02ec01de77bd1a13af96e7b6f"
+          ]
+        },
+        {
+          "average_price": 0.21000000000000002,
+          "cash": 5.8212,
+          "fee": 0.22993,
+          "fill_events": 1,
+          "order_hash": "0xc4684b1bb58851dc8db6a2de97c778ae693bdfd3b4e298edff6b184b1bc0350e",
+          "role": "taker_order",
+          "shares": 27.72,
+          "side": "BUY",
+          "token_id": "4098307739642386849110116877441263286074483923159741135947763402840953298069",
+          "transaction_count": 1,
+          "transactions": [
+            "0x600ed6cf7687e4894adbb298c18ed1576a58a7bf735719b600f56c1b1337a40f"
+          ]
+        },
+        {
+          "average_price": 0.007876350484551538,
+          "cash": 5.09592,
+          "fee": 0.25278,
+          "fill_events": 1,
+          "order_hash": "0xe3f710a0202e69e4bd0643ff6cd1aee25738326c1ba06e1e6911a6eab89a1bad",
+          "role": "taker_order",
+          "shares": 646.99,
+          "side": "BUY",
+          "token_id": "49883416558794738989188740812563309315107544199548441845349778945552999181487",
+          "transaction_count": 1,
+          "transactions": [
+            "0xf6e05c5812787e639a9eee1b3af584d6d43e258bdeec3849eb30b3e018faf9d9"
+          ]
+        },
+        {
+          "average_price": 0.04570940170940171,
+          "cash": 1.6044,
+          "fee": 0.07655,
+          "fill_events": 1,
+          "order_hash": "0xc4d6ca11bc9e6e1f29c52462d75a2670fbcb9038692458fdce8b805d1a48bc13",
+          "role": "taker_order",
+          "shares": 35.1,
+          "side": "BUY",
+          "token_id": "58140557294603153671514743146991396260103145911735968171121475756265329862191",
+          "transaction_count": 1,
+          "transactions": [
+            "0xf2b6f3bcf737371e18a084b2f8c4c0b39ed40966ababbeded7e17bd498889561"
+          ]
+        },
+        {
+          "average_price": 0.3530776,
+          "cash": 88.2694,
+          "fee": 2.85517,
+          "fill_events": 1,
+          "order_hash": "0xd27cfb3b2db6010a778a80ac3b6c8a039b1b45d1afa78d2853f95e60cf3ebf3c",
+          "role": "taker_order",
+          "shares": 250.0,
+          "side": "SELL",
+          "token_id": "21040477171998422445332412891363136126551070109206529011619548359157766340147",
+          "transaction_count": 1,
+          "transactions": [
+            "0x473093aff2421acc149072afe14c9381282dbff13763953c7220824dd36ae0f9"
+          ]
+        }
+      ],
+      "performance": {
+        "buy_cost": 506.176201,
+        "merge_cash": 0.0,
+        "public_cashflow_pnl": 2.649293000000057,
+        "redeem_cash": 322.344156,
+        "sell_proceeds": 186.48133800000002,
+        "split_cash": 0.0,
+        "token_payout_reconstructed": 322.34415600000005,
+        "turnover_roi": 0.005233934339003255
+      },
+      "phases_gap_gt_10m": [
+        {
+          "buy_cost": 6.65499,
+          "first_local": "2026-07-07T00:22:28+02:00",
+          "first_ts": 1783376548,
+          "first_utc": "2026-07-06T22:22:28+00:00",
+          "last_local": "2026-07-07T00:22:28+02:00",
+          "last_ts": 1783376548,
+          "last_utc": "2026-07-06T22:22:28+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 36°C",
+              "cash": 6.65499,
+              "rows": 1,
+              "shares": 102.53
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 12.55562,
+          "first_local": "2026-07-07T00:34:41+02:00",
+          "first_ts": 1783377281,
+          "first_utc": "2026-07-06T22:34:41+00:00",
+          "last_local": "2026-07-07T00:34:41+02:00",
+          "last_ts": 1783377281,
+          "last_utc": "2026-07-06T22:34:41+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 36°C",
+              "cash": 12.55562,
+              "rows": 1,
+              "shares": 202.51
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 103.0,
+          "first_local": "2026-07-07T02:28:55+02:00",
+          "first_ts": 1783384135,
+          "first_utc": "2026-07-07T00:28:55+00:00",
+          "last_local": "2026-07-07T02:28:55+02:00",
+          "last_ts": 1783384135,
+          "last_utc": "2026-07-07T00:28:55+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 35°C",
+              "cash": 103.0,
+              "rows": 1,
+              "shares": 250.0
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 169.970659,
+          "first_local": "2026-07-07T09:22:44+02:00",
+          "first_ts": 1783408964,
+          "first_utc": "2026-07-07T07:22:44+00:00",
+          "last_local": "2026-07-07T09:25:19+02:00",
+          "last_ts": 1783409119,
+          "last_utc": "2026-07-07T07:25:19+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 3
+          },
+          "sell_proceeds": 85.41423,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 34°C",
+              "cash": 118.055899,
+              "rows": 1,
+              "shares": 245.444582
+            },
+            {
+              "action": "SELL YES 35°C",
+              "cash": 85.41423,
+              "rows": 1,
+              "shares": 250.0
+            },
+            {
+              "action": "BUY YES 33°C",
+              "cash": 51.91476,
+              "rows": 1,
+              "shares": 213.5892
+            }
+          ],
+          "trade_rows": 3,
+          "unique_transactions": 3
+        },
+        {
+          "buy_cost": 1.86407,
+          "first_local": "2026-07-07T10:04:01+02:00",
+          "first_ts": 1783411441,
+          "first_utc": "2026-07-07T08:04:01+00:00",
+          "last_local": "2026-07-07T10:04:01+02:00",
+          "last_ts": 1783411441,
+          "last_utc": "2026-07-07T08:04:01+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 32°C",
+              "cash": 1.86407,
+              "rows": 1,
+              "shares": 88.85
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 0.1,
+          "first_local": "2026-07-07T11:12:50+02:00",
+          "first_ts": 1783415570,
+          "first_utc": "2026-07-07T09:12:50+00:00",
+          "last_local": "2026-07-07T11:12:50+02:00",
+          "last_ts": 1783415570,
+          "last_utc": "2026-07-07T09:12:50+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 32°C",
+              "cash": 0.1,
+              "rows": 1,
+              "shares": 5.0
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 0.0358,
+          "first_local": "2026-07-07T12:05:49+02:00",
+          "first_ts": 1783418749,
+          "first_utc": "2026-07-07T10:05:49+00:00",
+          "last_local": "2026-07-07T12:05:49+02:00",
+          "last_ts": 1783418749,
+          "last_utc": "2026-07-07T10:05:49+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 32°C",
+              "cash": 0.0358,
+              "rows": 1,
+              "shares": 1.79
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 6.122448,
+          "first_local": "2026-07-07T12:23:04+02:00",
+          "first_ts": 1783419784,
+          "first_utc": "2026-07-07T10:23:04+00:00",
+          "last_local": "2026-07-07T12:23:04+02:00",
+          "last_ts": 1783419784,
+          "last_utc": "2026-07-07T10:23:04+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 32°C",
+              "cash": 6.122448,
+              "rows": 1,
+              "shares": 306.1224
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 55.466349,
+          "first_local": "2026-07-07T12:49:14+02:00",
+          "first_ts": 1783421354,
+          "first_utc": "2026-07-07T10:49:14+00:00",
+          "last_local": "2026-07-07T13:08:28+02:00",
+          "last_ts": 1783422508,
+          "last_utc": "2026-07-07T11:08:28+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 4,
+            "taker_order": 3
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 33°C",
+              "cash": 39.59908,
+              "rows": 5,
+              "shares": 178.99
+            },
+            {
+              "action": "BUY YES 32°C",
+              "cash": 15.867269,
+              "rows": 2,
+              "shares": 348.795453
+            }
+          ],
+          "trade_rows": 7,
+          "unique_transactions": 7
+        },
+        {
+          "buy_cost": 41.77210899999992,
+          "first_local": "2026-07-07T13:21:25+02:00",
+          "first_ts": 1783423285,
+          "first_utc": "2026-07-07T11:21:25+00:00",
+          "last_local": "2026-07-07T13:43:16+02:00",
+          "last_ts": 1783424596,
+          "last_utc": "2026-07-07T11:43:16+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 40,
+            "taker_order": 5
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 31°C or below",
+              "cash": 15.557379000000012,
+              "rows": 39,
+              "shares": 1657.6859
+            },
+            {
+              "action": "BUY YES 32°C",
+              "cash": 15.214260000000001,
+              "rows": 5,
+              "shares": 335.3
+            },
+            {
+              "action": "BUY YES 33°C",
+              "cash": 11.00047,
+              "rows": 1,
+              "shares": 33.0
+            }
+          ],
+          "trade_rows": 45,
+          "unique_transactions": 45
+        },
+        {
+          "buy_cost": 5.884657000000001,
+          "first_local": "2026-07-07T14:11:11+02:00",
+          "first_ts": 1783426271,
+          "first_utc": "2026-07-07T12:11:11+00:00",
+          "last_local": "2026-07-07T14:23:55+02:00",
+          "last_ts": 1783427035,
+          "last_utc": "2026-07-07T12:23:55+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 11
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 32°C",
+              "cash": 5.884657000000001,
+              "rows": 11,
+              "shares": 117.69314
+            }
+          ],
+          "trade_rows": 11,
+          "unique_transactions": 11
+        },
+        {
+          "buy_cost": 102.749499,
+          "first_local": "2026-07-07T15:56:13+02:00",
+          "first_ts": 1783432573,
+          "first_utc": "2026-07-07T13:56:13+00:00",
+          "last_local": "2026-07-07T15:56:13+02:00",
+          "last_ts": 1783432573,
+          "last_utc": "2026-07-07T13:56:13+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 34°C",
+              "cash": 102.749499,
+              "rows": 1,
+              "shares": 222.173468
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-07-07T17:55:50+02:00",
+          "first_ts": 1783439750,
+          "first_utc": "2026-07-07T15:55:50+00:00",
+          "last_local": "2026-07-07T17:57:02+02:00",
+          "last_ts": 1783439822,
+          "last_utc": "2026-07-07T15:57:02+00:00",
+          "onchain_order_role_fill_events": {
+            "passive_maker_order": 2
+          },
+          "sell_proceeds": 101.067108,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 33°C",
+              "cash": 101.067108,
+              "rows": 2,
+              "shares": 103.235044
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        }
+      ],
+      "receipt_coverage": {
+        "receipts_found": 76,
+        "transactions": 76
+      },
+      "source_path": {
+        "basis_warning": "Live source observations are probability features, not settlement truth.",
+        "first_seen_rows": 28,
+        "mapping_rule": "whole-degree official station max",
+        "observed_max_c": 33.0,
+        "observed_min_c": 24.0,
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/2026-07-07/sources.jsonl",
+        "running_max_changes": [
+          {
+            "detected_at_utc": "2026-07-07T08:15:26.285489+00:00",
+            "raw_metar": "METAR LFPB 070800Z AUTO 27007KT 240V300 CAVOK 27/10 Q1018 NOSIG",
+            "report_ts_utc": "2026-07-07T08:00:00+00:00",
+            "running_max_c": 27.0,
+            "source": "aviationweather_metar",
+            "station": "LFPB",
+            "temp_c": 27.0
+          },
+          {
+            "detected_at_utc": "2026-07-07T08:35:54.665026+00:00",
+            "raw_metar": "METAR LFPB 070830Z AUTO 28008KT 250V310 CAVOK 28/09 Q1018 NOSIG",
+            "report_ts_utc": "2026-07-07T08:30:00+00:00",
+            "running_max_c": 28.0,
+            "source": "aviationweather_metar",
+            "station": "LFPB",
+            "temp_c": 28.0
+          },
+          {
+            "detected_at_utc": "2026-07-07T09:05:43.887734+00:00",
+            "raw_metar": "METAR LFPB 070900Z AUTO 30006KT 240V340 CAVOK 29/08 Q1018 NOSIG",
+            "report_ts_utc": "2026-07-07T09:00:00+00:00",
+            "running_max_c": 29.0,
+            "source": "aviationweather_metar",
+            "station": "LFPB",
+            "temp_c": 29.0
+          },
+          {
+            "detected_at_utc": "2026-07-07T09:35:40.936485+00:00",
+            "raw_metar": "METAR LFPB 070930Z AUTO 28006KT 230V340 CAVOK 30/10 Q1018 NOSIG",
+            "report_ts_utc": "2026-07-07T09:30:00+00:00",
+            "running_max_c": 30.0,
+            "source": "aviationweather_metar",
+            "station": "LFPB",
+            "temp_c": 30.0
+          },
+          {
+            "detected_at_utc": "2026-07-07T10:36:46.843140+00:00",
+            "raw_metar": "METAR LFPB 071030Z AUTO 27007KT 230V350 CAVOK 31/11 Q1017 NOSIG",
+            "report_ts_utc": "2026-07-07T10:30:00+00:00",
+            "running_max_c": 31.0,
+            "source": "aviationweather_metar",
+            "station": "LFPB",
+            "temp_c": 31.0
+          },
+          {
+            "detected_at_utc": "2026-07-07T12:02:22.065864+00:00",
+            "raw_metar": "METAR LFPB 071200Z AUTO 30010KT 260V340 CAVOK 32/09 Q1017 NOSIG",
+            "report_ts_utc": "2026-07-07T12:00:00+00:00",
+            "running_max_c": 32.0,
+            "source": "aviationweather_metar",
+            "station": "LFPB",
+            "temp_c": 32.0
+          },
+          {
+            "detected_at_utc": "2026-07-07T13:34:14.235588+00:00",
+            "raw_metar": "METAR LFPB 071330Z AUTO 31008KT 250V350 CAVOK 33/11 Q1017 NOSIG",
+            "report_ts_utc": "2026-07-07T13:30:00+00:00",
+            "running_max_c": 33.0,
+            "source": "aviationweather_metar",
+            "station": "LFPB",
+            "temp_c": 33.0
+          }
+        ],
+        "settlement_source": "WU official station from market rules",
+        "sources": [
+          "aviationweather_metar"
+        ]
+      },
+      "target_date": "2026-07-07",
+      "winner_condition": "0xf2e6fc1e41c24e2be4a357c9e1d88548c3f5f89625dcc58a94b11a5b78907969",
+      "winner_label": "33°C"
+    },
+    {
+      "activity": {
+        "conversion_types": {
+          "REDEEM": 1
+        },
+        "first_trade_utc": "2026-07-23T22:24:13+00:00",
+        "last_trade_utc": "2026-07-25T13:58:13+00:00",
+        "rows": 13,
+        "trade_rows": 12,
+        "transactions": 12
+      },
+      "case_class": "typical_win",
+      "city": "milan",
+      "condition_flows": [
+        {
+          "buy_cost": 413.91797,
+          "buy_shares": 1359.18,
+          "condition_id": "0x5fb296f8bbb5e0d44fc6a8b3f6e33953fbc8fb416cf143089747166a0296ea79",
+          "label": "28°C or below",
+          "net_trade_shares": 0.0,
+          "outcome": "YES",
+          "sell_proceeds": 474.71525,
+          "sell_shares": 1359.18,
+          "trade_cashflow": 60.79728
+        },
+        {
+          "buy_cost": 811.487661,
+          "buy_shares": 1860.7331500000003,
+          "condition_id": "0x099144139bf9583c5eaff1494897745967128557880a0334ad6cac1cc276f128",
+          "label": "30°C",
+          "net_trade_shares": 1860.7331500000003,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -811.487661
+        },
+        {
+          "buy_cost": 309.918059,
+          "buy_shares": 885.490293,
+          "condition_id": "0xc24ef7f5def0824272fc6375d35802b555ec9618bc0b1b6e8c777b7af519d373",
+          "label": "29°C",
+          "net_trade_shares": 0.00029299999994236714,
+          "outcome": "YES",
+          "sell_proceeds": 336.34762,
+          "sell_shares": 885.49,
+          "trade_cashflow": 26.42956099999998
+        },
+        {
+          "buy_cost": 202.279648,
+          "buy_shares": 259.055895,
+          "condition_id": "0x099144139bf9583c5eaff1494897745967128557880a0334ad6cac1cc276f128",
+          "label": "30°C",
+          "net_trade_shares": 0.0058950000000095315,
+          "outcome": "NO",
+          "sell_proceeds": 180.0801,
+          "sell_shares": 259.05,
+          "trade_cashflow": -22.19954800000002
+        },
+        {
+          "buy_cost": 228.95347900000002,
+          "buy_shares": 1187.488887,
+          "condition_id": "0x58e332885ec37042fb86906f97ec2177aadc54c9539be2a4cf344066db1f453f",
+          "label": "31°C",
+          "net_trade_shares": 1187.488887,
+          "outcome": "YES",
+          "sell_proceeds": 0.0,
+          "sell_shares": 0.0,
+          "trade_cashflow": -228.95347900000002
+        }
+      ],
+      "decision_points": {
+        "first_buy": {
+          "latest_pit_forecast": null,
+          "local": "2026-07-24T00:24:13+02:00",
+          "timestamp": 1784845453,
+          "utc": "2026-07-23T22:24:13+00:00"
+        },
+        "first_sell": {
+          "latest_pit_forecast": {
+            "assigned_model": "ecmwf",
+            "available_at_utc": "2026-07-24T00:46:42.488925Z",
+            "capture_id": "forecast_hourly_curves_20260724_084043_677fdc9e52",
+            "fallback": false,
+            "first_seen_utc": "2026-07-24T00:11:18.524276Z",
+            "forecast_max_c": 30.333333333333332,
+            "forecast_max_f": 86.6,
+            "forecast_peak_time_local": "2026-07-25T15:00",
+            "path": "/Volumes/jrs/weather_data_feed_service_runtime/targeted_output/forecast_hourly_curves/2026-07-24/forecast_hourly_curves_20260724_084043_677fdc9e52.jsonl",
+            "source": "open_meteo_live_ecmwf",
+            "values_hash": "8a6375d3bee841ac"
+          },
+          "local": "2026-07-24T02:55:01+02:00",
+          "timestamp": 1784854501,
+          "utc": "2026-07-24T00:55:01+00:00"
+        },
+        "largest_buy_transaction": {
+          "latest_pit_forecast": null,
+          "local": "2026-07-24T00:24:13+02:00",
+          "timestamp": 1784845453,
+          "utc": "2026-07-23T22:24:13+00:00"
+        }
+      },
+      "event_slugs": [
+        "highest-temperature-in-milan-on-july-25-2026"
+      ],
+      "evidence_boundary": {
+        "order": "role/order_hash/fills_onchain; post/cancel/queue_unobserved",
+        "plan": "inferred_only_from_public_fills",
+        "settlement_pnl": "cashflow_complete_public_activity",
+        "signal": "unobserved_private_state"
+      },
+      "exit_style": "active_sell_then_settlement",
+      "expression": "mixed_yes_no",
+      "onchain_order_roles": {
+        "taker_order": {
+          "cash": 2929.8644370000006,
+          "fee": 85.66265,
+          "fill_events": 12,
+          "orders": 12,
+          "shares": 8055.6682249999985
+        }
+      },
+      "orders": [
+        {
+          "average_price": 0.294153702967966,
+          "cash": 399.80783,
+          "fee": 14.11014,
+          "fill_events": 1,
+          "order_hash": "0xf08467ebb7b9810b0546bfd16e9b51d36d18e7c52f2437013860835ed71731ed",
+          "role": "taker_order",
+          "shares": 1359.18,
+          "side": "BUY",
+          "token_id": "4289667893934923438801427809243703196797089184449788230446499532378224662681",
+          "transaction_count": 1,
+          "transactions": [
+            "0x0a027d42704dba6d59e737a16b1e284c51d1c3f8184ce2f549c8c1f9d2db8d9a"
+          ]
+        },
+        {
+          "average_price": 0.38550414001157945,
+          "cash": 349.999999,
+          "fee": 10.75367,
+          "fill_events": 1,
+          "order_hash": "0xf344ee99f69e9304e8d6fb5371c4289f119a3bb9c366bd747772137b2f5f471d",
+          "role": "taker_order",
+          "shares": 907.90205,
+          "side": "BUY",
+          "token_id": "72671326517450776777188160945755927150433268341449443340773399084344352702962",
+          "transaction_count": 1,
+          "transactions": [
+            "0x9f9de0b35810009e4f790e0bea218fc1f94fd5c34576294e56dd6c6e0202484e"
+          ]
+        },
+        {
+          "average_price": 0.41459642581920425,
+          "cash": 299.999999,
+          "fee": 8.78105,
+          "fill_events": 1,
+          "order_hash": "0x7138d8f63a5b6a9d22123acb805345ff7f182200aa6e8f97c602bde2f671a3d9",
+          "role": "taker_order",
+          "shares": 723.595237,
+          "side": "BUY",
+          "token_id": "72671326517450776777188160945755927150433268341449443340773399084344352702962",
+          "transaction_count": 1,
+          "transactions": [
+            "0x739755d49bd2ab6363792361933ab67a551ec5d1fa24438aba293d319512b95d"
+          ]
+        },
+        {
+          "average_price": 0.3387953559418635,
+          "cash": 299.999999,
+          "fee": 9.91806,
+          "fill_events": 1,
+          "order_hash": "0x02a5709193bbcb3f7f55b901acc8b759ef8f24e0539540ef6c4c92240bea50d3",
+          "role": "taker_order",
+          "shares": 885.490293,
+          "side": "BUY",
+          "token_id": "110414555471569495854609264091404268642922259372219713377707255172947604375606",
+          "transaction_count": 1,
+          "transactions": [
+            "0x9feec704037a17a522ef7ff6c55b60968919082566e16532658754295090530f"
+          ]
+        },
+        {
+          "average_price": 0.7720341511626284,
+          "cash": 199.999998,
+          "fee": 2.27965,
+          "fill_events": 1,
+          "order_hash": "0x8f0786d3b80cbf307aab766b2867acf94c44ba973b4e4b324d94679f4cfa6643",
+          "role": "taker_order",
+          "shares": 259.055895,
+          "side": "BUY",
+          "token_id": "93709347724034915992743949946233108925974199211620965486053339195543800764819",
+          "transaction_count": 1,
+          "transactions": [
+            "0xcf5022d16bb06af9772d3e31187e0738ca72c002d77d7ab591ad6ebbd773915f"
+          ]
+        },
+        {
+          "average_price": 0.1959572511719751,
+          "cash": 130.0,
+          "fee": 5.22627,
+          "fill_events": 1,
+          "order_hash": "0x48680cd8f9e0181d06e169c1de6db5f272ef279a0597d8c21b25b0c89f8b3397",
+          "role": "taker_order",
+          "shares": 663.41,
+          "side": "BUY",
+          "token_id": "15560749095404142478927462194911730712369044671951843983814112075904979848575",
+          "transaction_count": 1,
+          "transactions": [
+            "0x5d5d855267609a72f1a432f83f097339fbd170b319290a1f93761514abe65a9d"
+          ]
+        },
+        {
+          "average_price": 0.8693045552708911,
+          "cash": 99.999994,
+          "fee": 0.65347,
+          "fill_events": 1,
+          "order_hash": "0x5492f1f1e4a44b1d98ba6bd9923cc52629019c0022965908e257a58f5ee03be6",
+          "role": "taker_order",
+          "shares": 115.034476,
+          "side": "BUY",
+          "token_id": "72671326517450776777188160945755927150433268341449443340773399084344352702962",
+          "transaction_count": 1,
+          "transactions": [
+            "0xadc0cb9cf3acaded81fb5efdf4db87605f7fdd1590e501aff233d1fbca8a9710"
+          ]
+        },
+        {
+          "average_price": 0.17172986974382734,
+          "cash": 89.999999,
+          "fee": 3.72721,
+          "fill_events": 1,
+          "order_hash": "0x067b41c477269c0c75b3427a05a1eb6bbff839f85089aa97ea015bc49f4ab0d2",
+          "role": "taker_order",
+          "shares": 524.078887,
+          "side": "BUY",
+          "token_id": "15560749095404142478927462194911730712369044671951843983814112075904979848575",
+          "transaction_count": 1,
+          "transactions": [
+            "0x749b9cfd9ca4a136b0009ab7550deefada993dfcc6e7913abe8f9102edcc6249"
+          ]
+        },
+        {
+          "average_price": 0.35025843425176617,
+          "cash": 39.999999,
+          "fee": 1.29948,
+          "fill_events": 1,
+          "order_hash": "0x80e1d7f3b9d3973e2988b2c442cc2335df2cc5337cd8a4b3c80c0ae955eb42a3",
+          "role": "taker_order",
+          "shares": 114.201387,
+          "side": "BUY",
+          "token_id": "72671326517450776777188160945755927150433268341449443340773399084344352702962",
+          "transaction_count": 1,
+          "transactions": [
+            "0xf8744eae028e7e9481d7aeea152870e49ff5ea707d3fbfc7db45754e8ffa4534"
+          ]
+        },
+        {
+          "average_price": 0.36079703939139773,
+          "cash": 490.38812,
+          "fee": 15.67287,
+          "fill_events": 1,
+          "order_hash": "0xfbe4ea19ba3f5d98e0cf57e374b52827e1384b51ee8e718dd51da0893509b56d",
+          "role": "taker_order",
+          "shares": 1359.18,
+          "side": "SELL",
+          "token_id": "4289667893934923438801427809243703196797089184449788230446499532378224662681",
+          "transaction_count": 1,
+          "transactions": [
+            "0x3d746abb4cb4596acf9c95deef46c180f375e2bdac6064b05c17e5eb2167f005"
+          ]
+        },
+        {
+          "average_price": 0.3917576708940812,
+          "cash": 346.8975,
+          "fee": 10.54988,
+          "fill_events": 1,
+          "order_hash": "0x8ac1861214aba10cbeeb60c0c8c7b1b24624aa6642c9f87b977ffb640b9d315d",
+          "role": "taker_order",
+          "shares": 885.49,
+          "side": "SELL",
+          "token_id": "110414555471569495854609264091404268642922259372219713377707255172947604375606",
+          "transaction_count": 1,
+          "transactions": [
+            "0x9f694e7bbc8b77175c7be673f05c728732583f5da477d45cf2cea307aaaa3aaf"
+          ]
+        },
+        {
+          "average_price": 0.7055433314032039,
+          "cash": 182.771,
+          "fee": 2.6909,
+          "fill_events": 1,
+          "order_hash": "0x5f9145edebf79e96a4b6d2ef2ecac12f82c8ef68b964c9afda1ef3325eba4585",
+          "role": "taker_order",
+          "shares": 259.05,
+          "side": "SELL",
+          "token_id": "93709347724034915992743949946233108925974199211620965486053339195543800764819",
+          "transaction_count": 1,
+          "transactions": [
+            "0x333eae67fb79ca1b56d555440a80d9904e4401c5b68b54d4d7820a37d9714c37"
+          ]
+        }
+      ],
+      "performance": {
+        "buy_cost": 1966.5568170000001,
+        "merge_cash": 0.0,
+        "public_cashflow_pnl": 885.3193029999998,
+        "redeem_cash": 1860.73315,
+        "sell_proceeds": 991.14297,
+        "split_cash": 0.0,
+        "token_payout_reconstructed": 1860.7331500000003,
+        "turnover_roi": 0.45018750302397187
+      },
+      "phases_gap_gt_10m": [
+        {
+          "buy_cost": 616.197618,
+          "first_local": "2026-07-24T00:24:13+02:00",
+          "first_ts": 1784845453,
+          "first_utc": "2026-07-23T22:24:13+00:00",
+          "last_local": "2026-07-24T00:24:24+02:00",
+          "last_ts": 1784845464,
+          "last_utc": "2026-07-23T22:24:24+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 28°C or below",
+              "cash": 413.91797,
+              "rows": 1,
+              "shares": 1359.18
+            },
+            {
+              "action": "BUY NO 30°C",
+              "cash": 202.279648,
+              "rows": 1,
+              "shares": 259.055895
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 309.918059,
+          "first_local": "2026-07-24T02:55:01+02:00",
+          "first_ts": 1784854501,
+          "first_utc": "2026-07-24T00:55:01+00:00",
+          "last_local": "2026-07-24T02:55:09+02:00",
+          "last_ts": 1784854509,
+          "last_utc": "2026-07-24T00:55:09+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 2
+          },
+          "sell_proceeds": 474.71525,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 28°C or below",
+              "cash": 474.71525,
+              "rows": 1,
+              "shares": 1359.18
+            },
+            {
+              "action": "BUY YES 29°C",
+              "cash": 309.918059,
+              "rows": 1,
+              "shares": 885.490293
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 0.0,
+          "first_local": "2026-07-24T09:49:39+02:00",
+          "first_ts": 1784879379,
+          "first_utc": "2026-07-24T07:49:39+00:00",
+          "last_local": "2026-07-24T09:49:46+02:00",
+          "last_ts": 1784879386,
+          "last_utc": "2026-07-24T07:49:46+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 2
+          },
+          "sell_proceeds": 516.42772,
+          "top_actions_by_cash": [
+            {
+              "action": "SELL YES 29°C",
+              "cash": 336.34762,
+              "rows": 1,
+              "shares": 885.49
+            },
+            {
+              "action": "SELL NO 30°C",
+              "cash": 180.0801,
+              "rows": 1,
+              "shares": 259.05
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 454.480878,
+          "first_local": "2026-07-24T12:29:09+02:00",
+          "first_ts": 1784888949,
+          "first_utc": "2026-07-24T10:29:09+00:00",
+          "last_local": "2026-07-24T12:29:16+02:00",
+          "last_ts": 1784888956,
+          "last_utc": "2026-07-24T10:29:16+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 2
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 30°C",
+              "cash": 360.753669,
+              "rows": 1,
+              "shares": 907.90205
+            },
+            {
+              "action": "BUY YES 31°C",
+              "cash": 93.727209,
+              "rows": 1,
+              "shares": 524.078887
+            }
+          ],
+          "trade_rows": 2,
+          "unique_transactions": 2
+        },
+        {
+          "buy_cost": 308.781049,
+          "first_local": "2026-07-24T18:16:28+02:00",
+          "first_ts": 1784909788,
+          "first_utc": "2026-07-24T16:16:28+00:00",
+          "last_local": "2026-07-24T18:16:28+02:00",
+          "last_ts": 1784909788,
+          "last_utc": "2026-07-24T16:16:28+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 30°C",
+              "cash": 308.781049,
+              "rows": 1,
+              "shares": 723.595237
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 135.22627,
+          "first_local": "2026-07-24T20:52:45+02:00",
+          "first_ts": 1784919165,
+          "first_utc": "2026-07-24T18:52:45+00:00",
+          "last_local": "2026-07-24T20:52:45+02:00",
+          "last_ts": 1784919165,
+          "last_utc": "2026-07-24T18:52:45+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 31°C",
+              "cash": 135.22627,
+              "rows": 1,
+              "shares": 663.41
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 41.299479,
+          "first_local": "2026-07-25T14:06:45+02:00",
+          "first_ts": 1784981205,
+          "first_utc": "2026-07-25T12:06:45+00:00",
+          "last_local": "2026-07-25T14:06:45+02:00",
+          "last_ts": 1784981205,
+          "last_utc": "2026-07-25T12:06:45+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 30°C",
+              "cash": 41.299479,
+              "rows": 1,
+              "shares": 114.201387
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        },
+        {
+          "buy_cost": 100.653464,
+          "first_local": "2026-07-25T15:58:13+02:00",
+          "first_ts": 1784987893,
+          "first_utc": "2026-07-25T13:58:13+00:00",
+          "last_local": "2026-07-25T15:58:13+02:00",
+          "last_ts": 1784987893,
+          "last_utc": "2026-07-25T13:58:13+00:00",
+          "onchain_order_role_fill_events": {
+            "taker_order": 1
+          },
+          "sell_proceeds": 0.0,
+          "top_actions_by_cash": [
+            {
+              "action": "BUY YES 30°C",
+              "cash": 100.653464,
+              "rows": 1,
+              "shares": 115.034476
+            }
+          ],
+          "trade_rows": 1,
+          "unique_transactions": 1
+        }
+      ],
+      "receipt_coverage": {
+        "receipts_found": 12,
+        "transactions": 12
+      },
+      "source_path": {
+        "basis_warning": "Live source observations are probability features, not settlement truth.",
+        "first_seen_rows": 83,
+        "mapping_rule": "whole-degree official station max",
+        "observed_max_c": 30.0,
+        "observed_min_c": 17.0,
+        "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/source_events/2026-07-25/sources.jsonl",
+        "running_max_changes": [
+          {
+            "detected_at_utc": "2026-07-25T00:01:11.321003+00:00",
+            "raw_metar": "METAR LIMC 242350Z 07006KT CAVOK 21/14 Q1015 NOSIG",
+            "report_ts_utc": "2026-07-24T23:50:00+00:00",
+            "running_max_c": 21.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 21.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T00:32:58.644941+00:00",
+            "raw_metar": "METAR LIMC 250020Z 08007KT CAVOK 22/13 Q1015 NOSIG",
+            "report_ts_utc": "2026-07-25T00:20:00+00:00",
+            "running_max_c": 22.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 22.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T06:31:28.219746+00:00",
+            "raw_metar": "METAR LIMC 250620Z 04005KT CAVOK 23/11 Q1015 NOSIG",
+            "report_ts_utc": "2026-07-25T06:20:00+00:00",
+            "running_max_c": 23.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 23.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T06:57:39.450125+00:00",
+            "raw_metar": "METAR LIMC 250650Z 03004KT CAVOK 24/10 Q1015 NOSIG",
+            "report_ts_utc": "2026-07-25T06:50:00+00:00",
+            "running_max_c": 24.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 24.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T07:27:42.396176+00:00",
+            "raw_metar": "METAR LIMC 250720Z 11004KT 040V150 CAVOK 25/09 Q1015 NOSIG",
+            "report_ts_utc": "2026-07-25T07:20:00+00:00",
+            "running_max_c": 25.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 25.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T09:01:37.525351+00:00",
+            "raw_metar": "METAR LIMC 250850Z VRB03KT CAVOK 26/07 Q1014 NOSIG",
+            "report_ts_utc": "2026-07-25T08:50:00+00:00",
+            "running_max_c": 26.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 26.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T09:26:52.481466+00:00",
+            "raw_metar": "METAR LIMC 250920Z VRB03KT CAVOK 27/06 Q1014 NOSIG",
+            "report_ts_utc": "2026-07-25T09:20:00+00:00",
+            "running_max_c": 27.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 27.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T09:57:55.407632+00:00",
+            "raw_metar": "METAR LIMC 250950Z VRB03KT CAVOK 28/07 Q1014 NOSIG",
+            "report_ts_utc": "2026-07-25T09:50:00+00:00",
+            "running_max_c": 28.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 28.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T10:56:37.518220+00:00",
+            "raw_metar": "METAR LIMC 251050Z VRB04KT CAVOK 29/04 Q1014 NOSIG",
+            "report_ts_utc": "2026-07-25T10:50:00+00:00",
+            "running_max_c": 29.0,
+            "source": "aviationweather_metar",
+            "station": "LIMC",
+            "temp_c": 29.0
+          },
+          {
+            "detected_at_utc": "2026-07-25T12:28:39.547512+00:00",
+            "raw_metar": "METAR LIMC 251220Z 12006KT 050V220 CAVOK 30/06 Q1013 NOSIG",
+            "report_ts_utc": "2026-07-25T12:20:00+00:00",
+            "running_max_c": 30.0,
+            "source": "aviationweather_cache_csv",
+            "station": "LIMC",
+            "temp_c": 30.0
+          }
+        ],
+        "settlement_source": "WU official station from market rules",
+        "sources": [
+          "aviationweather_cache_csv",
+          "aviationweather_metar"
+        ]
+      },
+      "target_date": "2026-07-25",
+      "winner_condition": "0x099144139bf9583c5eaff1494897745967128557880a0334ad6cac1cc276f128",
+      "winner_label": "30°C"
+    }
+  ],
+  "generated_at_utc": "2026-07-30T17:13:07.835828+00:00",
+  "history_summary": {
+    "coverage": {
+      "activity_rows": 23765,
+      "cities": 32,
+      "city_target_date_portfolios": 431,
+      "event_slugs": 438,
+      "independent_target_dates": 75,
+      "metadata_complete_portfolios": 431,
+      "metadata_incomplete_portfolios": 0,
+      "multi_event_slug_city_dates": 3,
+      "timezone_missing_cities": [
+        "unknown"
+      ],
+      "timezone_missing_portfolios": 3
+    },
+    "entry_fill_timing": {
+      "buy_cost_share_by_local_hour_band": {
+        "00-06": 0.2640642572449278,
+        "06-10": 0.1200725301393127,
+        "10-14": 0.1565788211284379,
+        "14-18": 0.2154458854849657,
+        "18-24": 0.2438385060023624
+      },
+      "buy_cost_share_by_target_day_offset": {
+        "-1": 0.41605354685259416,
+        "-2": 0.03355706884788578,
+        "0": 0.550312959651533,
+        "1": 7.642464799056108e-05
+      },
+      "cost_weighted_hour": {
+        "median": 13.216388888888888,
+        "p10": 1.4358333333333333,
+        "p25": 4.322777777777778,
+        "p75": 17.930555555555557,
+        "p90": 21.04527777777778
+      },
+      "timezone_coverage": 0.9949706726195408,
+      "timezone_covered_buy_cost": 147072.97050799907,
+      "total_buy_cost": 147816.38751299877
+    },
+    "exit_style_counts": {
+      "active_sell_only": 3,
+      "active_sell_then_settlement": 245,
+      "redeem_without_sell": 36,
+      "resolved_without_public_cash_exit": 142,
+      "unsettled_or_no_public_exit": 5
+    },
+    "expression_counts": {
+      "mixed_yes_no": 167,
+      "no_only": 9,
+      "single_yes": 86,
+      "yes_strip": 169
+    },
+    "portfolio_summary": {
+      "buy_bursts_gap_gt_60s": {
+        "mean": 20.88167053364269,
+        "median": 9.0,
+        "n": 431,
+        "p10": 1.0,
+        "p25": 3.0,
+        "p75": 27.0,
+        "p90": 54.0
+      },
+      "buy_cost": 147816.387513,
+      "buy_sessions_gap_gt_5m": {
+        "mean": 12.846867749419953,
+        "median": 7.0,
+        "n": 431,
+        "p10": 1.0,
+        "p25": 3.0,
+        "p75": 16.5,
+        "p90": 32.0
+      },
+      "buy_span_minutes": {
+        "mean": 948.2731245166281,
+        "median": 790.75,
+        "n": 431,
+        "p10": 0.0,
+        "p25": 92.275,
+        "p75": 1540.25,
+        "p90": 2401.0833333333335
+      },
+      "cashflow_complete_pnl": 28265.852879,
+      "cities": 32,
+      "contiguous_yes_strip_share": 0.7842227378190255,
+      "cost_weighted_buy_local_hour": {
+        "mean": 11.968380470940398,
+        "median": 12.870714458517753,
+        "n": 428,
+        "p10": 4.221716788220842,
+        "p25": 8.480844308192022,
+        "p75": 15.622206155661148,
+        "p90": 18.16017760874842
+      },
+      "events": 431,
+      "first_buy_local_hour": {
+        "mean": 11.778997274143302,
+        "median": 13.038055555555555,
+        "n": 428,
+        "p10": 1.500027777777778,
+        "p25": 3.4115277777777777,
+        "p75": 18.289930555555557,
+        "p90": 21.259944444444447
+      },
+      "first_buy_to_redeem_hours": {
+        "mean": 74.12531717888102,
+        "median": 31.92972222222222,
+        "n": 141,
+        "p10": 13.947777777777778,
+        "p25": 23.05388888888889,
+        "p75": 47.765277777777776,
+        "p90": 55.950833333333335
+      },
+      "independent_target_dates": 75,
+      "label": "all",
+      "last_buy_to_redeem_hours": {
+        "mean": 51.62863869188337,
+        "median": 8.951944444444445,
+        "n": 141,
+        "p10": 5.951944444444444,
+        "p25": 7.2275,
+        "p75": 14.648888888888889,
+        "p90": 25.295833333333334
+      },
+      "merge_event_share": 0.002320185614849188,
+      "redeem_event_share": 0.3271461716937355,
+      "resolved_events": 418,
+      "sell_event_share": 0.5754060324825986,
+      "settlement_without_sell_share": 0.41299303944315546,
+      "turnover_roi": 0.19933036659589173,
+      "unique_buy_transactions": {
+        "mean": 49.125290023201856,
+        "median": 20.0,
+        "n": 431,
+        "p10": 1.0,
+        "p25": 5.0,
+        "p75": 58.0,
+        "p90": 146.0
+      },
+      "winner_in_positive_yes_strip_share": 0.44258373205741625,
+      "yes_base_share_fraction": {
+        "mean": 0.47056835274101966,
+        "median": 0.4026422391671626,
+        "n": 421,
+        "p10": 8.957613328043356e-06,
+        "p25": 0.0013871794912280351,
+        "p75": 1.0,
+        "p90": 1.0
+      },
+      "yes_buy_cost_share": 0.8449895506208007,
+      "yes_ladder_coverage": {
+        "mean": 0.258630387400689,
+        "median": 0.18181818181818182,
+        "n": 431,
+        "p10": 0.09090909090909091,
+        "p25": 0.09090909090909091,
+        "p75": 0.36363636363636365,
+        "p90": 0.5454545454545454
+      },
+      "yes_modal_overweight_fraction": {
+        "mean": 0.5294316472589803,
+        "median": 0.5973577608328374,
+        "n": 421,
+        "p10": 0.0,
+        "p25": 0.0,
+        "p75": 0.998612820508772,
+        "p90": 0.9999910423866719
+      },
+      "yes_positive_brackets": {
+        "mean": 2.8816705336426915,
+        "median": 3.0,
+        "n": 431,
+        "p10": 1.0,
+        "p25": 1.0,
+        "p75": 4.0,
+        "p90": 6.0
+      },
+      "yes_positive_span_brackets": {
+        "mean": 3.401425178147268,
+        "median": 3.0,
+        "n": 421,
+        "p10": 1.0,
+        "p25": 1.0,
+        "p75": 5.0,
+        "p90": 6.0
+      },
+      "yes_share_cv": {
+        "mean": 0.5065056570466901,
+        "median": 0.5192006300194075,
+        "n": 421,
+        "p10": 0.0,
+        "p25": 0.0,
+        "p75": 0.8629918533024149,
+        "p90": 1.048107775176779
+      },
+      "yes_top_share_fraction": {
+        "mean": 0.7081586661484036,
+        "median": 0.7149347137071825,
+        "n": 421,
+        "p10": 0.3618095693358621,
+        "p25": 0.4668836998171866,
+        "p75": 1.0,
+        "p90": 1.0
+      },
+      "yes_weighted_ladder_center": {
+        "mean": 0.4875077047851717,
+        "median": 0.5,
+        "n": 421,
+        "p10": 0.1236249679041143,
+        "p25": 0.300000518940093,
+        "p75": 0.6756822171887114,
+        "p90": 0.8041479860343624
+      }
+    },
+    "sell_behavior": {
+      "first_buy_to_first_sell_hours": {
+        "mean": 15.528014112903227,
+        "median": 13.649444444444445,
+        "n": 248,
+        "p10": 2.7492500000000004,
+        "p25": 6.94625,
+        "p75": 21.442569444444445,
+        "p90": 32.445638888888894
+      },
+      "sell_event_share": 0.5754060324825986,
+      "sell_events": 248,
+      "sell_price_cost_weighted": 0.7379534246795474,
+      "sell_proceeds": 117826.45131,
+      "sell_proceeds_over_buy_cost": 0.7971135899910795,
+      "sell_proceeds_share_ge_95c": 0.40232865157143805,
+      "sell_proceeds_share_ge_99c": 0.2598605480058398,
+      "sell_rows": 2375,
+      "sell_transactions": 2373
+    },
+    "settlement_behavior": {
+      "cashflow_complete_resolved_buy_cost": 141804.048032,
+      "cashflow_complete_resolved_events": 418,
+      "cashflow_complete_resolved_pnl": 28265.852879,
+      "cashflow_complete_turnover_roi": 0.19933036659589173,
+      "first_buy_to_redeem_hours": {
+        "mean": 74.12531717888102,
+        "median": 31.92972222222222,
+        "n": 141,
+        "p10": 13.947777777777778,
+        "p25": 23.05388888888889,
+        "p75": 47.765277777777776,
+        "p90": 55.950833333333335
+      },
+      "gamma_resolved_events": 420,
+      "last_buy_to_redeem_hours": {
+        "mean": 51.62863869188337,
+        "median": 8.951944444444445,
+        "n": 141,
+        "p10": 5.951944444444444,
+        "p25": 7.2275,
+        "p75": 14.648888888888889,
+        "p90": 25.295833333333334
+      },
+      "merge_events": 1,
+      "redeem_events": 141,
+      "redeem_target_day_hour": {
+        "mean": 66.2975382447665,
+        "median": 24.9675,
+        "n": 138,
+        "p10": 24.452972222222222,
+        "p25": 24.70888888888889,
+        "p75": 26.129444444444445,
+        "p90": 32.751416666666664
+      },
+      "resolved_current_value_at_snapshot": 1499.3874,
+      "settlement_without_active_sell_events": 178,
+      "settlement_without_active_sell_share": 0.41299303944315546,
+      "split_events": 0,
+      "target_date_block_bootstrap": {
+        "block": "target_date",
+        "ci95": [
+          0.10518939620697083,
+          0.30854217822619184
+        ],
+        "independent_target_dates": 71,
+        "point_turnover_roi": 0.19933036659589173,
+        "positive_target_date_share": 0.5915492957746479,
+        "samples": 5000,
+        "seed": 20260729
+      }
+    }
+  },
+  "label": "jjavi",
+  "onchain_receipt_coverage": {
+    "receipts_found": 307,
+    "rpc_urls": [
+      "https://polygon-bor-rpc.publicnode.com",
+      "https://polygon.drpc.org",
+      "https://polygon.gateway.tenderly.co"
+    ],
+    "transactions": 307
+  },
+  "schema_version": "external_wallet_representative_lineages_v1",
+  "snapshot": "/Volumes/jrs/pm_agents/research/external_wallet_weather/raw/wallet=0x6ff2cb14da8be7eb57541d250a0196c5f295f140/snapshot=20260730T170241Z",
+  "wallet": "0x6ff2cb14da8be7eb57541d250a0196c5f295f140"
+}
