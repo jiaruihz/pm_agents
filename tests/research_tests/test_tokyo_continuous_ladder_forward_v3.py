@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+from pathlib import Path
 
 import numpy as np
 
@@ -181,3 +182,55 @@ def test_book_join_uses_latest_state_available_at_book_time() -> None:
         0.2,
         0.1,
     ]
+
+
+def test_first_per_bracket_keeps_new_brackets_without_add_ons(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(forward.v1, "raw_ask_size", lambda *_: 10.0)
+    base = {
+        "model": "model",
+        "target_date": "2026-07-20",
+        "winning_bracket": "31",
+        "selected_side_ask": 0.2,
+        "fee_per_share": 0.0,
+        "fee_adjusted_edge": 0.1,
+        "snapshot_ts_utc": "2026-07-20T01:00:00+00:00",
+        "availability_ts_utc": "2026-07-20T01:00:00+00:00",
+        "side": "YES",
+    }
+    candidates = [
+        {
+            **base,
+            "state_id": "29-first",
+            "expression_bracket": "29",
+        },
+        {
+            **base,
+            "state_id": "29-add-on",
+            "expression_bracket": "29",
+            "snapshot_ts_utc": "2026-07-20T01:10:00+00:00",
+            "availability_ts_utc": "2026-07-20T01:10:00+00:00",
+            "fee_adjusted_edge": 0.3,
+        },
+        {
+            **base,
+            "state_id": "30-first",
+            "expression_bracket": "30",
+            "snapshot_ts_utc": "2026-07-20T01:20:00+00:00",
+            "availability_ts_utc": "2026-07-20T01:20:00+00:00",
+        },
+    ]
+
+    selected = forward.select_first_signal(
+        candidates,
+        Path("unused"),
+        selection_policy=(
+            "first_signal_per_model_target_date_bracket"
+        ),
+    )
+
+    assert [
+        (row["expression_bracket"], row["state_id"]) for row in selected
+    ] == [("29", "29-first"), ("30", "30-first")]
+    assert all(row["add_on_allowed"] == 0 for row in selected)

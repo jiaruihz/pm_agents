@@ -558,31 +558,56 @@ def current_next_candidates(
 def select_first_signal(
     candidates: list[dict[str, Any]],
     raw_books: Path,
+    *,
+    selection_policy: str = "first_signal_per_model_target_date",
 ) -> list[dict[str, Any]]:
+    if selection_policy not in {
+        "first_signal_per_model_target_date",
+        "first_signal_per_model_target_date_bracket",
+    }:
+        raise ValueError(f"unsupported selection policy: {selection_policy}")
     eligible = [
         row
         for row in candidates
         if float(row["fee_adjusted_edge"]) >= EDGE_THRESHOLD
     ]
-    best_by_state: dict[tuple[str, str], dict[str, Any]] = {}
+    best_by_decision: dict[tuple[str, ...], dict[str, Any]] = {}
     for row in eligible:
-        key = (str(row["model"]), str(row["state_id"]))
-        previous = best_by_state.get(key)
+        if selection_policy == "first_signal_per_model_target_date":
+            key = (str(row["model"]), str(row["state_id"]))
+        else:
+            # A condition can appear first as "next" and later as "current".
+            # Treat the exact bracket as one position and choose at most one
+            # side at a checkpoint before applying the no-add-on rule.
+            key = (
+                str(row["model"]),
+                str(row["target_date"]),
+                str(row["expression_bracket"]),
+                str(row["snapshot_ts_utc"]),
+            )
+        previous = best_by_decision.get(key)
         if previous is None or float(row["fee_adjusted_edge"]) > float(
             previous["fee_adjusted_edge"]
         ):
-            best_by_state[key] = row
-    first_by_date: dict[tuple[str, str], dict[str, Any]] = {}
+            best_by_decision[key] = row
+    first_by_position: dict[tuple[str, ...], dict[str, Any]] = {}
     for row in sorted(
-        best_by_state.values(),
+        best_by_decision.values(),
         key=lambda item: str(item["availability_ts_utc"]),
     ):
-        first_by_date.setdefault(
-            (str(row["model"]), str(row["target_date"])), row
+        position_key: tuple[str, ...] = (
+            str(row["model"]),
+            str(row["target_date"]),
         )
+        if (
+            selection_policy
+            == "first_signal_per_model_target_date_bracket"
+        ):
+            position_key += (str(row["expression_bracket"]),)
+        first_by_position.setdefault(position_key, row)
 
     output = []
-    for row in first_by_date.values():
+    for row in first_by_position.values():
         ask_size = v1.raw_ask_size(
             raw_books,
             str(row["target_date"]),
@@ -600,6 +625,14 @@ def select_first_signal(
         selected = dict(row)
         selected.update(
             {
+                "strategy_policy": selection_policy,
+                "position_key": "|".join(
+                    (
+                        str(row["target_date"]),
+                        str(row["expression_bracket"]),
+                    )
+                ),
+                "add_on_allowed": 0,
                 "ask_size": ask_size,
                 "five_share_executable": int(executable),
                 "settled_win": int(won),
@@ -1048,7 +1081,7 @@ def join_market_asof_books(
     return output
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--features", type=Path, default=v1.FEATURE_ROWS)
     parser.add_argument(
@@ -1058,8 +1091,34 @@ def main() -> int:
     parser.add_argument("--pm-history", type=Path, default=v1.PM_HISTORY)
     parser.add_argument("--raw-books", type=Path, default=v1.RAW_BOOKS)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--selection-policy",
+        choices=(
+            "first_signal_per_model_target_date",
+            "first_signal_per_model_target_date_bracket",
+        ),
+        default="first_signal_per_model_target_date",
+    )
+    parser.add_argument(
+        "--analysis-version",
+        default="tokyo_continuous_ladder_forward_v3",
+    )
+    parser.add_argument(
+        "--strategy-evaluation-status",
+        default="frozen_before_forward",
+    )
+    args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
+    strategy_market_split = (
+        "frozen_forward_15d_market_available"
+        if args.strategy_evaluation_status == "frozen_before_forward"
+        else "post_forward_selector_diagnostic_market_available"
+    )
+    strategy_exact_split = (
+        "frozen_forward_collector_exact"
+        if args.strategy_evaluation_status == "frozen_before_forward"
+        else "post_forward_selector_diagnostic_collector_exact"
+    )
 
     raw = v1.read_rows(args.features)
     continuous = v2.annotate_grains(
@@ -1134,7 +1193,11 @@ def main() -> int:
     )
 
     candidates = current_next_candidates(joined, MODEL_NAMES)
-    trades = select_first_signal(candidates, args.raw_books)
+    trades = select_first_signal(
+        candidates,
+        args.raw_books,
+        selection_policy=args.selection_policy,
+    )
     exact_candidates = [
         row
         for row in candidates
@@ -1154,39 +1217,39 @@ def main() -> int:
     strategy_scores = strategy_summary(
         candidates,
         trades,
-        split="frozen_forward_15d_market_available",
+        split=strategy_market_split,
         denominator_dates=forward_dates,
     )
     strategy_scores.extend(
         strategy_summary(
             exact_candidates,
             exact_trades,
-            split="frozen_forward_collector_exact",
+            split=strategy_exact_split,
             denominator_dates=forward_dates,
         )
     )
     side_scores = strategy_side_summary(
-        trades, split="frozen_forward_15d_market_available"
+        trades, split=strategy_market_split
     )
     side_scores.extend(
         strategy_side_summary(
-            exact_trades, split="frozen_forward_collector_exact"
+            exact_trades, split=strategy_exact_split
         )
     )
     distributions = order_distribution(
-        trades, split="frozen_forward_15d_market_available"
+        trades, split=strategy_market_split
     )
     distributions.extend(
         order_distribution(
-            exact_trades, split="frozen_forward_collector_exact"
+            exact_trades, split=strategy_exact_split
         )
     )
     edge_distributions = edge_distribution(
-        trades, split="frozen_forward_15d_market_available"
+        trades, split=strategy_market_split
     )
     edge_distributions.extend(
         edge_distribution(
-            exact_trades, split="frozen_forward_collector_exact"
+            exact_trades, split=strategy_exact_split
         )
     )
 
@@ -1207,7 +1270,12 @@ def main() -> int:
         },
         {
             "funnel": "signal",
-            "stage": "first_city_day_signal_champion",
+            "stage": (
+                "first_city_day_signal_champion"
+                if args.selection_policy
+                == "first_signal_per_model_target_date"
+                else "first_city_day_bracket_signal_champion"
+            ),
             "unit": "signal",
             "count": sum(row["model"] == CHAMPION for row in trades),
             "target_dates": len(
@@ -1282,7 +1350,7 @@ def main() -> int:
     )
 
     summary = {
-        "schema_version": "tokyo_continuous_ladder_forward_v3",
+        "schema_version": args.analysis_version,
         "research_only_zero_notional": True,
         "live_behavior_changed": False,
         "training_cutoff": TRAIN_CUTOFF,
@@ -1305,7 +1373,8 @@ def main() -> int:
         "collector_exact_rows": len(exact_joined),
         "collector_exact_dates": exact_dates,
         "champion_frozen_before_forward": CHAMPION,
-        "strategy_policy_frozen_before_forward": {
+        "strategy_policy": {
+            "evaluation_status": args.strategy_evaluation_status,
             "expressions": ["current_exact", "next_exact"],
             "sides": ["YES", "NO"],
             "edge_threshold": EDGE_THRESHOLD,
@@ -1313,11 +1382,23 @@ def main() -> int:
             "entry": "taker_selected_side_ask",
             "fee_rate": FEE_RATE,
             "fee_rounding": "per_share_5_decimal",
-            "selection": "first_signal_per_model_target_date",
+            "selection": args.selection_policy,
+            "position_key": (
+                "model,target_date"
+                if args.selection_policy
+                == "first_signal_per_model_target_date"
+                else "model,target_date,expression_bracket"
+            ),
+            "add_on_allowed": False,
         },
         "feature_semantic_sha256": feature_hash,
         "model_hashes": hashes,
     }
+    if args.strategy_evaluation_status == "frozen_before_forward":
+        # Preserve the v3 summary contract for existing consumers.
+        summary["strategy_policy_frozen_before_forward"] = summary[
+            "strategy_policy"
+        ]
     (args.out / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

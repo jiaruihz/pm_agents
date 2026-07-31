@@ -1,5 +1,11 @@
 # Tokyo continuous ladder：15-day frozen forward v3
 
+> Selector 勘误：本文的 `0/12` 使用了“每天首个 signal”，不是用户确认的
+> “每个 exact bracket 首次 signal、同档不补仓”。因此该交易 headline 只保留为
+> 错误 selector 的负例；正确 mechanics 与诊断结果见
+> [Tokyo checkpoint first-bracket v4](2026-07-31-tokyo-checkpoint-first-bracket-v4.md)。
+> v3 的 weather probability 分数与 market 同分母分数不受该 selector 勘误影响。
+
 ## 数据快照
 
 | 字段 | 值 |
