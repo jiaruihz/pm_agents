@@ -1,0 +1,125 @@
+{
+  "status": "descriptive_archive_midpoint_proxy_only",
+  "window": [
+    "2026-07-15",
+    "2026-07-29"
+  ],
+  "signal_funnel": {
+    "weather_checkpoints": 2115,
+    "first_seen_weather_checkpoints": 1268,
+    "archive_midpoint_matched": 1147,
+    "matched_dates": 14
+  },
+  "evidence_funnel": {
+    "token_mapped_rows": 1151,
+    "midpoint_proxy_rows": 1147,
+    "direct_bid_ask_rows": 0,
+    "depth_rows": 0,
+    "actual_fills": 0
+  },
+  "api": {
+    "needed_tokens": 66,
+    "histories_returned": 66,
+    "history_points": 101962,
+    "fetch_errors": {}
+  },
+  "midpoint_age_sec": {
+    "median": 29.1617169380188,
+    "p95": 58.1000694513321,
+    "max": 101.72391295433044
+  },
+  "direct_book_overlap_validation": {
+    "rows": 522,
+    "dates": 14,
+    "midpoint_median_error": 0.0,
+    "midpoint_median_absolute_error": 0.0050000000000000044,
+    "ask_proxy_median_error": 0.0,
+    "ask_proxy_median_absolute_error": 0.01300899999999999,
+    "ask_proxy_mean_error": -0.008706114942528735
+  },
+  "probability_scores": [
+    {
+      "model": "archive_no_mid_score",
+      "brier": 0.04113063840473845,
+      "logloss": 0.1408381185496274
+    },
+    {
+      "model": "p_break_v7",
+      "brier": 0.05958426985122531,
+      "logloss": 0.18518118568914096
+    },
+    {
+      "model": "p_r16_final_descriptive",
+      "brier": 0.028304570138127053,
+      "logloss": 0.10395567753674238
+    }
+  ],
+  "trade_summaries": [
+    {
+      "model": "p_break_v7",
+      "scenario": "ask_markup_median",
+      "signals": 59,
+      "dates": 14,
+      "wins": 46,
+      "losses": 13,
+      "cash_cost": 216.626133183204,
+      "pnl": 13.373866816795998,
+      "roi": 0.06173708878183001,
+      "roi_ci_low": -0.02774668981289567,
+      "roi_ci_high": 0.1332308512386472,
+      "profitable_dates": 7,
+      "losing_dates": 7
+    },
+    {
+      "model": "p_break_v7",
+      "scenario": "midpoint",
+      "signals": 62,
+      "dates": 14,
+      "wins": 48,
+      "losses": 14,
+      "cash_cost": 223.0748801875,
+      "pnl": 16.925119812499993,
+      "roi": 0.07587192156406856,
+      "roi_ci_low": -0.007637287675311213,
+      "roi_ci_high": 0.14481568073397516,
+      "profitable_dates": 7,
+      "losing_dates": 7
+    },
+    {
+      "model": "p_r16_final_descriptive",
+      "scenario": "ask_markup_median",
+      "signals": 62,
+      "dates": 14,
+      "wins": 51,
+      "losses": 11,
+      "cash_cost": 241.48697448112299,
+      "pnl": 13.513025518876999,
+      "roi": 0.05595757513593476,
+      "roi_ci_low": -0.018143674393856758,
+      "roi_ci_high": 0.12085878170678135,
+      "profitable_dates": 7,
+      "losing_dates": 7
+    },
+    {
+      "model": "p_r16_final_descriptive",
+      "scenario": "midpoint",
+      "signals": 64,
+      "dates": 14,
+      "wins": 52,
+      "losses": 12,
+      "cash_cost": 243.08705075000003,
+      "pnl": 16.912949249999993,
+      "roi": 0.06957568985192022,
+      "roi_ci_low": -0.002717050758946559,
+      "roi_ci_high": 0.13259509180474224,
+      "profitable_dates": 8,
+      "losing_dates": 6
+    }
+  ],
+  "notes": [
+    "midpoint scenario is optimistic and non-executable",
+    "ask markup uses same-window direct-book price-band median and still has no depth",
+    "r16 final artifact is post-fit descriptive, not OOF on this window",
+    "no threshold was added"
+  ]
+}
