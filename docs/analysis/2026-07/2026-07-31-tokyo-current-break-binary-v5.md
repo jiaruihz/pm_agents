@@ -1,5 +1,10 @@
 # Tokyo current-bracket stay/break binary v5
 
+> 2026-07-31 更新：v5 保留为 observation-only standalone baseline。它暴露的低价
+> residual 系统性高估已由
+> [Tokyo market-anchored current-break binary v6](2026-07-31-tokyo-market-anchor-binary-v6.md)
+> 修复；v6 仍是 zero-notional research challenger，未通过全部 market/forward gate。
+
 ## 结论
 
 Tokyo 第一版应只回答一个问题：
