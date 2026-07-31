@@ -168,6 +168,19 @@ price/path hard filters，不修改 live runner、plan/order/fill/exit。
   完全不调参 holdout。若 30 日后 date-block CI 仍不收敛，扩到 `60` 日（`40+20`），
   不在中途按盈亏改阈值。
 
+### Deployment evidence
+
+- 2026-07-31 已部署到 Mac production checkout，production SHA `d78abf20`；通用
+  probability runner PID `40288`，Tokyo direct-book collector PID `34181`，两者均位于
+  canonical `tmux -L weather-data-feed-jrs`。
+- collector 当前在 Tokyo `06:00–22:00` capture window 外，因此首轮状态为
+  `degraded_missing_active_source`、Tokyo evaluation=`0`，这是预注册分母开始前的预期
+  off-window 状态；首个 eligible 评分时段为 2026-08-01 `06:00–18:00 JST`。
+- 部署前后 `paper_intents=0`；runtime 固定 `orders_submitted=0`，无 exchange/order
+  client。停止 Tokyo collector 用
+  `scripts/ops/start_weather_tokyo_current_break_active_ladder_shadow_v1.sh stop`；通用 runner
+  可单独重载，不影响 live runners 或其他 collector。
+
 复现：
 
 ```bash
