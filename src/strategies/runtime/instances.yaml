@@ -663,3 +663,30 @@
   default_health: unknown
   expected_live: null
   artifact_files: []
+- strategy_instance: city_probability_shadow_v1
+  display_name: Cross-city probability model shadow v1
+  family: weather.city_probability_model
+  strategy_key: weather_city_probability_shadow_v1
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v1
+  summary_file: latest_summary.json
+  primary_journal: evaluations.jsonl
+  live_order_file: null
+  paper_order_file: paper_intents.jsonl
+  telemetry_file: evaluations.jsonl
+  start_script: scripts/ops/start_weather_city_probability_shadow_v1.sh
+  tmux_session: weather_city_probability_shadow_v1
+  notes: Generic city adapter runtime. Helsinki FMI remaining-heat incumbent and challenger
+    are the first profile; every checkpoint is scored without an entry threshold and all
+    intents remain zero-notional. No exchange/order client exists in this runtime.
+  default_health: unknown
+  expected_live: false
+  artifact_files:
+  - - evaluations
+    - evaluations.jsonl
+  - - paper_intents
+    - paper_intents.jsonl
+  - - errors
+    - errors.jsonl

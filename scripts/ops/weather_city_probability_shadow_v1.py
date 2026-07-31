@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.strategies.weather_city_probability_shadow import ShadowRuntime
+from src.strategies.weather_city_probability_shadow.helsinki import HelsinkiRemainingHeatAdapter
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("mode", choices=("once", "loop"))
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--interval-seconds", type=int, default=60)
+    args = parser.parse_args()
+    config = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    runtime = ShadowRuntime(config, {"helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter()})
+    while True:
+        print(json.dumps(runtime.run_once(), sort_keys=True), flush=True)
+        if args.mode == "once":
+            break
+        time.sleep(args.interval_seconds)
+
+
+if __name__ == "__main__":
+    main()
