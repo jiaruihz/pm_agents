@@ -710,9 +710,10 @@ def strategy_summary(
     *,
     split: str,
     denominator_dates: list[str],
+    model_names: Iterable[str] = MODEL_NAMES,
 ) -> list[dict[str, Any]]:
     output = []
-    for model in MODEL_NAMES:
+    for model in model_names:
         model_candidates = [
             row for row in candidates if row["model"] == model
         ]
@@ -785,10 +786,13 @@ def strategy_summary(
 
 
 def strategy_side_summary(
-    trades: list[dict[str, Any]], *, split: str
+    trades: list[dict[str, Any]],
+    *,
+    split: str,
+    model_names: Iterable[str] = MODEL_NAMES,
 ) -> list[dict[str, Any]]:
     output = []
-    for model in MODEL_NAMES:
+    for model in model_names:
         for side in ("YES", "NO"):
             for delta in (0, 1):
                 selected = [

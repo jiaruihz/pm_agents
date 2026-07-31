@@ -1,5 +1,10 @@
 # Tokyo 每 10 分钟更新、每档首次建仓 v4
 
+> 2026-07-31 更新：v4 保留为 expression negative control。它虽然修正了“每档
+> 第一次”，但仍把 binary “还会升温”概率表达成 current/next exact。第一版已由
+> [Tokyo current-bracket stay/break binary v5](2026-07-31-tokyo-current-break-binary-v5.md)
+> 接替：只交易 current exact YES/NO，next exact 禁用。
+
 ## 数据快照
 
 | 字段 | 值 |
