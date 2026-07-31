@@ -201,6 +201,15 @@ class HelsinkiRemainingHeatAdapter:
         current_x = int(round(float(official["running_max_c"])))
         quote = _quote(profile, target_date, current_x)
         decision = pd.Timestamp(quote["book_fetched_at_utc"]).to_pydatetime()
+        forward_start = pd.Timestamp(profile["forward_start_utc"]).to_pydatetime()
+        if decision < forward_start:
+            return []
+        book_age = (now - decision).total_seconds()
+        if book_age > float(profile["max_book_age_seconds"]):
+            raise RuntimeError(f"active book is stale by {book_age:.1f}s")
+        official_obs = pd.Timestamp(official["last_obs_utc"]).to_pydatetime()
+        if official_obs > decision:
+            raise RuntimeError("latest official observation is after book decision clock")
         source_obs_ts = str(quote["source_obs_ts_utc"])
         history = [row for row in _fmi_history(Path(profile["source_journal"]), target_date)
                    if str(row["observation_time_utc"]) <= source_obs_ts]
@@ -215,7 +224,7 @@ class HelsinkiRemainingHeatAdapter:
             "fmi_running_max_c": float(np.max(temps)),
             "pullback_depth_c": float(np.max(temps) - temps[-1]),
             "distance_to_next_official_boundary_c": current_x + 0.5 - temps[-1],
-            "fmi_official_lattice_basis_c": round(temps[-1]) - current_x,
+            "fmi_official_lattice_basis_c": math.floor(temps[-1] + 0.5) - current_x,
             "source_to_official_level_basis_c": temps[-1] - float(official["current_temp_c"]),
             "source_cadence_gap_min": 10.0,
             "temp_delta_10m": temps[-1] - temps[-2],

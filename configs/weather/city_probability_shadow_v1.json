@@ -8,6 +8,8 @@
       "enabled": true,
       "city": "Helsinki",
       "adapter": "helsinki_remaining_heat_v1",
+      "forward_start_utc": "2026-07-31T12:43:00Z",
+      "max_book_age_seconds": 900,
       "observation_cache": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json",
       "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
       "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/active_bracket_books",

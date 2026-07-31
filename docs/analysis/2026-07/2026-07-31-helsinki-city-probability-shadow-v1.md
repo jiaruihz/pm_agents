@@ -37,5 +37,11 @@ the direct 26-NO book was 0.001/0.008. The incumbent/challenger estimated 0.0034
 intent. Two evaluations were written, zero orders were submitted, and the unit suite
 passed 3/3.
 
+The four pre-deployment smoke evaluations are explicitly excluded by
+`data_quality_adjustments.jsonl`: two were produced before the direct active-book fix and
+two were valid smoke checks but preceded the freeze. Frozen forward begins at
+2026-07-31 12:43 UTC. The adapter now also fails closed when the active book is over 15
+minutes old or when the official observation clock is later than the book clock.
+
 Promotion remains governed by the frozen-forward requirements in the Helsinki model
 reports. Shadow collection does not authorize live trading.
