@@ -155,6 +155,18 @@ deployment=zero-notional_only
 forecast peak/ceiling lineage 可用后，再作为独立 v7 challenger；不从当前 7 天继续加
 price/path hard filters，不修改 live runner、plan/order/fill/exit。
 
+## Frozen shadow protocol
+
+- 起点：Tokyo local `2026-08-01 00:00`（UTC `2026-07-31T15:00:00Z`）；此前行不进入
+  forward 分母。
+- 每个 JMA 10-minute exact first-seen checkpoint，用随后 direct current-exact book
+  评分 current YES/NO；官方 RJTT observation journal 只允许读取 `fetched_at <= decision`。
+- entry 规则冻结为 fee-adjusted edge `>=2%`，每个 `target_date × current bracket × model`
+  只记录首次 paper intent；notional/shares/order/fill 始终为 `0`。
+- 首轮积累 `30` 个 settled target dates：前 `20` 日只作运行/覆盖审计，后 `10` 日为
+  完全不调参 holdout。若 30 日后 date-block CI 仍不收敛，扩到 `60` 日（`40+20`），
+  不在中途按盈亏改阈值。
+
 复现：
 
 ```bash

@@ -104,6 +104,8 @@ class ShadowRuntime:
                 fee = self.fee_per_share(score.market_entry_price)
                 effective_cost = score.market_entry_price + fee
                 edge = score.model_probability - effective_cost
+                edge_threshold = float(profile.get("edge_threshold", 0.0))
+                would_enter = edge >= edge_threshold
                 row = {
                     "schema_version": self.schema_version,
                     "execution_mode": "zero_notional_shadow",
@@ -113,15 +115,27 @@ class ShadowRuntime:
                     "fee_per_share": fee,
                     "effective_cost_per_share": effective_cost,
                     "edge_after_fee": edge,
-                    "would_enter": edge > 0,
+                    "edge_threshold": edge_threshold,
+                    "would_enter": would_enter,
                 }
                 append_jsonl(self.evaluations, row)
                 written += 1
                 seen.add(evaluation_id)
-                position_key = "|".join((score.city, score.target_date,
-                                         str(score.current_bracket), score.market_side,
-                                         score.model_id))
-                if edge > 0 and position_key not in first_intents:
+                position_parts = [
+                    score.city,
+                    score.target_date,
+                    str(score.current_bracket),
+                ]
+                position_scope = profile.get(
+                    "position_scope", "city_date_bracket_side_model"
+                )
+                if position_scope == "city_date_bracket_side_model":
+                    position_parts.append(score.market_side)
+                elif position_scope != "city_date_bracket_model":
+                    raise ValueError(f"unsupported position_scope: {position_scope}")
+                position_parts.append(score.model_id)
+                position_key = "|".join(position_parts)
+                if would_enter and position_key not in first_intents:
                     append_jsonl(self.intents, {
                         **row,
                         "position_key": position_key,

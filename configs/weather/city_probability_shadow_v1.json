@@ -33,6 +33,33 @@
           "sha256": "e5290f36ad033d1a526162c124a54106ecfb066e0b1538a3864ed0db1c841288"
         }
       }
+    },
+    {
+      "enabled": true,
+      "city": "Tokyo",
+      "adapter": "tokyo_market_anchor_v6",
+      "forward_start_utc": "2026-07-31T15:00:00Z",
+      "max_book_age_seconds": 180,
+      "edge_threshold": 0.02,
+      "position_scope": "city_date_bracket_model",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
+      "evaluation_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v1/evaluations.jsonl",
+      "artifacts": {
+        "weather": {
+          "path": "docs/analysis/2026-07/generated/tokyo_current_break_binary_v5/models/binary_multigrain_hgb_v5.joblib",
+          "sha256": "c329b133c35384c2ba04689e82d28f6e06efeae4db2a66a4c3fb7bcef98b3175",
+          "spec_path": "docs/analysis/2026-07/generated/tokyo_current_break_binary_v5/models/binary_multigrain_hgb_v5.spec.json",
+          "spec_sha256": "31eaed86215cc287d3e97f4699e07e34b3cb50a0d69de11d692336902da2dc81"
+        },
+        "offset": {
+          "path": "docs/analysis/2026-07/generated/tokyo_market_anchor_binary_v6/models/offset_physical_ridge1_v6.joblib",
+          "sha256": "c7ad6b9abff0433deb1fd4af21a17b1544ea482f46b96af7a49f5b97423b98df",
+          "spec_path": "docs/analysis/2026-07/generated/tokyo_market_anchor_binary_v6/models/offset_physical_ridge1_v6.spec.json",
+          "spec_sha256": "67f78b5f6d0f152e93d052404ca795c0c41e810a1b74c29dc9e995757adeaa83"
+        }
+      }
     }
   ]
 }

@@ -40,3 +40,32 @@ def test_nonzero_execution_configuration_is_rejected(tmp_path):
 
 def test_weather_fee_formula():
     assert ShadowRuntime.fee_per_share(.5) == pytest.approx(.0125)
+
+
+def test_profile_threshold_and_bracket_scope_allow_only_one_side(tmp_path):
+    class BothSides:
+        def score(self, profile, now):
+            common = dict(
+                city="Tokyo", target_date="2026-08-01", decision_ts_utc=now.isoformat(),
+                source_obs_ts_utc="2026-08-01T01:00:00+00:00", current_bracket=34,
+                market_probability=.4, market_entry_price=.4, model_probability=.5,
+                model_id="v6", feature_coverage=1.0, missing_features=[], features={},
+                market={}, lineage={},
+            )
+            return [CityScore(market_side=side, **common) for side in ("YES", "NO")]
+
+    config = {
+        "execution_mode": "zero_notional_shadow", "orders_submitted": 0,
+        "output_dir": str(tmp_path),
+        "profiles": [{"adapter": "both", "city": "Tokyo", "edge_threshold": .05,
+                      "position_scope": "city_date_bracket_model"}],
+    }
+    summary = ShadowRuntime(config, {"both": BothSides()}).run_once(
+        datetime(2026, 8, 1, 1, tzinfo=timezone.utc)
+    )
+    assert summary["new_evaluations"] == 2
+    assert summary["new_paper_intents"] == 1
+    rows = [json.loads(line) for line in (tmp_path / "evaluations.jsonl").read_text().splitlines()]
+    assert all(row["edge_threshold"] == .05 and row["would_enter"] for row in rows)
+    intent = json.loads((tmp_path / "paper_intents.jsonl").read_text().splitlines()[0])
+    assert intent["position_key"] == "Tokyo|2026-08-01|34|v6"

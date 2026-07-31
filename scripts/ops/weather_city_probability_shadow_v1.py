@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 from src.strategies.weather_city_probability_shadow import ShadowRuntime
 from src.strategies.weather_city_probability_shadow.helsinki import HelsinkiRemainingHeatAdapter
+from src.strategies.weather_city_probability_shadow.tokyo import TokyoMarketAnchorAdapter
 
 
 def main() -> None:
@@ -22,7 +23,13 @@ def main() -> None:
     parser.add_argument("--interval-seconds", type=int, default=60)
     args = parser.parse_args()
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
-    runtime = ShadowRuntime(config, {"helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter()})
+    runtime = ShadowRuntime(
+        config,
+        {
+            "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
+            "tokyo_market_anchor_v6": TokyoMarketAnchorAdapter(),
+        },
+    )
     while True:
         print(json.dumps(runtime.run_once(), sort_keys=True), flush=True)
         if args.mode == "once":
