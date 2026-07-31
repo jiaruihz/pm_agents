@@ -355,7 +355,9 @@ class TokyoMarketAnchorAdapter:
         if source_first_seen > decision:
             raise RuntimeError("JMA first-seen is after the decision book clock")
         local_hour = source_obs.astimezone(TOKYO).hour + source_obs.astimezone(TOKYO).minute / 60.0
-        if not 5.0 <= local_hour < 18.0:
+        # The production high-frequency collector is active from 06:00 local.
+        # Keep the frozen forward denominator inside the actually captured clock.
+        if not 6.0 <= local_hour < 18.0:
             return []
         official = _official_history(Path(profile["observation_journal_dir"]), target_date, decision)
         if not official:

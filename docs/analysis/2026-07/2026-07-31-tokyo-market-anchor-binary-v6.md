@@ -160,7 +160,8 @@ price/path hard filters，不修改 live runner、plan/order/fill/exit。
 - 起点：Tokyo local `2026-08-01 00:00`（UTC `2026-07-31T15:00:00Z`）；此前行不进入
   forward 分母。
 - 每个 JMA 10-minute exact first-seen checkpoint，用随后 direct current-exact book
-  评分 current YES/NO；官方 RJTT observation journal 只允许读取 `fetched_at <= decision`。
+  评分 current YES/NO；实际评分域固定为 `06:00–18:00 JST`，与当前 collector capture
+  window 一致；官方 RJTT observation journal 只允许读取 `fetched_at <= decision`。
 - entry 规则冻结为 fee-adjusted edge `>=2%`，每个 `target_date × current bracket × model`
   只记录首次 paper intent；notional/shares/order/fill 始终为 `0`。
 - 首轮积累 `30` 个 settled target dates：前 `20` 日只作运行/覆盖审计，后 `10` 日为
