@@ -1,5 +1,11 @@
 # Tokyo market-anchored current-break binary v6
 
+> 口径勘误：v6 的 market-offset 层使用 `7/16..22` 中前 5 个有盘口日期训练，并在
+> `7/23..29` expanding OOF 上选结构，因此不能把它称为完整 15-day frozen forward。
+> `7/16..30` 只对 v5 weather model 保持 untouched；v6 全栈结果是 development
+> diagnostic，真正 clean forward 从 `8/1` 开始。历史覆盖与训练量审计见
+> [Tokyo market-anchor training coverage v7](2026-07-31-tokyo-market-anchor-training-coverage-v7.md)。
+
 ## 数据快照
 
 | 字段 | 值 |
