@@ -9,10 +9,10 @@
 | forward | `2026-07-16..2026-07-30`，完整 15 日 |
 | 训练数据 | `62,214` checkpoints / `804` target dates |
 | forward 天气分母 | `1,170` checkpoints / `15` target dates |
-| PIT 盘口+结算覆盖 | `793` states / `12` dates |
+| PIT 盘口+结算覆盖 | `248` book-time states / `12` dates |
 | 盘口 coverage gap | `2026-07-17`、`2026-07-18` 无 snapshots；`2026-07-30` 无 settlement |
-| collector exact | `431` states / `8` dates（`2026-07-22..29`） |
-| unsettled | 天气模型分母 `0/1,170`；盘口 score/trade 分母只保留 settled，`0/793` unsettled |
+| collector exact | `137` book-time states / `8` dates（`2026-07-22..29`） |
+| unsettled | 天气模型分母 `0/1,170`；盘口 score/trade 分母只保留 settled，`0/248` unsettled |
 | trade class | `research_counterfactual` / zero-notional；actual orders=`0`，actual fills=`0` |
 | feature source | `tokyo_jma_multivariate_path_v1/feature_rows.csv.gz`，mtime `2026-07-31 02:31:42 +08:00` |
 | exact lineage | `tokyo_jma_exact_enriched.csv`，mtime `2026-07-30 00:28:48 +08:00` |
@@ -23,6 +23,33 @@ production manifest 于 `2026-07-31T09:03:05Z` 返回 `warning`，唯一 finding
 部分 JRS tmux sessions 未进入 instance registry。本研究没有读取 canonical
 `fact_trades` 或发布 `live_real` PnL，只使用上述 research feature、raw book、
 settlement 与 exact collector 证据，因此继续 raw research replay；未同步或重建 DB。
+
+### Book/weather clock 修正
+
+初版 forward 输出确实发现一个回放 bug：旧 join 是“每个 weather state 找后面
+第一份 book”，允许 book 晚至 45 分钟；同一 book 可能被多个旧 weather states
+重复匹配，且可能在已有更新 JMA state 时继续使用旧概率。
+
+已修成：
+
+```text
+grain = book snapshot
+feature = book timestamp 当时 latest available weather state
+max weather-state age = 30 minutes
+```
+
+影响半径：
+
+- market score rows `793 -> 248`；
+- collector-exact rows `431 -> 137`；
+- market Brier delta `+0.0735 [0.0156,0.1320]`
+  修正为 `+0.0411 [-0.0160,0.0956]`，从“显著差”降为“点估差、CI 不显著”；
+- champion PnL `-$0.5609 -> -$0.5399`；
+- 策略命中仍是 `0/12`。
+
+所以旧 join 是真实 bug，但它**没有造成 0/12**。结算 winner、最终 METAR
+rounded bracket、strict-prior METAR floor 和 selector 已逐单核对：12 单无
+label mismatch，selector 也确实选择了每个 target date 的首个合格 signal。
 
 ## 冻结规则
 
@@ -66,9 +93,9 @@ forward 只复核，未根据结果增加 local-hour、price、probability 或 w
 - within-one accuracy `96.67%`；
 - stay/leave accuracy `95.38%`；
 - 但有盘口的 12 个 forward dates 上，预注册策略 `0/12` 命中，
-  fee-adjusted PnL `-$0.5609`，ROI `-100%`；
-- weather model 的同分母 Brier `0.1929`，market 为 `0.1194`；
-  delta `+0.0735`，95% CI `[+0.0156,+0.1320]`，显著差于 market。
+  fee-adjusted PnL `-$0.5399`，ROI `-100%`；
+- weather model 的同分母 Brier `0.1665`，market 为 `0.1254`；
+  delta `+0.0411`，95% CI `[-0.0160,+0.0956]`，点估差但 CI 跨零。
 
 因此：
 
@@ -111,11 +138,12 @@ challenger。
 
 | evidence | states / dates | model Brier | market Brier | delta model-market | 95% CI |
 |---|---:|---:|---:|---:|---:|
-| 全部可用 forward book | 793 / 12 | 0.1929 | **0.1194** | +0.0735 | **[+0.0156,+0.1320]** |
-| collector exact | 431 / 8 | 0.1548 | **0.1236** | +0.0311 | [-0.0199,+0.0809] |
+| 全部可用 forward book | 248 / 12 | 0.1665 | **0.1254** | +0.0411 | [-0.0160,+0.0956] |
+| collector exact | 137 / 8 | 0.1385 | **0.1281** | +0.0104 | [-0.0404,+0.0628] |
 
-全可用盘口中，天气模型显著差于 market；collector-exact 子集点估仍差，
-只是 8 日期 CI 太宽。概率层没有 residual alpha，selected ROI 无权绕过该失败。
+两个分母上天气模型都点估差于 market，但 CI 均跨零：当前证据没有证明
+residual alpha，也不能声称模型显著落后。selected ROI 无权绕过概率层
+baseline 未通过。
 
 ## 策略执行准确率与 ROI
 
@@ -128,12 +156,12 @@ challenger。
 
 | 分母 | selected | 5-share executable | settlement wins | hit rate | cost | fee-adjusted PnL | ROI |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| 15-day forward 中有 settled book 的日期 | 12 | 12 / 12 = **100%** | 0 | **0%**，Wilson 95% CI [0%,24.25%] | $0.5609 | **-$0.5609** | **-100%** |
+| 15-day forward 中有 settled book 的日期 | 12 | 12 / 12 = **100%** | 0 | **0%**，Wilson 95% CI [0%,24.25%] | $0.5399 | **-$0.5399** | **-100%** |
 | 上述已选订单中 trigger 本身为 collector exact | 3 | 3 / 3 = 100% | 0 | 0%，CI [0%,56.15%] | $0.2255 | -$0.2255 | -100% |
 
 按完整 15-day 分母、未覆盖日期记零交易，champion 平均
-PnL/date 为 `-$0.0370`，target-date bootstrap 95% CI
-`[-$0.07825,-$0.00770]`。这不是“ROI 因样本少不确定”，而是当前表达在
+PnL/date 为 `-$0.03559`，target-date bootstrap 95% CI
+`[-$0.07649,-$0.00665]`。这不是“ROI 因样本少不确定”，而是当前表达在
 available forward 上方向明确地错。
 
 collector exact 审计是先在完整可用 stream 选单，再标记哪些 trigger 为 exact。
@@ -146,19 +174,21 @@ champion 的 12 个拟下单全部是 `YES`：
 
 | 维度 | 分布 |
 |---|---|
-| expression | current YES `9`；next YES `3` |
-| model `p_win <5%` | `6` |
-| `5%<=p_win<10%` | `3` |
+| expression | current YES `10`；next YES `2` |
+| model `p_win <5%` | `4` |
+| `5%<=p_win<10%` | `5` |
 | `10%<=p_win<25%` | `2` |
 | `25%<=p_win<50%` | `1` |
 | selected-side ask | 12/12 全部 `<5%` |
-| mean model p_win | `9.11%`，range `2.38%..39.54%` |
-| mean ask | `0.89%`，range `0.10%..4.90%` |
-| mean fee-adjusted edge | `8.18%`，range `2.28%..39.43%` |
-| entry local hour | mean `06:20 JST`，range `05:00..10:50 JST` |
+| mean model p_win | `9.73%`，range `2.13%..44.97%` |
+| mean ask | `0.86%`，range `0.10%..4.90%` |
+| mean fee-adjusted edge | `8.83%`，range `2.02%..44.87%` |
+| entry local hour | mean `06:31 JST`，range `05:00..11:20 JST` |
+| latest-state age at book | mean `4.55m`，range `1.23m..8.77m` |
 
 所有看起来最大的 residual 都来自模型在清晨给低档 current/next 一个不小的
-尾部概率，而 market 已把这些档位压到 `0.1%–4.9%`。12 单最终全输。
+尾部概率，而 market 已把这些档位压到 `0.1%–4.9%`。最终 winner 比所买
+expression 高 `3–7` 档，12 单因此全部真实结算为输，并非 label 反了。
 
 forward 全 checkpoint 的 calibration 也显示该方向系统性高估：
 
@@ -183,7 +213,7 @@ remaining-rise class，所以总体 accuracy 高；但交易挑选的是被模�
 每次 JMA 更新 -> 找 p_model - ask 最大的 current/next -> 首次超过 2% 就买
 ```
 
-该规则实际上会在平均 `06:20 JST` 捕捉最早的低价 YES，而此时严格 PIT
+该规则实际上会在平均 `06:31 JST` 捕捉最早的低价 YES，而此时严格 PIT
 forecast ceiling / peak clock 尚未进入模型。它把“未来还会升很多档”的质量
 分配错误解释成“市场严重低估当前/下一档”。
 
@@ -206,15 +236,15 @@ Signal funnel：
 | stage | unit | rows | dates |
 |---|---|---:|---:|
 | frozen weather checkpoints | state | 1,170 | 15 |
-| joined current/next expressions | expression | 7,461（三模型） | 12 |
+| joined current/next expressions | expression | 2,370（三模型） | 12 |
 | champion first city-day signal | signal | 12 | 12 |
 
 Evidence funnel：
 
 | stage | unit | rows | dates |
 |---|---|---:|---:|
-| settled PIT/proxy book join | state | 793 | 12 |
-| collector-exact book join | state | 431 | 8 |
+| settled PIT/proxy book join | book-time state | 248 | 12 |
+| collector-exact book join | book-time state | 137 | 8 |
 | champion 5-share executable replay | research trade | 12 | 12 |
 | actual fill | fill | 0 | 0 |
 
@@ -287,8 +317,8 @@ next action=补严格 PIT forecast features，固定后等待新 forward
 ```
 
 最终一句：在 `2026-07-16..30` 的 frozen 15-day 分母，frozen champion 相对
-same-row market 的 Brier delta 为 `+0.0735`
-（95% CI `[+0.0156,+0.1320]`），预注册 current/next first-edge 表达
+same-row market 的 Brier delta 为 `+0.0411`
+（95% CI `[-0.0160,+0.0956]`），预注册 current/next first-edge 表达
 fee-adjusted ROI `-100%`、`0/12` 命中，forward `FAIL`，结论
 `rejected_for_expression`，动作是不改 live、保留模型与采集、补 PIT forecast 后
 等待下一段真正未见日期。

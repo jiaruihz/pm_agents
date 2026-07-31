@@ -1,5 +1,10 @@
 # Tokyo continuous ladder probability v2
 
+> 2026-07-31 修正：本文 market-specific score/trade 数字使用了
+> weather-state → future-book join，可能让同一 book 匹配多个旧 weather
+> states。相关数字已由 v3 的 book-time latest-as-of join 取代；weather-only
+> 模型分数不受影响。
+
 ## 结论
 
 Tokyo v2 已完成全量训练、三粒度 frozen 评估、exact first-seen 盘口回放和

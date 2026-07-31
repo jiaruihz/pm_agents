@@ -11,9 +11,10 @@ submitted.
 from __future__ import annotations
 
 import argparse
+from bisect import bisect_right
 from collections import defaultdict
 import csv
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import gzip
 import hashlib
 import json
@@ -940,16 +941,111 @@ def edge_distribution(
     return output
 
 
-def add_market_metadata(
-    joined: list[dict[str, Any]],
+def join_market_asof_books(
     rows: list[dict[str, Any]],
-) -> None:
-    by_state = {str(row["state_id"]): row for row in rows}
-    for row in joined:
-        source = by_state[str(row["state_id"])]
-        row["path_phase"] = source["path_phase"]
-        row["is_transition"] = source["is_transition"]
-        row["is_state_entry"] = source["is_state_entry"]
+    predictions: dict[str, np.ndarray],
+    exact: dict[str, datetime],
+    markets: dict[str, list[dict[str, Any]]],
+    winners: dict[str, str],
+    *,
+    max_state_age_min: float = 30.0,
+) -> list[dict[str, Any]]:
+    """Join each book to the latest weather state available at book time.
+
+    A weather-state -> next-book join can pair an old probability with a book
+    observed after one or more newer JMA updates.  Book time is the executable
+    decision clock, so it owns the grain and receives one latest-as-of state.
+    """
+    by_date: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    prediction_by_state: dict[
+        tuple[str, str], np.ndarray
+    ] = {}
+    for index, raw in enumerate(rows):
+        row = dict(raw)
+        observed = v1.parse_ts(str(row["decision_ts_utc"]))
+        exact_available = exact.get(observed.isoformat())
+        row["_available_ts"] = (
+            exact_available
+            if exact_available is not None
+            else observed + timedelta(minutes=15)
+        )
+        row["_availability_clock_class"] = (
+            "collector_exact_hash_verified"
+            if exact_available is not None
+            else "archive_reconstructed_plus_15m"
+        )
+        by_date[str(row["target_date"])].append(row)
+        for model, values in predictions.items():
+            prediction_by_state[(str(row["state_id"]), model)] = values[
+                index
+            ]
+    for selected in by_date.values():
+        selected.sort(key=lambda row: row["_available_ts"])
+
+    output = []
+    for target_date, states in sorted(by_date.items()):
+        winner = winners.get(target_date)
+        winner_anchor = v1.label_anchor(winner) if winner else None
+        if winner_anchor is None:
+            continue
+        availability_times = [row["_available_ts"] for row in states]
+        for market in markets.get(target_date, []):
+            snapshot = market["timestamp"]
+            state_index = bisect_right(availability_times, snapshot) - 1
+            if state_index < 0:
+                continue
+            state = states[state_index]
+            age_min = (
+                snapshot - state["_available_ts"]
+            ).total_seconds() / 60.0
+            if age_min > max_state_age_min:
+                continue
+            current = int(state["current_bracket"])
+            actual_delta = int(winner_anchor) - current
+            quotes = v1.normalized_yes_quotes(market["quotes"])
+            market_distribution, stale_mass = (
+                v1.conditional_market_distribution(quotes, current)
+            )
+            if market_distribution is None:
+                continue
+            record = {
+                "state_id": state["state_id"],
+                "target_date": target_date,
+                "decision_ts_utc": state["decision_ts_utc"],
+                "availability_ts_utc": state["_available_ts"].isoformat(),
+                "availability_clock_class": state[
+                    "_availability_clock_class"
+                ],
+                "snapshot_ts_utc": snapshot.isoformat(),
+                "availability_to_book_min": age_min,
+                "book_join_policy": (
+                    "book_snapshot_latest_available_weather_state"
+                ),
+                "max_state_age_min": max_state_age_min,
+                "current_bracket": current,
+                "winning_bracket": winner,
+                "actual_delta": actual_delta,
+                "settlement_lower_bound_violation": int(actual_delta < 0),
+                "stale_market_mass_below_current": stale_mass,
+                "quotes_json": json.dumps(quotes, sort_keys=True),
+                "market_distribution_json": json.dumps(
+                    market_distribution.tolist()
+                ),
+                "local_hour": state["local_hour"],
+                "path_phase": state["path_phase"],
+                "is_transition": state["is_transition"],
+                "is_state_entry": state["is_state_entry"],
+            }
+            for model in predictions:
+                probability = prediction_by_state[
+                    (str(state["state_id"]), model)
+                ]
+                record[f"{model}_distribution_json"] = json.dumps(
+                    probability.tolist()
+                )
+                record[f"{model}_p_current"] = float(probability[0])
+            output.append(record)
+    return output
 
 
 def main() -> int:
@@ -1000,16 +1096,13 @@ def main() -> int:
     winners = v1.load_winners(
         args.pm_history, date(2026, 7, 16), date(2026, 7, 30)
     )
-    joined = v1.join_market(
+    joined = join_market_asof_books(
         forward,
         predictions,
-        np.asarray([0]),
-        np.ones((len(forward), 1)),
         exact,
         markets,
         winners,
     )
-    add_market_metadata(joined, forward)
     for row in joined:
         row["market_split"] = "frozen_forward_15d_market_available"
     market_dates = sorted({str(row["target_date"]) for row in joined})
@@ -1201,6 +1294,10 @@ def main() -> int:
         "forward_dates": len(forward_dates),
         "forward_labels_used_in_fit": False,
         "market_join_rows": len(joined),
+        "market_join_policy": (
+            "book_snapshot_latest_available_weather_state"
+        ),
+        "max_weather_state_age_at_book_min": 30,
         "market_join_dates": market_dates,
         "market_coverage_gap_dates": sorted(
             set(forward_dates) - set(market_dates)

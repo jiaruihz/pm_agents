@@ -1,5 +1,10 @@
 # Tokyo 10 分钟升温路径概率与 full-ladder 回放 v1
 
+> 2026-07-31 修正：本文 market-specific score/trade 数字使用了
+> weather-state → future-book join，可能让同一 book 匹配多个旧 weather
+> states。相关数字已由 v3 的 book-time latest-as-of join 取代；weather-only
+> 模型分数不受影响。
+
 ## 结论
 
 用户提出的核心策略定义是对的：**每收到一条 Tokyo JMA 10-minute observation，就更新“最终温度落在哪一档”的概率，再与同一时点盘口比较**。但本轮结果表明，首版应保留两个 weather probability head，不应直接交易：

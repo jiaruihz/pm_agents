@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
+
+import numpy as np
 
 from scripts.analysis.market_structure_edge import (
     research_tokyo_continuous_ladder_forward_v3 as forward,
@@ -115,3 +118,66 @@ def test_wilson_interval_keeps_zero_win_uncertainty_visible() -> None:
 
     assert low == 0
     assert 0.24 < high < 0.25
+
+
+def test_book_join_uses_latest_state_available_at_book_time() -> None:
+    rows = [
+        {
+            "state_id": "old",
+            "target_date": "2026-07-20",
+            "decision_ts_utc": "2026-07-20T00:00:00+00:00",
+            "current_bracket": 29,
+            "local_hour": 9,
+            "path_phase": "warming",
+            "is_transition": 1,
+            "is_state_entry": 1,
+        },
+        {
+            "state_id": "new",
+            "target_date": "2026-07-20",
+            "decision_ts_utc": "2026-07-20T00:10:00+00:00",
+            "current_bracket": 30,
+            "local_hour": 9.1667,
+            "path_phase": "new_high",
+            "is_transition": 1,
+            "is_state_entry": 1,
+        },
+    ]
+    predictions = {
+        "model": np.asarray(
+            [[0.4, 0.3, 0.2, 0.1], [0.2, 0.5, 0.2, 0.1]]
+        )
+    }
+    markets = {
+        "2026-07-20": [
+            {
+                "timestamp": datetime(
+                    2026, 7, 20, 0, 27, tzinfo=timezone.utc
+                ),
+                "quotes": {
+                    "ask": {"30": 0.4, "31": 0.3},
+                    "bid": {"30": 0.35, "31": 0.25},
+                    "mid": {"30": 0.375, "31": 0.275},
+                },
+            }
+        ]
+    }
+
+    joined = forward.join_market_asof_books(
+        rows,
+        predictions,
+        exact={},
+        markets=markets,
+        winners={"2026-07-20": "31"},
+    )
+
+    # Archive availability is observation+15m: old=00:15, new=00:25.
+    assert len(joined) == 1
+    assert joined[0]["state_id"] == "new"
+    assert joined[0]["availability_to_book_min"] == 2
+    assert json.loads(joined[0]["model_distribution_json"]) == [
+        0.2,
+        0.5,
+        0.2,
+        0.1,
+    ]
