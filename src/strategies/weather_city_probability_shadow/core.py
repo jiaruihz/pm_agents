@@ -158,6 +158,31 @@ def load_jsonl_keys(path: Path, field: str) -> set[str]:
     return values
 
 
+JOURNAL_FILENAMES = {
+    "evaluations": "evaluations.jsonl",
+    "paper_intents": "paper_intents.jsonl",
+    "checkpoints": "checkpoints.jsonl",
+    "errors": "errors.jsonl",
+}
+
+
+def resolve_journal_catalog(config: dict[str, Any]) -> dict[str, list[Path]]:
+    """Return one logical journal catalog while preserving schema-versioned files."""
+
+    output_dir = Path(config["output_dir"])
+    declared = config.get("journal_catalog") or {}
+    result: dict[str, list[Path]] = {}
+    for kind, filename in JOURNAL_FILENAMES.items():
+        current = output_dir / filename
+        paths = [Path(value) for value in declared.get(kind, [current])]
+        if not paths or paths[0] != current:
+            raise ValueError(f"journal_catalog.{kind} must start with current journal {current}")
+        if len({str(path) for path in paths}) != len(paths):
+            raise ValueError(f"journal_catalog.{kind} contains duplicate paths")
+        result[kind] = paths
+    return result
+
+
 class ShadowRuntime:
     """Model-agnostic journal runtime. It has deliberately no execution client."""
 
@@ -190,6 +215,7 @@ class ShadowRuntime:
         self.config = config
         self.adapters = adapters
         self.output_dir = Path(config["output_dir"])
+        self.journal_catalog = resolve_journal_catalog(config)
         self.evaluations = self.output_dir / "evaluations.jsonl"
         self.intents = self.output_dir / "paper_intents.jsonl"
         self.checkpoints = self.output_dir / "checkpoints.jsonl"
@@ -313,8 +339,14 @@ class ShadowRuntime:
 
     def run_once(self, now: datetime | None = None) -> dict[str, Any]:
         now = now or datetime.now(timezone.utc)
-        seen = load_jsonl_keys(self.evaluations, "evaluation_id")
-        first_intents = load_jsonl_keys(self.intents, "position_key")
+        seen = set().union(*(
+            load_jsonl_keys(path, "evaluation_id")
+            for path in self.journal_catalog["evaluations"]
+        ))
+        first_intents = set().union(*(
+            load_jsonl_keys(path, "position_key")
+            for path in self.journal_catalog["paper_intents"]
+        ))
         seen_checkpoints = load_jsonl_keys(self.checkpoints, "checkpoint_id")
         evaluated = written = intents = errors = scored = not_scorable = blockers = 0
         for profile in self.config["profiles"]:

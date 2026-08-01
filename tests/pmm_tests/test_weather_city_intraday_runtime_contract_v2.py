@@ -13,6 +13,7 @@ from src.strategies.weather_city_probability_shadow.core import (
     InputNotReady,
     ShadowRuntime,
     migrate_evaluation_row,
+    resolve_journal_catalog,
 )
 from src.strategies.weather_city_probability_shadow.helsinki import (
     _official_helsinki_as_of,
@@ -190,9 +191,51 @@ def test_committed_v2_config_matches_runtime_schema_contract() -> None:
     assert config["output_schema_version"] == OUTPUT_SCHEMA_VERSION
     assert config["output_schema_fingerprint"] == OUTPUT_SCHEMA_FINGERPRINT
     assert config["output_dir"].endswith("city_probability_shadow_v2")
+    catalog = resolve_journal_catalog(config)
+    assert [path.parent.name for path in catalog["evaluations"]] == [
+        "city_probability_shadow_v2",
+        "city_probability_shadow_v1",
+    ]
     helsinki = next(profile for profile in config["profiles"] if profile["city"] == "Helsinki")
     assert "observation_cache" not in helsinki
     assert helsinki["observation_journal_dir"].endswith("/output/observations")
+
+
+def test_runtime_deduplicates_positions_across_legacy_journal_catalog(tmp_path: Path) -> None:
+    output = tmp_path / "v2"
+    legacy = tmp_path / "v1" / "paper_intents.jsonl"
+    position_key = "Tokyo|2026-08-01|35|model"
+    _write_jsonl(legacy, [{"position_key": position_key}])
+    config = _config(output, [{
+        "adapter": "fixed",
+        "city": "Tokyo",
+        "position_scope": "city_date_bracket_model",
+    }])
+    config["journal_catalog"] = {
+        "evaluations": [str(output / "evaluations.jsonl")],
+        "paper_intents": [str(output / "paper_intents.jsonl"), str(legacy)],
+        "checkpoints": [str(output / "checkpoints.jsonl")],
+        "errors": [str(output / "errors.jsonl")],
+    }
+
+    class Fixed:
+        def score(self, profile, now):
+            from src.strategies.weather_city_probability_shadow.core import CityScore
+            return [CityScore(
+                city="Tokyo", target_date="2026-08-01",
+                decision_ts_utc="2026-08-01T06:00:00+00:00",
+                source_obs_ts_utc="2026-08-01T06:00:00+00:00",
+                current_bracket=35, market_side="YES", market_probability=0.5,
+                market_entry_price=0.5, model_probability=0.9, model_id="model",
+                feature_coverage=1.0, missing_features=[], features={}, market={}, lineage={},
+            )]
+
+    summary = ShadowRuntime(config, {"fixed": Fixed()}).run_once(
+        datetime(2026, 8, 1, 6, tzinfo=UTC)
+    )
+    assert summary["new_evaluations"] == 1
+    assert summary["new_paper_intents"] == 0
+    assert not (output / "paper_intents.jsonl").exists()
 
 
 def test_runtime_handshakes_upstream_producer_identity(tmp_path: Path) -> None:

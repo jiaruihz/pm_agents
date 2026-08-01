@@ -14,6 +14,23 @@
     }
   ],
   "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2",
+  "journal_catalog": {
+    "evaluations": [
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/evaluations.jsonl",
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v1/evaluations.jsonl"
+    ],
+    "paper_intents": [
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/paper_intents.jsonl",
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v1/paper_intents.jsonl"
+    ],
+    "checkpoints": [
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/checkpoints.jsonl"
+    ],
+    "errors": [
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/errors.jsonl",
+      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v1/errors.jsonl"
+    ]
+  },
   "profiles": [
     {
       "enabled": true,
