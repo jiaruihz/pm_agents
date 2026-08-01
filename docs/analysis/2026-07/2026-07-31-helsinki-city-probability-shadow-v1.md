@@ -201,3 +201,27 @@ replay is PIT research evidence, not as-recorded forward evidence.
 
 The full-day artifact is
 `docs/analysis/2026-08/generated/helsinki_shadow_full_day_exact_bracket_pit_replay_v1/`.
+
+### Why the retrospective 26-NO entry was wrong
+
+At 13:00 Helsinki time the official lattice had just moved to 26 while the FMI path still
+looked like `fresh_runway`: 30-minute slope +0.6°C/h, no official pullback, and the raw
+forecast was under the current FMI print by 2.67°C. At the same time the raw forecast
+future peak was 2.78°C below the 26.5°C settlement boundary. Adding the current innovation
+back to that ceiling leaves a physically coherent boundary margin of about -0.10°C, just
+short of 27 rather than a strong cross.
+
+The weather head assigned 34.86% to 26-NO. The market midpoint was 32%, direct ask 37%,
+and effective five-share cost 38.17%. Both linear market-offset expressions over-weighted
+the hot innovation/recent runway/no-pullback combination relative to the protective
+forecast ceiling, lifting probability to 45.13%/46.73% and creating a false +6.97/+8.56pp
+edge. Missing live radiation was median-imputed and therefore supplied almost no
+state-specific counterevidence. Positive rows recurred at four checkpoints per model
+through 13:40, but position deduplication retained one model-intent each: one economic
+26-NO entry represented twice for A/B, not repeated trading.
+
+This points to a model representation repair, not a new threshold: learn a single
+settlement-lattice bias-corrected future-ceiling margin and explicit time-since-bracket-
+transition state, then test it on the fixed PIT denominator. The current split raw ceiling
+and innovation features allow linear coefficients to extrapolate a just-completed climb
+into a nonexistent next-bracket runway.
