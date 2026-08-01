@@ -225,3 +225,19 @@ settlement-lattice bias-corrected future-ceiling margin and explicit time-since-
 transition state, then test it on the fixed PIT denominator. The current split raw ceiling
 and innovation features allow linear coefficients to extrapolate a just-completed climb
 into a nonexistent next-bracket runway.
+
+## 2026-08-01 structural repair decision
+
+The proposed bias-corrected ceiling margin and bracket-transition-age repair was trained
+on the unchanged 2026-07-15..29 PIT denominator before the 2026-07-31 diagnostic replay.
+None of the three fixed candidates passed the active post-source date-X market gate. The
+best structural ridge improved all date-X Brier/logloss from `0.06669/0.21921` to
+`0.06389/0.21360`, but active date-X remained `0.10655/0.33034` versus market
+`0.09167/0.29274`, with only 12 rows/4 dates.
+
+The 2026-07-31 regression also failed: at the first 26-NO checkpoint the v2 probability
+was 46.73% against 38.17% effective cost, while the corrected-margin + transition model
+increased it to 52.48%. Therefore the new artifacts remain research-only,
+`expression_models` remains `incumbent/challenger`, and the zero-notional shadow was not
+restarted. No live behavior or order state changed. Full evidence is in
+[v3 structural repair](../2026-08/2026-08-01-helsinki-market-expression-v3-structural-repair.md).

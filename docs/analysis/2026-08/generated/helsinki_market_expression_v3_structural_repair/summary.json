@@ -1,0 +1,42 @@
+{
+  "artifacts": [
+    {
+      "candidate": "p_structural_margin_r16",
+      "path": "docs/analysis/2026-08/generated/helsinki_market_expression_v3_structural_repair/p_structural_margin_r16.joblib",
+      "sha256": "3d76c71acfff83ab68a2d7da9bbdafbacf04a9061d61e2d4f4122b2d29918364"
+    },
+    {
+      "candidate": "p_structural_margin_transition_r16",
+      "path": "docs/analysis/2026-08/generated/helsinki_market_expression_v3_structural_repair/p_structural_margin_transition_r16.joblib",
+      "sha256": "8f0908448bc28917d52bc08ab236448ffa765096dafa6fa07d3160958311924a"
+    },
+    {
+      "candidate": "p_structural_margin_transition_hgb",
+      "path": "docs/analysis/2026-08/generated/helsinki_market_expression_v3_structural_repair/p_structural_margin_transition_hgb.joblib",
+      "sha256": "58ae016ba7374486cef270a2f1c89909e4f63650288d2eec704a6384b5c324a2"
+    }
+  ],
+  "candidate_count_k": 3,
+  "config_changed": false,
+  "coverage": {
+    "active_dates": 4,
+    "active_matched_rows": 231,
+    "combined_dates": 14,
+    "combined_unique_market_rows": 598,
+    "full_ladder_market_rows": 534,
+    "weather_checkpoints": 2115
+  },
+  "diagnostic_20260731_rows": 39,
+  "live_change": false,
+  "oof": {
+    "end": "2026-07-29",
+    "rows": 362,
+    "start": "2026-07-20",
+    "target_dates": 9
+  },
+  "orders_submitted": 0,
+  "selected_for_shadow": null,
+  "selection_rule": "non-worse than v2 on integrated and date-X Brier/logloss, non-worse than market on active post-source date-X; 2026-07-31 diagnostic additionally must retain 21-25 and suppress false 26",
+  "shadow_restarted": false,
+  "status": "structural_repair_failed_keep_existing_shadow"
+}

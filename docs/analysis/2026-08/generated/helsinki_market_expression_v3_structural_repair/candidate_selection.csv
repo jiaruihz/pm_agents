@@ -1,0 +1,4 @@
+candidate,integrated_brier,integrated_logloss,date_x_brier,date_x_logloss,active_date_x_brier,active_date_x_logloss,gate_integrated_vs_v2,gate_date_x_vs_v2,gate_active_vs_market,historical_pass,diagnostic_20260731_pass,shadow_eligible
+p_structural_margin_transition_r16,0.06412145144398944,0.2191057919557768,0.06388501250471045,0.2135980657920846,0.10655307721234719,0.3303361887535622,True,True,False,False,False,False
+p_structural_margin_r16,0.06433159093589091,0.2196053710398773,0.06425487694230077,0.21428958484678076,0.10568265401566058,0.32815297700069707,True,True,False,False,False,False
+p_structural_margin_transition_hgb,0.07086751285295266,0.237362884214797,0.08323206333628533,0.26510364862373864,0.12431708567581012,0.40101693506208697,False,False,False,False,False,False

@@ -1,0 +1,13 @@
+model,evidence,signals,dates,wins,errors,cost,pnl,roi,target_date_bootstrap
+p_v2_compact_r16,all,19,8,16,3,63.06059535,16.93940465,0.26862107082850434,"{'target_dates': 9, 'draws': 5000, 'ci_low': 0.07468985150562565, 'ci_high': 0.5246888483468889}"
+p_v2_compact_r16,active_first_after_source,11,4,8,3,33.81674935,6.183250649999999,0.1828458018245328,"{'target_dates': 9, 'draws': 5000, 'ci_low': -0.1276314665312043, 'ci_high': 0.5982345404038176}"
+p_v2_compact_r16,full_ladder_before_source,8,4,8,0,29.243846,10.756153999999999,0.3678091452129791,"{'target_dates': 9, 'draws': 5000, 'ci_low': 0.16710209949218607, 'ci_high': 1.0631690792850086}"
+p_structural_margin_r16,all,21,8,18,3,74.7291191,15.2708809,0.20434980478714085,"{'target_dates': 9, 'draws': 5000, 'ci_low': 0.05732530464677622, 'ci_high': 0.3322564403530646}"
+p_structural_margin_r16,active_first_after_source,11,4,8,3,35.5042751,4.4957249,0.12662488918130313,"{'target_dates': 9, 'draws': 5000, 'ci_low': -0.1276314665312043, 'ci_high': 0.3632942594011483}"
+p_structural_margin_r16,full_ladder_before_source,10,4,10,0,39.224844000000004,10.775155999999999,0.2747023289627359,"{'target_dates': 9, 'draws': 5000, 'ci_low': 0.16710209949218607, 'ci_high': 0.3712706189637402}"
+p_structural_margin_transition_r16,all,21,8,18,3,74.82929435,15.17070565,0.202737521204488,"{'target_dates': 9, 'draws': 5000, 'ci_low': 0.05538371903394699, 'ci_high': 0.3305431073268527}"
+p_structural_margin_transition_r16,active_first_after_source,11,4,8,3,35.60445035000001,4.39554965,0.123455062689937,"{'target_dates': 9, 'draws': 5000, 'ci_low': -0.13052439756887382, 'ci_high': 0.36112935927671086}"
+p_structural_margin_transition_r16,full_ladder_before_source,10,4,10,0,39.224844000000004,10.775155999999999,0.2747023289627359,"{'target_dates': 9, 'draws': 5000, 'ci_low': 0.16710209949218607, 'ci_high': 0.3712706189637402}"
+p_structural_margin_transition_hgb,all,21,9,16,5,65.9938566,14.006143399999997,0.21223404907056148,"{'target_dates': 9, 'draws': 5000, 'ci_low': -0.003986394053260064, 'ci_high': 0.3905267788832046}"
+p_structural_margin_transition_hgb,active_first_after_source,12,4,8,4,35.0447566,4.9552434000000005,0.141397569301423,"{'target_dates': 9, 'draws': 5000, 'ci_low': -0.10827067817213405, 'ci_high': 0.38095585160862183}"
+p_structural_margin_transition_hgb,full_ladder_before_source,9,5,8,1,30.949099999999998,9.0509,0.2924446914449855,"{'target_dates': 9, 'draws': 5000, 'ci_low': -0.15182807555091415, 'ci_high': 0.5219657709898103}"
