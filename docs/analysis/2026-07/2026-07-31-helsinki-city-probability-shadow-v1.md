@@ -162,3 +162,11 @@ errors and suppressed 35 checkpoint records, but changed no trade decision, fill
 under the corrected code all 35 checkpoints are retained as valid interval-censored market
 evidence and remain non-signals. The replay artifact is
 `docs/analysis/2026-08/generated/helsinki_shadow_near_binary_replay_v1/`.
+
+The standard incremental settlement refresh subsequently imported all 11 Helsinki
+2026-07-31 brackets into canonical `settlement_outcomes`: bracket 26 has final YES=1 and
+the other ten brackets have final YES=0. Shadow evaluations themselves are still sourced
+from the immutable raw journal/replay artifact rather than materialized as canonical
+`fact_signal_candidates`; this remaining canonical opportunity-ingest gap does not affect
+the zero-order counterfactual above, but it prevents calling the storage lineage fully
+closed.
