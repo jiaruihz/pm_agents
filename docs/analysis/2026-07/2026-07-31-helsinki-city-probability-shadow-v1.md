@@ -191,12 +191,13 @@ replay is PIT research evidence, not as-recorded forward evidence.
   checkpoints / 96 structured `not_scorable` rows. Incumbent accuracy/Brier/logloss was
   97.44%/0.03741/0.13408; challenger was 100%/0.04625/0.17059; same-row market was
   100%/0.05059/0.19011.
-- The replay produced 43 positive-edge rows but only 12 first-positive paper intents after
-  position deduplication: ten early-bracket NO intents would have won and the two 26-NO
-  intents would have lost. At the standard five-share research size and official fee,
-  these counterfactual intents produce +$0.46 on $49.54 cost (ROI 0.93%): the meaningful
-  25-NO gain is largely given back by the incorrect 26-NO entry. They are counterfactual,
-  not actual orders or fills.
+- The replay produced 43 positive-edge rows and 12 model-intents after per-model position
+  deduplication. These are six economic bracket entries (21–26 NO), each recorded once for
+  the incumbent and once for the challenger A/B; they must not be aggregated as 12 trades
+  from one strategy. Each model has six intents, five wins and one 26-NO loss. At the
+  standard five-share research size and official fee, either model separately produces
+  +$0.23 on $24.77 cost (ROI 0.93%): the meaningful 25-NO gain is largely given back by
+  the incorrect 26-NO entry. They are counterfactual, not actual orders or fills.
 
 The full-day artifact is
 `docs/analysis/2026-08/generated/helsinki_shadow_full_day_exact_bracket_pit_replay_v1/`.
