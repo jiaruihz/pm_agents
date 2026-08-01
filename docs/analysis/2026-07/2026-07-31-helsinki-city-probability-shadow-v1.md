@@ -170,3 +170,30 @@ from the immutable raw journal/replay artifact rather than materialized as canon
 `fact_signal_candidates`; this remaining canonical opportunity-ingest gap does not affect
 the zero-order counterfactual above, but it prevents calling the storage lineage fully
 closed.
+
+## Full-day retrospective PIT audit
+
+The late-afternoon forward window is a deployment/freeze boundary, not a full-day data
+boundary. On 2026-07-31 the collectors actually retained 90 unique FMI checkpoints and
+2,375 active-ladder book rows from 04:00–18:50 UTC (07:00–21:50 Helsinki time), covering
+the observed 20→21→22→23→24→25→26 progression. The frozen shadow began only at 12:43 UTC,
+after the official running maximum had already reached 26; therefore its 38 as-recorded
+forward checkpoints test terminal remaining heat at 26, not the morning climb.
+
+A retrospective replay using only each checkpoint's then-available FMI, METAR, ECMWF and
+book state recovered 87/90 checkpoints. The first three lacked either four prior FMI
+prints or an exact bracket because the market's lower bucket was `20 or below`. This
+replay is PIT research evidence, not as-recorded forward evidence.
+
+- Weather head, 87 checkpoints: accuracy 97.70%, Brier 0.02148, logloss 0.10156. It was
+  correct at all 20–24 checkpoints, 8/10 at bracket 25, and 54/54 at bracket 26.
+- Expression evidence: 39 two-sided checkpoints / 78 scored model rows and 48 one-sided
+  checkpoints / 96 structured `not_scorable` rows. Incumbent accuracy/Brier/logloss was
+  97.44%/0.03741/0.13408; challenger was 100%/0.04625/0.17059; same-row market was
+  100%/0.05059/0.19011.
+- The replay produced 43 positive-edge rows but only 12 first-positive paper intents after
+  position deduplication: ten early-bracket NO intents would have won and the two 26-NO
+  intents would have lost. They are counterfactual, not actual orders or fills.
+
+The full-day artifact is
+`docs/analysis/2026-08/generated/helsinki_shadow_full_day_exact_bracket_pit_replay_v1/`.

@@ -46,6 +46,10 @@ def main() -> None:
     parser.add_argument(
         "--runtime-root", default="/Volumes/jrs/weather_data_feed_service_runtime"
     )
+    parser.add_argument(
+        "--start-utc",
+        help="Override the profile forward clock for a retrospective PIT replay.",
+    )
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
@@ -62,7 +66,9 @@ def main() -> None:
     official_path = (
         runtime_root / "output/observations" / args.target_date / "observations.jsonl"
     )
-    forward_start = _utc(profile["forward_start_utc"])
+    forward_start = _utc(args.start_utc or profile["forward_start_utc"])
+    if args.start_utc:
+        profile["forward_start_utc"] = forward_start.isoformat()
 
     books = [
         row for row in _rows(book_path)
