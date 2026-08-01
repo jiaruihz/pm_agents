@@ -1,7 +1,7 @@
 # 跨城市 Intraday Contract Root Fix v1
 
-Status: develop root-fix complete / deployed-fixture, producer-contract and anchor replay passed / production deployment pending
-Evidence cutoff: 2026-08-01 05:48:16 UTC
+Status: production producer + v2 zero-notional shadow deployed; process/raw/API verification passed
+Evidence cutoff: 2026-08-01 10:46:05 UTC
 Scope: Phase 0 后的 schema、runtime identity、cross-day locator、one-sided/error denominator；不修改模型、threshold 或 live 授权
 
 ## 结论
@@ -17,7 +17,7 @@ Phase A 前的 consumer/runtime root-fix 已在 develop 落地：
 - 生产独有的 `weather_live_cross_observations_loop.py` 与 fast-lane contract 已收回 develop/Git；producer payload、每条 observation、notification 和 state 均携带 loaded code/config/schema identity，v2 consumer 启动时 fail-closed 校验上游 fingerprint。
 - Tokyo active ladder 改为 source + official anchor 的表达并集，并记录 `capture_cycle_id`、`capture_anchor_values`、`capture_reasons`；consumer 按 official anchor 选择同一 PIT capture 中的 expression，不再假定 `relative_offset=0` 就等于官方档位。
 
-当前 production 仍运行旧 checkout/config/output。本报告没有部署或重启；因此“代码已修”不能写成“生产已切换”。
+production 已从 clean deployment worktree 的 commit `41806c874df169d327cffcbc2f41579a0b0bf38d` 完成切换；真实下单权限与 notional 均未扩大。
 
 ## 1. 新 contract
 
@@ -85,9 +85,16 @@ smoke 的 paper intent 为 zero-notional 临时文件，不是生产 intent/orde
 
 39 行逐条重放产物：`generated/city_intraday_contract_repair_v1/tokyo_anchor_gap_replay_v1.json`。这 39 行是 poll rows，不是 39 个独立 city-day；其中 9 行对应同一段 `official=33/source=35` 缺口，历史只有 34/35/36 books，所以保留为真实 coverage gap。
 
-## 4. 尚未关闭的项
+## 4. Production cutover 验证
 
-- deployed producer handshake：develop 已完成，但 production 仍是旧 checkout/schema；在 git-first 切换 producer 前，正式 v2 consumer 会按设计拒绝旧 latest，不能称为 deployed complete。
+- producer：PID `30243`，v2 schema fingerprint `789563c9...bf1`，首轮保留 65 rows 且 `new_observation_count=0`，未制造重复 notification。
+- Tokyo ladder：PID `30697`，首个 v2 capture 同时记录 source/official anchors `{30,35}`，生成表达并集 `29,30,31,34,35,36`。
+- city shadow v2：PID `31481`；完整循环 `evaluated=2, scored=2, blockers=0, errors=0, orders_submitted=0`，upstream producer instance 与 handshake 完全匹配。
+- 旧 v1 shadow session 已停止；v2 仅写 `evaluations.jsonl`、`paper_intents.jsonl` 等 zero-notional artifacts，没有 live order file/client。
+- 既有 downstream live fast-source 进程 PID `18670` 在 producer 切换后继续返回 `status=ok`；首轮 producer 没有新 event，因而没有 cutover-induced duplicate order。
+- production manifest strict 通过；canonical DB identity healthy。全局 health check 仍有切换前已存在的非目标 coverage warnings，不属于本次 v2 contract cutover。
+
+## 5. 尚未关闭的项
+
 - 历史 multi-anchor coverage：30/39 poll rows 可用既有 sibling books 恢复；其余 9/39 的缺失 quote 不允许事后补造，只能由新 ladder union 在 forward 中补齐。
 - Amsterdam：仍无 active producer/model consumer，按原计划在 Phase D 恢复 ownership 后接 interval/revision adapter。
-- production cutover：需另走 `weather-strategy-deploy`，单实例切 v2 config/output，并验证 process/raw/API/exchange；本轮未授权也未执行。
