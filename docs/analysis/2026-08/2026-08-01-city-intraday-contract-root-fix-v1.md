@@ -1,6 +1,6 @@
 # 跨城市 Intraday Contract Root Fix v1
 
-Status: production producer + v2 zero-notional shadow deployed; process/raw/API verification passed
+Status: production producer + v2 zero-notional shadow deployed; process/raw/exchange verification passed; dashboard API has pre-existing JRS LaunchAgent permission blocker
 Evidence cutoff: 2026-08-01 10:46:05 UTC
 Scope: Phase 0 后的 schema、runtime identity、cross-day locator、one-sided/error denominator；不修改模型、threshold 或 live 授权
 
@@ -92,7 +92,7 @@ smoke 的 paper intent 为 zero-notional 临时文件，不是生产 intent/orde
 - city shadow v2：PID `31481`；完整循环 `evaluated=2, scored=2, blockers=0, errors=0, orders_submitted=0`，upstream producer instance 与 handshake 完全匹配。
 - 旧 v1 shadow session 已停止；v2 仅写 `evaluations.jsonl`、`paper_intents.jsonl` 等 zero-notional artifacts，没有 live order file/client。
 - 既有 downstream live fast-source 进程 PID `18670` 在 producer 切换后继续返回 `status=ok`；首轮 producer 没有新 event，因而没有 cutover-induced duplicate order。
-- production manifest strict 通过；canonical DB identity healthy。全局 health check 仍有切换前已存在的非目标 coverage warnings，不属于本次 v2 contract cutover。
+- production manifest strict 通过；canonical DB identity healthy。dashboard 前端 `:5174` 页面壳返回 HTTP 200，但 LaunchAgent API 读取 JRS symlink 时触发 `sqlite3.OperationalError: unable to open database file`，strategy-runtime endpoint 因而返回 500；这是既有 JRS/LaunchAgent 权限问题，不能写成 API 验证通过。全局 health check 仍有切换前已存在的非目标 coverage warnings，不属于本次 v2 contract cutover。
 
 ## 5. 尚未关闭的项
 
