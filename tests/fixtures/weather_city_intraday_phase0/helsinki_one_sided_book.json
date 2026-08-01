@@ -1,0 +1,34 @@
+{
+  "fixture_kind": "one_sided_book",
+  "note": "valid book snapshot with exactly one quoted side",
+  "raw_ref": {
+    "line_numbers": [
+      1
+    ],
+    "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/helsinki_pre_cross_active_ladder_shadow/active_bracket_books/2026-08-01.jsonl",
+    "source_file_sha256_at_census": "0c5db2a0bf66ad8cebd27542272de4948ae61e4ec9d99de2438a221fc31d1153"
+  },
+  "record_schema_fingerprint": "6a80405d33e6ae23ee32ce205fd83c43f7274950f930d9383b8fbb040866669b",
+  "records": {
+    "book_fetched_at_utc": "2026-08-01T03:00:09.376201+00:00",
+    "book_status": "ok",
+    "city": "Helsinki",
+    "condition_id": "0x96c4e74c5dad5b07031bf53b6e35c224db9837cda912d4ae5bcef56b0cbb2ac1",
+    "outcome": "no",
+    "reference_market_value": 18,
+    "relative_offset": -1,
+    "schema_version": "fast_source_active_bracket_book_v1",
+    "source": "fmi",
+    "summary": {
+      "ask_size": null,
+      "best_ask": null,
+      "best_bid": 0.999,
+      "bid_size": 12587.0,
+      "spread": null,
+      "tick_size": 0.001
+    },
+    "target_date": "2026-08-01",
+    "token_id": "92332863732620653260258993373927587225676137459022928095354343791409400313499"
+  },
+  "schema_version": "weather_city_intraday_phase0_fixture_v1"
+}

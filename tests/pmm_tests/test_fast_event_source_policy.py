@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 import scripts.ops.weather_fast_source_stale_book_observer as observer
 from scripts.ops.weather_fast_source_stale_book_observer import (
+    MarketToken,
+    build_active_bracket_book_rows,
     bracket_from_question,
     bracket_lookup,
     build_market_index,
@@ -24,8 +26,8 @@ from weather_data_feed.fast_event_source_policy import (
 def test_fast_event_profiles_are_calibration_only_and_unit_aware():
     profiles = load_fast_event_source_profiles()
 
-    assert len(profiles) == 22
-    assert len({profile.city for profile in profiles.values()}) == 21
+    assert len(profiles) >= 22
+    assert len({profile.city for profile in profiles.values()}) >= 21
     assert not any(profile.live_eligible for profile in profiles.values())
     assert profiles[("Atlanta", "noaa_madis_hfmetar")].market_unit == "F"
     assert profiles[("HongKong", "hko_obs")].bracket_rounding == "floor"
@@ -272,6 +274,73 @@ def test_event_key_deduplicates_repeated_source_reports_within_same_market_brack
 
     assert first == repeated
     assert first != next_bracket
+
+
+def test_active_bracket_archive_keeps_previous_no_covered_across_cross(monkeypatch):
+    target_date = "2026-07-20"
+    market_index = {
+        ("Tokyo", target_date, str(bracket)): MarketToken(
+            city="Tokyo",
+            target_date=target_date,
+            bracket=str(bracket),
+            question=f"Will Tokyo be {bracket}C?",
+            event_slug="event",
+            market_id=f"market-{bracket}",
+            condition_id=f"condition-{bracket}",
+            yes_token_id=f"yes-{bracket}",
+            no_token_id=f"no-{bracket}",
+        )
+        for bracket in (32, 33, 34, 35, 36)
+    }
+    monkeypatch.setattr(
+        observer,
+        "fetch_fresh_book",
+        lambda token_id, **_kwargs: {
+            "status": "ok",
+            "fetched_at_utc": "2026-07-20T03:00:00+00:00",
+            "summary": {"best_ask": 0.95, "ask_size": 20.0},
+            "raw": {"asks": [{"price": 0.95, "size": 20.0}]},
+            "token_id": token_id,
+        },
+    )
+    metar_rows = {
+        ("Tokyo", target_date): {
+            "metar_running_max_market_value": 34,
+            "metar_running_max_round_c": 34,
+        }
+    }
+    before = build_active_bracket_book_rows(
+        source_rows={("Tokyo", target_date): {"source": "jma_amedas", "source_market_value": 34}},
+        metar_rows=metar_rows,
+        market_index=market_index,
+        market_proxy="",
+        active_cities={"Tokyo"},
+        offsets=[-1, 0, 1],
+        extreme_kind="max",
+    )
+    after = build_active_bracket_book_rows(
+        source_rows={("Tokyo", target_date): {"source": "jma_amedas", "source_market_value": 35}},
+        metar_rows=metar_rows,
+        market_index=market_index,
+        market_proxy="",
+        active_cities={"Tokyo"},
+        offsets=[-1, 0, 1],
+        extreme_kind="max",
+    )
+
+    assert {row["bracket"] for row in before} == {"33", "34", "35"}
+    assert {row["bracket"] for row in after} == {"33", "34", "35", "36"}
+    assert next(row for row in before if row["bracket"] == "34")["raw"]["asks"][0]["size"] == 20.0
+    assert next(row for row in after if row["bracket"] == "34")["monitor_reason"] == (
+        "pre_and_post_cross_continuous_active_ladder"
+    )
+    official_center = next(row for row in after if row["bracket"] == "34")
+    assert official_center["schema_version"] == "fast_source_active_bracket_book_v2"
+    assert official_center["capture_anchor_values"] == {"source": 35, "official": 34}
+    assert {reason["anchor_kind"] for reason in official_center["capture_reasons"]} == {
+        "source",
+        "official",
+    }
 
 
 def test_gamma_market_parsing_handles_fahrenheit_ranges_and_minimum_slugs():

@@ -5,9 +5,10 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 source "$ROOT/scripts/ops/weather_jrs_tmux_env.sh"
 RUNTIME_ROOT="${WEATHER_DATA_FEED_RUNTIME_ROOT:-/Volumes/jrs/weather_data_feed_service_runtime}"
 PY="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
-SESSION="weather_tokyo_current_break_active_ladder_shadow_v1"
-OUTPUT_DIR="$RUNTIME_ROOT/output/tokyo_current_break_active_ladder_shadow"
-LOG_FILE="$RUNTIME_ROOT/loop/tokyo_current_break_active_ladder_shadow_v1.log"
+CONFIG="${CITY_PROBABILITY_SHADOW_CONFIG:-$ROOT/configs/weather/city_probability_shadow_v2.json}"
+OUTPUT_DIR="${CITY_PROBABILITY_SHADOW_OUTPUT_DIR:-$RUNTIME_ROOT/output/city_probability_shadow_v2}"
+SESSION="weather_city_probability_shadow_v2"
+LOG_FILE="$OUTPUT_DIR/runner.log"
 ACTION="${1:-start}"
 TMUX_SOCKET="$(weather_jrs_tmux_start_socket "$RUNTIME_ROOT")"
 
@@ -25,8 +26,8 @@ if [[ "$ACTION" != "start" ]]; then
   exit 2
 fi
 
-weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$RUNTIME_ROOT/loop" "$OUTPUT_DIR"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR"
 weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "=$SESSION" 2>/dev/null || true
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" \
-  "cd '$ROOT' && exec '$PY' '$ROOT/scripts/ops/weather_fast_source_stale_book_observer.py' --loop --output-dir '$OUTPUT_DIR' --high-frequency-latest '$RUNTIME_ROOT/output/live_cross_observations/latest.json' --interval-seconds 60 --cities Tokyo --sources jma_amedas --fresh-scope all --continuous-active-brackets --active-bracket-cities Tokyo --active-bracket-offsets -1 0 1 --market-proxy http://127.0.0.1:7890 >> '$LOG_FILE' 2>&1"
-echo "started session=$SESSION socket=$TMUX_SOCKET output=$OUTPUT_DIR mode=telemetry_only_no_orders"
+  "cd '$ROOT' && exec '$PY' -u '$ROOT/scripts/ops/weather_city_probability_shadow_v1.py' loop --config '$CONFIG' --interval-seconds 60 >> '$LOG_FILE' 2>&1"
+echo "started session=$SESSION socket=$TMUX_SOCKET output=$OUTPUT_DIR config=$CONFIG"

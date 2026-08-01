@@ -88,10 +88,18 @@ def test_tokyo_adapter_scores_both_sides_from_pit_first_seen(tmp_path):
     book_dir = tmp_path / "books"
     _write_jsonl(book_dir / "2026-08-01.jsonl", [{
         "city": "Tokyo", "source": "jma_amedas", "outcome": "no",
-        "relative_offset": 0, "book_status": "ok", "target_date": "2026-08-01",
+        "relative_offset": -1, "book_status": "ok", "target_date": "2026-08-01",
         "book_fetched_at_utc": "2026-08-01T01:08:00Z",
-        "source_obs_ts_utc": "2026-08-01T01:00:00Z", "reference_market_value": 32,
+        "source_obs_ts_utc": "2026-08-01T01:00:00Z", "reference_market_value": 33,
+        "bracket": "32°C", "question": "Will the highest temperature in Tokyo be 32°C?",
         "summary": {"best_ask": .42, "best_bid": .40}, "token_id": "paper",
+    }, {
+        "city": "Tokyo", "source": "jma_amedas", "outcome": "no",
+        "relative_offset": 0, "book_status": "ok", "target_date": "2026-08-01",
+        "book_fetched_at_utc": "2026-08-01T01:08:01Z",
+        "source_obs_ts_utc": "2026-08-01T01:00:00Z", "reference_market_value": 33,
+        "bracket": "33°C", "question": "Will the highest temperature in Tokyo be 33°C?",
+        "summary": {"best_ask": .52, "best_bid": .50}, "token_id": "paper-33",
     }])
     weather_dir = ROOT / "docs/analysis/2026-07/generated/tokyo_current_break_binary_v5/models"
     offset_dir = ROOT / "docs/analysis/2026-07/generated/tokyo_market_anchor_binary_v6/models"
@@ -123,3 +131,6 @@ def test_tokyo_adapter_scores_both_sides_from_pit_first_seen(tmp_path):
     assert scores[0].model_probability + scores[1].model_probability == pytest.approx(1.0)
     assert scores[0].lineage["source_first_seen_at_utc"] == "2026-08-01T01:07:00Z"
     assert scores[0].lineage["official_snapshot_fetched_at_utc"] == "2026-08-01T01:05:00Z"
+    assert scores[0].lineage["source_lattice_anchor"] == 33
+    assert scores[0].lineage["official_lattice_anchor"] == 32
+    assert scores[0].lineage["market_expression_anchor"] == 32

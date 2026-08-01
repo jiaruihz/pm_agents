@@ -1,11 +1,37 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import subprocess
 from typing import Any, Protocol
+
+
+ROOT = Path(__file__).resolve().parents[3]
+CONFIG_SCHEMA_VERSION = "weather_city_probability_shadow_config_v2"
+OUTPUT_SCHEMA_VERSION = "weather_city_probability_shadow_v2"
+ADAPTER_CONTRACT_VERSION = "weather_city_probability_adapter_v1"
+
+OUTPUT_SCHEMA = {
+    "record_kind": "evaluation|checkpoint_blocker|error|summary|paper_intent",
+    "schema_version": OUTPUT_SCHEMA_VERSION,
+    "schema_fingerprint": "sha256",
+    "runtime_identity": {
+        "runtime_instance_id": "sha256",
+        "repo_head": "git_sha",
+        "repo_dirty_tracked": "bool",
+        "config_sha256": "sha256",
+        "loaded_module_sha256": "mapping[path,sha256]",
+        "artifact_sha256": "mapping[path,sha256]",
+        "upstream_producer_identity": "mapping[journal,runtime_identity]",
+    },
+}
+OUTPUT_SCHEMA_FINGERPRINT = hashlib.sha256(
+    json.dumps(OUTPUT_SCHEMA, sort_keys=True, separators=(",", ":")).encode()
+).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -33,6 +59,84 @@ class CityAdapter(Protocol):
     def score(self, profile: dict[str, Any], now: datetime) -> list[CityScore]: ...
 
 
+class InputNotReady(RuntimeError):
+    """Expected coverage state that must be journaled, not counted as an error."""
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        city: str,
+        target_date: str,
+        decision_ts_utc: str,
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(reason)
+        self.reason = reason
+        self.city = city
+        self.target_date = target_date
+        self.decision_ts_utc = decision_ts_utc
+        self.details = details or {}
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _git_value(*args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(ROOT), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def migrate_evaluation_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize legacy v1 evaluations without inventing missing lineage."""
+
+    if row.get("schema_version") == OUTPUT_SCHEMA_VERSION:
+        return dict(row)
+    if row.get("schema_version") != "weather_city_probability_shadow_v1":
+        raise ValueError(f"unsupported evaluation schema: {row.get('schema_version')}")
+    migrated = dict(row)
+    migrated["source_schema_version"] = "weather_city_probability_shadow_v1"
+    migrated["schema_version"] = OUTPUT_SCHEMA_VERSION
+    migrated["schema_fingerprint"] = OUTPUT_SCHEMA_FINGERPRINT
+    migrated["record_kind"] = "evaluation"
+    migrated["migration_status"] = "legacy_runtime_identity_unavailable"
+    migrated["runtime_identity"] = None
+    if "evaluation_status" not in migrated:
+        scorable = (
+            migrated.get("market_probability") is not None
+            and migrated.get("model_probability") is not None
+        )
+        migrated["evaluation_status"] = "scored" if scorable else "not_scorable"
+        migrated["not_scorable_reason"] = (
+            None if scorable else "legacy_v1_missing_probability_unclassified"
+        )
+    return migrated
+
+
+def iter_compatible_evaluations(paths: list[Path]):
+    for path in paths:
+        if not path.is_file():
+            continue
+        with path.open(encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(row, dict):
+                    yield migrate_evaluation_row(row)
+
+
 def append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
@@ -57,19 +161,151 @@ def load_jsonl_keys(path: Path, field: str) -> set[str]:
 class ShadowRuntime:
     """Model-agnostic journal runtime. It has deliberately no execution client."""
 
-    schema_version = "weather_city_probability_shadow_v1"
+    schema_version = OUTPUT_SCHEMA_VERSION
 
-    def __init__(self, config: dict[str, Any], adapters: dict[str, CityAdapter]):
+    def __init__(
+        self,
+        config: dict[str, Any],
+        adapters: dict[str, CityAdapter],
+        *,
+        config_path: Path | None = None,
+        entrypoint_path: Path | None = None,
+    ):
         if config.get("execution_mode") != "zero_notional_shadow":
             raise ValueError("execution_mode must be zero_notional_shadow")
         if config.get("orders_submitted") != 0:
             raise ValueError("orders_submitted must be exactly zero")
+        if config.get("schema_version") != CONFIG_SCHEMA_VERSION:
+            raise ValueError(
+                f"config schema must be {CONFIG_SCHEMA_VERSION}, got {config.get('schema_version')}"
+            )
+        expected_schema = config.get("output_schema_version")
+        if expected_schema != OUTPUT_SCHEMA_VERSION:
+            raise ValueError(
+                f"output schema handshake failed: expected {OUTPUT_SCHEMA_VERSION}, got {expected_schema}"
+            )
+        expected_fingerprint = config.get("output_schema_fingerprint")
+        if expected_fingerprint != OUTPUT_SCHEMA_FINGERPRINT:
+            raise ValueError("output schema fingerprint handshake failed")
         self.config = config
         self.adapters = adapters
         self.output_dir = Path(config["output_dir"])
         self.evaluations = self.output_dir / "evaluations.jsonl"
         self.intents = self.output_dir / "paper_intents.jsonl"
+        self.checkpoints = self.output_dir / "checkpoints.jsonl"
         self.errors = self.output_dir / "errors.jsonl"
+        self.upstream_producer_identity = self._validate_producer_contracts()
+        self.runtime_identity = self._build_runtime_identity(config_path, entrypoint_path)
+
+    def _validate_producer_contracts(self) -> dict[str, Any]:
+        declarations = self.config.get("producer_contracts") or []
+        if self.config.get("require_producer_contracts") and not declarations:
+            raise RuntimeError("producer contract declarations are required")
+        declared_journals = {str(Path(row["journal_path"]).resolve()) for row in declarations}
+        if self.config.get("require_producer_contracts"):
+            required = {
+                str(Path(profile["source_journal"]).resolve())
+                for profile in self.config.get("profiles", [])
+                if profile.get("enabled", True) and profile.get("source_journal")
+            }
+            missing = sorted(required - declared_journals)
+            if missing:
+                raise RuntimeError(f"missing producer contract declaration: {missing}")
+        identities: dict[str, Any] = {}
+        for declaration in declarations:
+            latest_path = Path(declaration["latest_path"])
+            if not latest_path.is_file():
+                raise RuntimeError(f"producer contract latest is missing: {latest_path}")
+            payload = json.loads(latest_path.read_text(encoding="utf-8"))
+            expected_schema = declaration["schema_version"]
+            expected_fingerprint = declaration["schema_fingerprint"]
+            if payload.get("schema_version") != expected_schema:
+                raise RuntimeError(f"producer schema handshake failed: {latest_path}")
+            if payload.get("schema_fingerprint") != expected_fingerprint:
+                raise RuntimeError(f"producer fingerprint handshake failed: {latest_path}")
+            identity = payload.get("producer_identity")
+            if not isinstance(identity, dict) or not identity.get("runtime_instance_id"):
+                raise RuntimeError(f"producer runtime identity missing: {latest_path}")
+            if identity.get("output_schema_version") != expected_schema:
+                raise RuntimeError(f"producer identity schema mismatch: {latest_path}")
+            if identity.get("output_schema_fingerprint") != expected_fingerprint:
+                raise RuntimeError(f"producer identity fingerprint mismatch: {latest_path}")
+            identities[str(Path(declaration["journal_path"]).resolve())] = identity
+        return identities
+
+    def _build_runtime_identity(
+        self, config_path: Path | None, entrypoint_path: Path | None
+    ) -> dict[str, Any]:
+        module_hashes: dict[str, str] = {}
+        module_names = {self.__class__.__module__, "weather_data_feed.input_catalog"}
+        module_names.update(adapter.__class__.__module__ for adapter in self.adapters.values())
+        for module_name in sorted(module_names):
+            spec = importlib.util.find_spec(module_name)
+            if spec is None or not spec.origin:
+                raise RuntimeError(f"cannot resolve loaded module: {module_name}")
+            path = Path(spec.origin).resolve()
+            module_hashes[str(path)] = _sha256_file(path)
+        if entrypoint_path is not None:
+            resolved_entrypoint = entrypoint_path.resolve()
+            module_hashes[str(resolved_entrypoint)] = _sha256_file(resolved_entrypoint)
+
+        canonical_config = json.dumps(
+            self.config, sort_keys=True, separators=(",", ":")
+        ).encode()
+        config_hash = hashlib.sha256(canonical_config).hexdigest()
+        if config_path is not None:
+            disk_config = json.loads(config_path.read_text(encoding="utf-8"))
+            disk_hash = hashlib.sha256(
+                json.dumps(disk_config, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            if disk_hash != config_hash:
+                raise RuntimeError("loaded config differs from config path contents")
+
+        artifacts: dict[str, str] = {}
+        for profile in self.config.get("profiles", []):
+            for declaration in (profile.get("artifacts") or {}).values():
+                for path_key, hash_key in (("path", "sha256"), ("spec_path", "spec_sha256")):
+                    value = declaration.get(path_key)
+                    if not value:
+                        continue
+                    path = Path(value).resolve()
+                    if not path.is_file():
+                        raise RuntimeError(f"declared artifact is missing: {path}")
+                    actual = _sha256_file(path)
+                    expected = declaration.get(hash_key)
+                    if actual != expected:
+                        raise RuntimeError(f"declared artifact hash mismatch: {path}")
+                    artifacts[str(path)] = actual
+
+        repo_head = _git_value("rev-parse", "HEAD")
+        dirty = bool(_git_value("status", "--short", "--untracked-files=no"))
+        identity_payload = {
+            "adapter_contract_version": ADAPTER_CONTRACT_VERSION,
+            "repo_root": str(ROOT),
+            "repo_head": repo_head,
+            "repo_dirty_tracked": dirty,
+            "config_path": str(config_path.resolve()) if config_path else None,
+            "config_sha256": config_hash,
+            "loaded_module_sha256": module_hashes,
+            "artifact_sha256": artifacts,
+            "upstream_producer_identity": self.upstream_producer_identity,
+            "output_schema_version": OUTPUT_SCHEMA_VERSION,
+            "output_schema_fingerprint": OUTPUT_SCHEMA_FINGERPRINT,
+        }
+        return {
+            **identity_payload,
+            "runtime_instance_id": hashlib.sha256(
+                json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest(),
+        }
+
+    def _contract_fields(self, record_kind: str) -> dict[str, Any]:
+        return {
+            "record_kind": record_kind,
+            "schema_version": self.schema_version,
+            "schema_fingerprint": OUTPUT_SCHEMA_FINGERPRINT,
+            "runtime_identity": self.runtime_identity,
+        }
 
     @staticmethod
     def fee_per_share(price: float) -> float:
@@ -79,20 +315,53 @@ class ShadowRuntime:
         now = now or datetime.now(timezone.utc)
         seen = load_jsonl_keys(self.evaluations, "evaluation_id")
         first_intents = load_jsonl_keys(self.intents, "position_key")
-        evaluated = written = intents = errors = scored = not_scorable = 0
+        seen_checkpoints = load_jsonl_keys(self.checkpoints, "checkpoint_id")
+        evaluated = written = intents = errors = scored = not_scorable = blockers = 0
         for profile in self.config["profiles"]:
             if not profile.get("enabled", True):
                 continue
             adapter_id = profile["adapter"]
             try:
                 scores = self.adapters[adapter_id].score(profile, now)
+            except InputNotReady as exc:
+                blockers += 1
+                checkpoint_key = "|".join((
+                    exc.city,
+                    exc.target_date,
+                    adapter_id,
+                    exc.reason,
+                    json.dumps(exc.details, sort_keys=True, separators=(",", ":")),
+                ))
+                checkpoint_id = hashlib.sha256(checkpoint_key.encode()).hexdigest()
+                if checkpoint_id not in seen_checkpoints:
+                    append_jsonl(self.checkpoints, {
+                        **self._contract_fields("checkpoint_blocker"),
+                        "checkpoint_id": checkpoint_id,
+                        "incident_id": checkpoint_id,
+                        "decision_ts_utc": exc.decision_ts_utc,
+                        "city": exc.city,
+                        "target_date": exc.target_date,
+                        "adapter": adapter_id,
+                        "checkpoint_status": "not_scorable",
+                        "blocker_reason": exc.reason,
+                        "details": exc.details,
+                    })
+                    seen_checkpoints.add(checkpoint_id)
+                continue
             except Exception as exc:  # persistent telemetry, never silent fallback
                 errors += 1
+                error_key = "|".join((
+                    str(profile.get("city") or ""),
+                    adapter_id,
+                    type(exc).__name__,
+                    str(exc),
+                ))
                 append_jsonl(self.errors, {
-                    "schema_version": self.schema_version,
+                    **self._contract_fields("error"),
                     "ts_utc": now.isoformat(),
                     "city": profile.get("city"),
                     "adapter": adapter_id,
+                    "incident_id": hashlib.sha256(error_key.encode()).hexdigest(),
                     "error": f"{type(exc).__name__}: {exc}",
                 })
                 continue
@@ -133,7 +402,7 @@ class ShadowRuntime:
                 )
                 would_enter = edge is not None and edge >= edge_threshold
                 row = {
-                    "schema_version": self.schema_version,
+                    **self._contract_fields("evaluation"),
                     "execution_mode": "zero_notional_shadow",
                     "orders_submitted": 0,
                     "evaluation_id": evaluation_id,
@@ -164,6 +433,7 @@ class ShadowRuntime:
                 if would_enter and position_key not in first_intents:
                     append_jsonl(self.intents, {
                         **row,
+                        "record_kind": "paper_intent",
                         "position_key": position_key,
                         "intent_kind": "first_positive_edge",
                         "notional_usd": 0.0,
@@ -172,13 +442,14 @@ class ShadowRuntime:
                     intents += 1
                     first_intents.add(position_key)
         summary = {
-            "schema_version": self.schema_version,
+            **self._contract_fields("summary"),
             "execution_mode": "zero_notional_shadow",
             "orders_submitted": 0,
             "generated_at_utc": now.isoformat(),
             "evaluated": evaluated,
             "scored": scored,
             "not_scorable": not_scorable,
+            "checkpoint_blockers": blockers,
             "new_evaluations": written,
             "new_paper_intents": intents,
             "errors": errors,

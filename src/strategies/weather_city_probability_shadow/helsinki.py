@@ -12,7 +12,9 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from .core import CityScore
+from weather_data_feed.input_catalog import JsonlInputCatalog
+
+from .core import CityScore, InputNotReady
 
 
 def _read_json(path: Path) -> Any:
@@ -97,39 +99,58 @@ def _fade_probabilities(artifact: dict[str, Any], features: dict[str, Any]) -> d
     return {key: float(coherent[index]) for index, key in enumerate(output)}
 
 
-def _fmi_history(path: Path, target_date: str) -> list[dict[str, Any]]:
+def _fmi_history(
+    path: Path, target_date: str, available_through: datetime | None = None
+) -> list[dict[str, Any]]:
     by_obs: dict[str, dict[str, Any]] = {}
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if row.get("city") == "Helsinki" and row.get("source") == "fmi" and row.get("target_date") == target_date:
-                key = str(row.get("observation_time_utc"))
-                if key and (key not in by_obs or str(row.get("source_first_seen_at_utc", "")) < str(by_obs[key].get("source_first_seen_at_utc", ""))):
-                    by_obs[key] = row
+    found_target = False
+    for catalog_row in JsonlInputCatalog.iter_path_reverse(path):
+        row = catalog_row.row
+        if row.get("city") != "Helsinki" or row.get("source") != "fmi":
+            continue
+        row_target = row.get("target_date")
+        if found_target and row_target != target_date:
+            break
+        if row_target != target_date:
+            continue
+        found_target = True
+        available = pd.Timestamp(row.get("source_first_seen_at_utc"))
+        if available_through is not None and available > pd.Timestamp(available_through):
+            continue
+        key = str(row.get("observation_time_utc"))
+        if key and (
+            key not in by_obs
+            or str(row.get("source_first_seen_at_utc", ""))
+            < str(by_obs[key].get("source_first_seen_at_utc", ""))
+        ):
+            by_obs[key] = row
     return sorted(by_obs.values(), key=lambda row: row["observation_time_utc"])
 
 
 def _latest_forecast(root: Path, target_date: str, decision: datetime) -> dict[str, Any]:
-    candidates: list[dict[str, Any]] = []
-    day_dir = root / target_date
-    for path in sorted(day_dir.glob("*.jsonl")):
-        with path.open(encoding="utf-8") as handle:
-            for line in handle:
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if row.get("city") != "Helsinki" or row.get("target_date") != target_date:
-                    continue
-                available = pd.Timestamp(row["available_at_utc"])
-                if available <= pd.Timestamp(decision):
-                    candidates.append(row)
-    if not candidates:
+    catalog = JsonlInputCatalog(
+        day_shard_lookback_days=1,
+        day_shard_lookahead_days=0,
+        physical_shard_timezone="Asia/Shanghai",
+    )
+    selected = catalog.latest_from_snapshot_files(
+        root,
+        pattern="*.jsonl",
+        as_of=decision,
+        available_field="available_at_utc",
+        predicate=lambda row: (
+            row.get("city") == "Helsinki" and row.get("target_date") == target_date
+        ),
+    )
+    if selected is None:
         raise RuntimeError(f"no PIT forecast for Helsinki {target_date}")
-    return max(candidates, key=lambda row: row["available_at_utc"])
+    return {
+        **selected.row,
+        "_input_ref": {
+            "physical_path": selected.physical_path,
+            "physical_line": selected.physical_line,
+        },
+    }
 
 
 def _forecast_features(row: dict[str, Any], decision: datetime, boundary: float, current_temp: float) -> dict[str, Any]:
@@ -176,15 +197,40 @@ def _forecast_features(row: dict[str, Any], decision: datetime, boundary: float,
     }
 
 
-def _quote(profile: dict[str, Any], target_date: str, bracket: int) -> dict[str, Any]:
-    path = Path(profile["book_dir"]) / f"{target_date}.jsonl"
-    row = _latest_jsonl(
-        path,
-        lambda x: x.get("target_date") == target_date
-        and str(x.get("bracket")) == str(bracket)
-        and x.get("outcome") == "no"
-        and x.get("book_status") == "ok",
+def _quote(
+    profile: dict[str, Any],
+    target_date: str,
+    bracket: int,
+    as_of: datetime | None = None,
+) -> dict[str, Any]:
+    catalog = JsonlInputCatalog()
+    selected = catalog.latest_from_discovered_journals(
+        Path(profile["book_dir"]),
+        pattern="*.jsonl",
+        as_of=as_of or datetime.now(tz=ZoneInfo("UTC")),
+        available_field="book_fetched_at_utc",
+        predicate=lambda x: (
+            x.get("target_date") == target_date
+            and str(x.get("bracket")) == str(bracket)
+            and x.get("outcome") == "no"
+            and x.get("book_status") == "ok"
+        ),
     )
+    if selected is None:
+        raise InputNotReady(
+            "missing_market_expression",
+            city="Helsinki",
+            target_date=target_date,
+            decision_ts_utc=(as_of or datetime.now(tz=ZoneInfo("UTC"))).isoformat(),
+            details={"bracket": bracket, "outcome": "no"},
+        )
+    row = {
+        **selected.row,
+        "_input_ref": {
+            "physical_path": selected.physical_path,
+            "physical_line": selected.physical_line,
+        },
+    }
     summary = row.get("summary", {})
     ask, bid = summary.get("best_ask"), summary.get("best_bid")
     if ask is None and bid is None:
@@ -225,26 +271,92 @@ def _quote(profile: dict[str, Any], target_date: str, bracket: int) -> dict[str,
     }
 
 
+def _official_helsinki_as_of(
+    journal_dir: Path, target_date: str, as_of: datetime
+) -> dict[str, Any] | None:
+    catalog = JsonlInputCatalog(
+        day_shard_lookback_days=2,
+        day_shard_lookahead_days=0,
+        physical_shard_timezone="UTC",
+    )
+    selected = catalog.latest_from_day_shard_journals(
+        journal_dir,
+        filename="observations.jsonl",
+        as_of=as_of,
+        available_field="fetched_at_utc",
+        predicate=lambda row: (
+            row.get("city") == "Helsinki"
+            and row.get("target_date") == target_date
+            and row.get("status") == "ok"
+            and row.get("running_max_c") is not None
+            and row.get("last_obs_utc") is not None
+            and pd.Timestamp(row.get("last_obs_utc")) <= pd.Timestamp(as_of)
+        ),
+    )
+    if selected is None:
+        return None
+    return {
+        **selected.row,
+        "_input_ref": {
+            "physical_path": selected.physical_path,
+            "physical_line": selected.physical_line,
+        },
+    }
+
+
 class HelsinkiRemainingHeatAdapter:
     def score(self, profile: dict[str, Any], now: datetime) -> list[CityScore]:
-        artifacts = {key: joblib.load(_verify_artifact(value)) for key, value in profile["artifacts"].items()}
-        cache = _read_json(Path(profile["observation_cache"]))
-        official = next(row for row in cache["records"] if row.get("city") == "Helsinki")
-        target_date = official["target_date"]
-        current_x = int(round(float(official["running_max_c"])))
-        quote = _quote(profile, target_date, current_x)
-        decision = pd.Timestamp(quote["book_fetched_at_utc"]).to_pydatetime()
         forward_start = pd.Timestamp(profile["forward_start_utc"]).to_pydatetime()
+        if now < forward_start:
+            return []
+        artifacts = {key: joblib.load(_verify_artifact(value)) for key, value in profile["artifacts"].items()}
+        target_date = now.astimezone(ZoneInfo("Europe/Helsinki")).date().isoformat()
+        official = _official_helsinki_as_of(
+            Path(profile["observation_journal_dir"]), target_date, now
+        )
+        if official is None:
+            raise InputNotReady(
+                "awaiting_official_observation",
+                city="Helsinki",
+                target_date=target_date,
+                decision_ts_utc=now.isoformat(),
+                details={"observation_journal_dir": profile["observation_journal_dir"]},
+            )
+        current_x = int(round(float(official["running_max_c"])))
+        quote = _quote(profile, target_date, current_x, now)
+        decision = pd.Timestamp(quote["book_fetched_at_utc"]).to_pydatetime()
         if decision < forward_start:
             return []
         book_age = (now - decision).total_seconds()
         if book_age > float(profile["max_book_age_seconds"]):
             raise RuntimeError(f"active book is stale by {book_age:.1f}s")
-        official_obs = pd.Timestamp(official["last_obs_utc"]).to_pydatetime()
-        if official_obs > decision:
-            raise RuntimeError("latest official observation is after book decision clock")
+        official = _official_helsinki_as_of(
+            Path(profile["observation_journal_dir"]), target_date, decision
+        )
+        if official is None:
+            raise InputNotReady(
+                "awaiting_official_observation",
+                city="Helsinki",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                details={"book_input_ref": quote.get("_input_ref")},
+            )
+        official_bracket = int(round(float(official["running_max_c"])))
+        if official_bracket != current_x:
+            raise InputNotReady(
+                "anchor_capture_gap",
+                city="Helsinki",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                details={
+                    "book_expression_anchor": current_x,
+                    "official_anchor": official_bracket,
+                    "book_input_ref": quote.get("_input_ref"),
+                    "official_input_ref": official.get("_input_ref"),
+                },
+            )
         source_obs_ts = str(quote["source_obs_ts_utc"])
-        history = [row for row in _fmi_history(Path(profile["source_journal"]), target_date)
+        history = [row for row in _fmi_history(Path(profile["source_journal"]), target_date, decision)
                    if str(row["observation_time_utc"]) <= source_obs_ts]
         if len(history) < 4:
             raise RuntimeError("need at least four unique PIT FMI observations")
@@ -317,11 +429,17 @@ class HelsinkiRemainingHeatAdapter:
                          "source_raw_payload_hash":source.get("raw_payload_hash"),
                          "book_fetched_at_utc":quote["book_fetched_at_utc"],
                          "book_snapshot_id":quote["book_snapshot_id"],
+                         "book_input_ref":quote.get("_input_ref"),
                          "official_source":official["source"],"official_last_obs_utc":official["last_obs_utc"],
+                         "official_input_ref":official.get("_input_ref"),
                          "forecast_available_at_utc":forecast.get("available_at_utc"),
                          "forecast_values_hash":forecast.get("forecast_values_hash"),
                          "forecast_payload_hash":forecast.get("payload_hash"),
+                         "forecast_input_ref":forecast.get("_input_ref"),
                          "model_artifact_sha256":profile["artifacts"][artifact_key]["sha256"],
+                         "source_lattice_anchor":int(math.floor(temps[-1] + 0.5)),
+                         "official_lattice_anchor":current_x,
+                         "market_expression_anchor":current_x,
                          "profile_id":profile.get("profile_id", "helsinki_remaining_heat_v1"),
                          "weather_probability":weather_p,"path_state":features["path_state"]},
                 evaluation_status="scored" if market_p is not None else "not_scorable",

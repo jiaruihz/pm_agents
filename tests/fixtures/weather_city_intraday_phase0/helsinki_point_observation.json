@@ -1,0 +1,31 @@
+{
+  "fixture_kind": "point_observation",
+  "note": "deployed point payload at Phase 0 cutoff",
+  "raw_ref": {
+    "line_numbers": [
+      1135
+    ],
+    "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/2026-08-01/high_frequency_observations.jsonl",
+    "source_file_sha256_at_census": "5eecf6132bb81d9cbe791111eb086df60b3f9c0539071443e00414329469346e"
+  },
+  "record_schema_fingerprint": "6a19a07a4fb588d589f06db142175a09fc00fb5e44e1b779f0c429f51bd00f94",
+  "records": {
+    "city": "Helsinki",
+    "fetched_at_utc": "2026-08-01T05:41:37.502870+00:00",
+    "observation_time_utc": "2026-08-01T05:40:00+00:00",
+    "payload_hash": "166e744f0583c3ca",
+    "pressure_hpa": null,
+    "raw_payload_hash": "6ab63a7fa1bbecf1",
+    "schema_version": "weather_high_frequency_observation_v1",
+    "source": "fmi",
+    "source_first_seen_at_utc": "2026-08-01T05:41:37.502870+00:00",
+    "source_kind": "official_airport_station",
+    "station": "100968",
+    "target_date": "2026-08-01",
+    "temp_c": 16.8,
+    "temp_f": 62.24,
+    "temp_round_f": 62,
+    "wind_speed_kt": 2.916
+  },
+  "schema_version": "weather_city_intraday_phase0_fixture_v1"
+}

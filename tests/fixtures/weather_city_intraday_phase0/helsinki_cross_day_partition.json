@@ -1,0 +1,28 @@
+{
+  "fixture_kind": "cross_day_partition",
+  "note": "business target date differs from physical UTC/fetch shard",
+  "physical_shard": "2026-07-31",
+  "raw_ref": {
+    "line_numbers": [
+      8935
+    ],
+    "path": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations/2026-07-31/observations.jsonl",
+    "source_file_sha256_at_census": "a61a0d9d501a0e93bcc63844ff7a442bfce89b613928fb790424a2ad364a9c2d"
+  },
+  "record_schema_fingerprint": "9eb8cba3f9066063171cb9fbf2fff89152ed53a5b81917bfcaaf6213e5b946f5",
+  "records": {
+    "city": "Helsinki",
+    "error": "RuntimeError: empty",
+    "fetched_at_utc": "2026-07-31T21:03:08.008908+00:00",
+    "first_observation_grace_min": 90,
+    "local_day_elapsed_min": 3,
+    "n_obs": 0,
+    "schema_version": "weather_data_feed_observation_cache_v1",
+    "source": "aviationweather_metar",
+    "station": "EFHK",
+    "status": "awaiting_first_observation",
+    "target_date": "2026-08-01",
+    "timezone_name": "Europe/Helsinki"
+  },
+  "schema_version": "weather_city_intraday_phase0_fixture_v1"
+}

@@ -22,13 +22,16 @@ def main() -> None:
     parser.add_argument("--config", required=True)
     parser.add_argument("--interval-seconds", type=int, default=60)
     args = parser.parse_args()
-    config = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    config_path = Path(args.config).resolve()
+    config = json.loads(config_path.read_text(encoding="utf-8"))
     runtime = ShadowRuntime(
         config,
         {
             "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
             "tokyo_market_anchor_v6": TokyoMarketAnchorAdapter(),
         },
+        config_path=config_path,
+        entrypoint_path=Path(__file__),
     )
     while True:
         print(json.dumps(runtime.run_once(), sort_keys=True), flush=True)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import math
 import os
@@ -33,6 +34,11 @@ from weather_data_feed.fast_event_source_policy import (  # noqa: E402
 )
 from weather_data_feed.market_brackets import bracket_contains, parse_label_dict  # noqa: E402
 from weather_data_feed.source_policy import city_slug  # noqa: E402
+from weather_data_feed.source_event_incremental_state import (  # noqa: E402
+    METAR_LIKE_SOURCES,
+    metar_running_max_from_state,
+    refresh_source_event_state,
+)
 
 RUNTIME_ROOT = Path(os.environ.get("WEATHER_DATA_FEED_RUNTIME_ROOT", "/Volumes/jrs/weather_data_feed_service_runtime"))
 HIGH_FREQUENCY_LATEST = RUNTIME_ROOT / "output/high_frequency_observations/latest.json"
@@ -43,15 +49,6 @@ ORDERBOOK_SNAPSHOT_ROOT = RUNTIME_ROOT / "targeted_output/orderbook_snapshots"
 DEFAULT_OUTPUT_DIR = RUNTIME_ROOT / "output/fast_source_stale_book"
 PM_CLOB_URL = os.environ.get("WEATHER_STALE_BOOK_CLOB_URL", "https://clob.polymarket.com")
 PM_GAMMA_URL = os.environ.get("WEATHER_STALE_BOOK_GAMMA_URL", "https://gamma-api.polymarket.com")
-
-METAR_LIKE_SOURCES = {
-    "aviationweather_metar",
-    "aviationweather_cache_csv",
-    "synopticdata_timeseries",
-    "noaa_tgftp_station_txt",
-    "iem_asos",
-    "iem_asos_madishf_latest",
-}
 
 CITY_ALIASES = {
     "Hong Kong": "HongKong",
@@ -829,6 +826,116 @@ def build_quotes(
     return out
 
 
+def build_active_bracket_book_rows(
+    *,
+    source_rows: dict[tuple[str, str], dict[str, Any]],
+    metar_rows: dict[tuple[str, str], dict[str, Any]],
+    market_index: dict[tuple[str, str, str], MarketToken],
+    market_proxy: str,
+    active_cities: set[str],
+    offsets: list[int],
+    extreme_kind: str,
+) -> list[dict[str, Any]]:
+    """Capture full direct NO books around the live running extreme.
+
+    The center follows ``max(source, METAR)`` for Tmax (and the inverse for
+    Tmin), so the previous bracket remains covered before and after a cross.
+    These rows are telemetry only and are never consumed by the executor.
+    """
+    rows: list[dict[str, Any]] = []
+    for (city, target_date), source in sorted(source_rows.items()):
+        if active_cities and city not in active_cities:
+            continue
+        metar = metar_rows.get((city, target_date))
+        source_value_raw = source.get("source_market_value") or source.get("source_temp_round_c")
+        metar_value_raw = None if metar is None else (
+            metar.get("metar_running_max_market_value") or metar.get("metar_running_max_round_c")
+        )
+        try:
+            source_value = int(source_value_raw)
+        except (TypeError, ValueError):
+            continue
+        values = [source_value]
+        try:
+            if metar_value_raw is not None:
+                values.append(int(metar_value_raw))
+        except (TypeError, ValueError):
+            pass
+        reference_value = max(values) if extreme_kind == "max" else min(values)
+        anchors = {"source": source_value}
+        if metar_value_raw is not None:
+            anchors["official"] = int(metar_value_raw)
+        requests: dict[str, tuple[MarketToken, list[dict[str, Any]]]] = {}
+        for anchor_kind, anchor_value in anchors.items():
+            for offset in offsets:
+                token = relative_market_token(
+                    market_index, city, target_date, anchor_value, int(offset)
+                )
+                if token is None or not token.no_token_id:
+                    continue
+                request = {
+                    "anchor_kind": anchor_kind,
+                    "anchor_value": anchor_value,
+                    "relative_offset": int(offset),
+                }
+                requests.setdefault(token.no_token_id, (token, []))[1].append(request)
+        cycle_payload = {
+            "city": city,
+            "target_date": target_date,
+            "source_obs_ts_utc": source.get("source_obs_ts_utc"),
+            "source_detect_ts_utc": source.get("source_detect_ts_utc"),
+            "anchors": anchors,
+        }
+        capture_cycle_id = hashlib.sha256(
+            json.dumps(cycle_payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        for token, capture_reasons in requests.values():
+            book = fetch_fresh_book(token.no_token_id, proxy=market_proxy, top_n=20)
+            legacy_offset = next(
+                (
+                    reason["relative_offset"]
+                    for reason in capture_reasons
+                    if reason["anchor_value"] == reference_value
+                ),
+                None,
+            )
+            rows.append(
+                {
+                    "schema_version": "fast_source_active_bracket_book_v2",
+                    "ts_utc": iso(),
+                    "mode": "telemetry_only_no_orders",
+                    "monitor_reason": "pre_and_post_cross_continuous_active_ladder",
+                    "city": city,
+                    "target_date": target_date,
+                    "source": source.get("source"),
+                    "source_obs_ts_utc": source.get("source_obs_ts_utc"),
+                    "source_detect_ts_utc": source.get("source_detect_ts_utc"),
+                    "source_market_value": source_value,
+                    "metar_running_max_market_value": metar_value_raw,
+                    "reference_market_value": reference_value,
+                    "relative_offset": legacy_offset,
+                    "capture_cycle_id": capture_cycle_id,
+                    "capture_anchor_values": anchors,
+                    "capture_reasons": capture_reasons,
+                    "extreme_kind": extreme_kind,
+                    "bracket": token.bracket,
+                    "question": token.question,
+                    "market_id": token.market_id,
+                    "condition_id": token.condition_id,
+                    "token_id": token.no_token_id,
+                    "outcome": "no",
+                    "book_status": book.get("status"),
+                    "book_fetched_at_utc": book.get("fetched_at_utc"),
+                    "book_http_status": book.get("http_status"),
+                    "book_error": book.get("error", ""),
+                    "book_proxy_used": book.get("proxy_used", ""),
+                    "summary": book.get("summary") or {},
+                    "raw": book.get("raw") or {},
+                }
+            )
+    return rows
+
+
 def classify_t_minus_1_no(quotes: dict[str, Any], stale_no_ask_max: float, bot_priced_no_bid_min: float) -> dict[str, Any]:
     no_quote = ((quotes.get("t_minus_1") or {}).get("no") or {})
     ask = safe_float(no_quote.get("fresh_best_ask"))
@@ -939,6 +1046,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     extreme_kind = args.extreme_kind
     gamma_event_slugs = parse_city_string_overrides(args.gamma_event_slug, arg_name="--gamma-event-slug")
     official_extreme_mode = args.signal_basis in {"official-running-max", "official-running-extreme"}
+    source_event_state = dict(state.get("source_event_incremental_state") or {})
+    source_event_refresh: dict[str, Any] = {"status": "not_required_for_official_extreme_mode"}
     if official_extreme_mode:
         source_rows = source_running_max_by_city(
             Path(args.high_frequency_jsonl),
@@ -960,7 +1069,13 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         )
         if allowed_cities:
             source_rows = {key: row for key, row in source_rows.items() if key[0] in allowed_cities}
-        metar_rows = metar_running_max(Path(args.source_events_jsonl), args.target_date, city_profiles, now)
+        source_event_state, source_event_refresh = refresh_source_event_state(
+            Path(args.source_events_jsonl),
+            source_event_state,
+            target_dates_by_city=city_target_dates,
+            city_profiles=city_profiles,
+        )
+        metar_rows = metar_running_max_from_state(source_event_state, city_target_dates)
     paper_path = latest_paper_snapshot()
     orderbook_path = latest_orderbook_snapshot()
     market_index = load_market_index_cache(market_index_cache_path, target_dates, extreme_kind)
@@ -987,6 +1102,23 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         if market_date_has_tokens(market_index, city, target_date):
             gamma_on_missing_city_dates.append(f"{city}|{target_date}")
     snapshot_quotes = build_snapshot_quote_index(orderbook_path, target_dates)
+
+    active_bracket_rows: list[dict[str, Any]] = []
+    if args.continuous_active_brackets and not args.no_fresh_orderbook:
+        active_bracket_rows = build_active_bracket_book_rows(
+            source_rows=source_rows,
+            metar_rows=metar_rows,
+            market_index=market_index,
+            market_proxy=args.market_proxy or "",
+            active_cities={market_city(city) for city in (args.active_bracket_cities or [])},
+            offsets=list(args.active_bracket_offsets),
+            extreme_kind=extreme_kind,
+        )
+        for row in active_bracket_rows:
+            append_jsonl(
+                out_dir / "active_bracket_books" / f"{row['target_date']}.jsonl",
+                row,
+            )
 
     new_events = []
     quote_rows = []
@@ -1222,6 +1354,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "city_target_dates": city_target_dates,
         "seen_event_keys": sorted(seen)[-5000:],
         "active_events": active_events,
+        "source_event_incremental_state": source_event_state,
     }
     save_state(state_path, state)
     latest = {
@@ -1235,6 +1368,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "source_city_dates": [f"{city}|{target_date}" for city, target_date in sorted(source_rows)],
         "metar_cities": sorted({city for city, _target_date in metar_rows}),
         "metar_city_dates": [f"{city}|{target_date}" for city, target_date in sorted(metar_rows)],
+        "source_event_incremental_refresh": source_event_refresh,
         "fast_source_profile_count": len(fast_profiles),
         "fast_source_profile_live_eligible_count": sum(profile.live_eligible for profile in fast_profiles.values()),
         "signal_basis": args.signal_basis,
@@ -1244,6 +1378,10 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "new_events": len(new_events),
         "active_events": len(active_events),
         "quote_snapshots": len(quote_rows),
+        "active_bracket_book_snapshots": len(active_bracket_rows),
+        "continuous_active_brackets": bool(args.continuous_active_brackets),
+        "active_bracket_cities": sorted({market_city(city) for city in (args.active_bracket_cities or [])}),
+        "active_bracket_offsets": list(args.active_bracket_offsets),
         "fresh_orderbook_enabled": not args.no_fresh_orderbook,
         "fresh_scope": args.fresh_scope,
         "paper_snapshot_path": str(paper_path) if paper_path else "",
@@ -1255,7 +1393,9 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "market_index_cache_path": str(market_index_cache_path),
         "events_path": str(out_dir / "events.jsonl"),
         "quote_snapshots_path": str(out_dir / "quote_snapshots.jsonl"),
+        "active_bracket_books_path": str(out_dir / "active_bracket_books"),
         "latest_quote_rows": quote_rows[-20:],
+        "latest_active_bracket_books": active_bracket_rows[-20:],
     }
     (out_dir / "latest.json").write_text(json.dumps(latest, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
     return latest
@@ -1300,6 +1440,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--fresh-scope", choices=["t_minus_1_no", "all"], default="t_minus_1_no")
     parser.add_argument("--no-fresh-orderbook", action="store_true")
+    parser.add_argument("--continuous-active-brackets", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--active-bracket-cities", nargs="*", default=[])
+    parser.add_argument("--active-bracket-offsets", nargs="*", type=int, default=[-1, 0, 1])
     parser.add_argument("--gamma-market-index", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--stale-no-ask-max", type=float, default=0.35)
     parser.add_argument("--bot-priced-no-bid-min", type=float, default=0.70)

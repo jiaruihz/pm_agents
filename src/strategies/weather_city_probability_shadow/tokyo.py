@@ -12,7 +12,10 @@ from zoneinfo import ZoneInfo
 import joblib
 import numpy as np
 
-from .core import CityScore
+from weather_data_feed.input_catalog import JsonlInputCatalog
+from weather_data_feed.market_brackets import bracket_contains, parse_label_dict
+
+from .core import CityScore, InputNotReady, iter_compatible_evaluations
 
 
 UTC = timezone.utc
@@ -86,7 +89,7 @@ def _jsonl(path: Path):
                 yield row
 
 
-def _latest_current_book(profile: dict[str, Any]) -> dict[str, Any] | None:
+def _latest_book_capture(profile: dict[str, Any]) -> list[dict[str, Any]]:
     forward = _parse_ts(profile["forward_start_utc"])
     candidates: list[dict[str, Any]] = []
     for path in sorted(Path(profile["book_dir"]).glob("*.jsonl"), reverse=True)[:3]:
@@ -95,31 +98,66 @@ def _latest_current_book(profile: dict[str, Any]) -> dict[str, Any] | None:
                 row.get("city") == "Tokyo"
                 and row.get("source") == "jma_amedas"
                 and row.get("outcome") == "no"
-                and int(row.get("relative_offset", 999)) == 0
                 and row.get("book_status") == "ok"
                 and _parse_ts(str(row["book_fetched_at_utc"])) >= forward
             ):
                 candidates.append(row)
     if not candidates:
-        return None
-    return max(candidates, key=lambda row: _parse_ts(str(row["book_fetched_at_utc"])))
+        return []
+    latest = max(candidates, key=lambda row: _parse_ts(str(row["book_fetched_at_utc"])))
+    cycle_id = latest.get("capture_cycle_id")
+    if cycle_id:
+        return [row for row in candidates if row.get("capture_cycle_id") == cycle_id]
+    latest_ts = _parse_ts(str(latest["book_fetched_at_utc"]))
+    return [
+        row for row in candidates
+        if row.get("target_date") == latest.get("target_date")
+        and row.get("source_obs_ts_utc") == latest.get("source_obs_ts_utc")
+        and row.get("reference_market_value") == latest.get("reference_market_value")
+        and 0 <= (latest_ts - _parse_ts(str(row["book_fetched_at_utc"]))).total_seconds() <= 45
+    ]
 
 
-def _jma_history(path: Path, target_date: str, through: datetime) -> list[dict[str, Any]]:
+def _latest_current_book(profile: dict[str, Any]) -> dict[str, Any] | None:
+    rows = _latest_book_capture(profile)
+    centered = [row for row in rows if row.get("relative_offset") == 0]
+    return max(centered or rows, default=None, key=lambda row: _parse_ts(str(row["book_fetched_at_utc"])))
+
+
+def _book_contains_anchor(book: dict[str, Any], anchor: int) -> bool:
+    parsed = parse_label_dict(str(book.get("bracket") or ""), str(book.get("question") or ""))
+    return bool(parsed and bracket_contains(parsed, anchor))
+
+
+def _jma_history(
+    path: Path,
+    target_date: str,
+    observation_through: datetime,
+    available_through: datetime | None = None,
+) -> list[dict[str, Any]]:
+    available_through = available_through or datetime.max.replace(tzinfo=UTC)
     earliest: dict[str, dict[str, Any]] = {}
-    for row in _jsonl(path):
+    found_target = False
+    for catalog_row in JsonlInputCatalog.iter_path_reverse(path):
+        row = catalog_row.row
         if (
             row.get("city") != "Tokyo"
             or row.get("source") != "jma_amedas"
-            or row.get("target_date") != target_date
             or row.get("source_status") != "ok"
         ):
             continue
+        row_target = row.get("target_date")
+        if found_target and row_target != target_date:
+            break
+        if row_target != target_date:
+            continue
+        found_target = True
         obs = _parse_ts(str(row["observation_time_utc"]))
-        if obs > through:
+        available = _parse_ts(str(row["source_first_seen_at_utc"]))
+        if obs > observation_through or available > available_through:
             continue
         key = obs.isoformat()
-        if key not in earliest or _parse_ts(str(row["source_first_seen_at_utc"])) < _parse_ts(
+        if key not in earliest or available < _parse_ts(
             str(earliest[key]["source_first_seen_at_utc"])
         ):
             earliest[key] = row
@@ -129,19 +167,47 @@ def _jma_history(path: Path, target_date: str, through: datetime) -> list[dict[s
 def _official_history(
     journal_dir: Path, target_date: str, decision: datetime
 ) -> list[dict[str, Any]]:
-    path = journal_dir / target_date / "observations.jsonl"
-    if not path.exists():
-        raise RuntimeError(f"missing official observation journal: {path}")
+    catalog = JsonlInputCatalog(
+        day_shard_lookback_days=2,
+        day_shard_lookahead_days=0,
+        physical_shard_timezone="UTC",
+    )
     by_observation: dict[str, dict[str, Any]] = {}
-    for row in _jsonl(path):
-        if row.get("city") != "Tokyo" or row.get("target_date") != target_date:
+    found_target = False
+    paths = catalog.day_shard_paths(
+        journal_dir, filename="observations.jsonl", as_of=decision
+    )
+    for catalog_row in (
+        item
+        for path in reversed(paths)
+        for item in JsonlInputCatalog.iter_path_reverse(path)
+    ):
+        row = catalog_row.row
+        if row.get("city") != "Tokyo":
+            continue
+        row_target = row.get("target_date")
+        if found_target and row_target != target_date:
+            break
+        if row_target != target_date:
+            continue
+        found_target = True
+        if not row.get("fetched_at_utc"):
             continue
         fetched = _parse_ts(str(row["fetched_at_utc"]))
+        if not row.get("last_obs_utc"):
+            continue
         observed = _parse_ts(str(row["last_obs_utc"]))
         if fetched > decision or observed > decision:
             continue
+        row = {
+            **row,
+            "_input_ref": {
+                "physical_path": catalog_row.physical_path,
+                "physical_line": catalog_row.physical_line,
+            },
+        }
         key = observed.isoformat()
-        if key not in by_observation or fetched > _parse_ts(str(by_observation[key]["fetched_at_utc"])):
+        if key not in by_observation:
             by_observation[key] = row
     return sorted(by_observation.values(), key=lambda row: _parse_ts(str(row["last_obs_utc"])))
 
@@ -192,19 +258,30 @@ def _visibility_m(raw_metar: str) -> float | None:
     return float(match.group(1)) if match else None
 
 
-def _market_prices(no_quote: dict[str, Any]) -> dict[str, float]:
+def _market_prices(no_quote: dict[str, Any]) -> dict[str, float | str | None]:
     summary = no_quote.get("summary") or {}
     no_ask = _finite(summary.get("best_ask"))
     no_bid = _finite(summary.get("best_bid"))
-    if no_ask is None or no_bid is None:
-        raise RuntimeError("Tokyo current NO book lacks a two-sided quote")
+    no_mid = (no_ask + no_bid) / 2.0 if no_ask is not None and no_bid is not None else None
     return {
         "no_ask": no_ask,
         "no_bid": no_bid,
-        "no_mid": (no_ask + no_bid) / 2.0,
-        "yes_ask": 1.0 - no_bid,
-        "yes_bid": 1.0 - no_ask,
-        "yes_mid": 1.0 - (no_ask + no_bid) / 2.0,
+        "no_mid": no_mid,
+        "yes_ask": None if no_bid is None else 1.0 - no_bid,
+        "yes_bid": None if no_ask is None else 1.0 - no_ask,
+        "yes_mid": None if no_mid is None else 1.0 - no_mid,
+        "market_probability_status": (
+            "two_sided_midpoint" if no_mid is not None else "interval_censored"
+        ),
+        "quote_state": (
+            "two_sided"
+            if no_mid is not None
+            else "one_sided_ask_only"
+            if no_ask is not None
+            else "one_sided_bid_only"
+            if no_bid is not None
+            else "empty"
+        ),
     }
 
 
@@ -305,12 +382,10 @@ def _weather_stay_probability(
 
 
 def _previous_weather_probability(
-    path: Path, target_date: str, bracket: int, source_obs: datetime
+    paths: list[Path], target_date: str, bracket: int, source_obs: datetime
 ) -> float | None:
-    if not path.exists():
-        return None
     candidates = []
-    for row in _jsonl(path):
+    for row in iter_compatible_evaluations(paths):
         if (
             row.get("city") == "Tokyo"
             and row.get("target_date") == target_date
@@ -338,16 +413,69 @@ class TokyoMarketAnchorAdapter:
     """Frozen Tokyo v6 scorer. It reads PIT journals and contains no order client."""
 
     def score(self, profile: dict[str, Any], now: datetime) -> list[CityScore]:
-        book = _latest_current_book(profile)
-        if book is None:
+        capture = _latest_book_capture(profile)
+        if not capture:
             return []
+        capture = sorted(
+            capture,
+            key=lambda row: _parse_ts(str(row["book_fetched_at_utc"])),
+            reverse=True,
+        )
+        book = None
+        official = []
+        bracket = None
+        for candidate in capture:
+            candidate_decision = _parse_ts(str(candidate["book_fetched_at_utc"]))
+            candidate_official = _official_history(
+                Path(profile["observation_journal_dir"]),
+                str(candidate["target_date"]),
+                candidate_decision,
+            )
+            if not candidate_official:
+                continue
+            candidate_anchor = _round_native_c(float(candidate_official[-1]["running_max_c"]))
+            if _book_contains_anchor(candidate, candidate_anchor):
+                book, official, bracket = candidate, candidate_official, candidate_anchor
+                break
+        latest = capture[0]
+        if book is None:
+            latest_decision = _parse_ts(str(latest["book_fetched_at_utc"]))
+            latest_official = _official_history(
+                Path(profile["observation_journal_dir"]),
+                str(latest["target_date"]),
+                latest_decision,
+            )
+            if not latest_official:
+                raise InputNotReady(
+                    "awaiting_official_observation",
+                    city="Tokyo",
+                    target_date=str(latest["target_date"]),
+                    decision_ts_utc=latest_decision.isoformat(),
+                    details={"observation_journal_dir": profile["observation_journal_dir"]},
+                )
+            official_anchor = _round_native_c(float(latest_official[-1]["running_max_c"]))
+            raise InputNotReady(
+                "anchor_capture_gap",
+                city="Tokyo",
+                target_date=str(latest["target_date"]),
+                decision_ts_utc=latest_decision.isoformat(),
+                details={
+                    "official_anchor": official_anchor,
+                    "capture_cycle_id": latest.get("capture_cycle_id"),
+                    "captured_brackets": sorted({str(row.get("bracket") or "") for row in capture}),
+                    "capture_anchor_values": latest.get("capture_anchor_values"),
+                    "official_input_ref": latest_official[-1].get("_input_ref"),
+                },
+            )
         decision = _parse_ts(str(book["book_fetched_at_utc"]))
         age = (now.astimezone(UTC) - decision).total_seconds()
         if age > float(profile["max_book_age_seconds"]):
             raise RuntimeError(f"Tokyo active current book is stale by {age:.1f}s")
         target_date = str(book["target_date"])
         source_obs = _parse_ts(str(book["source_obs_ts_utc"]))
-        jma = _jma_history(Path(profile["source_journal"]), target_date, source_obs)
+        jma = _jma_history(
+            Path(profile["source_journal"]), target_date, source_obs, decision
+        )
         if not jma or _parse_ts(str(jma[-1]["observation_time_utc"])) != source_obs:
             raise RuntimeError("active book source observation has no exact JMA first-seen row")
         source = jma[-1]
@@ -359,33 +487,51 @@ class TokyoMarketAnchorAdapter:
         # Keep the frozen forward denominator inside the actually captured clock.
         if not 6.0 <= local_hour < 18.0:
             return []
-        official = _official_history(Path(profile["observation_journal_dir"]), target_date, decision)
-        if not official:
-            raise RuntimeError("no PIT official Tokyo observation at the decision clock")
-        bracket = _round_native_c(float(official[-1]["running_max_c"]))
-        if bracket != int(book["reference_market_value"]):
-            raise RuntimeError(
-                f"official/book current bracket mismatch: official={bracket} book={book['reference_market_value']}"
-            )
+        assert bracket is not None
         prices = _market_prices(book)
+        if prices["quote_state"] == "empty":
+            raise InputNotReady(
+                "empty_market_book",
+                city="Tokyo",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                details={"current_bracket": bracket},
+            )
         weather_artifact, weather_metadata = _load_artifact(profile["artifacts"]["weather"])
         offset_artifact, _ = _load_artifact(profile["artifacts"]["offset"])
         weather_features = _weather_features(jma, official, decision)
         weather_stay, weather_missing = _weather_stay_probability(
             weather_artifact, weather_metadata, weather_features
         )
+        evaluation_journals = [
+            Path(path)
+            for path in profile.get(
+                "evaluation_journals",
+                [profile.get("evaluation_journal", "")],
+            )
+            if path
+        ]
         previous_weather = _previous_weather_probability(
-            Path(profile["evaluation_journal"]), target_date, bracket, source_obs
+            evaluation_journals, target_date, bracket, source_obs
         )
+        yes_mid = _finite(prices["yes_mid"])
         offset_features = {
-            "weather_market_logit_gap": float(np.clip(_logit(weather_stay) - _logit(prices["yes_mid"]), -6.0, 6.0)),
+            "weather_market_logit_gap": (
+                None
+                if yes_mid is None
+                else float(np.clip(_logit(weather_stay) - _logit(yes_mid), -6.0, 6.0))
+            ),
             "weather_logit_innovation": 0.0 if previous_weather is None else float(np.clip(_logit(weather_stay) - _logit(previous_weather), -4.0, 4.0)),
             "remaining_to_18h": float(weather_features["remaining_to_18h"]),
             "jma_pullback_from_running_max_c": float(weather_features["jma_pullback_from_running_max_c"]),
             "jma_temp_slope_60m_cph": weather_features["jma_temp_slope_60m_cph"],
             "solar_elevation_deg": float(weather_features["solar_elevation_deg"]),
         }
-        model_stay = _offset_probability(offset_artifact, offset_features, prices["yes_mid"])
+        model_stay = (
+            None
+            if yes_mid is None
+            else _offset_probability(offset_artifact, offset_features, yes_mid)
+        )
         compact_market = {
             key: book.get(key)
             for key in ("condition_id", "market_id", "token_id", "question", "book_fetched_at_utc", "book_status")
@@ -400,6 +546,12 @@ class TokyoMarketAnchorAdapter:
             "official_source": official[-1].get("source"),
             "official_last_obs_utc": official[-1].get("last_obs_utc"),
             "official_snapshot_fetched_at_utc": official[-1].get("fetched_at_utc"),
+            "official_input_ref": official[-1].get("_input_ref"),
+            "source_lattice_anchor": int(book["reference_market_value"]),
+            "official_lattice_anchor": bracket,
+            "market_expression_anchor": bracket,
+            "capture_cycle_id": book.get("capture_cycle_id"),
+            "capture_anchor_values": book.get("capture_anchor_values"),
             "weather_probability_stay": weather_stay,
             "weather_feature_coverage": 1.0 - len(weather_missing) / len(weather_metadata["features"]),
             "weather_missing_features": weather_missing,
@@ -425,15 +577,23 @@ class TokyoMarketAnchorAdapter:
             CityScore(
                 **common,
                 market_side="YES",
-                market_probability=prices["yes_mid"],
-                market_entry_price=prices["yes_ask"],
+                market_probability=_finite(prices["yes_mid"]),
+                market_entry_price=_finite(prices["yes_ask"]),
                 model_probability=model_stay,
+                evaluation_status="scored" if model_stay is not None else "not_scorable",
+                not_scorable_reason=(
+                    None if model_stay is not None else "one_sided_market_probability_interval"
+                ),
             ),
             CityScore(
                 **common,
                 market_side="NO",
-                market_probability=prices["no_mid"],
-                market_entry_price=prices["no_ask"],
-                model_probability=1.0 - model_stay,
+                market_probability=_finite(prices["no_mid"]),
+                market_entry_price=_finite(prices["no_ask"]),
+                model_probability=None if model_stay is None else 1.0 - model_stay,
+                evaluation_status="scored" if model_stay is not None else "not_scorable",
+                not_scorable_reason=(
+                    None if model_stay is not None else "one_sided_market_probability_interval"
+                ),
             ),
         ]
