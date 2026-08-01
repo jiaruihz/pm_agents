@@ -94,6 +94,12 @@ smoke 的 paper intent 为 zero-notional 临时文件，不是生产 intent/orde
 - 既有 downstream live fast-source 进程 PID `18670` 在 producer 切换后继续返回 `status=ok`；首轮 producer 没有新 event，因而没有 cutover-induced duplicate order。
 - production manifest strict 通过；canonical DB identity healthy。dashboard 前端 `:5174` 页面壳返回 HTTP 200，但 LaunchAgent API 读取 JRS symlink 时触发 `sqlite3.OperationalError: unable to open database file`，strategy-runtime endpoint 因而返回 500；这是既有 JRS/LaunchAgent 权限问题，不能写成 API 验证通过。全局 health check 仍有切换前已存在的非目标 coverage warnings，不属于本次 v2 contract cutover。
 
+### Tokyo off-hours stale error 修复
+
+2026-08-01 13:02:40–14:06:32 UTC，Tokyo adapter 在本地 18:00 评分窗结束后仍先执行 book-age 检查，因 ladder 不再产出当前 capture 而逐周期写入 61 条 `Tokyo active current book is stale`。61/61 都是同一 off-hours 运行口径错误，不是 61 个 signal/event；期间新增 live order/fill 为 0，paper intent 也未增加，因此 notional、shares、fee、PnL delta 均为 0。
+
+commit `81a7ca8d46de5b0b78c93d1a96ea141013756fee` 将 frozen Tokyo 06:00–18:00 本地评分窗判断前移；窗内 stale book 仍 fail-closed，窗外直接不评分。production v2 shadow 于 14:06:44 UTC 重载，连续两个周期 `errors=0`，历史 error journal 保留不删，计数稳定在 61。
+
 ## 5. 尚未关闭的项
 
 - 历史 multi-anchor coverage：30/39 poll rows 可用既有 sibling books 恢复；其余 9/39 的缺失 quote 不允许事后补造，只能由新 ladder union 在 forward 中补齐。
