@@ -468,11 +468,19 @@ class TokyoMarketAnchorAdapter:
                 },
             )
         decision = _parse_ts(str(book["book_fetched_at_utc"]))
+        source_obs = _parse_ts(str(book["source_obs_ts_utc"]))
+        local_time = source_obs.astimezone(TOKYO)
+        local_hour = local_time.hour + local_time.minute / 60.0
+        # Staleness only has meaning inside the frozen Tokyo scoring window.
+        # After the window closes, the ladder intentionally stops producing
+        # current books; treating its last capture as an error creates one
+        # false incident on every runner cycle overnight.
+        if not 6.0 <= local_hour < 18.0:
+            return []
         age = (now.astimezone(UTC) - decision).total_seconds()
         if age > float(profile["max_book_age_seconds"]):
             raise RuntimeError(f"Tokyo active current book is stale by {age:.1f}s")
         target_date = str(book["target_date"])
-        source_obs = _parse_ts(str(book["source_obs_ts_utc"]))
         jma = _jma_history(
             Path(profile["source_journal"]), target_date, source_obs, decision
         )
@@ -482,11 +490,6 @@ class TokyoMarketAnchorAdapter:
         source_first_seen = _parse_ts(str(source["source_first_seen_at_utc"]))
         if source_first_seen > decision:
             raise RuntimeError("JMA first-seen is after the decision book clock")
-        local_hour = source_obs.astimezone(TOKYO).hour + source_obs.astimezone(TOKYO).minute / 60.0
-        # The production high-frequency collector is active from 06:00 local.
-        # Keep the frozen forward denominator inside the actually captured clock.
-        if not 6.0 <= local_hour < 18.0:
-            return []
         assert bracket is not None
         prices = _market_prices(book)
         if prices["quote_state"] == "empty":

@@ -60,6 +60,39 @@ def test_no_book_reconstructs_complementary_yes_prices():
     assert prices["yes_ask"] == pytest.approx(.60)
 
 
+def test_tokyo_adapter_ignores_stale_book_after_scoring_window(tmp_path):
+    official_path = tmp_path / "official" / "2026-08-01" / "observations.jsonl"
+    _write_jsonl(official_path, [{
+        "city": "Tokyo", "target_date": "2026-08-01", "status": "ok",
+        "fetched_at_utc": "2026-08-01T10:45:00Z",
+        "last_obs_utc": "2026-08-01T10:40:00Z", "current_temp_c": 35.0,
+        "running_max_c": 35.0,
+    }])
+    book_dir = tmp_path / "books"
+    _write_jsonl(book_dir / "2026-08-01.jsonl", [{
+        "city": "Tokyo", "source": "jma_amedas", "outcome": "no",
+        "book_status": "ok", "target_date": "2026-08-01",
+        "book_fetched_at_utc": "2026-08-01T10:50:00Z",
+        "source_obs_ts_utc": "2026-08-01T10:40:00Z",
+        "reference_market_value": 30, "bracket": "35°C",
+        "question": "Will the highest temperature in Tokyo be 35°C?",
+        "summary": {"best_ask": .42, "best_bid": .40},
+    }])
+    profile = {
+        "forward_start_utc": "2026-08-01T00:00:00Z",
+        "max_book_age_seconds": 180,
+        "book_dir": str(book_dir),
+        "source_journal": str(tmp_path / "missing-jma.jsonl"),
+        "observation_journal_dir": str(tmp_path / "official"),
+    }
+
+    scores = TokyoMarketAnchorAdapter().score(
+        profile, datetime(2026, 8, 1, 13, 0, tzinfo=timezone.utc)
+    )
+
+    assert scores == []
+
+
 def test_tokyo_adapter_scores_both_sides_from_pit_first_seen(tmp_path):
     source_path = tmp_path / "jma.jsonl"
     source_rows = []
