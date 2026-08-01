@@ -193,7 +193,10 @@ replay is PIT research evidence, not as-recorded forward evidence.
   100%/0.05059/0.19011.
 - The replay produced 43 positive-edge rows but only 12 first-positive paper intents after
   position deduplication: ten early-bracket NO intents would have won and the two 26-NO
-  intents would have lost. They are counterfactual, not actual orders or fills.
+  intents would have lost. At the standard five-share research size and official fee,
+  these counterfactual intents produce +$0.46 on $49.54 cost (ROI 0.93%): the meaningful
+  25-NO gain is largely given back by the incorrect 26-NO entry. They are counterfactual,
+  not actual orders or fills.
 
 The full-day artifact is
 `docs/analysis/2026-08/generated/helsinki_shadow_full_day_exact_bracket_pit_replay_v1/`.
