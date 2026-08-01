@@ -371,16 +371,16 @@ def runtime_output_audit(runtime: Path, cutoff: datetime) -> dict[str, Any]:
 
 def build_census(manifest: dict[str, Any], runtime: Path, prod: Path, fixtures: dict[str, dict[str, Any]], cutoff: datetime) -> dict[str, Any]:
     collector = process_matches(manifest, "weather_live_cross_observations_loop.py")
-    probability = process_matches(manifest, "weather_city_probability_shadow_v1.py")
+    probability = process_matches(manifest, "weather_city_probability_shadow_v2.py")
     helsinki_books = process_matches(manifest, "helsinki_pre_cross_active_ladder_shadow")
     tokyo_books = process_matches(manifest, "tokyo_current_break_active_ladder_shadow")
     knmi_processes = process_matches(manifest, "knmi")
-    config = prod / "configs/weather/city_probability_shadow_v1.json"
+    config = prod / "configs/weather/city_probability_shadow_v2.json"
     common_files = [
         prod / "scripts/ops/weather_live_cross_observations_loop.py",
         prod / "weather_data_feed_service/high_frequency_observations.py",
         prod / "scripts/ops/weather_fast_source_stale_book_observer.py",
-        prod / "scripts/ops/weather_city_probability_shadow_v1.py",
+        prod / "scripts/ops/weather_city_probability_shadow_v2.py",
         prod / "src/strategies/weather_city_probability_shadow/core.py",
         config,
     ]

@@ -410,7 +410,7 @@ def _offset_probability(artifact: dict[str, Any], features: dict[str, float], ma
 
 
 class TokyoMarketAnchorAdapter:
-    """Frozen Tokyo v6 scorer. It reads PIT journals and contains no order client."""
+    """Tokyo market-anchor scorer. It reads PIT journals and has no order client."""
 
     def score(self, profile: dict[str, Any], now: datetime) -> list[CityScore]:
         capture = _latest_book_capture(profile)
@@ -530,10 +530,21 @@ class TokyoMarketAnchorAdapter:
             "jma_temp_slope_60m_cph": weather_features["jma_temp_slope_60m_cph"],
             "solar_elevation_deg": float(weather_features["solar_elevation_deg"]),
         }
-        model_stay = (
+        residual_model_stay = (
             None
             if yes_mid is None
             else _offset_probability(offset_artifact, offset_features, yes_mid)
+        )
+        # Pre-2026-08-01 OOF shows that the learned correction improves ordinary
+        # checkpoints but degrades the first observed checkpoint of a new
+        # bracket.  Route that state to the PIT market anchor instead of making
+        # a poorly supported weather correction.  This is a probability-model
+        # repair, not a price/low-tail trading filter.
+        is_observed_state_entry = previous_weather is None
+        model_stay = (
+            yes_mid
+            if yes_mid is not None and is_observed_state_entry
+            else residual_model_stay
         )
         compact_market = {
             key: book.get(key)
@@ -559,6 +570,10 @@ class TokyoMarketAnchorAdapter:
             "weather_feature_coverage": 1.0 - len(weather_missing) / len(weather_metadata["features"]),
             "weather_missing_features": weather_missing,
             "previous_same_bracket_weather_probability_stay": previous_weather,
+            "is_observed_state_entry": is_observed_state_entry,
+            "residual_model_probability_stay": residual_model_stay,
+            "state_entry_probability_policy": "pit_market_anchor",
+            "ordinary_checkpoint_probability_policy": "weather_market_residual_v6",
             "clean_forward_start": offset_artifact["clean_forward_start"],
             "training_end": offset_artifact["training_end"],
         }
@@ -569,7 +584,12 @@ class TokyoMarketAnchorAdapter:
             decision_ts_utc=decision.isoformat(),
             source_obs_ts_utc=source_obs.isoformat(),
             current_bracket=bracket,
-            model_id=str(offset_artifact["model_id"]),
+            model_id=str(
+                profile.get(
+                    "model_id",
+                    "tokyo_state_entry_routed_market_residual_v7",
+                )
+            ),
             feature_coverage=1.0 - len(feature_missing) / len(offset_features),
             missing_features=feature_missing,
             features=offset_features,

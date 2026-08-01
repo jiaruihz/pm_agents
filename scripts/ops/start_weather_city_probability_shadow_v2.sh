@@ -29,5 +29,5 @@ fi
 weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR"
 weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "=$SESSION" 2>/dev/null || true
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$SESSION" \
-  "cd '$ROOT' && exec '$PY' -u '$ROOT/scripts/ops/weather_city_probability_shadow_v1.py' loop --config '$CONFIG' --interval-seconds 60 >> '$LOG_FILE' 2>&1"
+  "cd '$ROOT' && exec '$PY' -u '$ROOT/scripts/ops/weather_city_probability_shadow_v2.py' loop --config '$CONFIG' --interval-seconds 60 >> '$LOG_FILE' 2>&1"
 echo "started session=$SESSION socket=$TMUX_SOCKET output=$OUTPUT_DIR config=$CONFIG"

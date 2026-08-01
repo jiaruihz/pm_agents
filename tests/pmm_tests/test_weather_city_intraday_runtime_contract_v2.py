@@ -194,7 +194,6 @@ def test_committed_v2_config_matches_runtime_schema_contract() -> None:
     catalog = resolve_journal_catalog(config)
     assert [path.parent.name for path in catalog["evaluations"]] == [
         "city_probability_shadow_v2",
-        "city_probability_shadow_v1",
     ]
     helsinki = next(profile for profile in config["profiles"] if profile["city"] == "Helsinki")
     assert "observation_cache" not in helsinki
@@ -227,6 +226,69 @@ def test_runtime_deduplicates_positions_across_legacy_journal_catalog(tmp_path: 
                 source_obs_ts_utc="2026-08-01T06:00:00+00:00",
                 current_bracket=35, market_side="YES", market_probability=0.5,
                 market_entry_price=0.5, model_probability=0.9, model_id="model",
+                feature_coverage=1.0, missing_features=[], features={}, market={}, lineage={},
+            )]
+
+    summary = ShadowRuntime(config, {"fixed": Fixed()}).run_once(
+        datetime(2026, 8, 1, 6, tzinfo=UTC)
+    )
+    assert summary["new_evaluations"] == 1
+    assert summary["new_paper_intents"] == 0
+    assert not (output / "paper_intents.jsonl").exists()
+
+
+def test_city_day_scope_selects_best_side_and_never_stacks_brackets(tmp_path: Path) -> None:
+    output = tmp_path / "output"
+    config = _config(output, [{
+        "adapter": "ladder",
+        "city": "Tokyo",
+        "position_scope": "city_date_model",
+    }])
+
+    class Ladder:
+        def score(self, profile, now):
+            from src.strategies.weather_city_probability_shadow.core import CityScore
+            common = dict(
+                city="Tokyo", target_date="2026-08-01",
+                decision_ts_utc="2026-08-01T06:00:00+00:00",
+                source_obs_ts_utc="2026-08-01T06:00:00+00:00",
+                market_probability=0.5, model_id="v7", feature_coverage=1.0,
+                missing_features=[], features={}, market={}, lineage={},
+            )
+            return [
+                CityScore(current_bracket=34, market_side="YES", market_entry_price=.4,
+                          model_probability=.55, **common),
+                CityScore(current_bracket=34, market_side="NO", market_entry_price=.4,
+                          model_probability=.70, **common),
+                CityScore(current_bracket=35, market_side="YES", market_entry_price=.4,
+                          model_probability=.60, **common),
+            ]
+
+    summary = ShadowRuntime(config, {"ladder": Ladder()}).run_once(
+        datetime(2026, 8, 1, 6, tzinfo=UTC)
+    )
+    assert summary["new_evaluations"] == 3
+    assert summary["new_paper_intents"] == 1
+    intent = json.loads((output / "paper_intents.jsonl").read_text())
+    assert intent["market_side"] == "NO"
+    assert intent["current_bracket"] == 34
+    assert intent["position_key"] == "Tokyo|2026-08-01|v7"
+
+
+def test_profile_can_emit_probability_telemetry_without_paper_intent(tmp_path: Path) -> None:
+    output = tmp_path / "output"
+    config = _config(output, [{
+        "adapter": "fixed", "city": "Tokyo", "emit_paper_intents": False,
+    }])
+
+    class Fixed:
+        def score(self, profile, now):
+            from src.strategies.weather_city_probability_shadow.core import CityScore
+            return [CityScore(
+                city="Tokyo", target_date="2026-08-01",
+                decision_ts_utc=now.isoformat(), source_obs_ts_utc=now.isoformat(),
+                current_bracket=35, market_side="YES", market_probability=.5,
+                market_entry_price=.4, model_probability=.9, model_id="v7",
                 feature_coverage=1.0, missing_features=[], features={}, market={}, lineage={},
             )]
 

@@ -42,7 +42,7 @@ def _utc(value: str) -> datetime:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target-date", default="2026-07-31")
-    parser.add_argument("--config", default="configs/weather/city_probability_shadow_v1.json")
+    parser.add_argument("--config", default="configs/weather/city_probability_shadow_v2.json")
     parser.add_argument(
         "--runtime-root", default="/Volumes/jrs/weather_data_feed_service_runtime"
     )

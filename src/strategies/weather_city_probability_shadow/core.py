@@ -397,6 +397,7 @@ class ShadowRuntime:
                     "error": f"{type(exc).__name__}: {exc}",
                 })
                 continue
+            profile_rows: list[tuple[dict[str, Any], str]] = []
             for score in scores:
                 evaluated += 1
                 if score.evaluation_status == "scored":
@@ -458,16 +459,32 @@ class ShadowRuntime:
                 )
                 if position_scope == "city_date_bracket_side_model":
                     position_parts.append(score.market_side)
+                elif position_scope == "city_date_model":
+                    position_parts = [score.city, score.target_date]
                 elif position_scope != "city_date_bracket_model":
                     raise ValueError(f"unsupported position_scope: {position_scope}")
                 position_parts.append(score.model_id)
                 position_key = "|".join(position_parts)
-                if would_enter and position_key not in first_intents:
+                profile_rows.append((row, position_key))
+            # YES and NO are competing expressions of the same exact bracket.
+            # Select the best net edge for each configured position before
+            # journaling an intent; row order must never decide the side.
+            best_by_position: dict[str, dict[str, Any]] = {}
+            for row, position_key in profile_rows:
+                if not row["would_enter"] or position_key in first_intents:
+                    continue
+                previous = best_by_position.get(position_key)
+                if previous is None or float(row["edge_after_fee"]) > float(
+                    previous["edge_after_fee"]
+                ):
+                    best_by_position[position_key] = row
+            if profile.get("emit_paper_intents", True):
+                for position_key, row in best_by_position.items():
                     append_jsonl(self.intents, {
                         **row,
                         "record_kind": "paper_intent",
                         "position_key": position_key,
-                        "intent_kind": "first_positive_edge",
+                        "intent_kind": "first_best_net_edge",
                         "notional_usd": 0.0,
                         "shares": 0.0,
                     })

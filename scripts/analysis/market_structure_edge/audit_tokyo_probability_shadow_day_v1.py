@@ -115,8 +115,9 @@ def main() -> int:
     blockers: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     seen: set[tuple[str, int, str, str]] = set()
-    first_positions: set[tuple[str, int, str]] = set()
+    first_positions: set[str] = set()
     intents: list[dict[str, Any]] = []
+    policy_candidates: list[dict[str, Any]] = []
     try:
         for cycle in ordered:
             active_cycle = cycle
@@ -140,6 +141,7 @@ def main() -> int:
                     }
                 )
                 continue
+            cycle_rows: list[tuple[dict[str, Any], str]] = []
             for score in scores:
                 key = (
                     score.source_obs_ts_utc,
@@ -183,24 +185,40 @@ def main() -> int:
                     previous[(score.target_date, score.current_bracket)].append(
                         (parse_ts(score.source_obs_ts_utc), float(score.lineage["weather_probability_stay"]))
                     )
-                position_key = (score.target_date, score.current_bracket, score.model_id)
-                if would_enter and position_key not in first_positions:
-                    first_positions.add(position_key)
-                    won = (
-                        args.winning_bracket == score.current_bracket
-                        if score.market_side == "YES"
-                        else args.winning_bracket != score.current_bracket
+                if profile.get("position_scope") == "city_date_model":
+                    position_key = f"{score.city}|{score.target_date}|{score.model_id}"
+                else:
+                    position_key = (
+                        f"{score.city}|{score.target_date}|{score.current_bracket}|"
+                        f"{score.model_id}"
                     )
-                    pnl_per_share = (1.0 if won else 0.0) - float(effective_cost)
-                    intents.append(
-                        {
-                            **row,
-                            "won": won,
-                            "shares": args.shares,
-                            "cost_usd": args.shares * float(effective_cost),
-                            "pnl_usd": args.shares * pnl_per_share,
-                        }
-                    )
+                cycle_rows.append((row, position_key))
+            best_by_position: dict[str, dict[str, Any]] = {}
+            for row, position_key in cycle_rows:
+                if not row["would_enter"] or position_key in first_positions:
+                    continue
+                old = best_by_position.get(position_key)
+                if old is None or float(row["edge_after_fee"]) > float(old["edge_after_fee"]):
+                    best_by_position[position_key] = row
+            for position_key, row in best_by_position.items():
+                won = (
+                    args.winning_bracket == int(row["current_bracket"])
+                    if row["market_side"] == "YES"
+                    else args.winning_bracket != int(row["current_bracket"])
+                )
+                pnl_per_share = (1.0 if won else 0.0) - float(row["effective_cost_per_share"])
+                candidate = {
+                    **row,
+                    "position_key": position_key,
+                    "won": won,
+                    "shares": args.shares,
+                    "cost_usd": args.shares * float(row["effective_cost_per_share"]),
+                    "pnl_usd": args.shares * pnl_per_share,
+                }
+                policy_candidates.append(candidate)
+                first_positions.add(position_key)
+                if profile.get("emit_paper_intents", True):
+                    intents.append(candidate)
     finally:
         tokyo_module._latest_book_capture = original_capture
         tokyo_module._previous_weather_probability = original_previous
@@ -324,6 +342,7 @@ def main() -> int:
             "capture_cycles": len(ordered),
             "unique_scored_checkpoints": len(yes_rows),
             "evaluation_rows_yes_no": len(evaluations),
+            "first_position_candidates": len(policy_candidates),
             "first_position_intents": len(intents),
         },
         "evidence_funnel": {
@@ -345,6 +364,7 @@ def main() -> int:
             ),
         },
         "paper_strategy": {
+            "intent_emission_enabled": bool(profile.get("emit_paper_intents", True)),
             "intents": len(intents),
             "wins": sum(int(row["won"]) for row in intents),
             "win_rate": mean([float(row["won"]) for row in intents]),
@@ -356,6 +376,7 @@ def main() -> int:
         "errors": errors,
         "evaluations": evaluations,
         "paper_intents": intents,
+        "policy_candidates": policy_candidates,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

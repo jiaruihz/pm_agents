@@ -162,6 +162,9 @@ def test_tokyo_adapter_scores_both_sides_from_pit_first_seen(tmp_path):
     assert [score.market_side for score in scores] == ["YES", "NO"]
     assert all(score.current_bracket == 32 for score in scores)
     assert scores[0].model_probability + scores[1].model_probability == pytest.approx(1.0)
+    assert scores[0].lineage["is_observed_state_entry"] is True
+    assert scores[0].model_probability == pytest.approx(scores[0].market_probability)
+    assert scores[0].model_id == "tokyo_state_entry_routed_market_residual_v7"
     assert scores[0].lineage["source_first_seen_at_utc"] == "2026-08-01T01:07:00Z"
     assert scores[0].lineage["official_snapshot_fetched_at_utc"] == "2026-08-01T01:05:00Z"
     assert scores[0].lineage["source_lattice_anchor"] == 33

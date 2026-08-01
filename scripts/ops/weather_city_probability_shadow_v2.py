@@ -28,7 +28,7 @@ def main() -> None:
         config,
         {
             "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
-            "tokyo_market_anchor_v6": TokyoMarketAnchorAdapter(),
+            "tokyo_market_anchor_v7": TokyoMarketAnchorAdapter(),
         },
         config_path=config_path,
         entrypoint_path=Path(__file__),
