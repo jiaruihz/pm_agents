@@ -45,3 +45,120 @@ minutes old or when the official observation clock is later than the book clock.
 
 Promotion remains governed by the frozen-forward requirements in the Helsinki model
 reports. Shadow collection does not authorize live trading.
+
+## 2026-08-01 audit of the first frozen-forward target date
+
+Audit grain: `Helsinki × target_date=2026-07-31 × first-seen FMI observation checkpoint
+× model`. Frozen forward starts at 2026-07-31 12:43 UTC. The raw source/book window is
+audited separately from successful model evaluations; retry errors are not counted as
+signal rows.
+
+Production identity at 2026-08-01 04:01 UTC was `status=warning` with a healthy
+canonical DB route. The warning was an unregistered tmux-session inventory issue, not a
+split DB. The current shadow process remained zero-notional. The focused runtime tests
+passed 8/8.
+
+### Result
+
+The source and direct-book collectors are sufficiently continuous, and the six written
+evaluations are PIT-consistent. The end-to-end frozen-forward evidence chain is **not yet
+complete**: after the current-bracket NO book entered its normal near-binary one-sided
+state, the adapter failed before writing a checkpoint-level coverage/evaluation row. This
+is not a missing/corrupt book: at 13:06 UTC the paired books were `26 YES bid=0.998 / no
+ask` and `26 NO no bid / ask=0.002`, with the same 978.75-share size; the later NO ask of
+0.001 corresponds to YES bid 0.999. The fail-closed behavior is safe for trading but
+misclassifies an informative market state and loses most of the intended ten-minute
+research denominator.
+
+Signal funnel:
+
+- 38 FMI checkpoint states were available to the active-book chain from the carried
+  12:40 UTC observation through 18:50 UTC; 37 were newly first-seen after the freeze.
+- The active-book journal contains 323 valid 26-NO book rows spanning all 38 source
+  checkpoints.
+- Only 3 source checkpoints produced model evaluations, two models per checkpoint, for
+  6 evaluation rows.
+- All 6 edges were negative; Helsinki produced 0 paper intents and 0 orders.
+
+Evidence funnel:
+
+- 323/323 book rows had a buyable NO ask.
+- 9 rows across 3 source checkpoints were two-sided. The remaining 314 rows across 36
+  source checkpoints were ask-only; the two sets overlap at the transition checkpoint.
+- The runner emitted 447 one-sided-book errors from 13:10 through 20:59 UTC instead of
+  one structured coverage row per new FMI checkpoint.
+- `fact_signal_candidates` and canonical `settlement_outcomes` contained no Helsinki
+  2026-07-31 rows at audit time. Official Polymarket market `3196720` was resolved YES=1,
+  so the evaluated 26-NO label is 0, but this settlement had not entered the canonical
+  shadow lineage.
+- Actual fills remain 0 by design.
+
+### Successful PIT checkpoints
+
+Times below are UTC; Helsinki local time is UTC+3.
+
+| FMI observation | decision/book time | NO bid/ask | incumbent p / edge after fee | challenger p / edge after fee |
+|---|---|---:|---:|---:|
+| 12:40 | 12:45:55 | 0.001 / 0.008 | 0.00243% / -0.83725pp | 0.10516% / -0.73452pp |
+| 12:50 | 12:52:55 | 0.001 / 0.006 | 0.00158% / -0.62824pp | 0.07638% / -0.55344pp |
+| 13:00 | 13:04:56 | 0.001 / 0.002 | 0.00066% / -0.20932pp | 0.03595% / -0.17403pp |
+
+All three decisions used books after source first-seen, observations only 2.9–5.9 minutes
+old, and an official METAR timestamp no later than the book. `decision_ts_utc` equals the
+recorded book clock. Feature coverage was 92.31–94.74%; the only declared missing feature
+was `global_radiation_slope_30m`. Four earlier smoke rows are explicitly excluded by
+`data_quality_adjustments.jsonl`, and all six retained evaluation IDs are unique.
+
+With final 26-NO label 0, the mechanical three-checkpoint scores were: market
+Brier/logloss `0.00001158/0.00317247`, challenger `0.00000061/0.00072528`, and incumbent
+`0.000000000295/0.00001558`. These are one target date and are operational smoke evidence,
+not a model-quality or alpha conclusion.
+
+### Lineage gaps to repair before this counts as a clean forward day
+
+1. Treat one-sided near-binary books as a market-state feature, not a data error. A buyable
+   ask should remain an executable-cost observation, while midpoint/market probability is
+   explicitly interval-censored/unavailable. Fetching the paired YES token confirms the
+   complement (`YES bid = 1 - NO ask`) but does not create the missing opposite quote. Do
+   not synthesize a bid or midpoint. If a frozen market-offset model cannot score without a
+   midpoint, write one structured `not_scorable_one_sided_near_binary` row per source
+   checkpoint instead of a per-minute error storm.
+2. Persist per-row source payload/hash, forecast run/availability/hash, model artifact SHA,
+   config identity, runner code SHA, and stable book snapshot ID. They can currently be
+   reconstructed from several raw/config files but are not self-contained in an evaluation.
+3. Materialize shadow opportunities/evaluations into the canonical opportunity grain and
+   join settlement. The current chain stops at raw `evaluation → paper_intent`; it does not
+   yet reach canonical `fact_signal_candidates → settlement`.
+4. Preserve the existing zero-order invariant and first-positive position deduplication.
+   No live behavior change is authorized by this audit.
+
+Qualification: collector continuity PASS; observed-row PIT parity PASS; zero-notional
+safety PASS; full ten-minute evaluation coverage FAIL; canonical settlement lineage FAIL;
+frozen-forward model/performance qualification FAIL. The 2026-07-31 date must be reported
+as a partial-coverage operational day, not as a clean forward scoring day.
+
+## 2026-08-01 implementation and counterfactual replay
+
+The runner now treats an ask-only or bid-only near-binary book as a normal quote state.
+It records executable ask cost independently from market probability, represents the
+probability as an interval, and emits a structured `not_scorable` evaluation when a frozen
+market-offset artifact requires an unavailable point midpoint. It neither synthesizes a
+midpoint nor creates a paper intent from an unscored row. Evaluation rows now also carry
+source/forecast payload hashes, artifact SHA, profile identity, and a stable book snapshot
+ID.
+
+Replaying the immutable 2026-07-31 journals from the 12:43 UTC freeze produced:
+
+- 38/38 FMI source checkpoints replayed, with 76 unique model rows and zero errors;
+- 3 two-sided checkpoints / 6 scored rows, exactly reproducing the original probabilities
+  (`max_abs_probability_diff=0`);
+- 35 one-sided near-binary ask checkpoints / 70 structured `not_scorable` rows;
+- 76/76 PIT source, official-observation, and forecast clocks, and 76/76 complete lineage
+  hashes;
+- zero `would_enter`, zero paper intents, and zero orders.
+
+Thus the affected window is 2026-07-31 13:10–20:59 UTC. The defect created 447 retry
+errors and suppressed 35 checkpoint records, but changed no trade decision, fill, or PnL:
+under the corrected code all 35 checkpoints are retained as valid interval-censored market
+evidence and remain non-signals. The replay artifact is
+`docs/analysis/2026-08/generated/helsinki_shadow_near_binary_replay_v1/`.

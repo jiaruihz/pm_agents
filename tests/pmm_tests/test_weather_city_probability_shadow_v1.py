@@ -42,6 +42,38 @@ def test_weather_fee_formula():
     assert ShadowRuntime.fee_per_share(.5) == pytest.approx(.0125)
 
 
+def test_not_scorable_checkpoint_is_journaled_without_intent_or_error(tmp_path):
+    class OneSided:
+        def score(self, profile, now):
+            return [CityScore(
+                city="Helsinki", target_date="2026-07-31",
+                decision_ts_utc=now.isoformat(),
+                source_obs_ts_utc="2026-07-31T13:10:00+00:00",
+                current_bracket=26, market_side="NO", market_probability=None,
+                market_entry_price=.001, model_probability=None, model_id="offset_v1",
+                feature_coverage=.9, missing_features=["weather_market_logit_gap"],
+                features={"weather_market_logit_gap": None},
+                market={"quote_state": "one_sided_near_binary"}, lineage={},
+                evaluation_status="not_scorable",
+                not_scorable_reason="one_sided_market_probability_interval",
+            )]
+
+    config = {"execution_mode":"zero_notional_shadow", "orders_submitted":0,
+              "output_dir":str(tmp_path), "profiles":[{"adapter":"one","city":"Helsinki"}]}
+    summary = ShadowRuntime(config, {"one": OneSided()}).run_once(
+        datetime(2026, 7, 31, 13, 11, tzinfo=timezone.utc)
+    )
+    assert summary["evaluated"] == 1
+    assert summary["scored"] == 0
+    assert summary["not_scorable"] == 1
+    assert summary["errors"] == 0
+    assert summary["new_paper_intents"] == 0
+    row = json.loads((tmp_path / "evaluations.jsonl").read_text().splitlines()[0])
+    assert row["evaluation_status"] == "not_scorable"
+    assert row["edge_after_fee"] is None
+    assert row["would_enter"] is False
+
+
 def test_profile_threshold_and_bracket_scope_allow_only_one_side(tmp_path):
     class BothSides:
         def score(self, profile, now):

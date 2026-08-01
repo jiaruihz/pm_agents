@@ -8,6 +8,7 @@
       "enabled": true,
       "city": "Helsinki",
       "adapter": "helsinki_remaining_heat_v1",
+      "profile_id": "helsinki_remaining_heat_frozen_20260731_v1",
       "forward_start_utc": "2026-07-31T12:43:00Z",
       "max_book_age_seconds": 900,
       "observation_cache": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json",

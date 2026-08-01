@@ -16,15 +16,17 @@ class CityScore:
     source_obs_ts_utc: str
     current_bracket: int
     market_side: str
-    market_probability: float
-    market_entry_price: float
-    model_probability: float
+    market_probability: float | None
+    market_entry_price: float | None
+    model_probability: float | None
     model_id: str
     feature_coverage: float
     missing_features: list[str]
     features: dict[str, float | None]
     market: dict[str, Any]
     lineage: dict[str, Any]
+    evaluation_status: str = "scored"
+    not_scorable_reason: str | None = None
 
 
 class CityAdapter(Protocol):
@@ -77,7 +79,7 @@ class ShadowRuntime:
         now = now or datetime.now(timezone.utc)
         seen = load_jsonl_keys(self.evaluations, "evaluation_id")
         first_intents = load_jsonl_keys(self.intents, "position_key")
-        evaluated = written = intents = errors = 0
+        evaluated = written = intents = errors = scored = not_scorable = 0
         for profile in self.config["profiles"]:
             if not profile.get("enabled", True):
                 continue
@@ -96,16 +98,40 @@ class ShadowRuntime:
                 continue
             for score in scores:
                 evaluated += 1
+                if score.evaluation_status == "scored":
+                    if score.market_probability is None or score.model_probability is None:
+                        raise ValueError("scored evaluation requires market and model probabilities")
+                    scored += 1
+                elif score.evaluation_status == "not_scorable":
+                    if not score.not_scorable_reason:
+                        raise ValueError("not_scorable evaluation requires a reason")
+                    not_scorable += 1
+                else:
+                    raise ValueError(f"unsupported evaluation_status: {score.evaluation_status}")
                 key = "|".join((score.city, score.target_date, score.source_obs_ts_utc,
                                 str(score.current_bracket), score.market_side, score.model_id))
                 evaluation_id = hashlib.sha256(key.encode()).hexdigest()
                 if evaluation_id in seen:
                     continue
-                fee = self.fee_per_share(score.market_entry_price)
-                effective_cost = score.market_entry_price + fee
-                edge = score.model_probability - effective_cost
+                fee = (
+                    self.fee_per_share(score.market_entry_price)
+                    if score.market_entry_price is not None
+                    else None
+                )
+                effective_cost = (
+                    score.market_entry_price + fee
+                    if score.market_entry_price is not None and fee is not None
+                    else None
+                )
                 edge_threshold = float(profile.get("edge_threshold", 0.0))
-                would_enter = edge >= edge_threshold
+                edge = (
+                    score.model_probability - effective_cost
+                    if score.evaluation_status == "scored"
+                    and score.model_probability is not None
+                    and effective_cost is not None
+                    else None
+                )
+                would_enter = edge is not None and edge >= edge_threshold
                 row = {
                     "schema_version": self.schema_version,
                     "execution_mode": "zero_notional_shadow",
@@ -151,6 +177,8 @@ class ShadowRuntime:
             "orders_submitted": 0,
             "generated_at_utc": now.isoformat(),
             "evaluated": evaluated,
+            "scored": scored,
+            "not_scorable": not_scorable,
             "new_evaluations": written,
             "new_paper_intents": intents,
             "errors": errors,

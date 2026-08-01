@@ -187,9 +187,42 @@ def _quote(profile: dict[str, Any], target_date: str, bracket: int) -> dict[str,
     )
     summary = row.get("summary", {})
     ask, bid = summary.get("best_ask"), summary.get("best_bid")
-    if ask is None or bid is None:
-        raise RuntimeError(f"current bracket {bracket} NO lacks two-sided quote")
-    return {**row, "best_ask": float(ask), "best_bid": float(bid), "quote_row_ts_utc": row.get("ts_utc")}
+    if ask is None and bid is None:
+        raise RuntimeError(f"current bracket {bracket} NO book is empty")
+    ask_value = None if ask is None else float(ask)
+    bid_value = None if bid is None else float(bid)
+    quote_state = "two_sided" if bid_value is not None and ask_value is not None else (
+        "one_sided_near_binary_ask" if ask_value is not None and ask_value <= 0.01
+        else "one_sided_near_binary_bid" if bid_value is not None and bid_value >= 0.99
+        else "one_sided_ask_only" if ask_value is not None
+        else "one_sided_bid_only"
+    )
+    snapshot_payload = {
+        "condition_id": row.get("condition_id"),
+        "token_id": row.get("token_id"),
+        "ts_utc": row.get("ts_utc"),
+        "source_obs_ts_utc": row.get("source_obs_ts_utc"),
+        "raw": row.get("raw"),
+    }
+    snapshot_id = hashlib.sha256(
+        json.dumps(snapshot_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return {
+        **row,
+        "best_ask": ask_value,
+        "best_bid": bid_value,
+        "quote_state": quote_state,
+        "market_probability_status": (
+            "two_sided_midpoint"
+            if bid_value is not None and ask_value is not None
+            else "interval_censored"
+        ),
+        "market_probability_lower": bid_value if bid_value is not None else 0.0,
+        "market_probability_upper": ask_value if ask_value is not None else 1.0,
+        "execution_status": "executable_ask" if ask_value is not None else "not_executable_no_ask",
+        "book_snapshot_id": snapshot_id,
+        "quote_row_ts_utc": row.get("ts_utc"),
+    }
 
 
 class HelsinkiRemainingHeatAdapter:
@@ -216,7 +249,11 @@ class HelsinkiRemainingHeatAdapter:
         if len(history) < 4:
             raise RuntimeError("need at least four unique PIT FMI observations")
         source = history[-1]
-        market_p = (quote["best_ask"] + quote["best_bid"]) / 2
+        market_p = (
+            (quote["best_ask"] + quote["best_bid"]) / 2
+            if quote["best_bid"] is not None and quote["best_ask"] is not None
+            else None
+        )
         temps = np.asarray([float(row["temp_c"]) for row in history])
         local = decision.astimezone(ZoneInfo("Europe/Helsinki"))
         features: dict[str, Any] = {
@@ -249,10 +286,16 @@ class HelsinkiRemainingHeatAdapter:
             "doy_sin": math.sin(2*math.pi*local.timetuple().tm_yday/365.25),
             "doy_cos": math.cos(2*math.pi*local.timetuple().tm_yday/365.25),
         }
-        features.update(_forecast_features(_latest_forecast(Path(profile["forecast_curve_dir"]), target_date, decision), decision, current_x+0.5, temps[-1]))
+        forecast = _latest_forecast(Path(profile["forecast_curve_dir"]), target_date, decision)
+        features.update(_forecast_features(forecast, decision, current_x+0.5, temps[-1]))
         features["path_state"] = _path_state(features)
         weather_p = _hgb_probability(artifacts["weather"], features)
-        features["weather_market_logit_gap"] = math.log(np.clip(weather_p,1e-6,1-1e-6)/(1-np.clip(weather_p,1e-6,1-1e-6))) - math.log(market_p/(1-market_p))
+        features["weather_market_logit_gap"] = (
+            math.log(np.clip(weather_p,1e-6,1-1e-6)/(1-np.clip(weather_p,1e-6,1-1e-6)))
+            - math.log(market_p/(1-market_p))
+            if market_p is not None
+            else None
+        )
         fade = _fade_probabilities(artifacts["fade"], features)
         features.update({f"fade_reheat_p_{key}": value for key, value in fade.items()})
         for state in ("pullback", "fade", "plateau"):
@@ -261,7 +304,7 @@ class HelsinkiRemainingHeatAdapter:
         for artifact_key in profile["expression_models"]:
             artifact = artifacts[artifact_key]
             missing = [name for name in artifact["features"] if features.get(name) is None or not np.isfinite(features.get(name, np.nan))]
-            probability = _offset_probability(artifact, features, market_p)
+            probability = _offset_probability(artifact, features, market_p) if market_p is not None else None
             outputs.append(CityScore(
                 city="Helsinki", target_date=target_date, decision_ts_utc=decision.isoformat(),
                 source_obs_ts_utc=source_obs_ts, current_bracket=current_x,
@@ -270,8 +313,20 @@ class HelsinkiRemainingHeatAdapter:
                 feature_coverage=1-len(missing)/len(artifact["features"]), missing_features=missing,
                 features={name: features.get(name) for name in artifact["features"]}, market=quote,
                 lineage={"source":"fmi","source_first_seen_at_utc":source["source_first_seen_at_utc"],
+                         "source_payload_hash":source.get("payload_hash"),
+                         "source_raw_payload_hash":source.get("raw_payload_hash"),
                          "book_fetched_at_utc":quote["book_fetched_at_utc"],
+                         "book_snapshot_id":quote["book_snapshot_id"],
                          "official_source":official["source"],"official_last_obs_utc":official["last_obs_utc"],
+                         "forecast_available_at_utc":forecast.get("available_at_utc"),
+                         "forecast_values_hash":forecast.get("forecast_values_hash"),
+                         "forecast_payload_hash":forecast.get("payload_hash"),
+                         "model_artifact_sha256":profile["artifacts"][artifact_key]["sha256"],
+                         "profile_id":profile.get("profile_id", "helsinki_remaining_heat_v1"),
                          "weather_probability":weather_p,"path_state":features["path_state"]},
+                evaluation_status="scored" if market_p is not None else "not_scorable",
+                not_scorable_reason=(
+                    None if market_p is not None else "one_sided_market_probability_interval"
+                ),
             ))
         return outputs
