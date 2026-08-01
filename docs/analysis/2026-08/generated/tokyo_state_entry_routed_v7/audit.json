@@ -1,0 +1,116 @@
+{
+  "frozen_shadow_day": {
+    "deployed_orders_submitted": 0,
+    "deployed_paper_intent_emission": false,
+    "first_city_day_candidate_at_2pct": {
+      "ask": 0.027000000000000024,
+      "current_bracket": 32,
+      "decision_ts_utc": "2026-08-01T02:58:07.255457+00:00",
+      "edge_after_fee": 0.1056396722108996,
+      "probability": 0.13395322221089961,
+      "settled_win": false,
+      "side": "YES",
+      "source_obs_ts_utc": "2026-08-01T02:50:00+00:00"
+    },
+    "market": {
+      "accuracy": 1.0,
+      "brier": 0.01711983,
+      "rows": 50
+    },
+    "target_date": "2026-08-01",
+    "unique_yes_checkpoints": 50,
+    "v6": {
+      "accuracy": 0.92,
+      "brier": 0.06330791280968129,
+      "rows": 50
+    },
+    "v7": {
+      "accuracy": 0.94,
+      "brier": 0.05628094240849071,
+      "rows": 50
+    },
+    "winning_bracket": 35
+  },
+  "oof": {
+    "all:market": {
+      "accuracy": 0.9716312056737588,
+      "brier": 0.019949448581560284,
+      "rows": 141
+    },
+    "all:v6": {
+      "accuracy": 0.9787234042553191,
+      "brier": 0.01411703596612671,
+      "rows": 141
+    },
+    "all:v7": {
+      "accuracy": 0.9787234042553191,
+      "brier": 0.01377995149789201,
+      "rows": 141
+    },
+    "ordinary:market": {
+      "accuracy": 0.9886363636363636,
+      "brier": 0.005130377840909091,
+      "rows": 88
+    },
+    "ordinary:v6": {
+      "accuracy": 1.0,
+      "brier": 0.0023932160808081584,
+      "rows": 88
+    },
+    "ordinary:v7": {
+      "accuracy": 1.0,
+      "brier": 0.0023932160808081584,
+      "rows": 88
+    },
+    "state_entry:market": {
+      "accuracy": 1.0,
+      "brier": 0.0014462750000000003,
+      "rows": 10
+    },
+    "state_entry:v6": {
+      "accuracy": 1.0,
+      "brier": 0.006199166002109286,
+      "rows": 10
+    },
+    "state_entry:v7": {
+      "accuracy": 1.0,
+      "brier": 0.0014462750000000003,
+      "rows": 10
+    },
+    "transition:market": {
+      "accuracy": 0.9302325581395349,
+      "brier": 0.054579912790697675,
+      "rows": 43
+    },
+    "transition:v6": {
+      "accuracy": 0.9302325581395349,
+      "brier": 0.039951334792829196,
+      "rows": 43
+    },
+    "transition:v7": {
+      "accuracy": 0.9302325581395349,
+      "brier": 0.039951334792829196,
+      "rows": 43
+    }
+  },
+  "oof_target_dates": 7,
+  "oof_window": [
+    "2026-07-23",
+    "2026-07-24",
+    "2026-07-25",
+    "2026-07-26",
+    "2026-07-27",
+    "2026-07-28",
+    "2026-07-29"
+  ],
+  "policy": {
+    "ordinary_probability": "v6 weather-market residual",
+    "paper_intents": "disabled until independent exact forward evidence",
+    "position_scope": "one city-day-model position",
+    "side_selection": "best fee-adjusted edge across YES and NO",
+    "state_entry_probability": "PIT market midpoint"
+  },
+  "schema_version": "tokyo_state_entry_routed_market_residual_v7_audit",
+  "target": "final exact maximum stays in current bracket",
+  "training_or_selection_uses_shadow_day": false
+}
