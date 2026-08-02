@@ -44,6 +44,18 @@ tmux -L weather-jrs list-sessions
 
 manifest 是部署 preflight：必须核对 physical DB route、每个 live PID 的 checkout/head/loaded SHA、canonical JRS tmux session、LaunchAgent 退出状态和 DB open handles。`critical` 时不得重启或切 live；先修 identity 根因。manifest 不替代 exchange/order pre-state。
 
+任何可能重启、重建或迁移 canonical JRS tmux server/session 的改动，必须保存 observed pre-state，并在改动后做同集合比较：
+
+```bash
+PRECHANGE_DIR="$(mktemp -d /tmp/weather-production-prechange.XXXXXX)"
+PRECHANGE_MANIFEST="$PRECHANGE_DIR/manifest.json"
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict --json-out "$PRECHANGE_MANIFEST"
+# 执行已授权的生产改动
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict --compare-prechange "$PRECHANGE_MANIFEST"
+```
+
+后置比较会把任何改动前存在、改动后消失的 canonical JRS session 判为 `critical`。若本次明确授权就是停某实例，只能逐个传 `--allow-missing-session SESSION`；不得用宽泛通配或跳过后置检查。后置检查失败时部署不算完成，先恢复被误伤实例，再重新验证 process、raw runtime 和 exchange/order state。
+
 ## Git-first
 
 1. 在本机源码修改。
@@ -82,9 +94,10 @@ worktree 已脏时保留用户改动。若目标文件已有无关修改，先�
 2. pause/stop 目标实例；不影响邻近策略。
 3. 重载已提交版本与明确参数；不依赖脚本默认 policy。
 4. 检查新 PID/started-at/command line。
-5. 检查第一轮 latest/events/opportunities/plans/orders。
-6. 若允许 live，确认 caps、pause、`--live/--confirm-live` 等真实状态与 authenticated order 结果。
-7. 失败立即回滚到记录的 SHA/参数/进程状态。
+5. 用 pre-change manifest 做 canonical JRS session 同集合后置比较，确认没有误伤其他已有实例。
+6. 检查第一轮 latest/events/opportunities/plans/orders。
+7. 若允许 live，确认 caps、pause、`--live/--confirm-live` 等真实状态与 authenticated order 结果。
+8. 失败立即回滚到记录的 SHA/参数/进程状态。
 
 ## N100 恢复分支
 

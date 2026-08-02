@@ -155,6 +155,48 @@ def test_manifest_reports_registry_and_launch_agent_drift(tmp_path, monkeypatch)
     assert findings["launch_agent_last_exit_nonzero"]["severity"] == "critical"
 
 
+def test_prechange_comparison_fails_when_existing_session_disappears():
+    baseline = {
+        "generated_at_utc": "2026-08-02T06:00:00Z",
+        "tmux_sessions": [
+            {"session": "weather_data_feed_jrs"},
+            {"session": "weather_current_yes_core_carry_tiny_live_v2"},
+        ],
+    }
+    current = {
+        "status": "healthy",
+        "findings": [],
+        "tmux_sessions": [{"session": "weather_data_feed_jrs"}],
+    }
+
+    payload = manifest.compare_prechange_manifest(current, baseline)
+
+    assert payload["status"] == "critical"
+    assert payload["prechange_comparison"]["missing_sessions"] == [
+        "weather_current_yes_core_carry_tiny_live_v2"
+    ]
+    assert payload["findings"][0]["kind"] == (
+        "canonical_tmux_sessions_lost_since_prechange"
+    )
+
+
+def test_prechange_comparison_requires_explicit_allowance_for_intended_stop():
+    baseline = {
+        "generated_at_utc": "2026-08-02T06:00:00Z",
+        "tmux_sessions": [{"session": "weather_shadow_v1"}],
+    }
+    current = {"status": "healthy", "findings": [], "tmux_sessions": []}
+
+    payload = manifest.compare_prechange_manifest(
+        current,
+        baseline,
+        allow_missing_sessions=["weather_shadow_v1"],
+    )
+
+    assert payload["status"] == "healthy"
+    assert payload["prechange_comparison"]["missing_sessions"] == []
+
+
 def test_weather_prompts_and_analysis_skills_require_manifest_preflight():
     paths = [
         ROOT / "AGENTS.md",

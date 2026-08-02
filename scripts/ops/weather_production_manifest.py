@@ -658,10 +658,77 @@ def write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
     temporary.replace(path)
 
 
+def compare_prechange_manifest(
+    payload: dict[str, Any],
+    baseline: Mapping[str, Any],
+    *,
+    allow_missing_sessions: Iterable[str] = (),
+) -> dict[str, Any]:
+    """Fail closed when a production change drops an existing JRS session.
+
+    The baseline is an observed pre-change manifest, not desired-state metadata.
+    This protects every process that was actually running before a tmux/server,
+    deployment, or runtime change without treating historical registry entries
+    as present-state truth.
+    """
+
+    baseline_sessions = {
+        str(row.get("session"))
+        for row in baseline.get("tmux_sessions", [])
+        if isinstance(row, Mapping) and row.get("session")
+    }
+    current_sessions = {
+        str(row.get("session"))
+        for row in payload.get("tmux_sessions", [])
+        if isinstance(row, Mapping) and row.get("session")
+    }
+    allowed = {str(item) for item in allow_missing_sessions}
+    missing = sorted(baseline_sessions - current_sessions - allowed)
+    payload["prechange_comparison"] = {
+        "baseline_generated_at_utc": baseline.get("generated_at_utc"),
+        "baseline_sessions": sorted(baseline_sessions),
+        "current_sessions": sorted(current_sessions),
+        "allowed_missing_sessions": sorted(allowed),
+        "missing_sessions": missing,
+    }
+    if missing:
+        payload.setdefault("findings", []).append(
+            finding(
+                "critical",
+                "canonical_tmux_sessions_lost_since_prechange",
+                "production change dropped canonical JRS sessions that were running before the change",
+                {
+                    "sessions": missing,
+                    "baseline_generated_at_utc": baseline.get("generated_at_utc"),
+                },
+            )
+        )
+    severities = [row.get("severity") for row in payload.get("findings", [])]
+    payload["status"] = (
+        "critical"
+        if "critical" in severities
+        else "warning"
+        if "warning" in severities
+        else "healthy"
+    )
+    return payload
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--production-spec", type=Path)
     parser.add_argument("--json-out", type=Path)
+    parser.add_argument(
+        "--compare-prechange",
+        type=Path,
+        help="compare current canonical JRS sessions with a pre-change manifest",
+    )
+    parser.add_argument(
+        "--allow-missing-session",
+        action="append",
+        default=[],
+        help="session intentionally stopped by this change; repeat as needed",
+    )
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -692,6 +759,15 @@ def main() -> int:
         db_route=db_route,
         db_consumers=db_consumers,
     )
+    if args.compare_prechange:
+        baseline = json.loads(args.compare_prechange.read_text(encoding="utf-8"))
+        if not isinstance(baseline, dict):
+            raise ValueError("pre-change manifest must be a JSON object")
+        payload = compare_prechange_manifest(
+            payload,
+            baseline,
+            allow_missing_sessions=args.allow_missing_session,
+        )
     if args.json_out:
         write_json_atomic(args.json_out, payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))

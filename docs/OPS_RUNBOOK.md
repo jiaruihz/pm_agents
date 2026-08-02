@@ -32,6 +32,21 @@ tmux -L weather-data-feed-jrs list-sessions
 如果发现进程仍在其他 socket，只记录并按生产变更流程迁移；涉及 live 的 session
 不得在巡检中自动重启或跨 socket 搬迁。
 
+凡是会重建 canonical tmux server、批量重启 session 或调整生产启动集合的操作，
+必须先保存 observed manifest，完成后比较 session 全集：
+
+```bash
+PRECHANGE_DIR="$(mktemp -d /tmp/weather-production-prechange.XXXXXX)"
+PRECHANGE_MANIFEST="$PRECHANGE_DIR/manifest.json"
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict --json-out "$PRECHANGE_MANIFEST"
+# 执行已授权的改动
+.venv/bin/python scripts/ops/weather_production_manifest.py --strict --compare-prechange "$PRECHANGE_MANIFEST"
+```
+
+改动前存在、改动后消失的任何 canonical JRS session 都是 `critical`，部署不算完成。
+只有本次明确要停的实例才可逐项传
+`--allow-missing-session SESSION`；不得因为主要服务已恢复就忽略其他 strategy/shadow/collector。
+
 先用这个脚本看当前状态：
 
 ```bash
