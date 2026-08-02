@@ -970,6 +970,19 @@ def orderbook_disabled_book(status):
     return {"status": status, "summary": {}, "raw": {}, "fetched_at_utc": None}
 
 
+def orderbook_for_entry(orderbook_cache, token_id, *, label, outcome, targets, disabled_reason=None):
+    """Return a fetched book or the correct status for this ladder entry."""
+    book = orderbook_cache.get(token_id)
+    if book is not None:
+        return book
+    targeted = targets is None or (label, outcome) in targets
+    return orderbook_disabled_book(
+        (disabled_reason or "orderbook_missing")
+        if targeted
+        else "orderbook_scope_skipped"
+    )
+
+
 def orderbook_targets_for_current_yes(markets, unit, metar_state):
     """Return (label, outcome) pairs needed by current-YES.
 
@@ -1641,22 +1654,22 @@ def main():
                 yes_book = {"status": "disabled", "summary": {}, "raw": {}, "fetched_at_utc": None}
                 no_book = {"status": "disabled", "summary": {}, "raw": {}, "fetched_at_utc": None}
                 if not args.no_orderbook:
-                    yes_book = orderbook_cache.get(entry["yes_token_id"], yes_book)
-                    no_book = orderbook_cache.get(entry["no_token_id"], no_book)
-                    if yes_book.get("status") == "disabled":
-                        yes_targeted = orderbook_targets is None or (label, "yes") in orderbook_targets
-                        yes_book = orderbook_disabled_book(
-                            (orderbook_disabled_reason or "orderbook_missing")
-                            if yes_targeted
-                            else "orderbook_scope_skipped"
-                        )
-                    if no_book.get("status") == "disabled":
-                        no_targeted = orderbook_targets is None or (label, "no") in orderbook_targets
-                        no_book = orderbook_disabled_book(
-                            (orderbook_disabled_reason or "orderbook_missing")
-                            if no_targeted
-                            else "orderbook_scope_skipped"
-                        )
+                    yes_book = orderbook_for_entry(
+                        orderbook_cache,
+                        entry["yes_token_id"],
+                        label=entry["label"],
+                        outcome="yes",
+                        targets=orderbook_targets,
+                        disabled_reason=orderbook_disabled_reason,
+                    )
+                    no_book = orderbook_for_entry(
+                        orderbook_cache,
+                        entry["no_token_id"],
+                        label=entry["label"],
+                        outcome="no",
+                        targets=orderbook_targets,
+                        disabled_reason=orderbook_disabled_reason,
+                    )
                 market_map[entry["label"]] = {
                     **entry,
                     "yes_book": yes_book,
