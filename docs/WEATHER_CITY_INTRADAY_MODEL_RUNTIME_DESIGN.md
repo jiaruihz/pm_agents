@@ -316,6 +316,26 @@ Status: **deployed census 与首轮 root-fix 已完成；rolling ledger 持续�
 
 ### Phase 1：低风险证据层整体迁移
 
+Status: **2026-08-02 已完成公共证据层实现与三城 fixture 验收；未改变生产行为。** 公共包为
+`weather_model_evaluation/`，统一入口为
+`scripts/analysis/market_structure_edge/replay_city_intraday_evidence_v1.py`。入口只允许写 macOS/POSIX 临时目录、
+`runtime/research/` 或 `research_outputs/`，拒绝 production/canonical runtime 路径。
+
+已落地的契约：
+
+- `EventEnvelope` 显式保存 event/available/first-seen/observation clocks、revision parent、state key、物理输入引用；
+  revision 在父事件可见前会显式失败。
+- `ReplayRunner` 只依赖注入的 input provider、clock 与 checkpoint builder；checkpoint/output identity 使用 canonical JSON hash，
+  相同 event stream 不依赖输入文件枚举顺序。
+- prediction table 固定保存 model/feature/market/label/coverage/runtime lineage；不可评分或缺 evidence 的 row 不删除，
+  使用结构化 `not_available/coverage_gap`。
+- 固定报告同时输出 prediction quality、同 rows market baseline、signal/evidence 双漏斗、plan/order/fill、maker/taker、
+  fee-adjusted settled PnL 和 raw/canonical delta；无对应证据时报告 `not_available`，不把 0 伪装成已验证结果。
+- 同一命令已回放 Helsinki、Tokyo、Amsterdam 的 9 个去重 event / 9 个 checkpoint，覆盖 point、interval、revision、
+  cross-day、one-sided book 和 multi-anchor mismatch。两次独立运行目录逐文件一致，fixture output hash 为
+  `d1ee35bfc0378944ed0e804bd9f626165cb9e156a4b472f559080ee6bf7d06f2`。fixture 本身没有模型概率和 settlement label，
+  因而质量、PnL 正确显示为 `not_available`；这不是用伪标签补齐的模型绩效证据。
+
 本阶段把 replay、评测和事后报告作为一个独立模块完成，不触碰生产 runner 或真实 DB。
 
 要做：
