@@ -16,20 +16,30 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from weather_data_feed.information_events import canonical_json_hash  # noqa: E402
+from scripts.ops.materialize_weather_city_runtime_canonical_v1 import (  # noqa: E402
+    load_bundles,
+)
 
 
 def build_report(
     db_path: Path,
     *,
     strategy_prefix: str = "weather_city_probability:",
+    candidate_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     conn = sqlite3.connect(f"file:{db_path.resolve()}?mode=ro", uri=True, timeout=1.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA query_only=ON")
     conn.execute("PRAGMA busy_timeout=1000")
     try:
+        identities = sorted(set(candidate_ids or ()))
+        scope_clause = ""
+        params: list[str] = [f"{strategy_prefix}%"]
+        if identities:
+            scope_clause = f" AND candidate_id IN ({','.join('?' for _ in identities)})"
+            params.extend(identities)
         rows = conn.execute(
-            """
+            f"""
             SELECT city,
                    COUNT(*) AS candidates,
                    SUM(candidate_status = 'scored') AS scored,
@@ -44,10 +54,11 @@ def build_report(
             FROM fact_signal_candidates
             WHERE candidate_grain_version = 'v2_event_checkpoint'
               AND strategy_key LIKE ?
+              {scope_clause}
             GROUP BY city
             ORDER BY city
             """,
-            (f"{strategy_prefix}%",),
+            params,
         ).fetchall()
     finally:
         conn.close()
@@ -113,6 +124,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=ROOT / "runtime/weather.db")
     parser.add_argument("--strategy-prefix", default="weather_city_probability:")
+    parser.add_argument(
+        "--bundles",
+        action="append",
+        type=Path,
+        default=[],
+        help="scope report by candidate IDs from WCIR journals (avoids a full-table scan)",
+    )
     parser.add_argument("--json", type=Path)
     parser.add_argument("--markdown", type=Path)
     return parser
@@ -120,7 +138,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    report = build_report(args.db, strategy_prefix=args.strategy_prefix)
+    candidate_ids = None
+    if args.bundles:
+        candidate_ids = [
+            bundle.signal_candidate.candidate_id
+            for bundle in load_bundles(args.bundles)
+        ]
+    report = build_report(
+        args.db,
+        strategy_prefix=args.strategy_prefix,
+        candidate_ids=candidate_ids,
+    )
     payload = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)

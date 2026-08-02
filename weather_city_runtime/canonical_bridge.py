@@ -236,18 +236,34 @@ class _CandidateCanonicalBridge:
             "input_duplicate_checkpoints": duplicate_checkpoints,
         }
 
-    def candidate_funnels(self) -> dict[str, Any]:
+    def candidate_funnels(
+        self,
+        candidate_ids: Iterable[str] | None = None,
+    ) -> dict[str, Any]:
+        identities = sorted(set(candidate_ids or ()))
         conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
         try:
-            rows = conn.execute(
-                """
+            if identities:
+                placeholders = ",".join("?" for _ in identities)
+                rows = conn.execute(
+                    f"""
+                    SELECT candidate_id, candidate_status, policy_selected,
+                           market_probability, condition_id, decision_entry_price
+                    FROM fact_signal_candidates
+                    WHERE candidate_id IN ({placeholders})
+                    """,
+                    identities,
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
                 SELECT candidate_id, candidate_status, policy_selected,
                        market_probability, condition_id, decision_entry_price
                 FROM fact_signal_candidates
                 WHERE candidate_grain_version = 'v2_event_checkpoint'
-                """
-            ).fetchall()
+                    """
+                ).fetchall()
         finally:
             conn.close()
         return {

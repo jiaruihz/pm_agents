@@ -309,7 +309,9 @@ def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
         "fill": "not_created_shadow",
         "pnl": "not_computed_without_fill",
     }
-    report = build_canonical_report(physical)
+    report = build_canonical_report(
+        physical, candidate_ids=[bundle.signal_candidate.candidate_id]
+    )
     assert report["signal_funnel"]["raw_candidates"] == 1
     assert report["city_rows"][0]["city"] == "Helsinki"
     assert report["evidence_funnel"]["order"] == "not_available_shadow"

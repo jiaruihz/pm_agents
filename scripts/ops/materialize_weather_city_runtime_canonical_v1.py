@@ -67,12 +67,16 @@ def main(argv: list[str] | None = None) -> int:
         mode = "canonical_incremental_apply"
         result = bridge.append(bundles)
         db_path = bridge.db_path
-        funnels = bridge.candidate_funnels()
+        funnels = bridge.candidate_funnels(
+            bundle.signal_candidate.candidate_id for bundle in bundles
+        )
     else:
         with tempfile.TemporaryDirectory(prefix="wcir-canonical-dry-run-") as tmp:
             bridge = TemporaryCanonicalBridge(Path(tmp) / "weather.db")
             result = bridge.append(bundles)
-            funnels = bridge.candidate_funnels()
+            funnels = bridge.candidate_funnels(
+                bundle.signal_candidate.candidate_id for bundle in bundles
+            )
         mode = "isolated_dry_run"
         db_path = None
     summary: dict[str, Any] = {
