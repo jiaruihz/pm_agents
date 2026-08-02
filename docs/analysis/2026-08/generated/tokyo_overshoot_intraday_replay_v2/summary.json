@@ -23,22 +23,31 @@
   "v2_edge_after_fee_min": -0.16518560042431002,
   "v2_edge_after_fee_max": -0.0005608003030524711,
   "unconditional_buy_every_scored_checkpoint": {
+    "shares_per_order": 5.0,
     "orders": 44,
     "wins": 26,
     "cost_1share_each": 25.719739999999998,
-    "fee_adjusted_pnl_1share_each": 0.2802600000000003
+    "fee_adjusted_pnl_1share_each": 0.2802600000000003,
+    "cost_5shares_each": 128.59869999999998,
+    "fee_adjusted_pnl_5shares_each": 1.4013000000000013
   },
   "model_direction_p_no_gte_0_5": {
+    "shares_per_order": 5.0,
     "orders": 26,
     "wins": 26,
     "cost_1share_each": 24.05444,
-    "fee_adjusted_pnl_1share_each": 1.9455600000000004
+    "fee_adjusted_pnl_1share_each": 1.9455600000000004,
+    "cost_5shares_each": 120.2722,
+    "fee_adjusted_pnl_5shares_each": 9.727800000000002
   },
   "v2_edge_policy": {
+    "shares_per_order": 5.0,
     "orders": 0,
     "wins": 0,
     "cost_1share_each": 0,
-    "fee_adjusted_pnl_1share_each": 0.0
+    "fee_adjusted_pnl_1share_each": 0.0,
+    "cost_5shares_each": 0.0,
+    "fee_adjusted_pnl_5shares_each": 0.0
   },
   "final_official_bracket": 35,
   "model_training_end": "2026-07-15",

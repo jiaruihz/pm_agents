@@ -75,3 +75,4 @@ def test_fee_adjusted_binary_pnl_uses_selected_side_ask():
     assert winner_cost == loser_cost == 0.612
     assert winner_pnl == 0.388
     assert loser_pnl == -0.612
+    assert replay.REPLAY_SHARES == 5.0

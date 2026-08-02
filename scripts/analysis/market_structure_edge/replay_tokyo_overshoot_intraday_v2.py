@@ -60,6 +60,7 @@ DEFAULT_OUT = ROOT / (
     "docs/analysis/2026-08/generated/tokyo_overshoot_intraday_replay_v2"
 )
 FEE_RATE = 0.05
+REPLAY_SHARES = 5.0
 
 
 def official_fee_per_share(price: float) -> float:
@@ -302,12 +303,21 @@ def replay(
             "no_label": no_label,
             "hypothetical_no_entry_cost_1share": entry_cost,
             "hypothetical_no_pnl_1share_fee_adjusted": hypothetical_pnl,
+            "hypothetical_no_pnl_5shares_fee_adjusted": (
+                hypothetical_pnl * REPLAY_SHARES if scorable else None
+            ),
             "model_direction_buy_no": model_direction_buy,
             "model_direction_pnl_1share_fee_adjusted": (
                 hypothetical_pnl if model_direction_buy else 0.0
             ),
+            "model_direction_pnl_5shares_fee_adjusted": (
+                hypothetical_pnl * REPLAY_SHARES if model_direction_buy else 0.0
+            ),
             "v2_policy_pnl_1share_fee_adjusted": (
                 hypothetical_pnl if would_enter else 0.0
+            ),
+            "v2_policy_pnl_5shares_fee_adjusted": (
+                hypothetical_pnl * REPLAY_SHARES if would_enter else 0.0
             ),
             "v2_prediction_correct_at_050": (
                 int((p_no_v2 >= 0.5) == (final_bracket != bracket))
@@ -354,6 +364,7 @@ def replay(
         "v2_edge_after_fee_min": min(row["edge_after_fee_v2"] for row in scored),
         "v2_edge_after_fee_max": max(row["edge_after_fee_v2"] for row in scored),
         "unconditional_buy_every_scored_checkpoint": {
+            "shares_per_order": REPLAY_SHARES,
             "orders": len(scored),
             "wins": sum(int(row["no_label"]) for row in scored),
             "cost_1share_each": sum(
@@ -362,8 +373,14 @@ def replay(
             "fee_adjusted_pnl_1share_each": sum(
                 row["hypothetical_no_pnl_1share_fee_adjusted"] for row in scored
             ),
+            "cost_5shares_each": REPLAY_SHARES
+            * sum(row["hypothetical_no_entry_cost_1share"] for row in scored),
+            "fee_adjusted_pnl_5shares_each": sum(
+                row["hypothetical_no_pnl_5shares_fee_adjusted"] for row in scored
+            ),
         },
         "model_direction_p_no_gte_0_5": {
+            "shares_per_order": REPLAY_SHARES,
             "orders": len(model_direction_selected),
             "wins": sum(int(row["no_label"]) for row in model_direction_selected),
             "cost_1share_each": sum(
@@ -374,8 +391,18 @@ def replay(
                 row["model_direction_pnl_1share_fee_adjusted"]
                 for row in model_direction_selected
             ),
+            "cost_5shares_each": REPLAY_SHARES
+            * sum(
+                row["hypothetical_no_entry_cost_1share"]
+                for row in model_direction_selected
+            ),
+            "fee_adjusted_pnl_5shares_each": sum(
+                row["model_direction_pnl_5shares_fee_adjusted"]
+                for row in model_direction_selected
+            ),
         },
         "v2_edge_policy": {
+            "shares_per_order": REPLAY_SHARES,
             "orders": len(triggered),
             "wins": sum(int(row["no_label"]) for row in triggered),
             "cost_1share_each": sum(
@@ -383,6 +410,11 @@ def replay(
             ),
             "fee_adjusted_pnl_1share_each": sum(
                 row["v2_policy_pnl_1share_fee_adjusted"] for row in scored
+            ),
+            "cost_5shares_each": REPLAY_SHARES
+            * sum(row["hypothetical_no_entry_cost_1share"] for row in triggered),
+            "fee_adjusted_pnl_5shares_each": sum(
+                row["v2_policy_pnl_5shares_fee_adjusted"] for row in scored
             ),
         },
         "final_official_bracket": final_bracket,
