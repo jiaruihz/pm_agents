@@ -88,40 +88,68 @@ def latest_existing_forecast_curve_dir() -> Path:
     return DEFAULT_FORECAST_CURVE_DIRS[0]
 
 
-def latest_orderbook_snapshot(root: Path) -> Path | None:
-    files = list(root.rglob("orderbook_snapshot_*.jsonl.gz"))
-    if not files:
-        files = list(root.rglob("orderbook_snapshot_*.jsonl"))
-    if not files:
+def latest_partitioned_file(root: Path, patterns: tuple[str, ...]) -> Path | None:
+    """Find the newest capture without scanning every historical partition."""
+
+    if not root.exists():
         return None
-    return max(files, key=lambda path: path.stat().st_mtime)
+    partitions = sorted(
+        (path for path in root.iterdir() if path.is_dir()),
+        key=lambda path: path.name,
+        reverse=True,
+    )
+    for partition in partitions:
+        files = [path for pattern in patterns for path in partition.glob(pattern)]
+        if files:
+            return max(files, key=lambda path: path.stat().st_mtime)
+    files = [path for pattern in patterns for path in root.glob(pattern)]
+    return max(files, key=lambda path: path.stat().st_mtime) if files else None
+
+
+def latest_orderbook_snapshot(root: Path) -> Path | None:
+    return latest_partitioned_file(
+        root,
+        ("orderbook_snapshot_*.jsonl.gz", "orderbook_snapshot_*.jsonl"),
+    )
 
 
 def latest_forecast_curve_capture(root: Path) -> Path | None:
-    files = list(root.glob("*/forecast_hourly_curves_*.jsonl"))
-    if not files:
-        return None
-    return max(files, key=lambda path: path.stat().st_mtime)
+    return latest_partitioned_file(root, ("forecast_hourly_curves_*.jsonl",))
 
 
 def read_jsonl_tail(path: Path, limit: int) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: deque[dict[str, Any]] = deque(maxlen=max(1, limit))
-    with path.open(encoding="utf-8") as fh:
-        for line_no, line in enumerate(fh, start=1):
-            raw = line.strip()
-            if not raw:
-                continue
-            try:
-                row = json.loads(raw)
-            except json.JSONDecodeError:
-                rows.append({"_line_no": line_no, "_parse_error": "json_decode_error"})
-                continue
-            if isinstance(row, dict):
-                row["_line_no"] = line_no
-                rows.append(row)
-    return list(rows)
+    wanted = max(1, limit)
+    chunk_size = 64 * 1024
+    with path.open("rb") as fh:
+        fh.seek(0, 2)
+        position = fh.tell()
+        buffer = b""
+        while position > 0 and buffer.count(b"\n") <= wanted:
+            read_size = min(chunk_size, position)
+            position -= read_size
+            fh.seek(position)
+            buffer = fh.read(read_size) + buffer
+    lines = [line for line in buffer.splitlines() if line.strip()][-wanted:]
+    rows: list[dict[str, Any]] = []
+    for tail_index, line in enumerate(lines, start=1):
+        try:
+            row = json.loads(line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            rows.append(
+                {
+                    "_line_no": None,
+                    "_tail_line_index": tail_index,
+                    "_parse_error": "json_decode_error",
+                }
+            )
+            continue
+        if isinstance(row, dict):
+            row["_line_no"] = None
+            row["_tail_line_index"] = tail_index
+            rows.append(row)
+    return rows
 
 
 def row_key(row: dict[str, Any], fields: Iterable[str]) -> tuple[str, ...]:
