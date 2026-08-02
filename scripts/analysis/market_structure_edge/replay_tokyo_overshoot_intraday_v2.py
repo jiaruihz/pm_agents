@@ -102,6 +102,23 @@ def _group_by_source_observation(
     return grouped
 
 
+def timely_books_after_first_seen(
+    candidates: Iterable[dict[str, Any]],
+    source_first_seen: datetime,
+    max_delay_seconds: float,
+) -> list[dict[str, Any]]:
+    """Exclude books captured before first-seen or after a stale-source delay."""
+    return [
+        row
+        for row in candidates
+        if 0
+        <= (
+            _parse_ts(str(row["book_fetched_at_utc"])) - source_first_seen
+        ).total_seconds()
+        <= max_delay_seconds
+    ]
+
+
 @dataclass(frozen=True)
 class SelectedCheckpoint:
     book: dict[str, Any]
@@ -140,6 +157,7 @@ def replay(
     start_hour_jst: float,
     end_hour_jst: float,
     edge_threshold: float,
+    max_book_after_first_seen_seconds: float,
     book_path: Path,
     jma_path: Path,
     official_journal_dir: Path,
@@ -170,19 +188,38 @@ def replay(
     missing_current_book = 0
     one_sided_current_book = 0
     for source_obs in observations:
+        all_observation_books = grouped[source_obs]
+        latest_candidate_decision = max(
+            _parse_ts(str(row["book_fetched_at_utc"]))
+            for row in all_observation_books
+        )
+        available_jma = _jma_history(
+            jma_path, target_date, source_obs, latest_candidate_decision
+        )
+        if not available_jma or _parse_ts(
+            str(available_jma[-1]["observation_time_utc"])
+        ) != source_obs:
+            raise RuntimeError(f"no exact first-seen JMA row for {source_obs.isoformat()}")
+        source_first_seen = _parse_ts(
+            str(available_jma[-1]["source_first_seen_at_utc"])
+        )
+        timely_books = timely_books_after_first_seen(
+            all_observation_books,
+            source_first_seen,
+            max_book_after_first_seen_seconds,
+        )
         selected = select_first_pit_current_book(
-            grouped[source_obs], official_journal_dir, target_date
+            timely_books, official_journal_dir, target_date
         )
         if selected is None:
             missing_current_book += 1
             first_book = min(
-                grouped[source_obs],
+                timely_books or all_observation_books,
                 key=lambda row: _parse_ts(str(row["book_fetched_at_utc"])),
             )
             decision = _parse_ts(str(first_book["book_fetched_at_utc"]))
             source_jma = _jma_history(jma_path, target_date, source_obs, decision)
             source = source_jma[-1] if source_jma else {}
-            source_first_seen = _parse_ts(str(source["source_first_seen_at_utc"]))
             official = _official_history(official_journal_dir, target_date, decision)
             official_anchor = (
                 _round_native_c(float(official[-1]["running_max_c"]))
@@ -203,9 +240,13 @@ def replay(
                     ),
                     "current_bracket": official_anchor,
                     "evaluation_status": "not_scorable",
-                    "not_scorable_reason": "anchor_capture_gap",
+                    "not_scorable_reason": (
+                        "anchor_capture_gap"
+                        if timely_books
+                        else "timely_book_capture_gap"
+                    ),
                     "captured_brackets": "|".join(
-                        sorted({str(row.get("bracket")) for row in grouped[source_obs]})
+                        sorted({str(row.get("bracket")) for row in all_observation_books})
                     ),
                     "final_bracket": final_bracket,
                     "no_label": (
@@ -349,9 +390,17 @@ def replay(
         "raw_book_rows": len(books),
         "source_observations_all_day": len(grouped),
         "source_observations_in_window": len(observations),
+        "expected_10m_observations_in_window": int(
+            round((end_hour_jst - start_hour_jst) * 6)
+        ),
+        "source_observation_coverage": len(observations)
+        / int(round((end_hour_jst - start_hour_jst) * 6)),
+        "max_book_after_first_seen_seconds": max_book_after_first_seen_seconds,
         "checkpoint_rows_preserved": len(output),
         "pit_current_book_rows": len(output) - missing_current_book,
-        "scored_two_sided_rows": len(output) - missing_current_book - one_sided_current_book,
+        "scored_two_sided_rows": (
+            len(output) - missing_current_book - one_sided_current_book
+        ),
         "one_sided_current_book_rows": one_sided_current_book,
         "missing_current_book_rows": missing_current_book,
         "edge_threshold_after_fee": edge_threshold,
@@ -441,6 +490,9 @@ def main() -> None:
     parser.add_argument("--start-hour-jst", type=float, default=10.0)
     parser.add_argument("--end-hour-jst", type=float, default=18.0)
     parser.add_argument("--edge-threshold", type=float, default=0.02)
+    parser.add_argument(
+        "--max-book-after-first-seen-seconds", type=float, default=900.0
+    )
     parser.add_argument("--book-path", type=Path, default=DEFAULT_BOOK)
     parser.add_argument("--jma-path", type=Path, default=DEFAULT_JMA)
     parser.add_argument("--official-journal-dir", type=Path, default=DEFAULT_OFFICIAL)
@@ -453,6 +505,7 @@ def main() -> None:
         start_hour_jst=args.start_hour_jst,
         end_hour_jst=args.end_hour_jst,
         edge_threshold=args.edge_threshold,
+        max_book_after_first_seen_seconds=args.max_book_after_first_seen_seconds,
         book_path=args.book_path,
         jma_path=args.jma_path,
         official_journal_dir=args.official_journal_dir,

@@ -134,3 +134,61 @@ Weather 曲线，持有至结算；`fee 后 PnL = 5 × (NO payout - NO ask - ent
 ```bash
 .venv/bin/python scripts/analysis/market_structure_edge/replay_tokyo_overshoot_intraday_v2.py
 ```
+
+## 2026-08-02 forward 与持续零信号诊断
+
+### 数据完整性
+
+8 月 2 日不能按“完整一天”发布：目标窗口理论应有 48 个十分钟 JMA checkpoint，raw exact collector
+只有 24 个，覆盖率 50%。缺口为 `12:00..15:50 JST`；11:50 后 producer identity 从
+repo SHA `41806c87` 变为 `c2047752`，16:00 才恢复新 observation，属于 collector/deployment
+中断，不是策略筛除，也不能 late backfill 后冒充 exact first-seen。
+
+旧 replay 还会把 11:50 observation 错配到 16:08 的 stale book。现已给 source first-seen→book
+增加 900 秒 PIT 配对上限；该行改记 `timely_book_capture_gap`，不再评分。修复后的 evidence funnel：
+
+```text
+48 expected checkpoints
+→ 24 exact first-seen observations
+→ 23 timely current-bracket books
+→ 22 two-sided scored rows
+→ 0 current-NO signals
+```
+
+受影响窗口是 8 月 2 日 12:00–15:50 JST 共 24 个缺失 checkpoint；没有 paper intent、order、fill，
+所以执行影响为 0 笔，但该窗口不得进入 exact-forward 概率或 ROI 分母。完整可用行见
+`generated/tokyo_overshoot_intraday_replay_v2_20260802/checkpoints.csv`。
+
+### 8 月 2 日结果
+
+- final official bracket = 33；22 行可评分，v2 Brier `0.000381`，market Brier `0.000291`，
+  v2 仍未胜 market。
+- current-NO fee 后最大 edge 只有 `-0.282%`，最小 `-1.952%`；2% 门槛 0 笔，拿掉门槛仍
+  没有正 fee-adjusted edge。
+- 最接近入场的是 10:00：market NO midpoint 96.45%、ask 97.0%、v2 P(NO) 96.86%；模型相对
+  midpoint 只增加 0.41%，不足以覆盖 0.55% half-spread、fee，更不用说额外 2% margin。
+- 单纯按 `P(NO)>=50%` 固定 5 shares 会买 11 次、11 胜，但成本 `$54.26795`、fee 后只赚
+  `+$0.73205`；这是大量 97–99.8c 的重复低收益方向票，不是 market residual alpha。
+
+### 一直 0 信号是不是正常
+
+**单日 0 信号正常，但当前 v2 连续为 0 已是结构性问题，不能再解释成健康的“耐心等待”。**
+
+冻结 7/16–7/30 的 238 行、8/1 的 44 行和 8/2 的 22 个可用行合计 304 个 checkpoint，
+current-NO taker 表达没有一笔 fee-adjusted 正 edge。原因不是单独的 2% threshold：v2 以 market
+midpoint logit 为固定 prior，ridge correction 很小，而交易必须跨 ask spread 与 Weather fee；模型只要
+没有产生足够大的、方向正确的 market residual，就天然不会触发。
+
+双边表达也不是直接修复：若把 8/1 对称扩成 current-YES，2% edge 会触发 4 笔，只有 2 胜，固定
+5 shares fee 后 `-$1.3420`；8/2 仍为 0 笔。因此不能靠降低门槛或机械开放 YES 制造交易。
+
+当前结论应收紧为：probability challenger 保留 collector，但 `current-NO taker v2` 交易表达
+`rejected_for_expression`；significance=NA，baseline=FAIL，forward=FAIL，不改 live。下一版必须先在
+完整 exact-forward rows 上用更有独立信息量的天气/path innovation 打败同 rows market，再重新评估
+双边 executable edge，而不是继续调低 2% threshold。
+
+## 2026-08-03 当前状态
+
+截至北京时间 `2026-08-03 00:26`（东京 `01:26 JST`），东京 8 月 3 日 active 日内窗口尚未开始，
+还没有 `2026-08-03.jsonl` JMA/book checkpoint，故不存在可发布的 8/3 胜率、edge 或 PnL。collector
+健康状态只能说明进程已恢复，不能提前把 8/2 或 future 数据当 8/3 first-seen。

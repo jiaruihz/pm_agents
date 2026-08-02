@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
@@ -76,3 +77,18 @@ def test_fee_adjusted_binary_pnl_uses_selected_side_ask():
     assert winner_pnl == 0.388
     assert loser_pnl == -0.612
     assert replay.REPLAY_SHARES == 5.0
+
+
+def test_timely_books_rejects_stale_source_capture():
+    first_seen = datetime(2026, 8, 2, 2, 57, tzinfo=timezone.utc)
+    candidates = [
+        _book("2026-08-02T02:56:59+00:00", "32", 0.9, 0.99),
+        _book("2026-08-02T02:57:30+00:00", "32", 0.9, 0.99),
+        _book("2026-08-02T07:08:00+00:00", "33", 0.1, 0.2),
+    ]
+
+    selected = replay.timely_books_after_first_seen(candidates, first_seen, 900)
+
+    assert [row["book_fetched_at_utc"] for row in selected] == [
+        "2026-08-02T02:57:30+00:00"
+    ]
