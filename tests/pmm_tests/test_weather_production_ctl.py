@@ -180,3 +180,81 @@ def test_live_recovery_is_blocked_without_explicit_confirmation(tmp_path):
         "status": "blocked",
         "reason": "confirm_live_required",
     }
+
+
+def test_data_feed_semantics_separates_coverage_warning_from_critical_chain():
+    payload = {
+        "checked_at_utc": "2026-08-02T16:00:00Z",
+        "observation_cache": {"status": "ok"},
+        "forecast_hourly_curves": {"status": "ok"},
+        "live_cross_observation_state": {"status": "ok"},
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_orderbook_coverage": {"status": "ok"},
+        "snapshot_source_model": {"status": "ok", "fallback_detected": False},
+        "orderbook_snapshots": {"missing": False, "stale": False},
+        "snapshot_city_state_coverage": {
+            "status": "missing_same_day_weather_state",
+            "missing_required_trading_cities": ["Chengdu", "Guangzhou"],
+        },
+        "fast_observation_state": {"status": "stale"},
+    }
+
+    result = ctl.summarize_data_feed_semantics(payload)
+
+    assert result["status"] == "warning"
+    assert result["critical_reasons"] == []
+    assert result["warnings"] == [
+        "snapshot_city_state_coverage:Chengdu,Guangzhou"
+    ]
+    assert result["ignored_legacy_checks"] == ["fast_observation_state"]
+
+
+def test_data_feed_semantics_makes_forecast_fallback_critical():
+    payload = {
+        "observation_cache": {"status": "ok"},
+        "forecast_hourly_curves": {"status": "ok"},
+        "live_cross_observation_state": {"status": "ok"},
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_orderbook_coverage": {"status": "ok"},
+        "snapshot_source_model": {"status": "ok", "fallback_detected": True},
+        "orderbook_snapshots": {"missing": False, "stale": False},
+        "snapshot_city_state_coverage": {"status": "ok"},
+    }
+
+    result = ctl.summarize_data_feed_semantics(payload)
+
+    assert result["status"] == "critical"
+    assert result["critical_reasons"] == ["forecast_source_fallback_detected"]
+
+
+def test_data_feed_semantics_treats_partial_fresh_coverage_as_warning():
+    payload = {
+        "observation_cache": {"status": "ok"},
+        "forecast_hourly_curves": {
+            "status": "incomplete_city_target_coverage",
+            "missing_city_target_count": 1,
+            "missing_city_target_examples": [
+                {"city": "NYC", "target_date": "2026-08-02"}
+            ],
+        },
+        "live_cross_observation_state": {"status": "ok"},
+        "snapshot_parity": {"status": "ok"},
+        "snapshot_orderbook_coverage": {
+            "status": "incomplete",
+            "target_count": 170,
+            "target_ok_count": 166,
+            "target_incomplete_count": 4,
+        },
+        "snapshot_source_model": {"status": "ok", "fallback_detected": False},
+        "orderbook_snapshots": {"missing": False, "stale": False},
+        "snapshot_city_state_coverage": {"status": "ok"},
+    }
+
+    result = ctl.summarize_data_feed_semantics(payload)
+
+    assert result["status"] == "warning"
+    assert result["critical_reasons"] == []
+    assert result["warnings"] == [
+        "forecast_hourly_curves_incomplete:NYC@2026-08-02",
+        "snapshot_orderbook_coverage_incomplete:4/170",
+    ]

@@ -53,7 +53,12 @@ tmux -L weather-data-feed-jrs list-sessions
 ```
 
 `health` 同时检查 canonical DB/进程 manifest、全部 required tmux sessions、
-关键 runtime artifact freshness、checkout、live flags、`live_enabled` 和上游依赖。
+关键 runtime artifact freshness、checkout、live flags、`live_enabled`、上游依赖，
+以及 observation/forecast/orderbook/snapshot/source-model 的 data-feed 语义健康。
+城市 same-day weather state、少量 fresh forecast curve / orderbook target 缺口单列为
+warning；forecast fallback、stale/invalid forecast capture、核心 cache/parity 或整层
+orderbook 缺失为 critical。当前已关闭的旧 `fast_observation_state` 不再覆盖活跃的
+`weather_live_cross_observations` 健康判断。
 旧 shadow/collector 在迁入完整 start contract 前只做 presence 保护并标
 `recovery_policy: manual`；controller 不会猜命令自动恢复。生产操作不得直接用
 `tmux kill-server`、`tmux kill-session` 或手拼 live 命令绕过 controller。

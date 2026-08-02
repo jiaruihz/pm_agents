@@ -211,6 +211,130 @@ def build_plan(
     return actions
 
 
+def summarize_data_feed_semantics(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize the broad legacy feed doctor into production-relevant health."""
+
+    critical_reasons: list[str] = []
+    expected_ok = {
+        "observation_cache": "status",
+        "live_cross_observation_state": "status",
+        "snapshot_parity": "status",
+        "snapshot_source_model": "status",
+    }
+    for component, field in expected_ok.items():
+        row = payload.get(component)
+        if not isinstance(row, Mapping) or row.get(field) != "ok":
+            critical_reasons.append(f"{component}_not_ok")
+    orderbooks = payload.get("orderbook_snapshots")
+    if not isinstance(orderbooks, Mapping):
+        critical_reasons.append("orderbook_snapshots_missing")
+    elif orderbooks.get("missing") or orderbooks.get("stale"):
+        critical_reasons.append("orderbook_snapshots_stale_or_missing")
+    source_model = payload.get("snapshot_source_model")
+    if isinstance(source_model, Mapping) and source_model.get("fallback_detected"):
+        critical_reasons.append("forecast_source_fallback_detected")
+
+    warnings: list[str] = []
+    curves = payload.get("forecast_hourly_curves")
+    curve_status = curves.get("status") if isinstance(curves, Mapping) else None
+    if curve_status == "incomplete_city_target_coverage":
+        examples = curves.get("missing_city_target_examples") or []
+        labels = [
+            f"{row.get('city')}@{row.get('target_date')}"
+            for row in examples
+            if isinstance(row, Mapping)
+        ]
+        warnings.append(
+            "forecast_hourly_curves_incomplete:"
+            + (",".join(labels) if labels else str(curves.get("missing_city_target_count") or "unknown"))
+        )
+    elif curve_status != "ok":
+        critical_reasons.append(f"forecast_hourly_curves:{curve_status or 'missing'}")
+
+    book_coverage = payload.get("snapshot_orderbook_coverage")
+    book_status = (
+        book_coverage.get("status") if isinstance(book_coverage, Mapping) else None
+    )
+    if book_status == "incomplete" and book_coverage.get("target_ok_count", 0) > 0:
+        warnings.append(
+            "snapshot_orderbook_coverage_incomplete:"
+            f"{book_coverage.get('target_incomplete_count', 0)}/"
+            f"{book_coverage.get('target_count', 0)}"
+        )
+    elif book_status != "ok":
+        critical_reasons.append(f"snapshot_orderbook_coverage:{book_status or 'missing'}")
+
+    coverage = payload.get("snapshot_city_state_coverage")
+    if isinstance(coverage, Mapping) and coverage.get("status") != "ok":
+        trading = coverage.get("missing_required_trading_cities") or []
+        missing = coverage.get("missing_record_cities") or []
+        warnings.append(
+            "snapshot_city_state_coverage:"
+            + (
+                ",".join(map(str, trading))
+                if trading
+                else ",".join(map(str, missing))
+                if missing
+                else str(coverage.get("status"))
+            )
+        )
+    if critical_reasons:
+        status = "critical"
+    elif warnings:
+        status = "warning"
+    else:
+        status = "healthy"
+    return {
+        "status": status,
+        "critical_reasons": critical_reasons,
+        "warnings": warnings,
+        # This producer is disabled in the current data-feed command; the
+        # active replacement is weather_live_cross_observations.
+        "ignored_legacy_checks": ["fast_observation_state"],
+        "checked_at_utc": payload.get("checked_at_utc"),
+    }
+
+
+def collect_data_feed_semantics() -> dict[str, Any]:
+    command = [
+        str(ROOT / ".venv/bin/python"),
+        str(ROOT / "scripts/ops/weather_data_feed_prod_health_check.py"),
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=45,
+            check=False,
+        )
+        payload = json.loads(result.stdout)
+        if not isinstance(payload, dict):
+            raise ValueError("data-feed health payload is not an object")
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, ValueError) as exc:
+        return {
+            "status": "critical",
+            "critical_reasons": [f"data_feed_health_command_failed:{type(exc).__name__}"],
+            "warnings": [],
+            "ignored_legacy_checks": [],
+            "checked_at_utc": None,
+        }
+    return summarize_data_feed_semantics(payload)
+
+
+def attach_semantic_health(
+    health: dict[str, Any], semantic: Mapping[str, Any]
+) -> dict[str, Any]:
+    health["data_feed_semantic_health"] = dict(semantic)
+    if semantic.get("status") == "critical":
+        health["status"] = "critical"
+    elif semantic.get("status") == "warning" and health.get("status") == "healthy":
+        health["status"] = "warning"
+    return health
+
+
 def _print_human(payload: Mapping[str, Any], *, include_plan: bool = False) -> None:
     print(f"weather production: {str(payload.get('status')).upper()}")
     print(f"manifest: {payload.get('manifest_status')}")
@@ -226,6 +350,12 @@ def _print_human(payload: Mapping[str, Any], *, include_plan: bool = False) -> N
         print(f"[{marker}] {row['instance_id']} session={row['tmux_session']}{age}{suffix}")
     if payload.get("extra_sessions"):
         print("extra_sessions=" + ",".join(payload["extra_sessions"]))
+    semantic = payload.get("data_feed_semantic_health") or {}
+    print(f"data_feed_semantics: {semantic.get('status', 'unknown')}")
+    for warning in semantic.get("warnings", []):
+        print(f"[WARNING] {warning}")
+    for reason in semantic.get("critical_reasons", []):
+        print(f"[CRITICAL] {reason}")
     if include_plan:
         for action in payload.get("plan", []):
             if action["action"] != "none":
@@ -287,6 +417,7 @@ def main() -> int:
     spec = load_production_spec(args.production_spec)
     before = manifest_tool.collect_manifest(spec)
     health = evaluate_production_health(spec, before)
+    health = attach_semantic_health(health, collect_data_feed_semantics())
     health["plan"] = build_plan(spec, health)
     health["command"] = args.command
     health["apply"] = bool(getattr(args, "apply", False))
@@ -307,6 +438,7 @@ def main() -> int:
         after = manifest_tool.collect_manifest(spec)
         after = manifest_tool.compare_prechange_manifest(after, before)
         health = evaluate_production_health(spec, after)
+        health = attach_semantic_health(health, collect_data_feed_semantics())
         health["command"] = args.command
         health["apply"] = True
         health["reason"] = args.reason
