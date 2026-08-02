@@ -285,7 +285,7 @@ source health -> raw event -> available clock -> checkpoint
 | 基线 | 现在是否冻结 | 用途 |
 |---|---|---|
 | 结构基线 | 立即冻结 | code/config/schema/hash、raw sample、四时钟、当前错误和数量；用于判断 contract 是否漂移 |
-| 行为基线 | 滚动积累 | 同一 checkpoint 下 legacy/vNext 的概率、candidate、blocker、intent 差异；由 dual-run 每日保存 |
+| 行为基线 | 滚动积累 | 统一 authority 每日保存 checkpoint、概率、candidate、blocker、intent 与版本 identity；迁移差异只用冻结 fixture 离线重放 |
 | 模型绩效基线 | 暂不冻结 | Brier/logloss/calibration/market baseline/ROI；按 model artifact 版本和 frozen-forward window 分层 |
 
 迁移期间 raw collector 持续运行，immutable journal 不重置、不改写；模型修复必须产生新的 `model_id/artifact_hash/config_hash/effective_from`，不能覆盖旧版本。框架 parity 与模型好坏分别验收：模型尚未盈利不阻止 contract 迁移，模型概率变化也不能被误报为 runtime parity bug。
@@ -430,6 +430,12 @@ dedupe 全流程无 bug。
 
 ### Phase 4：共享执行 runtime 的 non-live 迁移
 
+兼容原则：**WCIR 不建设第二套执行核心。** WCIR 的 `TradeIntent` 是策略侧、且不能授予 live 的请求契约；
+`src/strategies/weather_edge_v1/execution/wcir.py` 是唯一兼容边界。它把正 shares 的 shadow intent 映射为既有
+`ExecutionIntent`，后续继续复用现有 `ExecutionProfile -> quote/lifecycle/reconciliation -> OrderRuntime -> venue ->
+execution journal`。`research/zero_notional` 只生成 `record_only` handoff，不伪造正 shares，也不调用 venue。
+candidate/token/condition/outcome/profile 任一无法无损映射时显式 blocker，不让 metadata 或城市 adapter 猜语义。
+
 要做：
 
 - 补齐 `execution_config_id`、resolved profile、root/source/replacement action lineage、execution journal、risk/exposure/dedupe 和 Polymarket capability/fee identity。
@@ -443,7 +449,7 @@ dedupe 全流程无 bug。
 
 顺序固定为：一个低风险 GTC tiny canary → 其余 GTC → fast-source GTD → basket/FOK、SELL、stop-loss 各自独立验收。fast-source 最后，因为它包含 latency、GTD、即时重试、maker remainder 和 signed share cap。
 
-每次只切一个实例：记录 pre-state → legacy live/new comparator → parity → 新 runtime tiny canary → process/raw/exchange/canonical 对账 → 观察窗口通过后再扩大。每次都需用户对真实生产行为单独确认并调用 `weather-strategy-deploy`；本路线图不构成 live 授权。
+每次只切一个实例：记录 pre-state → 冻结 lifecycle fixture 离线 parity → 直接切新 runtime tiny canary → process/raw/exchange/canonical 对账 → 观察窗口通过后再扩大。不运行长期 live comparator 或双写。每次都需用户对真实生产行为单独确认并调用 `weather-strategy-deploy`；本路线图不构成 live 授权。
 
 完成标准：无重复 opportunity/plan/order；shares/notional/cap 不扩大；open order、fill、fee 与 canonical 逐笔一致；旧路径保留可审计 rollback，直到观察窗口完成。
 

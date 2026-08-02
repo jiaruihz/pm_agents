@@ -46,6 +46,12 @@ from .reconciliation import (
     order_chain,
     reconcile_replacement,
 )
+from .wcir import (
+    WCIR_EXECUTION_HANDOFF_SCHEMA_VERSION,
+    WCIRExecutionCompatibilityError,
+    WCIRExecutionHandoff,
+    build_wcir_execution_handoff,
+)
 
 __all__ = [
     "EXECUTION_SCHEMA_VERSION",
@@ -68,9 +74,13 @@ __all__ = [
     "ReconciliationResult",
     "RestingOrderState",
     "VenueCapabilities",
+    "WCIR_EXECUTION_HANDOFF_SCHEMA_VERSION",
+    "WCIRExecutionCompatibilityError",
+    "WCIRExecutionHandoff",
     "attach_data_update_lifecycle",
     "authoritative_remaining_shares",
     "build_data_update_lifecycle_fields",
+    "build_wcir_execution_handoff",
     "compose_price_cap",
     "execution_config_id_for_profile",
     "execution_profile_names",
