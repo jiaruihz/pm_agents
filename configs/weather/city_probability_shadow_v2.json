@@ -4,6 +4,13 @@
   "output_schema_fingerprint": "51a9b5a10229d7bfa522bc5d69e78ad544433867a419f9adda8a16415c6dbb1f",
   "execution_mode": "zero_notional_shadow",
   "orders_submitted": 0,
+  "decision_contract_dual_write": {
+    "enabled": true,
+    "execution_mode": "zero_notional",
+    "cities": ["Helsinki"],
+    "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_vnext/helsinki",
+    "execution_profile": "legacy_zero_notional"
+  },
   "require_producer_contracts": true,
   "producer_contracts": [
     {

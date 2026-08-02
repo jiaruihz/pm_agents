@@ -378,6 +378,18 @@ payload 未保存 `outcome` 而显式阻断，历史 notional/shares/orders/fill
 
 #### Phase 3A：Helsinki
 
+Status: **2026-08-02 代码与 deployed-journal parity 已完成，production activation 暂未执行。**
+公共 decision sink 已接入现有 `ShadowRuntime`，只为 Helsinki 向独立目录双写
+`ModelOutput/SignalCandidate/TradeIntent`，且 intent 固定 zero-notional。180 条真实 evaluation、6 条 paper
+intent 经 legacy-direct 与 vNext sink 两条路径得到的 180 个 candidate 和 6 个 intent 逐字节一致，临时 canonical
+`candidate_delta=0`。同时把 155 条 stale-book age-dependent exception polls 修为稳定
+`stale_market_expression` blocker。证据与影响清单见
+[Phase 3A report](analysis/2026-08/2026-08-02-helsinki-phase3a-decision-dual-run-v1.md)。
+
+尚未通过本阶段最终门：真实 raw 只有两个 Helsinki target date（其中 7/31 还是 partial window），未达到三个完整
+active window；canonical JRS tmux write probe 失败且 manifest 为 critical，city runner 已因 JRS
+`PermissionError` 停止，因此没有重启或切换 production。修复共享 JRS 权限上下文需单独生产维护确认。
+
 - 作为 point-observation、纯天气/market-offset 双表达参考实现。
 - 对齐 forecast、official、FMI、book、one-sided、等待首报与状态变化去重。
 - 至少覆盖 3 个完整本地 active window 和一次 UTC/业务日期边界。

@@ -329,7 +329,17 @@ class HelsinkiRemainingHeatAdapter:
             return []
         book_age = (now - decision).total_seconds()
         if book_age > float(profile["max_book_age_seconds"]):
-            raise RuntimeError(f"active book is stale by {book_age:.1f}s")
+            raise InputNotReady(
+                "stale_market_expression",
+                city="Helsinki",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                details={
+                    "book_snapshot_id": quote.get("book_snapshot_id"),
+                    "book_input_ref": quote.get("_input_ref"),
+                    "max_book_age_seconds": float(profile["max_book_age_seconds"]),
+                },
+            )
         official = _official_helsinki_as_of(
             Path(profile["observation_journal_dir"]), target_date, decision
         )

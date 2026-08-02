@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 from src.strategies.weather_city_probability_shadow import ShadowRuntime
 from src.strategies.weather_city_probability_shadow.helsinki import HelsinkiRemainingHeatAdapter
 from src.strategies.weather_city_probability_shadow.tokyo import TokyoMarketAnchorAdapter
+from weather_city_runtime import DecisionContractJournalSink
 
 
 def main() -> None:
@@ -24,6 +25,10 @@ def main() -> None:
     args = parser.parse_args()
     config_path = Path(args.config).resolve()
     config = json.loads(config_path.read_text(encoding="utf-8"))
+    legacy_output_dir = Path(config["output_dir"])
+    decision_sink = DecisionContractJournalSink.from_config(
+        config, legacy_output_dir=legacy_output_dir
+    )
     runtime = ShadowRuntime(
         config,
         {
@@ -33,6 +38,7 @@ def main() -> None:
         },
         config_path=config_path,
         entrypoint_path=Path(__file__),
+        decision_sink=decision_sink,
     )
     while True:
         print(json.dumps(runtime.run_once(), sort_keys=True), flush=True)

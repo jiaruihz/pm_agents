@@ -106,6 +106,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--legacy-paper-intents", action="append", type=Path, default=[])
     parser.add_argument("--vnext-bundles", action="append", type=Path, default=[])
     parser.add_argument("--vnext-intents", action="append", type=Path, default=[])
+    parser.add_argument(
+        "--city", action="append", default=[],
+        help="optional city filter for legacy rows and vNext bundles",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
 
@@ -122,9 +126,20 @@ def main(argv: list[str] | None = None) -> int:
     ):
         raise ValueError("at least one legacy or vNext input is required")
     bridge = TemporaryCanonicalBridge(args.output_dir / "canonical_weather.db")
-    legacy_evaluations = list(_rows(args.legacy_evaluations))
-    legacy_paper_intents = list(_rows(args.legacy_paper_intents))
-    vnext_bundle_rows = list(_rows(args.vnext_bundles))
+    city_filter = set(args.city)
+    legacy_evaluations = [
+        row for row in _rows(args.legacy_evaluations)
+        if not city_filter or row.get("city") in city_filter
+    ]
+    legacy_paper_intents = [
+        row for row in _rows(args.legacy_paper_intents)
+        if not city_filter or row.get("city") in city_filter
+    ]
+    vnext_bundle_rows = [
+        row for row in _rows(args.vnext_bundles)
+        if not city_filter
+        or (row.get("signal_candidate") or {}).get("city") in city_filter
+    ]
     vnext_intent_rows = list(_rows(args.vnext_intents))
     bundles = [
         *(legacy_bundle_from_evaluation(row) for row in legacy_evaluations),

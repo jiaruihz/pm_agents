@@ -59,6 +59,12 @@ class CityAdapter(Protocol):
     def score(self, profile: dict[str, Any], now: datetime) -> list[CityScore]: ...
 
 
+class DecisionSink(Protocol):
+    def record_evaluation(self, row: dict[str, Any]) -> Any: ...
+    def record_paper_intent(self, row: dict[str, Any]) -> Any: ...
+    def record_checkpoint_blocker(self, row: dict[str, Any]) -> Any: ...
+
+
 class InputNotReady(RuntimeError):
     """Expected coverage state that must be journaled, not counted as an error."""
 
@@ -195,6 +201,7 @@ class ShadowRuntime:
         *,
         config_path: Path | None = None,
         entrypoint_path: Path | None = None,
+        decision_sink: DecisionSink | None = None,
     ):
         if config.get("execution_mode") != "zero_notional_shadow":
             raise ValueError("execution_mode must be zero_notional_shadow")
@@ -220,6 +227,7 @@ class ShadowRuntime:
         self.intents = self.output_dir / "paper_intents.jsonl"
         self.checkpoints = self.output_dir / "checkpoints.jsonl"
         self.errors = self.output_dir / "errors.jsonl"
+        self.decision_sink = decision_sink
         self.upstream_producer_identity = self._validate_producer_contracts()
         self.runtime_identity = self._build_runtime_identity(config_path, entrypoint_path)
 
@@ -265,6 +273,8 @@ class ShadowRuntime:
         module_hashes: dict[str, str] = {}
         module_names = {self.__class__.__module__, "weather_data_feed.input_catalog"}
         module_names.update(adapter.__class__.__module__ for adapter in self.adapters.values())
+        if self.decision_sink is not None:
+            module_names.add(self.decision_sink.__class__.__module__)
         for module_name in sorted(module_names):
             spec = importlib.util.find_spec(module_name)
             if spec is None or not spec.origin:
@@ -349,6 +359,19 @@ class ShadowRuntime:
         ))
         seen_checkpoints = load_jsonl_keys(self.checkpoints, "checkpoint_id")
         evaluated = written = intents = errors = scored = not_scorable = blockers = 0
+        dual_write = {
+            "written_bundles": 0,
+            "written_intents": 0,
+            "written_blockers": 0,
+            "conversion_errors": 0,
+        }
+
+        def record_dual_write(result: Any) -> None:
+            if result is None:
+                return
+            values = result.to_dict() if hasattr(result, "to_dict") else dict(result)
+            for key in dual_write:
+                dual_write[key] += int(values.get(key, 0))
         for profile in self.config["profiles"]:
             if not profile.get("enabled", True):
                 continue
@@ -366,7 +389,7 @@ class ShadowRuntime:
                 ))
                 checkpoint_id = hashlib.sha256(checkpoint_key.encode()).hexdigest()
                 if checkpoint_id not in seen_checkpoints:
-                    append_jsonl(self.checkpoints, {
+                    blocker_row = {
                         **self._contract_fields("checkpoint_blocker"),
                         "checkpoint_id": checkpoint_id,
                         "incident_id": checkpoint_id,
@@ -377,7 +400,12 @@ class ShadowRuntime:
                         "checkpoint_status": "not_scorable",
                         "blocker_reason": exc.reason,
                         "details": exc.details,
-                    })
+                    }
+                    append_jsonl(self.checkpoints, blocker_row)
+                    if self.decision_sink is not None:
+                        record_dual_write(
+                            self.decision_sink.record_checkpoint_blocker(blocker_row)
+                        )
                     seen_checkpoints.add(checkpoint_id)
                 continue
             except Exception as exc:  # persistent telemetry, never silent fallback
@@ -447,6 +475,8 @@ class ShadowRuntime:
                     "would_enter": would_enter,
                 }
                 append_jsonl(self.evaluations, row)
+                if self.decision_sink is not None:
+                    record_dual_write(self.decision_sink.record_evaluation(row))
                 written += 1
                 seen.add(evaluation_id)
                 position_parts = [
@@ -480,14 +510,19 @@ class ShadowRuntime:
                     best_by_position[position_key] = row
             if profile.get("emit_paper_intents", True):
                 for position_key, row in best_by_position.items():
-                    append_jsonl(self.intents, {
+                    intent_row = {
                         **row,
                         "record_kind": "paper_intent",
                         "position_key": position_key,
                         "intent_kind": "first_best_net_edge",
                         "notional_usd": 0.0,
                         "shares": 0.0,
-                    })
+                    }
+                    append_jsonl(self.intents, intent_row)
+                    if self.decision_sink is not None:
+                        record_dual_write(
+                            self.decision_sink.record_paper_intent(intent_row)
+                        )
                     intents += 1
                     first_intents.add(position_key)
         summary = {
@@ -502,6 +537,7 @@ class ShadowRuntime:
             "new_evaluations": written,
             "new_paper_intents": intents,
             "errors": errors,
+            "decision_contract_dual_write": dual_write,
         }
         self.output_dir.mkdir(parents=True, exist_ok=True)
         (self.output_dir / "latest_summary.json").write_text(

@@ -481,7 +481,17 @@ class TokyoMarketAnchorAdapter:
             return []
         age = (now.astimezone(UTC) - decision).total_seconds()
         if age > float(profile["max_book_age_seconds"]):
-            raise RuntimeError(f"Tokyo active current book is stale by {age:.1f}s")
+            raise InputNotReady(
+                "stale_market_expression",
+                city="Tokyo",
+                target_date=str(book["target_date"]),
+                decision_ts_utc=decision.isoformat(),
+                details={
+                    "book_snapshot_id": book.get("book_snapshot_id"),
+                    "book_input_ref": book.get("_input_ref"),
+                    "max_book_age_seconds": float(profile["max_book_age_seconds"]),
+                },
+            )
         target_date = str(book["target_date"])
         jma = _jma_history(
             Path(profile["source_journal"]), target_date, source_obs, decision
