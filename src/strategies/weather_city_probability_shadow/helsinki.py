@@ -369,7 +369,19 @@ class HelsinkiRemainingHeatAdapter:
         history = [row for row in _fmi_history(Path(profile["source_journal"]), target_date, decision)
                    if str(row["observation_time_utc"]) <= source_obs_ts]
         if len(history) < 4:
-            raise RuntimeError("need at least four unique PIT FMI observations")
+            raise InputNotReady(
+                "insufficient_pit_source_history",
+                city="Helsinki",
+                target_date=target_date,
+                decision_ts_utc=decision.isoformat(),
+                details={
+                    "source": "fmi",
+                    "source_obs_ts_utc": source_obs_ts,
+                    "available_unique_observations": len(history),
+                    "required_unique_observations": 4,
+                    "source_journal": profile["source_journal"],
+                },
+            )
         source = history[-1]
         market_p = (
             (quote["best_ask"] + quote["best_bid"]) / 2
