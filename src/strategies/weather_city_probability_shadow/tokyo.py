@@ -406,7 +406,9 @@ def _offset_probability(artifact: dict[str, Any], features: dict[str, float], ma
     raw = np.where(np.isfinite(raw), raw, median)
     scaled = (raw - np.asarray(artifact["mean"], dtype=float)) / np.asarray(artifact["scale"], dtype=float)
     beta = np.asarray(artifact["beta"], dtype=float)
-    return _sigmoid(_logit(market_p) + float(beta[0] + scaled @ beta[1:]))
+    floor = float(artifact.get("market_logit_floor", 1e-6))
+    clipped_market = float(np.clip(market_p, floor, 1.0 - floor))
+    return _sigmoid(_logit(clipped_market) + float(beta[0] + scaled @ beta[1:]))
 
 
 class TokyoMarketAnchorAdapter:
@@ -500,52 +502,96 @@ class TokyoMarketAnchorAdapter:
                 decision_ts_utc=decision.isoformat(),
                 details={"current_bracket": bracket},
             )
-        weather_artifact, weather_metadata = _load_artifact(profile["artifacts"]["weather"])
-        offset_artifact, _ = _load_artifact(profile["artifacts"]["offset"])
         weather_features = _weather_features(jma, official, decision)
-        weather_stay, weather_missing = _weather_stay_probability(
-            weather_artifact, weather_metadata, weather_features
-        )
-        evaluation_journals = [
-            Path(path)
-            for path in profile.get(
-                "evaluation_journals",
-                [profile.get("evaluation_journal", "")],
-            )
-            if path
-        ]
-        previous_weather = _previous_weather_probability(
-            evaluation_journals, target_date, bracket, source_obs
-        )
         yes_mid = _finite(prices["yes_mid"])
-        offset_features = {
-            "weather_market_logit_gap": (
+        probability_policy = str(
+            profile.get("probability_policy", "state_entry_routed_market_residual_v7")
+        )
+        if probability_policy == "overshoot_market_residual_v2":
+            overshoot_artifact, _ = _load_artifact(profile["artifacts"]["overshoot"])
+            offset_features = {
+                name: weather_features.get(name)
+                for name in overshoot_artifact["features"]
+            }
+            no_mid = _finite(prices["no_mid"])
+            model_no = (
+                None
+                if no_mid is None
+                else _offset_probability(overshoot_artifact, offset_features, no_mid)
+            )
+            model_stay = None if model_no is None else 1.0 - model_no
+            weather_stay = None
+            weather_missing: list[str] = []
+            previous_weather = None
+            is_observed_state_entry = None
+            residual_model_stay = model_stay
+            probability_lineage = {
+                "probability_target": "leave_current_exact_bracket",
+                "probability_policy": probability_policy,
+                "market_probability_semantics": overshoot_artifact[
+                    "market_probability_semantics"
+                ],
+                "training_clock_class": overshoot_artifact["training_clock_class"],
+                "clean_forward_start": overshoot_artifact["clean_frozen_start"],
+                "training_end": overshoot_artifact["training_end"],
+            }
+        else:
+            weather_artifact, weather_metadata = _load_artifact(
+                profile["artifacts"]["weather"]
+            )
+            offset_artifact, _ = _load_artifact(profile["artifacts"]["offset"])
+            weather_stay, weather_missing = _weather_stay_probability(
+                weather_artifact, weather_metadata, weather_features
+            )
+            evaluation_journals = [
+                Path(path)
+                for path in profile.get(
+                    "evaluation_journals",
+                    [profile.get("evaluation_journal", "")],
+                )
+                if path
+            ]
+            previous_weather = _previous_weather_probability(
+                evaluation_journals, target_date, bracket, source_obs
+            )
+            offset_features = {
+                "weather_market_logit_gap": (
+                    None
+                    if yes_mid is None
+                    else float(np.clip(_logit(weather_stay) - _logit(yes_mid), -6.0, 6.0))
+                ),
+                "weather_logit_innovation": 0.0 if previous_weather is None else float(np.clip(_logit(weather_stay) - _logit(previous_weather), -4.0, 4.0)),
+                "remaining_to_18h": float(weather_features["remaining_to_18h"]),
+                "jma_pullback_from_running_max_c": float(weather_features["jma_pullback_from_running_max_c"]),
+                "jma_temp_slope_60m_cph": weather_features["jma_temp_slope_60m_cph"],
+                "solar_elevation_deg": float(weather_features["solar_elevation_deg"]),
+            }
+            residual_model_stay = (
                 None
                 if yes_mid is None
-                else float(np.clip(_logit(weather_stay) - _logit(yes_mid), -6.0, 6.0))
-            ),
-            "weather_logit_innovation": 0.0 if previous_weather is None else float(np.clip(_logit(weather_stay) - _logit(previous_weather), -4.0, 4.0)),
-            "remaining_to_18h": float(weather_features["remaining_to_18h"]),
-            "jma_pullback_from_running_max_c": float(weather_features["jma_pullback_from_running_max_c"]),
-            "jma_temp_slope_60m_cph": weather_features["jma_temp_slope_60m_cph"],
-            "solar_elevation_deg": float(weather_features["solar_elevation_deg"]),
-        }
-        residual_model_stay = (
-            None
-            if yes_mid is None
-            else _offset_probability(offset_artifact, offset_features, yes_mid)
-        )
-        # Pre-2026-08-01 OOF shows that the learned correction improves ordinary
-        # checkpoints but degrades the first observed checkpoint of a new
-        # bracket.  Route that state to the PIT market anchor instead of making
-        # a poorly supported weather correction.  This is a probability-model
-        # repair, not a price/low-tail trading filter.
-        is_observed_state_entry = previous_weather is None
-        model_stay = (
-            yes_mid
-            if yes_mid is not None and is_observed_state_entry
-            else residual_model_stay
-        )
+                else _offset_probability(offset_artifact, offset_features, yes_mid)
+            )
+            # Pre-2026-08-01 OOF shows that the learned correction improves ordinary
+            # checkpoints but degrades the first observed checkpoint of a new
+            # bracket. Route that state to the PIT market anchor.
+            is_observed_state_entry = previous_weather is None
+            model_stay = (
+                yes_mid
+                if yes_mid is not None and is_observed_state_entry
+                else residual_model_stay
+            )
+            probability_lineage = {
+                "weather_probability_stay": weather_stay,
+                "weather_feature_coverage": 1.0 - len(weather_missing) / len(weather_metadata["features"]),
+                "weather_missing_features": weather_missing,
+                "previous_same_bracket_weather_probability_stay": previous_weather,
+                "is_observed_state_entry": is_observed_state_entry,
+                "residual_model_probability_stay": residual_model_stay,
+                "state_entry_probability_policy": "pit_market_anchor",
+                "ordinary_checkpoint_probability_policy": "weather_market_residual_v6",
+                "clean_forward_start": offset_artifact["clean_forward_start"],
+                "training_end": offset_artifact["training_end"],
+            }
         compact_market = {
             key: book.get(key)
             for key in ("condition_id", "market_id", "token_id", "question", "book_fetched_at_utc", "book_status")
@@ -566,16 +612,7 @@ class TokyoMarketAnchorAdapter:
             "market_expression_anchor": bracket,
             "capture_cycle_id": book.get("capture_cycle_id"),
             "capture_anchor_values": book.get("capture_anchor_values"),
-            "weather_probability_stay": weather_stay,
-            "weather_feature_coverage": 1.0 - len(weather_missing) / len(weather_metadata["features"]),
-            "weather_missing_features": weather_missing,
-            "previous_same_bracket_weather_probability_stay": previous_weather,
-            "is_observed_state_entry": is_observed_state_entry,
-            "residual_model_probability_stay": residual_model_stay,
-            "state_entry_probability_policy": "pit_market_anchor",
-            "ordinary_checkpoint_probability_policy": "weather_market_residual_v6",
-            "clean_forward_start": offset_artifact["clean_forward_start"],
-            "training_end": offset_artifact["training_end"],
+            **probability_lineage,
         }
         feature_missing = [name for name, value in offset_features.items() if _finite(value) is None]
         common = dict(

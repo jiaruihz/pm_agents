@@ -170,3 +170,30 @@ def test_tokyo_adapter_scores_both_sides_from_pit_first_seen(tmp_path):
     assert scores[0].lineage["source_lattice_anchor"] == 33
     assert scores[0].lineage["official_lattice_anchor"] == 32
     assert scores[0].lineage["market_expression_anchor"] == 32
+
+    overshoot_path = (
+        ROOT
+        / "docs/analysis/2026-08/generated/tokyo_overshoot_market_residual_v2"
+        / "tokyo_overshoot_market_residual_v2.joblib"
+    )
+    overshoot_profile = {
+        **profile,
+        "model_id": "tokyo_overshoot_market_residual_v2",
+        "probability_policy": "overshoot_market_residual_v2",
+        "artifacts": {
+            "overshoot": {
+                "path": str(overshoot_path),
+                "sha256": "298b89ee629b7bf6e3fb6a074fa737de98e47156edba81b02c08ea20e784265e",
+                "spec_path": str(overshoot_path.with_suffix(".spec.json")),
+                "spec_sha256": "59a7a7f1ee0a7defa1bf4405db27edbedddf6cdddb8825467b36d6037cbca2ab",
+            }
+        },
+    }
+    overshoot = TokyoMarketAnchorAdapter().score(
+        overshoot_profile, datetime(2026, 8, 1, 1, 9, tzinfo=timezone.utc)
+    )
+    assert [score.market_side for score in overshoot] == ["YES", "NO"]
+    assert overshoot[0].model_probability + overshoot[1].model_probability == pytest.approx(1.0)
+    assert overshoot[1].lineage["probability_target"] == "leave_current_exact_bracket"
+    assert overshoot[1].lineage["training_clock_class"] == "archive_reconstructed_plus_15m_price_proxy"
+    assert overshoot[1].model_id == "tokyo_overshoot_market_residual_v2"

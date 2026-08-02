@@ -1,0 +1,54 @@
+{
+  "artifact_sha256": "9b659317aef4b5079fe7125479bb09fd2a1c33ea39c3c0d675fdfcfd585f1de0",
+  "features": [
+    "jma_temp_slope_30m_cph",
+    "jma_temp_slope_60m_cph",
+    "distance_to_next_jma_lattice_c",
+    "minutes_since_jma_strict_high",
+    "jma_warming_run_count",
+    "jma_pullback_from_running_max_c",
+    "remaining_to_18h",
+    "solar_elevation_deg",
+    "jma_minus_prior_metar_c",
+    "prior_metar_age_min",
+    "metar_dewpoint_depression_c",
+    "metar_wind_speed_kt",
+    "metar_cloud_cover_fraction",
+    "metar_precipitating",
+    "current_bracket"
+  ],
+  "forward_labels_used_in_fit": false,
+  "forward_window": [
+    "2026-07-16",
+    "2026-07-30"
+  ],
+  "model_id": "tokyo_overshoot_monotonic_hgb_v1",
+  "monotonic_cst": [
+    1,
+    1,
+    -1,
+    -1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    -1,
+    -1,
+    0
+  ],
+  "parameters": {
+    "l2_regularization": 15.0,
+    "learning_rate": 0.025,
+    "max_iter": 260,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 240
+  },
+  "schema_version": "tokyo_overshoot_survival_v1",
+  "target_id": "eod_leave_current_exact_bracket",
+  "temperature": 0.8500000000000002,
+  "training_cutoff": "2026-07-15"
+}

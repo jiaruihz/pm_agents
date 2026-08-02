@@ -198,6 +198,17 @@ def test_committed_v2_config_matches_runtime_schema_contract() -> None:
     helsinki = next(profile for profile in config["profiles"] if profile["city"] == "Helsinki")
     assert "observation_cache" not in helsinki
     assert helsinki["observation_journal_dir"].endswith("/output/observations")
+    tokyo_profiles = [profile for profile in config["profiles"] if profile["city"] == "Tokyo"]
+    assert {profile["model_id"] for profile in tokyo_profiles} == {
+        "tokyo_state_entry_routed_market_residual_v7",
+        "tokyo_overshoot_market_residual_v2",
+    }
+    challenger = next(
+        profile for profile in tokyo_profiles
+        if profile["model_id"] == "tokyo_overshoot_market_residual_v2"
+    )
+    assert challenger["emit_paper_intents"] is False
+    assert challenger["probability_policy"] == "overshoot_market_residual_v2"
 
 
 def test_runtime_deduplicates_positions_across_legacy_journal_catalog(tmp_path: Path) -> None:

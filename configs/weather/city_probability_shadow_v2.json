@@ -90,6 +90,30 @@
           "spec_sha256": "67f78b5f6d0f152e93d052404ca795c0c41e810a1b74c29dc9e995757adeaa83"
         }
       }
+    },
+    {
+      "enabled": true,
+      "city": "Tokyo",
+      "adapter": "tokyo_overshoot_market_residual_v2",
+      "profile_id": "tokyo_overshoot_market_residual_frozen_20260802_v2",
+      "model_id": "tokyo_overshoot_market_residual_v2",
+      "probability_policy": "overshoot_market_residual_v2",
+      "forward_start_utc": "2026-08-02T00:00:00Z",
+      "max_book_age_seconds": 180,
+      "edge_threshold": 0.02,
+      "position_scope": "city_date_bracket_model",
+      "emit_paper_intents": false,
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
+      "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
+      "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
+      "artifacts": {
+        "overshoot": {
+          "path": "docs/analysis/2026-08/generated/tokyo_overshoot_market_residual_v2/tokyo_overshoot_market_residual_v2.joblib",
+          "sha256": "298b89ee629b7bf6e3fb6a074fa737de98e47156edba81b02c08ea20e784265e",
+          "spec_path": "docs/analysis/2026-08/generated/tokyo_overshoot_market_residual_v2/tokyo_overshoot_market_residual_v2.spec.json",
+          "spec_sha256": "59a7a7f1ee0a7defa1bf4405db27edbedddf6cdddb8825467b36d6037cbca2ab"
+        }
+      }
     }
   ]
 }
