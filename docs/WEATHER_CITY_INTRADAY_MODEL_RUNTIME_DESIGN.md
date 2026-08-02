@@ -1,7 +1,7 @@
 # 跨城市日内温度模型 Runtime：总体设计与迁移方案
 
-Status: design-draft
-Updated: 2026-08-01
+Status: approved migration roadmap / partial implementation; model-performance baseline remains rolling
+Updated: 2026-08-02
 Scope: 城市级分钟/小时间隔观测模型从采集、PIT checkpoint、replay 到统一候选与下单执行的目标架构
 Source of truth: 目标模块边界与接口是；当前生产进程、实例和迁移状态不是
 Used by: `AGENTS.md`、`CLAUDE.md`、`weather-strategy-research`、各城市模型研究与接入任务
@@ -272,73 +272,143 @@ source health -> raw event -> available clock -> checkpoint
 -> feature/model lineage -> candidate -> intent -> plan/order/fill
 ```
 
-## 8. 迁移方案
+## 8. 迁移方案（2026-08-02 rolling-baseline 版）
 
-### Phase 0：deployed contract census
+### 8.1 基线不再等同于“冻结模型”
 
-Status: **completed 2026-08-01; Phase A implementation gate remains closed until the immediate P0 root-fixes below pass deployed-fixture replay.** 证据与机器可读 census 见 [Phase 0 census](analysis/2026-08/2026-08-01-city-intraday-phase0-census-v1.md)；9 个 golden deployed samples 位于 `tests/fixtures/weather_city_intraday_phase0/`。
+当前只积累了一两个 forward city-day，模型和链路仍会暴露 bug，因此迁移不等待一个并不存在的最终绩效基线，也不趁样本少直接替换全部 runtime。基线拆成三类：
 
-- 动态盘点实际 producer/consumer checkout、loaded SHA、process args、config、schema fingerprint 和 raw ownership。
-- 从东京、赫尔辛基、阿姆斯特丹当前 runtime 各冻结 point/interval/revision、cross-day、one-sided、anchor mismatch 样本。
-- 对比 repo tests 所用代码与 running process 所载代码；同名 schema shape 不同必须 bump version 或提供显式 migration。
+| 基线 | 现在是否冻结 | 用途 |
+|---|---|---|
+| 结构基线 | 立即冻结 | code/config/schema/hash、raw sample、四时钟、当前错误和数量；用于判断 contract 是否漂移 |
+| 行为基线 | 滚动积累 | 同一 checkpoint 下 legacy/vNext 的概率、candidate、blocker、intent 差异；由 dual-run 每日保存 |
+| 模型绩效基线 | 暂不冻结 | Brier/logloss/calibration/market baseline/ROI；按 model artifact 版本和 frozen-forward window 分层 |
 
-完成标准：每条运行链能回答“哪个进程、哪份代码/配置、写哪种 row、由谁消费”；develop fixture 与 deployed sample 都通过 contract validator。发现 drift 只记录并进入后续 git-first migration，本阶段不直接改生产。
+迁移期间 raw collector 持续运行，immutable journal 不重置、不改写；模型修复必须产生新的 `model_id/artifact_hash/config_hash/effective_from`，不能覆盖旧版本。框架 parity 与模型好坏分别验收：模型尚未盈利不阻止 contract 迁移，模型概率变化也不能被误报为 runtime parity bug。
 
-Phase 0 实际结论：Helsinki/Tokyo 的 producer、book producer 与 model consumer 已定位；Amsterdam 当前无 active KNMI producer 或同级 model consumer。fixtures/validator 全部通过，所以 census 完成。one-sided runtime 行为已在 cutoff 前改为结构化 `not_scorable`，但旧 614 个 exception polls / 68 个 legacy evaluations 与 10 个 current rows 仍共用 v1 journal；因此 runtime identity、schema migration、跨日 locator 三项仍须在 Phase A 公共抽象前先修。multi-anchor 与 typed revision 是 Phase A contract 本体，FMI/JMA canonical information-event lineage 在 Phase A→B 补齐。
+### 8.2 阶段总览
 
-2026-08-01 root-fix status：consumer/runtime 的 v2 schema、显式 v1 migration、loaded module/config/artifact identity、InputCatalog cross-day locator 与 Tokyo/Helsinki one-sided/expected-blocker contract 已在 develop 实现并通过 current-raw 临时 output smoke。随后 production-only producer entrypoint/fast-lane contract 已收回 Git，producer payload/row/notification/state identity 与 consumer fail-closed handshake 已实现；Tokyo source+official ladder union 及 official-expression selection 也已完成。39 个旧 mismatch polls 中 17 可恢复 scored、13 恢复为 one-sided not_scorable、9 因历史未采到相差两档 expression 保留 coverage gap，详见 [root-fix report](analysis/2026-08/2026-08-01-city-intraday-contract-root-fix-v1.md)。生产仍跑旧 checkout/config，production cutover 仍是 gate，不能把 develop 完成写成 deployed 完成。
+| 阶段 | 主交付 | 风险 | 是否改变生产行为 |
+|---|---|---:|---|
+| Phase 0 | 结构快照 + rolling baseline ledger | 低 | 否 |
+| Phase 1 | replay + 通用评测 + 固定事后报告 | 低 | 否，只写 research/temp DB |
+| Phase 2 | `SignalCandidate/TradeIntent` + canonical bridge | 中 | 否，先临时 DB/dual-write |
+| Phase 3 | Helsinki → Tokyo → Amsterdam 逐城 dual-run/cutover | 中高 | 只切 zero-notional shadow，逐城授权 |
+| Phase 4 | 共享执行 runtime 的 non-live 迁移 | 中 | 否，legacy 仍是 live authority |
+| Phase 5 | active execution 单实例 canary | 高 | 是，每次单独显式确认 |
+| Phase 6 | canonical/report 正式切换 | 中 | 只做批准的增量 materialization |
+| Phase 7 | 关闭 active 旁路、保留 legacy rollback | 中 | 分实例验证后进行 |
 
-### Phase A：冻结 contract 与 golden fixtures
+每个 phase 是独立、可 review 的 change set；不在一次变更中同时迁城市、改模型和切资金行为。Phase 1 可在 rolling baseline 积累期间立即推进；Phase 3 的三个城市分别验收，不组成一次批量切换。
 
-- 以东京、赫尔辛基、阿姆斯特丹各取一段现有 raw，建立 event/checkpoint/candidate golden fixture。
-- 定义 typed payload/revision、InputCatalog、multi-anchor、schema fingerprint、ID 和 blocker taxonomy；先做 adapter，不重写模型。
-- 为 live/replay parity、one-sided book、revision、跨日分区、anchor lead 和四时钟写 contract tests。
+### Phase 0：结构快照与 rolling baseline ledger
 
-完成标准：三城现有逻辑可通过 adapter 在 fixture 上复现，point/interval/revision 差异逐条解释；不涉及生产切换。
+Status: **deployed census 与首轮 root-fix 已完成；rolling ledger 持续追加，不作为 Phase 1 的等待门。** 证据见 [Phase 0 census](analysis/2026-08/2026-08-01-city-intraday-phase0-census-v1.md) 和 [root-fix report](analysis/2026-08/2026-08-01-city-intraday-contract-root-fix-v1.md)。Helsinki/Tokyo producer、multi-anchor ladder 和 city shadow v2 已部署；Amsterdam 仍无同级 active producer/model consumer。
 
-### Phase B：共享 capture profile 与 checkpoint/replay harness
+要做：
 
-- 复用 `weather_data_feed` source registry 和现有 collector，只把 cadence、active window、burst 规则移入统一 profile。
-- 统一事件 envelope、event-store fold、InputCatalog、checkpoint builder、virtual clock 和 telemetry；adapter 不再直接扫 mutable `latest.json` 或按 target_date 猜路径。
-- 禁止启动第二套 collector 与旧链并行抢同一 raw ownership。
+- 保存当前 production manifest、checkout/loaded SHA、config/schema/artifact hash 和 raw ownership。
+- 冻结 point、interval/revision、cross-day、one-sided、anchor mismatch、off-hours stale 等 fixtures。
+- 每个 city-day 追加 rolling manifest：raw/event/checkpoint/evaluation/error/scored/not-scorable/candidate/intent 数，以及各自 build/runtime identity。
+- 错误修复记录影响窗口、错误 poll rows 与独立事件数，并给 order/fill/notional/fee/PnL delta。
 
-完成标准：相同 raw 在重复 replay 中产生完全一致的 checkpoint IDs 和 coverage 状态。
+完成标准：任意一天都能复原“哪份代码/配置/模型处理了哪些 raw”；结构快照不可变，行为和绩效按版本追加而不覆盖。
 
-### Phase C：接入东京与赫尔辛基
+### Phase 1：低风险证据层整体迁移
 
-- 东京作为“market-offset 可进模型”的验证城市。
-- 赫尔辛基作为“纯天气 vs market-offset 稳定性比较”的验证城市。
-- 东京必须先解决 source/official/expression multi-anchor 和 ladder union；赫尔辛基必须把 one-sided/等待首报变为结构化状态。
-- 只包 adapter 和接口，不趁迁移重训或调阈值；先做旧/新同输入 parity。
+本阶段把 replay、评测和事后报告作为一个独立模块完成，不触碰生产 runner 或真实 DB。
 
-完成标准：概率、候选、blocker 和盘口 snapshot lineage 与原实现逐行对账。
+要做：
 
-### Phase D：接入阿姆斯特丹
+- 正式提交并稳定 `weather_model_evaluation/`：checkpoint/transition/state-entry grain、Brier/logloss/RPS/ECE、target-date block bootstrap、simplex calibration 和 artifact lineage。
+- 建立公共 `ReplayRunner`：`InputCatalog + EventEnvelope + virtual clock + checkpoint builder`；live/replay 只替换 clock/input provider，不复制城市模型逻辑。
+- 定义统一 prediction table，保存 model/feature/market snapshot/label/coverage/runtime lineage。
+- 建立固定报告入口：prediction quality、同分母 market baseline、signal/evidence 双漏斗、executable coverage、plan/order/fill、maker/taker、fee-adjusted PnL 与 raw/canonical reconciliation。
+- Helsinki、Tokyo、Amsterdam fixture 都走同一命令；缺数据写 `not_available/coverage_gap`，不联网补历史。
 
-- 先恢复并验证 KNMI collector ownership/freshness，再把 interval summary、revision、source-cross、热/冷 cadence、ask-only/one-sided 作为第三类插件验证。
-- 保留它尚未成熟为完整概率模型的事实，不为接口整齐伪造概率。
+完成标准：相同 raw 重复 replay 得到相同 checkpoint/output hash；三类 payload 均可回放；报告只写 research output 或临时 DB；既有城市结果在锁定 rows/labels 后可解释性复现。
 
-完成标准：initial/revision/late-backfill replay 确定；缺 midpoint 不丢 checkpoint；physical-path output 不越级生成 intent；quote policy 可在相同 replay 上确定性复现。
+### Phase 2：统一决策事实边界与 canonical bridge
 
-### Phase E：接 canonical 候选和 settlement
+要做：
 
-- adapter 输出写入统一 `fact_signal_candidates` 血缘。
-- settlement、label、market/fill coverage 走既有 canonical migration，不建城市私表。
-- 对候选数、未选中、不可执行、fill 与 settlement 做端到端对账。
+- 定义版本化 `ModelOutput`、`SignalCandidate`、`TradeIntent`；当前 `CityScore/evaluation/paper_intent` 先通过显式兼容转换，不删除。
+- selected、unselected、one-sided、缺 book、不可执行 rows 全部保留；execution profile A/B 共享同一 candidate，不复制 signal。
+- candidate 增量写入临时 canonical `fact_signal_candidates`；settlement/label/coverage 复用既有 migration。
+- `TradeIntent` 只声明 token/side/size/profile/cap/TTL/dedupe/exposure；metadata、模型或城市插件不能授予/升级 live mode。
+- 验证 legacy-only、vNext-only、mixed journal，禁止直接重建 production DB。
 
-完成标准：research/evidence 两个漏斗都能由 canonical rows 重建。
+完成标准：同 checkpoint 的 candidate identity 在 replay/shadow 一致；raw candidate 与临时 canonical 数完全对账；research/evidence 两个漏斗能由 canonical rows 重建；没有城市私有 PnL/settlement 表。
 
-### Phase F：zero-notional forward
+### Phase 3：逐城市 dual-run 与 zero-notional cutover
 
-- 新旧路径并行读取同一已授权 feed，旧路径不下单，新路径只产 zero-notional intent。
-- 逐日比较 freshness、checkpoint、概率、candidate、intent 和资源占用。
-- 冻结一段 forward，不能在对比期边看结果边改模型。
+共同方式：同一份已授权 raw 同时进入 legacy 和 vNext，输出不同目录；vNext 只产 zero-notional candidate/intent。模型调参和 runtime 迁移分开提交，parity 报告按 model artifact 版本比较。
 
-完成标准：达到预注册的 parity/稳定性门，且无数据 ownership、重启去重或延迟回退。
+#### Phase 3A：Helsinki
 
-### Phase G：按实例迁移执行
+- 作为 point-observation、纯天气/market-offset 双表达参考实现。
+- 对齐 forecast、official、FMI、book、one-sided、等待首报与状态变化去重。
+- 至少覆盖 3 个完整本地 active window 和一次 UTC/业务日期边界。
 
-只有用户明确要求变更生产行为时，才按 `weather-strategy-deploy` 做 git-first、单实例迁移和 process/raw/API/exchange 验证。每次只迁一个实例，保留可审计 rollback；不得由本设计直接批量切 live。
+完成标准：checkpoint/input refs/candidate/blocker 逐行 parity；无 exception storm；差异全部归因于明确 model version 或修复项。
+
+#### Phase 3B：Tokyo
+
+- 验证 cross-day physical shard、source/official/expression multi-anchor、ladder union、native lattice、off-hours、previous same-bracket probability。
+- 至少覆盖 3 个完整本地 active window、一次跨日，以及一次 source/official anchor 分离或等价 golden fixture。
+
+完成标准：同 capture cycle 选中正确 official expression；窗外不制造 stale error；缺 expression 保留 coverage gap；replay/shadow candidate parity。
+
+#### Phase 3C：Amsterdam
+
+- 先恢复并验证 KNMI producer ownership/freshness，再接 `ta` point、10-minute `tx` interval、initial/revision、measurement window、source-cross 和热/冷 cadence。
+- 不为接口整齐伪造概率；physical-path output 未映射 settlement expression 前不得生成 intent。
+
+完成标准：initial/revision/late-backfill replay 确定；只有 material state change 产生新 checkpoint；缺 midpoint 不丢分母；至少完成 3 个完整 active window 或覆盖预注册 revision fixtures。
+
+每城通过后只把 vNext 升为正式 zero-notional shadow；不自动删除 legacy，不自动赋予 live。
+
+### Phase 4：共享执行 runtime 的 non-live 迁移
+
+要做：
+
+- 补齐 `execution_config_id`、resolved profile、root/source/replacement action lineage、execution journal、risk/exposure/dedupe 和 Polymarket capability/fee identity。
+- 依次迁 dormant runner、zero-notional shadow、paper runner；真实 side effect 仍由 legacy authority 执行。
+- active runner 只增加 pure `shadow_execution_engine_compare`，比较 child role、shares、price、cap、TTL、reprice/cancel、remaining shares 和 blocker；新路径不得 claim key、reserve exposure 或调用 venue。
+- canonical mixed-schema 只在临时 DB 验证。
+
+完成标准：shadow/paper 单 token runner 不再私自重实现执行生命周期；legacy/new fixture parity 无未解释差异；partial fill、cancel/fill race、unknown submit、restart dedupe 均通过；无新增 live path。
+
+### Phase 5：active execution 单实例 canary
+
+顺序固定为：一个低风险 GTC tiny canary → 其余 GTC → fast-source GTD → basket/FOK、SELL、stop-loss 各自独立验收。fast-source 最后，因为它包含 latency、GTD、即时重试、maker remainder 和 signed share cap。
+
+每次只切一个实例：记录 pre-state → legacy live/new comparator → parity → 新 runtime tiny canary → process/raw/exchange/canonical 对账 → 观察窗口通过后再扩大。每次都需用户对真实生产行为单独确认并调用 `weather-strategy-deploy`；本路线图不构成 live 授权。
+
+完成标准：无重复 opportunity/plan/order；shares/notional/cap 不扩大；open order、fill、fee 与 canonical 逐笔一致；旧路径保留可审计 rollback，直到观察窗口完成。
+
+### Phase 6：canonical 与统一报告正式切换
+
+要做：
+
+- 新 execution profile/config/root/action 字段进入 canonical plan/order，并在 fill grain 允许时投影到 `fact_trades`。
+- unfilled plan/order 保留在 evidence denominator；fill/fee/PnL 只来自 canonical fill/settlement。
+- 公共报告默认读取 prediction table、`fact_signal_candidates`、canonical plans/orders 和 `fact_trades`。
+- 先临时 DB，再经批准执行 production 增量 materialization；不因迁移无条件全量重建。
+
+完成标准：raw/canonical order 数一致、无缺失 execution ID、无重复 fill、coverage gate 通过；signal/plan/order/fill/PnL 与 Phase 0 rolling ledger 的差异有逐条清单。
+
+### Phase 7：关闭 active 旁路并保留 legacy 资产
+
+最终扫描与验收：
+
+- active weather runner 不直接 import `ClobClient`，只有共享 venue adapter 可接触它。
+- active runner 不直接调用旧 `weather_order_executor`；basket/FOK/true-MM 可保留独立 orchestration，但共用 venue/risk/journal/canonical contract。
+- 新城市不自建 collector、replay clock、order/fill/PnL 链。
+- 所有城市输出标准 candidate/intent；replay/shadow/paper/live 共用 model/plugin/policy contract。
+- 旧 runtime、raw、fixture 和兼容 reader 标为 `legacy_adapter` / `dormant` / read-only rollback，保留不删；不再是 active authority。
+
+完成标准：仓库和 production manifest 的 active-path 扫描均无未登记旁路；三城 migration report、schema、contract tests、rolling-baseline impact report 同步完成，之后才把本文件状态升级为 `implemented`。
 
 ## 9. 全框架验收标准
 
@@ -356,7 +426,7 @@ Phase 0 实际结论：Helsinki/Tokyo 的 producer、book producer 与 model con
 - 所有候选进入 `fact_signal_candidates`；执行只接受 `TradeIntent`。
 - 城市插件无网络轮询、order client、私有 fill/PnL 或 settlement 实现。
 - 新城市只需新增 profile、adapter/plugin、model artifact 和 fixtures，不复制 runtime。
-- 文档、schema、contract tests 和三城 migration report 同步完成后，才可把本文件从 `design-draft` 升级。
+- 文档、schema、contract tests 和三城 migration report 同步完成后，才可把本文件从 `approved migration roadmap / partial implementation` 升级为 `implemented`。
 
 ## 10. 新城市接入工作单
 
