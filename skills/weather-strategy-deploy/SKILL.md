@@ -31,6 +31,8 @@ expected raw output / stop-pause mechanism / rollback
 ## 变更前动态盘点
 
 ```bash
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+.venv/bin/python scripts/ops/weather_production_ctl.py plan
 .venv/bin/python scripts/ops/weather_production_manifest.py --strict
 git status --short
 git rev-parse HEAD
@@ -43,6 +45,10 @@ tmux -L weather-jrs list-sessions
 若策略使用 screen，再查 `screen -ls`。随后读目标实例的 latest/events/opportunities/orders 与 pause/state 文件。不要根据脚本名、文档 `live` 标签或一个 PID 推断真实下单能力。
 
 manifest 是部署 preflight：必须核对 physical DB route、每个 live PID 的 checkout/head/loaded SHA、canonical JRS tmux session、LaunchAgent 退出状态和 DB open handles。`critical` 时不得重启或切 live；先修 identity 根因。manifest 不替代 exchange/order pre-state。
+
+`src/strategies/runtime/production.yaml.managed_runtimes` 是当前生产 desired state；
+`instances.yaml` 仍是研究/历史 registry，不能代替 active production list。生产启停和恢复优先走
+`scripts/ops/weather_production_ctl.py`。底层 start script 是 controller 的执行合同，不是 AI/操作员的默认直接入口；禁止手拼 tmux/live 命令绕过 desired-state、依赖和后置检查。
 
 任何可能重启、重建或迁移 canonical JRS tmux server/session 的改动，必须保存 observed pre-state，并在改动后做同集合比较：
 
@@ -91,7 +97,7 @@ worktree 已脏时保留用户改动。若目标文件已有无关修改，先�
 顺序：
 
 1. 记录 pre-state：PID、command line、SHA、pause、最近 raw event/order/fill。
-2. pause/stop 目标实例；不影响邻近策略。
+2. 用 `weather_production_ctl.py plan` 锁定目标与依赖；pause/stop 目标实例，不影响邻近策略。
 3. 重载已提交版本与明确参数；不依赖脚本默认 policy。
 4. 检查新 PID/started-at/command line。
 5. 用 pre-change manifest 做 canonical JRS session 同集合后置比较，确认没有误伤其他已有实例。

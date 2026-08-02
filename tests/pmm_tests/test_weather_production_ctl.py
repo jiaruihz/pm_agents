@@ -1,0 +1,182 @@
+import json
+import os
+from pathlib import Path
+
+from scripts.ops import weather_production_ctl as ctl
+from src.strategies.runtime.production import (
+    WeatherManagedRuntimeSpec,
+    WeatherProductionSpec,
+    load_production_spec,
+)
+
+
+def production_spec(
+    tmp_path: Path, runtimes: tuple[WeatherManagedRuntimeSpec, ...]
+) -> WeatherProductionSpec:
+    return WeatherProductionSpec(
+        version="test",
+        host_role="test",
+        operational_repo_root=tmp_path,
+        canonical_db_path=tmp_path / "weather.db",
+        compatibility_db_paths=(Path("runtime/weather.db"),),
+        data_feed_runtime_root=tmp_path / "feed",
+        pm_runtime_root=tmp_path,
+        canonical_tmux_socket="weather-data-feed-jrs",
+        canonical_tmux_binary=tmp_path / "tmux",
+        managed_runtimes=runtimes,
+    )
+
+
+def observed(*sessions: str) -> dict:
+    return {
+        "generated_at_utc": "2026-08-02T16:00:00Z",
+        "status": "healthy",
+        "findings": [],
+        "tmux_sessions": [
+            {
+                "session": session,
+                "panes": [
+                    {
+                        "pane_current_path": "/prod",
+                        "pane_start_command": "python runner.py --live --confirm-live",
+                    }
+                ],
+            }
+            for session in sessions
+        ],
+    }
+
+
+def test_committed_production_spec_declares_current_live_control_plane():
+    spec = load_production_spec()
+    by_id = {item.instance_id: item for item in spec.managed_runtimes}
+
+    assert by_id["current_yes_core_carry_tiny_live_v2"].expected_live is True
+    assert by_id["current_yes_core_carry_tiny_live_v2"].recovery_policy == "guarded_live"
+    assert by_id["fast_source_prev_no_trial_v1"].dependencies == (
+        "weather_data_feed_jrs",
+        "weather_live_cross_observations",
+    )
+    assert "weather_canonical_refresh" in spec.allowed_unmanaged_sessions
+
+
+def test_health_checks_session_freshness_status_and_live_flags(tmp_path):
+    health_path = tmp_path / "latest.json"
+    health_path.write_text(
+        json.dumps({"status": "ok", "live_enabled": True}), encoding="utf-8"
+    )
+    os.utime(health_path, (1000.0, 1000.0))
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="live",
+        tmux_session="live_session",
+        role="strategy",
+        execution_mode="live",
+        checkout_root=Path("/prod"),
+        health_path=health_path,
+        max_health_age_sec=60,
+        accepted_health_statuses=("ok",),
+        expected_live=True,
+        recovery_policy="guarded_live",
+    )
+
+    report = ctl.evaluate_production_health(
+        production_spec(tmp_path, (runtime,)),
+        observed("live_session"),
+        now_epoch=1030.0,
+    )
+
+    assert report["status"] == "healthy"
+    assert report["runtimes"][0]["health_age_sec"] == 30.0
+    assert report["runtimes"][0]["issues"] == []
+
+
+def test_health_propagates_missing_dependency_to_live_runtime(tmp_path):
+    feed = WeatherManagedRuntimeSpec(
+        instance_id="feed",
+        tmux_session="feed_session",
+        role="data_feed",
+        execution_mode="collector",
+        recovery_policy="safe",
+    )
+    live = WeatherManagedRuntimeSpec(
+        instance_id="live",
+        tmux_session="live_session",
+        role="strategy",
+        execution_mode="live",
+        dependencies=("feed",),
+        expected_live=True,
+        recovery_policy="guarded_live",
+    )
+
+    report = ctl.evaluate_production_health(
+        production_spec(tmp_path, (feed, live)),
+        observed("live_session"),
+        now_epoch=1000.0,
+    )
+    rows = {row["instance_id"]: row for row in report["runtimes"]}
+
+    assert report["status"] == "critical"
+    assert rows["feed"]["issues"] == ["tmux_session_missing"]
+    assert rows["live"]["issues"] == ["dependency_unhealthy:feed"]
+
+
+def test_plan_only_starts_missing_runtime_with_recovery_contract(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="feed",
+        tmux_session="feed_session",
+        role="data_feed",
+        execution_mode="collector",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    report = ctl.evaluate_production_health(spec, observed(), now_epoch=1000.0)
+
+    plan = ctl.build_plan(spec, report)
+
+    assert plan == [
+        {
+            "instance_id": "feed",
+            "action": "start",
+            "reason": "tmux_session_missing",
+            "recovery_policy": "safe",
+            "expected_live": False,
+            "start_script": str(tmp_path / "start.sh"),
+        }
+    ]
+
+
+def test_manual_runtime_never_becomes_automatic_start(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="legacy_shadow",
+        tmux_session="legacy_shadow",
+        role="shadow",
+        execution_mode="shadow",
+        recovery_policy="manual",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    report = ctl.evaluate_production_health(spec, observed(), now_epoch=1000.0)
+
+    assert ctl.build_plan(spec, report)[0]["action"] == "manual_recovery_required"
+
+
+def test_live_recovery_is_blocked_without_explicit_confirmation(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="live",
+        tmux_session="live",
+        role="strategy",
+        execution_mode="live",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        expected_live=True,
+        recovery_policy="guarded_live",
+    )
+
+    result = ctl._run_start(runtime, confirm_live=False)
+
+    assert result == {
+        "instance_id": "live",
+        "status": "blocked",
+        "reason": "confirm_live_required",
+    }

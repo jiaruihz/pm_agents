@@ -578,6 +578,9 @@ def build_manifest(
         for item in load_instance_specs()
         if item.tmux_session
     }
+    expected_sessions.update(
+        item.tmux_session for item in spec.managed_runtimes
+    )
     for row in tmux_rows:
         row["registered_strategy_session"] = row["session"] in expected_sessions
 
@@ -585,6 +588,7 @@ def build_manifest(
         row["session"]
         for row in tmux_rows
         if not row["registered_strategy_session"]
+        and row["session"] not in spec.allowed_unmanaged_sessions
     ]
     if unregistered_sessions:
         findings.append(
@@ -637,6 +641,10 @@ def build_manifest(
             "pm_runtime_root": str(spec.pm_runtime_root),
             "canonical_tmux_socket": spec.canonical_tmux_socket,
             "canonical_tmux_binary": str(spec.canonical_tmux_binary),
+            "managed_runtime_sessions": [
+                item.tmux_session for item in spec.managed_runtimes
+            ],
+            "allowed_unmanaged_sessions": list(spec.allowed_unmanaged_sessions),
         },
         "db_route": dict(db_route),
         "db_consumers": sorted(db_consumers.values(), key=lambda row: int(row["pid"])),
@@ -714,6 +722,33 @@ def compare_prechange_manifest(
     return payload
 
 
+def collect_manifest(spec: WeatherProductionSpec) -> dict[str, Any]:
+    """Collect the read-only observed production manifest for reuse by ctl tools."""
+
+    ps = run_command(
+        ["ps", "-axo", "pid=,ppid=,lstart=,command="],
+        timeout=10.0,
+        stderr=None,
+    )
+    processes = parse_process_table(ps.stdout)
+    tmux_rows = inspect_tmux(spec, processes)
+    launchctl_rows = inspect_launchctl()
+    db_route = inspect_db_route(spec)
+    db_paths = [
+        spec.canonical_db_path,
+        *spec.resolved_compatibility_db_paths(),
+    ]
+    db_consumers = inspect_db_consumers(db_paths)
+    return build_manifest(
+        spec=spec,
+        processes=processes,
+        tmux_rows=tmux_rows,
+        launchctl_rows=launchctl_rows,
+        db_route=db_route,
+        db_consumers=db_consumers,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--production-spec", type=Path)
@@ -737,28 +772,7 @@ def main() -> int:
     args = parser.parse_args()
 
     spec = load_production_spec(args.production_spec)
-    ps = run_command(
-        ["ps", "-axo", "pid=,ppid=,lstart=,command="],
-        timeout=10.0,
-        stderr=None,
-    )
-    processes = parse_process_table(ps.stdout)
-    tmux_rows = inspect_tmux(spec, processes)
-    launchctl_rows = inspect_launchctl()
-    db_route = inspect_db_route(spec)
-    db_paths = [
-        spec.canonical_db_path,
-        *spec.resolved_compatibility_db_paths(),
-    ]
-    db_consumers = inspect_db_consumers(db_paths)
-    payload = build_manifest(
-        spec=spec,
-        processes=processes,
-        tmux_rows=tmux_rows,
-        launchctl_rows=launchctl_rows,
-        db_route=db_route,
-        db_consumers=db_consumers,
-    )
+    payload = collect_manifest(spec)
     if args.compare_prechange:
         baseline = json.loads(args.compare_prechange.read_text(encoding="utf-8"))
         if not isinstance(baseline, dict):

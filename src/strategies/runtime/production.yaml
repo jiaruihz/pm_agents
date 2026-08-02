@@ -8,3 +8,94 @@ data_feed_runtime_root: /Volumes/jrs/weather_data_feed_service_runtime
 pm_runtime_root: /Volumes/jrs/pm_agents/runtime
 canonical_tmux_socket: weather-data-feed-jrs
 canonical_tmux_binary: /opt/homebrew/Cellar/tmux/3.6b/bin/tmux
+
+# This is the current Mac production desired state. Historical/research
+# metadata remains in instances.yaml; only runtimes listed here are required to
+# survive a production change or canonical tmux rebuild.
+allowed_unmanaged_sessions:
+  - weather_canonical_refresh  # bounded one-shot, allowed to finish naturally
+
+managed_runtimes:
+  - instance_id: weather_jrs_context_keeper
+    tmux_session: weather_jrs_context_keeper
+    role: infrastructure
+    execution_mode: infrastructure
+    recovery_policy: manual
+
+  - instance_id: weather_data_feed_jrs
+    tmux_session: weather_data_feed_jrs
+    role: data_feed
+    execution_mode: collector
+    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    start_script: scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/observations/latest.json
+    max_health_age_sec: 1800
+    recovery_policy: safe
+
+  - instance_id: weather_live_cross_observations
+    tmux_session: weather_live_cross_observations
+    role: source_collector
+    execution_mode: collector
+    checkout_root: /Users/deepsleep/projects/pm_agents_wcir_prod
+    start_script: scripts/ops/start_weather_live_cross_observations.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/latest.json
+    max_health_age_sec: 180
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+
+  - instance_id: weather_city_probability_runtime_v3
+    tmux_session: weather_city_probability_runtime_v3
+    role: probability_runtime
+    execution_mode: shadow
+    checkout_root: /Users/deepsleep/projects/pm_agents_city_runtime_v2_prod
+    start_script: scripts/ops/start_weather_city_probability_runtime_v3.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/latest_summary.json
+    max_health_age_sec: 180
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: safe
+
+  - instance_id: current_yes_core_carry_tiny_live_v2
+    tmux_session: weather_current_yes_core_carry_tiny_live_v2
+    role: strategy
+    execution_mode: live
+    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    start_script: scripts/ops/start_weather_current_yes_core_carry_tiny_live_v2.sh
+    health_path: /Volumes/jrs/pm_agents/runtime/weather_edge_v1/current_yes_core_carry_tiny_live_v2/latest_summary.json
+    max_health_age_sec: 120
+    accepted_health_statuses: [ok]
+    expected_live: true
+    dependencies: [weather_data_feed_jrs]
+    recovery_policy: guarded_live
+
+  - instance_id: fast_source_prev_no_trial_v1
+    tmux_session: weather_fast_source_prev_no_trial
+    role: strategy
+    execution_mode: live
+    checkout_root: /Users/deepsleep/projects/pm_agents_prod
+    start_script: scripts/ops/start_weather_fast_source_prev_no_trial.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/fast_source_prev_no_trial/latest_summary.json
+    max_health_age_sec: 180
+    accepted_health_statuses: [ok]
+    expected_live: true
+    dependencies: [weather_data_feed_jrs, weather_live_cross_observations]
+    recovery_policy: guarded_live
+
+  # Current zero-notional/research services are protected from collateral
+  # deletion. They remain manual-recovery until each start contract is moved
+  # into this control plane.
+  - {instance_id: d1_multisource_consensus_shadow_v1, tmux_session: d1_multisource_consensus_shadow_v1, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: europe_d1_distance2_dual_no_shadow_v1, tmux_session: europe_d1_distance2_dual_no_shadow_v1, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: low_price_yes_integrated_tail_shadow_v2, tmux_session: low_price_yes_integrated_tail_shadow_v2, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: low_price_yes_lottery_shadow_v1, tmux_session: low_price_yes_lottery_shadow_v1, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: metar_reversal_false_fade_reheat_shadow_v1, tmux_session: metar_reversal_false_fade_reheat_shadow_v1, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: regime_routed_no_shadow_v1, tmux_session: regime_routed_no_shadow_v1, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1, tmux_session: tmax_distribution_edge_first_lock_no_current_yes_shadow_v1, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: weather_current_yes_heat_death_shadow_v1, tmux_session: weather_current_yes_heat_death_shadow_v1, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: weather_fast_source_stale_book, tmux_session: weather_fast_source_stale_book, role: collector, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: weather_full_ladder_capture, tmux_session: weather_full_ladder_capture, role: collector, execution_mode: collector, recovery_policy: manual}
+  - {instance_id: weather_helsinki_pre_cross_active_ladder_shadow, tmux_session: weather_helsinki_pre_cross_active_ladder_shadow, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: weather_knmi_open_data_jrs, tmux_session: weather_knmi_open_data_jrs, role: collector, execution_mode: collector, recovery_policy: manual}
+  - {instance_id: weather_korea_first_seen_state_v1, tmux_session: weather_korea_first_seen_state_v1, role: collector, execution_mode: collector, recovery_policy: manual}
+  - {instance_id: weather_runtime_monitor, tmux_session: weather_runtime_monitor, role: monitor, execution_mode: monitor, recovery_policy: manual}
+  - {instance_id: weather_source_event_ladder_repricing_shadow, tmux_session: weather_source_event_ladder_repricing_shadow, role: shadow, execution_mode: shadow, recovery_policy: manual}
+  - {instance_id: weather_tokyo_current_break_active_ladder_shadow_v1, tmux_session: weather_tokyo_current_break_active_ladder_shadow_v1, role: shadow, execution_mode: shadow, recovery_policy: manual}

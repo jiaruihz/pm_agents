@@ -29,6 +29,35 @@ JRS write probe 由 helper 在 tmux server 内执行。
 tmux -L weather-data-feed-jrs list-sessions
 ```
 
+当前生产 desired state 在 `src/strategies/runtime/production.yaml` 的
+`managed_runtimes`。它与研究/历史 `instances.yaml` 分开：只有
+`managed_runtimes` 表示“现在应该持续运行”。统一控制入口：
+
+```bash
+# 人类可读的全链路健康检查；critical 时退出码为 2
+.venv/bin/python scripts/ops/weather_production_ctl.py health
+
+# 机器可读输出
+.venv/bin/python scripts/ops/weather_production_ctl.py health --json
+
+# 只显示 desired vs observed 和建议动作，不改生产
+.venv/bin/python scripts/ops/weather_production_ctl.py plan
+
+# 仅补启 production.yaml 中缺失且有恢复合同的实例；不停止任何额外进程
+.venv/bin/python scripts/ops/weather_production_ctl.py reconcile --apply \
+  --reason "named incident recovery"
+
+# 如果恢复集合包含 live，必须再显式确认
+.venv/bin/python scripts/ops/weather_production_ctl.py reconcile --apply \
+  --confirm-live --reason "named live incident recovery"
+```
+
+`health` 同时检查 canonical DB/进程 manifest、全部 required tmux sessions、
+关键 runtime artifact freshness、checkout、live flags、`live_enabled` 和上游依赖。
+旧 shadow/collector 在迁入完整 start contract 前只做 presence 保护并标
+`recovery_policy: manual`；controller 不会猜命令自动恢复。生产操作不得直接用
+`tmux kill-server`、`tmux kill-session` 或手拼 live 命令绕过 controller。
+
 如果发现进程仍在其他 socket，只记录并按生产变更流程迁移；涉及 live 的 session
 不得在巡检中自动重启或跨 socket 搬迁。
 

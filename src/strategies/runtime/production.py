@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -10,6 +10,32 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 PRODUCTION_PATH = ROOT / "src/strategies/runtime/production.yaml"
+
+
+@dataclass(frozen=True)
+class WeatherManagedRuntimeSpec:
+    instance_id: str
+    tmux_session: str
+    role: str
+    execution_mode: str
+    desired_state: str = "running"
+    checkout_root: Path | None = None
+    start_script: Path | None = None
+    health_path: Path | None = None
+    max_health_age_sec: float | None = None
+    accepted_health_statuses: tuple[str, ...] = ()
+    expected_live: bool = False
+    dependencies: tuple[str, ...] = ()
+    recovery_policy: str = "manual"
+
+    def resolved_start_script(self) -> Path | None:
+        if self.start_script is None:
+            return None
+        if self.start_script.is_absolute():
+            return self.start_script
+        if self.checkout_root is None:
+            return None
+        return self.checkout_root / self.start_script
 
 
 @dataclass(frozen=True)
@@ -23,6 +49,8 @@ class WeatherProductionSpec:
     pm_runtime_root: Path
     canonical_tmux_socket: str
     canonical_tmux_binary: Path
+    managed_runtimes: tuple[WeatherManagedRuntimeSpec, ...] = field(default_factory=tuple)
+    allowed_unmanaged_sessions: tuple[str, ...] = field(default_factory=tuple)
 
     def resolved_compatibility_db_paths(
         self, repo_root: Path | None = None
@@ -42,6 +70,63 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
     compatibility = raw.get("compatibility_db_paths")
     if not isinstance(compatibility, list) or not compatibility:
         raise ValueError("production spec requires compatibility_db_paths")
+    managed_raw = raw.get("managed_runtimes") or []
+    if not isinstance(managed_raw, list):
+        raise ValueError("production spec managed_runtimes must be a list")
+    managed: list[WeatherManagedRuntimeSpec] = []
+    seen_instances: set[str] = set()
+    seen_sessions: set[str] = set()
+    for item in managed_raw:
+        if not isinstance(item, dict):
+            raise ValueError("each managed runtime must be a mapping")
+        instance_id = str(item["instance_id"])
+        tmux_session = str(item["tmux_session"])
+        if instance_id in seen_instances:
+            raise ValueError(f"duplicate managed runtime instance_id: {instance_id}")
+        if tmux_session in seen_sessions:
+            raise ValueError(f"duplicate managed runtime tmux_session: {tmux_session}")
+        seen_instances.add(instance_id)
+        seen_sessions.add(tmux_session)
+        managed.append(
+            WeatherManagedRuntimeSpec(
+                instance_id=instance_id,
+                tmux_session=tmux_session,
+                role=str(item.get("role") or "strategy"),
+                execution_mode=str(item.get("execution_mode") or "unknown"),
+                desired_state=str(item.get("desired_state") or "running"),
+                checkout_root=(
+                    Path(item["checkout_root"])
+                    if item.get("checkout_root")
+                    else None
+                ),
+                start_script=(
+                    Path(item["start_script"])
+                    if item.get("start_script")
+                    else None
+                ),
+                health_path=(
+                    Path(item["health_path"])
+                    if item.get("health_path")
+                    else None
+                ),
+                max_health_age_sec=(
+                    float(item["max_health_age_sec"])
+                    if item.get("max_health_age_sec") is not None
+                    else None
+                ),
+                accepted_health_statuses=tuple(
+                    str(value) for value in (item.get("accepted_health_statuses") or [])
+                ),
+                expected_live=bool(item.get("expected_live", False)),
+                dependencies=tuple(
+                    str(value) for value in (item.get("dependencies") or [])
+                ),
+                recovery_policy=str(item.get("recovery_policy") or "manual"),
+            )
+        )
+    allowed_unmanaged = raw.get("allowed_unmanaged_sessions") or []
+    if not isinstance(allowed_unmanaged, list):
+        raise ValueError("production spec allowed_unmanaged_sessions must be a list")
     spec = WeatherProductionSpec(
         version=str(raw["version"]),
         host_role=str(raw["host_role"]),
@@ -52,6 +137,8 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         pm_runtime_root=Path(raw["pm_runtime_root"]),
         canonical_tmux_socket=str(raw["canonical_tmux_socket"]),
         canonical_tmux_binary=Path(raw["canonical_tmux_binary"]),
+        managed_runtimes=tuple(managed),
+        allowed_unmanaged_sessions=tuple(str(item) for item in allowed_unmanaged),
     )
     if not spec.canonical_db_path.is_absolute():
         raise ValueError("canonical_db_path must be absolute")
@@ -59,4 +146,22 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
         raise ValueError("operational_repo_root must be absolute")
     if spec.canonical_db_path.parent != spec.pm_runtime_root:
         raise ValueError("canonical_db_path must live directly under pm_runtime_root")
+    managed_ids = {item.instance_id for item in spec.managed_runtimes}
+    for item in spec.managed_runtimes:
+        if item.desired_state != "running":
+            raise ValueError(
+                f"unsupported managed runtime desired_state for {item.instance_id}: "
+                f"{item.desired_state}"
+            )
+        if item.recovery_policy not in {"safe", "guarded_live", "manual"}:
+            raise ValueError(
+                f"unsupported recovery_policy for {item.instance_id}: "
+                f"{item.recovery_policy}"
+            )
+        missing_dependencies = set(item.dependencies) - managed_ids
+        if missing_dependencies:
+            raise ValueError(
+                f"unknown dependencies for {item.instance_id}: "
+                f"{sorted(missing_dependencies)}"
+            )
     return spec
