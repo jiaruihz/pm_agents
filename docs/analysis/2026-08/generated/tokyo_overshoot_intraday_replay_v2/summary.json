@@ -1,0 +1,29 @@
+{
+  "target_date": "2026-08-01",
+  "grain": "one_row_per_jma_observation_first_seen_checkpoint",
+  "window_jst": [
+    10.0,
+    18.0
+  ],
+  "raw_book_rows": 3071,
+  "source_observations_all_day": 97,
+  "source_observations_in_window": 48,
+  "checkpoint_rows_preserved": 48,
+  "pit_current_book_rows": 47,
+  "scored_two_sided_rows": 44,
+  "one_sided_current_book_rows": 3,
+  "missing_current_book_rows": 1,
+  "edge_threshold_after_fee": 0.02,
+  "v2_trigger_count": 0,
+  "v2_trigger_wins": 0,
+  "no_floor_trigger_count": 0,
+  "no_floor_trigger_wins": 0,
+  "v2_brier_on_scored_rows": 0.022560392383951067,
+  "market_brier_on_scored_rows": 0.01907047159090909,
+  "v2_edge_after_fee_min": -0.16518560042431002,
+  "v2_edge_after_fee_max": -0.0005608003030524711,
+  "final_official_bracket": 35,
+  "model_training_end": "2026-07-15",
+  "model_market_logit_floor": 0.005,
+  "label_joined_after_scoring": true
+}

@@ -65,3 +65,46 @@ first-seen。
 ```bash
 .venv/bin/python scripts/analysis/market_structure_edge/research_tokyo_overshoot_market_residual_v2.py
 ```
+
+## 2026-08-01 连续日内 PIT 重放（口径纠正）
+
+此前把“每个 date×bracket 首次正 edge”selector 表拿来解释日内运行，是错误的展示粒度；它只是一张
+压缩后的交易表，不代表模型每天只预测一次。`07-28` 只是该 selector 的最后入选日期，也不是 JMA 或盘口
+数据截止日。8 月 1 日发生在 v2 的 8 月 2 日部署之前，因此这里使用冻结至 `2026-07-15` 的 artifact，
+对 8 月 1 日 raw first-seen 与 raw book 做只读 counterfactual replay。
+
+正确分母为 8 月 1 日 `10:00..17:50 JST` 的每个十分钟 JMA observation：
+
+- signal funnel：48 个 JMA first-seen checkpoint → 48 行全部保留 → 44 行同期 current-bracket 双边盘口
+  可评分 → fee 后 `edge >= 2%` 为 0 行。
+- evidence funnel：47 行存在当时官方 current-bracket book；其中 3 行（10:00/10:10/10:20）盘口单边，
+  无 midpoint；13:50 的 collector 只抓到 `34|35|36`，而当时官方 anchor 仍为 33，是 1 行明确
+  `anchor_capture_gap`，不能伪装成策略过滤。
+- 44 个可评分 checkpoint 的 fee 后 edge 范围为 `-16.519c .. -0.056c`；拿掉已知的 0.5c
+  market-logit floor 后仍然 0 触发。因此 8 月 1 日的 0 触发是“模型概率没有超过同期 NO ask + fee”，
+  不是模型没运行，也不是到下午才运行。
+- 当日最终 official bracket 为 35。current bracket 在 15:00 前为 31→32→33→34，买这些档的 NO
+  事后都赢；15:00 后 current bracket 已为 35，买 35 NO 事后都输。v2 和 market 在 0.5 分类阈值上
+  都是 44/44，但这只是方向分类；proper score 上 v2 Brier `0.02256`，反而弱于 market `0.01907`，
+  不能把“100% 分类正确”解释为 alpha。
+
+关键路径（概率均为 current-bracket NO）：
+
+| JMA 时刻 JST | 实际决策时刻 JST | current | JMA °C | market mid | NO ask | v2 P(NO) | fee 后 edge | 最终 NO |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 10:30 | 10:44 | 31 | 30.8 | 99.65% | 99.9% | 99.52% | -0.385% | 赢 |
+| 12:40 | 12:48 | 32 | 32.4 | 93.35% | 94.7% | 90.14% | -4.814% | 赢 |
+| 13:40 | 13:47 | 33 | 34.2 | 95.00% | 98.0% | 95.19% | -2.903% | 赢 |
+| 14:10 | 14:17 | 34 | 33.6 | 57.50% | 60.0% | 51.18% | -10.023% | 赢 |
+| 14:50 | 14:57 | 34 | 34.3 | 77.50% | 79.0% | 65.85% | -13.982% | 赢 |
+| 15:00 | 15:08 | 35 | 34.7 | 17.50% | 21.0% | 14.13% | -7.704% | 输 |
+| 15:30 | 15:37 | 35 | 35.3 | 33.50% | 35.0% | 28.82% | -7.321% | 输 |
+| 16:40 | 16:52 | 35 | 34.3 | 1.10% | 2.0% | 0.40% | -1.695% | 输 |
+| 17:20 | 17:27 | 35 | 33.3 | 0.15% | 0.2% | 0.15% | -0.056% | 输 |
+
+完整 48 行：`generated/tokyo_overshoot_intraday_replay_v2/checkpoints.csv`；摘要：
+`generated/tokyo_overshoot_intraday_replay_v2/summary.json`。
+
+```bash
+.venv/bin/python scripts/analysis/market_structure_edge/replay_tokyo_overshoot_intraday_v2.py
+```
