@@ -293,7 +293,7 @@ source health -> raw event -> available clock -> checkpoint
 | Phase 0 | 结构快照 + rolling baseline ledger | 低 | 否 |
 | Phase 1 | replay + 通用评测 + 固定事后报告 | 低 | 否，只写 research/temp DB |
 | Phase 2 | `SignalCandidate/TradeIntent` + canonical bridge | 中 | 否，先临时 DB/dual-write |
-| Phase 3 | Helsinki → Tokyo → Amsterdam 逐城 dual-run/cutover | 中高 | 只切 zero-notional shadow，逐城授权 |
+| Phase 3 | Helsinki/Tokyo/Amsterdam 直接迁移统一 runtime | 中高 | zero-notional 直接切统一 authority；旧链只读 |
 | Phase 4 | 共享执行 runtime 的 non-live 迁移 | 中 | 否，legacy 仍是 live authority |
 | Phase 5 | active execution 单实例 canary | 高 | 是，每次单独显式确认 |
 | Phase 6 | canonical/report 正式切换 | 中 | 只做批准的增量 materialization |
@@ -372,34 +372,38 @@ payload 未保存 `outcome` 而显式阻断，历史 notional/shares/orders/fill
 
 完成标准：同 checkpoint 的 candidate identity 在 replay/shadow 一致；raw candidate 与临时 canonical 数完全对账；research/evidence 两个漏斗能由 canonical rows 重建；没有城市私有 PnL/settlement 表。
 
-### Phase 3：逐城市 dual-run 与 zero-notional cutover
+### Phase 3：城市 runtime 直接迁移与 zero-notional cutover
 
-共同方式：同一份已授权 raw 同时进入 legacy 和 vNext，输出不同目录；vNext 只产 zero-notional candidate/intent。模型调参和 runtime 迁移分开提交，parity 报告按 model artifact 版本比较。
+2026-08-02 决策更新：不再以 dual-run 作为迁移门。先把全部 legacy raw 一次性转换到统一
+event/checkpoint/`ModelOutput`/`SignalCandidate`/`TradeIntent`，在 temp canonical 做 count/hash/foreign-key
+和零订单验收；通过后由 runtime v3 直接成为唯一 active authority。旧 journal 标记
+`deprecated_read_only`，保留审计和显式 rollback，不再接收新数据。模型调参与 runtime 迁移仍分开提交；真实资金执行仍受
+Phase 5 的逐实例显式授权约束，不能由本决策自动切换。
 
 #### Phase 3A：Helsinki
 
-Status: **2026-08-02 代码与 deployed-journal parity 已完成，production activation 暂未执行。**
-公共 decision sink 已接入现有 `ShadowRuntime`，只为 Helsinki 向独立目录双写
-`ModelOutput/SignalCandidate/TradeIntent`，且 intent 固定 zero-notional。180 条真实 evaluation、6 条 paper
-intent 经 legacy-direct 与 vNext sink 两条路径得到的 180 个 candidate 和 6 个 intent 逐字节一致，临时 canonical
-`candidate_delta=0`。同时把 155 条 stale-book age-dependent exception polls 修为稳定
-`stale_market_expression` blocker。证据与影响清单见
-[Phase 3A report](analysis/2026-08/2026-08-02-helsinki-phase3a-decision-dual-run-v1.md)。
+Status: **2026-08-02 已改为 runtime v3 authoritative 单写；本地与全历史迁移通过，production 重启待 JRS 恢复。**
+Helsinki 与 Tokyo 共用的 runtime v3 只写统一 contract journals，旧 v2 evaluation/intent/checkpoint/error
+journals 已在 config 与实例 registry 标为 `deprecated_read_only`。全量 388 evaluation、10 历史 paper intent、2 blocker
+转换为 386 unique candidates、6 可证明 zero-notional intents 和4条历史 Tokyo token-identity blocker；212 个缺失 outcome
+通过 raw book 的 exact token match 恢复，conversion error=0，temp canonical `candidate_delta=0`。active Tokyo 的上一
+checkpoint probability 已改读 v3 decision bundles，不再回读 legacy evaluation journal。完整证据见
+[direct migration report](analysis/2026-08/2026-08-02-city-probability-runtime-v3-direct-migration-v1.md)。
 
-尚未通过本阶段最终门：真实 raw 只有两个 Helsinki target date（其中 7/31 还是 partial window），未达到三个完整
-active window；canonical JRS tmux write probe 失败且 manifest 为 critical，city runner 已因 JRS
-`PermissionError` 停止，因此没有重启或切换 production。修复共享 JRS 权限上下文需单独生产维护确认。
+production 尚未重启：canonical JRS tmux write probe 失败且 manifest 为 critical。这个 blocker 只影响生产激活，不再要求
+等待第三个 forward window；切换验收改为全历史 raw、UTC/业务边界、one-sided/stale/token identity fixtures、进程首轮与重启
+dedupe 全流程无 bug。
 
 - 作为 point-observation、纯天气/market-offset 双表达参考实现。
 - 对齐 forecast、official、FMI、book、one-sided、等待首报与状态变化去重。
-- 至少覆盖 3 个完整本地 active window 和一次 UTC/业务日期边界。
+- 覆盖全部 deployed raw、一次 UTC/业务日期边界，以及 point/one-sided/stale/token identity fixtures。
 
-完成标准：checkpoint/input refs/candidate/blocker 逐行 parity；无 exception storm；差异全部归因于明确 model version 或修复项。
+完成标准：全历史迁移 conversion error=0、temp canonical delta=0；runtime v3 首轮与重启 dedupe 不写 legacy 文件；无 exception storm、无订单或 notional。
 
 #### Phase 3B：Tokyo
 
 - 验证 cross-day physical shard、source/official/expression multi-anchor、ladder union、native lattice、off-hours、previous same-bracket probability。
-- 至少覆盖 3 个完整本地 active window、一次跨日，以及一次 source/official anchor 分离或等价 golden fixture。
+- 覆盖全部 deployed raw、一次跨日，以及一次 source/official anchor 分离或等价 golden fixture。
 
 完成标准：同 capture cycle 选中正确 official expression；窗外不制造 stale error；缺 expression 保留 coverage gap；replay/shadow candidate parity。
 
@@ -410,15 +414,15 @@ active window；canonical JRS tmux write probe 失败且 manifest 为 critical�
 
 完成标准：initial/revision/late-backfill replay 确定；只有 material state change 产生新 checkpoint；缺 midpoint 不丢分母；至少完成 3 个完整 active window 或覆盖预注册 revision fixtures。
 
-每城通过后只把 vNext 升为正式 zero-notional shadow；不自动删除 legacy，不自动赋予 live。
+每城通过后直接由统一 runtime 成为正式 zero-notional authority；legacy 只读保留，不自动赋予 live。
 
 ### Phase 4：共享执行 runtime 的 non-live 迁移
 
 要做：
 
 - 补齐 `execution_config_id`、resolved profile、root/source/replacement action lineage、execution journal、risk/exposure/dedupe 和 Polymarket capability/fee identity。
-- 依次迁 dormant runner、zero-notional shadow、paper runner；真实 side effect 仍由 legacy authority 执行。
-- active runner 只增加 pure `shadow_execution_engine_compare`，比较 child role、shares、price、cap、TTL、reprice/cancel、remaining shares 和 blocker；新路径不得 claim key、reserve exposure 或调用 venue。
+- 依次直接迁 dormant runner、zero-notional shadow、paper runner；每类通过完整 fixture 后旧链标只读，不保留长期双写。
+- active live runner 不做长期 comparator；先在离线完整 lifecycle harness 验证 child role、shares、price、cap、TTL、reprice/cancel、remaining shares 和 blocker，再按 Phase 5 单实例 tiny canary 切换。
 - canonical mixed-schema 只在临时 DB 验证。
 
 完成标准：shadow/paper 单 token runner 不再私自重实现执行生命周期；legacy/new fixture parity 无未解释差异；partial fill、cancel/fill race、unknown submit、restart dedupe 均通过；无新增 live path。

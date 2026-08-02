@@ -170,6 +170,8 @@ def legacy_bundle_from_evaluation(row: Mapping[str, Any]) -> DecisionBundle:
             or migrated.get("schema_version"),
             "legacy_evaluation_id": migrated.get("evaluation_id"),
             "checkpoint_identity_status": "legacy_derived_from_city_score_lineage",
+            "weather_probability_stay": lineage.get("weather_probability_stay"),
+            "source_obs_ts_utc": score.source_obs_ts_utc,
         },
     )
 

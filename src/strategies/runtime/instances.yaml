@@ -664,24 +664,24 @@
   expected_live: null
   artifact_files: []
 - strategy_instance: city_probability_shadow_v2
-  display_name: Cross-city probability model shadow v2
+  display_name: Cross-city probability model legacy journals v2
   family: weather.city_probability_model
   strategy_key: weather_city_probability_shadow_v2
-  lifecycle_status: shadow
+  lifecycle_status: deprecated
   execution_mode: zero_notional_shadow
-  source_layer: runtime_local
+  source_layer: legacy_read_only
   runtime_dir: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2
   summary_file: latest_summary.json
   primary_journal: evaluations.jsonl
   live_order_file: null
   paper_order_file: paper_intents.jsonl
   telemetry_file: evaluations.jsonl
-  start_script: scripts/ops/start_weather_city_probability_shadow_v2.sh
-  tmux_session: weather_city_probability_shadow_v2
-  notes: Unified producer/consumer identity-handshaked Tokyo and Helsinki city runtime;
-    Tokyo v7 records probability telemetry only with city-day single-position semantics;
-    zero-notional only and no exchange client.
-  default_health: unknown
+  start_script: null
+  tmux_session: null
+  notes: Deprecated read-only evidence and rollback journals. Active authority moved to
+    city_probability_runtime_v3; this path must not receive new rows except an explicitly
+    authorized rollback.
+  default_health: not_applicable
   expected_live: false
   artifact_files:
   - - evaluations
@@ -692,3 +692,34 @@
     - checkpoints.jsonl
   - - errors
     - errors.jsonl
+- strategy_instance: city_probability_runtime_v3
+  display_name: Cross-city probability shared-contract runtime v3
+  family: weather.city_probability_model
+  strategy_key: weather_city_probability_runtime_v3
+  lifecycle_status: shadow
+  execution_mode: zero_notional_shadow
+  source_layer: runtime_local
+  runtime_dir: /Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3
+  summary_file: latest_summary.json
+  primary_journal: decision_bundles.jsonl
+  live_order_file: null
+  paper_order_file: trade_intents.jsonl
+  telemetry_file: decision_bundles.jsonl
+  start_script: scripts/ops/start_weather_city_probability_runtime_v3.sh
+  tmux_session: weather_city_probability_runtime_v3
+  notes: Sole active city probability authority for Helsinki and Tokyo. Writes shared
+    information-event/checkpoint/ModelOutput/SignalCandidate/TradeIntent contracts only;
+    zero-notional and no exchange client.
+  default_health: unknown
+  expected_live: false
+  artifact_files:
+  - - decision_bundles
+    - decision_bundles.jsonl
+  - - trade_intents
+    - trade_intents.jsonl
+  - - checkpoint_blockers
+    - checkpoint_blockers.jsonl
+  - - trade_intent_blockers
+    - trade_intent_blockers.jsonl
+  - - runtime_errors
+    - runtime_errors.jsonl

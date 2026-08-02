@@ -16,6 +16,7 @@ from .legacy_adapters import (
     legacy_trade_intent_from_paper_intent,
 )
 from .decision_sink import (
+    DECISION_JOURNAL_SCHEMA_VERSION,
     DUAL_WRITE_SCHEMA_VERSION,
     DecisionContractJournalSink,
     SinkResult,
@@ -34,6 +35,7 @@ __all__ = [
     "legacy_bundle_from_evaluation",
     "legacy_trade_intent_from_paper_intent",
     "DUAL_WRITE_SCHEMA_VERSION",
+    "DECISION_JOURNAL_SCHEMA_VERSION",
     "DecisionContractJournalSink",
     "SinkResult",
 ]

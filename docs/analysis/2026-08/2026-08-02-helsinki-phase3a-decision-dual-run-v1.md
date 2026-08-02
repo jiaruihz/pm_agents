@@ -2,7 +2,13 @@
 
 ## Status
 
-`code complete / deployed-journal parity pass / production activation blocked`
+`superseded migration method / evidence retained / no longer an activation plan`
+
+2026-08-02 direct-migration decision: dual-run is no longer the rollout method. The
+byte-level parity evidence in this report remains valid, but runtime v3 becomes the sole
+active contract authority and legacy v2 is retained read-only. Current implementation and
+full-flow evidence are recorded in
+`2026-08-02-city-probability-runtime-v3-direct-migration-v1.md`.
 
 This change adds a non-authoritative Phase-2 decision sink to the existing
 `city_probability_shadow_v2` runtime. Legacy evaluations and paper intents remain the

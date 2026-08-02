@@ -22,6 +22,10 @@ from weather_city_runtime import (
 from scripts.analysis.market_structure_edge.bridge_city_intraday_decisions_v1 import (
     main as bridge_main,
 )
+from scripts.analysis.market_structure_edge.materialize_city_decision_dual_run_v1 import (
+    _enrich_market_outcome,
+    _token_outcomes,
+)
 
 
 def _evaluation(**overrides):
@@ -80,6 +84,35 @@ def test_legacy_adapter_emits_versioned_model_candidate_and_stable_identity() ->
     assert first.signal_candidate.execution_book_snapshot_id == "book-18"
     assert first.signal_candidate.candidate_id
     assert "pnl" not in json.dumps(first.signal_candidate.to_dict()).lower()
+
+
+def test_legacy_market_outcome_recovery_requires_exact_raw_token_match(
+    tmp_path: Path,
+) -> None:
+    book_dir = tmp_path / "books"
+    book_dir.mkdir()
+    (book_dir / "books.jsonl").write_text(
+        json.dumps({"token_id": "token-no-18", "outcome": "no"}) + "\n"
+    )
+    row = _evaluation(market={
+        "condition_id": "condition-18",
+        "token_id": "token-no-18",
+    })
+    enriched, recovered = _enrich_market_outcome(
+        row, _token_outcomes([book_dir])
+    )
+    assert recovered is True
+    assert enriched["market"]["outcome"] == "NO"
+    assert enriched["market"]["outcome_lineage"] == (
+        "recovered_from_token_matched_book_journal"
+    )
+
+    untouched, recovered = _enrich_market_outcome(
+        _evaluation(market={"token_id": "unknown"}),
+        _token_outcomes([book_dir]),
+    )
+    assert recovered is False
+    assert "outcome" not in untouched["market"]
 
 
 def test_unselected_and_one_sided_rows_remain_candidate_denominator() -> None:

@@ -13,6 +13,8 @@ from typing import Any, Protocol
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG_SCHEMA_VERSION = "weather_city_probability_shadow_config_v2"
 OUTPUT_SCHEMA_VERSION = "weather_city_probability_shadow_v2"
+AUTHORITATIVE_CONFIG_SCHEMA_VERSION = "weather_city_probability_runtime_config_v3"
+AUTHORITATIVE_OUTPUT_SCHEMA_VERSION = "weather_city_probability_runtime_v3"
 ADAPTER_CONTRACT_VERSION = "weather_city_probability_adapter_v1"
 
 OUTPUT_SCHEMA = {
@@ -31,6 +33,23 @@ OUTPUT_SCHEMA = {
 }
 OUTPUT_SCHEMA_FINGERPRINT = hashlib.sha256(
     json.dumps(OUTPUT_SCHEMA, sort_keys=True, separators=(",", ":")).encode()
+).hexdigest()
+
+AUTHORITATIVE_OUTPUT_SCHEMA = {
+    "record_kind": "decision_bundle|checkpoint_blocker|runtime_error|summary|trade_intent",
+    "schema_version": AUTHORITATIVE_OUTPUT_SCHEMA_VERSION,
+    "decision_contracts": [
+        "weather_city_model_output_v1",
+        "weather_city_signal_candidate_v1",
+        "weather_city_trade_intent_v1",
+    ],
+    "execution_mode": "zero_notional_shadow",
+    "legacy_journals": "deprecated_read_only",
+}
+AUTHORITATIVE_OUTPUT_SCHEMA_FINGERPRINT = hashlib.sha256(
+    json.dumps(
+        AUTHORITATIVE_OUTPUT_SCHEMA, sort_keys=True, separators=(",", ":")
+    ).encode()
 ).hexdigest()
 
 
@@ -60,6 +79,12 @@ class CityAdapter(Protocol):
 
 
 class DecisionSink(Protocol):
+    @property
+    def source_evaluation_ids(self) -> set[str]: ...
+    @property
+    def intent_dedupe_keys(self) -> set[str]: ...
+    @property
+    def checkpoint_ids(self) -> set[str]: ...
     def record_evaluation(self, row: dict[str, Any]) -> Any: ...
     def record_paper_intent(self, row: dict[str, Any]) -> Any: ...
     def record_checkpoint_blocker(self, row: dict[str, Any]) -> Any: ...
@@ -106,7 +131,10 @@ def _git_value(*args: str) -> str:
 def migrate_evaluation_row(row: dict[str, Any]) -> dict[str, Any]:
     """Normalize legacy v1 evaluations without inventing missing lineage."""
 
-    if row.get("schema_version") == OUTPUT_SCHEMA_VERSION:
+    if row.get("schema_version") in {
+        OUTPUT_SCHEMA_VERSION,
+        AUTHORITATIVE_OUTPUT_SCHEMA_VERSION,
+    }:
         return dict(row)
     if row.get("schema_version") != "weather_city_probability_shadow_v1":
         raise ValueError(f"unsupported evaluation schema: {row.get('schema_version')}")
@@ -192,8 +220,6 @@ def resolve_journal_catalog(config: dict[str, Any]) -> dict[str, list[Path]]:
 class ShadowRuntime:
     """Model-agnostic journal runtime. It has deliberately no execution client."""
 
-    schema_version = OUTPUT_SCHEMA_VERSION
-
     def __init__(
         self,
         config: dict[str, Any],
@@ -207,27 +233,55 @@ class ShadowRuntime:
             raise ValueError("execution_mode must be zero_notional_shadow")
         if config.get("orders_submitted") != 0:
             raise ValueError("orders_submitted must be exactly zero")
-        if config.get("schema_version") != CONFIG_SCHEMA_VERSION:
+        config_schema = config.get("schema_version")
+        if config_schema not in {
+            CONFIG_SCHEMA_VERSION,
+            AUTHORITATIVE_CONFIG_SCHEMA_VERSION,
+        }:
             raise ValueError(
-                f"config schema must be {CONFIG_SCHEMA_VERSION}, got {config.get('schema_version')}"
+                "config schema must be a supported city probability runtime schema, "
+                f"got {config_schema}"
             )
+        self.authoritative_decision_output = (
+            config_schema == AUTHORITATIVE_CONFIG_SCHEMA_VERSION
+        )
+        expected_output_schema = (
+            AUTHORITATIVE_OUTPUT_SCHEMA_VERSION
+            if self.authoritative_decision_output
+            else OUTPUT_SCHEMA_VERSION
+        )
+        expected_output_fingerprint = (
+            AUTHORITATIVE_OUTPUT_SCHEMA_FINGERPRINT
+            if self.authoritative_decision_output
+            else OUTPUT_SCHEMA_FINGERPRINT
+        )
         expected_schema = config.get("output_schema_version")
-        if expected_schema != OUTPUT_SCHEMA_VERSION:
+        if expected_schema != expected_output_schema:
             raise ValueError(
-                f"output schema handshake failed: expected {OUTPUT_SCHEMA_VERSION}, got {expected_schema}"
+                "output schema handshake failed: "
+                f"expected {expected_output_schema}, got {expected_schema}"
             )
         expected_fingerprint = config.get("output_schema_fingerprint")
-        if expected_fingerprint != OUTPUT_SCHEMA_FINGERPRINT:
+        if expected_fingerprint != expected_output_fingerprint:
             raise ValueError("output schema fingerprint handshake failed")
         self.config = config
         self.adapters = adapters
         self.output_dir = Path(config["output_dir"])
-        self.journal_catalog = resolve_journal_catalog(config)
+        self.journal_catalog = (
+            {} if self.authoritative_decision_output else resolve_journal_catalog(config)
+        )
         self.evaluations = self.output_dir / "evaluations.jsonl"
         self.intents = self.output_dir / "paper_intents.jsonl"
         self.checkpoints = self.output_dir / "checkpoints.jsonl"
-        self.errors = self.output_dir / "errors.jsonl"
+        self.errors = self.output_dir / (
+            "runtime_errors.jsonl" if self.authoritative_decision_output else "errors.jsonl"
+        )
         self.decision_sink = decision_sink
+        if self.authoritative_decision_output:
+            if self.decision_sink is None:
+                raise ValueError("authoritative runtime requires decision contract output")
+            if self.decision_sink.output_dir != self.output_dir.resolve():
+                raise ValueError("authoritative decision journal must equal runtime output_dir")
         self.upstream_producer_identity = self._validate_producer_contracts()
         self.runtime_identity = self._build_runtime_identity(config_path, entrypoint_path)
 
@@ -325,8 +379,13 @@ class ShadowRuntime:
             "loaded_module_sha256": module_hashes,
             "artifact_sha256": artifacts,
             "upstream_producer_identity": self.upstream_producer_identity,
-            "output_schema_version": OUTPUT_SCHEMA_VERSION,
-            "output_schema_fingerprint": OUTPUT_SCHEMA_FINGERPRINT,
+            "output_schema_version": self.output_schema_version,
+            "output_schema_fingerprint": self.output_schema_fingerprint,
+            "legacy_journals": (
+                "deprecated_read_only"
+                if self.authoritative_decision_output
+                else "active_legacy_compatibility"
+            ),
         }
         return {
             **identity_payload,
@@ -338,8 +397,8 @@ class ShadowRuntime:
     def _contract_fields(self, record_kind: str) -> dict[str, Any]:
         return {
             "record_kind": record_kind,
-            "schema_version": self.schema_version,
-            "schema_fingerprint": OUTPUT_SCHEMA_FINGERPRINT,
+            "schema_version": self.output_schema_version,
+            "schema_fingerprint": self.output_schema_fingerprint,
             "runtime_identity": self.runtime_identity,
         }
 
@@ -347,31 +406,54 @@ class ShadowRuntime:
     def fee_per_share(price: float) -> float:
         return 0.05 * price * (1.0 - price)
 
+    @property
+    def output_schema_version(self) -> str:
+        return (
+            AUTHORITATIVE_OUTPUT_SCHEMA_VERSION
+            if self.authoritative_decision_output
+            else OUTPUT_SCHEMA_VERSION
+        )
+
+    @property
+    def output_schema_fingerprint(self) -> str:
+        return (
+            AUTHORITATIVE_OUTPUT_SCHEMA_FINGERPRINT
+            if self.authoritative_decision_output
+            else OUTPUT_SCHEMA_FINGERPRINT
+        )
+
     def run_once(self, now: datetime | None = None) -> dict[str, Any]:
         now = now or datetime.now(timezone.utc)
-        seen = set().union(*(
-            load_jsonl_keys(path, "evaluation_id")
-            for path in self.journal_catalog["evaluations"]
-        ))
-        first_intents = set().union(*(
-            load_jsonl_keys(path, "position_key")
-            for path in self.journal_catalog["paper_intents"]
-        ))
-        seen_checkpoints = load_jsonl_keys(self.checkpoints, "checkpoint_id")
+        if self.authoritative_decision_output:
+            assert self.decision_sink is not None
+            seen = self.decision_sink.source_evaluation_ids
+            first_intents = self.decision_sink.intent_dedupe_keys
+            seen_checkpoints = self.decision_sink.checkpoint_ids
+        else:
+            seen = set().union(*(
+                load_jsonl_keys(path, "evaluation_id")
+                for path in self.journal_catalog["evaluations"]
+            ))
+            first_intents = set().union(*(
+                load_jsonl_keys(path, "position_key")
+                for path in self.journal_catalog["paper_intents"]
+            ))
+            seen_checkpoints = load_jsonl_keys(self.checkpoints, "checkpoint_id")
         evaluated = written = intents = errors = scored = not_scorable = blockers = 0
-        dual_write = {
+        decision_output = {
             "written_bundles": 0,
             "written_intents": 0,
             "written_blockers": 0,
+            "written_intent_blockers": 0,
             "conversion_errors": 0,
         }
 
-        def record_dual_write(result: Any) -> None:
+        def record_decision_output(result: Any) -> None:
             if result is None:
                 return
             values = result.to_dict() if hasattr(result, "to_dict") else dict(result)
-            for key in dual_write:
-                dual_write[key] += int(values.get(key, 0))
+            for key in decision_output:
+                decision_output[key] += int(values.get(key, 0))
         for profile in self.config["profiles"]:
             if not profile.get("enabled", True):
                 continue
@@ -401,9 +483,10 @@ class ShadowRuntime:
                         "blocker_reason": exc.reason,
                         "details": exc.details,
                     }
-                    append_jsonl(self.checkpoints, blocker_row)
+                    if not self.authoritative_decision_output:
+                        append_jsonl(self.checkpoints, blocker_row)
                     if self.decision_sink is not None:
-                        record_dual_write(
+                        record_decision_output(
                             self.decision_sink.record_checkpoint_blocker(blocker_row)
                         )
                     seen_checkpoints.add(checkpoint_id)
@@ -474,9 +557,10 @@ class ShadowRuntime:
                     "edge_threshold": edge_threshold,
                     "would_enter": would_enter,
                 }
-                append_jsonl(self.evaluations, row)
+                if not self.authoritative_decision_output:
+                    append_jsonl(self.evaluations, row)
                 if self.decision_sink is not None:
-                    record_dual_write(self.decision_sink.record_evaluation(row))
+                    record_decision_output(self.decision_sink.record_evaluation(row))
                 written += 1
                 seen.add(evaluation_id)
                 position_parts = [
@@ -518,9 +602,10 @@ class ShadowRuntime:
                         "notional_usd": 0.0,
                         "shares": 0.0,
                     }
-                    append_jsonl(self.intents, intent_row)
+                    if not self.authoritative_decision_output:
+                        append_jsonl(self.intents, intent_row)
                     if self.decision_sink is not None:
-                        record_dual_write(
+                        record_decision_output(
                             self.decision_sink.record_paper_intent(intent_row)
                         )
                     intents += 1
@@ -537,7 +622,12 @@ class ShadowRuntime:
             "new_evaluations": written,
             "new_paper_intents": intents,
             "errors": errors,
-            "decision_contract_dual_write": dual_write,
+            "decision_contract_output": decision_output,
+            "legacy_journals": (
+                "deprecated_read_only"
+                if self.authoritative_decision_output
+                else "active_legacy_compatibility"
+            ),
         }
         self.output_dir.mkdir(parents=True, exist_ok=True)
         (self.output_dir / "latest_summary.json").write_text(

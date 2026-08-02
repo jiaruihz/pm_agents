@@ -9,6 +9,7 @@ from src.strategies.weather_city_probability_shadow.tokyo import (
     _jma_history,
     _market_prices,
     _official_history,
+    _previous_weather_probability,
 )
 
 
@@ -58,6 +59,31 @@ def test_no_book_reconstructs_complementary_yes_prices():
     assert prices["no_mid"] == pytest.approx(.41)
     assert prices["yes_mid"] == pytest.approx(.59)
     assert prices["yes_ask"] == pytest.approx(.60)
+
+
+def test_previous_weather_probability_reads_authoritative_decision_bundle(tmp_path):
+    path = tmp_path / "decision_bundles.jsonl"
+    _write_jsonl(path, [{
+        "signal_candidate": {
+            "city": "Tokyo",
+            "target_date": "2026-08-01",
+            "bracket": "35",
+            "side": "YES",
+        },
+        "model_output": {
+            "metadata": {
+                "source_obs_ts_utc": "2026-08-01T05:00:00+00:00",
+                "weather_probability_stay": 0.63,
+            }
+        },
+    }])
+    value = _previous_weather_probability(
+        [path],
+        "2026-08-01",
+        35,
+        datetime(2026, 8, 1, 5, 10, tzinfo=timezone.utc),
+    )
+    assert value == pytest.approx(0.63)
 
 
 def test_tokyo_adapter_ignores_stale_book_after_scoring_window(tmp_path):

@@ -385,17 +385,52 @@ def _previous_weather_probability(
     paths: list[Path], target_date: str, bracket: int, source_obs: datetime
 ) -> float | None:
     candidates = []
-    for row in iter_compatible_evaluations(paths):
-        if (
-            row.get("city") == "Tokyo"
-            and row.get("target_date") == target_date
-            and int(row.get("current_bracket", -999)) == bracket
-            and row.get("market_side") == "YES"
-            and _parse_ts(str(row["source_obs_ts_utc"])) < source_obs
-        ):
-            probability = _finite((row.get("lineage") or {}).get("weather_probability_stay"))
-            if probability is not None:
-                candidates.append((_parse_ts(str(row["source_obs_ts_utc"])), probability))
+    for path in paths:
+        if not path.is_file():
+            continue
+        with path.open(encoding="utf-8", errors="replace") as handle:
+            first_row = None
+            for line in handle:
+                try:
+                    first_row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(first_row, dict):
+                    break
+        if first_row and "signal_candidate" in first_row:
+            with path.open(encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    try:
+                        bundle = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    candidate = bundle.get("signal_candidate") or {}
+                    model_output = bundle.get("model_output") or {}
+                    metadata = model_output.get("metadata") or {}
+                    observed = metadata.get("source_obs_ts_utc")
+                    if (
+                        candidate.get("city") == "Tokyo"
+                        and candidate.get("target_date") == target_date
+                        and int(candidate.get("bracket", -999)) == bracket
+                        and candidate.get("side") == "YES"
+                        and observed
+                        and _parse_ts(str(observed)) < source_obs
+                    ):
+                        probability = _finite(metadata.get("weather_probability_stay"))
+                        if probability is not None:
+                            candidates.append((_parse_ts(str(observed)), probability))
+            continue
+        for row in iter_compatible_evaluations([path]):
+            if (
+                row.get("city") == "Tokyo"
+                and row.get("target_date") == target_date
+                and int(row.get("current_bracket", -999)) == bracket
+                and row.get("market_side") == "YES"
+                and _parse_ts(str(row["source_obs_ts_utc"])) < source_obs
+            ):
+                probability = _finite((row.get("lineage") or {}).get("weather_probability_stay"))
+                if probability is not None:
+                    candidates.append((_parse_ts(str(row["source_obs_ts_utc"])), probability))
     return max(candidates, default=(None, None), key=lambda item: item[0])[1]
 
 
@@ -556,8 +591,11 @@ class TokyoMarketAnchorAdapter:
             evaluation_journals = [
                 Path(path)
                 for path in profile.get(
-                    "evaluation_journals",
-                    [profile.get("evaluation_journal", "")],
+                    "decision_bundle_journals",
+                    profile.get(
+                        "evaluation_journals",
+                        [profile.get("evaluation_journal", "")],
+                    ),
                 )
                 if path
             ]

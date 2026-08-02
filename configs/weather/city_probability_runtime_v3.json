@@ -1,10 +1,23 @@
 {
-  "schema_version": "weather_city_probability_shadow_config_v2",
-  "output_schema_version": "weather_city_probability_shadow_v2",
-  "output_schema_fingerprint": "51a9b5a10229d7bfa522bc5d69e78ad544433867a419f9adda8a16415c6dbb1f",
+  "schema_version": "weather_city_probability_runtime_config_v3",
+  "output_schema_version": "weather_city_probability_runtime_v3",
+  "output_schema_fingerprint": "a108e39c36707bc6ed6cc0175d241f49d93442218b047a0534644eb239928985",
   "execution_mode": "zero_notional_shadow",
   "orders_submitted": 0,
-  "lifecycle_status": "deprecated_read_only",
+  "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3",
+  "decision_contract_output": {
+    "enabled": true,
+    "authority": "active",
+    "execution_mode": "zero_notional",
+    "cities": ["Helsinki", "Tokyo"],
+    "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3",
+    "execution_profile": "city_probability_zero_notional_v1"
+  },
+  "legacy_runtime": {
+    "lifecycle_status": "deprecated_read_only",
+    "runtime_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2",
+    "journals": ["evaluations.jsonl", "paper_intents.jsonl", "checkpoints.jsonl", "errors.jsonl"]
+  },
   "require_producer_contracts": true,
   "producer_contracts": [
     {
@@ -14,21 +27,6 @@
       "schema_fingerprint": "789563c9c429f760b1578897c7086563cb876956e9d4d69a191abc185d5b1bf1"
     }
   ],
-  "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2",
-  "journal_catalog": {
-    "evaluations": [
-      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/evaluations.jsonl"
-    ],
-    "paper_intents": [
-      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/paper_intents.jsonl"
-    ],
-    "checkpoints": [
-      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/checkpoints.jsonl"
-    ],
-    "errors": [
-      "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/errors.jsonl"
-    ]
-  },
   "profiles": [
     {
       "enabled": true,
@@ -74,8 +72,8 @@
       "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
       "observation_journal_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/observations",
       "book_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/tokyo_current_break_active_ladder_shadow/active_bracket_books",
-      "evaluation_journals": [
-        "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_shadow_v2/evaluations.jsonl"
+      "decision_bundle_journals": [
+        "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3/decision_bundles.jsonl"
       ],
       "artifacts": {
         "weather": {
