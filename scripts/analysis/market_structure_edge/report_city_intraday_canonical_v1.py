@@ -34,9 +34,11 @@ def build_report(
     try:
         identities = sorted(set(candidate_ids or ()))
         scope_clause = ""
+        index_clause = ""
         params: list[str] = [f"{strategy_prefix}%"]
         if identities:
             scope_clause = f" AND candidate_id IN ({','.join('?' for _ in identities)})"
+            index_clause = " INDEXED BY sqlite_autoindex_fact_signal_candidates_1"
             params.extend(identities)
         rows = conn.execute(
             f"""
@@ -51,7 +53,7 @@ def build_report(
                    COUNT(DISTINCT event_date) AS target_dates,
                    MIN(decision_ts_utc) AS first_decision_ts_utc,
                    MAX(decision_ts_utc) AS last_decision_ts_utc
-            FROM fact_signal_candidates
+            FROM fact_signal_candidates{index_clause}
             WHERE candidate_grain_version = 'v2_event_checkpoint'
               AND strategy_key LIKE ?
               {scope_clause}
