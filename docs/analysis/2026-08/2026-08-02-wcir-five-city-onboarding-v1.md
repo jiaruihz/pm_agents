@@ -1,6 +1,6 @@
 # WCIR 五城接入与 JRS 权限异常审计 v1
 
-Status: code/fixture/real-raw validation complete; production cutover pending maintenance restart
+Status: production recovered; WCIR five-city zero-notional runtime active
 Date: 2026-08-02
 Framework: `weather_city_intraday_runtime_v1` / Weather City Intraday Runtime (WCIR)
 Strategy family: `weather.city_intraday_probability`
@@ -51,3 +51,23 @@ order/fill/notional/fee/PnL delta 均为 0。未能产生的 source candidates �
 System Settings 显示 pinned `tmux` 的 Full Disk Access 仍为 on，说明现有 server 需要维护重建以重新获得 TCC/JRS context。
 同 socket 包含 active live runner；生产 cutover 必须先记录/恢复完整 session 拓扑，再依次验证 write probe、producer freshness、
 WCIR journals、restart dedupe、zero orders 和 strict manifest。
+
+## 维护恢复结果
+
+2026-08-02 07:07 UTC 进入已授权维护窗口。重启前认证 CLOB `open_orders=0`，并保存 canonical tmux 的
+18 sessions / 19 panes 及完整启动命令。pinned `/opt/homebrew/Cellar/tmux/3.6b/bin/tmux` server 重建后，
+JRS write probe 立即通过；18/19 拓扑原样恢复且无 restore error。随后启动统一 `live_cross_observations` producer 和
+WCIR v3：observations 于 07:07:56Z 恢复、source events 于 07:08:08Z 恢复、live-cross 于 07:08Z 后持续更新，
+snapshot/orderbook/forecast curves 于 07:13:14Z 完成首轮新鲜发布。
+
+生产运行中另发现 Helsinki 当日 FMI 历史不足四条时误抛 `RuntimeError`，形成每分钟同一 incident 的 error row。
+根因已在 `8a5a1794` 修为 `insufficient_pit_source_history` 结构化 checkpoint blocker；15 个定向测试通过。
+production 标准 WCIR session 当前运行其后代 clean SHA `8d53ac1a`，保留该修复；最新周期 `errors=0`、
+`orders_submitted=0`，framework/strategy identity 分别为 `weather_city_intraday_runtime_v1` 与
+`weather.city_intraday_probability`。统一 producer 在独立 clean worktree `pm_agents_wcir_prod@8a5a1794`，避免其他
+城市研究 checkout 切换污染 producer identity。
+
+canonical refresh 完成且 coverage gate 退出 0；LaunchAgent `last exit code=0`。最终 strict manifest 为
+`warning`、无 critical、DB route healthy；唯一 warning 是既有 18 个共享 tmux session 尚未全部登记到 instance registry，
+不是本次 JRS 权限或 WCIR freshness 故障。维护前后认证 open orders 均为 0，fast-source order journal 仍为 256 行，
+最后一行时间 2026-08-01 10:32:18Z；因此事故与维护窗口确认 order/fill/notional/fee/PnL delta 全为 0。
