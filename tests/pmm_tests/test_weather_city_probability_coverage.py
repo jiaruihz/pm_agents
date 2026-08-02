@@ -58,6 +58,15 @@ def test_amsterdam_production_profile_uses_notification_journal() -> None:
 
     assert profile["source"] == "knmi"
     assert profile["source_journal"] == KNMI_PRODUCTION_JOURNAL
+    contract = next(
+        row
+        for row in config["producer_contracts"]
+        if row["journal_path"] == KNMI_PRODUCTION_JOURNAL
+    )
+    assert contract["schema_version"] == "weather_knmi_open_data_payload_v1"
+    assert contract["schema_fingerprint"] == (
+        "401ae97fea4cd0f75399a50944949e658b5b17df80a06ac6d6056531b254c883"
+    )
 
 
 def test_amsterdam_revision_is_typed_and_never_becomes_candidate(tmp_path: Path) -> None:
