@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -122,11 +123,52 @@ def _validate_bundle(bundle: DecisionBundle) -> None:
         raise ValueError("bundle model/candidate probability mismatch")
 
 
-class TemporaryCanonicalBridge:
-    """Append candidates to an isolated DB and prove raw/canonical parity."""
+class _CandidateCanonicalBridge:
+    """Shared append implementation for isolated and production canonical DBs."""
 
-    def __init__(self, db_path: Path):
-        self.db_path = _validate_temporary_db_path(db_path)
+    def __init__(self, db_path: Path, *, initialize_schema: bool):
+        self.db_path = db_path
+        self.initialize_schema = initialize_schema
+
+    @staticmethod
+    def _validate_existing_schema(conn: sqlite3.Connection) -> None:
+        required_tables = {
+            "weather_information_events",
+            "weather_state_checkpoints",
+            "fact_signal_candidates",
+        }
+        existing_tables = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        missing_tables = sorted(required_tables - existing_tables)
+        if missing_tables:
+            raise ValueError(
+                f"canonical candidate bridge missing tables: {missing_tables}"
+            )
+        candidate_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(fact_signal_candidates)")
+        }
+        required_columns = {
+            "candidate_id",
+            "candidate_grain_version",
+            "state_checkpoint_id",
+            "trigger_event_id",
+            "decision_ts_utc",
+            "candidate_status",
+            "policy_selected",
+            "market_probability",
+            "condition_id",
+            "decision_entry_price",
+        }
+        missing_columns = sorted(required_columns - candidate_columns)
+        if missing_columns:
+            raise ValueError(
+                f"canonical candidate bridge missing columns: {missing_columns}"
+            )
 
     def append(self, bundles: Iterable[DecisionBundle]) -> dict[str, int]:
         values = list(bundles)
@@ -147,12 +189,19 @@ class TemporaryCanonicalBridge:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         try:
-            apply_schema_canonical(conn)
-            conn.execute(CANDIDATE_DDL)
-            apply_first_seen_schema(conn)
+            if self.initialize_schema:
+                apply_schema_canonical(conn)
+                conn.execute(CANDIDATE_DDL)
+                apply_first_seen_schema(conn)
+            else:
+                self._validate_existing_schema(conn)
             event_result = ingest_information_events(conn, events)
             inserted_checkpoints = ingest_state_checkpoints(conn, checkpoints)
-            result = materialize_candidate_rows(conn, candidates)
+            result = materialize_candidate_rows(
+                conn,
+                candidates,
+                initialize_schema=self.initialize_schema,
+            )
             candidate_ids = [row["candidate_id"] for row in candidates]
             if candidate_ids:
                 placeholders = ",".join("?" for _ in candidate_ids)
@@ -224,3 +273,38 @@ class TemporaryCanonicalBridge:
                 "fill": "not_available_phase2",
             },
         }
+
+
+class TemporaryCanonicalBridge(_CandidateCanonicalBridge):
+    """Append candidates to an isolated DB and prove raw/canonical parity."""
+
+    def __init__(self, db_path: Path):
+        super().__init__(
+            _validate_temporary_db_path(db_path), initialize_schema=True
+        )
+
+
+class CanonicalCandidateBridge(_CandidateCanonicalBridge):
+    """Incrementally append WCIR facts to the physical canonical DB.
+
+    The explicit physical identity check prevents a repo-local or split DB from
+    becoming a second canonical writer. Production callers must still pass the
+    production-manifest preflight before constructing this bridge.
+    """
+
+    def __init__(
+        self,
+        db_path: Path,
+        *,
+        expected_db_path: Path = Path("/Volumes/jrs/pm_agents/runtime/weather.db"),
+    ) -> None:
+        requested = db_path.resolve()
+        expected = expected_db_path.resolve()
+        if not requested.is_file() or not expected.is_file():
+            raise ValueError("canonical candidate bridge requires existing DB files")
+        if not os.path.samefile(requested, expected):
+            raise ValueError(
+                "canonical candidate bridge DB identity mismatch: "
+                f"requested={requested} expected={expected}"
+            )
+        super().__init__(requested, initialize_schema=False)

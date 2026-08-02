@@ -430,7 +430,8 @@ dedupe 全流程无 bug。
 
 ### Phase 4：共享执行 runtime 的 non-live 迁移
 
-Status: **2026-08-02 non-live 迁移已完成；真实下单 authority 仍留在 legacy，等待 Phase 5 逐实例批准。** 现有
+Status: **2026-08-02 non-live 迁移已完成；WCIR 当前只有 shadow authority，不存在待切换的 WCIR 实盘实例。** 仓库内其他
+策略的真实下单 authority 仍留在 legacy，只有那些实例未来单独进入 Phase 5。现有
 `ExecutionProfile/quote/lifecycle/reconciliation/OrderRuntime/Polymarket venue/execution journal` 保持唯一执行核心；
 不另建城市执行器。production WCIR 的 4 条实际 intent 已由 clean SHA `e3bd0aa2` 物化为 4 条 `record_only` handoff，
 blocked=0、可执行 intent=0、venue call=0；对应 zero-notional 语义没有被伪造成正 shares。
@@ -478,6 +479,10 @@ candidate/token/condition/outcome/profile 任一无法无损映射时显式 bloc
 
 ### Phase 5：active execution 单实例 canary
 
+WCIR 当前状态：**not applicable / skipped**。`weather_city_probability_runtime_v3` 是
+`zero_notional_shadow`，本阶段不把它升级成 live，也不因共享 execution contract 已接好就推断存在实盘迁移任务。
+以下流程只适用于仓库内其他已经获得真实下单授权、且未来要迁共享 runtime 的实例；每次仍需新的显式批准。
+
 顺序固定为：一个低风险 GTC tiny canary → 其余 GTC → fast-source GTD → basket/FOK、SELL、stop-loss 各自独立验收。fast-source 最后，因为它包含 latency、GTD、即时重试、maker remainder 和 signed share cap。
 
 每次只切一个实例：记录 pre-state → 冻结 lifecycle fixture 离线 parity → 直接切新 runtime tiny canary → process/raw/exchange/canonical 对账 → 观察窗口通过后再扩大。不运行长期 live comparator 或双写。每次都需用户对真实生产行为单独确认并调用 `weather-strategy-deploy`；本路线图不构成 live 授权。
@@ -486,12 +491,20 @@ candidate/token/condition/outcome/profile 任一无法无损映射时显式 bloc
 
 ### Phase 6：canonical 与统一报告正式切换
 
+Status: **2026-08-02 WCIR shadow candidate/report 接入已实现，production 增量物化待本阶段 preflight 通过后执行。**
+当前 WCIR 只把 event、checkpoint 和 `v2_event_checkpoint` candidate 写入 canonical；coverage-only 城市继续只保留
+checkpoint blocker。不会为 shadow 数据伪造 plan、order、fill 或 PnL，统一报告对此显示 `not_available_shadow`，而不是零成交或零收益。
+
 要做：
 
 - 新 execution profile/config/root/action 字段进入 canonical plan/order，并在 fill grain 允许时投影到 `fact_trades`。
 - unfilled plan/order 保留在 evidence denominator；fill/fee/PnL 只来自 canonical fill/settlement。
 - 公共报告默认读取 prediction table、`fact_signal_candidates`、canonical plans/orders 和 `fact_trades`。
 - 先临时 DB，再经批准执行 production 增量 materialization；不因迁移无条件全量重建。
+
+WCIR shadow 的增量入口是 `scripts/ops/materialize_weather_city_runtime_canonical_v1.py`：默认只写临时 DB，只有显式
+`--apply` 才写 physical canonical，并要求 requested/expected DB 是同一 device/inode。公共候选报告由
+`scripts/analysis/market_structure_edge/report_city_intraday_canonical_v1.py` 从 canonical v2 facts 只读生成。
 
 完成标准：raw/canonical order 数一致、无缺失 execution ID、无重复 fill、coverage gate 通过；signal/plan/order/fill/PnL 与 Phase 0 rolling ledger 的差异有逐条清单。
 

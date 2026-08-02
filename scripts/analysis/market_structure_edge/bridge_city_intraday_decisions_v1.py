@@ -43,21 +43,7 @@ def _rows(paths: Iterable[Path]) -> Iterable[dict[str, Any]]:
 
 
 def _vnext_bundle(row: Mapping[str, Any]) -> DecisionBundle:
-    required = {
-        "information_event",
-        "state_checkpoint",
-        "model_output",
-        "signal_candidate",
-    }
-    missing = sorted(required - set(row))
-    if missing:
-        raise ValueError(f"vNext bundle missing fields: {missing}")
-    return DecisionBundle(
-        information_event=dict(row["information_event"]),
-        state_checkpoint=dict(row["state_checkpoint"]),
-        model_output=ModelOutput.from_dict(row["model_output"]),
-        signal_candidate=SignalCandidate.from_dict(row["signal_candidate"]),
-    )
+    return DecisionBundle.from_dict(row)
 
 
 def _unique(values: Iterable[Any], identity_field: str) -> list[Any]:
