@@ -430,6 +430,11 @@ dedupe 全流程无 bug。
 
 ### Phase 4：共享执行 runtime 的 non-live 迁移
 
+Status: **2026-08-02 已完成 WCIR → 既有共享执行体系的第一批兼容切入。** 现有
+`ExecutionProfile/quote/lifecycle/reconciliation/OrderRuntime/Polymarket venue/execution journal` 保持唯一执行核心；
+不另建城市执行器。production WCIR 的 4 条实际 intent 已由 clean SHA `e3bd0aa2` 物化为 4 条 `record_only` handoff，
+blocked=0、可执行 intent=0、venue call=0；对应 zero-notional 语义没有被伪造成正 shares。
+
 兼容原则：**WCIR 不建设第二套执行核心。** WCIR 的 `TradeIntent` 是策略侧、且不能授予 live 的请求契约；
 `src/strategies/weather_edge_v1/execution/wcir.py` 是唯一兼容边界。它把正 shares 的 shadow intent 映射为既有
 `ExecutionIntent`，后续继续复用现有 `ExecutionProfile -> quote/lifecycle/reconciliation -> OrderRuntime -> venue ->
