@@ -78,3 +78,22 @@ record 时错误引用前一层循环残留的 `label`，把某一 bracket 的 m
 fetch、live strategy eligibility、order/fill journal 未被改写。修复 `2a6f5117` 已部署为 production SHA `55f6fbed`，57 个
 data-feed/health 定向测试通过；新 snapshot `snapshot_20260802_1531.json` 的 targeted orderbook 为 139/139 ok、
 `target_incomplete_count=0`。部署前后认证 open orders 均为 0，fast-source 最新周期仍为 attempted/submitted 0。
+
+## Amsterdam KNMI 接入复核与补修
+
+20:00 CST 后的端到端复核发现，Amsterdam 虽已登记为 WCIR coverage-only city，但当时没有进入统一 checkpoint journal。
+根因有两层：WCIR profile 错指向不具备生产 EDR key 的 common live-cross KNMI 路径；实际 KNMI Open Data notification
+collector 又在前述 JRS 权限事故中于 `2026-08-02T02:54:11Z` 停止，恢复 canonical tmux 时未被重建。因此
+`02:54:11Z..12:26:15Z` 是 Amsterdam source checkpoint 的明确 coverage gap。
+
+修复由三笔提交组成：`38ae42ca` 将 Amsterdam profile 路由到 canonical
+`output/knmi_open_data/knmi_observations.jsonl`；`e4d676dc` 给 KNMI producer 补齐 schema fingerprint、repo/config/module hash
+和 runtime instance identity；`bf02ed1b` 在 WCIR 声明并强校验该 upstream producer contract。KNMI collector 已在 canonical
+JRS tmux session `weather_knmi_open_data_jrs` 恢复，并补到观测时刻 `12:20:00Z`、available-at `12:26:15.997834Z`、
+`25.6°C` 的 current row。
+
+WCIR production 已部署 clean SHA `0b8c0318`。Amsterdam 最新输出为
+`city_probability_model_not_deployed`，payload=`measurement_interval_revision`，不再是
+`source_observation_not_available`；runtime 同时记录 live-cross 与 KNMI 两个 producer identity，最新周期 `errors=0`、
+`orders_submitted=0`。由于 Amsterdam 始终是 coverage-only adapter，本次缺口期间没有 candidate、intent 或 execution client，
+反事实影响清单为空，确认 order/fill/notional/fee/PnL delta 均为 0；影响仅限上述窗口缺失的 Amsterdam coverage checkpoints。
