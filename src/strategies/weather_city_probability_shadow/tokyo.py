@@ -594,7 +594,15 @@ class TokyoMarketAnchorAdapter:
             }
         compact_market = {
             key: book.get(key)
-            for key in ("condition_id", "market_id", "token_id", "question", "book_fetched_at_utc", "book_status")
+            for key in (
+                "condition_id",
+                "market_id",
+                "token_id",
+                "outcome",
+                "question",
+                "book_fetched_at_utc",
+                "book_status",
+            )
         }
         compact_market.update(prices)
         lineage = {

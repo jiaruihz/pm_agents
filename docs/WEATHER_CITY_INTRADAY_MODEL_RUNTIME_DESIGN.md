@@ -350,6 +350,18 @@ Status: **2026-08-02 已完成公共证据层实现与三城 fixture 验收；�
 
 ### Phase 2：统一决策事实边界与 canonical bridge
 
+Status: **2026-08-02 已完成 offline/temp-canonical 实现与 deployed-journal 验收；未切换生产 runner。** 证据和污染窗口见
+[Phase 2 decision bridge report](analysis/2026-08/2026-08-02-city-intraday-phase2-decision-bridge-v1.md)。公共
+`weather_city_runtime/` 已定义版本化 `ModelOutput`、`SignalCandidate`、`TradeIntent`；legacy
+`CityScore/evaluation/paper_intent` 通过显式 adapter 转换，原 journal 保留不删。统一 bridge 复用
+`fact_signal_candidates(candidate_grain_version=v2_event_checkpoint)`，只允许写 temp/research DB，并验证 legacy-only、
+vNext-only 和 mixed journal。
+
+实际 deployed raw snapshot 的 358 行决策记录收敛为 346 个唯一 candidate，临时 canonical 为 346，delta=0；
+6 个可证明 token/outcome 的 zero-notional intent 成功转换，4 个 Tokyo YES 历史 paper intent 因 legacy NO-token
+payload 未保存 `outcome` 而显式阻断，历史 notional/shares/orders/fills/PnL 影响均为 0。新 Tokyo telemetry 已补
+`outcome`；YES expression token 的真实映射留给 Phase 3B，不从 NO token 猜测。
+
 要做：
 
 - 定义版本化 `ModelOutput`、`SignalCandidate`、`TradeIntent`；当前 `CityScore/evaluation/paper_intent` 先通过显式兼容转换，不删除。

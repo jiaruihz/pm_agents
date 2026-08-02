@@ -72,6 +72,17 @@ _CANDIDATE_V2_COLUMNS = {
     "candidate_blocker": "TEXT",
     "policy_selected": "INTEGER",
     "first_city_day_selected": "INTEGER",
+    "target_id": "TEXT",
+    "target_kind": "TEXT",
+    "expression_id": "TEXT",
+    "token_id": "TEXT",
+    "feature_set_id": "TEXT",
+    "feature_book_snapshot_id": "TEXT",
+    "execution_book_snapshot_id": "TEXT",
+    "policy_id": "TEXT",
+    "candidate_schema_version": "TEXT",
+    "input_refs_json": "TEXT",
+    "candidate_metadata_json": "TEXT",
 }
 
 _OBSERVATION_LINEAGE_COLUMNS = {

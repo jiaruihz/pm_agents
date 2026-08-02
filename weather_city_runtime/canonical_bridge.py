@@ -1,0 +1,226 @@
+"""Incremental bridge from shared city candidates into a temporary canonical DB."""
+
+from __future__ import annotations
+
+from pathlib import Path
+import sqlite3
+import tempfile
+from typing import Any, Iterable
+
+from scripts.etl.build_weather_signal_candidates import CANDIDATE_DDL
+from scripts.etl.materialize_weather_event_signal_candidates import (
+    materialize_candidate_rows,
+)
+from weather_dashboard.db.apply_schema_canonical import apply_schema_canonical
+from weather_dashboard.db.first_seen_schema import apply_first_seen_schema
+from weather_dashboard.ingest.information_events import ingest_information_events
+from weather_dashboard.ingest.state_checkpoints import ingest_state_checkpoints
+from weather_data_feed.information_events import canonical_json_hash
+from weather_model_evaluation.contracts import parse_utc
+
+from .legacy_adapters import DecisionBundle
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _validate_temporary_db_path(path: Path) -> Path:
+    resolved = path.resolve()
+    allowed_roots = (
+        Path(tempfile.gettempdir()).resolve(),
+        Path("/tmp").resolve(),
+        (ROOT / "runtime" / "research").resolve(),
+        (ROOT / "research_outputs").resolve(),
+    )
+    if resolved.suffix != ".db":
+        raise ValueError("temporary canonical bridge path must end in .db")
+    if not any(resolved.is_relative_to(root) for root in allowed_roots):
+        raise ValueError("Phase 2 canonical bridge may write only research/temp DB")
+    return resolved
+
+
+def _unique_by_id(
+    rows: Iterable[dict[str, Any]],
+    identity_field: str,
+) -> tuple[list[dict[str, Any]], int]:
+    unique: dict[str, dict[str, Any]] = {}
+    duplicates = 0
+    for row in rows:
+        identity = str(row[identity_field])
+        previous = unique.get(identity)
+        if previous is not None:
+            if canonical_json_hash(previous) != canonical_json_hash(row):
+                raise ValueError(f"conflicting duplicate {identity_field}: {identity}")
+            duplicates += 1
+            continue
+        unique[identity] = row
+    return [unique[key] for key in sorted(unique)], duplicates
+
+
+def _unique_candidate_rows(
+    rows: Iterable[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    unique: dict[str, dict[str, Any]] = {}
+    duplicates = 0
+    for row in rows:
+        identity = str(row["candidate_id"])
+        previous = unique.get(identity)
+        if previous is None:
+            unique[identity] = row
+            continue
+        left = {**previous, "policy_selected": 0, "first_city_day_selected": 0}
+        right = {**row, "policy_selected": 0, "first_city_day_selected": 0}
+        if canonical_json_hash(left) != canonical_json_hash(right):
+            raise ValueError(f"conflicting duplicate candidate_id: {identity}")
+        previous["policy_selected"] = max(
+            int(previous.get("policy_selected") or 0),
+            int(row.get("policy_selected") or 0),
+        )
+        previous["first_city_day_selected"] = max(
+            int(previous.get("first_city_day_selected") or 0),
+            int(row.get("first_city_day_selected") or 0),
+        )
+        duplicates += 1
+    return [unique[key] for key in sorted(unique)], duplicates
+
+
+def _validate_bundle(bundle: DecisionBundle) -> None:
+    event = bundle.information_event
+    checkpoint = bundle.state_checkpoint
+    output = bundle.model_output
+    candidate = bundle.signal_candidate
+    event_id = str(event.get("information_event_id") or "")
+    checkpoint_id = str(checkpoint.get("state_checkpoint_id") or "")
+    if not event_id or checkpoint.get("trigger_event_id") != event_id:
+        raise ValueError("bundle event/checkpoint trigger identity mismatch")
+    if checkpoint_id != output.checkpoint_id or checkpoint_id != candidate.checkpoint_id:
+        raise ValueError("bundle checkpoint identity mismatch")
+    if event_id != output.trigger_event_id or event_id != candidate.trigger_event_id:
+        raise ValueError("bundle trigger_event identity mismatch")
+    for field in ("city", "target_date"):
+        values = {
+            str(checkpoint.get(field)),
+            str(getattr(output, field)),
+            str(getattr(candidate, field)),
+        }
+        if len(values) != 1:
+            raise ValueError(f"bundle {field} mismatch")
+    if parse_utc(str(checkpoint.get("as_of_ts_utc"))) != parse_utc(
+        output.decision_ts_utc
+    ) or parse_utc(output.decision_ts_utc) != parse_utc(candidate.decision_ts_utc):
+        raise ValueError("bundle decision clock mismatch")
+    for field in (
+        "target_id",
+        "target_kind",
+        "model_id",
+        "model_artifact_id",
+        "feature_set_id",
+    ):
+        if getattr(output, field) != getattr(candidate, field):
+            raise ValueError(f"bundle model/candidate {field} mismatch")
+    if output.p_model != candidate.p_model:
+        raise ValueError("bundle model/candidate probability mismatch")
+
+
+class TemporaryCanonicalBridge:
+    """Append candidates to an isolated DB and prove raw/canonical parity."""
+
+    def __init__(self, db_path: Path):
+        self.db_path = _validate_temporary_db_path(db_path)
+
+    def append(self, bundles: Iterable[DecisionBundle]) -> dict[str, int]:
+        values = list(bundles)
+        for bundle in values:
+            _validate_bundle(bundle)
+        events, duplicate_events = _unique_by_id(
+            [dict(bundle.information_event) for bundle in values],
+            "information_event_id",
+        )
+        checkpoints, duplicate_checkpoints = _unique_by_id(
+            [dict(bundle.state_checkpoint) for bundle in values],
+            "state_checkpoint_id",
+        )
+        candidates, duplicate_candidates_in_input = _unique_candidate_rows(
+            [bundle.signal_candidate.to_canonical_input() for bundle in values],
+        )
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            apply_schema_canonical(conn)
+            conn.execute(CANDIDATE_DDL)
+            apply_first_seen_schema(conn)
+            event_result = ingest_information_events(conn, events)
+            inserted_checkpoints = ingest_state_checkpoints(conn, checkpoints)
+            result = materialize_candidate_rows(conn, candidates)
+            candidate_ids = [row["candidate_id"] for row in candidates]
+            if candidate_ids:
+                placeholders = ",".join("?" for _ in candidate_ids)
+                canonical_count = int(
+                    conn.execute(
+                        f"SELECT COUNT(*) FROM fact_signal_candidates "
+                        f"WHERE candidate_id IN ({placeholders})",
+                        candidate_ids,
+                    ).fetchone()[0]
+                )
+            else:
+                canonical_count = 0
+            if canonical_count != len(candidate_ids):
+                raise RuntimeError(
+                    "raw/canonical candidate reconciliation failed: "
+                    f"raw_unique={len(candidate_ids)} canonical={canonical_count}"
+                )
+        finally:
+            conn.close()
+        return {
+            "raw_candidate_rows": len(values),
+            "raw_unique_candidates": len(candidates),
+            "canonical_candidates": canonical_count,
+            "candidate_delta": len(candidates) - canonical_count,
+            "inserted_candidates": result["inserted"],
+            "existing_candidates": result["duplicates"],
+            "input_duplicate_candidates": duplicate_candidates_in_input,
+            "inserted_events": event_result["inserted"],
+            "existing_events": event_result["duplicates"],
+            "input_duplicate_events": duplicate_events,
+            "inserted_checkpoints": inserted_checkpoints,
+            "input_duplicate_checkpoints": duplicate_checkpoints,
+        }
+
+    def candidate_funnels(self) -> dict[str, Any]:
+        conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                """
+                SELECT candidate_id, candidate_status, policy_selected,
+                       market_probability, condition_id, decision_entry_price
+                FROM fact_signal_candidates
+                WHERE candidate_grain_version = 'v2_event_checkpoint'
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+        return {
+            "signal_funnel": {
+                "unit": "expression_checkpoint",
+                "raw_candidates": len(rows),
+                "scored_candidates": sum(
+                    row["candidate_status"] == "scored" for row in rows
+                ),
+                "blocked_candidates": sum(
+                    row["candidate_status"] == "blocked" for row in rows
+                ),
+                "policy_selected": sum(bool(row["policy_selected"]) for row in rows),
+            },
+            "evidence_funnel": {
+                "unit": "expression_checkpoint",
+                "pit_market": sum(row["market_probability"] is not None for row in rows),
+                "mapped_expression": sum(row["condition_id"] is not None for row in rows),
+                "executable_expression": sum(
+                    row["decision_entry_price"] is not None for row in rows
+                ),
+                "intent": "reported_from_intent_journal",
+                "fill": "not_available_phase2",
+            },
+        }
