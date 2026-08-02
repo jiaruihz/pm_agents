@@ -453,6 +453,13 @@ blocked=0、可执行 intent=0、venue call=0；对应 zero-notional 语义没�
 
 离线验收覆盖 WCIR record-only、低价单腿 maker、heat-death 与 D1 taker+maker、partial fill、cancel/fill race、
 unknown submit recovery 和 restart dedupe。共享执行及三个 runner 的定向测试共 149 项通过；没有增加 live venue call。
+production zero-notional `low_price_yes_lottery_shadow_v1` 已从 clean SHA `4ca5da72` 重启：首个完成 cycle
+`2026-08-02T15:37:43Z` 明确为 `live_enabled=false`、`authority=shared_order_runtime`、input/submitted/venue call 均为 0；
+变更前后 live order journal 都是 2,007 行且 SHA-256 均为
+`c2387ca77c8fa71270455090357029bab70add5603f9b3eb3412824a5d8c77df`，canonical DB route healthy，精确变更前后的
+JRS tmux session 集合一致。第一次 clean-checkout smoke（`2026-08-02T15:35:08Z`）因 checkout-local
+`runtime/weather.db` 未连接 canonical DB 而显式失败；补同 inode symlink 并让 launcher 显式传递 runtime/code identity 后恢复，
+该失败窗口只有一个 shadow cycle，order/fill/notional/fee/PnL delta 全为 0。
 
 兼容原则：**WCIR 不建设第二套执行核心。** WCIR 的 `TradeIntent` 是策略侧、且不能授予 live 的请求契约；
 `src/strategies/weather_edge_v1/execution/wcir.py` 是唯一兼容边界。它把正 shares 的 shadow intent 映射为既有
