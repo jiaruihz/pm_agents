@@ -491,7 +491,10 @@ WCIR 当前状态：**not applicable / skipped**。`weather_city_probability_run
 
 ### Phase 6：canonical 与统一报告正式切换
 
-Status: **2026-08-02 WCIR shadow candidate/report 接入已实现，production 增量物化待本阶段 preflight 通过后执行。**
+Status: **2026-08-02 WCIR shadow candidate/report 已正式切换。** production manifest 的 DB route 为 healthy；当前
+164 条 journal bundle 归并为 160 条唯一 candidate（Helsinki 108、Tokyo 52），canonical reconciliation delta=0。
+冻结同一份 journal 连续物化两次均为 inserted event/checkpoint/candidate=0，证明增量入口幂等；写入前后
+plans/orders/fills/fact_trades 分别保持 6,425/7,273/4,927/4,885 行不变，160 个 candidate 关联 plan/order 均为 0。
 当前 WCIR 只把 event、checkpoint 和 `v2_event_checkpoint` candidate 写入 canonical；coverage-only 城市继续只保留
 checkpoint blocker。不会为 shadow 数据伪造 plan、order、fill 或 PnL，统一报告对此显示 `not_available_shadow`，而不是零成交或零收益。
 
@@ -504,7 +507,9 @@ checkpoint blocker。不会为 shadow 数据伪造 plan、order、fill 或 PnL�
 
 WCIR shadow 的增量入口是 `scripts/ops/materialize_weather_city_runtime_canonical_v1.py`：默认只写临时 DB，只有显式
 `--apply` 才写 physical canonical，并要求 requested/expected DB 是同一 device/inode。公共候选报告由
-`scripts/analysis/market_structure_edge/report_city_intraday_canonical_v1.py` 从 canonical v2 facts 只读生成。
+`scripts/analysis/market_structure_edge/report_city_intraday_canonical_v1.py` 从 canonical v2 facts 只读生成；production 报告必须
+用 `--bundles` 把查询限定到 journal 的 candidate IDs，避免在 11GB canonical DB 上做全量 v2 扫描。该性能问题在首次验收时
+实际暴露并已修正，未触及执行事实。
 
 完成标准：raw/canonical order 数一致、无缺失 execution ID、无重复 fill、coverage gate 通过；signal/plan/order/fill/PnL 与 Phase 0 rolling ledger 的差异有逐条清单。
 
