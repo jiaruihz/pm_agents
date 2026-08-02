@@ -135,6 +135,16 @@ def line_count(path: Path) -> int:
         return sum(1 for _ in handle)
 
 
+def next_runtime_telemetry_rows(conn: sqlite3.Connection) -> int:
+    """Advance the operational counter without rescanning the growing journal."""
+
+    row = conn.execute(
+        "SELECT telemetry_rows FROM strategy_instance_runtime WHERE instance_id = ?",
+        (STRATEGY_INSTANCE,),
+    ).fetchone()
+    return int(row[0] or 0) + 1 if row else 1
+
+
 def repo_path(path: Path) -> str:
     try:
         return str(path.relative_to(ROOT))
@@ -176,7 +186,7 @@ def publish_runtime_state(
             plan_rows=plan_rows,
             live_order_rows=line_count(output_dir / "live_orders.jsonl"),
             paper_order_rows=line_count(output_dir / "paper_orders.jsonl"),
-            telemetry_rows=line_count(output_dir / "summary_history.jsonl") + 1,
+            telemetry_rows=next_runtime_telemetry_rows(conn),
             live_enabled=int(bool(summary.get("live_enabled"))),
             summary_path=repo_path(output_dir / "latest_summary.json"),
             primary_journal_path=repo_path(output_dir / "live_orders.jsonl"),
