@@ -430,10 +430,29 @@ dedupe 全流程无 bug。
 
 ### Phase 4：共享执行 runtime 的 non-live 迁移
 
-Status: **2026-08-02 已完成 WCIR → 既有共享执行体系的第一批兼容切入。** 现有
+Status: **2026-08-02 non-live 迁移已完成；真实下单 authority 仍留在 legacy，等待 Phase 5 逐实例批准。** 现有
 `ExecutionProfile/quote/lifecycle/reconciliation/OrderRuntime/Polymarket venue/execution journal` 保持唯一执行核心；
 不另建城市执行器。production WCIR 的 4 条实际 intent 已由 clean SHA `e3bd0aa2` 物化为 4 条 `record_only` handoff，
 blocked=0、可执行 intent=0、venue call=0；对应 zero-notional 语义没有被伪造成正 shares。
+
+非实盘执行 runner 已直接切换，不做 dual-run：
+
+- `low_price_yes_lottery_tiny_live.py` 的 zero-notional 分支、
+  `weather_current_yes_heat_death_tiny_live_v1.py` 的 paper 分支和 dormant
+  `d1_yes_high_mid_shadow_v1.py` 的 would-live 分支，均通过 legacy compatibility adapter 进入
+  `OrderRuntime.submit_preplanned` 和统一 execution journal；旧 `trade_plans/paper_orders` 在非实盘分支标为
+  `deprecated_read_only`，只在尚未迁移的 live 分支继续作为 authority。
+- non-live venue 是显式注入、无 client/key/network 的 deterministic paper venue；它保留原 plan 的 child role、shares、
+  price cap、maker flag、book epoch 和 fee identity，并复用共享 risk、plan dedupe、exposure claim 与 attempt-before-side-effect。
+- `low_price_yes_integrated_tail_shadow_v2.py`、`tmax_distribution_edge_shadow_v1.py`、
+  `weather_current_yes_heat_death_shadow_v1.py` 只产 signal/decision evidence，没有 plan/order/venue side effect，因而不属于
+  execution runner；它们继续接统一 candidate/evidence 链，不另造空订单。
+- D1 迁移时发现并修正实际 contract 漂移：runner 写出的未注册
+  `d1_yes_split_5_taker_5_maker_v1` 已改为已有、行为匹配的
+  `d1_taker_plus_maker_chase_to_mid_v1`；maker cap adapter 同时接受该 runner 实际写出的 `maker_price_cap`。
+
+离线验收覆盖 WCIR record-only、低价单腿 maker、heat-death 与 D1 taker+maker、partial fill、cancel/fill race、
+unknown submit recovery 和 restart dedupe。共享执行及三个 runner 的定向测试共 149 项通过；没有增加 live venue call。
 
 兼容原则：**WCIR 不建设第二套执行核心。** WCIR 的 `TradeIntent` 是策略侧、且不能授予 live 的请求契约；
 `src/strategies/weather_edge_v1/execution/wcir.py` 是唯一兼容边界。它把正 shares 的 shadow intent 映射为既有
@@ -441,14 +460,14 @@ blocked=0、可执行 intent=0、venue call=0；对应 zero-notional 语义没�
 execution journal`。`research/zero_notional` 只生成 `record_only` handoff，不伪造正 shares，也不调用 venue。
 candidate/token/condition/outcome/profile 任一无法无损映射时显式 blocker，不让 metadata 或城市 adapter 猜语义。
 
-要做：
+已完成：
 
 - 补齐 `execution_config_id`、resolved profile、root/source/replacement action lineage、execution journal、risk/exposure/dedupe 和 Polymarket capability/fee identity。
 - 依次直接迁 dormant runner、zero-notional shadow、paper runner；每类通过完整 fixture 后旧链标只读，不保留长期双写。
 - active live runner 不做长期 comparator；先在离线完整 lifecycle harness 验证 child role、shares、price、cap、TTL、reprice/cancel、remaining shares 和 blocker，再按 Phase 5 单实例 tiny canary 切换。
 - canonical mixed-schema 只在临时 DB 验证。
 
-完成标准：shadow/paper 单 token runner 不再私自重实现执行生命周期；legacy/new fixture parity 无未解释差异；partial fill、cancel/fill race、unknown submit、restart dedupe 均通过；无新增 live path。
+完成标准已满足：shadow/paper 单 token runner 不再私自重实现执行生命周期；legacy/new fixture parity 无未解释差异；partial fill、cancel/fill race、unknown submit、restart dedupe 均通过；无新增 live path。live-only legacy 分支的删除属于 Phase 5/7，不在本阶段越权处理。
 
 ### Phase 5：active execution 单实例 canary
 

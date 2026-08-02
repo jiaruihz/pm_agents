@@ -39,6 +39,10 @@ from src.strategies.weather_edge_v1.tools.low_price_yes_tail_telemetry import (
     load_tail_telemetry_resources_soft,
     parse_bracket_bounds,
 )
+from src.strategies.weather_edge_v1.execution.engine import build_low_price_legacy_plan_compatibility
+from src.strategies.weather_edge_v1.runtime.non_live import (
+    execute_legacy_compatibility_paper,
+)
 from src.strategies.weather_edge_v1.runtime import order_runtime
 from scripts.ops.weather_market_proxy import market_proxy_url as shared_market_proxy_url
 from weather_data_feed.source_policy import city_slug
@@ -68,6 +72,7 @@ WOULD_LIVE_OUT = RUNTIME_DIR / "would_live_entries.jsonl"
 BLOCKED_OUT = RUNTIME_DIR / "blocked_candidates.jsonl"
 LATEST_CANDIDATES_OUT = RUNTIME_DIR / "latest_candidates.json"
 PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
+SHARED_EXECUTION_JOURNAL_OUT = RUNTIME_DIR / "shared_execution_journal.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 TOKEN_CACHE_OUT = RUNTIME_DIR / "token_cache.json"
 LIVE_OUT = LIVE_DIR / "low_price_yes_lottery_tiny_live_v1_orders.jsonl"
@@ -79,6 +84,7 @@ STRATEGY_INSTANCE = "low_price_yes_lottery_tiny_live_v1"
 STRATEGY_ID = "low_price_yes_lottery_tiny_live_v1"
 STRATEGY_FAMILY = "forecast_quality.low_price_yes_lottery"
 RULE_ID = "buy_yes_edge20_ask05_20_maker_first_v1"
+LOW_PRICE_EXECUTION_PROFILE = "single_side_maker_v1"
 SOURCE_REPORT = "docs/analysis/2026-07/2026-07-02-low-price-yes-lottery-selector-refinement-v1.md"
 DIST_BRANCH_REPORT = "docs/analysis/2026-07/2026-07-04-low-price-yes-dist-branch-v1.md"
 HEADA_REFINEMENT_REPORT = "docs/analysis/2026-07/2026-07-04-low-price-yes-heada-refinement-v1.md"
@@ -1908,6 +1914,44 @@ def build_plan(decision: dict[str, Any], *, live_enabled: bool) -> dict[str, Any
     }
 
 
+def execute_non_live_shared_entry_plans(
+    entry_plans: list[dict[str, Any]],
+    *,
+    generated_at_utc: str,
+) -> dict[str, Any]:
+    """Directly hand non-live plans to the existing shared order runtime."""
+
+    compatibilities = [
+        build_low_price_legacy_plan_compatibility(
+            legacy_plan=plan,
+            configured_execution_profile=LOW_PRICE_EXECUTION_PROFILE,
+        )
+        for plan in entry_plans
+    ]
+    summaries = [
+        execute_legacy_compatibility_paper(
+            compatibility=compatibility,
+            legacy_plans={compatibility.legacy_plan_ids[0]: plan},
+            journal_path=SHARED_EXECUTION_JOURNAL_OUT,
+            strategy_instance=STRATEGY_INSTANCE,
+            generated_at_utc=generated_at_utc,
+            code_commit=os.environ.get("WEATHER_RUNTIME_CODE_COMMIT", "committed_checkout"),
+        )
+        for compatibility, plan in zip(compatibilities, entry_plans, strict=True)
+    ]
+    return {
+        "authority": "shared_order_runtime",
+        "execution_mode": "paper",
+        "legacy_plan_journal": "deprecated_read_only",
+        "input_plans": sum(row["input_plans"] for row in summaries),
+        "submitted": sum(row["submitted"] for row in summaries),
+        "deduped": sum(row["deduped"] for row in summaries),
+        "blocked": sum(row["blocked"] for row in summaries),
+        "venue_calls": sum(row["venue_calls"] for row in summaries),
+        "journal": rel(SHARED_EXECUTION_JOURNAL_OUT),
+    }
+
+
 def attach_decision_feature_ref(decision: dict[str, Any]) -> dict[str, Any]:
     return attach_runtime_feature_frame_ref(
         decision,
@@ -2456,7 +2500,6 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         weather_snapshot=weather_snapshot,
     )
     plans = [*maker_lifecycle_plans, *entry_plans]
-    write_jsonl(PLAN_OUT, plans)
     for decision in decisions:
         append_jsonl(SHADOW_OUT, decision)
         if bool(decision.get("would_live_entry")) and not live_enabled:
@@ -2473,7 +2516,18 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         },
     )
 
-    executor_payload = run_executor(args)
+    if live_enabled:
+        write_jsonl(PLAN_OUT, plans)
+        executor_payload = run_executor(args)
+        shared_execution = None
+    else:
+        if maker_lifecycle_plans:
+            raise RuntimeError("non-live migration rejects legacy maker lifecycle plans")
+        shared_execution = execute_non_live_shared_entry_plans(
+            entry_plans,
+            generated_at_utc=generated_at,
+        )
+        executor_payload = None
     summary: dict[str, Any] = {
         "generated_at_utc": generated_at,
         "status": "planned",
@@ -2504,6 +2558,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "maker_lifecycle_plan_count": len(maker_lifecycle_plans),
         "blocked_count": len(blocked),
         "plans": len(plans),
+        "shared_execution": shared_execution,
         "live_requested": bool(args.live),
         "live_enabled": live_enabled,
         "daily_cap": None,
@@ -2556,6 +2611,8 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
             "blocked_candidates": rel(BLOCKED_OUT),
             "latest_candidates": rel(LATEST_CANDIDATES_OUT),
             "trade_plans": rel(PLAN_OUT),
+            "trade_plans_authority": "live_only_legacy_until_phase5",
+            "shared_execution_journal": rel(SHARED_EXECUTION_JOURNAL_OUT),
             "paper_orders": rel(PAPER_OUT),
             "live_orders": rel(LIVE_OUT),
             "maker_lifecycle_decisions": rel(LIFECYCLE_OUT),

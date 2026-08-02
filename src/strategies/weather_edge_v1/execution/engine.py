@@ -109,7 +109,12 @@ def build_d1_legacy_plan_compatibility(
         config_id = str(plan.get("config_id") or "legacy_d1_yes_high_mid_v1")
         token_id = _required(plan, "token_id")
         shares = _decimal_text(plan.get("size"), "size")
-        price_cap = _decimal_text(plan.get("max_live_price") if maker_only else plan.get("limit_price"), "price_cap")
+        raw_price_cap = (
+            plan.get("max_live_price") or plan.get("maker_price_cap")
+            if maker_only
+            else plan.get("limit_price")
+        )
+        price_cap = _decimal_text(raw_price_cap, "price_cap")
         deadline = str(plan.get("expires_at_utc") or "") or None
         data_source = plan.get("data_update_source") or event.get("obs_source")
         intent = ExecutionIntent(

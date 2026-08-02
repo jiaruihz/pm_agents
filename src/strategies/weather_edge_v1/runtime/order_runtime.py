@@ -356,6 +356,61 @@ class OrderRuntime:
             actions.append(self._submit_once(intent=intent, child=child, run_context=run_context))
         return ExecutionRuntimeResult(status="ok", actions=tuple(actions))
 
+    def submit_preplanned(
+        self,
+        intent: ExecutionIntent,
+        child: ChildOrderPlan,
+        run_context: ExecutionRunContext,
+    ) -> ExecutionRuntimeResult:
+        """Submit one already-planned compatibility child through shared controls.
+
+        This is the direct-migration boundary for legacy runners whose strategy
+        code has already fixed child role, shares and quote cap.  It deliberately
+        skips replanning while retaining run-context, risk, dedupe, exposure and
+        attempt-before-side-effect guarantees.
+        """
+
+        gate = self._gate(run_context)
+        if gate is not None:
+            return ExecutionRuntimeResult(status="blocked", actions=(gate,))
+        if child.intent != intent:
+            return ExecutionRuntimeResult(
+                status="blocked",
+                actions=(RuntimeActionResult(status="blocked", reason="preplanned_child_intent_mismatch"),),
+            )
+        aggregate = {
+            "intent": intent,
+            "children": (child,),
+            "open_or_reserved_exposure": self.journal.open_or_reserved_exposure(),
+        }
+        if not self._risk_allows(stage="initial_aggregate", payload=aggregate):
+            return ExecutionRuntimeResult(
+                status="blocked",
+                actions=(RuntimeActionResult(status="blocked", reason="aggregate_risk_rejected"),),
+            )
+        plan_key = child.intent.plan_dedupe_key + ":" + child.child_role
+        exposure_key = child.intent.live_exposure_key + ":" + child.child_role
+        if not self.journal.claim_plan(
+            plan_key,
+            run_context.runtime_owner,
+            {"intent": intent.to_json(), "child_role": child.child_role},
+        ):
+            return ExecutionRuntimeResult(
+                status="blocked",
+                actions=(RuntimeActionResult(status="blocked", reason="plan_dedupe_claim_not_acquired", identity_key=plan_key),),
+            )
+        if not self.journal.reserve_live_exposure(
+            exposure_key,
+            run_context.runtime_owner,
+            {"plan_dedupe_key": plan_key},
+        ):
+            return ExecutionRuntimeResult(
+                status="blocked",
+                actions=(RuntimeActionResult(status="blocked", reason="live_exposure_reservation_not_acquired", identity_key=plan_key),),
+            )
+        action = self._submit_once(intent=intent, child=child, run_context=run_context)
+        return ExecutionRuntimeResult(status="ok", actions=(action,))
+
     def manage_active_orders(
         self,
         owner: str,

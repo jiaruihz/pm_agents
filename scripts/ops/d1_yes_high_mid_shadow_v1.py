@@ -63,6 +63,12 @@ parse_bracket = _factory.parse_bracket
 round_half_up = _factory.round_half_up
 
 from src.strategies.weather_edge_v1.runtime import order_runtime  # noqa: E402
+from src.strategies.weather_edge_v1.execution.engine import (  # noqa: E402
+    build_d1_legacy_plan_compatibility,
+)
+from src.strategies.weather_edge_v1.runtime.non_live import (  # noqa: E402
+    execute_legacy_compatibility_paper,
+)
 
 STRATEGY_ID = "d1_yes_high_mid_shadow_v1"
 RULE_ID = "d1_yes_mid_ge_0p80_first_per_city_date_taker_v1"
@@ -94,6 +100,7 @@ PLAN_OUT = RUNTIME_DIR / "trade_plans.jsonl"
 PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
 LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
 MAKER_LIFECYCLE_OUT = RUNTIME_DIR / "maker_lifecycle_decisions.jsonl"
+SHARED_EXECUTION_JOURNAL_OUT = RUNTIME_DIR / "shared_execution_journal.jsonl"
 
 MID_THRESHOLD = 0.80
 # Parity: the backtest applied NO obs-age filter (it included every trigger; the
@@ -210,6 +217,7 @@ def parse_args() -> argparse.Namespace:
 def configure_runtime(args: argparse.Namespace) -> None:
     global STRATEGY_ID, RUNTIME_DIR, JOURNAL_OUT, POSITIONS_OUT, SUMMARY_OUT
     global SUMMARY_HISTORY_OUT, PLAN_OUT, PAPER_OUT, LIVE_OUT, MAKER_LIFECYCLE_OUT
+    global SHARED_EXECUTION_JOURNAL_OUT
     STRATEGY_ID = str(args.strategy_instance)
     RUNTIME_DIR = Path(args.runtime_dir)
     JOURNAL_OUT = RUNTIME_DIR / "shadow_events.jsonl"
@@ -220,6 +228,7 @@ def configure_runtime(args: argparse.Namespace) -> None:
     PAPER_OUT = RUNTIME_DIR / "paper_orders.jsonl"
     LIVE_OUT = RUNTIME_DIR / "live_orders.jsonl"
     MAKER_LIFECYCLE_OUT = RUNTIME_DIR / "maker_lifecycle_decisions.jsonl"
+    SHARED_EXECUTION_JOURNAL_OUT = RUNTIME_DIR / "shared_execution_journal.jsonl"
 
 
 # --------------------------------------------------------------------------- #
@@ -701,7 +710,7 @@ def build_live_plan(
         "signal_id": signal_id,
         "opportunity_id": signal_id,
         "comparison_group_id": comparison_group_id,
-        "execution_profile": "d1_yes_split_5_taker_5_maker_v1",
+        "execution_profile": "d1_taker_plus_maker_chase_to_mid_v1",
         "created_at_utc": cycle_dt.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "status": "accepted",
         "risk_status": "passed",
@@ -817,7 +826,7 @@ def build_maker_lifecycle_plan(
         "strategy_head": "d1_yes_high_mid",
         "decision_mode": "first_qualifying_city_date_maker_lifecycle",
         "execution_mode": "tiny_live_split_5_taker_5_maker_taipei_shadow",
-        "execution_profile": "d1_yes_split_5_taker_5_maker_v1",
+        "execution_profile": "d1_taker_plus_maker_chase_to_mid_v1",
         "comparison_group_id": str(order.get("comparison_group_id") or ""),
         "city": str(order.get("city") or ""),
         "city_pool": "all_except_taipei_live",
@@ -1073,6 +1082,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     invalid_book_age_rows = 0
     events: list[dict[str, Any]] = []
     plans: list[dict[str, Any]] = []
+    paper_entry_groups: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
+    paper_entry_plans: list[dict[str, Any]] = []
     latest_states: dict[str, dict[str, Any]] = {}
     pending_live_positions: dict[str, dict[str, Any]] = {}
     entry_plans_planned = 0
@@ -1255,7 +1266,11 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 and daily_city_day_count + city_days_planned + 1 > int(args.max_city_days_per_day)
             ):
                 blocker = "strategy_daily_city_day_cap"
-            if not blocker and daily_cost + sum(to_float(p.get("order_notional_cap"), 0.0) for p in plans) + order_cost > float(args.max_daily_cost_usd) + 1e-9:
+            planned_cost = sum(
+                to_float(p.get("order_notional_cap"), 0.0)
+                for p in [*plans, *paper_entry_plans]
+            )
+            if not blocker and daily_cost + planned_cost + order_cost > float(args.max_daily_cost_usd) + 1e-9:
                 blocker = "strategy_daily_cost_cap"
             if not blocker and not (args.live and args.confirm_live):
                 blocker = "live_not_requested"
@@ -1264,6 +1279,11 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                 event["execution_mode"] = "zero_notional_shadow"
                 event["live_blocker"] = blocker
                 shadow_first += 1
+                if blocker == "live_not_requested":
+                    paper_entry_groups.append((event, event_plans))
+                    paper_entry_plans.extend(event_plans)
+                    entry_plans_planned += len(event_plans)
+                    city_days_planned += 1
             else:
                 event["execution_mode"] = "tiny_live_split_5_taker_5_maker"
                 plans.extend(event_plans)
@@ -1356,8 +1376,8 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
 
     executor_result = None
     if not args.dry_run:
-        order_runtime.write_jsonl(PLAN_OUT, plans)
         if args.live:
+            order_runtime.write_jsonl(PLAN_OUT, plans)
             executor_result = order_runtime.run_weather_order_executor(
                 root=ROOT,
                 plans_path=PLAN_OUT,
@@ -1405,6 +1425,38 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
                     )
                 positions[pos_key] = position
                 new_positions += 1
+        else:
+            if lifecycle_plans:
+                raise RuntimeError("non-live migration rejects legacy maker lifecycle plans")
+            shared_results = []
+            for event, group_plans in paper_entry_groups:
+                compatibility = build_d1_legacy_plan_compatibility(
+                    legacy_plans=group_plans,
+                    event=event,
+                )
+                shared_results.append(
+                    execute_legacy_compatibility_paper(
+                        compatibility=compatibility,
+                        legacy_plans={str(plan["plan_id"]): plan for plan in group_plans},
+                        journal_path=SHARED_EXECUTION_JOURNAL_OUT,
+                        strategy_instance=STRATEGY_ID,
+                        generated_at_utc=cycle_ts,
+                        code_commit=os.environ.get(
+                            "WEATHER_RUNTIME_CODE_COMMIT", "committed_checkout"
+                        ),
+                    )
+                )
+            executor_result = {
+                "authority": "shared_order_runtime",
+                "execution_mode": "paper",
+                "legacy_plan_journal": "deprecated_read_only",
+                "input_plans": len(paper_entry_plans),
+                "submitted": sum(row["submitted"] for row in shared_results),
+                "deduped": sum(row["deduped"] for row in shared_results),
+                "blocked": sum(row["blocked"] for row in shared_results),
+                "venue_calls": sum(row["venue_calls"] for row in shared_results),
+                "journal": str(SHARED_EXECUTION_JOURNAL_OUT),
+            }
         for event in events:
             append_jsonl(JOURNAL_OUT, event)
         write_json(POSITIONS_OUT, positions)
@@ -1467,6 +1519,9 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         "live_positions_reconciled_this_cycle": reconciled_live_positions,
         "shadow_first_signals_this_cycle": shadow_first,
         "executor_result": executor_result,
+        "legacy_plan_journal": (
+            "live_only_legacy_until_phase5" if args.live else "deprecated_read_only"
+        ),
         "open_positions_total": len(positions),
         "settled_positions_total": len(settled_positions),
         "settled_positions_pending_canonical_fill_reconcile": (

@@ -6,6 +6,7 @@ from scripts.ops.low_price_yes_lottery_tiny_live import (
     annotate_runtime_decision,
     choose_lifecycle_action,
     enforce_live_safety_args,
+    execute_non_live_shared_entry_plans,
     load_fresh_snapshot_candidates,
     normalize_snapshot_candidate,
     refresh_lifecycle_thesis,
@@ -35,6 +36,45 @@ def test_shadow_would_live_decision_records_fresh_best_ask():
     assert row["would_live_best_ask"] == 0.11
     assert row["would_live_best_ask_size"] == 17.0
     assert row["would_live_maker_limit_price"] == 0.101
+
+
+def test_non_live_plan_uses_shared_order_runtime_and_dedupes(tmp_path, monkeypatch):
+    from scripts.ops import low_price_yes_lottery_tiny_live as runner
+
+    monkeypatch.setattr(runner, "SHARED_EXECUTION_JOURNAL_OUT", tmp_path / "execution.jsonl")
+    plan = runner.build_plan(
+        {
+            "signal_id": "signal-1",
+            "city": "Atlanta",
+            "target_date": "2026-08-03",
+            "condition_id": "condition-1",
+            "market_slug": "atlanta-2026-08-03",
+            "event_id": "event-1",
+            "question": "Atlanta temperature",
+            "bracket": "92-93",
+            "token_id": "token-1",
+            "limit_price": 0.101,
+            "maker_limit_price": 0.101,
+            "taker_limit_price": 0.11,
+            "planned_shares": 5.0,
+            "planned_notional_usd": 0.505,
+            "model_p_yes": 0.30,
+            "fresh_best_bid": 0.10,
+            "fresh_best_ask": 0.11,
+            "fresh_spread": 0.01,
+            "fee_adjusted_edge": 0.19,
+            "sizing_policy": "fixed_5_shares",
+        },
+        live_enabled=False,
+    )
+
+    first = execute_non_live_shared_entry_plans([plan], generated_at_utc="2026-08-02T10:00:00Z")
+    second = execute_non_live_shared_entry_plans([plan], generated_at_utc="2026-08-02T10:01:00Z")
+
+    assert first["submitted"] == first["venue_calls"] == 1
+    assert first["authority"] == "shared_order_runtime"
+    assert second["deduped"] == 1
+    assert second["venue_calls"] == 0
 
 
 def test_price_tier_6_8_10_boundaries():
