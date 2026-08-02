@@ -66,6 +66,12 @@ def official_fee_per_share(price: float) -> float:
     return round(FEE_RATE * price * (1.0 - price), 5)
 
 
+def fee_adjusted_binary_pnl(payout: int, ask: float) -> tuple[float, float]:
+    """Return taker entry cost and settled PnL for one binary share."""
+    entry_cost = ask + official_fee_per_share(ask)
+    return entry_cost, float(payout) - entry_cost
+
+
 def _local_hour(timestamp: datetime) -> float:
     local = timestamp.astimezone(TOKYO)
     return local.hour + local.minute / 60.0 + local.second / 3600.0
@@ -248,6 +254,13 @@ def replay(
         edge = p_no_v2 - no_ask - fee if scorable else None
         edge_no_floor = p_no_no_floor - no_ask - fee if scorable else None
         bracket = selected.official_anchor
+        no_label = int(final_bracket != bracket)
+        if scorable:
+            entry_cost, hypothetical_pnl = fee_adjusted_binary_pnl(no_label, no_ask)
+        else:
+            entry_cost, hypothetical_pnl = None, None
+        model_direction_buy = int(p_no_v2 >= 0.5) if scorable else 0
+        would_enter = int(edge >= edge_threshold) if scorable else 0
         row = {
             "target_date": target_date,
             "jma_observation_jst": source_obs.astimezone(TOKYO).isoformat(),
@@ -279,14 +292,23 @@ def replay(
             "fee_per_share": fee,
             "model_p_no_v2": p_no_v2,
             "edge_after_fee_v2": edge,
-            "would_enter_v2": int(edge >= edge_threshold) if scorable else 0,
+            "would_enter_v2": would_enter,
             "model_p_no_no_floor": p_no_no_floor,
             "edge_after_fee_no_floor": edge_no_floor,
             "would_enter_no_floor": (
                 int(edge_no_floor >= edge_threshold) if scorable else 0
             ),
             "final_bracket": final_bracket,
-            "no_label": int(final_bracket != bracket),
+            "no_label": no_label,
+            "hypothetical_no_entry_cost_1share": entry_cost,
+            "hypothetical_no_pnl_1share_fee_adjusted": hypothetical_pnl,
+            "model_direction_buy_no": model_direction_buy,
+            "model_direction_pnl_1share_fee_adjusted": (
+                hypothetical_pnl if model_direction_buy else 0.0
+            ),
+            "v2_policy_pnl_1share_fee_adjusted": (
+                hypothetical_pnl if would_enter else 0.0
+            ),
             "v2_prediction_correct_at_050": (
                 int((p_no_v2 >= 0.5) == (final_bracket != bracket))
                 if scorable
@@ -302,6 +324,7 @@ def replay(
     triggered = [row for row in output if row.get("would_enter_v2")]
     triggered_no_floor = [row for row in output if row.get("would_enter_no_floor")]
     scored = [row for row in output if row.get("evaluation_status") == "scored"]
+    model_direction_selected = [row for row in scored if row["model_direction_buy_no"]]
     model_brier = sum(
         (float(row["model_p_no_v2"]) - int(row["no_label"])) ** 2
         for row in scored
@@ -330,6 +353,38 @@ def replay(
         "market_brier_on_scored_rows": market_brier,
         "v2_edge_after_fee_min": min(row["edge_after_fee_v2"] for row in scored),
         "v2_edge_after_fee_max": max(row["edge_after_fee_v2"] for row in scored),
+        "unconditional_buy_every_scored_checkpoint": {
+            "orders": len(scored),
+            "wins": sum(int(row["no_label"]) for row in scored),
+            "cost_1share_each": sum(
+                row["hypothetical_no_entry_cost_1share"] for row in scored
+            ),
+            "fee_adjusted_pnl_1share_each": sum(
+                row["hypothetical_no_pnl_1share_fee_adjusted"] for row in scored
+            ),
+        },
+        "model_direction_p_no_gte_0_5": {
+            "orders": len(model_direction_selected),
+            "wins": sum(int(row["no_label"]) for row in model_direction_selected),
+            "cost_1share_each": sum(
+                row["hypothetical_no_entry_cost_1share"]
+                for row in model_direction_selected
+            ),
+            "fee_adjusted_pnl_1share_each": sum(
+                row["model_direction_pnl_1share_fee_adjusted"]
+                for row in model_direction_selected
+            ),
+        },
+        "v2_edge_policy": {
+            "orders": len(triggered),
+            "wins": sum(int(row["no_label"]) for row in triggered),
+            "cost_1share_each": sum(
+                row["hypothetical_no_entry_cost_1share"] for row in triggered
+            ),
+            "fee_adjusted_pnl_1share_each": sum(
+                row["v2_policy_pnl_1share_fee_adjusted"] for row in scored
+            ),
+        },
         "final_official_bracket": final_bracket,
         "model_training_end": artifact.get("training_end"),
         "model_market_logit_floor": artifact.get("market_logit_floor"),

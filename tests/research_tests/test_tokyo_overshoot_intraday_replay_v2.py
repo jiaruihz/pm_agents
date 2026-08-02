@@ -66,3 +66,12 @@ def test_fee_is_zero_at_binary_boundaries_and_positive_inside():
     assert replay.official_fee_per_share(0.0) == 0.0
     assert replay.official_fee_per_share(1.0) == 0.0
     assert replay.official_fee_per_share(0.5) == 0.0125
+
+
+def test_fee_adjusted_binary_pnl_uses_selected_side_ask():
+    winner_cost, winner_pnl = replay.fee_adjusted_binary_pnl(1, 0.6)
+    loser_cost, loser_pnl = replay.fee_adjusted_binary_pnl(0, 0.6)
+
+    assert winner_cost == loser_cost == 0.612
+    assert winner_pnl == 0.388
+    assert loser_pnl == -0.612

@@ -22,6 +22,24 @@
   "market_brier_on_scored_rows": 0.01907047159090909,
   "v2_edge_after_fee_min": -0.16518560042431002,
   "v2_edge_after_fee_max": -0.0005608003030524711,
+  "unconditional_buy_every_scored_checkpoint": {
+    "orders": 44,
+    "wins": 26,
+    "cost_1share_each": 25.719739999999998,
+    "fee_adjusted_pnl_1share_each": 0.2802600000000003
+  },
+  "model_direction_p_no_gte_0_5": {
+    "orders": 26,
+    "wins": 26,
+    "cost_1share_each": 24.05444,
+    "fee_adjusted_pnl_1share_each": 1.9455600000000004
+  },
+  "v2_edge_policy": {
+    "orders": 0,
+    "wins": 0,
+    "cost_1share_each": 0,
+    "fee_adjusted_pnl_1share_each": 0.0
+  },
   "final_official_bracket": 35,
   "model_training_end": "2026-07-15",
   "model_market_logit_floor": 0.005,
