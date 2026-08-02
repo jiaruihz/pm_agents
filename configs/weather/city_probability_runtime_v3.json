@@ -39,7 +39,7 @@
       "strategy_family": "weather.city_intraday_probability",
       "profile_id": "amsterdam_knmi_interval_revision_coverage_v1",
       "source": "knmi",
-      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/knmi_observations.jsonl",
       "max_source_age_seconds": 900,
       "material_state_change_only": true,
       "blocker_reason": "city_probability_model_not_deployed",

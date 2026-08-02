@@ -21,6 +21,10 @@ from weather_city_runtime import DecisionContractJournalSink
 
 UTC = timezone.utc
 ROOT = Path(__file__).resolve().parents[2]
+KNMI_PRODUCTION_JOURNAL = (
+    "/Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/"
+    "knmi_observations.jsonl"
+)
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -44,6 +48,16 @@ def _profile(city: str, source: str, journal: Path) -> dict:
         "blocker_reason": "city_probability_model_not_deployed",
         "emit_paper_intents": False,
     }
+
+
+def test_amsterdam_production_profile_uses_notification_journal() -> None:
+    config = json.loads(
+        (ROOT / "configs/weather/city_probability_runtime_v3.json").read_text()
+    )
+    profile = next(row for row in config["profiles"] if row["city"] == "Amsterdam")
+
+    assert profile["source"] == "knmi"
+    assert profile["source_journal"] == KNMI_PRODUCTION_JOURNAL
 
 
 def test_amsterdam_revision_is_typed_and_never_becomes_candidate(tmp_path: Path) -> None:
