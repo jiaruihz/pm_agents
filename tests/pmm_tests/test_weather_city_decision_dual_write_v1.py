@@ -17,6 +17,8 @@ from weather_city_runtime import DecisionContractJournalSink
 def _config(output: Path) -> dict:
     return {
         "schema_version": AUTHORITATIVE_CONFIG_SCHEMA_VERSION,
+        "framework_id": "weather_city_intraday_runtime_v1",
+        "strategy_family": "weather.city_intraday_probability",
         "output_schema_version": AUTHORITATIVE_OUTPUT_SCHEMA_VERSION,
         "output_schema_fingerprint": AUTHORITATIVE_OUTPUT_SCHEMA_FINGERPRINT,
         "execution_mode": "zero_notional_shadow",
@@ -159,7 +161,11 @@ def test_committed_runtime_v3_is_sole_zero_notional_authority() -> None:
     assert declaration["enabled"] is True
     assert declaration["authority"] == "active"
     assert declaration["execution_mode"] == "zero_notional"
-    assert declaration["cities"] == ["Helsinki", "Tokyo"]
+    assert declaration["cities"] == [
+        "Amsterdam", "Busan", "Helsinki", "Seoul", "Tokyo"
+    ]
+    assert config["framework_id"] == "weather_city_intraday_runtime_v1"
+    assert config["strategy_family"] == "weather.city_intraday_probability"
     assert declaration["output_dir"] == config["output_dir"]
     assert config["legacy_runtime"]["lifecycle_status"] == "deprecated_read_only"
     assert config["orders_submitted"] == 0

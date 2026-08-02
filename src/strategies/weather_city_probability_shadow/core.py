@@ -16,6 +16,8 @@ OUTPUT_SCHEMA_VERSION = "weather_city_probability_shadow_v2"
 AUTHORITATIVE_CONFIG_SCHEMA_VERSION = "weather_city_probability_runtime_config_v3"
 AUTHORITATIVE_OUTPUT_SCHEMA_VERSION = "weather_city_probability_runtime_v3"
 ADAPTER_CONTRACT_VERSION = "weather_city_probability_adapter_v1"
+FRAMEWORK_ID = "weather_city_intraday_runtime_v1"
+STRATEGY_FAMILY = "weather.city_intraday_probability"
 
 OUTPUT_SCHEMA = {
     "record_kind": "evaluation|checkpoint_blocker|error|summary|paper_intent",
@@ -245,6 +247,11 @@ class ShadowRuntime:
         self.authoritative_decision_output = (
             config_schema == AUTHORITATIVE_CONFIG_SCHEMA_VERSION
         )
+        if self.authoritative_decision_output:
+            if config.get("framework_id") != FRAMEWORK_ID:
+                raise ValueError(f"framework_id must be {FRAMEWORK_ID}")
+            if config.get("strategy_family") != STRATEGY_FAMILY:
+                raise ValueError(f"strategy_family must be {STRATEGY_FAMILY}")
         expected_output_schema = (
             AUTHORITATIVE_OUTPUT_SCHEMA_VERSION
             if self.authoritative_decision_output
@@ -370,6 +377,8 @@ class ShadowRuntime:
         repo_head = _git_value("rev-parse", "HEAD")
         dirty = bool(_git_value("status", "--short", "--untracked-files=no"))
         identity_payload = {
+            "framework_id": self.config.get("framework_id"),
+            "strategy_family": self.config.get("strategy_family"),
             "adapter_contract_version": ADAPTER_CONTRACT_VERSION,
             "repo_root": str(ROOT),
             "repo_head": repo_head,
@@ -612,6 +621,8 @@ class ShadowRuntime:
                     first_intents.add(position_key)
         summary = {
             **self._contract_fields("summary"),
+            "framework_id": self.config.get("framework_id"),
+            "strategy_family": self.config.get("strategy_family"),
             "execution_mode": "zero_notional_shadow",
             "orders_submitted": 0,
             "generated_at_utc": now.isoformat(),

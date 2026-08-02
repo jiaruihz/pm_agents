@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authoritative shared-contract runtime for city probability models."""
+"""Authoritative Weather City Intraday Runtime (WCIR)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.strategies.weather_city_probability_shadow import ShadowRuntime
+from src.strategies.weather_city_probability_shadow import (
+    ObservationCoverageAdapter,
+    ShadowRuntime,
+)
 from src.strategies.weather_city_probability_shadow.helsinki import HelsinkiRemainingHeatAdapter
 from src.strategies.weather_city_probability_shadow.tokyo import TokyoMarketAnchorAdapter
 from weather_city_runtime import DecisionContractJournalSink
@@ -34,6 +37,7 @@ def main() -> None:
             "helsinki_remaining_heat_v1": HelsinkiRemainingHeatAdapter(),
             "tokyo_market_anchor_v7": TokyoMarketAnchorAdapter(),
             "tokyo_overshoot_market_residual_v2": TokyoMarketAnchorAdapter(),
+            "observation_coverage_v1": ObservationCoverageAdapter(),
         },
         config_path=config_path,
         entrypoint_path=Path(__file__),

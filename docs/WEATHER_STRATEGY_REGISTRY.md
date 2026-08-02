@@ -63,6 +63,7 @@ reheat_risk   日内路径：已看到 running max 后，判断会不会再升�
 
 | 策略 / 家族 | 灵感 / 盈利规则 | 状态 | 是否可行（当前结论） | 血缘层 · 入口 doc |
 |---|---|---|---|---|
+| weather_city_intraday_runtime_v1 / city_probability_runtime_v3 | **Weather City Intraday Runtime（WCIR）**；城市 adapter 负责 source clock、settlement lattice、特征和 artifact，公共 runtime 负责 typed capture、checkpoint/replay、candidate/intent 与后续公共执行血缘 | **`five-city framework / Helsinki+Tokyo model adapters / Amsterdam+Busan+Seoul coverage-only / zero orders`** | 策略族固定为 `weather.city_intraday_probability`。没有冻结 artifact 与 expression mapping 的城市只写 blocker，不伪造概率/candidate/intent；以后所有新城市必须登记 WCIR CaptureProfile+adapter，不得另建 collector、回放、order/fill/PnL 链 | [runtime design](WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md) · [five-city audit](analysis/2026-08/2026-08-02-wcir-five-city-onboarding-v1.md) |
 | 普通单腿 YES/NO | forecast max + 历史误差 + 市场隐含，挑 mispriced bracket | `research` | baseline；裸 `model_p_yes - price` 不是确认 alpha | [1] model_vs_market |
 | model×market 融合 overlay | `0.3*model + 0.7*market`，承认市场吃掉大部分公开天气信息 | `research` | 提升太小，未确认 alpha；global model alpha 为负 | [1] model_vs_market |
 | forecast quality / reliability base | entropy/adjacent mass/city-model history 转可复用可靠性标签 | `shadow` | **只作共享可靠性层 / soft 标签**，非独立 live 策略 | [1] model_vs_market |

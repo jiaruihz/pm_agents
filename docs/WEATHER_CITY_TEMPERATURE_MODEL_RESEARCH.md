@@ -6,6 +6,11 @@ Scope: 城市级日内温度概率模型的方法、评测和知识沉淀；不�
 
 ## 1. 核心决定
 
+本研究体系统一运行在 **Weather City Intraday Runtime（WCIR）**，框架标识
+`weather_city_intraday_runtime_v1`，策略族 `weather.city_intraday_probability`。
+Amsterdam、Busan、Helsinki、Seoul、Tokyo 和以后新增城市都必须通过 WCIR profile/adapter 接入。
+模型尚未冻结时先接 `coverage-only` adapter 留完整分母与 blocker；这代表链路接入，不代表已有概率或 alpha。
+
 不同城市的数据源、观测频率、可用特征、结算单位和盘口结构不同，**不强制共用同一个模型或训练模块**。
 
 统一的只有三件事：

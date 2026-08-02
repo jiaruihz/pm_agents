@@ -1,5 +1,8 @@
 {
   "schema_version": "weather_city_probability_runtime_config_v3",
+  "framework_id": "weather_city_intraday_runtime_v1",
+  "framework_name": "Weather City Intraday Runtime",
+  "strategy_family": "weather.city_intraday_probability",
   "output_schema_version": "weather_city_probability_runtime_v3",
   "output_schema_fingerprint": "a108e39c36707bc6ed6cc0175d241f49d93442218b047a0534644eb239928985",
   "execution_mode": "zero_notional_shadow",
@@ -9,7 +12,7 @@
     "enabled": true,
     "authority": "active",
     "execution_mode": "zero_notional",
-    "cities": ["Helsinki", "Tokyo"],
+    "cities": ["Amsterdam", "Busan", "Helsinki", "Seoul", "Tokyo"],
     "output_dir": "/Volumes/jrs/weather_data_feed_service_runtime/output/city_probability_runtime_v3",
     "execution_profile": "city_probability_zero_notional_v1"
   },
@@ -28,6 +31,34 @@
     }
   ],
   "profiles": [
+    {
+      "enabled": true,
+      "city": "Amsterdam",
+      "adapter": "observation_coverage_v1",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "amsterdam_knmi_interval_revision_coverage_v1",
+      "source": "knmi",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
+      "max_source_age_seconds": 900,
+      "material_state_change_only": true,
+      "blocker_reason": "city_probability_model_not_deployed",
+      "emit_paper_intents": false
+    },
+    {
+      "enabled": true,
+      "city": "Busan",
+      "adapter": "observation_coverage_v1",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "busan_amos_point_group_coverage_v1",
+      "source": "amos_runway",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
+      "max_source_age_seconds": 180,
+      "material_state_change_only": true,
+      "blocker_reason": "city_probability_model_not_deployed",
+      "emit_paper_intents": false
+    },
     {
       "enabled": true,
       "city": "Helsinki",
@@ -58,6 +89,20 @@
           "sha256": "e5290f36ad033d1a526162c124a54106ecfb066e0b1538a3864ed0db1c841288"
         }
       }
+    },
+    {
+      "enabled": true,
+      "city": "Seoul",
+      "adapter": "observation_coverage_v1",
+      "framework_id": "weather_city_intraday_runtime_v1",
+      "strategy_family": "weather.city_intraday_probability",
+      "profile_id": "seoul_amos_point_group_coverage_v1",
+      "source": "amos_runway",
+      "source_journal": "/Volumes/jrs/weather_data_feed_service_runtime/output/live_cross_observations/high_frequency_observations.jsonl",
+      "max_source_age_seconds": 180,
+      "material_state_change_only": true,
+      "blocker_reason": "city_probability_model_not_deployed",
+      "emit_paper_intents": false
     },
     {
       "enabled": true,

@@ -1,13 +1,17 @@
-# 跨城市日内温度模型 Runtime：总体设计与迁移方案
+# Weather City Intraday Runtime（WCIR）：总体设计与迁移方案
 
 Status: approved migration roadmap / partial implementation; model-performance baseline remains rolling
-Updated: 2026-08-02
+Updated: 2026-08-02 WCIR naming + Amsterdam/Busan/Seoul onboarding
 Scope: 城市级分钟/小时间隔观测模型从采集、PIT checkpoint、replay 到统一候选与下单执行的目标架构
 Source of truth: 目标模块边界与接口是；当前生产进程、实例和迁移状态不是
 Used by: `AGENTS.md`、`CLAUDE.md`、`weather-strategy-research`、各城市模型研究与接入任务
 Reviewed against: [东京/赫尔辛基/阿姆斯特丹 Runtime Contract 实数审计 v1](analysis/2026-08/2026-08-01-three-city-runtime-contract-audit-v1.md)
 
 ## 0. 结论
+
+框架正式名为 **Weather City Intraday Runtime（WCIR）**，稳定机器标识为
+`weather_city_intraday_runtime_v1`；策略族统一登记为
+`weather.city_intraday_probability`。`city_probability_runtime_v3` 是当前实例/协议代际名，不是另一个框架。
 
 跨城市研究应收敛到“**共享 runtime + 城市策略插件**”，但不强迫城市模型共用算法、特征或是否使用盘口：
 
@@ -293,13 +297,13 @@ source health -> raw event -> available clock -> checkpoint
 | Phase 0 | 结构快照 + rolling baseline ledger | 低 | 否 |
 | Phase 1 | replay + 通用评测 + 固定事后报告 | 低 | 否，只写 research/temp DB |
 | Phase 2 | `SignalCandidate/TradeIntent` + canonical bridge | 中 | 否，先临时 DB/dual-write |
-| Phase 3 | Helsinki/Tokyo/Amsterdam 直接迁移统一 runtime | 中高 | zero-notional 直接切统一 authority；旧链只读 |
+| Phase 3 | Amsterdam/Busan/Helsinki/Seoul/Tokyo 直接接入 WCIR | 中高 | zero-notional 直接切统一 authority；旧链只读 |
 | Phase 4 | 共享执行 runtime 的 non-live 迁移 | 中 | 否，legacy 仍是 live authority |
 | Phase 5 | active execution 单实例 canary | 高 | 是，每次单独显式确认 |
 | Phase 6 | canonical/report 正式切换 | 中 | 只做批准的增量 materialization |
 | Phase 7 | 关闭 active 旁路、保留 legacy rollback | 中 | 分实例验证后进行 |
 
-每个 phase 是独立、可 review 的 change set；不在一次变更中同时迁城市、改模型和切资金行为。Phase 1 可在 rolling baseline 积累期间立即推进；Phase 3 的三个城市分别验收，不组成一次批量切换。
+每个 phase 是独立、可 review 的 change set；不在一次变更中同时迁城市、改模型和切资金行为。Phase 1 可在 rolling baseline 积累期间立即推进；Phase 3 的五个城市按 payload/model 状态分别验收。
 
 ### Phase 0：结构快照与 rolling baseline ledger
 
@@ -416,6 +420,14 @@ dedupe 全流程无 bug。
 
 每城通过后直接由统一 runtime 成为正式 zero-notional authority；legacy 只读保留，不自动赋予 live。
 
+#### Phase 3D：Seoul / Busan
+
+- 复用统一 `live_cross_observations` producer 的 `amos_runway` point-group/revision rows，不把独立 Korea collector 当 WCIR authority。
+- 同一 observation timestamp 的多 runway rows 合并为一个 coverage checkpoint；Seoul 优先保存指定 temperature runway，同时保留 group min/max、全部 information event 与 revision parent。
+- 概率 artifact 和 settlement-expression 映射未冻结前只输出 `coverage-only` checkpoint blocker，不生成 candidate/intent。
+
+完成标准：多 runway group/revision deterministic；stale/source-missing/model-missing 分类稳定且 restart dedupe；零 candidate、零 intent、零订单。未来模型接入只替换 city adapter，不改变 capture/replay/execution/canonical 链。
+
 ### Phase 4：共享执行 runtime 的 non-live 迁移
 
 要做：
@@ -452,11 +464,11 @@ dedupe 全流程无 bug。
 
 - active weather runner 不直接 import `ClobClient`，只有共享 venue adapter 可接触它。
 - active runner 不直接调用旧 `weather_order_executor`；basket/FOK/true-MM 可保留独立 orchestration，但共用 venue/risk/journal/canonical contract。
-- 新城市不自建 collector、replay clock、order/fill/PnL 链。
+- 新城市统一登记为 WCIR `CaptureProfile + city adapter`，不自建 collector、replay clock、order/fill/PnL 链；模型未冻结时使用 coverage-only adapter。
 - 所有城市输出标准 candidate/intent；replay/shadow/paper/live 共用 model/plugin/policy contract。
 - 旧 runtime、raw、fixture 和兼容 reader 标为 `legacy_adapter` / `dormant` / read-only rollback，保留不删；不再是 active authority。
 
-完成标准：仓库和 production manifest 的 active-path 扫描均无未登记旁路；三城 migration report、schema、contract tests、rolling-baseline impact report 同步完成，之后才把本文件状态升级为 `implemented`。
+完成标准：仓库和 production manifest 的 active-path 扫描均无未登记旁路；五城 migration report、schema、contract tests、rolling-baseline impact report 同步完成，之后才把本文件状态升级为 `implemented`。
 
 ## 9. 全框架验收标准
 
@@ -474,7 +486,7 @@ dedupe 全流程无 bug。
 - 所有候选进入 `fact_signal_candidates`；执行只接受 `TradeIntent`。
 - 城市插件无网络轮询、order client、私有 fill/PnL 或 settlement 实现。
 - 新城市只需新增 profile、adapter/plugin、model artifact 和 fixtures，不复制 runtime。
-- 文档、schema、contract tests 和三城 migration report 同步完成后，才可把本文件从 `approved migration roadmap / partial implementation` 升级为 `implemented`。
+- 文档、schema、contract tests 和五城 migration report 同步完成后，才可把本文件从 `approved migration roadmap / partial implementation` 升级为 `implemented`。
 
 ## 10. 新城市接入工作单
 
@@ -482,7 +494,7 @@ dedupe 全流程无 bug。
 
 1. 读本文件、`WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md` 和目标 source/settlement contract。
 2. 声明 target ontology、PIT 时钟、point/interval/revision payload、source profile、cadence、native lattice、三类 bracket anchor 和盘口在模型中的角色。
-3. 先接共享 capture/checkpoint/replay；发现共性缺口时扩展公共 contract 并补三城 regression，不另写私有链。
+3. 先接共享 capture/checkpoint/replay；模型未冻结时使用 coverage-only adapter；发现共性缺口时扩展公共 contract 并补五城 regression，不另写私有链。
 4. 城市内部自由实现 feature/model/policy，但输出标准 `ModelOutput` 与完整 `SignalCandidate`。
 5. 用 repo fixture + deployed sample 做 schema handshake 和 golden replay parity，再跑 OOF/frozen-forward 与同分母 market baseline。
 6. 需要执行时只输出 `TradeIntent`；是否 shadow/live 另走部署流程。

@@ -693,8 +693,8 @@
   - - errors
     - errors.jsonl
 - strategy_instance: city_probability_runtime_v3
-  display_name: Cross-city probability shared-contract runtime v3
-  family: weather.city_probability_model
+  display_name: Weather City Intraday Runtime (WCIR) v3
+  family: weather.city_intraday_probability
   strategy_key: weather_city_probability_runtime_v3
   lifecycle_status: shadow
   execution_mode: zero_notional_shadow
@@ -707,9 +707,10 @@
   telemetry_file: decision_bundles.jsonl
   start_script: scripts/ops/start_weather_city_probability_runtime_v3.sh
   tmux_session: weather_city_probability_runtime_v3
-  notes: Sole active city probability authority for Helsinki and Tokyo. Writes shared
-    information-event/checkpoint/ModelOutput/SignalCandidate/TradeIntent contracts only;
-    zero-notional and no exchange client.
+  notes: Sole WCIR authority for Amsterdam, Busan, Helsinki, Seoul, and Tokyo.
+    Amsterdam/Busan/Seoul start coverage-only until frozen probability artifacts exist;
+    all profiles share information-event/checkpoint/ModelOutput/SignalCandidate/TradeIntent
+    contracts. Zero-notional and no exchange client.
   default_health: unknown
   expected_live: false
   artifact_files:

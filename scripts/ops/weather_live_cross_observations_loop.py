@@ -31,9 +31,9 @@ from weather_data_feed_service.high_frequency_observations import (  # noqa: E40
     write_outputs,
 )
 
-DEFAULT_SOURCES = "jma_amedas singapore_mss fmi amos_runway mgm ims_lod noaa_madis_hfmetar"
-DEFAULT_CITIES = "Helsinki Busan Singapore Tokyo Seoul TelAviv Ankara Istanbul Atlanta Miami SanFrancisco"
-DEFAULT_SOURCE_INTERVALS = "jma_amedas=300 singapore_mss=20 fmi=60 amos_runway=20 mgm=300 ims_lod=300 noaa_madis_hfmetar=300"
+DEFAULT_SOURCES = "jma_amedas singapore_mss fmi knmi amos_runway mgm ims_lod noaa_madis_hfmetar"
+DEFAULT_CITIES = "Amsterdam Helsinki Busan Singapore Tokyo Seoul TelAviv Ankara Istanbul Atlanta Miami SanFrancisco"
+DEFAULT_SOURCE_INTERVALS = "jma_amedas=300 singapore_mss=20 fmi=60 knmi=300 amos_runway=20 mgm=300 ims_lod=300 noaa_madis_hfmetar=300"
 DEFAULT_WINDOW_INTERVALS = "jma_amedas=5-8,15-18,25-28,35-38,45-48,55-58:2 fmi=1-6,11-16,21-26,31-36,41-46,51-56:2"
 PERMISSION_ERRNOS = {errno.EACCES, errno.EPERM}
 

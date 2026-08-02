@@ -121,6 +121,17 @@ native-F 最终最高仍为 `89F`、winning bracket 仍是 `88-89`；NOAA direct
 `terminal_false_cross`；②同 timestamp 的 source→routine METAR→WU native-F basis；③正确事件不可成交、错误事件
 反而成交的 adverse-selection 分母。只报 persistent-cross 命中率或 QC pass 不算完成排查。
 
+跨城市细粒度温度模型的公共框架正式名为 **Weather City Intraday Runtime（WCIR）**，稳定标识
+`weather_city_intraday_runtime_v1`，策略族为 `weather.city_intraday_probability`。模型与盘口不强制独立；
+城市插件可实现纯天气、market-offset 或天气与盘口联合模型，但必须复用 WCIR 的采集 profile、事件/四时钟、
+PIT checkpoint/replay、`SignalCandidate`、`TradeIntent` 和公共 order/fill/PnL 血缘。
+
+Amsterdam、Busan、Helsinki、Seoul、Tokyo 及以后新增的每个城市都必须登记为 WCIR `CaptureProfile + city adapter`。
+模型尚未冻结时先接 `coverage-only` adapter 输出结构化 blocker，不得伪造概率、bracket、candidate 或 intent，
+也不得另建 collector、回放、下单或事后分析旁路。公共 contract 不足时扩展 WCIR，并给既有城市补 regression fixture；
+正式接入前必须拿 deployed raw/runtime 做 contract census 与 sample parity，repo 单测不能替代运行中样本验证。
+
+
 ## 5. 分析必走的 skill + 硬口径（细则见 [WEATHER_ANALYSIS_CONTRACT.md](docs/WEATHER_ANALYSIS_CONTRACT.md)）
 
 weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚本：
