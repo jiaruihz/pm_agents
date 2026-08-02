@@ -71,3 +71,10 @@ canonical refresh 完成且 coverage gate 退出 0；LaunchAgent `last exit code
 `warning`、无 critical、DB route healthy；唯一 warning 是既有 18 个共享 tmux session 尚未全部登记到 instance registry，
 不是本次 JRS 权限或 WCIR freshness 故障。维护前后认证 open orders 均为 0，fast-source order journal 仍为 256 行，
 最后一行时间 2026-08-01 10:32:18Z；因此事故与维护窗口确认 order/fill/notional/fee/PnL delta 全为 0。
+
+恢复后的 data-feed health 还暴露了 orderbook 状态写回 bug：target fetch planning 使用正确的 bracket，但 materialize
+record 时错误引用前一层循环残留的 `label`，把某一 bracket 的 missing/skipped 状态扩散到整座城市 ladder。该问题自
+2026-07-29 `d534fa9c` 起存在，污染的是 snapshot 的非目标腿 status 与由此派生的 health coverage 汇总；实际 targeted token
+fetch、live strategy eligibility、order/fill journal 未被改写。修复 `2a6f5117` 已部署为 production SHA `55f6fbed`，57 个
+data-feed/health 定向测试通过；新 snapshot `snapshot_20260802_1531.json` 的 targeted orderbook 为 139/139 ok、
+`target_incomplete_count=0`。部署前后认证 open orders 均为 0，fast-source 最新周期仍为 attempted/submitted 0。
