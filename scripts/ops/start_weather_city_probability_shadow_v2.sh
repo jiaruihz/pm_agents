@@ -25,6 +25,10 @@ if [[ "$ACTION" != "start" ]]; then
   echo "usage: $0 [start|stop|status]" >&2
   exit 2
 fi
+if [[ ! -x "$PY" ]]; then
+  echo "python interpreter is not executable: $PY (set PYTHON_BIN explicitly)" >&2
+  exit 1
+fi
 
 weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR"
 weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "=$SESSION" 2>/dev/null || true

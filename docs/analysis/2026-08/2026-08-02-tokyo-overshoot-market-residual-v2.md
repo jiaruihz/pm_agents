@@ -51,6 +51,11 @@ first-seen。
 - artifact：`generated/tokyo_overshoot_market_residual_v2/tokyo_overshoot_market_residual_v2.joblib`
 - runtime：统一 `city_probability_shadow_v2` 增加 Tokyo v2 A/B profile；`emit_paper_intents=false`，
   notional/shares/orders 均为 0，不接 plan/order/fill/exit，不改变任何 live runner。
+- deployment validation：`2026-08-02T00:36:37Z` 从开发 checkout 手工执行一次 `once`，写入 2 条
+  Tokyo v2 evaluation；其 `repo_dirty_tracked=true` 只表示验证进程身份，不是 first-seen/feature/label
+  污染，且 `would_enter=false`、0 intent/0 order。正式 tmux PID 随后的 runtime identity 为 clean
+  production SHA。独立 checkout 缺默认 `.venv` 曾导致首次重启立即退出；启动器现改为在 kill 旧 session
+  前校验 `PYTHON_BIN`，避免同类短暂中断。
 - verdict：`forward_collecting / probability challenger / no tradable edge / not live eligible`。
 - 继续积累 20 个 exact collector train dates + 10 个完全 untouched holdout dates 后复评；必须同时要求
   proper score 稳定胜 market、出现正的 fee-adjusted executable edge、并通过 date-block CI，才允许讨论 paper intent。
