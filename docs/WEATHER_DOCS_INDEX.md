@@ -81,11 +81,12 @@ Status 口径：
 |---|---|
 | `weather-strategy-research` | 新机制、概率模型、快源/source-event、PIT residual 与 shadow 设计 |
 | `weather-strategy-performance` | 固定分母的 probability/trade 绩效、A/B、fee、baseline、forward |
-| `weather-strategy-lineage` | candidate→signal→plan→order→fill→settlement 逐笔血缘与事故影响 |
+| `weather-strategy-lineage` | EventEnvelope→DecisionContext→ModelOutput→SignalCandidate→TradeIntent→plan/order/fill/settlement 逐笔血缘与事故影响 |
 | `weather-strategy-exposure` | 未结算 position、open order、三估值和集中度 |
 | `weather-live-account-reconcile` | 现金、fills、fees、reserved、open/realized 对账 |
-| `weather-fact-rebuild` | Mac-first sync、canonical rebuild、fill/fee gate 与污染窗口重放 |
+| `weather-fact-rebuild` | Mac-first sync、最小 canonical refresh、审批的增量 materialization/全量 rebuild、fill/fee gate 与污染窗口重放 |
 | `weather-strategy-deploy` | git-first 的 Mac/N100 生产行为变更、验证与回滚 |
+| `weather-jrs-runtime-failover` | JRS 权限/磁盘故障时本机接管、分层校验、迁回与单一物理正本恢复；联合 deploy skill |
 
 ## 数据真相与协议
 

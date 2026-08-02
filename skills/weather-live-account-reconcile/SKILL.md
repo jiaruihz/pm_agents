@@ -25,10 +25,15 @@ description: 对账 weather 实盘账户现金变化、真实 CLOB fills、submi
 ## 流程
 
 1. 读 `AGENTS.md` 与 `docs/WEATHER_ANALYSIS_CONTRACT.md`。
-2. 运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`，再用 raw runtime 与 authenticated exchange 动态发现实例；不从旧文档复制实例清单。
+2. 运行 `.venv/bin/python scripts/ops/weather_production_ctl.py health` 与
+   `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`，再用 raw runtime 与 authenticated exchange
+   动态发现实例；不从旧文档复制实例清单。
 3. 比较 raw 最新 order/fill 与 DB `fact_built_at_utc` / `fill_ts_utc`。
 4. DB 缺最新 fill 时先走 `weather-fact-rebuild` 的最小刷新路径。
 5. 运行固定对账脚本。
+
+使用 canonical 数字时保存 DB realpath/device/inode、build time/`build_id` 和
+`observed_at_utc`；对账运行中 refresh 改变 build 时重启查询，不混用两个分母。
 
 ```bash
 .venv/bin/python scripts/analysis/account_reconcile/weather_live_account_reconcile.py \

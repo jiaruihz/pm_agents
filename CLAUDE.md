@@ -23,7 +23,8 @@
 本项目不是一堆独立脚本，是一个有完整血缘的量化系统：
 
 ```text
-signal candidate → plan → order → fill → settlement
+EventEnvelope → DecisionContext → ModelOutput → SignalCandidate → TradeIntent
+→ shared execution handoff → plan → order → fill → settlement
 ```
 
 canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`（成交粒度），
@@ -52,7 +53,7 @@ canonical 事实表：`fact_signal_candidates`（机会粒度）、`fact_trades`
 - **执行 = `pm_agent` strategy runners**：消费标准数据 → signal → plan → CLOB order → fill；当前实例在 Mac，N100 只保留历史/恢复边界。实例是否 live 必须从进程参数、pause/state、raw order 和 exchange response 动态核对，不能从旧文档标签推断。
 
 机器：
-- **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）：Mac 目前跑 data-feed snapshot/orderbook、dashboard，以及若干 live probe / paper executor / zero-notional shadow；具体清单每次用 `ps` + LaunchAgent/tmux/screen + raw order files 动态盘点，不在本文件硬编码。data-feed 因 macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，短期用 tmux 常驻；启动脚本是 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`。默认 `zsh`/Darwin，**不要套 `wsl`**。分析“最新/今天”先读取对应 Mac runtime raw；只有 canonical DB 缺目标窗口时才增量同步。全量重算必须显式同意并使用 `run_stack.sh --rebuild`。
+- **短期生产 = Mac** `/Users/deepsleep/projects/pm_agents` + `/Volumes/jrs/weather_data_feed_service_runtime`（旧路径 `/Users/deepsleep/projects/weather_data_feed_service_runtime` 是 symlink；2026-07-04 起事故接管，2026-07-06 数据盘迁到 JRS APFS）：Mac 目前跑 data-feed snapshot/orderbook、dashboard，以及若干 live probe / paper executor / zero-notional shadow；具体清单每次用 `weather_production_ctl.py health/plan` + production manifest + `ps` + raw order files 动态盘点，不在本文件硬编码。data-feed 因 macOS LaunchAgent 对外置卷写入会触发 `Operation not permitted`，短期由 canonical JRS tmux 权限上下文常驻；启动脚本是 `scripts/ops/start_mac_weather_data_feed_jrs_tmux.sh`。默认 `zsh`/Darwin，**不要套 `wsl`**。分析“最新/今天”先读取对应 Mac runtime raw；只有 canonical DB 缺目标窗口时才增量同步。全量重算必须显式同意并使用 `run_stack.sh --rebuild`。
 - **生产 identity 先跑 manifest**：`src/strategies/runtime/production.yaml` 只声明期望拓扑；`scripts/ops/weather_production_manifest.py --strict` 用 `ps/lsof/tmux/launchctl/runtime summary` 生成当前事实。物理 canonical DB 期望在 `/Volumes/jrs/pm_agents/runtime/weather.db`；仓库 `runtime/weather.db` 只是兼容入口，健康时必须与前者解析为同一 device/inode。出现 split、非 canonical DB consumer、异常生产 checkout 或失败的 LaunchAgent 时，先处理 P0，不得根据旧文档继续分析、部署或重建。
 - **JRS 常驻进程只有一个许可上下文**：凡是读取或写入 `/Volumes/jrs` 的 collector、strategy、shadow、monitor、patrol，一律通过 `scripts/ops/weather_jrs_tmux_env.sh` 解析并复用 `tmux -L weather-data-feed-jrs`；不使用默认 tmux、`weather-jrs`、独立 socket、screen、nohup 或让 LaunchAgent 直接承载 JRS 子进程。启动器必须先在目标 tmux server **内部**完成 JRS write probe；“进程/session 存在”不算健康，巡检必须同时检查上游 producer state freshness、子循环 returncode、下游 runner latest。公共 start/stop 脚本不暴露 socket 或 process-manager/start-mode 开关，只允许调整 session 名与业务参数；新增或修改任何入口时先改共享 helper 和一致性测试，禁止再逐脚本发明启动上下文。
   权限宿主固定为已授予 macOS「完全磁盘访问权限」且由 helper 校验 path/hash 的 Homebrew Cellar tmux binary；升级 tmux 时必须先授权新 binary、更新 pin 并在维护窗口重建 canonical server，禁止跟随 symlink 静默切换。
@@ -145,6 +146,7 @@ weather 分析请求先 invoke 对应 skill，别直接写一次性 pandas 脚�
 | 余额 / 钱包 / USDC / CLOB 对账 / fill 对不上 | `weather-live-account-reconcile` |
 | 部署 / 上线策略 / 城市池 / 参数 / T1/T2 | `weather-strategy-deploy` |
 | 补全 / 重建底表 / 同步 / 数据陈旧 / 重新结算 | `weather-fact-rebuild` |
+| JRS 写入失败 / runtime 本机接管 / 迁回 / 单一正本恢复 | `weather-jrs-runtime-failover`（同时 invoke `weather-strategy-deploy`） |
 
 发布任何 `live_real` PnL / ROI / 曲线前的硬 gate（踩过坑换来的，不是形式）：
 - 先跑 5 行 SQL 自检（数据新鲜度 / trade_class 分布 / 结算 / 机会覆盖 / 订单成交）。

@@ -1,7 +1,7 @@
 # Weather Analysis Contract
 
 Status: current-source
-Updated: 2026-07-29 production identity and canonical DB route preflight
+Updated: 2026-08-03 WCIR decision identity, canonical build pin, bounded refresh routing
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -23,7 +23,9 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
    `orders.jsonl`、`events.jsonl`、`opportunities.jsonl`，并报告文件覆盖时间。
 2. 已有 canonical 分析：只读检查 `runtime/weather.db` 的 mtime、目标窗口覆盖和
    `MAX(fact_built_at_utc)`；覆盖足够就直接查询，不得为形式上的“完整 lineage”重建存量数据。
-3. 发布最新 PnL / settlement，且现有 DB 确实陈旧：优先使用增量刷新。只有增量流程不能满足、
+3. 发布最新 live order/fill/fee/PnL，且现有 DB 确实陈旧：先运行 bounded canonical
+   refresh `scripts/ops/start_weather_canonical_refresh_tmux.sh`。WCIR candidate/label/coverage 缺口只运行
+   相应的、已审批的增量 materializer。只有增量流程不能满足、schema/全历史派生层确实失效，
    且用户明确同意全量重建时，才运行：
 
    ```bash
@@ -36,16 +38,53 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 
 > 若数据源不可达，在报告“数据快照”段注明，并写明本地缓存的最后覆盖时间；不得用一次全量重建掩盖源缺失。
 
-### 数据源优先级（硬规定）
+### 数据源路由（按问题 grain，不设一个万能优先级）
 
-同步完成后按以下优先级使用数据：
+| 问题 | 首选证据 | 次选 |
+|---|---|---|
+| 当前 runner / order / trigger / fill | 当前 Mac strategy runtime + exchange response | canonical DB（仅在已同步时） |
+| 最新 snapshot / orderbook / forecast / source event | `/Volumes/jrs/weather_data_feed_service_runtime` raw | 本机 market mirror |
+| fill 绩效 / settlement / opportunity alpha | `runtime/weather.db` 的 canonical facts | Dashboard API（同一 DB 的展示层） |
+| 历史 N100 窗口 | 已同步的 N100 mirror | N100 raw（仅历史恢复且可达） |
 
-1. `weather.db`（`runtime/weather.db`）— 首选
-2. Dashboard API（`http://localhost:8000`）— DB 不可用时
-3. 镜像 JSON/CSV（`runtime/weather_edge_v1/market_data/research/`）— API 不可用时
-4. N100 raw（`jiarui@192.168.0.200:~/projects/weather-predict/output/`）— 最后手段
+N100 在 2026-07-01 磁盘事故恢复完成前不是 present-state truth。`weather.db` 是分析派生层，也不能替代当前进程和订单的 raw 证据。报告必须写清 evidence layer、覆盖截止和本次是否同步/重建。
 
-**每降一级必须在报告"数据快照"段写明原因。**
+### WCIR 决策血缘与 build identity（硬规定）
+
+新城市日内 runtime 的分析主链是：
+
+```text
+EventEnvelope -> DecisionContext -> ModelOutput -> SignalCandidate -> TradeIntent
+-> shared execution handoff -> plan -> order -> fill -> settlement
+```
+
+legacy signal 只能通过显式 adapter 投影，不伪造缺失的 `TradeIntent`。每次研究/绩效/血缘报告必须固定：
+
+- event/available/first-seen/observation 四时钟、revision parent 与 checkpoint identity。
+- model/artifact/config/schema/runtime contract hash 及 `candidate_grain_version`。
+- `feature_book_snapshot_id` 与 `execution_book_snapshot_id`；模型盘口不是成交价。
+- DB realpath、device/inode、canonical materialization `build_id`/build time 与报告
+  `observed_at_utc`。运行中 refresh 切换 build 时，重启查询或按 build 分层，不得静默混合分母。
+- `TradeIntent` 与 execution handoff 的 blocker/record-only 语义；zero-notional 不得伪造成正 shares。
+
+### 当前研究主口径（2026-07-15）
+
+当前没有达到 confirmed、可扩 live 的策略。研究默认目标是 fee-adjusted、PIT、可执行、能在 frozen forward 重复的 `P(outcome)-market` residual：
+
+1. 模型/物理特征先在固定同分母 rows 上用 logloss/Brier/calibration 与 market 比，再评 selected trade ROI。
+2. 先跑宽分母 sanity check，再做机制切片；少量事件或物理故事不能替代全量反证。
+3. source event 必须按 first-seen grain，并校准 source→official/settlement basis；快源打印不等于确定结算标签。
+4. maker 回放必须建 fill/queue/adverse selection；future price touch 不是实际 fill。
+5. 当前运行中的 live probe 只算 forward 取证，不自动构成策略已确认。
+
+每份机制/策略研究必须分开列：
+
+```text
+signal funnel: raw universe -> mechanism candidate -> first event/city-day signal -> selected
+evidence funnel: PIT source -> PIT book -> settlement -> executable expression -> actual fill
+```
+
+每层标 grain、行数、独立 target dates。盘口/结算/archive 缺失只能记 coverage gap，不能伪装成策略筛除。
 
 ### SQLite 查询可靠性（硬规定）
 

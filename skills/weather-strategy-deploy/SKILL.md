@@ -38,17 +38,25 @@ git status --short
 git rev-parse HEAD
 ps aux | rg 'weather|low_price|tmax|hko|source_event|regime' | rg -v 'rg '
 launchctl list | rg 'pm-agents|weather'
-tmux list-sessions
-tmux -L weather-jrs list-sessions
 ```
 
-若策略使用 screen，再查 `screen -ls`。随后读目标实例的 latest/events/opportunities/orders 与 pause/state 文件。不要根据脚本名、文档 `live` 标签或一个 PID 推断真实下单能力。
+不直接查默认 tmux、旧 `weather-jrs` socket 或 screen；这些不是 JRS 生产真相。
+canonical JRS session 由 manifest 和 `weather_production_ctl.py health` 盘点；需要底层诊断时只能
+`source scripts/ops/weather_jrs_tmux_env.sh` 后通过 `weather_jrs_tmux weather-data-feed-jrs ...`
+查看。随后读目标实例的 latest/events/opportunities/orders 与 pause/state 文件。不要根据脚本名、文档
+`live` 标签或一个 PID 推断真实下单能力。
 
 manifest 是部署 preflight：必须核对 physical DB route、每个 live PID 的 checkout/head/loaded SHA、canonical JRS tmux session、LaunchAgent 退出状态和 DB open handles。`critical` 时不得重启或切 live；先修 identity 根因。manifest 不替代 exchange/order pre-state。
 
 `src/strategies/runtime/production.yaml.managed_runtimes` 是当前生产 desired state；
 `instances.yaml` 仍是研究/历史 registry，不能代替 active production list。生产启停和恢复优先走
 `scripts/ops/weather_production_ctl.py`。底层 start script 是 controller 的执行合同，不是 AI/操作员的默认直接入口；禁止手拼 tmux/live 命令绕过 desired-state、依赖和后置检查。
+
+当前 controller 的真实边界是：`health/plan` 只读，`reconcile --apply` 只启动 desired-state 中缺失的
+runtime，不停止、替换或重启已存在进程。因此不得把 `reconcile` 说成完整部署事务；对已存在实例的
+pause/stop/restart 只能使用该实例在仓库中已登记的精确合同，并必须执行 pre/post manifest 对比。
+若实例只有 `start_script` 而没有可审计的 pause/stop/restart 合同，当次生产重启必须阻断：先补齐控制面合同和测试，
+不允许 AI 手拼 kill/tmux 命令填空。
 
 任何可能重启、重建或迁移 canonical JRS tmux server/session 的改动，必须保存 observed pre-state，并在改动后做同集合比较：
 
@@ -92,12 +100,13 @@ worktree 已脏时保留用户改动。若目标文件已有无关修改，先�
 
 ## 生产启停
 
-只有明确授权后执行。优先使用仓库已有 start/stop/status/pause 脚本或已登记的 LaunchAgent/tmux/screen 管理方式，不手写临时 daemon。
+只有明确授权后执行。使用 `production.yaml` 登记的 controller/start/stop/pause 合同；凡读写 JRS 的子进程均由
+canonical helper 进入 `weather-data-feed-jrs` tmux server。不使用默认 tmux、旧 socket、screen、nohup 或手写临时 daemon。
 
 顺序：
 
 1. 记录 pre-state：PID、command line、SHA、pause、最近 raw event/order/fill。
-2. 用 `weather_production_ctl.py plan` 锁定目标与依赖；pause/stop 目标实例，不影响邻近策略。
+2. 用 `weather_production_ctl.py plan` 锁定目标与依赖；确认存在已登记的精确实例合同后才 pause/stop 目标，不影响邻近策略。
 3. 重载已提交版本与明确参数；不依赖脚本默认 policy。
 4. 检查新 PID/started-at/command line。
 5. 用 pre-change manifest 做 canonical JRS session 同集合后置比较，确认没有误伤其他已有实例。

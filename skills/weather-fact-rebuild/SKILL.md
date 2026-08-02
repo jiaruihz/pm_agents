@@ -31,8 +31,13 @@ description: 同步、补全或重建 weather canonical 数据层与 JRS physica
 1. 单笔订单、当前 runner、某次触发：直接读精确 raw 文件，不 sync、不 rebuild。
 2. 历史分析且 DB 已覆盖目标窗：只读查询现有 DB。
 3. 问“最新/今天”且 Mac market mirror 落后：先增量同步当前 Mac market raw。
-4. canonical 缺目标窗、settlement/fill/fee 修复需重放，或用户明确要求重建：执行全链路 `--rebuild`。
-5. 只有历史抢救问题才同步 N100；先注明 N100 覆盖截止时间与可达状态。
+4. 当前 live order/fill/fee 缺口：先走已登记的 bounded canonical refresh one-shot，只重放
+   `order -> fill -> fact_trades -> coverage gate`，不无条件重算全部 candidate。
+5. WCIR candidate/label/coverage 或其他派生层缺目标窗：只运行对应的、已审批的增量
+   materializer；固定 `candidate_grain_version` 与输入 build，不直接改 raw journal。
+6. 只在 schema/全历史派生层失效、全量输入需重算，或用户明确要求全量重建时，才执行
+   `run_stack.sh --rebuild`。WCIR 迁移或单个 raw lineage 不能自动升级为全量重建。
+7. 只有历史抢救问题才同步 N100；先注明 N100 覆盖截止时间与可达状态。
 
 ## 标准命令
 
@@ -47,6 +52,15 @@ scripts/ops/sync_weather_remote.sh --market-source=mac-weather-data-feed --marke
 ```bash
 scripts/ops/sync_weather_remote.sh --dry-run
 ```
+
+当前 live execution 的最小 canonical refresh：
+
+```bash
+scripts/ops/start_weather_canonical_refresh_tmux.sh
+```
+
+该入口是 bounded one-shot，由 canonical JRS helper 承载；LaunchAgent 只触发它，不直接承载 JRS
+子进程。先查 `runtime/weather_edge_v1/canonical_refresh/last_exit_status` 和日志，不得在它仍运行时另起第二个 refresh。
 
 全量 canonical 重建（显式动作；用户说“重建/重跑底表”即已授权，否则先说明影响）：
 
@@ -71,10 +85,13 @@ SELECT settlement_status, COUNT(*) FROM fact_trades GROUP BY settlement_status;
 ```
 
 同时比较目标 raw 文件最新时间。DB 新鲜度不能只看 mtime；必须看目标窗口和 `fact_built_at_utc`。
+分析/重放开始时还必须保存 DB realpath、device/inode、canonical materialization `build_id`
+（若该层已提供）与 `observed_at_utc`。同一份报告运行中若 build 发生变化，必须重启该次查询或明确分层，
+不得静默混合两个分母。
 
 ## 重建后五项自检
 
-1. `fact_trades` / `fact_signal_candidates` build 时间与目标窗口。
+1. `fact_trades` / `fact_signal_candidates` build 时间、build identity、`candidate_grain_version` 与目标窗口。
 2. `trade_class` 分布，已知存在真实成交时 `live_real` 不得意外归零。
 3. settlement 覆盖、`missing_event` / `missing_bracket` / unresolved 数量。
 4. 机会覆盖：`eligible` / `paper_ordered` / `live_filled` 与 `decision_window_missing`。

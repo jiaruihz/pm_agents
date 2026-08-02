@@ -1,7 +1,7 @@
 # Weather Strategy — 系统接口契约
 
 Status: current-source
-Updated: 2026-07-15 Mac producer/executor boundary and fee evidence
+Updated: 2026-08-03 WCIR decision contract and canonical build identity overlay
 Source of truth: yes
 Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entry when listed
 
@@ -25,6 +25,24 @@ Superseded by / Used by: WEATHER_DOCS_INDEX.md; AGENTS.md / CLAUDE.md short entr
 N100 两个 repo 产出的文件格式 = 本文档约定的契约。pm_agent dashboard
 消费这些文件，**不应** 静默地把字段改名再存 DB（会造成双方字段漂移）。
 如果 DB 字段名与 CSV/JSONL 不同，必须在本文档里显式标注「别名」和迁移时间。
+
+### 0.1 WCIR 决策契约覆盖层
+
+本文后续 `Signal` 字段仍是 legacy/canonical compatibility contract，不是新城市 runtime 的完整内部边界。
+WCIR 的权威链路为：
+
+```text
+EventEnvelope -> DecisionContext -> ModelOutput -> SignalCandidate -> TradeIntent
+-> shared execution handoff -> plan -> order -> fill -> settlement
+```
+
+具体 typed contract 以 `WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md` 与 `weather_city_runtime/` 为准。
+跨层投影必须保留四时钟、revision parent、model/artifact/config/schema/runtime hash、
+`candidate_grain_version`、source/official/expression anchor、`feature_book_snapshot_id`、
+`execution_book_snapshot_id` 和 intent/handoff blocker。legacy adapter 不得伪造无法证明的 intent/token/outcome。
+
+canonical 物化与报告还必须保存 DB identity、materialization `build_id`/build time 与
+`observed_at_utc`。同一次分析不得静默混合不同 build。
 
 ---
 

@@ -11,17 +11,37 @@ description: 设计和验证新的 weather 策略机制、物理特征、概率/
 
 读 `AGENTS.md`、`WEATHER_ANALYSIS_CONTRACT.md`、`WEATHER_STRATEGY_QUANT_DESIGN.md`、`WEATHER_STRATEGY_REGISTRY.md` 和目标 family living doc。
 
+跨城市分钟/小时间隔温度模型还必须读 `WEATHER_CITY_INTRADAY_MODEL_RUNTIME_DESIGN.md` 与
+`WEATHER_CITY_TEMPERATURE_MODEL_RESEARCH.md`，先声明目标、PIT 时钟、source/cadence、settlement lattice 和盘口在模型中的角色。
+
 新产物挂到：
 
 ```text
-source/raw -> canonical state/feature -> fact_signal_candidates opportunity
+source/raw -> EventEnvelope -> DecisionContext -> ModelOutput
+           -> SignalCandidate -> TradeIntent -> shared execution handoff
            -> plan -> order -> fill -> settlement
 ```
 
 共享数据逻辑进 `weather_data_feed/`；共享机制特征按 feature-layer contract；策略私有 selector 不塞回数据层。
 
+## 跨城市日内模型的 runtime 边界
+
+- 城市 feature/model/policy 可独立；盘口可以不使用，也可以作为 prior、offset、联合或 microstructure 特征。
+- 采集 profile、事件/four clocks、PIT checkpoint、deterministic replay、`SignalCandidate`、`TradeIntent` 与
+  `plan -> order -> fill -> settlement` 必须复用公共框架。
+- 模型盘口输入与执行报价分别记录 `feature_book_snapshot_id`、`execution_book_snapshot_id` 和对应 clock。
+- candidate 明确记录 `candidate_grain_version`；replay/report 固定 canonical DB identity、`build_id`
+  与 `observed_at_utc`，运行中 refresh 不得静默改变同一次评测分母。
+- 正式接入前先对 deployed producer/consumer 做 contract census；repo fixture 与 running sample 必须同时通过 schema fingerprint/parity。
+- source payload 必须区分 point、measurement interval、revision/late-backfill；`target_date` 不得用于猜物理 shard。
+- source、official/settlement、market expression anchor 分开留痕，book `relative_offset` 必须声明相对哪个 anchor。
+- 新城市不得另建 collector、回放时钟、order client、fill/PnL 或 settlement 链；公共能力不足时扩展共享 contract，
+  并为既有东京、赫尔辛基、阿姆斯特丹 fixtures 补 parity regression。
+- 缺失、stale、one-sided book 返回结构化 scorable/blocker 状态并保留 coverage 分母，禁止静默丢行或 fallback。
+
 研究若读取 canonical facts/features，先运行 `.venv/bin/python scripts/ops/weather_production_manifest.py --strict`；
 DB split 或存在非 canonical consumer 时只允许继续 raw coverage/机制诊断，不得产出 canonical 同分母结论。
+开始读取时保存 build manifest；若 build 变化，重启该次查询或按 build 分层。
 
 ## 研究问题模板
 

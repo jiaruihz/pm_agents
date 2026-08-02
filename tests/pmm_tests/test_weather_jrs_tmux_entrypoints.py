@@ -44,7 +44,10 @@ def test_no_ops_entrypoint_keeps_legacy_jrs_socket_literal():
     for path in sorted(OPS.iterdir()):
         if path.suffix not in {".sh", ".py"}:
             continue
-        if "weather-jrs" in path.read_text(encoding="utf-8"):
+        text = path.read_text(encoding="utf-8")
+        # The failover skill name legitimately contains ``weather-jrs``.
+        # Reject only operational use of the retired socket, not docs/routing.
+        if "tmux -L " + "weather" + "-jrs" in text:
             offenders.append(path.name)
     assert offenders == []
 

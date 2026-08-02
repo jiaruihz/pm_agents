@@ -22,7 +22,7 @@ description: 评估 weather 策略、模型、shadow/live probe 的 fee-adjusted
 |---|---|---|
 | 已成交绩效 | fill | `fact_trades` |
 | 全机会 alpha / fill selection | opportunity | `fact_signal_candidates` |
-| 概率/分布质量 | 固定 PIT state/label | canonical feature/model artifact + settlement source |
+| 概率/分布质量 | 固定 PIT checkpoint/label | WCIR prediction table + canonical feature/model artifact + settlement source |
 | 当前 order/fill 状态 | raw event/order/fill | 当前 Mac strategy runtime |
 | 钱包现金流 | account | `weather-live-account-reconcile` |
 
@@ -43,8 +43,11 @@ description: 评估 weather 策略、模型、shadow/live probe 的 fee-adjusted
 - `trade_class`：research replay、paper、shadow、live_real 分层。
 - 时间：`target_date` 为策略归因；`fill_date_bj` 只用于现金流。
 - settlement：realized 只含 settled；unsettled 单列。
-- strategy identity：优先 `instance_id + strategy_id + config_id + execution_policy`，不只看 routing label。
+- strategy identity：优先 `instance_id + strategy_id + config_id + execution_policy`，并固定
+  model/artifact/config/runtime-contract version 与 `candidate_grain_version`；不只看 routing label。
 - price：YES price、selected-side ask、bid/mid、freshness 和 fee basis。
+- canonical identity：DB realpath、device/inode、build time/`build_id` 与报告 `observed_at_utc`。
+- quote identity：`feature_book_snapshot_id` 与 `execution_book_snapshot_id` 分开，不用模型输入价冒充可执行成本。
 
 ## Signal funnel 与 evidence funnel
 
@@ -69,6 +72,7 @@ PIT weather coverage -> PIT quote coverage -> settlement coverage -> executable 
 ```
 
 manifest 必须 `status=healthy`，并确认 `runtime/weather.db` 与 JRS physical canonical 是同一 device/inode；split 或存在非 canonical consumer 时停止绩效计算，不能挑行数较多的一份继续。
+读取开始时固定 canonical build manifest；如 refresh 在运行中切换 build，重启查询或按 build 分层，不得静默混合分母。
 
 ```sql
 SELECT MAX(fact_built_at_utc) FROM fact_trades;
@@ -99,6 +103,10 @@ gate 不通过时只做数据链诊断。
 - 同一 row、同一 label、同一时间窗。
 - market-anchored residual 与模型增量分开。
 - source/city overlay 用 expanding/OOF，不能泄漏 target date。
+
+WCIR 评测以 prediction table 为概率层入口，保留 selected/unselected、one-sided、stale、
+coverage blocker 和四时钟。结构基线固定 code/config/schema/hash；行为基线是按版本追加的 rolling ledger；
+模型绩效只能按 artifact 和 frozen-forward window 分层。不得把 rolling behavior baseline 说成已冻结模型。
 
 模型 proper score 没有 forward 打败 market 时，selected trade ROI 只能算探索性，不得包装成已证实 alpha。
 
