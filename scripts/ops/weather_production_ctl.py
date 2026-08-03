@@ -407,7 +407,12 @@ def recover_jrs_context(
 
     if not confirm_live:
         raise RuntimeError("recover-jrs-context requires --confirm-live")
-    restore_rows = _pane_restore_rows(before)
+    allowed_unmanaged = set(spec.allowed_unmanaged_sessions)
+    restore_rows = [
+        row
+        for row in _pane_restore_rows(before)
+        if row["session"] not in allowed_unmanaged
+    ]
     actions: list[dict[str, Any]] = []
     prospective = collect_prospective_jrs_context_health(spec)
     actions.append({"action": "prospective_jrs_write_probe", **prospective})

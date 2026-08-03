@@ -383,6 +383,45 @@ def test_restore_rows_decode_tmux_quoted_start_command():
     )
 
 
+def test_recovery_does_not_replay_allowed_unmanaged_oneshot(monkeypatch, tmp_path):
+    spec = WeatherProductionSpec(
+        **{
+            **production_spec(tmp_path, ()).__dict__,
+            "allowed_unmanaged_sessions": ("weather_canonical_refresh",),
+        }
+    )
+    snapshot = observed("weather_canonical_refresh")
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+
+    monkeypatch.setattr(
+        ctl,
+        "collect_prospective_jrs_context_health",
+        lambda _spec: {"status": "healthy", "returncode": 0},
+    )
+    monkeypatch.setattr(
+        ctl,
+        "collect_jrs_context_health",
+        lambda _spec: {"status": "healthy", "returncode": 0},
+    )
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: calls.append(args) or Result(),
+    )
+
+    ctl.recover_jrs_context(spec, snapshot, confirm_live=True)
+
+    assert not any(
+        "weather_canonical_refresh" in call
+        for args in calls
+        for call in args
+    )
+
+
 def test_manual_runtime_never_becomes_automatic_start(tmp_path):
     runtime = WeatherManagedRuntimeSpec(
         instance_id="legacy_shadow",
