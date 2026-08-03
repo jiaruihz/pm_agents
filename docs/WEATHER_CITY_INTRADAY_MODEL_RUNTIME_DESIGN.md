@@ -394,7 +394,8 @@ journals 已在 config 与实例 registry 标为 `deprecated_read_only`。全量
 checkpoint probability 已改读 v3 decision bundles，不再回读 legacy evaluation journal。完整证据见
 [direct migration report](analysis/2026-08/2026-08-02-city-probability-runtime-v3-direct-migration-v1.md)。
 
-2026-08-03 production 进程为 clean detached checkout `e3bd0aa2`，配置仍是 `zero_notional_shadow`，没有 live 参数。
+2026-08-03 Phase 7 审计时的 production 进程为 clean detached checkout `e3bd0aa2`，配置仍是
+`zero_notional_shadow`，没有 live 参数；当前是否仍在运行必须重新以 manifest/health 为准。
 旧 v2 journal 在 v3 active journal 建立后没有新增写入。当前新的 JRS 权限异常影响 canonical 补数，不影响已经完成的
 runtime authority cutover；它不能被解释成允许绕过 manifest 或另写 repo-local DB。
 
