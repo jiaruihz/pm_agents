@@ -55,6 +55,51 @@ weather_jrs_tmux() {
   "$tmux_bin" -L "$socket" "$@"
 }
 
+weather_jrs_tmux_exec_checked() (
+  local socket="$1"
+  local label="$2"
+  local command="$3"
+  local bridge_dir
+  local status_bridge
+  local session
+  local session_command
+  local rc
+  local wait_count=0
+
+  socket="$(weather_jrs_tmux_socket "$socket")" || return 1
+  bridge_dir="$(mktemp -d "${TMPDIR:-/tmp}/weather-jrs-${label}.XXXXXX")" || return 1
+  status_bridge="$bridge_dir/status"
+  session="weather_jrs_${label}_$$_${RANDOM}"
+  trap 'rm -f "$status_bridge"; rmdir "$bridge_dir" 2>/dev/null || true' EXIT INT TERM
+
+  printf -v session_command \
+    'set +e; %s; rc=$?; printf "%%s\n" "$rc" > %q; exit "$rc"' \
+    "$command" "$status_bridge"
+  if ! weather_jrs_tmux "$socket" new-session -d -s "$session" "$session_command"; then
+    echo "failed to start checked JRS tmux command: label=$label" >&2
+    return 1
+  fi
+  while weather_jrs_tmux "$socket" has-session -t "=$session" 2>/dev/null; do
+    wait_count=$((wait_count + 1))
+    if [[ "$wait_count" -ge 300 ]]; then
+      echo "checked JRS tmux command timed out: label=$label" >&2
+      weather_jrs_tmux "$socket" kill-session -t "=$session" 2>/dev/null || true
+      return 1
+    fi
+    sleep 0.1
+  done
+  if [[ ! -s "$status_bridge" ]]; then
+    echo "checked JRS tmux command exited without status: label=$label" >&2
+    return 1
+  fi
+  rc="$(tr -d '[:space:]' < "$status_bridge")"
+  if [[ ! "$rc" =~ ^[0-9]+$ || "$rc" -gt 255 ]]; then
+    echo "invalid checked JRS tmux command status: label=$label status=$rc" >&2
+    return 1
+  fi
+  return "$rc"
+)
+
 weather_jrs_tmux_write_probe() {
   local socket="$1"
   local runtime_root="$2"
@@ -66,7 +111,7 @@ weather_jrs_tmux_write_probe() {
   socket="$(weather_jrs_tmux_socket "$socket")" || return 1
   quoted_dir="$(printf '%q' "$probe_dir")"
   quoted_probe="$(printf '%q' "$probe_path")"
-  if ! weather_jrs_tmux "$socket" run-shell \
+  if ! weather_jrs_tmux_exec_checked "$socket" "write_probe" \
     "set -eu; umask 077; mkdir -p $quoted_dir; printf 'probe\\n' > $quoted_probe; rm -f $quoted_probe"; then
     echo "JRS tmux context cannot write $runtime_root: socket=$socket" >&2
     return 1
@@ -96,7 +141,7 @@ weather_jrs_tmux_mkdir() {
   for target_path in "$@"; do
     command+=" $(printf '%q' "$target_path")"
   done
-  weather_jrs_tmux "$socket" run-shell "$command"
+  weather_jrs_tmux_exec_checked "$socket" "mkdir" "$command"
 }
 
 weather_jrs_tmux_run_oneshot() (
@@ -142,7 +187,7 @@ weather_jrs_tmux_run_oneshot() (
   printf -v status_bridge_command \
     'set -eu; test -s %q; tr -d "[:space:]" < %q > %q' \
     "$status_file" "$status_file" "$status_bridge"
-  if ! weather_jrs_tmux "$socket" run-shell "$status_bridge_command"; then
+  if ! weather_jrs_tmux_exec_checked "$socket" "status_bridge" "$status_bridge_command"; then
     echo "JRS tmux one-shot exited without status: session=$session" >&2
     return 1
   fi

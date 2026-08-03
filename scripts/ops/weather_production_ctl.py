@@ -21,6 +21,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Mapping
@@ -58,6 +59,20 @@ def _pane_text(row: Mapping[str, Any] | None) -> str:
         for pane in row.get("panes", [])
         if isinstance(pane, Mapping)
     )
+
+
+def without_allowed_unmanaged_sessions(
+    spec: WeatherProductionSpec, observed: Mapping[str, Any]
+) -> dict[str, Any]:
+    allowed_unmanaged = set(spec.allowed_unmanaged_sessions)
+    return {
+        **observed,
+        "tmux_sessions": [
+            row
+            for row in observed.get("tmux_sessions", [])
+            if str(row.get("session") or "") not in allowed_unmanaged
+        ],
+    }
 
 
 def evaluate_production_health(
@@ -355,10 +370,47 @@ def collect_prospective_jrs_context_health(
                 f"if={shlex.quote(str(spec.canonical_db_path))} "
                 "of=/dev/null bs=1 count=1 2>/dev/null"
             )
-            command = "; ".join(commands)
-            probed = _tmux_on_socket(spec, socket, "run-shell", command)
-            probe_returncode = probed.returncode
-            output = probed.stdout[-2000:].strip()
+            with tempfile.TemporaryDirectory(
+                prefix="weather-jrs-prospective-probe-"
+            ) as bridge_dir:
+                status_path = Path(bridge_dir) / "status"
+                command = "; ".join(commands)
+                session_command = (
+                    "set +e; "
+                    f"{command}; "
+                    "rc=$?; "
+                    f"printf '%s\\n' \"$rc\" > {shlex.quote(str(status_path))}; "
+                    "exit \"$rc\""
+                )
+                probed = _tmux_on_socket(
+                    spec,
+                    socket,
+                    "new-session",
+                    "-d",
+                    "-s",
+                    f"{session}_io",
+                    session_command,
+                )
+                probe_returncode = probed.returncode
+                output = probed.stdout[-2000:].strip()
+                deadline = time.monotonic() + 15.0
+                while probe_returncode == 0 and time.monotonic() < deadline:
+                    present = _tmux_on_socket(
+                        spec, socket, "has-session", "-t", f"={session}_io"
+                    )
+                    if present.returncode != 0:
+                        break
+                    time.sleep(0.1)
+                else:
+                    if probe_returncode == 0:
+                        probe_returncode = 124
+                        output = "prospective JRS probe timed out"
+                if probe_returncode == 0:
+                    try:
+                        probe_returncode = int(status_path.read_text().strip())
+                    except (FileNotFoundError, OSError, ValueError):
+                        probe_returncode = 1
+                        output = "prospective JRS probe exited without status"
     finally:
         _tmux_on_socket(spec, socket, "kill-server")
     return {
@@ -773,6 +825,10 @@ def main() -> int:
             if args.command == "recover-jrs-context"
             else before
         )
+        if args.command == "recover-jrs-context":
+            comparison_before = without_allowed_unmanaged_sessions(
+                spec, comparison_before
+            )
         after = manifest_tool.compare_prechange_manifest(after, comparison_before)
         health = evaluate_production_health(spec, after)
         health = attach_jrs_context_health(

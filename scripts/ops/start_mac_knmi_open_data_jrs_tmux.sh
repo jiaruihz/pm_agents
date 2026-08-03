@@ -36,8 +36,8 @@ if [[ ! -f "$SUPERVISOR" ]]; then
   exit 1
 fi
 
-weather_jrs_tmux "$TMUX_SOCKET" run-shell \
-  "mkdir -p '$OUTPUT_DIR' '$RUNTIME_ROOT/loop' && probe='$OUTPUT_DIR/.write_probe' && : > \"\$probe\" && rm \"\$probe\""
+weather_jrs_tmux_write_probe "$TMUX_SOCKET" "$RUNTIME_ROOT"
+weather_jrs_tmux_mkdir "$TMUX_SOCKET" "$OUTPUT_DIR" "$RUNTIME_ROOT/loop"
 
 weather_jrs_tmux "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 weather_jrs_tmux "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" \

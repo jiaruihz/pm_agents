@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 from pathlib import Path
 
 from scripts.ops import weather_production_ctl as ctl
@@ -342,6 +343,33 @@ def test_failed_prospective_probe_preserves_canonical_server(monkeypatch, tmp_pa
     assert canonical_calls == []
 
 
+def test_prospective_probe_uses_ephemeral_session_not_run_shell(monkeypatch, tmp_path):
+    spec = production_spec(tmp_path, ())
+    spec.canonical_db_path.write_bytes(b"x")
+    calls = []
+
+    def fake_tmux_on_socket(_spec, _socket, *args):
+        calls.append(args)
+        if args[0] == "new-session" and str(args[3]).endswith("_io"):
+            completed = subprocess.run(
+                ["/bin/sh", "-c", str(args[-1])],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return completed
+        if args[0] == "has-session":
+            return subprocess.CompletedProcess(args, 1, "", "")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(ctl, "_tmux_on_socket", fake_tmux_on_socket)
+
+    report = ctl.collect_prospective_jrs_context_health(spec)
+
+    assert report["status"] == "healthy"
+    assert not any(args[0] == "run-shell" for args in calls)
+
+
 def test_persist_recovery_manifest_is_complete(tmp_path):
     snapshot = observed("one", "two")
 
@@ -420,6 +448,8 @@ def test_recovery_does_not_replay_allowed_unmanaged_oneshot(monkeypatch, tmp_pat
         for args in calls
         for call in args
     )
+    baseline = ctl.without_allowed_unmanaged_sessions(spec, snapshot)
+    assert baseline["tmux_sessions"] == []
 
 
 def test_manual_runtime_never_becomes_automatic_start(tmp_path):

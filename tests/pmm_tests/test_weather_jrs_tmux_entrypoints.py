@@ -67,7 +67,17 @@ def test_shared_helper_owns_socket_and_runs_probe_inside_tmux(tmp_path):
     fake_tmux = tmp_path / "tmux"
     fake_log = tmp_path / "tmux.log"
     fake_tmux.write_text(
-        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$WEATHER_JRS_FAKE_TMUX_LOG\"\n",
+        """#!/bin/sh
+printf '%s\n' "$*" >> "$WEATHER_JRS_FAKE_TMUX_LOG"
+case "$3" in
+  new-session)
+    /bin/sh -c "$7"
+    ;;
+  has-session)
+    exit 1
+    ;;
+esac
+""",
         encoding="utf-8",
     )
     fake_tmux.chmod(0o755)
@@ -92,7 +102,8 @@ def test_shared_helper_owns_socket_and_runs_probe_inside_tmux(tmp_path):
     )
     assert result.stdout.strip() == "weather-data-feed-jrs"
     invocation = fake_log.read_text(encoding="utf-8")
-    assert invocation.startswith("-L weather-data-feed-jrs run-shell ")
+    assert invocation.startswith("-L weather-data-feed-jrs new-session ")
+    assert "run-shell" not in invocation
     assert str(runtime_root).replace(" ", "\\ ") in invocation
 
 
@@ -184,6 +195,8 @@ def test_shared_helper_owns_jrs_oneshot_lifecycle():
     assert "weather_jrs_tmux_run_oneshot()" in helper
     assert "weather_jrs_tmux_start_socket" in helper
     assert "weather_jrs_tmux_mkdir" in helper
+    assert "weather_jrs_tmux_exec_checked" in helper
+    assert " run-shell " not in helper
     assert 'new-session -d -s "$session"' in helper
     assert 'has-session -t "=$session"' in helper
     assert 'local status_file="$job_dir/last_exit_status"' in helper
