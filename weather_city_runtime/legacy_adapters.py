@@ -25,6 +25,24 @@ class DecisionBundle:
     model_output: ModelOutput
     signal_candidate: SignalCandidate
 
+    @classmethod
+    def from_dict(cls, row: Mapping[str, Any]) -> "DecisionBundle":
+        required = {
+            "information_event",
+            "state_checkpoint",
+            "model_output",
+            "signal_candidate",
+        }
+        missing = sorted(required - set(row))
+        if missing:
+            raise ValueError(f"decision bundle missing fields: {missing}")
+        return cls(
+            information_event=dict(row["information_event"]),
+            state_checkpoint=dict(row["state_checkpoint"]),
+            model_output=ModelOutput.from_dict(row["model_output"]),
+            signal_candidate=SignalCandidate.from_dict(row["signal_candidate"]),
+        )
+
 
 # Compatibility name for callers that want to make the source explicit.
 LegacyDecisionBundle = DecisionBundle

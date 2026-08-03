@@ -1,6 +1,6 @@
 """Shared decision contracts for city intraday weather strategies."""
 
-from .canonical_bridge import TemporaryCanonicalBridge
+from .canonical_bridge import CanonicalCandidateBridge, TemporaryCanonicalBridge
 from .contracts import (
     MODEL_OUTPUT_SCHEMA_VERSION,
     SIGNAL_CANDIDATE_SCHEMA_VERSION,
@@ -31,6 +31,7 @@ __all__ = [
     "SignalCandidate",
     "TRADE_INTENT_SCHEMA_VERSION",
     "TemporaryCanonicalBridge",
+    "CanonicalCandidateBridge",
     "TradeIntent",
     "legacy_bundle_from_evaluation",
     "legacy_trade_intent_from_paper_intent",

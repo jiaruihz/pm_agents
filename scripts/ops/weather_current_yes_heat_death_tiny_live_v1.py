@@ -37,6 +37,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.ops import weather_current_yes_heat_death_shadow_v1 as shadow
+from src.strategies.weather_edge_v1.execution.engine import (
+    build_heat_death_legacy_plan_compatibility,
+)
+from src.strategies.weather_edge_v1.runtime.non_live import (
+    execute_legacy_compatibility_paper,
+)
 
 
 STRATEGY_ID = "current_yes_heat_death_physical_v1"
@@ -840,19 +846,48 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
     entry_plans = plans
     plans = [*lifecycle_plans, *entry_plans]
     plans_path = output_dir / "current_plans.jsonl"
-    write_jsonl(plans_path, plans)
-    execution = execute_plans(
-        args,
-        plans_path,
-        output_dir,
-        max_ask=max_ask,
-        total_shares=total_shares,
-        max_child_shares=max(taker_shares, maker_shares),
-    )
+    generated_at = utc_now()
+    if args.live:
+        write_jsonl(plans_path, plans)
+        execution = execute_plans(
+            args,
+            plans_path,
+            output_dir,
+            max_ask=max_ask,
+            total_shares=total_shares,
+            max_child_shares=max(taker_shares, maker_shares),
+        )
+    else:
+        if lifecycle_plans:
+            raise RuntimeError("non-live migration rejects legacy maker lifecycle plans")
+        if entry_plans:
+            compatibility = build_heat_death_legacy_plan_compatibility(
+                legacy_plans=entry_plans
+            )
+            execution = execute_legacy_compatibility_paper(
+                compatibility=compatibility,
+                legacy_plans={str(plan["plan_id"]): plan for plan in entry_plans},
+                journal_path=output_dir / "shared_execution_journal.jsonl",
+                strategy_instance=STRATEGY_INSTANCE,
+                generated_at_utc=generated_at,
+                code_commit=os.environ.get("WEATHER_RUNTIME_CODE_COMMIT", "committed_checkout"),
+            )
+        else:
+            execution = {
+                "authority": "shared_order_runtime",
+                "execution_mode": "paper",
+                "legacy_plan_journal": "deprecated_read_only",
+                "input_plans": 0,
+                "submitted": 0,
+                "deduped": 0,
+                "blocked": 0,
+                "venue_calls": 0,
+                "journal": str(output_dir / "shared_execution_journal.jsonl"),
+            }
     planned_city_days = sorted({f"{row['city']}:{row['target_date']}" for row in entry_plans})
     summary = {
-        "status": "ok" if execution["exit_code"] == 0 else "executor_error",
-        "generated_at_utc": utc_now(),
+        "status": "ok" if not args.live or execution["exit_code"] == 0 else "executor_error",
+        "generated_at_utc": generated_at,
         "strategy_id": STRATEGY_ID,
         "strategy_instance": STRATEGY_INSTANCE,
         "entry_regime_head": ACTIVE_HEAD,
@@ -876,6 +911,7 @@ def run_once(args: argparse.Namespace) -> dict[str, Any]:
         "maker_lifecycle_decisions": len(lifecycle_decisions),
         "planned_city_days": planned_city_days,
         "execution": execution,
+        "legacy_plan_journal": "live_only_legacy_until_phase5" if args.live else "deprecated_read_only",
     }
     write_json(output_dir / "latest_summary.json", summary)
     append_jsonl(output_dir / "summary_history.jsonl", summary)

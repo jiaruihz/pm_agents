@@ -6,6 +6,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts.ops import weather_current_yes_heat_death_tiny_live_v1 as live
+from src.strategies.weather_edge_v1.execution.engine import (
+    build_heat_death_legacy_plan_compatibility,
+)
+from src.strategies.weather_edge_v1.runtime.non_live import (
+    execute_legacy_compatibility_paper,
+)
 from src.strategies.weather_edge_v1.tools.execution_pipeline import ExecutorConfig, execute_trade_plans
 
 
@@ -79,7 +85,6 @@ def test_h2_builds_five_taker_plus_five_post_only_maker() -> None:
         live_enabled=True,
         ttl_min=15,
     )
-
     assert live.HEADS["h2_early_dislocation"]["total_shares"] == 10
     assert [(plan["child_order_role"], plan["size"]) for plan in plans] == [("taker", 5), ("maker", 5)]
     taker, maker = plans
@@ -99,6 +104,35 @@ def test_h2_builds_five_taker_plus_five_post_only_maker() -> None:
     assert taker["allow_duplicate_signal_id"] is True
     assert maker["allow_duplicate_signal_id"] is True
 
+
+def test_h2_non_live_uses_shared_runtime_and_restart_dedupe(tmp_path: Path) -> None:
+    _select_h2()
+    plans = live.build_opportunity_plans(
+        _row(ask=0.92),
+        taker_shares=5,
+        maker_shares=5,
+        live_enabled=False,
+        ttl_min=15,
+    )
+    compatibility = build_heat_death_legacy_plan_compatibility(legacy_plans=plans)
+    kwargs = {
+        "compatibility": compatibility,
+        "legacy_plans": {str(plan["plan_id"]): plan for plan in plans},
+        "journal_path": tmp_path / "execution.jsonl",
+        "strategy_instance": live.STRATEGY_INSTANCE,
+        "code_commit": "test",
+    }
+
+    first = execute_legacy_compatibility_paper(
+        **kwargs, generated_at_utc="2026-08-02T10:00:00Z"
+    )
+    second = execute_legacy_compatibility_paper(
+        **kwargs, generated_at_utc="2026-08-02T10:01:00Z"
+    )
+
+    assert first["submitted"] == first["venue_calls"] == 2
+    assert second["deduped"] == 2
+    assert second["venue_calls"] == 0
 
 def test_h1_builds_five_taker_plus_five_post_only_maker() -> None:
     _select_h1()

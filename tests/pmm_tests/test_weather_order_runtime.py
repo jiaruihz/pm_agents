@@ -237,6 +237,26 @@ def test_submit_intent_uses_gate_claims_and_fresh_injected_snapshots(tmp_path):
     assert all("http" not in str(row).lower() for row in rows)
 
 
+def test_submit_preplanned_uses_shared_claim_risk_and_attempt_order(tmp_path):
+    venue = FakeVenue()
+    risk = FakeRisk()
+    runtime = _runtime(tmp_path, venue=venue, risk=risk)
+    intent = _intent()
+    child = _child(intent)
+
+    first = runtime.submit_preplanned(intent, child, _run_context())
+    second = runtime.submit_preplanned(intent, child, _run_context())
+
+    assert [action.status for action in first.actions] == ["submitted"]
+    assert [stage for stage, _ in risk.calls] == [
+        "initial_aggregate",
+        "initial_child",
+        "initial_aggregate",
+    ]
+    assert second.actions[0].reason == "plan_dedupe_claim_not_acquired"
+    assert len(venue.place_calls) == 1
+
+
 def test_run_context_gate_happens_before_any_fetch_or_claim(tmp_path):
     class BlockedContext:
         def validate_submission(self):

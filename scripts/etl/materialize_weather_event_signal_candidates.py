@@ -93,9 +93,11 @@ def materialize_candidate_rows(
     rows: Iterable[Mapping[str, Any]],
     *,
     batch_size: int | None = None,
+    initialize_schema: bool = True,
 ) -> dict[str, int]:
-    conn.execute(CANDIDATE_DDL)
-    apply_first_seen_schema(conn)
+    if initialize_schema:
+        conn.execute(CANDIDATE_DDL)
+        apply_first_seen_schema(conn)
     table_columns = {
         str(row[1]) for row in conn.execute("PRAGMA table_info(fact_signal_candidates)")
     }

@@ -11,6 +11,8 @@ from pathlib import Path
 
 from scripts.ops import weather_order_executor as executor
 from src.strategies.weather_edge_v1.tools.execution_pipeline import ExecutorConfig, execute_trade_plans
+from src.strategies.weather_edge_v1.execution.engine import build_d1_legacy_plan_compatibility
+from src.strategies.weather_edge_v1.runtime.non_live import execute_legacy_compatibility_paper
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "scripts/ops/d1_yes_high_mid_shadow_v1.py"
 SPEC = importlib.util.spec_from_file_location("d1_yes_high_mid_shadow_v1_test", MODULE_PATH)
@@ -268,6 +270,41 @@ def test_live_signal_expands_to_five_taker_plus_five_maker() -> None:
     assert plans[1]["maker_price_cap"] == 0.93
     assert plans[1]["maker_lifecycle_root_observation_utc"] == "2026-07-16T10:00:00Z"
     assert plans[1]["data_epoch_ts_utc"] == "2026-07-16T10:00:00Z"
+
+
+def test_d1_non_live_uses_shared_runtime_and_restart_dedupe(tmp_path: Path) -> None:
+    args = Namespace(shares=5.0, maker_shares=5.0, order_ttl_min=45.0, mid_threshold=0.80)
+    event = {
+        "city": "Amsterdam",
+        "target_date": "2026-07-16",
+        "d1_bracket": "25",
+        "d1_yes_token_id": "yes-25",
+        "d1_yes_direct_ask": 0.93,
+        "d1_yes_direct_bid": 0.90,
+        "d1_yes_mid": 0.915,
+        "minutes_to_next_obs": 12.0,
+        "last_obs_utc": "2026-07-16T10:00:00Z",
+    }
+    plans = runner.build_live_plans(event, args, datetime.now(timezone.utc))
+    compatibility = build_d1_legacy_plan_compatibility(legacy_plans=plans, event=event)
+    kwargs = {
+        "compatibility": compatibility,
+        "legacy_plans": {str(plan["plan_id"]): plan for plan in plans},
+        "journal_path": tmp_path / "execution.jsonl",
+        "strategy_instance": runner.STRATEGY_ID,
+        "code_commit": "test",
+    }
+
+    first = execute_legacy_compatibility_paper(
+        **kwargs, generated_at_utc="2026-08-02T10:00:00Z"
+    )
+    second = execute_legacy_compatibility_paper(
+        **kwargs, generated_at_utc="2026-08-02T10:01:00Z"
+    )
+
+    assert first["submitted"] == first["venue_calls"] == 2
+    assert second["deduped"] == 2
+    assert second["venue_calls"] == 0
 
 
 def _resting_maker(now: datetime) -> dict:

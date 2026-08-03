@@ -430,10 +430,37 @@ dedupe 全流程无 bug。
 
 ### Phase 4：共享执行 runtime 的 non-live 迁移
 
-Status: **2026-08-02 已完成 WCIR → 既有共享执行体系的第一批兼容切入。** 现有
+Status: **2026-08-02 non-live 迁移已完成；WCIR 当前只有 shadow authority，不存在待切换的 WCIR 实盘实例。** 仓库内其他
+策略的真实下单 authority 仍留在 legacy，只有那些实例未来单独进入 Phase 5。现有
 `ExecutionProfile/quote/lifecycle/reconciliation/OrderRuntime/Polymarket venue/execution journal` 保持唯一执行核心；
 不另建城市执行器。production WCIR 的 4 条实际 intent 已由 clean SHA `e3bd0aa2` 物化为 4 条 `record_only` handoff，
 blocked=0、可执行 intent=0、venue call=0；对应 zero-notional 语义没有被伪造成正 shares。
+
+非实盘执行 runner 已直接切换，不做 dual-run：
+
+- `low_price_yes_lottery_tiny_live.py` 的 zero-notional 分支、
+  `weather_current_yes_heat_death_tiny_live_v1.py` 的 paper 分支和 dormant
+  `d1_yes_high_mid_shadow_v1.py` 的 would-live 分支，均通过 legacy compatibility adapter 进入
+  `OrderRuntime.submit_preplanned` 和统一 execution journal；旧 `trade_plans/paper_orders` 在非实盘分支标为
+  `deprecated_read_only`，只在尚未迁移的 live 分支继续作为 authority。
+- non-live venue 是显式注入、无 client/key/network 的 deterministic paper venue；它保留原 plan 的 child role、shares、
+  price cap、maker flag、book epoch 和 fee identity，并复用共享 risk、plan dedupe、exposure claim 与 attempt-before-side-effect。
+- `low_price_yes_integrated_tail_shadow_v2.py`、`tmax_distribution_edge_shadow_v1.py`、
+  `weather_current_yes_heat_death_shadow_v1.py` 只产 signal/decision evidence，没有 plan/order/venue side effect，因而不属于
+  execution runner；它们继续接统一 candidate/evidence 链，不另造空订单。
+- D1 迁移时发现并修正实际 contract 漂移：runner 写出的未注册
+  `d1_yes_split_5_taker_5_maker_v1` 已改为已有、行为匹配的
+  `d1_taker_plus_maker_chase_to_mid_v1`；maker cap adapter 同时接受该 runner 实际写出的 `maker_price_cap`。
+
+离线验收覆盖 WCIR record-only、低价单腿 maker、heat-death 与 D1 taker+maker、partial fill、cancel/fill race、
+unknown submit recovery 和 restart dedupe。共享执行及三个 runner 的定向测试共 149 项通过；没有增加 live venue call。
+production zero-notional `low_price_yes_lottery_shadow_v1` 已从 clean SHA `4ca5da72` 重启：首个完成 cycle
+`2026-08-02T15:37:43Z` 明确为 `live_enabled=false`、`authority=shared_order_runtime`、input/submitted/venue call 均为 0；
+变更前后 live order journal 都是 2,007 行且 SHA-256 均为
+`c2387ca77c8fa71270455090357029bab70add5603f9b3eb3412824a5d8c77df`，canonical DB route healthy，精确变更前后的
+JRS tmux session 集合一致。第一次 clean-checkout smoke（`2026-08-02T15:35:08Z`）因 checkout-local
+`runtime/weather.db` 未连接 canonical DB 而显式失败；补同 inode symlink 并让 launcher 显式传递 runtime/code identity 后恢复，
+该失败窗口只有一个 shadow cycle，order/fill/notional/fee/PnL delta 全为 0。
 
 兼容原则：**WCIR 不建设第二套执行核心。** WCIR 的 `TradeIntent` 是策略侧、且不能授予 live 的请求契约；
 `src/strategies/weather_edge_v1/execution/wcir.py` 是唯一兼容边界。它把正 shares 的 shadow intent 映射为既有
@@ -441,16 +468,20 @@ blocked=0、可执行 intent=0、venue call=0；对应 zero-notional 语义没�
 execution journal`。`research/zero_notional` 只生成 `record_only` handoff，不伪造正 shares，也不调用 venue。
 candidate/token/condition/outcome/profile 任一无法无损映射时显式 blocker，不让 metadata 或城市 adapter 猜语义。
 
-要做：
+已完成：
 
 - 补齐 `execution_config_id`、resolved profile、root/source/replacement action lineage、execution journal、risk/exposure/dedupe 和 Polymarket capability/fee identity。
 - 依次直接迁 dormant runner、zero-notional shadow、paper runner；每类通过完整 fixture 后旧链标只读，不保留长期双写。
 - active live runner 不做长期 comparator；先在离线完整 lifecycle harness 验证 child role、shares、price、cap、TTL、reprice/cancel、remaining shares 和 blocker，再按 Phase 5 单实例 tiny canary 切换。
 - canonical mixed-schema 只在临时 DB 验证。
 
-完成标准：shadow/paper 单 token runner 不再私自重实现执行生命周期；legacy/new fixture parity 无未解释差异；partial fill、cancel/fill race、unknown submit、restart dedupe 均通过；无新增 live path。
+完成标准已满足：shadow/paper 单 token runner 不再私自重实现执行生命周期；legacy/new fixture parity 无未解释差异；partial fill、cancel/fill race、unknown submit、restart dedupe 均通过；无新增 live path。live-only legacy 分支的删除属于 Phase 5/7，不在本阶段越权处理。
 
 ### Phase 5：active execution 单实例 canary
+
+WCIR 当前状态：**not applicable / skipped**。`weather_city_probability_runtime_v3` 是
+`zero_notional_shadow`，本阶段不把它升级成 live，也不因共享 execution contract 已接好就推断存在实盘迁移任务。
+以下流程只适用于仓库内其他已经获得真实下单授权、且未来要迁共享 runtime 的实例；每次仍需新的显式批准。
 
 顺序固定为：一个低风险 GTC tiny canary → 其余 GTC → fast-source GTD → basket/FOK、SELL、stop-loss 各自独立验收。fast-source 最后，因为它包含 latency、GTD、即时重试、maker remainder 和 signed share cap。
 
@@ -460,12 +491,25 @@ candidate/token/condition/outcome/profile 任一无法无损映射时显式 bloc
 
 ### Phase 6：canonical 与统一报告正式切换
 
+Status: **2026-08-02 WCIR shadow candidate/report 已正式切换。** production manifest 的 DB route 为 healthy；当前
+164 条 journal bundle 归并为 160 条唯一 candidate（Helsinki 108、Tokyo 52），canonical reconciliation delta=0。
+冻结同一份 journal 连续物化两次均为 inserted event/checkpoint/candidate=0，证明增量入口幂等；写入前后
+plans/orders/fills/fact_trades 分别保持 6,425/7,273/4,927/4,885 行不变，160 个 candidate 关联 plan/order 均为 0。
+当前 WCIR 只把 event、checkpoint 和 `v2_event_checkpoint` candidate 写入 canonical；coverage-only 城市继续只保留
+checkpoint blocker。不会为 shadow 数据伪造 plan、order、fill 或 PnL，统一报告对此显示 `not_available_shadow`，而不是零成交或零收益。
+
 要做：
 
 - 新 execution profile/config/root/action 字段进入 canonical plan/order，并在 fill grain 允许时投影到 `fact_trades`。
 - unfilled plan/order 保留在 evidence denominator；fill/fee/PnL 只来自 canonical fill/settlement。
 - 公共报告默认读取 prediction table、`fact_signal_candidates`、canonical plans/orders 和 `fact_trades`。
 - 先临时 DB，再经批准执行 production 增量 materialization；不因迁移无条件全量重建。
+
+WCIR shadow 的增量入口是 `scripts/ops/materialize_weather_city_runtime_canonical_v1.py`：默认只写临时 DB，只有显式
+`--apply` 才写 physical canonical，并要求 requested/expected DB 是同一 device/inode。公共候选报告由
+`scripts/analysis/market_structure_edge/report_city_intraday_canonical_v1.py` 从 canonical v2 facts 只读生成；production 报告必须
+用 `--bundles` 把查询限定到 journal 的 candidate IDs，避免在 11GB canonical DB 上做全量 v2 扫描。该性能问题在首次验收时
+实际暴露并已修正，未触及执行事实。
 
 完成标准：raw/canonical order 数一致、无缺失 execution ID、无重复 fill、coverage gate 通过；signal/plan/order/fill/PnL 与 Phase 0 rolling ledger 的差异有逐条清单。
 

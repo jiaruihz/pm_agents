@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.strategies.weather_city_probability_shadow.core import OUTPUT_SCHEMA_VERSION
 from weather_city_runtime import (
+    CanonicalCandidateBridge,
     LegacyDecisionBundle,
     ModelOutput,
     SignalCandidate,
@@ -18,6 +19,12 @@ from weather_city_runtime import (
     TradeIntent,
     legacy_bundle_from_evaluation,
     legacy_trade_intent_from_paper_intent,
+)
+from scripts.ops.materialize_weather_city_runtime_canonical_v1 import (
+    main as canonical_materialize_main,
+)
+from scripts.analysis.market_structure_edge.report_city_intraday_canonical_v1 import (
+    build_report as build_canonical_report,
 )
 from scripts.analysis.market_structure_edge.bridge_city_intraday_decisions_v1 import (
     main as bridge_main,
@@ -230,6 +237,93 @@ def test_bridge_rejects_production_canonical_path() -> None:
         TemporaryCanonicalBridge(
             Path(__file__).resolve().parents[2] / "runtime" / "weather.db"
         )
+
+
+def test_canonical_bridge_requires_same_physical_db_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    physical = tmp_path / "physical.db"
+    TemporaryCanonicalBridge(physical).append([])
+    compatible = tmp_path / "compatible.db"
+    compatible.symlink_to(physical)
+
+    bridge = CanonicalCandidateBridge(
+        compatible, expected_db_path=physical
+    )
+    first = bridge.append([bundle])
+    second = bridge.append([bundle])
+
+    assert first["inserted_candidates"] == 1
+    assert second["inserted_candidates"] == 0
+    assert second["existing_candidates"] == 1
+    split = tmp_path / "split.db"
+    TemporaryCanonicalBridge(split).append([])
+    with pytest.raises(ValueError, match="identity mismatch"):
+        CanonicalCandidateBridge(split, expected_db_path=physical)
+
+
+def test_canonical_shadow_materializer_and_report_do_not_fabricate_execution(
+    tmp_path: Path,
+) -> None:
+    bundle = legacy_bundle_from_evaluation(_evaluation())
+    journal = tmp_path / "decision_bundles.jsonl"
+    _write_jsonl(
+        journal,
+        [{
+            "information_event": bundle.information_event,
+            "state_checkpoint": bundle.state_checkpoint,
+            "model_output": bundle.model_output.to_dict(),
+            "signal_candidate": bundle.signal_candidate.to_dict(),
+        }],
+    )
+    physical = tmp_path / "canonical.db"
+    TemporaryCanonicalBridge(physical).append([])
+    before = sqlite3.connect(physical)
+    try:
+        execution_before = {
+            table: before.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("plans", "orders", "fills")
+        }
+    finally:
+        before.close()
+    dry_report = tmp_path / "dry.json"
+    assert canonical_materialize_main([
+        "--bundles", str(journal), "--report", str(dry_report)
+    ]) == 0
+    assert json.loads(dry_report.read_text())["mode"] == "isolated_dry_run"
+
+    apply_report = tmp_path / "apply.json"
+    assert canonical_materialize_main([
+        "--bundles", str(journal),
+        "--db", str(physical),
+        "--expected-db", str(physical),
+        "--apply",
+        "--report", str(apply_report),
+    ]) == 0
+    applied = json.loads(apply_report.read_text())
+    assert applied["canonical_reconciliation"]["inserted_candidates"] == 1
+    assert applied["execution_projection"] == {
+        "plan": "not_created_shadow",
+        "order": "not_created_shadow",
+        "fill": "not_created_shadow",
+        "pnl": "not_computed_without_fill",
+    }
+    report = build_canonical_report(
+        physical, candidate_ids=[bundle.signal_candidate.candidate_id]
+    )
+    assert report["signal_funnel"]["raw_candidates"] == 1
+    assert report["city_rows"][0]["city"] == "Helsinki"
+    assert report["evidence_funnel"]["order"] == "not_available_shadow"
+    after = sqlite3.connect(physical)
+    try:
+        execution_after = {
+            table: after.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("plans", "orders", "fills")
+        }
+    finally:
+        after.close()
+    assert execution_after == execution_before
 
 
 def test_bridge_rejects_cross_object_lineage_mismatch(tmp_path: Path) -> None:
