@@ -57,6 +57,26 @@ def test_db_route_accepts_repo_compatibility_symlink_to_jrs(tmp_path):
 
     assert result["status"] == "healthy"
     assert result["linked_compatibility_paths"] == [str(local)]
+    assert result["read_probe"] == {"readable": True, "error": None}
+
+
+def test_db_route_rejects_metadata_only_access(tmp_path, monkeypatch):
+    spec = production_spec(tmp_path)
+    spec.canonical_db_path.parent.mkdir(parents=True)
+    spec.canonical_db_path.write_text("jrs", encoding="utf-8")
+    local = tmp_path / "repo/runtime/weather.db"
+    local.parent.mkdir(parents=True)
+    local.symlink_to(spec.canonical_db_path)
+    monkeypatch.setattr(
+        manifest,
+        "probe_file_readable",
+        lambda _path: {"readable": False, "error": "Operation not permitted"},
+    )
+
+    result = manifest.inspect_db_route(spec, repo_root=tmp_path / "repo")
+
+    assert result["status"] == "inaccessible"
+    assert result["read_probe"]["readable"] is False
 
 
 def test_process_parser_and_execution_mode_are_present_state_based():

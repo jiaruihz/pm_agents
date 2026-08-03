@@ -190,6 +190,20 @@ def same_file(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
     )
 
 
+def probe_file_readable(path: Path) -> dict[str, Any]:
+    """Read one byte so path metadata cannot masquerade as JRS access."""
+
+    try:
+        with path.open("rb") as handle:
+            handle.read(1)
+    except OSError as exc:
+        return {
+            "readable": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    return {"readable": True, "error": None}
+
+
 def inspect_db_route(
     spec: WeatherProductionSpec,
     *,
@@ -207,7 +221,14 @@ def inspect_db_route(
         for row in compatibility
         if row.get("exists") and not same_file(canonical, row)
     ]
-    if canonical.get("exists") and linked and not distinct_existing:
+    read_probe = (
+        probe_file_readable(spec.canonical_db_path)
+        if canonical.get("exists")
+        else {"readable": False, "error": "canonical DB missing"}
+    )
+    if canonical.get("exists") and not read_probe["readable"]:
+        status = "inaccessible"
+    elif canonical.get("exists") and linked and not distinct_existing:
         status = "healthy"
     elif canonical.get("exists") and distinct_existing:
         status = "split"
@@ -223,6 +244,7 @@ def inspect_db_route(
         "compatibility": compatibility,
         "linked_compatibility_paths": [row["path"] for row in linked],
         "distinct_existing_paths": [row["path"] for row in distinct_existing],
+        "read_probe": read_probe,
     }
 
 
