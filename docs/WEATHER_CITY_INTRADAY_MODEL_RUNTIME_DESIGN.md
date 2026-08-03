@@ -1,7 +1,7 @@
 # Weather City Intraday Runtime（WCIR）：总体设计与迁移方案
 
-Status: approved migration roadmap / partial implementation; model-performance baseline remains rolling
-Updated: 2026-08-02 WCIR naming + Amsterdam/Busan/Seoul onboarding
+Status: WCIR runtime implemented; latest canonical refresh blocked by JRS permission context; model-performance baseline remains rolling
+Updated: 2026-08-03 Phase 7 five-city runtime audit + canonical permission fail-closed
 Scope: 城市级分钟/小时间隔观测模型从采集、PIT checkpoint、replay 到统一候选与下单执行的目标架构
 Source of truth: 目标模块边界与接口是；当前生产进程、实例和迁移状态不是
 Used by: `AGENTS.md`、`CLAUDE.md`、`weather-strategy-research`、各城市模型研究与接入任务
@@ -386,7 +386,7 @@ Phase 5 的逐实例显式授权约束，不能由本决策自动切换。
 
 #### Phase 3A：Helsinki
 
-Status: **2026-08-02 已改为 runtime v3 authoritative 单写；本地与全历史迁移通过，production 重启待 JRS 恢复。**
+Status: **2026-08-03 runtime v3 已作为 production authoritative 单写运行；本地、全历史迁移与实际 running raw 验收通过。**
 Helsinki 与 Tokyo 共用的 runtime v3 只写统一 contract journals，旧 v2 evaluation/intent/checkpoint/error
 journals 已在 config 与实例 registry 标为 `deprecated_read_only`。全量 388 evaluation、10 历史 paper intent、2 blocker
 转换为 386 unique candidates、6 可证明 zero-notional intents 和4条历史 Tokyo token-identity blocker；212 个缺失 outcome
@@ -394,9 +394,9 @@ journals 已在 config 与实例 registry 标为 `deprecated_read_only`。全量
 checkpoint probability 已改读 v3 decision bundles，不再回读 legacy evaluation journal。完整证据见
 [direct migration report](analysis/2026-08/2026-08-02-city-probability-runtime-v3-direct-migration-v1.md)。
 
-production 尚未重启：canonical JRS tmux write probe 失败且 manifest 为 critical。这个 blocker 只影响生产激活，不再要求
-等待第三个 forward window；切换验收改为全历史 raw、UTC/业务边界、one-sided/stale/token identity fixtures、进程首轮与重启
-dedupe 全流程无 bug。
+2026-08-03 production 进程为 clean detached checkout `e3bd0aa2`，配置仍是 `zero_notional_shadow`，没有 live 参数。
+旧 v2 journal 在 v3 active journal 建立后没有新增写入。当前新的 JRS 权限异常影响 canonical 补数，不影响已经完成的
+runtime authority cutover；它不能被解释成允许绕过 manifest 或另写 repo-local DB。
 
 - 作为 point-observation、纯天气/market-offset 双表达参考实现。
 - 对齐 forecast、official、FMI、book、one-sided、等待首报与状态变化去重。
@@ -511,9 +511,30 @@ WCIR shadow 的增量入口是 `scripts/ops/materialize_weather_city_runtime_can
 用 `--bundles` 把查询限定到 journal 的 candidate IDs，避免在 11GB canonical DB 上做全量 v2 扫描。该性能问题在首次验收时
 实际暴露并已修正，未触及执行事实。
 
+2026-08-03 对最新 production journal 冻结了 356 行快照，临时 canonical dry-run 得到 352 个唯一 candidate
+（Helsinki 144、Tokyo 212）、`candidate_delta=0`、121 event、246 checkpoint；4 条重复 candidate 来自 journal
+重放去重。production 增量写入**没有执行**：预检时 physical DB metadata/inode 仍可见，但当前 shell 与 canonical
+`tmux -L weather-data-feed-jrs` 新子进程读取 DB、创建 probe 都返回 `Operation not permitted`。manifest 已补真实
+read probe 并正确降为 `critical/canonical_db_inaccessible`，不再把 metadata-only access 误报 healthy。修复权限上下文后，
+必须对同一冻结快照执行一次增量 apply、第二次幂等 apply、统一报告和执行表前后计数核对；禁止改写其他 DB 或全量 rebuild。
+
 完成标准：raw/canonical order 数一致、无缺失 execution ID、无重复 fill、coverage gate 通过；signal/plan/order/fill/PnL 与 Phase 0 rolling ledger 的差异有逐条清单。
 
 ### Phase 7：关闭 active 旁路并保留 legacy 资产
+
+Status: **2026-08-03 WCIR 五城 runtime/代码旁路收口已通过；最新 canonical 补数因 JRS 权限 fail-closed，整体文档状态暂不升级为 fully implemented。**
+
+固定审计入口为 `scripts/ops/audit_weather_city_runtime_phase7.py`。实际 production raw 报告 hash
+`a3199ab975521f8f400267d7301d74c927d494c7f76255998b10dd0b1e903168`，覆盖 Amsterdam、Busan、Helsinki、
+Seoul、Tokyo：356 journal rows / 352 unique candidates、1,270 checkpoint blockers、4 条 zero-notional intents、
+4 条 record-only handoffs；没有 plan/order/fill 文件，执行影响为 0 单、0 fill、$0 notional。Amsterdam/Busan/Seoul
+只输出 coverage blocker；Helsinki/Tokyo 才输出 candidate。旧 v2 的 388 evaluation、10 paper intent、2 checkpoint、
+155 error 全部保留，只读 cutoff 后无新写入。
+
+仓库 authority scan 覆盖 13 个 WCIR active/shared execution 文件，没有直接 `ClobClient`、`py_clob_client` 或旧
+`weather_order_executor` 旁路。production desired state 明确 WCIR 为 `shadow/expected_live=false`，实际命令无 live flag。
+仓库内另外两个已授权 live 策略不是 WCIR 实例，其 legacy execution 迁移仍属于 Phase 5，必须另获真实生产行为授权；
+不能为了让 Phase 7 报告好看而把它们算成 WCIR 旁路或擅自切换。
 
 最终扫描与验收：
 
