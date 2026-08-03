@@ -67,7 +67,7 @@ weather_jrs_tmux_exec_checked() (
   local wait_count=0
 
   socket="$(weather_jrs_tmux_socket "$socket")" || return 1
-  bridge_dir="$(mktemp -d "${TMPDIR:-/tmp}/weather-jrs-${label}.XXXXXX")" || return 1
+  bridge_dir="$(mktemp -d "${TMPDIR:-/tmp}/weather_jrs_${label}.XXXXXX")" || return 1
   status_bridge="$bridge_dir/status"
   session="weather_jrs_${label}_$$_${RANDOM}"
   trap 'rm -f "$status_bridge"; rmdir "$bridge_dir" 2>/dev/null || true' EXIT INT TERM
