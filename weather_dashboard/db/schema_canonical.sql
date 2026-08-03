@@ -389,6 +389,19 @@ CREATE INDEX IF NOT EXISTS idx_orders_run_id ON orders(run_id);
 CREATE INDEX IF NOT EXISTS idx_orders_plan_id ON orders(plan_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status_quote ON orders(status, clob_status, quote_status);
 CREATE INDEX IF NOT EXISTS idx_orders_sizing ON orders(sizing_policy, score_dist_tier);
+-- Keep the live fill gate off the large orders table and exchange_response
+-- overflow pages. The expressions must match the gate query exactly so this
+-- remains a covering index on the external JRS canonical DB.
+CREATE INDEX IF NOT EXISTS idx_orders_clob_gate_v2
+    ON orders(
+      venue, status, execution_id, order_id, shares, limit_price,
+      posted_price, cost_usd, notional,
+      json_extract(exchange_response, '$.place.makingAmount'),
+      json_extract(exchange_response, '$.place.takingAmount'),
+      json_extract(exchange_response, '$.maker_only'),
+      lower(COALESCE(json_extract(exchange_response, '$.place.status'), ''))
+    )
+    WHERE venue='polymarket_clob' AND status='submitted';
 CREATE INDEX IF NOT EXISTS idx_fills_execution_id ON fills(execution_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_settlements_market
     ON settlements(target_date, condition_id, bracket)
