@@ -73,6 +73,29 @@ def test_jrs_prompts_do_not_treat_identity_as_permission_or_overclaim_fix() -> N
     assert "recovery improved" in failover
 
 
+def test_jrs_prompts_and_mutation_skills_require_attach_only_controller_entry() -> None:
+    paths = (
+        "AGENTS.md",
+        "CLAUDE.md",
+        "skills/weather-strategy-deploy/SKILL.md",
+        "skills/weather-jrs-runtime-failover/SKILL.md",
+    )
+
+    for path in paths:
+        text = _read(path)
+        for required in (
+            "attach-only",
+            "recover-jrs-context",
+            "controller",
+            "fail closed",
+        ):
+            assert required in text, (path, required)
+
+    deploy = _read("skills/weather-strategy-deploy/SKILL.md")
+    assert "bounded one-shot" in deploy
+    assert "直接执行 start/stop" in deploy
+
+
 def test_deploy_skill_defaults_to_mac_and_quarantines_n100_history() -> None:
     text = _read("skills/weather-strategy-deploy/SKILL.md")
 

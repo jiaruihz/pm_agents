@@ -56,15 +56,18 @@ canonical tmux socket、binary path/hash 和系统设置中的 Full Disk Access 
 `src/strategies/runtime/production.yaml.managed_runtimes` 是当前生产 desired state；
 `instances.yaml` 仍是研究/历史 registry，不能代替 active production list。生产启停和恢复优先走
 `scripts/ops/weather_production_ctl.py`。底层 start script 是 controller 的执行合同，不是 AI/操作员的默认直接入口；禁止手拼 tmux/live 命令绕过 desired-state、依赖和后置检查。
+共享 helper 是 attach-only，并用 tmux `-N` 保证 server 缺失时 fail closed，不会由业务脚本或 LaunchAgent 抢建；persistent
+session mutation 必须由 controller 注入 authority。不得通过设置同名环境变量或直接执行 start/stop
+脚本模拟 controller。canonical refresh 仅是已登记的 bounded one-shot，不拥有 permission-host 创建权。
 
 当前 controller 的真实边界是：`health/plan` 只读，`reconcile --apply` 只启动 desired-state 中缺失的
 runtime，不停止、替换或重启已存在进程；`recover-jrs-context --apply` 是唯一允许重建 canonical
 permission host 的有界事务，必须同时提供 reason、`--confirm-live`、保存的 restore manifest，并在杀旧
 server 前通过 prospective-host JRS probe。它只能验证当前调用上下文，不能授予或修复 macOS TCC，Mac
 锁屏或 prospective probe 失败时必须阻断。因此不得把 `reconcile` 或一次 recovery 成功说成完整部署/永久修复；对已存在实例的
-pause/stop/restart 只能使用该实例在仓库中已登记的精确合同，并必须执行 pre/post manifest 对比。
-若实例只有 `start_script` 而没有可审计的 pause/stop/restart 合同，当次生产重启必须阻断：先补齐控制面合同和测试，
-不允许 AI 手拼 kill/tmux 命令填空。
+pause/stop/restart 必须走 controller 并执行 pre/post manifest 对比。`safe` 且非 live 的实例可由
+controller 使用精确 session identity 做 stop-then-registered-start；live/guarded 实例仍必须有独立、可审计的
+pause/cancel/restart 合同，缺失时阻断，不允许 AI 手拼 kill/tmux 命令填空。
 
 任何可能重启、重建或迁移 canonical JRS tmux server/session 的改动，必须保存 observed pre-state，并在改动后做同集合比较：
 

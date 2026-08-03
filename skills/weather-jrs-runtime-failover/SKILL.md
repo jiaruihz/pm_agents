@@ -12,6 +12,10 @@ description: 诊断并恢复 weather 生产的 JRS 外置卷/TCC/canonical tmux 
 - 同一实例任一时刻只有一个可写 runtime 正本；不双写。
 - JRS 常驻进程只用 `tmux -L weather-data-feed-jrs`，并通过
   `scripts/ops/weather_jrs_tmux_env.sh` 在该 tmux server 内执行 write probe。
+- 共享 helper 使用 tmux `-N` attach-only。只有 controller 的 `recover-jrs-context`
+  可以创建/recreate canonical server；业务 start/stop、monitor 和 LaunchAgent 不拥有该能力。
+  persistent session mutation 由 controller 注入 authority，canonical refresh 只能执行 bounded
+  one-shot；server 缺失时必须 fail closed，不能抢占同名 socket。
 - canonical helper 必须使用 path/SHA-256 固定的 tmux binary；pin 只证明程序
   identity，不能证明当前 parent 仍有 TCC/JRS 权限。即使系统设置显示 Full Disk
   Access 为 on，也必须以 server 内真实 probe 为准。若 pin 缺失或 hash 漂移，先修

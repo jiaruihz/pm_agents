@@ -4,6 +4,9 @@
 The default commands are read-only. ``reconcile --apply`` only starts missing
 runtimes declared in production.yaml; it never stops extra processes. Live
 recovery requires both an explicit reason and ``--confirm-live``.
+``restart --apply`` may synthesize an exact-session stop followed by the
+registered start contract only for ``safe`` non-live runtimes; live runtimes
+require an explicit restart contract.
 
 ``recover-jrs-context --apply`` is the bounded exception for a failed canonical
 JRS permission host. It persists every existing pane to the internal disk,
@@ -694,6 +697,7 @@ def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dic
     if not script.exists():
         return {"instance_id": runtime.instance_id, "status": "error", "reason": f"start_script_missing:{script}"}
     env = os.environ.copy()
+    env["WEATHER_JRS_TMUX_MUTATION_AUTHORITY"] = "controller"
     if confirm_live:
         env["WEATHER_STRATEGY_CONFIRM_LIVE"] = "1"
     result = subprocess.run(
@@ -714,13 +718,44 @@ def _run_start(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dic
     }
 
 
-def _run_restart(runtime: WeatherManagedRuntimeSpec, *, confirm_live: bool) -> dict[str, Any]:
+def _run_restart(
+    spec: WeatherProductionSpec,
+    runtime: WeatherManagedRuntimeSpec,
+    *,
+    confirm_live: bool,
+) -> dict[str, Any]:
     script = runtime.resolved_restart_script()
     if script is None:
+        if runtime.expected_live or runtime.recovery_policy != "safe":
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "blocked",
+                "reason": "explicit_restart_contract_required",
+            }
+        if runtime.resolved_start_script() is None:
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "blocked",
+                "reason": "start_contract_missing",
+            }
+        stopped = _tmux(
+            spec, "kill-session", "-t", f"={runtime.tmux_session}"
+        )
+        if stopped.returncode != 0:
+            return {
+                "instance_id": runtime.instance_id,
+                "status": "error",
+                "reason": "stop_before_restart_failed",
+                "returncode": stopped.returncode,
+                "output": stopped.stdout[-2000:].strip(),
+            }
+        started = _run_start(runtime, confirm_live=False)
         return {
-            "instance_id": runtime.instance_id,
-            "status": "blocked",
-            "reason": "restart_contract_missing",
+            **started,
+            "status": (
+                "restarted" if started.get("status") == "started" else started.get("status")
+            ),
+            "restart_mode": "controller_stop_then_registered_start",
         }
     if runtime.expected_live and not confirm_live:
         return {
@@ -836,13 +871,36 @@ def main() -> int:
             if runtime.resolved_restart_script()
             else None
         )
+        health["restart_mode"] = (
+            "explicit_restart_script"
+            if runtime.resolved_restart_script()
+            else (
+                "controller_stop_then_registered_start"
+                if runtime.recovery_policy == "safe" and not runtime.expected_live
+                else "blocked_without_explicit_restart_contract"
+            )
+        )
         if args.apply:
             if not args.reason:
                 raise SystemExit("restart --apply requires --reason")
             if (health.get("jrs_context_health") or {}).get("status") != "healthy":
                 raise SystemExit("restart blocked: jrs_context_unhealthy")
+            target_health = next(
+                row
+                for row in health.get("runtimes", [])
+                if row.get("instance_id") == runtime.instance_id
+            )
+            dependency_issues = [
+                issue
+                for issue in target_health.get("issues", [])
+                if str(issue).startswith("dependency_unhealthy:")
+            ]
+            if dependency_issues:
+                raise SystemExit(
+                    "restart blocked: " + ",".join(dependency_issues)
+                )
             action = _run_restart(
-                runtime, confirm_live=bool(args.confirm_live)
+                spec, runtime, confirm_live=bool(args.confirm_live)
             )
             time.sleep(2)
             after = manifest_tool.collect_manifest(spec)

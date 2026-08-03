@@ -173,6 +173,19 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                 f"unsupported recovery_policy for {item.instance_id}: "
                 f"{item.recovery_policy}"
             )
+        if item.recovery_policy != "manual" and item.resolved_start_script() is None:
+            raise ValueError(
+                f"automatic recovery requires checkout_root and start_script: "
+                f"{item.instance_id}"
+            )
+        if item.expected_live and item.recovery_policy != "guarded_live":
+            raise ValueError(
+                f"live runtime must use guarded_live recovery: {item.instance_id}"
+            )
+        if item.recovery_policy == "guarded_live" and not item.expected_live:
+            raise ValueError(
+                f"guarded_live runtime must declare expected_live: {item.instance_id}"
+            )
         missing_dependencies = set(item.dependencies) - managed_ids
         if missing_dependencies:
             raise ValueError(

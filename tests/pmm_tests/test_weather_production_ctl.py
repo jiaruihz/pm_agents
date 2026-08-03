@@ -11,6 +11,9 @@ from src.strategies.runtime.production import (
 )
 
 
+ROOT = Path(__file__).resolve().parents[2]
+
+
 def production_spec(
     tmp_path: Path, runtimes: tuple[WeatherManagedRuntimeSpec, ...]
 ) -> WeatherProductionSpec:
@@ -74,6 +77,53 @@ def test_committed_production_spec_declares_current_live_control_plane():
     assert by_id["weather_knmi_first_seen_ladder_v1"].checkout_root == Path(
         "/Users/deepsleep/projects/pm_agents_knmi_first_seen_prod"
     )
+
+
+def test_every_business_runtime_has_controller_start_contract():
+    spec = load_production_spec()
+    business = [
+        item
+        for item in spec.managed_runtimes
+        if item.instance_id != "weather_jrs_context_keeper"
+    ]
+
+    assert len(business) == 22
+    assert all(item.recovery_policy != "manual" for item in business)
+    assert all(item.checkout_root is not None for item in business)
+    assert all(item.resolved_start_script() is not None for item in business)
+    assert all(
+        (ROOT / item.start_script).is_file()
+        for item in business
+        if item.start_script is not None and not item.start_script.is_absolute()
+    )
+
+
+def test_migrated_historical_runtimes_remain_non_live():
+    spec = load_production_spec()
+    migrated_ids = {
+        "d1_multisource_consensus_shadow_v1",
+        "europe_d1_distance2_dual_no_shadow_v1",
+        "low_price_yes_integrated_tail_shadow_v2",
+        "low_price_yes_lottery_shadow_v1",
+        "metar_reversal_false_fade_reheat_shadow_v1",
+        "regime_routed_no_shadow_v1",
+        "tmax_distribution_edge_first_lock_no_current_yes_shadow_v1",
+        "weather_current_yes_heat_death_shadow_v1",
+        "weather_fast_source_stale_book",
+        "weather_full_ladder_capture",
+        "weather_helsinki_pre_cross_active_ladder_shadow",
+        "weather_korea_first_seen_state_v1",
+        "weather_runtime_monitor",
+        "weather_source_event_ladder_repricing_shadow",
+        "weather_tokyo_current_break_active_ladder_shadow_v1",
+    }
+    migrated = [
+        item for item in spec.managed_runtimes if item.instance_id in migrated_ids
+    ]
+
+    assert len(migrated) == 15
+    assert all(item.expected_live is False for item in migrated)
+    assert all(item.recovery_policy == "safe" for item in migrated)
 
 
 def test_health_checks_session_freshness_status_and_live_flags(tmp_path):
@@ -496,6 +546,30 @@ def test_live_recovery_is_blocked_without_explicit_confirmation(tmp_path):
     }
 
 
+def test_controller_injects_tmux_mutation_authority_for_start(tmp_path):
+    marker = tmp_path / "authority.txt"
+    script = tmp_path / "start.sh"
+    script.write_text(
+        f"#!/bin/sh\nprintf '%s' \"$WEATHER_JRS_TMUX_MUTATION_AUTHORITY\" > {marker}\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow",
+        role="shadow",
+        execution_mode="shadow",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        recovery_policy="safe",
+    )
+
+    result = ctl._run_start(runtime, confirm_live=False)
+
+    assert result["status"] == "started"
+    assert marker.read_text(encoding="utf-8") == "controller"
+
+
 def test_restart_requires_explicit_contract(tmp_path):
     runtime = WeatherManagedRuntimeSpec(
         instance_id="feed",
@@ -506,16 +580,22 @@ def test_restart_requires_explicit_contract(tmp_path):
         recovery_policy="safe",
     )
 
-    assert ctl._run_restart(runtime, confirm_live=False) == {
+    assert ctl._run_restart(
+        production_spec(tmp_path, (runtime,)), runtime, confirm_live=False
+    ) == {
         "instance_id": "feed",
         "status": "blocked",
-        "reason": "restart_contract_missing",
+        "reason": "start_contract_missing",
     }
 
 
 def test_restart_runs_registered_contract(tmp_path):
+    marker = tmp_path / "authority.txt"
     script = tmp_path / "restart.sh"
-    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    script.write_text(
+        f"#!/bin/sh\nprintf '%s' \"$WEATHER_JRS_TMUX_MUTATION_AUTHORITY\" > {marker}\n",
+        encoding="utf-8",
+    )
     script.chmod(0o755)
     runtime = WeatherManagedRuntimeSpec(
         instance_id="feed",
@@ -527,10 +607,67 @@ def test_restart_runs_registered_contract(tmp_path):
         recovery_policy="safe",
     )
 
-    result = ctl._run_restart(runtime, confirm_live=False)
+    result = ctl._run_restart(
+        production_spec(tmp_path, (runtime,)), runtime, confirm_live=False
+    )
 
     assert result["status"] == "restarted"
     assert result["returncode"] == 0
+    assert marker.read_text(encoding="utf-8") == "controller"
+
+
+def test_controller_can_restart_safe_non_live_runtime_from_start_contract(
+    monkeypatch, tmp_path
+):
+    marker = tmp_path / "started.txt"
+    script = tmp_path / "start.sh"
+    script.write_text(f"#!/bin/sh\nprintf started > {marker}\n", encoding="utf-8")
+    script.chmod(0o755)
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="shadow",
+        tmux_session="shadow",
+        role="shadow",
+        execution_mode="shadow",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        recovery_policy="safe",
+    )
+    spec = production_spec(tmp_path, (runtime,))
+    calls = []
+    monkeypatch.setattr(
+        ctl,
+        "_tmux",
+        lambda _spec, *args: calls.append(args)
+        or subprocess.CompletedProcess(args, 0, "", ""),
+    )
+
+    result = ctl._run_restart(spec, runtime, confirm_live=False)
+
+    assert calls == [("kill-session", "-t", "=shadow")]
+    assert result["status"] == "restarted"
+    assert result["restart_mode"] == "controller_stop_then_registered_start"
+    assert marker.read_text(encoding="utf-8") == "started"
+
+
+def test_controller_does_not_synthesize_live_restart_contract(tmp_path):
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="live",
+        tmux_session="live",
+        role="strategy",
+        execution_mode="live",
+        checkout_root=tmp_path,
+        start_script=Path("start.sh"),
+        expected_live=True,
+        recovery_policy="guarded_live",
+    )
+
+    assert ctl._run_restart(
+        production_spec(tmp_path, (runtime,)), runtime, confirm_live=True
+    ) == {
+        "instance_id": "live",
+        "status": "blocked",
+        "reason": "explicit_restart_contract_required",
+    }
 
 
 def test_data_feed_semantics_separates_coverage_warning_from_critical_chain():

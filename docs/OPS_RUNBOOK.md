@@ -15,9 +15,11 @@
 
 Mac 上所有 weather/tmax/range 常驻进程统一由
 `scripts/ops/weather_jrs_tmux_env.sh` 管理，唯一 socket 是
-`weather-data-feed-jrs`。各业务 `start_*.sh` 只保留 session 名和业务参数，
+`weather-data-feed-jrs`。各业务 `start_*.sh` 是 controller 的底层合同，不是人工入口，
 不再支持默认 tmux、独立 socket、screen、nohup 或 start-mode fallback；启动前的
-JRS write probe 由 helper 在 tmux server 内执行。
+JRS write probe 由 helper 在 tmux server 内执行。helper 固定使用 tmux `-N`
+attach-only：server 不存在时 fail closed；只有 controller `recover-jrs-context`
+可以创建或重建 permission host，persistent session mutation 也必须带 controller authority。
 
 该 tmux server 的权限宿主固定为已在 macOS「完全磁盘访问权限」中授权的
 `/opt/homebrew/Cellar/tmux/3.6b/bin/tmux`，helper 同时固定其 SHA-256。
@@ -25,9 +27,9 @@ JRS write probe 由 helper 在 tmux server 内执行。
 加入完全磁盘访问权限，再更新 helper 的 path/hash、运行入口契约测试，并在维护
 窗口重建 canonical server；任一步未完成都继续使用旧的已授权 binary。
 
-```bash
-tmux -L weather-data-feed-jrs list-sessions
-```
+底层只读诊断先 source helper，再调用
+`weather_jrs_tmux weather-data-feed-jrs list-sessions`；日常盘点仍优先使用下面的
+controller health/plan，禁止直接执行 raw tmux 命令。
 
 当前生产 desired state 在 `src/strategies/runtime/production.yaml` 的
 `managed_runtimes`。它与研究/历史 `instances.yaml` 分开：只有
@@ -50,6 +52,14 @@ tmux -L weather-data-feed-jrs list-sessions
 # 如果恢复集合包含 live，必须再显式确认
 .venv/bin/python scripts/ops/weather_production_ctl.py reconcile --apply \
   --confirm-live --reason "named live incident recovery"
+
+# 单实例重启也必须走 controller；先不带 --apply 查看目标合同
+.venv/bin/python scripts/ops/weather_production_ctl.py restart \
+  --instance INSTANCE --json
+
+# safe 非 live 实例使用 exact-session stop + registered start；live 缺显式合同时阻断
+.venv/bin/python scripts/ops/weather_production_ctl.py restart \
+  --instance INSTANCE --apply --reason "named runtime restart"
 ```
 
 `health` 同时检查 canonical DB/进程 manifest、全部 required tmux sessions、
@@ -59,9 +69,11 @@ tmux -L weather-data-feed-jrs list-sessions
 warning；forecast fallback、stale/invalid forecast capture、核心 cache/parity 或整层
 orderbook 缺失为 critical。当前已关闭的旧 `fast_observation_state` 不再覆盖活跃的
 `weather_live_cross_observations` 健康判断。
-旧 shadow/collector 在迁入完整 start contract 前只做 presence 保护并标
-`recovery_policy: manual`；controller 不会猜命令自动恢复。生产操作不得直接用
-`tmux kill-server`、`tmux kill-session` 或手拼 live 命令绕过 controller。
+除 permission-host keeper 外，当前 required shadow/collector/monitor 都有显式
+start/health/dependency contract；controller 不从正在运行的 pane 猜恢复命令。
+canonical refresh 是唯一允许的 unmanaged bounded one-shot，但只能 attach，不能创建
+server。生产操作不得直接用 `tmux kill-server`、`tmux kill-session`、底层 start/stop
+脚本或手拼 live 命令绕过 controller。
 
 如果发现进程仍在其他 socket，只记录并按生产变更流程迁移；涉及 live 的 session
 不得在巡检中自动重启或跨 socket 搬迁。

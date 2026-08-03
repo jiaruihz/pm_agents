@@ -69,9 +69,9 @@ def test_shared_helper_owns_socket_and_runs_probe_inside_tmux(tmp_path):
     fake_tmux.write_text(
         """#!/bin/sh
 printf '%s\n' "$*" >> "$WEATHER_JRS_FAKE_TMUX_LOG"
-case "$3" in
+case "$4" in
   new-session)
-    /bin/sh -c "$7"
+    /bin/sh -c "$8"
     ;;
   has-session)
     exit 1
@@ -102,7 +102,7 @@ esac
     )
     assert result.stdout.strip() == "weather-data-feed-jrs"
     invocation = fake_log.read_text(encoding="utf-8")
-    assert invocation.startswith("-L weather-data-feed-jrs new-session ")
+    assert invocation.startswith("-N -L weather-data-feed-jrs new-session ")
     assert "run-shell" not in invocation
     assert str(runtime_root).replace(" ", "\\ ") in invocation
 
@@ -121,6 +121,7 @@ def test_shared_helper_pins_full_disk_access_tmux_binary():
     )
     assert "command -v tmux" not in helper_text
     assert "WEATHER_JRS_TMUX_TEST_OVERRIDE" in helper_text
+    assert '"$tmux_bin" -N -L "$socket" "$@"' in helper_text
 
 
 def test_shared_helper_rejects_tmux_binary_override_outside_tests(tmp_path):
@@ -140,6 +141,54 @@ def test_shared_helper_rejects_tmux_binary_override_outside_tests(tmp_path):
     )
     assert result.returncode != 0
     assert "refusing JRS tmux binary override outside tests" in result.stderr
+
+
+def test_shared_helper_rejects_persistent_mutation_without_controller(tmp_path):
+    fake_tmux = tmp_path / "tmux"
+    fake_log = tmp_path / "tmux.log"
+    fake_tmux.write_text(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$WEATHER_JRS_FAKE_TMUX_LOG\"\n",
+        encoding="utf-8",
+    )
+    fake_tmux.chmod(0o755)
+    helper = OPS / "weather_jrs_tmux_env.sh"
+    env = {
+        **os.environ,
+        "WEATHER_JRS_TMUX_BIN": str(fake_tmux),
+        "WEATHER_JRS_TMUX_TEST_OVERRIDE": "1",
+        "WEATHER_JRS_FAKE_TMUX_LOG": str(fake_log),
+    }
+
+    rejected = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"source {shlex.quote(str(helper))}; weather_jrs_tmux weather-data-feed-jrs new-session -d -s rogue true",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert rejected.returncode != 0
+    assert "outside production controller" in rejected.stderr
+    assert not fake_log.exists()
+
+    accepted = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"source {shlex.quote(str(helper))}; WEATHER_JRS_TMUX_MUTATION_AUTHORITY=controller weather_jrs_tmux weather-data-feed-jrs new-session -d -s managed true",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert accepted.returncode == 0
+    assert fake_log.read_text(encoding="utf-8").startswith(
+        "-N -L weather-data-feed-jrs new-session"
+    )
 
 
 def test_mac_start_entries_do_not_default_to_legacy_jrs_symlink():
@@ -207,7 +256,7 @@ def test_shared_helper_runs_jrs_oneshot_and_propagates_status(tmp_path):
     fake_tmux = tmp_path / "tmux"
     fake_tmux.write_text(
         """#!/bin/sh
-case "$3" in
+case "$4" in
   run-shell)
     /bin/sh -c "$4"
     ;;
@@ -215,7 +264,7 @@ case "$3" in
     exit 1
     ;;
   new-session)
-    /bin/sh -c "$7"
+    /bin/sh -c "$8"
     exit 0
     ;;
 esac
@@ -304,3 +353,22 @@ def test_shared_helper_rejects_legacy_socket():
     )
     assert result.returncode != 0
     assert "refusing non-canonical JRS tmux socket" in result.stderr
+
+
+def test_controller_contracts_separate_historical_stale_book_modes():
+    broad = (OPS / "start_weather_fast_source_stale_book_production.sh").read_text(
+        encoding="utf-8"
+    )
+    helsinki = (
+        OPS / "start_weather_helsinki_pre_cross_active_ladder_shadow.sh"
+    ).read_text(encoding="utf-8")
+
+    assert 'TMUX_SESSION="weather_fast_source_stale_book"' in broad
+    assert "--fresh-scope t_minus_1_no" in broad
+    assert "--continuous-active-brackets" not in broad
+    assert "--live" not in broad
+    assert 'TMUX_SESSION="weather_helsinki_pre_cross_active_ladder_shadow"' in helsinki
+    assert "--cities Helsinki" in helsinki
+    assert "--sources fmi" in helsinki
+    assert "--continuous-active-brackets" in helsinki
+    assert "--live" not in helsinki
