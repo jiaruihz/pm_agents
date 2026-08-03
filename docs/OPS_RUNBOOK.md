@@ -31,6 +31,9 @@ attach-only：server 不存在时 fail closed；只有 controller `recover-jrs-c
 `weather_jrs_tmux weather-data-feed-jrs list-sessions`；日常盘点仍优先使用下面的
 controller health/plan，禁止直接执行 raw tmux 命令。
 
+JRS/TCC、canonical tmux crash、历史入口与验收记录统一维护在
+[WEATHER_JRS_RUNTIME_INCIDENTS.md](WEATHER_JRS_RUNTIME_INCIDENTS.md)。
+
 当前生产 desired state 在 `src/strategies/runtime/production.yaml` 的
 `managed_runtimes`。它与研究/历史 `instances.yaml` 分开：只有
 `managed_runtimes` 表示“现在应该持续运行”。统一控制入口：
