@@ -110,8 +110,8 @@ managed_runtimes:
     role: collector
     execution_mode: collector
     checkout_root: /Users/deepsleep/projects/pm_agents_knmi_recovery
-    start_script: scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
-    restart_script: scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
+    start_script: /Users/deepsleep/projects/pm_agents/scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
+    restart_script: /Users/deepsleep/projects/pm_agents/scripts/ops/start_mac_knmi_open_data_jrs_tmux.sh
     health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/knmi_open_data/state.json
     max_health_age_sec: 900
     recovery_policy: safe

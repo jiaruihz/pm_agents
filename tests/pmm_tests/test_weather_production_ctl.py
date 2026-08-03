@@ -63,7 +63,11 @@ def test_committed_production_spec_declares_current_live_control_plane():
         "/Users/deepsleep/projects/pm_agents_knmi_recovery"
     )
     assert by_id["weather_knmi_open_data_jrs"].resolved_restart_script() == Path(
-        "/Users/deepsleep/projects/pm_agents_knmi_recovery/scripts/ops/"
+        "/Users/deepsleep/projects/pm_agents/scripts/ops/"
+        "start_mac_knmi_open_data_jrs_tmux.sh"
+    )
+    assert by_id["weather_knmi_open_data_jrs"].resolved_start_script() == Path(
+        "/Users/deepsleep/projects/pm_agents/scripts/ops/"
         "start_mac_knmi_open_data_jrs_tmux.sh"
     )
     assert by_id["weather_knmi_open_data_jrs"].max_health_age_sec == 900
