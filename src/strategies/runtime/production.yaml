@@ -101,9 +101,9 @@ managed_runtimes:
     execution_mode: shadow
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
     start_script: scripts/ops/start_d1_multisource_consensus_shadow_v1.sh
-    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/d1_multisource_consensus_shadow_v1/latest.json
-    max_health_age_sec: 1200
-    accepted_health_statuses: [ok]
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/d1_multisource_consensus_shadow_v1/runner.log
+    health_format: mtime
+    max_health_age_sec: 180
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: europe_d1_distance2_dual_no_shadow_v1
@@ -112,9 +112,9 @@ managed_runtimes:
     execution_mode: shadow
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
     start_script: scripts/ops/start_europe_d1_distance2_dual_no_shadow_v1.sh
-    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_distance2_dual_no_shadow_v1/latest.json
-    max_health_age_sec: 1200
-    accepted_health_statuses: [ok]
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/output/europe_d1_distance2_dual_no_shadow_v1/runner.log
+    health_format: mtime
+    max_health_age_sec: 180
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: low_price_yes_integrated_tail_shadow_v2
@@ -143,6 +143,9 @@ managed_runtimes:
     execution_mode: shadow
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
     start_script: scripts/ops/start_metar_reversal_false_fade_reheat_shadow_v1.sh
+    health_path: /Users/deepsleep/projects/pm_agents_prod/runtime/weather_edge_v1/metar_reversal_false_fade_reheat_shadow_v1/summary_history.jsonl
+    health_format: mtime
+    max_health_age_sec: 600
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: regime_routed_no_shadow_v1
@@ -193,6 +196,9 @@ managed_runtimes:
     execution_mode: collector
     checkout_root: /Users/deepsleep/projects/pm_agents_prod
     start_script: scripts/ops/start_full_ladder_orderbook_capture.sh
+    health_path: /Volumes/jrs/weather_data_feed_service_runtime/full_ladder_output/full_ladder_capture.log
+    health_format: mtime
+    max_health_age_sec: 2400
     dependencies: [weather_data_feed_jrs]
     recovery_policy: safe
   - instance_id: weather_helsinki_pre_cross_active_ladder_shadow

@@ -23,6 +23,7 @@ class WeatherManagedRuntimeSpec:
     start_script: Path | None = None
     restart_script: Path | None = None
     health_path: Path | None = None
+    health_format: str = "json"
     max_health_age_sec: float | None = None
     accepted_health_statuses: tuple[str, ...] = ()
     expected_live: bool = False
@@ -124,6 +125,7 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
                     if item.get("health_path")
                     else None
                 ),
+                health_format=str(item.get("health_format") or "json"),
                 max_health_age_sec=(
                     float(item["max_health_age_sec"])
                     if item.get("max_health_age_sec") is not None
@@ -172,6 +174,17 @@ def load_production_spec(path: Path | None = None) -> WeatherProductionSpec:
             raise ValueError(
                 f"unsupported recovery_policy for {item.instance_id}: "
                 f"{item.recovery_policy}"
+            )
+        if item.health_format not in {"json", "mtime"}:
+            raise ValueError(
+                f"unsupported health_format for {item.instance_id}: "
+                f"{item.health_format}"
+            )
+        if item.health_format == "mtime" and (
+            item.accepted_health_statuses or item.expected_live
+        ):
+            raise ValueError(
+                f"mtime health cannot validate status/live fields: {item.instance_id}"
             )
         if item.recovery_policy != "manual" and item.resolved_start_script() is None:
             raise ValueError(

@@ -113,23 +113,32 @@ def evaluate_production_health(
             if "--live" not in pane_text or "--confirm-live" not in pane_text:
                 issues.append("live_flags_missing")
         if runtime.health_path is not None:
-            health_payload, health_error = _read_json(runtime.health_path)
-            if health_error:
-                issues.append(health_error)
-            else:
+            if not runtime.health_path.is_file():
+                issues.append("health_artifact_missing")
+            elif runtime.health_format == "mtime":
+                health_payload = {}
                 health_age_sec = max(
                     0.0, now_epoch - runtime.health_path.stat().st_mtime
                 )
+            else:
+                health_payload, health_error = _read_json(runtime.health_path)
+                if health_error:
+                    issues.append(health_error)
+                else:
+                    health_age_sec = max(
+                        0.0, now_epoch - runtime.health_path.stat().st_mtime
+                    )
+            if health_age_sec is not None:
                 if (
                     runtime.max_health_age_sec is not None
                     and health_age_sec > runtime.max_health_age_sec
                 ):
                     issues.append("health_artifact_stale")
-                if runtime.accepted_health_statuses:
+                if runtime.health_format == "json" and runtime.accepted_health_statuses:
                     status = str(health_payload.get("status") or "")
                     if status not in runtime.accepted_health_statuses:
                         issues.append("health_status_unaccepted")
-                if runtime.expected_live and health_payload.get("live_enabled") is not True:
+                if runtime.health_format == "json" and runtime.expected_live and health_payload.get("live_enabled") is not True:
                     issues.append("health_live_not_enabled")
         row = {
             "instance_id": runtime.instance_id,
@@ -141,6 +150,7 @@ def evaluate_production_health(
             "status": "critical" if issues else "healthy",
             "issues": issues,
             "health_path": str(runtime.health_path) if runtime.health_path else None,
+            "health_format": runtime.health_format,
             "health_age_sec": (
                 round(health_age_sec, 3) if health_age_sec is not None else None
             ),

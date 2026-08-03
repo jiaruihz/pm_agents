@@ -91,6 +91,7 @@ def test_every_business_runtime_has_controller_start_contract():
     assert all(item.recovery_policy != "manual" for item in business)
     assert all(item.checkout_root is not None for item in business)
     assert all(item.resolved_start_script() is not None for item in business)
+    assert all(item.health_path is not None for item in business)
     assert all(
         (ROOT / item.start_script).is_file()
         for item in business
@@ -154,6 +155,32 @@ def test_health_checks_session_freshness_status_and_live_flags(tmp_path):
     assert report["status"] == "healthy"
     assert report["runtimes"][0]["health_age_sec"] == 30.0
     assert report["runtimes"][0]["issues"] == []
+
+
+def test_health_supports_explicit_mtime_heartbeat(tmp_path):
+    health_path = tmp_path / "runner.log"
+    health_path.write_text("not json\n", encoding="utf-8")
+    os.utime(health_path, (1000.0, 1000.0))
+    runtime = WeatherManagedRuntimeSpec(
+        instance_id="collector",
+        tmux_session="collector",
+        role="collector",
+        execution_mode="collector",
+        health_path=health_path,
+        health_format="mtime",
+        max_health_age_sec=60,
+        recovery_policy="safe",
+    )
+
+    report = ctl.evaluate_production_health(
+        production_spec(tmp_path, (runtime,)),
+        observed("collector"),
+        now_epoch=1030.0,
+    )
+
+    assert report["status"] == "healthy"
+    assert report["runtimes"][0]["health_format"] == "mtime"
+    assert report["runtimes"][0]["health_age_sec"] == 30.0
 
 
 def test_health_propagates_missing_dependency_to_live_runtime(tmp_path):
